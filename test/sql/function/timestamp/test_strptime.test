@@ -371,7 +371,10 @@ Error: Literal does not match, expected -
 statement error
 SELECT strptime('2000/10/10', '%Y-%m-%d')
 ----
-PLACEHOLDER_ERROR_MESSAGE2462
+Invalid Input Error: Could not parse string "2000/10/10" according to format specifier "%Y-%m-%d"
+2000/10/10
+     ^
+Error: Literal does not match, expected -
 
 # incorrect date
 statement error

@@ -141,7 +141,7 @@ SELECT * FROM song;
 statement error
 ALTER TABLE album RENAME COLUMN albumname TO albumname_new;
 ----
-PLACEHOLDER_ERROR_MESSAGE1326
+Catalog Error: Cannot rename column "albumname" because this is involved in the foreign key constraint
 
 statement error
 ALTER TABLE song RENAME COLUMN songalbum TO songalbum_new;

@@ -426,7 +426,7 @@ Not implemented Error: Month intervals cannot have day or time component
 statement error
 select time_bucket('1 month 1 day'::interval, '2019-05-05'::date, '2019-05-05'::date);
 ----
-PLACEHOLDER_ERROR_MESSAGE2030
+Not implemented Error: Month intervals cannot have day or time component
 
 statement error
 select time_bucket('3 days'::interval, '2019-05-05'::date, '2000000000 months'::interval);

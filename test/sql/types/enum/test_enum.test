@@ -186,7 +186,7 @@ Conversion Error: Could not convert string 'bla' to UINT8
 statement error
 select {'a': 'bla'::mood};
 ----
-PLACEHOLDER_ERROR_MESSAGE649
+Conversion Error: Could not convert string 'bla' to UINT8
 
 query I
 select MAP([1,2,3,4],['happy','ok','ok','sad']::mood[])

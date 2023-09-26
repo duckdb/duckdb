@@ -241,7 +241,10 @@ SELECT * FROM main_view;
 statement error
 SELECT * FROM oop_view;
 ----
-PLACEHOLDER_ERROR_MESSAGE1880
+Catalog Error: Table with name oop_view does not exist!
+Did you mean "out_of_path.oop_view"?
+LINE 1: SELECT * FROM oop_view;
+                      ^
 
 statement ok
 SELECT * FROM out_of_path.oop_view;

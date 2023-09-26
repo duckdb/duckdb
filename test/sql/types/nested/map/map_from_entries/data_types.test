@@ -257,7 +257,7 @@ select col['12.3'::DECIMAL] from decimal_key;
 statement error
 create table decimal_key_dup as select MAP_FROM_ENTRIES(ARRAY[('12.3'::DECIMAL, 'x'), ('12.3'::DECIMAL, 'y')]) col;
 ----
-PLACEHOLDER_ERROR_MESSAGE876
+Invalid Input Error: Map keys have to be unique
 
 # -- INTERVAL --
 # Valid

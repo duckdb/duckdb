@@ -95,7 +95,10 @@ LINE 1: SELECT FIRST(FIRST(1))
 statement error
 SELECT MAX()
 ----
-PLACEHOLDER_ERROR_MESSAGE1570
+Binder Error: No function matches the given name and argument types 'max()'. You might need to add explicit type casts.
+	Candidate functions:
+	max(DECIMAL) -> DECIMAL
+	max(ANY) -> ANY
 
 statement error
 SELECT MAX(1, 2, 3)

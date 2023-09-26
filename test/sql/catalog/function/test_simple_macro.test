@@ -242,7 +242,7 @@ Binder Error: STAR expression is not supported here
 statement error
 CREATE MACRO conflict(a, a := 1) AS a + a
 ----
-PLACEHOLDER_ERROR_MESSAGE1835
+Binder Error: table "0_macro_parametersconflict" has duplicate column name "a"
 
 statement ok
 CREATE MACRO add_default5(a, b := 5) AS a + b

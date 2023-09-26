@@ -143,7 +143,9 @@ select regr_r2(0, i) from range(5) tbl(i);
 statement error
 select regr_r2(*)
 ----
-PLACEHOLDER_ERROR_MESSAGE1596
+Binder Error: No function matches the given name and argument types 'regr_r2()'. You might need to add explicit type casts.
+	Candidate functions:
+	regr_r2(DOUBLE, DOUBLE) -> DOUBLE
 
 statement error
 select regr_sxx()

@@ -119,4 +119,4 @@ Conversion Error: Could not convert string ".1f3" to DECIMAL(18,3)
 statement error
 SELECT '1f3'::DECIMAL
 ----
-PLACEHOLDER_ERROR_MESSAGE402
+Conversion Error: Could not convert string "1f3" to DECIMAL(18,3)

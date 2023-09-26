@@ -208,7 +208,7 @@ Binder Error: No function matches the given name and argument types 'finalize(HU
 statement error
 select sum(42) EXPORT_STATE over ();
 ----
-PLACEHOLDER_ERROR_MESSAGE1672
+Parser Error: EXPORT_STATE is not supported for window functions!
 
 
 # tests with ze persistence

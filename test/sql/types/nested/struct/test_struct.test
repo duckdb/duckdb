@@ -208,7 +208,7 @@ Binder Error: Key name for struct_extract needs to be a constant string
 statement error
 SELECT STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), '42') FROM struct_data
 ----
-PLACEHOLDER_ERROR_MESSAGE855
+Binder Error: Could not find key "42" in struct
 
 statement ok
 CREATE TABLE test AS SELECT e, STRUCT_PACK(e) FROM struct_data

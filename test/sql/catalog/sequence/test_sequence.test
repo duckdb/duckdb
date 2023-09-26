@@ -441,7 +441,7 @@ Parser Error: START value (6) cannot be greater than MAXVALUE (5)
 statement error
 CREATE SEQUENCE seq MINVALUE 5 START WITH 4;
 ----
-PLACEHOLDER_ERROR_MESSAGE1921
+Parser Error: START value (4) cannot be less than MINVALUE (5)
 
 # min value bigger than max
 statement error

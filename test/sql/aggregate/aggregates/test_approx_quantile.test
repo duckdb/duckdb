@@ -347,7 +347,40 @@ Binder Error: Size of the RESERVOIR_QUANTILE sample cannot be NULL
 statement error
 SELECT reservoir_quantile(r, 0.9, r)  from quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1540
+Binder Error: No function matches the given name and argument types 'reservoir_quantile(BIGINT, DECIMAL(2,1), BIGINT)'. You might need to add explicit type casts.
+	Candidate functions:
+	reservoir_quantile(DECIMAL, DOUBLE) -> DECIMAL
+	reservoir_quantile(DECIMAL, DOUBLE, INTEGER) -> DECIMAL
+	reservoir_quantile(DECIMAL, DOUBLE[]) -> DECIMAL[]
+	reservoir_quantile(DECIMAL, DOUBLE[], INTEGER) -> DECIMAL[]
+	reservoir_quantile(TINYINT, DOUBLE) -> TINYINT
+	reservoir_quantile(TINYINT, DOUBLE, INTEGER) -> TINYINT
+	reservoir_quantile(TINYINT, DOUBLE[]) -> TINYINT[]
+	reservoir_quantile(TINYINT, DOUBLE[], INTEGER) -> TINYINT[]
+	reservoir_quantile(SMALLINT, DOUBLE) -> SMALLINT
+	reservoir_quantile(SMALLINT, DOUBLE, INTEGER) -> SMALLINT
+	reservoir_quantile(SMALLINT, DOUBLE[]) -> SMALLINT[]
+	reservoir_quantile(SMALLINT, DOUBLE[], INTEGER) -> SMALLINT[]
+	reservoir_quantile(INTEGER, DOUBLE) -> INTEGER
+	reservoir_quantile(INTEGER, DOUBLE, INTEGER) -> INTEGER
+	reservoir_quantile(INTEGER, DOUBLE[]) -> INTEGER[]
+	reservoir_quantile(INTEGER, DOUBLE[], INTEGER) -> INTEGER[]
+	reservoir_quantile(BIGINT, DOUBLE) -> BIGINT
+	reservoir_quantile(BIGINT, DOUBLE, INTEGER) -> BIGINT
+	reservoir_quantile(BIGINT, DOUBLE[]) -> BIGINT[]
+	reservoir_quantile(BIGINT, DOUBLE[], INTEGER) -> BIGINT[]
+	reservoir_quantile(HUGEINT, DOUBLE) -> HUGEINT
+	reservoir_quantile(HUGEINT, DOUBLE, INTEGER) -> HUGEINT
+	reservoir_quantile(HUGEINT, DOUBLE[]) -> HUGEINT[]
+	reservoir_quantile(HUGEINT, DOUBLE[], INTEGER) -> HUGEINT[]
+	reservoir_quantile(FLOAT, DOUBLE) -> FLOAT
+	reservoir_quantile(FLOAT, DOUBLE, INTEGER) -> FLOAT
+	reservoir_quantile(FLOAT, DOUBLE[]) -> FLOAT[]
+	reservoir_quantile(FLOAT, DOUBLE[], INTEGER) -> FLOAT[]
+	reservoir_quantile(DOUBLE, DOUBLE) -> DOUBLE
+	reservoir_quantile(DOUBLE, DOUBLE, INTEGER) -> DOUBLE
+	reservoir_quantile(DOUBLE, DOUBLE[]) -> DOUBLE[]
+	reservoir_quantile(DOUBLE, DOUBLE[], INTEGER) -> DOUBLE[]
 
 statement error
 SELECT reservoir_quantile(r, random()::float)  from quantile

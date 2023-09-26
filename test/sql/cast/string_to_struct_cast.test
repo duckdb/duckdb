@@ -370,7 +370,7 @@ Conversion Error: Type VARCHAR with value '}{a:5}' can't be cast to the destinat
 statement error
 SELECT CAST('{a:{b:{d: 800}, {c: "Duck"}}}' AS STRUCT(a STRUCT(b STRUCT(d INT), c STRUCT(c VARCHAR))));
 ----
-PLACEHOLDER_ERROR_MESSAGE1447
+Conversion Error: Type VARCHAR with value '{b:{d: 800}, {c: "Duck"}}' can't be cast to the destination type STRUCT
 
 statement error
 SELECT CAST('{[{]}}' AS STRUCT(a VARCHAR[]));

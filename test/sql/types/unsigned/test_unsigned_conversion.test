@@ -127,7 +127,7 @@ SELECT (9223372036854775808)::HUGEINT::UBIGINT
 statement error
 SELECT (-42)::TINYINT::UTINYINT
 ----
-PLACEHOLDER_ERROR_MESSAGE465
+Conversion Error: Type INT8 with value -42 can't be cast because the value is out of range for the destination type UINT8
 
 statement error
 SELECT (-42)::TINYINT::USMALLINT

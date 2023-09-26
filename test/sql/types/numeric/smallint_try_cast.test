@@ -211,7 +211,7 @@ Conversion Error: Could not cast value -32768 to DECIMAL(18,14)
 statement error
 SELECT i::DECIMAL(38,34)::SMALLINT FROM smallints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE790
+Conversion Error: Could not cast value -32768 to DECIMAL(38,34)
 
 query I
 SELECT TRY_CAST(i AS DECIMAL(3,0))::SMALLINT FROM smallints ORDER BY i

@@ -135,7 +135,9 @@ Candidates:
 statement error
 SELECT 42 WHERE 1=1 WHERE 1=0;
 ----
-PLACEHOLDER_ERROR_MESSAGE3084
+Parser Error: syntax error at or near "WHERE"
+LINE 1: SELECT 42 WHERE 1=1 WHERE 1=0;
+                            ^
 
 # multiple statements without semi colon
 statement error

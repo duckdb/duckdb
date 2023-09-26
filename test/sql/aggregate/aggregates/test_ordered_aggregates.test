@@ -180,7 +180,7 @@ Invalid Input Error: Could not convert string 'duck' to DOUBLE
 statement error
 SELECT percentile_disc(sum(1)) WITHIN GROUP (ORDER BY 1 DESC);
 ----
-PLACEHOLDER_ERROR_MESSAGE1690
+Binder Error: aggregate function calls cannot be nested
 
 # NULL fractions with DESC should not be inverted
 statement error

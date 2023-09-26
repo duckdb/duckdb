@@ -105,7 +105,7 @@ Conversion Error: Could not cast value 100000.000000 to DECIMAL(5,0)
 statement error
 SELECT CAST(100000::DECIMAL(6,0) AS DECIMAL(5,0))
 ----
-PLACEHOLDER_ERROR_MESSAGE390
+Conversion Error: Casting value "100000" to type DECIMAL(5,0) failed: value is out of range!
 
 statement error
 SELECT CAST(1000000000::DECIMAL(10,0) AS DECIMAL(2,0))

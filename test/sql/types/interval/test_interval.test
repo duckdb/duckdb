@@ -250,7 +250,7 @@ Invalid Input Error: Type INT64 with value 100000000000000000 can't be cast beca
 statement error
 SELECT INTERVAL '4294967296months';
 ----
-PLACEHOLDER_ERROR_MESSAGE527
+Invalid Input Error: Type INT64 with value 4294967296 can't be cast because the value is out of range for the destination type INT32
 
 query T
 SELECT INTERVAL '1294967296months';

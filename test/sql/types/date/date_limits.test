@@ -97,7 +97,7 @@ Out of Range Error: Date out of range
 statement error
 select '5877642-06-25 (BC)'::date - interval (9999999999999) second
 ----
-PLACEHOLDER_ERROR_MESSAGE634
+Out of Range Error: Interval value 9999999999999 seconds out of range
 
 statement error
 select '5877642-06-25 (BC)'::date - interval (9223372036854775807) microsecond

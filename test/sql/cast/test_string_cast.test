@@ -155,7 +155,7 @@ Conversion Error: Could not convert string '0x100000000' to UINT32
 statement error
 SELECT '0x10000000000000000'::UINT64
 ----
-PLACEHOLDER_ERROR_MESSAGE1459
+Conversion Error: Could not convert string '0x10000000000000000' to UINT64
 
 # Bounds exceeded for casting from hex strings to integers, TRY_CAST should be safe
 

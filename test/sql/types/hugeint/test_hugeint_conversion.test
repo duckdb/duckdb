@@ -140,7 +140,7 @@ Conversion Error: Type INT128 with value 100000000000 can't be cast because the 
 statement error
 SELECT 2147483648::HUGEINT::INTEGER;
 ----
-PLACEHOLDER_ERROR_MESSAGE1029
+Conversion Error: Type INT128 with value 2147483648 can't be cast because the value is out of range for the destination type INT32
 
 statement error
 SELECT -2147483648::HUGEINT::INTEGER;

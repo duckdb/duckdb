@@ -145,7 +145,10 @@ Binder Error: No function matches the given name and argument types 'first()'. Y
 statement error
 SELECT FIRST(1, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE1625
+Binder Error: No function matches the given name and argument types 'first(INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	first(DECIMAL) -> DECIMAL
+	first(ANY) -> ANY
 
 query IIRTTTT
 SELECT LAST(1), LAST(NULL), LAST(33.3), LAST('hello'), LAST(True), LAST(DATE '1992-02-02'), LAST(TIMESTAMP '2008-01-01 00:00:01')

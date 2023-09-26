@@ -228,6 +228,6 @@ SELECT i, DATE_PART(['${datepart}'], i) AS parts
 FROM intervals
 ORDER BY 1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1987
+Not implemented Error: "INTERVAL" units "dow" not recognized
 
 endloop

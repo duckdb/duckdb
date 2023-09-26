@@ -115,4 +115,4 @@ Conversion Error: Casting value "1.0" to type DECIMAL(1,1) failed: value is out 
 statement error
 SELECT 1.0::DECIMAL(38,1)::DECIMAL(1,1)
 ----
-PLACEHOLDER_ERROR_MESSAGE272
+Conversion Error: Casting value "1.0" to type DECIMAL(1,1) failed: value is out of range!
