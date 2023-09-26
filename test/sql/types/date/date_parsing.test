@@ -322,59 +322,61 @@ Conversion Error: date field value out of range: "100000", expected format is (Y
 statement error
 SELECT '1992-10/10'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE584
+Conversion Error: date field value out of range: "1992-10/10", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT '1992a10a10'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE583
+Conversion Error: date field value out of range: "1992a10a10", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT '1992/10-10'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE582
+Conversion Error: date field value out of range: "1992/10-10", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT 'hello'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE581
+Conversion Error: date field value out of range: "hello", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT 'aa-10-10'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE580
+Conversion Error: date field value out of range: "aa-10-10", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT '1992-aa-10'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE579
+Conversion Error: date field value out of range: "1992-aa-10", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT '1992-10-aa'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE578
+Conversion Error: date field value out of range: "1992-10-aa", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT ''::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE577
+Conversion Error: date field value out of range: "", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT '-'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE576
+Conversion Error: date field value out of range: "-", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT '-/10/10'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE575
+Conversion Error: date field value out of range: "-/10/10", expected format is (YYYY-MM-DD)
 
 # min year is slightly smaller than max year, because we start at 1970
 # -291000 is out of range, but 291000 is not
 statement error
 SELECT '-291000-01-01'::DATE:VARCHAR;
 ----
-PLACEHOLDER_ERROR_MESSAGE574
+Parser Error: syntax error at or near ":"
+LINE 1: SELECT '-291000-01-01'::DATE:VARCHAR;
+                                    ^
 
 statement ok
 SELECT '291000-01-01'::DATE::VARCHAR;
@@ -382,60 +384,62 @@ SELECT '291000-01-01'::DATE::VARCHAR;
 statement error
 SELECT '291000-01-01 (BC)'::DATE:VARCHAR;
 ----
-PLACEHOLDER_ERROR_MESSAGE573
+Parser Error: syntax error at or near ":"
+LINE 1: SELECT '291000-01-01 (BC)'::DATE:VARCHAR;
+                                        ^
 
 statement error
 SELECT '-a'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE572
+Conversion Error: date field value out of range: "-a", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT '1992-'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE571
+Conversion Error: date field value out of range: "1992-", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT '1992-10'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE570
+Conversion Error: date field value out of range: "1992-10", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT '1992-10-'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE569
+Conversion Error: date field value out of range: "1992-10-", expected format is (YYYY-MM-DD)
 
 # dates out of range
 statement error
 SELECT '10000000000-01-01'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE568
+Conversion Error: date field value out of range: "10000000000-01-01", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT '-10000000000-01-01'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE567
+Conversion Error: date field value out of range: "-10000000000-01-01", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT '1992-30-30'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE566
+Conversion Error: date field value out of range: "1992-30-30", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT '1992-00-50'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE565
+Conversion Error: date field value out of range: "1992-00-50", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT '1992-01-00'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE564
+Conversion Error: date field value out of range: "1992-01-00", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT '1992-10-50'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE563
+Conversion Error: date field value out of range: "1992-10-50", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT '1992-10-100'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE562
+Conversion Error: date field value out of range: "1992-10-100", expected format is (YYYY-MM-DD)

@@ -64,9 +64,6 @@ statement error
 SELECT * FROM tablename;
 ----
 Catalog Error: Table with name tablename does not exist!
-Did you mean "system.information_schema.tables"?
-LINE 1: SELECT * FROM tablename;
-                      ^
 
 ##TEST: The owned sequence cannot be dropped without CASCADE
 statement ok
@@ -170,17 +167,17 @@ DROP TABLE tablename;
 statement error
 SELECT nextval('sequence1');
 ----
-PLACEHOLDER_ERROR_MESSAGE1791
+Catalog Error: Sequence with name sequence1 does not exist!
 
 statement error
 SELECT nextval('sequence2');
 ----
-PLACEHOLDER_ERROR_MESSAGE1790
+Catalog Error: Sequence with name sequence2 does not exist!
 
 statement error
 SELECT nextval('sequence3');
 ----
-PLACEHOLDER_ERROR_MESSAGE1789
+Catalog Error: Sequence with name sequence3 does not exist!
 
 ##TEST: When owning a sequence, insertions work normally
 statement ok
@@ -244,12 +241,12 @@ CREATE TABLE tablename (
 statement error
 ALTER SEQUENCE sequence1 OWNED BY tablename;
 ----
-PLACEHOLDER_ERROR_MESSAGE1788
+Dependency Error: sequence1 already depends on new_tablename
 
 statement error
 DROP SEQUENCE sequence1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1787
+Dependency Error: Cannot drop entry "sequence1" because there are entries that depend on it. Use DROP...CASCADE to drop all dependents.
 
 statement error
 CREATE OR REPLACE SEQUENCE sequence1;
@@ -287,7 +284,7 @@ ALTER SEQUENCE sequence1 OWNED BY tablename;
 statement error
 DROP SEQUENCE sequence1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1786
+Dependency Error: Cannot drop entry "sequence1" because there are entries that depend on it. Use DROP...CASCADE to drop all dependents.
 
 statement ok
 DROP TABLE tablename;
@@ -311,7 +308,7 @@ ALTER TABLE tablename DROP colname2;
 statement error
 DROP SEQUENCE sequence1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1785
+Dependency Error: Cannot drop entry "sequence1" because there are entries that depend on it. Use DROP...CASCADE to drop all dependents.
 
 statement ok
 DROP TABLE tablename;
@@ -334,7 +331,7 @@ ALTER TABLE tablename ALTER colname TYPE float;
 statement error
 DROP SEQUENCE sequence1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1784
+Dependency Error: Cannot drop entry "sequence1" because there are entries that depend on it. Use DROP...CASCADE to drop all dependents.
 
 statement ok
 DROP TABLE tablename;
@@ -360,7 +357,7 @@ ALTER TABLE tablename DROP colname4;
 statement error
 DROP SEQUENCE sequence1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1783
+Dependency Error: Cannot drop entry "sequence1" because there are entries that depend on it. Use DROP...CASCADE to drop all dependents.
 
 statement ok
 ALTER TABLE tablename DROP colname3;
@@ -368,7 +365,7 @@ ALTER TABLE tablename DROP colname3;
 statement error
 DROP SEQUENCE sequence1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1782
+Dependency Error: Cannot drop entry "sequence1" because there are entries that depend on it. Use DROP...CASCADE to drop all dependents.
 
 statement ok
 ALTER TABLE tablename DROP colname2;
@@ -376,7 +373,7 @@ ALTER TABLE tablename DROP colname2;
 statement error
 DROP SEQUENCE sequence1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1781
+Dependency Error: Cannot drop entry "sequence1" because there are entries that depend on it. Use DROP...CASCADE to drop all dependents.
 
 statement ok
 DROP TABLE tablename;
@@ -402,7 +399,8 @@ DROP TABLE tablename;
 statement error
 select nextval('sequence1');
 ----
-PLACEHOLDER_ERROR_MESSAGE1780
+Catalog Error: Sequence with name sequence1 does not exist!
+Did you mean "sequence1"?
 
 statement ok
 ROLLBACK;
@@ -415,7 +413,7 @@ select nextval('sequence1');
 statement error
 DROP SEQUENCE sequence1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1779
+Dependency Error: Cannot drop entry "sequence1" because there are entries that depend on it. Use DROP...CASCADE to drop all dependents.
 
 statement ok
 DROP TABLE tablename;
@@ -433,7 +431,7 @@ ALTER SEQUENCE sequence1 OWNED BY v1_sequence1;
 statement error
 DROP SEQUENCE sequence1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1778
+Dependency Error: Cannot drop entry "sequence1" because there are entries that depend on it. Use DROP...CASCADE to drop all dependents.
 
 statement ok
 DROP VIEW v1_sequence1;
@@ -441,7 +439,7 @@ DROP VIEW v1_sequence1;
 statement error
 SELECT nextval('sequence1');
 ----
-PLACEHOLDER_ERROR_MESSAGE1777
+Catalog Error: Sequence with name sequence1 does not exist!
 
 ##TEST: Sequence can own a sequence
 statement ok
@@ -456,7 +454,7 @@ ALTER SEQUENCE sequence1 OWNED BY sequence2;
 statement error
 DROP SEQUENCE sequence1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1776
+Dependency Error: Cannot drop entry "sequence1" because there are entries that depend on it. Use DROP...CASCADE to drop all dependents.
 
 statement ok
 DROP SEQUENCE sequence2;
@@ -464,7 +462,7 @@ DROP SEQUENCE sequence2;
 statement error
 SELECT nextval('sequence1');
 ----
-PLACEHOLDER_ERROR_MESSAGE1775
+Catalog Error: Sequence with name sequence1 does not exist!
 
 ##TEST: Sequence cant own its owner
 statement ok
@@ -479,7 +477,7 @@ ALTER SEQUENCE sequence1 OWNED BY sequence2;
 statement error
 ALTER SEQUENCE sequence2 OWNED BY sequence1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1774
+Dependency Error: sequence1 already owned by sequence2
 
 statement ok
 DROP SEQUENCE sequence2;
@@ -503,12 +501,12 @@ ALTER SEQUENCE sequence2 OWNED BY sequence1;
 statement error
 ALTER SEQUENCE sequence3 OWNED BY sequence2;
 ----
-PLACEHOLDER_ERROR_MESSAGE1773
+Dependency Error: sequence2 already owned by sequence1
 
 statement error
 ALTER SEQUENCE sequence1 OWNED BY sequence3;
 ----
-PLACEHOLDER_ERROR_MESSAGE1772
+Dependency Error: sequence1 already depends on sequence2
 
 statement ok
 ALTER SEQUENCE sequence3 OWNED BY sequence4;
@@ -522,19 +520,19 @@ DROP SEQUENCE sequence4;
 statement error
 SELECT nextval('sequence1');
 ----
-PLACEHOLDER_ERROR_MESSAGE1771
+Catalog Error: Sequence with name sequence1 does not exist!
 
 statement error
 SELECT nextval('sequence2');
 ----
-PLACEHOLDER_ERROR_MESSAGE1770
+Catalog Error: Sequence with name sequence2 does not exist!
 
 statement error
 SELECT nextval('sequence3');
 ----
-PLACEHOLDER_ERROR_MESSAGE1769
+Catalog Error: Sequence with name sequence3 does not exist!
 
 statement error
 SELECT nextval('sequence4');
 ----
-PLACEHOLDER_ERROR_MESSAGE1768
+Catalog Error: Sequence with name sequence4 does not exist!

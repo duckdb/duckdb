@@ -201,47 +201,47 @@ select '5881580-07-10'::date - interval (1) day
 statement error
 select '5881580-07-10'::date + interval (1) day
 ----
-PLACEHOLDER_ERROR_MESSAGE619
+Out of Range Error: Date out of range
 
 statement error
 select '5881580-07-10'::date + interval (365) day
 ----
-PLACEHOLDER_ERROR_MESSAGE618
+Out of Range Error: Date out of range
 
 statement error
 select '5881580-07-10'::date + interval (2147483647) day
 ----
-PLACEHOLDER_ERROR_MESSAGE617
+Out of Range Error: Date out of range
 
 statement error
 select '5881580-07-10'::date + interval (9999999999999) second
 ----
-PLACEHOLDER_ERROR_MESSAGE616
+Out of Range Error: Interval value 9999999999999 seconds out of range
 
 statement error
 select '5881580-07-10'::date + interval (9223372036854775807) microsecond
 ----
-PLACEHOLDER_ERROR_MESSAGE615
+Out of Range Error: Date out of range
 
 statement error
 select '5881580-07-10'::date + interval '1147483647 days 9223372036854775807 microseconds'
 ----
-PLACEHOLDER_ERROR_MESSAGE614
+Out of Range Error: Date out of range
 
 statement error
 select '5881580-07-10'::date + interval '2147483647 days 9223372036854775807 microseconds'
 ----
-PLACEHOLDER_ERROR_MESSAGE613
+Out of Range Error: Date out of range
 
 statement error
 select '5881580-07-10'::date + interval '2007483647 days 9223372036854775807 microseconds'
 ----
-PLACEHOLDER_ERROR_MESSAGE612
+Out of Range Error: Date out of range
 
 statement error
 select '5881580-07-10'::date + interval (1) month
 ----
-PLACEHOLDER_ERROR_MESSAGE611
+Conversion Error: Date out of range: 5881580-8-10
 
 query I
 select '5881580-07-10'::date - interval (1) month
