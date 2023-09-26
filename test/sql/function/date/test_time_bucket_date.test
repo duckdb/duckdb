@@ -481,7 +481,7 @@ Invalid Input Error: Type INT32 with value 290309-12-21 (BC) can't be cast to th
 statement error
 select time_bucket('1 week'::interval, '290309-12-22 (BC)'::date);
 ----
-PLACEHOLDER_ERROR_MESSAGE2021
+Out of Range Error: Overflow in subtraction of INT64 (-9223372022400000000 - 345600000000)!
 
 statement error
 select time_bucket('1 day'::interval, '290309-12-21 (BC)'::date);

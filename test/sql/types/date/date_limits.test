@@ -153,7 +153,7 @@ Conversion Error: date field value out of range: "5881580-08-11", expected forma
 statement error
 select '99999999-01-01'::date
 ----
-PLACEHOLDER_ERROR_MESSAGE625
+Conversion Error: date field value out of range: "99999999-01-01", expected format is (YYYY-MM-DD)
 
 # max date for timestamp micros is 294246
 query I

@@ -205,7 +205,7 @@ Not implemented Error: "time" units "era" not recognized
 statement error
 select extract(julian from time '10:00:00');
 ----
-PLACEHOLDER_ERROR_MESSAGE2052
+Binder Error: julian can only take DATE or TIMESTAMP arguments
 
 statement error
 select date_part('julian', time '10:00:00');

@@ -394,7 +394,8 @@ SELECT main.nextval('main_sequence');
 statement error
 SELECT main.nextval('oop_sequence');
 ----
-PLACEHOLDER_ERROR_MESSAGE1871
+Catalog Error: Sequence with name oop_sequence does not exist!
+Did you mean "out_of_path.oop_sequence"?
 
 statement ok
 SELECT main.nextval('out_of_path.oop_sequence');

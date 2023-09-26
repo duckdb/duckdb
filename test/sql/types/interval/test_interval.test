@@ -357,7 +357,7 @@ Invalid Input Error: Could not convert string '9223372036854775810' to INT64
 statement error
 SELECT INTERVAL '-9223372036854775810msecs';
 ----
-PLACEHOLDER_ERROR_MESSAGE518
+Invalid Input Error: Could not convert string '9223372036854775810' to INT64
 
 # need a number here
 statement error

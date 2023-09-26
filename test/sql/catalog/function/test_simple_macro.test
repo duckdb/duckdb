@@ -321,7 +321,7 @@ Binder Error: Duplicate default parameters a!
 statement error
 SELECT two_default_params(b := 5, b := 3)
 ----
-PLACEHOLDER_ERROR_MESSAGE1826
+Binder Error: Duplicate default parameters b!
 
 statement error
 CREATE MACRO macros.add_macro(a, b) AS a + b

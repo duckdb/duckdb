@@ -257,7 +257,10 @@ Binder Error: No function matches the given name and argument types 'string_agg(
 statement error
 SELECT STRING_AGG(1, 2, 3)
 ----
-PLACEHOLDER_ERROR_MESSAGE1616
+Binder Error: No function matches the given name and argument types 'string_agg(INTEGER, INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	string_agg(VARCHAR) -> VARCHAR
+	string_agg(VARCHAR, VARCHAR) -> VARCHAR
 
 statement ok
 CREATE TABLE test_val(val INT)

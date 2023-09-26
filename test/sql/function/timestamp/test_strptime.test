@@ -448,7 +448,10 @@ Error: Full specifier did not match: trailing characters
 statement error
 SELECT strptime('2000-10-01 23:59:59.1000000000000000000000000000', '%Y-%m-%d %H:%M:%S.%f')
 ----
-PLACEHOLDER_ERROR_MESSAGE2453
+Invalid Input Error: Could not parse string "2000-10-01 23:59:59.1000000000000000000000000000" according to format specifier "%Y-%m-%d %H:%M:%S.%f"
+2000-10-01 23:59:59.1000000000000000000000000000
+                          ^
+Error: Full specifier did not match: trailing characters
 
 # empty string
 statement error
