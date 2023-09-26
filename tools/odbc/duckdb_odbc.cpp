@@ -5,6 +5,8 @@
 #include "odbc_interval.hpp"
 #include "parameter_descriptor.hpp"
 #include "row_descriptor.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 using duckdb::OdbcDiagnostic;
 using duckdb::OdbcHandle;
@@ -166,6 +168,10 @@ void OdbcHandleStmt::FillIRD() {
 		duckdb::ApiInfo::GetColumnSize<SQLINTEGER>(col_type, &new_record.sql_desc_display_size);
 		new_record.SetDescUnsignedField(col_type);
 
+		auto &db_manager = dbc->env->db->instance->GetDatabaseManager();
+		auto &catalog_name = db_manager.GetSystemCatalog().GetAttached().GetName();
+
+		new_record.sql_desc_catalog_name = catalog_name;
 		new_record.sql_desc_nullable = SQL_NULLABLE;
 
 		ird->records.emplace_back(new_record);

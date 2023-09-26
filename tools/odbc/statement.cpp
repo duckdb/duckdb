@@ -163,6 +163,19 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 	return SQL_SUCCESS;
 }
 
+/**
+ * @brief SQLGetStmtAttr returns attributes that govern aspects of a statement.
+ * @param statement_handle
+ * @param attribute [INPUT] The attribute to set
+ * @param value_ptr [OUTPUT] The value to set the attribute to.  Depending of the value of attribute, it can be:
+ * 					\n- ODBC descriptor handle
+ * 					\n- SQLUINTEGER value
+ * 					\n- SQLULEN value
+ * 					\n- a pointer to: null-terminated character string, a bin, a value or array of type SQLLEN, SQLULEN, or SQLUSMALLINT, a driver-defined value
+ * @param buffer_length
+ * @param string_length_ptr
+ * @return
+ */
 SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                  SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
@@ -177,19 +190,20 @@ SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 	case SQL_ATTR_APP_ROW_DESC:
 	case SQL_ATTR_IMP_ROW_DESC: {
 		if (string_length_ptr) {
-			*string_length_ptr = 4;
+			*string_length_ptr = SQL_IS_POINTER;
 		}
+		SQLHDESC *desc_handle = reinterpret_cast<SQLHDESC *>(value_ptr);
 		if (attribute == SQL_ATTR_APP_PARAM_DESC) {
-			*((HSTMT *)value_ptr) = hstmt->param_desc->GetAPD();
+			*desc_handle = hstmt->param_desc->GetAPD();
 		}
 		if (attribute == SQL_ATTR_IMP_PARAM_DESC) {
-			*((HSTMT *)value_ptr) = hstmt->param_desc->GetIPD();
+			*desc_handle = hstmt->param_desc->GetIPD();
 		}
 		if (attribute == SQL_ATTR_APP_ROW_DESC) {
-			*((HSTMT *)value_ptr) = hstmt->row_desc->GetARD();
+			*desc_handle = hstmt->row_desc->GetARD();
 		}
 		if (attribute == SQL_ATTR_IMP_ROW_DESC) {
-			*((HSTMT *)value_ptr) = hstmt->row_desc->GetIRD();
+			*desc_handle = hstmt->row_desc->GetIRD();
 		}
 		return SQL_SUCCESS;
 	}
@@ -511,9 +525,9 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 		return SQL_SUCCESS;
 	}
 	case SQL_DESC_CATALOG_NAME: {
-
+		duckdb::OdbcUtils::WriteString(desc_record->sql_desc_catalog_name, static_cast<SQLCHAR *>(character_attribute_ptr), buffer_length,
+		                               string_length_ptr);
 	}
-		// TODO: this
 	case SQL_DESC_CONCISE_TYPE: {
 		if (numeric_attribute_ptr) {
 			duckdb::Store<SQLLEN>(desc_record->sql_desc_concise_type, reinterpret_cast<duckdb::data_ptr_t >(numeric_attribute_ptr));

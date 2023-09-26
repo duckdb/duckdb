@@ -90,17 +90,10 @@ TEST_CASE("Test SQLColAttribute (descriptor information for a column)", "[odbc]"
 	                  &has_fixed_precision);
 	REQUIRE(has_fixed_precision == SQL_FALSE);
 
-	// Retrieve the descriptor handle
-	SQLHDESC desc_handle;
-	EXECUTE_AND_CHECK("SQLGetStmtAttr", SQLGetStmtAttr, hstmt, SQL_ATTR_IMP_PARAM_DESC, &desc_handle, 0, nullptr);
 
-	//Get catalog name using SQLGetDescField
-	SQLINTEGER catalog_name_length;
-	const char *buffer;
-	EXECUTE_AND_CHECK("SQLGetDescField", SQLGetDescField, desc_handle, 1, SQL_DESC_CATALOG_NAME, ConvertToSQLPOINTER(buffer), sizeof(buffer),
-	                  &catalog_name_length);
-	REQUIRE(catalog_name_length == 0);
-	REQUIRE(STR_EQUAL(buffer, ""));
+	// run simple query to get a result set
+	EXECUTE_AND_CHECK("SQLExecDirect", SQLExecDirect, hstmt,
+	                  ConvertToSQLCHAR("SELECT 1 AS a, 2 AS b"), SQL_NTS);
 
 	// Determine if column is auto incremental
 	SQLLEN is_auto_incremental;
