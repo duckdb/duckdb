@@ -260,7 +260,7 @@ SELECT INTERVAL '1294967296months';
 statement error
 SELECT INTERVAL '1294967296months 1294967296months';
 ----
-PLACEHOLDER_ERROR_MESSAGE526
+Out of Range Error: interval value is out of range
 
 query T
 SELECT INTERVAL '1294967296months -1294967296months';

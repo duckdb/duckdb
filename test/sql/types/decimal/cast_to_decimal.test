@@ -104,7 +104,7 @@ Conversion Error: Could not cast value 10000000 to DECIMAL(3,1)
 statement error
 SELECT -10000000::INTEGER::DECIMAL(3,1)
 ----
-PLACEHOLDER_ERROR_MESSAGE341
+Conversion Error: Could not cast value 10000000 to DECIMAL(3,1)
 
 statement error
 SELECT 1::INTEGER::DECIMAL(3,3)

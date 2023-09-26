@@ -805,7 +805,7 @@ Not implemented Error: Month intervals cannot have day or time component
 statement error
 select time_bucket('3 days'::interval, '2019-05-05 00:00:00'::timestamp, '2000000000 months'::interval);
 ----
-PLACEHOLDER_ERROR_MESSAGE2479
+Conversion Error: Date out of range: -166664648-9-5
 
 statement error
 select time_bucket('3 days'::interval, '2019-05-05 00:00:00'::timestamp, '-2000000000 months'::interval);

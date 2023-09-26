@@ -144,7 +144,9 @@ statement error
 SELECT 42
 SELECT 42;
 ----
-PLACEHOLDER_ERROR_MESSAGE3083
+Parser Error: syntax error at or near "SELECT"
+LINE 2: SELECT 42;
+        ^
 
 # multiple statements, but error is only in second statement
 statement error

@@ -447,7 +447,7 @@ Parser Error: START value (4) cannot be less than MINVALUE (5)
 statement error
 CREATE SEQUENCE seq MINVALUE 7 MAXVALUE 5;
 ----
-PLACEHOLDER_ERROR_MESSAGE1920
+Parser Error: MINVALUE (7) must be less than MAXVALUE (5)
 
 # increment must not be 0
 statement error

@@ -150,7 +150,7 @@ Out of Range Error: Interval value 9223372036854775807 seconds out of range
 statement error
 SELECT interval '9223372036854775807' milliseconds;
 ----
-PLACEHOLDER_ERROR_MESSAGE491
+Out of Range Error: Interval value 9223372036854775807 milliseconds out of range
 
 # milli/microseconds
 query I

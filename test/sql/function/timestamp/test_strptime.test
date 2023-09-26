@@ -380,7 +380,7 @@ Error: Literal does not match, expected -
 statement error
 SELECT strptime('2001-02-30', '%Y-%m-%d')
 ----
-PLACEHOLDER_ERROR_MESSAGE2461
+Conversion Error: Date out of range: 2001-2-30
 
 # incorrect date
 statement error

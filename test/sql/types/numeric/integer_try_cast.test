@@ -203,7 +203,7 @@ Conversion Error: Could not cast value -2147483648 to DECIMAL(3,0)
 statement error
 SELECT i::DECIMAL(9,0)::INTEGER FROM integers ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE804
+Conversion Error: Could not cast value -2147483648 to DECIMAL(9,0)
 
 statement error
 SELECT i::DECIMAL(18,9)::INTEGER FROM integers ORDER BY i

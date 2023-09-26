@@ -146,7 +146,7 @@ Catalog Error: Cannot rename column "albumname" because this is involved in the 
 statement error
 ALTER TABLE song RENAME COLUMN songalbum TO songalbum_new;
 ----
-PLACEHOLDER_ERROR_MESSAGE1325
+Catalog Error: Cannot rename column "songalbum" because this is involved in the foreign key constraint
 
 statement ok
 ALTER TABLE song RENAME COLUMN songname TO songname_new;

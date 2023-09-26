@@ -145,7 +145,7 @@ Conversion Error: Type INT128 with value 2147483648 can't be cast because the va
 statement error
 SELECT -2147483648::HUGEINT::INTEGER;
 ----
-PLACEHOLDER_ERROR_MESSAGE1028
+Conversion Error: Type INT128 with value 2147483648 can't be cast because the value is out of range for the destination type INT32
 
 statement ok
 SELECT 2147483647::HUGEINT::INTEGER, -2147483647::HUGEINT::INTEGER;

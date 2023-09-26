@@ -158,7 +158,10 @@ SELECT LAST(1), LAST(NULL), LAST(33.3), LAST('hello'), LAST(True), LAST(DATE '19
 statement error
 SELECT LAST()
 ----
-PLACEHOLDER_ERROR_MESSAGE1624
+Binder Error: No function matches the given name and argument types 'last()'. You might need to add explicit type casts.
+	Candidate functions:
+	last(DECIMAL) -> DECIMAL
+	last(ANY) -> ANY
 
 statement error
 SELECT LAST(1, 2)

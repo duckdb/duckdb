@@ -113,4 +113,4 @@ Conversion Error: Failure in decode: could not convert blob to UTF8 string, the 
 statement error
 SELECT upper(decode('\xc1\x82'::BLOB)::VARCHAR);
 ----
-PLACEHOLDER_ERROR_MESSAGE38
+Conversion Error: Failure in decode: could not convert blob to UTF8 string, the blob contained invalid UTF8 characters

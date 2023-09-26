@@ -250,7 +250,7 @@ CREATE MACRO add_default5(a, b := 5) AS a + b
 statement error
 SELECT add_default5(3, 6)
 ----
-PLACEHOLDER_ERROR_MESSAGE1834
+Binder Error: Macro function 'add_default5(a)' requires a single positional argument, but 2 positional arguments were provided.
 
 query T
 SELECT add_default5(3)

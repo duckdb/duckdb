@@ -183,7 +183,7 @@ Conversion Error: Could not cast value -9223372036854775808 to DECIMAL(3,0)
 statement error
 SELECT i::DECIMAL(9,0)::BIGINT FROM bigints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE759
+Conversion Error: Could not cast value -9223372036854775808 to DECIMAL(9,0)
 
 statement error
 SELECT i::DECIMAL(18,0)::BIGINT FROM bigints ORDER BY i

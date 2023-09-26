@@ -196,4 +196,4 @@ select MAP([1,2,3,4],['happy','ok','ok','sad']::mood[])
 statement error
 select MAP([1,2,3,4],['bla','ok','ok','sad']::mood[])
 ----
-PLACEHOLDER_ERROR_MESSAGE648
+Conversion Error: Could not convert string 'bla' to UINT8

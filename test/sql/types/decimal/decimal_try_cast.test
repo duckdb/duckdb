@@ -110,7 +110,7 @@ Conversion Error: Casting value "100000" to type DECIMAL(5,0) failed: value is o
 statement error
 SELECT CAST(1000000000::DECIMAL(10,0) AS DECIMAL(2,0))
 ----
-PLACEHOLDER_ERROR_MESSAGE389
+Conversion Error: Casting value "1000000000" to type DECIMAL(2,0) failed: value is out of range!
 
 statement error
 SELECT CAST(1000000000::DECIMAL(20,0) AS DECIMAL(5,0))

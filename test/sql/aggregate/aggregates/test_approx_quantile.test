@@ -385,7 +385,7 @@ Binder Error: No function matches the given name and argument types 'reservoir_q
 statement error
 SELECT reservoir_quantile(r, random()::float)  from quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1539
+Binder Error: RESERVOIR_QUANTILE can only take constant quantile parameters
 
 statement error
 SELECT reservoir_quantile(r, 0.9, random()::float)  from quantile

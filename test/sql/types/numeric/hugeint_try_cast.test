@@ -165,7 +165,7 @@ CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000000
 statement error
 SELECT s::HUGEINT FROM strings
 ----
-PLACEHOLDER_ERROR_MESSAGE732
+Conversion Error: Could not convert string '   ' to INT128
 
 query I
 SELECT TRY_CAST(s AS HUGEINT) FROM strings

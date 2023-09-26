@@ -186,7 +186,7 @@ Binder Error: aggregate function calls cannot be nested
 statement error
 SELECT percentile_disc(strftime(DATE '1-11-25',NULL)) WITHIN GROUP (ORDER BY 1 DESC);
 ----
-PLACEHOLDER_ERROR_MESSAGE1689
+Binder Error: QUANTILE parameter cannot be NULL
 
 statement error
 SELECT percentile_cont(CASE 1 WHEN 2 THEN 3 END) WITHIN GROUP (ORDER BY 1 DESC);

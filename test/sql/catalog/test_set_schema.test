@@ -256,7 +256,8 @@ SET SESSION schema = 'main';
 statement error
 CREATE VIEW bad_test_view AS SELECT * FROM test_table;
 ----
-PLACEHOLDER_ERROR_MESSAGE1879
+Catalog Error: Table with name test_table does not exist!
+Did you mean "test.test_table"?
 
 # TODO(omo):
 #   Currenly this fails because we bind the table name

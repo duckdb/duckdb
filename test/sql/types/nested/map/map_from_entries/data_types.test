@@ -278,7 +278,7 @@ select col[('2022-01-02 01:00:00'::TIMESTAMP - '2022-01-01'::TIMESTAMP)] from in
 statement error
 create table interval_key_dup as select MAP_FROM_ENTRIES(ARRAY[(('2022-01-02 01:00:00'::TIMESTAMP - '2022-01-01'::TIMESTAMP), 'x'), (('2022-01-02 01:00:00'::TIMESTAMP - '2022-01-01'::TIMESTAMP), 'y')]) col;
 ----
-PLACEHOLDER_ERROR_MESSAGE875
+Invalid Input Error: Map keys have to be unique
 
 # -- TIME --
 # Valid

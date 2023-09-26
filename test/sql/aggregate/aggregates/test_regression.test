@@ -150,7 +150,9 @@ Binder Error: No function matches the given name and argument types 'regr_r2()'.
 statement error
 select regr_sxx()
 ----
-PLACEHOLDER_ERROR_MESSAGE1595
+Binder Error: No function matches the given name and argument types 'regr_sxx()'. You might need to add explicit type casts.
+	Candidate functions:
+	regr_sxx(DOUBLE, DOUBLE) -> DOUBLE
 
 statement error
 select regr_sxx(0, 2e230*i) from range(5) tbl(i)
