@@ -2,15 +2,14 @@
 # description: Test attach using fsspec
 # group: [attach]
 
+# 'dummy_extension' not found
 statement error
 ATTACH 'dummy_extension:/hello.world';
----
-Extension not found
 ----
-PLACEHOLDER_ERROR_MESSAGE2787
+IO Error: Extension
 
+# 'dummy.csv'
 statement error
 ATTACH 'file://dummy.csv'
----
-File not found----
-PLACEHOLDER_ERROR_MESSAGE2786
+----
+IO Error: Cannot open file "file://dummy.csv": No such file or directory
