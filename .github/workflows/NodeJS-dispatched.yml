@@ -3,7 +3,6 @@ on:
   workflow_dispatch:
     inputs:
       #GitHub reference to build for
-      #GitHub reference to build for
       ref:
         required: true
         type: string
@@ -65,48 +64,6 @@ jobs:
         # node.js current support policy to be found at https://github.com/duckdb/duckdb/tree/main/tools/nodejs#Supported-Node-versions
         node: [ '12', '14', '16', '17', '18', '19', '20' ]
         target_arch: [ x64, arm64 ]
-        isRelease:
-          - ${{ startsWith(github.event.inputs.ref, 'refs/tags/v') || github.event.inputs.ref == 'refs/heads/main' }}
-        exclude:
-          - isRelease: false
-            node: 12
-            target_arch: x64
-          - isRelease: false
-            node: 14
-            target_arch: x64
-          - isRelease: false
-            node: 16
-            target_arch: x64
-          - isRelease: false
-            node: 17
-            target_arch: x64
-          - isRelease: false
-            node: 18
-            target_arch: x64
-          - isRelease: false
-            node: 19
-            target_arch: x64
-          - isRelease: false
-            node: 12
-            target_arch: arm64
-          - isRelease: false
-            node: 14
-            target_arch: arm64
-          - isRelease: false
-            node: 16
-            target_arch: arm64
-          - isRelease: false
-            node: 17
-            target_arch: arm64
-          - isRelease: false
-            node: 18
-            target_arch: arm64
-          - isRelease: false
-            node: 19
-            target_arch: arm64
-          - isRelease: false
-            node: 20
-            target_arch: arm64
 
     steps:
       - uses: actions/checkout@v3
@@ -170,7 +127,6 @@ jobs:
         run: ./scripts/node_build.sh ${{ matrix.node }}
 
   osx-nodejs:
-    if: startsWith(github.event.inputs.ref, 'refs/tags/v') || github.event.inputs.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb'
     name: node.js OSX
     runs-on: macos-latest
     needs: set-up-npm
@@ -178,19 +134,7 @@ jobs:
       matrix:
         target_arch: [ x64, arm64 ]
         node: [ '12', '14', '16', '17', '18', '19', '20' ]
-        isRelease:
-          - ${{ startsWith(github.event.inputs.ref, 'refs/tags/v') || github.event.inputs.ref == 'refs/heads/main' }}
         exclude:
-          - isRelease: false
-            node: 12
-          - isRelease: false
-            node: 14
-          - isRelease: false
-            node: 16
-          - isRelease: false
-            node: 17
-          - isRelease: false
-            node: 18
           - target_arch: arm64
             node: 12
           - target_arch: arm64
@@ -259,21 +203,6 @@ jobs:
     strategy:
       matrix:
         node: [ '12', '14', '16', '17', '18', '19', '20' ]
-        isRelease:
-          - ${{ startsWith(github.event.inputs.ref, 'refs/tags/v') || github.event.inputs.ref == 'refs/heads/main' }}
-        exclude:
-          - isRelease: false
-            node: 12
-          - isRelease: false
-            node: 14
-          - isRelease: false
-            node: 16
-          - isRelease: false
-            node: 17
-          - isRelease: false
-            node: 18
-          - isRelease: false
-            node: 19
 
     steps:
       - uses: actions/setup-python@v4
