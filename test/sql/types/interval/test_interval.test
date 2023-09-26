@@ -383,19 +383,19 @@ Conversion Error: extract specifier "unknowns" not recognized
 statement error
 SELECT '100 months a'::INTERVAL;
 ----
-PLACEHOLDER_ERROR_MESSAGE513
+Conversion Error: Could not convert string '100 months a' to INTERVAL
 
 statement error
 SELECT '100 months axo'::INTERVAL;
 ----
-PLACEHOLDER_ERROR_MESSAGE512
+Conversion Error: Could not convert string '100 months axo' to INTERVAL
 
 statement error
 SELECT '100 months agb'::INTERVAL;
 ----
-PLACEHOLDER_ERROR_MESSAGE511
+Conversion Error: Could not convert string '100 months agb' to INTERVAL
 
 statement error
 SELECT '100 months agob'::INTERVAL;
 ----
-PLACEHOLDER_ERROR_MESSAGE510
+Conversion Error: Could not convert string '100 months agob' to INTERVAL

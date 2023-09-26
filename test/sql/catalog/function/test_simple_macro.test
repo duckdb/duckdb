@@ -349,4 +349,4 @@ Binder Error: Macro my_macro does not have default parameter x!
 statement error
 SELECT my_macro(a := 42, a := 42);
 ----
-PLACEHOLDER_ERROR_MESSAGE1821
+Binder Error: Macro my_macro does not have default parameter a!

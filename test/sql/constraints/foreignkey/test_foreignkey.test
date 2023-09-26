@@ -300,7 +300,7 @@ DELETE FROM s1.pkt WHERE i=5
 statement error
 DROP TABLE s1.pkt;
 ----
-PLACEHOLDER_ERROR_MESSAGE1312
+Catalog Error: Could not drop the table because this table is main key table of the table "fkt"
 
 statement ok
 DROP TABLE s1.fkt;

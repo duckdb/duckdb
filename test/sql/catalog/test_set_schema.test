@@ -458,12 +458,14 @@ ALTER TABLE out_of_path.oop_table ADD COLUMN p INTEGER;
 statement error
 DROP TABLE main.test_table;
 ----
-PLACEHOLDER_ERROR_MESSAGE1866
+Catalog Error: Table with name test_table does not exist!
+Did you mean "memory.test.test_table"?
 
 statement error
 DROP TABLE test.main_table;
 ----
-PLACEHOLDER_ERROR_MESSAGE1865
+Catalog Error: Table with name main_table does not exist!
+Did you mean "memory.main_table"?
 
 statement ok
 DROP TABLE test_table;
@@ -474,7 +476,8 @@ DROP TABLE main_table;
 statement error
 DROP TABLE oop_table;
 ----
-PLACEHOLDER_ERROR_MESSAGE1864
+Catalog Error: Table with name oop_table does not exist!
+Did you mean "out_of_path.oop_table"?
 
 statement ok
 DROP TABLE out_of_path.oop_table;

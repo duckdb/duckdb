@@ -317,7 +317,7 @@ SELECT '-1-01-01'::DATE::VARCHAR
 statement error
 SELECT '100000'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE585
+Conversion Error: date field value out of range: "100000", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT '1992-10/10'::DATE::VARCHAR

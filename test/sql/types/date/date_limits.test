@@ -190,7 +190,7 @@ Out of Range Error: Date out of range
 statement error
 SELECT '5877642-06-25 (BC)'::DATE - 1;
 ----
-PLACEHOLDER_ERROR_MESSAGE620
+Out of Range Error: Date out of range
 
 # interval arithmetic
 query I
