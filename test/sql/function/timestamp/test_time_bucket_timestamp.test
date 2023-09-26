@@ -835,7 +835,7 @@ select time_bucket('1 microseconds'::interval, '290309-12-22 (BC) 00:00:00'::tim
 statement error
 select time_bucket('1 microseconds'::interval, '294247-01-10 04:00:54.775807'::timestamp);
 ----
-PLACEHOLDER_ERROR_MESSAGE2474
+Conversion Error: timestamp field value out of range: "294247-01-10 04:00:54.775807", expected format is (YYYY-MM-DD HH:MM:SS[.US][±HH:MM| ZONE])
 
 query I
 select time_bucket('1 microseconds'::interval, '294247-01-10 04:00:54.775806'::timestamp);

@@ -535,7 +535,8 @@ Did you mean "seq2"?
 statement error
 select currval(true);
 ----
-PLACEHOLDER_ERROR_MESSAGE1915
+Catalog Error: Sequence with name true does not exist!
+Did you mean "fresh"?
 
 # max value specified more than once
 statement error

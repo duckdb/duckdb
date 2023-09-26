@@ -292,7 +292,7 @@ Invalid Input Error: Could not convert string '100000000000000000000' to INT64
 statement error
 SELECT INTERVAL '100000000000000000hours';
 ----
-PLACEHOLDER_ERROR_MESSAGE521
+Out of Range Error: interval value is out of range
 
 query T
 SELECT INTERVAL '2562047788 hours';

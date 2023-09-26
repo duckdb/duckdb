@@ -217,7 +217,7 @@ INSERT INTO fkt VALUES (1, 101), (2, 102)
 statement error
 INSERT INTO fkt VALUES (4, 104)
 ----
-PLACEHOLDER_ERROR_MESSAGE1320
+Constraint Error: Violates foreign key constraint because key "i: 4" does not exist in the referenced table
 
 statement ok
 INSERT INTO fkt VALUES (3, 103)

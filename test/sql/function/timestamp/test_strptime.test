@@ -421,7 +421,10 @@ Error: Hour12 out of range, expected a value between 1 and 12
 statement error
 SELECT strptime('2000-10-01 23:60:00', '%Y-%m-%d %H:%M:%S')
 ----
-PLACEHOLDER_ERROR_MESSAGE2456
+Invalid Input Error: Could not parse string "2000-10-01 23:60:00" according to format specifier "%Y-%m-%d %H:%M:%S"
+2000-10-01 23:60:00
+              ^
+Error: Minutes out of range, expected a value between 0 and 59
 
 # incorrect seconds
 statement error

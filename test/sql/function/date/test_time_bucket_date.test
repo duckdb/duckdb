@@ -461,7 +461,7 @@ select time_bucket('1 month'::interval, '5877642-07-01 (BC)'::date);
 statement error
 select time_bucket('1 week'::interval, '5877642-07-01 (BC)'::date);
 ----
-PLACEHOLDER_ERROR_MESSAGE2024
+Invalid Input Error: Type INT32 with value 5877642-07-01 (BC) can't be cast to the destination type INT64
 
 statement error
 select time_bucket('1 month'::interval, '5881580-07-10'::date, '-1 day'::interval);

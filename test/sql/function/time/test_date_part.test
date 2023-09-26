@@ -189,7 +189,8 @@ Binder Error: No function matches the given name and argument types 'century(TIM
 statement error
 SELECT era(i) FROM times
 ----
-PLACEHOLDER_ERROR_MESSAGE2055
+Binder Error: Referenced column "i" not found in FROM clause!
+Candidate bindings: "times.d", "times.s"
 
 statement error
 select extract(era from time '10:00:00');

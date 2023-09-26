@@ -338,7 +338,8 @@ SELECT out_of_path.oop_macro(1, 2);
 statement error
 DROP MACRO main.test_macro;
 ----
-PLACEHOLDER_ERROR_MESSAGE1874
+Catalog Error: Macro Function with name test_macro does not exist!
+Did you mean "memory.test.test_macro"?
 
 statement ok
 DROP MACRO test_macro;

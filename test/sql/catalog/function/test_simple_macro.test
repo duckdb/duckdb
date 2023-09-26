@@ -288,7 +288,7 @@ Candidate bindings: "floats.b"
 statement error
 CREATE MACRO wrong_type(s='not a float') AS (SELECT b + s FROM floats)
 ----
-PLACEHOLDER_ERROR_MESSAGE1829
+Parser Error: Invalid parameter: '(s = 'not a float')'
 
 statement error
 CREATE MACRO two_default_params(a := 4, a := 2) AS a + a
