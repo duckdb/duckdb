@@ -429,7 +429,8 @@ DROP SEQUENCE out_of_path.oop_sequence;
 statement error
 ALTER TABLE main.test_table ADD COLUMN k INTEGER;
 ----
-PLACEHOLDER_ERROR_MESSAGE1868
+Catalog Error: Table with name test_table does not exist!
+Did you mean "memory.test.test_table"?
 
 statement ok
 ALTER TABLE main.main_table ADD COLUMN k INTEGER;

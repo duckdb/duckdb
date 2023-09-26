@@ -373,7 +373,7 @@ Conversion Error: Could not convert string '100 months' to INT32
 statement error
 SELECT '100'::INTERVAL;
 ----
-PLACEHOLDER_ERROR_MESSAGE515
+Conversion Error: Could not convert string '100' to INTERVAL
 
 statement error
 SELECT '100 unknowns'::INTERVAL;

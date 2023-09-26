@@ -287,7 +287,7 @@ SELECT '1992-12-31'::DATE::VARCHAR
 statement error
 SELECT '1992-12-32'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE587
+Conversion Error: date field value out of range: "1992-12-32", expected format is (YYYY-MM-DD)
 
 
 # 1900 is not a leap year

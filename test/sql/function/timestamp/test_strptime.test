@@ -468,7 +468,10 @@ Invalid Input Error: Could not parse string "" according to format specifier "%p
 statement error
 SELECT strptime('a', '%p')
 ----
-PLACEHOLDER_ERROR_MESSAGE2450
+Invalid Input Error: Could not parse string "a" according to format specifier "%p"
+a
+^
+Error: Expected AM/PM
 
 # incorrect am/pm
 statement error

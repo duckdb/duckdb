@@ -180,7 +180,7 @@ Out of Range Error: Date out of range
 statement error
 select '5881580-07-10'::date + 365
 ----
-PLACEHOLDER_ERROR_MESSAGE622
+Out of Range Error: Date out of range
 
 statement error
 select '5881580-07-10'::date + 2147483647
