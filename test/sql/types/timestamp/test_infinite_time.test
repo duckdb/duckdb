@@ -33,7 +33,7 @@ foreach special infinity -infinity epoch
 statement error
 SELECT '${special} 00:00:00'::${datatype};
 ----
-Conversion Error: timestamp field value out of range: "infinity 00:00:00", expected format is (YYYY-MM-DD HH:MM:SS[.US][±HH:MM| ZONE])
+field value out of range:
 
 endloop
 
@@ -297,12 +297,12 @@ infinity	infinity	infinity
 statement error
 select ts::TIME, tstz::TIME, dt::TIME FROM specials
 ----
-PLACEHOLDER_ERROR_MESSAGE996
+Invalid Input Error: Type INT64 with value infinity can't be cast to the destination type INT64
 
 statement error
 select 'infinity'::TIME;
 ----
-PLACEHOLDER_ERROR_MESSAGE995
+Conversion Error: time field value out of range: "infinity", expected format is ([YYYY-MM-DD ]HH:MM:SS[.MS])
 
 # infinite subtract
 statement error
@@ -310,7 +310,7 @@ select
   subtract(
     cast('infinity' as timestamp), timestamp '1970-01-01')
 ----
-PLACEHOLDER_ERROR_MESSAGE994
+Invalid Input Error: Cannot subtract infinite timestamps
 
 statement error
 select
@@ -318,24 +318,24 @@ select
     timestamp '1970-01-01',
     cast('-infinity' as timestamp))
 ----
-PLACEHOLDER_ERROR_MESSAGE993
+Invalid Input Error: Cannot subtract infinite timestamps
 
 statement error
 SELECT 'e'::TIMESTAMP
 ----
-PLACEHOLDER_ERROR_MESSAGE992
+Conversion Error: timestamp field value out of range: "e", expected format is (YYYY-MM-DD HH:MM:SS[.US][±HH:MM| ZONE])
 
 statement error
 SELECT 'e'::DATE
 ----
-PLACEHOLDER_ERROR_MESSAGE991
+Conversion Error: date field value out of range: "e", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT 'i'::TIMESTAMP
 ----
-PLACEHOLDER_ERROR_MESSAGE990
+Conversion Error: timestamp field value out of range: "i", expected format is (YYYY-MM-DD HH:MM:SS[.US][±HH:MM| ZONE])
 
 statement error
 SELECT 'i'::DATE
 ----
-PLACEHOLDER_ERROR_MESSAGE989
+Conversion Error: date field value out of range: "i", expected format is (YYYY-MM-DD)

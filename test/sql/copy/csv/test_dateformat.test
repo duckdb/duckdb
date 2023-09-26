@@ -95,5 +95,6 @@ COPY dates FROM 'test/sql/copy/csv/data/test/dateformat.csv' (HEADER 0, DATEFORM
 Invalid Input Error: Could not parse DATEFORMAT: Trailing format character %
 
 statement error
-COPY timestamps FROM 'test/sql/copy/csv/data/test/timestampformat.csv' (HEADER 0, DELIMITER '|', TIMESTAMPFORMAT '%')----
-PLACEHOLDER_ERROR_MESSAGE2886
+COPY timestamps FROM 'test/sql/copy/csv/data/test/timestampformat.csv' (HEADER 0, DELIMITER '|', TIMESTAMPFORMAT '%')
+----
+Invalid Input Error: Could not parse DATEFORMAT: Trailing format character %

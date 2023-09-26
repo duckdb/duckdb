@@ -43,42 +43,45 @@ foreach func_name list_sort list_reverse_sort
 statement error
 SELECT ${func_name}()
 ----
-Binder Error: No function matches the given name and argument types 'list_sort()'. You might need to add explicit type casts.
-	Candidate functions:
-	list_sort(ANY[]) -> ANY[]
-	list_sort(ANY[], VARCHAR) -> ANY[]
-	list_sort(ANY[], VARCHAR, VARCHAR) -> ANY[]
+Binder Error: No function matches the given name and argument types
 
 statement error
 SELECT ${func_name}(*)
 ----
-Binder Error: No function matches the given name and argument types 'list_sort()'. You might need to add explicit type casts.
-	Candidate functions:
-	list_sort(ANY[]) -> ANY[]
-	list_sort(ANY[], VARCHAR) -> ANY[]
-	list_sort(ANY[], VARCHAR, VARCHAR) -> ANY[]
+Binder Error: No function matches the given name and argument types
 
 statement error
 SELECT ${func_name}([1, 2], 2)
 ----
 Not implemented Error: Enum value: '2' not implemented
 
+endloop
+
 statement error
-SELECT ${func_name}([1, 2], 'DESC', 2)
+SELECT list_sort([1, 2], 'DESC', 2)
 ----
 Not implemented Error: Enum value: '2' not implemented
 
 statement error 
-SELECT ${func_name}([1, 2], 2, 2)
+SELECT list_sort([1, 2], 2, 2)
 ----
 Not implemented Error: Enum value: '2' not implemented
 
-endloop
+statement error
+SELECT list_reverse_sort([1, 2], 'DESC', 2)
+----
+Binder Error: No function matches the given name and argument types 'list_reverse_sort(INTEGER[], VARCHAR, INTEGER)'.
+
+statement error 
+SELECT list_reverse_sort([1, 2], 2, 2)
+----
+Binder Error: No function matches the given name and argument types 'list_reverse_sort(INTEGER[], INTEGER, INTEGER)'.
+
 
 statement error
 SELECT list_sort([1, 2], 'NULLS FIRST')
 ----
-PLACEHOLDER_ERROR_MESSAGE2284
+Not implemented Error: Enum value: 'NULLS FIRST' not implemented
 
 # test incorrect parameter type
 
@@ -89,7 +92,7 @@ foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint us
 statement error
 SELECT ${func_name}(NULL::${type})
 ----
-PLACEHOLDER_ERROR_MESSAGE2283
+Binder Error: No function matches the given name and argument types
 
 endloop
 
@@ -152,27 +155,27 @@ NULL
 statement error
 SELECT list_sort(l, l, l)
 ----
-PLACEHOLDER_ERROR_MESSAGE2282
+Binder Error: Referenced column "l" not found in FROM clause!
 
 statement error
 SELECT list_sort(l, 'ASC', l)
 ----
-PLACEHOLDER_ERROR_MESSAGE2281
+Binder Error: Referenced column "l" not found in FROM clause!
 
 statement error
 SELECT list_reverse_sort(l, l)
 ----
-PLACEHOLDER_ERROR_MESSAGE2280
+Binder Error: Referenced column "l" not found in FROM clause!
 
 statement error
 SELECT list_reverse_sort(l, 'DESC')
 ----
-PLACEHOLDER_ERROR_MESSAGE2279
+Binder Error: Referenced column "l" not found in FROM clause!
 
 statement error
 SELECT list_reverse_sort(l, 'DESC', 'NULLS FIRST')
 ----
-PLACEHOLDER_ERROR_MESSAGE2278
+Binder Error: Referenced column "l" not found in FROM clause!
 
 # test aliases
 
