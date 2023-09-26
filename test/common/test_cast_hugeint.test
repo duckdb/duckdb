@@ -37,7 +37,7 @@ loop i 0 2
 statement error
 SELECT f::HUGEINT FROM (SELECT f FROM broken_floats ORDER BY f LIMIT 1 OFFSET ${i}) t1
 ----
-Conversion Error: Type FLOAT with value -1.7014118e+38 can't be cast because the value is out of range for the destination type INT128
+can't be cast because the value is out of range for the destination type INT128
 
 endloop
 
@@ -74,7 +74,7 @@ loop i 0 4
 statement error
 SELECT f::HUGEINT FROM (SELECT f FROM broken_doubles ORDER BY f LIMIT 1 OFFSET ${i}) t1
 ----
-PLACEHOLDER_ERROR_MESSAGE97
+can't be cast because the value is out of range for the destination type INT128
 
 endloop
 
@@ -112,7 +112,7 @@ loop i 0 14
 statement error
 SELECT f::HUGEINT FROM (SELECT f FROM broken_strings ORDER BY f LIMIT 1 OFFSET ${i}) t1
 ----
-PLACEHOLDER_ERROR_MESSAGE96
+Conversion Error: Could not convert string
 
 endloop
 
@@ -334,12 +334,12 @@ select '255'::HUGEINT::UINT8
 statement error
 select '-1'::hugeint::uint8
 ----
-PLACEHOLDER_ERROR_MESSAGE95
+Conversion Error: Type INT128 with value -1 can't be cast because the value is out of range for the destination type UINT8
 
 statement error
 select '256'::hugeint::uint8
 ----
-PLACEHOLDER_ERROR_MESSAGE94
+Conversion Error: Type INT128 with value 256 can't be cast because the value is out of range for the destination type UINT8
 
 # uint16
 query I
@@ -350,12 +350,12 @@ select '65535'::HUGEINT::UINT16
 statement error
 select '-1'::hugeint::uint16
 ----
-PLACEHOLDER_ERROR_MESSAGE93
+Conversion Error: Type INT128 with value -1 can't be cast because the value is out of range for the destination type UINT16
 
 statement error
 select '65536'::hugeint::uint16
 ----
-PLACEHOLDER_ERROR_MESSAGE92
+Conversion Error: Type INT128 with value 65536 can't be cast because the value is out of range for the destination type UINT16
 
 # uint32
 query I
@@ -366,12 +366,12 @@ select '4294967295'::HUGEINT::UINT32
 statement error
 select '-1'::hugeint::uint32
 ----
-PLACEHOLDER_ERROR_MESSAGE91
+Conversion Error: Type INT128 with value -1 can't be cast because the value is out of range for the destination type UINT32
 
 statement error
 select '4294967296'::hugeint::uint32
 ----
-PLACEHOLDER_ERROR_MESSAGE90
+Conversion Error: Type INT128 with value 4294967296 can't be cast because the value is out of range for the destination type UINT32
 
 # UINT64
 query I
@@ -382,12 +382,12 @@ select '18446744073709551615'::HUGEINT::UINT64
 statement error
 select '-1'::hugeint::UINT64
 ----
-PLACEHOLDER_ERROR_MESSAGE89
+Conversion Error: Type INT128 with value -1 can't be cast because the value is out of range for the destination type UINT64
 
 statement error
 select '18446744073709551616'::hugeint::UINT64
 ----
-PLACEHOLDER_ERROR_MESSAGE88
+Conversion Error: Type INT128 with value 18446744073709551616 can't be cast because the value is out of range for the destination type UINT64
 
 # uint -> hugeint
 query I
