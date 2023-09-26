@@ -9,7 +9,7 @@ CREATE TABLE t (t TEXT);
 statement error
 SELECT * FROM t FOR UPDATE;
 ----
-PLACEHOLDER_ERROR_MESSAGE2992
+Parser Error: SELECT locking clause is not supported!
 
 # unsupported
 statement error

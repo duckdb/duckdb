@@ -12,7 +12,7 @@ INSERT INTO test (i, j) VALUES (1, 2), (2, 3)
 statement error
 INSERT INTO test (i, j) VALUES (100, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE2684
+Constraint Error: CHECK constraint failed: test
 
 statement ok
 ALTER TABLE test RENAME COLUMN i TO k

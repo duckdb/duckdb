@@ -74,7 +74,7 @@ SELECT date_part(s, i) FROM intervals;
 statement error
 SELECT dayofweek(i) FROM intervals
 ----
-PLACEHOLDER_ERROR_MESSAGE1998
+Not implemented Error: interval units "dow" not recognized
 
 statement error
 SELECT isodow(i) FROM intervals

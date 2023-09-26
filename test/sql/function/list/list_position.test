@@ -127,7 +127,9 @@ SELECT list_position([1.0,2.0,3.0], 'a')
 statement error
 SELECT list_position('a', 'a')
 ----
-PLACEHOLDER_ERROR_MESSAGE2244
+Binder Error: No function matches the given name and argument types 'list_position(VARCHAR, VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	list_position(ANY[], ANY) -> INTEGER
 
 query T
 SELECT list_position(NULL,NULL)

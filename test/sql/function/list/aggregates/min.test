@@ -6,7 +6,9 @@
 statement error
 SELECT list_min()
 ----
-PLACEHOLDER_ERROR_MESSAGE2234
+Binder Error: Macro function 'list_min(l)' requires a single positional argument, but 0 positional arguments were provided.
+LINE 1: SELECT list_min()
+               ^
 
 # test different types
 

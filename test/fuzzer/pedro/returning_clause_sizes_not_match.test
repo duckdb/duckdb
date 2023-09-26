@@ -41,7 +41,7 @@ UPDATE test SET x=0 WHERE x = 1 RETURNING *;
 statement error
 INSERT INTO test VALUES(1) RETURNING y.y;
 ----
-PLACEHOLDER_ERROR_MESSAGE34
+Binder Error: Cannot extract field 'y' from expression "(x + 100)" because it is not a struct or a union
 
 # Error: Binder Error: Referenced table "y" not found!
 statement error

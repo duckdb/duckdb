@@ -56,7 +56,7 @@ SET SEARCH_PATH = '"test","test2"';
 statement error
 SET SEARCH_PATH = 'does_not_exist';
 ----
-PLACEHOLDER_ERROR_MESSAGE1755
+Catalog Error: SET search_path: No catalog + schema named "does_not_exist" found.
 
 # Setting the default value through 'schema'
 

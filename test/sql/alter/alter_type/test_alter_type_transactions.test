@@ -20,7 +20,7 @@ ALTER TABLE test ALTER j TYPE VARCHAR
 statement error con2
 ALTER TABLE test ALTER i TYPE VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE2674
+TransactionContext Error: Catalog write-write conflict on alter with "test"
 
 statement ok con1
 COMMIT

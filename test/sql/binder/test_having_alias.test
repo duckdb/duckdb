@@ -22,7 +22,7 @@ SELECT i, COUNT(*) AS k FROM integers GROUP BY i HAVING k=1 ORDER BY i;
 statement error
 SELECT i, COUNT(*) AS k FROM integers GROUP BY i HAVING integers.k=1 ORDER BY i;
 ----
-PLACEHOLDER_ERROR_MESSAGE1427
+Binder Error: column integers.k must appear in the GROUP BY clause or be used in an aggregate function
 
 # column name wins over the alias
 query II

@@ -127,7 +127,9 @@ SELECT list_contains([1.0,2.0,3.0], 'a')
 statement error
 SELECT list_contains('a', 'a')
 ----
-PLACEHOLDER_ERROR_MESSAGE2276
+Binder Error: No function matches the given name and argument types 'list_contains(VARCHAR, VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	list_contains(ANY[], ANY) -> BOOLEAN
 
 query T
 SELECT list_contains(NULL,NULL)

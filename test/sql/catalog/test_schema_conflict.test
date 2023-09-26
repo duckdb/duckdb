@@ -16,7 +16,7 @@ CREATE SCHEMA test;
 statement error con2
 CREATE SCHEMA test;
 ----
-PLACEHOLDER_ERROR_MESSAGE1848
+TransactionContext Error: Catalog write-write conflict on create with "test"
 
 statement ok con1
 COMMIT

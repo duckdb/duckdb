@@ -16,7 +16,7 @@ foreach q q1 q2
 statement error
 execute ${q}([1, 2, 3], -1);
 ----
-PLACEHOLDER_ERROR_MESSAGE2269
+Conversion Error: Type INT32 with value -1 can't be cast because the value is out of range for the destination type UINT64
 
 statement error
 execute ${q}([1, 2, 3], 'a');

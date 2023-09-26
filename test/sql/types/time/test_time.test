@@ -32,7 +32,7 @@ NULL
 statement error
 SELECT ''::TIME
 ----
-PLACEHOLDER_ERROR_MESSAGE692
+Conversion Error: time field value out of range: "", expected format is ([YYYY-MM-DD ]HH:MM:SS[.MS])
 
 statement error
 SELECT '  '::TIME

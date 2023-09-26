@@ -32,7 +32,8 @@ select t from (SELECT * FROM test) AS t
 statement error
 select main.test from main.test t
 ----
-PLACEHOLDER_ERROR_MESSAGE1411
+Binder Error: Referenced table "main" not found!
+Candidate tables: "t"
 
 statement error
 select main.t from main.test t

@@ -6,7 +6,7 @@
 statement error
 DROP SCHEMA main CASCADE;
 ----
-PLACEHOLDER_ERROR_MESSAGE1909
+Catalog Error: Cannot drop entry "main" because it is an internal system entry
 
 # create and drop an empty schema
 statement ok

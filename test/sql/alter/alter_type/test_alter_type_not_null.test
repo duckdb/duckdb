@@ -11,7 +11,7 @@ INSERT INTO test VALUES (1, 1), (2, 2)
 statement error
 INSERT INTO test VALUES (NULL, 4)
 ----
-PLACEHOLDER_ERROR_MESSAGE2661
+Constraint Error: NOT NULL constraint failed: test.i
 
 statement ok
 ALTER TABLE test ALTER i SET DATA TYPE VARCHAR

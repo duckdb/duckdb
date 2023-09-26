@@ -36,7 +36,7 @@ SELECT timestamp '    2017-07-23     13:10:11    ';
 statement error
 SELECT timestamp '    2017-07-23     13:10:11    AA';
 ----
-PLACEHOLDER_ERROR_MESSAGE965
+Conversion Error: timestamp field value out of range: "    2017-07-23     13:10:11    AA", expected format is (YYYY-MM-DD HH:MM:SS[.US][±HH:MM| ZONE])
 
 statement error
 SELECT timestamp 'AA2017-07-23 13:10:11';

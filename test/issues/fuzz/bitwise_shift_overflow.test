@@ -9,7 +9,7 @@ PRAGMA enable_verification
 statement error
 SELECT 1000::bigint<<55;
 ----
-PLACEHOLDER_ERROR_MESSAGE163
+Out of Range Error: Overflow in left shift (1000 << 55)
 
 statement error
 SELECT 256::bigint<<55;

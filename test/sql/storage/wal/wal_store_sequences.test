@@ -56,7 +56,8 @@ SELECT nextval('seq_cycle')
 statement error
 SELECT nextval('seq2')
 ----
-PLACEHOLDER_ERROR_MESSAGE2540
+Catalog Error: Sequence with name seq2 does not exist!
+Did you mean "seq"?
 
 # again
 restart

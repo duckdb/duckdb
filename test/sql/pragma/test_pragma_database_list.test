@@ -19,4 +19,6 @@ memory	NULL
 statement error
 PRAGMA database_list()
 ----
-PLACEHOLDER_ERROR_MESSAGE1973
+Parser Error: syntax error at or near ")"
+LINE 1: PRAGMA database_list()
+                             ^

@@ -9,5 +9,5 @@ PRAGMA enable_verification
 statement error
 CREATE TABLE t0();
 ----
-PLACEHOLDER_ERROR_MESSAGE150
+Parser Error: Table must have at least one column!
 

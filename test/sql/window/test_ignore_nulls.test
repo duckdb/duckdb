@@ -311,7 +311,7 @@ ORDER BY id
 statement error
 SELECT ABS(x IGNORE NULLS) FROM range(10) tbl(x)
 ----
-PLACEHOLDER_ERROR_MESSAGE2804
+Parser Error: IGNORE NULLS is not supported for non-window functions
 
 # Aggregate function
 statement error

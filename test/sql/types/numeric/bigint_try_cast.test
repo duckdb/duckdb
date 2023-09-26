@@ -13,7 +13,7 @@ CREATE TABLE bigints AS SELECT i::BIGINT i FROM (VALUES (-9223372036854775808), 
 statement error
 SELECT i::UTINYINT FROM bigints
 ----
-PLACEHOLDER_ERROR_MESSAGE771
+Conversion Error: Type INT64 with value -9223372036854775808 can't be cast because the value is out of range for the destination type UINT8
 
 statement error
 SELECT i::USMALLINT FROM bigints

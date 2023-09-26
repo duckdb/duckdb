@@ -48,4 +48,6 @@ NULL	1	NULL
 statement error
 SELECT list_bit_and()
 ----
-PLACEHOLDER_ERROR_MESSAGE2216
+Binder Error: Macro function 'list_bit_and(l)' requires a single positional argument, but 0 positional arguments were provided.
+LINE 1: SELECT list_bit_and()
+               ^

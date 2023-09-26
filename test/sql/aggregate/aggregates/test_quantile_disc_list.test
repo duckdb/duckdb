@@ -165,7 +165,7 @@ FROM VALUES (0), (1), (2), (10) AS tab(col);
 statement error
 SELECT quantile_disc(r, [-0.1, 0.5, 0.9]) FROM quantiles
 ----
-PLACEHOLDER_ERROR_MESSAGE1706
+Binder Error: QUANTILE parameters must have consistent signs
 
 statement error
 SELECT quantile_disc(r, (0.1, 0.5, 1.1)) FROM quantiles

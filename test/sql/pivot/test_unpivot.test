@@ -183,7 +183,9 @@ SELECT * FROM monthly_sales
     UNPIVOT(sales FOR month IN ())
     ORDER BY empid;
 ----
-PLACEHOLDER_ERROR_MESSAGE257
+Parser Error: syntax error at or near ")"
+LINE 2:     UNPIVOT(sales FOR month IN ())
+                                        ^
 
 statement error
 SELECT * FROM monthly_sales

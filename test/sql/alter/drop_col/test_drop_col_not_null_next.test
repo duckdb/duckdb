@@ -24,7 +24,7 @@ ALTER TABLE test DROP COLUMN j
 statement error
 INSERT INTO test VALUES (3, NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE2736
+Constraint Error: NOT NULL constraint failed: test.k
 
 statement ok
 INSERT INTO test VALUES (3, 13)

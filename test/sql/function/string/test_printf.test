@@ -113,7 +113,7 @@ floats: 3.14 +3e+00 3.141600E+00
 statement error
 SELECT printf('%s')
 ----
-PLACEHOLDER_ERROR_MESSAGE2401
+Invalid Error: Argument index "0" out of range
 
 statement error
 SELECT printf('%s %s', 'hello')

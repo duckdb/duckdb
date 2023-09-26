@@ -822,7 +822,7 @@ SELECT ts, DATE_PART(['duck', 'month', 'day'], ts) AS parts
 FROM timestamps
 ORDER BY 1;
 ----
-PLACEHOLDER_ERROR_MESSAGE2425
+Conversion Error: extract specifier "duck" not recognized
 
 # Duplicate parts
 statement error

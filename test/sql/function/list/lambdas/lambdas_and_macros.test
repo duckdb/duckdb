@@ -13,7 +13,7 @@ create table test as select range i from range(3);
 statement error
 create macro my_macro(i) as (select i in (select i from test));
 ----
-PLACEHOLDER_ERROR_MESSAGE2152
+Binder Error: Conflicting column names for column i!
 
 statement ok
 CREATE MACRO list_contains_macro(x, y) AS (list_contains(x, y))

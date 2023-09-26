@@ -11,7 +11,16 @@ COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little.csv' (HEADER, I
 statement error
 COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little.csv' (HEADER, NULL_PADDING FALSE)
 ----
-PLACEHOLDER_ERROR_MESSAGE2878
+Invalid Input Error: Error in file "test/sql/copy/csv/data/test/error_too_little.csv" on line 8: expected 2 values per row, but got 1.
+Parser options:
+  file=test/sql/copy/csv/data/test/error_too_little.csv
+  delimiter=',' (default)
+  quote='"' (default)
+  escape='"' (default)
+  header=1
+  sample_size=20480
+  ignore_errors=0
+  all_varchar=0
 
 # not enough columns provided
 query II

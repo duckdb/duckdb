@@ -18,7 +18,7 @@ select m[0] from (select MAP(LIST_VALUE(1, 2, 3, 4,5),LIST_VALUE(10, 9, 8, 7,11)
 statement error
 select m[NULL] from (select MAP(LIST_VALUE(1, 2, 3, 4,5, NULL),LIST_VALUE(10, 9, 8, 7,11,42)) as m) as T
 ----
-PLACEHOLDER_ERROR_MESSAGE900
+Invalid Input Error: Map keys can not be NULL
 
 # Null not present on map
 query I

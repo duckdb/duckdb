@@ -26,7 +26,9 @@ CREATE TABLE tbl (
     bar GENERATED ALWAYS AS (foo+1)
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE1196
+Parser Error: syntax error at or near "GENERATED"
+LINE 3:     bar GENERATED ALWAYS AS (foo+1)
+                ^
 
 statement ok
 INSERT INTO test(foo) VALUES (1);

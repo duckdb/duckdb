@@ -70,7 +70,8 @@ PRAGMA table_info('test.v1')
 statement error
 PRAGMA table_info('nonexistant_table');
 ----
-PLACEHOLDER_ERROR_MESSAGE1978
+Catalog Error: Table with name nonexistant_table does not exist!
+Did you mean "temp.information_schema.tables"?
 
 # handle constraints + default values
 statement ok

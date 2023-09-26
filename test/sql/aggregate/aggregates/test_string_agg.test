@@ -16,7 +16,10 @@ PRAGMA verify_external
 statement error
 SELECT STRING_AGG()
 ----
-PLACEHOLDER_ERROR_MESSAGE1587
+Binder Error: No function matches the given name and argument types 'string_agg()'. You might need to add explicit type casts.
+	Candidate functions:
+	string_agg(VARCHAR) -> VARCHAR
+	string_agg(VARCHAR, VARCHAR) -> VARCHAR
 
 statement error
 SELECT STRING_AGG(1, 2, 3)

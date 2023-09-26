@@ -14,7 +14,8 @@ ALTER TABLE IF EXISTS t0 ADD COLUMN c0 INT;
 statement error
 INSERT INTO t0 VALUES (42);
 ----
-PLACEHOLDER_ERROR_MESSAGE2710
+Catalog Error: Table with name t0 does not exist!
+Did you mean "system.information_schema.tables"?
 
 # Add column if not exists to non-existing table
 statement ok

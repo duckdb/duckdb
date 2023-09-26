@@ -10,7 +10,7 @@ PRAGMA enable_verification
 statement error
 CREATE TYPE "integer" AS ENUM ('1', '2', '3');
 ----
-PLACEHOLDER_ERROR_MESSAGE671
+Catalog Error: Type with name "integer" already exists!
 
 restart
 

@@ -12,5 +12,5 @@ CREATE TABLE t0(c0 INT, c1 INT UNIQUE);
 statement error
 ALTER TABLE t0 DROP c1;
 ----
-PLACEHOLDER_ERROR_MESSAGE142
+Catalog Error: Cannot drop column "c1" because there is a UNIQUE constraint that depends on it
 

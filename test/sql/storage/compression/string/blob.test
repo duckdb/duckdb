@@ -71,7 +71,7 @@ SELECT * FROM blobs
 statement error
 INSERT INTO blobs VALUES('\xGA\xFF\xAA')
 ----
-PLACEHOLDER_ERROR_MESSAGE2579
+Conversion Error: Invalid hex escape code encountered in string -> blob conversion: \xGA
 
 # Insert invalid hex strings (odd # of chars)
 statement error

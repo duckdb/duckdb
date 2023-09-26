@@ -19,7 +19,7 @@ SELECT '${val}'::${source_type}
 statement error
 SELECT '${val}'::${source_type}::${target_type}
 ----
-PLACEHOLDER_ERROR_MESSAGE823
+Conversion Error: Type FLOAT with value nan can't be cast because the value is out of range for the destination type INT8
 
 endloop
 

@@ -19,7 +19,9 @@ SELECT flatten([[1, 2], [3, 4]])
 statement error
 SELECT flatten(1)
 ----
-PLACEHOLDER_ERROR_MESSAGE2120
+Binder Error: No function matches the given name and argument types 'flatten(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	flatten(ANY[][]) -> ANY[]
 
 # empty nested list
 query T

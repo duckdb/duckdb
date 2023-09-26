@@ -11,7 +11,7 @@ INSERT INTO integers VALUES (3)
 statement error
 INSERT INTO integers VALUES (NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE1230
+Constraint Error: NOT NULL constraint failed: integers.i
 
 statement ok
 UPDATE integers SET i=4

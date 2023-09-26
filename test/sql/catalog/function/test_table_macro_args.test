@@ -70,7 +70,9 @@ as TABLE SELECT * FROM  cards_tbl WHERE val>=_val_min AND val<=_val_max AND name
 statement error
 SELECT * FROM  card_select_args(_name:='king',1, 13);
 ----
-PLACEHOLDER_ERROR_MESSAGE1816
+Binder Error: Positional parameters cannot come after parameters with a default value!
+LINE 1: SELECT * FROM  card_select_args(_name:='king',1, 13);
+                       ^
 
 
 # correct arg order

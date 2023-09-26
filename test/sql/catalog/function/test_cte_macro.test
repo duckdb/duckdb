@@ -58,7 +58,10 @@ SELECT plus42(3) + a FROM integers
 statement error
 SELECT plus42(42) + answer FROM cte;
 ----
-PLACEHOLDER_ERROR_MESSAGE1817
+Catalog Error: Table with name cte does not exist!
+Did you mean "temp.information_schema.tables"?
+LINE 1: SELECT plus42(42) + answer FROM cte;
+                                        ^
 
 statement ok
 CREATE MACRO plus1(a) AS (WITH tbl AS (SELECT 1 AS one) SELECT one + a FROM tbl)

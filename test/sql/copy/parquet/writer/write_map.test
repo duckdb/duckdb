@@ -30,7 +30,7 @@ INSERT INTO int_maps VALUES
 	(MAP([NULL], [NULL]))
 ;
 ----
-PLACEHOLDER_ERROR_MESSAGE2974
+Invalid Input Error: Map keys can not be NULL
 
 # parquet does not support keys with null values
 statement error

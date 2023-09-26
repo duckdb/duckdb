@@ -11,7 +11,7 @@ INSERT INTO integers VALUES (3)
 statement error
 INSERT INTO integers VALUES (7)
 ----
-PLACEHOLDER_ERROR_MESSAGE1272
+Constraint Error: CHECK constraint failed: integers
 
 statement ok
 INSERT INTO integers VALUES (NULL)

@@ -53,7 +53,10 @@ DROP MACRO TABLE xt;
 statement error
 SELECT * from my_seq(0,10,2);
 ----
-PLACEHOLDER_ERROR_MESSAGE2545
+Catalog Error: Table Function with name my_seq does not exist!
+Did you mean "seq_scan"?
+LINE 1: SELECT * from my_seq(0,10,2);
+                      ^
 
 # create another macro to check  the WAL
 statement ok

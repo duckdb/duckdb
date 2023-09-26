@@ -30,7 +30,7 @@ select struct_insert({'a': 1, 'b': 'abc', 'c': true}, d := {'a': 'new stuff'})
 statement error
 select struct_insert()
 ----
-PLACEHOLDER_ERROR_MESSAGE2420
+Invalid Error: Missing required arguments for struct_insert function.
 
 statement error
 select struct_insert({a: 1, b: 2})

@@ -12,7 +12,8 @@ CREATE TABLE tbl2(i INTEGER)
 statement error
 ALTER TABLE non_table RENAME TO tbl
 ----
-PLACEHOLDER_ERROR_MESSAGE2643
+Catalog Error: Table with name non_table does not exist!
+Did you mean "temp.information_schema.tables"?
 
 # rename to an already existing table
 statement error

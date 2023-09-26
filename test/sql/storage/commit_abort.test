@@ -43,7 +43,7 @@ COMMIT
 statement error con2
 COMMIT
 ----
-PLACEHOLDER_ERROR_MESSAGE2575
+TransactionContext Error: Failed to commit: Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "14"
 
 statement ok con1
 INSERT INTO test VALUES (15, NULL, NULL)

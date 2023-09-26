@@ -9,4 +9,4 @@ PRAGMA enable_verification
 statement error
 SELECT map_from_entries();
 ----
-PLACEHOLDER_ERROR_MESSAGE871
+Invalid Input Error: The input argument must be a list of structs.

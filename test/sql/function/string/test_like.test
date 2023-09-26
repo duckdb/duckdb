@@ -290,5 +290,6 @@ aaa
 statement error
 SELECT 'hello' LIKE 'hê?llo' COLLATE idontexist;
 ----
-PLACEHOLDER_ERROR_MESSAGE2333
+Catalog Error: Collation with name idontexist does not exist!
+Did you mean "nfc"?
 

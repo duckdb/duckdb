@@ -13,7 +13,7 @@ CREATE TABLE usmallints AS SELECT i::USMALLINT i FROM (VALUES (0), (65535)) tbl(
 statement error
 SELECT i::UTINYINT FROM usmallints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE789
+Conversion Error: Type UINT16 with value 65535 can't be cast because the value is out of range for the destination type UINT8
 
 query I
 SELECT TRY_CAST(i AS UTINYINT) FROM usmallints ORDER BY i

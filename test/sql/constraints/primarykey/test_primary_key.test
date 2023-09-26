@@ -9,7 +9,7 @@ CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER)
 statement error
 INSERT INTO integers VALUES (3, 4), (3, 5)
 ----
-PLACEHOLDER_ERROR_MESSAGE1263
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "3"
 
 # insert unique values
 statement ok

@@ -36,7 +36,7 @@ CREATE TABLE test (a INTEGER NOT NULL, b INTEGER);
 statement error
 INSERT INTO test (b) VALUES (3);
 ----
-PLACEHOLDER_ERROR_MESSAGE1856
+Constraint Error: NOT NULL constraint failed: test.a
 
 statement ok
 DROP TABLE test

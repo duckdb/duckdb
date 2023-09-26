@@ -13,7 +13,7 @@ CREATE TABLE ubigints AS SELECT i::UBIGINT i FROM (VALUES (0), (1844674407370955
 statement error
 SELECT i::UTINYINT FROM ubigints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE756
+Conversion Error: Type UINT64 with value 18446744073709551615 can't be cast because the value is out of range for the destination type UINT8
 
 query I
 SELECT TRY_CAST(i AS UTINYINT) FROM ubigints ORDER BY i

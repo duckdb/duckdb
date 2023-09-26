@@ -61,7 +61,10 @@ SELECT * FROM t1 NATURAL JOIN t2 NATURAL JOIN t3
 statement error
 select * from (values (1)) tbl(a) natural join (values (1), (2)) tbl2(b) order by 1, 2
 ----
-PLACEHOLDER_ERROR_MESSAGE1122
+Binder Error: No columns found to join on in NATURAL JOIN.
+Use CROSS JOIN if you intended for this to be a cross-product.
+   Left candidates: tbl.a
+   Right candidates: tbl2.b
 
 # long join chain
 query I

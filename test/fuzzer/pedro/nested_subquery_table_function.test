@@ -8,7 +8,7 @@ PRAGMA enable_verification
 statement error
 SELECT 1 FROM range((SELECT 1) - 0);
 ----
-PLACEHOLDER_ERROR_MESSAGE69
+Binder Error: Table function cannot contain subqueries
 
 statement error
 SELECT (SELECT 1 FROM range((SELECT 1) - 0));

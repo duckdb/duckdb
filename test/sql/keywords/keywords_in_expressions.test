@@ -14,7 +14,7 @@ CREATE SCHEMA "SCHEMA";
 statement error
 CREATE TYPE "ENUM" AS ENUM('ALL');
 ----
-PLACEHOLDER_ERROR_MESSAGE3055
+Catalog Error: Type with name "ENUM" already exists!
 
 statement error
 CREATE TABLE "SCHEMA"."TABLE"("COLUMN" "ENUM");

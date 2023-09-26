@@ -54,7 +54,10 @@ SELECT * FROM entry
 statement error con2
 SELECT * FROM entry2
 ----
-PLACEHOLDER_ERROR_MESSAGE2652
+Catalog Error: Table with name entry2 does not exist!
+Did you mean "entry2"?
+LINE 1: SELECT * FROM entry2
+                      ^
 
 statement error con2
 SELECT * FROM entry3

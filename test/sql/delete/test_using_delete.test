@@ -82,7 +82,8 @@ SELECT * FROM a;
 statement error
 DELETE FROM a USING b WHERE a.i=b.i;
 ----
-PLACEHOLDER_ERROR_MESSAGE1400
+Catalog Error: Table with name b does not exist!
+Did you mean "a"?
 
 # column does not exist
 statement error

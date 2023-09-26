@@ -89,7 +89,7 @@ select split_part(NULL,',',1)
 statement error
 select split_part()
 ----
-PLACEHOLDER_ERROR_MESSAGE2350
+Binder Error: Macro function 'split_part(string, delimiter, position)' requires 3 positional arguments, but 0 positional arguments were provided.
 
 statement error
 select split_part('a')

@@ -97,4 +97,4 @@ Not implemented Error: Indexes cannot contain BLOBs that contain null-terminated
 statement error
 CREATE INDEX i21 ON t21 (c1);
 ----
-PLACEHOLDER_ERROR_MESSAGE2842
+Catalog Error: Index with name "i21" already exists!

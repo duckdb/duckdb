@@ -26,7 +26,7 @@ SELECT
   name
 FROM test_table_raw;
 ----
-PLACEHOLDER_ERROR_MESSAGE1960
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "abc001"
 
 # Insert aggregated data
 statement error

@@ -20,7 +20,8 @@ INSERT INTO fk_integers VALUES (1)
 statement error con2
 DROP TABLE fk_integers
 ----
-PLACEHOLDER_ERROR_MESSAGE1340
+Catalog Error: Table with name fk_integers does not exist!
+Did you mean "fk_integers"?
 
 statement ok con1
 DROP TABLE fk_integers

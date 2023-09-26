@@ -15,7 +15,8 @@ CREATE VIEW vw2 AS SELECT 1729 AS i
 statement error
 ALTER VIEW non_view RENAME TO vw
 ----
-PLACEHOLDER_ERROR_MESSAGE2712
+Catalog Error: View with name non_view does not exist!
+Did you mean "pg_views"?
 
 # rename to an already existing view
 statement error

@@ -14,7 +14,7 @@ CREATE INDEX i_index ON test(i)
 statement error
 ALTER TABLE test ALTER i SET DATA TYPE VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE2676
+Catalog Error: Cannot change the type of this column: an index depends on it!
 
 statement ok
 DROP INDEX i_index

@@ -40,7 +40,7 @@ select * from tbl;
 statement error
 insert into tbl(i,k) values (3,2), (5,5) on conflict (k) do update set j = 10;
 ----
-PLACEHOLDER_ERROR_MESSAGE1943
+Constraint Error: Duplicate key "i: 5" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 query III
 select * from tbl;

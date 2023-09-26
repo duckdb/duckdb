@@ -38,4 +38,4 @@ SELECT * FROM m WHERE m=m_2
 statement error
 SELECT * FROM m WHERE m::mood_2=m_2
 ----
-PLACEHOLDER_ERROR_MESSAGE666
+Conversion Error: Type UINT8 with value 0 can't be cast because the value is out of range for the destination type UINT8

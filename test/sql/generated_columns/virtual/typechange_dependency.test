@@ -24,7 +24,7 @@ SELECT total_profit FROM unit
 statement error
 ALTER TABLE unit ALTER COLUMN price TYPE BOOLEAN;
 ----
-PLACEHOLDER_ERROR_MESSAGE1183
+Binder Error: This column is referenced by the generated column "total_profit", so its type can not be changed
 
 # Generated column isn't deleted
 statement ok

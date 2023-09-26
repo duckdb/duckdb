@@ -30,7 +30,7 @@ CREATE TABLE tf_2 (
 statement error
 INSERT INTO tf_2 VALUES (1, 1, 1);
 ----
-PLACEHOLDER_ERROR_MESSAGE1347
+Constraint Error: Violates foreign key constraint because key "a: 1" does not exist in the referenced table
 
 # insert key (1, 1, 1)
 statement ok

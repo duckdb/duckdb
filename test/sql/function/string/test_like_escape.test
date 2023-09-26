@@ -18,7 +18,7 @@ SELECT '%++' NOT LIKE '*%++' ESCAPE '*';
 statement error
 SELECT '%' LIKE '%' ESCAPE '%';
 ----
-PLACEHOLDER_ERROR_MESSAGE2312
+Syntax Error: Like pattern must not end with escape character!
 
 statement error
 SELECT '%' LIKE '*' ESCAPE '*';

@@ -10,7 +10,7 @@ PRAGMA enable_verification
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/missingmagicatfront.parquet')
 ----
-PLACEHOLDER_ERROR_MESSAGE2938
+Invalid Input Error: Footer length error in file 'test/sql/copy/parquet/broken/missingmagicatfront.parquet'
 
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/missingmagicatend.parquet')

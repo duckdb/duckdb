@@ -51,7 +51,7 @@ physical_plan	<REGEX>:.*PERFECT_HASH_GROUP_BY.*
 statement error
 PRAGMA perfect_ht_threshold=-1;
 ----
-PLACEHOLDER_ERROR_MESSAGE9
+Parser Error: Perfect HT threshold out of range: should be within range 0 - 32
 
 statement error
 PRAGMA perfect_ht_threshold=100;

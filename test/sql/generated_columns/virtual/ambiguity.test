@@ -21,7 +21,7 @@ CREATE TABLE unit2 (
 	profit_total AS (unit2.price * unit2.amount_sold)
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE1167
+Parser Error: Qualified (tbl.name) column references are not allowed inside of generated column expressions
 
 statement ok
 CREATE TABLE unit2 (

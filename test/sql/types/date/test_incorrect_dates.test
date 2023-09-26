@@ -8,7 +8,7 @@ CREATE TABLE dates(i DATE)
 statement error
 INSERT INTO dates VALUES ('blabla')
 ----
-PLACEHOLDER_ERROR_MESSAGE548
+Conversion Error: date field value out of range: "blabla", expected format is (YYYY-MM-DD)
 
 # month out of range
 statement error

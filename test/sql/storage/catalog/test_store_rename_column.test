@@ -77,4 +77,7 @@ SELECT k FROM test ORDER BY k
 statement error
 SELECT a FROM test
 ----
-PLACEHOLDER_ERROR_MESSAGE2555
+Binder Error: Referenced column "a" not found in FROM clause!
+Candidate bindings: "test.k", "test.b"
+LINE 1: SELECT a FROM test
+               ^

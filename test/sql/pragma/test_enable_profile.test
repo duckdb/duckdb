@@ -6,7 +6,9 @@
 statement error
 PRAGMA enable_profiling()
 ----
-PLACEHOLDER_ERROR_MESSAGE1976
+Parser Error: syntax error at or near ")"
+LINE 1: PRAGMA enable_profiling()
+                                ^
 
 statement error
 PRAGMA enable_profiling='unsupported'

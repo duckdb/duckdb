@@ -6,7 +6,9 @@
 statement error
 SELECT union_tag(1);
 ----
-PLACEHOLDER_ERROR_MESSAGE851
+Binder Error: No function matches the given name and argument types 'union_tag(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	union_tag(UNION) -> ANY
 
 query I
 SELECT union_tag(1::UNION(a INT, b VARCHAR));

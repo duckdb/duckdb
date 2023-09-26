@@ -146,7 +146,7 @@ NULL
 statement error
 SELECT date_part('timezone', d) FROM dates;
 ----
-PLACEHOLDER_ERROR_MESSAGE2010
+Not implemented Error: "date" units "timezone" not recognized
 
 statement error
 SELECT date_part('timezone_hour', d) FROM dates;

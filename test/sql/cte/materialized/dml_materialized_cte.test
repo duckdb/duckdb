@@ -17,7 +17,7 @@ statement error
 WITH t(x) AS MATERIALIZED (VALUES (42))
 INSERT INTO a (SELECT * FROM t);
 ----
-PLACEHOLDER_ERROR_MESSAGE3042
+Not implemented Error: Materialized CTEs are not implemented for insert.
 
 statement error
 WITH t(x) AS MATERIALIZED (VALUES (42))

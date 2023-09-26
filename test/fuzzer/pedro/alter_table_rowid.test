@@ -11,7 +11,7 @@ CREATE TABLE t0(c0 INTEGER, c1 INTEGER);
 statement error
 ALTER TABLE t0 DROP COLUMN rowid;
 ----
-PLACEHOLDER_ERROR_MESSAGE59
+Binder Error: Table "t0" does not have a column with name "rowid"
 
 statement error
 ALTER TABLE t0 RENAME rowid TO ups;

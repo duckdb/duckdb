@@ -44,7 +44,7 @@ baz
 statement error
 SELECT regexp_extract('foobarbaz', '(b..)(b..)', -1)
 ----
-PLACEHOLDER_ERROR_MESSAGE2326
+Invalid Input Error: Group index must be between 0 and 9!
 
 statement error
 SELECT regexp_extract('foobarbaz', '(b..)(b..)', 42)

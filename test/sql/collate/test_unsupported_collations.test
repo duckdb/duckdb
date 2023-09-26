@@ -6,7 +6,8 @@
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE blabla)
 ----
-PLACEHOLDER_ERROR_MESSAGE1407
+Catalog Error: Collation with name blabla does not exist!
+Did you mean "nfc"?
 
 # non-varchar columns cannot have collations
 statement error

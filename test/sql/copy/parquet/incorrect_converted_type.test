@@ -7,7 +7,7 @@ require parquet
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_bigint.parquet';
 ----
-PLACEHOLDER_ERROR_MESSAGE2956
+IO Error: INT64 converted type can only be set for value of Type::INT32
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_date.parquet';

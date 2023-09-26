@@ -7,7 +7,8 @@
 statement error
 SELECT list_aggr([1], 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE2204
+Catalog Error: Aggregate Function with name 2 does not exist!
+Did you mean "|"?
 
 statement error
 SELECT list_aggr([1], True)

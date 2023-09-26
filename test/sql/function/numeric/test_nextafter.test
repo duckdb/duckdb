@@ -8,7 +8,10 @@ PRAGMA enable_verification
 statement error
 select nextafter()
 ----
-PLACEHOLDER_ERROR_MESSAGE2111
+Binder Error: No function matches the given name and argument types 'nextafter()'. You might need to add explicit type casts.
+	Candidate functions:
+	nextafter(DOUBLE, DOUBLE) -> DOUBLE
+	nextafter(FLOAT, FLOAT) -> FLOAT
 
 statement error
 select nextafter('bla','bla')

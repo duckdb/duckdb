@@ -6,7 +6,9 @@
 statement error
 SELEC 42;
 ----
-PLACEHOLDER_ERROR_MESSAGE3095
+Parser Error: syntax error at or near "SELEC"
+LINE 1: SELEC 42;
+        ^
 
 statement error
 SELEC 42, 'thisisareallylongstringloremipsumblablathisisareallylongstringloremipsumblablalthisisareallylongstringloremipsumblablalthisisareallylongstringloremipsumblablal';

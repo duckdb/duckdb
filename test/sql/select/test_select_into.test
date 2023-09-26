@@ -12,4 +12,4 @@ INSERT INTO t VALUES ('foo'), ('bar'), ('baz');
 statement error
 SELECT * INTO t2 FROM t WHERE t LIKE 'b%';
 ----
-PLACEHOLDER_ERROR_MESSAGE2988
+Parser Error: SELECT INTO not supported!

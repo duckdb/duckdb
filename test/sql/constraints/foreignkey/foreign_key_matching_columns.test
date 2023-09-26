@@ -13,7 +13,8 @@ CREATE TABLE routes (
 	FOREIGN KEY (agency_id) REFERENCES agency
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE1353
+Catalog Error: Table with name agency does not exist!
+Did you mean "pg_enum"?
 
 statement ok
 CREATE TABLE agency (

@@ -52,7 +52,7 @@ true
 statement error
 EXECUTE v2([[1, 2, 3]], [1, 2, 3])
 ----
-PLACEHOLDER_ERROR_MESSAGE1099
+Conversion Error: Unimplemented type for cast (INTEGER -> INTEGER[])
 
 # unbound parameter in scalar subquery
 statement ok

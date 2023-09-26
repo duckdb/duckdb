@@ -12,7 +12,7 @@ CREATE TABLE unit (
 	amount_sold AS (price) PRIMARY KEY,
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE1195
+Binder Error: Constraints on generated columns are not supported yet
 
 # Also not as a column list
 statement error

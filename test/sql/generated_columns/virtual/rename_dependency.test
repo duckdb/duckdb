@@ -29,7 +29,7 @@ ALTER TABLE unit RENAME COLUMN price TO value
 statement error
 ALTER TABLE unit DROP COLUMN value;
 ----
-PLACEHOLDER_ERROR_MESSAGE1198
+Catalog Error: Cannot drop column: column is a dependency of 1 or more generated column(s)
 
 query IIIII
 SELECT * FROM unit

@@ -80,7 +80,7 @@ SELECT (c).a FROM b
 statement error
 INSERT INTO a VALUES (1)
 ----
-PLACEHOLDER_ERROR_MESSAGE701
+Conversion Error: Unimplemented type for cast (INTEGER -> STRUCT(i STRUCT(a INTEGER), j INTEGER))
 
 statement error
 INSERT INTO a VALUES (ROW(1, 2))

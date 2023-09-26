@@ -75,7 +75,7 @@ DROP TABLE test
 statement error
 CREATE TABLE test("HeLlO" INTEGER, "HELLO" INTEGER)
 ----
-PLACEHOLDER_ERROR_MESSAGE1421
+Catalog Error: Column with name HELLO already exists!
 
 # conflicts can come from different sources!
 statement ok

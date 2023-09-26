@@ -13,7 +13,7 @@ CREATE TABLE tinyints AS SELECT i::TINYINT i FROM (VALUES (-128), (0), (127)) tb
 statement error
 SELECT i::UTINYINT FROM tinyints
 ----
-PLACEHOLDER_ERROR_MESSAGE719
+Conversion Error: Type INT8 with value -128 can't be cast because the value is out of range for the destination type UINT8
 
 statement error
 SELECT i::USMALLINT FROM tinyints

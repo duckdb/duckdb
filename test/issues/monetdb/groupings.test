@@ -160,7 +160,8 @@ fresh food
 statement error
 SELECT * FROM categories GROUP BY ()
 ----
-PLACEHOLDER_ERROR_MESSAGE175
+Binder Error: column "id" must appear in the GROUP BY clause or must be part of an aggregate function.
+Either add it to the GROUP BY list, or use "ANY_VALUE(id)" if the exact value of "id" is not important.
 
 statement ok
 ROLLBACK

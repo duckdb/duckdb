@@ -34,4 +34,6 @@ NULL
 statement error
 select list_count()
 ----
-PLACEHOLDER_ERROR_MESSAGE2172
+Binder Error: Macro function 'list_count(l)' requires a single positional argument, but 0 positional arguments were provided.
+LINE 1: select list_count()
+               ^

@@ -9,7 +9,7 @@ PRAGMA enable_verification
 statement error
 COMMIT
 ----
-PLACEHOLDER_ERROR_MESSAGE2781
+TransactionContext Error: cannot commit - no transaction is active
 
 statement error
 ROLLBACK

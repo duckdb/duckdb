@@ -53,7 +53,16 @@ CREATE TABLE test_too_few_rows (a INTEGER, b INTEGER, c VARCHAR, d INTEGER);
 statement error
 COPY test_too_few_rows FROM '__TEST_DIR__/test2.csv' (NULL_PADDING 0, HEADER 1);
 ----
-PLACEHOLDER_ERROR_MESSAGE2872
+Invalid Input Error: Error in file "duckdb_unittest_tempdir/53346/test2.csv" on line 3: expected 4 values per row, but got 3.
+Parser options:
+  file=duckdb_unittest_tempdir/53346/test2.csv
+  delimiter=',' (default)
+  quote='"' (default)
+  escape='"' (default)
+  header=1
+  sample_size=20480
+  ignore_errors=0
+  all_varchar=0
 
 # create CSV file from query
 query I

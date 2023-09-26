@@ -10,7 +10,9 @@ SELECT sum(c2) c0 FROM (SELECT 1) t1(c2) HAVING (SELECT c0);
 ---
 cannot reference alias
 ----
-PLACEHOLDER_ERROR_MESSAGE16
+Parser Error: syntax error at or near "cannot"
+LINE 3: cannot reference alias
+        ^
 
 statement error
 SELECT count() c0 FROM (SELECT 1) t1(c2) HAVING 1 = (SELECT c0 WHERE EXISTS (SELECT 1));

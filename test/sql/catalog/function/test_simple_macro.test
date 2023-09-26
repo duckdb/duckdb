@@ -22,7 +22,7 @@ SELECT one()
 statement error
 SELECT one(1)
 ----
-PLACEHOLDER_ERROR_MESSAGE1846
+Binder Error: Macro function 'one()' requires 0 positional arguments, but a single positional argument was provided.
 
 statement error
 SELECT one(NULL)

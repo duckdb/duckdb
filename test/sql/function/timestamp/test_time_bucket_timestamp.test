@@ -745,7 +745,7 @@ select w, t, origin, time_bucket(w, t, origin) from timestamps;
 statement error
 select time_bucket('-3 hours'::interval, '2019-04-05 00:00:00'::timestamp);
 ----
-PLACEHOLDER_ERROR_MESSAGE2491
+Not implemented Error: Period must be greater than 0
 
 statement error
 select time_bucket('-3 hours'::interval, '2019-04-05 00:00:00'::timestamp, '1 hour 30 minutes':: interval);

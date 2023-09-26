@@ -73,7 +73,7 @@ select bar(1, 'nan'::double, 10)
 statement error
 select bar(1, '-infinity'::double, 10)
 ----
-PLACEHOLDER_ERROR_MESSAGE2372
+Out of Range Error: Bar width must not be NaN or infinity
 
 query I
 select bar(1, 'infinity'::double, 10)

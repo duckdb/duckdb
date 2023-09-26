@@ -50,7 +50,10 @@ MotörHeadMotörHeadMotörHeadMotörHead
 statement error
 select REPEAT()
 ----
-PLACEHOLDER_ERROR_MESSAGE2344
+Binder Error: No function matches the given name and argument types 'repeat()'. You might need to add explicit type casts.
+	Candidate functions:
+	repeat(VARCHAR, BIGINT) -> VARCHAR
+	repeat(BLOB, BIGINT) -> BLOB
 
 statement error
 select REPEAT(1)

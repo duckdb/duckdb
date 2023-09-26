@@ -20,7 +20,9 @@ BEGIN TRANSACTION
 statement error
 SELEC 42
 ----
-PLACEHOLDER_ERROR_MESSAGE2759
+Parser Error: syntax error at or near "SELEC"
+LINE 1: SELEC 42
+        ^
 
 query I
 SELECT 42

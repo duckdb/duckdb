@@ -16,4 +16,4 @@ purple
 statement error
 SELECT enum_last('bla')
 ----
-PLACEHOLDER_ERROR_MESSAGE2043
+Binder Error: This function needs an ENUM as an argument

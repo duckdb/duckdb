@@ -36,4 +36,4 @@ NULL
 statement error
 COPY (SELECT -interval '1 day') TO '__TEST_DIR__/intervals.parquet'
 ----
-PLACEHOLDER_ERROR_MESSAGE2969
+IO Error: Parquet files do not support negative intervals

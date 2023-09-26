@@ -40,7 +40,7 @@ SELECT enum_range_boundary('orange'::rainbow, NULL)
 statement error
 SELECT enum_range_boundary('orange'::rainbow, 'brl'::currency)
 ----
-PLACEHOLDER_ERROR_MESSAGE2048
+Binder Error: The parameters need to link to ONLY one enum OR be NULL 
 
 statement error
 SELECT enum_range_boundary(NULL, NULL)

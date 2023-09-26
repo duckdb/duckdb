@@ -15,7 +15,7 @@ INSERT INTO test VALUES (11, 22), (12, 21), (13, 22);
 statement error
 SELECT a FROM test ORDER BY 2
 ----
-PLACEHOLDER_ERROR_MESSAGE194
+Binder Error: ORDER term out of range - should be between 1 and 1
 
 # ORDER BY constant works, but does nothing
 # CONTROVERSIAL: works in SQLite but not in Postgres

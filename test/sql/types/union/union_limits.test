@@ -91,7 +91,9 @@ CREATE TABLE tbl1 (u UNION(
     a249 INT, a250 INT, a251 INT, a252 INT, a253 INT, a254 INT, a255 INT, a256 INT, a257
 ))
 ----
-PLACEHOLDER_ERROR_MESSAGE839
+Parser Error: syntax error at or near ")"
+LINE 34: ))
+         ^
 
 
 # Need at least one column

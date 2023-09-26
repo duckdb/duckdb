@@ -13,7 +13,7 @@ CREATE TABLE hugeints AS SELECT i::HUGEINT i FROM (VALUES (-17014118346046923173
 statement error
 SELECT i::UTINYINT FROM hugeints
 ----
-PLACEHOLDER_ERROR_MESSAGE744
+Conversion Error: Type INT128 with value -170141183460469231731687303715884105727 can't be cast because the value is out of range for the destination type UINT8
 
 statement error
 SELECT i::USMALLINT FROM hugeints

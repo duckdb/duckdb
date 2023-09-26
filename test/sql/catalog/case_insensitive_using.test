@@ -202,4 +202,5 @@ SELECT * FROM (SELECT 1 "hello", 2 "HeLlO") t1 JOIN (SELECT 1 "hello", 2 "HeLlO"
 statement error
 SELECT hello FROM (a JOIN b USING (hello)), (d JOIN e USING (hello))
 ----
-PLACEHOLDER_ERROR_MESSAGE1849
+Binder Error: Ambiguous column reference: column "hello" can refer to either:
+[e.heLLo, d.HElLo][b.HELLO, a.hello]

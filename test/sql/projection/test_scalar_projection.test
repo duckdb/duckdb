@@ -49,7 +49,7 @@ SELECT 1 AS a, a * 2
 statement error
 SELECT
 ----
-PLACEHOLDER_ERROR_MESSAGE3113
+Parser Error: SELECT clause without selection list
 
 statement error
 SELECT FROM (SELECT 42) v1

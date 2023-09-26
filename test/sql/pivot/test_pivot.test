@@ -227,7 +227,7 @@ PIVOT(COS(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
   AS p (EMP_ID_renamed, JAN, FEB, MAR, APR)
 ORDER BY EMP_ID_renamed;
 ----
-PLACEHOLDER_ERROR_MESSAGE253
+Catalog Error: cos is not an aggregate function
 
 # subqueries not allowed
 statement error

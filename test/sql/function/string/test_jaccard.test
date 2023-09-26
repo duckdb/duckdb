@@ -84,7 +84,7 @@ SELECT round(jaccard('ababababababba', 'aaaabbbccddeeffgabcccc'), 3)
 statement error
 SELECT jaccard('hello', '')
 ----
-PLACEHOLDER_ERROR_MESSAGE2406
+Invalid Input Error: Jaccard Function: An argument too short!
 
 statement error
 SELECT jaccard('', 'hello')

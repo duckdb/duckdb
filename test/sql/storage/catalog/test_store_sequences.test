@@ -61,7 +61,8 @@ restart
 statement error
 SELECT nextval('seq')
 ----
-PLACEHOLDER_ERROR_MESSAGE2556
+Catalog Error: Sequence with name seq does not exist!
+Did you mean "seq_cycle"?
 
 # other sequence is still there
 statement ok

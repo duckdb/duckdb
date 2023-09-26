@@ -47,7 +47,9 @@ select list_histogram(name) from names;
 statement error
 select list_histogram()
 ----
-PLACEHOLDER_ERROR_MESSAGE2213
+Binder Error: Macro function 'list_histogram(l)' requires a single positional argument, but 0 positional arguments were provided.
+LINE 1: select list_histogram()
+               ^
 
 # temporal types
 

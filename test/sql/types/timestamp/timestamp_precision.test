@@ -61,7 +61,7 @@ endloop
 statement error
 CREATE TABLE ts_precision(sec TIMESTAMP(10));
 ----
-PLACEHOLDER_ERROR_MESSAGE968
+Catalog Error: Table with name "ts_precision" already exists!
 
 statement error
 CREATE TABLE ts_precision(sec TIMESTAMP(99999));

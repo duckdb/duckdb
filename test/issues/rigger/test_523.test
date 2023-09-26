@@ -9,5 +9,5 @@ PRAGMA enable_verification
 statement error
 SELECT SIN(1e1000);
 ----
-PLACEHOLDER_ERROR_MESSAGE128
+Out of Range Error: input value inf is out of range for numeric function
 

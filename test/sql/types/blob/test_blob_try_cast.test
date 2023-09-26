@@ -43,7 +43,7 @@ SELECT TRY_CAST('\x12' AS BLOB)
 statement error
 SELECT '\\'::BLOB
 ----
-PLACEHOLDER_ERROR_MESSAGE1018
+Conversion Error: Invalid hex escape code encountered in string -> blob conversion: unterminated escape code at end of blob
 
 statement error
 SELECT '\\x3'::BLOB

@@ -24,6 +24,8 @@ foreach datatype DATE TIME
 statement error
 SELECT '2021-04-29 10:50:09-05'::TIMESTAMPTZ::{datatype}
 ----
-PLACEHOLDER_ERROR_MESSAGE998
+Parser Error: syntax error at or near "{"
+LINE 1: ...'2021-04-29 10:50:09-05'::TIMESTAMPTZ::{datatype}
+                                                  ^
 
 endloop

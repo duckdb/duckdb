@@ -12,4 +12,4 @@ endloop
 statement error
 PRAGMA force_compression='unknown'
 ----
-PLACEHOLDER_ERROR_MESSAGE1971
+Parser Error: Unrecognized option for PRAGMA force_compression, expected Auto, Uncompressed, Constant, RLE, Dictionary, PFOR, BitPacking, FSST, Chimp, Patas

@@ -73,7 +73,9 @@ RÄcMotörHead	MotörHeadRÄc	MOTÖRHEAD	motörhead
 statement error
 select LPAD()
 ----
-PLACEHOLDER_ERROR_MESSAGE2322
+Binder Error: No function matches the given name and argument types 'lpad()'. You might need to add explicit type casts.
+	Candidate functions:
+	lpad(VARCHAR, INTEGER, VARCHAR) -> VARCHAR
 
 statement error
 select LPAD(1)

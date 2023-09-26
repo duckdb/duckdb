@@ -6,7 +6,7 @@
 statement error
 select ?;
 ----
-PLACEHOLDER_ERROR_MESSAGE1097
+Invalid Error: Expected 1 parameters, but none were supplied
 
 # cannot create a view with prepared statement parameters
 statement error

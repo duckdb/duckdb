@@ -18,7 +18,7 @@ CREATE TABLE tbl (
 statement error
 INSERT INTO tbl VALUES (5);
 ----
-PLACEHOLDER_ERROR_MESSAGE1190
+Constraint Error: Incorrect value for generated column "total_price DATE AS (CAST(CAST(price AS DATE) AS DATE))" : Conversion Error: Unimplemented type for cast (INTEGER -> DATE)
 
 # Test with multiple different generated columns
 statement ok

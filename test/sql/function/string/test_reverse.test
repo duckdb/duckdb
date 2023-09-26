@@ -44,7 +44,9 @@ daeHrötoM
 statement error
 select REVERSE()
 ----
-PLACEHOLDER_ERROR_MESSAGE2377
+Binder Error: No function matches the given name and argument types 'reverse()'. You might need to add explicit type casts.
+	Candidate functions:
+	reverse(VARCHAR) -> VARCHAR
 
 statement error
 select REVERSE(1, 2)

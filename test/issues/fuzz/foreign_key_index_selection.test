@@ -12,7 +12,7 @@ CREATE TABLE s1(t0 INTEGER, a TEXT, b TEXT);
 statement error
 CREATE TABLE c2(c0 INTEGER, c1 INTEGER UNIQUE, FOREIGN KEY (c0) REFERENCES s1(tz));
 ----
-PLACEHOLDER_ERROR_MESSAGE153
+Binder Error: Failed to create foreign key: there is no primary key or unique constraint for referenced table "s1"
 
 # key does not have an index on it
 statement error

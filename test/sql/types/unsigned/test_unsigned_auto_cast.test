@@ -111,7 +111,7 @@ SELECT '255'::UTINYINT;
 statement error
 SELECT '256'::UTINYINT;
 ----
-PLACEHOLDER_ERROR_MESSAGE484
+Conversion Error: Could not convert string '256' to UINT8
 
 query I
 SELECT '255'::USMALLINT;

@@ -27,7 +27,7 @@ DEALLOCATE s3
 statement error
 SELECT * FROM a WHERE i=$1
 ----
-PLACEHOLDER_ERROR_MESSAGE1102
+Invalid Error: Expected 1 parameters, but none were supplied
 
 # also can't run a query with a param when casting
 statement error

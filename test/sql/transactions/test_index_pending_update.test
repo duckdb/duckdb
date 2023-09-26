@@ -20,7 +20,7 @@ UPDATE integers SET i=4 WHERE i=1
 statement error con1
 CREATE INDEX i_index ON integers using art(i)
 ----
-PLACEHOLDER_ERROR_MESSAGE2776
+TransactionContext Error: Cannot create index with outstanding updates
 
 # now we commit
 statement ok con2

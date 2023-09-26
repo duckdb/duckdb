@@ -12,7 +12,7 @@ PRAGMA enable_verification
 statement error
 LOAD 'asdf';
 ----
-PLACEHOLDER_ERROR_MESSAGE6
+IO Error: Extension "/Users/thijs/.duckdb/extensions/a79c05a3bc/osx_arm64/asdf.duckdb_extension" not found.
 
 statement error
 LOAD 'Makefile';

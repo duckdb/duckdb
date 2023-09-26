@@ -15,7 +15,7 @@ INSERT INTO empsalary VALUES ('develop', 10, 5200, '2007-08-01'), ('sales', 1, 5
 statement error
 SELECT depname, min(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m1 FROM empsalary GROUP BY m1 ORDER BY depname, empno
 ----
-PLACEHOLDER_ERROR_MESSAGE2809
+Binder Error: GROUP BY clause cannot contain window functions!
 
 statement error
 select row_number() over (range between unbounded following and unbounded preceding);

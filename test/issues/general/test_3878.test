@@ -32,7 +32,7 @@ create table y (y int references x(x));
 statement error
 insert into y values (1);
 ----
-PLACEHOLDER_ERROR_MESSAGE110
+Constraint Error: Violates foreign key constraint because key "x: 1" does not exist in the referenced table
 
 statement ok
 insert into x values (1);

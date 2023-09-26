@@ -324,7 +324,14 @@ SELECT ROUND(12::DECIMAL(3,0))
 statement error
 SELECT ROUND(12::DECIMAL(3,0), i) FROM range(1) tbl(i)
 ----
-PLACEHOLDER_ERROR_MESSAGE271
+Binder Error: No function matches the given name and argument types 'round(DECIMAL(3,0), BIGINT)'. You might need to add explicit type casts.
+	Candidate functions:
+	round(FLOAT) -> FLOAT
+	round(FLOAT, INTEGER) -> FLOAT
+	round(DOUBLE) -> DOUBLE
+	round(DOUBLE, INTEGER) -> DOUBLE
+	round(DECIMAL) -> DECIMAL
+	round(DECIMAL, INTEGER) -> DECIMAL
 
 # null precision becomes null (postgres behavior)
 query T

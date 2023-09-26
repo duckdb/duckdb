@@ -111,7 +111,7 @@ EXECUTE v1([1,2,3,4,5]);
 statement error
 SELECT i FROM UNNEST(NULL) AS tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE831
+Binder Error: UNNEST requires a single list as input
 
 # not a list
 statement error

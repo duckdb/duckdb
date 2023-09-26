@@ -19,7 +19,7 @@ UPDATE integers SET i=4 WHERE i=2
 statement error con2
 UPDATE integers SET i=4 WHERE i=2
 ----
-PLACEHOLDER_ERROR_MESSAGE1258
+TransactionContext Error: Conflict on tuple deletion!
 
 statement error con2
 UPDATE integers SET i=5 WHERE i=2

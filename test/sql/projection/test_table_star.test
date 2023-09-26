@@ -35,7 +35,8 @@ SELECT t.* FROM test t
 statement error
 SELECT test.* FROM test t
 ----
-PLACEHOLDER_ERROR_MESSAGE3116
+Binder Error: Referenced table "test" not found!
+Candidate tables: "t"
 
 statement error
 SELECT xyz.* FROM test

@@ -25,7 +25,7 @@ SELECT i % 2 AS k FROM integers WHERE k<>0;
 statement error
 SELECT i % 2 AS k FROM integers WHERE integers.k<>0;
 ----
-PLACEHOLDER_ERROR_MESSAGE3007
+Binder Error: Table "integers" does not have a column named "k"
 
 # columns take priority
 query I

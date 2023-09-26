@@ -86,7 +86,10 @@ endloop
 statement error
 select list_intersect(l1) from list_of_strings;
 ----
-PLACEHOLDER_ERROR_MESSAGE2247
+Catalog Error: Table with name list_of_strings does not exist!
+Did you mean "pg_settings"?
+LINE 1: select list_intersect(l1) from list_of_strings;
+                                       ^
 
 statement error
 select list_intersect(l1, l2, l1) from list_of_strings;

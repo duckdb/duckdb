@@ -8,4 +8,5 @@ ALTER TABLE IF EXISTS t0 ADD COLUMN c1 INT;
 statement error
 ALTER TABLE t0 ADD COLUMN c1 INT;
 ----
-PLACEHOLDER_ERROR_MESSAGE80
+Catalog Error: Table with name t0 does not exist!
+Did you mean "temp.information_schema.tables"?

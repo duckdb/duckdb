@@ -33,7 +33,7 @@ INSERT INTO pkt VALUES (2)
 statement error
 INSERT INTO fkt VALUES (3)
 ----
-PLACEHOLDER_ERROR_MESSAGE1393
+Constraint Error: Violates foreign key constraint because key "i: 3" does not exist in the referenced table
 
 statement ok
 ROLLBACK

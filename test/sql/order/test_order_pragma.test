@@ -36,7 +36,9 @@ PRAGMA default_order='ASC'
 statement error
 PRAGMA default_order())
 ----
-PLACEHOLDER_ERROR_MESSAGE215
+Parser Error: syntax error at or near ")"
+LINE 1: PRAGMA default_order())
+                             ^
 
 statement error
 PRAGMA default_order='UNKNOWN'

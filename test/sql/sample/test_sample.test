@@ -74,7 +74,9 @@ SELECT (SELECT COUNT(*) + tbl.i FROM test USING SAMPLE 1) FROM range(3) tbl(i) O
 statement error
 SELECT COUNT(*) FROM test USING SAMPLE -1
 ----
-PLACEHOLDER_ERROR_MESSAGE2833
+Parser Error: syntax error at or near "-"
+LINE 1: SELECT COUNT(*) FROM test USING SAMPLE -1
+                                               ^
 
 # must be a number
 statement error

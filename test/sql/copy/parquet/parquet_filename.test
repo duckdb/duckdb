@@ -46,7 +46,7 @@ COPY test_csv TO '__TEST_DIR__/filename_as_column.csv' WITH HEADER;
 statement error
 SELECT id, filename FROM read_csv_auto('__TEST_DIR__/filename_as_column.csv', HEADER=1, FILENAME=1);
 ----
-PLACEHOLDER_ERROR_MESSAGE2977
+Binder Error: Using filename option on file with column named filename is not supported
 
 # Parquet filename name conflict
 statement ok

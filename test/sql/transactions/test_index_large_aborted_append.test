@@ -36,7 +36,7 @@ COMMIT;
 statement error con2
 COMMIT;
 ----
-PLACEHOLDER_ERROR_MESSAGE2748
+TransactionContext Error: Failed to commit: Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "-10"
 
 query I con1
 SELECT COUNT(*)=${i} FROM integers

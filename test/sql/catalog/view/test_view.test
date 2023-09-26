@@ -18,7 +18,7 @@ CREATE VIEW v1 AS SELECT i AS j FROM t1 WHERE i < 43
 statement error
 CREATE VIEW v1 AS SELECT 'whatever'
 ----
-PLACEHOLDER_ERROR_MESSAGE1896
+Catalog Error: View with name "v1" already exists!
 
 query I
 SELECT j FROM v1 WHERE j > 41

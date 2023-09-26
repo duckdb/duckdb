@@ -46,5 +46,5 @@ SELECT * FROM test2
 statement error
 ALTER TABLE test2 DROP COLUMN j
 ----
-PLACEHOLDER_ERROR_MESSAGE2735
+Catalog Error: Cannot drop column "j" because there is a CHECK constraint that depends on it
 

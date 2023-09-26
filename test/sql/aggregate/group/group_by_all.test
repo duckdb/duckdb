@@ -107,7 +107,7 @@ NULL	NULL	1
 statement error
 SELECT (g+i)%2 + SUM(i), SUM(i), SUM(g) FROM integers GROUP BY ALL ORDER BY 1
 ----
-PLACEHOLDER_ERROR_MESSAGE1726
+Binder Error: Cannot mix aggregates with non-aggregated columns!
 
 # multiple groups
 

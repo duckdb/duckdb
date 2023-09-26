@@ -23,7 +23,7 @@ UPDATE integers SET i=i, j=3
 statement error
 UPDATE integers SET i=i, i=10
 ----
-PLACEHOLDER_ERROR_MESSAGE1398
+Binder Error: Multiple assignments to same column "i"
 
 statement error
 UPDATE integers SET i=i, j=10

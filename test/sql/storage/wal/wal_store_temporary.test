@@ -34,7 +34,10 @@ DELETE FROM temp.a
 statement error
 DELETE FROM asdf.a
 ----
-PLACEHOLDER_ERROR_MESSAGE2538
+Catalog Error: Table with name a does not exist!
+Did you mean "main.a"?
+LINE 1: DELETE FROM asdf.a
+                    ^
 
 # temporary sequences
 statement ok

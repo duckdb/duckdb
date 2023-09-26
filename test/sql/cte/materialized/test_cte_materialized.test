@@ -46,7 +46,7 @@ with cte1 as MATERIALIZED (select i as j from a), cte2 as MATERIALIZED (select r
 statement error
 with cte1 as MATERIALIZED (select 42), cte1 as MATERIALIZED (select 42) select * FROM cte1;
 ----
-PLACEHOLDER_ERROR_MESSAGE3053
+Parser Error: Duplicate CTE name "cte1"
 
 # reference to CTE before its actually defined
 query I

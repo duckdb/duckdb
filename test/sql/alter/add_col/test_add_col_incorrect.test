@@ -11,7 +11,7 @@ INSERT INTO test VALUES (1, 1), (2, 2)
 statement error
 ALTER TABLE test ADD COLUMN i INTEGER
 ----
-PLACEHOLDER_ERROR_MESSAGE2702
+Catalog Error: Column with name i already exists!
 
 statement ok
 CREATE VIEW x(x) AS (SELECT 1)

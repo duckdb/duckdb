@@ -9,7 +9,7 @@ CREATE TABLE numbers(i varchar PRIMARY KEY, j INTEGER)
 statement error
 INSERT INTO numbers VALUES ('1', 4), ('1', 5)
 ----
-PLACEHOLDER_ERROR_MESSAGE1237
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "1"
 
 # insert unique values
 statement ok

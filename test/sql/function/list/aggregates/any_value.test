@@ -11,7 +11,9 @@ SELECT list_aggr([NULL, 1, 2], 'any_value')
 statement error
 SELECT list_any_value()
 ----
-PLACEHOLDER_ERROR_MESSAGE2223
+Binder Error: Macro function 'list_any_value(l)' requires a single positional argument, but 0 positional arguments were provided.
+LINE 1: SELECT list_any_value()
+               ^
 
 # different types
 

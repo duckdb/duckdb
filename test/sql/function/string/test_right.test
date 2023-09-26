@@ -116,4 +116,6 @@ SELECT "right"('a', -9223372036854775808);
 statement error
 SELECT right_grapheme('a', 9223372036854775808);
 ----
-PLACEHOLDER_ERROR_MESSAGE2328
+Binder Error: No function matches the given name and argument types 'right_grapheme(VARCHAR, HUGEINT)'. You might need to add explicit type casts.
+	Candidate functions:
+	right_grapheme(VARCHAR, BIGINT) -> VARCHAR

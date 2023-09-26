@@ -129,7 +129,7 @@ SELECT
 FROM ScoreBoard s
 ORDER BY TeamName, Score;
 ----
-PLACEHOLDER_ERROR_MESSAGE2795
+Binder Error: NTILE needs 1 parameter, got 0
 
 statement error
 SELECT

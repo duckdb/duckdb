@@ -15,4 +15,4 @@ SELECT date_trunc('DAY', A0) FROM T1
 statement error
 SELECT datetrunc('milliseconds', DATE '-2005205-7-28');
 ----
-PLACEHOLDER_ERROR_MESSAGE2011
+Invalid Error: Overflow exception in date/time -> timestamp conversion

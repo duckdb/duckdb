@@ -32,7 +32,7 @@ SELECT * FROM tbl3;
 statement error
 CREATE TABLE tbl1 AS SELECT 3;
 ----
-PLACEHOLDER_ERROR_MESSAGE3064
+Catalog Error: Table with name "tbl1" already exists!
 
 statement ok
 CREATE OR REPLACE TABLE tbl1 AS SELECT 4;

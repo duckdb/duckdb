@@ -125,7 +125,28 @@ select g,histogram(g) over (partition by g%2)
 statement error
 select histogram()
 ----
-PLACEHOLDER_ERROR_MESSAGE1664
+Binder Error: No function matches the given name and argument types 'histogram()'. You might need to add explicit type casts.
+	Candidate functions:
+	histogram(BOOLEAN) -> MAP
+	histogram(UTINYINT) -> MAP
+	histogram(USMALLINT) -> MAP
+	histogram(UINTEGER) -> MAP
+	histogram(UBIGINT) -> MAP
+	histogram(TINYINT) -> MAP
+	histogram(SMALLINT) -> MAP
+	histogram(INTEGER) -> MAP
+	histogram(BIGINT) -> MAP
+	histogram(FLOAT) -> MAP
+	histogram(DOUBLE) -> MAP
+	histogram(VARCHAR) -> MAP
+	histogram(TIMESTAMP) -> MAP
+	histogram(TIMESTAMP WITH TIME ZONE) -> MAP
+	histogram(TIMESTAMP_S) -> MAP
+	histogram(TIMESTAMP_MS) -> MAP
+	histogram(TIMESTAMP_NS) -> MAP
+	histogram(TIME) -> MAP
+	histogram(TIME WITH TIME ZONE) -> MAP
+	histogram(DATE) -> MAP
 
 statement error
 select histogram(*)

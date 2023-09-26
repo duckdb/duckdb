@@ -59,7 +59,7 @@ NULL
 statement error
 INSERT INTO a VALUES (ROW(1, 2, 3))
 ----
-PLACEHOLDER_ERROR_MESSAGE710
+Mismatch Type Error: Type STRUCT( INTEGER,  INTEGER,  INTEGER) does not match with STRUCT(i INTEGER, j INTEGER). Cannot cast STRUCTs of different size
 
 statement error
 INSERT INTO a VALUES (ROW(1))

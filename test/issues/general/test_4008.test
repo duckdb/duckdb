@@ -8,7 +8,7 @@ PRAGMA enable_verification;
 statement error
 select 1 - any(select 1);
 ----
-PLACEHOLDER_ERROR_MESSAGE120
+Parser Error: ANY and ALL operators require one of =,<>,>,<,>=,<= comparisons!
 
 query I
 select 1 = all(select 1);

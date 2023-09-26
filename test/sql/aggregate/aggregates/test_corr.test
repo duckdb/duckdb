@@ -9,7 +9,9 @@ PRAGMA enable_verification
 statement error
 select corr()
 ----
-PLACEHOLDER_ERROR_MESSAGE1615
+Binder Error: No function matches the given name and argument types 'corr()'. You might need to add explicit type casts.
+	Candidate functions:
+	corr(DOUBLE, DOUBLE) -> DOUBLE
 
 query I
 select corr(NULL,NULL)

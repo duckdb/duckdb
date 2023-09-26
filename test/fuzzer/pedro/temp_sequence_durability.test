@@ -21,4 +21,4 @@ restart
 statement error
 SELECT nextval('s0');
 ----
-PLACEHOLDER_ERROR_MESSAGE32
+Catalog Error: Sequence with name s0 does not exist!

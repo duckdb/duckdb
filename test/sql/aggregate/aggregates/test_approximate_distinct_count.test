@@ -11,7 +11,22 @@ PRAGMA verify_external
 statement error
 select approx_count_distinct(*)
 ----
-PLACEHOLDER_ERROR_MESSAGE1709
+Binder Error: No function matches the given name and argument types 'approx_count_distinct()'. You might need to add explicit type casts.
+	Candidate functions:
+	approx_count_distinct(UTINYINT) -> BIGINT
+	approx_count_distinct(USMALLINT) -> BIGINT
+	approx_count_distinct(UINTEGER) -> BIGINT
+	approx_count_distinct(UBIGINT) -> BIGINT
+	approx_count_distinct(TINYINT) -> BIGINT
+	approx_count_distinct(SMALLINT) -> BIGINT
+	approx_count_distinct(BIGINT) -> BIGINT
+	approx_count_distinct(HUGEINT) -> BIGINT
+	approx_count_distinct(FLOAT) -> BIGINT
+	approx_count_distinct(DOUBLE) -> BIGINT
+	approx_count_distinct(VARCHAR) -> BIGINT
+	approx_count_distinct(TIMESTAMP) -> BIGINT
+	approx_count_distinct(TIMESTAMP WITH TIME ZONE) -> BIGINT
+	approx_count_distinct(BLOB) -> BIGINT
 
 query I
 select approx_count_distinct(1)

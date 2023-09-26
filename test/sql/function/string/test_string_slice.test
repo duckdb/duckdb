@@ -21,7 +21,9 @@ INSERT INTO nulltable VALUES (NULL)
 statement error
 SELECT NULL::VARCHAR[off:length+off] FROM strings
 ----
-PLACEHOLDER_ERROR_MESSAGE2416
+Parser Error: syntax error at or near "off"
+LINE 1: SELECT NULL::VARCHAR[off:length+off] FROM strings
+                             ^
 
 statement error
 SELECT NULL::VARCHAR[NULL:length+NULL] FROM strings

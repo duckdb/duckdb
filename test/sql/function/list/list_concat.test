@@ -44,7 +44,9 @@ SELECT list_concat([1, 2], [])
 statement error
 SELECT list_concat([1, 2], 3)
 ----
-PLACEHOLDER_ERROR_MESSAGE2271
+Binder Error: No function matches the given name and argument types 'list_concat(INTEGER[], INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	list_concat(ANY[], ANY[]) -> ANY[]
 
 # operators
 query T

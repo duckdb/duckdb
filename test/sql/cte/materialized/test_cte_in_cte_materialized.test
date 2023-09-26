@@ -35,7 +35,7 @@ with cte1 as MATERIALIZED (with b as MATERIALIZED (Select i as j from a) select 
 statement error
 with cte1 as MATERIALIZED (select 42), cte1 as MATERIALIZED (select 42) select * FROM cte1;
 ----
-PLACEHOLDER_ERROR_MESSAGE3045
+Parser Error: Duplicate CTE name "cte1"
 
 # refer to CTE in subquery tableref
 query I

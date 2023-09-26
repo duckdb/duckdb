@@ -21,7 +21,7 @@ restart
 statement error
 INSERT INTO test VALUES (NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE2562
+Constraint Error: NOT NULL constraint failed: test.a
 
 # constraint ok
 statement ok

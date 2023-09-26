@@ -69,6 +69,7 @@ DROP TABLE test.t
 statement error
 SELECT * FROM test.v
 ----
-PLACEHOLDER_ERROR_MESSAGE1515
+Catalog Error: Table with name t does not exist!
+Did you mean "v"?
 
 endloop

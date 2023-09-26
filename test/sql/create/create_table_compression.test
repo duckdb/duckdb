@@ -17,7 +17,7 @@ DROP TABLE T
 statement error
 CREATE TABLE T (a INTEGER USING COMPRESSION 'bla')
 ----
-PLACEHOLDER_ERROR_MESSAGE3060
+Parser Error: Unrecognized option for column compression, expected none, uncompressed, rle, dictionary, pfor, bitpacking or fsst
 
 statement error
 CREATE TABLE T (a INTEGER USING COMPRESSION )

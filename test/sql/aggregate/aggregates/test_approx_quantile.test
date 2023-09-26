@@ -145,7 +145,7 @@ FROM (
 statement error
 SELECT approx_quantile(r, -0.1) FROM quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1551
+Binder Error: APPROXIMATE QUANTILE can only take parameters in range [0, 1]
 
 statement error
 SELECT approx_quantile(r, 1.1) FROM quantile

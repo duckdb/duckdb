@@ -9,7 +9,7 @@ CREATE TABLE tst(a varchar, b varchar,PRIMARY KEY(a,b))
 statement error
 INSERT INTO tst VALUES ('hell', 'hello'), ('hell','hello')
 ----
-PLACEHOLDER_ERROR_MESSAGE1255
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "hell, hello"
 
 # insert unique values
 statement ok

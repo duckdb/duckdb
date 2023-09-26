@@ -48,7 +48,7 @@ SELECT MAP(
 	]
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE907
+Invalid Input Error: Map keys have to be unique
 
 # Nested keys (list) not succesfull (nulls)
 statement error

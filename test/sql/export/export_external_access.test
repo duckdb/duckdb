@@ -20,7 +20,7 @@ SET enable_external_access=false
 statement error
 IMPORT DATABASE '__TEST_DIR__/export_permissions_test'
 ----
-PLACEHOLDER_ERROR_MESSAGE3010
+Permission Error: Import is disabled through configuration
 
 statement error
 EXPORT DATABASE '__TEST_DIR__/export_permissions_test2' (FORMAT CSV)

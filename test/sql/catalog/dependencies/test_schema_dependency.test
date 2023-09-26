@@ -17,7 +17,7 @@ SELECT * FROM s1.integers
 statement error con1
 DROP SCHEMA s1
 ----
-PLACEHOLDER_ERROR_MESSAGE1762
+Dependency Error: Cannot drop entry "s1" because there are entries that depend on it. Use DROP...CASCADE to drop all dependents.
 
 query I con1
 SELECT * FROM s1.integers

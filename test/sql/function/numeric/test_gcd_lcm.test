@@ -31,7 +31,10 @@ NULL
 statement error
 SELECT gcd(42, 'abcd')
 ----
-PLACEHOLDER_ERROR_MESSAGE2091
+Binder Error: No function matches the given name and argument types 'gcd(INTEGER, VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	gcd(BIGINT, BIGINT) -> BIGINT
+	gcd(HUGEINT, HUGEINT) -> HUGEINT
 
 query I
 select lcm(120,25);

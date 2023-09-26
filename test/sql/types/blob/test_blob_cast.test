@@ -50,7 +50,7 @@ SELECT '\x20\x00\xFF'::VARCHAR::BLOB::VARCHAR::BLOB
 statement error
 SELECT 1::BYTEA
 ----
-PLACEHOLDER_ERROR_MESSAGE1005
+Conversion Error: Unimplemented type for cast (INTEGER -> BLOB)
 
 statement error
 SELECT 1.0::BYTEA

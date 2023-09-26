@@ -18,7 +18,7 @@ INSERT INTO unit VALUES (4,5)
 statement error
 ALTER TABLE unit ADD COLUMN total_profit BIGINT GENERATED ALWAYS AS (price * rowid) VIRTUAL;
 ----
-PLACEHOLDER_ERROR_MESSAGE1144
+Parser Error: Adding generated columns after table creation is not supported yet
 
 statement ok
 ALTER TABLE unit ADD COLUMN rowid INTEGER;

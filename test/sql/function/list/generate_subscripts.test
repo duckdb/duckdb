@@ -23,4 +23,4 @@ SELECT generate_subscripts(NULL, 1)
 statement error
 SELECT generate_subscripts([[1,2],[3,4],[5,6]], 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE2277
+Not implemented Error: array_length for dimensions other than 1 not implemented

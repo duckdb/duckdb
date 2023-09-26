@@ -29,7 +29,7 @@ CREATE TABLE "ABC"(i integer);
 statement error
 CREATE TABLE "AbC"(i integer);
 ----
-PLACEHOLDER_ERROR_MESSAGE1758
+Catalog Error: Table with name "AbC" already exists!
 
 statement ok
 SELECT * FROM "ABC";

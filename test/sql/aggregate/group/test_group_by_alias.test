@@ -38,7 +38,7 @@ SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY 1 HAVING i%
 statement error
 SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY 42 HAVING i%2>0;
 ----
-PLACEHOLDER_ERROR_MESSAGE1725
+Binder Error: GROUP BY term out of range - should be between 1 and 2
 
 # entry in GROUP BY should refer to base column
 # ...BUT the alias in ORDER BY should refer to the alias from the select list

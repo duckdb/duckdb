@@ -26,7 +26,7 @@ select col['a'] from string_key;
 statement error
 create table string_key_dup as select MAP_FROM_ENTRIES(ARRAY[('a', 'x'), ('a', 'y')]) col;
 ----
-PLACEHOLDER_ERROR_MESSAGE887
+Invalid Input Error: Map keys have to be unique
 
 # -- TINYINT --
 # Valid

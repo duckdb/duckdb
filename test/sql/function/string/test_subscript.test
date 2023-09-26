@@ -65,7 +65,9 @@ e
 statement error
 SELECT NULL::VARCHAR[off] FROM strings
 ----
-PLACEHOLDER_ERROR_MESSAGE2332
+Parser Error: syntax error at or near "off"
+LINE 1: SELECT NULL::VARCHAR[off] FROM strings
+                             ^
 
 query T
 SELECT 'hello'[NULL] FROM strings

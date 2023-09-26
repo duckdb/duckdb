@@ -12,7 +12,7 @@ CREATE TABLE unit (
 	amount_sold AS (price) NOT NULL,
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE1134
+Binder Error: Constraints on generated columns are not supported yet
 
 # Show that proper NOT NULL constraints still work when mixed in when generated columns
 statement ok

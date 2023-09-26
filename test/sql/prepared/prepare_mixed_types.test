@@ -35,7 +35,7 @@ EXECUTE v3(42)
 statement error
 EXECUTE v3(-1)
 ----
-PLACEHOLDER_ERROR_MESSAGE1092
+Conversion Error: Type INT32 with value -1 can't be cast because the value is out of range for the destination type UINT64
 
 # mixed varchar types
 statement ok

@@ -39,7 +39,7 @@ SELECT '0.123456789'::DECIMAL::VARCHAR, '-0.123456789'::DECIMAL::VARCHAR;
 statement error
 SELECT '9223372036854788.758'::DECIMAL;
 ----
-PLACEHOLDER_ERROR_MESSAGE365
+Conversion Error: Could not convert string "9223372036854788.758" to DECIMAL(18,3)
 
 # trailing decimals with scale=0
 query I

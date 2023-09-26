@@ -20,7 +20,7 @@ CREATE TABLE tbl (
 	x INTEGER
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE1162
+Invalid Input Error: Circular dependency encountered when resolving generated column expressions
 
 statement ok
 CREATE TABLE tbl (

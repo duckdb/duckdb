@@ -346,7 +346,9 @@ select UNNEST(string_split_regex('1,2,3,4,*,6', '(\*|,)'))
 statement error
 select string_split()
 ----
-PLACEHOLDER_ERROR_MESSAGE2347
+Binder Error: No function matches the given name and argument types 'string_split()'. You might need to add explicit type casts.
+	Candidate functions:
+	string_split(VARCHAR, VARCHAR) -> VARCHAR[]
 
 statement error
 select string_split('a')

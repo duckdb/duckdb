@@ -87,7 +87,7 @@ select from_base64('AAAA');
 statement error
 SELECT from_base64('ab');
 ----
-PLACEHOLDER_ERROR_MESSAGE2495
+Conversion Error: Could not decode string "ab" as base64: length must be a multiple of 4
 
 # unknown bytes
 statement error

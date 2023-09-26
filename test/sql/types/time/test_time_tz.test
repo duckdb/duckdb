@@ -68,7 +68,7 @@ SELECT '2021-08-20'::TIME;
 statement error
 SELECT '02:30:00>04'::TIMETZ;
 ----
-PLACEHOLDER_ERROR_MESSAGE682
+Conversion Error: time field value out of range: "02:30:00>04", expected format is ([YYYY-MM-DD ]HH:MM:SS[.MS])
 
 statement error
 SELECT '02:30:00+4'::TIMETZ;

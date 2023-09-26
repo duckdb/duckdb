@@ -20,7 +20,7 @@ PRAGMA explain_output='all'
 statement error
 PRAGMA explain_output='unknown'
 ----
-PLACEHOLDER_ERROR_MESSAGE1986
+Parser Error: Unrecognized output type "unknown", expected either ALL, OPTIMIZED_ONLY or PHYSICAL_ONLY
 
 statement ok
 PRAGMA enable_progress_bar

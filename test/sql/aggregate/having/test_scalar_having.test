@@ -45,7 +45,7 @@ INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
 statement error
 SELECT a FROM test WHERE a=13 HAVING a > 11
 ----
-PLACEHOLDER_ERROR_MESSAGE1522
+Binder Error: column test.a must appear in the GROUP BY clause or be used in an aggregate function
 
 # HAVING clause also turns the rest of the query into an aggregate
 # thus column references in SELECT clause also produce errors

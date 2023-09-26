@@ -102,7 +102,7 @@ select interval '-05:12:34.567890' as test_interval;
 statement error
 SELECT INTERVAL 'P2MT1H1M';
 ----
-PLACEHOLDER_ERROR_MESSAGE538
+Conversion Error: Could not convert string 'P2MT1H1M' to INTERVAL
 
 # FIXME: or this format
 statement error

@@ -113,7 +113,10 @@ NULL	NULL	NULL
 statement error
 select LTRIM()
 ----
-PLACEHOLDER_ERROR_MESSAGE2366
+Binder Error: No function matches the given name and argument types 'ltrim()'. You might need to add explicit type casts.
+	Candidate functions:
+	ltrim(VARCHAR) -> VARCHAR
+	ltrim(VARCHAR, VARCHAR) -> VARCHAR
 
 statement error
 select LTRIM('hello', 'world', 'aaa')

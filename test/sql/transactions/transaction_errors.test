@@ -6,7 +6,7 @@
 statement error
 ROLLBACK;
 ----
-PLACEHOLDER_ERROR_MESSAGE2764
+TransactionContext Error: cannot rollback - no transaction is active
 
 # nothing to commit
 statement error

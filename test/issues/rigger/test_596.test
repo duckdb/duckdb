@@ -15,5 +15,5 @@ INSERT INTO t0(c0) VALUES(1E200), (0);
 statement error
 SELECT STDDEV_POP(c0) FROM t0;
 ----
-PLACEHOLDER_ERROR_MESSAGE135
+Out of Range Error: STDDEV_POP is out of range!
 

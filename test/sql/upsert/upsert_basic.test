@@ -23,7 +23,7 @@ insert into tbl VALUES
 statement error
 insert into tbl VALUES (3,5,1) ON CONFLICT (i) DO UPDATE SET i = i;
 ----
-PLACEHOLDER_ERROR_MESSAGE1944
+Binder Error: Can not assign to column 'i' because it has a UNIQUE/PRIMARY KEY constraint
 
 query III
 select * from tbl;

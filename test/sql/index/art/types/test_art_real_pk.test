@@ -12,7 +12,7 @@ CREATE TABLE numbers(i REAL PRIMARY KEY, j INTEGER)
 statement error
 INSERT INTO numbers VALUES (3.45, 4), (3.45, 5)
 ----
-PLACEHOLDER_ERROR_MESSAGE2838
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "3.45"
 
 # insert unique values
 statement ok

@@ -75,7 +75,8 @@ endloop
 statement error
 SELECT era(i) FROM times
 ----
-PLACEHOLDER_ERROR_MESSAGE2072
+Binder Error: Referenced column "i" not found in FROM clause!
+Candidate bindings: "times.d", "times.s"
 
 statement error
 SELECT year(i) FROM times

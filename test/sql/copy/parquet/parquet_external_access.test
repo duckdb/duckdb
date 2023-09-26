@@ -15,7 +15,7 @@ SET enable_external_access=false;
 statement error
 SELECT * FROM 'data/parquet-testing/arrow/lineitem-arrow.parquet'
 ----
-PLACEHOLDER_ERROR_MESSAGE2985
+Permission Error: Scanning Parquet files is disabled through configuration
 
 # or their metadata
 statement error

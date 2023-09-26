@@ -21,7 +21,7 @@ SELECT * FROM test ORDER BY a;
 statement error
 UPDATE test SET a=a+1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1252
+Constraint Error: Duplicate key "a: 12, b: pandas" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 query IT
 SELECT * FROM test ORDER BY a;

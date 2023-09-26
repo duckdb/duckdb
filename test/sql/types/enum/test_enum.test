@@ -18,7 +18,7 @@ happy
 statement error
 select 'awesome-bro'::mood;
 ----
-PLACEHOLDER_ERROR_MESSAGE660
+Conversion Error: Could not convert string 'awesome-bro' to UINT8
 
 # Non-String keys should fail
 statement error

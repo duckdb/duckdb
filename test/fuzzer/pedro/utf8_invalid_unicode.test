@@ -5,7 +5,7 @@
 statement error
 SELECT upper(decode('\xF6\x96\xB0\x85'::BLOB)::VARCHAR);
 ----
-PLACEHOLDER_ERROR_MESSAGE50
+Conversion Error: Failure in decode: could not convert blob to UTF8 string, the blob contained invalid UTF8 characters
 
 # invalid utf8, unicode value too high
 statement error

@@ -8,7 +8,7 @@ PRAGMA enable_verification
 statement error
 SELECT * FROM generate_series(0,10,1) LIMIT 3 OFFSET -1;
 ----
-PLACEHOLDER_ERROR_MESSAGE201
+Binder Error: OFFSET cannot be negative
 
 statement error
 SELECT * FROM generate_series(0,10,1) LIMIT -3;

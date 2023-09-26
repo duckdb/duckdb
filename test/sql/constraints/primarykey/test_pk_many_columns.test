@@ -9,7 +9,7 @@ CREATE TABLE numbers(a integer, b integer, c integer, d integer, e integer, PRIM
 statement error
 INSERT INTO numbers VALUES (1,1,1,1,1), (1,1,1,1,1)
 ----
-PLACEHOLDER_ERROR_MESSAGE1247
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "1, 1, 1, 1, 1"
 
 # insert unique values
 statement ok

@@ -89,7 +89,7 @@ select format('{:b}', 123456789)
 statement error
 SELECT format('{}')
 ----
-PLACEHOLDER_ERROR_MESSAGE2307
+Invalid Error: Argument index "0" out of range
 
 statement error
 SELECT format('{} {}', 'hello')

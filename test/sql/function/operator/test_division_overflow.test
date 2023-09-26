@@ -8,7 +8,7 @@ PRAGMA enable_verification
 statement error
 SELECT (-128)::TINYINT // (-1)::TINYINT
 ----
-PLACEHOLDER_ERROR_MESSAGE2503
+Out of Range Error: Overflow in division of -128 / -1
 
 query I
 SELECT (-127)::TINYINT // (-1)::TINYINT

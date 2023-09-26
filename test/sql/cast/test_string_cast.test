@@ -68,7 +68,7 @@ SELECT '0xF'::INTEGER, '0x0'::INTEGER, '0xFEE'::INTEGER, '0xfee'::INTEGER, '0x00
 statement error
 SELECT '0x'::INT
 ----
-PLACEHOLDER_ERROR_MESSAGE1470
+Conversion Error: Could not convert string '0x' to INT32
 
 statement error
 SELECT '0X'::INT

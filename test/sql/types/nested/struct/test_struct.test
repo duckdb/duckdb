@@ -143,7 +143,7 @@ asdf
 statement error
 SELECT STRUCT_PACK() FROM struct_data
 ----
-PLACEHOLDER_ERROR_MESSAGE866
+Invalid Error: Can't pack nothing into a struct
 
 statement error
 SELECT STRUCT_PACK(e+1) FROM struct_data

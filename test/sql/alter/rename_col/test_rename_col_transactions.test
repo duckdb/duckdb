@@ -21,7 +21,10 @@ ALTER TABLE test RENAME COLUMN i TO k
 statement error con1
 SELECT i FROM test
 ----
-PLACEHOLDER_ERROR_MESSAGE2680
+Binder Error: Referenced column "i" not found in FROM clause!
+Candidate bindings: "test.k", "test.j"
+LINE 1: SELECT i FROM test
+               ^
 
 statement ok con1
 SELECT k FROM test

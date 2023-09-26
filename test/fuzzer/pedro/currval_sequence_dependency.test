@@ -25,6 +25,7 @@ DROP SEQUENCE seq CASCADE;
 statement error
 INSERT INTO t1 VALUES (1)
 ----
-PLACEHOLDER_ERROR_MESSAGE13
+Catalog Error: Table with name t1 does not exist!
+Did you mean "temp.information_schema.tables"?
 
 endloop

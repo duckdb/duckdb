@@ -47,7 +47,7 @@ SELECT COUNT(*) FROM test
 statement error
 INSERT INTO test VALUES (11, 22, 'hello');
 ----
-PLACEHOLDER_ERROR_MESSAGE2580
+Constraint Error: Duplicate key "a: 11" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 statement ok
 CHECKPOINT

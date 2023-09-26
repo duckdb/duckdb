@@ -20,7 +20,7 @@ select '290309-12-22 (BC) 00:00:00'::timestamp
 statement error
 select '290309-12-21 (BC) 12:59:59.999999'::timestamp
 ----
-PLACEHOLDER_ERROR_MESSAGE988
+Conversion Error: timestamp field value out of range: "290309-12-21 (BC) 12:59:59.999999", expected format is (YYYY-MM-DD HH:MM:SS[.US][±HH:MM| ZONE])
 
 query I
 select '290309-12-22 (BC) 00:00:00'::timestamp + interval (1) day

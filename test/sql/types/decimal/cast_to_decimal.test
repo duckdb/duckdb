@@ -20,7 +20,7 @@ SELECT 100::TINYINT::DECIMAL(38,35), 100::TINYINT::DECIMAL(9,6)
 statement error
 SELECT 100::TINYINT::DECIMAL(3,1)
 ----
-PLACEHOLDER_ERROR_MESSAGE353
+Conversion Error: Could not cast value 100 to DECIMAL(3,1)
 
 statement error
 SELECT 1::TINYINT::DECIMAL(3,3)

@@ -183,7 +183,7 @@ NULL
 statement error
 SELECT CAST('{3==3}' AS MAP(INT, INT));
 ----
-PLACEHOLDER_ERROR_MESSAGE1505
+Conversion Error: Could not convert string '=3' to INT32
 
 statement error
 SELECT CAST('{[5]=5}' AS MAP(INT, INT));

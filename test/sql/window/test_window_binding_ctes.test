@@ -58,7 +58,7 @@ SELECT * FROM (SELECT i, lag(i) OVER named_window FROM ( VALUES (1), (2), (3)) A
 statement error
 WITH subquery AS (SELECT i, lag(i) OVER named_window FROM ( VALUES (1), (2), (3)) AS t (i)) SELECT * FROM subquery window named_window AS ( ORDER BY i);
 ----
-PLACEHOLDER_ERROR_MESSAGE2820
+Parser Error: window "named_window" does not exist
 
 # duplicate window clause name
 statement error

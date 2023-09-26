@@ -61,7 +61,7 @@ WITH "CTE"("ZZZ") AS (
 ),
 	"cte" AS (SELECT 42)
 ----
-PLACEHOLDER_ERROR_MESSAGE1858
+Parser Error: syntax error at end of input
 
 query I
 UPDATE integers SET i=integers.i+1

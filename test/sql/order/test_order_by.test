@@ -160,7 +160,7 @@ SELECT a-10 AS k FROM test UNION SELECT a-10 AS l FROM test ORDER BY l;
 statement error
 SELECT a-10 AS k FROM test UNION SELECT a-10 AS l FROM test ORDER BY 1-k;
 ----
-PLACEHOLDER_ERROR_MESSAGE211
+Binder Error: Could not ORDER BY column "(1 - k)": add the expression/function to every SELECT, or move the UNION into a FROM clause.
 
 # but ordering on computation elements should work
 query I

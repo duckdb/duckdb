@@ -84,7 +84,7 @@ world
 statement error
 SELECT regexp_replace(v, 'h.*', 'world', v) FROM test ORDER BY v
 ----
-PLACEHOLDER_ERROR_MESSAGE2340
+Invalid Input Error: Regex options field must be a constant
 
 # throw on invalid options
 statement error

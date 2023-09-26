@@ -55,7 +55,8 @@ DROP SCHEMA temp CASCADE
 statement error
 DROP TABLE memory.main.integersx
 ----
-PLACEHOLDER_ERROR_MESSAGE1863
+Catalog Error: Table with name integersx does not exist!
+Did you mean "main.integersx"?
 
 statement ok
 DROP TABLE integersx

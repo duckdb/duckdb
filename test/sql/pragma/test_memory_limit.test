@@ -97,7 +97,7 @@ PRAGMA memory_limit='0.01 terabytes'
 statement error
 PRAGMA memory_limit=100
 ----
-PLACEHOLDER_ERROR_MESSAGE1970
+Parser Error: Unknown unit for memory_limit:  (expected: b, mb, gb or tb)
 
 statement error
 PRAGMA memory_limit='0.01BG'

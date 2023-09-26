@@ -8,4 +8,4 @@ PRAGMA enable_verification
 statement error
 create table y(y int, foreign key (y) references y(y));
 ----
-PLACEHOLDER_ERROR_MESSAGE85
+Binder Error: Failed to create foreign key: there is no primary key or unique constraint for referenced table "y"

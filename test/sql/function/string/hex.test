@@ -30,7 +30,7 @@ duckdb
 statement error
 SELECT from_hex('duckdb');
 ----
-PLACEHOLDER_ERROR_MESSAGE2308
+Invalid Input Error: Invalid input for hex digit: 
 
 query IIIIIIIIII
 SELECT to_hex(columns('^(.*int|varchar)$')) FROM test_all_types();

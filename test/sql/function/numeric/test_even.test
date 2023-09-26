@@ -57,7 +57,9 @@ NULL
 statement error
 SELECT even('abcd')
 ----
-PLACEHOLDER_ERROR_MESSAGE2092
+Binder Error: No function matches the given name and argument types 'even(VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	even(DOUBLE) -> DOUBLE
 
 # check bound
 query I

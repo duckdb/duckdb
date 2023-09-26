@@ -26,7 +26,8 @@ SELECT nextval('seq');
 statement error con2
 SELECT nextval('seq');
 ----
-PLACEHOLDER_ERROR_MESSAGE2769
+Catalog Error: Sequence with name seq does not exist!
+Did you mean "seq"?
 
 # we commit the sequence
 statement ok con1

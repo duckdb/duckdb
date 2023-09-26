@@ -8,7 +8,7 @@ PRAGMA enable_verification
 statement error
 select 1e308::float;
 ----
-PLACEHOLDER_ERROR_MESSAGE1494
+Conversion Error: Type DOUBLE with value 1e+308 can't be cast because the value is out of range for the destination type FLOAT
 
 query I
 select '1e308'::float;

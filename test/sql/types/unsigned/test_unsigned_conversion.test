@@ -30,7 +30,7 @@ SELECT '7'::UBIGINT, '130'::UBIGINT, '18446744073709551615'::UBIGINT
 statement error
 SELECT '265'::UTINYINT
 ----
-PLACEHOLDER_ERROR_MESSAGE476
+Conversion Error: Could not convert string '265' to UINT8
 
 statement error
 SELECT '65536'::USMALLINT

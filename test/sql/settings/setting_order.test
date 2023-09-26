@@ -27,7 +27,7 @@ SELECT * FROM range(3) ORDER BY 1
 statement error
 ${statement_type} default_order='unknown_order'
 ----
-PLACEHOLDER_ERROR_MESSAGE228
+Invalid Input Error: Unrecognized parameter for option DEFAULT_ORDER "unknown_order". Expected ASC or DESC.
 
 endloop
 

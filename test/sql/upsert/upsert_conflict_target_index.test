@@ -19,7 +19,7 @@ create unique index other_index on index_tbl(i);
 statement error
 insert into index_tbl values (5, 5);
 ----
-PLACEHOLDER_ERROR_MESSAGE1961
+Constraint Error: Duplicate key "i: 5" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 query II
 select * from index_tbl;

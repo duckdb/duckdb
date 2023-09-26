@@ -9,7 +9,9 @@ PRAGMA enable_verification
 statement error
 select skewness()
 ----
-PLACEHOLDER_ERROR_MESSAGE1564
+Binder Error: No function matches the given name and argument types 'skewness()'. You might need to add explicit type casts.
+	Candidate functions:
+	skewness(DOUBLE) -> DOUBLE
 
 query I
 select skewness(NULL)

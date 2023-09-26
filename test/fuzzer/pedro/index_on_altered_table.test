@@ -16,7 +16,7 @@ ALTER TABLE t4 ADD c1 BLOB;
 statement error
 CREATE INDEX i3 ON t4 (c3);
 ----
-PLACEHOLDER_ERROR_MESSAGE53
+TransactionContext Error: Transaction conflict: cannot add an index to a table that has been altered!
 
 statement ok con1
 COMMIT;

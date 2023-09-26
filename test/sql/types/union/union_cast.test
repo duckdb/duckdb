@@ -26,7 +26,7 @@ three
 statement error
 SELECT u::int FROM tbl1;
 ----
-PLACEHOLDER_ERROR_MESSAGE849
+Conversion Error: Unimplemented type for cast (UNION(i32 INTEGER, str VARCHAR) -> INTEGER)
 
 # but we can cast to VARCHAR
 query I

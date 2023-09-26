@@ -15,7 +15,7 @@ EXECUTE p1
 statement error con1
 EXECUTE p1
 ----
-PLACEHOLDER_ERROR_MESSAGE1091
+Binder Error: Prepared statement "p1" does not exist
 
 # we can drop the table though
 statement ok con1

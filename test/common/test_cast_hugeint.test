@@ -37,7 +37,7 @@ loop i 0 2
 statement error
 SELECT f::HUGEINT FROM (SELECT f FROM broken_floats ORDER BY f LIMIT 1 OFFSET ${i}) t1
 ----
-PLACEHOLDER_ERROR_MESSAGE98
+Conversion Error: Type FLOAT with value -1.7014118e+38 can't be cast because the value is out of range for the destination type INT128
 
 endloop
 

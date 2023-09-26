@@ -78,7 +78,7 @@ NULL
 statement error
 SELECT EXTRACT(dayofweek FROM i) FROM intervals
 ----
-PLACEHOLDER_ERROR_MESSAGE2005
+Not implemented Error: interval units "dow" not recognized
 
 statement error
 SELECT EXTRACT(isodow FROM i) FROM intervals

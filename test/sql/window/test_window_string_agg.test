@@ -34,4 +34,4 @@ select j, s, string_agg(s, '|') over (partition by j order by s) from a order by
 statement error
 select j, s, string_agg(s, sep) over (partition by j order by s) from a order by j, s;
 ----
-PLACEHOLDER_ERROR_MESSAGE2801
+Binder Error: Separator argument to StringAgg must be a constant

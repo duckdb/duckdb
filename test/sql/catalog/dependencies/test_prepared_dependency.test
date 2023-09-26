@@ -23,7 +23,8 @@ DROP TABLE integers CASCADE
 statement error con2
 EXECUTE v
 ----
-PLACEHOLDER_ERROR_MESSAGE1802
+Catalog Error: Table with name integers does not exist!
+Did you mean "pg_indexes"?
 
 # dependency on a sequence for prepare
 statement ok con1

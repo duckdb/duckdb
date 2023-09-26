@@ -13,7 +13,7 @@ ATTACH '__TEST_DIR__/persistent_attach.db'
 statement error
 ATTACH '__TEST_DIR__/persistent_attach.db'
 ----
-PLACEHOLDER_ERROR_MESSAGE2785
+Binder Error: Database "duckdb_unittest_tempdir/53346/persistent_attach.db" is already attached with alias "persistent_attach"
 
 statement ok
 CREATE TABLE persistent_attach.integers(i INTEGER)

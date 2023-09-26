@@ -6,7 +6,7 @@
 statement error
 SET debug_window_mode='unknown';
 ----
-PLACEHOLDER_ERROR_MESSAGE234
+Parser Error: Unrecognized option for PRAGMA debug_window_mode, expected window, combine or separate
 
 # default_order
 foreach default_order ASC DESC

@@ -20,7 +20,7 @@ CREATE TYPE name_enum AS ENUM ('Pedro', 'Mark');
 statement error
 ALTER TABLE person ALTER name TYPE name_enum
 ----
-PLACEHOLDER_ERROR_MESSAGE646
+Conversion Error: Could not convert string 'Hannes' to UINT8
 
 statement ok
 DROP TYPE name_enum

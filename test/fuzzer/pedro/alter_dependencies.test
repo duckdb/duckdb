@@ -25,4 +25,6 @@ ALTER TABLE t1 ALTER c2 SET NOT NULL;
 ---
 Cannot alter
 ----
-PLACEHOLDER_ERROR_MESSAGE74
+Parser Error: syntax error at or near "Cannot"
+LINE 3: Cannot alter
+        ^

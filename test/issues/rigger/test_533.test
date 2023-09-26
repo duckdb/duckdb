@@ -15,5 +15,5 @@ INSERT INTO t0(c0) VALUES (10000000000);
 statement error
 SELECT t0.c0 ::INT FROM t0;
 ----
-PLACEHOLDER_ERROR_MESSAGE121
+Conversion Error: Type FLOAT with value 10000000000.0 can't be cast because the value is out of range for the destination type INT32
 

@@ -8,7 +8,7 @@ require no_extension_autoloading
 statement error
 SELECT * FROM read_csv('data/json/example_n.ndjson', columns={'json': 'JSON'}, delim=NULL, header=0, quote=NULL, escape=NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE2788
+Catalog Error: Type with name "JSON" is not in the catalog, but it exists in the json extension.
 
 require json
 

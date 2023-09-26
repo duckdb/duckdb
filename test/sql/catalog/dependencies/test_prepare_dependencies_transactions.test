@@ -33,7 +33,7 @@ EXECUTE v
 statement error con2
 DROP TABLE integers CASCADE
 ----
-PLACEHOLDER_ERROR_MESSAGE1800
+TransactionContext Error: Catalog write-write conflict on alter with "integers"
 
 # now we rollback
 statement ok con2

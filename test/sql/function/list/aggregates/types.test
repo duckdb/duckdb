@@ -41,7 +41,15 @@ foreach func_name avg favg bit_and bit_or bit_xor kurtosis mad product sem skewn
 statement error
 SELECT list_aggr([False], '${func_name}')
 ----
-PLACEHOLDER_ERROR_MESSAGE2233
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'avg(BOOLEAN)'. You might need to add explicit type casts.
+	Candidate functions:
+	avg(DECIMAL) -> DECIMAL
+	avg(SMALLINT) -> DOUBLE
+	avg(INTEGER) -> DOUBLE
+	avg(BIGINT) -> DOUBLE
+	avg(HUGEINT) -> DOUBLE
+	avg(DOUBLE) -> DOUBLE
 
 endloop
 

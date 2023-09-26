@@ -37,7 +37,8 @@ PRAGMA table_info('test.v')
 statement error
 SELECT * FROM test.v
 ----
-PLACEHOLDER_ERROR_MESSAGE2554
+Catalog Error: Table with name t does not exist!
+Did you mean "v"?
 
 
 loop i 0 2

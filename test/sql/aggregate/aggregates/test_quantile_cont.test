@@ -18,7 +18,7 @@ create table quantile as select range r, random() from range(0,1000000,100) unio
 statement error
 SELECT quantile_cont(r, NULL) FROM quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1660
+Binder Error: QUANTILE parameter cannot be NULL
 
 query R
 SELECT quantile_cont(r, 0.5) FROM quantile

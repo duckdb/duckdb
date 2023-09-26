@@ -80,7 +80,7 @@ PREPARE v5 AS SELECT printf('%s', ?)
 statement error
 EXECUTE v5(4)
 ----
-PLACEHOLDER_ERROR_MESSAGE1113
+Invalid Error: Invalid type specifier "s" for formatting a value of type int
 
 query I
 EXECUTE v5('hello')

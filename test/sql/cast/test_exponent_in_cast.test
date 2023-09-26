@@ -8,7 +8,7 @@ PRAGMA enable_verification
 statement error
 SELECT CAST('e1' AS INTEGER);
 ----
-PLACEHOLDER_ERROR_MESSAGE1511
+Conversion Error: Could not convert string 'e1' to INT32
 
 statement error
 SELECT CAST('  e1' AS INTEGER);

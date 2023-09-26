@@ -19,7 +19,8 @@ SELECT s1.tbl.i FROM s1.tbl;
 statement error
 SELECT s2.tbl.i FROM s1.tbl;
 ----
-PLACEHOLDER_ERROR_MESSAGE3000
+Binder Error: Referenced table "s2" not found!
+Candidate tables: "tbl"
 
 # no schema present
 statement error

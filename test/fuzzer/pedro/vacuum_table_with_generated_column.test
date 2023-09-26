@@ -13,7 +13,7 @@ CREATE TABLE test (x INT, y AS (x + 100));
 statement error
 ANALYZE test(x, x);
 ----
-PLACEHOLDER_ERROR_MESSAGE28
+Binder Error: Vacuum the same column twice(same name in column name list)
 
 statement ok
 ANALYZE test(y, x);

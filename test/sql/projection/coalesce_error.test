@@ -14,7 +14,7 @@ SELECT COALESCE(1, 'hello'::INT)
 statement error
 SELECT COALESCE(NULL, 'hello'::INT)
 ----
-PLACEHOLDER_ERROR_MESSAGE3110
+Conversion Error: Could not convert string 'hello' to INT32
 
 # non-constant
 statement ok

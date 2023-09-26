@@ -33,7 +33,7 @@ foreach special infinity -infinity epoch
 statement error
 SELECT '${special} 00:00:00'::${datatype};
 ----
-PLACEHOLDER_ERROR_MESSAGE997
+Conversion Error: timestamp field value out of range: "infinity 00:00:00", expected format is (YYYY-MM-DD HH:MM:SS[.US][±HH:MM| ZONE])
 
 endloop
 

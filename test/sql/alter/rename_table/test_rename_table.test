@@ -23,7 +23,10 @@ SELECT * FROM tbl2
 statement error
 SELECT * FROM tbl
 ----
-PLACEHOLDER_ERROR_MESSAGE2635
+Catalog Error: Table with name tbl does not exist!
+Did you mean "tbl2"?
+LINE 1: SELECT * FROM tbl
+                      ^
 
 statement ok
 ROLLBACK

@@ -9,5 +9,5 @@ PRAGMA enable_verification
 statement error
 SELECT 1e100::real*0;
 ----
-PLACEHOLDER_ERROR_MESSAGE131
+Conversion Error: Type DOUBLE with value 1e+100 can't be cast because the value is out of range for the destination type FLOAT
 

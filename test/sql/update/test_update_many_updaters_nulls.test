@@ -121,7 +121,7 @@ SELECT * FROM test ORDER BY a
 statement error con1
 UPDATE test SET a=99 WHERE a=1
 ----
-PLACEHOLDER_ERROR_MESSAGE1206
+TransactionContext Error: Conflict on update!
 
 statement error con2
 UPDATE test SET a=99 WHERE a=2

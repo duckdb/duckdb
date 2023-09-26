@@ -6,7 +6,7 @@
 statement error
 select * from read_csv('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK(a := 'INTEGER'))
 ----
-PLACEHOLDER_ERROR_MESSAGE2894
+Binder Error: read_csv requires columns to be specified through the 'columns' option. Use read_csv_auto or set read_csv(..., AUTO_DETECT=TRUE) to automatically guess columns.
 
 # Test non-struct throws
 statement error

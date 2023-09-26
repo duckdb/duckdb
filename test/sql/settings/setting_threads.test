@@ -10,7 +10,7 @@ SET ${thread_type} TO '3'
 statement error
 SET ${thread_type} TO '-1'
 ----
-PLACEHOLDER_ERROR_MESSAGE226
+Syntax Error: Must have at least 1 thread!
 
 statement error
 SET ${thread_type} TO 'blabla'

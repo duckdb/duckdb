@@ -40,7 +40,9 @@ SELECT sub_point(({'x': 2, 'y': 3})::POINT, ({'x': 3, 'y': 4})::POINT)
 statement error
 SELECT add_point(pt, pt) from points;
 ----
-PLACEHOLDER_ERROR_MESSAGE1
+Binder Error: No function matches the given name and argument types 'add_point(STRUCT(i INTEGER, j INTEGER), STRUCT(i INTEGER, j INTEGER))'. You might need to add explicit type casts.
+	Candidate functions:
+	add_point(POINT, POINT) -> POINT
 
 statement error
 SELECT sub_point(pt, pt) from points;

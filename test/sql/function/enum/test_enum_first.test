@@ -16,4 +16,4 @@ red
 statement error
 SELECT enum_first('bla')
 ----
-PLACEHOLDER_ERROR_MESSAGE2042
+Binder Error: This function needs an ENUM as an argument

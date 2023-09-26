@@ -15,7 +15,7 @@ SELECT 0::${float_type}::${type}
 statement error
 SELECT (-1)::${float_type}::${type}
 ----
-PLACEHOLDER_ERROR_MESSAGE67
+Conversion Error: Type FLOAT with value -1.0 can't be cast because the value is out of range for the destination type UINT8
 
 endloop
 

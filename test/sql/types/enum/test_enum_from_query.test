@@ -19,7 +19,7 @@ CREATE TABLE test (x VARCHAR, y VARCHAR);
 statement error
 CREATE TYPE a AS ENUM (SELECT * FROM test);
 ----
-PLACEHOLDER_ERROR_MESSAGE674
+Binder Error: The query must return a single column
 
 statement ok
 DROP TABLE test;

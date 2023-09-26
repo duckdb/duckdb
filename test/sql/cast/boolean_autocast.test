@@ -131,7 +131,7 @@ false
 statement error
 SELECT false='unknownbool';
 ----
-PLACEHOLDER_ERROR_MESSAGE1496
+Conversion Error: Could not convert string 'unknownbool' to BOOL
 
 statement error
 SELECT 'unknownbool'=false;

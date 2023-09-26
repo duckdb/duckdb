@@ -193,7 +193,7 @@ SELECT depname, empno,
 		) fv
 FROM empsalary
 ----
-PLACEHOLDER_ERROR_MESSAGE2811
+Binder Error: NTH_VALUE needs 2 parameters, got 1
 
 statement error
 SELECT depname, empno,

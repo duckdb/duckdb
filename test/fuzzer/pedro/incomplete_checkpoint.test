@@ -34,7 +34,7 @@ CREATE SCHEMA s3;
 statement error
 CHECKPOINT;
 ----
-PLACEHOLDER_ERROR_MESSAGE26
+FATAL Error: Failed to create checkpoint because of error: FATAL Error: Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag
 
 # error IO Error: Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag
 statement error

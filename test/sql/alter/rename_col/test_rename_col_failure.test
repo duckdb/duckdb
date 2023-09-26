@@ -9,7 +9,7 @@ CREATE TABLE test(i INTEGER, j INTEGER)
 statement error
 ALTER TABLE test RENAME COLUMN blablabla TO k
 ----
-PLACEHOLDER_ERROR_MESSAGE2682
+Binder Error: Table "test" does not have a column with name "blablabla"
 
 # cannot rename a column to an already existing column
 statement error

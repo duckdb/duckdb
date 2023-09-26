@@ -57,7 +57,10 @@ SELECT i FROM t2 ORDER BY i;
 statement error con1
 SELECT * FROM t1
 ----
-PLACEHOLDER_ERROR_MESSAGE2627
+Catalog Error: Table with name t1 does not exist!
+Did you mean "t2"?
+LINE 1: SELECT * FROM t1
+                      ^
 
 
 # Now we're going to do a rollback instead of a commit

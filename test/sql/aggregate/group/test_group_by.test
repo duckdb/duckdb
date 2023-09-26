@@ -21,7 +21,7 @@ INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
 statement error
 SELECT SUM(SUM(41)), COUNT(*);
 ----
-PLACEHOLDER_ERROR_MESSAGE1730
+Binder Error: aggregate function calls cannot be nested
 
 # simple aggregates without group by
 query RIR

@@ -126,7 +126,7 @@ select list_aggr([0, 0], 'stddev')
 statement error
 select list_aggr([1e301, -1e301], 'stddev')
 ----
-PLACEHOLDER_ERROR_MESSAGE2239
+Out of Range Error: STDDEV_SAMP is out of range!
 
 statement error
 select list_var_samp([1e301, -1e301])

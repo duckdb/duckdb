@@ -14,7 +14,7 @@ CREATE TABLE unit (
 	amount_sold AS (price) UNIQUE,
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE1188
+Binder Error: Constraints on generated columns are not supported yet
 
 # Also not as a column list
 statement error

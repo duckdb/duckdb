@@ -13,7 +13,7 @@ NULL
 statement error
 SELECT gamma(0)
 ----
-PLACEHOLDER_ERROR_MESSAGE2088
+Out of Range Error: cannot take gamma of zero
 
 query I
 SELECT gamma(-1)

@@ -25,4 +25,4 @@ select
 from
   ts as ref_0
 ----
-PLACEHOLDER_ERROR_MESSAGE79
+Conversion Error: Timestamp difference is out of bounds

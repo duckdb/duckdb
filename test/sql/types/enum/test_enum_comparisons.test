@@ -173,7 +173,7 @@ Tim	Chorizo	ok	NULL
 statement error
 SELECT person_mood::pet_mood FROM person_pet_den
 ----
-PLACEHOLDER_ERROR_MESSAGE665
+Conversion Error: Type UINT8 with value 3 can't be cast because the value is out of range for the destination type UINT8
 
 
 # Use enums as normal strings (testing e.g. substr, LIKE, REGEXP_MATCHES).

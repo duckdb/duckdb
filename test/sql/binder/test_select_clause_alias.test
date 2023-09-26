@@ -39,7 +39,7 @@ SELECT i + 1 AS i, i + 1 AS b FROM integers ORDER BY b
 statement error
 SELECT a + 1 AS b, i + 1 AS a FROM integers
 ----
-PLACEHOLDER_ERROR_MESSAGE1415
+Binder Error: Column "a" referenced that exists in the SELECT clause - but this column cannot be referenced before it is defined
 
 # expressions with side effects are not supported yet
 statement error

@@ -86,7 +86,7 @@ SELECT * FROM constrainty
 statement error
 ALTER TABLE test ALTER blabla SET DEFAULT 3
 ----
-PLACEHOLDER_ERROR_MESSAGE2694
+Binder Error: Table "test" does not have a column with name "blabla"
 
 statement error
 ALTER TABLE test ALTER blabla DROP DEFAULT

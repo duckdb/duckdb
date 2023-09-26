@@ -116,7 +116,7 @@ select list_sort((list), 'desc') == list from (select ${f}(test_vector) as list 
 statement error
 SELECT ${f}()
 ----
-PLACEHOLDER_ERROR_MESSAGE2164
+Binder Error: Macro function 'list_reverse(l)' requires a single positional argument, but 0 positional arguments were provided.
 
 statement error
 SELECT ${f}(42)

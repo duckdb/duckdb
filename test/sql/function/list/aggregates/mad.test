@@ -104,7 +104,17 @@ endloop
 statement error
 SELECT list_mad([INTERVAL 1 YEAR])
 ----
-PLACEHOLDER_ERROR_MESSAGE2211
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'mad(INTERVAL)'. You might need to add explicit type casts.
+	Candidate functions:
+	mad(DECIMAL) -> DECIMAL
+	mad(FLOAT) -> FLOAT
+	mad(DOUBLE) -> DOUBLE
+	mad(DATE) -> INTERVAL
+	mad(TIMESTAMP) -> INTERVAL
+	mad(TIME) -> INTERVAL
+	mad(TIMESTAMP WITH TIME ZONE) -> INTERVAL
+	mad(TIME WITH TIME ZONE) -> INTERVAL
 
 statement error
 SELECT list_mad([NULL::INTERVAL])

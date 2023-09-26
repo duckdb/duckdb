@@ -40,4 +40,4 @@ create or replace table tbl (a integer unique, b integer unique);
 statement error
 insert or replace into tbl values (1,2);
 ----
-PLACEHOLDER_ERROR_MESSAGE1957
+Binder Error: Conflict target has to be provided for a DO UPDATE operation when the table has multiple UNIQUE/PRIMARY KEY constraints

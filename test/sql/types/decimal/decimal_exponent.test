@@ -59,7 +59,7 @@ SELECT '1e37'::DECIMAL(38,0)
 statement error
 SELECT '1e4'::DECIMAL(4,0)
 ----
-PLACEHOLDER_ERROR_MESSAGE413
+Conversion Error: Could not convert string "1e4" to DECIMAL(4,0)
 
 statement error
 SELECT '1e9'::DECIMAL(9,0)

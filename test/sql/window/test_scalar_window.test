@@ -20,7 +20,7 @@ SELECT avg(42) OVER ()
 statement error
 SELECT concat() OVER ()
 ----
-PLACEHOLDER_ERROR_MESSAGE2827
+Catalog Error: concat is not an aggregate function
 
 statement error
 SELECT nonexistingfunction() OVER ()

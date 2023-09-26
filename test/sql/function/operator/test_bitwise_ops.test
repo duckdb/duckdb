@@ -39,7 +39,7 @@ SELECT xor(1, 1), xor(1, 0), xor(0, 0), xor(NULL, 1), xor(1, NULL)
 statement error
 SELECT 1::TINYINT << -1::TINYINT, 1::TINYINT >> -1::TINYINT, 1::TINYINT << 12::TINYINT, 1::TINYINT >> 12::TINYINT
 ----
-PLACEHOLDER_ERROR_MESSAGE2510
+Out of Range Error: Cannot left-shift by negative number -1
 
 statement error
 SELECT 1::SMALLINT << -1::SMALLINT, 1::SMALLINT >> -1::SMALLINT, 1::SMALLINT << 20::SMALLINT, 1::SMALLINT >> 20::SMALLINT

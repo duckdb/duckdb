@@ -15,4 +15,4 @@ SELECT * FROM 'data/csv/[avalon]_daily-avg.csv'
 statement error
 SELECT * FROM 'data/csv/[avxalon]_daily-avg.csv'
 ----
-PLACEHOLDER_ERROR_MESSAGE2895
+IO Error: No files found that match the pattern "data/csv/[avxalon]_daily-avg.csv"

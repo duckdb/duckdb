@@ -9,7 +9,7 @@ PRAGMA enable_verification
 statement error
 CREATE TEMP TABLE t0(c0 AS (1));
 ----
-PLACEHOLDER_ERROR_MESSAGE1139
+Binder Error: Creating a table without physical (non-generated) columns is not supported
 
 # Function doesn't exist
 statement error

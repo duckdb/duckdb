@@ -20,7 +20,7 @@ ALTER TABLE test ADD COLUMN k INTEGER
 statement error con2
 ALTER TABLE test ADD COLUMN l INTEGER
 ----
-PLACEHOLDER_ERROR_MESSAGE2699
+TransactionContext Error: Catalog write-write conflict on alter with "test"
 
 statement ok con1
 COMMIT

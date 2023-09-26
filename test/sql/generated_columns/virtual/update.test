@@ -28,7 +28,7 @@ SELECT * FROM test;
 statement error
 UPDATE test SET bar = 5
 ----
-PLACEHOLDER_ERROR_MESSAGE1170
+Binder Error: Cant update column "bar" because it is a generated column!
 
 # Correctly formatted UPDATE statements work
 statement ok

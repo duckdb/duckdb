@@ -60,5 +60,6 @@ US	Seattle	608	564	738
 statement error
 PIVOT Cities ON Year IN (SELECT xx FROM Cities) USING SUM(Population);
 ----
-PLACEHOLDER_ERROR_MESSAGE254
+Binder Error: Referenced column "xx" not found in FROM clause!
+Candidate bindings: "Cities.Name"
 

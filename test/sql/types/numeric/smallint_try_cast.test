@@ -13,7 +13,7 @@ CREATE TABLE smallints AS SELECT i::SMALLINT i FROM (VALUES (-32768), (0), (3276
 statement error
 SELECT i::UTINYINT FROM smallints
 ----
-PLACEHOLDER_ERROR_MESSAGE801
+Conversion Error: Type INT16 with value -32768 can't be cast because the value is out of range for the destination type UINT8
 
 statement error
 SELECT i::USMALLINT FROM smallints

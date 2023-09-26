@@ -8,7 +8,7 @@ require no_extension_autoloading
 statement error
 CREATE TABLE test_zst AS SELECT * FROM read_csv('test/sql/copy/csv/broken/test.csv.zst', AUTO_DETECT=TRUE);
 ----
-PLACEHOLDER_ERROR_MESSAGE2913
+Not implemented Error: Attempting to open a compressed file, but the compression type is not supported
 
 statement ok
 CREATE TABLE test_zst(a INTEGER, b INTEGER, c INTEGER, d VARCHAR, e VARCHAR);

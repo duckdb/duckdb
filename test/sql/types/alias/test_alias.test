@@ -12,7 +12,7 @@ CREATE TYPE alias AS VARCHAR;
 statement error
 CREATE TYPE alias AS INTEGER;
 ----
-PLACEHOLDER_ERROR_MESSAGE416
+Catalog Error: Type with name "alias" already exists!
 
 # Delete ALIASs
 statement ok

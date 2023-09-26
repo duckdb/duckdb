@@ -14,7 +14,7 @@ SET enable_external_access=false;
 statement error
 SELECT * FROM read_csv('test/sql/copy/csv/data/test/date.csv', columns = {'d': 'DATE'});
 ----
-PLACEHOLDER_ERROR_MESSAGE2906
+Permission Error: Scanning CSV files is disabled through configuration
 
 statement error
 SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/date.csv');

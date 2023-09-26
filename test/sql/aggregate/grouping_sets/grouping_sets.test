@@ -275,4 +275,5 @@ select count(*), course, type
 statement error
 select course from students group by ();
 ----
-PLACEHOLDER_ERROR_MESSAGE1732
+Binder Error: column "course" must appear in the GROUP BY clause or must be part of an aggregate function.
+Either add it to the GROUP BY list, or use "ANY_VALUE(course)" if the exact value of "course" is not important.

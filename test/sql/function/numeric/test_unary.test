@@ -53,7 +53,7 @@ INSERT INTO minima VALUES (-128, -32768, -2147483648, -9223372036854775808);
 statement error
 SELECT -t from minima;
 ----
-PLACEHOLDER_ERROR_MESSAGE2119
+Out of Range Error: Overflow in negation of integer!
 
 statement error
 SELECT -s from minima;

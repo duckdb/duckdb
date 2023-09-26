@@ -20,7 +20,7 @@ SELECT d+1 FROM decimals
 statement error
 SELECT d+1000000000000000.0 FROM decimals
 ----
-PLACEHOLDER_ERROR_MESSAGE356
+Out of Range Error: Overflow in addition of DECIMAL(18) (990000000000000000 + 10000000000000000). You might want to add an explicit cast to a bigger decimal.
 
 # subtraction
 query I

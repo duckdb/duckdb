@@ -49,7 +49,7 @@ CREATE TABLE "SAME_NAME"(i INTEGER, j INTEGER);
 statement error
 CREATE TABLE "same_name"(i INTEGER, j INTEGER);
 ----
-PLACEHOLDER_ERROR_MESSAGE3013
+Catalog Error: Table with name "same_name" already exists!
 
 statement ok
 INSERT INTO "SAME_NAME" VALUES (1, 1), (2, 2)

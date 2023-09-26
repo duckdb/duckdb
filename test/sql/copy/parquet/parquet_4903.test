@@ -8,4 +8,7 @@ require parquet
 statement error
 SELECT type_param_constraints FROM 'data/parquet-testing/bug4903.parquet' limit 10
 ----
-PLACEHOLDER_ERROR_MESSAGE2975
+Binder Error: Referenced column "type_param_constraints" not found in FROM clause!
+Candidate bindings: "bug4903.dt"
+LINE 1: SELECT type_param_constraints FROM 'data/parqu...
+               ^

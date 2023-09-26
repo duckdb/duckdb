@@ -70,7 +70,11 @@ NULL
 statement error
 SELECT EXTRACT(year FROM i) FROM times
 ----
-PLACEHOLDER_ERROR_MESSAGE2084
+Binder Error: No function matches the given name and argument types 'year(TIME)'. You might need to add explicit type casts.
+	Candidate functions:
+	year(DATE) -> BIGINT
+	year(TIMESTAMP) -> BIGINT
+	year(INTERVAL) -> BIGINT
 
 statement error
 SELECT EXTRACT(month FROM i) FROM times

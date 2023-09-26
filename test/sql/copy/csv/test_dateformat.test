@@ -92,7 +92,7 @@ SELECT * FROM new_timestamps ORDER BY 1
 statement error
 COPY dates FROM 'test/sql/copy/csv/data/test/dateformat.csv' (HEADER 0, DATEFORMAT '%')
 ----
-PLACEHOLDER_ERROR_MESSAGE2887
+Invalid Input Error: Could not parse DATEFORMAT: Trailing format character %
 
 statement error
 COPY timestamps FROM 'test/sql/copy/csv/data/test/timestampformat.csv' (HEADER 0, DELIMITER '|', TIMESTAMPFORMAT '%')----

@@ -55,7 +55,9 @@ NULL
 statement error
 SELECT CONCAT()
 ----
-PLACEHOLDER_ERROR_MESSAGE2380
+Binder Error: No function matches the given name and argument types 'concat()'. You might need to add explicit type casts.
+	Candidate functions:
+	concat(VARCHAR) -> VARCHAR
 
 # concat with one argument works
 query T

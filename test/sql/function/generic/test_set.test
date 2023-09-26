@@ -9,7 +9,7 @@ PRAGMA enable_verification
 statement error
 SELECT CURRENT_SETTING('a');
 ----
-PLACEHOLDER_ERROR_MESSAGE2300
+Catalog Error: unrecognized configuration parameter "a"
 
 statement error
 SELECT CURRENT_SETTING('memori_limit');

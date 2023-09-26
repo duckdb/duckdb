@@ -15,5 +15,5 @@ INSERT INTO integers VALUES (2, 12)
 statement error
 SELECT * FROM integers WHERE SUM(a)>10
 ----
-PLACEHOLDER_ERROR_MESSAGE3008
+Binder Error: WHERE clause cannot contain aggregates!
 

@@ -48,7 +48,8 @@ SELECT test.tbl.col FROM test.tbl;
 statement error
 SELECT test.t.col FROM test.tbl t;
 ----
-PLACEHOLDER_ERROR_MESSAGE2998
+Binder Error: Referenced table "test" not found!
+Candidate tables: "t"
 
 statement error
 SELECT test.tbl.col FROM test.tbl t;

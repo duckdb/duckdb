@@ -31,7 +31,7 @@ IMPORT DATABASE '__TEST_DIR__/fk_constraint'
 statement error
 INSERT INTO fk_integers VALUES (4)
 ----
-PLACEHOLDER_ERROR_MESSAGE1302
+Constraint Error: Violates foreign key constraint because key "i: 4" does not exist in the referenced table
 
 statement ok
 INSERT INTO fk_integers VALUES (3)

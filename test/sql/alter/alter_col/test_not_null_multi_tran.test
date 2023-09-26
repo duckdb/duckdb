@@ -21,7 +21,7 @@ BEGIN TRANSACTION
 statement error con2
 INSERT INTO t VALUES(7777, NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE2606
+TransactionContext Error: Transaction conflict: adding entries to a table that has been altered!
 
 statement ok con1
 INSERT INTO t VALUES(7, 7)

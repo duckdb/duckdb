@@ -20,7 +20,7 @@ CREATE VIEW v1 AS SELECT i AS j FROM t1 WHERE i < 43
 statement error
 DELETE FROM v1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1903
+Binder Error: Can only delete from base table!
 
 # try to update the view
 statement error

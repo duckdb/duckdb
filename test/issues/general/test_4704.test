@@ -15,7 +15,7 @@ INSERT INTO t0 SELECT 1 FROM RANGE(1024)
 statement error
 INSERT INTO t0 VALUES(NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE106
+Constraint Error: NOT NULL constraint failed: t0.c1
 
 # How to verify the error message?
 statement error

@@ -24,7 +24,7 @@ SELECT list_aggr(list(i), 'string_agg', '|') FROM range(1, 4) tbl(i);
 statement error
 SELECT list_aggr([0, 1, 2, 3], 'arg_min', i) FROM range(1, 4) tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE923
+Invalid Input Error: Aggregate function arg_min(NULL, i) is not supported for list_aggr: extra arguments were not removed during bind
 
 # not enough arguments
 statement error

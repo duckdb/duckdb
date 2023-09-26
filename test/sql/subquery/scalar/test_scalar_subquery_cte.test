@@ -58,7 +58,7 @@ SELECT * FROM (WITH cte AS (SELECT 42, 41 AS x) SELECT * FROM cte) v1(a);
 statement error
 SELECT * FROM (WITH cte AS (SELECT 42, 41 AS x) SELECT * FROM cte) v1(a, b, c);
 ----
-PLACEHOLDER_ERROR_MESSAGE1443
+Binder Error: table "v1" has 2 columns available but 3 columns specified
 
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);

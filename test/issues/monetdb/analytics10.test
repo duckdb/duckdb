@@ -41,7 +41,8 @@ SELECT
 FROM tbl_ProductSales
 GROUP BY ()
 ----
-PLACEHOLDER_ERROR_MESSAGE179
+Binder Error: column "ColID" must appear in the GROUP BY clause or must be part of an aggregate function.
+Either add it to the GROUP BY list, or use "ANY_VALUE(ColID)" if the exact value of "ColID" is not important.
 
 query I rowsort
 SELECT

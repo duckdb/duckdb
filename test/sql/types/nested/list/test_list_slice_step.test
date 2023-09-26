@@ -170,7 +170,8 @@ select a[:-:step] from tbl;
 statement error
 SELECT '12345'[1:3:2];
 ----
-PLACEHOLDER_ERROR_MESSAGE929
+Not implemented Error: Slice with steps has not been implemented for string types, you can consider rewriting your query as follows:
+ SELECT array_to_string((str_split(string, '')[begin:end:step], '');
 
 statement error
 SELECT ([1,2,3,4,5])[1:3:0];

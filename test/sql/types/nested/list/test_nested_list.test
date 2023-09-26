@@ -236,7 +236,7 @@ SELECT SUM(ue) FROM (SELECT UNNEST(le) ue FROM (SELECT g, LIST(e) le from list_d
 statement error
 SELECT SUM(UNNEST(le)) FROM ( SELECT g, LIST(e) le from list_data  GROUP BY g ORDER BY g) xx
 ----
-PLACEHOLDER_ERROR_MESSAGE943
+Binder Error: UNNEST not supported here
 
 # you're holding it wrong
 statement error

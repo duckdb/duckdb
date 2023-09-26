@@ -49,7 +49,10 @@ SELECT * FROM vw1
 statement error con2
 SELECT * FROM vw2
 ----
-PLACEHOLDER_ERROR_MESSAGE2730
+Catalog Error: Table with name vw2 does not exist!
+Did you mean "vw2"?
+LINE 1: SELECT * FROM vw2
+                      ^
 
 statement error con2
 SELECT * FROM vw3

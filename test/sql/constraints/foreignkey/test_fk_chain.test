@@ -30,7 +30,7 @@ INSERT INTO t4 VALUES (1)
 statement error
 INSERT INTO t2 VALUES (5)
 ----
-PLACEHOLDER_ERROR_MESSAGE1311
+Constraint Error: Violates foreign key constraint because key "i1: 5" does not exist in the referenced table
 
 statement error
 INSERT INTO t3 VALUES (4)

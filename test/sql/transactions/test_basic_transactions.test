@@ -22,7 +22,10 @@ SELECT * FROM integers
 statement error con2
 SELECT * FROM integers
 ----
-PLACEHOLDER_ERROR_MESSAGE2774
+Catalog Error: Table with name integers does not exist!
+Did you mean "integers"?
+LINE 1: SELECT * FROM integers
+                      ^
 
 # if we rollback, nobody should be able to query the table
 statement ok con1

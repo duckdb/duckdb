@@ -15,7 +15,27 @@ PRAGMA verify_external
 statement error
 select mode()
 ----
-PLACEHOLDER_ERROR_MESSAGE1638
+Binder Error: No function matches the given name and argument types 'mode()'. You might need to add explicit type casts.
+	Candidate functions:
+	mode(DECIMAL) -> DECIMAL
+	mode(TINYINT) -> TINYINT
+	mode(SMALLINT) -> SMALLINT
+	mode(INTEGER) -> INTEGER
+	mode(BIGINT) -> BIGINT
+	mode(HUGEINT) -> HUGEINT
+	mode(FLOAT) -> FLOAT
+	mode(DOUBLE) -> DOUBLE
+	mode(UTINYINT) -> UTINYINT
+	mode(USMALLINT) -> USMALLINT
+	mode(UINTEGER) -> UINTEGER
+	mode(UBIGINT) -> UBIGINT
+	mode(DATE) -> DATE
+	mode(TIMESTAMP) -> TIMESTAMP
+	mode(TIME) -> TIME
+	mode(TIMESTAMP WITH TIME ZONE) -> TIMESTAMP WITH TIME ZONE
+	mode(TIME WITH TIME ZONE) -> TIME WITH TIME ZONE
+	mode(INTERVAL) -> INTERVAL
+	mode(VARCHAR) -> VARCHAR
 
 query I
 select mode(NULL)

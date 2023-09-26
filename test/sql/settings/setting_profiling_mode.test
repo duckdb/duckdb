@@ -11,4 +11,4 @@ SET profiling_mode='detailed';
 statement error
 SET profiling_mode='unknown';
 ----
-PLACEHOLDER_ERROR_MESSAGE224
+Parser Error: Unrecognized profiling mode "unknown", supported formats: [standard, detailed]

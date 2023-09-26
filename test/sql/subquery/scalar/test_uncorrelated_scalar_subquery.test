@@ -86,7 +86,7 @@ SELECT * FROM integers WHERE i=(SELECT i FROM integers WHERE i IS NOT NULL ORDER
 statement error
 SELECT * FROM integers WHERE i=(SELECT 1, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE1441
+Binder Error: Subquery returns 2 columns - expected 1
 
 statement error
 SELECT * FROM integers WHERE i=(SELECT i, i + 2 FROM integers)

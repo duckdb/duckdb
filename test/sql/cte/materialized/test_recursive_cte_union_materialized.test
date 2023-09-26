@@ -112,7 +112,7 @@ NULL
 statement error
 with recursive t as MATERIALIZED (select 1 as x union select sum(x+1) from t where x < 3 order by x) select * from t
 ----
-PLACEHOLDER_ERROR_MESSAGE3052
+Parser Error: ORDER BY in a recursive query is not allowed
 
 # limit is not allowed in the recursive term of ctes
 statement error

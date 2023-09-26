@@ -9,7 +9,9 @@ PRAGMA enable_verification
 statement error
 SELECTl log(0);
 ----
-PLACEHOLDER_ERROR_MESSAGE2099
+Parser Error: syntax error at or near "SELECTl"
+LINE 1: SELECTl log(0);
+        ^
 
 statement error
 SELECTl log(-1);

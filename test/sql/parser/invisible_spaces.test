@@ -57,7 +57,9 @@ endloop
 statement error
 SELEC 
 ----
-PLACEHOLDER_ERROR_MESSAGE2519
+Parser Error: syntax error at or near "SELEC"
+LINE 1: SELEC 
+        ^
 
 # only a unicode space
 statement ok

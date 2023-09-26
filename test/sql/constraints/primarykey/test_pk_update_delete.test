@@ -14,7 +14,7 @@ UPDATE test SET b=2 WHERE b=3;
 statement error
 UPDATE test SET a=a+1 WHERE b=1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1243
+Constraint Error: Duplicate key "a: 12" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 statement error
 UPDATE test SET a=4;

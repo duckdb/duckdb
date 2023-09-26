@@ -151,7 +151,9 @@ NULL
 statement error
 SELECT damerau_levenshtein('one', 'two', 'three')
 ----
-PLACEHOLDER_ERROR_MESSAGE2383
+Binder Error: No function matches the given name and argument types 'damerau_levenshtein(VARCHAR, VARCHAR, VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	damerau_levenshtein(VARCHAR, VARCHAR) -> BIGINT
 
 statement error
 SELECT damerau_levenshtein('one')

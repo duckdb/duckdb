@@ -25,7 +25,8 @@ ALTER TABLE test RENAME COLUMN i TO k
 statement error
 EXECUTE v1
 ----
-PLACEHOLDER_ERROR_MESSAGE2687
+Binder Error: Referenced column "i" not found in FROM clause!
+Candidate bindings: "test.k", "test.j"
 
 # v2 still works
 statement ok

@@ -31,7 +31,7 @@ SELECT "COL"."HELLO" FROM tbl
 statement error
 SELECT ({'hello': 3, 'hello': 4}) col;
 ----
-PLACEHOLDER_ERROR_MESSAGE705
+Binder Error: Duplicate struct entry name "hello"
 
 statement error
 SELECT ({'HELLO': 3, 'HELLO': 4}) col;

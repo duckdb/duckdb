@@ -6,7 +6,9 @@
 statement error
 PRAG
 ----
-PLACEHOLDER_ERROR_MESSAGE1984
+Parser Error: syntax error at or near "PRAG"
+LINE 1: PRAG
+        ^
 
 # Pragma without a keyword
 statement error

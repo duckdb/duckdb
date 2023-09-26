@@ -13,7 +13,9 @@ foreach func_name list_transform list_filter
 statement error
 SELECT ${func_name}()
 ----
-PLACEHOLDER_ERROR_MESSAGE2149
+Binder Error: No function matches the given name and argument types 'list_transform()'. You might need to add explicit type casts.
+	Candidate functions:
+	list_transform(ANY[], LAMBDA) -> ANY[]
 
 statement error
 SELECT ${func_name}([])

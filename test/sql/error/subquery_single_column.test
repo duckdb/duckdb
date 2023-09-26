@@ -6,4 +6,6 @@
 statement error
 SELECT (SELECT 42, 84)
 ----
-PLACEHOLDER_ERROR_MESSAGE3065
+Binder Error: Subquery returns 2 columns - expected 1
+LINE 1: SELECT (SELECT 42, 84)
+               ^

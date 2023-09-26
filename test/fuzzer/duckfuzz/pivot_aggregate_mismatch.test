@@ -8,4 +8,4 @@ PRAGMA enable_verification
 statement error
 FROM (VALUES (42)) t(i) PIVOT (current_date() FOR (i) IN (41))
 ----
-PLACEHOLDER_ERROR_MESSAGE87
+Catalog Error: current_date is not an aggregate function

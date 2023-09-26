@@ -5,7 +5,9 @@
 statement error
 SELECT union_extract(1, 'b');
 ----
-PLACEHOLDER_ERROR_MESSAGE846
+Binder Error: No function matches the given name and argument types 'union_extract(INTEGER, VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	union_extract(UNION, VARCHAR) -> ANY
 
 query I
 SELECT union_extract(1::UNION(a INT, b FLOAT), 'a');

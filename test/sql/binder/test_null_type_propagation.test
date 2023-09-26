@@ -70,7 +70,9 @@ True
 statement error
 SELECT bool_and(i) FROM (SELECT * FROM (SELECT NULL::INTEGER) tbl(i) UNION ALL SELECT CAST(1 as BOOLEAN)) tbl(i)
 ----
-PLACEHOLDER_ERROR_MESSAGE1412
+Binder Error: No function matches the given name and argument types 'bool_and(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	bool_and(BOOLEAN) -> BOOLEAN
 
 # cross product
 query II

@@ -16,7 +16,7 @@ CREATE SEQUENCE seq;
 statement error
 CREATE SEQUENCE seq;
 ----
-PLACEHOLDER_ERROR_MESSAGE1932
+Catalog Error: Sequence with name "seq" already exists!
 
 # ignore errors if sequence already exists
 statement ok

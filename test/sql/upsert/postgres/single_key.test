@@ -67,7 +67,7 @@ Not implemented Error: 'excluded' qualified columns are not supported in the RET
 statement error
 insert into insertconflicttest values (1, 'Apple') on conflict (keyy) do update set fruit = excluded.fruit;
 ----
-PLACEHOLDER_ERROR_MESSAGE1955
+Binder Error: Table "insertconflicttest" does not have a column with name "keyy"
 
 # Have useful HINT for EXCLUDED.* RTE within UPDATE:
 

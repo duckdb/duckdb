@@ -12,7 +12,7 @@ CREATE VIEW vintegers AS SELECT 42;
 statement error
 CREATE OR REPLACE VIEW integers AS SELECT 42;
 ----
-PLACEHOLDER_ERROR_MESSAGE1810
+Catalog Error: Existing object integers is of type Table, trying to replace with type View
 
 # cannot use DROP VIEW to drop a table
 statement error

@@ -43,7 +43,7 @@ UPDATE integers SET i=i+1
 statement error con1
 CREATE INDEX i_index ON integers using art(i)
 ----
-PLACEHOLDER_ERROR_MESSAGE2843
+TransactionContext Error: Cannot create index with outstanding updates
 
 # con2
 query R con2

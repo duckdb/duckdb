@@ -20,7 +20,7 @@ INSERT INTO a SELECT i id, NULL c FROM range(-2, -250000, -1) tbl(i)
 statement error
 INSERT INTO a VALUES (1, 5)
 ----
-PLACEHOLDER_ERROR_MESSAGE2840
+Constraint Error: Duplicate key "id: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 statement ok
 ROLLBACK

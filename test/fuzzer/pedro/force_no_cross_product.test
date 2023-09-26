@@ -8,4 +8,4 @@ PRAGMA debug_force_no_cross_product=1;
 statement error
 SELECT 1 FROM (SELECT 1), (SELECT 1);
 ----
-PLACEHOLDER_ERROR_MESSAGE21
+Invalid Input Error: Query requires a cross-product, but 'force_no_cross_product' PRAGMA is enabled

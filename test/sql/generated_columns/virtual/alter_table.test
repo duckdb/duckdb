@@ -12,7 +12,7 @@ CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
 statement error
 CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
 ----
-PLACEHOLDER_ERROR_MESSAGE1181
+Catalog Error: Table with name "unit" already exists!
 
 statement ok
 INSERT INTO unit VALUES (5,4)

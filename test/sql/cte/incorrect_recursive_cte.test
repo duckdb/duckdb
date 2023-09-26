@@ -12,7 +12,7 @@ WITH RECURSIVE cte AS (SELECT 42) SELECT * FROM cte;
 statement error
 with recursive t as (select 1 as x intersect select x+1 from t where x < 3) select * from t order by x
 ----
-PLACEHOLDER_ERROR_MESSAGE3032
+Parser Error: Unsupported setop type for recursive CTE: only UNION or UNION ALL are supported
 
 statement error
 with recursive t as (select 1 as x except select x+1 from t where x < 3) select * from t order by x

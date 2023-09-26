@@ -16,7 +16,7 @@ CREATE TABLE test (
 statement error
 INSERT INTO test (bar) VALUES (5)
 ----
-PLACEHOLDER_ERROR_MESSAGE1153
+Binder Error: Cannot insert into a generated column
 
 #Using column names
 statement ok

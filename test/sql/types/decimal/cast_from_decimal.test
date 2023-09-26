@@ -14,7 +14,7 @@ SELECT 127::DECIMAL(3,0)::TINYINT, -127::DECIMAL(3,0)::TINYINT, -7::DECIMAL(9,1)
 statement error
 SELECT 128::DECIMAL(3,0)::TINYINT
 ----
-PLACEHOLDER_ERROR_MESSAGE293
+Conversion Error: Failed to cast decimal value 128 to type INT8
 
 statement error
 SELECT -128::DECIMAL(9,0)::TINYINT

@@ -47,7 +47,7 @@ SELECT DATE '0000-01-01'
 statement error
 SELECT DATE '0000-01-01 (BC)'
 ----
-PLACEHOLDER_ERROR_MESSAGE561
+Conversion Error: date field value out of range: "0000-01-01 (BC)", expected format is (YYYY-MM-DD)
 
 # negative BC years do not exist either
 statement error

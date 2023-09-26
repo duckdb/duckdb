@@ -6,7 +6,7 @@
 statement error
 CREATE TABLE integers(i INTEGER, PRIMARY KEY(j))
 ----
-PLACEHOLDER_ERROR_MESSAGE1941
+Parser Error: column "j" named in key does not exist
 
 # primary key that references the same key twice
 statement error

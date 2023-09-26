@@ -66,7 +66,7 @@ NULL
 statement error
 SELECT generate_series(timestamp '2020-01-01', timestamp '2020-06-01', interval '3' month - interval '3' day);
 ----
-PLACEHOLDER_ERROR_MESSAGE2254
+Invalid Input Error: Interval with mix of negative/positive entries not supported
 
 # Infinities will overflow or cause infinite loops so we ban them
 statement error

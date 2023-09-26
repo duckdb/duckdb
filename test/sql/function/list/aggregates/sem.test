@@ -6,7 +6,9 @@
 statement error
 select list_sem()
 ----
-PLACEHOLDER_ERROR_MESSAGE2217
+Binder Error: Macro function 'list_sem(l)' requires a single positional argument, but 0 positional arguments were provided.
+LINE 1: select list_sem()
+               ^
 
 query I
 select list_sem([1])

@@ -50,7 +50,9 @@ NULL
 statement error
 SELECT ASCII()
 ----
-PLACEHOLDER_ERROR_MESSAGE2356
+Binder Error: No function matches the given name and argument types 'ascii()'. You might need to add explicit type casts.
+	Candidate functions:
+	ascii(VARCHAR) -> INTEGER
 
 query T
 SELECT CHR(97)

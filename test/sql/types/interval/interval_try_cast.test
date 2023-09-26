@@ -8,7 +8,7 @@ PRAGMA enable_verification
 statement error
 SELECT cast('   ' as interval)
 ----
-PLACEHOLDER_ERROR_MESSAGE509
+Conversion Error: Could not convert string '   ' to INTERVAL
 
 statement error
 SELECT cast('AAAA' as interval)

@@ -202,7 +202,26 @@ SELECT BITSTRING_AGG(column0, -10, 40) FROM '__TEST_DIR__/bitstring_agg.csv';
 statement error
 SELECT BITSTRING_AGG()
 ----
-PLACEHOLDER_ERROR_MESSAGE1708
+Binder Error: No function matches the given name and argument types 'bitstring_agg()'. You might need to add explicit type casts.
+	Candidate functions:
+	bitstring_agg(TINYINT) -> BIT
+	bitstring_agg(TINYINT, TINYINT, TINYINT) -> BIT
+	bitstring_agg(SMALLINT) -> BIT
+	bitstring_agg(SMALLINT, SMALLINT, SMALLINT) -> BIT
+	bitstring_agg(INTEGER) -> BIT
+	bitstring_agg(INTEGER, INTEGER, INTEGER) -> BIT
+	bitstring_agg(BIGINT) -> BIT
+	bitstring_agg(BIGINT, BIGINT, BIGINT) -> BIT
+	bitstring_agg(HUGEINT) -> BIT
+	bitstring_agg(HUGEINT, HUGEINT, HUGEINT) -> BIT
+	bitstring_agg(UTINYINT) -> BIT
+	bitstring_agg(UTINYINT, UTINYINT, UTINYINT) -> BIT
+	bitstring_agg(USMALLINT) -> BIT
+	bitstring_agg(USMALLINT, USMALLINT, USMALLINT) -> BIT
+	bitstring_agg(UINTEGER) -> BIT
+	bitstring_agg(UINTEGER, UINTEGER, UINTEGER) -> BIT
+	bitstring_agg(UBIGINT) -> BIT
+	bitstring_agg(UBIGINT, UBIGINT, UBIGINT) -> BIT
 
 statement error
 SELECT BITSTRING_AGG(1, 3, 4, 8, 0)

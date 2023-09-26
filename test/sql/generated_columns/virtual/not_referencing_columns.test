@@ -13,7 +13,7 @@ CREATE TABLE tbl (
 	gcol AS (list(5,4,3))
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE1169
+Binder Error: Aggregate functions are not supported here
 
 statement ok
 CREATE TABLE tbl (

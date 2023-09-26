@@ -33,7 +33,10 @@ SELECT  v.trim('><') as trim_inequality,
         trim_inequality.replace('%', '') as only_alphabet,
 FROM varchars
 ----
-PLACEHOLDER_ERROR_MESSAGE1422
+Parser Error: syntax error at or near "trim_inequality"
+LINE 3:         trim_inequality.replace('%', '') as only_alphabet,
+FROM varchars...
+                ^
 
 
 query III

@@ -78,7 +78,7 @@ SELECT regexp_matches('foobarbequebaz', '(bar)(beque)')
 statement error
 SELECT regexp_matches('', '\X')
 ----
-PLACEHOLDER_ERROR_MESSAGE2338
+Invalid Error: invalid escape sequence: \X
 
 statement ok
 CREATE TABLE regex(s STRING, p STRING)

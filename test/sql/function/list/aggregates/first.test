@@ -11,7 +11,9 @@ SELECT list_aggr([1, 2], 'arbitrary')
 statement error
 SELECT list_first()
 ----
-PLACEHOLDER_ERROR_MESSAGE2218
+Binder Error: Macro function 'list_first(l)' requires a single positional argument, but 0 positional arguments were provided.
+LINE 1: SELECT list_first()
+               ^
 
 # different types
 

@@ -31,7 +31,7 @@ SELECT decode('\x00'::BLOB)
 statement error
 SELECT decode('\xFF'::BLOB)
 ----
-PLACEHOLDER_ERROR_MESSAGE2496
+Conversion Error: Failure in decode: could not convert blob to UTF8 string, the blob contained invalid UTF8 characters
 
 query I
 SELECT decode(encode(a)) || a from (values ('hello'), ('world')) tbl(a);

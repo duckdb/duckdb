@@ -24,7 +24,7 @@ CREATE VIEW v1 AS SELECT 42
 statement error
 PRAGMA storage_info('v1')
 ----
-PLACEHOLDER_ERROR_MESSAGE1980
+Catalog Error: v1 is not an table
 
 # non-existent table
 statement error

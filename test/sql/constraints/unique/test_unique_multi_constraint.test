@@ -13,7 +13,7 @@ INSERT INTO integers VALUES (1, 1), (2, 2)
 statement error
 INSERT INTO integers VALUES (3, 3), (4, 1)
 ----
-PLACEHOLDER_ERROR_MESSAGE1217
+Constraint Error: Duplicate key "j: 1" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 # no constraints are violated
 statement ok

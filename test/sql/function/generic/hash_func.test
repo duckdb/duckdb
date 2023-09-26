@@ -12,7 +12,9 @@ foreach datatype ANY HASH POINTER
 statement error
 SELECT HASH(NULL::${datatype});
 ----
-PLACEHOLDER_ERROR_MESSAGE2303
+Parser Error: syntax error at or near "ANY"
+LINE 1: SELECT HASH(NULL::ANY);
+                          ^
 
 endloop
 

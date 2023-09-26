@@ -5,4 +5,6 @@
 statement error
 SELECT substr('hello', 3, 2) OVER ();
 ----
-PLACEHOLDER_ERROR_MESSAGE3097
+Catalog Error: substr is not an aggregate function
+LINE 1: SELECT substr('hello', 3, 2) OVER ();
+               ^

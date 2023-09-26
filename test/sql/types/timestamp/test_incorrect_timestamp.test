@@ -11,7 +11,7 @@ CREATE TABLE timestamp(t TIMESTAMP)
 statement error
 INSERT INTO timestamp VALUES ('blabla')
 ----
-PLACEHOLDER_ERROR_MESSAGE956
+Conversion Error: timestamp field value out of range: "blabla", expected format is (YYYY-MM-DD HH:MM:SS[.US][±HH:MM| ZONE])
 
 statement error
 INSERT INTO timestamp VALUES ('1993-20-14 00:00:00')

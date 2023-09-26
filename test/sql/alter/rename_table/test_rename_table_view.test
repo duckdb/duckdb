@@ -14,7 +14,7 @@ CREATE VIEW v1 AS SELECT * FROM tbl
 statement error
 ALTER TABLE v1 RENAME TO v2
 ----
-PLACEHOLDER_ERROR_MESSAGE2644
+Catalog Error: Can only modify view with ALTER VIEW statement
 
 query I
 SELECT * FROM v1

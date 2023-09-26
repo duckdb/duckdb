@@ -17,7 +17,7 @@ ALTER TABLE t0 ALTER c1 SET NOT NULL;
 statement error
 ALTER TABLE t0 ALTER c0 SET NOT NULL;
 ----
-PLACEHOLDER_ERROR_MESSAGE20
+Binder Error: Unsupported constraint for generated column!
 
 statement error
 INSERT INTO t0 VALUES (NULL);

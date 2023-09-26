@@ -73,4 +73,7 @@ restart
 statement error
 select test(4, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE1820
+Catalog Error: Scalar Function with name test does not exist!
+Did you mean "least"?
+LINE 1: select test(4, 2)
+               ^

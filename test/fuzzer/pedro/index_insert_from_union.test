@@ -11,7 +11,7 @@ CREATE TABLE t2 (c1 INT, PRIMARY KEY (c1));
 statement error
 INSERT INTO t2 SELECT * FROM (VALUES (2), (2))
 ----
-PLACEHOLDER_ERROR_MESSAGE24
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "2"
 
 statement error
 INSERT INTO t2 SELECT 2 FROM range(10);

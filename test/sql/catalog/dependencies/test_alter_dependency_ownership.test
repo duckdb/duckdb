@@ -23,7 +23,7 @@ DROP TABLE tablename;
 statement error
 SELECT nextval('sequence1');
 ----
-PLACEHOLDER_ERROR_MESSAGE1797
+Catalog Error: Sequence with name sequence1 does not exist!
 
 ##TEST: If the table is dropped, then the sequence is also droppped, using schemas
 statement ok

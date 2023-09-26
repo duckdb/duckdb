@@ -69,7 +69,7 @@ SELECT a FROM test LIMIT (30-10) %
 statement error
 SELECT a FROM test LIMIT a %
 ----
-PLACEHOLDER_ERROR_MESSAGE210
+Binder Error: Referenced column "a" not found in FROM clause!
 
 # LIMIT with non-scalar operation should also fail
 statement error

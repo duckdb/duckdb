@@ -48,7 +48,7 @@ DECIMAL
 statement error
 select (typeof([(SELECT min from hugeint_limits), 1.00005])::VARCHAR)[:7]
 ----
-PLACEHOLDER_ERROR_MESSAGE727
+Conversion Error: Could not cast value -17014118346046923173168730371588410572 to DECIMAL(38,5)
 
 statement error
 select (typeof([(SELECT max from hugeint_limits), 1.00005])::VARCHAR)[:7]

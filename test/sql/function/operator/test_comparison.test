@@ -22,7 +22,7 @@ SELECT 1 <> 1, 1 != 1, 1 <> 0, 1 != 0, 1 <> NULL
 statement error
 select ('abc' between 20 and True);
 ----
-PLACEHOLDER_ERROR_MESSAGE2499
+Conversion Error: Could not convert string 'abc' to INT32
 
 statement error
 select 'abc' > 10

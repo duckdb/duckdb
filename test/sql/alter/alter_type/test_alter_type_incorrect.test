@@ -12,7 +12,7 @@ INSERT INTO test VALUES (1, 1), (2, 2)
 statement error
 ALTER TABLE test ALTER blabla SET TYPE VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE2668
+Binder Error: Table "test" does not have a column with name "blabla"
 
 # expression error
 statement error

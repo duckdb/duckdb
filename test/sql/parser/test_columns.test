@@ -63,7 +63,7 @@ SELECT id, MIN(COLUMNS('[0-9]')) FROM grouped_table GROUP BY all ORDER BY ALL
 statement error
 SELECT id, MIN(COLUMNS('xxx')) FROM grouped_table GROUP BY all
 ----
-PLACEHOLDER_ERROR_MESSAGE2517
+Binder Error: No matching columns found that match regex "xxx"
 
 # empty regex
 statement error

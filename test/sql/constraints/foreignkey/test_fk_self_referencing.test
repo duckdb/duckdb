@@ -5,7 +5,7 @@
 statement error
 CREATE TABLE employee(id INTEGER PRIMARY KEY, managerid INTEGER, name VARCHAR, FOREIGN KEY(managerid) REFERENCES employee(emp_id));
 ----
-PLACEHOLDER_ERROR_MESSAGE1379
+Binder Error: Failed to create foreign key: referenced table "employee" does not have a column named "emp_id"
 
 statement ok
 CREATE TABLE employee(id INTEGER PRIMARY KEY, managerid INTEGER, name VARCHAR, FOREIGN KEY(managerid) REFERENCES employee(id));

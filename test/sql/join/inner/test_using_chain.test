@@ -34,7 +34,7 @@ SELECT * FROM t1 JOIN t2 USING (b) JOIN t3 USING (c) ORDER BY 1, 2, 3, 4;
 statement error
 SELECT * FROM t1 JOIN t2 USING (c)
 ----
-PLACEHOLDER_ERROR_MESSAGE1124
+Binder Error: Column "c" does not exist on left side of join!
 
 # column does not exist on right side of join
 statement error

@@ -134,5 +134,7 @@ aaa
 statement error
 SELECT s FROM strings WHERE s SIMILAR TO 'ab.*%' {escape ''}
 ----
-PLACEHOLDER_ERROR_MESSAGE2327
+Parser Error: syntax error at or near "{"
+LINE 1: ...ROM strings WHERE s SIMILAR TO 'ab.*%' {escape ''}
+                                                  ^
 

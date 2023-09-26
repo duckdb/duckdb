@@ -73,7 +73,7 @@ NULL
 statement error
 select 'a%c' ilike 'a$%C' escape '///';
 ----
-PLACEHOLDER_ERROR_MESSAGE2379
+Syntax Error: Invalid escape string. Escape string must be empty or one character.
 
 # escape must be a constant
 statement error

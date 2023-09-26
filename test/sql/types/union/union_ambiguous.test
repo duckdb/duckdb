@@ -6,7 +6,7 @@
 statement error
 CREATE TABLE tbl(a UNION(b INT, b INT));
 ----
-PLACEHOLDER_ERROR_MESSAGE845
+Parser Error: Duplicate union type tag name "b"
 
 statement error
 CREATE TABLE tbl(a UNION(b INT, B INT));

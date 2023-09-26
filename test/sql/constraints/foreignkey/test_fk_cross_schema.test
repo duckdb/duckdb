@@ -17,4 +17,5 @@ INSERT INTO s1.pk_integers VALUES (1), (2), (3)
 statement error
 CREATE TABLE s2.fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES s1.pk_intexgers(i))
 ----
-PLACEHOLDER_ERROR_MESSAGE1296
+Catalog Error: Table with name pk_intexgers does not exist!
+Did you mean "pk_integers"?

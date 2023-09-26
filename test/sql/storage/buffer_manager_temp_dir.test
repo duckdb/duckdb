@@ -16,7 +16,9 @@ PRAGMA memory_limit='2MB'
 statement error
 CREATE TABLE t2 AS SELECT * FROM range(1000000);
 ----
-PLACEHOLDER_ERROR_MESSAGE2574
+Out of Memory Error: could not allocate block of size 262KB (1.8MB/2.0MB used)
+Database is launched in in-memory mode and no temporary directory is specified.
+Unused blocks cannot be offloaded to disk.
 
 # after we set the temp directory, we can create this table
 statement ok

@@ -16,7 +16,8 @@ SELECT i AS 'hello world' FROM integers
 statement error
 SELECT i 'hello world' FROM integers
 ----
-PLACEHOLDER_ERROR_MESSAGE1414
+Catalog Error: Type with name i does not exist!
+Did you mean "bit"?
 
 # double quotes work everywhere
 statement ok

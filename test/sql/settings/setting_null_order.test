@@ -31,7 +31,7 @@ NULL
 statement error
 ${statement_type} ${null_order_type}='unknown_null_order'
 ----
-PLACEHOLDER_ERROR_MESSAGE223
+Parser Error: Unrecognized parameter for option NULL_ORDER "unknown_null_order", expected either NULLS FIRST, NULLS LAST, SQLite, MySQL or Postgres
 
 endloop
 

@@ -38,7 +38,7 @@ SELECT subquery(a) FROM integers
 statement error
 CREATE MACRO a1(a) AS (SELECT a + a FROM integers)
 ----
-PLACEHOLDER_ERROR_MESSAGE1819
+Binder Error: Conflicting column names for column a!
 
 statement ok
 CREATE MACRO a1(b) AS (SELECT a + a FROM integers)

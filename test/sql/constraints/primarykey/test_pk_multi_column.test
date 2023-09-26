@@ -17,7 +17,7 @@ SELECT * FROM integers
 statement error
 INSERT INTO integers VALUES (6, 'bla'), (3, 'hello');
 ----
-PLACEHOLDER_ERROR_MESSAGE1238
+Constraint Error: Duplicate key "i: 3, j: hello" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 statement ok
 INSERT INTO integers VALUES (6, 'bla');

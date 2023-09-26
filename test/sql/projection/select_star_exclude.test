@@ -41,7 +41,7 @@ SELECT * EXCLUDE ("J") FROM integers
 statement error
 SELECT * EXCLUDE (i, j, k) FROM integers
 ----
-PLACEHOLDER_ERROR_MESSAGE3108
+Binder Error: SELECT list is empty after resolving * expressions!
 
 # same but with integers.*
 query II

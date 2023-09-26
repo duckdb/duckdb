@@ -83,7 +83,7 @@ SELECT interval 2 seconds, interval 2 second;
 statement error
 SELECT interval '2 10' years to months
 ----
-PLACEHOLDER_ERROR_MESSAGE503
+Parser Error: YEAR TO MONTH is not supported
 
 # 2 days 10 hours
 statement error

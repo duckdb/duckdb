@@ -42,7 +42,7 @@ SELECT 1 FROM t1;
 statement error
 SELECT 1 FROM t1 WHERE decode('\xC0'::BLOB) IS NULL; --1 row, wrong?
 ----
-PLACEHOLDER_ERROR_MESSAGE12
+Conversion Error: Failure in decode: could not convert blob to UTF8 string, the blob contained invalid UTF8 characters
 
 statement error
 SELECT 1 FROM t1 WHERE NOT (decode('\xC0'::BLOB) IS NULL); --1 row

@@ -31,7 +31,7 @@ SELECT 1.0::DECIMAL(38,37)::DECIMAL(2,1), 1.0::DECIMAL(38,37)::DECIMAL(9,1), 1.0
 statement error
 SELECT 10.00::DECIMAL(4,2)::DECIMAL(4,3);
 ----
-PLACEHOLDER_ERROR_MESSAGE283
+Conversion Error: Casting value "10.00" to type DECIMAL(4,3) failed: value is out of range!
 
 statement error
 SELECT 10.00::DECIMAL(4,2)::DECIMAL(9,8);

@@ -132,7 +132,7 @@ insert into excluded values(1, '1');
 statement error
 insert into excluded values(1, '2') on conflict (key) do update set data = excluded.data RETURNING *;
 ----
-PLACEHOLDER_ERROR_MESSAGE1956
+Binder Error: Duplicate alias "excluded" in query!
 
 # ok, aliased
 statement ok

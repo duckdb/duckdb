@@ -78,7 +78,7 @@ INSERT INTO albums_error VALUES ('Tenacious D', '2001'), ('The Pick of Destiny',
 statement error
 select name, year_release::INT from albums_error
 ----
-PLACEHOLDER_ERROR_MESSAGE675
+Conversion Error: Could not convert string 'bla' to INT32
 
 query II
 select name, year_release::INT from albums_error where year_release = '2001'

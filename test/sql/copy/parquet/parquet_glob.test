@@ -69,7 +69,7 @@ FROM parquet_scan('data/parquet-testing/glob3/*/dir/*.parquet');
 statement error
 select count(*) from parquet_scan('')
 ----
-PLACEHOLDER_ERROR_MESSAGE2960
+IO Error: No files found that match the pattern ""
 
 # schema mismatch in parquet glob
 statement error

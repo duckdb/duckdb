@@ -31,7 +31,9 @@ NULL
 statement error
 SELECT constant_or_null(1);
 ----
-PLACEHOLDER_ERROR_MESSAGE2295
+Binder Error: No function matches the given name and argument types 'constant_or_null(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	constant_or_null(ANY, ANY) -> ANY
 
 statement error
 SELECT constant_or_null();

@@ -11,7 +11,9 @@ PRAGMA enable_verification
 statement error
 DETACH DATABASE system
 ----
-PLACEHOLDER_ERROR_MESSAGE2783
+Parser Error: syntax error at or near "system"
+LINE 1: DETACH DATABASE system
+                        ^
 
 statement error
 DETACH DATABASE temp

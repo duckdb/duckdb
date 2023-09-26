@@ -13,7 +13,7 @@ INSERT INTO tbl VALUES (999, 4), (1000, 5)
 statement error
 INSERT INTO tbl VALUES (999, 4), (1000, 5)
 ----
-PLACEHOLDER_ERROR_MESSAGE2657
+Constraint Error: Duplicate key "i: 999" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 # check value constrain (j < 10)
 statement ok

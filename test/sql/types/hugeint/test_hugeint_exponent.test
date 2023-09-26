@@ -18,7 +18,7 @@ select '170141183460469231731687303715884105727e0'::hugeint
 statement error
 select '170141183460469231731687303715884105735e0'::hugeint
 ----
-PLACEHOLDER_ERROR_MESSAGE1070
+Conversion Error: Could not convert string '170141183460469231731687303715884105735e0' to INT128
 
 statement error
 select '1.7e39'::hugeint

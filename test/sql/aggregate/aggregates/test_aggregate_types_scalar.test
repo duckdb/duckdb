@@ -15,7 +15,10 @@ SELECT COUNT(), COUNT(1), COUNT(*), COUNT(NULL), COUNT('hello'), COUNT(DATE '199
 statement error
 SELECT COUNT(1, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE1636
+Binder Error: No function matches the given name and argument types 'count(INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	count(ANY) -> BIGINT
+	count() -> BIGINT
 
 query RRR
 SELECT SUM(1), SUM(NULL), SUM(33.3)

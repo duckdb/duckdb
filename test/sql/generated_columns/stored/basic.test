@@ -11,4 +11,4 @@ CREATE TABLE tbl (
 	gcol AS (price) STORED,
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE1199
+Invalid Input Error: Can not create a STORED generated column!

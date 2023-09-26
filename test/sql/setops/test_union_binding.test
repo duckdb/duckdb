@@ -53,7 +53,8 @@ NULL
 statement error
 SELECT b FROM (SELECT * FROM test UNION SELECT * FROM test2) res ORDER BY 1;
 ----
-PLACEHOLDER_ERROR_MESSAGE249
+Binder Error: Referenced column "b" not found in FROM clause!
+Candidate bindings: "res.a"
 
 # it works if we reverse the tables
 query I

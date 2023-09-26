@@ -16,7 +16,7 @@ loop i 0 10
 statement error
 CREATE OR REPLACE TABLE t1 AS (SELECT * FROM range(10) ORDER BY 1) UNION ALL (SELECT * FROM range(10) ORDER BY 1);
 ----
-PLACEHOLDER_ERROR_MESSAGE73
+Catalog Error: t1 is not an table
 
 statement error
 CREATE OR REPLACE TABLE t1 AS (SELECT 1) UNION ALL (SELECT * FROM range(10) ORDER BY 1);

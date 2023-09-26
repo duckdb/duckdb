@@ -40,7 +40,9 @@ NULL
 statement error
 SELECT list_avg()
 ----
-PLACEHOLDER_ERROR_MESSAGE2206
+Binder Error: Macro function 'list_avg(l)' requires a single positional argument, but 0 positional arguments were provided.
+LINE 1: SELECT list_avg()
+               ^
 
 # NULL average
 statement ok

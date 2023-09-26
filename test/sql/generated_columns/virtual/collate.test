@@ -12,7 +12,7 @@ CREATE TABLE tbl (
 	also_price VARCHAR AS (price) COLLATE NOCASE
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE1168
+Parser Error: Collations are not supported on generated columns
 
 statement ok
 CREATE TABLE coll (

@@ -16,7 +16,9 @@ from
     (select round from test limit 1) as subselect,
     test;
 ----
-PLACEHOLDER_ERROR_MESSAGE107
+Binder Error: Circular reference to CTE "test", There are two possible solutions. 
+1. use WITH RECURSIVE to use recursive CTEs. 
+2. If you want to use the TABLE name "test" the same as the CTE name, please explicitly add "SCHEMA" before table name. You can try "main.test" (main is the duckdb default schema)
 
 query I
 with test(round) as (

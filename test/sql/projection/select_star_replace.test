@@ -35,7 +35,7 @@ SELECT integers.* REPLACE (i+100 AS i) FROM integers
 statement error
 SELECT * REPLACE (i+100 AS i, i+200 AS i) FROM integers
 ----
-PLACEHOLDER_ERROR_MESSAGE3103
+Parser Error: Duplicate entry "i" in REPLACE list
 
 # replace name that does not exist
 statement error

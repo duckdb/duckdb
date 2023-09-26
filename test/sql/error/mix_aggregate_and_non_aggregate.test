@@ -11,7 +11,10 @@ FROM tbl
 GROUP BY style
 ORDER BY abv DESC;
 ----
-PLACEHOLDER_ERROR_MESSAGE3099
+Binder Error: column "abv" must appear in the GROUP BY clause or must be part of an aggregate function.
+Either add it to the GROUP BY list, or use "ANY_VALUE(abv)" if the exact value of "abv" is not important.
+LINE 4: ORDER BY abv DESC;
+                 ^
 
 statement error
 SELECT FIRST(name)||abv

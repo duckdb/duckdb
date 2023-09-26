@@ -48,4 +48,4 @@ SELECT COUNT(1 ORDER BY 1)
 statement error
 SELECT COUNT(DISTINCT *) FROM integers
 ----
-PLACEHOLDER_ERROR_MESSAGE1532
+Binder Error: STAR expression is only allowed as the root element of an expression. Use COLUMNS(*) instead.

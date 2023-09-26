@@ -18,7 +18,9 @@ INSERT INTO unit VALUES (4,5)
 statement error
 ALTER TABLE unit ADD COLUMN total_profit INTEGER DEFAULT 1 GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
 ----
-PLACEHOLDER_ERROR_MESSAGE1174
+Parser Error: syntax error at or near "GENERATED"
+LINE 1: ... COLUMN total_profit INTEGER DEFAULT 1 GENERATED ALWAYS AS (price * amount_sol...
+                                                  ^
 
 # Generated column failed to create
 statement error

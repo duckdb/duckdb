@@ -15,7 +15,7 @@ INSERT INTO test VALUES (1), (2)
 statement error
 ALTER TABLE test ALTER i TYPE VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE2659
+Not implemented Error: Changing types of generated columns is not supported yet
 
 # Alter normal column
 statement ok

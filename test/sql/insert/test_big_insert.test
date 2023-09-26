@@ -42,7 +42,7 @@ INSERT INTO integers VALUES (DEFAULT, 4);
 statement error
 INSERT INTO integers VALUES (DEFAULT+1, 4);
 ----
-PLACEHOLDER_ERROR_MESSAGE1117
+Binder Error: DEFAULT is not allowed here!
 
 statement ok
 INSERT INTO integers (i) SELECT j FROM integers;

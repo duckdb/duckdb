@@ -12,7 +12,7 @@ INSERT INTO tbl VALUES (union_value(num := 1));
 statement error
 INSERT INTO tbl VALUES (union_value());
 ----
-PLACEHOLDER_ERROR_MESSAGE837
+Binder Error: union_value takes exactly one argument
 
 statement error
 INSERT INTO tbl VALUES (union_value(num := 1, other := 2))

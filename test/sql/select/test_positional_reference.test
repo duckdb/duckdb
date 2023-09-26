@@ -26,7 +26,7 @@ SELECT #1 FROM (SELECT * FROM range(1)) tbl
 statement error
 select (select #1) from range(1);
 ----
-PLACEHOLDER_ERROR_MESSAGE3005
+Binder Error: Positional reference 1 out of range (total 0 columns)
 
 # out of range
 statement error

@@ -28,7 +28,7 @@ SELECT * FROM unit;
 statement error
 ALTER TABLE unit DROP COLUMN price;
 ----
-PLACEHOLDER_ERROR_MESSAGE1185
+Catalog Error: Cannot drop column: column is a dependency of 1 or more generated column(s)
 
 statement ok
 ALTER TABLE unit DROP COLUMN price CASCADE;

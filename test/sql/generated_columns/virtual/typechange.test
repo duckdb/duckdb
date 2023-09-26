@@ -24,7 +24,7 @@ SELECT total_profit FROM unit;
 statement error
 ALTER TABLE unit ALTER COLUMN total_profit TYPE BOOLEAN;
 ----
-PLACEHOLDER_ERROR_MESSAGE1192
+Not implemented Error: Changing types of generated columns is not supported yet
 
 statement ok
 INSERT INTO unit VALUES (5,0);

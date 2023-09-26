@@ -35,7 +35,7 @@ SELECT * FROM a
 statement error
 UPDATE a SET rowid=5
 ----
-PLACEHOLDER_ERROR_MESSAGE3124
+Binder Error: Referenced update column rowid not found in table!
 
 # we also can't insert with explicit row ids
 statement error

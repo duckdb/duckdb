@@ -12,7 +12,8 @@ explain CREATE TABLE integers(i INTEGER);
 statement error
 explain SELECT * FROM integers;
 ----
-PLACEHOLDER_ERROR_MESSAGE1116
+Catalog Error: Table with name integers does not exist!
+Did you mean "pg_indexes"?
 
 statement error
 explain INSERT INTO integers VALUES (1);

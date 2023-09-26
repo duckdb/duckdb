@@ -23,7 +23,7 @@ select * from unsigned;
 statement error
 SELECT (200)::UTINYINT + (200)::UTINYINT;
 ----
-PLACEHOLDER_ERROR_MESSAGE490
+Out of Range Error: Overflow in addition of UINT8 (200 + 200)!
 
 
 query I

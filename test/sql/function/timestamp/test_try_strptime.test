@@ -183,7 +183,7 @@ WHERE rt <> dt
 statement error
 SELECT try_strptime('', '')
 ----
-PLACEHOLDER_ERROR_MESSAGE2493
+Invalid Input Error: Failed to parse format specifier : Empty format string
 
 statement error
 SELECT try_strptime(NULL, '')

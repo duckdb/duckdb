@@ -6,7 +6,9 @@
 statement error
 SELECT list_max()
 ----
-PLACEHOLDER_ERROR_MESSAGE2222
+Binder Error: Macro function 'list_max(l)' requires a single positional argument, but 0 positional arguments were provided.
+LINE 1: SELECT list_max()
+               ^
 
 # test different types
 

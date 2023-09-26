@@ -19,7 +19,7 @@ SELECT 27::HUGEINT << 0
 statement error
 SELECT -27::HUGEINT << 1
 ----
-PLACEHOLDER_ERROR_MESSAGE1067
+Out of Range Error: Cannot left-shift negative number -27
 
 # large shifts
 query II

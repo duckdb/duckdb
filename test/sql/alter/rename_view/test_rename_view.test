@@ -22,7 +22,10 @@ SELECT * FROM vw2
 statement error
 SELECT * FROM vw
 ----
-PLACEHOLDER_ERROR_MESSAGE2718
+Catalog Error: Table with name vw does not exist!
+Did you mean "vw2"?
+LINE 1: SELECT * FROM vw
+                      ^
 
 statement ok
 ROLLBACK

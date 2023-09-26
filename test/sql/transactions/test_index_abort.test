@@ -38,7 +38,7 @@ COMMIT
 statement error con2
 COMMIT
 ----
-PLACEHOLDER_ERROR_MESSAGE2755
+TransactionContext Error: Failed to commit: Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "4"
 
 # verify that the data is (1, 1), (...), (4, 4)
 query II con1

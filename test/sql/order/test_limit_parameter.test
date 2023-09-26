@@ -10,7 +10,7 @@ PRAGMA enable_verification
 statement error
 SELECT 'Test' LIMIT ?
 ----
-PLACEHOLDER_ERROR_MESSAGE196
+Invalid Error: Expected 1 parameters, but none were supplied
 
 statement ok
 PREPARE v1 AS SELECT 'Test' LIMIT ?

@@ -43,7 +43,11 @@ foreach func_name list_sort list_reverse_sort
 statement error
 SELECT ${func_name}()
 ----
-PLACEHOLDER_ERROR_MESSAGE2289
+Binder Error: No function matches the given name and argument types 'list_sort()'. You might need to add explicit type casts.
+	Candidate functions:
+	list_sort(ANY[]) -> ANY[]
+	list_sort(ANY[], VARCHAR) -> ANY[]
+	list_sort(ANY[], VARCHAR, VARCHAR) -> ANY[]
 
 statement error
 SELECT ${func_name}(*)

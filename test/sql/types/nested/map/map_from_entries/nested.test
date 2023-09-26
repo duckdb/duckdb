@@ -16,7 +16,7 @@ SELECT MAP_FROM_ENTRIES(ARRAY[([1,2], 2), ([3,4], 4)]);
 statement error
 SELECT MAP_FROM_ENTRIES(ARRAY[([1,2], 2), ([1,2], 4)]);
 ----
-PLACEHOLDER_ERROR_MESSAGE870
+Invalid Input Error: Map keys have to be unique
 
 # STRUCT - correct
 query I

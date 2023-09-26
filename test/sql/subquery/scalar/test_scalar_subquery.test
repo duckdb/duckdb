@@ -58,7 +58,7 @@ SELECT * FROM (SELECT 42, 41 AS x) v1(a);
 statement error
 SELECT * FROM (SELECT 42, 41 AS x) v1(a, b, c);
 ----
-PLACEHOLDER_ERROR_MESSAGE1442
+Binder Error: table "v1" has 2 columns available but 3 columns specified
 
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);

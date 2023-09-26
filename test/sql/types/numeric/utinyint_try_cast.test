@@ -31,7 +31,7 @@ SELECT i::UBIGINT FROM utinyints ORDER BY i
 statement error
 SELECT i::TINYINT FROM utinyints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE725
+Conversion Error: Type UINT8 with value 255 can't be cast because the value is out of range for the destination type INT8
 
 query I
 SELECT TRY_CAST(i AS TINYINT) FROM utinyints ORDER BY i

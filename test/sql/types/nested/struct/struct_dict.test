@@ -37,7 +37,7 @@ SELECT {i: r, j: 2} FROM range(3) tbl(r);
 statement error
 SELECT {'i': 3, 'i': 4}
 ----
-PLACEHOLDER_ERROR_MESSAGE854
+Binder Error: Duplicate struct entry name "i"
 
 # empty struct is not allowed
 statement error

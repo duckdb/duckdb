@@ -11,7 +11,7 @@ PRAGMA enable_verification
 statement error
 SELECT * FROM parquet_scan('does_not_exist')
 ----
-PLACEHOLDER_ERROR_MESSAGE2987
+IO Error: No files found that match the pattern "does_not_exist"
 
 # alltypes_plain.parquet
 query ITIIIIRRTTT

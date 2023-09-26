@@ -11,7 +11,16 @@ COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_end_of_filled_c
 statement error
 COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_end_of_filled_chunk.csv' (HEADER, NULL_PADDING 0)
 ----
-PLACEHOLDER_ERROR_MESSAGE2920
+Invalid Input Error: Error in file "test/sql/copy/csv/data/test/error_too_little_end_of_filled_chunk.csv" on line 1027: expected 2 values per row, but got 1.
+Parser options:
+  file=test/sql/copy/csv/data/test/error_too_little_end_of_filled_chunk.csv
+  delimiter=',' (default)
+  quote='"' (default)
+  escape='"' (default)
+  header=1
+  sample_size=20480
+  ignore_errors=0
+  all_varchar=0
 
 # not enough columns provided
 query II

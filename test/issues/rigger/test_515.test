@@ -24,7 +24,7 @@ INSERT INTO t0 VALUES (0);
 statement error
 SELECT * FROM t1 JOIN t0 ON t1.c1 WHERE NOT (t1.c0<<-1);
 ----
-PLACEHOLDER_ERROR_MESSAGE126
+Out of Range Error: Cannot left-shift by negative number -1
 
 statement error
 SELECT * FROM t1 JOIN t0 ON t1.c1 WHERE (t1.c0<<-1);

@@ -9,7 +9,7 @@ PRAGMA enable_verification
 statement error
 SELECT map_from_entries(ARRAY[(1,2), (3,4)], ARRAY[(5,6), (7,8)]);
 ----
-PLACEHOLDER_ERROR_MESSAGE893
+Invalid Input Error: The input argument must be a list of structs.
 
 # Argument isn't an array
 statement error

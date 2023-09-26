@@ -130,7 +130,7 @@ endloop
 statement error
 SELECT strftime(d, d::VARCHAR) FROM dates ORDER BY d;
 ----
-PLACEHOLDER_ERROR_MESSAGE2017
+Invalid Input Error: strftime format must be a constant
 
 # unterminated escape
 statement error

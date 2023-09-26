@@ -6,7 +6,9 @@
 statement error
 select list_entropy()
 ----
-PLACEHOLDER_ERROR_MESSAGE2205
+Binder Error: Macro function 'list_entropy(l)' requires a single positional argument, but 0 positional arguments were provided.
+LINE 1: select list_entropy()
+               ^
 
 query I
 select list_entropy([1])

@@ -38,7 +38,9 @@ SELECT
 FROM tbl_ProductSales
 GROUP BY Product_Category
 ----
-PLACEHOLDER_ERROR_MESSAGE174
+Parser Error: syntax error at or near ")"
+LINE 2:     GROUPING()
+                     ^
 
 statement error
 SELECT

@@ -68,7 +68,7 @@ NULL	5
 statement error
 SELECT x AS a FROM t1 UNION ALL BY NAME SELECT x AS b FROM t1 ORDER BY t1.x;
 ----
-PLACEHOLDER_ERROR_MESSAGE241
+Binder Error: Ambiguous reference to column
 
 # Error: Binder Error: Ambiguous name in ORDER BY!
 statement error

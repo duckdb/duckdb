@@ -25,7 +25,7 @@ SELECT * FROM integers ORDER BY 1
 statement error
 INSERT INTO integers VALUES (1, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE2753
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "1"
 
 statement ok
 ROLLBACK

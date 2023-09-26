@@ -73,7 +73,7 @@ SELECT * FROM range(0, -5, -1)
 statement error
 SELECT * FROM range(0, 10, 0)
 ----
-PLACEHOLDER_ERROR_MESSAGE3132
+Binder Error: interval cannot be 0!
 
 statement error
 SELECT * FROM range(0, 10, -1)

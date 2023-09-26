@@ -7,7 +7,7 @@ foreach prefix 0b 0B
 statement error
 SELECT '${prefix}'::INT
 ----
-PLACEHOLDER_ERROR_MESSAGE1493
+Conversion Error: Could not convert string '0b' to INT32
 
 # Binary with invalid characters should fail
 statement error

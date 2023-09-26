@@ -34,7 +34,7 @@ CREATE TABLE t1(i DATE)
 statement error
 SELECT * FROM v1
 ----
-PLACEHOLDER_ERROR_MESSAGE1900
+Binder Error: Contents of view were altered: types don't match!
 
 # now drop the table and create one that has extra columns
 statement ok

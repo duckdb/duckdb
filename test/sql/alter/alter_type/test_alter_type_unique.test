@@ -12,7 +12,7 @@ INSERT INTO test VALUES (1, 1), (2, 2)
 statement error
 ALTER TABLE test ALTER i SET DATA TYPE VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE2663
+Binder Error: Cannot change the type of a column that has a UNIQUE or PRIMARY KEY constraint specified
 
 # but we can change the other column
 statement ok

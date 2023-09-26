@@ -41,7 +41,7 @@ NULL
 statement error
 SET binary_as_sting=true
 ----
-PLACEHOLDER_ERROR_MESSAGE2957
+Catalog Error: unrecognized configuration parameter "binary_as_sting"
 
 statement ok
 SET binary_as_string=true

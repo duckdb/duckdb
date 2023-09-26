@@ -114,7 +114,7 @@ SELECT "dest", mode() WITHIN GROUP (ORDER BY "arr_delay", "arr_time") AS "median
 FROM "flights"
 GROUP BY "dest"
 ----
-PLACEHOLDER_ERROR_MESSAGE1701
+Parser Error: Cannot use multiple ORDER BY clauses with WITHIN GROUP
 
 # Unknown ordered aggregate "duck".
 statement error
