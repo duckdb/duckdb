@@ -1,0 +1,308 @@
+name: NodeJS Dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      #GitHub reference to build for
+      #GitHub reference to build for
+      ref:
+        required: true
+        type: string
+      deploy:
+        required: false
+        type: boolean
+        default: true
+
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    paths-ignore:
+      - '**'
+      - '!.github/workflows/NodeJS-dispatched.yml'
+    inputs:
+      #GitHub reference to build for
+      ref:
+        required: false
+        type: string
+        default: 'v0.9.0'
+      deploy:
+        required: false
+        type: boolean
+        default: false
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.NODE_PRE_GYP_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
+
+jobs:
+  set-up-npm:
+    name: Set up NPM
+    runs-on: ubuntu-20.04
+    env:
+      DUCKDB_NODE_BUILD_CACHE: 0
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.ref }} 
+
+      - name: Setup NPM
+        shell: bash
+        run: ./scripts/node_version.sh upload
+        env:
+          DUCKDB_NODE_BUILD_CACHE: 0  # create a standalone package
+          NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
+
+  linux-nodejs:
+    name: node.js Linux
+    runs-on: ubuntu-20.04
+    needs: set-up-npm
+    env:
+      TARGET_ARCH: ${{ matrix.target_arch }}
+      DUCKDB_NODE_BUILD_CACHE: 0
+    strategy:
+      matrix:
+        # node.js current support policy to be found at https://github.com/duckdb/duckdb/tree/main/tools/nodejs#Supported-Node-versions
+        node: [ '12', '14', '16', '17', '18', '19', '20' ]
+        target_arch: [ x64, arm64 ]
+        isRelease:
+          - ${{ startsWith(github.event.inputs.ref, 'refs/tags/v') || github.event.inputs.ref == 'refs/heads/main' }}
+        exclude:
+          - isRelease: false
+            node: 12
+            target_arch: x64
+          - isRelease: false
+            node: 14
+            target_arch: x64
+          - isRelease: false
+            node: 16
+            target_arch: x64
+          - isRelease: false
+            node: 17
+            target_arch: x64
+          - isRelease: false
+            node: 18
+            target_arch: x64
+          - isRelease: false
+            node: 19
+            target_arch: x64
+          - isRelease: false
+            node: 12
+            target_arch: arm64
+          - isRelease: false
+            node: 14
+            target_arch: arm64
+          - isRelease: false
+            node: 16
+            target_arch: arm64
+          - isRelease: false
+            node: 17
+            target_arch: arm64
+          - isRelease: false
+            node: 18
+            target_arch: arm64
+          - isRelease: false
+            node: 19
+            target_arch: arm64
+          - isRelease: false
+            node: 20
+            target_arch: arm64
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.ref }} 
+
+      - name: Update apt
+        shell: bash
+        run: |
+          sudo apt-get update -y
+
+      - name: Install requirements
+        shell: bash
+        run: |
+          sudo apt-get install -y git ninja-build make gcc-multilib g++-multilib wget libssl-dev
+
+      - name: Install CMake
+        shell: bash
+        run: |
+          wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+          chmod +x cmake-3.21.3-linux-x86_64.sh
+          sudo ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ ( github.event.inputs.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' ) && ( matrix.node == '19' ) }}
+
+      - name: Build DuckDB
+        shell: bash
+        run: |
+          GEN=ninja EXTENSION_STATIC_BUILD=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 BUILD_NODE=1 make
+
+      - name: Print platform
+        shell: bash
+        run: ./build/release/duckdb -c "PRAGMA platform;"
+
+      - name: Setup
+        shell: bash
+        run: ./scripts/node_version.sh
+        env:
+          DUCKDB_NODE_BUILD_CACHE: 0  # create a standalone package
+          NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
+
+      - name: Validate Docs
+        run: npx jsdoc-to-markdown --files tools/nodejs/lib/*.js >> $GITHUB_STEP_SUMMARY
+        env:
+          npm_config_yes: true
+
+      - name: Node ${{ matrix.node }}
+        shell: bash
+        if: ${{ github.event.inputs.deploy }}
+        run: ./scripts/node_build.sh ${{ matrix.node }}
+
+  osx-nodejs:
+    if: startsWith(github.event.inputs.ref, 'refs/tags/v') || github.event.inputs.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb'
+    name: node.js OSX
+    runs-on: macos-latest
+    needs: set-up-npm
+    strategy:
+      matrix:
+        target_arch: [ x64, arm64 ]
+        node: [ '12', '14', '16', '17', '18', '19', '20' ]
+        isRelease:
+          - ${{ startsWith(github.event.inputs.ref, 'refs/tags/v') || github.event.inputs.ref == 'refs/heads/main' }}
+        exclude:
+          - isRelease: false
+            node: 12
+          - isRelease: false
+            node: 14
+          - isRelease: false
+            node: 16
+          - isRelease: false
+            node: 17
+          - isRelease: false
+            node: 18
+          - target_arch: arm64
+            node: 12
+          - target_arch: arm64
+            node: 14
+        # these older versions of NodeJS don't have M1 support
+
+    env:
+      TARGET_ARCH: ${{ matrix.target_arch }}
+      DUCKDB_NODE_BUILD_CACHE: 0
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.ref }} 
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}-${{ matrix.target_arch }}
+          save: ${{ ( github.event.inputs.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' ) && ( matrix.node == '19' ) }}
+
+      - name: Build DuckDB
+        shell: bash
+        if: matrix.target_arch == 'x64'
+        run: |
+          brew install openssl ninja
+          export OPENSSL_ROOT_DIR=`brew --prefix openssl`
+          echo $OPENSSL_ROOT_DIR
+          GEN=ninja BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 BUILD_NODE=1 make
+
+      - name: Build DuckDB
+        shell: bash
+        if: matrix.target_arch == 'arm64'
+        run: |
+          brew install ninja
+          GEN=ninja BUILD_TPCH=1 BUILD_NODE=1 make
+
+      - name: Print platform
+        shell: bash
+        run: ./build/release/duckdb -c "PRAGMA platform;"
+
+      - name: Setup
+        shell: bash
+        run: ./scripts/node_version.sh
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
+
+      - name: Node ${{ matrix.node }}
+        shell: bash
+        if: ${{ github.event.inputs.deploy }}
+        run: ./scripts/node_build.sh ${{ matrix.node }}
+
+  win-nodejs:
+    name: node.js Windows
+    runs-on: windows-latest
+    needs: set-up-npm
+    env:
+      npm_config_msvs_version: 2019
+
+    strategy:
+      matrix:
+        node: [ '12', '14', '16', '17', '18', '19', '20' ]
+        isRelease:
+          - ${{ startsWith(github.event.inputs.ref, 'refs/tags/v') || github.event.inputs.ref == 'refs/heads/main' }}
+        exclude:
+          - isRelease: false
+            node: 12
+          - isRelease: false
+            node: 14
+          - isRelease: false
+            node: 16
+          - isRelease: false
+            node: 17
+          - isRelease: false
+            node: 18
+          - isRelease: false
+            node: 19
+
+    steps:
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.ref }} 
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Versions
+        shell: bash
+        run: |
+          systeminfo
+          node -v
+          npm -v
+
+      - name: Windows Build Tools
+        shell: bash
+        run: |
+          choco install visualstudio2019-workload-vctools -y
+
+      - name: Node Version
+        shell: bash
+        run: ./scripts/node_version.sh
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}-${{ matrix.node }}
+          save: ${{ github.event.inputs.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+          variant: sccache
+
+      - name: Node
+        shell: bash
+        if: ${{ github.event.inputs.deploy }}
+        run: ./scripts/node_build_win.sh
