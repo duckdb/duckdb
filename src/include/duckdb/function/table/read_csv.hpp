@@ -8,16 +8,16 @@
 
 #pragma once
 
-#include "duckdb/execution/operator/scan/csv/buffered_csv_reader.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_buffer.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_file_handle.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
-#include "duckdb/execution/operator/scan/csv/parallel_csv_reader.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_state_machine_cache.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_state_machine_cache.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_scanner.hpp"
 
 namespace duckdb {
 
@@ -84,12 +84,10 @@ struct ReadCSVData : public BaseCSVData {
 	//! The buffer manager (if any): this is used when automatic detection is used during binding.
 	//! In this case, some CSV buffers have already been read and can be reused.
 	shared_ptr<CSVBufferManager> buffer_manager;
-	unique_ptr<BufferedCSVReader> initial_reader;
+	unique_ptr<CSVScanner> initial_reader;
 	//! The union readers are created (when csv union_by_name option is on) during binding
 	//! Those readers can be re-used during ReadCSVFunction
-	vector<unique_ptr<BufferedCSVReader>> union_readers;
-	//! Whether or not the single-threaded reader should be used
-	bool single_threaded = false;
+	vector<unique_ptr<CSVScanner>> union_readers;
 	//! Reader bind data
 	MultiFileReaderBindData reader_bind;
 	vector<ColumnInfo> column_info;
@@ -98,7 +96,11 @@ struct ReadCSVData : public BaseCSVData {
 	//! State machines for sniffing becomes a major bottleneck.
 	CSVStateMachineCache state_machine_cache;
 
-	void Initialize(unique_ptr<BufferedCSVReader> &reader) {
+	//! CSV Files can be parallelized either within a file or per-file, depending on the number of files
+	//! Or options used, we only parallelize per-file.
+	bool parallelize_single_file_scan = true;
+
+	void Initialize(unique_ptr<CSVScanner> &reader) {
 		this->initial_reader = std::move(reader);
 	}
 	void FinalizeRead(ClientContext &context);

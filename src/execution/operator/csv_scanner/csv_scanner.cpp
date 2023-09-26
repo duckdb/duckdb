@@ -165,16 +165,36 @@ void CSVScanner::Parse(DataChunk &parse_chunk, VerificationPositions &verificati
 	// Now we do the actual parsing
 	// TODO: Check for errors.
 	Process<ParseChunk>(*this, parse_chunk);
-	//	total_rows_emmited += parse_chunk.size();
+	total_rows_emmited += parse_chunk.size();
 }
 
-// idx_t CSVScanner::GetBufferIndex() {
-//	return cur_buffer_idx - 1;
-//}
+string CSVScanner::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names) {
+	for (idx_t i = 0; i < names.size(); i++) {
+		auto it = sql_types_per_column.find(names[i]);
+		if (it != sql_types_per_column.end()) {
+			sql_types_per_column.erase(names[i]);
+			continue;
+		}
+	}
+	if (sql_types_per_column.empty()) {
+		return string();
+	}
+	string exception = "COLUMN_TYPES error: Columns with names: ";
+	for (auto &col : sql_types_per_column) {
+		exception += "\"" + col.first + "\",";
+	}
+	exception.pop_back();
+	exception += " do not exist in the CSV File";
+	return exception;
+}
 
-// idx_t CSVScanner::GetTotalRowsEmmited() {
-//	return total_rows_emmited;
-//}
+idx_t CSVScanner::GetBufferIndex() {
+	return cur_buffer_idx - 1;
+}
+
+idx_t CSVScanner::GetTotalRowsEmmited() {
+	return total_rows_emmited;
+}
 
 bool CSVScanner::Finished() {
 	// We consider the scanner done, if there is no buffer handle for a given buffer_idx (i.e., we are done scanning

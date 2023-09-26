@@ -125,9 +125,11 @@ public:
 
 	//! Parses data into a parse_chunk (chunk where all columns are initially set to varchar)
 	void Parse(DataChunk &parse_chunk, VerificationPositions &verification_positions, const vector<LogicalType> &types);
-	//	idx_t GetBufferIndex();
 
-	//	idx_t GetTotalRowsEmmited();
+	static string ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
+	idx_t GetBufferIndex();
+
+	idx_t GetTotalRowsEmmited();
 
 private:
 	//! Where this CSV Scanner starts
@@ -146,6 +148,8 @@ private:
 
 	//! If we already set the start of this CSV Scanner (i.e., the next newline)
 	bool start_set = false;
+	//! Number of rows emmited by this scanner
+	idx_t total_rows_emmited = 0;
 	//! This function walks the buffer until the first new valid line.
 	bool SetStart(VerificationPositions &verification_positions, const vector<LogicalType> &types);
 	//! Skips empty lines when reading the first buffer

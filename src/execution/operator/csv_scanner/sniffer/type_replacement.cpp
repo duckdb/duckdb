@@ -1,5 +1,4 @@
 #include "duckdb/execution/operator/scan/csv/csv_sniffer.hpp"
-#include "duckdb/execution/operator/scan/csv/buffered_csv_reader.hpp"
 
 namespace duckdb {
 void CSVSniffer::ReplaceTypes() {
@@ -22,7 +21,7 @@ void CSVSniffer::ReplaceTypes() {
 		}
 		if (!sniffing_state_machine.options.file_options.union_by_name &&
 		    found < sniffing_state_machine.options.sql_types_per_column.size()) {
-			string error_msg = BufferedCSVReader::ColumnTypesError(options.sql_types_per_column, names);
+			string error_msg = CSVScanner::ColumnTypesError(options.sql_types_per_column, names);
 			if (!error_msg.empty()) {
 				throw BinderException(error_msg);
 			}
