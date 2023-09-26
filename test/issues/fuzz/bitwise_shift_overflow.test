@@ -14,7 +14,7 @@ Out of Range Error: Overflow in left shift (1000 << 55)
 statement error
 SELECT 256::bigint<<55;
 ----
-PLACEHOLDER_ERROR_MESSAGE162
+Out of Range Error: Overflow in left shift (256 << 55)
 
 query I
 SELECT 255::bigint<<55;

@@ -44,7 +44,7 @@ Binder Error: Unrecognized option CSV writer "force_not_null"
 statement error
 COPY test FROM 'test/sql/copy/csv/data/test/force_not_null.csv' (FORCE_NOT_NULL, NULL 'test');
 ----
-PLACEHOLDER_ERROR_MESSAGE2900
+Binder Error: "force_not_null" expects a column list or * as parameter
 
 statement error
 COPY test FROM 'test/sql/copy/csv/data/test/force_not_null.csv' (FORCE_NOT_NULL 42, NULL 'test');

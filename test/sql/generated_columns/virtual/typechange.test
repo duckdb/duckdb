@@ -44,4 +44,4 @@ CREATE TABLE tbl (
 statement error
 INSERT INTO tbl VALUES (5);
 ----
-PLACEHOLDER_ERROR_MESSAGE1191
+Constraint Error: Incorrect value for generated column "total_profit DATE AS (CAST((price * 5) AS DATE))" : Conversion Error: Unimplemented type for cast (INTEGER -> DATE)

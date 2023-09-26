@@ -57,7 +57,7 @@ Conversion Error: Invalid hex escape code encountered in string -> blob conversi
 statement error
 INSERT INTO blobs VALUES('\xA')
 ----
-PLACEHOLDER_ERROR_MESSAGE1010
+Conversion Error: Invalid hex escape code encountered in string -> blob conversion: unterminated escape code at end of blob
 
 statement error
 INSERT INTO blobs VALUES('\xAA\xA')

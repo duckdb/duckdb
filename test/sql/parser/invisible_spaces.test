@@ -68,4 +68,6 @@ statement ok
 statement error
 S
 ----
-PLACEHOLDER_ERROR_MESSAGE2518
+Parser Error: syntax error at or near "S"
+LINE 1: S
+        ^

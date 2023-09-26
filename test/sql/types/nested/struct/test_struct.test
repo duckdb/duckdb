@@ -148,7 +148,7 @@ Invalid Error: Can't pack nothing into a struct
 statement error
 SELECT STRUCT_PACK(e+1) FROM struct_data
 ----
-PLACEHOLDER_ERROR_MESSAGE865
+Binder Error: Need named argument for struct pack, e.g. STRUCT_PACK(a := b)
 
 statement error
 SELECT STRUCT_PACK(a := e, a := g) FROM struct_data

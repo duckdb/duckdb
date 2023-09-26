@@ -13,7 +13,9 @@ LINE 1: select list_bool_or()
 statement error
 select list_bool_and()
 ----
-PLACEHOLDER_ERROR_MESSAGE2207
+Binder Error: Macro function 'list_bool_and(l)' requires a single positional argument, but 0 positional arguments were provided.
+LINE 1: select list_bool_and()
+               ^
 
 # list of booleans
 statement ok

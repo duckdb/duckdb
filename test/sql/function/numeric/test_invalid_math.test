@@ -16,7 +16,9 @@ LINE 1: SELECTl log(0);
 statement error
 SELECTl log(-1);
 ----
-PLACEHOLDER_ERROR_MESSAGE2098
+Parser Error: syntax error at or near "SELECTl"
+LINE 1: SELECTl log(-1);
+        ^
 
 statement error
 SELECTl ln(0);

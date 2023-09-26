@@ -25,7 +25,8 @@ DROP TABLE a
 statement error con2
 EXECUTE p1
 ----
-PLACEHOLDER_ERROR_MESSAGE1090
+Catalog Error: Table with name a does not exist!
+Did you mean "pg_am"?
 
 # but when we take the statement away
 statement ok con2

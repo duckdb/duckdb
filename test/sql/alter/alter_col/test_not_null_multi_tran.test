@@ -62,7 +62,7 @@ COMMIT
 statement error con2
 COMMIT
 ----
-PLACEHOLDER_ERROR_MESSAGE2605
+TransactionContext Error: Failed to commit: TransactionContext Error: Transaction conflict: adding entries to a table that has been altered!
 
 statement error con1
 INSERT INTO t VALUES(7777, NULL)

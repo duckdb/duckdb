@@ -19,7 +19,7 @@ Constraint Error: Duplicate key "a: 12" violates primary key constraint. If this
 statement error
 UPDATE test SET a=4;
 ----
-PLACEHOLDER_ERROR_MESSAGE1242
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "4"
 
 query II
 SELECT * FROM test;

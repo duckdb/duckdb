@@ -12,7 +12,7 @@ Invalid Error: Expected 1 parameters, but none were supplied
 statement error
 create view v1 as select ?;
 ----
-PLACEHOLDER_ERROR_MESSAGE1096
+Binder Error: Unexpected prepared parameter. This type of statement can't be prepared!
 
 # start with a higher index than 1
 statement ok

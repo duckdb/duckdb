@@ -279,7 +279,7 @@ SELECT * FROM s2.table01 ORDER BY i;
 statement error
 INSERT INTO integers VALUES (5, 6)
 ----
-PLACEHOLDER_ERROR_MESSAGE3012
+Constraint Error: CHECK constraint failed: integers
 
 statement error
 INSERT INTO strings VALUES(NULL, NULL)

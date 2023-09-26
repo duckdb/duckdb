@@ -22,7 +22,7 @@ endloop
 statement error
 SET default_order='unknown';
 ----
-PLACEHOLDER_ERROR_MESSAGE233
+Invalid Input Error: Unrecognized parameter for option DEFAULT_ORDER "unknown". Expected ASC or DESC.
 
 # enable_external_access
 statement error

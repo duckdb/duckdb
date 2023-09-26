@@ -36,7 +36,8 @@ Invalid Input Error: Map keys can not be NULL
 statement error
 COPY string_map TO '__TEST_DIR__/int_maps.parquet' (FORMAT PARQUET)
 ----
-PLACEHOLDER_ERROR_MESSAGE2973
+Catalog Error: Table with name string_map does not exist!
+Did you mean "int_maps"?
 
 # string -> string map
 statement ok

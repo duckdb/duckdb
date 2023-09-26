@@ -14,7 +14,7 @@ LINE 1: PRAG
 statement error
 PRAGMA 
 ----
-PLACEHOLDER_ERROR_MESSAGE1983
+Parser Error: syntax error at end of input
 
 # Unknown pragma error
 statement error

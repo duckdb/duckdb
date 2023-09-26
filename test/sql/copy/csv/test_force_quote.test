@@ -71,7 +71,7 @@ Binder Error: "force_quote" expected to find col_c, but it was not found in the 
 statement error
 COPY test TO '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE (col_c, col_d));
 ----
-PLACEHOLDER_ERROR_MESSAGE2918
+Binder Error: "force_quote" expected to find col_d, but it was not found in the table
 
 # FORCE_QUOTE is only supported in COPY ... TO ...
 statement error

@@ -31,4 +31,4 @@ CREATE TABLE tbl (
 statement error
 ALTER TABLE tbl DROP COLUMN price;
 ----
-PLACEHOLDER_ERROR_MESSAGE1163
+Catalog Error: Cannot drop column: column is a dependency of 1 or more generated column(s)

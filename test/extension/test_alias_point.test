@@ -47,7 +47,9 @@ Binder Error: No function matches the given name and argument types 'add_point(S
 statement error
 SELECT sub_point(pt, pt) from points;
 ----
-PLACEHOLDER_ERROR_MESSAGE0
+Binder Error: No function matches the given name and argument types 'sub_point(STRUCT(i INTEGER, j INTEGER), STRUCT(i INTEGER, j INTEGER))'. You might need to add explicit type casts.
+	Candidate functions:
+	sub_point(POINT, POINT) -> POINT
 
 query I
 SELECT add_point(point, point) from points;

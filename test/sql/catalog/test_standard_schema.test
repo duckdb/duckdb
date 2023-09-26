@@ -23,7 +23,7 @@ CREATE SCHEMA test;
 statement error
 CREATE SCHEMA test;
 ----
-PLACEHOLDER_ERROR_MESSAGE1908
+Catalog Error: Schema with name test already exists!
 
 # if not exists ignores error
 statement ok

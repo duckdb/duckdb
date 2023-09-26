@@ -18,7 +18,7 @@ Conversion Error: Type INT32 with value -2147483648 can't be cast because the va
 statement error
 SELECT i::USMALLINT FROM integers
 ----
-PLACEHOLDER_ERROR_MESSAGE815
+Conversion Error: Type INT32 with value -2147483648 can't be cast because the value is out of range for the destination type UINT16
 
 statement error
 SELECT i::UINTEGER FROM integers

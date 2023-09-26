@@ -47,7 +47,7 @@ select col[123] from tinyint_key;
 statement error
 create table tinyint_key_dup as select MAP_FROM_ENTRIES(ARRAY[(123, 'x'), (123, 'y')]) col;
 ----
-PLACEHOLDER_ERROR_MESSAGE886
+Invalid Input Error: Map keys have to be unique
 
 # -- SMALLINT --
 # Valid

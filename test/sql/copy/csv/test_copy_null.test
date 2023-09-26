@@ -81,7 +81,7 @@ LINE 1: .../data/test/test_null_option.csv' (NULL null);
 statement error
 COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL 'null,', DELIMITER ',');
 ----
-PLACEHOLDER_ERROR_MESSAGE2930
+Binder Error: DELIMITER must not appear in the NULL specification and vice versa
 
 statement error
 COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (DELIMITER 'null', NULL 'null');

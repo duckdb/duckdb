@@ -39,7 +39,19 @@ select entropy(1)
 statement error
 select entropy(*)
 ----
-PLACEHOLDER_ERROR_MESSAGE1684
+Binder Error: No function matches the given name and argument types 'entropy()'. You might need to add explicit type casts.
+	Candidate functions:
+	entropy(USMALLINT) -> DOUBLE
+	entropy(UINTEGER) -> DOUBLE
+	entropy(UBIGINT) -> DOUBLE
+	entropy(FLOAT) -> DOUBLE
+	entropy(SMALLINT) -> DOUBLE
+	entropy(INTEGER) -> DOUBLE
+	entropy(BIGINT) -> DOUBLE
+	entropy(DOUBLE) -> DOUBLE
+	entropy(VARCHAR) -> DOUBLE
+	entropy(TIMESTAMP) -> DOUBLE
+	entropy(TIMESTAMP WITH TIME ZONE) -> DOUBLE
 
 statement ok
 create table aggr(k int);

@@ -192,7 +192,7 @@ SELECT * FROM monthly_sales
     UNPIVOT(sales FOR month IN (''))
     ORDER BY empid;
 ----
-PLACEHOLDER_ERROR_MESSAGE256
+Binder Error: Column "" referenced in UNPIVOT but no matching entry was found in the table
 
 statement error
 SELECT * FROM monthly_sales

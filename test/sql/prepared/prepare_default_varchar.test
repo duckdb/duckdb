@@ -142,7 +142,7 @@ time: 27
 statement error
 EXECUTE v7('hello world', [1, 2, 3])
 ----
-PLACEHOLDER_ERROR_MESSAGE1098
+Invalid Error: Invalid type specifier "d" for formatting a value of type string
 
 # unbound parameter with lists
 statement ok

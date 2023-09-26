@@ -43,7 +43,9 @@ Binder Error: Duplicate struct entry name "i"
 statement error
 SELECT {};
 ----
-PLACEHOLDER_ERROR_MESSAGE853
+Parser Error: syntax error at or near "}"
+LINE 1: SELECT {};
+                ^
 
 # need string keys
 statement error

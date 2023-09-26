@@ -90,5 +90,5 @@ Invalid Input Error: Regex options field must be a constant
 statement error
 SELECT regexp_replace('asdf', '.*SD.*', 'a', 'q')
 ----
-PLACEHOLDER_ERROR_MESSAGE2339
+Invalid Input Error: Unrecognized Regex option q
 

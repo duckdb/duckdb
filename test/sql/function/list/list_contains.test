@@ -227,7 +227,9 @@ SELECT list_contains([NULL,7], 7)
 statement error
 SELECT list_contains([[1,2,3],[1],[1,2,3])
 ----
-PLACEHOLDER_ERROR_MESSAGE2275
+Parser Error: syntax error at or near ")"
+LINE 1: ...LECT list_contains([[1,2,3],[1],[1,2,3])
+                                                  ^
 
 statement error
 SELECT list_contains([[1,2,3],[1],[1,2,3]])

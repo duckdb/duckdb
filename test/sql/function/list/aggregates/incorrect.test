@@ -13,7 +13,8 @@ Did you mean "|"?
 statement error
 SELECT list_aggr([1], True)
 ----
-PLACEHOLDER_ERROR_MESSAGE2203
+Catalog Error: Aggregate Function with name true does not exist!
+Did you mean "trunc"?
 
 statement error
 SELECT list_aggr([1], NULL)

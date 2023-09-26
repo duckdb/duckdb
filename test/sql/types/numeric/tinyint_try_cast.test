@@ -18,7 +18,7 @@ Conversion Error: Type INT8 with value -128 can't be cast because the value is o
 statement error
 SELECT i::USMALLINT FROM tinyints
 ----
-PLACEHOLDER_ERROR_MESSAGE718
+Conversion Error: Type INT8 with value -128 can't be cast because the value is out of range for the destination type UINT16
 
 statement error
 SELECT i::UINTEGER FROM tinyints

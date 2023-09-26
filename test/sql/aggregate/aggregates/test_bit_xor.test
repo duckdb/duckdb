@@ -66,7 +66,18 @@ Binder Error: No function matches the given name and argument types 'bit_xor()'.
 statement error
 SELECT BIT_XOR(1, 2, 3)
 ----
-PLACEHOLDER_ERROR_MESSAGE1524
+Binder Error: No function matches the given name and argument types 'bit_xor(INTEGER, INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	bit_xor(TINYINT) -> TINYINT
+	bit_xor(SMALLINT) -> SMALLINT
+	bit_xor(INTEGER) -> INTEGER
+	bit_xor(BIGINT) -> BIGINT
+	bit_xor(HUGEINT) -> HUGEINT
+	bit_xor(UTINYINT) -> UTINYINT
+	bit_xor(USMALLINT) -> USMALLINT
+	bit_xor(UINTEGER) -> UINTEGER
+	bit_xor(UBIGINT) -> UBIGINT
+	bit_xor(BIT) -> BIT
 
 statement error
 SELECT BIT_XOR(BIT_XOR(1))

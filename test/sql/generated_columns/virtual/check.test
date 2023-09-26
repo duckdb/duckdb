@@ -31,7 +31,7 @@ CREATE TABLE tbl (
 	CHECK (amount_sold > price)
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE1141
+Binder Error: Constraints on generated columns are not supported yet
 
 statement ok
 CREATE TABLE chk (

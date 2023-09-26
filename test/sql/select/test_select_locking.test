@@ -15,7 +15,7 @@ Parser Error: SELECT locking clause is not supported!
 statement error
 SELECT * FROM t FOR NO KEY UPDATE;
 ----
-PLACEHOLDER_ERROR_MESSAGE2991
+Parser Error: SELECT locking clause is not supported!
 
 # unsupported
 statement error

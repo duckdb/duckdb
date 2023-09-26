@@ -14,7 +14,7 @@ Catalog Error: unrecognized configuration parameter "a"
 statement error
 SELECT CURRENT_SETTING('memori_limit');
 ----
-PLACEHOLDER_ERROR_MESSAGE2299
+Catalog Error: unrecognized configuration parameter "memori_limit"
 
 statement ok
 SELECT CURRENT_SETTING('default_null_order');

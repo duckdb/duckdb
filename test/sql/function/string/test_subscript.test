@@ -80,7 +80,9 @@ NULL
 statement error
 SELECT NULL::VARCHAR[NULL] FROM strings
 ----
-PLACEHOLDER_ERROR_MESSAGE2331
+Parser Error: syntax error at or near "NULL"
+LINE 1: SELECT NULL::VARCHAR[NULL] FROM strings
+                             ^
 
 statement error
 SELECT NULL::VARCHAR[off] FROM strings

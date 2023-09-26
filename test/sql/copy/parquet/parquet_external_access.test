@@ -21,7 +21,7 @@ Permission Error: Scanning Parquet files is disabled through configuration
 statement error
 SELECT * FROM parquet_metadata('data/parquet-testing/arrow/lineitem-arrow.parquet')
 ----
-PLACEHOLDER_ERROR_MESSAGE2984
+Permission Error: Scanning Parquet files is disabled through configuration
 
 statement error
 SELECT * FROM parquet_schema('data/parquet-testing/arrow/lineitem-arrow.parquet')

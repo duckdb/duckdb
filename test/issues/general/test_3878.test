@@ -43,7 +43,7 @@ insert into y values (1);
 statement error
 insert into x values (NULL);
 ----
-PLACEHOLDER_ERROR_MESSAGE109
+Constraint Error: NOT NULL constraint failed: x.x
 
 statement ok
 insert into y values (NULL);

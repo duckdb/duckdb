@@ -40,7 +40,7 @@ INSERT INTO t0(c0) VALUES (3);
 statement error
 INSERT INTO t0(c0) VALUES (2);
 ----
-PLACEHOLDER_ERROR_MESSAGE136
+Constraint Error: Duplicate key "c0: 2" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 query I
 SELECT * FROM t0 WHERE t0.c0 = 2;

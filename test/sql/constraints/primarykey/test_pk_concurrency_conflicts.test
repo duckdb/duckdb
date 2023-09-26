@@ -24,7 +24,7 @@ TransactionContext Error: Conflict on tuple deletion!
 statement error con2
 UPDATE integers SET i=5 WHERE i=2
 ----
-PLACEHOLDER_ERROR_MESSAGE1257
+TransactionContext Error: Conflict on tuple deletion!
 
 # nor can it delete it
 statement error con2

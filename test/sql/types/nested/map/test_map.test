@@ -20,7 +20,7 @@ SELECT MAP(LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}),LIST_VALUE({'i':1,'j':2},{'i'
 statement error
 select MAP(LIST_VALUE(1,NULL,3), LIST_VALUE(6,5,4))
 ----
-PLACEHOLDER_ERROR_MESSAGE917
+Invalid Input Error: Map keys can not be NULL
 
 query I
 select MAP(LIST_VALUE(1,2,3), LIST_VALUE(6,NULL,4))

@@ -32,7 +32,7 @@ Binder Error: Positional reference 1 out of range (total 0 columns)
 statement error
 SELECT #2 FROM range(1)
 ----
-PLACEHOLDER_ERROR_MESSAGE3004
+Binder Error: Positional reference 2 out of range (total 1 columns)
 
 # no from clause
 statement error

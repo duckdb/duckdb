@@ -49,7 +49,7 @@ Invalid Input Error: Group index must be between 0 and 9!
 statement error
 SELECT regexp_extract('foobarbaz', '(b..)(b..)', 42)
 ----
-PLACEHOLDER_ERROR_MESSAGE2325
+Invalid Input Error: Group index must be between 0 and 9!
 
 statement ok
 CREATE TABLE test (s VARCHAR, p VARCHAR, i INT)

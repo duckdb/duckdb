@@ -18,7 +18,7 @@ Conversion Error: Type INT16 with value -32768 can't be cast because the value i
 statement error
 SELECT i::USMALLINT FROM smallints
 ----
-PLACEHOLDER_ERROR_MESSAGE800
+Conversion Error: Type INT16 with value -32768 can't be cast because the value is out of range for the destination type UINT16
 
 statement error
 SELECT i::UINTEGER FROM smallints

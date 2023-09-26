@@ -76,7 +76,10 @@ restart
 statement error
 SELECT * FROM xt(100, 'joe');
 ----
-PLACEHOLDER_ERROR_MESSAGE2544
+Catalog Error: Table Function with name xt does not exist!
+Did you mean "repeat"?
+LINE 1: SELECT * FROM xt(100, 'joe');
+                      ^
 
 statement error
 SELECT * FROM my_seq(0,3,2);

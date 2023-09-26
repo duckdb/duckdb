@@ -69,7 +69,7 @@ Binder Error: No matching columns found that match regex "xxx"
 statement error
 SELECT MIN(COLUMNS('xxx')) FROM grouped_table
 ----
-PLACEHOLDER_ERROR_MESSAGE2516
+Binder Error: No matching columns found that match regex "xxx"
 
 # invalid regex
 statement error

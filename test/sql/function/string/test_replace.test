@@ -77,7 +77,9 @@ Binder Error: No function matches the given name and argument types 'replace(INT
 statement error
 select REPLACE(1, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE2358
+Binder Error: No function matches the given name and argument types 'replace(INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	replace(VARCHAR, VARCHAR, VARCHAR) -> VARCHAR
 
 statement error
 select REPLACE(1, 2, 3, 4)

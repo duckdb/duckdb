@@ -353,7 +353,9 @@ Binder Error: No function matches the given name and argument types 'string_spli
 statement error
 select string_split('a')
 ----
-PLACEHOLDER_ERROR_MESSAGE2346
+Binder Error: No function matches the given name and argument types 'string_split(VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	string_split(VARCHAR, VARCHAR) -> VARCHAR[]
 
 # incorrect regex
 statement error

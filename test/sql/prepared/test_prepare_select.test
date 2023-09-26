@@ -33,5 +33,5 @@ Invalid Error: Expected 1 parameters, but none were supplied
 statement error
 SELECT * FROM a WHERE i=CAST($1 AS VARCHAR)
 ----
-PLACEHOLDER_ERROR_MESSAGE1101
+Invalid Error: Expected 1 parameters, but none were supplied
 

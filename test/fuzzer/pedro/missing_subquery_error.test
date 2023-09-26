@@ -13,7 +13,7 @@ Binder Error: WHERE clause cannot contain aggregates!
 statement error
 SELECT (WITH t2 AS (SELECT 3 WHERE count(*)) SELECT 0 FROM t2);
 ----
-PLACEHOLDER_ERROR_MESSAGE36
+Binder Error: WHERE clause cannot contain aggregates!
 
 statement error
 SELECT (WITH t2 AS (SELECT 3 WHERE count(*) FILTER (1)) SELECT 0 FROM t2);

@@ -73,7 +73,7 @@ Conversion Error: Could not convert string '0x' to INT32
 statement error
 SELECT '0X'::INT
 ----
-PLACEHOLDER_ERROR_MESSAGE1469
+Conversion Error: Could not convert string '0X' to INT32
 
 # Hex with invalid characters fails
 

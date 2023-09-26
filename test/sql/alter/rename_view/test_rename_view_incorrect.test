@@ -22,5 +22,5 @@ Did you mean "pg_views"?
 statement error
 ALTER VIEW vw2 RENAME TO vw
 ----
-PLACEHOLDER_ERROR_MESSAGE2711
+Catalog Error: Could not rename "vw2" to "vw": another entry with this name already exists!
 

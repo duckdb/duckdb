@@ -13,7 +13,7 @@ Conversion Error: Could not convert string '0b' to INT32
 statement error
 SELECT '${prefix}2'::INT
 ----
-PLACEHOLDER_ERROR_MESSAGE1492
+Conversion Error: Could not convert string '0b2' to INT32
 
 statement error
 SELECT '${prefix}10105'::INT

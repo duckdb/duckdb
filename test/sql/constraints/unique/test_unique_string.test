@@ -30,7 +30,7 @@ INSERT INTO integers VALUES (6,NULL), (7,NULL)
 statement error
 UPDATE integers SET j='77' WHERE j IS NULL
 ----
-PLACEHOLDER_ERROR_MESSAGE1212
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "77"
 
 query IT
 SELECT * FROM integers ORDER BY i, j

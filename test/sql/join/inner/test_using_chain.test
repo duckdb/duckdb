@@ -40,7 +40,7 @@ Binder Error: Column "c" does not exist on left side of join!
 statement error
 SELECT * FROM t1 JOIN t2 USING (a)
 ----
-PLACEHOLDER_ERROR_MESSAGE1123
+Binder Error: Column "a" does not exist on right side of join!
 
 statement ok
 DROP TABLE t1

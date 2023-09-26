@@ -77,7 +77,7 @@ NULL
 statement error
 SELECT CHR(-10)
 ----
-PLACEHOLDER_ERROR_MESSAGE2355
+Invalid Input Error: Invalid UTF8 Codepoint -10
 
 statement error
 SELECT CHR(1073741824)

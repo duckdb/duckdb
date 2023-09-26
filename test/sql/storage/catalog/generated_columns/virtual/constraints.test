@@ -59,7 +59,7 @@ restart
 statement error
 INSERT INTO tbl VALUES (5, 'test');
 ----
-PLACEHOLDER_ERROR_MESSAGE2551
+Constraint Error: CHECK constraint failed: tbl
 
 restart
 

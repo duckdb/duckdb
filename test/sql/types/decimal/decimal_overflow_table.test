@@ -31,7 +31,7 @@ SELECT -1-d FROM decimals
 statement error
 SELECT -1000000000000000.0-d FROM decimals
 ----
-PLACEHOLDER_ERROR_MESSAGE355
+Out of Range Error: Overflow in subtract of DECIMAL(18) (-10000000000000000 - 990000000000000000). You might want to add an explicit cast to a bigger decimal.
 
 # multiplication
 query I

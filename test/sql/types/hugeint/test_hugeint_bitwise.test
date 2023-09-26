@@ -43,7 +43,7 @@ select 1::HUGEINT << 64;
 statement error
 select 1::HUGEINT << 200
 ----
-PLACEHOLDER_ERROR_MESSAGE1066
+Out of Range Error: Left-shift value 200 is out of range
 
 statement error
 SELECT '1329227995784915872903807060280344576'::HUGEINT << 50;

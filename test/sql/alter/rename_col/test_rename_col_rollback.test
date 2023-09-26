@@ -36,5 +36,8 @@ SELECT i FROM test
 statement error
 SELECT k FROM test
 ----
-PLACEHOLDER_ERROR_MESSAGE2685
+Binder Error: Referenced column "k" not found in FROM clause!
+Candidate bindings: "test.i", "test.j"
+LINE 1: SELECT k FROM test
+               ^
 

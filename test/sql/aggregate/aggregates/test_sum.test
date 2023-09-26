@@ -95,5 +95,5 @@ SELECT sum(n ORDER BY ABS(n))::BIGINT FROM doubles;
 statement error
 SELECT (sum(n) WITHIN GROUP(ORDER BY ABS(n)))::BIGINT FROM doubles;
 ----
-PLACEHOLDER_ERROR_MESSAGE1646
+Parser Error: Unknown ordered aggregate "sum".
 

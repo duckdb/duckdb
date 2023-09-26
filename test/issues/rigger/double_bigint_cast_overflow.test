@@ -18,7 +18,7 @@ Conversion Error: Type FLOAT with value 9.223372e+18 can't be cast because the v
 statement error
 select 9.2233720368547758E+18::int8;
 ----
-PLACEHOLDER_ERROR_MESSAGE140
+Conversion Error: Type DOUBLE with value 9.223372036854776e+18 can't be cast because the value is out of range for the destination type INT64
 
 statement error
 select 2147483648::real::int4;

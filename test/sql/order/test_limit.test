@@ -41,7 +41,7 @@ Binder Error: Referenced column "a" not found in FROM clause!
 statement error
 SELECT a FROM test LIMIT a+1
 ----
-PLACEHOLDER_ERROR_MESSAGE187
+Binder Error: Referenced column "a" not found in FROM clause!
 
 # aggregate in limit
 statement error

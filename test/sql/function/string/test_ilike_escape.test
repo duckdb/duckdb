@@ -79,4 +79,4 @@ Syntax Error: Invalid escape string. Escape string must be empty or one characte
 statement error
 SELECT str ILIKE pat ESCAPE str FROM tbl
 ----
-PLACEHOLDER_ERROR_MESSAGE2378
+Syntax Error: Invalid escape string. Escape string must be empty or one character.

@@ -13,4 +13,4 @@ Binder Error: Correlated columns not supported in LIMIT/OFFSET
 statement error
 SELECT 0 FROM (SELECT 8 c0) WHERE (SELECT 1 LIMIT c0);
 ----
-PLACEHOLDER_ERROR_MESSAGE14
+Binder Error: Correlated columns not supported in LIMIT/OFFSET

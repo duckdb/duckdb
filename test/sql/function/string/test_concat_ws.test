@@ -76,7 +76,9 @@ Binder Error: No function matches the given name and argument types 'concat_ws()
 statement error
 select CONCAT_WS(',')
 ----
-PLACEHOLDER_ERROR_MESSAGE2407
+Binder Error: No function matches the given name and argument types 'concat_ws(VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	concat_ws(VARCHAR, VARCHAR) -> VARCHAR
 
 # one entry: just returns the entry
 query T

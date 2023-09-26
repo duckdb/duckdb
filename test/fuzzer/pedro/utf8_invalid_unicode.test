@@ -11,7 +11,7 @@ Conversion Error: Failure in decode: could not convert blob to UTF8 string, the 
 statement error
 SELECT decode('\xF6\x96\xB0\x85'::BLOB)::VARCHAR ILIKE '1';
 ----
-PLACEHOLDER_ERROR_MESSAGE49
+Conversion Error: Failure in decode: could not convert blob to UTF8 string, the blob contained invalid UTF8 characters
 
 query I
 SELECT upper(decode('\xF0\x9F\x98\x84'::BLOB)::VARCHAR);

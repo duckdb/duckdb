@@ -34,4 +34,6 @@ SELECT "hello world".i FROM integers AS 'hello world'
 statement error
 SELECT "hello world".i FROM integers 'hello world'
 ----
-PLACEHOLDER_ERROR_MESSAGE1413
+Parser Error: syntax error at or near "'hello world'"
+LINE 1: SELECT "hello world".i FROM integers 'hello world'
+                                             ^

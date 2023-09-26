@@ -131,7 +131,7 @@ Out of Range Error: STDDEV_SAMP is out of range!
 statement error
 select list_var_samp([1e301, -1e301])
 ----
-PLACEHOLDER_ERROR_MESSAGE2238
+Out of Range Error: VARSAMP is out of range!
 
 statement error
 select list_var_pop([1e301, -1e301])

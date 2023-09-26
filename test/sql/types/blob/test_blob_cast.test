@@ -55,7 +55,7 @@ Conversion Error: Unimplemented type for cast (INTEGER -> BLOB)
 statement error
 SELECT 1.0::BYTEA
 ----
-PLACEHOLDER_ERROR_MESSAGE1004
+Conversion Error: Unimplemented type for cast (DECIMAL(2,1) -> BLOB)
 
 # numeric -> bytea, not valid/implemented casts
 statement error

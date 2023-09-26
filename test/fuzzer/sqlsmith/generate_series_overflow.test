@@ -25,7 +25,7 @@ Invalid Input Error: Lists larger than 2^32 elements are not supported
 statement error
 SELECT generate_series(-9223372036854775808, 9223372036854775807, 1) AS c1
 ----
-PLACEHOLDER_ERROR_MESSAGE75
+Invalid Input Error: Lists larger than 2^32 elements are not supported
 
 query I
 SELECT generate_series(9223372036854775805, 9223372036854775807, 1) AS c1

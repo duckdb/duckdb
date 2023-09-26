@@ -27,7 +27,7 @@ Parser Error: The number of referencing and referenced columns for foreign keys 
 statement error
 CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songalbum) REFERENCES album(artistid, albumname));
 ----
-PLACEHOLDER_ERROR_MESSAGE1159
+Parser Error: The number of referencing and referenced columns for foreign keys must be the same
 
 statement error
 CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES albumlist(artistid, albumname));

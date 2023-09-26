@@ -172,7 +172,7 @@ SELECT regexp_matches(v, 'h.*', 'c') FROM test ORDER BY v
 statement error
 SELECT regexp_matches(v, 'h.*', v) FROM test ORDER BY v
 ----
-PLACEHOLDER_ERROR_MESSAGE2337
+Invalid Input Error: Regex options field must be a constant
 
 # throw on invalid options
 statement error

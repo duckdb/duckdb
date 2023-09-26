@@ -176,7 +176,7 @@ Not implemented Error: Slice with steps has not been implemented for string type
 statement error
 SELECT ([1,2,3,4,5])[1:3:0];
 ----
-PLACEHOLDER_ERROR_MESSAGE928
+Invalid Input Error: Slice step cannot be zero
 
 statement ok
 CREATE TABLE err(a INT[], start int, stop int, step int);

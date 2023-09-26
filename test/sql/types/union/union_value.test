@@ -17,7 +17,7 @@ Binder Error: union_value takes exactly one argument
 statement error
 INSERT INTO tbl VALUES (union_value(num := 1, other := 2))
 ----
-PLACEHOLDER_ERROR_MESSAGE836
+Binder Error: union_value takes exactly one argument
 
 # unions can only be cast to eachother if their member sets overlap
 statement error

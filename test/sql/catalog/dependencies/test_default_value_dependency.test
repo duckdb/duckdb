@@ -34,7 +34,10 @@ DROP SEQUENCE seq CASCADE
 statement error con1
 SELECT * FROM integers
 ----
-PLACEHOLDER_ERROR_MESSAGE1766
+Catalog Error: Table with name integers does not exist!
+Did you mean "pg_indexes"?
+LINE 1: SELECT * FROM integers
+                      ^
 
 # dependency on multiple sequences in default value
 statement ok con1

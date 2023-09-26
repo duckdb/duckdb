@@ -23,4 +23,4 @@ Out of Range Error: Cannot left-shift negative number -1
 statement error
 SELECT * FROM t0 WHERE t0.c0 AND (t0.c0<<64);
 ----
-PLACEHOLDER_ERROR_MESSAGE133
+Out of Range Error: Cannot left-shift negative number -1

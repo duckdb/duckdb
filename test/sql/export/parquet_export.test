@@ -73,7 +73,7 @@ SELECT SUM(i), SUM(j) FROM integers
 statement error
 INSERT INTO integers VALUES (NULL, NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE3015
+Constraint Error: NOT NULL constraint failed: integers.i
 
 statement ok
 DROP TABLE integers

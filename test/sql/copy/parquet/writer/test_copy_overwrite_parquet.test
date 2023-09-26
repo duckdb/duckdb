@@ -70,7 +70,7 @@ SELECT * FROM test ORDER BY 1;
 statement error
 COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.parquet' (FORMAT PARQUET, USE_TMP_FILE FALSE);
 ----
-PLACEHOLDER_ERROR_MESSAGE2967
+Conversion Error: Could not convert string 'hello0' to INT32
 
 statement error
 SELECT * FROM '__TEST_DIR__/overwrite.parquet';

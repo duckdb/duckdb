@@ -39,7 +39,10 @@ SELECT * FROM vw;
 statement error
 SELECT * FROM vw2
 ----
-PLACEHOLDER_ERROR_MESSAGE2717
+Catalog Error: Table with name vw2 does not exist!
+Did you mean "vw"?
+LINE 1: SELECT * FROM vw2
+                      ^
 
 statement ok
 BEGIN TRANSACTION;

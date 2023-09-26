@@ -94,7 +94,7 @@ Binder Error: Macro function 'split_part(string, delimiter, position)' requires 
 statement error
 select split_part('a')
 ----
-PLACEHOLDER_ERROR_MESSAGE2349
+Binder Error: Macro function 'split_part(string, delimiter, position)' requires 3 positional arguments, but a single positional argument was provided.
 
 statement error
 select split_part('a','a')

@@ -85,7 +85,7 @@ Conversion Error: Unimplemented type for cast (INTEGER -> STRUCT(i STRUCT(a INTE
 statement error
 INSERT INTO a VALUES (ROW(1, 2))
 ----
-PLACEHOLDER_ERROR_MESSAGE700
+Conversion Error: Unimplemented type for cast (INTEGER -> STRUCT(a INTEGER))
 
 statement error
 INSERT INTO a VALUES (ROW(ROW(1, 2, 3), 1))

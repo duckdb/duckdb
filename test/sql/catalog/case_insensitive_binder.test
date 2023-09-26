@@ -43,7 +43,7 @@ ALTER TABLE abc ADD COLUMN j INTEGER;
 statement error
 ALTER TABLE "ABC" ADD COLUMN "J" INTEGER;
 ----
-PLACEHOLDER_ERROR_MESSAGE1757
+Catalog Error: Column with name J already exists!
 
 statement ok
 DROP TABLE abc

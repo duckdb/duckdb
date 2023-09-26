@@ -63,7 +63,7 @@ Invalid Error: SETSEED accepts seed values between -1.0 and 1.0, inclusive
 statement error
 select setseed(-1.1)
 ----
-PLACEHOLDER_ERROR_MESSAGE2107
+Invalid Error: SETSEED accepts seed values between -1.0 and 1.0, inclusive
 
 # we can use setseed with a table as well
 statement ok

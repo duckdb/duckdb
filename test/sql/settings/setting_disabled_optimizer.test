@@ -22,4 +22,4 @@ Parser Error: Optimizer type "expression_rewritex" not recognized
 statement error
 SET disabled_optimizers TO 'unknown_optimizer'
 ----
-PLACEHOLDER_ERROR_MESSAGE221
+Parser Error: Optimizer type "unknown_optimizer" not recognized

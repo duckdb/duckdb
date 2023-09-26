@@ -55,5 +55,8 @@ Binder Error: No function matches the given name and argument types 'bit_length(
 statement error
 select BIT_LENGTH(1, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE2384
+Binder Error: No function matches the given name and argument types 'bit_length(INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	bit_length(VARCHAR) -> BIGINT
+	bit_length(BIT) -> BIGINT
 

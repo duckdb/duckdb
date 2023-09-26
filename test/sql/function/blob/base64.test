@@ -93,4 +93,4 @@ Conversion Error: Could not decode string "ab" as base64: length must be a multi
 statement error
 SELECT from_base64('üab');
 ----
-PLACEHOLDER_ERROR_MESSAGE2494
+Conversion Error: Could not decode string "üab" as base64: invalid byte value '195' at position 0

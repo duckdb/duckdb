@@ -20,7 +20,9 @@ Binder Error: GROUP BY clause cannot contain window functions!
 statement error
 select row_number() over (range between unbounded following and unbounded preceding);
 ----
-PLACEHOLDER_ERROR_MESSAGE2808
+Parser Error: frame start cannot be UNBOUNDED FOLLOWING
+LINE 1: ...elect row_number() over (range between unbounded following and unbounded prece...
+                                                  ^
 
 statement error
 select row_number() over (range between unbounded preceding and unbounded preceding);

@@ -197,7 +197,7 @@ RETURNING *;
 statement error
 UPDATE table1 SET a = 0, b = 0, c = 0 WHERE a = 10 RETURNING a IN (SELECT a FROM table1);
 ----
-PLACEHOLDER_ERROR_MESSAGE258
+Binder Error: SUBQUERY is not supported in returning statements
 
 # updating using empty subquery returns nothing
 query III

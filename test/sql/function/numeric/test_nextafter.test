@@ -16,7 +16,10 @@ Binder Error: No function matches the given name and argument types 'nextafter()
 statement error
 select nextafter('bla','bla')
 ----
-PLACEHOLDER_ERROR_MESSAGE2110
+Binder Error: No function matches the given name and argument types 'nextafter(VARCHAR, VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	nextafter(DOUBLE, DOUBLE) -> DOUBLE
+	nextafter(FLOAT, FLOAT) -> FLOAT
 
 query I
 select nextafter(NULL,1)

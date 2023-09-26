@@ -117,7 +117,7 @@ Binder Error: UNNEST requires a single list as input
 statement error
 SELECT i FROM UNNEST(1) AS tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE830
+Binder Error: UNNEST requires a single list as input
 
 # multiple parameters
 statement error

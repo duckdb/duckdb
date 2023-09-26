@@ -38,7 +38,7 @@ DROP SCHEMA test;
 statement error con2
 DROP SCHEMA test;
 ----
-PLACEHOLDER_ERROR_MESSAGE1847
+TransactionContext Error: Catalog write-write conflict on alter with "test"
 
 # rollback the drop
 statement ok con1

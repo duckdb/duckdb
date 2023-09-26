@@ -16,7 +16,7 @@ Not implemented Error: Index without a name not supported yet!
 statement error
 CREATE INDEX i_index ON integers(i COLLATE "NOCASE")
 ----
-PLACEHOLDER_ERROR_MESSAGE2852
+Not implemented Error: Index with collation not supported yet!
 
 statement error
 CREATE INDEX i_index ON integers(i COLLATE "de_DE")

@@ -170,7 +170,7 @@ SELECT quantile_cont(r, []) FROM quantiles
 statement error
 SELECT quantile_cont(r, [-0.25, 0.5, 0.75]) FROM quantiles
 ----
-PLACEHOLDER_ERROR_MESSAGE1718
+Binder Error: QUANTILE parameters must have consistent signs
 
 statement error
 SELECT quantile_cont(r, (0.25, 0.5, 1.1)) FROM quantiles

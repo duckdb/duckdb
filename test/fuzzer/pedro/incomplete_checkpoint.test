@@ -40,7 +40,8 @@ FATAL Error: Failed to create checkpoint because of error: FATAL Error: Checkpoi
 statement error
 CHECKPOINT;
 ----
-PLACEHOLDER_ERROR_MESSAGE25
+FATAL Error: Failed: database has been invalidated because of a previous fatal error. The database must be restarted prior to being used again.
+Original error: "FATAL Error: Failed to create checkpoint because of error: FATAL Error: Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag"
 
 restart
 

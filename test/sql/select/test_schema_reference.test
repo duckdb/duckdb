@@ -26,4 +26,5 @@ Candidate tables: "tbl"
 statement error
 SELECT a.tbl.i FROM range(10) tbl(i)
 ----
-PLACEHOLDER_ERROR_MESSAGE2999
+Binder Error: Referenced table "a" not found!
+Candidate tables: "tbl"

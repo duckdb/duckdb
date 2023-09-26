@@ -91,5 +91,5 @@ Binder Error: Table "test" does not have a column with name "blabla"
 statement error
 ALTER TABLE test ALTER blabla DROP DEFAULT
 ----
-PLACEHOLDER_ERROR_MESSAGE2693
+Binder Error: Table "test" does not have a column with name "blabla"
 

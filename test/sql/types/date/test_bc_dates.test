@@ -53,7 +53,7 @@ Conversion Error: date field value out of range: "0000-01-01 (BC)", expected for
 statement error
 SELECT DATE '-0030-01-01 (BC)'
 ----
-PLACEHOLDER_ERROR_MESSAGE560
+Conversion Error: date field value out of range: "-0030-01-01 (BC)", expected format is (YYYY-MM-DD)
 
 query T
 SELECT DATE '1992-01-01 (BC)'

@@ -14,7 +14,7 @@ Conversion Error: date field value out of range: "blabla", expected format is (Y
 statement error
 INSERT INTO dates VALUES ('1993-20-14')
 ----
-PLACEHOLDER_ERROR_MESSAGE547
+Conversion Error: date field value out of range: "1993-20-14", expected format is (YYYY-MM-DD)
 
 # day out of range
 statement error

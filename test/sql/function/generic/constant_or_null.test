@@ -38,4 +38,6 @@ Binder Error: No function matches the given name and argument types 'constant_or
 statement error
 SELECT constant_or_null();
 ----
-PLACEHOLDER_ERROR_MESSAGE2294
+Binder Error: No function matches the given name and argument types 'constant_or_null()'. You might need to add explicit type casts.
+	Candidate functions:
+	constant_or_null(ANY, ANY) -> ANY

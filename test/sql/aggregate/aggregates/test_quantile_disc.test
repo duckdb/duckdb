@@ -187,7 +187,7 @@ Binder Error: QUANTILE can only take parameters in the range [-1, 1]
 statement error
 SELECT quantile_disc(r, 1.1) FROM quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1644
+Binder Error: QUANTILE can only take parameters in the range [-1, 1]
 
 statement error
 SELECT quantile_disc(r, "string") FROM quantile

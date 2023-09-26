@@ -52,7 +52,7 @@ Conversion Error: Could not convert Timestamp(US) to Timestamp(NS)
 statement error
 select sec::DATE from timestamp;
 ----
-PLACEHOLDER_ERROR_MESSAGE974
+Conversion Error: Unimplemented type for cast (TIMESTAMP_S -> DATE)
 
 statement error
 select milli::DATE from timestamp;

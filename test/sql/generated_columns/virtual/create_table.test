@@ -45,7 +45,7 @@ SELECT * FROM tbl
 statement error
 INSERT INTO tbl VALUES ('string', 5, 12);
 ----
-PLACEHOLDER_ERROR_MESSAGE1138
+Constraint Error: Incorrect value for generated column "total_profit BOOLEAN AS (CAST(word AS BOOLEAN))" : Conversion Error: Could not convert string 'string' to BOOL
 
 # Expression contains a subquery
 statement error

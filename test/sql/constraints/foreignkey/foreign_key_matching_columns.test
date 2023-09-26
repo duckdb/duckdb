@@ -30,7 +30,7 @@ CREATE TABLE routes (
 	FOREIGN KEY (route_id, agency_id) REFERENCES agency
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE1352
+Binder Error: Failed to create foreign key: number of referencing (route_id,agency_id) and referenced columns (agency_id) differ
 
 statement ok
 CREATE TABLE routes (

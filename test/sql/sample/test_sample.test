@@ -82,7 +82,9 @@ LINE 1: SELECT COUNT(*) FROM test USING SAMPLE -1
 statement error
 SELECT COUNT(*) FROM test USING SAMPLE 'hello'
 ----
-PLACEHOLDER_ERROR_MESSAGE2832
+Parser Error: syntax error at or near "'hello'"
+LINE 1: SELECT COUNT(*) FROM test USING SAMPLE 'hello'
+                                               ^
 
 statement error
 SELECT COUNT(*) FROM test USING SAMPLE DATE '1992-01-01'

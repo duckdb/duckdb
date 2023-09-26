@@ -79,7 +79,9 @@ PREPARE p2 as SELECT union_tag(?);
 statement error
 EXECUTE p2(1);
 ----
-PLACEHOLDER_ERROR_MESSAGE850
+Binder Error: No function matches the given name and argument types 'union_tag(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	union_tag(UNION) -> ANY
 
 query I
 EXECUTE p2('woo'::UNION(a INT, b VARCHAR));

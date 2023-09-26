@@ -118,7 +118,14 @@ Binder Error: No function matches the given name and argument types 'sum(VARCHAR
 statement error
 SELECT AVG(s) FROM strings GROUP BY g ORDER BY g
 ----
-PLACEHOLDER_ERROR_MESSAGE1610
+Binder Error: No function matches the given name and argument types 'avg(VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	avg(DECIMAL) -> DECIMAL
+	avg(SMALLINT) -> DOUBLE
+	avg(INTEGER) -> DOUBLE
+	avg(BIGINT) -> DOUBLE
+	avg(HUGEINT) -> DOUBLE
+	avg(DOUBLE) -> DOUBLE
 
 # booleans
 statement ok

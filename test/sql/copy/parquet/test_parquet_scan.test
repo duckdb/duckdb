@@ -248,4 +248,4 @@ SELECT FIRST(comments) OVER w, LAST(comments) OVER w FROM userdata1 WINDOW w AS 
 statement error
 SELECT * FROM parquet_scan('data/parquet-testing/broken-arrow.parquet')
 ----
-PLACEHOLDER_ERROR_MESSAGE2986
+Invalid Error: Out of buffer

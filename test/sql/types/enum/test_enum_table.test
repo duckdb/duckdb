@@ -30,7 +30,7 @@ INSERT INTO person VALUES ('Moe', 'happy');
 statement error
 INSERT INTO person VALUES ('Moe', 'diego');
 ----
-PLACEHOLDER_ERROR_MESSAGE663
+Conversion Error: Could not convert string 'diego' to UINT8
 
 query TT
 select * from person

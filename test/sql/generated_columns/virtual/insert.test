@@ -36,7 +36,7 @@ SELECT * FROM test
 statement error
 INSERT INTO test VALUES (22)
 ----
-PLACEHOLDER_ERROR_MESSAGE1152
+Binder Error: table test has 2 columns but 1 values were supplied
 
 #Using VALUES correctly
 statement ok

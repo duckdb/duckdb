@@ -50,7 +50,10 @@ LINE 1: SELECT * FROM out_of_path.test_table;
 statement error
 SELECT * FROM main.test_table;
 ----
-PLACEHOLDER_ERROR_MESSAGE1890
+Catalog Error: Table with name test_table does not exist!
+Did you mean "memory.test.test_table"?
+LINE 1: SELECT * FROM main.test_table;
+                      ^
 
 # Testing INSERT, UPDATE and DELETE
 

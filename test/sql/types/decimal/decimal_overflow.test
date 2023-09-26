@@ -14,7 +14,7 @@ Out of Range Error: Overflow in addition of DECIMAL(18) (990000000000000000 + 99
 statement error
 select (99000000000000000.0::DECIMAL(18,1)+99000000000000000.0::DECIMAL(18,1))::VARCHAR::DECIMAL(18,1);
 ----
-PLACEHOLDER_ERROR_MESSAGE377
+Out of Range Error: Overflow in addition of DECIMAL(18) (990000000000000000 + 990000000000000000). You might want to add an explicit cast to a bigger decimal.
 
 statement error
 select (50000000000000000.0::DECIMAL(18,1)+50000000000000000.0::DECIMAL(18,1));

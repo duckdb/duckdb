@@ -19,7 +19,7 @@ Conversion Error: Failed to cast decimal value 128 to type INT8
 statement error
 SELECT -128::DECIMAL(9,0)::TINYINT
 ----
-PLACEHOLDER_ERROR_MESSAGE292
+Conversion Error: Failed to cast decimal value 128 to type INT8
 
 statement error
 SELECT 128::DECIMAL(18,0)::TINYINT

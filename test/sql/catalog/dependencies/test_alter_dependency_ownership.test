@@ -43,7 +43,7 @@ DROP TABLE main.tablename;
 statement error
 SELECT nextval('main.sequence1');
 ----
-PLACEHOLDER_ERROR_MESSAGE1796
+Catalog Error: Sequence with name sequence1 does not exist!
 
 ##TEST: If the owned sequence is dropped with CASCADE, then the table is also dropped
 statement ok

@@ -49,7 +49,7 @@ SELECT * FROM integers ORDER BY 1
 statement error
 UPDATE integers SET i=1 WHERE i=2
 ----
-PLACEHOLDER_ERROR_MESSAGE2752
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "1"
 
 statement ok
 ROLLBACK

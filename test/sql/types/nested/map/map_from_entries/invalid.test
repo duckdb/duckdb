@@ -15,7 +15,7 @@ Invalid Input Error: The input argument must be a list of structs.
 statement error
 SELECT map_from_entries(5);
 ----
-PLACEHOLDER_ERROR_MESSAGE892
+Invalid Input Error: The provided argument is not a list of structs
 
 # ARRAY doesn't contain structs
 statement error

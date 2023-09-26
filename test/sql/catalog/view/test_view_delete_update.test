@@ -26,5 +26,5 @@ Binder Error: Can only delete from base table!
 statement error
 UPDATE v1 SET j=1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1902
+Binder Error: Can only update base table!
 

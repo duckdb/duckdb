@@ -188,7 +188,7 @@ Invalid Input Error: Failed to parse format specifier : Empty format string
 statement error
 SELECT strptime(NULL, '')
 ----
-PLACEHOLDER_ERROR_MESSAGE2472
+Invalid Input Error: Failed to parse format specifier : Empty format string
 
 query I
 SELECT strptime('', NULL)

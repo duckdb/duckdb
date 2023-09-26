@@ -23,7 +23,7 @@ Conversion Error: Could not convert string '170141183460469231731687303715884105
 statement error
 select '1.7e39'::hugeint
 ----
-PLACEHOLDER_ERROR_MESSAGE1069
+Conversion Error: Could not convert string '1.7e39' to INT128
 
 statement error
 select '2e38'::hugeint

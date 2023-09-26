@@ -830,7 +830,7 @@ SELECT ts, DATE_PART(['year', 'month', 'day', 'year'], ts) AS parts
 FROM timestamps
 ORDER BY 1;
 ----
-PLACEHOLDER_ERROR_MESSAGE2424
+Binder Error: Duplicate struct entry name "year" in date_part
 
 # Empty parts
 statement error

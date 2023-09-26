@@ -134,7 +134,9 @@ Binder Error: No function matches the given name and argument types 'translate(I
 statement error
 select TRANSLATE(1, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE2410
+Binder Error: No function matches the given name and argument types 'translate(INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	translate(VARCHAR, VARCHAR, VARCHAR) -> VARCHAR
 
 statement error
 select TRANSLATE(1, 2, 3, 4)

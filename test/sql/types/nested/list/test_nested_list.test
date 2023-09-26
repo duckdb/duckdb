@@ -242,7 +242,7 @@ Binder Error: UNNEST not supported here
 statement error
 SELECT LIST(LIST(42))
 ----
-PLACEHOLDER_ERROR_MESSAGE942
+Binder Error: aggregate function calls cannot be nested
 
 statement error
 SELECT UNNEST(UNNEST(LIST(42))

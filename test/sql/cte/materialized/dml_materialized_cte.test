@@ -23,7 +23,7 @@ statement error
 WITH t(x) AS MATERIALIZED (VALUES (42))
 DELETE FROM a WHERE a.i IN (SELECT * FROM t);
 ----
-PLACEHOLDER_ERROR_MESSAGE3041
+Not implemented Error: Materialized CTEs are not implemented for delete.
 
 statement error
 WITH t(x) AS MATERIALIZED (VALUES (42))

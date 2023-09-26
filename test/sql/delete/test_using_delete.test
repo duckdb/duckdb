@@ -89,4 +89,6 @@ Did you mean "a"?
 statement error
 DELETE FROM a USING a b WHERE a.i=b.j;
 ----
-PLACEHOLDER_ERROR_MESSAGE1399
+Binder Error: Table "b" does not have a column named "j"
+LINE 1: ...ELETE FROM a USING a AS b WHERE (a.i = b.j)
+                                                  ^

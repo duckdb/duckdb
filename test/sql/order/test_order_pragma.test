@@ -43,7 +43,7 @@ LINE 1: PRAGMA default_order())
 statement error
 PRAGMA default_order='UNKNOWN'
 ----
-PLACEHOLDER_ERROR_MESSAGE214
+Invalid Input Error: Unrecognized parameter for option DEFAULT_ORDER "unknown". Expected ASC or DESC.
 
 statement error
 PRAGMA default_order=UNKNOWN)

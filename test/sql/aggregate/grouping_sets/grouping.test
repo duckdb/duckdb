@@ -193,7 +193,9 @@ LINE 1: SELECT GROUPING();
 statement error
 SELECT GROUPING() FROM students;
 ----
-PLACEHOLDER_ERROR_MESSAGE1739
+Parser Error: syntax error at or near ")"
+LINE 1: SELECT GROUPING() FROM students;
+                        ^
 
 statement error
 SELECT GROUPING(NULL) FROM students;

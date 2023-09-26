@@ -178,7 +178,8 @@ LINE 1: ... count(*) from students group by cube () order by 1, 2;
 statement error
 select course, count(*) from students group by cube (cube (course)) order by 1, 2;
 ----
-PLACEHOLDER_ERROR_MESSAGE1744
+Catalog Error: Scalar Function with name cube does not exist!
+Did you mean "user"?
 
 statement error
 select course, count(*) from students group by cube (grouping_sets (course)) order by 1, 2;

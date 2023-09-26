@@ -66,7 +66,18 @@ Binder Error: No function matches the given name and argument types 'bit_or()'. 
 statement error
 SELECT BIT_OR(1, 2, 3)
 ----
-PLACEHOLDER_ERROR_MESSAGE1711
+Binder Error: No function matches the given name and argument types 'bit_or(INTEGER, INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	bit_or(TINYINT) -> TINYINT
+	bit_or(SMALLINT) -> SMALLINT
+	bit_or(INTEGER) -> INTEGER
+	bit_or(BIGINT) -> BIGINT
+	bit_or(HUGEINT) -> HUGEINT
+	bit_or(UTINYINT) -> UTINYINT
+	bit_or(USMALLINT) -> USMALLINT
+	bit_or(UINTEGER) -> UINTEGER
+	bit_or(UBIGINT) -> UBIGINT
+	bit_or(BIT) -> BIT
 
 statement error
 SELECT BIT_OR(BIT_AND(1))

@@ -54,7 +54,7 @@ Parser Error: SELECT clause without selection list
 statement error
 SELECT FROM (SELECT 42) v1
 ----
-PLACEHOLDER_ERROR_MESSAGE3112
+Parser Error: SELECT clause without selection list
 
 # Scalar query from SQLLogicTests
 query I

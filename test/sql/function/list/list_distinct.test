@@ -39,7 +39,9 @@ Binder Error: No function matches the given name and argument types 'list_distin
 statement error
 SELECT list_distinct(*)
 ----
-PLACEHOLDER_ERROR_MESSAGE2167
+Binder Error: No function matches the given name and argument types 'list_distinct()'. You might need to add explicit type casts.
+	Candidate functions:
+	list_distinct(ANY[]) -> ANY[]
 
 statement error
 SELECT list_distinct([1, 2], 2)

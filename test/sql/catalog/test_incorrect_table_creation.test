@@ -12,7 +12,7 @@ Parser Error: column "j" named in key does not exist
 statement error
 CREATE TABLE integers(i INTEGER, PRIMARY KEY(i, i))
 ----
-PLACEHOLDER_ERROR_MESSAGE1940
+Parser Error: column "i" appears twice in primary key constraint
 
 # multiple primary keys
 statement error

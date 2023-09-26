@@ -28,7 +28,7 @@ SELECT MAP_FROM_ENTRIES(ARRAY[({'a':5, 'b':7}, 2), ({'a':3, 'b':8}, 4)]);
 statement error
 SELECT MAP_FROM_ENTRIES(ARRAY[({'a':5, 'b':7}, 2), ({'a':5, 'b':7}, 4)]);
 ----
-PLACEHOLDER_ERROR_MESSAGE869
+Invalid Input Error: Map keys have to be unique
 
 # MAP - correct
 query I

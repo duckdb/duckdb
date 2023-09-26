@@ -132,7 +132,9 @@ SELECT i, list_concat(j, k) FROM lists
 statement error
 SELECT i, list_concat(j, cast(k AS VARCHAR)) FROM lists
 ----
-PLACEHOLDER_ERROR_MESSAGE2270
+Binder Error: No function matches the given name and argument types 'list_concat(BIGINT[], VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	list_concat(ANY[], ANY[]) -> ANY[]
 
 # list_append(l, e) is an alias for list_concat(l, list_value(e))
 query T

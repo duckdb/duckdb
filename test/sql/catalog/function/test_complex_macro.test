@@ -68,7 +68,8 @@ Candidate bindings: "integers.a"
 statement error
 CREATE MACRO f1(x) AS (SELECT MIN(a) + x FROM integers)
 ----
-PLACEHOLDER_ERROR_MESSAGE1812
+Binder Error: column "x" must appear in the GROUP BY clause or must be part of an aggregate function.
+Either add it to the GROUP BY list, or use "ANY_VALUE(x)" if the exact value of "x" is not important.
 
 # macro in GROUP BY
 statement ok

@@ -11,7 +11,7 @@ Parser Error: Duplicate union type tag name "b"
 statement error
 CREATE TABLE tbl(a UNION(b INT, B INT));
 ----
-PLACEHOLDER_ERROR_MESSAGE844
+Parser Error: Duplicate union type tag name "B"
 
 
 # allow members with same type

@@ -206,7 +206,7 @@ LINE 1: ...M exam QUALIFY row_number() OVER w = 1 WINDOW w AS (ORDER BY mark)
 statement error
 SELECT b, avg(a) AS avga FROM test GROUP BY b QUALIFY avga > 10
 ----
-PLACEHOLDER_ERROR_MESSAGE1519
+Binder Error: at least one window function must appear in the SELECT column or QUALIFY clause
 
 # invalid window function
 statement error

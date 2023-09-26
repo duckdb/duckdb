@@ -13,7 +13,7 @@ Binder Error: OFFSET cannot be negative
 statement error
 SELECT * FROM generate_series(0,10,1) LIMIT -3;
 ----
-PLACEHOLDER_ERROR_MESSAGE200
+Binder Error: LIMIT cannot be negative
 
 statement error
 SELECT * FROM generate_series(0,10,1) LIMIT -1%

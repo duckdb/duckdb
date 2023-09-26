@@ -109,7 +109,7 @@ Parser Error: VALUES lists must all be the same length
 statement error
 SELECT * FROM (VALUES (DEFAULT, 2, 3), (1,2)) v1;
 ----
-PLACEHOLDER_ERROR_MESSAGE3121
+Parser Error: VALUES lists must all be the same length
 
 # VALUES list for INSERT
 statement ok

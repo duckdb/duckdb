@@ -17,7 +17,7 @@ IO Error: Extension "/Users/thijs/.duckdb/extensions/a79c05a3bc/osx_arm64/asdf.d
 statement error
 LOAD 'Makefile';
 ----
-PLACEHOLDER_ERROR_MESSAGE5
+IO Error: Extension "/Users/thijs/.duckdb/extensions/a79c05a3bc/osx_arm64/Makefile.duckdb_extension" not found.
 
 statement error
 LOAD NULL;

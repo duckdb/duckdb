@@ -136,7 +136,7 @@ Invalid Input Error: strftime format must be a constant
 statement error
 SELECT strftime(DATE '1992-01-01', '%');
 ----
-PLACEHOLDER_ERROR_MESSAGE2016
+Invalid Input Error: Failed to parse format specifier %: Trailing format character %
 
 # unrecognized code
 statement error

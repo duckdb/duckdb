@@ -98,7 +98,7 @@ EXECUTE v6(4)
 statement error
 EXECUTE v6('hello')
 ----
-PLACEHOLDER_ERROR_MESSAGE1112
+Invalid Error: Invalid type specifier "d" for formatting a value of type string
 
 # lists and structs
 statement ok

@@ -51,7 +51,9 @@ Binder Error: No function matches the given name and argument types 'reverse()'.
 statement error
 select REVERSE(1, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE2376
+Binder Error: No function matches the given name and argument types 'reverse(INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	reverse(VARCHAR) -> VARCHAR
 
 statement error
 select REVERSE('hello', 'world')

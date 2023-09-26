@@ -26,7 +26,9 @@ NULL
 statement error
 select kurtosis(*)
 ----
-PLACEHOLDER_ERROR_MESSAGE1666
+Binder Error: No function matches the given name and argument types 'kurtosis()'. You might need to add explicit type casts.
+	Candidate functions:
+	kurtosis(DOUBLE) -> DOUBLE
 
 query I
 select kurtosis(i) from (values (0), (0), (0), (0), (0), (0)) tbl(i)

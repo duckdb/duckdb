@@ -19,7 +19,7 @@ UPDATE integers SET i=4
 statement error
 UPDATE integers SET i=NULL
 ----
-PLACEHOLDER_ERROR_MESSAGE1229
+Constraint Error: NOT NULL constraint failed: integers.i
 
 statement ok
 CREATE TABLE integers_with_null(i INTEGER)

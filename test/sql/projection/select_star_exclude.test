@@ -67,7 +67,7 @@ SELECT integers.* EXCLUDE (i, j), * EXCLUDE (i, j), * EXCLUDE (i, k) FROM intege
 statement error
 SELECT integers.* EXCLUDE (i, j, k) FROM integers
 ----
-PLACEHOLDER_ERROR_MESSAGE3107
+Binder Error: SELECT list is empty after resolving * expressions!
 
 # exclude but with multiple tables
 query II

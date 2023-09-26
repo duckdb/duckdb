@@ -45,7 +45,7 @@ Binder Error: The parameters need to link to ONLY one enum OR be NULL
 statement error
 SELECT enum_range_boundary(NULL, NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE2047
+Binder Error: This function needs an ENUM as an argument
 
 statement error
 SELECT enum_last('bla')

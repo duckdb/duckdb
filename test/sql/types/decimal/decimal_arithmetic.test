@@ -180,7 +180,7 @@ SELECT '0.001'::DECIMAL * 100::TINYINT,
 statement error
 SELECT '0.000000000000000000000000000001'::DECIMAL(38,30) * '0.000000000000000000000000000001'::DECIMAL(38,30)
 ----
-PLACEHOLDER_ERROR_MESSAGE269
+Out of Range Error: Needed scale 60 to accurately represent the multiplication result, but this is out of range of the DECIMAL type. Max scale is 38; could not perform an accurate multiplication. Either add a cast to DOUBLE, or add an explicit cast to a decimal with a lower scale.
 
 # test addition, subtraction and multiplication with various scales and precisions
 query IIII

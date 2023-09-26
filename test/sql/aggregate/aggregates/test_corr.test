@@ -26,7 +26,9 @@ NULL
 statement error
 select corr(*)
 ----
-PLACEHOLDER_ERROR_MESSAGE1614
+Binder Error: No function matches the given name and argument types 'corr()'. You might need to add explicit type casts.
+	Candidate functions:
+	corr(DOUBLE, DOUBLE) -> DOUBLE
 
 statement ok
 create table aggr(k int, v decimal(10,2), v2 decimal(10, 2));

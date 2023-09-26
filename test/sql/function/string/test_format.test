@@ -94,7 +94,7 @@ Invalid Error: Argument index "0" out of range
 statement error
 SELECT format('{} {}', 'hello')
 ----
-PLACEHOLDER_ERROR_MESSAGE2306
+Invalid Error: Argument index "1" out of range
 
 # excess parameters are ignored
 query T

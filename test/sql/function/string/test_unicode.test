@@ -54,5 +54,7 @@ Binder Error: No function matches the given name and argument types 'unicode()'.
 statement error
 select UNICODE(1, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE2351
+Binder Error: No function matches the given name and argument types 'unicode(INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	unicode(VARCHAR) -> INTEGER
 

@@ -61,4 +61,5 @@ with cte as (Select i as j from a) select * from cte where j = (with cte as (sel
 statement error
 with cte as (select * from cte) select * from cte
 ----
-PLACEHOLDER_ERROR_MESSAGE3034
+Catalog Error: Table with name cte does not exist!
+Did you mean "a"?

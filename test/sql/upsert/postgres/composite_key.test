@@ -24,7 +24,7 @@ Binder Error: The specified columns as conflict target are not referenced by a U
 statement error
 insert into insertconflicttest values(0, 'Crowberry', 0) on conflict (fruit) do nothing;
 ----
-PLACEHOLDER_ERROR_MESSAGE1947
+Binder Error: The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT
 
 # succeeds
 

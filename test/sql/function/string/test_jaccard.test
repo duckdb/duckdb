@@ -89,7 +89,7 @@ Invalid Input Error: Jaccard Function: An argument too short!
 statement error
 SELECT jaccard('', 'hello')
 ----
-PLACEHOLDER_ERROR_MESSAGE2405
+Invalid Input Error: Jaccard Function: An argument too short!
 
 statement error
 SELECT jaccard('', '')

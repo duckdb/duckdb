@@ -22,7 +22,7 @@ Binder Error: Unsupported constraint for generated column!
 statement error
 INSERT INTO t0 VALUES (NULL);
 ----
-PLACEHOLDER_ERROR_MESSAGE19
+Constraint Error: NOT NULL constraint failed: t0.c1
 
 statement ok
 DROP TABLE t0;

@@ -35,7 +35,7 @@ Invalid Error: Missing required arguments for struct_insert function.
 statement error
 select struct_insert({a: 1, b: 2})
 ----
-PLACEHOLDER_ERROR_MESSAGE2419
+Invalid Error: Can't insert nothing into a struct
 
 statement error
 select struct_insert(123, a := 1)

@@ -91,7 +91,7 @@ Binder Error: Subquery returns 2 columns - expected 1
 statement error
 SELECT * FROM integers WHERE i=(SELECT i, i + 2 FROM integers)
 ----
-PLACEHOLDER_ERROR_MESSAGE1440
+Binder Error: Subquery returns 2 columns - expected 1
 
 # but not for EXISTS queries!
 query I

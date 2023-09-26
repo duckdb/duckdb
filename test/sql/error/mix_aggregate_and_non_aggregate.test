@@ -20,4 +20,7 @@ statement error
 SELECT FIRST(name)||abv
 FROM tbl
 ----
-PLACEHOLDER_ERROR_MESSAGE3098
+Binder Error: column "abv" must appear in the GROUP BY clause or must be part of an aggregate function.
+Either add it to the GROUP BY list, or use "ANY_VALUE(abv)" if the exact value of "abv" is not important.
+LINE 1: SELECT FIRST(name)||abv
+                            ^

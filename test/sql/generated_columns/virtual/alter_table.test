@@ -21,7 +21,7 @@ INSERT INTO unit VALUES (5,4)
 statement error
 ALTER TABLE unit ADD COLUMN profit_total BOOLEAN GENERATED ALWAYS AS(non_existant_function() * price) VIRTUAL;
 ----
-PLACEHOLDER_ERROR_MESSAGE1180
+Parser Error: Adding generated columns after table creation is not supported yet
 
 # Adding a generated column after table creation is not supported yet
 statement error

@@ -18,7 +18,7 @@ Catalog Error: Existing object integers is of type Table, trying to replace with
 statement error
 DROP VIEW integers
 ----
-PLACEHOLDER_ERROR_MESSAGE1809
+Catalog Error: Existing object integers is of type Table, trying to replace with type View
 
 # cannot drop a table that does not exist
 statement error

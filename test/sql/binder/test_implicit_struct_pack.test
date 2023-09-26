@@ -38,7 +38,8 @@ Candidate tables: "t"
 statement error
 select main.t from main.test t
 ----
-PLACEHOLDER_ERROR_MESSAGE1410
+Binder Error: Referenced table "main" not found!
+Candidate tables: "t"
 
 # example query in feature request
 query T

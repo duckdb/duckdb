@@ -89,7 +89,7 @@ Parser Error: YEAR TO MONTH is not supported
 statement error
 SELECT interval '2 10' days to hours
 ----
-PLACEHOLDER_ERROR_MESSAGE502
+Parser Error: DAY TO HOUR is not supported
 
 # 12 days 15:06:00
 statement error

@@ -138,7 +138,8 @@ LINE 1: ...ount(*) from students group by rollup () order by 1, 2;
 statement error
 select course, count(*) from students group by rollup (rollup (course)) order by 1, 2;
 ----
-PLACEHOLDER_ERROR_MESSAGE1747
+Catalog Error: Scalar Function with name rollup does not exist!
+Did you mean "row"?
 
 statement error
 select course, count(*) from students group by rollup (grouping_sets (course)) order by 1, 2;

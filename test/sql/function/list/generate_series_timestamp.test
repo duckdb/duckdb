@@ -72,7 +72,7 @@ Invalid Input Error: Interval with mix of negative/positive entries not supporte
 statement error
 SELECT generate_series('294247-01-10'::TIMESTAMP, 'infinity'::TIMESTAMP, INTERVAL '1 DAY');
 ----
-PLACEHOLDER_ERROR_MESSAGE2253
+Invalid Input Error: Interval infinite bounds not supported
 
 statement error
 SELECT range('294247-01-10'::TIMESTAMP, 'infinity'::TIMESTAMP, INTERVAL '1 DAY');

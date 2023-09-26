@@ -188,7 +188,7 @@ Conversion Error: Could not convert string '=3' to INT32
 statement error
 SELECT CAST('{[5]=5}' AS MAP(INT, INT));
 ----
-PLACEHOLDER_ERROR_MESSAGE1504
+Conversion Error: Could not convert string '[5]' to INT32
 
 statement error
 SELECT CAST('{3=three}}' AS MAP(INT, VARCHAR));

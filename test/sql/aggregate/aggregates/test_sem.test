@@ -26,7 +26,9 @@ select sem(1)
 statement error
 select sem(*)
 ----
-PLACEHOLDER_ERROR_MESSAGE1533
+Binder Error: No function matches the given name and argument types 'sem()'. You might need to add explicit type casts.
+	Candidate functions:
+	sem(DOUBLE) -> DOUBLE
 
 statement ok
 create table aggr(k int, v decimal(10,2), v2 decimal(10, 2));

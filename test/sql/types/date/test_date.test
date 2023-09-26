@@ -71,7 +71,11 @@ Binder Error: No function matches the given name and argument types '*(DATE, INT
 statement error
 SELECT i / 3 FROM dates
 ----
-PLACEHOLDER_ERROR_MESSAGE558
+Binder Error: No function matches the given name and argument types '/(DATE, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	/(FLOAT, FLOAT) -> FLOAT
+	/(DOUBLE, DOUBLE) -> DOUBLE
+	/(INTERVAL, BIGINT) -> INTERVAL
 
 statement error
 SELECT i % 3 FROM dates

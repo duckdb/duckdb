@@ -25,5 +25,5 @@ ALTER TABLE test DROP COLUMN i
 statement error
 ALTER TABLE test DROP COLUMN j
 ----
-PLACEHOLDER_ERROR_MESSAGE2738
+Catalog Error: Cannot drop column: table only has one column remaining!
 

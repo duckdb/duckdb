@@ -56,4 +56,4 @@ Parser Error: Perfect HT threshold out of range: should be within range 0 - 32
 statement error
 PRAGMA perfect_ht_threshold=100;
 ----
-PLACEHOLDER_ERROR_MESSAGE8
+Parser Error: Perfect HT threshold out of range: should be within range 0 - 32

@@ -142,7 +142,9 @@ INSERT INTO table1(a) (SELECT 42) RETURNING a, b;
 statement error
 INSERT INTO table1(a) VALUES (SELECT 42) RETURNING a, b, (select 10);
 ----
-PLACEHOLDER_ERROR_MESSAGE265
+Parser Error: syntax error at or near "SELECT"
+LINE 1: INSERT INTO table1(a) VALUES (SELECT 42) RETURNING a, b, (select 10);
+                                      ^
 
 # unknown columns
 statement error

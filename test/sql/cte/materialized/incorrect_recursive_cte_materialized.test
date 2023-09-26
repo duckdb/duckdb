@@ -17,4 +17,4 @@ Parser Error: Unsupported setop type for recursive CTE: only UNION or UNION ALL 
 statement error
 with recursive t as MATERIALIZED (select 1 as x except select x+1 from t where x < 3) select * from t order by x
 ----
-PLACEHOLDER_ERROR_MESSAGE3046
+Parser Error: Unsupported setop type for recursive CTE: only UNION or UNION ALL are supported

@@ -101,7 +101,7 @@ Out of Range Error: input value inf is out of range for numeric function
 statement error
 select ${unary_func}('-inf'::${type})
 ----
-PLACEHOLDER_ERROR_MESSAGE824
+Out of Range Error: input value -inf is out of range for numeric function
 
 query I
 select ${unary_func}('nan'::${type})

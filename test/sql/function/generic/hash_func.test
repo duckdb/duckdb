@@ -191,7 +191,9 @@ NULL	13787848793156543929
 statement error
 SELECT HASH();
 ----
-PLACEHOLDER_ERROR_MESSAGE2302
+Binder Error: No function matches the given name and argument types 'hash()'. You might need to add explicit type casts.
+	Candidate functions:
+	hash(ANY) -> UBIGINT
 
 statement error
 SELECT r, HASH() FROM enums;

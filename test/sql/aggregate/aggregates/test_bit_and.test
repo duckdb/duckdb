@@ -66,7 +66,18 @@ Binder Error: No function matches the given name and argument types 'bit_and()'.
 statement error
 SELECT BIT_AND(1, 2, 3)
 ----
-PLACEHOLDER_ERROR_MESSAGE1536
+Binder Error: No function matches the given name and argument types 'bit_and(INTEGER, INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	bit_and(TINYINT) -> TINYINT
+	bit_and(SMALLINT) -> SMALLINT
+	bit_and(INTEGER) -> INTEGER
+	bit_and(BIGINT) -> BIGINT
+	bit_and(HUGEINT) -> HUGEINT
+	bit_and(UTINYINT) -> UTINYINT
+	bit_and(USMALLINT) -> USMALLINT
+	bit_and(UINTEGER) -> UINTEGER
+	bit_and(UBIGINT) -> UBIGINT
+	bit_and(BIT) -> BIT
 
 statement error
 SELECT BIT_AND(BIT_AND(1))

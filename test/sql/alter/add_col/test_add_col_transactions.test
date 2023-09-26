@@ -50,7 +50,7 @@ ALTER TABLE test ADD COLUMN k INTEGER
 statement error con2
 INSERT INTO test (i, j) VALUES (3, 3)
 ----
-PLACEHOLDER_ERROR_MESSAGE2698
+TransactionContext Error: Transaction conflict: adding entries to a table that has been altered!
 
 # but we can delete rows!
 statement ok con2

@@ -26,7 +26,7 @@ Constraint Error: CHECK constraint failed: test
 statement error
 INSERT INTO test VALUES (5, 3);
 ----
-PLACEHOLDER_ERROR_MESSAGE2560
+Constraint Error: CHECK constraint failed: test
 
 # check constraint on b not violated !(b < 10) => (a + b < 100)
 statement ok

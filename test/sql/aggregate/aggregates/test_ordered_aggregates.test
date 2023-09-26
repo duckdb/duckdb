@@ -122,7 +122,7 @@ SELECT "dest", duck(0.5) WITHIN GROUP (ORDER BY "arr_delay") AS "duck_delay"
 FROM "flights"
 GROUP BY "dest"
 ----
-PLACEHOLDER_ERROR_MESSAGE1700
+Parser Error: Unknown ordered aggregate "duck".
 
 # Wrong number of arguments for PERCENTILE_DISC
 statement error

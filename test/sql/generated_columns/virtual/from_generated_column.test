@@ -20,7 +20,8 @@ Parser Error: Adding generated columns after table creation is not supported yet
 statement error
 SELECT total_profit FROM unit
 ----
-PLACEHOLDER_ERROR_MESSAGE1147
+Binder Error: Referenced column "total_profit" not found in FROM clause!
+Candidate bindings: "unit.price"
 
 statement error
 ALTER TABLE unit ADD COLUMN also_total_profit INTEGER GENERATED ALWAYS AS (total_profit) VIRTUAL;

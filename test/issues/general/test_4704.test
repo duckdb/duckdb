@@ -21,7 +21,7 @@ Constraint Error: NOT NULL constraint failed: t0.c1
 statement error
 UPDATE t0 SET c1 = NULL
 ----
-PLACEHOLDER_ERROR_MESSAGE105
+Constraint Error: NOT NULL constraint failed: t0.c1
 
 query T
 SELECT column_name FROM PRAGMA_STORAGE_INFO('t0') LIMIT 2

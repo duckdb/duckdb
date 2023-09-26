@@ -160,7 +160,7 @@ SELECT COUNT(*) FROM glob('test//sql////copy//csv/////data///glob///*//////*.csv
 statement error
 SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/a*a.csv', auto_detect=1) ORDER BY 1
 ----
-PLACEHOLDER_ERROR_MESSAGE2924
+IO Error: No files found that match the pattern "test/sql/copy/csv/data/glob/*/a*a.csv"
 
 statement error
 SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/*/a*a.csv'], auto_detect=1) ORDER BY 1

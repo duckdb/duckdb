@@ -24,5 +24,5 @@ INSERT INTO test (k, j) VALUES (1, 2), (2, 3)
 statement error
 INSERT INTO test (k, j) VALUES (100, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE2683
+Constraint Error: CHECK constraint failed: test
 

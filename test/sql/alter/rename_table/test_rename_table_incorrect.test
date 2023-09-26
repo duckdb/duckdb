@@ -19,5 +19,5 @@ Did you mean "temp.information_schema.tables"?
 statement error
 ALTER TABLE tbl2 RENAME TO tbl
 ----
-PLACEHOLDER_ERROR_MESSAGE2642
+Catalog Error: Could not rename "tbl2" to "tbl": another entry with this name already exists!
 

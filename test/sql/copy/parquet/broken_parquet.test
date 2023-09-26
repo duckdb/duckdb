@@ -15,7 +15,7 @@ Invalid Input Error: Footer length error in file 'test/sql/copy/parquet/broken/m
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/missingmagicatend.parquet')
 ----
-PLACEHOLDER_ERROR_MESSAGE2937
+Invalid Input Error: No magic bytes found at end of file 'test/sql/copy/parquet/broken/missingmagicatend.parquet'
 
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/firstmarker.parquet')

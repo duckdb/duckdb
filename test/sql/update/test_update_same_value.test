@@ -139,7 +139,7 @@ SELECT * FROM test ORDER BY a
 statement error con2
 UPDATE test SET a=a+1
 ----
-PLACEHOLDER_ERROR_MESSAGE1201
+TransactionContext Error: Conflict on update!
 
 query I con2
 SELECT * FROM test ORDER BY a

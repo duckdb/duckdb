@@ -54,7 +54,9 @@ SELECT gamma(2::hugeint)
 statement error
 SELECT gamma('asdf')
 ----
-PLACEHOLDER_ERROR_MESSAGE2087
+Binder Error: No function matches the given name and argument types 'gamma(VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	gamma(DOUBLE) -> DOUBLE
 
 query I
 SELECT lgamma(NULL)

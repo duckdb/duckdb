@@ -138,7 +138,7 @@ SELECT
 FROM testing
 ORDER BY y, x;
 ----
-PLACEHOLDER_ERROR_MESSAGE2813
+Parser Error: FILTER is not implemented for non-aggregate window functions!
 
 endloop
 

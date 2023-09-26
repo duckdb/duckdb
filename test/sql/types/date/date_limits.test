@@ -29,7 +29,7 @@ Conversion Error: date field value out of range: "5877642-06-24 (BC)", expected 
 statement error
 select '5877680-06-23 (BC)'::date
 ----
-PLACEHOLDER_ERROR_MESSAGE644
+Conversion Error: date field value out of range: "5877680-06-23 (BC)", expected format is (YYYY-MM-DD)
 
 statement error
 select '99999999-06-23 (BC)'::date

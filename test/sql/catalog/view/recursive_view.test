@@ -36,4 +36,4 @@ CREATE OR REPLACE VIEW foo AS (SELECT (SELECT * FROM foo2));
 statement error
 SELECT * FROM foo;
 ----
-PLACEHOLDER_ERROR_MESSAGE1897
+Binder Error: infinite recursion detected: attempting to recursively bind view "foo"

@@ -99,7 +99,7 @@ NULL	NULL
 statement error
 SELECT * FROM integers s1 LEFT OUTER JOIN integers s2 ON s1.i=s2.i AND (SELECT CASE WHEN s1.i>2 THEN TRUE ELSE FALSE END) ORDER BY s1.i;
 ----
-PLACEHOLDER_ERROR_MESSAGE1437
+Not implemented Error: Cannot perform non-inner join on subquery!
 
 # left outer join in correlated expression
 statement error

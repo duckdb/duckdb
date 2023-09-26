@@ -113,7 +113,34 @@ SELECT quantile_cont('00:00:00'::TIME + interval (r/100) second, 0.5) FROM quant
 statement error
 SELECT quantile_cont(interval (r/100) second, 0.5) FROM quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1659
+Binder Error: No function matches the given name and argument types 'quantile_cont(INTERVAL, DECIMAL(2,1))'. You might need to add explicit type casts.
+	Candidate functions:
+	quantile_cont(DECIMAL, DOUBLE) -> DECIMAL
+	quantile_cont(DECIMAL, DOUBLE[]) -> DECIMAL[]
+	quantile_cont(TINYINT, DOUBLE) -> DOUBLE
+	quantile_cont(TINYINT, DOUBLE[]) -> DOUBLE[]
+	quantile_cont(SMALLINT, DOUBLE) -> DOUBLE
+	quantile_cont(SMALLINT, DOUBLE[]) -> DOUBLE[]
+	quantile_cont(INTEGER, DOUBLE) -> DOUBLE
+	quantile_cont(INTEGER, DOUBLE[]) -> DOUBLE[]
+	quantile_cont(BIGINT, DOUBLE) -> DOUBLE
+	quantile_cont(BIGINT, DOUBLE[]) -> DOUBLE[]
+	quantile_cont(HUGEINT, DOUBLE) -> DOUBLE
+	quantile_cont(HUGEINT, DOUBLE[]) -> DOUBLE[]
+	quantile_cont(FLOAT, DOUBLE) -> FLOAT
+	quantile_cont(FLOAT, DOUBLE[]) -> FLOAT[]
+	quantile_cont(DOUBLE, DOUBLE) -> DOUBLE
+	quantile_cont(DOUBLE, DOUBLE[]) -> DOUBLE[]
+	quantile_cont(DATE, DOUBLE) -> TIMESTAMP
+	quantile_cont(DATE, DOUBLE[]) -> TIMESTAMP[]
+	quantile_cont(TIMESTAMP, DOUBLE) -> TIMESTAMP
+	quantile_cont(TIMESTAMP, DOUBLE[]) -> TIMESTAMP[]
+	quantile_cont(TIME, DOUBLE) -> TIME
+	quantile_cont(TIME, DOUBLE[]) -> TIME[]
+	quantile_cont(TIMESTAMP WITH TIME ZONE, DOUBLE) -> TIMESTAMP WITH TIME ZONE
+	quantile_cont(TIMESTAMP WITH TIME ZONE, DOUBLE[]) -> TIMESTAMP WITH TIME ZONE[]
+	quantile_cont(TIME WITH TIME ZONE, DOUBLE) -> TIME WITH TIME ZONE
+	quantile_cont(TIME WITH TIME ZONE, DOUBLE[]) -> TIME WITH TIME ZONE[]
 
 # WITH TIME ZONE
 query I

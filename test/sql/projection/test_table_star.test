@@ -41,7 +41,8 @@ Candidate tables: "t"
 statement error
 SELECT xyz.* FROM test
 ----
-PLACEHOLDER_ERROR_MESSAGE3115
+Binder Error: Referenced table "xyz" not found!
+Candidate tables: "test"
 
 statement error
 SELECT xyz.*

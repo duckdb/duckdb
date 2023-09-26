@@ -70,7 +70,8 @@ Either add it to the GROUP BY list, or use "ANY_VALUE(col1)" if the exact value 
 statement error
 SELECT col1+1, col1+42 FROM another_T GROUP BY col1+1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1432
+Binder Error: column "col1" must appear in the GROUP BY clause or must be part of an aggregate function.
+Either add it to the GROUP BY list, or use "ANY_VALUE(col1)" if the exact value of "col1" is not important.
 
 # this should also fail, col1 + 42 is not a grouping column
 statement error

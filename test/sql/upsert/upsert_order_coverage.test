@@ -54,7 +54,7 @@ select * from tbl;
 statement error
 insert into tbl(i,k) values (3,10), (6,2) on conflict(i) do update set j = 10;
 ----
-PLACEHOLDER_ERROR_MESSAGE1942
+Constraint Error: Duplicate key "k: 2" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 query III
 select * from tbl;

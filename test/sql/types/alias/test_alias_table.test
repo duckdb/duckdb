@@ -93,7 +93,8 @@ CREATE TABLE aliens (
     current_alias alias
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE417
+Catalog Error: Type with name alias does not exist!
+Did you mean "list"?
 
 statement ok
 CREATE TYPE alias AS VARCHAR;

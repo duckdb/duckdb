@@ -64,7 +64,7 @@ Parser Error: window "named_window" does not exist
 statement error
 select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i), named_window as (order by j);
 ----
-PLACEHOLDER_ERROR_MESSAGE2819
+Parser Error: window "named_window" is already defined
 
 # window specs are locally scoped.
 statement ok

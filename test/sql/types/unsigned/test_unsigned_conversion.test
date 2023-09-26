@@ -35,7 +35,7 @@ Conversion Error: Could not convert string '265' to UINT8
 statement error
 SELECT '65536'::USMALLINT
 ----
-PLACEHOLDER_ERROR_MESSAGE475
+Conversion Error: Could not convert string '65536' to UINT16
 
 statement error
 SELECT '4294967296'::UINTEGER

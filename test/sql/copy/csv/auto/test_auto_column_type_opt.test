@@ -12,7 +12,7 @@ Binder Error: read_csv requires columns to be specified through the 'columns' op
 statement error
 select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=1)
 ----
-PLACEHOLDER_ERROR_MESSAGE2893
+Binder Error: read_csv_auto COLUMN_TYPES requires a struct or list as input
 
 # Test empty throws
 statement error

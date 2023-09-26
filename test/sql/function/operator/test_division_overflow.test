@@ -18,7 +18,7 @@ SELECT (-127)::TINYINT // (-1)::TINYINT
 statement error
 SELECT (-32768)::SMALLINT // (-1)::SMALLINT
 ----
-PLACEHOLDER_ERROR_MESSAGE2502
+Out of Range Error: Overflow in division of -32768 / -1
 
 query I
 SELECT (-32767)::SMALLINT // (-1)::SMALLINT

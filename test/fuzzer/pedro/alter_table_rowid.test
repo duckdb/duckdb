@@ -16,7 +16,7 @@ Binder Error: Table "t0" does not have a column with name "rowid"
 statement error
 ALTER TABLE t0 RENAME rowid TO ups;
 ----
-PLACEHOLDER_ERROR_MESSAGE58
+Binder Error: Table "t0" does not have a column with name "rowid"
 
 statement error
 ALTER TABLE t0 ALTER rowid TYPE VARCHAR;

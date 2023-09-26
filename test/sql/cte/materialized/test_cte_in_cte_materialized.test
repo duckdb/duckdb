@@ -55,7 +55,7 @@ require noalternativeverify
 statement error
 with cte as MATERIALIZED (Select i as j from a) select * from cte where j = (with cte as MATERIALIZED (select max(j) as j from cte) select j from cte);
 ----
-PLACEHOLDER_ERROR_MESSAGE3044
+Binder Error: Duplicate alias "cte" in query!
 
 # self-refer to non-existent cte
 statement error

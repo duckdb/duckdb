@@ -32,5 +32,5 @@ SELECT COALESCE(a, b::INT) FROM vals
 statement error
 SELECT COALESCE(NULL, b::INT) FROM vals
 ----
-PLACEHOLDER_ERROR_MESSAGE3109
+Conversion Error: Could not convert string 'hello' to INT32
 

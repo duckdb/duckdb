@@ -103,7 +103,7 @@ Parser Error: ORDER BY in a recursive query is not allowed
 statement error
 with recursive t as MATERIALIZED (select 1 as x union all select x+1 from t where x < 3 LIMIT 1) select * from t
 ----
-PLACEHOLDER_ERROR_MESSAGE3038
+Parser Error: LIMIT or OFFSET in a recursive query is not allowed
 
 # offset is not allowed in the recursive term of ctes
 statement error

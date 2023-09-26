@@ -147,7 +147,7 @@ Binder Error: Cannot use EXPORT_STATE on aggregate functions with custom binders
 statement error
 SELECT string_agg(d, ',') EXPORT_STATE from dummy;
 ----
-PLACEHOLDER_ERROR_MESSAGE1682
+Binder Error: Cannot use EXPORT_STATE on aggregate functions with custom binders
 
 statement error
 SELECT string_agg(d) EXPORT_STATE from dummy;

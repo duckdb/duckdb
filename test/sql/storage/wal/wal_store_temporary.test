@@ -89,7 +89,10 @@ SELECT * FROM persistent
 statement error
 SELECT * FROM a
 ----
-PLACEHOLDER_ERROR_MESSAGE2537
+Catalog Error: Table with name a does not exist!
+Did you mean "pg_am"?
+LINE 1: SELECT * FROM a
+                      ^
 
 statement ok
 CREATE TEMPORARY TABLE a (i INTEGER)

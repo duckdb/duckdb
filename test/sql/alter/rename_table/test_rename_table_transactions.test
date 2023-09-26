@@ -40,7 +40,10 @@ SELECT * FROM tbl
 statement error con2
 SELECT * FROM tbl2
 ----
-PLACEHOLDER_ERROR_MESSAGE2640
+Catalog Error: Table with name tbl2 does not exist!
+Did you mean "tbl2"?
+LINE 1: SELECT * FROM tbl2
+                      ^
 
 statement ok con1
 COMMIT

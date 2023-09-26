@@ -12,7 +12,7 @@ IO Error: INT64 converted type can only be set for value of Type::INT32
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_date.parquet';
 ----
-PLACEHOLDER_ERROR_MESSAGE2955
+IO Error: DATE converted type can only be set for value of Type::INT32
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_int.parquet';

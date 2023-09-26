@@ -14,7 +14,7 @@ TransactionContext Error: cannot commit - no transaction is active
 statement error
 ROLLBACK
 ----
-PLACEHOLDER_ERROR_MESSAGE2780
+TransactionContext Error: cannot rollback - no transaction is active
 
 # we can start a transaction
 statement ok

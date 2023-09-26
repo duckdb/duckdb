@@ -22,7 +22,9 @@ Parser Error: Unrecognized option for column compression, expected none, uncompr
 statement error
 CREATE TABLE T (a INTEGER USING COMPRESSION )
 ----
-PLACEHOLDER_ERROR_MESSAGE3059
+Parser Error: syntax error at or near ")"
+LINE 1: ...E TABLE T (a INTEGER USING COMPRESSION )
+                                                  ^
 
 statement error
 CREATE TABLE T (a INTEGER NOT NULL USING COMPRESSION )

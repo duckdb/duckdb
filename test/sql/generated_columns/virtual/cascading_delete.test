@@ -60,7 +60,7 @@ SELECT * FROM unit;
 statement error
 ALTER TABLE unit DROP COLUMN amount_sold CASCADE;
 ----
-PLACEHOLDER_ERROR_MESSAGE1184
+Catalog Error: Cannot drop column: table only has one column remaining!
 
 query I
 SELECT * FROM unit;

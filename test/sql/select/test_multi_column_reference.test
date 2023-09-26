@@ -54,7 +54,8 @@ Candidate tables: "t"
 statement error
 SELECT test.tbl.col FROM test.tbl t;
 ----
-PLACEHOLDER_ERROR_MESSAGE2997
+Binder Error: Referenced table "test" not found!
+Candidate tables: "t"
 
 # check how ties are resolved
 # we create a table called "t" in a schema called "t" with a column called "t" that has a field called "t"

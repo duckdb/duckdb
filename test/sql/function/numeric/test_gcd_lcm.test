@@ -65,7 +65,10 @@ NULL
 statement error
 SELECT lcm(42, 'abcd')
 ----
-PLACEHOLDER_ERROR_MESSAGE2090
+Binder Error: No function matches the given name and argument types 'lcm(INTEGER, VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	lcm(BIGINT, BIGINT) -> BIGINT
+	lcm(HUGEINT, HUGEINT) -> HUGEINT
 
 statement error
 select lcm(4200000000000000000,5700000000000000000)

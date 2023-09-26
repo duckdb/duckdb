@@ -28,7 +28,7 @@ Binder Error: Multiple assignments to same column "i"
 statement error
 UPDATE integers SET i=i, j=10
 ----
-PLACEHOLDER_ERROR_MESSAGE1397
+Constraint Error: CHECK constraint failed: integers
 
 # now update the value without explicitly mentioning the other column
 statement ok

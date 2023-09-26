@@ -17,7 +17,7 @@ CREATE TABLE test_zst(a INTEGER, b INTEGER, c INTEGER, d VARCHAR, e VARCHAR);
 statement error
 COPY test_zst FROM 'test/sql/copy/csv/broken/test.csv.zst' (COMPRESSION ZSTD);
 ----
-PLACEHOLDER_ERROR_MESSAGE2912
+Not implemented Error: Attempting to open a compressed file, but the compression type is not supported
 
 statement error
 COPY test_zst FROM 'test/sql/copy/csv/broken/test.csv.zst' (COMPRESSION GZIP);

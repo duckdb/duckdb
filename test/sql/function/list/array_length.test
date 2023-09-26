@@ -33,7 +33,7 @@ Not implemented Error: array_length for dimensions other than 1 not implemented
 statement error
 SELECT array_length(ARRAY[1, 2, 3], 0)
 ----
-PLACEHOLDER_ERROR_MESSAGE2248
+Not implemented Error: array_length for dimensions other than 1 not implemented
 
 query I
 SELECT len([1]) FROM range(3)

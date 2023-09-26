@@ -23,7 +23,9 @@ select product(1)
 statement error
 select product(*)
 ----
-PLACEHOLDER_ERROR_MESSAGE1661
+Binder Error: No function matches the given name and argument types 'product()'. You might need to add explicit type casts.
+	Candidate functions:
+	product(DOUBLE) -> DOUBLE
 
 statement ok
 CREATE TABLE integers(i INTEGER);

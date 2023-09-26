@@ -13,7 +13,7 @@ Did you mean "nfc"?
 statement error
 CREATE TABLE collate_test(s INTEGER COLLATE blabla)
 ----
-PLACEHOLDER_ERROR_MESSAGE1406
+Parser Error: Only VARCHAR columns can have collations!
 
 # cannot combine these collations
 statement error

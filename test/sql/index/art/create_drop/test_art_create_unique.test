@@ -39,4 +39,4 @@ INSERT INTO merge_violation VALUES (2047);
 statement error
 CREATE UNIQUE INDEX idx ON merge_violation(id);
 ----
-PLACEHOLDER_ERROR_MESSAGE2844
+Constraint Error: Data contains duplicates on indexed column(s)

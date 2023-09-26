@@ -227,7 +227,9 @@ SELECT list_position([NULL,7], 7)
 statement error
 SELECT list_position([[1,2,3],[1],[1,2,3])
 ----
-PLACEHOLDER_ERROR_MESSAGE2243
+Parser Error: syntax error at or near ")"
+LINE 1: ...LECT list_position([[1,2,3],[1],[1,2,3])
+                                                  ^
 
 statement error
 SELECT list_position([[1,2,3],[1],[1,2,3]])

@@ -35,7 +35,9 @@ Binder Error: No function matches the given name and argument types 'list_unique
 statement error
 SELECT list_unique(*)
 ----
-PLACEHOLDER_ERROR_MESSAGE2292
+Binder Error: No function matches the given name and argument types 'list_unique()'. You might need to add explicit type casts.
+	Candidate functions:
+	list_unique(ANY[]) -> UBIGINT
 
 statement error
 SELECT list_unique([1, 2], 2)

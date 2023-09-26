@@ -13,7 +13,7 @@ Conversion Error: Could not convert string 'e1' to INT32
 statement error
 SELECT CAST('  e1' AS INTEGER);
 ----
-PLACEHOLDER_ERROR_MESSAGE1510
+Conversion Error: Could not convert string '  e1' to INT32
 
 statement error
 SELECT CAST('  E1' AS INTEGER);

@@ -48,7 +48,7 @@ SELECT
 FROM tbl_ProductSales
 GROUP BY GROUPING(Product_Name)
 ----
-PLACEHOLDER_ERROR_MESSAGE173
+Binder Error: GROUPING function is not supported here
 
 statement error
 SELECT

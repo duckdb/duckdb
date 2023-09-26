@@ -12,7 +12,7 @@ TransactionContext Error: cannot rollback - no transaction is active
 statement error
 COMMIT;
 ----
-PLACEHOLDER_ERROR_MESSAGE2763
+TransactionContext Error: cannot commit - no transaction is active
 
 statement ok
 BEGIN;

@@ -100,4 +100,6 @@ LINE 34: ))
 statement error
 CREATE TABLE tbl1 (u UNION())
 ----
-PLACEHOLDER_ERROR_MESSAGE838
+Parser Error: syntax error at or near ")"
+LINE 1: CREATE TABLE tbl1 (u UNION())
+                                   ^

@@ -37,7 +37,8 @@ COMMIT
 statement error con2
 SELECT nextval('seq');
 ----
-PLACEHOLDER_ERROR_MESSAGE2768
+Catalog Error: Sequence with name seq does not exist!
+Did you mean "seq"?
 
 # now commit node two
 statement ok con2

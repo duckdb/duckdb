@@ -57,7 +57,7 @@ SELECT a1(3) + a FROM integers
 statement error
 CREATE MACRO a2(a) AS (SELECT i.a + a FROM integers i)
 ----
-PLACEHOLDER_ERROR_MESSAGE1818
+Binder Error: Conflicting column names for column a!
 
 statement ok
 CREATE MACRO a2(b) AS (SELECT i.a + b FROM integers i)

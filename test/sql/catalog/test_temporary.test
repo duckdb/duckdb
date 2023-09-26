@@ -71,7 +71,7 @@ DROP TABLE temp.integersx
 statement error
 CREATE TEMPORARY TABLE integers2(i INTEGER) ON COMMIT DELETE ROWS
 ----
-PLACEHOLDER_ERROR_MESSAGE1862
+Not implemented Error: Only ON COMMIT PRESERVE ROWS is supported
 
 # temp table already exists
 statement error

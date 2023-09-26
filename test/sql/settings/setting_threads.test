@@ -15,6 +15,6 @@ Syntax Error: Must have at least 1 thread!
 statement error
 SET ${thread_type} TO 'blabla'
 ----
-PLACEHOLDER_ERROR_MESSAGE225
+Invalid Input Error: Failed to cast value: Could not convert string 'blabla' to INT64
 
 endloop

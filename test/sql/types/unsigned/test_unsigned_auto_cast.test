@@ -121,7 +121,7 @@ SELECT '255'::USMALLINT;
 statement error
 SELECT '65536'::USMALLINT;
 ----
-PLACEHOLDER_ERROR_MESSAGE483
+Conversion Error: Could not convert string '65536' to UINT16
 
 query I
 SELECT '65535'::UINTEGER;

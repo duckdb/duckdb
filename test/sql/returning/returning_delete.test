@@ -155,7 +155,7 @@ RETURNING *;
 statement error
 DELETE FROM table1 WHERE a = 14 RETURNING a IN (SELECT a FROM table1);
 ----
-PLACEHOLDER_ERROR_MESSAGE267
+Binder Error: SUBQUERY is not supported in returning statements
 
 
 # using case statement

@@ -53,4 +53,4 @@ CREATE TABLE circular (
 	x INTEGER,
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE1161
+Invalid Input Error: Circular dependency encountered when resolving generated column expressions

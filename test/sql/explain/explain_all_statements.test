@@ -18,7 +18,8 @@ Did you mean "pg_indexes"?
 statement error
 explain INSERT INTO integers VALUES (1);
 ----
-PLACEHOLDER_ERROR_MESSAGE1115
+Catalog Error: Table with name integers does not exist!
+Did you mean "pg_indexes"?
 
 statement ok
 CREATE TABLE integers(i INTEGER);

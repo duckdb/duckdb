@@ -36,7 +36,7 @@ INSERT INTO test VALUES (12, 24)
 statement error
 INSERT INTO test VALUES (12, 24)
 ----
-PLACEHOLDER_ERROR_MESSAGE2583
+Constraint Error: Duplicate key "a: 12" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 query II
 SELECT * FROM test ORDER BY a

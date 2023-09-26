@@ -41,4 +41,6 @@ NULL
 statement error
 select list_kurtosis()
 ----
-PLACEHOLDER_ERROR_MESSAGE2170
+Binder Error: Macro function 'list_kurtosis(l)' requires a single positional argument, but 0 positional arguments were provided.
+LINE 1: select list_kurtosis()
+               ^

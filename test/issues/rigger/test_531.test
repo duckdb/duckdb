@@ -17,5 +17,5 @@ Conversion Error: Unimplemented type for cast (INTEGER -> DATE)
 statement error
 SELECT (-10000000)::DATE;
 ----
-PLACEHOLDER_ERROR_MESSAGE145
+Conversion Error: Unimplemented type for cast (INTEGER -> DATE)
 

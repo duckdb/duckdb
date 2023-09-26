@@ -30,7 +30,7 @@ SELECT a FROM test ORDER BY 'hello', a
 statement error
 SELECT a AS k, b FROM test UNION SELECT a, b AS k FROM test ORDER BY k
 ----
-PLACEHOLDER_ERROR_MESSAGE193
+Binder Error: Ambiguous name in ORDER BY!
 
 # but works if not ambiguous
 query II

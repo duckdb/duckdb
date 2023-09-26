@@ -27,7 +27,7 @@ Binder Error: Macro function 'one()' requires 0 positional arguments, but a sing
 statement error
 SELECT one(NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE1845
+Binder Error: Macro function 'one()' requires 0 positional arguments, but a single positional argument was provided.
 
 statement ok
 DROP MACRO one;

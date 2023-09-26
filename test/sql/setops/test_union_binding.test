@@ -99,7 +99,7 @@ NULL
 statement error
 SELECT 1, a FROM test UNION SELECT b AS a, 1 FROM test2 ORDER BY a;
 ----
-PLACEHOLDER_ERROR_MESSAGE248
+Binder Error: Ambiguous name in ORDER BY!
 
 # if expressions are ambiguous as well, throw an error
 statement error

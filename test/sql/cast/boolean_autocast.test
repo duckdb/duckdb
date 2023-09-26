@@ -136,4 +136,4 @@ Conversion Error: Could not convert string 'unknownbool' to BOOL
 statement error
 SELECT 'unknownbool'=false;
 ----
-PLACEHOLDER_ERROR_MESSAGE1495
+Conversion Error: Could not convert string 'unknownbool' to BOOL

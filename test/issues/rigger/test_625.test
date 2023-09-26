@@ -22,5 +22,5 @@ INSERT INTO t0 (c) VALUES (1);
 statement error
 INSERT INTO t0 (c) VALUES (1);
 ----
-PLACEHOLDER_ERROR_MESSAGE143
+Constraint Error: Duplicate key "c: 1" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 

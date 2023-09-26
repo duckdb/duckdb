@@ -61,7 +61,7 @@ SELECT MAP(
 	]
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE906
+Invalid Input Error: Map keys can not be NULL
 
 # Nested keys (struct) succesfull
 query I

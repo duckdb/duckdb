@@ -25,7 +25,8 @@ Catalog Error: concat is not an aggregate function
 statement error
 SELECT nonexistingfunction() OVER ()
 ----
-PLACEHOLDER_ERROR_MESSAGE2826
+Catalog Error: Aggregate Function with name nonexistingfunction does not exist!
+Did you mean "position"?
 
 # nested window functions are not allowed
 statement error

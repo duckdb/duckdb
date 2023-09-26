@@ -39,7 +39,7 @@ INSERT INTO fk_integers VALUES (3)
 statement error
 DELETE FROM pk_integers WHERE i=3
 ----
-PLACEHOLDER_ERROR_MESSAGE1301
+Constraint Error: Violates foreign key constraint because key "j: 3" is still referenced by a foreign key in a different table
 
 statement ok
 DELETE FROM fk_integers WHERE j=3

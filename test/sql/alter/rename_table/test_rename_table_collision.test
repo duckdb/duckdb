@@ -74,7 +74,10 @@ ALTER TABLE t2 RENAME TO t3;
 statement error con1
 SELECT i FROM t3 ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE2626
+Catalog Error: Table with name t3 does not exist!
+Did you mean "t3"?
+LINE 1: SELECT i FROM t3 ORDER BY i
+                      ^
 
 statement error con2
 SELECT i FROM t2 ORDER BY i

@@ -44,5 +44,5 @@ DROP SEQUENCE seq CASCADE
 statement error con2
 EXECUTE v
 ----
-PLACEHOLDER_ERROR_MESSAGE1801
+Catalog Error: Sequence with name seq does not exist!
 

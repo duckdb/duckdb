@@ -31,4 +31,4 @@ CREATE TABLE t2 AS SELECT * FROM range(1000000);
 statement error
 PRAGMA temp_directory=''
 ----
-PLACEHOLDER_ERROR_MESSAGE2573
+Not implemented Error: Cannot switch temporary directory after the current one has been used

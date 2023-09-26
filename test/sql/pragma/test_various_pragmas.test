@@ -40,6 +40,6 @@ PRAGMA debug_checkpoint_abort='none'
 statement error
 PRAGMA debug_checkpoint_abort='unknown'
 ----
-PLACEHOLDER_ERROR_MESSAGE1985
+Parser Error: Unrecognized option for PRAGMA debug_checkpoint_abort, expected none, before_truncate or before_header
 
 

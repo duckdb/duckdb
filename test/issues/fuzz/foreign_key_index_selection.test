@@ -18,7 +18,7 @@ Binder Error: Failed to create foreign key: there is no primary key or unique co
 statement error
 CREATE TABLE c2(c0 INTEGER, c1 INTEGER UNIQUE, FOREIGN KEY (c0) REFERENCES s1(t0));
 ----
-PLACEHOLDER_ERROR_MESSAGE152
+Binder Error: Failed to create foreign key: there is no primary key or unique constraint for referenced table "s1"
 
 statement ok
 CREATE TABLE s2(t0 INTEGER, a TEXT, b TEXT, UNIQUE (t0, a));

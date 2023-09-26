@@ -30,7 +30,7 @@ select m[NULL] from (select MAP(LIST_VALUE(1, 2, 3, 4,5),LIST_VALUE(10, 9, 8, 7,
 statement error
 select m[2] from (select MAP(LIST_VALUE(1, 2, 3, 4,2),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
 ----
-PLACEHOLDER_ERROR_MESSAGE899
+Invalid Input Error: Map keys have to be unique
 
 # Empty maps
 query I

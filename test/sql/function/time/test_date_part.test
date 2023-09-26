@@ -81,7 +81,8 @@ Candidate bindings: "times.d", "times.s"
 statement error
 SELECT year(i) FROM times
 ----
-PLACEHOLDER_ERROR_MESSAGE2071
+Binder Error: Referenced column "i" not found in FROM clause!
+Candidate bindings: "times.d", "times.s"
 
 statement error
 SELECT month(i) FROM times

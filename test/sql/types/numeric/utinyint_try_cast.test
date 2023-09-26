@@ -97,7 +97,7 @@ CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000'),
 statement error
 SELECT s::UTINYINT FROM strings
 ----
-PLACEHOLDER_ERROR_MESSAGE724
+Conversion Error: Could not convert string '   ' to UINT8
 
 query I
 SELECT TRY_CAST(s AS UTINYINT) FROM strings

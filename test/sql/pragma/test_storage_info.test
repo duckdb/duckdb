@@ -30,7 +30,8 @@ Catalog Error: v1 is not an table
 statement error
 PRAGMA storage_info('bla')
 ----
-PLACEHOLDER_ERROR_MESSAGE1979
+Catalog Error: Table with name bla does not exist!
+Did you mean "v1"?
 
 # different types
 statement ok

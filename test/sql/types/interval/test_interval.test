@@ -108,7 +108,7 @@ Conversion Error: Could not convert string 'P2MT1H1M' to INTERVAL
 statement error
 SELECT INTERVAL 'P00-02-00T01:00:01';
 ----
-PLACEHOLDER_ERROR_MESSAGE537
+Conversion Error: Could not convert string 'P00-02-00T01:00:01' to INTERVAL
 
 query T
 SELECT INTERVAL '90' DAY;

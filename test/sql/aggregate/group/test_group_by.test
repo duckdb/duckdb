@@ -93,7 +93,7 @@ SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test WHERE a <= 12 GROUP BY b ORDER BY
 statement error
 SELECT b % 2 AS f, COUNT(SUM(a)) FROM test GROUP BY f;
 ----
-PLACEHOLDER_ERROR_MESSAGE1729
+Binder Error: aggregate function calls cannot be nested
 
 statement ok
 INSERT INTO test VALUES (12, 21), (12, 21), (12, 21)

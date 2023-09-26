@@ -52,7 +52,10 @@ Binder Error: column test.a must appear in the GROUP BY clause or be used in an 
 statement error
 SELECT a FROM test WHERE a=13 HAVING SUM(a) > 11
 ----
-PLACEHOLDER_ERROR_MESSAGE1521
+Binder Error: column "a" must appear in the GROUP BY clause or must be part of an aggregate function.
+Either add it to the GROUP BY list, or use "ANY_VALUE(a)" if the exact value of "a" is not important.
+LINE 1: SELECT a FROM test WHERE a=13 HAVING SUM(a) > ...
+               ^
 
 # once we produce a sum this works though
 query R

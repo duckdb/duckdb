@@ -22,7 +22,7 @@ INSERT INTO tbl VALUES (9999, 0), (10000, 1)
 statement error
 INSERT INTO tbl VALUES (777, 10), (888, 10)
 ----
-PLACEHOLDER_ERROR_MESSAGE2656
+Constraint Error: CHECK constraint failed: tbl
 
 query II
 SELECT * FROM tbl

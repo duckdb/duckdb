@@ -34,7 +34,7 @@ SELECT list_filter([[1, 2], NULL, [3], [4, NULL]], f -> list_count(macro_with_la
 statement error
 CREATE MACRO some_macro(x, y, z) AS (SELECT list_transform(x, x -> x + y + z))
 ----
-PLACEHOLDER_ERROR_MESSAGE2151
+Binder Error: Invalid parameter name '"0_macro_parameterssome_macro".x': must be unqualified
 
 # this is a bit more tricky, because the operator mismatch is only detected when using the macro
 statement ok

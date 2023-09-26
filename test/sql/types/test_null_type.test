@@ -25,7 +25,7 @@ Conversion Error: Unimplemented type for cast (TINYINT -> NULL)
 statement error
 insert into null_table values (42::${type})
 ----
-PLACEHOLDER_ERROR_MESSAGE821
+Conversion Error: Unimplemented type for cast (TINYINT -> NULL)
 
 endloop
 

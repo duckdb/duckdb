@@ -26,7 +26,9 @@ Binder Error: No function matches the given name and argument types 'regr_avgx()
 statement error
 select regr_avgx(*)
 ----
-PLACEHOLDER_ERROR_MESSAGE1606
+Binder Error: No function matches the given name and argument types 'regr_avgx()'. You might need to add explicit type casts.
+	Candidate functions:
+	regr_avgx(DOUBLE, DOUBLE) -> DOUBLE
 
 statement error
 select regr_avgy()

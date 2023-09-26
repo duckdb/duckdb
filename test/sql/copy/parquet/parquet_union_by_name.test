@@ -67,7 +67,7 @@ SELECT a
 FROM parquet_scan(['__TEST_DIR__/ubn2.parquet', '__TEST_DIR__/ubn1.parquet', '__TEST_DIR__/ubn3.parquet']) 
 ORDER BY a;
 ----
-PLACEHOLDER_ERROR_MESSAGE2963
+Conversion Error: Type INT64 with value 9223372036854775807 can't be cast because the value is out of range for the destination type INT32
 
 # with union by name, parquet readers will use max logical type
 query I

@@ -45,7 +45,7 @@ INSERT INTO a SELECT i id, [-i, i, 33] c FROM range(-2, -2500, -1) tbl(i)
 statement error
 INSERT INTO a VALUES (1, [4, 5])
 ----
-PLACEHOLDER_ERROR_MESSAGE833
+Constraint Error: Duplicate key "id: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 statement ok
 ROLLBACK

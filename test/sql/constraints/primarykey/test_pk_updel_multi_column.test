@@ -33,7 +33,7 @@ SELECT * FROM test ORDER BY a;
 statement error
 UPDATE test SET a=13 WHERE a=12;
 ----
-PLACEHOLDER_ERROR_MESSAGE1251
+Constraint Error: Duplicate key "a: 13, b: pandas" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 statement error
 UPDATE test SET a=4;

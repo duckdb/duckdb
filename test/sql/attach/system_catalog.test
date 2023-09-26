@@ -18,7 +18,9 @@ LINE 1: DETACH DATABASE system
 statement error
 DETACH DATABASE temp
 ----
-PLACEHOLDER_ERROR_MESSAGE2782
+Parser Error: syntax error at or near "temp"
+LINE 1: DETACH DATABASE temp
+                        ^
 
 # cannot create entries in the system catalog
 statement error

@@ -18,7 +18,7 @@ Binder Error: Table "test" does not have a column with name "blabla"
 statement error
 ALTER TABLE test ALTER i SET TYPE VARCHAR USING blabla
 ----
-PLACEHOLDER_ERROR_MESSAGE2667
+Binder Error: Table does not contain column blabla referenced in alter statement!
 
 # cannot use aggregates/window functions
 statement error

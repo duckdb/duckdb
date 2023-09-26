@@ -154,7 +154,7 @@ INSERT INTO tbl4 VALUES (1), ('010203'::BLOB), (3), ('070809'::BLOB);
 statement error
 SELECT u::UNION(i SMALLINT, v VARCHAR) FROM tbl4;
 ----
-PLACEHOLDER_ERROR_MESSAGE848
+Conversion Error: Type UNION(i INTEGER, b BLOB) can't be cast as UNION(i SMALLINT, v VARCHAR). The member 'b' is not present in target union
 
 # succeeds since b is present
 query I

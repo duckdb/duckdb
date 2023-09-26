@@ -27,7 +27,7 @@ Conversion Error: Could not convert string 'abc' to INT32
 statement error
 select 'abc' > 10
 ----
-PLACEHOLDER_ERROR_MESSAGE2498
+Conversion Error: Could not convert string 'abc' to INT32
 
 statement error
 select 20.0 = 'abc'

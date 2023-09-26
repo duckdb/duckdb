@@ -29,7 +29,7 @@ DROP TABLE fk_integers
 statement error con2
 CREATE TABLE fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))
 ----
-PLACEHOLDER_ERROR_MESSAGE1339
+TransactionContext Error: Catalog write-write conflict on create with "fk_integers"
 
 statement ok con1
 ROLLBACK

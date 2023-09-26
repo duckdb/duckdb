@@ -156,7 +156,7 @@ SELECT my_struct_extract_c({a: 1, b: 2, c: 3, d: 4})
 statement error
 SELECT my_struct_extract_c({a: 1, b: 2, d: 4})
 ----
-PLACEHOLDER_ERROR_MESSAGE116
+Binder Error: Could not find key "c" in struct
 
 statement ok
 CREATE MACRO my_specific_struct_extract(field) AS struct_pack(a:= 1, b:= 2, c:= 3, d:= 4)[field]

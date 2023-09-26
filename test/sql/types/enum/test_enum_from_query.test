@@ -40,7 +40,7 @@ INSERT INTO test SELECT CAST(range AS VARCHAR) FROM range(0, 100);
 statement error
 INSERT INTO test VALUES ('100');
 ----
-PLACEHOLDER_ERROR_MESSAGE673
+Conversion Error: Could not convert string '100' to UINT8
 
 statement ok
 DROP TABLE number_str;

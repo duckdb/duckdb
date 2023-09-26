@@ -41,7 +41,7 @@ Parser Error: Duplicate entry "i" in REPLACE list
 statement error
 SELECT * REPLACE (i+100 AS blabla) FROM integers
 ----
-PLACEHOLDER_ERROR_MESSAGE3102
+Binder Error: Column "blabla" in REPLACE list not found in FROM clause
 
 statement error
 SELECT integers.* REPLACE (i+100 AS blabla) FROM integers

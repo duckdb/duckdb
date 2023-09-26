@@ -158,7 +158,9 @@ Binder Error: No function matches the given name and argument types 'damerau_lev
 statement error
 SELECT damerau_levenshtein('one')
 ----
-PLACEHOLDER_ERROR_MESSAGE2382
+Binder Error: No function matches the given name and argument types 'damerau_levenshtein(VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	damerau_levenshtein(VARCHAR, VARCHAR) -> BIGINT
 
 statement error
 SELECT damerau_levenshtein()

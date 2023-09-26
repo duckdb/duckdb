@@ -203,4 +203,4 @@ SELECT depname, empno,
 		) fv
 FROM empsalary
 ----
-PLACEHOLDER_ERROR_MESSAGE2810
+Parser Error: Incorrect number of parameters for function nth_value

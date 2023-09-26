@@ -13,7 +13,9 @@ Binder Error: No function matches the given name and argument types 'covar_pop()
 statement error
 SELECT COVAR_POP(1, 2, 3)
 ----
-PLACEHOLDER_ERROR_MESSAGE1560
+Binder Error: No function matches the given name and argument types 'covar_pop(INTEGER, INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	covar_pop(DOUBLE, DOUBLE) -> DOUBLE
 
 statement error
 SELECT COVAR_POP(COVAR_POP(1))

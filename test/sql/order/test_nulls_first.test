@@ -126,7 +126,7 @@ LINE 1: PRAGMA default_null_order())
 statement error
 PRAGMA default_null_order='UNKNOWN'
 ----
-PLACEHOLDER_ERROR_MESSAGE218
+Parser Error: Unrecognized parameter for option NULL_ORDER "unknown", expected either NULLS FIRST, NULLS LAST, SQLite, MySQL or Postgres
 
 statement error
 PRAGMA default_null_order=UNKNOWN)

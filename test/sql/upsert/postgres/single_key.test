@@ -74,7 +74,9 @@ Binder Error: Table "insertconflicttest" does not have a column with name "keyy"
 statement error
 insert into insertconflicttest values (1, 'Apple') on conflict (key) do update set fruit = excluded.fruitt;
 ----
-PLACEHOLDER_ERROR_MESSAGE1954
+Binder Error: Values list "excluded" does not have a column named "fruitt"
+LINE 1: ... CONFLICT (key ) DO UPDATE SET fruit = excluded.fruitt
+                                                  ^
 
 # inference fails:
 

@@ -41,7 +41,7 @@ SELECT * FROM a;
 statement error
 ALTER TABLE a ALTER COLUMN gen_x TYPE BOOLEAN;
 ----
-PLACEHOLDER_ERROR_MESSAGE1189
+Not implemented Error: Changing types of generated columns is not supported yet
 
 ## TEXT -> BOOLEAN: KO
 #statement error

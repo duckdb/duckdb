@@ -18,7 +18,7 @@ Conversion Error: Type INT64 with value -9223372036854775808 can't be cast becau
 statement error
 SELECT i::USMALLINT FROM bigints
 ----
-PLACEHOLDER_ERROR_MESSAGE770
+Conversion Error: Type INT64 with value -9223372036854775808 can't be cast because the value is out of range for the destination type UINT16
 
 statement error
 SELECT i::UINTEGER FROM bigints

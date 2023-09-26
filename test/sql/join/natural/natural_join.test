@@ -222,7 +222,7 @@ NULL	29
 statement error
 select (select * from (select 42) tbl(a) natural join (select 42) tbl(a))
 ----
-PLACEHOLDER_ERROR_MESSAGE1121
+Binder Error: Duplicate alias "tbl" in query!
 
 statement ok
 DROP TABLE t1

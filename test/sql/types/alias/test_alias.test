@@ -22,7 +22,8 @@ DROP TYPE alias;
 statement error
 DROP TYPE alias;
 ----
-PLACEHOLDER_ERROR_MESSAGE415
+Catalog Error: Type with name alias does not exist!
+Did you mean "list"?
 
 # We can create alias again
 statement ok

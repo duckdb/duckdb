@@ -64,7 +64,7 @@ INSERT INTO test VALUES (1), (2)
 statement error
 INSERT INTO test VALUES (NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE2607
+Constraint Error: NOT NULL constraint failed: test.j
 
 query II
 SELECT * FROM test

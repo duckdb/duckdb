@@ -96,7 +96,7 @@ NULL
 statement error
 CREATE SEQUENCE seq;
 ----
-PLACEHOLDER_ERROR_MESSAGE1931
+Catalog Error: Sequence with name "seq" already exists!
 
 # drop the sequence
 statement ok

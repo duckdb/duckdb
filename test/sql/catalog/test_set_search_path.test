@@ -71,7 +71,7 @@ expected a single entry
 statement error
 SET SCHEMA = 'does_not_exist';
 ----
-PLACEHOLDER_ERROR_MESSAGE1754
+Catalog Error: SET schema: No catalog + schema named "does_not_exist" found.
 
 # Reading out to see how aliasing works.
 

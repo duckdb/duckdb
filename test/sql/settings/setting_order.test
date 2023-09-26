@@ -35,4 +35,4 @@ endloop
 statement error
 SET SESSION default_order='asc'
 ----
-PLACEHOLDER_ERROR_MESSAGE227
+Catalog Error: option "default_order" cannot be set locally

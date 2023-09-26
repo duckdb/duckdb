@@ -99,4 +99,6 @@ PRAGMA table_info(tconstraint2)
 statement error
 PRAGMA table_info(1,2,3);
 ----
-PLACEHOLDER_ERROR_MESSAGE1977
+Binder Error: No function matches the given name and argument types 'table_info(INTEGER, INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	PRAGMA table_info(VARCHAR)
