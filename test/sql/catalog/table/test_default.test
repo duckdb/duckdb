@@ -158,7 +158,7 @@ Binder Error: DEFAULT value cannot contain window functions!
 statement error
 CREATE TABLE test (a INTEGER DEFAULT b+1, b INTEGER);
 ----
-PLACEHOLDER_ERROR_MESSAGE1851
+Binder Error: DEFAULT value cannot contain column names
 
 # test default with random
 statement ok

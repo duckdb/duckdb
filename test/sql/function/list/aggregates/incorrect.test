@@ -39,7 +39,9 @@ Binder Error: STAR expression is only allowed as the root element of an expressi
 statement error
 SELECT list_aggr('hello', '${func_name}')
 ----
-PLACEHOLDER_ERROR_MESSAGE2199
+Binder Error: No function matches the given name and argument types 'list_aggr(VARCHAR, VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	list_aggr(ANY[], VARCHAR) -> ANY
 
 statement error
 SELECT list_aggr(1, 2, '${func_name}')

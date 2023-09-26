@@ -34,7 +34,7 @@ Conversion Error: Casting value "100" to type DECIMAL(2,0) failed: value is out 
 statement error
 SELECT CAST(10000::DECIMAL(5,0) AS DECIMAL(2,0))
 ----
-PLACEHOLDER_ERROR_MESSAGE396
+Conversion Error: Casting value "10000" to type DECIMAL(2,0) failed: value is out of range!
 
 statement error
 SELECT CAST(1000000000::DECIMAL(10,0) AS DECIMAL(2,0))

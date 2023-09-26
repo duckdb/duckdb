@@ -56,7 +56,7 @@ Conversion Error: Could not convert string '-1' to UINT8
 statement error
 SELECT '-1'::USMALLINT
 ----
-PLACEHOLDER_ERROR_MESSAGE471
+Conversion Error: Could not convert string '-1' to UINT16
 
 statement error
 SELECT '-1'::UINTEGER

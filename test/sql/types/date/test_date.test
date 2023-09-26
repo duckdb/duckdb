@@ -152,7 +152,7 @@ Conversion Error: date field value out of range: "", expected format is (YYYY-MM
 statement error
 SELECT '  '::DATE
 ----
-PLACEHOLDER_ERROR_MESSAGE554
+Conversion Error: date field value out of range: "  ", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT '1992'::DATE

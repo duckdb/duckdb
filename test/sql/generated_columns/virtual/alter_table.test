@@ -44,7 +44,7 @@ Parser Error: Adding generated columns after table creation is not supported yet
 statement error
 INSERT INTO unit (total_profit) VALUES (1)
 ----
-PLACEHOLDER_ERROR_MESSAGE1176
+Binder Error: Table "unit" does not have a column with name "total_profit"
 
 # Only 2 real columns exist in the table
 statement error

@@ -123,7 +123,8 @@ Parser Error: Unknown unit for memory_limit: test (expected: b, mb, gb or tb)
 statement error
 PRAGMA memory_limit
 ----
-PLACEHOLDER_ERROR_MESSAGE1965
+Catalog Error: Pragma Function with name memory_limit does not exist!
+Did you mean "version"?
 
 statement error
 PRAGMA memory_limit()

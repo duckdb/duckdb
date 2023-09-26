@@ -100,4 +100,4 @@ CREATE TABLE tbl2(i INTEGER);
 statement error con1
 ALTER TABLE tbl RENAME TO tbl2
 ----
-PLACEHOLDER_ERROR_MESSAGE2636
+Catalog Error: Could not rename "tbl" to "tbl2": another entry with this name already exists!

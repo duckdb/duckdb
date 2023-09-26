@@ -44,7 +44,9 @@ LINE 1: SELECTl log10(0);
 statement error
 SELECTl log10(-1);
 ----
-PLACEHOLDER_ERROR_MESSAGE2094
+Parser Error: syntax error at or near "SELECTl"
+LINE 1: SELECTl log10(-1);
+        ^
 
 # cannot take square root of a negative number
 statement error

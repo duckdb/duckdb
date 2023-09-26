@@ -215,7 +215,7 @@ Binder Error: GROUPING statement cannot be used without groups
 statement error
 SELECT GROUPING(type) FROM students GROUP BY course;
 ----
-PLACEHOLDER_ERROR_MESSAGE1735
+Binder Error: GROUPING child "type" must be a grouping column
 
 statement error
 SELECT GROUPING(course) FROM students WHERE GROUPING(course)=0 GROUP BY course;

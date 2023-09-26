@@ -154,7 +154,12 @@ Binder Error: No function matches the given name and argument types 'range(INTEG
 statement error
 SELECT * FROM range(10, 10, 'hello')
 ----
-PLACEHOLDER_ERROR_MESSAGE3127
+Binder Error: No function matches the given name and argument types 'range(INTEGER, INTEGER, VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	range(BIGINT)
+	range(BIGINT, BIGINT)
+	range(BIGINT, BIGINT, BIGINT)
+	range(TIMESTAMP, TIMESTAMP, INTERVAL)
 
 # range with big numbers
 query I

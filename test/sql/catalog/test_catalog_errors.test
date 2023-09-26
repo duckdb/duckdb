@@ -38,7 +38,7 @@ Did you mean "temp.information_schema.tables"?
 statement error
 DROP TABLE IF EXISTS vintegers
 ----
-PLACEHOLDER_ERROR_MESSAGE1806
+Catalog Error: Existing object vintegers is of type View, trying to replace with type Table
 
 statement ok
 CREATE INDEX i_index ON integers(i);

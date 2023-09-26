@@ -185,7 +185,22 @@ Binder Error: No function matches the given name and argument types 'approx_quan
 statement error
 SELECT approx_quantile(r) FROM quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1546
+Binder Error: No function matches the given name and argument types 'approx_quantile(BIGINT)'. You might need to add explicit type casts.
+	Candidate functions:
+	approx_quantile(DECIMAL, FLOAT) -> DECIMAL
+	approx_quantile(SMALLINT, FLOAT) -> SMALLINT
+	approx_quantile(INTEGER, FLOAT) -> INTEGER
+	approx_quantile(BIGINT, FLOAT) -> BIGINT
+	approx_quantile(HUGEINT, FLOAT) -> HUGEINT
+	approx_quantile(DOUBLE, FLOAT) -> DOUBLE
+	approx_quantile(DECIMAL, FLOAT[]) -> DECIMAL[]
+	approx_quantile(TINYINT, FLOAT[]) -> TINYINT[]
+	approx_quantile(SMALLINT, FLOAT[]) -> SMALLINT[]
+	approx_quantile(INTEGER, FLOAT[]) -> INTEGER[]
+	approx_quantile(BIGINT, FLOAT[]) -> BIGINT[]
+	approx_quantile(HUGEINT, FLOAT[]) -> HUGEINT[]
+	approx_quantile(FLOAT, FLOAT[]) -> FLOAT[]
+	approx_quantile(DOUBLE, FLOAT[]) -> DOUBLE[]
 
 statement error
 SELECT approx_quantile(r, 0.1, 0.2) FROM quantile

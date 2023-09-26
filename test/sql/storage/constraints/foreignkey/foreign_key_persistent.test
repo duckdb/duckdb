@@ -61,7 +61,7 @@ restart
 statement error
 DROP TABLE pk_integers;
 ----
-PLACEHOLDER_ERROR_MESSAGE2522
+Catalog Error: Could not drop the table because this table is main key table of the table "fk_integers"
 
 statement ok
 DROP TABLE fk_integers;

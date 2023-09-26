@@ -185,7 +185,7 @@ Candidate bindings: "quantile.r"
 statement error
 SELECT quantile_cont(r, NULL) FROM quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1655
+Binder Error: QUANTILE parameter cannot be NULL
 
 statement error
 SELECT quantile_cont(r::string, 0.5) FROM quantile

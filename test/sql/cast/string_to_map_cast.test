@@ -208,7 +208,7 @@ Conversion Error: Could not convert string ', 3' to INT32
 statement error
 SELECT CAST('{3=3, 4=4' AS MAP(INT, INT));
 ----
-PLACEHOLDER_ERROR_MESSAGE1500
+Conversion Error: Type VARCHAR with value '{3=3, 4=4' can't be cast to the destination type MAP
 
 statement error
 SELECT CAST('{3=3, 4=4} bla' AS MAP(INT, INT));

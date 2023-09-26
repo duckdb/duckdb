@@ -203,7 +203,7 @@ DROP TABLE e1
 statement error con1
 ALTER TABLE e1 RENAME TO e2
 ----
-PLACEHOLDER_ERROR_MESSAGE2622
+TransactionContext Error: Catalog write-write conflict on alter with "e1"
 
 statement error con2
 ALTER TABLE e2 RENAME TO e1

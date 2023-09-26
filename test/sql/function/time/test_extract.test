@@ -115,7 +115,11 @@ Binder Error: No function matches the given name and argument types 'century(TIM
 statement error
 SELECT EXTRACT(millennium FROM i) FROM times
 ----
-PLACEHOLDER_ERROR_MESSAGE2079
+Binder Error: No function matches the given name and argument types 'millennium(TIME)'. You might need to add explicit type casts.
+	Candidate functions:
+	millennium(DATE) -> BIGINT
+	millennium(TIMESTAMP) -> BIGINT
+	millennium(INTERVAL) -> BIGINT
 
 statement error
 SELECT EXTRACT(quarter FROM i) FROM times

@@ -99,7 +99,7 @@ Binder Error: Ambiguous reference to column name "b" (use: "t2.b" or "t1.b")
 statement error
 select * from (values (1)) tbl(i) join ((values (1)) tbl2(i) join  (values (1)) tbl3(i) on tbl2.i=tbl3.i) using (i)
 ----
-PLACEHOLDER_ERROR_MESSAGE1125
+Binder Error: Ambiguous reference to column name "i" (use: "tbl3.i" or "tbl2.i")
 
 # a chain with the same column name is allowed though!
 query IIIIIII

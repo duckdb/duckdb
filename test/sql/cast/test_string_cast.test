@@ -125,7 +125,7 @@ Conversion Error: Could not convert string '0x80' to INT8
 statement error
 SELECT '0x8000'::SMALLINT
 ----
-PLACEHOLDER_ERROR_MESSAGE1465
+Conversion Error: Could not convert string '0x8000' to INT16
 
 statement error
 SELECT '0x80000000'::INT

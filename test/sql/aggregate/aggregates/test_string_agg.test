@@ -148,7 +148,7 @@ Binder Error: Separator argument to StringAgg must be a constant
 statement error
 SELECT g, STRING_AGG(x, y ORDER BY x DESC) FROM strings GROUP BY g ORDER BY 1
 ----
-PLACEHOLDER_ERROR_MESSAGE1582
+Binder Error: Separator argument to StringAgg must be a constant
 
 # A more complex ORDER BY expression
 # Ordering [NULL a b i j p x y z]

@@ -107,7 +107,7 @@ NULL
 statement error
 select 'ü'::blob;
 ----
-PLACEHOLDER_ERROR_MESSAGE1006
+Conversion Error: Invalid byte encountered in STRING -> BLOB conversion. All non-ascii characters must be escaped with hex codes (e.g. \xAA)
 
 # Test PR 6633
 query I

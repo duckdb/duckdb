@@ -47,7 +47,7 @@ INSERT INTO dates VALUES ('2000-02-29')
 statement error
 INSERT INTO dates VALUES ('02-02-1992')
 ----
-PLACEHOLDER_ERROR_MESSAGE543
+Conversion Error: date field value out of range: "02-02-1992", expected format is (YYYY-MM-DD)
 
 # different separators are not supported
 statement error

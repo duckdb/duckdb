@@ -72,7 +72,7 @@ SELECT '${prefix}11110000_11110000'::INT
 statement error
 SELECT '${prefix}_1'::INT
 ----
-PLACEHOLDER_ERROR_MESSAGE1488
+Conversion Error: Could not convert string '0b_1' to INT32
 
 statement error
 SELECT '${prefix}1_'::INT

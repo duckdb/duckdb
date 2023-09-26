@@ -160,7 +160,7 @@ SELECT b FROM test LIMIT 0%
 statement error
 SELECT * FROM range(100) LIMIT -10 %;
 ----
-PLACEHOLDER_ERROR_MESSAGE205
+Invalid Error: Limit percentage can't be negative value
 
 #Subqueries that return strings that can't be converted to integers
 statement error

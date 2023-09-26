@@ -62,7 +62,9 @@ Parser Error: subqueries prohibited in CHECK constraints
 statement error
 CREATE TABLE integers2(i INTEGER CHECK(i > SUM(j)), j INTEGER)
 ----
-PLACEHOLDER_ERROR_MESSAGE1267
+Binder Error: aggregate functions are not allowed in check constraints
+LINE 1: ...TE TABLE integers2(i INTEGER CHECK(i > SUM(j)), j INTEGER)
+                                                  ^
 
 statement error
 CREATE TABLE integers3(i INTEGER CHECK(k < 10), j INTEGER)

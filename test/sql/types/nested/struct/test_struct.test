@@ -170,7 +170,9 @@ Binder Error: No function matches the given name and argument types 'struct_extr
 statement error
 SELECT STRUCT_EXTRACT(e) FROM struct_data
 ----
-PLACEHOLDER_ERROR_MESSAGE861
+Binder Error: No function matches the given name and argument types 'struct_extract(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	struct_extract(STRUCT, VARCHAR) -> ANY
 
 statement error
 SELECT STRUCT_EXTRACT('e') FROM struct_data

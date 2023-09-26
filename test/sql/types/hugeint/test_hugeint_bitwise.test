@@ -185,7 +185,7 @@ select 1 >> 170141183460469231731687303715884105727::hugeint;
 statement error
 select 1::hugeint << 1000;
 ----
-PLACEHOLDER_ERROR_MESSAGE1062
+Out of Range Error: Left-shift value 1000 is out of range
 
 statement error
 select 1 << 170141183460469231731687303715884105727::hugeint;

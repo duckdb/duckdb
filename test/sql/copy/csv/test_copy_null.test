@@ -106,7 +106,14 @@ CREATE TABLE test_null_option_2 (col_a INTEGER, col_b INTEGER, col_c VARCHAR(10)
 statement error
 COPY test_null_option_2 FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL 'null');
 ----
-PLACEHOLDER_ERROR_MESSAGE2926
+Invalid Input Error: Error in file "test/sql/copy/csv/data/test/test_null_option.csv", on line 1: expected 4 values per row, but got more. (  file=test/sql/copy/csv/data/test/test_null_option.csv
+  delimiter=',' (default)
+  quote='"' (default)
+  escape='"' (default)
+  header=0' (default)
+  sample_size=20480
+  ignore_errors=0
+  all_varchar=0)
 
 # test COPY ... TO ...
 # implicitly using default NULL value

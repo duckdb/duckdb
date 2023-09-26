@@ -69,4 +69,4 @@ Conversion Error: time field value out of range: "14:42:70.500", expected format
 statement error
 SELECT '14-42-04'::TIME::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE693
+Conversion Error: time field value out of range: "14-42-04", expected format is ([YYYY-MM-DD ]HH:MM:SS[.MS])

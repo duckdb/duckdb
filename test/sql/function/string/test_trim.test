@@ -152,5 +152,8 @@ LINE 1: select TRIM()
 statement error
 select TRIM('hello', 'world', 'aaa')
 ----
-PLACEHOLDER_ERROR_MESSAGE2361
+Binder Error: No function matches the given name and argument types 'trim(VARCHAR, VARCHAR, VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	trim(VARCHAR) -> VARCHAR
+	trim(VARCHAR, VARCHAR) -> VARCHAR
 

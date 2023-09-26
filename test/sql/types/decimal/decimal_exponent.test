@@ -86,7 +86,7 @@ Conversion Error: Could not convert string "1e100" to DECIMAL(18,3)
 statement error
 SELECT '1e100e100'::DECIMAL
 ----
-PLACEHOLDER_ERROR_MESSAGE408
+Conversion Error: Could not convert string "1e100e100" to DECIMAL(18,3)
 
 # fractional exponent
 statement error

@@ -149,7 +149,7 @@ SELECT i::DECIMAL(38,0)::USMALLINT FROM usmallints ORDER BY i
 statement error
 SELECT i::DECIMAL(9,5)::USMALLINT FROM usmallints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE784
+Conversion Error: Could not cast value 65535 to DECIMAL(9,5)
 
 statement error
 SELECT i::DECIMAL(18,14)::USMALLINT FROM usmallints ORDER BY i

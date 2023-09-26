@@ -92,7 +92,7 @@ INSERT INTO routes VALUES (1, NULL);
 statement error
 INSERT INTO routes VALUES (2, 2);
 ----
-PLACEHOLDER_ERROR_MESSAGE1348
+Constraint Error: Violates foreign key constraint because key "route_id: 2" does not exist in the referenced table
 
 statement ok
 INSERT INTO routes VALUES (2, 1);

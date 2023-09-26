@@ -40,7 +40,7 @@ create table lists(id int, l int[]);
 statement error
 create index i_index on lists(l);
 ----
-PLACEHOLDER_ERROR_MESSAGE2848
+Invalid type Error: Invalid Type [INTEGER[]]: Invalid type for index key.
 
 statement error
 create index i_index on lists(id, l);

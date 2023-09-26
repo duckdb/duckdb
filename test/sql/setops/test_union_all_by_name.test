@@ -195,7 +195,7 @@ NULL	4	4
 statement error
 SELECT x, x FROM t1 UNION ALL BY NAME SELECT y FROM t2;
 ----
-PLACEHOLDER_ERROR_MESSAGE236
+Binder Error: UNION(ALL) BY NAME operation doesn't support same name in SELECT list
 
 query III
 SELECT x, x as a FROM t1 UNION ALL BY NAME SELECT y FROM t2;

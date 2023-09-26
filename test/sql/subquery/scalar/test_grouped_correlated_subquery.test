@@ -144,5 +144,5 @@ Binder Error: correlated columns in window functions not supported
 statement error
 SELECT (SELECT SUM(col2) OVER (PARTITION BY SUM(col2) ORDER BY MAX(col1 + ColID) ROWS UNBOUNDED PRECEDING) FROM tbl_ProductSales) FROM another_T t1 GROUP BY col1
 ----
-PLACEHOLDER_ERROR_MESSAGE1428
+Binder Error: correlated columns in window functions not supported
 

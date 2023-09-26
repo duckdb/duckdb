@@ -106,7 +106,9 @@ Binder Error: No function matches the given name and argument types 'lpad(VARCHA
 statement error
 select RPAD()
 ----
-PLACEHOLDER_ERROR_MESSAGE2317
+Binder Error: No function matches the given name and argument types 'rpad()'. You might need to add explicit type casts.
+	Candidate functions:
+	rpad(VARCHAR, INTEGER, VARCHAR) -> VARCHAR
 
 statement error
 select RPAD(1)

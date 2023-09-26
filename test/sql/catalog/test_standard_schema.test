@@ -79,5 +79,5 @@ DROP SCHEMA IF EXISTS test;
 statement error
 DROP SCHEMA test;
 ----
-PLACEHOLDER_ERROR_MESSAGE1904
+Catalog Error: Schema with name "test" does not exist!
 

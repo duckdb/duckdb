@@ -134,7 +134,7 @@ Parser Error: Expected an integer constant as type modifier
 statement error
 SELECT '0.1'::DECIMAL(-17);
 ----
-PLACEHOLDER_ERROR_MESSAGE360
+Parser Error: Negative modifier not supported
 
 # width/scale out of range
 statement error

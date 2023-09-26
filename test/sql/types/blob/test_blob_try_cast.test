@@ -68,7 +68,7 @@ Conversion Error: Invalid hex escape code encountered in string -> blob conversi
 statement error
 SELECT 'ü'::BLOB
 ----
-PLACEHOLDER_ERROR_MESSAGE1013
+Conversion Error: Invalid byte encountered in STRING -> BLOB conversion. All non-ascii characters must be escaped with hex codes (e.g. \xAA)
 
 query I
 SELECT CAST('\x12' AS BLOB)

@@ -45,7 +45,8 @@ statement error
 CREATE VIEW v1
 AS SELECT FUNFUNFUN();
 ----
-PLACEHOLDER_ERROR_MESSAGE3090
+Catalog Error: Scalar Function with name funfunfun does not exist!
+Did you mean "unbin"?
 
 # unrecognized aggregate parameters
 statement error

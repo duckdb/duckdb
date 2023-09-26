@@ -59,7 +59,7 @@ LINE 1: CREATE TYPE bla AS ENUM ('sad',NULL);
 statement error
 CREATE TYPE bla AS ENUM ('sad','sad');
 ----
-PLACEHOLDER_ERROR_MESSAGE655
+Invalid Input Error: Attempted to create ENUM type with duplicate value sad
 
 # This should be case sensitive
 statement ok

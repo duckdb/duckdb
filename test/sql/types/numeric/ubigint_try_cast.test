@@ -69,7 +69,7 @@ NULL
 statement error
 SELECT i::INTEGER FROM ubigints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE751
+Conversion Error: Type UINT64 with value 18446744073709551615 can't be cast because the value is out of range for the destination type INT32
 
 query I
 SELECT TRY_CAST(i AS INTEGER) FROM ubigints ORDER BY i

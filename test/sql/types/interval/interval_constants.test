@@ -113,7 +113,7 @@ Parser Error: HOUR TO MINUTE is not supported
 statement error
 SELECT interval '15:06:04.123' hours to seconds
 ----
-PLACEHOLDER_ERROR_MESSAGE498
+Parser Error: HOUR TO MINUTE is not supported
 
 # 00:12:30
 statement error

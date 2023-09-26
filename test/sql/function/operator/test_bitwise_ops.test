@@ -76,7 +76,18 @@ Binder Error: No function matches the given name and argument types '<<(VARCHAR,
 statement error
 SELECT 3 << 'hello'
 ----
-PLACEHOLDER_ERROR_MESSAGE2505
+Binder Error: No function matches the given name and argument types '<<(INTEGER, VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	<<(TINYINT, TINYINT) -> TINYINT
+	<<(SMALLINT, SMALLINT) -> SMALLINT
+	<<(INTEGER, INTEGER) -> INTEGER
+	<<(BIGINT, BIGINT) -> BIGINT
+	<<(HUGEINT, HUGEINT) -> HUGEINT
+	<<(UTINYINT, UTINYINT) -> UTINYINT
+	<<(USMALLINT, USMALLINT) -> USMALLINT
+	<<(UINTEGER, UINTEGER) -> UINTEGER
+	<<(UBIGINT, UBIGINT) -> UBIGINT
+	<<(BIT, INTEGER) -> BIT
 
 statement error
 SELECT 2.0 << 1

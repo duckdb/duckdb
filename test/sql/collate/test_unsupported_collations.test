@@ -38,5 +38,6 @@ LINE 1: ...E TABLE collate_test(s VARCHAR COLLATE 'hello')
 statement error
 PRAGMA default_collation='blabla'
 ----
-PLACEHOLDER_ERROR_MESSAGE1402
+Catalog Error: Collation with name blabla does not exist!
+Did you mean "nfc"?
 

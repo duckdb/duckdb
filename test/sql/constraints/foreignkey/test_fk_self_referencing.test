@@ -56,7 +56,7 @@ SELECT * FROM employee;
 statement error
 UPDATE employee SET managerid=5 WHERE id=4;
 ----
-PLACEHOLDER_ERROR_MESSAGE1374
+Constraint Error: Duplicate key "id: 4" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 # this is failed because the update is transformed into a delete and an insert
 statement error

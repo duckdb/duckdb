@@ -68,5 +68,5 @@ Binder Error: ORDER term out of range - should be between 1 and 2
 statement error
 SELECT a % 2, b FROM test UNION SELECT a % 2 AS k FROM test ORDER BY -1
 ----
-PLACEHOLDER_ERROR_MESSAGE189
+Binder Error: Set operations can only apply to expressions with the same number of result columns
 

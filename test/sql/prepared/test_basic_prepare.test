@@ -53,7 +53,9 @@ LINE 1: PREPARE EXPLAIN SELECT 42
 statement error
 PREPARE CREATE TABLE a(i INTEGER)
 ----
-PLACEHOLDER_ERROR_MESSAGE1104
+Parser Error: syntax error at or near "CREATE"
+LINE 1: PREPARE CREATE TABLE a(i INTEGER)
+                ^
 
 statement error
 SELECT * FROM a;

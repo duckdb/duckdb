@@ -203,7 +203,7 @@ SELECT EXTRACT(epoch FROM interval '6 months ago')
 statement error
 SELECT EXTRACT(doy FROM interval '6 months ago')
 ----
-PLACEHOLDER_ERROR_MESSAGE2000
+Not implemented Error: interval units "doy" not recognized
 
 statement error
 SELECT EXTRACT(dow FROM interval '6 months ago')

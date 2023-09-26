@@ -194,7 +194,7 @@ Parser Error: Sample method System cannot be used with a discrete sample count, 
 statement error
 select * from integers using sample 10000%;
 ----
-PLACEHOLDER_ERROR_MESSAGE2828
+Parser Error: Sample sample_size 10000.000000 out of range, must be between 0 and 100
 
 query I
 select i from integers using sample (1 rows) repeatable (0);

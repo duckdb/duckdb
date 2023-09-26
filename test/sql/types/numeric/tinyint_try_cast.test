@@ -194,7 +194,7 @@ SELECT i::DECIMAL(38,0)::TINYINT FROM tinyints ORDER BY i
 statement error
 SELECT i::DECIMAL(3,1)::TINYINT FROM tinyints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE714
+Conversion Error: Could not cast value -128 to DECIMAL(3,1)
 
 statement error
 SELECT i::DECIMAL(9,7)::TINYINT FROM tinyints ORDER BY i

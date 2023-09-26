@@ -39,7 +39,7 @@ Mismatch Type Error: Type STRUCT( INTEGER,  VARCHAR,  VARCHAR) does not match wi
 statement error
 SELECT MAP_FROM_ENTRIES(ARRAY[(NULL, 2), ([3,4], 4)]);
 ----
-PLACEHOLDER_ERROR_MESSAGE888
+Invalid Input Error: Map keys can not be NULL
 
 ##Keys have to be unique
 #statement error

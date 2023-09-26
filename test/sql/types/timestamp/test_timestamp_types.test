@@ -72,7 +72,7 @@ Conversion Error: Unimplemented type for cast (TIMESTAMP_S -> TIME)
 statement error
 select milli::TIME from timestamp;
 ----
-PLACEHOLDER_ERROR_MESSAGE970
+Conversion Error: Unimplemented type for cast (TIMESTAMP_MS -> TIME)
 
 statement error
 select nano::TIME from timestamp;

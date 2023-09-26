@@ -96,7 +96,7 @@ Invalid Input Error: Map keys have to be unique
 statement error
 select MAP(LIST_VALUE(10),LIST_VALUE())
 ----
-PLACEHOLDER_ERROR_MESSAGE913
+Invalid Input Error: Error in MAP creation: key list and value list do not align. i.e. different size or incompatible structure
 
 query I
 select MAP(LIST_VALUE([1],[2],[3],[4]),LIST_VALUE(10,9,8,7))

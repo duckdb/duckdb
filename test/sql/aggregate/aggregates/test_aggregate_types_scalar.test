@@ -78,7 +78,14 @@ Binder Error: No function matches the given name and argument types 'sum()'. You
 statement error
 SELECT SUM(1, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE1631
+Binder Error: No function matches the given name and argument types 'sum(INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	sum(DECIMAL) -> DECIMAL
+	sum(SMALLINT) -> HUGEINT
+	sum(INTEGER) -> HUGEINT
+	sum(BIGINT) -> HUGEINT
+	sum(HUGEINT) -> HUGEINT
+	sum(DOUBLE) -> DOUBLE
 
 query IIRTTTT
 SELECT MIN(1), MIN(NULL), MIN(33.3), MIN('hello'), MIN(True), MIN(DATE '1992-02-02'), MIN(TIMESTAMP '2008-01-01 00:00:01')

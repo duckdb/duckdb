@@ -65,7 +65,7 @@ Binder Error: Referenced update column i not found in table!
 statement error
 DROP TABLE pk_integers;
 ----
-PLACEHOLDER_ERROR_MESSAGE1297
+Catalog Error: Could not drop the table because this table is main key table of the table "fk_integers"
 
 statement ok
 DROP TABLE fk_integers;

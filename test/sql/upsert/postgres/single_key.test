@@ -98,7 +98,7 @@ Binder Error: The specified columns as conflict target are not referenced by a U
 statement error
 insert into insertconflicttest values (6, 'Passionfruit') on conflict (fruit) do update set fruit = excluded.fruit;
 ----
-PLACEHOLDER_ERROR_MESSAGE1950
+Binder Error: The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT
 
 # Check the target relation can be aliased
 

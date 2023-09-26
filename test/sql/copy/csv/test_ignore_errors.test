@@ -145,7 +145,15 @@ COPY nullable_type FROM 'test/sql/copy/csv/data/test/test_incompatible_type_with
 statement error
 COPY nullable_type FROM 'test/sql/copy/csv/data/test/test_incompatible_type_with_nullable.csv'
 ----
-PLACEHOLDER_ERROR_MESSAGE2873
+Invalid Input Error: Could not convert string 'a' to INT32 at line 1 in column "col_a". Parser options:
+  file=test/sql/copy/csv/data/test/test_incompatible_type_with_nullable.csv
+  delimiter=',' (default)
+  quote='"' (default)
+  escape='"' (default)
+  header=0' (default)
+  sample_size=20480
+  ignore_errors=0
+  all_varchar=0 
 
 query IIII
 SELECT * FROM nullable_type

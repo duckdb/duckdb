@@ -65,7 +65,7 @@ Constraint Error: Violates foreign key constraint because key "i3: 3" is still r
 statement error
 DELETE FROM t3 WHERE i3=2
 ----
-PLACEHOLDER_ERROR_MESSAGE1306
+Constraint Error: Violates foreign key constraint because key "i4: 2" is still referenced by a foreign key in a different table
 
 statement ok
 DELETE FROM t2 WHERE i2=4

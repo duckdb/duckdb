@@ -185,7 +185,7 @@ Binder Error: Referenced column "x" not found in FROM clause!
 statement error
 select list_has_any([[1,2], [2,4]], ['abc', 'def']);
 ----
-PLACEHOLDER_ERROR_MESSAGE2258
+Conversion Error: Type VARCHAR with value 'abc' can't be cast to the destination type LIST
 
 # Test Function in Function
 

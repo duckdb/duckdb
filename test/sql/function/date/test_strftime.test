@@ -173,5 +173,10 @@ Error: Full specifier did not match: trailing characters
 statement error
 SELECT strftime('%Y', '1992-01-01');
 ----
-PLACEHOLDER_ERROR_MESSAGE2012
+Binder Error: No function matches the given name and argument types 'strftime(VARCHAR, VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	strftime(DATE, VARCHAR) -> VARCHAR
+	strftime(TIMESTAMP, VARCHAR) -> VARCHAR
+	strftime(VARCHAR, DATE) -> VARCHAR
+	strftime(VARCHAR, TIMESTAMP) -> VARCHAR
 

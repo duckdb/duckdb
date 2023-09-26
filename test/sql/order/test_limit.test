@@ -191,7 +191,7 @@ SELECT * FROM integers as int LIMIT (SELECT NULL)
 statement error
 SELECT * FROM integers as int LIMIT (SELECT -1);
 ----
-PLACEHOLDER_ERROR_MESSAGE183
+Invalid Input Error: Type INT32 with value -1 can't be cast because the value is out of range for the destination type UINT64
 
 #Subqueries that return strings that can't be converted to integers
 statement error

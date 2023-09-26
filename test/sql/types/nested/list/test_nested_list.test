@@ -266,7 +266,9 @@ Binder Error: No function matches the given name and argument types 'list()'. Yo
 statement error
 SELECT LIST(e, g) FROM list_data
 ----
-PLACEHOLDER_ERROR_MESSAGE938
+Binder Error: No function matches the given name and argument types 'list(INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	list(ANY) -> LIST
 
 statement error
 SELECT g, UNNEST(l+1) u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1

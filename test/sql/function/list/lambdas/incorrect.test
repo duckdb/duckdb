@@ -44,7 +44,7 @@ Binder Error: Invalid lambda expression!
 statement error
 SELECT ${func_name}(NULL, x)
 ----
-PLACEHOLDER_ERROR_MESSAGE2144
+Binder Error: Referenced column "x" not found in FROM clause!
 
 statement error
 SELECT ${func_name}([1, 2], (SELECT 1) -> x + 1)

@@ -170,7 +170,7 @@ Binder Error: SUBQUERY is not supported in returning statements
 statement error
 INSERT INTO table1(a, b) VALUES (42, 43) RETURNING (SELECT a), (SELECT b), NULL;
 ----
-PLACEHOLDER_ERROR_MESSAGE261
+Binder Error: SUBQUERY is not supported in returning statements
 
 # Window function in subquery
 statement error

@@ -216,7 +216,7 @@ Conversion Error: Could not convert string '' to INTERVAL
 statement error
 SELECT INTERVAL '   	';
 ----
-PLACEHOLDER_ERROR_MESSAGE533
+Conversion Error: Could not convert string '   	' to INTERVAL
 
 # no number
 statement error

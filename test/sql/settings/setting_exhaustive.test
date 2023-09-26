@@ -75,4 +75,4 @@ endloop
 statement error
 SET explain_output='unknown';
 ----
-PLACEHOLDER_ERROR_MESSAGE229
+Parser Error: Unrecognized output type "unknown", expected either ALL, OPTIMIZED_ONLY or PHYSICAL_ONLY

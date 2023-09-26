@@ -76,7 +76,7 @@ Conversion Error: Unimplemented type for cast (INTEGER -> BLOB)
 statement error
 SELECT 1::bigint::BYTEA
 ----
-PLACEHOLDER_ERROR_MESSAGE1000
+Conversion Error: Unimplemented type for cast (BIGINT -> BLOB)
 
 statement error
 SELECT 1::decimal::BYTEA

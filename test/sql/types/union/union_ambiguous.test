@@ -69,7 +69,7 @@ Conversion Error: Type STRUCT(foo VARCHAR) can't be cast as UNION(b STRUCT(foo V
 statement error
 INSERT INTO tbl2 VALUES (union_value(b := {'foo': 'bar'})), (union_value(c := {'foo': 'baz'})), (union_value(d := {'foo': 'qux'}));
 ----
-PLACEHOLDER_ERROR_MESSAGE840
+Conversion Error: Type UNION(d STRUCT(foo VARCHAR)) can't be cast as UNION(b STRUCT(foo VARCHAR), c STRUCT(foo VARCHAR)). The member 'd' is not present in target union
 
 statement ok
 INSERT INTO tbl2 VALUES (union_value(b := {'foo': 'bar'})), (union_value(c := {'foo': 'baz'}));

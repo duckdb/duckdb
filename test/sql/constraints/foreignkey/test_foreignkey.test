@@ -42,7 +42,7 @@ CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname T
 statement error
 INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 2, 'E', 'B_song'), (13, 3, 'C', 'C_song');
 ----
-PLACEHOLDER_ERROR_MESSAGE1332
+Constraint Error: Violates foreign key constraint because key "artistid: 2, albumname: E" does not exist in the referenced table
 
 statement error
 INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 5, 'D', 'B_song'), (13, 3, 'C', 'C_song');

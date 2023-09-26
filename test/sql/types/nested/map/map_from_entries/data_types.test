@@ -131,7 +131,7 @@ select col[123] from hugeint_key;
 statement error
 create table hugeint_key as select MAP_FROM_ENTRIES(ARRAY[(123, 'x'), (123, 'y')]) col;
 ----
-PLACEHOLDER_ERROR_MESSAGE882
+Catalog Error: Table with name "hugeint_key" already exists!
 
 # -- BOOLEAN --
 # Valid

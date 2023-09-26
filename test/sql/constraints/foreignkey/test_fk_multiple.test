@@ -53,7 +53,7 @@ Constraint Error: Violates foreign key constraint because key "j1: 13" does not 
 statement error
 INSERT INTO fkt1 VALUES (12, 1003);
 ----
-PLACEHOLDER_ERROR_MESSAGE1363
+Constraint Error: Violates foreign key constraint because key "i1: 12" does not exist in the referenced table
 
 statement ok
 INSERT INTO fkt2 VALUES (12, 1001), (11, 1002);

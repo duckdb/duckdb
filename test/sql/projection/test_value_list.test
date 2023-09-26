@@ -145,5 +145,5 @@ Parser Error: VALUES lists must all be the same length
 statement error
 INSERT INTO varchars (v) VALUES (DEFAULT IS NULL);
 ----
-PLACEHOLDER_ERROR_MESSAGE3117
+Binder Error: DEFAULT is not allowed here!
 

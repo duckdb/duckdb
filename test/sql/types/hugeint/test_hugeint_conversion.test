@@ -102,7 +102,7 @@ Conversion Error: Type INT128 with value 1000 can't be cast because the value is
 statement error
 SELECT 128::HUGEINT::TINYINT;
 ----
-PLACEHOLDER_ERROR_MESSAGE1035
+Conversion Error: Type INT128 with value 128 can't be cast because the value is out of range for the destination type INT8
 
 statement error
 SELECT -128::HUGEINT::TINYINT;

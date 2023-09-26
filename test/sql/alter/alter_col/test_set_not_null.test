@@ -135,7 +135,7 @@ INSERT INTO t SELECT 1 FROM RANGE(65536)
 statement error
 ALTER TABLE t ALTER COLUMN i SET NOT NULL
 ----
-PLACEHOLDER_ERROR_MESSAGE2586
+Binder Error: Unsupported constraint for generated column!
 
 # Set not null
 statement ok

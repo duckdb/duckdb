@@ -133,7 +133,7 @@ Binder Error: RANGE with infinite bounds is not supported
 statement error
 SELECT COUNT(*) FROM range('294247-01-10'::TIMESTAMP, 'infinity'::TIMESTAMP, INTERVAL '1 DAY');
 ----
-PLACEHOLDER_ERROR_MESSAGE3135
+Binder Error: RANGE with infinite bounds is not supported
 
 statement error
 SELECT COUNT(*) FROM generate_series('-infinity'::TIMESTAMP, '290309-12-22 (BC) 00:00:00'::TIMESTAMP, INTERVAL '1 DAY');

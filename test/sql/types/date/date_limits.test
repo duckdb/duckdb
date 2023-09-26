@@ -61,7 +61,7 @@ select '5877642-06-25 (BC)'::date + 1
 statement error
 select '5877642-06-24 (BC)'::date - 1
 ----
-PLACEHOLDER_ERROR_MESSAGE640
+Conversion Error: date field value out of range: "5877642-06-24 (BC)", expected format is (YYYY-MM-DD)
 
 statement error
 select '5877642-06-24 (BC)'::date - 365

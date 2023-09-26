@@ -38,7 +38,7 @@ Conversion Error: Type INT32 with value 2147483647 can't be cast because the val
 statement error
 SELECT i::USMALLINT FROM integers WHERE i>=0 ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE811
+Conversion Error: Type INT32 with value 2147483647 can't be cast because the value is out of range for the destination type UINT16
 
 query I
 SELECT i::UINTEGER FROM integers WHERE i>=0 ORDER BY i

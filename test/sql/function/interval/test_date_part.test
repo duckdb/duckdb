@@ -99,7 +99,10 @@ Not implemented Error: interval units "era" not recognized
 statement error
 SELECT julian(i) FROM intervals;
 ----
-PLACEHOLDER_ERROR_MESSAGE1993
+Binder Error: No function matches the given name and argument types 'julian(INTERVAL)'. You might need to add explicit type casts.
+	Candidate functions:
+	julian(DATE) -> DOUBLE
+	julian(TIMESTAMP) -> DOUBLE
 
 statement error
 SELECT extract(era from i) FROM intervals;

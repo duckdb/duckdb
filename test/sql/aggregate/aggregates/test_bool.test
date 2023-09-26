@@ -54,7 +54,9 @@ Binder Error: No function matches the given name and argument types 'bool_or()'.
 statement error
 select bool_and(*)
 ----
-PLACEHOLDER_ERROR_MESSAGE1526
+Binder Error: No function matches the given name and argument types 'bool_and()'. You might need to add explicit type casts.
+	Candidate functions:
+	bool_and(BOOLEAN) -> BOOLEAN
 
 query I
 SELECT bool_or(True) FROM range(100);

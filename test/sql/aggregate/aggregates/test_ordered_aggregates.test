@@ -144,7 +144,7 @@ Parser Error: Wrong number of arguments for PERCENTILE_CONT
 statement error
 select percentile_cont(0.25, 0.5) within group(order by i) from generate_series(0,100) tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE1696
+Parser Error: Wrong number of arguments for PERCENTILE_CONT
 
 # NaN is not allowed
 statement error
