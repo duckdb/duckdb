@@ -170,26 +170,30 @@ statement error
 SELECT * FROM bla.integers2;
 ----
 Catalog Error: Table with name integers2 does not exist!
-Did you mean "pg_catalog.pg_indexes"?
-LINE 1: SELECT * FROM bla.integers2;
-                      ^
 
 # non-existent table in view
 statement error
 CREATE VIEW v1 AS SELECT * FROM integers2;
 ----
-PLACEHOLDER_ERROR_MESSAGE3079
+Catalog Error: Table with name integers2 does not exist!
+Did you mean "pg_indexes"?
 
 # non-existent table in long single-line query
 statement error
 with cte1 as (select 42 as j), cte2 as (select ref.j as k from cte1 as ref), cte3 as (select ref2.j+1 as i from cte1 as ref2) SELECT * FROM integers9;
 ----
-PLACEHOLDER_ERROR_MESSAGE3078
+Catalog Error: Table with name integers9 does not exist!
+Did you mean "pg_indexes"?
+LINE 1: ... as i from cte1 as ref2) SELECT * FROM integers9;
+                                                  ^
 
 statement error
 with cte1 as (select 42 as j), cte2 as (select ref.j as k from cte1 as ref), cte3 as (select ref2.j+1 as i from cte1 as ref2) SELECT * FROM integers9 where x=3 order by x+1+1+1+1+1+1+1+1+1+1+1;
 ----
-PLACEHOLDER_ERROR_MESSAGE3077
+Catalog Error: Table with name integers9 does not exist!
+Did you mean "pg_indexes"?
+LINE 1: ... as i from cte1 as ref2) SELECT * FROM integers9 where x=3 order by x+1+1+1+1+...
+                                                  ^
 
 # non-existent table in multi-line query (Q1)
 statement error
@@ -215,20 +219,29 @@ ORDER BY
     l_returnflag,
     l_linestatus;
 ----
-PLACEHOLDER_ERROR_MESSAGE3076
+Catalog Error: Table with name lineitem does not exist!
+Did you mean "pg_indexes"?
+LINE 13:     lineitem
+             ^
 
 # now with unicode
 # short unicode error
 statement error
 select 🦆🍞 from 🦆🍞;
 ----
-PLACEHOLDER_ERROR_MESSAGE3075
+Catalog Error: Table with name 🦆🍞 does not exist!
+Did you mean "pg_am"?
+LINE 1: select 🦆🍞 from 🦆🍞;
+                         ^
 
 # long unicode error
 statement error
 with 🍞🍞 as (select 'bread' as 🍞), 🦆🦆 as (select ref.🍞 as "🍞" from 🍞🍞 as ref) SELECT * FROM integers9 where x LIKE '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆' order by x+1+1+1+1+1+1+1+1+1+1+1;
 ----
-PLACEHOLDER_ERROR_MESSAGE3074
+Catalog Error: Table with name integers9 does not exist!
+Did you mean "pg_indexes"?
+LINE 1: ...s "🍞" from 🍞🍞 as ref) SELECT * FROM integers9 where x LIKE '🦆🦆🦆🦆🦆🦆🦆...
+                                                  ^
 
 statement ok
 CREATE TABLE integers(integ INTEGER);
@@ -243,35 +256,53 @@ CREATE TABLE chickens(feather INTEGER, beak INTEGER);
 statement error
 SELECT * FROM integres;
 ----
-PLACEHOLDER_ERROR_MESSAGE3073
+Catalog Error: Table with name integres does not exist!
+Did you mean "integers"?
+LINE 1: SELECT * FROM integres;
+                      ^
 
 # non-existent column
 statement error
 SELECT feathe FROM chickens;
 ----
-PLACEHOLDER_ERROR_MESSAGE3072
+Binder Error: Referenced column "feathe" not found in FROM clause!
+Candidate bindings: "chickens.feather"
+LINE 1: SELECT feathe FROM chickens;
+               ^
 
 # non-existent column, with multiple tables
 statement error
 SELECT feathe FROM chickens, integers, strings;
 ----
-PLACEHOLDER_ERROR_MESSAGE3071
+Binder Error: Referenced column "feathe" not found in FROM clause!
+Candidate bindings: "chickens.feather"
+LINE 1: SELECT feathe FROM chickens, integers, strings...
+               ^
 
 statement error
 SELECT st FROM chickens, integers, strings;
 ----
-PLACEHOLDER_ERROR_MESSAGE3070
+Binder Error: Referenced column "st" not found in FROM clause!
+Candidate bindings: "strings.str", "integers.integ"
+LINE 1: SELECT st FROM chickens, integers, strings;
+               ^
 
 statement error
 SELECT chicken.feather FROM chickens
 ----
-PLACEHOLDER_ERROR_MESSAGE3069
+Binder Error: Referenced table "chicken" not found!
+Candidate tables: "chickens"
+LINE 1: SELECT chicken.feather FROM chickens
+               ^
 
 # table-qualified non-existent column
 statement error
 SELECT chicken.st FROM chickens, integers, strings;
 ----
-PLACEHOLDER_ERROR_MESSAGE3068
+Binder Error: Referenced table "chicken" not found!
+Candidate tables: "chickens"
+LINE 1: SELECT chicken.st FROM chickens, integers, str...
+               ^
 
 # now with unicode
 statement ok
@@ -280,9 +311,15 @@ CREATE TABLE 🦆🍞(🦆🦆🦆 INTEGER, 🍞🍞🍞 INTEGER);
 statement error
 SELECT 🦆.🦆🦆🦆 FROM 🦆🍞
 ----
-PLACEHOLDER_ERROR_MESSAGE3067
+Binder Error: Referenced table "🦆" not found!
+Candidate tables: "🦆🍞"
+LINE 1: SELECT 🦆.🦆🦆🦆 FROM 🦆🍞
+               ^
 
 statement error
 SELECT 🦆🦆 FROM 🦆🍞, chickens
 ----
-PLACEHOLDER_ERROR_MESSAGE3066
+Binder Error: Referenced column "🦆🦆" not found in FROM clause!
+Candidate bindings: "🦆🍞.🦆🦆🦆"
+LINE 1: SELECT 🦆🦆 FROM 🦆🍞, chickens
+               ^

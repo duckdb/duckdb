@@ -42,14 +42,7 @@ statement error
 SELECT list_aggr([False], '${func_name}')
 ----
 Binder Error: No matching aggregate function
-No function matches the given name and argument types 'avg(BOOLEAN)'. You might need to add explicit type casts.
-	Candidate functions:
-	avg(DECIMAL) -> DECIMAL
-	avg(SMALLINT) -> DOUBLE
-	avg(INTEGER) -> DOUBLE
-	avg(BIGINT) -> DOUBLE
-	avg(HUGEINT) -> DOUBLE
-	avg(DOUBLE) -> DOUBLE
+No function matches the given name and argument types
 
 endloop
 
@@ -87,7 +80,8 @@ foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or kurtosis mad 
 statement error
 SELECT list_aggr(['hello'], '${func_name}')
 ----
-PLACEHOLDER_ERROR_MESSAGE2232
+Binder Error: No matching aggregate function
+No function matches the given name and argument types
 
 endloop
 
@@ -134,7 +128,8 @@ foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger
 statement error
 SELECT list_aggr([1::${type}], '${func_name}')
 ----
-PLACEHOLDER_ERROR_MESSAGE2231
+Binder Error: No matching aggregate function
+No function matches the given name and argument types
 
 endloop
 
@@ -183,7 +178,8 @@ foreach type float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10)
 statement error
 SELECT list_aggr([1::${type}], '${func_name}')
 ----
-PLACEHOLDER_ERROR_MESSAGE2230
+Binder Error: No matching aggregate function
+No function matches the given name and argument types
 
 endloop
 
@@ -294,14 +290,16 @@ foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz ti
 statement error
 SELECT list_aggr(['2021-08-20'::${type}], '${func_name}')
 ----
-PLACEHOLDER_ERROR_MESSAGE2229
+Binder Error: No matching aggregate function
+No function matches the given name and argument types
 
 endloop
 
 statement error
 SELECT list_aggr([INTERVAL 1 YEAR], '${func_name}')
 ----
-PLACEHOLDER_ERROR_MESSAGE2228
+Binder Error: No matching aggregate function
+No function matches the given name and argument types
 
 endloop
 
@@ -344,7 +342,8 @@ foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or entropy histo
 statement error
 SELECT list_aggr(['{a: 1}'::BLOB], '${func_name}')
 ----
-PLACEHOLDER_ERROR_MESSAGE2227
+Binder Error: No matching aggregate function
+No function matches the given name and argument types
 
 endloop
 
@@ -384,7 +383,8 @@ foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or kurtosis mad 
 statement error
 SELECT list_aggr(e, '${func_name}') FROM enums
 ----
-PLACEHOLDER_ERROR_MESSAGE2226
+Binder Error: No matching aggregate function
+No function matches the given name and argument types
 
 endloop
 
@@ -419,16 +419,30 @@ endloop
 # statement error for NESTED types
 
 # list, struct
-foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or histogram kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
+foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 statement error
 SELECT list_aggr([[1]], '${func_name}')
 ----
-PLACEHOLDER_ERROR_MESSAGE2225
+Binder Error: No matching aggregate function
+No function matches the given name and argument types
 
 statement error
 SELECT list_aggr([{'a': 1}], '${func_name}')
 ----
-PLACEHOLDER_ERROR_MESSAGE2224
+Binder Error: No matching aggregate function
+No function matches the given name and argument types
 
 endloop
+
+# histogram
+# list, struct
+statement error
+SELECT list_aggr([[1]], 'histogram')
+----
+Not implemented Error: Unimplemented type for histogram
+
+statement error
+SELECT list_aggr([{'a': 1}], 'histogram')
+----
+Not implemented Error: Unimplemented type for histogram

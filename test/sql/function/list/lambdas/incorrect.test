@@ -13,16 +13,12 @@ foreach func_name list_transform list_filter
 statement error
 SELECT ${func_name}()
 ----
-Binder Error: No function matches the given name and argument types 'list_transform()'. You might need to add explicit type casts.
-	Candidate functions:
-	list_transform(ANY[], LAMBDA) -> ANY[]
+Binder Error: No function matches the given name and argument types
 
 statement error
 SELECT ${func_name}([])
 ----
-Binder Error: No function matches the given name and argument types 'list_transform(NULL[])'. You might need to add explicit type casts.
-	Candidate functions:
-	list_transform(ANY[], LAMBDA) -> ANY[]
+Binder Error: No function matches the given name and argument types
 
 statement error
 SELECT ${func_name}([1], x -> x, 3)
@@ -32,9 +28,7 @@ Binder Error: Referenced column "x" not found in FROM clause!
 statement error
 SELECT ${func_name}(1, 2, 3)
 ----
-Binder Error: No function matches the given name and argument types 'list_transform(INTEGER, INTEGER, INTEGER)'. You might need to add explicit type casts.
-	Candidate functions:
-	list_transform(ANY[], LAMBDA) -> ANY[]
+Binder Error: No function matches the given name and argument types
 
 statement error
 SELECT ${func_name}(NULL, NULL)
@@ -54,9 +48,7 @@ Binder Error: Invalid parameter list! Parameters must be comma-separated column 
 statement error
 SELECT ${func_name}(NULL, i) FROM incorrect_test
 ----
-Binder Error: No function matches the given name and argument types 'list_transform(NULL, INTEGER)'. You might need to add explicit type casts.
-	Candidate functions:
-	list_transform(ANY[], LAMBDA) -> ANY[]
+Binder Error: No function matches the given name and argument types
 
 statement error
 SELECT ${func_name}(NULL, x -> y)
@@ -66,9 +58,7 @@ Binder Error: Referenced column "y" not found in FROM clause!
 statement error
 SELECT ${func_name}([1])
 ----
-Binder Error: No function matches the given name and argument types 'list_transform(INTEGER[])'. You might need to add explicit type casts.
-	Candidate functions:
-	list_transform(ANY[], LAMBDA) -> ANY[]
+Binder Error: No function matches the given name and argument types
 
 statement error
 SELECT ${func_name}([1], NULL)
@@ -125,9 +115,7 @@ Binder Error: No function matches the given name and argument types '+(INTEGER[]
 statement error
 SELECT ${func_name}(1, 1)
 ----
-Binder Error: No function matches the given name and argument types 'list_transform(INTEGER, INTEGER)'. You might need to add explicit type casts.
-	Candidate functions:
-	list_transform(ANY[], LAMBDA) -> ANY[]
+Binder Error: No function matches the given name and argument types
 
 statement error
 SELECT ${func_name}([True], x -> x, x -> x)
@@ -143,38 +131,78 @@ CREATE TABLE l_test (l integer[])
 statement error
 SELECT l, list_transform(l, l -> l + 1) FROM l_test
 ----
-PLACEHOLDER_ERROR_MESSAGE2134
+Binder Error: Invalid parameter name 'l_test.l': must be unqualified
 
 statement error
 select list_apply(i, x -> x * 3 + 2 / zz) from (values (list_value(1, 2, 3))) tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE2133
+Binder Error: Referenced column "zz" not found in FROM clause!
+Candidate bindings: "tbl.i"
 
 # lambda cannot be the root of a plan
 statement error
 select x -> x + 1 from (values (list_value(1, 2, 3))) tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE2132
+Binder Error: Referenced column "x" not found in FROM clause!
+Candidate bindings: "tbl.i"
 
 statement error
 select i -> i + 1 from (values (list_value(1, 2, 3))) tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE2131
+Binder Error: No function matches the given name and argument types '+(INTEGER[], INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	+(TINYINT) -> TINYINT
+	+(TINYINT, TINYINT) -> TINYINT
+	+(SMALLINT) -> SMALLINT
+	+(SMALLINT, SMALLINT) -> SMALLINT
+	+(INTEGER) -> INTEGER
+	+(INTEGER, INTEGER) -> INTEGER
+	+(BIGINT) -> BIGINT
+	+(BIGINT, BIGINT) -> BIGINT
+	+(HUGEINT) -> HUGEINT
+	+(HUGEINT, HUGEINT) -> HUGEINT
+	+(FLOAT) -> FLOAT
+	+(FLOAT, FLOAT) -> FLOAT
+	+(DOUBLE) -> DOUBLE
+	+(DOUBLE, DOUBLE) -> DOUBLE
+	+(DECIMAL) -> DECIMAL
+	+(DECIMAL, DECIMAL) -> DECIMAL
+	+(UTINYINT) -> UTINYINT
+	+(UTINYINT, UTINYINT) -> UTINYINT
+	+(USMALLINT) -> USMALLINT
+	+(USMALLINT, USMALLINT) -> USMALLINT
+	+(UINTEGER) -> UINTEGER
+	+(UINTEGER, UINTEGER) -> UINTEGER
+	+(UBIGINT) -> UBIGINT
+	+(UBIGINT, UBIGINT) -> UBIGINT
+	+(DATE, INTEGER) -> DATE
+	+(INTEGER, DATE) -> DATE
+	+(INTERVAL, INTERVAL) -> INTERVAL
+	+(DATE, INTERVAL) -> DATE
+	+(INTERVAL, DATE) -> DATE
+	+(TIME, INTERVAL) -> TIME
+	+(INTERVAL, TIME) -> TIME
+	+(TIMESTAMP, INTERVAL) -> TIMESTAMP
+	+(INTERVAL, TIMESTAMP) -> TIMESTAMP
+	+(TIME, DATE) -> TIMESTAMP
+	+(DATE, TIME) -> TIMESTAMP
+	+(ANY[], ANY[]) -> ANY[]
 
 statement error
 select list_apply(i, y + 1 -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE2130
+Binder Error: Parameter must be a column name.
 
 statement error
 select list_apply(i, a.x -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE2129
+Binder Error: Invalid parameter name 'a.x': must be unqualified
 
 statement error
 select list_apply(i, x -> x + 1 AND y + 1) from (values (list_value(1, 2, 3))) tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE2128
+Binder Error: Referenced column "y" not found in FROM clause!
+Candidate bindings: "tbl.i"
 
 statement ok
 CREATE TABLE l_filter_test (l integer[])
@@ -182,38 +210,40 @@ CREATE TABLE l_filter_test (l integer[])
 statement error
 SELECT l, list_filter(l, l -> l > 1) FROM l_filter_test
 ----
-PLACEHOLDER_ERROR_MESSAGE2127
+Binder Error: Invalid parameter name 'l_filter_test.l': must be unqualified
 
 statement error
 SELECT list_transform([1, 2], (x, y) -> x + y)
 ----
-PLACEHOLDER_ERROR_MESSAGE2126
+Binder Error: Incorrect number of parameters in lambda function! list_transform expects 1 parameter(s).
 
 statement error
 SELECT list_transform([1, 2], (x, y, z) -> x + y + z)
 ----
-PLACEHOLDER_ERROR_MESSAGE2125
+Binder Error: Incorrect number of parameters in lambda function! list_transform expects 1 parameter(s).
 
 statement error
 SELECT list_filter([1, 2], (x, y) -> x >= y)
 ----
-PLACEHOLDER_ERROR_MESSAGE2124
+Binder Error: Incorrect number of parameters in lambda function! list_filter expects 1 parameter(s).
 
 statement error
 SELECT list_filter([1, 2], (x, y, z) -> x >= y AND y >= z)
 ----
-PLACEHOLDER_ERROR_MESSAGE2123
+Binder Error: Incorrect number of parameters in lambda function! list_filter expects 1 parameter(s).
 
 # using lambdas in functions that do not support them
 statement error
 SELECT cos(x -> x + 1)
 ----
-PLACEHOLDER_ERROR_MESSAGE2122
+Binder Error: Referenced column "x" not found in FROM clause!
 
 statement error
 SELECT cos([1], x -> x + 1)
 ----
-PLACEHOLDER_ERROR_MESSAGE2121
+Binder Error: No function matches the given name and argument types 'cos(INTEGER[], LAMBDA)'. You might need to add explicit type casts.
+	Candidate functions:
+	cos(DOUBLE) -> DOUBLE
 
 # don't allow lambdas in check constraints
 # FIXME: support lambdas in CHECK constraints
