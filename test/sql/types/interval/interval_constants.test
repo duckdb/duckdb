@@ -125,7 +125,7 @@ Parser Error: MINUTE TO SECOND is not supported
 statement error
 SELECT interval '99999999999999' years;
 ----
-PLACEHOLDER_ERROR_MESSAGE496
+Conversion Error: Could not convert string '99999999999999' to INT32
 
 statement error
 SELECT interval '214748364' years;

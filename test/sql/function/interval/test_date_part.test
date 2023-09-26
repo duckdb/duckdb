@@ -112,7 +112,7 @@ Not implemented Error: interval units "era" not recognized
 statement error
 SELECT extract(julian from i) FROM intervals;
 ----
-PLACEHOLDER_ERROR_MESSAGE1991
+Binder Error: julian can only take DATE or TIMESTAMP arguments
 
 statement error
 SELECT date_part('era', i) FROM intervals;

@@ -103,7 +103,10 @@ Binder Error: No function matches the given name and argument types 'min()'. You
 statement error
 SELECT MIN(1, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE1629
+Binder Error: No function matches the given name and argument types 'min(INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	min(DECIMAL) -> DECIMAL
+	min(ANY) -> ANY
 
 query IIRTTTT
 SELECT MAX(1), MAX(NULL), MAX(33.3), MAX('hello'), MAX(True), MAX(DATE '1992-02-02'), MAX(TIMESTAMP '2008-01-01 00:00:01')

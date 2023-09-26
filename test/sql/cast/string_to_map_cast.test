@@ -218,7 +218,7 @@ Conversion Error: Type VARCHAR with value '{3=3, 4=4} bla' can't be cast to the 
 statement error
 SELECT CAST('{                                                                      ' AS MAP(INT, INT));
 ----
-PLACEHOLDER_ERROR_MESSAGE1498
+Conversion Error: Type VARCHAR with value '{                                                                      ' can't be cast to the destination type MAP
 
 #               Test WHERE clause
 # ---------------------------------------------------

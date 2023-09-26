@@ -61,7 +61,7 @@ DROP INDEX i_index
 statement error
 DROP INDEX i_index
 ----
-PLACEHOLDER_ERROR_MESSAGE1804
+Catalog Error: Index with name i_index does not exist!
 
 # IF NOT EXISTS does not report the failure
 statement ok

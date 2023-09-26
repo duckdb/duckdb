@@ -74,7 +74,7 @@ Binder Error: Table does not contain column k referenced in check constraint!
 statement error
 CREATE TABLE integers3(i INTEGER CHECK(integers3.k < 10), j INTEGER)
 ----
-PLACEHOLDER_ERROR_MESSAGE1265
+Binder Error: Table does not contain column k referenced in check constraint!
 
 statement error
 CREATE TABLE integers3(i INTEGER CHECK(integers2.i < 10), j INTEGER)

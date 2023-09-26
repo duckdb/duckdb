@@ -179,7 +179,9 @@ Binder Error: Can only FINALIZE aggregate state, not NULL
 statement error
 SELECT finalize(42);
 ----
-PLACEHOLDER_ERROR_MESSAGE1676
+Binder Error: No function matches the given name and argument types 'finalize(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	finalize(AGGREGATE_STATE<?>) -> INVALID
 
 statement error
 SELECT finalize(sum(d)) from dummy;

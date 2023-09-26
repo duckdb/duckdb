@@ -136,7 +136,8 @@ LINE 1: PRAGMA memory_limit()
 statement error
 PRAGMA memory_limit(1, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE1963
+Catalog Error: Pragma Function with name memory_limit does not exist!
+Did you mean "version"?
 
 statement error
 PRAGMA memory_limit='blabla'

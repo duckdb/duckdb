@@ -275,7 +275,9 @@ select l1 <@ l2 from tbl;
 statement error
 select 'hello' @> l1 from tbl;
 ----
-PLACEHOLDER_ERROR_MESSAGE2256
+Binder Error: No function matches the given name and argument types 'list_contains(VARCHAR, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	list_contains(ANY[], ANY) -> BOOLEAN
 
 statement error
 select 'hello' <@ l1 from tbl;

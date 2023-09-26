@@ -172,7 +172,7 @@ Invalid Input Error: Could not convert string 'ab' to DOUBLE
 statement error
 select 1 limit date '2021-11-25' %;
 ----
-PLACEHOLDER_ERROR_MESSAGE203
+Conversion Error: Unimplemented type for cast (DATE -> DOUBLE)
 
 statement error
 select * from test limit "Hello World" %;

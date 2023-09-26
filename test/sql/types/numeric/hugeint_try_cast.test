@@ -48,7 +48,7 @@ Conversion Error: Type INT128 with value 170141183460469231731687303715884105727
 statement error
 SELECT i::UBIGINT FROM hugeints WHERE i>=0 ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE737
+Conversion Error: Type INT128 with value 170141183460469231731687303715884105727 can't be cast because the value is out of range for the destination type UINT64
 
 query I
 SELECT TRY_CAST(i AS UTINYINT) FROM hugeints ORDER BY i

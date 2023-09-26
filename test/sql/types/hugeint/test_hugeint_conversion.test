@@ -116,7 +116,7 @@ SELECT 127::HUGEINT::TINYINT, -127::HUGEINT::TINYINT;
 statement error
 SELECT 100000::HUGEINT::SMALLINT;
 ----
-PLACEHOLDER_ERROR_MESSAGE1033
+Conversion Error: Type INT128 with value 100000 can't be cast because the value is out of range for the destination type INT16
 
 statement error
 SELECT 32768::HUGEINT::SMALLINT;

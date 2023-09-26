@@ -145,7 +145,7 @@ Parser Error: Width must be between 1 and 38!
 statement error
 SELECT '0.1'::DECIMAL(1, 2, 3);
 ----
-PLACEHOLDER_ERROR_MESSAGE358
+Parser Error: A maximum of two modifiers is supported
 
 statement error
 SELECT '1'::INTEGER(1000);

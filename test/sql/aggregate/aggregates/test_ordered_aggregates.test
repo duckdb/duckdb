@@ -156,7 +156,7 @@ Binder Error: QUANTILE parameter cannot be NaN
 statement error
 SELECT percentile_disc([]) WITHIN GROUP (ORDER BY LAST);
 ----
-PLACEHOLDER_ERROR_MESSAGE1694
+Binder Error: Empty list in percentile not allowed
 
 # Wrong number of arguments for MODE
 statement error

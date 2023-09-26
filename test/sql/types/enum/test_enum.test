@@ -112,7 +112,9 @@ DROP TYPE IF EXISTS mood;
 statement error
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy', NULL);
 ----
-PLACEHOLDER_ERROR_MESSAGE653
+Parser Error: syntax error at or near "NULL"
+LINE 1: ...PE mood AS ENUM ('sad', 'ok', 'happy', NULL);
+                                                  ^
 
 mode skip
 

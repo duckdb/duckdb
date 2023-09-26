@@ -159,7 +159,11 @@ Binder Error: No function matches the given name and argument types '*(TIMESTAMP
 statement error
 SELECT t/t FROM timestamp
 ----
-PLACEHOLDER_ERROR_MESSAGE958
+Binder Error: No function matches the given name and argument types '/(TIMESTAMP, TIMESTAMP)'. You might need to add explicit type casts.
+	Candidate functions:
+	/(FLOAT, FLOAT) -> FLOAT
+	/(DOUBLE, DOUBLE) -> DOUBLE
+	/(INTERVAL, BIGINT) -> INTERVAL
 
 statement error
 SELECT t%t FROM timestamp

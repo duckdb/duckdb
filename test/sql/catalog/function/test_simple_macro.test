@@ -183,7 +183,7 @@ Binder Error: Macro function 'IFELSE(a, b, c)' requires 3 positional arguments, 
 statement error
 CREATE MACRO IFELSE(a,b) AS a+b
 ----
-PLACEHOLDER_ERROR_MESSAGE1839
+Catalog Error: Macro Function with name "IFELSE" already exists!
 
 statement error
 CREATE MACRO ifelse(a,b) AS a+b

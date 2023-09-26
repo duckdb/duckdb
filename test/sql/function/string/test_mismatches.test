@@ -154,7 +154,7 @@ INSERT INTO strings VALUES ('hello'), ('halo'), (NULL)
 statement error
 SELECT mismatches(s, 'hallo') FROM strings
 ----
-PLACEHOLDER_ERROR_MESSAGE2389
+Invalid Input Error: Mismatch Function: Strings must be of equal length!
 
 statement error
 SELECT mismatches('hallo', s) FROM strings

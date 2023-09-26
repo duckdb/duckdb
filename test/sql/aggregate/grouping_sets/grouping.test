@@ -226,4 +226,4 @@ Binder Error: GROUPING function is not supported here
 statement error
 SELECT GROUPING(course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course), course, type, COUNT(*) FROM students GROUP BY CUBE(course, type) ORDER BY 1, 2, 3, 4;
 ----
-PLACEHOLDER_ERROR_MESSAGE1733
+Binder Error: GROUPING statement cannot have more than 64 groups

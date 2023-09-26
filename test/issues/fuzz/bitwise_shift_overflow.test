@@ -69,7 +69,7 @@ SELECT 1000::smallint<<5::smallint;
 statement error
 SELECT 1000::integer<<22::integer;
 ----
-PLACEHOLDER_ERROR_MESSAGE156
+Out of Range Error: Overflow in left shift (1000 << 22)
 
 query I
 SELECT 1000::integer<<21::integer;

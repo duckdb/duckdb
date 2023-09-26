@@ -403,7 +403,7 @@ Conversion Error: Could not convert string '' to INT32
 statement error
 SELECT CAST('[[3], [[5], [4]]' AS INT[][]);
 ----
-PLACEHOLDER_ERROR_MESSAGE1474
+Conversion Error: Type VARCHAR with value '[[3], [[5], [4]]' can't be cast to the destination type LIST
 
 statement error
 SELECT CAST('][3]' AS INT[]);

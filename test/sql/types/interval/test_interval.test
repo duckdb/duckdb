@@ -227,7 +227,7 @@ Conversion Error: Could not convert string 'years' to INTERVAL
 statement error
 SELECT INTERVAL '-years';
 ----
-PLACEHOLDER_ERROR_MESSAGE531
+Conversion Error: Could not convert string '-years' to INTERVAL
 
 # gibberish
 statement error

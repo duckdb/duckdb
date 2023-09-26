@@ -315,7 +315,7 @@ Binder Error: No function matches the given name and argument types '+(INTEGER[]
 statement error
 SELECT g, UNNEST(g) u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1
 ----
-PLACEHOLDER_ERROR_MESSAGE936
+Binder Error: UNNEST() can only be applied to lists, structs and NULL
 
 statement error
 SELECT g, UNNEST() u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1

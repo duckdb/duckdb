@@ -170,7 +170,7 @@ NULL
 statement error
 SELECT i::DECIMAL(3,0)::SMALLINT FROM smallints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE794
+Conversion Error: Could not cast value -32768 to DECIMAL(3,0)
 
 query I
 SELECT i::DECIMAL(9,0)::SMALLINT FROM smallints ORDER BY i

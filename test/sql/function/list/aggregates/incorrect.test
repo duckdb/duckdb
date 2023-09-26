@@ -55,7 +55,9 @@ foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint us
 statement error
 SELECT list_aggr(NULL::${type}, '${func_name}')
 ----
-PLACEHOLDER_ERROR_MESSAGE2197
+Binder Error: No function matches the given name and argument types 'list_aggr(BOOLEAN, VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	list_aggr(ANY[], VARCHAR) -> ANY
 
 endloop
 

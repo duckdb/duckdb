@@ -83,7 +83,7 @@ NULL
 statement error
 SELECT i::TINYINT FROM bigints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE764
+Conversion Error: Type INT64 with value -9223372036854775808 can't be cast because the value is out of range for the destination type INT8
 
 query I
 SELECT TRY_CAST(i AS TINYINT) FROM bigints ORDER BY i

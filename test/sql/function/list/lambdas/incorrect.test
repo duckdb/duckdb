@@ -54,7 +54,9 @@ Binder Error: Invalid parameter list! Parameters must be comma-separated column 
 statement error
 SELECT ${func_name}(NULL, i) FROM incorrect_test
 ----
-PLACEHOLDER_ERROR_MESSAGE2142
+Binder Error: No function matches the given name and argument types 'list_transform(NULL, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	list_transform(ANY[], LAMBDA) -> ANY[]
 
 statement error
 SELECT ${func_name}(NULL, x -> y)

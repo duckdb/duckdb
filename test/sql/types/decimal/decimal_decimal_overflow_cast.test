@@ -67,7 +67,7 @@ Conversion Error: Casting value "10.0000000000000000" to type DECIMAL(16,15) fai
 statement error
 SELECT 10.00::DECIMAL(38,36)::DECIMAL(36,35);
 ----
-PLACEHOLDER_ERROR_MESSAGE276
+Conversion Error: Casting value "10.000000000000000000000000000000000000" to type DECIMAL(36,35) failed: value is out of range!
 
 # casting up in a manner that will always fit
 query II

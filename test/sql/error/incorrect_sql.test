@@ -65,7 +65,9 @@ Binder Error: No function matches the given name and argument types 'sum(INTEGER
 statement error
 SELECT cos(0, 1, 2, 3);
 ----
-PLACEHOLDER_ERROR_MESSAGE3088
+Binder Error: No function matches the given name and argument types 'cos(INTEGER, INTEGER, INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	cos(DOUBLE) -> DOUBLE
 
 # unrecognized table function
 statement error

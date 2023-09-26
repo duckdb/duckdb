@@ -66,7 +66,7 @@ Conversion Error: Could not convert string '-1' to UINT32
 statement error
 SELECT '-1'::UBIGINT
 ----
-PLACEHOLDER_ERROR_MESSAGE469
+Conversion Error: Could not convert string '-1' to UINT64
 
 # zero
 query II

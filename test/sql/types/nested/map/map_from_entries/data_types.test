@@ -173,7 +173,7 @@ select col['\xF0\x9F\xA6\x86'::BLOB] from blob_key;
 statement error
 create table blob_key_dup as select MAP_FROM_ENTRIES(ARRAY[('\xF0\x9F\xA6\x86'::BLOB, 'x'), ('\xF0\x9F\xA6\x86'::BLOB, 'y')]) col;
 ----
-PLACEHOLDER_ERROR_MESSAGE880
+Invalid Input Error: Map keys have to be unique
 
 # -- DATE --
 # Valid

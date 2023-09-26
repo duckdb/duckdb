@@ -98,7 +98,7 @@ Conversion Error: Could not convert string "1e100.2" to DECIMAL(18,3)
 statement error
 SELECT '1e9999999999'::DECIMAL
 ----
-PLACEHOLDER_ERROR_MESSAGE406
+Conversion Error: Could not convert string "1e9999999999" to DECIMAL(18,3)
 
 statement error
 SELECT '1e-9999999999'::DECIMAL

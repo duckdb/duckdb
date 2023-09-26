@@ -51,4 +51,4 @@ Invalid type Error: Invalid Type [INTEGER[]]: Invalid type for index key.
 statement error
 create index i_index on integers(('hello'));
 ----
-PLACEHOLDER_ERROR_MESSAGE2846
+Binder Error: CREATE INDEX does not refer to any columns in the base table!

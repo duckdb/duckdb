@@ -96,7 +96,7 @@ SELECT
     GROUPING(Product_Name)
 FROM tbl_ProductSales
 ----
-PLACEHOLDER_ERROR_MESSAGE167
+Binder Error: GROUPING statement cannot be used without groups
 
 statement error
 SELECT

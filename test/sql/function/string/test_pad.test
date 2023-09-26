@@ -120,7 +120,9 @@ Binder Error: No function matches the given name and argument types 'rpad(INTEGE
 statement error
 select RPAD(1, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE2315
+Binder Error: No function matches the given name and argument types 'rpad(INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	rpad(VARCHAR, INTEGER, VARCHAR) -> VARCHAR
 
 statement error
 select RPAD('Hello', 10, '')

@@ -141,7 +141,10 @@ SELECT k FROM out_of_path.oop_table;
 statement error
 UPDATE main.test_table SET i=10 WHERE i=1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1884
+Catalog Error: Table with name test_table does not exist!
+Did you mean "memory.test.test_table"?
+LINE 1: UPDATE main.test_table SET i=10 WHERE i=1;
+               ^
 
 statement ok
 UPDATE test_table SET i=30 WHERE i=3;

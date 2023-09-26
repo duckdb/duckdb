@@ -294,7 +294,7 @@ GROUP BY a
 statement error
 SELECT reservoir_quantile(r, r)  from quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1544
+Binder Error: RESERVOIR_QUANTILE can only take constant quantile parameters
 
 statement error
 SELECT reservoir_quantile(r, NULL)  from quantile

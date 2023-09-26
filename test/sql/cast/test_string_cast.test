@@ -135,7 +135,7 @@ Conversion Error: Could not convert string '0x80000000' to INT32
 statement error
 SELECT '0x8000000000000000'::BIGINT
 ----
-PLACEHOLDER_ERROR_MESSAGE1463
+Conversion Error: Could not convert string '0x8000000000000000' to INT64
 
 statement error
 SELECT '0x100'::UINT8

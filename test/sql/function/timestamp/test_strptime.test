@@ -334,7 +334,10 @@ Error: Full specifier did not match: trailing characters
 statement error
 select strptime('2020-12-31 21:25:58.745232X00', '%Y-%m-%d %H:%M:%S.%f%z');
 ----
-PLACEHOLDER_ERROR_MESSAGE2466
+Invalid Input Error: Could not parse string "2020-12-31 21:25:58.745232X00" according to format specifier "%Y-%m-%d %H:%M:%S.%f%z"
+2020-12-31 21:25:58.745232X00
+                          ^
+Error: Expected +HH[MM] or -HH[MM]
 
 # different errors
 # month out of range

@@ -133,7 +133,11 @@ Binder Error: No function matches the given name and argument types 'quarter(TIM
 statement error
 SELECT EXTRACT(dayofweek FROM i) FROM times
 ----
-PLACEHOLDER_ERROR_MESSAGE2077
+Binder Error: No function matches the given name and argument types 'dayofweek(TIME)'. You might need to add explicit type casts.
+	Candidate functions:
+	dayofweek(DATE) -> BIGINT
+	dayofweek(TIMESTAMP) -> BIGINT
+	dayofweek(INTERVAL) -> BIGINT
 
 statement error
 SELECT EXTRACT(isodow FROM i) FROM times

@@ -66,7 +66,7 @@ Conversion Error: timestamp field value out of range: "294247-01-10 04:00:54.775
 statement error
 select timestamp '294247-01-10 04:00:54.775806' + interval (1) microsecond
 ----
-PLACEHOLDER_ERROR_MESSAGE981
+Invalid Error: Overflow exception in date/time -> timestamp conversion
 
 statement error
 select timestamp '294247-01-10 04:00:54.775806' + interval (1) second

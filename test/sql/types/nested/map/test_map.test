@@ -117,7 +117,7 @@ select MAP(LIST_VALUE(10),LIST_VALUE(10),LIST_VALUE(10))
 statement error
 select MAP(LIST_VALUE(10),10)
 ----
-PLACEHOLDER_ERROR_MESSAGE910
+Invalid Error: Second argument is not a list
 ----
 PLACEHOLDER_ERROR_MESSAGE911
 

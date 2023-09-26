@@ -383,7 +383,7 @@ Parser Error: START value (-1) cannot be less than MINVALUE (1)
 statement error
 CREATE SEQUENCE seq INCREMENT -1 START 1 CYCLE;
 ----
-PLACEHOLDER_ERROR_MESSAGE1925
+Parser Error: START value (1) cannot be greater than MAXVALUE (-1)
 
 # sequences in schemas
 statement ok

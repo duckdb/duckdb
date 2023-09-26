@@ -85,7 +85,7 @@ Catalog Error: Could not drop the table because this table is main key table of 
 statement error
 DROP TABLE t2;
 ----
-PLACEHOLDER_ERROR_MESSAGE1304
+Catalog Error: Could not drop the table because this table is main key table of the table "t3"
 
 statement error
 DROP TABLE t3;

@@ -406,7 +406,7 @@ Conversion Error: Could not convert string '1 day - 172800 seconds' to INTERVAL
 statement error
 select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05'::date, '1 hour 30 minutes'::interval);
 ----
-PLACEHOLDER_ERROR_MESSAGE2034
+Conversion Error: Could not convert string '1 day - 172800 seconds' to INTERVAL
 
 statement error
 select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05'::date, '2018-05-05'::date);

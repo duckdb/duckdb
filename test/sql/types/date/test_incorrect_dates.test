@@ -63,7 +63,7 @@ INSERT INTO dates VALUES ('1900-1-1')
 statement error
 INSERT INTO dates VALUES ('-100000000-01-01')
 ----
-PLACEHOLDER_ERROR_MESSAGE541
+Conversion Error: date field value out of range: "-100000000-01-01", expected format is (YYYY-MM-DD)
 
 statement error
 INSERT INTO dates VALUES ('1000000000-01-01')

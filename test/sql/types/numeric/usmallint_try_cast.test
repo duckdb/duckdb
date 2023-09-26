@@ -159,7 +159,7 @@ Conversion Error: Could not cast value 65535 to DECIMAL(18,14)
 statement error
 SELECT i::DECIMAL(38,34)::USMALLINT FROM usmallints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE782
+Conversion Error: Could not cast value 65535 to DECIMAL(38,34)
 
 query I
 SELECT TRY_CAST(i AS DECIMAL(3,0))::USMALLINT FROM usmallints ORDER BY i

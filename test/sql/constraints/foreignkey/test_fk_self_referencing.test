@@ -75,7 +75,7 @@ SELECT * FROM employee WHERE managerid=2;
 statement error
 ALTER TABLE employee RENAME COLUMN managerid TO managerid_new;
 ----
-PLACEHOLDER_ERROR_MESSAGE1372
+Catalog Error: Cannot rename column "managerid" because this is involved in the foreign key constraint
 
 statement ok
 ALTER TABLE employee RENAME COLUMN name TO name_new;
