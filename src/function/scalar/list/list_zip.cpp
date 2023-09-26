@@ -7,6 +7,7 @@
 namespace duckdb {
 
 static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	int64_t bigint_reference_value = 3245234123123;
 	idx_t count = args.size();
 	idx_t args_size = args.ColumnCount();
 	auto *result_data = FlatVector::GetData<list_entry_t>(result);
@@ -41,7 +42,7 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 		}
 
 		// Calculation of the outgoing list size
-		idx_t len = is_flag ? INT_MAX : 0;
+		idx_t len = is_flag ? bigint_reference_value : 0;
 		for (idx_t i = 0; i < args_size; i++) {
 			idx_t curr_size;
 			if (args.data[i].GetType() == LogicalType::SQLNULL || ListVector::GetListSize(args.data[i]) == 0) {
@@ -65,6 +66,12 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	ListVector::SetListSize(result, result_size);
 	ListVector::Reserve(result, result_size);
+	vector<SelectionVector> selections;
+	vector<ValidityMask> masks;
+	for (idx_t i = 0; i < args_size; i++) {
+		selections.push_back(SelectionVector(result_size));
+		masks.push_back(ValidityMask(result_size));
+	}
 
 	idx_t offset = 0;
 	for (idx_t j = 0; j < count; j++) {
@@ -78,26 +85,38 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 			// Copying values from the given lists
 			if (curr.validity.RowIsValid(sel_idx)) {
 				auto input_lists_data = UnifiedVectorFormat::GetData<list_entry_t>(curr);
-				Vector &curr_entry = ListVector::GetEntry(args.data[i]);
 				curr_off = input_lists_data[sel_idx].offset;
 				curr_len = input_lists_data[sel_idx].length;
 				auto copy_len = len < curr_len ? len : curr_len;
-				VectorOperations::Copy(curr_entry, (*struct_entries[i]), copy_len + curr_off, curr_off, offset);
+				idx_t entry = offset;
+				for (idx_t k = 0; k < copy_len; k++) {
+					if (!FlatVector::Validity(ListVector::GetEntry(args.data[i])).RowIsValid(curr_off + k)) {
+						masks[i].SetInvalid(entry + k);
+					}
+					selections[i].set_index(entry + k, curr_off + k);
+				}
 			}
 
 			// Set NULL values for list that are shorter than the output list
 			if (len > curr_len) {
 				for (idx_t d = curr_len; d < len; d++) {
-					ValidityMask &entry_validity = FlatVector::Validity((*struct_entries[i]));
-					entry_validity.SetInvalid(d + offset);
+					masks[i].SetInvalid(d + offset);
+					selections[i].set_index(d + offset, 0);
 				}
 			}
 		}
 		result_data[j].length = len;
 		result_data[j].offset = offset;
-		result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 		offset += len;
 	}
+	for (idx_t child_idx = 0; child_idx < args_size; child_idx++) {
+		if (!(args.data[child_idx].GetType() == LogicalType::SQLNULL))
+			struct_entries[child_idx]->Slice(ListVector::GetEntry(args.data[child_idx]), selections[child_idx],
+			                                 result_size);
+		struct_entries[child_idx]->Flatten(result_size);
+		FlatVector::SetValidity((*struct_entries[child_idx]), masks[child_idx]);
+	}
+	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 }
 
 static unique_ptr<FunctionData> ListZipBind(ClientContext &context, ScalarFunction &bound_function,
@@ -124,34 +143,21 @@ static unique_ptr<FunctionData> ListZipBind(ClientContext &context, ScalarFuncti
 			break;
 		default:
 			throw ParameterNotResolvedException();
-			break;
 		}
 	}
 	bound_function.return_type = LogicalType::LIST(LogicalType::STRUCT(struct_children));
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
-static unique_ptr<BaseStatistics> ListZipStats(ClientContext &context, FunctionStatisticsInput &input) {
-	auto &child_stats = input.child_stats;
-	auto stats = child_stats[0].ToUnique();
-	for (idx_t i = 1; i < child_stats.size(); i++) {
-		if (child_stats[i].GetType() == LogicalTypeId::LIST) {
-			stats->Merge(child_stats[i]);
-		}
-	}
-	return stats;
-}
-
 ScalarFunction ListZipFun::GetFunction() {
 
-	auto fun = ScalarFunction({}, LogicalType::LIST(LogicalTypeId::STRUCT), ListZipFunction, ListZipBind, nullptr,
-	                          ListZipStats);
+	auto fun = ScalarFunction({}, LogicalType::LIST(LogicalTypeId::STRUCT), ListZipFunction, ListZipBind);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING; // Special handling needed?
 	return fun;
 }
 
 void ListZipFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"list_zip"}, GetFunction());
+	set.AddFunction({"list_zip", "array_zip"}, GetFunction());
 }
 } // namespace duckdb

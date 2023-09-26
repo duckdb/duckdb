@@ -3,6 +3,9 @@
 # group: [list]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE integers (i int[])
 
 statement ok
@@ -25,6 +28,11 @@ query I
 SELECT list_zip([1,2,3])
 ----
 [{'v1': 1}, {'v1': 2}, {'v1': 3}]
+
+query I
+SELECT list_zip([1,2,3], [2,3,4], [3,4,5], []);
+----
+[{'v1': 1, 'v2': 2, 'v3': 3, 'v4': NULL}, {'v1': 2, 'v2': 3, 'v3': 4, 'v4': NULL}, {'v1': 3, 'v2': 4, 'v3': 5, 'v4': NULL}]
 
 query I
 SELECT list_zip([1,2,3], [1,2,3])
@@ -62,12 +70,25 @@ SELECT list_zip([1,2,3], [], true)
 []
 
 query I
+SELECT list_zip([1,2,3], [2,3,4], [3,4,5], [], true);
+----
+[]
+
+query I
 SELECT list_zip(a.i, b.i) FROM integers AS a, integers AS b
 ----
 [{'i': 1, 'i': 1}, {'i': 2, 'i': 2}, {'i': 3, 'i': 3}]
 [{'i': 4, 'i': 1}, {'i': 5, 'i': 2}, {'i': 6, 'i': 3}]
 [{'i': 1, 'i': 4}, {'i': 2, 'i': 5}, {'i': 3, 'i': 6}]
 [{'i': 4, 'i': 4}, {'i': 5, 'i': 5}, {'i': 6, 'i': 6}]
+
+query I
+SELECT list_zip(a.i, b.i, b.i) FROM integers AS a, integers AS b
+----
+[{'i': 1, 'i': 1, 'i': 1}, {'i': 2, 'i': 2, 'i': 2}, {'i': 3, 'i': 3, 'i': 3}]
+[{'i': 4, 'i': 1, 'i': 1}, {'i': 5, 'i': 2, 'i': 2}, {'i': 6, 'i': 3, 'i': 3}]
+[{'i': 1, 'i': 4, 'i': 4}, {'i': 2, 'i': 5, 'i': 5}, {'i': 3, 'i': 6, 'i': 6}]
+[{'i': 4, 'i': 4, 'i': 4}, {'i': 5, 'i': 5, 'i': 5}, {'i': 6, 'i': 6, 'i': 6}]
 
 query I
 SELECT list_zip([1,2,3], true)
