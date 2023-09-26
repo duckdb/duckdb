@@ -54,7 +54,7 @@ SQLRETURN SQL_API SQLFetch(SQLHSTMT statement_handle) {
 		return ret;
 	}
 
-	auto ret = hstmt->odbc_fetcher->DummyFetch();
+	ret = hstmt->odbc_fetcher->DummyFetch();
 	if (ret != SQL_NEED_DATA) {
 		return ret;
 	}

@@ -22,7 +22,6 @@ public:
 	void SetDescUnsignedField(const duckdb::LogicalType &type);
 
 public:
-	SQLINTEGER sql_desc_auto_unique_value;
 	std::string sql_desc_base_column_name;
 	std::string sql_desc_base_table_name;
 	SQLINTEGER sql_desc_case_sensitive;

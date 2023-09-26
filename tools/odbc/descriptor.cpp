@@ -768,7 +768,6 @@ void OdbcHandleDesc::AddMoreRecords(SQLSMALLINT new_size) {
 
 // Copy constructor
 DescRecord::DescRecord(const DescRecord &other) {
-	sql_desc_auto_unique_value = other.sql_desc_auto_unique_value;
 	sql_desc_base_column_name = other.sql_desc_base_column_name;
 	sql_desc_base_table_name = other.sql_desc_base_table_name;
 	sql_desc_case_sensitive = other.sql_desc_case_sensitive;

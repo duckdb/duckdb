@@ -239,7 +239,7 @@ SQLRETURN SQL_API SQLParamData(SQLHSTMT statement_handle, SQLPOINTER *value_ptr_
 		return ret;
 	}
 
-	auto ret = hstmt->param_desc->GetNextParam(value_ptr_ptr);
+	ret = hstmt->param_desc->GetNextParam(value_ptr_ptr);
 	if (ret != SQL_NO_DATA) {
 		return ret;
 	}
@@ -263,7 +263,7 @@ SQLRETURN SQL_API SQLPutData(SQLHSTMT statement_handle, SQLPOINTER data_ptr, SQL
 		return ret;
 	}
 
-	auto ret = hstmt->param_desc->PutData(data_ptr, str_len_or_ind_ptr);
+	ret = hstmt->param_desc->PutData(data_ptr, str_len_or_ind_ptr);
 	if (ret == SQL_SUCCESS) {
 		return ret;
 	}

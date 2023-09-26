@@ -84,6 +84,37 @@ TEST_CASE("Test SQLColAttribute (descriptor information for a column)", "[odbc]"
 		}
 	}
 
+	// Determine if the column has a fixed precision
+	SQLLEN has_fixed_precision;
+	EXECUTE_AND_CHECK("SQLColAttribute", SQLColAttribute, hstmt, 1, SQL_DESC_FIXED_PREC_SCALE, nullptr, 0, nullptr,
+	                  &has_fixed_precision);
+	REQUIRE(has_fixed_precision == SQL_FALSE);
+
+	// Retrieve the descriptor handle
+	SQLHDESC desc_handle;
+	EXECUTE_AND_CHECK("SQLGetStmtAttr", SQLGetStmtAttr, hstmt, SQL_ATTR_IMP_PARAM_DESC, &desc_handle, 0, nullptr);
+
+	//Get catalog name using SQLGetDescField
+	SQLINTEGER catalog_name_length;
+	const char *buffer;
+	EXECUTE_AND_CHECK("SQLGetDescField", SQLGetDescField, desc_handle, 1, SQL_DESC_CATALOG_NAME, ConvertToSQLPOINTER(buffer), sizeof(buffer),
+	                  &catalog_name_length);
+	REQUIRE(catalog_name_length == 0);
+	REQUIRE(STR_EQUAL(buffer, ""));
+
+	// Determine if column is auto incremental
+	SQLLEN is_auto_incremental;
+	ret = SQLColAttribute(hstmt, 1, SQL_DESC_AUTO_UNIQUE_VALUE, nullptr, 0, nullptr, &is_auto_incremental);
+	REQUIRE(ret == SQL_SUCCESS_WITH_INFO);
+	REQUIRE(is_auto_incremental == SQL_FALSE);
+
+
+	// Create table and retrieve base table name using SQLColAttribute, should fail because the statement is not a SELECT
+	EXECUTE_AND_CHECK("SQLExecDirect", SQLExecDirect, hstmt,
+	                  ConvertToSQLCHAR("CREATE TABLE test (a INTEGER, b INTEGER)"), SQL_NTS);
+	ret = SQLColAttribute(hstmt, 1, SQL_DESC_BASE_TABLE_NAME, nullptr, 0, nullptr, nullptr);
+	REQUIRE(ret == SQL_ERROR);
+
 	// SQLColAttribute should fail if the column number is out of bounds
 	ret = SQLColAttribute(hstmt, 7, SQL_DESC_TYPE_NAME, nullptr, 0, nullptr, nullptr);
 	REQUIRE(ret == SQL_ERROR);

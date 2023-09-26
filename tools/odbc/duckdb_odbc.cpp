@@ -149,6 +149,7 @@ void OdbcHandleStmt::FillIRD() {
 
 		new_record.sql_desc_base_column_name = stmt->GetNames()[col_idx];
 		new_record.sql_desc_name = new_record.sql_desc_base_column_name;
+		new_record.sql_desc_base_table_name =
 		new_record.sql_desc_label = stmt->GetNames()[col_idx];
 		new_record.sql_desc_length = new_record.sql_desc_label.size();
 		new_record.sql_desc_octet_length = 0;
