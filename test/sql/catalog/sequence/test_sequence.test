@@ -523,7 +523,7 @@ CREATE SEQUENCE fresh;
 statement error
 select currval('fresh');
 ----
-PLACEHOLDER_ERROR_MESSAGE1917
+Serialization Error: currval: sequence is not yet defined in this session
 
 # convert inputs into varchar if that's not the case
 statement error

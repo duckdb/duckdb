@@ -265,7 +265,9 @@ IO Error: Aggregate state size mismatch, expect 24, got 24 and 4
 statement error
 SELECT COMBINE((SUM(42) EXPORT_STATE)::BLOB, SUM(42) EXPORT_STATE);
 ----
-PLACEHOLDER_ERROR_MESSAGE1668
+Binder Error: No function matches the given name and argument types 'combine(BLOB, AGGREGATE_STATE<sum(INTEGER)::HUGEINT>)'. You might need to add explicit type casts.
+	Candidate functions:
+	combine(AGGREGATE_STATE<?>, ANY) -> AGGREGATE_STATE<?>
 
 # simulate round tripping
 require parquet

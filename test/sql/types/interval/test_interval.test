@@ -281,7 +281,7 @@ Invalid Input Error: Type INT64 with value 100000000000000000 can't be cast beca
 statement error
 SELECT INTERVAL '1294967296days 1294967296days';
 ----
-PLACEHOLDER_ERROR_MESSAGE523
+Out of Range Error: interval value is out of range
 
 # overflow in micro seconds
 statement error

@@ -119,7 +119,7 @@ Conversion Error: Could not cast value 100 to DECIMAL(18,17)
 statement error
 SELECT 100::INTEGER::DECIMAL(9,7)
 ----
-PLACEHOLDER_ERROR_MESSAGE338
+Conversion Error: Could not cast value 100 to DECIMAL(9,7)
 
 statement error
 SELECT 100::INTEGER::DECIMAL(38,37)

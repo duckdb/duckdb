@@ -275,7 +275,7 @@ Parser Error: syntax error at end of input
 statement error
 CREATE MACRO wrong_order(a := 3, b)
 ----
-PLACEHOLDER_ERROR_MESSAGE1831
+Parser Error: syntax error at end of input
 
 # only constant default values are allowed
 statement error

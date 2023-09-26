@@ -164,7 +164,7 @@ Conversion Error: Type INT128 with value 9223372036854775808 can't be cast becau
 statement error
 SELECT '-9223372036854775809'::HUGEINT::BIGINT;
 ----
-PLACEHOLDER_ERROR_MESSAGE1025
+Conversion Error: Type INT128 with value -9223372036854775809 can't be cast because the value is out of range for the destination type INT64
 
 statement ok
 SELECT 9223372036854775807::HUGEINT::BIGINT, (-9223372036854775808)::HUGEINT::BIGINT;

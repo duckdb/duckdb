@@ -307,7 +307,10 @@ CREATE MACRO out_of_path.oop_macro(a, b) AS a * b;
 statement error
 SELECT main.test_macro(1, 2);
 ----
-PLACEHOLDER_ERROR_MESSAGE1876
+Catalog Error: Scalar Function with name test_macro does not exist!
+Did you mean "memory.test.test_macro"?
+LINE 1: SELECT main.test_macro(1, 2);
+               ^
 
 statement error
 SELECT oop_macro(1, 2);

@@ -126,7 +126,10 @@ Binder Error: No function matches the given name and argument types 'min()'. You
 statement error
 SELECT MIN(1, 2, 3)
 ----
-PLACEHOLDER_ERROR_MESSAGE1566
+Binder Error: No function matches the given name and argument types 'min(INTEGER, INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	min(DECIMAL) -> DECIMAL
+	min(ANY) -> ANY
 
 statement error
 SELECT MIN(MIN(1))

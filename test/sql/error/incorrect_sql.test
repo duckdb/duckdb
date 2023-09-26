@@ -169,7 +169,10 @@ LINE 1: SELECT * FROM integers2;
 statement error
 SELECT * FROM bla.integers2;
 ----
-PLACEHOLDER_ERROR_MESSAGE3080
+Catalog Error: Table with name integers2 does not exist!
+Did you mean "pg_catalog.pg_indexes"?
+LINE 1: SELECT * FROM bla.integers2;
+                      ^
 
 # non-existent table in view
 statement error

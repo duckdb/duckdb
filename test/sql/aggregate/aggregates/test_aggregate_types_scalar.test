@@ -191,7 +191,14 @@ Binder Error: No function matches the given name and argument types 'avg(BOOLEAN
 statement error
 SELECT AVG('hello')
 ----
-PLACEHOLDER_ERROR_MESSAGE1621
+Binder Error: No function matches the given name and argument types 'avg(VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	avg(DECIMAL) -> DECIMAL
+	avg(SMALLINT) -> DOUBLE
+	avg(INTEGER) -> DOUBLE
+	avg(BIGINT) -> DOUBLE
+	avg(HUGEINT) -> DOUBLE
+	avg(DOUBLE) -> DOUBLE
 
 statement error
 SELECT AVG(DATE '1992-02-02')

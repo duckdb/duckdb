@@ -341,4 +341,4 @@ select col['eeccb8c5-9943-b2bb-bb5e-222f4e14b687'::UUID] from uuid_key;
 statement error
 create table uuid_key_dup as select MAP_FROM_ENTRIES(ARRAY[('eeccb8c5-9943-b2bb-bb5e-222f4e14b687'::UUID, 'x'), ('eeccb8c5-9943-b2bb-bb5e-222f4e14b687'::UUID, 'y')]) col;
 ----
-PLACEHOLDER_ERROR_MESSAGE872
+Invalid Input Error: Map keys have to be unique

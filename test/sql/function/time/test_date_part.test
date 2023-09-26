@@ -171,7 +171,11 @@ Binder Error: No function matches the given name and argument types 'dayofyear(T
 statement error
 select extract(yearweek from time '10:00:00');
 ----
-PLACEHOLDER_ERROR_MESSAGE2057
+Binder Error: No function matches the given name and argument types 'yearweek(TIME)'. You might need to add explicit type casts.
+	Candidate functions:
+	yearweek(DATE) -> BIGINT
+	yearweek(TIMESTAMP) -> BIGINT
+	yearweek(INTERVAL) -> BIGINT
 
 statement error
 select extract(century from time '10:00:00');

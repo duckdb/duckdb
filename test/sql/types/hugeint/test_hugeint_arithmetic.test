@@ -343,7 +343,7 @@ SELECT 1 - (-170141183460469231731687303715884105726);
 statement error
 SELECT 1 - (-170141183460469231731687303715884105727);
 ----
-PLACEHOLDER_ERROR_MESSAGE1045
+Out of Range Error: Overflow in subtraction of INT128 (1 - -170141183460469231731687303715884105727)!
 
 # the other way around (i.e. move away from the overflow direction)
 query I

@@ -216,7 +216,7 @@ Constraint Error: Violates foreign key constraint because key "j: 2" is still re
 statement error
 UPDATE fkt SET i=4 WHERE l=102
 ----
-PLACEHOLDER_ERROR_MESSAGE1280
+Binder Error: Referenced update column i not found in table!
 
 statement error
 UPDATE fkt SET i=4 WHERE l=102
