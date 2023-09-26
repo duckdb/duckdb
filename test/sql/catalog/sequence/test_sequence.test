@@ -529,7 +529,8 @@ Serialization Error: currval: sequence is not yet defined in this session
 statement error
 select nextval(1 + 1);
 ----
-PLACEHOLDER_ERROR_MESSAGE1916
+Catalog Error: Sequence with name 2 does not exist!
+Did you mean "seq2"?
 
 statement error
 select currval(true);

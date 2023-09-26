@@ -221,7 +221,7 @@ Binder Error: Referenced update column i not found in table!
 statement error
 UPDATE fkt SET i=4 WHERE l=102
 ----
-PLACEHOLDER_ERROR_MESSAGE1279
+Binder Error: Referenced update column i not found in table!
 
 statement ok
 DROP INDEX k_index

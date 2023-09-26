@@ -825,7 +825,7 @@ Conversion Error: Date out of range: 166668686-1-5
 statement error
 select time_bucket('1 microseconds'::interval, '290309-12-21 (BC) 23:59:59.999999'::timestamp);
 ----
-PLACEHOLDER_ERROR_MESSAGE2475
+Conversion Error: timestamp field value out of range: "290309-12-21 (BC) 23:59:59.999999", expected format is (YYYY-MM-DD HH:MM:SS[.US][±HH:MM| ZONE])
 
 query I
 select time_bucket('1 microseconds'::interval, '290309-12-22 (BC) 00:00:00'::timestamp);

@@ -287,7 +287,7 @@ Out of Range Error: interval value is out of range
 statement error
 SELECT INTERVAL '100000000000000000000msecs';
 ----
-PLACEHOLDER_ERROR_MESSAGE522
+Invalid Input Error: Could not convert string '100000000000000000000' to INT64
 
 statement error
 SELECT INTERVAL '100000000000000000hours';

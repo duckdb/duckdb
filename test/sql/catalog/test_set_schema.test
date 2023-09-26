@@ -315,7 +315,10 @@ LINE 1: SELECT main.test_macro(1, 2);
 statement error
 SELECT oop_macro(1, 2);
 ----
-PLACEHOLDER_ERROR_MESSAGE1875
+Catalog Error: Scalar Function with name oop_macro does not exist!
+Did you mean "out_of_path.oop_macro"?
+LINE 1: SELECT oop_macro(1, 2);
+               ^
 
 statement ok
 SELECT main_macro(1, 2);

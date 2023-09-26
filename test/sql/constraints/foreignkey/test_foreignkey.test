@@ -178,7 +178,7 @@ ALTER TABLE song DROP COLUMN songname_new;
 statement error
 DROP TABLE album;
 ----
-PLACEHOLDER_ERROR_MESSAGE1321
+Catalog Error: Could not drop the table because this table is main key table of the table "song"
 
 statement ok
 DROP TABLE song;

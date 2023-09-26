@@ -161,7 +161,7 @@ Conversion Error: Could not convert string "10000000000" to DECIMAL(10,0)
 statement error
 SELECT CAST('10000000000'::DOUBLE AS DECIMAL(10,0))
 ----
-PLACEHOLDER_ERROR_MESSAGE385
+Conversion Error: Could not cast value 10000000000.000000 to DECIMAL(10,0)
 
 statement error
 SELECT CAST(10000000000::DECIMAL(11,0) AS DECIMAL(10,0))

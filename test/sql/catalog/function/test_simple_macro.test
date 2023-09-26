@@ -281,7 +281,8 @@ Parser Error: syntax error at end of input
 statement error
 CREATE MACRO select_plus_floats(a, f := b) AS (SELECT a + f FROM floats)
 ----
-PLACEHOLDER_ERROR_MESSAGE1830
+Binder Error: Referenced column "f" not found in FROM clause!
+Candidate bindings: "floats.b"
 
 # +(FLOAT, VARCHAR) does not work - constant types are checked at create time
 statement error

@@ -451,7 +451,7 @@ Conversion Error: Date out of range: 166668686-1-5
 statement error
 select time_bucket('1 month'::interval, '5877642-06-25 (BC)'::date);
 ----
-PLACEHOLDER_ERROR_MESSAGE2025
+Conversion Error: Date out of range: -5877641-6-1
 
 query I
 select time_bucket('1 month'::interval, '5877642-07-01 (BC)'::date);

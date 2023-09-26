@@ -231,7 +231,7 @@ SELECT '1992-05-31'::DATE::VARCHAR
 statement error
 SELECT '1992-05-32'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE594
+Conversion Error: date field value out of range: "1992-05-32", expected format is (YYYY-MM-DD)
 
 statement ok
 SELECT '1992-06-30'::DATE::VARCHAR

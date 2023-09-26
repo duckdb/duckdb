@@ -124,7 +124,7 @@ Conversion Error: Could not cast value 100 to DECIMAL(9,7)
 statement error
 SELECT 100::INTEGER::DECIMAL(38,37)
 ----
-PLACEHOLDER_ERROR_MESSAGE337
+Conversion Error: Could not cast value 100 to DECIMAL(38,37)
 
 # bigint
 query IIII

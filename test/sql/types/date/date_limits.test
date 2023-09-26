@@ -127,7 +127,7 @@ select '5877642-06-25 (BC)'::date + interval (1) month
 statement error
 select '5877642-06-23 (BC)'::date - interval (1) month
 ----
-PLACEHOLDER_ERROR_MESSAGE629
+Conversion Error: date field value out of range: "5877642-06-23 (BC)", expected format is (YYYY-MM-DD)
 
 statement error
 select '5877642-06-23 (BC)'::date - interval (2147483647) month
