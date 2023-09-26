@@ -57,6 +57,8 @@ SELECT plus42(3) + a FROM integers
 # we should not be able to query the CTE from outside the function call
 statement error
 SELECT plus42(42) + answer FROM cte;
+----
+PLACEHOLDER_ERROR_MESSAGE1817
 
 statement ok
 CREATE MACRO plus1(a) AS (WITH tbl AS (SELECT 1 AS one) SELECT one + a FROM tbl)

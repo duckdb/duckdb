@@ -105,9 +105,13 @@ world r
 # unsupported aggregates
 statement error
 SELECT SUM(s) FROM strings GROUP BY g ORDER BY g
+----
+PLACEHOLDER_ERROR_MESSAGE1611
 
 statement error
 SELECT AVG(s) FROM strings GROUP BY g ORDER BY g
+----
+PLACEHOLDER_ERROR_MESSAGE1610
 
 # booleans
 statement ok
@@ -162,9 +166,13 @@ NULL
 
 statement error
 SELECT SUM(b) FROM booleans GROUP BY g ORDER BY g
+----
+PLACEHOLDER_ERROR_MESSAGE1609
 
 statement error
 SELECT AVG(b) FROM booleans GROUP BY g ORDER BY g
+----
+PLACEHOLDER_ERROR_MESSAGE1608
 
 statement ok
 CREATE TABLE integers(i INTEGER, g INTEGER)

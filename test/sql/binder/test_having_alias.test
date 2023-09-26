@@ -21,6 +21,8 @@ SELECT i, COUNT(*) AS k FROM integers GROUP BY i HAVING k=1 ORDER BY i;
 # alias cannot be qualified
 statement error
 SELECT i, COUNT(*) AS k FROM integers GROUP BY i HAVING integers.k=1 ORDER BY i;
+----
+PLACEHOLDER_ERROR_MESSAGE1427
 
 # column name wins over the alias
 query II
@@ -49,9 +51,13 @@ SELECT COUNT(i) AS j FROM integers HAVING j=5;
 # (SQLite says: 'Error: a GROUP BY clause is required before HAVING')
 statement error
 SELECT COUNT(i) AS i FROM integers HAVING i=5;
+----
+PLACEHOLDER_ERROR_MESSAGE1426
 
 statement error
 SELECT COUNT(i) AS i FROM integers HAVING i=5 ORDER BY i;
+----
+PLACEHOLDER_ERROR_MESSAGE1425
 
 # use the same alias multiple times
 query I
@@ -68,7 +74,11 @@ SELECT COUNT(*) FROM (SELECT i, SUM(RANDOM()) AS k FROM integers GROUP BY i HAVI
 # if this is qualified we get an error
 statement error
 SELECT COUNT(i) AS i FROM integers HAVING integers.i=5 ORDER BY i;
+----
+PLACEHOLDER_ERROR_MESSAGE1424
 
 # recursive alias without aggregate
 statement error
 SELECT i + i AS i FROM integers HAVING i=5 ORDER BY i;
+----
+PLACEHOLDER_ERROR_MESSAGE1423

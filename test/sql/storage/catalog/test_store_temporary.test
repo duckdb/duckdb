@@ -27,6 +27,8 @@ DELETE FROM temp.a
 # check schema
 statement error
 DELETE FROM asdf.a
+----
+PLACEHOLDER_ERROR_MESSAGE2558
 
 # temporary sequences
 statement ok
@@ -77,6 +79,8 @@ SELECT * FROM persistent
 # temporary table is gone
 statement error
 SELECT * FROM a
+----
+PLACEHOLDER_ERROR_MESSAGE2557
 
 statement ok
 CREATE TEMPORARY TABLE a (i INTEGER)

@@ -274,3 +274,5 @@ select count(*), course, type
 # course is not a group or aggregate column
 statement error
 select course from students group by ();
+----
+PLACEHOLDER_ERROR_MESSAGE1732

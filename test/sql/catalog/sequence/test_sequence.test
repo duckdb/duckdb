@@ -15,6 +15,8 @@ CREATE SEQUENCE seq;
 # cannot create duplicate sequence
 statement error
 CREATE SEQUENCE seq;
+----
+PLACEHOLDER_ERROR_MESSAGE1932
 
 # ignore errors if sequence already exists
 statement ok
@@ -93,6 +95,8 @@ NULL
 # can't create a sequence that already exists
 statement error
 CREATE SEQUENCE seq;
+----
+PLACEHOLDER_ERROR_MESSAGE1931
 
 # drop the sequence
 statement ok
@@ -101,6 +105,8 @@ DROP SEQUENCE seq;
 # can't drop non-existing sequence
 statement error
 DROP SEQUENCE seq;
+----
+PLACEHOLDER_ERROR_MESSAGE1930
 
 # but doesn't fail with IF EXISTS
 statement ok
@@ -162,6 +168,8 @@ SELECT nextval('seq')
 # max value exceeded
 statement error
 SELECT nextval('seq')
+----
+PLACEHOLDER_ERROR_MESSAGE1929
 
 statement ok
 DROP SEQUENCE seq;
@@ -262,6 +270,8 @@ SELECT currval('seq')
 
 statement error
 SELECT nextval('seq')
+----
+PLACEHOLDER_ERROR_MESSAGE1928
 
 query I
 SELECT currval('seq')
@@ -292,6 +302,8 @@ SELECT nextval('seq')
 
 statement error
 SELECT nextval('seq')
+----
+PLACEHOLDER_ERROR_MESSAGE1927
 
 statement ok
 DROP SEQUENCE seq;
@@ -364,10 +376,14 @@ DROP SEQUENCE seq;
 # min_value defaults to 1, setting start to -1 gives start < min_value
 statement error
 CREATE SEQUENCE seq INCREMENT 1 START -1 CYCLE;
+----
+PLACEHOLDER_ERROR_MESSAGE1926
 
 # max_value defaults to -1, setting start to 1 gives start > max_value
 statement error
 CREATE SEQUENCE seq INCREMENT -1 START 1 CYCLE;
+----
+PLACEHOLDER_ERROR_MESSAGE1925
 
 # sequences in schemas
 statement ok
@@ -406,26 +422,38 @@ SELECT currval('"a"."seq"'), currval('"b".seq');
 # unterminated quotes
 statement error
 SELECT nextval('"a"."seq');
+----
+PLACEHOLDER_ERROR_MESSAGE1924
 
 # too many separators
 statement error
 SELECT nextval('a.b.c.d');
+----
+PLACEHOLDER_ERROR_MESSAGE1923
 
 # start exceeds max value
 statement error
 CREATE SEQUENCE seq MAXVALUE 5 START WITH 6;
+----
+PLACEHOLDER_ERROR_MESSAGE1922
 
 # start preceeds min value
 statement error
 CREATE SEQUENCE seq MINVALUE 5 START WITH 4;
+----
+PLACEHOLDER_ERROR_MESSAGE1921
 
 # min value bigger than max
 statement error
 CREATE SEQUENCE seq MINVALUE 7 MAXVALUE 5;
+----
+PLACEHOLDER_ERROR_MESSAGE1920
 
 # increment must not be 0
 statement error
 CREATE SEQUENCE seq INCREMENT 0;
+----
+PLACEHOLDER_ERROR_MESSAGE1919
 
 statement ok
 CREATE SEQUENCE seq;
@@ -484,6 +512,8 @@ INSERT INTO strings VALUES ('nonexistant_seq')
 
 statement error
 SELECT s, nextval(s) FROM strings
+----
+PLACEHOLDER_ERROR_MESSAGE1918
 
 # currval causes error for new sequence
 statement ok
@@ -491,30 +521,46 @@ CREATE SEQUENCE fresh;
 
 statement error
 select currval('fresh');
+----
+PLACEHOLDER_ERROR_MESSAGE1917
 
 # convert inputs into varchar if that's not the case
 statement error
 select nextval(1 + 1);
+----
+PLACEHOLDER_ERROR_MESSAGE1916
 
 statement error
 select currval(true);
+----
+PLACEHOLDER_ERROR_MESSAGE1915
 
 # max value specified more than once
 statement error
 CREATE SEQUENCE wrongseq NO MAXVALUE MAXVALUE 2;
+----
+PLACEHOLDER_ERROR_MESSAGE1914
 
 # min value specified more than once
 statement error
 CREATE SEQUENCE wrongseq MINVALUE 10 MINVALUE 2;
+----
+PLACEHOLDER_ERROR_MESSAGE1913
 
 # start value specified more than once
 statement error
 CREATE SEQUENCE wrongseq START 13 START WITH 3;
+----
+PLACEHOLDER_ERROR_MESSAGE1912
 
 # cycle value specified more than once
 statement error
 CREATE SEQUENCE wrongseq CYCLE MAXVALUE 2 MINVALUE 1 NO CYCLE;
+----
+PLACEHOLDER_ERROR_MESSAGE1911
 
 # increment value specified more than once
 statement error
 CREATE SEQUENCE wrongseq INCREMENT 2 INCREMENT BY -1;
+----
+PLACEHOLDER_ERROR_MESSAGE1910

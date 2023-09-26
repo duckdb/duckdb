@@ -33,10 +33,14 @@ CREATE SCHEMA s3;
 # error IO Error: Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag
 statement error
 CHECKPOINT;
+----
+PLACEHOLDER_ERROR_MESSAGE26
 
 # error IO Error: Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag
 statement error
 CHECKPOINT;
+----
+PLACEHOLDER_ERROR_MESSAGE25
 
 restart
 

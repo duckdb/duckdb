@@ -36,6 +36,8 @@ PRAGMA table_info('test.v')
 # but querying the view fails
 statement error
 SELECT * FROM test.v
+----
+PLACEHOLDER_ERROR_MESSAGE2554
 
 
 loop i 0 2
@@ -53,6 +55,8 @@ PRAGMA table_info('test.v')
 
 statement error
 SELECT * FROM test.v
+----
+PLACEHOLDER_ERROR_MESSAGE2553
 
 # after recreating the table, we can query the view again
 statement ok

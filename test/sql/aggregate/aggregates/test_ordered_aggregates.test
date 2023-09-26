@@ -113,57 +113,85 @@ statement error
 SELECT "dest", mode() WITHIN GROUP (ORDER BY "arr_delay", "arr_time") AS "median_delay"
 FROM "flights"
 GROUP BY "dest"
+----
+PLACEHOLDER_ERROR_MESSAGE1701
 
 # Unknown ordered aggregate "duck".
 statement error
 SELECT "dest", duck(0.5) WITHIN GROUP (ORDER BY "arr_delay") AS "duck_delay"
 FROM "flights"
 GROUP BY "dest"
+----
+PLACEHOLDER_ERROR_MESSAGE1700
 
 # Wrong number of arguments for PERCENTILE_DISC
 statement error
 select percentile_disc() within group(order by i) from generate_series(0,100) tbl(i);
+----
+PLACEHOLDER_ERROR_MESSAGE1699
 
 statement error
 select percentile_disc(0.25, 0.5) within group(order by i) from generate_series(0,100) tbl(i);
+----
+PLACEHOLDER_ERROR_MESSAGE1698
 
 # Wrong number of arguments for PERCENTILE_CONT
 statement error
 select percentile_cont() within group(order by i) from generate_series(0,100) tbl(i);
+----
+PLACEHOLDER_ERROR_MESSAGE1697
 
 statement error
 select percentile_cont(0.25, 0.5) within group(order by i) from generate_series(0,100) tbl(i);
+----
+PLACEHOLDER_ERROR_MESSAGE1696
 
 # NaN is not allowed
 statement error
 SELECT percentile_disc(CAST('NaN' AS REAL)) WITHIN GROUP (ORDER BY 1);
+----
+PLACEHOLDER_ERROR_MESSAGE1695
 
 # Empty list is also not allowed
 statement error
 SELECT percentile_disc([]) WITHIN GROUP (ORDER BY LAST);
+----
+PLACEHOLDER_ERROR_MESSAGE1694
 
 # Wrong number of arguments for MODE
 statement error
 select mode(0.25) within group(order by i) from generate_series(0,100) tbl(i);
+----
+PLACEHOLDER_ERROR_MESSAGE1693
 
 # No function matches the given name and argument types 'quantile_disc(BIGINT, VARCHAR)'
 statement error
 select percentile_disc('duck') within group(order by i) from generate_series(0,100) tbl(i);
+----
+PLACEHOLDER_ERROR_MESSAGE1692
 
 # No function matches the given name and argument types 'quantile_cont(BIGINT, VARCHAR)'
 statement error
 select percentile_cont('duck') within group(order by i) from generate_series(0,100) tbl(i);
+----
+PLACEHOLDER_ERROR_MESSAGE1691
 
 # aggregate function calls cannot be nested
 statement error
 SELECT percentile_disc(sum(1)) WITHIN GROUP (ORDER BY 1 DESC);
+----
+PLACEHOLDER_ERROR_MESSAGE1690
 
 # NULL fractions with DESC should not be inverted
 statement error
 SELECT percentile_disc(strftime(DATE '1-11-25',NULL)) WITHIN GROUP (ORDER BY 1 DESC);
+----
+PLACEHOLDER_ERROR_MESSAGE1689
 
 statement error
 SELECT percentile_cont(CASE 1 WHEN 2 THEN 3 END) WITHIN GROUP (ORDER BY 1 DESC);
+----
+PLACEHOLDER_ERROR_MESSAGE1688
 
 # Negative fractions are not allowed
 
@@ -172,9 +200,13 @@ foreach sense ASC DESC
 statement error
 SELECT percentile_disc(-.5) WITHIN GROUP (order by col ${sense}) 
 FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
+----
+PLACEHOLDER_ERROR_MESSAGE1687
 
 statement error
 SELECT percentile_disc([-.25, .5, .75]) WITHIN GROUP (order by col ${sense}) 
 FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
+----
+PLACEHOLDER_ERROR_MESSAGE1686
 
 endloop

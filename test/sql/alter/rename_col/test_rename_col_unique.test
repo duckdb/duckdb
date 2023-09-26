@@ -10,6 +10,8 @@ INSERT INTO test (i, j) VALUES (1, 1), (2, 2)
 
 statement error
 INSERT INTO test (i, j) VALUES (1, 1)
+----
+PLACEHOLDER_ERROR_MESSAGE2689
 
 statement ok
 ALTER TABLE test RENAME COLUMN i TO k
@@ -20,4 +22,6 @@ INSERT INTO test (k, j) VALUES (3, 3), (4, 4)
 
 statement error
 INSERT INTO test (k, j) VALUES (1, 1)
+----
+PLACEHOLDER_ERROR_MESSAGE2688
 

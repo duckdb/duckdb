@@ -159,6 +159,8 @@ fresh food
 
 statement error
 SELECT * FROM categories GROUP BY ()
+----
+PLACEHOLDER_ERROR_MESSAGE175
 
 statement ok
 ROLLBACK

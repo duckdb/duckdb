@@ -11,22 +11,32 @@ CREATE VIEW vintegers AS SELECT 42;
 # cannot CREATE OR REPLACE a table with a view
 statement error
 CREATE OR REPLACE VIEW integers AS SELECT 42;
+----
+PLACEHOLDER_ERROR_MESSAGE1810
 
 # cannot use DROP VIEW to drop a table
 statement error
 DROP VIEW integers
+----
+PLACEHOLDER_ERROR_MESSAGE1809
 
 # cannot drop a table that does not exist
 statement error
 DROP TABLE blabla
+----
+PLACEHOLDER_ERROR_MESSAGE1808
 
 # cannot alter a table that does not exist
 statement error
 ALTER TABLE blabla RENAME COLUMN i TO k
+----
+PLACEHOLDER_ERROR_MESSAGE1807
 
 # cannot drop view with DROP TABLE
 statement error
 DROP TABLE IF EXISTS vintegers
+----
+PLACEHOLDER_ERROR_MESSAGE1806
 
 statement ok
 CREATE INDEX i_index ON integers(i);
@@ -34,6 +44,8 @@ CREATE INDEX i_index ON integers(i);
 # cannot create an index that already exists
 statement error
 CREATE INDEX i_index ON integers(i);
+----
+PLACEHOLDER_ERROR_MESSAGE1805
 
 # with IF NOT EXISTS it does not fail!
 statement ok
@@ -46,6 +58,8 @@ DROP INDEX i_index
 # cannot drop the index again: it no longer exists
 statement error
 DROP INDEX i_index
+----
+PLACEHOLDER_ERROR_MESSAGE1804
 
 # IF NOT EXISTS does not report the failure
 statement ok
@@ -61,3 +75,5 @@ DROP TABLE integers;
 
 statement error
 DROP INDEX i_index
+----
+PLACEHOLDER_ERROR_MESSAGE1803

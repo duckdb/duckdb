@@ -11,18 +11,28 @@ CREATE TABLE integers(i INTEGER)
 # we use columns here that are not part of the table
 statement error
 SELECT MIN(a) OVER (PARTITION BY i ORDER BY i) FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE2800
 
 statement error
 SELECT MIN(i) OVER (PARTITION BY a ORDER BY i) FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE2799
 
 statement error
 SELECT MIN(i) OVER (PARTITION BY i ORDER BY a) FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE2798
 
 statement error
 SELECT MIN(i) OVER (PARTITION BY i, a ORDER BY i) FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE2797
 
 statement error
 SELECT MIN(i) OVER (PARTITION BY i ORDER BY i, a) FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE2796
 
 # now we only use the "proper" columns
 query I

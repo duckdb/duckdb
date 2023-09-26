@@ -33,6 +33,8 @@ CREATE TABLE tbl2 (
 	circular INTEGER AS (dependency),
 	dependency INTEGER AS (circular)
 );
+----
+PLACEHOLDER_ERROR_MESSAGE1197
 
 # Type is resolved, regardless of order
 statement ok

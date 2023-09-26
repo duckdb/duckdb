@@ -30,6 +30,10 @@ NULL
 
 statement error
 SELECT constant_or_null(1);
+----
+PLACEHOLDER_ERROR_MESSAGE2295
 
 statement error
 SELECT constant_or_null();
+----
+PLACEHOLDER_ERROR_MESSAGE2294

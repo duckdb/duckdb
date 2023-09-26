@@ -45,6 +45,8 @@ DROP MACRO plus1
 
 statement error
 SELECT plus1(2)
+----
+PLACEHOLDER_ERROR_MESSAGE1516
 
 # after recreating the macro we can use it again
 statement ok

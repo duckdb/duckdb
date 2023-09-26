@@ -5,12 +5,18 @@
 # enable profiling cannot be called
 statement error
 PRAGMA enable_profiling()
+----
+PLACEHOLDER_ERROR_MESSAGE1976
 
 statement error
 PRAGMA enable_profiling='unsupported'
+----
+PLACEHOLDER_ERROR_MESSAGE1975
 
 statement error
 PRAGMA profiling_output
+----
+PLACEHOLDER_ERROR_MESSAGE1974
 
 # select the location of where to save the profiling output (instead of printing to stdout)
 statement ok

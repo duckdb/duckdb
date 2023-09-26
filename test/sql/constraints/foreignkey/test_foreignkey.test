@@ -11,18 +11,28 @@ INSERT INTO album VALUES (1, 'A', 'A_cover'), (2, 'B', 'B_cover'), (3, 'C', 'C_c
 # The count of columns are primary keys must be equal with the count of columns are foreign keys
 statement error
 CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid));
+----
+PLACEHOLDER_ERROR_MESSAGE1337
 
 statement error
 CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songalbum) REFERENCES album(artistid, albumname));
+----
+PLACEHOLDER_ERROR_MESSAGE1336
 
 statement error
 CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES albumlist(artistid, albumname));
+----
+PLACEHOLDER_ERROR_MESSAGE1335
 
 statement error
 CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid, album_name));
+----
+PLACEHOLDER_ERROR_MESSAGE1334
 
 statement error
 CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, song_album) REFERENCES album(artistid, albumname));
+----
+PLACEHOLDER_ERROR_MESSAGE1333
 
 statement ok
 CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid, albumname));
@@ -30,9 +40,13 @@ CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname T
 # Any row that is inserted into the table with the foreign key must exist in the table with the primary key (constraint)
 statement error
 INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 2, 'E', 'B_song'), (13, 3, 'C', 'C_song');
+----
+PLACEHOLDER_ERROR_MESSAGE1332
 
 statement error
 INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 5, 'D', 'B_song'), (13, 3, 'C', 'C_song');
+----
+PLACEHOLDER_ERROR_MESSAGE1331
 
 statement ok
 INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 2, 'B', 'B_song'), (13, 3, 'C', 'C_song');
@@ -40,6 +54,8 @@ INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 2, 'B', 'B_song'), (13, 3, 
 # Any row that is deleted from the table with the primary key must not exist in the table with the foreign key (constraint)
 statement error
 DELETE FROM album WHERE albumname='C';
+----
+PLACEHOLDER_ERROR_MESSAGE1330
 
 statement ok
 DELETE FROM album WHERE albumname='D';
@@ -54,6 +70,8 @@ SELECT * FROM album;
 # Any row that is updated from the table has foreign key must exist in the table with the primary key (constraint)
 statement error
 UPDATE song SET songartist=5, songalbum='A' WHERE songname='B_song';
+----
+PLACEHOLDER_ERROR_MESSAGE1329
 
 statement ok
 UPDATE song SET songartist=1, songalbum='A' WHERE songname='B_song';
@@ -75,9 +93,13 @@ SELECT * FROM song;
 # Any row that is updated from the table with primary key must not exist in the table has foreign key (constraint)
 statement error
 UPDATE album SET albumname='B' WHERE albumcover='C_cover';
+----
+PLACEHOLDER_ERROR_MESSAGE1328
 
 statement error
 UPDATE song SET songalbum='E' WHERE albumcover='C_song';
+----
+PLACEHOLDER_ERROR_MESSAGE1327
 
 statement ok
 UPDATE album SET artistid=5, albumname='D' WHERE albumcover='B_cover';
@@ -114,9 +136,13 @@ SELECT * FROM song;
 # Cannot rename the columns that are involved in the foreign key constraint
 statement error
 ALTER TABLE album RENAME COLUMN albumname TO albumname_new;
+----
+PLACEHOLDER_ERROR_MESSAGE1326
 
 statement error
 ALTER TABLE song RENAME COLUMN songalbum TO songalbum_new;
+----
+PLACEHOLDER_ERROR_MESSAGE1325
 
 statement ok
 ALTER TABLE song RENAME COLUMN songname TO songname_new;
@@ -124,9 +150,13 @@ ALTER TABLE song RENAME COLUMN songname TO songname_new;
 # Cannot change type of the columns that are involved in the foreign key constraint
 statement error
 ALTER TABLE song ALTER COLUMN songartist SET DATA TYPE TEXT;
+----
+PLACEHOLDER_ERROR_MESSAGE1324
 
 statement error
 ALTER TABLE album ALTER COLUMN artistid SET DATA TYPE TEXT;
+----
+PLACEHOLDER_ERROR_MESSAGE1323
 
 statement ok
 ALTER TABLE song ALTER COLUMN songname_new SET DATA TYPE VARCHAR;
@@ -134,6 +164,8 @@ ALTER TABLE song ALTER COLUMN songname_new SET DATA TYPE VARCHAR;
 # Cannot drop the columns that are involved in the foreign key constraint because of dependency
 statement error
 ALTER TABLE album DROP COLUMN artistid;
+----
+PLACEHOLDER_ERROR_MESSAGE1322
 
 statement ok
 ALTER TABLE song DROP COLUMN songname_new;
@@ -141,6 +173,8 @@ ALTER TABLE song DROP COLUMN songname_new;
 # Can't drop the table with primary key corresponding with foreign key until exists the table has foreign key
 statement error
 DROP TABLE album;
+----
+PLACEHOLDER_ERROR_MESSAGE1321
 
 statement ok
 DROP TABLE song;
@@ -178,12 +212,16 @@ INSERT INTO fkt VALUES (1, 101), (2, 102)
 
 statement error
 INSERT INTO fkt VALUES (4, 104)
+----
+PLACEHOLDER_ERROR_MESSAGE1320
 
 statement ok
 INSERT INTO fkt VALUES (3, 103)
 
 statement error
 DELETE FROM pkt WHERE k=13
+----
+PLACEHOLDER_ERROR_MESSAGE1319
 
 statement ok
 DELETE FROM fkt WHERE l=103
@@ -193,12 +231,18 @@ DELETE FROM pkt WHERE k=13
 
 statement error
 UPDATE pkt SET i=5 WHERE k=12
+----
+PLACEHOLDER_ERROR_MESSAGE1318
 
 statement error
 UPDATE fkt SET i=4 WHERE l=102
+----
+PLACEHOLDER_ERROR_MESSAGE1317
 
 statement error
 UPDATE fkt SET i=4 WHERE l=102
+----
+PLACEHOLDER_ERROR_MESSAGE1316
 
 statement ok
 DROP INDEX k_index
@@ -208,6 +252,8 @@ DROP INDEX l_index
 
 statement error
 DROP TABLE pkt;
+----
+PLACEHOLDER_ERROR_MESSAGE1315
 
 statement ok
 DROP TABLE fkt;
@@ -233,18 +279,24 @@ INSERT INTO s1.fkt VALUES (2), (3)
 
 statement error
 INSERT INTO s1.fkt VALUES (6)
+----
+PLACEHOLDER_ERROR_MESSAGE1314
 
 statement ok
 INSERT INTO s1.fkt VALUES (1)
 
 statement error
 DELETE FROM s1.pkt WHERE i=2
+----
+PLACEHOLDER_ERROR_MESSAGE1313
 
 statement ok
 DELETE FROM s1.pkt WHERE i=5
 
 statement error
 DROP TABLE s1.pkt;
+----
+PLACEHOLDER_ERROR_MESSAGE1312
 
 statement ok
 DROP TABLE s1.fkt;

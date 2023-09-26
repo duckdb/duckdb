@@ -32,6 +32,8 @@ foreach special infinity -infinity epoch
 
 statement error
 SELECT '${special} 00:00:00'::${datatype};
+----
+PLACEHOLDER_ERROR_MESSAGE997
 
 endloop
 
@@ -294,30 +296,46 @@ infinity	infinity	infinity
 
 statement error
 select ts::TIME, tstz::TIME, dt::TIME FROM specials
+----
+PLACEHOLDER_ERROR_MESSAGE996
 
 statement error
 select 'infinity'::TIME;
+----
+PLACEHOLDER_ERROR_MESSAGE995
 
 # infinite subtract
 statement error
 select
   subtract(
     cast('infinity' as timestamp), timestamp '1970-01-01')
+----
+PLACEHOLDER_ERROR_MESSAGE994
 
 statement error
 select
   subtract(
     timestamp '1970-01-01',
     cast('-infinity' as timestamp))
+----
+PLACEHOLDER_ERROR_MESSAGE993
 
 statement error
 SELECT 'e'::TIMESTAMP
+----
+PLACEHOLDER_ERROR_MESSAGE992
 
 statement error
 SELECT 'e'::DATE
+----
+PLACEHOLDER_ERROR_MESSAGE991
 
 statement error
 SELECT 'i'::TIMESTAMP
+----
+PLACEHOLDER_ERROR_MESSAGE990
 
 statement error
 SELECT 'i'::DATE
+----
+PLACEHOLDER_ERROR_MESSAGE989

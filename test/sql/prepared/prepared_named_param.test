@@ -26,6 +26,8 @@ statement error
 prepare q02 as select $1, $param, $2;
 ---
 Not implemented Error: Mixing named and positional parameters is not supported yet
+----
+PLACEHOLDER_ERROR_MESSAGE1100
 
 statement error
 execute q01(a, 2, 0)

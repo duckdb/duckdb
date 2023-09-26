@@ -40,6 +40,8 @@ SELECT * EXCLUDE ("J") FROM integers
 # no columns remaining...
 statement error
 SELECT * EXCLUDE (i, j, k) FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE3108
 
 # same but with integers.*
 query II
@@ -64,6 +66,8 @@ SELECT integers.* EXCLUDE (i, j), * EXCLUDE (i, j), * EXCLUDE (i, k) FROM intege
 
 statement error
 SELECT integers.* EXCLUDE (i, j, k) FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE3107
 
 # exclude but with multiple tables
 query II
@@ -89,10 +93,16 @@ SELECT * EXCLUDE (i) FROM integers i1 JOIN integers i2 USING (i)
 # duplicate entry in exclude list
 statement error
 SELECT * EXCLUDE (i, i) FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE3106
 
 # column name that does not exist
 statement error
 SELECT * EXCLUDE (blabla) FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE3105
 
 statement error
 SELECT integers.* EXCLUDE (blabla) FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE3104

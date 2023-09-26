@@ -21,6 +21,8 @@ SELECT * FROM vw2
 
 statement error
 SELECT * FROM vw
+----
+PLACEHOLDER_ERROR_MESSAGE2718
 
 statement ok
 ROLLBACK
@@ -33,6 +35,8 @@ SELECT * FROM vw;
 
 statement error
 SELECT * FROM vw2
+----
+PLACEHOLDER_ERROR_MESSAGE2717
 
 statement ok
 BEGIN TRANSACTION;
@@ -51,6 +55,8 @@ SELECT * FROM vw2
 
 statement error
 SELECT * FROM vw
+----
+PLACEHOLDER_ERROR_MESSAGE2716
 
 statement ok
 CREATE VIEW vw AS SELECT i+1 AS i FROM tbl
@@ -64,7 +70,11 @@ SELECT * FROM vw
 # cannot rename a system view
 statement error
 ALTER VIEW sqlite_master RENAME TO my_sqlite_master
+----
+PLACEHOLDER_ERROR_MESSAGE2715
 
 # cannot rename a view that does not exist
 statement error
 ALTER VIEW nonexistingview RENAME TO my_new_view
+----
+PLACEHOLDER_ERROR_MESSAGE2714

@@ -77,6 +77,8 @@ Thousand separators are not supported for floating point numbers
 
 statement error
 select format('{:t}', 123456789)
+----
+PLACEHOLDER_ERROR_MESSAGE2374
 
 query I
 select format('{0:d} {0:L}', 123456789)

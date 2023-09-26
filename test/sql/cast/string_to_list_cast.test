@@ -367,33 +367,53 @@ SELECT TRY_CAST(col1 AS INT[]) FROM try_cast_tbl;
 
 statement error
 SELECT CAST('{[3]}' AS INT[]);
+----
+PLACEHOLDER_ERROR_MESSAGE1481
 
 statement error
 SELECT CAST('Hello World' AS INT[]);
+----
+PLACEHOLDER_ERROR_MESSAGE1480
 
 statement error
 SELECT CAST('[3]]' AS INT[]);
+----
+PLACEHOLDER_ERROR_MESSAGE1479
 
 statement error
 SELECT CAST('[3],[[]' AS INT[][]);
+----
+PLACEHOLDER_ERROR_MESSAGE1478
 
 statement error
 SELECT CAST('[3], [[1]]' AS INT[][]);
+----
+PLACEHOLDER_ERROR_MESSAGE1477
 
 statement error
 SELECT CAST('[[3 1]]' AS INT[][]);
+----
+PLACEHOLDER_ERROR_MESSAGE1476
 
 statement error
 SELECT CAST('[[3,, 1]]' AS INT[][]);
+----
+PLACEHOLDER_ERROR_MESSAGE1475
 
 statement error
 SELECT CAST('[[3], [[5], [4]]' AS INT[][]);
+----
+PLACEHOLDER_ERROR_MESSAGE1474
 
 statement error
 SELECT CAST('][3]' AS INT[]);
+----
+PLACEHOLDER_ERROR_MESSAGE1473
 
 statement error
 SELECT CAST('[[[[[]][3][[]][][[[][]]]]]' AS INT[][][][]);
+----
+PLACEHOLDER_ERROR_MESSAGE1472
 
 
 #               Test WHERE clause
@@ -500,6 +520,8 @@ select '[{"bar":"\""}]'::VARCHAR[];
 # escaped '\', does not count as an escape for "
 statement error
 select '[{"bar":"\\""}]'::VARCHAR[];
+----
+PLACEHOLDER_ERROR_MESSAGE1471
 
 # uneven amount of escapes does escape the "
 query I

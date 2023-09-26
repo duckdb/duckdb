@@ -14,6 +14,8 @@ CREATE TABLE person (
     name text,
     current_car car
 );
+----
+PLACEHOLDER_ERROR_MESSAGE418
 
 statement ok
 CREATE TABLE person (
@@ -89,6 +91,8 @@ CREATE TABLE aliens (
     name text,
     current_alias alias
 );
+----
+PLACEHOLDER_ERROR_MESSAGE417
 
 statement ok
 CREATE TYPE alias AS VARCHAR;

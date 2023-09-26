@@ -30,12 +30,20 @@ SELECT "COL"."HELLO" FROM tbl
 
 statement error
 SELECT ({'hello': 3, 'hello': 4}) col;
+----
+PLACEHOLDER_ERROR_MESSAGE705
 
 statement error
 SELECT ({'HELLO': 3, 'HELLO': 4}) col;
+----
+PLACEHOLDER_ERROR_MESSAGE704
 
 statement error
 SELECT ({'HELLO': 3, 'hello': 4}) col;
+----
+PLACEHOLDER_ERROR_MESSAGE703
 
 statement error
 SELECT col['HELL'] FROM tbl
+----
+PLACEHOLDER_ERROR_MESSAGE702

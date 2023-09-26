@@ -46,6 +46,8 @@ select list_histogram(name) from names;
 # incorrect usage
 statement error
 select list_histogram()
+----
+PLACEHOLDER_ERROR_MESSAGE2213
 
 # temporal types
 

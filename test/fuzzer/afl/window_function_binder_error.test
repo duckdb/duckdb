@@ -12,3 +12,5 @@ SELECT count(x) OVER () FROM (SELECT 1) x(x);
 
 statement error
 SELECT count(x) OVER () FROM (SELECT 1) x(x) GROUP BY ALL;
+----
+PLACEHOLDER_ERROR_MESSAGE81

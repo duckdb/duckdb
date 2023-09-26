@@ -24,6 +24,8 @@ SELECT enum_code(x) FROM test
 
 statement error
 SELECT enum_code('bla')
+----
+PLACEHOLDER_ERROR_MESSAGE2049
 
 statement ok
 PREPARE p1 as SELECT enum_code(x) FROM test

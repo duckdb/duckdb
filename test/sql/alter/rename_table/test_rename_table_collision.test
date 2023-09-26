@@ -56,6 +56,8 @@ SELECT i FROM t2 ORDER BY i;
 
 statement error con1
 SELECT * FROM t1
+----
+PLACEHOLDER_ERROR_MESSAGE2627
 
 
 # Now we're going to do a rollback instead of a commit
@@ -68,9 +70,13 @@ ALTER TABLE t2 RENAME TO t3;
 
 statement error con1
 SELECT i FROM t3 ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE2626
 
 statement error con2
 SELECT i FROM t2 ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE2625
 
 query I con2
 SELECT i FROM t3 ORDER BY i
@@ -132,6 +138,8 @@ ALTER TABLE t2 RENAME TO t3
 
 statement error con2
 CREATE TABLE t3 (i INTEGER)
+----
+PLACEHOLDER_ERROR_MESSAGE2624
 
 statement ok con1
 ROLLBACK
@@ -152,6 +160,8 @@ ALTER TABLE t2 RENAME TO t3
 
 statement error con1
 ALTER TABLE t2 RENAME TO t4
+----
+PLACEHOLDER_ERROR_MESSAGE2623
 
 statement ok con1
 ROLLBACK
@@ -183,9 +193,13 @@ DROP TABLE e1
 
 statement error con1
 ALTER TABLE e1 RENAME TO e2
+----
+PLACEHOLDER_ERROR_MESSAGE2622
 
 statement error con2
 ALTER TABLE e2 RENAME TO e1
+----
+PLACEHOLDER_ERROR_MESSAGE2621
 
 statement ok con1
 ROLLBACK

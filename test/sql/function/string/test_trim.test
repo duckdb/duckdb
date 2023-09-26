@@ -112,19 +112,31 @@ NULL	NULL	NULL
 # test incorrect usage of ltrim/rtrim/trim
 statement error
 select LTRIM()
+----
+PLACEHOLDER_ERROR_MESSAGE2366
 
 statement error
 select LTRIM('hello', 'world', 'aaa')
+----
+PLACEHOLDER_ERROR_MESSAGE2365
 
 statement error
 select RTRIM()
+----
+PLACEHOLDER_ERROR_MESSAGE2364
 
 statement error
 select RTRIM('hello', 'world', 'aaa')
+----
+PLACEHOLDER_ERROR_MESSAGE2363
 
 statement error
 select TRIM()
+----
+PLACEHOLDER_ERROR_MESSAGE2362
 
 statement error
 select TRIM('hello', 'world', 'aaa')
+----
+PLACEHOLDER_ERROR_MESSAGE2361
 

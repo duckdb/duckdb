@@ -19,12 +19,16 @@ INSERT INTO fk_integers VALUES (1)
 
 statement error con2
 DROP TABLE fk_integers
+----
+PLACEHOLDER_ERROR_MESSAGE1340
 
 statement ok con1
 DROP TABLE fk_integers
 
 statement error con2
 CREATE TABLE fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))
+----
+PLACEHOLDER_ERROR_MESSAGE1339
 
 statement ok con1
 ROLLBACK
@@ -37,6 +41,8 @@ INSERT INTO fk_integers VALUES (1), (2)
 
 statement error con1
 INSERT INTO fk_integers VALUES (4), (5)
+----
+PLACEHOLDER_ERROR_MESSAGE1338
 
 statement ok con2
 CREATE TABLE fk_integers_another(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))

@@ -18,10 +18,14 @@ foreach type <integral> float double varchar
 # explicit cast
 statement error
 select 42::${type}::"null"
+----
+PLACEHOLDER_ERROR_MESSAGE822
 
 # implicit cast
 statement error
 insert into null_table values (42::${type})
+----
+PLACEHOLDER_ERROR_MESSAGE821
 
 endloop
 
@@ -48,6 +52,8 @@ NULL
 
 statement error
 insert into null_list values ([42::${type}])
+----
+PLACEHOLDER_ERROR_MESSAGE820
 
 endloop
 
@@ -74,6 +80,8 @@ NULL
 
 statement error
 insert into null_struct values ({n: 42::${type}})
+----
+PLACEHOLDER_ERROR_MESSAGE819
 
 endloop
 
@@ -84,10 +92,14 @@ create table null_map (i map("null", "null"))
 # Map keys cant be NULL
 statement error
 insert into null_map values (null), (map([null], [null]))
+----
+PLACEHOLDER_ERROR_MESSAGE818
 
 foreach type <integral> float double varchar
 
 statement error
 insert into null_map values (map([42::${type}], [7::${type}]))
+----
+PLACEHOLDER_ERROR_MESSAGE817
 
 endloop

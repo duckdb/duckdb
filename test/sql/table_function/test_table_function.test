@@ -25,6 +25,8 @@ j
 # project column that is not in function return
 statement error
 SELECT blablabla FROM pragma_table_info('integers');
+----
+PLACEHOLDER_ERROR_MESSAGE3125
 
 # join with table function
 statement ok

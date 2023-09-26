@@ -17,6 +17,8 @@ CREATE TABLE tbl (
 # '(Error: Conversion Error: Unimplemented type for cast (INTEGER -> DATE))'
 statement error
 INSERT INTO tbl VALUES (5);
+----
+PLACEHOLDER_ERROR_MESSAGE1190
 
 # Test with multiple different generated columns
 statement ok
@@ -38,6 +40,8 @@ SELECT * FROM a;
 # Not supported yet
 statement error
 ALTER TABLE a ALTER COLUMN gen_x TYPE BOOLEAN;
+----
+PLACEHOLDER_ERROR_MESSAGE1189
 
 ## TEXT -> BOOLEAN: KO
 #statement error

@@ -72,12 +72,18 @@ SELECT * FROM range(0, -5, -1)
 
 statement error
 SELECT * FROM range(0, 10, 0)
+----
+PLACEHOLDER_ERROR_MESSAGE3132
 
 statement error
 SELECT * FROM range(0, 10, -1)
+----
+PLACEHOLDER_ERROR_MESSAGE3131
 
 statement error
 SELECT * FROM range(10, 0, 1)
+----
+PLACEHOLDER_ERROR_MESSAGE3130
 
 # overloads
 # only one parameter defaults to start=0, interval=1
@@ -127,12 +133,18 @@ SELECT * FROM range(10) t1(j) WHERE j=3
 
 statement error
 SELECT * FROM range('hello')
+----
+PLACEHOLDER_ERROR_MESSAGE3129
 
 statement error
 SELECT * FROM range(10, 'hello')
+----
+PLACEHOLDER_ERROR_MESSAGE3128
 
 statement error
 SELECT * FROM range(10, 10, 'hello')
+----
+PLACEHOLDER_ERROR_MESSAGE3127
 
 # range with big numbers
 query I

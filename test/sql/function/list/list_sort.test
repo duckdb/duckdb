@@ -42,23 +42,35 @@ foreach func_name list_sort list_reverse_sort
 
 statement error
 SELECT ${func_name}()
+----
+PLACEHOLDER_ERROR_MESSAGE2289
 
 statement error
 SELECT ${func_name}(*)
+----
+PLACEHOLDER_ERROR_MESSAGE2288
 
 statement error
 SELECT ${func_name}([1, 2], 2)
+----
+PLACEHOLDER_ERROR_MESSAGE2287
 
 statement error
 SELECT ${func_name}([1, 2], 'DESC', 2)
+----
+PLACEHOLDER_ERROR_MESSAGE2286
 
 statement error 
 SELECT ${func_name}([1, 2], 2, 2)
+----
+PLACEHOLDER_ERROR_MESSAGE2285
 
 endloop
 
 statement error
 SELECT list_sort([1, 2], 'NULLS FIRST')
+----
+PLACEHOLDER_ERROR_MESSAGE2284
 
 # test incorrect parameter type
 
@@ -68,6 +80,8 @@ foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint us
 
 statement error
 SELECT ${func_name}(NULL::${type})
+----
+PLACEHOLDER_ERROR_MESSAGE2283
 
 endloop
 
@@ -129,18 +143,28 @@ NULL
 
 statement error
 SELECT list_sort(l, l, l)
+----
+PLACEHOLDER_ERROR_MESSAGE2282
 
 statement error
 SELECT list_sort(l, 'ASC', l)
+----
+PLACEHOLDER_ERROR_MESSAGE2281
 
 statement error
 SELECT list_reverse_sort(l, l)
+----
+PLACEHOLDER_ERROR_MESSAGE2280
 
 statement error
 SELECT list_reverse_sort(l, 'DESC')
+----
+PLACEHOLDER_ERROR_MESSAGE2279
 
 statement error
 SELECT list_reverse_sort(l, 'DESC', 'NULLS FIRST')
+----
+PLACEHOLDER_ERROR_MESSAGE2278
 
 # test aliases
 

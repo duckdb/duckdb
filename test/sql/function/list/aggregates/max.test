@@ -5,6 +5,8 @@
 # incorrect usage
 statement error
 SELECT list_max()
+----
+PLACEHOLDER_ERROR_MESSAGE2222
 
 # test different types
 

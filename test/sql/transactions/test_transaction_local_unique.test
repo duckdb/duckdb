@@ -17,6 +17,8 @@ BEGIN TRANSACTION
 
 statement error
 INSERT INTO integers VALUES (1, 2)
+----
+PLACEHOLDER_ERROR_MESSAGE2777
 
 statement ok
 ROLLBACK

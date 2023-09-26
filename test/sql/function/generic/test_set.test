@@ -8,9 +8,13 @@ PRAGMA enable_verification
 # unrecognized configuration parameter
 statement error
 SELECT CURRENT_SETTING('a');
+----
+PLACEHOLDER_ERROR_MESSAGE2300
 
 statement error
 SELECT CURRENT_SETTING('memori_limit');
+----
+PLACEHOLDER_ERROR_MESSAGE2299
 
 statement ok
 SELECT CURRENT_SETTING('default_null_order');
@@ -38,9 +42,15 @@ NULL
 
 statement error
 SELECT CURRENT_SETTING(i::VARCHAR) FROM range(1) tbl(i)
+----
+PLACEHOLDER_ERROR_MESSAGE2298
 
 statement error
 SELECT CURRENT_SETTING(NULL)
+----
+PLACEHOLDER_ERROR_MESSAGE2297
 
 statement error
 SELECT CURRENT_SETTING('')
+----
+PLACEHOLDER_ERROR_MESSAGE2296

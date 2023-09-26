@@ -345,10 +345,16 @@ select UNNEST(string_split_regex('1,2,3,4,*,6', '(\*|,)'))
 # test incorrect usage
 statement error
 select string_split()
+----
+PLACEHOLDER_ERROR_MESSAGE2347
 
 statement error
 select string_split('a')
+----
+PLACEHOLDER_ERROR_MESSAGE2346
 
 # incorrect regex
 statement error
 SELECT string_split_regex(a, '[') FROM test ORDER BY a;
+----
+PLACEHOLDER_ERROR_MESSAGE2345

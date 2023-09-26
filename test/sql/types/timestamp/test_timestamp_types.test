@@ -45,25 +45,39 @@ INSERT INTO timestamp VALUES ('2008-01-01 00:00:11','2008-01-01 00:00:01.794','2
 # Overflow from US to NS
 statement error
 select '90000-01-19 03:14:07.999999'::TIMESTAMP_US::TIMESTAMP_NS
+----
+PLACEHOLDER_ERROR_MESSAGE975
 
 #DATE/TIME conversions are not directly supported yet
 statement error
 select sec::DATE from timestamp;
+----
+PLACEHOLDER_ERROR_MESSAGE974
 
 statement error
 select milli::DATE from timestamp;
+----
+PLACEHOLDER_ERROR_MESSAGE973
 
 statement error
 select nano::DATE from timestamp;
+----
+PLACEHOLDER_ERROR_MESSAGE972
 
 statement error
 select sec::TIME from timestamp;
+----
+PLACEHOLDER_ERROR_MESSAGE971
 
 statement error
 select milli::TIME from timestamp;
+----
+PLACEHOLDER_ERROR_MESSAGE970
 
 statement error
 select nano::TIME from timestamp;
+----
+PLACEHOLDER_ERROR_MESSAGE969
 
 # Direct timestamp promotions
 foreach src sec milli micro nano

@@ -7,3 +7,5 @@ PRAGMA enable_verification
 
 statement error
 CREATE TABLE tbl AS EXECUTE tbl;
+----
+PLACEHOLDER_ERROR_MESSAGE3056

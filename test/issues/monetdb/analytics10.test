@@ -40,6 +40,8 @@ SELECT
     *
 FROM tbl_ProductSales
 GROUP BY ()
+----
+PLACEHOLDER_ERROR_MESSAGE179
 
 query I rowsort
 SELECT
@@ -86,6 +88,8 @@ SELECT
     CAST(SUM(TotalSales) as BIGINT) AS TotalSales
 FROM tbl_ProductSales
 GROUP BY ROLLUP ()
+----
+PLACEHOLDER_ERROR_MESSAGE178
 
 query TI rowsort
 SELECT
@@ -169,6 +173,8 @@ SELECT
     CAST(SUM(TotalSales) as BIGINT) AS TotalSales
 FROM tbl_ProductSales
 GROUP BY CUBE()
+----
+PLACEHOLDER_ERROR_MESSAGE177
 
 query TI rowsort
 SELECT
@@ -760,6 +766,8 @@ SELECT
     CAST(SUM(TotalSales) as BIGINT) AS TotalSales
 FROM tbl_ProductSales
 GROUP BY GROUPING SETS()
+----
+PLACEHOLDER_ERROR_MESSAGE176
 
 query I rowsort
 SELECT

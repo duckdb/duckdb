@@ -20,6 +20,8 @@ restart
 
 statement error
 INSERT INTO fk_integers VALUES (4);
+----
+PLACEHOLDER_ERROR_MESSAGE2527
 
 statement ok
 INSERT INTO fk_integers VALUES (3);
@@ -28,6 +30,8 @@ restart
 
 statement error
 DELETE FROM pk_integers WHERE i=3;
+----
+PLACEHOLDER_ERROR_MESSAGE2526
 
 statement ok
 DELETE FROM fk_integers WHERE j=3;
@@ -39,17 +43,25 @@ restart
 
 statement error
 UPDATE pk_integers SET i=5 WHERE i=2;
+----
+PLACEHOLDER_ERROR_MESSAGE2525
 
 statement error
 UPDATE fk_integers SET i=4 WHERE j=2;
+----
+PLACEHOLDER_ERROR_MESSAGE2524
 
 statement error
 UPDATE fk_integers SET i=4 WHERE j=2;
+----
+PLACEHOLDER_ERROR_MESSAGE2523
 
 restart
 
 statement error
 DROP TABLE pk_integers;
+----
+PLACEHOLDER_ERROR_MESSAGE2522
 
 statement ok
 DROP TABLE fk_integers;

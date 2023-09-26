@@ -185,25 +185,41 @@ NULL	NULL	7
 # test incorrect grouping usage
 statement error
 SELECT GROUPING();
+----
+PLACEHOLDER_ERROR_MESSAGE1740
 
 statement error
 SELECT GROUPING() FROM students;
+----
+PLACEHOLDER_ERROR_MESSAGE1739
 
 statement error
 SELECT GROUPING(NULL) FROM students;
+----
+PLACEHOLDER_ERROR_MESSAGE1738
 
 statement error
 SELECT GROUPING(course) FROM students;
+----
+PLACEHOLDER_ERROR_MESSAGE1737
 
 statement error
 SELECT GROUPING(course) FROM students GROUP BY ();
+----
+PLACEHOLDER_ERROR_MESSAGE1736
 
 statement error
 SELECT GROUPING(type) FROM students GROUP BY course;
+----
+PLACEHOLDER_ERROR_MESSAGE1735
 
 statement error
 SELECT GROUPING(course) FROM students WHERE GROUPING(course)=0 GROUP BY course;
+----
+PLACEHOLDER_ERROR_MESSAGE1734
 
 # we have a limit on how many children the grouping clause can contain
 statement error
 SELECT GROUPING(course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course), course, type, COUNT(*) FROM students GROUP BY CUBE(course, type) ORDER BY 1, 2, 3, 4;
+----
+PLACEHOLDER_ERROR_MESSAGE1733

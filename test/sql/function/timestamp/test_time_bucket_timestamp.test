@@ -744,54 +744,88 @@ select w, t, origin, time_bucket(w, t, origin) from timestamps;
 
 statement error
 select time_bucket('-3 hours'::interval, '2019-04-05 00:00:00'::timestamp);
+----
+PLACEHOLDER_ERROR_MESSAGE2491
 
 statement error
 select time_bucket('-3 hours'::interval, '2019-04-05 00:00:00'::timestamp, '1 hour 30 minutes':: interval);
+----
+PLACEHOLDER_ERROR_MESSAGE2490
 
 statement error
 select time_bucket('-3 hours'::interval, '2019-04-05 00:00:00'::timestamp, '2019-04-05 00:00:00'::timestamp);
+----
+PLACEHOLDER_ERROR_MESSAGE2489
 
 statement error
 select time_bucket('-1 month'::interval, '2019-04-05 00:00:00'::timestamp);
+----
+PLACEHOLDER_ERROR_MESSAGE2488
 
 statement error
 select time_bucket('-1 month'::interval, '2019-04-05 00:00:00'::timestamp, '1 hour 30 minutes':: interval);
+----
+PLACEHOLDER_ERROR_MESSAGE2487
 
 statement error
 select time_bucket('-1 month'::interval, '2019-04-05 00:00:00'::timestamp, '2018-04-05 00:00:00'::timestamp);
+----
+PLACEHOLDER_ERROR_MESSAGE2486
 
 statement error
 select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05 00:00:00'::timestamp);
+----
+PLACEHOLDER_ERROR_MESSAGE2485
 
 statement error
 select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05 00:00:00'::timestamp, '1 hour 30 minutes':: interval);
+----
+PLACEHOLDER_ERROR_MESSAGE2484
 
 statement error
 select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05 00:00:00'::timestamp, '2018-05-05 00:00:00'::timestamp);
+----
+PLACEHOLDER_ERROR_MESSAGE2483
 
 statement error
 select time_bucket('1 month 1 day'::interval, '2018-05-05 00:00:00'::timestamp);
+----
+PLACEHOLDER_ERROR_MESSAGE2482
 
 statement error
 select time_bucket('1 month 1 day'::interval, '2018-05-05 00:00:00'::timestamp, '1 hour 30 minutes':: interval);
+----
+PLACEHOLDER_ERROR_MESSAGE2481
 
 statement error
 select time_bucket('1 month 1 day'::interval, '2018-05-05 00:00:00'::timestamp, '2018-05-05 00:00:00'::timestamp);
+----
+PLACEHOLDER_ERROR_MESSAGE2480
 
 statement error
 select time_bucket('3 days'::interval, '2019-05-05 00:00:00'::timestamp, '2000000000 months'::interval);
+----
+PLACEHOLDER_ERROR_MESSAGE2479
 
 statement error
 select time_bucket('3 days'::interval, '2019-05-05 00:00:00'::timestamp, '-2000000000 months'::interval);
+----
+PLACEHOLDER_ERROR_MESSAGE2478
 
 statement error
 select time_bucket('3 months'::interval, '2019-05-05 00:00:00'::timestamp, '2000000000 months'::interval);
+----
+PLACEHOLDER_ERROR_MESSAGE2477
 
 statement error
 select time_bucket('3 months'::interval, '2019-05-05 00:00:00'::timestamp, '-2000000000 months'::interval);
+----
+PLACEHOLDER_ERROR_MESSAGE2476
 
 statement error
 select time_bucket('1 microseconds'::interval, '290309-12-21 (BC) 23:59:59.999999'::timestamp);
+----
+PLACEHOLDER_ERROR_MESSAGE2475
 
 query I
 select time_bucket('1 microseconds'::interval, '290309-12-22 (BC) 00:00:00'::timestamp);
@@ -800,6 +834,8 @@ select time_bucket('1 microseconds'::interval, '290309-12-22 (BC) 00:00:00'::tim
 
 statement error
 select time_bucket('1 microseconds'::interval, '294247-01-10 04:00:54.775807'::timestamp);
+----
+PLACEHOLDER_ERROR_MESSAGE2474
 
 query I
 select time_bucket('1 microseconds'::interval, '294247-01-10 04:00:54.775806'::timestamp);

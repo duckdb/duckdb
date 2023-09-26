@@ -34,12 +34,18 @@ SELECT t.* FROM test t
 
 statement error
 SELECT test.* FROM test t
+----
+PLACEHOLDER_ERROR_MESSAGE3116
 
 statement error
 SELECT xyz.* FROM test
+----
+PLACEHOLDER_ERROR_MESSAGE3115
 
 statement error
 SELECT xyz.*
+----
+PLACEHOLDER_ERROR_MESSAGE3114
 
 # issue 415
 statement ok

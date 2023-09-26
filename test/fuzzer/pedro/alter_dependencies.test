@@ -24,3 +24,5 @@ statement error
 ALTER TABLE t1 ALTER c2 SET NOT NULL;
 ---
 Cannot alter
+----
+PLACEHOLDER_ERROR_MESSAGE74

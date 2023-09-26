@@ -11,3 +11,5 @@ endloop
 
 statement error
 PRAGMA force_compression='unknown'
+----
+PLACEHOLDER_ERROR_MESSAGE1971

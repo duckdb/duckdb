@@ -151,21 +151,33 @@ NULL
 
 statement error
 select list_has_any(l1) from list_of_strings;
+----
+PLACEHOLDER_ERROR_MESSAGE2263
 
 statement error
 select list_has_any(l1, l2, l1) from list_of_strings;
+----
+PLACEHOLDER_ERROR_MESSAGE2262
 
 statement error
 select list_has_all(l1) from list_of_strings;
+----
+PLACEHOLDER_ERROR_MESSAGE2261
 
 statement error
 select list_has_all(l1, l2, l1) from list_of_strings;
+----
+PLACEHOLDER_ERROR_MESSAGE2260
 
 statement error
 select list_has_all([1, 2], 1);
+----
+PLACEHOLDER_ERROR_MESSAGE2259
 
 statement error
 select list_has_any([[1,2], [2,4]], ['abc', 'def']);
+----
+PLACEHOLDER_ERROR_MESSAGE2258
 
 # Test Function in Function
 
@@ -225,6 +237,8 @@ select l1 && l2 from tbl;
 
 statement error
 select 'hello' && l1 from tbl;
+----
+PLACEHOLDER_ERROR_MESSAGE2257
 
 query I
 select NULL && [NULL];
@@ -251,9 +265,13 @@ select l1 <@ l2 from tbl;
 
 statement error
 select 'hello' @> l1 from tbl;
+----
+PLACEHOLDER_ERROR_MESSAGE2256
 
 statement error
 select 'hello' <@ l1 from tbl;
+----
+PLACEHOLDER_ERROR_MESSAGE2255
 
 query I
 select l1 @> NULL from tbl;

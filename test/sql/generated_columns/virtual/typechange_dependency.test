@@ -23,6 +23,8 @@ SELECT total_profit FROM unit
 # Dependency of 'total_price' - the change is prohibited
 statement error
 ALTER TABLE unit ALTER COLUMN price TYPE BOOLEAN;
+----
+PLACEHOLDER_ERROR_MESSAGE1183
 
 # Generated column isn't deleted
 statement ok

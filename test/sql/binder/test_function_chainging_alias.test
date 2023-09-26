@@ -32,6 +32,8 @@ SELECT  v.trim('><') as trim_inequality,
         only_alphabet.lower() as lower
         trim_inequality.replace('%', '') as only_alphabet,
 FROM varchars
+----
+PLACEHOLDER_ERROR_MESSAGE1422
 
 
 query III

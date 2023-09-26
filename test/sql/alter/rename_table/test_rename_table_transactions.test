@@ -25,6 +25,8 @@ SELECT * FROM tbl2
 
 statement error con1
 SELECT * FROM tbl
+----
+PLACEHOLDER_ERROR_MESSAGE2641
 
 query I con2
 SELECT * FROM tbl
@@ -34,6 +36,8 @@ SELECT * FROM tbl
 
 statement error con2
 SELECT * FROM tbl2
+----
+PLACEHOLDER_ERROR_MESSAGE2640
 
 statement ok con1
 COMMIT
@@ -43,9 +47,13 @@ COMMIT
 
 statement error con1
 SELECT * FROM tbl
+----
+PLACEHOLDER_ERROR_MESSAGE2639
 
 statement error con2
 SELECT * FROM tbl
+----
+PLACEHOLDER_ERROR_MESSAGE2638
 
 query I con1
 SELECT * FROM tbl2
@@ -66,6 +74,8 @@ CREATE TABLE tbl(i INTEGER);
 # tbl2 is still occupied though
 statement error con1
 CREATE TABLE tbl2(i INTEGER);
+----
+PLACEHOLDER_ERROR_MESSAGE2637
 
 # we can drop and re-create the table
 statement ok con1
@@ -77,3 +87,5 @@ CREATE TABLE tbl2(i INTEGER);
 # a rename fails now
 statement error con1
 ALTER TABLE tbl RENAME TO tbl2
+----
+PLACEHOLDER_ERROR_MESSAGE2636

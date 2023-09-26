@@ -5,6 +5,8 @@
 # incorrect usage
 statement error
 SELECT list_min()
+----
+PLACEHOLDER_ERROR_MESSAGE2234
 
 # test different types
 

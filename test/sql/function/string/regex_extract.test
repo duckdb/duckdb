@@ -43,9 +43,13 @@ baz
 
 statement error
 SELECT regexp_extract('foobarbaz', '(b..)(b..)', -1)
+----
+PLACEHOLDER_ERROR_MESSAGE2326
 
 statement error
 SELECT regexp_extract('foobarbaz', '(b..)(b..)', 42)
+----
+PLACEHOLDER_ERROR_MESSAGE2325
 
 statement ok
 CREATE TABLE test (s VARCHAR, p VARCHAR, i INT)
@@ -60,6 +64,8 @@ INSERT INTO test VALUES
 
 statement error
 SELECT regexp_extract(s, p, i) FROM test
+----
+PLACEHOLDER_ERROR_MESSAGE2324
 
 query T
 SELECT regexp_extract(s, p, 0) FROM test
@@ -102,3 +108,5 @@ NULL
 
 statement error
 SELECT regexp_extract('foobarbaz', 'b..', '1')
+----
+PLACEHOLDER_ERROR_MESSAGE2323

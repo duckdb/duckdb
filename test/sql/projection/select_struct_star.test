@@ -43,4 +43,5 @@ CREATE TABLE b(i row(t int));
 
 # Binder Error: Ambiguous reference to column name "i" (use: "b.i" or "a.i")
 statement error
-SELECT i.* FROM a, b;
+SELECT i.* FROM a, b;----
+PLACEHOLDER_ERROR_MESSAGE3111

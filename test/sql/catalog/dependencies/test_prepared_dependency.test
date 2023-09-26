@@ -22,6 +22,8 @@ DROP TABLE integers CASCADE
 # after the drop the prepared statement is invalidated
 statement error con2
 EXECUTE v
+----
+PLACEHOLDER_ERROR_MESSAGE1802
 
 # dependency on a sequence for prepare
 statement ok con1
@@ -40,4 +42,6 @@ DROP SEQUENCE seq CASCADE
 # after the drop the prepared statement is invalidated
 statement error con2
 EXECUTE v
+----
+PLACEHOLDER_ERROR_MESSAGE1801
 

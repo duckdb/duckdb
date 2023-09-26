@@ -10,3 +10,5 @@ CREATE TABLE tbl (
 	price INTEGER,
 	gcol AS (price) STORED,
 );
+----
+PLACEHOLDER_ERROR_MESSAGE1199

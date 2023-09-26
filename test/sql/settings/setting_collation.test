@@ -40,6 +40,8 @@ wozld
 
 statement error
 PRAGMA default_collation='unknown'
+----
+PLACEHOLDER_ERROR_MESSAGE220
 
 statement ok
 SET GLOBAL default_collation='NOCASE'

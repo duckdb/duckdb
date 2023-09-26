@@ -25,3 +25,5 @@ SELECT * FROM sqlite_master;
 
 statement error
 DROP VIEW sqlite_master
+----
+PLACEHOLDER_ERROR_MESSAGE3126

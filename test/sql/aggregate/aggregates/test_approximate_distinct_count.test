@@ -10,6 +10,8 @@ PRAGMA verify_external
 
 statement error
 select approx_count_distinct(*)
+----
+PLACEHOLDER_ERROR_MESSAGE1709
 
 query I
 select approx_count_distinct(1)

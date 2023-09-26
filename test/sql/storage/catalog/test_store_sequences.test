@@ -60,6 +60,8 @@ restart
 # verify that sequence is gone
 statement error
 SELECT nextval('seq')
+----
+PLACEHOLDER_ERROR_MESSAGE2556
 
 # other sequence is still there
 statement ok

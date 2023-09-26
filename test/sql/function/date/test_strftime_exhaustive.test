@@ -383,4 +383,6 @@ SELECT strftime(DATE '-4869706-10-11','%-yi');
 
 statement error
 SELECT strftime(date '-99999-01-01', random()::varchar)
+----
+PLACEHOLDER_ERROR_MESSAGE2007
 

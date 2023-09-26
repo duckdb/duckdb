@@ -10,9 +10,13 @@ PRAGMA enable_verification
 # cannot detach system/temp catalogs
 statement error
 DETACH DATABASE system
+----
+PLACEHOLDER_ERROR_MESSAGE2783
 
 statement error
 DETACH DATABASE temp
+----
+PLACEHOLDER_ERROR_MESSAGE2782
 
 # cannot create entries in the system catalog
 statement error

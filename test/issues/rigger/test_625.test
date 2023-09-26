@@ -12,6 +12,8 @@ CREATE TABLE t0(c0 INT, c INT UNIQUE);
 # we don't support this case yet
 statement error
 ALTER TABLE t0 DROP c0;
+----
+PLACEHOLDER_ERROR_MESSAGE144
 
 # check that unique constraint still works
 statement ok
@@ -19,4 +21,6 @@ INSERT INTO t0 (c) VALUES (1);
 
 statement error
 INSERT INTO t0 (c) VALUES (1);
+----
+PLACEHOLDER_ERROR_MESSAGE143
 

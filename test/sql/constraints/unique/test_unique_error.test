@@ -12,6 +12,8 @@ INSERT INTO integers VALUES (3, '4'), (2, '4')
 
 statement error
 CREATE UNIQUE INDEX uidx ON integers (j) 
+----
+PLACEHOLDER_ERROR_MESSAGE1221
 
 statement ok
 DROP TABLE integers

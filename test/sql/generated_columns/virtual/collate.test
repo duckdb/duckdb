@@ -11,6 +11,8 @@ CREATE TABLE tbl (
 	price VARCHAR,
 	also_price VARCHAR AS (price) COLLATE NOCASE
 );
+----
+PLACEHOLDER_ERROR_MESSAGE1168
 
 statement ok
 CREATE TABLE coll (

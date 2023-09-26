@@ -14,15 +14,23 @@ INSERT INTO unit VALUES (5,4)
 # ALTER TABLE - ADD COLUMN generated column not supported yet
 statement error
 ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+----
+PLACEHOLDER_ERROR_MESSAGE1148
 
 statement error
 SELECT total_profit FROM unit
+----
+PLACEHOLDER_ERROR_MESSAGE1147
 
 statement error
 ALTER TABLE unit ADD COLUMN also_total_profit INTEGER GENERATED ALWAYS AS (total_profit) VIRTUAL;
+----
+PLACEHOLDER_ERROR_MESSAGE1146
 
 statement error
 SELECT also_total_profit FROM unit
+----
+PLACEHOLDER_ERROR_MESSAGE1145
 
 # Create a table with a generated column, and another generated column created from this other one
 statement ok

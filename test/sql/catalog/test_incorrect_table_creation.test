@@ -5,15 +5,23 @@
 # primary key constraint that references unknown column
 statement error
 CREATE TABLE integers(i INTEGER, PRIMARY KEY(j))
+----
+PLACEHOLDER_ERROR_MESSAGE1941
 
 # primary key that references the same key twice
 statement error
 CREATE TABLE integers(i INTEGER, PRIMARY KEY(i, i))
+----
+PLACEHOLDER_ERROR_MESSAGE1940
 
 # multiple primary keys
 statement error
 CREATE TABLE integers(i INTEGER, PRIMARY KEY(i), PRIMARY KEY(i)
+----
+PLACEHOLDER_ERROR_MESSAGE1939
 
 statement error
 CREATE TABLE integers(i INTEGER PRIMARY KEY, PRIMARY KEY(i)
+----
+PLACEHOLDER_ERROR_MESSAGE1938
 

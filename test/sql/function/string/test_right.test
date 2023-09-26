@@ -114,4 +114,5 @@ statement ok
 SELECT "right"('a', -9223372036854775808);
 
 statement error
-SELECT right_grapheme('a', 9223372036854775808);
+SELECT right_grapheme('a', 9223372036854775808);----
+PLACEHOLDER_ERROR_MESSAGE2328

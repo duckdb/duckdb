@@ -65,19 +65,29 @@ NULL
 # mixed sign interval not supported
 statement error
 SELECT generate_series(timestamp '2020-01-01', timestamp '2020-06-01', interval '3' month - interval '3' day);
+----
+PLACEHOLDER_ERROR_MESSAGE2254
 
 # Infinities will overflow or cause infinite loops so we ban them
 statement error
 SELECT generate_series('294247-01-10'::TIMESTAMP, 'infinity'::TIMESTAMP, INTERVAL '1 DAY');
+----
+PLACEHOLDER_ERROR_MESSAGE2253
 
 statement error
 SELECT range('294247-01-10'::TIMESTAMP, 'infinity'::TIMESTAMP, INTERVAL '1 DAY');
+----
+PLACEHOLDER_ERROR_MESSAGE2252
 
 statement error
 SELECT generate_series('-infinity'::TIMESTAMP, '290309-12-22 (BC) 00:00:00'::TIMESTAMP, INTERVAL '1 DAY');
+----
+PLACEHOLDER_ERROR_MESSAGE2251
 
 statement error
 SELECT range('-infinity'::TIMESTAMP, '290309-12-22 (BC) 00:00:00'::TIMESTAMP, INTERVAL '1 DAY');
+----
+PLACEHOLDER_ERROR_MESSAGE2250
 
 statement ok
 PRAGMA disable_verification

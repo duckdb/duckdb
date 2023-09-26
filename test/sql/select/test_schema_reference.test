@@ -18,7 +18,10 @@ SELECT s1.tbl.i FROM s1.tbl;
 # schema mismatch
 statement error
 SELECT s2.tbl.i FROM s1.tbl;
+----
+PLACEHOLDER_ERROR_MESSAGE3000
 
 # no schema present
 statement error
-SELECT a.tbl.i FROM range(10) tbl(i)
+SELECT a.tbl.i FROM range(10) tbl(i)----
+PLACEHOLDER_ERROR_MESSAGE2999

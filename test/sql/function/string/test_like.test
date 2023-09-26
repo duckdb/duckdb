@@ -289,4 +289,6 @@ aaa
 # Reject invalid collations
 statement error
 SELECT 'hello' LIKE 'hê?llo' COLLATE idontexist;
+----
+PLACEHOLDER_ERROR_MESSAGE2333
 

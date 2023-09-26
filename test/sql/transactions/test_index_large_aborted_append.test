@@ -35,6 +35,8 @@ COMMIT;
 # con2 fails to commit because of the conflict
 statement error con2
 COMMIT;
+----
+PLACEHOLDER_ERROR_MESSAGE2748
 
 query I con1
 SELECT COUNT(*)=${i} FROM integers

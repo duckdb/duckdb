@@ -9,21 +9,35 @@ PRAGMA enable_verification
 
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/missingmagicatfront.parquet')
+----
+PLACEHOLDER_ERROR_MESSAGE2938
 
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/missingmagicatend.parquet')
+----
+PLACEHOLDER_ERROR_MESSAGE2937
 
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/firstmarker.parquet')
+----
+PLACEHOLDER_ERROR_MESSAGE2936
 
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/twomarkers.parquet')
+----
+PLACEHOLDER_ERROR_MESSAGE2935
 
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/footerlengthzero.parquet')
+----
+PLACEHOLDER_ERROR_MESSAGE2934
 
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/hugefooter.parquet')
+----
+PLACEHOLDER_ERROR_MESSAGE2933
 
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/garbledfooter.parquet')
+----
+PLACEHOLDER_ERROR_MESSAGE2932

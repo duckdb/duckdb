@@ -204,6 +204,8 @@ SELECT ' {      }   '::STRUCT(a INT, b DATE);
 
 statement error
 SELECT '{  key_A:     2, key_B: {key_C: hello world    }     X   }'::STRUCT(key_A INT, key_B STRUCT(key_C VARCHAR));
+----
+PLACEHOLDER_ERROR_MESSAGE1458
 
 
 
@@ -317,39 +319,63 @@ NULL
 # ---------------------------------------------------
 statement error
 SELECT CAST('[{a:3}]' AS STRUCT(a INT));
+----
+PLACEHOLDER_ERROR_MESSAGE1457
 
 statement error
 SELECT CAST('Hello World' AS STRUCT(a VARCHAR));
+----
+PLACEHOLDER_ERROR_MESSAGE1456
 
 statement error
 SELECT CAST('{a: 3}}' AS STRUCT(a INT));
+----
+PLACEHOLDER_ERROR_MESSAGE1455
 
 statement error
 SELECT CAST('{a: 3, b:{c: 8}}}' AS STRUCT(a INT, b STRUCT(c INT)));
+----
+PLACEHOLDER_ERROR_MESSAGE1454
 
 statement error
 SELECT CAST('{{a: 3}' AS STRUCT(a INT));
+----
+PLACEHOLDER_ERROR_MESSAGE1453
 
 statement error
 SELECT CAST('{a:3}, {b:1}' AS STRUCT(a INT, b INT));
+----
+PLACEHOLDER_ERROR_MESSAGE1452
 
 statement error
 SELECT CAST('{a:{a:3}, b:{{b:1}}}' AS STRUCT(a STRUCT(a INT), b STRUCT(b INT)));
+----
+PLACEHOLDER_ERROR_MESSAGE1451
 
 statement error
 SELECT CAST('{a: 3 1}' AS STRUCT(a INT));
+----
+PLACEHOLDER_ERROR_MESSAGE1450
 
 statement error
 SELECT CAST('{a:3,, b:1}' AS STRUCT(a INT, b INT));
+----
+PLACEHOLDER_ERROR_MESSAGE1449
 
 statement error
 SELECT CAST('}{a:5}' AS STRUCT(a INT));
+----
+PLACEHOLDER_ERROR_MESSAGE1448
 
 statement error
 SELECT CAST('{a:{b:{d: 800}, {c: "Duck"}}}' AS STRUCT(a STRUCT(b STRUCT(d INT), c STRUCT(c VARCHAR))));
+----
+PLACEHOLDER_ERROR_MESSAGE1447
 
 statement error
 SELECT CAST('{[{]}}' AS STRUCT(a VARCHAR[]));
+----
+PLACEHOLDER_ERROR_MESSAGE1446
 
 
 

@@ -82,49 +82,75 @@ SELECT interval 2 seconds, interval 2 second;
 # 2 years 10 months
 statement error
 SELECT interval '2 10' years to months
+----
+PLACEHOLDER_ERROR_MESSAGE503
 
 # 2 days 10 hours
 statement error
 SELECT interval '2 10' days to hours
+----
+PLACEHOLDER_ERROR_MESSAGE502
 
 # 12 days 15:06:00
 statement error
 SELECT interval '12 15:06' days to minutes
+----
+PLACEHOLDER_ERROR_MESSAGE501
 
 # 12 days 15:06:04.123
 statement error
 SELECT interval '12 15:06:04.123' days to seconds
+----
+PLACEHOLDER_ERROR_MESSAGE500
 
 # 12:30:00
 statement error
 SELECT interval '12:30' hours to minutes
+----
+PLACEHOLDER_ERROR_MESSAGE499
 
 # 15:06:04.123
 statement error
 SELECT interval '15:06:04.123' hours to seconds
+----
+PLACEHOLDER_ERROR_MESSAGE498
 
 # 00:12:30
 statement error
 SELECT interval '12:30' minutes to seconds
+----
+PLACEHOLDER_ERROR_MESSAGE497
 
 # test out of range interval constants
 statement error
 SELECT interval '99999999999999' years;
+----
+PLACEHOLDER_ERROR_MESSAGE496
 
 statement error
 SELECT interval '214748364' years;
+----
+PLACEHOLDER_ERROR_MESSAGE495
 
 statement error
 SELECT interval '9223372036854775807' hours;
+----
+PLACEHOLDER_ERROR_MESSAGE494
 
 statement error
 SELECT interval '9223372036854775807' minutes;
+----
+PLACEHOLDER_ERROR_MESSAGE493
 
 statement error
 SELECT interval '9223372036854775807' seconds;
+----
+PLACEHOLDER_ERROR_MESSAGE492
 
 statement error
 SELECT interval '9223372036854775807' milliseconds;
+----
+PLACEHOLDER_ERROR_MESSAGE491
 
 # milli/microseconds
 query I

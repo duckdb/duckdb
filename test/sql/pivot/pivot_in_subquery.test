@@ -59,4 +59,6 @@ US	Seattle	608	564	738
 
 statement error
 PIVOT Cities ON Year IN (SELECT xx FROM Cities) USING SUM(Population);
+----
+PLACEHOLDER_ERROR_MESSAGE254
 

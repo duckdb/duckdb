@@ -49,12 +49,18 @@ NULL
 # test incorrect usage
 statement error
 SELECT BIT_AND()
+----
+PLACEHOLDER_ERROR_MESSAGE1537
 
 statement error
 SELECT BIT_AND(1, 2, 3)
+----
+PLACEHOLDER_ERROR_MESSAGE1536
 
 statement error
 SELECT BIT_AND(BIT_AND(1))
+----
+PLACEHOLDER_ERROR_MESSAGE1535
 
 #test on bit types
 statement ok

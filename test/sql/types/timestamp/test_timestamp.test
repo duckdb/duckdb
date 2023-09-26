@@ -35,12 +35,18 @@ SELECT timestamp '    2017-07-23     13:10:11    ';
 # other trailing, preceding, or middle gunk is not accepted
 statement error
 SELECT timestamp '    2017-07-23     13:10:11    AA';
+----
+PLACEHOLDER_ERROR_MESSAGE965
 
 statement error
 SELECT timestamp 'AA2017-07-23 13:10:11';
+----
+PLACEHOLDER_ERROR_MESSAGE964
 
 statement error
 SELECT timestamp '2017-07-23A13:10:11';
+----
+PLACEHOLDER_ERROR_MESSAGE963
 
 query T
 SELECT t FROM timestamp ORDER BY t;
@@ -66,21 +72,33 @@ SELECT MAX(t) FROM timestamp;
 
 statement error
 SELECT SUM(t) FROM timestamp
+----
+PLACEHOLDER_ERROR_MESSAGE962
 
 statement error
 SELECT AVG(t) FROM timestamp
+----
+PLACEHOLDER_ERROR_MESSAGE961
 
 statement error
 SELECT t+t FROM timestamp
+----
+PLACEHOLDER_ERROR_MESSAGE960
 
 statement error
 SELECT t*t FROM timestamp
+----
+PLACEHOLDER_ERROR_MESSAGE959
 
 statement error
 SELECT t/t FROM timestamp
+----
+PLACEHOLDER_ERROR_MESSAGE958
 
 statement error
 SELECT t%t FROM timestamp
+----
+PLACEHOLDER_ERROR_MESSAGE957
 
 query T
 SELECT t-t FROM timestamp

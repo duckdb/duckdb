@@ -30,6 +30,8 @@ NULL
 
 statement error
 ${statement_type} ${null_order_type}='unknown_null_order'
+----
+PLACEHOLDER_ERROR_MESSAGE223
 
 endloop
 

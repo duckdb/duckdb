@@ -58,16 +58,26 @@ NULL
 # incorrect number of struct entries
 statement error
 INSERT INTO a VALUES (ROW(1, 2, 3))
+----
+PLACEHOLDER_ERROR_MESSAGE710
 
 statement error
 INSERT INTO a VALUES (ROW(1))
+----
+PLACEHOLDER_ERROR_MESSAGE709
 
 # incorrect types
 statement error
 INSERT INTO a VALUES (ROW('hello', 1))
+----
+PLACEHOLDER_ERROR_MESSAGE708
 
 statement error
 INSERT INTO a VALUES (ROW('hello', [1, 2]))
+----
+PLACEHOLDER_ERROR_MESSAGE707
 
 statement error
 INSERT INTO a VALUES (ROW(1, ROW(1, 7)))
+----
+PLACEHOLDER_ERROR_MESSAGE706

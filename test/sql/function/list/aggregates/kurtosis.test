@@ -15,6 +15,8 @@ NULL
 # out of range
 statement error
 select list_kurtosis([2e304, 2e305, 2e306, 2e307])
+----
+PLACEHOLDER_ERROR_MESSAGE2171
 
 statement ok
 create table aggr(k int[]);
@@ -37,4 +39,5 @@ NULL
 
 # incorrect usage
 statement error
-select list_kurtosis()
+select list_kurtosis()----
+PLACEHOLDER_ERROR_MESSAGE2170

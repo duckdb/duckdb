@@ -11,6 +11,8 @@ foreach datatype ANY HASH POINTER
 
 statement error
 SELECT HASH(NULL::${datatype});
+----
+PLACEHOLDER_ERROR_MESSAGE2303
 
 endloop
 
@@ -178,9 +180,13 @@ NULL	13787848793156543929
 # Zero arguments are not allowed
 statement error
 SELECT HASH();
+----
+PLACEHOLDER_ERROR_MESSAGE2302
 
 statement error
 SELECT r, HASH() FROM enums;
+----
+PLACEHOLDER_ERROR_MESSAGE2301
 
 # Multiple arguments of any kind are accepted
 query II

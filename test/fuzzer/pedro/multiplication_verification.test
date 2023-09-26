@@ -7,6 +7,8 @@ PRAGMA enable_verification
 
 statement error
 SELECT 1 * (1 < 1);
+----
+PLACEHOLDER_ERROR_MESSAGE17
 
 query I
 SELECT 2 * (1 << 2);

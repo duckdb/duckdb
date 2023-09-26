@@ -7,6 +7,8 @@ PRAGMA enable_verification
 
 statement error
 select 1e308::float;
+----
+PLACEHOLDER_ERROR_MESSAGE1494
 
 query I
 select '1e308'::float;

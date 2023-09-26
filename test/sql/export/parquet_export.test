@@ -37,6 +37,8 @@ SELECT SUM(i), SUM(j) FROM integers
 # verify that the not null constraint is still there
 statement error
 INSERT INTO integers VALUES (NULL, NULL)
+----
+PLACEHOLDER_ERROR_MESSAGE3016
 
 statement ok
 DROP TABLE integers
@@ -70,6 +72,8 @@ SELECT SUM(i), SUM(j) FROM integers
 # verify that the not null constraint is still there
 statement error
 INSERT INTO integers VALUES (NULL, NULL)
+----
+PLACEHOLDER_ERROR_MESSAGE3015
 
 statement ok
 DROP TABLE integers
@@ -103,3 +107,5 @@ SELECT SUM(i), SUM(j) FROM integers
 # verify that the not null constraint is still there
 statement error
 INSERT INTO integers VALUES (NULL, NULL)
+----
+PLACEHOLDER_ERROR_MESSAGE3014

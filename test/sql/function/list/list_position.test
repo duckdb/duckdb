@@ -126,6 +126,8 @@ SELECT list_position([1.0,2.0,3.0], 'a')
 # Not a list as input
 statement error
 SELECT list_position('a', 'a')
+----
+PLACEHOLDER_ERROR_MESSAGE2244
 
 query T
 SELECT list_position(NULL,NULL)
@@ -222,15 +224,23 @@ SELECT list_position([NULL,7], 7)
 
 statement error
 SELECT list_position([[1,2,3],[1],[1,2,3])
+----
+PLACEHOLDER_ERROR_MESSAGE2243
 
 statement error
 SELECT list_position([[1,2,3],[1],[1,2,3]])
+----
+PLACEHOLDER_ERROR_MESSAGE2242
 
 statement error
 SELECT list_position(1)
+----
+PLACEHOLDER_ERROR_MESSAGE2241
 
 statement error
 SELECT list_position(1,1)
+----
+PLACEHOLDER_ERROR_MESSAGE2240
 
 statement ok
 PRAGMA debug_force_external=true

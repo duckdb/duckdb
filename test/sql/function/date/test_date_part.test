@@ -145,12 +145,18 @@ NULL
 
 statement error
 SELECT date_part('timezone', d) FROM dates;
+----
+PLACEHOLDER_ERROR_MESSAGE2010
 
 statement error
 SELECT date_part('timezone_hour', d) FROM dates;
+----
+PLACEHOLDER_ERROR_MESSAGE2009
 
 statement error
 SELECT date_part('timezone_minute', d) FROM dates;
+----
+PLACEHOLDER_ERROR_MESSAGE2008
 
 # timestamps
 query I

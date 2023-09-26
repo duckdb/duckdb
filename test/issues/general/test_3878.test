@@ -31,6 +31,8 @@ create table y (y int references x(x));
 
 statement error
 insert into y values (1);
+----
+PLACEHOLDER_ERROR_MESSAGE110
 
 statement ok
 insert into x values (1);
@@ -40,12 +42,16 @@ insert into y values (1);
 
 statement error
 insert into x values (NULL);
+----
+PLACEHOLDER_ERROR_MESSAGE109
 
 statement ok
 insert into y values (NULL);
 
 statement error
 delete from x;
+----
+PLACEHOLDER_ERROR_MESSAGE108
 
 statement ok
 delete from y;

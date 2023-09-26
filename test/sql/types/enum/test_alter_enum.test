@@ -19,6 +19,8 @@ CREATE TYPE name_enum AS ENUM ('Pedro', 'Mark');
 #This should error out since we can't do this cast
 statement error
 ALTER TABLE person ALTER name TYPE name_enum
+----
+PLACEHOLDER_ERROR_MESSAGE646
 
 statement ok
 DROP TYPE name_enum

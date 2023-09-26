@@ -50,20 +50,30 @@ SELECT * FROM blobs
 # Insert invalid hex strings (invalid hex chars: G, H, I)
 statement error
 INSERT INTO blobs VALUES('\xGA\xFF\xAA')
+----
+PLACEHOLDER_ERROR_MESSAGE1011
 
 # Insert invalid hex strings (odd # of chars)
 statement error
 INSERT INTO blobs VALUES('\xA')
+----
+PLACEHOLDER_ERROR_MESSAGE1010
 
 statement error
 INSERT INTO blobs VALUES('\xAA\xA')
+----
+PLACEHOLDER_ERROR_MESSAGE1009
 
 statement error
 INSERT INTO blobs VALUES('blablabla\x')
+----
+PLACEHOLDER_ERROR_MESSAGE1008
 
 # BLOB with “non-printable” octets
 statement error
 SELECT 'abc �'::BYTEA;
+----
+PLACEHOLDER_ERROR_MESSAGE1007
 
 # BLOB null and empty values
 query T
@@ -96,6 +106,8 @@ NULL
 # convert non-ascii string to blob using cat
 statement error
 select 'ü'::blob;
+----
+PLACEHOLDER_ERROR_MESSAGE1006
 
 # Test PR 6633
 query I

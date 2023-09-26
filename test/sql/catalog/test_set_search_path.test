@@ -55,6 +55,8 @@ SET SEARCH_PATH = '"test","test2"';
 
 statement error
 SET SEARCH_PATH = 'does_not_exist';
+----
+PLACEHOLDER_ERROR_MESSAGE1755
 
 # Setting the default value through 'schema'
 
@@ -68,6 +70,8 @@ expected a single entry
 
 statement error
 SET SCHEMA = 'does_not_exist';
+----
+PLACEHOLDER_ERROR_MESSAGE1754
 
 # Reading out to see how aliasing works.
 
@@ -76,6 +80,8 @@ SET SEARCH_PATH = 'test,test2';
 
 statement error
 SET SEARCH_PATH = '"invalid quoted string list';
+----
+PLACEHOLDER_ERROR_MESSAGE1753
 
 query I
 SELECT MAIN.CURRENT_SETTING('search_path');
@@ -158,9 +164,13 @@ CREATE TABLE test2.table_with_same_name(in_test2 INTEGER);
 
 statement error
 SELECT in_main FROM table_with_same_name;
+----
+PLACEHOLDER_ERROR_MESSAGE1752
 
 statement error
 SELECT in_test2 FROM table_with_same_name;
+----
+PLACEHOLDER_ERROR_MESSAGE1751
 
 statement ok
 SELECT in_test FROM table_with_same_name;
@@ -211,9 +221,13 @@ SELECT i FROM test_table;
 
 statement error con2
 SELECT i FROM test_table;
+----
+PLACEHOLDER_ERROR_MESSAGE1750
 
 statement error con1
 SELECT i FROM test2_table;
+----
+PLACEHOLDER_ERROR_MESSAGE1749
 
 statement ok con2
 SELECT i FROM test2_table;

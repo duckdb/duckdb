@@ -13,16 +13,26 @@ SET enable_external_access=false;
 
 statement error
 SELECT * FROM read_csv('test/sql/copy/csv/data/test/date.csv', columns = {'d': 'DATE'});
+----
+PLACEHOLDER_ERROR_MESSAGE2906
 
 statement error
 SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/date.csv');
+----
+PLACEHOLDER_ERROR_MESSAGE2905
 
 statement error
 COPY date_test FROM 'test/sql/copy/csv/data/test/date.csv';
+----
+PLACEHOLDER_ERROR_MESSAGE2904
 
 statement error
 COPY date_test TO '__TEST_DIR__/date.csv'
+----
+PLACEHOLDER_ERROR_MESSAGE2903
 
 # we also can't just enable external access again
 statement error
 SET enable_external_access=true;
+----
+PLACEHOLDER_ERROR_MESSAGE2902

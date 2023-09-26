@@ -6,34 +6,56 @@ require parquet
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_bigint.parquet';
+----
+PLACEHOLDER_ERROR_MESSAGE2956
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_date.parquet';
+----
+PLACEHOLDER_ERROR_MESSAGE2955
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_int.parquet';
+----
+PLACEHOLDER_ERROR_MESSAGE2954
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_smallint.parquet';
+----
+PLACEHOLDER_ERROR_MESSAGE2953
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_timestamp.parquet';
+----
+PLACEHOLDER_ERROR_MESSAGE2952
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_timestamp_ms.parquet';
+----
+PLACEHOLDER_ERROR_MESSAGE2951
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_tinyint.parquet';
+----
+PLACEHOLDER_ERROR_MESSAGE2950
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_ubigint.parquet';
+----
+PLACEHOLDER_ERROR_MESSAGE2949
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_uinteger.parquet';
+----
+PLACEHOLDER_ERROR_MESSAGE2948
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_usmallint.parquet';
+----
+PLACEHOLDER_ERROR_MESSAGE2947
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_utinyint.parquet';
+----
+PLACEHOLDER_ERROR_MESSAGE2946
 

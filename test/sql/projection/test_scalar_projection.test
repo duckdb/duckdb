@@ -48,9 +48,13 @@ SELECT 1 AS a, a * 2
 # query without selection list
 statement error
 SELECT
+----
+PLACEHOLDER_ERROR_MESSAGE3113
 
 statement error
 SELECT FROM (SELECT 42) v1
+----
+PLACEHOLDER_ERROR_MESSAGE3112
 
 # Scalar query from SQLLogicTests
 query I

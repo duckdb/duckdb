@@ -14,8 +14,12 @@ CREATE VIEW vw2 AS SELECT 1729 AS i
 # Renaming a non existing view
 statement error
 ALTER VIEW non_view RENAME TO vw
+----
+PLACEHOLDER_ERROR_MESSAGE2712
 
 # rename to an already existing view
 statement error
 ALTER VIEW vw2 RENAME TO vw
+----
+PLACEHOLDER_ERROR_MESSAGE2711
 

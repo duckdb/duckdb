@@ -5,6 +5,8 @@
 # incorrect usage
 statement error
 select list_sem()
+----
+PLACEHOLDER_ERROR_MESSAGE2217
 
 query I
 select list_sem([1])

@@ -40,6 +40,8 @@ foreach func_name avg favg bit_and bit_or bit_xor kurtosis mad product sem skewn
 
 statement error
 SELECT list_aggr([False], '${func_name}')
+----
+PLACEHOLDER_ERROR_MESSAGE2233
 
 endloop
 
@@ -76,6 +78,8 @@ foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or kurtosis mad 
 
 statement error
 SELECT list_aggr(['hello'], '${func_name}')
+----
+PLACEHOLDER_ERROR_MESSAGE2232
 
 endloop
 
@@ -121,6 +125,8 @@ foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger
 
 statement error
 SELECT list_aggr([1::${type}], '${func_name}')
+----
+PLACEHOLDER_ERROR_MESSAGE2231
 
 endloop
 
@@ -168,6 +174,8 @@ foreach type float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10)
 
 statement error
 SELECT list_aggr([1::${type}], '${func_name}')
+----
+PLACEHOLDER_ERROR_MESSAGE2230
 
 endloop
 
@@ -277,11 +285,15 @@ foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz ti
 
 statement error
 SELECT list_aggr(['2021-08-20'::${type}], '${func_name}')
+----
+PLACEHOLDER_ERROR_MESSAGE2229
 
 endloop
 
 statement error
 SELECT list_aggr([INTERVAL 1 YEAR], '${func_name}')
+----
+PLACEHOLDER_ERROR_MESSAGE2228
 
 endloop
 
@@ -323,6 +335,8 @@ foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or entropy histo
 
 statement error
 SELECT list_aggr(['{a: 1}'::BLOB], '${func_name}')
+----
+PLACEHOLDER_ERROR_MESSAGE2227
 
 endloop
 
@@ -361,6 +375,8 @@ foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or kurtosis mad 
 
 statement error
 SELECT list_aggr(e, '${func_name}') FROM enums
+----
+PLACEHOLDER_ERROR_MESSAGE2226
 
 endloop
 
@@ -399,8 +415,12 @@ foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or histogram kur
 
 statement error
 SELECT list_aggr([[1]], '${func_name}')
+----
+PLACEHOLDER_ERROR_MESSAGE2225
 
 statement error
 SELECT list_aggr([{'a': 1}], '${func_name}')
+----
+PLACEHOLDER_ERROR_MESSAGE2224
 
 endloop

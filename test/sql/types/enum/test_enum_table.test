@@ -14,6 +14,8 @@ CREATE TABLE person (
     name text,
     current_car car
 );
+----
+PLACEHOLDER_ERROR_MESSAGE664
 
 statement ok
 CREATE TABLE person (
@@ -26,6 +28,8 @@ INSERT INTO person VALUES ('Moe', 'happy');
 
 statement error
 INSERT INTO person VALUES ('Moe', 'diego');
+----
+PLACEHOLDER_ERROR_MESSAGE663
 
 query TT
 select * from person
@@ -97,6 +101,8 @@ CREATE TABLE aliens (
     name text,
     current_mood mood
 );
+----
+PLACEHOLDER_ERROR_MESSAGE662
 
 statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
@@ -221,6 +227,8 @@ ok
 
 statement error
 SELECT CAST ('bla' as mood)
+----
+PLACEHOLDER_ERROR_MESSAGE661
 
 query I
 SELECT TRY_CAST ('bla' as mood)

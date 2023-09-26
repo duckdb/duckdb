@@ -21,9 +21,13 @@ SELECT one()
 
 statement error
 SELECT one(1)
+----
+PLACEHOLDER_ERROR_MESSAGE1846
 
 statement error
 SELECT one(NULL)
+----
+PLACEHOLDER_ERROR_MESSAGE1845
 
 statement ok
 DROP MACRO one;
@@ -95,6 +99,8 @@ DROP FUNCTION two;
 # b cannot be found
 statement error
 CREATE MACRO add_macro(a) AS a + b
+----
+PLACEHOLDER_ERROR_MESSAGE1844
 
 statement ok
 CREATE MACRO add_macro(a, b) AS a + b
@@ -155,22 +161,34 @@ false
 # incorrect number of arguments
 statement error
 SELECT IFELSE();
+----
+PLACEHOLDER_ERROR_MESSAGE1843
 
 statement error
 SELECT IFELSE(1);
+----
+PLACEHOLDER_ERROR_MESSAGE1842
 
 statement error
 SELECT IFELSE(1, 2);
+----
+PLACEHOLDER_ERROR_MESSAGE1841
 
 statement error
 SELECT IFELSE(1, 2, 3, 4);
+----
+PLACEHOLDER_ERROR_MESSAGE1840
 
 # no duplicate macro function names
 statement error
 CREATE MACRO IFELSE(a,b) AS a+b
+----
+PLACEHOLDER_ERROR_MESSAGE1839
 
 statement error
 CREATE MACRO ifelse(a,b) AS a+b
+----
+PLACEHOLDER_ERROR_MESSAGE1838
 
 query T
 SELECT IFELSE(1, 'random', RANDOM())
@@ -192,6 +210,8 @@ SELECT macros.add_macro(40,2)
 # conflicting parameter names in macro definition
 statement error
 CREATE MACRO conflict(i, i) AS i + 1
+----
+PLACEHOLDER_ERROR_MESSAGE1837
 
 # aggregation macro's
 statement ok
@@ -215,16 +235,22 @@ SELECT weird_avg(a) FROM integers
 
 statement error
 CREATE MACRO star() AS *
+----
+PLACEHOLDER_ERROR_MESSAGE1836
 
 # macro's with default arguments
 statement error
 CREATE MACRO conflict(a, a := 1) AS a + a
+----
+PLACEHOLDER_ERROR_MESSAGE1835
 
 statement ok
 CREATE MACRO add_default5(a, b := 5) AS a + b
 
 statement error
 SELECT add_default5(3, 6)
+----
+PLACEHOLDER_ERROR_MESSAGE1834
 
 query T
 SELECT add_default5(3)
@@ -238,23 +264,35 @@ SELECT add_default5(3, b := 6)
 
 statement error
 SELECT add_default5(b := 6, 3)
+----
+PLACEHOLDER_ERROR_MESSAGE1833
 
 statement error
 CREATE MACRO wrong_order(a, b := 3, c)
+----
+PLACEHOLDER_ERROR_MESSAGE1832
 
 statement error
 CREATE MACRO wrong_order(a := 3, b)
+----
+PLACEHOLDER_ERROR_MESSAGE1831
 
 # only constant default values are allowed
 statement error
 CREATE MACRO select_plus_floats(a, f := b) AS (SELECT a + f FROM floats)
+----
+PLACEHOLDER_ERROR_MESSAGE1830
 
 # +(FLOAT, VARCHAR) does not work - constant types are checked at create time
 statement error
 CREATE MACRO wrong_type(s='not a float') AS (SELECT b + s FROM floats)
+----
+PLACEHOLDER_ERROR_MESSAGE1829
 
 statement error
 CREATE MACRO two_default_params(a := 4, a := 2) AS a + a
+----
+PLACEHOLDER_ERROR_MESSAGE1828
 
 statement ok
 CREATE MACRO two_default_params(a := 4, b := 2) AS a + b
@@ -276,24 +314,37 @@ SELECT two_default_params(b := 3)
 
 statement error
 SELECT two_default_params(a := 5, a := 3)
+----
+PLACEHOLDER_ERROR_MESSAGE1827
 
 statement error
 SELECT two_default_params(b := 5, b := 3)
+----
+PLACEHOLDER_ERROR_MESSAGE1826
 
 statement error
 CREATE MACRO macros.add_macro(a, b) AS a + b
+----
+PLACEHOLDER_ERROR_MESSAGE1825
 
 statement error
 CREATE MACRO my_macro(a.b) AS 42;
+----
+PLACEHOLDER_ERROR_MESSAGE1824
 
 statement error
 CREATE MACRO my_macro(a.b.c) AS 42;
+----
+PLACEHOLDER_ERROR_MESSAGE1823
 
 statement ok
 CREATE MACRO my_macro(a) AS 42;
 
 statement error
 SELECT my_macro(x := 42);
+----
+PLACEHOLDER_ERROR_MESSAGE1822
 
 statement error
-SELECT my_macro(a := 42, a := 42);
+SELECT my_macro(a := 42, a := 42);----
+PLACEHOLDER_ERROR_MESSAGE1821

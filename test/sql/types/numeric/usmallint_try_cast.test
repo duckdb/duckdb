@@ -12,6 +12,8 @@ CREATE TABLE usmallints AS SELECT i::USMALLINT i FROM (VALUES (0), (65535)) tbl(
 # unsigned
 statement error
 SELECT i::UTINYINT FROM usmallints ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE789
 
 query I
 SELECT TRY_CAST(i AS UTINYINT) FROM usmallints ORDER BY i
@@ -34,6 +36,8 @@ SELECT i::UBIGINT FROM usmallints ORDER BY i
 # signed
 statement error
 SELECT i::TINYINT FROM usmallints ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE788
 
 query I
 SELECT TRY_CAST(i AS TINYINT) FROM usmallints ORDER BY i
@@ -43,6 +47,8 @@ NULL
 
 statement error
 SELECT i::SMALLINT FROM usmallints ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE787
 
 query I
 SELECT TRY_CAST(i AS SMALLINT) FROM usmallints ORDER BY i
@@ -101,6 +107,8 @@ CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000'),
 
 statement error
 SELECT s::USMALLINT FROM strings
+----
+PLACEHOLDER_ERROR_MESSAGE786
 
 query I
 SELECT TRY_CAST(s AS USMALLINT) FROM strings
@@ -117,6 +125,8 @@ NULL
 # -> decimal casts
 statement error
 SELECT i::DECIMAL(3,0)::USMALLINT FROM usmallints ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE785
 
 query I
 SELECT i::DECIMAL(9,0)::USMALLINT FROM usmallints ORDER BY i
@@ -138,12 +148,18 @@ SELECT i::DECIMAL(38,0)::USMALLINT FROM usmallints ORDER BY i
 
 statement error
 SELECT i::DECIMAL(9,5)::USMALLINT FROM usmallints ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE784
 
 statement error
 SELECT i::DECIMAL(18,14)::USMALLINT FROM usmallints ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE783
 
 statement error
 SELECT i::DECIMAL(38,34)::USMALLINT FROM usmallints ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE782
 
 query I
 SELECT TRY_CAST(i AS DECIMAL(3,0))::USMALLINT FROM usmallints ORDER BY i

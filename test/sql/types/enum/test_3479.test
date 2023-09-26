@@ -26,3 +26,5 @@ insert into m_2 values ('1')
 
 statement error
 insert into m SELECT * FROM m_2
+----
+PLACEHOLDER_ERROR_MESSAGE647

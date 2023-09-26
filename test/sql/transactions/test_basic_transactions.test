@@ -21,6 +21,8 @@ SELECT * FROM integers
 # connection two should not be able to
 statement error con2
 SELECT * FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE2774
 
 # if we rollback, nobody should be able to query the table
 statement ok con1
@@ -28,9 +30,13 @@ ROLLBACK
 
 statement error con1
 SELECT * FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE2773
 
 statement error con2
 SELECT * FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE2772
 
 # now if we commit the table
 statement ok con1
@@ -46,6 +52,8 @@ COMMIT
 # transaction committed
 statement error con2
 SELECT * FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE2771
 
 # but if we rollback and start a new transaction it should see it
 statement ok con2
@@ -70,4 +78,6 @@ CREATE TABLE integers2(i INTEGER)
 # create a table on connection two with the same name
 statement error con1
 CREATE TABLE integers2(i INTEGER)
+----
+PLACEHOLDER_ERROR_MESSAGE2770
 

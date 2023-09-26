@@ -13,6 +13,8 @@ CREATE TABLE unit (
 	price INTEGER,
 	amount_sold AS (price) UNIQUE,
 );
+----
+PLACEHOLDER_ERROR_MESSAGE1188
 
 # Also not as a column list
 statement error
@@ -21,6 +23,8 @@ CREATE TABLE unit (
 	amount_sold AS (price),
 	UNIQUE (amount_sold),
 );
+----
+PLACEHOLDER_ERROR_MESSAGE1187
 
 # Show that proper UNIQUE constraints still work when mixed in when generated columns
 statement ok
@@ -36,3 +40,5 @@ INSERT INTO tbl VALUES (5);
 # Violates unique constraint
 statement error
 INSERT INTO tbl VALUES (5);
+----
+PLACEHOLDER_ERROR_MESSAGE1186

@@ -27,6 +27,8 @@ SELECT * FROM unit;
 # Is a dependency of 1 or more columns - CASCADE required
 statement error
 ALTER TABLE unit DROP COLUMN price;
+----
+PLACEHOLDER_ERROR_MESSAGE1185
 
 statement ok
 ALTER TABLE unit DROP COLUMN price CASCADE;
@@ -57,6 +59,8 @@ SELECT * FROM unit;
 # Cant delete last column
 statement error
 ALTER TABLE unit DROP COLUMN amount_sold CASCADE;
+----
+PLACEHOLDER_ERROR_MESSAGE1184
 
 query I
 SELECT * FROM unit;

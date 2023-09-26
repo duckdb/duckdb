@@ -112,9 +112,13 @@ floats: 3.14 +3e+00 3.141600E+00
 # too few parameters
 statement error
 SELECT printf('%s')
+----
+PLACEHOLDER_ERROR_MESSAGE2401
 
 statement error
 SELECT printf('%s %s', 'hello')
+----
+PLACEHOLDER_ERROR_MESSAGE2400
 
 # excess parameters are ignored
 query T
@@ -125,9 +129,13 @@ hello
 # incorrect types
 statement error
 SELECT printf('%s', 42)
+----
+PLACEHOLDER_ERROR_MESSAGE2399
 
 statement error
 SELECT printf('%d', 'hello')
+----
+PLACEHOLDER_ERROR_MESSAGE2398
 
 # Test printf with vectors
 statement ok
@@ -145,6 +153,8 @@ INSERT INTO strings VALUES (3, NULL, 30, 'abcde')
 # printf without format specifiers: too few parameters
 statement error
 SELECT printf(fmt) FROM strings ORDER BY idx
+----
+PLACEHOLDER_ERROR_MESSAGE2397
 
 query T
 SELECT printf(CASE WHEN pint < 15 THEN NULL ELSE pint END) FROM strings ORDER BY idx

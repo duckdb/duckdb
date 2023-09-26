@@ -7,9 +7,13 @@ PRAGMA enable_verification
 
 statement error
 select nextafter()
+----
+PLACEHOLDER_ERROR_MESSAGE2111
 
 statement error
 select nextafter('bla','bla')
+----
+PLACEHOLDER_ERROR_MESSAGE2110
 
 query I
 select nextafter(NULL,1)

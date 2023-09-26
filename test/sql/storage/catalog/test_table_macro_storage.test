@@ -52,6 +52,8 @@ DROP MACRO TABLE xt;
 
 statement error
 SELECT * from my_seq(0,10,2);
+----
+PLACEHOLDER_ERROR_MESSAGE2545
 
 # create another macro to check  the WAL
 statement ok
@@ -70,9 +72,13 @@ restart
 
 statement error
 SELECT * FROM xt(100, 'joe');
+----
+PLACEHOLDER_ERROR_MESSAGE2544
 
 statement error
 SELECT * FROM my_seq(0,3,2);
+----
+PLACEHOLDER_ERROR_MESSAGE2543
 
 query I
 SELECT * from my_range(2);

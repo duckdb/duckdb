@@ -11,6 +11,8 @@ INSERT INTO test VALUES (1, 1), (2, 2)
 # cannot drop column which does not exist
 statement error
 ALTER TABLE test DROP COLUMN blabla
+----
+PLACEHOLDER_ERROR_MESSAGE2739
 
 # unless IF EXISTS is specified
 statement ok
@@ -22,4 +24,6 @@ ALTER TABLE test DROP COLUMN i
 
 statement error
 ALTER TABLE test DROP COLUMN j
+----
+PLACEHOLDER_ERROR_MESSAGE2738
 

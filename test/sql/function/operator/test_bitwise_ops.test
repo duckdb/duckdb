@@ -38,23 +38,37 @@ SELECT xor(1, 1), xor(1, 0), xor(0, 0), xor(NULL, 1), xor(1, NULL)
 # out of range shifts throw an error
 statement error
 SELECT 1::TINYINT << -1::TINYINT, 1::TINYINT >> -1::TINYINT, 1::TINYINT << 12::TINYINT, 1::TINYINT >> 12::TINYINT
+----
+PLACEHOLDER_ERROR_MESSAGE2510
 
 statement error
 SELECT 1::SMALLINT << -1::SMALLINT, 1::SMALLINT >> -1::SMALLINT, 1::SMALLINT << 20::SMALLINT, 1::SMALLINT >> 20::SMALLINT
+----
+PLACEHOLDER_ERROR_MESSAGE2509
 
 statement error
 SELECT 1::INT << -1::INT, 1::INT >> -1::INT, 1::INT << 40::INT, 1::INT >> 40::INT
+----
+PLACEHOLDER_ERROR_MESSAGE2508
 
 statement error
 SELECT 1::BIGINT << -1::BIGINT, 1::BIGINT >> -1::BIGINT, 1::BIGINT << 1000::BIGINT, 1::BIGINT >> 1000::BIGINT
+----
+PLACEHOLDER_ERROR_MESSAGE2507
 
 # test invalid bitwise ops
 statement error
 SELECT 'hello' << 3
+----
+PLACEHOLDER_ERROR_MESSAGE2506
 
 statement error
 SELECT 3 << 'hello'
+----
+PLACEHOLDER_ERROR_MESSAGE2505
 
 statement error
 SELECT 2.0 << 1
+----
+PLACEHOLDER_ERROR_MESSAGE2504
 

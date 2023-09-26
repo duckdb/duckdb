@@ -12,18 +12,28 @@ CREATE TABLE smallints AS SELECT i::SMALLINT i FROM (VALUES (-32768), (0), (3276
 # -> unsigned
 statement error
 SELECT i::UTINYINT FROM smallints
+----
+PLACEHOLDER_ERROR_MESSAGE801
 
 statement error
 SELECT i::USMALLINT FROM smallints
+----
+PLACEHOLDER_ERROR_MESSAGE800
 
 statement error
 SELECT i::UINTEGER FROM smallints
+----
+PLACEHOLDER_ERROR_MESSAGE799
 
 statement error
 SELECT i::UBIGINT FROM smallints
+----
+PLACEHOLDER_ERROR_MESSAGE798
 
 statement error
 SELECT i::UTINYINT FROM smallints WHERE i>=0 ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE797
 
 query I
 SELECT i::USMALLINT FROM smallints WHERE i>=0 ORDER BY i
@@ -74,6 +84,8 @@ NULL
 # -> signed
 statement error
 SELECT i::TINYINT FROM smallints ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE796
 
 query I
 SELECT TRY_CAST(i AS TINYINT)::SMALLINT FROM smallints ORDER BY i
@@ -140,6 +152,8 @@ CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-100000'
 
 statement error
 SELECT s::SMALLINT FROM strings
+----
+PLACEHOLDER_ERROR_MESSAGE795
 
 query I
 SELECT TRY_CAST(s AS SMALLINT) FROM strings
@@ -155,6 +169,8 @@ NULL
 # -> decimal casts
 statement error
 SELECT i::DECIMAL(3,0)::SMALLINT FROM smallints ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE794
 
 query I
 SELECT i::DECIMAL(9,0)::SMALLINT FROM smallints ORDER BY i
@@ -179,15 +195,23 @@ SELECT i::DECIMAL(38,0)::SMALLINT FROM smallints ORDER BY i
 
 statement error
 SELECT i::DECIMAL(3,0)::SMALLINT FROM smallints ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE793
 
 statement error
 SELECT i::DECIMAL(9,5)::SMALLINT FROM smallints ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE792
 
 statement error
 SELECT i::DECIMAL(18,14)::SMALLINT FROM smallints ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE791
 
 statement error
 SELECT i::DECIMAL(38,34)::SMALLINT FROM smallints ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE790
 
 query I
 SELECT TRY_CAST(i AS DECIMAL(3,0))::SMALLINT FROM smallints ORDER BY i

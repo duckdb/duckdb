@@ -124,6 +124,8 @@ INSERT INTO bits VALUES (NULL)
 
 statement error
 INSERT INTO bits VALUES ('')
+----
+PLACEHOLDER_ERROR_MESSAGE424
 
 query I
 SELECT * FROM bits

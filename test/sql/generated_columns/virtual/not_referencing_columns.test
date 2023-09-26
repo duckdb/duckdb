@@ -12,6 +12,8 @@ CREATE TABLE tbl (
 	amount_sold INTEGER,
 	gcol AS (list(5,4,3))
 );
+----
+PLACEHOLDER_ERROR_MESSAGE1169
 
 statement ok
 CREATE TABLE tbl (

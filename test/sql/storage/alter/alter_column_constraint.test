@@ -17,11 +17,15 @@ ALTER TABLE a ADD COLUMN c REAL;
 
 statement error
 INSERT INTO a(id) VALUES (1);
+----
+PLACEHOLDER_ERROR_MESSAGE2572
 
 restart
 
 statement error
 INSERT INTO a(id) VALUES (1);
+----
+PLACEHOLDER_ERROR_MESSAGE2571
 
 # add default
 statement ok
@@ -29,11 +33,15 @@ ALTER TABLE a ALTER COLUMN c SET DEFAULT 10;
 
 statement error
 INSERT INTO a(id) VALUES (1);
+----
+PLACEHOLDER_ERROR_MESSAGE2570
 
 restart
 
 statement error
 INSERT INTO a(id) VALUES (1);
+----
+PLACEHOLDER_ERROR_MESSAGE2569
 
 # rename column
 statement ok
@@ -41,11 +49,15 @@ ALTER TABLE a RENAME c TO d;
 
 statement error
 INSERT INTO a(id) VALUES (1);
+----
+PLACEHOLDER_ERROR_MESSAGE2568
 
 restart
 
 statement error
 INSERT INTO a(id) VALUES (1);
+----
+PLACEHOLDER_ERROR_MESSAGE2567
 
 # rename table
 statement ok
@@ -53,11 +65,15 @@ ALTER TABLE a RENAME TO b;
 
 statement error
 INSERT INTO b(id) VALUES (1);
+----
+PLACEHOLDER_ERROR_MESSAGE2566
 
 restart
 
 statement error
 INSERT INTO b(id) VALUES (1);
+----
+PLACEHOLDER_ERROR_MESSAGE2565
 
 # drop column
 statement ok
@@ -65,11 +81,15 @@ ALTER TABLE b DROP d;
 
 statement error
 INSERT INTO b(id) VALUES (1);
+----
+PLACEHOLDER_ERROR_MESSAGE2564
 
 restart
 
 statement error
 INSERT INTO b(id) VALUES (1);
+----
+PLACEHOLDER_ERROR_MESSAGE2563
 
 statement ok
 INSERT INTO b(id) VALUES (2);

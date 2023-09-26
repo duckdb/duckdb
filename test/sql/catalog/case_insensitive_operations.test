@@ -60,6 +60,8 @@ WITH "CTE"("ZZZ") AS (
 	SELECT integers.i AS "ZZZ" FROM integers GROUP BY "zzz"
 ),
 	"cte" AS (SELECT 42)
+----
+PLACEHOLDER_ERROR_MESSAGE1858
 
 query I
 UPDATE integers SET i=integers.i+1

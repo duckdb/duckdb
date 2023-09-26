@@ -310,13 +310,19 @@ ORDER BY id
 # Regular function
 statement error
 SELECT ABS(x IGNORE NULLS) FROM range(10) tbl(x)
+----
+PLACEHOLDER_ERROR_MESSAGE2804
 
 # Aggregate function
 statement error
 SELECT SUM(x IGNORE NULLS)
 FROM range(10) tbl(x)
+----
+PLACEHOLDER_ERROR_MESSAGE2803
 
 # Windowed aggregate
 statement error
 SELECT SUM(x IGNORE NULLS) OVER (PARTITION BY (x / 3) ORDER BY x % 3)
 FROM range(10) tbl(x)
+----
+PLACEHOLDER_ERROR_MESSAGE2802

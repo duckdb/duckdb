@@ -13,6 +13,8 @@ INSERT INTO unit VALUES (5,4)
 
 statement error
 ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+----
+PLACEHOLDER_ERROR_MESSAGE1164
 
 statement ok
 ALTER TABLE unit DROP COLUMN price;
@@ -28,3 +30,5 @@ CREATE TABLE tbl (
 # total_profit depends on this
 statement error
 ALTER TABLE tbl DROP COLUMN price;
+----
+PLACEHOLDER_ERROR_MESSAGE1163

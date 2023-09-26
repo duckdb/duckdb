@@ -12,15 +12,23 @@ CREATE TABLE tinyints AS SELECT i::TINYINT i FROM (VALUES (-128), (0), (127)) tb
 # tinyint -> unsigned
 statement error
 SELECT i::UTINYINT FROM tinyints
+----
+PLACEHOLDER_ERROR_MESSAGE719
 
 statement error
 SELECT i::USMALLINT FROM tinyints
+----
+PLACEHOLDER_ERROR_MESSAGE718
 
 statement error
 SELECT i::UINTEGER FROM tinyints
+----
+PLACEHOLDER_ERROR_MESSAGE717
 
 statement error
 SELECT i::UBIGINT FROM tinyints
+----
+PLACEHOLDER_ERROR_MESSAGE716
 
 query I
 SELECT i::UTINYINT::TINYINT FROM tinyints WHERE i>=0 ORDER BY i
@@ -140,6 +148,8 @@ CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000'),
 
 statement error
 SELECT s::TINYINT FROM strings
+----
+PLACEHOLDER_ERROR_MESSAGE715
 
 query I
 SELECT TRY_CAST(s AS TINYINT) FROM strings
@@ -183,15 +193,23 @@ SELECT i::DECIMAL(38,0)::TINYINT FROM tinyints ORDER BY i
 
 statement error
 SELECT i::DECIMAL(3,1)::TINYINT FROM tinyints ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE714
 
 statement error
 SELECT i::DECIMAL(9,7)::TINYINT FROM tinyints ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE713
 
 statement error
 SELECT i::DECIMAL(18,16)::TINYINT FROM tinyints ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE712
 
 statement error
 SELECT i::DECIMAL(38,36)::TINYINT FROM tinyints ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE711
 
 query I
 SELECT TRY_CAST(i AS DECIMAL(3,1))::TINYINT FROM tinyints ORDER BY i

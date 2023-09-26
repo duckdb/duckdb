@@ -144,24 +144,38 @@ FROM (
 # Errors
 statement error
 SELECT approx_quantile(r, -0.1) FROM quantile
+----
+PLACEHOLDER_ERROR_MESSAGE1551
 
 statement error
 SELECT approx_quantile(r, 1.1) FROM quantile
+----
+PLACEHOLDER_ERROR_MESSAGE1550
 
 statement error
 SELECT approx_quantile(r, NULL) FROM quantile
+----
+PLACEHOLDER_ERROR_MESSAGE1549
 
 statement error
 SELECT approx_quantile(r, r) FROM quantile
+----
+PLACEHOLDER_ERROR_MESSAGE1548
 
 statement error
 SELECT approx_quantile(r::string, 0.5) FROM quantile
+----
+PLACEHOLDER_ERROR_MESSAGE1547
 
 statement error
 SELECT approx_quantile(r) FROM quantile
+----
+PLACEHOLDER_ERROR_MESSAGE1546
 
 statement error
 SELECT approx_quantile(r, 0.1, 0.2) FROM quantile
+----
+PLACEHOLDER_ERROR_MESSAGE1545
 
 statement ok
 pragma threads=4
@@ -234,21 +248,35 @@ GROUP BY a
 
 statement error
 SELECT reservoir_quantile(r, r)  from quantile
+----
+PLACEHOLDER_ERROR_MESSAGE1544
 
 statement error
 SELECT reservoir_quantile(r, NULL)  from quantile
+----
+PLACEHOLDER_ERROR_MESSAGE1543
 
 statement error
 SELECT reservoir_quantile(r, r, r)  from quantile
+----
+PLACEHOLDER_ERROR_MESSAGE1542
 
 statement error
 SELECT reservoir_quantile(r, 0.9, NULL)  from quantile
+----
+PLACEHOLDER_ERROR_MESSAGE1541
 
 statement error
 SELECT reservoir_quantile(r, 0.9, r)  from quantile
+----
+PLACEHOLDER_ERROR_MESSAGE1540
 
 statement error
 SELECT reservoir_quantile(r, random()::float)  from quantile
+----
+PLACEHOLDER_ERROR_MESSAGE1539
 
 statement error
 SELECT reservoir_quantile(r, 0.9, random()::float)  from quantile
+----
+PLACEHOLDER_ERROR_MESSAGE1538

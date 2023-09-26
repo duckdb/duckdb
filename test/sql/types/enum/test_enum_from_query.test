@@ -18,6 +18,8 @@ CREATE TABLE test (x VARCHAR, y VARCHAR);
 
 statement error
 CREATE TYPE a AS ENUM (SELECT * FROM test);
+----
+PLACEHOLDER_ERROR_MESSAGE674
 
 statement ok
 DROP TABLE test;
@@ -37,6 +39,8 @@ INSERT INTO test SELECT CAST(range AS VARCHAR) FROM range(0, 100);
 
 statement error
 INSERT INTO test VALUES ('100');
+----
+PLACEHOLDER_ERROR_MESSAGE673
 
 statement ok
 DROP TABLE number_str;
@@ -108,6 +112,8 @@ DROP TYPE number_enum;
 # Throw exception for NULL
 statement error
 CREATE TYPE number_enum AS ENUM (SELECT NULL::VARCHAR);
+----
+PLACEHOLDER_ERROR_MESSAGE672
 
 # Test inserted order
 statement ok

@@ -14,3 +14,5 @@ SELECT * FROM 'data/csv/[avalon]_daily-avg.csv'
 
 statement error
 SELECT * FROM 'data/csv/[avxalon]_daily-avg.csv'
+----
+PLACEHOLDER_ERROR_MESSAGE2895

@@ -53,18 +53,26 @@ SELECT * FROM entry
 
 statement error con2
 SELECT * FROM entry2
+----
+PLACEHOLDER_ERROR_MESSAGE2652
 
 statement error con2
 SELECT * FROM entry3
+----
+PLACEHOLDER_ERROR_MESSAGE2651
 
 statement error con2
 SELECT * FROM entry4
+----
+PLACEHOLDER_ERROR_MESSAGE2650
 
 statement ok con1
 COMMIT
 
 statement error con2
 SELECT * FROM entry
+----
+PLACEHOLDER_ERROR_MESSAGE2649
 
 query I con2
 SELECT * FROM entry4

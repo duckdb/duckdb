@@ -14,6 +14,8 @@ INSERT INTO test VALUES (1), (2)
 # Alter generated column
 statement error
 ALTER TABLE test ALTER i TYPE VARCHAR
+----
+PLACEHOLDER_ERROR_MESSAGE2659
 
 # Alter normal column
 statement ok

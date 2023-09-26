@@ -5,6 +5,8 @@
 # incorrect usage
 statement error
 select list_product()
+----
+PLACEHOLDER_ERROR_MESSAGE2209
 
 statement ok
 CREATE TABLE integers(i INTEGER[]);

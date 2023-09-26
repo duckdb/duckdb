@@ -141,40 +141,64 @@ SELECT FINALIZE(corr(d, d+1) EXPORT_STATE), FINALIZE(covar_pop(d, d+1) EXPORT_ST
 
 statement error
 SELECT list(d) EXPORT_STATE from dummy;
+----
+PLACEHOLDER_ERROR_MESSAGE1683
 
 statement error
 SELECT string_agg(d, ',') EXPORT_STATE from dummy;
+----
+PLACEHOLDER_ERROR_MESSAGE1682
 
 statement error
 SELECT string_agg(d) EXPORT_STATE from dummy;
+----
+PLACEHOLDER_ERROR_MESSAGE1681
 
 statement error
 SELECT FINALIZE(COMBINE(SUM(d) EXPORT_STATE, AVG(d) EXPORT_STATE)) FROM dummy;
+----
+PLACEHOLDER_ERROR_MESSAGE1680
 
 statement error
 SELECT combine(NULL, NULL);
+----
+PLACEHOLDER_ERROR_MESSAGE1679
 
 statement error
 SELECT combine(42, 42);
+----
+PLACEHOLDER_ERROR_MESSAGE1678
 
 statement error
 SELECT finalize(NULL);
+----
+PLACEHOLDER_ERROR_MESSAGE1677
 
 statement error
 SELECT finalize(42);
+----
+PLACEHOLDER_ERROR_MESSAGE1676
 
 statement error
 SELECT finalize(sum(d)) from dummy;
+----
+PLACEHOLDER_ERROR_MESSAGE1675
 
 statement error
 SELECT finalize(sum(d)) from dummy group by g;
+----
+PLACEHOLDER_ERROR_MESSAGE1674
 
 # can't finalize twice
 statement error
 SELECT finalize(finalize(sum(d) EXPORT_STATE)) from dummy;
+----
+PLACEHOLDER_ERROR_MESSAGE1673
 
 statement error
 select sum(42) EXPORT_STATE over ();
+----
+PLACEHOLDER_ERROR_MESSAGE1672
 
 
 # tests with ze persistence
@@ -215,15 +239,23 @@ SELECT FINALIZE(COMBINE(SUM(42) EXPORT_STATE, (SUM(42) EXPORT_STATE)::BLOB));
 
 statement error
 SELECT (SUM(42) EXPORT_STATE)::INTEGER;
+----
+PLACEHOLDER_ERROR_MESSAGE1671
 
 statement error
 SELECT COMBINE(SUM(42) EXPORT_STATE, 42);
+----
+PLACEHOLDER_ERROR_MESSAGE1670
 
 statement error
 SELECT COMBINE(SUM(42) EXPORT_STATE, 'ASDF'::BLOB);
+----
+PLACEHOLDER_ERROR_MESSAGE1669
 
 statement error
 SELECT COMBINE((SUM(42) EXPORT_STATE)::BLOB, SUM(42) EXPORT_STATE);
+----
+PLACEHOLDER_ERROR_MESSAGE1668
 
 # simulate round tripping
 require parquet

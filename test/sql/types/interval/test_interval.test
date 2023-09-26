@@ -101,10 +101,14 @@ select interval '-05:12:34.567890' as test_interval;
 # FIXME: we can also use the ISO 8601 interval format
 statement error
 SELECT INTERVAL 'P2MT1H1M';
+----
+PLACEHOLDER_ERROR_MESSAGE538
 
 # FIXME: or this format
 statement error
 SELECT INTERVAL 'P00-02-00T01:00:01';
+----
+PLACEHOLDER_ERROR_MESSAGE537
 
 query T
 SELECT INTERVAL '90' DAY;
@@ -151,6 +155,8 @@ SELECT INTERVAL '2 month' - INTERVAL '1 month 3 days';
 # but not multiply
 statement error
 SELECT INTERVAL '2 month' * INTERVAL '1 month 3 days';
+----
+PLACEHOLDER_ERROR_MESSAGE536
 
 # we can, however, multiply/divide intervals by integers
 query T
@@ -172,6 +178,8 @@ SELECT INTERVAL '1 year 2 days 2 seconds' / 2;
 # division cannot!
 statement error
 SELECT 2 / INTERVAL '1 year 2 days 2 seconds';
+----
+PLACEHOLDER_ERROR_MESSAGE535
 
 # division by zero
 query T
@@ -183,31 +191,47 @@ NULL
 # empty interval
 statement error
 SELECT INTERVAL '';
+----
+PLACEHOLDER_ERROR_MESSAGE534
 
 statement error
 SELECT INTERVAL '   	';
+----
+PLACEHOLDER_ERROR_MESSAGE533
 
 # no number
 statement error
 SELECT INTERVAL 'years';
+----
+PLACEHOLDER_ERROR_MESSAGE532
 
 statement error
 SELECT INTERVAL '-years';
+----
+PLACEHOLDER_ERROR_MESSAGE531
 
 # gibberish
 statement error
 SELECT INTERVAL 'aergjaerghiuaehrgiuhaerg';
+----
+PLACEHOLDER_ERROR_MESSAGE530
 
 # overflow in year
 statement error
 SELECT INTERVAL '100000000000000000year';
+----
+PLACEHOLDER_ERROR_MESSAGE529
 
 # overflow in months
 statement error
 SELECT INTERVAL '100000000000000000months';
+----
+PLACEHOLDER_ERROR_MESSAGE528
 
 statement error
 SELECT INTERVAL '4294967296months';
+----
+PLACEHOLDER_ERROR_MESSAGE527
 
 query T
 SELECT INTERVAL '1294967296months';
@@ -216,6 +240,8 @@ SELECT INTERVAL '1294967296months';
 
 statement error
 SELECT INTERVAL '1294967296months 1294967296months';
+----
+PLACEHOLDER_ERROR_MESSAGE526
 
 query T
 SELECT INTERVAL '1294967296months -1294967296months';
@@ -224,20 +250,30 @@ SELECT INTERVAL '1294967296months -1294967296months';
 
 statement error
 SELECT INTERVAL '-1294967296months -1294967296months';
+----
+PLACEHOLDER_ERROR_MESSAGE525
 
 # overflow in days
 statement error
 SELECT INTERVAL '100000000000000000days';
+----
+PLACEHOLDER_ERROR_MESSAGE524
 
 statement error
 SELECT INTERVAL '1294967296days 1294967296days';
+----
+PLACEHOLDER_ERROR_MESSAGE523
 
 # overflow in micro seconds
 statement error
 SELECT INTERVAL '100000000000000000000msecs';
+----
+PLACEHOLDER_ERROR_MESSAGE522
 
 statement error
 SELECT INTERVAL '100000000000000000hours';
+----
+PLACEHOLDER_ERROR_MESSAGE521
 
 query T
 SELECT INTERVAL '2562047788 hours';
@@ -246,6 +282,8 @@ SELECT INTERVAL '2562047788 hours';
 
 statement error
 SELECT INTERVAL '2562047788 hours 2562047788 hours';
+----
+PLACEHOLDER_ERROR_MESSAGE520
 
 query T
 SELECT INTERVAL '-9223372036854775msecs';
@@ -294,31 +332,51 @@ SELECT INTERVAL '2147483647 months 2147483647 days 9223372036854775msecs';
 
 statement error
 SELECT INTERVAL '9223372036854775810msecs';
+----
+PLACEHOLDER_ERROR_MESSAGE519
 
 statement error
 SELECT INTERVAL '-9223372036854775810msecs';
+----
+PLACEHOLDER_ERROR_MESSAGE518
 
 # need a number here
 statement error
 SELECT INTERVAL 'aa' DAY;
+----
+PLACEHOLDER_ERROR_MESSAGE517
 
 statement error
 SELECT INTERVAL '100 months' DAY;
+----
+PLACEHOLDER_ERROR_MESSAGE516
 
 statement error
 SELECT '100'::INTERVAL;
+----
+PLACEHOLDER_ERROR_MESSAGE515
 
 statement error
 SELECT '100 unknowns'::INTERVAL;
+----
+PLACEHOLDER_ERROR_MESSAGE514
 
 statement error
 SELECT '100 months a'::INTERVAL;
+----
+PLACEHOLDER_ERROR_MESSAGE513
 
 statement error
 SELECT '100 months axo'::INTERVAL;
+----
+PLACEHOLDER_ERROR_MESSAGE512
 
 statement error
 SELECT '100 months agb'::INTERVAL;
+----
+PLACEHOLDER_ERROR_MESSAGE511
 
 statement error
 SELECT '100 months agob'::INTERVAL;
+----
+PLACEHOLDER_ERROR_MESSAGE510

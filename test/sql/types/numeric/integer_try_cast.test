@@ -12,21 +12,33 @@ CREATE TABLE integers AS SELECT i::INTEGER i FROM (VALUES (-2147483648), (0), (2
 # -> unsigned
 statement error
 SELECT i::UTINYINT FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE816
 
 statement error
 SELECT i::USMALLINT FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE815
 
 statement error
 SELECT i::UINTEGER FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE814
 
 statement error
 SELECT i::UBIGINT FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE813
 
 statement error
 SELECT i::UTINYINT FROM integers WHERE i>=0 ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE812
 
 statement error
 SELECT i::USMALLINT FROM integers WHERE i>=0 ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE811
 
 query I
 SELECT i::UINTEGER FROM integers WHERE i>=0 ORDER BY i
@@ -71,6 +83,8 @@ NULL
 # -> signed
 statement error
 SELECT i::TINYINT FROM integers ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE810
 
 query I
 SELECT TRY_CAST(i AS TINYINT) FROM integers ORDER BY i
@@ -81,6 +95,8 @@ NULL
 
 statement error
 SELECT i::SMALLINT FROM integers ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE809
 
 query I
 SELECT TRY_CAST(i AS SMALLINT) FROM integers ORDER BY i
@@ -140,6 +156,8 @@ CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000000
 
 statement error
 SELECT s::INTEGER FROM strings
+----
+PLACEHOLDER_ERROR_MESSAGE808
 
 query I
 SELECT TRY_CAST(s AS INTEGER) FROM strings
@@ -155,9 +173,13 @@ NULL
 # -> decimal casts
 statement error
 SELECT i::DECIMAL(3,0)::INTEGER FROM integers ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE807
 
 statement error
 SELECT i::DECIMAL(9,0)::INTEGER FROM integers ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE806
 
 query I
 SELECT i::DECIMAL(18,0)::INTEGER FROM integers ORDER BY i
@@ -175,15 +197,23 @@ SELECT i::DECIMAL(38,0)::INTEGER FROM integers ORDER BY i
 
 statement error
 SELECT i::DECIMAL(3,0)::INTEGER FROM integers ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE805
 
 statement error
 SELECT i::DECIMAL(9,0)::INTEGER FROM integers ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE804
 
 statement error
 SELECT i::DECIMAL(18,9)::INTEGER FROM integers ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE803
 
 statement error
 SELECT i::DECIMAL(38,29)::INTEGER FROM integers ORDER BY i
+----
+PLACEHOLDER_ERROR_MESSAGE802
 
 query I
 SELECT TRY_CAST(i AS DECIMAL(3,0))::INTEGER FROM integers ORDER BY i

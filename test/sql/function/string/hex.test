@@ -29,6 +29,8 @@ duckdb
 # Test Invalid input
 statement error
 SELECT from_hex('duckdb');
+----
+PLACEHOLDER_ERROR_MESSAGE2308
 
 query IIIIIIIIII
 SELECT to_hex(columns('^(.*int|varchar)$')) FROM test_all_types();

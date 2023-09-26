@@ -8,10 +8,14 @@ CREATE TABLE test(i INTEGER, j INTEGER)
 # cannot rename a column that does not exist
 statement error
 ALTER TABLE test RENAME COLUMN blablabla TO k
+----
+PLACEHOLDER_ERROR_MESSAGE2682
 
 # cannot rename a column to an already existing column
 statement error
 ALTER TABLE test RENAME COLUMN i TO j
+----
+PLACEHOLDER_ERROR_MESSAGE2681
 
 # after failure original columns should still be there
 statement ok

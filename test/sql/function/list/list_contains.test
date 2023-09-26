@@ -126,6 +126,8 @@ SELECT list_contains([1.0,2.0,3.0], 'a')
 # Not a list as input
 statement error
 SELECT list_contains('a', 'a')
+----
+PLACEHOLDER_ERROR_MESSAGE2276
 
 query T
 SELECT list_contains(NULL,NULL)
@@ -222,15 +224,23 @@ SELECT list_contains([NULL,7], 7)
 
 statement error
 SELECT list_contains([[1,2,3],[1],[1,2,3])
+----
+PLACEHOLDER_ERROR_MESSAGE2275
 
 statement error
 SELECT list_contains([[1,2,3],[1],[1,2,3]])
+----
+PLACEHOLDER_ERROR_MESSAGE2274
 
 statement error
 SELECT list_contains(1)
+----
+PLACEHOLDER_ERROR_MESSAGE2273
 
 statement error
 SELECT list_contains(1,1)
+----
+PLACEHOLDER_ERROR_MESSAGE2272
 
 statement ok
 PRAGMA debug_force_external=true

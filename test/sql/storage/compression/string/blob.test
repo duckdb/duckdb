@@ -70,16 +70,24 @@ SELECT * FROM blobs
 # Insert invalid hex strings (invalid hex chars: G, H, I)
 statement error
 INSERT INTO blobs VALUES('\xGA\xFF\xAA')
+----
+PLACEHOLDER_ERROR_MESSAGE2579
 
 # Insert invalid hex strings (odd # of chars)
 statement error
 INSERT INTO blobs VALUES('\xA')
+----
+PLACEHOLDER_ERROR_MESSAGE2578
 
 statement error
 INSERT INTO blobs VALUES('\xAA\xA')
+----
+PLACEHOLDER_ERROR_MESSAGE2577
 
 statement error
 INSERT INTO blobs VALUES('blablabla\x')
+----
+PLACEHOLDER_ERROR_MESSAGE2576
 
 statement ok
 checkpoint

@@ -11,9 +11,13 @@ explain CREATE TABLE integers(i INTEGER);
 # oops we didn't actually create it
 statement error
 explain SELECT * FROM integers;
+----
+PLACEHOLDER_ERROR_MESSAGE1116
 
 statement error
 explain INSERT INTO integers VALUES (1);
+----
+PLACEHOLDER_ERROR_MESSAGE1115
 
 statement ok
 CREATE TABLE integers(i INTEGER);
@@ -93,6 +97,8 @@ explain CREATE MACRO f(x) AS x+1
 
 statement error
 SELECT f(1)
+----
+PLACEHOLDER_ERROR_MESSAGE1114
 
 statement ok
 CREATE MACRO f(x) AS x+1

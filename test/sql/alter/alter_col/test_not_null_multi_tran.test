@@ -20,6 +20,8 @@ BEGIN TRANSACTION
 
 statement error con2
 INSERT INTO t VALUES(7777, NULL)
+----
+PLACEHOLDER_ERROR_MESSAGE2606
 
 statement ok con1
 INSERT INTO t VALUES(7, 7)
@@ -59,9 +61,13 @@ COMMIT
 
 statement error con2
 COMMIT
+----
+PLACEHOLDER_ERROR_MESSAGE2605
 
 statement error con1
 INSERT INTO t VALUES(7777, NULL)
+----
+PLACEHOLDER_ERROR_MESSAGE2604
 
 query I con1
 SELECT COUNT(*) FROM  t
@@ -86,6 +92,8 @@ BEGIN TRANSACTION
 
 statement error con2
 INSERT INTO t VALUES(1, 1)
+----
+PLACEHOLDER_ERROR_MESSAGE2603
 
 statement ok con1
 COMMIT
@@ -128,6 +136,8 @@ COMMIT
 
 statement error con2
 INSERT INTO t VALUES(1, NULL)
+----
+PLACEHOLDER_ERROR_MESSAGE2602
 
 statement ok con2
 ROLLBACK
@@ -164,9 +174,13 @@ COMMIT
 #Failed to commit
 statement error con2
 COMMIT
+----
+PLACEHOLDER_ERROR_MESSAGE2601
 
 statement error con2
 INSERT INTO t VALUES(2, NULL)
+----
+PLACEHOLDER_ERROR_MESSAGE2600
 
 query I con1
 SELECT count(*) from t
@@ -197,6 +211,8 @@ ALTER TABLE t ALTER COLUMN j SET NOT NULL
 # Failed to commit
 statement error con2
 COMMIT
+----
+PLACEHOLDER_ERROR_MESSAGE2599
 
 statement ok con1
 COMMIT
@@ -204,6 +220,8 @@ COMMIT
 # Failed to insert null
 statement error con2
 INSERT INTO t VALUES(2, NULL)
+----
+PLACEHOLDER_ERROR_MESSAGE2598
 
 query I con1
 SELECT count(*) from t
@@ -232,6 +250,8 @@ COMMIT
 
 statement error con1
 ALTER TABLE t ALTER COLUMN j SET NOT NULL
+----
+PLACEHOLDER_ERROR_MESSAGE2597
 
 statement ok con1
 ROLLBACK

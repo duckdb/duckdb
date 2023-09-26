@@ -5,6 +5,8 @@
 #Corner cases
 statement error
 select product()
+----
+PLACEHOLDER_ERROR_MESSAGE1662
 
 query I
 select product(NULL)
@@ -18,6 +20,8 @@ select product(1)
 
 statement error
 select product(*)
+----
+PLACEHOLDER_ERROR_MESSAGE1661
 
 statement ok
 CREATE TABLE integers(i INTEGER);

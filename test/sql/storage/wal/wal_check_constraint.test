@@ -25,10 +25,14 @@ INSERT INTO test VALUES (3, 7);
 # check constraint on a violated (a < 10)
 statement error
 INSERT INTO test VALUES (12, 13);
+----
+PLACEHOLDER_ERROR_MESSAGE2536
 
 # check constraint on b violated  (b < 10) => (a < b)
 statement error
 INSERT INTO test VALUES (5, 3);
+----
+PLACEHOLDER_ERROR_MESSAGE2535
 
 # check constraint on b not violated !(b < 10) => (a + b < 100)
 statement ok
@@ -37,3 +41,5 @@ INSERT INTO test VALUES (9, 90);
 # check constraint on b violated !(b < 10) => (a + b < 100)
 statement error
 INSERT INTO test VALUES (9, 99);
+----
+PLACEHOLDER_ERROR_MESSAGE2534

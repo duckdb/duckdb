@@ -17,6 +17,8 @@ INSERT INTO vals VALUES (0, ${min}), (1, ${max}), (2, 0), (3, -2), (4, 2);
 # cannot negate the min value
 statement error
 SELECT -v FROM vals;
+----
+PLACEHOLDER_ERROR_MESSAGE1401
 
 # we can negate the maximum value
 statement ok

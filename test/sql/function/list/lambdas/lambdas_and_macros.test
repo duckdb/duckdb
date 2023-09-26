@@ -12,6 +12,8 @@ create table test as select range i from range(3);
 # Error: Binder Error: Conflicting column names for column i!
 statement error
 create macro my_macro(i) as (select i in (select i from test));
+----
+PLACEHOLDER_ERROR_MESSAGE2152
 
 statement ok
 CREATE MACRO list_contains_macro(x, y) AS (list_contains(x, y))
@@ -31,6 +33,8 @@ SELECT list_filter([[1, 2], NULL, [3], [4, NULL]], f -> list_count(macro_with_la
 
 statement error
 CREATE MACRO some_macro(x, y, z) AS (SELECT list_transform(x, x -> x + y + z))
+----
+PLACEHOLDER_ERROR_MESSAGE2151
 
 # this is a bit more tricky, because the operator mismatch is only detected when using the macro
 statement ok
@@ -38,4 +42,6 @@ CREATE MACRO some_macro(x, y, z) AS (SELECT list_transform(x, a -> x + y + z))
 
 statement error
 SELECT some_macro([1, 2], 3, 4);
+----
+PLACEHOLDER_ERROR_MESSAGE2150
 

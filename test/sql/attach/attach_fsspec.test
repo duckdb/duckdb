@@ -6,8 +6,11 @@ statement error
 ATTACH 'dummy_extension:/hello.world';
 ---
 Extension not found
+----
+PLACEHOLDER_ERROR_MESSAGE2787
 
 statement error
 ATTACH 'file://dummy.csv'
 ---
-File not found
+File not found----
+PLACEHOLDER_ERROR_MESSAGE2786

@@ -54,6 +54,8 @@ NULL
 # concat requires at least one argument
 statement error
 SELECT CONCAT()
+----
+PLACEHOLDER_ERROR_MESSAGE2380
 
 # concat with one argument works
 query T

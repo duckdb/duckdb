@@ -103,28 +103,44 @@ SELECT COUNT(*) FROM generate_series(TIMESTAMP '1992-01-01 00:00:00', TIMESTAMP 
 # zero interval not supported
 statement error
 SELECT d FROM range(TIMESTAMP '1992-01-01 00:00:00', TIMESTAMP '1992-12-31 12:00:00', INTERVAL '0 MONTH') tbl(d)
+----
+PLACEHOLDER_ERROR_MESSAGE3140
 
 # start is smaller than end but we have a negative interval
 statement error
 SELECT d FROM range(TIMESTAMP '1992-01-01 00:00:00', TIMESTAMP '1992-12-31 12:00:00', INTERVAL '1 MONTH ago') tbl(d)
+----
+PLACEHOLDER_ERROR_MESSAGE3139
 
 # start is bigger than end but we have a positive interval
 statement error
 SELECT d FROM range(TIMESTAMP '1993-01-01 00:00:00', TIMESTAMP '1992-01-01 00:00:00', INTERVAL '1 MONTH') tbl(d)
+----
+PLACEHOLDER_ERROR_MESSAGE3138
 
 # composite interval with negative types not supported
 statement error
 SELECT d FROM range(TIMESTAMP '1992-01-01 00:00:00', TIMESTAMP '1992-12-31 12:00:00', INTERVAL '1 MONTH' - INTERVAL '1 HOUR') tbl(d)
+----
+PLACEHOLDER_ERROR_MESSAGE3137
 
 # Infinities will overflow or cause infinite loops (PG behaviour!) so we ban them
 statement error
 SELECT COUNT(*) FROM generate_series('294247-01-10'::TIMESTAMP, 'infinity'::TIMESTAMP, INTERVAL '1 DAY');
+----
+PLACEHOLDER_ERROR_MESSAGE3136
 
 statement error
 SELECT COUNT(*) FROM range('294247-01-10'::TIMESTAMP, 'infinity'::TIMESTAMP, INTERVAL '1 DAY');
+----
+PLACEHOLDER_ERROR_MESSAGE3135
 
 statement error
 SELECT COUNT(*) FROM generate_series('-infinity'::TIMESTAMP, '290309-12-22 (BC) 00:00:00'::TIMESTAMP, INTERVAL '1 DAY');
+----
+PLACEHOLDER_ERROR_MESSAGE3134
 
 statement error
 SELECT COUNT(*) FROM range('-infinity'::TIMESTAMP, '290309-12-22 (BC) 00:00:00'::TIMESTAMP, INTERVAL '1 DAY');
+----
+PLACEHOLDER_ERROR_MESSAGE3133

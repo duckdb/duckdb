@@ -12,48 +12,78 @@ foreach func_name list_transform list_filter
 
 statement error
 SELECT ${func_name}()
+----
+PLACEHOLDER_ERROR_MESSAGE2149
 
 statement error
 SELECT ${func_name}([])
+----
+PLACEHOLDER_ERROR_MESSAGE2148
 
 statement error
 SELECT ${func_name}([1], x -> x, 3)
+----
+PLACEHOLDER_ERROR_MESSAGE2147
 
 statement error
 SELECT ${func_name}(1, 2, 3)
+----
+PLACEHOLDER_ERROR_MESSAGE2146
 
 statement error
 SELECT ${func_name}(NULL, NULL)
+----
+PLACEHOLDER_ERROR_MESSAGE2145
 
 statement error
 SELECT ${func_name}(NULL, x)
+----
+PLACEHOLDER_ERROR_MESSAGE2144
 
 statement error
 SELECT ${func_name}([1, 2], (SELECT 1) -> x + 1)
+----
+PLACEHOLDER_ERROR_MESSAGE2143
 
 statement error
 SELECT ${func_name}(NULL, i) FROM incorrect_test
+----
+PLACEHOLDER_ERROR_MESSAGE2142
 
 statement error
 SELECT ${func_name}(NULL, x -> y)
+----
+PLACEHOLDER_ERROR_MESSAGE2141
 
 statement error
 SELECT ${func_name}([1])
+----
+PLACEHOLDER_ERROR_MESSAGE2140
 
 statement error
 SELECT ${func_name}([1], NULL)
+----
+PLACEHOLDER_ERROR_MESSAGE2139
 
 statement error
 SELECT ${func_name}(1, x -> x + 1)
+----
+PLACEHOLDER_ERROR_MESSAGE2138
 
 statement error
 SELECT ${func_name}([[1]], x -> x + 1)
+----
+PLACEHOLDER_ERROR_MESSAGE2137
 
 statement error
 SELECT ${func_name}(1, 1)
+----
+PLACEHOLDER_ERROR_MESSAGE2136
 
 statement error
 SELECT ${func_name}([True], x -> x, x -> x)
+----
+PLACEHOLDER_ERROR_MESSAGE2135
 
 endloop
 
@@ -63,50 +93,78 @@ CREATE TABLE l_test (l integer[])
 
 statement error
 SELECT l, list_transform(l, l -> l + 1) FROM l_test
+----
+PLACEHOLDER_ERROR_MESSAGE2134
 
 statement error
 select list_apply(i, x -> x * 3 + 2 / zz) from (values (list_value(1, 2, 3))) tbl(i);
+----
+PLACEHOLDER_ERROR_MESSAGE2133
 
 # lambda cannot be the root of a plan
 statement error
 select x -> x + 1 from (values (list_value(1, 2, 3))) tbl(i);
+----
+PLACEHOLDER_ERROR_MESSAGE2132
 
 statement error
 select i -> i + 1 from (values (list_value(1, 2, 3))) tbl(i);
+----
+PLACEHOLDER_ERROR_MESSAGE2131
 
 statement error
 select list_apply(i, y + 1 -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
+----
+PLACEHOLDER_ERROR_MESSAGE2130
 
 statement error
 select list_apply(i, a.x -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
+----
+PLACEHOLDER_ERROR_MESSAGE2129
 
 statement error
 select list_apply(i, x -> x + 1 AND y + 1) from (values (list_value(1, 2, 3))) tbl(i);
+----
+PLACEHOLDER_ERROR_MESSAGE2128
 
 statement ok
 CREATE TABLE l_filter_test (l integer[])
 
 statement error
 SELECT l, list_filter(l, l -> l > 1) FROM l_filter_test
+----
+PLACEHOLDER_ERROR_MESSAGE2127
 
 statement error
 SELECT list_transform([1, 2], (x, y) -> x + y)
+----
+PLACEHOLDER_ERROR_MESSAGE2126
 
 statement error
 SELECT list_transform([1, 2], (x, y, z) -> x + y + z)
+----
+PLACEHOLDER_ERROR_MESSAGE2125
 
 statement error
 SELECT list_filter([1, 2], (x, y) -> x >= y)
+----
+PLACEHOLDER_ERROR_MESSAGE2124
 
 statement error
 SELECT list_filter([1, 2], (x, y, z) -> x >= y AND y >= z)
+----
+PLACEHOLDER_ERROR_MESSAGE2123
 
 # using lambdas in functions that do not support them
 statement error
 SELECT cos(x -> x + 1)
+----
+PLACEHOLDER_ERROR_MESSAGE2122
 
 statement error
 SELECT cos([1], x -> x + 1)
+----
+PLACEHOLDER_ERROR_MESSAGE2121
 
 # don't allow lambdas in check constraints
 # FIXME: support lambdas in CHECK constraints

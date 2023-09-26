@@ -7,21 +7,33 @@ PRAGMA enable_verification
 
 statement error
 SELECT cast('   ' as interval)
+----
+PLACEHOLDER_ERROR_MESSAGE509
 
 statement error
 SELECT cast('AAAA' as interval)
+----
+PLACEHOLDER_ERROR_MESSAGE508
 
 statement error
 SELECT cast('00:00:' as interval)
+----
+PLACEHOLDER_ERROR_MESSAGE507
 
 statement error
 SELECT cast('3 doopiedoos' as interval)
+----
+PLACEHOLDER_ERROR_MESSAGE506
 
 statement error
 SELECT cast('3 years 2 doy' as interval)
+----
+PLACEHOLDER_ERROR_MESSAGE505
 
 statement error
 SELECT cast('3 yearweek' as interval)
+----
+PLACEHOLDER_ERROR_MESSAGE504
 
 query I
 SELECT cast(NULL as interval)

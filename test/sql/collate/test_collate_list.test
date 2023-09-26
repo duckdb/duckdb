@@ -7,4 +7,6 @@ PRAGMA collations
 
 statement error
 PRAGMA collations=3
+----
+PLACEHOLDER_ERROR_MESSAGE1408
 

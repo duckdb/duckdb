@@ -12,6 +12,8 @@ INSERT INTO tbl VALUES (999, 4), (1000, 5)
 
 statement error
 INSERT INTO tbl VALUES (999, 4), (1000, 5)
+----
+PLACEHOLDER_ERROR_MESSAGE2657
 
 # check value constrain (j < 10)
 statement ok
@@ -19,6 +21,8 @@ INSERT INTO tbl VALUES (9999, 0), (10000, 1)
 
 statement error
 INSERT INTO tbl VALUES (777, 10), (888, 10)
+----
+PLACEHOLDER_ERROR_MESSAGE2656
 
 query II
 SELECT * FROM tbl
@@ -34,14 +38,20 @@ ALTER TABLE tbl RENAME TO new_tbl
 # insert two conflicting pairs at the same time
 statement error
 INSERT INTO new_tbl VALUES (999, 0), (1000, 1)
+----
+PLACEHOLDER_ERROR_MESSAGE2655
 
 # insert two conflicting pairs at the same time
 statement error
 INSERT INTO new_tbl VALUES (9999, 0), (10000, 1)
+----
+PLACEHOLDER_ERROR_MESSAGE2654
 
 # insert values out of range constrain
 statement error
 INSERT INTO new_tbl VALUES (1, 10), (2, 999)
+----
+PLACEHOLDER_ERROR_MESSAGE2653
 
 statement ok
 INSERT INTO new_tbl VALUES (66, 6), (55, 5)

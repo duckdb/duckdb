@@ -11,13 +11,19 @@ INSERT INTO tbl VALUES (union_value(num := 1));
 # union_value must take exactly one argument
 statement error
 INSERT INTO tbl VALUES (union_value());
+----
+PLACEHOLDER_ERROR_MESSAGE837
 
 statement error
 INSERT INTO tbl VALUES (union_value(num := 1, other := 2))
+----
+PLACEHOLDER_ERROR_MESSAGE836
 
 # unions can only be cast to eachother if their member sets overlap
 statement error
 INSERT INTO tbl VALUES (union_value(key := 1))
+----
+PLACEHOLDER_ERROR_MESSAGE835
 
 statement ok
 INSERT INTO tbl VALUES (union_value(num := 1)), (1), (union_value(str := 'hello')), (2), ('world');

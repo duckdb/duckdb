@@ -12,12 +12,20 @@ select 9.2233720368547750E+18::int8;
 
 statement error
 select 9.2233720368547758E+18::real::int8;
+----
+PLACEHOLDER_ERROR_MESSAGE141
 
 statement error
 select 9.2233720368547758E+18::int8;
+----
+PLACEHOLDER_ERROR_MESSAGE140
 
 statement error
 select 2147483648::real::int4;
+----
+PLACEHOLDER_ERROR_MESSAGE139
 
 statement error
 select 2147483648::double::int4;
+----
+PLACEHOLDER_ERROR_MESSAGE138

@@ -40,6 +40,8 @@ NULL
 
 statement error
 SET binary_as_sting=true
+----
+PLACEHOLDER_ERROR_MESSAGE2957
 
 statement ok
 SET binary_as_string=true

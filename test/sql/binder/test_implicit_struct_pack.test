@@ -31,9 +31,13 @@ select t from (SELECT * FROM test) AS t
 # shouldn't work
 statement error
 select main.test from main.test t
+----
+PLACEHOLDER_ERROR_MESSAGE1411
 
 statement error
 select main.t from main.test t
+----
+PLACEHOLDER_ERROR_MESSAGE1410
 
 # example query in feature request
 query T

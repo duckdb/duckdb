@@ -11,6 +11,8 @@ INSERT INTO integers VALUES (1, false), (1, true), (2, false)
 # duplicate value!
 statement error
 INSERT INTO integers VALUES (1, false)
+----
+PLACEHOLDER_ERROR_MESSAGE1244
 
 statement ok
 INSERT INTO integers VALUES (2, true)

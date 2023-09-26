@@ -16,6 +16,10 @@ SELECT current_setting('disabled_optimizers');
 
 statement error
 SET disabled_optimizers TO 'expression_rewriteX'
+----
+PLACEHOLDER_ERROR_MESSAGE222
 
 statement error
 SET disabled_optimizers TO 'unknown_optimizer'
+----
+PLACEHOLDER_ERROR_MESSAGE221

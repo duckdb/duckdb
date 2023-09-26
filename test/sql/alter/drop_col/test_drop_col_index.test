@@ -14,8 +14,12 @@ CREATE INDEX i_index ON test(j)
 # cannot drop indexed column
 statement error
 ALTER TABLE test DROP COLUMN j
+----
+PLACEHOLDER_ERROR_MESSAGE2741
 
 # we also cannot drop the column i (for now) because an index depends on a subsequent column
 statement error
 ALTER TABLE test DROP COLUMN i
+----
+PLACEHOLDER_ERROR_MESSAGE2740
 

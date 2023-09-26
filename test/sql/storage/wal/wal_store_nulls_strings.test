@@ -35,6 +35,8 @@ NULL	hello
 
 statement error
 CREATE TABLE test (a INTEGER, b STRING);
+----
+PLACEHOLDER_ERROR_MESSAGE2533
 
 statement ok
 CREATE TABLE IF NOT EXISTS test (a INTEGER, b STRING);

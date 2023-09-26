@@ -68,5 +68,7 @@ DROP TABLE test.t
 
 statement error
 SELECT * FROM test.v
+----
+PLACEHOLDER_ERROR_MESSAGE1515
 
 endloop

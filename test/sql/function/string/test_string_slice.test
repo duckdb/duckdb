@@ -20,18 +20,28 @@ INSERT INTO nulltable VALUES (NULL)
 
 statement error
 SELECT NULL::VARCHAR[off:length+off] FROM strings
+----
+PLACEHOLDER_ERROR_MESSAGE2416
 
 statement error
 SELECT NULL::VARCHAR[NULL:length+NULL] FROM strings
+----
+PLACEHOLDER_ERROR_MESSAGE2415
 
 statement error
 SELECT NULL::VARCHAR[off:NULL+off] FROM strings
+----
+PLACEHOLDER_ERROR_MESSAGE2414
 
 statement error
 SELECT NULL::VARCHAR[off:NULL+off] FROM strings
+----
+PLACEHOLDER_ERROR_MESSAGE2413
 
 statement error
 SELECT NULL::VARCHAR[NULL:NULL+NULL] FROM strings
+----
+PLACEHOLDER_ERROR_MESSAGE2412
 
 # test zero length
 query II

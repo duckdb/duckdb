@@ -20,6 +20,8 @@ CREATE TABLE tbl (
 	price INTEGER,
 	amount_sold AS (price) CHECK (amount_sold > 5)
 );
+----
+PLACEHOLDER_ERROR_MESSAGE1142
 
 # Also when used in this way
 statement error
@@ -28,6 +30,8 @@ CREATE TABLE tbl (
 	amount_sold AS (price),
 	CHECK (amount_sold > price)
 );
+----
+PLACEHOLDER_ERROR_MESSAGE1141
 
 statement ok
 CREATE TABLE chk (
@@ -42,3 +46,5 @@ INSERT INTO chk VALUES (6);
 
 statement error
 INSERT INTO chk VALUES (3);
+----
+PLACEHOLDER_ERROR_MESSAGE1140

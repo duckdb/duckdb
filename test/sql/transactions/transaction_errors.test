@@ -5,10 +5,14 @@
 # nothing to rollback
 statement error
 ROLLBACK;
+----
+PLACEHOLDER_ERROR_MESSAGE2764
 
 # nothing to commit
 statement error
 COMMIT;
+----
+PLACEHOLDER_ERROR_MESSAGE2763
 
 statement ok
 BEGIN;
@@ -16,6 +20,8 @@ BEGIN;
 # cannot start a transaction in a transaction
 statement error
 BEGIN;
+----
+PLACEHOLDER_ERROR_MESSAGE2762
 
 statement ok
 ROLLBACK;

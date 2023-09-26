@@ -67,19 +67,27 @@ SELECT '0xF'::INTEGER, '0x0'::INTEGER, '0xFEE'::INTEGER, '0xfee'::INTEGER, '0x00
 
 statement error
 SELECT '0x'::INT
+----
+PLACEHOLDER_ERROR_MESSAGE1470
 
 statement error
 SELECT '0X'::INT
+----
+PLACEHOLDER_ERROR_MESSAGE1469
 
 # Hex with invalid characters fails
 
 statement error
 SELECT '0xHELLO'::INT
+----
+PLACEHOLDER_ERROR_MESSAGE1468
 
 # Overflow with very large numbers
 
 statement error
 SELECT '0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'::INT
+----
+PLACEHOLDER_ERROR_MESSAGE1467
 
 # Allowed upper bounds for casting from hex strings to signed integers
 query IIII
@@ -111,27 +119,43 @@ SELECT '0x000000000000000000000000000000000000000000000000000000000000000000'::I
 
 statement error
 SELECT '0x80'::TINYINT
+----
+PLACEHOLDER_ERROR_MESSAGE1466
 
 statement error
 SELECT '0x8000'::SMALLINT
+----
+PLACEHOLDER_ERROR_MESSAGE1465
 
 statement error
 SELECT '0x80000000'::INT
+----
+PLACEHOLDER_ERROR_MESSAGE1464
 
 statement error
 SELECT '0x8000000000000000'::BIGINT
+----
+PLACEHOLDER_ERROR_MESSAGE1463
 
 statement error
 SELECT '0x100'::UINT8
+----
+PLACEHOLDER_ERROR_MESSAGE1462
 
 statement error
 SELECT '0x10000'::UINT16
+----
+PLACEHOLDER_ERROR_MESSAGE1461
 
 statement error
 SELECT '0x100000000'::UINT32
+----
+PLACEHOLDER_ERROR_MESSAGE1460
 
 statement error
 SELECT '0x10000000000000000'::UINT64
+----
+PLACEHOLDER_ERROR_MESSAGE1459
 
 # Bounds exceeded for casting from hex strings to integers, TRY_CAST should be safe
 

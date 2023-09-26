@@ -35,13 +35,21 @@ PRAGMA default_order='ASC'
 
 statement error
 PRAGMA default_order())
+----
+PLACEHOLDER_ERROR_MESSAGE215
 
 statement error
 PRAGMA default_order='UNKNOWN'
+----
+PLACEHOLDER_ERROR_MESSAGE214
 
 statement error
 PRAGMA default_order=UNKNOWN)
+----
+PLACEHOLDER_ERROR_MESSAGE213
 
 statement error
 PRAGMA default_order=3)
+----
+PLACEHOLDER_ERROR_MESSAGE212
 

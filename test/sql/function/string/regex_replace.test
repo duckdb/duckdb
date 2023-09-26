@@ -83,8 +83,12 @@ world
 # we cannot use non-constant options (currently)
 statement error
 SELECT regexp_replace(v, 'h.*', 'world', v) FROM test ORDER BY v
+----
+PLACEHOLDER_ERROR_MESSAGE2340
 
 # throw on invalid options
 statement error
 SELECT regexp_replace('asdf', '.*SD.*', 'a', 'q')
+----
+PLACEHOLDER_ERROR_MESSAGE2339
 

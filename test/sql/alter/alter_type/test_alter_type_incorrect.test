@@ -11,18 +11,28 @@ INSERT INTO test VALUES (1, 1), (2, 2)
 # cannot alter columns that don't exist
 statement error
 ALTER TABLE test ALTER blabla SET TYPE VARCHAR
+----
+PLACEHOLDER_ERROR_MESSAGE2668
 
 # expression error
 statement error
 ALTER TABLE test ALTER i SET TYPE VARCHAR USING blabla
+----
+PLACEHOLDER_ERROR_MESSAGE2667
 
 # cannot use aggregates/window functions
 statement error
 ALTER TABLE test ALTER i SET TYPE VARCHAR USING SUM(i)
+----
+PLACEHOLDER_ERROR_MESSAGE2666
 
 statement error
 ALTER TABLE test ALTER i SET TYPE VARCHAR USING row_id() OVER ()
+----
+PLACEHOLDER_ERROR_MESSAGE2665
 
 statement error
 ALTER TABLE test ALTER i SET TYPE VARCHAR USING othertable.j
+----
+PLACEHOLDER_ERROR_MESSAGE2664
 

@@ -8,6 +8,8 @@ PRAGMA enable_verification
 #Corner cases
 statement error
 select sem()
+----
+PLACEHOLDER_ERROR_MESSAGE1534
 
 query I
 select sem(NULL)
@@ -21,6 +23,8 @@ select sem(1)
 
 statement error
 select sem(*)
+----
+PLACEHOLDER_ERROR_MESSAGE1533
 
 statement ok
 create table aggr(k int, v decimal(10,2), v2 decimal(10, 2));

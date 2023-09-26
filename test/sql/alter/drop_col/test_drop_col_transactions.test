@@ -19,6 +19,8 @@ ALTER TABLE test DROP COLUMN j
 # con2 cannot add a new column now!
 statement error con2
 ALTER TABLE test ADD COLUMN k INTEGER
+----
+PLACEHOLDER_ERROR_MESSAGE2746
 
 statement ok con1
 COMMIT
@@ -47,6 +49,8 @@ ALTER TABLE test DROP COLUMN i
 # con2 cannot append now!
 statement error con2
 INSERT INTO test (i, j) VALUES (3, 3)
+----
+PLACEHOLDER_ERROR_MESSAGE2745
 
 # but we can delete rows!
 statement ok con2
@@ -66,6 +70,8 @@ SELECT * FROM test
 # we can't update on tables that have been altered
 statement error con2
 UPDATE test SET j=100
+----
+PLACEHOLDER_ERROR_MESSAGE2744
 
 query I con1
 SELECT * FROM test
@@ -107,6 +113,8 @@ ALTER TABLE test DROP COLUMN i
 # cannot commit con2! conflict on append
 statement error con2
 COMMIT
+----
+PLACEHOLDER_ERROR_MESSAGE2743
 
 statement ok con1
 DROP TABLE test
@@ -128,4 +136,6 @@ ALTER TABLE test DROP COLUMN j
 # now con tries to add an index to that column: this should fail
 statement error con1
 CREATE INDEX i_index ON test(j
+----
+PLACEHOLDER_ERROR_MESSAGE2742
 

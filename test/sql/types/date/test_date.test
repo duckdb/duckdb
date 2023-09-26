@@ -50,16 +50,24 @@ NULL
 # HOWEVER, we can't divide or multiply or modulo
 statement error
 SELECT i * 3 FROM dates
+----
+PLACEHOLDER_ERROR_MESSAGE559
 
 statement error
 SELECT i / 3 FROM dates
+----
+PLACEHOLDER_ERROR_MESSAGE558
 
 statement error
 SELECT i % 3 FROM dates
+----
+PLACEHOLDER_ERROR_MESSAGE557
 
 # we also can't add two dates together
 statement error
 SELECT i + i FROM dates
+----
+PLACEHOLDER_ERROR_MESSAGE556
 
 # but we can subtract them! resulting in an integer
 query I
@@ -70,21 +78,35 @@ NULL
 
 statement error
 SELECT ''::DATE
+----
+PLACEHOLDER_ERROR_MESSAGE555
 
 statement error
 SELECT '  '::DATE
+----
+PLACEHOLDER_ERROR_MESSAGE554
 
 statement error
 SELECT '1992'::DATE
+----
+PLACEHOLDER_ERROR_MESSAGE553
 
 statement error
 SELECT '1992-'::DATE
+----
+PLACEHOLDER_ERROR_MESSAGE552
 
 statement error
 SELECT '1992-01'::DATE
+----
+PLACEHOLDER_ERROR_MESSAGE551
 
 statement error
 SELECT '1992-01-'::DATE
+----
+PLACEHOLDER_ERROR_MESSAGE550
 
 statement error
 SELECT '30000307-01-01 (BC)'::DATE
+----
+PLACEHOLDER_ERROR_MESSAGE549

@@ -27,9 +27,13 @@ SELECT array_length(ARRAY[1, 2, 3], 1)
 
 statement error
 SELECT array_length(ARRAY[1, 2, 3], 2)
+----
+PLACEHOLDER_ERROR_MESSAGE2249
 
 statement error
 SELECT array_length(ARRAY[1, 2, 3], 0)
+----
+PLACEHOLDER_ERROR_MESSAGE2248
 
 query I
 SELECT len([1]) FROM range(3)

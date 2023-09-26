@@ -23,6 +23,8 @@ SELECT SUM(i) FROM integers
 # we can't drop the sequence: the table depends on it
 statement error con1
 DROP SEQUENCE seq
+----
+PLACEHOLDER_ERROR_MESSAGE1767
 
 # cascade drop works
 statement ok con1
@@ -31,6 +33,8 @@ DROP SEQUENCE seq CASCADE
 # but it also drops the table
 statement error con1
 SELECT * FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE1766
 
 # dependency on multiple sequences in default value
 statement ok con1
@@ -59,6 +63,8 @@ DROP SEQUENCE seq2
 # seq2 does not exist after this drop, so another insert fails
 statement error con1
 INSERT INTO integers (j) VALUES (1)
+----
+PLACEHOLDER_ERROR_MESSAGE1765
 
 # table is now [1, 1]: query it
 query R con1
@@ -69,6 +75,8 @@ SELECT SUM(i) FROM integers
 # we can't drop seq however: the dependency is fixed
 statement error con1
 DROP SEQUENCE seq
+----
+PLACEHOLDER_ERROR_MESSAGE1764
 
 # need to do a cascading drop
 statement ok con1
@@ -77,4 +85,6 @@ DROP SEQUENCE seq CASCADE
 # now the table is gone
 statement error con1
 SELECT * FROM integers
+----
+PLACEHOLDER_ERROR_MESSAGE1763
 

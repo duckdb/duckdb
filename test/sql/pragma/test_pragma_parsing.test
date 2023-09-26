@@ -5,18 +5,26 @@
 # Almost pragma but not quite
 statement error
 PRAG
+----
+PLACEHOLDER_ERROR_MESSAGE1984
 
 # Pragma without a keyword
 statement error
 PRAGMA 
+----
+PLACEHOLDER_ERROR_MESSAGE1983
 
 # Unknown pragma error
 statement error
 PRAGMA random_unknown_pragma
+----
+PLACEHOLDER_ERROR_MESSAGE1982
 
 # Call pragma in wrong way
 statement error
 PRAGMA table_info = 3
+----
+PLACEHOLDER_ERROR_MESSAGE1981
 
 statement ok
 CREATE TABLE integers(i INTEGER)

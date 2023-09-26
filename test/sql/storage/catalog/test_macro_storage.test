@@ -34,6 +34,8 @@ restart
 
 statement error
 SELECT plus1(2)
+----
+PLACEHOLDER_ERROR_MESSAGE2547
 
 # after recreating the macro we can use it again
 statement ok

@@ -23,6 +23,8 @@ restart
 
 statement error
 INSERT INTO tbl VALUES (5, 'test');
+----
+PLACEHOLDER_ERROR_MESSAGE2552
 
 restart
 
@@ -56,6 +58,8 @@ restart
 
 statement error
 INSERT INTO tbl VALUES (5, 'test');
+----
+PLACEHOLDER_ERROR_MESSAGE2551
 
 restart
 
@@ -94,6 +98,8 @@ restart
 
 statement error
 INSERT INTO tbl VALUES (6,'test');
+----
+PLACEHOLDER_ERROR_MESSAGE2550
 
 restart
 
@@ -124,6 +130,8 @@ restart
 
 statement error
 INSERT INTO tbl VALUES (6,'test');
+----
+PLACEHOLDER_ERROR_MESSAGE2549
 
 restart
 
@@ -183,6 +191,8 @@ SELECT * FROM tbl;
 # gcol1 is a dependency of gcol2
 statement error
 ALTER TABLE tbl DROP COLUMN gcol1;
+----
+PLACEHOLDER_ERROR_MESSAGE2548
 
 # gcol2 is not a dependency of anything
 statement ok

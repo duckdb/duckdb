@@ -18,3 +18,5 @@ memory	NULL
 
 statement error
 PRAGMA database_list()
+----
+PLACEHOLDER_ERROR_MESSAGE1973

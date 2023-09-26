@@ -8,15 +8,22 @@ CREATE TABLE t (t TEXT);
 # unsupported
 statement error
 SELECT * FROM t FOR UPDATE;
+----
+PLACEHOLDER_ERROR_MESSAGE2992
 
 # unsupported
 statement error
 SELECT * FROM t FOR NO KEY UPDATE;
+----
+PLACEHOLDER_ERROR_MESSAGE2991
 
 # unsupported
 statement error
 SELECT * FROM t FOR SHARE;
+----
+PLACEHOLDER_ERROR_MESSAGE2990
 
 # unsupported
 statement error
-SELECT * FROM t KEY SHARE;
+SELECT * FROM t KEY SHARE;----
+PLACEHOLDER_ERROR_MESSAGE2989

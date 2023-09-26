@@ -30,6 +30,8 @@ NULL
 
 statement error
 SELECT gcd(42, 'abcd')
+----
+PLACEHOLDER_ERROR_MESSAGE2091
 
 query I
 select lcm(120,25);
@@ -59,6 +61,10 @@ NULL
 
 statement error
 SELECT lcm(42, 'abcd')
+----
+PLACEHOLDER_ERROR_MESSAGE2090
 
 statement error
 select lcm(4200000000000000000,5700000000000000000)
+----
+PLACEHOLDER_ERROR_MESSAGE2089

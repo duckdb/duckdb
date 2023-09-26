@@ -72,31 +72,51 @@ RÄcMotörHead	MotörHeadRÄc	MOTÖRHEAD	motörhead
 # test incorrect usage
 statement error
 select LPAD()
+----
+PLACEHOLDER_ERROR_MESSAGE2322
 
 statement error
 select LPAD(1)
+----
+PLACEHOLDER_ERROR_MESSAGE2321
 
 statement error
 select LPAD(1, 2)
+----
+PLACEHOLDER_ERROR_MESSAGE2320
 
 statement error
 select LPAD('Hello', 10, '')
+----
+PLACEHOLDER_ERROR_MESSAGE2319
 
 statement error
 select LPAD('a', 100000000000000000, 0)
+----
+PLACEHOLDER_ERROR_MESSAGE2318
 
 statement error
 select RPAD()
+----
+PLACEHOLDER_ERROR_MESSAGE2317
 
 statement error
 select RPAD(1)
+----
+PLACEHOLDER_ERROR_MESSAGE2316
 
 statement error
 select RPAD(1, 2)
+----
+PLACEHOLDER_ERROR_MESSAGE2315
 
 statement error
 select RPAD('Hello', 10, '')
+----
+PLACEHOLDER_ERROR_MESSAGE2314
 
 statement error
 select RPAD('a', 100000000000000000, 0)
+----
+PLACEHOLDER_ERROR_MESSAGE2313
 

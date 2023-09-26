@@ -7,22 +7,32 @@ CREATE TABLE dates(i DATE)
 
 statement error
 INSERT INTO dates VALUES ('blabla')
+----
+PLACEHOLDER_ERROR_MESSAGE548
 
 # month out of range
 statement error
 INSERT INTO dates VALUES ('1993-20-14')
+----
+PLACEHOLDER_ERROR_MESSAGE547
 
 # day out of range
 statement error
 INSERT INTO dates VALUES ('1993-08-99')
+----
+PLACEHOLDER_ERROR_MESSAGE546
 
 # day out of range because not a leapyear
 statement error
 INSERT INTO dates VALUES ('1993-02-29')
+----
+PLACEHOLDER_ERROR_MESSAGE545
 
 # day out of range because not a leapyear
 statement error
 INSERT INTO dates VALUES ('1900-02-29')
+----
+PLACEHOLDER_ERROR_MESSAGE544
 
 # day in range because of leapyear
 statement ok
@@ -36,10 +46,14 @@ INSERT INTO dates VALUES ('2000-02-29')
 # dd-mm-YYYY
 statement error
 INSERT INTO dates VALUES ('02-02-1992')
+----
+PLACEHOLDER_ERROR_MESSAGE543
 
 # different separators are not supported
 statement error
 INSERT INTO dates VALUES ('1900a01a01')
+----
+PLACEHOLDER_ERROR_MESSAGE542
 
 # this should work though
 statement ok
@@ -48,7 +62,11 @@ INSERT INTO dates VALUES ('1900-1-1')
 # out of range dates
 statement error
 INSERT INTO dates VALUES ('-100000000-01-01')
+----
+PLACEHOLDER_ERROR_MESSAGE541
 
 statement error
 INSERT INTO dates VALUES ('1000000000-01-01')
+----
+PLACEHOLDER_ERROR_MESSAGE540
 

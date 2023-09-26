@@ -16,6 +16,8 @@ SELECT * FROM integers
 
 statement error
 INSERT INTO integers VALUES (6, 'bla'), (3, 'hello');
+----
+PLACEHOLDER_ERROR_MESSAGE1238
 
 statement ok
 INSERT INTO integers VALUES (6, 'bla');

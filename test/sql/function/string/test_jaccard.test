@@ -83,12 +83,18 @@ SELECT round(jaccard('ababababababba', 'aaaabbbccddeeffgabcccc'), 3)
 
 statement error
 SELECT jaccard('hello', '')
+----
+PLACEHOLDER_ERROR_MESSAGE2406
 
 statement error
 SELECT jaccard('', 'hello')
+----
+PLACEHOLDER_ERROR_MESSAGE2405
 
 statement error
 SELECT jaccard('', '')
+----
+PLACEHOLDER_ERROR_MESSAGE2404
 
 
 statement ok
@@ -139,6 +145,10 @@ NULL
 
 statement error
 select round(jaccard('', t), 1) from strings
+----
+PLACEHOLDER_ERROR_MESSAGE2403
 
 statement error
 select round(jaccard(s, ''), 1) from strings
+----
+PLACEHOLDER_ERROR_MESSAGE2402

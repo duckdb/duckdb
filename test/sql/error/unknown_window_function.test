@@ -4,3 +4,5 @@
 
 statement error
 SELECT substr('hello', 3, 2) OVER ();
+----
+PLACEHOLDER_ERROR_MESSAGE3097

@@ -118,13 +118,21 @@ PRAGMA default_null_order='NULLS FIRST'
 
 statement error
 PRAGMA default_null_order())
+----
+PLACEHOLDER_ERROR_MESSAGE219
 
 statement error
 PRAGMA default_null_order='UNKNOWN'
+----
+PLACEHOLDER_ERROR_MESSAGE218
 
 statement error
 PRAGMA default_null_order=UNKNOWN)
+----
+PLACEHOLDER_ERROR_MESSAGE217
 
 statement error
 PRAGMA default_null_order=3)
+----
+PLACEHOLDER_ERROR_MESSAGE216
 

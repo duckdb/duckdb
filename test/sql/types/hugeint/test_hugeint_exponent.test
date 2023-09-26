@@ -17,9 +17,15 @@ select '170141183460469231731687303715884105727e0'::hugeint
 
 statement error
 select '170141183460469231731687303715884105735e0'::hugeint
+----
+PLACEHOLDER_ERROR_MESSAGE1070
 
 statement error
 select '1.7e39'::hugeint
+----
+PLACEHOLDER_ERROR_MESSAGE1069
 
 statement error
 select '2e38'::hugeint
+----
+PLACEHOLDER_ERROR_MESSAGE1068

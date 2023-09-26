@@ -182,9 +182,13 @@ WHERE rt <> dt
 # empty specifier and string
 statement error
 SELECT try_strptime('', '')
+----
+PLACEHOLDER_ERROR_MESSAGE2493
 
 statement error
 SELECT try_strptime(NULL, '')
+----
+PLACEHOLDER_ERROR_MESSAGE2492
 
 query I
 SELECT try_strptime('', NULL)

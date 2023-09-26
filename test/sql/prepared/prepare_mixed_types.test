@@ -34,6 +34,8 @@ EXECUTE v3(42)
 
 statement error
 EXECUTE v3(-1)
+----
+PLACEHOLDER_ERROR_MESSAGE1092
 
 # mixed varchar types
 statement ok

@@ -20,6 +20,8 @@ SELECT * FROM test ORDER BY a;
 
 statement error
 UPDATE test SET a=a+1;
+----
+PLACEHOLDER_ERROR_MESSAGE1252
 
 query IT
 SELECT * FROM test ORDER BY a;
@@ -30,9 +32,13 @@ SELECT * FROM test ORDER BY a;
 
 statement error
 UPDATE test SET a=13 WHERE a=12;
+----
+PLACEHOLDER_ERROR_MESSAGE1251
 
 statement error
 UPDATE test SET a=4;
+----
+PLACEHOLDER_ERROR_MESSAGE1250
 
 query IT
 SELECT * FROM test ORDER BY a;
@@ -49,6 +55,8 @@ INSERT INTO test VALUES (12, 'pandas');
 
 statement error
 INSERT INTO test VALUES (12, 'pandas');
+----
+PLACEHOLDER_ERROR_MESSAGE1249
 
 statement ok
 DELETE FROM test WHERE a=12
@@ -68,4 +76,6 @@ SELECT * FROM test ORDER BY a;
 
 statement error
 UPDATE test SET b=NULL WHERE a=13;
+----
+PLACEHOLDER_ERROR_MESSAGE1248
 

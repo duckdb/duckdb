@@ -29,12 +29,20 @@ select struct_insert({'a': 1, 'b': 'abc', 'c': true}, d := {'a': 'new stuff'})
 # test incorrect usage
 statement error
 select struct_insert()
+----
+PLACEHOLDER_ERROR_MESSAGE2420
 
 statement error
 select struct_insert({a: 1, b: 2})
+----
+PLACEHOLDER_ERROR_MESSAGE2419
 
 statement error
 select struct_insert(123, a := 1)
+----
+PLACEHOLDER_ERROR_MESSAGE2418
 
 statement error
 select struct_insert({a: 1, b: 2}, a := 2)
+----
+PLACEHOLDER_ERROR_MESSAGE2417

@@ -11,6 +11,8 @@ INSERT INTO test VALUES (1, 1), (2, 2)
 # cannot drop primary key column
 statement error
 ALTER TABLE test DROP COLUMN i
+----
+PLACEHOLDER_ERROR_MESSAGE2737
 
 # but we can drop column "j"
 statement ok

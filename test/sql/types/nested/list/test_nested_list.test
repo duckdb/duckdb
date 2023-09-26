@@ -235,44 +235,72 @@ SELECT SUM(ue) FROM (SELECT UNNEST(le) ue FROM (SELECT g, LIST(e) le from list_d
 # this is technically equivalent but is not supported
 statement error
 SELECT SUM(UNNEST(le)) FROM ( SELECT g, LIST(e) le from list_data  GROUP BY g ORDER BY g) xx
+----
+PLACEHOLDER_ERROR_MESSAGE943
 
 # you're holding it wrong
 statement error
 SELECT LIST(LIST(42))
+----
+PLACEHOLDER_ERROR_MESSAGE942
 
 statement error
 SELECT UNNEST(UNNEST(LIST(42))
+----
+PLACEHOLDER_ERROR_MESSAGE941
 
 statement error
 SELECT LIST()
+----
+PLACEHOLDER_ERROR_MESSAGE940
 
 statement error
 SELECT LIST() FROM list_data
+----
+PLACEHOLDER_ERROR_MESSAGE939
 
 statement error
 SELECT LIST(e, g) FROM list_data
+----
+PLACEHOLDER_ERROR_MESSAGE938
 
 statement error
 SELECT g, UNNEST(l+1) u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1
+----
+PLACEHOLDER_ERROR_MESSAGE937
 
 statement error
 SELECT g, UNNEST(g) u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1
+----
+PLACEHOLDER_ERROR_MESSAGE936
 
 statement error
 SELECT g, UNNEST() u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1
+----
+PLACEHOLDER_ERROR_MESSAGE935
 
 statement error
 SELECT UNNEST(42)
+----
+PLACEHOLDER_ERROR_MESSAGE934
 
 statement error
 SELECT UNNEST()
+----
+PLACEHOLDER_ERROR_MESSAGE933
 
 statement error
 SELECT UNNEST(42) from list_data
+----
+PLACEHOLDER_ERROR_MESSAGE932
 
 statement error
 SELECT UNNEST() from list_data
+----
+PLACEHOLDER_ERROR_MESSAGE931
 
 statement error
 SELECT g FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1 where UNNEST(l) > 42
+----
+PLACEHOLDER_ERROR_MESSAGE930
 

@@ -5,9 +5,13 @@
 # incorrect usage
 statement error
 select list_bool_or()
+----
+PLACEHOLDER_ERROR_MESSAGE2208
 
 statement error
 select list_bool_and()
+----
+PLACEHOLDER_ERROR_MESSAGE2207
 
 # list of booleans
 statement ok

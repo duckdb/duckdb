@@ -15,9 +15,13 @@ vacuum
 
 statement error
 vacuum test
+----
+PLACEHOLDER_ERROR_MESSAGE1514
 
 statement error
 analyze test
+----
+PLACEHOLDER_ERROR_MESSAGE1513
 
 statement ok
 create table test (i int, j int)
@@ -30,6 +34,8 @@ create view testview as select * from test
 
 statement error
 analyze testview
+----
+PLACEHOLDER_ERROR_MESSAGE1512
 
 statement ok
 insert into test select range % 5000, range % 5000 from range(10000)

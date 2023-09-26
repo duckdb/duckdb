@@ -31,12 +31,18 @@ SELECT list_distinct([]) WHERE 1 = 0
 
 statement error
 SELECT list_distinct()
+----
+PLACEHOLDER_ERROR_MESSAGE2168
 
 statement error
 SELECT list_distinct(*)
+----
+PLACEHOLDER_ERROR_MESSAGE2167
 
 statement error
 SELECT list_distinct([1, 2], 2)
+----
+PLACEHOLDER_ERROR_MESSAGE2166
 
 # test incorrect parameter type
 
@@ -44,6 +50,8 @@ foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint us
 
 statement error
 SELECT list_distinct(NULL::${type})
+----
+PLACEHOLDER_ERROR_MESSAGE2165
 
 endloop
 

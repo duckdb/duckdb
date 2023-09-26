@@ -28,3 +28,5 @@ WITH RECURSIVE tag_hierarchy(id, source, path, target) AS (
 SELECT source, path, target
 FROM tag_hierarchy
 ;
+----
+PLACEHOLDER_ERROR_MESSAGE3033

@@ -69,6 +69,8 @@ SELECT ARRAY[[1, 2], [3, 4]]::BIGINT[][]
 # this doesn't work: int[][] to bigint[]
 statement error
 SELECT ARRAY[[1, 2], [3, 4]]::BIGINT[]
+----
+PLACEHOLDER_ERROR_MESSAGE944
 
 # however, this does work
 # casting to varchar[] or varchar

@@ -72,6 +72,8 @@ select bar(1, 'nan'::double, 10)
 
 statement error
 select bar(1, '-infinity'::double, 10)
+----
+PLACEHOLDER_ERROR_MESSAGE2372
 
 query I
 select bar(1, 'infinity'::double, 10)
@@ -100,12 +102,18 @@ select bar(1, 0, 'infinity'::double)
 
 statement error
 select bar(1, 0, 10, 'nan'::double)
+----
+PLACEHOLDER_ERROR_MESSAGE2371
 
 statement error
 select bar(1, 0, 10, 'infinity'::double)
+----
+PLACEHOLDER_ERROR_MESSAGE2370
 
 statement error
 select bar(1, 0, 10, '-infinity'::double)
+----
+PLACEHOLDER_ERROR_MESSAGE2369
 
 query I
 select bar(1, 0, 10, 1000)
@@ -114,6 +122,8 @@ select bar(1, 0, 10, 1000)
 
 statement error
 select bar(1, 0, 10, 1001)
+----
+PLACEHOLDER_ERROR_MESSAGE2368
 
 query I
 select bar(1, 0, 10, 1)
@@ -127,6 +137,8 @@ select bar(10, 10, 10, 10)
 
 statement error
 select bar(1, 0, 10, 0.99)
+----
+PLACEHOLDER_ERROR_MESSAGE2367
 
 query I
 select bar(1, 0, 1, 1.125)

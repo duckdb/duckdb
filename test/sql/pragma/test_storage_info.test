@@ -23,10 +23,14 @@ CREATE VIEW v1 AS SELECT 42
 
 statement error
 PRAGMA storage_info('v1')
+----
+PLACEHOLDER_ERROR_MESSAGE1980
 
 # non-existent table
 statement error
 PRAGMA storage_info('bla')
+----
+PLACEHOLDER_ERROR_MESSAGE1979
 
 # different types
 statement ok

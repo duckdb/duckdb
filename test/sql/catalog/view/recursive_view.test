@@ -20,6 +20,8 @@ CREATE OR REPLACE VIEW foo AS (SELECT * FROM foo);
 
 statement error
 SELECT * FROM foo;
+----
+PLACEHOLDER_ERROR_MESSAGE1898
 
 # more complex recursive view definition
 statement ok
@@ -33,3 +35,5 @@ CREATE OR REPLACE VIEW foo AS (SELECT (SELECT * FROM foo2));
 
 statement error
 SELECT * FROM foo;
+----
+PLACEHOLDER_ERROR_MESSAGE1897

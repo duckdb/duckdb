@@ -19,6 +19,8 @@ UPDATE integers SET i=4 WHERE i=1
 # failed to create an index: pending updates
 statement error con1
 CREATE INDEX i_index ON integers using art(i)
+----
+PLACEHOLDER_ERROR_MESSAGE2776
 
 # now we commit
 statement ok con2

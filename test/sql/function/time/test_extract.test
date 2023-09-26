@@ -69,36 +69,60 @@ NULL
 # time gives errors for date-only parts
 statement error
 SELECT EXTRACT(year FROM i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2084
 
 statement error
 SELECT EXTRACT(month FROM i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2083
 
 statement error
 SELECT EXTRACT(day FROM i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2082
 
 statement error
 SELECT EXTRACT(decade FROM i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2081
 
 statement error
 SELECT EXTRACT(century FROM i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2080
 
 statement error
 SELECT EXTRACT(millennium FROM i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2079
 
 statement error
 SELECT EXTRACT(quarter FROM i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2078
 
 statement error
 SELECT EXTRACT(dayofweek FROM i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2077
 
 statement error
 SELECT EXTRACT(isodow FROM i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2076
 
 statement error
 SELECT EXTRACT(dayofyear FROM i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2075
 
 statement error
 SELECT EXTRACT(week FROM i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2074
 
 statement error
 SELECT EXTRACT(yearweek FROM i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2073

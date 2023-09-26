@@ -74,69 +74,113 @@ endloop
 # time gives errors for date-only parts
 statement error
 SELECT era(i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2072
 
 statement error
 SELECT year(i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2071
 
 statement error
 SELECT month(i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2070
 
 statement error
 SELECT day(i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2069
 
 statement error
 SELECT decade(i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2068
 
 statement error
 SELECT century(i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2067
 
 statement error
 SELECT millennium(i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2066
 
 statement error
 SELECT quarter(i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2065
 
 statement error
 SELECT dayofweek(i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2064
 
 statement error
 SELECT isodow(i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2063
 
 statement error
 SELECT dayofyear(i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2062
 
 statement error
 SELECT week(i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2061
 
 statement error
 SELECT yearweek(i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2060
 
 statement error
 select extract(dow from time '10:00:00');
+----
+PLACEHOLDER_ERROR_MESSAGE2059
 
 statement error
 select extract(doy from time '10:00:00');
+----
+PLACEHOLDER_ERROR_MESSAGE2058
 
 statement error
 select extract(yearweek from time '10:00:00');
+----
+PLACEHOLDER_ERROR_MESSAGE2057
 
 statement error
 select extract(century from time '10:00:00');
+----
+PLACEHOLDER_ERROR_MESSAGE2056
 
 statement error
 SELECT era(i) FROM times
+----
+PLACEHOLDER_ERROR_MESSAGE2055
 
 statement error
 select extract(era from time '10:00:00');
+----
+PLACEHOLDER_ERROR_MESSAGE2054
 
 statement error
 select date_part('era', time '10:00:00');
+----
+PLACEHOLDER_ERROR_MESSAGE2053
 
 statement error
 select extract(julian from time '10:00:00');
+----
+PLACEHOLDER_ERROR_MESSAGE2052
 
 statement error
 select date_part('julian', time '10:00:00');
+----
+PLACEHOLDER_ERROR_MESSAGE2051
 
 # Correctness: Compare date_part against function value
 foreach partcode hour minute second millisecond microsecond epoch
@@ -221,5 +265,7 @@ statement error
 SELECT d, DATE_PART(['${datepart}'], d) AS parts
 FROM times
 ORDER BY 1;
+----
+PLACEHOLDER_ERROR_MESSAGE2050
 
 endloop

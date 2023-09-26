@@ -38,6 +38,8 @@ SELECT '0.123456789'::DECIMAL::VARCHAR, '-0.123456789'::DECIMAL::VARCHAR;
 # overflow in conversion
 statement error
 SELECT '9223372036854788.758'::DECIMAL;
+----
+PLACEHOLDER_ERROR_MESSAGE365
 
 # trailing decimals with scale=0
 query I
@@ -60,9 +62,13 @@ SELECT '0.1'::DECIMAL(3, 3)::VARCHAR, '-0.1'::DECIMAL(3, 3)::VARCHAR;
 # any value >= 1 becomes out of range, though
 statement error
 SELECT '1'::DECIMAL(3, 3)::VARCHAR;
+----
+PLACEHOLDER_ERROR_MESSAGE364
 
 statement error
 SELECT '-1'::DECIMAL(3, 3)::VARCHAR;
+----
+PLACEHOLDER_ERROR_MESSAGE363
 
 # repeat the same cast many times
 query I
@@ -115,21 +121,33 @@ select '0.00003'::DECIMAL(38,10)::VARCHAR
 # scale must be bigger than or equal to width
 statement error
 SELECT '0.1'::DECIMAL(3, 4);
+----
+PLACEHOLDER_ERROR_MESSAGE362
 
 # cannot have string variable as scale
 statement error
 SELECT '0.1'::DECIMAL('hello');
+----
+PLACEHOLDER_ERROR_MESSAGE361
 
 # ...or negative numbers
 statement error
 SELECT '0.1'::DECIMAL(-17);
+----
+PLACEHOLDER_ERROR_MESSAGE360
 
 # width/scale out of range
 statement error
 SELECT '0.1'::DECIMAL(1000);
+----
+PLACEHOLDER_ERROR_MESSAGE359
 
 statement error
 SELECT '0.1'::DECIMAL(1, 2, 3);
+----
+PLACEHOLDER_ERROR_MESSAGE358
 
 statement error
 SELECT '1'::INTEGER(1000);
+----
+PLACEHOLDER_ERROR_MESSAGE357

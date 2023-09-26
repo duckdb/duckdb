@@ -51,6 +51,8 @@ true
 
 statement error
 EXECUTE v2([[1, 2, 3]], [1, 2, 3])
+----
+PLACEHOLDER_ERROR_MESSAGE1099
 
 # unbound parameter in scalar subquery
 statement ok
@@ -139,6 +141,8 @@ time: 27
 
 statement error
 EXECUTE v7('hello world', [1, 2, 3])
+----
+PLACEHOLDER_ERROR_MESSAGE1098
 
 # unbound parameter with lists
 statement ok

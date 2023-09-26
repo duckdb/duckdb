@@ -22,9 +22,13 @@ UPDATE integers SET i=i, j=3
 # update to a passing value should work
 statement error
 UPDATE integers SET i=i, i=10
+----
+PLACEHOLDER_ERROR_MESSAGE1398
 
 statement error
 UPDATE integers SET i=i, j=10
+----
+PLACEHOLDER_ERROR_MESSAGE1397
 
 # now update the value without explicitly mentioning the other column
 statement ok
@@ -32,6 +36,8 @@ UPDATE integers SET j=2
 
 statement error
 UPDATE integers SET j=10
+----
+PLACEHOLDER_ERROR_MESSAGE1396
 
 # verify that the final result is correct
 query III
@@ -57,9 +63,13 @@ UPDATE integers SET j=3
 # now update the value so it doesn't pass
 statement error
 UPDATE integers SET i=NULL
+----
+PLACEHOLDER_ERROR_MESSAGE1395
 
 statement error
 UPDATE integers SET j=NULL
+----
+PLACEHOLDER_ERROR_MESSAGE1394
 
 # verify that the final result is correct
 query II

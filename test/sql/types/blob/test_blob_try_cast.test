@@ -42,21 +42,33 @@ SELECT TRY_CAST('\x12' AS BLOB)
 
 statement error
 SELECT '\\'::BLOB
+----
+PLACEHOLDER_ERROR_MESSAGE1018
 
 statement error
 SELECT '\\x3'::BLOB
+----
+PLACEHOLDER_ERROR_MESSAGE1017
 
 statement error
 SELECT '\\b12'::BLOB
+----
+PLACEHOLDER_ERROR_MESSAGE1016
 
 statement error
 SELECT '\\xx2'::BLOB
+----
+PLACEHOLDER_ERROR_MESSAGE1015
 
 statement error
 SELECT '\\x2x'::BLOB
+----
+PLACEHOLDER_ERROR_MESSAGE1014
 
 statement error
 SELECT 'ü'::BLOB
+----
+PLACEHOLDER_ERROR_MESSAGE1013
 
 query I
 SELECT CAST('\x12' AS BLOB)

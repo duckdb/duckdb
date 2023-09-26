@@ -43,10 +43,16 @@ daeHrötoM
 # test incorrect usage of reverse
 statement error
 select REVERSE()
+----
+PLACEHOLDER_ERROR_MESSAGE2377
 
 statement error
 select REVERSE(1, 2)
+----
+PLACEHOLDER_ERROR_MESSAGE2376
 
 statement error
 select REVERSE('hello', 'world')
+----
+PLACEHOLDER_ERROR_MESSAGE2375
 

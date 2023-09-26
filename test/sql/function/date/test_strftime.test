@@ -129,14 +129,20 @@ endloop
 # non-constant format not supported
 statement error
 SELECT strftime(d, d::VARCHAR) FROM dates ORDER BY d;
+----
+PLACEHOLDER_ERROR_MESSAGE2017
 
 # unterminated escape
 statement error
 SELECT strftime(DATE '1992-01-01', '%');
+----
+PLACEHOLDER_ERROR_MESSAGE2016
 
 # unrecognized code
 statement error
 SELECT strftime(DATE '1992-01-01', '%R');
+----
+PLACEHOLDER_ERROR_MESSAGE2015
 
 # millisecond specifier %g
 query IIII
@@ -149,11 +155,17 @@ select strftime(strptime('023', '%g'), '%g'), strftime(strptime('0', '%g'), '%g'
 
 statement error
 SELECT strptime('-1', '%g');
+----
+PLACEHOLDER_ERROR_MESSAGE2014
 
 statement error
 SELECT strptime('1000', '%g');
+----
+PLACEHOLDER_ERROR_MESSAGE2013
 
 # this won't work without explicit casts
 statement error
 SELECT strftime('%Y', '1992-01-01');
+----
+PLACEHOLDER_ERROR_MESSAGE2012
 

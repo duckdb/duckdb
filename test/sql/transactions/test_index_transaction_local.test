@@ -12,6 +12,8 @@ INSERT INTO integers VALUES (1), (2), (3)
 # inserting a duplicate value fails
 statement error con1
 INSERT INTO integers VALUES (1)
+----
+PLACEHOLDER_ERROR_MESSAGE2751
 
 # inserting a non-duplicate value works
 statement ok con1
@@ -20,6 +22,8 @@ INSERT INTO integers VALUES (4)
 # updating a primary key to an existing value fails
 statement error con1
 UPDATE integers SET i=1 WHERE i=4
+----
+PLACEHOLDER_ERROR_MESSAGE2750
 
 # but updating to a non-existing value works
 statement ok con1
@@ -98,6 +102,8 @@ COMMIT
 # but then con2 fails to commit
 statement error con2
 COMMIT
+----
+PLACEHOLDER_ERROR_MESSAGE2749
 
 # Issue #2241: Delete and reinsert fails on unique/indexed column
 statement ok

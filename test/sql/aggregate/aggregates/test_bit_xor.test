@@ -49,12 +49,18 @@ NULL
 # test incorrect usage
 statement error
 SELECT BIT_XOR()
+----
+PLACEHOLDER_ERROR_MESSAGE1525
 
 statement error
 SELECT BIT_XOR(1, 2, 3)
+----
+PLACEHOLDER_ERROR_MESSAGE1524
 
 statement error
 SELECT BIT_XOR(BIT_XOR(1))
+----
+PLACEHOLDER_ERROR_MESSAGE1523
 
 #test on bit types
 statement ok

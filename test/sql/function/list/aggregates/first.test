@@ -10,6 +10,8 @@ SELECT list_aggr([1, 2], 'arbitrary')
 # incorrect usage
 statement error
 SELECT list_first()
+----
+PLACEHOLDER_ERROR_MESSAGE2218
 
 # different types
 

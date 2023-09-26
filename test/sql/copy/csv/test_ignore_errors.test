@@ -10,6 +10,8 @@ COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little.csv' (HEADER, I
 
 statement error
 COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little.csv' (HEADER, NULL_PADDING FALSE)
+----
+PLACEHOLDER_ERROR_MESSAGE2878
 
 # not enough columns provided
 query II
@@ -29,6 +31,8 @@ INSERT INTO integers SELECT * FROM read_csv('test/sql/copy/csv/data/test/error_t
 
 statement error
 INSERT INTO integers SELECT * FROM read_csv('test/sql/copy/csv/data/test/error_too_little.csv', columns={'i': 'INTEGER'}, header=1, null_padding=0)
+----
+PLACEHOLDER_ERROR_MESSAGE2877
 
 # not enough columns provided
 query II
@@ -48,6 +52,8 @@ COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_single.csv' (HE
 
 statement error
 COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_single.csv' (HEADER, NULL_PADDING 0)
+----
+PLACEHOLDER_ERROR_MESSAGE2876
 
 # not enough columns provided, single value
 query II
@@ -63,6 +69,8 @@ COPY integers FROM 'test/sql/copy/csv/data/test/error_too_many.csv' (HEADER, IGN
 
 statement error
 COPY integers FROM 'test/sql/copy/csv/data/test/error_too_many.csv' (HEADER)
+----
+PLACEHOLDER_ERROR_MESSAGE2875
 
 # too many columns provided
 query II
@@ -82,6 +90,8 @@ COPY integers FROM 'test/sql/copy/csv/data/test/error_invalid_type.csv' (HEADER,
 
 statement error
 COPY integers FROM 'test/sql/copy/csv/data/test/error_invalid_type.csv' (HEADER)
+----
+PLACEHOLDER_ERROR_MESSAGE2874
 
 # too many columns provided
 query II
@@ -101,6 +111,8 @@ COPY nullable_type FROM 'test/sql/copy/csv/data/test/test_incompatible_type_with
 
 statement error
 COPY nullable_type FROM 'test/sql/copy/csv/data/test/test_incompatible_type_with_nullable.csv'
+----
+PLACEHOLDER_ERROR_MESSAGE2873
 
 query IIII
 SELECT * FROM nullable_type

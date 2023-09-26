@@ -182,27 +182,43 @@ NULL
 # ---------------------------------------------------
 statement error
 SELECT CAST('{3==3}' AS MAP(INT, INT));
+----
+PLACEHOLDER_ERROR_MESSAGE1505
 
 statement error
 SELECT CAST('{[5]=5}' AS MAP(INT, INT));
+----
+PLACEHOLDER_ERROR_MESSAGE1504
 
 statement error
 SELECT CAST('{3=three}}' AS MAP(INT, VARCHAR));
+----
+PLACEHOLDER_ERROR_MESSAGE1503
 
 statement error   
 SELECT CAST('{Ducky=, DB=ok}' AS MAP(VARCHAR, INT));
+----
+PLACEHOLDER_ERROR_MESSAGE1502
 
 statement error
 SELECT CAST('{5=5,, 3=3}' AS MAP(INT, INT));
+----
+PLACEHOLDER_ERROR_MESSAGE1501
 
 statement error
 SELECT CAST('{3=3, 4=4' AS MAP(INT, INT));
+----
+PLACEHOLDER_ERROR_MESSAGE1500
 
 statement error
 SELECT CAST('{3=3, 4=4} bla' AS MAP(INT, INT));
+----
+PLACEHOLDER_ERROR_MESSAGE1499
 
 statement error
 SELECT CAST('{                                                                      ' AS MAP(INT, INT));
+----
+PLACEHOLDER_ERROR_MESSAGE1498
 
 #               Test WHERE clause
 # ---------------------------------------------------
@@ -296,6 +312,8 @@ SELECT '{ok=happy, sad=ok}'::MAP(MOOD, MOOD)
 
 statement error
 SELECT '{sadDucky: nothappy}'::MAP(VARCHAR, MOOD)
+----
+PLACEHOLDER_ERROR_MESSAGE1497
 
 #               Larger input test
 # ---------------------------------------------------

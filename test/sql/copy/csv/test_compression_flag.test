@@ -50,6 +50,8 @@ DROP TABLE lineitem
 
 statement error
 COPY lineitem FROM 'test/sql/copy/csv/data/test/test_comp.csv.gz' COMPRESSION 'none';
+----
+PLACEHOLDER_ERROR_MESSAGE2914
 
 
 statement ok

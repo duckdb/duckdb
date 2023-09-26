@@ -37,6 +37,8 @@ SELECT subquery(a) FROM integers
 # macro parameters and column names should not conflict
 statement error
 CREATE MACRO a1(a) AS (SELECT a + a FROM integers)
+----
+PLACEHOLDER_ERROR_MESSAGE1819
 
 statement ok
 CREATE MACRO a1(b) AS (SELECT a + a FROM integers)
@@ -54,6 +56,8 @@ SELECT a1(3) + a FROM integers
 # never allow columns with the same name as parameters
 statement error
 CREATE MACRO a2(a) AS (SELECT i.a + a FROM integers i)
+----
+PLACEHOLDER_ERROR_MESSAGE1818
 
 statement ok
 CREATE MACRO a2(b) AS (SELECT i.a + b FROM integers i)

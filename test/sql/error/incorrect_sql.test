@@ -5,75 +5,113 @@
 # typo
 statement error
 SELEC 42;
+----
+PLACEHOLDER_ERROR_MESSAGE3095
 
 statement error
 SELEC 42, 'thisisareallylongstringloremipsumblablathisisareallylongstringloremipsumblablalthisisareallylongstringloremipsumblablalthisisareallylongstringloremipsumblablal';
+----
+PLACEHOLDER_ERROR_MESSAGE3094
 
 statement error
 SELEC 42, '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆';
+----
+PLACEHOLDER_ERROR_MESSAGE3093
 
 # unrecognized column
 statement error
 SELECT '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆', x, '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆';
+----
+PLACEHOLDER_ERROR_MESSAGE3092
 
 # unrecognized scalar function
 statement error
 SELECT FUNFUNFUN();
+----
+PLACEHOLDER_ERROR_MESSAGE3091
 
 statement error
 CREATE VIEW v1
 AS SELECT FUNFUNFUN();
+----
+PLACEHOLDER_ERROR_MESSAGE3090
 
 # unrecognized aggregate parameters
 statement error
 SELECT SUM(42, 84, 11, 'hello')
+----
+PLACEHOLDER_ERROR_MESSAGE3089
 
 # no matching function
 statement error
 SELECT cos(0, 1, 2, 3);
+----
+PLACEHOLDER_ERROR_MESSAGE3088
 
 # unrecognized table function
 statement error
 SELECT * FROM RANG();
+----
+PLACEHOLDER_ERROR_MESSAGE3087
 
 # unknown named parameters
 statement error
 SELECT * FROM RANGE(1, hello=3);
+----
+PLACEHOLDER_ERROR_MESSAGE3086
 
 statement error
 SELECT * FROM READ_CSV('x', hello=3);
+----
+PLACEHOLDER_ERROR_MESSAGE3085
 
 # multiple where clauses
 statement error
 SELECT 42 WHERE 1=1 WHERE 1=0;
+----
+PLACEHOLDER_ERROR_MESSAGE3084
 
 # multiple statements without semi colon
 statement error
 SELECT 42
 SELECT 42;
+----
+PLACEHOLDER_ERROR_MESSAGE3083
 
 # multiple statements, but error is only in second statement
 statement error
 SELECT 42; SELEC 42;
+----
+PLACEHOLDER_ERROR_MESSAGE3082
 
 # non-existent table
 statement error
 SELECT * FROM integers2;
+----
+PLACEHOLDER_ERROR_MESSAGE3081
 
 # non-existent schema
 statement error
 SELECT * FROM bla.integers2;
+----
+PLACEHOLDER_ERROR_MESSAGE3080
 
 # non-existent table in view
 statement error
 CREATE VIEW v1 AS SELECT * FROM integers2;
+----
+PLACEHOLDER_ERROR_MESSAGE3079
 
 # non-existent table in long single-line query
 statement error
 with cte1 as (select 42 as j), cte2 as (select ref.j as k from cte1 as ref), cte3 as (select ref2.j+1 as i from cte1 as ref2) SELECT * FROM integers9;
+----
+PLACEHOLDER_ERROR_MESSAGE3078
 
 statement error
 with cte1 as (select 42 as j), cte2 as (select ref.j as k from cte1 as ref), cte3 as (select ref2.j+1 as i from cte1 as ref2) SELECT * FROM integers9 where x=3 order by x+1+1+1+1+1+1+1+1+1+1+1;
+----
+PLACEHOLDER_ERROR_MESSAGE3077
 
 # non-existent table in multi-line query (Q1)
 statement error
@@ -98,15 +136,21 @@ GROUP BY
 ORDER BY
     l_returnflag,
     l_linestatus;
+----
+PLACEHOLDER_ERROR_MESSAGE3076
 
 # now with unicode
 # short unicode error
 statement error
 select 🦆🍞 from 🦆🍞;
+----
+PLACEHOLDER_ERROR_MESSAGE3075
 
 # long unicode error
 statement error
 with 🍞🍞 as (select 'bread' as 🍞), 🦆🦆 as (select ref.🍞 as "🍞" from 🍞🍞 as ref) SELECT * FROM integers9 where x LIKE '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆' order by x+1+1+1+1+1+1+1+1+1+1+1;
+----
+PLACEHOLDER_ERROR_MESSAGE3074
 
 statement ok
 CREATE TABLE integers(integ INTEGER);
@@ -120,24 +164,36 @@ CREATE TABLE chickens(feather INTEGER, beak INTEGER);
 # non-existent table, with several tables available
 statement error
 SELECT * FROM integres;
+----
+PLACEHOLDER_ERROR_MESSAGE3073
 
 # non-existent column
 statement error
 SELECT feathe FROM chickens;
+----
+PLACEHOLDER_ERROR_MESSAGE3072
 
 # non-existent column, with multiple tables
 statement error
 SELECT feathe FROM chickens, integers, strings;
+----
+PLACEHOLDER_ERROR_MESSAGE3071
 
 statement error
 SELECT st FROM chickens, integers, strings;
+----
+PLACEHOLDER_ERROR_MESSAGE3070
 
 statement error
 SELECT chicken.feather FROM chickens
+----
+PLACEHOLDER_ERROR_MESSAGE3069
 
 # table-qualified non-existent column
 statement error
 SELECT chicken.st FROM chickens, integers, strings;
+----
+PLACEHOLDER_ERROR_MESSAGE3068
 
 # now with unicode
 statement ok
@@ -145,6 +201,10 @@ CREATE TABLE 🦆🍞(🦆🦆🦆 INTEGER, 🍞🍞🍞 INTEGER);
 
 statement error
 SELECT 🦆.🦆🦆🦆 FROM 🦆🍞
+----
+PLACEHOLDER_ERROR_MESSAGE3067
 
 statement error
 SELECT 🦆🦆 FROM 🦆🍞, chickens
+----
+PLACEHOLDER_ERROR_MESSAGE3066

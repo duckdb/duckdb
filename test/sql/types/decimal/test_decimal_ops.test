@@ -323,6 +323,8 @@ SELECT ROUND(12::DECIMAL(3,0))
 # non-constant precision is not supported
 statement error
 SELECT ROUND(12::DECIMAL(3,0), i) FROM range(1) tbl(i)
+----
+PLACEHOLDER_ERROR_MESSAGE271
 
 # null precision becomes null (postgres behavior)
 query T

@@ -7,6 +7,8 @@ require strinline
 # incorrect usage
 statement error
 select list_mode()
+----
+PLACEHOLDER_ERROR_MESSAGE2169
 
 # integers
 statement ok

@@ -120,13 +120,21 @@ SELECT * FROM test ORDER BY a
 # now verify that we get conflicts when we update values that have been updated AFTER we started
 statement error con1
 UPDATE test SET a=99 WHERE a=1
+----
+PLACEHOLDER_ERROR_MESSAGE1206
 
 statement error con2
 UPDATE test SET a=99 WHERE a=2
+----
+PLACEHOLDER_ERROR_MESSAGE1205
 
 statement error con3
 UPDATE test SET a=99 WHERE a=3
+----
+PLACEHOLDER_ERROR_MESSAGE1204
 
 statement error con4
 UPDATE test SET a=99 WHERE a IS NULL
+----
+PLACEHOLDER_ERROR_MESSAGE1203
 

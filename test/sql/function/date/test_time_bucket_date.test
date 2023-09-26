@@ -370,54 +370,88 @@ select w, d, origin, time_bucket(w, d, origin) from dates;
 
 statement error
 select time_bucket('-3 hours'::interval, '2019-04-05'::date);
+----
+PLACEHOLDER_ERROR_MESSAGE2041
 
 statement error
 select time_bucket('-3 hours'::interval, '2019-04-05'::date, '1 hour 30 minutes'::interval);
+----
+PLACEHOLDER_ERROR_MESSAGE2040
 
 statement error
 select time_bucket('-3 hours'::interval, '2019-04-05'::date, '2019-04-05'::date);
+----
+PLACEHOLDER_ERROR_MESSAGE2039
 
 statement error
 select time_bucket('-1 month'::interval, '2019-04-05'::date);
+----
+PLACEHOLDER_ERROR_MESSAGE2038
 
 statement error
 select time_bucket('-1 month'::interval, '2019-04-05'::date, '1 week'::interval);
+----
+PLACEHOLDER_ERROR_MESSAGE2037
 
 statement error
 select time_bucket('-1 month'::interval, '2019-04-05'::date, '2019-04-05'::date);
+----
+PLACEHOLDER_ERROR_MESSAGE2036
 
 statement error
 select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05'::date);
+----
+PLACEHOLDER_ERROR_MESSAGE2035
 
 statement error
 select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05'::date, '1 hour 30 minutes'::interval);
+----
+PLACEHOLDER_ERROR_MESSAGE2034
 
 statement error
 select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05'::date, '2018-05-05'::date);
+----
+PLACEHOLDER_ERROR_MESSAGE2033
 
 statement error
 select time_bucket('1 month 1 day'::interval, '2018-05-05'::date);
+----
+PLACEHOLDER_ERROR_MESSAGE2032
 
 statement error
 select time_bucket('1 month 1 day'::interval, '2018-05-05'::date, '1 week'::interval);
+----
+PLACEHOLDER_ERROR_MESSAGE2031
 
 statement error
 select time_bucket('1 month 1 day'::interval, '2019-05-05'::date, '2019-05-05'::date);
+----
+PLACEHOLDER_ERROR_MESSAGE2030
 
 statement error
 select time_bucket('3 days'::interval, '2019-05-05'::date, '2000000000 months'::interval);
+----
+PLACEHOLDER_ERROR_MESSAGE2029
 
 statement error
 select time_bucket('3 days'::interval, '2019-05-05'::date, '-2000000000 months'::interval);
+----
+PLACEHOLDER_ERROR_MESSAGE2028
 
 statement error
 select time_bucket('3 months'::interval, '2019-05-05'::date, '2000000000 months'::interval);
+----
+PLACEHOLDER_ERROR_MESSAGE2027
 
 statement error
 select time_bucket('3 months'::interval, '2019-05-05'::date, '-2000000000 months'::interval);
+----
+PLACEHOLDER_ERROR_MESSAGE2026
 
 statement error
 select time_bucket('1 month'::interval, '5877642-06-25 (BC)'::date);
+----
+PLACEHOLDER_ERROR_MESSAGE2025
 
 query I
 select time_bucket('1 month'::interval, '5877642-07-01 (BC)'::date);
@@ -426,9 +460,13 @@ select time_bucket('1 month'::interval, '5877642-07-01 (BC)'::date);
 
 statement error
 select time_bucket('1 week'::interval, '5877642-07-01 (BC)'::date);
+----
+PLACEHOLDER_ERROR_MESSAGE2024
 
 statement error
 select time_bucket('1 month'::interval, '5881580-07-10'::date, '-1 day'::interval);
+----
+PLACEHOLDER_ERROR_MESSAGE2023
 
 query I
 select time_bucket('1 month'::interval, '5881580-07-10'::date);
@@ -437,12 +475,18 @@ select time_bucket('1 month'::interval, '5881580-07-10'::date);
 
 statement error
 select time_bucket('1 week'::interval, '290309-12-21 (BC)'::date);
+----
+PLACEHOLDER_ERROR_MESSAGE2022
 
 statement error
 select time_bucket('1 week'::interval, '290309-12-22 (BC)'::date);
+----
+PLACEHOLDER_ERROR_MESSAGE2021
 
 statement error
 select time_bucket('1 day'::interval, '290309-12-21 (BC)'::date);
+----
+PLACEHOLDER_ERROR_MESSAGE2020
 
 query I
 select time_bucket('1 day'::interval, '290309-12-22 (BC)'::date);
@@ -451,6 +495,8 @@ select time_bucket('1 day'::interval, '290309-12-22 (BC)'::date);
 
 statement error
 select time_bucket('1 week'::interval, '294247-01-11'::date);
+----
+PLACEHOLDER_ERROR_MESSAGE2019
 
 query I
 select time_bucket('1 week'::interval, '294247-01-10'::date);
@@ -459,6 +505,8 @@ select time_bucket('1 week'::interval, '294247-01-10'::date);
 
 statement error
 select time_bucket('1 day'::interval, '294247-01-11'::date);
+----
+PLACEHOLDER_ERROR_MESSAGE2018
 
 query I
 select time_bucket('1 day'::interval, '294247-01-10'::date);

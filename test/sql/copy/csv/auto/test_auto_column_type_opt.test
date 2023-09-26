@@ -5,26 +5,38 @@
 # Test read_csv wout auto_detect throws
 statement error
 select * from read_csv('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK(a := 'INTEGER'))
+----
+PLACEHOLDER_ERROR_MESSAGE2894
 
 # Test non-struct throws
 statement error
 select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=1)
+----
+PLACEHOLDER_ERROR_MESSAGE2893
 
 # Test empty throws
 statement error
 select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK())
+----
+PLACEHOLDER_ERROR_MESSAGE2892
 
 # Test funky type throws
 statement error
 select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK(a := 'BLA'))
+----
+PLACEHOLDER_ERROR_MESSAGE2891
 
 # Test funky name throws
 statement error
 select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK(bla := 'INTEGER'))
+----
+PLACEHOLDER_ERROR_MESSAGE2890
 
 # Test wrong type throws
 statement error
 select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK(column3 := 'INTEGER'))
+----
+PLACEHOLDER_ERROR_MESSAGE2889
 
 # Test 1st column defined
 query I

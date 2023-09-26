@@ -59,12 +59,18 @@ NULL
 # invalid use of average
 statement error
 SELECT AVG()
+----
+PLACEHOLDER_ERROR_MESSAGE1722
 
 statement error
 SELECT AVG(1, 2, 3)
+----
+PLACEHOLDER_ERROR_MESSAGE1721
 
 statement error
 SELECT AVG(AVG(1))
+----
+PLACEHOLDER_ERROR_MESSAGE1720
 
 # empty average
 statement ok

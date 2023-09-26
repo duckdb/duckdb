@@ -72,7 +72,11 @@ NULL
 # multi-byte escape not supported
 statement error
 select 'a%c' ilike 'a$%C' escape '///';
+----
+PLACEHOLDER_ERROR_MESSAGE2379
 
 # escape must be a constant
 statement error
 SELECT str ILIKE pat ESCAPE str FROM tbl
+----
+PLACEHOLDER_ERROR_MESSAGE2378

@@ -27,12 +27,18 @@ SELECT list_unique([]) WHERE 1 = 0
 
 statement error
 SELECT list_unique()
+----
+PLACEHOLDER_ERROR_MESSAGE2293
 
 statement error
 SELECT list_unique(*)
+----
+PLACEHOLDER_ERROR_MESSAGE2292
 
 statement error
 SELECT list_unique([1, 2], 2)
+----
+PLACEHOLDER_ERROR_MESSAGE2291
 
 # test incorrect parameter type
 
@@ -40,6 +46,8 @@ foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint us
 
 statement error
 SELECT list_unique(NULL::${type})
+----
+PLACEHOLDER_ERROR_MESSAGE2290
 
 endloop
 

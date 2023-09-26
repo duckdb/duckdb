@@ -120,6 +120,8 @@ SELECT
 	, ${nullary}() FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
 FROM testing
 ORDER BY y, x;
+----
+PLACEHOLDER_ERROR_MESSAGE2814
 
 endloop
 
@@ -135,6 +137,8 @@ SELECT
 	, ${unary}(x) FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
 FROM testing
 ORDER BY y, x;
+----
+PLACEHOLDER_ERROR_MESSAGE2813
 
 endloop
 
@@ -150,5 +154,7 @@ SELECT
 	, ${binary}(x, 1) FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
 FROM testing
 ORDER BY y, x;
+----
+PLACEHOLDER_ERROR_MESSAGE2812
 
 endloop

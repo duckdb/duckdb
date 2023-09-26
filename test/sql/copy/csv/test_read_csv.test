@@ -12,6 +12,8 @@ CREATE TABLE dates (d DATE);
 # base date format does not work here
 statement error
 INSERT INTO dates SELECT * FROM read_csv('test/sql/copy/csv/data/test/dateformat.csv', columns=STRUCT_PACK(d := 'DATE'), header=0)
+----
+PLACEHOLDER_ERROR_MESSAGE2885
 
 # have to specify it ourselves
 statement ok
@@ -66,4 +68,6 @@ SELECT l_partkey, RTRIM(l_comment) FROM lineitem WHERE l_orderkey=1 ORDER BY l_l
 # wrong argument type
 statement error
 SELECT * FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', sep='|', columns=STRUCT_PACK(l_orderkey := 5))
+----
+PLACEHOLDER_ERROR_MESSAGE2884
 

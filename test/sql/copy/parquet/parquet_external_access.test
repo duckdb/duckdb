@@ -14,29 +14,45 @@ SET enable_external_access=false;
 # we cannot read parquet files
 statement error
 SELECT * FROM 'data/parquet-testing/arrow/lineitem-arrow.parquet'
+----
+PLACEHOLDER_ERROR_MESSAGE2985
 
 # or their metadata
 statement error
 SELECT * FROM parquet_metadata('data/parquet-testing/arrow/lineitem-arrow.parquet')
+----
+PLACEHOLDER_ERROR_MESSAGE2984
 
 statement error
 SELECT * FROM parquet_schema('data/parquet-testing/arrow/lineitem-arrow.parquet')
+----
+PLACEHOLDER_ERROR_MESSAGE2983
 
 # also not in a list
 statement error
 SELECT * FROM parquet_scan(['data/parquet-testing/arrow/lineitem-arrow.parquet', 'data/parquet-testing/arrow/lineitem-arrow.parquet'])
+----
+PLACEHOLDER_ERROR_MESSAGE2982
 
 # neither can we glob
 statement error
 SELECT * FROM glob('data/parquet-testing/arrow/lineitem-arrow.parquet')
+----
+PLACEHOLDER_ERROR_MESSAGE2981
 
 # or copy to/from...
 statement error
 COPY lineitem FROM 'data/parquet-testing/arrow/lineitem-arrow.parquet'
+----
+PLACEHOLDER_ERROR_MESSAGE2980
 
 statement error
 COPY lineitem TO '__TEST_DIR__/lineitem.parquet'
+----
+PLACEHOLDER_ERROR_MESSAGE2979
 
 # we also can't just enable external access again
 statement error
 SET enable_external_access=true;
+----
+PLACEHOLDER_ERROR_MESSAGE2978

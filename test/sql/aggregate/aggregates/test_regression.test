@@ -18,12 +18,18 @@ select regr_avgx(1,1)
 #Corner cases
 statement error
 select regr_avgx()
+----
+PLACEHOLDER_ERROR_MESSAGE1607
 
 statement error
 select regr_avgx(*)
+----
+PLACEHOLDER_ERROR_MESSAGE1606
 
 statement error
 select regr_avgy()
+----
+PLACEHOLDER_ERROR_MESSAGE1605
 
 query I
 select regr_avgy(NULL,NULL)
@@ -37,9 +43,13 @@ select regr_avgy(1,1)
 
 statement error
 select regr_avgy(*)
+----
+PLACEHOLDER_ERROR_MESSAGE1604
 
 statement error
 select regr_count()
+----
+PLACEHOLDER_ERROR_MESSAGE1603
 
 query I
 select regr_count(NULL,NULL)
@@ -53,9 +63,13 @@ select regr_count(1,1)
 
 statement error
 select regr_count(*)
+----
+PLACEHOLDER_ERROR_MESSAGE1602
 
 statement error
 select regr_slope()
+----
+PLACEHOLDER_ERROR_MESSAGE1601
 
 query I
 select regr_slope(NULL,NULL)
@@ -69,9 +83,13 @@ NULL
 
 statement error
 select regr_slope(*)
+----
+PLACEHOLDER_ERROR_MESSAGE1600
 
 statement error
 select regr_r2()
+----
+PLACEHOLDER_ERROR_MESSAGE1599
 
 query I
 select regr_r2(NULL,NULL)
@@ -86,9 +104,13 @@ NULL
 #Corner cases
 statement error
 select regr_r2(0, 1e230*i) from range(5) tbl(i);
+----
+PLACEHOLDER_ERROR_MESSAGE1598
 
 statement error
 select regr_r2(1e230*i, i) from range(5) tbl(i);
+----
+PLACEHOLDER_ERROR_MESSAGE1597
 
 query I
 select regr_r2(1e230*i, 0) from range(5) tbl(i);
@@ -102,12 +124,18 @@ select regr_r2(0, i) from range(5) tbl(i);
 
 statement error
 select regr_r2(*)
+----
+PLACEHOLDER_ERROR_MESSAGE1596
 
 statement error
 select regr_sxx()
+----
+PLACEHOLDER_ERROR_MESSAGE1595
 
 statement error
 select regr_sxx(0, 2e230*i) from range(5) tbl(i)
+----
+PLACEHOLDER_ERROR_MESSAGE1594
 
 query I
 select regr_sxx(2e230*i, 0) from range(5) tbl(i)
@@ -126,6 +154,8 @@ select regr_sxx(1,1)
 
 statement error
 select regr_syy()
+----
+PLACEHOLDER_ERROR_MESSAGE1593
 
 query I
 select regr_syy(NULL,NULL)
@@ -139,9 +169,13 @@ select regr_syy(1,1)
 
 statement error
 select regr_sxy(*)
+----
+PLACEHOLDER_ERROR_MESSAGE1592
 
 statement error
 select regr_sxy()
+----
+PLACEHOLDER_ERROR_MESSAGE1591
 
 query I
 select regr_sxy(NULL,NULL)
@@ -155,9 +189,13 @@ select regr_sxy(1,1)
 
 statement error
 select regr_syy(*)
+----
+PLACEHOLDER_ERROR_MESSAGE1590
 
 statement error
 select regr_intercept()
+----
+PLACEHOLDER_ERROR_MESSAGE1589
 
 query I
 select regr_intercept(NULL,NULL)
@@ -172,6 +210,8 @@ NULL
 
 statement error
 select regr_intercept(*)
+----
+PLACEHOLDER_ERROR_MESSAGE1588
 
 statement ok
 create  table aggr(k int, v decimal(10,2), v2 decimal(10, 2));

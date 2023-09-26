@@ -15,6 +15,8 @@ CREATE TABLE test (
 #Inserting into a generated column by name
 statement error
 INSERT INTO test (bar) VALUES (5)
+----
+PLACEHOLDER_ERROR_MESSAGE1153
 
 #Using column names
 statement ok
@@ -33,6 +35,8 @@ SELECT * FROM test
 #Using VALUES with not enough values - cant rely on DEFAULT here
 statement error
 INSERT INTO test VALUES (22)
+----
+PLACEHOLDER_ERROR_MESSAGE1152
 
 #Using VALUES correctly
 statement ok
@@ -41,6 +45,8 @@ INSERT INTO test VALUES (22, 10);
 #Using VALUES incorrectly, too many values
 statement error
 INSERT INTO test VALUES (22, 10, 10)
+----
+PLACEHOLDER_ERROR_MESSAGE1151
 
 statement ok
 CREATE TABLE tbl (
@@ -73,3 +79,5 @@ CREATE TABLE tbl2 (
 
 statement error
 INSERT INTO tbl2 VALUES ('test');
+----
+PLACEHOLDER_ERROR_MESSAGE1150

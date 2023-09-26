@@ -114,6 +114,8 @@ SELECT * FROM test ORDER BY a
 # test concurrent update in con2, it should fail now
 statement error con2
 UPDATE test SET a=a+1
+----
+PLACEHOLDER_ERROR_MESSAGE1202
 
 query I con2
 SELECT * FROM test ORDER BY a
@@ -136,6 +138,8 @@ SELECT * FROM test ORDER BY a
 # test concurrent update in con2, it should fail now
 statement error con2
 UPDATE test SET a=a+1
+----
+PLACEHOLDER_ERROR_MESSAGE1201
 
 query I con2
 SELECT * FROM test ORDER BY a
@@ -158,6 +162,8 @@ SELECT * FROM test ORDER BY a
 # test concurrent update in con2, it should fail now
 statement error con2
 UPDATE test SET a=a+1
+----
+PLACEHOLDER_ERROR_MESSAGE1200
 
 query I con2
 SELECT * FROM test ORDER BY a

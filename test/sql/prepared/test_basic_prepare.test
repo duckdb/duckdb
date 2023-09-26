@@ -14,14 +14,20 @@ EXECUTE s1(43, 'asdf')
 # not enough params
 statement error
 EXECUTE s1(43)
+----
+PLACEHOLDER_ERROR_MESSAGE1109
 
 # too many
 statement error
 EXECUTE s1(43, 'asdf', 42)
+----
+PLACEHOLDER_ERROR_MESSAGE1108
 
 # wrong non-castable types
 statement error
 EXECUTE s1('asdf', 'asdf')
+----
+PLACEHOLDER_ERROR_MESSAGE1107
 
 statement ok
 DEALLOCATE s1
@@ -33,16 +39,24 @@ DEALLOCATE s2
 # now its gone
 statement error
 EXECUTE s1(42, 'dpfkg')
+----
+PLACEHOLDER_ERROR_MESSAGE1106
 
 # prepare a statement that cannot be prepared
 statement error
 PREPARE EXPLAIN SELECT 42
+----
+PLACEHOLDER_ERROR_MESSAGE1105
 
 statement error
 PREPARE CREATE TABLE a(i INTEGER)
+----
+PLACEHOLDER_ERROR_MESSAGE1104
 
 statement error
 SELECT * FROM a;
+----
+PLACEHOLDER_ERROR_MESSAGE1103
 
 # type will be resolved to "double"
 statement ok

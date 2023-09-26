@@ -42,6 +42,8 @@ COMMIT
 
 statement error con2
 COMMIT
+----
+PLACEHOLDER_ERROR_MESSAGE2575
 
 statement ok con1
 INSERT INTO test VALUES (15, NULL, NULL)

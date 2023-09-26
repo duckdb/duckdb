@@ -103,9 +103,13 @@ endloop
 
 statement error
 SELECT list_mad([INTERVAL 1 YEAR])
+----
+PLACEHOLDER_ERROR_MESSAGE2211
 
 statement error
 SELECT list_mad([NULL::INTERVAL])
+----
+PLACEHOLDER_ERROR_MESSAGE2210
 
 # extreme values
 

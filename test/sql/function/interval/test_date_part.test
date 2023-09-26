@@ -73,36 +73,58 @@ SELECT date_part(s, i) FROM intervals;
 # interval gives errors for date-only parts
 statement error
 SELECT dayofweek(i) FROM intervals
+----
+PLACEHOLDER_ERROR_MESSAGE1998
 
 statement error
 SELECT isodow(i) FROM intervals
+----
+PLACEHOLDER_ERROR_MESSAGE1997
 
 statement error
 SELECT dayofyear(i) FROM intervals
+----
+PLACEHOLDER_ERROR_MESSAGE1996
 
 statement error
 SELECT week(i) FROM intervals
+----
+PLACEHOLDER_ERROR_MESSAGE1995
 
 statement error
 SELECT era(i) FROM intervals;
+----
+PLACEHOLDER_ERROR_MESSAGE1994
 
 statement error
 SELECT julian(i) FROM intervals;
+----
+PLACEHOLDER_ERROR_MESSAGE1993
 
 statement error
 SELECT extract(era from i) FROM intervals;
+----
+PLACEHOLDER_ERROR_MESSAGE1992
 
 statement error
 SELECT extract(julian from i) FROM intervals;
+----
+PLACEHOLDER_ERROR_MESSAGE1991
 
 statement error
 SELECT date_part('era', i) FROM intervals;
+----
+PLACEHOLDER_ERROR_MESSAGE1990
 
 statement error
 SELECT date_part('julian', i) FROM intervals;
+----
+PLACEHOLDER_ERROR_MESSAGE1989
 
 statement error
 SELECT date_part('offset', i) FROM intervals;
+----
+PLACEHOLDER_ERROR_MESSAGE1988
 
 # Correctness: Compare date_part values with function values
 foreach partcode millennium century decade year quarter month day hour minute second millisecond microsecond epoch
@@ -202,5 +224,7 @@ statement error
 SELECT i, DATE_PART(['${datepart}'], i) AS parts
 FROM intervals
 ORDER BY 1;
+----
+PLACEHOLDER_ERROR_MESSAGE1987
 
 endloop

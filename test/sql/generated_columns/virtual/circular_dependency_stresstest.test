@@ -19,6 +19,8 @@ CREATE TABLE tbl (
 	gcol10 AS (gcol3),
 	x INTEGER
 );
+----
+PLACEHOLDER_ERROR_MESSAGE1162
 
 statement ok
 CREATE TABLE tbl (
@@ -50,3 +52,5 @@ CREATE TABLE circular (
 	b AS (a),
 	x INTEGER,
 );
+----
+PLACEHOLDER_ERROR_MESSAGE1161

@@ -48,16 +48,24 @@ SELECT * FROM vw1
 
 statement error con2
 SELECT * FROM vw2
+----
+PLACEHOLDER_ERROR_MESSAGE2730
 
 statement error con2
 SELECT * FROM vw3
+----
+PLACEHOLDER_ERROR_MESSAGE2729
 
 statement error con2
 SELECT * FROM vw4
+----
+PLACEHOLDER_ERROR_MESSAGE2728
 
 # con3 sees ONLY vw2
 statement error con3
 SELECT * FROM vw1
+----
+PLACEHOLDER_ERROR_MESSAGE2727
 
 query I con3
 SELECT * FROM vw2
@@ -67,16 +75,24 @@ SELECT * FROM vw2
 
 statement error con3
 SELECT * FROM vw3
+----
+PLACEHOLDER_ERROR_MESSAGE2726
 
 statement error con3
 SELECT * FROM vw4
+----
+PLACEHOLDER_ERROR_MESSAGE2725
 
 # con4 sees ONLY vw3
 statement error con4
 SELECT * FROM vw1
+----
+PLACEHOLDER_ERROR_MESSAGE2724
 
 statement error con4
 SELECT * FROM vw2
+----
+PLACEHOLDER_ERROR_MESSAGE2723
 
 query I con4
 SELECT * FROM vw3
@@ -86,16 +102,24 @@ SELECT * FROM vw3
 
 statement error con4
 SELECT * FROM vw4
+----
+PLACEHOLDER_ERROR_MESSAGE2722
 
 # con1 sees ONLY vw4
 statement error con1
 SELECT * FROM vw1
+----
+PLACEHOLDER_ERROR_MESSAGE2721
 
 statement error con1
 SELECT * FROM vw2
+----
+PLACEHOLDER_ERROR_MESSAGE2720
 
 statement error con1
 SELECT * FROM vw3
+----
+PLACEHOLDER_ERROR_MESSAGE2719
 
 query I con1
 SELECT * FROM vw4

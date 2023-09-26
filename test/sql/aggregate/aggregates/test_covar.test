@@ -5,22 +5,34 @@
 # test incorrect usage of COVAR_POP function
 statement error
 SELECT COVAR_POP()
+----
+PLACEHOLDER_ERROR_MESSAGE1561
 
 statement error
 SELECT COVAR_POP(1, 2, 3)
+----
+PLACEHOLDER_ERROR_MESSAGE1560
 
 statement error
 SELECT COVAR_POP(COVAR_POP(1))
+----
+PLACEHOLDER_ERROR_MESSAGE1559
 
 # test incorrect usage of COVAR_SAMP function
 statement error
 SELECT COVAR_SAMP()
+----
+PLACEHOLDER_ERROR_MESSAGE1558
 
 statement error
 SELECT COVAR_SAMP(1, 2, 3)
+----
+PLACEHOLDER_ERROR_MESSAGE1557
 
 statement error
 SELECT COVAR_SAMP(COVAR_SAMP(1))
+----
+PLACEHOLDER_ERROR_MESSAGE1556
 
 # test population covariance on scalar values
 query RRRR

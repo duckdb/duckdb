@@ -188,6 +188,8 @@ SELECT DATE '1993-03-01' - INTERVAL '1000000' SECOND
 # we cannot subtract dates from intervals
 statement error
 SELECT INTERVAL '1000000' SECOND - DATE '1993-03-01'
+----
+PLACEHOLDER_ERROR_MESSAGE539
 
 # we can add/subtract them to/from times
 query T

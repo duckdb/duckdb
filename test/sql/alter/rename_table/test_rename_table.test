@@ -22,6 +22,8 @@ SELECT * FROM tbl2
 
 statement error
 SELECT * FROM tbl
+----
+PLACEHOLDER_ERROR_MESSAGE2635
 
 statement ok
 ROLLBACK
@@ -34,6 +36,8 @@ SELECT * FROM tbl;
 
 statement error
 SELECT * FROM tbl2
+----
+PLACEHOLDER_ERROR_MESSAGE2634
 
 statement ok
 BEGIN TRANSACTION;
@@ -52,6 +56,8 @@ SELECT * FROM tbl2
 
 statement error
 SELECT * FROM tbl
+----
+PLACEHOLDER_ERROR_MESSAGE2633
 
 query I
 SELECT * FROM tbl2
@@ -84,6 +90,8 @@ SELECT * FROM tbl2
 
 statement error
 SELECT * FROM tbl5
+----
+PLACEHOLDER_ERROR_MESSAGE2632
 
 statement ok
 BEGIN TRANSACTION
@@ -103,6 +111,8 @@ COMMIT
 # everything was committed
 statement error
 SELECT * FROM tbl2
+----
+PLACEHOLDER_ERROR_MESSAGE2631
 
 query I
 SELECT * FROM tbl5

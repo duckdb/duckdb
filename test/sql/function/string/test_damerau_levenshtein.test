@@ -150,12 +150,18 @@ NULL
 
 statement error
 SELECT damerau_levenshtein('one', 'two', 'three')
+----
+PLACEHOLDER_ERROR_MESSAGE2383
 
 statement error
 SELECT damerau_levenshtein('one')
+----
+PLACEHOLDER_ERROR_MESSAGE2382
 
 statement error
 SELECT damerau_levenshtein()
+----
+PLACEHOLDER_ERROR_MESSAGE2381
 
 
 statement ok

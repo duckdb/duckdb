@@ -30,6 +30,8 @@ SELECT decode('\x00'::BLOB)
 # test invalid decodes
 statement error
 SELECT decode('\xFF'::BLOB)
+----
+PLACEHOLDER_ERROR_MESSAGE2496
 
 query I
 SELECT decode(encode(a)) || a from (values ('hello'), ('world')) tbl(a);

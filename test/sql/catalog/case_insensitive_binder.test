@@ -28,6 +28,8 @@ CREATE TABLE "ABC"(i integer);
 
 statement error
 CREATE TABLE "AbC"(i integer);
+----
+PLACEHOLDER_ERROR_MESSAGE1758
 
 statement ok
 SELECT * FROM "ABC";
@@ -40,6 +42,8 @@ ALTER TABLE abc ADD COLUMN j INTEGER;
 
 statement error
 ALTER TABLE "ABC" ADD COLUMN "J" INTEGER;
+----
+PLACEHOLDER_ERROR_MESSAGE1757
 
 statement ok
 DROP TABLE abc

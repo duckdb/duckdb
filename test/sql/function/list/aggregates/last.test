@@ -5,6 +5,8 @@
 # incorrect usage
 statement error
 SELECT list_last()
+----
+PLACEHOLDER_ERROR_MESSAGE2212
 
 # different types
 

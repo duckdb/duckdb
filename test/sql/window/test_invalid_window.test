@@ -14,13 +14,21 @@ INSERT INTO empsalary VALUES ('develop', 10, 5200, '2007-08-01'), ('sales', 1, 5
 # GROUP BY window function is not allowed
 statement error
 SELECT depname, min(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m1 FROM empsalary GROUP BY m1 ORDER BY depname, empno
+----
+PLACEHOLDER_ERROR_MESSAGE2809
 
 statement error
 select row_number() over (range between unbounded following and unbounded preceding);
+----
+PLACEHOLDER_ERROR_MESSAGE2808
 
 statement error
 select row_number() over (range between unbounded preceding and unbounded preceding);
+----
+PLACEHOLDER_ERROR_MESSAGE2807
 
 # ORDER BY is not implemented for window functions
 statement error
 select LIST(salary ORDER BY enroll_date) OVER (PARTITION BY depname) FROM empsalary
+----
+PLACEHOLDER_ERROR_MESSAGE2806

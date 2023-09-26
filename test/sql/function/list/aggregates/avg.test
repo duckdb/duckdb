@@ -39,6 +39,8 @@ NULL
 # incorrect use
 statement error
 SELECT list_avg()
+----
+PLACEHOLDER_ERROR_MESSAGE2206
 
 # NULL average
 statement ok

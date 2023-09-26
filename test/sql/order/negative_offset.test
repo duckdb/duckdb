@@ -7,18 +7,28 @@ PRAGMA enable_verification
 
 statement error
 SELECT * FROM generate_series(0,10,1) LIMIT 3 OFFSET -1;
+----
+PLACEHOLDER_ERROR_MESSAGE201
 
 statement error
 SELECT * FROM generate_series(0,10,1) LIMIT -3;
+----
+PLACEHOLDER_ERROR_MESSAGE200
 
 statement error
 SELECT * FROM generate_series(0,10,1) LIMIT -1%
+----
+PLACEHOLDER_ERROR_MESSAGE199
 
 statement ok
 CREATE TABLE integers AS SELECT -1 k
 
 statement error
 SELECT * FROM generate_series(0,10,1) LIMIT (SELECT k FROM integers);
+----
+PLACEHOLDER_ERROR_MESSAGE198
 
 statement error
 SELECT * FROM generate_series(0,10,1) LIMIT 1 OFFSET (SELECT k FROM integers);
+----
+PLACEHOLDER_ERROR_MESSAGE197

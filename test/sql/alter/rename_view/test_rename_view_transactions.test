@@ -28,6 +28,8 @@ SELECT * FROM vw2
 
 statement error con1
 SELECT * FROM vw
+----
+PLACEHOLDER_ERROR_MESSAGE2734
 
 query I con2
 SELECT * FROM vw
@@ -37,6 +39,8 @@ SELECT * FROM vw
 
 statement error con2
 SELECT * FROM vw2
+----
+PLACEHOLDER_ERROR_MESSAGE2733
 
 statement ok con1
 COMMIT
@@ -46,9 +50,13 @@ COMMIT
 
 statement error con1
 SELECT * FROM vw
+----
+PLACEHOLDER_ERROR_MESSAGE2732
 
 statement error con2
 SELECT * FROM vw
+----
+PLACEHOLDER_ERROR_MESSAGE2731
 
 query I con1
 SELECT * FROM vw2

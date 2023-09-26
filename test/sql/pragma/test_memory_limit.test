@@ -96,28 +96,46 @@ PRAGMA memory_limit='0.01 terabytes'
 # no unit or unknown units fail
 statement error
 PRAGMA memory_limit=100
+----
+PLACEHOLDER_ERROR_MESSAGE1970
 
 statement error
 PRAGMA memory_limit='0.01BG'
+----
+PLACEHOLDER_ERROR_MESSAGE1969
 
 statement error
 PRAGMA memory_limit='0.01BLA'
+----
+PLACEHOLDER_ERROR_MESSAGE1968
 
 statement error
 PRAGMA memory_limit='0.01PP'
+----
+PLACEHOLDER_ERROR_MESSAGE1967
 
 statement error
 PRAGMA memory_limit='0.01TEST'
+----
+PLACEHOLDER_ERROR_MESSAGE1966
 
 # we can't invoke it like this either
 statement error
 PRAGMA memory_limit
+----
+PLACEHOLDER_ERROR_MESSAGE1965
 
 statement error
 PRAGMA memory_limit()
+----
+PLACEHOLDER_ERROR_MESSAGE1964
 
 statement error
 PRAGMA memory_limit(1, 2)
+----
+PLACEHOLDER_ERROR_MESSAGE1963
 
 statement error
 PRAGMA memory_limit='blabla'
+----
+PLACEHOLDER_ERROR_MESSAGE1962

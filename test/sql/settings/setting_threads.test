@@ -9,8 +9,12 @@ SET ${thread_type} TO '3'
 
 statement error
 SET ${thread_type} TO '-1'
+----
+PLACEHOLDER_ERROR_MESSAGE226
 
 statement error
 SET ${thread_type} TO 'blabla'
+----
+PLACEHOLDER_ERROR_MESSAGE225
 
 endloop

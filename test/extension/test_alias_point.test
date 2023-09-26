@@ -39,9 +39,13 @@ SELECT sub_point(({'x': 2, 'y': 3})::POINT, ({'x': 3, 'y': 4})::POINT)
 
 statement error
 SELECT add_point(pt, pt) from points;
+----
+PLACEHOLDER_ERROR_MESSAGE1
 
 statement error
 SELECT sub_point(pt, pt) from points;
+----
+PLACEHOLDER_ERROR_MESSAGE0
 
 query I
 SELECT add_point(point, point) from points;

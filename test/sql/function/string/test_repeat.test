@@ -49,13 +49,21 @@ MotörHeadMotörHeadMotörHeadMotörHead
 # test incorrect usage of reverse
 statement error
 select REPEAT()
+----
+PLACEHOLDER_ERROR_MESSAGE2344
 
 statement error
 select REPEAT(1)
+----
+PLACEHOLDER_ERROR_MESSAGE2343
 
 statement error
 select REPEAT('hello', 'world')
+----
+PLACEHOLDER_ERROR_MESSAGE2342
 
 statement error
 select REPEAT('hello', 'world', 3)
+----
+PLACEHOLDER_ERROR_MESSAGE2341
 

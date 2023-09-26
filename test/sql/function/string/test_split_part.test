@@ -88,9 +88,14 @@ select split_part(NULL,',',1)
 # test incorrect usage
 statement error
 select split_part()
+----
+PLACEHOLDER_ERROR_MESSAGE2350
 
 statement error
 select split_part('a')
+----
+PLACEHOLDER_ERROR_MESSAGE2349
 
 statement error
-select split_part('a','a')
+select split_part('a','a')----
+PLACEHOLDER_ERROR_MESSAGE2348

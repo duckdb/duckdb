@@ -126,10 +126,16 @@ Hi
 # test incorrect usage of translate
 statement error
 select TRANSLATE(1)
+----
+PLACEHOLDER_ERROR_MESSAGE2411
 
 statement error
 select TRANSLATE(1, 2)
+----
+PLACEHOLDER_ERROR_MESSAGE2410
 
 statement error
 select TRANSLATE(1, 2, 3, 4)
+----
+PLACEHOLDER_ERROR_MESSAGE2409
 

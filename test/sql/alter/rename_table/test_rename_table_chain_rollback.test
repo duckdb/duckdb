@@ -47,12 +47,18 @@ SELECT * FROM entry
 
 statement error con2
 SELECT * FROM entry2
+----
+PLACEHOLDER_ERROR_MESSAGE2648
 
 statement error con2
 SELECT * FROM entry3
+----
+PLACEHOLDER_ERROR_MESSAGE2647
 
 statement error con2
 SELECT * FROM entry4
+----
+PLACEHOLDER_ERROR_MESSAGE2646
 
 statement ok con1
 ROLLBACK
@@ -64,5 +70,7 @@ SELECT * FROM entry
 
 statement error con2
 SELECT * FROM entry4
+----
+PLACEHOLDER_ERROR_MESSAGE2645
 
 

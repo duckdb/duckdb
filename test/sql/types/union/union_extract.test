@@ -4,6 +4,8 @@
 
 statement error
 SELECT union_extract(1, 'b');
+----
+PLACEHOLDER_ERROR_MESSAGE846
 
 query I
 SELECT union_extract(1::UNION(a INT, b FLOAT), 'a');

@@ -5,6 +5,8 @@
 # debug_window_mode
 statement error
 SET debug_window_mode='unknown';
+----
+PLACEHOLDER_ERROR_MESSAGE234
 
 # default_order
 foreach default_order ASC DESC
@@ -19,10 +21,14 @@ endloop
 
 statement error
 SET default_order='unknown';
+----
+PLACEHOLDER_ERROR_MESSAGE233
 
 # enable_external_access
 statement error
 SET enable_external_access=true
+----
+PLACEHOLDER_ERROR_MESSAGE232
 
 # enable_profiling
 statement ok
@@ -40,6 +46,8 @@ endloop
 
 statement error
 SET enable_profiling='unknown';
+----
+PLACEHOLDER_ERROR_MESSAGE231
 
 # enable_progress_bar
 statement ok
@@ -50,6 +58,8 @@ SET enable_progress_bar=true;
 
 statement error
 SET GLOBAL enable_progress_bar=true;
+----
+PLACEHOLDER_ERROR_MESSAGE230
 
 # explain_output
 foreach explain_output all optimized_only physical_only
@@ -64,3 +74,5 @@ endloop
 
 statement error
 SET explain_output='unknown';
+----
+PLACEHOLDER_ERROR_MESSAGE229

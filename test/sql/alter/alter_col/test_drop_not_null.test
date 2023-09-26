@@ -15,6 +15,8 @@ INSERT INTO test VALUES (1, 1), (2, 2)
 
 statement error
 INSERT INTO test VALUES (3, NULL)
+----
+PLACEHOLDER_ERROR_MESSAGE2608
 
 query II
 SELECT * FROM test
@@ -61,6 +63,8 @@ INSERT INTO test VALUES (1), (2)
 
 statement error
 INSERT INTO test VALUES (NULL)
+----
+PLACEHOLDER_ERROR_MESSAGE2607
 
 query II
 SELECT * FROM test

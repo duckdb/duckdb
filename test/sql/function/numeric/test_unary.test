@@ -52,22 +52,34 @@ INSERT INTO minima VALUES (-128, -32768, -2147483648, -9223372036854775808);
 
 statement error
 SELECT -t from minima;
+----
+PLACEHOLDER_ERROR_MESSAGE2119
 
 statement error
 SELECT -s from minima;
+----
+PLACEHOLDER_ERROR_MESSAGE2118
 
 statement error
 SELECT -i from minima;
+----
+PLACEHOLDER_ERROR_MESSAGE2117
 
 statement error
 SELECT -b from minima;
+----
+PLACEHOLDER_ERROR_MESSAGE2116
 
 # cannot apply these to a string
 statement error
 SELECT +'hello'
+----
+PLACEHOLDER_ERROR_MESSAGE2115
 
 statement error
 SELECT -'hello'
+----
+PLACEHOLDER_ERROR_MESSAGE2114
 
 # cannot apply these to a date either
 statement ok
@@ -78,6 +90,10 @@ INSERT INTO dates VALUES ('1992-02-02')
 
 statement error
 SELECT +d FROM dates
+----
+PLACEHOLDER_ERROR_MESSAGE2113
 
 statement error
 SELECT -d FROM dates
+----
+PLACEHOLDER_ERROR_MESSAGE2112

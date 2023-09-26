@@ -6,31 +6,47 @@
 
 statement error
 SELECT list_aggr([1], 2)
+----
+PLACEHOLDER_ERROR_MESSAGE2204
 
 statement error
 SELECT list_aggr([1], True)
+----
+PLACEHOLDER_ERROR_MESSAGE2203
 
 statement error
 SELECT list_aggr([1], NULL)
+----
+PLACEHOLDER_ERROR_MESSAGE2202
 
 foreach func_name approx_count_distinct avg favg bit_and bit_or bit_xor bool_and bool_or count entropy first arbitrary histogram kurtosis last mad max median min mode array_agg list product sem skewness string_agg group_concat sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 statement error
 SELECT list_aggr('${func_name}')
+----
+PLACEHOLDER_ERROR_MESSAGE2201
 
 statement error
 SELECT list_aggr(*, '${func_name}')
+----
+PLACEHOLDER_ERROR_MESSAGE2200
 
 statement error
 SELECT list_aggr('hello', '${func_name}')
+----
+PLACEHOLDER_ERROR_MESSAGE2199
 
 statement error
 SELECT list_aggr(1, 2, '${func_name}')
+----
+PLACEHOLDER_ERROR_MESSAGE2198
 
 foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval blob
 
 statement error
 SELECT list_aggr(NULL::${type}, '${func_name}')
+----
+PLACEHOLDER_ERROR_MESSAGE2197
 
 endloop
 
@@ -40,72 +56,119 @@ endloop
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'count_star');
+----
+PLACEHOLDER_ERROR_MESSAGE2196
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'corr');
+----
+PLACEHOLDER_ERROR_MESSAGE2195
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'covar_pop');
+----
+PLACEHOLDER_ERROR_MESSAGE2194
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'covar_samp');
+----
+PLACEHOLDER_ERROR_MESSAGE2193
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'regr_intercept');
+----
+PLACEHOLDER_ERROR_MESSAGE2192
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'regr_sxy');
+----
+PLACEHOLDER_ERROR_MESSAGE2191
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'regr_sxx');
+----
+PLACEHOLDER_ERROR_MESSAGE2190
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'regr_syy');
+----
+PLACEHOLDER_ERROR_MESSAGE2189
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'regr_r2');
+----
+PLACEHOLDER_ERROR_MESSAGE2188
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'regr_slope');
+----
+PLACEHOLDER_ERROR_MESSAGE2187
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'regr_count');
+----
+PLACEHOLDER_ERROR_MESSAGE2186
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'regr_avgy');
+----
+PLACEHOLDER_ERROR_MESSAGE2185
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'regr_avgx');
+----
+PLACEHOLDER_ERROR_MESSAGE2184
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'reservoir_quantile');
+----
+PLACEHOLDER_ERROR_MESSAGE2183
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'approx_quantile');
+----
+PLACEHOLDER_ERROR_MESSAGE2182
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'quantile');
+----
+PLACEHOLDER_ERROR_MESSAGE2181
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'quantile_cont');
+----
+PLACEHOLDER_ERROR_MESSAGE2180
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'quantile_disc');
+----
+PLACEHOLDER_ERROR_MESSAGE2179
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'arg_max');
+----
+PLACEHOLDER_ERROR_MESSAGE2178
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'max_by');
+----
+PLACEHOLDER_ERROR_MESSAGE2177
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'argmax');
+----
+PLACEHOLDER_ERROR_MESSAGE2176
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'arg_min');
+----
+PLACEHOLDER_ERROR_MESSAGE2175
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'min_by');
+----
+PLACEHOLDER_ERROR_MESSAGE2174
 
 statement error
-SELECT list_aggr([1, 2, NULL], 'argmin');
+SELECT list_aggr([1, 2, NULL], 'argmin');----
+PLACEHOLDER_ERROR_MESSAGE2173

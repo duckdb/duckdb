@@ -17,10 +17,14 @@ happy
 # Casts should fail if not in the enum
 statement error
 select 'awesome-bro'::mood;
+----
+PLACEHOLDER_ERROR_MESSAGE660
 
 # Non-String keys should fail
 statement error
 select 0::mood;
+----
+PLACEHOLDER_ERROR_MESSAGE659
 
 # Postgres accept empty ENUMs
 statement ok
@@ -29,6 +33,8 @@ CREATE TYPE bla AS ENUM ();
 #Enums with the same name shouldn't work
 statement error
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+----
+PLACEHOLDER_ERROR_MESSAGE658
 
 statement ok
 DROP TYPE bla;
@@ -36,14 +42,20 @@ DROP TYPE bla;
 # We should only accept strings
 statement error
 CREATE TYPE bla AS ENUM (1,2,3);
+----
+PLACEHOLDER_ERROR_MESSAGE657
 
 # Shouldn't accept NULL
 statement error
 CREATE TYPE bla AS ENUM ('sad',NULL);
+----
+PLACEHOLDER_ERROR_MESSAGE656
 
 # We don't accept repeated elements?
 statement error
 CREATE TYPE bla AS ENUM ('sad','sad');
+----
+PLACEHOLDER_ERROR_MESSAGE655
 
 # This should be case sensitive
 statement ok
@@ -69,6 +81,8 @@ DROP TYPE mood_2;
 #This won't work because mood was already deleted
 statement error
 DROP TYPE mood;
+----
+PLACEHOLDER_ERROR_MESSAGE654
 
 # We can create mood again
 statement ok
@@ -92,6 +106,8 @@ DROP TYPE IF EXISTS mood;
 # We shouldn't be able to add NULL values to ENUMs
 statement error
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy', NULL);
+----
+PLACEHOLDER_ERROR_MESSAGE653
 
 mode skip
 
@@ -122,9 +138,13 @@ select ['happy','ok','ok']::mood[]
 
 statement error
 select ['bla']::mood[]
+----
+PLACEHOLDER_ERROR_MESSAGE652
 
 statement error
 select [1]::mood[]
+----
+PLACEHOLDER_ERROR_MESSAGE651
 
 query I
 select []::mood[]
@@ -153,9 +173,13 @@ select {'a': 'happy'::mood, 'b': 1, 'c': 'ok'::mood};
 
 statement error
 select {'a': 'happy'::mood, 'b': 'bla'::mood};
+----
+PLACEHOLDER_ERROR_MESSAGE650
 
 statement error
 select {'a': 'bla'::mood};
+----
+PLACEHOLDER_ERROR_MESSAGE649
 
 query I
 select MAP([1,2,3,4],['happy','ok','ok','sad']::mood[])
@@ -164,3 +188,5 @@ select MAP([1,2,3,4],['happy','ok','ok','sad']::mood[])
 
 statement error
 select MAP([1,2,3,4],['bla','ok','ok','sad']::mood[])
+----
+PLACEHOLDER_ERROR_MESSAGE648

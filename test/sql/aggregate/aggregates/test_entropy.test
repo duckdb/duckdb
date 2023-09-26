@@ -11,6 +11,8 @@ PRAGMA verify_external
 #Corner cases
 statement error
 select entropy()
+----
+PLACEHOLDER_ERROR_MESSAGE1685
 
 query I
 select entropy(NULL)
@@ -24,6 +26,8 @@ select entropy(1)
 
 statement error
 select entropy(*)
+----
+PLACEHOLDER_ERROR_MESSAGE1684
 
 statement ok
 create table aggr(k int);

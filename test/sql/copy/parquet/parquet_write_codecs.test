@@ -43,11 +43,17 @@ SELECT * FROM parquet_scan('__TEST_DIR__/zstd.parquet');
 # unsupported codec
 statement error
 COPY (SELECT 42, 'hello') TO '__TEST_DIR__/gzip.parquet' (FORMAT 'parquet', CODEC 'BLABLABLA');
+----
+PLACEHOLDER_ERROR_MESSAGE2945
 
 # empty codec
 statement error
 COPY (SELECT 42, 'hello') TO '__TEST_DIR__/gzip.parquet' (FORMAT 'parquet', CODEC);
+----
+PLACEHOLDER_ERROR_MESSAGE2944
 
 # integer codec
 statement error
 COPY (SELECT 42, 'hello') TO '__TEST_DIR__/gzip.parquet' (FORMAT 'parquet', CODEC 3);
+----
+PLACEHOLDER_ERROR_MESSAGE2943

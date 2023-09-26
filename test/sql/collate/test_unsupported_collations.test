@@ -5,21 +5,33 @@
 # unrecognized collation
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE blabla)
+----
+PLACEHOLDER_ERROR_MESSAGE1407
 
 # non-varchar columns cannot have collations
 statement error
 CREATE TABLE collate_test(s INTEGER COLLATE blabla)
+----
+PLACEHOLDER_ERROR_MESSAGE1406
 
 # cannot combine these collations
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE NOACCENT.NOACCENT)
+----
+PLACEHOLDER_ERROR_MESSAGE1405
 
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE 1)
+----
+PLACEHOLDER_ERROR_MESSAGE1404
 
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE 'hello')
+----
+PLACEHOLDER_ERROR_MESSAGE1403
 
 statement error
 PRAGMA default_collation='blabla'
+----
+PLACEHOLDER_ERROR_MESSAGE1402
 

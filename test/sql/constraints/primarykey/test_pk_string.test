@@ -8,6 +8,8 @@ CREATE TABLE numbers(i varchar PRIMARY KEY, j INTEGER)
 # insert two conflicting pairs at the same time
 statement error
 INSERT INTO numbers VALUES ('1', 4), ('1', 5)
+----
+PLACEHOLDER_ERROR_MESSAGE1237
 
 # insert unique values
 statement ok
@@ -22,6 +24,8 @@ SELECT * FROM numbers
 # insert a duplicate value as part of a chain of values
 statement error
 INSERT INTO numbers VALUES ('6', 6), ('1', 4);
+----
+PLACEHOLDER_ERROR_MESSAGE1236
 
 # now insert just the first value
 statement ok
@@ -37,8 +41,12 @@ SELECT * FROM numbers
 # insert NULL value in PRIMARY KEY is not allowed
 statement error
 INSERT INTO numbers VALUES (NULL, 4);
+----
+PLACEHOLDER_ERROR_MESSAGE1235
 
 # update NULL is also not allowed
 statement error
 UPDATE numbers SET i=NULL;
+----
+PLACEHOLDER_ERROR_MESSAGE1234
 

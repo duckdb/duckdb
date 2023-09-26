@@ -24,6 +24,8 @@ ALTER TABLE test RENAME COLUMN i TO k
 # v1 does not work anymore: "i" does not exist
 statement error
 EXECUTE v1
+----
+PLACEHOLDER_ERROR_MESSAGE2687
 
 # v2 still works
 statement ok

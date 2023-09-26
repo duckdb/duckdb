@@ -5,6 +5,8 @@
 # incorrect usage
 statement error
 SELECT list_string_agg()
+----
+PLACEHOLDER_ERROR_MESSAGE2221
 
 # scalar values
 query T
