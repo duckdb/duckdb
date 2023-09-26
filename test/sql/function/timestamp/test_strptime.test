@@ -386,7 +386,10 @@ Conversion Error: Date out of range: 2001-2-30
 statement error
 SELECT strptime('2000-10-hello', '%Y-%m-%d')
 ----
-PLACEHOLDER_ERROR_MESSAGE2460
+Invalid Input Error: Could not parse string "2000-10-hello" according to format specifier "%Y-%m-%d"
+2000-10-hello
+        ^
+Error: Expected a number
 
 # incorrect hour
 statement error

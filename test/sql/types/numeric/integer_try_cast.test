@@ -208,7 +208,7 @@ Conversion Error: Could not cast value -2147483648 to DECIMAL(9,0)
 statement error
 SELECT i::DECIMAL(18,9)::INTEGER FROM integers ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE803
+Conversion Error: Could not cast value -2147483648 to DECIMAL(18,9)
 
 statement error
 SELECT i::DECIMAL(38,29)::INTEGER FROM integers ORDER BY i

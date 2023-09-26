@@ -299,7 +299,7 @@ select col['12:30:00'::TIME] from time_key;
 statement error
 create table time_key_dup as select MAP_FROM_ENTRIES(ARRAY[('12:30:00'::TIME, 'x'), ('12:30:00'::TIME, 'y')]) col;
 ----
-PLACEHOLDER_ERROR_MESSAGE874
+Invalid Input Error: Map keys have to be unique
 
 # -- TIMESTAMP --
 # Valid

@@ -436,7 +436,7 @@ Conversion Error: Date out of range: -166664648-9-5
 statement error
 select time_bucket('3 days'::interval, '2019-05-05'::date, '-2000000000 months'::interval);
 ----
-PLACEHOLDER_ERROR_MESSAGE2028
+Conversion Error: Date out of range: 166668686-1-5
 
 statement error
 select time_bucket('3 months'::interval, '2019-05-05'::date, '2000000000 months'::interval);

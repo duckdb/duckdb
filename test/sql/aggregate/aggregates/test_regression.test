@@ -157,7 +157,7 @@ Binder Error: No function matches the given name and argument types 'regr_sxx()'
 statement error
 select regr_sxx(0, 2e230*i) from range(5) tbl(i)
 ----
-PLACEHOLDER_ERROR_MESSAGE1594
+Out of Range Error: VARPOP is out of range!
 
 query I
 select regr_sxx(2e230*i, 0) from range(5) tbl(i)

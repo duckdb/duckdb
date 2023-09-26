@@ -155,7 +155,7 @@ ALTER TABLE song RENAME COLUMN songname TO songname_new;
 statement error
 ALTER TABLE song ALTER COLUMN songartist SET DATA TYPE TEXT;
 ----
-PLACEHOLDER_ERROR_MESSAGE1324
+Binder Error: Cannot change the type of a column that has a FOREIGN KEY constraint specified
 
 statement error
 ALTER TABLE album ALTER COLUMN artistid SET DATA TYPE TEXT;

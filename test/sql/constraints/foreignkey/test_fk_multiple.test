@@ -155,7 +155,7 @@ DROP TABLE fkt2
 statement error
 DROP TABLE pkt1
 ----
-PLACEHOLDER_ERROR_MESSAGE1355
+Catalog Error: Could not drop the table because this table is main key table of the table "fkt1"
 
 statement error
 DROP TABLE pkt2

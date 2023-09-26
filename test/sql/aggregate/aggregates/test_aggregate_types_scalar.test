@@ -166,7 +166,10 @@ Binder Error: No function matches the given name and argument types 'last()'. Yo
 statement error
 SELECT LAST(1, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE1623
+Binder Error: No function matches the given name and argument types 'last(INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	last(DECIMAL) -> DECIMAL
+	last(ANY) -> ANY
 
 query RRR
 SELECT AVG(1), AVG(NULL), AVG(33.3)

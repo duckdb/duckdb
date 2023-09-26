@@ -265,7 +265,7 @@ SELECT add_default5(3, b := 6)
 statement error
 SELECT add_default5(b := 6, 3)
 ----
-PLACEHOLDER_ERROR_MESSAGE1833
+Binder Error: Positional parameters cannot come after parameters with a default value!
 
 statement error
 CREATE MACRO wrong_order(a, b := 3, c)

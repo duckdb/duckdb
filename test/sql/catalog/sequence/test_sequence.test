@@ -453,7 +453,7 @@ Parser Error: MINVALUE (7) must be less than MAXVALUE (5)
 statement error
 CREATE SEQUENCE seq INCREMENT 0;
 ----
-PLACEHOLDER_ERROR_MESSAGE1919
+Parser Error: Increment must not be zero
 
 statement ok
 CREATE SEQUENCE seq;

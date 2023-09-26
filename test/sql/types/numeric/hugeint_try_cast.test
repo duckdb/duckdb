@@ -182,7 +182,7 @@ NULL
 statement error
 SELECT i::DECIMAL(3,0)::HUGEINT FROM hugeints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE731
+Conversion Error: Could not cast value -170141183460469231731687303715884105727 to DECIMAL(3,0)
 
 statement error
 SELECT i::DECIMAL(9,0)::HUGEINT FROM hugeints ORDER BY i

@@ -270,7 +270,7 @@ SELECT INTERVAL '1294967296months -1294967296months';
 statement error
 SELECT INTERVAL '-1294967296months -1294967296months';
 ----
-PLACEHOLDER_ERROR_MESSAGE525
+Out of Range Error: interval value is out of range
 
 # overflow in days
 statement error

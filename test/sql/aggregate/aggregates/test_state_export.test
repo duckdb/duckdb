@@ -255,7 +255,7 @@ Mismatch Type Error: Type AGGREGATE_STATE<sum(INTEGER)::HUGEINT> does not match 
 statement error
 SELECT COMBINE(SUM(42) EXPORT_STATE, 42);
 ----
-PLACEHOLDER_ERROR_MESSAGE1670
+Binder Error: Cannot COMBINE aggregate states from different functions, AGGREGATE_STATE<sum(INTEGER)::HUGEINT> <> INTEGER
 
 statement error
 SELECT COMBINE(SUM(42) EXPORT_STATE, 'ASDF'::BLOB);

@@ -152,7 +152,9 @@ LINE 2: SELECT 42;
 statement error
 SELECT 42; SELEC 42;
 ----
-PLACEHOLDER_ERROR_MESSAGE3082
+Parser Error: syntax error at or near "SELEC"
+LINE 1: SELECT 42; SELEC 42;
+                   ^
 
 # non-existent table
 statement error

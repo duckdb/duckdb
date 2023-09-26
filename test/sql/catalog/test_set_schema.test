@@ -272,7 +272,8 @@ SET SESSION schema = 'test';
 statement error
 DROP VIEW main.test_view
 ----
-PLACEHOLDER_ERROR_MESSAGE1878
+Catalog Error: View with name test_view does not exist!
+Did you mean "memory.test.test_view"?
 
 statement ok
 DROP VIEW test_view

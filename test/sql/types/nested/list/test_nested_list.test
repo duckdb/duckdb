@@ -345,5 +345,5 @@ Binder Error: UNNEST() requires a single argument
 statement error
 SELECT g FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1 where UNNEST(l) > 42
 ----
-PLACEHOLDER_ERROR_MESSAGE930
+Binder Error: UNNEST not supported here
 
