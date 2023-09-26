@@ -16,9 +16,36 @@
 
 namespace duckdb {
 
+//! Structure that holds information on the beginning of the first line and end of the last line read by this scanner
+//! This is mainly used for verification and to guarantee our parallel scanner read all lines correctly
 struct VerificationPositions {
 	idx_t beginning_of_first_line = 0;
 	idx_t end_of_last_line = 0;
+};
+
+//! Structure that holds information from the data a scanner should scan
+struct CSVIterator {
+	CSVIterator(idx_t file_idx_p, idx_t buffer_idx_p, idx_t buffer_pos_p, idx_t bytes_to_read_p)
+	    : file_idx(file_idx_p), start_buffer_idx(buffer_idx_p), start_buffer_pos(buffer_pos_p),
+	      buffer_idx(buffer_idx_p), buffer_pos(buffer_pos_p), bytes_to_read(bytes_to_read_p) {};
+	CSVIterator() {};
+
+	//! Resets the Iterator, only used in the sniffing where scanners must be restarted for dialect/type detection
+	void Reset();
+
+	//! File index where we start scanning [0-idx], a scanner can never go over one file.
+	const idx_t file_idx = 0;
+	//! Start Buffer index of the file where we start scanning
+	const idx_t start_buffer_idx = 0;
+	//! Start Buffer position of the buffer of the file where we start scanning
+	const idx_t start_buffer_pos = 0;
+	//! Current Buffer index of the file we are scanning
+	idx_t buffer_idx = 0;
+	//! Current Buffer position of the buffer of the file we are scanning
+	idx_t buffer_pos = 0;
+	//! How many bytes this CSV Scanner should read
+	//! If higher than the remainder of the file, will read the file in its entirety
+	idx_t bytes_to_read = NumericLimits<idx_t>::Maximum();
 };
 
 //! The CSV Scanner is what iterates over CSV Buffers
@@ -33,28 +60,34 @@ public:
 	//! This functions templates an operation over the CSV File
 	template <class OP, class T>
 	inline bool Process(CSVScanner &machine, T &result) {
+		if (csv_iterator.bytes_to_read == 0) {
+			//! Nothing to process, as we exhausted the bytes we can process in this scanner
+			return false;
+		}
 		OP::Initialize(machine);
 		//! If current buffer is not set we try to get a new one
 		if (!cur_buffer_handle) {
-			cur_pos = 0;
-			if (cur_buffer_idx == 0) {
-				cur_pos = buffer_manager->GetStartPos();
+			csv_iterator.buffer_pos = 0;
+			if (csv_iterator.buffer_idx == 0) {
+				csv_iterator.buffer_pos = buffer_manager->GetStartPos();
 			}
-			cur_buffer_handle = buffer_manager->GetBuffer(cur_file_idx, cur_buffer_idx++);
+			cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
 			D_ASSERT(cur_buffer_handle);
 		}
 		while (cur_buffer_handle) {
 			char *buffer_handle_ptr = cur_buffer_handle->Ptr();
-			while (cur_pos < cur_buffer_handle->actual_size) {
-				if (OP::Process(machine, result, buffer_handle_ptr[cur_pos], cur_pos)) {
+			while (csv_iterator.buffer_pos < cur_buffer_handle->actual_size) {
+				if (OP::Process(machine, result, buffer_handle_ptr[csv_iterator.buffer_pos], csv_iterator.buffer_pos) ||
+				    csv_iterator.bytes_to_read == 0) {
 					//! Not-Done Processing the File, but the Operator is happy!
 					OP::Finalize(machine, result);
 					return false;
 				}
-				cur_pos++;
+				csv_iterator.buffer_pos++;
+				csv_iterator.bytes_to_read--;
 			}
-			cur_buffer_handle = buffer_manager->GetBuffer(cur_file_idx, cur_buffer_idx++);
-			cur_pos = 0;
+			cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
+			csv_iterator.buffer_pos = 0;
 		}
 		//! Done Processing the File
 		OP::Finalize(machine, result);
@@ -84,44 +117,38 @@ public:
 	idx_t rows_read = 0;
 	idx_t line_start_pos = 0;
 
-	const idx_t initial_buffer_set = 0;
-	const idx_t scanner_id = 0;
-
 	//! Verifies if value is UTF8
 	void VerifyUTF8();
 
-	//! End of the piece of this buffer this thread should read
-	idx_t end_buffer = NumericLimits<idx_t>::Maximum();
-
 	//! Parses data into a parse_chunk (chunk where all columns are initially set to varchar)
 	void Parse(DataChunk &parse_chunk, VerificationPositions &verification_positions, const vector<LogicalType> &types);
+	//	idx_t GetBufferIndex();
 
-	idx_t GetBufferIndex();
-
-	idx_t GetTotalRowsEmmited();
+	//	idx_t GetTotalRowsEmmited();
 
 private:
-	idx_t cur_pos = 0;
-	idx_t cur_buffer_idx = 0;
-	idx_t cur_file_idx = 0;
+	//! Where this CSV Scanner starts
+	CSVIterator csv_iterator;
+	//! Shared pointer to the buffer_manager, this is shared across multiple scanners
 	shared_ptr<CSVBufferManager> buffer_manager;
+	//! Unique pointer to the buffer_handle, this is unique per scanner, since it also contains the necessary counters
+	//! To offload buffers to disk if necessary
 	unique_ptr<CSVBufferHandle> cur_buffer_handle;
-	unique_ptr<CSVStateMachine> state_machine;
-	bool start_set = false;
-	idx_t total_rows_emmited = 0;
+	//! Shared pointer to the state machine, this is used across multiple scanners
+	shared_ptr<CSVStateMachine> state_machine;
 
 	//! ------------- CSV Parsing -------------------//
 	//! The following set of functions and variables are related to actual CSV Parsing
 	//! Sets the start of a buffer. In Parallel CSV Reading, buffers can (and most likely will) start mid-line.
+
+	//! If we already set the start of this CSV Scanner (i.e., the next newline)
+	bool start_set = false;
 	//! This function walks the buffer until the first new valid line.
 	bool SetStart(VerificationPositions &verification_positions, const vector<LogicalType> &types);
 	//! Skips empty lines when reading the first buffer
 	void SkipEmptyLines();
 	//! Skips header when reading the first buffer
 	void SkipHeader();
-
-	//! Start of the piece of the buffer this thread should read
-	idx_t start_buffer = 0;
 };
 
 } // namespace duckdb

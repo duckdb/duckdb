@@ -3,7 +3,8 @@
 #include "duckdb/function/table/read_csv.hpp"
 namespace duckdb {
 
-CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOptions &options, vector<string> &file_path)
+CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOptions &options,
+                                   const vector<string> &file_path)
     : context(context_p), buffer_size(CSVBuffer::CSV_BUFFER_SIZE) {
 	D_ASSERT(!file_path.empty());
 	cached_buffers.resize(file_path.size());

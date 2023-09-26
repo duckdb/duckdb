@@ -8,16 +8,16 @@ namespace duckdb {
 
 CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p)
     : buffer_manager(std::move(buffer_manager_p)), state_machine(std::move(state_machine_p)) {
-	cur_pos = buffer_manager->GetStartPos();
+	csv_iterator.buffer_pos = buffer_manager->GetStartPos();
 };
 
-CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p,
-                       idx_t buffer_idx, idx_t start_buffer_p, idx_t end_buffer_p, idx_t scanner_id_p)
-    : buffer_manager(std::move(buffer_manager_p)), state_machine(std::move(state_machine_p)),
-      cur_buffer_idx(buffer_idx), start_buffer(start_buffer_p), end_buffer(end_buffer_p),
-      initial_buffer_set(buffer_idx), scanner_id(scanner_id_p) {
-	cur_pos = start_buffer;
-}
+// CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p,
+//                       idx_t buffer_idx, idx_t start_buffer_p, idx_t end_buffer_p, idx_t scanner_id_p)
+//    : buffer_manager(std::move(buffer_manager_p)), state_machine(std::move(state_machine_p)),
+//      cur_buffer_idx(buffer_idx), start_buffer(start_buffer_p), end_buffer(end_buffer_p),
+//      initial_buffer_set(buffer_idx), scanner_id(scanner_id_p) {
+//	cur_pos = start_buffer;
+//}
 
 //! Skips all empty lines, until a non-empty line shows up
 struct ProcessSkipEmptyLines {
@@ -47,7 +47,7 @@ void CSVScanner::SkipEmptyLines() {
 		// If we only have one column, empty lines are null data.
 		return;
 	}
-	Process<ProcessSkipEmptyLines>(*this, cur_pos);
+	Process<ProcessSkipEmptyLines>(*this, csv_iterator.buffer_pos);
 }
 
 //! Moves the buffer until the next new line
@@ -78,7 +78,7 @@ void CSVScanner::SkipHeader() {
 		// No header to skip
 		return;
 	}
-	Process<SkipUntilNewLine>(*this, cur_pos);
+	Process<SkipUntilNewLine>(*this, csv_iterator.buffer_pos);
 }
 
 bool CSVScanner::SetStart(VerificationPositions &verification_positions, const vector<LogicalType> &types) {
@@ -86,17 +86,17 @@ bool CSVScanner::SetStart(VerificationPositions &verification_positions, const v
 		return true;
 	}
 	start_set = true;
-	if (cur_buffer_idx == 0 && start_buffer <= buffer_manager->GetStartPos()) {
+	if (csv_iterator.buffer_idx == 0 && csv_iterator.buffer_pos <= buffer_manager->GetStartPos()) {
 		// This means this is the very first buffer
-		// This CSV is not from auto-detect so we don't know where exactly it starts
+		// This CSV is not from auto-detect, so we don't know where exactly it starts
 		// Hence we potentially have to skip empty lines and headers.
 		SkipEmptyLines();
 		SkipHeader();
 		SkipEmptyLines();
 		if (verification_positions.beginning_of_first_line == 0) {
-			verification_positions.beginning_of_first_line = cur_pos;
+			verification_positions.beginning_of_first_line = csv_iterator.buffer_pos;
 		}
-		verification_positions.end_of_last_line = cur_pos;
+		verification_positions.end_of_last_line = csv_iterator.buffer_pos;
 		return true;
 	}
 
@@ -104,20 +104,20 @@ bool CSVScanner::SetStart(VerificationPositions &verification_positions, const v
 	bool success = false;
 	while (!Finished()) {
 		// 1. We walk until the next new line
-		Process<SkipUntilNewLine>(*this, cur_pos);
-		idx_t position_being_checked = cur_pos;
+		Process<SkipUntilNewLine>(*this, csv_iterator.buffer_pos);
+		idx_t position_being_checked = csv_iterator.buffer_pos;
 		vector<TupleOfValues> tuples(1);
 		Process<ParseValues>(*this, tuples);
 		if (!tuples.empty()) {
 			// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
-			cur_pos = position_being_checked;
+			csv_iterator.buffer_pos = position_being_checked;
 			continue;
 		}
 		vector<Value> &values = tuples[0].values;
 
 		if (values.size() != state_machine->options.dialect_options.num_cols) {
 			// If columns don't match, this is not the correct start, we need to skip until the next new line
-			cur_pos = position_being_checked;
+			csv_iterator.buffer_pos = position_being_checked;
 			continue;
 		}
 		// 2. We try to cast all columns to the correct types
@@ -129,7 +129,7 @@ bool CSVScanner::SetStart(VerificationPositions &verification_positions, const v
 				break;
 			};
 		}
-		cur_pos = position_being_checked;
+		csv_iterator.buffer_pos = position_being_checked;
 		if (all_cast) {
 			// We found the start of the line, yay
 			success = true;
@@ -138,9 +138,9 @@ bool CSVScanner::SetStart(VerificationPositions &verification_positions, const v
 	}
 	// We have to move position up to next new line
 	if (verification_positions.beginning_of_first_line == 0) {
-		verification_positions.beginning_of_first_line = cur_pos;
+		verification_positions.beginning_of_first_line = csv_iterator.buffer_pos;
 	}
-	verification_positions.end_of_last_line = cur_pos;
+	verification_positions.end_of_last_line = csv_iterator.buffer_pos;
 	return success;
 }
 
@@ -155,31 +155,36 @@ void CSVScanner::Parse(DataChunk &parse_chunk, VerificationPositions &verificati
 	// Now we do the actual parsing
 	// TODO: Check for errors.
 	Process<ParseChunk>(*this, parse_chunk);
-	total_rows_emmited += parse_chunk.size();
+	//	total_rows_emmited += parse_chunk.size();
 }
 
-idx_t CSVScanner::GetBufferIndex() {
-	return cur_buffer_idx - 1;
-}
+// idx_t CSVScanner::GetBufferIndex() {
+//	return cur_buffer_idx - 1;
+//}
 
-idx_t CSVScanner::GetTotalRowsEmmited() {
-	return total_rows_emmited;
-}
+// idx_t CSVScanner::GetTotalRowsEmmited() {
+//	return total_rows_emmited;
+//}
 
 bool CSVScanner::Finished() {
-	return !cur_buffer_handle && cur_buffer_idx > 0;
+	// We consider the scanner done, if there is no buffer handle for a given buffer_idx (i.e., we are done scanning
+	// the file) OR if we exhausted the bytes we were supposed to read
+	return (!cur_buffer_handle && csv_iterator.buffer_idx > 0) || csv_iterator.bytes_to_read == 0;
+}
+
+void CSVIterator::Reset() {
+	buffer_idx = start_buffer_idx;
+	buffer_pos = start_buffer_pos;
+	bytes_to_read = NumericLimits<idx_t>::Maximum();
 }
 
 void CSVScanner::Reset() {
 	if (cur_buffer_handle) {
 		cur_buffer_handle.reset();
 	}
-	if (cur_buffer_idx > 0) {
-		buffer_manager->UnpinBuffer(cur_file_idx, cur_buffer_idx - 1);
-	}
-	cur_buffer_idx = 0;
+	csv_iterator.Reset();
+
 	buffer_manager->Initialize();
-	cur_pos = buffer_manager->GetStartPos();
 }
 
 CSVStateMachineSniffing &CSVScanner::GetStateMachineSniff() {

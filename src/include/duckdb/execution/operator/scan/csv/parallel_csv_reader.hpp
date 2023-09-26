@@ -21,13 +21,11 @@ namespace duckdb {
 class ParallelCSVReader : public BaseCSVReader {
 public:
 	ParallelCSVReader(ClientContext &context, CSVReaderOptions options_p, const vector<LogicalType> &requested_types,
-	                  idx_t file_idx_p, unique_ptr<CSVScanner> scanner);
+	                  unique_ptr<CSVScanner> scanner);
 	~ParallelCSVReader() override {
 	}
 
 	bool finished = false;
-
-	idx_t file_idx;
 
 	VerificationPositions GetVerificationPositions();
 

@@ -106,7 +106,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		options.file_path = result->files[0];
 		// Initialize Buffer Manager and Sniffer
 		auto file_handle = BaseCSVReader::OpenCSV(context, options);
-		result->buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), options);
+		result->buffer_manager = make_shared<CSVBufferManager>(context, options, result->files);
 		CSVSniffer sniffer(options, result->buffer_manager, result->state_machine_cache, explicitly_set_columns);
 		auto sniffer_result = sniffer.SniffCSV();
 		if (names.empty()) {
@@ -182,8 +182,6 @@ public:
 			// If our buffers are too small, and we skip too many rows there is a chance things will go over-buffer
 			// for now don't reuse the buffer manager
 			buffer_manager.reset();
-			file_handle = ReadCSV::OpenCSV(current_file_path, options.compression, context);
-			file_handle_ptr = file_handle.get();
 		} else {
 			file_handle_ptr = buffer_manager->file_handle.get();
 		}
@@ -241,7 +239,6 @@ public:
 
 	double GetProgress(const ReadCSVData &bind_data) const {
 		idx_t total_files = bind_data.files.size();
-
 		// get the progress WITHIN the current file
 		double progress;
 		if (file_size == 0) {
@@ -261,8 +258,6 @@ private:
 
 	//! The index of the next file to read (i.e. current file + 1)
 	idx_t file_index = 1;
-	string current_file_path;
-
 	//! Mutex to lock when getting next batch of bytes (Parallel Only)
 	mutex main_mutex;
 	//! Byte set from for last thread
@@ -283,6 +278,7 @@ private:
 	idx_t first_position = 0;
 	//! Current File Number
 	idx_t max_tuple_end = 0;
+
 	//! The vector stores positions where threads ended the last line they read in the CSV File, and the set stores
 	//! Positions where they started reading the first line.
 	vector<vector<idx_t>> tuple_end;
@@ -298,8 +294,6 @@ private:
 	LineInfo line_info;
 	//! Current Buffer index
 	idx_t cur_buffer_idx = 0;
-	//! Only used if we don't run auto_detection first
-	unique_ptr<CSVFileHandle> file_handle;
 };
 
 idx_t ParallelCSVGlobalState::MaxThreads() const {
@@ -396,30 +390,27 @@ void LineInfo::Verify(idx_t file_idx, idx_t batch_idx, idx_t cur_first_pos) {
 bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bind_data,
                                   unique_ptr<ParallelCSVReader> &reader) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	if (!buffer_manager && file_handle) {
-		buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), bind_data.options);
+	if (!buffer_manager) {
+		buffer_manager = make_shared<CSVBufferManager>(context, bind_data.options, bind_data.files);
 	}
 	if (!buffer_manager) {
 		return false;
 	}
-	auto current_buffer = buffer_manager->GetBuffer(cur_buffer_idx);
-	auto next_buffer = buffer_manager->GetBuffer(cur_buffer_idx + 1);
+	auto current_buffer = buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx);
+	auto next_buffer = buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx + 1);
 
 	if (!current_buffer) {
 		// This means we are done with the current file, we need to go to the next one (if exists).
 		if (file_index < bind_data.files.size()) {
 			current_file_path = bind_data.files[file_index];
-			file_handle = ReadCSV::OpenCSV(current_file_path, bind_data.options.compression, context);
-			buffer_manager =
-			    make_shared<CSVBufferManager>(context, std::move(file_handle), bind_data.options, file_index);
 			cur_buffer_idx = 0;
 			first_position = 0;
 			local_batch_index = 0;
 
 			line_info.lines_read[file_index++][local_batch_index] = (bind_data.options.has_header ? 1 : 0);
 
-			current_buffer = buffer_manager->GetBuffer(cur_buffer_idx);
-			next_buffer = buffer_manager->GetBuffer(cur_buffer_idx + 1);
+			current_buffer = buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx);
+			next_buffer = buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx + 1);
 		} else {
 			// We are done scanning.
 			reader.reset();
@@ -429,9 +420,10 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 	// set up the current buffer
 	line_info.current_batches[file_index - 1].insert(local_batch_index);
 	idx_t bytes_per_local_state = current_buffer->actual_size / MaxThreads() + 1;
-	auto result = make_uniq<CSVBufferRead>(
-	    buffer_manager->GetBuffer(cur_buffer_idx), buffer_manager->GetBuffer(cur_buffer_idx + 1), next_byte,
-	    next_byte + bytes_per_local_state, batch_index++, local_batch_index++, &line_info);
+	auto result =
+	    make_uniq<CSVBufferRead>(buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx),
+	                             buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx + 1), next_byte,
+	                             next_byte + bytes_per_local_state, batch_index++, local_batch_index++, &line_info);
 	// move the byte index of the CSV reader to the next buffer
 	next_byte += bytes_per_local_state;
 	if (next_byte >= current_buffer->actual_size) {
@@ -442,7 +434,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		cur_buffer_idx++;
 		if (current_buffer) {
 			// Next buffer gets the next-next buffer
-			next_buffer = buffer_manager->GetBuffer(cur_buffer_idx + 1);
+			next_buffer = buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx + 1);
 		}
 	}
 	if (!reader || reader->options.file_path != current_file_path) {

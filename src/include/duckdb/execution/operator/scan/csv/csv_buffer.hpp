@@ -26,6 +26,12 @@ public:
 	CSVBufferHandle()
 	    : actual_size(0), is_first_buffer(false), is_last_buffer(false), csv_global_start(0), start_position(0),
 	      file_idx(0) {};
+	~CSVBufferHandle() {
+		// unpinning the buffer should be magically done, i dont want to deal with this outside here
+		//		if (cur_buffer_idx > 0) {
+		//		buffer_manager->UnpinBuffer(cur_file_idx, cur_buffer_idx - 1);
+		//	}
+	}
 	//! Handle created during allocation
 	BufferHandle handle;
 	const idx_t actual_size;
@@ -34,6 +40,7 @@ public:
 	const idx_t csv_global_start;
 	const idx_t start_position;
 	const idx_t file_idx;
+	const idx_t buffer_idx;
 	inline char *Ptr() {
 		return char_ptr_cast(handle.Ptr());
 	}

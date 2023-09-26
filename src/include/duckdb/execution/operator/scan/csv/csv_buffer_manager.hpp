@@ -21,7 +21,7 @@ class CSVStateMachine;
 //! A CSV Buffer Managers, holds all buffers for all csv files used within a CSV Scanner
 class CSVBufferManager {
 public:
-	CSVBufferManager(ClientContext &context, const CSVReaderOptions &options, vector<string> &file_path);
+	CSVBufferManager(ClientContext &context, const CSVReaderOptions &options, const vector<string> &file_path);
 	//! Returns a buffer from a buffer id (starting from 0). If it's in the auto-detection then we cache new buffers
 	//! Otherwise we remove them from the cache if they are already there, or just return them bypassing the cache.
 	unique_ptr<CSVBufferHandle> GetBuffer(const idx_t file_idx, const idx_t pos);
