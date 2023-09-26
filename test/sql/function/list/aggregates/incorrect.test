@@ -55,9 +55,7 @@ foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint us
 statement error
 SELECT list_aggr(NULL::${type}, '${func_name}')
 ----
-Binder Error: No function matches the given name and argument types 'list_aggr(BOOLEAN, VARCHAR)'. You might need to add explicit type casts.
-	Candidate functions:
-	list_aggr(ANY[], VARCHAR) -> ANY
+Binder Error: No function matches the given name and argument types
 
 endloop
 
@@ -68,119 +66,744 @@ endloop
 statement error
 SELECT list_aggr([1, 2, NULL], 'count_star');
 ----
-PLACEHOLDER_ERROR_MESSAGE2196
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'count_star(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	count_star() -> BIGINT
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'corr');
 ----
-PLACEHOLDER_ERROR_MESSAGE2195
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'corr(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	corr(DOUBLE, DOUBLE) -> DOUBLE
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'covar_pop');
 ----
-PLACEHOLDER_ERROR_MESSAGE2194
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'covar_pop(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	covar_pop(DOUBLE, DOUBLE) -> DOUBLE
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'covar_samp');
 ----
-PLACEHOLDER_ERROR_MESSAGE2193
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'covar_samp(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	covar_samp(DOUBLE, DOUBLE) -> DOUBLE
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'regr_intercept');
 ----
-PLACEHOLDER_ERROR_MESSAGE2192
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'regr_intercept(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	regr_intercept(DOUBLE, DOUBLE) -> DOUBLE
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'regr_sxy');
 ----
-PLACEHOLDER_ERROR_MESSAGE2191
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'regr_sxy(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	regr_sxy(DOUBLE, DOUBLE) -> DOUBLE
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'regr_sxx');
 ----
-PLACEHOLDER_ERROR_MESSAGE2190
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'regr_sxx(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	regr_sxx(DOUBLE, DOUBLE) -> DOUBLE
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'regr_syy');
 ----
-PLACEHOLDER_ERROR_MESSAGE2189
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'regr_syy(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	regr_syy(DOUBLE, DOUBLE) -> DOUBLE
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'regr_r2');
 ----
-PLACEHOLDER_ERROR_MESSAGE2188
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'regr_r2(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	regr_r2(DOUBLE, DOUBLE) -> DOUBLE
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'regr_slope');
 ----
-PLACEHOLDER_ERROR_MESSAGE2187
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'regr_slope(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	regr_slope(DOUBLE, DOUBLE) -> DOUBLE
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'regr_count');
 ----
-PLACEHOLDER_ERROR_MESSAGE2186
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'regr_count(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	regr_count(DOUBLE, DOUBLE) -> UINTEGER
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'regr_avgy');
 ----
-PLACEHOLDER_ERROR_MESSAGE2185
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'regr_avgy(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	regr_avgy(DOUBLE, DOUBLE) -> DOUBLE
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'regr_avgx');
 ----
-PLACEHOLDER_ERROR_MESSAGE2184
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'regr_avgx(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	regr_avgx(DOUBLE, DOUBLE) -> DOUBLE
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'reservoir_quantile');
 ----
-PLACEHOLDER_ERROR_MESSAGE2183
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'reservoir_quantile(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	reservoir_quantile(DECIMAL, DOUBLE) -> DECIMAL
+	reservoir_quantile(DECIMAL, DOUBLE, INTEGER) -> DECIMAL
+	reservoir_quantile(DECIMAL, DOUBLE[]) -> DECIMAL[]
+	reservoir_quantile(DECIMAL, DOUBLE[], INTEGER) -> DECIMAL[]
+	reservoir_quantile(TINYINT, DOUBLE) -> TINYINT
+	reservoir_quantile(TINYINT, DOUBLE, INTEGER) -> TINYINT
+	reservoir_quantile(TINYINT, DOUBLE[]) -> TINYINT[]
+	reservoir_quantile(TINYINT, DOUBLE[], INTEGER) -> TINYINT[]
+	reservoir_quantile(SMALLINT, DOUBLE) -> SMALLINT
+	reservoir_quantile(SMALLINT, DOUBLE, INTEGER) -> SMALLINT
+	reservoir_quantile(SMALLINT, DOUBLE[]) -> SMALLINT[]
+	reservoir_quantile(SMALLINT, DOUBLE[], INTEGER) -> SMALLINT[]
+	reservoir_quantile(INTEGER, DOUBLE) -> INTEGER
+	reservoir_quantile(INTEGER, DOUBLE, INTEGER) -> INTEGER
+	reservoir_quantile(INTEGER, DOUBLE[]) -> INTEGER[]
+	reservoir_quantile(INTEGER, DOUBLE[], INTEGER) -> INTEGER[]
+	reservoir_quantile(BIGINT, DOUBLE) -> BIGINT
+	reservoir_quantile(BIGINT, DOUBLE, INTEGER) -> BIGINT
+	reservoir_quantile(BIGINT, DOUBLE[]) -> BIGINT[]
+	reservoir_quantile(BIGINT, DOUBLE[], INTEGER) -> BIGINT[]
+	reservoir_quantile(HUGEINT, DOUBLE) -> HUGEINT
+	reservoir_quantile(HUGEINT, DOUBLE, INTEGER) -> HUGEINT
+	reservoir_quantile(HUGEINT, DOUBLE[]) -> HUGEINT[]
+	reservoir_quantile(HUGEINT, DOUBLE[], INTEGER) -> HUGEINT[]
+	reservoir_quantile(FLOAT, DOUBLE) -> FLOAT
+	reservoir_quantile(FLOAT, DOUBLE, INTEGER) -> FLOAT
+	reservoir_quantile(FLOAT, DOUBLE[]) -> FLOAT[]
+	reservoir_quantile(FLOAT, DOUBLE[], INTEGER) -> FLOAT[]
+	reservoir_quantile(DOUBLE, DOUBLE) -> DOUBLE
+	reservoir_quantile(DOUBLE, DOUBLE, INTEGER) -> DOUBLE
+	reservoir_quantile(DOUBLE, DOUBLE[]) -> DOUBLE[]
+	reservoir_quantile(DOUBLE, DOUBLE[], INTEGER) -> DOUBLE[]
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'approx_quantile');
 ----
-PLACEHOLDER_ERROR_MESSAGE2182
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'approx_quantile(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	approx_quantile(DECIMAL, FLOAT) -> DECIMAL
+	approx_quantile(SMALLINT, FLOAT) -> SMALLINT
+	approx_quantile(INTEGER, FLOAT) -> INTEGER
+	approx_quantile(BIGINT, FLOAT) -> BIGINT
+	approx_quantile(HUGEINT, FLOAT) -> HUGEINT
+	approx_quantile(DOUBLE, FLOAT) -> DOUBLE
+	approx_quantile(DECIMAL, FLOAT[]) -> DECIMAL[]
+	approx_quantile(TINYINT, FLOAT[]) -> TINYINT[]
+	approx_quantile(SMALLINT, FLOAT[]) -> SMALLINT[]
+	approx_quantile(INTEGER, FLOAT[]) -> INTEGER[]
+	approx_quantile(BIGINT, FLOAT[]) -> BIGINT[]
+	approx_quantile(HUGEINT, FLOAT[]) -> HUGEINT[]
+	approx_quantile(FLOAT, FLOAT[]) -> FLOAT[]
+	approx_quantile(DOUBLE, FLOAT[]) -> DOUBLE[]
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'quantile');
 ----
-PLACEHOLDER_ERROR_MESSAGE2181
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'quantile(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	quantile(DECIMAL, DOUBLE) -> DECIMAL
+	quantile(DECIMAL, DOUBLE[]) -> DECIMAL[]
+	quantile(TINYINT, DOUBLE) -> TINYINT
+	quantile(TINYINT, DOUBLE[]) -> TINYINT[]
+	quantile(SMALLINT, DOUBLE) -> SMALLINT
+	quantile(SMALLINT, DOUBLE[]) -> SMALLINT[]
+	quantile(INTEGER, DOUBLE) -> INTEGER
+	quantile(INTEGER, DOUBLE[]) -> INTEGER[]
+	quantile(BIGINT, DOUBLE) -> BIGINT
+	quantile(BIGINT, DOUBLE[]) -> BIGINT[]
+	quantile(HUGEINT, DOUBLE) -> HUGEINT
+	quantile(HUGEINT, DOUBLE[]) -> HUGEINT[]
+	quantile(FLOAT, DOUBLE) -> FLOAT
+	quantile(FLOAT, DOUBLE[]) -> FLOAT[]
+	quantile(DOUBLE, DOUBLE) -> DOUBLE
+	quantile(DOUBLE, DOUBLE[]) -> DOUBLE[]
+	quantile(DATE, DOUBLE) -> DATE
+	quantile(DATE, DOUBLE[]) -> DATE[]
+	quantile(TIMESTAMP, DOUBLE) -> TIMESTAMP
+	quantile(TIMESTAMP, DOUBLE[]) -> TIMESTAMP[]
+	quantile(TIME, DOUBLE) -> TIME
+	quantile(TIME, DOUBLE[]) -> TIME[]
+	quantile(TIMESTAMP WITH TIME ZONE, DOUBLE) -> TIMESTAMP WITH TIME ZONE
+	quantile(TIMESTAMP WITH TIME ZONE, DOUBLE[]) -> TIMESTAMP WITH TIME ZONE[]
+	quantile(TIME WITH TIME ZONE, DOUBLE) -> TIME WITH TIME ZONE
+	quantile(TIME WITH TIME ZONE, DOUBLE[]) -> TIME WITH TIME ZONE[]
+	quantile(INTERVAL, DOUBLE) -> INTERVAL
+	quantile(INTERVAL, DOUBLE[]) -> INTERVAL[]
+	quantile(VARCHAR, DOUBLE) -> VARCHAR
+	quantile(VARCHAR, DOUBLE[]) -> VARCHAR[]
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'quantile_cont');
 ----
-PLACEHOLDER_ERROR_MESSAGE2180
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'quantile_cont(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	quantile_cont(DECIMAL, DOUBLE) -> DECIMAL
+	quantile_cont(DECIMAL, DOUBLE[]) -> DECIMAL[]
+	quantile_cont(TINYINT, DOUBLE) -> DOUBLE
+	quantile_cont(TINYINT, DOUBLE[]) -> DOUBLE[]
+	quantile_cont(SMALLINT, DOUBLE) -> DOUBLE
+	quantile_cont(SMALLINT, DOUBLE[]) -> DOUBLE[]
+	quantile_cont(INTEGER, DOUBLE) -> DOUBLE
+	quantile_cont(INTEGER, DOUBLE[]) -> DOUBLE[]
+	quantile_cont(BIGINT, DOUBLE) -> DOUBLE
+	quantile_cont(BIGINT, DOUBLE[]) -> DOUBLE[]
+	quantile_cont(HUGEINT, DOUBLE) -> DOUBLE
+	quantile_cont(HUGEINT, DOUBLE[]) -> DOUBLE[]
+	quantile_cont(FLOAT, DOUBLE) -> FLOAT
+	quantile_cont(FLOAT, DOUBLE[]) -> FLOAT[]
+	quantile_cont(DOUBLE, DOUBLE) -> DOUBLE
+	quantile_cont(DOUBLE, DOUBLE[]) -> DOUBLE[]
+	quantile_cont(DATE, DOUBLE) -> TIMESTAMP
+	quantile_cont(DATE, DOUBLE[]) -> TIMESTAMP[]
+	quantile_cont(TIMESTAMP, DOUBLE) -> TIMESTAMP
+	quantile_cont(TIMESTAMP, DOUBLE[]) -> TIMESTAMP[]
+	quantile_cont(TIME, DOUBLE) -> TIME
+	quantile_cont(TIME, DOUBLE[]) -> TIME[]
+	quantile_cont(TIMESTAMP WITH TIME ZONE, DOUBLE) -> TIMESTAMP WITH TIME ZONE
+	quantile_cont(TIMESTAMP WITH TIME ZONE, DOUBLE[]) -> TIMESTAMP WITH TIME ZONE[]
+	quantile_cont(TIME WITH TIME ZONE, DOUBLE) -> TIME WITH TIME ZONE
+	quantile_cont(TIME WITH TIME ZONE, DOUBLE[]) -> TIME WITH TIME ZONE[]
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'quantile_disc');
 ----
-PLACEHOLDER_ERROR_MESSAGE2179
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'quantile_disc(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	quantile_disc(DECIMAL, DOUBLE) -> DECIMAL
+	quantile_disc(DECIMAL, DOUBLE[]) -> DECIMAL[]
+	quantile_disc(TINYINT, DOUBLE) -> TINYINT
+	quantile_disc(TINYINT, DOUBLE[]) -> TINYINT[]
+	quantile_disc(SMALLINT, DOUBLE) -> SMALLINT
+	quantile_disc(SMALLINT, DOUBLE[]) -> SMALLINT[]
+	quantile_disc(INTEGER, DOUBLE) -> INTEGER
+	quantile_disc(INTEGER, DOUBLE[]) -> INTEGER[]
+	quantile_disc(BIGINT, DOUBLE) -> BIGINT
+	quantile_disc(BIGINT, DOUBLE[]) -> BIGINT[]
+	quantile_disc(HUGEINT, DOUBLE) -> HUGEINT
+	quantile_disc(HUGEINT, DOUBLE[]) -> HUGEINT[]
+	quantile_disc(FLOAT, DOUBLE) -> FLOAT
+	quantile_disc(FLOAT, DOUBLE[]) -> FLOAT[]
+	quantile_disc(DOUBLE, DOUBLE) -> DOUBLE
+	quantile_disc(DOUBLE, DOUBLE[]) -> DOUBLE[]
+	quantile_disc(DATE, DOUBLE) -> DATE
+	quantile_disc(DATE, DOUBLE[]) -> DATE[]
+	quantile_disc(TIMESTAMP, DOUBLE) -> TIMESTAMP
+	quantile_disc(TIMESTAMP, DOUBLE[]) -> TIMESTAMP[]
+	quantile_disc(TIME, DOUBLE) -> TIME
+	quantile_disc(TIME, DOUBLE[]) -> TIME[]
+	quantile_disc(TIMESTAMP WITH TIME ZONE, DOUBLE) -> TIMESTAMP WITH TIME ZONE
+	quantile_disc(TIMESTAMP WITH TIME ZONE, DOUBLE[]) -> TIMESTAMP WITH TIME ZONE[]
+	quantile_disc(TIME WITH TIME ZONE, DOUBLE) -> TIME WITH TIME ZONE
+	quantile_disc(TIME WITH TIME ZONE, DOUBLE[]) -> TIME WITH TIME ZONE[]
+	quantile_disc(INTERVAL, DOUBLE) -> INTERVAL
+	quantile_disc(INTERVAL, DOUBLE[]) -> INTERVAL[]
+	quantile_disc(VARCHAR, DOUBLE) -> VARCHAR
+	quantile_disc(VARCHAR, DOUBLE[]) -> VARCHAR[]
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'arg_max');
 ----
-PLACEHOLDER_ERROR_MESSAGE2178
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'arg_max(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	arg_max(INTEGER, INTEGER) -> INTEGER
+	arg_max(INTEGER, BIGINT) -> INTEGER
+	arg_max(INTEGER, DOUBLE) -> INTEGER
+	arg_max(INTEGER, VARCHAR) -> INTEGER
+	arg_max(INTEGER, DATE) -> INTEGER
+	arg_max(INTEGER, TIMESTAMP) -> INTEGER
+	arg_max(INTEGER, TIMESTAMP WITH TIME ZONE) -> INTEGER
+	arg_max(INTEGER, BLOB) -> INTEGER
+	arg_max(BIGINT, INTEGER) -> BIGINT
+	arg_max(BIGINT, BIGINT) -> BIGINT
+	arg_max(BIGINT, DOUBLE) -> BIGINT
+	arg_max(BIGINT, VARCHAR) -> BIGINT
+	arg_max(BIGINT, DATE) -> BIGINT
+	arg_max(BIGINT, TIMESTAMP) -> BIGINT
+	arg_max(BIGINT, TIMESTAMP WITH TIME ZONE) -> BIGINT
+	arg_max(BIGINT, BLOB) -> BIGINT
+	arg_max(DOUBLE, INTEGER) -> DOUBLE
+	arg_max(DOUBLE, BIGINT) -> DOUBLE
+	arg_max(DOUBLE, DOUBLE) -> DOUBLE
+	arg_max(DOUBLE, VARCHAR) -> DOUBLE
+	arg_max(DOUBLE, DATE) -> DOUBLE
+	arg_max(DOUBLE, TIMESTAMP) -> DOUBLE
+	arg_max(DOUBLE, TIMESTAMP WITH TIME ZONE) -> DOUBLE
+	arg_max(DOUBLE, BLOB) -> DOUBLE
+	arg_max(VARCHAR, INTEGER) -> VARCHAR
+	arg_max(VARCHAR, BIGINT) -> VARCHAR
+	arg_max(VARCHAR, DOUBLE) -> VARCHAR
+	arg_max(VARCHAR, VARCHAR) -> VARCHAR
+	arg_max(VARCHAR, DATE) -> VARCHAR
+	arg_max(VARCHAR, TIMESTAMP) -> VARCHAR
+	arg_max(VARCHAR, TIMESTAMP WITH TIME ZONE) -> VARCHAR
+	arg_max(VARCHAR, BLOB) -> VARCHAR
+	arg_max(DATE, INTEGER) -> DATE
+	arg_max(DATE, BIGINT) -> DATE
+	arg_max(DATE, DOUBLE) -> DATE
+	arg_max(DATE, VARCHAR) -> DATE
+	arg_max(DATE, DATE) -> DATE
+	arg_max(DATE, TIMESTAMP) -> DATE
+	arg_max(DATE, TIMESTAMP WITH TIME ZONE) -> DATE
+	arg_max(DATE, BLOB) -> DATE
+	arg_max(TIMESTAMP, INTEGER) -> TIMESTAMP
+	arg_max(TIMESTAMP, BIGINT) -> TIMESTAMP
+	arg_max(TIMESTAMP, DOUBLE) -> TIMESTAMP
+	arg_max(TIMESTAMP, VARCHAR) -> TIMESTAMP
+	arg_max(TIMESTAMP, DATE) -> TIMESTAMP
+	arg_max(TIMESTAMP, TIMESTAMP) -> TIMESTAMP
+	arg_max(TIMESTAMP, TIMESTAMP WITH TIME ZONE) -> TIMESTAMP
+	arg_max(TIMESTAMP, BLOB) -> TIMESTAMP
+	arg_max(TIMESTAMP WITH TIME ZONE, INTEGER) -> TIMESTAMP WITH TIME ZONE
+	arg_max(TIMESTAMP WITH TIME ZONE, BIGINT) -> TIMESTAMP WITH TIME ZONE
+	arg_max(TIMESTAMP WITH TIME ZONE, DOUBLE) -> TIMESTAMP WITH TIME ZONE
+	arg_max(TIMESTAMP WITH TIME ZONE, VARCHAR) -> TIMESTAMP WITH TIME ZONE
+	arg_max(TIMESTAMP WITH TIME ZONE, DATE) -> TIMESTAMP WITH TIME ZONE
+	arg_max(TIMESTAMP WITH TIME ZONE, TIMESTAMP) -> TIMESTAMP WITH TIME ZONE
+	arg_max(TIMESTAMP WITH TIME ZONE, TIMESTAMP WITH TIME ZONE) -> TIMESTAMP WITH TIME ZONE
+	arg_max(TIMESTAMP WITH TIME ZONE, BLOB) -> TIMESTAMP WITH TIME ZONE
+	arg_max(BLOB, INTEGER) -> BLOB
+	arg_max(BLOB, BIGINT) -> BLOB
+	arg_max(BLOB, DOUBLE) -> BLOB
+	arg_max(BLOB, VARCHAR) -> BLOB
+	arg_max(BLOB, DATE) -> BLOB
+	arg_max(BLOB, TIMESTAMP) -> BLOB
+	arg_max(BLOB, TIMESTAMP WITH TIME ZONE) -> BLOB
+	arg_max(BLOB, BLOB) -> BLOB
+	arg_max(ANY, INTEGER) -> ANY
+	arg_max(ANY, BIGINT) -> ANY
+	arg_max(ANY, DOUBLE) -> ANY
+	arg_max(ANY, VARCHAR) -> ANY
+	arg_max(ANY, DATE) -> ANY
+	arg_max(ANY, TIMESTAMP) -> ANY
+	arg_max(ANY, TIMESTAMP WITH TIME ZONE) -> ANY
+	arg_max(ANY, BLOB) -> ANY
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'max_by');
 ----
-PLACEHOLDER_ERROR_MESSAGE2177
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'max_by(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	max_by(INTEGER, INTEGER) -> INTEGER
+	max_by(INTEGER, BIGINT) -> INTEGER
+	max_by(INTEGER, DOUBLE) -> INTEGER
+	max_by(INTEGER, VARCHAR) -> INTEGER
+	max_by(INTEGER, DATE) -> INTEGER
+	max_by(INTEGER, TIMESTAMP) -> INTEGER
+	max_by(INTEGER, TIMESTAMP WITH TIME ZONE) -> INTEGER
+	max_by(INTEGER, BLOB) -> INTEGER
+	max_by(BIGINT, INTEGER) -> BIGINT
+	max_by(BIGINT, BIGINT) -> BIGINT
+	max_by(BIGINT, DOUBLE) -> BIGINT
+	max_by(BIGINT, VARCHAR) -> BIGINT
+	max_by(BIGINT, DATE) -> BIGINT
+	max_by(BIGINT, TIMESTAMP) -> BIGINT
+	max_by(BIGINT, TIMESTAMP WITH TIME ZONE) -> BIGINT
+	max_by(BIGINT, BLOB) -> BIGINT
+	max_by(DOUBLE, INTEGER) -> DOUBLE
+	max_by(DOUBLE, BIGINT) -> DOUBLE
+	max_by(DOUBLE, DOUBLE) -> DOUBLE
+	max_by(DOUBLE, VARCHAR) -> DOUBLE
+	max_by(DOUBLE, DATE) -> DOUBLE
+	max_by(DOUBLE, TIMESTAMP) -> DOUBLE
+	max_by(DOUBLE, TIMESTAMP WITH TIME ZONE) -> DOUBLE
+	max_by(DOUBLE, BLOB) -> DOUBLE
+	max_by(VARCHAR, INTEGER) -> VARCHAR
+	max_by(VARCHAR, BIGINT) -> VARCHAR
+	max_by(VARCHAR, DOUBLE) -> VARCHAR
+	max_by(VARCHAR, VARCHAR) -> VARCHAR
+	max_by(VARCHAR, DATE) -> VARCHAR
+	max_by(VARCHAR, TIMESTAMP) -> VARCHAR
+	max_by(VARCHAR, TIMESTAMP WITH TIME ZONE) -> VARCHAR
+	max_by(VARCHAR, BLOB) -> VARCHAR
+	max_by(DATE, INTEGER) -> DATE
+	max_by(DATE, BIGINT) -> DATE
+	max_by(DATE, DOUBLE) -> DATE
+	max_by(DATE, VARCHAR) -> DATE
+	max_by(DATE, DATE) -> DATE
+	max_by(DATE, TIMESTAMP) -> DATE
+	max_by(DATE, TIMESTAMP WITH TIME ZONE) -> DATE
+	max_by(DATE, BLOB) -> DATE
+	max_by(TIMESTAMP, INTEGER) -> TIMESTAMP
+	max_by(TIMESTAMP, BIGINT) -> TIMESTAMP
+	max_by(TIMESTAMP, DOUBLE) -> TIMESTAMP
+	max_by(TIMESTAMP, VARCHAR) -> TIMESTAMP
+	max_by(TIMESTAMP, DATE) -> TIMESTAMP
+	max_by(TIMESTAMP, TIMESTAMP) -> TIMESTAMP
+	max_by(TIMESTAMP, TIMESTAMP WITH TIME ZONE) -> TIMESTAMP
+	max_by(TIMESTAMP, BLOB) -> TIMESTAMP
+	max_by(TIMESTAMP WITH TIME ZONE, INTEGER) -> TIMESTAMP WITH TIME ZONE
+	max_by(TIMESTAMP WITH TIME ZONE, BIGINT) -> TIMESTAMP WITH TIME ZONE
+	max_by(TIMESTAMP WITH TIME ZONE, DOUBLE) -> TIMESTAMP WITH TIME ZONE
+	max_by(TIMESTAMP WITH TIME ZONE, VARCHAR) -> TIMESTAMP WITH TIME ZONE
+	max_by(TIMESTAMP WITH TIME ZONE, DATE) -> TIMESTAMP WITH TIME ZONE
+	max_by(TIMESTAMP WITH TIME ZONE, TIMESTAMP) -> TIMESTAMP WITH TIME ZONE
+	max_by(TIMESTAMP WITH TIME ZONE, TIMESTAMP WITH TIME ZONE) -> TIMESTAMP WITH TIME ZONE
+	max_by(TIMESTAMP WITH TIME ZONE, BLOB) -> TIMESTAMP WITH TIME ZONE
+	max_by(BLOB, INTEGER) -> BLOB
+	max_by(BLOB, BIGINT) -> BLOB
+	max_by(BLOB, DOUBLE) -> BLOB
+	max_by(BLOB, VARCHAR) -> BLOB
+	max_by(BLOB, DATE) -> BLOB
+	max_by(BLOB, TIMESTAMP) -> BLOB
+	max_by(BLOB, TIMESTAMP WITH TIME ZONE) -> BLOB
+	max_by(BLOB, BLOB) -> BLOB
+	max_by(ANY, INTEGER) -> ANY
+	max_by(ANY, BIGINT) -> ANY
+	max_by(ANY, DOUBLE) -> ANY
+	max_by(ANY, VARCHAR) -> ANY
+	max_by(ANY, DATE) -> ANY
+	max_by(ANY, TIMESTAMP) -> ANY
+	max_by(ANY, TIMESTAMP WITH TIME ZONE) -> ANY
+	max_by(ANY, BLOB) -> ANY
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'argmax');
 ----
-PLACEHOLDER_ERROR_MESSAGE2176
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'argmax(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	argmax(INTEGER, INTEGER) -> INTEGER
+	argmax(INTEGER, BIGINT) -> INTEGER
+	argmax(INTEGER, DOUBLE) -> INTEGER
+	argmax(INTEGER, VARCHAR) -> INTEGER
+	argmax(INTEGER, DATE) -> INTEGER
+	argmax(INTEGER, TIMESTAMP) -> INTEGER
+	argmax(INTEGER, TIMESTAMP WITH TIME ZONE) -> INTEGER
+	argmax(INTEGER, BLOB) -> INTEGER
+	argmax(BIGINT, INTEGER) -> BIGINT
+	argmax(BIGINT, BIGINT) -> BIGINT
+	argmax(BIGINT, DOUBLE) -> BIGINT
+	argmax(BIGINT, VARCHAR) -> BIGINT
+	argmax(BIGINT, DATE) -> BIGINT
+	argmax(BIGINT, TIMESTAMP) -> BIGINT
+	argmax(BIGINT, TIMESTAMP WITH TIME ZONE) -> BIGINT
+	argmax(BIGINT, BLOB) -> BIGINT
+	argmax(DOUBLE, INTEGER) -> DOUBLE
+	argmax(DOUBLE, BIGINT) -> DOUBLE
+	argmax(DOUBLE, DOUBLE) -> DOUBLE
+	argmax(DOUBLE, VARCHAR) -> DOUBLE
+	argmax(DOUBLE, DATE) -> DOUBLE
+	argmax(DOUBLE, TIMESTAMP) -> DOUBLE
+	argmax(DOUBLE, TIMESTAMP WITH TIME ZONE) -> DOUBLE
+	argmax(DOUBLE, BLOB) -> DOUBLE
+	argmax(VARCHAR, INTEGER) -> VARCHAR
+	argmax(VARCHAR, BIGINT) -> VARCHAR
+	argmax(VARCHAR, DOUBLE) -> VARCHAR
+	argmax(VARCHAR, VARCHAR) -> VARCHAR
+	argmax(VARCHAR, DATE) -> VARCHAR
+	argmax(VARCHAR, TIMESTAMP) -> VARCHAR
+	argmax(VARCHAR, TIMESTAMP WITH TIME ZONE) -> VARCHAR
+	argmax(VARCHAR, BLOB) -> VARCHAR
+	argmax(DATE, INTEGER) -> DATE
+	argmax(DATE, BIGINT) -> DATE
+	argmax(DATE, DOUBLE) -> DATE
+	argmax(DATE, VARCHAR) -> DATE
+	argmax(DATE, DATE) -> DATE
+	argmax(DATE, TIMESTAMP) -> DATE
+	argmax(DATE, TIMESTAMP WITH TIME ZONE) -> DATE
+	argmax(DATE, BLOB) -> DATE
+	argmax(TIMESTAMP, INTEGER) -> TIMESTAMP
+	argmax(TIMESTAMP, BIGINT) -> TIMESTAMP
+	argmax(TIMESTAMP, DOUBLE) -> TIMESTAMP
+	argmax(TIMESTAMP, VARCHAR) -> TIMESTAMP
+	argmax(TIMESTAMP, DATE) -> TIMESTAMP
+	argmax(TIMESTAMP, TIMESTAMP) -> TIMESTAMP
+	argmax(TIMESTAMP, TIMESTAMP WITH TIME ZONE) -> TIMESTAMP
+	argmax(TIMESTAMP, BLOB) -> TIMESTAMP
+	argmax(TIMESTAMP WITH TIME ZONE, INTEGER) -> TIMESTAMP WITH TIME ZONE
+	argmax(TIMESTAMP WITH TIME ZONE, BIGINT) -> TIMESTAMP WITH TIME ZONE
+	argmax(TIMESTAMP WITH TIME ZONE, DOUBLE) -> TIMESTAMP WITH TIME ZONE
+	argmax(TIMESTAMP WITH TIME ZONE, VARCHAR) -> TIMESTAMP WITH TIME ZONE
+	argmax(TIMESTAMP WITH TIME ZONE, DATE) -> TIMESTAMP WITH TIME ZONE
+	argmax(TIMESTAMP WITH TIME ZONE, TIMESTAMP) -> TIMESTAMP WITH TIME ZONE
+	argmax(TIMESTAMP WITH TIME ZONE, TIMESTAMP WITH TIME ZONE) -> TIMESTAMP WITH TIME ZONE
+	argmax(TIMESTAMP WITH TIME ZONE, BLOB) -> TIMESTAMP WITH TIME ZONE
+	argmax(BLOB, INTEGER) -> BLOB
+	argmax(BLOB, BIGINT) -> BLOB
+	argmax(BLOB, DOUBLE) -> BLOB
+	argmax(BLOB, VARCHAR) -> BLOB
+	argmax(BLOB, DATE) -> BLOB
+	argmax(BLOB, TIMESTAMP) -> BLOB
+	argmax(BLOB, TIMESTAMP WITH TIME ZONE) -> BLOB
+	argmax(BLOB, BLOB) -> BLOB
+	argmax(ANY, INTEGER) -> ANY
+	argmax(ANY, BIGINT) -> ANY
+	argmax(ANY, DOUBLE) -> ANY
+	argmax(ANY, VARCHAR) -> ANY
+	argmax(ANY, DATE) -> ANY
+	argmax(ANY, TIMESTAMP) -> ANY
+	argmax(ANY, TIMESTAMP WITH TIME ZONE) -> ANY
+	argmax(ANY, BLOB) -> ANY
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'arg_min');
 ----
-PLACEHOLDER_ERROR_MESSAGE2175
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'arg_min(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	arg_min(INTEGER, INTEGER) -> INTEGER
+	arg_min(INTEGER, BIGINT) -> INTEGER
+	arg_min(INTEGER, DOUBLE) -> INTEGER
+	arg_min(INTEGER, VARCHAR) -> INTEGER
+	arg_min(INTEGER, DATE) -> INTEGER
+	arg_min(INTEGER, TIMESTAMP) -> INTEGER
+	arg_min(INTEGER, TIMESTAMP WITH TIME ZONE) -> INTEGER
+	arg_min(INTEGER, BLOB) -> INTEGER
+	arg_min(BIGINT, INTEGER) -> BIGINT
+	arg_min(BIGINT, BIGINT) -> BIGINT
+	arg_min(BIGINT, DOUBLE) -> BIGINT
+	arg_min(BIGINT, VARCHAR) -> BIGINT
+	arg_min(BIGINT, DATE) -> BIGINT
+	arg_min(BIGINT, TIMESTAMP) -> BIGINT
+	arg_min(BIGINT, TIMESTAMP WITH TIME ZONE) -> BIGINT
+	arg_min(BIGINT, BLOB) -> BIGINT
+	arg_min(DOUBLE, INTEGER) -> DOUBLE
+	arg_min(DOUBLE, BIGINT) -> DOUBLE
+	arg_min(DOUBLE, DOUBLE) -> DOUBLE
+	arg_min(DOUBLE, VARCHAR) -> DOUBLE
+	arg_min(DOUBLE, DATE) -> DOUBLE
+	arg_min(DOUBLE, TIMESTAMP) -> DOUBLE
+	arg_min(DOUBLE, TIMESTAMP WITH TIME ZONE) -> DOUBLE
+	arg_min(DOUBLE, BLOB) -> DOUBLE
+	arg_min(VARCHAR, INTEGER) -> VARCHAR
+	arg_min(VARCHAR, BIGINT) -> VARCHAR
+	arg_min(VARCHAR, DOUBLE) -> VARCHAR
+	arg_min(VARCHAR, VARCHAR) -> VARCHAR
+	arg_min(VARCHAR, DATE) -> VARCHAR
+	arg_min(VARCHAR, TIMESTAMP) -> VARCHAR
+	arg_min(VARCHAR, TIMESTAMP WITH TIME ZONE) -> VARCHAR
+	arg_min(VARCHAR, BLOB) -> VARCHAR
+	arg_min(DATE, INTEGER) -> DATE
+	arg_min(DATE, BIGINT) -> DATE
+	arg_min(DATE, DOUBLE) -> DATE
+	arg_min(DATE, VARCHAR) -> DATE
+	arg_min(DATE, DATE) -> DATE
+	arg_min(DATE, TIMESTAMP) -> DATE
+	arg_min(DATE, TIMESTAMP WITH TIME ZONE) -> DATE
+	arg_min(DATE, BLOB) -> DATE
+	arg_min(TIMESTAMP, INTEGER) -> TIMESTAMP
+	arg_min(TIMESTAMP, BIGINT) -> TIMESTAMP
+	arg_min(TIMESTAMP, DOUBLE) -> TIMESTAMP
+	arg_min(TIMESTAMP, VARCHAR) -> TIMESTAMP
+	arg_min(TIMESTAMP, DATE) -> TIMESTAMP
+	arg_min(TIMESTAMP, TIMESTAMP) -> TIMESTAMP
+	arg_min(TIMESTAMP, TIMESTAMP WITH TIME ZONE) -> TIMESTAMP
+	arg_min(TIMESTAMP, BLOB) -> TIMESTAMP
+	arg_min(TIMESTAMP WITH TIME ZONE, INTEGER) -> TIMESTAMP WITH TIME ZONE
+	arg_min(TIMESTAMP WITH TIME ZONE, BIGINT) -> TIMESTAMP WITH TIME ZONE
+	arg_min(TIMESTAMP WITH TIME ZONE, DOUBLE) -> TIMESTAMP WITH TIME ZONE
+	arg_min(TIMESTAMP WITH TIME ZONE, VARCHAR) -> TIMESTAMP WITH TIME ZONE
+	arg_min(TIMESTAMP WITH TIME ZONE, DATE) -> TIMESTAMP WITH TIME ZONE
+	arg_min(TIMESTAMP WITH TIME ZONE, TIMESTAMP) -> TIMESTAMP WITH TIME ZONE
+	arg_min(TIMESTAMP WITH TIME ZONE, TIMESTAMP WITH TIME ZONE) -> TIMESTAMP WITH TIME ZONE
+	arg_min(TIMESTAMP WITH TIME ZONE, BLOB) -> TIMESTAMP WITH TIME ZONE
+	arg_min(BLOB, INTEGER) -> BLOB
+	arg_min(BLOB, BIGINT) -> BLOB
+	arg_min(BLOB, DOUBLE) -> BLOB
+	arg_min(BLOB, VARCHAR) -> BLOB
+	arg_min(BLOB, DATE) -> BLOB
+	arg_min(BLOB, TIMESTAMP) -> BLOB
+	arg_min(BLOB, TIMESTAMP WITH TIME ZONE) -> BLOB
+	arg_min(BLOB, BLOB) -> BLOB
+	arg_min(ANY, INTEGER) -> ANY
+	arg_min(ANY, BIGINT) -> ANY
+	arg_min(ANY, DOUBLE) -> ANY
+	arg_min(ANY, VARCHAR) -> ANY
+	arg_min(ANY, DATE) -> ANY
+	arg_min(ANY, TIMESTAMP) -> ANY
+	arg_min(ANY, TIMESTAMP WITH TIME ZONE) -> ANY
+	arg_min(ANY, BLOB) -> ANY
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'min_by');
 ----
-PLACEHOLDER_ERROR_MESSAGE2174
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'min_by(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	min_by(INTEGER, INTEGER) -> INTEGER
+	min_by(INTEGER, BIGINT) -> INTEGER
+	min_by(INTEGER, DOUBLE) -> INTEGER
+	min_by(INTEGER, VARCHAR) -> INTEGER
+	min_by(INTEGER, DATE) -> INTEGER
+	min_by(INTEGER, TIMESTAMP) -> INTEGER
+	min_by(INTEGER, TIMESTAMP WITH TIME ZONE) -> INTEGER
+	min_by(INTEGER, BLOB) -> INTEGER
+	min_by(BIGINT, INTEGER) -> BIGINT
+	min_by(BIGINT, BIGINT) -> BIGINT
+	min_by(BIGINT, DOUBLE) -> BIGINT
+	min_by(BIGINT, VARCHAR) -> BIGINT
+	min_by(BIGINT, DATE) -> BIGINT
+	min_by(BIGINT, TIMESTAMP) -> BIGINT
+	min_by(BIGINT, TIMESTAMP WITH TIME ZONE) -> BIGINT
+	min_by(BIGINT, BLOB) -> BIGINT
+	min_by(DOUBLE, INTEGER) -> DOUBLE
+	min_by(DOUBLE, BIGINT) -> DOUBLE
+	min_by(DOUBLE, DOUBLE) -> DOUBLE
+	min_by(DOUBLE, VARCHAR) -> DOUBLE
+	min_by(DOUBLE, DATE) -> DOUBLE
+	min_by(DOUBLE, TIMESTAMP) -> DOUBLE
+	min_by(DOUBLE, TIMESTAMP WITH TIME ZONE) -> DOUBLE
+	min_by(DOUBLE, BLOB) -> DOUBLE
+	min_by(VARCHAR, INTEGER) -> VARCHAR
+	min_by(VARCHAR, BIGINT) -> VARCHAR
+	min_by(VARCHAR, DOUBLE) -> VARCHAR
+	min_by(VARCHAR, VARCHAR) -> VARCHAR
+	min_by(VARCHAR, DATE) -> VARCHAR
+	min_by(VARCHAR, TIMESTAMP) -> VARCHAR
+	min_by(VARCHAR, TIMESTAMP WITH TIME ZONE) -> VARCHAR
+	min_by(VARCHAR, BLOB) -> VARCHAR
+	min_by(DATE, INTEGER) -> DATE
+	min_by(DATE, BIGINT) -> DATE
+	min_by(DATE, DOUBLE) -> DATE
+	min_by(DATE, VARCHAR) -> DATE
+	min_by(DATE, DATE) -> DATE
+	min_by(DATE, TIMESTAMP) -> DATE
+	min_by(DATE, TIMESTAMP WITH TIME ZONE) -> DATE
+	min_by(DATE, BLOB) -> DATE
+	min_by(TIMESTAMP, INTEGER) -> TIMESTAMP
+	min_by(TIMESTAMP, BIGINT) -> TIMESTAMP
+	min_by(TIMESTAMP, DOUBLE) -> TIMESTAMP
+	min_by(TIMESTAMP, VARCHAR) -> TIMESTAMP
+	min_by(TIMESTAMP, DATE) -> TIMESTAMP
+	min_by(TIMESTAMP, TIMESTAMP) -> TIMESTAMP
+	min_by(TIMESTAMP, TIMESTAMP WITH TIME ZONE) -> TIMESTAMP
+	min_by(TIMESTAMP, BLOB) -> TIMESTAMP
+	min_by(TIMESTAMP WITH TIME ZONE, INTEGER) -> TIMESTAMP WITH TIME ZONE
+	min_by(TIMESTAMP WITH TIME ZONE, BIGINT) -> TIMESTAMP WITH TIME ZONE
+	min_by(TIMESTAMP WITH TIME ZONE, DOUBLE) -> TIMESTAMP WITH TIME ZONE
+	min_by(TIMESTAMP WITH TIME ZONE, VARCHAR) -> TIMESTAMP WITH TIME ZONE
+	min_by(TIMESTAMP WITH TIME ZONE, DATE) -> TIMESTAMP WITH TIME ZONE
+	min_by(TIMESTAMP WITH TIME ZONE, TIMESTAMP) -> TIMESTAMP WITH TIME ZONE
+	min_by(TIMESTAMP WITH TIME ZONE, TIMESTAMP WITH TIME ZONE) -> TIMESTAMP WITH TIME ZONE
+	min_by(TIMESTAMP WITH TIME ZONE, BLOB) -> TIMESTAMP WITH TIME ZONE
+	min_by(BLOB, INTEGER) -> BLOB
+	min_by(BLOB, BIGINT) -> BLOB
+	min_by(BLOB, DOUBLE) -> BLOB
+	min_by(BLOB, VARCHAR) -> BLOB
+	min_by(BLOB, DATE) -> BLOB
+	min_by(BLOB, TIMESTAMP) -> BLOB
+	min_by(BLOB, TIMESTAMP WITH TIME ZONE) -> BLOB
+	min_by(BLOB, BLOB) -> BLOB
+	min_by(ANY, INTEGER) -> ANY
+	min_by(ANY, BIGINT) -> ANY
+	min_by(ANY, DOUBLE) -> ANY
+	min_by(ANY, VARCHAR) -> ANY
+	min_by(ANY, DATE) -> ANY
+	min_by(ANY, TIMESTAMP) -> ANY
+	min_by(ANY, TIMESTAMP WITH TIME ZONE) -> ANY
+	min_by(ANY, BLOB) -> ANY
 
 statement error
 SELECT list_aggr([1, 2, NULL], 'argmin');
 ----
-PLACEHOLDER_ERROR_MESSAGE2173
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'argmin(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	argmin(INTEGER, INTEGER) -> INTEGER
+	argmin(INTEGER, BIGINT) -> INTEGER
+	argmin(INTEGER, DOUBLE) -> INTEGER
+	argmin(INTEGER, VARCHAR) -> INTEGER
+	argmin(INTEGER, DATE) -> INTEGER
+	argmin(INTEGER, TIMESTAMP) -> INTEGER
+	argmin(INTEGER, TIMESTAMP WITH TIME ZONE) -> INTEGER
+	argmin(INTEGER, BLOB) -> INTEGER
+	argmin(BIGINT, INTEGER) -> BIGINT
+	argmin(BIGINT, BIGINT) -> BIGINT
+	argmin(BIGINT, DOUBLE) -> BIGINT
+	argmin(BIGINT, VARCHAR) -> BIGINT
+	argmin(BIGINT, DATE) -> BIGINT
+	argmin(BIGINT, TIMESTAMP) -> BIGINT
+	argmin(BIGINT, TIMESTAMP WITH TIME ZONE) -> BIGINT
+	argmin(BIGINT, BLOB) -> BIGINT
+	argmin(DOUBLE, INTEGER) -> DOUBLE
+	argmin(DOUBLE, BIGINT) -> DOUBLE
+	argmin(DOUBLE, DOUBLE) -> DOUBLE
+	argmin(DOUBLE, VARCHAR) -> DOUBLE
+	argmin(DOUBLE, DATE) -> DOUBLE
+	argmin(DOUBLE, TIMESTAMP) -> DOUBLE
+	argmin(DOUBLE, TIMESTAMP WITH TIME ZONE) -> DOUBLE
+	argmin(DOUBLE, BLOB) -> DOUBLE
+	argmin(VARCHAR, INTEGER) -> VARCHAR
+	argmin(VARCHAR, BIGINT) -> VARCHAR
+	argmin(VARCHAR, DOUBLE) -> VARCHAR
+	argmin(VARCHAR, VARCHAR) -> VARCHAR
+	argmin(VARCHAR, DATE) -> VARCHAR
+	argmin(VARCHAR, TIMESTAMP) -> VARCHAR
+	argmin(VARCHAR, TIMESTAMP WITH TIME ZONE) -> VARCHAR
+	argmin(VARCHAR, BLOB) -> VARCHAR
+	argmin(DATE, INTEGER) -> DATE
+	argmin(DATE, BIGINT) -> DATE
+	argmin(DATE, DOUBLE) -> DATE
+	argmin(DATE, VARCHAR) -> DATE
+	argmin(DATE, DATE) -> DATE
+	argmin(DATE, TIMESTAMP) -> DATE
+	argmin(DATE, TIMESTAMP WITH TIME ZONE) -> DATE
+	argmin(DATE, BLOB) -> DATE
+	argmin(TIMESTAMP, INTEGER) -> TIMESTAMP
+	argmin(TIMESTAMP, BIGINT) -> TIMESTAMP
+	argmin(TIMESTAMP, DOUBLE) -> TIMESTAMP
+	argmin(TIMESTAMP, VARCHAR) -> TIMESTAMP
+	argmin(TIMESTAMP, DATE) -> TIMESTAMP
+	argmin(TIMESTAMP, TIMESTAMP) -> TIMESTAMP
+	argmin(TIMESTAMP, TIMESTAMP WITH TIME ZONE) -> TIMESTAMP
+	argmin(TIMESTAMP, BLOB) -> TIMESTAMP
+	argmin(TIMESTAMP WITH TIME ZONE, INTEGER) -> TIMESTAMP WITH TIME ZONE
+	argmin(TIMESTAMP WITH TIME ZONE, BIGINT) -> TIMESTAMP WITH TIME ZONE
+	argmin(TIMESTAMP WITH TIME ZONE, DOUBLE) -> TIMESTAMP WITH TIME ZONE
+	argmin(TIMESTAMP WITH TIME ZONE, VARCHAR) -> TIMESTAMP WITH TIME ZONE
+	argmin(TIMESTAMP WITH TIME ZONE, DATE) -> TIMESTAMP WITH TIME ZONE
+	argmin(TIMESTAMP WITH TIME ZONE, TIMESTAMP) -> TIMESTAMP WITH TIME ZONE
+	argmin(TIMESTAMP WITH TIME ZONE, TIMESTAMP WITH TIME ZONE) -> TIMESTAMP WITH TIME ZONE
+	argmin(TIMESTAMP WITH TIME ZONE, BLOB) -> TIMESTAMP WITH TIME ZONE
+	argmin(BLOB, INTEGER) -> BLOB
+	argmin(BLOB, BIGINT) -> BLOB
+	argmin(BLOB, DOUBLE) -> BLOB
+	argmin(BLOB, VARCHAR) -> BLOB
+	argmin(BLOB, DATE) -> BLOB
+	argmin(BLOB, TIMESTAMP) -> BLOB
+	argmin(BLOB, TIMESTAMP WITH TIME ZONE) -> BLOB
+	argmin(BLOB, BLOB) -> BLOB
+	argmin(ANY, INTEGER) -> ANY
+	argmin(ANY, BIGINT) -> ANY
+	argmin(ANY, DOUBLE) -> ANY
+	argmin(ANY, VARCHAR) -> ANY
+	argmin(ANY, DATE) -> ANY
+	argmin(ANY, TIMESTAMP) -> ANY
+	argmin(ANY, TIMESTAMP WITH TIME ZONE) -> ANY
+	argmin(ANY, BLOB) -> ANY
