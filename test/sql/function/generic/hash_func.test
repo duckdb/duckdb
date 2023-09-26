@@ -7,16 +7,24 @@ PRAGMA enable_verification
 
 # Unsupported types
 
-foreach datatype ANY HASH POINTER
-
 statement error
-SELECT HASH(NULL::${datatype});
+SELECT HASH(NULL::ANY);
 ----
 Parser Error: syntax error at or near "ANY"
 LINE 1: SELECT HASH(NULL::ANY);
                           ^
 
-endloop
+statement error
+SELECT HASH(NULL::HASH)
+----
+Catalog Error: Type with name HASH does not exist!
+Did you mean "char"?
+
+statement error
+SELECT HASH(NULL::POINTER)
+----
+Catalog Error: Type with name POINTER does not exist!
+Did you mean "int"?
 
 # NULLS of all scalar types should produce the same value on all platforms
 
