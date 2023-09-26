@@ -2,10 +2,12 @@
 
 #include "parquet_extension.hpp"
 
+#include "cast_column_reader.hpp"
 #include "duckdb.hpp"
 #include "parquet_metadata.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_writer.hpp"
+#include "struct_column_reader.hpp"
 #include "zstd_file_system.hpp"
 
 #include <fstream>
@@ -184,14 +186,53 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBindData &bind_data,
                                     const vector<column_t> &global_column_ids,
                                     optional_ptr<TableFilterSet> table_filters, ClientContext &context) {
+	auto &parquet_options = bind_data.parquet_options;
+	auto &reader_data = reader.reader_data;
 	if (bind_data.parquet_options.schema.empty()) {
-		MultiFileReader::InitializeReader(reader, bind_data.parquet_options.file_options, bind_data.reader_bind,
-		                                  bind_data.types, bind_data.names, global_column_ids, table_filters,
-		                                  bind_data.files[0], context);
+		MultiFileReader::InitializeReader(reader, parquet_options.file_options, bind_data.reader_bind, bind_data.types,
+		                                  bind_data.names, global_column_ids, table_filters, bind_data.files[0],
+		                                  context);
 		return;
 	}
 
-	// a fixed schema was supplied, initialize the MultiFileReader settings here so we can read the schema
+	// a fixed schema was supplied, initialize the MultiFileReader settings here so we can read using the schema
+
+	// this deals with hive partitioning and filename=true
+	MultiFileReader::FinalizeBind(parquet_options.file_options, bind_data.reader_bind, reader.GetFileName(),
+	                              reader.GetNames(), bind_data.types, bind_data.names, global_column_ids, reader_data,
+	                              context);
+
+	// create a mapping from field id to column index in file
+	unordered_map<uint32_t, idx_t> field_id_to_column_index;
+	auto &column_readers = reader.root_reader->Cast<StructColumnReader>().child_readers;
+	for (idx_t column_index = 0; column_index < column_readers.size(); column_index++) {
+		field_id_to_column_index[column_readers[column_index]->Schema().field_id] = column_index;
+	}
+
+	// loop through the schema definition
+	for (idx_t global_column_index = 0; global_column_index < parquet_options.schema.size(); global_column_index++) {
+		const auto &column_definition = parquet_options.schema[global_column_index];
+		auto it = field_id_to_column_index.find(column_definition.field_id);
+		if (it == field_id_to_column_index.end()) {
+			// field id not present in file, use default value
+			reader_data.constant_map.emplace_back(global_column_index, column_definition.default_value);
+			continue;
+		}
+
+		const auto &local_column_index = it->second;
+		auto &column_reader = column_readers[local_column_index];
+		if (column_reader->Type() != column_definition.type) {
+			// differing types, wrap in a cast column reader
+			reader_data.cast_map[local_column_index] = column_definition.type;
+		}
+
+		reader_data.column_mapping.push_back(global_column_index);
+		reader_data.column_ids.push_back(local_column_index);
+	}
+
+	// Finally, initialize the filters
+	MultiFileReader::CreateFilterMap(bind_data.types, table_filters, reader_data);
+	reader_data.filters = table_filters;
 }
 
 class ParquetScanFunction {
@@ -335,6 +376,7 @@ public:
 			// expected types - overwrite the types we want to read instead
 			result->types = return_types;
 		}
+		result->parquet_options = parquet_options;
 		return std::move(result);
 	}
 
