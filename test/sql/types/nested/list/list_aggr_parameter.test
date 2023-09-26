@@ -77,7 +77,39 @@ No function matches the given name and argument types 'min(BIGINT, INTEGER)'. Yo
 statement error
 SELECT list_aggr(list(i), 'quantile', 0.5, 0.3, 0.5) FROM range(10) tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE920
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'quantile(BIGINT, DECIMAL(2,1), DECIMAL(2,1), DECIMAL(2,1))'. You might need to add explicit type casts.
+	Candidate functions:
+	quantile(DECIMAL, DOUBLE) -> DECIMAL
+	quantile(DECIMAL, DOUBLE[]) -> DECIMAL[]
+	quantile(TINYINT, DOUBLE) -> TINYINT
+	quantile(TINYINT, DOUBLE[]) -> TINYINT[]
+	quantile(SMALLINT, DOUBLE) -> SMALLINT
+	quantile(SMALLINT, DOUBLE[]) -> SMALLINT[]
+	quantile(INTEGER, DOUBLE) -> INTEGER
+	quantile(INTEGER, DOUBLE[]) -> INTEGER[]
+	quantile(BIGINT, DOUBLE) -> BIGINT
+	quantile(BIGINT, DOUBLE[]) -> BIGINT[]
+	quantile(HUGEINT, DOUBLE) -> HUGEINT
+	quantile(HUGEINT, DOUBLE[]) -> HUGEINT[]
+	quantile(FLOAT, DOUBLE) -> FLOAT
+	quantile(FLOAT, DOUBLE[]) -> FLOAT[]
+	quantile(DOUBLE, DOUBLE) -> DOUBLE
+	quantile(DOUBLE, DOUBLE[]) -> DOUBLE[]
+	quantile(DATE, DOUBLE) -> DATE
+	quantile(DATE, DOUBLE[]) -> DATE[]
+	quantile(TIMESTAMP, DOUBLE) -> TIMESTAMP
+	quantile(TIMESTAMP, DOUBLE[]) -> TIMESTAMP[]
+	quantile(TIME, DOUBLE) -> TIME
+	quantile(TIME, DOUBLE[]) -> TIME[]
+	quantile(TIMESTAMP WITH TIME ZONE, DOUBLE) -> TIMESTAMP WITH TIME ZONE
+	quantile(TIMESTAMP WITH TIME ZONE, DOUBLE[]) -> TIMESTAMP WITH TIME ZONE[]
+	quantile(TIME WITH TIME ZONE, DOUBLE) -> TIME WITH TIME ZONE
+	quantile(TIME WITH TIME ZONE, DOUBLE[]) -> TIME WITH TIME ZONE[]
+	quantile(INTERVAL, DOUBLE) -> INTERVAL
+	quantile(INTERVAL, DOUBLE[]) -> INTERVAL[]
+	quantile(VARCHAR, DOUBLE) -> VARCHAR
+	quantile(VARCHAR, DOUBLE[]) -> VARCHAR[]
 
 # non-constant argument
 statement error

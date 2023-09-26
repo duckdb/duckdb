@@ -113,7 +113,7 @@ Invalid Error: Non-inner join on correlated columns not supported
 statement error
 SELECT i, (SELECT SUM(s1.i) FROM integers s1 FULL OUTER JOIN integers s2 ON s1.i=s2.i OR s1.i=i1.i-1) AS j FROM integers i1 ORDER BY i;
 ----
-PLACEHOLDER_ERROR_MESSAGE1435
+Invalid Error: Non-inner join on correlated columns not supported
 
 # REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 # REQUIRE(CHECK_COLUMN(result, 1, {6, 6, 9, 12}));

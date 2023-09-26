@@ -28,7 +28,9 @@ LINE 1: SELECT COVAR_POP(COVAR_POP(1))
 statement error
 SELECT COVAR_SAMP()
 ----
-PLACEHOLDER_ERROR_MESSAGE1558
+Binder Error: No function matches the given name and argument types 'covar_samp()'. You might need to add explicit type casts.
+	Candidate functions:
+	covar_samp(DOUBLE, DOUBLE) -> DOUBLE
 
 statement error
 SELECT COVAR_SAMP(1, 2, 3)

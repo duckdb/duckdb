@@ -41,7 +41,7 @@ create view testview as select * from test
 statement error
 analyze testview
 ----
-PLACEHOLDER_ERROR_MESSAGE1512
+Invalid Input Error: Can only vacuum/analyze base tables!
 
 statement ok
 insert into test select range % 5000, range % 5000 from range(10000)

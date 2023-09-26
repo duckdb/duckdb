@@ -135,7 +135,7 @@ Invalid Error: Invalid type specifier "s" for formatting a value of type int
 statement error
 SELECT printf('%d', 'hello')
 ----
-PLACEHOLDER_ERROR_MESSAGE2398
+Invalid Error: Invalid type specifier "d" for formatting a value of type string
 
 # Test printf with vectors
 statement ok

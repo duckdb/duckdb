@@ -58,7 +58,7 @@ Conversion Error: Invalid hex escape code encountered in string -> blob conversi
 statement error
 SELECT '\\xx2'::BLOB
 ----
-PLACEHOLDER_ERROR_MESSAGE1015
+Conversion Error: Invalid hex escape code encountered in string -> blob conversion: \\xx
 
 statement error
 SELECT '\\x2x'::BLOB

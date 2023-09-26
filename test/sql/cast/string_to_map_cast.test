@@ -198,7 +198,7 @@ Conversion Error: Type VARCHAR with value '{3=three}}' can't be cast to the dest
 statement error   
 SELECT CAST('{Ducky=, DB=ok}' AS MAP(VARCHAR, INT));
 ----
-PLACEHOLDER_ERROR_MESSAGE1502
+Conversion Error: Could not convert string '' to INT32
 
 statement error
 SELECT CAST('{5=5,, 3=3}' AS MAP(INT, INT));

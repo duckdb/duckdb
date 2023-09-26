@@ -160,7 +160,7 @@ Binder Error: APPROXIMATE QUANTILE parameter cannot be NULL
 statement error
 SELECT approx_quantile(r, r) FROM quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1548
+Binder Error: APPROXIMATE QUANTILE can only take constant quantile parameters
 
 statement error
 SELECT approx_quantile(r::string, 0.5) FROM quantile

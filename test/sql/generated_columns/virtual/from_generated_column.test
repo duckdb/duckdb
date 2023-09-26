@@ -31,7 +31,8 @@ Parser Error: Adding generated columns after table creation is not supported yet
 statement error
 SELECT also_total_profit FROM unit
 ----
-PLACEHOLDER_ERROR_MESSAGE1145
+Binder Error: Referenced column "also_total_profit" not found in FROM clause!
+Candidate bindings: "unit.price"
 
 # Create a table with a generated column, and another generated column created from this other one
 statement ok

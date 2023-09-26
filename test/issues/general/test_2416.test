@@ -182,7 +182,11 @@ SELECT my_specific_list_extract(2)
 statement error
 SELECT my_specific_list_extract('c')
 ----
-PLACEHOLDER_ERROR_MESSAGE114
+Binder Error: No function matches the given name and argument types 'array_extract(INTEGER[], VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	array_extract(ANY[], BIGINT) -> ANY
+	array_extract(VARCHAR, BIGINT) -> VARCHAR
+	array_extract(STRUCT, VARCHAR) -> ANY
 
 statement ok
 CREATE MACRO my_specific_string_extract(index) AS '1234'[index]

@@ -144,7 +144,7 @@ Conversion Error: Could not cast value 255 to DECIMAL(3,1)
 statement error
 SELECT i::DECIMAL(9,7)::UTINYINT FROM utinyints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE722
+Conversion Error: Could not cast value 255 to DECIMAL(9,7)
 
 statement error
 SELECT i::DECIMAL(18,16)::UTINYINT FROM utinyints ORDER BY i

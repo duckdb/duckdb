@@ -158,7 +158,7 @@ Binder Error: Duplicate struct entry name "a"
 statement error
 SELECT STRUCT_PACK(e, e) FROM struct_data
 ----
-PLACEHOLDER_ERROR_MESSAGE863
+Binder Error: Duplicate struct entry name "e"
 
 statement error
 SELECT STRUCT_EXTRACT(e, 'e') FROM struct_data

@@ -772,7 +772,9 @@ SELECT
 FROM tbl_ProductSales
 GROUP BY GROUPING SETS()
 ----
-PLACEHOLDER_ERROR_MESSAGE176
+Parser Error: syntax error at or near ")"
+LINE 4: GROUP BY GROUPING SETS()
+                               ^
 
 query I rowsort
 SELECT

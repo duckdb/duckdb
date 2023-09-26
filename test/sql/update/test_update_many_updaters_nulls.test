@@ -136,5 +136,5 @@ TransactionContext Error: Conflict on update!
 statement error con4
 UPDATE test SET a=99 WHERE a IS NULL
 ----
-PLACEHOLDER_ERROR_MESSAGE1203
+TransactionContext Error: Conflict on update!
 

@@ -80,7 +80,7 @@ SELECT SUM(i) FROM integers
 statement error con1
 DROP SEQUENCE seq
 ----
-PLACEHOLDER_ERROR_MESSAGE1764
+Dependency Error: Cannot drop entry "seq" because there are entries that depend on it. Use DROP...CASCADE to drop all dependents.
 
 # need to do a cascading drop
 statement ok con1

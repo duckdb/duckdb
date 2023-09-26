@@ -198,7 +198,7 @@ Candidate bindings: "quantile.r"
 statement error
 SELECT quantile_disc(r, NULL) FROM quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1642
+Binder Error: QUANTILE parameter cannot be NULL
 
 statement error
 SELECT quantile_disc(r) FROM quantile

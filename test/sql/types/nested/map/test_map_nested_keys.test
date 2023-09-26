@@ -100,7 +100,7 @@ SELECT MAP(
 	]
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE904
+Invalid Input Error: Map keys can not be NULL
 
 # Nested keys (map) succesfull
 query I

@@ -47,7 +47,7 @@ endloop
 statement error
 SET enable_profiling='unknown';
 ----
-PLACEHOLDER_ERROR_MESSAGE231
+Parser Error: Unrecognized print format unknown, supported formats: [json, query_tree, query_tree_optimizer]
 
 # enable_progress_bar
 statement ok

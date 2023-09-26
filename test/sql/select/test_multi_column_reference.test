@@ -168,7 +168,8 @@ Binder Error: Duplicate alias "t1" in query!
 statement error
 SELECT testX.tbl.col FROM test.tbl;
 ----
-PLACEHOLDER_ERROR_MESSAGE2995
+Binder Error: Referenced table "testX" not found!
+Candidate tables: "tbl"
 
 statement error
 SELECT test.tblX.col FROM test.tbl;

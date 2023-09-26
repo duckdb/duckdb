@@ -32,7 +32,9 @@ Binder Error: Referenced column "x" not found in FROM clause!
 statement error
 SELECT ${func_name}(1, 2, 3)
 ----
-PLACEHOLDER_ERROR_MESSAGE2146
+Binder Error: No function matches the given name and argument types 'list_transform(INTEGER, INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	list_transform(ANY[], LAMBDA) -> ANY[]
 
 statement error
 SELECT ${func_name}(NULL, NULL)

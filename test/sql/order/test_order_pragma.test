@@ -55,5 +55,7 @@ LINE 1: PRAGMA default_order=UNKNOWN)
 statement error
 PRAGMA default_order=3)
 ----
-PLACEHOLDER_ERROR_MESSAGE212
+Parser Error: syntax error at or near ")"
+LINE 1: PRAGMA default_order=3)
+                              ^
 

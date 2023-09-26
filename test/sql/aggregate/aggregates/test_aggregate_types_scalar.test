@@ -54,7 +54,14 @@ Binder Error: No function matches the given name and argument types 'sum(VARCHAR
 statement error
 SELECT SUM(DATE '1992-02-02')
 ----
-PLACEHOLDER_ERROR_MESSAGE1633
+Binder Error: No function matches the given name and argument types 'sum(DATE)'. You might need to add explicit type casts.
+	Candidate functions:
+	sum(DECIMAL) -> DECIMAL
+	sum(SMALLINT) -> HUGEINT
+	sum(INTEGER) -> HUGEINT
+	sum(BIGINT) -> HUGEINT
+	sum(HUGEINT) -> HUGEINT
+	sum(DOUBLE) -> DOUBLE
 
 statement error
 SELECT SUM()

@@ -27,7 +27,16 @@ IO Error: Input is not a GZIP stream
 statement error
 COPY test_zst FROM 'test/sql/copy/csv/broken/test.csv.zst' (COMPRESSION NONE);
 ----
-PLACEHOLDER_ERROR_MESSAGE2910
+Invalid Input Error: Error in file "test/sql/copy/csv/broken/test.csv.zst" on line 2: expected 5 values per row, but got 2.
+Parser options:
+  file=test/sql/copy/csv/broken/test.csv.zst
+  delimiter=',' (default)
+  quote='"' (default)
+  escape='"' (default)
+  header=0' (default)
+  sample_size=20480
+  ignore_errors=0
+  all_varchar=0
 
 statement error
 COPY test_zst FROM 'test/sql/copy/csv/broken/test.csv.zst' (COMPRESSION INFER);

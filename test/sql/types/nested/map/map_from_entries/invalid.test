@@ -27,7 +27,7 @@ Invalid Input Error: The elements of the list must be structs
 statement error
 select MAP_FROM_ENTRIES(ARRAY[(1, 'x', 'extra'), (2, 'y', 'extra')]);
 ----
-PLACEHOLDER_ERROR_MESSAGE890
+Invalid Input Error: The provided struct type should only contain 2 fields, a key and a value
 
 # Structs inside the ARRAY have different amounts of fields
 statement error

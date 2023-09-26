@@ -25,7 +25,7 @@ Invalid Input Error: File 'test/sql/copy/parquet/broken/firstmarker.parquet' too
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/twomarkers.parquet')
 ----
-PLACEHOLDER_ERROR_MESSAGE2935
+Invalid Input Error: File 'test/sql/copy/parquet/broken/twomarkers.parquet' too small to be a Parquet file
 
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/footerlengthzero.parquet')

@@ -39,7 +39,9 @@ Conversion Error: Could not convert string 'huh' to UINT64
 statement error
 execute ${q}();
 ----
-PLACEHOLDER_ERROR_MESSAGE2266
+Parser Error: syntax error at or near ")"
+LINE 1: execute q1();
+                   ^
 
 statement error
 execute ${q}([1, 2, 3]);

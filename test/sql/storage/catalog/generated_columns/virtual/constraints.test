@@ -131,7 +131,7 @@ restart
 statement error
 INSERT INTO tbl VALUES (6,'test');
 ----
-PLACEHOLDER_ERROR_MESSAGE2549
+Constraint Error: Duplicate key "y: 6" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 restart
 

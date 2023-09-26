@@ -78,7 +78,8 @@ INSERT INTO main.main_table (j) VALUES (5), (6);
 statement error
 INSERT INTO oop_table (k) VALUES (7);
 ----
-PLACEHOLDER_ERROR_MESSAGE1888
+Catalog Error: Table with name oop_table does not exist!
+Did you mean "out_of_path.oop_table"?
 
 statement ok
 INSERT INTO out_of_path.oop_table (k) VALUES (8), (9);

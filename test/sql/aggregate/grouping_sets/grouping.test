@@ -205,7 +205,7 @@ Binder Error: GROUPING statement cannot be used without groups
 statement error
 SELECT GROUPING(course) FROM students;
 ----
-PLACEHOLDER_ERROR_MESSAGE1737
+Binder Error: GROUPING statement cannot be used without groups
 
 statement error
 SELECT GROUPING(course) FROM students GROUP BY ();

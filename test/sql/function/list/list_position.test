@@ -241,7 +241,9 @@ Binder Error: No function matches the given name and argument types 'list_positi
 statement error
 SELECT list_position(1)
 ----
-PLACEHOLDER_ERROR_MESSAGE2241
+Binder Error: No function matches the given name and argument types 'list_position(INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	list_position(ANY[], ANY) -> INTEGER
 
 statement error
 SELECT list_position(1,1)

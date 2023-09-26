@@ -80,7 +80,7 @@ SELECT * FROM vw
 statement error
 ALTER VIEW sqlite_master RENAME TO my_sqlite_master
 ----
-PLACEHOLDER_ERROR_MESSAGE2715
+Catalog Error: Cannot alter entry "sqlite_master" because it is an internal system entry
 
 # cannot rename a view that does not exist
 statement error

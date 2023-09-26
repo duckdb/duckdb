@@ -27,7 +27,9 @@ Binder Error: No function matches the given name and argument types 'stddev_samp
 statement error
 SELECT STDDEV_SAMP(1, 2, 3)
 ----
-PLACEHOLDER_ERROR_MESSAGE1578
+Binder Error: No function matches the given name and argument types 'stddev_samp(INTEGER, INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	stddev_samp(DOUBLE) -> DOUBLE
 
 statement error
 SELECT STDDEV_SAMP(STDDEV_SAMP(1))

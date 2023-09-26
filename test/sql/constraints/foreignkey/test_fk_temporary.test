@@ -47,7 +47,7 @@ SELECT * FROM album;
 statement error
 UPDATE song SET songartist=5, songalbum='A' WHERE songname='B_song';
 ----
-PLACEHOLDER_ERROR_MESSAGE1292
+Constraint Error: Violates foreign key constraint because key "artistid: 5, albumname: A" does not exist in the referenced table
 
 statement ok
 UPDATE song SET songartist=1, songalbum='A' WHERE songname='B_song';

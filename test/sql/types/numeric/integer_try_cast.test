@@ -28,7 +28,7 @@ Conversion Error: Type INT32 with value -2147483648 can't be cast because the va
 statement error
 SELECT i::UBIGINT FROM integers
 ----
-PLACEHOLDER_ERROR_MESSAGE813
+Conversion Error: Type INT32 with value -2147483648 can't be cast because the value is out of range for the destination type UINT64
 
 statement error
 SELECT i::UTINYINT FROM integers WHERE i>=0 ORDER BY i

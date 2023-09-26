@@ -87,4 +87,6 @@ Invalid Input Error: Invalid UTF8 Codepoint 1073741824
 statement error
 SELECT CHR()
 ----
-PLACEHOLDER_ERROR_MESSAGE2353
+Binder Error: No function matches the given name and argument types 'chr()'. You might need to add explicit type casts.
+	Candidate functions:
+	chr(INTEGER) -> VARCHAR

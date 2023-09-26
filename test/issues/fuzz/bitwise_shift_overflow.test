@@ -42,7 +42,7 @@ SELECT 10::tinyint<<3::tinyint;
 statement error
 SELECT (-128)::tinyint<<0::tinyint;
 ----
-PLACEHOLDER_ERROR_MESSAGE160
+Out of Range Error: Cannot left-shift negative number -128
 
 statement error
 SELECT (-10)::tinyint<<4::tinyint;

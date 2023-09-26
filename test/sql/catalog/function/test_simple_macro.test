@@ -162,7 +162,7 @@ false
 statement error
 SELECT IFELSE();
 ----
-PLACEHOLDER_ERROR_MESSAGE1843
+Binder Error: Macro function 'IFELSE(a, b, c)' requires 3 positional arguments, but 0 positional arguments were provided.
 
 statement error
 SELECT IFELSE(1);

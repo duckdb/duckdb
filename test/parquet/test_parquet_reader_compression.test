@@ -230,7 +230,7 @@ Invalid Error: Unsupported compression codec "7". Supported options are uncompre
 statement error
 SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_LZ4.parquet') limit 50
 ----
-PLACEHOLDER_ERROR_MESSAGE99
+Invalid Error: Unsupported compression codec "7". Supported options are uncompressed, gzip, snappy or zstd
 
 query IIII
 SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_ZSTD.parquet', hive_partitioning=0) limit 50

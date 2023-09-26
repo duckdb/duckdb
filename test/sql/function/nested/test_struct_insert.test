@@ -45,4 +45,4 @@ Invalid Error: The first argument to struct_insert must be a STRUCT
 statement error
 select struct_insert({a: 1, b: 2}, a := 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE2417
+Binder Error: Duplicate struct entry name "a"

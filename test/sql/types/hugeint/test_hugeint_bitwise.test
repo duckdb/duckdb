@@ -53,7 +53,7 @@ Out of Range Error: Overflow in left shift (132922799578491587290380706028034457
 statement error
 SELECT 27::HUGEINT << -1
 ----
-PLACEHOLDER_ERROR_MESSAGE1064
+Out of Range Error: Cannot left-shift by negative number -1
 
 statement error
 SELECT 100::HUGEINT << '1329227995784915872903807060280344576'::HUGEINT

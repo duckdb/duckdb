@@ -93,7 +93,8 @@ Candidate bindings: "times.d", "times.s"
 statement error
 SELECT day(i) FROM times
 ----
-PLACEHOLDER_ERROR_MESSAGE2069
+Binder Error: Referenced column "i" not found in FROM clause!
+Candidate bindings: "times.d", "times.s"
 
 statement error
 SELECT decade(i) FROM times

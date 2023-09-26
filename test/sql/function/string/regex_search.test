@@ -184,7 +184,7 @@ Invalid Input Error: Unrecognized Regex option q
 statement error
 SELECT regexp_matches('asdf', '.*SD.*', 'g')
 ----
-PLACEHOLDER_ERROR_MESSAGE2335
+Invalid Input Error: Option 'g' (global replace) is only valid for regexp_replace
 
 # error in non-constant regex
 statement ok

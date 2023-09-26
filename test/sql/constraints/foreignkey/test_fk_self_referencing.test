@@ -29,7 +29,7 @@ Constraint Error: Violates foreign key constraint because key "managerid: 2" is 
 statement error
 DELETE FROM employee WHERE id=2;
 ----
-PLACEHOLDER_ERROR_MESSAGE1376
+Constraint Error: Violates foreign key constraint because key "managerid: 2" is still referenced by a foreign key in a different table
 
 statement ok
 DELETE FROM employee WHERE id=4;

@@ -144,7 +144,7 @@ NULL	NULL
 statement error
 SELECT a, 10 - a AS b FROM test UNION SELECT b, b + 1 FROM test2 ORDER BY b;
 ----
-PLACEHOLDER_ERROR_MESSAGE246
+Binder Error: Ambiguous name in ORDER BY!
 
 # and by constant references
 query I

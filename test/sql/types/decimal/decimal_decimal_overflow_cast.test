@@ -46,7 +46,7 @@ Conversion Error: Casting value "10.00" to type DECIMAL(18,17) failed: value is 
 statement error
 SELECT 10.00::DECIMAL(4,2)::DECIMAL(38,37);
 ----
-PLACEHOLDER_ERROR_MESSAGE280
+Conversion Error: Casting value "10.00" to type DECIMAL(38,37) failed: value is out of range!
 
 # overflow on casting DOWN on scale
 statement error

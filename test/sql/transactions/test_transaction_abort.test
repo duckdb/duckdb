@@ -52,7 +52,7 @@ Constraint Error: Duplicate key "i: 2" violates primary key constraint. If this 
 statement error
 SELECT 42
 ----
-PLACEHOLDER_ERROR_MESSAGE2756
+Invalid Error: Current transaction is aborted (please ROLLBACK)
 
 # now we need to rollback
 statement ok

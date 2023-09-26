@@ -33,7 +33,7 @@ Parser Error: Adding generated columns after table creation is not supported yet
 statement error
 ALTER TABLE unit ADD COLUMN total_profit BOOLEAN GENERATED ALWAYS AS((SELECT 1)) VIRTUAL;
 ----
-PLACEHOLDER_ERROR_MESSAGE1178
+Parser Error: Adding generated columns after table creation is not supported yet
 
 statement error
 ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;

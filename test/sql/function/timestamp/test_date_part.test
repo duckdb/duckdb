@@ -842,7 +842,7 @@ Binder Error: date_part requires non-empty lists of part names
 statement error
 SELECT DATE_PART(['year', NULL, 'month'], ts) FROM timestamps;
 ----
-PLACEHOLDER_ERROR_MESSAGE2422
+Binder Error: NULL struct entry name in date_part
 
 # Non-constant parts
 statement error

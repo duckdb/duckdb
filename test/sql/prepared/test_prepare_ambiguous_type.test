@@ -301,4 +301,6 @@ true
 statement error
 EXECUTE v19(0)
 ----
-PLACEHOLDER_ERROR_MESSAGE1110
+Binder Error: No function matches the given name and argument types 'array_contains(INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	array_contains(ANY[], ANY) -> BOOLEAN

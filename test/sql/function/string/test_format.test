@@ -111,5 +111,5 @@ Invalid Error: Invalid type specifier "s" for formatting a value of type int
 statement error
 SELECT format('{:d}', 'hello')
 ----
-PLACEHOLDER_ERROR_MESSAGE2304
+Invalid Error: Invalid type specifier "d" for formatting a value of type string
 

@@ -27,7 +27,8 @@ Did you mean "show"?
 statement error
 PRAGMA table_info = 3
 ----
-PLACEHOLDER_ERROR_MESSAGE1981
+Catalog Error: Table with name 3 does not exist!
+Did you mean "pg_am"?
 
 statement ok
 CREATE TABLE integers(i INTEGER)

@@ -148,7 +148,7 @@ ALTER TABLE t2 RENAME TO t3
 statement error con2
 CREATE TABLE t3 (i INTEGER)
 ----
-PLACEHOLDER_ERROR_MESSAGE2624
+TransactionContext Error: Catalog write-write conflict on create with "t3"
 
 statement ok con1
 ROLLBACK

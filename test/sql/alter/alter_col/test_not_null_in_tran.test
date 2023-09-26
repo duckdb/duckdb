@@ -176,7 +176,7 @@ ROLLBACK
 statement error 
 INSERT INTO t VALUES(8888, NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE2593
+Constraint Error: NOT NULL constraint failed: t.j
 
 # NO null values
 query I

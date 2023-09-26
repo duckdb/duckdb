@@ -146,7 +146,7 @@ Binder Error: DEFAULT value cannot contain subqueries
 statement error
 CREATE TABLE test (a INTEGER DEFAULT SUM(42), b INTEGER);
 ----
-PLACEHOLDER_ERROR_MESSAGE1853
+Binder Error: DEFAULT value cannot contain aggregates!
 
 # window functions are not allowed in DEFAULT expressions
 statement error

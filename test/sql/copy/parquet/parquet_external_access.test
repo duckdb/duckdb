@@ -32,7 +32,7 @@ Permission Error: Scanning Parquet files is disabled through configuration
 statement error
 SELECT * FROM parquet_scan(['data/parquet-testing/arrow/lineitem-arrow.parquet', 'data/parquet-testing/arrow/lineitem-arrow.parquet'])
 ----
-PLACEHOLDER_ERROR_MESSAGE2982
+Permission Error: Scanning Parquet files is disabled through configuration
 
 # neither can we glob
 statement error

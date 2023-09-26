@@ -65,7 +65,7 @@ Conversion Error: Could not convert string '170141183460469231731687303715884105
 statement error
 SELECT '-170141183460469231731687303715884105728'::HUGEINT;
 ----
-PLACEHOLDER_ERROR_MESSAGE1037
+Conversion Error: Could not convert string '-170141183460469231731687303715884105728' to INT128
 
 # cast various types to hugeint
 query IIIIII

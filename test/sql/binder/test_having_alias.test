@@ -75,7 +75,7 @@ SELECT COUNT(*) FROM (SELECT i, SUM(RANDOM()) AS k FROM integers GROUP BY i HAVI
 statement error
 SELECT COUNT(i) AS i FROM integers HAVING integers.i=5 ORDER BY i;
 ----
-PLACEHOLDER_ERROR_MESSAGE1424
+Binder Error: column integers.i must appear in the GROUP BY clause or be used in an aggregate function
 
 # recursive alias without aggregate
 statement error

@@ -169,7 +169,7 @@ SELECT nextval('seq')
 statement error
 SELECT nextval('seq')
 ----
-PLACEHOLDER_ERROR_MESSAGE1929
+Serialization Error: nextval: reached maximum value of sequence "seq" (2)
 
 statement ok
 DROP SEQUENCE seq;

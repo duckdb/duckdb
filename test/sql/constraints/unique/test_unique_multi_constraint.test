@@ -59,7 +59,7 @@ Constraint Error: Duplicate key "i: 4" violates primary key constraint. If this 
 statement error
 UPDATE integers SET i=100, j=4 WHERE j=1
 ----
-PLACEHOLDER_ERROR_MESSAGE1214
+Constraint Error: Duplicate key "j: 4" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 # we can insert the old tuple normally
 statement ok

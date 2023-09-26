@@ -103,5 +103,5 @@ ROLLBACK
 statement error con2
 CREATE TABLE s1.dummy(i INTEGER)
 ----
-PLACEHOLDER_ERROR_MESSAGE1759
+Catalog Error: Schema with name s1 does not exist!
 

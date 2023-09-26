@@ -109,4 +109,10 @@ NULL
 statement error
 SELECT regexp_extract('foobarbaz', 'b..', '1')
 ----
-PLACEHOLDER_ERROR_MESSAGE2323
+Binder Error: No function matches the given name and argument types 'regexp_extract(VARCHAR, VARCHAR, VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	regexp_extract(VARCHAR, VARCHAR) -> VARCHAR
+	regexp_extract(VARCHAR, VARCHAR, INTEGER) -> VARCHAR
+	regexp_extract(VARCHAR, VARCHAR, INTEGER, VARCHAR) -> VARCHAR
+	regexp_extract(VARCHAR, VARCHAR, VARCHAR[]) -> VARCHAR
+	regexp_extract(VARCHAR, VARCHAR, VARCHAR[], VARCHAR) -> VARCHAR

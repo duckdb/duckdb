@@ -252,7 +252,9 @@ Parser Error: syntax error at end of input
 statement error
 SELECT LIST()
 ----
-PLACEHOLDER_ERROR_MESSAGE940
+Binder Error: No function matches the given name and argument types 'list()'. You might need to add explicit type casts.
+	Candidate functions:
+	list(ANY) -> LIST
 
 statement error
 SELECT LIST() FROM list_data

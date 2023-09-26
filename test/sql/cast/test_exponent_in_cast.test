@@ -23,7 +23,7 @@ Conversion Error: Could not convert string '  E1' to INT32
 statement error
 SELECT CAST('e1' AS DOUBLE);
 ----
-PLACEHOLDER_ERROR_MESSAGE1508
+Conversion Error: Could not convert string 'e1' to DOUBLE
 
 statement error
 SELECT CAST('  e1' AS DOUBLE);

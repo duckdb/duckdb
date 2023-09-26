@@ -24,7 +24,7 @@ Conversion Error: Could not convert string '0b10105' to INT32
 statement error
 SELECT '${prefix}-1'::INT
 ----
-PLACEHOLDER_ERROR_MESSAGE1490
+Conversion Error: Could not convert string '0b-1' to INT32
 
 statement error
 SELECT '-${prefix}1'::INT

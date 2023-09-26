@@ -27,7 +27,9 @@ foreach func_name approx_count_distinct avg favg bit_and bit_or bit_xor bool_and
 statement error
 SELECT list_aggr('${func_name}')
 ----
-PLACEHOLDER_ERROR_MESSAGE2201
+Binder Error: No function matches the given name and argument types 'list_aggr(VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	list_aggr(ANY[], VARCHAR) -> ANY
 
 statement error
 SELECT list_aggr(*, '${func_name}')

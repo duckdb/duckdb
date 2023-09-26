@@ -108,7 +108,7 @@ CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000'),
 statement error
 SELECT s::USMALLINT FROM strings
 ----
-PLACEHOLDER_ERROR_MESSAGE786
+Conversion Error: Could not convert string '   ' to UINT16
 
 query I
 SELECT TRY_CAST(s AS USMALLINT) FROM strings

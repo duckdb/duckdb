@@ -60,7 +60,7 @@ SELECT (200)::UBIGINT * (200)::UBIGINT;
 statement error
 SELECT (18446744073709551615)::UBIGINT * (3)::UBIGINT;
 ----
-PLACEHOLDER_ERROR_MESSAGE487
+Out of Range Error: Overflow in multiplication of UINT64 (18446744073709551615 * 3)!
 
 # Subtraction
 statement error

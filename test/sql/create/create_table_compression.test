@@ -36,7 +36,7 @@ LINE 1: ... (a INTEGER NOT NULL USING COMPRESSION )
 statement error
 CREATE TABLE T (a INTEGER USING COMPRESSION bla)
 ----
-PLACEHOLDER_ERROR_MESSAGE3057
+Parser Error: Unrecognized option for column compression, expected none, uncompressed, rle, dictionary, pfor, bitpacking or fsst
 
 statement ok
 CREATE TABLE T (a INTEGER NOT NULL USING COMPRESSION RLE)

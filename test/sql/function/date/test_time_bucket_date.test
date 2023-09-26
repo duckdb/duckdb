@@ -386,7 +386,7 @@ Not implemented Error: Period must be greater than 0
 statement error
 select time_bucket('-1 month'::interval, '2019-04-05'::date);
 ----
-PLACEHOLDER_ERROR_MESSAGE2038
+Not implemented Error: Period must be greater than 0
 
 statement error
 select time_bucket('-1 month'::interval, '2019-04-05'::date, '1 week'::interval);

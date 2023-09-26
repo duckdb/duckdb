@@ -30,7 +30,8 @@ Candidate bindings: "integers.i"
 statement error
 SELECT MIN(i) OVER (PARTITION BY i, a ORDER BY i) FROM integers
 ----
-PLACEHOLDER_ERROR_MESSAGE2797
+Binder Error: Referenced column "a" not found in FROM clause!
+Candidate bindings: "integers.i"
 
 statement error
 SELECT MIN(i) OVER (PARTITION BY i ORDER BY i, a) FROM integers

@@ -51,4 +51,4 @@ Binder Error: table tbl has 1 columns but 2 values were supplied
 statement error
 ALTER TABLE tbl DROP COLUMN x;
 ----
-PLACEHOLDER_ERROR_MESSAGE3017
+Catalog Error: Cannot drop column: column is a dependency of 1 or more generated column(s)

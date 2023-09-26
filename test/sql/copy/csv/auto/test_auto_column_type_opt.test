@@ -24,7 +24,8 @@ Invalid Error: Can't pack nothing into a struct
 statement error
 select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK(a := 'BLA'))
 ----
-PLACEHOLDER_ERROR_MESSAGE2891
+Catalog Error: Type with name BLA does not exist!
+Did you mean "bool"?
 
 # Test funky name throws
 statement error

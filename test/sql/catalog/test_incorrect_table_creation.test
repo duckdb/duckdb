@@ -23,5 +23,5 @@ Parser Error: syntax error at end of input
 statement error
 CREATE TABLE integers(i INTEGER PRIMARY KEY, PRIMARY KEY(i)
 ----
-PLACEHOLDER_ERROR_MESSAGE1938
+Parser Error: syntax error at end of input
 

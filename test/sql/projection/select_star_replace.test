@@ -52,4 +52,4 @@ Binder Error: Column "blabla" in REPLACE list not found in integers
 statement error
 SELECT * EXCLUDE (i) REPLACE (i+100 AS i) FROM integers
 ----
-PLACEHOLDER_ERROR_MESSAGE3100
+Parser Error: Column "i" cannot occur in both EXCEPT and REPLACE list

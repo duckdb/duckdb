@@ -101,7 +101,7 @@ Parser Error: DAY TO HOUR is not supported
 statement error
 SELECT interval '12 15:06:04.123' days to seconds
 ----
-PLACEHOLDER_ERROR_MESSAGE500
+Parser Error: DAY TO HOUR is not supported
 
 # 12:30:00
 statement error

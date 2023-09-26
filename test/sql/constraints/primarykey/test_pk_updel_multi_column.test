@@ -56,7 +56,7 @@ INSERT INTO test VALUES (12, 'pandas');
 statement error
 INSERT INTO test VALUES (12, 'pandas');
 ----
-PLACEHOLDER_ERROR_MESSAGE1249
+Constraint Error: Duplicate key "a: 12, b: pandas" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 statement ok
 DELETE FROM test WHERE a=12

@@ -48,7 +48,7 @@ Parser Error: Key name for current_setting needs to be a constant string
 statement error
 SELECT CURRENT_SETTING(NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE2297
+Parser Error: Key name for current_setting needs to be a constant string
 
 statement error
 SELECT CURRENT_SETTING('')

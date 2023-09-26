@@ -55,7 +55,7 @@ INSERT INTO routes VALUES (1, 1);
 statement error
 DROP TABLE agency;
 ----
-PLACEHOLDER_ERROR_MESSAGE1350
+Catalog Error: Could not drop the table because this table is main key table of the table "routes"
 
 statement ok
 DROP TABLE routes;

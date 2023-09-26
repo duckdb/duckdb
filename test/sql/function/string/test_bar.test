@@ -113,7 +113,7 @@ Out of Range Error: Max bar width must not be NaN or infinity
 statement error
 select bar(1, 0, 10, '-infinity'::double)
 ----
-PLACEHOLDER_ERROR_MESSAGE2369
+Out of Range Error: Max bar width must not be NaN or infinity
 
 query I
 select bar(1, 0, 10, 1000)

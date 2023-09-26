@@ -106,7 +106,7 @@ select m[10] from (select MAP(lst,lst) as m from (SELECT LIST(i) as lst FROM ran
 statement error
 select m[1] from (select MAP(LIST_VALUE(1, 1, 1, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T
 ----
-PLACEHOLDER_ERROR_MESSAGE897
+Invalid Input Error: Map keys have to be unique
 
 #String search with a bunch of NULL values in the map
 statement error

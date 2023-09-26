@@ -81,7 +81,10 @@ COMMIT
 statement error con2
 SELECT * FROM entry
 ----
-PLACEHOLDER_ERROR_MESSAGE2649
+Catalog Error: Table with name entry does not exist!
+Did you mean "entry4"?
+LINE 1: SELECT * FROM entry
+                      ^
 
 query I con2
 SELECT * FROM entry4

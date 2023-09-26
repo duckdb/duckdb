@@ -59,7 +59,7 @@ Binder Error: The specified columns as conflict target are not referenced by a U
 statement error
 insert into insertconflicttest values (10, 'Blueberry', 0) on conflict (key, key, key) do update set other = 1
 ----
-PLACEHOLDER_ERROR_MESSAGE1945
+Binder Error: The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT
 
 ## -- This fails on postgres for some reason? -- ##
 statement ok

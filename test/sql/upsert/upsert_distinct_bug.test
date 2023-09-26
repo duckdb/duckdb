@@ -48,7 +48,7 @@ SELECT
   name
 FROM test_table_raw;
 ----
-PLACEHOLDER_ERROR_MESSAGE1958
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "abc001"
 
 statement ok
 SELECT * FROM test_table_raw;

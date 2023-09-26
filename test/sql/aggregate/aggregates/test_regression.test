@@ -50,7 +50,9 @@ select regr_avgy(1,1)
 statement error
 select regr_avgy(*)
 ----
-PLACEHOLDER_ERROR_MESSAGE1604
+Binder Error: No function matches the given name and argument types 'regr_avgy()'. You might need to add explicit type casts.
+	Candidate functions:
+	regr_avgy(DOUBLE, DOUBLE) -> DOUBLE
 
 statement error
 select regr_count()

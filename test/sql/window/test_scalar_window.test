@@ -37,7 +37,7 @@ Binder Error: window function calls cannot be nested
 statement error
 SELECT avg(42) over (partition by row_number() over ())
 ----
-PLACEHOLDER_ERROR_MESSAGE2824
+Parser Error: window functions are not allowed in window definitions
 
 statement error
 SELECT avg(42) over (order by row_number() over ())

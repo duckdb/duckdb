@@ -113,7 +113,7 @@ ROLLBACK
 statement error
 DROP TABLE pkt;
 ----
-PLACEHOLDER_ERROR_MESSAGE1390
+Catalog Error: Could not drop the table because this table is main key table of the table "fkt"
 
 statement ok
 DROP TABLE fkt;

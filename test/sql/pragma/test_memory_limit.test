@@ -112,7 +112,7 @@ Parser Error: Unknown unit for memory_limit: bla (expected: b, mb, gb or tb)
 statement error
 PRAGMA memory_limit='0.01PP'
 ----
-PLACEHOLDER_ERROR_MESSAGE1967
+Parser Error: Unknown unit for memory_limit: pp (expected: b, mb, gb or tb)
 
 statement error
 PRAGMA memory_limit='0.01TEST'

@@ -50,7 +50,7 @@ Constraint Error: Violates foreign key constraint because key "b: 2" does not ex
 statement error
 INSERT INTO tf_2 VALUES (1, 1, 2);
 ----
-PLACEHOLDER_ERROR_MESSAGE1344
+Constraint Error: Violates foreign key constraint because key "c: 2" does not exist in the referenced table
 
 # this succeeds
 statement ok

@@ -131,7 +131,7 @@ SELECT (SELECT MIN(ColID) FROM tbl_ProductSales INNER JOIN another_T t2 ON t1.co
 statement error
 SELECT CASE WHEN NOT col1 NOT IN (SELECT (SELECT MAX(col7)) UNION (SELECT MIN(ColID) FROM tbl_ProductSales LEFT JOIN another_T t2 ON t2.col5 = t1.col1)) THEN 1 ELSE 2 END FROM another_T t1 GROUP BY col1 ORDER BY 1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1430
+Invalid Error: Non-inner join on correlated columns not supported
 
 # REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 2, 2}));
 # correlated columns in window functions not supported yet

@@ -28,7 +28,7 @@ Conversion Error: Type INT64 with value -9223372036854775808 can't be cast becau
 statement error
 SELECT i::UBIGINT FROM bigints
 ----
-PLACEHOLDER_ERROR_MESSAGE768
+Conversion Error: Type INT64 with value -9223372036854775808 can't be cast because the value is out of range for the destination type UINT64
 
 statement error
 SELECT i::UTINYINT FROM bigints WHERE i>=0 ORDER BY i

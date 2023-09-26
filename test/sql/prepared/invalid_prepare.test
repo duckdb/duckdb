@@ -30,7 +30,7 @@ prepare v2 as select $1::int;
 statement error
 execute v2('hello');
 ----
-PLACEHOLDER_ERROR_MESSAGE1094
+Conversion Error: Could not convert string 'hello' to INT32
 
 statement ok
 prepare v3 as select $1::int where 1=0;

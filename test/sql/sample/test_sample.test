@@ -183,7 +183,7 @@ select count(*) from range(1000) using sample reservoir(0.1%);
 statement error
 select * from integers using sample bernoulli(5 rows);
 ----
-PLACEHOLDER_ERROR_MESSAGE2830
+Parser Error: Sample method Bernoulli cannot be used with a discrete sample count, either switch to reservoir sampling or use a sample_size
 
 statement error
 select * from integers using sample system(5 rows);

@@ -65,7 +65,10 @@ COMMIT
 statement error con1
 SELECT i FROM test
 ----
-PLACEHOLDER_ERROR_MESSAGE2677
+Binder Error: Referenced column "i" not found in FROM clause!
+Candidate bindings: "test.k", "test.j"
+LINE 1: SELECT i FROM test
+               ^
 
 statement ok
 SELECT k FROM test

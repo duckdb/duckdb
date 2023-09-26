@@ -130,7 +130,7 @@ Parser Error: LIMIT or OFFSET in a recursive query is not allowed
 statement error
 with recursive t as MATERIALIZED (select 1 as x union select sum(x+1) from t where x < 3 LIMIT 1 OFFSET 1) select * from t
 ----
-PLACEHOLDER_ERROR_MESSAGE3049
+Parser Error: LIMIT or OFFSET in a recursive query is not allowed
 
 # create a view from a recursive cte
 statement ok

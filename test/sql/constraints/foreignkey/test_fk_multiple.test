@@ -40,7 +40,7 @@ Constraint Error: Violates foreign key constraint because key "i1: 3" does not e
 statement error
 INSERT INTO fkt1 VALUES (2, 103);
 ----
-PLACEHOLDER_ERROR_MESSAGE1365
+Constraint Error: Violates foreign key constraint because key "i2: 103" does not exist in the referenced table
 
 statement ok
 INSERT INTO fkt1 VALUES (1, 102), (2, 101);

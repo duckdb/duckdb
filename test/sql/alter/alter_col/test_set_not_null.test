@@ -69,7 +69,7 @@ INSERT INTO t SELECT 4,4 FROM RANGE(65536)
 statement error
 ALTER TABLE t ALTER COLUMN j SET NOT NULL
 ----
-PLACEHOLDER_ERROR_MESSAGE2588
+Constraint Error: NOT NULL constraint failed: t.j
 
 statement ok
 INSERT INTO t VALUES (5, null)

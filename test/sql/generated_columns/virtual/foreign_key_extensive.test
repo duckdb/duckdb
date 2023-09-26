@@ -38,7 +38,7 @@ Did you mean "album"?
 statement error
 CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid, album_name));
 ----
-PLACEHOLDER_ERROR_MESSAGE1157
+Binder Error: Failed to create foreign key: referenced table "album" does not have a column named "album_name"
 
 statement error
 CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, song_album) REFERENCES album(artistid, albumname));

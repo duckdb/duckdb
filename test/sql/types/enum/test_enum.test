@@ -43,7 +43,9 @@ DROP TYPE bla;
 statement error
 CREATE TYPE bla AS ENUM (1,2,3);
 ----
-PLACEHOLDER_ERROR_MESSAGE657
+Parser Error: syntax error at or near "1"
+LINE 1: CREATE TYPE bla AS ENUM (1,2,3);
+                                 ^
 
 # Shouldn't accept NULL
 statement error

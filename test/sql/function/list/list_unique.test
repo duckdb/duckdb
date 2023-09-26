@@ -53,7 +53,9 @@ foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint us
 statement error
 SELECT list_unique(NULL::${type})
 ----
-PLACEHOLDER_ERROR_MESSAGE2290
+Binder Error: No function matches the given name and argument types 'list_unique(BOOLEAN)'. You might need to add explicit type casts.
+	Candidate functions:
+	list_unique(ANY[]) -> UBIGINT
 
 endloop
 

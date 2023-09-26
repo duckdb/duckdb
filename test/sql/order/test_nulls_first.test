@@ -138,5 +138,7 @@ LINE 1: PRAGMA default_null_order=UNKNOWN)
 statement error
 PRAGMA default_null_order=3)
 ----
-PLACEHOLDER_ERROR_MESSAGE216
+Parser Error: syntax error at or near ")"
+LINE 1: PRAGMA default_null_order=3)
+                                   ^
 

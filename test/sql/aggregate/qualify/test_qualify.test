@@ -219,4 +219,4 @@ Did you mean "avg"?
 statement error
 SELECT b, SUM(a) FROM test GROUP BY b QUALIFY row_number() OVER (PARTITION BY b) > sum;
 ----
-PLACEHOLDER_ERROR_MESSAGE1517
+Binder Error: Referenced column sum not found in FROM clause and can't find in alias map.

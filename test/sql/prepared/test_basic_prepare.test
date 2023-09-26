@@ -40,7 +40,7 @@ DEALLOCATE s2
 statement error
 EXECUTE s1(42, 'dpfkg')
 ----
-PLACEHOLDER_ERROR_MESSAGE1106
+Binder Error: Prepared statement "s1" does not exist
 
 # prepare a statement that cannot be prepared
 statement error

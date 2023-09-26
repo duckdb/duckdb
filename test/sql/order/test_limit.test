@@ -53,7 +53,7 @@ Binder Error: Aggregate functions are not supported here
 statement error
 SELECT a FROM test LIMIT row_number() OVER ()
 ----
-PLACEHOLDER_ERROR_MESSAGE185
+Not implemented Error: Unimplemented expression class
 
 # LIMIT Bug #321 Crazy Result
 statement ok

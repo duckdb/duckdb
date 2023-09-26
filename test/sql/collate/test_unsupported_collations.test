@@ -24,7 +24,9 @@ Binder Error: Cannot combine collation types "noaccent" and "noaccent"
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE 1)
 ----
-PLACEHOLDER_ERROR_MESSAGE1404
+Parser Error: syntax error at or near "1"
+LINE 1: ...E TABLE collate_test(s VARCHAR COLLATE 1)
+                                                  ^
 
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE 'hello')

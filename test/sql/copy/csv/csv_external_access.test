@@ -29,7 +29,7 @@ Permission Error: COPY FROM is disabled by configuration
 statement error
 COPY date_test TO '__TEST_DIR__/date.csv'
 ----
-PLACEHOLDER_ERROR_MESSAGE2903
+Permission Error: COPY TO is disabled by configuration
 
 # we also can't just enable external access again
 statement error

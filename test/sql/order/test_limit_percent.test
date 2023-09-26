@@ -85,7 +85,7 @@ Binder Error: Referenced column "a" not found in FROM clause!
 statement error
 SELECT a FROM test LIMIT (a+b*c) %
 ----
-PLACEHOLDER_ERROR_MESSAGE207
+Binder Error: Referenced column "a" not found in FROM clause!
 
 # aggregate in limit percent
 statement error

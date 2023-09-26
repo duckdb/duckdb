@@ -29,7 +29,7 @@ Binder Error: aggregate functions are not allowed in alter statement
 statement error
 ALTER TABLE test ALTER i SET TYPE VARCHAR USING row_id() OVER ()
 ----
-PLACEHOLDER_ERROR_MESSAGE2665
+Binder Error: window functions are not allowed in alter statement
 
 statement error
 ALTER TABLE test ALTER i SET TYPE VARCHAR USING othertable.j

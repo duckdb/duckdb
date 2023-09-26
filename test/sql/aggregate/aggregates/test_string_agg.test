@@ -60,7 +60,7 @@ INSERT INTO strings VALUES (1,'a','/'), (1,'b','-'), (2,'i','/'), (2,NULL,'-'), 
 statement error
 SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings
 ----
-PLACEHOLDER_ERROR_MESSAGE1584
+Binder Error: Separator argument to StringAgg must be a constant
 
 query II
 SELECT g, STRING_AGG(x,'|') FROM strings GROUP BY g ORDER BY g

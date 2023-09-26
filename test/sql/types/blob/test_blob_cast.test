@@ -66,7 +66,7 @@ Conversion Error: Unimplemented type for cast (TINYINT -> BLOB)
 statement error
 SELECT 1::smallint::BYTEA
 ----
-PLACEHOLDER_ERROR_MESSAGE1002
+Conversion Error: Unimplemented type for cast (SMALLINT -> BLOB)
 
 statement error
 SELECT 1::integer::BYTEA

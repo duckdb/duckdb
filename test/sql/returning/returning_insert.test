@@ -157,7 +157,9 @@ Candidate bindings: "table1.a", "table1.b", "table1.c"
 statement error
 INSERT INTO table1 SELECT * from table1 RETURNING row_number() OVER (ORDER BY a) as row_number, a, b FROM table1;
 ----
-PLACEHOLDER_ERROR_MESSAGE263
+Parser Error: syntax error at or near "FROM"
+LINE 1: ... OVER (ORDER BY a) as row_number, a, b FROM table1;
+                                                  ^
 
 statement error
 INSERT INTO table1 VALUES (1, 2, 3) RETURNING [1, 2] IN (SELECT [a, b] from table1);

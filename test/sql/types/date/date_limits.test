@@ -45,7 +45,7 @@ select '290308-01-01 (BC)'::date::timestamp
 statement error
 select '290309-01-01 (BC)'::date::timestamp
 ----
-PLACEHOLDER_ERROR_MESSAGE642
+Conversion Error: Type INT32 with value 290309-01-01 (BC) can't be cast to the destination type INT64
 
 statement error
 select '5877642-06-23 (BC)'::date::timestamp

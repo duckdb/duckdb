@@ -30,7 +30,9 @@ LINE 1: SELECTl ln(0);
 statement error
 SELECTl ln(-1);
 ----
-PLACEHOLDER_ERROR_MESSAGE2096
+Parser Error: syntax error at or near "SELECTl"
+LINE 1: SELECTl ln(-1);
+        ^
 
 statement error
 SELECTl log10(0);

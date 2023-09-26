@@ -46,4 +46,4 @@ Binder Error: Duplicate struct entry name "hello"
 statement error
 SELECT col['HELL'] FROM tbl
 ----
-PLACEHOLDER_ERROR_MESSAGE702
+Binder Error: Could not find key "hell" in struct

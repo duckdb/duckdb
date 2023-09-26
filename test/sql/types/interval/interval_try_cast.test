@@ -23,7 +23,7 @@ Conversion Error: Could not convert string '00:00:' to INTERVAL
 statement error
 SELECT cast('3 doopiedoos' as interval)
 ----
-PLACEHOLDER_ERROR_MESSAGE506
+Conversion Error: extract specifier "doopiedoos" not recognized
 
 statement error
 SELECT cast('3 years 2 doy' as interval)

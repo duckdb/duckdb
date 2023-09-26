@@ -70,7 +70,7 @@ Syntax Error: Invalid escape string. Escape string must be empty or one characte
 statement error
 SELECT '%_' LIKE '%_' ESCAPE '**';
 ----
-PLACEHOLDER_ERROR_MESSAGE2309
+Syntax Error: Invalid escape string. Escape string must be empty or one character.
 
 # Test LIKE statement with ESCAPE in the middle of the pattern
 statement ok

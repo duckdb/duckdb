@@ -80,4 +80,4 @@ CREATE TABLE tbl2 (
 statement error
 INSERT INTO tbl2 VALUES ('test');
 ----
-PLACEHOLDER_ERROR_MESSAGE1150
+Constraint Error: Incorrect value for generated column "y BOOLEAN AS (CAST(x AS BOOLEAN))" : Conversion Error: Could not convert string 'test' to BOOL

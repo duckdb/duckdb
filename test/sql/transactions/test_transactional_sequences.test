@@ -88,7 +88,7 @@ DROP SEQUENCE seq;
 statement error con1
 SELECT nextval('seq');
 ----
-PLACEHOLDER_ERROR_MESSAGE2766
+Catalog Error: Sequence with name seq does not exist!
 
 statement error con2
 SELECT nextval('seq');

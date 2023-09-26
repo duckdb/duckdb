@@ -44,7 +44,7 @@ Binder Error: Positional reference 1 out of range (total 0 columns)
 statement error
 SELECT #0 FROM range(1)
 ----
-PLACEHOLDER_ERROR_MESSAGE3002
+Parser Error: Positional reference node needs to be >= 1
 
 # as do negative numbers
 statement error

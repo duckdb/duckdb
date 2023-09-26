@@ -64,7 +64,7 @@ UPDATE integers SET j=3
 statement error
 UPDATE integers SET i=NULL
 ----
-PLACEHOLDER_ERROR_MESSAGE1395
+Constraint Error: NOT NULL constraint failed: integers.i
 
 statement error
 UPDATE integers SET j=NULL

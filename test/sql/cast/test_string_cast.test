@@ -87,7 +87,7 @@ Conversion Error: Could not convert string '0xHELLO' to INT32
 statement error
 SELECT '0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'::INT
 ----
-PLACEHOLDER_ERROR_MESSAGE1467
+Conversion Error: Could not convert string '0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF' to INT32
 
 # Allowed upper bounds for casting from hex strings to signed integers
 query IIII

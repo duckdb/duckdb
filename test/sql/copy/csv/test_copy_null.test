@@ -91,7 +91,7 @@ Invalid Input Error: The delimiter option cannot exceed a size of 1 byte.
 statement error
 COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (DELIMITER 'null', NULL 'nu');
 ----
-PLACEHOLDER_ERROR_MESSAGE2928
+Invalid Input Error: The delimiter option cannot exceed a size of 1 byte.
 
 # no parameter type
 statement error

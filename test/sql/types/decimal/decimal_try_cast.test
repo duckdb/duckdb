@@ -24,7 +24,7 @@ Conversion Error: Could not convert string "100" to DECIMAL(2,0)
 statement error
 SELECT CAST('100'::DOUBLE AS DECIMAL(2,0))
 ----
-PLACEHOLDER_ERROR_MESSAGE398
+Conversion Error: Could not cast value 100.000000 to DECIMAL(2,0)
 
 statement error
 SELECT CAST(100::DECIMAL(3,0) AS DECIMAL(2,0))

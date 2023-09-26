@@ -81,7 +81,7 @@ Binder Error: Failed to compile regex "[asdadd": missing ]: [asdadd
 statement error
 SELECT COLUMNS(*) + COLUMNS(* EXCLUDE(j)) FROM integers
 ----
-PLACEHOLDER_ERROR_MESSAGE2514
+Binder Error: Multiple different STAR/COLUMNS in the same expression are not supported
 
 # COLUMNS in subquery without FROM clause
 statement error

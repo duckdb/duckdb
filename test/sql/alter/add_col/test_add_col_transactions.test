@@ -114,5 +114,5 @@ ALTER TABLE test ADD COLUMN k INTEGER
 statement error con2
 COMMIT
 ----
-PLACEHOLDER_ERROR_MESSAGE2696
+TransactionContext Error: Failed to commit: TransactionContext Error: Transaction conflict: adding entries to a table that has been altered!
 

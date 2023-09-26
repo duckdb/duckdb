@@ -165,7 +165,7 @@ NULL	NULL	4	4
 statement error
 SELECT 1, 2 FROM t1 UNION (SELECT x, y FROM t1 UNION ALL BY NAME SELECT y, z FROM t2);
 ----
-PLACEHOLDER_ERROR_MESSAGE238
+Binder Error: Set operations can only apply to expressions with the same number of result columns
 
 query III
 SELECT x, y FROM t1 UNION ALL BY NAME SELECT y, z FROM t2 INTERSECT SELECT 2, 2 FROM t1;

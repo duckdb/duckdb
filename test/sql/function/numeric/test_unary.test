@@ -68,7 +68,7 @@ Out of Range Error: Overflow in negation of integer!
 statement error
 SELECT -b from minima;
 ----
-PLACEHOLDER_ERROR_MESSAGE2116
+Out of Range Error: Overflow in negation of integer!
 
 # cannot apply these to a string
 statement error

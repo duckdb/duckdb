@@ -112,4 +112,6 @@ SELECT lgamma(2::hugeint)
 statement error
 SELECT lgamma('asdf')
 ----
-PLACEHOLDER_ERROR_MESSAGE2085
+Binder Error: No function matches the given name and argument types 'lgamma(VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	lgamma(DOUBLE) -> DOUBLE

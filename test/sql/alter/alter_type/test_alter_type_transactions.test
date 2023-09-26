@@ -76,7 +76,7 @@ TransactionContext Error: Transaction conflict: cannot update a table that has b
 statement error con2
 UPDATE test SET j=100
 ----
-PLACEHOLDER_ERROR_MESSAGE2671
+TransactionContext Error: Transaction conflict: cannot update a table that has been altered!
 
 query TI con1
 SELECT * FROM test

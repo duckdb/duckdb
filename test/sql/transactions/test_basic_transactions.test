@@ -62,7 +62,10 @@ COMMIT
 statement error con2
 SELECT * FROM integers
 ----
-PLACEHOLDER_ERROR_MESSAGE2771
+Catalog Error: Table with name integers does not exist!
+Did you mean "integers"?
+LINE 1: SELECT * FROM integers
+                      ^
 
 # but if we rollback and start a new transaction it should see it
 statement ok con2

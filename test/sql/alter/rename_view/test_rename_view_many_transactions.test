@@ -74,7 +74,10 @@ LINE 1: SELECT * FROM vw4
 statement error con3
 SELECT * FROM vw1
 ----
-PLACEHOLDER_ERROR_MESSAGE2727
+Catalog Error: Table with name vw1 does not exist!
+Did you mean "vw3"?
+LINE 1: SELECT * FROM vw1
+                      ^
 
 query I con3
 SELECT * FROM vw2

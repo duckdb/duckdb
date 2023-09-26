@@ -157,7 +157,10 @@ ROLLBACK
 statement error
 SELECT i from integers3
 ----
-PLACEHOLDER_ERROR_MESSAGE1860
+Catalog Error: Table with name integers3 does not exist!
+Did you mean "integers"?
+LINE 1: SELECT i from integers3
+                      ^
 
 # table is not visible to other cons
 statement error con2

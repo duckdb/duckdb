@@ -100,4 +100,4 @@ INSERT INTO list_map VALUES
 	(MAP([NULL], [NULL]))
 ;
 ----
-PLACEHOLDER_ERROR_MESSAGE2971
+Invalid Input Error: Map keys can not be NULL

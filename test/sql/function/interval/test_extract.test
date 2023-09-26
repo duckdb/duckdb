@@ -93,7 +93,7 @@ Not implemented Error: interval units "doy" not recognized
 statement error
 SELECT EXTRACT(week FROM i) FROM intervals
 ----
-PLACEHOLDER_ERROR_MESSAGE2002
+Not implemented Error: interval units "week" not recognized
 
 statement error
 SELECT EXTRACT(yearweek FROM i) FROM intervals

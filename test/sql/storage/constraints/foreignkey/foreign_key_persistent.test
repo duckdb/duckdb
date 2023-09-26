@@ -49,7 +49,7 @@ Constraint Error: Violates foreign key constraint because key "j: 2" is still re
 statement error
 UPDATE fk_integers SET i=4 WHERE j=2;
 ----
-PLACEHOLDER_ERROR_MESSAGE2524
+Binder Error: Referenced update column i not found in table!
 
 statement error
 UPDATE fk_integers SET i=4 WHERE j=2;

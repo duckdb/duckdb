@@ -67,7 +67,7 @@ CREATE TABLE unit (
     amount_sold INTEGER,
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE1136
+Catalog Error: Column with name total_profit already exists!
 
 statement ok
 CREATE TABLE unit (

@@ -116,4 +116,4 @@ create sequence seq7 INCREMENT BY -9223372036854775808 MINVALUE -922337203685477
 statement error
 SELECT nextval('seq7') from generate_series(0,20);
 ----
-PLACEHOLDER_ERROR_MESSAGE1933
+Serialization Error: nextval: reached minimum value of sequence "seq7" (-9223372036854775808)

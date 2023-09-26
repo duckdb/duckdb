@@ -146,7 +146,7 @@ NULL
 statement error
 select round(jaccard('', t), 1) from strings
 ----
-PLACEHOLDER_ERROR_MESSAGE2403
+Invalid Input Error: Jaccard Function: An argument too short!
 
 statement error
 select round(jaccard(s, ''), 1) from strings

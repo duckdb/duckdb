@@ -75,7 +75,7 @@ Conversion Error: Could not convert string 'hello' to INT32
 statement error
 INSERT INTO a VALUES (ROW('hello', [1, 2]))
 ----
-PLACEHOLDER_ERROR_MESSAGE707
+Conversion Error: Could not convert string 'hello' to INT32
 
 statement error
 INSERT INTO a VALUES (ROW(1, ROW(1, 7)))

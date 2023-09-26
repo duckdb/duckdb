@@ -53,7 +53,7 @@ NULL
 statement error
 SELECT i::SMALLINT FROM uintegers ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE778
+Conversion Error: Type UINT32 with value 4294967295 can't be cast because the value is out of range for the destination type INT16
 
 query I
 SELECT TRY_CAST(i AS SMALLINT) FROM uintegers ORDER BY i

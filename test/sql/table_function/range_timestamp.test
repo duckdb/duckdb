@@ -122,7 +122,7 @@ Binder Error: start is bigger than end, but increment is positive: cannot genera
 statement error
 SELECT d FROM range(TIMESTAMP '1992-01-01 00:00:00', TIMESTAMP '1992-12-31 12:00:00', INTERVAL '1 MONTH' - INTERVAL '1 HOUR') tbl(d)
 ----
-PLACEHOLDER_ERROR_MESSAGE3137
+Binder Error: RANGE with composite interval that has mixed signs is not supported
 
 # Infinities will overflow or cause infinite loops (PG behaviour!) so we ban them
 statement error

@@ -87,7 +87,7 @@ Conversion Error: Invalid hex escape code encountered in string -> blob conversi
 statement error
 INSERT INTO blobs VALUES('blablabla\x')
 ----
-PLACEHOLDER_ERROR_MESSAGE2576
+Conversion Error: Invalid hex escape code encountered in string -> blob conversion: unterminated escape code at end of blob
 
 statement ok
 checkpoint

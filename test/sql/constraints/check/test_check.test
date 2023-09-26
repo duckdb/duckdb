@@ -52,7 +52,7 @@ CREATE TABLE indirect_subq(
 	CHECK (i > (2 * (SELECT(1))))
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE1269
+Parser Error: subqueries prohibited in CHECK constraints
 
 statement error
 CREATE TABLE integers2(i INTEGER CHECK(i > (SELECT 42)), j INTEGER)

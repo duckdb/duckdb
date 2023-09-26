@@ -230,7 +230,7 @@ ok
 statement error
 SELECT CAST ('bla' as mood)
 ----
-PLACEHOLDER_ERROR_MESSAGE661
+Conversion Error: Could not convert string 'bla' to UINT8
 
 query I
 SELECT TRY_CAST ('bla' as mood)

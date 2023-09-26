@@ -34,7 +34,7 @@ INSERT INTO tbl VALUES (union_value(b := 1)), (union_value(c := 2)), (union_valu
 statement error
 INSERT INTO tbl VALUES (union_value(b := 3)), (union_value(a := 4)), (union_value(b := 5));
 ----
-PLACEHOLDER_ERROR_MESSAGE842
+Conversion Error: Type UNION(a INTEGER) can't be cast as UNION(b INTEGER, c INTEGER). The member 'a' is not present in target union
 
 query I
 SELECT a.b FROM tbl

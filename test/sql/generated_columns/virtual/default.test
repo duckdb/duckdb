@@ -43,7 +43,10 @@ Invalid Input Error: DEFAULT constraint on GENERATED column "total_profit" is no
 statement error
 select * from unit2
 ----
-PLACEHOLDER_ERROR_MESSAGE1171
+Catalog Error: Table with name unit2 does not exist!
+Did you mean "unit"?
+LINE 1: select * from unit2
+                      ^
 
 statement ok
 CREATE TABLE tbl (

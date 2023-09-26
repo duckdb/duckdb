@@ -51,5 +51,5 @@ Constraint Error: NOT NULL constraint failed: numbers.i
 statement error
 UPDATE numbers SET i=NULL;
 ----
-PLACEHOLDER_ERROR_MESSAGE2835
+Constraint Error: NOT NULL constraint failed: numbers.i
 

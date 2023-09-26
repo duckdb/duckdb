@@ -53,7 +53,7 @@ select MAP()
 statement error
 select MAP(NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE915
+Invalid Error: We need exactly two lists for a map
 
 # Test making MAPs from columns
 statement ok

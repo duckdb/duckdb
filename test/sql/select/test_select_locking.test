@@ -27,4 +27,6 @@ Parser Error: SELECT locking clause is not supported!
 statement error
 SELECT * FROM t KEY SHARE;
 ----
-PLACEHOLDER_ERROR_MESSAGE2989
+Parser Error: syntax error at or near "SHARE"
+LINE 1: SELECT * FROM t KEY SHARE;
+                            ^

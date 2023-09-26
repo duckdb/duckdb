@@ -140,7 +140,7 @@ statement error
 SELECT *
 FROM parquet_scan('__TEST_DIR__/*.parquet', union_by_name=true);
 ----
-PLACEHOLDER_ERROR_MESSAGE2961
+Conversion Error: Unimplemented type for cast (INTEGER -> INTEGER[])
 
 statement ok
 PRAGMA threads=1

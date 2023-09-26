@@ -66,7 +66,7 @@ Not implemented Error: Enum value: '2' not implemented
 statement error
 SELECT ${func_name}([1, 2], 'DESC', 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE2286
+Not implemented Error: Enum value: '2' not implemented
 
 statement error 
 SELECT ${func_name}([1, 2], 2, 2)

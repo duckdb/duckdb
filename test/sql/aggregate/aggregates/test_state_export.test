@@ -157,7 +157,7 @@ Binder Error: Cannot use EXPORT_STATE on aggregate functions with custom binders
 statement error
 SELECT FINALIZE(COMBINE(SUM(d) EXPORT_STATE, AVG(d) EXPORT_STATE)) FROM dummy;
 ----
-PLACEHOLDER_ERROR_MESSAGE1680
+Binder Error: Cannot COMBINE aggregate states from different functions, AGGREGATE_STATE<sum(BIGINT)::HUGEINT> <> AGGREGATE_STATE<avg(BIGINT)::DOUBLE>
 
 statement error
 SELECT combine(NULL, NULL);

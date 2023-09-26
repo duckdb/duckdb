@@ -194,7 +194,11 @@ SELECT INTERVAL '1 year 2 days 2 seconds' / 2;
 statement error
 SELECT 2 / INTERVAL '1 year 2 days 2 seconds';
 ----
-PLACEHOLDER_ERROR_MESSAGE535
+Binder Error: No function matches the given name and argument types '/(INTEGER, INTERVAL)'. You might need to add explicit type casts.
+	Candidate functions:
+	/(FLOAT, FLOAT) -> FLOAT
+	/(DOUBLE, DOUBLE) -> DOUBLE
+	/(INTERVAL, BIGINT) -> INTERVAL
 
 # division by zero
 query T

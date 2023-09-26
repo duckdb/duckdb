@@ -55,7 +55,7 @@ Binder Error: "force_not_null" expected to find 42, but it was not found in the 
 statement error
 COPY test (col_b, col_a) FROM 'test/sql/copy/csv/data/test/force_not_null_reordered.csv' (FORCE_NOT_NULL (col_c, col_b));
 ----
-PLACEHOLDER_ERROR_MESSAGE2898
+Binder Error: "force_not_null" expected to find col_c, but it was not found in the table
 
 # test using a column in FORCE_NOT_NULL that is not a column of the table
 statement error

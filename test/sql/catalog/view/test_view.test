@@ -69,7 +69,8 @@ DROP VIEW v1
 statement error
 DROP VIEW v1
 ----
-PLACEHOLDER_ERROR_MESSAGE1893
+Catalog Error: View with name v1 does not exist!
+Did you mean "t1"?
 
 statement ok
 DROP VIEW IF EXISTS v1

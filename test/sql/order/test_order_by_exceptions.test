@@ -57,7 +57,7 @@ SELECT a % 2, b FROM test UNION SELECT a % 2 AS k, b FROM test ORDER BY a % 2
 statement error
 SELECT a % 2, b FROM test UNION SELECT a % 2 AS k, b FROM test ORDER BY 3
 ----
-PLACEHOLDER_ERROR_MESSAGE191
+Binder Error: ORDER term out of range - should be between 1 and 2
 
 statement error
 SELECT a % 2, b FROM test UNION SELECT a % 2 AS k, b FROM test ORDER BY -1

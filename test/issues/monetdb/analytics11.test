@@ -65,7 +65,7 @@ SELECT
 FROM tbl_ProductSales
 GROUP BY GROUPING SETS((Product_Category))
 ----
-PLACEHOLDER_ERROR_MESSAGE171
+Binder Error: GROUPING function is not supported here
 
 statement error
 SELECT

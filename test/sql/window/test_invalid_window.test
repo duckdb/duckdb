@@ -35,4 +35,4 @@ LINE 1: ...(range between unbounded preceding and unbounded preceding);
 statement error
 select LIST(salary ORDER BY enroll_date) OVER (PARTITION BY depname) FROM empsalary
 ----
-PLACEHOLDER_ERROR_MESSAGE2806
+Parser Error: ORDER BY is not implemented for window functions!
