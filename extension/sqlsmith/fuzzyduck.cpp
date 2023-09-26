@@ -49,6 +49,10 @@ void FuzzyDuck::FuzzAllFunctions() {
 	StatementGenerator generator(context);
 	auto queries = generator.GenerateAllFunctionCalls();
 
+	if (max_queries == 0) {
+		max_queries = queries.size();
+	}
+
 	std::default_random_engine e(seed);
 	std::shuffle(std::begin(queries), std::end(queries), e);
 	BeginFuzzing();
