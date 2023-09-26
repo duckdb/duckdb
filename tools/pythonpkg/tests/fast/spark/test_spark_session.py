@@ -1,7 +1,7 @@
 import pytest
 
-_ = pytest.importorskip("duckdb.spark")
-from duckdb.spark.sql import SparkSession
+_ = pytest.importorskip("duckdb.experimental.spark")
+from duckdb.experimental.spark.sql import SparkSession
 
 
 class TestSparkSession(object):

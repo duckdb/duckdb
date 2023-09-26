@@ -16,8 +16,7 @@
         "id": 101,
         "name": "type_info",
         "type": "shared_ptr<ExtraTypeInfo>",
-        "serialize_property": "type_info_",
-        "optional": true
+        "serialize_property": "type_info_"
       }
     ],
     "pointer_type": "none",
@@ -55,7 +54,7 @@
       {
         "id": 100,
         "name": "map",
-        "type": "unordered_map<string, CommonTableExpressionInfo*>"
+        "type": "case_insensitive_map_t<CommonTableExpressionInfo*>"
       }
     ],
     "pointer_type": "none"
@@ -217,8 +216,7 @@
       {
         "id": 101,
         "name": "star_expr",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       },
       {
         "id": 102,
@@ -276,8 +274,7 @@
       {
         "id": 102,
         "name": "expression",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       },
       {
         "id": 103,
@@ -287,7 +284,7 @@
       {
         "id": 104,
         "name": "compression_type",
-        "type": "CompressionType"
+        "type": "duckdb::CompressionType"
       }
     ],
     "constructor": ["name", "type", "expression", "category"],
@@ -438,7 +435,7 @@
       {
         "id": 105,
         "name": "hive_types_schema",
-        "type": "unordered_map<string, LogicalType>"
+        "type": "case_insensitive_map_t<LogicalType>"
       }
     ],
     "pointer_type": "none"
@@ -620,11 +617,11 @@
       },
       {"id": 133,
         "name": "dialect_options.date_format",
-        "type": "unordered_map<LogicalTypeId, StrpTimeFormat>"
+        "type": "map<LogicalTypeId, StrpTimeFormat>"
       },
       {"id": 134,
         "name": "dialect_options.has_format",
-        "type": "unordered_map<bool, StrpTimeFormat>"
+        "type": "map<LogicalTypeId, bool>"
       }
     ],
     "pointer_type": "none"
@@ -683,7 +680,7 @@
       {
         "id": 106,
         "name": "options",
-        "type": "BufferedCSVReaderOptions"
+        "type": "CSVReaderOptions"
       },
       {
         "id": 107,

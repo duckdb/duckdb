@@ -421,7 +421,8 @@ void FindMinimalQualification(ClientContext &context, const string &catalog_name
 	qualify_schema = true;
 }
 
-bool Catalog::TryAutoLoad(ClientContext &context, const string &extension_name) noexcept {
+bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) noexcept {
+	string extension_name = ExtensionHelper::ApplyExtensionAlias(original_name);
 	if (context.db->ExtensionIsLoaded(extension_name)) {
 		return true;
 	}
@@ -468,6 +469,8 @@ bool Catalog::AutoLoadExtensionByCatalogEntry(ClientContext &context, CatalogTyp
 			extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_COPY_FUNCTIONS);
 		} else if (type == CatalogType::TYPE_ENTRY) {
 			extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_TYPES);
+		} else if (type == CatalogType::COLLATION_ENTRY) {
+			extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_COLLATIONS);
 		}
 
 		if (!extension_name.empty() && ExtensionHelper::CanAutoloadExtension(extension_name)) {
@@ -525,6 +528,8 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 		extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_TYPES);
 	} else if (type == CatalogType::COPY_FUNCTION_ENTRY) {
 		extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_COPY_FUNCTIONS);
+	} else if (type == CatalogType::COLLATION_ENTRY) {
+		extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_COLLATIONS);
 	}
 
 	// if we found an extension that can handle this catalog entry, create an error hinting the user

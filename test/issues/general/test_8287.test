@@ -1,0 +1,11 @@
+# name: test/issues/general/test_8287.test
+# description: Issue 8287: Internal Exception when dropping system catalog function as if it were a Macro
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+drop macro sum;
+----
+Catalog Error: Cannot drop internal catalog entry "sum"!

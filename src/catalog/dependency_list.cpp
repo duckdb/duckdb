@@ -123,4 +123,21 @@ LogicalDependencyList LogicalDependencyList::Deserialize(Deserializer &deseriali
 	return dependency;
 }
 
+bool LogicalDependencyList::operator==(const LogicalDependencyList &other) {
+	if (set.size() != other.set.size()) {
+		return false;
+	}
+
+	for (auto &entry : set) {
+		if (!other.set.count(entry)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+LogicalDependencyList LogicalDependencyList::DefaultValue() {
+	return LogicalDependencyList();
+}
+
 } // namespace duckdb

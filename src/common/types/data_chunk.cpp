@@ -263,7 +263,6 @@ void DataChunk::Deserialize(Deserializer &deserializer) {
 
 	// read and set the row count
 	auto row_count = deserializer.ReadProperty<sel_t>(100, "rows");
-	SetCardinality(row_count);
 
 	// read the types
 	vector<LogicalType> types;
@@ -275,6 +274,7 @@ void DataChunk::Deserialize(Deserializer &deserializer) {
 	// initialize the data chunk
 	D_ASSERT(!types.empty());
 	Initialize(Allocator::DefaultAllocator(), types);
+	SetCardinality(row_count);
 
 	// read the data
 	deserializer.ReadList(102, "columns", [&](Deserializer::List &list, idx_t i) {

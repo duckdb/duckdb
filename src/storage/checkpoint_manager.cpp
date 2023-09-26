@@ -55,6 +55,74 @@ unique_ptr<TableDataWriter> SingleFileCheckpointWriter::GetTableDataWriter(Table
 	return make_uniq<SingleFileTableDataWriter>(*this, table, *table_metadata_writer);
 }
 
+static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEntry>> &schemas) {
+	catalog_entry_vector_t entries;
+	for (auto &schema_p : schemas) {
+		auto &schema = schema_p.get();
+		entries.push_back(schema);
+		schema.Scan(CatalogType::TYPE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			entries.push_back(entry);
+		});
+
+		schema.Scan(CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			entries.push_back(entry);
+		});
+
+		catalog_entry_vector_t tables;
+		vector<reference<ViewCatalogEntry>> views;
+		schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			if (entry.type == CatalogType::TABLE_ENTRY) {
+				tables.push_back(entry.Cast<TableCatalogEntry>());
+			} else if (entry.type == CatalogType::VIEW_ENTRY) {
+				views.push_back(entry.Cast<ViewCatalogEntry>());
+			} else {
+				throw NotImplementedException("Catalog type for entries");
+			}
+		});
+		// Reorder tables because of foreign key constraint
+		ReorderTableEntries(tables);
+		for (auto &table : tables) {
+			entries.push_back(table.get());
+		}
+		for (auto &view : views) {
+			entries.push_back(view.get());
+		}
+
+		schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			if (entry.type == CatalogType::MACRO_ENTRY) {
+				entries.push_back(entry);
+			}
+		});
+
+		schema.Scan(CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			if (entry.type == CatalogType::TABLE_MACRO_ENTRY) {
+				entries.push_back(entry);
+			}
+		});
+
+		schema.Scan(CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) {
+			D_ASSERT(!entry.internal);
+			entries.push_back(entry);
+		});
+	}
+	return entries;
+}
+
 void SingleFileCheckpointWriter::CreateCheckpoint() {
 	auto &config = DBConfig::Get(db);
 	auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
@@ -107,7 +175,6 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	 */
 	BinarySerializer serializer(*metadata_writer);
 	serializer.Begin();
-
 	serializer.WriteList(100, "catalog_entries", catalog_entries.size(), [&](Serializer::List &list, idx_t i) {
 		auto &entry = catalog_entries[i];
 		list.WriteObject([&](Serializer &obj) { WriteEntry(entry.get(), obj); });
@@ -150,7 +217,6 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 void CheckpointReader::LoadCheckpoint(ClientContext &context, MetadataReader &reader) {
 	BinaryDeserializer deserializer(reader);
 	deserializer.Begin();
-
 	deserializer.ReadList(100, "catalog_entries", [&](Deserializer::List &list, idx_t i) {
 		return list.ReadObject([&](Deserializer &obj) { ReadEntry(context, obj); });
 	});

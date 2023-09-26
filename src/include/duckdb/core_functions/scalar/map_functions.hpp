@@ -18,7 +18,7 @@ namespace duckdb {
 struct CardinalityFun {
 	static constexpr const char *Name = "cardinality";
 	static constexpr const char *Parameters = "map";
-	static constexpr const char *Description = "Return the size of the map (or the number of entries in the map).";
+	static constexpr const char *Description = "Returns the size of the map (or the number of entries in the map)";
 	static constexpr const char *Example = "cardinality( map([4, 2], ['a', 'b']) );";
 
 	static ScalarFunction GetFunction();
@@ -27,7 +27,7 @@ struct CardinalityFun {
 struct MapFun {
 	static constexpr const char *Name = "map";
 	static constexpr const char *Parameters = "keys,values";
-	static constexpr const char *Description = "Creates a map from a set of keys and values.";
+	static constexpr const char *Description = "Creates a map from a set of keys and values";
 	static constexpr const char *Example = "map(['key1', 'key2'], ['val1', 'val2'])";
 
 	static ScalarFunction GetFunction();
@@ -45,7 +45,7 @@ struct MapEntriesFun {
 struct MapExtractFun {
 	static constexpr const char *Name = "map_extract";
 	static constexpr const char *Parameters = "map,key";
-	static constexpr const char *Description = "Return a list containing the value for a given key or an empty list if the key is not contained in the map. The type of the key provided in the second parameter must match the type of the map’s keys else an error is returned.";
+	static constexpr const char *Description = "Returns a list containing the value for a given key or an empty list if the key is not contained in the map. The type of the key provided in the second parameter must match the type of the map’s keys else an error is returned";
 	static constexpr const char *Example = "map_extract(map(['key'], ['val']), 'key')";
 
 	static ScalarFunction GetFunction();

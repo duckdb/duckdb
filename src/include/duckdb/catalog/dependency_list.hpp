@@ -75,6 +75,8 @@ public:
 public:
 	void Serialize(Serializer &serializer) const;
 	static LogicalDependencyList Deserialize(Deserializer &deserializer);
+	bool operator==(const LogicalDependencyList &other);
+	static LogicalDependencyList DefaultValue();
 
 private:
 	create_info_set_t set;

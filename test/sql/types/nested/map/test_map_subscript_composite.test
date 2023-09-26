@@ -20,7 +20,7 @@ select m[NULL] from (select MAP(LIST_VALUE([2], [NULL], [3,0], [NULL,NULL],[5,4]
 
 # Null not present on map
 query I
-select m[NULL] from (select MAP(LIST_VALUE({a:3}, {b:4}, {c:5}, {d:6},{e:7}),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
+select m[NULL] from (select MAP(LIST_VALUE({a:3}, {a:4}, {a:5}, {a:6},{a:7}),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
 ----
 []
 
