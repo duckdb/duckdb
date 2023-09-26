@@ -213,7 +213,7 @@ Conversion Error: Could not cast value -2147483648 to DECIMAL(18,9)
 statement error
 SELECT i::DECIMAL(38,29)::INTEGER FROM integers ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE802
+Conversion Error: Could not cast value -2147483648 to DECIMAL(38,29)
 
 query I
 SELECT TRY_CAST(i AS DECIMAL(3,0))::INTEGER FROM integers ORDER BY i

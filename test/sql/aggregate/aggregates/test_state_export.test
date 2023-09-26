@@ -260,7 +260,7 @@ Binder Error: Cannot COMBINE aggregate states from different functions, AGGREGAT
 statement error
 SELECT COMBINE(SUM(42) EXPORT_STATE, 'ASDF'::BLOB);
 ----
-PLACEHOLDER_ERROR_MESSAGE1669
+IO Error: Aggregate state size mismatch, expect 24, got 24 and 4
 
 statement error
 SELECT COMBINE((SUM(42) EXPORT_STATE)::BLOB, SUM(42) EXPORT_STATE);

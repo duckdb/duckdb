@@ -201,7 +201,7 @@ statement error
 SELECT percentile_disc(-.5) WITHIN GROUP (order by col ${sense}) 
 FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
 ----
-PLACEHOLDER_ERROR_MESSAGE1687
+Binder Error: PERCENTILEs can only take parameters in the range [0, 1]
 
 statement error
 SELECT percentile_disc([-.25, .5, .75]) WITHIN GROUP (order by col ${sense}) 

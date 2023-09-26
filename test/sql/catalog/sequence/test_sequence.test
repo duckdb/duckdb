@@ -513,7 +513,8 @@ INSERT INTO strings VALUES ('nonexistant_seq')
 statement error
 SELECT s, nextval(s) FROM strings
 ----
-PLACEHOLDER_ERROR_MESSAGE1918
+Catalog Error: Sequence with name nonexistant_seq does not exist!
+Did you mean "seq"?
 
 # currval causes error for new sequence
 statement ok

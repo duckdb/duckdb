@@ -160,7 +160,7 @@ Catalog Error: Could not drop the table because this table is main key table of 
 statement error
 DROP TABLE pkt2
 ----
-PLACEHOLDER_ERROR_MESSAGE1354
+Catalog Error: Could not drop the table because this table is main key table of the table "fkt1"
 
 statement ok
 DROP TABLE fkt1

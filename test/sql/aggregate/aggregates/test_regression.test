@@ -177,7 +177,9 @@ select regr_sxx(1,1)
 statement error
 select regr_syy()
 ----
-PLACEHOLDER_ERROR_MESSAGE1593
+Binder Error: No function matches the given name and argument types 'regr_syy()'. You might need to add explicit type casts.
+	Candidate functions:
+	regr_syy(DOUBLE, DOUBLE) -> DOUBLE
 
 query I
 select regr_syy(NULL,NULL)

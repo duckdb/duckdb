@@ -395,7 +395,10 @@ Error: Expected a number
 statement error
 SELECT strptime('2000-10-01 24:00:00', '%Y-%m-%d %H:%M:%S')
 ----
-PLACEHOLDER_ERROR_MESSAGE2459
+Invalid Input Error: Could not parse string "2000-10-01 24:00:00" according to format specifier "%Y-%m-%d %H:%M:%S"
+2000-10-01 24:00:00
+           ^
+Error: Hour out of range, expected a value between 0 and 23
 
 # incorrect hour with 12 hour clock
 statement error

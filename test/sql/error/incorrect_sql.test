@@ -160,7 +160,10 @@ LINE 1: SELECT 42; SELEC 42;
 statement error
 SELECT * FROM integers2;
 ----
-PLACEHOLDER_ERROR_MESSAGE3081
+Catalog Error: Table with name integers2 does not exist!
+Did you mean "pg_indexes"?
+LINE 1: SELECT * FROM integers2;
+                      ^
 
 # non-existent schema
 statement error

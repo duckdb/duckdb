@@ -284,7 +284,8 @@ DROP VIEW main_view
 statement error
 DROP VIEW oop_view
 ----
-PLACEHOLDER_ERROR_MESSAGE1877
+Catalog Error: View with name oop_view does not exist!
+Did you mean "out_of_path.oop_view"?
 
 statement ok
 DROP VIEW out_of_path.oop_view

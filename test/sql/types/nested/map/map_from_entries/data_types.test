@@ -320,7 +320,7 @@ select col['1992-09-20 11:30:00'::TIMESTAMP] from timestamp_key;
 statement error
 create table timestamp_key_dup as select MAP_FROM_ENTRIES(ARRAY[('1992-09-20 11:30:00'::TIMESTAMP, 'x'), ('1992-09-20 11:30:00'::TIMESTAMP, 'y')]) col;
 ----
-PLACEHOLDER_ERROR_MESSAGE873
+Invalid Input Error: Map keys have to be unique
 
 # -- UUID --
 # Valid

@@ -211,7 +211,7 @@ DELETE FROM pkt WHERE k=13
 statement error
 UPDATE pkt SET i=5 WHERE k=12
 ----
-PLACEHOLDER_ERROR_MESSAGE1281
+Constraint Error: Violates foreign key constraint because key "j: 2" is still referenced by a foreign key in a different table
 
 statement error
 UPDATE fkt SET i=4 WHERE l=102
