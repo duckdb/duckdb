@@ -432,7 +432,8 @@ void FindMinimalQualification(ClientContext &context, const string &catalog_name
 	qualify_schema = true;
 }
 
-bool Catalog::TryAutoLoad(ClientContext &context, const string &extension_name) noexcept {
+bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) noexcept {
+	string extension_name = ExtensionHelper::ApplyExtensionAlias(original_name);
 	if (context.db->ExtensionIsLoaded(extension_name)) {
 		return true;
 	}
