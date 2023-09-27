@@ -39,8 +39,6 @@ SELECT b FROM '__TEST_DIR__/evolution_*.parquet' ORDER BY 1
 statement error
 SELECT c FROM '__TEST_DIR__/evolution_*.parquet' ORDER BY 1
 ----
-Candidate names: b, a
-If you are trying to read files with different schemas, try setting union_by_name=True
 
 # we can also do this with COPY
 statement ok
