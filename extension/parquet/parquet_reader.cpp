@@ -92,7 +92,7 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	transport.SetLocation(metadata_pos);
 	transport.Prefetch(metadata_pos, footer_len);
 
-	unique_ptr<FileMetaData> metadata;
+	unique_ptr<FileMetaData> metadata = make_uniq<FileMetaData>();
 	if (footer_encrypted) {
 		auto crypto_metadata = make_uniq<FileCryptoMetaData>();
 		crypto_metadata->read(file_proto.get());
@@ -100,31 +100,10 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
 			                            file_handle.path);
 		}
-		metadata = ParquetCryptoWrapper::Read<FileMetaData>(*file_proto, encryption_key);
+		ParquetCryptoWrapper::Read(*metadata, *file_proto, encryption_key);
 	} else {
-		metadata = make_uniq<FileMetaData>();
 		metadata->read(file_proto.get());
 	}
-
-	//	for (auto &row_group : metadata->row_groups) {
-	//		for (auto &column_chunk : row_group.columns) {
-	//			if (!column_chunk.__isset.encrypted_column_metadata) {
-	//				// || !column_chunk.crypto_metadata.__isset.ENCRYPTION_WITH_FOOTER_KEY
-	//				// We can only decrypt when everything is encrypted with footer key (for now)
-	//				continue;
-	//			}
-	//			if (!column_chunk.__isset.encrypted_column_metadata) {
-	//				continue; // Nothing to decrypt
-	//			}
-	//
-	//			auto &ecm = column_chunk.encrypted_column_metadata;
-	//
-	//			// TODO decrypt
-	//
-	//			auto string_proto = CreateThriftGenericProtocol(ecm.c_str(), ecm.length());
-	//			column_chunk.meta_data.statistics.read(string_proto.get());
-	//		}
-	//	}
 
 	return make_shared<ParquetFileMetadataCache>(std::move(metadata), current_time);
 }
@@ -540,6 +519,14 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 		}
 	}
 	return column_stats;
+}
+
+void ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) {
+	if (!parquet_options.encryption_key.empty()) {
+		ParquetCryptoWrapper::Read(object, iprot, parquet_options.encryption_key);
+	} else {
+		object.read(&iprot);
+	}
 }
 
 const ParquetRowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {

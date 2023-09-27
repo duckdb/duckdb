@@ -78,6 +78,8 @@ public:
 
 	static CopyTypeSupport TypeIsSupported(const LogicalType &type);
 
+	void Write(const duckdb_apache::thrift::TBase &object);
+
 private:
 	static CopyTypeSupport DuckDBTypeToParquetTypeInternal(const LogicalType &duckdb_type,
 	                                                       duckdb_parquet::format::Type::type &type);

@@ -105,6 +105,8 @@ public:
 
 	const duckdb_parquet::format::FileMetaData *GetFileMetadata();
 
+	void Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot);
+
 	unique_ptr<BaseStatistics> ReadStatistics(const string &name);
 	static LogicalType DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string);
 

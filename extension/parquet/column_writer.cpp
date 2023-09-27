@@ -678,7 +678,7 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	for (auto &write_info : state.write_info) {
 		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		auto header_start_offset = column_writer.GetTotalWritten();
-		write_info.page_header.write(writer.GetProtocol());
+		writer.Write(write_info.page_header);
 		// total uncompressed size in the column chunk includes the header size (!)
 		total_uncompressed_size += column_writer.GetTotalWritten() - header_start_offset;
 		total_uncompressed_size += write_info.page_header.uncompressed_page_size;

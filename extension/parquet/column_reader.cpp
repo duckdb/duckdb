@@ -247,7 +247,7 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 	defined_decoder.reset();
 	block.reset();
 	PageHeader page_hdr;
-	page_hdr.read(protocol);
+	reader.Read(page_hdr, *protocol);
 
 	switch (page_hdr.type) {
 	case PageType::DATA_PAGE_V2:
