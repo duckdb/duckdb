@@ -216,7 +216,7 @@ struct StringConvert {
 	static NUMPY_T NullValue(bool &set_mask) {
 		if (PANDAS) {
 			set_mask = false;
-			return Py_None;
+			return nullptr;
 		}
 		set_mask = true;
 		return nullptr;
