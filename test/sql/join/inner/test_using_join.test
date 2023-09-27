@@ -87,13 +87,13 @@ SELECT * FROM t1 JOIN t2 USING(a,b)
 statement error
 SELECT * FROM t1 JOIN t2 USING(a) JOIN t2 t2b USING (b);
 ----
-Binder Error: Ambiguous reference to column name "b" (use: "t2.b" or "t1.b")
+Binder Error: Ambiguous reference to column name "b"
 
 # this is the same, but now with a duplicate potential binding on the RHS
 statement error
 select * from (values (1)) tbl(i) join ((values (1)) tbl2(i) join  (values (1)) tbl3(i) on tbl2.i=tbl3.i) using (i)
 ----
-Binder Error: Ambiguous reference to column name "i" (use: "tbl3.i" or "tbl2.i")
+Binder Error: Ambiguous reference to column name "i"
 
 # a chain with the same column name is allowed though!
 query IIIIIII
