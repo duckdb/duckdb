@@ -1,49 +1,58 @@
-import numpy
-import datetime
-import pandas
-import pytest
+import os
+from pathlib import Path
+
 import duckdb
-import re
+import pytest
+from pytest import mark
 
 
-def TestFile(name):
-    import os
+def build_test_file(name: str) -> Path:
+    return Path(__file__).absolute().parent / 'data' / name
 
-    filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', name)
-    return filename
+
+def in_memory_file(name: str):
+    return build_test_file(name).open('rb')
+
+
+parametrize = lambda: mark.parametrize('name', [build_test_file('example.json'), in_memory_file('example.json')])
 
 
 class TestReadJSON(object):
-    def test_read_json_columns(self):
-        rel = duckdb.read_json(TestFile('example.json'), columns={'id': 'integer', 'name': 'varchar'})
+    @parametrize()
+    def test_read_json_columns(self, name):
+        rel = duckdb.read_json(name, columns={'id': 'integer', 'name': 'varchar'})
         res = rel.fetchone()
         print(res)
         assert res == (1, 'O Brother, Where Art Thou?')
 
-    def test_read_json_auto(self):
-        rel = duckdb.read_json(TestFile('example.json'))
+    @parametrize()
+    def test_read_json_auto(self, name):
+        rel = duckdb.read_json(name)
         res = rel.fetchone()
         print(res)
         assert res == (1, 'O Brother, Where Art Thou?')
 
-    def test_read_json_maximum_depth(self):
-        rel = duckdb.read_json(TestFile('example.json'), maximum_depth=4)
+    @parametrize()
+    def test_read_json_maximum_depth(self, name):
+        rel = duckdb.read_json(name, maximum_depth=4)
         res = rel.fetchone()
         print(res)
         assert res == (1, 'O Brother, Where Art Thou?')
 
-    def test_read_json_sample_size(self):
-        rel = duckdb.read_json(TestFile('example.json'), sample_size=2)
+    @parametrize()
+    def test_read_json_sample_size(self, name):
+        rel = duckdb.read_json(name, sample_size=2)
         res = rel.fetchone()
         print(res)
         assert res == (1, 'O Brother, Where Art Thou?')
 
-    def test_read_json_format(self):
+    @parametrize()
+    def test_read_json_format(self, name):
         # Wrong option
         with pytest.raises(duckdb.BinderException, match="format must be one of .* not 'test'"):
-            rel = duckdb.read_json(TestFile('example.json'), format='test')
+            rel = duckdb.read_json(name, format='test')
 
-        rel = duckdb.read_json(TestFile('example.json'), format='unstructured')
+        rel = duckdb.read_json(name, format='unstructured')
         res = rel.fetchone()
         print(res)
         assert res == (
@@ -56,12 +65,13 @@ class TestReadJSON(object):
             ],
         )
 
-    def test_read_json_records(self):
+    @parametrize()
+    def test_read_json_records(self, name):
         # Wrong option
         with pytest.raises(duckdb.BinderException, match="""read_json requires "records" to be one of"""):
-            rel = duckdb.read_json(TestFile('example.json'), records='none')
+            rel = duckdb.read_json(name, records='none')
 
-        rel = duckdb.read_json(TestFile('example.json'), records='true')
+        rel = duckdb.read_json(name, records='true')
         res = rel.fetchone()
         print(res)
         assert res == (1, 'O Brother, Where Art Thou?')
