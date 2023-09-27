@@ -22,12 +22,6 @@ void CSVStateMachine::Reset() {
 	csv_buffer_iterator.Reset();
 }
 
-void CSVStateMachine::Transition(char current_char) {
-	pre_previous_state = previous_state;
-	previous_state = state;
-	state = transition_array[state][static_cast<uint8_t>(current_char)];
-}
-
 void CSVStateMachine::VerifyUTF8() {
 	auto utf_type = Utf8Proc::Analyze(value.c_str(), value.size());
 	if (utf_type == UnicodeType::INVALID) {

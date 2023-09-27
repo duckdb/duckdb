@@ -27,7 +27,11 @@ public:
 	                         CSVStateMachineCache &csv_state_machine_cache_p);
 
 	//! Transition all states to next state, that depends on the current char
-	void Transition(char current_char);
+	inline void Transition(char current_char) {
+		pre_previous_state = previous_state;
+		previous_state = state;
+		state = transition_array[state][static_cast<uint8_t>(current_char)];
+	}
 
 	//! Resets the state machine, so it can be used again
 	void Reset();
