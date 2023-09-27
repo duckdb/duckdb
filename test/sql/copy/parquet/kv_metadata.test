@@ -1,0 +1,18 @@
+# name: test/sql/copy/parquet/kv_metadata.test
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (SELECT 1, 'foo') TO  '__TEST_DIR__/kv_metadata_test.parquet' (FORMAT PARQUET, KV_METADATA {foo: 'bar', baz: 42});
+
+query II
+SELECT * FROM parquet_kv_metadata('__TEST_DIR__/kv_metadata_test.parquet');
+----
+foo	bar
+baz	42
+
+statement error
+COPY (SELECT 1, 'foo') TO  '__TEST_DIR__/kv_metadata_test_fail.parquet' (FORMAT PARQUET, KV_METADATA 'foobar');
+----
+Expected kv_metadata argument to be a STRUCT
