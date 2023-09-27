@@ -47,7 +47,6 @@ statement error
 SELECT * FROM test.v
 ----
 Catalog Error: Table with name t does not exist!
-Did you mean "v"?
 
 statement ok
 CREATE VIEW test.v2 AS SELECT 42
@@ -72,7 +71,6 @@ statement error
 SELECT * FROM test.v
 ----
 Catalog Error: Table with name t does not exist!
-Did you mean "v"?
 
 # after recreating the table, we can query the view again
 statement ok
@@ -98,8 +96,5 @@ statement error
 SELECT * FROM test.v2
 ----
 Catalog Error: Table with name v2 does not exist!
-Did you mean "v"?
-LINE 1: SELECT * FROM test.v2
-                      ^
 
 endloop

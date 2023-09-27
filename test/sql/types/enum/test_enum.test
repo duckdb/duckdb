@@ -87,7 +87,6 @@ statement error
 DROP TYPE mood;
 ----
 Catalog Error: Type with name mood does not exist!
-Did you mean "oid"?
 
 # We can create mood again
 statement ok

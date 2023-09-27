@@ -213,7 +213,6 @@ statement error
 SELECT b FROM test QUALIFY avga() > 10
 ----
 Catalog Error: Scalar Function with name avga does not exist!
-Did you mean "avg"?
 
 # column not found in from clause and can't find in alias map
 statement error

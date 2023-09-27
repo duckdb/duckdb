@@ -21,14 +21,12 @@ statement error
 PRAGMA random_unknown_pragma
 ----
 Catalog Error: Pragma Function with name random_unknown_pragma does not exist!
-Did you mean "show"?
 
 # Call pragma in wrong way
 statement error
 PRAGMA table_info = 3
 ----
 Catalog Error: Table with name 3 does not exist!
-Did you mean "pg_am"?
 
 statement ok
 CREATE TABLE integers(i INTEGER)

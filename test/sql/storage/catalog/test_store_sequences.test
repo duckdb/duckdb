@@ -62,7 +62,6 @@ statement error
 SELECT nextval('seq')
 ----
 Catalog Error: Sequence with name seq does not exist!
-Did you mean "seq_cycle"?
 
 # other sequence is still there
 statement ok

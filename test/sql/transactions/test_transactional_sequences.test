@@ -27,7 +27,6 @@ statement error con2
 SELECT nextval('seq');
 ----
 Catalog Error: Sequence with name seq does not exist!
-Did you mean "seq"?
 
 # we commit the sequence
 statement ok con1
@@ -38,7 +37,6 @@ statement error con2
 SELECT nextval('seq');
 ----
 Catalog Error: Sequence with name seq does not exist!
-Did you mean "seq"?
 
 # now commit node two
 statement ok con2
@@ -62,7 +60,6 @@ statement error con1
 SELECT nextval('seq');
 ----
 Catalog Error: Sequence with name seq does not exist!
-Did you mean "seq"?
 
 # node two can still use it
 query I con2

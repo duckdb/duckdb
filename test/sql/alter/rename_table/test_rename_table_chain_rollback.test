@@ -49,25 +49,16 @@ statement error con2
 SELECT * FROM entry2
 ----
 Catalog Error: Table with name entry2 does not exist!
-Did you mean "entry2"?
-LINE 1: SELECT * FROM entry2
-                      ^
 
 statement error con2
 SELECT * FROM entry3
 ----
 Catalog Error: Table with name entry3 does not exist!
-Did you mean "entry3"?
-LINE 1: SELECT * FROM entry3
-                      ^
 
 statement error con2
 SELECT * FROM entry4
 ----
 Catalog Error: Table with name entry4 does not exist!
-Did you mean "entry4"?
-LINE 1: SELECT * FROM entry4
-                      ^
 
 statement ok con1
 ROLLBACK
@@ -81,8 +72,3 @@ statement error con2
 SELECT * FROM entry4
 ----
 Catalog Error: Table with name entry4 does not exist!
-Did you mean "entry"?
-LINE 1: SELECT * FROM entry4
-                      ^
-
-

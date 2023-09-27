@@ -35,9 +35,6 @@ statement error con1
 SELECT * FROM integers
 ----
 Catalog Error: Table with name integers does not exist!
-Did you mean "pg_indexes"?
-LINE 1: SELECT * FROM integers
-                      ^
 
 # dependency on multiple sequences in default value
 statement ok con1
@@ -68,7 +65,6 @@ statement error con1
 INSERT INTO integers (j) VALUES (1)
 ----
 Catalog Error: Sequence with name seq2 does not exist!
-Did you mean "seq"?
 
 # table is now [1, 1]: query it
 query R con1
@@ -91,7 +87,4 @@ statement error con1
 SELECT * FROM integers
 ----
 Catalog Error: Table with name integers does not exist!
-Did you mean "pg_indexes"?
-LINE 1: SELECT * FROM integers
-                      ^
 

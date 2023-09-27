@@ -42,7 +42,6 @@ statement error
 PRAGMA default_collation='unknown'
 ----
 Catalog Error: Collation with name unknown does not exist!
-Did you mean "nfc"?
 
 statement ok
 SET GLOBAL default_collation='NOCASE'

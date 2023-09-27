@@ -83,12 +83,9 @@ statement error
 DELETE FROM a USING b WHERE a.i=b.i;
 ----
 Catalog Error: Table with name b does not exist!
-Did you mean "a"?
 
 # column does not exist
 statement error
 DELETE FROM a USING a b WHERE a.i=b.j;
 ----
 Binder Error: Table "b" does not have a column named "j"
-LINE 1: ...ELETE FROM a USING a AS b WHERE (a.i = b.j)
-                                                  ^

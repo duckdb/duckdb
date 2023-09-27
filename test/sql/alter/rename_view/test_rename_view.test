@@ -23,9 +23,6 @@ statement error
 SELECT * FROM vw
 ----
 Catalog Error: Table with name vw does not exist!
-Did you mean "vw2"?
-LINE 1: SELECT * FROM vw
-                      ^
 
 statement ok
 ROLLBACK
@@ -40,9 +37,6 @@ statement error
 SELECT * FROM vw2
 ----
 Catalog Error: Table with name vw2 does not exist!
-Did you mean "vw"?
-LINE 1: SELECT * FROM vw2
-                      ^
 
 statement ok
 BEGIN TRANSACTION;
@@ -63,9 +57,6 @@ statement error
 SELECT * FROM vw
 ----
 Catalog Error: Table with name vw does not exist!
-Did you mean "vw2"?
-LINE 1: SELECT * FROM vw
-                      ^
 
 statement ok
 CREATE VIEW vw AS SELECT i+1 AS i FROM tbl
@@ -87,4 +78,3 @@ statement error
 ALTER VIEW nonexistingview RENAME TO my_new_view
 ----
 Catalog Error: View with name nonexistingview does not exist!
-Did you mean "pg_views"?

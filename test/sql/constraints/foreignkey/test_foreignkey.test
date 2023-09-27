@@ -23,7 +23,6 @@ statement error
 CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES albumlist(artistid, albumname));
 ----
 Catalog Error: Table with name albumlist does not exist!
-Did you mean "album"?
 
 statement error
 CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid, album_name));

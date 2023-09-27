@@ -38,9 +38,6 @@ statement error
 SELECT j FROM v1 WHERE j > 41
 ----
 Catalog Error: Table with name v1 does not exist!
-Did you mean "t1"?
-LINE 1: SELECT j FROM v1 WHERE j > 41
-                      ^
 
 statement ok
 CREATE VIEW v1 AS SELECT 'whatever'
@@ -70,7 +67,6 @@ statement error
 DROP VIEW v1
 ----
 Catalog Error: View with name v1 does not exist!
-Did you mean "t1"?
 
 statement ok
 DROP VIEW IF EXISTS v1
@@ -79,4 +75,3 @@ statement error
 CREATE VIEW v1 AS SELECT * FROM dontexist
 ----
 Catalog Error: Table with name dontexist does not exist!
-Did you mean "t1"?

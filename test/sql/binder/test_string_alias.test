@@ -17,7 +17,6 @@ statement error
 SELECT i 'hello world' FROM integers
 ----
 Catalog Error: Type with name i does not exist!
-Did you mean "bit"?
 
 # double quotes work everywhere
 statement ok

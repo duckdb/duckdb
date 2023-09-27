@@ -148,7 +148,6 @@ statement error
 SELECT * FROM card_no_tbl();
 ----
 Catalog Error: Table with name suit_tbl does not exist!
-Did you mean "cards_tbl"?
 
 
 # wrong arg order

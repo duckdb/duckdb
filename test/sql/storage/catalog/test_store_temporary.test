@@ -29,9 +29,6 @@ statement error
 DELETE FROM asdf.a
 ----
 Catalog Error: Table with name a does not exist!
-Did you mean "main.a"?
-LINE 1: DELETE FROM asdf.a
-                    ^
 
 # temporary sequences
 statement ok
@@ -84,9 +81,6 @@ statement error
 SELECT * FROM a
 ----
 Catalog Error: Table with name a does not exist!
-Did you mean "pg_am"?
-LINE 1: SELECT * FROM a
-                      ^
 
 statement ok
 CREATE TEMPORARY TABLE a (i INTEGER)

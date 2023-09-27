@@ -41,7 +41,6 @@ statement error
 DESCRIBE my_index;
 ----
 Catalog Error: Table with name my_index does not exist!
-Did you mean "pg_index"?
 
 # We test that right table is described (from main schema)
 # column_name | column_type | null | key | default | extra

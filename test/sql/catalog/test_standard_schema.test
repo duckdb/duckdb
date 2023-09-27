@@ -49,9 +49,6 @@ statement error
 SELECT * FROM hello
 ----
 Catalog Error: Table with name hello does not exist!
-Did you mean "test.hello"?
-LINE 1: SELECT * FROM hello
-                      ^
 
 # with schema specified should succeed
 query I

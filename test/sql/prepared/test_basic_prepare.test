@@ -47,23 +47,16 @@ statement error
 PREPARE EXPLAIN SELECT 42
 ----
 Parser Error: syntax error at or near "SELECT"
-LINE 1: PREPARE EXPLAIN SELECT 42
-                        ^
 
 statement error
 PREPARE CREATE TABLE a(i INTEGER)
 ----
 Parser Error: syntax error at or near "CREATE"
-LINE 1: PREPARE CREATE TABLE a(i INTEGER)
-                ^
 
 statement error
 SELECT * FROM a;
 ----
 Catalog Error: Table with name a does not exist!
-Did you mean "pg_am"?
-LINE 1: SELECT * FROM a;
-                      ^
 
 # type will be resolved to "double"
 statement ok

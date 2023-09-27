@@ -13,13 +13,11 @@ statement error
 explain SELECT * FROM integers;
 ----
 Catalog Error: Table with name integers does not exist!
-Did you mean "pg_indexes"?
 
 statement error
 explain INSERT INTO integers VALUES (1);
 ----
 Catalog Error: Table with name integers does not exist!
-Did you mean "pg_indexes"?
 
 statement ok
 CREATE TABLE integers(i INTEGER);
@@ -101,9 +99,6 @@ statement error
 SELECT f(1)
 ----
 Catalog Error: Scalar Function with name f does not exist!
-Did you mean "|"?
-LINE 1: SELECT f(1)
-               ^
 
 statement ok
 CREATE MACRO f(x) AS x+1

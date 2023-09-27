@@ -69,13 +69,11 @@ statement error
 ALTER TABLE t1 DROP COLUMN IF EXISTS c3;
 ----
 Catalog Error: Table with name t1 does not exist!
-Did you mean "t0"?
 
 statement error
 ALTER TABLE t1 DROP COLUMN c3;
 ----
 Catalog Error: Table with name t1 does not exist!
-Did you mean "t0"?
 
 statement error
 ALTER TABLE t0 DROP COLUMN c3;

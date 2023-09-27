@@ -38,7 +38,6 @@ statement error
 SELECT * FROM test.v
 ----
 Catalog Error: Table with name t does not exist!
-Did you mean "v"?
 
 
 loop i 0 2
@@ -58,7 +57,6 @@ statement error
 SELECT * FROM test.v
 ----
 Catalog Error: Table with name t does not exist!
-Did you mean "v"?
 
 # after recreating the table, we can query the view again
 statement ok

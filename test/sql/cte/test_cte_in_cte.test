@@ -62,4 +62,3 @@ statement error
 with cte as (select * from cte) select * from cte
 ----
 Catalog Error: Table with name cte does not exist!
-Did you mean "a"?

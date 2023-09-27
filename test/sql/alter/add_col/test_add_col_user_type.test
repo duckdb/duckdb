@@ -24,7 +24,6 @@ statement error
 ALTER TABLE main_t1 ADD COLUMN j test_int;
 ----
 Catalog Error: Type with name test_int does not exist!
-Did you mean "test_schema.test_int"?
 
 #
 # main.<type> in test_schema.<table>

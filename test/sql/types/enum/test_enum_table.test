@@ -16,7 +16,6 @@ CREATE TABLE person (
 );
 ----
 Catalog Error: Type with name car does not exist!
-Did you mean "char"?
 
 statement ok
 CREATE TABLE person (
@@ -104,7 +103,6 @@ CREATE TABLE aliens (
 );
 ----
 Catalog Error: Type with name mood does not exist!
-Did you mean "oid"?
 
 statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');

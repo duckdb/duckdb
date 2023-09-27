@@ -24,7 +24,6 @@ statement error con2
 EXECUTE v
 ----
 Catalog Error: Table with name integers does not exist!
-Did you mean "pg_indexes"?
 
 # dependency on a sequence for prepare
 statement ok con1

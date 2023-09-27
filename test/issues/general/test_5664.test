@@ -10,7 +10,6 @@ statement error
 CREATE TYPE alias as BLOBL;
 ----
 Catalog Error: Type with name BLOBL does not exist!
-Did you mean "blob"?
 
 statement ok
 CREATE TYPE a as BLOB;

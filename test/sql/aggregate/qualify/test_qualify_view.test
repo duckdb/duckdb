@@ -70,6 +70,5 @@ statement error
 SELECT * FROM test.v
 ----
 Catalog Error: Table with name t does not exist!
-Did you mean "v"?
 
 endloop

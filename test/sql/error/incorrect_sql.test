@@ -7,46 +7,34 @@ statement error
 SELEC 42;
 ----
 Parser Error: syntax error at or near "SELEC"
-LINE 1: SELEC 42;
-        ^
 
 statement error
 SELEC 42, 'thisisareallylongstringloremipsumblablathisisareallylongstringloremipsumblablalthisisareallylongstringloremipsumblablalthisisareallylongstringloremipsumblablal';
 ----
 Parser Error: syntax error at or near "SELEC"
-LINE 1: SELEC 42, 'thisisareallylongstringlorem...
-        ^
 
 statement error
 SELEC 42, '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆';
 ----
 Parser Error: syntax error at or near "SELEC"
-LINE 1: SELEC 42, '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆...
-        ^
 
 # unrecognized column
 statement error
 SELECT '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆', x, '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆';
 ----
 Binder Error: Referenced column "x" not found in FROM clause!
-LINE 1: ...🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆', x, '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆...
-                                                  ^
 
 # unrecognized scalar function
 statement error
 SELECT FUNFUNFUN();
 ----
 Catalog Error: Scalar Function with name funfunfun does not exist!
-Did you mean "unbin"?
-LINE 1: SELECT FUNFUNFUN();
-               ^
 
 statement error
 CREATE VIEW v1
 AS SELECT FUNFUNFUN();
 ----
 Catalog Error: Scalar Function with name funfunfun does not exist!
-Did you mean "unbin"?
 
 # unrecognized aggregate parameters
 statement error
@@ -74,9 +62,6 @@ statement error
 SELECT * FROM RANG();
 ----
 Catalog Error: Table Function with name rang does not exist!
-Did you mean "range"?
-LINE 1: SELECT * FROM RANG();
-                      ^
 
 # unknown named parameters
 statement error
@@ -84,60 +69,17 @@ SELECT * FROM RANGE(1, hello=3);
 ----
 Binder Error: Invalid named parameter "hello" for function range
 Function does not accept any named parameters.
-LINE 1: SELECT * FROM RANGE(1, hello=3);
-                      ^
 
 statement error
 SELECT * FROM READ_CSV('x', hello=3);
 ----
 Binder Error: Invalid named parameter "hello" for function read_csv
-Candidates:
-    hive_types_autocast BOOLEAN
-    hive_types ANY
-    union_by_name BOOLEAN
-    filename BOOLEAN
-    dtypes ANY
-    null_padding BOOLEAN
-    parallel BOOLEAN
-    decimal_separator VARCHAR
-    buffer_size UBIGINT
-    columns ANY
-    rejects_limit BIGINT
-    names VARCHAR[]
-    compression VARCHAR
-    ignore_errors BOOLEAN
-    quote VARCHAR
-    max_line_size VARCHAR
-    types ANY
-    skip BIGINT
-    column_types ANY
-    rejects_table VARCHAR
-    normalize_names BOOLEAN
-    all_varchar BOOLEAN
-    nullstr VARCHAR
-    auto_type_candidates ANY
-    sample_size BIGINT
-    auto_detect BOOLEAN
-    timestampformat VARCHAR
-    new_line VARCHAR
-    maximum_line_size VARCHAR
-    allow_quoted_nulls BOOLEAN
-    escape VARCHAR
-    header BOOLEAN
-    hive_partitioning BOOLEAN
-    sep VARCHAR
-    rejects_recovery_columns VARCHAR[]
-    column_names VARCHAR[]
-    dateformat VARCHAR
-    delim VARCHAR
 
 # multiple where clauses
 statement error
 SELECT 42 WHERE 1=1 WHERE 1=0;
 ----
 Parser Error: syntax error at or near "WHERE"
-LINE 1: SELECT 42 WHERE 1=1 WHERE 1=0;
-                            ^
 
 # multiple statements without semi colon
 statement error
@@ -145,25 +87,18 @@ SELECT 42
 SELECT 42;
 ----
 Parser Error: syntax error at or near "SELECT"
-LINE 2: SELECT 42;
-        ^
 
 # multiple statements, but error is only in second statement
 statement error
 SELECT 42; SELEC 42;
 ----
 Parser Error: syntax error at or near "SELEC"
-LINE 1: SELECT 42; SELEC 42;
-                   ^
 
 # non-existent table
 statement error
 SELECT * FROM integers2;
 ----
 Catalog Error: Table with name integers2 does not exist!
-Did you mean "pg_indexes"?
-LINE 1: SELECT * FROM integers2;
-                      ^
 
 # non-existent schema
 statement error
@@ -176,27 +111,18 @@ statement error
 CREATE VIEW v1 AS SELECT * FROM integers2;
 ----
 Catalog Error: Table with name integers2 does not exist!
-Did you mean "pg_indexes"?
 
-# non-existent table in long single-line query
-statement error
+# non-existent table in long single
 with cte1 as (select 42 as j), cte2 as (select ref.j as k from cte1 as ref), cte3 as (select ref2.j+1 as i from cte1 as ref2) SELECT * FROM integers9;
 ----
 Catalog Error: Table with name integers9 does not exist!
-Did you mean "pg_indexes"?
-LINE 1: ... as i from cte1 as ref2) SELECT * FROM integers9;
-                                                  ^
 
 statement error
 with cte1 as (select 42 as j), cte2 as (select ref.j as k from cte1 as ref), cte3 as (select ref2.j+1 as i from cte1 as ref2) SELECT * FROM integers9 where x=3 order by x+1+1+1+1+1+1+1+1+1+1+1;
 ----
 Catalog Error: Table with name integers9 does not exist!
-Did you mean "pg_indexes"?
-LINE 1: ... as i from cte1 as ref2) SELECT * FROM integers9 where x=3 order by x+1+1+1+1+...
-                                                  ^
 
-# non-existent table in multi-line query (Q1)
-statement error
+# non-existent table in multi
 SELECT
     l_returnflag,
     l_linestatus,
@@ -220,9 +146,6 @@ ORDER BY
     l_linestatus;
 ----
 Catalog Error: Table with name lineitem does not exist!
-Did you mean "pg_indexes"?
-LINE 13:     lineitem
-             ^
 
 # now with unicode
 # short unicode error
@@ -230,18 +153,12 @@ statement error
 select 🦆🍞 from 🦆🍞;
 ----
 Catalog Error: Table with name 🦆🍞 does not exist!
-Did you mean "pg_am"?
-LINE 1: select 🦆🍞 from 🦆🍞;
-                         ^
 
 # long unicode error
 statement error
 with 🍞🍞 as (select 'bread' as 🍞), 🦆🦆 as (select ref.🍞 as "🍞" from 🍞🍞 as ref) SELECT * FROM integers9 where x LIKE '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆' order by x+1+1+1+1+1+1+1+1+1+1+1;
 ----
 Catalog Error: Table with name integers9 does not exist!
-Did you mean "pg_indexes"?
-LINE 1: ...s "🍞" from 🍞🍞 as ref) SELECT * FROM integers9 where x LIKE '🦆🦆🦆🦆🦆🦆🦆...
-                                                  ^
 
 statement ok
 CREATE TABLE integers(integ INTEGER);
@@ -257,9 +174,6 @@ statement error
 SELECT * FROM integres;
 ----
 Catalog Error: Table with name integres does not exist!
-Did you mean "integers"?
-LINE 1: SELECT * FROM integres;
-                      ^
 
 # non-existent column
 statement error
@@ -267,8 +181,6 @@ SELECT feathe FROM chickens;
 ----
 Binder Error: Referenced column "feathe" not found in FROM clause!
 Candidate bindings: "chickens.feather"
-LINE 1: SELECT feathe FROM chickens;
-               ^
 
 # non-existent column, with multiple tables
 statement error
@@ -276,24 +188,18 @@ SELECT feathe FROM chickens, integers, strings;
 ----
 Binder Error: Referenced column "feathe" not found in FROM clause!
 Candidate bindings: "chickens.feather"
-LINE 1: SELECT feathe FROM chickens, integers, strings...
-               ^
 
 statement error
 SELECT st FROM chickens, integers, strings;
 ----
 Binder Error: Referenced column "st" not found in FROM clause!
 Candidate bindings: "strings.str", "integers.integ"
-LINE 1: SELECT st FROM chickens, integers, strings;
-               ^
 
 statement error
 SELECT chicken.feather FROM chickens
 ----
 Binder Error: Referenced table "chicken" not found!
 Candidate tables: "chickens"
-LINE 1: SELECT chicken.feather FROM chickens
-               ^
 
 # table-qualified non-existent column
 statement error
@@ -301,8 +207,6 @@ SELECT chicken.st FROM chickens, integers, strings;
 ----
 Binder Error: Referenced table "chicken" not found!
 Candidate tables: "chickens"
-LINE 1: SELECT chicken.st FROM chickens, integers, str...
-               ^
 
 # now with unicode
 statement ok
@@ -313,13 +217,9 @@ SELECT 🦆.🦆🦆🦆 FROM 🦆🍞
 ----
 Binder Error: Referenced table "🦆" not found!
 Candidate tables: "🦆🍞"
-LINE 1: SELECT 🦆.🦆🦆🦆 FROM 🦆🍞
-               ^
 
 statement error
 SELECT 🦆🦆 FROM 🦆🍞, chickens
 ----
 Binder Error: Referenced column "🦆🦆" not found in FROM clause!
 Candidate bindings: "🦆🍞.🦆🦆🦆"
-LINE 1: SELECT 🦆🦆 FROM 🦆🍞, chickens
-               ^

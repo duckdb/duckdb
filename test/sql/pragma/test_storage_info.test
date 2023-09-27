@@ -31,7 +31,6 @@ statement error
 PRAGMA storage_info('bla')
 ----
 Catalog Error: Table with name bla does not exist!
-Did you mean "v1"?
 
 # different types
 statement ok

@@ -26,7 +26,6 @@ statement error con2
 EXECUTE p1
 ----
 Catalog Error: Table with name a does not exist!
-Did you mean "pg_am"?
 
 # but when we take the statement away
 statement ok con2

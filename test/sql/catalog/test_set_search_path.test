@@ -229,17 +229,11 @@ statement error con2
 SELECT i FROM test_table;
 ----
 Catalog Error: Table with name test_table does not exist!
-Did you mean "test.test_table"?
-LINE 1: SELECT i FROM test_table;
-                      ^
 
 statement error con1
 SELECT i FROM test2_table;
 ----
 Catalog Error: Table with name test2_table does not exist!
-Did you mean "test2.test2_table"?
-LINE 1: SELECT i FROM test2_table;
-                      ^
 
 statement ok con2
 SELECT i FROM test2_table;

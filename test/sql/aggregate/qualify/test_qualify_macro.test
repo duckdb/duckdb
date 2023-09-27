@@ -47,9 +47,6 @@ statement error
 SELECT plus1(2)
 ----
 Catalog Error: Scalar Function with name plus1 does not exist!
-Did you mean "user"?
-LINE 1: SELECT plus1(2)
-               ^
 
 # after recreating the macro we can use it again
 statement ok

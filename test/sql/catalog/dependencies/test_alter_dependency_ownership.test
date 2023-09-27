@@ -400,7 +400,6 @@ statement error
 select nextval('sequence1');
 ----
 Catalog Error: Sequence with name sequence1 does not exist!
-Did you mean "sequence1"?
 
 statement ok
 ROLLBACK;

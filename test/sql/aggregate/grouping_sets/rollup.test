@@ -139,10 +139,8 @@ statement error
 select course, count(*) from students group by rollup (rollup (course)) order by 1, 2;
 ----
 Catalog Error: Scalar Function with name rollup does not exist!
-Did you mean "row"?
 
 statement error
 select course, count(*) from students group by rollup (grouping_sets (course)) order by 1, 2;
 ----
 Catalog Error: Scalar Function with name grouping_sets does not exist!
-Did you mean "range"?

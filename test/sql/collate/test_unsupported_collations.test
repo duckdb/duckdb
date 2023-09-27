@@ -7,7 +7,6 @@ statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE blabla)
 ----
 Catalog Error: Collation with name blabla does not exist!
-Did you mean "nfc"?
 
 # non-varchar columns cannot have collations
 statement error
@@ -25,19 +24,14 @@ statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE 1)
 ----
 Parser Error: syntax error at or near "1"
-LINE 1: ...E TABLE collate_test(s VARCHAR COLLATE 1)
-                                                  ^
 
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE 'hello')
 ----
 Parser Error: syntax error at or near "'hello'"
-LINE 1: ...E TABLE collate_test(s VARCHAR COLLATE 'hello')
-                                                  ^
 
 statement error
 PRAGMA default_collation='blabla'
 ----
 Catalog Error: Collation with name blabla does not exist!
-Did you mean "nfc"?
 
