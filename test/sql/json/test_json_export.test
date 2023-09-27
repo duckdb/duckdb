@@ -1,0 +1,50 @@
+# name: test/sql/json/test_json_export.test
+# description: Test Json Export
+# group: [json]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table text(i varchar);
+
+statement ok
+insert into text values ('bla');
+
+statement ok
+export database '__TEST_DIR__/test_export' (FORMAT JSON);
+
+statement ok
+drop table text;
+
+statement ok
+import database '__TEST_DIR__/test_export';
+
+query I
+select * from text;
+----
+bla
+
+statement ok
+COPY text TO '__TEST_DIR__/text.json' (ARRAY)
+
+statement ok
+drop table text;
+
+statement ok
+create table text(i varchar);
+
+statement ok
+COPY text from '__TEST_DIR__/text.json' (ARRAY)
+
+query I
+select * from text;
+----
+bla
+
+query I
+select * from '__TEST_DIR__/text.json';
+----
+bla

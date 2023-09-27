@@ -38,6 +38,7 @@ public:
 	virtual unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) = 0;
 
 protected:
+	virtual void WriteEntry(CatalogEntry &entry, Serializer &serializer);
 	virtual void WriteSchema(SchemaCatalogEntry &schema, Serializer &serializer);
 	virtual void WriteTable(TableCatalogEntry &table, Serializer &serializer);
 	virtual void WriteView(ViewCatalogEntry &table, Serializer &serializer);
@@ -60,6 +61,7 @@ protected:
 
 protected:
 	virtual void LoadCheckpoint(ClientContext &context, MetadataReader &reader);
+	virtual void ReadEntry(ClientContext &context, Deserializer &deserializer);
 	virtual void ReadSchema(ClientContext &context, Deserializer &deserializer);
 	virtual void ReadTable(ClientContext &context, Deserializer &deserializer);
 	virtual void ReadView(ClientContext &context, Deserializer &deserializer);

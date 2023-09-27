@@ -93,11 +93,9 @@ Statement::Statement(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Statemen
 	int length = info.Length();
 
 	if (length <= 0 || !Connection::HasInstance(info[0])) {
-		Napi::TypeError::New(env, "Connection object expected").ThrowAsJavaScriptException();
-		return;
+		throw Napi::TypeError::New(env, "Connection object expected");
 	} else if (length <= 1 || !info[1].IsString()) {
-		Napi::TypeError::New(env, "SQL query expected").ThrowAsJavaScriptException();
-		return;
+		throw Napi::TypeError::New(env, "SQL query expected");
 	}
 
 	connection_ref = Napi::ObjectWrap<Connection>::Unwrap(info[0].As<Napi::Object>());

@@ -66,7 +66,6 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 		row_group_serializer.End();
 	}
 
-	// TODO: Serialize this:
 	auto index_pointers = info->indexes.SerializeIndexes(table_data_writer);
 
 	// Now begin the metadata as a unit

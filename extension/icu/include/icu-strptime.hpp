@@ -12,6 +12,6 @@
 
 namespace duckdb {
 
-void RegisterICUStrptimeFunctions(ClientContext &context);
+void RegisterICUStrptimeFunctions(DatabaseInstance &db);
 
 } // namespace duckdb

@@ -1502,6 +1502,12 @@ timestamp_t CastTimestampMsToUs::Operation(timestamp_t input) {
 }
 
 template <>
+timestamp_t CastTimestampMsToNs::Operation(timestamp_t input) {
+	auto us = CastTimestampMsToUs::Operation<timestamp_t, timestamp_t>(input);
+	return CastTimestampUsToNs::Operation<timestamp_t, timestamp_t>(us);
+}
+
+template <>
 timestamp_t CastTimestampNsToUs::Operation(timestamp_t input) {
 	return Timestamp::FromEpochNanoSeconds(input.value);
 }
@@ -1509,6 +1515,18 @@ timestamp_t CastTimestampNsToUs::Operation(timestamp_t input) {
 template <>
 timestamp_t CastTimestampSecToUs::Operation(timestamp_t input) {
 	return Timestamp::FromEpochSeconds(input.value);
+}
+
+template <>
+timestamp_t CastTimestampSecToMs::Operation(timestamp_t input) {
+	auto us = CastTimestampSecToUs::Operation<timestamp_t, timestamp_t>(input);
+	return CastTimestampUsToMs::Operation<timestamp_t, timestamp_t>(us);
+}
+
+template <>
+timestamp_t CastTimestampSecToNs::Operation(timestamp_t input) {
+	auto us = CastTimestampSecToUs::Operation<timestamp_t, timestamp_t>(input);
+	return CastTimestampUsToNs::Operation<timestamp_t, timestamp_t>(us);
 }
 
 //===--------------------------------------------------------------------===//

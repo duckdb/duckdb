@@ -1,8 +1,8 @@
 import pytest
 
-_ = pytest.importorskip("pyduckdb.spark")
-from pyduckdb.spark.sql.types import Row
-from pyduckdb.spark.sql.types import (
+_ = pytest.importorskip("duckdb.experimental.spark")
+from duckdb.experimental.spark.sql.types import Row
+from duckdb.experimental.spark.sql.types import (
     StringType,
     BinaryType,
     BitstringType,

@@ -95,7 +95,7 @@ const correct_answer_map: Record<string, any[]> = {
   date_array: [
     [],
     [
-      new Date(1970, 0, 1),
+      new Date(Date.UTC(1970, 0, 1)),
       null,
       new Date("0001-01-01T00:00:00.000Z"),
       new Date("9999-12-31T00:00:00.000Z"),
@@ -105,7 +105,7 @@ const correct_answer_map: Record<string, any[]> = {
   timestamp_array: [
     [],
     [
-      new Date(1970, 0, 1),
+      new Date(Date.UTC(1970, 0, 1)),
       null,
       new Date("0001-01-01T00:00:00.000Z"),
       new Date("9999-12-31T23:59:59.999Z"),
@@ -116,7 +116,7 @@ const correct_answer_map: Record<string, any[]> = {
   timestamptz_array: [
     [],
     [
-      new Date(1970, 0, 1),
+      new Date(Date.UTC(1970, 0, 1)),
       null,
       new Date("0001-01-01T00:00:00.000Z"),
       new Date("9999-12-31T23:59:59.999Z"),
@@ -176,7 +176,7 @@ const correct_answer_map: Record<string, any[]> = {
   ],
 
   timestamp: [
-    new Date("1990-01-01T00:00"),
+    new Date(Date.UTC(1990, 0, 1)),
     new Date("9999-12-31T23:59:59.000Z"),
     null,
   ],

@@ -86,7 +86,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	D_ASSERT(!updates);
 
 	Vector offset_vector(LogicalType::UBIGINT, count);
-	idx_t scan_count = ScanVector(state, offset_vector, count);
+	idx_t scan_count = ScanVector(state, offset_vector, count, false);
 	D_ASSERT(scan_count > 0);
 	validity.ScanCount(state.child_states[0], result, count);
 
@@ -132,7 +132,7 @@ void ListColumnData::Skip(ColumnScanState &state, idx_t count) {
 	// note that we only need to read the first and last entry
 	// however, let's just read all "count" entries for now
 	Vector result(LogicalType::UBIGINT, count);
-	idx_t scan_count = ScanVector(state, result, count);
+	idx_t scan_count = ScanVector(state, result, count, false);
 	if (scan_count == 0) {
 		return;
 	}

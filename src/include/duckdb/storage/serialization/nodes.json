@@ -16,8 +16,7 @@
         "id": 101,
         "name": "type_info",
         "type": "shared_ptr<ExtraTypeInfo>",
-        "serialize_property": "type_info_",
-        "optional": true
+        "serialize_property": "type_info_"
       }
     ],
     "pointer_type": "none",
@@ -55,7 +54,7 @@
       {
         "id": 100,
         "name": "map",
-        "type": "unordered_map<string, CommonTableExpressionInfo*>"
+        "type": "case_insensitive_map_t<CommonTableExpressionInfo*>"
       }
     ],
     "pointer_type": "none"
@@ -217,8 +216,7 @@
       {
         "id": 101,
         "name": "star_expr",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       },
       {
         "id": 102,
@@ -276,8 +274,7 @@
       {
         "id": 102,
         "name": "expression",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       },
       {
         "id": 103,
@@ -287,7 +284,7 @@
       {
         "id": 104,
         "name": "compression_type",
-        "type": "CompressionType"
+        "type": "duckdb::CompressionType"
       }
     ],
     "constructor": ["name", "type", "expression", "category"],
@@ -438,7 +435,7 @@
       {
         "id": 105,
         "name": "hive_types_schema",
-        "type": "unordered_map<string, LogicalType>"
+        "type": "case_insensitive_map_t<LogicalType>"
       }
     ],
     "pointer_type": "none"
@@ -543,92 +540,88 @@
         "type": "bool"
       },
       {"id": 114,
-        "name": "sample_chunk_size",
+        "name": "sample_size_chunks",
         "type": "idx_t"
       },
       {"id": 115,
-        "name": "sample_chunks",
-        "type": "idx_t"
-      },
-      {"id": 116,
         "name": "auto_detect",
         "type": "bool"
       },
-      {"id": 117,
+      {"id": 116,
         "name": "file_path",
         "type": "string"
       },
-      {"id": 118,
+      {"id": 117,
         "name": "decimal_separator",
         "type": "string"
       },
-      {"id": 119,
+      {"id": 118,
         "name": "null_padding",
         "type": "bool"
       },
-      {"id": 120,
+      {"id": 119,
         "name": "buffer_size",
         "type": "idx_t"
       },
-      {"id": 121,
+      {"id": 120,
         "name": "file_options",
         "type": "MultiFileReaderOptions"
       },
-      {"id": 122,
+      {"id": 121,
         "name": "force_quote",
         "type": "vector<bool>"
       },
-      {"id": 123,
+      {"id": 122,
         "name": "rejects_table_name",
         "type": "string"
       },
-      {"id": 124,
+      {"id": 123,
         "name": "rejects_limit",
         "type": "idx_t"
       },
-      {"id": 125,
+      {"id": 124,
         "name": "rejects_recovery_columns",
         "type": "vector<string>"
       },
-      {"id": 126,
+      {"id": 125,
         "name": "rejects_recovery_column_ids",
         "type": "vector<idx_t>"
       },
-      {"id": 127,
+      {"id": 126,
         "name": "dialect_options.state_machine_options.delimiter",
         "type": "char"
       },
-      {"id": 128,
+      {"id": 127,
         "name": "dialect_options.state_machine_options.quote",
         "type": "char"
       },
-      {"id": 129,
+      {"id": 128,
         "name": "dialect_options.state_machine_options.escape",
         "type": "char"
       },
-       {"id": 130,
+       {"id": 129,
         "name": "dialect_options.header",
         "type": "bool"
       },
-            {"id": 131,
+            {"id": 130,
         "name": "dialect_options.num_cols",
         "type": "idx_t"
       },
-            {"id": 132,
+            {"id": 131,
         "name": "dialect_options.new_line",
         "type": "NewLineIdentifier"
       },
-            {"id": 133,
+            {"id": 132,
         "name": "dialect_options.skip_rows",
         "type": "idx_t"
       },
-      {"id": 134,
+      {"id": 133,
         "name": "dialect_options.date_format",
-        "type": "unordered_map<LogicalTypeId, StrpTimeFormat>"
+        "type": "map<LogicalTypeId, StrpTimeFormat>"
       },
-      {"id": 135,
+      {"id": 134,
         "name": "dialect_options.has_format",
-        "type": "unordered_map<bool, StrpTimeFormat>"
+        "type": "map<LogicalTypeId, bool>"
       }
     ],
     "pointer_type": "none"
@@ -687,7 +680,7 @@
       {
         "id": 106,
         "name": "options",
-        "type": "BufferedCSVReaderOptions"
+        "type": "CSVReaderOptions"
       },
       {
         "id": 107,

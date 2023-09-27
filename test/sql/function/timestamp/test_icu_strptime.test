@@ -31,6 +31,18 @@ select strptime(NULL, '%Y-%m-%d %H:%M:%S.%g %Z');
 ----
 NULL
 
+# Parse microseconds
+query I
+select strptime('2022-03-05 17:59:17.123456 CST', '%Y-%m-%d %H:%M:%S.%f %Z');
+----
+2022-03-05 15:59:17.123456-08
+
+# Parse nanoseconds
+query I
+select strptime('2022-03-05 17:59:17.123456789 CST', '%Y-%m-%d %H:%M:%S.%n %Z');
+----
+2022-03-05 15:59:17.123457-08
+
 #
 # Parsing pre-Gregorian timestamps
 #

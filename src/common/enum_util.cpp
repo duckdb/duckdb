@@ -11,6 +11,7 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/aggregate_handling.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
@@ -551,6 +552,8 @@ BindingMode EnumUtil::FromString<BindingMode>(const char *value) {
 template<>
 const char* EnumUtil::ToChars<BitpackingMode>(BitpackingMode value) {
 	switch(value) {
+	case BitpackingMode::INVALID:
+		return "INVALID";
 	case BitpackingMode::AUTO:
 		return "AUTO";
 	case BitpackingMode::CONSTANT:
@@ -568,6 +571,9 @@ const char* EnumUtil::ToChars<BitpackingMode>(BitpackingMode value) {
 
 template<>
 BitpackingMode EnumUtil::FromString<BitpackingMode>(const char *value) {
+	if (StringUtil::Equals(value, "INVALID")) {
+		return BitpackingMode::INVALID;
+	}
 	if (StringUtil::Equals(value, "AUTO")) {
 		return BitpackingMode::AUTO;
 	}
@@ -1191,8 +1197,6 @@ const char* EnumUtil::ToChars<DatePartSpecifier>(DatePartSpecifier value) {
 		return "MINUTE";
 	case DatePartSpecifier::HOUR:
 		return "HOUR";
-	case DatePartSpecifier::EPOCH:
-		return "EPOCH";
 	case DatePartSpecifier::DOW:
 		return "DOW";
 	case DatePartSpecifier::ISODOW:
@@ -1215,8 +1219,12 @@ const char* EnumUtil::ToChars<DatePartSpecifier>(DatePartSpecifier value) {
 		return "TIMEZONE_HOUR";
 	case DatePartSpecifier::TIMEZONE_MINUTE:
 		return "TIMEZONE_MINUTE";
+	case DatePartSpecifier::EPOCH:
+		return "EPOCH";
 	case DatePartSpecifier::JULIAN_DAY:
 		return "JULIAN_DAY";
+	case DatePartSpecifier::INVALID:
+		return "INVALID";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -1257,9 +1265,6 @@ DatePartSpecifier EnumUtil::FromString<DatePartSpecifier>(const char *value) {
 	if (StringUtil::Equals(value, "HOUR")) {
 		return DatePartSpecifier::HOUR;
 	}
-	if (StringUtil::Equals(value, "EPOCH")) {
-		return DatePartSpecifier::EPOCH;
-	}
 	if (StringUtil::Equals(value, "DOW")) {
 		return DatePartSpecifier::DOW;
 	}
@@ -1293,8 +1298,14 @@ DatePartSpecifier EnumUtil::FromString<DatePartSpecifier>(const char *value) {
 	if (StringUtil::Equals(value, "TIMEZONE_MINUTE")) {
 		return DatePartSpecifier::TIMEZONE_MINUTE;
 	}
+	if (StringUtil::Equals(value, "EPOCH")) {
+		return DatePartSpecifier::EPOCH;
+	}
 	if (StringUtil::Equals(value, "JULIAN_DAY")) {
 		return DatePartSpecifier::JULIAN_DAY;
+	}
+	if (StringUtil::Equals(value, "INVALID")) {
+		return DatePartSpecifier::INVALID;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4803,6 +4814,29 @@ RelationType EnumUtil::FromString<RelationType>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<RenderMode>(RenderMode value) {
+	switch(value) {
+	case RenderMode::ROWS:
+		return "ROWS";
+	case RenderMode::COLUMNS:
+		return "COLUMNS";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+RenderMode EnumUtil::FromString<RenderMode>(const char *value) {
+	if (StringUtil::Equals(value, "ROWS")) {
+		return RenderMode::ROWS;
+	}
+	if (StringUtil::Equals(value, "COLUMNS")) {
+		return RenderMode::COLUMNS;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value) {
 	switch(value) {
 	case ResultModifierType::LIMIT_MODIFIER:
@@ -5479,6 +5513,8 @@ const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value) {
 		return "LOCALE_APPROPRIATE_DATE";
 	case StrTimeSpecifier::LOCALE_APPROPRIATE_TIME:
 		return "LOCALE_APPROPRIATE_TIME";
+	case StrTimeSpecifier::NANOSECOND_PADDED:
+		return "NANOSECOND_PADDED";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5581,6 +5617,9 @@ StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "LOCALE_APPROPRIATE_TIME")) {
 		return StrTimeSpecifier::LOCALE_APPROPRIATE_TIME;
+	}
+	if (StringUtil::Equals(value, "NANOSECOND_PADDED")) {
+		return StrTimeSpecifier::NANOSECOND_PADDED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -5979,6 +6018,8 @@ const char* EnumUtil::ToChars<UnionInvalidReason>(UnionInvalidReason value) {
 		return "NO_MEMBERS";
 	case UnionInvalidReason::VALIDITY_OVERLAP:
 		return "VALIDITY_OVERLAP";
+	case UnionInvalidReason::TAG_MISMATCH:
+		return "TAG_MISMATCH";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5997,6 +6038,9 @@ UnionInvalidReason EnumUtil::FromString<UnionInvalidReason>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "VALIDITY_OVERLAP")) {
 		return UnionInvalidReason::VALIDITY_OVERLAP;
+	}
+	if (StringUtil::Equals(value, "TAG_MISMATCH")) {
+		return UnionInvalidReason::TAG_MISMATCH;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
