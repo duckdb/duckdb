@@ -113,6 +113,7 @@ CREATE VIEW v1 AS SELECT * FROM integers2;
 Catalog Error: Table with name integers2 does not exist!
 
 # non-existent table in long single
+statement error
 with cte1 as (select 42 as j), cte2 as (select ref.j as k from cte1 as ref), cte3 as (select ref2.j+1 as i from cte1 as ref2) SELECT * FROM integers9;
 ----
 Catalog Error: Table with name integers9 does not exist!
@@ -123,6 +124,7 @@ with cte1 as (select 42 as j), cte2 as (select ref.j as k from cte1 as ref), cte
 Catalog Error: Table with name integers9 does not exist!
 
 # non-existent table in multi
+statement error
 SELECT
     l_returnflag,
     l_linestatus,

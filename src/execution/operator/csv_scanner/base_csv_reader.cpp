@@ -451,8 +451,8 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 				                            "or skipping column conversion (ALL_VARCHAR=1)",
 				                            error_message, col_name, error_line, options.ToString());
 			} else {
-				throw InvalidInputException("%s at line %llu in column %s. Parser options:\n%s ", error_message,
-				                            error_line, col_name, options.ToString());
+				throw InvalidInputException("%s in column %s, at line %llu. Parser options:\n%s ", error_message,
+				                            col_name, error_line, options.ToString());
 			}
 		}
 	}

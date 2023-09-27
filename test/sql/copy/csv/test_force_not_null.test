@@ -72,13 +72,5 @@ COPY test FROM 'test/sql/copy/csv/data/test/force_not_null.csv' (FORCE_NOT_NULL 
 statement error
 COPY test FROM 'test/sql/copy/csv/data/test/force_not_null_inull.csv' (FORCE_NOT_NULL (col_a), HEADER 0);
 ----
-Invalid Input Error: Could not convert string '' to INT32 at line 2 in column "col_a". Parser options:
-  file=test/sql/copy/csv/data/test/force_not_null_inull.csv
-  delimiter=',' (default)
-  quote='"' (default)
-  escape='"' (default)
-  header=0
-  sample_size=20480
-  ignore_errors=0
-  all_varchar=0 
+Invalid Input Error: Could not convert string '' to INT32 in column "col_a", at line 2
 

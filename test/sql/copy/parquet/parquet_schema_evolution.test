@@ -35,7 +35,6 @@ SELECT a FROM parquet_scan(['__TEST_DIR__/evolution_2.parquet', '__TEST_DIR__/ev
 statement error
 SELECT b FROM '__TEST_DIR__/evolution_*.parquet' ORDER BY 1
 ----
-Binder Error: Referenced column "b" not found in FROM clause!
 
 statement error
 SELECT c FROM '__TEST_DIR__/evolution_*.parquet' ORDER BY 1

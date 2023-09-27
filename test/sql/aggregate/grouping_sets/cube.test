@@ -172,8 +172,6 @@ statement error
 select course, count(*) from students group by cube () order by 1, 2;
 ----
 Parser Error: syntax error at or near ")"
-LINE 1: ... count(*) from students group by cube () order by 1, 2;
-                                                  ^
 
 statement error
 select course, count(*) from students group by cube (cube (course)) order by 1, 2;

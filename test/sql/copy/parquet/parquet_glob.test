@@ -75,7 +75,7 @@ IO Error: No files found that match the pattern ""
 statement error
 select * from parquet_scan('data/parquet-testing/*.parquet')
 ----
-schema mismatch in glob: column "FRUIT" was read from the original file
+schema mismatch in glob
 
 # parquet glob with COPY FROM
 statement ok

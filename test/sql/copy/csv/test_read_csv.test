@@ -13,15 +13,7 @@ CREATE TABLE dates (d DATE);
 statement error
 INSERT INTO dates SELECT * FROM read_csv('test/sql/copy/csv/data/test/dateformat.csv', columns=STRUCT_PACK(d := 'DATE'), header=0)
 ----
-Invalid Input Error: date field value out of range: "05/06/2019", expected format is (YYYY-MM-DD) at line 1 in column "d". Parser options:
-  file=test/sql/copy/csv/data/test/dateformat.csv
-  delimiter=',' (default)
-  quote='"' (default)
-  escape='"' (default)
-  header=0
-  sample_size=20480
-  ignore_errors=0
-  all_varchar=0 
+Invalid Input Error: date field value out of range: "05/06/2019", expected format is (YYYY-MM-DD) in column "d", at line 1
 
 # have to specify it ourselves
 statement ok
