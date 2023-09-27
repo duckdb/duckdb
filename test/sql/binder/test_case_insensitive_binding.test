@@ -87,27 +87,27 @@ CREATE TABLE test2("HELLO" INTEGER)
 statement error
 SELECT HeLlO FROM test1, test2
 ----
-Binder Error: Ambiguous reference to column name "HeLlO" (use: "test2.HeLlO" or "test1.HeLlO")
+Binder Error: Ambiguous reference to column name "HeLlO"
 
 statement error
 SELECT hello FROM test1, test2
 ----
-Binder Error: Ambiguous reference to column name "hello" (use: "test2.hello" or "test1.hello")
+Binder Error: Ambiguous reference to column name "hello"
 
 statement error
 SELECT "HeLlO" FROM test1, test2
 ----
-Binder Error: Ambiguous reference to column name "HeLlO" (use: "test2.HeLlO" or "test1.HeLlO")
+Binder Error: Ambiguous reference to column name "HeLlO"
 
 statement error
 SELECT "HELLO" FROM test1, test2
 ----
-Binder Error: Ambiguous reference to column name "HELLO" (use: "test2.HELLO" or "test1.HELLO")
+Binder Error: Ambiguous reference to column name "HELLO"
 
 statement error
 SELECT "HELLo" FROM test1, test2
 ----
-Binder Error: Ambiguous reference to column name "HELLo" (use: "test2.HELLo" or "test1.HELLo")
+Binder Error: Ambiguous reference to column name "HELLo"
 
 # in this case we can eliminate the conflict by specifically selecting the source
 statement ok

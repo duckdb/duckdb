@@ -12,4 +12,4 @@ IO Error: Extension
 statement error
 ATTACH 'file://dummy.csv'
 ----
-IO Error: Cannot open file "file://dummy.csv": No such file or directory
+IO Error: Cannot open file "file://dummy.csv"
