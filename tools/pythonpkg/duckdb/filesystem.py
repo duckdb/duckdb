@@ -2,7 +2,8 @@ from fsspec import filesystem, AbstractFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
 from shutil import copyfileobj
 from .bytes_io_wrapper import BytesIOWrapper
-from io import TextIOBase
+from io import StringIO, BytesIO, TextIOBase, BufferedReader
+import os
 
 
 def is_file_like(obj):
@@ -24,13 +25,21 @@ class ModifiedMemoryFileSystem(MemoryFileSystem):
                 return name
         return f"{protos[0]}://{name}"
 
+    def _get_size(self, filelike):
+        if isinstance(filelike, (StringIO, BytesIO)):
+            return len(filelike.getvalue())
+        elif isinstance(filelike, BufferedReader):
+            return os.stat(filelike.name).st_size
+        else:
+            return getattr(filelike, 'size', 0)
+
     def info(self, path, **kwargs):
         path = self._strip_protocol(path)
         if path in self.store:
             filelike = self.store[path]
             return {
                 "name": path,
-                "size": getattr(filelike, "size", 0),
+                "size": self._get_size(filelike),
                 "type": "file",
                 "created": getattr(filelike, "created", None),
             }
