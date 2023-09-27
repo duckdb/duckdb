@@ -25,6 +25,10 @@ public:
 	explicit CSVStateMachine(CSVReaderOptions &options_p, const CSVStateMachineOptions &state_machine_options,
 	                         shared_ptr<CSVBufferManager> buffer_manager_p,
 	                         CSVStateMachineCache &csv_state_machine_cache_p);
+
+	//! Transition all states to next state, that depends on the current char
+	void Transition(char current_char);
+
 	//! Resets the state machine, so it can be used again
 	void Reset();
 
