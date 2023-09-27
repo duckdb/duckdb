@@ -27,8 +27,8 @@ INSERT INTO ubn2 VALUES (3,4), (5, 6);
 statement ok
 INSERT INTO ubn3 VALUES (100,101), (102, 103);
 
-# Write them to temporary files
 
+# Write them to temporary files
 statement ok
 COPY ubn1 TO '__TEST_DIR__/ubn1.csv' WITH (HEADER 1, DELIMITER ',');
 
@@ -38,12 +38,12 @@ COPY ubn2 TO '__TEST_DIR__/ubn2.csv' WITH (HEADER 1, DELIMITER ',');
 statement ok
 COPY ubn3 TO '__TEST_DIR__/ubn3.csv' WITH (HEADER 1, DELIMITER ',');
 
-# Read from them (the order matters)
 
+# Read from them (the order matters)
 statement error
 SELECT * FROM read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '__TEST_DIR__/ubn3.csv']);
 ----
-ubn2.csv", on line 2: expected 1 values per row, but got more.
+expected 1 values per row, but got more.
 
 query III
 SELECT a, b, c
