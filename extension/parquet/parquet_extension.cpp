@@ -162,6 +162,10 @@ BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
 static MultiFileReaderBindData BindSchema(ClientContext &context, vector<LogicalType> &return_types,
                                           vector<string> &names, ParquetReadBindData &result, ParquetOptions &options) {
 	D_ASSERT(!options.schema.empty());
+	auto &file_options = options.file_options;
+	if (file_options.union_by_name || file_options.hive_partitioning) {
+		throw BinderException("Parquet schema cannot be combined with union_by_name=true or hive_partitioning=true");
+	}
 
 	vector<string> schema_col_names;
 	vector<LogicalType> schema_col_types;
@@ -361,9 +365,6 @@ public:
 			                                                                 *result, parquet_options);
 		} else {
 			// a schema was supplied
-			if (parquet_options.file_options.union_by_name) {
-				throw BinderException("Parquet schema cannot be combined with union_by_name=true");
-			}
 			result->reader_bind = BindSchema(context, result->types, result->names, *result, parquet_options);
 		}
 		if (return_types.empty()) {

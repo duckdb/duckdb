@@ -431,9 +431,7 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(const Value &co
 
 	const auto &column_def = StructValue::GetChildren(column_value)[1];
 	const auto &column_type = column_def.type();
-	if (column_type.id() != LogicalTypeId::STRUCT) {
-		throw BinderException("Parquet schema column definition must be a STRUCT");
-	}
+	D_ASSERT(column_type.id() == LogicalTypeId::STRUCT);
 
 	const auto children = StructValue::GetChildren(column_def);
 	result.name = StringValue::Get(children[0]);
