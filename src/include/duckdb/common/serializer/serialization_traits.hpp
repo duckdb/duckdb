@@ -1,6 +1,7 @@
 #pragma once
 #include <type_traits>
 #include <cstdint>
+#include <atomic>
 
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/unordered_map.hpp"
