@@ -7,8 +7,6 @@ statement error
 SELECT list_string_agg()
 ----
 Binder Error: Macro function 'list_string_agg(l)' requires a single positional argument, but 0 positional arguments were provided.
-LINE 1: SELECT list_string_agg()
-               ^
 
 # scalar values
 query T

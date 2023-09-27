@@ -12,15 +12,11 @@ statement error
 DETACH DATABASE system
 ----
 Parser Error: syntax error at or near "system"
-LINE 1: DETACH DATABASE system
-                        ^
 
 statement error
 DETACH DATABASE temp
 ----
 Parser Error: syntax error at or near "temp"
-LINE 1: DETACH DATABASE temp
-                        ^
 
 # cannot create entries in the system catalog
 statement error

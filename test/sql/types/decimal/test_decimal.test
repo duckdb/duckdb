@@ -151,5 +151,3 @@ statement error
 SELECT '1'::INTEGER(1000);
 ----
 Parser Error: syntax error at or near "("
-LINE 1: SELECT '1'::INTEGER(1000);
-                           ^

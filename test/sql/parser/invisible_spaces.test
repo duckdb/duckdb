@@ -58,8 +58,6 @@ statement error
 SELEC 
 ----
 Parser Error: syntax error at or near "SELEC"
-LINE 1: SELEC 
-        ^
 
 # only a unicode space
 statement ok
@@ -69,5 +67,3 @@ statement error
 S
 ----
 Parser Error: syntax error at or near "S"
-LINE 1: S
-        ^

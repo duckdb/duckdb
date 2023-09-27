@@ -21,8 +21,6 @@ statement error
 SELEC 42
 ----
 Parser Error: syntax error at or near "SELEC"
-LINE 1: SELEC 42
-        ^
 
 query I
 SELECT 42

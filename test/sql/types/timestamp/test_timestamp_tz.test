@@ -25,7 +25,5 @@ statement error
 SELECT '2021-04-29 10:50:09-05'::TIMESTAMPTZ::{datatype}
 ----
 Parser Error: syntax error at or near "{"
-LINE 1: ...'2021-04-29 10:50:09-05'::TIMESTAMPTZ::{datatype}
-                                                  ^
 
 endloop

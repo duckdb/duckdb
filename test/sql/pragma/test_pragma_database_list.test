@@ -20,5 +20,3 @@ statement error
 PRAGMA database_list()
 ----
 Parser Error: syntax error at or near ")"
-LINE 1: PRAGMA database_list()
-                             ^

@@ -62,12 +62,8 @@ statement error
 CREATE TABLE tbl4 IF NOT EXISTS AS SELECT 4;
 ----
 Parser Error: syntax error at or near "IF"
-LINE 1: CREATE TABLE tbl4 IF NOT EXISTS AS SELECT 4;
-                          ^
 
 statement error
 CREATE OR REPLACE TABLE tbl4 IF NOT EXISTS AS SELECT 4;
 ----
 Parser Error: syntax error at or near "IF"
-LINE 1: CREATE OR REPLACE TABLE tbl4 IF NOT EXISTS AS SELECT 4;
-                                     ^

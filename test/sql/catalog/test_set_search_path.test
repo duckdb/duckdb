@@ -166,17 +166,11 @@ statement error
 SELECT in_main FROM table_with_same_name;
 ----
 Binder Error: Referenced column "in_main" not found in FROM clause!
-Candidate bindings: "table_with_same_name.in_test"
-LINE 1: SELECT in_main FROM table_with_same_name;
-               ^
 
 statement error
 SELECT in_test2 FROM table_with_same_name;
 ----
 Binder Error: Referenced column "in_test2" not found in FROM clause!
-Candidate bindings: "table_with_same_name.in_test"
-LINE 1: SELECT in_test2 FROM table_with_same_name;
-               ^
 
 statement ok
 SELECT in_test FROM table_with_same_name;

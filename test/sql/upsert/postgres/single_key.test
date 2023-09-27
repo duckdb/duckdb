@@ -75,8 +75,6 @@ statement error
 insert into insertconflicttest values (1, 'Apple') on conflict (key) do update set fruit = excluded.fruitt;
 ----
 Binder Error: Values list "excluded" does not have a column named "fruitt"
-LINE 1: ... CONFLICT (key ) DO UPDATE SET fruit = excluded.fruitt
-                                                  ^
 
 # inference fails:
 
@@ -115,6 +113,3 @@ statement error
 insert into insertconflicttest AS ict values (6, 'Passionfruit') on conflict (key) do update set fruit = insertconflicttest.fruit;
 ----
 Binder Error: Referenced table "insertconflicttest" not found!
-Candidate tables: "ict"
-LINE 1: ... CONFLICT (key ) DO UPDATE SET fruit = insertconflicttest.fruit
-                                                  ^

@@ -15,9 +15,6 @@ statement error
 SELECT BIGCOLUMN FROM MyTable
 ----
 Binder Error: Referenced column "BIGCOLUMN" not found in FROM clause!
-Candidate bindings: "MyTable.i"
-LINE 1: SELECT BIGCOLUMN FROM MyTable
-               ^
 
 statement ok
 ALTER TABLE MyTable ADD COLUMN "BIGCOLUMN" VARCHAR;

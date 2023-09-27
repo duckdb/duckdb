@@ -9,8 +9,6 @@ statement error
 select list_mode()
 ----
 Binder Error: Macro function 'list_mode(l)' requires a single positional argument, but 0 positional arguments were provided.
-LINE 1: select list_mode()
-               ^
 
 # integers
 statement ok

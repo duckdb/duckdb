@@ -12,8 +12,6 @@ statement error
 SELECT list_any_value()
 ----
 Binder Error: Macro function 'list_any_value(l)' requires a single positional argument, but 0 positional arguments were provided.
-LINE 1: SELECT list_any_value()
-               ^
 
 # different types
 

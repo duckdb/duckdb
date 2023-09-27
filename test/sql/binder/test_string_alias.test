@@ -34,5 +34,3 @@ statement error
 SELECT "hello world".i FROM integers 'hello world'
 ----
 Parser Error: syntax error at or near "'hello world'"
-LINE 1: SELECT "hello world".i FROM integers 'hello world'
-                                             ^

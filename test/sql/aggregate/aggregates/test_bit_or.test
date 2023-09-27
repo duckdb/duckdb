@@ -83,8 +83,6 @@ statement error
 SELECT BIT_OR(BIT_AND(1))
 ----
 Binder Error: aggregate function calls cannot be nested
-LINE 1: SELECT BIT_OR(BIT_AND(1))
-                      ^
 
 #test on bit types
 statement ok

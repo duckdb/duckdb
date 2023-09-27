@@ -21,5 +21,3 @@ statement error
 CREATE OR REPLACE TABLE IF NOT EXISTS integers(i INTEGER)
 ----
 Parser Error: syntax error at or near "NOT"
-LINE 1: CREATE OR REPLACE TABLE IF NOT EXISTS integers(i INTEGER)
-                                   ^

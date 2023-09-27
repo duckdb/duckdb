@@ -28,5 +28,3 @@ statement error
 SELECT * FROM t KEY SHARE;
 ----
 Parser Error: syntax error at or near "SHARE"
-LINE 1: SELECT * FROM t KEY SHARE;
-                            ^

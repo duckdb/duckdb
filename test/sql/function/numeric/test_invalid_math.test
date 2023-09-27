@@ -10,51 +10,37 @@ statement error
 SELECTl log(0);
 ----
 Parser Error: syntax error at or near "SELECTl"
-LINE 1: SELECTl log(0);
-        ^
 
 statement error
 SELECTl log(-1);
 ----
 Parser Error: syntax error at or near "SELECTl"
-LINE 1: SELECTl log(-1);
-        ^
 
 statement error
 SELECTl ln(0);
 ----
 Parser Error: syntax error at or near "SELECTl"
-LINE 1: SELECTl ln(0);
-        ^
 
 statement error
 SELECTl ln(-1);
 ----
 Parser Error: syntax error at or near "SELECTl"
-LINE 1: SELECTl ln(-1);
-        ^
 
 statement error
 SELECTl log10(0);
 ----
 Parser Error: syntax error at or near "SELECTl"
-LINE 1: SELECTl log10(0);
-        ^
 
 statement error
 SELECTl log10(-1);
 ----
 Parser Error: syntax error at or near "SELECTl"
-LINE 1: SELECTl log10(-1);
-        ^
 
 # cannot take square root of a negative number
 statement error
 SELECTl sqrt(-1);
 ----
 Parser Error: syntax error at or near "SELECTl"
-LINE 1: SELECTl sqrt(-1);
-        ^
 
 query I
 SELECT SQRT(0)

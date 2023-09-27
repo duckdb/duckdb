@@ -120,8 +120,6 @@ statement error
 PRAGMA default_null_order())
 ----
 Parser Error: syntax error at or near ")"
-LINE 1: PRAGMA default_null_order())
-                                  ^
 
 statement error
 PRAGMA default_null_order='UNKNOWN'
@@ -132,13 +130,9 @@ statement error
 PRAGMA default_null_order=UNKNOWN)
 ----
 Parser Error: syntax error at or near ")"
-LINE 1: PRAGMA default_null_order=UNKNOWN)
-                                         ^
 
 statement error
 PRAGMA default_null_order=3)
 ----
 Parser Error: syntax error at or near ")"
-LINE 1: PRAGMA default_null_order=3)
-                                   ^
 

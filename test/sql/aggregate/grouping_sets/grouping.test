@@ -187,15 +187,11 @@ statement error
 SELECT GROUPING();
 ----
 Parser Error: syntax error at or near ")"
-LINE 1: SELECT GROUPING();
-                        ^
 
 statement error
 SELECT GROUPING() FROM students;
 ----
 Parser Error: syntax error at or near ")"
-LINE 1: SELECT GROUPING() FROM students;
-                        ^
 
 statement error
 SELECT GROUPING(NULL) FROM students;

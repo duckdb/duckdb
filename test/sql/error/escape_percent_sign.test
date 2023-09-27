@@ -10,6 +10,3 @@ statement error
 select count(*) from list_int where l is distinct from NULL;
 ----
 Binder Error: Referenced column "l" not found in FROM clause!
-Candidate bindings: "list_int.CASE  WHEN (((i % 2) != 0)) THEN (main.list_value(1)) ELSE NULL END"
-LINE 1: select count(*) from list_int where l is distinct from NULL;
-                                            ^

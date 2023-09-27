@@ -199,8 +199,6 @@ statement error
 SELECT * FROM exam QUALIFY row_number() OVER w = 1 WINDOW w AS (ORDER BY mark)
 ----
 Parser Error: syntax error at or near "WINDOW"
-LINE 1: ...M exam QUALIFY row_number() OVER w = 1 WINDOW w AS (ORDER BY mark)
-                                                  ^
 
 # QUALIFY clause requires at least one window function to be specified in at least one of the SELECT column list or the filter predicate of the QUALIFY clause
 statement error

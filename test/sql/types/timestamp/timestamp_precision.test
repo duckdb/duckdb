@@ -73,5 +73,3 @@ statement error
 CREATE TABLE ts_precision(sec TIMESTAMP(1, 1));
 ----
 Parser Error: syntax error at or near ","
-LINE 1: ...EATE TABLE ts_precision(sec TIMESTAMP(1, 1));
-                                                  ^

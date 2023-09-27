@@ -7,8 +7,6 @@ statement error
 select list_skewness()
 ----
 Binder Error: Macro function 'list_skewness(l)' requires a single positional argument, but 0 positional arguments were provided.
-LINE 1: select list_skewness()
-               ^
 
 query I
 select list_skewness([1])

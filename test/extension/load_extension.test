@@ -23,8 +23,6 @@ statement error
 LOAD NULL;
 ----
 Parser Error: syntax error at or near "NULL"
-LINE 1: LOAD NULL;
-             ^
 
 statement ok
 LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';

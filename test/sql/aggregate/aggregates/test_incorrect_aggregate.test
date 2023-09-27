@@ -14,8 +14,6 @@ statement error
 SELECT COUNT(COUNT(1))
 ----
 Binder Error: aggregate function calls cannot be nested
-LINE 1: SELECT COUNT(COUNT(1))
-                     ^
 
 statement error
 SELECT STDDEV_SAMP()
@@ -35,8 +33,6 @@ statement error
 SELECT STDDEV_SAMP(STDDEV_SAMP(1))
 ----
 Binder Error: aggregate function calls cannot be nested
-LINE 1: SELECT STDDEV_SAMP(STDDEV_SAMP(1))
-                           ^
 
 statement error
 SELECT SUM()
@@ -66,8 +62,6 @@ statement error
 SELECT SUM(SUM(1))
 ----
 Binder Error: aggregate function calls cannot be nested
-LINE 1: SELECT SUM(SUM(1))
-                   ^
 
 statement error
 SELECT FIRST()
@@ -89,8 +83,6 @@ statement error
 SELECT FIRST(FIRST(1))
 ----
 Binder Error: aggregate function calls cannot be nested
-LINE 1: SELECT FIRST(FIRST(1))
-                     ^
 
 statement error
 SELECT MAX()
@@ -112,8 +104,6 @@ statement error
 SELECT MAX(MAX(1))
 ----
 Binder Error: aggregate function calls cannot be nested
-LINE 1: SELECT MAX(MAX(1))
-                   ^
 
 statement error
 SELECT MIN()
@@ -135,6 +125,4 @@ statement error
 SELECT MIN(MIN(1))
 ----
 Binder Error: aggregate function calls cannot be nested
-LINE 1: SELECT MIN(MIN(1))
-                   ^
 

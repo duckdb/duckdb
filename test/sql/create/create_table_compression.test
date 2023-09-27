@@ -23,15 +23,11 @@ statement error
 CREATE TABLE T (a INTEGER USING COMPRESSION )
 ----
 Parser Error: syntax error at or near ")"
-LINE 1: ...E TABLE T (a INTEGER USING COMPRESSION )
-                                                  ^
 
 statement error
 CREATE TABLE T (a INTEGER NOT NULL USING COMPRESSION )
 ----
 Parser Error: syntax error at or near ")"
-LINE 1: ... (a INTEGER NOT NULL USING COMPRESSION )
-                                                  ^
 
 statement error
 CREATE TABLE T (a INTEGER USING COMPRESSION bla)

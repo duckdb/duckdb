@@ -135,6 +135,3 @@ statement error
 SELECT s FROM strings WHERE s SIMILAR TO 'ab.*%' {escape ''}
 ----
 Parser Error: syntax error at or near "{"
-LINE 1: ...ROM strings WHERE s SIMILAR TO 'ab.*%' {escape ''}
-                                                  ^
-

@@ -49,5 +49,3 @@ statement error
 SELECT list_bit_xor()
 ----
 Binder Error: Macro function 'list_bit_xor(l)' requires a single positional argument, but 0 positional arguments were provided.
-LINE 1: SELECT list_bit_xor()
-               ^

@@ -66,8 +66,6 @@ statement error
 SELECT NULL::VARCHAR[off] FROM strings
 ----
 Parser Error: syntax error at or near "off"
-LINE 1: SELECT NULL::VARCHAR[off] FROM strings
-                             ^
 
 query T
 SELECT 'hello'[NULL] FROM strings
@@ -81,22 +79,16 @@ statement error
 SELECT NULL::VARCHAR[NULL] FROM strings
 ----
 Parser Error: syntax error at or near "NULL"
-LINE 1: SELECT NULL::VARCHAR[NULL] FROM strings
-                             ^
 
 statement error
 SELECT NULL::VARCHAR[off] FROM strings
 ----
 Parser Error: syntax error at or near "off"
-LINE 1: SELECT NULL::VARCHAR[off] FROM strings
-                             ^
 
 statement error
 SELECT NULL::VARCHAR[NULL] FROM strings
 ----
 Parser Error: syntax error at or near "NULL"
-LINE 1: SELECT NULL::VARCHAR[NULL] FROM strings
-                             ^
 
 # negative offset
 query T

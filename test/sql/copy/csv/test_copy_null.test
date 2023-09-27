@@ -74,8 +74,6 @@ statement error
 COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL null);
 ----
 Parser Error: syntax error at or near "null"
-LINE 1: .../data/test/test_null_option.csv' (NULL null);
-                                                  ^
 
 # delimiter must not appear in the NULL specification
 statement error

@@ -11,8 +11,6 @@ statement error
 SELECT HASH(NULL::ANY);
 ----
 Parser Error: syntax error at or near "ANY"
-LINE 1: SELECT HASH(NULL::ANY);
-                          ^
 
 statement error
 SELECT HASH(NULL::HASH)

@@ -44,16 +44,12 @@ statement error
 CREATE TYPE bla AS ENUM (1,2,3);
 ----
 Parser Error: syntax error at or near "1"
-LINE 1: CREATE TYPE bla AS ENUM (1,2,3);
-                                 ^
 
 # Shouldn't accept NULL
 statement error
 CREATE TYPE bla AS ENUM ('sad',NULL);
 ----
 Parser Error: syntax error at or near "NULL"
-LINE 1: CREATE TYPE bla AS ENUM ('sad',NULL);
-                                       ^
 
 # We don't accept repeated elements?
 statement error
@@ -112,8 +108,6 @@ statement error
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy', NULL);
 ----
 Parser Error: syntax error at or near "NULL"
-LINE 1: ...PE mood AS ENUM ('sad', 'ok', 'happy', NULL);
-                                                  ^
 
 mode skip
 

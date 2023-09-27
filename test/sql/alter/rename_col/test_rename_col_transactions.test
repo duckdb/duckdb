@@ -22,9 +22,6 @@ statement error con1
 SELECT i FROM test
 ----
 Binder Error: Referenced column "i" not found in FROM clause!
-Candidate bindings: "test.k", "test.j"
-LINE 1: SELECT i FROM test
-               ^
 
 statement ok con1
 SELECT k FROM test
@@ -37,9 +34,6 @@ statement error con2
 SELECT k FROM test
 ----
 Binder Error: Referenced column "k" not found in FROM clause!
-Candidate bindings: "test.i", "test.j"
-LINE 1: SELECT k FROM test
-               ^
 
 # now commit
 statement ok con1
@@ -53,9 +47,6 @@ statement error con2
 SELECT k FROM test
 ----
 Binder Error: Referenced column "k" not found in FROM clause!
-Candidate bindings: "test.i", "test.j"
-LINE 1: SELECT k FROM test
-               ^
 
 # now rollback the second transasction
 # it should now see the new name
@@ -66,9 +57,6 @@ statement error con1
 SELECT i FROM test
 ----
 Binder Error: Referenced column "i" not found in FROM clause!
-Candidate bindings: "test.k", "test.j"
-LINE 1: SELECT i FROM test
-               ^
 
 statement ok
 SELECT k FROM test

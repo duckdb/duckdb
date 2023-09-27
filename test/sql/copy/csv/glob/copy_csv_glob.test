@@ -27,6 +27,3 @@ statement error
 COPY dates FROM read_csv('test/sql/copy/csv/data/glob/*/a*a.csv', auto_detect=1)
 ----
 Parser Error: syntax error at or near "read_csv"
-LINE 1: COPY dates FROM read_csv('test/sql/copy/csv/data/glob/*...
-                        ^
-

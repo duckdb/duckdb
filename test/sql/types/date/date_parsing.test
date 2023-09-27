@@ -375,8 +375,6 @@ statement error
 SELECT '-291000-01-01'::DATE:VARCHAR;
 ----
 Parser Error: syntax error at or near ":"
-LINE 1: SELECT '-291000-01-01'::DATE:VARCHAR;
-                                    ^
 
 statement ok
 SELECT '291000-01-01'::DATE::VARCHAR;
@@ -385,8 +383,6 @@ statement error
 SELECT '291000-01-01 (BC)'::DATE:VARCHAR;
 ----
 Parser Error: syntax error at or near ":"
-LINE 1: SELECT '291000-01-01 (BC)'::DATE:VARCHAR;
-                                        ^
 
 statement error
 SELECT '-a'::DATE::VARCHAR

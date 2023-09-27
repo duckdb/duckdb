@@ -146,8 +146,6 @@ statement error
 select TRIM()
 ----
 Parser Error: syntax error at or near ")"
-LINE 1: select TRIM()
-                    ^
 
 statement error
 select TRIM('hello', 'world', 'aaa')

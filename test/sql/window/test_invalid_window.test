@@ -21,15 +21,11 @@ statement error
 select row_number() over (range between unbounded following and unbounded preceding);
 ----
 Parser Error: frame start cannot be UNBOUNDED FOLLOWING
-LINE 1: ...elect row_number() over (range between unbounded following and unbounded prece...
-                                                  ^
 
 statement error
 select row_number() over (range between unbounded preceding and unbounded preceding);
 ----
 Parser Error: frame end cannot be UNBOUNDED PRECEDING
-LINE 1: ...(range between unbounded preceding and unbounded preceding);
-                                                  ^
 
 # ORDER BY is not implemented for window functions
 statement error

@@ -7,8 +7,6 @@ statement error
 select list_product()
 ----
 Binder Error: Macro function 'list_product(l)' requires a single positional argument, but 0 positional arguments were provided.
-LINE 1: select list_product()
-               ^
 
 statement ok
 CREATE TABLE integers(i INTEGER[]);
