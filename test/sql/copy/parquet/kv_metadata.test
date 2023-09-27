@@ -7,7 +7,7 @@ statement ok
 COPY (SELECT 1, 'foo') TO  '__TEST_DIR__/kv_metadata_test.parquet' (FORMAT PARQUET, KV_METADATA {foo: 'bar', baz: 42});
 
 query II
-SELECT * FROM parquet_kv_metadata('__TEST_DIR__/kv_metadata_test.parquet');
+SELECT key::VARCHAR, value::VARCHAR FROM parquet_kv_metadata('__TEST_DIR__/kv_metadata_test.parquet');
 ----
 foo	bar
 baz	42

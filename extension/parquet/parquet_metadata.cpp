@@ -435,10 +435,10 @@ void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const v
 
 void ParquetMetaDataOperatorData::BindKeyValueMetaData(vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("key");
-	return_types.emplace_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::BLOB);
 
 	names.emplace_back("value");
-	return_types.emplace_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::BLOB);
 }
 
 void ParquetMetaDataOperatorData::LoadKeyValueMetaData(ClientContext &context, const vector<LogicalType> &return_types,
@@ -454,8 +454,8 @@ void ParquetMetaDataOperatorData::LoadKeyValueMetaData(ClientContext &context, c
 	for (idx_t col_idx = 0; col_idx < meta_data->key_value_metadata.size(); col_idx++) {
 		auto &entry = meta_data->key_value_metadata[col_idx];
 
-		current_chunk.SetValue(0, count, entry.key);
-		current_chunk.SetValue(1, count, entry.value);
+		current_chunk.SetValue(0, count, Value::BLOB_RAW(entry.key));
+		current_chunk.SetValue(1, count, Value::BLOB_RAW(entry.value));
 
 		count++;
 		if (count >= STANDARD_VECTOR_SIZE) {
