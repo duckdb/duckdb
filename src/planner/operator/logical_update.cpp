@@ -9,9 +9,10 @@ LogicalUpdate::LogicalUpdate(TableCatalogEntry &table)
     : LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE), table(table), table_index(0), return_chunk(false) {
 }
 
-LogicalUpdate::LogicalUpdate(ClientContext &context, const string &catalog, const string &schema, const string &table)
+LogicalUpdate::LogicalUpdate(ClientContext &context, const unique_ptr<CreateInfo> &table_info)
     : LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE),
-      table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table)) {
+      table(Catalog::GetEntry<TableCatalogEntry>(context, table_info->catalog, table_info->schema,
+                                                 dynamic_cast<CreateTableInfo &>(*table_info).table)) {
 }
 
 idx_t LogicalUpdate::EstimateCardinality(ClientContext &context) {

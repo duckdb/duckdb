@@ -11,3 +11,13 @@ query I
 SELECT json_contains(NULL::VARCHAR, NULL::VARCHAR);
 ----
 NULL
+
+query I
+WITH cte AS (
+    SELECT NULL::VARCHAR j
+    FROM range(1)
+)
+SELECT json_contains(j, j)
+FROM cte
+----
+NULL

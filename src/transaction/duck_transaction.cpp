@@ -142,6 +142,7 @@ string DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bo
 		}
 		return string();
 	} catch (std::exception &ex) {
+		undo_buffer.RevertCommit(iterator_state, this->transaction_id);
 		return ex.what();
 	}
 }

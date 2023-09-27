@@ -154,14 +154,14 @@ SELECT SUM(num) FROM read_csv(
     rejects_table='csv_rejects_table',
     ignore_errors=true, parallel=${PARALLEL});
 ----
-4094
+4270
 
 query  IIIIII rowsort
 SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
 FROM csv_rejects_table;
 ----
-2000	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
-4000	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
+2176	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
+4176	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
 
 statement ok
 DROP TABLE csv_rejects_table;
@@ -173,14 +173,14 @@ SELECT SUM(num) FROM read_csv(
     rejects_table='csv_rejects_table',
     ignore_errors=true, parallel=${PARALLEL})
 ----
-4094
+6774
 
 query  IIIIII rowsort
 SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
 FROM csv_rejects_table;
 ----
-1000	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
-3000	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
+3680	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
+5680	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
 
 statement ok
 DROP TABLE csv_rejects_table;
@@ -193,16 +193,16 @@ SELECT SUM(num) FROM read_csv(
     rejects_table='csv_rejects_table',
     ignore_errors=true, parallel=${PARALLEL});
 ----
-8188
+11044
 
 query  IIIIII rowsort
 SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
 FROM csv_rejects_table;
 ----
-1000	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
-2000	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
-3000	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
-4000	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
+2176	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
+3680	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
+4176	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
+5680	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
 
 statement ok
 DROP TABLE csv_rejects_table;

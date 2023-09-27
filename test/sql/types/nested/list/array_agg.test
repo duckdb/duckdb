@@ -2,6 +2,9 @@
 # description: Test array_agg function
 # group: [list]
 
+statement ok
+PRAGMA enable_verification
+
 # scalar array agg
 query II
 SELECT ARRAY_AGG(NULL), ARRAY_AGG(42)
@@ -59,7 +62,7 @@ Team America	[MATT DAAAMON, Kim Jong Un, Alec Baldwin]
 The Martian	[Matt Damon, Jessica Chastain]
 
 query II
-select film_id, ARRAY_AGG(actor_id order by actor_id) FROM film_actor GROUP BY film_id;
+select film_id, ARRAY_AGG(actor_id order by actor_id) FROM film_actor GROUP BY film_id ORDER BY ALL;
 ----
 1	[1, 2]
 2	[1, 3, 4]

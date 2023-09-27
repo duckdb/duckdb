@@ -39,7 +39,6 @@ OdbcHandle::OdbcHandle(const OdbcHandle &other) {
 
 OdbcHandle &OdbcHandle::operator=(const OdbcHandle &other) {
 	type = other.type;
-	std::copy(other.error_messages.begin(), other.error_messages.end(), std::back_inserter(error_messages));
 	return *this;
 }
 
@@ -118,7 +117,6 @@ void OdbcHandleStmt::Close() {
 	// the parameter values can be reused after
 	param_desc->Reset();
 	// stmt->stmt.reset(); // the statment can be reuse in prepared statement
-	error_messages.clear();
 }
 
 SQLRETURN OdbcHandleStmt::MaterializeResult() {
