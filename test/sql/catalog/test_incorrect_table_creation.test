@@ -16,12 +16,12 @@ Parser Error: column "i" appears twice in primary key constraint
 
 # multiple primary keys
 statement error
-CREATE TABLE integers(i INTEGER, PRIMARY KEY(i), PRIMARY KEY(i)
+CREATE TABLE integers(i INTEGER, PRIMARY KEY(i), PRIMARY KEY(i))
 ----
-Parser Error: syntax error at end of input
+Parser Error: table "integers" has more than one primary key
 
 statement error
-CREATE TABLE integers(i INTEGER PRIMARY KEY, PRIMARY KEY(i)
+CREATE TABLE integers(i INTEGER PRIMARY KEY, PRIMARY KEY(i))
 ----
-Parser Error: syntax error at end of input
+Parser Error: table "integers" has more than one primary key
 
