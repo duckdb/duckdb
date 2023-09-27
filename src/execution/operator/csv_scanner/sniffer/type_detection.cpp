@@ -143,7 +143,7 @@ struct SniffValue {
 			machine.rows_read++;
 		}
 
-		if ((machine.previous_state == CSVState::RECORD_SEPARATOR && machine.state != CSVState::EMPTY_LINE) ||
+		if ((machine.previous_state == CSVState::RECORD_SEPARATOR) ||
 		    (machine.state != CSVState::RECORD_SEPARATOR && machine.previous_state == CSVState::CARRIAGE_RETURN)) {
 			sniffed_values[machine.cur_rows].position = machine.line_start_pos;
 			sniffed_values[machine.cur_rows].set = true;
@@ -155,8 +155,7 @@ struct SniffValue {
 		    machine.transition_array[static_cast<uint8_t>(machine.state)][static_cast<uint8_t>(current_char)]);
 
 		bool carriage_return = machine.previous_state == CSVState::CARRIAGE_RETURN;
-		if (machine.previous_state == CSVState::DELIMITER ||
-		    (machine.previous_state == CSVState::RECORD_SEPARATOR && machine.state != CSVState::EMPTY_LINE) ||
+		if (machine.previous_state == CSVState::DELIMITER || (machine.previous_state == CSVState::RECORD_SEPARATOR) ||
 		    (machine.state != CSVState::RECORD_SEPARATOR && carriage_return)) {
 			// Started a new value
 			// Check if it's UTF-8
@@ -175,8 +174,7 @@ struct SniffValue {
 		    (machine.state == CSVState::QUOTED && machine.previous_state == CSVState::QUOTED)) {
 			machine.value += current_char;
 		}
-		machine.cur_rows +=
-		    machine.previous_state == CSVState::RECORD_SEPARATOR && machine.state != CSVState::EMPTY_LINE;
+		machine.cur_rows += machine.previous_state == CSVState::RECORD_SEPARATOR;
 		// It means our carriage return is actually a record separator
 		machine.cur_rows += machine.state != CSVState::RECORD_SEPARATOR && carriage_return;
 		if (machine.cur_rows >= sniffed_values.size()) {
