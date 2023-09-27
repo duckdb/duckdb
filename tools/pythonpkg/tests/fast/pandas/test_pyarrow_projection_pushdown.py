@@ -10,7 +10,6 @@ _ = pytest.importorskip("pandas", '2.0.0')
 
 
 # @pytest.mark.skipif(not pandas_supports_arrow_backend(), reason="pandas does not support the 'pyarrow' backend")
-@pytest.mark.skip(reason="Incompatible with the way we create DataFrames, likely an internal pandas->arrow issue")
 class TestArrowDFProjectionPushdown(object):
     def test_projection_pushdown_no_filter(self, duckdb_cursor):
         duckdb_conn = duckdb.connect()
