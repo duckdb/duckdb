@@ -1173,13 +1173,14 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 	auto all_dependencies = rel->GetAllDependencies();
 	rel->context.GetContext()->external_dependencies[view_name] = std::move(all_dependencies);
 
-	auto statements = rel->context.GetContext()->ParseStatements(sql_query);
-	if (statements.size() != 1) {
+	Parser parser(rel->context.GetContext()->GetParserOptions());
+	parser.ParseQuery(sql_query);
+	if (parser.statements.size() != 1) {
 		throw InvalidInputException("'DuckDBPyRelation.query' only accepts a single statement");
 	}
-	auto &statement = *statements[0];
+	auto &statement = *parser.statements[0];
 	if (statement.type == StatementType::SELECT_STATEMENT) {
-		auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(statements[0]));
+		auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
 		auto query_relation =
 		    make_shared<QueryRelation>(rel->context.GetContext(), std::move(select_statement), "query_relation");
 		return make_uniq<DuckDBPyRelation>(std::move(query_relation));
@@ -1191,7 +1192,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 	}
 	{
 		py::gil_scoped_release release;
-		auto query_result = rel->context.GetContext()->Query(std::move(statements[0]), false);
+		auto query_result = rel->context.GetContext()->Query(std::move(parser.statements[0]), false);
 		// Execute it anyways, for creation/altering statements
 		// We only care that it succeeds, we can't store the result
 		D_ASSERT(query_result);
