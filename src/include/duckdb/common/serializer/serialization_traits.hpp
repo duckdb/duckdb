@@ -54,13 +54,6 @@ struct has_deserialize<
     T, typename std::enable_if<std::is_same<decltype(T::Deserialize), T(Deserializer &)>::value, T>::type>
     : std::true_type {};
 
-template <typename T, typename = T>
-struct has_default_value : std::false_type {};
-
-template <typename T>
-struct has_default_value<T, typename std::enable_if<std::is_same<decltype(T::DefaultValue), T()>::value, T>::type>
-    : std::true_type {};
-
 // Check if T is a vector, and provide access to the inner type
 template <typename T>
 struct is_vector : std::false_type {};
@@ -264,17 +257,6 @@ struct SerializationDefaultValue {
 	template <typename T = void>
 	static inline bool IsDefault(const typename std::enable_if<std::is_same<T, string>::value, T>::type &value) {
 		return value.empty();
-	}
-
-	template <typename T = void>
-	static inline typename std::enable_if<has_default_value<T>::value, T>::type GetDefault() {
-		return T::DefaultValue();
-	}
-
-	template <typename T = void>
-	static inline bool IsDefault(const typename std::enable_if<has_default_value<T>::value, T>::type &value) {
-		auto default_value = T::DefaultValue();
-		return default_value == value;
 	}
 };
 

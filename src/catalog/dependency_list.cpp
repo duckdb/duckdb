@@ -136,8 +136,4 @@ bool LogicalDependencyList::operator==(const LogicalDependencyList &other) {
 	return true;
 }
 
-LogicalDependencyList LogicalDependencyList::DefaultValue() {
-	return LogicalDependencyList();
-}
-
 } // namespace duckdb
