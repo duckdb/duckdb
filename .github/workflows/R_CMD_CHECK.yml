@@ -17,7 +17,7 @@ on:
       - '!tools/swift/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
-      - '!.github/workflows/Swift.yml'
+      - '!.github/workflows/R_CMD_CHECK.yml'
 
   pull_request:
     types: [ opened, reopened, ready_for_review ]
@@ -27,7 +27,7 @@ on:
       - '!tools/odbc/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
-      - '!.github/workflows/Main.yml'
+      - '!.github/workflows/R_CMD_CHECK.yml'
 
 
 name: R-CMD-check
