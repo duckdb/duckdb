@@ -5,9 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-# load the DB from disk
-load __TEST_DIR__/test_art_vacuum_integers.db
-
 statement ok
 CREATE FUNCTION mem_to_bytes(x) AS CASE
     WHEN CONTAINS(x, 'KB') THEN REPLACE(x, 'KB', '')::INT * 1000
@@ -42,7 +39,7 @@ FROM base, empty;
 true
 
 statement ok
-DROP TABLE temp
+DROP TABLE temp;
 
 statement ok
 UPDATE empty SET usage = (SELECT mem_to_bytes(current.memory_usage) FROM pragma_database_size() AS current);
@@ -60,29 +57,17 @@ statement ok
 CREATE INDEX idx ON t(i);
 
 query I
-SELECT mem_to_bytes(current.memory_usage) > 10 * base.usage
-FROM base, pragma_database_size() current;
-----
-1
-
-restart
-
-query I
 SELECT mem_to_bytes(current.memory_usage) < 4 * base.usage
 FROM base, pragma_database_size() current;
 ----
 1
 
 # insert 250K values into every fourth leaf, partially deserializing the ART
+# the size of the database also increases more significantly, as we now have duplicates in leaves,
+# i.e., we no longer inline row IDs
 
 statement ok
 INSERT INTO t SELECT range * 4 FROM range(250000);
-
-query I
-SELECT mem_to_bytes(current.memory_usage) > 10 * base.usage
-FROM base, pragma_database_size() current;
-----
-1
 
 # store the current size of the DB
 statement ok
@@ -96,12 +81,14 @@ FROM pragma_database_size() AS current;
 statement ok
 DELETE FROM t WHERE i > 500000;
 
-# half the index still is not in-memory, and the DB is persistent,
-# so we don't expect the vacuum to clean up too much memory
-# (since many allocators won't pass the threshold)
+# the previous bulk deletion causes a vacuum-operation. We delete excess_buffer_count in-memory buffers
+# during a vacuum. We move their data to buffers that still have free space and that potentially
+# are not yet deserialized, deserializing them. Therefore, our overall ART size decreases, but our in-memory
+# ART size potentially increases, as we deserialize additional buffers
 
+# we add some +10MB
 query I
-SELECT mem_to_bytes(current.memory_usage) < db_size.usage
+SELECT mem_to_bytes(current.memory_usage) < db_size.usage + 10000000
 FROM db_size, pragma_database_size() current;
 ----
 1
@@ -133,14 +120,6 @@ DELETE FROM t;
 query I
 SELECT mem_to_bytes(current.memory_usage) < db_size.usage
 FROM db_size, pragma_database_size() current;
-----
-1
-
-restart
-
-query I
-SELECT mem_to_bytes(current.memory_usage) <= base.usage
-FROM pragma_database_size() current, base;
 ----
 1
 

@@ -82,10 +82,10 @@ typedef void (*copy_to_combine_t)(ExecutionContext &context, FunctionData &bind_
                                   LocalFunctionData &lstate);
 typedef void (*copy_to_finalize_t)(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate);
 
-typedef void (*copy_to_serialize_t)(FieldWriter &writer, const FunctionData &bind_data, const CopyFunction &function);
+typedef void (*copy_to_serialize_t)(Serializer &serializer, const FunctionData &bind_data,
+                                    const CopyFunction &function);
 
-typedef unique_ptr<FunctionData> (*copy_to_deserialize_t)(ClientContext &context, FieldReader &reader,
-                                                          CopyFunction &function);
+typedef unique_ptr<FunctionData> (*copy_to_deserialize_t)(Deserializer &deserializer, CopyFunction &function);
 
 typedef unique_ptr<FunctionData> (*copy_from_bind_t)(ClientContext &context, CopyInfo &info,
                                                      vector<string> &expected_names,
@@ -99,13 +99,18 @@ typedef void (*copy_flush_batch_t)(ClientContext &context, FunctionData &bind_da
                                    PreparedBatchData &batch);
 typedef idx_t (*copy_desired_batch_size_t)(ClientContext &context, FunctionData &bind_data);
 
+enum class CopyTypeSupport { SUPPORTED, LOSSY, UNSUPPORTED };
+
+typedef CopyTypeSupport (*copy_supports_type_t)(const LogicalType &type);
+
 class CopyFunction : public Function {
 public:
 	explicit CopyFunction(string name)
 	    : Function(name), plan(nullptr), copy_to_bind(nullptr), copy_to_initialize_local(nullptr),
 	      copy_to_initialize_global(nullptr), copy_to_sink(nullptr), copy_to_combine(nullptr),
 	      copy_to_finalize(nullptr), execution_mode(nullptr), prepare_batch(nullptr), flush_batch(nullptr),
-	      desired_batch_size(nullptr), serialize(nullptr), deserialize(nullptr), copy_from_bind(nullptr) {
+	      desired_batch_size(nullptr), serialize(nullptr), deserialize(nullptr), supports_type(nullptr),
+	      copy_from_bind(nullptr) {
 	}
 
 	//! Plan rewrite copy function
@@ -125,6 +130,8 @@ public:
 
 	copy_to_serialize_t serialize;
 	copy_to_deserialize_t deserialize;
+
+	copy_supports_type_t supports_type;
 
 	copy_from_bind_t copy_from_bind;
 	TableFunction copy_from_function;

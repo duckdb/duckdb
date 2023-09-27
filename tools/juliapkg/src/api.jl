@@ -1351,6 +1351,17 @@ function duckdb_execute_pending(pending_result, out_result)
     )
 end
 
+"""
+Returns whether a duckdb_pending_state is finished executing. For example if `pending_state` is
+DUCKDB_PENDING_RESULT_READY, this function will return true.
+
+* pending_state: The pending state on which to decide whether to finish execution.
+* returns: Boolean indicating pending execution should be considered finished.
+"""
+function duckdb_pending_execution_is_finished(pending_state)
+    return ccall((:duckdb_execute_pending, libduckdb), Bool, (duckdb_pending_state,), pending_state)
+end
+
 #=
 //===--------------------------------------------------------------------===//
 // Value Interface

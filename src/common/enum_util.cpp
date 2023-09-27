@@ -11,6 +11,7 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/aggregate_handling.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
@@ -57,6 +58,7 @@
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -64,14 +66,16 @@
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/operator/persistent/base_csv_reader.hpp"
-#include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
+#include "duckdb/execution/operator/scan/csv/base_csv_reader.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_state_machine.hpp"
+#include "duckdb/execution/operator/scan/csv/quote_rules.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
-#include "duckdb/function/table/arrow.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/config.hpp"
@@ -81,6 +85,7 @@
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
@@ -547,6 +552,8 @@ BindingMode EnumUtil::FromString<BindingMode>(const char *value) {
 template<>
 const char* EnumUtil::ToChars<BitpackingMode>(BitpackingMode value) {
 	switch(value) {
+	case BitpackingMode::INVALID:
+		return "INVALID";
 	case BitpackingMode::AUTO:
 		return "AUTO";
 	case BitpackingMode::CONSTANT:
@@ -564,6 +571,9 @@ const char* EnumUtil::ToChars<BitpackingMode>(BitpackingMode value) {
 
 template<>
 BitpackingMode EnumUtil::FromString<BitpackingMode>(const char *value) {
+	if (StringUtil::Equals(value, "INVALID")) {
+		return BitpackingMode::INVALID;
+	}
 	if (StringUtil::Equals(value, "AUTO")) {
 		return BitpackingMode::AUTO;
 	}
@@ -634,6 +644,64 @@ CAPIResultSetType EnumUtil::FromString<CAPIResultSetType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "CAPI_RESULT_TYPE_DEPRECATED")) {
 		return CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<CSVState>(CSVState value) {
+	switch(value) {
+	case CSVState::STANDARD:
+		return "STANDARD";
+	case CSVState::DELIMITER:
+		return "DELIMITER";
+	case CSVState::RECORD_SEPARATOR:
+		return "RECORD_SEPARATOR";
+	case CSVState::CARRIAGE_RETURN:
+		return "CARRIAGE_RETURN";
+	case CSVState::QUOTED:
+		return "QUOTED";
+	case CSVState::UNQUOTED:
+		return "UNQUOTED";
+	case CSVState::ESCAPE:
+		return "ESCAPE";
+	case CSVState::EMPTY_LINE:
+		return "EMPTY_LINE";
+	case CSVState::INVALID:
+		return "INVALID";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+CSVState EnumUtil::FromString<CSVState>(const char *value) {
+	if (StringUtil::Equals(value, "STANDARD")) {
+		return CSVState::STANDARD;
+	}
+	if (StringUtil::Equals(value, "DELIMITER")) {
+		return CSVState::DELIMITER;
+	}
+	if (StringUtil::Equals(value, "RECORD_SEPARATOR")) {
+		return CSVState::RECORD_SEPARATOR;
+	}
+	if (StringUtil::Equals(value, "CARRIAGE_RETURN")) {
+		return CSVState::CARRIAGE_RETURN;
+	}
+	if (StringUtil::Equals(value, "QUOTED")) {
+		return CSVState::QUOTED;
+	}
+	if (StringUtil::Equals(value, "UNQUOTED")) {
+		return CSVState::UNQUOTED;
+	}
+	if (StringUtil::Equals(value, "ESCAPE")) {
+		return CSVState::ESCAPE;
+	}
+	if (StringUtil::Equals(value, "EMPTY_LINE")) {
+		return CSVState::EMPTY_LINE;
+	}
+	if (StringUtil::Equals(value, "INVALID")) {
+		return CSVState::INVALID;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -1129,8 +1197,6 @@ const char* EnumUtil::ToChars<DatePartSpecifier>(DatePartSpecifier value) {
 		return "MINUTE";
 	case DatePartSpecifier::HOUR:
 		return "HOUR";
-	case DatePartSpecifier::EPOCH:
-		return "EPOCH";
 	case DatePartSpecifier::DOW:
 		return "DOW";
 	case DatePartSpecifier::ISODOW:
@@ -1153,6 +1219,12 @@ const char* EnumUtil::ToChars<DatePartSpecifier>(DatePartSpecifier value) {
 		return "TIMEZONE_HOUR";
 	case DatePartSpecifier::TIMEZONE_MINUTE:
 		return "TIMEZONE_MINUTE";
+	case DatePartSpecifier::EPOCH:
+		return "EPOCH";
+	case DatePartSpecifier::JULIAN_DAY:
+		return "JULIAN_DAY";
+	case DatePartSpecifier::INVALID:
+		return "INVALID";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -1193,9 +1265,6 @@ DatePartSpecifier EnumUtil::FromString<DatePartSpecifier>(const char *value) {
 	if (StringUtil::Equals(value, "HOUR")) {
 		return DatePartSpecifier::HOUR;
 	}
-	if (StringUtil::Equals(value, "EPOCH")) {
-		return DatePartSpecifier::EPOCH;
-	}
 	if (StringUtil::Equals(value, "DOW")) {
 		return DatePartSpecifier::DOW;
 	}
@@ -1228,6 +1297,15 @@ DatePartSpecifier EnumUtil::FromString<DatePartSpecifier>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "TIMEZONE_MINUTE")) {
 		return DatePartSpecifier::TIMEZONE_MINUTE;
+	}
+	if (StringUtil::Equals(value, "EPOCH")) {
+		return DatePartSpecifier::EPOCH;
+	}
+	if (StringUtil::Equals(value, "JULIAN_DAY")) {
+		return DatePartSpecifier::JULIAN_DAY;
+	}
+	if (StringUtil::Equals(value, "INVALID")) {
+		return DatePartSpecifier::INVALID;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -2300,6 +2378,24 @@ FunctionSideEffects EnumUtil::FromString<FunctionSideEffects>(const char *value)
 }
 
 template<>
+const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value) {
+	switch(value) {
+	case HLLStorageType::UNCOMPRESSED:
+		return "UNCOMPRESSED";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value) {
+	if (StringUtil::Equals(value, "UNCOMPRESSED")) {
+		return HLLStorageType::UNCOMPRESSED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value) {
 	switch(value) {
 	case IndexConstraintType::NONE:
@@ -2339,6 +2435,8 @@ const char* EnumUtil::ToChars<IndexType>(IndexType value) {
 		return "INVALID";
 	case IndexType::ART:
 		return "ART";
+	case IndexType::EXTENSION:
+		return "EXTENSION";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2351,6 +2449,9 @@ IndexType EnumUtil::FromString<IndexType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "ART")) {
 		return IndexType::ART;
+	}
+	if (StringUtil::Equals(value, "EXTENSION")) {
+		return IndexType::EXTENSION;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -3750,8 +3851,6 @@ const char* EnumUtil::ToChars<ParserMode>(ParserMode value) {
 	switch(value) {
 	case ParserMode::PARSING:
 		return "PARSING";
-	case ParserMode::SNIFFING_DIALECT:
-		return "SNIFFING_DIALECT";
 	case ParserMode::SNIFFING_DATATYPES:
 		return "SNIFFING_DATATYPES";
 	case ParserMode::PARSING_HEADER:
@@ -3765,9 +3864,6 @@ template<>
 ParserMode EnumUtil::FromString<ParserMode>(const char *value) {
 	if (StringUtil::Equals(value, "PARSING")) {
 		return ParserMode::PARSING;
-	}
-	if (StringUtil::Equals(value, "SNIFFING_DIALECT")) {
-		return ParserMode::SNIFFING_DIALECT;
 	}
 	if (StringUtil::Equals(value, "SNIFFING_DATATYPES")) {
 		return ParserMode::SNIFFING_DATATYPES;
@@ -3783,6 +3879,8 @@ const char* EnumUtil::ToChars<PartitionSortStage>(PartitionSortStage value) {
 	switch(value) {
 	case PartitionSortStage::INIT:
 		return "INIT";
+	case PartitionSortStage::SCAN:
+		return "SCAN";
 	case PartitionSortStage::PREPARE:
 		return "PREPARE";
 	case PartitionSortStage::MERGE:
@@ -3798,6 +3896,9 @@ template<>
 PartitionSortStage EnumUtil::FromString<PartitionSortStage>(const char *value) {
 	if (StringUtil::Equals(value, "INIT")) {
 		return PartitionSortStage::INIT;
+	}
+	if (StringUtil::Equals(value, "SCAN")) {
+		return PartitionSortStage::SCAN;
 	}
 	if (StringUtil::Equals(value, "PREPARE")) {
 		return PartitionSortStage::PREPARE;
@@ -3871,6 +3972,8 @@ const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult val
 		return "RESULT_NOT_READY";
 	case PendingExecutionResult::EXECUTION_ERROR:
 		return "EXECUTION_ERROR";
+	case PendingExecutionResult::NO_TASKS_AVAILABLE:
+		return "NO_TASKS_AVAILABLE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -3886,6 +3989,9 @@ PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *
 	}
 	if (StringUtil::Equals(value, "EXECUTION_ERROR")) {
 		return PendingExecutionResult::EXECUTION_ERROR;
+	}
+	if (StringUtil::Equals(value, "NO_TASKS_AVAILABLE")) {
+		return PendingExecutionResult::NO_TASKS_AVAILABLE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4405,6 +4511,39 @@ PragmaType EnumUtil::FromString<PragmaType>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<PreparedParamType>(PreparedParamType value) {
+	switch(value) {
+	case PreparedParamType::AUTO_INCREMENT:
+		return "AUTO_INCREMENT";
+	case PreparedParamType::POSITIONAL:
+		return "POSITIONAL";
+	case PreparedParamType::NAMED:
+		return "NAMED";
+	case PreparedParamType::INVALID:
+		return "INVALID";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+PreparedParamType EnumUtil::FromString<PreparedParamType>(const char *value) {
+	if (StringUtil::Equals(value, "AUTO_INCREMENT")) {
+		return PreparedParamType::AUTO_INCREMENT;
+	}
+	if (StringUtil::Equals(value, "POSITIONAL")) {
+		return PreparedParamType::POSITIONAL;
+	}
+	if (StringUtil::Equals(value, "NAMED")) {
+		return PreparedParamType::NAMED;
+	}
+	if (StringUtil::Equals(value, "INVALID")) {
+		return PreparedParamType::INVALID;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value) {
 	switch(value) {
 	case ProfilerPrintFormat::QUERY_TREE:
@@ -4499,6 +4638,34 @@ QueryResultType EnumUtil::FromString<QueryResultType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "NUMPY_RESULT")) {
 		return QueryResultType::NUMPY_RESULT;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<QuoteRule>(QuoteRule value) {
+	switch(value) {
+	case QuoteRule::QUOTES_RFC:
+		return "QUOTES_RFC";
+	case QuoteRule::QUOTES_OTHER:
+		return "QUOTES_OTHER";
+	case QuoteRule::NO_QUOTES:
+		return "NO_QUOTES";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+QuoteRule EnumUtil::FromString<QuoteRule>(const char *value) {
+	if (StringUtil::Equals(value, "QUOTES_RFC")) {
+		return QuoteRule::QUOTES_RFC;
+	}
+	if (StringUtil::Equals(value, "QUOTES_OTHER")) {
+		return QuoteRule::QUOTES_OTHER;
+	}
+	if (StringUtil::Equals(value, "NO_QUOTES")) {
+		return QuoteRule::NO_QUOTES;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4637,6 +4804,29 @@ RelationType EnumUtil::FromString<RelationType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "QUERY_RELATION")) {
 		return RelationType::QUERY_RELATION;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<RenderMode>(RenderMode value) {
+	switch(value) {
+	case RenderMode::ROWS:
+		return "ROWS";
+	case RenderMode::COLUMNS:
+		return "COLUMNS";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+RenderMode EnumUtil::FromString<RenderMode>(const char *value) {
+	if (StringUtil::Equals(value, "ROWS")) {
+		return RenderMode::ROWS;
+	}
+	if (StringUtil::Equals(value, "COLUMNS")) {
+		return RenderMode::COLUMNS;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -5318,6 +5508,8 @@ const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value) {
 		return "LOCALE_APPROPRIATE_DATE";
 	case StrTimeSpecifier::LOCALE_APPROPRIATE_TIME:
 		return "LOCALE_APPROPRIATE_TIME";
+	case StrTimeSpecifier::NANOSECOND_PADDED:
+		return "NANOSECOND_PADDED";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5420,6 +5612,9 @@ StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "LOCALE_APPROPRIATE_TIME")) {
 		return StrTimeSpecifier::LOCALE_APPROPRIATE_TIME;
+	}
+	if (StringUtil::Equals(value, "NANOSECOND_PADDED")) {
+		return StrTimeSpecifier::NANOSECOND_PADDED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -5818,6 +6013,8 @@ const char* EnumUtil::ToChars<UnionInvalidReason>(UnionInvalidReason value) {
 		return "NO_MEMBERS";
 	case UnionInvalidReason::VALIDITY_OVERLAP:
 		return "VALIDITY_OVERLAP";
+	case UnionInvalidReason::TAG_MISMATCH:
+		return "TAG_MISMATCH";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5836,6 +6033,9 @@ UnionInvalidReason EnumUtil::FromString<UnionInvalidReason>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "VALIDITY_OVERLAP")) {
 		return UnionInvalidReason::VALIDITY_OVERLAP;
+	}
+	if (StringUtil::Equals(value, "TAG_MISMATCH")) {
+		return UnionInvalidReason::TAG_MISMATCH;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -5963,8 +6163,6 @@ const char* EnumUtil::ToChars<VerificationType>(VerificationType value) {
 		return "COPIED";
 	case VerificationType::DESERIALIZED:
 		return "DESERIALIZED";
-	case VerificationType::DESERIALIZED_V2:
-		return "DESERIALIZED_V2";
 	case VerificationType::PARSED:
 		return "PARSED";
 	case VerificationType::UNOPTIMIZED:
@@ -5992,9 +6190,6 @@ VerificationType EnumUtil::FromString<VerificationType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "DESERIALIZED")) {
 		return VerificationType::DESERIALIZED;
-	}
-	if (StringUtil::Equals(value, "DESERIALIZED_V2")) {
-		return VerificationType::DESERIALIZED_V2;
 	}
 	if (StringUtil::Equals(value, "PARSED")) {
 		return VerificationType::PARSED;

@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
@@ -14,43 +15,31 @@
 
 namespace duckdb {
 
+static constexpr auto INET_TYPE_NAME = "INET";
+
 void InetExtension::Load(DuckDB &db) {
-	Connection con(db);
-	con.BeginTransaction();
-
-	auto &catalog = Catalog::GetSystemCatalog(*con.context);
-
 	// add the "inet" type
 	child_list_t<LogicalType> children;
 	children.push_back(make_pair("ip_type", LogicalType::UTINYINT));
 	children.push_back(make_pair("address", LogicalType::HUGEINT));
 	children.push_back(make_pair("mask", LogicalType::USMALLINT));
 	auto inet_type = LogicalType::STRUCT(std::move(children));
-	inet_type.SetAlias("inet");
+	inet_type.SetAlias(INET_TYPE_NAME);
+	ExtensionUtil::RegisterType(*db.instance, INET_TYPE_NAME, inet_type);
 
-	CreateTypeInfo info("inet", inet_type);
-	info.temporary = true;
-	info.internal = true;
-	catalog.CreateType(*con.context, info);
+	// add the casts to and from INET type
+	ExtensionUtil::RegisterCastFunction(*db.instance, LogicalType::VARCHAR, inet_type, INetFunctions::CastVarcharToINET,
+	                                    100);
+	ExtensionUtil::RegisterCastFunction(*db.instance, inet_type, LogicalType::VARCHAR,
+	                                    INetFunctions::CastINETToVarchar);
 
 	// add inet functions
-	auto host_fun = ScalarFunction("host", {inet_type}, LogicalType::VARCHAR, INetFunctions::Host);
-	CreateScalarFunctionInfo host_info(host_fun);
-	catalog.CreateFunction(*con.context, host_info);
+	ExtensionUtil::RegisterFunction(*db.instance,
+	                                ScalarFunction("host", {inet_type}, LogicalType::VARCHAR, INetFunctions::Host));
 
-	auto substract_fun = ScalarFunction("-", {inet_type, LogicalType::BIGINT}, inet_type, INetFunctions::Subtract);
-	CreateScalarFunctionInfo subtract_info(substract_fun);
-	subtract_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
-	catalog.CreateFunction(*con.context, subtract_info);
-
-	// add inet casts
-	auto &config = DBConfig::GetConfig(*con.context);
-
-	auto &casts = config.GetCastFunctions();
-	casts.RegisterCastFunction(LogicalType::VARCHAR, inet_type, INetFunctions::CastVarcharToINET, 100);
-	casts.RegisterCastFunction(inet_type, LogicalType::VARCHAR, INetFunctions::CastINETToVarchar);
-
-	con.Commit();
+	// Add - function with ALTER_ON_CONFLICT
+	ScalarFunction substract_fun("-", {inet_type, LogicalType::BIGINT}, inet_type, INetFunctions::Subtract);
+	ExtensionUtil::AddFunctionOverload(*db.instance, substract_fun);
 }
 
 std::string InetExtension::Name() {

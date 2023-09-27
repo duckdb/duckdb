@@ -60,11 +60,8 @@ public:
 	vector<column_t> source_columns;
 
 public:
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
-
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
 protected:
 	vector<ColumnBinding> GetColumnBindings() override;
@@ -75,6 +72,6 @@ protected:
 	string GetName() const override;
 
 private:
-	LogicalInsert(ClientContext &context, const string &catalog, const string &schema, const string &table);
+	LogicalInsert(ClientContext &context, const unique_ptr<CreateInfo> table_info);
 };
 } // namespace duckdb

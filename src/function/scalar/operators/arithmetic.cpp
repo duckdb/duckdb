@@ -1,4 +1,3 @@
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
@@ -34,6 +33,9 @@ static scalar_function_t GetScalarIntegerFunction(PhysicalType type) {
 		break;
 	case PhysicalType::INT64:
 		function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
+		break;
+	case PhysicalType::INT128:
+		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP>;
 		break;
 	case PhysicalType::UINT8:
 		function = &ScalarFunction::BinaryFunction<uint8_t, uint8_t, uint8_t, OP>;
@@ -247,23 +249,22 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 	return std::move(bind_data);
 }
 
-static void SerializeDecimalArithmetic(FieldWriter &writer, const FunctionData *bind_data_p,
+static void SerializeDecimalArithmetic(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                        const ScalarFunction &function) {
 	auto &bind_data = bind_data_p->Cast<DecimalArithmeticBindData>();
-	writer.WriteField(bind_data.check_overflow);
-	writer.WriteSerializable(function.return_type);
-	writer.WriteRegularSerializableList(function.arguments);
+	serializer.WriteProperty(100, "check_overflow", bind_data.check_overflow);
+	serializer.WriteProperty(101, "return_type", function.return_type);
+	serializer.WriteProperty(102, "arguments", function.arguments);
 }
 
 // TODO this is partially duplicated from the bind
 template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
-unique_ptr<FunctionData> DeserializeDecimalArithmetic(PlanDeserializationState &state, FieldReader &reader,
-                                                      ScalarFunction &bound_function) {
-	// re-change the function pointers
-	auto check_overflow = reader.ReadRequired<bool>();
-	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto arguments = reader.template ReadRequiredSerializableList<LogicalType, LogicalType>();
+unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer, ScalarFunction &bound_function) {
 
+	//	// re-change the function pointers
+	auto check_overflow = deserializer.ReadProperty<bool>(100, "check_overflow");
+	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
+	auto arguments = deserializer.ReadProperty<vector<LogicalType>>(102, "arguments");
 	if (check_overflow) {
 		bound_function.function = GetScalarBinaryFunction<OPOVERFLOWCHECK>(return_type.InternalType());
 	} else {
@@ -302,7 +303,7 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<AddOperator, DecimalAddOverflowCheck>;
 			return function;
-		} else if (left_type.IsIntegral() && left_type.id() != LogicalTypeId::HUGEINT) {
+		} else if (left_type.IsIntegral()) {
 			return ScalarFunction("+", {left_type, right_type}, left_type,
 			                      GetScalarIntegerFunction<AddOperatorOverflowCheck>(left_type.InternalType()), nullptr,
 			                      nullptr, PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
@@ -564,7 +565,7 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck>;
 			return function;
-		} else if (left_type.IsIntegral() && left_type.id() != LogicalTypeId::HUGEINT) {
+		} else if (left_type.IsIntegral()) {
 			return ScalarFunction(
 			    "-", {left_type, right_type}, left_type,
 			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), nullptr, nullptr,
@@ -768,7 +769,7 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<MultiplyOperator, DecimalMultiplyOverflowCheck>;
 			functions.AddFunction(function);
-		} else if (TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::HUGEINT) {
+		} else if (TypeIsIntegral(type.InternalType())) {
 			functions.AddFunction(ScalarFunction(
 			    {type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()),
 			    nullptr, nullptr,

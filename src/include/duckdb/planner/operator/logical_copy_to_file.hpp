@@ -38,15 +38,13 @@ public:
 	vector<LogicalType> expected_types;
 
 public:
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 	idx_t EstimateCardinality(ClientContext &context) override;
 	//! Skips the serialization check in VerifyPlan
 	bool SupportSerialization() const override {
 		return false;
 	}
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
 protected:
 	void ResolveTypes() override {

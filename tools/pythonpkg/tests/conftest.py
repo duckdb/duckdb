@@ -4,12 +4,11 @@ import shutil
 from os.path import abspath, join, dirname, normpath
 import glob
 import duckdb
-from packaging.version import Version
 
 try:
     import pandas
 
-    pyarrow_dtype = pandas.core.arrays.arrow.dtype.ArrowDtype
+    pyarrow_dtype = pandas.ArrowDtype
 except:
     pyarrow_dtype = None
 
@@ -56,6 +55,13 @@ def duckdb_empty_cursor(request):
     return cursor
 
 
+def pandas_2_or_higher():
+    from packaging.version import Version
+    import pandas as pd
+
+    return Version(pd.__version__) >= Version('2.0.0')
+
+
 def pandas_supports_arrow_backend():
     try:
         from pandas.compat import pa_version_under7p0
@@ -64,9 +70,7 @@ def pandas_supports_arrow_backend():
             return False
     except:
         return False
-    import pandas as pd
-
-    return Version(pd.__version__) >= Version('2.0.0')
+    return pandas_2_or_higher()
 
 
 def numpy_pandas_df(*args, **kwargs):
@@ -132,7 +136,7 @@ class ArrowMockTesting:
 class ArrowPandas:
     def __init__(self):
         self.pandas = pytest.importorskip("pandas")
-        if Version(self.pandas.__version__) >= Version('2.0.0') and pyarrow_dtypes_enabled:
+        if pandas_2_or_higher() and pyarrow_dtypes_enabled:
             self.backend = 'pyarrow'
             self.DataFrame = arrow_pandas_df
         else:
@@ -182,6 +186,17 @@ def require():
         pytest.skip(f'could not load {extension_name}')
 
     return _require
+
+
+# By making the scope 'function' we ensure that a new connection gets created for every function that uses the fixture
+@pytest.fixture(scope='function', autouse=True)
+def spark():
+    if not hasattr(spark, 'session'):
+        # Cache the import
+        from duckdb.experimental.spark.sql import SparkSession as session
+
+        spark.session = session
+    return spark.session.builder.master(':memory:').appName('pyspark').getOrCreate()
 
 
 @pytest.fixture(scope='session', autouse=True)

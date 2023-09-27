@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/winapi.hpp"
-#include "duckdb_python/numpy/array_wrapper.hpp"
+#include "duckdb_python/numpy/numpy_result_conversion.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/common/preserved_error.hpp"
 

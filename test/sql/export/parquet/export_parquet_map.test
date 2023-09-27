@@ -1,0 +1,50 @@
+# name: test/sql/export/parquet/export_parquet_map.test
+# description: Test EXPORT DATABASE with MAP columns
+# group: [parquet]
+
+require parquet
+
+statement ok
+begin transaction;
+
+statement ok
+create table unsupported_key as select val from (
+	select MAP {
+		'hello': '01010101000'::BIT,
+		'HELLO': NULL::BIT
+	} val
+), range(3);
+
+statement ok
+create table unsupported_value as select val from (
+	select MAP {
+		'01010101000'::BIT: 'hello',
+		'11110111101'::BIT: 'world'
+	} val
+), range(3);
+
+query I nosort key
+select * from unsupported_key;
+----
+
+query I nosort value
+select * from unsupported_value;
+----
+
+# now export the db
+statement ok
+EXPORT DATABASE '__TEST_DIR__/export_test' (FORMAT PARQUET)
+
+statement ok
+ROLLBACK
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/export_test'
+
+query I nosort key
+select * from unsupported_key;
+----
+
+query I nosort value
+select * from unsupported_value;
+----

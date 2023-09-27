@@ -4,8 +4,15 @@ include_directories(${PYTHON_INCLUDE_DIRS})
 find_package(pybind11 REQUIRED)
 
 add_library(
-  python_numpy OBJECT type.cpp numpy_scan.cpp array_wrapper.cpp numpy_bind.cpp
-                      numpy_query_result.cpp physical_numpy_collector.cpp)
+  python_numpy OBJECT
+  type.cpp
+  numpy_scan.cpp
+  array_wrapper.cpp
+  raw_array_wrapper.cpp
+  numpy_bind.cpp
+  numpy_result_conversion.cpp
+  numpy_query_result.cpp
+  physical_numpy_collector.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:python_numpy>

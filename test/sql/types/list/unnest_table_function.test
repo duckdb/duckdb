@@ -130,10 +130,10 @@ SELECT * FROM (VALUES
 ) t(k, a,b);
 
 query I
-SELECT array(
+SELECT list_sort(array(
 	SELECT list_contains(b, ax)
 	FROM UNNEST(a) ta(ax)
-) ab_intersect
+)) ab_intersect
 FROM tbl;
 ----
 [false, true, true]
@@ -142,11 +142,12 @@ FROM tbl;
 
 query IIII
 SELECT k, a, b,
-	ARRAY(
+	list_sort(ARRAY(
 		SELECT DISTINCT ax
 			FROM UNNEST(a) ta(ax)
 			WHERE ax = any(b)
-	) ab_intersect
+			ORDER BY ALL
+	)) ab_intersect
 	FROM tbl;
 ----
 a	[4, 5, 5]	[5, 7]	[5]

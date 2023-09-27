@@ -45,7 +45,6 @@ void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &
 
 OptionValueSet &GetValueForOption(const string &name) {
 	static unordered_map<string, OptionValueSet> value_map = {
-	    {"access_mode", {Value("READ_ONLY"), Value("read_only")}},
 	    {"threads", {Value::BIGINT(42), Value::BIGINT(42)}},
 	    {"checkpoint_threshold", {"4.2GB"}},
 	    {"debug_checkpoint_abort", {{"none", "before_truncate", "before_header", "after_free_list_write"}}},
@@ -59,6 +58,17 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"debug_force_external", {Value(true)}},
 	    {"prefer_range_joins", {Value(true)}},
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
+	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
+#ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
+	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
+#else
+	    {"autoload_known_extensions", {true}},
+#endif
+#ifdef DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT
+	    {"autoinstall_known_extensions", {!DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT}},
+#else
+	    {"autoinstall_known_extensions", {true}},
+#endif
 	    {"enable_fsst_vectors", {true}},
 	    {"enable_object_cache", {true}},
 	    {"enable_profiling", {"json"}},
@@ -101,6 +111,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 
 bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
+	    "access_mode",
 	    "schema",
 	    "search_path",
 	    "debug_window_mode",

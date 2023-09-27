@@ -157,19 +157,17 @@ py::dict DuckDBPyResult::FillDictionary(NumpyResultConversion &conversion) {
 	return res;
 }
 
-py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
+unique_ptr<NumpyResultConversion> DuckDBPyResult::InitializeNumpyConversion(bool pandas) {
 	if (!result) {
 		throw InvalidInputException("result closed");
 	}
 	D_ASSERT(py::gil_check());
 
 	if (result->type == QueryResultType::NUMPY_RESULT) {
-		auto &numpy_result = result->Cast<NumpyQueryResult>();
-		auto &conversion = numpy_result.Collection();
-		return FillDictionary(conversion);
+		// We have already created a numpy result, it's owned by the QueryResult
+		return nullptr;
 	}
 
-	// iterate over the result to materialize the data needed for the NumPy arrays
 	idx_t initial_capacity = STANDARD_VECTOR_SIZE * 2ULL;
 	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 		// materialized query result: we know exactly how much space we need
@@ -177,7 +175,30 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 		initial_capacity = materialized.RowCount();
 	}
 
-	NumpyResultConversion conversion(result->types, initial_capacity, result->client_properties);
+	auto conversion =
+	    make_uniq<NumpyResultConversion>(result->types, initial_capacity, result->client_properties, pandas);
+	return std::move(conversion);
+}
+
+py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk,
+                                            unique_ptr<NumpyResultConversion> conversion_p) {
+	if (!result) {
+		throw InvalidInputException("result closed");
+	}
+	if (result->type == QueryResultType::NUMPY_RESULT) {
+		D_ASSERT(!conversion_p);
+		D_ASSERT(!stream);
+		// The numpy result conversion was already created
+		auto &numpy_result = result->Cast<NumpyQueryResult>();
+		auto &conversion = numpy_result.Collection();
+		return FillDictionary(conversion);
+	}
+
+	if (!conversion_p) {
+		conversion_p = InitializeNumpyConversion();
+	}
+	auto &conversion = *conversion_p;
+
 	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 		auto &materialized = result->Cast<MaterializedQueryResult>();
 		for (auto &chunk : materialized.Collection().Chunks()) {
@@ -243,11 +264,13 @@ PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::ha
 }
 
 PandasDataFrame DuckDBPyResult::FetchDF(bool date_as_object) {
-	return FrameFromNumpy(date_as_object, FetchNumpyInternal());
+	auto conversion = InitializeNumpyConversion(true);
+	return FrameFromNumpy(date_as_object, FetchNumpyInternal(false, 1, std::move(conversion)));
 }
 
 PandasDataFrame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors, bool date_as_object) {
-	return FrameFromNumpy(date_as_object, FetchNumpyInternal(true, num_of_vectors));
+	auto conversion = InitializeNumpyConversion(true);
+	return FrameFromNumpy(date_as_object, FetchNumpyInternal(true, num_of_vectors, std::move(conversion)));
 }
 
 py::dict DuckDBPyResult::FetchPyTorch() {

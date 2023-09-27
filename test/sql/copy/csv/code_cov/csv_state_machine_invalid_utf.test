@@ -1,0 +1,11 @@
+# name: test/sql/copy/csv/code_cov/csv_state_machine_invalid_utf.test
+# description: Test to reach error of invalidate state machine due to utf8 incompatible data
+# group: [code_cov]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+select * from read_csv_auto('test/sql/copy/csv/data/test/invalid_utf.csv')
+----
+Invalid unicode (byte sequence mismatch) detected in CSV file.

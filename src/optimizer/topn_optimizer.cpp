@@ -12,6 +12,13 @@ bool TopN::CanOptimize(LogicalOperator &op) {
 	    op.children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
 		auto &limit = op.Cast<LogicalLimit>();
 
+		// When there are some expressions in the limit operator,
+		// we shouldn't use this optimizations. Because of the expressions
+		// will be lost when it convert to TopN operator.
+		if (limit.limit || limit.offset) {
+			return false;
+		}
+
 		// This optimization doesn't apply when OFFSET is present without LIMIT
 		// Or if offset is not constant
 		if (limit.limit_val != NumericLimits<int64_t>::Maximum() || limit.offset) {

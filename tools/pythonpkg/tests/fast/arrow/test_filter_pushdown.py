@@ -487,12 +487,12 @@ class TestArrowFilterPushdown(object):
         df2 = pandas.DataFrame(np.random.randn(date2.shape[0], 5), columns=list("ABCDE"))
         df2["date"] = date2
 
-        pq.write_table(pa.table(df1), "data1.parquet")
-        pq.write_table(pa.table(df2), "data2.parquet")
+        con = duckdb.connect()
+        con.execute("copy (select * from df1) to 'data1.parquet'")
+        con.execute("copy (select * from df2) to 'data2.parquet'")
 
         table = pq.ParquetDataset(["data1.parquet", "data2.parquet"]).read()
 
-        con = duckdb.connect()
         con.register("testarrow", table)
 
         output_df = duckdb.arrow(table).filter("date > '2019-01-01'").df()
