@@ -333,11 +333,23 @@ normal : {
 	for (; position_buffer < end_buffer; position_buffer++) {
 		auto c = (*buffer)[position_buffer];
 		if (c == options.dialect_options.state_machine_options.delimiter) {
+			// Check if previous character is a quote, if yes, this means we are in a non-initialized quoted value
+			// This only matters for when trying to figure out where csv lines start
+			if (position_buffer > 0 && try_add_line) {
+				if ((*buffer)[position_buffer - 1] == options.dialect_options.state_machine_options.quote) {
+					return false;
+				}
+			}
 			// delimiter: end the value and add it to the chunk
 			goto add_value;
-		} else if (c == options.dialect_options.state_machine_options.quote && try_add_line) {
-			return false;
 		} else if (StringUtil::CharacterIsNewline(c)) {
+			// Check if previous character is a quote, if yes, this means we are in a non-initialized quoted value
+			// This only matters for when trying to figure out where csv lines start
+			if (position_buffer > 0 && try_add_line) {
+				if ((*buffer)[position_buffer - 1] == options.dialect_options.state_machine_options.quote) {
+					return false;
+				}
+			}
 			// newline: add row
 			if (column > 0 || try_add_line || parse_chunk.data.size() == 1) {
 				goto add_row;
@@ -645,6 +657,10 @@ idx_t ParallelCSVReader::GetLineError(idx_t line_error, idx_t buffer_idx, bool s
 			return buffer->line_info->GetLine(buffer_idx, line_error, file_idx, cur_start, false, stop_at_first);
 		}
 	}
+}
+
+void ParallelCSVReader::Increment(idx_t buffer_idx) {
+	return buffer->line_info->Increment(file_idx, buffer_idx);
 }
 
 bool ParallelCSVReader::TryParseCSV(ParserMode mode) {

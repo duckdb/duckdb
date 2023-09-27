@@ -229,6 +229,21 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	transform_options.error_unknown_key = bind_data->auto_detect && !bind_data->ignore_errors;
 	transform_options.delay_error = true;
 
+	if (bind_data->auto_detect) {
+		// JSON may contain columns such as "id" and "Id", which are duplicates for us due to case-insensitivity
+		// We rename them so we can parse the file anyway. Note that we can't change bind_data->names,
+		// because the JSON reader gets columns by exact name, not position
+		case_insensitive_map_t<idx_t> name_count_map;
+		for (auto &name : names) {
+			auto it = name_count_map.find(name);
+			if (it == name_count_map.end()) {
+				name_count_map[name] = 1;
+			} else {
+				name = StringUtil::Format("%s_%llu", name, it->second++);
+			}
+		}
+	}
+
 	return std::move(bind_data);
 }
 

@@ -107,11 +107,11 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		// Initialize Buffer Manager and Sniffer
 		auto file_handle = BaseCSVReader::OpenCSV(context, options);
 		result->buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), options);
-		CSVSniffer sniffer(options, result->buffer_manager, result->state_machine_cache);
+		CSVSniffer sniffer(options, result->buffer_manager, result->state_machine_cache, explicitly_set_columns);
 		auto sniffer_result = sniffer.SniffCSV();
-		return_types = sniffer_result.return_types;
 		if (names.empty()) {
 			names = sniffer_result.names;
+			return_types = sniffer_result.return_types;
 		} else {
 			if (explicitly_set_columns) {
 				// The user has influenced the names, can't assume they are valid anymore
@@ -178,7 +178,11 @@ public:
 		current_file_path = files_path_p[0];
 		CSVFileHandle *file_handle_ptr;
 
-		if (!buffer_manager) {
+		if (!buffer_manager || (options.skip_rows_set && options.dialect_options.skip_rows > 0) ||
+		    buffer_manager->file_handle->GetFilePath() != current_file_path) {
+			// If our buffers are too small, and we skip too many rows there is a chance things will go over-buffer
+			// for now don't reuse the buffer manager
+			buffer_manager.reset();
 			file_handle = ReadCSV::OpenCSV(current_file_path, options.compression, context);
 			file_handle_ptr = file_handle.get();
 		} else {
@@ -195,6 +199,7 @@ public:
 		auto file_count = files_path_p.size();
 		line_info.current_batches.resize(file_count);
 		line_info.lines_read.resize(file_count);
+		line_info.lines_errored.resize(file_count);
 		tuple_start.resize(file_count);
 		tuple_end.resize(file_count);
 		tuple_end_to_batch.resize(file_count);
@@ -206,6 +211,7 @@ public:
 			line_info.lines_read[0][0]++;
 		}
 		first_position = options.dialect_options.true_start;
+		next_byte = options.dialect_options.true_start;
 	}
 	explicit ParallelCSVGlobalState(idx_t system_threads_p)
 	    : system_threads(system_threads_p), line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
@@ -509,6 +515,11 @@ bool LineInfo::CanItGetLine(idx_t file_idx, idx_t batch_idx) {
 	return false;
 }
 
+void LineInfo::Increment(idx_t file_idx, idx_t batch_idx) {
+	auto parallel_lock = duckdb::make_uniq<lock_guard<mutex>>(main_mutex);
+	lines_errored[file_idx][batch_idx]++;
+}
+
 // Returns the 1-indexed line number
 idx_t LineInfo::GetLine(idx_t batch_idx, idx_t line_error, idx_t file_idx, idx_t cur_start, bool verify,
                         bool stop_at_first) {
@@ -520,12 +531,11 @@ idx_t LineInfo::GetLine(idx_t batch_idx, idx_t line_error, idx_t file_idx, idx_t
 
 	if (!stop_at_first) {
 		// Figure out the amount of lines read in the current file
-		auto &file_batches = current_batches[file_idx];
-		for (auto &batch : file_batches) {
-			if (batch > batch_idx) {
-				break;
+		for (idx_t cur_batch_idx = 0; cur_batch_idx <= batch_idx; cur_batch_idx++) {
+			if (cur_batch_idx < batch_idx) {
+				line_count += lines_errored[file_idx][cur_batch_idx];
 			}
-			line_count += lines_read[file_idx][batch];
+			line_count += lines_read[file_idx][cur_batch_idx];
 		}
 		return line_count + line_error + 1;
 	}
@@ -880,8 +890,6 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["header"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["sample_size"] = LogicalType::BIGINT;
-	table_function.named_parameters["sample_chunk_size"] = LogicalType::BIGINT;
-	table_function.named_parameters["sample_chunks"] = LogicalType::BIGINT;
 	table_function.named_parameters["all_varchar"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["dateformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;

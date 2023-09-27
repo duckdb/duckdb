@@ -51,7 +51,7 @@ endloop
 statement ok
 create table manycolumns as select i a, i b, i c, i d, i e from range(0,2) tbl(i);
 
-query IIIII
+query IIIII rowsort
 select a, b, c, d, e FROM manycolumns GROUP BY 1, 2, 3, 4, 5
 ----
 0	0	0	0	0
@@ -85,7 +85,7 @@ statement ok
 create table dates as select date '1992-01-01' + concat(i, ' months')::interval as d from range(100) tbl(i);
 
 query II
-select extract(year from d), extract(month from d) from dates group by 1, 2;
+select extract(year from d), extract(month from d) from dates group by 1, 2 ORDER BY ALL;
 ----
 1992	1
 1992	2

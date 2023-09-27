@@ -143,7 +143,7 @@ statement ok
 insert into ints values (5,1), (1,2),(2,3),(6,4)
 
 query I
-select m from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints group by b) as lst_tbl) as T
+select m from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints group by b) as lst_tbl) as T ORDER BY ALL
 ----
 {1=1, 5=1}
 {2=2, 1=2}
@@ -151,23 +151,23 @@ select m from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) 
 {4=4, 6=4}
 
 query I
-select m[1] from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints group by b) as lst_tbl) as T
+select m[1] from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints group by b) as lst_tbl) as T ORDER BY ALL
 ----
+[]
+[]
 [1]
 [2]
-[]
-[]
 
 #What about multiple rows each with a map, with a selection vector on top of them (e.g. because of a WHERE clause)?
 statement ok
 insert into ints values (1,4)
 
 query I
-select m[1] from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints where b <4 group by b) as lst_tbl) as T
+select m[1] from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints where b <4 group by b) as lst_tbl) as T ORDER BY ALL
 ----
+[]
 [1]
 [2]
-[]
 
 #map_extract directly on a constant map (SELECT map_extract(MAP(..)), i.e. no FROM clause).
 query I

@@ -2,6 +2,9 @@
 # description: Test SEM operator
 # group: [aggregates]
 
+statement ok
+PRAGMA enable_verification
+
 #Corner cases
 statement error
 select sem()
@@ -26,7 +29,7 @@ statement ok
 insert into aggr values(1, 10, null),(2, 10, 11), (2, 20, 22), (2, 25, null), (2, 30, 35);
 
 query III
-select k, sem(v),sem(v2)  from aggr group by k;
+select k, sem(v),sem(v2)  from aggr group by k ORDER BY ALL;
 ----
 1	0.000000	NULL
 2	3.697550	5.663398
