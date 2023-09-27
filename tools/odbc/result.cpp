@@ -21,7 +21,7 @@ SQLRETURN SQL_API SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_para
 
 static SQLRETURN ExecuteBeforeFetch(SQLHSTMT statement_handle) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	SQLRETURN ret= ConvertHSTMTPrepared(statement_handle, hstmt);
+	SQLRETURN ret = ConvertHSTMTPrepared(statement_handle, hstmt);
 	if (ret != SQL_SUCCESS) {
 		return ret;
 	}
@@ -49,7 +49,7 @@ static SQLRETURN ExecuteBeforeFetch(SQLHSTMT statement_handle) {
  */
 SQLRETURN SQL_API SQLFetch(SQLHSTMT statement_handle) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	SQLRETURN ret= ConvertHSTMTPrepared(statement_handle, hstmt);
+	SQLRETURN ret = ConvertHSTMTPrepared(statement_handle, hstmt);
 	if (ret != SQL_SUCCESS) {
 		return ret;
 	}

@@ -151,10 +151,10 @@ void OdbcHandleStmt::FillIRD() {
 
 		new_record.sql_desc_base_column_name = stmt->GetNames()[col_idx];
 		new_record.sql_desc_name = new_record.sql_desc_base_column_name;
-		new_record.sql_desc_base_table_name =
 		new_record.sql_desc_label = stmt->GetNames()[col_idx];
 		new_record.sql_desc_length = new_record.sql_desc_label.size();
-		new_record.sql_desc_octet_length = 0;
+
+		new_record.sql_desc_unnamed = new_record.sql_desc_name.empty() ? SQL_UNNAMED : SQL_NAMED;
 
 		auto sql_type = duckdb::ApiInfo::FindRelatedSQLType(col_type.id());
 		if (sql_type == SQL_INTERVAL) {
@@ -172,7 +172,10 @@ void OdbcHandleStmt::FillIRD() {
 		auto &catalog_name = db_manager.GetSystemCatalog().GetAttached().GetName();
 
 		new_record.sql_desc_catalog_name = catalog_name;
-		new_record.sql_desc_nullable = SQL_NULLABLE;
+
+		// TODO: this is not correct, we need to get the schema name from the table, but the docs say that if it cannot
+		// be determined, to return an empty string
+		new_record.sql_desc_schema_name = "";
 
 		ird->records.emplace_back(new_record);
 	}
