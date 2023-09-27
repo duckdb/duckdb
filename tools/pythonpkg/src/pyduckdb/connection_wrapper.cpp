@@ -235,12 +235,11 @@ Optional<py::tuple> PyConnectionWrapper::FetchOne(shared_ptr<DuckDBPyConnection>
 	return conn->FetchOne();
 }
 
-unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ReadJSON(const string &filename, shared_ptr<DuckDBPyConnection> conn,
-                                                           const Optional<py::object> &columns,
-                                                           const Optional<py::object> &sample_size,
-                                                           const Optional<py::object> &maximum_depth,
-                                                           const Optional<py::str> &records,
-                                                           const Optional<py::str> &format) {
+unique_ptr<DuckDBPyRelation>
+PyConnectionWrapper::ReadJSON(const py::object &filename, shared_ptr<DuckDBPyConnection> conn,
+                              const Optional<py::object> &columns, const Optional<py::object> &sample_size,
+                              const Optional<py::object> &maximum_depth, const Optional<py::str> &records,
+                              const Optional<py::str> &format) {
 
 	return conn->ReadJSON(filename, columns, sample_size, maximum_depth, records, format);
 }

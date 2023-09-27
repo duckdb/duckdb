@@ -618,16 +618,17 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 	return shared_from_this();
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, const Optional<py::object> &columns,
-                                                          const Optional<py::object> &sample_size,
-                                                          const Optional<py::object> &maximum_depth,
-                                                          const Optional<py::str> &records,
-                                                          const Optional<py::str> &format) {
+unique_ptr<DuckDBPyRelation>
+DuckDBPyConnection::ReadJSON(const py::object &name_or_fh, const Optional<py::object> &columns,
+                             const Optional<py::object> &sample_size, const Optional<py::object> &maximum_depth,
+                             const Optional<py::str> &records, const Optional<py::str> &format) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
 
 	named_parameter_map_t options;
+
+	auto input = GetPathLike(name_or_fh);
 
 	if (!py::none().is(columns)) {
 		if (!py::isinstance<py::dict>(columns)) {
@@ -695,9 +696,14 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 		auto_detect = true;
 	}
 
-	auto read_json_relation = make_shared<ReadJSONRelation>(connection->context, name, std::move(options), auto_detect);
+	auto read_json_relation =
+	    make_shared<ReadJSONRelation>(connection->context, input.str, std::move(options), auto_detect);
 	if (read_json_relation == nullptr) {
 		throw BinderException("read_json can only be used when the JSON extension is (statically) loaded");
+	}
+	if (input.dependency) {
+		D_ASSERT(!read_json_relation->extra_dependencies);
+		read_json_relation->extra_dependencies = std::move(input.dependency);
 	}
 	return make_uniq<DuckDBPyRelation>(std::move(read_json_relation));
 }

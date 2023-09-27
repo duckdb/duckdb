@@ -80,7 +80,7 @@ public:
 	        const py::object &filename = py::none(), const py::object &null_padding = py::none(),
 	        const py::object &names = py::none());
 
-	unique_ptr<DuckDBPyRelation> ReadJSON(const string &filename, const Optional<py::object> &columns = py::none(),
+	unique_ptr<DuckDBPyRelation> ReadJSON(const py::object &filename, const Optional<py::object> &columns = py::none(),
 	                                      const Optional<py::object> &sample_size = py::none(),
 	                                      const Optional<py::object> &maximum_depth = py::none(),
 	                                      const Optional<py::str> &records = py::none(),
