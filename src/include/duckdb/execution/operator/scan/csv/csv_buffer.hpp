@@ -59,7 +59,7 @@ public:
 
 	//! Constructor for `Next()` Buffers
 	CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t buffer_size, idx_t global_csv_current_position,
-	          idx_t file_number_p);
+	          idx_t file_number_p, idx_t buffer_idx);
 
 	//! Creates a new buffer with the next part of the CSV File
 	shared_ptr<CSVBuffer> Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t file_number);
@@ -110,6 +110,8 @@ private:
 	//! If we can seek in the file or not.
 	//! If we can't seek, this means we can't destroy the buffers
 	bool can_seek;
+	//! Buffer Index, used as a batch index for insertion-order preservation
+	idx_t buffer_idx = 0;
 	//! -------- Allocated Block ---------//
 	//! Block created in allocation
 	shared_ptr<BlockHandle> block;

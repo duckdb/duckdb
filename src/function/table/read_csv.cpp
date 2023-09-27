@@ -170,7 +170,6 @@ public:
 	    : buffer_manager(std::move(buffer_manager_p)), system_threads(system_threads_p),
 	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)),
 	      line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
-		current_file_path = files_path_p[0];
 		CSVFileHandle *file_handle_ptr;
 
 		if (!buffer_manager || (options.skip_rows_set && options.dialect_options.skip_rows > 0)) {
@@ -219,7 +218,9 @@ public:
 
 public:
 	idx_t MaxThreads() const override;
-	//! Updates the CSV reader with the next buffer to read. Returns false if no more buffers are available.
+
+	//! Updates the CSV scanner with the next piece of buffer it should read.
+	//! It also properly moves to different files.
 	bool Next(ClientContext &context, const ReadCSVData &bind_data, unique_ptr<CSVScanner> &reader);
 	//! Verify if the CSV File was read correctly
 	void Verify();
@@ -435,13 +436,13 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		D_ASSERT(0);
 		//		// we either don't have a reader, or the reader was created for a different file
 		//		// we need to create a new reader and instantiate it
-		//		if (file_index > 0 && file_index <= bind_data.union_readers.size() && bind_data.union_readers[file_index -
-		//1]) {
+		//		if (file_index > 0 && file_index <= bind_data.union_readers.size() && bind_data.union_readers[file_index
+		//- 1]) {
 		//			// we are doing UNION BY NAME - fetch the options from the union reader for this file
 		//			auto &union_reader = *bind_data.union_readers[file_index - 1];
 		//			reader = make_uniq<ParallelCSVReader>(context, union_reader.options, std::move(result),
-		//first_position, 			                                      union_reader.GetTypes(), file_index - 1); 			reader->names = union_reader.GetNames(); 		} else if
-		//(file_index <= bind_data.column_info.size()) {
+		// first_position, 			                                      union_reader.GetTypes(), file_index - 1);
+		// reader->names = union_reader.GetNames(); 		} else if (file_index <= bind_data.column_info.size()) {
 		//			// Serialized Union By name
 		//			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result), first_position,
 		//			                                      bind_data.column_info[file_index - 1].types, file_index - 1);

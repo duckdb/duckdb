@@ -22,9 +22,9 @@ CSVBuffer::CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle 
 }
 
 CSVBuffer::CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t buffer_size,
-                     idx_t global_csv_current_position, idx_t file_number_p)
+                     idx_t global_csv_current_position, idx_t file_number_p, idx_t buffer_idx_p)
     : context(context), global_csv_start(global_csv_current_position), file_number(file_number_p),
-      can_seek(file_handle.CanSeek()) {
+      can_seek(file_handle.CanSeek()), buffer_idx(buffer_idx_p) {
 	AllocateBuffer(buffer_size);
 	auto buffer = handle.Ptr();
 	actual_buffer_size = file_handle.Read(handle.Ptr(), buffer_size);
@@ -36,8 +36,8 @@ CSVBuffer::CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t b
 }
 
 shared_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t file_number_p) {
-	auto next_csv_buffer =
-	    make_shared<CSVBuffer>(file_handle, context, buffer_size, global_csv_start + actual_buffer_size, file_number_p);
+	auto next_csv_buffer = make_shared<CSVBuffer>(file_handle, context, buffer_size,
+	                                              global_csv_start + actual_buffer_size, file_number_p, buffer_idx + 1);
 	if (next_csv_buffer->GetBufferSize() == 0) {
 		// We are done reading
 		return nullptr;
@@ -69,7 +69,7 @@ unique_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle) {
 		Reload(file_handle);
 	}
 	return make_uniq<CSVBufferHandle>(buffer_manager.Pin(block), actual_buffer_size, first_buffer, last_buffer,
-	                                  global_csv_start, start_position, file_number);
+	                                  global_csv_start, start_position, file_number, buffer_idx);
 }
 
 void CSVBuffer::Unpin() {

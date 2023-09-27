@@ -126,9 +126,14 @@ public:
 	//! Parses data into a parse_chunk (chunk where all columns are initially set to varchar)
 	void Parse(DataChunk &parse_chunk, VerificationPositions &verification_positions, const vector<LogicalType> &types);
 
+	//! Produces error messages for column name -> type mismatch.
 	static string ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
-	idx_t GetBufferIndex();
 
+	//! Gets the current buffer index of this scanner. Returns -1 if scanner has no buffer attached to it.
+	int64_t GetBufferIndex();
+
+	//! Gets the total rows emmited by this scanner.
+	//! This is currently used for retrieving lines when errors occur.
 	idx_t GetTotalRowsEmmited();
 
 private:

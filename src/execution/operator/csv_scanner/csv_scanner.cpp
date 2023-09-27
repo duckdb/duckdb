@@ -188,8 +188,11 @@ string CSVScanner::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_
 	return exception;
 }
 
-idx_t CSVScanner::GetBufferIndex() {
-	return cur_buffer_idx - 1;
+int64_t CSVScanner::GetBufferIndex() {
+	if (cur_buffer_handle) {
+		return cur_buffer_handle->buffer_idx;
+	}
+	return -1;
 }
 
 idx_t CSVScanner::GetTotalRowsEmmited() {
