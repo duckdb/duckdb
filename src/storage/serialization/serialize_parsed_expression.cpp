@@ -318,7 +318,7 @@ void WindowExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(211, "default_expr", default_expr);
 	serializer.WritePropertyWithDefault<bool>(212, "ignore_nulls", ignore_nulls);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(213, "filter_expr", filter_expr);
-	serializer.WritePropertyWithDefault(214, "exclude_clause", exclude_clause);
+	serializer.WritePropertyWithDefault<WindowExclusion>(214, "exclude_clause", exclude_clause);
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deserializer) {
@@ -337,7 +337,7 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deseria
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(211, "default_expr", result->default_expr);
 	deserializer.ReadPropertyWithDefault<bool>(212, "ignore_nulls", result->ignore_nulls);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(213, "filter_expr", result->filter_expr);
-	deserializer.ReadPropertyWithDefault(214, "exclude_clause", result->exclude_clause, WindowExclusion::NO_OTHER);
+	deserializer.ReadPropertyWithDefault<WindowExclusion>(214, "exclude_clause", result->exclude_clause);
 	return std::move(result);
 }
 
