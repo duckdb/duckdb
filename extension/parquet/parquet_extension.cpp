@@ -408,6 +408,9 @@ public:
 				for (idx_t i = 0; i < column_values.size(); i++) {
 					parquet_options.schema.emplace_back(ParquetColumnDefinition::FromSchemaValue(column_values[i]));
 				}
+
+				// cannot be combined with hive_partitioning=true, so we disable auto-detection
+				parquet_options.file_options.auto_detect_hive_partitioning = false;
 			}
 		}
 		parquet_options.file_options.AutoDetectHivePartitioning(files, context);

@@ -36,6 +36,26 @@ FROM read_parquet('__TEST_DIR__/*.parquet', schema=map {
 ----
 Binder Error: Parquet schema cannot be combined with union_by_name=true or hive_partitioning=true
 
+statement ok
+COPY (
+    SELECT 1 i1, 3 i3, 4 i4, 5 i5 UNION ALL
+    SELECT 2 i1, 3 i3, 4 i4, 5 i5
+) TO '__TEST_DIR__/partitioned' (FIELD_IDS {i1: 5, i3: 3, i4: 2, i5: 1}, PARTITION_BY i1, FORMAT parquet)
+
+# auto-detection of hive partitioning is enabled by default,
+# but automatically disabled when a schema is supplied, so this should succeed
+query IIII
+SELECT *
+FROM read_parquet('__TEST_DIR__/partitioned/*/*.parquet', schema=map {
+                    1: {name: 'i1', type: 'BIGINT', default_value: NULL},
+                    3: {name: 'i3', type: 'BIGINT', default_value: NULL},
+                    4: {name: 'i4', type: 'BIGINT', default_value: 2},
+                    5: {name: 'i5', type: 'BIGINT', default_value: NULL}
+                  })
+----
+5	3	2	1
+5	3	2	2
+
 # cannot duplicate field_ids
 statement error
 SELECT *
@@ -167,3 +187,27 @@ WHERE my_cool_group = 2
 GROUP BY my_cool_group
 ----
 2	125000
+
+# also test multi-file reading with different field ids
+statement ok
+COPY (
+    SELECT 1 i1, 3 i3, 4 i4, 5 i5
+) TO '__TEST_DIR__/multifile1.parquet' (FIELD_IDS {i1: 5, i3: 3, i4: 2, i5: 1})
+
+statement ok
+COPY (
+    SELECT 1 j1, 3 j3, 4 j4, 5 j5
+) TO '__TEST_DIR__/multifile2.parquet' (FIELD_IDS {j1: 1, j3: 2, j4: 3, j5: 4})
+
+query IIII
+SELECT *
+FROM read_parquet('__TEST_DIR__/multifile*.parquet', schema=map {
+                    1: {name: 'i1', type: 'BIGINT', default_value: NULL},
+                    3: {name: 'i3', type: 'BIGINT', default_value: NULL},
+                    4: {name: 'i4', type: 'BIGINT', default_value: 2},
+                    5: {name: 'i5', type: 'BIGINT', default_value: NULL}
+                  })
+ORDER BY i1
+----
+1	4	5	NULL
+5	3	2	1
