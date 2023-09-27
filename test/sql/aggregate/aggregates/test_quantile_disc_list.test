@@ -171,37 +171,6 @@ statement error
 SELECT quantile_disc(r, (0.1, 0.5, 1.1)) FROM quantiles
 ----
 Binder Error: No function matches the given name and argument types 'quantile_disc(BIGINT, STRUCT( DECIMAL(2,1),  DECIMAL(2,1),  DECIMAL(2,1)))'. You might need to add explicit type casts.
-	Candidate functions:
-	quantile_disc(DECIMAL, DOUBLE) -> DECIMAL
-	quantile_disc(DECIMAL, DOUBLE[]) -> DECIMAL[]
-	quantile_disc(TINYINT, DOUBLE) -> TINYINT
-	quantile_disc(TINYINT, DOUBLE[]) -> TINYINT[]
-	quantile_disc(SMALLINT, DOUBLE) -> SMALLINT
-	quantile_disc(SMALLINT, DOUBLE[]) -> SMALLINT[]
-	quantile_disc(INTEGER, DOUBLE) -> INTEGER
-	quantile_disc(INTEGER, DOUBLE[]) -> INTEGER[]
-	quantile_disc(BIGINT, DOUBLE) -> BIGINT
-	quantile_disc(BIGINT, DOUBLE[]) -> BIGINT[]
-	quantile_disc(HUGEINT, DOUBLE) -> HUGEINT
-	quantile_disc(HUGEINT, DOUBLE[]) -> HUGEINT[]
-	quantile_disc(FLOAT, DOUBLE) -> FLOAT
-	quantile_disc(FLOAT, DOUBLE[]) -> FLOAT[]
-	quantile_disc(DOUBLE, DOUBLE) -> DOUBLE
-	quantile_disc(DOUBLE, DOUBLE[]) -> DOUBLE[]
-	quantile_disc(DATE, DOUBLE) -> DATE
-	quantile_disc(DATE, DOUBLE[]) -> DATE[]
-	quantile_disc(TIMESTAMP, DOUBLE) -> TIMESTAMP
-	quantile_disc(TIMESTAMP, DOUBLE[]) -> TIMESTAMP[]
-	quantile_disc(TIME, DOUBLE) -> TIME
-	quantile_disc(TIME, DOUBLE[]) -> TIME[]
-	quantile_disc(TIMESTAMP WITH TIME ZONE, DOUBLE) -> TIMESTAMP WITH TIME ZONE
-	quantile_disc(TIMESTAMP WITH TIME ZONE, DOUBLE[]) -> TIMESTAMP WITH TIME ZONE[]
-	quantile_disc(TIME WITH TIME ZONE, DOUBLE) -> TIME WITH TIME ZONE
-	quantile_disc(TIME WITH TIME ZONE, DOUBLE[]) -> TIME WITH TIME ZONE[]
-	quantile_disc(INTERVAL, DOUBLE) -> INTERVAL
-	quantile_disc(INTERVAL, DOUBLE[]) -> INTERVAL[]
-	quantile_disc(VARCHAR, DOUBLE) -> VARCHAR
-	quantile_disc(VARCHAR, DOUBLE[]) -> VARCHAR[]
 
 statement error
 SELECT quantile_disc(r, [0.1, 0.5, NULL]) FROM quantiles
@@ -212,40 +181,8 @@ statement error
 SELECT quantile_disc(r, ["0.1", "0.5", "0.9"]) FROM quantiles
 ----
 Binder Error: Referenced column "0.1" not found in FROM clause!
-Candidate bindings: "quantiles.r"
 
 statement error
 SELECT quantile_disc(r, [0.1, 0.5, 0.9], 50) FROM quantiles
 ----
 Binder Error: No function matches the given name and argument types 'quantile_disc(BIGINT, DECIMAL(2,1)[], INTEGER)'. You might need to add explicit type casts.
-	Candidate functions:
-	quantile_disc(DECIMAL, DOUBLE) -> DECIMAL
-	quantile_disc(DECIMAL, DOUBLE[]) -> DECIMAL[]
-	quantile_disc(TINYINT, DOUBLE) -> TINYINT
-	quantile_disc(TINYINT, DOUBLE[]) -> TINYINT[]
-	quantile_disc(SMALLINT, DOUBLE) -> SMALLINT
-	quantile_disc(SMALLINT, DOUBLE[]) -> SMALLINT[]
-	quantile_disc(INTEGER, DOUBLE) -> INTEGER
-	quantile_disc(INTEGER, DOUBLE[]) -> INTEGER[]
-	quantile_disc(BIGINT, DOUBLE) -> BIGINT
-	quantile_disc(BIGINT, DOUBLE[]) -> BIGINT[]
-	quantile_disc(HUGEINT, DOUBLE) -> HUGEINT
-	quantile_disc(HUGEINT, DOUBLE[]) -> HUGEINT[]
-	quantile_disc(FLOAT, DOUBLE) -> FLOAT
-	quantile_disc(FLOAT, DOUBLE[]) -> FLOAT[]
-	quantile_disc(DOUBLE, DOUBLE) -> DOUBLE
-	quantile_disc(DOUBLE, DOUBLE[]) -> DOUBLE[]
-	quantile_disc(DATE, DOUBLE) -> DATE
-	quantile_disc(DATE, DOUBLE[]) -> DATE[]
-	quantile_disc(TIMESTAMP, DOUBLE) -> TIMESTAMP
-	quantile_disc(TIMESTAMP, DOUBLE[]) -> TIMESTAMP[]
-	quantile_disc(TIME, DOUBLE) -> TIME
-	quantile_disc(TIME, DOUBLE[]) -> TIME[]
-	quantile_disc(TIMESTAMP WITH TIME ZONE, DOUBLE) -> TIMESTAMP WITH TIME ZONE
-	quantile_disc(TIMESTAMP WITH TIME ZONE, DOUBLE[]) -> TIMESTAMP WITH TIME ZONE[]
-	quantile_disc(TIME WITH TIME ZONE, DOUBLE) -> TIME WITH TIME ZONE
-	quantile_disc(TIME WITH TIME ZONE, DOUBLE[]) -> TIME WITH TIME ZONE[]
-	quantile_disc(INTERVAL, DOUBLE) -> INTERVAL
-	quantile_disc(INTERVAL, DOUBLE[]) -> INTERVAL[]
-	quantile_disc(VARCHAR, DOUBLE) -> VARCHAR
-	quantile_disc(VARCHAR, DOUBLE[]) -> VARCHAR[]

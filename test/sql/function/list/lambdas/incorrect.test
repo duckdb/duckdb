@@ -137,14 +137,12 @@ statement error
 select list_apply(i, x -> x * 3 + 2 / zz) from (values (list_value(1, 2, 3))) tbl(i);
 ----
 Binder Error: Referenced column "zz" not found in FROM clause!
-Candidate bindings: "tbl.i"
 
 # lambda cannot be the root of a plan
 statement error
 select x -> x + 1 from (values (list_value(1, 2, 3))) tbl(i);
 ----
 Binder Error: Referenced column "x" not found in FROM clause!
-Candidate bindings: "tbl.i"
 
 statement error
 select i -> i + 1 from (values (list_value(1, 2, 3))) tbl(i);
@@ -202,7 +200,6 @@ statement error
 select list_apply(i, x -> x + 1 AND y + 1) from (values (list_value(1, 2, 3))) tbl(i);
 ----
 Binder Error: Referenced column "y" not found in FROM clause!
-Candidate bindings: "tbl.i"
 
 statement ok
 CREATE TABLE l_filter_test (l integer[])

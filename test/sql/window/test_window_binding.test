@@ -13,31 +13,26 @@ statement error
 SELECT MIN(a) OVER (PARTITION BY i ORDER BY i) FROM integers
 ----
 Binder Error: Referenced column "a" not found in FROM clause!
-Candidate bindings: "integers.i"
 
 statement error
 SELECT MIN(i) OVER (PARTITION BY a ORDER BY i) FROM integers
 ----
 Binder Error: Referenced column "a" not found in FROM clause!
-Candidate bindings: "integers.i"
 
 statement error
 SELECT MIN(i) OVER (PARTITION BY i ORDER BY a) FROM integers
 ----
 Binder Error: Referenced column "a" not found in FROM clause!
-Candidate bindings: "integers.i"
 
 statement error
 SELECT MIN(i) OVER (PARTITION BY i, a ORDER BY i) FROM integers
 ----
 Binder Error: Referenced column "a" not found in FROM clause!
-Candidate bindings: "integers.i"
 
 statement error
 SELECT MIN(i) OVER (PARTITION BY i ORDER BY i, a) FROM integers
 ----
 Binder Error: Referenced column "a" not found in FROM clause!
-Candidate bindings: "integers.i"
 
 # now we only use the "proper" columns
 query I

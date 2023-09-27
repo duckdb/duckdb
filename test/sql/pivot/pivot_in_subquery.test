@@ -61,5 +61,3 @@ statement error
 PIVOT Cities ON Year IN (SELECT xx FROM Cities) USING SUM(Population);
 ----
 Binder Error: Referenced column "xx" not found in FROM clause!
-Candidate bindings: "Cities.Name"
-

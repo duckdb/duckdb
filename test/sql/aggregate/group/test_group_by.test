@@ -192,7 +192,6 @@ statement error
 SELECT 1 AS k, SUM(i) FROM integers GROUP BY k+1 ORDER BY 2;
 ----
 Binder Error: Referenced column "k" not found in FROM clause!
-Candidate bindings: "integers.i"
 
 # group by column refs should be recognized, even if one uses an explicit table specifier and the other does not
 query IR

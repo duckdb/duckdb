@@ -62,7 +62,6 @@ statement error
 SELECT IFELSE(1,IFELSE(1,b,1),a) FROM integers
 ----
 Binder Error: Referenced column "b" not found in FROM clause!
-Candidate bindings: "integers.a"
 
 # conflicting bindings
 statement error

@@ -149,7 +149,6 @@ statement error
 INSERT INTO table1 VALUES (1,2,3) RETURNING d, e, f
 ----
 Binder Error: Referenced column "d" not found in FROM clause!
-Candidate bindings: "table1.a", "table1.b", "table1.c"
 
 # Top level statement cannot contain a window function in returning statement
 statement error

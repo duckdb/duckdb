@@ -21,7 +21,6 @@ statement error
 SELECT total_profit FROM unit
 ----
 Binder Error: Referenced column "total_profit" not found in FROM clause!
-Candidate bindings: "unit.price"
 
 statement error
 ALTER TABLE unit ADD COLUMN also_total_profit INTEGER GENERATED ALWAYS AS (total_profit) VIRTUAL;
@@ -32,7 +31,6 @@ statement error
 SELECT also_total_profit FROM unit
 ----
 Binder Error: Referenced column "also_total_profit" not found in FROM clause!
-Candidate bindings: "unit.price"
 
 # Create a table with a generated column, and another generated column created from this other one
 statement ok

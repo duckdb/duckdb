@@ -56,4 +56,3 @@ statement error
 SELECT i % 2 AS o, COUNT(i) AS c FROM integers WHERE c = 0 GROUP BY o;
 ----
 Binder Error: Referenced column "c" not found in FROM clause!
-Candidate bindings: "integers.i"

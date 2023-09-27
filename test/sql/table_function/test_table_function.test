@@ -27,7 +27,6 @@ statement error
 SELECT blablabla FROM pragma_table_info('integers');
 ----
 Binder Error: Referenced column "blablabla" not found in FROM clause!
-Candidate bindings: "pragma_table_info.pk"
 
 # join with table function
 statement ok

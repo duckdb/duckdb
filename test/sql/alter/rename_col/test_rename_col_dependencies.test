@@ -26,7 +26,6 @@ statement error
 EXECUTE v1
 ----
 Binder Error: Referenced column "i" not found in FROM clause!
-Candidate bindings: "test.k", "test.j"
 
 # v2 still works
 statement ok

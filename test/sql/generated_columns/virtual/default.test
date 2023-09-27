@@ -25,7 +25,6 @@ statement error
 SELECT total_profit FROM unit;
 ----
 Binder Error: Referenced column "total_profit" not found in FROM clause!
-Candidate bindings: "unit.price"
 
 # (CREATE) Generated columns can not be created with a DEFAULT constraint
 statement error

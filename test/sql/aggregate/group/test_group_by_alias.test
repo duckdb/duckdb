@@ -75,7 +75,6 @@ statement error
 SELECT i % 2 AS k, SUM(k) FROM integers GROUP BY k
 ----
 Binder Error: Referenced column "k" not found in FROM clause!
-Candidate bindings: "integers.i"
 
 # ...unless it is one of the base columns
 query IR

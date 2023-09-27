@@ -182,20 +182,17 @@ statement error
 SELECT feathe FROM chickens;
 ----
 Binder Error: Referenced column "feathe" not found in FROM clause!
-Candidate bindings: "chickens.feather"
 
 # non-existent column, with multiple tables
 statement error
 SELECT feathe FROM chickens, integers, strings;
 ----
 Binder Error: Referenced column "feathe" not found in FROM clause!
-Candidate bindings: "chickens.feather"
 
 statement error
 SELECT st FROM chickens, integers, strings;
 ----
 Binder Error: Referenced column "st" not found in FROM clause!
-Candidate bindings: "strings.str", "integers.integ"
 
 statement error
 SELECT chicken.feather FROM chickens
@@ -224,4 +221,3 @@ statement error
 SELECT 🦆🦆 FROM 🦆🍞, chickens
 ----
 Binder Error: Referenced column "🦆🦆" not found in FROM clause!
-Candidate bindings: "🦆🍞.🦆🦆🦆"

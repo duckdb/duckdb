@@ -76,79 +76,66 @@ statement error
 SELECT era(i) FROM times
 ----
 Binder Error: Referenced column "i" not found in FROM clause!
-Candidate bindings: "times.d", "times.s"
 
 statement error
 SELECT year(i) FROM times
 ----
 Binder Error: Referenced column "i" not found in FROM clause!
-Candidate bindings: "times.d", "times.s"
 
 statement error
 SELECT month(i) FROM times
 ----
 Binder Error: Referenced column "i" not found in FROM clause!
-Candidate bindings: "times.d", "times.s"
 
 statement error
 SELECT day(i) FROM times
 ----
 Binder Error: Referenced column "i" not found in FROM clause!
-Candidate bindings: "times.d", "times.s"
 
 statement error
 SELECT decade(i) FROM times
 ----
 Binder Error: Referenced column "i" not found in FROM clause!
-Candidate bindings: "times.d", "times.s"
 
 statement error
 SELECT century(i) FROM times
 ----
 Binder Error: Referenced column "i" not found in FROM clause!
-Candidate bindings: "times.d", "times.s"
 
 statement error
 SELECT millennium(i) FROM times
 ----
 Binder Error: Referenced column "i" not found in FROM clause!
-Candidate bindings: "times.d", "times.s"
 
 statement error
 SELECT quarter(i) FROM times
 ----
 Binder Error: Referenced column "i" not found in FROM clause!
-Candidate bindings: "times.d", "times.s"
 
 statement error
 SELECT dayofweek(i) FROM times
 ----
 Binder Error: Referenced column "i" not found in FROM clause!
-Candidate bindings: "times.d", "times.s"
 
 statement error
 SELECT isodow(i) FROM times
 ----
 Binder Error: Referenced column "i" not found in FROM clause!
-Candidate bindings: "times.d", "times.s"
 
 statement error
 SELECT dayofyear(i) FROM times
 ----
 Binder Error: Referenced column "i" not found in FROM clause!
-Candidate bindings: "times.d", "times.s"
 
 statement error
 SELECT week(i) FROM times
 ----
 Binder Error: Referenced column "i" not found in FROM clause!
-Candidate bindings: "times.d", "times.s"
 
 statement error
 SELECT yearweek(i) FROM times
 ----
 Binder Error: Referenced column "i" not found in FROM clause!
-Candidate bindings: "times.d", "times.s"
 
 statement error
 select extract(dow from time '10:00:00');
@@ -190,7 +177,6 @@ statement error
 SELECT era(i) FROM times
 ----
 Binder Error: Referenced column "i" not found in FROM clause!
-Candidate bindings: "times.d", "times.s"
 
 statement error
 select extract(era from time '10:00:00');

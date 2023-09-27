@@ -239,7 +239,6 @@ statement error
 select 'hello' && l1 from tbl;
 ----
 Binder Error: Referenced column "x" not found in FROM clause!
-Candidate bindings: "tbl.l1", "tbl.l2"
 
 query I
 select NULL && [NULL];
@@ -275,7 +274,6 @@ statement error
 select 'hello' <@ l1 from tbl;
 ----
 Binder Error: Referenced column "x" not found in FROM clause!
-Candidate bindings: "tbl.l1", "tbl.l2"
 
 query I
 select l1 @> NULL from tbl;
