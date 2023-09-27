@@ -135,7 +135,7 @@ class TestArrowFetchRecordBatch(object):
         assert res == correct
 
     # Test with Map
-    def test_record_batch_next_batch_list(self, duckdb_cursor):
+    def test_record_batch_next_batch_map(self, duckdb_cursor):
         duckdb_cursor = duckdb.connect()
         duckdb_cursor_check = duckdb.connect()
         duckdb_cursor.execute("CREATE table t as select map([i], [i+1]) as a from range(3000)  as tbl(i);")
