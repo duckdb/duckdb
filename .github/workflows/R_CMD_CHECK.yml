@@ -92,7 +92,7 @@ jobs:
       - name: update duckdb-r src code with PR code
         shell: bash
         working-directory: ${{ env.DUCKDB_R_SRC }}
-        run: ./vendor.sh
+        run: ./vendor.sh duckdb
 
       - uses: r-lib/actions/check-r-package@v2
         with:
