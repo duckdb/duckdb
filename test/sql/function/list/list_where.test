@@ -3,6 +3,9 @@
 # group: [list]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE integers (i int[])
 
 statement ok
@@ -37,13 +40,18 @@ SELECT list_where(i, j) FROM integers, selections
 
 statement error
 SELECT list_where([1,2,3], [True, NULL, FALSE]);
+----
+No NULLs are allowed in the selection list.
 
-statement error
+query I
 SELECT list_where([1,2,3], [True, True, False, False]);
+----
+[1, 2]
 
-statement error
+query I
 SELECT list_where([1,2,3], [True, False]);
-
+----
+[1]
 
 # very large lists
 

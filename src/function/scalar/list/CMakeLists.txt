@@ -6,8 +6,7 @@ add_library_unity(
   list_extract.cpp
   list_resize.cpp
   list_zip.cpp
-  list_select.cpp
-  list_where.cpp)
+  list_select.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_list_nested>
     PARENT_SCOPE)
