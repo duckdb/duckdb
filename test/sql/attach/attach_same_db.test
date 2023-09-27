@@ -10,8 +10,6 @@ PRAGMA enable_verification
 statement ok
 ATTACH '__TEST_DIR__/attach_same_db.db' AS db1
 
-# IO Error: Cannot open file "duckdb_unittest_tempdir/1620/attach_same_db.db": The process cannot access the file because it is being used by another process. ??
 statement error
 ATTACH '__TEST_DIR__/attach_same_db.db' AS db2
 ----
-attach_same_db.db" is already attached with alias "db1"
