@@ -9,7 +9,4 @@ class TestPandasDFNone(object):
     # This used to decrease the ref count of None
     def test_none_deref(self):
         con = duckdb.connect()
-        gc.collect()
-        for _ in range(1000):
-            df = con.sql("select NULL::VARCHAR as a").df()
-        gc.collect()
+        df = con.sql("select NULL::VARCHAR as a from range(1000000)").df()
