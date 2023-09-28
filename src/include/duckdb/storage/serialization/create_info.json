@@ -133,8 +133,7 @@
       {
         "id": 203,
         "name": "query",
-        "type": "SelectStatement*",
-        "optional": true
+        "type": "SelectStatement*"
       }
     ]
   },
@@ -174,8 +173,7 @@
       {
         "id": 203,
         "name": "query",
-        "type": "SelectStatement*",
-        "optional": true
+        "type": "SelectStatement*"
       }
     ]
   },
