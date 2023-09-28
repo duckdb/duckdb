@@ -3751,6 +3751,15 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_UUID_binding() throws Exception {
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+             PreparedStatement statement = conn.prepareStatement("select '0b17ce61-375c-4ad8-97b3-349d96d35ab1'::UUID");
+             ResultSet resultSet = statement.executeQuery()) {
+            resultSet.next();
+            assertEquals(UUID.fromString("0b17ce61-375c-4ad8-97b3-349d96d35ab1"), resultSet.getObject(1));
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         // Woo I can do reflection too, take this, JUnit!
         Method[] methods = TestDuckDBJDBC.class.getMethods();
