@@ -468,20 +468,25 @@ class TestArrowFilterPushdown(object):
         )
 
     @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
-    @pytest.mark.parametrize(['data_type', 'value'], [
-        ['TINYINT', 127],
-        ['SMALLINT', 32767],
-        ['INTEGER', 2147483647],
-        ['BIGINT', 9223372036854775807],
-        ['UTINYINT', 255],
-        ['USMALLINT', 65535],
-        ['UINTEGER', 4294967295],
-        ['UBIGINT', 18446744073709551615],
-    ])
+    @pytest.mark.parametrize(
+        ['data_type', 'value'],
+        [
+            ['TINYINT', 127],
+            ['SMALLINT', 32767],
+            ['INTEGER', 2147483647],
+            ['BIGINT', 9223372036854775807],
+            ['UTINYINT', 255],
+            ['USMALLINT', 65535],
+            ['UINTEGER', 4294967295],
+            ['UBIGINT', 18446744073709551615],
+        ],
+    )
     def test_filter_pushdown_integers(self, duckdb_cursor, data_type, value, create_table):
-        duckdb_cursor.execute(f"""
+        duckdb_cursor.execute(
+            f"""
             CREATE TABLE tbl as select {value}::{data_type} as i
-        """)
+        """
+        )
         expected = duckdb_cursor.table('tbl').fetchall()
         filter = "i > 0"
         rel = duckdb_cursor.table('tbl')
