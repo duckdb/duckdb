@@ -14,10 +14,7 @@ struct Parse {
 
 	inline static bool Process(CSVStateMachine &machine, DataChunk &parse_chunk, char current_char, idx_t current_pos) {
 
-		machine.pre_previous_state = machine.previous_state;
-		machine.previous_state = machine.state;
-		machine.state = static_cast<CSVState>(
-		    machine.transition_array[static_cast<uint8_t>(machine.state)][static_cast<uint8_t>(current_char)]);
+		machine.Transition(current_char);
 
 		bool carriage_return = machine.previous_state == CSVState::CARRIAGE_RETURN;
 		if (machine.previous_state == CSVState::DELIMITER ||
