@@ -91,12 +91,12 @@ NULL	0
 
 # subquery with OFFSET
 query II
-SELECT i, (SELECT i+i1.i FROM integers LIMIT 1 OFFSET 1) AS j FROM integers i1 ORDER BY i;
+SELECT i, (SELECT i+i1.i FROM integers ORDER BY ALL LIMIT 1 OFFSET 1) AS j FROM integers i1 ORDER BY i;
 ----
 NULL	NULL
-1	3
-2	4
-3	5
+1	2
+2	3
+3	4
 
 # subquery with ORDER BY
 query II

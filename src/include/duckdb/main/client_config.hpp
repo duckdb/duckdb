@@ -67,6 +67,8 @@ struct ClientConfig {
 	bool enable_caching_operators = true;
 	//! Force parallelism of small tables, used for testing
 	bool verify_parallelism = false;
+	//! Enable the optimizer to consider index joins, which are disabled on default
+	bool enable_index_join = false;
 	//! Force index join independent of table cardinality, used for testing
 	bool force_index_join = false;
 	//! Force out-of-core computation for operators that support it, used for testing

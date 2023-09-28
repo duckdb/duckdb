@@ -32,7 +32,7 @@ statement ok
 CREATE TABLE integers_load(i INTEGER);
 
 statement ok
-COPY integers_load FROM '~/integers.csv'
+COPY integers_load FROM '~/integers.csv'  (HEADER 1)
 
 query I
 SELECT * FROM integers_load

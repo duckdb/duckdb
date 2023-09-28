@@ -74,17 +74,13 @@ LocalTableStorage::~LocalTableStorage() {
 
 void LocalTableStorage::InitializeScan(CollectionScanState &state, optional_ptr<TableFilterSet> table_filters) {
 	if (row_groups->GetTotalRows() == 0) {
-		// nothing to scan
-		return;
+		throw InternalException("No rows in LocalTableStorage row group for scan");
 	}
 	row_groups->InitializeScan(state, state.GetColumnIds(), table_filters.get());
 }
 
 idx_t LocalTableStorage::EstimatedSize() {
 	idx_t appended_rows = row_groups->GetTotalRows() - deleted_rows;
-	if (appended_rows == 0) {
-		return 0;
-	}
 	idx_t row_size = 0;
 	auto &types = row_groups->GetTypes();
 	for (auto &type : types) {
@@ -169,10 +165,10 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 			} catch (Exception &ex) {
 				error = PreservedError(ex);
 				return false;
-			} catch (std::exception &ex) {
+			} catch (std::exception &ex) { // LCOV_EXCL_START
 				error = PreservedError(ex);
 				return false;
-			}
+			} // LCOV_EXCL_STOP
 
 			current_row += chunk.size();
 			if (current_row >= append_state.current_row) {
@@ -182,7 +178,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 			return true;
 		});
 		if (append_to_table) {
-			table.RevertAppendInternal(append_state.row_start, append_count);
+			table.RevertAppendInternal(append_state.row_start);
 		}
 
 		// we need to vacuum the indexes to remove any buffers that are now empty
@@ -357,7 +353,6 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 
 	//! Append the chunk to the local storage
 	auto new_row_group = storage->row_groups->Append(chunk, state.append_state);
-
 	//! Check if we should pre-emptively flush blocks to disk
 	if (new_row_group) {
 		storage->WriteNewRowGroup();
@@ -436,6 +431,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 
 	TableAppendState append_state;
 	table.AppendLock(append_state);
+	transaction.PushAppend(table, append_state.row_start, append_count);
 	if ((append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= MERGE_THRESHOLD) &&
 	    storage.deleted_rows == 0) {
 		// table is currently empty OR we are bulk appending: move over the storage directly
@@ -457,7 +453,6 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 		// append to the indexes and append to the base table
 		storage.AppendToIndexes(transaction, append_state, append_count, true);
 	}
-	transaction.PushAppend(table, append_state.row_start, append_count);
 
 	// possibly vacuum any excess index data
 	table.info->indexes.Scan([&](Index &index) {

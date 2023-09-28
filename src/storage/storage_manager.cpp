@@ -235,8 +235,12 @@ void SingleFileStorageManager::CreateCheckpoint(bool delete_wal, bool force_chec
 	auto &config = DBConfig::Get(db);
 	if (wal->GetWALSize() > 0 || config.options.force_checkpoint || force_checkpoint) {
 		// we only need to checkpoint if there is anything in the WAL
-		SingleFileCheckpointWriter checkpointer(db, *block_manager);
-		checkpointer.CreateCheckpoint();
+		try {
+			SingleFileCheckpointWriter checkpointer(db, *block_manager);
+			checkpointer.CreateCheckpoint();
+		} catch (std::exception &ex) {
+			throw FatalException("Failed to create checkpoint because of error: %s", ex.what());
+		}
 	}
 	if (delete_wal) {
 		wal->Delete();
@@ -258,6 +262,11 @@ DatabaseSize SingleFileStorageManager::GetDatabaseSize() {
 		}
 	}
 	return ds;
+}
+
+vector<MetadataBlockInfo> SingleFileStorageManager::GetMetadataInfo() {
+	auto &metadata_manager = block_manager->GetMetadataManager();
+	return metadata_manager.GetMetadataInfo();
 }
 
 bool SingleFileStorageManager::AutomaticCheckpoint(idx_t estimated_wal_bytes) {

@@ -72,17 +72,21 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		for (auto &cond : comp_join.conditions) {
 			if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
 				has_equality = true;
+				break;
 			}
 		}
 		if (!has_equality) {
 			break;
 		}
-		// now, for each of the columns of the RHS, check which columns need to be projected
+		// visit current operator expressions so they are added to the referenced_columns
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+
 		column_binding_set_t unused_bindings;
+		auto old_op_bindings = op.GetColumnBindings();
 		ExtractUnusedColumnBindings(op.children[1]->GetColumnBindings(), unused_bindings);
 
 		// now recurse into the filter and its children
-		StandardVisitOperator(op);
+		LogicalOperatorVisitor::VisitOperatorChildren(op);
 
 		// then generate the projection map
 		GenerateProjectionMap(op.children[1]->GetColumnBindings(), unused_bindings, comp_join.right_projection_map);
@@ -118,12 +122,14 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		if (everything_referenced) {
 			break;
 		}
+		// first visit operator expressions to populate referenced columns
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 		// filter, figure out which columns are not needed after the filter
 		column_binding_set_t unused_bindings;
 		ExtractUnusedColumnBindings(op.children[0]->GetColumnBindings(), unused_bindings);
 
 		// now recurse into the filter and its children
-		StandardVisitOperator(op);
+		LogicalOperatorVisitor::VisitOperatorChildren(op);
 
 		// then generate the projection map
 		GenerateProjectionMap(op.children[0]->GetColumnBindings(), unused_bindings, filter.projection_map);

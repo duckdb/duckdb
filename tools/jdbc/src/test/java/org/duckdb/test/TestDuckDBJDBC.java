@@ -3729,6 +3729,28 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_offset_limit() throws Exception {
+        try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+             Statement s = connection.createStatement()) {
+            s.executeUpdate("create table t (i int not null)");
+            s.executeUpdate("insert into t values (1), (1), (2), (3), (3), (3)");
+
+            try (PreparedStatement ps =
+                     connection.prepareStatement("select t.i from t order by t.i limit ? offset ?")) {
+                ps.setLong(1, 2);
+                ps.setLong(2, 1);
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    assertTrue(rs.next());
+                    assertEquals(1, rs.getInt(1));
+                    assertTrue(rs.next());
+                    assertEquals(2, rs.getInt(1));
+                    assertFalse(rs.next());
+                }
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         // Woo I can do reflection too, take this, JUnit!
         Method[] methods = TestDuckDBJDBC.class.getMethods();

@@ -18,7 +18,7 @@ statement ok
 CREATE TABLE database.schema.table(col ROW(field INTEGER));
 
 statement ok
-INSERT INTO database.schema.table VALUES ({'col': 42});
+INSERT INTO database.schema.table VALUES ({'field': 42});
 
 query I
 SELECT database.schema.table.col.field FROM database.schema.table
