@@ -373,6 +373,45 @@ class TestArrowDFFilterPushdown(object):
             == 2
         )
 
+    def test_filter_pushdown_blob(self, duckdb_cursor):
+        import pandas
+
+        df = pandas.DataFrame(
+            {
+                'a': [bytes([1]), bytes([2]), bytes([3]), None],
+                'b': [bytes([1]), bytes([2]), bytes([3]), None],
+                'c': [bytes([1]), bytes([2]), bytes([3]), None],
+            }
+        )
+        arrow_table = duckdb_cursor.from_df(df).df().convert_dtypes(dtype_backend='pyarrow')
+
+        # Try ==
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a ='\x01'").fetchone()[0] == 1
+        # # Try >
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a >'\x01'").fetchone()[0] == 2
+        # Try >=
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a >='\x02'").fetchone()[0] == 2
+        # Try <
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a <'\x02'").fetchone()[0] == 1
+        # Try <=
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a <='\x02'").fetchone()[0] == 2
+
+        # Try Is Null
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a IS NULL").fetchone()[0] == 1
+        # Try Is Not Null
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a IS NOT NULL").fetchone()[0] == 3
+
+        # Try And
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a='\x02' and b ='\x01'").fetchone()[0] == 0
+        assert (
+            duckdb_conn.execute(
+                "SELECT count(*) from arrow_table where a ='\x02' and b = '\x02' and c = '\x02'"
+            ).fetchone()[0]
+            == 1
+        )
+        # Try Or
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a = '\x01' or b ='\x02'").fetchone()[0] == 2
+
     def test_filter_pushdown_date(self, duckdb_cursor):
         duckdb_conn.execute("CREATE TABLE test_date (a  DATE, b DATE, c DATE)")
         duckdb_conn.execute(
