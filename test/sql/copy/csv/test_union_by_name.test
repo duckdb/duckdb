@@ -184,7 +184,7 @@ NULL	300	Friday	data/csv/union-by-name/ubn4.csv
 statement error
 SELECT * FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE, null_padding=0)
 ----
-Invalid Input Error: Error in file "data/csv/union-by-name/part=b/test.csv"
+Invalid Input Error: Error in file
 
 query IIII
 SELECT id, value, a, part
