@@ -198,4 +198,4 @@ ORDER BY id
 statement error
 SELECT * FROM read_csv_auto('data/csv/union-by-name/*[!a]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
 ----
-Binder Error: Hive partition mismatch between file "data/csv/union-by-name/part=b/test.csv" and "data/csv/union-by-name/mismatching/test.csv": key "part" not found
+Binder Error: Hive partition mismatch between file

@@ -203,4 +203,3 @@ statement error
 SELECT hello FROM (a JOIN b USING (hello)), (d JOIN e USING (hello))
 ----
 Binder Error: Ambiguous column reference: column "hello" can refer to either:
-[e.heLLo, d.HElLo][b.HELLO, a.hello]

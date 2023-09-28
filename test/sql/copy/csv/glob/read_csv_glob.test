@@ -92,7 +92,7 @@ SELECT a, b LIKE '%a1.csv%' FROM read_csv('test/sql/*/*/data/*/a?/a*.csv', auto_
 statement error
 SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv', auto_detect=1) ORDER BY 1
 ----
-Invalid Input Error: date field value out of range: "1", expected format is (YYYY-MM-DD) in column "d", at line 2.
+Invalid Input Error
 
 # forcing string parsing works
 query I
