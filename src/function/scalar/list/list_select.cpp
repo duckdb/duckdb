@@ -79,8 +79,6 @@ static void ListSelectFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto &input_validity = FlatVector::Validity(input_entry);
 
 	ListVector::Reserve(result, result_length);
-	ListVector::SetListSize(result, result_length);
-
 	SelectionVector result_selection_vec = SelectionVector(result_length);
 	ValidityMask entry_validity_mask = ValidityMask(result_length);
 	ValidityMask &result_validity_mask = FlatVector::Validity(result);
@@ -122,6 +120,7 @@ static void ListSelectFunction(DataChunk &args, ExpressionState &state, Vector &
 	}
 	result_entry.Slice(input_entry, result_selection_vec, count);
 	result_entry.Flatten(offset);
+	ListVector::SetListSize(result, offset);
 	FlatVector::SetValidity(result_entry, entry_validity_mask);
 	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 }
@@ -129,7 +128,6 @@ static void ListSelectFunction(DataChunk &args, ExpressionState &state, Vector &
 static unique_ptr<FunctionData> ListSelectBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
-
 	LogicalType child_type;
 	if (arguments[0]->return_type == LogicalTypeId::UNKNOWN || arguments[1]->return_type == LogicalTypeId::UNKNOWN) {
 		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
