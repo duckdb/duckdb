@@ -49,11 +49,12 @@ bool ParallelCSVReader::NewLineDelimiter(bool carry, bool carry_followed_by_nl, 
 	return (carry && carry_followed_by_nl) || (!carry && first_char);
 }
 
-void ParallelCSVReader::SkipEmptyLines() {
+bool ParallelCSVReader::SkipEmptyLines() {
+	const idx_t initial_position_buffer = position_buffer;
 	idx_t new_pos_buffer = position_buffer;
 	if (parse_chunk.data.size() == 1) {
 		// Empty lines are null data.
-		return;
+		return initial_position_buffer != position_buffer;
 	}
 	for (; new_pos_buffer < end_buffer; new_pos_buffer++) {
 		if (StringUtil::CharacterIsNewline((*buffer)[new_pos_buffer])) {
@@ -63,13 +64,14 @@ void ParallelCSVReader::SkipEmptyLines() {
 				position_buffer++;
 			}
 			if (new_pos_buffer > end_buffer) {
-				return;
+				return initial_position_buffer != position_buffer;
 			}
 			position_buffer = new_pos_buffer;
 		} else if ((*buffer)[new_pos_buffer] != ' ') {
-			return;
+			return initial_position_buffer != position_buffer;
 		}
 	}
+	return initial_position_buffer != position_buffer;
 }
 
 bool ParallelCSVReader::SetPosition() {
@@ -185,7 +187,6 @@ bool ParallelCSVReader::SetPosition() {
 	}
 	// Ensure that parse_chunk has no gunk when trying to figure new line
 	parse_chunk.Reset();
-
 	verification_positions.end_of_last_line = position_buffer;
 	finished = false;
 	return successfully_read_first_line;
@@ -288,7 +289,7 @@ bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error
 	idx_t column = 0;
 	idx_t offset = 0;
 	bool has_quotes = false;
-
+	bool last_line_empty = false;
 	vector<idx_t> escape_positions;
 	if ((start_buffer == buffer->buffer_start || start_buffer == buffer->buffer_end) && !try_add_line) {
 		// First time reading this buffer piece
@@ -454,7 +455,10 @@ add_row : {
 		if (!BufferRemainder()) {
 			goto final_state;
 		}
-		SkipEmptyLines();
+		if (SkipEmptyLines() && reached_remainder_state) {
+			last_line_empty = true;
+			goto final_state;
+		}
 		if (position_buffer - verification_positions.end_of_last_line > options.buffer_size) {
 			error_message = "Line does not fit in one buffer. Increase the buffer size.";
 			return false;
@@ -583,8 +587,8 @@ final_state : {
 		return true;
 	}
 	// If this is the last buffer, we have to read the last value
-	if (buffer->buffer->is_last_buffer || !buffer->next_buffer ||
-	    (buffer->next_buffer && buffer->next_buffer->is_last_buffer)) {
+	if (!last_line_empty && (buffer->buffer->is_last_buffer || !buffer->next_buffer ||
+	                         (buffer->next_buffer && buffer->next_buffer->is_last_buffer))) {
 		if (column > 0 || start_buffer != position_buffer || try_add_line ||
 		    (insert_chunk.data.size() == 1 && start_buffer != position_buffer)) {
 			// remaining values to be added to the chunk
