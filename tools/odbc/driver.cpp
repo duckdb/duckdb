@@ -300,8 +300,9 @@ SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSM
 	    };
 
 	duckdb::OdbcHandle *hdl = nullptr;
-	if (ConvertHandle(handle, hdl) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertHandle(handle, hdl);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	bool is_valid_type;
@@ -380,8 +381,9 @@ SQLRETURN SQL_API SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQL
 	case SQL_HANDLE_STMT:
 	case SQL_HANDLE_DESC: {
 		duckdb::OdbcHandle *hdl = nullptr;
-		if (ConvertHandle(handle, hdl) != SQL_SUCCESS) {
-			return SQL_ERROR;
+		SQLRETURN ret = ConvertHandle(handle, hdl);
+		if (ret != SQL_SUCCESS) {
+			return ret;
 		}
 
 		// diag header fields
