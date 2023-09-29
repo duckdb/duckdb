@@ -168,6 +168,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(GetBitFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentTimeFun),
 	DUCKDB_SCALAR_FUNCTION(GetCurrentTimestampFun),
+	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(GradeUpFun),
 	DUCKDB_SCALAR_FUNCTION_SET(GreatestFun),
 	DUCKDB_SCALAR_FUNCTION_SET(GreatestCommonDivisorFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET_ALIAS(GroupConcatFun),
