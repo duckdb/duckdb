@@ -494,6 +494,13 @@ class TestArrowFilterPushdown(object):
         actual = duckdb_cursor.sql(f"select * from arrow_table where {filter}").fetchall()
         assert expected == actual
 
+        # Test with equivalent prepared statement
+        actual = duckdb_cursor.execute("select * from arrow_table where i > ?", (0,)).fetchall()
+        assert expected == actual
+        # Test equality
+        actual = duckdb_cursor.execute("select * from arrow_table where i = ?", (value,)).fetchall()
+        assert expected == actual
+
     @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
     def test_filter_pushdown_date(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
