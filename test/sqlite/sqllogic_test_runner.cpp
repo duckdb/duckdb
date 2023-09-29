@@ -594,9 +594,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				parser.Fail(StringUtil::Format("Environment variable '%s' has already been defined", env_var));
 			}
 			environment_variables[env_var] = env_actual;
-		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_TEMP_DIR) {
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_TEST_DIR) {
 			if (token.parameters.size() != 1) {
-				parser.Fail("require-temp-dir requires a single parameter");
+				parser.Fail("require-test-dir requires a single parameter");
 			}
 			auto param = token.parameters[0];
 			duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();

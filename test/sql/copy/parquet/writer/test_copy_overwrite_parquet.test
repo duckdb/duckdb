@@ -4,7 +4,7 @@
 
 require parquet
 
-require-temp-dir overwrite
+require-test-dir overwrite
 
 # create a table and insert some values
 statement ok
