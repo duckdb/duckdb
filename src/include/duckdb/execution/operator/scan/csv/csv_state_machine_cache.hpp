@@ -8,14 +8,28 @@
 
 #pragma once
 
-#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_state.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
 #include "duckdb/execution/operator/scan/csv/quote_rules.hpp"
 
 namespace duckdb {
-static constexpr uint32_t NUM_STATES = 9;
-static constexpr uint32_t NUM_TRANSITIONS = 256;
-typedef uint8_t state_machine_t[NUM_STATES][NUM_TRANSITIONS];
+
+//! Class to wrap the state machine matrix
+class StateMachine {
+public:
+	static constexpr uint32_t NUM_STATES = 9;
+	static constexpr uint32_t NUM_TRANSITIONS = 256;
+	CSVState state_machine[NUM_STATES][NUM_TRANSITIONS];
+
+	const CSVState *operator[](CSVState state) const {
+		return state_machine[static_cast<uint8_t>(state)];
+	}
+
+	CSVState *operator[](CSVState state) {
+		return state_machine[static_cast<uint8_t>(state)];
+	}
+};
 
 //! Hash function used in out state machine cache, it hashes and combines all options used to generate a state machine
 struct HashCSVStateMachineConfig {
@@ -36,12 +50,12 @@ public:
 	~CSVStateMachineCache() {};
 	//! Gets a state machine from the cache, if it's not from one the default options
 	//! It first caches it, then returns it.
-	const state_machine_t &Get(const CSVStateMachineOptions &state_machine_options);
+	const StateMachine &Get(const CSVStateMachineOptions &state_machine_options);
 
 private:
 	void Insert(const CSVStateMachineOptions &state_machine_options);
 	//! Cache on delimiter|quote|escape
-	unordered_map<CSVStateMachineOptions, state_machine_t, HashCSVStateMachineConfig> state_machine_cache;
+	unordered_map<CSVStateMachineOptions, StateMachine, HashCSVStateMachineConfig> state_machine_cache;
 	//! Default value for options used to intialize CSV State Machine Cache
 	const vector<char> default_delimiter = {',', '|', ';', '\t'};
 	const vector<vector<char>> default_quote = {{'\"'}, {'\"', '\''}, {'\0'}};

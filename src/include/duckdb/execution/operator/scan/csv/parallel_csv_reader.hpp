@@ -148,7 +148,7 @@ private:
 	//! Sets Position depending on the byte_start of this thread
 	bool SetPosition();
 	//! Called when scanning the 1st buffer, skips empty lines
-	void SkipEmptyLines();
+	bool SkipEmptyLines();
 	//! When a buffer finishes reading its piece, it still can try to scan up to the real end of the buffer
 	//! Up to finding a new line. This function sets the buffer_end and marks a boolean variable
 	//! when changing the buffer end the first time.
