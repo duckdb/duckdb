@@ -21,15 +21,10 @@ statement ok
 DELETE FROM test;
 
 # now do the same with a multi-byte quote that is not actually used
-query I
+statement error
 COPY test FROM 'test/sql/copy/csv/data/test/windows_newline.csv' (QUOTE 'BLABLABLA', AUTO_DETECT FALSE);
 ----
-20000
-
-query RIIRR
-SELECT SUM(a), MIN(LENGTH(b)), MAX(LENGTH(b)), SUM(LENGTH(b)), SUM(c) FROM test;
-----
-199990000.000000	5	5	100000.000000	200030000.000000
+The quote option cannot exceed a size of 1 byte.
 
 statement ok
 DROP TABLE test;

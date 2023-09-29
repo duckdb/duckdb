@@ -44,3 +44,8 @@ QUAC
 
 statement error
 QUACK NOT QUACK
+
+query I
+SELECT contains(loaded_extensions(), 'loadable_extension_demo')
+----
+true

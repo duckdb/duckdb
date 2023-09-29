@@ -142,6 +142,7 @@ static void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &
 		list_struct_data[rid].offset = old_len;
 		old_len += list_struct_data[rid].length;
 	}
+	result.Verify(count);
 }
 
 unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, AggregateFunction &function,

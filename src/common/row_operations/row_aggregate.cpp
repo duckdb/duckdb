@@ -76,6 +76,10 @@ void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &la
 	//	Move to the first aggregate states
 	VectorOperations::AddInPlace(sources, layout.GetAggrOffset(), count);
 	VectorOperations::AddInPlace(targets, layout.GetAggrOffset(), count);
+
+	// Keep track of the offset
+	idx_t offset = layout.GetAggrOffset();
+
 	for (auto &aggr : layout.GetAggregates()) {
 		D_ASSERT(aggr.function.combine);
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
@@ -84,23 +88,34 @@ void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &la
 		// Move to the next aggregate states
 		VectorOperations::AddInPlace(sources, aggr.payload_size, count);
 		VectorOperations::AddInPlace(targets, aggr.payload_size, count);
+
+		// Increment the offset
+		offset += aggr.payload_size;
 	}
+
+	// Now subtract the offset to get back to the original position
+	VectorOperations::AddInPlace(sources, -offset, count);
+	VectorOperations::AddInPlace(targets, -offset, count);
 }
 
 void RowOperations::FinalizeStates(RowOperationsState &state, TupleDataLayout &layout, Vector &addresses,
                                    DataChunk &result, idx_t aggr_idx) {
+	// Copy the addresses
+	Vector addresses_copy(LogicalType::POINTER);
+	VectorOperations::Copy(addresses, addresses_copy, result.size(), 0, 0);
+
 	//	Move to the first aggregate state
-	VectorOperations::AddInPlace(addresses, layout.GetAggrOffset(), result.size());
+	VectorOperations::AddInPlace(addresses_copy, layout.GetAggrOffset(), result.size());
 
 	auto &aggregates = layout.GetAggregates();
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[aggr_idx + i];
 		auto &aggr = aggregates[i];
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
-		aggr.function.finalize(addresses, aggr_input_data, target, result.size(), 0);
+		aggr.function.finalize(addresses_copy, aggr_input_data, target, result.size(), 0);
 
 		// Move to the next aggregate state
-		VectorOperations::AddInPlace(addresses, aggr.payload_size, result.size());
+		VectorOperations::AddInPlace(addresses_copy, aggr.payload_size, result.size());
 	}
 }
 

@@ -1,5 +1,5 @@
 # name: test/sql/copy/csv/csv_quoted_newline_incorrect.test
-# description: Read a CSV with a null byte
+# description: Read a CSV with an incorrect quoted newline, is expected that the csv reader manages to skip dirty lines
 # group: [csv]
 
 require vector_size 512
@@ -7,7 +7,12 @@ require vector_size 512
 statement ok
 PRAGMA enable_verification
 
-statement error
+# force parallelism of the queries
+statement ok
+PRAGMA verify_parallelism
+
+# CSV reader skips malformed lines
+query II
 select * from 'data/csv/csv_quoted_newline_odd.csv';
 ----
-csv_quoted_newline_odd.csv": CSV options could not be auto-detected
+84	hello world

@@ -13,8 +13,6 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 
 namespace duckdb {
-class Serializer;
-class Deserializer;
 
 //! A type catalog entry
 class TypeCatalogEntry : public StandardEntry {

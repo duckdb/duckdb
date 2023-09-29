@@ -21,7 +21,7 @@ idx_t BufferedFileWriter::GetTotalWritten() {
 	return total_written + offset;
 }
 
-void BufferedFileWriter::WriteData(const_data_ptr_t buffer, uint64_t write_size) {
+void BufferedFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 	// first copy anything we can from the buffer
 	const_data_ptr_t end_ptr = buffer + write_size;
 	while (buffer < end_ptr) {

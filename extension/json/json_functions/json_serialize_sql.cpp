@@ -184,7 +184,7 @@ static unique_ptr<SelectStatement> DeserializeSelectStatement(string_t input, yy
 	}
 	auto stmt_json = yyjson_arr_get(statements, 0);
 	JsonDeserializer deserializer(stmt_json, doc);
-	return SelectStatement::FormatDeserialize(deserializer);
+	return SelectStatement::Deserialize(deserializer);
 }
 
 //----------------------------------------------------------------------
@@ -244,6 +244,9 @@ struct ExecuteSqlTableFunction {
 		auto result = make_uniq<BindData>();
 
 		result->con = make_uniq<Connection>(*context.db);
+		if (input.inputs[0].IsNull()) {
+			throw BinderException("json_execute_serialized_sql cannot execute NULL plan");
+		}
 		auto serialized = input.inputs[0].GetValueUnsafe<string>();
 		auto stmt = DeserializeSelectStatement(serialized, alc);
 		result->plan = result->con->RelationFromQuery(std::move(stmt));

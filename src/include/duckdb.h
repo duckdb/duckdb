@@ -972,6 +972,12 @@ Clear the params bind to the prepared statement.
 DUCKDB_API duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement);
 
 /*!
+Binds a value to the prepared statement at the specified index.
+*/
+DUCKDB_API duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                          duckdb_value val);
+
+/*!
 Retrieve the index of the parameter for the prepared statement, identified by name
 */
 DUCKDB_API duckdb_state duckdb_bind_parameter_index(duckdb_prepared_statement prepared_statement, idx_t *param_idx_out,
@@ -1367,6 +1373,18 @@ DUCKDB_API duckdb_logical_type duckdb_create_union_type(duckdb_logical_type memb
                                                         idx_t member_count);
 
 /*!
+Creates a STRUCT type from the passed member name and type arrays.
+The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+* member_types: The array of types that the struct should consist of.
+* member_names: The array of names that the struct should consist of.
+* member_count: The number of members that were specified for both arrays.
+* returns: The logical type.
+*/
+DUCKDB_API duckdb_logical_type duckdb_create_struct_type(duckdb_logical_type *member_types, const char **member_names,
+                                                         idx_t member_count);
+
+/*!
 Creates a `duckdb_logical_type` of type decimal with the specified width and scale
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
@@ -1722,7 +1740,7 @@ DUCKDB_API duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, id
 /*!
 Returns whether or not a row is valid (i.e. not NULL) in the given validity mask.
 
-* validity: The validity mask, as obtained through `duckdb_data_chunk_get_validity`
+* validity: The validity mask, as obtained through `duckdb_vector_get_validity`
 * row: The row index
 * returns: true if the row is valid, false otherwise
 */
@@ -1731,10 +1749,10 @@ DUCKDB_API bool duckdb_validity_row_is_valid(uint64_t *validity, idx_t row);
 /*!
 In a validity mask, sets a specific row to either valid or invalid.
 
-Note that `duckdb_data_chunk_ensure_validity_writable` should be called before calling `duckdb_data_chunk_get_validity`,
+Note that `duckdb_vector_ensure_validity_writable` should be called before calling `duckdb_vector_get_validity`,
 to ensure that there is a validity mask to write to.
 
-* validity: The validity mask, as obtained through `duckdb_data_chunk_get_validity`.
+* validity: The validity mask, as obtained through `duckdb_vector_get_validity`.
 * row: The row index
 * valid: Whether or not to set the row to valid, or invalid
 */
@@ -2323,6 +2341,16 @@ Fetch the internal arrow schema from the arrow result.
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema *out_schema);
+
+/*!
+Fetch the internal arrow schema from the prepared statement.
+
+* result: The prepared statement to fetch the schema from.
+* out_schema: The output schema.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared,
+                                                     duckdb_arrow_schema *out_schema);
 
 /*!
 Fetch an internal arrow array from the arrow result.

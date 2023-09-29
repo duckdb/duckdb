@@ -1,6 +1,6 @@
 import pytest
 
-_ = pytest.importorskip("pyduckdb.spark")
+_ = pytest.importorskip("duckdb.experimental.spark")
 
 
 class TestSparkRuntimeConfig(object):

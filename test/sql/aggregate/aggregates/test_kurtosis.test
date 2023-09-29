@@ -2,6 +2,9 @@
 # description: Test kurtosis aggregate
 # group: [aggregates]
 
+statement ok
+PRAGMA enable_verification
+
 #Corner cases
 statement error
 select kurtosis()
@@ -63,12 +66,12 @@ select kurtosis(k), kurtosis(v), kurtosis(v2) from aggr;
 11.000000	-1.961428	-1.445120
 
 query I
-select  kurtosis(v2) from aggr group by v;
+select  kurtosis(v2) from aggr group by v ORDER BY ALL;
 ----
-NULL
-NULL
-NULL
 -3.977599
+NULL
+NULL
+NULL
 
 # Window Function
 query I rowsort

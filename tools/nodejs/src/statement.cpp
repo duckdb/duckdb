@@ -17,9 +17,7 @@ using duckdb::vector;
 
 namespace node_duckdb {
 
-Napi::FunctionReference Statement::constructor;
-
-Napi::Object Statement::Init(Napi::Env env, Napi::Object exports) {
+Napi::FunctionReference Statement::Init(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
 	Napi::Function t =
@@ -29,11 +27,9 @@ Napi::Object Statement::Init(Napi::Env env, Napi::Object exports) {
 	                 InstanceMethod("finalize", &Statement::Finish), InstanceMethod("stream", &Statement::Stream),
 	                 InstanceMethod("columns", &Statement::Columns)});
 
-	constructor = Napi::Persistent(t);
-	constructor.SuppressDestruct();
-
 	exports.Set("Statement", t);
-	return exports;
+
+	return Napi::Persistent(t);
 }
 
 static unique_ptr<duckdb::PreparedStatement> PrepareManyInternal(Statement &statement) {
@@ -97,11 +93,9 @@ Statement::Statement(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Statemen
 	int length = info.Length();
 
 	if (length <= 0 || !Connection::HasInstance(info[0])) {
-		Napi::TypeError::New(env, "Connection object expected").ThrowAsJavaScriptException();
-		return;
+		throw Napi::TypeError::New(env, "Connection object expected");
 	} else if (length <= 1 || !info[1].IsString()) {
-		Napi::TypeError::New(env, "SQL query expected").ThrowAsJavaScriptException();
-		return;
+		throw Napi::TypeError::New(env, "SQL query expected");
 	}
 
 	connection_ref = Napi::ObjectWrap<Connection>::Unwrap(info[0].As<Napi::Object>());
@@ -174,7 +168,7 @@ static Napi::Value convert_col_val(Napi::Env &env, duckdb::Value dval, duckdb::L
 			duckdb::Hugeint::NegateInPlace(val); // remove signing bit
 		}
 		D_ASSERT(val.upper >= 0);
-		const uint64_t words[] = {val.lower, (uint64_t)val.upper};
+		const uint64_t words[] = {val.lower, static_cast<uint64_t>(val.upper)};
 		value = Napi::BigInt::New(env, negative, 2, words);
 	} break;
 	case duckdb::LogicalTypeId::DECIMAL: {
@@ -447,8 +441,8 @@ struct RunQueryTask : public Task {
 			deferred.Reject(Utils::CreateError(env, result->GetErrorObject()));
 		} else {
 			auto db = statement.connection_ref->database_ref->Value();
-			auto query_result = QueryResult::constructor.New({db});
-			auto unwrapped = Napi::ObjectWrap<QueryResult>::Unwrap(query_result);
+			auto query_result = QueryResult::NewInstance(db);
+			auto unwrapped = QueryResult::Unwrap(query_result);
 			unwrapped->result = std::move(result);
 			deferred.Resolve(query_result);
 		}
@@ -624,21 +618,20 @@ Napi::Value Statement::Finish(const Napi::CallbackInfo &info) {
 	connection_ref->database_ref->Schedule(env, duckdb::make_uniq<FinishTask>(*this, callback));
 	return env.Null();
 }
+Napi::Object Statement::NewInstance(Napi::Env env, const vector<napi_value> &args) {
+	return NodeDuckDB::GetData(env)->statement_constructor.New(args);
+}
 
-Napi::FunctionReference QueryResult::constructor;
-
-Napi::Object QueryResult::Init(Napi::Env env, Napi::Object exports) {
+Napi::FunctionReference QueryResult::Init(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
 	Napi::Function t = DefineClass(env, "QueryResult",
 	                               {InstanceMethod("nextChunk", &QueryResult::NextChunk),
 	                                InstanceMethod("nextIpcBuffer", &QueryResult::NextIpcBuffer)});
 
-	constructor = Napi::Persistent(t);
-	constructor.SuppressDestruct();
-
 	exports.Set("QueryResult", t);
-	return exports;
+
+	return Napi::Persistent(t);
 }
 
 QueryResult::QueryResult(const Napi::CallbackInfo &info) : Napi::ObjectWrap<QueryResult>(info) {
@@ -738,6 +731,10 @@ Napi::Value QueryResult::NextIpcBuffer(const Napi::CallbackInfo &info) {
 	auto deferred = Napi::Promise::Deferred::New(env);
 	database_ref->Schedule(env, duckdb::make_uniq<GetNextArrowIpcTask>(*this, deferred));
 	return deferred.Promise();
+}
+
+Napi::Object QueryResult::NewInstance(const Napi::Object &db) {
+	return NodeDuckDB::GetData(db.Env())->query_result_constructor.New({db});
 }
 
 } // namespace node_duckdb

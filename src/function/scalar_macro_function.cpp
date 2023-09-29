@@ -49,14 +49,4 @@ string ScalarMacroFunction::ToSQL(const string &schema, const string &name) cons
 	return MacroFunction::ToSQL(schema, name) + StringUtil::Format("(%s);", expression_copy->ToString());
 }
 
-void ScalarMacroFunction::SerializeInternal(FieldWriter &writer) const {
-	writer.WriteSerializable(*expression);
-}
-
-unique_ptr<MacroFunction> ScalarMacroFunction::Deserialize(FieldReader &reader) {
-	auto result = make_uniq<ScalarMacroFunction>();
-	result->expression = reader.ReadRequiredSerializable<ParsedExpression>();
-	return std::move(result);
-}
-
 } // namespace duckdb

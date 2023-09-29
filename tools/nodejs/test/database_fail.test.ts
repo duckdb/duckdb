@@ -1,6 +1,8 @@
 import * as sqlite3 from '..';
 import * as assert from 'assert';
 import {DuckDbError, RowData} from "..";
+import {Worker} from 'worker_threads';
+import {expect} from 'chai';
 
 describe('error handling', function() {
     var db: sqlite3.Database;
@@ -143,4 +145,28 @@ describe('error handling', function() {
             }
         });
     });
+
+    it('should not error when multiple instances are started in one process', async () => {
+      async function run_worker() {
+        return new Promise((resolve, reject) => {
+          const worker = new Worker(__dirname + '/worker.js', { workerData: 'test' });
+
+          worker.on('message', resolve);
+          worker.on('error', reject);
+          worker.on('exit', (code: number) => {
+            if (code !== 0) {
+              console.log(new Error(`Worker stopped with exit code ${code}`));
+            }
+          })
+        });
+      }
+
+      await run_worker(); // first should always succeed
+      await run_worker(); // second fails without thread safety
+    })
+
+    it("shouldn't crash on an exception", () => {
+        expect(() => new sqlite3.Database(':memory:', {file_search_path: '/'})).to.throw('Could not set option "file_search_path" as a global option');
+    });
 });
+

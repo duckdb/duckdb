@@ -160,6 +160,15 @@ bool TryAddOperator::Operation(int64_t left, int64_t right, int64_t &result) {
 	return true;
 }
 
+template <>
+bool TryAddOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
+	if (!Hugeint::AddInPlace(left, right)) {
+		return false;
+	}
+	result = left;
+	return true;
+}
+
 //===--------------------------------------------------------------------===//
 // add decimal with overflow check
 //===--------------------------------------------------------------------===//

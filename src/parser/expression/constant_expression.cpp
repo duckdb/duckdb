@@ -1,12 +1,11 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -33,15 +32,6 @@ unique_ptr<ParsedExpression> ConstantExpression::Copy() const {
 	auto copy = make_uniq<ConstantExpression>(value);
 	copy->CopyProperties(*this);
 	return std::move(copy);
-}
-
-void ConstantExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializable(value);
-}
-
-unique_ptr<ParsedExpression> ConstantExpression::Deserialize(ExpressionType type, FieldReader &reader) {
-	Value value = reader.ReadRequiredSerializable<Value, Value>();
-	return make_uniq<ConstantExpression>(std::move(value));
 }
 
 } // namespace duckdb

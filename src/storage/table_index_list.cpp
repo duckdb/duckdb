@@ -54,7 +54,7 @@ void TableIndexList::VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, Data
 	                   ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE
 	                   : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 
-	// check whether or not the chunk can be inserted or deleted into the referenced table' storage
+	// check whether the chunk can be inserted or deleted into the referenced table storage
 	auto index = FindForeignKeyIndex(fk_keys, fk_type);
 	if (!index) {
 		throw InternalException("Internal Foreign Key error: could not find index to verify...");

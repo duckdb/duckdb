@@ -1,4 +1,3 @@
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 
@@ -32,18 +31,6 @@ unique_ptr<Expression> BoundComparisonExpression::Copy() {
 	auto copy = make_uniq<BoundComparisonExpression>(type, left->Copy(), right->Copy());
 	copy->CopyProperties(*this);
 	return std::move(copy);
-}
-
-void BoundComparisonExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteOptional(left);
-	writer.WriteOptional(right);
-}
-
-unique_ptr<Expression> BoundComparisonExpression::Deserialize(ExpressionDeserializationState &state,
-                                                              FieldReader &reader) {
-	auto left = reader.ReadOptional<Expression>(nullptr, state.gstate);
-	auto right = reader.ReadOptional<Expression>(nullptr, state.gstate);
-	return make_uniq<BoundComparisonExpression>(state.type, std::move(left), std::move(right));
 }
 
 } // namespace duckdb
