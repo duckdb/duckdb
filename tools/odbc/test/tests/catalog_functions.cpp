@@ -41,7 +41,7 @@ void TestGetTypeInfo(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 	    {{"FIXED_PREC_SCALE", SQL_SMALLINT}, "0"},   {{"AUTO_UNIQUE_VALUE", SQL_SMALLINT}, "-1"},
 	    {{"LOCAL_TYPE_NAME", SQL_VARCHAR}, ""},      {{"MINIMUM_SCALE", SQL_SMALLINT}, "-1"},
 	    {{"MAXIMUM_SCALE", SQL_SMALLINT}, "-1"},     {{"SQL_DATA_TYPE", SQL_SMALLINT}, "12"},
-	    {{"SQL_DATETIME_SUB", SQL_SMALLINT}, "-1"},  {{"NUM_PREC_RADIX", SQL_INTEGER}, "0"},
+	    {{"SQL_DATETIME_SUB", SQL_SMALLINT}, "-1"},  {{"NUM_PREC_RADIX", SQL_INTEGER}, "-1"},
 	    {{"INTERVAL_PRECISION", SQL_SMALLINT}, "-1"}};
 
 	for (int i = 0; i < col_count; i++) {

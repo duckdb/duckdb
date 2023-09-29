@@ -140,7 +140,7 @@ void OdbcHandleStmt::SetAPD(OdbcHandleDesc *new_apd) {
 }
 
 void OdbcHandleStmt::FillIRD() {
-	D_ASSERT(stmt);
+ 	D_ASSERT(stmt);
 	auto ird = row_desc->GetIRD();
 	ird->Reset();
 	ird->header.sql_desc_count = 0;
