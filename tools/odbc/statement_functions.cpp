@@ -804,11 +804,7 @@ SQLRETURN duckdb::ExecDirectStmt(SQLHSTMT statement_handle, SQLCHAR *statement_t
 		return SQL_ERROR;
 	}
 
-	auto execute_status = duckdb::BatchExecuteStmt(statement_handle);
-	if (execute_status != SQL_SUCCESS) {
-		return SQL_ERROR;
-	}
-	return SQL_SUCCESS;
+	return duckdb::BatchExecuteStmt(statement_handle);
 }
 
 SQLRETURN duckdb::ExecuteStmt(SQLHSTMT statement_handle) {
