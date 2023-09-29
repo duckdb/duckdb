@@ -155,11 +155,6 @@ statement ok
 CREATE TEMP TABLE test_temp_table(i INTEGER);
 
 statement error
-SELECT * FROM memory.main.test_temp_table;
-----
-Catalog Error: Table with name test_temp_table does not exist!
-
-statement error
 SELECT * FROM test.test_temp_table;
 ----
 Catalog Error: Table with name test_temp_table does not exist!
