@@ -168,7 +168,7 @@ TEST_CASE("Test SQLColAttribute (descriptor information for a column)", "[odbc]"
 	CheckInteger(SQLColAttribute, hstmt, SQL_NULLABLE, SQL_DESC_NULLABLE);
 
 	// SQL_DESC_NUM_PREC_RADIX
-	CheckInteger(SQLColAttribute, hstmt, 10, SQL_DESC_NUM_PREC_RADIX);
+	CheckInteger(SQLColAttribute, hstmt, 2, SQL_DESC_NUM_PREC_RADIX);
 
 	// SQL_DESC_PRECISION
 	CheckInteger(SQLColAttribute, hstmt, 10, SQL_DESC_PRECISION);
