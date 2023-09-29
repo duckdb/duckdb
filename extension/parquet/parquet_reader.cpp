@@ -4,9 +4,9 @@
 #include "callback_column_reader.hpp"
 #include "cast_column_reader.hpp"
 #include "column_reader.hpp"
-#include "crypto_wrapper.hpp"
 #include "duckdb.hpp"
 #include "list_column_reader.hpp"
+#include "parquet_crypto.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_statistics.hpp"
 #include "parquet_timestamp.hpp"
@@ -100,7 +100,7 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
 			                            file_handle.path);
 		}
-		ParquetCryptoWrapper::Read(*metadata, *file_proto, encryption_key);
+		ParquetCrypto::Read(*metadata, *file_proto, encryption_key);
 	} else {
 		metadata->read(file_proto.get());
 	}
@@ -523,7 +523,7 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 
 void ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) {
 	if (!parquet_options.encryption_key.empty()) {
-		ParquetCryptoWrapper::Read(object, iprot, parquet_options.encryption_key);
+		ParquetCrypto::Read(object, iprot, parquet_options.encryption_key);
 	} else {
 		object.read(&iprot);
 	}

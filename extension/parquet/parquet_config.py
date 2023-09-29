@@ -64,6 +64,7 @@ source_files += [
     for x in [
         'extension/parquet/parquet_reader.cpp',
         'extension/parquet/parquet_timestamp.cpp',
+        'extension/parquet/parquet_crypto.cpp',
         'extension/parquet/parquet_writer.cpp',
         'extension/parquet/column_reader.cpp',
         'extension/parquet/parquet_statistics.cpp',

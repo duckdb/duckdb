@@ -1,8 +1,8 @@
 #include "parquet_writer.hpp"
 
-#include "crypto_wrapper.hpp"
 #include "duckdb.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "parquet_crypto.hpp"
 #include "parquet_timestamp.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
@@ -315,7 +315,7 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 
 void ParquetWriter::Write(const duckdb_apache::thrift::TBase &object) {
 	if (!encryption_key.empty()) {
-		ParquetCryptoWrapper::Write(object, *protocol, encryption_key);
+		ParquetCrypto::Write(object, *protocol, encryption_key);
 	} else {
 		file_meta_data.write(protocol.get());
 	}
