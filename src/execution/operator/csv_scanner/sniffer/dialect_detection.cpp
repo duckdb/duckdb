@@ -5,9 +5,9 @@ namespace duckdb {
 
 struct SniffDialect {
 	inline static void Initialize(CSVStateMachine &machine) {
-		machine.state = CSVState::STANDARD;
-		machine.previous_state = CSVState::STANDARD;
-		machine.pre_previous_state = CSVState::STANDARD;
+		machine.state = CSVState::EMPTY_LINE;
+		machine.previous_state = CSVState::EMPTY_LINE;
+		machine.pre_previous_state = CSVState::EMPTY_LINE;
 		machine.cur_rows = 0;
 		machine.column_count = 1;
 	}
@@ -223,18 +223,9 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 	// with the same quote, we add this state_machine as a suitable candidate.
 	if (more_than_one_row && more_than_one_column && start_good && rows_consistent && !require_more_padding &&
 	    !invalid_padding) {
-		bool same_quote_is_candidate = false;
-		for (auto &candidate : candidates) {
-			if (state_machine->dialect_options.state_machine_options.quote ==
-			    candidate->dialect_options.state_machine_options.quote) {
-				same_quote_is_candidate = true;
-			}
-		}
-		if (!same_quote_is_candidate) {
-			state_machine->start_row = start_row;
-			state_machine->dialect_options.num_cols = num_cols;
-			candidates.emplace_back(std::move(state_machine));
-		}
+		state_machine->start_row = start_row;
+		state_machine->dialect_options.num_cols = num_cols;
+		candidates.emplace_back(std::move(state_machine));
 	}
 }
 
@@ -256,10 +247,6 @@ void CSVSniffer::RefineCandidates() {
 	// fully on the whole sample dataset, when/if it fails we go to the next one.
 	if (candidates.empty()) {
 		// No candidates to refine
-		return;
-	}
-	if (candidates.size() == 1 || candidates[0]->csv_buffer_iterator.Finished()) {
-		// Only one candidate nothing to refine or all candidates already checked
 		return;
 	}
 	for (auto &cur_candidate : candidates) {

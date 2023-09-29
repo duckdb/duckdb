@@ -5,6 +5,8 @@
 statement ok
 PRAGMA enable_verification
 
+require vector_size 512
+
 query IIIII
 from 'data/csv/inconsistent_cells.csv'
 ----

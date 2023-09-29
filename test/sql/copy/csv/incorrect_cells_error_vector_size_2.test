@@ -1,0 +1,13 @@
+# name: test/sql/copy/csv/incorrect_cells_error_vector_size_2.test
+# description: Test that inconsistent cells fail the parsing, if the first vector fully inconsistent
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+require vector_size 2
+
+statement error
+from 'data/csv/inconsistent_cells.csv'
+----
+Invalid Input Error: Error in file "data/csv/inconsistent_cells.csv": CSV options could not be auto-detected. Consider setting parser options manually.

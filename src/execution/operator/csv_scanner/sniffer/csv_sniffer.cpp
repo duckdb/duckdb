@@ -23,6 +23,10 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager>
 }
 
 SnifferResult CSVSniffer::SniffCSV() {
+	// Early-out for empty files
+	if (buffer_manager->file_handle->FileSize() == 0) {
+		throw InvalidInputException("File is empty, nothing to parse.");
+	}
 	// 1. Dialect Detection
 	DetectDialect();
 	if (explicit_set_columns) {
