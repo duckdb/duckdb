@@ -3,8 +3,8 @@
 
 namespace duckdb {
 
-void InitializeTransitionArray(unsigned char *transition_array, const uint8_t state) {
-	for (uint32_t i = 0; i < NUM_TRANSITIONS; i++) {
+void InitializeTransitionArray(CSVState *transition_array, const CSVState state) {
+	for (uint32_t i = 0; i < StateMachine::NUM_TRANSITIONS; i++) {
 		transition_array[i] = state;
 	}
 }
@@ -13,72 +13,63 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	D_ASSERT(state_machine_cache.find(state_machine_options) == state_machine_cache.end());
 	// Initialize transition array with default values to the Standard option
 	auto &transition_array = state_machine_cache[state_machine_options];
-	const uint8_t standard_state = static_cast<uint8_t>(CSVState::STANDARD);
-	const uint8_t field_separator_state = static_cast<uint8_t>(CSVState::DELIMITER);
-	const uint8_t record_separator_state = static_cast<uint8_t>(CSVState::RECORD_SEPARATOR);
-	const uint8_t carriage_return_state = static_cast<uint8_t>(CSVState::CARRIAGE_RETURN);
-	const uint8_t quoted_state = static_cast<uint8_t>(CSVState::QUOTED);
-	const uint8_t unquoted_state = static_cast<uint8_t>(CSVState::UNQUOTED);
-	const uint8_t escape_state = static_cast<uint8_t>(CSVState::ESCAPE);
-	const uint8_t empty_line_state = static_cast<uint8_t>(CSVState::EMPTY_LINE);
-	const uint8_t invalid_state = static_cast<uint8_t>(CSVState::INVALID);
 
-	for (uint32_t i = 0; i < NUM_STATES; i++) {
-		switch (i) {
-		case quoted_state:
-			InitializeTransitionArray(transition_array[i], quoted_state);
+	for (uint32_t i = 0; i < StateMachine::NUM_STATES; i++) {
+		CSVState cur_state = CSVState(i);
+		switch (cur_state) {
+		case CSVState::QUOTED:
+			InitializeTransitionArray(transition_array[cur_state], CSVState::QUOTED);
 			break;
-		case unquoted_state:
-		case invalid_state:
-		case escape_state:
-			InitializeTransitionArray(transition_array[i], invalid_state);
+		case CSVState::UNQUOTED:
+		case CSVState::INVALID:
+		case CSVState::ESCAPE:
+			InitializeTransitionArray(transition_array[cur_state], CSVState::INVALID);
 			break;
 		default:
-			InitializeTransitionArray(transition_array[i], standard_state);
+			InitializeTransitionArray(transition_array[cur_state], CSVState::STANDARD);
 			break;
 		}
 	}
 
 	// Now set values depending on configuration
 	// 1) Standard State
-	transition_array[standard_state][static_cast<uint8_t>(state_machine_options.delimiter)] = field_separator_state;
-	transition_array[standard_state][static_cast<uint8_t>('\n')] = record_separator_state;
-	transition_array[standard_state][static_cast<uint8_t>('\r')] = carriage_return_state;
-	transition_array[standard_state][static_cast<uint8_t>(state_machine_options.quote)] = quoted_state;
+	transition_array[CSVState::STANDARD][static_cast<uint8_t>(state_machine_options.delimiter)] = CSVState::DELIMITER;
+	transition_array[CSVState::STANDARD][static_cast<uint8_t>('\n')] = CSVState::RECORD_SEPARATOR;
+	transition_array[CSVState::STANDARD][static_cast<uint8_t>('\r')] = CSVState::CARRIAGE_RETURN;
+	transition_array[CSVState::STANDARD][static_cast<uint8_t>(state_machine_options.quote)] = CSVState::QUOTED;
 	// 2) Field Separator State
-	transition_array[field_separator_state][static_cast<uint8_t>(state_machine_options.delimiter)] =
-	    field_separator_state;
-	transition_array[field_separator_state][static_cast<uint8_t>('\n')] = record_separator_state;
-	transition_array[field_separator_state][static_cast<uint8_t>('\r')] = carriage_return_state;
-	transition_array[field_separator_state][static_cast<uint8_t>(state_machine_options.quote)] = quoted_state;
+	transition_array[CSVState::DELIMITER][static_cast<uint8_t>(state_machine_options.delimiter)] = CSVState::DELIMITER;
+	transition_array[CSVState::DELIMITER][static_cast<uint8_t>('\n')] = CSVState::RECORD_SEPARATOR;
+	transition_array[CSVState::DELIMITER][static_cast<uint8_t>('\r')] = CSVState::CARRIAGE_RETURN;
+	transition_array[CSVState::DELIMITER][static_cast<uint8_t>(state_machine_options.quote)] = CSVState::QUOTED;
 	// 3) Record Separator State
-	transition_array[record_separator_state][static_cast<uint8_t>(state_machine_options.delimiter)] =
-	    field_separator_state;
-	transition_array[record_separator_state][static_cast<uint8_t>('\n')] = empty_line_state;
-	transition_array[record_separator_state][static_cast<uint8_t>('\r')] = empty_line_state;
-	transition_array[record_separator_state][static_cast<uint8_t>(state_machine_options.quote)] = quoted_state;
+	transition_array[CSVState::RECORD_SEPARATOR][static_cast<uint8_t>(state_machine_options.delimiter)] =
+	    CSVState::DELIMITER;
+	transition_array[CSVState::RECORD_SEPARATOR][static_cast<uint8_t>('\n')] = CSVState::EMPTY_LINE;
+	transition_array[CSVState::RECORD_SEPARATOR][static_cast<uint8_t>('\r')] = CSVState::EMPTY_LINE;
+	transition_array[CSVState::RECORD_SEPARATOR][static_cast<uint8_t>(state_machine_options.quote)] = CSVState::QUOTED;
 	// 4) Carriage Return State
-	transition_array[carriage_return_state][static_cast<uint8_t>('\n')] = record_separator_state;
-	transition_array[carriage_return_state][static_cast<uint8_t>('\r')] = empty_line_state;
-	transition_array[carriage_return_state][static_cast<uint8_t>(state_machine_options.escape)] = escape_state;
+	transition_array[CSVState::CARRIAGE_RETURN][static_cast<uint8_t>('\n')] = CSVState::RECORD_SEPARATOR;
+	transition_array[CSVState::CARRIAGE_RETURN][static_cast<uint8_t>('\r')] = CSVState::EMPTY_LINE;
+	transition_array[CSVState::CARRIAGE_RETURN][static_cast<uint8_t>(state_machine_options.escape)] = CSVState::ESCAPE;
 	// 5) Quoted State
-	transition_array[quoted_state][static_cast<uint8_t>(state_machine_options.quote)] = unquoted_state;
+	transition_array[CSVState::QUOTED][static_cast<uint8_t>(state_machine_options.quote)] = CSVState::UNQUOTED;
 	if (state_machine_options.quote != state_machine_options.escape) {
-		transition_array[quoted_state][static_cast<uint8_t>(state_machine_options.escape)] = escape_state;
+		transition_array[CSVState::QUOTED][static_cast<uint8_t>(state_machine_options.escape)] = CSVState::ESCAPE;
 	}
 	// 6) Unquoted State
-	transition_array[unquoted_state][static_cast<uint8_t>('\n')] = record_separator_state;
-	transition_array[unquoted_state][static_cast<uint8_t>('\r')] = carriage_return_state;
-	transition_array[unquoted_state][static_cast<uint8_t>(state_machine_options.delimiter)] = field_separator_state;
+	transition_array[CSVState::UNQUOTED][static_cast<uint8_t>('\n')] = CSVState::RECORD_SEPARATOR;
+	transition_array[CSVState::UNQUOTED][static_cast<uint8_t>('\r')] = CSVState::CARRIAGE_RETURN;
+	transition_array[CSVState::UNQUOTED][static_cast<uint8_t>(state_machine_options.delimiter)] = CSVState::DELIMITER;
 	if (state_machine_options.quote == state_machine_options.escape) {
-		transition_array[unquoted_state][static_cast<uint8_t>(state_machine_options.escape)] = quoted_state;
+		transition_array[CSVState::UNQUOTED][static_cast<uint8_t>(state_machine_options.escape)] = CSVState::QUOTED;
 	}
 	// 7) Escaped State
-	transition_array[escape_state][static_cast<uint8_t>(state_machine_options.quote)] = quoted_state;
-	transition_array[escape_state][static_cast<uint8_t>(state_machine_options.escape)] = quoted_state;
+	transition_array[CSVState::ESCAPE][static_cast<uint8_t>(state_machine_options.quote)] = CSVState::QUOTED;
+	transition_array[CSVState::ESCAPE][static_cast<uint8_t>(state_machine_options.escape)] = CSVState::QUOTED;
 	// 8) Empty Line State
-	transition_array[empty_line_state][static_cast<uint8_t>('\r')] = empty_line_state;
-	transition_array[empty_line_state][static_cast<uint8_t>('\n')] = empty_line_state;
+	transition_array[CSVState::EMPTY_LINE][static_cast<uint8_t>('\r')] = CSVState::EMPTY_LINE;
+	transition_array[CSVState::EMPTY_LINE][static_cast<uint8_t>('\n')] = CSVState::EMPTY_LINE;
 }
 
 CSVStateMachineCache::CSVStateMachineCache() {
@@ -95,7 +86,7 @@ CSVStateMachineCache::CSVStateMachineCache() {
 	}
 }
 
-const state_machine_t &CSVStateMachineCache::Get(const CSVStateMachineOptions &state_machine_options) {
+const StateMachine &CSVStateMachineCache::Get(const CSVStateMachineOptions &state_machine_options) {
 	//! Custom State Machine, we need to create it and cache it first
 	if (state_machine_cache.find(state_machine_options) == state_machine_cache.end()) {
 		Insert(state_machine_options);
