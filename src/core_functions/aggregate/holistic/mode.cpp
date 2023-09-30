@@ -41,6 +41,7 @@ struct ModeState {
 	};
 	using Counts = unordered_map<KEY_TYPE, ModeAttr>;
 
+	FrameBounds prev;
 	Counts *frequency_map;
 	KEY_TYPE *mode;
 	size_t nonzero;
@@ -209,17 +210,18 @@ struct ModeFunction {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &, STATE &state, const FrameBounds &frame, const FrameBounds &prev,
-	                   Vector &result, idx_t rid, idx_t bias) {
+	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds &frame, Vector &result,
+	                   idx_t rid, const STATE *gstate) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
-		ModeIncluded included(fmask, dmask, bias);
+		ModeIncluded included(fmask, dmask, 0);
 
 		if (!state.frequency_map) {
 			state.frequency_map = new typename STATE::Counts;
 		}
 		const double tau = .25;
+		auto &prev = state.prev;
 		if (state.nonzero <= tau * state.frequency_map->size() || prev.end <= frame.start || frame.end <= prev.start) {
 			state.Reset();
 			// for f ∈ F do
@@ -269,6 +271,8 @@ struct ModeFunction {
 		} else {
 			rmask.Set(rid, false);
 		}
+
+		prev = frame;
 	}
 
 	static bool IgnoreNull() {

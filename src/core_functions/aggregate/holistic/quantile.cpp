@@ -1,5 +1,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/core_functions/aggregate/holistic_functions.hpp"
+#include "duckdb/execution/merge_sort_tree.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/abs.hpp"
@@ -11,6 +12,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 
 #include <algorithm>
+#include <numeric>
 #include <stdlib.h>
 #include <utility>
 
@@ -36,33 +38,120 @@ inline interval_t operator-(const interval_t &lhs, const interval_t &rhs) {
 	return Interval::FromMicro(Interval::GetMicro(lhs) - Interval::GetMicro(rhs));
 }
 
-template <typename SAVE_TYPE>
-struct QuantileState {
-	using SaveType = SAVE_TYPE;
-
-	// Regular aggregation
-	vector<SaveType> v;
-
-	// Windowed Quantile indirection
-	vector<idx_t> w;
-	idx_t pos;
-
-	// Windowed MAD indirection
-	vector<idx_t> m;
-
-	QuantileState() : pos(0) {
+struct QuantileSortTree : public MergeSortTree<uint32_t, uint32_t, std::less<uint32_t>, 64, 64> {
+	explicit QuantileSortTree(Elements &&lowest_level) : MergeSortTree(std::move(lowest_level)) {
 	}
 
-	~QuantileState() {
+	size_t SelectNth(const FrameBounds &frame, ElementType n) const;
+};
+
+size_t QuantileSortTree::SelectNth(const FrameBounds &frame, ElementType n) const {
+	//	Empty frames should be handled by the caller
+	D_ASSERT(frame.start < frame.end);
+
+	// Handle special case of a one-element tree
+	if (tree.size() < 2) {
+		return 0;
 	}
 
-	inline void SetPos(size_t pos_p) {
-		pos = pos_p;
-		if (pos >= w.size()) {
-			w.resize(pos);
+	// 	The first level contains a single run,
+	//	so the only thing we need is any cascading pointers
+	auto level_no = tree.size() - 2;
+	auto level_width = 1;
+	for (size_t i = 0; i < level_no; ++i) {
+		level_width *= FANOUT;
+	}
+
+	// Find Nth element in a top-down traversal
+	size_t result = 0;
+
+	// First, handle levels with cascading pointers
+	const auto min_cascaded = LowestCascadingLevel();
+	if (level_no > min_cascaded) {
+		//	Initialise the cascade indicies from the previous level
+		pair<size_t, size_t> cascade_idx;
+		{
+			const auto &level = tree[level_no + 1].first;
+			const auto lower_idx = std::lower_bound(level.begin(), level.end(), frame.start) - level.begin();
+			cascade_idx.first = lower_idx / CASCADING * FANOUT;
+			const auto upper_idx = std::lower_bound(level.begin(), level.end(), frame.end) - level.begin();
+			cascade_idx.second = upper_idx / CASCADING * FANOUT;
+		}
+
+		// 	Walk the cascaded levels
+		for (; level_no >= min_cascaded; --level_no) {
+			//	The cascade indicies into this level are in the previous level
+			const auto &level_cascades = tree[level_no + 1].second;
+
+			// Go over all children until we found enough in range
+			const auto *level_data = tree[level_no].first.data();
+			while (true) {
+				const auto lower_begin = level_data + level_cascades[cascade_idx.first];
+				const auto lower_end = level_data + level_cascades[cascade_idx.first + FANOUT];
+				const auto lower_idx = std::lower_bound(lower_begin, lower_end, frame.start) - level_data;
+
+				const auto upper_begin = level_data + level_cascades[cascade_idx.second];
+				const auto upper_end = level_data + level_cascades[cascade_idx.second + FANOUT];
+				const auto upper_idx = std::lower_bound(upper_begin, upper_end, frame.end) - level_data;
+
+				const auto matched = upper_idx - lower_idx;
+				if (matched > n) {
+					// 	Enough in this level, so move down to leftmost child candidate within the cascade range
+					cascade_idx.first = (lower_idx / CASCADING + 2 * result) * FANOUT;
+					cascade_idx.second = (upper_idx / CASCADING + 2 * result) * FANOUT;
+					result *= FANOUT;
+					level_width /= FANOUT;
+					--level_no;
+					break;
+				}
+
+				//	Not enough in this child, so move right
+				++cascade_idx.first;
+				++cascade_idx.second;
+				++result;
+				n -= matched;
+			}
 		}
 	}
-};
+
+	//	Continue with the uncascaded levels (except the first)
+	for (; level_no > 0; --level_no) {
+		const auto &level = tree[level_no].first;
+		auto range_begin = level.begin() + result * level_width;
+		auto range_end = range_begin + level_width;
+		while (range_end < level.end()) {
+			const auto lower_match = std::lower_bound(range_begin, range_end, frame.start);
+			const auto upper_match = std::lower_bound(lower_match, range_end, frame.end);
+			const auto matched = upper_match - lower_match;
+			if (matched > n) {
+				// 	Enough in this level, so move down to leftmost child candidate
+				//	Since we have no cascade pointers left, this is just the start of the next level.
+				result *= FANOUT;
+				level_width /= FANOUT;
+				break;
+			}
+			//	Not enough in this child, so move right
+			range_begin = range_end;
+			range_end += level_width;
+			++result;
+			n -= matched;
+		}
+	}
+
+	// The last level
+	const auto *level_data = tree[level_no].first.data();
+	++n;
+	while (true) {
+		const auto v = level_data[result];
+		n -= (v >= frame.start) && (v < frame.end);
+		if (!n) {
+			break;
+		}
+		++result;
+	}
+
+	return result;
+}
 
 struct QuantileIncluded {
 	inline explicit QuantileIncluded(const ValidityMask &fmask_p, const ValidityMask &dmask_p, idx_t bias_p)
@@ -80,6 +169,38 @@ struct QuantileIncluded {
 	const ValidityMask &fmask;
 	const ValidityMask &dmask;
 	const idx_t bias;
+};
+
+template <typename SAVE_TYPE>
+struct QuantileState {
+	using SaveType = SAVE_TYPE;
+
+	// Regular aggregation
+	vector<SaveType> v;
+
+	// Windowed Quantile indirection
+	FrameBounds prev;
+	vector<idx_t> w;
+	idx_t pos;
+
+	// Windowed Quantile merge sort tree
+	unique_ptr<QuantileSortTree> qst;
+
+	// Windowed MAD indirection
+	vector<idx_t> m;
+
+	QuantileState() : pos(0) {
+	}
+
+	~QuantileState() {
+	}
+
+	inline void SetPos(size_t pos_p) {
+		pos = pos_p;
+		if (pos >= w.size()) {
+			w.resize(pos);
+		}
+	}
 };
 
 void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &prev) {
@@ -558,6 +679,38 @@ struct QuantileOperation {
 	static bool IgnoreNull() {
 		return true;
 	}
+
+	template <class STATE, class INPUT_TYPE>
+	static void WindowInit(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
+	                       const ValidityMask &filter_mask, data_ptr_t state_p, idx_t count) {
+		D_ASSERT(input_count == 1);
+		const auto data = FlatVector::GetData<const INPUT_TYPE>(inputs[0]);
+		const auto &data_mask = FlatVector::Validity(inputs[0]);
+
+		//	Build the indirection array
+		using ElementType = typename QuantileSortTree::ElementType;
+		vector<ElementType> sorted(count);
+		if (filter_mask.AllValid() && data_mask.AllValid()) {
+			std::iota(sorted.begin(), sorted.end(), 0);
+		} else {
+			size_t valid = 0;
+			QuantileIncluded included(filter_mask, data_mask, 0);
+			for (ElementType i = 0; i < count; ++i) {
+				if (included(i)) {
+					sorted[valid++] = i;
+				}
+			}
+			sorted.resize(valid);
+		}
+
+		//	Sort it
+		std::sort(sorted.begin(), sorted.end(),
+		          [&](const ElementType &lhs, const ElementType &rhs) { return data[lhs] < data[rhs]; });
+
+		//	Build the tree
+		auto &state = *reinterpret_cast<STATE *>(state_p);
+		state.qst = make_uniq<QuantileSortTree>(std::move(sorted));
+	}
 };
 
 template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
@@ -588,12 +741,12 @@ struct QuantileScalarOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds &frame,
-	                   const FrameBounds &prev, Vector &result, idx_t ridx, idx_t bias) {
+	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds &frame, Vector &result,
+	                   idx_t ridx, const STATE *gstate) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
-		QuantileIncluded included(fmask, dmask, bias);
+		QuantileIncluded included(fmask, dmask, 0);
 
 		//  Lazily initialise frame state
 		auto prev_pos = state.pos;
@@ -609,6 +762,7 @@ struct QuantileScalarOperation : public QuantileOperation {
 		const auto &q = bind_data.quantiles[0];
 
 		bool replace = false;
+		auto &prev = state.prev;
 		if (frame.start == prev.start + 1 && frame.end == prev.end + 1) {
 			//  Fixed frame size
 			const auto j = ReplaceIndex(index, frame, prev);
@@ -638,6 +792,8 @@ struct QuantileScalarOperation : public QuantileOperation {
 		} else {
 			rmask.Set(ridx, false);
 		}
+
+		prev = frame;
 	}
 };
 
@@ -647,6 +803,7 @@ AggregateFunction GetTypedDiscreteQuantileAggregateFunction(const LogicalType &t
 	using OP = QuantileScalarOperation<true>;
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
+	fun.wininit = OP::WindowInit<STATE, INPUT_TYPE>;
 	return fun;
 }
 
@@ -736,12 +893,12 @@ struct QuantileListOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds &frame,
-	                   const FrameBounds &prev, Vector &list, idx_t lidx, idx_t bias) {
+	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds &frame, Vector &list,
+	                   idx_t lidx, const STATE *gstate) {
 		D_ASSERT(aggr_input_data.bind_data);
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
-		QuantileIncluded included(fmask, dmask, bias);
+		QuantileIncluded included(fmask, dmask, 0);
 
 		// Result is a constant LIST<RESULT_TYPE> with a fixed length
 		auto ldata = FlatVector::GetData<RESULT_TYPE>(list);
@@ -760,6 +917,7 @@ struct QuantileListOperation : public QuantileOperation {
 		state.SetPos(frame.end - frame.start);
 
 		auto index = state.w.data();
+		auto &prev = state.prev;
 
 		// We can generalise replacement for quantile lists by observing that when a replacement is
 		// valid for a single quantile, it is valid for all quantiles greater/less than that quantile
@@ -826,6 +984,8 @@ struct QuantileListOperation : public QuantileOperation {
 		} else {
 			lmask.Set(lidx, false);
 		}
+
+		prev = frame;
 	}
 };
 
@@ -836,6 +996,7 @@ AggregateFunction GetTypedDiscreteQuantileListAggregateFunction(const LogicalTyp
 	auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(type, type);
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;
+	fun.wininit = OP::template WindowInit<STATE, INPUT_TYPE>;
 	return fun;
 }
 
@@ -893,6 +1054,7 @@ AggregateFunction GetTypedContinuousQuantileAggregateFunction(const LogicalType 
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, TARGET_TYPE, OP>;
+	fun.wininit = OP::template WindowInit<STATE, INPUT_TYPE>;
 	return fun;
 }
 
@@ -947,6 +1109,7 @@ AggregateFunction GetTypedContinuousQuantileListAggregateFunction(const LogicalT
 	auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(input_type, result_type);
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;
+	fun.wininit = OP::template WindowInit<STATE, INPUT_TYPE>;
 	return fun;
 }
 
@@ -1094,12 +1257,12 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds &frame,
-	                   const FrameBounds &prev, Vector &result, idx_t ridx, idx_t bias) {
+	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds &frame, Vector &result,
+	                   idx_t ridx, const STATE *gstate) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
-		QuantileIncluded included(fmask, dmask, bias);
+		QuantileIncluded included(fmask, dmask, 0);
 
 		//  Lazily initialise frame state
 		auto prev_pos = state.pos;
@@ -1119,6 +1282,7 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 		// The replacement trick does not work on the second index because if
 		// the median has changed, the previous order is not correct.
 		// It is probably close, however, and so reuse is helpful.
+		auto &prev = state.prev;
 		ReuseIndexes(index2, frame, prev);
 		std::partition(index2, index2 + state.pos, included);
 
@@ -1168,6 +1332,8 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 		} else {
 			rmask.Set(ridx, false);
 		}
+
+		prev = frame;
 	}
 };
 
@@ -1185,6 +1351,7 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
 	fun.bind = BindMedian;
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, TARGET_TYPE, OP>;
+	fun.wininit = OP::template WindowInit<STATE, INPUT_TYPE>;
 	return fun;
 }
 

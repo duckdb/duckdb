@@ -9,8 +9,9 @@
 #pragma once
 
 #include "duckdb/common/array.hpp"
-#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
@@ -48,7 +49,7 @@ struct MergeSortTree {
 
 	MergeSortTree() {
 	}
-	explicit MergeSortTree(Elements &&lowest_level, const CMP &cmp);
+	explicit MergeSortTree(Elements &&lowest_level, const CMP &cmp = CMP());
 
 	RunElement StartGames(Games &losers, const RunElements &elements, const RunElement &sentinel) {
 		const auto elem_nodes = elements.size();
@@ -124,6 +125,19 @@ struct MergeSortTree {
 
 	Tree tree;
 	CompareElements cmp;
+
+	static constexpr auto FANOUT = F;
+	static constexpr auto CASCADING = C;
+
+	static size_t LowestCascadingLevel() {
+		size_t level = 0;
+		size_t level_width = 1;
+		while (level_width <= CASCADING) {
+			++level;
+			level_width *= FANOUT;
+		}
+		return level;
+	}
 };
 
 template <typename E, typename P, typename CMP, uint64_t F, uint64_t C>
@@ -131,13 +145,13 @@ MergeSortTree<E, P, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP
 	const auto fanout = F;
 	const auto cascading = C;
 	const auto count = lowest_level.size();
-	tree.emplace_back({lowest_level, Offsets()});
+	tree.emplace_back(Level(lowest_level, Offsets()));
 
-	constexpr RunElement SENTINEL(std::numeric_limits<ElementType>::max(), std::numeric_limits<size_t>::max());
+	const RunElement SENTINEL(std::numeric_limits<ElementType>::max(), std::numeric_limits<size_t>::max());
 
 	//	Fan in parent levels until we are at the top
 	//	Note that we don't build the top layer as that would just be all the data.
-	for (idx_t child_run_length = 1; child_run_length < count;) {
+	for (size_t child_run_length = 1; child_run_length < count;) {
 		const auto run_length = child_run_length * fanout;
 		const auto num_runs = (count + run_length - 1) / run_length;
 
@@ -155,7 +169,7 @@ MergeSortTree<E, P, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP
 		// 	https://en.wikipedia.org/wiki/K-way_merge_algorithm
 		//	TODO: Because the runs are independent, they can be parallelised with parallel_for
 		const auto &child_level = tree.back();
-		for (idx_t run_idx = 0; run_idx < num_runs; ++run_idx) {
+		for (size_t run_idx = 0; run_idx < num_runs; ++run_idx) {
 			//	Position markers for scanning the children.
 			using Bounds = pair<size_t, size_t>;
 			array<Bounds, fanout> bounds;
@@ -164,7 +178,8 @@ MergeSortTree<E, P, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP
 			const auto child_base = run_idx * run_length;
 			for (size_t child_run = 0; child_run < fanout; ++child_run) {
 				const auto child_idx = child_base + child_run * child_run_length;
-				bounds[child_run] = {MinValue(child_idx, count), MinValue(child_idx + child_run_length, count)};
+				bounds[child_run] = {MinValue<size_t>(child_idx, count),
+				                     MinValue<size_t>(child_idx + child_run_length, count)};
 				if (bounds[child_run].first != bounds[child_run].second) {
 					players[child_run] = {child_level.first[child_idx], child_run};
 				} else {
@@ -174,7 +189,7 @@ MergeSortTree<E, P, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP
 			}
 
 			//	Play the first round and extract the winner
-			RunElements games;
+			Games games;
 			auto winner = StartGames(games, players, SENTINEL);
 			while (winner != SENTINEL) {
 				// Add fractional cascading pointers
@@ -210,7 +225,7 @@ MergeSortTree<E, P, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP
 		}
 
 		//	Insert completed level and move up to the next one
-		tree.emplace_back(move(elements), move(cascades));
+		tree.emplace_back(std::move(elements), std::move(cascades));
 		child_run_length = run_length;
 	}
 }

@@ -352,8 +352,8 @@ struct SortedAggregateFunction {
 	}
 
 	static void Window(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
-	                   idx_t input_count, data_ptr_t state, const FrameBounds &frame, const FrameBounds &prev,
-	                   Vector &result, idx_t rid, idx_t bias) {
+	                   idx_t input_count, data_ptr_t state, const FrameBounds &frame, Vector &result, idx_t rid,
+	                   const_data_ptr_t) {
 		throw InternalException("Sorted aggregates should not be generated for window clauses");
 	}
 

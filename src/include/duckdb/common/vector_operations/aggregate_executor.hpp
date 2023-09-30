@@ -384,13 +384,15 @@ public:
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static void UnaryWindow(Vector &input, const ValidityMask &ifilter, AggregateInputData &aggr_input_data,
-	                        data_ptr_t state, const FrameBounds &frame, const FrameBounds &prev, Vector &result,
-	                        idx_t rid, idx_t bias) {
+	                        data_ptr_t state_p, const FrameBounds &frame, Vector &result, idx_t ridx,
+	                        const_data_ptr_t gstate_p) {
 
-		auto idata = FlatVector::GetData<const INPUT_TYPE>(input) - bias;
+		auto idata = FlatVector::GetData<const INPUT_TYPE>(input);
 		const auto &ivalid = FlatVector::Validity(input);
-		OP::template Window<STATE, INPUT_TYPE, RESULT_TYPE>(
-		    idata, ifilter, ivalid, aggr_input_data, *reinterpret_cast<STATE *>(state), frame, prev, result, rid, bias);
+		auto &state = *reinterpret_cast<STATE *>(state_p);
+		auto gstate = reinterpret_cast<const STATE *>(gstate_p);
+		OP::template Window<STATE, INPUT_TYPE, RESULT_TYPE>(idata, ifilter, ivalid, aggr_input_data, state, frame,
+		                                                    result, ridx, gstate);
 	}
 
 	template <class STATE_TYPE, class OP>

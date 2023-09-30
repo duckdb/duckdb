@@ -40,11 +40,14 @@ typedef void (*aggregate_destructor_t)(Vector &state, AggregateInputData &aggr_i
 typedef void (*aggregate_simple_update_t)(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
                                           data_ptr_t state, idx_t count);
 
-//! The type used for updating complex windowed aggregate functions (optional)
+//! The type used for computing complex/custom windowed aggregate functions (optional)
 typedef void (*aggregate_window_t)(Vector inputs[], const ValidityMask &filter_mask,
                                    AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
-                                   const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t rid,
-                                   idx_t bias);
+                                   const FrameBounds &frame, Vector &result, idx_t rid, const_data_ptr_t win_state);
+
+//! The type used for initializing shared complex/custom windowed aggregate state (optional)
+typedef void (*aggregate_wininit_t)(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
+                                    const ValidityMask &filter_mask, data_ptr_t win_state, idx_t count);
 
 typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                       const AggregateFunction &function);
@@ -116,8 +119,10 @@ public:
 	aggregate_finalize_t finalize;
 	//! The simple aggregate update function (may be null)
 	aggregate_simple_update_t simple_update;
-	//! The windowed aggregate frame update function (may be null)
+	//! The windowed aggregate custom function (may be null)
 	aggregate_window_t window;
+	//! The windowed aggregate custom initialization function (may be null)
+	aggregate_wininit_t wininit;
 
 	//! The bind function (may be null)
 	bind_aggregate_function_t bind;
@@ -219,11 +224,11 @@ public:
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static void UnaryWindow(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
-	                        idx_t input_count, data_ptr_t state, const FrameBounds &frame, const FrameBounds &prev,
-	                        Vector &result, idx_t rid, idx_t bias) {
+	                        idx_t input_count, data_ptr_t state, const FrameBounds &frame, Vector &result, idx_t ridx,
+	                        const_data_ptr_t gstate) {
 		D_ASSERT(input_count == 1);
 		AggregateExecutor::UnaryWindow<STATE, INPUT_TYPE, RESULT_TYPE, OP>(inputs[0], filter_mask, aggr_input_data,
-		                                                                   state, frame, prev, result, rid, bias);
+		                                                                   state, frame, result, ridx, gstate);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
