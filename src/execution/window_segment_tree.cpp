@@ -243,14 +243,12 @@ WindowCustomAggregator::~WindowCustomAggregator() {
 
 class WindowCustomAggregatorState : public WindowAggregatorState {
 public:
-	explicit WindowCustomAggregatorState(const AggregateObject &aggr, DataChunk &inputs);
+	explicit WindowCustomAggregatorState(const AggregateObject &aggr);
 	~WindowCustomAggregatorState() override;
 
 public:
 	//! The aggregate function
 	const AggregateObject &aggr;
-	//! The aggregate function
-	DataChunk &inputs;
 	//! Data pointer that contains a single state, shared by all the custom evaluators
 	vector<data_t> state;
 	//! Reused result state container for the window functions
@@ -259,9 +257,9 @@ public:
 	FrameBounds frame;
 };
 
-WindowCustomAggregatorState::WindowCustomAggregatorState(const AggregateObject &aggr, DataChunk &inputs)
-    : aggr(aggr), inputs(inputs), state(aggr.function.state_size()),
-      statef(Value::POINTER(CastPointerToValue(state.data()))), frame(0, 0) {
+WindowCustomAggregatorState::WindowCustomAggregatorState(const AggregateObject &aggr)
+    : aggr(aggr), state(aggr.function.state_size()), statef(Value::POINTER(CastPointerToValue(state.data()))),
+      frame(0, 0) {
 	// if we have a frame-by-frame method, share the single state
 	aggr.function.initialize(state.data());
 }
@@ -273,8 +271,19 @@ WindowCustomAggregatorState::~WindowCustomAggregatorState() {
 	}
 }
 
+void WindowCustomAggregator::Finalize() {
+	if (aggr.function.wininit) {
+		gstate = GetLocalState();
+		auto &gcstate = gstate->Cast<WindowCustomAggregatorState>();
+
+		AggregateInputData aggr_input_data(aggr.GetFunctionData(), gcstate.allocator);
+		aggr.function.wininit(inputs.data.data(), aggr_input_data, inputs.ColumnCount(), filter_mask,
+		                      gcstate.state.data(), inputs.size());
+	}
+}
+
 unique_ptr<WindowAggregatorState> WindowCustomAggregator::GetLocalState() const {
-	return make_uniq<WindowCustomAggregatorState>(aggr, const_cast<DataChunk &>(inputs));
+	return make_uniq<WindowCustomAggregatorState>(aggr);
 }
 
 void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends,
@@ -282,8 +291,14 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const idx_t
 	//	TODO: window should take a const Vector*
 	auto &lcstate = lstate.Cast<WindowCustomAggregatorState>();
 	auto &frame = lcstate.frame;
-	auto params = lcstate.inputs.data.data();
+	auto params = const_cast<DataChunk &>(inputs).data.data();
 	auto &rmask = FlatVector::Validity(result);
+	const_data_ptr_t gstate_p = nullptr;
+	if (gstate) {
+		auto &gcstate = gstate->Cast<WindowCustomAggregatorState>();
+		gstate_p = gcstate.state.data();
+	}
+
 	for (idx_t i = 0; i < count; ++i) {
 		const auto begin = begins[i];
 		const auto end = ends[i];
@@ -298,7 +313,7 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const idx_t
 		// Extract the range
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), lstate.allocator);
 		aggr.function.window(params, filter_mask, aggr_input_data, inputs.ColumnCount(), lcstate.state.data(), frame,
-		                     result, i, nullptr);
+		                     result, i, gstate_p);
 	}
 }
 

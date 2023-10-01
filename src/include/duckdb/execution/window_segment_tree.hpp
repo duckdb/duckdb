@@ -110,9 +110,14 @@ public:
 	WindowCustomAggregator(AggregateObject aggr, const LogicalType &result_type_p, idx_t partition_count);
 	~WindowCustomAggregator() override;
 
+	void Finalize() override;
+
 	unique_ptr<WindowAggregatorState> GetLocalState() const override;
 	void Evaluate(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends, Vector &result,
 	              idx_t count) const override;
+
+	//! Data pointer that contains a single state, used for global custom window state
+	unique_ptr<WindowAggregatorState> gstate;
 };
 
 class WindowSegmentTree : public WindowAggregator {
