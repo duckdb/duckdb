@@ -150,6 +150,17 @@ unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deseriali
 // LambdaFunctions
 //===--------------------------------------------------------------------===//
 
+LogicalType LambdaFunctions::BindBinaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
+	switch (parameter_idx) {
+	case 0:
+		return list_child_type;
+	case 1:
+		return LogicalType::BIGINT;
+	default:
+		throw BinderException("This lambda function only supports up to two lambda parameters!");
+	}
+}
+
 void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result, LambdaType lambda_type) {
 
 	// always at least the list argument

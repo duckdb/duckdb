@@ -44,6 +44,8 @@ public:
 
 class LambdaFunctions {
 public:
+	//! Returns the parameter type for binary lambdas
+	static LogicalType BindBinaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type);
 	//! Prepares the input for the expression executor and then executes the lambda expression on it for each row
 	static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result, LambdaType lambda_type);
 	//! Returns the ListLambdaBindData containing the lambda expression

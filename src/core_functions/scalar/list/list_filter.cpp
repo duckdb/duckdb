@@ -33,15 +33,7 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 }
 
 static LogicalType ListFilterBindLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
-
-	switch (parameter_idx) {
-	case 0:
-		return list_child_type;
-	case 1:
-		return LogicalType::BIGINT;
-	default:
-		throw BinderException("This lambda function only supports up to two lambda parameters!");
-	}
+	return LambdaFunctions::BindBinaryLambda(parameter_idx, list_child_type);
 }
 
 ScalarFunction ListFilterFun::GetFunction() {

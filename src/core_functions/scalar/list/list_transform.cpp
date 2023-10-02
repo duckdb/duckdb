@@ -24,15 +24,7 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
 }
 
 static LogicalType ListTransformBindLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
-
-	switch (parameter_idx) {
-	case 0:
-		return list_child_type;
-	case 1:
-		return LogicalType::BIGINT;
-	default:
-		throw BinderException("This lambda function only supports up to two lambda parameters!");
-	}
+	return LambdaFunctions::BindBinaryLambda(parameter_idx, list_child_type);
 }
 
 ScalarFunction ListTransformFun::GetFunction() {
