@@ -77,7 +77,7 @@ class AllTimings:
 	def get_summary_phase_timings(self, phase):
 		return reduce(NodeTiming.combine_timing, self.phase_to_timings[phase])
 
-	def get_phases_high_to_low(self):
+	def get_phases(self):
 		phases = list(self.phase_to_timings.keys())
 		phases.sort(key=lambda x: (self.get_summary_phase_timings(x)).time)
 		phases.reverse()
@@ -99,7 +99,7 @@ def open_utf8(fpath, flags):
         return open(fpath, flags, encoding="utf8")
 
 
-# if detailed profiling is enabled, then information on how long the optimizer/physical planner etc. is available
+# if detailed profiling is enabled, then information on the timing of each stage of the query is available
 # that is "top level timing information"
 def get_top_level_timings(json):
 	return []
@@ -116,7 +116,13 @@ color_map = {
 	"PROJECTION": "#ffb3ba",
 	"SEQ_SCAN": "#baffc9",
 	"UNGROUPED_AGGREGATE": "#ffdfba",
-	"FILTER": "#bae1ff"
+	"FILTER": "#bae1ff",
+	"ORDER_BY": "#facd60",
+	"PERFECT_HASH_GROUP_BY": "#ffffba",
+	"HASH_GROUP_BY": "#ffffba",
+	"NESTED_LOOP_JOIN": "#ffffba",
+	"STREAMING_LIMIT": "#facd60",
+	"COLUMN_DATA_SCAN": "#1ac0c6"
 }
 
 def get_node_body(name, result, cardinality, extra_info, timing):
@@ -188,7 +194,7 @@ def generate_timing_html(graph_json):
 
 	execution_time = QUERY_TIMINGS.get_sum_of_all_timings()
 
-	all_phases = QUERY_TIMINGS.get_phases_high_to_low()
+	all_phases = QUERY_TIMINGS.get_phases()
 	QUERY_TIMINGS.add_node_timing(NodeTiming("TOTAL TIME", total_time))
 	QUERY_TIMINGS.add_node_timing(NodeTiming("Execution Time", execution_time))
 	all_phases = ["TOTAL TIME", "Execution Time"] + all_phases
@@ -284,8 +290,5 @@ def generate(input_file, output_file):
 		html = html.replace('${TREE}', tree_output)
 		f.write(html)
 
-
-# output = "output_detailed.json"
-# generate("output_detailed.json", "output_detailed.html")
 
 __all__ = ["generate"]
