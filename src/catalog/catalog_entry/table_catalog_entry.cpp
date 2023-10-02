@@ -151,19 +151,22 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 }
 
 string TableCatalogEntry::ToSQL() const {
-	std::stringstream ss;
+	auto create_info = GetInfo();
+	return create_info->ToString();
 
-	ss << "CREATE TABLE ";
-
-	if (schema.name != DEFAULT_SCHEMA) {
-		ss << KeywordHelper::WriteOptionallyQuoted(schema.name) << ".";
-	}
-
-	ss << KeywordHelper::WriteOptionallyQuoted(name);
-	ss << ColumnsToSQL(columns, constraints);
-	ss << ";";
-
-	return ss.str();
+//	std::stringstream ss;
+//
+//	ss << "CREATE TABLE ";
+//
+//	if (schema.name != DEFAULT_SCHEMA) {
+//		ss << KeywordHelper::WriteOptionallyQuoted(schema.name) << ".";
+//	}
+//
+//	ss << KeywordHelper::WriteOptionallyQuoted(name);
+//	ss << ColumnsToSQL(columns, constraints);
+//	ss << ";";
+//
+//	return ss.str();
 }
 
 const ColumnList &TableCatalogEntry::GetColumns() const {

@@ -32,11 +32,16 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 string CreateTableInfo::ToString() const {
 	string ret = "";
 
-	ret += "CREATE TABLE " + table;
+	string table_name = KeywordHelper::WriteOptionallyQuoted(table);
+	if (schema != DEFAULT_SCHEMA) {
+		table_name = KeywordHelper::WriteOptionallyQuoted(schema) + "." + table_name;
+	}
+
+	ret += "CREATE TABLE " + table_name;
 	if (query != nullptr) {
 		ret += " AS " + query->ToString();
 	} else {
-		ret += " (";
+		ret += " (" + ColumnsTo
 		auto column_names = columns.GetColumnNames();
 		auto column_types = columns.GetColumnTypes();
 		D_ASSERT(column_names.size() == column_types.size());
