@@ -54,7 +54,7 @@ final class DatabaseTests: XCTestCase {
   
   func test_query_result() throws {
     let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT * FROM test_all_types(use_large_enum=true);")
+    let result = try connection.query("SELECT * FROM test_all_types();")
     let element: Void? = result[0][0]
     XCTAssertNotNil(element)
   }
