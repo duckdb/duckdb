@@ -347,8 +347,16 @@ double IntegralConvert::ConvertValue(hugeint_t val) {
 
 } // namespace duckdb_py_convert
 
-template <class DUCKDB_T, class NUMPY_T, class CONVERT>
-static bool ConvertColumn(NumpyAppendData &append_data) {
+static bool IsVarcharDictionary(const NumpyAppendData &input) {
+	auto &vec = input.input;
+	if (vec.GetType().id() != LogicalTypeId::VARCHAR) {
+		return false;
+	}
+	return (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+}
+
+template <class DUCKDB_T, class NUMPY_T, class CONVERT, bool ALL_VALID>
+static bool ConvertColumnTemplated(NumpyAppendData &append_data) {
 	auto target_offset = append_data.target_offset;
 	auto target_data = append_data.target_data;
 	auto target_mask = append_data.target_mask;
@@ -357,32 +365,86 @@ static bool ConvertColumn(NumpyAppendData &append_data) {
 
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
 	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
-	if (!idata.validity.AllValid()) {
-		bool mask_is_set = false;
-		for (idx_t i = 0; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i);
-			idx_t offset = target_offset + i;
-			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
-				if (append_data.pandas) {
-					out_ptr[offset] = CONVERT::template NullValue<NUMPY_T, true>(target_mask[offset]);
-				} else {
-					out_ptr[offset] = CONVERT::template NullValue<NUMPY_T, false>(target_mask[offset]);
-				}
-				mask_is_set = mask_is_set || target_mask[offset];
+
+	const bool is_dictionary = IsVarcharDictionary(append_data);
+
+	bool mask_is_set = false;
+	for (idx_t i = 0; i < count; i++) {
+		idx_t src_idx = idata.sel->get_index(i);
+		idx_t offset = target_offset + i;
+		if (!ALL_VALID && !idata.validity.RowIsValidUnsafe(src_idx)) {
+			if (append_data.pandas) {
+				out_ptr[offset] = CONVERT::template NullValue<NUMPY_T, true>(target_mask[offset]);
 			} else {
-				out_ptr[offset] = CONVERT::template ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx]);
-				target_mask[offset] = false;
+				out_ptr[offset] = CONVERT::template NullValue<NUMPY_T, false>(target_mask[offset]);
 			}
-		}
-		return mask_is_set;
-	} else {
-		for (idx_t i = 0; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i);
-			idx_t offset = target_offset + i;
+			mask_is_set = mask_is_set || target_mask[offset];
+		} else {
 			out_ptr[offset] = CONVERT::template ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx]);
 			target_mask[offset] = false;
 		}
-		return false;
+	}
+	return mask_is_set;
+}
+
+template <class DUCKDB_T, class NUMPY_T, class CONVERT, bool ALL_VALID>
+static bool ConvertColumnDictionary(NumpyAppendData &append_data) {
+	auto target_offset = append_data.target_offset;
+	auto target_data = append_data.target_data;
+	auto target_mask = append_data.target_mask;
+	auto &idata = append_data.idata;
+	auto count = append_data.count;
+
+	D_ASSERT(append_data.input.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+
+	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
+	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
+
+	// TODO: Maybe just a vector would be more efficient, since it's only 2048 values max
+	unordered_map<idx_t, NUMPY_T> cache;
+
+	bool mask_is_set = false;
+	for (idx_t i = 0; i < count; i++) {
+		idx_t src_idx = idata.sel->get_index(i);
+		idx_t offset = target_offset + i;
+		if (!ALL_VALID && !idata.validity.RowIsValidUnsafe(src_idx)) {
+			if (append_data.pandas) {
+				out_ptr[offset] = CONVERT::template NullValue<NUMPY_T, true>(target_mask[offset]);
+			} else {
+				out_ptr[offset] = CONVERT::template NullValue<NUMPY_T, false>(target_mask[offset]);
+			}
+			mask_is_set = mask_is_set || target_mask[offset];
+		} else {
+			auto it = cache.find(src_idx);
+			if (it == cache.end()) {
+				// We have not converted this value yet
+				auto value = CONVERT::template ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx]);
+				cache.emplace(std::make_pair(src_idx, value));
+			}
+			out_ptr[offset] = cache.at(src_idx);
+			target_mask[offset] = false;
+		}
+	}
+	return mask_is_set;
+}
+
+template <class DUCKDB_T, class NUMPY_T, class CONVERT>
+static bool ConvertColumn(NumpyAppendData &append_data) {
+	auto &idata = append_data.idata;
+
+	const bool is_dictionary = IsVarcharDictionary(append_data);
+	if (is_dictionary) {
+		if (!idata.validity.AllValid()) {
+			return ConvertColumnDictionary<DUCKDB_T, NUMPY_T, CONVERT, false>(append_data);
+		} else {
+			return ConvertColumnDictionary<DUCKDB_T, NUMPY_T, CONVERT, true>(append_data);
+		}
+	}
+
+	if (!idata.validity.AllValid()) {
+		return ConvertColumnTemplated<DUCKDB_T, NUMPY_T, CONVERT, false>(append_data);
+	} else {
+		return ConvertColumnTemplated<DUCKDB_T, NUMPY_T, CONVERT, true>(append_data);
 	}
 }
 
