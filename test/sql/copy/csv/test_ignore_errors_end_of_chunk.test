@@ -10,6 +10,8 @@ COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_end_of_filled_c
 
 statement error
 COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_end_of_filled_chunk.csv' (HEADER, NULL_PADDING 0)
+----
+Invalid Input Error: Error in file "test/sql/copy/csv/data/test/error_too_little_end_of_filled_chunk.csv" on line 3: expected 2 values per row, but got 1.
 
 # not enough columns provided
 query II

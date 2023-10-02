@@ -131,7 +131,7 @@ struct CSVReaderOptions {
 	//! Consider all columns to be of type varchar
 	bool all_varchar = false;
 	//! Whether or not to automatically detect dialect and datatypes
-	bool auto_detect = false;
+	bool auto_detect = true;
 	//! The file path of the CSV file to read
 	string file_path;
 	//! Multi-file reader options
