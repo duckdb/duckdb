@@ -288,13 +288,14 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		uncompressed = true;
 	}
 	if (uncompressed) {
-		trans.read(block->ptr, page_hdr.compressed_page_size);
+		reader.ReadData(*protocol, block->ptr, page_hdr.compressed_page_size);
 		return;
 	}
 
 	// copy repeats & defines as-is because FOR SOME REASON they are uncompressed
 	auto uncompressed_bytes = page_hdr.data_page_header_v2.repetition_levels_byte_length +
 	                          page_hdr.data_page_header_v2.definition_levels_byte_length;
+	// TODO: ParquetCrypto::ReadData here
 	trans.read(block->ptr, uncompressed_bytes);
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
@@ -326,10 +327,11 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
 			throw std::runtime_error("Page size mismatch");
 		}
-		trans.read((uint8_t *)block->ptr, page_hdr.compressed_page_size);
+		reader.ReadData(*protocol, block->ptr, page_hdr.compressed_page_size);
 		return;
 	}
 
+	// TODO: ParquetCrypto::ReadData here
 	AllocateCompressed(page_hdr.compressed_page_size + 1);
 	trans.read((uint8_t *)compressed_buffer.ptr, page_hdr.compressed_page_size);
 

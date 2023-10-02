@@ -313,11 +313,20 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 	}
 }
 
-void ParquetWriter::Write(const duckdb_apache::thrift::TBase &object) {
-	if (!encryption_key.empty()) {
-		ParquetCrypto::Write(object, *protocol, encryption_key);
+uint32_t ParquetWriter::Write(const duckdb_apache::thrift::TBase &object) {
+	if (encryption_key.empty()) {
+		return file_meta_data.write(protocol.get());
 	} else {
-		file_meta_data.write(protocol.get());
+		return ParquetCrypto::Write(object, *protocol, encryption_key);
+	}
+}
+
+uint32_t ParquetWriter::WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size) {
+	if (encryption_key.empty()) {
+		protocol->getTransport()->write(buffer, buffer_size);
+		return buffer_size;
+	} else {
+		return ParquetCrypto::WriteData(*protocol, buffer, buffer_size, encryption_key);
 	}
 }
 

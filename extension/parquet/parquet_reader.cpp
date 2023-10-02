@@ -521,11 +521,20 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 	return column_stats;
 }
 
-void ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) {
-	if (!parquet_options.encryption_key.empty()) {
-		ParquetCrypto::Read(object, iprot, parquet_options.encryption_key);
+uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) {
+	if (parquet_options.encryption_key.empty()) {
+		return object.read(&iprot);
 	} else {
-		object.read(&iprot);
+		return ParquetCrypto::Read(object, iprot, parquet_options.encryption_key);
+	}
+}
+
+uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
+                                 const uint32_t buffer_size) {
+	if (parquet_options.encryption_key.empty()) {
+		return iprot.getTransport()->read(buffer, buffer_size);
+	} else {
+		return ParquetCrypto::ReadData(iprot, buffer, buffer_size, parquet_options.encryption_key);
 	}
 }
 

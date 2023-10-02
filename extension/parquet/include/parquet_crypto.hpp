@@ -28,13 +28,15 @@ public:
 	static constexpr uint32_t CRYPTO_BLOCK_SIZE = 2048;
 
 public:
-	//! Write a
-	static void Read(TBase &object, TProtocol &iprot, const string &key);
-
-	static void Write(const TBase &object, TProtocol &oprot, const string &key);
-
-	static void WriteData(BufferedFileWriter &writer, const const_data_ptr_t buffer, const uint32_t buffer_size,
-	                      const string &key);
+	//! Decrypt and read a Thrift object from the transport protocol
+	static uint32_t Read(TBase &object, TProtocol &iprot, const string &key);
+	//! Encrypt and write a Thrift object to the transport protocol
+	static uint32_t Write(const TBase &object, TProtocol &oprot, const string &key);
+	//! Decrypt and read a buffer
+	static uint32_t ReadData(TProtocol &iprot, const data_ptr_t buffer, const uint32_t buffer_size, const string &key);
+	//! Encrypt and write a buffer to a file
+	static uint32_t WriteData(TProtocol &oprot, const const_data_ptr_t buffer, const uint32_t buffer_size,
+	                          const string &key);
 };
 
 } // namespace duckdb
