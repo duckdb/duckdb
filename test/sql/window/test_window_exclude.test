@@ -225,7 +225,8 @@ FROM (  SELECT *
         FROM generate_series(1,3000) AS _(i), (SELECT NULL::integer)
           UNION ALL
         SELECT 3001, 1
-     ) AS _(i, col);
+     ) AS _(i, col)
+ORDER BY ALL NULLS FIRST;
 ----
 NULL
 1
