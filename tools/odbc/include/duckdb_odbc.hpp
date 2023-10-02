@@ -154,6 +154,10 @@ public:
 	SQLRETURN SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field_identifier, SQLPOINTER value_ptr,
 	                       SQLINTEGER buffer_length);
 
+	idx_t GetRecordCount() {
+		return records.size();
+	}
+
 	void Clear();
 	void Reset();
 	void Copy(OdbcHandleDesc &other);
