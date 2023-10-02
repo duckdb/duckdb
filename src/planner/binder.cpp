@@ -491,7 +491,11 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	projection->AddChild(std::move(child_operator));
 	D_ASSERT(result.types.size() == result.names.size());
 	result.plan = std::move(projection);
-	properties.allow_stream_result = true;
+	// If an insert/delete/update statement returns data, there are sometimes issues with streaming results
+	// where the data modification doesn't take place until the streamed result is exhausted. Once a row is
+	// returned, it should be guaranteed that the row has been inserted.
+	// see https://github.com/duckdb/duckdb/issues/8310
+	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
 }

@@ -243,14 +243,22 @@ py::object GetScalar(Value &constant, const string &timezone_config, const Arrow
 		py::object date_type = py::module_::import("pyarrow").attr("timestamp");
 		return dataset_scalar(scalar(converted_value, date_type(time_unit_string, py::arg("tz") = timezone_config)));
 	}
-	case LogicalTypeId::UTINYINT:
-		return dataset_scalar(constant.GetValue<uint8_t>());
-	case LogicalTypeId::USMALLINT:
-		return dataset_scalar(constant.GetValue<uint16_t>());
-	case LogicalTypeId::UINTEGER:
-		return dataset_scalar(constant.GetValue<uint32_t>());
-	case LogicalTypeId::UBIGINT:
-		return dataset_scalar(constant.GetValue<uint64_t>());
+	case LogicalTypeId::UTINYINT: {
+		py::object integer_type = py::module_::import("pyarrow").attr("uint8");
+		return dataset_scalar(scalar(constant.GetValue<uint8_t>(), integer_type()));
+	}
+	case LogicalTypeId::USMALLINT: {
+		py::object integer_type = py::module_::import("pyarrow").attr("uint16");
+		return dataset_scalar(scalar(constant.GetValue<uint16_t>(), integer_type()));
+	}
+	case LogicalTypeId::UINTEGER: {
+		py::object integer_type = py::module_::import("pyarrow").attr("uint32");
+		return dataset_scalar(scalar(constant.GetValue<uint32_t>(), integer_type()));
+	}
+	case LogicalTypeId::UBIGINT: {
+		py::object integer_type = py::module_::import("pyarrow").attr("uint64");
+		return dataset_scalar(scalar(constant.GetValue<uint64_t>(), integer_type()));
+	}
 	case LogicalTypeId::FLOAT:
 		return dataset_scalar(constant.GetValue<float>());
 	case LogicalTypeId::DOUBLE:

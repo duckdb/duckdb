@@ -21,14 +21,12 @@
       {
         "id": 200,
         "name": "limit",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       },
       {
         "id": 201,
         "name": "offset",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       }
     ]
   },
@@ -64,14 +62,12 @@
       {
         "id": 200,
         "name": "limit",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       },
       {
         "id": 201,
         "name": "offset",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       }
     ]
   },

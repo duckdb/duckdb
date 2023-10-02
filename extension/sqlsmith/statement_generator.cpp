@@ -50,8 +50,15 @@ shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientContext 
 		auto &schema = schema_ref.get();
 		schema.Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY,
 		            [&](CatalogEntry &entry) { result->scalar_functions.push_back(entry); });
-		schema.Scan(context, CatalogType::TABLE_FUNCTION_ENTRY,
-		            [&](CatalogEntry &entry) { result->table_functions.push_back(entry); });
+		schema.Scan(context, CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
+			// don't include fuzz functions
+			if (entry.name.find("fuzzyduck") == std::string::npos &&
+			    entry.name.find("fuzz_all_functions") == std::string::npos &&
+			    entry.name.find("reduce_sql_statement") == std::string::npos &&
+			    entry.name.find("sqlsmith") == std::string::npos) {
+				result->table_functions.push_back(entry);
+			}
+		});
 		schema.Scan(context, CatalogType::PRAGMA_FUNCTION_ENTRY,
 		            [&](CatalogEntry &entry) { result->pragma_functions.push_back(entry); });
 		schema.Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {

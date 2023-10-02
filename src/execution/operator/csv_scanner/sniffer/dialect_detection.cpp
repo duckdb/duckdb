@@ -21,17 +21,12 @@ struct SniffDialect {
 			sniffed_column_counts.clear();
 			return true;
 		}
-		machine.pre_previous_state = machine.previous_state;
-		machine.previous_state = machine.state;
-
-		machine.state = static_cast<CSVState>(
-		    machine.transition_array[static_cast<uint8_t>(machine.state)][static_cast<uint8_t>(current_char)]);
+		machine.Transition(current_char);
 
 		bool carriage_return = machine.previous_state == CSVState::CARRIAGE_RETURN;
 		machine.column_count += machine.previous_state == CSVState::DELIMITER;
 		sniffed_column_counts[machine.cur_rows] = machine.column_count;
-		machine.cur_rows +=
-		    machine.previous_state == CSVState::RECORD_SEPARATOR && machine.state != CSVState::EMPTY_LINE;
+		machine.cur_rows += machine.previous_state == CSVState::RECORD_SEPARATOR;
 		machine.column_count -= (machine.column_count - 1) * (machine.previous_state == CSVState::RECORD_SEPARATOR);
 
 		// It means our carriage return is actually a record separator

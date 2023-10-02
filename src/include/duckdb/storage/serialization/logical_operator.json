@@ -94,7 +94,7 @@
       {
         "id": 206,
         "name": "grouping_functions",
-        "type": "vector<vector<idx_t>>"
+        "type": "vector<unsafe_vector<idx_t>>"
       }
     ],
     "constructor": ["group_index", "aggregate_index", "expressions"]
@@ -153,14 +153,12 @@
       {
         "id": 202,
         "name": "limit",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       },
       {
         "id": 203,
         "name": "offset",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       }
     ],
     "constructor": ["limit_val", "offset_val", "limit", "offset"]
@@ -224,8 +222,7 @@
       {
         "id": 202,
         "name": "order_by",
-        "type": "BoundOrderModifier*",
-        "optional": true
+        "type": "BoundOrderModifier*"
       }
     ],
     "constructor": ["distinct_targets", "distinct_type"]
@@ -238,7 +235,7 @@
       {
         "id": 200,
         "name": "sample_options",
-        "type": "SampleOptions"
+        "type": "SampleOptions*"
       }
     ]
   },
@@ -260,14 +257,12 @@
       {
         "id": 202,
         "name": "limit",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       },
       {
         "id": 203,
         "name": "offset",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       }
     ],
     "constructor": ["limit_percent", "offset_val", "limit", "offset"]
@@ -579,7 +574,7 @@
       {
         "id": 202,
         "name": "column_index_map",
-        "type": "vector<idx_t>"
+        "type": "IndexVector<idx_t, PhysicalIndex>"
       },
       {
         "id": 203,
@@ -619,19 +614,17 @@
       {
         "id": 210,
         "name": "on_conflict_condition",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       },
       {
         "id": 211,
         "name": "do_update_condition",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       },
       {
         "id": 212,
         "name": "set_columns",
-        "type": "vector<idx_t>"
+        "type": "vector<PhysicalIndex>"
       },
       {
         "id": 213,
@@ -897,7 +890,8 @@
       {
         "id": 200,
         "name": "info",
-        "type": "CreateInfo*"
+        "type": "CreateIndexInfo*",
+        "base": "CreateInfo"
       },
       {
         "id": 201,

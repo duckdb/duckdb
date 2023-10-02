@@ -27,7 +27,7 @@ select *  from m where m = ''
 query I
 SELECT m='' FROM m
 ----
-NULL
+false
 
 # implicit cast
 query II

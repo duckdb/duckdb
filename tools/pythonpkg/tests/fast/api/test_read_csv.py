@@ -398,6 +398,7 @@ class TestReadCSV(object):
         with pytest.raises(ValueError, match="Can not read from a non file-like object"):
             res = duckdb_cursor.read_csv(obj, header=True).fetchall()
 
+    @pytest.mark.skip(reason="depends on garbage collector behaviour, and sporadically breaks in CI")
     def test_internal_object_filesystem_cleanup(self, duckdb_cursor):
         _ = pytest.importorskip("fsspec")
 
