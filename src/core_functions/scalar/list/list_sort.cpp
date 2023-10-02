@@ -248,7 +248,8 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunct
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::ARRAY) {
 		child_type = ArrayType::GetChildType(arguments[0]->return_type);
-		arguments[0] = BoundCastExpression::AddCastToType(context, std::move(arguments[0]), LogicalType::LIST(child_type));
+		arguments[0] =
+		    BoundCastExpression::AddCastToType(context, std::move(arguments[0]), LogicalType::LIST(child_type));
 	} else {
 		child_type = ListType::GetChildType(arguments[0]->return_type);
 	}

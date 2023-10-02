@@ -263,8 +263,7 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 		// Set the array size in the child format
 		format.children[0].parent_array_size = array_size;
 
-		ToUnifiedFormatInternal(format.children[0], ArrayVector::GetEntry(vector),
-		                        ArrayVector::GetTotalSize(vector));
+		ToUnifiedFormatInternal(format.children[0], ArrayVector::GetEntry(vector), ArrayVector::GetTotalSize(vector));
 	} break;
 	default:
 		break;

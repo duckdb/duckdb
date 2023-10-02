@@ -814,13 +814,13 @@ static void TupleDataStructWithinCollectionScatter(const Vector &source, const T
 }
 
 template <class COLLECTION>
-static void
-TupleDataCollectionWithinCollectionScatter(const Vector &child_list, const TupleDataVectorFormat &child_list_format,
-                                           const SelectionVector &append_sel, const idx_t append_count,
-                                           const TupleDataLayout &layout, const Vector &row_locations,
-                                           Vector &heap_locations, const idx_t col_idx,
-                                           const UnifiedVectorFormat &list_data,
-                                           const vector<TupleDataScatterFunction> &child_functions) {
+static void TupleDataCollectionWithinCollectionScatter(const Vector &child_list,
+                                                       const TupleDataVectorFormat &child_list_format,
+                                                       const SelectionVector &append_sel, const idx_t append_count,
+                                                       const TupleDataLayout &layout, const Vector &row_locations,
+                                                       Vector &heap_locations, const idx_t col_idx,
+                                                       const UnifiedVectorFormat &list_data,
+                                                       const vector<TupleDataScatterFunction> &child_functions) {
 	// List data (of the list Vector that "child_list" is in)
 	const auto list_sel = *list_data.sel;
 	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
