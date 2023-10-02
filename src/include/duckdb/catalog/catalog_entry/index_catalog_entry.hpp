@@ -9,13 +9,10 @@
 #pragma once
 
 #include "duckdb/catalog/standard_entry.hpp"
-#include "duckdb/parser/parsed_data/create_index_info.hpp"
-#include "duckdb/storage/metadata/metadata_writer.hpp"
 
 namespace duckdb {
 
 struct DataTableInfo;
-class Index;
 
 //! An index catalog entry
 class IndexCatalogEntry : public StandardEntry {
@@ -24,17 +21,18 @@ public:
 	static constexpr const char *Name = "index";
 
 public:
-	//! Create an IndexCatalogEntry and initialize storage for it
+	//! Create an IndexCatalogEntry
 	IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info);
 
-	optional_ptr<Index> index;
 	string sql;
 	vector<unique_ptr<ParsedExpression>> expressions;
 	vector<unique_ptr<ParsedExpression>> parsed_expressions;
 	case_insensitive_map_t<Value> options;
 
 public:
+	//! Returns the CreateIndexInfo
 	unique_ptr<CreateInfo> GetInfo() const override;
+	//! Returns the original CREATE INDEX SQL
 	string ToSQL() const override;
 
 	virtual string GetSchemaName() const = 0;

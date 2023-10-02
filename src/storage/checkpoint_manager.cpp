@@ -375,18 +375,16 @@ void CheckpointReader::ReadSequence(ClientContext &context, Deserializer &deseri
 //===--------------------------------------------------------------------===//
 // Indexes
 //===--------------------------------------------------------------------===//
-void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog, Serializer &serializer) {
-	// The index data is written as part of WriteTableData.
-	// Here, we need only serialize the pointer to that data.
-	auto root_block_pointer = index_catalog.index->GetRootBlockPointer();
-	serializer.WriteProperty(100, "index", &index_catalog);
-	serializer.WriteProperty(101, "root_block_pointer", root_block_pointer);
+void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog_entry, Serializer &serializer) {
+	// The index data is written as part of WriteTableData
+	// Here, we serialize the index catalog entry
+	serializer.WriteProperty(100, "index_catalog_entry", &index_catalog_entry);
 }
 
 void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deserializer) {
 
 	// deserialize the index create info
-	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "index");
+	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "index_catalog_entry");
 	auto &info = create_info->Cast<CreateIndexInfo>();
 
 	// create the index in the catalog
@@ -403,9 +401,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 		index.parsed_expressions.push_back(parsed_expr->Copy());
 	}
 
-	// we deserialize the index lazily, i.e., we do not need to load any node information
-	// except the root block pointer
-	auto root_block_pointer = deserializer.ReadProperty<BlockPointer>(101, "root_block_pointer");
+
 
 	// obtain the parsed expressions of the ART from the index metadata
 	vector<unique_ptr<ParsedExpression>> parsed_expressions;

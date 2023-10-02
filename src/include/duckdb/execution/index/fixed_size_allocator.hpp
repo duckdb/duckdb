@@ -11,15 +11,26 @@
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/metadata/metadata_manager.hpp"
-#include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/execution/index/fixed_size_buffer.hpp"
 #include "duckdb/execution/index/index_pointer.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/storage/partial_block_manager.hpp"
 
 namespace duckdb {
+
+struct FixedSizeAllocatorInfo {
+	idx_t segment_size;
+	vector<idx_t> buffer_ids;
+	vector<BlockPointer> buffer_block_pointers;
+	vector<idx_t> buffer_segment_counts;
+	vector<idx_t> buffer_allocation_sizes;
+	vector<idx_t> buffers_with_free_space_vec;
+
+	void Serialize(Serializer &serializer) const;
+	static FixedSizeAllocatorInfo Deserialize(Deserializer &deserializer);
+};
 
 //! The FixedSizeAllocator provides pointers to fixed-size memory segments of pre-allocated memory buffers.
 //! The pointers are IndexPointers, and the leftmost byte (metadata) must always be zero.
@@ -30,14 +41,13 @@ public:
 	static constexpr uint8_t VACUUM_THRESHOLD = 10;
 
 public:
+	//! Construct a new fixed-size allocator
 	FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager);
 
 	//! Block manager of the database instance
 	BlockManager &block_manager;
 	//! Buffer manager of the database instance
 	BufferManager &buffer_manager;
-	//! Metadata manager for (de)serialization
-	MetadataManager &metadata_manager;
 
 public:
 	//! Get a new IndexPointer to a segment, might cause a new buffer allocation
@@ -75,10 +85,12 @@ public:
 	//! Vacuums an IndexPointer
 	IndexPointer VacuumPointer(const IndexPointer ptr);
 
+	//! Returns all FixedSizeAllocator information for serialization
+	FixedSizeAllocatorInfo GetInfo() const;
 	//! Serializes all in-memory buffers and the metadata
-	BlockPointer Serialize(PartialBlockManager &partial_block_manager, MetadataWriter &writer);
-	//! Deserializes all metadata
-	void Deserialize(const BlockPointer &block_pointer);
+	void SerializeBuffers(PartialBlockManager &partial_block_manager);
+	//! Initialize a fixed-size allocator from deserialize data
+	void Deserialize(const FixedSizeAllocatorInfo &info);
 
 private:
 	//! Allocation size of one segment in a buffer

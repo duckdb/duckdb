@@ -7,12 +7,48 @@
 
 namespace duckdb {
 
-Index::Index(AttachedDatabase &db, IndexType type, TableIOManager &table_io_manager,
-             const vector<column_t> &column_ids_p, const vector<unique_ptr<Expression>> &unbound_expressions,
-             IndexConstraintType constraint_type_p)
+//===--------------------------------------------------------------------===//
+// IndexStorageInfo
+//===--------------------------------------------------------------------===//
 
-    : type(type), table_io_manager(table_io_manager), column_ids(column_ids_p), constraint_type(constraint_type_p),
-      db(db) {
+void IndexStorageInfo::Serialize(Serializer &serializer) const {
+
+	serializer.WriteProperty(100, "name", name);
+	serializer.WriteList(101, "properties", properties.size(),
+	                     [&](Serializer::List &list, idx_t i) {
+		                     list.WriteElement(properties[i]);
+	                     });
+	serializer.WriteList(102, "allocator_infos", allocator_infos.size(),
+	                     [&](Serializer::List &list, idx_t i) {
+		                     list.WriteElement(allocator_infos[i]);
+	                     });
+}
+
+IndexStorageInfo IndexStorageInfo::Deserialize(Deserializer &deserializer) {
+
+	IndexStorageInfo info;
+
+	info.name = deserializer.ReadProperty<string>(100, "name");
+	deserializer.ReadList(101, "properties", [&](Deserializer::List &list, idx_t i) {
+		info.properties.push_back(list.ReadElement<idx_t>());
+	});
+	deserializer.ReadList(102, "allocator_infos", [&](Deserializer::List &list, idx_t i) {
+		info.allocator_infos.push_back(list.ReadElement<FixedSizeAllocatorInfo>());
+	});
+
+	return info;
+}
+
+//===--------------------------------------------------------------------===//
+// Index
+//===--------------------------------------------------------------------===//
+
+Index::Index(const string &name, const string &index_type, IndexConstraintType index_constraint_type,
+             const vector<column_t> &column_ids, TableIOManager &table_io_manager,
+             const vector<unique_ptr<Expression>> &unbound_expressions, AttachedDatabase &db)
+
+    : name(name), index_type(index_type), index_constraint_type(index_constraint_type), column_ids(column_ids),
+      table_io_manager(table_io_manager), db(db) {
 
 	for (auto &expr : unbound_expressions) {
 		types.push_back(expr->return_type.InternalType());
@@ -83,8 +119,8 @@ unique_ptr<Expression> Index::BindExpression(unique_ptr<Expression> expr) {
 	return expr;
 }
 
-bool Index::IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const {
-	for (auto &column : column_ids) {
+bool Index::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const {
+	for (auto &column : column_ids_p) {
 		if (column_id_set.find(column.index) != column_id_set.end()) {
 			return true;
 		}
@@ -92,7 +128,7 @@ bool Index::IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const {
 	return false;
 }
 
-BlockPointer Index::Serialize(MetadataWriter &writer) {
+void Index::Serialize(Serializer &serializer) {
 	throw NotImplementedException("The implementation of this index serialization does not exist.");
 }
 

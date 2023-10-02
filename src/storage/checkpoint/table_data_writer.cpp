@@ -39,7 +39,7 @@ unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup
 }
 
 void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info,
-                                              Serializer &metadata_serializer) {
+                                              Serializer &serializer) {
 	// store the current position in the metadata writer
 	// this is where the row groups for this table start
 	auto pointer = table_data_writer.GetMetaBlockPointer();
@@ -66,13 +66,15 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 		row_group_serializer.End();
 	}
 
-	auto index_pointers = info->indexes.SerializeIndexes(table_data_writer);
+	BinarySerializer index_serializer(table_data_writer);
+	index_serializer.Begin();
+	info->indexes.Serialize(index_serializer);
+	index_serializer.End();
 
 	// Now begin the metadata as a unit
 	// Pointer to the table itself goes to the metadata stream.
-	metadata_serializer.WriteProperty(101, "table_pointer", pointer);
-	metadata_serializer.WriteProperty(102, "total_rows", total_rows);
-	metadata_serializer.WriteProperty(103, "index_pointers", index_pointers);
+	serializer.WriteProperty(101, "table_pointer", pointer);
+	serializer.WriteProperty(102, "total_rows", total_rows);
 }
 
 } // namespace duckdb

@@ -38,11 +38,11 @@ public:
 
 public:
 	//! Constructs an ART
-	ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
-	    const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
+	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
+	    TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
 	    AttachedDatabase &db,
 	    const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr = nullptr,
-	    const BlockPointer &block = BlockPointer());
+	    const IndexStorageInfo &index_storage_info = IndexStorageInfo());
 
 	//! Root of the tree
 	Node tree = Node();
@@ -86,8 +86,10 @@ public:
 	//! Search equal values used for joins that do not need to fetch data
 	void SearchEqualJoinNoFetch(ARTKey &key, idx_t &result_size);
 
-	//! Serializes the index and returns the pair of block_id offset positions
-	BlockPointer Serialize(MetadataWriter &writer) override;
+	//! Returns all ART storage information for serialization
+	IndexStorageInfo GetInfo() const;
+	//! Serializes the index
+	void Serialize(Serializer &serializer) override;
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
@@ -145,7 +147,7 @@ private:
 	string VerifyAndToStringInternal(const bool only_verify);
 
 	//! Deserialize the allocators of the ART
-	void Deserialize(const BlockPointer &pointer);
+	void Deserialize(const IndexStorageInfo &art_storage_info);
 };
 
 } // namespace duckdb

@@ -14,8 +14,9 @@
 #include "duckdb/execution/index/art/iterator.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 #include <algorithm>
 
@@ -33,11 +34,15 @@ struct ARTIndexScanState : public IndexScanState {
 	Iterator iterator;
 };
 
-ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
-         const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
+//===--------------------------------------------------------------------===//
+// ART
+//===--------------------------------------------------------------------===//
+
+ART::ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
+         TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
          AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
-         const BlockPointer &pointer)
-    : Index(db, IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type),
+         const IndexStorageInfo &index_storage_info)
+    : Index("ART", name, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
       allocators(allocators_ptr), owns_data(false) {
 	if (!Radix::IsLittleEndian()) {
 		throw NotImplementedException("ART indexes are not supported on big endian architectures");
@@ -58,8 +63,8 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 		allocators = make_shared<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
 	}
 
-	if (pointer.IsValid()) {
-		Deserialize(pointer);
+	if (index_storage_info.IsValid()) {
+		Deserialize(index_storage_info);
 	}
 
 	// validate the types of the key columns
@@ -974,43 +979,40 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 // Serialization
 //===--------------------------------------------------------------------===//
 
-BlockPointer ART::Serialize(MetadataWriter &writer) {
+IndexStorageInfo ART::GetInfo() const {
 
-	D_ASSERT(owns_data);
+	IndexStorageInfo info;
+	info.properties.push_back(tree.Get());
 
-	// early-out, if all allocators are empty
-	if (!tree.HasMetadata()) {
-		root_block_pointer = BlockPointer();
-		return root_block_pointer;
+	for (const auto &allocator: *allocators) {
+		info.allocator_infos.push_back(allocator->GetInfo());
 	}
 
-	lock_guard<mutex> l(lock);
+	return info;
+}
+
+void ART::Serialize(Serializer &serializer) {
+
+	// use the partial block manager to serialize all allocator data
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
 	PartialBlockManager partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT);
 
-	vector<BlockPointer> allocator_pointers;
 	for (auto &allocator : *allocators) {
-		allocator_pointers.push_back(allocator->Serialize(partial_block_manager, writer));
+		allocator->SerializeBuffers(partial_block_manager);
 	}
 	partial_block_manager.FlushPartialBlocks();
 
-	root_block_pointer = writer.GetBlockPointer();
-	writer.Write(tree);
-	for (auto &allocator_pointer : allocator_pointers) {
-		writer.Write(allocator_pointer);
-	}
-
-	return root_block_pointer;
+	// use the serializer to serialize ART meta data
+	auto index_storage_info = GetInfo();
+	serializer.WriteProperty(100, "index_storage_info", index_storage_info);
 }
 
-void ART::Deserialize(const BlockPointer &pointer) {
+void ART::Deserialize(const IndexStorageInfo &index_storage_info) {
 
-	D_ASSERT(pointer.IsValid());
-	MetadataReader reader(table_io_manager.GetMetadataManager(), pointer);
-	tree = reader.Read<Node>();
-
-	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
-		(*allocators)[i]->Deserialize(reader.Read<BlockPointer>());
+	tree.Set(index_storage_info.properties.back());
+	D_ASSERT(index_storage_info.allocator_infos.size() == ALLOCATOR_COUNT);
+	for (idx_t i = 0; i < index_storage_info.allocator_infos.size(); i++) {
+		(*allocators)[i]->Deserialize(index_storage_info.allocator_infos[i]);
 	}
 }
 

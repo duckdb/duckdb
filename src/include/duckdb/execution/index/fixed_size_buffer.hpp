@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/storage/partial_block_manager.hpp"
-#include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/block_manager.hpp"
@@ -19,7 +18,7 @@ namespace duckdb {
 class FixedSizeAllocator;
 class MetadataWriter;
 
-struct PartialBlockForIndex : public PartialBlock {
+class PartialBlockForIndex : public PartialBlock {
 public:
 	PartialBlockForIndex(PartialBlockState state, BlockManager &block_manager,
 	                     const shared_ptr<BlockHandle> &block_handle);

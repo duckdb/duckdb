@@ -23,7 +23,7 @@
 namespace duckdb {
 
 void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vector<PhysicalIndex> &keys,
-                       IndexConstraintType constraint_type, BlockPointer index_block = BlockPointer()) {
+                       IndexConstraintType constraint_type, const IndexStorageInfo &index_storage_info = IndexStorageInfo()) {
 	// fetch types and create expressions for the index from the columns
 	vector<column_t> column_ids;
 	vector<unique_ptr<Expression>> unbound_expressions;
@@ -41,9 +41,9 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vect
 	}
 	unique_ptr<ART> art;
 	// create an adaptive radix tree around the expressions
-	if (index_block.IsValid()) {
+	if (index_storage_info.IsValid()) {
 		art = make_uniq<ART>(column_ids, TableIOManager::Get(storage), std::move(unbound_expressions), constraint_type,
-		                     storage.db, nullptr, index_block);
+		                     storage.db, nullptr, index_storage_info);
 	} else {
 		art = make_uniq<ART>(column_ids, TableIOManager::Get(storage), std::move(unbound_expressions), constraint_type,
 		                     storage.db);
@@ -55,13 +55,13 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vect
 }
 
 void AddDataTableIndex(DataTable &storage, const ColumnList &columns, vector<LogicalIndex> &keys,
-                       IndexConstraintType constraint_type, BlockPointer index_block = BlockPointer()) {
+                       IndexConstraintType constraint_type, const IndexStorageInfo &index_storage_info = IndexStorageInfo()) {
 	vector<PhysicalIndex> new_keys;
 	new_keys.reserve(keys.size());
 	for (auto &logical_key : keys) {
 		new_keys.push_back(columns.LogicalToPhysical(logical_key));
 	}
-	AddDataTableIndex(storage, columns, new_keys, constraint_type, index_block);
+	AddDataTableIndex(storage, columns, new_keys, constraint_type, index_storage_info);
 }
 
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,

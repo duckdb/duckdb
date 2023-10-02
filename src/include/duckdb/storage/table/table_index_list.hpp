@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/table_index_list.hpp
+// duckdb/storage/table/table_index_list.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -46,8 +46,8 @@ public:
 	Index *FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, ForeignKeyType fk_type);
 	void VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, DataChunk &chunk, ConflictManager &conflict_manager);
 
-	//! Serialize all indexes owned by this table, returns a vector of block info of all indexes
-	vector<BlockPointer> SerializeIndexes(duckdb::MetadataWriter &writer);
+	//! Serialize all indexes owned by this table
+	void Serialize(Serializer &serializer);
 
 	vector<column_t> GetRequiredColumns();
 
