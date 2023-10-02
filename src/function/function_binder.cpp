@@ -268,8 +268,17 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 
 	if (bound_function.null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		for (auto &child : children) {
-			if (child->return_type == LogicalTypeId::SQLNULL ||
-			    (child->IsFoldable() && ExpressionExecutor::EvaluateScalar(context, *child).IsNull())) {
+			if (child->return_type == LogicalTypeId::SQLNULL) {
+				return make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL));
+			}
+			if (!child->IsFoldable()) {
+				continue;
+			}
+			Value result;
+			if (!ExpressionExecutor::TryEvaluateScalar(context, *child, result)) {
+				continue;
+			}
+			if (result.IsNull()) {
 				return make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL));
 			}
 		}

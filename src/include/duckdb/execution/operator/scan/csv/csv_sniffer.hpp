@@ -50,6 +50,8 @@ private:
 	CSVReaderOptions &options;
 	//! Buffer being used on sniffer
 	shared_ptr<CSVBufferManager> buffer_manager;
+	//! Sets the result options
+	void SetResultOptions();
 
 	//! ------------------------------------------------------//
 	//! ----------------- Dialect Detection ----------------- //

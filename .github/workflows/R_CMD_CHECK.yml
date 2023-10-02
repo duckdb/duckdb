@@ -17,8 +17,8 @@ on:
       - '!tools/swift/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
-      - '!.github/workflows/Swift.yml'
-      - '.github/config/uncovered_files.csv'
+      - '!.github/workflows/R_CMD_CHECK.yml'
+
   pull_request:
     types: [ opened, reopened, ready_for_review ]
     paths-ignore:
@@ -27,8 +27,8 @@ on:
       - '!tools/odbc/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
-      - '!.github/workflows/Main.yml'
-      - '.github/config/uncovered_files.csv'
+      - '!.github/workflows/R_CMD_CHECK.yml'
+
 
 name: R-CMD-check
 
@@ -92,7 +92,7 @@ jobs:
       - name: update duckdb-r src code with PR code
         shell: bash
         working-directory: ${{ env.DUCKDB_R_SRC }}
-        run: ./vendor.sh
+        run: ./vendor.sh duckdb
 
       - uses: r-lib/actions/check-r-package@v2
         with:

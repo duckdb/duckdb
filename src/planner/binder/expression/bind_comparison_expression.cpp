@@ -119,6 +119,7 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	if (!error.empty()) {
 		return BindResult(error);
 	}
+
 	// the children have been successfully resolved
 	auto &left = BoundExpression::GetExpression(*expr.left);
 	auto &right = BoundExpression::GetExpression(*expr.right);

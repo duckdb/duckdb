@@ -1,12 +1,12 @@
-catalog/catalog.cpp	41
+catalog/catalog.cpp	49
 catalog/catalog_entry.cpp	11
-catalog/catalog_entry/duck_schema_entry.cpp	4
+catalog/catalog_entry/duck_schema_entry.cpp	10
 catalog/catalog_entry/duck_table_entry.cpp	7
 catalog/catalog_entry/index_catalog_entry.cpp	2
-catalog/catalog_entry/scalar_function_catalog_entry.cpp	3
+catalog/catalog_entry/scalar_function_catalog_entry.cpp	4
 catalog/catalog_entry/schema_catalog_entry.cpp	10
 catalog/catalog_entry/table_catalog_entry.cpp	4
-catalog/catalog_entry/table_function_catalog_entry.cpp	3
+catalog/catalog_entry/table_function_catalog_entry.cpp	5
 catalog/catalog_entry/type_catalog_entry.cpp	2
 catalog/catalog_search_path.cpp	9
 catalog/catalog_set.cpp	20
@@ -48,8 +48,10 @@ common/radix_partitioning.cpp	15
 common/re2_regex.cpp	37
 common/row_operations/row_aggregate.cpp	2
 common/row_operations/row_external.cpp	26
+common/row_operations/row_heap_gather.cpp	3
+common/row_operations/row_heap_scatter.cpp	3
 common/row_operations/row_gather.cpp	11
-common/row_operations/row_matcher.cpp	13
+common/row_operations/row_matcher.cpp	14
 common/serializer/deserializer.cpp	13
 common/serializer/serializer.cpp	21
 common/serializer/buffered_file_reader.cpp	11
@@ -80,6 +82,7 @@ common/types/date.cpp	24
 common/types/hash.cpp	5
 common/types/hugeint.cpp	35
 common/types/hyperloglog.cpp	22
+common/types/list_segment.cpp	1
 common/types/interval.cpp	31
 common/types/row/partitioned_tuple_data.cpp	15
 common/types/row/row_data_collection.cpp	8
@@ -98,7 +101,7 @@ common/types/validity_mask.cpp	13
 common/types/value.cpp	180
 common/types/vector.cpp	153
 common/value_operations/comparison_operations.cpp	32
-common/vector_operations/generators.cpp	29
+common/vector_operations/generators.cpp	31
 common/vector_operations/is_distinct_from.cpp	49
 common/vector_operations/null_operations.cpp	15
 common/vector_operations/numeric_inplace_operators.cpp	6
@@ -131,7 +134,7 @@ core_functions/scalar/enum/enum_functions.cpp	10
 core_functions/scalar/generic/current_setting.cpp	1
 core_functions/scalar/generic/least.cpp	2
 core_functions/scalar/generic/system_functions.cpp	4
-core_functions/scalar/list/array_slice.cpp	2
+core_functions/scalar/list/array_slice.cpp	3
 core_functions/scalar/list/flatten.cpp	6
 core_functions/scalar/list/list_aggregates.cpp	2
 core_functions/scalar/list/list_lambdas.cpp	2
@@ -164,7 +167,7 @@ execution/expression_executor_state.cpp	2
 execution/index/art/art.cpp	7
 execution/index/art/art_key.cpp	6
 execution/index/art/iterator.cpp	2
-execution/index/art/leaf.cpp	3
+execution/index/art/leaf.cpp	10
 execution/index/art/node.cpp	11
 execution/index/art/node256.cpp	2
 execution/index/art/node48.cpp	10
@@ -173,7 +176,7 @@ execution/index/fixed_size_allocator.cpp	2
 execution/index/fixed_size_buffer.cpp	6
 execution/join_hashtable.cpp	23
 execution/nested_loop_join/nested_loop_join_inner.cpp	24
-execution/nested_loop_join/nested_loop_join_mark.cpp	30
+execution/nested_loop_join/nested_loop_join_mark.cpp	35
 execution/operator/aggregate/aggregate_object.cpp	2
 execution/operator/aggregate/distinct_aggregate_data.cpp	9
 execution/operator/aggregate/physical_hash_aggregate.cpp	30
@@ -194,7 +197,7 @@ execution/operator/join/physical_asof_join.cpp	38
 execution/operator/join/physical_blockwise_nl_join.cpp	2
 execution/operator/join/physical_hash_join.cpp	8
 execution/operator/join/physical_iejoin.cpp	32
-execution/operator/join/physical_index_join.cpp	2
+execution/operator/join/physical_index_join.cpp	3
 execution/operator/join/physical_nested_loop_join.cpp	4
 execution/operator/join/physical_piecewise_merge_join.cpp	142
 execution/operator/join/physical_range_join.cpp	62
@@ -204,7 +207,7 @@ execution/operator/csv_scanner/buffered_csv_reader.cpp	47
 execution/operator/csv_scanner/csv_reader_options.cpp	41
 execution/operator/persistent/csv_buffer.cpp	2
 execution/operator/csv_scanner/csv_file_handle.cpp	7
-execution/operator/csv_scanner/parallel_csv_reader.cpp	50
+execution/operator/csv_scanner/parallel_csv_reader.cpp	54
 execution/operator/persistent/physical_batch_copy_to_file.cpp	7
 execution/operator/persistent/physical_batch_insert.cpp	43
 execution/operator/persistent/physical_copy_to_file.cpp	2
@@ -272,7 +275,7 @@ function/scalar/string/regexp/regexp_extract_all.cpp	5
 function/scalar/string/substring.cpp	8
 function/scalar/struct/struct_extract.cpp	3
 function/scalar/system/aggregate_export.cpp	10
-function/scalar_function.cpp	7
+function/scalar_function.cpp	8
 function/table/arrow.cpp	61
 function/table/arrow_conversion.cpp	231
 function/table/arrow/arrow_duck_schema.cpp	3
@@ -292,7 +295,7 @@ function/table/system/pragma_table_info.cpp	2
 function/table/table_scan.cpp	12
 function/table/unnest.cpp	8
 function/table/version/pragma_version.cpp	3
-function/table_function.cpp	4
+function/table_function.cpp	9
 function/udf_function.cpp	6
 extension/json/buffered_json_reader.cpp	35
 extension/json/include/json_common.hpp	8
@@ -452,6 +455,7 @@ include/duckdb/planner/expression/bound_parameter_data.hpp	2
 include/duckdb/planner/expression/bound_subquery_expression.hpp	5
 include/duckdb/planner/filter/conjunction_filter.hpp	3
 include/duckdb/planner/table_filter.hpp	3
+include/duckdb/planner/extension_callback.hpp	2
 include/duckdb/storage/buffer/block_handle.hpp	7
 include/duckdb/storage/compression/chimp/algorithm/chimp128.hpp	10
 include/duckdb/storage/compression/chimp/algorithm/leading_zero_buffer.hpp	3
@@ -507,7 +511,7 @@ main/extension/extension_alias.cpp	2
 main/extension/extension_helper.cpp	8
 main/extension/extension_install.cpp	125
 main/extension/extension_load.cpp	70
-main/extension/extension_util.cpp	18
+main/extension/extension_util.cpp	24
 main/materialized_query_result.cpp	9
 main/pending_query_result.cpp	5
 main/prepared_statement.cpp	16
@@ -582,8 +586,8 @@ parser/expression/subquery_expression.cpp	5
 parser/expression/window_expression.cpp	8
 parser/expression_util.cpp	2
 parser/parsed_data/alter_info.cpp	7
-parser/parsed_data/alter_scalar_function_info.cpp	4
-parser/parsed_data/alter_table_function_info.cpp	4
+parser/parsed_data/alter_scalar_function_info.cpp	17
+parser/parsed_data/alter_table_function_info.cpp	17
 parser/parsed_data/alter_table_info.cpp	21
 parser/parsed_data/create_aggregate_function_info.cpp	11
 parser/parsed_data/create_collation_info.cpp	6
@@ -591,8 +595,8 @@ parser/parsed_data/create_copy_function_info.cpp	6
 parser/parsed_data/create_info.cpp	6
 parser/parsed_data/create_index_info.cpp	7
 parser/parsed_data/create_pragma_function_info.cpp	5
-parser/parsed_data/create_scalar_function_info.cpp	7
-parser/parsed_data/create_table_function_info.cpp	7
+parser/parsed_data/create_scalar_function_info.cpp	13
+parser/parsed_data/create_table_function_info.cpp	13
 parser/parsed_data/create_view_info.cpp	15
 parser/parsed_data/sample_options.cpp	5
 parser/parsed_expression.cpp	15

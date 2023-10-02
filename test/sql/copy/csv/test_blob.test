@@ -29,7 +29,7 @@ statement ok
 DELETE FROM blobs
 
 query I
-COPY blobs FROM '__TEST_DIR__/blob.csv' (HEADER 0);
+COPY blobs FROM '__TEST_DIR__/blob.csv' (HEADER 1);
 ----
 1
 
@@ -48,7 +48,7 @@ statement ok
 DELETE FROM blobs
 
 query I
-COPY blobs FROM '__TEST_DIR__/blob.csv' DELIMITER 'A' QUOTE 'B' ESCAPE 'C';
+COPY blobs FROM '__TEST_DIR__/blob.csv' (DELIMITER 'A', QUOTE 'B', ESCAPE 'C', HEADER 1);
 ----
 1
 
