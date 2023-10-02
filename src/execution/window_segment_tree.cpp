@@ -262,7 +262,6 @@ public:
 	Vector statef;
 	//! The frame boundaries, used for the window functions
 	vector<FrameBounds> frames;
-	vector<FrameBounds> prevs;
 };
 
 WindowCustomAggregatorState::WindowCustomAggregatorState(const AggregateObject &aggr, DataChunk &inputs,
@@ -286,7 +285,6 @@ WindowCustomAggregatorState::WindowCustomAggregatorState(const AggregateObject &
 		break;
 	}
 	frames.resize(nframes, {0, 0});
-	prevs = frames;
 }
 
 WindowCustomAggregatorState::~WindowCustomAggregatorState() {
@@ -310,7 +308,6 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 	//	TODO: window should take a const Vector*
 	auto &lcstate = lstate.Cast<WindowCustomAggregatorState>();
 	auto &frames = lcstate.frames;
-	auto &prevs = lcstate.prevs;
 	auto params = lcstate.inputs.data.data();
 	auto &rmask = FlatVector::Validity(result);
 	for (idx_t i = 0, cur_row = row_idx; i < count; ++i, ++cur_row) {
@@ -320,7 +317,7 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 			auto begin = begins[i];
 			auto end = ends[i];
 			non_empty += (begin < end);
-			prevs[nframes++] = FrameBounds(begin, end);
+			frames[nframes++] = FrameBounds(begin, end);
 		} else {
 			//	The frame_exclusion option allows rows around the current row to be excluded from the frame,
 			//	even if they would be included according to the frame start and frame end options.
@@ -346,13 +343,13 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 			auto end = (exclude_mode == WindowExclusion::CURRENT_ROW) ? cur_row : peer_begin[i];
 			end = MaxValue(begin, end);
 			non_empty += (begin < end);
-			prevs[nframes++] = FrameBounds(begin, end);
+			frames[nframes++] = FrameBounds(begin, end);
 
 			// with EXCLUDE TIES, in addition to the frame part right of the peer group's end,
 			// we also need to consider the current row
 			if (exclude_mode == WindowExclusion::TIES) {
 				++non_empty;
-				prevs[nframes++] = FrameBounds(cur_row, cur_row + 1);
+				frames[nframes++] = FrameBounds(cur_row, cur_row + 1);
 			}
 
 			//	WindowSegmentTreePart::RIGHT
@@ -360,7 +357,7 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 			begin = (exclude_mode == WindowExclusion::CURRENT_ROW) ? (cur_row + 1) : peer_end[i];
 			begin = MinValue(begin, end);
 			non_empty += (begin < end);
-			prevs[nframes++] = FrameBounds(begin, end);
+			frames[nframes++] = FrameBounds(begin, end);
 		}
 
 		//	No data means NULL
@@ -369,13 +366,10 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 			continue;
 		}
 
-		// We defer updating the current frames until we know we have data
-		prevs.swap(frames);
-
 		// Extract the range
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), lstate.allocator);
-		aggr.function.window(params, filter_mask, aggr_input_data, inputs.ColumnCount(), lcstate.state.data(),
-		                     frames.data(), prevs.data(), result, i, nframes);
+		aggr.function.window(params, filter_mask, aggr_input_data, inputs.ColumnCount(), lcstate.state.data(), frames,
+		                     result, i);
 	}
 }
 

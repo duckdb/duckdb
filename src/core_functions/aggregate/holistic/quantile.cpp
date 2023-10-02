@@ -37,32 +37,30 @@ inline interval_t operator-(const interval_t &lhs, const interval_t &rhs) {
 }
 
 struct FrameSet {
-	using const_iterator = const FrameBounds *;
+	using FrameVec = vector<FrameBounds>;
 
-	inline FrameSet(const FrameBounds *frames, idx_t nframes) : frames(frames), nframes(nframes) {
+	inline explicit FrameSet(const FrameVec &frames_p) : frames(frames_p) {
 	}
 
 	inline idx_t Size() const {
 		idx_t result = 0;
-		for (idx_t f = 0; f < nframes; ++f) {
-			const auto &frame = frames[f];
+		for (const auto &frame : frames) {
 			result += frame.end - frame.start;
 		}
 
 		return result;
 	}
 
-	inline const_iterator Find(idx_t i) const {
-		for (idx_t f = 0; f < nframes; ++f) {
+	inline bool Contains(idx_t i) const {
+		for (size_t f = 0; f < frames.size(); ++f) {
 			const auto &frame = frames[f];
 			if (frame.start <= i && i < frame.end) {
-				return frames + f;
+				return true;
 			}
 		}
-		return nullptr;
+		return false;
 	}
-	const_iterator frames;
-	const idx_t nframes;
+	const FrameVec &frames;
 };
 
 template <typename SAVE_TYPE>
@@ -72,6 +70,9 @@ struct QuantileState {
 	// Regular aggregation
 	vector<SaveType> v;
 
+	// Windowing state
+	vector<FrameBounds> prevs;
+
 	// Windowed Quantile indirection
 	vector<idx_t> w;
 	idx_t count;
@@ -79,14 +80,14 @@ struct QuantileState {
 	// Windowed MAD indirection
 	vector<idx_t> m;
 
-	QuantileState() : count(0) {
+	QuantileState() : prevs(1), count(0) {
 	}
 
 	~QuantileState() {
 	}
 
-	inline void SetCount(const FrameBounds *frames, idx_t nframes) {
-		count = FrameSet(frames, nframes).Size();
+	inline void SetCount(const vector<FrameBounds> &frames) {
+		count = FrameSet(frames).Size();
 		if (count >= w.size()) {
 			w.resize(count);
 		}
@@ -110,12 +111,12 @@ struct QuantileIncluded {
 	const ValidityMask &dmask;
 };
 
-void ReuseIndexes(idx_t *index, const FrameBounds *currs, const FrameBounds *prevs, idx_t nframes) {
+void ReuseIndexes(idx_t *index, const vector<FrameBounds> &currs, const vector<FrameBounds> &prevs) {
 
 	//  Copy overlapping indices by scanning the previous set and copying down into holes.
 	//	We copy instead of leaving gaps in case there are fewer values in the current frame.
-	FrameSet prev_set(prevs, nframes);
-	FrameSet curr_set(currs, nframes);
+	FrameSet prev_set(prevs);
+	FrameSet curr_set(currs);
 	const auto prev_count = prev_set.Size();
 	idx_t j = 0;
 	for (idx_t p = 0; p < prev_count; ++p) {
@@ -127,7 +128,7 @@ void ReuseIndexes(idx_t *index, const FrameBounds *currs, const FrameBounds *pre
 		}
 
 		//  Skip overlapping values
-		if (curr_set.Find(idx)) {
+		if (curr_set.Contains(idx)) {
 			++j;
 		}
 	}
@@ -136,7 +137,7 @@ void ReuseIndexes(idx_t *index, const FrameBounds *currs, const FrameBounds *pre
 	if (j > 0) {
 		//	Subframe indices
 		const auto union_start = MinValue(currs[0].start, prevs[0].start);
-		const auto union_end = MaxValue(currs[nframes - 1].end, prevs[nframes - 1].end);
+		const auto union_end = MaxValue(currs.back().end, prevs.back().end);
 		const FrameBounds last(union_end, union_end);
 
 		idx_t p = 0;
@@ -146,15 +147,15 @@ void ReuseIndexes(idx_t *index, const FrameBounds *currs, const FrameBounds *pre
 
 			//	Are we in the previous frame?
 			auto prev = &last;
-			if (p < nframes) {
-				prev = prevs + p;
+			if (p < prevs.size()) {
+				prev = &prevs[p];
 				overlap |= int(prev->start <= idx && idx < prev->end) << 0;
 			}
 
 			//	Are we in the current frame?
 			auto curr = &last;
-			if (c < nframes) {
-				curr = currs + c;
+			if (c < currs.size()) {
+				curr = &currs[c];
 				overlap |= int(curr->start <= idx && idx < curr->end) << 1;
 			}
 
@@ -185,10 +186,8 @@ void ReuseIndexes(idx_t *index, const FrameBounds *currs, const FrameBounds *pre
 		}
 	} else {
 		//  No overlap: overwrite with new values
-		for (idx_t f = 0; f < nframes; ++f) {
-			auto curr = currs + f;
-
-			for (auto idx = curr->start; idx < curr->end; ++idx) {
+		for (const auto &curr : currs) {
+			for (auto idx = curr.start; idx < curr.end; ++idx) {
 				index[j++] = idx;
 			}
 		}
@@ -666,8 +665,8 @@ struct QuantileScalarOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds *frames,
-	                   const FrameBounds *prevs, Vector &result, idx_t ridx, idx_t nframes) {
+	                   AggregateInputData &aggr_input_data, STATE &state, const vector<FrameBounds> &frames,
+	                   Vector &result, idx_t ridx) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
@@ -675,7 +674,8 @@ struct QuantileScalarOperation : public QuantileOperation {
 
 		//  Lazily initialise frame state
 		const auto prev_count = state.count;
-		state.SetCount(frames, nframes);
+		auto &prevs = state.prevs;
+		state.SetCount(frames);
 
 		auto index = state.w.data();
 		D_ASSERT(index);
@@ -687,11 +687,11 @@ struct QuantileScalarOperation : public QuantileOperation {
 		const auto &q = bind_data.quantiles[0];
 
 		bool replace = false;
-		if (nframes == 1 && frames->start == prevs->start + 1 && frames->end == prevs->end + 1) {
+		if (frames.size() == 1 && frames[0].start == prevs[0].start + 1 && frames[0].end == prevs[0].end + 1) {
 			//  Fixed frame size
-			const auto j = ReplaceIndex(index, *frames, *prevs);
+			const auto j = ReplaceIndex(index, frames[0], prevs[0]);
 			//	We can only replace if the number of NULLs has not changed
-			if (included.AllValid() || included(prevs->start) == included(prevs->end)) {
+			if (included.AllValid() || included(prevs[0].start) == included(prevs[0].end)) {
 				Interpolator<DISCRETE> interp(q, prev_count, false);
 				replace = CanReplace(index, data, j, interp.FRN, interp.CRN, included);
 				if (replace) {
@@ -699,7 +699,7 @@ struct QuantileScalarOperation : public QuantileOperation {
 				}
 			}
 		} else {
-			ReuseIndexes(index, frames, prevs, nframes);
+			ReuseIndexes(index, frames, prevs);
 		}
 
 		if (!replace && !included.AllValid()) {
@@ -716,6 +716,8 @@ struct QuantileScalarOperation : public QuantileOperation {
 		} else {
 			rmask.Set(ridx, false);
 		}
+
+		prevs = frames;
 	}
 };
 
@@ -814,8 +816,8 @@ struct QuantileListOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds *frames,
-	                   const FrameBounds *prevs, Vector &list, idx_t lidx, idx_t nframes) {
+	                   AggregateInputData &aggr_input_data, STATE &state, const vector<FrameBounds> &frames,
+	                   Vector &list, idx_t lidx) {
 		D_ASSERT(aggr_input_data.bind_data);
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
@@ -835,7 +837,8 @@ struct QuantileListOperation : public QuantileOperation {
 
 		//  Lazily initialise frame state
 		const auto prev_count = state.count;
-		state.SetCount(frames, nframes);
+		auto &prevs = state.prevs;
+		state.SetCount(frames);
 
 		auto index = state.w.data();
 
@@ -846,11 +849,11 @@ struct QuantileListOperation : public QuantileOperation {
 		// then Q25 must be recomputed, but Q50 and Q75 are unaffected.
 		// For a single element list, this reduces to the scalar case.
 		std::pair<idx_t, idx_t> replaceable {state.count, 0};
-		if (nframes == 1 && frames->start == prevs->start + 1 && frames->end == prevs->end + 1) {
+		if (frames.size() == 1 && frames[0].start == prevs[0].start + 1 && frames[0].end == prevs[0].end + 1) {
 			//  Fixed frame size
-			const auto j = ReplaceIndex(index, *frames, *prevs);
+			const auto j = ReplaceIndex(index, frames[0], prevs[0]);
 			//	We can only replace if the number of NULLs has not changed
-			if (included.AllValid() || included(prevs->start) == included(prevs->end)) {
+			if (included.AllValid() || included(prevs[0].start) == included(prevs[0].end)) {
 				for (const auto &q : bind_data.order) {
 					const auto &quantile = bind_data.quantiles[q];
 					Interpolator<DISCRETE> interp(quantile, prev_count, false);
@@ -871,7 +874,7 @@ struct QuantileListOperation : public QuantileOperation {
 				}
 			}
 		} else {
-			ReuseIndexes(index, frames, prevs, nframes);
+			ReuseIndexes(index, frames, prevs);
 		}
 
 		if (replaceable.first >= replaceable.second && !included.AllValid()) {
@@ -904,6 +907,8 @@ struct QuantileListOperation : public QuantileOperation {
 		} else {
 			lmask.Set(lidx, false);
 		}
+
+		prevs = frames;
 	}
 };
 
@@ -1172,8 +1177,8 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds *frames,
-	                   const FrameBounds *prevs, Vector &result, idx_t ridx, idx_t nframes) {
+	                   AggregateInputData &aggr_input_data, STATE &state, const vector<FrameBounds> &frames,
+	                   Vector &result, idx_t ridx) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
@@ -1181,7 +1186,8 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 
 		//  Lazily initialise frame state
 		auto prev_count = state.count;
-		state.SetCount(frames, nframes);
+		auto &prevs = state.prevs;
+		state.SetCount(frames);
 
 		auto index = state.w.data();
 		D_ASSERT(index);
@@ -1197,7 +1203,7 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 		// The replacement trick does not work on the second index because if
 		// the median has changed, the previous order is not correct.
 		// It is probably close, however, and so reuse is helpful.
-		ReuseIndexes(index2, frames, prevs, nframes);
+		ReuseIndexes(index2, frames, prevs);
 		std::partition(index2, index2 + state.count, included);
 
 		// Find the two positions needed for the median
@@ -1207,11 +1213,11 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 		const auto &q = bind_data.quantiles[0];
 
 		bool replace = false;
-		if (nframes == 1 && frames->start == prevs->start + 1 && frames->end == prevs->end + 1) {
+		if (frames.size() == 1 && frames[0].start == prevs[0].start + 1 && frames[0].end == prevs[0].end + 1) {
 			//  Fixed frame size
-			const auto j = ReplaceIndex(index, *frames, *prevs);
+			const auto j = ReplaceIndex(index, frames[0], prevs[0]);
 			//	We can only replace if the number of NULLs has not changed
-			if (included.AllValid() || included(prevs->start) == included(prevs->end)) {
+			if (included.AllValid() || included(prevs[0].start) == included(prevs[0].end)) {
 				Interpolator<false> interp(q, prev_count, false);
 				replace = CanReplace(index, data, j, interp.FRN, interp.CRN, included);
 				if (replace) {
@@ -1219,7 +1225,7 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 				}
 			}
 		} else {
-			ReuseIndexes(index, frames, prevs, nframes);
+			ReuseIndexes(index, frames, prevs);
 		}
 
 		if (!replace && !included.AllValid()) {
@@ -1246,6 +1252,8 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 		} else {
 			rmask.Set(ridx, false);
 		}
+
+		prevs = frames;
 	}
 };
 

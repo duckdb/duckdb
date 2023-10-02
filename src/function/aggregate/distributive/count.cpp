@@ -35,14 +35,13 @@ struct CountStarFunction : public BaseCountFunction {
 
 	template <typename RESULT_TYPE>
 	static void Window(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
-	                   idx_t input_count, data_ptr_t state, const FrameBounds *frames, const FrameBounds *prevs,
-	                   Vector &result, idx_t rid, idx_t nframes) {
+	                   idx_t input_count, data_ptr_t state, const vector<FrameBounds> &frames, Vector &result,
+	                   idx_t rid) {
 		D_ASSERT(input_count == 0);
 
 		auto data = FlatVector::GetData<RESULT_TYPE>(result);
 		RESULT_TYPE total = 0;
-		for (idx_t f = 0; f < nframes; ++f) {
-			const auto &frame = frames[f];
+		for (const auto &frame : frames) {
 			const auto begin = frame.start;
 			const auto end = frame.end;
 

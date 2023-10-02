@@ -41,6 +41,10 @@ struct ModeState {
 	};
 	using Counts = unordered_map<KEY_TYPE, ModeAttr>;
 
+	ModeState() : prevs(1) {
+	}
+
+	vector<FrameBounds> prevs;
 	Counts *frequency_map;
 	KEY_TYPE *mode;
 	size_t nonzero;
@@ -208,11 +212,12 @@ struct ModeFunction {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &, STATE &state, const FrameBounds *frames, const FrameBounds *prevs,
-	                   Vector &result, idx_t rid, idx_t nframes) {
+	                   AggregateInputData &aggr_input_data, STATE &state, const vector<FrameBounds> &frames,
+	                   Vector &result, idx_t rid) {
 
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
+		auto &prevs = state.prevs;
 
 		ModeIncluded included(fmask, dmask);
 
@@ -223,8 +228,7 @@ struct ModeFunction {
 		if (state.nonzero <= tau * state.frequency_map->size()) {
 			state.Reset();
 			// for f ∈ F do
-			for (idx_t f = 0; f < nframes; ++f) {
-				const auto &frame = frames[f];
+			for (const auto &frame : frames) {
 				for (auto i = frame.start; i < frame.end; ++i) {
 					if (included(i)) {
 						state.ModeAdd(KEY_TYPE(data[i]), i);
@@ -234,7 +238,7 @@ struct ModeFunction {
 		} else {
 			//	Subframe indices
 			const auto union_start = MinValue(frames[0].start, prevs[0].start);
-			const auto union_end = MaxValue(frames[nframes - 1].end, prevs[nframes - 1].end);
+			const auto union_end = MaxValue(frames.back().end, prevs.back().end);
 			const FrameBounds last(union_end, union_end);
 
 			idx_t p = 0;
@@ -244,15 +248,15 @@ struct ModeFunction {
 
 				//	Are we in the previous frame?
 				auto prev = &last;
-				if (p < nframes) {
-					prev = prevs + p;
+				if (p < prevs.size()) {
+					prev = &prevs[p];
 					overlap |= int(prev->start <= i && i < prev->end) << 0;
 				}
 
 				//	Are we in the current frame?
 				auto frame = &last;
-				if (f < nframes) {
-					frame = frames + f;
+				if (f < frames.size()) {
+					frame = &frames[f];
 					overlap |= int(frame->start <= i && i < frame->end) << 1;
 				}
 
@@ -304,6 +308,8 @@ struct ModeFunction {
 		} else {
 			rmask.Set(rid, false);
 		}
+
+		prevs = frames;
 	}
 
 	static bool IgnoreNull() {
