@@ -101,9 +101,10 @@ py::object ArrowTableFromDataframe(const py::object &df) {
 	try {
 		return py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_pandas")(df);
 	} catch (py::error_already_set &e) {
+		// We don't fetch the original python exception because it can cause a segfault
+		// The cause of this is not known yet, for now we just side-step the issue.
 		throw InvalidInputException(
-		    "The dataframe could not be converted to a pyarrow.lib.Table, due to the following python exception: %s",
-		    e.what());
+		    "The dataframe could not be converted to a pyarrow.lib.Table, because a python exception occurred.");
 	}
 }
 
@@ -952,7 +953,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, s
 			return DuckDBPyRelation::EmptyResult(connection->context, res->types, res->names);
 		}
 	}
-	return make_uniq<DuckDBPyRelation>(make_uniq<ValueRelation>(connection->context, values, names));
+	return make_uniq<DuckDBPyRelation>(make_uniq<ValueRelation>(connection->context, values, names, alias));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {

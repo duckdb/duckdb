@@ -64,6 +64,17 @@ public:
 
 	// Default Value return
 	template <typename T>
+	inline T ReadPropertyWithDefault(const field_id_t field_id, const char *tag) {
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
+			OnOptionalPropertyEnd(false);
+			return std::forward<T>(SerializationDefaultValue::GetDefault<T>());
+		}
+		auto ret = Read<T>();
+		OnOptionalPropertyEnd(true);
+		return ret;
+	}
+
+	template <typename T>
 	inline T ReadPropertyWithDefault(const field_id_t field_id, const char *tag, T &&default_value) {
 		if (!OnOptionalPropertyBegin(field_id, tag)) {
 			OnOptionalPropertyEnd(false);
@@ -75,6 +86,17 @@ public:
 	}
 
 	// Default value in place
+	template <typename T>
+	inline void ReadPropertyWithDefault(const field_id_t field_id, const char *tag, T &ret) {
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
+			ret = std::forward<T>(SerializationDefaultValue::GetDefault<T>());
+			OnOptionalPropertyEnd(false);
+			return;
+		}
+		ret = Read<T>();
+		OnOptionalPropertyEnd(true);
+	}
+
 	template <typename T>
 	inline void ReadPropertyWithDefault(const field_id_t field_id, const char *tag, T &ret, T &&default_value) {
 		if (!OnOptionalPropertyBegin(field_id, tag)) {
@@ -92,6 +114,19 @@ public:
 		OnPropertyBegin(field_id, tag);
 		ReadDataPtr(ret, count);
 		OnPropertyEnd();
+	}
+
+	// Try to read a property, if it is not present, continue, otherwise read and discard the value
+	template <typename T>
+	inline void ReadDeletedProperty(const field_id_t field_id, const char *tag) {
+		// Try to read the property. If not present, great!
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
+			OnOptionalPropertyEnd(false);
+			return;
+		}
+		// Otherwise read and discard the value
+		(void)Read<T>();
+		OnOptionalPropertyEnd(true);
 	}
 
 	//! Set a serialization property

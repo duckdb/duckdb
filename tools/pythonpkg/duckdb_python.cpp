@@ -294,13 +294,13 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 
 	m.doc() = "DuckDB is an embeddable SQL OLAP Database Management System";
 	m.attr("__package__") = "duckdb";
-	m.attr("__version__") = DuckDB::LibraryVersion();
+	m.attr("__version__") = std::string(DuckDB::LibraryVersion()).substr(1);
 	m.attr("__standard_vector_size__") = DuckDB::StandardVectorSize();
 	m.attr("__git_revision__") = DuckDB::SourceID();
 	m.attr("__interactive__") = DuckDBPyConnection::DetectAndGetEnvironment();
 	m.attr("__jupyter__") = DuckDBPyConnection::IsJupyter();
 	m.attr("default_connection") = DuckDBPyConnection::DefaultConnection();
-	m.attr("apilevel") = "1.0";
+	m.attr("apilevel") = "2.0";
 	m.attr("threadsafety") = 1;
 	m.attr("paramstyle") = "qmark";
 

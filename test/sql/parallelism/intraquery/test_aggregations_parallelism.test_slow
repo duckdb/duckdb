@@ -110,7 +110,7 @@ select entropy(a) from t;
 16.609640
 
 query I
-select product(b) from t where a < 2000 group by b ;
+select product(b) from t where a < 2000 group by b ORDER BY ALL;
 ----
 0.000000
 1.000000
