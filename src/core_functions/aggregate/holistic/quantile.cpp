@@ -111,6 +111,29 @@ struct QuantileIncluded {
 	const ValidityMask &dmask;
 };
 
+struct QuantileReuseUpdater {
+	idx_t *index;
+	idx_t j;
+
+	inline QuantileReuseUpdater(idx_t *index, idx_t j) : index(index), j(j) {
+	}
+
+	inline void Neither(idx_t begin, idx_t end) {
+	}
+
+	inline void Left(idx_t begin, idx_t end) {
+	}
+
+	inline void Right(idx_t begin, idx_t end) {
+		for (; begin < end; ++begin) {
+			index[j++] = begin;
+		}
+	}
+
+	inline void Both(idx_t begin, idx_t end) {
+	}
+};
+
 void ReuseIndexes(idx_t *index, const vector<FrameBounds> &currs, const vector<FrameBounds> &prevs) {
 
 	//  Copy overlapping indices by scanning the previous set and copying down into holes.
@@ -135,55 +158,8 @@ void ReuseIndexes(idx_t *index, const vector<FrameBounds> &currs, const vector<F
 
 	//  Insert new indices
 	if (j > 0) {
-		//	Subframe indices
-		const auto union_start = MinValue(currs[0].start, prevs[0].start);
-		const auto union_end = MaxValue(currs.back().end, prevs.back().end);
-		const FrameBounds last(union_end, union_end);
-
-		idx_t p = 0;
-		idx_t c = 0;
-		for (auto idx = union_start; idx < union_end;) {
-			int overlap = 0;
-
-			//	Are we in the previous frame?
-			auto prev = &last;
-			if (p < prevs.size()) {
-				prev = &prevs[p];
-				overlap |= int(prev->start <= idx && idx < prev->end) << 0;
-			}
-
-			//	Are we in the current frame?
-			auto curr = &last;
-			if (c < currs.size()) {
-				curr = &currs[c];
-				overlap |= int(curr->start <= idx && idx < curr->end) << 1;
-			}
-
-			switch (overlap) {
-			case 0x00:
-				//  f ∉ F U P
-				idx = MinValue(curr->start, prev->start);
-				break;
-			case 0x01:
-				// f ∈ P \ F
-				idx = MinValue(curr->start, prev->end);
-				break;
-			case 0x02:
-				// f ∈ F \ P
-				for (; idx < MinValue(curr->end, prev->start); ++idx) {
-					index[j++] = idx;
-				}
-				break;
-			case 0x03:
-				//	f ∈ F ∩ P
-				idx = MinValue(curr->end, prev->end);
-				break;
-			}
-
-			//	Advance  the subframe indices
-			p += (idx == prev->end);
-			c += (idx == curr->end);
-		}
+		QuantileReuseUpdater updater(index, j);
+		AggregateExecutor::IntersectFrames(prevs, currs, updater);
 	} else {
 		//  No overlap: overwrite with new values
 		for (const auto &curr : currs) {

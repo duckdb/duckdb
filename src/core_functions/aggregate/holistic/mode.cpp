@@ -210,6 +210,39 @@ struct ModeFunction {
 		state.count += count;
 	}
 
+	template <typename STATE, typename INPUT_TYPE>
+	struct UpdateWindowState {
+		STATE &state;
+		const INPUT_TYPE *data;
+		ModeIncluded &included;
+
+		inline UpdateWindowState(STATE &state, const INPUT_TYPE *data, ModeIncluded &included)
+		    : state(state), data(data), included(included) {
+		}
+
+		inline void Neither(idx_t begin, idx_t end) {
+		}
+
+		inline void Left(idx_t begin, idx_t end) {
+			for (; begin < end; ++begin) {
+				if (included(begin)) {
+					state.ModeRm(KEY_TYPE(data[begin]), begin);
+				}
+			}
+		}
+
+		inline void Right(idx_t begin, idx_t end) {
+			for (; begin < end; ++begin) {
+				if (included(begin)) {
+					state.ModeAdd(KEY_TYPE(data[begin]), begin);
+				}
+			}
+		}
+
+		inline void Both(idx_t begin, idx_t end) {
+		}
+	};
+
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
 	                   AggregateInputData &aggr_input_data, STATE &state, const vector<FrameBounds> &frames,
@@ -236,61 +269,9 @@ struct ModeFunction {
 				}
 			}
 		} else {
-			//	Subframe indices
-			const auto union_start = MinValue(frames[0].start, prevs[0].start);
-			const auto union_end = MaxValue(frames.back().end, prevs.back().end);
-			const FrameBounds last(union_end, union_end);
-
-			idx_t p = 0;
-			idx_t f = 0;
-			for (auto i = union_start; i < union_end;) {
-				int overlap = 0;
-
-				//	Are we in the previous frame?
-				auto prev = &last;
-				if (p < prevs.size()) {
-					prev = &prevs[p];
-					overlap |= int(prev->start <= i && i < prev->end) << 0;
-				}
-
-				//	Are we in the current frame?
-				auto frame = &last;
-				if (f < frames.size()) {
-					frame = &frames[f];
-					overlap |= int(frame->start <= i && i < frame->end) << 1;
-				}
-
-				switch (overlap) {
-				case 0x00:
-					//    f ∉ F U P
-					i = MinValue(frame->start, prev->start);
-					break;
-				case 0x01:
-					// f ∈ P \ F
-					for (; i < MinValue(prev->end, frame->start); ++i) {
-						if (included(i)) {
-							state.ModeRm(KEY_TYPE(data[i]), i);
-						}
-					}
-					break;
-				case 0x02:
-					// f ∈ F \ P
-					for (; i < MinValue(frame->end, prev->start); ++i) {
-						if (included(i)) {
-							state.ModeAdd(KEY_TYPE(data[i]), i);
-						}
-					}
-					break;
-				case 0x03:
-					//	f ∈ F ∩ P
-					i = MinValue(frame->end, prev->end);
-					break;
-				}
-
-				//	Advance  the subframe indices
-				p += (i == prev->end);
-				f += (i == frame->end);
-			}
+			using Updater = UpdateWindowState<STATE, INPUT_TYPE>;
+			Updater updater(state, data, included);
+			AggregateExecutor::IntersectFrames(prevs, frames, updater);
 		}
 
 		if (!state.valid) {
