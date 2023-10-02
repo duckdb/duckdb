@@ -40,7 +40,9 @@ qgraph_css = """
 	width: 250px;
 	text-align: center;
 	background-color: #fff100;
-}"""
+}
+"""
+
 
 class NodeTiming:
 
@@ -109,10 +111,34 @@ def get_child_timings(top_node):
 	for child in top_node['children']:
 		get_child_timings(child)
 
+color_map = {
+	"HASH_JOIN": "#ffffba",
+	"PROJECTION": "#ffb3ba",
+	"SEQ_SCAN": "#baffc9",
+	"UNGROUPED_AGGREGATE": "#ffdfba",
+	"FILTER": "#bae1ff"
+}
+
 def get_node_body(name, result, cardinality, extra_info, timing):
-	body = "<span class=\"tf-nc\">"
+	node_class = ""
+
+	if name == "SEQ_SCAN":
+		node_class = "seq_scan"
+	if name == "HASH_JOIN":
+		node_class = "hash_join"
+	if name == "PROJECTION":
+		node_class = "projection"
+	if name == "UNGROUPED_AGGREGATE":
+		node_class = "ungrouped_aggregate"
+	node_style = ""
+	stripped_name = name.strip()
+	if stripped_name in color_map:
+		node_style = f"background-color: {color_map[stripped_name]};"
+
+	body = f"<span class=\"tf-nc {node_class}\" style=\"{node_style}\">"
 	body += "<div class=\"node-body\">"
-	body += f"<p> <b>{name} ({result}s) </b></p>"
+	new_name = name.replace("_", " ")
+	body += f"<p> <b>{new_name} ({result}s) </b></p>"
 	body += f"<p> cardinality = {cardinality} </p>"
 	if extra_info:
 		extra_info = extra_info.replace("[INFOSEPARATOR]", "----")
