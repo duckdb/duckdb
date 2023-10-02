@@ -19,7 +19,7 @@ void FuzzyDuck::BeginFuzzing() {
 		seed = random_engine.NextRandomInteger();
 	}
 	if (max_queries == 0) {
-		max_queries = NumericLimits<idx_t>::Maximum();
+		throw BinderException("Provide a max_queries argument greater than 0");
 	}
 	if (!complete_log.empty()) {
 		auto &fs = FileSystem::GetFileSystem(context);
@@ -48,6 +48,10 @@ void FuzzyDuck::Fuzz() {
 void FuzzyDuck::FuzzAllFunctions() {
 	StatementGenerator generator(context);
 	auto queries = generator.GenerateAllFunctionCalls();
+
+	if (max_queries == 0) {
+		max_queries = queries.size();
+	}
 
 	std::default_random_engine e(seed);
 	std::shuffle(std::begin(queries), std::end(queries), e);

@@ -1,0 +1,22 @@
+# name: test/sql/copy/csv/auto/test_timings_csv.test
+# description: Test CSV Sample works for Gabor's timings csv file
+# group: [auto]
+
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+CREATE OR REPLACE TABLE timings(tool string, sf float, day string, batch_type string, q string, parameters string, time float);
+
+query I
+COPY timings FROM 'data/csv/timings.csv' (HEADER, DELIMITER '|', PARALLEL 1)
+----
+1095
+
+statement ok
+CREATE OR REPLACE TABLE timings(tool string, sf float, day string, batch_type string, q string, parameters string, time float);
+
+query I
+COPY timings FROM 'data/csv/timings.csv' (HEADER, DELIMITER '|', PARALLEL 0)
+----
+1095

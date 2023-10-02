@@ -339,75 +339,7 @@ TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function
 	return function_set;
 }
 
-void MultiFileReaderOptions::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteField<bool>(filename);
-	writer.WriteField<bool>(hive_partitioning);
-	writer.WriteField<bool>(auto_detect_hive_partitioning);
-	writer.WriteField<bool>(union_by_name);
-	writer.WriteField<bool>(hive_types_autocast);
-	// serialize hive_types_schema
-	const uint32_t schema_size = hive_types_schema.size();
-	writer.WriteField<uint32_t>(schema_size);
-	for (auto &hive_type : hive_types_schema) {
-		writer.WriteString(hive_type.first);
-		writer.WriteString(hive_type.second.ToString());
-	}
-	writer.Finalize();
-}
-
-MultiFileReaderOptions MultiFileReaderOptions::Deserialize(Deserializer &source) {
-	MultiFileReaderOptions result;
-	FieldReader reader(source);
-	result.filename = reader.ReadRequired<bool>();
-	result.hive_partitioning = reader.ReadRequired<bool>();
-	result.auto_detect_hive_partitioning = reader.ReadRequired<bool>();
-	result.union_by_name = reader.ReadRequired<bool>();
-	result.hive_types_autocast = reader.ReadRequired<bool>();
-	// deserialize hive_types_schema
-	const uint32_t schema_size = reader.ReadRequired<uint32_t>();
-	for (idx_t i = 0; i < schema_size; i++) {
-		const string name = reader.ReadRequired<string>();
-		const LogicalType type = TransformStringToLogicalType(reader.ReadRequired<string>());
-		result.hive_types_schema[name] = type;
-	}
-	reader.Finalize();
-	return result;
-}
-
-void MultiFileReaderBindData::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteField(filename_idx);
-	writer.WriteRegularSerializableList<HivePartitioningIndex>(hive_partitioning_indexes);
-	writer.Finalize();
-}
-
-MultiFileReaderBindData MultiFileReaderBindData::Deserialize(Deserializer &source) {
-	MultiFileReaderBindData result;
-	FieldReader reader(source);
-	result.filename_idx = reader.ReadRequired<idx_t>();
-	result.hive_partitioning_indexes =
-	    reader.ReadRequiredSerializableList<HivePartitioningIndex, HivePartitioningIndex>();
-	reader.Finalize();
-	return result;
-}
-
 HivePartitioningIndex::HivePartitioningIndex(string value_p, idx_t index) : value(std::move(value_p)), index(index) {
-}
-
-void HivePartitioningIndex::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteString(value);
-	writer.WriteField<idx_t>(index);
-	writer.Finalize();
-}
-
-HivePartitioningIndex HivePartitioningIndex::Deserialize(Deserializer &source) {
-	FieldReader reader(source);
-	auto value = reader.ReadRequired<string>();
-	auto index = reader.ReadRequired<idx_t>();
-	reader.Finalize();
-	return HivePartitioningIndex(std::move(value), index);
 }
 
 void MultiFileReaderOptions::AddBatchInfo(BindInfo &bind_info) const {

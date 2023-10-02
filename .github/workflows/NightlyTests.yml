@@ -250,7 +250,7 @@ jobs:
      name: Python Address Sanitizer (Linux)
      runs-on: ubuntu-latest
      needs: linux-memory-leaks
-     container: ubuntu:16.04
+     container: ubuntu:18.04
      env:
         GEN: ninja
         DUCKDEBUG: 1
@@ -409,11 +409,11 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make debug
+        run: make relassert
 
       - name: Test
         shell: bash
-        run: build/debug/test/unittest
+        run: build/relassert/test/unittest
 
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
@@ -539,69 +539,6 @@ jobs:
        shell: bash
        run: |
          python scripts/regression_test_runner.py --old=unsafe/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/imdb.csv --verbose --threads=2
-
-
-  rstats-windows-warnings:
-    name: R Package Windows (Warnings)
-    needs: linux-memory-leaks
-    runs-on: windows-latest
-    env:
-      TREAT_WARNINGS_AS_ERRORS: true
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - uses: r-lib/actions/setup-r@v2
-      with:
-        r-version: 'devel'
-        update-rtools: true
-
-    - uses: r-lib/actions/setup-pandoc@v2
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ env.CCACHE_SAVE }}
-
-    - name: Install
-      shell: bash
-      run: |
-        R -f tools/rpkg/dependencies.R
-
-    - name: Build
-      shell: bash
-      run: |
-        cd tools/rpkg
-        ./configure
-        R CMD build .
-        R CMD INSTALL duckdb_*.tar.gz
-
-  rubsan:
-    name: R UBSAN
-    runs-on: ubuntu-latest
-    needs: linux-memory-leaks
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ env.CCACHE_SAVE }}
-
-    - name: Run
-      shell: bash
-      run: |
-        (cd tools/rpkg && ./configure && R CMD build .)
-        docker run -v `pwd`:/duckdb --cap-add SYS_PTRACE wch1/r-debug:latest bash -c /duckdb/scripts/r_ubsan.sh
 
 
   threadsan:
@@ -742,3 +679,47 @@ jobs:
         name: duckdb-wasm32
         path: |
           duckdb-wasm32.zip
+
+  codecov:
+    name: Code Coverage
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    strategy:
+      fail-fast: false
+    env:
+      GEN: ninja
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov curl g++ zip
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install pytest
+        run: |
+          python3 -m pip install pytest
+
+      - name: Check Coverage
+        shell: bash
+        run: |
+          make coverage-check
+
+      - name: Create Archive
+        if: always()
+        shell: bash
+        run: |
+          zip -r coverage.zip coverage_html
+
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: coverage
+          path: coverage.zip
+          if-no-files-found: error

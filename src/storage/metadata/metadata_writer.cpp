@@ -3,7 +3,9 @@
 
 namespace duckdb {
 
-MetadataWriter::MetadataWriter(MetadataManager &manager) : manager(manager), capacity(0), offset(0) {
+MetadataWriter::MetadataWriter(MetadataManager &manager, optional_ptr<vector<MetaBlockPointer>> written_pointers_p)
+    : manager(manager), written_pointers(written_pointers_p), capacity(0), offset(0) {
+	D_ASSERT(!written_pointers || written_pointers->empty());
 }
 
 MetadataWriter::~MetadataWriter() {
@@ -38,7 +40,8 @@ void MetadataWriter::NextBlock() {
 
 	// write the block id of the new block to the start of the current block
 	if (capacity > 0) {
-		Store<idx_t>(manager.GetDiskPointer(new_handle.pointer).block_pointer, BasePtr());
+		auto disk_block = manager.GetDiskPointer(new_handle.pointer);
+		Store<idx_t>(disk_block.block_pointer, BasePtr());
 	}
 	// now update the block id of the block
 	block = std::move(new_handle);
@@ -46,6 +49,9 @@ void MetadataWriter::NextBlock() {
 	offset = sizeof(idx_t);
 	capacity = MetadataManager::METADATA_BLOCK_SIZE;
 	Store<idx_t>(-1, BasePtr());
+	if (written_pointers) {
+		written_pointers->push_back(manager.GetDiskPointer(current_pointer));
+	}
 }
 
 void MetadataWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {

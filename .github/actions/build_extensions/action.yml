@@ -124,7 +124,6 @@ runs:
       shell: bash
       run: |
         make extension_configuration
-        echo "USE_MERGED_VCPKG_MANIFEST=1" >> $GITHUB_ENV 
 
     - name: Build
       shell: bash
@@ -140,6 +139,7 @@ runs:
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
         LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && github.workspace || ''}}
         GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
+        USE_MERGED_VCPKG_MANIFEST: 1
       run: |
         ls
         mkdir -p ~/.ssh
@@ -179,6 +179,7 @@ runs:
         ENABLE_EXTENSION_AUTOLOADING: 1
         ENABLE_EXTENSION_AUTOINSTALL: 1
         GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
+        USE_MERGED_VCPKG_MANIFEST: 1
       run: |
         cd  ${{ inputs.build_dir}}
         rm -rf duckdb_unittest_tempdir/*

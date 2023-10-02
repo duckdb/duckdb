@@ -41,7 +41,7 @@ ScalarFunction SuffixFun::GetFunction() {
 }
 
 void SuffixFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunction());
+	set.AddFunction({"suffix", "ends_with"}, GetFunction());
 }
 
 } // namespace duckdb

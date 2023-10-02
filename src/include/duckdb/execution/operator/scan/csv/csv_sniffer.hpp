@@ -28,7 +28,7 @@ struct SnifferResult {
 class CSVSniffer {
 public:
 	explicit CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-	                    CSVStateMachineCache &state_machine_cache);
+	                    CSVStateMachineCache &state_machine_cache, bool explicit_set_columns = false);
 
 	//! Main method that sniffs the CSV file, returns the types, names and options as a result
 	//! CSV Sniffing consists of five steps:
@@ -50,6 +50,8 @@ private:
 	CSVReaderOptions &options;
 	//! Buffer being used on sniffer
 	shared_ptr<CSVBufferManager> buffer_manager;
+	//! Sets the result options
+	void SetResultOptions();
 
 	//! ------------------------------------------------------//
 	//! ----------------- Dialect Detection ----------------- //
@@ -110,6 +112,8 @@ private:
 	//! ------------------------------------------------------//
 	void DetectHeader();
 	vector<string> names;
+	//! If Column Names and Types have been explicitly set
+	const bool explicit_set_columns;
 
 	//! ------------------------------------------------------//
 	//! ------------------ Type Replacement ----------------- //

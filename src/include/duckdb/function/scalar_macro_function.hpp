@@ -34,13 +34,8 @@ public:
 
 	string ToSQL(const string &schema, const string &name) const override;
 
-	static unique_ptr<MacroFunction> Deserialize(FieldReader &reader);
-
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<MacroFunction> FormatDeserialize(FormatDeserializer &deserializer);
-
-protected:
-	void SerializeInternal(FieldWriter &writer) const override;
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<MacroFunction> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

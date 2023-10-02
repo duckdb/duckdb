@@ -53,20 +53,18 @@ footer = '''
 '''
 
 serialize_base = '''
-void ${CLASS_NAME}::FormatSerialize(FormatSerializer &serializer) const {
+void ${CLASS_NAME}::Serialize(Serializer &serializer) const {
 ${MEMBERS}}
 '''
 
-serialize_element = (
-    '\tserializer.WriteProperty(${PROPERTY_ID}, "${PROPERTY_KEY}", ${PROPERTY_NAME}${PROPERTY_DEFAULT});\n'
-)
+serialize_element = '\tserializer.WriteProperty<${PROPERTY_TYPE}>(${PROPERTY_ID}, "${PROPERTY_KEY}", ${PROPERTY_NAME}${PROPERTY_DEFAULT});\n'
 
-base_serialize = '\t${BASE_CLASS_NAME}::FormatSerialize(serializer);\n'
+base_serialize = '\t${BASE_CLASS_NAME}::Serialize(serializer);\n'
 
 pointer_return = '${POINTER}<${CLASS_NAME}>'
 
 deserialize_base = '''
-${DESERIALIZE_RETURN} ${CLASS_NAME}::FormatDeserialize(FormatDeserializer &deserializer) {
+${DESERIALIZE_RETURN} ${CLASS_NAME}::Deserialize(Deserializer &deserializer) {
 ${MEMBERS}
 }
 '''
@@ -85,16 +83,24 @@ switch_header = '\tcase ${ENUM_TYPE}::${ENUM_VALUE}:\n'
 
 switch_statement = (
     switch_header
-    + '''\t\tresult = ${CLASS_DESERIALIZE}::FormatDeserialize(deserializer);
+    + '''\t\tresult = ${CLASS_DESERIALIZE}::Deserialize(deserializer);
 \t\tbreak;
 '''
 )
 
 deserialize_element = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<${PROPERTY_TYPE}>(${PROPERTY_ID}, "${PROPERTY_KEY}"${PROPERTY_DEFAULT});\n'
-deserialize_element_class = '\tdeserializer.ReadProperty(${PROPERTY_ID}, "${PROPERTY_KEY}", result${ASSIGNMENT}${PROPERTY_NAME}${PROPERTY_DEFAULT});\n'
+deserialize_element_base = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<unique_ptr<${BASE_PROPERTY}>>(${PROPERTY_ID}, "${PROPERTY_KEY}"${PROPERTY_DEFAULT});\n'
+deserialize_element_class = '\tdeserializer.ReadProperty<${PROPERTY_TYPE}>(${PROPERTY_ID}, "${PROPERTY_KEY}", result${ASSIGNMENT}${PROPERTY_NAME}${PROPERTY_DEFAULT});\n'
 deserialize_element_class_base = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<unique_ptr<${BASE_PROPERTY}>>(${PROPERTY_ID}, "${PROPERTY_KEY}"${PROPERTY_DEFAULT});\n\tresult${ASSIGNMENT}${PROPERTY_NAME} = unique_ptr_cast<${BASE_PROPERTY}, ${DERIVED_PROPERTY}>(std::move(${PROPERTY_NAME}));\n'
 
-move_list = ['string', 'ParsedExpression*', 'CommonTableExpressionMap', 'LogicalType', 'ColumnDefinition']
+move_list = [
+    'string',
+    'ParsedExpression*',
+    'CommonTableExpressionMap',
+    'LogicalType',
+    'ColumnDefinition',
+    'BaseStatistics',
+]
 
 reference_list = ['ClientContext', 'bound_parameter_map_t']
 
@@ -107,6 +113,23 @@ def is_pointer(type):
     return type.endswith('*') or type.startswith('shared_ptr<')
 
 
+def is_zeroable(type):
+    return type in [
+        'bool',
+        'int8_t',
+        'int16_t',
+        'int32_t',
+        'int64_t',
+        'uint8_t',
+        'uint16_t',
+        'uint32_t',
+        'uint64_t',
+        'idx_t',
+        'size_t',
+        'int',
+    ]
+
+
 def requires_move(type):
     return is_container(type) or is_pointer(type) or type in move_list
 
@@ -115,46 +138,73 @@ def replace_pointer(type):
     return re.sub('([a-zA-Z0-9]+)[*]', 'unique_ptr<\\1>', type)
 
 
-def get_serialize_element(property_name, property_id, property_key, property_type, is_optional, pointer_type):
-    write_method = 'WriteProperty'
+def get_serialize_element(
+    property_name, property_id, property_key, property_type, has_default, default_value, is_deleted, pointer_type
+):
     assignment = '.' if pointer_type == 'none' else '->'
-    default_argument = ''
-    if is_optional:
-        write_method = 'WritePropertyWithDefault'
-        default_argument = f', {property_type}()'  # TODO: allow this to be passed
+    default_argument = '' if default_value is None else f', {default_value}'
+    template = serialize_element
+    if is_deleted:
+        template = "\t/* [Deleted] (${PROPERTY_TYPE}) \"${PROPERTY_NAME}\" */\n"
+    elif has_default:
+        template = template.replace('WriteProperty', 'WritePropertyWithDefault')
     return (
-        serialize_element.replace('${PROPERTY_NAME}', property_name)
+        template.replace('${PROPERTY_NAME}', property_name)
+        .replace('${PROPERTY_TYPE}', property_type)
         .replace('${PROPERTY_ID}', str(property_id))
         .replace('${PROPERTY_KEY}', property_key)
         .replace('${PROPERTY_DEFAULT}', default_argument)
-        .replace('WriteProperty', write_method)
         .replace('${ASSIGNMENT}', assignment)
     )
 
 
 def get_deserialize_element_template(
-    template, property_name, property_key, property_id, property_type, is_optional, pointer_type
+    template,
+    property_name,
+    property_key,
+    property_id,
+    property_type,
+    has_default,
+    default_value,
+    is_deleted,
+    pointer_type,
 ):
-    read_method = 'ReadProperty'
+    # read_method = 'ReadProperty'
     assignment = '.' if pointer_type == 'none' else '->'
-    default_argument = ''
-    if is_optional:
-        read_method = 'ReadPropertyWithDefault'
-        default_argument = f', {property_type}()'  # TODO: allow this to be passed
+    default_argument = '' if default_value is None else f', {default_value}'
+    if is_deleted:
+        template = template.replace(', result${ASSIGNMENT}${PROPERTY_NAME}', '').replace(
+            'ReadProperty', 'ReadDeletedProperty'
+        )
+    elif has_default:
+        template = template.replace('ReadProperty', 'ReadPropertyWithDefault')
     return (
         template.replace('${PROPERTY_NAME}', property_name)
         .replace('${PROPERTY_KEY}', property_key)
         .replace('${PROPERTY_ID}', str(property_id))
         .replace('${PROPERTY_DEFAULT}', default_argument)
-        .replace('ReadProperty', read_method)
         .replace('${PROPERTY_TYPE}', property_type)
         .replace('${ASSIGNMENT}', assignment)
     )
 
 
-def get_deserialize_element(property_name, property_key, property_id, property_type, is_optional, pointer_type):
+def get_deserialize_element(
+    property_name, property_key, property_id, property_type, has_default, default_value, is_deleted, base, pointer_type
+):
+    template = deserialize_element
+    if base:
+        template = deserialize_element_base.replace('${BASE_PROPERTY}', base.replace('*', ''))
+
     return get_deserialize_element_template(
-        deserialize_element, property_name, property_key, property_id, property_type, is_optional, pointer_type
+        template,
+        property_name,
+        property_key,
+        property_id,
+        property_type,
+        has_default,
+        default_value,
+        is_deleted,
+        pointer_type,
     )
 
 
@@ -193,9 +243,24 @@ supported_member_entries = [
     'property',
     'serialize_property',
     'deserialize_property',
-    'optional',
     'base',
+    'default',
+    'deleted',
 ]
+
+
+def has_default_by_default(type):
+    if is_pointer(type):
+        return True
+    if is_container(type):
+        if 'IndexVector' in type:
+            return False
+        return True
+    if type == 'string':
+        return True
+    if is_zeroable(type):
+        return True
+    return False
 
 
 class MemberVariable:
@@ -204,7 +269,9 @@ class MemberVariable:
         self.name = entry['name']
         self.type = entry['type']
         self.base = None
-        self.optional = False
+        self.has_default = False
+        self.default = None
+        self.deleted = False
         if 'property' in entry:
             self.serialize_property = entry['property']
             self.deserialize_property = entry['property']
@@ -215,8 +282,14 @@ class MemberVariable:
             self.serialize_property = entry['serialize_property']
         if 'deserialize_property' in entry:
             self.deserialize_property = entry['deserialize_property']
-        if 'optional' in entry:
-            self.optional = entry['optional']
+        if 'default' in entry:
+            self.has_default = True
+            self.default = entry['default']
+        if 'deleted' in entry:
+            self.deleted = entry['deleted']
+        if self.default is None:
+            # default default
+            self.has_default = has_default_by_default(self.type)
         if 'base' in entry:
             self.base = entry['base']
         for key in entry.keys():
@@ -313,12 +386,27 @@ def generate_base_class_code(base_class):
         type_name = replace_pointer(entry.type)
         if entry.serialize_property == base_class.enum_value:
             enum_type = entry.type
-        is_optional = entry.optional
+        default = entry.default
         base_class_serialize += get_serialize_element(
-            entry.serialize_property, entry.id, entry.name, type_name, is_optional, base_class.pointer_type
+            entry.serialize_property,
+            entry.id,
+            entry.name,
+            type_name,
+            entry.has_default,
+            default,
+            entry.deleted,
+            base_class.pointer_type,
         )
         base_class_deserialize += get_deserialize_element(
-            entry.deserialize_property, entry.name, entry.id, type_name, is_optional, base_class.pointer_type
+            entry.deserialize_property,
+            entry.name,
+            entry.id,
+            type_name,
+            entry.has_default,
+            default,
+            entry.deleted,
+            None,
+            base_class.pointer_type,
         )
     expressions = [x for x in base_class.children.items()]
     expressions = sorted(expressions, key=lambda x: x[0])
@@ -461,7 +549,15 @@ def generate_class_code(class_entry):
         entry = class_entry.members[entry_idx]
         type_name = replace_pointer(entry.type)
         class_deserialize += get_deserialize_element(
-            entry.deserialize_property, entry.name, entry.id, type_name, entry.optional, 'unique_ptr'
+            entry.deserialize_property,
+            entry.name,
+            entry.id,
+            type_name,
+            entry.has_default,
+            entry.default,
+            entry.deleted,
+            entry.base,
+            'unique_ptr',
         )
 
     class_deserialize += generate_constructor(
@@ -474,25 +570,22 @@ def generate_class_code(class_entry):
         property_id = entry.id
         property_key = entry.name
         write_property_name = entry.serialize_property
-        is_optional = entry.optional
-        if is_pointer(entry.type):
-            if not is_optional:
-                # TODO: At ome point we should maybe add checks for non-optional pointers
-                # for now nullable pointers are implicitly handled by providing default values
-                pass
-        elif is_optional:
-            raise Exception(
-                f"Optional can only be combined with pointers (in {class_entry.name}, type {entry.type}, member {entry.type})"
-            )
         deserialize_template_str = deserialize_element_class
+        default_value = entry.default
         if entry.base:
-            write_property_name = f"({entry.base} *)" + write_property_name + ".get()"
             deserialize_template_str = deserialize_element_class_base.replace(
                 '${BASE_PROPERTY}', entry.base.replace('*', '')
             ).replace('${DERIVED_PROPERTY}', entry.type.replace('*', ''))
         type_name = replace_pointer(entry.type)
         class_serialize += get_serialize_element(
-            write_property_name, property_id, property_key, type_name, is_optional, class_entry.pointer_type
+            write_property_name,
+            property_id,
+            property_key,
+            type_name,
+            entry.has_default,
+            default_value,
+            entry.deleted,
+            class_entry.pointer_type,
         )
         if entry_idx > last_constructor_index:
             class_deserialize += get_deserialize_element_template(
@@ -501,14 +594,24 @@ def generate_class_code(class_entry):
                 property_key,
                 property_id,
                 type_name,
-                is_optional,
+                entry.has_default,
+                default_value,
+                entry.deleted,
                 class_entry.pointer_type,
             )
         elif entry.name not in constructor_entries:
             class_deserialize += get_deserialize_assignment(
                 entry.deserialize_property, entry.type, class_entry.pointer_type
             )
+        if entry.name in class_entry.set_parameter_names:
+            class_deserialize += set_deserialize_parameter.replace('${PROPERTY_TYPE}', entry.type).replace(
+                '${PROPERTY_NAME}', entry.name
+            )
 
+    for entry in class_entry.set_parameters:
+        class_deserialize += unset_deserialize_parameter.replace('${PROPERTY_TYPE}', entry.type).replace(
+            '${PROPERTY_NAME}', entry.name
+        )
     class_deserialize += generate_return(class_entry)
     deserialize_return = get_return_value(class_entry.pointer_type, class_entry.return_type)
 
@@ -547,11 +650,15 @@ for entry in file_list:
     source_path = entry['source']
     target_path = entry['target']
     with open(source_path, 'r') as f:
-        json_data = json.load(f)
+        try:
+            json_data = json.load(f)
+        except Exception as e:
+            print(f"Failed to parse {source_path}: {str(e)}")
+            exit(1)
 
     include_list = [
-        'duckdb/common/serializer/format_serializer.hpp',
-        'duckdb/common/serializer/format_deserializer.hpp',
+        'duckdb/common/serializer/serializer.hpp',
+        'duckdb/common/serializer/deserializer.hpp',
     ]
     base_classes = []
     classes = []
