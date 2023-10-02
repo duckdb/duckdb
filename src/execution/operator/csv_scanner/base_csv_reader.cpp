@@ -263,7 +263,7 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error
 		return true;
 	}
 
-	if (mode == ParserMode::SNIFFING_DATATYPES && parse_chunk.size() == options.sample_chunk_size) {
+	if (mode == ParserMode::SNIFFING_DATATYPES) {
 		return true;
 	}
 
@@ -480,6 +480,10 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 
 				bool was_already_null = FlatVector::IsNull(parse_vector, row_idx);
 				if (!was_already_null && FlatVector::IsNull(result_vector, row_idx)) {
+					Increment(buffer_idx);
+					auto bla = GetLineError(global_row_idx, buffer_idx, false);
+					row_idx += bla;
+					row_idx -= bla;
 					row_failed = true;
 					failed_cells.emplace_back(row_idx, col_idx, row_line);
 				}

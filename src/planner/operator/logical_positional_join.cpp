@@ -17,14 +17,4 @@ unique_ptr<LogicalOperator> LogicalPositionalJoin::Create(unique_ptr<LogicalOper
 	return make_uniq<LogicalPositionalJoin>(std::move(left), std::move(right));
 }
 
-void LogicalPositionalJoin::Serialize(FieldWriter &writer) const {
-}
-
-unique_ptr<LogicalOperator> LogicalPositionalJoin::Deserialize(LogicalDeserializationState &state,
-                                                               FieldReader &reader) {
-	// TODO(stephwang): review if unique_ptr<LogicalOperator> plan is needed
-	auto result = unique_ptr<LogicalPositionalJoin>(new LogicalPositionalJoin());
-	return std::move(result);
-}
-
 } // namespace duckdb

@@ -21,6 +21,10 @@ namespace duckdb {
 // Access Mode
 //===--------------------------------------------------------------------===//
 void AccessModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (db) {
+		throw InvalidInputException("Cannot change access_mode setting while database is running - it must be set when "
+		                            "opening or attaching the database");
+	}
 	auto parameter = StringUtil::Lower(input.ToString());
 	if (parameter == "automatic") {
 		config.options.access_mode = AccessMode::AUTOMATIC;
@@ -726,17 +730,12 @@ Value ForceCompressionSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void ForceBitpackingModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto mode_str = StringUtil::Lower(input.ToString());
-	if (mode_str == "none") {
-		config.options.force_bitpacking_mode = BitpackingMode::AUTO;
-	} else {
-		auto mode = BitpackingModeFromString(mode_str);
-		if (mode == BitpackingMode::AUTO) {
-			throw ParserException(
-			    "Unrecognized option for force_bitpacking_mode, expected none, constant, constant_delta, "
-			    "delta_for, or for");
-		}
-		config.options.force_bitpacking_mode = mode;
+	auto mode = BitpackingModeFromString(mode_str);
+	if (mode == BitpackingMode::INVALID) {
+		throw ParserException("Unrecognized option for force_bitpacking_mode, expected none, constant, constant_delta, "
+		                      "delta_for, or for");
 	}
+	config.options.force_bitpacking_mode = mode;
 }
 
 void ForceBitpackingModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {

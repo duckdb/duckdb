@@ -19,7 +19,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/NodeJS.yml'
-      - '.github/config/uncovered_files.csv'
+
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
@@ -32,7 +32,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/NodeJS.yml'
-      - '.github/config/uncovered_files.csv'
+
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
@@ -71,14 +71,11 @@ jobs:
     strategy:
       matrix:
         # node.js current support policy to be found at https://github.com/duckdb/duckdb/tree/main/tools/nodejs#Supported-Node-versions
-        node: [ '10', '12', '14', '16', '17', '18', '19', '20' ]
+        node: [ '12', '14', '16', '17', '18', '19', '20' ]
         target_arch: [ x64, arm64 ]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
         exclude:
-          - isRelease: false
-            node: 10
-            target_arch: x64
           - isRelease: false
             node: 12
             target_arch: x64
@@ -97,9 +94,6 @@ jobs:
           - isRelease: false
             node: 19
             target_arch: x64
-          - isRelease: false
-            node: 10
-            target_arch: arm64
           - isRelease: false
             node: 12
             target_arch: arm64
@@ -183,12 +177,10 @@ jobs:
     strategy:
       matrix:
         target_arch: [ x64, arm64 ]
-        node: [ '10', '12', '14', '16', '17', '18', '19', '20' ]
+        node: [ '12', '14', '16', '17', '18', '19', '20' ]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
         exclude:
-          - isRelease: false
-            node: 10
           - isRelease: false
             node: 12
           - isRelease: false
@@ -199,8 +191,6 @@ jobs:
             node: 17
           - isRelease: false
             node: 18
-          - target_arch: arm64
-            node: 10
           - target_arch: arm64
             node: 12
           - target_arch: arm64
@@ -260,12 +250,10 @@ jobs:
 
     strategy:
       matrix:
-        node: [ '10', '12', '14', '16', '17', '18', '19', '20' ]
+        node: [ '12', '14', '16', '17', '18', '19', '20' ]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
         exclude:
-          - isRelease: false
-            node: 10
           - isRelease: false
             node: 12
           - isRelease: false

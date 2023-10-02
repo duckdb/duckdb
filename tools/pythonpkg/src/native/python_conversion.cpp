@@ -247,14 +247,10 @@ void TransformPythonUnsigned(uint64_t value, Value &res) {
 bool TrySniffPythonNumeric(Value &res, int64_t value) {
 	if (value < (int64_t)std::numeric_limits<int32_t>::min() || value > (int64_t)std::numeric_limits<int32_t>::max()) {
 		res = Value::BIGINT(value);
-	} else if (value < (int32_t)std::numeric_limits<int16_t>::min() ||
-	           value > (int32_t)std::numeric_limits<int16_t>::max()) {
-		res = Value::INTEGER(value);
-	} else if (value < (int16_t)std::numeric_limits<int8_t>::min() ||
-	           value > (int16_t)std::numeric_limits<int8_t>::max()) {
-		res = Value::SMALLINT(value);
 	} else {
-		res = Value::TINYINT(value);
+		// To match default duckdb behavior, numeric values without a specified type should not become a smaller type
+		// than INT32
+		res = Value::INTEGER(value);
 	}
 	return true;
 }

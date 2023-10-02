@@ -1,27 +1,12 @@
 #include "buffered_json_reader.hpp"
 
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/file_opener.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 
 #include <utility>
 
 namespace duckdb {
-
-void BufferedJSONReaderOptions::Serialize(FieldWriter &writer) const {
-	writer.WriteField<JSONFormat>(format);
-	writer.WriteField<JSONRecordType>(record_type);
-	writer.WriteField<FileCompressionType>(compression);
-	writer.WriteSerializable(file_options);
-}
-
-void BufferedJSONReaderOptions::Deserialize(FieldReader &reader) {
-	format = reader.ReadRequired<JSONFormat>();
-	record_type = reader.ReadRequired<JSONRecordType>();
-	compression = reader.ReadRequired<FileCompressionType>();
-	file_options = reader.ReadRequiredSerializable<MultiFileReaderOptions, MultiFileReaderOptions>();
-}
 
 JSONBufferHandle::JSONBufferHandle(idx_t buffer_index_p, idx_t readers_p, AllocatedData &&buffer_p, idx_t buffer_size_p)
     : buffer_index(buffer_index_p), readers(readers_p), buffer(std::move(buffer_p)), buffer_size(buffer_size_p) {
@@ -38,7 +23,7 @@ bool JSONFileHandle::IsOpen() const {
 }
 
 void JSONFileHandle::Close() {
-	if (IsOpen()) {
+	if (IsOpen() && file_handle->OnDiskFile()) {
 		file_handle->Close();
 		file_handle = nullptr;
 	}
@@ -49,7 +34,7 @@ void JSONFileHandle::Reset() {
 	read_position = 0;
 	requested_reads = 0;
 	actual_reads = 0;
-	if (IsOpen() && plain_file_source) {
+	if (IsOpen() && CanSeek()) {
 		file_handle->Reset();
 	}
 }
@@ -188,12 +173,13 @@ BufferedJSONReader::BufferedJSONReader(ClientContext &context, BufferedJSONReade
 }
 
 void BufferedJSONReader::OpenJSONFile() {
-	D_ASSERT(!IsOpen());
 	lock_guard<mutex> guard(lock);
-	auto &file_system = FileSystem::GetFileSystem(context);
-	auto regular_file_handle =
-	    file_system.OpenFile(file_name.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK, options.compression);
-	file_handle = make_uniq<JSONFileHandle>(std::move(regular_file_handle), BufferAllocator::Get(context));
+	if (!IsOpen()) {
+		auto &file_system = FileSystem::GetFileSystem(context);
+		auto regular_file_handle = file_system.OpenFile(file_name.c_str(), FileFlags::FILE_FLAGS_READ,
+		                                                FileLockType::NO_LOCK, options.compression);
+		file_handle = make_uniq<JSONFileHandle>(std::move(regular_file_handle), BufferAllocator::Get(context));
+	}
 	Reset();
 }
 

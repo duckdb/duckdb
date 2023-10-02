@@ -4,10 +4,8 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
@@ -24,9 +22,9 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/extra_type_info.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include <cmath>
 
@@ -400,7 +398,7 @@ string LogicalType::ToString() const {
 			if (i > 0) {
 				ret += ", ";
 			}
-			ret += "'" + KeywordHelper::WriteOptionallyQuoted(EnumType::GetString(*this, i).GetString(), '\'') + "'";
+			ret += KeywordHelper::WriteQuoted(EnumType::GetString(*this, i).GetString(), '\'');
 		}
 		ret += ")";
 		return ret;
@@ -436,7 +434,7 @@ LogicalType TransformStringToLogicalType(const string &str) {
 
 LogicalType GetUserTypeRecursive(const LogicalType &type, ClientContext &context) {
 	if (type.id() == LogicalTypeId::USER && type.HasAlias()) {
-		return Catalog::GetSystemCatalog(context).GetType(context, SYSTEM_CATALOG, DEFAULT_SCHEMA, type.GetAlias());
+		return Catalog::GetType(context, INVALID_CATALOG, INVALID_SCHEMA, type.GetAlias());
 	}
 	// Look for LogicalTypeId::USER in nested types
 	if (type.id() == LogicalTypeId::STRUCT) {
@@ -661,6 +659,10 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 		return right;
 	} else if (right.id() == LogicalTypeId::UNKNOWN) {
 		return left;
+	} else if ((right.id() == LogicalTypeId::ENUM || left.id() == LogicalTypeId::ENUM) && right.id() != left.id()) {
+		// if one is an enum and the other is not, compare strings, not enums
+		// see https://github.com/duckdb/duckdb/issues/8561
+		return LogicalTypeId::VARCHAR;
 	} else if (left.id() < right.id()) {
 		return right;
 	}
@@ -913,6 +915,11 @@ const string &StructType::GetChildName(const LogicalType &type, idx_t index) {
 idx_t StructType::GetChildCount(const LogicalType &type) {
 	return StructType::GetChildTypes(type).size();
 }
+bool StructType::IsUnnamed(const LogicalType &type) {
+	auto &child_types = StructType::GetChildTypes(type);
+	D_ASSERT(child_types.size() > 0);
+	return child_types[0].first.empty();
+}
 
 LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	auto info = make_shared<StructTypeInfo>(std::move(children));
@@ -1063,22 +1070,6 @@ PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 
 // the destructor needs to know about the extra type info
 LogicalType::~LogicalType() {
-}
-
-void LogicalType::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteField<LogicalTypeId>(id_);
-	ExtraTypeInfo::Serialize(type_info_.get(), writer);
-	writer.Finalize();
-}
-
-LogicalType LogicalType::Deserialize(Deserializer &source) {
-	FieldReader reader(source);
-	auto id = reader.ReadRequired<LogicalTypeId>();
-	auto info = ExtraTypeInfo::Deserialize(reader);
-	reader.Finalize();
-
-	return LogicalType(id, std::move(info));
 }
 
 bool LogicalType::EqualTypeInfo(const LogicalType &rhs) const {

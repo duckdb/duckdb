@@ -13,7 +13,6 @@ on:
       - '**.md'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
-      - '!.github/workflows/CodeQuality.yml'
       - '!.github/workflows/lcov_exclude'
 
   pull_request:
@@ -22,7 +21,6 @@ on:
       - '**.md'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
-      - '!.github/workflows/CodeQuality.yml'
       - '!.github/workflows/lcov_exclude'
 
 concurrency:
@@ -101,43 +99,3 @@ jobs:
       - name: Tidy Check
         shell: bash
         run: make tidy-check TIDY_BINARY=/tmp/clang-tidy-cache
-
-  codecov:
-    name: Code Coverage
-    runs-on: ubuntu-20.04
-    needs: format-check
-    strategy:
-      fail-fast: false
-    env:
-      GEN: ninja
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov curl g++ zip
-
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
-      - name: Check Coverage
-        shell: bash
-        run: |
-          make coverage-check
-
-      - name: Create Archive
-        if: always()
-        shell: bash
-        run: |
-          zip -r coverage.zip coverage_html
-
-      - uses: actions/upload-artifact@v3
-        if: always()
-        with:
-          name: coverage
-          path: coverage.zip
-          if-no-files-found: error

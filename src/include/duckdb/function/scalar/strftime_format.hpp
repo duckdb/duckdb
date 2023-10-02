@@ -52,7 +52,8 @@ enum class StrTimeSpecifier : uint8_t {
 	LOCALE_APPROPRIATE_DATE_AND_TIME =
 	    29, // %c - Locale’s appropriate date and time representation. (Mon Sep 30 07:06:05 2013)
 	LOCALE_APPROPRIATE_DATE = 30, // %x - Locale’s appropriate date representation. (09/30/13)
-	LOCALE_APPROPRIATE_TIME = 31  // %X - Locale’s appropriate time representation. (07:06:05)
+	LOCALE_APPROPRIATE_TIME = 31, // %X - Locale’s appropriate time representation. (07:06:05)
+	NANOSECOND_PADDED = 32 // %n - Nanosecond as a decimal number, zero-padded on the left. (000000000 - 999999999)
 };
 
 struct StrTimeFormat {
@@ -150,8 +151,8 @@ public:
 	date_t ParseDate(string_t str);
 	timestamp_t ParseTimestamp(string_t str);
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static StrpTimeFormat FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static StrpTimeFormat Deserialize(Deserializer &deserializer);
 
 protected:
 	static string FormatStrpTimeError(const string &input, idx_t position);

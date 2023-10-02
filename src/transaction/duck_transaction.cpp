@@ -70,10 +70,12 @@ void DuckTransaction::PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_dat
 	}
 }
 
-void DuckTransaction::PushDelete(DataTable &table, ChunkVectorInfo *vinfo, row_t rows[], idx_t count, idx_t base_row) {
+void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_t vector_idx, row_t rows[], idx_t count,
+                                 idx_t base_row) {
 	auto delete_info = reinterpret_cast<DeleteInfo *>(
 	    undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo) + sizeof(row_t) * count));
-	delete_info->vinfo = vinfo;
+	delete_info->version_info = &info;
+	delete_info->vector_idx = vector_idx;
 	delete_info->table = &table;
 	delete_info->count = count;
 	delete_info->base_row = base_row;
@@ -140,6 +142,7 @@ string DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bo
 		}
 		return string();
 	} catch (std::exception &ex) {
+		undo_buffer.RevertCommit(iterator_state, this->transaction_id);
 		return ex.what();
 	}
 }

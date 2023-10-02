@@ -190,6 +190,8 @@ main_include_path = os.path.join(script_path, 'src', 'include')
 main_source_path = os.path.join(script_path, 'src')
 main_source_files = ['duckdb_python.cpp'] + list_source_files(main_source_path)
 include_directories = [main_include_path, get_pybind_include(), get_pybind_include(user=True)]
+if 'BUILD_HTTPFS' in os.environ and 'OPENSSL_ROOT_DIR' in os.environ:
+    include_directories += [os.path.join(os.environ['OPENSSL_ROOT_DIR'], 'include')]
 
 if len(existing_duckdb_dir) == 0:
     # no existing library supplied: compile everything from source
@@ -318,15 +320,14 @@ packages = [
     lib_name,
     'duckdb.typing',
     'duckdb.functional',
-    'pyduckdb',
-    'pyduckdb.value',
+    'duckdb.value',
     'duckdb-stubs',
     'duckdb-stubs.functional',
     'duckdb-stubs.typing',
     'adbc_driver_duckdb',
 ]
 
-spark_packages = ['pyduckdb.spark', 'pyduckdb.spark.sql']
+spark_packages = ['duckdb.experimental.spark', 'duckdb.experimental.spark.sql']
 
 packages.extend(spark_packages)
 

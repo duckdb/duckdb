@@ -13,13 +13,18 @@
 namespace duckdb {
 
 struct PyDuckDBFileSystemCacheItem : public PythonImportCacheItem {
-	static constexpr const char *Name = "pyduckdb.filesystem";
+	static constexpr const char *Name = "duckdb.filesystem";
 
 public:
 	PyDuckDBFileSystemCacheItem()
-	    : PythonImportCacheItem("pyduckdb.filesystem"), ModifiedMemoryFileSystem("ModifiedMemoryFileSystem", this) {
+	    : PythonImportCacheItem("duckdb.filesystem"), ModifiedMemoryFileSystem("ModifiedMemoryFileSystem", this) {
 	}
 	~PyDuckDBFileSystemCacheItem() override {
+	}
+
+protected:
+	bool IsRequired() const override {
+		return false;
 	}
 
 public:
@@ -28,10 +33,10 @@ public:
 
 struct PyDuckDBCacheItem : public PythonImportCacheItem {
 public:
-	static constexpr const char *Name = "pyduckdb";
+	static constexpr const char *Name = "duckdb";
 
 public:
-	PyDuckDBCacheItem() : PythonImportCacheItem("pyduckdb"), filesystem(), Value("Value", this) {
+	PyDuckDBCacheItem() : PythonImportCacheItem("duckdb"), filesystem(), Value("Value", this) {
 	}
 	~PyDuckDBCacheItem() override {
 	}

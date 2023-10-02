@@ -101,10 +101,10 @@ void TestGetTypeInfo(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 	SQLRETURN ret;
 	while ((ret = SQLFetch(hstmt)) != SQL_NO_DATA) {
 		std::string state, message;
-		REQUIRE(ret == SQL_SUCCESS_WITH_INFO);
+		REQUIRE(ret == SQL_ERROR);
 		ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
-		REQUIRE(state == "07006");
-		REQUIRE(duckdb::StringUtil::Contains(message, "Unsupported type"));
+		REQUIRE(state == "HY004");
+		REQUIRE(duckdb::StringUtil::Contains(message, "not supported"));
 		row_count++;
 	}
 
