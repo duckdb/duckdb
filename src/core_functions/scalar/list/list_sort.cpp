@@ -238,15 +238,23 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunct
                                              vector<unique_ptr<Expression>> &arguments, OrderType &order,
                                              OrderByNullType &null_order) {
 
+	LogicalType child_type;
+	if (arguments[0]->return_type == LogicalTypeId::UNKNOWN) {
+		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
+		bound_function.return_type = LogicalType::SQLNULL;
+		child_type = bound_function.return_type;
+		return make_uniq<ListSortBindData>(order, null_order, bound_function.return_type, child_type, context);
+	}
+
 	if (arguments[0]->return_type.id() == LogicalTypeId::ARRAY) {
-		auto child_type = ArrayType::GetChildType(arguments[0]->return_type);
-		arguments[0] =
-		    BoundCastExpression::AddCastToType(context, std::move(arguments[0]), LogicalType::LIST(child_type));
+		child_type = ArrayType::GetChildType(arguments[0]->return_type);
+		arguments[0] = BoundCastExpression::AddCastToType(context, std::move(arguments[0]), LogicalType::LIST(child_type));
+	} else {
+		child_type = ListType::GetChildType(arguments[0]->return_type);
 	}
 
 	bound_function.arguments[0] = arguments[0]->return_type;
 	bound_function.return_type = arguments[0]->return_type;
-	auto child_type = ListType::GetChildType(arguments[0]->return_type);
 
 	return make_uniq<ListSortBindData>(order, null_order, bound_function.return_type, child_type, context);
 }

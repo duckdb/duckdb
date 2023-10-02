@@ -315,7 +315,7 @@ final class LogicalTypeTests: XCTestCase {
   func test_struct() throws {
     let connection = try Database(store: .inMemory).connect()
     try connection.execute("CREATE TABLE t1(num INTEGER, str VARCHAR);")
-    let result = try connection.query("SELECT row(num, str) as struct_column FROM t1;")
+    let result = try connection.query("SELECT {'num': num, 'str': str} as struct_column FROM t1;")
     let logicalType = result[0].cast(to: NumStrStruct.self).underlyingLogicalType
 
     XCTAssertEqual(logicalType.dataType, .struct)

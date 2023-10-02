@@ -189,26 +189,39 @@ def require():
 
 
 # By making the scope 'function' we ensure that a new connection gets created for every function that uses the fixture
-@pytest.fixture(scope='function', autouse=True)
+@pytest.fixture(scope='function')
 def spark():
     if not hasattr(spark, 'session'):
         # Cache the import
-        from duckdb.spark.sql import SparkSession as session
+        from duckdb.experimental.spark.sql import SparkSession as session
 
         spark.session = session
     return spark.session.builder.master(':memory:').appName('pyspark').getOrCreate()
 
 
-@pytest.fixture(scope='session', autouse=True)
-def duckdb_cursor(request):
+@pytest.fixture(scope='function')
+def duckdb_cursor():
     connection = duckdb.connect('')
-    cursor = connection.cursor()
+    yield connection
+    connection.close()
+
+
+@pytest.fixture(scope='function')
+def integers(duckdb_cursor):
+    cursor = duckdb_cursor
     cursor.execute('CREATE TABLE integers (i integer)')
     cursor.execute('INSERT INTO integers VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(NULL)')
+    yield
+    cursor.execute("drop table integers")
+
+
+@pytest.fixture(scope='function')
+def timestamps(duckdb_cursor):
+    cursor = duckdb_cursor
     cursor.execute('CREATE TABLE timestamps (t timestamp)')
     cursor.execute("INSERT INTO timestamps VALUES ('1992-10-03 18:34:45'), ('2010-01-01 00:00:01'), (NULL)")
-    cursor.execute("CALL dbgen(sf=0.01)")
-    return cursor
+    yield
+    cursor.execute("drop table timestamps")
 
 
 @pytest.fixture(scope="function")

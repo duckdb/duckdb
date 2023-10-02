@@ -141,18 +141,19 @@ struct SniffValue {
 		     (current_char == '\r' || current_char == '\n')) ||
 		    (machine.dialect_options.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
 			machine.rows_read++;
+		}
+
+		if ((machine.previous_state == CSVState::RECORD_SEPARATOR) ||
+		    (machine.state != CSVState::RECORD_SEPARATOR && machine.previous_state == CSVState::CARRIAGE_RETURN)) {
 			sniffed_values[machine.cur_rows].position = machine.line_start_pos;
 			sniffed_values[machine.cur_rows].set = true;
 			machine.line_start_pos = current_pos;
 		}
-		machine.pre_previous_state = machine.previous_state;
-		machine.previous_state = machine.state;
-		machine.state = static_cast<CSVState>(
-		    machine.transition_array[static_cast<uint8_t>(machine.state)][static_cast<uint8_t>(current_char)]);
+
+		machine.Transition(current_char);
 
 		bool carriage_return = machine.previous_state == CSVState::CARRIAGE_RETURN;
-		if (machine.previous_state == CSVState::DELIMITER ||
-		    (machine.previous_state == CSVState::RECORD_SEPARATOR && machine.state != CSVState::EMPTY_LINE) ||
+		if (machine.previous_state == CSVState::DELIMITER || (machine.previous_state == CSVState::RECORD_SEPARATOR) ||
 		    (machine.state != CSVState::RECORD_SEPARATOR && carriage_return)) {
 			// Started a new value
 			// Check if it's UTF-8
@@ -171,8 +172,7 @@ struct SniffValue {
 		    (machine.state == CSVState::QUOTED && machine.previous_state == CSVState::QUOTED)) {
 			machine.value += current_char;
 		}
-		machine.cur_rows +=
-		    machine.previous_state == CSVState::RECORD_SEPARATOR && machine.state != CSVState::EMPTY_LINE;
+		machine.cur_rows += machine.previous_state == CSVState::RECORD_SEPARATOR;
 		// It means our carriage return is actually a record separator
 		machine.cur_rows += machine.state != CSVState::RECORD_SEPARATOR && carriage_return;
 		if (machine.cur_rows >= sniffed_values.size()) {
@@ -283,43 +283,49 @@ void CSVSniffer::DetectTypes() {
 		candidate->Reset();
 
 		// Parse chunk and read csv with info candidate
-		idx_t sample_size = options.sample_chunk_size;
-		if (options.sample_chunk_size == 1) {
-			sample_size++;
-		}
-		vector<TupleSniffing> tuples(sample_size);
+		vector<TupleSniffing> tuples(STANDARD_VECTOR_SIZE);
 		candidate->csv_buffer_iterator.Process<SniffValue>(*candidate, tuples);
 		// Potentially Skip empty rows (I find this dirty, but it is what the original code does)
-		idx_t true_start = 0;
-		idx_t values_start = 0;
-		while (true_start < tuples.size()) {
-			if (tuples[true_start].values.empty() ||
-			    (tuples[true_start].values.size() == 1 && tuples[true_start].values[0].IsNull())) {
-				true_start = tuples[true_start].line_number;
-				values_start++;
+		// The true line where parsing starts in reference to the csv file
+		idx_t true_line_start = 0;
+		idx_t true_pos = 0;
+		// The start point of the tuples
+		idx_t tuple_true_start = 0;
+		while (tuple_true_start < tuples.size()) {
+			if (tuples[tuple_true_start].values.empty() ||
+			    (tuples[tuple_true_start].values.size() == 1 && tuples[tuple_true_start].values[0].IsNull())) {
+				true_line_start = tuples[tuple_true_start].line_number;
+				true_pos = tuples[tuple_true_start].position;
+				tuple_true_start++;
 			} else {
 				break;
 			}
 		}
 
 		// Potentially Skip Notes (I also find this dirty, but it is what the original code does)
-		while (true_start < tuples.size()) {
-			if (tuples[true_start].values.size() < max_columns_found && !options.null_padding) {
-				true_start = tuples[true_start].line_number;
-				values_start++;
+		while (tuple_true_start < tuples.size()) {
+			if (tuples[tuple_true_start].values.size() < max_columns_found && !options.null_padding) {
+				true_line_start = tuples[tuple_true_start].line_number;
+				true_pos = tuples[tuple_true_start].position;
+				tuple_true_start++;
 			} else {
 				break;
 			}
 		}
+		if (tuple_true_start < tuples.size()) {
+			true_pos = tuples[tuple_true_start].position;
+		}
+		if (tuple_true_start > 0) {
+			tuples.erase(tuples.begin(), tuples.begin() + tuple_true_start);
+		}
 
-		tuples.erase(tuples.begin(), tuples.begin() + values_start);
 		idx_t row_idx = 0;
 		if (tuples.size() > 1 && (!options.has_header || (options.has_header && options.dialect_options.header))) {
 			// This means we have more than one row, hence we can use the first row to detect if we have a header
 			row_idx = 1;
 		}
 		if (!tuples.empty()) {
-			best_start_without_header = tuples[0].position;
+			best_start_without_header = tuples[0].position - true_pos;
 		}
 
 		// First line where we start our type detection
@@ -327,6 +333,9 @@ void CSVSniffer::DetectTypes() {
 		for (; row_idx < tuples.size(); row_idx++) {
 			for (idx_t col = 0; col < tuples[row_idx].values.size(); col++) {
 				auto &col_type_candidates = info_sql_types_candidates[col];
+				// col_type_candidates can't be empty since anything in a CSV file should at least be a string
+				// and we validate utf-8 compatibility when creating the type
+				D_ASSERT(!col_type_candidates.empty());
 				auto cur_top_candidate = col_type_candidates.back();
 				auto dummy_val = tuples[row_idx].values[col];
 				// try cast from string to sql_type
@@ -377,16 +386,16 @@ void CSVSniffer::DetectTypes() {
 		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of best_num_cols.
 		if (varchar_cols < min_varchar_cols && info_sql_types_candidates.size() > (max_columns_found * 0.7)) {
 			// we have a new best_options candidate
-			if (true_start > 0) {
+			if (true_line_start > 0) {
 				// Add empty rows to skip_rows
-				candidate->dialect_options.skip_rows += true_start;
+				candidate->dialect_options.skip_rows += true_line_start;
 			}
 			best_candidate = std::move(candidate);
 			min_varchar_cols = varchar_cols;
 			best_sql_types_candidates_per_column_idx = info_sql_types_candidates;
 			best_format_candidates = format_candidates;
 			best_header_row = tuples[0].values;
-			best_start_with_header = tuples[0].position;
+			best_start_with_header = tuples[0].position - true_pos;
 		}
 	}
 	// Assert that it's all good at this point.

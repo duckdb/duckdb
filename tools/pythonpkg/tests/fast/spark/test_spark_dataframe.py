@@ -1,8 +1,20 @@
 import pytest
 
-_ = pytest.importorskip("duckdb.spark")
-from duckdb.spark.sql.types import Row
-from duckdb.spark.sql.types import LongType, StructType, BooleanType, StructField, StringType, IntegerType
+_ = pytest.importorskip("duckdb.experimental.spark")
+
+from duckdb.experimental.spark.sql.types import (
+    LongType,
+    StructType,
+    BooleanType,
+    StructField,
+    StringType,
+    IntegerType,
+    LongType,
+    Row,
+    ArrayType,
+    MapType,
+)
+from duckdb.experimental.spark.sql.functions import col, struct, when
 import duckdb
 import re
 
@@ -18,8 +30,8 @@ class TestDataFrame(object):
         # Create Hive table & query it.
         spark.sql(
             """
-			create table sample_table("_1" bool, "_2" integer)
-		"""
+            create table sample_table("_1" bool, "_2" integer)
+        """
         )
         spark.sql('insert into sample_table VALUES (True, 42)')
         spark.table("sample_table").write.saveAsTable("sample_hive_table")
@@ -32,7 +44,7 @@ class TestDataFrame(object):
     def test_dataframe_collect(self, spark):
         df = spark.createDataFrame([(42,), (21,)]).toDF('a')
         res = df.collect()
-        assert res == [Row(a=42), Row(a=21)]
+        assert str(res) == '[Row(a=42), Row(a=21)]'
 
     def test_dataframe_from_rows(self, spark):
         columns = ["language", "users_count"]
@@ -79,7 +91,7 @@ class TestDataFrame(object):
         assert res == [Row(a=42, b=True), Row(a=21, b=False)]
 
     def test_df_creation_coverage(self, spark):
-        from duckdb.spark.sql.types import StructType, StructField, StringType, IntegerType
+        from duckdb.experimental.spark.sql.types import StructType, StructField, StringType, IntegerType
 
         data2 = [
             ("James", "", "Smith", "36636", "M", 3000),
@@ -176,5 +188,69 @@ class TestDataFrame(object):
                 StructField('id', StringType(), True),
                 StructField('gender', StringType(), True),
                 StructField('salary', IntegerType(), True),
+            ]
+        )
+
+    def test_df_columns(self, spark):
+        from duckdb.experimental.spark.sql.functions import col, struct, when
+
+        structureData = [
+            (("James", "", "Smith"), "36636", "M", 3100),
+            (("Michael", "Rose", ""), "40288", "M", 4300),
+            (("Robert", "", "Williams"), "42114", "M", 1400),
+            (("Maria", "Anne", "Jones"), "39192", "F", 5500),
+            (("Jen", "Mary", "Brown"), "", "F", -1),
+        ]
+        structureSchema = StructType(
+            [
+                StructField(
+                    'name',
+                    StructType(
+                        [
+                            StructField('firstname', StringType(), True),
+                            StructField('middlename', StringType(), True),
+                            StructField('lastname', StringType(), True),
+                        ]
+                    ),
+                ),
+                StructField('id', StringType(), True),
+                StructField('gender', StringType(), True),
+                StructField('salary', IntegerType(), True),
+            ]
+        )
+
+        df2 = spark.createDataFrame(data=structureData, schema=structureSchema)
+        updatedDF = df2.withColumn(
+            "OtherInfo",
+            struct(
+                col("id").alias("identifier"),
+                col("gender").alias("gender"),
+                col("salary").alias("salary"),
+                when(col("salary").cast(IntegerType()) < 2000, "Low")
+                .when(col("salary").cast(IntegerType()) < 4000, "Medium")
+                .otherwise("High")
+                .alias("Salary_Grade"),
+            ),
+        ).drop("id", "gender", "salary")
+
+        assert 'OtherInfo' in updatedDF
+
+    def test_array_and_map_type(self, spark):
+        """Array & Map"""
+
+        arrayStructureSchema = StructType(
+            [
+                StructField(
+                    'name',
+                    StructType(
+                        [
+                            StructField('firstname', StringType(), True),
+                            StructField('middlename', StringType(), True),
+                            StructField('lastname', StringType(), True),
+                        ]
+                    ),
+                ),
+                StructField('hobbies', ArrayType(StringType()), True),
+                StructField('properties', MapType(StringType(), StringType()), True),
             ]
         )

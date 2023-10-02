@@ -5,6 +5,7 @@ import pandas
 import pytest
 import duckdb
 from io import StringIO, BytesIO
+from duckdb.typing import BIGINT, VARCHAR, INTEGER
 
 
 def TestFile(name):
@@ -176,15 +177,6 @@ class TestReadCSV(object):
         res = rel.fetchone()
         print(res)
         assert res == (123, 'TEST2', datetime.time(12, 12, 12), datetime.date(2000, 1, 1), '2000-01-01 12:12:00')
-
-    def test_sample_size_incorrect(self, duckdb_cursor):
-        rel = duckdb_cursor.read_csv(TestFile('problematic.csv'), header=True, sample_size=1)
-        with pytest.raises(duckdb.InvalidInputException):
-            # The sniffer couldn't detect that this column contains non-integer values
-            while True:
-                res = rel.fetchone()
-                if res is None:
-                    break
 
     def test_sample_size_correct(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile('problematic.csv'), header=True, sample_size=-1)
@@ -406,6 +398,7 @@ class TestReadCSV(object):
         with pytest.raises(ValueError, match="Can not read from a non file-like object"):
             res = duckdb_cursor.read_csv(obj, header=True).fetchall()
 
+    @pytest.mark.skip(reason="depends on garbage collector behaviour, and sporadically breaks in CI")
     def test_internal_object_filesystem_cleanup(self, duckdb_cursor):
         _ = pytest.importorskip("fsspec")
 
@@ -495,3 +488,51 @@ class TestReadCSV(object):
         # And assert that the columns and types of the relations are the same
         assert rel.columns == rel2.columns
         assert rel.types == rel2.types
+
+    def test_read_csv_names(self):
+        con = duckdb.connect()
+        file = StringIO('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
+        rel = con.read_csv(file, names=['a', 'b', 'c'])
+        assert rel.columns == ['a', 'b', 'c', 'four']
+
+        with pytest.raises(duckdb.InvalidInputException, match="read_csv only accepts 'names' as a list of strings"):
+            rel = con.read_csv(file, names=True)
+
+        # Excessive columns is fine, just doesn't have any effect past the number of provided columns
+        rel = con.read_csv(file, names=['a', 'b', 'c', 'd', 'e'])
+        assert rel.columns == ['a', 'b', 'c', 'd']
+
+        # Duplicates are not okay
+        with pytest.raises(duckdb.BinderException, match="has duplicate column name"):
+            rel = con.read_csv(file, names=['a', 'b', 'a', 'b'])
+            assert rel.columns == ['a', 'b', 'a', 'b']
+
+    def test_read_csv_names_mixed_with_dtypes(self):
+        con = duckdb.connect()
+        file = StringIO('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
+        rel = con.read_csv(
+            file,
+            names=['a', 'b', 'c'],
+            dtype={
+                'a': int,
+                'b': bool,
+                'c': str,
+            },
+        )
+        assert rel.columns == ['a', 'b', 'c', 'four']
+        assert rel.types == ['BIGINT', 'BOOLEAN', 'VARCHAR', 'BIGINT']
+
+        # dtypes and names dont match
+        # FIXME: seems the order columns are named in this error is non-deterministic
+        # so for now I'm excluding the list of columns from the expected error
+        expected_error = """do not exist in the CSV File"""
+        with pytest.raises(duckdb.BinderException, match=expected_error):
+            rel = con.read_csv(
+                file,
+                names=['a', 'b', 'c'],
+                dtype={
+                    'd': int,
+                    'e': bool,
+                    'f': str,
+                },
+            )

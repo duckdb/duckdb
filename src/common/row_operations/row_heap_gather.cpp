@@ -184,7 +184,7 @@ static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const Selection
 				}
 			}
 
-			SelectionVector array_sel(chunk_size);
+			SelectionVector array_sel(STANDARD_VECTOR_SIZE);
 
 			if (child_type_is_var_size) {
 				// variable size list entries

@@ -9,6 +9,7 @@ add_library_unity(
   duckdb_planner
   OBJECT
   bound_result_modifier.cpp
+  bound_parameter_map.cpp
   expression_iterator.cpp
   expression.cpp
   table_binding.cpp

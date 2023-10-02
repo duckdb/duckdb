@@ -304,6 +304,11 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 	// now construct the actual varchar vector
 	varchar_union.Flatten(count);
 	auto &tag_vector = UnionVector::GetTags(source);
+	auto tag_vector_type = tag_vector.GetVectorType();
+	if (tag_vector_type != VectorType::CONSTANT_VECTOR && tag_vector_type != VectorType::FLAT_VECTOR) {
+		tag_vector.Flatten(count);
+	}
+
 	auto tags = FlatVector::GetData<union_tag_t>(tag_vector);
 
 	auto &validity = FlatVector::Validity(varchar_union);

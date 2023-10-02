@@ -446,7 +446,7 @@ LogicalType TransformStringToLogicalType(const string &str) {
 
 LogicalType GetUserTypeRecursive(const LogicalType &type, ClientContext &context) {
 	if (type.id() == LogicalTypeId::USER && type.HasAlias()) {
-		return Catalog::GetSystemCatalog(context).GetType(context, SYSTEM_CATALOG, DEFAULT_SCHEMA, type.GetAlias());
+		return Catalog::GetType(context, INVALID_CATALOG, INVALID_SCHEMA, type.GetAlias());
 	}
 	// Look for LogicalTypeId::USER in nested types
 	if (type.id() == LogicalTypeId::STRUCT) {
@@ -671,6 +671,10 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 		return right;
 	} else if (right.id() == LogicalTypeId::UNKNOWN) {
 		return left;
+	} else if ((right.id() == LogicalTypeId::ENUM || left.id() == LogicalTypeId::ENUM) && right.id() != left.id()) {
+		// if one is an enum and the other is not, compare strings, not enums
+		// see https://github.com/duckdb/duckdb/issues/8561
+		return LogicalTypeId::VARCHAR;
 	} else if (left.id() < right.id()) {
 		return right;
 	}
@@ -927,6 +931,11 @@ const string &StructType::GetChildName(const LogicalType &type, idx_t index) {
 
 idx_t StructType::GetChildCount(const LogicalType &type) {
 	return StructType::GetChildTypes(type).size();
+}
+bool StructType::IsUnnamed(const LogicalType &type) {
+	auto &child_types = StructType::GetChildTypes(type);
+	D_ASSERT(child_types.size() > 0);
+	return child_types[0].first.empty();
 }
 
 LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
