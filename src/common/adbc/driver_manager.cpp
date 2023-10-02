@@ -151,9 +151,9 @@ struct ManagedLibrary {
 			this->handle = handle;
 		}
 #else
-		 const std::string kPlatformLibraryPrefix = "lib";
+		const std::string kPlatformLibraryPrefix = "lib";
 #if defined(__APPLE__)
-		 const std::string kPlatformLibrarySuffix = ".dylib";
+		const std::string kPlatformLibrarySuffix = ".dylib";
 #else
 		static const std::string kPlatformLibrarySuffix = ".so";
 #endif // defined(__APPLE__)

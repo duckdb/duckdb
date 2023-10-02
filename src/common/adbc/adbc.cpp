@@ -13,7 +13,7 @@
 #endif
 
 #include "duckdb/common/adbc/single_batch_array_stream.hpp"
-
+#include "duckdb/common/adbc/options.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -392,8 +392,8 @@ static AdbcInfoCode ConvertToInfoCode(uint32_t info_code) {
 	}
 }
 
-AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, const uint32_t *info_codes, size_t info_codes_length,
-                                 struct ArrowArrayStream *out, struct AdbcError *error) {
+AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, const uint32_t *info_codes,
+                                 size_t info_codes_length, struct ArrowArrayStream *out, struct AdbcError *error) {
 	if (!connection) {
 		SetError(error, "Missing connection object");
 		return ADBC_STATUS_INVALID_ARGUMENT;
@@ -917,6 +917,12 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 
 	if (strcmp(key, ADBC_INGEST_OPTION_TARGET_TABLE) == 0) {
 		wrapper->ingestion_table_name = strdup(value);
+		return ADBC_STATUS_OK;
+	}
+	if (strcmp(key, ADBC_INGEST_OPTION_TEMPORARY) == 0) {
+		if (strcmp(value, "false") == 0) {
+			return ADBC_STATUS_NOT_IMPLEMENTED;
+		}
 		return ADBC_STATUS_OK;
 	}
 	if (strcmp(key, ADBC_INGEST_OPTION_MODE) == 0) {
