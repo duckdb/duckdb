@@ -33,7 +33,7 @@ AdbcStatusCode ConnectionInit(struct AdbcConnection *connection, struct AdbcData
 
 AdbcStatusCode ConnectionRelease(struct AdbcConnection *connection, struct AdbcError *error);
 
-AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *info_codes, size_t info_codes_length,
+AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, const uint32_t *info_codes, size_t info_codes_length,
                                  struct ArrowArrayStream *out, struct AdbcError *error);
 
 AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth, const char *catalog,
@@ -86,7 +86,7 @@ AdbcStatusCode StatementExecutePartitions(struct AdbcStatement *statement, struc
 
 //! This method should only be called when the string is guaranteed to not be NULL
 void SetError(struct AdbcError *error, const std::string &message);
-void SetError(struct AdbcError *error, const char *message);
+//void SetError(struct AdbcError *error, const char *message);
 
 void InitializeADBCError(AdbcError *error);
 

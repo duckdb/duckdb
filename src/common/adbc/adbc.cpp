@@ -50,9 +50,6 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::A
 	driver->StatementGetParameterSchema = duckdb_adbc::StatementGetParameterSchema;
 	driver->ConnectionGetTableSchema = duckdb_adbc::ConnectionGetTableSchema;
 	driver->StatementSetSubstraitPlan = duckdb_adbc::StatementSetSubstraitPlan;
-
-	driver->ConnectionGetInfo = duckdb_adbc::ConnectionGetInfo;
-	driver->StatementGetParameterSchema = duckdb_adbc::StatementGetParameterSchema;
 	return ADBC_STATUS_OK;
 }
 
@@ -395,7 +392,7 @@ static AdbcInfoCode ConvertToInfoCode(uint32_t info_code) {
 	}
 }
 
-AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *info_codes, size_t info_codes_length,
+AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, const uint32_t *info_codes, size_t info_codes_length,
                                  struct ArrowArrayStream *out, struct AdbcError *error) {
 	if (!connection) {
 		SetError(error, "Missing connection object");
