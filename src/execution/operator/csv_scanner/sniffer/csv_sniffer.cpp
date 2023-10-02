@@ -35,10 +35,6 @@ void CSVSniffer::SetResultOptions() {
 }
 
 SnifferResult CSVSniffer::SniffCSV() {
-	// Early-out for empty files
-	if (buffer_manager->file_handle->FileSize() == 0) {
-		throw InvalidInputException("File is empty, nothing to parse.");
-	}
 	// 1. Dialect Detection
 	DetectDialect();
 	// 2. Type Detection
