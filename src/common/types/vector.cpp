@@ -960,7 +960,6 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 			break;
 		}
 		case PhysicalType::STRUCT: {
-			Flatten(count);
 			auto &entries = StructVector::GetEntries(*this);
 
 			// Serialize entries as a list
@@ -2007,6 +2006,9 @@ UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector, idx_t count, 
 					return UnionInvalidReason::VALIDITY_OVERLAP;
 				}
 				found_valid = true;
+				if (tag != static_cast<union_tag_t>(member_idx)) {
+					return UnionInvalidReason::TAG_MISMATCH;
+				}
 			}
 		}
 	}

@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/planner/expression/bound_parameter_data.hpp"
+#include "duckdb/planner/bound_parameter_map.hpp"
 
 namespace duckdb {
 

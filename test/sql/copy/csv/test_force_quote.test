@@ -28,7 +28,7 @@ statement ok
 CREATE TABLE test2 (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10));
 
 query I
-COPY test2 FROM '__TEST_DIR__/test_chosen_columns.csv' (QUOTE 't', NULL 'ea');
+COPY test2 FROM '__TEST_DIR__/test_chosen_columns.csv' (QUOTE 't', NULL 'ea', HEADER 1);
 ----
 3
 
@@ -49,7 +49,7 @@ statement ok
 CREATE TABLE test3 (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10));
 
 query I
-COPY test3(col_b, col_c, col_a) FROM '__TEST_DIR__/test_reorder.csv' (NULL 'test');
+COPY test3(col_b, col_c, col_a) FROM '__TEST_DIR__/test_reorder.csv' (NULL 'test', HEADER 1);
 ----
 3
 
@@ -71,7 +71,7 @@ COPY test TO '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE (col_c, col_d));
 
 # FORCE_QUOTE is only supported in COPY ... TO ...
 statement error
-COPY test FROM '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE (col_c, col_d));
+COPY test FROM '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE (col_c, col_d), HEADER 1);
 
 # FORCE_QUOTE must not be empty and must have the correct parameter type
 statement error

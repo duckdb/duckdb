@@ -77,7 +77,8 @@ private:
 	WriteStream &serializer;
 };
 
-bool ParquetWriter::DuckDBTypeToParquetTypeInternal(const LogicalType &duckdb_type, Type::type &parquet_type) {
+CopyTypeSupport ParquetWriter::DuckDBTypeToParquetTypeInternal(const LogicalType &duckdb_type,
+                                                               Type::type &parquet_type) {
 	switch (duckdb_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		parquet_type = Type::BOOLEAN;
@@ -95,9 +96,11 @@ bool ParquetWriter::DuckDBTypeToParquetTypeInternal(const LogicalType &duckdb_ty
 		parquet_type = Type::FLOAT;
 		break;
 	case LogicalTypeId::DOUBLE:
-	case LogicalTypeId::HUGEINT:
 		parquet_type = Type::DOUBLE;
 		break;
+	case LogicalTypeId::HUGEINT:
+		parquet_type = Type::DOUBLE;
+		return CopyTypeSupport::LOSSY;
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
@@ -141,47 +144,62 @@ bool ParquetWriter::DuckDBTypeToParquetTypeInternal(const LogicalType &duckdb_ty
 		}
 		break;
 	default:
-		// Anything that is not supported returns false
-		return false;
+		// Anything that is not supported
+		return CopyTypeSupport::UNSUPPORTED;
 	}
-	return true;
+	return CopyTypeSupport::SUPPORTED;
 }
 
 Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
 	Type::type result;
-	if (!DuckDBTypeToParquetTypeInternal(duckdb_type, result)) {
+	auto type_supports = DuckDBTypeToParquetTypeInternal(duckdb_type, result);
+	if (type_supports == CopyTypeSupport::UNSUPPORTED) {
 		throw NotImplementedException("Unimplemented type for Parquet \"%s\"", duckdb_type.ToString());
 	}
 	return result;
 }
 
-bool ParquetWriter::TypeIsSupported(const LogicalType &type) {
+CopyTypeSupport ParquetWriter::TypeIsSupported(const LogicalType &type) {
 	Type::type unused;
 	auto id = type.id();
 	if (id == LogicalTypeId::LIST) {
 		auto &child_type = ListType::GetChildType(type);
 		return TypeIsSupported(child_type);
 	}
+	if (id == LogicalTypeId::UNION) {
+		auto count = UnionType::GetMemberCount(type);
+		for (idx_t i = 0; i < count; i++) {
+			auto &member_type = UnionType::GetMemberType(type, i);
+			auto type_support = TypeIsSupported(member_type);
+			if (type_support != CopyTypeSupport::SUPPORTED) {
+				return type_support;
+			}
+		}
+		return CopyTypeSupport::SUPPORTED;
+	}
 	if (id == LogicalTypeId::STRUCT) {
 		auto &children = StructType::GetChildTypes(type);
 		for (auto &child : children) {
 			auto &child_type = child.second;
-			if (!TypeIsSupported(child_type)) {
-				return false;
+			auto type_support = TypeIsSupported(child_type);
+			if (type_support != CopyTypeSupport::SUPPORTED) {
+				return type_support;
 			}
 		}
-		return true;
+		return CopyTypeSupport::SUPPORTED;
 	}
 	if (id == LogicalTypeId::MAP) {
 		auto &key_type = MapType::KeyType(type);
 		auto &value_type = MapType::ValueType(type);
-		if (!TypeIsSupported(key_type)) {
-			return false;
+		auto key_type_support = TypeIsSupported(key_type);
+		if (key_type_support != CopyTypeSupport::SUPPORTED) {
+			return key_type_support;
 		}
-		if (!TypeIsSupported(value_type)) {
-			return false;
+		auto value_type_support = TypeIsSupported(value_type);
+		if (value_type_support != CopyTypeSupport::SUPPORTED) {
+			return value_type_support;
 		}
-		return true;
+		return CopyTypeSupport::SUPPORTED;
 	}
 	return DuckDBTypeToParquetTypeInternal(type, unused);
 }

@@ -157,6 +157,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	}
 
 	bind_data->FinalizeRead(context);
+
 	if (options.auto_detect) {
 		// We must run the sniffer.
 		auto file_handle = BaseCSVReader::OpenCSV(context, options);
@@ -332,7 +333,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 		global_data->WriteData(options.prefix.c_str(), options.prefix.size());
 	}
 
-	if (options.dialect_options.header) {
+	if (!(options.has_header && !options.dialect_options.header)) {
 		MemoryStream stream;
 		// write the header line to the file
 		for (idx_t i = 0; i < csv_data.options.name_list.size(); i++) {

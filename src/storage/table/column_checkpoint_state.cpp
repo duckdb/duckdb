@@ -181,6 +181,9 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 	}
 	data_pointer.tuple_count = tuple_count;
 	data_pointer.compression_type = segment->function.get().type;
+	if (segment->function.get().serialize_state) {
+		data_pointer.segment_state = segment->function.get().serialize_state(*segment);
+	}
 
 	// append the segment to the new segment tree
 	new_tree.AppendSegment(std::move(segment));

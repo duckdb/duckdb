@@ -218,6 +218,8 @@ enum class QuoteRule : uint8_t;
 
 enum class RelationType : uint8_t;
 
+enum class RenderMode : uint8_t;
+
 enum class ResultModifierType : uint8_t;
 
 enum class SampleMethod : uint8_t;
@@ -569,6 +571,9 @@ const char* EnumUtil::ToChars<QuoteRule>(QuoteRule value);
 
 template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value);
+
+template<>
+const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
 
 template<>
 const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
@@ -957,6 +962,9 @@ QuoteRule EnumUtil::FromString<QuoteRule>(const char *value);
 
 template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value);
+
+template<>
+RenderMode EnumUtil::FromString<RenderMode>(const char *value);
 
 template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
