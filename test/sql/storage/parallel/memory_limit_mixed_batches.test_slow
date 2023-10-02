@@ -1,0 +1,103 @@
+# name: test/sql/storage/parallel/memory_limit_mixed_batches.test_slow
+# description: Test batch streaming to disk with mixed batch sizes
+# group: [parallel]
+
+require parquet
+
+load __TEST_DIR__/memory_limit_mixed_batches.db
+
+# in this test we load data of around 100M rows - uncompressed this will be 1.4GB~2GB (without/with NULLs)
+# we do these operations with a low memory limit to verify the data is streamed to and from disk correctly
+statement ok
+SET memory_limit='300MB'
+
+statement ok
+COPY (FROM range(20000000) tbl(i)) TO '__TEST_DIR__/mixed_batches_1.parquet' (ROW_GROUP_SIZE 5000)
+
+statement ok
+COPY (FROM range(20000000,30000000) tbl(i)) TO '__TEST_DIR__/mixed_batches_2.parquet' (ROW_GROUP_SIZE 200000)
+
+statement ok
+COPY (FROM range(30000000,50000000) tbl(i)) TO '__TEST_DIR__/mixed_batches_3.parquet' (ROW_GROUP_SIZE 999)
+
+statement ok
+COPY (FROM range(50000000,70000000) tbl(i)) TO '__TEST_DIR__/mixed_batches_4.parquet' (ROW_GROUP_SIZE 99979)
+
+statement ok
+COPY (FROM range(70000000,90000000) tbl(i)) TO '__TEST_DIR__/mixed_batches_5.parquet' (ROW_GROUP_SIZE 99979)
+
+statement ok
+COPY (FROM range(90000000,100000000) tbl(i)) TO '__TEST_DIR__/mixed_batches_6.parquet' (ROW_GROUP_SIZE 33445)
+
+statement ok
+CREATE TABLE integers AS FROM read_parquet([
+         '__TEST_DIR__/mixed_batches_1.parquet',
+         '__TEST_DIR__/mixed_batches_2.parquet',
+         '__TEST_DIR__/mixed_batches_3.parquet',
+         '__TEST_DIR__/mixed_batches_4.parquet',
+         '__TEST_DIR__/mixed_batches_5.parquet',
+         '__TEST_DIR__/mixed_batches_6.parquet'
+     ])
+
+query IIIII
+SELECT SUM(i), MIN(i), MAX(i), COUNT(i), COUNT(*) FROM integers
+----
+4999999950000000	0	99999999	100000000	100000000
+
+query I
+SELECT * FROM integers LIMIT 5 OFFSET 99998
+----
+99998
+99999
+100000
+100001
+100002
+
+statement ok
+DROP TABLE integers
+
+# now with NULL values
+statement ok
+COPY (SELECT CASE WHEN i%2=0 THEN NULL ELSE i END AS i FROM range(20000000) tbl(i)) TO '__TEST_DIR__/mixed_batches_1.parquet' (ROW_GROUP_SIZE 5000)
+
+statement ok
+COPY (SELECT CASE WHEN i%2=0 THEN NULL ELSE i END AS i FROM range(20000000,30000000) tbl(i)) TO '__TEST_DIR__/mixed_batches_2.parquet' (ROW_GROUP_SIZE 200000)
+
+statement ok
+COPY (SELECT CASE WHEN i%2=0 THEN NULL ELSE i END AS i FROM range(30000000,50000000) tbl(i)) TO '__TEST_DIR__/mixed_batches_3.parquet' (ROW_GROUP_SIZE 999)
+
+statement ok
+COPY (SELECT CASE WHEN i%2=0 THEN NULL ELSE i END AS i FROM range(50000000,70000000) tbl(i)) TO '__TEST_DIR__/mixed_batches_4.parquet' (ROW_GROUP_SIZE 99979)
+
+statement ok
+COPY (SELECT CASE WHEN i%2=0 THEN NULL ELSE i END AS i FROM range(70000000,90000000) tbl(i)) TO '__TEST_DIR__/mixed_batches_5.parquet' (ROW_GROUP_SIZE 99979)
+
+statement ok
+COPY (SELECT CASE WHEN i%2=0 THEN NULL ELSE i END AS i FROM range(90000000,100000000) tbl(i)) TO '__TEST_DIR__/mixed_batches_6.parquet' (ROW_GROUP_SIZE 33445)
+
+statement ok
+CREATE TABLE integers AS FROM read_parquet([
+         '__TEST_DIR__/mixed_batches_1.parquet',
+         '__TEST_DIR__/mixed_batches_2.parquet',
+         '__TEST_DIR__/mixed_batches_3.parquet',
+         '__TEST_DIR__/mixed_batches_4.parquet',
+         '__TEST_DIR__/mixed_batches_5.parquet',
+         '__TEST_DIR__/mixed_batches_6.parquet'
+     ])
+
+query IIIII
+SELECT SUM(i), MIN(i), MAX(i), COUNT(i), COUNT(*) FROM integers
+----
+2500000000000000	1	99999999	50000000	100000000
+
+query I
+SELECT * FROM integers LIMIT 5 OFFSET 99998
+----
+NULL
+99999
+NULL
+100001
+NULL
+
+statement ok
+DROP TABLE integers

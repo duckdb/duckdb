@@ -32,11 +32,23 @@ select count(*) from parquet_scan(['data/parquet-testing/glob/t1.parquet', 'data
 # empty list
 statement error
 select count(*) from parquet_scan([]);
+----
+at least one file
 
 # null inside a list
 statement error
 select count(*) from parquet_scan([NULL]);
+----
+NULL
 
 # null list
 statement error
 select count(*) from parquet_scan(NULL::VARCHAR[]);
+----
+NULL
+
+# null varchar
+statement error
+select count(*) from parquet_scan(NULL::VARCHAR);
+----
+NULL

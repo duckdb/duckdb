@@ -1,0 +1,48 @@
+# name: test/sql/function/list/list_resize_types.test_slow
+# description: test for list_resize() that take a long time
+# group: [list]
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification;
+
+query I
+select list_resize(c, 3) from test_vector_types(NULL::INT[], false) t(c);
+----
+[-2147483648, 2147483647, NULL]
+[NULL, NULL, NULL]
+[NULL, NULL, NULL]
+[-2147483648, 2147483647, NULL]
+[-2147483648, 2147483647, NULL]
+[-2147483648, 2147483647, NULL]
+[NULL, NULL, NULL]
+[NULL, NULL, NULL]
+[3, 5, NULL]
+[NULL, NULL, NULL]
+[7, NULL, NULL]
+
+query I
+select list_resize(c, 1) from test_vector_types(NULL::INT[], false) t(c);
+----
+[-2147483648]
+[NULL]
+[NULL]
+[-2147483648]
+[-2147483648]
+[-2147483648]
+[NULL]
+[NULL]
+[3]
+[NULL]
+[7]
+
+statement ok
+CREATE TABLE all_types AS SELECT * FROM test_all_types();
+
+foreach colname bool tinyint smallint int bigint hugeint utinyint usmallint uint ubigint date time timestamp timestamp_s timestamp_ms timestamp_ns time_tz timestamp_tz float double dec_4_1 dec_9_4 dec_18_6 dec38_10 uuid interval varchar blob small_enum medium_enum large_enum int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array struct struct_of_arrays array_of_structs map
+
+statement ok
+select list_resize(["${colname}"], 2) FROM all_types;
+
+endloop

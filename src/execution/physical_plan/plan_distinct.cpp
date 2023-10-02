@@ -9,8 +9,10 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<PhysicalOperator> child,
-                                                                     vector<unique_ptr<Expression>> distinct_targets) {
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op) {
+	D_ASSERT(op.children.size() == 1);
+	auto child = CreatePlan(*op.children[0]);
+	auto &distinct_targets = op.distinct_targets;
 	D_ASSERT(child);
 	D_ASSERT(!distinct_targets.empty());
 
@@ -23,11 +25,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 	for (idx_t i = 0; i < distinct_targets.size(); i++) {
 		auto &target = distinct_targets[i];
 		if (target->type == ExpressionType::BOUND_REF) {
-			auto &bound_ref = (BoundReferenceExpression &)*target;
+			auto &bound_ref = target->Cast<BoundReferenceExpression>();
 			group_by_references[bound_ref.index] = i;
 		}
 		aggregate_types.push_back(target->return_type);
-		groups.push_back(move(target));
+		groups.push_back(std::move(target));
 	}
 	bool requires_projection = false;
 	if (types.size() != group_count) {
@@ -41,49 +43,47 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 		if (entry != group_by_references.end()) {
 			auto group_index = entry->second;
 			// entry is found: can directly refer to a group
-			projections.push_back(make_unique<BoundReferenceExpression>(logical_type, group_index));
+			projections.push_back(make_uniq<BoundReferenceExpression>(logical_type, group_index));
 			if (group_index != i) {
 				// we require a projection only if this group element is out of order
 				requires_projection = true;
 			}
 		} else {
+			if (op.distinct_type == DistinctType::DISTINCT && op.order_by) {
+				throw InternalException("Entry that is not a group, but not a DISTINCT ON aggregate");
+			}
 			// entry is not one of the groups: need to push a FIRST aggregate
-			auto bound = make_unique<BoundReferenceExpression>(logical_type, i);
+			auto bound = make_uniq<BoundReferenceExpression>(logical_type, i);
 			vector<unique_ptr<Expression>> first_children;
-			first_children.push_back(move(bound));
+			first_children.push_back(std::move(bound));
 
 			FunctionBinder function_binder(context);
 			auto first_aggregate = function_binder.BindAggregateFunction(
-			    FirstFun::GetFunction(logical_type), move(first_children), nullptr, AggregateType::NON_DISTINCT);
+			    FirstFun::GetFunction(logical_type), std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
+			first_aggregate->order_bys = op.order_by ? op.order_by->Copy() : nullptr;
 			// add the projection
-			projections.push_back(make_unique<BoundReferenceExpression>(logical_type, group_count + aggregates.size()));
+			projections.push_back(make_uniq<BoundReferenceExpression>(logical_type, group_count + aggregates.size()));
 			// push it to the list of aggregates
 			aggregate_types.push_back(logical_type);
-			aggregates.push_back(move(first_aggregate));
+			aggregates.push_back(std::move(first_aggregate));
 			requires_projection = true;
 		}
 	}
 
-	child = ExtractAggregateExpressions(move(child), aggregates, groups);
+	child = ExtractAggregateExpressions(std::move(child), aggregates, groups);
 
 	// we add a physical hash aggregation in the plan to select the distinct groups
-	auto groupby = make_unique<PhysicalHashAggregate>(context, aggregate_types, move(aggregates), move(groups),
-	                                                  child->estimated_cardinality);
-	groupby->children.push_back(move(child));
+	auto groupby = make_uniq<PhysicalHashAggregate>(context, aggregate_types, std::move(aggregates), std::move(groups),
+	                                                child->estimated_cardinality);
+	groupby->children.push_back(std::move(child));
 	if (!requires_projection) {
-		return move(groupby);
+		return std::move(groupby);
 	}
 
 	// we add a physical projection on top of the aggregation to project all members in the select list
-	auto aggr_projection = make_unique<PhysicalProjection>(types, move(projections), groupby->estimated_cardinality);
-	aggr_projection->children.push_back(move(groupby));
-	return move(aggr_projection);
-}
-
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op) {
-	D_ASSERT(op.children.size() == 1);
-	auto plan = CreatePlan(*op.children[0]);
-	return CreateDistinctOn(move(plan), move(op.distinct_targets));
+	auto aggr_projection = make_uniq<PhysicalProjection>(types, std::move(projections), groupby->estimated_cardinality);
+	aggr_projection->children.push_back(std::move(groupby));
+	return std::move(aggr_projection);
 }
 
 } // namespace duckdb

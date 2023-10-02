@@ -20,6 +20,10 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "EXPRESSION_GET";
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		return "ANY_JOIN";
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+		return "ASOF_JOIN";
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
+		return "DEPENDENT_JOIN";
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		return "COMPARISON_JOIN";
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
@@ -50,6 +54,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "JOIN";
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		return "CROSS_PRODUCT";
+	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
+		return "POSITIONAL_JOIN";
 	case LogicalOperatorType::LOGICAL_UNION:
 		return "UNION";
 	case LogicalOperatorType::LOGICAL_EXCEPT:
@@ -82,6 +88,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "VACUUM";
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 		return "REC_CTE";
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		return "CTE";
 	case LogicalOperatorType::LOGICAL_CTE_REF:
 		return "CTE_SCAN";
 	case LogicalOperatorType::LOGICAL_SHOW:
@@ -96,6 +104,10 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CREATE_VIEW";
 	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
 		return "CREATE_SCHEMA";
+	case LogicalOperatorType::LOGICAL_ATTACH:
+		return "ATTACH";
+	case LogicalOperatorType::LOGICAL_DETACH:
+		return "ATTACH";
 	case LogicalOperatorType::LOGICAL_DROP:
 		return "DROP";
 	case LogicalOperatorType::LOGICAL_PRAGMA:
@@ -114,6 +126,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		break;
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		return "CUSTOM_OP";
+	case LogicalOperatorType::LOGICAL_PIVOT:
+		return "PIVOT";
 	}
 	return "INVALID";
 }

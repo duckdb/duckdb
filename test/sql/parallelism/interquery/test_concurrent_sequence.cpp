@@ -11,7 +11,7 @@ using namespace std;
 struct ConcurrentData {
 	DuckDB &db;
 	mutex lock;
-	vector<int64_t> results;
+	duckdb::vector<int64_t> results;
 
 	ConcurrentData(DuckDB &db) : db(db) {
 	}
@@ -31,7 +31,7 @@ static void append_values_from_sequence(ConcurrentData *data) {
 }
 
 TEST_CASE("Test Concurrent Usage of Sequences", "[interquery][.]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 	thread threads[CONCURRENT_SEQUENCE_THREAD_COUNT];
@@ -54,7 +54,7 @@ TEST_CASE("Test Concurrent Usage of Sequences", "[interquery][.]") {
 	REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq;"));
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq;"));
 	// now launch threads that all use the sequence in parallel
-	// each appends the values to a vector "results"
+	// each appends the values to a duckdb::vector "results"
 	for (size_t i = 0; i < CONCURRENT_SEQUENCE_THREAD_COUNT; i++) {
 		threads[i] = thread(append_values_from_sequence, &data);
 	}

@@ -1,0 +1,23 @@
+# name: test/sql/storage/lazy_load/lazy_load_limit.test
+# description: Test lazy load with progressively increasing limit
+# group: [lazy_load]
+
+# load the DB from disk
+load __TEST_DIR__/lazy_load_limit.db
+
+statement ok
+CREATE TABLE vals(i INTEGER, v VARCHAR)
+
+statement ok
+INSERT INTO vals SELECT i, i::VARCHAR FROM generate_series(1000000) t(i)
+
+restart
+
+loop i 0 10
+
+query I
+SELECT COUNT(*)=(${i}*100000) FROM (FROM vals LIMIT ${i}*100000)
+----
+true
+
+endloop

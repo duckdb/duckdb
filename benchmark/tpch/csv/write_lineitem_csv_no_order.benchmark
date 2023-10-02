@@ -1,0 +1,22 @@
+# name: benchmark/tpch/csv/write_lineitem_csv_no_order.benchmark
+# description: Write the lineitem of TPC-H SF1 to a CSV file (without preserving insertion order)
+# group: [csv]
+
+name Write Lineitem CSV (Non-Order Preserving)
+group csv
+
+cache tpch_sf1.duckdb
+
+require tpch
+
+load
+CALL dbgen(sf=1);
+
+init
+SET preserve_insertion_order=false;
+
+run
+COPY lineitem TO '${BENCHMARK_DIR}/lineitem.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+
+result I
+6001215

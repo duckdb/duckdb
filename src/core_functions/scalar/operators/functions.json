@@ -1,0 +1,50 @@
+[
+    {
+        "name": "&",
+        "parameters": "left,right",
+        "description": "Bitwise AND",
+        "example": "91 & 15",
+        "type": "scalar_function_set",
+        "struct": "BitwiseAndFun"
+    },
+    {
+        "name": "|",
+        "parameters": "left,right",
+        "description": "Bitwise OR",
+        "example": "32 | 3",
+        "type": "scalar_function_set",
+        "struct": "BitwiseOrFun"
+    },
+    {
+        "name": "~",
+        "parameters": "input",
+        "description": "Bitwise NOT",
+        "example": "~15",
+        "type": "scalar_function_set",
+        "struct": "BitwiseNotFun"
+    },
+    {
+        "name": "<<",
+        "parameters": "input",
+        "description": "Bitwise shift left",
+        "example": "1 << 4",
+        "type": "scalar_function_set",
+        "struct": "LeftShiftFun"
+    },
+    {
+        "name": ">>",
+        "parameters": "input",
+        "description": "Bitwise shift right",
+        "example": "8 >> 2",
+        "type": "scalar_function_set",
+        "struct": "RightShiftFun"
+    },
+    {
+        "name": "xor",
+        "parameters": "left,right",
+        "description": "Bitwise XOR",
+        "example": "xor(17, 5)",
+        "type": "scalar_function_set",
+        "struct": "BitwiseXorFun"
+    }
+]

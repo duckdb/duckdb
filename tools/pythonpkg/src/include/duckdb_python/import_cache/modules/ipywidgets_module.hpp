@@ -14,6 +14,9 @@ namespace duckdb {
 
 struct IpywidgetsCacheItem : public PythonImportCacheItem {
 public:
+	static constexpr const char *Name = "ipywidgets";
+
+public:
 	~IpywidgetsCacheItem() override {
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {

@@ -34,7 +34,7 @@ string_t StringHeap::AddString(const string &data) {
 }
 
 string_t StringHeap::AddString(const string_t &data) {
-	return AddString(data.GetDataUnsafe(), data.GetSize());
+	return AddString(data.GetData(), data.GetSize());
 }
 
 string_t StringHeap::AddBlob(const char *data, idx_t len) {
@@ -46,13 +46,17 @@ string_t StringHeap::AddBlob(const char *data, idx_t len) {
 }
 
 string_t StringHeap::AddBlob(const string_t &data) {
-	return AddBlob(data.GetDataUnsafe(), data.GetSize());
+	return AddBlob(data.GetData(), data.GetSize());
 }
 
 string_t StringHeap::EmptyString(idx_t len) {
-	D_ASSERT(len >= string_t::INLINE_LENGTH);
-	auto insert_pos = (const char *)allocator.Allocate(len);
+	D_ASSERT(len > string_t::INLINE_LENGTH);
+	auto insert_pos = const_char_ptr_cast(allocator.Allocate(len));
 	return string_t(insert_pos, len);
+}
+
+idx_t StringHeap::SizeInBytes() const {
+	return allocator.SizeInBytes();
 }
 
 } // namespace duckdb

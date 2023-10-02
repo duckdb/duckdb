@@ -1,0 +1,15 @@
+# name: benchmark/micro/aggregate/bitstring_aggregate.benchmark
+# description: Count distinct values using bitstring_agg function
+# group: [aggregate]
+
+name distinct count with bitstring_agg
+group aggregate
+
+load
+CREATE TABLE ints AS SELECT i % 1000 col FROM range(0, 100000000, 5) tbl(i);
+
+run
+SELECT bit_count(bitstring_agg(col)) FROM ints
+
+result I
+200

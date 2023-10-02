@@ -1,0 +1,35 @@
+# name: test/fuzzer/sqlsmith/bitstring_agg_overflow.test
+# description: bitstring_agg overflow
+# group: [sqlsmith]
+
+foreach type utinyint usmallint uinteger ubigint smallint integer bigint hugeint
+
+statement ok
+CREATE OR REPLACE TABLE integers(i ${type});
+
+statement ok
+INSERT INTO integers VALUES (0), (255);
+
+statement ok
+SELECT bitstring_agg(i) FROM integers
+
+endloop
+
+statement ok
+CREATE TABLE all_types AS FROM test_all_types();
+
+foreach small_type utinyint usmallint
+
+statement ok
+SELECT bitstring_agg("${small_type}") FROM all_types;
+
+endloop
+
+foreach type tinyint smallint int uint ubigint bigint hugeint
+
+statement error
+SELECT bitstring_agg("${type}") FROM all_types;
+----
+too large for bitstring aggregation
+
+endloop

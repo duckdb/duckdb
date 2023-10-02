@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/operator/logical_extension.operator.hpp
+// duckdb/planner/operator/logical_extension_operator.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,16 +13,25 @@
 
 namespace duckdb {
 
-struct LogicalExtensionOperator : public LogicalOperator {
+class ColumnBindingResolver;
 
+struct LogicalExtensionOperator : public LogicalOperator {
+public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR;
+
+public:
 	LogicalExtensionOperator() : LogicalOperator(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR) {
 	}
 	LogicalExtensionOperator(vector<unique_ptr<Expression>> expressions)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR, move(expressions)) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR, std::move(expressions)) {
 	}
 
-	static unique_ptr<LogicalExtensionOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+	virtual void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
 	virtual unique_ptr<PhysicalOperator> CreatePlan(ClientContext &context, PhysicalPlanGenerator &generator) = 0;
+
+	virtual void ResolveColumnBindings(ColumnBindingResolver &res, vector<ColumnBinding> &bindings);
+	virtual string GetExtensionName() const;
 };
 } // namespace duckdb

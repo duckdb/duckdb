@@ -1,0 +1,122 @@
+# name: test/sql/aggregate/distinct/grouped/coverage.test_slow
+# description: DISTINCT aggregations
+# group: [grouped]
+
+# Since these tests are made to test the grouped operator, and not necessarily the functions themselves
+# This test will mostly focus on the order and mixing of distinct and non-distinct aggregates
+# And not on variation between types and functions
+
+#Recursive CTE
+
+query I
+with recursive t as (select 1 as x union select sum(distinct x+1) from t where x < 3 group by x) select * from t order by x;
+----
+1
+2
+3
+
+# Prepared statement
+
+statement ok
+CREATE TABLE tbl AS SELECT i, i%5 as j FROM range(1000000) tbl(i);
+
+statement ok
+PREPARE v1 AS SELECT SUM(DISTINCT i%5+?::INT) FROM tbl group by j order by all;
+
+query I
+EXECUTE v1(1);
+----
+1
+2
+3
+4
+5
+
+query I
+EXECUTE v1(2);
+----
+2
+3
+4
+5
+6
+
+query I
+EXECUTE v1(3);
+----
+3
+4
+5
+6
+7
+
+# DISTINCT aggregate parameter as expression
+
+query I
+SELECT COUNT(distinct i % 5) from tbl group by j;
+----
+1
+1
+1
+1
+1
+
+# Correlated subquery
+
+query I
+SELECT COUNT(distinct (SELECT i%5)) from tbl group by j;
+----
+1
+1
+1
+1
+1
+
+## Aggregate with multiple parameters
+
+query I
+SELECT ARG_MIN(distinct i%5, i) from tbl group by j order by all;
+----
+0
+1
+2
+3
+4
+
+# Distinct lists
+
+statement ok
+CREATE TABLE lists_tbl AS SELECT i%20 as groups, [x + i for x in range(280)] AS l FROM range(200000) tmp(i);
+
+query IIII
+SELECT COUNT(l), avg(groups), COUNT(DISTINCT l), groups FROM lists_tbl group by groups order by groups limit 10;
+----
+10000	0.0	10000	0
+10000	1.0	10000	1
+10000	2.0	10000	2
+10000	3.0	10000	3
+10000	4.0	10000	4
+10000	5.0	10000	5
+10000	6.0	10000	6
+10000	7.0	10000	7
+10000	8.0	10000	8
+10000	9.0	10000	9
+
+# Non-inlined (>12 length) strings
+
+statement ok
+create table strings_tbl as select gen_random_uuid() as strings, i as groups from range(200000) tbl(i);
+
+query II
+select count(strings), count(distinct strings) from strings_tbl group by groups order by groups limit 10;
+----
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1

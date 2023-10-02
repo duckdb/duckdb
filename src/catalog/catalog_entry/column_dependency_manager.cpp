@@ -177,12 +177,12 @@ void ColumnDependencyManager::AdjustSingle(LogicalIndex idx, idx_t offset) {
 	}
 	if (has_dependents) {
 		D_ASSERT(!dependencies_map.count(new_idx));
-		dependencies_map[new_idx] = move(dependencies_map[idx]);
+		dependencies_map[new_idx] = std::move(dependencies_map[idx]);
 		dependencies_map.erase(idx);
 	}
 	if (has_dependencies) {
 		D_ASSERT(!dependents_map.count(new_idx));
-		dependents_map[new_idx] = move(dependents_map[idx]);
+		dependents_map[new_idx] = std::move(dependents_map[idx]);
 		dependents_map.erase(idx);
 	}
 }

@@ -1,0 +1,73 @@
+# name: test/sql/attach/attach_views.test
+# description: Test views in an attached database
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH DATABASE ':memory:' AS new_database;
+
+statement ok
+CREATE TABLE t1 AS SELECT 42 i
+
+statement ok
+CREATE SCHEMA new_database.s1;
+
+foreach prefix new_database.s1 new_database
+
+# reference table in other database in view
+statement ok
+CREATE VIEW ${prefix}.v1 AS SELECT * FROM t1
+
+query I
+SELECT * FROM ${prefix}.v1
+----
+42
+
+# reference table in current database in view
+statement ok
+CREATE TABLE ${prefix}.t1 AS SELECT 84 i
+
+statement ok
+CREATE OR REPLACE VIEW ${prefix}.v1 AS SELECT * FROM ${prefix}.t1
+
+query I
+SELECT * FROM ${prefix}.t1
+----
+84
+
+query I
+SELECT * FROM ${prefix}.v1
+----
+84
+
+# reference tables from different databases in view
+statement ok
+CREATE OR REPLACE VIEW ${prefix}.v1 AS SELECT * FROM ${prefix}.t1 UNION ALL FROM t1 ORDER BY ALL
+
+query I
+SELECT * FROM ${prefix}.v1
+----
+42
+84
+
+# rename view
+statement ok
+ALTER VIEW ${prefix}.v1 RENAME TO v2
+
+query I
+SELECT * FROM ${prefix}.v2
+----
+42
+84
+
+statement ok
+DROP VIEW ${prefix}.v2
+
+statement ok
+DROP TABLE ${prefix}.t1
+
+endloop

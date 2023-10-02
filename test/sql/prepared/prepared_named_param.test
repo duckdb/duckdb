@@ -1,0 +1,33 @@
+# name: test/sql/prepared/prepared_named_param.test
+# group: [prepared]
+
+statement ok
+prepare q123 as select $param, $other_name, $param;
+
+query III
+execute q123(param := 5, other_name := 3);
+----
+5	3	5
+
+statement error
+execute q123(param := 5, 3)
+----
+Not implemented Error: Mixing named parameters and positional parameters is not supported yet
+
+statement ok
+prepare q01 as select $1, ?, $2;
+
+statement error
+execute q01(4, 2, 0)
+----
+Parameter argument/count mismatch, identifiers of the excess parameters: 3
+
+statement error
+prepare q02 as select $1, $param, $2;
+---
+Not implemented Error: Mixing named and positional parameters is not supported yet
+
+statement error
+execute q01(a, 2, 0)
+----
+Invalid Input Error: Only scalar parameters, named parameters or NULL supported for EXECUTE

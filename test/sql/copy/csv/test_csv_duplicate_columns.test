@@ -1,0 +1,32 @@
+# name: test/sql/copy/csv/test_csv_duplicate_columns.test
+# group: [csv]
+
+require parquet
+
+statement ok
+COPY (SELECT 1 as a, 2 as a, 3 as a) TO '__TEST_DIR__/dupe_cols.csv' (FORMAT CSV, HEADER);
+
+# The duplicate column(s) get `:{index}` appended to it
+query III
+SELECT a, "a:1", "a:2" FROM '__TEST_DIR__/dupe_cols.csv';
+----
+1	2	3
+
+# Original names are not preserved if a dupe appears first
+statement ok
+COPY (SELECT 1 as a, 2 as a, 3 as "a:1") TO '__TEST_DIR__/dupe_cols.csv' (FORMAT CSV, HEADER);
+
+# original 'a:1' is renamed to 'a:2'
+query III
+SELECT a, "a:1", "a:1:1" FROM '__TEST_DIR__/dupe_cols.csv';
+----
+1	2	3
+
+statement ok
+COPY (SELECT 1 as a, 3 as "a:1", 2 as a) TO '__TEST_DIR__/dupe_cols.csv' (FORMAT CSV, HEADER);
+
+# Here the name is preserved, because it appears before the dupe
+query III
+SELECT a, "a:1", "a:2" FROM '__TEST_DIR__/dupe_cols.csv';
+----
+1	3	2

@@ -1,11 +1,12 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "duckdb.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 
 using namespace duckdb;
 
@@ -22,6 +23,11 @@ using namespace duckdb;
 #include <sys/types.h>
 #include <arpa/inet.h>
 
+#ifdef __MVS__
+#define _XOPEN_SOURCE_EXTENDED 1
+#include <strings.h>
+#endif
+
 class WaggleExtension : public OptimizerExtension {
 public:
 	WaggleExtension() {
@@ -30,7 +36,7 @@ public:
 
 	static bool HasParquetScan(LogicalOperator &op) {
 		if (op.type == LogicalOperatorType::LOGICAL_GET) {
-			auto &get = (LogicalGet &)op;
+			auto &get = op.Cast<LogicalGet>();
 			return get.function.name == "parquet_scan";
 		}
 		for (auto &child : op.children) {
@@ -41,8 +47,29 @@ public:
 		return false;
 	}
 
+	static void WriteChecked(int sockfd, void *data, idx_t write_size) {
+		auto bytes_written = write(sockfd, data, write_size);
+		if (bytes_written < 0) {
+			throw InternalException("Failed to write \"%lld\" bytes to socket: %s", write_size, strerror(errno));
+		}
+		if (idx_t(bytes_written) != write_size) {
+			throw InternalException("Failed to write \"%llu\" bytes from socket - wrote %llu instead", write_size,
+			                        bytes_written);
+		}
+	}
+	static void ReadChecked(int sockfd, void *data, idx_t read_size) {
+		auto bytes_read = read(sockfd, data, read_size);
+		if (bytes_read < 0) {
+			throw InternalException("Failed to read \"%lld\" bytes from socket: %s", read_size, strerror(errno));
+		}
+		if (idx_t(bytes_read) != read_size) {
+			throw InternalException("Failed to read \"%llu\" bytes from socket - read %llu instead", read_size,
+			                        bytes_read);
+		}
+	}
+
 	static void WaggleOptimizeFunction(ClientContext &context, OptimizerExtensionInfo *info,
-	                                   unique_ptr<LogicalOperator> &plan) {
+	                                   duckdb::unique_ptr<LogicalOperator> &plan) {
 		if (!HasParquetScan(*plan)) {
 			return;
 		}
@@ -73,38 +100,46 @@ public:
 			throw IOException("Failed to connect socket %s", string(strerror(errno)));
 		}
 
-		BufferedSerializer serializer;
+		MemoryStream stream;
+		BinarySerializer serializer(stream);
+		serializer.Begin();
 		plan->Serialize(serializer);
-		auto data = serializer.GetData();
+		serializer.End();
+		auto data = stream.GetData();
+		idx_t len = stream.GetPosition();
 
-		ssize_t len = data.size;
-		D_ASSERT(write(sockfd, &len, sizeof(idx_t)) == sizeof(idx_t));
-		D_ASSERT(write(sockfd, data.data.get(), len) == len);
+		WriteChecked(sockfd, &len, sizeof(idx_t));
+		WriteChecked(sockfd, data, len);
 
-		auto chunk_collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator());
+		auto chunk_collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator());
 		idx_t n_chunks;
-		D_ASSERT(read(sockfd, &n_chunks, sizeof(idx_t)) == sizeof(idx_t));
+		ReadChecked(sockfd, &n_chunks, sizeof(idx_t));
 		for (idx_t i = 0; i < n_chunks; i++) {
-			ssize_t chunk_len;
-			D_ASSERT(read(sockfd, &chunk_len, sizeof(idx_t)) == sizeof(idx_t));
+			idx_t chunk_len;
+			ReadChecked(sockfd, &chunk_len, sizeof(idx_t));
 			auto buffer = malloc(chunk_len);
 			D_ASSERT(buffer);
-			D_ASSERT(read(sockfd, buffer, chunk_len) == chunk_len);
-			BufferedDeserializer deserializer((data_ptr_t)buffer, chunk_len);
+			ReadChecked(sockfd, buffer, chunk_len);
+
+			MemoryStream source(data_ptr_cast(buffer), chunk_len);
 			DataChunk chunk;
 
+			BinaryDeserializer deserializer(source);
+
+			deserializer.Begin();
 			chunk.Deserialize(deserializer);
+			deserializer.End();
 			chunk_collection->Initialize(chunk.GetTypes());
 			chunk_collection->Append(chunk);
 			free(buffer);
 		}
 
 		auto types = chunk_collection->Types();
-		plan = make_unique<LogicalColumnDataGet>(0, types, move(chunk_collection));
+		plan = make_uniq<LogicalColumnDataGet>(0, types, std::move(chunk_collection));
 
 		len = 0;
 		(void)len;
-		D_ASSERT(write(sockfd, &len, sizeof(idx_t)) == sizeof(idx_t));
+		WriteChecked(sockfd, &len, sizeof(idx_t));
 		// close the socket
 		close(sockfd);
 	}

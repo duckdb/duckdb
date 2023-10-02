@@ -1,12 +1,13 @@
 #include "duckdb/storage/table/update_segment.hpp"
 
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
-#include "duckdb/storage/statistics/string_statistics.hpp"
-#include "duckdb/storage/statistics/validity_statistics.hpp"
+
 #include "duckdb/storage/table/column_data.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
+#include "duckdb/common/printer.hpp"
+
+#include <algorithm>
 
 namespace duckdb {
 
@@ -39,12 +40,6 @@ UpdateSegment::UpdateSegment(ColumnData &column_data)
 UpdateSegment::~UpdateSegment() {
 }
 
-void UpdateSegment::ClearUpdates() {
-	stats.Reset();
-	root.reset();
-	heap.Destroy();
-}
-
 //===--------------------------------------------------------------------===//
 // Update Info Helpers
 //===--------------------------------------------------------------------===//
@@ -53,9 +48,9 @@ Value UpdateInfo::GetValue(idx_t index) {
 
 	switch (type.id()) {
 	case LogicalTypeId::VALIDITY:
-		return Value::BOOLEAN(((bool *)tuple_data)[index]);
+		return Value::BOOLEAN(reinterpret_cast<bool *>(tuple_data)[index]);
 	case LogicalTypeId::INTEGER:
-		return Value::INTEGER(((int32_t *)tuple_data)[index]);
+		return Value::INTEGER(reinterpret_cast<int32_t *>(tuple_data)[index]);
 	default:
 		throw NotImplementedException("Unimplemented type for UpdateInfo::GetValue");
 	}
@@ -90,7 +85,7 @@ void UpdateInfo::Verify() {
 // Update Fetch
 //===--------------------------------------------------------------------===//
 static void MergeValidityInfo(UpdateInfo *current, ValidityMask &result_mask) {
-	auto info_data = (bool *)current->tuple_data;
+	auto info_data = reinterpret_cast<bool *>(current->tuple_data);
 	for (idx_t i = 0; i < current->N; i++) {
 		result_mask.Set(current->tuples[i], info_data[i]);
 	}
@@ -105,7 +100,7 @@ static void UpdateMergeValidity(transaction_t start_time, transaction_t transact
 
 template <class T>
 static void MergeUpdateInfo(UpdateInfo *current, T *result_data) {
-	auto info_data = (T *)current->tuple_data;
+	auto info_data = reinterpret_cast<T *>(current->tuple_data);
 	if (current->N == STANDARD_VECTOR_SIZE) {
 		// special case: update touches ALL tuples of this vector
 		// in this case we can just memcpy the data
@@ -246,7 +241,7 @@ void UpdateSegment::FetchCommitted(idx_t vector_index, Vector &result) {
 //===--------------------------------------------------------------------===//
 static void MergeUpdateInfoRangeValidity(UpdateInfo *current, idx_t start, idx_t end, idx_t result_offset,
                                          ValidityMask &result_mask) {
-	auto info_data = (bool *)current->tuple_data;
+	auto info_data = reinterpret_cast<bool *>(current->tuple_data);
 	for (idx_t i = 0; i < current->N; i++) {
 		auto tuple_idx = current->tuples[i];
 		if (tuple_idx < start) {
@@ -266,7 +261,7 @@ static void FetchCommittedRangeValidity(UpdateInfo *info, idx_t start, idx_t end
 
 template <class T>
 static void MergeUpdateInfoRange(UpdateInfo *current, idx_t start, idx_t end, idx_t result_offset, T *result_data) {
-	auto info_data = (T *)current->tuple_data;
+	auto info_data = reinterpret_cast<T *>(current->tuple_data);
 	for (idx_t i = 0; i < current->N; i++) {
 		auto tuple_idx = current->tuples[i];
 		if (tuple_idx < start) {
@@ -333,7 +328,7 @@ void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &re
 	idx_t start_vector = start_row / STANDARD_VECTOR_SIZE;
 	idx_t end_vector = (end_row - 1) / STANDARD_VECTOR_SIZE;
 	D_ASSERT(start_vector <= end_vector);
-	D_ASSERT(end_vector < RowGroup::ROW_GROUP_VECTOR_COUNT);
+	D_ASSERT(end_vector < Storage::ROW_GROUP_VECTOR_COUNT);
 
 	for (idx_t vector_idx = start_vector; vector_idx <= end_vector; vector_idx++) {
 		if (!root->info[vector_idx]) {
@@ -357,7 +352,7 @@ static void FetchRowValidity(transaction_t start_time, transaction_t transaction
                              Vector &result, idx_t result_idx) {
 	auto &result_mask = FlatVector::Validity(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
-		auto info_data = (bool *)current->tuple_data;
+		auto info_data = reinterpret_cast<bool *>(current->tuple_data);
 		// FIXME: we could do a binary search in here
 		for (idx_t i = 0; i < current->N; i++) {
 			if (current->tuples[i] == row_idx) {
@@ -432,7 +427,7 @@ void UpdateSegment::FetchRow(TransactionData transaction, idx_t row_id, Vector &
 	if (!root->info[vector_index]) {
 		return;
 	}
-	idx_t row_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
+	idx_t row_in_vector = (row_id - column_data.start) - vector_index * STANDARD_VECTOR_SIZE;
 	fetch_row_function(transaction.start_time, transaction.transaction_id, root->info[vector_index]->info.get(),
 	                   row_in_vector, result, result_idx);
 }
@@ -441,15 +436,15 @@ void UpdateSegment::FetchRow(TransactionData transaction, idx_t row_id, Vector &
 // Rollback update
 //===--------------------------------------------------------------------===//
 template <class T>
-static void RollbackUpdate(UpdateInfo *base_info, UpdateInfo *rollback_info) {
-	auto base_data = (T *)base_info->tuple_data;
-	auto rollback_data = (T *)rollback_info->tuple_data;
+static void RollbackUpdate(UpdateInfo &base_info, UpdateInfo &rollback_info) {
+	auto base_data = (T *)base_info.tuple_data;
+	auto rollback_data = (T *)rollback_info.tuple_data;
 	idx_t base_offset = 0;
-	for (idx_t i = 0; i < rollback_info->N; i++) {
-		auto id = rollback_info->tuples[i];
-		while (base_info->tuples[base_offset] < id) {
+	for (idx_t i = 0; i < rollback_info.N; i++) {
+		auto id = rollback_info.tuples[i];
+		while (base_info.tuples[base_offset] < id) {
 			base_offset++;
-			D_ASSERT(base_offset < base_info->N);
+			D_ASSERT(base_offset < base_info.N);
 		}
 		base_data[base_offset] = rollback_data[i];
 	}
@@ -491,13 +486,13 @@ static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(Physi
 	}
 }
 
-void UpdateSegment::RollbackUpdate(UpdateInfo *info) {
+void UpdateSegment::RollbackUpdate(UpdateInfo &info) {
 	// obtain an exclusive lock
 	auto lock_handle = lock.GetExclusiveLock();
 
 	// move the data from the UpdateInfo back into the base info
-	D_ASSERT(root->info[info->vector_index]);
-	rollback_update_function(root->info[info->vector_index]->info.get(), info);
+	D_ASSERT(root->info[info.vector_index]);
+	rollback_update_function(*root->info[info.vector_index]->info, info);
 
 	// clean up the update chain
 	CleanupUpdateInternal(*lock_handle, info);
@@ -506,16 +501,16 @@ void UpdateSegment::RollbackUpdate(UpdateInfo *info) {
 //===--------------------------------------------------------------------===//
 // Cleanup Update
 //===--------------------------------------------------------------------===//
-void UpdateSegment::CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo *info) {
-	D_ASSERT(info->prev);
-	auto prev = info->prev;
-	prev->next = info->next;
+void UpdateSegment::CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo &info) {
+	D_ASSERT(info.prev);
+	auto prev = info.prev;
+	prev->next = info.next;
 	if (prev->next) {
 		prev->next->prev = prev;
 	}
 }
 
-void UpdateSegment::CleanupUpdate(UpdateInfo *info) {
+void UpdateSegment::CleanupUpdate(UpdateInfo &info) {
 	// obtain an exclusive lock
 	auto lock_handle = lock.GetExclusiveLock();
 	CleanupUpdateInternal(*lock_handle, info);
@@ -581,7 +576,7 @@ void UpdateSegment::InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const Sel
 static void InitializeUpdateValidity(UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info, Vector &update,
                                      const SelectionVector &sel) {
 	auto &update_mask = FlatVector::Validity(update);
-	auto tuple_data = (bool *)update_info->tuple_data;
+	auto tuple_data = reinterpret_cast<bool *>(update_info->tuple_data);
 
 	if (!update_mask.AllValid()) {
 		for (idx_t i = 0; i < update_info->N; i++) {
@@ -595,7 +590,7 @@ static void InitializeUpdateValidity(UpdateInfo *base_info, Vector &base_data, U
 	}
 
 	auto &base_mask = FlatVector::Validity(base_data);
-	auto base_tuple_data = (bool *)base_info->tuple_data;
+	auto base_tuple_data = reinterpret_cast<bool *>(base_info->tuple_data);
 	if (!base_mask.AllValid()) {
 		for (idx_t i = 0; i < base_info->N; i++) {
 			base_tuple_data[i] = base_mask.RowIsValidUnsafe(base_info->tuples[i]);
@@ -616,7 +611,7 @@ struct UpdateSelectElement {
 
 template <>
 string_t UpdateSelectElement::Operation(UpdateSegment *segment, string_t element) {
-	return element.IsInlined() ? element : segment->GetStringHeap().AddString(element);
+	return element.IsInlined() ? element : segment->GetStringHeap().AddBlob(element);
 }
 
 template <class T>
@@ -890,17 +885,17 @@ static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTyp
 //===--------------------------------------------------------------------===//
 unique_ptr<BaseStatistics> UpdateSegment::GetStatistics() {
 	lock_guard<mutex> stats_guard(stats_lock);
-	return stats.statistics->Copy();
+	return stats.statistics.ToUnique();
 }
 
 idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
                                SelectionVector &sel) {
 	auto &mask = FlatVector::Validity(update);
-	auto &validity = (ValidityStatistics &)*stats.statistics;
-	if (!mask.AllValid() && !validity.has_null) {
+	auto &validity = stats.statistics;
+	if (!mask.AllValid() && !validity.CanHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			if (!mask.RowIsValid(i)) {
-				validity.has_null = true;
+				validity.SetHasNull();
 				break;
 			}
 		}
@@ -917,7 +912,7 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 
 	if (mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			NumericStatistics::Update<T>(stats, update_data[i]);
+			NumericStats::Update<T>(stats.statistics, update_data[i]);
 		}
 		sel.Initialize(nullptr);
 		return count;
@@ -927,7 +922,7 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 		for (idx_t i = 0; i < count; i++) {
 			if (mask.RowIsValid(i)) {
 				sel.set_index(not_null_count++, i);
-				NumericStatistics::Update<T>(stats, update_data[i]);
+				NumericStats::Update<T>(stats.statistics, update_data[i]);
 			}
 		}
 		return not_null_count;
@@ -940,9 +935,9 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, V
 	auto &mask = FlatVector::Validity(update);
 	if (mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			((StringStatistics &)*stats.statistics).Update(update_data[i]);
+			StringStats::Update(stats.statistics, update_data[i]);
 			if (!update_data[i].IsInlined()) {
-				update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
+				update_data[i] = segment->GetStringHeap().AddBlob(update_data[i]);
 			}
 		}
 		sel.Initialize(nullptr);
@@ -953,9 +948,9 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, V
 		for (idx_t i = 0; i < count; i++) {
 			if (mask.RowIsValid(i)) {
 				sel.set_index(not_null_count++, i);
-				((StringStatistics &)*stats.statistics).Update(update_data[i]);
+				StringStats::Update(stats.statistics, update_data[i]);
 				if (!update_data[i].IsInlined()) {
-					update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
+					update_data[i] = segment->GetStringHeap().AddBlob(update_data[i]);
 				}
 			}
 		}
@@ -1047,12 +1042,13 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 	return pos;
 }
 
-UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, idx_t count, unique_ptr<char[]> &data) {
-	data = unique_ptr<char[]>(new char[sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE]);
-	auto update_info = (UpdateInfo *)data.get();
+UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, idx_t count,
+                                  unsafe_unique_array<char> &data) {
+	data = make_unsafe_uniq_array<char>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
+	auto update_info = reinterpret_cast<UpdateInfo *>(data.get());
 	update_info->max = STANDARD_VECTOR_SIZE;
-	update_info->tuples = (sel_t *)(((data_ptr_t)update_info) + sizeof(UpdateInfo));
-	update_info->tuple_data = ((data_ptr_t)update_info) + sizeof(UpdateInfo) + sizeof(sel_t) * update_info->max;
+	update_info->tuples = reinterpret_cast<sel_t *>((data_ptr_cast(update_info)) + sizeof(UpdateInfo));
+	update_info->tuple_data = (data_ptr_cast(update_info)) + sizeof(UpdateInfo) + sizeof(sel_t) * update_info->max;
 	update_info->version_number = transaction.transaction_id;
 	return update_info;
 }
@@ -1083,7 +1079,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 
 	// create the versions for this segment, if there are none yet
 	if (!root) {
-		root = make_unique<UpdateNode>();
+		root = make_uniq<UpdateNode>();
 	}
 
 	// get the vector index based on the first id
@@ -1093,7 +1089,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 	idx_t vector_offset = column_data.start + vector_index * STANDARD_VECTOR_SIZE;
 
 	D_ASSERT(idx_t(first_id) >= column_data.start);
-	D_ASSERT(vector_index < RowGroup::ROW_GROUP_VECTOR_COUNT);
+	D_ASSERT(vector_index < Storage::ROW_GROUP_VECTOR_COUNT);
 
 	// first check the version chain
 	UpdateInfo *node = nullptr;
@@ -1114,11 +1110,12 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 			}
 			node = node->next;
 		}
-		unique_ptr<char[]> update_info_data;
+		unsafe_unique_array<char> update_info_data;
 		if (!node) {
 			// no updates made yet by this transaction: initially the update info to empty
 			if (transaction.transaction) {
-				node = transaction.transaction->CreateUpdateInfo(type_size, count);
+				auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
+				node = dtransaction.CreateUpdateInfo(type_size, count);
 			} else {
 				node = CreateEmptyUpdateInfo(transaction, type_size, count, update_info_data);
 			}
@@ -1145,11 +1142,11 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		node->Verify();
 	} else {
 		// there is no version info yet: create the top level update info and fill it with the updates
-		auto result = make_unique<UpdateNodeData>();
+		auto result = make_uniq<UpdateNodeData>();
 
-		result->info = make_unique<UpdateInfo>();
-		result->tuples = unique_ptr<sel_t[]>(new sel_t[STANDARD_VECTOR_SIZE]);
-		result->tuple_data = unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * type_size]);
+		result->info = make_uniq<UpdateInfo>();
+		result->tuples = make_unsafe_uniq_array<sel_t>(STANDARD_VECTOR_SIZE);
+		result->tuple_data = make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * type_size);
 		result->info->tuples = result->tuples.get();
 		result->info->tuple_data = result->tuple_data.get();
 		result->info->version_number = TRANSACTION_ID_START - 1;
@@ -1157,7 +1154,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		InitializeUpdateInfo(*result->info, ids, sel, count, vector_index, vector_offset);
 
 		// now create the transaction level update info in the undo log
-		unique_ptr<char[]> update_info_data;
+		unsafe_unique_array<char> update_info_data;
 		UpdateInfo *transaction_node;
 		if (transaction.transaction) {
 			transaction_node = transaction.transaction->CreateUpdateInfo(type_size, count);
@@ -1179,7 +1176,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		transaction_node->Verify();
 		result->info->Verify();
 
-		root->info[vector_index] = move(result);
+		root->info[vector_index] = std::move(result);
 	}
 }
 

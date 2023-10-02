@@ -1,0 +1,19 @@
+# name: test/sql/storage/extensions/extension_default.test
+# description: Store default values that rely on extension functions
+# group: [extensions]
+
+# load the DB from disk
+load __TEST_DIR__/views_with_extensions.db
+
+statement ok
+CREATE TABLE t1(v VARCHAR DEFAULT CURRENT_SCHEMA())
+
+restart
+
+statement ok
+INSERT INTO t1 VALUES (DEFAULT)
+
+query I
+SELECT * FROM t1;
+----
+main

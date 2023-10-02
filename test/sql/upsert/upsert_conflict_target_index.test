@@ -1,0 +1,32 @@
+# name: test/sql/upsert/upsert_conflict_target_index.test
+# group: [upsert]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create or replace table index_tbl (
+	i integer,
+	j integer
+);
+
+statement ok
+insert into index_tbl values (5, 3);
+
+statement ok
+create unique index other_index on index_tbl(i);
+
+statement error
+insert into index_tbl values (5, 5);
+
+query II
+select * from index_tbl;
+----
+5	3
+
+# TODO: Indexes are only checked as part of committing a transaction, not in the Insert, so we currently can't support the
+# ON CONFLICT ON CONSTRAINT <constraint_name> syntax
+statement error
+insert into index_tbl values (5, 10) on conflict on constraint other_index do update set j = excluded.j;
+----
+Not implemented Error: ON CONSTRAINT conflict target is not supported yet

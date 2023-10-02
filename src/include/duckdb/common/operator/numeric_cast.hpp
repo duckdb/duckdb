@@ -9,8 +9,11 @@
 #pragma once
 
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include <cmath>
 
 namespace duckdb {
@@ -97,6 +100,26 @@ bool TryCastWithOverflowCheck(float value, int64_t &result) {
 }
 
 template <>
+bool TryCastWithOverflowCheck(float value, uint8_t &result) {
+	return TryCastWithOverflowCheckFloat<float, uint8_t>(value, result, 0.0f, 256.0f);
+}
+
+template <>
+bool TryCastWithOverflowCheck(float value, uint16_t &result) {
+	return TryCastWithOverflowCheckFloat<float, uint16_t>(value, result, 0.0f, 65536.0f);
+}
+
+template <>
+bool TryCastWithOverflowCheck(float value, uint32_t &result) {
+	return TryCastWithOverflowCheckFloat<float, uint32_t>(value, result, 0.0f, 4294967296.0f);
+}
+
+template <>
+bool TryCastWithOverflowCheck(float value, uint64_t &result) {
+	return TryCastWithOverflowCheckFloat<float, uint64_t>(value, result, 0.0f, 18446744073709551616.0f);
+}
+
+template <>
 bool TryCastWithOverflowCheck(double value, int8_t &result) {
 	return TryCastWithOverflowCheckFloat<double, int8_t>(value, result, -128.0, 128.0);
 }
@@ -116,6 +139,25 @@ bool TryCastWithOverflowCheck(double value, int64_t &result) {
 	return TryCastWithOverflowCheckFloat<double, int64_t>(value, result, -9223372036854775808.0, 9223372036854775808.0);
 }
 
+template <>
+bool TryCastWithOverflowCheck(double value, uint8_t &result) {
+	return TryCastWithOverflowCheckFloat<double, uint8_t>(value, result, 0.0, 256.0);
+}
+
+template <>
+bool TryCastWithOverflowCheck(double value, uint16_t &result) {
+	return TryCastWithOverflowCheckFloat<double, uint16_t>(value, result, 0.0, 65536.0);
+}
+
+template <>
+bool TryCastWithOverflowCheck(double value, uint32_t &result) {
+	return TryCastWithOverflowCheckFloat<double, uint32_t>(value, result, 0.0, 4294967296.0);
+}
+
+template <>
+bool TryCastWithOverflowCheck(double value, uint64_t &result) {
+	return TryCastWithOverflowCheckFloat<double, uint64_t>(value, result, 0.0, 18446744073709551615.0);
+}
 template <>
 bool TryCastWithOverflowCheck(float input, float &result) {
 	result = input;
@@ -402,6 +444,13 @@ template <>
 bool TryCastWithOverflowCheck(hugeint_t value, double &result) {
 	return Hugeint::TryCast(value, result);
 }
+
+struct NumericTryCastToBit {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		return StringVector::AddStringOrBlob(result, Bit::NumericToBit(input));
+	}
+};
 
 struct NumericTryCast {
 	template <class SRC, class DST>

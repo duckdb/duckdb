@@ -7,13 +7,13 @@ group string
 
 require tpch
 
-cache tpch_sf1
+cache tpch_sf1.duckdb
 
 load
 CALL dbgen(sf=1);
 
 run
-SELECT COUNT(*) FROM lineitem WHERE contains(l_comment, 'riously. regular, express dep')
+SELECT COUNT(*) FROM lineitem WHERE contains(l_comment, 'riously. regular, express pinto ')
 
 result I
 3

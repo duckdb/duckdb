@@ -7,16 +7,16 @@
 
 namespace duckdb {
 
-ExplainRelation::ExplainRelation(shared_ptr<Relation> child_p)
-    : Relation(child_p->context, RelationType::EXPLAIN_RELATION), child(move(child_p)) {
+ExplainRelation::ExplainRelation(shared_ptr<Relation> child_p, ExplainType type)
+    : Relation(child_p->context, RelationType::EXPLAIN_RELATION), child(std::move(child_p)), type(type) {
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 BoundStatement ExplainRelation::Bind(Binder &binder) {
-	auto select = make_unique<SelectStatement>();
+	auto select = make_uniq<SelectStatement>();
 	select->node = child->GetQueryNode();
-	ExplainStatement explain(move(select));
-	return binder.Bind((SQLStatement &)explain);
+	ExplainStatement explain(std::move(select), type);
+	return binder.Bind(explain.Cast<SQLStatement>());
 }
 
 const vector<ColumnDefinition> &ExplainRelation::Columns() {

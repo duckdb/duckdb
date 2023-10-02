@@ -3,9 +3,9 @@
 
 namespace duckdb {
 
-PragmaFunctionCatalogEntry::PragmaFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
-                                                       CreatePragmaFunctionInfo *info)
-    : StandardEntry(CatalogType::PRAGMA_FUNCTION_ENTRY, schema, catalog, info->name), functions(move(info->functions)) {
+PragmaFunctionCatalogEntry::PragmaFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
+                                                       CreatePragmaFunctionInfo &info)
+    : FunctionEntry(CatalogType::PRAGMA_FUNCTION_ENTRY, catalog, schema, info), functions(std::move(info.functions)) {
 }
 
 } // namespace duckdb

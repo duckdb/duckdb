@@ -9,11 +9,11 @@ Block::Block(Allocator &allocator, block_id_t id)
 
 Block::Block(Allocator &allocator, block_id_t id, uint32_t internal_size)
     : FileBuffer(allocator, FileBufferType::BLOCK, internal_size), id(id) {
-	D_ASSERT((GetMallocedSize() & (Storage::SECTOR_SIZE - 1)) == 0);
+	D_ASSERT((AllocSize() & (Storage::SECTOR_SIZE - 1)) == 0);
 }
 
 Block::Block(FileBuffer &source, block_id_t id) : FileBuffer(source, FileBufferType::BLOCK), id(id) {
-	D_ASSERT((GetMallocedSize() & (Storage::SECTOR_SIZE - 1)) == 0);
+	D_ASSERT((AllocSize() & (Storage::SECTOR_SIZE - 1)) == 0);
 }
 
 } // namespace duckdb

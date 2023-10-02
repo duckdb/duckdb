@@ -1,0 +1,30 @@
+# name: test/sql/tpch/q01_positional.test_slow
+# description: Test positional join decomposition in Q01
+# group: [tpch]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1, suffix='_positional');
+
+statement ok
+CREATE VIEW lineitem AS (SELECT * FROM
+	(SELECT l_returnflag FROM lineitem_positional)
+	POSITIONAL JOIN
+	(SELECT l_linestatus FROM lineitem_positional)
+	POSITIONAL JOIN
+	(SELECT l_quantity FROM lineitem_positional)
+	POSITIONAL JOIN
+	(SELECT l_extendedprice FROM lineitem_positional)
+	POSITIONAL JOIN
+	(SELECT l_discount FROM lineitem_positional)
+	POSITIONAL JOIN
+	(SELECT l_tax FROM lineitem_positional)
+	POSITIONAL JOIN
+	(SELECT l_shipdate FROM lineitem_positional)
+)
+
+query I
+PRAGMA tpch(1)
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q01.csv

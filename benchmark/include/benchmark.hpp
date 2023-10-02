@@ -11,15 +11,13 @@
 #pragma once
 
 #include <memory>
-#include <string>
-#include <vector>
 #include "benchmark_configuration.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
-
-using std::string;
-using std::unique_ptr;
-using std::vector;
 
 //! Base class for any state that has to be kept by a Benchmark
 struct BenchmarkState {
@@ -44,7 +42,7 @@ public:
 	Benchmark(bool register_benchmark, string name, string group);
 
 	//! Initialize the benchmark state
-	virtual unique_ptr<BenchmarkState> Initialize(BenchmarkConfiguration &config) {
+	virtual duckdb::unique_ptr<BenchmarkState> Initialize(BenchmarkConfiguration &config) {
 		return nullptr;
 	}
 	//! Run the benchmark

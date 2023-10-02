@@ -14,14 +14,14 @@ GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &nod
       group_index(group_index) {
 }
 
-BindResult GroupBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = **expr_ptr;
+BindResult GroupBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = *expr_ptr;
 	if (root_expression && depth == 0) {
 		switch (expr.expression_class) {
 		case ExpressionClass::COLUMN_REF:
-			return BindColumnRef((ColumnRefExpression &)expr);
+			return BindColumnRef(expr.Cast<ColumnRefExpression>());
 		case ExpressionClass::CONSTANT:
-			return BindConstant((ConstantExpression &)expr);
+			return BindConstant(expr.Cast<ConstantExpression>());
 		case ExpressionClass::PARAMETER:
 			throw ParameterNotAllowedException("Parameter not supported in GROUP BY clause");
 		default:
@@ -49,7 +49,7 @@ BindResult GroupBinder::BindSelectRef(idx_t entry) {
 		// e.g. GROUP BY k, k or GROUP BY 1, 1
 		// in this case, we can just replace the grouping with a constant since the second grouping has no effect
 		// (the constant grouping will be optimized out later)
-		return BindResult(make_unique<BoundConstantExpression>(Value::INTEGER(42)));
+		return BindResult(make_uniq<BoundConstantExpression>(Value::INTEGER(42)));
 	}
 	if (entry >= node.select_list.size()) {
 		throw BinderException("GROUP BY term out of range - should be between 1 and %d", (int)node.select_list.size());
@@ -57,14 +57,14 @@ BindResult GroupBinder::BindSelectRef(idx_t entry) {
 	// we replace the root expression, also replace the unbound expression
 	unbound_expression = node.select_list[entry]->Copy();
 	// move the expression that this refers to here and bind it
-	auto select_entry = move(node.select_list[entry]);
+	auto select_entry = std::move(node.select_list[entry]);
 	auto binding = Bind(select_entry, nullptr, false);
 	// now replace the original expression in the select list with a reference to this group
 	group_alias_map[to_string(entry)] = bind_index;
-	node.select_list[entry] = make_unique<ColumnRefExpression>(to_string(entry));
+	node.select_list[entry] = make_uniq<ColumnRefExpression>(to_string(entry));
 	// insert into the set of used aliases
 	used_aliases.insert(entry);
-	return BindResult(move(binding));
+	return BindResult(std::move(binding));
 }
 
 BindResult GroupBinder::BindConstant(ConstantExpression &constant) {

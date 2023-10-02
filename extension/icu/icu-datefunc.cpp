@@ -5,6 +5,8 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
+#include "unicode/ucal.h"
+
 namespace duckdb {
 
 ICUDateFunc::BindData::BindData(const BindData &other)
@@ -34,20 +36,27 @@ ICUDateFunc::BindData::BindData(ClientContext &context) {
 	if (U_FAILURE(success)) {
 		throw Exception("Unable to create ICU calendar.");
 	}
+
+	//	Postgres always assumes times are given in the proleptic Gregorian calendar.
+	//	ICU defaults to the Gregorian change in 1582, so we reset the change to the minimum date
+	//	so that all dates are proleptic Gregorian.
+	//	The only error here is if we have a non-Gregorian calendar,
+	//	and we just ignore that and hope for the best...
+	ucal_setGregorianChange((UCalendar *)calendar.get(), U_DATE_MIN, &success); // NOLINT
 }
 
 bool ICUDateFunc::BindData::Equals(const FunctionData &other_p) const {
-	auto &other = (const ICUDateFunc::BindData &)other_p;
+	auto &other = other_p.Cast<const BindData>();
 	return *calendar == *other.calendar;
 }
 
 unique_ptr<FunctionData> ICUDateFunc::BindData::Copy() const {
-	return make_unique<BindData>(*this);
+	return make_uniq<BindData>(*this);
 }
 
 unique_ptr<FunctionData> ICUDateFunc::Bind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
-	return make_unique<BindData>(context);
+                                           vector<duckdb::unique_ptr<Expression>> &arguments) {
+	return make_uniq<BindData>(context);
 }
 
 void ICUDateFunc::SetTimeZone(icu::Calendar *calendar, const string_t &tz_id) {
@@ -65,24 +74,36 @@ timestamp_t ICUDateFunc::GetTimeUnsafe(icu::Calendar *calendar, uint64_t micros)
 	return timestamp_t(millis * Interval::MICROS_PER_MSEC + micros);
 }
 
-timestamp_t ICUDateFunc::GetTime(icu::Calendar *calendar, uint64_t micros) {
+bool ICUDateFunc::TryGetTime(icu::Calendar *calendar, uint64_t micros, timestamp_t &result) {
 	// Extract the new time
 	UErrorCode status = U_ZERO_ERROR;
 	auto millis = int64_t(calendar->getTime(status));
 	if (U_FAILURE(status)) {
-		throw Exception("Unable to get ICU calendar time.");
+		return false;
 	}
 
 	// UDate is a double, so it can't overflow (it just loses accuracy), but converting back to µs can.
-	millis = MultiplyOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(millis, Interval::MICROS_PER_MSEC);
-	millis = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(millis, micros);
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(millis, Interval::MICROS_PER_MSEC, millis)) {
+		return false;
+	}
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(millis, micros, millis)) {
+		return false;
+	}
 
 	// Now make sure the value is in range
-	date_t d;
-	dtime_t t;
-	Timestamp::Convert(timestamp_t(millis), d, t);
+	result = timestamp_t(millis);
+	date_t out_date = Timestamp::GetDate(result);
+	int64_t days_micros;
+	return TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(out_date.days, Interval::MICROS_PER_DAY,
+	                                                                 days_micros);
+}
 
-	return timestamp_t(millis);
+timestamp_t ICUDateFunc::GetTime(icu::Calendar *calendar, uint64_t micros) {
+	timestamp_t result;
+	if (!TryGetTime(calendar, micros, result)) {
+		throw ConversionException("Unable to convert ICU date to timestamp");
+	}
+	return result;
 }
 
 uint64_t ICUDateFunc::SetTime(icu::Calendar *calendar, timestamp_t date) {
@@ -112,14 +133,6 @@ int32_t ICUDateFunc::ExtractField(icu::Calendar *calendar, UCalendarDateFields f
 }
 
 int64_t ICUDateFunc::SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_t end_date) {
-	// ICU triggers the address sanitiser because it tries to left shift a negative value
-	// when start_date > end_date. To avoid this, we swap the values and negate the result.
-	const auto start_date = GetTimeUnsafe(calendar);
-	if (start_date > end_date) {
-		SetTime(calendar, end_date);
-		return -SubtractField(calendar, field, start_date);
-	}
-
 	const int64_t millis = end_date.value / Interval::MICROS_PER_MSEC;
 	const auto when = UDate(millis);
 	UErrorCode status = U_ZERO_ERROR;

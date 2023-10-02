@@ -1,0 +1,623 @@
+# name: test/sql/function/timestamp/date_sub.test_slow
+# description: Test the DATESUB function
+# group: [timestamp]
+
+statement ok
+PRAGMA enable_verification
+
+#
+# DATE
+#
+
+statement ok
+CREATE TABLE date1 AS
+SELECT '2004-01-31'::DATE AS startdate, '2004-02-29'::DATE AS enddate;
+
+# Ragged months
+query I
+select DATESUB('month', '2004-01-31'::DATE, '2004-02-29'::DATE);
+----
+1
+
+query I
+select DATESUB('month', '2004-01-29'::DATE, '2004-02-29'::DATE);
+----
+1
+
+query I
+select DATESUB('quarter', '2004-01-31'::DATE, '2004-04-30'::DATE);
+----
+1
+
+query I
+select DATESUB('year', '2004-02-29'::DATE, '2005-02-28'::DATE);
+----
+1
+
+query I
+select DATESUB('isoyear', '2004-02-29'::DATE, '2005-02-28'::DATE);
+----
+1
+
+query I
+select DATESUB('decade', '1994-02-28'::DATE, '2004-02-29'::DATE);
+----
+1
+
+query I
+select DATESUB('century', '1904-02-29'::DATE, '2005-02-28'::DATE);
+----
+1
+
+query I
+select DATESUB('millennium', '1004-02-29'::DATE, '2004-02-29'::DATE);
+----
+1
+
+# Sub-month
+foreach datepart day doy dow isodow julian
+
+query I
+select DATESUB('${datepart}', '2004-01-31'::DATE, '2004-02-29'::DATE);
+----
+29
+
+endloop
+
+foreach datepart week yearweek
+
+query I
+select DATESUB('${datepart}', '2004-01-31'::DATE, '2004-02-29'::DATE);
+----
+4
+
+endloop
+
+query I
+select DATESUB('hour', '2004-01-31'::DATE, '2004-02-01'::DATE);
+----
+24
+
+query I
+select DATESUB('minute', '2004-02-29'::DATE, '2004-03-01'::DATE);
+----
+1440
+
+query I
+select DATESUB('second', '2004-02-29'::DATE, '2004-03-01'::DATE);
+----
+86400
+
+query I
+select DATESUB('millisecond', '2004-02-29'::DATE, '2004-03-01'::DATE);
+----
+86400000
+
+query I
+select DATESUB('microsecond', '2004-02-29'::DATE, '2004-03-01'::DATE);
+----
+86400000000
+
+# Negation
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear
+
+query I
+SELECT DATESUB('${datepart}', startdate, enddate) + DATESUB('${datepart}', enddate, startdate) FROM date1
+----
+0
+
+endloop
+
+# Table
+foreach datepart year month day
+
+query I
+SELECT DATESUB('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
+FROM (SELECT '2021-07-30'::DATE + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
+----
+1
+1
+1
+1
+1
+
+endloop
+
+foreach datepart hour minute second millisecond microsecond
+
+query I
+SELECT DATESUB('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
+FROM (SELECT '2021-07-30'::DATE + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
+----
+0
+0
+0
+0
+0
+
+endloop
+
+#
+# TIMESTAMP
+#
+
+statement ok
+CREATE TABLE datetime1 AS
+SELECT '2004-01-31 12:00:00'::TIMESTAMP AS startdate, '2004-02-29 13:05:00'::TIMESTAMP AS enddate;
+
+# Ragged months
+
+query I
+select DATESUB('month', '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-29 13:00:00'::TIMESTAMP);
+----
+1
+
+query I
+select DATESUB('month', '2004-01-29 12:00:00'::TIMESTAMP, '2004-02-29 13:00:00'::TIMESTAMP);
+----
+1
+
+query I
+select DATESUB('month', '2004-02-29 12:00:00'::TIMESTAMP, '2004-03-31 13:00:00'::TIMESTAMP);
+----
+1
+
+query I
+select DATESUB('month', '2004-02-29 13:00:00'::TIMESTAMP, '2004-03-31 12:00:00'::TIMESTAMP);
+----
+1
+
+query I
+select DATESUB('quarter', '2004-01-31 12:00:00'::TIMESTAMP, '2004-04-30 13:00:00'::TIMESTAMP);
+----
+1
+
+query I
+select DATESUB('year', '2004-02-29 12:00:00'::TIMESTAMP, '2005-02-28 13:00:00'::TIMESTAMP);
+----
+1
+
+query I
+select DATESUB('isoyear', '2004-02-29 12:00:00'::TIMESTAMP, '2005-02-28 13:00:00'::TIMESTAMP);
+----
+1
+
+query I
+select DATESUB('decade', '1994-02-28 12:00:00'::TIMESTAMP, '2004-02-29 13:00:00'::TIMESTAMP);
+----
+1
+
+query I
+select DATESUB('century', '1904-02-29 12:00:00'::TIMESTAMP, '2005-02-28 13:00:00'::TIMESTAMP);
+----
+1
+
+# Ragged incomplete months
+
+query I
+select DATESUB('month', '2004-01-31 13:00:00'::TIMESTAMP, '2004-02-29 12:00:00'::TIMESTAMP);
+----
+0
+
+query I
+select DATESUB('month', '2004-01-29 13:00:00'::TIMESTAMP, '2004-02-29 12:00:00'::TIMESTAMP);
+----
+0
+
+query I
+select DATESUB('quarter', '2004-01-31 13:00:00'::TIMESTAMP, '2004-04-30 12:00:00'::TIMESTAMP);
+----
+0
+
+query I
+select DATESUB('year', '2004-02-29 13:00:00'::TIMESTAMP, '2005-02-28 12:00:00'::TIMESTAMP);
+----
+0
+
+query I
+select DATESUB('isoyear', '2004-02-29 13:00:00'::TIMESTAMP, '2005-02-28 12:00:00'::TIMESTAMP);
+----
+0
+
+query I
+select DATESUB('decade', '1992-02-29 13:00:00'::TIMESTAMP, '2002-02-28 12:00:00'::TIMESTAMP);
+----
+0
+
+query I
+select DATESUB('century', '1904-02-29 13:00:00'::TIMESTAMP, '2004-02-28 12:00:00'::TIMESTAMP);
+----
+0
+
+query I
+select DATESUB('millennium', '1004-02-29 12:00:00'::TIMESTAMP, '2004-02-28 13:00:00'::TIMESTAMP);
+----
+0
+
+# Sub-month
+foreach datepart day doy dow isodow julian
+
+query I
+select DATESUB('${datepart}', '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-29 13:00:00'::TIMESTAMP);
+----
+29
+
+query I
+select DATESUB('${datepart}', '2004-01-31 13:00:00'::TIMESTAMP, '2004-02-29 12:00:00'::TIMESTAMP);
+----
+28
+
+endloop
+
+foreach datepart week yearweek
+
+query I
+select DATESUB('${datepart}', '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-28 13:00:00'::TIMESTAMP);
+----
+4
+
+query I
+select DATESUB('${datepart}', '2004-01-31 13:00:00'::TIMESTAMP, '2004-02-28 12:00:00'::TIMESTAMP);
+----
+3
+
+endloop
+
+query I
+select DATESUB('hour', '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-01 13:05:00'::TIMESTAMP);
+----
+25
+
+query I
+select DATESUB('hour', '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-01 12:00:00'::TIMESTAMP);
+----
+24
+
+query I
+select DATESUB('hour', '2004-01-31 13:00:00'::TIMESTAMP, '2004-02-01 12:05:00'::TIMESTAMP);
+----
+23
+
+query I
+select DATESUB('minute', '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-01 13:05:00'::TIMESTAMP);
+----
+1505
+
+query I
+select DATESUB('minute', '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-01 12:00:00'::TIMESTAMP);
+----
+1440
+
+query I
+select DATESUB('minute', '2004-01-31 13:00:00'::TIMESTAMP, '2004-02-01 12:05:00'::TIMESTAMP);
+----
+1385
+
+
+query I
+select DATESUB('second', '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-01 12:00:05'::TIMESTAMP);
+----
+86405
+
+query I
+select DATESUB('second', '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-01 12:00:00'::TIMESTAMP);
+----
+86400
+
+query I
+select DATESUB('second', '2004-01-31 12:00:05'::TIMESTAMP, '2004-02-01 12:00:00'::TIMESTAMP);
+----
+86395
+
+
+query I
+select DATESUB('millisecond', '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-01 12:00:00.050'::TIMESTAMP);
+----
+86400050
+
+query I
+select DATESUB('millisecond', '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-01 12:00:00'::TIMESTAMP);
+----
+86400000
+
+query I
+select DATESUB('millisecond', '2004-01-31 12:00:00.050'::TIMESTAMP, '2004-02-01 12:00:00'::TIMESTAMP);
+----
+86399950
+
+query I
+select DATESUB('microsecond', '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-01 12:00:00.000050'::TIMESTAMP);
+----
+86400000050
+
+query I
+select DATESUB('microsecond', '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-01 12:00:00'::TIMESTAMP);
+----
+86400000000
+
+query I
+select DATESUB('microsecond', '2004-01-31 12:00:00.000050'::TIMESTAMP, '2004-02-01 12:00:00'::TIMESTAMP);
+----
+86399999950
+
+# Negation
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear
+
+query I
+SELECT DATESUB('${datepart}', startdate, enddate) + DATESUB('${datepart}', enddate, startdate) FROM datetime1
+----
+0
+
+endloop
+
+# Table
+foreach datepart year month day hour minute second millisecond microsecond
+
+query I
+SELECT DATESUB('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
+FROM (SELECT '2021-07-30'::TIMESTAMP + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
+----
+1
+1
+1
+1
+1
+
+endloop
+
+# Overflow
+statement error
+SELECT datesub('week',TIMESTAMP '-214169-1-18 21:29:6',TIMESTAMP '93495-11-19 13:3:22');
+
+statement error
+SELECT datesub('dayofyear',TIMESTAMP '-109502-12-4 20:26:13',TIMESTAMP '252823-4-6 9:56:28');
+
+statement error
+SELECT datesub('epoch',TIMESTAMP '153520-4-1 20:33:43',TIMESTAMP '-269898-3-29 12:9:14');
+
+#
+# TIME
+#
+
+statement ok
+CREATE TABLE time1 AS
+SELECT '12:00:00'::TIME AS enddate, '13:35:47.123456'::TIME AS startdate;
+
+query I
+select DATESUB('hour', '12:00:00'::TIME, '13:05:00'::TIME);
+----
+1
+
+query I
+select DATESUB('hour', '12:00:00'::TIME, '12:05:00'::TIME);
+----
+0
+
+query I
+select DATESUB('hour', '13:00:00'::TIME, '12:05:00'::TIME);
+----
+0
+
+query I
+select DATESUB('minute', '12:00:00'::TIME, '13:05:00'::TIME);
+----
+65
+
+query I
+select DATESUB('minute', '12:00:00'::TIME, '13:00:00'::TIME);
+----
+60
+
+query I
+select DATESUB('minute', '13:00:00'::TIME, '12:05:00'::TIME);
+----
+-55
+
+query I
+select DATESUB('second', '12:00:00'::TIME, '12:00:05'::TIME);
+----
+5
+
+query I
+select DATESUB('second', '12:00:00'::TIME, '12:00:00'::TIME);
+----
+0
+
+query I
+select DATESUB('second', '12:00:05'::TIME, '12:00:00'::TIME);
+----
+-5
+
+query I
+select DATESUB('millisecond', '12:00:00'::TIME, '12:00:00.050'::TIME);
+----
+50
+
+query I
+select DATESUB('millisecond', '12:00:00'::TIME, '12:00:00'::TIME);
+----
+0
+
+query I
+select DATESUB('millisecond', '12:00:00.050'::TIME, '12:00:00'::TIME);
+----
+-50
+
+query I
+select DATESUB('microsecond', '12:00:00'::TIME, '12:00:00.000050'::TIME);
+----
+50
+
+query I
+select DATESUB('microsecond', '12:00:00'::TIME, '12:00:00'::TIME);
+----
+0
+
+query I
+select DATESUB('microsecond', '12:00:00.000050'::TIME, '12:00:00'::TIME);
+----
+-50
+
+foreach datepart year month day decade century millennium quarter week
+
+statement error
+select DATESUB('${datepart}', '12:00:00.000050'::TIME, '12:00:00'::TIME)
+
+endloop
+
+# Negation
+foreach datepart 'hour' 'minute' 'second' 'millisecond' 'microsecond'
+
+query I
+SELECT DATESUB(${datepart}, startdate, enddate) + DATESUB(${datepart}, enddate, startdate) FROM time1
+----
+0
+
+endloop
+
+# Table
+foreach datepart hour minute second millisecond microsecond
+
+query I
+SELECT DATESUB('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
+FROM (SELECT '12:52:07.123456'::TIME + INTERVAL (d) HOUR AS startdate FROM range(0, 5) tbl(d)) times
+----
+1
+1
+1
+1
+1
+
+endloop
+
+
+#
+# NULLs
+#
+
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek
+
+foreach tbl date1 datetime1 time1
+
+query I
+SELECT DATESUB('${datepart}', NULL::TIMESTAMP, NULL::TIMESTAMP) FROM ${tbl}
+----
+NULL
+
+query I
+SELECT DATESUB('${datepart}', NULL, enddate) FROM ${tbl}
+----
+NULL
+
+query I
+SELECT DATESUB('${datepart}', startdate, NULL) FROM ${tbl}
+----
+NULL
+
+endloop
+
+endloop
+
+foreach tbl date1 datetime1 time1
+
+query I
+SELECT DATESUB(NULL, startdate, enddate) FROM ${tbl}
+----
+NULL
+
+endloop
+
+#
+# Infinities
+#
+foreach specifier year isoyear month day decade century millennium quarter week microseconds milliseconds second minute hour
+
+foreach ltype DATE TIMESTAMP
+
+foreach rtype DATE TIMESTAMP
+
+foreach lspecial infinity -infinity
+
+foreach rspecial infinity -infinity
+
+query I
+SELECT DATE_SUB('${specifier}', '${lspecial}'::${ltype}, '${rspecial}'::${rtype});
+----
+NULL
+
+endloop
+
+endloop
+
+endloop
+
+endloop
+
+endloop
+
+#
+# VARCHAR
+#
+statement ok
+CREATE TABLE parts (datepart VARCHAR);
+
+statement ok
+INSERT into parts VALUES(NULL);
+
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear
+
+statement ok
+INSERT into parts VALUES('${datepart}');
+
+endloop
+
+query II
+SELECT datepart, DATESUB(datepart, '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-29 13:05:47.123456'::TIMESTAMP)
+FROM parts;
+----
+NULL	NULL
+year	0
+quarter	0
+month	1
+day	29
+dayofyear	29
+hour	697
+minute	41825
+second	2509547
+millisecond	2509547123
+microsecond	2509547123456
+decade	0
+century	0
+millennium	0
+week	4
+yearweek	4
+isoyear	0
+
+foreach ltype DATE TIMESTAMP
+
+foreach rtype DATE TIMESTAMP
+
+foreach lspecial infinity -infinity
+
+foreach rspecial infinity -infinity
+
+query I
+SELECT DATE_SUB(datepart, '${lspecial}'::${ltype}, '${rspecial}'::${rtype}) AS sub
+FROM parts
+WHERE sub IS NOT NULL
+----
+
+endloop
+
+endloop
+
+endloop
+
+endloop
+
+statement ok
+INSERT into parts VALUES('duck');
+
+statement error
+SELECT datepart, DATESUB(datepart, '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-29 13:05:47.123456'::TIMESTAMP)
+FROM parts;

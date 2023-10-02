@@ -9,19 +9,25 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
 
 //! LogicalDistinct filters duplicate entries from its child operator
 class LogicalDistinct : public LogicalOperator {
 public:
-	LogicalDistinct() : LogicalOperator(LogicalOperatorType::LOGICAL_DISTINCT) {
-	}
-	explicit LogicalDistinct(vector<unique_ptr<Expression>> targets)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_DISTINCT), distinct_targets(move(targets)) {
-	}
-	//! The set of distinct targets (optional).
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_DISTINCT;
+
+public:
+	explicit LogicalDistinct(DistinctType distinct_type);
+	explicit LogicalDistinct(vector<unique_ptr<Expression>> targets, DistinctType distinct_type);
+
+	//! Whether or not this is a DISTINCT or DISTINCT ON
+	DistinctType distinct_type;
+	//! The set of distinct targets
 	vector<unique_ptr<Expression>> distinct_targets;
+	//! The order by modifier (optional, only for distinct on)
+	unique_ptr<BoundOrderModifier> order_by;
 
 public:
 	string ParamsToString() const override;
@@ -29,12 +35,11 @@ public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return children[0]->GetColumnBindings();
 	}
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
 protected:
-	void ResolveTypes() override {
-		types = children[0]->types;
-	}
+	void ResolveTypes() override;
 };
 } // namespace duckdb

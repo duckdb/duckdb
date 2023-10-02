@@ -1,0 +1,48 @@
+# name: test/sql/copy/parquet/parquet_6933.test
+# description: Issue #6933: Segfault when using enable_object_cache alongside union_by_name for parquet files
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE table1 (
+    name VARCHAR,
+);
+
+statement ok
+INSERT INTO table1 VALUES ('Test value 1!');
+
+statement ok
+INSERT INTO table1 VALUES ('Test value 2!');
+
+statement ok
+COPY table1 TO '__TEST_DIR__/output1.parquet' (FORMAT PARQUET);
+
+statement ok
+CREATE TABLE table2 (
+    name VARCHAR,
+    number INTEGER,
+);
+
+statement ok
+INSERT INTO table2 VALUES ('Other test value', 1);
+
+statement ok
+INSERT INTO table2 VALUES ('Other test value', 2);
+
+statement ok
+COPY table2 TO '__TEST_DIR__/output2.parquet' (FORMAT PARQUET);
+
+statement ok
+PRAGMA enable_object_cache;
+
+query II
+SELECT name, number FROM read_parquet(['__TEST_DIR__/output*.parquet'], union_by_name=True) ORDER BY name, number
+----
+Other test value	1
+Other test value	2
+Test value 1!	NULL
+Test value 2!	NULL

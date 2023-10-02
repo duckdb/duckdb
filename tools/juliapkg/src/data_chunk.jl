@@ -60,3 +60,7 @@ function _destroy_data_chunk(chunk::DataChunk)
     end
     return chunk.handle = C_NULL
 end
+
+function destroy_data_chunk(chunk::DataChunk)
+    return _destroy_data_chunk(chunk)
+end

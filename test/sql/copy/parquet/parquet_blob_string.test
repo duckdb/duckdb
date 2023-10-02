@@ -32,6 +32,12 @@ foo
 bar
 baz
 
+query I
+SELECT converted_type FROM parquet_schema('data/parquet-testing/binary_string.parquet')
+----
+NULL
+NULL
+
 statement error
 SET binary_as_sting=true
 

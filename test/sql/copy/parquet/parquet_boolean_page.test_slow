@@ -1,0 +1,21 @@
+# name: test/sql/copy/parquet/parquet_boolean_page.test_slow
+# description: Test that boolean values that cross column pages are correctly read
+# group: [parquet]
+
+require parquet
+
+require httpfs
+
+statement ok
+PRAGMA enable_verification
+
+query IIIII
+SELECT
+    SUM(CASE WHEN is_successful THEN 1 ELSE 0 END),
+	SUM(CASE WHEN advanced_on_error_flag THEN 1 ELSE 0 END),
+	SUM(CASE WHEN safe_on_error_flag THEN 1 ELSE 0 END),
+	SUM(CASE WHEN rbi_flag THEN 1 ELSE 0 END),
+	SUM(CASE WHEN team_unearned_flag THEN 1 ELSE 0 END)
+FROM read_parquet('https://github.com/duckdb/duckdb-data/releases/download/v1.0/event_baserunning_advance_attempt.parquet');
+----
+9252616	111041	7120	1609612	1860

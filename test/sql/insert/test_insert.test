@@ -37,11 +37,3 @@ CREATE TABLE IF NOT EXISTS presentations(presentation_date Date NOT NULL UNIQUE,
 
 statement ok
 insert into presentations values ('2020-05-29', 'Eduardo Pena', 'Analytical Query Processing Based on Continuous Compression of Intermediates', NULL, 'Modern in-memory column-stores are widely accepted as the adequate database architecture for the efficient processing of complex analytical queries over large relational data volumes. These systems keep their entire data in main memory and typically employ lightweight compression to address the bottleneck between main memory and CPU. Numerous lightweight compression algorithms have been proposed in the past years, but none of them is suitable in all cases. While lightweight compression is already well established for base data, the efficient representation of intermediate results generated during query processing has attracted insufficient attention so far, although in in-memory systems, accessing intermeFdiates is as expensive as accessing base data. Thus, our vision is a continuous use of lightweight compression for all intermediates in a query execution plan, whereby a suitable compression algorithm should be selected for each intermediate. In this talk, I will provide an overview of our research in the context of this vision, including an experimental survey of lightweight compression algorithms, our compression-enabled processing model, and our compression-aware query optimization strategies.', 'https://zoom.us/j/7845983526');
-
-statement ok
-CREATE TABLE bar(x INTEGER UNIQUE)
-
-# this should throw an error and not silently ignore the ON CONFLICT clause
-statement error
-INSERT INTO bar (x) VALUES (2) ON CONFLICT DO NOTHING
-

@@ -8,7 +8,7 @@ subgroup list
 
 require tpch
 
-cache tpch_sf1
+cache tpch_sf1.duckdb
 
 load
 CALL dbgen(sf=1);
@@ -17,4 +17,4 @@ run
 SELECT SUM(LENGTH(str_split_regex(l_comment, '[z ]'))) FROM lineitem
 
 result I
-27186473
+27179168

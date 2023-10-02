@@ -21,11 +21,11 @@ WHERE ind::int>0
 AND NOT EXISTS (
 SELECT 1
 FROM digits AS lp
-WHERE z.z = substr(s, ((ind::int-1)/9)*9 + lp, 1)
+WHERE z.z = substr(s, ((ind::int-1)//9)*9 + lp, 1)
 OR z.z = substr(s, ((ind::int-1)%9) + (lp-1)*9 + 1, 1)
-OR z.z = substr(s, (((ind::int-1)/3) % 3) * 3
-+ ((ind::int-1)/27) * 27 + lp
-+ ((lp-1) / 3) * 6, 1)
+OR z.z = substr(s, (((ind::int-1)//3) % 3) * 3
++ ((ind::int-1)//27) * 27 + lp
++ ((lp-1) // 3) * 6, 1)
 )
 )
 SELECT s FROM x WHERE ind::int=0;

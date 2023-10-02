@@ -1,0 +1,110 @@
+# name: test/sql/attach/attach_table_ddl.test
+# description: Test various DDL statements on an attached database
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH DATABASE ':memory:' AS new_database;
+
+statement ok
+CREATE SCHEMA new_database.s1;
+
+foreach prefix new_database.s1 new_database
+
+statement ok
+CREATE TABLE ${prefix}.integers(i INTEGER)
+
+# insert
+statement ok
+INSERT INTO ${prefix}.integers VALUES (42);
+
+query I
+SELECT * FROM ${prefix}.integers
+----
+42
+
+# update
+query I
+UPDATE ${prefix}.integers SET i=i+1
+----
+1
+
+query I
+SELECT * FROM ${prefix}.integers
+----
+43
+
+# delete
+query I
+DELETE FROM ${prefix}.integers WHERE i=43
+----
+1
+
+query I
+SELECT COUNT(*) FROM ${prefix}.integers
+----
+0
+
+# alter table statements
+
+# add column
+statement ok
+ALTER TABLE ${prefix}.integers ADD COLUMN j VARCHAR
+
+statement ok
+INSERT INTO ${prefix}.integers VALUES (1, 'T100');
+
+query II
+SELECT * FROM ${prefix}.integers
+----
+1	T100
+
+# alter type
+statement ok
+ALTER TABLE ${prefix}.integers ALTER j TYPE INT USING REPLACE(j, 'T', '')::INT
+
+query II
+SELECT * FROM ${prefix}.integers
+----
+1	100
+
+# drop column
+statement ok
+ALTER TABLE ${prefix}.integers DROP COLUMN j
+
+query I
+SELECT * FROM ${prefix}.integers
+----
+1
+
+# rename column
+statement ok
+ALTER TABLE ${prefix}.integers RENAME COLUMN i TO k
+
+query I
+SELECT k FROM ${prefix}.integers
+----
+1
+
+# drop table
+statement ok
+DROP TABLE ${prefix}.integers
+
+# rename table
+statement ok
+CREATE TABLE ${prefix}.t1(i INTEGER)
+
+statement ok
+ALTER TABLE ${prefix}.t1 RENAME TO t2
+
+statement ok
+SELECT * FROM ${prefix}.t2
+
+statement ok
+DROP TABLE ${prefix}.t2
+
+endloop

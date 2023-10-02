@@ -1,0 +1,65 @@
+# name: test/sql/json/tpch_round_trip.test_slow
+# description: TPCH JSON round trip
+# group: [json]
+
+require tpch
+
+require json
+
+statement ok
+start transaction;
+
+statement ok
+call dbgen(sf=1)
+
+statement ok
+copy lineitem to '__TEST_DIR__/lineitem.json'
+
+statement ok
+rollback;
+
+statement ok
+create view lineitem_struct as select from_json(json, '{
+"l_orderkey":"INTEGER",
+"l_partkey":"INTEGER",
+"l_suppkey":"INTEGER",
+"l_linenumber":"INTEGER",
+"l_quantity":"INTEGER",
+"l_extendedprice":"DECIMAL(15,2)",
+"l_discount":"DECIMAL(15,2)",
+"l_tax":"DECIMAL(15,2)",
+"l_returnflag":"VARCHAR",
+"l_linestatus":"VARCHAR",
+"l_shipdate":"DATE",
+"l_commitdate":"DATE",
+"l_receiptdate":"DATE",
+"l_shipinstruct":"VARCHAR",
+"l_shipmode":"VARCHAR",
+"l_comment":"VARCHAR"
+}') j
+from read_ndjson_objects('__TEST_DIR__/lineitem.json')
+
+statement ok
+CREATE VIEW lineitem AS SELECT
+j['l_orderkey'] AS l_orderkey,
+j['l_partkey'] AS l_partkey,
+j['l_suppkey'] AS l_suppkey,
+j['l_linenumber'] AS l_linenumber,
+j['l_quantity'] AS l_quantity,
+j['l_extendedprice'] AS l_extendedprice,
+j['l_discount'] AS l_discount,
+j['l_tax'] AS l_tax,
+j['l_returnflag'] AS l_returnflag,
+j['l_linestatus'] AS l_linestatus,
+j['l_shipdate'] AS l_shipdate,
+j['l_commitdate'] AS l_commitdate,
+j['l_receiptdate'] AS l_receiptdate,
+j['l_shipinstruct'] AS l_shipinstruct,
+j['l_shipmode'] AS l_shipmode,
+j['l_comment'] AS l_comment
+FROM lineitem_struct
+
+query I
+PRAGMA tpch(1)
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q01.csv

@@ -1,10 +1,9 @@
 #include "duckdb/execution/operator/helper/physical_limit_percent.hpp"
-#include "duckdb/execution/operator/helper/physical_limit.hpp"
 
 #include "duckdb/common/algorithm.hpp"
-
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/execution/operator/helper/physical_limit.hpp"
 
 namespace duckdb {
 
@@ -40,19 +39,18 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalLimitPercent::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<LimitPercentGlobalState>(context, *this);
+	return make_uniq<LimitPercentGlobalState>(context, *this);
 }
 
-SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                          DataChunk &input) const {
-	D_ASSERT(input.size() > 0);
-	auto &state = (LimitPercentGlobalState &)gstate;
+SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	D_ASSERT(chunk.size() > 0);
+	auto &state = input.global_state.Cast<LimitPercentGlobalState>();
 	auto &limit_percent = state.limit_percent;
 	auto &offset = state.offset;
 
 	// get the next chunk from the child
 	if (!state.is_limit_percent_delimited) {
-		Value val = PhysicalLimit::GetDelimiter(context, input, limit_expression.get());
+		Value val = PhysicalLimit::GetDelimiter(context, chunk, limit_expression.get());
 		if (!val.IsNull()) {
 			limit_percent = val.GetValue<double>();
 		}
@@ -62,7 +60,7 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 		state.is_limit_percent_delimited = true;
 	}
 	if (!state.is_offset_delimited) {
-		Value val = PhysicalLimit::GetDelimiter(context, input, offset_expression.get());
+		Value val = PhysicalLimit::GetDelimiter(context, chunk, offset_expression.get());
 		if (!val.IsNull()) {
 			offset = val.GetValue<idx_t>();
 		}
@@ -72,11 +70,11 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 		state.is_offset_delimited = true;
 	}
 
-	if (!PhysicalLimit::HandleOffset(input, state.current_offset, offset, DConstants::INVALID_INDEX)) {
+	if (!PhysicalLimit::HandleOffset(chunk, state.current_offset, offset, DConstants::INVALID_INDEX)) {
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
-	state.data.Append(input);
+	state.data.Append(chunk);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -88,7 +86,7 @@ public:
 	explicit LimitPercentOperatorState(const PhysicalLimitPercent &op)
 	    : limit(DConstants::INVALID_INDEX), current_offset(0) {
 		D_ASSERT(op.sink_state);
-		auto &gstate = (LimitPercentGlobalState &)*op.sink_state;
+		auto &gstate = op.sink_state->Cast<LimitPercentGlobalState>();
 		gstate.data.InitializeScan(scan_state);
 	}
 
@@ -98,13 +96,13 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalLimitPercent::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<LimitPercentOperatorState>(*this);
+	return make_uniq<LimitPercentOperatorState>(*this);
 }
 
-void PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                   LocalSourceState &lstate) const {
-	auto &gstate = (LimitPercentGlobalState &)*sink_state;
-	auto &state = (LimitPercentOperatorState &)gstate_p;
+SourceResultType PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk,
+                                               OperatorSourceInput &input) const {
+	auto &gstate = sink_state->Cast<LimitPercentGlobalState>();
+	auto &state = input.global_state.Cast<LimitPercentOperatorState>();
 	auto &percent_limit = gstate.limit_percent;
 	auto &offset = gstate.offset;
 	auto &limit = state.limit;
@@ -125,18 +123,20 @@ void PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk, 
 			limit = idx_t(limit_dbl);
 		}
 		if (limit == 0) {
-			return;
+			return SourceResultType::FINISHED;
 		}
 	}
 
 	if (current_offset >= limit) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 	if (!gstate.data.Scan(state.scan_state, chunk)) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 
 	PhysicalLimit::HandleOffset(chunk, current_offset, 0, limit);
+
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

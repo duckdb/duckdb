@@ -3,6 +3,9 @@
 # group: [rigger]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 CREATE TABLE t0(c0 BIGINT, c1 SMALLINT, c2 VARCHAR COLLATE NOACCENT);
 
 statement ok

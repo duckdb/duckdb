@@ -1,0 +1,65 @@
+# name: test/sql/index/art/nodes/test_art_prefixes_restart.test
+# description: Test the (de)serialization of different ART prefixes
+# group: [nodes]
+
+load __TEST_DIR__/test_art_prefixes.db
+
+statement ok
+CREATE TABLE tbl (id INTEGER);
+
+statement ok
+CREATE INDEX idx ON tbl(id);
+
+# insert two children into a Node4
+statement ok
+INSERT INTO tbl VALUES (1), (2);
+
+restart
+
+# delete one child, the other child will still be serialized
+statement ok
+DELETE FROM tbl WHERE id = 1;
+
+# now do the same, but with a very long shared prefix
+
+statement ok
+CREATE TABLE tbl_varchar (id VARCHAR);
+
+statement ok
+CREATE INDEX idx_varchar ON tbl_varchar(id);
+
+# insert two children into a Node4
+statement ok
+INSERT INTO tbl_varchar VALUES
+	('hello I am a prefix, and it is a beautiful sommer evening, and the plants are blossoming - 1'),
+	('hello I am a prefix, and it is a beautiful sommer evening, and the plants are blossoming - 2');
+
+restart
+
+# delete one child, the other child will still be serialized
+statement ok
+DELETE FROM tbl_varchar
+WHERE id = 'hello I am a prefix, and it is a beautiful sommer evening, and the plants are blossoming - 1';
+
+# now we test splitting prefixes
+
+statement ok
+DELETE FROM tbl_varchar;
+
+statement ok
+INSERT INTO tbl_varchar VALUES ('012345678901234'), ('012345678901235');
+
+# now with serialized prefixes
+
+statement ok
+DELETE FROM tbl_varchar;
+
+statement ok
+INSERT INTO tbl_varchar VALUES
+	('0123456789-0123456789-0123456789-0123456789');
+
+restart
+
+statement ok
+INSERT INTO tbl_varchar VALUES
+	('0123456779-0123456789-0123456789-0123456789');

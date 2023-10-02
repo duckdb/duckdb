@@ -9,21 +9,21 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("UDF functions with arguments", "[coverage][.]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
 
 	string func_name, table_name, col_type;
 	// The types supported by the argumented CreateScalarFunction
-	const vector<LogicalTypeId> all_sql_types = {
+	const duckdb::vector<LogicalTypeId> all_sql_types = {
 	    LogicalTypeId::BOOLEAN, LogicalTypeId::TINYINT, LogicalTypeId::SMALLINT, LogicalTypeId::DATE,
 	    LogicalTypeId::TIME,    LogicalTypeId::INTEGER, LogicalTypeId::BIGINT,   LogicalTypeId::TIMESTAMP,
 	    LogicalTypeId::FLOAT,   LogicalTypeId::DOUBLE,  LogicalTypeId::DECIMAL,  LogicalTypeId::VARCHAR};
 
 	// Creating the tables
 	for (LogicalType sql_type : all_sql_types) {
-		col_type = LogicalTypeIdToString(sql_type.id());
+		col_type = EnumUtil::ToString(sql_type.id());
 		table_name = StringUtil::Lower(col_type);
 
 		con.Query("CREATE TABLE " + table_name + " (a " + col_type + ", b " + col_type + ", c " + col_type + ")");
@@ -31,7 +31,7 @@ TEST_CASE("UDF functions with arguments", "[coverage][.]") {
 
 	// Creating the UDF functions into the catalog
 	for (LogicalType sql_type : all_sql_types) {
-		func_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
+		func_name = StringUtil::Lower(EnumUtil::ToString(sql_type.id()));
 
 		switch (sql_type.id()) {
 		case LogicalTypeId::BOOLEAN: {
@@ -175,7 +175,7 @@ TEST_CASE("UDF functions with arguments", "[coverage][.]") {
 	SECTION("Testing UDF functions") {
 		// Inserting values
 		for (LogicalType sql_type : all_sql_types) {
-			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
+			table_name = StringUtil::Lower(EnumUtil::ToString(sql_type.id()));
 
 			string query = "INSERT INTO " + table_name + " VALUES";
 			if (sql_type == LogicalType::BOOLEAN) {
@@ -202,7 +202,7 @@ TEST_CASE("UDF functions with arguments", "[coverage][.]") {
 			if (sql_type.id() == LogicalTypeId::DECIMAL) {
 				continue;
 			}
-			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
+			table_name = StringUtil::Lower(EnumUtil::ToString(sql_type.id()));
 			func_name = table_name;
 			if (sql_type.IsNumeric()) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
@@ -269,7 +269,7 @@ TEST_CASE("UDF functions with arguments", "[coverage][.]") {
 			if (sql_type.id() == LogicalTypeId::DECIMAL) {
 				continue;
 			}
-			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
+			table_name = StringUtil::Lower(EnumUtil::ToString(sql_type.id()));
 			func_name = table_name;
 
 			// Deleting old values

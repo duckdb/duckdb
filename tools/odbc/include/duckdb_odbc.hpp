@@ -7,12 +7,11 @@
 #include "duckdb/common/windows.hpp"
 #include "descriptor.hpp"
 #include "odbc_diagnostic.hpp"
-#include "odbc_exception.hpp"
 #include "odbc_utils.hpp"
 
 #include <sqltypes.h>
 #include <sqlext.h>
-#include <vector>
+#include "duckdb/common/vector.hpp"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -34,16 +33,18 @@ struct OdbcHandle {
 	OdbcHandle &operator=(const OdbcHandle &other);
 
 	OdbcHandleType type;
-	// appending all error messages into it
-	std::vector<std::string> error_messages;
 
-	unique_ptr<OdbcDiagnostic> odbc_diagnostic;
+	duckdb::unique_ptr<OdbcDiagnostic> odbc_diagnostic;
 };
 
 struct OdbcHandleEnv : public OdbcHandle {
 	OdbcHandleEnv() : OdbcHandle(OdbcHandleType::ENV), db(make_shared<DuckDB>(nullptr)) {};
 
 	shared_ptr<DuckDB> db;
+	SQLINTEGER odbc_version;
+	SQLUINTEGER connection_pooling;
+	SQLUINTEGER cp_match;
+	SQLINTEGER output_nts;
 };
 
 struct OdbcHandleStmt;
@@ -67,7 +68,7 @@ public:
 
 public:
 	OdbcHandleEnv *env;
-	unique_ptr<Connection> conn;
+	duckdb::unique_ptr<Connection> conn;
 	bool autocommit;
 	SQLUINTEGER sql_attr_metadata_id;
 	SQLUINTEGER sql_attr_access_mode;
@@ -77,7 +78,7 @@ public:
 	// Ex: "DSN=DuckDB"
 	std::string dsn;
 	// reference to an open statement handled by this connection
-	std::vector<OdbcHandleStmt *> vec_stmt_ref;
+	vector<OdbcHandleStmt *> vec_stmt_ref;
 };
 
 struct OdbcBoundCol {
@@ -115,19 +116,19 @@ public:
 
 public:
 	OdbcHandleDbc *dbc;
-	unique_ptr<PreparedStatement> stmt;
-	unique_ptr<QueryResult> res;
+	duckdb::unique_ptr<PreparedStatement> stmt;
+	duckdb::unique_ptr<QueryResult> res;
 	vector<OdbcBoundCol> bound_cols;
 	bool open;
 	SQLULEN retrieve_data = SQL_RD_ON;
 	SQLULEN *rows_fetched_ptr;
 
 	// fetcher
-	unique_ptr<OdbcFetch> odbc_fetcher;
+	duckdb::unique_ptr<OdbcFetch> odbc_fetcher;
 
-	unique_ptr<ParameterDescriptor> param_desc;
+	duckdb::unique_ptr<ParameterDescriptor> param_desc;
 
-	unique_ptr<RowDescriptor> row_desc;
+	duckdb::unique_ptr<RowDescriptor> row_desc;
 };
 
 struct OdbcHandleDesc : public OdbcHandle {
@@ -152,6 +153,7 @@ public:
 	DescRecord *GetDescRecord(idx_t param_idx);
 	SQLRETURN SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field_identifier, SQLPOINTER value_ptr,
 	                       SQLINTEGER buffer_length);
+
 	void Clear();
 	void Reset();
 	void Copy(OdbcHandleDesc &other);
@@ -167,141 +169,10 @@ public:
 
 public:
 	DescHeader header;
-	std::vector<DescRecord> records;
+	vector<DescRecord> records;
 	OdbcHandleDbc *dbc;
 	OdbcHandleStmt *stmt;
 };
-
-template <class T>
-SQLRETURN WithHandle(SQLHANDLE &handle, T &&lambda) {
-	if (!handle) {
-		return SQL_INVALID_HANDLE;
-	}
-	auto *hdl = (OdbcHandle *)handle;
-	if (!hdl->odbc_diagnostic) {
-		return SQL_ERROR;
-	}
-
-	return lambda(hdl);
-}
-
-template <class T>
-SQLRETURN WithEnvironment(SQLHANDLE &enviroment_handle, T &&lambda) {
-	if (!enviroment_handle) {
-		return SQL_ERROR;
-	}
-	auto *env = (OdbcHandleEnv *)enviroment_handle;
-	if (env->type != OdbcHandleType::ENV) {
-		return SQL_ERROR;
-	}
-	if (!env->db) {
-		return SQL_ERROR;
-	}
-
-	return lambda(env);
-}
-
-template <class T>
-SQLRETURN WithConnection(SQLHANDLE &connection_handle, T &&lambda) {
-	if (!connection_handle) {
-		return SQL_ERROR;
-	}
-	auto *hdl = (OdbcHandleDbc *)connection_handle;
-	if (hdl->type != OdbcHandleType::DBC) {
-		return SQL_ERROR;
-	}
-	if (!hdl->conn) {
-		return SQL_ERROR;
-	}
-
-	// ODBC requires to clean up the diagnostic for every ODBC function call
-	hdl->odbc_diagnostic->Clean();
-
-	try {
-		return lambda(hdl);
-	} catch (OdbcException &ex) {
-		auto diag_record = ex.GetDiagRecord();
-		auto component = ex.GetComponent();
-		auto data_source = hdl->GetDataSourceName();
-		hdl->odbc_diagnostic->FormatDiagnosticMessage(diag_record, data_source, component);
-		hdl->odbc_diagnostic->AddDiagRecord(diag_record);
-		return ex.GetSqlReturn();
-	}
-}
-
-template <class T>
-SQLRETURN WithStatement(SQLHANDLE &statement_handle, T &&lambda) {
-	if (!statement_handle) {
-		return SQL_ERROR;
-	}
-	auto *hdl_stmt = (OdbcHandleStmt *)statement_handle;
-	if (hdl_stmt->type != OdbcHandleType::STMT) {
-		return SQL_ERROR;
-	}
-	if (!hdl_stmt->dbc || !hdl_stmt->dbc->conn) {
-		return SQL_ERROR;
-	}
-
-	// ODBC requires to clean up the diagnostic for every ODBC function call
-	hdl_stmt->odbc_diagnostic->Clean();
-
-	try {
-		return lambda(hdl_stmt);
-	} catch (OdbcException &ex) {
-		auto diag_record = ex.GetDiagRecord();
-		auto component = ex.GetComponent();
-		auto data_source = hdl_stmt->dbc->GetDataSourceName();
-		hdl_stmt->odbc_diagnostic->FormatDiagnosticMessage(diag_record, data_source, component);
-		hdl_stmt->odbc_diagnostic->AddDiagRecord(diag_record);
-		return ex.GetSqlReturn();
-	}
-}
-
-template <class T>
-SQLRETURN WithStatementPrepared(SQLHANDLE &statement_handle, T &&lambda) {
-	return WithStatement(statement_handle, [&](OdbcHandleStmt *stmt) -> SQLRETURN {
-		if (!stmt->stmt) {
-			return SQL_ERROR;
-		}
-		if (stmt->stmt->HasError()) {
-			return SQL_ERROR;
-		}
-		try {
-			return lambda(stmt);
-		} catch (OdbcException &ex) {
-			throw ex;
-		}
-	});
-}
-
-template <class T>
-SQLRETURN WithStatementResult(SQLHANDLE &statement_handle, T &&lambda) {
-	return WithStatementPrepared(statement_handle, [&](OdbcHandleStmt *stmt) -> SQLRETURN {
-		if (!stmt->res) {
-			return SQL_ERROR;
-		}
-		if (stmt->res->HasError()) {
-			return SQL_ERROR;
-		}
-		try {
-			return lambda(stmt);
-		} catch (OdbcException &ex) {
-			throw ex;
-		}
-	});
-}
-
-template <class T>
-SQLRETURN WithDescriptor(SQLHANDLE &descriptor_handle, T &&lambda) {
-	if (!descriptor_handle) {
-		return SQL_ERROR;
-	}
-	auto *hdl = (OdbcHandleDesc *)descriptor_handle;
-	if (hdl->type != OdbcHandleType::DESC) {
-		return SQL_ERROR;
-	}
-	return lambda(hdl);
-}
 
 } // namespace duckdb
 

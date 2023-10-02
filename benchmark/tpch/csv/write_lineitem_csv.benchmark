@@ -1,17 +1,19 @@
 # name: benchmark/tpch/csv/write_lineitem_csv.benchmark
-# description: Write the lineitem of TPC-H SF0.1 to a CSV file
+# description: Write the lineitem of TPC-H SF1 to a CSV file
 # group: [csv]
 
 name Write Lineitem CSV
 group csv
 
+cache tpch_sf1.duckdb
+
 require tpch
 
 load
-CALL dbgen(sf=0.1);
+CALL dbgen(sf=1);
 
 run
 COPY lineitem TO '${BENCHMARK_DIR}/lineitem.csv' (FORMAT CSV, DELIMITER '|', HEADER);
 
 result I
-600572
+6001215

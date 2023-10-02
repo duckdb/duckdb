@@ -13,20 +13,23 @@
 namespace duckdb {
 
 class LogicalRecursiveCTE : public LogicalOperator {
-	LogicalRecursiveCTE(idx_t table_index, idx_t column_count, bool union_all, LogicalOperatorType type)
-	    : LogicalOperator(type), union_all(union_all), table_index(table_index), column_count(column_count) {
+	LogicalRecursiveCTE() : LogicalOperator(LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 	}
 
 public:
-	LogicalRecursiveCTE(idx_t table_index, idx_t column_count, bool union_all, unique_ptr<LogicalOperator> top,
-	                    unique_ptr<LogicalOperator> bottom, LogicalOperatorType type)
-	    : LogicalOperator(type), union_all(union_all), table_index(table_index), column_count(column_count) {
-		D_ASSERT(type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE);
-		children.push_back(move(top));
-		children.push_back(move(bottom));
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_RECURSIVE_CTE;
+
+public:
+	LogicalRecursiveCTE(string ctename, idx_t table_index, idx_t column_count, bool union_all,
+	                    unique_ptr<LogicalOperator> top, unique_ptr<LogicalOperator> bottom)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_RECURSIVE_CTE), union_all(union_all), ctename(ctename),
+	      table_index(table_index), column_count(column_count) {
+		children.push_back(std::move(top));
+		children.push_back(std::move(bottom));
 	}
 
 	bool union_all;
+	string ctename;
 	idx_t table_index;
 	idx_t column_count;
 
@@ -34,9 +37,12 @@ public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(table_index, column_count);
 	}
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
+
 	vector<idx_t> GetTableIndex() const override;
+	string GetName() const override;
 
 protected:
 	void ResolveTypes() override {

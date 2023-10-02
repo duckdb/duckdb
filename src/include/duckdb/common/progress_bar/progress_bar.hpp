@@ -16,11 +16,13 @@
 
 namespace duckdb {
 
+struct ClientConfig;
 typedef unique_ptr<ProgressBarDisplay> (*progress_bar_display_create_func_t)();
 
 class ProgressBar {
 public:
 	static unique_ptr<ProgressBarDisplay> DefaultProgressBarDisplay();
+	static void SystemOverrideCheck(ClientConfig &config);
 
 	explicit ProgressBar(
 	    Executor &executor, idx_t show_progress_after,

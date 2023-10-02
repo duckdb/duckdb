@@ -1,0 +1,139 @@
+[
+    {
+        "name": "approx_count_distinct",
+        "parameters": "x",
+        "description": "Computes the approximate count of distinct elements using HyperLogLog.",
+        "example": "approx_count_distinct(A)",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "arg_min",
+        "parameters": "arg,val",
+        "description": "Finds the row with the minimum val. Calculates the arg expression at that row.",
+        "example": "arg_min(A,B)",
+        "type": "aggregate_function_set",
+        "aliases": ["argmin", "min_by"]
+    },
+    {
+        "name": "arg_max",
+        "parameters": "arg,val",
+        "description": "Finds the row with the maximum val. Calculates the arg expression at that row.",
+        "example": "arg_max(A,B)",
+        "type": "aggregate_function_set",
+        "aliases": ["argmax", "max_by"]
+    },
+    {
+        "name": "bit_and",
+        "parameters": "arg",
+        "description": "Returns the bitwise AND of all bits in a given expression.",
+        "example": "bit_and(A)",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "bit_or",
+        "parameters": "arg",
+        "description": "Returns the bitwise OR of all bits in a given expression.",
+        "example": "bit_or(A)",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "bit_xor",
+        "parameters": "arg",
+        "description": "Returns the bitwise XOR of all bits in a given expression.",
+        "example": "bit_xor(A)",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "bitstring_agg",
+        "parameters": "arg",
+        "description": "Returns a bitstring with bits set for each distinct value.",
+        "example": "bitstring_agg(A)",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "bool_and",
+        "parameters": "arg",
+        "description": "Returns TRUE if every input value is TRUE, otherwise FALSE.",
+        "example": "bool_and(A)",
+        "type": "aggregate_function"
+    },
+    {
+        "name": "bool_or",
+        "parameters": "arg",
+        "description": "Returns TRUE if any input value is TRUE, otherwise FALSE.",
+        "example": "bool_or(A)",
+        "type": "aggregate_function"
+    },
+    {
+        "name": "entropy",
+        "parameters": "x",
+        "description": "Returns the log-2 entropy of count input-values.",
+        "example": "",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "kahan_sum",
+        "parameters": "arg",
+        "description": "Calculates the sum using a more accurate floating point summation (Kahan Sum).",
+        "example": "kahan_sum(A)",
+        "type": "aggregate_function",
+        "aliases": ["fsum", "sumkahan"]
+    },
+    {
+        "name": "kurtosis",
+        "parameters": "x",
+        "description": "Returns the excess kurtosis (Fisher’s definition) of all input values, with a bias correction according to the sample size",
+        "example": "",
+        "type": "aggregate_function"
+    },
+    {
+        "name": "min",
+        "parameters": "arg",
+        "description": "Returns the minimum value present in arg.",
+        "example": "min(A)",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "max",
+        "parameters": "arg",
+        "description": "Returns the maximum value present in arg.",
+        "example": "max(A)",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "product",
+        "parameters": "arg",
+        "description": "Calculates the product of all tuples in arg.",
+        "example": "product(A)",
+        "type": "aggregate_function"
+    },
+    {
+        "name": "skewness",
+        "parameters": "x",
+        "description": "Returns the skewness of all input values.",
+        "example": "skewness(A)",
+        "type": "aggregate_function"
+    },
+    {
+        "name": "string_agg",
+        "parameters": "str,arg",
+        "description": "Concatenates the column string values with an optional separator.",
+        "example": "string_agg(A, '-')",
+        "type": "aggregate_function_set",
+        "aliases": ["group_concat"]
+    },
+    {
+        "name": "sum",
+        "parameters": "arg",
+        "description": "Calculates the sum value for all tuples in arg.",
+        "example": "sum(A)",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "sum_no_overflow",
+        "parameters": "arg",
+        "description": "Calculates the sum value for all tuples in arg without overflow checks.",
+        "example": "sum_no_overflow(A)",
+        "type": "aggregate_function_set"
+    }
+]

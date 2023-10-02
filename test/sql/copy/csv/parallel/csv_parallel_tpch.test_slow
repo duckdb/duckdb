@@ -5,9 +5,6 @@
 require tpch
 
 statement ok
-SET experimental_parallel_csv=true;
-
-statement ok
 pragma threads=4
 
 statement ok
@@ -16,7 +13,7 @@ CALL dbgen(sf=1, suffix='_og');
 foreach tpch_tbl orders customer lineitem nation part partsupp region supplier
 
 statement ok
-COPY ${tpch_tbl}_og TO '__TEST_DIR__/${tpch_tbl}.csv';
+COPY ${tpch_tbl}_og TO '__TEST_DIR__/${tpch_tbl}.csv' (HEADER 0);
 
 statement ok
 create table ${tpch_tbl} as select * from ${tpch_tbl}_og limit 0;

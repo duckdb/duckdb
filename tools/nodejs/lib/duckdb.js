@@ -1,6 +1,6 @@
 /**
  * @module duckdb
- * @summary these jsdoc annotations are still a work in progress - feedback and suggestions are welcome!
+ * @summary DuckDB is an embeddable SQL OLAP Database Management System
  */
 
 var duckdb = require('./duckdb-binding.js');
@@ -46,6 +46,10 @@ var OPEN_PRIVATECACHE = duckdb.OPEN_PRIVATECACHE;
 // some wrappers for compatibilities sake
 /**
  * Main database interface
+ * @arg path - path to database file or :memory: for in-memory database
+ * @arg access_mode - access mode
+ * @arg config - the configuration object
+ * @arg callback - callback function
  */
 var Database = duckdb.Database;
 /**
@@ -185,7 +189,7 @@ Connection.prototype.arrowIPCAll = function (sql) {
  * @arg sql
  * @param {...*} params
  * @param callback
- * @return IpcResultStreamIterator
+ * @return Promise<IpcResultStreamIterator>
  */
 Connection.prototype.arrowIPCStream = async function (sql) {
     const query = "SELECT * FROM to_arrow_ipc((" + sql + "));";
@@ -330,7 +334,6 @@ Connection.prototype.register_udf = function (name, return_type, fun) {
                 desc.ret.validity[i] = res === undefined || res === null ? 0 : 1;
             }
         } catch (error) { // work around recently fixed napi bug https://github.com/nodejs/node-addon-api/issues/912
-            console.log(desc.ret);
             msg = error;
             if (typeof error == 'object' && 'message' in error) {
                 msg = error.message
@@ -409,6 +412,13 @@ Connection.prototype.register_buffer;
  */
 Connection.prototype.unregister_buffer;
 
+/**
+ * Closes connection
+ * @method
+ * @param callback
+ * @return {void}
+ */
+Connection.prototype.close;
 
 /**
  * Closes database instance
@@ -417,7 +427,10 @@ Connection.prototype.unregister_buffer;
  * @return {void}
  */
 Database.prototype.close = function() {
-    this.default_connection = null
+    if (this.default_connection) {
+        this.default_connection.close(); // this queues up a job in the internals, which blocks the below close call
+        this.default_connection = null;
+    }
     this.close_internal.apply(this, arguments);
 };
 
@@ -438,7 +451,7 @@ Database.prototype.close_internal;
 Database.prototype.wait;
 
 /**
- * TODO: what does this do?
+ * Currently a no-op. Provided for SQLite compatibility
  * @method
  * @param callback
  * @return {void}
@@ -446,7 +459,7 @@ Database.prototype.wait;
 Database.prototype.serialize;
 
 /**
- * TODO: what does this do?
+ * Currently a no-op. Provided for SQLite compatibility
  * @method
  * @param callback
  * @return {void}
@@ -610,6 +623,15 @@ Database.prototype.unregister_udf = function () {
 }
 
 /**
+ * Register a table replace scan function
+ * @method
+ * @arg fun Replacement scan function
+ * @return {this}
+ */
+
+Database.prototype.registerReplacementScan;
+
+/**
  * Not implemented
  */
 Database.prototype.get = function () {
@@ -676,3 +698,43 @@ Statement.prototype.stream;
  * @returns sql contained in statement
  */
 Statement.prototype.sql;
+
+/**
+ * @method
+ * @return {ColumnInfo[]} - Array of column names and types
+ */
+Statement.prototype.columns;
+
+/**
+ * @typedef ColumnInfo
+ * @type {object}
+ * @property {string} name - Column name
+ * @property {TypeInfo} type - Column type
+ */
+
+/**
+ * @typedef TypeInfo
+ * @type {object}
+ * @property {string} id - Type ID
+ * @property {string} [alias] - SQL type alias
+ * @property {string} sql_type - SQL type name
+ */
+
+/**
+ * @typedef DuckDbError
+ * @type {object}
+ * @property {number} errno - -1 for DuckDB errors
+ * @property {string} message - Error message
+ * @property {string} code - 'DUCKDB_NODEJS_ERROR' for DuckDB errors
+ * @property {string} errorType - DuckDB error type code (eg, HTTP, IO, Catalog)
+ */
+
+/**
+ * @typedef HTTPError
+ * @type {object}
+ * @extends {DuckDbError}
+ * @property {number} statusCode - HTTP response status code
+ * @property {string} reason - HTTP response reason
+ * @property {string} response - HTTP response body
+ * @property {object} headers - HTTP headers
+ */

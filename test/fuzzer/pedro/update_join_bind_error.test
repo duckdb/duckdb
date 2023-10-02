@@ -1,0 +1,25 @@
+# name: test/fuzzer/pedro/update_join_bind_error.test
+# description: Lateral join in update clause
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0 (c1 INT);
+
+statement ok
+CREATE TABLE t1 AS SELECT 1
+
+statement ok
+CREATE TABLE t2 AS SELECT 1
+
+statement error
+UPDATE t0 SET c1 = 0 FROM t2 JOIN t1 ON (c1);
+----
+c1
+
+statement error
+UPDATE t0 SET c1 = 0 FROM (SELECT 1) t2 JOIN (SELECT 1) t1 ON (0, c1);
+----
+c1

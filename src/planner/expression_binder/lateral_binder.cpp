@@ -11,19 +11,19 @@ LateralBinder::LateralBinder(Binder &binder, ClientContext &context) : Expressio
 
 void LateralBinder::ExtractCorrelatedColumns(Expression &expr) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = (BoundColumnRefExpression &)expr;
+		auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
 		if (bound_colref.depth > 0) {
 			// add the correlated column info
 			CorrelatedColumnInfo info(bound_colref);
 			if (std::find(correlated_columns.begin(), correlated_columns.end(), info) == correlated_columns.end()) {
-				correlated_columns.push_back(move(info));
+				correlated_columns.push_back(std::move(info));
 			}
 		}
 	}
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ExtractCorrelatedColumns(child); });
 }
 
-BindResult LateralBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
+BindResult LateralBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
 	if (depth == 0) {
 		throw InternalException("Lateral binder can only bind correlated columns");
 	}
@@ -31,27 +31,12 @@ BindResult LateralBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, 
 	if (result.HasError()) {
 		return result;
 	}
-	if (depth > 1) {
-		throw BinderException("Nested lateral joins are not supported yet");
-	}
 	ExtractCorrelatedColumns(*result.expression);
 	return result;
 }
 
-vector<CorrelatedColumnInfo> LateralBinder::ExtractCorrelatedColumns(Binder &binder) {
-	auto all_correlated_columns = binder.correlated_columns;
-	for (auto &correlated : correlated_columns) {
-		auto entry = std::find(binder.correlated_columns.begin(), binder.correlated_columns.end(), correlated);
-		if (entry == binder.correlated_columns.end()) {
-			throw InternalException("Lateral Binder: could not find correlated column in binder");
-		}
-		binder.correlated_columns.erase(entry);
-	}
-	return all_correlated_columns;
-}
-
-BindResult LateralBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = **expr_ptr;
+BindResult LateralBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = *expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::DEFAULT:
 		return BindResult("LATERAL join cannot contain DEFAULT clause");
@@ -106,10 +91,14 @@ protected:
 
 	void ReduceExpressionDepth(Expression &expr) {
 		if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-			ReduceColumnRefDepth((BoundColumnRefExpression &)expr);
+			ReduceColumnRefDepth(expr.Cast<BoundColumnRefExpression>());
 		}
 		if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
-			ReduceExpressionSubquery((BoundSubqueryExpression &)expr);
+			auto &subquery_ref = expr.Cast<BoundSubqueryExpression>();
+			ReduceExpressionSubquery(expr.Cast<BoundSubqueryExpression>());
+			// Recursively update the depth in the bindings of the children nodes
+			ExpressionIterator::EnumerateQueryNodeChildren(
+			    *subquery_ref.subquery, [&](Expression &child_expr) { ReduceExpressionDepth(child_expr); });
 		}
 	}
 

@@ -1,0 +1,96 @@
+# name: test/sql/function/generic/test_boolean_test.test
+# description: Test NULL IF statement
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select true is true
+----
+true
+
+query I
+select false is true
+----
+false
+
+query I
+select null is true
+----
+false
+
+query I
+select 42 is true
+----
+true
+
+query I
+select 0 is true
+----
+false
+
+query I
+select true is not true
+----
+false
+
+query I
+select false is not true
+----
+true
+
+query I
+select null is not true
+----
+true
+
+query I
+select 42 is not true
+----
+false
+
+query I
+select 0 is not true
+----
+true
+
+query I
+select null is null
+----
+true
+
+query I
+select 42 is null
+----
+false
+
+query I
+select null is not null
+----
+false
+
+query I
+select 42 is not null
+----
+true
+
+query I
+select null is unknown
+----
+true
+
+query I
+select 42 is unknown
+----
+false
+
+query I
+select null is not unknown
+----
+false
+
+query I
+select 42 is not unknown
+----
+true

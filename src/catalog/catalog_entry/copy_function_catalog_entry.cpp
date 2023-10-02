@@ -3,9 +3,9 @@
 
 namespace duckdb {
 
-CopyFunctionCatalogEntry::CopyFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
-                                                   CreateCopyFunctionInfo *info)
-    : StandardEntry(CatalogType::COPY_FUNCTION_ENTRY, schema, catalog, info->name), function(info->function) {
+CopyFunctionCatalogEntry::CopyFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
+                                                   CreateCopyFunctionInfo &info)
+    : StandardEntry(CatalogType::COPY_FUNCTION_ENTRY, schema, catalog, info.name), function(info.function) {
 }
 
 } // namespace duckdb

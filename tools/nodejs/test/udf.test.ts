@@ -36,6 +36,15 @@ describe('UDFs', function() {
             db.unregister_udf("udf", done);
         });
 
+        it('0ary non-inlined string', function(done) {
+            db.register_udf("udf", "varchar", () => 'this string is over 12 bytes');
+            db.all("select udf() v", function(err: null | Error, rows: TableData) {
+                if (err) throw err;
+                assert.equal(rows[0].v, 'this string is over 12 bytes');
+            });
+            db.unregister_udf("udf", done);
+        });
+
         it('0ary int null', function(done) {
             db.register_udf("udf", "integer", () => undefined);
             db.all("select udf() v", function(err: null | Error, rows: TableData) {
@@ -208,6 +217,15 @@ describe('UDFs', function() {
             db.all("SELECT min(udf({'x': (case when v % 2 = 0 then {'y': v::INTEGER } else null end), 'z': 42}))::INTEGER as foo FROM generate_series(1, 10000) as t(v)", function(err: null | Error, rows: TableData) {
                 if (err) throw err;
                 assert.equal(rows[0].foo, -100);
+            });
+            db.unregister_udf("udf", done);
+        });
+
+        it('blob', function(done) {
+            db.register_udf("udf", "varchar", (buf: Buffer) => buf.toString("hex"));
+            db.all("select udf('\\xAA\\xAB\\xAC'::BLOB) v", function(err: null | Error, rows: TableData) {
+                if (err) throw err;
+                assert.equal(rows[0].v, "aaabac");
             });
             db.unregister_udf("udf", done);
         });

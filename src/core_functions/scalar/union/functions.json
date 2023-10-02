@@ -1,0 +1,23 @@
+[
+    {
+        "name": "union_extract",
+        "parameters": "union,tag",
+        "description": "Extract the value with the named tags from the union. NULL if the tag is not currently selected",
+        "example": "union_extract(s, 'k')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "union_tag",
+        "parameters": "union",
+        "description": "Retrieve the currently selected tag of the union as an ENUM",
+        "example": "union_tag(union_value(k := 'foo'))",
+        "type": "scalar_function"
+    },
+    {
+        "name": "union_value",
+        "parameters": "tag",
+        "description": "Create a single member UNION containing the argument value. The tag of the value will be the bound variable name",
+        "example": "union_value(k := 'hello')",
+        "type": "scalar_function"
+    }
+]

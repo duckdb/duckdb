@@ -1,0 +1,51 @@
+# name: test/sql/copy/partitioned/hive_partitioned_write.test_slow
+# description: slow test for the hive partitioned write
+# group: [partitioned]
+
+require parquet
+
+require tpch
+
+statement ok
+pragma memory_limit='100mb'
+
+# around 200MB worth of data, will require the PartitionedColumnData to spill to disk
+statement ok
+COPY (SELECT i%2::INT32 as part_col, i::INT32 FROM range(0,25000000) tbl(i)) TO '__TEST_DIR__/partitioned_memory_spill' (FORMAT parquet, PARTITION_BY part_col);
+
+statement ok
+pragma memory_limit='-1'
+
+statement ok
+call dbgen(sf=1);
+
+# Partition by 2 columns
+statement ok
+COPY lineitem TO '__TEST_DIR__/lineitem_sf1_partitioned' (FORMAT PARQUET, PARTITION_BY (l_linestatus, l_returnflag));
+
+statement ok
+DROP TABLE lineitem;
+
+statement ok
+CREATE VIEW lineitem as SELECT * FROM parquet_scan('__TEST_DIR__/lineitem_sf1_partitioned/l_linestatus=*/l_returnflag=*/*.parquet', HIVE_PARTITIONING=1);
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop
+
+statement ok
+pragma threads=1;

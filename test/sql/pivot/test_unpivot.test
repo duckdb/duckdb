@@ -1,0 +1,193 @@
+# name: test/sql/pivot/test_unpivot.test
+# description: Test standard SQL unpivot syntax
+# group: [pivot]
+
+# example taken from the snowflake docs
+# https://docs.snowflake.com/en/sql-reference/constructs/unpivot
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE OR REPLACE TABLE monthly_sales(empid INT, dept TEXT, Jan INT, Feb INT, Mar INT, April INT);
+
+statement ok
+INSERT INTO monthly_sales VALUES
+    (1, 'electronics', 100, 200, 300, 100),
+    (2, 'clothes', 100, 300, 150, 200),
+    (3, 'cars', 200, 400, 100, 50);
+
+# standard UNPIVOT
+query IIII
+SELECT * FROM monthly_sales
+    UNPIVOT(sales FOR month IN (jan, feb, mar, april))
+    ORDER BY empid;
+----
+1	electronics	Jan	100
+1	electronics	Feb	200
+1	electronics	Mar	300
+1	electronics	April	100
+2	clothes	Jan	100
+2	clothes	Feb	300
+2	clothes	Mar	150
+2	clothes	April	200
+3	cars	Jan	200
+3	cars	Feb	400
+3	cars	Mar	100
+3	cars	April	50
+
+# leaving out an entry works - it just does not unpivot that entry and leave it as a normal column
+query IIIII
+SELECT empid, dept, april, month, sales FROM monthly_sales
+    UNPIVOT(sales FOR month IN (jan, feb, mar))
+    ORDER BY empid;
+----
+1	electronics	100	Jan	100
+1	electronics	100	Feb	200
+1	electronics	100	Mar	300
+2	clothes	200	Jan	100
+2	clothes	200	Feb	300
+2	clothes	200	Mar	150
+3	cars	50	Jan	200
+3	cars	50	Feb	400
+3	cars	50	Mar	100
+
+# alias in pivots
+query IIII
+SELECT * FROM monthly_sales
+    UNPIVOT(sales FOR month IN (jan AS January, feb AS February, mar AS March, april))
+    ORDER BY empid;
+----
+1	electronics	January	100
+1	electronics	February	200
+1	electronics	March	300
+1	electronics	April	100
+2	clothes	January	100
+2	clothes	February	300
+2	clothes	March	150
+2	clothes	April	200
+3	cars	January	200
+3	cars	February	400
+3	cars	March	100
+3	cars	April	50
+
+# alias the unpivot clause
+query IIII
+SELECT p.id, p.type, p.m, p.vals FROM monthly_sales
+    UNPIVOT(sales FOR month IN (jan, feb, mar, april)) AS p(id, type, m, vals);
+----
+1	electronics	Jan	100
+1	electronics	Feb	200
+1	electronics	Mar	300
+1	electronics	April	100
+2	clothes	Jan	100
+2	clothes	Feb	300
+2	clothes	Mar	150
+2	clothes	April	200
+3	cars	Jan	200
+3	cars	Feb	400
+3	cars	Mar	100
+3	cars	April	50
+
+# multi-column unpivot
+query IIIII
+SELECT empid, dept, month, sales_jan_feb, sales_mar_apr FROM monthly_sales
+    UNPIVOT((sales_jan_feb, sales_mar_apr) FOR month IN ((jan, feb), (mar, april)));
+----
+1	electronics	Jan_Feb	100	200
+1	electronics	Mar_April	300	100
+2	clothes	Jan_Feb	100	300
+2	clothes	Mar_April	150	200
+3	cars	Jan_Feb	200	400
+3	cars	Mar_April	100	50
+
+# multiple names in FOR clause
+statement error
+SELECT * FROM monthly_sales
+    UNPIVOT((sales_jan_feb, sales_mar_apr) FOR (month, month2) IN ((jan, feb), (mar, april)));
+----
+UNPIVOT requires a single column name
+
+# count mismatch
+statement error
+SELECT * FROM monthly_sales
+    UNPIVOT(sales_jan_feb FOR month IN ((jan, feb), (mar, april)));
+----
+UNPIVOT name count mismatch
+
+statement error
+SELECT * FROM monthly_sales
+    UNPIVOT((a, b, c) FOR month IN ((jan, feb), (mar, april)));
+----
+UNPIVOT name count mismatch
+
+statement error
+SELECT empid, dept, month, sales_jan_feb, sales_mar_apr FROM monthly_sales
+    UNPIVOT((sales_jan_feb, sales_mar_apr) FOR month IN ((jan, feb), mar));
+----
+inconsistent amount of
+
+# unrecognized entry in unpivot
+statement error
+SELECT empid, dept, april, month, sales FROM monthly_sales
+    UNPIVOT(sales FOR month IN (jan, feb, mar, dec))
+    ORDER BY empid;
+----
+referenced in UNPIVOT but no matching entry was found in the table
+
+# what if there are no columns left?
+query II
+SELECT * FROM monthly_sales
+    UNPIVOT(sales FOR month IN (empid, dept, jan, feb, mar, april))
+----
+empid	1
+dept	electronics
+Jan	100
+Feb	200
+Mar	300
+April	100
+empid	2
+dept	clothes
+Jan	100
+Feb	300
+Mar	150
+April	200
+empid	3
+dept	cars
+Jan	200
+Feb	400
+Mar	100
+April	50
+
+# unpivot over subquery
+query IIIII
+UNPIVOT (SELECT * FROM monthly_sales)
+    ON jan, feb, mar april
+    INTO
+        NAME month
+        VALUE sales;
+----
+1	electronics	100	Jan	100
+1	electronics	100	Feb	200
+1	electronics	100	april	300
+2	clothes	200	Jan	100
+2	clothes	200	Feb	300
+2	clothes	200	april	150
+3	cars	50	Jan	200
+3	cars	50	Feb	400
+3	cars	50	april	100
+
+# empty IN clause
+statement error
+SELECT * FROM monthly_sales
+    UNPIVOT(sales FOR month IN ())
+    ORDER BY empid;
+
+statement error
+SELECT * FROM monthly_sales
+    UNPIVOT(sales FOR month IN (''))
+    ORDER BY empid;
+
+statement error
+SELECT * FROM monthly_sales
+    UNPIVOT(SUM(sales) FOR month IN (empid, dept, jan, feb, mar, april))

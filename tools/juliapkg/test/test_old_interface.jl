@@ -42,7 +42,7 @@ end
     DuckDB.appendDataFrame(input_df, con, "dtypes")
 
     # Output the data from the table
-    output_df = DuckDB.toDataFrame(con, "select * from dtypes;")
+    output_df = DataFrame(DuckDB.toDataFrame(con, "select * from dtypes;"))
 
     # Compare each column of the input and output dataframe with each other
     for (col_pos, input_col) in enumerate(eachcol(input_df))
@@ -60,9 +60,9 @@ end
     res = DuckDB.execute(con, "CREATE TABLE integers(date DATE, jcol INTEGER)")
     res = DuckDB.execute(con, "INSERT INTO integers VALUES ('2021-09-27', 4), ('2021-09-28', 6), ('2021-09-29', 8)")
     res = DuckDB.execute(con, "SELECT * FROM integers")
-    df = DuckDB.toDataFrame(res)
+    df = DataFrame(DuckDB.toDataFrame(res))
     @test isa(df, DataFrame)
-    df = DuckDB.toDataFrame(con, "SELECT * FROM integers")
+    df = DataFrame(DuckDB.toDataFrame(con, "SELECT * FROM integers"))
     println(typeof(df))
     @test isa(df, DataFrame)
     DuckDB.appendDataFrame(df, con, "integers")
@@ -94,7 +94,7 @@ INSERT INTO interval VALUES
 (INTERVAL 1 YEAR);
 """
     )
-    res = DuckDB.toDataFrame(con, "SELECT * FROM interval;")
+    res = DataFrame(DuckDB.toDataFrame(con, "SELECT * FROM interval;"))
     @test isa(res, DataFrame)
     DuckDB.disconnect(con)
     DuckDB.close(db)
@@ -103,14 +103,66 @@ end
 @testset "Timestamp" begin
     db = DuckDB.open(":memory:")
     con = DuckDB.connect(db)
+
+    # insert without timezone, display as UTC
     res = DuckDB.execute(con, "CREATE TABLE timestamp(timestamp TIMESTAMP , data INTEGER);")
     res = DuckDB.execute(
         con,
         "INSERT INTO timestamp VALUES ('2021-09-27 11:30:00.000', 4), ('2021-09-28 12:30:00.000', 6), ('2021-09-29 13:30:00.000', 8);"
     )
-    res = DuckDB.execute(con, "SELECT * FROM timestamp;")
-    res = DuckDB.toDataFrame(res)
-    @test isa(res, DataFrame)
+    res = DuckDB.execute(con, "SELECT * FROM timestamp WHERE timestamp='2021-09-27T11:30:00Z';")
+    df = DataFrame(res)
+    @test isequal(df[1, "timestamp"], DateTime(2021, 9, 27, 11, 30, 0))
+
+    # insert with timezone, display as UTC
+    res = DuckDB.execute(con, "CREATE TABLE timestamp1(timestamp TIMESTAMP , data INTEGER);")
+    res = DuckDB.execute(
+        con,
+        "INSERT INTO timestamp1 VALUES ('2021-09-27T11:30:00.000+01', 4), ('2021-09-28T12:30:00.000+01', 6), ('2021-09-29T13:30:00.000+01', 8);"
+    )
+    res = DuckDB.execute(con, "SELECT * FROM timestamp1 WHERE timestamp=?;", [DateTime(2021, 9, 27, 10, 30, 0)])
+    df = DataFrame(res)
+    @test isequal(df[1, "timestamp"], DateTime(2021, 9, 27, 10, 30, 0))
+
+    # query with local datetime, display as UTC
+    res = DuckDB.execute(con, "SELECT * FROM timestamp1 WHERE timestamp='2021-09-27T11:30:00.000+01';")
+    df = DataFrame(res)
+    @test isequal(df[1, "timestamp"], DateTime(2021, 9, 27, 10, 30, 0))
+
+    DuckDB.disconnect(con)
+    DuckDB.close(db)
+end
+
+@testset "TimestampTZ" begin
+    db = DuckDB.open(":memory:")
+    con = DuckDB.connect(db)
+    DuckDB.execute(con, "SET TimeZone='Asia/Shanghai'") # UTC+8
+
+    res = DuckDB.execute(con, "SELECT TIMESTAMPTZ '2021-09-27 11:30:00' tz, TIMESTAMP '2021-09-27 11:30:00' ts;")
+    df = DataFrame(res)
+    @test isequal(df[1, "tz"], DateTime(2021, 9, 27, 3, 30, 0))
+    @test isequal(df[1, "ts"], DateTime(2021, 9, 27, 11, 30, 0))
+
+    res = DuckDB.execute(con, "CREATE TABLE timestamptz(timestamp TIMESTAMPTZ , data INTEGER);")
+    res = DuckDB.execute(
+        con,
+        "INSERT INTO timestamptz VALUES ('2021-09-27 11:30:00.000', 4), ('2021-09-28 12:30:00.000', 6), ('2021-09-29 13:30:00.000', 8);"
+    )
+    res = DuckDB.execute(con, "SELECT * FROM timestamptz WHERE timestamp='2021-09-27 11:30:00'")
+    df = DataFrame(res)
+    @test isequal(df[1, "data"], 4)
+    @test isequal(df[1, "timestamp"], DateTime(2021, 9, 27, 3, 30, 0))
+
+    res = DuckDB.execute(con, "SELECT * FROM timestamptz WHERE timestamp='2021-09-27T03:30:00Z'")
+    df = DataFrame(res)
+    @test isequal(df[1, "data"], 4)
+    @test isequal(df[1, "timestamp"], DateTime(2021, 9, 27, 3, 30, 0))
+
+    res = DuckDB.execute(con, "SELECT * FROM timestamptz WHERE timestamp='2021-09-27T12:30:00+09'")
+    df = DataFrame(res)
+    @test isequal(df[1, "data"], 4)
+    @test isequal(df[1, "timestamp"], DateTime(2021, 9, 27, 3, 30, 0))
+
     DuckDB.disconnect(con)
     DuckDB.close(db)
 end
@@ -120,7 +172,7 @@ end
     con = DuckDB.connect(db)
     res = DuckDB.execute(con, "CREATE TABLE items(item VARCHAR, value DECIMAL(10,2), count INTEGER);")
     res = DuckDB.execute(con, "INSERT INTO items VALUES ('jeans', 20.0, 1), ('hammer', 42.2, 2);")
-    res = DuckDB.toDataFrame(con, "SELECT * FROM items;")
+    res = DataFrame(DuckDB.toDataFrame(con, "SELECT * FROM items;"))
     @test isa(res, DataFrame)
     DuckDB.disconnect(con)
 end
@@ -131,7 +183,7 @@ end
     res =
         DBInterface.execute(db, "INSERT INTO integers VALUES ('2021-09-27', 4), ('2021-09-28', 6), ('2021-09-29', 8);")
     res = DBInterface.execute(db, "SELECT * FROM integers;")
-    res = DuckDB.toDataFrame(res)
+    res = DataFrame(DuckDB.toDataFrame(res))
     @test res.date == [Date(2021, 9, 27), Date(2021, 9, 28), Date(2021, 9, 29)]
     @test isa(res, DataFrame)
     DBInterface.close!(db)

@@ -1,0 +1,11 @@
+# name: test/sql/copy/partitioned/partition_issue_6304.test
+# description: Issue #6304: INTERNAL Error: Comparison on NULL values
+# group: [partitioned]
+
+require parquet
+
+statement ok
+copy (select NULL as i from range(100000)) to '__TEST_DIR__/issue6304_null' (format parquet, partition_by(i), overwrite_or_ignore);
+
+statement ok
+copy (select 1 as i from range(100000)) to '__TEST_DIR__/issue6304_constant' (format parquet, partition_by(i), overwrite_or_ignore);

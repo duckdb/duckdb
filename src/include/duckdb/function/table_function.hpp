@@ -9,8 +9,11 @@
 #pragma once
 
 #include "duckdb/common/enums/operator_result_type.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/function/function.hpp"
+#include "duckdb/planner/bind_context.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 
 #include <functional>
@@ -18,11 +21,23 @@
 namespace duckdb {
 
 class BaseStatistics;
+class DependencyList;
 class LogicalGet;
 class TableFilterSet;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 struct GlobalTableFunctionState {
@@ -33,19 +48,41 @@ public:
 public:
 	DUCKDB_API virtual ~GlobalTableFunctionState();
 
-	DUCKDB_API virtual idx_t MaxThreads() const {
+	virtual idx_t MaxThreads() const {
 		return 1;
+	}
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
 struct LocalTableFunctionState {
 	DUCKDB_API virtual ~LocalTableFunctionState();
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 struct TableFunctionBindInput {
 	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
 	                       vector<LogicalType> &input_table_types, vector<string> &input_table_names,
-	                       TableFunctionInfo *info)
+	                       optional_ptr<TableFunctionInfo> info)
 	    : inputs(inputs), named_parameters(named_parameters), input_table_types(input_table_types),
 	      input_table_names(input_table_names), info(info) {
 	}
@@ -54,19 +91,19 @@ struct TableFunctionBindInput {
 	named_parameter_map_t &named_parameters;
 	vector<LogicalType> &input_table_types;
 	vector<string> &input_table_names;
-	TableFunctionInfo *info;
+	optional_ptr<TableFunctionInfo> info;
 };
 
 struct TableFunctionInitInput {
-	TableFunctionInitInput(const FunctionData *bind_data_p, const vector<column_t> &column_ids_p,
-	                       const vector<idx_t> &projection_ids_p, TableFilterSet *filters_p)
+	TableFunctionInitInput(optional_ptr<const FunctionData> bind_data_p, const vector<column_t> &column_ids_p,
+	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p)
 	    : bind_data(bind_data_p), column_ids(column_ids_p), projection_ids(projection_ids_p), filters(filters_p) {
 	}
 
-	const FunctionData *bind_data;
+	optional_ptr<const FunctionData> bind_data;
 	const vector<column_t> &column_ids;
 	const vector<idx_t> projection_ids;
-	TableFilterSet *filters;
+	optional_ptr<TableFilterSet> filters;
 
 	bool CanRemoveFilterColumns() const {
 		if (projection_ids.empty()) {
@@ -84,15 +121,16 @@ struct TableFunctionInitInput {
 
 struct TableFunctionInput {
 public:
-	TableFunctionInput(const FunctionData *bind_data_p, LocalTableFunctionState *local_state_p,
-	                   GlobalTableFunctionState *global_state_p)
+	TableFunctionInput(optional_ptr<const FunctionData> bind_data_p,
+	                   optional_ptr<LocalTableFunctionState> local_state_p,
+	                   optional_ptr<GlobalTableFunctionState> global_state_p)
 	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p) {
 	}
 
 public:
-	const FunctionData *bind_data;
-	LocalTableFunctionState *local_state;
-	GlobalTableFunctionState *global_state;
+	optional_ptr<const FunctionData> bind_data;
+	optional_ptr<LocalTableFunctionState> local_state;
+	optional_ptr<GlobalTableFunctionState> global_state;
 };
 
 enum ScanType { TABLE, PARQUET };
@@ -102,21 +140,21 @@ public:
 	explicit BindInfo(ScanType type_p) : type(type_p) {};
 	unordered_map<string, Value> options;
 	ScanType type;
-	void InsertOption(string name, Value value) {
+	void InsertOption(const string &name, Value value) {
 		if (options.find(name) != options.end()) {
 			throw InternalException("This option already exists");
 		}
-		options[name] = value;
+		options[name] = std::move(value);
 	}
 	template <class T>
-	T GetOption(string name) {
+	T GetOption(const string &name) {
 		if (options.find(name) == options.end()) {
 			throw InternalException("This option does not exist");
 		}
 		return options[name].GetValue<T>();
 	}
 	template <class T>
-	vector<T> GetOptionList(string name) {
+	vector<T> GetOptionList(const string &name) {
 		if (options.find(name) == options.end()) {
 			throw InternalException("This option does not exist");
 		}
@@ -135,6 +173,7 @@ public:
 
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, TableFunctionBindInput &input,
                                                           vector<LogicalType> &return_types, vector<string> &names);
+typedef unique_ptr<TableRef> (*table_function_bind_replace_t)(ClientContext &context, TableFunctionBindInput &input);
 typedef unique_ptr<GlobalTableFunctionState> (*table_function_init_global_t)(ClientContext &context,
                                                                              TableFunctionInitInput &input);
 typedef unique_ptr<LocalTableFunctionState> (*table_function_init_local_t)(ExecutionContext &context,
@@ -143,7 +182,6 @@ typedef unique_ptr<LocalTableFunctionState> (*table_function_init_local_t)(Execu
 typedef unique_ptr<BaseStatistics> (*table_statistics_t)(ClientContext &context, const FunctionData *bind_data,
                                                          column_t column_index);
 typedef void (*table_function_t)(ClientContext &context, TableFunctionInput &data, DataChunk &output);
-
 typedef OperatorResultType (*table_in_out_function_t)(ExecutionContext &context, TableFunctionInput &data,
                                                       DataChunk &input, DataChunk &output);
 typedef OperatorFinalizeResultType (*table_in_out_function_final_t)(ExecutionContext &context, TableFunctionInput &data,
@@ -156,7 +194,7 @@ typedef BindInfo (*table_function_get_bind_info)(const FunctionData *bind_data);
 
 typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state);
-typedef void (*table_function_dependency_t)(unordered_set<CatalogEntry *> &dependencies, const FunctionData *bind_data);
+typedef void (*table_function_dependency_t)(DependencyList &dependencies, const FunctionData *bind_data);
 typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext &context,
                                                                    const FunctionData *bind_data);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
@@ -164,10 +202,9 @@ typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context,
                                                          vector<unique_ptr<Expression>> &filters);
 typedef string (*table_function_to_string_t)(const FunctionData *bind_data);
 
-typedef void (*table_function_serialize_t)(FieldWriter &writer, const FunctionData *bind_data,
+typedef void (*table_function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                            const TableFunction &function);
-typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(ClientContext &context, FieldReader &reader,
-                                                                 TableFunction &function);
+typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &deserializer, TableFunction &function);
 
 class TableFunction : public SimpleNamedParameterFunction {
 public:
@@ -184,6 +221,11 @@ public:
 	//! This function is used for determining the return type of a table producing function and returning bind data
 	//! The returned FunctionData object should be constant and should not be changed during execution.
 	table_function_bind_t bind;
+	//! (Optional) Bind replace function
+	//! This function is called before the regular bind function. It allows returning a TableRef will be used to
+	//! to generate a logical plan that replaces the LogicalGet of a regularly bound TableFunction. The BindReplace can
+	//! also return a nullptr to indicate a regular bind needs to be performed instead.
+	table_function_bind_replace_t bind_replace;
 	//! (Optional) global init function
 	//! Initialize the global operator state of the function.
 	//! The global operator state is used to keep track of the progress in the table function and is shared between
@@ -222,6 +264,7 @@ public:
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;
+	bool verify_serialization = true;
 
 	//! Whether or not the table function supports projection pushdown. If not supported a projection will be added
 	//! that filters out unused columns.
@@ -234,6 +277,8 @@ public:
 	bool filter_prune;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
+
+	DUCKDB_API bool Equal(const TableFunction &rhs) const;
 };
 
 } // namespace duckdb

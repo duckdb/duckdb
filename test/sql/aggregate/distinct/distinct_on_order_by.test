@@ -1,0 +1,161 @@
+# name: test/sql/aggregate/distinct/distinct_on_order_by.test
+# description: Test DISTINCT ON ORDER BY
+# group: [distinct]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (2, 3, 5), (4, 5, 6), (2, 7, 6);
+
+query II
+SELECT DISTINCT ON (i) i, j FROM integers ORDER BY i, j DESC;
+----
+2	7
+4	5
+
+query II
+SELECT DISTINCT ON (i) i, j FROM integers ORDER BY i, j;
+----
+2	3
+4	5
+
+# we don't need to ORDER BY i
+query II
+SELECT DISTINCT ON (i) i, j FROM integers ORDER BY j DESC;
+----
+2	7
+4	5
+
+query II
+SELECT DISTINCT ON (i) i, j FROM integers ORDER BY j;
+----
+2	3
+4	5
+
+# DISTINCT ON in correlated subqueries
+query III
+SELECT i, j, (SELECT DISTINCT ON(i) j) AS k FROM integers ORDER BY i, j;
+----
+2	3	3
+2	7	7
+4	5	5
+
+query III
+SELECT i, j, (SELECT DISTINCT ON(i) j ORDER BY i, j DESC) AS k FROM integers ORDER BY i, j;
+----
+2	3	3
+2	7	7
+4	5	5
+
+query III
+SELECT i, j, (SELECT DISTINCT ON(i) j ORDER BY i, k) AS k FROM integers ORDER BY i, j;
+----
+2	3	3
+2	7	7
+4	5	5
+
+# DISTINCT ON with multiple parameters
+statement ok
+INSERT INTO integers VALUES (2, 3, 7), (4, 5, 11);
+
+query III
+SELECT DISTINCT ON(i) i, j, k FROM integers ORDER BY i, j ASC, k ASC
+----
+2	3	5
+4	5	6
+
+query III
+SELECT DISTINCT ON(i) i, j, k FROM integers ORDER BY i, j ASC, k DESC
+----
+2	3	7
+4	5	11
+
+# DISTINCT ON with NULL values
+statement ok
+INSERT INTO integers VALUES (2, NULL, 27), (4, 88, NULL);
+
+query III
+SELECT DISTINCT ON(i) i, j, k FROM integers ORDER BY i, j NULLS FIRST, k DESC NULLS LAST;
+----
+2	NULL	27
+4	5	11
+
+query III
+SELECT DISTINCT ON(i) i, j, k FROM integers ORDER BY i, j NULLS FIRST, k NULLS FIRST;
+----
+2	NULL	27
+4	5	6
+
+query III
+SELECT DISTINCT ON(i) i, j, k FROM integers ORDER BY i, k NULLS FIRST, j NULLS FIRST;
+----
+2	3	5
+4	88	NULL
+
+# examples from the original issue
+statement ok
+create table foo(a real, b real);
+
+statement ok
+insert into foo values (1, 69), (1, 420), (2, 69), (2, 420);
+
+query II rowsort
+select distinct on(a) a, b from foo order by b asc;
+----
+1	69
+2	69
+
+query II rowsort
+select distinct on(a) a, b from foo order by b desc;
+----
+1	420
+2	420
+
+statement ok
+CREATE TABLE example (
+    id               INT,
+    person_id        INT,
+    address_id       INT,
+    effective_date   DATE
+);
+
+statement ok
+INSERT INTO
+    example (id, person_id, address_id, effective_date)
+VALUES
+    (1, 2, 1, '2000-01-01'),  -- Moved to first house
+    (5, 2, 2, '2004-08-19'),  -- Went to uni
+    (9, 2, 1, '2007-06-12'),  -- Moved back home
+    (2, 4, 3, '2007-05-18'),  -- Moved to first house
+    (3, 4, 4, '2016-02-09')   -- Moved to new house
+;
+
+query IIII
+SELECT DISTINCT ON (person_id)
+    *
+FROM
+    example
+ORDER BY
+    person_id,
+    effective_date ASC
+;
+----
+1	2	1	2000-01-01
+2	4	3	2007-05-18
+
+query IIII
+SELECT DISTINCT ON (person_id)
+    *
+FROM
+    example
+ORDER BY
+    person_id,
+    effective_date DESC
+;
+----
+9	2	1	2007-06-12
+3	4	4	2016-02-09

@@ -1,0 +1,22 @@
+# name: test/sql/attach/attach_issue7711.test
+# description: Issue #7711 - Detaching the current database prevents from using another one
+# group: [attach]
+
+require noforcestorage
+
+statement ok
+attach ':memory:' as test;
+
+statement ok
+use test;
+
+statement error
+detach test;
+----
+Cannot detach database "test" because it is the default database
+
+statement ok
+use memory
+
+statement ok
+detach test

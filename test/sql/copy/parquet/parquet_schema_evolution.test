@@ -45,6 +45,8 @@ CREATE TABLE copy_test(a INT, b INT);
 # if we copy from both files, we run into a schema mismatch in the files themselves (name differences)
 statement error
 COPY copy_test FROM '__TEST_DIR__/evolution_*.parquet'
+----
+schema mismatch
 
 # copying from one file works, however
 statement ok

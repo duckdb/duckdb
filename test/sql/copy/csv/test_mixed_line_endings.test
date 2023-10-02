@@ -7,8 +7,9 @@
 statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 
+
 query I
-COPY test FROM 'test/sql/copy/csv/data/test/mixed_line_endings.csv';
+insert into test select * from read_csv_auto('test/sql/copy/csv/data/test/mixed_line_endings.csv');
 ----
 3
 

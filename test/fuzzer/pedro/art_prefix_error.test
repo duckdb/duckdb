@@ -1,0 +1,11 @@
+# name: test/fuzzer/pedro/art_prefix_error.test
+# description: Issue #5984, number 59
+# group: [pedro]
+
+statement ok
+CREATE TABLE t0 (c0 BLOB PRIMARY KEY);
+
+statement error
+INSERT INTO t0(c0) VALUES (BLOB '\x00a'), (BLOB '');
+----
+Not implemented Error: Indexes cannot contain BLOBs that contain null-terminated bytes.

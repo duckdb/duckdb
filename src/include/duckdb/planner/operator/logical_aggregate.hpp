@@ -19,6 +19,9 @@ namespace duckdb {
 //! operator.
 class LogicalAggregate : public LogicalOperator {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY;
+
+public:
 	LogicalAggregate(idx_t group_index, idx_t aggregate_index, vector<unique_ptr<Expression>> select_list);
 
 	//! The table index for the groups of the LogicalAggregate
@@ -32,7 +35,7 @@ public:
 	//! The set of grouping sets (optional).
 	vector<GroupingSet> grouping_sets;
 	//! The list of grouping function calls (optional)
-	vector<vector<idx_t>> grouping_functions;
+	vector<unsafe_vector<idx_t>> grouping_functions;
 	//! Group statistics (optional)
 	vector<unique_ptr<BaseStatistics>> group_stats;
 
@@ -40,10 +43,12 @@ public:
 	string ParamsToString() const override;
 
 	vector<ColumnBinding> GetColumnBindings() override;
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 	idx_t EstimateCardinality(ClientContext &context) override;
 	vector<idx_t> GetTableIndex() const override;
+	string GetName() const override;
 
 protected:
 	void ResolveTypes() override;

@@ -135,13 +135,7 @@ query III
 SELECT MODE(ts), MODE(tstz), MODE(dt)
 FROM specials;
 ----
--infinity	-infinity	-infinity
-
-query III
-SELECT MODE(ts), MODE(tstz), MODE(dt)
-FROM specials;
-----
--infinity	-infinity	-infinity
+infinity	infinity	infinity
 
 query III
 SELECT APPROX_COUNT_DISTINCT(ts), APPROX_COUNT_DISTINCT(tstz), APPROX_COUNT_DISTINCT(dt)

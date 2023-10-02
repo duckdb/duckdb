@@ -1,0 +1,172 @@
+# name: test/sql/window/test_window_constant_aggregate.test
+# description: Most basic window function
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+# Mix of constant/non-constant aggregate (sum and lead over same OVER clause)
+query IIII
+SELECT part, id, sum(val) OVER(PARTITION BY part ORDER BY id), lead(val) OVER(PARTITION BY part ORDER BY id)
+FROM (SELECT range AS id, range % 5 AS part, range AS val FROM range(13)) t
+ORDER BY ALL;
+----
+0	0	0	5
+0	5	5	10
+0	10	15	NULL
+1	1	1	6
+1	6	7	11
+1	11	18	NULL
+2	2	2	7
+2	7	9	12
+2	12	21	NULL
+3	3	3	8
+3	8	11	NULL
+4	4	4	9
+4	9	13	NULL
+
+# Constant aggregate with non-simple_update 
+query III
+SELECT part, id, list_sort(list(val) OVER(PARTITION BY part))
+FROM (SELECT range AS id, range % 5 AS part, range AS val FROM range(13)) t
+ORDER BY ALL;
+----
+0	0	[0, 5, 10]
+0	5	[0, 5, 10]
+0	10	[0, 5, 10]
+1	1	[1, 6, 11]
+1	6	[1, 6, 11]
+1	11	[1, 6, 11]
+2	2	[2, 7, 12]
+2	7	[2, 7, 12]
+2	12	[2, 7, 12]
+3	3	[3, 8]
+3	8	[3, 8]
+4	4	[4, 9]
+4	9	[4, 9]
+
+# Constant aggregate with not-nicely-aligned partitions (e.g. partitions are 73, 75, 77, 79, 81, 83, ... rows)
+query III
+SELECT part, min(const) AS lo, max(const) AS hi
+FROM (
+	SELECT part, sum(val) OVER(PARTITION BY part) as const
+	FROM (
+		(SELECT 1 AS part, range AS val FROM range(73))
+	UNION ALL
+		(SELECT 2 AS part, range AS val FROM range(75))
+	UNION ALL
+		(SELECT 3 AS part, range AS val FROM range(77))
+	UNION ALL
+		(SELECT 4 AS part, range AS val FROM range(79))
+	UNION ALL
+		(SELECT 5 AS part, range AS val FROM range(81))
+	UNION ALL
+		(SELECT 6 AS part, range AS val FROM range(83))
+	) u
+) t
+GROUP BY ALL
+ORDER BY ALL
+;
+----
+1	2628	2628
+2	2775	2775
+3	2926	2926
+4	3081	3081
+5	3240	3240
+6	3403	3403
+
+# Constant aggregate with large partitions (> vector size), also not nicely-aligned
+query III
+SELECT part, min(const) AS lo, max(const) AS hi
+FROM (
+	SELECT part, sum(val) OVER(PARTITION BY part) AS const
+	FROM (
+		SELECT part, val
+		FROM (
+			(SELECT range as part, random() AS val FROM range(10)) r
+		CROSS JOIN 
+			range(3000)
+		) p
+	) t
+) w
+GROUP BY ALL
+HAVING lo <> hi
+ORDER BY ALL
+;
+----
+
+statement ok
+CREATE TABLE issue7353 (
+    Season VARCHAR,
+    Medal VARCHAR,
+    Sex VARCHAR,
+    Ct INT,
+    Depth INT
+);
+
+statement ok
+INSERT INTO issue7353 (Season, Medal, Sex, Ct, Depth) VALUES
+    (NULL, NULL, NULL, 271116, 0),
+    ('Summer', NULL, NULL, 222552, 1),
+    ('Winter', NULL, NULL, 48564, 1),
+    ('Summer', 'NA', NULL, 188464, 2),
+    ('Summer', 'Gold', NULL, 11459, 2),
+    ('Winter', 'NA', NULL, 42869, 2),
+    ('Summer', 'Bronze', NULL, 11409, 2),
+    ('Winter', 'Bronze', NULL, 1886, 2),
+    ('Winter', 'Gold', NULL, 1913, 2),
+    ('Winter', 'Silver', NULL, 1896, 2),
+    ('Summer', 'Silver', NULL, 11220, 2),
+    ('Summer', 'NA', 'M', 138463, 3),
+    ('Summer', 'Gold', 'M', 8319, 3),
+    ('Winter', 'NA', 'F', 13268, 3),
+    ('Winter', 'NA', 'M', 29601, 3),
+    ('Summer', 'NA', 'F', 50001, 3),
+    ('Summer', 'Bronze', 'M', 8235, 3),
+    ('Winter', 'Bronze', 'M', 1289, 3),
+    ('Winter', 'Gold', 'M', 1306, 3),
+    ('Winter', 'Silver', 'M', 1289, 3),
+    ('Summer', 'Gold', 'F', 3140, 3),
+    ('Summer', 'Silver', 'M', 8092, 3),
+    ('Summer', 'Bronze', 'F', 3174, 3),
+    ('Summer', 'Silver', 'F', 3128, 3),
+    ('Winter', 'Bronze', 'F', 597, 3),
+    ('Winter', 'Gold', 'F', 607, 3),
+    ('Winter', 'Silver', 'F', 607, 3);
+
+# Calculate the max at the level Depth=1 and add to every row
+statement ok
+PRAGMA default_null_order='NULLS LAST';
+
+query IIIIII
+SELECT *, max(Ct) FILTER (WHERE Depth=1) OVER (PARTITION BY Season) as value_depth1 
+from issue7353
+order by all;
+----
+Summer	Bronze	F	3174	3	222552
+Summer	Bronze	M	8235	3	222552
+Summer	Bronze	NULL	11409	2	222552
+Summer	Gold	F	3140	3	222552
+Summer	Gold	M	8319	3	222552
+Summer	Gold	NULL	11459	2	222552
+Summer	NA	F	50001	3	222552
+Summer	NA	M	138463	3	222552
+Summer	NA	NULL	188464	2	222552
+Summer	Silver	F	3128	3	222552
+Summer	Silver	M	8092	3	222552
+Summer	Silver	NULL	11220	2	222552
+Summer	NULL	NULL	222552	1	222552
+Winter	Bronze	F	597	3	48564
+Winter	Bronze	M	1289	3	48564
+Winter	Bronze	NULL	1886	2	48564
+Winter	Gold	F	607	3	48564
+Winter	Gold	M	1306	3	48564
+Winter	Gold	NULL	1913	2	48564
+Winter	NA	F	13268	3	48564
+Winter	NA	M	29601	3	48564
+Winter	NA	NULL	42869	2	48564
+Winter	Silver	F	607	3	48564
+Winter	Silver	M	1289	3	48564
+Winter	Silver	NULL	1896	2	48564
+Winter	NULL	NULL	48564	1	48564
+NULL	NULL	NULL	271116	0	NULL

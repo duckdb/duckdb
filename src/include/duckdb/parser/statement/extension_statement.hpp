@@ -15,6 +15,9 @@ namespace duckdb {
 
 class ExtensionStatement : public SQLStatement {
 public:
+	static constexpr const StatementType TYPE = StatementType::EXTENSION_STATEMENT;
+
+public:
 	ExtensionStatement(ParserExtension extension, unique_ptr<ParserExtensionParseData> parse_data);
 
 	//! The ParserExtension this statement was generated from

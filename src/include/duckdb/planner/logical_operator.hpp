@@ -15,19 +15,11 @@
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
-#include "duckdb/planner/plan_serialization.hpp"
 
 #include <algorithm>
 #include <functional>
 
 namespace duckdb {
-
-class FieldWriter;
-class FieldReader;
-
-//! The current version of the plan serialization format. Exposed via by @Serializer & @Deserializer
-//! to be used by various Operator to know what format to read and write.
-extern const uint64_t PLAN_SERIALIZATION_VERSION;
 
 //! LogicalOperator is the base class of the logical operators present in the
 //! logical query tree
@@ -49,8 +41,6 @@ public:
 	idx_t estimated_cardinality;
 	bool has_estimated_cardinality;
 
-	unique_ptr<EstimatedProperties> estimated_props;
-
 public:
 	virtual vector<ColumnBinding> GetColumnBindings();
 	static vector<ColumnBinding> GenerateColumnBindings(idx_t table_idx, idx_t column_count);
@@ -70,12 +60,8 @@ public:
 	void AddChild(unique_ptr<LogicalOperator> child);
 	virtual idx_t EstimateCardinality(ClientContext &context);
 
-	//! Serializes a LogicalOperator to a stand-alone binary blob
-	void Serialize(Serializer &serializer) const;
-	//! Serializes an LogicalOperator to a stand-alone binary blob
-	virtual void Serialize(FieldWriter &writer) const = 0;
-
-	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer, PlanDeserializationState &state);
+	virtual void Serialize(Serializer &serializer) const;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
 	virtual unique_ptr<LogicalOperator> Copy(ClientContext &context) const;
 
@@ -83,11 +69,33 @@ public:
 		return true;
 	}
 
+	//! Allows LogicalOperators to opt out of serialization
+	virtual bool SupportSerialization() const {
+		return true;
+	};
+
 	//! Returns the set of table indexes of this operator
 	virtual vector<idx_t> GetTableIndex() const;
 
 protected:
 	//! Resolve types for this specific operator
 	virtual void ResolveTypes() = 0;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (TARGET::TYPE != LogicalOperatorType::LOGICAL_INVALID && type != TARGET::TYPE) {
+			throw InternalException("Failed to cast logical operator to type - logical operator type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (TARGET::TYPE != LogicalOperatorType::LOGICAL_INVALID && type != TARGET::TYPE) {
+			throw InternalException("Failed to cast logical operator to type - logical operator type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 } // namespace duckdb

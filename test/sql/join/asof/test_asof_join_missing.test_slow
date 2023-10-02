@@ -1,0 +1,162 @@
+# name: test/sql/join/asof/test_asof_join_missing.test_slow
+# description: Test As-Of join with missing matches
+# group: [asof]
+
+statement ok
+PRAGMA enable_verification
+
+# These test stress several aspects of the matching:
+# * Probe inequality less than the minimum (no match)
+# * Probe equality missing (no match)
+# * More than 64 valid probe entries (mask => SV construction)
+# * First radix bin empty.
+# * First payload bin empty 
+# * Multiple scanned payload blocks
+
+# Check results against IEJoin
+foreach debug False True
+
+statement ok 
+PRAGMA debug_asof_iejoin=${debug}
+
+# 10 dates, 5 keys
+query I
+WITH build AS (
+	SELECT k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS t, v
+	FROM range(0,10) vals(v), range(0,5) keys(k)
+), probe AS (
+	SELECT k * 2 AS k, t - INTERVAL (30) SECOND AS t
+	FROM build
+)
+SELECT SUM(v)
+FROM probe ASOF JOIN build USING(k, t);
+----
+108
+
+# Coverage: Missing right side bin
+query II
+WITH build AS (
+	SELECT k * 2 as k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS t, v
+	FROM range(0,10) vals(v), range(0,5) keys(k)
+), probe AS (
+	SELECT k / 2 AS k, t - INTERVAL (30) SECOND AS t
+	FROM build
+)
+SELECT SUM(v), COUNT(*)
+FROM probe ASOF JOIN build USING(k, t);
+----
+108	27
+
+# 20 dates, 5 keys
+query I
+WITH build AS (
+	SELECT k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS t, v
+	FROM range(0,20) vals(v), range(0,5) keys(k)
+), probe AS (
+	SELECT k * 2 AS k, t - INTERVAL (30) SECOND AS t
+	FROM build
+)
+SELECT SUM(v)
+FROM probe ASOF JOIN build USING(k, t);
+----
+513
+
+# 30 dates, 5 keys
+query I
+WITH build AS (
+	SELECT k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS t, v
+	FROM range(0,30) vals(v), range(0,5) keys(k)
+), probe AS (
+	SELECT k * 2 AS k, t - INTERVAL (30) SECOND AS t
+	FROM build
+)
+SELECT SUM(v)
+FROM probe ASOF JOIN build USING(k, t);
+----
+1218
+
+# 50 dates, 5 keys
+query I
+WITH build AS (
+	SELECT k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS t, v
+	FROM range(0,50) vals(v), range(0,5) keys(k)
+), probe AS (
+	SELECT k * 2 AS k, t - INTERVAL (30) SECOND AS t
+	FROM build
+)
+SELECT SUM(v)
+FROM probe ASOF JOIN build USING(k, t);
+----
+3528
+
+# 100 dates, 5 keys
+query I
+WITH build AS (
+	SELECT k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS t, v
+	FROM range(0,100) vals(v), range(0,5) keys(k)
+), probe AS (
+	SELECT k * 2 AS k, t - INTERVAL (30) SECOND AS t
+	FROM build
+)
+SELECT SUM(v)
+FROM probe ASOF JOIN build USING(k, t);
+----
+14553
+
+# 100 dates, 50 keys
+query I
+WITH build AS (
+	SELECT k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS t, v
+	FROM range(0,100) vals(v), range(0,50) keys(k)
+), probe AS (
+	SELECT k * 2 AS k, t - INTERVAL (30) SECOND AS t
+	FROM build
+)
+SELECT SUM(v)
+FROM probe ASOF JOIN build USING(k, t);
+----
+121275
+
+# 1000 dates, 5 keys
+query I
+WITH build AS (
+	SELECT k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS t, v
+	FROM range(0,1000) vals(v), range(0,5) keys(k)
+), probe AS (
+	SELECT k * 2 AS k, t - INTERVAL (30) SECOND AS t
+	FROM build
+)
+SELECT SUM(v)
+FROM probe ASOF JOIN build USING(k, t);
+----
+1495503
+
+# 1000 dates, 50 keys
+query I
+WITH build AS (
+	SELECT k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS t, v
+	FROM range(0,1000) vals(v), range(0,50) keys(k)
+), probe AS (
+	SELECT k * 2 AS k, t - INTERVAL (30) SECOND AS t
+	FROM build
+)
+SELECT SUM(v)
+FROM probe ASOF JOIN build USING(k, t);
+----
+12462525
+
+# 10000 dates, 50 keys
+query I
+WITH build AS (
+	SELECT k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS t, v
+	FROM range(0,10000) vals(v), range(0,50) keys(k)
+), probe AS (
+	SELECT k * 2 AS k, t - INTERVAL (30) SECOND AS t
+	FROM build
+)
+SELECT SUM(v)
+FROM probe ASOF JOIN build USING(k, t);
+----
+1249625025
+
+endloop

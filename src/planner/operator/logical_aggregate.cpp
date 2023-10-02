@@ -1,12 +1,13 @@
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/field_writer.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
 LogicalAggregate::LogicalAggregate(idx_t group_index, idx_t aggregate_index, vector<unique_ptr<Expression>> select_list)
-    : LogicalOperator(LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY, move(select_list)), group_index(group_index),
-      aggregate_index(aggregate_index), groupings_index(DConstants::INVALID_INDEX) {
+    : LogicalOperator(LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY, std::move(select_list)),
+      group_index(group_index), aggregate_index(aggregate_index), groupings_index(DConstants::INVALID_INDEX) {
 }
 
 void LogicalAggregate::ResolveTypes() {
@@ -26,6 +27,7 @@ void LogicalAggregate::ResolveTypes() {
 vector<ColumnBinding> LogicalAggregate::GetColumnBindings() {
 	D_ASSERT(groupings_index != DConstants::INVALID_INDEX || grouping_functions.empty());
 	vector<ColumnBinding> result;
+	result.reserve(groups.size() + expressions.size() + grouping_functions.size());
 	for (idx_t i = 0; i < groups.size(); i++) {
 		result.emplace_back(group_index, i);
 	}
@@ -55,51 +57,6 @@ string LogicalAggregate::ParamsToString() const {
 	return result;
 }
 
-void LogicalAggregate::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializableList(expressions);
-
-	writer.WriteField(group_index);
-	writer.WriteField(aggregate_index);
-	writer.WriteField(groupings_index);
-	writer.WriteSerializableList(groups);
-	writer.WriteField<idx_t>(grouping_sets.size());
-	for (auto &entry : grouping_sets) {
-		writer.WriteList<idx_t>(entry);
-	}
-	writer.WriteField<idx_t>(grouping_functions.size());
-	for (auto &entry : grouping_functions) {
-		writer.WriteList<idx_t>(entry);
-	}
-
-	// TODO statistics
-}
-
-unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
-	auto expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
-
-	auto group_index = reader.ReadRequired<idx_t>();
-	auto aggregate_index = reader.ReadRequired<idx_t>();
-	auto groupings_index = reader.ReadRequired<idx_t>();
-	auto groups = reader.ReadRequiredSerializableList<Expression>(state.gstate);
-	auto grouping_sets_size = reader.ReadRequired<idx_t>();
-	vector<GroupingSet> grouping_sets;
-	for (idx_t i = 0; i < grouping_sets_size; i++) {
-		grouping_sets.push_back(reader.ReadRequiredSet<idx_t>());
-	}
-	vector<vector<idx_t>> grouping_functions;
-	auto grouping_functions_size = reader.ReadRequired<idx_t>();
-	for (idx_t i = 0; i < grouping_functions_size; i++) {
-		grouping_functions.push_back(reader.ReadRequiredList<idx_t>());
-	}
-	auto result = make_unique<LogicalAggregate>(group_index, aggregate_index, move(expressions));
-	result->groupings_index = groupings_index;
-	result->groups = move(groups);
-	result->grouping_functions = move(grouping_functions);
-	result->grouping_sets = move(grouping_sets);
-
-	return move(result);
-}
-
 idx_t LogicalAggregate::EstimateCardinality(ClientContext &context) {
 	if (groups.empty()) {
 		// ungrouped aggregate
@@ -114,6 +71,16 @@ vector<idx_t> LogicalAggregate::GetTableIndex() const {
 		result.push_back(groupings_index);
 	}
 	return result;
+}
+
+string LogicalAggregate::GetName() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return LogicalOperator::GetName() +
+		       StringUtil::Format(" #%llu, #%llu, #%llu", group_index, aggregate_index, groupings_index);
+	}
+#endif
+	return LogicalOperator::GetName();
 }
 
 } // namespace duckdb

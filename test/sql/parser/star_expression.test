@@ -1,0 +1,69 @@
+# name: test/sql/parser/star_expression.test
+# description: Test star expression in different places
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers AS SELECT 42 i, 84 j UNION ALL SELECT 13, 14
+
+statement error
+SELECT * FROM integers WHERE *
+----
+Use COLUMNS(*) instead
+
+statement error
+SELECT * FROM integers WHERE * IS NOT NULL
+----
+Use COLUMNS(*) instead
+
+query II
+SELECT * FROM integers WHERE COLUMNS(*) IS NULL ORDER BY ALL
+----
+
+statement error
+SELECT * FROM integers GROUP BY COLUMNS(*)
+----
+not supported
+
+statement error
+SELECT * FROM integers GROUP BY * + 42
+----
+not supported
+
+statement error
+SELECT * FROM integers GROUP BY i HAVING * > 42
+----
+not supported
+
+statement error
+SELECT * FROM integers GROUP BY i HAVING COLUMNS(*)>42
+----
+not supported
+
+query II
+SELECT * FROM integers ORDER BY *, *
+----
+13	14
+42	84
+
+statement error
+SELECT * FROM integers ORDER BY * + 42
+----
+only allowed as the root element
+
+statement error
+INSERT INTO integers VALUES (*, *)
+----
+not supported
+
+statement error
+VALUES (*)
+----
+not supported
+
+statement error
+FROM range(*, *);
+----
+not supported

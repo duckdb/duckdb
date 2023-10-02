@@ -10,11 +10,11 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
-#include "duckdb/common/types/column_data_consumer.hpp"
+#include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/types/row_data_collection.hpp"
-#include "duckdb/common/types/row_layout.hpp"
+#include "duckdb/common/types/row/tuple_data_iterator.hpp"
+#include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -30,25 +30,13 @@ struct ClientConfig;
 
 struct JoinHTScanState {
 public:
-	JoinHTScanState() : position(0), block_position(0), total(0), scan_index(0), scanned(0) {
+	JoinHTScanState(TupleDataCollection &collection, idx_t chunk_idx_from, idx_t chunk_idx_to,
+	                TupleDataPinProperties properties = TupleDataPinProperties::ALREADY_PINNED)
+	    : iterator(collection, properties, chunk_idx_from, chunk_idx_to, false), offset_in_chunk(0) {
 	}
 
-	idx_t position;
-	idx_t block_position;
-
-	//! Used for synchronization of parallel external join
-	idx_t total;
-	idx_t scan_index;
-	idx_t scanned;
-
-public:
-	void Reset() {
-		position = 0;
-		block_position = 0;
-		total = 0;
-		scan_index = 0;
-		scanned = 0;
-	}
+	TupleDataChunkIterator iterator;
+	idx_t offset_in_chunk;
 
 private:
 	//! Implicit copying is not allowed
@@ -77,16 +65,16 @@ public:
 	//! returned by the JoinHashTable::Scan function and can be used to resume a
 	//! probe.
 	struct ScanStructure {
-		unique_ptr<UnifiedVectorFormat[]> key_data;
+		TupleDataChunkState &key_state;
 		Vector pointers;
 		idx_t count;
 		SelectionVector sel_vector;
 		// whether or not the given tuple has found a match
-		unique_ptr<bool[]> found_match;
+		unsafe_unique_array<bool> found_match;
 		JoinHashTable &ht;
 		bool finished;
 
-		explicit ScanStructure(JoinHashTable &ht);
+		explicit ScanStructure(JoinHashTable &ht, TupleDataChunkState &key_state);
 		//! Get the next batch of data from the scan structure
 		void Next(DataChunk &keys, DataChunk &left, DataChunk &result);
 
@@ -130,33 +118,39 @@ public:
 	~JoinHashTable();
 
 	//! Add the given data to the HT
-	void Build(DataChunk &keys, DataChunk &input);
+	void Build(PartitionedTupleDataAppendState &append_state, DataChunk &keys, DataChunk &input);
 	//! Merge another HT into this one
 	void Merge(JoinHashTable &other);
+	//! Combines the partitions in sink_collection into data_collection, as if it were not partitioned
+	void Unpartition();
 	//! Initialize the pointer table for the probe
 	void InitializePointerTable();
 	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing.
 	//! Finalize must be called before any call to Probe, and after Finalize is called Build should no longer be
 	//! ever called.
-	void Finalize(idx_t block_idx_start, idx_t block_idx_end, bool parallel);
+	void Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel);
 	//! Probe the HT with the given input chunk, resulting in the given result
-	unique_ptr<ScanStructure> Probe(DataChunk &keys, Vector *precomputed_hashes = nullptr);
-	//! Scan the HT to find the rows for the full outer join and return the number of found entries
-	idx_t ScanFullOuter(JoinHTScanState &state, Vector &addresses);
-	//! Construct the full outer join result given the addresses and number of found entries
-	void GatherFullOuter(DataChunk &result, Vector &addresses, idx_t found_entries);
+	unique_ptr<ScanStructure> Probe(DataChunk &keys, TupleDataChunkState &key_state,
+	                                Vector *precomputed_hashes = nullptr);
+	//! Scan the HT to construct the full outer join result
+	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result);
 
 	//! Fill the pointer with all the addresses from the hashtable for full scan
-	idx_t FillWithHTOffsets(data_ptr_t *key_locations, JoinHTScanState &state);
-	//! Pins all fixed-size blocks
-	void PinAllBlocks();
+	idx_t FillWithHTOffsets(JoinHTScanState &state, Vector &addresses);
 
 	idx_t Count() const {
-		return block_collection->count;
+		return data_collection->Count();
+	}
+	idx_t SizeInBytes() const {
+		return data_collection->SizeInBytes();
 	}
 
-	const RowDataCollection &GetBlockCollection() const {
-		return *block_collection;
+	PartitionedTupleData &GetSinkCollection() {
+		return *sink_collection;
+	}
+
+	TupleDataCollection &GetDataCollection() {
+		return *data_collection;
 	}
 
 	//! BufferManager
@@ -172,7 +166,10 @@ public:
 	//! The comparison predicates
 	vector<ExpressionType> predicates;
 	//! Data column layout
-	RowLayout layout;
+	TupleDataLayout layout;
+	//! Efficiently matches rows
+	RowMatcher row_matcher;
+	RowMatcher row_matcher_no_match_sel;
 	//! The size of an entry as stored in the HashTable
 	idx_t entry_size;
 	//! The total tuple size
@@ -208,7 +205,8 @@ public:
 	} correlated_mark_join_info;
 
 private:
-	unique_ptr<ScanStructure> InitializeScanStructure(DataChunk &keys, const SelectionVector *&current_sel);
+	unique_ptr<ScanStructure> InitializeScanStructure(DataChunk &keys, TupleDataChunkState &key_state,
+	                                                  const SelectionVector *&current_sel);
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 
 	//! Apply a bitmask to the hashes
@@ -219,16 +217,15 @@ private:
 	//! Insert the given set of locations into the HT with the given set of hashes
 	void InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[], bool parallel);
 
-	idx_t PrepareKeys(DataChunk &keys, unique_ptr<UnifiedVectorFormat[]> &key_data, const SelectionVector *&current_sel,
+	idx_t PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> &vector_data, const SelectionVector *&current_sel,
 	                  SelectionVector &sel, bool build_side);
 
-	//! The RowDataCollection holding the main data of the hash table
-	unique_ptr<RowDataCollection> block_collection;
-	//! The stringheap of the JoinHashTable
-	unique_ptr<RowDataCollection> string_heap;
-	//! Pinned handles, these are pinned during finalization only
-	mutex pinned_handles_lock;
-	vector<BufferHandle> pinned_handles;
+	//! Lock for combining data_collection when merging HTs
+	mutex data_lock;
+	//! Partitioned data collection that the data is sunk into when building
+	unique_ptr<PartitionedTupleData> sink_collection;
+	//! The DataCollection holding the main data of the hash table
+	unique_ptr<TupleDataCollection> data_collection;
 	//! The hash map of the HT, created after finalization
 	AllocatedData hash_map;
 	//! Whether or not NULL values are considered equal in each of the comparisons
@@ -297,34 +294,25 @@ public:
 	bool external;
 	//! The current number of radix bits used to partition
 	idx_t radix_bits;
+	//! The max size of the HT
+	idx_t max_ht_size;
 	//! Total count
 	idx_t total_count;
-	//! Number of tuples for the build-side HT per partitioned round
-	idx_t tuples_per_round;
 
-	//! The number of tuples that are swizzled
-	idx_t SwizzledCount() const {
-		return swizzled_block_collection->count;
-	}
-	//! Size of the in-memory data
-	idx_t SizeInBytes() const {
-		return block_collection->SizeInBytes() + string_heap->SizeInBytes();
-	}
-	//! Size of the swizzled data
-	idx_t SwizzledSize() const {
-		return swizzled_block_collection->SizeInBytes() + swizzled_string_heap->SizeInBytes();
-	}
 	//! Capacity of the pointer table given the ht count
 	//! (minimum of 1024 to prevent collision chance for small HT's)
 	static idx_t PointerTableCapacity(idx_t count) {
 		return MaxValue<idx_t>(NextPowerOfTwo(count * 2), 1 << 10);
 	}
+	//! Size of the pointer table (in bytes)
+	static idx_t PointerTableSize(idx_t count) {
+		return PointerTableCapacity(count) * sizeof(data_ptr_t);
+	}
 
-	//! Swizzle the blocks in this HT (moves from block_collection and string_heap to swizzled_...)
-	void SwizzleBlocks();
-
+	//! Whether we need to do an external join
+	bool RequiresExternalJoin(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts);
 	//! Computes partition sizes and number of radix bits (called before scheduling partition tasks)
-	void ComputePartitionSizes(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts, idx_t max_ht_size);
+	bool RequiresPartitioning(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts);
 	//! Partition this HT
 	void Partition(JoinHashTable &global_ht);
 
@@ -333,22 +321,14 @@ public:
 	//! Build HT for the next partitioned probe round
 	bool PrepareExternalFinalize();
 	//! Probe whatever we can, sink the rest into a thread-local HT
-	unique_ptr<ScanStructure> ProbeAndSpill(DataChunk &keys, DataChunk &payload, ProbeSpill &probe_spill,
-	                                        ProbeSpillLocalAppendState &spill_state, DataChunk &spill_chunk);
+	unique_ptr<ScanStructure> ProbeAndSpill(DataChunk &keys, TupleDataChunkState &key_state, DataChunk &payload,
+	                                        ProbeSpill &probe_spill, ProbeSpillLocalAppendState &spill_state,
+	                                        DataChunk &spill_chunk);
 
 private:
 	//! First and last partition of the current probe round
 	idx_t partition_start;
 	idx_t partition_end;
-
-	//! Swizzled row data
-	unique_ptr<RowDataCollection> swizzled_block_collection;
-	unique_ptr<RowDataCollection> swizzled_string_heap;
-
-	//! Partitioned data
-	mutex partitioned_data_lock;
-	vector<unique_ptr<RowDataCollection>> partition_block_collections;
-	vector<unique_ptr<RowDataCollection>> partition_string_heaps;
 };
 
 } // namespace duckdb

@@ -2,6 +2,7 @@ AlterObjectSchemaStmt
 AlterSeqStmt
 AlterTableStmt
 AnalyzeStmt
+AttachStmt
 CallStmt
 CheckPointStmt
 CopyStmt
@@ -13,6 +14,7 @@ CreateSeqStmt
 CreateStmt
 DeallocateStmt
 DeleteStmt
+DetachStmt
 DropStmt
 ExecuteStmt
 ExplainStmt
@@ -27,6 +29,7 @@ RenameStmt
 SelectStmt
 TransactionStmt
 UpdateStmt
+UseStmt
 VacuumStmt
 VariableResetStmt
 VariableSetStmt

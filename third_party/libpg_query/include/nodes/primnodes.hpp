@@ -1324,7 +1324,7 @@ typedef struct PGRangeTblRef {
 /*----------
  * PGJoinExpr - for SQL JOIN expressions
  *
- * isNatural, usingClause, and quals are interdependent.  The user can write
+ * joinreftype, usingClause, and quals are interdependent.  The user can write
  * only one of NATURAL, USING(), or ON() (this is enforced by the grammar).
  * If he writes NATURAL then parse analysis generates the equivalent USING()
  * list, and from that fills in "quals" with the right equality comparisons.
@@ -1347,7 +1347,7 @@ typedef struct PGRangeTblRef {
 typedef struct PGJoinExpr {
 	PGNodeTag type;
 	PGJoinType jointype; /* type of join */
-	bool isNatural;      /* Natural join? Will need to shape table */
+	PGJoinRefType joinreftype; /* Regular/Natural/AsOf join? Will need to shape table */
 	PGNode *larg;        /* left subtree */
 	PGNode *rarg;        /* right subtree */
 	PGList *usingClause; /* USING clause, if any (list of String) */

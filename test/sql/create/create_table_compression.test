@@ -76,6 +76,9 @@ SELECT * FROM T
 2	2	2
 3	3	3
 
+statement ok
+CHECKPOINT
+
 query I
 SELECT compression FROM pragma_storage_info('T') WHERE segment_type ILIKE 'INTEGER' LIMIT 3
 ----
@@ -173,6 +176,9 @@ SELECT * FROM T_1
 2	2
 2	2
 3	2
+
+statement ok
+CHECKPOINT
 
 query I
 SELECT compression FROM pragma_storage_info('T_1') WHERE segment_type ILIKE 'INTEGER' LIMIT 3

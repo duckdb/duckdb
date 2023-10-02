@@ -1,0 +1,84 @@
+# name: test/sql/types/nested/map/test_map_entries.test
+# description: Show expected behavior with an empty arguments list
+# group: [map]
+
+statement ok
+PRAGMA enable_verification
+
+# Empty
+query I
+select map_entries(MAP())
+----
+[]
+
+# One element
+query I
+SELECT map_entries(map_from_entries([('a', 5)]));
+----
+[{'key': a, 'value': 5}]
+
+# Multiple elements
+query I
+SELECT map_entries(map_from_entries([
+	('a', 5), ('b', 6), ('x', 21), ('abc', 0)
+]));
+----
+[{'key': a, 'value': 5}, {'key': b, 'value': 6}, {'key': x, 'value': 21}, {'key': abc, 'value': 0}]
+
+# Value NULL
+query I
+SELECT map_entries(map([5], [NULL]))
+----
+[{'key': 5, 'value': NULL}]
+
+# Mixed NULLs
+query I
+SELECT map_entries(map_from_entries(
+	[
+		('a', 5),
+		('b', 6),
+		('x', 21),
+		('abc', 0)
+	]
+));
+----
+[{'key': a, 'value': 5}, {'key': b, 'value': 6}, {'key': x, 'value': 21}, {'key': abc, 'value': 0}]
+
+# Empty
+query I
+select map_entries(MAP())
+----
+[]
+
+# One element
+query I
+SELECT map_entries(map_from_entries([('a', 5)]));
+----
+[{'key': a, 'value': 5}]
+
+# Multiple elements
+query I
+SELECT map_entries(map_from_entries([
+	('a', 5), ('b', 6), ('x', 21), ('abc', 0)
+]));
+----
+[{'key': a, 'value': 5}, {'key': b, 'value': 6}, {'key': x, 'value': 21}, {'key': abc, 'value': 0}]
+
+# Value NULL
+query I
+SELECT map_entries(map([5], [NULL]))
+----
+[{'key': 5, 'value': NULL}]
+
+# Mixed NULLs
+query I
+SELECT map_entries(map_from_entries(
+	[
+		('a', 5),
+		('b', 6),
+		('x', 21),
+		('abc', 0)
+	]
+));
+----
+[{'key': a, 'value': 5}, {'key': b, 'value': 6}, {'key': x, 'value': 21}, {'key': abc, 'value': 0}]

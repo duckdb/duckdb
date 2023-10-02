@@ -3,6 +3,9 @@
 # group: [rigger]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 PRAGMA enable_verification
 
 # Query with complex ORDER BY causes an incorrect rowid value

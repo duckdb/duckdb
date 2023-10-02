@@ -174,7 +174,8 @@ long mk_order(DSS_HUGE index, order_t *o, DBGenContext *ctx, long upd_num) {
 		rprice = rpb_routine(o->l[lcnt].partkey);
 		RANDOM(supp_num, 0, 3, &ctx->Seed[L_SKEY_SD]);
 		PART_SUPP_BRIDGE(o->l[lcnt].suppkey, o->l[lcnt].partkey, supp_num);
-		o->l[lcnt].eprice = rprice * o->l[lcnt].quantity;
+		o->l[lcnt].quantity *= 100;
+		o->l[lcnt].eprice = rprice * o->l[lcnt].quantity / 100;
 
 		o->totalprice += ((o->l[lcnt].eprice * ((long)100 - o->l[lcnt].discount)) / (long)PENNIES) *
 		                 ((long)100 + o->l[lcnt].tax) / (long)PENNIES;

@@ -12,19 +12,19 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 
 struct CaseInsensitiveStringHashFunction {
 	uint64_t operator()(const string &str) const {
-		std::hash<string> hasher;
-		return hasher(StringUtil::Lower(str));
+		return StringUtil::CIHash(str);
 	}
 };
 
 struct CaseInsensitiveStringEquality {
 	bool operator()(const string &a, const string &b) const {
-		return StringUtil::Lower(a) == StringUtil::Lower(b);
+		return StringUtil::CIEquals(a, b);
 	}
 };
 

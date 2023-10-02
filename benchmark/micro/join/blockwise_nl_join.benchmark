@@ -1,0 +1,23 @@
+# name: benchmark/micro/join/blockwise_nl_join.benchmark
+# description: Left join between two tables, where the left table is significantly less than the right table.
+# group: [join]
+
+name Left Join (big RHS, small LHS)
+group join
+
+load
+create table lhs as select * from range(10000) lhs(id);
+alter table lhs add column enroll_date date;
+update lhs set enroll_date = date '2000-01-01' + cast(round(random()*3000) as integer);
+create table rhs as select * from range(100000) rhs(id);
+update rhs set id = random() * 1000000;
+alter table rhs add column claim_date date;
+update rhs set claim_date = date '2000-01-01' + cast(random()*3000 as integer);
+alter table rhs add column claim_cost double;
+update rhs set claim_cost = random() * 10000;
+
+run
+select lhs.id, sum(coalesce(claim_cost,0))
+from lhs left join rhs on lhs.id = rhs.id
+and datediff('month',enroll_date,claim_date) between 1 and 12
+group by lhs.id order by lhs.id;

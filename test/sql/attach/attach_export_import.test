@@ -1,0 +1,34 @@
+# name: test/sql/attach/attach_export_import.test
+# description: Test ATTACH with export and import
+# group: [attach]
+
+require skip_reload
+
+statement ok
+ATTACH ':memory:' AS db1
+
+statement ok
+CREATE TABLE db1.integers(i INTEGER);
+
+statement ok
+INSERT INTO db1.integers VALUES (1), (2), (3), (NULL);
+
+# now export the db
+statement ok
+EXPORT DATABASE db1 TO '__TEST_DIR__/export_test' (FORMAT CSV)
+
+statement error
+SELECT * FROM integers
+----
+does not exist
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/export_test'
+
+query I
+SELECT * FROM integers ORDER BY i NULLS LAST
+----
+1
+2
+3
+NULL

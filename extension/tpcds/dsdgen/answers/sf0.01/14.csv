@@ -1,6 +1,6 @@
 channel|i_brand_id|i_class_id|i_category_id|sum_sales|sum_number_sales
-NULL|NULL|NULL|NULL|5873545.32|1353
-catalog|NULL|NULL|NULL|813316.25|168
+NULL|NULL|NULL|NULL|5652756.47|1319
+catalog|NULL|NULL|NULL|811721.28|167
 catalog|1002001|NULL|NULL|38898.36|7
 catalog|1002001|2|NULL|12226.90|3
 catalog|1002001|2|6|12226.90|3

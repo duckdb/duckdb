@@ -1,0 +1,38 @@
+# name: test/sql/function/list/lambdas/filter_vector_types.test
+# description: Test list_filter function with 'test_vector_types'
+# group: [lambdas]
+
+require vector_size 2048
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select [x for x in c if x IS NOT NULL] FROM test_vector_types(NULL::INT[]) t(c);
+----
+[-2147483648, 2147483647]
+[]
+[]
+[-2147483648, 2147483647]
+[-2147483648, 2147483647]
+[-2147483648, 2147483647]
+[]
+[]
+[3, 5]
+[]
+[7]
+
+query I
+select [x for x in c if x IS NULL] FROM test_vector_types(NULL::INT[]) t(c);
+----
+[]
+[]
+[NULL]
+[]
+[]
+[]
+[]
+[NULL]
+[]
+[]
+[]

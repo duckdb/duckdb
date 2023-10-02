@@ -1,0 +1,40 @@
+# name: test/fuzzer/pedro/binder_error_with_having_statement.test
+# description: Issue #5984 (8, 12, 15): Another Binder Error
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+
+statement ok
+CREATE TABLE t2(c1 INT, c2 INT);
+
+statement error 
+SELECT 1 alias1 FROM (SELECT 1) t2(c1) GROUP BY ALL HAVING (SELECT c1);
+----
+Binder Error
+
+statement error
+SELECT 1 alias1 FROM (SELECT 1) t2(c1) GROUP BY ALL HAVING (SELECT alias1);
+----
+Binder Error
+
+# works without a group by all
+query I 
+SELECT 1 alias1 FROM (SELECT 1) t2(c1) GROUP BY c1 HAVING (SELECT c1);
+----
+1
+
+statement ok
+CREATE TABLE t1 (c0 INT);
+
+statement error
+SELECT 0 c0 FROM t1 GROUP BY ALL HAVING c0 < ALL(SELECT 0 FROM ((SELECT 2) UNION (SELECT 2)) t2 WHERE substr('b', 1, c0) GROUP BY ALL);
+----
+Binder Error
+
+
+statement error
+SELECT 1 FROM (SELECT 1) t1(c0) GROUP BY ALL HAVING EXISTS (SELECT 1 FROM (SELECT 1) t0(c2) HAVING c0);
+----
+Binder Error

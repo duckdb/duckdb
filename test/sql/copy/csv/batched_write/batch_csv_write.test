@@ -1,0 +1,86 @@
+# name: test/sql/copy/csv/batched_write/batch_csv_write.test
+# description: Batched copy to file
+# group: [batched_write]
+
+statement ok
+CREATE TABLE integers AS SELECT i, i // 5 AS j FROM range(1000000) t(i) ;
+
+statement ok
+COPY integers TO '__TEST_DIR__/batched_integers.csv' (HEADER);
+
+statement ok
+CREATE TABLE integers_copied AS FROM '__TEST_DIR__/batched_integers.csv'
+
+query IIIII
+SELECT SUM(i), SUM(j), COUNT(*), COUNT(i), COUNT(j) FROM integers_copied
+----
+499999500000	99999500000	1000000	1000000	1000000
+
+query II
+SELECT * FROM integers_copied LIMIT 5
+----
+0	0
+1	0
+2	0
+3	0
+4	0
+
+query II
+SELECT * FROM integers_copied LIMIT 5 OFFSET 99997
+----
+99997	19999
+99998	19999
+99999	19999
+100000	20000
+100001	20000
+
+query II
+SELECT * FROM integers_copied QUALIFY i<=lag(i) over ()
+----
+
+# now with filters
+statement ok
+CREATE VIEW v1 AS SELECT * FROM integers WHERE (i%2=0 AND i<300000) OR (i BETWEEN 500000 AND 700000)
+
+statement ok
+COPY v1 TO '__TEST_DIR__/batched_integers_filters.csv' (HEADER);
+
+statement ok
+CREATE TABLE integers_filtered AS FROM '__TEST_DIR__/batched_integers_filters.csv'
+
+
+foreach table v1 integers_filtered
+
+query IIIII
+SELECT SUM(i), SUM(j), COUNT(*), COUNT(i), COUNT(j) FROM ${table}
+----
+142500450000	28499950000	350001	350001	350001
+
+query II
+SELECT * FROM ${table} LIMIT 5
+----
+0	0
+2	0
+4	0
+6	1
+8	1
+
+query II
+SELECT * FROM ${table} LIMIT 5 OFFSET 99997
+----
+199994	39998
+199996	39999
+199998	39999
+200000	40000
+200002	40000
+
+query II
+SELECT * FROM ${table} LIMIT 5 OFFSET 300000
+----
+650000	130000
+650001	130000
+650002	130000
+650003	130000
+650004	130000
+
+endloop

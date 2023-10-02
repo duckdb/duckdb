@@ -1,0 +1,27 @@
+# name: test/sql/copy/csv/test_csv_httpfs.test_slow
+# description: This test triggers the http prefetch mechanism.
+# group: [csv]
+
+require httpfs
+
+require parquet
+
+# Add test for 3731
+query I
+SELECT count(*) FROM read_csv_auto('https://datasets.imdbws.com/name.basics.tsv.gz', delim='\t', quote='',header=True)
+----
+12783090
+
+query I
+  copy (
+    SELECT *
+      REPLACE (
+        str_split(primaryProfession,',') as primaryProfession,
+        str_split(knownForTitles,',') as knownForTitles,
+        case WHEN regexp_matches(deathYear,'[0-9]+') THEN CAST(deathYear as integer) END as deathYear,
+        case WHEN regexp_matches(birthYear,'[0-9]+') THEN CAST(birthYear as integer) END as birthYear
+      )
+    FROM read_csv_auto('https://datasets.imdbws.com/name.basics.tsv.gz', delim='\t', quote='',header=True)
+  ) to '__TEST_DIR__/name_basics.parquet' (FORMAT 'parquet', CODEC 'ZSTD')
+----
+12783090

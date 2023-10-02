@@ -29,7 +29,7 @@ std::string duckdb::OdbcHandleTypeToString(OdbcHandleType type) {
 
 //! OdbcHandle functions ***************************************************
 OdbcHandle::OdbcHandle(OdbcHandleType type_p) : type(type_p) {
-	odbc_diagnostic = make_unique<OdbcDiagnostic>();
+	odbc_diagnostic = make_uniq<OdbcDiagnostic>();
 }
 
 OdbcHandle::OdbcHandle(const OdbcHandle &other) {
@@ -39,7 +39,6 @@ OdbcHandle::OdbcHandle(const OdbcHandle &other) {
 
 OdbcHandle &OdbcHandle::operator=(const OdbcHandle &other) {
 	type = other.type;
-	std::copy(other.error_messages.begin(), other.error_messages.end(), std::back_inserter(error_messages));
 	return *this;
 }
 
@@ -100,12 +99,12 @@ OdbcHandleStmt::OdbcHandleStmt(OdbcHandleDbc *dbc_p)
 	D_ASSERT(dbc_p);
 	D_ASSERT(dbc_p->conn);
 
-	odbc_fetcher = make_unique<OdbcFetch>(this);
+	odbc_fetcher = make_uniq<OdbcFetch>(this);
 	dbc->vec_stmt_ref.emplace_back(this);
 
 	// Implicit parameter and row descriptor associated with this ODBC handle statement
-	param_desc = make_unique<ParameterDescriptor>(this);
-	row_desc = make_unique<RowDescriptor>(this);
+	param_desc = make_uniq<ParameterDescriptor>(this);
+	row_desc = make_uniq<RowDescriptor>(this);
 }
 
 OdbcHandleStmt::~OdbcHandleStmt() {
@@ -118,7 +117,6 @@ void OdbcHandleStmt::Close() {
 	// the parameter values can be reused after
 	param_desc->Reset();
 	// stmt->stmt.reset(); // the statment can be reuse in prepared statement
-	error_messages.clear();
 }
 
 SQLRETURN OdbcHandleStmt::MaterializeResult() {

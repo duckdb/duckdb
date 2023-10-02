@@ -1,0 +1,56 @@
+# name: test/fuzzer/pedro/floating_point_conversion_overflow.test
+# description: Floating-point conversion overflow
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+foreach float_type REAL DOUBLE
+
+foreach type UTINYINT USMALLINT UINTEGER UBIGINT
+
+statement ok
+SELECT 0::${float_type}::${type}
+
+statement error
+SELECT (-1)::${float_type}::${type}
+
+endloop
+
+statement ok
+SELECT 255::${float_type}::UTINYINT
+
+statement error
+SELECT 256::${float_type}::UTINYINT
+
+statement ok
+SELECT 65535::${float_type}::USMALLINT
+
+statement error
+SELECT 65536::${float_type}::USMALLINT
+
+endloop
+
+statement ok
+SELECT 4294967167::REAL::UINTEGER
+
+statement error
+SELECT 4294967168::REAL::UINTEGER
+
+statement ok
+SELECT 4294967295::DOUBLE::UINTEGER
+
+statement error
+SELECT 4294967296::DOUBLE::UINTEGER
+
+statement ok
+SELECT 18446743523953736703::REAL::UBIGINT
+
+statement error
+SELECT 18446743523953736704::REAL::UBIGINT
+
+statement ok
+SELECT 18446744073709550591::DOUBLE::UBIGINT
+
+statement error
+SELECT 18446744073709550592::DOUBLE::UBIGINT

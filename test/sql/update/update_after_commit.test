@@ -1,0 +1,29 @@
+# name: test/sql/update/update_after_commit.test
+# description: Issue #6651 - Crash When Updating after Commit
+# group: [update]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE a (b int);
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO a VALUES (1);
+
+statement ok
+UPDATE a SET b = b + 10;
+
+statement ok
+COMMIT;
+
+statement ok
+UPDATE a SET b = b + 10;
+
+query I
+SELECT * FROM a
+----
+21

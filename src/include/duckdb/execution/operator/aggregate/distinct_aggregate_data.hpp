@@ -21,7 +21,7 @@ public:
 
 public:
 	// The indices of the aggregates that are distinct
-	vector<idx_t> indices;
+	unsafe_vector<idx_t> indices;
 	// The amount of radix_tables that are occupied
 	idx_t table_count;
 	//! Occupied tables, not equal to indices if aggregates share input data
@@ -34,7 +34,7 @@ public:
 
 public:
 	static unique_ptr<DistinctAggregateCollectionInfo> Create(vector<unique_ptr<Expression>> &aggregates);
-	const vector<idx_t> &Indices() const;
+	const unsafe_vector<idx_t> &Indices() const;
 	bool AnyDistinct() const;
 
 private:

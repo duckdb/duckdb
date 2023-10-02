@@ -3,7 +3,7 @@
 #pragma once
 
 #include "duckdb/common/winapi.hpp"
-#include <vector>
+#include "duckdb/common/vector.hpp"
 #include <string>
 #include <stdexcept>
 
@@ -15,7 +15,7 @@ enum class RegexOptions : uint8_t { NONE, CASE_INSENSITIVE };
 class Regex {
 public:
 	DUCKDB_API Regex(const std::string &pattern, RegexOptions options = RegexOptions::NONE);
-	DUCKDB_API Regex(const char *pattern, RegexOptions options = RegexOptions::NONE) : Regex(std::string(pattern)) {
+	Regex(const char *pattern, RegexOptions options = RegexOptions::NONE) : Regex(std::string(pattern)) {
 	}
 	const duckdb_re2::RE2 &GetRegex() const {
 		return *regex;
@@ -38,7 +38,7 @@ struct GroupMatch {
 };
 
 struct Match {
-	std::vector<GroupMatch> groups;
+	duckdb::vector<GroupMatch> groups;
 
 	GroupMatch &GetGroup(uint64_t index) {
 		if (index >= groups.size()) {
@@ -68,6 +68,6 @@ DUCKDB_API bool RegexSearch(const std::string &input, Match &match, const Regex 
 DUCKDB_API bool RegexMatch(const std::string &input, Match &match, const Regex &regex);
 DUCKDB_API bool RegexMatch(const char *start, const char *end, Match &match, const Regex &regex);
 DUCKDB_API bool RegexMatch(const std::string &input, const Regex &regex);
-DUCKDB_API std::vector<Match> RegexFindAll(const std::string &input, const Regex &regex);
+DUCKDB_API duckdb::vector<Match> RegexFindAll(const std::string &input, const Regex &regex);
 
 } // namespace duckdb_re2

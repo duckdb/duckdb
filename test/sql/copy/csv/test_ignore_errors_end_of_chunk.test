@@ -6,10 +6,10 @@ statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER);
 
 statement ok
-COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_end_of_filled_chunk.csv' (HEADER, IGNORE_ERRORS)
+COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_end_of_filled_chunk.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING 0)
 
 statement error
-COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_end_of_filled_chunk.csv' (HEADER)
+COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_end_of_filled_chunk.csv' (HEADER, NULL_PADDING 0)
 
 # not enough columns provided
 query II

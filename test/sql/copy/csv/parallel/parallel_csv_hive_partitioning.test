@@ -1,0 +1,26 @@
+# name: test/sql/copy/csv/parallel/parallel_csv_hive_partitioning.test
+# description: Test parallel CSV reader with hive partitioning
+# group: [parallel]
+
+# force parallelism of the queries
+statement ok
+PRAGMA verify_parallelism
+
+# filenames could allow you to parse hive partitions manually using SQL
+query IIII
+select id, value, filename.replace('\', '/').split('/')[-2], filename.replace('\', '/').split('/')[-3] from read_csv_auto('data/csv/hive-partitioning/simple/*/*/test.csv', FILENAME=1, HEADER=1) order by id
+----
+1	value1	date=2012-01-01	part=a
+2	value2	date=2013-01-01	part=b
+
+query IIII
+select id, value, part, date from read_csv_auto('data/csv/hive-partitioning/simple/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1) order by id
+----
+1	value1	a	2012-01-01
+2	value2	b	2013-01-01
+
+query III
+select part, value, date from read_csv_auto('data/csv/hive-partitioning/simple/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1) order by 1
+----
+a	value1	2012-01-01
+b	value2	2013-01-01

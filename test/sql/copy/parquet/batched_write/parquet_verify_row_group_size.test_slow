@@ -1,0 +1,33 @@
+# name: test/sql/copy/parquet/batched_write/parquet_verify_row_group_size.test_slow
+# description: Verify row group size is respected
+# group: [batched_write]
+
+require parquet
+
+loop i 0 2
+
+foreach row_group_size 777 9999 83838 143431 333333
+
+statement ok
+CREATE TABLE integers AS SELECT i, i // 5 AS j FROM range(1000000) t(i) ;
+
+statement ok
+COPY integers TO '__TEST_DIR__/row_group_size.parquet' (ROW_GROUP_SIZE ${row_group_size});
+
+statement ok
+select row_group_num_rows from parquet_metadata('__TEST_DIR__/row_group_size.parquet');
+
+query I
+select abs(median(row_group_num_rows)-${row_group_size})<2048 from parquet_metadata('__TEST_DIR__/row_group_size.parquet');
+----
+true
+
+statement ok
+DROP TABLE integers
+
+endloop
+
+statement ok
+SET threads=1
+
+endloop

@@ -1,0 +1,89 @@
+# name: test/sql/attach/attach_read_only.test
+# description: Test attaching of a read-only database
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+ATTACH ':memory:' AS db1 (READONLY 1)
+----
+Cannot launch in-memory database in read-only mode
+
+statement error
+ATTACH ':memory:' AS db1 (BLABLABLA 1)
+----
+Unrecognized option
+
+statement error
+ATTACH '__TEST_DIR__/attach_read_only.db' AS db1 (READONLY 1)
+----
+database does not exist
+
+# create a database file and close it again
+statement ok
+ATTACH '__TEST_DIR__/attach_read_only.db' AS db1
+
+statement ok
+CREATE TABLE db1.integers AS SELECT * FROM range(10) t(i);
+
+statement ok
+DETACH db1
+
+# now attach in read only mode
+statement ok
+ATTACH '__TEST_DIR__/attach_read_only.db' AS db1 (READONLY 1)
+
+query I
+SELECT SUM(i) FROM db1.integers
+----
+45
+
+# database is opened in read-only mode - cannot create a table
+statement error
+CREATE TABLE db1.test AS SELECT * FROM range(10) t(i);
+----
+read-only
+
+# we can attach a second database in read-write mode and write to there
+statement ok
+ATTACH ':memory:' AS db2
+
+statement ok
+CREATE TABLE db2.integers AS SELECT * FROM db1.integers
+
+query I
+SELECT SUM(i) FROM db2.integers
+----
+45
+
+# attach main database in read only mode
+# load the DB from disk
+load __TEST_DIR__/attach_read_only.db readonly
+
+query I
+SELECT SUM(i) FROM integers
+----
+45
+
+# cannot create a table - database is opened in read-only mode
+statement error
+CREATE TABLE test AS SELECT * FROM range(10) t(i);
+----
+read-only
+
+# attach a non-read-only database
+statement ok
+ATTACH ':memory:' AS db1 (READ_WRITE);
+
+# we can write tables to that database
+statement ok
+CREATE TABLE db1.test AS SELECT * FROM integers
+
+# but not to the main (read-only) database
+statement error
+CREATE TABLE test AS SELECT * FROM db1.test
+----
+read-only

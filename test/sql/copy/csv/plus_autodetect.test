@@ -1,0 +1,21 @@
+# name: test/sql/copy/csv/plus_autodetect.test
+# description: Test auto-detect with plus symbols
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE phone_numbers AS SELECT * FROM read_csv_auto('data/csv/phonenumbers.csv', header=1)
+
+query I
+SELECT phone FROM phone_numbers;
+----
++318855443322
++552244331122
++12233445567
+
+query I
+SELECT typeof(phone) FROM phone_numbers LIMIT 1;
+----
+VARCHAR

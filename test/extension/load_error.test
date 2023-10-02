@@ -1,0 +1,12 @@
+# name: test/extension/load_error.test
+# description: Check the loading error for typos in extensions
+# group: [extension]
+
+require notmingw
+
+require skip_reload
+
+statement error
+LOAD motherduk
+----
+motherduck

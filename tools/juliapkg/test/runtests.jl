@@ -1,4 +1,5 @@
 using DataFrames
+using Tables
 using DuckDB
 using Test
 using Dates
@@ -8,9 +9,10 @@ using UUIDs
 test_files = [
     "test_appender.jl",
     "test_basic_queries.jl",
+    "test_big_nested.jl",
     "test_config.jl",
     "test_connection.jl",
-    "test_df_scan.jl",
+    "test_tbl_scan.jl",
     "test_prepare.jl",
     "test_transaction.jl",
     "test_sqlite.jl",
@@ -21,10 +23,12 @@ test_files = [
     "test_union_type.jl",
     "test_decimals.jl",
     "test_threading.jl",
-    "test_tpch.jl"
+    "test_tpch.jl",
+    "test_tpch_multithread.jl",
+    "test_stream_data_chunk.jl"
 ]
 
-if size(ARGS)[1] > 0
+if length(ARGS) > 0 && !isempty(ARGS[1])
     filtered_test_files = []
     for test_file in test_files
         if test_file == ARGS[1]

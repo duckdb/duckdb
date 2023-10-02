@@ -9,15 +9,18 @@
 #pragma once
 
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/planner/expression/bound_parameter_data.hpp"
+#include "duckdb/planner/bound_parameter_map.hpp"
 
 namespace duckdb {
 
 class BoundParameterExpression : public Expression {
 public:
-	explicit BoundParameterExpression(idx_t parameter_nr);
+	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_PARAMETER;
 
-	idx_t parameter_nr;
+public:
+	explicit BoundParameterExpression(const string &identifier);
+
+	string identifier;
 	shared_ptr<BoundParameterData> parameter_data;
 
 public:
@@ -32,13 +35,17 @@ public:
 
 	string ToString() const override;
 
-	bool Equals(const BaseExpression *other) const override;
+	bool Equals(const BaseExpression &other) const override;
 	hash_t Hash() const override;
 
 	unique_ptr<Expression> Copy() override;
 
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+
+private:
+	BoundParameterExpression(bound_parameter_map_t &global_parameter_set, string identifier, LogicalType return_type,
+	                         shared_ptr<BoundParameterData> parameter_data);
 };
 
 } // namespace duckdb

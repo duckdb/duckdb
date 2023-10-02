@@ -1,0 +1,24 @@
+# name: test/sql/copy/parquet/parquet_5968.test
+# description: Issue #5968: Segmentation fault on reading parquet file
+# group: [parquet]
+
+require parquet
+
+require httpfs
+
+statement ok
+CREATE TABLE issue_5968 AS FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/issue_5968.parquet'
+
+query I
+SELECT COUNT(*) FROM issue_5968
+----
+2028587
+
+query I
+SELECT * FROM issue_5968 LIMIT 5
+----
+B00001
+B00001
+B00009
+B00009
+B00009

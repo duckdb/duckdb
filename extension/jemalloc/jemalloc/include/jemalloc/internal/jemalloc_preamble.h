@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdarg>
 #include <cstdbool>
+#include <cstdlib>
 
 #include "jemalloc/internal/jemalloc_internal_defs.h"
 #include "jemalloc/internal/jemalloc_internal_decls.h"

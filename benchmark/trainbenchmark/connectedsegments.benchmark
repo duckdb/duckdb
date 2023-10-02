@@ -29,10 +29,10 @@ WHERE mb1.Sensor_id = mb2.Sensor_id
   AND mb1.Sensor_id = mb3.Sensor_id
   AND mb1.Sensor_id = mb4.Sensor_id
   AND mb1.Sensor_id = mb5.Sensor_id
-  AND mb1.Sensor_id = mb6.Sensor_id;
+  AND mb1.Sensor_id = mb6.Sensor_id ORDER BY ALL;
 
 result IIIIIII
 6	7	8	9	10	11	12
 121	122	123	124	125	126	127
-688	689	690	691	692	693	694
 128	129	130	131	132	133	134
+688	689	690	691	692	693	694

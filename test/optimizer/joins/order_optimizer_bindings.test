@@ -1,0 +1,6 @@
+# name: test/optimizer/joins/order_optimizer_bindings.test
+# description: In the join order optimizer queries need to have the correct bindings
+# group: [joins]
+
+statement ok
+SELECT * FROM summary((select 5)) tbl1(i) JOIN summary((select 5)) tbl2(i) ON tbl1.i=tbl2.i;

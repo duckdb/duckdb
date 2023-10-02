@@ -1,0 +1,19 @@
+# name: benchmark/micro/copy/from_parquet_large_row_groups.benchmark
+# description: Import data from big batches
+# group: [copy]
+
+name Import data from big row groups
+group copy
+
+require parquet
+
+storage persistent
+
+load
+COPY (FROM range(100000000)) TO '${BENCHMARK_DIR}/big_batches.parquet' (ROW_GROUP_SIZE 1000000);
+
+run
+CREATE TABLE big AS FROM '${BENCHMARK_DIR}/big_batches.parquet';
+
+cleanup
+DROP TABLE big;

@@ -1,0 +1,17 @@
+# name: test/sql/copy/parquet/parquet_go.test
+# description: Issue #5744: Fail to import .parquet file created with parquet-go
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT * FROM 'data/parquet-testing/parquet_go.parquet'
+----
+John	Hello World
+John	Hello World
+John	Hello World
+John	Hello World
+John	Hello World

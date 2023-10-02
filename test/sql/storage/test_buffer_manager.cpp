@@ -8,52 +8,8 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test scanning a table and computing an aggregate over a table that exceeds buffer manager size",
-          "[storage][.]") {
-	unique_ptr<MaterializedQueryResult> result;
-	auto storage_database = TestCreatePath("storage_test");
-	auto config = GetTestConfig();
-
-	// set the maximum memory to 10MB and force uncompressed so we actually use the memory
-	config->options.force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
-	config->options.maximum_memory = 10000000;
-	config->options.maximum_threads = 1;
-
-	int64_t expected_sum;
-	Value sum;
-	// make sure the database does not exist
-	DeleteDatabase(storage_database);
-	{
-		// create a database and insert values
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21), (NULL, NULL)"));
-		uint64_t table_size = 2 * 4 * sizeof(int);
-		uint64_t desired_size = 10 * config->options.maximum_memory;
-		expected_sum = 11 + 12 + 13 + 22 + 22 + 21;
-		// grow the table until it exceeds 100MB
-		while (table_size < desired_size) {
-			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM test"));
-			table_size *= 2;
-			expected_sum *= 2;
-		}
-		sum = Value::BIGINT(expected_sum);
-		// compute the sum
-		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
-		REQUIRE(CHECK_COLUMN(result, 0, {sum}));
-	}
-	for (idx_t i = 0; i < 2; i++) {
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
-		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
-		REQUIRE(CHECK_COLUMN(result, 0, {sum}));
-	}
-	DeleteDatabase(storage_database);
-}
-
 TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storage][.]") {
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 	config->options.maximum_threads = 1;
@@ -117,7 +73,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 }
 
 TEST_CASE("Test appending and checkpointing a table that exceeds buffer manager size", "[storage][.]") {
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 
@@ -169,7 +125,7 @@ TEST_CASE("Test appending and checkpointing a table that exceeds buffer manager 
 }
 
 TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory database", "[storage][.]") {
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -320,7 +276,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	// Create 40 blocks, but don't hold the pin
 	// They will be added to the eviction queue and the buffers will be re-used
 	idx_t block_count = 40;
-	vector<shared_ptr<BlockHandle>> blocks;
+	duckdb::vector<shared_ptr<BlockHandle>> blocks;
 	blocks.reserve(block_count);
 	for (idx_t i = 0; i < block_count; i++) {
 		blocks.emplace_back();

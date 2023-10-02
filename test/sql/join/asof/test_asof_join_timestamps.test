@@ -1,0 +1,206 @@
+# name: test/sql/join/asof/test_asof_join_timestamps.test
+# description: Test As-Of joins for timestamps
+# group: [asof]
+
+statement ok
+PRAGMA enable_verification
+
+# Join on a timestamp range
+
+statement ok
+CREATE TABLE events0 AS
+	SELECT '2023-03-21 13:00:00'::TIMESTAMP + INTERVAL (range) HOUR AS begin, range AS value
+	FROM range(0, 4);
+
+# Could we add some tests where we have NULL values in the tables?
+# Could we add some tests where we have infinity values (e.g. NaN, or infinity::timestamp) in the tables?
+statement ok
+INSERT INTO events0 VALUES 
+	(NULL, -1),
+	('infinity', 9)
+;
+
+statement ok
+CREATE TABLE probe0 AS 
+	SELECT *
+	FROM range('2023-03-21 12:00:00'::TIMESTAMP, '2023-03-21 22:00:00'::TIMESTAMP, INTERVAL 1 HOUR) p(begin)
+;
+
+statement ok
+INSERT INTO probe0 VALUES 
+	(NULL),
+	('infinity')
+;
+
+# INNER ON inequality only
+query II nosort
+SELECT p.begin, e.value
+FROM probe0 p ASOF JOIN events0 e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC
+----
+2023-03-21 13:00:00	0
+2023-03-21 14:00:00	1
+2023-03-21 15:00:00	2
+2023-03-21 16:00:00	3
+2023-03-21 17:00:00	3
+2023-03-21 18:00:00	3
+2023-03-21 19:00:00	3
+2023-03-21 20:00:00	3
+2023-03-21 21:00:00	3
+infinity	9
+
+# INNER USING inequality only
+query II nosort
+SELECT p.begin, e.value
+FROM probe0 p ASOF JOIN events0 e
+USING (begin)
+ORDER BY p.begin ASC
+----
+2023-03-21 13:00:00	0
+2023-03-21 14:00:00	1
+2023-03-21 15:00:00	2
+2023-03-21 16:00:00	3
+2023-03-21 17:00:00	3
+2023-03-21 18:00:00	3
+2023-03-21 19:00:00	3
+2023-03-21 20:00:00	3
+2023-03-21 21:00:00	3
+infinity	9
+
+# LEFT ON inequality only
+query II nosort
+SELECT p.begin, e.value
+FROM probe0 p ASOF LEFT JOIN events0 e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC
+----
+2023-03-21 12:00:00	NULL
+2023-03-21 13:00:00	0
+2023-03-21 14:00:00	1
+2023-03-21 15:00:00	2
+2023-03-21 16:00:00	3
+2023-03-21 17:00:00	3
+2023-03-21 18:00:00	3
+2023-03-21 19:00:00	3
+2023-03-21 20:00:00	3
+2023-03-21 21:00:00	3
+infinity	9
+NULL	NULL
+
+# LEFT USING inequality only
+query II nosort left_inequality
+SELECT p.begin, e.value
+FROM probe0 p ASOF LEFT JOIN events0 e
+USING (begin)
+ORDER BY p.begin ASC
+----
+2023-03-21 12:00:00	NULL
+2023-03-21 13:00:00	0
+2023-03-21 14:00:00	1
+2023-03-21 15:00:00	2
+2023-03-21 16:00:00	3
+2023-03-21 17:00:00	3
+2023-03-21 18:00:00	3
+2023-03-21 19:00:00	3
+2023-03-21 20:00:00	3
+2023-03-21 21:00:00	3
+infinity	9
+NULL	NULL
+
+# RIGHT ON inequality only
+query II nosort 
+SELECT p.begin, e.value
+FROM probe0 p ASOF RIGHT JOIN events0 e
+ON p.begin >= e.begin
+ORDER BY ALL
+----
+2023-03-21 13:00:00	0
+2023-03-21 14:00:00	1
+2023-03-21 15:00:00	2
+2023-03-21 16:00:00	3
+2023-03-21 17:00:00	3
+2023-03-21 18:00:00	3
+2023-03-21 19:00:00	3
+2023-03-21 20:00:00	3
+2023-03-21 21:00:00	3
+infinity	9
+NULL	-1
+
+# RIGHT USING inequality only
+query II nosort
+SELECT p.begin, e.value
+FROM probe0 p ASOF RIGHT JOIN events0 e
+USING (begin)
+ORDER BY ALL
+----
+2023-03-21 13:00:00	0
+2023-03-21 14:00:00	1
+2023-03-21 15:00:00	2
+2023-03-21 16:00:00	3
+2023-03-21 17:00:00	3
+2023-03-21 18:00:00	3
+2023-03-21 19:00:00	3
+2023-03-21 20:00:00	3
+2023-03-21 21:00:00	3
+infinity	9
+NULL	-1
+
+#
+# Coverage
+#
+
+# rhs_sink.count == 0
+query II
+SELECT p.begin, e.value
+FROM probe0 p ASOF LEFT JOIN (SELECT * FROM events0 WHERE log(value + 5) > 10) e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC
+----
+2023-03-21 12:00:00	NULL
+2023-03-21 13:00:00	NULL
+2023-03-21 14:00:00	NULL
+2023-03-21 15:00:00	NULL
+2023-03-21 16:00:00	NULL
+2023-03-21 17:00:00	NULL
+2023-03-21 18:00:00	NULL
+2023-03-21 19:00:00	NULL
+2023-03-21 20:00:00	NULL
+2023-03-21 21:00:00	NULL
+infinity	NULL
+NULL	NULL
+
+# EmptyResultIfRHSIsEmpty
+query II
+SELECT p.begin, e.value
+FROM probe0 p ASOF RIGHT JOIN (SELECT * FROM events0 WHERE log(value + 5) > 10) e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC
+----
+
+# SEMI JOIN
+query I
+SELECT p.begin
+FROM probe0 p ASOF SEMI JOIN events0 e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC
+----
+2023-03-21 13:00:00
+2023-03-21 14:00:00
+2023-03-21 15:00:00
+2023-03-21 16:00:00
+2023-03-21 17:00:00
+2023-03-21 18:00:00
+2023-03-21 19:00:00
+2023-03-21 20:00:00
+2023-03-21 21:00:00
+infinity
+
+# ANTI JOIN
+query I
+SELECT p.begin
+FROM probe0 p ASOF ANTI JOIN events0 e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC
+----
+2023-03-21 12:00:00

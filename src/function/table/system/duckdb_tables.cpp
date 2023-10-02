@@ -9,6 +9,7 @@
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
 
 namespace duckdb {
 
@@ -16,12 +17,18 @@ struct DuckDBTablesData : public GlobalTableFunctionState {
 	DuckDBTablesData() : offset(0) {
 	}
 
-	vector<CatalogEntry *> entries;
+	vector<reference<CatalogEntry>> entries;
 	idx_t offset;
 };
 
 static unique_ptr<FunctionData> DuckDBTablesBind(ClientContext &context, TableFunctionBindInput &input,
                                                  vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("database_name");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("database_oid");
+	return_types.emplace_back(LogicalType::BIGINT);
+
 	names.emplace_back("schema_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -62,24 +69,21 @@ static unique_ptr<FunctionData> DuckDBTablesBind(ClientContext &context, TableFu
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBTablesInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBTablesData>();
+	auto result = make_uniq<DuckDBTablesData>();
 
 	// scan all the schemas for tables and collect themand collect them
-	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
+	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
-		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema.get().Scan(context, CatalogType::TABLE_ENTRY,
+		                  [&](CatalogEntry &entry) { result->entries.push_back(entry); });
 	};
-
-	// check the temp schema as well
-	SchemaCatalogEntry::GetTemporaryObjects(context)->Scan(
-	    context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
-	return move(result);
+	return std::move(result);
 }
 
 static bool TableHasPrimaryKey(TableCatalogEntry &table) {
-	for (auto &constraint : table.constraints) {
+	for (auto &constraint : table.GetConstraints()) {
 		if (constraint->type == ConstraintType::UNIQUE) {
-			auto &unique = (UniqueConstraint &)*constraint;
+			auto &unique = constraint->Cast<UniqueConstraint>();
 			if (unique.is_primary_key) {
 				return true;
 			}
@@ -90,7 +94,7 @@ static bool TableHasPrimaryKey(TableCatalogEntry &table) {
 
 static idx_t CheckConstraintCount(TableCatalogEntry &table) {
 	idx_t check_count = 0;
-	for (auto &constraint : table.constraints) {
+	for (auto &constraint : table.GetConstraints()) {
 		if (constraint->type == ConstraintType::CHECK) {
 			check_count++;
 		}
@@ -99,7 +103,7 @@ static idx_t CheckConstraintCount(TableCatalogEntry &table) {
 }
 
 void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBTablesData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBTablesData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
@@ -108,37 +112,45 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = data.entries[data.offset++];
+		auto &entry = data.entries[data.offset++].get();
 
-		if (entry->type != CatalogType::TABLE_ENTRY) {
+		if (entry.type != CatalogType::TABLE_ENTRY) {
 			continue;
 		}
-		auto &table = (TableCatalogEntry &)*entry;
+		auto &table = entry.Cast<TableCatalogEntry>();
+		auto storage_info = table.GetStorageInfo(context);
 		// return values:
+		idx_t col = 0;
+		// database_name, VARCHAR
+		output.SetValue(col++, count, table.catalog.GetName());
+		// database_oid, BIGINT
+		output.SetValue(col++, count, Value::BIGINT(table.catalog.GetOid()));
 		// schema_name, LogicalType::VARCHAR
-		output.SetValue(0, count, Value(table.schema->name));
+		output.SetValue(col++, count, Value(table.schema.name));
 		// schema_oid, LogicalType::BIGINT
-		output.SetValue(1, count, Value::BIGINT(table.schema->oid));
+		output.SetValue(col++, count, Value::BIGINT(table.schema.oid));
 		// table_name, LogicalType::VARCHAR
-		output.SetValue(2, count, Value(table.name));
+		output.SetValue(col++, count, Value(table.name));
 		// table_oid, LogicalType::BIGINT
-		output.SetValue(3, count, Value::BIGINT(table.oid));
+		output.SetValue(col++, count, Value::BIGINT(table.oid));
 		// internal, LogicalType::BOOLEAN
-		output.SetValue(4, count, Value::BOOLEAN(table.internal));
+		output.SetValue(col++, count, Value::BOOLEAN(table.internal));
 		// temporary, LogicalType::BOOLEAN
-		output.SetValue(5, count, Value::BOOLEAN(table.temporary));
+		output.SetValue(col++, count, Value::BOOLEAN(table.temporary));
 		// has_primary_key, LogicalType::BOOLEAN
-		output.SetValue(6, count, Value::BOOLEAN(TableHasPrimaryKey(table)));
+		output.SetValue(col++, count, Value::BOOLEAN(TableHasPrimaryKey(table)));
 		// estimated_size, LogicalType::BIGINT
-		output.SetValue(7, count, Value::BIGINT(table.storage->info->cardinality.load()));
+		Value card_val =
+		    storage_info.cardinality == DConstants::INVALID_INDEX ? Value() : Value::BIGINT(storage_info.cardinality);
+		output.SetValue(col++, count, card_val);
 		// column_count, LogicalType::BIGINT
-		output.SetValue(8, count, Value::BIGINT(table.columns.LogicalColumnCount()));
+		output.SetValue(col++, count, Value::BIGINT(table.GetColumns().LogicalColumnCount()));
 		// index_count, LogicalType::BIGINT
-		output.SetValue(9, count, Value::BIGINT(table.storage->info->indexes.Count()));
+		output.SetValue(col++, count, Value::BIGINT(storage_info.index_info.size()));
 		// check_constraint_count, LogicalType::BIGINT
-		output.SetValue(10, count, Value::BIGINT(CheckConstraintCount(table)));
+		output.SetValue(col++, count, Value::BIGINT(CheckConstraintCount(table)));
 		// sql, LogicalType::VARCHAR
-		output.SetValue(11, count, Value(table.ToSQL()));
+		output.SetValue(col++, count, Value(table.ToSQL()));
 
 		count++;
 	}

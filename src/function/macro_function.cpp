@@ -5,13 +5,14 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 
 namespace duckdb {
 
-// MacroFunction::MacroFunction(unique_ptr<ParsedExpression> expression) : expression(move(expression)) {}
+// MacroFunction::MacroFunction(unique_ptr<ParsedExpression> expression) : expression(std::move(expression)) {}
 
 MacroFunction::MacroFunction(MacroType type) : type(type) {
 }
@@ -22,20 +23,19 @@ string MacroFunction::ValidateArguments(MacroFunction &macro_def, const string &
 
 	// separate positional and default arguments
 	for (auto &arg : function_expr.children) {
-		if ((arg->type == ExpressionType::VALUE_CONSTANT || arg->type == ExpressionType::VALUE_PARAMETER) &&
-		    !arg->alias.empty()) {
+		if (!arg->alias.empty()) {
 			// default argument
-			if (macro_def.default_parameters.find(arg->alias) == macro_def.default_parameters.end()) {
+			if (!macro_def.default_parameters.count(arg->alias)) {
 				return StringUtil::Format("Macro %s does not have default parameter %s!", name, arg->alias);
-			} else if (defaults.find(arg->alias) != defaults.end()) {
+			} else if (defaults.count(arg->alias)) {
 				return StringUtil::Format("Duplicate default parameters %s!", arg->alias);
 			}
-			defaults[arg->alias] = move(arg);
+			defaults[arg->alias] = std::move(arg);
 		} else if (!defaults.empty()) {
 			return "Positional parameters cannot come after parameters with a default value!";
 		} else {
 			// positional argument
-			positionals.push_back(move(arg));
+			positionals.push_back(std::move(arg));
 		}
 	}
 
@@ -46,7 +46,7 @@ string MacroFunction::ValidateArguments(MacroFunction &macro_def, const string &
 		error = StringUtil::Format(
 		    "Macro function '%s(%s)' requires ", name,
 		    StringUtil::Join(parameters, parameters.size(), ", ", [](const unique_ptr<ParsedExpression> &p) {
-			    return ((ColumnRefExpression &)*p).column_names[0];
+			    return (p->Cast<ColumnRefExpression>()).column_names[0];
 		    }));
 		error += parameters.size() == 1 ? "a single positional argument"
 		                                : StringUtil::Format("%i positional arguments", parameters.size());
@@ -57,17 +57,20 @@ string MacroFunction::ValidateArguments(MacroFunction &macro_def, const string &
 		return error;
 	}
 
-	// fill in default value where this was not supplied
+	// Add the default values for parameters that have defaults, that were not explicitly assigned to
 	for (auto it = macro_def.default_parameters.begin(); it != macro_def.default_parameters.end(); it++) {
-		if (defaults.find(it->first) == defaults.end()) {
-			defaults[it->first] = it->second->Copy();
+		auto &parameter_name = it->first;
+		auto &parameter_default = it->second;
+		if (!defaults.count(parameter_name)) {
+			// This parameter was not set yet, set it with the default value
+			defaults[parameter_name] = parameter_default->Copy();
 		}
 	}
 
 	return error;
 }
 
-void MacroFunction::CopyProperties(MacroFunction &other) {
+void MacroFunction::CopyProperties(MacroFunction &other) const {
 	other.type = type;
 	for (auto &param : parameters) {
 		other.parameters.push_back(param->Copy());
@@ -77,7 +80,7 @@ void MacroFunction::CopyProperties(MacroFunction &other) {
 	}
 }
 
-string MacroFunction::ToSQL(const string &schema, const string &name) {
+string MacroFunction::ToSQL(const string &schema, const string &name) const {
 	vector<string> param_strings;
 	for (auto &param : parameters) {
 		param_strings.push_back(param->ToString());

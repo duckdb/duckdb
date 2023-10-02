@@ -8,7 +8,7 @@ BaseAggregateHashTable::BaseAggregateHashTable(ClientContext &context, Allocator
                                                const vector<AggregateObject> &aggregates,
                                                vector<LogicalType> payload_types_p)
     : allocator(allocator), buffer_manager(BufferManager::GetBufferManager(context)),
-      payload_types(move(payload_types_p)) {
+      payload_types(std::move(payload_types_p)) {
 	filter_set.Initialize(context, aggregates, payload_types);
 }
 

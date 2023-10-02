@@ -1,0 +1,69 @@
+# name: test/sql/join/asof/test_asof_join.test
+# description: Test As-Of join useage
+# group: [asof]
+
+statement ok
+PRAGMA enable_verification
+
+# Use doubles for readable infinities
+statement ok
+CREATE TABLE events0 (begin DOUBLE, value INTEGER);
+
+statement ok
+INSERT INTO events0 VALUES
+	(1, 0),
+	(3, 1),
+	(6, 2),
+	(8, 3)
+;
+
+# ASOF join on a constant (e.g. ON 1=1)
+query II
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF JOIN events0 e
+ON 1 = 1 AND p.ts >= e.begin
+ORDER BY p.ts ASC
+----
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+
+# Use an ASOF join inside of a correlated subquery
+
+
+#
+#  Errors
+#
+
+# Invalid ASOF JOIN comparison
+statement error
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF JOIN events0 e
+ON p.ts <> e.begin
+ORDER BY p.ts ASC
+----
+Binder Error: Invalid ASOF JOIN comparison
+
+# Missing ASOF JOIN inequality
+statement error
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF JOIN events0 e
+ON p.ts = e.begin
+ORDER BY p.ts ASC
+----
+Binder Error: Missing ASOF JOIN inequality
+
+# Multiple ASOF JOIN inequalities
+statement error
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF JOIN events0 e
+ON p.ts >= e.begin AND p.ts >= e.value
+ORDER BY p.ts ASC
+----
+Binder Error: Multiple ASOF JOIN inequalities

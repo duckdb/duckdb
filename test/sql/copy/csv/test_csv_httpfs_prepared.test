@@ -1,0 +1,45 @@
+# name: test/sql/copy/csv/test_csv_httpfs_prepared.test
+# description: CSV Reading From HTTPFS in Prepared Statements
+# group: [csv]
+
+require httpfs
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PREPARE boaz_bug AS from read_csv_auto('https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv')
+
+query IIIIIIIIIIIIIIIIII
+EXECUTE boaz_bug
+----
+1	AAAAAAAABAAAAAAA	980124	7135	32946	2452238	2452208	Mr.	Javier	Lewis	Y	9	12	1936	CHILE	NULL	Javier.Lewis@VFAxlnZEvOx.org	2452508
+2	AAAAAAAACAAAAAAA	819667	1461	31655	2452318	2452288	Dr.	Amy	Moses	Y	9	4	1966	TOGO	NULL	Amy.Moses@Ovk9KjHH.com	2452318
+3	AAAAAAAADAAAAAAA	1473522	6247	48572	2449130	2449100	Miss	Latisha	Hamilton	Y	18	9	1979	NIUE	NULL	Latisha.Hamilton@V.com	2452313
+4	AAAAAAAAEAAAAAAA	1703214	3986	39558	2450030	2450000	Dr.	Michael	White	Y	7	6	1983	MEXICO	NULL	Michael.White@i.org	2452361
+5	AAAAAAAAFAAAAAAA	953372	4470	36368	2449438	2449408	Sir	Robert	Moran	N	8	5	1956	FIJI	NULL	Robert.Moran@Hh.edu	2452469
+6	AAAAAAAAGAAAAAAA	213219	6374	27082	2451883	2451853	Ms.	Brunilda	Sharp	Y	4	12	1925	SURINAME	NULL	Brunilda.Sharp@T3pylZEUQjm.org	2452430
+7	AAAAAAAAHAAAAAAA	68377	3219	44814	2451438	2451408	Ms.	Fonda	Wiles	N	24	4	1985	GAMBIA	NULL	Fonda.Wiles@S9KnyEtz9hv.org	2452360
+8	AAAAAAAAIAAAAAAA	1215897	2471	16598	2449406	2449376	Sir	Ollie	Shipman	N	26	12	1938	KOREA, REPUBLIC OF	NULL	Ollie.Shipman@be.org	2452334
+9	AAAAAAAAJAAAAAAA	1168667	1404	49388	2452275	2452245	Sir	Karl	Gilbert	N	26	10	1966	MONTSERRAT	NULL	Karl.Gilbert@Crg5KyP2IxX9C4d6.edu	2452454
+10	AAAAAAAAKAAAAAAA	1207553	5143	19580	2451353	2451323	Ms.	Albert	Brunson	N	15	10	1973	JORDAN	NULL	Albert.Brunson@62.com	2452641
+
+statement ok
+DEALLOCATE boaz_bug
+
+statement error
+EXECUTE boaz_bug
+
+# Recreate prepared statement with different file
+
+statement ok
+PREPARE boaz_bug AS SELECT * from read_csv_auto('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c') order by all limit 5;
+
+query IIIIII
+EXECUTE boaz_bug
+----
+2020	Allemagne	Germany	26.1	53196.069	200601.2
+2020	Autriche	Austria	18.0	4723.5	26215.8
+2020	Belgique	Belgium	28.999999999999996	9436.1	32553.0
+2020	Bulgarie	Bulgaria	11.600000000000001	1124.1	9698.7
+2020	Chypre	Cyprus	0.0	0.0	1627.6

@@ -1,0 +1,58 @@
+# name: test/sql/parser/test_columns_prepared.test
+# description: Test the columns expression
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create or replace table my_table as
+select 'test1' as column1, 1 as column2, 'quack' as column3
+union all
+select 'test2' as column1, 2 as column2, 'quacks' as column3
+union all
+select 'test3' as column1, 3 as column2, 'quacking' as column3
+
+statement ok
+prepare v1 as
+select
+	COLUMNS(?)
+from my_table
+
+query I
+EXECUTE v1('col.*1')
+----
+test1
+test2
+test3
+
+query I
+EXECUTE v1('col.*2')
+----
+1
+2
+3
+
+query I
+EXECUTE v1('col.*3')
+----
+quack
+quacks
+quacking
+
+query II
+EXECUTE v1(['column1', 'column2'])
+----
+test1	1
+test2	2
+test3	3
+
+statement error
+EXECUTE v1(NULL::VARCHAR)
+----
+does not support NULL
+
+statement error
+EXECUTE v1(42)
+----
+VARCHAR argument

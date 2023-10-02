@@ -17,7 +17,7 @@ public:
 	void ResetParams(SQLSMALLINT count);
 	void ResetCurrentAPD();
 
-	SQLRETURN GetParamValues(std::vector<Value> &values);
+	SQLRETURN GetParamValues(vector<Value> &values);
 	void SetParamProcessedPtr(SQLULEN *value_ptr);
 	SQLULEN *GetParamProcessedPtr();
 	void SetArrayStatusPtr(SQLUSMALLINT *value_ptr);
@@ -31,8 +31,8 @@ public:
 
 public:
 	// implicitly allocated descriptors
-	unique_ptr<OdbcHandleDesc> apd;
-	unique_ptr<OdbcHandleDesc> ipd;
+	duckdb::unique_ptr<OdbcHandleDesc> apd;
+	duckdb::unique_ptr<OdbcHandleDesc> ipd;
 
 private:
 	SQLRETURN SetValue(idx_t rec_idx);
@@ -51,11 +51,9 @@ private:
 	void SetSQLDescDataPtr(DescRecord &apd_record, SQLPOINTER data_ptr);
 
 	SQLLEN *GetSQLDescIndicatorPtr(DescRecord &apd_record, idx_t set_idx = 0);
-	void SetSQLDescIndicatorPtr(DescRecord &apd_record, SQLLEN *ind_ptr);
 	void SetSQLDescIndicatorPtr(DescRecord &apd_record, SQLLEN value);
 
 	SQLLEN *GetSQLDescOctetLengthPtr(DescRecord &apd_record, idx_t set_idx = 0);
-	void SetSQLDescOctetLengthPtr(DescRecord &apd_record, SQLLEN *ind_ptr);
 
 private:
 	OdbcHandleStmt *stmt;
@@ -63,13 +61,13 @@ private:
 	OdbcHandleDesc *cur_apd;
 
 	//! a pool of allocated parameters during SQLPutData for character data
-	vector<unique_ptr<char[]>> pool_allocated_ptr;
+	vector<duckdb::unsafe_unique_array<char>> pool_allocated_ptr;
 	//! Index of the
 	idx_t paramset_idx;
 	idx_t cur_paramset_idx;
 	idx_t cur_param_idx;
 	// duckdb Values for the parameters
-	std::vector<Value> values;
+	vector<Value> values;
 };
 } // namespace duckdb
 #endif

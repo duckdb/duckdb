@@ -2,7 +2,9 @@
 
 #include "duckdb/common/pair.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
-#include "miniz_wrapper.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 
@@ -12,7 +14,7 @@ namespace duckdb {
 UncompressedStringSegmentState::~UncompressedStringSegmentState() {
 	while (head) {
 		// prevent deep recursion here
-		head = move(head->next);
+		head = std::move(head->next);
 	}
 }
 
@@ -29,16 +31,16 @@ struct StringAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> UncompressedStringStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_unique<StringAnalyzeState>();
+	return make_uniq<StringAnalyzeState>();
 }
 
 bool UncompressedStringStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
-	auto &state = (StringAnalyzeState &)state_p;
+	auto &state = state_p.Cast<StringAnalyzeState>();
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
 	state.count += count;
-	auto data = (string_t *)vdata.data;
+	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (vdata.validity.RowIsValid(idx)) {
@@ -53,7 +55,7 @@ bool UncompressedStringStorage::StringAnalyze(AnalyzeState &state_p, Vector &inp
 }
 
 idx_t UncompressedStringStorage::StringFinalAnalyze(AnalyzeState &state_p) {
-	auto &state = (StringAnalyzeState &)state_p;
+	auto &state = state_p.Cast<StringAnalyzeState>();
 	return state.count * sizeof(int32_t) + state.total_string_size + state.overflow_strings * BIG_STRING_MARKER_SIZE;
 }
 
@@ -61,10 +63,10 @@ idx_t UncompressedStringStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 // Scan
 //===--------------------------------------------------------------------===//
 unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(ColumnSegment &segment) {
-	auto result = make_unique<StringScanState>();
+	auto result = make_uniq<StringScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
-	return move(result);
+	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -73,12 +75,12 @@ unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(ColumnSeg
 void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
                                                   Vector &result, idx_t result_offset) {
 	// clear any previously locked buffers and get the primary buffer handle
-	auto &scan_state = (StringScanState &)*state.scan_state;
+	auto &scan_state = state.scan_state->Cast<StringScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
 
 	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto dict = GetDictionary(segment, scan_state.handle);
-	auto base_data = (int32_t *)(baseptr + DICTIONARY_HEADER_SIZE);
+	auto base_data = reinterpret_cast<int32_t *>(baseptr + DICTIONARY_HEADER_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
 	int32_t previous_offset = start > 0 ? base_data[start - 1] : 0;
@@ -108,7 +110,7 @@ BufferHandle &ColumnFetchState::GetOrInsertHandle(ColumnSegment &segment) {
 		// not pinned yet: pin it
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		auto handle = buffer_manager.Pin(segment.block);
-		auto entry = handles.insert(make_pair(primary_id, move(handle)));
+		auto entry = handles.insert(make_pair(primary_id, std::move(handle)));
 		return entry.first->second;
 	} else {
 		// already pinned: use the pinned handle
@@ -124,7 +126,7 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 
 	auto baseptr = handle.Ptr() + segment.GetBlockOffset();
 	auto dict = GetDictionary(segment, handle);
-	auto base_data = (int32_t *)(baseptr + DICTIONARY_HEADER_SIZE);
+	auto base_data = reinterpret_cast<int32_t *>(baseptr + DICTIONARY_HEADER_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
 	auto dict_offset = base_data[row_id];
@@ -141,9 +143,22 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
+struct SerializedStringSegmentState : public ColumnSegmentState {
+	SerializedStringSegmentState() {
+	}
+	explicit SerializedStringSegmentState(vector<block_id_t> blocks_p) : blocks(std::move(blocks_p)) {
+	}
 
-unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(ColumnSegment &segment,
-                                                                                block_id_t block_id) {
+	vector<block_id_t> blocks;
+
+	void Serialize(Serializer &serializer) const override {
+		serializer.WriteProperty(1, "overflow_blocks", blocks);
+	}
+};
+
+unique_ptr<CompressedSegmentState>
+UncompressedStringStorage::StringInitSegment(ColumnSegment &segment, block_id_t block_id,
+                                             optional_ptr<ColumnSegmentState> segment_state) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	if (block_id == INVALID_BLOCK) {
 		auto handle = buffer_manager.Pin(segment.block);
@@ -152,7 +167,12 @@ unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(
 		dictionary.end = segment.SegmentSize();
 		SetDictionary(segment, handle, dictionary);
 	}
-	return make_unique<UncompressedStringSegmentState>();
+	auto result = make_uniq<UncompressedStringSegmentState>();
+	if (segment_state) {
+		auto &serialized_state = segment_state->Cast<SerializedStringSegmentState>();
+		result->on_disk_blocks = std::move(serialized_state.blocks);
+	}
+	return std::move(result);
 }
 
 idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats) {
@@ -180,6 +200,32 @@ idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentS
 }
 
 //===--------------------------------------------------------------------===//
+// Serialization & Cleanup
+//===--------------------------------------------------------------------===//
+unique_ptr<ColumnSegmentState> UncompressedStringStorage::SerializeState(ColumnSegment &segment) {
+	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
+	if (state.on_disk_blocks.empty()) {
+		// no on-disk blocks - nothing to write
+		return nullptr;
+	}
+	return make_uniq<SerializedStringSegmentState>(state.on_disk_blocks);
+}
+
+unique_ptr<ColumnSegmentState> UncompressedStringStorage::DeserializeState(Deserializer &deserializer) {
+	auto result = make_uniq<SerializedStringSegmentState>();
+	deserializer.ReadProperty(1, "overflow_blocks", result->blocks);
+	return std::move(result);
+}
+
+void UncompressedStringStorage::CleanupState(ColumnSegment &segment) {
+	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
+	auto &block_manager = segment.GetBlockManager();
+	for (auto &block_id : state.on_disk_blocks) {
+		block_manager.MarkBlockAsModified(block_id);
+	}
+}
+
+//===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
 CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
@@ -192,7 +238,9 @@ CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
 	                           UncompressedStringStorage::StringScanPartial, UncompressedStringStorage::StringFetchRow,
 	                           UncompressedFunctions::EmptySkip, UncompressedStringStorage::StringInitSegment,
 	                           UncompressedStringStorage::StringInitAppend, UncompressedStringStorage::StringAppend,
-	                           UncompressedStringStorage::FinalizeAppend);
+	                           UncompressedStringStorage::FinalizeAppend, nullptr,
+	                           UncompressedStringStorage::SerializeState, UncompressedStringStorage::DeserializeState,
+	                           UncompressedStringStorage::CleanupState);
 }
 
 //===--------------------------------------------------------------------===//
@@ -223,10 +271,10 @@ idx_t UncompressedStringStorage::RemainingSpace(ColumnSegment &segment, BufferHa
 
 void UncompressedStringStorage::WriteString(ColumnSegment &segment, string_t string, block_id_t &result_block,
                                             int32_t &result_offset) {
-	auto &state = (UncompressedStringSegmentState &)*segment.GetSegmentState();
+	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 	if (state.overflow_writer) {
 		// overflow writer is set: write string there
-		state.overflow_writer->WriteString(string, result_block, result_offset);
+		state.overflow_writer->WriteString(state, string, result_block, result_offset);
 	} else {
 		// default overflow behavior: use in-memory buffer to store the overflow string
 		WriteStringMemory(segment, string, result_block, result_offset);
@@ -240,21 +288,21 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 	BufferHandle handle;
 
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto &state = (UncompressedStringSegmentState &)*segment.GetSegmentState();
+	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 	// check if the string fits in the current block
 	if (!state.head || state.head->offset + total_length >= state.head->size) {
 		// string does not fit, allocate space for it
 		// create a new string block
 		idx_t alloc_size = MaxValue<idx_t>(total_length, Storage::BLOCK_SIZE);
-		auto new_block = make_unique<StringBlock>();
+		auto new_block = make_uniq<StringBlock>();
 		new_block->offset = 0;
 		new_block->size = alloc_size;
 		// allocate an in-memory buffer for it
 		handle = buffer_manager.Allocate(alloc_size, false, &block);
-		state.overflow_blocks[block->BlockId()] = new_block.get();
-		new_block->block = move(block);
-		new_block->next = move(state.head);
-		state.head = move(new_block);
+		state.overflow_blocks.insert(make_pair(block->BlockId(), reference<StringBlock>(*new_block)));
+		new_block->block = std::move(block);
+		new_block->next = std::move(state.head);
+		state.head = std::move(new_block);
 	} else {
 		// string fits, copy it into the current block
 		handle = buffer_manager.Pin(state.head->block);
@@ -267,7 +315,7 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 	auto ptr = handle.Ptr() + state.head->offset;
 	Store<uint32_t>(string.GetSize(), ptr);
 	ptr += sizeof(uint32_t);
-	memcpy(ptr, string.GetDataUnsafe(), string.GetSize());
+	memcpy(ptr, string.GetData(), string.GetSize());
 	state.head->offset += total_length;
 }
 
@@ -278,81 +326,66 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 
 	auto &block_manager = segment.GetBlockManager();
 	auto &buffer_manager = block_manager.buffer_manager;
-	auto &state = (UncompressedStringSegmentState &)*segment.GetSegmentState();
+	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 	if (block < MAXIMUM_BLOCK) {
 		// read the overflow string from disk
 		// pin the initial handle and read the length
-		auto block_handle = block_manager.RegisterBlock(block);
+		auto block_handle = state.GetHandle(block_manager, block);
 		auto handle = buffer_manager.Pin(block_handle);
 
 		// read header
-		uint32_t compressed_size = Load<uint32_t>(handle.Ptr() + offset);
-		uint32_t uncompressed_size = Load<uint32_t>(handle.Ptr() + offset + sizeof(uint32_t));
-		uint32_t remaining = compressed_size;
-		offset += 2 * sizeof(uint32_t);
+		uint32_t length = Load<uint32_t>(handle.Ptr() + offset);
+		uint32_t remaining = length;
+		offset += sizeof(uint32_t);
 
-		data_ptr_t decompression_ptr;
-		std::unique_ptr<data_t[]> decompression_buffer;
+		// allocate a buffer to store the string
+		auto alloc_size = MaxValue<idx_t>(Storage::BLOCK_SIZE, length);
+		// allocate a buffer to store the compressed string
+		// TODO: profile this to check if we need to reuse buffer
+		auto target_handle = buffer_manager.Allocate(alloc_size);
+		auto target_ptr = target_handle.Ptr();
 
-		// If string is in single block we decompress straight from it, else we copy first
-		if (remaining <= Storage::BLOCK_SIZE - sizeof(block_id_t) - offset) {
-			decompression_ptr = handle.Ptr() + offset;
-		} else {
-			decompression_buffer = std::unique_ptr<data_t[]>(new data_t[compressed_size]);
-			auto target_ptr = decompression_buffer.get();
-
-			// now append the string to the single buffer
-			while (remaining > 0) {
-				idx_t to_write = MinValue<idx_t>(remaining, Storage::BLOCK_SIZE - sizeof(block_id_t) - offset);
-				memcpy(target_ptr, handle.Ptr() + offset, to_write);
-
-				remaining -= to_write;
-				offset += to_write;
-				target_ptr += to_write;
-				if (remaining > 0) {
-					// read the next block
-					block_id_t next_block = Load<block_id_t>(handle.Ptr() + offset);
-					block_handle = block_manager.RegisterBlock(next_block);
-					handle = buffer_manager.Pin(block_handle);
-					offset = 0;
-				}
+		// now append the string to the single buffer
+		while (remaining > 0) {
+			idx_t to_write = MinValue<idx_t>(remaining, Storage::BLOCK_SIZE - sizeof(block_id_t) - offset);
+			memcpy(target_ptr, handle.Ptr() + offset, to_write);
+			remaining -= to_write;
+			offset += to_write;
+			target_ptr += to_write;
+			if (remaining > 0) {
+				// read the next block
+				block_id_t next_block = Load<block_id_t>(handle.Ptr() + offset);
+				block_handle = state.GetHandle(block_manager, next_block);
+				handle = buffer_manager.Pin(block_handle);
+				offset = 0;
 			}
-			decompression_ptr = decompression_buffer.get();
 		}
 
-		// overflow strings on disk are gzipped, decompress here
-		auto decompressed_target_handle =
-		    buffer_manager.Allocate(MaxValue<idx_t>(Storage::BLOCK_SIZE, uncompressed_size));
-		auto decompressed_target_ptr = decompressed_target_handle.Ptr();
-		MiniZStream s;
-		s.Decompress((const char *)decompression_ptr, compressed_size, (char *)decompressed_target_ptr,
-		             uncompressed_size);
-
-		auto final_buffer = decompressed_target_handle.Ptr();
-		StringVector::AddHandle(result, move(decompressed_target_handle));
-		return ReadString(final_buffer, 0, uncompressed_size);
+		auto final_buffer = target_handle.Ptr();
+		StringVector::AddHandle(result, std::move(target_handle));
+		return ReadString(final_buffer, 0, length);
 	} else {
 		// read the overflow string from memory
 		// first pin the handle, if it is not pinned yet
 		auto entry = state.overflow_blocks.find(block);
 		D_ASSERT(entry != state.overflow_blocks.end());
-		auto handle = buffer_manager.Pin(entry->second->block);
+		auto handle = buffer_manager.Pin(entry->second.get().block);
 		auto final_buffer = handle.Ptr();
-		StringVector::AddHandle(result, move(handle));
+		StringVector::AddHandle(result, std::move(handle));
 		return ReadStringWithLength(final_buffer, offset);
 	}
 }
 
 string_t UncompressedStringStorage::ReadString(data_ptr_t target, int32_t offset, uint32_t string_length) {
 	auto ptr = target + offset;
-	auto str_ptr = (char *)(ptr);
+	auto str_ptr = char_ptr_cast(ptr);
 	return string_t(str_ptr, string_length);
 }
 
 string_t UncompressedStringStorage::ReadStringWithLength(data_ptr_t target, int32_t offset) {
 	auto ptr = target + offset;
 	auto str_length = Load<uint32_t>(ptr);
-	auto str_ptr = (char *)(ptr + sizeof(uint32_t));
+	auto str_ptr = char_ptr_cast(ptr + sizeof(uint32_t));
 	return string_t(str_ptr, str_length);
 }
 
@@ -403,7 +436,7 @@ string_t UncompressedStringStorage::FetchString(ColumnSegment &segment, StringDi
 		auto dict_end = baseptr + dict.end;
 		auto dict_pos = dict_end - location.offset;
 
-		auto str_ptr = (char *)(dict_pos);
+		auto str_ptr = char_ptr_cast(dict_pos);
 		return string_t(str_ptr, string_length);
 	}
 }

@@ -1,0 +1,63 @@
+# name: test/sql/catalog/function/test_recursive_macro.test
+# description: Test recursive macros
+# group: [function]
+
+statement ok
+CREATE MACRO "sum"(x) AS (CASE WHEN sum(x) IS NULL THEN 0 ELSE sum(x) END);
+
+statement error
+SELECT sum(1);
+----
+Binder Error: Maximum recursion depth exceeded
+
+statement error
+SELECT sum(1) WHERE 42=0
+----
+Binder Error: Maximum recursion depth exceeded
+
+statement ok
+DROP MACRO sum
+
+# recursive macro with explicit qualification
+statement ok
+CREATE MACRO "sum"(x) AS (CASE WHEN system.main.sum(x) IS NULL THEN 0 ELSE system.main.sum(x) END);
+
+query I
+SELECT sum(1);
+----
+1
+
+query I
+SELECT sum(1) WHERE 42=0
+----
+0
+
+# evil test case by Mark
+statement ok
+create macro m1(a) as a+1;
+
+statement ok
+create macro m2(a) as m1(a)+1;
+
+statement ok
+create or replace macro m1(a) as m2(a)+1;
+
+statement error
+select m2(42);
+----
+Binder Error: Maximum recursion depth exceeded
+
+# also table macros
+statement ok
+create macro m3(a) as a+1;
+
+statement ok
+create macro m4(a) as table select m3(a);
+
+statement ok
+create or replace macro m3(a) as (from m4(42));
+
+statement error
+select m3(42);
+----
+Binder Error: Maximum recursion depth exceeded

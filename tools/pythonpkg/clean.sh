@@ -8,13 +8,13 @@ echo $SCRIPTPATH
 rm -rf	$SCRIPTPATH/.eggs \
 		$SCRIPTPATH/.pytest_cache \
 		$SCRIPTPATH/build \
+		$SCRIPTPATH/duckdb_build \
 		$SCRIPTPATH/dist \
 		$SCRIPTPATH/duckdb.egg-info \
 		$SCRIPTPATH/duckdb.cpp \
 		$SCRIPTPATH/duckdb.hpp \
-		$SCRIPTPATH/parquet-extension.cpp \
-		$SCRIPTPATH/parquet-extension.hpp \
-		$SCRIPTPATH/duckdb \
+		$SCRIPTPATH/parquet_extension.cpp \
+		$SCRIPTPATH/parquet_extension.hpp \
 		$SCRIPTPATH/duckdb_tarball
 
 rm -f	$SCRIPTPATH/sources.list \

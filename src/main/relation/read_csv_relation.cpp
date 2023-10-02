@@ -1,66 +1,85 @@
 #include "duckdb/main/relation/read_csv_relation.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/parser/tableref/basetableref.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/expression/star_expression.hpp"
+
+#include "duckdb/execution/operator/scan/csv/buffered_csv_reader.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_sniffer.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
 
-ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, string csv_file_p,
-                                 vector<ColumnDefinition> columns_p, bool auto_detect, string alias_p)
-    : Relation(context, RelationType::READ_CSV_RELATION), csv_file(move(csv_file_p)), auto_detect(auto_detect),
-      alias(move(alias_p)), columns(move(columns_p)) {
+ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const string &csv_file,
+                                 vector<ColumnDefinition> columns_p, string alias_p)
+    : TableFunctionRelation(context, "read_csv", {Value(csv_file)}, nullptr, false), alias(std::move(alias_p)),
+      auto_detect(false) {
+
 	if (alias.empty()) {
 		alias = StringUtil::Split(csv_file, ".")[0];
 	}
-}
 
-unique_ptr<QueryNode> ReadCSVRelation::GetQueryNode() {
-	auto result = make_unique<SelectNode>();
-	result->select_list.push_back(make_unique<StarExpression>());
-	result->from_table = GetTableRef();
-	return move(result);
-}
+	columns = std::move(columns_p);
 
-unique_ptr<TableRef> ReadCSVRelation::GetTableRef() {
-	auto table_ref = make_unique<TableFunctionRef>();
-	table_ref->alias = alias;
-	vector<unique_ptr<ParsedExpression>> children;
-	// CSV file
-	children.push_back(make_unique<ConstantExpression>(Value(csv_file)));
-	if (!auto_detect) {
-		// parameters
-		child_list_t<Value> column_names;
-		for (idx_t i = 0; i < columns.size(); i++) {
-			column_names.push_back(make_pair(columns[i].Name(), Value(columns[i].Type().ToString())));
-		}
-		auto colnames = make_unique<ConstantExpression>(Value::STRUCT(move(column_names)));
-		children.push_back(make_unique<ComparisonExpression>(
-		    ExpressionType::COMPARE_EQUAL, make_unique<ColumnRefExpression>("columns"), move(colnames)));
-	} else {
-		children.push_back(make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL,
-		                                                     make_unique<ColumnRefExpression>("auto_detect"),
-		                                                     make_unique<ConstantExpression>(Value::BOOLEAN(true))));
+	child_list_t<Value> column_names;
+	for (idx_t i = 0; i < columns.size(); i++) {
+		column_names.push_back(make_pair(columns[i].Name(), Value(columns[i].Type().ToString())));
 	}
-	table_ref->function = make_unique<FunctionExpression>("read_csv", move(children));
-	return move(table_ref);
+
+	AddNamedParameter("columns", Value::STRUCT(std::move(column_names)));
+}
+
+ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const string &csv_file,
+                                 named_parameter_map_t &&options, string alias_p)
+    : TableFunctionRelation(context, "read_csv_auto", {Value(csv_file)}, nullptr, false), alias(std::move(alias_p)),
+      auto_detect(true) {
+
+	if (alias.empty()) {
+		alias = StringUtil::Split(csv_file, ".")[0];
+	}
+
+	auto files = MultiFileReader::GetFileList(*context, csv_file, "CSV");
+	D_ASSERT(!files.empty());
+
+	auto &file_name = files[0];
+	options["auto_detect"] = Value::BOOLEAN(true);
+	CSVReaderOptions csv_options;
+	csv_options.file_path = file_name;
+	vector<string> empty;
+
+	vector<LogicalType> unused_types;
+	vector<string> unused_names;
+	csv_options.FromNamedParameters(options, *context, unused_types, unused_names);
+	// Run the auto-detect, populating the options with the detected settings
+
+	auto bm_file_handle = BaseCSVReader::OpenCSV(*context, csv_options);
+	auto buffer_manager = make_shared<CSVBufferManager>(*context, std::move(bm_file_handle), csv_options);
+	CSVStateMachineCache state_machine_cache;
+	CSVSniffer sniffer(csv_options, buffer_manager, state_machine_cache);
+	auto sniffer_result = sniffer.SniffCSV();
+	auto &types = sniffer_result.return_types;
+	auto &names = sniffer_result.names;
+	for (idx_t i = 0; i < types.size(); i++) {
+		columns.emplace_back(names[i], types[i]);
+	}
+
+	//! Capture the options potentially set/altered by the auto detection phase
+	csv_options.ToNamedParameters(options);
+
+	// No need to auto-detect again
+	options["auto_detect"] = Value::BOOLEAN(false);
+	SetNamedParameters(std::move(options));
 }
 
 string ReadCSVRelation::GetAlias() {
 	return alias;
-}
-
-const vector<ColumnDefinition> &ReadCSVRelation::Columns() {
-	return columns;
-}
-
-string ReadCSVRelation::ToString(idx_t depth) {
-	return RenderWhitespace(depth) + "Read CSV [" + csv_file + "]";
 }
 
 } // namespace duckdb

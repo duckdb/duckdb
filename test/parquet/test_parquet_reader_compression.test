@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification
 
 query IIII
-SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_NONE.parquet') limit 50
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_NONE.parquet', hive_partitioning=0) limit 50
 ----
 0	20	{'string': foo, 'int': 22}	[]
 1	6	{'string': baz, 'int': 10}	NULL
@@ -42,7 +42,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page
 29	13	{'string': bar, 'int': 8}	[40, 32, 9, 2, 2, 40, 7, 0, 32, 31, 11, 14, 4, 14, 40, 20, 29, 17, 41]
 
 query IIII
-SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_NONE.parquet') limit 50
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_NONE.parquet', hive_partitioning=0) limit 50
 ----
 0	20	{'string': foo, 'int': 22}	[]
 1	6	{'string': baz, 'int': 10}	NULL
@@ -76,7 +76,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page
 29	13	{'string': bar, 'int': 8}	[40, 32, 9, 2, 2, 40, 7, 0, 32, 31, 11, 14, 4, 14, 40, 20, 29, 17, 41]
 
 query IIII
-SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_SNAPPY.parquet') limit 50
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_SNAPPY.parquet', hive_partitioning=0) limit 50
 ----
 0	20	{'string': foo, 'int': 22}	[]
 1	6	{'string': baz, 'int': 10}	NULL
@@ -110,7 +110,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page
 29	13	{'string': bar, 'int': 8}	[40, 32, 9, 2, 2, 40, 7, 0, 32, 31, 11, 14, 4, 14, 40, 20, 29, 17, 41]
 
 query IIII
-SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_SNAPPY.parquet') limit 50
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_SNAPPY.parquet', hive_partitioning=0) limit 50
 ----
 0	20	{'string': foo, 'int': 22}	[]
 1	6	{'string': baz, 'int': 10}	NULL
@@ -144,7 +144,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page
 29	13	{'string': bar, 'int': 8}	[40, 32, 9, 2, 2, 40, 7, 0, 32, 31, 11, 14, 4, 14, 40, 20, 29, 17, 41]
 
 query IIII
-SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_GZIP.parquet') limit 50
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_GZIP.parquet', hive_partitioning=0) limit 50
 ----
 0	20	{'string': foo, 'int': 22}	[]
 1	6	{'string': baz, 'int': 10}	NULL
@@ -178,7 +178,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page
 29	13	{'string': bar, 'int': 8}	[40, 32, 9, 2, 2, 40, 7, 0, 32, 31, 11, 14, 4, 14, 40, 20, 29, 17, 41]
 
 query IIII
-SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_GZIP.parquet') limit 50
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_GZIP.parquet', hive_partitioning=0) limit 50
 ----
 0	20	{'string': foo, 'int': 22}	[]
 1	6	{'string': baz, 'int': 10}	NULL
@@ -225,7 +225,7 @@ statement error
 SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_LZ4.parquet') limit 50
 
 query IIII
-SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_ZSTD.parquet') limit 50
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_ZSTD.parquet', hive_partitioning=0) limit 50
 ----
 0	20	{'string': foo, 'int': 22}	[]
 1	6	{'string': baz, 'int': 10}	NULL
@@ -259,7 +259,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page
 29	13	{'string': bar, 'int': 8}	[40, 32, 9, 2, 2, 40, 7, 0, 32, 31, 11, 14, 4, 14, 40, 20, 29, 17, 41]
 
 query IIII
-SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_ZSTD.parquet') limit 50
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_ZSTD.parquet', hive_partitioning=0) limit 50
 ----
 0	20	{'string': foo, 'int': 22}	[]
 1	6	{'string': baz, 'int': 10}	NULL

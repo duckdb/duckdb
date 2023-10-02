@@ -1,0 +1,16 @@
+# name: test/sql/storage/extensions/extension_views.test
+# description: Store views that rely on extension functions
+# group: [extensions]
+
+# load the DB from disk
+load __TEST_DIR__/views_with_extensions.db
+
+statement ok
+CREATE VIEW v1 AS SELECT current_schema();
+
+restart
+
+query I
+SELECT * FROM v1;
+----
+main

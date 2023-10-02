@@ -26,6 +26,16 @@ CreateSeqStmt:
 					n->onconflict = PG_IGNORE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
+			| CREATE_P OR REPLACE OptTemp SEQUENCE qualified_name OptSeqOptList
+				{
+					PGCreateSeqStmt *n = makeNode(PGCreateSeqStmt);
+					$6->relpersistence = $4;
+					n->sequence = $6;
+					n->options = $7;
+					n->ownerId = InvalidOid;
+					n->onconflict = PG_REPLACE_ON_CONFLICT;
+					$$ = (PGNode *)n;
+				}
 		;
 
 

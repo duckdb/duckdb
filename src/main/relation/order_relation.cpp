@@ -7,22 +7,22 @@
 namespace duckdb {
 
 OrderRelation::OrderRelation(shared_ptr<Relation> child_p, vector<OrderByNode> orders)
-    : Relation(child_p->context, RelationType::ORDER_RELATION), orders(move(orders)), child(move(child_p)) {
+    : Relation(child_p->context, RelationType::ORDER_RELATION), orders(std::move(orders)), child(std::move(child_p)) {
 	D_ASSERT(child.get() != this);
 	// bind the expressions
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 unique_ptr<QueryNode> OrderRelation::GetQueryNode() {
-	auto select = make_unique<SelectNode>();
+	auto select = make_uniq<SelectNode>();
 	select->from_table = child->GetTableRef();
-	select->select_list.push_back(make_unique<StarExpression>());
-	auto order_node = make_unique<OrderModifier>();
+	select->select_list.push_back(make_uniq<StarExpression>());
+	auto order_node = make_uniq<OrderModifier>();
 	for (idx_t i = 0; i < orders.size(); i++) {
 		order_node->orders.emplace_back(orders[i].type, orders[i].null_order, orders[i].expression->Copy());
 	}
-	select->modifiers.push_back(move(order_node));
-	return move(select);
+	select->modifiers.push_back(std::move(order_node));
+	return std::move(select);
 }
 
 string OrderRelation::GetAlias() {

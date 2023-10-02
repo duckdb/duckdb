@@ -1,16 +1,17 @@
 #include "duckdb_odbc.hpp"
 #include "api_info.hpp"
 #include "statement_functions.hpp"
+#include "handle_functions.hpp"
+#include "duckdb/common/vector.hpp"
 
 using duckdb::ApiInfo;
 using duckdb::idx_t;
 using duckdb::TypeInfo;
+using duckdb::vector;
 using std::string;
-using std::vector;
 
 /*** ODBC API Functions ********************************/
 SQLRETURN SQL_API SQLGetFunctions(SQLHDBC connection_handle, SQLUSMALLINT function_id, SQLUSMALLINT *supported_ptr) {
-
 	if (function_id == SQL_API_ODBC3_ALL_FUNCTIONS) {
 		return ApiInfo::GetFunctions30(connection_handle, function_id, supported_ptr);
 	} else {
@@ -19,27 +20,49 @@ SQLRETURN SQL_API SQLGetFunctions(SQLHDBC connection_handle, SQLUSMALLINT functi
 }
 
 SQLRETURN SQL_API SQLGetTypeInfo(SQLHSTMT statement_handle, SQLSMALLINT data_type) {
-	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
-		string query("SELECT * FROM (VALUES ");
+	duckdb::OdbcHandleStmt *hstmt = nullptr;
+	SQLRETURN ret = ConvertHSTMT(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
+	}
 
-		if (data_type == SQL_ALL_TYPES) {
-			auto vec_types = ApiInfo::GetVectorTypesAddr();
-			ApiInfo::WriteInfoTypesToQueryString(vec_types, query);
-		} else {
-			vector<TypeInfo> vec_types;
-			ApiInfo::FindDataType(data_type, vec_types);
-			ApiInfo::WriteInfoTypesToQueryString(vec_types, query);
-		}
+	string query("SELECT * FROM (VALUES ");
 
-		query += ") AS odbc_types (\"TYPE_NAME\", \"DATA_TYPE\", \"COLUMN_SIZE\", \"LITERAL_PREFIX\", "
-		         "\"LITERAL_SUFFIX\", \"CREATE_PARAMS\", \"NULLABLE\", "
-		         "\"CASE_SENSITIVE\", \"SEARCHABLE\", \"UNSIGNED_ATTRIBUTE\", \"FIXED_PREC_SCALE\", "
-		         "\"AUTO_UNIQUE_VALUE\", \"LOCAL_TYPE_NAME\", "
-		         "\"MINIMUM_SCALE\", \"MAXIMUM_SCALE\", \"SQL_DATA_TYPE\", \"SQL_DATETIME_SUB\", \"NUM_PREC_RADIX\", "
-		         "\"INTERVAL_PRECISION\")";
+	if (data_type == SQL_ALL_TYPES) {
+		auto vec_types = ApiInfo::GetVectorTypesAddr();
+		ApiInfo::WriteInfoTypesToQueryString(vec_types, query);
+	} else {
+		vector<TypeInfo> vec_types;
+		ApiInfo::FindDataType(data_type, vec_types);
+		ApiInfo::WriteInfoTypesToQueryString(vec_types, query);
+	}
 
-		return duckdb::ExecDirectStmt(stmt, (SQLCHAR *)query.c_str(), query.size());
-	});
+	// clang-format off
+	query += R"(
+	) AS odbc_types (
+		"TYPE_NAME",
+		"DATA_TYPE",
+		"COLUMN_SIZE",
+		"LITERAL_PREFIX",
+		"LITERAL_SUFFIX",
+		"CREATE_PARAMS",
+		"NULLABLE",
+		"CASE_SENSITIVE",
+		"SEARCHABLE",
+		"UNSIGNED_ATTRIBUTE",
+		"FIXED_PREC_SCALE",
+		"AUTO_UNIQUE_VALUE",
+		"LOCAL_TYPE_NAME",
+		"MINIMUM_SCALE",
+		"MAXIMUM_SCALE",
+		"SQL_DATA_TYPE",
+		"SQL_DATETIME_SUB",
+		"NUM_PREC_RADIX",
+		"INTERVAL_PRECISION"
+	))";
+	// clang-format on
+
+	return duckdb::ExecDirectStmt(hstmt, (SQLCHAR *)query.c_str(), query.size());
 }
 
 /*** ApiInfo private attributes ********************************/
@@ -65,7 +88,7 @@ const std::unordered_set<SQLUSMALLINT> ApiInfo::ODBC3_EXTRA_SUPPORTED_FUNCTIONS 
     SQL_API_SQLGETDESCREC,    SQL_API_SQLPRIMARYKEYS,    SQL_API_SQLPROCEDURECOLUMNS, SQL_API_SQLPROCEDURES,
     SQL_API_SQLSETDESCREC,    SQL_API_SQLSETPOS,         SQL_API_SQLTABLEPRIVILEGES};
 
-const std::vector<duckdb::TypeInfo> ApiInfo::ODBC_SUPPORTED_SQL_TYPES = {
+const vector<duckdb::TypeInfo> ApiInfo::ODBC_SUPPORTED_SQL_TYPES = {
     {"'CHAR'", SQL_CHAR, 1, "''''", "''''", "'length'", SQL_NULLABLE, SQL_TRUE, SQL_SEARCHABLE, -1, SQL_FALSE,
      SQL_FALSE, "NULL", -1, -1, SQL_CHAR, -1, -1, -1},
     {"'BOOLEAN'", SQL_BIT, 1, "NULL", "NULL", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_TRUE, SQL_TRUE,
@@ -193,9 +216,6 @@ SQLRETURN ApiInfo::GetFunctions(SQLHDBC connection_handle, SQLUSMALLINT function
 }
 
 SQLRETURN ApiInfo::GetFunctions30(SQLHDBC connection_handle, SQLUSMALLINT function_id, SQLUSMALLINT *supported_ptr) {
-	if (function_id != SQL_API_ODBC3_ALL_FUNCTIONS) {
-		return SQL_ERROR;
-	}
 	memset(supported_ptr, 0, sizeof(UWORD) * SQL_API_ODBC3_ALL_FUNCTIONS_SIZE);
 	for (auto it = BASE_SUPPORTED_FUNCTIONS.begin(); it != BASE_SUPPORTED_FUNCTIONS.end(); it++) {
 		SetFunctionSupported(supported_ptr, *it);
@@ -243,6 +263,10 @@ SQLSMALLINT ApiInfo::FindRelatedSQLType(duckdb::LogicalTypeId type_id) {
 		return SQL_VARBINARY;
 	case LogicalTypeId::INTERVAL:
 		return SQL_INTERVAL;
+	case LogicalTypeId::DECIMAL:
+		return SQL_DOUBLE;
+	case LogicalTypeId::LIST:
+		return SQL_VARCHAR;
 	default:
 		return SQL_UNKNOWN_TYPE;
 	}

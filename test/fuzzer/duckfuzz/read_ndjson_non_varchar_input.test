@@ -1,0 +1,18 @@
+# name: test/fuzzer/duckfuzz/read_ndjson_non_varchar_input.test
+# description: read_ndjson with non-varchar input
+# group: [duckfuzz]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+FROM read_ndjson([42])
+----
+can only take a list of strings as a parameter
+
+statement error
+FROM read_csv_auto([42])
+----
+can only take a list of strings as a parameter

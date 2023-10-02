@@ -7,27 +7,25 @@
 
 %type <node> opt_collate_clause
 
-
+%type <node> indirection_expr
+%type <node> struct_expr
 
 
 %type <lockwaitpolicy>	opt_nowait_or_skip
 
-%type <str>	 			 attr_name
-				name
+%type <str> name
 %type <list>	func_name qual_Op qual_all_Op subquery_Op
 
-%type <range>	qualified_name
 %type <str>		all_Op
 %type <conststr> MathOp
 
-
-%type <list>	distinct_clause opt_all_clause name_list_opt_comma opt_name_list
+%type <list>	distinct_clause opt_all_clause name_list_opt_comma opt_name_list name_list_opt_comma_opt_bracket
 				sort_clause opt_sort_clause sortby_list name_list from_clause from_list from_list_opt_comma opt_array_bounds
-				qualified_name_list any_name 				any_operator expr_list	attrs expr_list_opt_comma opt_expr_list_opt_comma
-				target_list			 			 indirection opt_indirection target_list_opt_comma opt_target_list_opt_comma
+				qualified_name_list any_name 				any_operator expr_list	attrs expr_list_opt_comma opt_expr_list_opt_comma c_expr_list c_expr_list_opt_comma
+				target_list			 			 opt_indirection target_list_opt_comma opt_target_list_opt_comma
 			 group_clause select_limit
-				opt_select_limit 			 			 TableFuncElementList opt_type_modifiers opt_select
-%type <list>	group_by_list group_by_list_opt_comma
+				opt_select_limit 			 			 TableFuncElementList opt_type_modifiers opt_select extended_indirection opt_extended_indirection
+%type <list>	group_by_list group_by_list_opt_comma opt_func_arguments unpivot_header
 %type <node>	group_by_item empty_grouping_set rollup_clause cube_clause grouping_sets_clause grouping_or_grouping_id
 %type <range>	OptTempTableName
 %type <into>	into_clause
@@ -58,7 +56,7 @@
 %type <node> TableFuncElement
 
 
-%type <node> where_clause 				a_expr b_expr c_expr AexprConst indirection_el opt_slice_bound
+%type <node> where_clause 				a_expr b_expr c_expr d_expr AexprConst opt_slice_bound extended_indirection_el
 				columnref in_expr having_clause qualify_clause func_table
 %type <list>	rowsfrom_item rowsfrom_list opt_col_def_list
 %type <boolean> opt_ordinality
@@ -73,6 +71,8 @@
 
 %type <node>	dict_arg
 %type <list>	dict_arguments dict_arguments_opt_comma
+
+%type <list>	map_arg map_arguments map_arguments_opt_comma opt_map_arguments_opt_comma
 
 %type <alias>	alias_clause opt_alias_clause
 %type <list>	func_alias_clause
@@ -101,12 +101,10 @@
 %type <str>		extract_arg
 %type <boolean> opt_varying opt_timezone
 %type <ival>	Iconst
-%type <str>		Sconst
-%type <str>		ColId ColLabel type_function_name param_name type_name_token function_name_token
-%type <str>		ColIdOrString ColLabelOrString
+%type <str>		type_function_name param_name type_name_token function_name_token
+%type <str>		ColLabelOrString
 
-%type <keyword> unreserved_keyword type_func_name_keyword type_name_keyword func_name_keyword
-%type <keyword> col_name_keyword reserved_keyword other_keyword
+%type <keyword> type_func_name_keyword type_name_keyword func_name_keyword
 
 
 
@@ -116,6 +114,7 @@
 %type <node>	common_table_expr
 %type <with>	with_clause
 %type <list>	cte_list
+%type <ctematerialize>	opt_materialized
 
 %type <list>	within_group_clause
 %type <node>	filter_clause
@@ -125,3 +124,7 @@
 %type <windef>	window_definition over_clause window_specification
 				opt_frame_clause frame_extent frame_bound
 %type <str>		opt_existing_window_name
+
+%type <node> pivot_value pivot_column_entry single_pivot_value unpivot_value
+%type <list> pivot_value_list pivot_column_list_internal pivot_column_list pivot_header opt_pivot_group_by unpivot_value_list
+%type <boolean> opt_include_nulls

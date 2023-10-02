@@ -21,6 +21,7 @@ In order to compile the grammar, run the following command:
 ```bash
 python3 scripts/generate_grammar.py
 ```
+Depending on how you installed bison, you may need to pass `--bison=/usr/bin/bison` to the above command.
 
 In order to compile the lexer, run the following command:
 

@@ -16,18 +16,12 @@ namespace duckdb {
 template <>
 float MultiplyOperator::Operation(float left, float right) {
 	auto result = left * right;
-	if (!Value::FloatIsFinite(result)) {
-		throw OutOfRangeException("Overflow in multiplication of float!");
-	}
 	return result;
 }
 
 template <>
 double MultiplyOperator::Operation(double left, double right) {
 	auto result = left * right;
-	if (!Value::DoubleIsFinite(result)) {
-		throw OutOfRangeException("Overflow in multiplication of double!");
-	}
 	return result;
 }
 
@@ -182,6 +176,11 @@ bool TryMultiplyOperator::Operation(int64_t left, int64_t right, int64_t &result
 	result = left * right;
 #endif
 	return true;
+}
+
+template <>
+bool TryMultiplyOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
+	return Hugeint::TryMultiply(left, right, result);
 }
 
 //===--------------------------------------------------------------------===//

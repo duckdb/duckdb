@@ -12,9 +12,15 @@ if(POLICY CMP0054)
   cmake_policy(SET CMP0054 NEW)
 endif()
 
+if(POLICY CMP0063)
+  cmake_policy(SET CMP0063 NEW)
+endif()
+
 project(DuckDB)
 
 find_package(Threads REQUIRED)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if (CMAKE_VERSION VERSION_LESS "3.1")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
@@ -118,6 +124,10 @@ endif()
 
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
+option(ENABLE_EXTENSION_AUTOLOADING "Enable extension auto-loading by default." FALSE)
+option(ENABLE_EXTENSION_AUTOINSTAll "Enable extension auto-installing by default." FALSE)
+option(EXTENSION_TESTS_ONLY "Only load the tests for extensions, don't actually build them; useful for testing loadable extensions" FALSE)
+option(WASM_LOADABLE_EXTENSIONS "WebAssembly build with loadable extensions." FALSE)
 option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
 option(ENABLE_THREAD_SANITIZER "Enable thread sanitizer." FALSE)
 option(ENABLE_UBSAN "Enable undefined behavior sanitizer." TRUE)
@@ -126,13 +136,13 @@ option(
   FORCE_SANITIZER
   "Forces building with sanitizers even if the Python and R modules are enabled."
   FALSE)
-if((BUILD_PYTHON OR BUILD_R OR CONFIGURE_R)
+if((BUILD_PYTHON OR BUILD_NODE)
    AND (ENABLE_SANITIZER OR ENABLE_UBSAN)
    AND ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug"))
   if(FORCE_SANITIZER)
     message(
       WARNING
-        "FORCE_SANITIZER is set and the Python/R builds are enabled. Sanitizers will be linked as a shared library (-shared-libasan). You may need to do LD_PRELOAD tricks to load packages built in this way."
+        "FORCE_SANITIZER is set and the Python/R/Node builds are enabled. Sanitizers will be linked as a shared library (-shared-libasan). You may need to do LD_PRELOAD tricks to load packages built in this way."
     )
     set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -shared-libasan")
   else()
@@ -151,6 +161,7 @@ if(${ENABLE_THREAD_SANITIZER})
         "Both thread and address sanitizers are enabled. This is not supported. The address sanitizer will be disabled, and we will run with only the thread sanitizer."
     )
   endif()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_THREAD_SANITIZER")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread")
 elseif(${ENABLE_SANITIZER})
   if(FORCE_ASSERT)
@@ -159,7 +170,6 @@ elseif(${ENABLE_SANITIZER})
     set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address")
   endif()
 endif()
-
 
 if (${DISABLE_VPTR_SANITIZER})
 else()
@@ -181,6 +191,7 @@ if(${ENABLE_UBSAN})
       WARNING
         "Both thread and undefined sanitizers are enabled. This is not supported. The undefined sanitizer will be disabled, and we will run with only the thread sanitizer."
     )
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_THREAD_SANITIZER")
   else()
     if(FORCE_ASSERT)
       set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined -fno-sanitize-recover=all")
@@ -201,12 +212,29 @@ if(${EXPLICIT_EXCEPTIONS})
   set(CXX_EXTRA "${CXX_EXTRA} -fexceptions")
 endif()
 
+if (ENABLE_EXTENSION_AUTOLOADING)
+  add_definitions(-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1)
+endif()
+if (ENABLE_EXTENSION_AUTOINSTALL)
+  add_definitions(-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=${ENABLE_EXTENSION_AUTOINSTALL})
+endif()
+
 option(OSX_BUILD_UNIVERSAL "Build both architectures on OSX and create a single binary containing both." FALSE)
 if (OSX_BUILD_UNIVERSAL)
   if (NOT APPLE)
     error("This only makes sense on OSX")
   endif()
   SET(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures for Mac OS X" FORCE)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "Minimum OS X deployment version" FORCE)
+endif()
+
+if (OSX_BUILD_ARCH)
+  message(STATUS "building for OSX architecture: ${OSX_BUILD_ARCH}")
+  if (NOT APPLE)
+    error("This only makes sense on OSX")
+  endif()
+  SET(CMAKE_OSX_ARCHITECTURES "${OSX_BUILD_ARCH}" CACHE STRING "Build architectures for Mac OS X" FORCE)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "Minimum OS X deployment version" FORCE)
 endif()
 
 set(SUN FALSE)
@@ -276,39 +304,35 @@ option(EXTENSION_STATIC_BUILD
         "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
         FALSE)
 
-
-set(JEMALLOC_DEFAULT_BUILD FALSE)
-if(NOT CLANG_TIDY AND OS_NAME STREQUAL "linux")
-  # build jemalloc by default for linux
-  set(JEMALLOC_DEFAULT_BUILD TRUE)
+if(WIN32 OR ZOS)
+  set(EXTENSION_STATIC_BUILD TRUE)
 endif()
 
-option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
-option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
-option(BUILD_TPCH_EXTENSION "Build the TPC-H extension." FALSE)
-option(BUILD_TPCDS_EXTENSION "Build the TPC-DS extension." FALSE)
-option(BUILD_FTS_EXTENSION "Build the FTS extension." FALSE)
-option(BUILD_HTTPFS_EXTENSION "Build the HTTP File System extension." FALSE)
-option(BUILD_VISUALIZER_EXTENSION "Build the profiler-output visualizer extension." FALSE)
-option(BUILD_JSON_EXTENSION "Build the JSON extension." FALSE)
-option(BUILD_JEMALLOC_EXTENSION "Build the JEMalloc extension." ${JEMALLOC_DEFAULT_BUILD})
-option(BUILD_EXCEL_EXTENSION "Build the excel extension." FALSE)
-option(BUILD_INET_EXTENSION "Build the inet extension." FALSE)
+option(BUILD_CORE_FUNCTIONS_EXTENSION "Build the core functions." TRUE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
-option(BUILD_SQLSMITH_EXTENSION "Enable building of the SQLSmith extension." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
 option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_ODBC_DRIVER "Build the DuckDB ODBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
+option(BUILD_NODE "Build the DuckDB Node extension" FALSE)
 option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
 option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
+option(DISABLE_EXTENSION_LOAD "Disable support for loading and installing extensions" FALSE)
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
+option(DISABLE_MEMORY_SAFETY "Debug setting: disable memory access checks at runtime" FALSE)
+option(DISABLE_ASSERTIONS "Debug setting: disable assertions" FALSE)
+option(ALTERNATIVE_VERIFY "Debug setting: use alternative verify mode" FALSE)
 option(DESTROY_UNPINNED_BLOCKS "Debug setting: destroy unpinned buffer-managed blocks" FALSE)
+option(FORCE_ASYNC_SINK_SOURCE "Debug setting: forces sinks/sources to block the first 2 times they're called" FALSE)
+option(DEBUG_STACKTRACE "Debug setting: print a stracktrace on asserts and when testing crashes" FALSE)
+option(DEBUG_MOVE "Debug setting: Ensure std::move is being used" FALSE)
 option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build." FALSE)
 option(BUILD_UNITTESTS "Build the C++ Unit Tests." TRUE)
+option(EXTENSION_CONFIG_BUILD "Produce extension configuration artifacts instead of building. (such as shared vcpkg.json, extensions.txt)" FALSE)
+option(CUSTOM_LINKER "Use a custom linker program" "")
 option(
   ASSERT_EXCEPTION
   "Throw an exception on an assert failing, instead of triggering a sigabort"
@@ -318,41 +342,20 @@ option(FORCE_ASSERT "Enable checking of assertions, even in release mode" FALSE)
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
 option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
-option(BUILD_ARROW_ABI_TEST "Enable the Arrow ABI Test." FALSE)
 option(TEST_REMOTE_INSTALL "Test installation of specific extensions." FALSE)
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
 endif()
 
+if(EXTENSION_CONFIG_BUILD)
+  set(BUILD_MAIN_DUCKDB_LIBRARY FALSE)
+endif()
+
 if (NOT BUILD_MAIN_DUCKDB_LIBRARY)
   set(BUILD_UNITTESTS FALSE)
   set(BUILD_SHELL FALSE)
   set(DISABLE_BUILTIN_EXTENSIONS TRUE)
-endif()
-
-if(BUILD_PYTHON
-   OR BUILD_R
-   OR CONFIGURE_R
-   OR JDBC_DRIVER)
-  set(BUILD_ICU_EXTENSION TRUE)
-  set(BUILD_VISUALIZER_EXTENSION TRUE)
-  set(BUILD_PARQUET_EXTENSION TRUE)
-endif()
-
-if(BUILD_PYTHON)
-  set(BUILD_TPCH_EXTENSION TRUE)
-  set(BUILD_TPCDS_EXTENSION TRUE)
-  set(BUILD_FTS_EXTENSION TRUE)
-  set(BUILD_EXCEL_EXTENSION TRUE)
-endif()
-
-if (BUILD_BENCHMARKS)
-  set(BUILD_PARQUET_EXTENSION TRUE)
-endif()
-
-if(BUILD_SQLSMITH)
-  set(BUILD_SQLSMITH_EXTENSION TRUE)
 endif()
 
 if(TREAT_WARNINGS_AS_ERRORS)
@@ -368,12 +371,44 @@ if(DISABLE_STR_INLINE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_NO_INLINE")
 endif()
 
+if(DISABLE_MEMORY_SAFETY)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_NO_SAFETY")
+endif()
+
+if(DISABLE_ASSERTIONS)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISABLE_ASSERTIONS")
+endif()
+
 if(DESTROY_UNPINNED_BLOCKS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_DESTROY_BLOCKS")
+endif()
+if(FORCE_ASYNC_SINK_SOURCE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_ASYNC_SINK_SOURCE")
+endif()
+
+if(ALTERNATIVE_VERIFY)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ALTERNATIVE_VERIFY")
+endif()
+
+if(DEBUG_STACKTRACE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_STACKTRACE")
+endif()
+
+if(DEBUG_MOVE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_MOVE")
+endif()
+
+if (CLANG_TIDY)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_CLANG_TIDY")
 endif()
 
 if(FORCE_ASSERT)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_FORCE_ASSERT")
+endif()
+
+if(CUSTOM_LINKER)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=${CUSTOM_LINKER}")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=${CUSTOM_LINKER}")
 endif()
 
 if(NOT MSVC)
@@ -387,6 +422,11 @@ if(NOT MSVC)
       "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG -Wall ${M32_FLAG} ${CXX_EXTRA}")
   set(CMAKE_CXX_FLAGS_RELEASE
       "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ${M32_FLAG} ${CXX_EXTRA}")
+  if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_LTO)
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto=${CMAKE_LTO}")
+  elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_LTO)
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto")
+  endif()
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -g")
 
   set(CXX_EXTRA_DEBUG
@@ -431,7 +471,8 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 if(OS_NAME STREQUAL "windows")
-  if(BUILD_JEMALLOC_EXTENSION EQUAL 1)
+  list (FIND DUCKDB_EXTENSION_NAMES jemalloc _index)
+  if (${_index} GREATER -1)
     # have to throw an error because this will crash at runtime
     message(FATAL_ERROR "The jemalloc extension is not supported on Windows")
   endif()
@@ -532,7 +573,12 @@ endfunction()
 
 function(add_extension_definitions)
   include_directories(${PROJECT_SOURCE_DIR}/extension)
-
+  if(NOT "${TEST_WITH_LOADABLE_EXTENSION}" STREQUAL "")
+    string(REPLACE ";"  "," COMMA_SEPARATED_EXTENSIONS "${TEST_WITH_LOADABLE_EXTENSION}")
+    # Note: weird commas are for easy substring matching in c++
+    add_definitions(-DDUCKDB_EXTENSIONS_TEST_WITH_LOADABLE=\",${COMMA_SEPARATED_EXTENSIONS},\")
+    add_definitions(-DDUCKDB_EXTENSIONS_BUILD_PATH="${CMAKE_BINARY_DIR}/extension")
+  endif()
   if(NOT("${TEST_REMOTE_INSTALL}" STREQUAL "OFF"))
     add_definitions(-DDUCKDB_TEST_REMOTE_INSTALL="${TEST_REMOTE_INSTALL}")
   endif()
@@ -541,173 +587,41 @@ function(add_extension_definitions)
     add_definitions(-DDISABLE_BUILTIN_EXTENSIONS=${DISABLE_BUILTIN_EXTENSIONS})
   endif()
 
-  if(${BUILD_ICU_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/icu/include)
-    add_definitions(-DBUILD_ICU_EXTENSION=${BUILD_ICU_EXTENSION})
-  endif()
-
-  if(${BUILD_PARQUET_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/parquet/include)
-    add_definitions(-DBUILD_PARQUET_EXTENSION=${BUILD_PARQUET_EXTENSION})
-  endif()
-
-  if(${BUILD_TPCH_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/tpch/include)
-    add_definitions(-DBUILD_TPCH_EXTENSION=${BUILD_TPCH_EXTENSION})
-  endif()
-
-  if(${BUILD_TPCDS_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/tpcds/include)
-    add_definitions(-DBUILD_TPCDS_EXTENSION=${BUILD_TPCDS_EXTENSION})
-  endif()
-
-  if(${BUILD_FTS_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/fts/include)
-    add_definitions(-DBUILD_FTS_EXTENSION=${BUILD_FTS_EXTENSION})
-  endif()
-
-  if(${BUILD_HTTPFS_EXTENSION})
-    find_package(OpenSSL REQUIRED)
-    include_directories(${PROJECT_SOURCE_DIR}/extension/httpfs/include ${OPENSSL_INCLUDE_DIR})
-    add_definitions(-DBUILD_HTTPFS_EXTENSION=${BUILD_HTTPFS_EXTENSION})
-  endif()
-
-  if(${BUILD_VISUALIZER_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/visualizer/include)
-    add_definitions(-DBUILD_VISUALIZER_EXTENSION=${BUILD_VISUALIZER_EXTENSION})
-  endif()
-
-  if(${BUILD_JSON_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/json/include)
-    add_definitions(-DBUILD_JSON_EXTENSION=${BUILD_JSON_EXTENSION})
-  endif()
-
-  if(${BUILD_JEMALLOC_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/jemalloc/include)
-    add_definitions(-DBUILD_JEMALLOC_EXTENSION=${BUILD_JEMALLOC_EXTENSION})
-  endif()
-
-  if(${BUILD_EXCEL_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/excel/include)
-    add_definitions(-DBUILD_EXCEL_EXTENSION=${BUILD_EXCEL_EXTENSION})
-  endif()
-
-  if(${BUILD_SQLSMITH_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/sqlsmith/include)
-    add_definitions(-DBUILD_SQLSMITH_EXTENSION=${BUILD_SQLSMITH_EXTENSION})
-  endif()
-
-  if(${BUILD_INET_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/inet/include)
-    add_definitions(-DBUILD_INET_EXTENSION=${BUILD_INET_EXTENSION})
-  endif()
+  # Include paths for any registered out-of-tree extensions
+  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+    string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+    if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
+      add_definitions(-DDUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_LINKED=1)
+      if (DEFINED DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_INCLUDE_PATH)
+        include_directories("${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_INCLUDE_PATH}")
+      else()
+        # We try the default locations for headers
+        include_directories("${PROJECT_SOURCE_DIR}/extension_external/${EXT_NAME}/src/include")
+        include_directories("${PROJECT_SOURCE_DIR}/extension_external/${EXT_NAME}/include")
+      endif()
+    endif()
+  endforeach()
 endfunction()
 
 function(add_extension_dependencies LIBRARY)
-  if(${BUILD_PARQUET_EXTENSION})
-    add_dependencies(${LIBRARY} parquet_extension)
-  endif()
-
-  if(${BUILD_ICU_EXTENSION})
-    add_dependencies(${LIBRARY} icu_extension)
-  endif()
-
-  if(${BUILD_TPCH_EXTENSION})
-    add_dependencies(${LIBRARY} tpch_extension)
-  endif()
-
-  if(${BUILD_TPCDS_EXTENSION})
-    add_dependencies(${LIBRARY} tpcds_extension)
-  endif()
-
-  if(${BUILD_FTS_EXTENSION})
-    add_dependencies(${LIBRARY} fts_extension)
-  endif()
-
-  if(${BUILD_HTTPFS_EXTENSION})
-    add_dependencies(${LIBRARY} httpfs_extension)
-  endif()
-
-  if(${BUILD_VISUALIZER_EXTENSION})
-    add_dependencies(${LIBRARY} visualizer_extension)
-  endif()
-
-  if(${BUILD_JSON_EXTENSION})
-    add_dependencies(${LIBRARY} json_extension)
-  endif()
-
-  if(${BUILD_JEMALLOC_EXTENSION})
-    add_dependencies(${LIBRARY} jemalloc_extension)
-  endif()
-
-  if(${BUILD_EXCEL_EXTENSION})
-    add_dependencies(${LIBRARY} excel_extension)
-  endif()
-
-  if(${BUILD_SQLSMITH_EXTENSION})
-    add_dependencies(${LIBRARY} sqlsmith_extension)
-  endif()
-
-  if(${BUILD_INET_EXTENSION})
-    add_dependencies(${LIBRARY} inet_extension)
-  endif()
-
+  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+    add_dependencies(${LIBRARY} ${EXT_NAME}_extension)
+  endforeach()
 endfunction()
 
 function(link_extension_libraries LIBRARY)
-  # special case for our static-only jemalloc extension
-  if(${BUILD_JEMALLOC_EXTENSION})
-    target_link_libraries(${LIBRARY} jemalloc_extension)
-  endif()
-
   if(${DISABLE_BUILTIN_EXTENSIONS})
     return()
   endif()
 
-  if(${BUILD_PARQUET_EXTENSION})
-    target_link_libraries(${LIBRARY} parquet_extension)
-  endif()
+  # Now link against any registered out-of-tree extensions
+  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+    string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+    if (${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
+      target_link_libraries(${LIBRARY} ${EXT_NAME}_extension)
+    endif()
+  endforeach()
 
-  if(${BUILD_ICU_EXTENSION})
-    target_link_libraries(${LIBRARY} icu_extension)
-  endif()
-
-  if(${BUILD_TPCH_EXTENSION})
-    target_link_libraries(${LIBRARY} tpch_extension)
-  endif()
-
-  if(${BUILD_TPCDS_EXTENSION})
-    target_link_libraries(${LIBRARY} tpcds_extension)
-  endif()
-
-  if(${BUILD_FTS_EXTENSION})
-    target_link_libraries(${LIBRARY} fts_extension)
-  endif()
-
-  if(${BUILD_HTTPFS_EXTENSION})
-    find_package(OpenSSL REQUIRED)
-    target_link_libraries(${LIBRARY} httpfs_extension ${OPENSSL_LIBRARIES})
-  endif()
-
-  if(${BUILD_VISUALIZER_EXTENSION})
-    target_link_libraries(${LIBRARY} visualizer_extension)
-  endif()
-
-  if(${BUILD_JSON_EXTENSION})
-    target_link_libraries(${LIBRARY} json_extension)
-  endif()
-
-  if(${BUILD_EXCEL_EXTENSION})
-    target_link_libraries(${LIBRARY} excel_extension)
-  endif()
-
-  if(${BUILD_SQLSMITH_EXTENSION})
-    target_link_libraries(${LIBRARY} sqlsmith_extension)
-  endif()
-
-  if(${BUILD_INET_EXTENSION})
-    target_link_libraries(${LIBRARY} inet_extension)
-  endif()
 endfunction()
 
 function(link_threads LIBRARY)
@@ -720,11 +634,6 @@ function(link_threads LIBRARY)
 endfunction()
 
 function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
-  #  skip building extensions on mingw because its weird
-  if(WIN32 AND NOT MSVC)
-    return()
-  endif()
-
   set(TARGET_NAME ${NAME}_loadable_extension)
   # all parameters after output_directory
   set(FILES ${ARGV})
@@ -738,36 +647,41 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   # parse parameters
   string(FIND "${PARAMETERS}" "-no-warnings" IGNORE_WARNINGS)
 
-
   add_library(${TARGET_NAME} SHARED ${FILES})
   # this disables the -Dsome_target_EXPORTS define being added by cmake which otherwise trips clang-tidy (yay)
   set_target_properties(${TARGET_NAME} PROPERTIES DEFINE_SYMBOL "")
   set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
   set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
-  if(${IGNORE_WARNINGS} GREATER_EQUAL 0)
+  if(${IGNORE_WARNINGS} GREATER -1)
     disable_target_warnings(${TARGET_NAME})
   endif()
   # loadable extension binaries can be built two ways:
   # 1. EXTENSION_STATIC_BUILD=1
   #    DuckDB is statically linked into each extension binary. This increases portability because in several situations
-  #    DuckDB itself may have been loaded with RTLD_LOCAL. This is currently the main way we distribute the lodable
+  #    DuckDB itself may have been loaded with RTLD_LOCAL. This is currently the main way we distribute the loadable
   #    extension binaries
   # 2. EXTENSION_STATIC_BUILD=0
   #    The DuckDB symbols required by the loadable extensions are left unresolved. This will reduce the size of the binaries
   #    and works well when running the DuckDB cli directly. For windows this uses delay loading. For MacOS and linux the
   #    dynamic loader will look up the missing symbols when the extension is dlopen-ed.
-  if (EXTENSION_STATIC_BUILD)
-    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-      # For GNU we rely on fvisibility=hidden to hide the extension symbols and use -exclude-libs to hide the duckdb symbols
-      set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
-      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
+  if(WASM_LOADABLE_EXTENSIONS)
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sSIDE_MODULE=1 -DWASM_LOADABLE_EXTENSIONS")
+  elseif (EXTENSION_STATIC_BUILD)
+    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+      if (APPLE)
+        set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
+        # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
+        set(WHITELIST "-Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version -Wl,-exported_symbol,_${NAME}_storage_ini*")
+        target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
+      elseif (ZOS)
+        target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
+      else()
+        # For GNU we rely on fvisibility=hidden to hide the extension symbols and use -exclude-libs to hide the duckdb symbols
+        set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
+        target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
+      endif()
     elseif (WIN32)
       target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
-    elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
-      set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
-      # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
-      set(WHITELIST "-Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version -Wl,-exported_symbol,_${NAME}_replacement_open_*")
-      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
     else()
       error("EXTENSION static build is only intended for Linux and Windows on MVSC")
     endif()
@@ -775,7 +689,9 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
     if (WIN32)
       target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
     elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
-      set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
+      if (APPLE)
+        set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
+      endif()
     endif()
   endif()
 
@@ -785,9 +701,6 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
           ".duckdb_extension")
 
   if(MSVC)
-    if (NOT EXTENSION_STATIC_BUILD)
-      target_link_libraries(${TARGET_NAME} delayimp)
-    endif()
     set_target_properties(
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
             "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
@@ -795,21 +708,6 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE
             "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
   endif()
-
-  if(WIN32 AND NOT EXTENSION_STATIC_BUILD)
-    set_target_properties(${TARGET_NAME}
-            PROPERTIES LINK_FLAGS_DEBUG "/DELAYLOAD:duckdb.dll")
-    set(CMAKE_EXE_LINKER_FLAGS_DEBUG
-            "${CMAKE_EXE_LINKER_FLAGS_DEBUG}  /DELAYLOAD:duckdb.dll")
-    set_target_properties(${TARGET_NAME}
-            PROPERTIES LINK_FLAGS_RELEASE "/DELAYLOAD:duckdb.dll")
-    set(CMAKE_EXE_LINKER_FLAGS_RELEASE
-            "${CMAKE_EXE_LINKER_FLAGS_RELEASE}  /DELAYLOAD:duckdb.dll")
-    # This is only strictly required in non-Visual-Studio builds like Ninja:
-    target_link_libraries(${TARGET_NAME}
-            delayimp)
-endif()
-
 endfunction()
 
 function(build_loadable_extension NAME PARAMETERS)
@@ -821,17 +719,359 @@ function(build_loadable_extension NAME PARAMETERS)
   build_loadable_extension_directory(${NAME} "extension/${NAME}" "${PARAMETERS}" ${FILES})
 endfunction()
 
+function(build_static_extension NAME PARAMETERS)
+  # all parameters after name
+  set(FILES ${ARGV})
+  list(REMOVE_AT FILES 0)
+  add_library(${NAME}_extension STATIC ${FILES})
+  target_link_libraries(${NAME}_extension duckdb_static)
+endfunction()
+
+# Internal extension register function
+function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH)
+  string(TOLOWER ${NAME} EXTENSION_NAME_LOWERCASE)
+  string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
+
+  set(DUCKDB_EXTENSION_NAMES ${DUCKDB_EXTENSION_NAMES} ${EXTENSION_NAME_LOWERCASE} PARENT_SCOPE)
+
+  if ("${LOAD_TESTS}")
+    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LOAD_TESTS TRUE PARENT_SCOPE)
+  else()
+    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LOAD_TESTS FALSE PARENT_SCOPE)
+  endif()
+
+  if (NOT ${DONT_LINK} AND NOT DISABLE_BUILTIN_EXTENSIONS)
+    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK TRUE PARENT_SCOPE)
+  else()
+    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK FALSE PARENT_SCOPE)
+  endif()
+
+  # Allows explicitly disabling extensions that may be specified in other configurations
+  if (NOT ${DONT_BUILD} AND NOT ${EXTENSION_TESTS_ONLY})
+    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD TRUE PARENT_SCOPE)
+  else()
+    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD FALSE PARENT_SCOPE)
+    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK FALSE PARENT_SCOPE)
+  endif()
+
+  if ("${PATH}" STREQUAL "")
+    message(FATAL_ERROR "Invalid path set for extension '${NAME}' : '${INCLUDE}'")
+  endif()
+  if ("${INCLUDE_PATH}" STREQUAL "")
+    message(FATAL_ERROR "Invalid include path for extension '${NAME}' : '${INCLUDE_PATH}'")
+  endif()
+  if ("${TEST_PATH}" STREQUAL "" AND "${LOAD_TESTS}")
+    message(FATAL_ERROR "Invalid include path for extension '${NAME}' : '${INCLUDE_PATH}'")
+  endif()
+
+  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_PATH ${PATH} PARENT_SCOPE)
+  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH ${INCLUDE_PATH} PARENT_SCOPE)
+  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_TEST_PATH ${TEST_PATH} PARENT_SCOPE)
+endfunction()
+
+# Downloads the external extension repo at the specified commit and calls register_extension
+macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH APPLY_PATCHES)
+  include(FetchContent)
+  if (${APPLY_PATCHES})
+    set(PATCH_COMMAND python3 ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
+  endif()
+  FETCHCONTENT_DECLARE(
+          ${NAME}_extension_fc
+          GIT_REPOSITORY ${URL}
+          GIT_TAG ${COMMIT}
+          GIT_SUBMODULES ""
+          PATCH_COMMAND ${PATCH_COMMAND}
+  )
+  message(STATUS "Load extension '${NAME}' from ${URL} @ ${COMMIT}")
+  FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
+
+  if ("${INCLUDE_PATH}" STREQUAL "")
+    set(INCLUDE_FULL_PATH "${${NAME}_extension_fc_SOURCE_DIR}/src/include")
+  else()
+    set(INCLUDE_FULL_PATH "${${NAME}_extension_fc_SOURCE_DIR}/${INCLUDE_PATH}")
+  endif()
+
+  if ("${TEST_PATH}" STREQUAL "")
+    set(TEST_FULL_PATH "${${NAME}_extension_fc_SOURCE_DIR}/test/sql")
+  else()
+    set(TEST_FULL_PATH "${${NAME}_extension_fc_SOURCE_DIR}/${TEST_PATH}")
+  endif()
+
+  register_extension(${NAME} ${DONT_LINK} ${DONT_BUILD} ${LOAD_TESTS} ${${NAME}_extension_fc_SOURCE_DIR}/${PATH} "${INCLUDE_FULL_PATH}" "${TEST_FULL_PATH}")
+endmacro()
+
+function(duckdb_extension_load NAME)
+  # Parameter parsing
+  set(options DONT_LINK DONT_BUILD LOAD_TESTS APPLY_PATCHES)
+  set(oneValueArgs SOURCE_DIR INCLUDE_DIR TEST_DIR GIT_URL GIT_TAG)
+  cmake_parse_arguments(duckdb_extension_load "${options}" "${oneValueArgs}" "" ${ARGN})
+
+  string(TOLOWER ${NAME} EXTENSION_NAME_LOWERCASE)
+  string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
+
+  # If extension was set already, we ignore subsequent calls
+  list (FIND DUCKDB_EXTENSION_NAMES ${EXTENSION_NAME_LOWERCASE} _index)
+  if (${_index} GREATER -1)
+    return()
+  endif()
+
+  list (FIND SKIP_EXTENSIONS ${EXTENSION_NAME_LOWERCASE} _index)
+  if (${_index} GREATER -1)
+    return()
+  endif()
+
+  # Remote Git extension
+  if (${duckdb_extension_load_DONT_BUILD})
+    register_extension(${NAME} "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "" "" "" "")
+  elseif (NOT "${duckdb_extension_load_GIT_URL}" STREQUAL "")
+    if (NOT "${duckdb_extension_load_GIT_COMMIT}" STREQUAL "")
+      error("Git URL specified but no valid git commit was found for ${NAME} extension")
+    endif()
+    register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}" "${duckdb_extension_load_TEST_DIR}" "${duckdb_extension_load_APPLY_PATCHES}")
+  elseif (NOT "${duckdb_extension_load_SOURCE_DIR}" STREQUAL "")
+    # Local extension, custom path
+    message(STATUS "Load extension '${NAME}' from '${duckdb_extension_load_SOURCE_DIR}'")
+
+    # If no include path specified, use default
+    if ("${duckdb_extension_load_INCLUDE_DIR}" STREQUAL "")
+      set(INCLUDE_PATH_DEFAULT "${duckdb_extension_load_SOURCE_DIR}/src/include")
+    else()
+      set(INCLUDE_PATH_DEFAULT ${duckdb_extension_load_INCLUDE_DIR})
+    endif()
+
+    # If no test path specified, use default
+    if ("${duckdb_extension_load_TEST_DIR}" STREQUAL "")
+      set(TEST_PATH_DEFAULT "${duckdb_extension_load_SOURCE_DIR}/test/sql")
+    else()
+      set(TEST_PATH_DEFAULT ${duckdb_extension_load_TEST_DIR})
+    endif()
+
+    register_extension(${NAME} "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${INCLUDE_PATH_DEFAULT}" "${TEST_PATH_DEFAULT}")
+  elseif(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/extension_external/${NAME})
+    # Local extension, default path
+    message(STATUS "Load extension '${NAME}' from '${CMAKE_CURRENT_SOURCE_DIR}/extension_external'")
+    register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}"  "${CMAKE_CURRENT_SOURCE_DIR}/extension_external/${NAME}" "${CMAKE_CURRENT_SOURCE_DIR}/extension_external/${NAME}/src/include" "${CMAKE_CURRENT_SOURCE_DIR}/extension_external/${NAME}/test/sql")
+  else()
+    # Local extension, default path
+    message(STATUS "Load extension '${NAME}' from '${CMAKE_CURRENT_SOURCE_DIR}/extensions'")
+    register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}/include" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}/test/sql")
+  endif()
+
+  # Propagate variables set by register_extension
+  set(DUCKDB_EXTENSION_NAMES ${DUCKDB_EXTENSION_NAMES} PARENT_SCOPE)
+  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD} PARENT_SCOPE)
+  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK} PARENT_SCOPE)
+  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LOAD_TESTS ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LOAD_TESTS} PARENT_SCOPE)
+  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_PATH ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_PATH} PARENT_SCOPE)
+  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH} PARENT_SCOPE)
+  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_TEST_PATH ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_TEST_PATH} PARENT_SCOPE)
+endfunction()
+
 if(${EXPORT_DLL_SYMBOLS})
   # For Windows DLL export symbols
   add_definitions(-DDUCKDB_BUILD_LIBRARY)
 endif()
+
+# Log extensions that are built by directly passing cmake variables
+foreach(EXT IN LISTS DUCKDB_EXTENSION_NAMES)
+  if (NOT "${EXT}" STREQUAL "")
+    string(TOUPPER ${EXT} EXTENSION_NAME_UPPERCASE)
+    message(STATUS "Load extension '${EXT}' from '${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_PATH}'")
+  endif()
+endforeach()
+
+# Load extensions passed through cmake config var
+foreach(EXT IN LISTS BUILD_EXTENSIONS)
+  if(NOT "${EXT}" STREQUAL "")
+    duckdb_extension_load(${EXT})
+  endif()
+endforeach()
+
+# Custom extension configs passed in DUCKDB_EXTENSION_CONFIGS parameter
+foreach(DUCKDB_EXTENSION_CONFIG IN LISTS DUCKDB_EXTENSION_CONFIGS)
+  if (NOT "${DUCKDB_EXTENSION_CONFIG}" STREQUAL "")
+    include(${DUCKDB_EXTENSION_CONFIG})
+  endif()
+endforeach()
+
+# Local extension config
+if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
+  include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
+endif()
+
+# Load client specific config
+if(BUILD_PYTHON)
+  include(${CMAKE_CURRENT_SOURCE_DIR}/tools/pythonpkg/duckdb_extension_config.cmake)
+endif()
+if(BUILD_NODE)
+  include(${CMAKE_CURRENT_SOURCE_DIR}/tools/nodejs/duckdb_extension_config.cmake)
+endif()
+if (JDBC_DRIVER)
+  include(${CMAKE_CURRENT_SOURCE_DIR}/tools/jdbc/duckdb_extension_config.cmake)
+endif()
+
+# Load base extension config
+include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config.cmake)
+
+# For extensions whose tests were loaded, but not linked into duckdb, we need to ensure they are registered to have
+# the sqllogictest "require" statement load the loadable extensions instead of the baked in static one
+foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+  string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+  if (NOT "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK}" AND "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_LOAD_TESTS}")
+    list(APPEND TEST_WITH_LOADABLE_EXTENSION ${EXT_NAME})
+  endif()
+endforeach()
 
 if (BUILD_MAIN_DUCKDB_LIBRARY)
   add_subdirectory(src)
   add_subdirectory(tools)
 endif()
 
-add_subdirectory(extension)
+# Add subdirectories for registered extensions
+foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+  string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+
+  if (NOT DEFINED DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD)
+    set(DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD TRUE)
+  endif()
+
+  # Skip explicitly disabled extensions
+  if (NOT ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD} OR ${EXTENSION_CONFIG_BUILD})
+    continue()
+  endif()
+
+  # Warning for trying to load vcpkg extensions without having VCPKG_BUILD SET
+  if (EXISTS "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}/vcpkg.json" AND NOT DEFINED VCPKG_BUILD)
+    message(WARNING "Extension '${EXT_NAME}' has a vcpkg.json, but build was not run with VCPKG. If build fails, check out VCPKG build instructions in 'duckdb/extension/README.md' or try manually installing the dependencies in ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}vcpkg.json")
+  endif()
+
+  if (DEFINED DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH)
+    add_subdirectory(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH} extension/${EXT_NAME})
+  else()
+    message(FATAL_ERROR "No path found for registered extension '${EXT_NAME}'")
+  endif()
+endforeach()
+
+# Output the extensions that we linked into DuckDB for some nice build logs
+set(LINKED_EXTENSIONS "")
+set(NONLINKED_EXTENSIONS "")
+set(SKIPPED_EXTENSIONS "")
+set(TEST_LOADED_EXTENSIONS "")
+foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+  string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+  if (NOT ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD})
+    list(APPEND SKIPPED_EXTENSIONS ${EXT_NAME})
+  elseif (${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
+    list(APPEND LINKED_EXTENSIONS ${EXT_NAME})
+  else()
+    list(APPEND NONLINKED_EXTENSIONS ${EXT_NAME})
+  endif()
+
+  if (${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_LOAD_TESTS})
+    list(APPEND TEST_LOADED_EXTENSIONS ${EXT_NAME})
+  endif()
+endforeach()
+
+if(NOT "${LINKED_EXTENSIONS}" STREQUAL "")
+  string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${LINKED_EXTENSIONS}")
+  message(STATUS "Extensions linked into DuckDB: [${EXT_LIST_DEBUG_MESSAGE}]")
+endif()
+if(NOT "${NONLINKED_EXTENSIONS}" STREQUAL "")
+  string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${NONLINKED_EXTENSIONS}")
+  message(STATUS "Extensions built but not linked: [${EXT_LIST_DEBUG_MESSAGE}]")
+endif()
+if(NOT "${SKIPPED_EXTENSIONS}" STREQUAL "")
+  string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${SKIPPED_EXTENSIONS}")
+  message(STATUS "Extensions explicitly skipped: [${EXT_LIST_DEBUG_MESSAGE}]")
+endif()
+if(NOT "${TEST_LOADED_EXTENSIONS}" STREQUAL "")
+  string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${TEST_LOADED_EXTENSIONS}")
+  message(STATUS "Tests loaded for extensions: [${EXT_LIST_DEBUG_MESSAGE}]")
+endif()
+
+# Special build where instead of building duckdb, we produce several artifact that require parsing the
+# extension config, such as a merged vcpg.json file for extension dependencies.
+if(${EXTENSION_CONFIG_BUILD})
+  set(VCPKG_PATHS "")
+  set(VCPKG_NAMES "")
+  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+    string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+    if (EXISTS "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}/vcpkg.json")
+      list(APPEND VCPKG_NAMES ${EXT_NAME})
+      list(APPEND VCPKG_PATHS ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}/vcpkg.json)
+    endif()
+  endforeach()
+
+  add_custom_target(
+          duckdb_merge_vcpkg_manifests ALL
+          COMMAND  python3 scripts/merge_vcpkg_deps.py ${VCPKG_PATHS} ${EXT_NAMES}
+          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+          COMMENT Generates a shared vcpkg manifest from the individual extensions)
+  string(REPLACE ";"  ", " VCPKG_NAMES_COMMAS "${VCPKG_NAMES}")
+  Message(STATUS "Combined vcpkg manifest created from extensions: ${VCPKG_NAMES_COMMAS}")
+
+  # Write linked extensions that will be built to extensions_linked.txt
+  FILE(WRITE ${CMAKE_BINARY_DIR}/extensions.txt "")
+  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+    string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+    if (${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD})
+      FILE(APPEND ${CMAKE_BINARY_DIR}/extensions.txt "${EXT_NAME}\r")
+    endif()
+  endforeach()
+endif()
+
+if(BUILD_PYTHON
+        OR BUILD_NODE)
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG}")
+  elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE}")
+  elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+    set(ALL_COMPILE_FLAGS
+            "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+  else()
+    set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS}")
+  endif()
+
+  get_target_property(duckdb_libs duckdb LINK_LIBRARIES)
+
+  if(BUILD_PYTHON)
+    if(USER_SPACE)
+      add_custom_target(
+              duckdb_python ALL
+              COMMAND
+              python3 setup.py install --user --binary-dir=${PROJECT_BINARY_DIR}
+              --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
+              DEPENDS duckdb duckdb_static
+              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
+              COMMENT Build
+              Python package)
+    else()
+      add_custom_target(
+              duckdb_python ALL
+              COMMAND python3 setup.py install --binary-dir=${PROJECT_BINARY_DIR}
+              --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
+              DEPENDS duckdb duckdb_static
+              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
+              COMMENT Build
+              Python package)
+    endif()
+    add_extension_dependencies(duckdb_python)
+  endif()
+  if(BUILD_NODE)
+    add_custom_target(
+            duckdb_node ALL
+            COMMAND
+            make complete_build DUCKDB_NODE_BINDIR=${CMAKE_BINARY_DIR}
+            DUCKDB_NODE_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
+            DUCKDB_NODE_LIBS=\"${duckdb_libs}\"
+            DEPENDS duckdb duckdb_static
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/nodejs
+            COMMENT Build
+            Node package)
+    add_extension_dependencies(duckdb_node)
+  endif()
+endif()
 
 if(NOT CLANG_TIDY)
   if(${BUILD_UNITTESTS})
@@ -842,19 +1082,37 @@ if(NOT CLANG_TIDY)
       add_subdirectory(benchmark)
     endif()
   endif()
-  add_subdirectory(third_party)
+  if (NOT EXTENSION_CONFIG_BUILD)
+    add_subdirectory(third_party)
+  endif()
 endif()
 
-if (CMAKE_VERSION VERSION_GREATER "3.0") # this does not work with 2.8
+# Deploys extensions to a local repository (a folder structure that contains the duckdb version + binary arch)
+if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "")
+  add_custom_target(
+          duckdb_local_extension_repo ALL
+          COMMAND
+          python3 scripts/create_local_extension_repo.py $<TARGET_FILE:shell> "${CMAKE_CURRENT_BINARY_DIR}" "${LOCAL_EXTENSION_REPO}"
+          DEPENDS shell
+          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+          COMMENT Create local extension repository)
+  add_extension_dependencies(duckdb_local_extension_repo)
+  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+    add_dependencies(duckdb_local_extension_repo ${EXT_NAME}_loadable_extension)
+  endforeach()
+  message(STATUS "Extensions will be deployed to: ${LOCAL_EXTENSION_REPO}")
+endif()
+
+if (CMAKE_VERSION VERSION_GREATER "3.0" AND NOT EXTENSION_CONFIG_BUILD ) # this does not work with 2.8
 # Write the export set for build and install tree
 install(EXPORT "${DUCKDB_EXPORT_SET}" DESTINATION "${INSTALL_CMAKE_DIR}")
 export(EXPORT "${DUCKDB_EXPORT_SET}"
        FILE "${PROJECT_BINARY_DIR}/${DUCKDB_EXPORT_SET}.cmake")
 
 # Only write the cmake package configuration if the templates exist
-set(CMAKE_CONFIG_TEMPLATE "${CMAKE_SOURCE_DIR}/DuckDBConfig.cmake.in")
+set(CMAKE_CONFIG_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/DuckDBConfig.cmake.in")
 set(CMAKE_CONFIG_VERSION_TEMPLATE
-    "${CMAKE_SOURCE_DIR}/DuckDBConfigVersion.cmake.in")
+    "${CMAKE_CURRENT_SOURCE_DIR}/DuckDBConfigVersion.cmake.in")
 if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
 
   # Configure cmake package config for the build tree
@@ -881,16 +1139,4 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()
 
-endif()
-
-# build out-of-tree extensions on demand
-if(NOT "${EXTERNAL_EXTENSION_DIRECTORIES}" STREQUAL "")
-  separate_arguments(EXTERNAL_EXTENSION_DIRECTORIES)
-
-  foreach(EXTERNAL_EXTENSION_DIRECTORY IN LISTS EXTERNAL_EXTENSION_DIRECTORIES)
-
-    # the build path seems to get ignored on windows in just the right way. no idea why.
-    get_filename_component(EXTERNAL_EXTENSION_NAME ${EXTERNAL_EXTENSION_DIRECTORY} NAME)
-    add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} "extension/${EXTERNAL_EXTENSION_NAME}")
-  endforeach()
 endif()

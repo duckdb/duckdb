@@ -12,10 +12,10 @@ static constexpr int CONCURRENT_APPEND_THREAD_COUNT = 10;
 static constexpr int CONCURRENT_APPEND_INSERT_ELEMENTS = 1000;
 
 TEST_CASE("Sequential append", "[interquery][.]") {
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	vector<unique_ptr<Connection>> connections;
+	duckdb::vector<duckdb::unique_ptr<Connection>> connections;
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");
@@ -27,7 +27,7 @@ TEST_CASE("Sequential append", "[interquery][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
 
 	for (size_t i = 0; i < CONCURRENT_APPEND_THREAD_COUNT; i++) {
-		connections.push_back(make_unique<Connection>(db));
+		connections.push_back(make_uniq<Connection>(db));
 		connections[i]->Query("BEGIN TRANSACTION;");
 	}
 
@@ -80,7 +80,7 @@ static void insert_random_elements(DuckDB *db, bool *correct, int threadnr) {
 }
 
 TEST_CASE("Concurrent append", "[interquery][.]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 

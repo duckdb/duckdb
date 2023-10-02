@@ -1,0 +1,16 @@
+# name: test/sql/table_function/database_oid.test
+# description: Issue #5836: Test database oid
+# group: [table_function]
+
+require noforcestorage
+
+statement ok
+CREATE TEMP TABLE x (x INT);
+
+statement ok
+CREATE TABLE x (x INT);
+
+query I
+SELECT COUNT(DISTINCT database_oid) FROM duckdb_tables();
+----
+2

@@ -1,0 +1,55 @@
+# name: test/sql/copy/csv/null_padding_big.test
+# description: Test null_padding big/mixed
+# group: [csv]
+
+require vector_size 512
+
+statement ok
+CREATE TABLE test (a VARCHAR, b INTEGER, c INTEGER);
+
+query I
+INSERT INTO test SELECT * FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', null_padding=True, Header=True)
+----
+2501
+
+query I
+SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', null_padding=True)
+----
+2501
+
+# one line that requires null padding
+statement error
+SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', null_padding=False, ignore_errors=True, parallel = false)
+----
+CSV options could not be auto-detected. Consider setting parser options manually.
+
+statement error
+SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', parallel=True)
+----
+Error in file "data/csv/nullpadding_big_mixed.csv"
+
+statement ok
+CREATE TABLE test2 (a VARCHAR, b INTEGER, c INTEGER, d INTEGER);
+
+# all nulls, several lines require NULL padding
+query I
+SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_commas.csv', null_padding=True)
+----
+2500
+
+query I
+SELECT COUNT(*) FROM read_csv('data/csv/nullpadding_commas.csv', sep=',', header=True, columns={'a': INT, 'b': INT, 'c': INT, 'd': INT}, ignore_errors=True, null_padding=False)
+----
+2492
+
+require notwindows
+
+statement error
+SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', parallel=True, buffer_size=55)
+----
+CSV options could not be auto-detected. Consider setting parser options manually.
+
+statement error
+SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', parallel=True, buffer_size=55, null_padding=False)
+----
+CSV options could not be auto-detected. Consider setting parser options manually.

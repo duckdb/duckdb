@@ -18,9 +18,12 @@ class PerfectAggregateHashTable;
 //! PhysicalPerfectHashAggregate performs a group-by and aggregation using a perfect hash table
 class PhysicalPerfectHashAggregate : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::PERFECT_HASH_GROUP_BY;
+
+public:
 	PhysicalPerfectHashAggregate(ClientContext &context, vector<LogicalType> types,
 	                             vector<unique_ptr<Expression>> aggregates, vector<unique_ptr<Expression>> groups,
-	                             vector<unique_ptr<BaseStatistics>> group_stats, vector<idx_t> required_bits,
+	                             const vector<unique_ptr<BaseStatistics>> &group_stats, vector<idx_t> required_bits,
 	                             idx_t estimated_cardinality);
 
 	//! The groups
@@ -31,14 +34,19 @@ public:
 public:
 	// Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
-	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	             LocalSourceState &lstate) const override;
+	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+
+	bool IsSource() const override {
+		return true;
+	}
+	OrderPreservationType SourceOrder() const override {
+		return OrderPreservationType::NO_ORDER;
+	}
 
 public:
 	// Sink interface
-	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-	                    DataChunk &input) const override;
-	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const override;
+	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
+	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
@@ -56,7 +64,7 @@ public:
 		return true;
 	}
 
-	bool IsOrderPreserving() const override {
+	bool SinkOrderDependent() const override {
 		return false;
 	}
 

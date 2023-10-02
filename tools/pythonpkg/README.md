@@ -113,7 +113,6 @@ But we still have CMakeLists in the pythonpkg, for tidy-check and intellisense p
 For this reason it might not be instantly apparent that the CMakeLists are incorrectly set up, and will only result in a very confusing CI failure of TidyCheck.
 
 To prevent this, or to help you when you encounter said CI failure, here are a couple of things to note about the CMakeLists in here.
-When running clang-tidy, cmake is called with `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`, this will cause cmake to output a `compile_commands.json` file containing all the commands for every file it registered.
 
 The pythonpkg depends on `PythonLibs`, and `pybind11`, for some reason `PythonLibs` can not be found by clang-tidy when generating the `compile_commands.json` file
 So the reason for clang-tidy failing is likely that there is no entry for a file in the `compile_commands.json`, check the CMakeLists to see why cmake did not register it.
@@ -126,3 +125,14 @@ For example:
 export PATH="$PATH:/opt/homebrew/Cellar/llvm/15.0.2/bin"
 ```
 
+# What are py::objects and a py::handles??
+
+These are classes provided by pybind11, the library we use to manage our interaction with the python environment.
+py::handle is a direct wrapper around a raw PyObject* and does not manage any references.
+py::object is similar to py::handle but it can handle refcounts.
+
+I say *can* because it doesn't have to, using `py::reinterpret_borrow<py::object>(...)` we can create a non-owning py::object, this is essentially just a py::handle but py::handle can't be used if the prototype requires a py::object.
+
+`py::reinterpret_steal<py::object>(...)` creates an owning py::object, this will increase the refcount of the python object and will decrease the refcount when the py::object goes out of scope.
+
+When directly interacting with python functions that return a `PyObject*`, such as `PyDateTime_DATE_GET_TZINFO`, you should generally wrap the call in `py::reinterpret_steal` to take ownership of the returned object.

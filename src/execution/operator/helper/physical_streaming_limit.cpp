@@ -7,9 +7,9 @@ PhysicalStreamingLimit::PhysicalStreamingLimit(vector<LogicalType> types, idx_t 
                                                unique_ptr<Expression> limit_expression,
                                                unique_ptr<Expression> offset_expression, idx_t estimated_cardinality,
                                                bool parallel)
-    : PhysicalOperator(PhysicalOperatorType::STREAMING_LIMIT, move(types), estimated_cardinality), limit_value(limit),
-      offset_value(offset), limit_expression(move(limit_expression)), offset_expression(move(offset_expression)),
-      parallel(parallel) {
+    : PhysicalOperator(PhysicalOperatorType::STREAMING_LIMIT, std::move(types), estimated_cardinality),
+      limit_value(limit), offset_value(offset), limit_expression(std::move(limit_expression)),
+      offset_expression(std::move(offset_expression)), parallel(parallel) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -35,17 +35,17 @@ public:
 };
 
 unique_ptr<OperatorState> PhysicalStreamingLimit::GetOperatorState(ExecutionContext &context) const {
-	return make_unique<StreamingLimitOperatorState>(*this);
+	return make_uniq<StreamingLimitOperatorState>(*this);
 }
 
 unique_ptr<GlobalOperatorState> PhysicalStreamingLimit::GetGlobalOperatorState(ClientContext &context) const {
-	return make_unique<StreamingLimitGlobalState>();
+	return make_uniq<StreamingLimitGlobalState>();
 }
 
 OperatorResultType PhysicalStreamingLimit::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    GlobalOperatorState &gstate_p, OperatorState &state_p) const {
-	auto &gstate = (StreamingLimitGlobalState &)gstate_p;
-	auto &state = (StreamingLimitOperatorState &)state_p;
+	auto &gstate = gstate_p.Cast<StreamingLimitGlobalState>();
+	auto &state = state_p.Cast<StreamingLimitOperatorState>();
 	auto &limit = state.limit;
 	auto &offset = state.offset;
 	idx_t current_offset = gstate.current_offset.fetch_add(input.size());
@@ -60,8 +60,8 @@ OperatorResultType PhysicalStreamingLimit::Execute(ExecutionContext &context, Da
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 
-bool PhysicalStreamingLimit::IsOrderDependent() const {
-	return !parallel;
+OrderPreservationType PhysicalStreamingLimit::OperatorOrder() const {
+	return OrderPreservationType::FIXED_ORDER;
 }
 
 bool PhysicalStreamingLimit::ParallelOperator() const {

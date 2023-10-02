@@ -5,7 +5,7 @@
 namespace duckdb {
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundEmptyTableRef &ref) {
-	return make_unique<LogicalDummyScan>(ref.bind_index);
+	return make_uniq<LogicalDummyScan>(ref.bind_index);
 }
 
 } // namespace duckdb

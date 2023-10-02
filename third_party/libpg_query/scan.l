@@ -334,6 +334,7 @@ colon_equals	":="
 lambda_arrow	"->"
 double_arrow    "->>"
 power_of        "**"
+integer_div     "//"
 
 /* " */
 
@@ -835,6 +836,11 @@ other			.
 					return POWER_OF;
 				}
 
+{integer_div}	{
+					SET_YYLLOC();
+					return INTEGER_DIVISION;
+				}
+
 {equals_greater} {
 					SET_YYLLOC();
 					return EQUALS_GREATER;
@@ -1057,7 +1063,7 @@ other			.
 						if (keyword_text[yyleng - 1] == '\0') {
 							yyless(yyleng - 1);
 						}
-						yylval->keyword = keyword->name;
+						yylval->keyword = keyword_text;
 						return keyword->value;
 					}
 

@@ -1,0 +1,7 @@
+# name: benchmark/tpch/sf1-parquet/q09.benchmark
+# description: Run query 09 from the TPC-H benchmark (single-threaded)
+# group: [sf1-parquet]
+
+template benchmark/tpch/sf1-parquet/tpch_sf1_parquet.benchmark.in
+QUERY_NUMBER=9
+QUERY_NUMBER_PADDED=09

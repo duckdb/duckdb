@@ -17,7 +17,7 @@ static regex e_internal(".*INTERNAL.*");
 
 sqlsmith_duckdb_connection::sqlsmith_duckdb_connection(duckdb::DatabaseInstance &database) {
 	// in-memory database
-	connection = make_unique<Connection>(database);
+	connection = make_uniq<Connection>(database);
 }
 
 void sqlsmith_duckdb_connection::q(const char *query) {

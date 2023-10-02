@@ -10,6 +10,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/extension_helper.hpp"
+#include "duckdb/common/windows_util.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -21,6 +23,14 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#ifdef __MVS__
+#define _XOPEN_SOURCE_EXTENDED 1
+#include <sys/resource.h>
+// enjoy - https://reviews.llvm.org/D92110
+#define PATH_MAX _XOPEN_PATH_MAX
+#endif
+
 #else
 #include <string>
 #include <sysinfoapi.h>
@@ -39,11 +49,8 @@ FileSystem::~FileSystem() {
 }
 
 FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
-	return *context.db->config.file_system;
-}
-
-FileOpener *FileSystem::GetFileOpener(ClientContext &context) {
-	return ClientData::Get(context).file_opener.get();
+	auto &client_data = ClientData::Get(context);
+	return *client_data.client_file_system;
 }
 
 bool PathMatched(const string &path, const string &sub_path) {
@@ -55,12 +62,20 @@ bool PathMatched(const string &path, const string &sub_path) {
 
 #ifndef _WIN32
 
+string FileSystem::GetEnvVariable(const string &name) {
+	const char *env = getenv(name.c_str());
+	if (!env) {
+		return string();
+	}
+	return env;
+}
+
 bool FileSystem::IsPathAbsolute(const string &path) {
-	auto path_separator = FileSystem::PathSeparator();
+	auto path_separator = PathSeparator(path);
 	return PathMatched(path, path_separator);
 }
 
-string FileSystem::PathSeparator() {
+string FileSystem::PathSeparator(const string &path) {
 	return "/";
 }
 
@@ -72,7 +87,14 @@ void FileSystem::SetWorkingDirectory(const string &path) {
 
 idx_t FileSystem::GetAvailableMemory() {
 	errno = 0;
+
+#ifdef __MVS__
+	struct rlimit limit;
+	int rlim_rc = getrlimit(RLIMIT_AS, &limit);
+	idx_t max_memory = MinValue<idx_t>(limit.rlim_max, UINTPTR_MAX);
+#else
 	idx_t max_memory = MinValue<idx_t>((idx_t)sysconf(_SC_PHYS_PAGES) * (idx_t)sysconf(_SC_PAGESIZE), UINTPTR_MAX);
+#endif
 	if (errno != 0) {
 		return DConstants::INVALID_INDEX;
 	}
@@ -80,43 +102,79 @@ idx_t FileSystem::GetAvailableMemory() {
 }
 
 string FileSystem::GetWorkingDirectory() {
-	auto buffer = unique_ptr<char[]>(new char[PATH_MAX]);
+	auto buffer = make_unsafe_uniq_array<char>(PATH_MAX);
 	char *ret = getcwd(buffer.get(), PATH_MAX);
 	if (!ret) {
 		throw IOException("Could not get working directory!");
 	}
 	return string(buffer.get());
 }
+
+string FileSystem::NormalizeAbsolutePath(const string &path) {
+	D_ASSERT(IsPathAbsolute(path));
+	return path;
+}
+
 #else
 
+string FileSystem::GetEnvVariable(const string &env) {
+	// first convert the environment variable name to the correct encoding
+	auto env_w = WindowsUtil::UTF8ToUnicode(env.c_str());
+	// use _wgetenv to get the value
+	auto res_w = _wgetenv(env_w.c_str());
+	if (!res_w) {
+		// no environment variable of this name found
+		return string();
+	}
+	return WindowsUtil::UnicodeToUTF8(res_w);
+}
+
+static bool StartsWithSingleBackslash(const string &path) {
+	if (path.size() < 2) {
+		return false;
+	}
+	if (path[0] != '/' && path[0] != '\\') {
+		return false;
+	}
+	if (path[1] == '/' || path[1] == '\\') {
+		return false;
+	}
+	return true;
+}
+
 bool FileSystem::IsPathAbsolute(const string &path) {
-	// 1) A single backslash
-	auto sub_path = FileSystem::PathSeparator();
-	if (PathMatched(path, sub_path)) {
+	// 1) A single backslash or forward-slash
+	if (StartsWithSingleBackslash(path)) {
 		return true;
 	}
-	// 2) check if starts with a double-backslash (i.e., \\)
-	sub_path += FileSystem::PathSeparator();
-	if (PathMatched(path, sub_path)) {
-		return true;
-	}
-	// 3) A disk designator with a backslash (e.g., C:\)
+	// 2) A disk designator with a backslash (e.g., C:\ or C:/)
 	auto path_aux = path;
 	path_aux.erase(0, 1);
-	sub_path = ":" + FileSystem::PathSeparator();
-	if (PathMatched(path_aux, sub_path)) {
+	if (PathMatched(path_aux, ":\\") || PathMatched(path_aux, ":/")) {
 		return true;
 	}
 	return false;
 }
 
-string FileSystem::PathSeparator() {
+string FileSystem::NormalizeAbsolutePath(const string &path) {
+	D_ASSERT(IsPathAbsolute(path));
+	auto result = StringUtil::Lower(FileSystem::ConvertSeparators(path));
+	if (StartsWithSingleBackslash(result)) {
+		// Path starts with a single backslash or forward slash
+		// prepend drive letter
+		return GetWorkingDirectory().substr(0, 2) + result;
+	}
+	return result;
+}
+
+string FileSystem::PathSeparator(const string &path) {
 	return "\\";
 }
 
 void FileSystem::SetWorkingDirectory(const string &path) {
-	if (!SetCurrentDirectory(path.c_str())) {
-		throw IOException("Could not change working directory!");
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(path.c_str());
+	if (!SetCurrentDirectoryW(unicode_path.c_str())) {
+		throw IOException("Could not change working directory to \"%s\"", path);
 	}
 }
 
@@ -136,56 +194,57 @@ idx_t FileSystem::GetAvailableMemory() {
 }
 
 string FileSystem::GetWorkingDirectory() {
-	idx_t count = GetCurrentDirectory(0, nullptr);
+	idx_t count = GetCurrentDirectoryW(0, nullptr);
 	if (count == 0) {
 		throw IOException("Could not get working directory!");
 	}
-	auto buffer = unique_ptr<char[]>(new char[count]);
-	idx_t ret = GetCurrentDirectory(count, buffer.get());
+	auto buffer = make_unsafe_uniq_array<wchar_t>(count);
+	idx_t ret = GetCurrentDirectoryW(count, buffer.get());
 	if (count != ret + 1) {
 		throw IOException("Could not get working directory!");
 	}
-	return string(buffer.get(), ret);
+	return WindowsUtil::UnicodeToUTF8(buffer.get());
 }
 
 #endif
 
 string FileSystem::JoinPath(const string &a, const string &b) {
 	// FIXME: sanitize paths
-	return a + PathSeparator() + b;
+	return a + PathSeparator(a) + b;
 }
 
 string FileSystem::ConvertSeparators(const string &path) {
-	auto separator_str = PathSeparator();
+	auto separator_str = PathSeparator(path);
 	char separator = separator_str[0];
 	if (separator == '/') {
 		// on unix-based systems we only accept / as a separator
 		return path;
 	}
 	// on windows-based systems we accept both
-	string result = path;
-	for (idx_t i = 0; i < result.size(); i++) {
-		if (result[i] == '/') {
-			result[i] = separator;
-		}
+	return StringUtil::Replace(path, "/", separator_str);
+}
+
+string FileSystem::ExtractName(const string &path) {
+	if (path.empty()) {
+		return string();
 	}
-	return result;
+	auto normalized_path = ConvertSeparators(path);
+	auto sep = PathSeparator(path);
+	auto splits = StringUtil::Split(normalized_path, sep);
+	D_ASSERT(!splits.empty());
+	return splits.back();
 }
 
 string FileSystem::ExtractBaseName(const string &path) {
 	if (path.empty()) {
 		return string();
 	}
-	auto normalized_path = ConvertSeparators(path);
-	auto sep = PathSeparator();
-	auto splits = StringUtil::Split(normalized_path, sep);
-	D_ASSERT(!splits.empty());
-	auto vec = StringUtil::Split(splits.back(), ".");
+	auto vec = StringUtil::Split(ExtractName(path), ".");
 	D_ASSERT(!vec.empty());
 	return vec[0];
 }
 
-string FileSystem::GetHomeDirectory(FileOpener *opener) {
+string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
 	// read the home_directory setting first, if it is set
 	if (opener) {
 		Value result;
@@ -197,17 +256,17 @@ string FileSystem::GetHomeDirectory(FileOpener *opener) {
 	}
 	// fallback to the default home directories for the specified system
 #ifdef DUCKDB_WINDOWS
-	const char *homedir = getenv("USERPROFILE");
+	return FileSystem::GetEnvVariable("USERPROFILE");
 #else
-	const char *homedir = getenv("HOME");
+	return FileSystem::GetEnvVariable("HOME");
 #endif
-	if (homedir) {
-		return homedir;
-	}
-	return string();
 }
 
-string FileSystem::ExpandPath(const string &path, FileOpener *opener) {
+string FileSystem::GetHomeDirectory() {
+	return GetHomeDirectory(nullptr);
+}
+
+string FileSystem::ExpandPath(const string &path, optional_ptr<FileOpener> opener) {
 	if (path.empty()) {
 		return path;
 	}
@@ -215,6 +274,10 @@ string FileSystem::ExpandPath(const string &path, FileOpener *opener) {
 		return GetHomeDirectory(opener) + path.substr(1);
 	}
 	return path;
+}
+
+string FileSystem::ExpandPath(const string &path) {
+	return FileSystem::ExpandPath(path, nullptr);
 }
 
 // LCOV_EXCL_START
@@ -267,7 +330,8 @@ void FileSystem::RemoveDirectory(const string &directory) {
 	throw NotImplementedException("%s: RemoveDirectory is not implemented!", GetName());
 }
 
-bool FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) {
+bool FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+                           FileOpener *opener) {
 	throw NotImplementedException("%s: ListFiles is not implemented!", GetName());
 }
 
@@ -291,12 +355,22 @@ void FileSystem::FileSync(FileHandle &handle) {
 	throw NotImplementedException("%s: FileSync is not implemented!", GetName());
 }
 
-vector<string> FileSystem::Glob(const string &path, FileOpener *opener) {
-	throw NotImplementedException("%s: Glob is not implemented!", GetName());
+bool FileSystem::HasGlob(const string &str) {
+	for (idx_t i = 0; i < str.size(); i++) {
+		switch (str[i]) {
+		case '*':
+		case '?':
+		case '[':
+			return true;
+		default:
+			break;
+		}
+	}
+	return false;
 }
 
-vector<string> FileSystem::Glob(const string &path, ClientContext &context) {
-	return Glob(path, GetFileOpener(context));
+vector<string> FileSystem::Glob(const string &path, FileOpener *opener) {
+	throw NotImplementedException("%s: Glob is not implemented!", GetName());
 }
 
 void FileSystem::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
@@ -307,8 +381,60 @@ void FileSystem::RegisterSubSystem(FileCompressionType compression_type, unique_
 	throw NotImplementedException("%s: Can't register a sub system on a non-virtual file system", GetName());
 }
 
+void FileSystem::UnregisterSubSystem(const string &name) {
+	throw NotImplementedException("%s: Can't unregister a sub system on a non-virtual file system", GetName());
+}
+
+void FileSystem::SetDisabledFileSystems(const vector<string> &names) {
+	throw NotImplementedException("%s: Can't disable file systems on a non-virtual file system", GetName());
+}
+
+vector<string> FileSystem::ListSubSystems() {
+	throw NotImplementedException("%s: Can't list sub systems on a non-virtual file system", GetName());
+}
+
 bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
+}
+
+static string LookupExtensionForPattern(const string &pattern) {
+	for (const auto &entry : EXTENSION_FILE_PREFIXES) {
+		if (StringUtil::StartsWith(pattern, entry.name)) {
+			return entry.extension;
+		}
+	}
+	return "";
+}
+
+vector<string> FileSystem::GlobFiles(const string &pattern, ClientContext &context, FileGlobOptions options) {
+	auto result = Glob(pattern);
+	if (result.empty()) {
+		string required_extension = LookupExtensionForPattern(pattern);
+		if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
+			auto &dbconfig = DBConfig::GetConfig(context);
+			if (!ExtensionHelper::CanAutoloadExtension(required_extension) ||
+			    !dbconfig.options.autoload_known_extensions) {
+				auto error_message =
+				    "File " + pattern + " requires the extension " + required_extension + " to be loaded";
+				error_message =
+				    ExtensionHelper::AddExtensionInstallHintToErrorMsg(context, error_message, required_extension);
+				throw MissingExtensionException(error_message);
+			}
+			// an extension is required to read this file, but it is not loaded - try to load it
+			ExtensionHelper::AutoLoadExtension(context, required_extension);
+			// success! glob again
+			// check the extension is loaded just in case to prevent an infinite loop here
+			if (!context.db->ExtensionIsLoaded(required_extension)) {
+				throw InternalException("Extension load \"%s\" did not throw but somehow the extension was not loaded",
+				                        required_extension);
+			}
+			return GlobFiles(pattern, context, options);
+		}
+		if (options == FileGlobOptions::DISALLOW_EMPTY) {
+			throw IOException("No files found that match the pattern \"%s\"", pattern);
+		}
+	}
+	return result;
 }
 
 void FileSystem::Seek(FileHandle &handle, idx_t location) {
@@ -336,7 +462,7 @@ bool FileSystem::OnDiskFile(FileHandle &handle) {
 }
 // LCOV_EXCL_STOP
 
-FileHandle::FileHandle(FileSystem &file_system, string path_p) : file_system(file_system), path(move(path_p)) {
+FileHandle::FileHandle(FileSystem &file_system, string path_p) : file_system(file_system), path(std::move(path_p)) {
 }
 
 FileHandle::~FileHandle() {
@@ -406,6 +532,16 @@ void FileHandle::Truncate(int64_t new_size) {
 
 FileType FileHandle::GetType() {
 	return file_system.GetFileType(*this);
+}
+
+bool FileSystem::IsRemoteFile(const string &path) {
+	const string prefixes[] = {"http://", "https://", "s3://"};
+	for (auto &prefix : prefixes) {
+		if (StringUtil::StartsWith(path, prefix)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 } // namespace duckdb

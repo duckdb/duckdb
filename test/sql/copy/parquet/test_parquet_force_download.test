@@ -1,0 +1,133 @@
+# name: test/sql/copy/parquet/test_parquet_force_download.test
+# description: Test Force download
+# group: [parquet]
+
+require parquet
+
+require httpfs
+
+require tpch
+
+statement ok
+SET force_download=true;
+
+query II
+explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+----
+analyzed_plan	<REGEX>:.*GET: 1.*
+
+query I
+SELECT count(*) FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+----
+1000
+
+statement ok
+SET force_download=false;
+
+query II
+explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+----
+analyzed_plan	<REGEX>:.*GET: 3.*
+
+query I
+SELECT count(*) FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+----
+1000
+
+require-env S3_TEST_SERVER_AVAILABLE 1
+
+# Require that these environment variables are also set
+
+require-env AWS_DEFAULT_REGION
+
+require-env AWS_ACCESS_KEY_ID
+
+require-env AWS_SECRET_ACCESS_KEY
+
+require-env DUCKDB_S3_ENDPOINT
+
+require-env DUCKDB_S3_USE_SSL
+
+statement ok
+SET force_download=true;
+
+statement ok
+SET threads=1
+
+statement ok
+create table user_info as SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+
+statement ok
+COPY (from user_info) TO 's3://test-bucket/row-user-data.parquet' (FORMAT PARQUET,  ROW_GROUP_SIZE 2048);
+
+statement ok
+COPY (from user_info limit 100) TO 's3://test-bucket/row-user-data_1.parquet' (FORMAT PARQUET,  ROW_GROUP_SIZE 2048);
+
+statement ok
+PRAGMA threads=10
+
+statement ok
+PRAGMA verify_parallelism
+
+query II
+explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
+----
+analyzed_plan	<REGEX>:.*GET: 1.*
+
+
+query I
+SELECT count(*) FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
+----
+9000
+
+query I
+SELECT count(*) FROM PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet')
+----
+100
+
+statement ok
+SET force_download=false;
+
+query I
+SELECT count(*) FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
+----
+9000
+
+query II
+explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
+----
+analyzed_plan	<REGEX>:.*GET: 5.*
+
+statement ok
+SET force_download=true;
+
+query I
+SELECT count(*) FROM (SELECT * FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet') union all select * from PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet'))  as t
+----
+9100
+
+query II
+explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet') union all select id, first_name, last_name, email from PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet')
+----
+analyzed_plan	<REGEX>:.*GET: 2.*
+
+statement ok
+SET force_download=false;
+
+query I
+SELECT count(*) FROM (SELECT * FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet') union all select * from PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet')) as t
+----
+9100
+
+query II
+explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet') union all select id, first_name, last_name, email from PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet')
+----
+analyzed_plan	<REGEX>:.*GET: 8.*

@@ -1,0 +1,49 @@
+# name: test/sql/copy/csv/parallel/test_parallel_option.test
+# description: Test parallel option works as intended
+# group: [parallel]
+
+# force parallelism of the queries
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+SET threads=4;
+
+# By default runs multi-threaded
+query II
+explain  select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string_rn.csv')
+----
+physical_plan	<REGEX>:.*MULTI.*
+
+query II
+explain  select * from read_csv('test/sql/copy/csv/data/test/multi_column_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), delim = '|')
+----
+physical_plan	<REGEX>:.*MULTI-THREADED.*
+
+# But we can also run single-threaded
+query II
+explain  select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string_rn.csv', parallel = 0)
+----
+physical_plan	<REGEX>:.*SINGLE.*
+
+query II
+explain  select * from read_csv('test/sql/copy/csv/data/test/multi_column_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), delim = '|', parallel = 0)
+----
+physical_plan	<REGEX>:.*SINGLE-THREADED.*
+
+# But we can also run multi-threaded explicitly
+query II
+explain  select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string_rn.csv', parallel = 1)
+----
+physical_plan	<REGEX>:.*MULTI.*
+
+query II
+explain  select * from read_csv('test/sql/copy/csv/data/test/multi_column_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), delim = '|', parallel = 1)
+----
+physical_plan	<REGEX>:.*MULTI-THREADED.*
+
+# Must be a bool
+statement error
+select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string_rn.csv', parallel = '')
+----
+Could not convert string '' to BOOL

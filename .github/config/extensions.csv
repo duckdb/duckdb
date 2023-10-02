@@ -8,7 +8,11 @@ parquet,,,
 tpcds,,,
 tpch,,,
 visualizer,,,
-sqlite_scanner,https://github.com/duckdblabs/sqlite_scanner,5477f0a5f82b6edd141c87e7a21b7e60705d4645,
-postgres_scanner,https://github.com/duckdblabs/postgres_scanner,6eca14aec37f58e0a901bb2ed46183b2ced7b550,
-substrait,https://github.com/duckdblabs/substrait,e9c34fe852e80364ace223a735de4d763191243b,no-windows
-arrow,https://github.com/duckdblabs/arrow,925d4c57285d20d0fa471b068626ceefc89415d1,no-windows
+sqlite_scanner,https://github.com/duckdblabs/sqlite_scanner,3443b2999ae1e68a108568fd32145705237a5760,
+postgres_scanner,https://github.com/duckdblabs/postgres_scanner,844f46536b5d5f9e65b57b7ff92f4ce3346e2829,
+substrait,https://github.com/duckdblabs/substrait,5d621b1d7d16fe86f8b1930870c8e6bf05bcb92a,no-windows
+arrow,https://github.com/duckdblabs/arrow,1b5b9649d28cd7f79496fb3f2e4dd7b03bf90ac5,no-windows
+aws,https://github.com/duckdblabs/duckdb_aws,348ae2625de86ab760f80a43eb76e4441cd01354,
+azure,https://github.com/duckdblabs/azure,1fe568d3eb3c8842118e395ba8031e2a8566daed,
+spatial,https://github.com/duckdblabs/duckdb_spatial.git,36e5a126976ac3b66716893360ef7e6295707082,
+iceberg,https://github.com/duckdblabs/duckdb_iceberg.git,51ba9564859698c29db4165f17143a2f6af2bb18,

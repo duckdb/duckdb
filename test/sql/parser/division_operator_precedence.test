@@ -1,0 +1,37 @@
+# name: test/sql/parser/division_operator_precedence.test
+# description: Test division operator precedence
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+# division operator precedence
+query I
+SELECT 6 * 1 / 2
+----
+3
+
+query I
+SELECT 6 * 1 // 2
+----
+3
+
+query I
+SELECT (6 * 1) // 2
+----
+3
+
+query I
+SELECT 6 * (1 // 2)
+----
+0
+
+query I
+SELECT 6 + 1 / 2
+----
+6.5
+
+query I
+SELECT 6 + 1 // 2
+----
+6

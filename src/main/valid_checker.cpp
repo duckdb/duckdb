@@ -8,7 +8,7 @@ ValidChecker::ValidChecker() : is_invalidated(false) {
 void ValidChecker::Invalidate(string error) {
 	lock_guard<mutex> l(invalidate_lock);
 	this->is_invalidated = true;
-	this->invalidated_msg = move(error);
+	this->invalidated_msg = std::move(error);
 }
 
 bool ValidChecker::IsInvalidated() {

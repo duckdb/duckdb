@@ -38,3 +38,17 @@ select id, v_map[array_sort(k, 'DESC', 'NULLS LAST')[1]] from t2 where id > 3 li
 7	[32.000]
 8	[36.000]
 9	[40.000]
+
+
+statement ok
+CREATE table tbl (key INT, val VARCHAR);
+
+statement ok
+INSERT INTO tbl VALUES (1,'duck'), (2,'DB'), (3,'duckDB');
+
+query I
+SELECT MAP([key], [val])[key] FROM tbl
+WHERE key <> '2';
+----
+[duck]
+[duckDB]

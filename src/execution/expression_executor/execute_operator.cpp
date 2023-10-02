@@ -6,7 +6,7 @@ namespace duckdb {
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundOperatorExpression &expr,
                                                                 ExpressionExecutorState &root) {
-	auto result = make_unique<ExpressionState>(expr, root);
+	auto result = make_uniq<ExpressionState>(expr, root);
 	for (auto &child : expr.children) {
 		result->AddChild(child.get());
 	}
@@ -20,7 +20,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 	// IN has n children
 	if (expr.type == ExpressionType::COMPARE_IN || expr.type == ExpressionType::COMPARE_NOT_IN) {
 		if (expr.children.size() < 2) {
-			throw Exception("IN needs at least two children");
+			throw InvalidInputException("IN needs at least two children");
 		}
 
 		Vector left(expr.children[0]->return_type);

@@ -1,0 +1,30 @@
+# name: benchmark/micro/join/asof_join_small_probe.benchmark
+# description: AsOf Join with probe smaller than build
+# group: [join]
+
+name ASOf Join with |probe| << |build|
+group join
+
+load
+SELECT SETSEED(0.8675309);
+PRAGMA debug_asof_iejoin=False;
+CREATE TABLE probe AS
+	SELECT r AS id, 
+		'2021-01-01T00:00:00'::TIMESTAMP + INTERVAL (random() * 60 * 60 * 24 * 365) SECOND AS probe_ts_1_0,
+	FROM range(0, 100000) tbl(r);
+CREATE TABLE build AS
+	SELECT r % 100000 AS id, 
+		'2021-01-01T00:00:00'::TIMESTAMP + INTERVAL (random() * 60 * 60 * 24 * 365) SECOND AS build_ts_1_0,
+		(random() * 100000)::INTEGER AS build_int_1_0
+	FROM range(0, 1000000) tbl(r);
+
+run
+SELECT SUM(build_int_1_0)
+FROM "probe"
+ASOF JOIN "build"
+       ON  "probe"."id" = "build"."id"
+      AND "probe"."probe_ts_1_0" >= "build"."build_ts_1_0"
+;
+
+result I
+4556519822

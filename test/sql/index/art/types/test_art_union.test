@@ -1,0 +1,193 @@
+# name: test/sql/index/art/types/test_art_union.test
+# description: Test the UNION type for ART keys
+# group: [types]
+
+load __TEST_DIR__/test_art_union.db
+
+statement ok
+CREATE TABLE tbl (
+	u_2 UNION("string" VARCHAR, "bool" BOOLEAN),
+	u_1 UNION("string" VARCHAR),
+	i INTEGER,
+	u_list UNION("int" INTEGER, "list" INTEGER[], "bool" BOOLEAN));
+
+statement ok
+INSERT INTO tbl VALUES
+	('hello', 'world', 42, [1, 2, 3]),
+	(NULL, NULL, NULL, NULL),
+	(true, NULL, 44, 45),
+	(false, 'wazzup', false, [1]);
+
+# we cannot create an index on union types
+
+statement error
+CREATE INDEX idx_u_2 ON tbl (u_2);
+----
+Invalid type Error: Invalid Type [UNION(string VARCHAR, bool BOOLEAN)]: Invalid type for index key.
+
+statement error
+CREATE INDEX idx_u_1 ON tbl (u_1);
+----
+Invalid type Error: Invalid Type [UNION(string VARCHAR)]: Invalid type for index key.
+
+statement ok
+CREATE INDEX idx_i ON tbl (i);
+
+statement ok
+DROP INDEX idx_i;
+
+statement error
+CREATE INDEX idx_u_list ON tbl (u_list);
+----
+Invalid type Error: Invalid Type [UNION(int INTEGER, list INTEGER[], bool BOOLEAN)]: Invalid type for index key.
+
+statement error
+CREATE INDEX idx_u_list ON tbl (i, u_list);
+----
+Invalid type Error: Invalid Type [UNION(int INTEGER, list INTEGER[], bool BOOLEAN)]: Invalid type for index key.
+
+query IIII
+SELECT * FROM tbl ORDER BY ALL;
+----
+hello	world	42	[1, 2, 3]
+false	wazzup	0	[1]
+true	NULL	44	45
+NULL	NULL	NULL	NULL
+
+restart
+
+# unique indexes out of union values
+
+statement ok
+CREATE UNIQUE INDEX idx_u_2_1 ON tbl ((u_2.string));
+
+statement ok
+CREATE UNIQUE INDEX idx_u_2_2 ON tbl ((u_2.bool));
+
+statement ok
+CREATE UNIQUE INDEX idx_u_1 ON tbl ((u_1.string));
+
+statement ok
+CREATE UNIQUE INDEX idx_list_1 ON tbl ((u_list.int));
+
+statement error
+CREATE UNIQUE INDEX idx_list_2 ON tbl ((u_list.list));
+----
+Invalid type Error: Invalid Type [INTEGER[]]: Invalid type for index key.
+
+statement ok
+CREATE UNIQUE INDEX idx_list_3 ON tbl ((u_list.bool));
+
+restart
+
+statement ok
+INSERT INTO tbl VALUES ('helloo', 'worldd', 43, [1, 2, 3, 4]);
+
+restart
+
+query IIII
+SELECT * FROM tbl ORDER BY ALL;
+----
+hello	world	42	[1, 2, 3]
+helloo	worldd	43	[1, 2, 3, 4]
+false	wazzup	0	[1]
+true	NULL	44	45
+NULL	NULL	NULL	NULL
+
+restart
+
+query I
+SELECT u_1.string FROM tbl WHERE u_2 = 'helloo';
+----
+worldd
+
+restart
+
+# constraint violation
+
+statement error
+INSERT INTO tbl VALUES ('helloo', 'nop', 7, true);
+----
+Constraint Error: Duplicate key "union_extract(u_2, 'string'): helloo" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
+
+restart
+
+# drop all indexes
+
+statement ok
+DROP INDEX idx_u_2_1;
+
+statement ok
+DROP INDEX idx_u_2_2;
+
+statement ok
+DROP INDEX idx_u_1;
+
+statement ok
+DROP INDEX idx_list_1;
+
+statement ok
+DROP INDEX idx_list_3;
+
+restart
+
+# unique compound keys out of union values
+
+statement ok
+CREATE UNIQUE INDEX idx_c_1 ON tbl ((u_2.string), (u_1.string));
+
+statement error
+CREATE INDEX idx_c_fail ON tbl ((u_2.string), u_list);
+----
+Invalid type Error: Invalid Type [UNION(int INTEGER, list INTEGER[], bool BOOLEAN)]: Invalid type for index key.
+
+statement ok
+CREATE UNIQUE INDEX idx_c_2 ON tbl ((u_list.int), (u_1.string), (u_2.bool));
+
+restart
+
+statement ok
+INSERT INTO tbl VALUES ('sunshine', 'love', 85, true);
+
+restart
+
+query IIII
+SELECT * FROM tbl ORDER BY ALL;
+----
+hello	world	42	[1, 2, 3]
+helloo	worldd	43	[1, 2, 3, 4]
+sunshine	love	85	true
+false	wazzup	0	[1]
+true	NULL	44	45
+NULL	NULL	NULL	NULL
+
+query I
+SELECT u_list.bool FROM tbl WHERE u_1.string = 'love';
+----
+1
+
+restart
+
+query IIII
+SELECT * FROM tbl ORDER BY ALL;
+----
+hello	world	42	[1, 2, 3]
+helloo	worldd	43	[1, 2, 3, 4]
+sunshine	love	85	true
+false	wazzup	0	[1]
+true	NULL	44	45
+NULL	NULL	NULL	NULL
+
+query I
+SELECT u_list.bool FROM tbl WHERE u_1.string = 'love';
+----
+1
+
+restart
+
+# constraint violations
+
+statement error
+INSERT INTO tbl VALUES ('sunshine', 'love', 85, true);
+----
+Constraint Error: Duplicate key "union_extract(u_2, 'string'): sunshine, union_extract(u_1, 'string'): love" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).

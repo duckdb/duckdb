@@ -4,7 +4,7 @@
 
 require tpch
 
-cache tpch_sf1
+cache tpch_sf1.duckdb
 
 load
 CALL dbgen(sf=1);
@@ -13,4 +13,4 @@ run
 SELECT COUNT(*) FROM lineitem WHERE l_comment LIKE '%_%' AND l_comment LIKE '%s%' AND l_comment LIKE '%str%';
 
 result I
-279627
+279725

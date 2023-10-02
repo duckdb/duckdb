@@ -1,0 +1,49 @@
+# name: test/fuzzer/pedro/blob_wrong_optimization.test
+# description: Blob wrong optimization
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE t0 (c0 INT);
+
+statement ok
+CREATE VIEW t1(c1, c0) AS (SELECT 1, max(c0) FROM t0);
+
+query I
+SELECT 1 FROM t1;
+----
+1
+
+statement error
+SELECT 1 FROM t1 WHERE '\x96'::BLOB IN (1);
+----
+Unimplemented
+
+statement error
+SELECT 1 FROM t1 WHERE NOT ('\x96'::BLOB IN (1));
+----
+Unimplemented
+
+statement error
+SELECT 1 FROM t1 WHERE ('\x96'::BLOB IN (1)) IS NULL;
+----
+Unimplemented
+
+statement ok
+CREATE OR REPLACE VIEW t1(c0) AS (SELECT (SELECT 1 WHERE FALSE));
+
+query I
+SELECT 1 FROM t1;
+----
+1
+
+statement error
+SELECT 1 FROM t1 WHERE decode('\xC0'::BLOB) IS NULL; --1 row, wrong?
+
+statement error
+SELECT 1 FROM t1 WHERE NOT (decode('\xC0'::BLOB) IS NULL); --1 row
+
+statement error
+SELECT 1 FROM t1 WHERE (decode('\xC0'::BLOB) IS NULL) IS NULL; --1 row, wrong?

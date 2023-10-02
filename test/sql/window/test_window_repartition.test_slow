@@ -1,0 +1,27 @@
+# name: test/sql/window/test_window_repartition.test_slow
+# description: Window reparitioning at scale
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=10
+
+statement ok
+create table df as 
+	select d, i v1 
+	from 
+		range(date '2017-01-01', date '2020-12-31', interval '1' day) t(d), 
+		range(3000) i
+	;
+
+query I
+select count(*) 
+from (
+	select percent_rank() over (partition by d order by v1) as rank_v1 
+	from df
+);
+----
+4380000
+

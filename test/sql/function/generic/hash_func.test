@@ -98,11 +98,30 @@ query II
 SELECT m, HASH(m) FROM maps
 ----
 {1=TGTA}	18414860414590184248
-{1=CGGT, 2=CCTC}	5600317661921613618
+{1=CGGT, 2=CCTC}	7379615964515607490
 {}	13787848793156543929
-{1=TCTA, 2=NULL, 3=CGGT}	6544980779747424731
-{1=TGTA, 2=CGGT, 3=CCTC, 4=TCTA, 5=AGGG}	16668895355375581271
+{1=TCTA, 2=NULL, 3=CGGT}	12173925144272852347
+{1=TGTA, 2=CGGT, 3=CCTC, 4=TCTA, 5=AGGG}	5599453766553248695
 NULL	13787848793156543929
+
+statement ok
+CREATE TABLE map_as_list AS
+	SELECT * FROM (VALUES
+		([{'key':1, 'value':'TGTA'}]),
+		([{'key':1, 'value':'CGGT'}, {'key':2, 'value':'CCTC'}]),
+		([]),
+		([{'key':1, 'value':'TCTA'}, {'key':2, 'value':NULL}, {'key':3, 'value':'CGGT'}]),
+		([{'key':1, 'value':'TGTA'}, {'key':2, 'value':'CGGT'}, {'key':3, 'value':'CCTC'}, {'key':4, 'value':'TCTA'}, {'key':5, 'value':'AGGG'}]),
+		(NULL)
+) tbl(m);
+
+# Because the map has physical type LIST, it creates an identical hash when the same values are stored as list of key/val structs
+query I nosort map_hashes
+SELECT HASH(m) FROM maps
+
+query I nosort map_hashes
+SELECT HASH(m) FROM map_as_list
+
 
 # Enums
 statement ok

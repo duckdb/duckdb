@@ -44,8 +44,8 @@ TEST_CASE("Test iterating over results", "[api]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE data(i INTEGER, j VARCHAR)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO data VALUES (1, 'hello'), (2, 'test')"));
 
-	vector<int> i_values = {1, 2};
-	vector<string> j_values = {"hello", "test"};
+	duckdb::vector<int> i_values = {1, 2};
+	duckdb::vector<string> j_values = {"hello", "test"};
 	idx_t row_count = 0;
 	auto result = con.Query("SELECT * FROM data;");
 	for (auto &row : *result) {
@@ -199,5 +199,6 @@ TEST_CASE("Test ARRAY_AGG with ORDER BY", "[api][array_agg]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO t2 VALUES (1,1,1), (1,2,2), (2,1,3), (2,2,4)"));
 
 	auto result = con.Query("select a, array_agg(c ORDER BY b) from t2 GROUP BY a");
+	REQUIRE(!result->HasError());
 	REQUIRE(result->names[1] == "array_agg(c ORDER BY b)");
 }

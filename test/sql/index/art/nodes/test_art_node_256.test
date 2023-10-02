@@ -1,0 +1,85 @@
+# name: test/sql/index/art/nodes/test_art_node_256.test
+# description: Test ART Node 256
+# group: [nodes]
+
+statement ok
+PRAGMA enable_verification
+
+# load the DB from disk
+load __TEST_DIR__/test_index.db
+
+statement ok
+CREATE TABLE integers(i integer)
+
+statement ok
+CREATE INDEX i_index ON integers(i)
+
+# insert elements
+
+loop i 0 60
+
+statement ok
+INSERT INTO integers VALUES (${i} + 1);
+
+endloop
+
+restart
+
+# verify counts
+
+loop i 0 20
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = ${i} + 1
+----
+1
+
+endloop
+
+# verify sums
+
+query I
+SELECT sum(i) FROM integers WHERE i <= 2
+----
+3
+
+query I
+SELECT sum(i) FROM integers WHERE i > 15
+----
+1710
+
+# delete an element and reinsert it
+
+statement ok
+DELETE FROM integers WHERE i=16;
+
+statement ok
+INSERT INTO integers VALUES (16);
+
+query I
+SELECT sum(i) FROM integers WHERE i <= 2
+----
+3
+
+query I
+SELECT sum(i) FROM integers WHERE i > 15
+----
+1710
+
+# now delete all elements
+
+loop i 0 60
+
+statement ok
+DELETE FROM integers WHERE i = ${i} + 1
+
+endloop
+
+statement ok
+DELETE FROM integers WHERE i = 0
+
+statement ok
+DROP INDEX i_index
+
+statement ok
+DROP TABLE integers

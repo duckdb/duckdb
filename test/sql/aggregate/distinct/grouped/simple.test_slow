@@ -1,0 +1,52 @@
+# name: test/sql/aggregate/distinct/grouped/simple.test_slow
+# description: Test aggregation/group by statements
+# group: [grouped]
+
+statement ok
+pragma enable_verification
+
+statement ok
+pragma verify_parallelism
+
+statement ok
+PRAGMA verify_external
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES
+	(11, 22),
+	(12, 19),
+	(13, 23),
+	(13, 22),
+	(12, 21),
+	(12, 19)
+
+# aggregations with group by
+query IIII
+SELECT b, SUM(distinct a), SUM(distinct a+2), AVG(a) FROM test GROUP BY b ORDER BY b;
+----
+19	12	14	12.0
+21	12	14	12.0
+22	24	28	12.0
+23	13	15	13.0
+
+# TEST THAT FAILS ON MASTER IF WE PARALLELIZE DISTINCT AGGREGATES WITH NO EXTRA WORK
+
+statement ok
+create table distinct_sum as select ((random() * 100) % 2)::BIGINT as i, (i % 10) as j from range(1000000) tbl(i);
+
+statement ok
+pragma threads=8;
+
+query I nosort test1
+SELECT sum(distinct i) from distinct_sum group by j order by j;
+----
+
+statement ok
+pragma threads=1;
+
+query I nosort test1
+SELECT sum(distinct i) from distinct_sum group by j order by j;
+----

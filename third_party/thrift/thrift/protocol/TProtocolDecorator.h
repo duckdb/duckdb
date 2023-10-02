@@ -22,6 +22,7 @@
 
 #include "thrift/protocol/TProtocol.h"
 #include <memory>
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb_apache {
 namespace thrift {
@@ -126,7 +127,7 @@ public:
   uint32_t readSetEnd_virt() override { return protocol->readSetEnd(); }
 
   uint32_t readBool_virt(bool& value) override { return protocol->readBool(value); }
-  uint32_t readBool_virt(std::vector<bool>::reference value) override {
+  uint32_t readBool_virt(duckdb::vector<bool>::reference value) override {
     return protocol->readBool(value);
   }
 

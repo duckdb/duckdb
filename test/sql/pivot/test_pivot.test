@@ -1,0 +1,291 @@
+# name: test/sql/pivot/test_pivot.test
+# description: Test standard SQL pivot syntax
+# group: [pivot]
+
+# example taken from SQL server docs
+# https://learn.microsoft.com/en-us/sql/t-sql/queries/from-using-pivot-and-unpivot?view=sql-server-ver15
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Product(DaysToManufacture int, StandardCost int);
+
+statement ok
+INSERT INTO Product VALUES (0, 5.0885), (1, 223.88), (2, 359.1082), (4, 949.4105);
+
+query II rowsort
+SELECT DaysToManufacture, AVG(StandardCost) AS AverageCost
+FROM Product
+GROUP BY DaysToManufacture;
+----
+0	5.0
+1	224.0
+2	359.0
+4	949.0
+
+query IIIIII
+SELECT 'AverageCost' AS Cost_Sorted_By_Production_Days,
+  "0", "1", "2", "3", "4"
+FROM
+(
+  SELECT DaysToManufacture, StandardCost
+  FROM Product
+) AS SourceTable
+PIVOT
+(
+  AVG(StandardCost)
+  FOR DaysToManufacture IN (0, 1, 2, 3, 4)
+) AS PivotTable;
+----
+AverageCost	5.0	224.0	359.0	NULL	949.0
+
+# example taken from the snowflake docs
+# https://docs.snowflake.com/en/sql-reference/constructs/pivot
+
+statement ok
+CREATE OR REPLACE TABLE monthly_sales(empid INT, amount INT, month TEXT);
+
+statement ok
+INSERT INTO monthly_sales VALUES
+    (1, 10000, 'JAN'),
+    (1, 400, 'JAN'),
+    (2, 4500, 'JAN'),
+    (2, 35000, 'JAN'),
+    (1, 5000, 'FEB'),
+    (1, 3000, 'FEB'),
+    (2, 200, 'FEB'),
+    (2, 90500, 'FEB'),
+    (1, 6000, 'MAR'),
+    (1, 5000, 'MAR'),
+    (2, 2500, 'MAR'),
+    (2, 9500, 'MAR'),
+    (1, 8000, 'APR'),
+    (1, 10000, 'APR'),
+    (2, 800, 'APR'),
+    (2, 4500, 'APR');
+
+query IIIII
+SELECT *
+  FROM monthly_sales
+    PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
+      AS p
+  ORDER BY EMPID;
+----
+1	10400	8000	11000	18000
+2	39500	90700	12000	5300
+
+# expressions in pivot
+query IIIII
+SELECT *
+  FROM monthly_sales
+    PIVOT(SUM(amount+1) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'DEC'))
+      AS p
+  ORDER BY EMPID;
+----
+1	10402	8002	11002	NULL
+2	39502	90702	12002	NULL
+
+# count star
+query IIIII
+SELECT *
+  FROM monthly_sales
+    PIVOT(COUNT(*) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'DEC') GROUP BY empid)
+      AS p
+  ORDER BY EMPID;
+----
+1	2	2	2	0
+2	2	2	2	0
+
+# test pivot aliases
+query IIIII
+SELECT empid, January, February, March, April
+  FROM monthly_sales
+    PIVOT(SUM(amount) FOR MONTH IN ('JAN' AS January, 'FEB' AS February, 'MAR' AS March, 'APR' AS April))
+      AS p
+  ORDER BY EMPID;
+----
+1	10400	8000	11000	18000
+2	39500	90700	12000	5300
+
+# not all columns are mentioned (columns not mentioned are dropped)
+query IIII
+SELECT *
+  FROM monthly_sales
+    PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR'))
+      AS p
+  ORDER BY EMPID;
+----
+1	10400	8000	11000
+2	39500	90700	12000
+
+# extra columns that don't occur in the data -> they stay as NULL
+query IIIII
+SELECT *
+  FROM monthly_sales
+    PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'DEC'))
+      AS p
+  ORDER BY EMPID;
+----
+1	10400	8000	11000	NULL
+2	39500	90700	12000	NULL
+
+# aliases
+query IIIII
+SELECT *
+FROM monthly_sales
+PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
+  AS p (EMP_ID_renamed, JAN, FEB, MAR, APR)
+ORDER BY EMP_ID_renamed;
+----
+1	10400	8000	11000	18000
+2	39500	90700	12000	5300
+
+# NULL pivot
+statement ok
+INSERT INTO monthly_sales VALUES (1, 250, NULL);
+
+query IIIIII
+SELECT *
+  FROM monthly_sales
+    PIVOT(SUM(amount) FOR MONTH IN (NULL, 'JAN', 'FEB', 'MAR', 'APR'))
+      AS p
+  ORDER BY EMPID;
+----
+1	250	10400	8000	11000	18000
+2	NULL	39500	90700	12000	5300
+
+query III
+SELECT *
+  FROM monthly_sales
+    PIVOT(SUM(amount) FOR MONTH IN (NULL, 'JAN', 'FEB', 'MAR', 'APR'))
+      AS p
+    UNPIVOT INCLUDE NULLS(amount FOR MONTH IN ("NULL", JAN, FEB, MAR, APR))
+  ORDER BY ALL;
+----
+1	APR	18000
+1	FEB	8000
+1	JAN	10400
+1	MAR	11000
+1	NULL	250
+2	APR	5300
+2	FEB	90700
+2	JAN	39500
+2	MAR	12000
+2	NULL	NULL
+
+query III
+SELECT *
+  FROM monthly_sales
+    PIVOT(SUM(amount) FOR MONTH IN (NULL, 'JAN', 'FEB', 'MAR', 'APR'))
+      AS p
+    UNPIVOT EXCLUDE NULLS(amount FOR MONTH IN ("NULL", JAN, FEB, MAR, APR))
+  ORDER BY ALL;
+----
+1	APR	18000
+1	FEB	8000
+1	JAN	10400
+1	MAR	11000
+1	NULL	250
+2	APR	5300
+2	FEB	90700
+2	JAN	39500
+2	MAR	12000
+
+query III
+SELECT *
+  FROM monthly_sales
+    PIVOT(SUM(amount) FOR MONTH IN (NULL, 'JAN', 'FEB', 'MAR', 'APR'))
+      AS p
+    UNPIVOT EXCLUDE NULLS(amount FOR MONTH IN ("NULL", JAN, FEB, MAR, APR))
+  ORDER BY EMPID;
+----
+1	NULL	250
+1	JAN	10400
+1	FEB	8000
+1	MAR	11000
+1	APR	18000
+2	JAN	39500
+2	FEB	90700
+2	MAR	12000
+2	APR	5300
+
+statement error
+SELECT *
+FROM monthly_sales
+PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'JAN'))
+  AS p
+ORDER BY EMPID;
+----
+was specified multiple times
+
+# cannot use non-aggregate functions
+statement error
+SELECT *
+FROM monthly_sales
+PIVOT(COS(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
+  AS p (EMP_ID_renamed, JAN, FEB, MAR, APR)
+ORDER BY EMP_ID_renamed;
+
+# subqueries not allowed
+statement error
+SELECT *
+FROM monthly_sales
+PIVOT(SUM(amount + (SELECT 42)) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
+  AS p (EMP_ID_renamed, JAN, FEB, MAR, APR)
+ORDER BY EMP_ID_renamed;
+----
+cannot contain subqueries
+
+# window functions not allowed
+statement error
+SELECT *
+FROM monthly_sales
+PIVOT(SUM(amount + row_number() over ()) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
+  AS p (EMP_ID_renamed, JAN, FEB, MAR, APR)
+ORDER BY EMP_ID_renamed;
+----
+cannot contain window functions
+
+# unrecognized IN clause
+statement error
+SELECT *
+  FROM monthly_sales
+    PIVOT(SUM(amount) FOR MONTHx IN ('JAN', 'FEB', 'MAR', 'DEC'))
+      AS p
+  ORDER BY EMPID;
+----
+MONTHx
+
+# empty IN clause
+statement error
+SELECT *
+  FROM monthly_sales
+    PIVOT(SUM(amount) FOR MONTH IN ())
+      AS p
+  ORDER BY EMPID;
+
+
+# star
+statement error
+SELECT *
+  FROM monthly_sales
+    PIVOT(SUM(amount) FOR MONTH IN (*))
+      AS p
+  ORDER BY EMPID;
+----
+must contain columns or lists of columns
+
+query I
+FROM
+(
+  SELECT DaysToManufacture, StandardCost
+  FROM Product
+) AS SourceTable
+PIVOT
+(
+  AVG(StandardCost)
+  FOR DaysToManufacture IN ('zz')
+) AS PivotTable;
+----
+NULL

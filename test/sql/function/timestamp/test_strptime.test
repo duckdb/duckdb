@@ -197,17 +197,29 @@ SELECT strptime('Jun 30 2003  2:03:10AM', '%b %d %Y %-I:%M:%S%p');
 ----
 2003-06-30 02:03:10
 
+# Parse nanoseconds
+query I
+select strptime('2020-12-31 21:25:58.745232159', '%Y-%m-%d %H:%M:%S.%n');
+----
+2020-12-31 21:25:58.745232
+
+# Rounding of ns
+query I
+select strptime('2020-12-31 21:25:58.745232951', '%Y-%m-%d %H:%M:%S.%n');
+----
+2020-12-31 21:25:58.745233
+
+query I
+select strptime('2020-12-31 21:25:58.745232', '%Y-%m-%d %H:%M:%S.%f');
+----
+2020-12-31 21:25:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232', '%Y-%m-%d %H:%M:%S.%f');
+----
+2020-12-31 21:25:58.745232
+
 # UTC offset - produces TIMESTAMPTZ
-query I
-select strptime('2020-12-31 21:25:58.745232', '%Y-%m-%d %H:%M:%S.%f');
-----
-2020-12-31 21:25:58.745232
-
-query I
-select strptime('2020-12-31 21:25:58.745232', '%Y-%m-%d %H:%M:%S.%f');
-----
-2020-12-31 21:25:58.745232
-
 query I
 select strptime('2020-12-31 21:25:58.745232+00', '%Y-%m-%d %H:%M:%S.%f%z');
 ----
@@ -259,6 +271,20 @@ query I
 SELECT strptime('Mon Oct 17 2022 22:00:00 GMT+0000 (GMT', '%a %b %d %Y %X GMT%z (%Z') as working;
 ----
 2022-10-17 22:00:00+00
+
+#
+# Multiple patterns
+#
+query I
+SELECT strptime('10/28/1910', ['%d-%m-%Y', '%m-%d-%Y', '%d/%m/%Y', '%m/%d/%Y'])
+----
+1910-10-28 00:00:00
+
+# Report mismatch for first pattern
+statement error
+SELECT strptime('10.28.1910', ['%d-%m-%Y', '%m-%d-%Y', '%d/%m/%Y', '%m/%d/%Y'])
+----
+Error: Literal does not match, expected /
 
 statement error
 SELECT strptime('Mon Oct 17 2022 22:00:00 GMT+0000 (GMT)', '%a %b %d %Y %X GMT%z (%Z') as broken;

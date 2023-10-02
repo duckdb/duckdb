@@ -26,6 +26,6 @@ endif()
 
 set_target_properties(shell PROPERTIES OUTPUT_NAME duckdb)
 set_target_properties(shell PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                                       ${CMAKE_BINARY_DIR})
+                                       ${PROJECT_BINARY_DIR})
 
 install(TARGETS shell RUNTIME DESTINATION "${INSTALL_BIN_DIR}")

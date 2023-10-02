@@ -6,20 +6,20 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("UDF functions with template", "[coverage][.]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
 
 	string func_name, table_name, col_type;
 	// The types supported by the templated CreateScalarFunction
-	const vector<LogicalType> sql_templated_types = {LogicalType::BOOLEAN, LogicalType::TINYINT, LogicalType::SMALLINT,
-	                                                 LogicalType::INTEGER, LogicalType::BIGINT,  LogicalType::FLOAT,
-	                                                 LogicalType::DOUBLE,  LogicalType::VARCHAR};
+	const duckdb::vector<LogicalType> sql_templated_types = {
+	    LogicalType::BOOLEAN, LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
+	    LogicalType::BIGINT,  LogicalType::FLOAT,   LogicalType::DOUBLE,   LogicalType::VARCHAR};
 
 	// Creating the tables
 	for (LogicalType sql_type : sql_templated_types) {
-		col_type = LogicalTypeIdToString(sql_type.id());
+		col_type = EnumUtil::ToString(sql_type.id());
 		table_name = StringUtil::Lower(col_type);
 
 		con.Query("CREATE TABLE " + table_name + " (a " + col_type + ", b " + col_type + ", c " + col_type + ")");
@@ -27,7 +27,7 @@ TEST_CASE("UDF functions with template", "[coverage][.]") {
 
 	// Create the UDF functions into the catalog
 	for (LogicalType sql_type : sql_templated_types) {
-		func_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
+		func_name = StringUtil::Lower(EnumUtil::ToString(sql_type.id()));
 
 		switch (sql_type.id()) {
 		case LogicalTypeId::BOOLEAN: {
@@ -89,7 +89,7 @@ TEST_CASE("UDF functions with template", "[coverage][.]") {
 	SECTION("Testing UDF functions") {
 		// Inserting values
 		for (LogicalType sql_type : sql_templated_types) {
-			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
+			table_name = StringUtil::Lower(EnumUtil::ToString(sql_type.id()));
 
 			string query = "INSERT INTO " + table_name + " VALUES";
 			if (sql_type == LogicalType::BOOLEAN) {
@@ -103,7 +103,7 @@ TEST_CASE("UDF functions with template", "[coverage][.]") {
 
 		// Running the UDF functions and checking the results
 		for (LogicalType sql_type : sql_templated_types) {
-			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
+			table_name = StringUtil::Lower(EnumUtil::ToString(sql_type.id()));
 			func_name = table_name;
 			if (sql_type.IsNumeric()) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
@@ -140,7 +140,7 @@ TEST_CASE("UDF functions with template", "[coverage][.]") {
 
 	SECTION("Checking NULLs with UDF functions") {
 		for (LogicalType sql_type : sql_templated_types) {
-			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
+			table_name = StringUtil::Lower(EnumUtil::ToString(sql_type.id()));
 			func_name = table_name;
 
 			// Deleting old values

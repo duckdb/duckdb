@@ -14,7 +14,7 @@ static void create_dummy_file(string fname) {
 }
 
 TEST_CASE("Make sure file system operators work as advertised", "[file_system]") {
-	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	auto dname = TestCreatePath("TEST_DIR");
 	string fname = "TEST_FILE";
 	string fname2 = "TEST_FILE_TWO";
@@ -63,8 +63,8 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 #define INTEGER_COUNT 512
 
 TEST_CASE("Test file operations", "[file_system]") {
-	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	unique_ptr<FileHandle> handle, handle2;
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileHandle> handle, handle2;
 	int64_t test_data[INTEGER_COUNT];
 	for (int i = 0; i < INTEGER_COUNT; i++) {
 		test_data[i] = i;

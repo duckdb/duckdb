@@ -2,16 +2,18 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/types/hash.hpp"
-#include "duckdb/parser/expression_util.hpp"
 #include "duckdb/function/function_serialization.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
 BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, ScalarFunction bound_function,
                                                  vector<unique_ptr<Expression>> arguments,
                                                  unique_ptr<FunctionData> bind_info, bool is_operator)
-    : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, move(return_type)),
-      function(move(bound_function)), children(move(arguments)), bind_info(move(bind_info)), is_operator(is_operator) {
+    : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, std::move(return_type)),
+      function(std::move(bound_function)), children(std::move(arguments)), bind_info(std::move(bind_info)),
+      is_operator(is_operator) {
 	D_ASSERT(!function.name.empty());
 }
 
@@ -38,18 +40,18 @@ hash_t BoundFunctionExpression::Hash() const {
 	return CombineHash(result, function.Hash());
 }
 
-bool BoundFunctionExpression::Equals(const BaseExpression *other_p) const {
+bool BoundFunctionExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundFunctionExpression *)other_p;
-	if (other->function != function) {
+	auto &other = other_p.Cast<BoundFunctionExpression>();
+	if (other.function != function) {
 		return false;
 	}
-	if (!ExpressionUtil::ListEquals(children, other->children)) {
+	if (!Expression::ListEquals(children, other.children)) {
 		return false;
 	}
-	if (!FunctionData::Equals(bind_info.get(), other->bind_info.get())) {
+	if (!FunctionData::Equals(bind_info.get(), other.bind_info.get())) {
 		return false;
 	}
 	return true;
@@ -63,33 +65,33 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() {
 	}
 	unique_ptr<FunctionData> new_bind_info = bind_info ? bind_info->Copy() : nullptr;
 
-	auto copy = make_unique<BoundFunctionExpression>(return_type, function, move(new_children), move(new_bind_info),
-	                                                 is_operator);
+	auto copy = make_uniq<BoundFunctionExpression>(return_type, function, std::move(new_children),
+	                                               std::move(new_bind_info), is_operator);
 	copy->CopyProperties(*this);
-	return move(copy);
+	return std::move(copy);
 }
 
 void BoundFunctionExpression::Verify() const {
 	D_ASSERT(!function.name.empty());
 }
 
-void BoundFunctionExpression::Serialize(FieldWriter &writer) const {
-	D_ASSERT(!function.name.empty());
-	D_ASSERT(return_type == function.return_type);
-	writer.WriteField(is_operator);
-	FunctionSerializer::Serialize<ScalarFunction>(writer, function, return_type, children, bind_info.get());
+void BoundFunctionExpression::Serialize(Serializer &serializer) const {
+	Expression::Serialize(serializer);
+	serializer.WriteProperty(200, "return_type", return_type);
+	serializer.WriteProperty(201, "children", children);
+	FunctionSerializer::Serialize(serializer, function, bind_info.get());
+	serializer.WriteProperty(202, "is_operator", is_operator);
 }
 
-unique_ptr<Expression> BoundFunctionExpression::Deserialize(ExpressionDeserializationState &state,
-                                                            FieldReader &reader) {
-	auto is_operator = reader.ReadRequired<bool>();
-	vector<unique_ptr<Expression>> children;
-	unique_ptr<FunctionData> bind_info;
-	auto function = FunctionSerializer::Deserialize<ScalarFunction, ScalarFunctionCatalogEntry>(
-	    reader, state, CatalogType::SCALAR_FUNCTION_ENTRY, children, bind_info);
-
-	auto return_type = function.return_type;
-	return make_unique<BoundFunctionExpression>(move(return_type), move(function), move(children), move(bind_info),
-	                                            is_operator);
+unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deserializer) {
+	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
+	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
+	auto entry = FunctionSerializer::Deserialize<ScalarFunction, ScalarFunctionCatalogEntry>(
+	    deserializer, CatalogType::SCALAR_FUNCTION_ENTRY, children, return_type);
+	auto result = make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(entry.first),
+	                                                 std::move(children), std::move(entry.second));
+	deserializer.ReadProperty(202, "is_operator", result->is_operator);
+	return std::move(result);
 }
+
 } // namespace duckdb

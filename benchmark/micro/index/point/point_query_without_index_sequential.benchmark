@@ -1,0 +1,15 @@
+# name: benchmark/micro/index/point/point_query_without_index_sequential.benchmark
+# description: Point query without on sequentially ordered data
+# group: [point]
+
+name Point Query (No Index, Ordered Data)
+group index
+
+load
+CREATE TABLE integers AS SELECT i, i + 2 AS j FROM range(0, 100000000) t(i)
+
+run
+SELECT j FROM integers WHERE i=50000
+
+result I
+50002

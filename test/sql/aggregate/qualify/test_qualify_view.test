@@ -27,7 +27,11 @@ statement ok
 CREATE VIEW test.v AS SELECT * FROM test.t QUALIFY row_number() OVER (PARTITION BY b) = 1;
 
 query II
-SELECT b, SUM(a) FROM test.v GROUP BY b QUALIFY row_number() OVER (PARTITION BY b) = 1
+SELECT b, SUM(a) 
+FROM test.v 
+GROUP BY b 
+QUALIFY row_number() OVER (PARTITION BY b) = 1
+ORDER BY ALL
 ----
 21	12
 22	11
@@ -49,7 +53,11 @@ statement ok
 INSERT INTO test.t VALUES (11, 22), (13, 22), (12, 21)
 
 query II
-SELECT b, SUM(a) FROM test.v GROUP BY b QUALIFY row_number() OVER (PARTITION BY b) = 1
+SELECT b, SUM(a) 
+FROM test.v 
+GROUP BY b 
+QUALIFY row_number() OVER (PARTITION BY b) = 1
+ORDER BY ALL
 ----
 21	12
 22	11

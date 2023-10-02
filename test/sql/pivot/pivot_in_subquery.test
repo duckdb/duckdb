@@ -1,0 +1,62 @@
+# name: test/sql/pivot/pivot_in_subquery.test
+# description: Test SQL pivot with a subquery in the IN clause
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Cities(Country VARCHAR, Name VARCHAR, Year INT, Population INT);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2000, 1005);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2010, 1065);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2020, 1158);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2000, 564);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2010, 608);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2020, 738);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2000, 8015);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2010, 8175);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2020, 8772);
+
+# order the pivot columns
+query IIIII rowsort
+PIVOT Cities ON Year IN (SELECT Year FROM Cities ORDER BY Year DESC) USING SUM(Population);
+----
+NL	Amsterdam	1158	1065	1005
+US	New York City	8772	8175	8015
+US	Seattle	738	608	564
+
+query IIIII rowsort
+PIVOT Cities ON Year IN (SELECT YEAR FROM (SELECT Year, SUM(POPULATION) AS popsum FROM Cities GROUP BY Year ORDER BY popsum DESC)) USING SUM(Population);
+----
+NL	Amsterdam	1158	1065	1005
+US	New York City	8772	8175	8015
+US	Seattle	738	608	564
+
+query IIIII rowsort
+PIVOT Cities ON Year IN (SELECT '2010' UNION ALL SELECT '2000' UNION ALL SELECT '2020') USING SUM(Population);
+----
+NL	Amsterdam	1065	1005	1158
+US	New York City	8175	8015	8772
+US	Seattle	608	564	738
+
+statement error
+PIVOT Cities ON Year IN (SELECT xx FROM Cities) USING SUM(Population);
+

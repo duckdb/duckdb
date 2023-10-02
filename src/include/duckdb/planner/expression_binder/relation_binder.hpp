@@ -20,7 +20,7 @@ public:
 	string op;
 
 protected:
-	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
+	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
 	                          bool root_expression = false) override;
 
 	string UnsupportedAggregateMessage() override;

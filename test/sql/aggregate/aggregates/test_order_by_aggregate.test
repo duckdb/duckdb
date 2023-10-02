@@ -1,0 +1,63 @@
+# name: test/sql/aggregate/aggregates/test_order_by_aggregate.test
+# description: Test ORDER BY in AGGREGATE clause
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(grp INTEGER, i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1, 10), (2, 15), (1, 30), (2, 20)
+
+query I
+SELECT FIRST(i ORDER BY i) FROM integers
+----
+10
+
+# ordering by the same aggregate multiple times has no effect
+query I
+SELECT FIRST(i ORDER BY i, i, i) FROM integers
+----
+10
+
+query I
+SELECT FIRST(i ORDER BY i, i DESC, i) FROM integers
+----
+10
+
+query I
+SELECT FIRST(i ORDER BY i DESC) FROM integers
+----
+30
+
+query I
+SELECT FIRST(i ORDER BY i DESC, i ASC) FROM integers
+----
+30
+
+query II
+SELECT FIRST(i ORDER BY i), FIRST(i ORDER BY i DESC) FROM integers
+----
+10	30
+
+query II
+SELECT grp, FIRST(i ORDER BY i) FROM integers GROUP BY grp ORDER BY ALL
+----
+1	10
+2	15
+
+# ordering by the group has no effect
+query II
+SELECT grp, FIRST(i ORDER BY grp, i, grp DESC, i DESC) FROM integers GROUP BY grp ORDER BY ALL
+----
+1	10
+2	15
+
+query II
+SELECT grp, FIRST(i ORDER BY i DESC) FROM integers GROUP BY grp ORDER BY ALL
+----
+1	30
+2	20
+

@@ -2,6 +2,9 @@
 # description: NULL values and a multi-column UNIQUE constraint
 # group: [unique]
 
+statement ok
+SET default_null_order='nulls_first';
+
 require skip_reload
 
 statement ok

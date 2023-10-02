@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/function/built_in_functions.hpp"
 
 namespace duckdb {
 
@@ -25,6 +26,10 @@ struct RangeTableFunction {
 };
 
 struct RepeatTableFunction {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct RepeatRowTableFunction {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

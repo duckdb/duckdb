@@ -6,19 +6,7 @@
 
 namespace duckdb {
 
-vector<string> ReadPgListToString(duckdb_libpgquery::PGList *column_list) {
-	vector<string> result;
-	if (!column_list) {
-		return result;
-	}
-	for (auto c = column_list->head; c != nullptr; c = lnext(c)) {
-		auto target = (duckdb_libpgquery::PGResTarget *)(c->data.ptr_value);
-		result.emplace_back(target->name);
-	}
-	return result;
-}
-
-Vector ReadPgListToVector(duckdb_libpgquery::PGList *column_list, idx_t &size) {
+Vector Transformer::PGListToVector(optional_ptr<duckdb_libpgquery::PGList> column_list, idx_t &size) {
 	if (!column_list) {
 		Vector result(LogicalType::VARCHAR);
 		return result;
@@ -33,8 +21,8 @@ Vector ReadPgListToVector(duckdb_libpgquery::PGList *column_list, idx_t &size) {
 
 	size = 0;
 	for (auto c = column_list->head; c != nullptr; c = lnext(c)) {
-		auto &type_val = *((duckdb_libpgquery::PGAConst *)c->data.ptr_value);
-		auto entry_value_node = (duckdb_libpgquery::PGValue)(type_val.val);
+		auto &type_val = *PGPointerCast<duckdb_libpgquery::PGAConst>(c->data.ptr_value);
+		auto &entry_value_node = type_val.val;
 		if (entry_value_node.type != duckdb_libpgquery::T_PGString) {
 			throw ParserException("Expected a string constant as value");
 		}
@@ -46,40 +34,41 @@ Vector ReadPgListToVector(duckdb_libpgquery::PGList *column_list, idx_t &size) {
 	return result;
 }
 
-unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::PGNode *node) {
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateTypeStmt *>(node);
-	D_ASSERT(stmt);
-	auto result = make_unique<CreateStatement>();
-	auto info = make_unique<CreateTypeInfo>();
-	info->name = ReadPgListToString(stmt->typeName)[0];
-	switch (stmt->kind) {
+unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::PGCreateTypeStmt &stmt) {
+	auto result = make_uniq<CreateStatement>();
+	auto info = make_uniq<CreateTypeInfo>();
+
+	auto qualified_name = TransformQualifiedName(*stmt.typeName);
+	info->catalog = qualified_name.catalog;
+	info->schema = qualified_name.schema;
+	info->name = qualified_name.name;
+
+	switch (stmt.kind) {
 	case duckdb_libpgquery::PG_NEWTYPE_ENUM: {
 		info->internal = false;
-		if (stmt->query) {
+		if (stmt.query) {
 			// CREATE TYPE mood AS ENUM (SELECT ...)
-			D_ASSERT(stmt->vals == nullptr);
-			auto query = TransformSelect(stmt->query, false);
-			info->query = move(query);
+			D_ASSERT(stmt.vals == nullptr);
+			auto query = TransformSelect(stmt.query, false);
+			info->query = std::move(query);
 			info->type = LogicalType::INVALID;
 		} else {
-			D_ASSERT(stmt->query == nullptr);
+			D_ASSERT(stmt.query == nullptr);
 			idx_t size = 0;
-			auto ordered_array = ReadPgListToVector(stmt->vals, size);
-			info->type = LogicalType::ENUM(info->name, ordered_array, size);
+			auto ordered_array = PGListToVector(stmt.vals, size);
+			info->type = LogicalType::ENUM(ordered_array, size);
 		}
 	} break;
 
 	case duckdb_libpgquery::PG_NEWTYPE_ALIAS: {
-		LogicalType target_type = TransformTypeName(stmt->ofType);
-		target_type.SetAlias(info->name);
+		LogicalType target_type = TransformTypeName(*stmt.ofType);
 		info->type = target_type;
 	} break;
 
 	default:
 		throw InternalException("Unknown kind of new type");
 	}
-
-	result->info = move(info);
+	result->info = std::move(info);
 	return result;
 }
 } // namespace duckdb

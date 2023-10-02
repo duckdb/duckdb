@@ -9,6 +9,7 @@
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/storage/table/row_version_manager.hpp"
 
 namespace duckdb {
 
@@ -18,24 +19,24 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 		// undo this catalog entry
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		D_ASSERT(catalog_entry->set);
-		catalog_entry->set->Undo(catalog_entry);
+		catalog_entry->set->Undo(*catalog_entry);
 		break;
 	}
 	case UndoFlags::INSERT_TUPLE: {
-		auto info = (AppendInfo *)data;
+		auto info = reinterpret_cast<AppendInfo *>(data);
 		// revert the append in the base table
 		info->table->RevertAppend(info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
-		auto info = (DeleteInfo *)data;
+		auto info = reinterpret_cast<DeleteInfo *>(data);
 		// reset the deleted flag on rollback
-		info->vinfo->CommitDelete(NOT_DELETED_ID, info->rows, info->count);
+		info->version_info->CommitDelete(info->vector_idx, NOT_DELETED_ID, info->rows, info->count);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
-		auto info = (UpdateInfo *)data;
-		info->segment->RollbackUpdate(info);
+		auto info = reinterpret_cast<UpdateInfo *>(data);
+		info->segment->RollbackUpdate(*info);
 		break;
 	}
 	default: // LCOV_EXCL_START

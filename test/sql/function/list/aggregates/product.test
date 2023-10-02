@@ -33,7 +33,7 @@ statement ok
 drop table prods
 
 statement ok
-CREATE TABLE prods AS SELECT LIST(2) AS i FROM range(100 / 2) t1(i)
+CREATE TABLE prods AS SELECT LIST(2) AS i FROM range(100 // 2) t1(i)
 
 query I
 SELECT list_product(i) FROM prods;

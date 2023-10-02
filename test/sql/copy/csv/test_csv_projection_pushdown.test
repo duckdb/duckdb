@@ -1,0 +1,81 @@
+# name: test/sql/copy/csv/test_csv_projection_pushdown.test
+# description: Test CSV projection pushdown
+# group: [csv]
+
+#statement ok
+#PRAGMA enable_verification
+
+statement ok
+CREATE VIEW lineitem_csv AS SELECT * FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', delim='|', header=False, columns={
+	'l_orderkey': 'INT',
+	'l_partkey': 'INT',
+	'l_suppkey': 'INT',
+	'l_linenumber': 'INT',
+	'l_quantity': 'INTEGER',
+	'l_extendedprice': 'DECIMAL(15,2)',
+	'l_discount': 'DECIMAL(15,2)',
+	'l_tax': 'DECIMAL(15,2)',
+	'l_returnflag': 'VARCHAR(1)',
+	'l_linestatus': 'VARCHAR(1)',
+	'l_shipdate': 'DATE',
+	'l_commitdate': 'DATE',
+	'l_receiptdate': 'DATE',
+	'l_shipinstruct': 'VARCHAR(25)',
+	'l_shipmode': 'VARCHAR(10)',
+	'l_comment': 'VARCHAR(44)'
+})
+
+statement ok
+CREATE VIEW lineitem_csv_auto AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/real/lineitem_sample.csv', header=False) lineitem(l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment)
+
+foreach lineitem lineitem_csv lineitem_csv_auto
+
+query I
+SELECT l_orderkey FROM ${lineitem}
+----
+1
+1
+1
+1
+1
+1
+2
+3
+3
+3
+
+query I
+SELECT l_partkey FROM ${lineitem}
+----
+15519
+6731
+6370
+214
+2403
+1564
+10617
+430
+1904
+12845
+
+query I
+SELECT l_shipdate FROM ${lineitem}
+----
+1996-03-13
+1996-04-12
+1996-01-29
+1996-04-21
+1996-03-30
+1996-01-30
+1997-01-28
+1994-02-02
+1993-11-09
+1994-01-16
+
+query I
+SELECT COUNT(*) FROM ${lineitem}
+----
+10
+
+endloop
+

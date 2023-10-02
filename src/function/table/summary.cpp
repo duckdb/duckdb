@@ -18,7 +18,7 @@ static unique_ptr<FunctionData> SummaryFunctionBind(ClientContext &context, Tabl
 		names.emplace_back(input.input_table_names[i]);
 	}
 
-	return make_unique<TableFunctionData>();
+	return make_uniq<TableFunctionData>();
 }
 
 static OperatorResultType SummaryFunction(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,

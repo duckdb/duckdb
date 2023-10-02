@@ -1,0 +1,57 @@
+# name: test/sql/copy/csv/csv_dtypes.test
+# description: Read a CSV with dtypes flags
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+select typeof(Year), typeof(Quarter) from 'test/sql/copy/csv/data/real/ontime_sample.csv' LIMIT 1;
+----
+BIGINT	BIGINT
+
+query II
+select typeof(Year), typeof(Quarter) from read_csv_auto('test/sql/copy/csv/data/real/ontime_sample.csv', dtypes={'Quarter': 'TINYINT'}) LIMIT 1
+----
+BIGINT	TINYINT
+
+# case insensitivity for struct
+query II
+select typeof(Year), typeof(Quarter) from read_csv_auto('test/sql/copy/csv/data/real/ontime_sample.csv', dtypes={'quArTeR': 'TINYINT'}) LIMIT 1
+----
+BIGINT	TINYINT
+
+query II
+select typeof(Year), typeof(Quarter) from read_csv_auto('test/sql/copy/csv/data/real/ontime_sample.csv', dtypes=['INT', 'TINYINT']) LIMIT 1
+----
+INTEGER	TINYINT
+
+# mix of struct and list parameters
+statement error
+select * from read_csv_auto('test/sql/copy/csv/data/real/ontime_sample.csv', dtypes=['INT'], column_types={'Quarter': 'TINYINT'}) LIMIT 1
+----
+can only be supplied once
+
+# invalid list type
+statement error
+select * from read_csv_auto('test/sql/copy/csv/data/real/ontime_sample.csv', dtypes=[42]) LIMIT 1
+----
+requires a list of types
+
+# invalid type
+statement error
+select * from read_csv_auto('test/sql/copy/csv/data/real/ontime_sample.csv', dtypes=['unknown_type']) LIMIT 1
+----
+unknown_type
+
+# invalid struct type
+statement error
+select * from read_csv_auto('test/sql/copy/csv/data/real/ontime_sample.csv', dtypes={'Quarter': 42}) LIMIT 1
+----
+requires a type specification as string
+
+# too many sql types provided in list
+statement error
+select * from read_csv_auto('test/sql/copy/csv/data/auto/int_bol.csv', dtypes=['varchar', 'varchar', 'varchar']) LIMIT 1
+----
+3 types were provided, but CSV file only has 2 columns

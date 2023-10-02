@@ -1,7 +1,5 @@
 c_last_name|c_first_name|c_salutation|c_preferred_cust_flag|ss_ticket_number|cnt
+NULL|Ernestina|NULL|NULL|224|15
 Cole|Ruby|Dr.|N|932|16
-Garza|Carlos|Mr.|Y|1894|16
-Harding|Ernestina|Miss|Y|224|16
 Martinez|Bernard|Sir|N|1281|16
-Robbins|Ruth|Ms.|N|60|16
-Simpson|Kevin|Dr.|N|1369|15
+Robbins|Ruth|Ms.|N|60|15

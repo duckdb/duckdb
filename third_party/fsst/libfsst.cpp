@@ -381,8 +381,7 @@ static inline size_t compressBulk(SymbolTable &symbolTable, size_t nlines, size_
 	size_t curLine, suffixLim = symbolTable.suffixLim;
 	u8 byteLim = symbolTable.nSymbols + symbolTable.zeroTerminated - symbolTable.lenHisto[0];
 
-	u8 buf[512+7]; /* +7 sentinel is to avoid 8-byte unaligned-loads going beyond 511 out-of-bounds */
-	memset(buf+511, 0, 8); /* and initialize the sentinal bytes */
+	u8 buf[512+7] = {}; /* +7 sentinel is to avoid 8-byte unaligned-loads going beyond 511 out-of-bounds */
 
 	// three variants are possible. dead code falls away since the bool arguments are constants
 	auto compressVariant = [&](bool noSuffixOpt, bool avoidBranch) {
@@ -454,21 +453,24 @@ static inline size_t compressBulk(SymbolTable &symbolTable, size_t nlines, size_
 #define FSST_SAMPLELINE ((size_t) 512)
 
 // quickly select a uniformly random set of lines such that we have between [FSST_SAMPLETARGET,FSST_SAMPLEMAXSZ) string bytes
-vector<u8*> makeSample(u8* sampleBuf, u8* strIn[], size_t **lenRef, size_t nlines) {
-	size_t totSize = 0, *lenIn = *lenRef;
+vector<u8*> makeSample(u8* sampleBuf, u8* strIn[], size_t *lenIn, size_t nlines,
+                                                    unique_ptr<vector<size_t>>& sample_len_out) {
+	size_t totSize = 0;
 	vector<u8*> sample;
 
 	for(size_t i=0; i<nlines; i++)
 		totSize += lenIn[i];
-
 	if (totSize < FSST_SAMPLETARGET) {
 		for(size_t i=0; i<nlines; i++)
 			sample.push_back(strIn[i]);
 	} else {
 		size_t sampleRnd = FSST_HASH(4637947);
 		u8* sampleLim = sampleBuf + FSST_SAMPLETARGET;
-		size_t *sampleLen = *lenRef = new size_t[nlines + FSST_SAMPLEMAXSZ/FSST_SAMPLELINE];
 
+		sample_len_out = unique_ptr<vector<size_t>>(new vector<size_t>());
+		sample_len_out->reserve(nlines + FSST_SAMPLEMAXSZ/FSST_SAMPLELINE);
+
+		// This fails if we have a lot of small strings and a few big ones?
 		while(sampleBuf < sampleLim) {
 			// choose a non-empty line
 			sampleRnd = FSST_HASH(sampleRnd);
@@ -485,7 +487,9 @@ vector<u8*> makeSample(u8* sampleBuf, u8* strIn[], size_t **lenRef, size_t nline
 			size_t len = min(lenIn[linenr]-chunk,FSST_SAMPLELINE);
 			memcpy(sampleBuf, strIn[linenr]+chunk, len);
 			sample.push_back(sampleBuf);
-			sampleBuf += *sampleLen++ = len;
+
+			sample_len_out->push_back(len);
+			sampleBuf += len;
 		}
 	}
 	return sample;
@@ -493,11 +497,11 @@ vector<u8*> makeSample(u8* sampleBuf, u8* strIn[], size_t **lenRef, size_t nline
 
 extern "C" duckdb_fsst_encoder_t* duckdb_fsst_create(size_t n, size_t lenIn[], u8 *strIn[], int zeroTerminated) {
 	u8* sampleBuf = new u8[FSST_SAMPLEMAXSZ];
-	size_t *sampleLen = lenIn;
-	vector<u8*> sample = makeSample(sampleBuf, strIn, &sampleLen, n?n:1); // careful handling of input to get a right-size and representative sample
+	unique_ptr<vector<size_t>> sample_sizes;
+	vector<u8*> sample = makeSample(sampleBuf, strIn, lenIn, n?n:1, sample_sizes); // careful handling of input to get a right-size and representative sample
 	Encoder *encoder = new Encoder();
+	size_t* sampleLen = sample_sizes ? sample_sizes->data() : &lenIn[0];
 	encoder->symbolTable = shared_ptr<SymbolTable>(buildSymbolTable(encoder->counters, sample, sampleLen, zeroTerminated));
-	if (sampleLen != lenIn) delete[] sampleLen;
 	delete[] sampleBuf;
 	return (duckdb_fsst_encoder_t*) encoder;
 }

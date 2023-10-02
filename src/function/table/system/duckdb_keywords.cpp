@@ -26,13 +26,13 @@ static unique_ptr<FunctionData> DuckDBKeywordsBind(ClientContext &context, Table
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBKeywordsInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBKeywordsData>();
+	auto result = make_uniq<DuckDBKeywordsData>();
 	result->entries = Parser::KeywordList();
-	return move(result);
+	return std::move(result);
 }
 
 void DuckDBKeywordsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBKeywordsData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBKeywordsData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
@@ -63,7 +63,7 @@ void DuckDBKeywordsFunction(ClientContext &context, TableFunctionInput &data_p, 
 		default:
 			throw InternalException("Unrecognized keyword category");
 		}
-		output.SetValue(1, count, Value(move(category_name)));
+		output.SetValue(1, count, Value(std::move(category_name)));
 
 		count++;
 	}

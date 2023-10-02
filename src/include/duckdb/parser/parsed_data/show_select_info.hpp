@@ -14,6 +14,13 @@
 namespace duckdb {
 
 struct ShowSelectInfo : public ParseInfo {
+public:
+	static constexpr const ParseInfoType TYPE = ParseInfoType::SHOW_SELECT_INFO;
+
+public:
+	ShowSelectInfo() : ParseInfo(TYPE) {
+	}
+
 	//! Types of projected columns
 	vector<LogicalType> types;
 	//! The QueryNode of select query
@@ -24,7 +31,7 @@ struct ShowSelectInfo : public ParseInfo {
 	bool is_summary;
 
 	unique_ptr<ShowSelectInfo> Copy() {
-		auto result = make_unique<ShowSelectInfo>();
+		auto result = make_uniq<ShowSelectInfo>();
 		result->types = types;
 		result->query = query->Copy();
 		result->aliases = aliases;

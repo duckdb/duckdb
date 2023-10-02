@@ -53,7 +53,7 @@
  * formatter.format(5.9831).toString();  // 5.983% in en-US
  *
  * // Create a "template" in a singleton unique_ptr but without setting a locale until the call site:
- * std::unique_ptr<UnlocalizedNumberFormatter> template = NumberFormatter::with()
+ * unique_ptr<UnlocalizedNumberFormatter> template = NumberFormatter::with()
  *     .sign(UNumberSignDisplay::UNUM_SIGN_ALWAYS)
  *     .unit(MeasureUnit::getMeter())
  *     .unitWidth(UNumberUnitWidth::UNUM_UNIT_WIDTH_FULL_NAME)

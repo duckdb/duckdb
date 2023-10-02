@@ -1,0 +1,28 @@
+# name: test/sql/storage/lazy_load/concurrent_lazy_load.test_slow
+# description: Test concurrent lazy load
+# group: [lazy_load]
+
+# load the DB from disk
+load __TEST_DIR__/lazy_load_concurrent.db
+
+statement ok
+CREATE TABLE vals(i INTEGER, v VARCHAR)
+
+statement ok
+INSERT INTO vals SELECT i, i::VARCHAR FROM generate_series(1000000) t(i)
+
+restart
+
+concurrentloop threadid 0 10
+
+query I
+SELECT MIN(i) FROM vals
+----
+0
+
+query I
+SELECT MIN(v) FROM vals
+----
+0
+
+endloop

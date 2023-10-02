@@ -1,0 +1,35 @@
+# name: test/sql/prepared/prepare_copy.test
+# group: [prepared]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+PREPARE q1 AS
+	COPY (
+		select $1 as 'col'
+	) to '__TEST_DIR__/res.csv' (
+		FORMAT csv,
+		header true
+	);
+
+statement ok
+execute q1 (42);
+
+query I
+select i from '__TEST_DIR__/res.csv' tbl(i);
+----
+42
+
+# Can't use a prepared parameter for the destination
+
+statement error
+PREPARE q2 AS
+	COPY (
+		select 42 as 'col'
+	) to $1 (
+		FORMAT csv,
+		header true
+	);
+----
+Parser Error: syntax error at or near "$1"

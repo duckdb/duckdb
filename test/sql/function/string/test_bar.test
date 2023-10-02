@@ -1,0 +1,182 @@
+# name: test/sql/function/string/test_bar.test
+# description: BAR test
+# group: [string]
+
+statement ok
+pragma enable_verification
+
+query I
+select bar(x * x, 0, 100) from range(0, 11) t(x)
+----
+(empty)
+▊
+███▏
+███████▏
+████████████▊
+████████████████████
+████████████████████████████▊
+███████████████████████████████████████▏
+███████████████████████████████████████████████████▏
+████████████████████████████████████████████████████████████████▊
+████████████████████████████████████████████████████████████████████████████████
+
+query I
+select bar(9, 10, 20)
+----
+(empty)
+
+query I
+select bar(120, -10, 100, 10)
+----
+██████████
+
+query I
+select bar(40, 20, 0)
+----
+████████████████████████████████████████████████████████████████████████████████
+
+query I
+select bar(100, 200, 0)
+----
+(empty)
+
+query I
+select bar(-10, 20, 0)
+----
+(empty)
+
+query I
+select bar('nan'::double, 0, 10)
+----
+(empty)
+
+query I
+select bar('infinity'::double, 0, 10)
+----
+████████████████████████████████████████████████████████████████████████████████
+
+query I
+select bar('-infinity'::double, 0, 10)
+----
+(empty)
+
+query I
+select bar(null, 0, 10)
+----
+NULL
+
+query I
+select bar(1, 'nan'::double, 10)
+----
+(empty)
+
+statement error
+select bar(1, '-infinity'::double, 10)
+
+query I
+select bar(1, 'infinity'::double, 10)
+----
+(empty)
+
+query I
+select bar(1, null, 10)
+----
+NULL
+
+query I
+select bar(1, 0, 'nan'::double)
+----
+(empty)
+
+query I
+select bar(1, 0, '-infinity'::double)
+----
+████████████████████████████████████████████████████████████████████████████████
+
+query I
+select bar(1, 0, 'infinity'::double)
+----
+(empty)
+
+statement error
+select bar(1, 0, 10, 'nan'::double)
+
+statement error
+select bar(1, 0, 10, 'infinity'::double)
+
+statement error
+select bar(1, 0, 10, '-infinity'::double)
+
+query I
+select bar(1, 0, 10, 1000)
+----
+████████████████████████████████████████████████████████████████████████████████████████████████████
+
+statement error
+select bar(1, 0, 10, 1001)
+
+query I
+select bar(1, 0, 10, 1)
+----
+(empty)
+
+query I
+select bar(10, 10, 10, 10)
+----
+(empty)
+
+statement error
+select bar(1, 0, 10, 0.99)
+
+query I
+select bar(1, 0, 1, 1.125)
+----
+█▏
+
+query I
+select bar(1, 0, 1, 1.25)
+----
+█▎
+
+query I
+select bar(1, 0, 1, 1.375)
+----
+█▍
+
+query I
+select bar(1, 0, 1, 1.5)
+----
+█▌
+
+query I
+select bar(1, 0, 1, 1.625)
+----
+█▋
+
+query I
+select bar(1, 0, 1, 1.75)
+----
+█▊
+
+query I
+select bar(1, 0, 1, 1.875)
+----
+█▉
+
+query I
+select bar(1, 0, 1, 2)
+----
+██
+
+query I
+select bar(1, 0, 1, width) from (values (1), (1.125), (1.25), (1.375), (1.5), (1.625), (1.75), (1.875), (2)) as _(width);
+----
+█
+█▏
+█▎
+█▍
+█▌
+█▋
+█▊
+█▉
+██

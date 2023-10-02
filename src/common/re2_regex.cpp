@@ -1,4 +1,4 @@
-#include <vector>
+#include "duckdb/common/vector.hpp"
 #include <memory>
 
 #include "duckdb/common/re2_regex.hpp"
@@ -15,7 +15,7 @@ Regex::Regex(const std::string &pattern, RegexOptions options) {
 bool RegexSearchInternal(const char *input, Match &match, const Regex &r, RE2::Anchor anchor, size_t start,
                          size_t end) {
 	auto &regex = r.GetRegex();
-	std::vector<StringPiece> target_groups;
+	duckdb::vector<StringPiece> target_groups;
 	auto group_count = regex.NumberOfCapturingGroups() + 1;
 	target_groups.resize(group_count);
 	match.groups.clear();
@@ -48,13 +48,13 @@ bool RegexMatch(const std::string &input, const Regex &regex) {
 	return RegexSearchInternal(input.c_str(), nop_match, regex, RE2::ANCHOR_BOTH, 0, input.size());
 }
 
-std::vector<Match> RegexFindAll(const std::string &input, const Regex &regex) {
-	std::vector<Match> matches;
+duckdb::vector<Match> RegexFindAll(const std::string &input, const Regex &regex) {
+	duckdb::vector<Match> matches;
 	size_t position = 0;
 	Match match;
 	while (RegexSearchInternal(input.c_str(), match, regex, RE2::UNANCHORED, position, input.size())) {
 		position += match.position(0) + match.length(0);
-		matches.emplace_back(std::move(match));
+		matches.emplace_back(match);
 	}
 	return matches;
 }

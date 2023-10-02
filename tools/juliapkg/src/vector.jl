@@ -10,17 +10,18 @@ struct Vec
     end
 end
 
-function get_array(vector::Vec, ::Type{T})::Vector{T} where {T}
+function get_array(vector::Vec, ::Type{T}, size = VECTOR_SIZE)::Vector{T} where {T}
     raw_ptr = duckdb_vector_get_data(vector.handle)
     ptr = Base.unsafe_convert(Ptr{T}, raw_ptr)
-    return unsafe_wrap(Vector{T}, ptr, VECTOR_SIZE, own = false)
+    return unsafe_wrap(Vector{T}, ptr, size, own = false)
 end
 
-function get_validity(vector::Vec)::ValidityMask
+function get_validity(vector::Vec, size = VECTOR_SIZE)::ValidityMask
     duckdb_vector_ensure_validity_writable(vector.handle)
     validity_ptr = duckdb_vector_get_validity(vector.handle)
     ptr = Base.unsafe_convert(Ptr{UInt64}, validity_ptr)
-    validity_vector = unsafe_wrap(Vector{UInt64}, ptr, VECTOR_SIZE ÷ BITS_PER_VALUE, own = false)
+    size_words = div(size, BITS_PER_VALUE, RoundUp)
+    validity_vector = unsafe_wrap(Vector{UInt64}, ptr, size_words, own = false)
     return ValidityMask(validity_vector)
 end
 

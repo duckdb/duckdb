@@ -1,16 +1,20 @@
-add_subdirectory(matcher)
+add_subdirectory(compressed_materialization)
 add_subdirectory(join_order)
-add_subdirectory(pushdown)
+add_subdirectory(matcher)
 add_subdirectory(pullup)
+add_subdirectory(pushdown)
 add_subdirectory(rule)
 add_subdirectory(statistics)
 
 add_library_unity(
   duckdb_optimizer
   OBJECT
+  column_binding_replacer.cpp
   common_aggregate_optimizer.cpp
+  compressed_materialization.cpp
   cse_optimizer.cpp
   deliminator.cpp
+  unnest_rewriter.cpp
   column_lifetime_analyzer.cpp
   expression_heuristics.cpp
   filter_combiner.cpp
@@ -20,6 +24,7 @@ add_library_unity(
   optimizer.cpp
   expression_rewriter.cpp
   regex_range_filter.cpp
+  remove_duplicate_groups.cpp
   remove_unused_columns.cpp
   statistics_propagator.cpp
   topn_optimizer.cpp)

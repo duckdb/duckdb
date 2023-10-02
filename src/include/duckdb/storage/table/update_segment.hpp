@@ -32,7 +32,6 @@ public:
 	bool HasUncommittedUpdates(idx_t vector_index);
 	bool HasUpdates(idx_t vector_index) const;
 	bool HasUpdates(idx_t start_row_idx, idx_t end_row_idx);
-	void ClearUpdates();
 
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result);
 	void FetchCommitted(idx_t vector_index, Vector &result);
@@ -41,9 +40,9 @@ public:
 	            Vector &base_data);
 	void FetchRow(TransactionData transaction, idx_t row_id, Vector &result, idx_t result_idx);
 
-	void RollbackUpdate(UpdateInfo *info);
-	void CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo *info);
-	void CleanupUpdate(UpdateInfo *info);
+	void RollbackUpdate(UpdateInfo &info);
+	void CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo &info);
+	void CleanupUpdate(UpdateInfo &info);
 
 	unique_ptr<BaseStatistics> GetStatistics();
 	StringHeap &GetStringHeap() {
@@ -76,7 +75,7 @@ public:
 	                                                 Vector &result);
 	typedef void (*fetch_row_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
 	                                     idx_t row_idx, Vector &result, idx_t result_idx);
-	typedef void (*rollback_update_function_t)(UpdateInfo *base_info, UpdateInfo *rollback_info);
+	typedef void (*rollback_update_function_t)(UpdateInfo &base_info, UpdateInfo &rollback_info);
 	typedef idx_t (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats, Vector &update,
 	                                              idx_t count, SelectionVector &sel);
 
@@ -97,12 +96,12 @@ private:
 
 struct UpdateNodeData {
 	unique_ptr<UpdateInfo> info;
-	unique_ptr<sel_t[]> tuples;
-	unique_ptr<data_t[]> tuple_data;
+	unsafe_unique_array<sel_t> tuples;
+	unsafe_unique_array<data_t> tuple_data;
 };
 
 struct UpdateNode {
-	unique_ptr<UpdateNodeData> info[RowGroup::ROW_GROUP_VECTOR_COUNT];
+	unique_ptr<UpdateNodeData> info[Storage::ROW_GROUP_VECTOR_COUNT];
 };
 
 } // namespace duckdb

@@ -45,6 +45,7 @@ public:
 	inline T ReadValue(uint8_t bytes, uint8_t trailing_zero) {
 		T result = 0;
 		switch (bytes) {
+			// LCOV_EXCL_START
 		case 1:
 			result = Load<uint8_t>(buffer + index);
 			index++;
@@ -73,6 +74,7 @@ public:
 			memcpy(&result, (void *)(buffer + index), 7);
 			index += 7;
 			return result;
+			// LCOV_EXCL_STOP
 		default:
 			if (trailing_zero < 8) {
 				result = Load<T>(buffer + index);
@@ -93,6 +95,7 @@ inline uint32_t ByteReader::ReadValue(uint8_t bytes, uint8_t trailing_zero) {
 	uint32_t result = 0;
 	switch (bytes) {
 	case 0:
+		// LCOV_EXCL_START
 		if (trailing_zero < 8) {
 			result = Load<uint32_t>(buffer + index);
 			index += sizeof(uint32_t);
@@ -115,6 +118,7 @@ inline uint32_t ByteReader::ReadValue(uint8_t bytes, uint8_t trailing_zero) {
 		result = Load<uint32_t>(buffer + index);
 		index += 4;
 		return result;
+		// LCOV_EXCL_STOP
 	default:
 		throw InternalException("Write of %llu bytes attempted into address pointing to 4 byte value", bytes);
 	}

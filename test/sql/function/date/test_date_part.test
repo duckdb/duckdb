@@ -3,6 +3,9 @@
 # group: [date]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 PRAGMA enable_verification
 
 statement ok
@@ -124,6 +127,18 @@ SELECT date_part('era', d) FROM dates;
 1
 1
 0
+NULL
+NULL
+NULL
+
+query I
+SELECT date_part('julian', d) FROM dates;
+----
+2448623
+2448685
+2448748
+2459581
+1705428
 NULL
 NULL
 NULL
@@ -352,6 +367,18 @@ NULL
 NULL
 NULL
 
+query I
+SELECT JULIAN(d) FROM dates;
+----
+2448623
+2448685
+2448748
+2459581
+1705428
+NULL
+NULL
+NULL
+
 query IIIIIIIIIIII
 select
 date_part('quarter', DATE '1992-01-20'),
@@ -370,7 +397,7 @@ date_part('quarter', DATE '1992-12-20')
 1	1	1	2	2	2	3	3	3	4	4	4
 
 # Correctness: Compare date_part values with scalar values
-foreach partcode era millennium century decade year quarter month day week weekday isodow dayofyear isoyear yearweek
+foreach partcode era millennium century decade year quarter month day week weekday isodow dayofyear isoyear yearweek julian
 
 query III
 SELECT d, DATE_PART('${partcode}', d) AS p, ${partcode}(d) AS f
@@ -379,6 +406,45 @@ WHERE p IS DISTINCT FROM f;
 ----
 
 endloop
+
+# Function-only parts
+query II
+SELECT d, epoch_ns(d) 
+FROM dates 
+WHERE d != '0044-03-15 (BC)' OR d IS NULL
+ORDER BY ALL;
+----
+NULL	NULL
+-infinity	NULL
+1992-01-01	694224000000000000
+1992-03-03	699580800000000000
+1992-05-05	705024000000000000
+2022-01-01	1640995200000000000
+infinity	NULL
+
+query II
+SELECT d, epoch_us(d) FROM dates ORDER BY ALL;
+----
+NULL	NULL
+-infinity	NULL
+0044-03-15 (BC)	-63517824000000000
+1992-01-01	694224000000000
+1992-03-03	699580800000000
+1992-05-05	705024000000000
+2022-01-01	1640995200000000
+infinity	NULL
+
+query II
+SELECT d, epoch_ms(d) FROM dates ORDER BY ALL;
+----
+NULL	NULL
+-infinity	NULL
+0044-03-15 (BC)	-63517824000000
+1992-01-01	694224000000
+1992-03-03	699580800000
+1992-05-05	705024000000
+2022-01-01	1640995200000
+infinity	NULL
 
 #
 # Structs
@@ -397,18 +463,18 @@ endloop
 
 # Date parts
 query II
-SELECT d, DATE_PART(['year', 'month', 'day'], d) AS parts
+SELECT d, DATE_PART(['year', 'month', 'day', 'epoch'], d) AS parts
 FROM dates
 ORDER BY 1;
 ----
 NULL	NULL
--infinity	{'year': NULL, 'month': NULL, 'day': NULL}
-0044-03-15 (BC)	{'year': -43, 'month': 3, 'day': 15}
-1992-01-01	{'year': 1992, 'month': 1, 'day': 1}
-1992-03-03	{'year': 1992, 'month': 3, 'day': 3}
-1992-05-05	{'year': 1992, 'month': 5, 'day': 5}
-2022-01-01	{'year': 2022, 'month': 1, 'day': 1}
-infinity	{'year': NULL, 'month': NULL, 'day': NULL}
+-infinity	{'year': NULL, 'month': NULL, 'day': NULL, 'epoch': NULL}
+0044-03-15 (BC)	{'year': -43, 'month': 3, 'day': 15, 'epoch': -63517824000.0}
+1992-01-01	{'year': 1992, 'month': 1, 'day': 1, 'epoch': 694224000.0}
+1992-03-03	{'year': 1992, 'month': 3, 'day': 3, 'epoch': 699580800.0}
+1992-05-05	{'year': 1992, 'month': 5, 'day': 5, 'epoch': 705024000.0}
+2022-01-01	{'year': 2022, 'month': 1, 'day': 1, 'epoch': 1640995200.0}
+infinity	{'year': NULL, 'month': NULL, 'day': NULL, 'epoch': NULL}
 
 # Year parts
 query II
@@ -427,18 +493,23 @@ infinity	{'era': NULL, 'millennium': NULL, 'century': NULL, 'decade': NULL, 'qua
 
 # Day parts
 query II
-SELECT d, DATE_PART(['weekday', 'isodow', 'doy'], d) AS parts
+SELECT d, DATE_PART(['weekday', 'isodow', 'doy', 'julian'], d) AS parts
 FROM dates
 ORDER BY 1;
 ----
 NULL	NULL
--infinity	{'weekday': NULL, 'isodow': NULL, 'doy': NULL}
-0044-03-15 (BC)	{'weekday': 5, 'isodow': 5, 'doy': 74}
-1992-01-01	{'weekday': 3, 'isodow': 3, 'doy': 1}
-1992-03-03	{'weekday': 2, 'isodow': 2, 'doy': 63}
-1992-05-05	{'weekday': 2, 'isodow': 2, 'doy': 126}
-2022-01-01	{'weekday': 6, 'isodow': 6, 'doy': 1}
-infinity	{'weekday': NULL, 'isodow': NULL, 'doy': NULL}
+-infinity	{'weekday': NULL, 'isodow': NULL, 'doy': NULL, 'julian': NULL}
+0044-03-15 (BC)	{'weekday': 5, 'isodow': 5, 'doy': 74, 'julian': 1705428.0}
+1992-01-01	{'weekday': 3, 'isodow': 3, 'doy': 1, 'julian': 2448623.0}
+1992-03-03	{'weekday': 2, 'isodow': 2, 'doy': 63, 'julian': 2448685.0}
+1992-05-05	{'weekday': 2, 'isodow': 2, 'doy': 126, 'julian': 2448748.0}
+2022-01-01	{'weekday': 6, 'isodow': 6, 'doy': 1, 'julian': 2459581.0}
+infinity	{'weekday': NULL, 'isodow': NULL, 'doy': NULL, 'julian': NULL}
+
+query I
+SELECT DATE_PART(['weekday', 'isodow', 'doy', 'julian'], '2022-01-01'::DATE) AS parts
+----
+{'weekday': 6, 'isodow': 6, 'doy': 1, 'julian': 2459581.0}
 
 # ISO parts
 query II
@@ -466,14 +537,21 @@ ORDER BY 1;
 
 # Invalid parts
 
-foreach hour minute second millisecond microsecond timezone timezone_hour timezone_minute
+foreach datepart hour minute second millisecond microsecond timezone timezone_hour timezone_minute
 
 statement error
 SELECT d, DATE_PART(['${datepart}'], d) AS parts
 FROM dates
 ORDER BY 1;
+----
+not recognized
 
 endloop
+
+statement error
+SELECT DATE_PART(['hour', 'minute'], '2023-09-17'::DATE) AS parts
+----
+not recognized
 
 #
 # Infinities
@@ -502,6 +580,22 @@ NULL
 
 endloop
 
+# Struct entries should be NULL
+query I
+SELECT DATE_PART(['year', 'month', 'day', 'epoch'], '${special}'::${datatype}) AS parts
+----
+{'year': NULL, 'month': NULL, 'day': NULL, 'epoch': NULL}
+
 endloop
 
 endloop
+
+query T
+WITH cte AS (
+    SELECT NULL::VARCHAR part
+    FROM range(1)
+)
+SELECT date_part(part, TIMESTAMP '2019-01-06 04:03:02')
+FROM cte
+----
+NULL

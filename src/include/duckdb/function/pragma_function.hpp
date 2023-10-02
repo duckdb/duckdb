@@ -40,7 +40,7 @@ public:
 	DUCKDB_API static PragmaFunction PragmaStatement(const string &name, pragma_query_t query);
 	DUCKDB_API static PragmaFunction PragmaStatement(const string &name, pragma_function_t function);
 
-	DUCKDB_API string ToString() override;
+	DUCKDB_API string ToString() const override;
 
 public:
 	PragmaType type;

@@ -3,7 +3,13 @@
 # group: [aggregates]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
 
 # Get around 1% approximately equal for R
 statement ok

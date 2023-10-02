@@ -5,14 +5,12 @@
 
 #include <string>
 
-extern "C" {
-#include <unistd.h>
-}
-
 #include "log.hh"
 #include "schema.hh"
 #include "impedance.hh"
 #include "random.hh"
+
+#include "duckdb/common/vector.hpp"
 
 using namespace std;
 
@@ -30,7 +28,7 @@ struct stats_visitor : prod_visitor {
 	}
 	void report() {
 		cerr << "production statistics" << endl;
-		vector<pair<const char *, long>> report;
+		duckdb::vector<pair<const char *, long>> report;
 		for (auto p : production_stats)
 			report.push_back(p);
 		stable_sort(
@@ -59,7 +57,7 @@ void cerr_logger::report() {
 	// 	 << 1000.0*query_count/query_time.count() << " exec/s)" << endl;
 	cerr << "AST stats (avg): height = " << sum_height / queries << " nodes = " << sum_nodes / queries << endl;
 
-	vector<pair<std::string, long>> report;
+	duckdb::vector<pair<std::string, long>> report;
 	for (auto e : errors) {
 		report.push_back(e);
 	}

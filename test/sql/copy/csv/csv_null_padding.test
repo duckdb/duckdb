@@ -1,0 +1,61 @@
+# name: test/sql/copy/csv/csv_null_padding.test
+# description: Test nullpadding setting
+# group: [csv]
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+# null padding with a header
+query IIII
+FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=True)
+----
+# this file has a bunch of gunk at the top	NULL	NULL	NULL
+one	two	three	four
+1	a	alice	NULL
+2	b	bob	NULL
+
+# without null padding we can only read one column
+query I
+FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False)
+----
+# this file has a bunch of gunk at the top
+one,two,three,four
+1,a,alice
+2,b,bob
+
+query I
+FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False, skip=1)
+----
+one,two,three,four
+1,a,alice
+2,b,bob
+
+query I
+FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False, skip=1)
+----
+one,two,three,four
+1,a,alice
+2,b,bob
+
+query III
+FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False, skip=2)
+----
+1	a	alice
+2	b	bob
+
+query I
+FROM read_csv_auto('data/csv/blank_line.csv', null_padding=True)
+----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+NULL
+11

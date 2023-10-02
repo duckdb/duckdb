@@ -2,6 +2,9 @@
 # description: Test LIMIT keyword {% | PERCENT}
 # group: [order]
 
+statement ok
+SET default_null_order='nulls_first';
+
 require skip_reload
 
 

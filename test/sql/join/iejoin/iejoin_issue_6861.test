@@ -1,0 +1,42 @@
+# name: test/sql/join/iejoin/iejoin_issue_6861.test
+# description: Issue #6861: Index out of bound for all-NULL case.
+# group: [iejoin]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test(x INT);
+
+query II
+SELECT * 
+FROM test AS a, test AS b 
+WHERE (a.x BETWEEN b.x AND b.x);
+----
+
+statement ok
+INSERT INTO test(x) VALUES (1), (2), (3), (NULL), (NULL), (NULL);
+
+statement ok
+CREATE TABLE all_null AS SELECT * FROM test;
+
+statement ok
+UPDATE all_null SET x=(NULL);
+
+query II
+SELECT * 
+FROM all_null AS a, all_null AS b 
+WHERE (a.x BETWEEN b.x AND b.x);
+----
+
+query II
+SELECT * 
+FROM test AS a, all_null AS b 
+WHERE (a.x BETWEEN b.x AND b.x);
+----
+
+query II
+SELECT * 
+FROM all_null AS a, test AS b 
+WHERE (a.x BETWEEN b.x AND b.x);
+----

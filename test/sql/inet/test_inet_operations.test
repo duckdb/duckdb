@@ -2,6 +2,9 @@
 # description: Test inet operations
 # group: [inet]
 
+statement ok
+SET default_null_order='nulls_first';
+
 require inet
 
 statement ok

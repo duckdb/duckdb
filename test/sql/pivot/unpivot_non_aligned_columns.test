@@ -1,0 +1,35 @@
+# name: test/sql/pivot/unpivot_non_aligned_columns.test
+# description: Test unpivot with unaligned columns
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test(id BIGINT, metric_1 VARCHAR, value_x VARCHAR, metric_2 VARCHAR, value_q VARCHAR, metric_3 VARCHAR, value_j VARCHAR);;
+
+statement ok
+INSERT INTO test VALUES(1,'a','a_value','b','b_value','c','c_value');
+
+statement ok
+INSERT INTO test VALUES(2,'d','d_value','e','e_value','f','f_value');
+
+statement error
+UNPIVOT test ON (metric_1, value_x), metric_2, metric_3;
+----
+UNPIVOT value count mismatch
+
+statement error
+UNPIVOT test ON (metric_1, value_x), (metric_2, value_q), (metric_3, value_j) INTO NAME metric VALUE metric_value;
+----
+UNPIVOT name count mismatch
+
+query IIII
+UNPIVOT test ON (metric_1, value_x), (metric_2, value_q), (metric_3, value_j) INTO NAME metric VALUES metric_value, metric_type;
+----
+1	metric_1_value_x	a	a_value
+1	metric_2_value_q	b	b_value
+1	metric_3_value_j	c	c_value
+2	metric_1_value_x	d	d_value
+2	metric_2_value_q	e	e_value
+2	metric_3_value_j	f	f_value

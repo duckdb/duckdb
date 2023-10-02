@@ -17,8 +17,14 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 struct TryCastToDecimal {
 	template <class SRC, class DST>
-	DUCKDB_API static inline bool Operation(SRC input, DST &result, string *error_message, uint8_t width,
-	                                        uint8_t scale) {
+	static inline bool Operation(SRC input, DST &result, string *error_message, uint8_t width, uint8_t scale) {
+		throw NotImplementedException("Unimplemented type for TryCastToDecimal!");
+	}
+};
+
+struct TryCastToDecimalCommaSeparated {
+	template <class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, string *error_message, uint8_t width, uint8_t scale) {
 		throw NotImplementedException("Unimplemented type for TryCastToDecimal!");
 	}
 };
@@ -367,6 +373,18 @@ DUCKDB_API bool TryCastToDecimal::Operation(string_t input, int64_t &result, str
 template <>
 DUCKDB_API bool TryCastToDecimal::Operation(string_t input, hugeint_t &result, string *error_message, uint8_t width,
                                             uint8_t scale);
+template <>
+DUCKDB_API bool TryCastToDecimalCommaSeparated::Operation(string_t input, int16_t &result, string *error_message,
+                                                          uint8_t width, uint8_t scale);
+template <>
+DUCKDB_API bool TryCastToDecimalCommaSeparated::Operation(string_t input, int32_t &result, string *error_message,
+                                                          uint8_t width, uint8_t scale);
+template <>
+DUCKDB_API bool TryCastToDecimalCommaSeparated::Operation(string_t input, int64_t &result, string *error_message,
+                                                          uint8_t width, uint8_t scale);
+template <>
+DUCKDB_API bool TryCastToDecimalCommaSeparated::Operation(string_t input, hugeint_t &result, string *error_message,
+                                                          uint8_t width, uint8_t scale);
 
 struct StringCastFromDecimal {
 	template <class SRC>

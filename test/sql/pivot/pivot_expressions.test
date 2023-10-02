@@ -1,0 +1,75 @@
+# name: test/sql/pivot/pivot_expressions.test
+# description: Test SQL pivot expressions
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Cities(Country VARCHAR, Name VARCHAR, Year INT, Population INT);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2000, 1005);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2010, 1065);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2020, 1158);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2000, 564);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2010, 608);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2020, 738);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2000, 8015);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2010, 8175);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2020, 8772);
+
+query IIII rowsort
+PIVOT Cities ON Country || '_' || Name USING SUM(Population) GROUP BY Year;
+----
+2000	1005	8015	564
+2010	1065	8175	608
+2020	1158	8772	738
+
+query II rowsort
+PIVOT Cities ON (CASE WHEN Country='NL' THEN NULL ELSE Country END) USING SUM(Population) GROUP BY Year;
+----
+2000	8579
+2010	8783
+2020	9510
+
+statement error
+PIVOT Cities ON min(Country) over () USING SUM(Population) GROUP BY Year;
+----
+cannot contain window functions
+
+statement error
+PIVOT Cities ON min(Country) USING SUM(Population) GROUP BY Year;
+----
+cannot contain aggregates
+
+statement error
+PIVOT Cities ON NULL USING SUM(Population) GROUP BY Year;
+----
+Cannot pivot on constant value
+
+statement error
+PIVOT Cities ON 'hello world' USING SUM(Population) GROUP BY Year;
+----
+Cannot pivot on constant value
+
+statement error
+PIVOT Cities ON (SELECT COUNTRY) USING SUM(Population) GROUP BY Year;
+----
+Cannot pivot on subquery

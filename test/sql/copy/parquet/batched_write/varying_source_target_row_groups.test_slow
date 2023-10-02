@@ -1,0 +1,38 @@
+# name: test/sql/copy/parquet/batched_write/varying_source_target_row_groups.test_slow
+# description: Verify source-target row group size pairs
+# group: [batched_write]
+
+require parquet
+
+statement ok
+CREATE TABLE integers AS SELECT i, i // 5 AS j FROM range(1000000) t(i) ;
+
+foreach src_size 777 9999 83838 143431 333333
+
+foreach tgt_size 777 9999 83838 143431 333333
+
+statement ok
+SET threads=1
+
+statement ok
+COPY integers TO '__TEST_DIR__/src_size.parquet' (ROW_GROUP_SIZE ${src_size});
+
+statement ok
+SET threads=4
+
+query I
+select abs(median(row_group_num_rows)-${src_size})<2048 from parquet_metadata('__TEST_DIR__/src_size.parquet');
+----
+true
+
+statement ok
+COPY '__TEST_DIR__/src_size.parquet' TO '__TEST_DIR__/tgt_size.parquet' (ROW_GROUP_SIZE ${tgt_size});
+
+query I
+select abs(median(row_group_num_rows)-${tgt_size})<2048 from parquet_metadata('__TEST_DIR__/tgt_size.parquet');
+----
+true
+
+endloop
+
+endloop

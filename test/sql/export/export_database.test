@@ -2,6 +2,9 @@
 # description: Test export database
 # group: [export]
 
+statement ok
+SET default_null_order='nulls_first';
+
 # create a bunch of tables with data and views
 
 statement ok

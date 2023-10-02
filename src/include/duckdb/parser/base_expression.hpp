@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
@@ -70,22 +71,33 @@ public:
 	//! Expression::Equals() returns true), that their hash value is identical as well.
 	virtual hash_t Hash() const = 0;
 	//! Returns true if this expression is equal to another expression
-	virtual bool Equals(const BaseExpression *other) const;
+	virtual bool Equals(const BaseExpression &other) const;
 
-	static bool Equals(BaseExpression *left, BaseExpression *right) {
-		if (left == right) {
-			return true;
-		}
-		if (!left || !right) {
-			return false;
-		}
-		return left->Equals(right);
+	static bool Equals(const BaseExpression &left, const BaseExpression &right) {
+		return left.Equals(right);
 	}
 	bool operator==(const BaseExpression &rhs) {
-		return this->Equals(&rhs);
+		return Equals(rhs);
 	}
 
 	virtual void Verify() const;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (expression_class != TARGET::TYPE) {
+			throw InternalException("Failed to cast expression to type - expression type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (expression_class != TARGET::TYPE) {
+			throw InternalException("Failed to cast expression to type - expression type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 } // namespace duckdb

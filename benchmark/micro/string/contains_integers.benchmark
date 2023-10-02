@@ -8,12 +8,12 @@ group string
 require tpch
 
 load
-CREATE TABLE strs AS SELECT (i * 9876983769044 % 10000000)::VARCHAR AS s FROM range(0, 10000000) t(i);
+CREATE TABLE strs AS SELECT (i * 9 % 10000000)::VARCHAR AS s FROM range(0, 10000000) t(i);
 
 run
 SELECT COUNT(*) FROM strs WHERE contains(s, '1234')
 
 result I
-3209
+4000
 
 

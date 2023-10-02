@@ -17,7 +17,6 @@ struct DescRecord {
 public:
 	DescRecord() {};
 	DescRecord(const DescRecord &other);
-	SQLRETURN SetValueType(SQLSMALLINT value_type);
 	SQLRETURN SetSqlDescType(SQLSMALLINT type);
 	SQLRETURN SetSqlDataType(SQLSMALLINT type);
 	void SetDescUnsignedField(const duckdb::LogicalType &type);
@@ -67,7 +66,7 @@ public:
 
 public:
 	SQLSMALLINT sql_desc_alloc_type;
-	// default value is 1 for array size, this should be use by odbc_fetch
+	// default value is 1 for array size, this should be used by odbc_fetch
 	SQLULEN sql_desc_array_size = 1;
 	SQLUSMALLINT *sql_desc_array_status_ptr;
 	SQLLEN *sql_desc_bind_offset_ptr = nullptr;

@@ -1,0 +1,251 @@
+# name: test/sql/copy/csv/parallel/test_multiple_files.test
+# description: Test parallel read CSV function on multiple files
+# group: [parallel]
+
+# force parallelism of the queries
+statement ok
+PRAGMA verify_parallelism
+
+loop thr 1 8
+
+statement ok
+pragma threads=${thr}
+
+query IIII rowsort
+select * from read_csv_auto('test/sql/copy/csv/data/auto/glob/[0-9].csv');
+----
+0	0	1.0	zero
+1	1	1.1	one
+10	10	2.0	zero
+11	11	2.1	one
+12	12	2.2	two
+13	13	2.3	three
+14	14	2.4	four
+15	15	2.5	five
+16	16	2.6	six
+17	17	2.7	seven
+18	18	2.8	eight
+19	19	2.9	nine
+2	2	1.2	two
+20	20	3.0	zero
+21	21	3.1	one
+22	22	3.2	two
+23	23	3.3	three
+24	24	3.4	four
+25	25	3.5	five
+26	26	3.6	six
+3	3	1.3	three
+4	4	1.4	four
+5	5	1.5	five
+50000	0	1.0	zero
+50001	1	1.1	one
+50002	2	1.2	two
+50003	3	1.3	three
+50004	4	1.4	four
+50005	5	1.5	five
+50006	6	1.6	six
+50007	7	1.7	seven
+50008	8	1.8	eight
+50009	9	1.9	nine
+50010	10	2.0	zero
+50011	11	2.1	one
+50012	12	2.2	two
+50013	13	2.3	three
+50014	14	2.4	four
+50015	15	2.5	five
+50016	16	2.6	six
+50017	17	2.7	seven
+50018	18	2.8	eight
+50019	19	2.9	nine
+50020	20	3.0	zero
+50021	21	3.1	one
+50022	22	3.2	two
+50023	23	3.3	three
+50024	24	3.4	four
+50025	25	3.5	five
+50026	26	3.6	six
+50027	27	3.7	seven
+6	6	1.6	six
+7	7	1.7	seven
+8	8	1.8	eight
+9	9	1.9	nine
+
+query IIII rowsort
+select * from read_csv_auto('test/sql/copy/csv/data/auto/glob/[0-9].csv', buffer_size=100)
+----
+0	0	1.0	zero
+1	1	1.1	one
+10	10	2.0	zero
+11	11	2.1	one
+12	12	2.2	two
+13	13	2.3	three
+14	14	2.4	four
+15	15	2.5	five
+16	16	2.6	six
+17	17	2.7	seven
+18	18	2.8	eight
+19	19	2.9	nine
+2	2	1.2	two
+20	20	3.0	zero
+21	21	3.1	one
+22	22	3.2	two
+23	23	3.3	three
+24	24	3.4	four
+25	25	3.5	five
+26	26	3.6	six
+3	3	1.3	three
+4	4	1.4	four
+5	5	1.5	five
+50000	0	1.0	zero
+50001	1	1.1	one
+50002	2	1.2	two
+50003	3	1.3	three
+50004	4	1.4	four
+50005	5	1.5	five
+50006	6	1.6	six
+50007	7	1.7	seven
+50008	8	1.8	eight
+50009	9	1.9	nine
+50010	10	2.0	zero
+50011	11	2.1	one
+50012	12	2.2	two
+50013	13	2.3	three
+50014	14	2.4	four
+50015	15	2.5	five
+50016	16	2.6	six
+50017	17	2.7	seven
+50018	18	2.8	eight
+50019	19	2.9	nine
+50020	20	3.0	zero
+50021	21	3.1	one
+50022	22	3.2	two
+50023	23	3.3	three
+50024	24	3.4	four
+50025	25	3.5	five
+50026	26	3.6	six
+50027	27	3.7	seven
+6	6	1.6	six
+7	7	1.7	seven
+8	8	1.8	eight
+9	9	1.9	nine
+
+
+query IIII rowsort
+select * from read_csv('test/sql/copy/csv/data/auto/glob/[0-9].csv', AUTO_DETECT=true)
+----
+0	0	1.0	zero
+1	1	1.1	one
+10	10	2.0	zero
+11	11	2.1	one
+12	12	2.2	two
+13	13	2.3	three
+14	14	2.4	four
+15	15	2.5	five
+16	16	2.6	six
+17	17	2.7	seven
+18	18	2.8	eight
+19	19	2.9	nine
+2	2	1.2	two
+20	20	3.0	zero
+21	21	3.1	one
+22	22	3.2	two
+23	23	3.3	three
+24	24	3.4	four
+25	25	3.5	five
+26	26	3.6	six
+3	3	1.3	three
+4	4	1.4	four
+5	5	1.5	five
+50000	0	1.0	zero
+50001	1	1.1	one
+50002	2	1.2	two
+50003	3	1.3	three
+50004	4	1.4	four
+50005	5	1.5	five
+50006	6	1.6	six
+50007	7	1.7	seven
+50008	8	1.8	eight
+50009	9	1.9	nine
+50010	10	2.0	zero
+50011	11	2.1	one
+50012	12	2.2	two
+50013	13	2.3	three
+50014	14	2.4	four
+50015	15	2.5	five
+50016	16	2.6	six
+50017	17	2.7	seven
+50018	18	2.8	eight
+50019	19	2.9	nine
+50020	20	3.0	zero
+50021	21	3.1	one
+50022	22	3.2	two
+50023	23	3.3	three
+50024	24	3.4	four
+50025	25	3.5	five
+50026	26	3.6	six
+50027	27	3.7	seven
+6	6	1.6	six
+7	7	1.7	seven
+8	8	1.8	eight
+9	9	1.9	nine
+
+query IIII rowsort
+select * from read_csv('test/sql/copy/csv/data/auto/glob/[0-9].csv', sample_size=-1, header=True, new_line = '\r\n', columns={'row_id':'BIGINT','integer':'INTEGER','float':'DOUBLE', 'text':'VARCHAR'})
+----
+0	0	1.0	zero
+1	1	1.1	one
+10	10	2.0	zero
+11	11	2.1	one
+12	12	2.2	two
+13	13	2.3	three
+14	14	2.4	four
+15	15	2.5	five
+16	16	2.6	six
+17	17	2.7	seven
+18	18	2.8	eight
+19	19	2.9	nine
+2	2	1.2	two
+20	20	3.0	zero
+21	21	3.1	one
+22	22	3.2	two
+23	23	3.3	three
+24	24	3.4	four
+25	25	3.5	five
+26	26	3.6	six
+3	3	1.3	three
+4	4	1.4	four
+5	5	1.5	five
+50000	0	1.0	zero
+50001	1	1.1	one
+50002	2	1.2	two
+50003	3	1.3	three
+50004	4	1.4	four
+50005	5	1.5	five
+50006	6	1.6	six
+50007	7	1.7	seven
+50008	8	1.8	eight
+50009	9	1.9	nine
+50010	10	2.0	zero
+50011	11	2.1	one
+50012	12	2.2	two
+50013	13	2.3	three
+50014	14	2.4	four
+50015	15	2.5	five
+50016	16	2.6	six
+50017	17	2.7	seven
+50018	18	2.8	eight
+50019	19	2.9	nine
+50020	20	3.0	zero
+50021	21	3.1	one
+50022	22	3.2	two
+50023	23	3.3	three
+50024	24	3.4	four
+50025	25	3.5	five
+50026	26	3.6	six
+50027	27	3.7	seven
+6	6	1.6	six
+7	7	1.7	seven
+8	8	1.8	eight
+9	9	1.9	nine
+
+endloop

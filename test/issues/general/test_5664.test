@@ -1,0 +1,27 @@
+# name: test/issues/general/test_5664.test
+# description: Issue 5664: Create type from non-existing type causes INTERNAL Error
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+# create a type with a non-existant type as source
+statement error
+CREATE TYPE alias as BLOBL;
+
+statement ok
+CREATE TYPE a as BLOB;
+
+statement ok
+CREATE TYPE b as a;
+
+statement ok
+CREATE TABLE test (x b);
+
+statement ok
+INSERT INTO test VALUES ('duckdb');
+
+query I
+SELECT typeof(x) FROM test;
+----
+b

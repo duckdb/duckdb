@@ -1,6 +1,6 @@
 # DuckDB Node Bindings
 
-This package provides a node.js API for [DuckDB](https://github.com/cwida/duckdb), the "SQLite for Analytics". The API for this client is somewhat compliant to the SQLite node.js client for easier transition (and transition you must eventually).
+This package provides a node.js API for [DuckDB](https://github.com/duckdb/duckdb), the "SQLite for Analytics". The API for this client is somewhat compliant to the SQLite node.js client for easier transition (and transition you must eventually).
 
 Load the package and create a database object:
 
@@ -99,6 +99,13 @@ var stmt = con.prepare('select ?::INTEGER as fortytwo', function(err, stmt) {
   });
 });
 ```
+
+## Supported Node versions
+We actively support only LTS and In-Support Node versions, as per July 2023, they are: Node 16, Node 18 and Node 20.
+Release schedule for Node.js can be checked here: https://github.com/nodejs/release#release-schedule.
+
+We currently bundle and test DuckDB also for Node 10, 12, 14, 17 and 19. We plan of going so going forward as long as the tooling supports it.
+As per July 2023, Node 15 has been removed from the supported versions.
 
 ## Development
 

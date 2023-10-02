@@ -1,0 +1,59 @@
+# name: test/sql/function/list/list_resize_error.test
+# description: test for list_resize() that should error
+# group: [list]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+prepare q1 as select list_resize(?, ?);
+
+statement ok
+prepare q2 as select array_resize(?, ?);
+
+foreach q q1 q2
+
+statement error
+execute ${q}([1, 2, 3], -1);
+
+statement error
+execute ${q}([1, 2, 3], 'a');
+
+statement error
+execute ${q}('cici n est pas een list', 2);
+
+statement error
+execute ${q}([1, 2, 3], 'huh');
+----
+Conversion Error: Could not convert string 'huh' to UINT64
+
+statement error
+execute ${q}();
+
+statement error
+execute ${q}([1, 2, 3]);
+
+endloop
+
+statement ok
+prepare q3 as select list_resize(?, ?, ?);
+
+statement ok
+prepare q4 as select array_resize(?, ?, ?);
+
+foreach q q3 q4
+
+statement error
+execute ${q}([1, 2, 3], 5, 'abc');
+----
+Conversion Error: Could not convert string 'abc' to INT32
+
+statement error
+execute ${q}([1, 2, 3], 2, 3, 4);
+
+statement error
+execute ${q}([1, 2, 3], 1, [1, 2, 3]);
+----
+Conversion Error: Unimplemented type for cast (INTEGER[] -> INTEGER)
+
+endloop

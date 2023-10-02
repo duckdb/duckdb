@@ -1,0 +1,13 @@
+# name: test/sql/upsert/no_complex_default.test
+# group: [upsert]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create or replace table tbl (a integer default 3);
+
+statement error
+insert into tbl VALUES ((3+DEFAULT));
+----
+Binder Error: DEFAULT is not allowed here!

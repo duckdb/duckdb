@@ -1,17 +1,21 @@
 # test fetchdf with various types
-import pandas
 import numpy
+import pytest
+import duckdb
+from conftest import NumpyPandas
+
 
 class TestType(object):
-    def test_fetchdf(self, duckdb_cursor):
-        duckdb_cursor.execute("CREATE TABLE items(item VARCHAR)")
-        duckdb_cursor.execute("INSERT INTO items VALUES ('jeans'), (''), (NULL)")
-        res = duckdb_cursor.execute("SELECT item FROM items").fetchdf()
-        assert isinstance(res, pandas.DataFrame)
+    @pytest.mark.parametrize('pandas', [NumpyPandas()])
+    def test_fetchdf(self, pandas):
+        con = duckdb.connect()
+        con.execute("CREATE TABLE items(item VARCHAR)")
+        con.execute("INSERT INTO items VALUES ('jeans'), (''), (NULL)")
+        res = con.execute("SELECT item FROM items").fetchdf()
+        assert isinstance(res, pandas.core.frame.DataFrame)
 
-        arr = numpy.ma.masked_array(['jeans', '', None])
-        arr.mask = [False, False, True]
-        arr = {'item': arr}
-        df = pandas.DataFrame.from_dict(arr)
+        df = pandas.DataFrame({'item': ['jeans', '', None]})
 
+        print(res)
+        print(df)
         pandas.testing.assert_frame_equal(res, df)

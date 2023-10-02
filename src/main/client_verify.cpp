@@ -7,6 +7,20 @@
 
 namespace duckdb {
 
+static void ThrowIfExceptionIsInternal(StatementVerifier &verifier) {
+	if (!verifier.materialized_result) {
+		return;
+	}
+	auto &result = *verifier.materialized_result;
+	if (!result.HasError()) {
+		return;
+	}
+	auto &error = result.GetErrorObject();
+	if (error.Type() == ExceptionType::INTERNAL) {
+		error.Throw();
+	}
+}
+
 PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string &query,
                                           unique_ptr<SQLStatement> statement) {
 	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
@@ -28,12 +42,16 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::DESERIALIZED, stmt));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::UNOPTIMIZED, stmt));
 		prepared_statement_verifier = StatementVerifier::Create(VerificationType::PREPARED, stmt);
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+		// This verification is quite slow, so we only run it for the async sink/source debug mode
+		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::NO_OPERATOR_CACHING, stmt));
+#endif
 	}
 	if (config.verify_external) {
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::EXTERNAL, stmt));
 	}
 
-	auto original = make_unique<StatementVerifier>(move(statement));
+	auto original = make_uniq<StatementVerifier>(std::move(statement));
 	for (auto &verifier : statement_verifiers) {
 		original->CheckExpressions(*verifier);
 	}
@@ -54,7 +72,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 
 	// Execute the original statement
 	bool any_failed = original->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
-		return RunStatementInternal(lock, q, move(s), false, false);
+		return RunStatementInternal(lock, q, std::move(s), false, false);
 	});
 	if (!any_failed) {
 		statement_verifiers.emplace_back(
@@ -63,7 +81,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	// Execute the verifiers
 	for (auto &verifier : statement_verifiers) {
 		bool failed = verifier->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
-			return RunStatementInternal(lock, q, move(s), false, false);
+			return RunStatementInternal(lock, q, std::move(s), false, false);
 		});
 		any_failed = any_failed || failed;
 	}
@@ -71,11 +89,14 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	if (!any_failed && prepared_statement_verifier) {
 		// If none failed, we execute the prepared statement verifier
 		bool failed = prepared_statement_verifier->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
-			return RunStatementInternal(lock, q, move(s), false, false);
+			return RunStatementInternal(lock, q, std::move(s), false, false);
 		});
 		if (!failed) {
 			// PreparedStatementVerifier fails if it runs into a ParameterNotAllowedException, which is OK
-			statement_verifiers.push_back(move(prepared_statement_verifier));
+			statement_verifiers.push_back(std::move(prepared_statement_verifier));
+		} else {
+			// If it does fail, let's make sure it's not an internal exception
+			ThrowIfExceptionIsInternal(*prepared_statement_verifier);
 		}
 	} else {
 		if (ValidChecker::IsInvalidated(*db)) {
@@ -90,9 +111,9 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	// Check explain, only if q does not already contain EXPLAIN
 	if (original->materialized_result->success) {
 		auto explain_q = "EXPLAIN " + query;
-		auto explain_stmt = make_unique<ExplainStatement>(move(statement_copy_for_explain));
+		auto explain_stmt = make_uniq<ExplainStatement>(std::move(statement_copy_for_explain));
 		try {
-			RunStatementInternal(lock, explain_q, move(explain_stmt), false, false);
+			RunStatementInternal(lock, explain_q, std::move(explain_stmt), false, false);
 		} catch (std::exception &ex) { // LCOV_EXCL_START
 			interrupted = false;
 			return PreservedError("EXPLAIN failed but query did not (" + string(ex.what()) + ")");

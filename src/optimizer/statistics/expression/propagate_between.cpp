@@ -29,33 +29,35 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundBetwee
 	if (lower_prune == FilterPropagateResult::FILTER_ALWAYS_TRUE &&
 	    upper_prune == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 		// both filters are always true: replace the between expression with a constant true
-		*expr_ptr = make_unique<BoundConstantExpression>(Value::BOOLEAN(true));
+		*expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
 	} else if (lower_prune == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
 	           upper_prune == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 		// either one of the filters is always false: replace the between expression with a constant false
-		*expr_ptr = make_unique<BoundConstantExpression>(Value::BOOLEAN(false));
+		*expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
 	} else if (lower_prune == FilterPropagateResult::FILTER_FALSE_OR_NULL ||
 	           upper_prune == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 		// either one of the filters is false or null: replace with a constant or null (false)
 		vector<unique_ptr<Expression>> children;
-		children.push_back(move(between.input));
-		children.push_back(move(between.lower));
-		children.push_back(move(between.upper));
-		*expr_ptr = ExpressionRewriter::ConstantOrNull(move(children), Value::BOOLEAN(false));
+		children.push_back(std::move(between.input));
+		children.push_back(std::move(between.lower));
+		children.push_back(std::move(between.upper));
+		*expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(false));
 	} else if (lower_prune == FilterPropagateResult::FILTER_TRUE_OR_NULL &&
 	           upper_prune == FilterPropagateResult::FILTER_TRUE_OR_NULL) {
 		// both filters are true or null: replace with a true or null
 		vector<unique_ptr<Expression>> children;
-		children.push_back(move(between.input));
-		children.push_back(move(between.lower));
-		children.push_back(move(between.upper));
-		*expr_ptr = ExpressionRewriter::ConstantOrNull(move(children), Value::BOOLEAN(true));
+		children.push_back(std::move(between.input));
+		children.push_back(std::move(between.lower));
+		children.push_back(std::move(between.upper));
+		*expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(true));
 	} else if (lower_prune == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 		// lower filter is always true: replace with upper comparison
-		*expr_ptr = make_unique<BoundComparisonExpression>(upper_comparison, move(between.input), move(between.upper));
+		*expr_ptr =
+		    make_uniq<BoundComparisonExpression>(upper_comparison, std::move(between.input), std::move(between.upper));
 	} else if (upper_prune == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 		// upper filter is always true: replace with lower comparison
-		*expr_ptr = make_unique<BoundComparisonExpression>(lower_comparison, move(between.input), move(between.lower));
+		*expr_ptr =
+		    make_uniq<BoundComparisonExpression>(lower_comparison, std::move(between.input), std::move(between.lower));
 	}
 	return nullptr;
 }

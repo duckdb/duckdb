@@ -56,3 +56,31 @@ SELECT BIT_XOR(1, 2, 3)
 statement error
 SELECT BIT_XOR(BIT_XOR(1))
 
+#test on bit types
+statement ok
+CREATE TABLE bits(b BIT);
+
+statement ok
+INSERT INTO bits VALUES ('1010101001'), ('0011010101'), ('0001011101'), ('1011111101'), ('0000010001'), ('1000110001')
+
+query I
+SELECT BIT_XOR(b) FROM bits
+----
+1011111100
+
+query I
+SELECT BIT_XOR(b) FROM bits WHERE get_bit(b, 3) = 1;
+----
+1001110101
+
+query I
+SELECT BIT_XOR('101011'::BIT)
+----
+101011
+
+query I
+SELECT BIT_XOR('0010101010101010101101011'::BIT) from bits
+----
+0000000000000000000000000
+
+

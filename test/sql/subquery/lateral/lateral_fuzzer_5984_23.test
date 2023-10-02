@@ -1,0 +1,13 @@
+# name: test/sql/subquery/lateral/lateral_fuzzer_5984_23.test
+# description: Test case for fuzzer issue 5984, number 23
+# group: [lateral]
+
+query I
+SELECT 1 FROM (SELECT 1) t1(c1), (SELECT TRUE IN (TRUE, t1.c1 LIKE 'a' ESCAPE NULL));
+----
+1
+
+query I
+SELECT (SELECT t1.c1 LIKE 'a' ESCAPE NULL) FROM (SELECT 1) t1(c1)
+----
+NULL

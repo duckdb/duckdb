@@ -1,0 +1,46 @@
+# name: test/sql/subquery/scalar/test_issue_7079.test
+# description: Issue 7079: Coalesce function not functioning properly in DuckDB macro function
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE MACRO array_rv(arr) AS (
+    SELECT CASE WHEN l IS NOT NULL THEN l ELSE arr END 
+    FROM (
+        SELECT array_agg(elm ORDER BY g DESC) as l
+        FROM (SELECT generate_subscripts(arr, 1) AS g, arr[g] AS elm)
+    ) 
+);
+
+statement ok
+CREATE MACRO array_rv_coal(arr) AS (
+    SELECT COALESCE(l,arr)
+    FROM (
+        SELECT array_agg(elm ORDER BY g DESC) as l
+        FROM (SELECT generate_subscripts(arr, 1) AS g, arr[g] AS elm)
+    ) 
+);
+
+statement ok
+CREATE TABLE t AS (
+  SELECT [1, 2, 3] AS arr UNION ALL   
+  SELECT [4, 5] AS arr UNION ALL   
+  SELECT [] AS arr 
+);
+
+
+query I
+SELECT array_rv(arr) FROM t ORDER BY arr;
+----
+[]
+[3, 2, 1]
+[5, 4]
+
+query I
+SELECT array_rv_coal(arr) FROM t ORDER BY arr;
+----
+[]
+[3, 2, 1]
+[5, 4]

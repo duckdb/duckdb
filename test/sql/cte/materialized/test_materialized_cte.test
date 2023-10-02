@@ -1,0 +1,77 @@
+# name: test/sql/cte/materialized/test_materialized_cte.test
+# description: Test Materialized Common Table Expressions (CTE)
+# group: [materialized]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+WITH t(x) AS MATERIALIZED (SELECT 1) SELECT * FROM t;
+----
+1
+
+query II
+WITH t(x) AS MATERIALIZED (SELECT t FROM generate_series(1,3) AS _(t)) SELECT t1.x,1 as y FROM t AS t1 ORDER BY x;
+----
+1	1
+2	1
+3	1
+
+query II
+WITH t(x) AS MATERIALIZED (SELECT t FROM generate_series(1,3) AS _(t)) SELECT t1.x, t1.x FROM t AS t1 ORDER BY x;
+----
+1	1
+2	2
+3	3
+
+query II
+WITH t(x) AS MATERIALIZED (SELECT t FROM generate_series(1,3) AS _(t)) SELECT t1.x, t2.x FROM t AS t1, t AS t2 ORDER BY t1.x, t2.x;
+----
+1	1
+1	2
+1	3
+2	1
+2	2
+2	3
+3	1
+3	2
+3	3
+
+query II
+WITH t(x) AS MATERIALIZED (SELECT 1),
+     u(x) AS MATERIALIZED (SELECT 2)
+  SELECT *
+  FROM u FULL OUTER JOIN t ON TRUE;
+----
+2	1
+
+query I
+WITH t(x) AS MATERIALIZED (SELECT x FROM generate_series(1,10) AS _(x) limit 4)   SELECT DISTINCT x   FROM t order by x desc;
+----
+4
+3
+2
+1
+
+query I
+WITH t(x) AS MATERIALIZED (SELECT x FROM generate_series(1,10) AS _(x) limit 4)   SELECT DISTINCT x   FROM t order by x desc LIMIT 2;
+----
+4
+3
+
+query I
+WITH t(x) AS MATERIALIZED (
+  WITH u(x) AS MATERIALIZED (
+    SELECT 42
+  ) SELECT * FROM u
+) SELECT * FROM t;
+----
+42
+
+query I
+WITH t(x) AS MATERIALIZED (SELECT 1),
+     u(x) AS MATERIALIZED (SELECT x+1 FROM t)
+  TABLE u UNION ALL TABLE t;
+----
+2
+1

@@ -8,14 +8,18 @@
 
 #pragma once
 
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/extra_operator_info.hpp"
 
 namespace duckdb {
 
 //! LogicalGet represents a scan operation from a data source
 class LogicalGet : public LogicalOperator {
+public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_GET;
+
 public:
 	LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
 	           vector<LogicalType> returned_types, vector<string> returned_names);
@@ -44,21 +48,34 @@ public:
 	vector<LogicalType> input_table_types;
 	//! The set of named input table names for the table-in table-out function
 	vector<string> input_table_names;
+	//! For a table-in-out function, the set of projected input columns
+	vector<column_t> projected_input;
+	//! Currently stores File Filters (as strings) applied by hive partitioning/complex filter pushdown
+	//! Stored so the can be included in explain output
+	ExtraOperatorInfo extra_info;
 
 	string GetName() const override;
 	string ParamsToString() const override;
 	//! Returns the underlying table that is being scanned, or nullptr if there is none
-	TableCatalogEntry *GetTable() const;
+	optional_ptr<TableCatalogEntry> GetTable() const;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
 	idx_t EstimateCardinality(ClientContext &context) override;
 
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 	vector<idx_t> GetTableIndex() const override;
+	//! Skips the serialization check in VerifyPlan
+	bool SupportSerialization() const override {
+		return function.verify_serialization;
+	}
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
 protected:
 	void ResolveTypes() override;
+
+private:
+	LogicalGet();
 };
 } // namespace duckdb

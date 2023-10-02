@@ -1,7 +1,7 @@
 #include "duckdb_python/pyrelation.hpp"
-#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
-#include "duckdb_python/pandas_analyzer.hpp"
+#include "duckdb_python/pandas/pandas_analyzer.hpp"
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb/common/types/decimal.hpp"
 
@@ -104,11 +104,8 @@ static bool SatisfiesMapConstraints(const LogicalType &left, const LogicalType &
 }
 
 static LogicalType ConvertStructToMap(LogicalType &map_value_type) {
-	child_list_t<LogicalType> children;
 	// TODO: find a way to figure out actual type of the keys, not just the converted one
-	children.push_back(make_pair("key", LogicalType::LIST(LogicalType::VARCHAR)));
-	children.push_back(make_pair("value", LogicalType::LIST(map_value_type)));
-	return LogicalType::MAP(move(children));
+	return LogicalType::MAP(LogicalType::VARCHAR, map_value_type);
 }
 
 static bool UpgradeType(LogicalType &left, const LogicalType &right) {
@@ -118,7 +115,21 @@ static bool UpgradeType(LogicalType &left, const LogicalType &right) {
 	}
 	// If struct constraints are not respected, left will be set to MAP
 	if (left.id() == LogicalTypeId::STRUCT && right.id() == left.id()) {
-		if (!IsStructColumnValid(left, right)) {
+		bool valid_struct = IsStructColumnValid(left, right);
+		if (valid_struct) {
+			child_list_t<LogicalType> children;
+			for (idx_t i = 0; i < StructType::GetChildCount(right); i++) {
+				auto &right_child = StructType::GetChildType(right, i);
+				auto new_child = StructType::GetChildType(left, i);
+				auto child_name = StructType::GetChildName(left, i);
+				if (!UpgradeType(new_child, right_child)) {
+					return false;
+				}
+				children.push_back(std::make_pair(child_name, new_child));
+			}
+			left = LogicalType::STRUCT(std::move(children));
+		}
+		if (!valid_struct) {
 			LogicalType map_value_type = LogicalType::SQLNULL;
 			if (SatisfiesMapConstraints(left, right, map_value_type)) {
 				left = ConvertStructToMap(map_value_type);
@@ -132,17 +143,18 @@ static bool UpgradeType(LogicalType &left, const LogicalType &right) {
 	return true;
 }
 
-LogicalType PandasAnalyzer::GetListType(py::handle &ele, bool &can_convert) {
+LogicalType PandasAnalyzer::GetListType(py::object &ele, bool &can_convert) {
 	auto size = py::len(ele);
 
 	if (size == 0) {
-		return LogicalType::LIST(LogicalType::SQLNULL);
+		return LogicalType::SQLNULL;
 	}
 
 	idx_t i = 0;
 	LogicalType list_type = LogicalType::SQLNULL;
 	for (auto py_val : ele) {
-		auto item_type = GetItemType(py_val, can_convert);
+		auto object = py::reinterpret_borrow<py::object>(py_val);
+		auto item_type = GetItemType(object, can_convert);
 		if (!i) {
 			list_type = item_type;
 		} else {
@@ -155,15 +167,11 @@ LogicalType PandasAnalyzer::GetListType(py::handle &ele, bool &can_convert) {
 		}
 		i++;
 	}
-	return LogicalType::LIST(list_type);
+	return list_type;
 }
 
 static LogicalType EmptyMap() {
-	child_list_t<LogicalType> child_types;
-	auto empty = LogicalType::LIST(LogicalTypeId::SQLNULL);
-	child_types.push_back(make_pair("key", empty));
-	child_types.push_back(make_pair("value", empty));
-	return LogicalType::MAP(move(child_types));
+	return LogicalType::MAP(LogicalTypeId::SQLNULL, LogicalTypeId::SQLNULL);
 }
 
 //! Check if the keys match
@@ -217,7 +225,6 @@ LogicalType PandasAnalyzer::DictToMap(const PyDictionary &dict, bool &can_conver
 	auto keys = dict.values.attr("__getitem__")(0);
 	auto values = dict.values.attr("__getitem__")(1);
 
-	child_list_t<LogicalType> child_types;
 	auto key_type = GetListType(keys, can_convert);
 	if (!can_convert) {
 		return EmptyMap();
@@ -227,9 +234,7 @@ LogicalType PandasAnalyzer::DictToMap(const PyDictionary &dict, bool &can_conver
 		return EmptyMap();
 	}
 
-	child_types.push_back(make_pair("key", key_type));
-	child_types.push_back(make_pair("value", value_type));
-	return LogicalType::MAP(move(child_types));
+	return LogicalType::MAP(key_type, value_type);
 }
 
 //! Python dictionaries don't allow duplicate keys, so we don't need to check this.
@@ -244,16 +249,16 @@ LogicalType PandasAnalyzer::DictToStruct(const PyDictionary &dict, bool &can_con
 
 		auto dict_val = dict.values.attr("__getitem__")(i);
 		auto val = GetItemType(dict_val, can_convert);
-		struct_children.push_back(make_pair(key, move(val)));
+		struct_children.push_back(make_pair(key, std::move(val)));
 	}
-	return LogicalType::STRUCT(move(struct_children));
+	return LogicalType::STRUCT(struct_children);
 }
 
 //! 'can_convert' is used to communicate if internal structures encountered here are valid
 //! e.g python lists can consist of multiple different types, which we cant communicate downwards through
 //! LogicalType's alone
 
-LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
+LogicalType PandasAnalyzer::GetItemType(py::object ele, bool &can_convert) {
 	auto object_type = GetPythonObjectType(ele);
 
 	switch (object_type) {
@@ -282,10 +287,20 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 		}
 		return type;
 	}
-	case PythonObjectType::Datetime:
+	case PythonObjectType::Datetime: {
+		auto tzinfo = ele.attr("tzinfo");
+		if (!py::none().is(tzinfo)) {
+			return LogicalType::TIMESTAMP_TZ;
+		}
 		return LogicalType::TIMESTAMP;
-	case PythonObjectType::Time:
+	}
+	case PythonObjectType::Time: {
+		auto tzinfo = ele.attr("tzinfo");
+		if (!py::none().is(tzinfo)) {
+			return LogicalType::TIME_TZ;
+		}
 		return LogicalType::TIME;
+	}
 	case PythonObjectType::Date:
 		return LogicalType::DATE;
 	case PythonObjectType::Timedelta:
@@ -298,8 +313,9 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 	case PythonObjectType::MemoryView:
 	case PythonObjectType::Bytes:
 		return LogicalType::BLOB;
+	case PythonObjectType::Tuple:
 	case PythonObjectType::List:
-		return GetListType(ele, can_convert);
+		return LogicalType::LIST(GetListType(ele, can_convert));
 	case PythonObjectType::Dict: {
 		PyDictionary dict = PyDictionary(py::reinterpret_borrow<py::object>(ele));
 		// Assuming keys and values are the same size
@@ -312,11 +328,14 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 		}
 		return DictToStruct(dict, can_convert);
 	}
+	case PythonObjectType::NdDatetime: {
+		return GetItemType(ele.attr("tolist")(), can_convert);
+	}
 	case PythonObjectType::NdArray: {
-		auto extended_type = ConvertPandasType(ele.attr("dtype"));
+		auto extended_type = ConvertNumpyType(ele.attr("dtype"));
 		LogicalType ltype;
-		ltype = PandasToLogicalType(extended_type);
-		if (extended_type == PandasType::OBJECT) {
+		ltype = NumpyToLogicalType(extended_type);
+		if (extended_type.type == NumpyNullableType::OBJECT) {
 			LogicalType converted_type = InnerAnalyze(ele, can_convert, false, 1);
 			if (can_convert) {
 				ltype = converted_type;
@@ -328,6 +347,8 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 		// Fall back to string for unknown types
 		can_convert = false;
 		return LogicalType::VARCHAR;
+	default:
+		throw InternalException("Unsupported PythonObjectType");
 	}
 }
 
@@ -342,7 +363,7 @@ uint64_t PandasAnalyzer::GetSampleIncrement(idx_t rows) {
 	return rows / sample;
 }
 
-LogicalType PandasAnalyzer::InnerAnalyze(py::handle column, bool &can_convert, bool sample, idx_t increment) {
+LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, bool sample, idx_t increment) {
 	idx_t rows = py::len(column);
 
 	if (!rows) {
@@ -352,7 +373,9 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::handle column, bool &can_convert, b
 	// Keys are not guaranteed to start at 0 for Series, use the internal __array__ instead
 	auto pandas_module = py::module::import("pandas");
 	auto pandas_series = pandas_module.attr("core").attr("series").attr("Series");
+
 	if (py::isinstance(column, pandas_series)) {
+		// TODO: check if '_values' is more portable, and behaves the same as '__array__()'
 		column = column.attr("__array__")();
 	}
 	auto row = column.attr("__getitem__");
@@ -384,13 +407,13 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::handle column, bool &can_convert, b
 	return item_type;
 }
 
-bool PandasAnalyzer::Analyze(py::handle column) {
+bool PandasAnalyzer::Analyze(py::object column) {
 	// Disable analyze
 	if (sample_size == 0) {
 		return false;
 	}
 	bool can_convert = true;
-	LogicalType type = InnerAnalyze(column, can_convert);
+	LogicalType type = InnerAnalyze(std::move(column), can_convert);
 	if (can_convert) {
 		analyzed_type = type;
 	}

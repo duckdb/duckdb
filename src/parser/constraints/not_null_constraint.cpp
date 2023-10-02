@@ -1,7 +1,5 @@
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 
-#include "duckdb/common/field_writer.hpp"
-
 namespace duckdb {
 
 NotNullConstraint::NotNullConstraint(LogicalIndex index) : Constraint(ConstraintType::NOT_NULL), index(index) {
@@ -15,16 +13,7 @@ string NotNullConstraint::ToString() const {
 }
 
 unique_ptr<Constraint> NotNullConstraint::Copy() const {
-	return make_unique<NotNullConstraint>(index);
-}
-
-void NotNullConstraint::Serialize(FieldWriter &writer) const {
-	writer.WriteField<idx_t>(index.index);
-}
-
-unique_ptr<Constraint> NotNullConstraint::Deserialize(FieldReader &source) {
-	auto index = source.ReadRequired<idx_t>();
-	return make_unique_base<Constraint, NotNullConstraint>(LogicalIndex(index));
+	return make_uniq<NotNullConstraint>(index);
 }
 
 } // namespace duckdb

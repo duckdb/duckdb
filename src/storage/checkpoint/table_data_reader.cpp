@@ -1,41 +1,32 @@
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
-
-#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/common/types/null_value.hpp"
-
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/client_context.hpp"
-
-#include "duckdb/storage/table/row_group.hpp"
 
 namespace duckdb {
 
-TableDataReader::TableDataReader(MetaBlockReader &reader, BoundCreateTableInfo &info) : reader(reader), info(info) {
-	info.data = make_unique<PersistentTableData>(info.Base().columns.LogicalColumnCount());
+TableDataReader::TableDataReader(MetadataReader &reader, BoundCreateTableInfo &info) : reader(reader), info(info) {
+	info.data = make_uniq<PersistentTableData>(info.Base().columns.LogicalColumnCount());
 }
 
 void TableDataReader::ReadTableData() {
 	auto &columns = info.Base().columns;
 	D_ASSERT(!columns.empty());
 
-	// deserialize the total table statistics
-	info.data->column_stats.reserve(columns.PhysicalColumnCount());
-	for (auto &col : columns.Physical()) {
-		info.data->column_stats.push_back(BaseStatistics::Deserialize(reader, col.Type()));
-	}
+	// We stored the table statistics as a unit in FinalizeTable.
+	BinaryDeserializer stats_deserializer(reader);
+	stats_deserializer.Begin();
+	info.data->table_stats.Deserialize(stats_deserializer, columns);
+	stats_deserializer.End();
 
-	// deserialize each of the individual row groups
-	auto row_group_count = reader.Read<uint64_t>();
-	info.data->row_groups.reserve(row_group_count);
-	for (idx_t i = 0; i < row_group_count; i++) {
-		auto row_group_pointer = RowGroup::Deserialize(reader, columns);
-		info.data->row_groups.push_back(move(row_group_pointer));
-	}
+	// Deserialize the row group pointers (lazily, just set the count and the pointer to them for now)
+	info.data->row_group_count = reader.Read<uint64_t>();
+	info.data->block_pointer = reader.GetMetaBlockPointer();
 }
 
 } // namespace duckdb

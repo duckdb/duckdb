@@ -1,0 +1,18 @@
+# name: test/sql/fts/test_issue_5936.test
+# description: Issue #5936 - Confusing "column does not exist" error when using column named "document" with full text search
+# group: [fts]
+
+require skip_reload
+
+require fts
+
+require noalternativeverify
+
+statement ok
+CREATE TABLE documents(document VARCHAR, url VARCHAR);
+
+statement ok
+INSERT INTO documents VALUES ('hello world', 'https://example.com'), ('foobar', 'https://google.com');
+
+statement ok
+PRAGMA create_fts_index(documents, url, document);

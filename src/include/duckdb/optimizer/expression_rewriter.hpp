@@ -37,11 +37,11 @@ public:
 
 private:
 	//! Apply a set of rules to a specific expression
-	static unique_ptr<Expression> ApplyRules(LogicalOperator &op, const vector<Rule *> &rules,
+	static unique_ptr<Expression> ApplyRules(LogicalOperator &op, const vector<reference<Rule>> &rules,
 	                                         unique_ptr<Expression> expr, bool &changes_made, bool is_root = false);
 
-	LogicalOperator *op;
-	vector<Rule *> to_apply_rules;
+	optional_ptr<LogicalOperator> op;
+	vector<reference<Rule>> to_apply_rules;
 };
 
 } // namespace duckdb

@@ -9,7 +9,7 @@
 namespace duckdb {
 
 unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
-	auto result = make_unique<BoundRecursiveCTENode>();
+	auto result = make_uniq<BoundRecursiveCTENode>();
 
 	// first recursively visit the recursive CTE operations
 	// the left side is visited first and is added to the BindContext of the right side
@@ -55,7 +55,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		throw NotImplementedException("FIXME: bind modifiers in recursive CTE");
 	}
 
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

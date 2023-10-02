@@ -1,0 +1,83 @@
+# name: test/sql/update/test_unaligned_update.test_slow
+# description: Unaligned updates
+# group: [update]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1 AS SELECT * FROM generate_series(0, 1999, 1) tbl(i)
+
+statement ok
+CREATE TABLE t2 AS SELECT * FROM generate_series(0, 4999, 1) tbl(i)
+
+query I
+SELECT SUM(i) FROM t1
+----
+1999000
+
+query I
+SELECT SUM(i) FROM t2
+----
+12497500
+
+query I
+SELECT COUNT(*) FROM t1, t2 WHERE t1.i<33
+----
+165000
+
+query I
+SELECT COUNT(*) FROM t1, t2 WHERE t2.i<33
+----
+66000
+
+# update with a cross-product
+statement ok
+UPDATE t1 SET i=33 FROM t2 WHERE t1.i<33
+
+statement ok
+UPDATE t2 SET i=33 FROM t1 WHERE t2.i<33
+
+query I
+SELECT SUM(i) FROM t1
+----
+1999561
+
+query I
+SELECT SUM(i) FROM t2
+----
+12498061
+
+# update with a inequality join
+statement ok
+UPDATE t1 SET i=34 FROM t2 WHERE t1.i=33 AND t1.i<>t2.i
+
+statement ok
+UPDATE t2 SET i=34 FROM t1 WHERE t2.i=33 AND t1.i<>t2.i
+
+query I
+SELECT SUM(i) FROM t1
+----
+1999595
+
+query I
+SELECT SUM(i) FROM t2
+----
+12498095
+
+# update with a range join
+statement ok
+UPDATE t1 SET i=35 FROM t2 WHERE t1.i=34 AND t1.i<t2.i
+
+statement ok
+UPDATE t2 SET i=35 FROM t1 WHERE t2.i=34 AND t2.i<t1.i
+
+query I
+SELECT SUM(i) FROM t1
+----
+1999630
+
+query I
+SELECT SUM(i) FROM t2
+----
+12498130

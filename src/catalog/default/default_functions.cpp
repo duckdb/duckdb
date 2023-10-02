@@ -10,9 +10,9 @@
 namespace duckdb {
 
 static DefaultMacro internal_macros[] = {
+	{DEFAULT_SCHEMA, "current_role", {nullptr}, "'duckdb'"},                       // user name of current execution context
 	{DEFAULT_SCHEMA, "current_user", {nullptr}, "'duckdb'"},                       // user name of current execution context
-	{DEFAULT_SCHEMA, "current_catalog", {nullptr}, "'duckdb'"},                    // name of current database (called "catalog" in the SQL standard)
-	{DEFAULT_SCHEMA, "current_database", {nullptr}, "'duckdb'"},                   // name of current database
+	{DEFAULT_SCHEMA, "current_catalog", {nullptr}, "current_database()"},          // name of current database (called "catalog" in the SQL standard)
 	{DEFAULT_SCHEMA, "user", {nullptr}, "current_user"},                           // equivalent to current_user
 	{DEFAULT_SCHEMA, "session_user", {nullptr}, "'duckdb'"},                       // session user name
 	{"pg_catalog", "inet_client_addr", {nullptr}, "NULL"},                       // address of the remote connection
@@ -53,10 +53,10 @@ static DefaultMacro internal_macros[] = {
 
 	// various postgres system functions
 	{"pg_catalog", "pg_get_viewdef", {"oid", nullptr}, "(select sql from duckdb_views() v where v.view_oid=oid)"},
-	{"pg_catalog", "pg_get_constraintdef", {"constraint_oid", "pretty_bool", nullptr}, "(select constraint_text from duckdb_constraints() d_constraint where d_constraint.table_oid=constraint_oid/1000000 and d_constraint.constraint_index=constraint_oid%1000000)"},
+	{"pg_catalog", "pg_get_constraintdef", {"constraint_oid", "pretty_bool", nullptr}, "(select constraint_text from duckdb_constraints() d_constraint where d_constraint.table_oid=constraint_oid//1000000 and d_constraint.constraint_index=constraint_oid%1000000)"},
 	{"pg_catalog", "pg_get_expr", {"pg_node_tree", "relation_oid", nullptr}, "pg_node_tree"},
 	{"pg_catalog", "format_pg_type", {"type_name", nullptr}, "case when logical_type='FLOAT' then 'real' when logical_type='DOUBLE' then 'double precision' when logical_type='DECIMAL' then 'numeric' when logical_type='ENUM' then lower(type_name) when logical_type='VARCHAR' then 'character varying' when logical_type='BLOB' then 'bytea' when logical_type='TIMESTAMP' then 'timestamp without time zone' when logical_type='TIME' then 'time without time zone' else lower(logical_type) end"},
-	{"pg_catalog", "format_type", {"type_oid", "typemod", nullptr}, "(select format_pg_type(type_name) from duckdb_types() t where t.type_oid=type_oid) || case when typemod>0 then concat('(', typemod/1000, ',', typemod%1000, ')') else '' end"},
+	{"pg_catalog", "format_type", {"type_oid", "typemod", nullptr}, "(select format_pg_type(type_name) from duckdb_types() t where t.type_oid=type_oid) || case when typemod>0 then concat('(', typemod//1000, ',', typemod%1000, ')') else '' end"},
 
 	{"pg_catalog", "pg_has_role", {"user", "role", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for role
 	{"pg_catalog", "pg_has_role", {"role", "privilege", nullptr}, "true"},  //boolean  //does current user have privilege for role
@@ -79,6 +79,8 @@ static DefaultMacro internal_macros[] = {
 	{"pg_catalog", "pg_ts_template_is_visible", {"template_oid", nullptr}, "true"},
 	{"pg_catalog", "pg_type_is_visible", {"type_oid", nullptr}, "true"},
 
+	{"pg_catalog", "pg_size_pretty", {"bytes", nullptr}, "format_bytes(bytes)"},
+
 	{DEFAULT_SCHEMA, "round_even", {"x", "n", nullptr}, "CASE ((abs(x) * power(10, n+1)) % 10) WHEN 5 THEN round(x/2, n) * 2 ELSE round(x, n) END"},
 	{DEFAULT_SCHEMA, "roundbankers", {"x", "n", nullptr}, "round_even(x, n)"},
 	{DEFAULT_SCHEMA, "nullif", {"a", "b", nullptr}, "CASE WHEN a=b THEN NULL ELSE a END"},
@@ -90,9 +92,30 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "array_pop_front", {"arr", nullptr}, "arr[2:]"},
 	{DEFAULT_SCHEMA, "array_push_back", {"arr", "e", nullptr}, "list_concat(arr, list_value(e))"},
 	{DEFAULT_SCHEMA, "array_push_front", {"arr", "e", nullptr}, "list_concat(list_value(e), arr)"},
+	{DEFAULT_SCHEMA, "array_to_string", {"arr", "sep", nullptr}, "list_aggr(arr, 'string_agg', sep)"},
 	{DEFAULT_SCHEMA, "generate_subscripts", {"arr", "dim", nullptr}, "unnest(generate_series(1, array_length(arr, dim)))"},
 	{DEFAULT_SCHEMA, "fdiv", {"x", "y", nullptr}, "floor(x/y)"},
 	{DEFAULT_SCHEMA, "fmod", {"x", "y", nullptr}, "(x-y*floor(x/y))"},
+	{DEFAULT_SCHEMA, "count_if", {"l", nullptr}, "sum(if(l, 1, 0))"},
+	{DEFAULT_SCHEMA, "split_part", {"string", "delimiter", "position", nullptr}, "coalesce(string_split(string, delimiter)[position],'')"},
+	{DEFAULT_SCHEMA, "geomean", {"x", nullptr}, "exp(avg(ln(x)))"},
+	{DEFAULT_SCHEMA, "geometric_mean", {"x", nullptr}, "geomean(x)"},
+
+    {DEFAULT_SCHEMA, "list_reverse", {"l", nullptr}, "l[:-:-1]"},
+    {DEFAULT_SCHEMA, "array_reverse", {"l", nullptr}, "list_reverse(l)"},
+
+    // FIXME implement as actual function if we encounter a lot of performance issues. Complexity now: n * m, with hashing possibly n + m
+    {DEFAULT_SCHEMA, "list_intersect", {"l1", "l2", nullptr}, "list_filter(l1, (x) -> list_contains(l2, x))"},
+    {DEFAULT_SCHEMA, "array_intersect", {"l1", "l2", nullptr}, "list_intersect(l1, l2)"},
+
+    {DEFAULT_SCHEMA, "list_has_any", {"l1", "l2", nullptr}, "CASE WHEN l1 IS NULL THEN NULL WHEN l2 IS NULL THEN NULL WHEN len(list_intersect(l1, l2)) > 0 THEN true ELSE false END"},
+    {DEFAULT_SCHEMA, "array_has_any", {"l1", "l2", nullptr}, "list_has_any(l1, l2)" },
+    {DEFAULT_SCHEMA, "&&", {"l1", "l2", nullptr}, "list_has_any(l1, l2)" }, // "&&" is the operator for "list_has_any
+
+    {DEFAULT_SCHEMA, "list_has_all", {"l1", "l2", nullptr}, "CASE WHEN l1 IS NULL THEN NULL WHEN l2 IS NULL THEN NULL WHEN len(list_intersect(l2, l1)) = len(list_filter(l2, x -> x IS NOT NULL)) THEN true ELSE false END"},
+    {DEFAULT_SCHEMA, "array_has_all", {"l1", "l2", nullptr}, "list_has_all(l1, l2)" },
+    {DEFAULT_SCHEMA, "@>", {"l1", "l2", nullptr}, "list_has_all(l1, l2)" }, // "@>" is the operator for "list_has_all
+    {DEFAULT_SCHEMA, "<@", {"l1", "l2", nullptr}, "list_has_all(l2, l1)" }, // "<@" is the operator for "list_has_all
 
 	// algebraic list aggregates
 	{DEFAULT_SCHEMA, "list_avg", {"l", nullptr}, "list_aggr(l, 'avg')"},
@@ -130,22 +153,25 @@ static DefaultMacro internal_macros[] = {
 	// nested list aggregates
 	{DEFAULT_SCHEMA, "list_histogram", {"l", nullptr}, "list_aggr(l, 'histogram')"},
 
+	// date functions
+	{DEFAULT_SCHEMA, "date_add", {"date", "interval", nullptr}, "date + interval"},
+
 	{nullptr, nullptr, {nullptr}, nullptr}
 	};
 
 unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroInfo(DefaultMacro &default_macro, unique_ptr<MacroFunction> function) {
 	for (idx_t param_idx = 0; default_macro.parameters[param_idx] != nullptr; param_idx++) {
 		function->parameters.push_back(
-		    make_unique<ColumnRefExpression>(default_macro.parameters[param_idx]));
+		    make_uniq<ColumnRefExpression>(default_macro.parameters[param_idx]));
 	}
 
-	auto bind_info = make_unique<CreateMacroInfo>();
+	auto type = function->type == MacroType::TABLE_MACRO ? CatalogType::TABLE_MACRO_ENTRY : CatalogType::MACRO_ENTRY;
+	auto bind_info = make_uniq<CreateMacroInfo>(type);
 	bind_info->schema = default_macro.schema;
 	bind_info->name = default_macro.name;
 	bind_info->temporary = true;
 	bind_info->internal = true;
-	bind_info->type = function->type == MacroType::TABLE_MACRO ? CatalogType::TABLE_MACRO_ENTRY : CatalogType::MACRO_ENTRY;
-	bind_info->function = move(function);
+	bind_info->function = std::move(function);
 	return bind_info;
 
 }
@@ -155,8 +181,8 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(De
 	auto expressions = Parser::ParseExpressionList(default_macro.macro);
 	D_ASSERT(expressions.size() == 1);
 
-	auto result = make_unique<ScalarMacroFunction>(move(expressions[0]));
-	return CreateInternalTableMacroInfo(default_macro, move(result));
+	auto result = make_uniq<ScalarMacroFunction>(std::move(expressions[0]));
+	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
 
 unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroInfo(DefaultMacro &default_macro) {
@@ -165,9 +191,9 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroIn
 	D_ASSERT(parser.statements.size() == 1);
 	D_ASSERT(parser.statements[0]->type == StatementType::SELECT_STATEMENT);
 
-	auto &select = (SelectStatement &) *parser.statements[0];
-	auto result = make_unique<TableMacroFunction>(move(select.node));
-	return CreateInternalTableMacroInfo(default_macro, move(result));
+	auto &select = parser.statements[0]->Cast<SelectStatement>();
+	auto result = make_uniq<TableMacroFunction>(std::move(select.node));
+	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
 
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &input_schema, const string &input_name) {
@@ -181,15 +207,15 @@ static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &input_sch
 	return nullptr;
 }
 
-DefaultFunctionGenerator::DefaultFunctionGenerator(Catalog &catalog, SchemaCatalogEntry *schema)
+DefaultFunctionGenerator::DefaultFunctionGenerator(Catalog &catalog, SchemaCatalogEntry &schema)
     : DefaultGenerator(catalog), schema(schema) {
 }
 
 unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientContext &context,
                                                                       const string &entry_name) {
-	auto info = GetDefaultFunction(schema->name, entry_name);
+	auto info = GetDefaultFunction(schema.name, entry_name);
 	if (info) {
-		return make_unique_base<CatalogEntry, ScalarMacroCatalogEntry>(&catalog, schema, (CreateMacroInfo *)info.get());
+		return make_uniq_base<CatalogEntry, ScalarMacroCatalogEntry>(catalog, schema, info->Cast<CreateMacroInfo>());
 	}
 	return nullptr;
 }
@@ -197,7 +223,10 @@ unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientCont
 vector<string> DefaultFunctionGenerator::GetDefaultEntries() {
 	vector<string> result;
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
-		if (internal_macros[index].schema == schema->name) {
+		if (StringUtil::Lower(internal_macros[index].name) != internal_macros[index].name) {
+			throw InternalException("Default macro name %s should be lowercase", internal_macros[index].name);
+		}
+		if (internal_macros[index].schema == schema.name) {
 			result.emplace_back(internal_macros[index].name);
 		}
 	}

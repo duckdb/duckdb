@@ -1,0 +1,44 @@
+# name: test/sql/upsert/upsert_default_value_causes_conflict.test
+# group: [upsert]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create or replace table tbl (
+	a integer primary key default 5,
+	b integer
+);
+
+statement ok
+insert into tbl(b) VALUES (10);
+
+query II
+select * from tbl;
+----
+5	10
+
+# The default expression is a constant, can't be inserted twice
+statement error
+insert into tbl(b) VALUES (10);
+----
+Constraint Error: Duplicate key "a: 5" violates primary key constraint
+
+# We can ignore the error
+statement ok
+insert into tbl(b) VALUES (10) ON CONFLICT (a) DO NOTHING;
+
+# The tuple is not inserted
+query II
+select * from tbl;
+----
+5	10
+
+# We can also change the value of 'b', but not of 'a' because it's indexed on
+statement ok
+insert into tbl(b) VALUES (10) ON CONFLICT (a) DO UPDATE SET b = excluded.b * 2;
+
+query II
+select * from tbl;
+----
+5	20

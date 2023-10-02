@@ -1,0 +1,41 @@
+# name: test/sql/storage/test_unique_index_checkpoint.test
+# description: Verify that unique indexes are correctly checkpointed
+# group: [storage]
+
+# issue #6214
+
+load __TEST_DIR__/test_unique_index.db
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO test VALUES (1,100),(2,200);
+
+statement ok
+CREATE UNIQUE INDEX idx ON test (i);
+
+restart
+
+statement error
+INSERT INTO test VALUES (1,101),(2,201);
+----
+Constraint Error: Duplicate key "i: 1" violates unique constraint
+
+restart
+
+statement ok
+CREATE TABLE IF NOT EXISTS unique_index_test AS
+SELECT i AS ordernumber, j AS quantity FROM test;
+
+restart
+
+statement ok
+CREATE UNIQUE INDEX unique_index_test_ordernumber_idx_unique ON unique_index_test (ordernumber);
+
+restart
+
+statement error
+INSERT INTO unique_index_test VALUES (1,101),(2,201);
+----
+Constraint Error: Duplicate key "ordernumber: 1" violates unique constraint

@@ -1,11 +1,18 @@
 # test_tpch.jl
 
+# DuckDB needs to have been built with TPCH (BUILD_TPCH=1) to run this test!
+
 @testset "Test TPC-H" begin
-    sf = "0.01"
+    sf = "0.1"
 
     # load TPC-H into DuckDB
     native_con = DBInterface.connect(DuckDB.DB)
-    DBInterface.execute(native_con, "CALL dbgen(sf=$sf)")
+    try
+        DBInterface.execute(native_con, "CALL dbgen(sf=$sf)")
+    catch
+        @info "TPC-H extension not available; skipping"
+        return
+    end
 
     # convert all tables to Julia DataFrames
     customer = DataFrame(DBInterface.execute(native_con, "SELECT * FROM customer"))
@@ -19,14 +26,14 @@
 
     # now open a new in-memory database, and register the dataframes there
     df_con = DBInterface.connect(DuckDB.DB)
-    DuckDB.register_data_frame(df_con, customer, "customer")
-    DuckDB.register_data_frame(df_con, lineitem, "lineitem")
-    DuckDB.register_data_frame(df_con, nation, "nation")
-    DuckDB.register_data_frame(df_con, orders, "orders")
-    DuckDB.register_data_frame(df_con, part, "part")
-    DuckDB.register_data_frame(df_con, partsupp, "partsupp")
-    DuckDB.register_data_frame(df_con, region, "region")
-    DuckDB.register_data_frame(df_con, supplier, "supplier")
+    DuckDB.register_table(df_con, customer, "customer")
+    DuckDB.register_table(df_con, lineitem, "lineitem")
+    DuckDB.register_table(df_con, nation, "nation")
+    DuckDB.register_table(df_con, orders, "orders")
+    DuckDB.register_table(df_con, part, "part")
+    DuckDB.register_table(df_con, partsupp, "partsupp")
+    DuckDB.register_table(df_con, region, "region")
+    DuckDB.register_table(df_con, supplier, "supplier")
     GC.gc()
 
     # run all the queries

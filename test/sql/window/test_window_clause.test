@@ -1,5 +1,5 @@
 # name: test/sql/window/test_window_clause.test
-# description: Most basic window function
+# description: Test window clauses and overrides
 # group: [window]
 
 statement ok
@@ -17,7 +17,54 @@ select max(base), max(referenced), sum(refined), sum(unrefined) from (
     	sum(i % 4) over (w rows between 1 preceding and 1 following) AS refined,
     	sum(i % 4) over (rows between 1 preceding and 1 following) AS unrefined
     from integers
-    WINDOW w AS (partition by i / 4 order by i % 4)
+    WINDOW w AS (partition by i // 4 order by i % 4)
 ) q;
 ----
 4	4	60	69
+
+#
+# Clause overrides
+#
+query IIII
+select 
+  x, y, 
+  count(*) over (partition by y order by x), 
+  count(*) over (w order by x)
+from (values (1, 1), (2, 1), (3, 2), (4, 2)) as t (x, y)
+window w as (partition by y)
+order by x
+----
+1	1	1	1
+2	1	2	2
+3	2	1	1
+4	2	2	2
+
+statement error
+select 
+  x, y, 
+  count(*) over (partition by y order by x), 
+  count(*) over (w order by x)
+from (values (1, 1), (2, 1), (3, 2), (4, 2)) as t (x, y)
+window w as (partition by y order by x desc)
+order by x
+----
+Cannot override ORDER BY clause of window "w"
+
+statement error
+select 
+  x, y, 
+  count(*) over (partition by y order by x), 
+  count(*) over (w partition by y)
+from (values (1, 1), (2, 1), (3, 2), (4, 2)) as t (x, y)
+window w as (partition by x)
+order by x
+----
+Cannot override PARTITION BY clause of window "w"
+
+statement error
+select i, sum(i) over (w) as smoothed 
+from integers 
+window w AS (order by i rows between 1 preceding and 1 following) 
+order by i;
+----
+frame clause

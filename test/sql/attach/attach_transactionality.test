@@ -1,0 +1,112 @@
+# name: test/sql/attach/attach_transactionality.test
+# description: Test transactionality of attach
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+# straightforward attach and rollback
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ATTACH '__TEST_DIR__/attach_transaction.db'
+
+statement ok
+ROLLBACK
+
+# attach and insert data, then rollback
+# the data should never make it into the attached database
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ATTACH '__TEST_DIR__/attach_transaction.db'
+
+statement ok
+CREATE TABLE attach_transaction.integers(i INTEGER)
+
+statement ok
+INSERT INTO attach_transaction.integers VALUES (42)
+
+statement ok
+ROLLBACK
+
+# now commit
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ATTACH '__TEST_DIR__/attach_transaction.db'
+
+statement ok
+CREATE TABLE attach_transaction.integers(i INTEGER)
+
+statement ok
+INSERT INTO attach_transaction.integers VALUES (42)
+
+statement ok
+COMMIT
+
+# rollback detach
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DETACH attach_transaction
+
+statement ok
+ROLLBACK
+
+statement ok
+DETACH attach_transaction
+
+# what if we attach, push entries, then detach, and then rollback!?
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ATTACH '__TEST_DIR__/attach_transaction.db'
+
+statement ok
+INSERT INTO attach_transaction.integers VALUES (84)
+
+statement ok
+DETACH attach_transaction
+
+statement ok
+ROLLBACK
+
+# now do the same but commit
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ATTACH '__TEST_DIR__/attach_transaction.db'
+
+# verify the previous data was not written
+query I
+SELECT * FROM attach_transaction.integers
+----
+42
+
+statement ok
+INSERT INTO attach_transaction.integers VALUES (84)
+
+statement ok
+DETACH attach_transaction
+
+statement ok
+COMMIT
+
+# now if we attach we should see [42, 84]
+statement ok
+ATTACH '__TEST_DIR__/attach_transaction.db'
+
+query I
+SELECT * FROM attach_transaction.integers ORDER BY 1
+----
+42
+84

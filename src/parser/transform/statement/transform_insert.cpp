@@ -5,9 +5,9 @@
 namespace duckdb {
 
 unique_ptr<TableRef> Transformer::TransformValuesList(duckdb_libpgquery::PGList *list) {
-	auto result = make_unique<ExpressionListRef>();
+	auto result = make_uniq<ExpressionListRef>();
 	for (auto value_list = list->head; value_list != nullptr; value_list = value_list->next) {
-		auto target = (duckdb_libpgquery::PGList *)(value_list->data.ptr_value);
+		auto target = PGPointerCast<duckdb_libpgquery::PGList>(value_list->data.ptr_value);
 
 		vector<unique_ptr<ParsedExpression>> insert_values;
 		TransformExpressionList(*target, insert_values);
@@ -16,44 +16,70 @@ unique_ptr<TableRef> Transformer::TransformValuesList(duckdb_libpgquery::PGList 
 				throw ParserException("VALUES lists must all be the same length");
 			}
 		}
-		result->values.push_back(move(insert_values));
+		result->values.push_back(std::move(insert_values));
 	}
 	result->alias = "valueslist";
-	return move(result);
+	return std::move(result);
 }
 
-unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNode *node) {
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGInsertStmt *>(node);
-	D_ASSERT(stmt);
-	if (stmt->onConflictClause && stmt->onConflictClause->action != duckdb_libpgquery::PG_ONCONFLICT_NONE) {
-		throw ParserException("ON CONFLICT IGNORE/UPDATE clauses are not supported");
-	}
-	if (!stmt->selectStmt) {
-		throw ParserException("DEFAULT VALUES clause is not supported!");
-	}
-
-	auto result = make_unique<InsertStatement>();
-	if (stmt->withClause) {
-		TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), result->cte_map);
+unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGInsertStmt &stmt) {
+	auto result = make_uniq<InsertStatement>();
+	vector<unique_ptr<CTENode>> materialized_ctes;
+	if (stmt.withClause) {
+		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), result->cte_map,
+		             materialized_ctes);
+		if (!materialized_ctes.empty()) {
+			throw NotImplementedException("Materialized CTEs are not implemented for insert.");
+		}
 	}
 
 	// first check if there are any columns specified
-	if (stmt->cols) {
-		for (auto c = stmt->cols->head; c != nullptr; c = lnext(c)) {
-			auto target = (duckdb_libpgquery::PGResTarget *)(c->data.ptr_value);
+	if (stmt.cols) {
+		for (auto c = stmt.cols->head; c != nullptr; c = lnext(c)) {
+			auto target = PGPointerCast<duckdb_libpgquery::PGResTarget>(c->data.ptr_value);
 			result->columns.emplace_back(target->name);
 		}
 	}
 
 	// Grab and transform the returning columns from the parser.
-	if (stmt->returningList) {
-		Transformer::TransformExpressionList(*(stmt->returningList), result->returning_list);
+	if (stmt.returningList) {
+		TransformExpressionList(*stmt.returningList, result->returning_list);
 	}
-	result->select_statement = TransformSelect(stmt->selectStmt, false);
+	if (stmt.selectStmt) {
+		result->select_statement = TransformSelect(stmt.selectStmt, false);
+	} else {
+		result->default_values = true;
+	}
 
-	auto qname = TransformQualifiedName(stmt->relation);
+	auto qname = TransformQualifiedName(*stmt.relation);
 	result->table = qname.name;
 	result->schema = qname.schema;
+
+	if (stmt.onConflictClause) {
+		if (stmt.onConflictAlias != duckdb_libpgquery::PG_ONCONFLICT_ALIAS_NONE) {
+			// OR REPLACE | OR IGNORE are shorthands for the ON CONFLICT clause
+			throw ParserException("You can not provide both OR REPLACE|IGNORE and an ON CONFLICT clause, please remove "
+			                      "the first if you want to have more granual control");
+		}
+		result->on_conflict_info = TransformOnConflictClause(stmt.onConflictClause, result->schema);
+		result->table_ref = TransformRangeVar(*stmt.relation);
+	}
+	if (stmt.onConflictAlias != duckdb_libpgquery::PG_ONCONFLICT_ALIAS_NONE) {
+		D_ASSERT(!stmt.onConflictClause);
+		result->on_conflict_info = DummyOnConflictClause(stmt.onConflictAlias, result->schema);
+		result->table_ref = TransformRangeVar(*stmt.relation);
+	}
+	switch (stmt.insert_column_order) {
+	case duckdb_libpgquery::PG_INSERT_BY_POSITION:
+		result->column_order = InsertColumnOrder::INSERT_BY_POSITION;
+		break;
+	case duckdb_libpgquery::PG_INSERT_BY_NAME:
+		result->column_order = InsertColumnOrder::INSERT_BY_NAME;
+		break;
+	default:
+		throw InternalException("Unrecognized insert column order in TransformInsert");
+	}
+	result->catalog = qname.catalog;
 	return result;
 }
 

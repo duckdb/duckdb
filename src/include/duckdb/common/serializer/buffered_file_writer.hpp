@@ -8,31 +8,30 @@
 
 #pragma once
 
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/file_system.hpp"
 
 namespace duckdb {
 
 #define FILE_BUFFER_SIZE 4096
 
-class BufferedFileWriter : public Serializer {
+class BufferedFileWriter : public WriteStream {
 public:
 	static constexpr uint8_t DEFAULT_OPEN_FLAGS = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
 
 	//! Serializes to a buffer allocated by the serializer, will expand when
 	//! writing past the initial threshold
-	DUCKDB_API BufferedFileWriter(FileSystem &fs, const string &path, uint8_t open_flags = DEFAULT_OPEN_FLAGS,
-	                              FileOpener *opener = nullptr);
+	DUCKDB_API BufferedFileWriter(FileSystem &fs, const string &path, uint8_t open_flags = DEFAULT_OPEN_FLAGS);
 
 	FileSystem &fs;
 	string path;
-	unique_ptr<data_t[]> data;
+	unsafe_unique_array<data_t> data;
 	idx_t offset;
 	idx_t total_written;
 	unique_ptr<FileHandle> handle;
 
 public:
-	DUCKDB_API void WriteData(const_data_ptr_t buffer, uint64_t write_size) override;
+	DUCKDB_API void WriteData(const_data_ptr_t buffer, idx_t write_size) override;
 	//! Flush the buffer to disk and sync the file to ensure writing is completed
 	DUCKDB_API void Sync();
 	//! Flush the buffer to the file (without sync)

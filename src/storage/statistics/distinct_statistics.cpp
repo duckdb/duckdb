@@ -1,57 +1,26 @@
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 
 #include <math.h>
 
 namespace duckdb {
 
-DistinctStatistics::DistinctStatistics()
-    : BaseStatistics(LogicalType::INVALID, StatisticsType::LOCAL_STATS), log(make_unique<HyperLogLog>()),
-      sample_count(0), total_count(0) {
+DistinctStatistics::DistinctStatistics() : log(make_uniq<HyperLogLog>()), sample_count(0), total_count(0) {
 }
 
 DistinctStatistics::DistinctStatistics(unique_ptr<HyperLogLog> log, idx_t sample_count, idx_t total_count)
-    : BaseStatistics(LogicalType::INVALID, StatisticsType::LOCAL_STATS), log(move(log)), sample_count(sample_count),
-      total_count(total_count) {
+    : log(std::move(log)), sample_count(sample_count), total_count(total_count) {
 }
 
-unique_ptr<BaseStatistics> DistinctStatistics::Copy() const {
-	return make_unique<DistinctStatistics>(log->Copy(), sample_count, total_count);
+unique_ptr<DistinctStatistics> DistinctStatistics::Copy() const {
+	return make_uniq<DistinctStatistics>(log->Copy(), sample_count, total_count);
 }
 
-void DistinctStatistics::Merge(const BaseStatistics &other_p) {
-	BaseStatistics::Merge(other_p);
-	auto &other = (const DistinctStatistics &)other_p;
+void DistinctStatistics::Merge(const DistinctStatistics &other) {
 	log = log->Merge(*other.log);
 	sample_count += other.sample_count;
 	total_count += other.total_count;
-}
-
-void DistinctStatistics::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	Serialize(writer);
-	writer.Finalize();
-}
-
-void DistinctStatistics::Serialize(FieldWriter &writer) const {
-	writer.WriteField<idx_t>(sample_count);
-	writer.WriteField<idx_t>(total_count);
-	log->Serialize(writer);
-}
-
-unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(Deserializer &source) {
-	FieldReader reader(source);
-	auto result = Deserialize(reader);
-	reader.Finalize();
-	return result;
-}
-
-unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(FieldReader &reader) {
-	auto sample_count = reader.ReadRequired<idx_t>();
-	auto total_count = reader.ReadRequired<idx_t>();
-	return make_unique<DistinctStatistics>(HyperLogLog::Deserialize(reader), sample_count, total_count);
 }
 
 void DistinctStatistics::Update(Vector &v, idx_t count, bool sample) {
@@ -97,6 +66,10 @@ idx_t DistinctStatistics::GetCount() const {
 	// Estimate total uniques using Good Turing Estimation
 	idx_t estimate = u + u1 / s * (n - s);
 	return MinValue<idx_t>(estimate, total_count);
+}
+
+bool DistinctStatistics::TypeIsSupported(const LogicalType &type) {
+	return type.InternalType() != PhysicalType::LIST && type.InternalType() != PhysicalType::STRUCT;
 }
 
 } // namespace duckdb

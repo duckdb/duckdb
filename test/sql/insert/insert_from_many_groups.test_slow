@@ -1,0 +1,59 @@
+# name: test/sql/insert/insert_from_many_groups.test_slow
+# description: Test parallel insert from many groups
+# group: [insert]
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(1000000) tbl(i);
+
+statement ok
+CREATE TABLE integers2 AS SELECT * FROM integers GROUP BY i
+
+query III
+SELECT SUM(i), COUNT(*), COUNT(i) FROM integers
+----
+499999500000	1000000	1000000
+
+query III
+SELECT SUM(i), COUNT(*), COUNT(i) FROM integers2
+----
+499999500000	1000000	1000000
+
+statement ok
+DROP TABLE integers
+
+statement ok
+DROP TABLE integers2
+
+# now with null values
+statement ok
+CREATE TABLE integers AS SELECT case when i%2=0 then null else i end AS i  FROM range(1000000) tbl(i);
+
+statement ok
+CREATE TABLE integers2 AS SELECT * FROM integers GROUP BY i
+
+query III
+SELECT SUM(i), COUNT(*), COUNT(i) FROM integers
+----
+250000000000	1000000	500000
+
+query III
+SELECT SUM(i), COUNT(*), COUNT(i) FROM integers2
+----
+250000000000	500001	500000
+
+# varchars
+statement ok
+CREATE TABLE varchars AS SELECT case when i%2=0 then null else concat('thisismyvarchar-', i//4) end AS v  FROM range(1000000) tbl(i);
+
+statement ok
+CREATE TABLE varchars2 AS SELECT * FROM varchars GROUP BY v
+
+query IIIII
+SELECT MIN(v), MAX(v), COUNT(*), COUNT(v), COUNT(DISTINCT v) FROM varchars
+----
+thisismyvarchar-0	thisismyvarchar-99999	1000000	500000	250000
+
+query IIIII
+SELECT MIN(v), MAX(v), COUNT(*), COUNT(v), COUNT(DISTINCT v) FROM varchars2
+----
+thisismyvarchar-0	thisismyvarchar-99999	250001	250000	250000

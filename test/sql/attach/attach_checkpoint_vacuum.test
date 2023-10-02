@@ -1,0 +1,20 @@
+# name: test/sql/attach/attach_checkpoint_vacuum.test
+# description: Test ATTACH with CHECKPOINT and VACUUM
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/attach_vacuum.db' AS db1
+
+statement ok
+CREATE TABLE db1.integers(i INTEGER);
+
+statement ok
+CHECKPOINT db1
+
+statement ok
+VACUUM db1.integers

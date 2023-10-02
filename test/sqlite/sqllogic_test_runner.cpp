@@ -4,17 +4,23 @@
 #include "sqllogic_test_runner.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/extension/generated_extension_loader.hpp"
+#include "duckdb/main/extension_entries.hpp"
 #include "sqllogic_parser.hpp"
 #ifdef DUCKDB_OUT_OF_TREE
 #include DUCKDB_EXTENSION_HEADER
 #endif
-#include "test_helper_extension.hpp"
 
 namespace duckdb {
 
-SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(move(dbpath)), finished_processing_file(false) {
+SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)), finished_processing_file(false) {
 	config = GetTestConfig();
-	config->options.load_extensions = false;
+
+	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
+	if (!env_var) {
+		config->options.load_extensions = false;
+		config->options.autoload_known_extensions = false;
+	}
 }
 
 SQLLogicTestRunner::~SQLLogicTestRunner() {
@@ -33,9 +39,9 @@ SQLLogicTestRunner::~SQLLogicTestRunner() {
 	}
 }
 
-void SQLLogicTestRunner::ExecuteCommand(unique_ptr<Command> command) {
+void SQLLogicTestRunner::ExecuteCommand(duckdb::unique_ptr<Command> command) {
 	if (InLoop()) {
-		active_loops.back()->loop_commands.push_back(move(command));
+		active_loops.back()->loop_commands.push_back(std::move(command));
 	} else {
 		ExecuteContext context;
 		command->Execute(context);
@@ -43,17 +49,17 @@ void SQLLogicTestRunner::ExecuteCommand(unique_ptr<Command> command) {
 }
 
 void SQLLogicTestRunner::StartLoop(LoopDefinition definition) {
-	auto loop = make_unique<LoopCommand>(*this, move(definition));
+	auto loop = make_uniq<LoopCommand>(*this, std::move(definition));
 	auto loop_ptr = loop.get();
 	if (InLoop()) {
 		// already in a loop: add it to the currently active loop
 		if (definition.is_parallel) {
 			throw std::runtime_error("concurrent loop must be the outer-most loop!");
 		}
-		active_loops.back()->loop_commands.push_back(move(loop));
+		active_loops.back()->loop_commands.push_back(std::move(loop));
 	} else {
 		// not in a loop yet: new top-level loop
-		top_level_loop = move(loop);
+		top_level_loop = std::move(loop);
 	}
 	active_loops.push_back(loop_ptr);
 }
@@ -81,15 +87,31 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 	named_connection_map.clear();
 	// now re-open the current database
 
-	db = make_unique<DuckDB>(dbpath, config.get());
-	con = make_unique<Connection>(*db);
-	if (enable_verification) {
-		con->EnableQueryVerification();
-	}
+	db = make_uniq<DuckDB>(dbpath, config.get());
+	Reconnect();
 
 	// load any previously loaded extensions again
 	for (auto &extension : extensions) {
 		ExtensionHelper::LoadExtension(*db, extension);
+	}
+}
+
+void SQLLogicTestRunner::Reconnect() {
+	con = make_uniq<Connection>(*db);
+	if (original_sqlite_test) {
+		con->Query("SET integer_division=true");
+	}
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+	con->Query("SET pivot_filter_threshold=0");
+#endif
+	if (enable_verification) {
+		con->EnableQueryVerification();
+	}
+	// Set the local extension repo for autoinstalling extensions
+	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
+	if (env_var) {
+		config->options.autoload_known_extensions = true;
+		auto res1 = con->Query("SET autoinstall_extension_repository='" + string(env_var) + "'");
 	}
 }
 
@@ -124,6 +146,12 @@ string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinit
 }
 
 string SQLLogicTestRunner::ReplaceKeywords(string input) {
+	// Replace environment variables in the SQL
+	for (auto &it : environment_variables) {
+		auto &name = it.first;
+		auto &value = it.second;
+		input = StringUtil::Replace(input, StringUtil::Format("${%s}", name), value);
+	}
 	input = StringUtil::Replace(input, "__TEST_DIR__", TestDirectoryPath());
 	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
 	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
@@ -164,7 +192,6 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("bool");
 		result.push_back("interval");
 		result.push_back("varchar");
-		result.push_back("json");
 		collection = true;
 	}
 	if (is_compression) {
@@ -187,7 +214,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 	// for the original SQLite tests we convert floating point numbers to integers
 	// for our own tests this is undesirable since it hides certain errors
-	if (script.find("sqlite") != string::npos || script.find("sqllogictest") != string::npos) {
+	if (script.find("test/sqlite/select") != string::npos) {
+		original_sqlite_test = true;
+	}
+	if (script.find("third_party/sqllogictest") != string::npos) {
 		original_sqlite_test = true;
 	}
 
@@ -204,10 +234,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	if (!success) {
 		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
 	}
-
-#ifdef DUCKDB_OUT_OF_TREE
-	db->LoadExtension<duckdb::DUCKDB_EXTENSION_CLASS>();
-#endif
 
 	/* Loop over all records in the file */
 	while (parser.NextStatement()) {
@@ -252,7 +278,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (token.parameters.size() < 1) {
 				parser.Fail("statement requires at least one parameter (statement ok/error)");
 			}
-			auto command = make_unique<Statement>(*this);
+			auto command = make_uniq<Statement>(*this);
 
 			// parse the first parameter
 			if (token.parameters[0] == "ok") {
@@ -278,17 +304,17 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			    parser.ExtractExpectedError(command->expected_result == ExpectedResult::RESULT_SUCCESS);
 
 			// perform any renames in the text
-			command->base_sql_query = ReplaceKeywords(move(statement_text));
+			command->base_sql_query = ReplaceKeywords(std::move(statement_text));
 
 			if (token.parameters.size() >= 2) {
 				command->connection_name = token.parameters[1];
 			}
-			ExecuteCommand(move(command));
+			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_QUERY) {
 			if (token.parameters.size() < 1) {
 				parser.Fail("query requires at least one parameter (query III)");
 			}
-			auto command = make_unique<Query>(*this);
+			auto command = make_uniq<Query>(*this);
 
 			// parse the expected column count
 			command->expected_column_count = 0;
@@ -312,7 +338,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			auto statement_text = parser.ExtractStatement();
 
 			// perform any renames in the text
-			command->base_sql_query = ReplaceKeywords(move(statement_text));
+			command->base_sql_query = ReplaceKeywords(std::move(statement_text));
 
 			// extract the expected result
 			command->values = parser.ExtractExpectedResult();
@@ -344,7 +370,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			} else {
 				command->query_has_label = false;
 			}
-			ExecuteCommand(move(command));
+			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_HASH_THRESHOLD) {
 			if (token.parameters.size() != 1) {
 				parser.Fail("hash-threshold requires a parameter");
@@ -487,6 +513,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				if (TestForceStorage()) {
 					return;
 				}
+			} else if (param == "nothreadsan") {
+#ifdef DUCKDB_THREAD_SANITIZER
+				return;
+#endif
 			} else if (param == "strinline") {
 #ifdef DUCKDB_DEBUG_NO_INLINE
 				return;
@@ -501,36 +531,70 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					// vector size is too low for this test: skip it
 					return;
 				}
-			} else if (param == "test_helper") {
-				db->LoadExtension<TestHelperExtension>();
 			} else if (param == "skip_reload") {
 				skip_reload = true;
+			} else if (param == "noalternativeverify") {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+				return;
+#endif
+			} else if (param == "no_extension_autoloading") {
+				if (config->options.autoload_known_extensions) {
+					return;
+				}
 			} else {
-				auto result = ExtensionHelper::LoadExtension(*db, param);
-				if (result == ExtensionLoadResult::LOADED_EXTENSION) {
-					// add the extension to the list of loaded extensions
-					extensions.insert(param);
-				} else if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
-					parser.Fail("unknown extension type: %s", token.parameters[0]);
-				} else if (result == ExtensionLoadResult::NOT_LOADED) {
-					// extension known but not build: skip this test
+				bool excluded_from_autoloading = true;
+				for (const auto &ext : AUTOLOADABLE_EXTENSIONS) {
+					if (ext == param) {
+						excluded_from_autoloading = false;
+						break;
+					}
+				}
+
+				if (!config->options.autoload_known_extensions) {
+					auto result = ExtensionHelper::LoadExtension(*db, param);
+					if (result == ExtensionLoadResult::LOADED_EXTENSION) {
+						// add the extension to the list of loaded extensions
+						extensions.insert(param);
+					} else if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
+						parser.Fail("unknown extension type: %s", token.parameters[0]);
+					} else if (result == ExtensionLoadResult::NOT_LOADED) {
+						// extension known but not build: skip this test
+						return;
+					}
+				} else if (excluded_from_autoloading) {
 					return;
 				}
 			}
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV) {
-			if (token.parameters.size() < 2) {
-				parser.Fail("require-env requires 2 arguments: <env name> <env value>");
+			if (InLoop()) {
+				parser.Fail("require-env cannot be called in a loop");
+			}
+
+			if (token.parameters.size() != 1 && token.parameters.size() != 2) {
+				parser.Fail("require-env requires 1 argument: <env name> [optional: <expected env val>]");
 			}
 
 			auto env_var = token.parameters[0];
-			auto env_value = token.parameters[1];
-
 			auto env_actual = std::getenv(env_var.c_str());
-
-			if (env_actual == nullptr || std::strcmp(env_actual, env_value.c_str()) != 0) {
+			if (env_actual == nullptr) {
 				// Environment variable was not found, this test should not be run
 				return;
 			}
+
+			if (token.parameters.size() == 2) {
+				// Check that the value is the same as the expected value
+				auto env_value = token.parameters[1];
+				if (std::strcmp(env_actual, env_value.c_str()) != 0) {
+					// It's not, check the test
+					return;
+				}
+			}
+
+			if (environment_variables.count(env_var)) {
+				parser.Fail(StringUtil::Format("Environment variable '%s' has already been defined", env_var));
+			}
+			environment_variables[env_var] = env_actual;
+
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
 			if (InLoop()) {
 				parser.Fail("load cannot be called in a loop");
@@ -561,9 +625,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				parser.Fail("cannot restart an in-memory database, did you forget to call \"load\"?");
 			}
 			// restart the current database
-			// first clear all connections
-			auto command = make_unique<RestartCommand>(*this);
-			ExecuteCommand(move(command));
+			auto command = make_uniq<RestartCommand>(*this);
+			ExecuteCommand(std::move(command));
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_RECONNECT) {
+			auto command = make_uniq<ReconnectCommand>(*this);
+			ExecuteCommand(std::move(command));
 		}
 	}
 	if (InLoop()) {

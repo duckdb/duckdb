@@ -4,6 +4,8 @@
 
 require skip_reload
 
+statement ok
+SET immediate_transaction_mode=true
 
 statement ok
 PRAGMA enable_verification

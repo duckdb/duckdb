@@ -29,7 +29,6 @@ struct ExpressionState {
 	vector<unique_ptr<ExpressionState>> child_states;
 	vector<LogicalType> types;
 	DataChunk intermediate_chunk;
-	string name;
 	CycleCounter profiler;
 
 public:
@@ -37,9 +36,21 @@ public:
 	void Finalize();
 	Allocator &GetAllocator();
 	bool HasContext();
-	ClientContext &GetContext();
+	DUCKDB_API ClientContext &GetContext();
 
 	void Verify(ExpressionExecutorState &root);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 struct ExecuteFunctionState : public ExpressionState {
@@ -49,18 +60,17 @@ struct ExecuteFunctionState : public ExpressionState {
 	unique_ptr<FunctionLocalState> local_state;
 
 public:
-	static FunctionLocalState *GetFunctionState(ExpressionState &state) {
-		return ((ExecuteFunctionState &)state).local_state.get();
+	static optional_ptr<FunctionLocalState> GetFunctionState(ExpressionState &state) {
+		return state.Cast<ExecuteFunctionState>().local_state.get();
 	}
 };
 
 struct ExpressionExecutorState {
-	explicit ExpressionExecutorState(const string &name);
+	ExpressionExecutorState();
 
 	unique_ptr<ExpressionState> root_state;
 	ExpressionExecutor *executor = nullptr;
 	CycleCounter profiler;
-	string name;
 
 	void Verify();
 };

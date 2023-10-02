@@ -12,10 +12,11 @@
 #include "parquet_types.h"
 
 namespace duckdb {
-class BufferedSerializer;
+class MemoryStream;
 class ParquetWriter;
 class ColumnWriterPageState;
 class BasicColumnWriterState;
+struct ChildFieldIDs;
 
 class ColumnWriterState {
 public:
@@ -24,6 +25,18 @@ public:
 	vector<uint16_t> definition_levels;
 	vector<uint16_t> repetition_levels;
 	vector<bool> is_empty;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 class ColumnWriterStatistics {
@@ -34,6 +47,18 @@ public:
 	virtual string GetMax();
 	virtual string GetMinValue();
 	virtual string GetMaxValue();
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 class ColumnWriter {
@@ -57,11 +82,11 @@ public:
 	static unique_ptr<ColumnWriter> CreateWriterRecursive(vector<duckdb_parquet::format::SchemaElement> &schemas,
 	                                                      ParquetWriter &writer, const LogicalType &type,
 	                                                      const string &name, vector<string> schema_path,
+	                                                      optional_ptr<const ChildFieldIDs> field_ids,
 	                                                      idx_t max_repeat = 0, idx_t max_define = 1,
 	                                                      bool can_have_nulls = true);
 
-	virtual unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
-	                                                           Allocator &allocator) = 0;
+	virtual unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) = 0;
 
 	//! indicates whether the write need to analyse the data before preparing it
 	virtual bool HasAnalyze() {
@@ -88,7 +113,7 @@ protected:
 	                        uint16_t define_value, uint16_t null_value);
 	void HandleRepeatLevels(ColumnWriterState &state_p, ColumnWriterState *parent, idx_t count, idx_t max_repeat);
 
-	void CompressPage(BufferedSerializer &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
+	void CompressPage(MemoryStream &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
 	                  unique_ptr<data_t[]> &compressed_buf);
 };
 

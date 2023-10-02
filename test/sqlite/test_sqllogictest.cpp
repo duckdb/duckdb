@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "duckdb/main/extension/generated_extension_loader.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -33,7 +35,7 @@ static bool endsWith(const string &mainStr, const string &toMatch) {
 	        mainStr.compare(mainStr.size() - toMatch.size(), toMatch.size(), toMatch) == 0);
 }
 
-template <bool VERIFICATION>
+template <bool VERIFICATION, bool AUTO_SWITCH_TEST_DIR = false>
 static void testRunner() {
 	// this is an ugly hack that uses the test case name to pass the script file
 	// name if someone has a better idea...
@@ -46,10 +48,34 @@ static void testRunner() {
 		storage_name = StringUtil::Replace(storage_name, "\\", "_");
 		initial_dbpath = TestCreatePath(storage_name + ".db");
 	}
-	SQLLogicTestRunner runner(move(initial_dbpath));
+	SQLLogicTestRunner runner(std::move(initial_dbpath));
 	runner.output_sql = Catch::getCurrentContext().getConfig()->outputSQL();
 	runner.enable_verification = VERIFICATION;
+
+	string prev_directory;
+
+	// We assume the test working dir for extensions to be one dir above the test/sql. Note that this is very hacky.
+	// however for now it suffices: we use it to run tests from out-of-tree extensions that are based on the extension
+	// template which adheres to this convention.
+	if (AUTO_SWITCH_TEST_DIR) {
+		prev_directory = TestGetCurrentDirectory();
+
+		std::size_t found = name.rfind("test/sql");
+		if (found == std::string::npos) {
+			throw Exception("Failed to auto detect working dir for test '" + name +
+			                "' because a non-standard path was used!");
+		}
+		auto test_working_dir = name.substr(0, found);
+
+		// Parse the test dir automatically
+		TestChangeDirectory(test_working_dir);
+	}
+
 	runner.ExecuteFile(name);
+
+	if (AUTO_SWITCH_TEST_DIR) {
+		TestChangeDirectory(prev_directory);
+	}
 }
 
 static string ParseGroupFromPath(string file) {
@@ -59,7 +85,7 @@ static string ParseGroupFromPath(string file) {
 		extension = "[.]";
 	}
 	if (file.find(".test_coverage") != std::string::npos) {
-		// "slow" in the name indicates a slow test (i.e. only run as part of allunit)
+		// "coverage" in the name indicates a coverage test (i.e. only run as part of coverage)
 		return "[coverage][.]";
 	}
 	// move backwards to the last slash
@@ -150,7 +176,7 @@ void RegisterSqllogictests() {
 	    "test/random/expr/slt_good_8.test", "test/random/expr/slt_good_61.test",
 	    // strange error in hash comparison, results appear correct...
 	    "test/index/random/10/slt_good_7.test", "test/index/random/10/slt_good_9.test"};
-	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	listFiles(*fs, fs->JoinPath(fs->JoinPath("third_party", "sqllogictest"), "test"), [&](const string &path) {
 		if (endsWith(path, ".test")) {
 			for (auto &excl : excludes) {
@@ -178,5 +204,16 @@ void RegisterSqllogictests() {
 			REGISTER_TEST_CASE(testRunner<false>, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
 		}
 	});
+
+#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS && !defined(DUCKDB_AMALGAMATION)
+	for (auto extension_test_path : loaded_extension_test_paths) {
+		listFiles(*fs, extension_test_path, [&](const string &path) {
+			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
+				auto fun = testRunner<false, true>;
+				REGISTER_TEST_CASE(fun, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
+			}
+		});
+	}
+#endif
 }
 } // namespace duckdb

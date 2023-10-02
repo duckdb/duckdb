@@ -3,6 +3,8 @@
 import duckdb
 import tempfile
 import os
+import pytest
+
 
 def check_exception(f):
     had_exception = False
@@ -10,7 +12,8 @@ def check_exception(f):
         f()
     except BaseException:
         had_exception = True
-    assert(had_exception)
+    assert had_exception
+
 
 class TestConnectionClose(object):
     def test_connection_close(self, duckdb_cursor):
@@ -22,7 +25,14 @@ class TestConnectionClose(object):
         cursor.execute("create table a (i integer)")
         cursor.execute("insert into a values (42)")
         con.close()
-        check_exception(lambda :cursor.execute("select * from a"))
+        check_exception(lambda: cursor.execute("select * from a"))
+
+    def test_open_and_exit(self):
+        with pytest.raises(TypeError):
+            with duckdb.connect() as connection:
+                connection.execute("select 42")
+                # This exception does not get swallowed by __exit__
+                raise TypeError()
 
     def test_reopen_connection(self, duckdb_cursor):
         fd, db = tempfile.mkstemp()

@@ -1,0 +1,24 @@
+# name: test/sql/attach/attach_schema.test
+# description: Test various DDL statements on an attached database
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH DATABASE ':memory:' AS new_database;
+
+statement error
+CREATE SCHEMA new_database.s1.xxx;
+----
+too many dots
+
+statement error
+CREATE SCHEMA IF NOT EXISTS new_database.s1.xxx;
+----
+too many dots
+
+statement ok
+CREATE SCHEMA new_database.s1;

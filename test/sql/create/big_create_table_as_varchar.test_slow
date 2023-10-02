@@ -1,0 +1,64 @@
+# name: test/sql/create/big_create_table_as_varchar.test_slow
+# description: Test large CREATE TABLE AS with varchar columns
+# group: [create]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+CREATE TABLE varchars AS SELECT i, concat('thisisalongstring', i) AS v FROM range(1000000) tbl(i);
+----
+1000000
+
+query I
+CREATE TABLE varchars2 AS SELECT * FROM varchars;
+----
+1000000
+
+query II
+SELECT COUNT(*), SUM(REPLACE(v, 'thisisalongstring', '')::INT) FROM varchars2
+----
+1000000	499999500000
+
+
+query II
+SELECT * FROM varchars2 LIMIT 5
+----
+0	thisisalongstring0
+1	thisisalongstring1
+2	thisisalongstring2
+3	thisisalongstring3
+4	thisisalongstring4
+
+query II
+SELECT * FROM varchars2 LIMIT 5 OFFSET 77777
+----
+77777	thisisalongstring77777
+77778	thisisalongstring77778
+77779	thisisalongstring77779
+77780	thisisalongstring77780
+77781	thisisalongstring77781
+
+# batch insert
+query I
+INSERT INTO varchars2 SELECT i + 1000000, concat('thisisalongstring', i + 1000000) AS v FROM varchars;
+----
+1000000
+
+query II
+SELECT * FROM varchars2 LIMIT 5 OFFSET 1000000
+----
+1000000	thisisalongstring1000000
+1000001	thisisalongstring1000001
+1000002	thisisalongstring1000002
+1000003	thisisalongstring1000003
+1000004	thisisalongstring1000004
+
+query II
+SELECT * FROM varchars2 LIMIT 5 OFFSET 1077777
+----
+1077777	thisisalongstring1077777
+1077778	thisisalongstring1077778
+1077779	thisisalongstring1077779
+1077780	thisisalongstring1077780
+1077781	thisisalongstring1077781

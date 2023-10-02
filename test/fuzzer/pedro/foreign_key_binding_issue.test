@@ -1,0 +1,24 @@
+# name: test/fuzzer/pedro/foreign_key_binding_issue.test
+# description: foreign key binding issue
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+CREATE TABLE t0 (c0 INT, UNIQUE (c0, c0));
+----
+appears twice in primary key constraint
+
+statement error
+CREATE TABLE t0 (c0 INT, FOREIGN KEY (c0, c0) REFERENCES t0(c0, c0), UNIQUE (c0, c0));
+----
+Duplicate primary
+
+statement error
+CREATE TABLE t0 (c0 INT, c1 INT, FOREIGN KEY (c0, c0) REFERENCES t0(c0, c1), UNIQUE (c0, c1));
+----
+Duplicate key
+
+statement ok
+CREATE TABLE t0 (c0 INT, c1 INT, FOREIGN KEY (c0, c1) REFERENCES t0(c0, c1), UNIQUE (c0, c1));

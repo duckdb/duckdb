@@ -1,0 +1,54 @@
+# name: test/sql/parser/test_columns_where.test
+# description: Test the columns expression in the WHERE clause
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl(col1 INTEGER, col2 INTEGER, col3 INTEGER);
+
+statement ok
+INSERT INTO tbl VALUES (1, 200, 10), (2, 100, 20), (3, 200, 0)
+
+query III
+SELECT * FROM tbl WHERE COLUMNS(*) >= 2 ORDER BY ALL
+----
+2	100	20
+
+query III
+SELECT * FROM tbl WHERE COLUMNS(['col1', 'col2']) >= 2 ORDER BY ALL
+----
+2	100	20
+3	200	0
+
+query III
+SELECT * FROM tbl WHERE COLUMNS(['col1', 'col2']) >= 2 AND COLUMNS(*) IS NOT NULL ORDER BY ALL
+----
+2	100	20
+3	200	0
+
+query III
+SELECT * FROM tbl WHERE COLUMNS(['col1', 'col2']) >= 2 AND COLUMNS(['col1', 'col3']) < 10 ORDER BY ALL
+----
+3	200	0
+
+statement error
+SELECT * FROM tbl WHERE COLUMNS(['nonexistent']) >= 2 ORDER BY ALL
+----
+nonexistent
+
+statement error
+SELECT * FROM tbl WHERE COLUMNS(* EXCLUDE (col1, col2, col3)) >= 2 ORDER BY ALL
+----
+empty set of columns
+
+statement error
+SELECT * FROM tbl WHERE * ORDER BY ALL
+----
+STAR expression is not allowed in the WHERE clause
+
+statement error
+SELECT * FROM tbl WHERE * >= 2 ORDER BY ALL
+----
+Use COLUMNS(*) instead

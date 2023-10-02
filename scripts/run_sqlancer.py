@@ -39,7 +39,7 @@ if not os.path.isfile(shell):
     exit(1)
 
 if seed is None:
-    seed = random.randint(0, 2 ** 30)
+    seed = random.randint(0, 2**30)
 
 git_hash = fuzzer_helper.get_github_hash()
 
@@ -141,7 +141,10 @@ current_errors = fuzzer_helper.extract_github_issues(shell)
 # check if this is a duplicate issue
 if error_msg in current_errors:
     print("Skip filing duplicate issue")
-    print("Issue already exists: https://github.com/duckdb/duckdb-fuzzer/issues/" + str(current_errors[error_msg]['number']))
+    print(
+        "Issue already exists: https://github.com/duckdb/duckdb-fuzzer/issues/"
+        + str(current_errors[error_msg]['number'])
+    )
     exit(0)
 
 fuzzer_helper.file_issue(reduced_test_case, error_msg, "SQLancer", seed, git_hash)

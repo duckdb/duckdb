@@ -1,0 +1,16 @@
+# name: test/fuzzer/duckfuzz/array_slice_underflow.test
+# description: Array slice underflow
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT ([1, 2, 3])[0:-9223372036854775808];
+----
+[]
+
+query I
+SELECT ([1, 2, 3])[-9223372036854775808:0];
+----
+[]

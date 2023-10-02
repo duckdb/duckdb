@@ -17,13 +17,13 @@ bool StripAccentsFun::IsAscii(const char *input, idx_t n) {
 struct StripAccentsOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		if (StripAccentsFun::IsAscii(input.GetDataUnsafe(), input.GetSize())) {
+		if (StripAccentsFun::IsAscii(input.GetData(), input.GetSize())) {
 			return input;
 		}
 
 		// non-ascii, perform collation
-		auto stripped = utf8proc_remove_accents((const utf8proc_uint8_t *)input.GetDataUnsafe(), input.GetSize());
-		auto result_str = StringVector::AddString(result, (const char *)stripped);
+		auto stripped = utf8proc_remove_accents((const utf8proc_uint8_t *)input.GetData(), input.GetSize());
+		auto result_str = StringVector::AddString(result, const_char_ptr_cast(stripped));
 		free(stripped);
 		return result_str;
 	}

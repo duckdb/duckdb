@@ -3,6 +3,9 @@
 # group: [monetdb]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 PRAGMA enable_verification
 
 statement ok
@@ -941,8 +944,20 @@ query I rowsort
 SELECT
     CAST(SUM(TotalSales) as BIGINT) AS TotalSales
 FROM tbl_ProductSales
-GROUP BY ColID, GROUPING SETS (GROUPING SETS (()), (Product_Name), (Product_Category)) LIMIT 1 OFFSET 2
+GROUP BY ColID, GROUPING SETS (GROUPING SETS (()), (Product_Name), (Product_Category))
+ORDER BY 1
 ----
+100
+100
+100
+200
+200
+200
+400
+400
+400
+500
+500
 500
 
 query I rowsort

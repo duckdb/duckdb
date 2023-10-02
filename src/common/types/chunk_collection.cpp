@@ -38,19 +38,19 @@ void ChunkCollection::Merge(ChunkCollection &other) {
 		return;
 	}
 	if (count == 0) {
-		chunks = move(other.chunks);
-		types = move(other.types);
+		chunks = std::move(other.chunks);
+		types = std::move(other.types);
 		count = other.count;
 		return;
 	}
 	unique_ptr<DataChunk> old_back;
 	if (!chunks.empty() && chunks.back()->size() != STANDARD_VECTOR_SIZE) {
-		old_back = move(chunks.back());
+		old_back = std::move(chunks.back());
 		chunks.pop_back();
 		count -= old_back->size();
 	}
 	for (auto &chunk : other.chunks) {
-		chunks.push_back(move(chunk));
+		chunks.push_back(std::move(chunk));
 	}
 	count += other.count;
 	if (old_back) {
@@ -119,10 +119,10 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 
 	if (remaining_data > 0) {
 		// create a new chunk and fill it with the remainder
-		auto chunk = make_unique<DataChunk>();
+		auto chunk = make_uniq<DataChunk>();
 		chunk->Initialize(allocator, types);
 		new_chunk.Copy(*chunk, offset);
-		chunks.push_back(move(chunk));
+		chunks.push_back(std::move(chunk));
 	}
 }
 
@@ -132,21 +132,21 @@ void ChunkCollection::Append(unique_ptr<DataChunk> new_chunk) {
 	}
 	D_ASSERT(types == new_chunk->GetTypes());
 	count += new_chunk->size();
-	chunks.push_back(move(new_chunk));
+	chunks.push_back(std::move(new_chunk));
 }
 
 void ChunkCollection::Fuse(ChunkCollection &other) {
 	if (count == 0) {
 		chunks.reserve(other.ChunkCount());
 		for (idx_t chunk_idx = 0; chunk_idx < other.ChunkCount(); ++chunk_idx) {
-			auto lhs = make_unique<DataChunk>();
+			auto lhs = make_uniq<DataChunk>();
 			auto &rhs = other.GetChunk(chunk_idx);
 			lhs->data.reserve(rhs.data.size());
 			for (auto &v : rhs.data) {
-				lhs->data.emplace_back(Vector(v));
+				lhs->data.emplace_back(v);
 			}
 			lhs->SetCardinality(rhs.size());
-			chunks.push_back(move(lhs));
+			chunks.push_back(std::move(lhs));
 		}
 		count = other.Count();
 	} else {
@@ -156,7 +156,7 @@ void ChunkCollection::Fuse(ChunkCollection &other) {
 			auto &rhs = other.GetChunk(chunk_idx);
 			D_ASSERT(lhs.size() == rhs.size());
 			for (auto &v : rhs.data) {
-				lhs.data.emplace_back(Vector(v));
+				lhs.data.emplace_back(v);
 			}
 		}
 	}

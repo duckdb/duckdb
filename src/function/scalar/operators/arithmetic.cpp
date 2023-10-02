@@ -1,4 +1,3 @@
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
@@ -10,9 +9,9 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 
 #include <limits>
@@ -34,6 +33,9 @@ static scalar_function_t GetScalarIntegerFunction(PhysicalType type) {
 		break;
 	case PhysicalType::INT64:
 		function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
+		break;
+	case PhysicalType::INT128:
+		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP>;
 		break;
 	case PhysicalType::UINT8:
 		function = &ScalarFunction::BinaryFunction<uint8_t, uint8_t, uint8_t, OP>;
@@ -78,15 +80,15 @@ static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
 //===--------------------------------------------------------------------===//
 struct AddPropagateStatistics {
 	template <class T, class OP>
-	static bool Operation(LogicalType type, NumericStatistics &lstats, NumericStatistics &rstats, Value &new_min,
+	static bool Operation(LogicalType type, BaseStatistics &lstats, BaseStatistics &rstats, Value &new_min,
 	                      Value &new_max) {
 		T min, max;
 		// new min is min+min
-		if (!OP::Operation(lstats.min.GetValueUnsafe<T>(), rstats.min.GetValueUnsafe<T>(), min)) {
+		if (!OP::Operation(NumericStats::GetMin<T>(lstats), NumericStats::GetMin<T>(rstats), min)) {
 			return true;
 		}
 		// new max is max+max
-		if (!OP::Operation(lstats.max.GetValueUnsafe<T>(), rstats.max.GetValueUnsafe<T>(), max)) {
+		if (!OP::Operation(NumericStats::GetMax<T>(lstats), NumericStats::GetMax<T>(rstats), max)) {
 			return true;
 		}
 		new_min = Value::Numeric(type, min);
@@ -97,13 +99,13 @@ struct AddPropagateStatistics {
 
 struct SubtractPropagateStatistics {
 	template <class T, class OP>
-	static bool Operation(LogicalType type, NumericStatistics &lstats, NumericStatistics &rstats, Value &new_min,
+	static bool Operation(LogicalType type, BaseStatistics &lstats, BaseStatistics &rstats, Value &new_min,
 	                      Value &new_max) {
 		T min, max;
-		if (!OP::Operation(lstats.min.GetValueUnsafe<T>(), rstats.max.GetValueUnsafe<T>(), min)) {
+		if (!OP::Operation(NumericStats::GetMin<T>(lstats), NumericStats::GetMax<T>(rstats), min)) {
 			return true;
 		}
-		if (!OP::Operation(lstats.max.GetValueUnsafe<T>(), rstats.min.GetValueUnsafe<T>(), max)) {
+		if (!OP::Operation(NumericStats::GetMax<T>(lstats), NumericStats::GetMin<T>(rstats), max)) {
 			return true;
 		}
 		new_min = Value::Numeric(type, min);
@@ -117,13 +119,13 @@ struct DecimalArithmeticBindData : public FunctionData {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		auto res = make_unique<DecimalArithmeticBindData>();
+		auto res = make_uniq<DecimalArithmeticBindData>();
 		res->check_overflow = check_overflow;
-		return move(res);
+		return std::move(res);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto other = (DecimalArithmeticBindData &)other_p;
+		auto other = other_p.Cast<DecimalArithmeticBindData>();
 		return other.check_overflow == check_overflow;
 	}
 
@@ -136,14 +138,11 @@ static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, 
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 2);
 	// can only propagate stats if the children have stats
-	if (!child_stats[0] || !child_stats[1]) {
-		return nullptr;
-	}
-	auto &lstats = (NumericStatistics &)*child_stats[0];
-	auto &rstats = (NumericStatistics &)*child_stats[1];
+	auto &lstats = child_stats[0];
+	auto &rstats = child_stats[1];
 	Value new_min, new_max;
 	bool potential_overflow = true;
-	if (!lstats.min.IsNull() && !lstats.max.IsNull() && !rstats.min.IsNull() && !rstats.max.IsNull()) {
+	if (NumericStats::HasMinMax(lstats) && NumericStats::HasMinMax(rstats)) {
 		switch (expr.return_type.InternalType()) {
 		case PhysicalType::INT8:
 			potential_overflow =
@@ -171,22 +170,23 @@ static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, 
 	} else {
 		// no potential overflow: replace with non-overflowing operator
 		if (input.bind_data) {
-			auto bind_data = (DecimalArithmeticBindData *)input.bind_data;
-			bind_data->check_overflow = false;
+			auto &bind_data = input.bind_data->Cast<DecimalArithmeticBindData>();
+			bind_data.check_overflow = false;
 		}
 		expr.function.function = GetScalarIntegerFunction<BASEOP>(expr.return_type.InternalType());
 	}
-	auto stats =
-	    make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max), StatisticsType::LOCAL_STATS);
-	stats->validity_stats = ValidityStatistics::Combine(lstats.validity_stats, rstats.validity_stats);
-	return move(stats);
+	auto result = NumericStats::CreateEmpty(expr.return_type);
+	NumericStats::SetMin(result, new_min);
+	NumericStats::SetMax(result, new_max);
+	result.CombineValidity(lstats, rstats);
+	return result.ToUnique();
 }
 
 template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
 unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
 
-	auto bind_data = make_unique<DecimalArithmeticBindData>();
+	auto bind_data = make_uniq<DecimalArithmeticBindData>();
 
 	// get the max width and scale of the input arguments
 	uint8_t max_width = 0, max_scale = 0, max_width_over_scale = 0;
@@ -246,27 +246,25 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 			bound_function.statistics = PropagateNumericStats<TryDecimalAdd, AddPropagateStatistics, AddOperator>;
 		}
 	}
-	return move(bind_data);
+	return std::move(bind_data);
 }
 
-static void SerializeDecimalArithmetic(FieldWriter &writer, const FunctionData *bind_data_p,
+static void SerializeDecimalArithmetic(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                        const ScalarFunction &function) {
-	D_ASSERT(bind_data_p);
-	auto bind_data = (DecimalArithmeticBindData *)bind_data_p;
-	writer.WriteField(bind_data->check_overflow);
-	writer.WriteSerializable(function.return_type);
-	writer.WriteRegularSerializableList(function.arguments);
+	auto &bind_data = bind_data_p->Cast<DecimalArithmeticBindData>();
+	serializer.WriteProperty(100, "check_overflow", bind_data.check_overflow);
+	serializer.WriteProperty(101, "return_type", function.return_type);
+	serializer.WriteProperty(102, "arguments", function.arguments);
 }
 
 // TODO this is partially duplicated from the bind
 template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
-unique_ptr<FunctionData> DeserializeDecimalArithmetic(ClientContext &context, FieldReader &reader,
-                                                      ScalarFunction &bound_function) {
-	// re-change the function pointers
-	auto check_overflow = reader.ReadRequired<bool>();
-	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto arguments = reader.template ReadRequiredSerializableList<LogicalType, LogicalType>();
+unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer, ScalarFunction &bound_function) {
 
+	//	// re-change the function pointers
+	auto check_overflow = deserializer.ReadProperty<bool>(100, "check_overflow");
+	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
+	auto arguments = deserializer.ReadProperty<vector<LogicalType>>(102, "arguments");
 	if (check_overflow) {
 		bound_function.function = GetScalarBinaryFunction<OPOVERFLOWCHECK>(return_type.InternalType());
 	} else {
@@ -276,9 +274,9 @@ unique_ptr<FunctionData> DeserializeDecimalArithmetic(ClientContext &context, Fi
 	bound_function.return_type = return_type;
 	bound_function.arguments = arguments;
 
-	auto bind_data = make_unique<DecimalArithmeticBindData>();
+	auto bind_data = make_uniq<DecimalArithmeticBindData>();
 	bind_data->check_overflow = check_overflow;
-	return move(bind_data);
+	return std::move(bind_data);
 }
 
 unique_ptr<FunctionData> NopDecimalBind(ClientContext &context, ScalarFunction &bound_function,
@@ -305,7 +303,7 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<AddOperator, DecimalAddOverflowCheck>;
 			return function;
-		} else if (left_type.IsIntegral() && left_type.id() != LogicalTypeId::HUGEINT) {
+		} else if (left_type.IsIntegral()) {
 			return ScalarFunction("+", {left_type, right_type}, left_type,
 			                      GetScalarIntegerFunction<AddOperatorOverflowCheck>(left_type.InternalType()), nullptr,
 			                      nullptr, PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
@@ -368,8 +366,8 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 		break;
 	}
 	// LCOV_EXCL_START
-	throw NotImplementedException("AddFun for types %s, %s", LogicalTypeIdToString(left_type.id()),
-	                              LogicalTypeIdToString(right_type.id()));
+	throw NotImplementedException("AddFun for types %s, %s", EnumUtil::ToString(left_type.id()),
+	                              EnumUtil::ToString(right_type.id()));
 	// LCOV_EXCL_STOP
 }
 
@@ -431,12 +429,12 @@ struct NegateOperator {
 
 template <>
 bool NegateOperator::CanNegate(float input) {
-	return Value::FloatIsFinite(input);
+	return true;
 }
 
 template <>
 bool NegateOperator::CanNegate(double input) {
-	return Value::DoubleIsFinite(input);
+	return true;
 }
 
 template <>
@@ -453,13 +451,13 @@ struct DecimalNegateBindData : public FunctionData {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		auto res = make_unique<DecimalNegateBindData>();
+		auto res = make_uniq<DecimalNegateBindData>();
 		res->bound_type = bound_type;
-		return move(res);
+		return std::move(res);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto other = (DecimalNegateBindData &)other_p;
+		auto other = other_p.Cast<DecimalNegateBindData>();
 		return other.bound_type == bound_type;
 	}
 
@@ -469,7 +467,7 @@ struct DecimalNegateBindData : public FunctionData {
 unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunction &bound_function,
                                            vector<unique_ptr<Expression>> &arguments) {
 
-	auto bind_data = make_unique<DecimalNegateBindData>();
+	auto bind_data = make_uniq<DecimalNegateBindData>();
 
 	auto &decimal_type = arguments[0]->return_type;
 	auto width = DecimalType::GetWidth(decimal_type);
@@ -491,9 +489,9 @@ unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunctio
 
 struct NegatePropagateStatistics {
 	template <class T>
-	static bool Operation(LogicalType type, NumericStatistics &istats, Value &new_min, Value &new_max) {
-		auto max_value = istats.max.GetValueUnsafe<T>();
-		auto min_value = istats.min.GetValueUnsafe<T>();
+	static bool Operation(LogicalType type, BaseStatistics &istats, Value &new_min, Value &new_max) {
+		auto max_value = NumericStats::GetMax<T>(istats);
+		auto min_value = NumericStats::GetMin<T>(istats);
 		if (!NegateOperator::CanNegate<T>(min_value) || !NegateOperator::CanNegate<T>(max_value)) {
 			return true;
 		}
@@ -510,13 +508,10 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, F
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
-	if (!child_stats[0]) {
-		return nullptr;
-	}
-	auto &istats = (NumericStatistics &)*child_stats[0];
+	auto &istats = child_stats[0];
 	Value new_min, new_max;
 	bool potential_overflow = true;
-	if (!istats.min.IsNull() && !istats.max.IsNull()) {
+	if (NumericStats::HasMinMax(istats)) {
 		switch (expr.return_type.InternalType()) {
 		case PhysicalType::INT8:
 			potential_overflow =
@@ -542,12 +537,11 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, F
 		new_min = Value(expr.return_type);
 		new_max = Value(expr.return_type);
 	}
-	auto stats =
-	    make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max), StatisticsType::LOCAL_STATS);
-	if (istats.validity_stats) {
-		stats->validity_stats = istats.validity_stats->Copy();
-	}
-	return move(stats);
+	auto stats = NumericStats::CreateEmpty(expr.return_type);
+	NumericStats::SetMin(stats, new_min);
+	NumericStats::SetMax(stats, new_max);
+	stats.CopyValidity(istats);
+	return stats.ToUnique();
 }
 
 ScalarFunction SubtractFun::GetFunction(const LogicalType &type) {
@@ -571,7 +565,7 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck>;
 			return function;
-		} else if (left_type.IsIntegral() && left_type.id() != LogicalTypeId::HUGEINT) {
+		} else if (left_type.IsIntegral()) {
 			return ScalarFunction(
 			    "-", {left_type, right_type}, left_type,
 			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), nullptr, nullptr,
@@ -624,8 +618,8 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 		break;
 	}
 	// LCOV_EXCL_START
-	throw NotImplementedException("SubtractFun for types %s, %s", LogicalTypeIdToString(left_type.id()),
-	                              LogicalTypeIdToString(right_type.id()));
+	throw NotImplementedException("SubtractFun for types %s, %s", EnumUtil::ToString(left_type.id()),
+	                              EnumUtil::ToString(right_type.id()));
 	// LCOV_EXCL_STOP
 }
 
@@ -662,7 +656,7 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct MultiplyPropagateStatistics {
 	template <class T, class OP>
-	static bool Operation(LogicalType type, NumericStatistics &lstats, NumericStatistics &rstats, Value &new_min,
+	static bool Operation(LogicalType type, BaseStatistics &lstats, BaseStatistics &rstats, Value &new_min,
 	                      Value &new_max) {
 		// statistics propagation on the multiplication is slightly less straightforward because of negative numbers
 		// the new min/max depend on the signs of the input types
@@ -671,8 +665,8 @@ struct MultiplyPropagateStatistics {
 		// etc
 		// rather than doing all this switcheroo we just multiply all combinations of lmin/lmax with rmin/rmax
 		// and check what the minimum/maximum value is
-		T lvals[] {lstats.min.GetValueUnsafe<T>(), lstats.max.GetValueUnsafe<T>()};
-		T rvals[] {rstats.min.GetValueUnsafe<T>(), rstats.max.GetValueUnsafe<T>()};
+		T lvals[] {NumericStats::GetMin<T>(lstats), NumericStats::GetMax<T>(lstats)};
+		T rvals[] {NumericStats::GetMin<T>(rstats), NumericStats::GetMax<T>(rstats)};
 		T min = NumericLimits<T>::Maximum();
 		T max = NumericLimits<T>::Minimum();
 		// multiplications
@@ -700,7 +694,7 @@ struct MultiplyPropagateStatistics {
 unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments) {
 
-	auto bind_data = make_unique<DecimalArithmeticBindData>();
+	auto bind_data = make_uniq<DecimalArithmeticBindData>();
 
 	uint8_t result_width = 0, result_scale = 0;
 	uint8_t max_width = 0;
@@ -764,7 +758,7 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 		bound_function.statistics =
 		    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>;
 	}
-	return move(bind_data);
+	return std::move(bind_data);
 }
 
 void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
@@ -775,7 +769,7 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<MultiplyOperator, DecimalMultiplyOverflowCheck>;
 			functions.AddFunction(function);
-		} else if (TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::HUGEINT) {
+		} else if (TypeIsIntegral(type.InternalType())) {
 			functions.AddFunction(ScalarFunction(
 			    {type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()),
 			    nullptr, nullptr,
@@ -803,18 +797,12 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 template <>
 float DivideOperator::Operation(float left, float right) {
 	auto result = left / right;
-	if (!Value::FloatIsFinite(result)) {
-		throw OutOfRangeException("Overflow in division of float!");
-	}
 	return result;
 }
 
 template <>
 double DivideOperator::Operation(double left, double right) {
 	auto result = left / right;
-	if (!Value::DoubleIsFinite(result)) {
-		throw OutOfRangeException("Overflow in division of double!");
-	}
 	return result;
 }
 
@@ -920,23 +908,29 @@ static scalar_function_t GetBinaryFunctionIgnoreZero(const LogicalType &type) {
 }
 
 void DivideFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet functions("/");
+	ScalarFunctionSet fp_divide("/");
+	fp_divide.AddFunction(ScalarFunction({LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT,
+	                                     GetBinaryFunctionIgnoreZero<DivideOperator>(LogicalType::FLOAT)));
+	fp_divide.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                                     GetBinaryFunctionIgnoreZero<DivideOperator>(LogicalType::DOUBLE)));
+	fp_divide.AddFunction(
+	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                   BinaryScalarFunctionIgnoreZero<interval_t, int64_t, interval_t, DivideOperator>));
+	set.AddFunction(fp_divide);
+
+	ScalarFunctionSet full_divide("//");
 	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			continue;
 		} else {
-			functions.AddFunction(
+			full_divide.AddFunction(
 			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type)));
 		}
 	}
-	functions.AddFunction(
-	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                   BinaryScalarFunctionIgnoreZero<interval_t, int64_t, interval_t, DivideOperator>));
+	set.AddFunction(full_divide);
 
-	set.AddFunction(functions);
-
-	functions.name = "divide";
-	set.AddFunction(functions);
+	full_divide.name = "divide";
+	set.AddFunction(full_divide);
 }
 
 //===--------------------------------------------------------------------===//
@@ -946,9 +940,6 @@ template <>
 float ModuloOperator::Operation(float left, float right) {
 	D_ASSERT(right != 0);
 	auto result = std::fmod(left, right);
-	if (!Value::FloatIsFinite(result)) {
-		throw OutOfRangeException("Overflow in modulo of float!");
-	}
 	return result;
 }
 
@@ -956,9 +947,6 @@ template <>
 double ModuloOperator::Operation(double left, double right) {
 	D_ASSERT(right != 0);
 	auto result = std::fmod(left, right);
-	if (!Value::DoubleIsFinite(result)) {
-		throw OutOfRangeException("Overflow in modulo of double!");
-	}
 	return result;
 }
 

@@ -1,0 +1,301 @@
+[
+    {
+        "name": "^@",
+        "parameters": "string,search_string",
+        "description": "Returns true if string begins with search_string",
+        "example": "starts_with('abc','a')",
+        "type": "scalar_function",
+        "struct": "StartsWithOperatorFun",
+        "aliases": ["starts_with"]
+    },
+    {
+        "name": "ascii",
+        "parameters": "string",
+        "description": "Returns an integer that represents the Unicode code point of the first character of the string",
+        "example": "ascii('Ω')",
+        "type": "scalar_function",
+        "struct": "ASCIIFun"
+    },
+    {
+        "name": "bar",
+        "parameters": "x,min,max,width",
+        "description": "Draws a band whose width is proportional to (x - min) and equal to width characters when x = max. width defaults to 80",
+        "example": "bar(5, 0, 20, 10)",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "bin",
+        "parameters": "value",
+        "description": "Converts the value to binary representation",
+        "example": "bin(42)",
+        "type": "scalar_function_set",
+        "aliases": ["to_binary"]
+    },
+    {
+        "name": "chr",
+        "parameters": "code_point",
+        "description": "Returns a character which is corresponding the ASCII code value or Unicode code point",
+        "example": "chr(65)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "damerau_levenshtein",
+        "parameters": "str1,str2",
+        "description": "Extension of Levenshtein distance to also include transposition of adjacent characters as an allowed edit operation. In other words, the minimum number of edit operations (insertions, deletions, substitutions or transpositions) required to change one string to another. Different case is considered different",
+        "example": "damerau_levenshtein('hello', 'world')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "format",
+        "parameters": "format,parameters...",
+        "description": "Formats a string using fmt syntax",
+        "example": "format('Benchmark \"{}\" took {} seconds', 'CSV', 42)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "format_bytes",
+        "parameters": "bytes",
+        "description": "Converts bytes to a human-readable presentation (e.g. 16000 -> 16KB)",
+        "example": "format_bytes(1000 * 16)",
+        "type": "scalar_function",
+        "aliases": ["formatReadableDecimalSize"]
+    },
+    {
+        "name": "hamming",
+        "parameters": "str1,str2",
+        "description": "The number of positions with different characters for 2 strings of equal length. Different case is considered different",
+        "example": "hamming('duck','luck')",
+        "type": "scalar_function",
+        "aliases": ["mismatches"]
+    },
+    {
+        "name": "hex",
+        "parameters": "value",
+        "description": "Converts the value to hexadecimal representation",
+        "example": "hex(42)",
+        "type": "scalar_function_set",
+        "aliases": ["to_hex"]
+    },
+    {
+        "name": "instr",
+        "parameters": "haystack,needle",
+        "description": "Returns location of first occurrence of needle in haystack, counting from 1. Returns 0 if no match found",
+        "example": "instr('test test','es')",
+        "type": "scalar_function",
+        "aliases": ["strpos", "position"]
+    },
+    {
+        "name": "jaccard",
+        "parameters": "str1,str2",
+        "description": "The Jaccard similarity between two strings. Different case is considered different. Returns a number between 0 and 1",
+        "example": "jaccard('duck','luck')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "jaro_similarity",
+        "parameters": "str1,str2",
+        "description": "The Jaro similarity between two strings. Different case is considered different. Returns a number between 0 and 1",
+        "example": "jaro_similarity('duck','duckdb')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "jaro_winkler_similarity",
+        "parameters": "str1,str2",
+        "description": "The Jaro-Winkler similarity between two strings. Different case is considered different. Returns a number between 0 and 1",
+        "example": "jaro_winkler_similarity('duck','duckdb')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "left",
+        "parameters": "string,count",
+        "description": "Extract the left-most count characters",
+        "example": "left('Hello\uD83E\uDD86', 2)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "left_grapheme",
+        "parameters": "string,count",
+        "description": "Extract the left-most count grapheme clusters",
+        "example": "left_grapheme('\uD83E\uDD26\uD83C\uDFFC\u200D♂️\uD83E\uDD26\uD83C\uDFFD\u200D♀️', 1)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "levenshtein",
+        "parameters": "str1,str2",
+        "description": "The minimum number of single-character edits (insertions, deletions or substitutions) required to change one string to the other. Different case is considered different",
+        "example": "levenshtein('duck','db')",
+        "type": "scalar_function",
+        "aliases": ["editdist3"]
+    },
+    {
+        "name": "lpad",
+        "parameters": "string,count,character",
+        "description": "Pads the string with the character from the left until it has count characters",
+        "example": "lpad('hello', 10, '>')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "ltrim",
+        "parameters": "string,characters",
+        "description": "Removes any occurrences of any of the characters from the left side of the string",
+        "example": "ltrim('>>>>test<<', '><')",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "md5",
+        "parameters": "value",
+        "description": "Returns the MD5 hash of the value as a string",
+        "example": "md5('123')",
+        "type": "scalar_function",
+        "struct": "MD5Fun"
+    },
+    {
+        "name": "md5_number",
+        "parameters": "value",
+        "description": "Returns the MD5 hash of the value as an INT128",
+        "example": "md5_number('123')",
+        "type": "scalar_function",
+        "struct": "MD5NumberFun"
+    },
+    {
+        "name": "md5_number_lower",
+        "parameters": "value",
+        "description": "Returns the MD5 hash of the value as an INT128",
+        "example": "md5_number_lower('123')",
+        "type": "scalar_function",
+        "struct": "MD5NumberLowerFun"
+    },
+    {
+        "name": "md5_number_upper",
+        "parameters": "value",
+        "description": "Returns the MD5 hash of the value as an INT128",
+        "example": "md5_number_upper('123')",
+        "type": "scalar_function",
+        "struct": "MD5NumberUpperFun"
+    },
+    {
+        "name": "printf",
+        "parameters": "format,parameters...",
+        "description": "Formats a string using printf syntax",
+        "example": "printf('Benchmark \"%s\" took %d seconds', 'CSV', 42)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "repeat",
+        "parameters": "string,count",
+        "description": "Repeats the string count number of times",
+        "example": "repeat('A', 5)",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "replace",
+        "parameters": "string,source,target",
+        "description": "Replaces any occurrences of the source with target in string",
+        "example": "replace('hello', 'l', '-')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "reverse",
+        "parameters": "string",
+        "description": "Reverses the string",
+        "example": "reverse('hello')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "right",
+        "parameters": "string,count",
+        "description": "Extract the right-most count characters",
+        "example": "right('Hello\uD83E\uDD86', 3)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "right_grapheme",
+        "parameters": "string,count",
+        "description": "Extract the right-most count grapheme clusters",
+        "example": "right_grapheme('\uD83E\uDD26\uD83C\uDFFC\u200D♂️\uD83E\uDD26\uD83C\uDFFD\u200D♀️', 1)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "rpad",
+        "parameters": "string,count,character",
+        "description": "Pads the string with the character from the right until it has count characters",
+        "example": "rpad('hello', 10, '<')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "rtrim",
+        "parameters": "string,characters",
+        "description": "Removes any occurrences of any of the characters from the right side of the string",
+        "example": "rtrim('>>>>test<<', '><')",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "sha256",
+        "parameters": "value",
+        "description": "Returns the SHA256 hash of the value",
+        "example": "sha256('hello')",
+        "type": "scalar_function",
+        "struct": "SHA256Fun"
+    },
+    {
+        "name": "string_split",
+        "parameters": "string,separator",
+        "description": "Splits the string along the separator",
+        "example": "string_split('hello-world', '-')",
+        "type": "scalar_function",
+        "aliases": ["str_split", "string_to_array", "split"]
+    },
+    {
+        "name": "string_split_regex",
+        "parameters": "string,separator",
+        "description": "Splits the string along the regex",
+        "example": "string_split_regex('hello␣world; 42', ';?␣')",
+        "type": "scalar_function_set",
+        "aliases": ["str_split_regex", "regexp_split_to_array"]
+    },
+    {
+        "name": "translate",
+        "parameters": "string,from,to",
+        "description": "Replaces each character in string that matches a character in the from set with the corresponding character in the to set. If from is longer than to, occurrences of the extra characters in from are deleted",
+        "example": "translate('12345', '143', 'ax')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "trim",
+        "parameters": "string,characters",
+        "description": "Removes any occurrences of any of the characters from either side of the string",
+        "example": "trim('>>>>test<<', '><')",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "unbin",
+        "parameters": "value",
+        "description": "Converts a value from binary representation to a blob",
+        "example": "unbin('0110')",
+        "type": "scalar_function",
+        "aliases": ["from_binary"]
+    },
+    {
+        "name": "unhex",
+        "parameters": "value",
+        "description": "Converts a value from hexadecimal representation to a blob",
+        "example": "unhex('2A')",
+        "type": "scalar_function",
+        "aliases": ["from_hex"]
+    },
+    {
+        "name": "unicode",
+        "parameters": "str",
+        "description": "Returns the unicode codepoint of the first character of the string",
+        "example": "unicode('ü')",
+        "type": "scalar_function",
+        "aliases": ["ord"]
+    },
+    {
+        "name": "to_base",
+        "parameters": "number,radix,min_length",
+        "description": "Converts a value to a string in the given base radix, optionally padding with leading zeros to the minimum length",
+        "example": "to_base(42, 16)",
+        "type": "scalar_function_set"
+    }
+]

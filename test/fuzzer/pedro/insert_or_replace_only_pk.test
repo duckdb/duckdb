@@ -1,0 +1,25 @@
+# name: test/fuzzer/pedro/insert_or_replace_only_pk.test
+# description: Insert or replace with only columns that are part of the primary key constraint
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t2 (c1 INT PRIMARY KEY);
+
+statement ok
+INSERT OR REPLACE INTO t2 VALUES (1);
+
+query I
+SELECT * FROM t2
+----
+1
+
+statement ok
+INSERT OR REPLACE INTO t2 VALUES (1);
+
+query I
+SELECT * FROM t2
+----
+1

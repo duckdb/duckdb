@@ -1,0 +1,79 @@
+[
+    {
+        "name": "avg",
+        "parameters": "x",
+        "description": "Calculates the average value for all tuples in x.",
+        "example": "SUM(x) / COUNT(*)",
+        "type": "aggregate_function_set",
+        "aliases": ["mean"]
+    },
+    {
+        "name": "corr",
+        "parameters": "y,x",
+        "description": "Returns the correlation coefficient for non-null pairs in a group.",
+        "example": "COVAR_POP(y, x) / (STDDEV_POP(x) * STDDEV_POP(y))",
+        "type": "aggregate_function"
+    },
+    {
+        "name": "covar_pop",
+        "parameters": "y,x",
+        "description": "Returns the population covariance of input values.",
+        "example": "(SUM(x*y) - SUM(x) * SUM(y) / COUNT(*)) / COUNT(*)",
+        "type": "aggregate_function"
+    },
+    {
+        "name": "covar_samp",
+        "parameters": "y,x",
+        "description": "Returns the sample covariance for non-null pairs in a group.",
+        "example": "(SUM(x*y) - SUM(x) * SUM(y) / COUNT(*)) / (COUNT(*) - 1)",
+        "type": "aggregate_function"
+    },
+    {
+        "name": "favg",
+        "parameters": "x",
+        "description": "Calculates the average using a more accurate floating point summation (Kahan Sum)",
+        "example": "favg(A)",
+        "type": "aggregate_function",
+        "struct": "FAvgFun"
+    },
+    {
+        "name": "sem",
+        "parameters": "x",
+        "description": "Returns the standard error of the mean",
+        "example": "",
+        "type": "aggregate_function",
+        "struct": "StandardErrorOfTheMeanFun"
+    },
+    {
+        "name": "stddev_pop",
+        "parameters": "x",
+        "description": "Returns the population standard deviation.",
+        "example": "sqrt(var_pop(x))",
+        "type": "aggregate_function",
+        "struct": "StdDevPopFun"
+    },
+    {
+        "name": "stddev_samp",
+        "parameters": "x",
+        "description": "Returns the sample standard deviation",
+        "example": "sqrt(var_samp(x))",
+        "type": "aggregate_function",
+        "aliases": ["stddev"],
+        "struct": "StdDevSampFun"
+    },
+    {
+        "name": "var_pop",
+        "parameters": "x",
+        "description": "Returns the population variance.",
+        "example": "",
+        "type": "aggregate_function"
+    },
+    {
+        "name": "var_samp",
+        "parameters": "x",
+        "description": "Returns the sample variance of all input values.",
+        "example": "(SUM(x^2) - SUM(x)^2 / COUNT(x)) / (COUNT(x) - 1)",
+        "type": "aggregate_function",
+        "aliases": ["variance"]
+    }
+]

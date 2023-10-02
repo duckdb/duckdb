@@ -2,6 +2,15 @@
 # description: Test mode function
 # group: [aggregates]
 
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
 #Corner cases
 statement error
 select mode()
@@ -113,7 +122,7 @@ select mode(v) from dates;
 2021-05-02
 
 query II
-select k, mode(v) from dates group by k;
+select k, mode(v) from dates group by k ORDER BY ALL;
 ----
 1	2021-05-02
 2	2020-02-29
@@ -151,7 +160,7 @@ select mode(v) from times;
 12:11:49.5
 
 query II
-select k, mode(v) from times group by k;
+select k, mode(v) from times group by k ORDER BY ALL;
 ----
 1	12:11:49.5
 2	06:30:00
@@ -189,7 +198,7 @@ select mode(v) from timestamps;
 2021-05-02 12:11:49.5
 
 query II
-select k, mode(v) from timestamps group by k;
+select k, mode(v) from timestamps group by k ORDER BY ALL;
 ----
 1	2021-05-02 12:11:49.5
 2	2020-02-29 06:30:00
@@ -227,7 +236,7 @@ select mode(v) from intervals;
 5 months 2 days 12:11:49
 
 query II
-select k, mode(v) from intervals group by k;
+select k, mode(v) from intervals group by k ORDER BY ALL;
 ----
 1	5 months 2 days 12:11:49
 2	2 months 29 days 06:30:00
@@ -260,7 +269,7 @@ select mode(v) from hugeints;
 5
 
 query II
-select k, mode(v) from hugeints group by k;
+select k, mode(v) from hugeints group by k ORDER BY ALL;
 ----
 1	5
 2	2
@@ -278,3 +287,20 @@ select k, v, mode(v) over (partition by k)
 2	2	2
 2	5	2
 3	1	1
+
+# MODE is order-sensitive, so this should bind and return the larger value
+query I
+SELECT MODE(order_occurrences ORDER BY order_occurrences DESC) FROM (
+VALUES
+	(500, 1),
+	(1000, 2),
+	(800, 3),
+	(1000, 4),
+	(500, 5),
+	(550, 6),
+	(400, 7),
+	(200, 8),
+	(10, 9)
+)items_per_order(order_occurrences, item_count);
+----
+1000

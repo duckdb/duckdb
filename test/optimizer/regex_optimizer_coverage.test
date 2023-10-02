@@ -1,0 +1,63 @@
+# name: test/optimizer/regex_optimizer_coverage.test
+# description: Test Like Optimization Rules
+# group: [optimizer]
+
+statement ok
+CREATE TABLE test(word VARCHAR);
+
+statement ok
+INSERT INTO test VALUES ('FLASH'), ('TOAST'), ('BELL');
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+query I nosort correct_result
+select contains(word, 'AS') from test;
+----
+
+query I nosort correct_result
+select regexp_matches(word, '[A]') from test;
+----
+
+query I nosort correct_result
+select regexp_matches(word, 'A') from test;
+----
+
+query I nosort correct_result
+select regexp_matches(word, 'AS') from test;
+----
+
+query I nosort correct_result
+select regexp_matches(word, '[AS]') from test;
+----
+
+query I nosort correct_result
+select regexp_matches(word, '[S]') from test;
+----
+
+query I nosort correct_result
+select regexp_matches(word, '[A][S]') from test;
+----
+
+query I nosort correct_result
+select regexp_matches(word, '[AAAA]') from test;
+----
+
+query I nosort correct_result
+select regexp_matches(word, '[A-A]') from test;
+----
+
+# case-insensitive
+query I nosort correct_result
+select regexp_matches(word, '(?i)[A-A]') from test;
+----
+
+# single-line mode
+query I nosort correct_result
+select regexp_matches(word, '(?s)[A-A]') from test;
+----
+
+# multi-line mode
+query I nosort correct_result
+select regexp_matches(word, '(?m)[A-A]') from test;
+----

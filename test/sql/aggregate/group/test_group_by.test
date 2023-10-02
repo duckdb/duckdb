@@ -3,7 +3,13 @@
 # group: [group]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
 
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);

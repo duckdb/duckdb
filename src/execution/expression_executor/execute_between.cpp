@@ -74,6 +74,9 @@ static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, 
 	case PhysicalType::VARCHAR:
 		return TernaryExecutor::Select<string_t, string_t, string_t, OP>(input, lower, upper, sel, count, true_sel,
 		                                                                 false_sel);
+	case PhysicalType::INTERVAL:
+		return TernaryExecutor::Select<interval_t, interval_t, interval_t, OP>(input, lower, upper, sel, count,
+		                                                                       true_sel, false_sel);
 	default:
 		throw InvalidTypeException(input.GetType(), "Invalid type for BETWEEN");
 	}
@@ -81,7 +84,7 @@ static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, 
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundBetweenExpression &expr,
                                                                 ExpressionExecutorState &root) {
-	auto result = make_unique<ExpressionState>(expr, root);
+	auto result = make_uniq<ExpressionState>(expr, root);
 	result->AddChild(expr.input.get());
 	result->AddChild(expr.lower.get());
 	result->AddChild(expr.upper.get());

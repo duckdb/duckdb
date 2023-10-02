@@ -1,0 +1,11 @@
+# name: benchmark/micro/list/column_data_collection_copy/small_lists.benchmark
+# description: Benchmark code paths that use the column data collection copy for small lists
+# group: [column_data_collection_copy]
+
+name Column Data Collection Copy Small Lists
+group micro
+subgroup list
+
+run
+SELECT a from (SELECT STRUCT_PACK(a := LIST_VALUE(1,2,3,4,5,6,7,8,9,10,2,2,2,2,2,1,2,3,4,5,6,7,8,9,0,11,42), b := i) as a FROM range(5000000) tbl(i)) as t;
+

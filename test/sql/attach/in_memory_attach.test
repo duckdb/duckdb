@@ -1,0 +1,61 @@
+# name: test/sql/attach/in_memory_attach.test
+# description: Test in-memory attach
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH DATABASE ':memory:' AS new_database;
+
+# specify database but use a default schema
+statement ok
+CREATE TABLE new_database.integers(i INTEGER)
+
+statement ok
+INSERT INTO new_database.integers VALUES (42);
+
+# plus schema
+statement ok
+INSERT INTO new_database.main.integers VALUES (84);
+
+# not in search path
+statement error
+SELECT * FROM integers
+----
+does not exist
+
+query I
+SELECT * FROM new_database.integers ORDER BY i
+----
+42
+84
+
+# plus schema
+query I
+SELECT * FROM new_database.main.integers ORDER BY i
+----
+42
+84
+
+# database + column name does not work
+statement error
+SELECT * FROM new_database.integers ORDER BY new_database.i
+----
+not found
+
+# database + table name + column name works
+query I
+SELECT * FROM new_database.integers ORDER BY new_database.integers.i
+----
+42
+84
+
+# database + schema name + table name + column name works as well
+query I
+SELECT * FROM new_database.main.integers ORDER BY new_database.main.integers.i
+----
+42
+84

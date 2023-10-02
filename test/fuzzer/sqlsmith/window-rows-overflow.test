@@ -1,0 +1,57 @@
+# name: test/fuzzer/sqlsmith/window-rows-overflow.test
+# description: Overflow testing for rows offsets.
+# group: [sqlsmith]
+
+# Query failed, but error message did not match expected error message:
+#     Out of Range Error: Overflow computing ROWS PRECEDING start (test/fuzzer/sqlsmith/window-rows-overflow.test:14)!
+# Skipping for now since it's causing non-deterministic failures on CI
+mode skip
+
+statement ok
+create table all_types as 
+	select * exclude(
+		small_enum,
+		medium_enum,
+		large_enum
+	)
+from test_all_types();
+
+statement error
+SELECT nth_value(1929, "array_of_structs") OVER (
+	PARTITION BY (
+		"usmallint" > "smallint"
+	), 747 ROWS BETWEEN "bigint" PRECEDING AND CURRENT ROW
+)
+FROM all_types;
+----
+Out of Range Error: Overflow computing ROWS PRECEDING start
+
+statement error
+SELECT nth_value(1929, "bool") OVER (
+	PARTITION BY (
+		"usmallint" > "smallint"
+	), 747 ROWS BETWEEN 1 PRECEDING AND "bigint" PRECEDING
+)
+FROM all_types;
+----
+Out of Range Error: Overflow computing ROWS PRECEDING end
+
+statement error
+SELECT nth_value(1929, "bool") OVER (
+	PARTITION BY (
+		"usmallint" > "smallint"
+	), 747 ROWS BETWEEN "bigint" FOLLOWING AND 1 FOLLOWING
+)
+FROM all_types;
+----
+Out of Range Error: Overflow computing ROWS FOLLOWING start
+
+statement error
+SELECT nth_value(1929, "bool") OVER (
+	PARTITION BY (
+		"usmallint" > "smallint"
+	), 747 ROWS BETWEEN CURRENT ROW AND "bigint" FOLLOWING
+)
+FROM all_types;
+----
+Out of Range Error: Overflow computing ROWS FOLLOWING end

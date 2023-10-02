@@ -56,7 +56,7 @@ DangiCalendar::DangiCalendar(const Locale& aLocale, UErrorCode& success)
 {
 }
 
-DangiCalendar::DangiCalendar (const DangiCalendar& other) 
+DangiCalendar::DangiCalendar (const DangiCalendar& other)
 : ChineseCalendar(other)
 {
 }
@@ -71,37 +71,37 @@ DangiCalendar::clone() const
     return new DangiCalendar(*this);
 }
 
-const char *DangiCalendar::getType() const { 
+const char *DangiCalendar::getType() const {
     return "dangi";
 }
 
 /**
  * The time zone used for performing astronomical computations for
- * Dangi calendar. In Korea various timezones have been used historically 
- * (cf. http://www.math.snu.ac.kr/~kye/others/lunar.html): 
- *  
- *            - 1908/04/01: GMT+8 
- * 1908/04/01 - 1911/12/31: GMT+8.5 
- * 1912/01/01 - 1954/03/20: GMT+9 
- * 1954/03/21 - 1961/08/09: GMT+8.5 
- * 1961/08/10 -           : GMT+9 
- *  
- * Note that, in 1908-1911, the government did not apply the timezone change 
- * but used GMT+8. In addition, 1954-1961's timezone change does not affect 
- * the lunar date calculation. Therefore, the following simpler rule works: 
- *   
- * -1911: GMT+8 
- * 1912-: GMT+9 
- *  
- * Unfortunately, our astronomer's approximation doesn't agree with the 
- * references (http://www.math.snu.ac.kr/~kye/others/lunar.html and 
- * http://astro.kasi.re.kr/Life/ConvertSolarLunarForm.aspx?MenuID=115) 
- * in 1897/7/30. So the following ad hoc fix is used here: 
- *  
- *     -1896: GMT+8 
- *      1897: GMT+7 
- * 1898-1911: GMT+8 
- * 1912-    : GMT+9 
+ * Dangi calendar. In Korea various timezones have been used historically
+ * (cf. http://www.math.snu.ac.kr/~kye/others/lunar.html):
+ *
+ *            - 1908/04/01: GMT+8
+ * 1908/04/01 - 1911/12/31: GMT+8.5
+ * 1912/01/01 - 1954/03/20: GMT+9
+ * 1954/03/21 - 1961/08/09: GMT+8.5
+ * 1961/08/10 -           : GMT+9
+ *
+ * Note that, in 1908-1911, the government did not apply the timezone change
+ * but used GMT+8. In addition, 1954-1961's timezone change does not affect
+ * the lunar date calculation. Therefore, the following simpler rule works:
+ *
+ * -1911: GMT+8
+ * 1912-: GMT+9
+ *
+ * Unfortunately, our astronomer's approximation doesn't agree with the
+ * references (http://www.math.snu.ac.kr/~kye/others/lunar.html and
+ * http://astro.kasi.re.kr/Life/ConvertSolarLunarForm.aspx?MenuID=115)
+ * in 1897/7/30. So the following ad hoc fix is used here:
+ *
+ *     -1896: GMT+8
+ *      1897: GMT+7
+ * 1898-1911: GMT+8
+ * 1912-    : GMT+9
  */
 static void U_CALLCONV initDangiCalZoneAstroCalc(void) {
     U_ASSERT(gDangiCalendarZoneAstroCalc == NULL);
@@ -127,7 +127,7 @@ static void U_CALLCONV initDangiCalZoneAstroCalc(void) {
     ucln_i18n_registerCleanup(UCLN_I18N_DANGI_CALENDAR, calendar_dangi_cleanup);
 }
 
-const TimeZone* DangiCalendar::getDangiCalZoneAstroCalc(void) const {
+TimeZone* DangiCalendar::getDangiCalZoneAstroCalc(void) {
     umtx_initOnce(gDangiCalendarInitOnce, &initDangiCalZoneAstroCalc);
     return gDangiCalendarZoneAstroCalc;
 }

@@ -1,0 +1,29 @@
+# name: test/sql/storage/parallel/batch_insert_filtered_row_groups.test_slow
+# description: Test batch insert with small batches
+# group: [parallel]
+
+require vector_size 512
+
+require parquet
+
+load __TEST_DIR__/insert_mix_batches.db
+
+statement ok
+COPY (FROM range(10000000)) to '__TEST_DIR__/many_small_batches.parquet' (row_group_size 5000)
+
+statement ok
+create table test as from '__TEST_DIR__/many_small_batches.parquet' t(i) where (i//6144) % 3 = 0;
+
+query I
+SELECT MEDIAN(count) FROM pragma_storage_info('test')
+----
+122880
+
+query I
+SELECT * FROM test LIMIT 5 OFFSET 500000
+----
+1495328
+1495329
+1495330
+1495331
+1495332

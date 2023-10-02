@@ -16,11 +16,8 @@
 namespace duckdb {
 
 struct CreateTypeInfo : public CreateInfo {
-	CreateTypeInfo() : CreateInfo(CatalogType::TYPE_ENTRY) {
-	}
-	CreateTypeInfo(string name_p, LogicalType type_p)
-	    : CreateInfo(CatalogType::TYPE_ENTRY), name(move(name_p)), type(move(type_p)) {
-	}
+	CreateTypeInfo();
+	CreateTypeInfo(string name_p, LogicalType type_p);
 
 	//! Name of the Type
 	string name;
@@ -30,21 +27,10 @@ struct CreateTypeInfo : public CreateInfo {
 	unique_ptr<SQLStatement> query;
 
 public:
-	unique_ptr<CreateInfo> Copy() const override {
-		auto result = make_unique<CreateTypeInfo>();
-		CopyProperties(*result);
-		result->name = name;
-		result->type = type;
-		if (query) {
-			result->query = query->Copy();
-		}
-		return move(result);
-	}
+	unique_ptr<CreateInfo> Copy() const override;
 
-protected:
-	void SerializeInternal(Serializer &) const override {
-		throw NotImplementedException("Cannot serialize '%s'", CatalogTypeToString(CreateInfo::type));
-	}
+	DUCKDB_API void Serialize(Serializer &serializer) const override;
+	DUCKDB_API static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

@@ -9,10 +9,12 @@
 #pragma once
 
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/exception_format_value.hpp"
-#include "duckdb/common/vector.hpp"
+#include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/map.hpp"
+#include "duckdb/common/typedefs.hpp"
 
+#include <vector>
 #include <stdexcept>
 
 namespace duckdb {
@@ -20,8 +22,8 @@ enum class PhysicalType : uint8_t;
 struct LogicalType;
 struct hugeint_t;
 
-inline void assert_restrict_function(void *left_start, void *left_end, void *right_start, void *right_end,
-                                     const char *fname, int linenr) {
+inline void assert_restrict_function(const void *left_start, const void *left_end, const void *right_start,
+                                     const void *right_end, const char *fname, int linenr) {
 	// assert that the two pointers do not overlap
 #ifdef DEBUG
 	if (!(left_end <= right_start || right_end <= left_start)) {
@@ -76,8 +78,12 @@ enum class ExceptionType {
 	PERMISSION = 34,      // insufficient permissions
 	PARAMETER_NOT_RESOLVED = 35, // parameter types could not be resolved
 	PARAMETER_NOT_ALLOWED = 36,  // parameter types not allowed
-	DEPENDENCY = 37              // dependency
+	DEPENDENCY = 37,             // dependency
+	HTTP = 38,
+	MISSING_EXTENSION = 39, // Thrown when an extension is used but not loaded
+	AUTOLOAD = 40           // Thrown when an extension is used but not loaded
 };
+class HTTPException;
 
 class Exception : public std::exception {
 public:
@@ -91,18 +97,26 @@ public:
 	DUCKDB_API const string &RawMessage() const;
 
 	DUCKDB_API static string ExceptionTypeToString(ExceptionType type);
-	[[noreturn]] DUCKDB_API static void ThrowAsTypeWithMessage(ExceptionType type, const string &message);
+	[[noreturn]] DUCKDB_API static void ThrowAsTypeWithMessage(ExceptionType type, const string &message,
+	                                                           const std::shared_ptr<Exception> &original);
+	virtual std::shared_ptr<Exception> Copy() const {
+		return make_shared<Exception>(type, raw_message_);
+	}
+	DUCKDB_API const HTTPException &AsHTTPException() const;
 
 	template <typename... Args>
 	static string ConstructMessage(const string &msg, Args... params) {
-		vector<ExceptionFormatValue> values;
+		const std::size_t num_args = sizeof...(Args);
+		if (num_args == 0)
+			return msg;
+		std::vector<ExceptionFormatValue> values;
 		return ConstructMessageRecursive(msg, values, params...);
 	}
 
-	DUCKDB_API static string ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values);
+	DUCKDB_API static string ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values);
 
 	template <class T, typename... Args>
-	static string ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values, T param,
+	static string ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values, T param,
 	                                        Args... params) {
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		return ConstructMessageRecursive(msg, values, params...);
@@ -111,6 +125,9 @@ public:
 	DUCKDB_API static bool UncaughtException();
 
 	DUCKDB_API static string GetStackTrace(int max_depth = 120);
+	static string FormatStackTrace(string message = "") {
+		return (message + "\n" + GetStackTrace());
+	}
 
 private:
 	string exception_message_;
@@ -256,10 +273,92 @@ public:
 class IOException : public Exception {
 public:
 	DUCKDB_API explicit IOException(const string &msg);
+	explicit IOException(ExceptionType exception_type, const string &msg) : Exception(exception_type, msg) {
+	}
 
 	template <typename... Args>
 	explicit IOException(const string &msg, Args... params) : IOException(ConstructMessage(msg, params...)) {
 	}
+};
+
+class MissingExtensionException : public Exception {
+public:
+	DUCKDB_API explicit MissingExtensionException(const string &msg);
+
+	template <typename... Args>
+	explicit MissingExtensionException(const string &msg, Args... params)
+	    : MissingExtensionException(ConstructMessage(msg, params...)) {
+	}
+};
+
+class AutoloadException : public Exception {
+public:
+	DUCKDB_API explicit AutoloadException(const string &extension_name, Exception &e);
+
+	template <typename... Args>
+	explicit AutoloadException(const string &extension_name, Exception &e, Args... params)
+	    : AutoloadException(ConstructMessage(extension_name, e, params...)) {
+	}
+
+protected:
+	Exception &wrapped_exception;
+};
+
+class HTTPException : public IOException {
+public:
+	template <typename>
+	struct ResponseShape {
+		typedef int status;
+	};
+
+	template <class RESPONSE, typename ResponseShape<decltype(RESPONSE::status)>::status = 0, typename... ARGS>
+	explicit HTTPException(RESPONSE &response, const string &msg, ARGS... params)
+	    : HTTPException(response.status, response.body, response.headers, response.reason, msg, params...) {
+	}
+
+	template <typename>
+	struct ResponseWrapperShape {
+		typedef int code;
+	};
+	template <class RESPONSE, typename ResponseWrapperShape<decltype(RESPONSE::code)>::code = 0, typename... ARGS>
+	explicit HTTPException(RESPONSE &response, const string &msg, ARGS... params)
+	    : HTTPException(response.code, response.body, response.headers, response.error, msg, params...) {
+	}
+
+	template <typename HEADERS, typename... ARGS>
+	explicit HTTPException(int status_code, string response_body, HEADERS headers, const string &reason,
+	                       const string &msg, ARGS... params)
+	    : IOException(ExceptionType::HTTP, ConstructMessage(msg, params...)), status_code(status_code), reason(reason),
+	      response_body(std::move(response_body)) {
+		this->headers.insert(headers.begin(), headers.end());
+		D_ASSERT(this->headers.size() > 0);
+	}
+
+	std::shared_ptr<Exception> Copy() const {
+		return make_shared<HTTPException>(status_code, response_body, headers, reason, RawMessage());
+	}
+
+	const std::multimap<std::string, std::string> GetHeaders() const {
+		return headers;
+	}
+	int GetStatusCode() const {
+		return status_code;
+	}
+	const string &GetResponseBody() const {
+		return response_body;
+	}
+	const string &GetReason() const {
+		return reason;
+	}
+	[[noreturn]] void Throw() const {
+		throw HTTPException(status_code, response_body, headers, reason, RawMessage());
+	}
+
+private:
+	int status_code;
+	string reason;
+	string response_body;
+	std::multimap<string, string> headers;
 };
 
 class SerializationException : public Exception {
@@ -289,7 +388,7 @@ public:
 
 class FatalException : public Exception {
 public:
-	DUCKDB_API explicit FatalException(const string &msg) : FatalException(ExceptionType::FATAL, msg) {
+	explicit FatalException(const string &msg) : FatalException(ExceptionType::FATAL, msg) {
 	}
 	template <typename... Args>
 	explicit FatalException(const string &msg, Args... params) : FatalException(ConstructMessage(msg, params...)) {

@@ -1,0 +1,133 @@
+# name: test/sql/join/asof/test_asof_join_varchar.test
+# description: Test As-Of joins for strings
+# group: [asof]
+
+statement ok
+PRAGMA enable_verification
+
+# Join on a string range
+
+statement ok
+CREATE TABLE events0 (begin VARCHAR, value INTEGER);
+
+statement ok
+INSERT INTO events0 VALUES
+	(NULL, -1),
+	(1, 0),
+	(3, 1),
+	(6, 2),
+	(8, 3),
+	('infinity', 9)
+;
+
+statement ok
+CREATE TABLE probe0 AS 
+	SELECT range::VARCHAR AS begin
+	FROM range(0,10)
+;
+
+# INNER ON inequality only
+query II
+SELECT p.begin, e.value
+FROM probe0 p ASOF JOIN events0 e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC
+----
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+
+query II
+SELECT p.begin, e.value
+FROM probe0 p ASOF JOIN events0 e
+USING (begin)
+ORDER BY p.begin ASC
+----
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+
+# LEFT ON inequality only
+query II
+SELECT p.begin, e.value
+FROM probe0 p ASOF LEFT JOIN events0 e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC
+----
+0	NULL
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+
+query II
+SELECT p.begin, e.value
+FROM probe0 p ASOF LEFT JOIN events0 e
+USING (begin)
+ORDER BY p.begin ASC
+----
+0	NULL
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+
+# RIGHT ON inequality only
+query II
+SELECT p.begin, e.value
+FROM probe0 p ASOF RIGHT JOIN events0 e
+ON p.begin >= e.begin
+ORDER BY ALL
+----
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+NULL	-1
+NULL	9
+
+# RIGHT USING inequality only
+query II
+SELECT p.begin, e.value
+FROM probe0 p ASOF RIGHT JOIN events0 e
+USING (begin)
+ORDER BY ALL
+----
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+NULL	-1
+NULL	9

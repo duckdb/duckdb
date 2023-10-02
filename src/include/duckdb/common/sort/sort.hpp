@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/sort/sorted_block.hpp"
-#include "duckdb/common/types/row_data_collection.hpp"
+#include "duckdb/common/types/row/row_data_collection.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 
 namespace duckdb {

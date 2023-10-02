@@ -2,9 +2,11 @@ add_library_unity(
   duckdb_statement
   OBJECT
   alter_statement.cpp
+  attach_statement.cpp
   call_statement.cpp
   copy_statement.cpp
   create_statement.cpp
+  detach_statement.cpp
   delete_statement.cpp
   drop_statement.cpp
   execute_statement.cpp
@@ -13,6 +15,7 @@ add_library_unity(
   extension_statement.cpp
   insert_statement.cpp
   load_statement.cpp
+  multi_statement.cpp
   pragma_statement.cpp
   prepare_statement.cpp
   relation_statement.cpp

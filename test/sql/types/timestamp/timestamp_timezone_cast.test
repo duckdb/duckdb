@@ -1,0 +1,43 @@
+# name: test/sql/types/timestamp/timestamp_timezone_cast.test
+# description: Test timestamp with timezones cast
+# group: [timestamp]
+
+statement ok
+PRAGMA enable_verification
+
+# we can cast timestamps with UTC in them
+query I
+SELECT TIMESTAMP '2021-05-25 04:55:03.382494 UTC';
+----
+2021-05-25 04:55:03.382494
+
+query I
+SELECT TIMESTAMP '2021-05-25 04:55:03.382494 utc';
+----
+2021-05-25 04:55:03.382494
+
+query I
+SELECT TIMESTAMP '2021-05-25 04:55:03.382494 uTc';
+----
+2021-05-25 04:55:03.382494
+
+statement error
+SELECT TIMESTAMP '2021-05-25 04:55:03.382494 EST';
+----
+has a timestamp that is not UTC
+
+require icu
+
+# FIXME: we should be able to make this work
+statement error
+SELECT TIMESTAMP '2021-05-25 04:55:03.382494 EST';
+----
+has a timestamp that is not UTC
+
+statement ok
+SET TimeZone='UTC'
+
+query I
+SELECT TIMESTAMPTZ '2021-05-25 04:55:03.382494 EST';
+----
+2021-05-25 09:55:03.382494+00

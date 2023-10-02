@@ -6,6 +6,8 @@ require skip_reload
 
 require fts
 
+require noalternativeverify
+
 statement ok
 PRAGMA enable_verification
 
@@ -37,7 +39,7 @@ statement error
 PRAGMA create_fts_index('documents', 'id', 'body')
 
 statement ok
-PRAGMA create_fts_index('documents', 'id', 'body', overwrite=1)
+PRAGMA create_fts_index('documents', 'id', 'body', overwrite=true)
 
 # drop and re-create
 statement ok
@@ -122,15 +124,15 @@ SELECT name, score FROM (SELECT docid, sum(subscore) AS score
     FROM subscores GROUP BY docid) AS scores JOIN fts_main_documents.docs AS docs ON
     scores.docid = docs.docid ORDER BY score DESC LIMIT 1000
 ----
-doc1	0.443697
-doc2	0.375436
+doc2	0.3754363455046031
+doc1	0.36835264087244074
 
 # now test the actual match macro
 query III
 SELECT score, id, body FROM (SELECT *, fts_main_documents.match_bm25(id, 'quacked barked') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
 ----
-0.443697	doc1	 QUÁCKING+QUÁCKING+QUÁCKING
-0.375436	doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING
+0.37543634550460314	doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING
+0.3683526408724408	doc1	 QUÁCKING+QUÁCKING+QUÁCKING
 
 # drop and re-create, but index both the 'body' and 'author' column this time
 statement ok

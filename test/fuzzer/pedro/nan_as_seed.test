@@ -1,0 +1,29 @@
+# name: test/fuzzer/pedro/nan_as_seed.test
+# description: Issue #4984 (42): Nan as seed
+# group: [pedro]
+
+statement ok
+create table test as select range i from range(10000)
+
+foreach type FLOAT DOUBLE REAL
+
+foreach val nan
+
+statement error
+SELECT setseed('${val}'::${type});
+----
+SETSEED accepts seed values
+
+statement ok
+SELECT setseed(0.5);
+
+statement ok
+SELECT 1, random();
+
+statement ok
+select * from test using sample 100;
+
+endloop
+
+endloop
+

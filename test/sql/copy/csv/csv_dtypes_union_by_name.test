@@ -1,0 +1,69 @@
+# name: test/sql/copy/csv/csv_dtypes_union_by_name.test
+# description: Read a CSV with dtypes and UNION BY NAME
+# group: [csv]
+
+#statement ok
+#PRAGMA enable_verification
+
+statement ok
+CREATE TABLE ubn1(a BIGINT);
+
+statement ok
+CREATE TABLE ubn2(a INTEGER, b INTEGER);
+
+statement ok
+CREATE TABLE ubn3(a INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO ubn1 VALUES (1), (2), (9223372036854775807);
+
+statement ok
+INSERT INTO ubn2 VALUES (3,4), (5, 6);
+
+statement ok
+INSERT INTO ubn3 VALUES (100,101), (102, 103);
+
+statement ok
+COPY ubn1 TO '__TEST_DIR__/ubn1.csv' WITH (HEADER 1, DELIMITER ',');
+
+statement ok
+COPY ubn2 TO '__TEST_DIR__/ubn2.csv' WITH (HEADER 1, DELIMITER ',');
+
+statement ok
+COPY ubn3 TO '__TEST_DIR__/ubn3.csv' WITH (HEADER 1, DELIMITER ',');
+
+query III
+SELECT typeof(a), typeof(b), typeof(c)
+FROM  read_csv_auto('__TEST_DIR__/ubn*.csv', UNION_BY_NAME=TRUE, dtypes={'c': TINYINT})
+LIMIT 1;
+----
+BIGINT	BIGINT	TINYINT
+
+query III
+SELECT typeof(a), typeof(b), typeof(c)
+FROM  read_csv_auto('__TEST_DIR__/ubn*.csv', UNION_BY_NAME=TRUE, dtypes={'c': TINYINT, 'A': DOUBLE})
+LIMIT 1;
+----
+DOUBLE	BIGINT	TINYINT
+
+# unrecognized in any file
+statement error
+SELECT typeof(a), typeof(b), typeof(c)
+FROM  read_csv_auto('__TEST_DIR__/ubn*.csv', UNION_BY_NAME=TRUE, dtypes={'xxx': TINYINT})
+LIMIT 1;
+----
+xxx
+
+statement error
+SELECT typeof(a), typeof(b), typeof(c)
+FROM  read_csv_auto('__TEST_DIR__/ubn*.csv', UNION_BY_NAME=TRUE, dtypes={'c': TINYINT, 'A': DOUBLE, 'C': FLOAT})
+LIMIT 1;
+----
+Duplicate struct entry name
+
+statement error
+SELECT typeof(a), typeof(b), typeof(c)
+FROM  read_csv_auto('__TEST_DIR__/ubn*.csv', UNION_BY_NAME=TRUE, dtypes={'c': TINYINT, 'A': DOUBLE, 'xZX': FLOAT})
+LIMIT 1;
+----
+xZX

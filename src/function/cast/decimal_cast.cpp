@@ -66,7 +66,7 @@ struct DecimalScaleUpCheckOperator {
 			auto error = StringUtil::Format("Casting value \"%s\" to type %s failed: value is out of range!",
 			                                Decimal::ToString(input, data->source_width, data->source_scale),
 			                                data->result.GetType().ToString());
-			return HandleVectorCastError::Operation<RESULT_TYPE>(move(error), mask, idx, data->error_message,
+			return HandleVectorCastError::Operation<RESULT_TYPE>(std::move(error), mask, idx, data->error_message,
 			                                                     data->all_converted);
 		}
 		return Cast::Operation<INPUT_TYPE, RESULT_TYPE>(input) * data->factor;
@@ -115,7 +115,7 @@ struct DecimalScaleDownCheckOperator {
 			auto error = StringUtil::Format("Casting value \"%s\" to type %s failed: value is out of range!",
 			                                Decimal::ToString(input, data->source_width, data->source_scale),
 			                                data->result.GetType().ToString());
-			return HandleVectorCastError::Operation<RESULT_TYPE>(move(error), mask, idx, data->error_message,
+			return HandleVectorCastError::Operation<RESULT_TYPE>(std::move(error), mask, idx, data->error_message,
 			                                                     data->all_converted);
 		}
 		return Cast::Operation<INPUT_TYPE, RESULT_TYPE>(input / data->factor);
@@ -207,7 +207,7 @@ struct DecimalCastInput {
 struct StringCastFromDecimalOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (DecimalCastInput *)dataptr;
+		auto data = reinterpret_cast<DecimalCastInput *>(dataptr);
 		return StringCastFromDecimal::Operation<INPUT_TYPE>(input, data->width, data->scale, data->result);
 	}
 };

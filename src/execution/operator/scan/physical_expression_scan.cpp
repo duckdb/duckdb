@@ -17,12 +17,12 @@ public:
 };
 
 unique_ptr<OperatorState> PhysicalExpressionScan::GetOperatorState(ExecutionContext &context) const {
-	return make_unique<ExpressionScanState>(Allocator::Get(context.client), *this);
+	return make_uniq<ExpressionScanState>(Allocator::Get(context.client), *this);
 }
 
 OperatorResultType PhysicalExpressionScan::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    GlobalOperatorState &gstate, OperatorState &state_p) const {
-	auto &state = (ExpressionScanState &)state_p;
+	auto &state = state_p.Cast<ExpressionScanState>();
 
 	for (; chunk.size() + input.size() <= STANDARD_VECTOR_SIZE && state.expression_index < expressions.size();
 	     state.expression_index++) {

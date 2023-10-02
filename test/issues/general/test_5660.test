@@ -1,0 +1,27 @@
+# name: test/issues/general/test_5660.test
+# description: Issue 5660: Group by all throws binder error when a more informative error should be produced
+# group: [general]
+
+statement ok
+CREATE TABLE foo AS SELECT 'a, b, c' AS "x", '1' AS y;
+
+statement error
+SELECT y, UNLIST(string_split("x", ', ')) alias, COUNT(*) FROM foo GROUP BY y, alias;
+----
+Binder Error
+
+statement ok
+select * from foo
+
+statement error
+SELECT y, UNLIST(string_split("x", ', ')) x, COUNT(*) FROM foo GROUP BY ALL;
+----
+Binder Error
+
+# essentially the same as above but with a subquery instead of a group by and unlist
+statement ok
+select f.y, k.c1, count(*) FROM foo f, (Select UNLIST(string_split("x", ', ')) c1) k group by y, k.c1;
+
+# Make sure we don't invalidate the database
+statement ok
+select * from foo

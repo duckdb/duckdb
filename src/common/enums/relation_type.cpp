@@ -43,6 +43,8 @@ string RelationTypeToString(RelationType type) {
 		return "UPDATE_RELATION";
 	case RelationType::WRITE_CSV_RELATION:
 		return "WRITE_CSV_RELATION";
+	case RelationType::WRITE_PARQUET_RELATION:
+		return "WRITE_PARQUET_RELATION";
 	case RelationType::READ_CSV_RELATION:
 		return "READ_CSV_RELATION";
 	case RelationType::SUBQUERY_RELATION:

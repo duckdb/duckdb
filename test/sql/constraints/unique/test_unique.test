@@ -3,6 +3,9 @@
 # group: [unique]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 CREATE TABLE integers(i INTEGER UNIQUE, j INTEGER)
 
 # insert unique values

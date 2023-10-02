@@ -1,0 +1,21 @@
+# name: benchmark/micro/copy/from_parquet_small_row_groups.benchmark
+# description: Import data from small batches
+# group: [copy]
+
+name Import data from small row groups
+group copy
+
+require parquet
+
+storage persistent
+
+load
+COPY (FROM range(100000000)) TO '${BENCHMARK_DIR}/small_batches.parquet' (ROW_GROUP_SIZE 5000);
+
+run
+CREATE TABLE small AS FROM '${BENCHMARK_DIR}/small_batches.parquet';
+
+cleanup
+DROP TABLE small;
+
+

@@ -1,0 +1,118 @@
+# name: test/sql/settings/default_null_order_extended.test
+# description: Test extended default null order settings
+# group: [settings]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i integer);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+# NULLS FIRST
+statement ok
+SET default_null_order='nulls_first';
+
+query I
+SELECT * FROM integers ORDER BY i;
+----
+NULL
+1
+2
+3
+
+query I
+SELECT * FROM integers ORDER BY i DESC;
+----
+NULL
+3
+2
+1
+
+query II
+SELECT FIRST(i ORDER BY i), LAST(i ORDER BY i) FROM integers
+----
+NULL	3
+
+query II
+SELECT FIRST(i ORDER BY i DESC), LAST(i ORDER BY i DESC) FROM integers
+----
+NULL	1
+
+query II
+SELECT list_sort(LIST(i)), list_reverse_sort(LIST(i)) FROM integers
+----
+[NULL, 1, 2, 3]	[NULL, 3, 2, 1]
+
+# SQLite-style null order
+statement ok
+SET default_null_order='sqlite';
+
+query I
+SELECT * FROM integers ORDER BY i;
+----
+NULL
+1
+2
+3
+
+query I
+SELECT * FROM integers ORDER BY i DESC;
+----
+3
+2
+1
+NULL
+
+query II
+SELECT FIRST(i ORDER BY i), LAST(i ORDER BY i) FROM integers
+----
+NULL	3
+
+query II
+SELECT FIRST(i ORDER BY i DESC), LAST(i ORDER BY i DESC) FROM integers
+----
+3	NULL
+
+query II
+SELECT list_sort(LIST(i)), list_reverse_sort(LIST(i)) FROM integers
+----
+[NULL, 1, 2, 3]	[3, 2, 1, NULL]
+
+
+# Postgres-style NULL order
+statement ok
+SET default_null_order='postgres';
+
+query I
+SELECT * FROM integers ORDER BY i;
+----
+1
+2
+3
+NULL
+
+query I
+SELECT * FROM integers ORDER BY i DESC;
+----
+NULL
+3
+2
+1
+
+query II
+SELECT FIRST(i ORDER BY i), LAST(i ORDER BY i) FROM integers
+----
+1	NULL
+
+query II
+SELECT FIRST(i ORDER BY i DESC), LAST(i ORDER BY i DESC) FROM integers
+----
+NULL	1
+
+query II
+SELECT list_sort(LIST(i)), list_reverse_sort(LIST(i)) FROM integers
+----
+[1, 2, 3, NULL]	[NULL, 3, 2, 1]

@@ -13,6 +13,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
+#include "duckdb/storage/database_size.hpp"
 
 namespace duckdb {
 class BlockManager;
@@ -21,15 +22,6 @@ class CheckpointWriter;
 class DatabaseInstance;
 class TransactionManager;
 class TableCatalogEntry;
-
-struct DatabaseSize {
-	idx_t total_blocks = 0;
-	idx_t block_size = 0;
-	idx_t free_blocks = 0;
-	idx_t used_blocks = 0;
-	idx_t bytes = 0;
-	idx_t wal_size = 0;
-};
 
 class StorageCommitState {
 public:
@@ -46,27 +38,23 @@ public:
 //! database on disk
 class StorageManager {
 public:
-	StorageManager(DatabaseInstance &db, string path, bool read_only);
+	StorageManager(AttachedDatabase &db, string path, bool read_only);
 	virtual ~StorageManager();
 
-	//! The BufferManager of the database
-	unique_ptr<BufferManager> buffer_manager;
-	//! The database this storagemanager belongs to
-	DatabaseInstance &db;
-
 public:
-	static StorageManager &GetStorageManager(ClientContext &context);
-	static StorageManager &GetStorageManager(DatabaseInstance &db);
+	static StorageManager &Get(AttachedDatabase &db);
+	static StorageManager &Get(Catalog &catalog);
 
 	//! Initialize a database or load an existing database from the given path
 	void Initialize();
 
-	DatabaseInstance &GetDatabase() {
+	DatabaseInstance &GetDatabase();
+	AttachedDatabase &GetAttached() {
 		return db;
 	}
 
 	//! Get the WAL of the StorageManager, returns nullptr if in-memory
-	WriteAheadLog *GetWriteAheadLog() {
+	optional_ptr<WriteAheadLog> GetWriteAheadLog() {
 		return wal.get();
 	}
 
@@ -77,28 +65,42 @@ public:
 
 	virtual bool AutomaticCheckpoint(idx_t estimated_wal_bytes) = 0;
 	virtual unique_ptr<StorageCommitState> GenStorageCommitState(Transaction &transaction, bool checkpoint) = 0;
-	virtual bool IsCheckpointClean(block_id_t checkpoint_id) = 0;
+	virtual bool IsCheckpointClean(MetaBlockPointer checkpoint_id) = 0;
 	virtual void CreateCheckpoint(bool delete_wal = false, bool force_checkpoint = false) = 0;
 	virtual DatabaseSize GetDatabaseSize() = 0;
+	virtual vector<MetadataBlockInfo> GetMetadataInfo() = 0;
 	virtual shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) = 0;
 
 protected:
 	virtual void LoadDatabase() = 0;
-	virtual void CreateBufferManager();
 
+protected:
+	//! The database this storagemanager belongs to
+	AttachedDatabase &db;
 	//! The path of the database
 	string path;
 	//! The WriteAheadLog of the storage manager
 	unique_ptr<WriteAheadLog> wal;
-
 	//! Whether or not the database is opened in read-only mode
 	bool read_only;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 //! Stores database in a single file.
 class SingleFileStorageManager : public StorageManager {
 public:
-	SingleFileStorageManager(DatabaseInstance &db, string path, bool read_only);
+	SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only);
 
 	//! The BlockManager to read/store meta information and data in blocks
 	unique_ptr<BlockManager> block_manager;
@@ -108,9 +110,10 @@ public:
 public:
 	bool AutomaticCheckpoint(idx_t estimated_wal_bytes) override;
 	unique_ptr<StorageCommitState> GenStorageCommitState(Transaction &transaction, bool checkpoint) override;
-	bool IsCheckpointClean(block_id_t checkpoint_id) override;
+	bool IsCheckpointClean(MetaBlockPointer checkpoint_id) override;
 	void CreateCheckpoint(bool delete_wal, bool force_checkpoint) override;
 	DatabaseSize GetDatabaseSize() override;
+	vector<MetadataBlockInfo> GetMetadataInfo() override;
 	shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) override;
 
 protected:

@@ -7,12 +7,12 @@ mode skip
 statement error
 SELECT avg(0) c0, (SELECT 0 OFFSET c0);
 ----
-Parser Error: Non-constant limit or offset not supported in correlated subquery
+Correlated columns not supported in LIMIT/OFFSET
 
 statement error
 SELECT avg(0) c0, (SELECT 0 OFFSET c0 + 1);
 ----
-Parser Error: Non-constant limit or offset not supported in correlated subquery
+Correlated columns not supported in LIMIT/OFFSET
 
 query II
 SELECT 1 c0, (SELECT 0 OFFSET c0 - 1);

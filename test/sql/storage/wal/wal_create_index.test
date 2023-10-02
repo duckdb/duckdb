@@ -1,0 +1,170 @@
+# name: test/sql/storage/wal/wal_create_index.test
+# description: Test serialization of index to WAL
+# group: [wal]
+
+# load the DB from disk
+load __TEST_DIR__/test_wal_create_index.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1,1), (2,2), (3,3);
+
+# Test single column
+statement ok
+CREATE UNIQUE INDEX i_index ON integers(i);
+
+query II
+EXPLAIN SELECT i FROM integers WHERE i = 1
+----
+logical_opt	<REGEX>:.*INDEX_SCAN.*
+
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+query II
+EXPLAIN SELECT i FROM integers WHERE i = 1
+----
+logical_opt	<REGEX>:.*INDEX_SCAN.*
+
+statement error
+INSERT INTO integers VALUES (1, 1);
+----
+Constraint Error: Duplicate key "i: 1" violates unique constraint
+
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+DROP INDEX i_index;
+
+restart
+
+# test more complex expressions
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE UNIQUE INDEX i_index ON integers USING art((i + j));
+
+query II
+EXPLAIN SELECT i FROM integers WHERE i + j = 2;
+----
+logical_opt	<REGEX>:.*INDEX_SCAN.*
+
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+query II
+EXPLAIN SELECT i FROM integers WHERE i + j = 2;
+----
+logical_opt	<REGEX>:.*INDEX_SCAN.*
+
+query I
+SELECT i FROM integers WHERE i + j = 2
+----
+1
+
+statement error
+INSERT INTO integers VALUES (1, 1);
+----
+Constraint Error: Duplicate key "(i + j): 2" violates unique constraint
+
+statement ok
+DROP INDEX i_index;
+
+restart
+
+# change the order of the columns in the index expressions
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE UNIQUE INDEX i_index ON integers USING art((j + i));
+
+query II
+EXPLAIN SELECT i FROM integers WHERE j + i = 2;
+----
+logical_opt	<REGEX>:.*INDEX_SCAN.*
+
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+query II
+EXPLAIN SELECT i FROM integers WHERE j + i = 2;
+----
+logical_opt	<REGEX>:.*INDEX_SCAN.*
+
+query I
+SELECT i FROM integers WHERE j + i = 2
+----
+1
+
+statement error
+INSERT INTO integers VALUES (1, 1);
+----
+Constraint Error: Duplicate key "(j + i): 2" violates unique constraint
+
+statement ok
+DROP INDEX i_index;
+
+restart
+
+# compound keys
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE UNIQUE INDEX i_index ON integers USING art((j + i), j, i);
+
+restart
+
+statement error
+INSERT INTO integers VALUES (1, 1);
+----
+Constraint Error: Duplicate key "(j + i): 2, j: 1, i: 1" violates unique constraint
+
+statement ok
+DROP INDEX i_index;

@@ -27,7 +27,7 @@ INSERT INTO test SELECT case when i%5=0 then null else i end FROM range(0,10000)
 
 # FOR/FOR-delta compressible range
 statement ok
-INSERT INTO test SELECT case when i%5=0 then null else i/2 end FROM range(0,10000) tbl(i);
+INSERT INTO test SELECT case when i%5=0 then null else i//2 end FROM range(0,10000) tbl(i);
 
 statement ok
 checkpoint

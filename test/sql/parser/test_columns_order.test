@@ -1,0 +1,61 @@
+# name: test/sql/parser/test_columns_order.test
+# description: Test the columns expression in the ORDER BY
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl(col1 INTEGER, col2 INTEGER, col3 INTEGER);
+
+statement ok
+INSERT INTO tbl VALUES (1, 200, 10), (2, 100, 20), (3, 200, 0)
+
+query III
+SELECT * FROM tbl ORDER BY COLUMNS('col1|col3')
+----
+1	200	10
+2	100	20
+3	200	0
+
+query III
+SELECT * FROM tbl ORDER BY COLUMNS('col2|col3')
+----
+2	100	20
+3	200	0
+1	200	10
+
+query III
+SELECT * FROM tbl ORDER BY COLUMNS('col2|col3') DESC
+----
+1	200	10
+3	200	0
+2	100	20
+
+query III
+SELECT * FROM tbl ORDER BY COLUMNS('col2') DESC, COLUMNS('col3') ASC
+----
+3	200	0
+1	200	10
+2	100	20
+
+query III
+SELECT * FROM tbl ORDER BY COLUMNS(x -> x[-1] IN (2, 3))
+----
+2	100	20
+3	200	0
+1	200	10
+
+# set ops
+query III
+FROM tbl UNION FROM tbl ORDER BY COLUMNS('col2|col3') DESC
+----
+1	200	10
+3	200	0
+2	100	20
+
+
+statement error
+SELECT * FROM tbl ORDER BY COLUMNS('xxxx')
+----
+No matching columns found that match regex

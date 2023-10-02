@@ -17,13 +17,14 @@
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
+
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 
 #include "duckdb/storage/compression/chimp/algorithm/flag_buffer.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/leading_zero_buffer.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 
@@ -251,7 +252,7 @@ public:
 
 template <class T>
 unique_ptr<SegmentScanState> ChimpInitScan(ColumnSegment &segment) {
-	auto result = make_unique_base<SegmentScanState, ChimpScanState<T>>(segment);
+	auto result = make_uniq_base<SegmentScanState, ChimpScanState<T>>(segment);
 	return result;
 }
 

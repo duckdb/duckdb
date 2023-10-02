@@ -11,7 +11,8 @@
 #include <sql.h>
 #include <sqltypes.h>
 #include <string>
-#include <vector>
+
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 struct OdbcUtils {
@@ -35,7 +36,7 @@ public:
 
 	template <typename FIELD_TYPE>
 	SQLRETURN IsValidPtrForSpecificedField(SQLPOINTER value_ptr, FIELD_TYPE target_field,
-	                                       const std::vector<FIELD_TYPE> vec_field_ids) {
+	                                       const vector<FIELD_TYPE> vec_field_ids) {
 		for (auto field_id : vec_field_ids) {
 			// target field doens't accept null_ptr
 			if (field_id == target_field && value_ptr == nullptr) {
@@ -48,9 +49,6 @@ public:
 	static bool IsCharType(SQLSMALLINT type);
 
 	static SQLRETURN SetStringValueLength(const std::string &val_str, SQLLEN *str_len_or_ind_ptr);
-	static SQLRETURN SetStringAndLength(std::vector<std::string> &error_messages, const std::string &val_str,
-	                                    SQLPOINTER target_value_ptr, SQLSMALLINT buffer_length,
-	                                    SQLSMALLINT *str_len_or_ind_ptr);
 
 	static std::string GetStringAsIdentifier(const std::string &str);
 	static std::string ParseStringFilter(const std::string &filter_name, const std::string &filter_value,
@@ -63,6 +61,8 @@ public:
 
 	static void SetValueFromConnStr(const string &conn_str, const char *key, string &value);
 	static void SetValueFromConnStr(SQLCHAR *conn_c_str, const char *key, string &value);
+
+	static SQLUINTEGER SQLPointerToSQLUInteger(SQLPOINTER value);
 };
 } // namespace duckdb
 #endif

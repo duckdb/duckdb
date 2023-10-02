@@ -16,7 +16,7 @@ struct MyAllocateData : public PrivateAllocatorData {
 data_ptr_t my_allocate_function(PrivateAllocatorData *private_data, idx_t size) {
 	auto my_allocate_data = (MyAllocateData *)private_data;
 	*my_allocate_data->memory_counter += size;
-	return (data_ptr_t)malloc(size);
+	return data_ptr_cast(malloc(size));
 }
 
 void my_free_function(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
@@ -29,7 +29,7 @@ data_ptr_t my_reallocate_function(PrivateAllocatorData *private_data, data_ptr_t
 	auto my_allocate_data = (MyAllocateData *)private_data;
 	*my_allocate_data->memory_counter -= old_size;
 	*my_allocate_data->memory_counter += size;
-	return (data_ptr_t)realloc(pointer, size);
+	return data_ptr_cast(realloc(pointer, size));
 }
 
 TEST_CASE("Test using a custom allocator", "[api][.]") {
@@ -39,8 +39,8 @@ TEST_CASE("Test using a custom allocator", "[api][.]") {
 	REQUIRE(memory_counter.load() == 0);
 
 	DBConfig config;
-	config.allocator = make_unique<Allocator>(my_allocate_function, my_free_function, my_reallocate_function,
-	                                          make_unique<MyAllocateData>(&memory_counter));
+	config.allocator = make_uniq<Allocator>(my_allocate_function, my_free_function, my_reallocate_function,
+	                                        make_uniq<MyAllocateData>(&memory_counter));
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl AS SELECT * FROM range(1000000)"));

@@ -80,9 +80,9 @@ struct ToCStringCastWrapper {
 		Vector result_vector(LogicalType::VARCHAR, nullptr);
 		auto result_string = OP::template Operation<SOURCE_TYPE>(input, result_vector);
 		auto result_size = result_string.GetSize();
-		auto result_data = result_string.GetDataUnsafe();
+		auto result_data = result_string.GetData();
 
-		char *allocated_data = (char *)duckdb_malloc(result_size + 1);
+		char *allocated_data = char_ptr_cast(duckdb_malloc(result_size + 1));
 		memcpy(allocated_data, result_data, result_size);
 		allocated_data[result_size] = '\0';
 		result.data = allocated_data;

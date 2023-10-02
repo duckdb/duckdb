@@ -9,12 +9,13 @@ include_directories(
 
 set(PARQUET_EXTENSION_FILES
     column_writer.cpp
-    parquet-extension.cpp
+    parquet_extension.cpp
     parquet_metadata.cpp
     parquet_reader.cpp
     parquet_timestamp.cpp
     parquet_writer.cpp
     parquet_statistics.cpp
+    serialize_parquet.cpp
     zstd_file_system.cpp
     column_reader.cpp)
 
@@ -51,7 +52,8 @@ if(NOT CLANG_TIDY)
       ../../third_party/zstd/compress/zstd_opt.cpp)
 endif()
 
-add_library(parquet_extension STATIC ${PARQUET_EXTENSION_FILES})
+build_static_extension(parquet ${PARQUET_EXTENSION_FILES})
+
 set(PARAMETERS "-warnings")
 build_loadable_extension(parquet ${PARAMETERS} ${PARQUET_EXTENSION_FILES})
 
@@ -60,9 +62,3 @@ install(
   EXPORT "${DUCKDB_EXPORT_SET}"
   LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
   ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
-
-if(NOT CLANG_TIDY AND BUILD_MAIN_DUCKDB_LIBRARY)
-  add_executable(parquetcli parquetcli.cpp)
-  target_link_libraries(parquetcli parquet_extension)
-  target_link_libraries(parquetcli duckdb_static)
-endif()

@@ -1,0 +1,16 @@
+# name: test/sql/types/list/unnest_having_qualify.test
+# description: Test unnest in having/qualfiy clauses
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+select 42 having unnest([1,2,3]);
+----
+UNNEST not supported
+
+statement error
+select row_number() over () qualify unnest([1,2,3]);
+----
+UNNEST not supported

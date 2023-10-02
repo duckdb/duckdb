@@ -50,7 +50,7 @@ static void create_drop_table(DuckDB *db) {
 
 static void create_use_prepared_statement(DuckDB *db) {
 	Connection con(*db);
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 
 	for (int i = 0; i < CONCURRENT_DEPENDENCIES_REPETITIONS; i++) {
 		// printf("[PREPARE] Prepare statement\n");
@@ -107,7 +107,7 @@ static void create_drop_schema(DuckDB *db) {
 
 static void create_use_table_view(DuckDB *db, int threadnr) {
 	Connection con(*db);
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	string tname = "integers" + to_string(threadnr);
 	string vname = "v" + to_string(threadnr);
 

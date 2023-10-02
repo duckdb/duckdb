@@ -8,12 +8,12 @@ using namespace std;
 
 template <class SRC>
 void TestAppendingSingleDecimalValue(SRC value, Value expected_result, uint8_t width, uint8_t scale) {
-	auto db = make_unique<DuckDB>(nullptr);
-	auto conn = make_unique<Connection>(*db);
-	unique_ptr<Appender> appender;
-	unique_ptr<QueryResult> result;
+	auto db = make_uniq<DuckDB>(nullptr);
+	auto conn = make_uniq<Connection>(*db);
+	duckdb::unique_ptr<Appender> appender;
+	duckdb::unique_ptr<QueryResult> result;
 	REQUIRE_NO_FAIL(conn->Query(StringUtil::Format("CREATE TABLE decimals(i DECIMAL(%d,%d))", width, scale)));
-	appender = make_unique<Appender>(*conn, "decimals");
+	appender = make_uniq<Appender>(*conn, "decimals");
 
 	appender->BeginRow();
 	appender->Append<SRC>(value);
@@ -50,15 +50,15 @@ TEST_CASE("Test appending to a decimal column", "[api]") {
 }
 
 TEST_CASE("Test using appender after connection is gone", "[api]") {
-	auto db = make_unique<DuckDB>(nullptr);
-	auto conn = make_unique<Connection>(*db);
-	unique_ptr<Appender> appender;
-	unique_ptr<QueryResult> result;
+	auto db = make_uniq<DuckDB>(nullptr);
+	auto conn = make_uniq<Connection>(*db);
+	duckdb::unique_ptr<Appender> appender;
+	duckdb::unique_ptr<QueryResult> result;
 	// create an appender for a non-existing table fails
-	REQUIRE_THROWS(make_unique<Appender>(*conn, "integers"));
+	REQUIRE_THROWS(make_uniq<Appender>(*conn, "integers"));
 	// now create the table and create the appender
 	REQUIRE_NO_FAIL(conn->Query("CREATE TABLE integers(i INTEGER)"));
-	appender = make_unique<Appender>(*conn, "integers");
+	appender = make_uniq<Appender>(*conn, "integers");
 
 	// we can use the appender
 	appender->BeginRow();
@@ -83,7 +83,7 @@ TEST_CASE("Test using appender after connection is gone", "[api]") {
 	appender.reset();
 
 	// if we re-create the connection we can verify the data was actually inserted
-	conn = make_unique<Connection>(*db);
+	conn = make_uniq<Connection>(*db);
 
 	result = conn->Query("SELECT * FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
@@ -91,10 +91,10 @@ TEST_CASE("Test using appender after connection is gone", "[api]") {
 
 TEST_CASE("Test appender and connection destruction order", "[api]") {
 	for (idx_t i = 0; i < 6; i++) {
-		auto db = make_unique<DuckDB>(nullptr);
-		auto con = make_unique<Connection>(*db);
+		auto db = make_uniq<DuckDB>(nullptr);
+		auto con = make_uniq<Connection>(*db);
 		REQUIRE_NO_FAIL(con->Query("CREATE TABLE integers(i INTEGER)"));
-		auto appender = make_unique<Appender>(*con, "integers");
+		auto appender = make_uniq<Appender>(*con, "integers");
 
 		switch (i) {
 		case 0:
@@ -187,7 +187,7 @@ TEST_CASE("Test using appender after table is altered", "[api]") {
 TEST_CASE("Test appenders and transactions", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	// create the table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	// now create the appender
@@ -219,7 +219,7 @@ TEST_CASE("Test appenders and transactions", "[api]") {
 TEST_CASE("Test using multiple appenders", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	// create the table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t2(i VARCHAR, j DATE)"));
@@ -254,7 +254,7 @@ TEST_CASE("Test using multiple appenders", "[api]") {
 TEST_CASE("Test usage of appender interleaved with connection usage", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	// create the table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(i INTEGER)"));
 	Appender appender(con, "t1");

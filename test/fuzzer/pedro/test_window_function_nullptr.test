@@ -1,0 +1,14 @@
+# name: test/fuzzer/pedro/test_window_function_nullptr.test
+# group: [pedro]
+
+statement ok
+PRAGMA DEBUG_WINDOW_MODE='separate';
+
+statement ok
+CREATE TABLE t1 (c1 INT);
+
+statement ok
+INSERT INTO t1(c1) VALUES (1);
+
+statement ok
+SELECT count(*) OVER () FROM t1;

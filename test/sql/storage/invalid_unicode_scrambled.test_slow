@@ -1,0 +1,14 @@
+# name: test/sql/storage/invalid_unicode_scrambled.test_slow
+# description: Issue #1650 - "invalid unicode detected in segment statistics" when inserting structs with strings and NULL values
+# group: [storage]
+
+require httpfs
+
+require parquet
+
+statement ok
+create or replace table blah as (with
+us as (select distinct * from 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/invalid_unicode_scrambled.parquet') select Address from
+us);
+
+

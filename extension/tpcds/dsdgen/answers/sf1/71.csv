@@ -1,4 +1,8 @@
 brand_id|brand|t_hour|t_minute|ext_price
+5003001|exportischolar #1|9|3|NULL
+8004009|edu packnameless #9|8|59|NULL
+8011009|amalgmaxi #9|19|15|NULL
+9016003|corpunivamalg #3|8|42|NULL
 6008005|namelesscorp #5|17|47|20597.76
 7004009|edu packbrand #9|19|36|18357.00
 1003002|exportiamalg #2|18|35|17042.54
@@ -23,7 +27,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 4001001|amalgedu pack #1|19|43|10449.00
 4001001|amalgedu pack #1|19|13|10067.06
 10012004|importoamalgamalg #4|8|8|10000.26
-9016003|corpunivamalg #3|8|42|9866.24
 5001001|amalgscholar #1|9|28|9792.51
 9013009|exportiunivamalg #9|17|42|9773.44
 7010003|univnameless #3|19|49|9773.09
@@ -35,7 +38,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 7016001|corpnameless #1|19|50|9026.17
 6016003|corpbrand #3|19|19|8993.70
 2001002|amalgimporto #2|17|12|8910.82
-5004002|edu packscholar #2|19|2|8801.39
 5003001|exportischolar #1|8|50|8457.67
 2004001|edu packimporto #1|18|4|8448.64
 1004001|edu packamalg #1|19|26|8439.57
@@ -52,12 +54,10 @@ brand_id|brand|t_hour|t_minute|ext_price
 10012011|importoamalgamalg #11|17|9|7805.31
 7016007|corpnameless #7|18|45|7781.95
 6012008|importobrand #8|9|10|7753.20
-9012005|importounivamalg #5|18|4|7703.15
 3003001|exportiexporti #1|17|21|7518.54
 8005005|scholarnameless #5|19|55|7476.84
 7012010|importonameless #10|7|19|7357.35
 4004002|edu packedu pack #2|17|57|7334.49
-5002002|importoscholar #2|17|27|7286.78
 8004003|edu packnameless #3|18|21|7203.00
 5003001|exportischolar #1|18|14|7193.28
 9013009|exportiunivamalg #9|18|51|7173.84
@@ -67,7 +67,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 2001002|amalgimporto #2|19|47|6929.60
 9008002|namelessmaxi #2|17|41|6875.10
 6011001|amalgbrand #1|19|21|6827.55
-6003008|exporticorp #8|17|43|6800.85
 9012008|importounivamalg #8|18|56|6778.00
 6016003|corpbrand #3|19|59|6746.04
 1002002|importoamalg #2|8|13|6732.48
@@ -85,14 +84,12 @@ brand_id|brand|t_hour|t_minute|ext_price
 6005001|scholarcorp #1|18|43|6387.36
 6008007|namelesscorp #7|17|2|6383.50
 3003002|exportiexporti #2|7|31|6380.40
-2002001|importoimporto #1|18|34|6371.40
 7010003|univnameless #3|18|35|6350.40
 8013009|exportimaxi #9|19|26|6289.83
 4004001|edu packedu pack #1|17|18|6270.02
 1003001|exportiamalg #1|9|44|6261.14
 4001002|amalgedu pack #2|19|51|6255.92
 3001001|amalgexporti #1|19|1|6236.80
-6012008|importobrand #8|18|58|6203.87
 8003010|exportinameless #10|18|27|6199.00
 6011001|amalgbrand #1|6|46|6162.75
 9014011|edu packunivamalg #11|17|3|6116.76
@@ -112,13 +109,11 @@ brand_id|brand|t_hour|t_minute|ext_price
 2001002|amalgimporto #2|17|32|5682.24
 8013007|exportimaxi #7|19|3|5678.34
 9012003|importounivamalg #3|8|59|5624.38
-8014005|edu packmaxi #5|19|7|5550.16
 10003016|exportiunivamalg #16|19|4|5538.47
 3004001|edu packexporti #1|19|14|5535.53
 7014001|edu packnameless #1|9|55|5513.80
 3002001|importoexporti #1|18|39|5504.89
 6010005|univbrand #5|17|3|5482.04
-7010003|univnameless #3|17|11|5464.00
 6008007|namelesscorp #7|18|16|5444.16
 1003001|exportiamalg #1|17|37|5432.70
 6005001|scholarcorp #1|17|14|5420.58
@@ -175,7 +170,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 3002001|importoexporti #1|17|33|4402.58
 2001002|amalgimporto #2|18|21|4382.88
 10010013|univamalgamalg #13|9|26|4381.00
-2001002|amalgimporto #2|19|9|4374.45
 3001001|amalgexporti #1|17|10|4359.36
 5003001|exportischolar #1|17|28|4319.08
 3002002|importoexporti #2|18|21|4297.92
@@ -235,11 +229,11 @@ brand_id|brand|t_hour|t_minute|ext_price
 5003002|exportischolar #2|9|29|3578.40
 4001002|amalgedu pack #2|7|45|3548.44
 3002001|importoexporti #1|9|41|3547.98
-2002001|importoimporto #1|19|51|3538.00
 7001005|amalgbrand #5|17|4|3528.98
 9008002|namelessmaxi #2|17|4|3523.77
 3002002|importoexporti #2|19|13|3523.25
 4001002|amalgedu pack #2|17|53|3504.10
+2001002|amalgimporto #2|19|9|3490.65
 6003008|exporticorp #8|18|47|3464.15
 1004002|edu packamalg #2|19|26|3399.00
 8014005|edu packmaxi #5|17|40|3390.20
@@ -283,7 +277,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 5002001|importoscholar #1|18|2|2928.36
 7015007|scholarnameless #7|18|44|2925.52
 9008005|namelessmaxi #5|17|42|2920.98
-5001002|amalgscholar #2|18|35|2920.00
 3004001|edu packexporti #1|18|4|2906.52
 7010009|univnameless #9|8|48|2896.00
 5002001|importoscholar #1|18|32|2893.80
@@ -294,7 +287,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 7010003|univnameless #3|18|37|2872.23
 4003001|exportiedu pack #1|8|33|2870.00
 5003002|exportischolar #2|8|54|2864.25
-7012003|importonameless #3|9|2|2820.72
 2003002|exportiimporto #2|6|17|2815.56
 3002001|importoexporti #1|6|50|2815.34
 5001002|amalgscholar #2|19|51|2810.64
@@ -351,12 +343,10 @@ brand_id|brand|t_hour|t_minute|ext_price
 7010003|univnameless #3|7|5|2438.72
 10002012|importounivamalg #12|18|10|2432.70
 10012017|importoamalgamalg #17|19|11|2430.81
-5001001|amalgscholar #1|19|54|2426.49
 5003001|exportischolar #1|8|59|2417.52
 5003001|exportischolar #1|19|28|2414.79
 3002001|importoexporti #1|19|45|2396.52
 5003001|exportischolar #1|17|59|2394.72
-4004001|edu packedu pack #1|17|30|2389.20
 2002001|importoimporto #1|17|40|2388.60
 2001002|amalgimporto #2|8|51|2388.14
 6008007|namelesscorp #7|18|0|2384.18
@@ -365,14 +355,12 @@ brand_id|brand|t_hour|t_minute|ext_price
 3002001|importoexporti #1|19|27|2363.02
 2002001|importoimporto #1|18|1|2353.59
 7016007|corpnameless #7|19|16|2345.00
-3004001|edu packexporti #1|19|9|2327.03
 5003002|exportischolar #2|9|14|2312.00
 5003002|exportischolar #2|17|26|2309.94
 4003001|exportiedu pack #1|17|43|2309.04
 5002001|importoscholar #1|19|33|2307.38
 2001002|amalgimporto #2|19|45|2307.24
 6011001|amalgbrand #1|19|3|2276.05
-5003001|exportischolar #1|17|45|2271.75
 3003001|exportiexporti #1|7|29|2265.05
 1004001|edu packamalg #1|17|26|2253.02
 4003001|exportiedu pack #1|18|35|2251.90
@@ -408,7 +396,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 5001001|amalgscholar #1|19|12|2015.94
 1002002|importoamalg #2|9|27|2000.16
 7012003|importonameless #3|9|22|1997.10
-10003016|exportiunivamalg #16|19|13|1990.47
 4004001|edu packedu pack #1|9|32|1985.92
 10004001|edu packunivamalg #1|9|20|1976.19
 7004009|edu packbrand #9|6|11|1974.24
@@ -425,7 +412,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 5003001|exportischolar #1|17|11|1929.60
 6011008|amalgbrand #8|8|28|1919.16
 9013009|exportiunivamalg #9|9|36|1918.44
-8004009|edu packnameless #9|8|59|1917.19
 1004002|edu packamalg #2|8|26|1913.60
 3002002|importoexporti #2|17|45|1913.52
 7004007|edu packbrand #7|17|8|1907.57
@@ -449,7 +435,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 5003001|exportischolar #1|8|25|1764.99
 3004001|edu packexporti #1|17|1|1750.00
 5004002|edu packscholar #2|18|15|1748.11
-4003001|exportiedu pack #1|18|37|1723.20
 2002001|importoimporto #1|9|43|1723.09
 3002002|importoexporti #2|9|53|1718.75
 6016003|corpbrand #3|8|6|1710.00
@@ -470,7 +455,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 2001002|amalgimporto #2|17|56|1632.00
 4001002|amalgedu pack #2|17|55|1630.16
 8004009|edu packnameless #9|17|8|1625.94
-9015009|scholarunivamalg #9|8|47|1625.04
 5002002|importoscholar #2|19|31|1605.99
 2003001|exportiimporto #1|18|28|1597.32
 5001001|amalgscholar #1|19|21|1594.43
@@ -480,7 +464,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 9014011|edu packunivamalg #11|18|32|1580.54
 3002001|importoexporti #1|18|20|1575.22
 9016003|corpunivamalg #3|17|53|1567.53
-4004001|edu packedu pack #1|9|11|1565.20
 6011001|amalgbrand #1|7|21|1560.54
 7001005|amalgbrand #5|8|12|1560.16
 5004002|edu packscholar #2|17|22|1557.76
@@ -493,7 +476,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 8011009|amalgmaxi #9|19|5|1523.49
 4001001|amalgedu pack #1|9|48|1521.00
 9015009|scholarunivamalg #9|8|38|1520.64
-7010004|univnameless #4|17|26|1511.56
 7010003|univnameless #3|18|12|1506.70
 1003001|exportiamalg #1|6|10|1503.90
 3003001|exportiexporti #1|9|6|1503.18
@@ -529,7 +511,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 5002002|importoscholar #2|18|26|1329.75
 1001001|amalgamalg #1|17|48|1324.78
 8014005|edu packmaxi #5|9|22|1323.56
-1003002|exportiamalg #2|19|33|1316.94
 4004001|edu packedu pack #1|18|22|1312.71
 10009015|maxiunivamalg #15|17|29|1298.20
 8003010|exportinameless #10|17|42|1292.40
@@ -550,7 +531,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 5003002|exportischolar #2|17|2|1235.65
 4003001|exportiedu pack #1|9|12|1232.50
 2003002|exportiimporto #2|18|9|1223.80
-10003004|exportiunivamalg #4|9|23|1222.02
 1002001|importoamalg #1|17|22|1220.56
 2002001|importoimporto #1|17|24|1218.63
 5003001|exportischolar #1|9|53|1215.90
@@ -574,7 +554,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 10012011|importoamalgamalg #11|19|25|1131.57
 9012005|importounivamalg #5|8|3|1129.55
 1004002|edu packamalg #2|7|0|1125.76
-8013009|exportimaxi #9|9|53|1121.77
 5003001|exportischolar #1|17|32|1117.80
 2001002|amalgimporto #2|18|49|1117.00
 8002009|importonameless #9|19|8|1104.00
@@ -582,7 +561,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 5003002|exportischolar #2|17|23|1100.00
 5003001|exportischolar #1|19|10|1088.89
 6011001|amalgbrand #1|8|42|1086.60
-1003002|exportiamalg #2|18|21|1083.00
 8014005|edu packmaxi #5|17|2|1080.77
 6009003|maxicorp #3|17|6|1076.73
 5004001|edu packscholar #1|18|30|1068.98
@@ -609,7 +587,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 2004002|edu packimporto #2|8|39|997.62
 4001001|amalgedu pack #1|19|59|996.00
 6002003|importocorp #3|17|53|989.00
-5003001|exportischolar #1|9|29|978.50
 9015011|scholarunivamalg #11|17|17|969.10
 1004001|edu packamalg #1|17|57|960.63
 2004002|edu packimporto #2|19|20|959.90
@@ -650,7 +627,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 3002002|importoexporti #2|8|58|797.92
 1003001|exportiamalg #1|19|4|791.05
 9008002|namelessmaxi #2|9|51|788.04
-5002001|importoscholar #1|19|9|787.92
 7016001|corpnameless #1|19|5|787.20
 2001002|amalgimporto #2|18|20|781.92
 7008009|namelessbrand #9|17|29|780.78
@@ -681,7 +657,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 5002002|importoscholar #2|6|34|707.85
 7010009|univnameless #9|17|54|701.68
 4001001|amalgedu pack #1|19|58|699.95
-10003016|exportiunivamalg #16|19|43|699.27
 1004002|edu packamalg #2|17|16|695.64
 6008002|namelesscorp #2|8|59|688.50
 5003001|exportischolar #1|18|1|687.57
@@ -736,7 +711,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 9013009|exportiunivamalg #9|9|57|536.76
 1002001|importoamalg #1|19|20|534.30
 1004002|edu packamalg #2|9|12|528.70
-8011009|amalgmaxi #9|19|15|525.92
 5001001|amalgscholar #1|18|23|525.69
 6015006|scholarbrand #6|19|0|525.39
 9013009|exportiunivamalg #9|18|43|525.30
@@ -749,7 +723,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 9015009|scholarunivamalg #9|8|52|510.72
 2003001|exportiimporto #1|18|54|508.08
 3003001|exportiexporti #1|17|53|507.78
-7013007|exportinameless #7|18|47|505.89
 2004002|edu packimporto #2|9|24|502.50
 8004009|edu packnameless #9|9|22|501.96
 5003001|exportischolar #1|17|9|500.40
@@ -763,7 +736,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 7016001|corpnameless #1|17|32|491.47
 6012008|importobrand #8|19|41|490.62
 1003002|exportiamalg #2|17|41|486.55
-6007003|brandcorp #3|9|4|482.04
 3001001|amalgexporti #1|9|41|478.80
 10004001|edu packunivamalg #1|18|58|478.50
 6003008|exporticorp #8|18|36|478.08
@@ -782,7 +754,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 3001001|amalgexporti #1|19|57|440.45
 1002001|importoamalg #1|17|46|437.52
 1004002|edu packamalg #2|18|32|434.16
-6011008|amalgbrand #8|18|5|433.44
 10009015|maxiunivamalg #15|19|55|427.70
 3003001|exportiexporti #1|8|19|421.20
 9015011|scholarunivamalg #11|8|55|420.48
@@ -924,7 +895,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 7014001|edu packnameless #1|18|38|161.54
 10003004|exportiunivamalg #4|19|46|159.58
 10010013|univamalgamalg #13|18|40|158.62
-4004001|edu packedu pack #1|19|13|156.75
 3001001|amalgexporti #1|17|38|156.69
 6008002|namelesscorp #2|19|53|153.78
 1001002|amalgamalg #2|19|48|150.99
@@ -989,7 +959,6 @@ brand_id|brand|t_hour|t_minute|ext_price
 8002009|importonameless #9|6|46|63.51
 1001001|amalgamalg #1|17|19|58.80
 2002001|importoimporto #1|9|20|56.75
-6005001|scholarcorp #1|17|55|56.24
 5002001|importoscholar #1|8|48|55.40
 8014005|edu packmaxi #5|17|11|54.90
 3003001|exportiexporti #1|19|49|54.05
@@ -1017,14 +986,12 @@ brand_id|brand|t_hour|t_minute|ext_price
 5003001|exportischolar #1|18|10|27.56
 1003001|exportiamalg #1|19|19|27.39
 5002002|importoscholar #2|17|38|27.20
-5003001|exportischolar #1|9|3|26.96
 1004001|edu packamalg #1|8|16|26.50
 1004002|edu packamalg #2|17|32|25.05
 9012005|importounivamalg #5|6|45|23.43
 1002002|importoamalg #2|17|44|22.95
 3002001|importoexporti #1|19|4|21.44
 2004001|edu packimporto #1|19|27|21.36
-7010004|univnameless #4|18|7|21.24
 2003001|exportiimporto #1|8|42|19.44
 4004001|edu packedu pack #1|19|11|19.20
 5002002|importoscholar #2|19|18|19.20

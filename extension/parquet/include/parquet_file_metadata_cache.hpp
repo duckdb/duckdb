@@ -20,14 +20,14 @@ class ParquetFileMetadataCache : public ObjectCacheEntry {
 public:
 	ParquetFileMetadataCache() : metadata(nullptr) {
 	}
-	ParquetFileMetadataCache(std::unique_ptr<duckdb_parquet::format::FileMetaData> file_metadata, time_t r_time)
+	ParquetFileMetadataCache(unique_ptr<duckdb_parquet::format::FileMetaData> file_metadata, time_t r_time)
 	    : metadata(std::move(file_metadata)), read_time(r_time) {
 	}
 
 	~ParquetFileMetadataCache() override = default;
 
 	//! Parquet file metadata
-	std::unique_ptr<const duckdb_parquet::format::FileMetaData> metadata;
+	unique_ptr<const duckdb_parquet::format::FileMetaData> metadata;
 
 	//! read time
 	time_t read_time;

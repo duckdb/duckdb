@@ -29,13 +29,13 @@ enum class JoinType : uint8_t {
 	             // (and NULL if no partner is found)
 };
 
-//! Convert join type to string
-DUCKDB_API string JoinTypeToString(JoinType type);
-
 //! True if join is left or full outer join
 bool IsLeftOuterJoin(JoinType type);
 
 //! True if join is rght or full outer join
 bool IsRightOuterJoin(JoinType type);
+
+// **DEPRECATED**: Use EnumUtil directly instead.
+string JoinTypeToString(JoinType type);
 
 } // namespace duckdb

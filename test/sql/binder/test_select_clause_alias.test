@@ -42,3 +42,22 @@ SELECT a + 1 AS b, i + 1 AS a FROM integers
 # expressions with side effects are not supported yet
 statement error
 SELECT RANDOM() AS a, a + 1 AS b FROM integers
+----
+This is not yet supported
+
+statement ok
+create table orders as
+select
+    cast(random()*100 as integer) + 1 as customer_id,
+    date '2020-01-01' + interval (cast(random()*365*10 as integer)) days as order_date,
+    cast(random()*1000 as integer) as order_amount,
+from range(0, 1000)
+order by order_date;
+
+# expressions with subqueries are not supported yet
+statement error
+select
+    (select distinct date_trunc('month', order_date) from orders) as month,
+    (select sum(order_amount) from orders where date_trunc('month', order_date) = month) as revenue;
+----
+This is not yet supported

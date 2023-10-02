@@ -28,37 +28,49 @@ public:
 	void Insert(const string &path, HTTPMetadataCacheEntry val) {
 		if (shared) {
 			lock_guard<mutex> parallel_lock(lock);
+			map[path] = val;
+		} else {
+			map[path] = val;
 		}
-		map[path] = val;
 	};
 
 	void Erase(string path) {
 		if (shared) {
 			lock_guard<mutex> parallel_lock(lock);
+			map.erase(path);
+		} else {
+			map.erase(path);
 		}
-		map.erase(path);
 	};
 
 	bool Find(string path, HTTPMetadataCacheEntry &ret_val) {
 		if (shared) {
 			lock_guard<mutex> parallel_lock(lock);
-		}
-		auto lookup = map.find(path);
-		if (lookup != map.end()) {
-			ret_val = lookup->second;
-			return true;
+			auto lookup = map.find(path);
+			if (lookup != map.end()) {
+				ret_val = lookup->second;
+				return true;
+			} else {
+				return false;
+			}
 		} else {
-			return false;
+			auto lookup = map.find(path);
+			if (lookup != map.end()) {
+				ret_val = lookup->second;
+				return true;
+			} else {
+				return false;
+			}
 		}
-
-		return false;
 	};
 
 	void Clear() {
 		if (shared) {
 			lock_guard<mutex> parallel_lock(lock);
+			map.clear();
+		} else {
+			map.clear();
 		}
-		map.clear();
 	}
 
 	//! Called by the ClientContext when the current query ends

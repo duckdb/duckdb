@@ -26,6 +26,9 @@ public:
 
 struct IPythonCacheItem : public PythonImportCacheItem {
 public:
+	static constexpr const char *Name = "IPython";
+
+public:
 	~IPythonCacheItem() override {
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {

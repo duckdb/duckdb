@@ -1,0 +1,41 @@
+# name: test/sql/aggregate/group/group_by_all_order.test
+# description: Test GROUP BY ALL with ORDER BY
+# group: [group]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
+statement ok
+CREATE TABLE integers(g integer, i integer);
+
+statement ok
+INSERT INTO integers values (0, 1), (0, 2), (1, 3), (1, NULL);
+
+query I
+SELECT SUM(i) FROM integers
+----
+6
+
+query I
+SELECT SUM(i) FROM integers GROUP BY ALL
+----
+6
+
+query I
+SELECT SUM(i) FROM integers GROUP BY ALL ORDER BY ALL
+----
+6
+
+statement error
+SELECT SUM(i) FROM integers GROUP BY ALL ORDER BY g
+----
+GROUP BY ALL will only group entries in the SELECT list
+
+query II
+SELECT g, SUM(i) FROM integers GROUP BY ALL ORDER BY g
+----
+0	3
+1	3

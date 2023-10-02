@@ -1,0 +1,11 @@
+# name: test/sql/function/generic/table_func_varargs.test
+# description: VarArgs with a Table Function
+# group: [generic]
+
+query III
+SELECT * FROM repeat_row(1, 2, 'foo', num_rows=3)
+----
+1	2	foo
+1	2	foo
+1	2	foo
+

@@ -3,6 +3,9 @@
 # group: [pg_catalog]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 SELECT * FROM pg_settings;
 
 query II

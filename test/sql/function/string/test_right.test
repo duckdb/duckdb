@@ -105,3 +105,13 @@ query TTTT
 SELECT RIGHT_GRAPHEME('🦆🤦S̈', 0), RIGHT_GRAPHEME('🦆🤦S̈', -1), RIGHT_GRAPHEME('🦆🤦S̈', -2), RIGHT_GRAPHEME('🦆🤦S̈', -3)
 ----
 (empty)	🤦S̈	S̈	(empty)
+
+# grapheme overflow
+statement ok
+SELECT right_grapheme('a', -9223372036854775808);
+
+statement ok
+SELECT "right"('a', -9223372036854775808);
+
+statement error
+SELECT right_grapheme('a', 9223372036854775808);

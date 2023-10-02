@@ -21,7 +21,41 @@ SELECT f, SUM(i) FROM floats GROUP BY f ORDER BY f;
 inf	8
 nan	26
 
+query I
+select sum(f) from floats where 0 < f and f != 'nan'::DOUBLE;
+----
+inf
+
+query I
+select sum(f) from floats where 0 > f;
+----
+-inf
+
+query I
+select sum(f) from floats
+----
+nan
+
 statement ok
 DROP TABLE floats
 
 endloop
+
+# still need to catch overflows during sum operation
+mode skip
+
+statement ok
+create table floats_doubles (f FLOAT, d DOUBLE);
+
+statement ok
+insert into floats_doubles VALUES (2e38, 1e308), (2e38, 1e308), (-1e38, 0), (-1e38, 0);
+
+statement error
+select sum(f) from floats_doubles where f > 0
+----
+Out of Range Error
+
+statement error
+select sum(d) from floats_doubles where d > 0
+----
+Out of Range Error

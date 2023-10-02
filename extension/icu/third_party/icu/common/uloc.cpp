@@ -2143,7 +2143,9 @@ _uloc_strtod(const char *start, char **end) {
         /* For machines that decide to change the decimal on you,
         and try to be too smart with localization.
         This normally should be just a '.'. */
-        sprintf(rep, "%+1.1f", 1.0);
+        int used_buffer = snprintf(rep, 5, "%+1.1f", 1.0);
+        (void)used_buffer;
+        U_ASSERT(used_buffer > 0);
         gDecimal = rep[2];
     }
 

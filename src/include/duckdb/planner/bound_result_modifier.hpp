@@ -23,9 +23,29 @@ public:
 	virtual ~BoundResultModifier();
 
 	ResultModifierType type;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast result modifier to type - result modifier type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast result modifier to type - result modifier type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 struct BoundOrderByNode {
+public:
+	static constexpr const ResultModifierType TYPE = ResultModifierType::ORDER_MODIFIER;
+
 public:
 	BoundOrderByNode(OrderType type, OrderByNullType null_order, unique_ptr<Expression> expression);
 	BoundOrderByNode(OrderType type, OrderByNullType null_order, unique_ptr<Expression> expression,
@@ -42,10 +62,13 @@ public:
 	string ToString() const;
 
 	void Serialize(Serializer &serializer) const;
-	static BoundOrderByNode Deserialize(Deserializer &source, PlanDeserializationState &state);
+	static BoundOrderByNode Deserialize(Deserializer &deserializer);
 };
 
 class BoundLimitModifier : public BoundResultModifier {
+public:
+	static constexpr const ResultModifierType TYPE = ResultModifierType::LIMIT_MODIFIER;
+
 public:
 	BoundLimitModifier();
 
@@ -61,21 +84,41 @@ public:
 
 class BoundOrderModifier : public BoundResultModifier {
 public:
+	static constexpr const ResultModifierType TYPE = ResultModifierType::ORDER_MODIFIER;
+
+public:
 	BoundOrderModifier();
 
 	//! List of order nodes
 	vector<BoundOrderByNode> orders;
+
+	unique_ptr<BoundOrderModifier> Copy() const;
+	static bool Equals(const BoundOrderModifier &left, const BoundOrderModifier &right);
+	static bool Equals(const unique_ptr<BoundOrderModifier> &left, const unique_ptr<BoundOrderModifier> &right);
+
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<BoundOrderModifier> Deserialize(Deserializer &deserializer);
 };
+
+enum class DistinctType : uint8_t { DISTINCT = 0, DISTINCT_ON = 1 };
 
 class BoundDistinctModifier : public BoundResultModifier {
 public:
+	static constexpr const ResultModifierType TYPE = ResultModifierType::DISTINCT_MODIFIER;
+
+public:
 	BoundDistinctModifier();
 
-	//! list of distinct on targets (if any)
+	//! Whether or not this is a DISTINCT or DISTINCT ON
+	DistinctType distinct_type;
+	//! list of distinct on targets
 	vector<unique_ptr<Expression>> target_distincts;
 };
 
 class BoundLimitPercentModifier : public BoundResultModifier {
+public:
+	static constexpr const ResultModifierType TYPE = ResultModifierType::LIMIT_PERCENT_MODIFIER;
+
 public:
 	BoundLimitPercentModifier();
 

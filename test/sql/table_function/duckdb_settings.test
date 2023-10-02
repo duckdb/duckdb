@@ -3,6 +3,9 @@
 # group: [table_function]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 SELECT * FROM duckdb_settings();
 
 query II

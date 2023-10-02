@@ -6,13 +6,13 @@ namespace duckdb {
 
 PendingQueryResult::PendingQueryResult(shared_ptr<ClientContext> context_p, PreparedStatementData &statement,
                                        vector<LogicalType> types_p, bool allow_stream_result)
-    : BaseQueryResult(QueryResultType::PENDING_RESULT, statement.statement_type, statement.properties, move(types_p),
-                      statement.names),
-      context(move(context_p)), allow_stream_result(allow_stream_result) {
+    : BaseQueryResult(QueryResultType::PENDING_RESULT, statement.statement_type, statement.properties,
+                      std::move(types_p), statement.names),
+      context(std::move(context_p)), allow_stream_result(allow_stream_result) {
 }
 
 PendingQueryResult::PendingQueryResult(PreservedError error)
-    : BaseQueryResult(QueryResultType::PENDING_RESULT, move(error)) {
+    : BaseQueryResult(QueryResultType::PENDING_RESULT, std::move(error)) {
 }
 
 PendingQueryResult::~PendingQueryResult() {
@@ -55,10 +55,11 @@ PendingExecutionResult PendingQueryResult::ExecuteTaskInternal(ClientContextLock
 
 unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &lock) {
 	CheckExecutableInternal(lock);
-	while (ExecuteTaskInternal(lock) == PendingExecutionResult::RESULT_NOT_READY) {
+	// Busy wait while execution is not finished
+	while (!IsFinished(ExecuteTaskInternal(lock))) {
 	}
 	if (HasError()) {
-		return make_unique<MaterializedQueryResult>(error);
+		return make_uniq<MaterializedQueryResult>(error);
 	}
 	auto result = context->FetchResultInternal(lock, *this);
 	Close();
@@ -72,6 +73,13 @@ unique_ptr<QueryResult> PendingQueryResult::Execute() {
 
 void PendingQueryResult::Close() {
 	context.reset();
+}
+
+bool PendingQueryResult::IsFinished(PendingExecutionResult result) {
+	if (result == PendingExecutionResult::RESULT_READY || result == PendingExecutionResult::EXECUTION_ERROR) {
+		return true;
+	}
+	return false;
 }
 
 } // namespace duckdb

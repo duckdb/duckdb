@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 
 namespace duckdb {
 
@@ -45,15 +46,20 @@ protected:
 	// The actual pointer to the data
 	data_ptr_t data;
 	//! The owned data of the HT
-	unique_ptr<data_t[]> owned_data;
+	unsafe_unique_array<data_t> owned_data;
 	//! Information on whether or not a specific group has any entries
-	unique_ptr<bool[]> group_is_set;
+	unsafe_unique_array<bool> group_is_set;
 
 	//! The minimum values for each of the group columns
 	vector<Value> group_minima;
 
 	//! Reused selection vector
 	SelectionVector sel;
+
+	//! The active arena allocator used by the aggregates for their internal state
+	unique_ptr<ArenaAllocator> aggregate_allocator;
+	//! Owning arena allocators that this HT has data from
+	vector<unique_ptr<ArenaAllocator>> stored_allocators;
 
 private:
 	//! Destroy the perfect aggregate HT (called automatically by the destructor)

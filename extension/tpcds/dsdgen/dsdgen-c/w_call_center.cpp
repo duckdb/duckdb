@@ -237,7 +237,7 @@ int mk_w_call_center(void *info_arr, ds_key_t index) {
 	sprintf(szTemp, "%05d", r->cc_address.zip);
 	append_varchar(info, szTemp);
 	append_varchar(info, &r->cc_address.country[0]);
-	append_integer(info, r->cc_address.gmt_offset);
+	append_integer_decimal(info, r->cc_address.gmt_offset);
 	append_decimal(info, &r->cc_tax_percentage);
 
 	append_row_end(info);

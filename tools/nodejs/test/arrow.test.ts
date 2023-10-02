@@ -1,7 +1,6 @@
 import * as duckdb from '..';
 import * as assert from 'assert';
-import * as fs from 'fs';
-import {QueryResult} from "..";
+import {ArrowArray} from "..";
 
 describe('arrow IPC API fails neatly when extension not loaded', function() {
     // Note: arrow IPC api requires the arrow extension to be loaded. The tests for this functionality reside in:
@@ -21,25 +20,26 @@ describe('arrow IPC API fails neatly when extension not loaded', function() {
         db.arrowIPCStream(query).then(
             () => Promise.reject(new Error('Expected method to reject.')),
             err => {
-                assert.ok(err.message.includes("Catalog Error: Function with name to_arrow_ipc is not on the catalog, but it exists in the arrow extension. To Install and Load the extension, run: INSTALL arrow; LOAD arrow;"))
+                assert.ok(err.message.includes("arrow"))
             }
         );
 
-        db.arrowIPCAll(`SELECT * FROM ipc_table`, function (err: null | Error, result: QueryResult) {
+        db.arrowIPCAll(`SELECT * FROM ipc_table`, function (err: null | Error, result: ArrowArray) {
             if (err) {
-                assert.ok(err.message.includes("Catalog Error: Function with name to_arrow_ipc is not on the catalog, but it exists in the arrow extension. To Install and Load the extension, run: INSTALL arrow; LOAD arrow;"))
+                assert.ok(err.message.includes("arrow"))
             } else {
                 assert.fail("Expected error");
             }
         });
 
+        // @ts-expect-error
         assert.throws(() => db.register_buffer("ipc_table", [1,'a',1], true), TypeError, "Incorrect parameters");
     });
 
     it('register buffer should be disabled currently', function(done) {
         db.register_buffer("test", [new Uint8Array(new ArrayBuffer(10))], true, (err: null | Error) => {
             assert.ok(err)
-            assert.ok(err.toString().includes("Function with name scan_arrow_ipc is not on the catalog, but it exists in the arrow extension. To Install and Load the extension, run: INSTALL arrow; LOAD arrow;"));
+            assert.ok(err.toString().includes("arrow"));
             done()
         });
     });

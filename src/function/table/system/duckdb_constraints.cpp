@@ -1,6 +1,7 @@
 #include "duckdb/function/table/system_functions.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
@@ -18,7 +19,8 @@
 namespace duckdb {
 
 struct UniqueKeyInfo {
-	string schema, table;
+	string schema;
+	string table;
 	vector<LogicalIndex> columns;
 
 	bool operator==(const UniqueKeyInfo &other) const {
@@ -51,7 +53,7 @@ struct DuckDBConstraintsData : public GlobalTableFunctionState {
 	DuckDBConstraintsData() : offset(0), constraint_offset(0), unique_constraint_offset(0) {
 	}
 
-	vector<CatalogEntry *> entries;
+	vector<reference<CatalogEntry>> entries;
 	idx_t offset;
 	idx_t constraint_offset;
 	idx_t unique_constraint_offset;
@@ -60,6 +62,12 @@ struct DuckDBConstraintsData : public GlobalTableFunctionState {
 
 static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, TableFunctionBindInput &input,
                                                       vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("database_name");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("database_oid");
+	return_types.emplace_back(LogicalType::BIGINT);
+
 	names.emplace_back("schema_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -95,36 +103,30 @@ static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, Ta
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBConstraintsData>();
+	auto result = make_uniq<DuckDBConstraintsData>();
 
 	// scan all the schemas for tables and collect them
-	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
-
-	sort(schemas.begin(), schemas.end(), [&](CatalogEntry *x, CatalogEntry *y) { return (x->name < y->name); });
-
-	// check the temp schema as well
-	auto temp_schema = SchemaCatalogEntry::GetTemporaryObjects(context);
-	schemas.push_back(temp_schema);
+	auto schemas = Catalog::GetAllSchemas(context);
 
 	for (auto &schema : schemas) {
-		vector<CatalogEntry *> entries;
+		vector<reference<CatalogEntry>> entries;
 
-		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
-			if (entry->type == CatalogType::TABLE_ENTRY) {
+		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.type == CatalogType::TABLE_ENTRY) {
 				entries.push_back(entry);
 			}
 		});
 
-		sort(entries.begin(), entries.end(), [&](CatalogEntry *x, CatalogEntry *y) { return (x->name < y->name); });
+		sort(entries.begin(), entries.end(), [&](CatalogEntry &x, CatalogEntry &y) { return (x.name < y.name); });
 
 		result->entries.insert(result->entries.end(), entries.begin(), entries.end());
 	};
 
-	return move(result);
+	return std::move(result);
 }
 
 void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBConstraintsData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBConstraintsData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
@@ -133,13 +135,14 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = data.entries[data.offset];
-		D_ASSERT(entry->type == CatalogType::TABLE_ENTRY);
+		auto &entry = data.entries[data.offset].get();
+		D_ASSERT(entry.type == CatalogType::TABLE_ENTRY);
 
-		auto &table = (TableCatalogEntry &)*entry;
-		for (; data.constraint_offset < table.constraints.size() && count < STANDARD_VECTOR_SIZE;
-		     data.constraint_offset++) {
-			auto &constraint = table.constraints[data.constraint_offset];
+		auto &table = entry.Cast<TableCatalogEntry>();
+		auto &constraints = table.GetConstraints();
+		bool is_duck_table = table.IsDuckTable();
+		for (; data.constraint_offset < constraints.size() && count < STANDARD_VECTOR_SIZE; data.constraint_offset++) {
+			auto &constraint = constraints[data.constraint_offset];
 			// return values:
 			// constraint_type, VARCHAR
 			// Processing this first due to shortcut (early continue)
@@ -149,7 +152,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 				constraint_type = "CHECK";
 				break;
 			case ConstraintType::UNIQUE: {
-				auto &unique = (UniqueConstraint &)*constraint;
+				auto &unique = constraint->Cast<UniqueConstraint>();
 				constraint_type = unique.is_primary_key ? "PRIMARY KEY" : "UNIQUE";
 				break;
 			}
@@ -157,8 +160,11 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 				constraint_type = "NOT NULL";
 				break;
 			case ConstraintType::FOREIGN_KEY: {
-				auto &bound_foreign_key =
-				    (const BoundForeignKeyConstraint &)*table.bound_constraints[data.constraint_offset];
+				if (!is_duck_table) {
+					continue;
+				}
+				auto &bound_constraints = table.GetBoundConstraints();
+				auto &bound_foreign_key = bound_constraints[data.constraint_offset]->Cast<BoundForeignKeyConstraint>();
 				if (bound_foreign_key.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
 					// Those are already covered by PRIMARY KEY and UNIQUE entries
 					continue;
@@ -169,120 +175,130 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			default:
 				throw NotImplementedException("Unimplemented constraint for duckdb_constraints");
 			}
-			output.SetValue(5, count, Value(constraint_type));
 
+			idx_t col = 0;
+			// database_name, LogicalType::VARCHAR
+			output.SetValue(col++, count, Value(table.schema.catalog.GetName()));
+			// database_oid, LogicalType::BIGINT
+			output.SetValue(col++, count, Value::BIGINT(table.schema.catalog.GetOid()));
 			// schema_name, LogicalType::VARCHAR
-			output.SetValue(0, count, Value(table.schema->name));
+			output.SetValue(col++, count, Value(table.schema.name));
 			// schema_oid, LogicalType::BIGINT
-			output.SetValue(1, count, Value::BIGINT(table.schema->oid));
+			output.SetValue(col++, count, Value::BIGINT(table.schema.oid));
 			// table_name, LogicalType::VARCHAR
-			output.SetValue(2, count, Value(table.name));
+			output.SetValue(col++, count, Value(table.name));
 			// table_oid, LogicalType::BIGINT
-			output.SetValue(3, count, Value::BIGINT(table.oid));
+			output.SetValue(col++, count, Value::BIGINT(table.oid));
 
 			// constraint_index, BIGINT
-			auto &bound_constraint = (BoundConstraint &)*table.bound_constraints[data.constraint_offset];
 			UniqueKeyInfo uk_info;
-			switch (bound_constraint.type) {
-			case ConstraintType::UNIQUE: {
-				auto &bound_unique = (BoundUniqueConstraint &)bound_constraint;
-				uk_info = {table.schema->name, table.name, bound_unique.keys};
-				break;
-			}
-			case ConstraintType::FOREIGN_KEY: {
-				const auto &bound_foreign_key = (const BoundForeignKeyConstraint &)bound_constraint;
-				const auto &info = bound_foreign_key.info;
-				// find the other table
-				auto &catalog = Catalog::GetCatalog(context);
-				auto table_entry = (TableCatalogEntry *)catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info.schema,
-				                                                         info.table, true);
-				if (!table_entry) {
-					throw InternalException("dukdb_constraints: entry %s.%s referenced in foreign key not found",
-					                        info.schema, info.table);
+
+			if (is_duck_table) {
+				auto &bound_constraint = *table.GetBoundConstraints()[data.constraint_offset];
+				switch (bound_constraint.type) {
+				case ConstraintType::UNIQUE: {
+					auto &bound_unique = bound_constraint.Cast<BoundUniqueConstraint>();
+					uk_info = {table.schema.name, table.name, bound_unique.keys};
+					break;
 				}
-				vector<LogicalIndex> index;
-				for (auto &key : info.pk_keys) {
-					index.push_back(table_entry->columns.PhysicalToLogical(key));
+				case ConstraintType::FOREIGN_KEY: {
+					const auto &bound_foreign_key = bound_constraint.Cast<BoundForeignKeyConstraint>();
+					const auto &info = bound_foreign_key.info;
+					// find the other table
+					auto table_entry = Catalog::GetEntry<TableCatalogEntry>(
+					    context, table.catalog.GetName(), info.schema, info.table, OnEntryNotFound::RETURN_NULL);
+					if (!table_entry) {
+						throw InternalException("dukdb_constraints: entry %s.%s referenced in foreign key not found",
+						                        info.schema, info.table);
+					}
+					vector<LogicalIndex> index;
+					for (auto &key : info.pk_keys) {
+						index.push_back(table_entry->GetColumns().PhysicalToLogical(key));
+					}
+					uk_info = {table_entry->schema.name, table_entry->name, index};
+					break;
 				}
-				uk_info = {table_entry->schema->name, table_entry->name, index};
-				break;
-			}
-			default:
-				break;
+				default:
+					break;
+				}
 			}
 
 			if (uk_info.columns.empty()) {
-				output.SetValue(4, count, Value::BIGINT(data.unique_constraint_offset++));
+				output.SetValue(col++, count, Value::BIGINT(data.unique_constraint_offset++));
 			} else {
 				auto known_unique_constraint_offset = data.known_fk_unique_constraint_offsets.find(uk_info);
 				if (known_unique_constraint_offset == data.known_fk_unique_constraint_offsets.end()) {
 					data.known_fk_unique_constraint_offsets.insert(make_pair(uk_info, data.unique_constraint_offset));
-					output.SetValue(4, count, Value::BIGINT(data.unique_constraint_offset));
+					output.SetValue(col++, count, Value::BIGINT(data.unique_constraint_offset));
 					data.unique_constraint_offset++;
 				} else {
-					output.SetValue(4, count, Value::BIGINT(known_unique_constraint_offset->second));
+					output.SetValue(col++, count, Value::BIGINT(known_unique_constraint_offset->second));
 				}
 			}
+			output.SetValue(col++, count, Value(constraint_type));
 
 			// constraint_text, VARCHAR
-			output.SetValue(6, count, Value(constraint->ToString()));
+			output.SetValue(col++, count, Value(constraint->ToString()));
 
 			// expression, VARCHAR
 			Value expression_text;
 			if (constraint->type == ConstraintType::CHECK) {
-				auto &check = (CheckConstraint &)*constraint;
+				auto &check = constraint->Cast<CheckConstraint>();
 				expression_text = Value(check.expression->ToString());
 			}
-			output.SetValue(7, count, expression_text);
+			output.SetValue(col++, count, expression_text);
 
 			vector<LogicalIndex> column_index_list;
-			switch (bound_constraint.type) {
-			case ConstraintType::CHECK: {
-				auto &bound_check = (BoundCheckConstraint &)bound_constraint;
-				for (auto &col_idx : bound_check.bound_columns) {
-					column_index_list.push_back(table.columns.PhysicalToLogical(col_idx));
+			if (is_duck_table) {
+				auto &bound_constraint = *table.GetBoundConstraints()[data.constraint_offset];
+				switch (bound_constraint.type) {
+				case ConstraintType::CHECK: {
+					auto &bound_check = bound_constraint.Cast<BoundCheckConstraint>();
+					for (auto &col_idx : bound_check.bound_columns) {
+						column_index_list.push_back(table.GetColumns().PhysicalToLogical(col_idx));
+					}
+					break;
 				}
-				break;
-			}
-			case ConstraintType::UNIQUE: {
-				auto &bound_unique = (BoundUniqueConstraint &)bound_constraint;
-				for (auto &col_idx : bound_unique.keys) {
-					column_index_list.push_back(col_idx);
+				case ConstraintType::UNIQUE: {
+					auto &bound_unique = bound_constraint.Cast<BoundUniqueConstraint>();
+					for (auto &col_idx : bound_unique.keys) {
+						column_index_list.push_back(col_idx);
+					}
+					break;
 				}
-				break;
-			}
-			case ConstraintType::NOT_NULL: {
-				auto &bound_not_null = (BoundNotNullConstraint &)bound_constraint;
-				column_index_list.push_back(table.columns.PhysicalToLogical(bound_not_null.index));
-				break;
-			}
-			case ConstraintType::FOREIGN_KEY: {
-				auto &bound_foreign_key = (const BoundForeignKeyConstraint &)bound_constraint;
-				for (auto &col_idx : bound_foreign_key.info.fk_keys) {
-					column_index_list.push_back(table.columns.PhysicalToLogical(col_idx));
+				case ConstraintType::NOT_NULL: {
+					auto &bound_not_null = bound_constraint.Cast<BoundNotNullConstraint>();
+					column_index_list.push_back(table.GetColumns().PhysicalToLogical(bound_not_null.index));
+					break;
 				}
-				break;
-			}
-			default:
-				throw NotImplementedException("Unimplemented constraint for duckdb_constraints");
+				case ConstraintType::FOREIGN_KEY: {
+					auto &bound_foreign_key = bound_constraint.Cast<BoundForeignKeyConstraint>();
+					for (auto &col_idx : bound_foreign_key.info.fk_keys) {
+						column_index_list.push_back(table.GetColumns().PhysicalToLogical(col_idx));
+					}
+					break;
+				}
+				default:
+					throw NotImplementedException("Unimplemented constraint for duckdb_constraints");
+				}
 			}
 
 			vector<Value> index_list;
 			vector<Value> column_name_list;
 			for (auto column_index : column_index_list) {
 				index_list.push_back(Value::BIGINT(column_index.index));
-				column_name_list.emplace_back(table.columns.GetColumn(column_index).Name());
+				column_name_list.emplace_back(table.GetColumn(column_index).Name());
 			}
 
 			// constraint_column_indexes, LIST
-			output.SetValue(8, count, Value::LIST(move(index_list)));
+			output.SetValue(col++, count, Value::LIST(LogicalType::BIGINT, std::move(index_list)));
 
 			// constraint_column_names, LIST
-			output.SetValue(9, count, Value::LIST(move(column_name_list)));
+			output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, std::move(column_name_list)));
 
 			count++;
 		}
-		if (data.constraint_offset >= table.constraints.size()) {
+		if (data.constraint_offset >= constraints.size()) {
 			data.constraint_offset = 0;
 			data.offset++;
 		}

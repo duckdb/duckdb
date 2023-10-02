@@ -1,9 +1,6 @@
 #include "duckdb/optimizer/column_lifetime_optimizer.hpp"
-
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/planner/operator/logical_delim_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 
 namespace duckdb {
@@ -20,6 +17,7 @@ void ColumnLifetimeAnalyzer::ExtractUnusedColumnBindings(vector<ColumnBinding> b
 void ColumnLifetimeAnalyzer::GenerateProjectionMap(vector<ColumnBinding> bindings,
                                                    column_binding_set_t &unused_bindings,
                                                    vector<idx_t> &projection_map) {
+	projection_map.clear();
 	if (unused_bindings.empty()) {
 		return;
 	}
@@ -39,7 +37,7 @@ void ColumnLifetimeAnalyzer::StandardVisitOperator(LogicalOperator &op) {
 	LogicalOperatorVisitor::VisitOperatorExpressions(op);
 	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		// visit the duplicate eliminated columns on the LHS, if any
-		auto &delim_join = (LogicalDelimJoin &)op;
+		auto &delim_join = op.Cast<LogicalComparisonJoin>();
 		for (auto &expr : delim_join.duplicate_eliminated_columns) {
 			VisitExpression(&expr);
 		}
@@ -57,12 +55,13 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		analyzer.VisitOperator(*op.children[0]);
 		return;
 	}
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		if (everything_referenced) {
 			break;
 		}
-		auto &comp_join = (LogicalComparisonJoin &)op;
+		auto &comp_join = op.Cast<LogicalComparisonJoin>();
 		if (comp_join.join_type == JoinType::MARK || comp_join.join_type == JoinType::SEMI ||
 		    comp_join.join_type == JoinType::ANTI) {
 			break;
@@ -73,17 +72,21 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		for (auto &cond : comp_join.conditions) {
 			if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
 				has_equality = true;
+				break;
 			}
 		}
 		if (!has_equality) {
 			break;
 		}
-		// now, for each of the columns of the RHS, check which columns need to be projected
+		// visit current operator expressions so they are added to the referenced_columns
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+
 		column_binding_set_t unused_bindings;
+		auto old_op_bindings = op.GetColumnBindings();
 		ExtractUnusedColumnBindings(op.children[1]->GetColumnBindings(), unused_bindings);
 
 		// now recurse into the filter and its children
-		StandardVisitOperator(op);
+		LogicalOperatorVisitor::VisitOperatorChildren(op);
 
 		// then generate the projection map
 		GenerateProjectionMap(op.children[1]->GetColumnBindings(), unused_bindings, comp_join.right_projection_map);
@@ -115,16 +118,18 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_FILTER: {
-		auto &filter = (LogicalFilter &)op;
+		auto &filter = op.Cast<LogicalFilter>();
 		if (everything_referenced) {
 			break;
 		}
+		// first visit operator expressions to populate referenced columns
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 		// filter, figure out which columns are not needed after the filter
 		column_binding_set_t unused_bindings;
 		ExtractUnusedColumnBindings(op.children[0]->GetColumnBindings(), unused_bindings);
 
 		// now recurse into the filter and its children
-		StandardVisitOperator(op);
+		LogicalOperatorVisitor::VisitOperatorChildren(op);
 
 		// then generate the projection map
 		GenerateProjectionMap(op.children[0]->GetColumnBindings(), unused_bindings, filter.projection_map);

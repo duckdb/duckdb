@@ -1,0 +1,2 @@
+%type <str> opt_database_alias
+%type <list> ident_list ident_name

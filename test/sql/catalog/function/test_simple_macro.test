@@ -115,9 +115,14 @@ SELECT add_macro(a,2) + add_macro(3,b) FROM integers, floats
 ----
 6.5
 
-# cannot create function with same name as a ScalarFunction
-statement error
+# can create function with same name as a ScalarFunction
+statement ok
 CREATE MACRO string_split(a,b) AS a + b
+
+query I
+SELECT string_split(1, 2)
+----
+3
 
 statement ok
 CREATE MACRO IFELSE(a,b,c) AS CASE WHEN a THEN b ELSE c END

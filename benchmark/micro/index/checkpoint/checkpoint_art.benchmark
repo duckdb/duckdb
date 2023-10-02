@@ -1,0 +1,22 @@
+# name: benchmark/micro/index/checkpoint/checkpoint_art.benchmark
+# description: Checkpoint an ART
+# group: [checkpoint]
+
+name Checkpoint (ART)
+group art
+
+#cache art_checkpoint.duckdb
+storage persistent
+
+load
+CREATE TABLE art AS SELECT (range * 9876983769044::INT128 % 10000000)::INT64 AS id FROM range(10000000);
+CREATE INDEX idx ON art USING ART(id);
+
+run
+CHECKPOINT;
+INSERT INTO art SELECT (range * 9876123469044::INT128 % 10000000)::INT64 AS id FROM range(1000000);
+CHECKPOINT;
+
+cleanup
+DROP INDEX idx;
+CREATE INDEX idx ON art USING ART(id);

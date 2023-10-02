@@ -20,6 +20,15 @@ CREATE SEQUENCE seq;
 statement ok
 CREATE SEQUENCE IF NOT EXISTS seq;
 
+query I
+SELECT nextval('seq')
+----
+1
+
+# replace sequence
+statement ok
+CREATE OR REPLACE SEQUENCE seq
+
 # generate values from the sequence
 query I
 SELECT nextval('seq')

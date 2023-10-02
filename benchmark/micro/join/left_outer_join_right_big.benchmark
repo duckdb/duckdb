@@ -6,6 +6,7 @@ name Left Outer Join (big RHS, small LHS)
 group join
 
 load
+select setseed(0.4);
 CREATE TABLE small_table ( pkey integer, c0 char(2), c_1k integer, c_10k integer, c_100k integer, c_1m integer, c_10m integer, c_100m integer );
 insert into small_table
 select i, concat('A',mod(i,2)), (random()* 1000)::int, (random()* 10000)::int, (random()* 100000)::int,
@@ -19,4 +20,4 @@ run
 select count(*) from small_table d left outer join big_table f on ( d.pkey=f.c_10k);
 
 result I
-100000000
+99995031

@@ -1,7 +1,9 @@
 #include "duckdb/common/types/hyperloglog.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+
 #include "hyperloglog.hpp"
 
 namespace duckdb {
@@ -9,18 +11,18 @@ namespace duckdb {
 HyperLogLog::HyperLogLog() : hll(nullptr) {
 	hll = duckdb_hll::hll_create();
 	// Insert into a dense hll can be vectorized, sparse cannot, so we immediately convert
-	duckdb_hll::hllSparseToDense((duckdb_hll::robj *)hll);
+	duckdb_hll::hllSparseToDense(hll);
 }
 
-HyperLogLog::HyperLogLog(void *hll) : hll(hll) {
+HyperLogLog::HyperLogLog(duckdb_hll::robj *hll) : hll(hll) {
 }
 
 HyperLogLog::~HyperLogLog() {
-	duckdb_hll::hll_destroy((duckdb_hll::robj *)hll);
+	duckdb_hll::hll_destroy(hll);
 }
 
 void HyperLogLog::Add(data_ptr_t element, idx_t size) {
-	if (duckdb_hll::hll_add((duckdb_hll::robj *)hll, element, size) == HLL_C_ERR) {
+	if (duckdb_hll::hll_add(hll, element, size) == HLL_C_ERR) {
 		throw InternalException("Could not add to HLL?");
 	}
 }
@@ -29,7 +31,7 @@ idx_t HyperLogLog::Count() const {
 	// exception from size_t ban
 	size_t result;
 
-	if (duckdb_hll::hll_count((duckdb_hll::robj *)hll, &result) != HLL_C_OK) {
+	if (duckdb_hll::hll_count(hll, &result) != HLL_C_OK) {
 		throw InternalException("Could not count HLL?");
 	}
 	return result;
@@ -37,24 +39,24 @@ idx_t HyperLogLog::Count() const {
 
 unique_ptr<HyperLogLog> HyperLogLog::Merge(HyperLogLog &other) {
 	duckdb_hll::robj *hlls[2];
-	hlls[0] = (duckdb_hll::robj *)hll;
-	hlls[1] = (duckdb_hll::robj *)other.hll;
+	hlls[0] = hll;
+	hlls[1] = other.hll;
 	auto new_hll = duckdb_hll::hll_merge(hlls, 2);
 	if (!new_hll) {
 		throw InternalException("Could not merge HLLs");
 	}
-	return unique_ptr<HyperLogLog>(new HyperLogLog((void *)new_hll));
+	return unique_ptr<HyperLogLog>(new HyperLogLog(new_hll));
 }
 
 HyperLogLog *HyperLogLog::MergePointer(HyperLogLog &other) {
 	duckdb_hll::robj *hlls[2];
-	hlls[0] = (duckdb_hll::robj *)hll;
-	hlls[1] = (duckdb_hll::robj *)other.hll;
+	hlls[0] = hll;
+	hlls[1] = other.hll;
 	auto new_hll = duckdb_hll::hll_merge(hlls, 2);
 	if (!new_hll) {
 		throw Exception("Could not merge HLLs");
 	}
-	return new HyperLogLog((void *)new_hll);
+	return new HyperLogLog(new_hll);
 }
 
 unique_ptr<HyperLogLog> HyperLogLog::Merge(HyperLogLog logs[], idx_t count) {
@@ -63,13 +65,13 @@ unique_ptr<HyperLogLog> HyperLogLog::Merge(HyperLogLog logs[], idx_t count) {
 	};
 	auto hlls = hlls_uptr.get();
 	for (idx_t i = 0; i < count; i++) {
-		hlls[i] = (duckdb_hll::robj *)logs[i].hll;
+		hlls[i] = logs[i].hll;
 	}
 	auto new_hll = duckdb_hll::hll_merge(hlls, count);
 	if (!new_hll) {
 		throw InternalException("Could not merge HLLs");
 	}
-	return unique_ptr<HyperLogLog>(new HyperLogLog((void *)new_hll));
+	return unique_ptr<HyperLogLog>(new HyperLogLog(new_hll));
 }
 
 idx_t HyperLogLog::GetSize() {
@@ -77,28 +79,28 @@ idx_t HyperLogLog::GetSize() {
 }
 
 data_ptr_t HyperLogLog::GetPtr() const {
-	return (data_ptr_t)((duckdb_hll::robj *)hll)->ptr;
+	return data_ptr_cast((hll)->ptr);
 }
 
 unique_ptr<HyperLogLog> HyperLogLog::Copy() {
-	auto result = make_unique<HyperLogLog>();
+	auto result = make_uniq<HyperLogLog>();
 	lock_guard<mutex> guard(lock);
 	memcpy(result->GetPtr(), GetPtr(), GetSize());
 	D_ASSERT(result->Count() == Count());
 	return result;
 }
 
-void HyperLogLog::Serialize(FieldWriter &writer) const {
-	writer.WriteField<HLLStorageType>(HLLStorageType::UNCOMPRESSED);
-	writer.WriteBlob(GetPtr(), GetSize());
+void HyperLogLog::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty(100, "type", HLLStorageType::UNCOMPRESSED);
+	serializer.WriteProperty(101, "data", GetPtr(), GetSize());
 }
 
-unique_ptr<HyperLogLog> HyperLogLog::Deserialize(FieldReader &reader) {
-	auto result = make_unique<HyperLogLog>();
-	auto storage_type = reader.ReadRequired<HLLStorageType>();
+unique_ptr<HyperLogLog> HyperLogLog::Deserialize(Deserializer &deserializer) {
+	auto result = make_uniq<HyperLogLog>();
+	auto storage_type = deserializer.ReadProperty<HLLStorageType>(100, "type");
 	switch (storage_type) {
 	case HLLStorageType::UNCOMPRESSED:
-		reader.ReadBlob(result->GetPtr(), GetSize());
+		deserializer.ReadProperty(101, "data", result->GetPtr(), GetSize());
 		break;
 	default:
 		throw SerializationException("Unknown HyperLogLog storage type!");
@@ -123,21 +125,22 @@ inline uint64_t TemplatedHash(const T &elem) {
 
 template <>
 inline uint64_t TemplatedHash(const hugeint_t &elem) {
-	return TemplatedHash<uint64_t>(Load<uint64_t>((data_ptr_t)&elem.upper)) ^ TemplatedHash<uint64_t>(elem.lower);
+	return TemplatedHash<uint64_t>(Load<uint64_t>(const_data_ptr_cast(&elem.upper))) ^
+	       TemplatedHash<uint64_t>(elem.lower);
 }
 
 template <idx_t rest>
-inline void CreateIntegerRecursive(const data_ptr_t &data, uint64_t &x) {
+inline void CreateIntegerRecursive(const_data_ptr_t &data, uint64_t &x) {
 	x ^= (uint64_t)data[rest - 1] << ((rest - 1) * 8);
 	return CreateIntegerRecursive<rest - 1>(data, x);
 }
 
 template <>
-inline void CreateIntegerRecursive<1>(const data_ptr_t &data, uint64_t &x) {
+inline void CreateIntegerRecursive<1>(const_data_ptr_t &data, uint64_t &x) {
 	x ^= (uint64_t)data[0];
 }
 
-inline uint64_t HashOtherSize(const data_ptr_t &data, const idx_t &len) {
+inline uint64_t HashOtherSize(const_data_ptr_t &data, const idx_t &len) {
 	uint64_t x = 0;
 	switch (len & 7) {
 	case 7:
@@ -169,7 +172,7 @@ inline uint64_t HashOtherSize(const data_ptr_t &data, const idx_t &len) {
 
 template <>
 inline uint64_t TemplatedHash(const string_t &elem) {
-	data_ptr_t data = (data_ptr_t)elem.GetDataUnsafe();
+	auto data = const_data_ptr_cast(elem.GetData());
 	const auto &len = elem.GetSize();
 	uint64_t h = 0;
 	for (idx_t i = 0; i + sizeof(uint64_t) <= len; i += sizeof(uint64_t)) {
@@ -194,7 +197,7 @@ inline uint64_t TemplatedHash(const string_t &elem) {
 
 template <class T>
 void TemplatedComputeHashes(UnifiedVectorFormat &vdata, const idx_t &count, uint64_t hashes[]) {
-	T *data = (T *)vdata.data;
+	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (vdata.validity.RowIsValid(idx)) {
@@ -262,7 +265,7 @@ void HyperLogLog::ProcessEntries(UnifiedVectorFormat &vdata, const LogicalType &
 
 void HyperLogLog::AddToLogs(UnifiedVectorFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[],
                             HyperLogLog **logs[], const SelectionVector *log_sel) {
-	AddToLogsInternal(vdata, count, indices, counts, (void ****)logs, log_sel);
+	AddToLogsInternal(vdata, count, indices, counts, reinterpret_cast<void ****>(logs), log_sel);
 }
 
 void HyperLogLog::AddToLog(UnifiedVectorFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[]) {

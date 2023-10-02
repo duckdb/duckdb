@@ -1,19 +1,20 @@
 #include "duckdb/main/query_result.hpp"
+
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/client_context.hpp"
-
 namespace duckdb {
 
-BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
+BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties_p,
                                  vector<LogicalType> types_p, vector<string> names_p)
-    : type(type), statement_type(statement_type), properties(properties), types(move(types_p)), names(move(names_p)),
-      success(true) {
+    : type(type), statement_type(statement_type), properties(std::move(properties_p)), types(std::move(types_p)),
+      names(std::move(names_p)), success(true) {
 	D_ASSERT(types.size() == names.size());
 }
 
 BaseQueryResult::BaseQueryResult(QueryResultType type, PreservedError error)
-    : type(type), success(false), error(move(error)) {
+    : type(type), success(false), error(std::move(error)) {
 }
 
 BaseQueryResult::~BaseQueryResult() {
@@ -26,7 +27,7 @@ void BaseQueryResult::ThrowError(const string &prepended_message) const {
 
 void BaseQueryResult::SetError(PreservedError error) {
 	success = !error;
-	this->error = move(error);
+	this->error = std::move(error);
 }
 
 bool BaseQueryResult::HasError() const {
@@ -53,11 +54,12 @@ idx_t BaseQueryResult::ColumnCount() {
 
 QueryResult::QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
                          vector<LogicalType> types_p, vector<string> names_p, ClientProperties client_properties_p)
-    : BaseQueryResult(type, statement_type, properties, move(types_p), move(names_p)),
-      client_properties(move(client_properties_p)) {
+    : BaseQueryResult(type, statement_type, std::move(properties), std::move(types_p), std::move(names_p)),
+      client_properties(std::move(client_properties_p)) {
 }
 
-QueryResult::QueryResult(QueryResultType type, PreservedError error) : BaseQueryResult(type, move(error)) {
+QueryResult::QueryResult(QueryResultType type, PreservedError error)
+    : BaseQueryResult(type, std::move(error)), client_properties("UTC", ArrowOffsetSize::REGULAR) {
 }
 
 QueryResult::~QueryResult() {
@@ -66,6 +68,10 @@ QueryResult::~QueryResult() {
 const string &QueryResult::ColumnName(idx_t index) const {
 	D_ASSERT(index < names.size());
 	return names[index];
+}
+
+string QueryResult::ToBox(ClientContext &context, const BoxRendererConfig &config) {
+	return ToString();
 }
 
 unique_ptr<DataChunk> QueryResult::Fetch() {
@@ -95,9 +101,17 @@ bool QueryResult::Equals(QueryResult &other) { // LCOV_EXCL_START
 	}
 	// now compare the actual values
 	// fetch chunks
+	unique_ptr<DataChunk> lchunk, rchunk;
+	idx_t lindex = 0, rindex = 0;
 	while (true) {
-		auto lchunk = Fetch();
-		auto rchunk = other.Fetch();
+		if (!lchunk || lindex == lchunk->size()) {
+			lchunk = Fetch();
+			lindex = 0;
+		}
+		if (!rchunk || rindex == rchunk->size()) {
+			rchunk = other.Fetch();
+			rindex = 0;
+		}
 		if (!lchunk && !rchunk) {
 			return true;
 		}
@@ -107,14 +121,11 @@ bool QueryResult::Equals(QueryResult &other) { // LCOV_EXCL_START
 		if (lchunk->size() == 0 && rchunk->size() == 0) {
 			return true;
 		}
-		if (lchunk->size() != rchunk->size()) {
-			return false;
-		}
 		D_ASSERT(lchunk->ColumnCount() == rchunk->ColumnCount());
-		for (idx_t col = 0; col < rchunk->ColumnCount(); col++) {
-			for (idx_t row = 0; row < rchunk->size(); row++) {
-				auto lvalue = lchunk->GetValue(col, row);
-				auto rvalue = rchunk->GetValue(col, row);
+		for (; lindex < lchunk->size() && rindex < rchunk->size(); lindex++, rindex++) {
+			for (idx_t col = 0; col < rchunk->ColumnCount(); col++) {
+				auto lvalue = lchunk->GetValue(col, lindex);
+				auto rvalue = rchunk->GetValue(col, rindex);
 				if (lvalue.IsNull() && rvalue.IsNull()) {
 					continue;
 				}
@@ -144,10 +155,6 @@ string QueryResult::HeaderToString() {
 	}
 	result += "\n";
 	return result;
-}
-
-string QueryResult::GetConfigTimezone(QueryResult &query_result) {
-	return query_result.client_properties.timezone;
 }
 
 } // namespace duckdb

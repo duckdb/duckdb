@@ -2,6 +2,9 @@
 # description: Test union to union casts
 # group: [union]
 
+statement ok
+SET default_null_order='nulls_first';
+
 # Test value -> union casts
 statement ok
 create table tbl1(u UNION(i32 INT, str VARCHAR));

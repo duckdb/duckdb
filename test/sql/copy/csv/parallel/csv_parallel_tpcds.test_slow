@@ -5,9 +5,6 @@
 require tpcds
 
 statement ok
-SET experimental_parallel_csv=true;
-
-statement ok
 pragma threads=4
 
 statement ok
@@ -23,7 +20,7 @@ statement ok
 create table ${tpcds_tbl} as select * from ${tpcds_tbl}_og limit 0;
 
 statement ok
-copy ${tpcds_tbl} from '__TEST_DIR__/${tpcds_tbl}.csv';
+insert into ${tpcds_tbl} select * from read_csv_auto('__TEST_DIR__/${tpcds_tbl}.csv', allow_quoted_nulls=False)
 
 query I
 select count(*) from (SELECT * FROM ${tpcds_tbl} EXCEPT SELECT * FROM ${tpcds_tbl}_og);

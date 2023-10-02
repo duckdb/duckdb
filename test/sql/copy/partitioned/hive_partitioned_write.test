@@ -1,0 +1,195 @@
+# name: test/sql/copy/partitioned/hive_partitioned_write.test
+# description: basic tests for the hive partitioned write
+# group: [partitioned]
+
+require parquet
+
+# Simple table that is easy to partition
+statement ok
+CREATE TABLE test as SELECT i%2 as part_col, (i+1)%5 as value_col, i as value2_col from range(0,10) tbl(i);
+
+statement ok
+COPY test TO '__TEST_DIR__/partitioned1' (FORMAT PARQUET, PARTITION_BY (part_col));
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/partitioned1/part_col=0/*.parquet' ORDER BY value2_col;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/partitioned1/part_col=1/*.parquet' ORDER BY value2_col;
+----
+1	2	1
+1	4	3
+1	1	5
+1	3	7
+1	0	9
+
+# Want a modified version of the partition_col? (for example to do custom string conversion?) No problem:
+statement ok
+COPY (SELECT * EXCLUDE (part_col), 'prefix-'::VARCHAR || part_col::VARCHAR as part_col FROM test) TO '__TEST_DIR__/partitioned2' (FORMAT PARQUET, PARTITION_BY (part_col));
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/partitioned2/part_col=prefix-0/*.parquet' ORDER BY value2_col;
+----
+prefix-0	1	0
+prefix-0	3	2
+prefix-0	0	4
+prefix-0	2	6
+prefix-0	4	8
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/partitioned2/part_col=prefix-1/*.parquet' ORDER BY value2_col;
+----
+prefix-1	2	1
+prefix-1	4	3
+prefix-1	1	5
+prefix-1	3	7
+prefix-1	0	9
+
+# Test partitioning by all
+statement ok
+COPY test TO '__TEST_DIR__/partitioned3' (FORMAT PARQUET, PARTITION_BY '*');
+
+query I
+SELECT min(value2_col) as min_val
+FROM parquet_scan('__TEST_DIR__/partitioned3/part_col=*/value_col=*/value2_col=*/*.parquet', FILENAME=1)
+GROUP BY filename
+ORDER BY min_val
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+# single col as param is also fine
+statement ok
+COPY test TO '__TEST_DIR__/partitioned4' (FORMAT PARQUET, PARTITION_BY part_col);
+
+query III
+SELECT part_col, value_col, value2_col FROM parquet_scan('__TEST_DIR__/partitioned4/part_col=*/*.parquet', HIVE_PARTITIONING=1) WHERE part_col=0 ORDER BY value2_col;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
+
+# a file already exist, throw error
+statement error
+COPY test TO '__TEST_DIR__/partitioned4' (FORMAT PARQUET, PARTITION_BY part_col);
+----
+IO Error: Directory
+
+# Trailing slash ist auch gut!
+statement ok
+COPY test TO '__TEST_DIR__/partitioned5/' (FORMAT PARQUET, PARTITION_BY part_col);
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/partitioned5/part_col=0/*.parquet' ORDER BY value2_col;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
+# Cannot use the USE_TMP_FILE option simulatiously with partitioning
+statement error
+COPY test TO '__TEST_DIR__/partitioned6' (FORMAT PARQUET, PARTITION_BY part_col, USE_TMP_FILE TRUE);
+----
+Not implemented Error: Can't combine USE_TMP_FILE and PARTITION_BY for COPY
+
+# Technically it doesn't really matter, as currently out parition_by behaves similarly, but for clarity user should just
+# EITHER use partition_by or per_thread_output.
+statement error
+COPY test TO '__TEST_DIR__/partitioned6' (FORMAT PARQUET, PARTITION_BY part_col, PER_THREAD_OUTPUT TRUE);
+----
+Not implemented Error: Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY
+
+# partitioning csv files is also a thing
+statement ok
+COPY test TO '__TEST_DIR__/partitioned7' (FORMAT CSV, HEADER TRUE, PARTITION_BY part_col);
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/partitioned7/part_col=0/*.csv' ORDER BY value2_col;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/partitioned7/part_col=1/*.csv' ORDER BY value2_col;
+----
+1	2	1
+1	4	3
+1	1	5
+1	3	7
+1	0	9
+
+# Don't care about capitalization
+statement ok
+COPY test TO '__TEST_DIR__/partitioned8' (FORMAT PARQUET, PARTITION_BY pArt_cOl);
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/partitioned8/part_col=0/*.parquet' ORDER BY value2_cOl;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
+# Order matters!
+statement ok
+COPY test TO '__TEST_DIR__/partitioned9' (FORMAT PARQUET, PARTITION_BY (part_col, value_col));
+
+query I
+SELECT min(value2_col) as min_val
+FROM parquet_scan('__TEST_DIR__/partitioned9/part_col=*/value_col=*/*.parquet', FILENAME=1)
+GROUP BY filename
+ORDER BY min_val
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+statement ok
+COPY test TO '__TEST_DIR__/partitioned10' (FORMAT PARQUET, PARTITION_BY (value_col, part_col));
+
+query I
+SELECT min(value2_col) as min_val
+FROM parquet_scan('__TEST_DIR__/partitioned10/value_col=*/part_col=*/*.parquet', FILENAME=1)
+GROUP BY filename
+ORDER BY min_val
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9

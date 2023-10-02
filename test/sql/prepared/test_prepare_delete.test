@@ -2,9 +2,6 @@
 # description: PREPARE for DELETE
 # group: [prepared]
 
-require skip_reload
-
-
 statement ok
 CREATE TABLE b (i TINYINT)
 

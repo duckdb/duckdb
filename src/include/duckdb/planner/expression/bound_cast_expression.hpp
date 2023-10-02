@@ -15,6 +15,9 @@ namespace duckdb {
 
 class BoundCastExpression : public Expression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_CAST;
+
+public:
 	BoundCastExpression(unique_ptr<Expression> child, LogicalType target_type, BoundCastInfo bound_cast,
 	                    bool try_cast = false);
 
@@ -35,19 +38,22 @@ public:
 	static unique_ptr<Expression> AddDefaultCastToType(unique_ptr<Expression> expr, const LogicalType &target_type,
 	                                                   bool try_cast = false);
 	//! Cast an expression to the specified SQL type if required
-	static unique_ptr<Expression> AddCastToType(ClientContext &context, unique_ptr<Expression> expr,
-	                                            const LogicalType &target_type, bool try_cast = false);
+	DUCKDB_API static unique_ptr<Expression> AddCastToType(ClientContext &context, unique_ptr<Expression> expr,
+	                                                       const LogicalType &target_type, bool try_cast = false);
 	//! Returns true if a cast is invertible (i.e. CAST(s -> t -> s) = s for all values of s). This is not true for e.g.
 	//! boolean casts, because that can be e.g. -1 -> TRUE -> 1. This is necessary to prevent some optimizer bugs.
 	static bool CastIsInvertible(const LogicalType &source_type, const LogicalType &target_type);
 
 	string ToString() const override;
 
-	bool Equals(const BaseExpression *other) const override;
+	bool Equals(const BaseExpression &other) const override;
 
 	unique_ptr<Expression> Copy() override;
 
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+
+private:
+	BoundCastExpression(ClientContext &context, unique_ptr<Expression> child, LogicalType target_type);
 };
 } // namespace duckdb

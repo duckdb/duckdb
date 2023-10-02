@@ -3,6 +3,9 @@
 # group: [lateral]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 PRAGMA enable_verification
 
 statement ok
@@ -19,8 +22,22 @@ NULL	NULL
 2	3
 3	4
 
-# we do not (yet) support referencing columns multiple levels down
-statement error
+query III
 SELECT * FROM integers a, integers b JOIN LATERAL (VALUES (a.i)) ss(x) ON (true) ORDER BY a.i, b.i;
 ----
-Nested lateral joins
+NULL	NULL	NULL
+NULL	1	NULL
+NULL	2	NULL
+NULL	3	NULL
+1	NULL	1
+1	1	1
+1	2	1
+1	3	1
+2	NULL	2
+2	1	2
+2	2	2
+2	3	2
+3	NULL	3
+3	1	3
+3	2	3
+3	3	3

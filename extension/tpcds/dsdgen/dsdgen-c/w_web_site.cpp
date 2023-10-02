@@ -195,7 +195,7 @@ int mk_w_web_site(void *info_arr, ds_key_t index) {
 	sprintf(szStreetName, "%05d", r->web_address.zip);
 	append_varchar(info, szStreetName);
 	append_varchar(info, r->web_address.country);
-	append_integer(info, r->web_address.gmt_offset);
+	append_integer_decimal(info, r->web_address.gmt_offset);
 	append_decimal(info, &r->web_tax_percentage);
 
 	append_row_end(info);

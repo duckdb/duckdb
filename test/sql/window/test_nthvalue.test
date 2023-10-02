@@ -3,6 +3,9 @@
 # group: [window]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 PRAGMA enable_verification
 
 statement ok
@@ -139,6 +142,27 @@ personnel	5	3	NULL
 sales	1	2	3
 sales	3	1	3
 sales	4	2	NULL
+
+# Where the second parameter (offset) can be zero (coverage)
+query IIII
+SELECT depname, empno, empno %3 as offset,
+	nth_value(empno, empno %3) OVER (
+		PARTITION BY depname ORDER BY empno ASC
+		ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+		) fv
+FROM empsalary
+ORDER BY 1, 2
+----
+develop	7	1	7
+develop	8	2	9
+develop	9	0	NULL
+develop	10	1	10
+develop	11	2	NULL
+personnel	2	2	5
+personnel	5	2	NULL
+sales	1	1	1
+sales	3	0	NULL
+sales	4	1	4
 
 # Where the first parameter is a constant
 query III

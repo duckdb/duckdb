@@ -1,0 +1,155 @@
+# name: test/sql/cte/materialized/test_cte_materialized.test
+# description: Test Common Table Expressions (CTE)
+# group: [materialized]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table a(i integer);
+
+statement ok
+insert into a values (42);
+
+query I
+with cte1 as MATERIALIZED (Select i as j from a) select * from cte1;
+----
+42
+
+query I
+with cte1 as MATERIALIZED (Select i as j from a) select x from cte1 t1(x);
+----
+42
+
+query I
+with cte1(xxx) as MATERIALIZED (Select i as j from a) select xxx from cte1;
+----
+42
+
+query I
+with cte1(xxx) as MATERIALIZED (Select i as j from a) select x from cte1 t1(x);
+----
+42
+
+query II
+with cte1 as MATERIALIZED (Select i as j from a), cte2 as MATERIALIZED (select ref.j as k from cte1 as ref), cte3 as MATERIALIZED (select ref2.j+1 as i from cte1 as ref2) select * from cte2 , cte3;
+----
+42	43
+
+query I
+with cte1 as MATERIALIZED (select i as j from a), cte2 as MATERIALIZED (select ref.j as k from cte1 as ref), cte3 as MATERIALIZED (select ref2.j+1 as i from cte1 as ref2) select * from cte2 union all select * FROM cte3;
+----
+42
+43
+
+# duplicate CTE alias
+statement error
+with cte1 as MATERIALIZED (select 42), cte1 as MATERIALIZED (select 42) select * FROM cte1;
+
+# reference to CTE before its actually defined
+query I
+with cte3 as MATERIALIZED (select ref2.j as i from cte1 as ref2), cte1 as MATERIALIZED (Select i as j from a), cte2 as MATERIALIZED (select ref.j+1 as k from cte1 as ref) select * from cte2 union all select * FROM cte3;
+----
+43
+42
+
+# multiple uses of same CTE
+query II
+with cte1 as MATERIALIZED (Select i as j from a) select * from cte1 cte11, cte1 cte12;
+----
+42	42
+
+# refer to CTE in subquery
+query I
+with cte1 as MATERIALIZED (Select i as j from a) select * from cte1 where j = (select max(j) from cte1 as cte2);
+----
+42
+
+# multi-column name alias
+query II
+with cte1(x, y) as MATERIALIZED (select 42 a, 84 b) select zzz, y from cte1 t1(zzz);
+----
+42	84
+
+# use a CTE in a view definition
+statement ok
+create view va AS (with cte as MATERIALIZED (Select i as j from a) select * from cte);
+
+query I
+select * from va
+----
+42
+
+# nested CTE views that re-use CTE aliases
+query I
+with cte AS MATERIALIZED (SELECT * FROM va) SELECT * FROM cte;
+----
+42
+
+# multiple ctes in a view definition
+statement ok
+create view vb AS (with cte1 as MATERIALIZED (Select i as j from a), cte2 as MATERIALIZED (select ref.j+1 as k from cte1 as ref) select * from cte2);
+
+query I
+select * from vb
+----
+43
+
+# cte in set operation node
+query I
+SELECT 1 UNION ALL (WITH cte AS MATERIALIZED (SELECT 42) SELECT * FROM cte);
+----
+1
+42
+
+# cte in recursive cte
+query I
+WITH RECURSIVE cte(d) AS MATERIALIZED (
+		SELECT 1
+	UNION ALL
+		(WITH c(d) AS (SELECT * FROM cte)
+			SELECT d + 1
+			FROM c
+			WHERE FALSE
+		)
+)
+SELECT max(d) FROM cte;
+----
+1
+
+# test CTE with nested aliases in where clause
+query II
+with cte (a) as MATERIALIZED (
+    select 1
+)
+select
+    a as alias1,
+    alias1 as alias2
+from cte
+where alias2 > 0;
+----
+1	1
+
+# test materialized CTE in recursive CTE
+query II
+WITH RECURSIVE t(x,v) AS (
+  SELECT 1, ARRAY[] :: int[]
+    UNION ALL
+  (WITH u(x) AS MATERIALIZED (SELECT 1)
+    SELECT f.x, (SELECT array_agg(x) FROM u)
+    FROM   t, LATERAL (SELECT t.x + 1) AS f(x)
+    WHERE  t.x < 5
+  )
+) SELECT * FROM t ORDER BY x;
+----
+1	[]
+2	[1]
+3	[1]
+4	[1]
+5	[1]
+
+query I
+SELECT * FROM (WITH t(x) AS MATERIALIZED (SELECT * FROM generate_series(1,10) LIMIT 75%) SELECT * FROM t LIMIT 80%) AS _(x) ORDER BY x LIMIT 50%;
+----
+1
+2

@@ -16,6 +16,9 @@ namespace duckdb {
 
 class RecursiveCTENode : public QueryNode {
 public:
+	static constexpr const QueryNodeType TYPE = QueryNodeType::RECURSIVE_CTE_NODE;
+
+public:
 	RecursiveCTENode() : QueryNode(QueryNodeType::RECURSIVE_CTE_NODE) {
 	}
 
@@ -41,9 +44,10 @@ public:
 	unique_ptr<QueryNode> Copy() const override;
 
 	//! Serializes a QueryNode to a stand-alone binary blob
-	void Serialize(FieldWriter &writer) const override;
 	//! Deserializes a blob back into a QueryNode
-	static unique_ptr<QueryNode> Deserialize(FieldReader &reader);
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<QueryNode> Deserialize(Deserializer &source);
 };
 
 } // namespace duckdb

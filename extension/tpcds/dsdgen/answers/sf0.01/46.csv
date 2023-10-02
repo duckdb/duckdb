@@ -1,100 +1,94 @@
 c_last_name|c_first_name|ca_city|bought_city|ss_ticket_number|amt|profit
+NULL|Sean|Union Hill|Royal|214|1950.49|-9630.83
 Adams|Chris|Spring Hill|Lakeview|114|428.59|-2260.63
-Alexander|Tara|Proctor|Mount Pleasant|1880|45.14|-11183.18
 Allen|Richard|Oak Ridge|Greenwood|259|2431.92|-19280.56
 Andrews|Catherine|Lincoln|Deerfield|1846|6471.59|-8070.90
-Archie|Geneva|Enterprise|Lakeview|89|2578.22|-13859.38
-Berry|Nancy|Pleasant Valley|Mount Vernon|2352|2322.97|-11554.09
+Archie|Geneva|Enterprise|Lakeview|89|2578.22|-10494.29
+Berry|Nancy|Pleasant Valley|Mount Vernon|2352|2322.97|-8819.65
 Blair|John|Spring Valley|Valley View|654|899.69|-9066.75
-Bond|Larry|Jackson|Newtown|324|392.93|-1058.32
+Bond|Larry|Jackson|Newtown|324|392.93|1.48
 Bravo|Paul|Mount Zion|Maple Grove|671|1995.34|-1564.30
-Britt|Inez|Edgewood|Plainview|61|0.00|687.08
-Brown|Heather|Riverdale|Wilson|2393|123.85|-6022.89
-Buchanan|Alvin|Walnut Grove|Clifton|537|701.93|-18891.29
+Britt|Inez|Edgewood|Plainview|61|0.00|-858.82
+Brown|Heather|Riverdale|Wilson|2393|123.85|-5937.04
+Buchanan|Alvin|Walnut Grove|Clifton|537|701.93|-19121.18
 Burns|Kevin|Midway|Glenwood|1069|3930.91|-14558.48
-Burns|Kevin|Midway|Mount Zion|1585|1289.04|-25477.36
-Butler|Claudia|Five Points|Forest Hills|205|2017.72|-9117.74
-Butler|Rebecca|Union|Harmony|2035|591.02|-6337.32
+Butler|Claudia|Five Points|Forest Hills|205|2017.72|-8097.29
+Butler|Rebecca|Union|Harmony|2035|591.02|-5611.42
 Caldwell|Joseph|Providence|Wilson|2069|1866.90|-6056.38
-Campbell|Sheila|Union|Bethel|1589|4165.20|-16731.01
-Carl|Natasha|Frogtown|Newport|302|407.49|-3284.30
-Carroll|Bryan|Centerville|Jamestown|1346|0.00|-2555.03
-Chambers|Adam|Stringtown|Red Hill|2|4916.73|-28346.06
-Cowan|Shawn|Green Acres|Woodville|1780|1256.07|-6667.96
-Daniels|Brandi|Oakdale|Highland|1242|3510.53|-12169.74
-Dawkins|Steven|Lakeview|Macedonia|1081|135.10|-7184.66
+Campbell|Sheila|Union|Bethel|1589|4165.20|-17637.25
+Carl|Natasha|Frogtown|Newport|302|407.49|-2683.64
+Carroll|Bryan|Centerville|Jamestown|1346|0.00|-274.31
+Chambers|Adam|Stringtown|Red Hill|2|4891.64|-28301.55
+Cowan|Shawn|Green Acres|Woodville|1780|317.50|-3753.04
+Daniels|Brandi|Oakdale|Highland|1242|3510.53|-13066.68
+Dawkins|Steven|Lakeview|Macedonia|1081|135.10|-5637.06
 Dawkins|Steven|Lakeview|Salem|2054|314.97|-8809.77
-Dudley|Tonia|Greenwood|Newport|142|1055.09|-18655.68
-Dunbar|Ronald|Mount Zion|Proctor|995|2751.72|-4890.87
-Evans|Eleanor|Midway|Lewisburg|1656|3406.37|-27973.81
-Foster|Florence|Sulphur Springs|Woodland|199|24.81|1272.19
+Dudley|Tonia|Greenwood|Newport|142|1055.09|-16700.22
+Evans|Eleanor|Midway|Lewisburg|1656|3406.37|-26446.06
+Foster|Florence|Sulphur Springs|Woodland|199|24.81|1337.68
 Fuller|Jean|Union|Highland Park|1791|1260.50|-3811.61
-Garrison|Kevin|Union|Hopewell|784|3084.73|-3287.39
 Gilbert|Karl|Unionville|Hartland|1158|1135.91|-1479.70
-Glaze|Michael|Greenwood|New Hope|2056|33.28|-9211.07
-Greene|Jennifer|Oakdale|Oakland|1804|0.00|1383.44
-Greene|Jennifer|Oakdale|Riverview|1030|1444.78|-1633.26
-Grider|James|Franklin|Greenwood|2232|11869.79|-26811.60
-Grogan|Timothy|Mount Vernon|Pomona|1519|539.81|-4908.75
-Harrison|Bonnie|Marion|Newtown|316|525.42|-2477.98
-Harry|Paul|Centerville|Woodland|1882|17.63|-7693.96
-Hermann|Rebecca|Harmony|Newtown|570|3036.52|-4815.17
-Hernandez|Michael|Salem|Harmony|1338|4174.10|-16379.93
+Glaze|NULL|Greenwood|New Hope|2056|33.28|-7415.62
+Greene|Jennifer|Oakdale|Oakland|1804|0.00|1372.88
+Greene|Jennifer|Oakdale|Riverview|1030|1185.86|-3891.20
+Grider|James|Franklin|Greenwood|2232|11869.79|-26751.01
+Harrison|Bonnie|Marion|Newtown|316|525.42|-2535.98
+Harry|Paul|Centerville|Woodland|1882|17.63|-6969.46
+Hermann|Rebecca|Harmony|Newtown|570|3036.52|-4033.27
+Hernandez|Michael|Salem|Harmony|1338|2421.60|-12143.95
 Hernandez|Rachel|Greenwood|Harmony|1864|6791.14|-11294.62
 Holloway|Monica|Edgewood|Oakdale|1933|1476.46|-13005.54
-Hutchins|Rudolph|Five Forks|Spring Hill|1623|4414.53|-10891.60
+Hutchins|Rudolph|Five Forks|Spring Hill|1623|2728.17|-1807.56
 Jackson|John|Valley View|Union Hill|820|570.84|-11833.63
-Johnson|Benjamin|Bethel|Crossroads|533|983.56|-16491.21
-Johnson|Marilyn|Walnut Grove|Bunker Hill|752|2089.47|-13435.58
-Jones|Renee|Crossroads|Salem|113|851.20|-13800.31
+Johnson|Benjamin|Bethel|Crossroads|533|983.56|-17753.61
+Johnson|Marilyn|Walnut Grove|Bunker Hill|752|2089.47|-13690.63
+Jones|Renee|Crossroads|Salem|113|851.20|-10378.29
 Katz|Anderson|Oak Ridge|Lakewood|1459|2905.56|-610.21
-Katz|Anderson|Oak Ridge|Waterloo|1294|995.10|-4080.69
-Kuhn|Annie|Glendale|Friendship|1040|1757.54|-8840.65
-Lanier|David|Mountain View|Edgewood|1213|1500.63|-7518.84
+Katz|Anderson|Oak Ridge|Waterloo|1294|0.00|-2978.28
+Kuhn|Annie|Glendale|Friendship|1040|1745.63|-8431.53
+Lanier|David|Mountain View|Edgewood|1213|1470.41|-5566.30
 Leake|Matthew|Midway|Enterprise|1771|84.52|225.24
-Levi|Leroy|Riverdale|Union|1328|1587.93|-15462.21
-Lewis|Brian|Riverview|Lakewood|623|721.19|-2584.54
-Lewis|Brian|Riverview|Union Hill|85|1035.02|-3490.24
+Lewis|Brian|Riverview|Lakewood|623|721.19|-2893.77
+Lewis|Brian|Riverview|Union Hill|85|405.81|-1628.53
 Lloyd|Douglas|Springfield|Concord|265|5762.93|-21807.69
-Lloyd|Douglas|Springfield|Mount Olive|1209|2327.21|-11677.36
+Lloyd|Douglas|Springfield|Mount Olive|1209|1971.22|-11919.87
 Long|Samantha|Antioch|Union Hill|1388|161.06|684.47
 Lowry|Craig|Oakwood|Newport|57|138.61|-10694.10
-Malloy|Penelope|Oakland|Pleasant Grove|39|2846.77|-6886.04
+Malloy|Penelope|Oakland|Pleasant Grove|39|2846.77|-3623.66
 Marlow|Polly|Pine Grove|Providence|491|831.42|6462.24
 Mayes|Archie|Forest Hills|Harmony|1139|4469.46|-4074.42
-Mays|Sean|Union Hill|Royal|214|1950.49|-11418.38
-Mcclellan|Steven|Riverside|Marion|977|1153.54|3432.80
-Miller|Christine|Clinton|Five Points|44|3136.33|-5980.81
-Moore|Steven|Ashland|Centerville|2050|3618.24|-6879.65
-Moore|Steven|Ashland|Lakewood|2072|782.13|-16537.78
+Mcclellan|Steven|Riverside|Marion|977|803.23|4035.10
+Miller|Christine|Clinton|Five Points|44|3136.33|-5911.63
+Moore|Steven|Ashland|Centerville|2050|3618.24|-4477.63
+Moore|Steven|Ashland|Lakewood|2072|0.00|-16703.36
 Munoz|Leonard|Waterloo|Bunker Hill|1690|1626.23|-11189.98
 Norris|Joseph|Red Hill|Union Hill|2116|2411.64|-8725.21
-Numbers|Michael|Union Hill|Oak Hill|2239|376.16|-7512.84
-Olvera|Bruce|Shore Acres|Pleasant Valley|1023|2010.20|-16389.06
+Numbers|Michael|Union Hill|Oak Hill|2239|191.57|-5036.17
+Olvera|Bruce|Shore Acres|Pleasant Valley|1023|2010.20|-9959.13
 Orr|Jeffrey|Clifton|Oakdale|435|3097.21|-10995.97
-Ortiz|Terry|Wright|Liberty|1663|326.54|-8050.03
+Ortiz|Terry|Wright|Liberty|1663|326.54|-7913.29
 Perry|Dustin|Waterloo|Lakewood|815|3834.72|-12402.70
-Peterson|Marie|Deerfield|Highland|1251|9192.69|-24606.05
+Peterson|Marie|Deerfield|Highland|1251|9192.69|-25526.63
 Phillips|Julia|Glenwood|Liberty|2151|5131.79|-7431.33
 Ramos|Aline|Newport|Enterprise|1776|2247.16|-15606.78
-Ritchey|Evelyn|Plainview|Clifton|371|2276.26|-1248.97
-Rutherford|Adela|Crossroads|Belmont|1849|5064.59|-7525.50
-Schneider|Dwight|Walnut Grove|Pleasant Valley|776|473.94|1251.51
+Ritchey|Evelyn|Plainview|Clifton|371|2086.89|-1260.05
+Rutherford|Adela|Crossroads|Belmont|1849|4867.60|-7152.60
+Schneider|Dwight|Walnut Grove|Pleasant Valley|776|470.43|1242.62
 Simpson|Kevin|Valley View|Red Hill|2207|10089.03|-15994.53
-Smith|Daisy|Stringtown|Five Points|124|758.97|-1955.99
+Smith|Daisy|Stringtown|Five Points|124|758.97|-1.27
 Smith|Marjorie|Providence|Blue Springs|104|2270.72|-17277.06
 Smith|Rochel|Enterprise|New Hope|1921|0.00|-13085.27
 Thompson|Samuel|Forest Hills|Marion|1911|607.52|-8326.91
 Travers|Shawn|Mount Olive|Franklin|540|4824.64|-22373.02
-Valdez|Charles|Maple Grove|Five Forks|1399|1078.25|-9558.03
-Villanueva|Paul|Mechanicsburg|Farmington|1077|954.29|-8281.06
+Valdez|Charles|Maple Grove|Five Forks|1399|733.85|-10333.35
+Villanueva|Paul|Mechanicsburg|Farmington|1077|954.29|-7742.86
 Walton|Cedric|Hamilton|Mount Olive|164|1978.62|-3569.70
 Ward|Scott|Riverside|Enterprise|1689|9046.85|-14860.55
 Watson|Alfred|Jamestown|Union|1186|2852.45|-6438.45
-Whitaker|Richard|Oak Ridge|Glendale|2158|2811.09|-9782.20
+Whitaker|Richard|Oak Ridge|Glendale|2158|2239.93|-5532.44
 Wiles|Jeffrey|Cedar Grove|Bethel|489|109.44|-8395.15
 Wilson|Joseph|Warwick|Bunker Hill|2083|128.66|-6901.74
-Woods|Brandon|Fairfield|Ashland|1572|1490.43|-1443.79
+Woods|NULL|Fairfield|Ashland|1572|1490.43|-4264.59
 Wynne|Joanne|Sugar Hill|Pleasant Grove|1004|1490.33|-8000.14
-Young|Althea|Jamestown|Lakeview|634|2760.16|-23436.25
-Young|Althea|Jamestown|Riverside|1289|0.00|-543.36
+Young|Althea|Jamestown|Lakeview|634|2760.16|-16172.15
+Young|Althea|Jamestown|Riverside|1289|0.00|-2497.16

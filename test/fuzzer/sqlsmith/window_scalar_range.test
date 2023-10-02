@@ -1,0 +1,13 @@
+# name: test/fuzzer/sqlsmith/window_scalar_range.test
+# description: Test multiple constant chunks
+# group: [sqlsmith]
+
+statement ok
+CREATE TABLE partsupp AS SELECT (random() * 100)::INT AS c2 
+FROM range(8000);
+
+statement ok
+SELECT percent_rank() 
+	OVER (ORDER BY 7543 ASC NULLS FIRST 
+		  RANGE BETWEEN c2 PRECEDING AND c2 FOLLOWING) 
+FROM partsupp;

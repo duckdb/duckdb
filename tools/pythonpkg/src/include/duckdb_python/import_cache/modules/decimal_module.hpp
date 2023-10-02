@@ -14,6 +14,9 @@ namespace duckdb {
 
 struct DecimalCacheItem : public PythonImportCacheItem {
 public:
+	static constexpr const char *Name = "decimal";
+
+public:
 	~DecimalCacheItem() override {
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {

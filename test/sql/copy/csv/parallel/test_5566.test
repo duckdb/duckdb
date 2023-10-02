@@ -1,0 +1,46 @@
+# name: test/sql/copy/csv/parallel/test_5566.test
+# description: Test parallel read CSV function on issue #5566
+# group: [parallel]
+
+# force parallelism of the queries
+statement ok
+PRAGMA verify_parallelism
+
+loop thr 1 8
+
+statement ok
+pragma threads=${thr}
+
+query I
+select * from read_csv_auto('test/sql/copy/csv/data/auto/test_single_column.csv')
+----
+1
+2
+3
+4
+5
+
+query I
+select * from read_csv_auto('test/sql/copy/csv/data/auto/test_single_column_rn.csv')
+----
+1
+2
+3
+4
+5
+
+query II
+select foo, count(1) cnt from read_csv_auto('test/sql/copy/csv/data/auto/test_multiple_columns.csv') group by foo order by cnt desc
+----
+1	102
+2	100
+3	98
+
+query II
+select foo, count(1) cnt from read_csv_auto('test/sql/copy/csv/data/auto/test_multiple_columns_rn.csv') group by foo order by cnt desc
+----
+1	102
+2	100
+3	98
+
+endloop

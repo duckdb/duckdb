@@ -19,12 +19,12 @@ typedef BoundCastInfo (*bind_cast_function_t)(BindCastInput &input, const Logica
 typedef int64_t (*implicit_cast_cost_t)(const LogicalType &from, const LogicalType &to);
 
 struct GetCastFunctionInput {
-	GetCastFunctionInput(ClientContext *context = nullptr) : context(context) {
+	GetCastFunctionInput(optional_ptr<ClientContext> context = nullptr) : context(context) {
 	}
 	GetCastFunctionInput(ClientContext &context) : context(&context) {
 	}
 
-	ClientContext *context;
+	optional_ptr<ClientContext> context;
 };
 
 struct BindCastFunction {
@@ -59,7 +59,7 @@ public:
 private:
 	vector<BindCastFunction> bind_functions;
 	//! If any custom cast functions have been defined using RegisterCastFunction, this holds the map
-	MapCastInfo *map_info;
+	optional_ptr<MapCastInfo> map_info;
 
 private:
 	void RegisterCastFunction(const LogicalType &source, const LogicalType &target, MapCastNode node);

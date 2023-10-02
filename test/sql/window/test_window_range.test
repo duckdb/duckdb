@@ -27,7 +27,9 @@ statement ok
 CREATE VIEW c1 AS SELECT a::${type} AS a, b FROM t1;
 
 query II
-SELECT a, sum(b) OVER win FROM c1 WINDOW win AS ( ORDER BY a RANGE BETWEEN 5 PRECEDING AND 5 FOLLOWING )
+SELECT a, sum(b) OVER win 
+FROM c1 
+WINDOW win AS ( ORDER BY a RANGE BETWEEN 5::${type} PRECEDING AND 5::${type} FOLLOWING )
 ----
 5	30
 10	112
@@ -397,6 +399,17 @@ SELECT sum(b) OVER (
 6
 15
 15
+
+query I
+SELECT sum(b) OVER (
+    ORDER BY a NULLS FIRST RANGE BETWEEN CURRENT ROW AND 10 FOLLOWING
+  ) FROM t1 ORDER BY 1 NULLS FIRST;
+----
+6
+6
+6
+9
+9
 
 #==========================================================================
 
@@ -956,14 +969,14 @@ SELECT sum(a) OVER (
     PARTITION BY (
 SELECT t FROM map WHERE v=a
     ) ORDER BY a
-  ) FROM tx;
+  ) FROM tx ORDER BY ALL;
 ----
-2
-6
-12
 1
+2
 4
+6
 9
+12
 
 query I
 SELECT sum(a) OVER win FROM tx
@@ -971,14 +984,14 @@ SELECT sum(a) OVER win FROM tx
     PARTITION BY (
 SELECT t FROM map WHERE v=a
     ) ORDER BY a
-  );
+  ) ORDER BY ALL;
 ----
-2
-6
-12
 1
+2
 4
+6
 9
+12
 
 query I
   WITH map2 AS (
@@ -988,14 +1001,14 @@ SELECT sum(a) OVER (
     PARTITION BY (
 SELECT t FROM map2 WHERE v=a
     ) ORDER BY a
-  ) FROM tx;
+  ) FROM tx ORDER BY ALL;
 ----
-2
-6
-12
 1
+2
 4
+6
 9
+12
 
 query I
   WITH map2 AS (
@@ -1006,14 +1019,14 @@ SELECT sum(a) OVER win FROM tx
     PARTITION BY (
 SELECT t FROM map2 WHERE v=a
     ) ORDER BY a
-  );
+  ) ORDER BY ALL;
 ----
-2
-6
-12
 1
+2
 4
+6
 9
+12
 
 #==========================================================================
 

@@ -1,0 +1,59 @@
+# name: test/sql/vector_types/struct_vector_types.test_slow
+# description: Vector Types test: structs
+# group: [vector_types]
+
+statement ok
+PRAGMA enable_verification
+
+# we run a bunch of queries, and verify that the result does not change
+# when running with different vector types vs running with only flat vectors
+
+foreach all_flat true false
+
+query I nosort standard_select
+SELECT * FROM test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat});
+
+query I nosort struct_extract
+SELECT val.i, val.j FROM test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) t(val);
+
+query I nosort filter
+SELECT min(val), max(val) FROM (SELECT row_number() OVER () AS rownum, val FROM test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) t(val)) where rownum%2=1;
+
+query I nosort aggr
+SELECT min(val), max(val) FROM test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) t(val);
+
+query I nosort count_distinct
+SELECT count(distinct val) FROM test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) t(val);
+
+query I nosort grouped_count
+SELECT val, count(*) FROM test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) t(val) group by val order by all;
+
+query I nosort sort
+SELECT * FROM test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) t(val) ORDER BY 1;
+
+query I nosort struct_pack
+SELECT {'a': val, 'b': val} FROM test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) t(val)
+
+query I nosort list_scalar
+SELECT [NULL, val, NULL, val] FROM test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) t(val)
+
+query I nosort list_aggr
+SELECT list(val) FROM test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) t(val)
+
+query I nosort not_distinct
+SELECT val IS NOT DISTINCT FROM val FROM test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) t(val)
+
+query I nosort distinct
+SELECT val IS DISTINCT FROM val FROM test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) t(val)
+
+query I nosort equals
+SELECT val=val FROM test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) t(val)
+
+query I nosort not_equals
+SELECT val<>val FROM test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) t(val)
+
+query I nosort self_join
+SELECT * FROM test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) t(val) JOIN test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) t2(val) USING (val)
+
+endloop
+

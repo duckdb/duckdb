@@ -1,0 +1,75 @@
+{
+  "event_id": "VARCHAR",
+  "user_id": "VARCHAR",
+  "action": "VARCHAR",
+  "client_time": "VARCHAR",
+  "metadata": {
+    "argv": [
+      "VARCHAR"
+    ],
+    "dag": {
+      "dag_size": "VARCHAR",
+      "tasks": {
+        "load_oscar": {
+          "status": "VARCHAR",
+          "type": "VARCHAR",
+          "upstream": "JSON",
+          "products": {
+            "nb": "VARCHAR"
+          }
+        },
+        "load_weather": {
+          "status": "VARCHAR",
+          "type": "VARCHAR",
+          "upstream": "JSON",
+          "products": {
+            "nb": "VARCHAR"
+          }
+        },
+        "compress": {
+          "status": "VARCHAR",
+          "type": "VARCHAR",
+          "upstream": {
+            "load_oscar": "VARCHAR"
+          },
+          "products": {
+            "nb": "VARCHAR"
+          }
+        }
+      }
+    }
+  },
+  "total_runtime": "VARCHAR",
+  "python_version": "VARCHAR",
+  "version": "VARCHAR",
+  "package_name": "VARCHAR",
+  "docker_container": "BOOLEAN",
+  "cloud": "NULL",
+  "email": "NULL",
+  "os": "VARCHAR",
+  "environment": "VARCHAR",
+  "telemetry_version": "VARCHAR",
+  "$lib": "VARCHAR",
+  "$lib_version": "VARCHAR",
+  "$geoip_city_name": "VARCHAR",
+  "$geoip_country_name": "VARCHAR",
+  "$geoip_country_code": "VARCHAR",
+  "$geoip_continent_name": "VARCHAR",
+  "$geoip_continent_code": "VARCHAR",
+  "$geoip_postal_code": "VARCHAR",
+  "$geoip_latitude": "DOUBLE",
+  "$geoip_longitude": "DOUBLE",
+  "$geoip_time_zone": "VARCHAR",
+  "$geoip_subdivision_1_code": "VARCHAR",
+  "$geoip_subdivision_1_name": "VARCHAR",
+  "$plugins_succeeded": [
+    "VARCHAR"
+  ],
+  "$plugins_failed": [
+    "NULL"
+  ],
+  "$plugins_deferred": [
+    "NULL"
+  ],
+  "$ip": "VARCHAR"
+}

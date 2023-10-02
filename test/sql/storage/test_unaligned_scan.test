@@ -16,9 +16,9 @@ INSERT INTO test VALUES (NULL, 'hello'), (13, 'abcdefgh'), (12, NULL)
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	hello
 12	NULL
 13	abcdefgh
+NULL	hello
 
 restart
 
@@ -28,9 +28,9 @@ PRAGMA enable_verification
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	hello
 12	NULL
 13	abcdefgh
+NULL	hello
 
 # now we have persistent segments containing 3 tuples
 # now insert many values

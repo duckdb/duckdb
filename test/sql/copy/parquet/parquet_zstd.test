@@ -2,6 +2,9 @@
 # description: Read a parquet file with ZSTD
 # group: [parquet]
 
+statement ok
+SET default_null_order='nulls_first';
+
 require parquet
 
 query TTT

@@ -1,0 +1,45 @@
+# name: test/sql/copy/csv/csv_windows_mixed_separators.test
+# description: Test mixed separators on Windows
+# group: [csv]
+
+require windows
+
+statement ok
+PRAGMA enable_verification
+
+# \  and / are interchangeable on Windows
+query I
+SELECT * FROM 'test\sql/copy\csv/data\test/date.csv'
+----
+2019-06-05
+
+query I
+SELECT * FROM glob('test\sql/copy\csv\data/test/*.csv') t(g) WHERE g LIKE '%date.csv'
+----
+test\sql\copy\csv\data\test\date.csv
+
+# also for attach
+statement ok
+ATTACH '__TEST_DIR__/windows_test.db' AS s1
+
+statement  ok
+CREATE TABLE s1.tbl AS SELECT * FROM range(10) t(i);
+
+query I
+SELECT SUM(i) FROM s1.tbl
+----
+45
+
+statement ok
+DETACH s1
+
+statement ok
+ATTACH '__TEST_DIR__\windows_test.db' AS s1
+
+query I
+SELECT SUM(i) FROM s1.tbl
+----
+45
+
+statement ok
+DETACH s1

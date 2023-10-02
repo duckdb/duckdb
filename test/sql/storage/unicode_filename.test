@@ -21,10 +21,10 @@ INSERT INTO test2 VALUES (13), (12), (11)
 query II
 SELECT * FROM test ORDER BY a
 ----
-NULL	NULL
 11	22
 12	21
 13	22
+NULL	NULL
 
 query I
 SELECT * FROM test2 ORDER BY a
@@ -41,10 +41,10 @@ CHECKPOINT;
 query II
 SELECT * FROM test ORDER BY a
 ----
-NULL	NULL
 11	22
 12	21
 13	22
+NULL	NULL
 
 query I
 SELECT * FROM test2 ORDER BY a
@@ -61,10 +61,10 @@ restart
 query II
 SELECT * FROM test ORDER BY a
 ----
-NULL	NULL
 11	22
 12	21
 13	22
+NULL	NULL
 
 query I
 SELECT * FROM test2 ORDER BY a
@@ -80,22 +80,22 @@ INSERT INTO test VALUES (14, 23)
 query II
 SELECT * FROM test ORDER BY a
 ----
-NULL	NULL
 11	22
 12	21
 13	22
 14	23
+NULL	NULL
 
 restart
 
 query II
 SELECT * FROM test ORDER BY a
 ----
-NULL	NULL
 11	22
 12	21
 13	22
 14	23
+NULL	NULL
 
 statement ok
 DROP TABLE test

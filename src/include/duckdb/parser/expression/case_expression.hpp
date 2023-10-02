@@ -16,10 +16,16 @@ namespace duckdb {
 struct CaseCheck {
 	unique_ptr<ParsedExpression> when_expr;
 	unique_ptr<ParsedExpression> then_expr;
+
+	void Serialize(Serializer &serializer) const;
+	static CaseCheck Deserialize(Deserializer &deserializer);
 };
 
 //! The CaseExpression represents a CASE expression in the query
 class CaseExpression : public ParsedExpression {
+public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::CASE;
+
 public:
 	DUCKDB_API CaseExpression();
 
@@ -29,12 +35,12 @@ public:
 public:
 	string ToString() const override;
 
-	static bool Equals(const CaseExpression *a, const CaseExpression *b);
+	static bool Equal(const CaseExpression &a, const CaseExpression &b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
 public:
 	template <class T, class BASE>

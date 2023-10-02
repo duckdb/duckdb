@@ -5,7 +5,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test prepared statements API", "[api]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
@@ -52,7 +52,7 @@ TEST_CASE("Test prepared statements API", "[api]") {
 TEST_CASE("Test type resolution of function with parameter expressions", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	con.EnableQueryVerification();
 
 	// can deduce type of prepared parameter here
@@ -67,7 +67,7 @@ TEST_CASE("Test type resolution of function with parameter expressions", "[api]"
 }
 
 TEST_CASE("Test prepared statements and dependencies", "[api]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db), con2(db);
 
@@ -93,9 +93,9 @@ TEST_CASE("Test prepared statements and dependencies", "[api]") {
 }
 
 TEST_CASE("Dropping connection with prepared statement resets dependencies", "[api]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	auto con = make_unique<Connection>(db);
+	auto con = make_uniq<Connection>(db);
 	Connection con2(db);
 
 	REQUIRE_NO_FAIL(con->Query("CREATE TABLE a(i TINYINT)"));
@@ -114,9 +114,9 @@ TEST_CASE("Dropping connection with prepared statement resets dependencies", "[a
 }
 
 TEST_CASE("Alter table and prepared statements", "[api]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	auto con = make_unique<Connection>(db);
+	auto con = make_uniq<Connection>(db);
 	Connection con2(db);
 
 	REQUIRE_NO_FAIL(con->Query("CREATE TABLE a(i TINYINT)"));
@@ -140,14 +140,14 @@ TEST_CASE("Alter table and prepared statements", "[api]") {
 }
 
 TEST_CASE("Test destructors of prepared statements", "[api]") {
-	unique_ptr<DuckDB> db;
-	unique_ptr<Connection> con;
-	unique_ptr<PreparedStatement> prepare;
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<DuckDB> db;
+	duckdb::unique_ptr<Connection> con;
+	duckdb::unique_ptr<PreparedStatement> prepare;
+	duckdb::unique_ptr<QueryResult> result;
 
 	// test destruction of connection
-	db = make_unique<DuckDB>(nullptr);
-	con = make_unique<Connection>(*db);
+	db = make_uniq<DuckDB>(nullptr);
+	con = make_uniq<Connection>(*db);
 	// create a prepared statement
 	prepare = con->Prepare("SELECT $1::INTEGER+$2::INTEGER");
 	// we can execute it
@@ -162,7 +162,7 @@ TEST_CASE("Test destructors of prepared statements", "[api]") {
 
 	// test destruction of db
 	// create a connection and prepared statement again
-	con = make_unique<Connection>(*db);
+	con = make_uniq<Connection>(*db);
 	prepare = con->Prepare("SELECT $1::INTEGER+$2::INTEGER");
 	// we can execute it
 	result = prepare->Execute(3, 5);
@@ -179,7 +179,7 @@ TEST_CASE("Test destructors of prepared statements", "[api]") {
 }
 
 TEST_CASE("Test incorrect usage of prepared statements API", "[api]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -196,19 +196,19 @@ TEST_CASE("Test incorrect usage of prepared statements API", "[api]") {
 	auto prepare = con.Prepare("SELEC COUNT(*) FROM a WHERE i=$1");
 	// we cannot execute this prepared statement
 	REQUIRE(prepare->HasError());
-	REQUIRE_THROWS(prepare->Execute(12));
+	REQUIRE_FAIL(prepare->Execute(12));
 
 	// cannot prepare multiple statements at once
 	prepare = con.Prepare("SELECT COUNT(*) FROM a WHERE i=$1; SELECT 42+$2;");
 	REQUIRE(prepare->HasError());
-	REQUIRE_THROWS(prepare->Execute(12));
+	REQUIRE_FAIL(prepare->Execute(12));
 
 	// also not in the Query syntax
 	REQUIRE_FAIL(con.Query("SELECT COUNT(*) FROM a WHERE i=$1; SELECT 42+$2", 11));
 }
 
 TEST_CASE("Test multiple prepared statements", "[api]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -226,7 +226,7 @@ TEST_CASE("Test multiple prepared statements", "[api]") {
 }
 
 TEST_CASE("Test prepared statements and transactions", "[api]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -250,7 +250,7 @@ TEST_CASE("Test prepared statements and transactions", "[api]") {
 }
 
 TEST_CASE("Test prepared statement parameter counting", "[api]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -280,7 +280,7 @@ TEST_CASE("Test prepared statement parameter counting", "[api]") {
 }
 
 TEST_CASE("Test ANALYZE", "[api]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
@@ -301,7 +301,7 @@ TEST_CASE("Test ANALYZE", "[api]") {
 }
 
 TEST_CASE("Test DECIMAL with PreparedStatement", "[api]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -314,13 +314,13 @@ TEST_CASE("Test DECIMAL with PreparedStatement", "[api]") {
 }
 
 TEST_CASE("Test BLOB with PreparedStatement", "[api]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
 	// Creating a blob buffer with almost ALL ASCII chars
 	uint8_t num_chars = 256 - 5; // skipping: '\0', '\n', '\15', ',', '\32'
-	unique_ptr<char[]> blob_chars(new char[num_chars]);
+	auto blob_chars = make_unsafe_uniq_array<char>(num_chars);
 	char ch = '\0';
 	idx_t buf_idx = 0;
 	for (idx_t i = 0; i < 255; ++i, ++ch) {
@@ -335,8 +335,8 @@ TEST_CASE("Test BLOB with PreparedStatement", "[api]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs (b BYTEA);"));
 
 	// Insert blob values through a PreparedStatement
-	Value blob_val = Value::BLOB((const_data_ptr_t)blob_chars.get(), num_chars);
-	unique_ptr<PreparedStatement> ps = con.Prepare("INSERT INTO blobs VALUES (?::BYTEA)");
+	Value blob_val = Value::BLOB(const_data_ptr_cast(blob_chars.get()), num_chars);
+	duckdb::unique_ptr<PreparedStatement> ps = con.Prepare("INSERT INTO blobs VALUES (?::BYTEA)");
 	ps->Execute(blob_val);
 	REQUIRE(!ps->HasError());
 	ps.reset();
@@ -355,7 +355,7 @@ TEST_CASE("Test BLOB with PreparedStatement", "[api]") {
 }
 
 TEST_CASE("PREPARE for INSERT with dates", "[prepared]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -377,7 +377,7 @@ TEST_CASE("PREPARE for INSERT with dates", "[prepared]") {
 }
 
 TEST_CASE("PREPARE multiple statements", "[prepared]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -397,14 +397,14 @@ TEST_CASE("PREPARE multiple statements", "[prepared]") {
 	}
 }
 
-static unique_ptr<QueryResult> TestExecutePrepared(Connection &con, string query) {
+static duckdb::unique_ptr<QueryResult> TestExecutePrepared(Connection &con, string query) {
 	auto prepared = con.Prepare(query);
 	REQUIRE(!prepared->HasError());
 	return prepared->Execute();
 }
 
 TEST_CASE("Prepare all types of statements", "[prepared]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto &fs = db.GetFileSystem();
@@ -459,7 +459,7 @@ TEST_CASE("Prepare all types of statements", "[prepared]") {
 }
 
 TEST_CASE("Test ambiguous prepared statement parameter types", "[api]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 

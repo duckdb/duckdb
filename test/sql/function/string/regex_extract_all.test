@@ -1,0 +1,709 @@
+# name: test/sql/function/string/regex_extract_all.test
+# description: regex extract test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\d+)', 1);
+----
+[1, 2, 14]
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\d+)([a-z]+)', 2)
+----
+[a, b, m]
+
+query I
+SELECT REGEXP_EXTRACT_ALL('test', '.')
+----
+[t, e, s, t]
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', -1);
+----
+[]
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '\\d+');
+----
+[]
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '\\d+', 0);
+----
+[]
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '\\d+', 1);
+----
+[]
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '\\d+', 2);
+----
+[]
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '\\d+', -1);
+----
+[]
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)?', 1);
+----
+[NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL]
+
+query I
+SELECT regexp_extract_all('a 2b 14m', '(\\d+)?', 1);
+----
+[NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL]
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)');
+----
+[]
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', 0);
+----
+[]
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', 1);
+----
+[]
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', 2);
+----
+[]
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', 3);
+----
+[]
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', -1);
+----
+[]
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)?([a-z]+)', 1);
+----
+[NULL, NULL, NULL]
+
+query I
+SELECT regexp_extract_all('a 2b 14m', '(\\d+)?([a-z]+)', 1);
+----
+[NULL, NULL, NULL]
+
+# source:
+# https://github.com/ep-infosec/33_apache_doris/blob/9edb4e8735fd0c56ee63a3d1d2560af867d80440/docs/zh-CN/docs/sql-manual/sql-functions/string-functions/regexp/regexp_extract_all.md
+query I
+select regexp_extract_all('AbCdE', '([[:lower:]]+)C([[:lower:]]+)', 1);
+----
+[b]
+
+query I
+select regexp_extract_all('AbCdEfCg', '([[:lower:]]+)C([[:lower:]]+)', 1);
+----
+[b, f]
+
+query I
+select regexp_extract_all('abc=111, def=222, ghi=333', '("[^"]+"|\w+)=("[^"]+"|\w+)', 1);
+----
+[abc, def, ghi]
+
+query I
+select regexp_extract_all('', NULL)
+----
+NULL
+
+query I
+select regexp_extract_all(NULL, '')
+----
+NULL
+
+query I
+select regexp_extract_all('', '')
+----
+[]
+
+query I
+select regexp_extract_all('', 'abc')
+----
+[]
+
+query I
+select regexp_extract_all('abc', '.')
+----
+[a, b, c]
+
+query I
+select regexp_extract_all('aaa', '^a')
+----
+[a]
+
+query I
+select regexp_extract_all('abc', 'abc')
+----
+[abc]
+
+query I
+select regexp_extract_all('abcdef', 'a.c.*f')
+----
+[abcdef]
+
+query I
+select regexp_extract_all('abcdef', 'ac.*e.')
+----
+[]
+
+query I
+select regexp_extract_all('abcdef', 'bcde')
+----
+[bcde]
+
+query I
+select regexp_extract_all('aabca', 'a*')
+----
+[aa, , , a, ]
+
+query I
+select regexp_extract_all('aaba', 'a?')
+----
+[a, a, , a, ]
+
+query I
+select regexp_extract_all('baac', 'a*')
+----
+[, aa, , ]
+
+query I
+select regexp_extract_all('abcd', 'a(bc)*')
+----
+[abc]
+
+query I
+select regexp_extract_all('щцф', '.')
+----
+[щ, ц, ф]
+
+query I
+select regexp_extract_all('щцф', '.{3}')
+----
+[щцф]
+
+query I
+select regexp_extract_all('щцф', '.{6}')
+----
+[]
+
+query I
+select regexp_extract_all('щццф', 'ц*')
+----
+[, цц, , ]
+
+query I
+select regexp_extract_all('abba', 'b*')
+----
+[, bb, , ]
+
+query I
+select regexp_extract_all('', '()')
+----
+[]
+
+query I
+select regexp_extract_all('', '(abc)')
+----
+[]
+
+query I
+select regexp_extract_all('', '(abc)?')
+----
+[]
+
+query I
+select regexp_extract_all('abc', 'a(b)c')
+----
+[abc]
+
+query I
+select regexp_extract_all('abbb', '^a*(b)')
+----
+[ab]
+
+query I
+select regexp_extract_all('XbASDZb', '(.)b')
+----
+[Xb, Zb]
+
+query I
+select regexp_extract_all('abcdef', 'a(.c.*)f')
+----
+[abcdef]
+
+query I
+select regexp_extract_all('abcdef', '(bcde)')
+----
+[bcde]
+
+query I
+select regexp_extract_all('this_is__a___Test', '(.*?)(?:_|$)')
+----
+[this_, is_, _, a_, _, _, Test, ]
+
+query I
+select regexp_extract_all('щцф', 'щ(.).', 1)
+----
+[ц]
+
+query I
+select regexp_extract_all('щцф', '(.{6})')
+----
+[]
+
+query I
+select regexp_extract_all('abc', '((a))')
+----
+[a]
+
+query I
+select regexp_extract_all('abc', '(a)(b)')
+----
+[ab]
+
+statement error
+select regexp_extract_all('', '(')
+----
+Invalid Input Error: Pattern failed to parse, error: 'missing ): ('
+
+query I
+select regexp_extract_all('abcdef', 'ac.*e.')
+----
+[]
+
+query I
+select regexp_extract_all('щцф', '.{2}')
+----
+[щц]
+
+query I
+select regexp_extract_all('abc', '.{2}')
+----
+[ab]
+
+query I
+select regexp_extract_all('\001\002\003', '\002?')
+----
+[, , , , , , , , , , , , ]
+
+query I
+select regexp_extract_all('', '()')
+----
+[]
+
+query I
+select regexp_extract_all('', '(abc)')
+----
+[]
+
+query I
+select regexp_extract_all('', '(abc)?')
+----
+[]
+
+query I
+select regexp_extract_all('this__test_case', '(.*?)(?:_|$)')
+----
+[this_, _, test_, case, ]
+
+query I
+select regexp_extract_all('щцф', 'щ(..)..')
+----
+[]
+
+query II
+SELECT str, 
+  REGEXP_EXTRACT_ALL(str,'ab?cd') AS matched
+FROM (
+  VALUES ('acd'), ('abcd'), ('abcdacd'), ('abbcd'), ('abbbcd'), ('ab1cd')
+) AS t(str)
+----
+acd	[acd]
+abcd	[abcd]
+abcdacd	[abcd, acd]
+abbcd	[]
+abbbcd	[]
+ab1cd	[]
+
+query II
+SELECT str, 
+  REGEXP_EXTRACT_ALL(str,'a(bc)?d') AS matched
+FROM (
+  VALUES ('ad'), ('abd'), ('acd'), ('abcd'), ('abce'), ('abcxd'), ('abcbcd')
+) AS t(str)
+----
+ad	[ad]
+abd	[]
+acd	[]
+abcd	[abcd]
+abce	[]
+abcxd	[]
+abcbcd	[]
+
+query II
+SELECT str, 
+  REGEXP_EXTRACT_ALL(str,'a[bc]?d') AS matched
+FROM (
+  VALUES ('ad'), ('abd'), ('acd'), ('acde'), ('abcd'), ('abbd')
+) AS t(str)
+----
+ad	[ad]
+abd	[abd]
+acd	[acd]
+acde	[acd]
+abcd	[]
+abbd	[]
+
+query II
+SELECT str, 
+  REGEXP_EXTRACT_ALL(str,'X[\d]?Y[\d]?') AS matched
+FROM (
+  VALUES ('XY'),('X1Y'),('X123Y'),('X1Y23')
+) AS t(str)
+----
+XY	[XY]
+X1Y	[X1Y]
+X123Y	[]
+X1Y23	[X1Y2]
+
+query II
+SELECT str, 
+  REGEXP_EXTRACT_ALL(str,'ab*cd') AS matched
+FROM (
+  VALUES ('acd'), ('abcd'), ('abcdacd'), ('abbcd'), ('abbbcd'), ('ab1cd')
+) AS t(str)
+----
+acd	[acd]
+abcd	[abcd]
+abcdacd	[abcd, acd]
+abbcd	[abbcd]
+abbbcd	[abbbcd]
+ab1cd	[]
+
+query II
+SELECT str, 
+  REGEXP_EXTRACT_ALL(str,'a(bc)*d') AS matched
+FROM (
+  VALUES ('ad'), ('abd'), ('acd'), ('abcd'), ('abcxd'), ('abcbcd'), ('abcbce')
+) AS t(str)
+----
+ad	[ad]
+abd	[]
+acd	[]
+abcd	[abcd]
+abcxd	[]
+abcbcd	[abcbcd]
+abcbce	[]
+
+query II
+SELECT str, 
+  REGEXP_EXTRACT_ALL(str,'a[bc]*d') AS matched
+FROM (
+  VALUES ('ad'), ('abd'), ('acd'), ('abcd'), ('abcbbcd'), ('abce')
+) AS t(str)
+----
+ad	[ad]
+abd	[abd]
+acd	[acd]
+abcd	[abcd]
+abcbbcd	[abcbbcd]
+abce	[]
+
+query II
+SELECT str, 
+  REGEXP_EXTRACT_ALL(str,'X[\d]*Y[\d]*') AS matched
+FROM (
+  VALUES ('XY'),('X1Y'),('X123Y'),('X1Y23'),('X12Z34Y')
+) AS t(str)
+----
+XY	[XY]
+X1Y	[X1Y]
+X123Y	[X123Y]
+X1Y23	[X1Y23]
+X12Z34Y	[]
+
+query II
+SELECT str, 
+  REGEXP_EXTRACT_ALL(str,'ab+cd') AS matched
+FROM (
+  VALUES ('acd'), ('abcd'), ('abcdacd'), ('abbcd'), ('abbbcd'), ('ab1cd')
+) AS t(str)
+----
+acd	[]
+abcd	[abcd]
+abcdacd	[abcd]
+abbcd	[abbcd]
+abbbcd	[abbbcd]
+ab1cd	[]
+
+query II
+SELECT str, 
+  REGEXP_EXTRACT_ALL(str,'(ab)+cd') AS matched
+FROM (
+  VALUES ('bcd'), ('abcd'), ('abbcd'), ('ababcd'), ('ababxcd')
+) AS t(str)
+----
+bcd	[]
+abcd	[abcd]
+abbcd	[]
+ababcd	[ababcd]
+ababxcd	[]
+
+query II
+SELECT str, 
+  REGEXP_EXTRACT_ALL(str,'a[bc]+d') AS matched
+FROM (
+  VALUES ('ad'), ('abd'), ('acd'), ('abcd'), ('abce'), ('abcbd')
+) AS t(str)
+----
+ad	[]
+abd	[abd]
+acd	[acd]
+abcd	[abcd]
+abce	[]
+abcbd	[abcbd]
+
+query II
+SELECT str, 
+  REGEXP_EXTRACT_ALL(str,'X[\d]+Y[\d]*') AS matched
+FROM (
+  VALUES ('XY'),('X1Y'),('X123Y'),('X1Y23'),('X12Z34Y')
+) AS t(str)
+----
+XY	[]
+X1Y	[X1Y]
+X123Y	[X123Y]
+X1Y23	[X1Y23]
+X12Z34Y	[]
+
+query IIIII
+SELECT str, 
+  REGEXP_EXTRACT_ALL(str,'ab{3}cd')   AS m1,
+  REGEXP_EXTRACT_ALL(str,'ab{1,}cd')  AS m2,
+  REGEXP_EXTRACT_ALL(str,'ab{1,2}cd') AS m3,
+  REGEXP_EXTRACT_ALL(str,'ab{0,2}cd') AS m4
+FROM (
+  VALUES ('acd'), ('abcd'), ('abcdacd'), ('abbcd'), ('abbbcd'), ('ab1cd')
+) AS t(str)
+----
+acd	[]	[]	[]	[acd]
+abcd	[]	[abcd]	[abcd]	[abcd]
+abcdacd	[]	[abcd]	[abcd]	[abcd, acd]
+abbcd	[]	[abbcd]	[abbcd]	[abbcd]
+abbbcd	[abbbcd]	[abbbcd]	[]	[]
+ab1cd	[]	[]	[]	[]
+
+query IIIII
+SELECT str, 
+  REGEXP_EXTRACT_ALL(str,'(ab){2}cd')   AS m1,
+  REGEXP_EXTRACT_ALL(str,'(ab){1,}cd')  AS m2,
+  REGEXP_EXTRACT_ALL(str,'(ab){1,2}cd') AS m3,
+  REGEXP_EXTRACT_ALL(str,'(ab){0,2}cd') AS m4
+FROM (
+  VALUES ('acd'), ('bcd'),('abcd'), ('abbcd'), ('ababcd'), ('ab1cd')
+) AS t(str)
+----
+acd	[]	[]	[]	[cd]
+bcd	[]	[]	[]	[cd]
+abcd	[]	[abcd]	[abcd]	[abcd]
+abbcd	[]	[]	[]	[cd]
+ababcd	[ababcd]	[ababcd]	[ababcd]	[ababcd]
+ab1cd	[]	[]	[]	[cd]
+
+query IIIIII
+SELECT str, 
+  REGEXP_EXTRACT_ALL(str,'[\d]{3}')   AS m1,
+  REGEXP_EXTRACT_ALL(str,'[\d]{5}')   AS m2,
+  REGEXP_EXTRACT_ALL(str,'[\d]{1,}')  AS m3,
+  REGEXP_EXTRACT_ALL(str,'[\d]{1,2}') AS m4,
+  REGEXP_EXTRACT_ALL(str,'[\d]{0,2}') AS m5
+FROM (
+  VALUES ('03-123-4567')
+) AS t(str)
+----
+03-123-4567	[123, 456]	[]	[03, 123, 4567]	[03, 12, 3, 45, 67]	[03, , 12, 3, , 45, 67, ]
+
+statement error
+SELECT str, 
+  REGEXP_EXTRACT_ALL(str,'ab++') AS m1_long, 
+FROM (
+  VALUES ('acd'), ('abcd'), ('abbcd'), ('abbbcd')
+) AS t(str)
+----
+Invalid Input Error: Pattern failed to parse, error: 'bad repetition operator: ++'
+
+query IIIIIII
+SELECT
+ REGEXP_EXTRACT_ALL('123456789', '^[0-9]*$') AS m1,
+ REGEXP_EXTRACT_ALL('abcdefg', '^[a-z]*$') AS m2,
+ REGEXP_EXTRACT_ALL('ABCDEFG', '^[A-Z]*$') AS m3,
+ REGEXP_EXTRACT_ALL('ABCdefg', '^[a-zA-Z]*$') AS m4,
+ REGEXP_EXTRACT_ALL('12aaAA', '^[0-9a-zA-Z]*$') AS m5,
+ REGEXP_EXTRACT_ALL('123-1234', '^[0-9]{3}-[0-9]{4}$') AS m6,
+ REGEXP_EXTRACT_ALL('2009/7/29', '^[0-9]{4}/[01]?[0-9]/[0123]?[0-9]$') AS m7
+----
+[123456789]	[abcdefg]	[ABCDEFG]	[ABCdefg]	[12aaAA]	[123-1234]	[2009/7/29]
+
+query III
+WITH sample AS
+( 
+  SELECT s FROM
+  ( 
+    VALUES 
+    ('https://docs.fluentd.org/v0.12/articles/out_file'),
+    ('https://docs.fluentd.org/v0.12/articles/out_forward'),
+    ('https://www.fluentd.org/v0.12/articles/out_file'),
+    ('out_file/article/docs.fluentd.org/')
+  ) AS t(s)
+)
+SELECT
+  s, REGEXP_EXTRACT_ALL(s,'docs.fluentd.org.*out_file') AS match_strs1,
+     REGEXP_EXTRACT_ALL(s,'docs.fluentd.org|out_file') AS match_strs2
+FROM sample
+----
+https://docs.fluentd.org/v0.12/articles/out_file	[docs.fluentd.org/v0.12/articles/out_file]	[docs.fluentd.org, out_file]
+https://docs.fluentd.org/v0.12/articles/out_forward	[]	[docs.fluentd.org]
+https://www.fluentd.org/v0.12/articles/out_file	[]	[out_file]
+out_file/article/docs.fluentd.org/	[]	[out_file, docs.fluentd.org]
+
+statement error
+select REGEXP_EXTRACT_ALL('hello', '.', 2);
+----
+Pattern has 0 groups. Cannot access group 2
+
+query II
+SELECT
+  REGEXP_EXTRACT_ALL('https://www.emakina.nl/?utm_source=sf_mail&user_id=7h87hte51kj_9866c', '([^\?&]+)=') AS parameter_key,
+  REGEXP_EXTRACT_ALL('https://www.emakina.nl/?utm_source=sf_mail&user_id=7h87hte51kj_9866c', '=([^&]+)') AS parameter_value 
+----
+[utm_source=, user_id=]	[=sf_mail, =7h87hte51kj_9866c]
+
+# Double anchor:
+query I
+select regexp_extract_all('si1si2', 'si\d$');
+----
+[si2]
+
+query I
+select regexp_extract_all('si1si2', '^(si\d)(?:.*)$', 1);
+----
+[si1]
+
+query I
+select regexp_extract_all('aabb', '^((aa)(bb))$', 3);
+----
+[bb]
+
+# Different size patterns
+query I
+WITH t(pattern) AS (
+    VALUES
+		(NULL),
+		('(a)'),
+		('(a)(a)(a)'),
+		('()'),
+		('(a)(a)'),
+		(NULL),
+		('(a)'),
+		('(a)(b)?(a)'),
+		('(a)(a)(a)(a)(a)(a)(a)'),
+		(NULL),
+)
+select regexp_extract_all('aaaaaaaa', pattern) from t;
+----
+NULL
+[a, a, a, a, a, a, a, a]
+[aaa, aaa]
+[, , , , , , , , ]
+[aa, aa, aa, aa]
+NULL
+[a, a, a, a, a, a, a, a]
+[aa, aa, aa, aa]
+[aaaaaaa]
+NULL
+
+query I
+WITH t(input, pattern, g) AS (
+    VALUES
+		(NULL, NULL, 0),
+		(NULL, NULL, 1),
+		('aaaaaaaa', '(a)', 0),
+		('aaaaaaaa', '(a)(a)(a)', 0),
+		('aaaaaaaa', '()', 1),
+		('aaaaaaaa', '(a)(a)', 0),
+		(NULL, NULL, NULL),
+		('aaaaaaaa', '(a)', 0),
+		('aaaaaaaa', '(a)(b)?(a)', NULL),
+		('aaa', '(a)(a)(a)(a)(a)(a)(a)', 0),
+		('aaaaaaaaaaa', '(a)(a)(a)(a)(a)(a)(a)', 0),
+		(NULL, '()', NULL)
+)
+select regexp_extract_all(input, pattern, g) from t;
+----
+NULL
+NULL
+[a, a, a, a, a, a, a, a]
+[aaa, aaa]
+[, , , , , , , , ]
+[aa, aa, aa, aa]
+NULL
+[a, a, a, a, a, a, a, a]
+NULL
+[]
+[aaaaaaa]
+NULL
+
+# With regex options
+
+query I
+select regexp_extract_all('foobarbaz', '(BA[R|Z])', 1, 'i');
+----
+[bar, baz]
+
+query I
+WITH t(input, pattern, g) AS (
+    VALUES
+		(NULL, NULL, 0),
+		(NULL, NULL, 1),
+		('aaaaaaaa', '(A)', 0),
+		('aaaaaaaa', '(a)(A)(a)', 0),
+		('aaaaaaaa', '()', 1),
+		('aaaaaaaa', '(a)(A)', 0),
+		(NULL, NULL, NULL),
+		('aaaaaaaa', '(a)', 0),
+		('aaaaaaaa', '(a)(B)?(a)', NULL),
+		('aaa', '(a)(a)(A)(A)(a)(A)(a)', 0),
+		('aaaaaaaaaaa', '(a)(A)(a)(a)(a)(a)(a)', 0),
+		(NULL, '()', NULL)
+)
+select regexp_extract_all(input, pattern, g, 'i') from t;
+----
+NULL
+NULL
+[a, a, a, a, a, a, a, a]
+[aaa, aaa]
+[, , , , , , , , ]
+[aa, aa, aa, aa]
+NULL
+[a, a, a, a, a, a, a, a]
+NULL
+[]
+[aaaaaaa]
+NULL
+

@@ -4,7 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
-void AssertDecimalValueMatches(unique_ptr<CAPIResult> &result, duckdb_decimal expected) {
+void AssertDecimalValueMatches(duckdb::unique_ptr<CAPIResult> &result, duckdb_decimal expected) {
 	duckdb_decimal actual;
 
 	actual = result->Fetch<duckdb_decimal>(0, 0);
@@ -21,7 +21,7 @@ void TestAppendingSingleDecimalValue(TYPE value, duckdb_decimal expected, uint8_
 	expected.scale = scale;
 
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 	duckdb_state status;
 
 	// open the database in in-memory mode
@@ -90,7 +90,7 @@ TEST_CASE("Test appending into DECIMAL in C API", "[capi]") {
 
 TEST_CASE("Test appender statements in C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 	duckdb_state status;
 
 	// open the database in in-memory mode
@@ -476,7 +476,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 
 TEST_CASE("Test append timestamp in C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 	duckdb_state status;
 
 	// open the database in in-memory mode

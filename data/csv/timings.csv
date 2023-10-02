@@ -1,0 +1,1096 @@
+tool|sf|day|batch_type|q|parameters|time
+Umbra|100|2012-11-29|power|q4precomputation||1.6661677360534668
+Umbra|100|2012-11-29|power|q6precomputation||1.0260441303253174
+Umbra|100|2012-11-29|power|q19precomputation||7.383813858032227
+Umbra|100|2012-11-29|power|q20precomputation||1.7466752529144287
+Umbra|100|2012-11-29|power|writes||14.66388201713562
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-08-01T12:12:48.000+00:00"}|0.05486106872558594
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-06-11T09:21:46.000+00:00"}|0.05437922477722168
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-02-26T03:51:21.000+00:00"}|0.05473947525024414
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-08-04T10:58:09.000+00:00"}|0.0544126033782959
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-07-21T06:06:50.000+00:00"}|0.05519294738769531
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-07-02T14:38:15.000+00:00"}|0.05507397651672363
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-06-07T04:40:58.000+00:00"}|0.0542600154876709
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-06-24T05:17:38.000+00:00"}|0.054059743881225586
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-06-19T18:42:23.000+00:00"}|0.05461430549621582
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-07-03T22:34:42.000+00:00"}|0.0544588565826416
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-08-08T14:38:58.000+00:00"}|0.05538368225097656
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-05-21T03:03:17.000+00:00"}|0.05382847785949707
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-07-04T05:29:09.000+00:00"}|0.05422568321228027
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-04-06T18:42:58.000+00:00"}|0.05379152297973633
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-07-11T07:55:19.000+00:00"}|0.0552668571472168
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-07-19T16:16:56.000+00:00"}|0.05458831787109375
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-06-01T09:09:15.000+00:00"}|0.05640769004821777
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-05-31T02:14:48.000+00:00"}|0.05490612983703613
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-04-28T07:55:54.000+00:00"}|0.053754329681396484
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-06-18T11:47:56.000+00:00"}|0.05511975288391113
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-08-09T22:34:25.000+00:00"}|0.05575156211853027
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-06-06T21:45:30.000+00:00"}|0.05472111701965332
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-06-05T14:50:03.000+00:00"}|0.055161476135253906
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-04-18T07:43:23.000+00:00"}|0.05398225784301758
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-06-12T16:16:13.000+00:00"}|0.055385589599609375
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-08-16T00:00:34.000+00:00"}|0.05484771728515625
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-08-07T07:43:30.000+00:00"}|0.05618715286254883
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-07-17T01:25:01.000+00:00"}|0.05601620674133301
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-05-29T12:24:54.000+00:00"}|0.05434107780456543
+Umbra|100|2012-11-29|power|1|{"datetime": "2010-05-26T14:38:32.000+00:00"}|0.05460762977600098
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-08", "tagClass": "ChristianBishop"}|0.05144762992858887
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-11", "tagClass": "OfficeHolder"}|0.17173385620117188
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-06", "tagClass": "Album"}|0.20615720748901367
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-18", "tagClass": "Song"}|0.07800769805908203
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-11", "tagClass": "Person"}|0.2044835090637207
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-22", "tagClass": "MilitaryPerson"}|0.04892253875732422
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-23", "tagClass": "ChristianBishop"}|0.04807567596435547
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-07", "tagClass": "Thing"}|0.05856180191040039
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-16", "tagClass": "Song"}|0.0776522159576416
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-05", "tagClass": "President"}|0.0688636302947998
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-20", "tagClass": "ChristianBishop"}|0.050917863845825195
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-16", "tagClass": "TennisPlayer"}|0.08922028541564941
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-10", "tagClass": "Philosopher"}|0.07817411422729492
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-24", "tagClass": "Philosopher"}|0.0783078670501709
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-10", "tagClass": "OfficeHolder"}|0.17238974571228027
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-15", "tagClass": "Philosopher"}|0.07959246635437012
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-13", "tagClass": "Artist"}|0.05978798866271973
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-19", "tagClass": "TennisPlayer"}|0.07889986038208008
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-21", "tagClass": "Song"}|0.0777750015258789
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-07", "tagClass": "SoccerPlayer"}|0.03196597099304199
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-06", "tagClass": "MusicalArtist"}|0.19579172134399414
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-23", "tagClass": "TennisPlayer"}|0.08102297782897949
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-16", "tagClass": "Person"}|0.20352959632873535
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-08", "tagClass": "Thing"}|0.05951046943664551
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-15", "tagClass": "MusicalArtist"}|0.18851184844970703
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-08", "tagClass": "Person"}|0.20758676528930664
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-11", "tagClass": "Artist"}|0.05505943298339844
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-23", "tagClass": "BritishRoyalty"}|0.12690019607543945
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-18", "tagClass": "SoccerPlayer"}|0.032733917236328125
+Umbra|100|2012-11-29|power|2a|{"date": "2010-06-23", "tagClass": "MilitaryPerson"}|0.04978513717651367
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-08", "tagClass": "ChristianBishop"}|0.05180525779724121
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-06", "tagClass": "Senator"}|0.037996530532836914
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-07", "tagClass": "ComicsCharacter"}|0.03731274604797363
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-22", "tagClass": "IceHockeyPlayer"}|0.028812170028686523
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-20", "tagClass": "Comedian"}|0.04572629928588867
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-10", "tagClass": "EurovisionSongContestEntry"}|0.03287935256958008
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-22", "tagClass": "MilitaryPerson"}|0.05068016052246094
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-17", "tagClass": "PrimeMinister"}|0.04036259651184082
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-23", "tagClass": "ChristianBishop"}|0.048662662506103516
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-20", "tagClass": "ChristianBishop"}|0.05007624626159668
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-22", "tagClass": "GolfPlayer"}|0.02983999252319336
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-23", "tagClass": "IceHockeyPlayer"}|0.03107142448425293
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-16", "tagClass": "Chancellor"}|0.030387163162231445
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-13", "tagClass": "Artist"}|0.05457639694213867
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-07", "tagClass": "ComicsCreator"}|0.03524637222290039
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-24", "tagClass": "Chancellor"}|0.029285669326782227
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-23", "tagClass": "ComicsCharacter"}|0.037711381912231445
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-23", "tagClass": "Governor"}|0.03232741355895996
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-07", "tagClass": "Comedian"}|0.04650259017944336
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-05", "tagClass": "Architect"}|0.03366494178771973
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-22", "tagClass": "ComicsCreator"}|0.03576493263244629
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-18", "tagClass": "BasketballPlayer"}|0.029526472091674805
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-15", "tagClass": "ComicsCreator"}|0.03588128089904785
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-11", "tagClass": "Artist"}|0.05710577964782715
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-23", "tagClass": "MilitaryPerson"}|0.0492558479309082
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-05", "tagClass": "EurovisionSongContestEntry"}|0.03216361999511719
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-19", "tagClass": "Senator"}|0.03587651252746582
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-10", "tagClass": "PrimeMinister"}|0.03995347023010254
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-14", "tagClass": "ComicsCharacter"}|0.03710126876831055
+Umbra|100|2012-11-29|power|2b|{"date": "2010-06-19", "tagClass": "ChristianBishop"}|0.050336599349975586
+Umbra|100|2012-11-29|power|3|{"tagClass": "Song", "country": "China"}|0.19637703895568848
+Umbra|100|2012-11-29|power|3|{"tagClass": "President", "country": "India"}|0.183363676071167
+Umbra|100|2012-11-29|power|3|{"tagClass": "Saint", "country": "India"}|0.17427802085876465
+Umbra|100|2012-11-29|power|3|{"tagClass": "Philosopher", "country": "China"}|0.16712474822998047
+Umbra|100|2012-11-29|power|3|{"tagClass": "Monarch", "country": "China"}|0.16509222984313965
+Umbra|100|2012-11-29|power|3|{"tagClass": "TennisPlayer", "country": "India"}|0.16777420043945312
+Umbra|100|2012-11-29|power|3|{"tagClass": "Thing", "country": "China"}|0.15523862838745117
+Umbra|100|2012-11-29|power|3|{"tagClass": "Scientist", "country": "India"}|0.15558528900146484
+Umbra|100|2012-11-29|power|3|{"tagClass": "Artist", "country": "China"}|0.15496015548706055
+Umbra|100|2012-11-29|power|3|{"tagClass": "BaseballPlayer", "country": "China"}|0.14927268028259277
+Umbra|100|2012-11-29|power|3|{"tagClass": "ChristianBishop", "country": "China"}|0.16272783279418945
+Umbra|100|2012-11-29|power|3|{"tagClass": "MilitaryPerson", "country": "India"}|0.16923022270202637
+Umbra|100|2012-11-29|power|3|{"tagClass": "Comedian", "country": "China"}|0.14933204650878906
+Umbra|100|2012-11-29|power|3|{"tagClass": "FictionalCharacter", "country": "India"}|0.15170598030090332
+Umbra|100|2012-11-29|power|3|{"tagClass": "PrimeMinister", "country": "China"}|0.16362571716308594
+Umbra|100|2012-11-29|power|3|{"tagClass": "ComicsCreator", "country": "India"}|0.1497058868408203
+Umbra|100|2012-11-29|power|3|{"tagClass": "Cricketer", "country": "China"}|0.14982938766479492
+Umbra|100|2012-11-29|power|3|{"tagClass": "ComicsCharacter", "country": "China"}|0.14971089363098145
+Umbra|100|2012-11-29|power|3|{"tagClass": "Actor", "country": "China"}|0.15144562721252441
+Umbra|100|2012-11-29|power|3|{"tagClass": "Senator", "country": "India"}|0.15906262397766113
+Umbra|100|2012-11-29|power|3|{"tagClass": "SoccerPlayer", "country": "China"}|0.1514415740966797
+Umbra|100|2012-11-29|power|3|{"tagClass": "Politician", "country": "India"}|0.1698760986328125
+Umbra|100|2012-11-29|power|3|{"tagClass": "IceHockeyPlayer", "country": "India"}|0.15062618255615234
+Umbra|100|2012-11-29|power|3|{"tagClass": "Governor", "country": "India"}|0.15102148056030273
+Umbra|100|2012-11-29|power|3|{"tagClass": "Architect", "country": "China"}|0.15354704856872559
+Umbra|100|2012-11-29|power|3|{"tagClass": "Company", "country": "India"}|0.16050338745117188
+Umbra|100|2012-11-29|power|3|{"tagClass": "EurovisionSongContestEntry", "country": "India"}|0.14644527435302734
+Umbra|100|2012-11-29|power|3|{"tagClass": "Boxer", "country": "China"}|0.1468813419342041
+Umbra|100|2012-11-29|power|3|{"tagClass": "Athlete", "country": "India"}|0.14774847030639648
+Umbra|100|2012-11-29|power|3|{"tagClass": "FormulaOneRacer", "country": "India"}|0.1490786075592041
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-07"}|0.06547069549560547
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-10"}|0.06455206871032715
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-26"}|0.0662987232208252
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-11"}|0.06487584114074707
+Umbra|100|2012-11-29|power|4|{"date": "2010-02-06"}|0.067596435546875
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-24"}|0.06644964218139648
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-03"}|0.06788134574890137
+Umbra|100|2012-11-29|power|4|{"date": "2010-02-08"}|0.06498384475708008
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-15"}|0.06612205505371094
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-31"}|0.06449246406555176
+Umbra|100|2012-11-29|power|4|{"date": "2010-02-04"}|0.07789278030395508
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-01"}|0.06495380401611328
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-05"}|0.0658257007598877
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-04"}|0.06613826751708984
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-16"}|0.06484723091125488
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-18"}|0.06449151039123535
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-25"}|0.06583547592163086
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-19"}|0.0648198127746582
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-29"}|0.0664072036743164
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-22"}|0.0643925666809082
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-14"}|0.06675148010253906
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-28"}|0.0647127628326416
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-30"}|0.0669395923614502
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-17"}|0.0655052661895752
+Umbra|100|2012-11-29|power|4|{"date": "2010-02-09"}|0.06680512428283691
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-21"}|0.06589031219482422
+Umbra|100|2012-11-29|power|4|{"date": "2010-02-02"}|0.06562495231628418
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-12"}|0.06475496292114258
+Umbra|100|2012-11-29|power|4|{"date": "2010-02-01"}|0.06460070610046387
+Umbra|100|2012-11-29|power|4|{"date": "2010-01-23"}|0.06549310684204102
+Umbra|100|2012-11-29|power|5|{"tag": "Republic_of_New_Granada"}|0.0876626968383789
+Umbra|100|2012-11-29|power|5|{"tag": "Party_in_the_U.S.A."}|0.08887124061584473
+Umbra|100|2012-11-29|power|5|{"tag": "Rivers_of_Babylon"}|0.09019899368286133
+Umbra|100|2012-11-29|power|5|{"tag": "Hot_n_Cold"}|0.09461212158203125
+Umbra|100|2012-11-29|power|5|{"tag": "Fresh_Cream"}|0.09483933448791504
+Umbra|100|2012-11-29|power|5|{"tag": "Under_Cover"}|0.09639096260070801
+Umbra|100|2012-11-29|power|5|{"tag": "David_Ortiz"}|0.08587050437927246
+Umbra|100|2012-11-29|power|5|{"tag": "Liao_Dynasty"}|0.08612751960754395
+Umbra|100|2012-11-29|power|5|{"tag": "Seven_Nation_Army"}|0.08235883712768555
+Umbra|100|2012-11-29|power|5|{"tag": "Islands_in_the_Stream"}|0.09528565406799316
+Umbra|100|2012-11-29|power|5|{"tag": "Kadamba_Dynasty"}|0.08429098129272461
+Umbra|100|2012-11-29|power|5|{"tag": "Trilogy:_Past_Present_Future"}|0.0880594253540039
+Umbra|100|2012-11-29|power|5|{"tag": "Funkytown"}|0.09642410278320312
+Umbra|100|2012-11-29|power|5|{"tag": "Their_Satanic_Majesties_Request"}|0.08055877685546875
+Umbra|100|2012-11-29|power|5|{"tag": "Chattanooga_Choo_Choo"}|0.09810471534729004
+Umbra|100|2012-11-29|power|5|{"tag": "Me_and_Bobby_McGee"}|0.100067138671875
+Umbra|100|2012-11-29|power|5|{"tag": "Some_Enchanted_Evening"}|0.08358359336853027
+Umbra|100|2012-11-29|power|5|{"tag": "West_End_Girls"}|0.08281135559082031
+Umbra|100|2012-11-29|power|5|{"tag": "Sticky_Fingers"}|0.08610105514526367
+Umbra|100|2012-11-29|power|5|{"tag": "Wheels_of_Fire"}|0.08260440826416016
+Umbra|100|2012-11-29|power|5|{"tag": "Crocodile_Rock"}|0.08749628067016602
+Umbra|100|2012-11-29|power|5|{"tag": "The_Lamb_Lies_Down_on_Broadway"}|0.08701801300048828
+Umbra|100|2012-11-29|power|5|{"tag": "Kingdom_of_Westphalia"}|0.08797216415405273
+Umbra|100|2012-11-29|power|5|{"tag": "Punk_in_Drublic"}|0.09466123580932617
+Umbra|100|2012-11-29|power|5|{"tag": "Viva_Hate"}|0.08290672302246094
+Umbra|100|2012-11-29|power|5|{"tag": "Streets_of_Philadelphia"}|0.0836334228515625
+Umbra|100|2012-11-29|power|5|{"tag": "Upside_Down"}|0.09654688835144043
+Umbra|100|2012-11-29|power|5|{"tag": "Illmatic"}|0.08420372009277344
+Umbra|100|2012-11-29|power|5|{"tag": "Two_Tribes"}|0.10084724426269531
+Umbra|100|2012-11-29|power|5|{"tag": "Emilio_Aguinaldo"}|0.08353900909423828
+Umbra|100|2012-11-29|power|6|{"tag": "All_by_Myself"}|0.06312370300292969
+Umbra|100|2012-11-29|power|6|{"tag": "Sikh_Empire"}|0.0694270133972168
+Umbra|100|2012-11-29|power|6|{"tag": "Lee_Hyung-taik"}|0.07108521461486816
+Umbra|100|2012-11-29|power|6|{"tag": "German_colonial_empire"}|0.06218695640563965
+Umbra|100|2012-11-29|power|6|{"tag": "French_Union"}|0.07366704940795898
+Umbra|100|2012-11-29|power|6|{"tag": "Hohenzollern-Sigmaringen"}|0.07218766212463379
+Umbra|100|2012-11-29|power|6|{"tag": "Principality_of_Antioch"}|0.06207394599914551
+Umbra|100|2012-11-29|power|6|{"tag": "Lady_Marmalade"}|0.07838702201843262
+Umbra|100|2012-11-29|power|6|{"tag": "Sweetheart_of_the_Rodeo"}|0.06060028076171875
+Umbra|100|2012-11-29|power|6|{"tag": "Seventeen_Provinces"}|0.06879663467407227
+Umbra|100|2012-11-29|power|6|{"tag": "The_Division_Bell"}|0.058626651763916016
+Umbra|100|2012-11-29|power|6|{"tag": "Band_of_Gypsys"}|0.058271169662475586
+Umbra|100|2012-11-29|power|6|{"tag": "Exile_on_Main_St."}|0.059758663177490234
+Umbra|100|2012-11-29|power|6|{"tag": "The_Eminem_Show"}|0.05812978744506836
+Umbra|100|2012-11-29|power|6|{"tag": "Khanate_of_Kazan"}|0.05997872352600098
+Umbra|100|2012-11-29|power|6|{"tag": "Paul_Keres"}|0.057065486907958984
+Umbra|100|2012-11-29|power|6|{"tag": "George_Bentham"}|0.05991935729980469
+Umbra|100|2012-11-29|power|6|{"tag": "Ayutthaya_Kingdom"}|0.07934379577636719
+Umbra|100|2012-11-29|power|6|{"tag": "Colonel_Bogey_March"}|0.05849933624267578
+Umbra|100|2012-11-29|power|6|{"tag": "Bad_Romance"}|0.05930900573730469
+Umbra|100|2012-11-29|power|6|{"tag": "Manny_Ramirez"}|0.055696964263916016
+Umbra|100|2012-11-29|power|6|{"tag": "Appetite_for_Destruction"}|0.05825948715209961
+Umbra|100|2012-11-29|power|6|{"tag": "Roll_Over_Beethoven"}|0.0601046085357666
+Umbra|100|2012-11-29|power|6|{"tag": "French_Somaliland"}|0.06696438789367676
+Umbra|100|2012-11-29|power|6|{"tag": "Frisia"}|0.06310009956359863
+Umbra|100|2012-11-29|power|6|{"tag": "Beautiful_Day"}|0.05994558334350586
+Umbra|100|2012-11-29|power|6|{"tag": "Xiongnu"}|0.05804276466369629
+Umbra|100|2012-11-29|power|6|{"tag": "Czechoslovak_Socialist_Republic"}|0.062053680419921875
+Umbra|100|2012-11-29|power|6|{"tag": "In_Rainbows"}|0.05944013595581055
+Umbra|100|2012-11-29|power|6|{"tag": "Coolio"}|0.11777687072753906
+Umbra|100|2012-11-29|power|7|{"tag": "Jacques_Chirac"}|0.09360384941101074
+Umbra|100|2012-11-29|power|7|{"tag": "Slovenia"}|0.09502530097961426
+Umbra|100|2012-11-29|power|7|{"tag": "Al_Gore"}|0.09334158897399902
+Umbra|100|2012-11-29|power|7|{"tag": "W._B._Yeats"}|0.09715509414672852
+Umbra|100|2012-11-29|power|7|{"tag": "Nicolas_Sarkozy"}|0.09699153900146484
+Umbra|100|2012-11-29|power|7|{"tag": "Niccol\u00f2_Machiavelli"}|0.09673285484313965
+Umbra|100|2012-11-29|power|7|{"tag": "Luxembourg"}|0.0968942642211914
+Umbra|100|2012-11-29|power|7|{"tag": "Mohammad_Reza_Pahlavi"}|0.10423517227172852
+Umbra|100|2012-11-29|power|7|{"tag": "Richard_Strauss"}|0.09379982948303223
+Umbra|100|2012-11-29|power|7|{"tag": "John_the_Baptist"}|0.0959925651550293
+Umbra|100|2012-11-29|power|7|{"tag": "Muhammad"}|0.10346245765686035
+Umbra|100|2012-11-29|power|7|{"tag": "Joni_Mitchell"}|0.10059452056884766
+Umbra|100|2012-11-29|power|7|{"tag": "Alfred_Hitchcock"}|0.09548664093017578
+Umbra|100|2012-11-29|power|7|{"tag": "Michelangelo"}|0.09563255310058594
+Umbra|100|2012-11-29|power|7|{"tag": "Czechoslovakia"}|0.09229755401611328
+Umbra|100|2012-11-29|power|7|{"tag": "Henry_II_of_England"}|0.09414219856262207
+Umbra|100|2012-11-29|power|7|{"tag": "Thailand"}|0.09883356094360352
+Umbra|100|2012-11-29|power|7|{"tag": "Robert_Louis_Stevenson"}|0.0901191234588623
+Umbra|100|2012-11-29|power|7|{"tag": "Republic_of_Ireland"}|0.09635591506958008
+Umbra|100|2012-11-29|power|7|{"tag": "Bertolt_Brecht"}|0.09288454055786133
+Umbra|100|2012-11-29|power|7|{"tag": "Vladimir_Nabokov"}|0.0920705795288086
+Umbra|100|2012-11-29|power|7|{"tag": "Galileo_Galilei"}|0.1071164608001709
+Umbra|100|2012-11-29|power|7|{"tag": "Jamaica"}|0.09558272361755371
+Umbra|100|2012-11-29|power|7|{"tag": "Dominican_Republic"}|0.1041419506072998
+Umbra|100|2012-11-29|power|7|{"tag": "Ulysses_S._Grant"}|0.09434270858764648
+Umbra|100|2012-11-29|power|7|{"tag": "Isaac_Asimov"}|0.09312033653259277
+Umbra|100|2012-11-29|power|7|{"tag": "Bing_Crosby"}|0.0929710865020752
+Umbra|100|2012-11-29|power|7|{"tag": "Fyodor_Dostoyevsky"}|0.09189462661743164
+Umbra|100|2012-11-29|power|7|{"tag": "Johnny_Cash"}|0.09078288078308105
+Umbra|100|2012-11-29|power|7|{"tag": "Iran"}|0.09504413604736328
+Umbra|100|2012-11-29|power|8a|{"tag": "Jack_Kerouac", "startDate": "2010-06-12", "endDate": "2010-06-23"}|0.04077744483947754
+Umbra|100|2012-11-29|power|8a|{"tag": "William_Faulkner", "startDate": "2010-06-08", "endDate": "2010-06-21"}|0.04169130325317383
+Umbra|100|2012-11-29|power|8a|{"tag": "James_Bond", "startDate": "2010-06-14", "endDate": "2010-06-24"}|0.06813788414001465
+Umbra|100|2012-11-29|power|8a|{"tag": "Herman_Melville", "startDate": "2010-06-12", "endDate": "2010-06-23"}|0.0428922176361084
+Umbra|100|2012-11-29|power|8a|{"tag": "Mick_Jagger", "startDate": "2010-06-07", "endDate": "2010-06-18"}|0.044217824935913086
+Umbra|100|2012-11-29|power|8a|{"tag": "Carlos_Santana", "startDate": "2010-06-13", "endDate": "2010-06-26"}|0.03895831108093262
+Umbra|100|2012-11-29|power|8a|{"tag": "Aung_San_Suu_Kyi", "startDate": "2010-06-23", "endDate": "2010-07-06"}|0.06740760803222656
+Umbra|100|2012-11-29|power|8a|{"tag": "Iran", "startDate": "2010-06-15", "endDate": "2010-06-27"}|0.06810688972473145
+Umbra|100|2012-11-29|power|8a|{"tag": "Virginia_Woolf", "startDate": "2010-06-16", "endDate": "2010-06-30"}|0.0741117000579834
+Umbra|100|2012-11-29|power|8a|{"tag": "Latvia", "startDate": "2010-06-14", "endDate": "2010-06-24"}|0.06008744239807129
+Umbra|100|2012-11-29|power|8a|{"tag": "Hans_Christian_Andersen", "startDate": "2010-06-23", "endDate": "2010-07-06"}|0.06515288352966309
+Umbra|100|2012-11-29|power|8a|{"tag": "Bono", "startDate": "2010-06-16", "endDate": "2010-06-30"}|0.06595230102539062
+Umbra|100|2012-11-29|power|8a|{"tag": "Cambodia", "startDate": "2010-06-12", "endDate": "2010-06-23"}|0.03668022155761719
+Umbra|100|2012-11-29|power|8a|{"tag": "Graham_Greene", "startDate": "2010-06-08", "endDate": "2010-06-21"}|0.051906585693359375
+Umbra|100|2012-11-29|power|8a|{"tag": "Hugo_Ch\u00e1vez", "startDate": "2010-06-16", "endDate": "2010-06-30"}|0.0730440616607666
+Umbra|100|2012-11-29|power|8a|{"tag": "Saint_George", "startDate": "2010-06-21", "endDate": "2010-07-05"}|0.06505203247070312
+Umbra|100|2012-11-29|power|8a|{"tag": "William_Wordsworth", "startDate": "2010-06-05", "endDate": "2010-06-17"}|0.04232311248779297
+Umbra|100|2012-11-29|power|8a|{"tag": "El_Salvador", "startDate": "2010-06-08", "endDate": "2010-06-21"}|0.03807187080383301
+Umbra|100|2012-11-29|power|8a|{"tag": "Grover_Cleveland", "startDate": "2010-06-11", "endDate": "2010-06-25"}|0.04430365562438965
+Umbra|100|2012-11-29|power|8a|{"tag": "Henry_IV_of_France", "startDate": "2010-06-06", "endDate": "2010-06-20"}|0.04234623908996582
+Umbra|100|2012-11-29|power|8a|{"tag": "Mongolia", "startDate": "2010-06-16", "endDate": "2010-06-30"}|0.05822563171386719
+Umbra|100|2012-11-29|power|8a|{"tag": "Barbra_Streisand", "startDate": "2010-06-16", "endDate": "2010-06-30"}|0.06780338287353516
+Umbra|100|2012-11-29|power|8a|{"tag": "Germany", "startDate": "2010-06-23", "endDate": "2010-07-06"}|0.06354188919067383
+Umbra|100|2012-11-29|power|8a|{"tag": "George_Lucas", "startDate": "2010-06-06", "endDate": "2010-06-20"}|0.043000221252441406
+Umbra|100|2012-11-29|power|8a|{"tag": "Johnny_Cash", "startDate": "2010-06-12", "endDate": "2010-06-23"}|0.04423332214355469
+Umbra|100|2012-11-29|power|8a|{"tag": "Vladimir_Putin", "startDate": "2010-06-12", "endDate": "2010-06-23"}|0.04504990577697754
+Umbra|100|2012-11-29|power|8a|{"tag": "H._P._Lovecraft", "startDate": "2010-06-11", "endDate": "2010-06-25"}|0.04314136505126953
+Umbra|100|2012-11-29|power|8a|{"tag": "Ralph_Waldo_Emerson", "startDate": "2010-06-16", "endDate": "2010-06-30"}|0.07179641723632812
+Umbra|100|2012-11-29|power|8a|{"tag": "Singapore", "startDate": "2010-06-15", "endDate": "2010-06-27"}|0.06625628471374512
+Umbra|100|2012-11-29|power|8a|{"tag": "John_Calvin", "startDate": "2010-06-08", "endDate": "2010-06-21"}|0.04686117172241211
+Umbra|100|2012-11-29|power|8b|{"tag": "4_Way_Street", "startDate": "2010-06-22", "endDate": "2010-07-03"}|0.05946612358093262
+Umbra|100|2012-11-29|power|8b|{"tag": "18_til_I_Die", "startDate": "2010-06-18", "endDate": "2010-07-01"}|0.05842089653015137
+Umbra|100|2012-11-29|power|8b|{"tag": "...And_Then_There_Was_X", "startDate": "2010-06-18", "endDate": "2010-07-01"}|0.0648946762084961
+Umbra|100|2012-11-29|power|8b|{"tag": "18_and_Life", "startDate": "2010-06-20", "endDate": "2010-07-02"}|0.05806922912597656
+Umbra|100|2012-11-29|power|8b|{"tag": "12_Memories", "startDate": "2010-06-20", "endDate": "2010-07-02"}|0.05861401557922363
+Umbra|100|2012-11-29|power|8b|{"tag": "13_Ways_to_Bleed_on_Stage", "startDate": "2010-06-18", "endDate": "2010-07-01"}|0.06523847579956055
+Umbra|100|2012-11-29|power|8b|{"tag": "1962\u20131966", "startDate": "2010-06-20", "endDate": "2010-07-02"}|0.058564186096191406
+Umbra|100|2012-11-29|power|8b|{"tag": "20_Jazz_Funk_Greats", "startDate": "2010-06-18", "endDate": "2010-07-01"}|0.06051015853881836
+Umbra|100|2012-11-29|power|8b|{"tag": "1958_Miles", "startDate": "2010-06-07", "endDate": "2010-06-18"}|0.03440427780151367
+Umbra|100|2012-11-29|power|8b|{"tag": "100th_Window", "startDate": "2010-06-22", "endDate": "2010-07-03"}|0.060193777084350586
+Umbra|100|2012-11-29|power|8b|{"tag": "1958_Miles", "startDate": "2010-06-11", "endDate": "2010-06-25"}|0.033120155334472656
+Umbra|100|2012-11-29|power|8b|{"tag": "13_Ways_to_Bleed_on_Stage", "startDate": "2010-06-22", "endDate": "2010-07-03"}|0.0638887882232666
+Umbra|100|2012-11-29|power|8b|{"tag": "1958_Miles", "startDate": "2010-06-12", "endDate": "2010-06-23"}|0.03363943099975586
+Umbra|100|2012-11-29|power|8b|{"tag": "14_Shades_of_Grey", "startDate": "2010-06-23", "endDate": "2010-07-06"}|0.07177996635437012
+Umbra|100|2012-11-29|power|8b|{"tag": "13_Songs", "startDate": "2010-06-23", "endDate": "2010-07-06"}|0.059003353118896484
+Umbra|100|2012-11-29|power|8b|{"tag": "1958_Miles", "startDate": "2010-06-09", "endDate": "2010-06-19"}|0.032601356506347656
+Umbra|100|2012-11-29|power|8b|{"tag": "...Something_to_Be", "startDate": "2010-06-22", "endDate": "2010-07-03"}|0.06322145462036133
+Umbra|100|2012-11-29|power|8b|{"tag": "24_Nights", "startDate": "2010-06-23", "endDate": "2010-07-06"}|0.058123111724853516
+Umbra|100|2012-11-29|power|8b|{"tag": "1958_Miles", "startDate": "2010-06-10", "endDate": "2010-06-22"}|0.03428077697753906
+Umbra|100|2012-11-29|power|8b|{"tag": "2000_Light_Years_from_Home", "startDate": "2010-06-18", "endDate": "2010-07-01"}|0.05846691131591797
+Umbra|100|2012-11-29|power|8b|{"tag": "100th_Window", "startDate": "2010-06-24", "endDate": "2010-07-04"}|0.05769968032836914
+Umbra|100|2012-11-29|power|8b|{"tag": "200_Po_Vstrechnoy", "startDate": "2010-06-14", "endDate": "2010-06-24"}|0.058798789978027344
+Umbra|100|2012-11-29|power|8b|{"tag": "1967\u20131970", "startDate": "2010-06-17", "endDate": "2010-06-28"}|0.060964107513427734
+Umbra|100|2012-11-29|power|8b|{"tag": "30_Minutes", "startDate": "2010-06-08", "endDate": "2010-06-21"}|0.03314542770385742
+Umbra|100|2012-11-29|power|8b|{"tag": "100th_Window", "startDate": "2010-06-18", "endDate": "2010-07-01"}|0.056830644607543945
+Umbra|100|2012-11-29|power|8b|{"tag": "2_Become_1", "startDate": "2010-06-17", "endDate": "2010-06-28"}|0.058527469635009766
+Umbra|100|2012-11-29|power|8b|{"tag": "...And_the_Circus_Leaves_Town", "startDate": "2010-06-19", "endDate": "2010-06-29"}|0.05899214744567871
+Umbra|100|2012-11-29|power|8b|{"tag": "1_fille_&_4_types", "startDate": "2010-06-23", "endDate": "2010-07-06"}|0.058167219161987305
+Umbra|100|2012-11-29|power|8b|{"tag": "18_and_Life", "startDate": "2010-06-22", "endDate": "2010-07-03"}|0.05852699279785156
+Umbra|100|2012-11-29|power|8b|{"tag": "...But_Seriously", "startDate": "2010-06-24", "endDate": "2010-07-04"}|0.058730125427246094
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-08-29", "endDate": "2012-11-24"}|0.5481173992156982
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-09-04", "endDate": "2012-12-03"}|0.5417640209197998
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-09-03", "endDate": "2012-12-09"}|0.5512900352478027
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-09-02", "endDate": "2012-11-27"}|0.5320484638214111
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-09-02", "endDate": "2012-12-07"}|0.5543088912963867
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-08-31", "endDate": "2012-11-30"}|0.5499165058135986
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-09-02", "endDate": "2012-12-06"}|0.5488266944885254
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-08-30", "endDate": "2012-11-28"}|0.538677453994751
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-08-28", "endDate": "2012-12-02"}|0.5491900444030762
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-09-03", "endDate": "2012-11-29"}|0.5501701831817627
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-08-31", "endDate": "2012-12-01"}|0.5738334655761719
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-08-31", "endDate": "2012-12-10"}|0.5557489395141602
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-09-04", "endDate": "2012-11-23"}|0.5471529960632324
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-08-31", "endDate": "2012-12-11"}|0.5432350635528564
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-09-06", "endDate": "2012-11-29"}|0.5416779518127441
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-09-03", "endDate": "2012-11-30"}|0.5507299900054932
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-09-05", "endDate": "2012-11-25"}|0.5378146171569824
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-08-30", "endDate": "2012-12-07"}|0.5726430416107178
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-09-01", "endDate": "2012-11-24"}|0.5399887561798096
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-09-01", "endDate": "2012-11-23"}|0.5374267101287842
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-08-29", "endDate": "2012-12-05"}|0.5460038185119629
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-08-28", "endDate": "2012-11-22"}|0.5402805805206299
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-09-06", "endDate": "2012-12-09"}|0.5544760227203369
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-08-28", "endDate": "2012-12-01"}|0.5506958961486816
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-09-04", "endDate": "2012-11-22"}|0.5426609516143799
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-08-30", "endDate": "2012-12-08"}|0.5762147903442383
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-09-06", "endDate": "2012-11-28"}|0.5465314388275146
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-09-03", "endDate": "2012-12-10"}|0.5536520481109619
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-08-29", "endDate": "2012-12-04"}|0.5731079578399658
+Umbra|100|2012-11-29|power|9|{"startDate": "2012-09-05", "endDate": "2012-11-26"}|0.5412259101867676
+Umbra|100|2012-11-29|power|10a|{"personId": "100316", "country": "Australia", "tagClass": "NascarDriver", "minPathDistance": "3", "maxPathDistance": "4"}|0.33199238777160645
+Umbra|100|2012-11-29|power|10a|{"personId": "99220", "country": "Poland", "tagClass": "Architect", "minPathDistance": "3", "maxPathDistance": "4"}|0.2868330478668213
+Umbra|100|2012-11-29|power|10a|{"personId": "21055", "country": "Peru", "tagClass": "Senator", "minPathDistance": "3", "maxPathDistance": "4"}|0.3252744674682617
+Umbra|100|2012-11-29|power|10a|{"personId": "46904", "country": "Tunisia", "tagClass": "AmericanFootballPlayer", "minPathDistance": "3", "maxPathDistance": "4"}|0.2991938591003418
+Umbra|100|2012-11-29|power|10a|{"personId": "21055", "country": "Moldova", "tagClass": "NascarDriver", "minPathDistance": "3", "maxPathDistance": "4"}|0.3215293884277344
+Umbra|100|2012-11-29|power|10a|{"personId": "62306", "country": "Morocco", "tagClass": "Architect", "minPathDistance": "3", "maxPathDistance": "4"}|0.2874462604522705
+Umbra|100|2012-11-29|power|10a|{"personId": "66816", "country": "Peru", "tagClass": "BaseballPlayer", "minPathDistance": "3", "maxPathDistance": "4"}|0.3013651371002197
+Umbra|100|2012-11-29|power|10a|{"personId": "17096", "country": "Netherlands", "tagClass": "Saint", "minPathDistance": "3", "maxPathDistance": "4"}|0.3126213550567627
+Umbra|100|2012-11-29|power|10a|{"personId": "10979", "country": "Poland", "tagClass": "ComicsCreator", "minPathDistance": "3", "maxPathDistance": "4"}|0.34155821800231934
+Umbra|100|2012-11-29|power|10a|{"personId": "62306", "country": "Kazakhstan", "tagClass": "BasketballPlayer", "minPathDistance": "3", "maxPathDistance": "4"}|0.2748541831970215
+Umbra|100|2012-11-29|power|10a|{"personId": "127078", "country": "Tunisia", "tagClass": "Monarch", "minPathDistance": "3", "maxPathDistance": "4"}|0.366300106048584
+Umbra|100|2012-11-29|power|10a|{"personId": "64584", "country": "Malaysia", "tagClass": "Senator", "minPathDistance": "3", "maxPathDistance": "4"}|0.33397960662841797
+Umbra|100|2012-11-29|power|10a|{"personId": "135625", "country": "Morocco", "tagClass": "Cricketer", "minPathDistance": "3", "maxPathDistance": "4"}|0.30382704734802246
+Umbra|100|2012-11-29|power|10a|{"personId": "69546", "country": "Poland", "tagClass": "Politician", "minPathDistance": "3", "maxPathDistance": "4"}|0.3045947551727295
+Umbra|100|2012-11-29|power|10a|{"personId": "83381", "country": "Poland", "tagClass": "Architect", "minPathDistance": "3", "maxPathDistance": "4"}|0.3280661106109619
+Umbra|100|2012-11-29|power|10a|{"personId": "17096", "country": "Madagascar", "tagClass": "AmericanFootballPlayer", "minPathDistance": "3", "maxPathDistance": "4"}|0.29750633239746094
+Umbra|100|2012-11-29|power|10a|{"personId": "55685", "country": "Madagascar", "tagClass": "NascarDriver", "minPathDistance": "3", "maxPathDistance": "4"}|0.3466196060180664
+Umbra|100|2012-11-29|power|10a|{"personId": "66816", "country": "Democratic_Republic_of_the_Congo", "tagClass": "BasketballPlayer", "minPathDistance": "3", "maxPathDistance": "4"}|0.2755472660064697
+Umbra|100|2012-11-29|power|10a|{"personId": "99220", "country": "Romania", "tagClass": "ComicsCreator", "minPathDistance": "3", "maxPathDistance": "4"}|0.29846787452697754
+Umbra|100|2012-11-29|power|10a|{"personId": "54141", "country": "Democratic_Republic_of_the_Congo", "tagClass": "BasketballPlayer", "minPathDistance": "3", "maxPathDistance": "4"}|0.321591854095459
+Umbra|100|2012-11-29|power|10a|{"personId": "127078", "country": "Taiwan", "tagClass": "Politician", "minPathDistance": "3", "maxPathDistance": "4"}|0.33884620666503906
+Umbra|100|2012-11-29|power|10a|{"personId": "85384", "country": "Belgium", "tagClass": "Saint", "minPathDistance": "3", "maxPathDistance": "4"}|0.3116755485534668
+Umbra|100|2012-11-29|power|10a|{"personId": "124550", "country": "Zambia", "tagClass": "Thing", "minPathDistance": "3", "maxPathDistance": "4"}|0.33414506912231445
+Umbra|100|2012-11-29|power|10a|{"personId": "37587", "country": "Belgium", "tagClass": "GolfPlayer", "minPathDistance": "3", "maxPathDistance": "4"}|0.3092174530029297
+Umbra|100|2012-11-29|power|10a|{"personId": "119985", "country": "Cambodia", "tagClass": "BasketballPlayer", "minPathDistance": "3", "maxPathDistance": "4"}|0.30332374572753906
+Umbra|100|2012-11-29|power|10a|{"personId": "63371", "country": "Moldova", "tagClass": "GolfPlayer", "minPathDistance": "3", "maxPathDistance": "4"}|0.3348524570465088
+Umbra|100|2012-11-29|power|10a|{"personId": "17096", "country": "Netherlands", "tagClass": "AmericanFootballPlayer", "minPathDistance": "3", "maxPathDistance": "4"}|0.304901123046875
+Umbra|100|2012-11-29|power|10a|{"personId": "99220", "country": "Romania", "tagClass": "Architect", "minPathDistance": "3", "maxPathDistance": "4"}|0.29677772521972656
+Umbra|100|2012-11-29|power|10a|{"personId": "99220", "country": "Romania", "tagClass": "Thing", "minPathDistance": "3", "maxPathDistance": "4"}|0.32938575744628906
+Umbra|100|2012-11-29|power|10a|{"personId": "114393", "country": "Poland", "tagClass": "GolfPlayer", "minPathDistance": "3", "maxPathDistance": "4"}|0.31578755378723145
+Umbra|100|2012-11-29|power|10b|{"personId": "1451", "country": "Liberia", "tagClass": "Model", "minPathDistance": "3", "maxPathDistance": "4"}|0.14300107955932617
+Umbra|100|2012-11-29|power|10b|{"personId": "40070", "country": "Liberia", "tagClass": "MartialArtist", "minPathDistance": "3", "maxPathDistance": "4"}|0.1292564868927002
+Umbra|100|2012-11-29|power|10b|{"personId": "45804", "country": "Libya", "tagClass": "ComicsCharacter", "minPathDistance": "3", "maxPathDistance": "4"}|0.16086888313293457
+Umbra|100|2012-11-29|power|10b|{"personId": "15461", "country": "Bulgaria", "tagClass": "Cyclist", "minPathDistance": "3", "maxPathDistance": "4"}|0.14622759819030762
+Umbra|100|2012-11-29|power|10b|{"personId": "2523", "country": "Libya", "tagClass": "MemberOfParliament", "minPathDistance": "3", "maxPathDistance": "4"}|0.1497490406036377
+Umbra|100|2012-11-29|power|10b|{"personId": "39220", "country": "Bulgaria", "tagClass": "Band", "minPathDistance": "3", "maxPathDistance": "4"}|0.15065264701843262
+Umbra|100|2012-11-29|power|10b|{"personId": "33234", "country": "Hong_Kong", "tagClass": "Model", "minPathDistance": "3", "maxPathDistance": "4"}|0.14619874954223633
+Umbra|100|2012-11-29|power|10b|{"personId": "33146", "country": "Chad", "tagClass": "CollegeCoach", "minPathDistance": "3", "maxPathDistance": "4"}|0.10398983955383301
+Umbra|100|2012-11-29|power|10b|{"personId": "38104", "country": "Bulgaria", "tagClass": "ComicsCharacter", "minPathDistance": "3", "maxPathDistance": "4"}|0.14239764213562012
+Umbra|100|2012-11-29|power|10b|{"personId": "34916", "country": "Bulgaria", "tagClass": "Athlete", "minPathDistance": "3", "maxPathDistance": "4"}|0.11395454406738281
+Umbra|100|2012-11-29|power|10b|{"personId": "46201", "country": "Nicaragua", "tagClass": "Company", "minPathDistance": "3", "maxPathDistance": "4"}|0.1518077850341797
+Umbra|100|2012-11-29|power|10b|{"personId": "34916", "country": "Chad", "tagClass": "MemberOfParliament", "minPathDistance": "3", "maxPathDistance": "4"}|0.11732959747314453
+Umbra|100|2012-11-29|power|10b|{"personId": "48750", "country": "Liberia", "tagClass": "ComicsCharacter", "minPathDistance": "3", "maxPathDistance": "4"}|0.17367863655090332
+Umbra|100|2012-11-29|power|10b|{"personId": "21007", "country": "Nicaragua", "tagClass": "Band", "minPathDistance": "3", "maxPathDistance": "4"}|0.14279484748840332
+Umbra|100|2012-11-29|power|10b|{"personId": "47813", "country": "Denmark", "tagClass": "ComicsCharacter", "minPathDistance": "3", "maxPathDistance": "4"}|0.1372537612915039
+Umbra|100|2012-11-29|power|10b|{"personId": "45804", "country": "Panama", "tagClass": "Band", "minPathDistance": "3", "maxPathDistance": "4"}|0.14636635780334473
+Umbra|100|2012-11-29|power|10b|{"personId": "38104", "country": "Slovakia", "tagClass": "Band", "minPathDistance": "3", "maxPathDistance": "4"}|0.14444780349731445
+Umbra|100|2012-11-29|power|10b|{"personId": "47150", "country": "Azerbaijan", "tagClass": "Chancellor", "minPathDistance": "3", "maxPathDistance": "4"}|0.15474510192871094
+Umbra|100|2012-11-29|power|10b|{"personId": "32172", "country": "Denmark", "tagClass": "SnookerChamp", "minPathDistance": "3", "maxPathDistance": "4"}|0.14679312705993652
+Umbra|100|2012-11-29|power|10b|{"personId": "47813", "country": "Denmark", "tagClass": "Criminal", "minPathDistance": "3", "maxPathDistance": "4"}|0.1613771915435791
+Umbra|100|2012-11-29|power|10b|{"personId": "1451", "country": "Namibia", "tagClass": "Wrestler", "minPathDistance": "3", "maxPathDistance": "4"}|0.1627974510192871
+Umbra|100|2012-11-29|power|10b|{"personId": "24185", "country": "Norway", "tagClass": "Astronaut", "minPathDistance": "3", "maxPathDistance": "4"}|0.16858220100402832
+Umbra|100|2012-11-29|power|10b|{"personId": "48750", "country": "Slovakia", "tagClass": "Astronaut", "minPathDistance": "3", "maxPathDistance": "4"}|0.15522980690002441
+Umbra|100|2012-11-29|power|10b|{"personId": "7280", "country": "Oman", "tagClass": "MemberOfParliament", "minPathDistance": "3", "maxPathDistance": "4"}|0.10901498794555664
+Umbra|100|2012-11-29|power|10b|{"personId": "47150", "country": "Laos", "tagClass": "Criminal", "minPathDistance": "3", "maxPathDistance": "4"}|0.14276337623596191
+Umbra|100|2012-11-29|power|10b|{"personId": "20170", "country": "Bosnia_and_Herzegovina", "tagClass": "Astronaut", "minPathDistance": "3", "maxPathDistance": "4"}|0.14684510231018066
+Umbra|100|2012-11-29|power|10b|{"personId": "26091", "country": "Bulgaria", "tagClass": "Wrestler", "minPathDistance": "3", "maxPathDistance": "4"}|0.10073399543762207
+Umbra|100|2012-11-29|power|10b|{"personId": "38304", "country": "Liberia", "tagClass": "Astronaut", "minPathDistance": "3", "maxPathDistance": "4"}|0.15144729614257812
+Umbra|100|2012-11-29|power|10b|{"personId": "27889", "country": "Laos", "tagClass": "CollegeCoach", "minPathDistance": "3", "maxPathDistance": "4"}|0.10059189796447754
+Umbra|100|2012-11-29|power|10b|{"personId": "26091", "country": "Oman", "tagClass": "Band", "minPathDistance": "3", "maxPathDistance": "4"}|0.10549759864807129
+Umbra|100|2012-11-29|power|11|{"country": "India", "startDate": "2012-09-28", "endDate": "2013-01-10"}|0.13763856887817383
+Umbra|100|2012-11-29|power|11|{"country": "China", "startDate": "2012-09-30", "endDate": "2012-12-31"}|0.10441088676452637
+Umbra|100|2012-11-29|power|11|{"country": "India", "startDate": "2012-10-04", "endDate": "2013-01-16"}|0.11902427673339844
+Umbra|100|2012-11-29|power|11|{"country": "China", "startDate": "2012-10-12", "endDate": "2013-01-12"}|0.07838106155395508
+Umbra|100|2012-11-29|power|11|{"country": "China", "startDate": "2012-10-14", "endDate": "2013-01-14"}|0.07264447212219238
+Umbra|100|2012-11-29|power|11|{"country": "China", "startDate": "2012-10-02", "endDate": "2013-01-02"}|0.08039522171020508
+Umbra|100|2012-11-29|power|11|{"country": "India", "startDate": "2012-10-18", "endDate": "2013-01-30"}|0.0611109733581543
+Umbra|100|2012-11-29|power|11|{"country": "China", "startDate": "2012-09-25", "endDate": "2012-12-26"}|0.0850222110748291
+Umbra|100|2012-11-29|power|11|{"country": "China", "startDate": "2012-10-04", "endDate": "2013-01-04"}|0.07521200180053711
+Umbra|100|2012-11-29|power|11|{"country": "India", "startDate": "2012-09-30", "endDate": "2013-01-12"}|0.08708000183105469
+Umbra|100|2012-11-29|power|11|{"country": "China", "startDate": "2012-09-21", "endDate": "2012-12-22"}|0.09687471389770508
+Umbra|100|2012-11-29|power|11|{"country": "China", "startDate": "2012-10-19", "endDate": "2013-01-19"}|0.0612335205078125
+Umbra|100|2012-11-29|power|11|{"country": "India", "startDate": "2012-10-19", "endDate": "2013-01-31"}|0.08787250518798828
+Umbra|100|2012-11-29|power|11|{"country": "India", "startDate": "2012-10-02", "endDate": "2013-01-14"}|0.09097599983215332
+Umbra|100|2012-11-29|power|11|{"country": "India", "startDate": "2012-10-12", "endDate": "2013-01-24"}|0.06785106658935547
+Umbra|100|2012-11-29|power|11|{"country": "China", "startDate": "2012-10-18", "endDate": "2013-01-18"}|0.06210160255432129
+Umbra|100|2012-11-29|power|11|{"country": "India", "startDate": "2012-10-11", "endDate": "2013-01-23"}|0.07150721549987793
+Umbra|100|2012-11-29|power|11|{"country": "India", "startDate": "2012-09-26", "endDate": "2013-01-08"}|0.09711003303527832
+Umbra|100|2012-11-29|power|11|{"country": "China", "startDate": "2012-09-26", "endDate": "2012-12-27"}|0.07988333702087402
+Umbra|100|2012-11-29|power|11|{"country": "India", "startDate": "2012-09-21", "endDate": "2013-01-03"}|0.13916277885437012
+Umbra|100|2012-11-29|power|11|{"country": "China", "startDate": "2012-10-07", "endDate": "2013-01-07"}|0.09055280685424805
+Umbra|100|2012-11-29|power|11|{"country": "China", "startDate": "2012-09-28", "endDate": "2012-12-29"}|0.07631587982177734
+Umbra|100|2012-11-29|power|11|{"country": "China", "startDate": "2012-10-05", "endDate": "2013-01-05"}|0.06568026542663574
+Umbra|100|2012-11-29|power|11|{"country": "India", "startDate": "2012-10-14", "endDate": "2013-01-26"}|0.0686185359954834
+Umbra|100|2012-11-29|power|11|{"country": "India", "startDate": "2012-10-09", "endDate": "2013-01-21"}|0.09281492233276367
+Umbra|100|2012-11-29|power|11|{"country": "India", "startDate": "2012-10-10", "endDate": "2013-01-22"}|0.10353612899780273
+Umbra|100|2012-11-29|power|11|{"country": "India", "startDate": "2012-10-05", "endDate": "2013-01-17"}|0.07289481163024902
+Umbra|100|2012-11-29|power|11|{"country": "India", "startDate": "2012-10-03", "endDate": "2013-01-15"}|0.08122491836547852
+Umbra|100|2012-11-29|power|11|{"country": "China", "startDate": "2012-09-27", "endDate": "2012-12-28"}|0.08499455451965332
+Umbra|100|2012-11-29|power|11|{"country": "China", "startDate": "2012-10-03", "endDate": "2013-01-03"}|0.07258725166320801
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-06-05", "lengthThreshold": "115", "languages": "es;pt;zh"}|0.10759115219116211
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-06-05", "lengthThreshold": "115", "languages": "zh;ru;fr"}|0.10497665405273438
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-06-05", "lengthThreshold": "115", "languages": "ru;de;ja"}|0.09094738960266113
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-06-05", "lengthThreshold": "115", "languages": "ur;de;ja"}|0.08839607238769531
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-06-29", "lengthThreshold": "75", "languages": "es;pt;zh"}|0.09817028045654297
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-06-29", "lengthThreshold": "75", "languages": "zh;ru;fr"}|0.09725189208984375
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-06-29", "lengthThreshold": "75", "languages": "ru;de;ja"}|0.08328032493591309
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-06-29", "lengthThreshold": "75", "languages": "ur;de;ja"}|0.08424544334411621
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-07-05", "lengthThreshold": "65", "languages": "es;pt;zh"}|0.09560108184814453
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-07-05", "lengthThreshold": "65", "languages": "zh;ru;fr"}|0.09717488288879395
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-07-05", "lengthThreshold": "65", "languages": "ru;de;ja"}|0.08291077613830566
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-07-05", "lengthThreshold": "65", "languages": "ur;de;ja"}|0.08233475685119629
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-06-11", "lengthThreshold": "105", "languages": "es;pt;zh"}|0.1078803539276123
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-06-11", "lengthThreshold": "105", "languages": "zh;ru;fr"}|0.10639500617980957
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-06-11", "lengthThreshold": "105", "languages": "ru;de;ja"}|0.08960556983947754
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-06-11", "lengthThreshold": "105", "languages": "ur;de;ja"}|0.08794593811035156
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-07-11", "lengthThreshold": "55", "languages": "es;pt;zh"}|0.09787893295288086
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-07-11", "lengthThreshold": "55", "languages": "zh;ru;fr"}|0.09646010398864746
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-07-11", "lengthThreshold": "55", "languages": "ru;de;ja"}|0.08175444602966309
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-07-11", "lengthThreshold": "55", "languages": "ur;de;ja"}|0.08218216896057129
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-05-21", "lengthThreshold": "140", "languages": "es;pt;zh"}|0.10298919677734375
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-05-21", "lengthThreshold": "140", "languages": "zh;ru;fr"}|0.10402178764343262
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-05-21", "lengthThreshold": "140", "languages": "ru;de;ja"}|0.08292746543884277
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-05-21", "lengthThreshold": "140", "languages": "ur;de;ja"}|0.08252906799316406
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-06-26", "lengthThreshold": "80", "languages": "es;pt;zh"}|0.1025691032409668
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-06-26", "lengthThreshold": "80", "languages": "zh;ru;fr"}|0.1054835319519043
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-06-26", "lengthThreshold": "80", "languages": "ru;de;ja"}|0.08518457412719727
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-06-26", "lengthThreshold": "80", "languages": "ur;de;ja"}|0.08374214172363281
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-05-27", "lengthThreshold": "130", "languages": "es;pt;zh"}|0.10443854331970215
+Umbra|100|2012-11-29|power|12|{"startDate": "2012-05-27", "lengthThreshold": "130", "languages": "zh;ru;fr"}|0.10213851928710938
+Umbra|100|2012-11-29|power|13|{"country": "India", "endDate": "2012-11-09"}|0.14340925216674805
+Umbra|100|2012-11-29|power|13|{"country": "India", "endDate": "2012-11-03"}|0.12362909317016602
+Umbra|100|2012-11-29|power|13|{"country": "China", "endDate": "2012-11-10"}|0.11997127532958984
+Umbra|100|2012-11-29|power|13|{"country": "China", "endDate": "2012-10-25"}|0.12443828582763672
+Umbra|100|2012-11-29|power|13|{"country": "India", "endDate": "2012-11-05"}|0.12463498115539551
+Umbra|100|2012-11-29|power|13|{"country": "China", "endDate": "2012-10-22"}|0.12307572364807129
+Umbra|100|2012-11-29|power|13|{"country": "India", "endDate": "2012-11-07"}|0.12391114234924316
+Umbra|100|2012-11-29|power|13|{"country": "China", "endDate": "2012-10-30"}|0.12741613388061523
+Umbra|100|2012-11-29|power|13|{"country": "China", "endDate": "2012-11-09"}|0.13866567611694336
+Umbra|100|2012-11-29|power|13|{"country": "China", "endDate": "2012-11-05"}|0.12012791633605957
+Umbra|100|2012-11-29|power|13|{"country": "India", "endDate": "2012-10-23"}|0.13036155700683594
+Umbra|100|2012-11-29|power|13|{"country": "India", "endDate": "2012-10-27"}|0.13170957565307617
+Umbra|100|2012-11-29|power|13|{"country": "China", "endDate": "2012-11-04"}|0.1547999382019043
+Umbra|100|2012-11-29|power|13|{"country": "India", "endDate": "2012-11-02"}|0.12390708923339844
+Umbra|100|2012-11-29|power|13|{"country": "China", "endDate": "2012-10-26"}|0.12587523460388184
+Umbra|100|2012-11-29|power|13|{"country": "India", "endDate": "2012-11-01"}|0.13164901733398438
+Umbra|100|2012-11-29|power|13|{"country": "China", "endDate": "2012-10-29"}|0.12611842155456543
+Umbra|100|2012-11-29|power|13|{"country": "India", "endDate": "2012-10-30"}|0.1243588924407959
+Umbra|100|2012-11-29|power|13|{"country": "India", "endDate": "2012-11-06"}|0.1268448829650879
+Umbra|100|2012-11-29|power|13|{"country": "China", "endDate": "2012-10-23"}|0.12608957290649414
+Umbra|100|2012-11-29|power|13|{"country": "China", "endDate": "2012-10-31"}|0.12528038024902344
+Umbra|100|2012-11-29|power|13|{"country": "India", "endDate": "2012-11-10"}|0.1244819164276123
+Umbra|100|2012-11-29|power|13|{"country": "India", "endDate": "2012-10-28"}|0.13864660263061523
+Umbra|100|2012-11-29|power|13|{"country": "China", "endDate": "2012-10-27"}|0.1351783275604248
+Umbra|100|2012-11-29|power|13|{"country": "India", "endDate": "2012-10-22"}|0.12193894386291504
+Umbra|100|2012-11-29|power|13|{"country": "China", "endDate": "2012-11-01"}|0.1376326084136963
+Umbra|100|2012-11-29|power|13|{"country": "China", "endDate": "2012-11-03"}|0.12388420104980469
+Umbra|100|2012-11-29|power|13|{"country": "India", "endDate": "2012-10-31"}|0.13416790962219238
+Umbra|100|2012-11-29|power|13|{"country": "China", "endDate": "2012-11-08"}|0.12485551834106445
+Umbra|100|2012-11-29|power|13|{"country": "India", "endDate": "2012-11-04"}|0.1263141632080078
+Umbra|100|2012-11-29|power|14a|{"country1": "India", "country2": "Netherlands"}|0.2178049087524414
+Umbra|100|2012-11-29|power|14a|{"country1": "Philippines", "country2": "Taiwan"}|0.14293241500854492
+Umbra|100|2012-11-29|power|14a|{"country1": "India", "country2": "Poland"}|0.2215120792388916
+Umbra|100|2012-11-29|power|14a|{"country1": "China", "country2": "Belgium"}|0.21756863594055176
+Umbra|100|2012-11-29|power|14a|{"country1": "China", "country2": "Spain"}|0.21994638442993164
+Umbra|100|2012-11-29|power|14a|{"country1": "India", "country2": "South_Korea"}|0.22231554985046387
+Umbra|100|2012-11-29|power|14a|{"country1": "China", "country2": "Egypt"}|0.2237415313720703
+Umbra|100|2012-11-29|power|14a|{"country1": "China", "country2": "England"}|0.2226564884185791
+Umbra|100|2012-11-29|power|14a|{"country1": "India", "country2": "Taiwan"}|0.22074222564697266
+Umbra|100|2012-11-29|power|14a|{"country1": "China", "country2": "Zambia"}|0.22188830375671387
+Umbra|100|2012-11-29|power|14a|{"country1": "China", "country2": "Kenya"}|0.2207934856414795
+Umbra|100|2012-11-29|power|14a|{"country1": "India", "country2": "Romania"}|0.2244417667388916
+Umbra|100|2012-11-29|power|14a|{"country1": "India", "country2": "Hungary"}|0.2427821159362793
+Umbra|100|2012-11-29|power|14a|{"country1": "China", "country2": "Poland"}|0.2200465202331543
+Umbra|100|2012-11-29|power|14a|{"country1": "Germany", "country2": "Indonesia"}|0.18686795234680176
+Umbra|100|2012-11-29|power|14a|{"country1": "India", "country2": "Iran"}|0.21757745742797852
+Umbra|100|2012-11-29|power|14a|{"country1": "China", "country2": "South_Korea"}|0.2259197235107422
+Umbra|100|2012-11-29|power|14a|{"country1": "India", "country2": "Tunisia"}|0.22062277793884277
+Umbra|100|2012-11-29|power|14a|{"country1": "India", "country2": "Kazakhstan"}|0.222459077835083
+Umbra|100|2012-11-29|power|14a|{"country1": "China", "country2": "Colombia"}|0.22021842002868652
+Umbra|100|2012-11-29|power|14a|{"country1": "India", "country2": "Sri_Lanka"}|0.21621489524841309
+Umbra|100|2012-11-29|power|14a|{"country1": "Russia", "country2": "United_States"}|0.1963489055633545
+Umbra|100|2012-11-29|power|14a|{"country1": "India", "country2": "England"}|0.2257826328277588
+Umbra|100|2012-11-29|power|14a|{"country1": "China", "country2": "Sweden"}|0.2223665714263916
+Umbra|100|2012-11-29|power|14a|{"country1": "China", "country2": "Tunisia"}|0.22127485275268555
+Umbra|100|2012-11-29|power|14a|{"country1": "India", "country2": "Belgium"}|0.22561860084533691
+Umbra|100|2012-11-29|power|14a|{"country1": "China", "country2": "Greece"}|0.23347187042236328
+Umbra|100|2012-11-29|power|14a|{"country1": "China", "country2": "Belarus"}|0.21516680717468262
+Umbra|100|2012-11-29|power|14a|{"country1": "China", "country2": "Cambodia"}|0.24235892295837402
+Umbra|100|2012-11-29|power|14a|{"country1": "India", "country2": "Niger"}|0.23322439193725586
+Umbra|100|2012-11-29|power|14b|{"country1": "Dominican_Republic", "country2": "Malta"}|0.05767202377319336
+Umbra|100|2012-11-29|power|14b|{"country1": "Angola", "country2": "Mauritius"}|0.06008338928222656
+Umbra|100|2012-11-29|power|14b|{"country1": "Estonia", "country2": "New_Zealand"}|0.06081366539001465
+Umbra|100|2012-11-29|power|14b|{"country1": "Laos", "country2": "Uruguay"}|0.06071114540100098
+Umbra|100|2012-11-29|power|14b|{"country1": "Republic_of_Macedonia", "country2": "Swaziland"}|0.05817604064941406
+Umbra|100|2012-11-29|power|14b|{"country1": "Estonia", "country2": "Panama"}|0.060285329818725586
+Umbra|100|2012-11-29|power|14b|{"country1": "Laos", "country2": "Singapore"}|0.05864357948303223
+Umbra|100|2012-11-29|power|14b|{"country1": "Chad", "country2": "Mauritania"}|0.06148481369018555
+Umbra|100|2012-11-29|power|14b|{"country1": "Angola", "country2": "Panama"}|0.06358838081359863
+Umbra|100|2012-11-29|power|14b|{"country1": "Finland", "country2": "Scotland"}|0.060060739517211914
+Umbra|100|2012-11-29|power|14b|{"country1": "Puerto_Rico", "country2": "Slovenia"}|0.06055474281311035
+Umbra|100|2012-11-29|power|14b|{"country1": "Chad", "country2": "Latvia"}|0.05833244323730469
+Umbra|100|2012-11-29|power|14b|{"country1": "Croatia", "country2": "Estonia"}|0.059949636459350586
+Umbra|100|2012-11-29|power|14b|{"country1": "Bosnia_and_Herzegovina", "country2": "Swaziland"}|0.06007242202758789
+Umbra|100|2012-11-29|power|14b|{"country1": "Norway", "country2": "Uruguay"}|0.05747032165527344
+Umbra|100|2012-11-29|power|14b|{"country1": "Republic_of_Ireland", "country2": "Slovakia"}|0.05936622619628906
+Umbra|100|2012-11-29|power|14b|{"country1": "Israel", "country2": "Malta"}|0.0623321533203125
+Umbra|100|2012-11-29|power|14b|{"country1": "Bulgaria", "country2": "Singapore"}|0.05971837043762207
+Umbra|100|2012-11-29|power|14b|{"country1": "Panama", "country2": "Republic_of_Macedonia"}|0.059958696365356445
+Umbra|100|2012-11-29|power|14b|{"country1": "Bolivia", "country2": "Dominican_Republic"}|0.062032222747802734
+Umbra|100|2012-11-29|power|14b|{"country1": "Laos", "country2": "Panama"}|0.060410499572753906
+Umbra|100|2012-11-29|power|14b|{"country1": "Denmark", "country2": "Norway"}|0.06199836730957031
+Umbra|100|2012-11-29|power|14b|{"country1": "Republic_of_Ireland", "country2": "Rwanda"}|0.060848236083984375
+Umbra|100|2012-11-29|power|14b|{"country1": "Lithuania", "country2": "Northern_Ireland"}|0.06051278114318848
+Umbra|100|2012-11-29|power|14b|{"country1": "Angola", "country2": "Liberia"}|0.06127166748046875
+Umbra|100|2012-11-29|power|14b|{"country1": "Oman", "country2": "Tajikistan"}|0.0613245964050293
+Umbra|100|2012-11-29|power|14b|{"country1": "Azerbaijan", "country2": "Chad"}|0.06378579139709473
+Umbra|100|2012-11-29|power|14b|{"country1": "Mauritania", "country2": "Switzerland"}|0.06208443641662598
+Umbra|100|2012-11-29|power|14b|{"country1": "Israel", "country2": "Liberia"}|0.05859375
+Umbra|100|2012-11-29|power|14b|{"country1": "Dominican_Republic", "country2": "Panama"}|0.06175541877746582
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "24189256101944", "startDate": "2012-11-07", "endDate": "2012-11-10"}|0.6123249530792236
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "26388279200119", "startDate": "2012-11-07", "endDate": "2012-11-11"}|0.5866336822509766
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "24189256180525", "startDate": "2012-11-07", "endDate": "2012-11-09"}|0.4001810550689697
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "30786325823226", "startDate": "2012-11-07", "endDate": "2012-11-08"}|0.3962366580963135
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "8796093455615", "startDate": "2012-11-07", "endDate": "2012-11-11"}|0.7193593978881836
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "30786325820054", "startDate": "2012-11-07", "endDate": "2012-11-07"}|0.20420098304748535
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "30786325997586", "startDate": "2012-11-07", "endDate": "2012-11-12"}|0.6825249195098877
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "78209", "startDate": "2012-11-07", "endDate": "2012-11-12"}|0.2764017581939697
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "30786325975244", "startDate": "2012-11-07", "endDate": "2012-11-07"}|1.3274376392364502
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "35184372290247", "startDate": "2012-11-07", "endDate": "2012-11-12"}|0.2633793354034424
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "15393162833389", "startDate": "2012-11-07", "endDate": "2012-11-12"}|1.3288466930389404
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "13194139800917", "startDate": "2012-11-07", "endDate": "2012-11-12"}|0.34554624557495117
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "13194139617821", "startDate": "2012-11-07", "endDate": "2012-11-08"}|0.5390365123748779
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "35184372093540", "startDate": "2012-11-07", "endDate": "2012-11-12"}|0.2781991958618164
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "21990233012857", "startDate": "2012-11-07", "endDate": "2012-11-11"}|0.9540550708770752
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "35184372523959", "startDate": "2012-11-07", "endDate": "2012-11-08"}|0.24056124687194824
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "15393162797317", "startDate": "2012-11-07", "endDate": "2012-11-11"}|0.4383544921875
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "28587302751711", "startDate": "2012-11-07", "endDate": "2012-11-11"}|0.45413684844970703
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "15393163039983", "startDate": "2012-11-07", "endDate": "2012-11-08"}|1.215226650238037
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "17592186294283", "startDate": "2012-11-07", "endDate": "2012-11-13"}|0.3745133876800537
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "19791209686930", "startDate": "2012-11-07", "endDate": "2012-11-10"}|0.5326583385467529
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "17592186351948", "startDate": "2012-11-07", "endDate": "2012-11-12"}|0.2993357181549072
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "35184372407146", "startDate": "2012-11-07", "endDate": "2012-11-11"}|0.3966968059539795
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "15393163166004", "startDate": "2012-11-07", "endDate": "2012-11-08"}|0.40416908264160156
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "28587302689966", "startDate": "2012-11-07", "endDate": "2012-11-13"}|0.23749065399169922
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "2199023427602", "startDate": "2012-11-07", "endDate": "2012-11-08"}|0.23528504371643066
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "15393163268099", "startDate": "2012-11-07", "endDate": "2012-11-08"}|0.3169994354248047
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "26388279488354", "startDate": "2012-11-07", "endDate": "2012-11-07"}|0.8712186813354492
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "30786325699814", "startDate": "2012-11-07", "endDate": "2012-11-13"}|0.9271030426025391
+Umbra|100|2012-11-29|power|15a|{"person1Id": "2199023365133", "person2Id": "6597070084526", "startDate": "2012-11-07", "endDate": "2012-11-12"}|1.5011985301971436
+Umbra|100|2012-11-29|power|15b|{"person1Id": "8796093089701", "person2Id": "8796093481509", "startDate": "2010-04-13", "endDate": "2010-05-05"}|0.22958993911743164
+Umbra|100|2012-11-29|power|15b|{"person1Id": "28587302551274", "person2Id": "35184372378415", "startDate": "2010-04-14", "endDate": "2010-05-06"}|12.537187814712524
+Umbra|100|2012-11-29|power|15b|{"person1Id": "32985349285491", "person2Id": "32985349257527", "startDate": "2010-04-09", "endDate": "2010-05-01"}|0.2134847640991211
+Umbra|100|2012-11-29|power|15b|{"person1Id": "28587302734912", "person2Id": "26388279140454", "startDate": "2010-04-16", "endDate": "2010-05-08"}|0.4619266986846924
+Umbra|100|2012-11-29|power|15b|{"person1Id": "28587302734912", "person2Id": "8796093486306", "startDate": "2010-04-16", "endDate": "2010-05-08"}|0.4365863800048828
+Umbra|100|2012-11-29|power|15b|{"person1Id": "17592186274390", "person2Id": "19791209650269", "startDate": "2010-04-10", "endDate": "2010-05-02"}|0.23908710479736328
+Umbra|100|2012-11-29|power|15b|{"person1Id": "21990233025187", "person2Id": "35184372401831", "startDate": "2010-04-16", "endDate": "2010-05-08"}|0.2952718734741211
+Umbra|100|2012-11-29|power|15b|{"person1Id": "32985348880030", "person2Id": "32985348895456", "startDate": "2010-04-16", "endDate": "2010-05-08"}|0.2806107997894287
+Umbra|100|2012-11-29|power|15b|{"person1Id": "28587302435439", "person2Id": "30786325669746", "startDate": "2010-04-09", "endDate": "2010-05-01"}|0.21172380447387695
+Umbra|100|2012-11-29|power|15b|{"person1Id": "15393163050434", "person2Id": "19791209603266", "startDate": "2010-04-11", "endDate": "2010-05-03"}|0.22768282890319824
+Umbra|100|2012-11-29|power|15b|{"person1Id": "17592186274390", "person2Id": "132232", "startDate": "2010-04-10", "endDate": "2010-05-02"}|13.966890096664429
+Umbra|100|2012-11-29|power|15b|{"person1Id": "4398046649902", "person2Id": "10995116471218", "startDate": "2010-04-10", "endDate": "2010-05-02"}|0.24765276908874512
+Umbra|100|2012-11-29|power|15b|{"person1Id": "6597070152835", "person2Id": "8796093222929", "startDate": "2010-04-13", "endDate": "2010-05-05"}|13.175968885421753
+Umbra|100|2012-11-29|power|15b|{"person1Id": "2199023329988", "person2Id": "166529", "startDate": "2010-04-11", "endDate": "2010-05-03"}|0.31411314010620117
+Umbra|100|2012-11-29|power|15b|{"person1Id": "32985348894286", "person2Id": "32985348893578", "startDate": "2010-04-16", "endDate": "2010-05-08"}|0.28647804260253906
+Umbra|100|2012-11-29|power|15b|{"person1Id": "8796093478301", "person2Id": "10995116445567", "startDate": "2010-04-11", "endDate": "2010-05-03"}|0.2296431064605713
+Umbra|100|2012-11-29|power|15b|{"person1Id": "19791209325078", "person2Id": "24189256126409", "startDate": "2010-04-09", "endDate": "2010-05-01"}|0.2877211570739746
+Umbra|100|2012-11-29|power|15b|{"person1Id": "6597070079098", "person2Id": "35184372560148", "startDate": "2010-04-13", "endDate": "2010-05-05"}|1.1840548515319824
+Umbra|100|2012-11-29|power|15b|{"person1Id": "17592186269252", "person2Id": "21990232818703", "startDate": "2010-04-11", "endDate": "2010-05-03"}|7.245805978775024
+Umbra|100|2012-11-29|power|15b|{"person1Id": "28587302551274", "person2Id": "28587302670211", "startDate": "2010-04-14", "endDate": "2010-05-06"}|0.3694422245025635
+Umbra|100|2012-11-29|power|15b|{"person1Id": "30786325769356", "person2Id": "17592186207667", "startDate": "2010-04-16", "endDate": "2010-05-08"}|0.3161745071411133
+Umbra|100|2012-11-29|power|15b|{"person1Id": "10995116667897", "person2Id": "26388279383380", "startDate": "2010-04-12", "endDate": "2010-05-04"}|0.23684191703796387
+Umbra|100|2012-11-29|power|15b|{"person1Id": "26388279317411", "person2Id": "30786325653464", "startDate": "2010-04-17", "endDate": "2010-05-09"}|0.3054471015930176
+Umbra|100|2012-11-29|power|15b|{"person1Id": "32985349282852", "person2Id": "35184372318952", "startDate": "2010-04-16", "endDate": "2010-05-08"}|11.868082284927368
+Umbra|100|2012-11-29|power|15b|{"person1Id": "19791209371997", "person2Id": "6597069833392", "startDate": "2010-04-11", "endDate": "2010-05-03"}|13.861751556396484
+Umbra|100|2012-11-29|power|15b|{"person1Id": "10995116543276", "person2Id": "8796093425783", "startDate": "2010-04-14", "endDate": "2010-05-06"}|12.740249395370483
+Umbra|100|2012-11-29|power|15b|{"person1Id": "28587302435439", "person2Id": "19791209737179", "startDate": "2010-04-09", "endDate": "2010-05-01"}|13.004374504089355
+Umbra|100|2012-11-29|power|15b|{"person1Id": "28587302551274", "person2Id": "10995116555019", "startDate": "2010-04-14", "endDate": "2010-05-06"}|0.3028905391693115
+Umbra|100|2012-11-29|power|15b|{"person1Id": "35184372180547", "person2Id": "10995116693939", "startDate": "2010-04-13", "endDate": "2010-05-05"}|13.00594449043274
+Umbra|100|2012-11-29|power|15b|{"person1Id": "32985348880030", "person2Id": "35184372385365", "startDate": "2010-04-16", "endDate": "2010-05-08"}|12.809171199798584
+Umbra|100|2012-11-29|power|16a|{"tagA": "Marc_Gicquel", "dateA": "2010-12-02", "tagB": "Vladimir_Putin", "dateB": "2012-11-13", "maxKnowsLimit": "5"}|0.11122751235961914
+Umbra|100|2012-11-29|power|16a|{"tagA": "Marc_Gicquel", "dateA": "2012-07-25", "tagB": "Vladimir_Putin", "dateB": "2012-11-13", "maxKnowsLimit": "4"}|0.11233949661254883
+Umbra|100|2012-11-29|power|16a|{"tagA": "Marc_Gicquel", "dateA": "2012-07-26", "tagB": "Vladimir_Putin", "dateB": "2012-11-13", "maxKnowsLimit": "5"}|0.10397529602050781
+Umbra|100|2012-11-29|power|16a|{"tagA": "Carl_Gustaf_Emil_Mannerheim", "dateA": "2011-12-12", "tagB": "Cher", "dateB": "2012-09-15", "maxKnowsLimit": "4"}|0.09955620765686035
+Umbra|100|2012-11-29|power|16a|{"tagA": "Sanath_Jayasuriya", "dateA": "2011-03-26", "tagB": "Argentina", "dateB": "2012-11-12", "maxKnowsLimit": "5"}|0.14557361602783203
+Umbra|100|2012-11-29|power|16a|{"tagA": "Sanath_Jayasuriya", "dateA": "2012-01-03", "tagB": "Argentina", "dateB": "2012-11-12", "maxKnowsLimit": "3"}|0.10135483741760254
+Umbra|100|2012-11-29|power|16a|{"tagA": "Sanath_Jayasuriya", "dateA": "2012-01-04", "tagB": "Argentina", "dateB": "2012-11-12", "maxKnowsLimit": "4"}|0.13645720481872559
+Umbra|100|2012-11-29|power|16a|{"tagA": "Haile_Gebrselassie", "dateA": "2011-03-26", "tagB": "Camille_Saint-Sa\u00ebns", "dateB": "2012-12-22", "maxKnowsLimit": "5"}|0.15514135360717773
+Umbra|100|2012-11-29|power|16a|{"tagA": "Rick_Springfield", "dateA": "2012-10-15", "tagB": "Henrik_Ibsen", "dateB": "2012-12-04", "maxKnowsLimit": "3"}|0.14912891387939453
+Umbra|100|2012-11-29|power|16a|{"tagA": "Imelda_Marcos", "dateA": "2012-05-07", "tagB": "Horatio_Nelson,_1st_Viscount_Nelson", "dateB": "2012-04-20", "maxKnowsLimit": "6"}|0.09712958335876465
+Umbra|100|2012-11-29|power|16a|{"tagA": "Imelda_Marcos", "dateA": "2012-05-08", "tagB": "Horatio_Nelson,_1st_Viscount_Nelson", "dateB": "2012-04-20", "maxKnowsLimit": "3"}|0.14827537536621094
+Umbra|100|2012-11-29|power|16a|{"tagA": "Imelda_Marcos", "dateA": "2012-05-09", "tagB": "Horatio_Nelson,_1st_Viscount_Nelson", "dateB": "2012-04-20", "maxKnowsLimit": "4"}|0.17726469039916992
+Umbra|100|2012-11-29|power|16a|{"tagA": "Diosdado_Macapagal", "dateA": "2012-10-08", "tagB": "Vladimir_Lenin", "dateB": "2012-10-29", "maxKnowsLimit": "4"}|0.0982978343963623
+Umbra|100|2012-11-29|power|16a|{"tagA": "Edgar_Prado", "dateA": "2011-12-19", "tagB": "Pope_Gregory_I", "dateB": "2012-12-17", "maxKnowsLimit": "4"}|0.16066193580627441
+Umbra|100|2012-11-29|power|16a|{"tagA": "Edgar_Prado", "dateA": "2011-12-20", "tagB": "Pope_Gregory_I", "dateB": "2012-12-17", "maxKnowsLimit": "5"}|0.16141104698181152
+Umbra|100|2012-11-29|power|16a|{"tagA": "Sanath_Jayasuriya", "dateA": "2011-03-26", "tagB": "Ho_Chi_Minh", "dateB": "2012-10-28", "maxKnowsLimit": "6"}|0.12528419494628906
+Umbra|100|2012-11-29|power|16a|{"tagA": "Sanath_Jayasuriya", "dateA": "2012-01-03", "tagB": "Ho_Chi_Minh", "dateB": "2012-10-28", "maxKnowsLimit": "4"}|0.14461112022399902
+Umbra|100|2012-11-29|power|16a|{"tagA": "Sanath_Jayasuriya", "dateA": "2012-01-04", "tagB": "Ho_Chi_Minh", "dateB": "2012-10-28", "maxKnowsLimit": "5"}|0.12933921813964844
+Umbra|100|2012-11-29|power|16a|{"tagA": "Paradorn_Srichaphan", "dateA": "2012-02-20", "tagB": "Philip_K._Dick", "dateB": "2012-12-07", "maxKnowsLimit": "4"}|0.1692204475402832
+Umbra|100|2012-11-29|power|16a|{"tagA": "Paradorn_Srichaphan", "dateA": "2012-02-21", "tagB": "Philip_K._Dick", "dateB": "2012-12-07", "maxKnowsLimit": "5"}|0.13164615631103516
+Umbra|100|2012-11-29|power|16a|{"tagA": "Paradorn_Srichaphan", "dateA": "2012-02-22", "tagB": "Philip_K._Dick", "dateB": "2012-12-07", "maxKnowsLimit": "6"}|0.12682890892028809
+Umbra|100|2012-11-29|power|16a|{"tagA": "Mariano_Rivera", "dateA": "2011-10-12", "tagB": "Jack_Kerouac", "dateB": "2012-04-20", "maxKnowsLimit": "3"}|0.18302249908447266
+Umbra|100|2012-11-29|power|16a|{"tagA": "Mariano_Rivera", "dateA": "2011-10-13", "tagB": "Jack_Kerouac", "dateB": "2012-04-20", "maxKnowsLimit": "4"}|0.13442230224609375
+Umbra|100|2012-11-29|power|16a|{"tagA": "Rub\u00e9n_Blades", "dateA": "2010-06-03", "tagB": "Sassanid_Empire", "dateB": "2011-10-12", "maxKnowsLimit": "6"}|0.1374530792236328
+Umbra|100|2012-11-29|power|16a|{"tagA": "Siad_Barre", "dateA": "2010-06-16", "tagB": "Erwin_Rommel", "dateB": "2012-12-15", "maxKnowsLimit": "4"}|0.16292834281921387
+Umbra|100|2012-11-29|power|16a|{"tagA": "Paradorn_Srichaphan", "dateA": "2012-02-20", "tagB": "Benjamin_Franklin", "dateB": "2012-11-17", "maxKnowsLimit": "4"}|0.14580345153808594
+Umbra|100|2012-11-29|power|16a|{"tagA": "Paradorn_Srichaphan", "dateA": "2012-02-21", "tagB": "Benjamin_Franklin", "dateB": "2012-11-17", "maxKnowsLimit": "5"}|0.1867208480834961
+Umbra|100|2012-11-29|power|16a|{"tagA": "Paradorn_Srichaphan", "dateA": "2012-02-22", "tagB": "Benjamin_Franklin", "dateB": "2012-11-17", "maxKnowsLimit": "6"}|0.12272357940673828
+Umbra|100|2012-11-29|power|16a|{"tagA": "Francis_I_of_the_Two_Sicilies", "dateA": "2012-10-04", "tagB": "Rumi", "dateB": "2012-09-04", "maxKnowsLimit": "5"}|0.08484101295471191
+Umbra|100|2012-11-29|power|16a|{"tagA": "Peter_Hain", "dateA": "2011-10-11", "tagB": "James_Joyce", "dateB": "2012-11-04", "maxKnowsLimit": "4"}|0.15799403190612793
+Umbra|100|2012-11-29|power|16b|{"tagA": "Jeff_Kennett", "dateA": "2012-11-26", "tagB": "Ralph_Bakshi", "dateB": "2010-05-29", "maxKnowsLimit": "3"}|0.12135982513427734
+Umbra|100|2012-11-29|power|16b|{"tagA": "Alex_Shelley", "dateA": "2012-12-04", "tagB": "Republic_of_New_Granada", "dateB": "2010-01-30", "maxKnowsLimit": "4"}|0.1394655704498291
+Umbra|100|2012-11-29|power|16b|{"tagA": "Big_Poppa", "dateA": "2012-07-18", "tagB": "East_Germany", "dateB": "2010-03-11", "maxKnowsLimit": "5"}|0.11572003364562988
+Umbra|100|2012-11-29|power|16b|{"tagA": "Gin_and_Juice", "dateA": "2012-04-04", "tagB": "Slovenia", "dateB": "2010-02-02", "maxKnowsLimit": "3"}|0.13572287559509277
+Umbra|100|2012-11-29|power|16b|{"tagA": "J.E._Heartbreak", "dateA": "2012-09-22", "tagB": "Right_on_the_Money", "dateB": "2010-12-01", "maxKnowsLimit": "4"}|0.10317540168762207
+Umbra|100|2012-11-29|power|16b|{"tagA": "No_Way_to_Say", "dateA": "2012-12-29", "tagB": "Apagorevmeno", "dateB": "2010-05-27", "maxKnowsLimit": "6"}|0.1494123935699463
+Umbra|100|2012-11-29|power|16b|{"tagA": "Party_in_the_U.S.A.", "dateA": "2011-11-30", "tagB": "Right_on_the_Money", "dateB": "2010-12-01", "maxKnowsLimit": "4"}|0.10413265228271484
+Umbra|100|2012-11-29|power|16b|{"tagA": "Shankar_Mahadevan", "dateA": "2012-12-22", "tagB": "Jack_Kerouac", "dateB": "2010-01-22", "maxKnowsLimit": "6"}|0.14863371849060059
+Umbra|100|2012-11-29|power|16b|{"tagA": "All_by_Myself", "dateA": "2011-09-11", "tagB": "Slovenia", "dateB": "2010-02-02", "maxKnowsLimit": "6"}|0.13886594772338867
+Umbra|100|2012-11-29|power|16b|{"tagA": "Ralph_Bakshi", "dateA": "2012-05-27", "tagB": "Something_to_Remember", "dateB": "2010-05-28", "maxKnowsLimit": "3"}|0.10058355331420898
+Umbra|100|2012-11-29|power|16b|{"tagA": "Aga_Khan_IV", "dateA": "2012-11-10", "tagB": "Seventh_Star", "dateB": "2010-08-18", "maxKnowsLimit": "4"}|0.10153508186340332
+Umbra|100|2012-11-29|power|16b|{"tagA": "Shankar_Mahadevan", "dateA": "2012-12-22", "tagB": "Something_to_Remember", "dateB": "2010-05-28", "maxKnowsLimit": "4"}|0.13845586776733398
+Umbra|100|2012-11-29|power|16b|{"tagA": "East_Germany", "dateA": "2010-10-28", "tagB": "Disco_Duck", "dateB": "2010-04-07", "maxKnowsLimit": "5"}|0.14191365242004395
+Umbra|100|2012-11-29|power|16b|{"tagA": "Felix_Frankfurter", "dateA": "2012-12-27", "tagB": "Aga_Khan_IV", "dateB": "2010-09-11", "maxKnowsLimit": "3"}|0.13541150093078613
+Umbra|100|2012-11-29|power|16b|{"tagA": "After_the_Heat", "dateA": "2012-09-09", "tagB": "Preflyte", "dateB": "2010-02-25", "maxKnowsLimit": "4"}|0.09948444366455078
+Umbra|100|2012-11-29|power|16b|{"tagA": "Jeff_Daniels", "dateA": "2012-10-03", "tagB": "Dancing_Undercover", "dateB": "2010-06-03", "maxKnowsLimit": "6"}|0.10555863380432129
+Umbra|100|2012-11-29|power|16b|{"tagA": "J.E._Heartbreak", "dateA": "2012-09-22", "tagB": "Republic_of_New_Granada", "dateB": "2010-01-30", "maxKnowsLimit": "3"}|0.11873054504394531
+Umbra|100|2012-11-29|power|16b|{"tagA": "Jerry_Lee_Lewis", "dateA": "2010-12-22", "tagB": "Lovesexy", "dateB": "2010-02-25", "maxKnowsLimit": "3"}|0.1514267921447754
+Umbra|100|2012-11-29|power|16b|{"tagA": "Jeff_Kennett", "dateA": "2012-11-26", "tagB": "Disco_Duck", "dateB": "2010-04-07", "maxKnowsLimit": "3"}|0.10862064361572266
+Umbra|100|2012-11-29|power|16b|{"tagA": "Aga_Khan_IV", "dateA": "2012-11-10", "tagB": "Something_in_Common", "dateB": "2010-06-03", "maxKnowsLimit": "4"}|0.12024521827697754
+Umbra|100|2012-11-29|power|16b|{"tagA": "Shankar_Mahadevan", "dateA": "2012-12-22", "tagB": "Sans_logique", "dateB": "2011-09-27", "maxKnowsLimit": "6"}|0.11662101745605469
+Umbra|100|2012-11-29|power|16b|{"tagA": "J.E._Heartbreak", "dateA": "2012-09-22", "tagB": "William_Blake", "dateB": "2010-02-04", "maxKnowsLimit": "4"}|0.10275411605834961
+Umbra|100|2012-11-29|power|16b|{"tagA": "Black_Tie_White_Noise", "dateA": "2012-03-12", "tagB": "Arma-Goddamn-Motherfuckin-Geddon", "dateB": "2010-09-14", "maxKnowsLimit": "4"}|0.1416158676147461
+Umbra|100|2012-11-29|power|16b|{"tagA": "Transatlanticism", "dateA": "2012-04-26", "tagB": "Preflyte", "dateB": "2010-02-25", "maxKnowsLimit": "4"}|0.11670804023742676
+Umbra|100|2012-11-29|power|16b|{"tagA": "Koda_Kumi", "dateA": "2012-12-09", "tagB": "Dancing_Undercover", "dateB": "2010-06-03", "maxKnowsLimit": "5"}|0.15120673179626465
+Umbra|100|2012-11-29|power|16b|{"tagA": "Meaty_Beaty_Big_and_Bouncy", "dateA": "2012-06-05", "tagB": "Rani_Mukerji", "dateB": "2011-02-11", "maxKnowsLimit": "6"}|0.11254215240478516
+Umbra|100|2012-11-29|power|16b|{"tagA": "Jeff_Daniels", "dateA": "2012-10-03", "tagB": "Jeff_Kennett", "dateB": "2010-09-07", "maxKnowsLimit": "6"}|0.10236740112304688
+Umbra|100|2012-11-29|power|16b|{"tagA": "Black_Tie_White_Noise", "dateA": "2012-03-12", "tagB": "Shepherd_Moons", "dateB": "2010-02-24", "maxKnowsLimit": "6"}|0.13477182388305664
+Umbra|100|2012-11-29|power|16b|{"tagA": "Locked_Out", "dateA": "2012-10-12", "tagB": "Bulgaria", "dateB": "2010-03-11", "maxKnowsLimit": "3"}|0.10779380798339844
+Umbra|100|2012-11-29|power|16b|{"tagA": "Gold_Cobra", "dateA": "2012-10-25", "tagB": "Alex_Shelley", "dateB": "2012-02-13", "maxKnowsLimit": "6"}|0.07993412017822266
+Umbra|100|2012-11-29|power|17|{"tag": "Koda_Kumi", "delta": "10"}|0.19419431686401367
+Umbra|100|2012-11-29|power|17|{"tag": "The_Thin_Ice", "delta": "11"}|0.15794086456298828
+Umbra|100|2012-11-29|power|17|{"tag": "There_Goes_My_Life", "delta": "13"}|0.15324020385742188
+Umbra|100|2012-11-29|power|17|{"tag": "New_Irish_Hymns", "delta": "13"}|0.17625117301940918
+Umbra|100|2012-11-29|power|17|{"tag": "Telephono", "delta": "14"}|0.16595244407653809
+Umbra|100|2012-11-29|power|17|{"tag": "C\u00e9sar_Franck", "delta": "12"}|0.1940007209777832
+Umbra|100|2012-11-29|power|17|{"tag": "Angry_All_the_Time", "delta": "16"}|0.16389703750610352
+Umbra|100|2012-11-29|power|17|{"tag": "Proper_Education", "delta": "12"}|0.1627025604248047
+Umbra|100|2012-11-29|power|17|{"tag": "Charge_It_2_da_Game", "delta": "15"}|0.15387845039367676
+Umbra|100|2012-11-29|power|17|{"tag": "Jos\u00e9_de_San_Mart\u00edn", "delta": "16"}|0.6153697967529297
+Umbra|100|2012-11-29|power|17|{"tag": "Figured_You_Out", "delta": "16"}|0.15854787826538086
+Umbra|100|2012-11-29|power|17|{"tag": "Set_Yourself_on_Fire", "delta": "9"}|0.15673089027404785
+Umbra|100|2012-11-29|power|17|{"tag": "Led_Zeppelin_Remasters", "delta": "14"}|0.15042853355407715
+Umbra|100|2012-11-29|power|17|{"tag": "Larisa_Neiland", "delta": "11"}|0.17158222198486328
+Umbra|100|2012-11-29|power|17|{"tag": "The_Punisher:_The_Album", "delta": "13"}|0.15743494033813477
+Umbra|100|2012-11-29|power|17|{"tag": "Wait_Until_Tomorrow", "delta": "11"}|0.16364550590515137
+Umbra|100|2012-11-29|power|17|{"tag": "Man_in_the_Box", "delta": "15"}|0.15363597869873047
+Umbra|100|2012-11-29|power|17|{"tag": "No_Me_Dejes_de_Querer", "delta": "14"}|0.15929293632507324
+Umbra|100|2012-11-29|power|17|{"tag": "Gravity_of_Love", "delta": "11"}|0.15375542640686035
+Umbra|100|2012-11-29|power|17|{"tag": "Would_You_Go_with_Me", "delta": "16"}|0.15378522872924805
+Umbra|100|2012-11-29|power|17|{"tag": "Back_Here", "delta": "14"}|0.15848064422607422
+Umbra|100|2012-11-29|power|17|{"tag": "Take_Good_Care_of_My_Baby", "delta": "16"}|0.14975357055664062
+Umbra|100|2012-11-29|power|17|{"tag": "Live_from_the_Kitchen", "delta": "9"}|0.15440130233764648
+Umbra|100|2012-11-29|power|17|{"tag": "Leave_Before_the_Lights_Come_On", "delta": "10"}|0.1668698787689209
+Umbra|100|2012-11-29|power|17|{"tag": "Sh\u014dso_Strip", "delta": "11"}|0.15345120429992676
+Umbra|100|2012-11-29|power|17|{"tag": "The_Sound_of_White", "delta": "11"}|0.15384674072265625
+Umbra|100|2012-11-29|power|17|{"tag": "H\u00e6ttuleg_hlj\u00f3msveit_&_gl\u00e6pakvendi\u00f0_Stella", "delta": "15"}|0.1523299217224121
+Umbra|100|2012-11-29|power|17|{"tag": "Bang_the_Drum_All_Day", "delta": "8"}|0.1663820743560791
+Umbra|100|2012-11-29|power|17|{"tag": "John_III_of_Portugal", "delta": "8"}|0.1652052402496338
+Umbra|100|2012-11-29|power|17|{"tag": "Milla_Jovovich", "delta": "16"}|0.18448662757873535
+Umbra|100|2012-11-29|power|18|{"tag": "Barbra_Streisand"}|0.21000909805297852
+Umbra|100|2012-11-29|power|18|{"tag": "Thomas_More"}|0.23264122009277344
+Umbra|100|2012-11-29|power|18|{"tag": "Al_Gore"}|0.21244502067565918
+Umbra|100|2012-11-29|power|18|{"tag": "Alfred_Hitchcock"}|0.20364832878112793
+Umbra|100|2012-11-29|power|18|{"tag": "Michelangelo"}|0.2059168815612793
+Umbra|100|2012-11-29|power|18|{"tag": "Oliver_Cromwell"}|0.2017078399658203
+Umbra|100|2012-11-29|power|18|{"tag": "Herodotus"}|0.23846960067749023
+Umbra|100|2012-11-29|power|18|{"tag": "Stevie_Wonder"}|0.2075490951538086
+Umbra|100|2012-11-29|power|18|{"tag": "William_III_of_England"}|0.21504855155944824
+Umbra|100|2012-11-29|power|18|{"tag": "Arthur_Conan_Doyle"}|0.21346521377563477
+Umbra|100|2012-11-29|power|18|{"tag": "James_Bond"}|0.2000119686126709
+Umbra|100|2012-11-29|power|18|{"tag": "Charlie_Chaplin"}|0.21365046501159668
+Umbra|100|2012-11-29|power|18|{"tag": "Woody_Allen"}|0.21064424514770508
+Umbra|100|2012-11-29|power|18|{"tag": "George_Frideric_Handel"}|0.19479680061340332
+Umbra|100|2012-11-29|power|18|{"tag": "Orson_Welles"}|0.22640132904052734
+Umbra|100|2012-11-29|power|18|{"tag": "Tacitus"}|0.24574875831604004
+Umbra|100|2012-11-29|power|18|{"tag": "Giuseppe_Verdi"}|0.21158432960510254
+Umbra|100|2012-11-29|power|18|{"tag": "James_Madison"}|0.14931583404541016
+Umbra|100|2012-11-29|power|18|{"tag": "James_II_of_England"}|0.2162637710571289
+Umbra|100|2012-11-29|power|18|{"tag": "John_Stuart_Mill"}|0.2235560417175293
+Umbra|100|2012-11-29|power|18|{"tag": "Hugo_Ch\u00e1vez"}|0.2794027328491211
+Umbra|100|2012-11-29|power|18|{"tag": "Mikhail_Gorbachev"}|0.2234184741973877
+Umbra|100|2012-11-29|power|18|{"tag": "Victor_Hugo"}|0.14539766311645508
+Umbra|100|2012-11-29|power|18|{"tag": "Gautama_Buddha"}|0.22118282318115234
+Umbra|100|2012-11-29|power|18|{"tag": "George_Gershwin"}|0.18094444274902344
+Umbra|100|2012-11-29|power|18|{"tag": "Arnold_Schwarzenegger"}|0.20930194854736328
+Umbra|100|2012-11-29|power|18|{"tag": "Beyonc\u00e9_Knowles"}|0.20317792892456055
+Umbra|100|2012-11-29|power|18|{"tag": "Clint_Eastwood"}|0.18040776252746582
+Umbra|100|2012-11-29|power|18|{"tag": "Pliny_the_Elder"}|0.22897028923034668
+Umbra|100|2012-11-29|power|18|{"tag": "Johnny_Cash"}|0.16118240356445312
+Umbra|100|2012-11-29|power|19a|{"city1Id": "702", "city2Id": "967"}|0.04550814628601074
+Umbra|100|2012-11-29|power|19a|{"city1Id": "116", "city2Id": "662"}|0.028411149978637695
+Umbra|100|2012-11-29|power|19a|{"city1Id": "807", "city2Id": "1447"}|0.029070138931274414
+Umbra|100|2012-11-29|power|19a|{"city1Id": "198", "city2Id": "1035"}|0.02962517738342285
+Umbra|100|2012-11-29|power|19a|{"city1Id": "127", "city2Id": "573"}|0.036965131759643555
+Umbra|100|2012-11-29|power|19a|{"city1Id": "317", "city2Id": "1382"}|0.024203777313232422
+Umbra|100|2012-11-29|power|19a|{"city1Id": "455", "city2Id": "1268"}|0.030932903289794922
+Umbra|100|2012-11-29|power|19a|{"city1Id": "880", "city2Id": "1209"}|0.03178095817565918
+Umbra|100|2012-11-29|power|19a|{"city1Id": "655", "city2Id": "1138"}|0.029030799865722656
+Umbra|100|2012-11-29|power|19a|{"city1Id": "334", "city2Id": "614"}|0.02403426170349121
+Umbra|100|2012-11-29|power|19a|{"city1Id": "719", "city2Id": "1199"}|0.02564215660095215
+Umbra|100|2012-11-29|power|19a|{"city1Id": "406", "city2Id": "513"}|0.03293585777282715
+Umbra|100|2012-11-29|power|19a|{"city1Id": "434", "city2Id": "1169"}|0.029325246810913086
+Umbra|100|2012-11-29|power|19a|{"city1Id": "726", "city2Id": "1251"}|0.025733470916748047
+Umbra|100|2012-11-29|power|19a|{"city1Id": "479", "city2Id": "617"}|0.02787613868713379
+Umbra|100|2012-11-29|power|19a|{"city1Id": "283", "city2Id": "452"}|0.032688140869140625
+Umbra|100|2012-11-29|power|19a|{"city1Id": "611", "city2Id": "1304"}|0.029696941375732422
+Umbra|100|2012-11-29|power|19a|{"city1Id": "1080", "city2Id": "1106"}|0.03182578086853027
+Umbra|100|2012-11-29|power|19a|{"city1Id": "982", "city2Id": "1086"}|0.024623632431030273
+Umbra|100|2012-11-29|power|19a|{"city1Id": "531", "city2Id": "682"}|0.04178214073181152
+Umbra|100|2012-11-29|power|19a|{"city1Id": "544", "city2Id": "601"}|0.029184341430664062
+Umbra|100|2012-11-29|power|19a|{"city1Id": "777", "city2Id": "1098"}|0.05825448036193848
+Umbra|100|2012-11-29|power|19a|{"city1Id": "271", "city2Id": "842"}|0.0284726619720459
+Umbra|100|2012-11-29|power|19a|{"city1Id": "711", "city2Id": "1415"}|0.02689671516418457
+Umbra|100|2012-11-29|power|19a|{"city1Id": "553", "city2Id": "737"}|0.028113603591918945
+Umbra|100|2012-11-29|power|19a|{"city1Id": "622", "city2Id": "800"}|0.02792811393737793
+Umbra|100|2012-11-29|power|19a|{"city1Id": "248", "city2Id": "1293"}|0.0331571102142334
+Umbra|100|2012-11-29|power|19a|{"city1Id": "259", "city2Id": "1203"}|0.029342174530029297
+Umbra|100|2012-11-29|power|19a|{"city1Id": "923", "city2Id": "1402"}|0.027202844619750977
+Umbra|100|2012-11-29|power|19a|{"city1Id": "242", "city2Id": "729"}|0.023741483688354492
+Umbra|100|2012-11-29|power|19b|{"city1Id": "129", "city2Id": "265"}|0.032013654708862305
+Umbra|100|2012-11-29|power|19b|{"city1Id": "372", "city2Id": "482"}|0.03069305419921875
+Umbra|100|2012-11-29|power|19b|{"city1Id": "921", "city2Id": "934"}|0.031795501708984375
+Umbra|100|2012-11-29|power|19b|{"city1Id": "282", "city2Id": "295"}|0.05392885208129883
+Umbra|100|2012-11-29|power|19b|{"city1Id": "179", "city2Id": "252"}|0.03112053871154785
+Umbra|100|2012-11-29|power|19b|{"city1Id": "480", "city2Id": "498"}|0.027367353439331055
+Umbra|100|2012-11-29|power|19b|{"city1Id": "397", "city2Id": "484"}|0.03691887855529785
+Umbra|100|2012-11-29|power|19b|{"city1Id": "770", "city2Id": "776"}|0.03086709976196289
+Umbra|100|2012-11-29|power|19b|{"city1Id": "402", "city2Id": "426"}|0.027399539947509766
+Umbra|100|2012-11-29|power|19b|{"city1Id": "137", "city2Id": "247"}|0.028977632522583008
+Umbra|100|2012-11-29|power|19b|{"city1Id": "716", "city2Id": "749"}|0.035227298736572266
+Umbra|100|2012-11-29|power|19b|{"city1Id": "371", "city2Id": "380"}|0.028179168701171875
+Umbra|100|2012-11-29|power|19b|{"city1Id": "128", "city2Id": "198"}|0.02889394760131836
+Umbra|100|2012-11-29|power|19b|{"city1Id": "121", "city2Id": "224"}|0.05062103271484375
+Umbra|100|2012-11-29|power|19b|{"city1Id": "332", "city2Id": "338"}|0.02774953842163086
+Umbra|100|2012-11-29|power|19b|{"city1Id": "354", "city2Id": "381"}|0.0344541072845459
+Umbra|100|2012-11-29|power|19b|{"city1Id": "737", "city2Id": "751"}|0.04889249801635742
+Umbra|100|2012-11-29|power|19b|{"city1Id": "774", "city2Id": "786"}|0.028947114944458008
+Umbra|100|2012-11-29|power|19b|{"city1Id": "210", "city2Id": "261"}|0.03062748908996582
+Umbra|100|2012-11-29|power|19b|{"city1Id": "314", "city2Id": "499"}|0.02914142608642578
+Umbra|100|2012-11-29|power|19b|{"city1Id": "368", "city2Id": "400"}|0.029666662216186523
+Umbra|100|2012-11-29|power|19b|{"city1Id": "1384", "city2Id": "1387"}|0.03318214416503906
+Umbra|100|2012-11-29|power|19b|{"city1Id": "332", "city2Id": "343"}|0.03837084770202637
+Umbra|100|2012-11-29|power|19b|{"city1Id": "919", "city2Id": "941"}|0.033307790756225586
+Umbra|100|2012-11-29|power|19b|{"city1Id": "369", "city2Id": "383"}|0.03368020057678223
+Umbra|100|2012-11-29|power|19b|{"city1Id": "236", "city2Id": "254"}|0.031232118606567383
+Umbra|100|2012-11-29|power|19b|{"city1Id": "138", "city2Id": "157"}|0.03168129920959473
+Umbra|100|2012-11-29|power|19b|{"city1Id": "178", "city2Id": "300"}|0.029885292053222656
+Umbra|100|2012-11-29|power|19b|{"city1Id": "117", "city2Id": "208"}|0.03731060028076172
+Umbra|100|2012-11-29|power|19b|{"city1Id": "447", "city2Id": "481"}|0.02939128875732422
+Umbra|100|2012-11-29|power|20a|{"company": "Nova_Air", "person2Id": "21990232732014"}|0.010411739349365234
+Umbra|100|2012-11-29|power|20a|{"company": "A\u00e9reo_Servicio_Guerrero", "person2Id": "35184372300686"}|0.009261131286621094
+Umbra|100|2012-11-29|power|20a|{"company": "Global_Air_(Mexico)", "person2Id": "17592186456817"}|0.009381771087646484
+Umbra|100|2012-11-29|power|20a|{"company": "Jet4you", "person2Id": "143479"}|0.008616924285888672
+Umbra|100|2012-11-29|power|20a|{"company": "Travel_Service_(Hungary)", "person2Id": "4398046891364"}|0.023756742477416992
+Umbra|100|2012-11-29|power|20a|{"company": "CityLine_Hungary", "person2Id": "10995116716795"}|0.00914454460144043
+Umbra|100|2012-11-29|power|20a|{"company": "Mexicana_de_Aviaci\u00f3n", "person2Id": "6597069958495"}|0.018938779830932617
+Umbra|100|2012-11-29|power|20a|{"company": "ZanAir", "person2Id": "30786325897622"}|0.009127616882324219
+Umbra|100|2012-11-29|power|20a|{"company": "Avolar", "person2Id": "458841"}|0.008064985275268555
+Umbra|100|2012-11-29|power|20a|{"company": "Regional_Air_Lines", "person2Id": "15393162859267"}|0.008521556854248047
+Umbra|100|2012-11-29|power|20a|{"company": "Pamir_Airways", "person2Id": "17592186439817"}|0.0070188045501708984
+Umbra|100|2012-11-29|power|20a|{"company": "Avioquintana", "person2Id": "13194139601297"}|0.006861448287963867
+Umbra|100|2012-11-29|power|20a|{"company": "Atlas_Blue", "person2Id": "2199023467827"}|0.014529228210449219
+Umbra|100|2012-11-29|power|20a|{"company": "Atlas_Blue", "person2Id": "17592186463892"}|0.00680088996887207
+Umbra|100|2012-11-29|power|20a|{"company": "SBA_Airlines", "person2Id": "24189256246389"}|0.007687807083129883
+Umbra|100|2012-11-29|power|20a|{"company": "ZanAir", "person2Id": "10995116716795"}|0.006916522979736328
+Umbra|100|2012-11-29|power|20a|{"company": "CityLine_Hungary", "person2Id": "21990232802435"}|0.014918088912963867
+Umbra|100|2012-11-29|power|20a|{"company": "CityLine_Hungary", "person2Id": "143479"}|0.0078029632568359375
+Umbra|100|2012-11-29|power|20a|{"company": "Bakhtar_Afghan_Airlines", "person2Id": "17592186255549"}|0.010266780853271484
+Umbra|100|2012-11-29|power|20a|{"company": "Nova_Air", "person2Id": "2199023371666"}|0.006130218505859375
+Umbra|100|2012-11-29|power|20a|{"company": "SBA_Airlines", "person2Id": "24189256057565"}|0.015299797058105469
+Umbra|100|2012-11-29|power|20a|{"company": "Nationwide_Airlines_(Zambia)", "person2Id": "17592186463892"}|0.006278514862060547
+Umbra|100|2012-11-29|power|20a|{"company": "SBA_Airlines", "person2Id": "21990232665949"}|0.0057637691497802734
+Umbra|100|2012-11-29|power|20a|{"company": "Pamir_Airways", "person2Id": "21990232732014"}|0.013779878616333008
+Umbra|100|2012-11-29|power|20a|{"company": "Balkh_Airlines", "person2Id": "32985349112915"}|0.01762223243713379
+Umbra|100|2012-11-29|power|20a|{"company": "CityLine_Hungary", "person2Id": "32985348883940"}|0.008700847625732422
+Umbra|100|2012-11-29|power|20a|{"company": "Sevenair", "person2Id": "6597069958495"}|0.01764655113220215
+Umbra|100|2012-11-29|power|20a|{"company": "Eastern_Air", "person2Id": "26388279188239"}|0.007047414779663086
+Umbra|100|2012-11-29|power|20a|{"company": "Tepavia_Trans", "person2Id": "17592186255549"}|0.010990142822265625
+Umbra|100|2012-11-29|power|20a|{"company": "Budapest_Aircraft_Service", "person2Id": "10995116406393"}|0.008040428161621094
+Umbra|100|2012-11-29|power|20b|{"company": "Sierra_Pacific_Airlines", "person2Id": "13194139890998"}|0.02588057518005371
+Umbra|100|2012-11-29|power|20b|{"company": "Tailwind_Airlines", "person2Id": "30786325997337"}|0.03777503967285156
+Umbra|100|2012-11-29|power|20b|{"company": "Tajik_Air", "person2Id": "24189256188342"}|0.039598941802978516
+Umbra|100|2012-11-29|power|20b|{"company": "Corendon_Airlines", "person2Id": "30786325597307"}|0.051218509674072266
+Umbra|100|2012-11-29|power|20b|{"company": "Turkuaz_Airlines", "person2Id": "26388279176268"}|0.010082244873046875
+Umbra|100|2012-11-29|power|20b|{"company": "Gemini_Air_Cargo", "person2Id": "17592186504848"}|0.05006289482116699
+Umbra|100|2012-11-29|power|20b|{"company": "Gemini_Air_Cargo", "person2Id": "8796093429061"}|0.05578780174255371
+Umbra|100|2012-11-29|power|20b|{"company": "IBC_Airways", "person2Id": "8796093429061"}|0.05383110046386719
+Umbra|100|2012-11-29|power|20b|{"company": "National_Airlines_(5M)", "person2Id": "26388279338933"}|0.026068925857543945
+Umbra|100|2012-11-29|power|20b|{"company": "Cape_Air", "person2Id": "26388279338933"}|0.05852556228637695
+Umbra|100|2012-11-29|power|20b|{"company": "Champion_Air", "person2Id": "26388279338933"}|0.0199434757232666
+Umbra|100|2012-11-29|power|20b|{"company": "Flight_Alaska", "person2Id": "13194139986656"}|0.027210235595703125
+Umbra|100|2012-11-29|power|20b|{"company": "Air_Choice_One", "person2Id": "13194139986656"}|0.02422189712524414
+Umbra|100|2012-11-29|power|20b|{"company": "CommutAir", "person2Id": "13194139986656"}|0.028025150299072266
+Umbra|100|2012-11-29|power|20b|{"company": "Ameristar_Jet_Charter", "person2Id": "13194139986656"}|0.03164219856262207
+Umbra|100|2012-11-29|power|20b|{"company": "Flying_Tiger_Line", "person2Id": "6597070051164"}|0.15168476104736328
+Umbra|100|2012-11-29|power|20b|{"company": "Tajik_Air", "person2Id": "28587302325739"}|0.038893938064575195
+Umbra|100|2012-11-29|power|20b|{"company": "Air_Kasai", "person2Id": "13194139571131"}|0.023093223571777344
+Umbra|100|2012-11-29|power|20b|{"company": "Great_Lakes_Business_Company", "person2Id": "13194139571131"}|0.013887882232666016
+Umbra|100|2012-11-29|power|20b|{"company": "Gemini_Air_Cargo", "person2Id": "24189255818038"}|0.0698695182800293
+Umbra|100|2012-11-29|power|20b|{"company": "Sierra_Pacific_Airlines", "person2Id": "24189255818038"}|0.05808210372924805
+Umbra|100|2012-11-29|power|20b|{"company": "Corporate_Flight_Management", "person2Id": "24189255818038"}|0.019934654235839844
+Umbra|100|2012-11-29|power|20b|{"company": "ArGo_Airways", "person2Id": "30786325818443"}|0.05388164520263672
+Umbra|100|2012-11-29|power|20b|{"company": "Olympic_Air", "person2Id": "30786325818443"}|0.03152823448181152
+Umbra|100|2012-11-29|power|20b|{"company": "Flying_Tiger_Line", "person2Id": "2199023422323"}|0.64284348487854
+Umbra|100|2012-11-29|power|20b|{"company": "Tajik_Air", "person2Id": "30786325858060"}|0.013458013534545898
+Umbra|100|2012-11-29|power|20b|{"company": "Flying_Tiger_Line", "person2Id": "2199023589457"}|0.357532262802124
+Umbra|100|2012-11-29|power|20b|{"company": "Pegasus_Airlines", "person2Id": "13194139842938"}|0.023394107818603516
+Umbra|100|2012-11-29|power|20b|{"company": "Corendon_Airlines", "person2Id": "28587302387971"}|0.031278371810913086
+Umbra|100|2012-11-29|power|20b|{"company": "Gemini_Air_Cargo", "person2Id": "26388279247012"}|0.18299508094787598
+Umbra|100|2012-11-29|power|reads||243.465813
+Umbra|100|2012-11-30|throughput|q4precomputation||1.7209930419921875
+Umbra|100|2012-11-30|throughput|q6precomputation||1.0545680522918701
+Umbra|100|2012-11-30|throughput|q19precomputation||7.509005069732666
+Umbra|100|2012-11-30|throughput|q20precomputation||1.8372297286987305
+Umbra|100|2012-11-30|throughput|writes||15.372872591018677
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-06-26T20:08:32.000+00:00"}|0.05576729774475098
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-05-22T10:58:44.000+00:00"}|0.05374717712402344
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-07-16T18:30:34.000+00:00"}|0.05515646934509277
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-03-12T07:43:40.000+00:00"}|0.05354642868041992
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-08-13T02:14:13.000+00:00"}|0.05577564239501953
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-02-24T13:01:27.000+00:00"}|0.0535435676574707
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-08-24T09:21:11.000+00:00"}|0.054949045181274414
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-07-13T21:45:13.000+00:00"}|0.05410146713256836
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-05-30T19:19:21.000+00:00"}|0.054529428482055664
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-08-03T03:03:42.000+00:00"}|0.055754661560058594
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-08-14T09:09:40.000+00:00"}|0.055753469467163086
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-06-23T22:22:11.000+00:00"}|0.05412626266479492
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-07-27T01:37:32.000+00:00"}|0.05427980422973633
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-08-23T01:25:44.000+00:00"}|0.05462503433227539
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-04-17T00:48:56.000+00:00"}|0.05379176139831543
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-07-14T04:40:40.000+00:00"}|0.055130958557128906
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-07-10T00:00:52.000+00:00"}|0.05431652069091797
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-07-15T11:35:07.000+00:00"}|0.055077552795410156
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-08-22T18:30:17.000+00:00"}|0.05566239356994629
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-06-22T15:27:44.000+00:00"}|0.05439448356628418
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-07-31T05:17:21.000+00:00"}|0.05628800392150879
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-08-21T11:35:50.000+00:00"}|0.05582690238952637
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-08-02T20:08:15.000+00:00"}|0.05473947525024414
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-07-30T22:22:54.000+00:00"}|0.055387020111083984
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-05-25T07:43:05.000+00:00"}|0.05406761169433594
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-06-14T06:06:07.000+00:00"}|0.0550382137298584
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-06-27T03:03:00.000+00:00"}|0.05424070358276367
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-06-25T12:12:05.000+00:00"}|0.05395054817199707
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-07-09T16:04:25.000+00:00"}|0.05477094650268555
+Umbra|100|2012-11-30|throughput|1|{"datetime": "2010-07-18T09:21:29.000+00:00"}|0.0553433895111084
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-23", "tagClass": "Saint"}|0.0718545913696289
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-06", "tagClass": "Writer"}|0.14034557342529297
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-19", "tagClass": "ChristianBishop"}|0.05055999755859375
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-18", "tagClass": "Single"}|0.21246576309204102
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-12", "tagClass": "BaseballPlayer"}|0.04214978218078613
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-13", "tagClass": "Album"}|0.21027207374572754
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-12", "tagClass": "Album"}|0.19741058349609375
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-10", "tagClass": "BaseballPlayer"}|0.0432283878326416
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-23", "tagClass": "Philosopher"}|0.07954573631286621
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-23", "tagClass": "Song"}|0.07677173614501953
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-19", "tagClass": "OfficeHolder"}|0.17233538627624512
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-21", "tagClass": "BritishRoyalty"}|0.14132928848266602
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-19", "tagClass": "MilitaryPerson"}|0.05155301094055176
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-19", "tagClass": "Album"}|0.20023727416992188
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-10", "tagClass": "President"}|0.06850457191467285
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-13", "tagClass": "BritishRoyalty"}|0.1307520866394043
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-16", "tagClass": "OfficeHolder"}|0.18196797370910645
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-09", "tagClass": "Philosopher"}|0.07819986343383789
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-21", "tagClass": "SoccerPlayer"}|0.03195643424987793
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-21", "tagClass": "Writer"}|0.13846135139465332
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-17", "tagClass": "Artist"}|0.055333614349365234
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-23", "tagClass": "Scientist"}|0.06087684631347656
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-19", "tagClass": "President"}|0.06798815727233887
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-07", "tagClass": "MilitaryPerson"}|0.048163652420043945
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-19", "tagClass": "Monarch"}|0.06533360481262207
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-14", "tagClass": "Philosopher"}|0.07948541641235352
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-21", "tagClass": "Person"}|0.20617032051086426
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-15", "tagClass": "Album"}|0.1995716094970703
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-16", "tagClass": "BaseballPlayer"}|0.039803266525268555
+Umbra|100|2012-11-30|throughput|2a|{"date": "2010-06-12", "tagClass": "MilitaryPerson"}|0.04839038848876953
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-14", "tagClass": "ComicsCreator"}|0.03727364540100098
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-12", "tagClass": "BaseballPlayer"}|0.04375958442687988
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-23", "tagClass": "GolfPlayer"}|0.030429363250732422
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-10", "tagClass": "BaseballPlayer"}|0.04195046424865723
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-22", "tagClass": "Criminal"}|0.02874159812927246
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-18", "tagClass": "Chancellor"}|0.028789997100830078
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-20", "tagClass": "Architect"}|0.03349781036376953
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-24", "tagClass": "Criminal"}|0.028689861297607422
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-05", "tagClass": "Actor"}|0.03666949272155762
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-19", "tagClass": "MilitaryPerson"}|0.050994157791137695
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-18", "tagClass": "ComicsCharacter"}|0.03805947303771973
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-19", "tagClass": "ComicsCharacter"}|0.03764796257019043
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-12", "tagClass": "PrimeMinister"}|0.03951597213745117
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-18", "tagClass": "EurovisionSongContestEntry"}|0.03396415710449219
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-10", "tagClass": "Company"}|0.030686378479003906
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-24", "tagClass": "IceHockeyPlayer"}|0.03091263771057129
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-17", "tagClass": "Artist"}|0.05744338035583496
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-07", "tagClass": "MilitaryPerson"}|0.05011701583862305
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-15", "tagClass": "Chancellor"}|0.029268503189086914
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-22", "tagClass": "Governor"}|0.03220963478088379
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-10", "tagClass": "FictionalCharacter"}|0.04206204414367676
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-20", "tagClass": "Governor"}|0.03252816200256348
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-19", "tagClass": "Actor"}|0.0376589298248291
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-16", "tagClass": "BaseballPlayer"}|0.04193830490112305
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-12", "tagClass": "MilitaryPerson"}|0.05099368095397949
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-17", "tagClass": "MilitaryPerson"}|0.04940962791442871
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-24", "tagClass": "PrimeMinister"}|0.039922475814819336
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-06", "tagClass": "MilitaryPerson"}|0.0475161075592041
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-09", "tagClass": "ComicsCharacter"}|0.037035226821899414
+Umbra|100|2012-11-30|throughput|2b|{"date": "2010-06-18", "tagClass": "Comedian"}|0.04779195785522461
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "BasketballPlayer", "country": "China"}|0.1899878978729248
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "Chancellor", "country": "India"}|0.15946245193481445
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "MilitaryUnit", "country": "India"}|0.1533527374267578
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "GolfPlayer", "country": "India"}|0.1616051197052002
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "Criminal", "country": "India"}|0.15751004219055176
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "AmericanFootballPlayer", "country": "China"}|0.14853501319885254
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "Band", "country": "India"}|0.14986395835876465
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "SoccerManager", "country": "China"}|0.14844608306884766
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "NascarDriver", "country": "India"}|0.1504983901977539
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "Cyclist", "country": "India"}|0.14814496040344238
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "SportsTeamMember", "country": "China"}|0.16296148300170898
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "MartialArtist", "country": "China"}|0.15997576713562012
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "MemberOfParliament", "country": "China"}|0.14845776557922363
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "Wrestler", "country": "India"}|0.1463756561279297
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "Judge", "country": "China"}|0.1474287509918213
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "SnookerChamp", "country": "China"}|0.15099120140075684
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "Congressman", "country": "India"}|0.14972448348999023
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "Model", "country": "India"}|0.15004396438598633
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "SnookerPlayer", "country": "China"}|0.14771032333374023
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "Film", "country": "India"}|0.1502819061279297
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "Astronaut", "country": "India"}|0.14863872528076172
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "AdultActor", "country": "China"}|0.14542675018310547
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "BritishRoyalty", "country": "China"}|0.18434977531433105
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "Writer", "country": "China"}|0.18482017517089844
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "OfficeHolder", "country": "India"}|0.19224166870117188
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "MusicalArtist", "country": "India"}|0.2071995735168457
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "Album", "country": "China"}|0.21015548706054688
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "Person", "country": "India"}|0.20099210739135742
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "Single", "country": "China"}|0.19889545440673828
+Umbra|100|2012-11-30|throughput|3|{"tagClass": "Country", "country": "China"}|0.2154862880706787
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-13"}|0.06521821022033691
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-09"}|0.06708765029907227
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-02-03"}|0.06652975082397461
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-06"}|0.0641775131225586
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-27"}|0.06656265258789062
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-08"}|0.06499338150024414
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-02"}|0.06978297233581543
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-02-07"}|0.0657813549041748
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-02-05"}|0.06616973876953125
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-20"}|0.07492733001708984
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-07"}|0.0669245719909668
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-10"}|0.0653989315032959
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-26"}|0.06615209579467773
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-11"}|0.06548047065734863
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-02-06"}|0.06644034385681152
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-24"}|0.07355260848999023
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-03"}|0.06588244438171387
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-02-08"}|0.06642889976501465
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-15"}|0.06735944747924805
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-31"}|0.06580877304077148
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-02-04"}|0.06524109840393066
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-01"}|0.06528496742248535
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-05"}|0.06676292419433594
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-04"}|0.06552720069885254
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-16"}|0.0661613941192627
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-18"}|0.06563377380371094
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-25"}|0.06569266319274902
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-19"}|0.0657045841217041
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-29"}|0.06978750228881836
+Umbra|100|2012-11-30|throughput|4|{"date": "2010-01-22"}|0.06546783447265625
+Umbra|100|2012-11-30|throughput|5|{"tag": "God_Bless_the_USA"}|0.08950304985046387
+Umbra|100|2012-11-30|throughput|5|{"tag": "China_in_Your_Hand"}|0.0848228931427002
+Umbra|100|2012-11-30|throughput|5|{"tag": "Superunknown"}|0.0991368293762207
+Umbra|100|2012-11-30|throughput|5|{"tag": "Black_&_Blue"}|0.08411550521850586
+Umbra|100|2012-11-30|throughput|5|{"tag": "American_Boy"}|0.08886003494262695
+Umbra|100|2012-11-30|throughput|5|{"tag": "Kingdom_of_East_Anglia"}|0.08378982543945312
+Umbra|100|2012-11-30|throughput|5|{"tag": "Blue_Moon_of_Kentucky"}|0.08342409133911133
+Umbra|100|2012-11-30|throughput|5|{"tag": "Cisalpine_Republic"}|0.09799623489379883
+Umbra|100|2012-11-30|throughput|5|{"tag": "Duchy_of_Brittany"}|0.09573483467102051
+Umbra|100|2012-11-30|throughput|5|{"tag": "Kingdom_of_Kush"}|0.08681106567382812
+Umbra|100|2012-11-30|throughput|5|{"tag": "Behind_Blue_Eyes"}|0.09756660461425781
+Umbra|100|2012-11-30|throughput|5|{"tag": "Aq_Qoyunlu"}|0.09663748741149902
+Umbra|100|2012-11-30|throughput|5|{"tag": "Desolation_Row"}|0.0845944881439209
+Umbra|100|2012-11-30|throughput|5|{"tag": "Schaumburg-Lippe"}|0.08464956283569336
+Umbra|100|2012-11-30|throughput|5|{"tag": "No_Air"}|0.09633111953735352
+Umbra|100|2012-11-30|throughput|5|{"tag": "I_Want_You_to_Want_Me"}|0.08716154098510742
+Umbra|100|2012-11-30|throughput|5|{"tag": "Harsha"}|0.08605599403381348
+Umbra|100|2012-11-30|throughput|5|{"tag": "You_Are_So_Beautiful"}|0.08394646644592285
+Umbra|100|2012-11-30|throughput|5|{"tag": "Judy_at_Carnegie_Hall"}|0.09715843200683594
+Umbra|100|2012-11-30|throughput|5|{"tag": "MMMBop"}|0.08805227279663086
+Umbra|100|2012-11-30|throughput|5|{"tag": "The_Fame_Monster"}|0.08413362503051758
+Umbra|100|2012-11-30|throughput|5|{"tag": "The_Bedlam_in_Goliath"}|0.08527016639709473
+Umbra|100|2012-11-30|throughput|5|{"tag": "Pinball_Wizard"}|0.0980222225189209
+Umbra|100|2012-11-30|throughput|5|{"tag": "Take_Five"}|0.08347535133361816
+Umbra|100|2012-11-30|throughput|5|{"tag": "The_Dutchess"}|0.09247159957885742
+Umbra|100|2012-11-30|throughput|5|{"tag": "All_Eyez_on_Me"}|0.09003758430480957
+Umbra|100|2012-11-30|throughput|5|{"tag": "Samogitia"}|0.09309792518615723
+Umbra|100|2012-11-30|throughput|5|{"tag": "Unknown_Pleasures"}|0.08517146110534668
+Umbra|100|2012-11-30|throughput|5|{"tag": "Welcome_to_the_Jungle"}|0.08410263061523438
+Umbra|100|2012-11-30|throughput|5|{"tag": "Private_Dancer"}|0.08302450180053711
+Umbra|100|2012-11-30|throughput|6|{"tag": "Prince-Bishopric_of_Li\u00e8ge"}|0.08488273620605469
+Umbra|100|2012-11-30|throughput|6|{"tag": "Lordship_of_Ireland"}|0.06218457221984863
+Umbra|100|2012-11-30|throughput|6|{"tag": "Malacca_Sultanate"}|0.05931425094604492
+Umbra|100|2012-11-30|throughput|6|{"tag": "International_Energy_Agency"}|0.05934929847717285
+Umbra|100|2012-11-30|throughput|6|{"tag": "France_in_the_Middle_Ages"}|0.062000274658203125
+Umbra|100|2012-11-30|throughput|6|{"tag": "OK_Computer"}|0.05509829521179199
+Umbra|100|2012-11-30|throughput|6|{"tag": "Hotel_California"}|0.06425070762634277
+Umbra|100|2012-11-30|throughput|6|{"tag": "Dilip_Kumar"}|0.060582637786865234
+Umbra|100|2012-11-30|throughput|6|{"tag": "Ingrid_van_Houten-Groeneveld"}|0.07277989387512207
+Umbra|100|2012-11-30|throughput|6|{"tag": "Saxe-Altenburg"}|0.05690312385559082
+Umbra|100|2012-11-30|throughput|6|{"tag": "Both_Sides,_Now"}|0.06134939193725586
+Umbra|100|2012-11-30|throughput|6|{"tag": "Sark"}|0.060073137283325195
+Umbra|100|2012-11-30|throughput|6|{"tag": "Nevermind"}|0.06397438049316406
+Umbra|100|2012-11-30|throughput|6|{"tag": "Magical_Mystery_Tour"}|0.059618234634399414
+Umbra|100|2012-11-30|throughput|6|{"tag": "In_da_Club"}|0.055739641189575195
+Umbra|100|2012-11-30|throughput|6|{"tag": "Eleanor_Rigby"}|0.061437368392944336
+Umbra|100|2012-11-30|throughput|6|{"tag": "Tristan_da_Cunha"}|0.060785531997680664
+Umbra|100|2012-11-30|throughput|6|{"tag": "Nevis"}|0.07390403747558594
+Umbra|100|2012-11-30|throughput|6|{"tag": "Hephthalite"}|0.07333993911743164
+Umbra|100|2012-11-30|throughput|6|{"tag": "Girls_Just_Want_to_Have_Fun"}|0.07153034210205078
+Umbra|100|2012-11-30|throughput|6|{"tag": "HIStory:_Past,_Present_and_Future,_Book_I"}|0.0631864070892334
+Umbra|100|2012-11-30|throughput|6|{"tag": "Beggars_Banquet"}|0.058908939361572266
+Umbra|100|2012-11-30|throughput|6|{"tag": "Whole_Lotta_Love"}|0.0689704418182373
+Umbra|100|2012-11-30|throughput|6|{"tag": "We_Are_the_Champions"}|0.0682365894317627
+Umbra|100|2012-11-30|throughput|6|{"tag": "Electric_Ladyland"}|0.06112408638000488
+Umbra|100|2012-11-30|throughput|6|{"tag": "TV_Asahi"}|0.05655336380004883
+Umbra|100|2012-11-30|throughput|6|{"tag": "Kurt_G\u00f6del"}|0.05713057518005371
+Umbra|100|2012-11-30|throughput|6|{"tag": "Duchy_of_Styria"}|0.05896639823913574
+Umbra|100|2012-11-30|throughput|6|{"tag": "Long_Tall_Sally"}|0.060042619705200195
+Umbra|100|2012-11-30|throughput|6|{"tag": "Saint_Barth\u00e9lemy"}|0.0681769847869873
+Umbra|100|2012-11-30|throughput|7|{"tag": "John_Wayne"}|0.09300708770751953
+Umbra|100|2012-11-30|throughput|7|{"tag": "Burma"}|0.09664130210876465
+Umbra|100|2012-11-30|throughput|7|{"tag": "Universal_Studios"}|0.09454107284545898
+Umbra|100|2012-11-30|throughput|7|{"tag": "C._S._Lewis"}|0.10478401184082031
+Umbra|100|2012-11-30|throughput|7|{"tag": "North_Korea"}|0.10204386711120605
+Umbra|100|2012-11-30|throughput|7|{"tag": "Confucius"}|0.09636545181274414
+Umbra|100|2012-11-30|throughput|7|{"tag": "Bolivia"}|0.09839129447937012
+Umbra|100|2012-11-30|throughput|7|{"tag": "James_Cameron"}|0.10884380340576172
+Umbra|100|2012-11-30|throughput|7|{"tag": "John_McCain"}|0.09529709815979004
+Umbra|100|2012-11-30|throughput|7|{"tag": "Gamal_Abdel_Nasser"}|0.09248852729797363
+Umbra|100|2012-11-30|throughput|7|{"tag": "Cleopatra_VII"}|0.09615063667297363
+Umbra|100|2012-11-30|throughput|7|{"tag": "Jean-Jacques_Rousseau"}|0.09373831748962402
+Umbra|100|2012-11-30|throughput|7|{"tag": "United_Nations"}|0.09542489051818848
+Umbra|100|2012-11-30|throughput|7|{"tag": "Oliver_Cromwell"}|0.0982048511505127
+Umbra|100|2012-11-30|throughput|7|{"tag": "Charles_I_of_England"}|0.09382820129394531
+Umbra|100|2012-11-30|throughput|7|{"tag": "Alanis_Morissette"}|0.09582853317260742
+Umbra|100|2012-11-30|throughput|7|{"tag": "Malaysia"}|0.09416675567626953
+Umbra|100|2012-11-30|throughput|7|{"tag": "Anthony_Hopkins"}|0.09469962120056152
+Umbra|100|2012-11-30|throughput|7|{"tag": "Nicolaus_Copernicus"}|0.10674738883972168
+Umbra|100|2012-11-30|throughput|7|{"tag": "Roman_Empire"}|0.09493732452392578
+Umbra|100|2012-11-30|throughput|7|{"tag": "Marilyn_Monroe"}|0.09649443626403809
+Umbra|100|2012-11-30|throughput|7|{"tag": "Ottoman_Empire"}|0.093353271484375
+Umbra|100|2012-11-30|throughput|7|{"tag": "Francisco_Franco"}|0.09823131561279297
+Umbra|100|2012-11-30|throughput|7|{"tag": "Sherlock_Holmes"}|0.0966036319732666
+Umbra|100|2012-11-30|throughput|7|{"tag": "Socialist_Federal_Republic_of_Yugoslavia"}|0.09447622299194336
+Umbra|100|2012-11-30|throughput|7|{"tag": "Salvador_Dal\u00ed"}|0.09466791152954102
+Umbra|100|2012-11-30|throughput|7|{"tag": "Pope_Paul_VI"}|0.09404611587524414
+Umbra|100|2012-11-30|throughput|7|{"tag": "Paul_Capdeville"}|0.09737992286682129
+Umbra|100|2012-11-30|throughput|7|{"tag": "Singapore"}|0.09384536743164062
+Umbra|100|2012-11-30|throughput|7|{"tag": "Andrew_Jackson"}|0.09325432777404785
+Umbra|100|2012-11-30|throughput|8a|{"tag": "James_Madison", "startDate": "2010-06-08", "endDate": "2010-06-21"}|0.04625725746154785
+Umbra|100|2012-11-30|throughput|8a|{"tag": "Herodotus", "startDate": "2010-06-11", "endDate": "2010-06-25"}|0.057211875915527344
+Umbra|100|2012-11-30|throughput|8a|{"tag": "Hillary_Rodham_Clinton", "startDate": "2010-06-14", "endDate": "2010-06-24"}|0.06710076332092285
+Umbra|100|2012-11-30|throughput|8a|{"tag": "Dmitri_Shostakovich", "startDate": "2010-06-16", "endDate": "2010-06-30"}|0.0646052360534668

@@ -6,6 +6,8 @@
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/planner/extension_callback.hpp"
+
 using namespace duckdb;
 
 //===--------------------------------------------------------------------===//
@@ -124,19 +126,20 @@ public:
 		idx_t offset;
 	};
 
-	static unique_ptr<FunctionData> QuackBind(ClientContext &context, TableFunctionBindInput &input,
-	                                          vector<LogicalType> &return_types, vector<string> &names) {
+	static duckdb::unique_ptr<FunctionData> QuackBind(ClientContext &context, TableFunctionBindInput &input,
+	                                                  vector<LogicalType> &return_types, vector<string> &names) {
 		names.emplace_back("quack");
 		return_types.emplace_back(LogicalType::VARCHAR);
-		return make_unique<QuackBindData>(BigIntValue::Get(input.inputs[0]));
+		return make_uniq<QuackBindData>(BigIntValue::Get(input.inputs[0]));
 	}
 
-	static unique_ptr<GlobalTableFunctionState> QuackInit(ClientContext &context, TableFunctionInitInput &input) {
-		return make_unique<QuackGlobalData>();
+	static duckdb::unique_ptr<GlobalTableFunctionState> QuackInit(ClientContext &context,
+	                                                              TableFunctionInitInput &input) {
+		return make_uniq<QuackGlobalData>();
 	}
 
 	static void QuackFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-		auto &bind_data = (QuackBindData &)*data_p.bind_data;
+		auto &bind_data = data_p.bind_data->Cast<QuackBindData>();
 		auto &data = (QuackGlobalData &)*data_p.global_state;
 		if (data.offset >= bind_data.number_of_quacks) {
 			// finished returning values
@@ -163,8 +166,8 @@ struct QuackExtensionData : public ParserExtensionParseData {
 
 	idx_t number_of_quacks;
 
-	unique_ptr<ParserExtensionParseData> Copy() const override {
-		return make_unique<QuackExtensionData>(number_of_quacks);
+	duckdb::unique_ptr<ParserExtensionParseData> Copy() const override {
+		return make_uniq<QuackExtensionData>(number_of_quacks);
 	}
 };
 
@@ -195,22 +198,40 @@ public:
 			}
 		}
 		// QUACK
-		return ParserExtensionParseResult(make_unique<QuackExtensionData>(splits.size() + 1));
+		return ParserExtensionParseResult(make_uniq<QuackExtensionData>(splits.size() + 1));
 	}
 
 	static ParserExtensionPlanResult QuackPlanFunction(ParserExtensionInfo *info, ClientContext &context,
-	                                                   unique_ptr<ParserExtensionParseData> parse_data) {
+	                                                   duckdb::unique_ptr<ParserExtensionParseData> parse_data) {
 		auto &quack_data = (QuackExtensionData &)*parse_data;
 
 		ParserExtensionPlanResult result;
 		result.function = QuackFunction();
 		result.parameters.push_back(Value::BIGINT(quack_data.number_of_quacks));
-		result.read_only = true;
 		result.requires_valid_transaction = false;
 		result.return_type = StatementReturnType::QUERY_RESULT;
 		return result;
 	}
 };
+
+static set<string> test_loaded_extension_list;
+
+class QuackLoadExtension : public ExtensionCallback {
+	void OnExtensionLoaded(DatabaseInstance &db, const string &name) override {
+		test_loaded_extension_list.insert(name);
+	}
+};
+
+inline void LoadedExtensionsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	string result_str;
+	for (auto &ext : test_loaded_extension_list) {
+		if (!result_str.empty()) {
+			result_str += ", ";
+		}
+		result_str += ext;
+	}
+	result.Reference(Value(result_str));
+}
 
 //===--------------------------------------------------------------------===//
 // Extension load + setup
@@ -223,47 +244,52 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	// create a scalar function
 	Connection con(db);
 	auto &client_context = *con.context;
-	auto &catalog = Catalog::GetCatalog(client_context);
+	auto &catalog = Catalog::GetSystemCatalog(client_context);
 	con.BeginTransaction();
 	con.CreateScalarFunction<int32_t, string_t>("hello", {LogicalType(LogicalTypeId::VARCHAR)},
 	                                            LogicalType(LogicalTypeId::INTEGER), &hello_fun);
-
-	catalog.CreateFunction(client_context, &hello_alias_info);
+	catalog.CreateFunction(client_context, hello_alias_info);
 
 	// Add alias POINT type
 	string alias_name = "POINT";
 	child_list_t<LogicalType> child_types;
 	child_types.push_back(make_pair("x", LogicalType::INTEGER));
 	child_types.push_back(make_pair("y", LogicalType::INTEGER));
-	auto alias_info = make_unique<CreateTypeInfo>();
+	auto alias_info = make_uniq<CreateTypeInfo>();
+	alias_info->internal = true;
 	alias_info->name = alias_name;
 	LogicalType target_type = LogicalType::STRUCT(child_types);
 	target_type.SetAlias(alias_name);
 	alias_info->type = target_type;
 
-	auto entry = (TypeCatalogEntry *)catalog.CreateType(client_context, alias_info.get());
-	LogicalType::SetCatalog(target_type, entry);
+	catalog.CreateType(client_context, *alias_info);
 
 	// Function add point
 	ScalarFunction add_point_func("add_point", {target_type, target_type}, target_type, AddPointFunction);
 	CreateScalarFunctionInfo add_point_info(add_point_func);
-	catalog.CreateFunction(client_context, &add_point_info);
+	catalog.CreateFunction(client_context, add_point_info);
 
 	// Function sub point
 	ScalarFunction sub_point_func("sub_point", {target_type, target_type}, target_type, SubPointFunction);
 	CreateScalarFunctionInfo sub_point_info(sub_point_func);
-	catalog.CreateFunction(client_context, &sub_point_info);
+	catalog.CreateFunction(client_context, sub_point_info);
+
+	// Function sub point
+	ScalarFunction loaded_extensions("loaded_extensions", {}, LogicalType::VARCHAR, LoadedExtensionsFunction);
+	CreateScalarFunctionInfo loaded_extensions_info(loaded_extensions);
+	catalog.CreateFunction(client_context, loaded_extensions_info);
 
 	// Quack function
 	QuackFunction quack_function;
 	CreateTableFunctionInfo quack_info(quack_function);
-	catalog.CreateTableFunction(client_context, &quack_info);
+	catalog.CreateTableFunction(client_context, quack_info);
 
 	con.Commit();
 
 	// add a parser extension
 	auto &config = DBConfig::GetConfig(db);
 	config.parser_extensions.push_back(QuackExtension());
+	config.extension_callbacks.push_back(make_uniq<QuackLoadExtension>());
 }
 
 DUCKDB_EXTENSION_API const char *loadable_extension_demo_version() {

@@ -7,27 +7,169 @@ PRAGMA enable_verification
 
 foreach type FLOAT DOUBLE
 
-foreach val nan inf -inf
+foreach val nan
 
-# any arithmetic on a nan or inf value will result in an overflow
-statement error
+# any arithmetic on a nan value will result in a nan value
+
+query I
 SELECT '${val}'::${type} + 1
+----
+nan
 
-statement error
+query I
+SELECT '${val}'::${type} + 'inf'::${type}
+----
+nan
+
+query I
 SELECT '${val}'::${type} - 1
+----
+nan
 
-statement error
+query I
+SELECT '${val}'::${type} - 'inf'::${type}
+----
+nan
+
+query I
 SELECT '${val}'::${type} * 1
+----
+nan
 
-statement error
+query I
+SELECT '${val}'::${type} * 'inf'::${type}
+----
+nan
+
+query I
 SELECT '${val}'::${type} / 1
+----
+nan
 
-statement error
+query I
+SELECT '${val}'::${type} / 'inf'::${type}
+----
+nan
+
+query I
 SELECT '${val}'::${type} % 1
+----
+nan
 
-statement error
+query I
+SELECT '${val}'::${type} % 'inf'::${type}
+----
+nan
+
+query I
 SELECT -('${val}'::${type})
+----
+nan
 
 endloop
+
+endloop
+
+foreach type FLOAT DOUBLE
+# any arithmetic on a nan value will result in a nan value
+
+query I
+SELECT 'inf'::${type} + 1
+----
+inf
+
+# inf + inf = inf
+query I
+SELECT 'inf'::${type} + 'inf'::${type} 
+----
+inf
+
+query I
+SELECT 'inf'::${type} - 1
+----
+inf
+
+# inf - inf = nan
+query I
+SELECT 'inf'::${type} - 'inf'::${type} 
+----
+nan
+
+query I
+SELECT 'inf'::${type} * 1
+----
+inf
+
+# inf * inf = inf
+query I
+SELECT 'inf'::${type} * 'inf'::${type}
+----
+inf
+
+# inf * -inf = -inf
+query I
+SELECT 'inf'::${type} * '-inf'::${type}
+----
+-inf
+
+query I
+SELECT 'inf'::${type} / 1
+----
+inf
+
+query I
+SELECT 1 / 'inf'::${type}
+----
+0
+
+query I
+SELECT 'inf'::${type} % 1
+----
+nan
+
+query I
+SELECT 1 % 'inf'::${type}
+----
+1
+
+query I
+SELECT -('inf'::${type})
+----
+-inf
+
+endloop
+
+
+foreach type FLOAT DOUBLE
+
+query I
+SELECT '-inf'::${type} + 1
+----
+-inf
+
+query I
+SELECT '-inf'::${type} - 1
+----
+-inf
+
+query I
+SELECT '-inf'::${type} * 1
+----
+-inf
+
+query I
+SELECT '-inf'::${type} / 1
+----
+-inf
+
+query I
+SELECT '-inf'::${type} % 1
+----
+nan
+
+query I
+SELECT -('-inf'::${type})
+----
+inf
 
 endloop

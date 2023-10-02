@@ -3,6 +3,9 @@
 # group: [generic]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 PRAGMA enable_verification
 
 # test constant BETWEEN statement

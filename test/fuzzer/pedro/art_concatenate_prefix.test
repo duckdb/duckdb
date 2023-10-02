@@ -1,0 +1,15 @@
+# name: test/fuzzer/pedro/art_concatenate_prefix.test
+# description: Issue #7128, number 14
+# group: [pedro]
+
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+CREATE INDEX i0 ON t0 (c0, (BLOB '\xE7\x1F\x8B&\xF0'));
+
+statement ok
+INSERT INTO t0 VALUES (-2041046163), (35016222);
+
+statement ok
+TRUNCATE t0;

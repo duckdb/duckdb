@@ -64,7 +64,7 @@ char *params[9];
 #endif
 
 #define MAX_LINE_LEN 120
-#ifdef WIN32
+#ifdef _WIN32
 #define OPTION_START '/'
 #else
 #define OPTION_START '-'

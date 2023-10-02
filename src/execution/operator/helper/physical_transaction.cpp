@@ -1,10 +1,11 @@
 #include "duckdb/execution/operator/helper/physical_transaction.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/valid_checker.hpp"
 
 namespace duckdb {
 
-void PhysicalTransaction::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                  LocalSourceState &lstate) const {
+SourceResultType PhysicalTransaction::GetData(ExecutionContext &context, DataChunk &chunk,
+                                              OperatorSourceInput &input) const {
 	auto &client = context.client;
 
 	auto type = info->type;
@@ -47,6 +48,8 @@ void PhysicalTransaction::GetData(ExecutionContext &context, DataChunk &chunk, G
 	default:
 		throw NotImplementedException("Unrecognized transaction type!");
 	}
+
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

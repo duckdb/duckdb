@@ -1,0 +1,68 @@
+# name: test/sql/error/extension_function_error.test
+# description: Test usage of functions/settings that are found in extensions without having the extension loaded
+# group: [error]
+
+require no_extension_autoloading
+
+# this function is in the dbgen extension
+statement error
+SELECT dbgen();
+----
+tpch
+
+statement error
+SELECT DBGEN();
+----
+tpch
+
+
+statement error
+SELECT * FROM dbgen();
+----
+tpch
+
+statement error
+CALL dbgen(sf=0.1);
+----
+tpch
+
+# if we use it as a table we don't report this error - though!
+statement error
+SELECT * FROM dbgen
+----
+Table with name dbgen does not exist
+
+# how about settings
+statement error
+SET TimeZone='UTC'
+----
+icu
+
+statement error
+SELECT * FROM TimeZone
+----
+Table with name TimeZone does not exist
+
+# after loading the extension the function works like a normal function
+require tpch
+
+statement error
+SELECT dbgen()
+----
+Function "dbgen" is a table function but it was used as a scalar function
+
+statement error
+CALL dbge()
+----
+dbgen
+
+# same for settings
+require icu
+
+statement error
+SET TimeZon='UTC'
+----
+TimeZone
+
+statement ok
+SET TimeZone='UTC'

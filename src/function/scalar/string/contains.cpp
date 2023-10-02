@@ -106,9 +106,9 @@ idx_t ContainsFun::Find(const unsigned char *haystack, idx_t haystack_size, cons
 	if (location == nullptr) {
 		return DConstants::INVALID_INDEX;
 	}
-	idx_t base_offset = (const unsigned char *)location - haystack;
+	idx_t base_offset = const_uchar_ptr_cast(location) - haystack;
 	haystack_size -= base_offset;
-	haystack = (const unsigned char *)location;
+	haystack = const_uchar_ptr_cast(location);
 	// switch algorithm depending on needle size
 	switch (needle_size) {
 	case 1:
@@ -133,9 +133,9 @@ idx_t ContainsFun::Find(const unsigned char *haystack, idx_t haystack_size, cons
 }
 
 idx_t ContainsFun::Find(const string_t &haystack_s, const string_t &needle_s) {
-	auto haystack = (const unsigned char *)haystack_s.GetDataUnsafe();
+	auto haystack = const_uchar_ptr_cast(haystack_s.GetData());
 	auto haystack_size = haystack_s.GetSize();
-	auto needle = (const unsigned char *)needle_s.GetDataUnsafe();
+	auto needle = const_uchar_ptr_cast(needle_s.GetData());
 	auto needle_size = needle_s.GetSize();
 	if (needle_size == 0) {
 		// empty needle: always true

@@ -1,0 +1,135 @@
+# name: test/sql/pivot/top_level_pivot_syntax.test
+# description: Test top-level pivot syntax
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+# pivot using an enum
+statement ok
+CREATE OR REPLACE TABLE monthly_sales(empid INT, amount INT, month TEXT);
+
+statement ok
+INSERT INTO monthly_sales VALUES
+    (1, 10000, '1-JAN'),
+    (1, 400, '1-JAN'),
+    (2, 4500, '1-JAN'),
+    (2, 35000, '1-JAN'),
+    (1, 5000, '2-FEB'),
+    (1, 3000, '2-FEB'),
+    (2, 200, '2-FEB'),
+    (2, 90500, '2-FEB'),
+    (1, 6000, '3-MAR'),
+    (1, 5000, '3-MAR'),
+    (2, 2500, '3-MAR'),
+    (2, 9500, '3-MAR'),
+    (1, 8000, '4-APR'),
+    (1, 10000, '4-APR'),
+    (2, 800, '4-APR'),
+    (2, 4500, '4-APR');
+
+# top level PIVOT syntax
+query IIIII rowsort
+PIVOT monthly_sales ON MONTH USING SUM(AMOUNT)
+----
+1	10400	8000	11000	18000
+2	39500	90700	12000	5300
+
+query IIIII rowsort
+FROM (PIVOT monthly_sales ON MONTH USING SUM(AMOUNT));
+----
+1	10400	8000	11000	18000
+2	39500	90700	12000	5300
+
+query IIIII rowsort
+PIVOT monthly_sales ON MONTH USING SUM(AMOUNT) GROUP BY empid
+----
+1	10400	8000	11000	18000
+2	39500	90700	12000	5300
+
+query IIIII rowsort
+PIVOT monthly_sales ON MONTH IN ('1-JAN', '2-FEB', '3-MAR', '4-APR') USING SUM(AMOUNT) GROUP BY empid
+----
+1	10400	8000	11000	18000
+2	39500	90700	12000	5300
+
+query IIII rowsort
+PIVOT monthly_sales ON MONTH IN ('1-JAN', '2-FEB', '3-MAR') USING SUM(AMOUNT) GROUP BY empid
+----
+1	10400	8000	11000
+2	39500	90700	12000
+
+query IIIII rowsort
+PIVOT monthly_sales ON MONTH USING SUM(AMOUNT) GROUP BY empid
+----
+1	10400	8000	11000	18000
+2	39500	90700	12000	5300
+
+# add a column
+statement ok
+ALTER TABLE monthly_sales ADD COLUMN status VARCHAR
+
+statement ok
+UPDATE monthly_sales SET status=CASE WHEN amount >= 10000 THEN 'important' ELSE 'regular' END
+
+# test the ROWS syntax
+query IIIIII
+FROM (PIVOT monthly_sales ON MONTH USING SUM(AMOUNT)) ORDER BY ALL;
+----
+1	important	10000	NULL	NULL	10000
+1	regular	400	8000	11000	8000
+2	important	35000	90500	NULL	NULL
+2	regular	4500	200	12000	5300
+
+query IIIII
+PIVOT monthly_sales ON MONTH USING SUM(AMOUNT) GROUP BY empid ORDER BY ALL
+----
+1	10400	8000	11000	18000
+2	39500	90700	12000	5300
+
+query IIIII
+FROM (PIVOT monthly_sales ON MONTH USING SUM(AMOUNT) GROUP BY status) ORDER BY ALL
+----
+important	45000	90500	NULL	10000
+regular	4900	8200	23000	13300
+
+# GROUP BY syntax in the SQL standard PIVOT clause
+query IIIII
+SELECT *
+  FROM monthly_sales
+    PIVOT(SUM(amount) FOR MONTH IN ('1-JAN', '2-FEB', '3-MAR', '4-APR') GROUP BY status)
+      AS p
+  ORDER BY 1;
+----
+important	45000	90500	NULL	10000
+regular	4900	8200	23000	13300
+
+# in CTE
+query IIIII
+WITH pivoted_sales AS (PIVOT monthly_sales ON MONTH USING SUM(AMOUNT) GROUP BY empid)
+SELECT * FROM pivoted_sales ORDER BY empid DESC;
+----
+2	39500	90700	12000	5300
+1	10400	8000	11000	18000
+
+# in CTE
+query IIIII
+WITH pivoted_sales AS MATERIALIZED (PIVOT monthly_sales ON MONTH USING SUM(AMOUNT) GROUP BY empid)
+SELECT * FROM pivoted_sales ORDER BY empid DESC;
+----
+2	39500	90700	12000	5300
+1	10400	8000	11000	18000
+
+statement error
+CREATE VIEW v1 AS PIVOT monthly_sales ON MONTH USING SUM(AMOUNT)
+----
+PIVOT ... ON "MONTH" IN (val1, val2, ...)
+
+statement ok
+CREATE VIEW v1 AS PIVOT monthly_sales ON MONTH IN ('1-JAN', '2-FEB', '3-MAR', '4-APR') USING SUM(AMOUNT) GROUP BY empid ORDER BY ALL
+
+query IIIII
+FROM v1
+----
+1	10400	8000	11000	18000
+2	39500	90700	12000	5300

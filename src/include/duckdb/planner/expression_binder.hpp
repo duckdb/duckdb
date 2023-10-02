@@ -9,11 +9,12 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/stack_checker.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 
@@ -39,7 +40,7 @@ struct BindResult {
 	}
 	explicit BindResult(string error) : error(error) {
 	}
-	explicit BindResult(unique_ptr<Expression> expr) : expression(move(expr)) {
+	explicit BindResult(unique_ptr<Expression> expr) : expression(std::move(expr)) {
 	}
 
 	bool HasError() {
@@ -51,6 +52,8 @@ struct BindResult {
 };
 
 class ExpressionBinder {
+	friend class StackChecker<ExpressionBinder>;
+
 public:
 	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
 	virtual ~ExpressionBinder();
@@ -59,11 +62,11 @@ public:
 	//! be added. Defaults to INVALID.
 	LogicalType target_type;
 
-	DummyBinding *macro_binding;
-	vector<DummyBinding> *lambda_bindings = nullptr;
+	optional_ptr<DummyBinding> macro_binding;
+	optional_ptr<vector<DummyBinding>> lambda_bindings;
 
 public:
-	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type = nullptr,
+	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, optional_ptr<LogicalType> result_type = nullptr,
 	                            bool root_expression = true);
 
 	//! Returns whether or not any columns have been bound by the expression binder
@@ -74,7 +77,7 @@ public:
 		return bound_columns;
 	}
 
-	string Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression = false);
+	string Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false);
 
 	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, string field_name);
 	unique_ptr<ParsedExpression> CreateStructPack(ColumnRefExpression &colref);
@@ -101,12 +104,23 @@ public:
 	static bool ContainsType(const LogicalType &type, LogicalTypeId target);
 	static LogicalType ExchangeType(const LogicalType &type, LogicalTypeId target, LogicalType new_type);
 
+	virtual bool QualifyColumnAlias(const ColumnRefExpression &colref);
+
 	//! Bind the given expresion. Unlike Bind(), this does *not* mute the given ParsedExpression.
 	//! Exposed to be used from sub-binders that aren't subclasses of ExpressionBinder.
-	virtual BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
+	virtual BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
 	                                  bool root_expression = false);
 
 	void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
+
+private:
+	//! Maximum stack depth
+	static constexpr const idx_t MAXIMUM_STACK_DEPTH = 128;
+	//! Current stack depth
+	idx_t stack_depth = DConstants::INVALID_INDEX;
+
+	void InitializeStackCheck();
+	StackChecker<ExpressionBinder> StackCheck(const ParsedExpression &expr, idx_t extra_stack = 1);
 
 protected:
 	BindResult BindExpression(BetweenExpression &expr, idx_t depth);
@@ -117,35 +131,36 @@ protected:
 	BindResult BindExpression(ComparisonExpression &expr, idx_t depth);
 	BindResult BindExpression(ConjunctionExpression &expr, idx_t depth);
 	BindResult BindExpression(ConstantExpression &expr, idx_t depth);
-	BindResult BindExpression(FunctionExpression &expr, idx_t depth, unique_ptr<ParsedExpression> *expr_ptr);
+	BindResult BindExpression(FunctionExpression &expr, idx_t depth, unique_ptr<ParsedExpression> &expr_ptr);
 	BindResult BindExpression(LambdaExpression &expr, idx_t depth, const bool is_lambda,
 	                          const LogicalType &list_child_type);
 	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
-	BindResult BindExpression(PositionalReferenceExpression &ref, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
+	BindResult BindPositionalReference(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression);
 
 	void TransformCapturedLambdaColumn(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
-	                                   vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type,
-	                                   string &alias);
+	                                   vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type);
 	void CaptureLambdaColumns(vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type,
-	                          unique_ptr<Expression> &expr, string &alias);
+	                          unique_ptr<Expression> &expr);
+
+	static unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
 
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);
-	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, idx_t depth);
-	virtual BindResult BindLambdaFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, idx_t depth);
-	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth);
-	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth);
-	virtual BindResult BindMacro(FunctionExpression &expr, ScalarMacroCatalogEntry *macro, idx_t depth,
-	                             unique_ptr<ParsedExpression> *expr_ptr);
+	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function, idx_t depth);
+	virtual BindResult BindLambdaFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function, idx_t depth);
+	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth);
+	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth, bool root_expression);
+	virtual BindResult BindMacro(FunctionExpression &expr, ScalarMacroCatalogEntry &macro, idx_t depth,
+	                             unique_ptr<ParsedExpression> &expr_ptr);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();
 
 	Binder &binder;
 	ClientContext &context;
-	ExpressionBinder *stored_binder;
+	optional_ptr<ExpressionBinder> stored_binder;
 	vector<BoundColumnReferenceInfo> bound_columns;
 };
 

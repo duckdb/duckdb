@@ -16,6 +16,9 @@ namespace duckdb {
 
 class AlterStatement : public SQLStatement {
 public:
+	static constexpr const StatementType TYPE = StatementType::ALTER_STATEMENT;
+
+public:
 	AlterStatement();
 
 	unique_ptr<AlterInfo> info;

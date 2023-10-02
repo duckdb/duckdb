@@ -29,11 +29,7 @@ using namespace duckdb;
 	void get_random_area_code(char *area_code) {                                                                       \
 		uint32_t code = uint32_t(random.NextRandom(0, 999999));                                                        \
 		auto endptr = area_code + 6;                                                                                   \
-		endptr = NumericHelper::FormatUnsigned(code, endptr);                                                          \
-		while (endptr > area_code) {                                                                                   \
-			*endptr = '0';                                                                                             \
-			endptr--;                                                                                                  \
-		}                                                                                                              \
+		NumericHelper::FormatUnsigned(code, endptr);                                                                   \
 	}                                                                                                                  \
 	void RunBenchmark(DuckDBBenchmarkState *state) override {                                                          \
 		state->conn.Query("BEGIN TRANSACTION");                                                                        \
@@ -42,7 +38,7 @@ using namespace duckdb;
 			appender.BeginRow();                                                                                       \
 			appender.Append<int32_t>(i);                                                                               \
 			if (get_random_bool()) {                                                                                   \
-				char area_code[6];                                                                                     \
+				char area_code[6] = {'0', '0', '0', '0', '0', '0'};                                                    \
 				get_random_area_code(area_code);                                                                       \
 				appender.Append<string_t>(string_t(area_code, 6));                                                     \
 			} else {                                                                                                   \

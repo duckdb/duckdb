@@ -1,0 +1,78 @@
+# name: test/sql/attach/attach_show_table.test
+# description: Show table should respect current scope
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH DATABASE ':memory:' AS db1;
+
+statement ok
+ATTACH DATABASE ':memory:' AS db2;
+
+statement ok
+CREATE TABLE db1.table_in_db1(i int);
+
+statement ok
+CREATE TABLE db2.table_in_db2(i int);
+
+statement ok
+CREATE SCHEMA db2.test_schema;
+
+statement ok
+CREATE TABLE db2.test_schema.table_in_db2_test_schema(i int);
+
+query I
+SHOW TABLES
+----
+
+statement ok
+USE DB1
+
+query I
+SHOW TABLES
+----
+table_in_db1
+
+statement ok
+USE db1
+
+query I
+SHOW TABLES
+----
+table_in_db1
+
+statement ok
+USE db2
+
+query I
+SHOW TABLES
+----
+table_in_db2
+
+statement ok
+USE db2.test_schema;
+
+query I
+SHOW TABLES
+----
+table_in_db2
+table_in_db2_test_schema
+
+statement ok
+USE DB2.TEST_sChEmA;
+
+query I
+SHOW TABLES
+----
+table_in_db2
+table_in_db2_test_schema
+
+statement ok
+FROM table_in_db2
+
+statement ok
+FROM table_in_db2_test_schema

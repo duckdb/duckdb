@@ -1,0 +1,206 @@
+# name: test/sql/upsert/postgres/planner_preprocessing.test
+# group: [postgres]
+
+statement ok
+pragma enable_verification;
+
+# ******************************************************************
+# *                                                                *
+# * Test inheritance (example taken from tutorial)                 *
+# *                                                                *
+# ******************************************************************
+
+statement ok
+create table cities (
+	name		text,
+	population	float8,
+	altitude	int,
+	unique (name)
+);
+
+statement ok
+create table capitals (
+	name		text,
+	population	float8,
+	altitude	int,
+	state		char(2),
+	unique (name)
+);
+
+# Create unique indexes.  Due to a general limitation of inheritance,
+# uniqueness is only enforced per-relation.  Unique index inference
+# specification will do the right thing, though.
+
+# prepopulate the tables.
+
+statement ok
+insert into cities values ('San Francisco', 7.24E+5, 63);
+
+statement ok
+insert into cities values ('Las Vegas', 2.583E+5, 2174);
+
+statement ok
+insert into cities values ('Mariposa', 1200, 1953);
+
+
+statement ok
+insert into capitals values ('Sacramento', 3.694E+5, 30, 'CA');
+
+statement ok
+insert into capitals values ('Madison', 1.913E+5, 845, 'WI');
+
+# Tests proper for inheritance:
+query IIII
+select * from capitals;
+----
+Sacramento	369400.0	30	CA
+Madison	191300.0	845	WI
+
+# Succeeds:
+
+statement ok
+insert into cities values ('Las Vegas', 2.583E+5, 2174) on conflict do nothing;
+
+statement ok
+insert into capitals values ('Sacramento', 4664.E+5, 30, 'CA') on conflict (name) do update set population = excluded.population;
+# Wrong "Sacramento", so do nothing:
+
+statement ok
+insert into capitals values ('Sacramento', 50, 2267, 'NE') on conflict (name) do nothing;
+
+query IIII
+select * from capitals;
+----
+Sacramento	466400000.0	30	CA
+Madison	191300.0	845	WI
+
+statement ok
+insert into cities values ('Las Vegas', 5.83E+5, 2001) on conflict (name) do update set population = excluded.population, altitude = excluded.altitude;
+
+query IIII
+select rowid, * from cities;
+----
+0	San Francisco	724000.0	63
+1	Las Vegas	583000.0	2001
+2	Mariposa	1200.0	1953
+
+statement ok
+insert into capitals values ('Las Vegas', 5.83E+5, 2222, 'NV') on conflict (name) do update set population = excluded.population;
+# Capitals will contain new capital, Las Vegas:
+
+query IIII
+select * from capitals;
+----
+Sacramento	466400000.0	30	CA
+Madison	191300.0	845	WI
+Las Vegas	583000.0	2222	NV
+
+# Cities contains two instances of "Las Vegas", since unique constraints don't
+# work across inheritance:
+
+query IIII
+select rowid, * from cities;
+----
+0	San Francisco	724000.0	63
+1	Las Vegas	583000.0	2001
+2	Mariposa	1200.0	1953
+
+# This only affects "cities" version of "Las Vegas":
+
+statement ok
+insert into cities values ('Las Vegas', 5.86E+5, 2223) on conflict (name) do update set population = excluded.population, altitude = excluded.altitude;
+select rowid, * from cities;
+
+# clean up
+
+statement ok
+drop table capitals;
+
+statement ok
+drop table cities;
+
+
+# Make sure a table named excluded is handled properly
+
+statement ok
+create table excluded(key int primary key, data text);
+
+statement ok
+insert into excluded values(1, '1');
+
+# error, ambiguous
+statement error
+insert into excluded values(1, '2') on conflict (key) do update set data = excluded.data RETURNING *;
+
+# ok, aliased
+statement ok
+insert into excluded AS target values(1, '2') on conflict (key) do update set data = excluded.data RETURNING *;
+
+# ok, aliased
+statement ok
+insert into excluded AS target values(1, '2') on conflict (key) do update set data = target.data RETURNING *;
+
+## -- We don't support excluded in RETURNING, also, this is ambiguous??? -- ##
+# make sure excluded isn't a problem in returning clause
+statement error
+insert into excluded values(1, '2') on conflict (key) do update set data = 3 RETURNING excluded.*;
+----
+Binder Error: Duplicate alias "excluded" in query!
+
+# clean up
+statement ok
+drop table excluded;
+
+
+# check that references to columns after dropped columns are handled correctly
+
+statement ok
+create table dropcol(key int primary key, drop1 int, keep1 text, drop2 numeric, keep2 float);
+
+statement ok
+insert into dropcol(key, drop1, keep1, drop2, keep2) values(1, 1, '1', '1', 1);
+# set using excluded
+
+statement ok
+insert into dropcol(key, drop1, keep1, drop2, keep2) values(1, 2, '2', '2', 2) on conflict(key)
+    do update set drop1 = excluded.drop1, keep1 = excluded.keep1, drop2 = excluded.drop2, keep2 = excluded.keep2
+    where excluded.drop1 is not null and excluded.keep1 is not null and excluded.drop2 is not null and excluded.keep2 is not null
+          and dropcol.drop1 is not null and dropcol.keep1 is not null and dropcol.drop2 is not null and dropcol.keep2 is not null
+    returning *;
+;
+# set using existing table
+
+statement ok
+insert into dropcol(key, drop1, keep1, drop2, keep2) values(1, 3, '3', '3', 3) on conflict(key)
+    do update set drop1 = dropcol.drop1, keep1 = dropcol.keep1, drop2 = dropcol.drop2, keep2 = dropcol.keep2
+    returning *;
+;
+
+statement ok
+alter table dropcol
+drop column drop1;
+
+statement ok
+alter table dropcol
+drop column drop2;
+
+# set using excluded
+
+statement ok
+insert into dropcol(key, keep1, keep2) values(1, '4', 4) on conflict(key)
+    do update set keep1 = excluded.keep1, keep2 = excluded.keep2
+    where excluded.keep1 is not null and excluded.keep2 is not null
+          and dropcol.keep1 is not null and dropcol.keep2 is not null
+    returning *;
+;
+# set using existing table
+
+statement ok
+insert into dropcol(key, keep1, keep2) values(1, '5', 5) on conflict(key)
+    do update set keep1 = dropcol.keep1, keep2 = dropcol.keep2
+    returning *;
+;
+
+
+statement ok
+DROP TABLE dropcol;

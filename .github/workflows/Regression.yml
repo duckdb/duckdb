@@ -1,40 +1,46 @@
 name: Regression
 on:
+  workflow_dispatch:
+  repository_dispatch:
   push:
+    branches:
+      - '**'
+      - '!main'
+      - '!feature'
+    tags:
+      - '**'
     paths-ignore:
       - '**.md'
-  pull_request:
-    paths-ignore:
-      - '**.md'
-      - 'tools/juliapkg/**'
-      - 'tools/nodejs/**'
-      - 'tools/rpkg/**'
+      - 'tools/**'
+      - '!tools/pythonpkg/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Regression.yml'
 
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    paths-ignore:
+      - '**.md'
+      - 'tools/**'
+      - '!tools/pythonpkg/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Regression.yml'
+
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
-  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
-  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
+  BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
 
 jobs:
  regression-test-benchmark-runner:
-  name: Regression Test (${{ matrix.benchmark }})
+  name: Regression Tests
   runs-on: ubuntu-20.04
-  strategy:
-    fail-fast: false
-    matrix:
-      benchmark:
-        - 'micro'
-        - 'tpch'
-        - 'tpcds'
-        - 'h2oai'
+  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10
@@ -50,7 +56,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -62,25 +68,68 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
       run: |
         make
-        git clone https://github.com/duckdb/duckdb.git --depth=1
+        git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb
         make
         cd ..
 
-    - name: Regression Test
+    - name: Set up benchmarks
       shell: bash
       run: |
         cp -r benchmark duckdb/
-        python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/${{ matrix.benchmark }}.csv --verbose --threads=2
+
+    - name: Regression Test Micro
+      if: always()
+      shell: bash
+      run: |
+        python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/micro.csv --verbose --threads=2
+
+    - name: Regression Test TPCH
+      if: always()
+      shell: bash
+      run: |
+        python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch.csv --verbose --threads=2
+
+    - name: Regression Test TPCH-PARQUET
+      if: always()
+      shell: bash
+      run: |
+        python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch_parquet.csv --verbose --threads=2
+
+    - name: Regression Test TPCDS
+      if: always()
+      shell: bash
+      run: |
+        python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpcds.csv --verbose --threads=2
+
+    - name: Regression Test H2OAI
+      if: always()
+      shell: bash
+      run: |
+        python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/h2oai.csv --verbose --threads=2
+
+    - name: Regression Test IMDB
+      if: always()
+      shell: bash
+      run: |
+        python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/imdb.csv --verbose --threads=2
+
+    - name: Regression Test CSV
+      if: always()
+      shell: bash
+      run: |
+        python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/csv.csv --verbose --threads=2
 
  regression-test-storage:
   name: Storage Size Regression Test
   runs-on: ubuntu-20.04
+  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10
@@ -93,7 +142,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -105,12 +154,13 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
       run: |
         make
-        git clone https://github.com/duckdb/duckdb.git --depth=1
+        git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb
         make
         cd ..
@@ -120,9 +170,48 @@ jobs:
       run: |
         python scripts/regression_test_storage_size.py --old=duckdb/build/release/duckdb --new=build/release/duckdb
 
+    - name: Test for incompatibility
+      shell: bash
+      run: |
+        if (cmp test/sql/storage_version/storage_version.db duckdb/test/sql/storage_version/storage_version.db); then
+          echo "storage_changed=false" >> $GITHUB_ENV
+        else
+          echo "storage_changed=true" >> $GITHUB_ENV
+        fi
+
+    - name: Regression Compatibility Test (testing bidirectional compatibility)
+      shell: bash
+      if: env.storage_changed == 'false'
+      run: |
+        # Regenerate test/sql/storage_version.db with newer version -> read with older version
+        python3 scripts/generate_storage_version.py
+        ./duckdb/build/release/duckdb test/sql/storage_version/storage_version.db
+        # Regenerate test/sql/storage_version.db with older version -> read with newer version (already performed as part of test.slow)
+        cd duckdb
+        python3 ../scripts/generate_storage_version.py
+        ../build/release/duckdb duckdb/test/sql/storage_version/storage_version.db
+        cd ..
+
+    - name: Regression Compatibility Test (testing storage version has been bumped)
+      shell: bash
+      if: env.storage_changed == 'true'
+      run: |
+        python3 scripts/generate_storage_version.py
+        cd duckdb
+        python3 scripts/generate_storage_version.py
+        cd ..
+        if (cmp -i 8 -n 12 test/sql/storage_version.db duckdb/test/sql/storage_version.db); then
+           echo "Expected storage format to be bumped, but this is not the case"
+           echo "This might fail spuriously if changes to content of test database / generation script happened"
+           exit 1
+        else
+           echo "Storage bump detected, all good!"
+        fi
+
  regression-test-python:
   name: Regression Test (Python Client)
   runs-on: ubuntu-20.04
+  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10
@@ -133,7 +222,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -141,7 +230,13 @@ jobs:
       shell: bash
       run: |
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-        pip install numpy pytest pandas mypy psutil pyarrow
+        pip install numpy pytest pandas mypy psutil "pyarrow<=11.0.0"
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build Current Version
       shell: bash
@@ -165,7 +260,7 @@ jobs:
     - name: Build Current
       shell: bash
       run: |
-        git clone https://github.com/duckdb/duckdb.git --depth=1
+        git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb/tools/pythonpkg
         python setup.py install --user
         cd ../../..
@@ -178,17 +273,13 @@ jobs:
     - name: Regression Test
       shell: bash
       run: |
+        cp -r benchmark duckdb/
         python scripts/regression_check.py --old=current.csv --new=new.csv
 
  regression-test-plan-cost:
   name: Regression Test Join Order Plan Cost
   runs-on: ubuntu-20.04
-  strategy:
-    fail-fast: false
-    matrix:
-      benchmark:
-        - 'imdb'
-        - 'tpch'
+  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10
@@ -201,7 +292,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -213,18 +304,30 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
       run: |
         make
-        git clone https://github.com/duckdb/duckdb.git --depth=1
+        git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb
         make
         cd ..
 
-    - name: Regression Test
+    - name: Set up benchmarks
       shell: bash
       run: |
         cp -r benchmark duckdb/
-        python scripts/plan_cost_runner.py --old=duckdb/build/release/duckdb --new=build/release/duckdb --dir=benchmark/${{ matrix.benchmark }}_plan_cost
+
+    - name: Regression Test IMDB
+      continue-on-error: true
+      shell: bash
+      run: |
+        python scripts/plan_cost_runner.py --old=duckdb/build/release/duckdb --new=build/release/duckdb --dir=benchmark/imdb_plan_cost
+
+    - name: Regression Test TPCH
+      continue-on-error: true
+      shell: bash
+      run: |
+        python scripts/plan_cost_runner.py --old=duckdb/build/release/duckdb --new=build/release/duckdb --dir=benchmark/tpch_plan_cost

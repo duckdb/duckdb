@@ -2,6 +2,9 @@
 # description: Test aggregations on strings
 # group: [aggregates]
 
+statement ok
+SET default_null_order='nulls_first';
+
 query TTTTI
 SELECT NULL as a, NULL as b, NULL as c, NULL as d, 1 as id UNION SELECT 'Кирилл' as a, 'Müller' as b, '我是谁' as c, 'ASCII' as d, 2 as id ORDER BY 1
 ----

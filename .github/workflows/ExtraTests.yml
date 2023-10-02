@@ -1,0 +1,65 @@
+name: Extra Tests
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  cancel-in-progress: true
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+jobs:
+ regression-test-all:
+  name: All Regression Tests
+  runs-on: ubuntu-20.04
+  env:
+    CC: gcc-10
+    CXX: g++-10
+    GEN: ninja
+    BUILD_BENCHMARK: 1
+    BUILD_TPCH: 1
+    BUILD_TPCDS: 1
+    BUILD_HTTPFS: 1
+    BUILD_JEMALLOC: 1
+
+  steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.7'
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build Last Release
+      shell: bash
+      run: |
+        make
+        git clone https://github.com/duckdb/duckdb.git
+        cd duckdb
+        git checkout `git tag --list | tail -n 1`
+        make
+        cd ..
+
+    - name: Set up benchmarks
+      shell: bash
+      run: |
+        cp -r benchmark duckdb/
+
+    - name: Regression Test
+      if: always()
+      shell: bash
+      run: |
+        build/release/benchmark/benchmark_runner --list > alltests.list
+        python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=alltests.list --verbose --threads=2

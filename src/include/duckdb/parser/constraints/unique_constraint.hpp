@@ -15,6 +15,9 @@ namespace duckdb {
 
 class UniqueConstraint : public Constraint {
 public:
+	static constexpr const ConstraintType TYPE = ConstraintType::UNIQUE;
+
+public:
 	DUCKDB_API UniqueConstraint(LogicalIndex index, bool is_primary_key);
 	DUCKDB_API UniqueConstraint(vector<string> columns, bool is_primary_key);
 
@@ -31,10 +34,11 @@ public:
 
 	DUCKDB_API unique_ptr<Constraint> Copy() const override;
 
-	//! Serialize to a stand-alone binary blob
-	DUCKDB_API void Serialize(FieldWriter &writer) const override;
-	//! Deserializes a ParsedConstraint
-	DUCKDB_API static unique_ptr<Constraint> Deserialize(FieldReader &source);
+	DUCKDB_API void Serialize(Serializer &serializer) const override;
+	DUCKDB_API static unique_ptr<Constraint> Deserialize(Deserializer &deserializer);
+
+private:
+	UniqueConstraint();
 };
 
 } // namespace duckdb

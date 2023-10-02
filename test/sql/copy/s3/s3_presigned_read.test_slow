@@ -1,0 +1,42 @@
+# name: test/sql/copy/s3/s3_presigned_read.test_slow
+# description: Read large csv/parquet files from S3 Presigned URL.
+# group: [s3]
+
+require parquet
+
+require httpfs
+
+require-env S3_TEST_SERVER_AVAILABLE 1
+
+# Require that these environment variables are also set
+
+require-env AWS_DEFAULT_REGION
+
+require-env AWS_ACCESS_KEY_ID
+
+require-env AWS_SECRET_ACCESS_KEY
+
+require-env DUCKDB_S3_ENDPOINT
+
+require-env DUCKDB_S3_USE_SSL
+
+
+require-env S3_LARGE_PARQUET_PRESIGNED_URL
+
+# override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
+set ignore_error_messages
+
+
+query I
+SELECT
+    sum(l_extendedprice * l_discount) AS revenue
+FROM
+    '${S3_LARGE_PARQUET_PRESIGNED_URL}' 
+WHERE
+    l_shipdate >= CAST('1994-01-01' AS date)
+    AND l_shipdate < CAST('1995-01-01' AS date)
+    AND l_discount BETWEEN 0.05
+    AND 0.07
+    AND l_quantity < 24;
+----
+123141078.2283

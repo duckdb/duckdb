@@ -12,4 +12,4 @@
 
 namespace duckdb {
 using std::queue;
-}
+} // namespace duckdb

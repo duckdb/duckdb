@@ -12,7 +12,7 @@
 #include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
@@ -43,7 +43,7 @@ public:
 public:
 	static Executor &Get(ClientContext &context);
 
-	void Initialize(PhysicalOperator *physical_plan);
+	void Initialize(PhysicalOperator &physical_plan);
 	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
 
 	void CancelTasks();
@@ -70,6 +70,12 @@ public:
 	//! Flush a thread context into the client context
 	void Flush(ThreadContext &context);
 
+	//! Reschedules a task that was blocked
+	void RescheduleTask(shared_ptr<Task> &task);
+
+	//! Add the task to be rescheduled
+	void AddToBeRescheduled(shared_ptr<Task> &task);
+
 	//! Returns the progress of the pipelines
 	bool GetPipelinesProgress(double &current_progress);
 
@@ -81,7 +87,8 @@ public:
 	}
 	void AddEvent(shared_ptr<Event> event);
 
-	void AddRecursiveCTE(PhysicalOperator *rec_cte);
+	void AddRecursiveCTE(PhysicalOperator &rec_cte);
+	void AddMaterializedCTE(PhysicalOperator &mat_cte);
 	void ReschedulePipelines(const vector<shared_ptr<MetaPipeline>> &pipelines, vector<shared_ptr<Event>> &events);
 
 	//! Whether or not the root of the pipeline is a result collector object
@@ -89,8 +96,11 @@ public:
 	//! Returns the query result - can only be used if `HasResultCollector` returns true
 	unique_ptr<QueryResult> GetResult();
 
+	//! Returns true if all pipelines have been completed
+	bool ExecutionIsFinished();
+
 private:
-	void InitializeInternal(PhysicalOperator *physical_plan);
+	void InitializeInternal(PhysicalOperator &physical_plan);
 
 	void ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipelines);
 	static void ScheduleEventsInternal(ScheduleEventData &event_data);
@@ -103,13 +113,13 @@ private:
 
 	bool NextExecutor();
 
-	shared_ptr<Pipeline> CreateChildPipeline(Pipeline *current, PhysicalOperator *op);
+	shared_ptr<Pipeline> CreateChildPipeline(Pipeline &current, PhysicalOperator &op);
 
 	void VerifyPipeline(Pipeline &pipeline);
 	void VerifyPipelines();
 
 private:
-	PhysicalOperator *physical_plan;
+	optional_ptr<PhysicalOperator> physical_plan;
 	unique_ptr<PhysicalOperator> owned_plan;
 
 	mutex executor_lock;
@@ -119,7 +129,9 @@ private:
 	//! The root pipelines of the query
 	vector<shared_ptr<Pipeline>> root_pipelines;
 	//! The recursive CTE's in this query plan
-	vector<PhysicalOperator *> recursive_ctes;
+	vector<reference<PhysicalOperator>> recursive_ctes;
+	//! The materialized CTE's in this query plan
+	vector<reference<PhysicalOperator>> materialized_ctes;
 	//! The pipeline executor for the root pipeline
 	unique_ptr<PipelineExecutor> root_executor;
 	//! The current root pipeline index
@@ -143,6 +155,9 @@ private:
 	//! The last pending execution result (if any)
 	PendingExecutionResult execution_result;
 	//! The current task in process (if any)
-	unique_ptr<Task> task;
+	shared_ptr<Task> task;
+
+	//! Task that have been descheduled
+	unordered_map<Task *, shared_ptr<Task>> to_be_rescheduled_tasks;
 };
 } // namespace duckdb

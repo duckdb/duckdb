@@ -1,7 +1,9 @@
-#include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/bit.hpp"
+#include "duckdb/function/table/system_functions.hpp"
+
 #include <cmath>
 #include <limits>
 
@@ -15,7 +17,7 @@ struct TestAllTypesData : public GlobalTableFunctionState {
 	idx_t offset;
 };
 
-vector<TestType> TestAllTypesFun::GetTestTypes() {
+vector<TestType> TestAllTypesFun::GetTestTypes(bool use_large_enum) {
 	vector<TestType> result;
 	// scalar types/numerics
 	result.emplace_back(LogicalType::BOOLEAN, "bool");
@@ -56,34 +58,42 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	max_interval.micros = 999999999;
 	result.emplace_back(LogicalType::INTERVAL, "interval", Value::INTERVAL(min_interval),
 	                    Value::INTERVAL(max_interval));
-	// strings/blobs
+	// strings/blobs/bitstrings
 	result.emplace_back(LogicalType::VARCHAR, "varchar", Value("🦆🦆🦆🦆🦆🦆"),
 	                    Value(string("goo\x00se", 6)));
-	result.emplace_back(LogicalType::JSON, "json", Value("🦆🦆🦆🦆🦆🦆"), Value("goose"));
 	result.emplace_back(LogicalType::BLOB, "blob", Value::BLOB("thisisalongblob\\x00withnullbytes"),
 	                    Value::BLOB("\\x00\\x00\\x00a"));
+	result.emplace_back(LogicalType::BIT, "bit", Value::BIT("0010001001011100010101011010111"), Value::BIT("10101"));
 
 	// enums
 	Vector small_enum(LogicalType::VARCHAR, 2);
 	auto small_enum_ptr = FlatVector::GetData<string_t>(small_enum);
 	small_enum_ptr[0] = StringVector::AddStringOrBlob(small_enum, "DUCK_DUCK_ENUM");
 	small_enum_ptr[1] = StringVector::AddStringOrBlob(small_enum, "GOOSE");
-	result.emplace_back(LogicalType::ENUM("small_enum", small_enum, 2), "small_enum");
+	result.emplace_back(LogicalType::ENUM(small_enum, 2), "small_enum");
 
 	Vector medium_enum(LogicalType::VARCHAR, 300);
 	auto medium_enum_ptr = FlatVector::GetData<string_t>(medium_enum);
 	for (idx_t i = 0; i < 300; i++) {
 		medium_enum_ptr[i] = StringVector::AddStringOrBlob(medium_enum, string("enum_") + to_string(i));
 	}
-	result.emplace_back(LogicalType::ENUM("medium_enum", medium_enum, 300), "medium_enum");
+	result.emplace_back(LogicalType::ENUM(medium_enum, 300), "medium_enum");
 
-	// this is a big one... not sure if we should push this one here, but it's required for completeness
-	Vector large_enum(LogicalType::VARCHAR, 70000);
-	auto large_enum_ptr = FlatVector::GetData<string_t>(large_enum);
-	for (idx_t i = 0; i < 70000; i++) {
-		large_enum_ptr[i] = StringVector::AddStringOrBlob(large_enum, string("enum_") + to_string(i));
+	if (use_large_enum) {
+		// this is a big one... not sure if we should push this one here, but it's required for completeness
+		Vector large_enum(LogicalType::VARCHAR, 70000);
+		auto large_enum_ptr = FlatVector::GetData<string_t>(large_enum);
+		for (idx_t i = 0; i < 70000; i++) {
+			large_enum_ptr[i] = StringVector::AddStringOrBlob(large_enum, string("enum_") + to_string(i));
+		}
+		result.emplace_back(LogicalType::ENUM(large_enum, 70000), "large_enum");
+	} else {
+		Vector large_enum(LogicalType::VARCHAR, 2);
+		auto large_enum_ptr = FlatVector::GetData<string_t>(large_enum);
+		large_enum_ptr[0] = StringVector::AddStringOrBlob(large_enum, string("enum_") + to_string(0));
+		large_enum_ptr[1] = StringVector::AddStringOrBlob(large_enum, string("enum_") + to_string(69999));
+		result.emplace_back(LogicalType::ENUM(large_enum, 2), "large_enum");
 	}
-	result.emplace_back(LogicalType::ENUM("large_enum", large_enum, 70000), "large_enum");
 
 	// arrays
 	auto int_list_type = LogicalType::LIST(LogicalType::INTEGER);
@@ -136,17 +146,17 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	child_list_t<LogicalType> struct_type_list;
 	struct_type_list.push_back(make_pair("a", LogicalType::INTEGER));
 	struct_type_list.push_back(make_pair("b", LogicalType::VARCHAR));
-	auto struct_type = LogicalType::STRUCT(move(struct_type_list));
+	auto struct_type = LogicalType::STRUCT(struct_type_list);
 
 	child_list_t<Value> min_struct_list;
 	min_struct_list.push_back(make_pair("a", Value(LogicalType::INTEGER)));
 	min_struct_list.push_back(make_pair("b", Value(LogicalType::VARCHAR)));
-	auto min_struct_val = Value::STRUCT(move(min_struct_list));
+	auto min_struct_val = Value::STRUCT(std::move(min_struct_list));
 
 	child_list_t<Value> max_struct_list;
 	max_struct_list.push_back(make_pair("a", Value::INTEGER(42)));
 	max_struct_list.push_back(make_pair("b", Value("🦆🦆🦆🦆🦆🦆")));
-	auto max_struct_val = Value::STRUCT(move(max_struct_list));
+	auto max_struct_val = Value::STRUCT(std::move(max_struct_list));
 
 	result.emplace_back(struct_type, "struct", min_struct_val, max_struct_val);
 
@@ -154,63 +164,92 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	child_list_t<LogicalType> struct_list_type_list;
 	struct_list_type_list.push_back(make_pair("a", int_list_type));
 	struct_list_type_list.push_back(make_pair("b", varchar_list_type));
-	auto struct_list_type = LogicalType::STRUCT(move(struct_list_type_list));
+	auto struct_list_type = LogicalType::STRUCT(struct_list_type_list);
 
 	child_list_t<Value> min_struct_vl_list;
 	min_struct_vl_list.push_back(make_pair("a", Value(int_list_type)));
 	min_struct_vl_list.push_back(make_pair("b", Value(varchar_list_type)));
-	auto min_struct_val_list = Value::STRUCT(move(min_struct_vl_list));
+	auto min_struct_val_list = Value::STRUCT(std::move(min_struct_vl_list));
 
 	child_list_t<Value> max_struct_vl_list;
 	max_struct_vl_list.push_back(make_pair("a", int_list));
 	max_struct_vl_list.push_back(make_pair("b", varchar_list));
-	auto max_struct_val_list = Value::STRUCT(move(max_struct_vl_list));
+	auto max_struct_val_list = Value::STRUCT(std::move(max_struct_vl_list));
 
-	result.emplace_back(struct_list_type, "struct_of_arrays", move(min_struct_val_list), move(max_struct_val_list));
+	result.emplace_back(struct_list_type, "struct_of_arrays", std::move(min_struct_val_list),
+	                    std::move(max_struct_val_list));
 
 	// array of structs
 	auto array_of_structs_type = LogicalType::LIST(struct_type);
 	auto min_array_of_struct_val = Value::EMPTYLIST(struct_type);
 	auto max_array_of_struct_val = Value::LIST({min_struct_val, max_struct_val, Value(struct_type)});
-	result.emplace_back(array_of_structs_type, "array_of_structs", move(min_array_of_struct_val),
-	                    move(max_array_of_struct_val));
+	result.emplace_back(array_of_structs_type, "array_of_structs", std::move(min_array_of_struct_val),
+	                    std::move(max_array_of_struct_val));
 
 	// map
 	auto map_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
-	auto min_map_value = Value::MAP(Value::EMPTYLIST(LogicalType::VARCHAR), Value::EMPTYLIST(LogicalType::VARCHAR));
-	auto max_map_value = Value::MAP(Value::LIST({Value("key1"), Value("key2")}),
-	                                Value::LIST({Value("🦆🦆🦆🦆🦆🦆"), Value("goose")}));
-	result.emplace_back(map_type, "map", move(min_map_value), move(max_map_value));
+	auto min_map_value = Value::MAP(ListType::GetChildType(map_type), vector<Value>());
+
+	child_list_t<Value> map_struct1;
+	map_struct1.push_back(make_pair("key", Value("key1")));
+	map_struct1.push_back(make_pair("value", Value("🦆🦆🦆🦆🦆🦆")));
+	child_list_t<Value> map_struct2;
+	map_struct2.push_back(make_pair("key", Value("key2")));
+	map_struct2.push_back(make_pair("key", Value("goose")));
+
+	vector<Value> map_values;
+	map_values.push_back(Value::STRUCT(map_struct1));
+	map_values.push_back(Value::STRUCT(map_struct2));
+
+	auto max_map_value = Value::MAP(ListType::GetChildType(map_type), map_values);
+	result.emplace_back(map_type, "map", std::move(min_map_value), std::move(max_map_value));
+
+	// union
+	child_list_t<LogicalType> members = {{"name", LogicalType::VARCHAR}, {"age", LogicalType::SMALLINT}};
+	auto union_type = LogicalType::UNION(members);
+	const Value &min = Value::UNION(members, 0, Value("Frank"));
+	const Value &max = Value::UNION(members, 1, Value::SMALLINT(5));
+	result.emplace_back(union_type, "union", min, max);
 
 	return result;
 }
 
+struct TestAllTypesBindData : public TableFunctionData {
+	vector<TestType> test_types;
+};
+
 static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFunctionBindInput &input,
                                                  vector<LogicalType> &return_types, vector<string> &names) {
-	auto test_types = TestAllTypesFun::GetTestTypes();
-	for (auto &test_type : test_types) {
-		return_types.push_back(move(test_type.type));
-		names.push_back(move(test_type.name));
+	auto result = make_uniq<TestAllTypesBindData>();
+	bool use_large_enum = false;
+	auto entry = input.named_parameters.find("use_large_enum");
+	if (entry != input.named_parameters.end()) {
+		use_large_enum = BooleanValue::Get(entry->second);
 	}
-	return nullptr;
+	result->test_types = TestAllTypesFun::GetTestTypes(use_large_enum);
+	for (auto &test_type : result->test_types) {
+		return_types.push_back(test_type.type);
+		names.push_back(test_type.name);
+	}
+	return std::move(result);
 }
 
 unique_ptr<GlobalTableFunctionState> TestAllTypesInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<TestAllTypesData>();
-	auto test_types = TestAllTypesFun::GetTestTypes();
+	auto &bind_data = input.bind_data->Cast<TestAllTypesBindData>();
+	auto result = make_uniq<TestAllTypesData>();
 	// 3 rows: min, max and NULL
 	result->entries.resize(3);
 	// initialize the values
-	for (auto &test_type : test_types) {
-		result->entries[0].push_back(move(test_type.min_value));
-		result->entries[1].push_back(move(test_type.max_value));
-		result->entries[2].emplace_back(move(test_type.type));
+	for (auto &test_type : bind_data.test_types) {
+		result->entries[0].push_back(test_type.min_value);
+		result->entries[1].push_back(test_type.max_value);
+		result->entries[2].emplace_back(test_type.type);
 	}
-	return move(result);
+	return std::move(result);
 }
 
 void TestAllTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (TestAllTypesData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<TestAllTypesData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
@@ -229,7 +268,9 @@ void TestAllTypesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 }
 
 void TestAllTypesFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("test_all_types", {}, TestAllTypesFunction, TestAllTypesBind, TestAllTypesInit));
+	TableFunction test_all_types("test_all_types", {}, TestAllTypesFunction, TestAllTypesBind, TestAllTypesInit);
+	test_all_types.named_parameters["use_large_enum"] = LogicalType::BOOLEAN;
+	set.AddFunction(test_all_types);
 }
 
 } // namespace duckdb

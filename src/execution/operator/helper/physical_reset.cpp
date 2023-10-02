@@ -19,26 +19,23 @@ void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &
 	}
 }
 
-void PhysicalReset::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                            LocalSourceState &lstate) const {
+SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	auto &config = DBConfig::GetConfig(context.client);
+	if (config.options.lock_configuration) {
+		throw InvalidInputException("Cannot reset configuration option \"%s\" - the configuration has been locked",
+		                            name);
+	}
 	auto option = DBConfig::GetOptionByName(name);
 	if (!option) {
 		// check if this is an extra extension variable
-		auto &config = DBConfig::GetConfig(context.client);
 		auto entry = config.extension_parameters.find(name);
 		if (entry == config.extension_parameters.end()) {
-			// it is not!
-			// get a list of all options
-			vector<string> potential_names = DBConfig::GetOptionNames();
-			for (auto &entry : config.extension_parameters) {
-				potential_names.push_back(entry.first);
-			}
-
-			throw CatalogException("unrecognized configuration parameter \"%s\"\n%s", name,
-			                       StringUtil::CandidatesErrorMessage(potential_names, name, "Did you mean"));
+			Catalog::AutoloadExtensionByConfigName(context.client, name);
+			entry = config.extension_parameters.find(name);
+			D_ASSERT(entry != config.extension_parameters.end());
 		}
 		ResetExtensionVariable(context, config, entry->second);
-		return;
+		return SourceResultType::FINISHED;
 	}
 
 	// Transform scope
@@ -58,7 +55,6 @@ void PhysicalReset::GetData(ExecutionContext &context, DataChunk &chunk, GlobalS
 			throw CatalogException("option \"%s\" cannot be reset globally", name);
 		}
 		auto &db = DatabaseInstance::GetDatabase(context.client);
-		auto &config = DBConfig::GetConfig(context.client);
 		config.ResetOption(&db, *option);
 		break;
 	}
@@ -71,6 +67,8 @@ void PhysicalReset::GetData(ExecutionContext &context, DataChunk &chunk, GlobalS
 	default:
 		throw InternalException("Unsupported SetScope for variable");
 	}
+
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

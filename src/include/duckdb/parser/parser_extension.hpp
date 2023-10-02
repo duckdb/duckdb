@@ -17,7 +17,7 @@ namespace duckdb {
 //! The ParserExtensionInfo holds static information relevant to the parser extension
 //! It is made available in the parse_function, and will be kept alive as long as the database system is kept alive
 struct ParserExtensionInfo {
-	DUCKDB_API virtual ~ParserExtensionInfo() {
+	virtual ~ParserExtensionInfo() {
 	}
 };
 
@@ -29,7 +29,7 @@ enum class ParserExtensionResultType : uint8_t { PARSE_SUCCESSFUL, DISPLAY_ORIGI
 //! The ParserExtensionParseData holds the result of a successful parse step
 //! It will be passed along to the subsequent plan function
 struct ParserExtensionParseData {
-	DUCKDB_API virtual ~ParserExtensionParseData() {
+	virtual ~ParserExtensionParseData() {
 	}
 
 	virtual unique_ptr<ParserExtensionParseData> Copy() const = 0;
@@ -39,10 +39,10 @@ struct ParserExtensionParseResult {
 	ParserExtensionParseResult() : type(ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {
 	}
 	ParserExtensionParseResult(string error_p)
-	    : type(ParserExtensionResultType::DISPLAY_EXTENSION_ERROR), error(move(error_p)) {
+	    : type(ParserExtensionResultType::DISPLAY_EXTENSION_ERROR), error(std::move(error_p)) {
 	}
 	ParserExtensionParseResult(unique_ptr<ParserExtensionParseData> parse_data_p)
-	    : type(ParserExtensionResultType::PARSE_SUCCESSFUL), parse_data(move(parse_data_p)) {
+	    : type(ParserExtensionResultType::PARSE_SUCCESSFUL), parse_data(std::move(parse_data_p)) {
 	}
 
 	//! Whether or not parsing was successful
@@ -62,8 +62,8 @@ struct ParserExtensionPlanResult {
 	TableFunction function;
 	//! Parameters to the function
 	vector<Value> parameters;
-	//! Whether or not the statement is read_only (i.e. can be executed in a read_only database)
-	bool read_only = false;
+	//! The set of databases that will be modified by this statement (empty for a read-only statement)
+	unordered_set<string> modified_databases;
 	//! Whether or not the statement requires a valid transaction to be executed
 	bool requires_valid_transaction = true;
 	//! What type of result set the statement returns

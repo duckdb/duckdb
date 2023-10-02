@@ -15,7 +15,13 @@ namespace duckdb {
 //! Represents a subquery
 class SubqueryRef : public TableRef {
 public:
-	explicit SubqueryRef(unique_ptr<SelectStatement> subquery, string alias = string());
+	static constexpr const TableReferenceType TYPE = TableReferenceType::SUBQUERY;
+
+private:
+	SubqueryRef();
+
+public:
+	DUCKDB_API explicit SubqueryRef(unique_ptr<SelectStatement> subquery, string alias = string());
 
 	//! The subquery
 	unique_ptr<SelectStatement> subquery;
@@ -24,13 +30,12 @@ public:
 
 public:
 	string ToString() const override;
-	bool Equals(const TableRef *other_p) const override;
+	bool Equals(const TableRef &other_p) const override;
 
 	unique_ptr<TableRef> Copy() override;
 
-	//! Serializes a blob into a SubqueryRef
-	void Serialize(FieldWriter &serializer) const override;
 	//! Deserializes a blob back into a SubqueryRef
-	static unique_ptr<TableRef> Deserialize(FieldReader &source);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<TableRef> Deserialize(Deserializer &source);
 };
 } // namespace duckdb

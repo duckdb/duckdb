@@ -1,0 +1,150 @@
+# name: test/sql/storage/mix/test_update_delete_string.test
+# description: Test updates/deletes and strings
+# group: [mix]
+
+# load the DB from disk
+load __TEST_DIR__/test_string_update.db
+
+# create a database and insert values
+statement ok
+CREATE TABLE test (a INTEGER, b STRING);
+
+statement ok
+INSERT INTO test VALUES (NULL, 'hello'), (13, 'abcdefgh'), (12, NULL)
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+12	NULL
+13	abcdefgh
+NULL	hello
+
+restart
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+12	NULL
+13	abcdefgh
+NULL	hello
+
+query II
+SELECT * FROM test WHERE a IS NULL
+----
+NULL	hello
+
+query I
+UPDATE test SET b=NULL WHERE a IS NULL
+----
+1
+
+query II
+SELECT * FROM test WHERE a IS NULL
+----
+NULL	NULL
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+12	NULL
+13	abcdefgh
+NULL	NULL
+
+restart
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+12	NULL
+13	abcdefgh
+NULL	NULL
+
+restart
+
+statement ok
+DELETE FROM test WHERE a=12
+
+restart
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+13	abcdefgh
+NULL	NULL
+
+restart
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+13	abcdefgh
+NULL	NULL
+
+statement ok
+INSERT INTO test VALUES (12, NULL)
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+12	NULL
+13	abcdefgh
+NULL	NULL
+
+restart
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+12	NULL
+13	abcdefgh
+NULL	NULL
+
+restart
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+12	NULL
+13	abcdefgh
+NULL	NULL
+
+statement ok
+UPDATE test SET b='test123' WHERE a=12
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+12	test123
+13	abcdefgh
+NULL	NULL
+
+restart
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+12	test123
+13	abcdefgh
+NULL	NULL
+
+statement ok
+UPDATE test SET a=a+1
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+13	test123
+14	abcdefgh
+NULL	NULL
+
+restart
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+13	test123
+14	abcdefgh
+NULL	NULL

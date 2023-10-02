@@ -18,6 +18,9 @@ class AggregateFunction;
 
 class BoundWindowExpression : public Expression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_WINDOW;
+
+public:
 	BoundWindowExpression(ExpressionType type, LogicalType return_type, unique_ptr<AggregateFunction> aggregate,
 	                      unique_ptr<FunctionData> bind_info);
 
@@ -57,12 +60,12 @@ public:
 
 	string ToString() const override;
 
-	bool KeysAreCompatible(const BoundWindowExpression *other) const;
-	bool Equals(const BaseExpression *other) const override;
+	bool KeysAreCompatible(const BoundWindowExpression &other) const;
+	bool Equals(const BaseExpression &other) const override;
 
 	unique_ptr<Expression> Copy() override;
 
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 };
 } // namespace duckdb

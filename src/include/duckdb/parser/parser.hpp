@@ -13,6 +13,7 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/parser/simplified_token.hpp"
+#include "duckdb/parser/parser_options.hpp"
 
 namespace duckdb_libpgquery {
 struct PGNode;
@@ -20,13 +21,8 @@ struct PGList;
 } // namespace duckdb_libpgquery
 
 namespace duckdb {
-class ParserExtension;
 
-struct ParserOptions {
-	bool preserve_identifier_case = true;
-	idx_t max_expression_depth = 1000;
-	const vector<ParserExtension> *extensions = nullptr;
-};
+class GroupByNode;
 
 //! The parser is responsible for parsing the query and converting it into a set
 //! of parsed statements. The parsed statements can then be converted into a
@@ -56,6 +52,8 @@ public:
 	//! Parses a list of expressions (i.e. the list found in a SELECT clause)
 	DUCKDB_API static vector<unique_ptr<ParsedExpression>> ParseExpressionList(const string &select_list,
 	                                                                           ParserOptions options = ParserOptions());
+	//! Parses a list of GROUP BY expressions
+	static GroupByNode ParseGroupByList(const string &group_by, ParserOptions options = ParserOptions());
 	//! Parses a list as found in an ORDER BY expression (i.e. including optional ASCENDING/DESCENDING modifiers)
 	static vector<OrderByNode> ParseOrderList(const string &select_list, ParserOptions options = ParserOptions());
 	//! Parses an update list (i.e. the list found in the SET clause of an UPDATE statement)
@@ -67,6 +65,8 @@ public:
 	                                                                    ParserOptions options = ParserOptions());
 	//! Parses a column list (i.e. as found in a CREATE TABLE statement)
 	static ColumnList ParseColumnList(const string &column_list, ParserOptions options = ParserOptions());
+
+	static bool StripUnicodeSpaces(const string &query_str, string &new_query);
 
 private:
 	ParserOptions options;

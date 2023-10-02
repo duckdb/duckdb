@@ -1,12 +1,19 @@
 #include "duckdb_python/map.hpp"
-#include "duckdb_python/vector_conversion.hpp"
-#include "duckdb_python/array_wrapper.hpp"
+#include "duckdb_python/numpy/numpy_scan.hpp"
+#include "duckdb_python/pandas/pandas_bind.hpp"
+#include "duckdb_python/numpy/numpy_result_conversion.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
+#include "duckdb_python/pandas/pandas_scan.hpp"
+#include "duckdb_python/pybind11/dataframe.hpp"
+#include "duckdb_python/pytype.hpp"
+#include "duckdb_python/pybind11/dataframe.hpp"
 
 namespace duckdb {
 
 MapFunction::MapFunction()
-    : TableFunction("python_map_function", {LogicalType::TABLE, LogicalType::POINTER}, nullptr, MapFunctionBind) {
+    : TableFunction("python_map_function", {LogicalType::TABLE, LogicalType::POINTER, LogicalType::POINTER}, nullptr,
+                    MapFunctionBind) {
 	in_out_function = MapFunctionExec;
 }
 
@@ -18,7 +25,7 @@ struct MapFunctionData : public TableFunctionData {
 	vector<string> in_names, out_names;
 };
 
-static py::handle FunctionCall(NumpyResultConversion &conversion, vector<string> &names, PyObject *function) {
+static py::object FunctionCall(NumpyResultConversion &conversion, const vector<string> &names, PyObject *function) {
 	py::dict in_numpy_dict;
 	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
 		in_numpy_dict[names[col_idx].c_str()] = conversion.ToArray(col_idx);
@@ -33,12 +40,87 @@ static py::handle FunctionCall(NumpyResultConversion &conversion, vector<string>
 		throw InvalidInputException("Python error. See above for a stack trace.");
 	}
 
-	py::handle df(df_obj);
+	auto df = py::reinterpret_steal<py::object>(df_obj);
 	if (df.is_none()) { // no return, probably modified in place
 		throw InvalidInputException("No return value from Python function");
 	}
 
+	if (!py::isinstance<PandasDataFrame>(df)) {
+		throw InvalidInputException(
+		    "Expected the UDF to return an object of type 'pandas.DataFrame', found '%s' instead",
+		    std::string(py::str(df.attr("__class__"))));
+	}
+	if (PandasDataFrame::IsPyArrowBacked(df)) {
+		throw InvalidInputException(
+		    "Produced DataFrame has columns that are backed by PyArrow, which is not supported yet in 'map'");
+	}
+
 	return df;
+}
+
+static bool ContainsNullType(const vector<LogicalType> &types) {
+	for (auto &type : types) {
+		if (type.id() == LogicalTypeId::SQLNULL) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static void OverrideNullType(vector<LogicalType> &return_types, const vector<string> &return_names,
+                             const vector<LogicalType> &original_types, const vector<string> &original_names) {
+	if (!ContainsNullType(return_types)) {
+		// Nothing to override, none of the returned types are NULL
+		return;
+	}
+	if (return_types.size() != original_types.size()) {
+		// FIXME: we can probably infer from the names in this case
+		//  Cant infer what the type should be
+		return;
+	}
+	for (idx_t i = 0; i < return_types.size(); i++) {
+		auto &return_type = return_types[i];
+		auto &original_type = original_types[i];
+
+		if (return_type != LogicalTypeId::SQLNULL) {
+			continue;
+		}
+		if (return_names[i] != original_names[i]) {
+			throw InvalidInputException(
+			    "Returned dataframe contains NULL type, and we could not infer the desired type");
+		}
+		// Override the NULL with the original type
+		return_type = original_type;
+	}
+}
+
+unique_ptr<FunctionData> BindExplicitSchema(unique_ptr<MapFunctionData> function_data, PyObject *schema_p,
+                                            vector<LogicalType> &types, vector<string> &names) {
+	D_ASSERT(schema_p != Py_None);
+
+	auto schema_object = py::reinterpret_borrow<py::dict>(schema_p);
+	if (!py::isinstance<py::dict>(schema_object)) {
+		throw InvalidInputException("'schema' should be given as a Dict[str, DuckDBType]");
+	}
+	auto schema = py::dict(schema_object);
+
+	auto column_count = schema.size();
+
+	types.reserve(column_count);
+	names.reserve(column_count);
+	for (auto &item : schema) {
+		auto name = item.first;
+		auto type_p = item.second;
+		names.push_back(std::string(py::str(name)));
+		// TODO: replace with py::try_cast so we can catch the error and throw a better exception
+		auto type = py::cast<shared_ptr<DuckDBPyType>>(type_p);
+		types.push_back(type->Type());
+	}
+
+	function_data->out_names = names;
+	function_data->out_types = types;
+
+	return std::move(function_data);
 }
 
 // we call the passed function with a zero-row data frame to infer the output columns and their names.
@@ -47,23 +129,31 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, Ta
                                                       vector<LogicalType> &return_types, vector<string> &names) {
 	py::gil_scoped_acquire acquire;
 
-	auto data_uptr = make_unique<MapFunctionData>();
+	auto data_uptr = make_uniq<MapFunctionData>();
 	auto &data = *data_uptr;
-	data.function = (PyObject *)input.inputs[0].GetPointer();
+	data.function = reinterpret_cast<PyObject *>(input.inputs[1].GetPointer());
+	auto explicit_schema = reinterpret_cast<PyObject *>(input.inputs[2].GetPointer());
+
 	data.in_names = input.input_table_names;
 	data.in_types = input.input_table_types;
 
-	NumpyResultConversion conversion(data.in_types, 0);
+	if (explicit_schema != Py_None) {
+		return BindExplicitSchema(std::move(data_uptr), explicit_schema, return_types, names);
+	}
+	NumpyResultConversion conversion(data.in_types, 0, context.GetClientProperties());
 	auto df = FunctionCall(conversion, data.in_names, data.function);
 	vector<PandasColumnBindData> pandas_bind_data; // unused
-	VectorConversion::BindPandas(DBConfig::GetConfig(context), df, pandas_bind_data, return_types, names);
+	Pandas::Bind(context, df, pandas_bind_data, return_types, names);
+
+	// output types are potentially NULL, this happens for types that map to 'object' dtype
+	OverrideNullType(return_types, names, data.in_types, data.in_names);
 
 	data.out_names = names;
 	data.out_types = return_types;
-	return move(data_uptr);
+	return std::move(data_uptr);
 }
 
-static string TypeVectorToString(vector<LogicalType> &types) {
+static string TypeVectorToString(const vector<LogicalType> &types) {
 	return StringUtil::Join(types, types.size(), ", ", [](const LogicalType &argument) { return argument.ToString(); });
 }
 
@@ -75,10 +165,10 @@ OperatorResultType MapFunction::MapFunctionExec(ExecutionContext &context, Table
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
-	auto &data = (MapFunctionData &)*data_p.bind_data;
+	auto &data = data_p.bind_data->Cast<MapFunctionData>();
 
 	D_ASSERT(input.GetTypes() == data.in_types);
-	NumpyResultConversion conversion(data.in_types, input.size());
+	NumpyResultConversion conversion(data.in_types, input.size(), context.client.GetClientProperties());
 	conversion.Append(input);
 
 	auto df = FunctionCall(conversion, data.in_names, data.function);
@@ -87,8 +177,7 @@ OperatorResultType MapFunction::MapFunctionExec(ExecutionContext &context, Table
 	vector<LogicalType> pandas_return_types;
 	vector<string> pandas_names;
 
-	VectorConversion::BindPandas(DBConfig::GetConfig(context.client), df, pandas_bind_data, pandas_return_types,
-	                             pandas_names);
+	Pandas::Bind(context.client, df, pandas_bind_data, pandas_return_types, pandas_names);
 	if (pandas_return_types.size() != output.ColumnCount()) {
 		throw InvalidInputException("Expected %llu columns from UDF, got %llu", output.ColumnCount(),
 		                            pandas_return_types.size());
@@ -112,8 +201,8 @@ OperatorResultType MapFunction::MapFunctionExec(ExecutionContext &context, Table
 	}
 
 	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
-		VectorConversion::NumpyToDuckDB(pandas_bind_data[col_idx], pandas_bind_data[col_idx].numpy_col, row_count, 0,
-		                                output.data[col_idx]);
+		auto &bind_data = pandas_bind_data[col_idx];
+		PandasScanFunction::PandasBackendScanSwitch(bind_data, row_count, 0, output.data[col_idx]);
 	}
 	output.SetCardinality(row_count);
 	return OperatorResultType::NEED_MORE_INPUT;

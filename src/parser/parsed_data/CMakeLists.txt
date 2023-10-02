@@ -1,14 +1,29 @@
 add_library_unity(
   duckdb_parsed_data
   OBJECT
-  alter_function_info.cpp
   alter_info.cpp
+  alter_scalar_function_info.cpp
+  alter_table_function_info.cpp
   alter_table_info.cpp
+  attach_info.cpp
   create_info.cpp
   create_index_info.cpp
+  create_aggregate_function_info.cpp
+  create_collation_info.cpp
+  create_copy_function_info.cpp
+  create_macro_info.cpp
+  create_pragma_function_info.cpp
+  create_sequence_info.cpp
   create_scalar_function_info.cpp
+  create_table_function_info.cpp
   create_table_info.cpp
-  sample_options.cpp)
+  create_type_info.cpp
+  create_view_info.cpp
+  detach_info.cpp
+  drop_info.cpp
+  sample_options.cpp
+  transaction_info.cpp
+  vacuum_info.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_parsed_data>
     PARENT_SCOPE)

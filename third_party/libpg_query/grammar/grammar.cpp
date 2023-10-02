@@ -343,6 +343,17 @@ static PGNode* makeParamRef(int number, int location)
 	PGParamRef *p = makeNode(PGParamRef);
 	p->number = number;
 	p->location = location;
+	p->name = NULL;
+	return (PGNode *) p;
+}
+
+/* makeNamedParamRef
+ * Creates a new PGParamRef node
+ */
+static PGNode* makeNamedParamRef(char *name, int location)
+{
+	PGParamRef *p = (PGParamRef *)makeParamRef(0, location);
+	p->name = name;
 	return (PGNode *) p;
 }
 
@@ -541,18 +552,6 @@ static PGNode *
 makeNotExpr(PGNode *expr, int location)
 {
 	return (PGNode *) makeBoolExpr(PG_NOT_EXPR, list_make1(expr), location);
-}
-
-static PGNode *
-makeSQLValueFunction(PGSQLValueFunctionOp op, int32_t typmod, int location)
-{
-	PGSQLValueFunction *svf = makeNode(PGSQLValueFunction);
-
-	svf->op = op;
-	/* svf->type will be filled during parse analysis */
-	svf->typmod = typmod;
-	svf->location = location;
-	return (PGNode *) svf;
 }
 
 /* Separate PGConstraint nodes from COLLATE clauses in a */

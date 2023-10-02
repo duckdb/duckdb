@@ -1,0 +1,23 @@
+# name: test/sql/upsert/upsert_explicit_index.test
+# group: [upsert]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create table tbl (i integer, j integer);
+
+statement ok
+insert into tbl values (5,3), (3,2);
+
+statement ok
+create unique index my_index on tbl(i);
+
+statement ok
+insert into tbl values (5,2) on conflict (i) do update set j = 10;
+
+query II
+select * from tbl;
+----
+5	10
+3	2

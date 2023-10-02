@@ -1,12 +1,7 @@
-
 #include "duckdb/storage/table/column_data.hpp"
-
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
-#include "duckdb/storage/table/validity_column_data.hpp"
-#include "duckdb/storage/table/standard_column_data.hpp"
-#include "duckdb/storage/table/list_column_data.hpp"
-#include "duckdb/transaction/transaction.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 
@@ -24,69 +19,100 @@ ColumnCheckpointState::~ColumnCheckpointState() {
 
 unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
 	D_ASSERT(global_stats);
-	return move(global_stats);
+	return std::move(global_stats);
 }
 
-struct PartialBlockForCheckpoint : PartialBlock {
-	struct PartialColumnSegment {
-		ColumnData *data;
-		ColumnSegment *segment;
-		uint32_t offset_in_block;
-	};
+PartialBlockForCheckpoint::PartialBlockForCheckpoint(ColumnData &data, ColumnSegment &segment, PartialBlockState state,
+                                                     BlockManager &block_manager)
+    : PartialBlock(state, block_manager, segment.block) {
+	AddSegmentToTail(data, segment, 0);
+}
 
-public:
-	PartialBlockForCheckpoint(ColumnData *first_data, ColumnSegment *first_segment, BlockManager &block_manager,
-	                          PartialBlockState state)
-	    : PartialBlock(state), first_data(first_data), first_segment(first_segment), block_manager(block_manager) {
+PartialBlockForCheckpoint::~PartialBlockForCheckpoint() {
+	D_ASSERT(IsFlushed() || Exception::UncaughtException());
+}
+
+bool PartialBlockForCheckpoint::IsFlushed() {
+	// segments are cleared on Flush
+	return segments.empty();
+}
+
+void PartialBlockForCheckpoint::Flush(const idx_t free_space_left) {
+
+	if (IsFlushed()) {
+		throw InternalException("Flush called on partial block that was already flushed");
 	}
 
-	~PartialBlockForCheckpoint() override {
-		D_ASSERT(IsFlushed() || Exception::UncaughtException());
+	// zero-initialize unused memory
+	FlushInternal(free_space_left);
+
+	// At this point, we've already copied all data from tail_segments
+	// into the page owned by first_segment. We flush all segment data to
+	// disk with the following call.
+	// persist the first segment to disk and point the remaining segments to the same block
+	bool fetch_new_block = state.block_id == INVALID_BLOCK;
+	if (fetch_new_block) {
+		state.block_id = block_manager.GetFreeBlockId();
 	}
 
-	// We will copy all subsequent segment data into the memory corresponding
-	// to the first segment. Once the block is full (or checkpoint is complete)
-	// we'll invoke Flush(), which will cause
-	// the block to get written to storage (via BlockManger::ConvertToPersistent),
-	// and all segments to have their references updated
-	// (via ColumnSegment::ConvertToPersistent)
-	ColumnData *first_data;
-	ColumnSegment *first_segment;
-	BlockManager &block_manager;
-	vector<PartialColumnSegment> tail_segments;
-
-public:
-	bool IsFlushed() {
-		// first_segment is zeroed on Flush
-		return !first_segment;
-	}
-
-	void Flush() override {
-		// At this point, we've already copied all data from tail_segments
-		// into the page owned by first_segment. We flush all segment data to
-		// disk with the following call.
-		first_data->IncrementVersion();
-		first_segment->ConvertToPersistent(&block_manager, state.block_id);
-		// Now that the page is persistent, update tail_segments to point to the
-		// newly persistent block.
-		for (auto e : tail_segments) {
-			e.data->IncrementVersion();
-			e.segment->MarkAsPersistent(first_segment->block, e.offset_in_block);
+	for (idx_t i = 0; i < segments.size(); i++) {
+		auto &segment = segments[i];
+		segment.data.IncrementVersion();
+		if (i == 0) {
+			// the first segment is converted to persistent - this writes the data for ALL segments to disk
+			D_ASSERT(segment.offset_in_block == 0);
+			segment.segment.ConvertToPersistent(&block_manager, state.block_id);
+			// update the block after it has been converted to a persistent segment
+			block_handle = segment.segment.block;
+		} else {
+			// subsequent segments are MARKED as persistent - they don't need to be rewritten
+			segment.segment.MarkAsPersistent(block_handle, segment.offset_in_block);
+			if (fetch_new_block) {
+				// if we fetched a new block we need to increase the reference count to the block
+				block_manager.IncreaseBlockReferenceCount(state.block_id);
+			}
 		}
-		first_segment = nullptr;
-		tail_segments.clear();
 	}
 
-	void Clear() override {
-		first_data = nullptr;
-		first_segment = nullptr;
-		tail_segments.clear();
+	Clear();
+}
+
+void PartialBlockForCheckpoint::Merge(PartialBlock &other_p, idx_t offset, idx_t other_size) {
+	auto &other = other_p.Cast<PartialBlockForCheckpoint>();
+
+	auto &buffer_manager = block_manager.buffer_manager;
+	// pin the source block
+	auto old_handle = buffer_manager.Pin(other.block_handle);
+	// pin the target block
+	auto new_handle = buffer_manager.Pin(block_handle);
+	// memcpy the contents of the old block to the new block
+	memcpy(new_handle.Ptr() + offset, old_handle.Ptr(), other_size);
+
+	// now copy over all segments to the new block
+	// move over the uninitialized regions
+	for (auto &region : other.uninitialized_regions) {
+		region.start += offset;
+		region.end += offset;
+		uninitialized_regions.push_back(region);
 	}
 
-	void AddSegmentToTail(ColumnData *data, ColumnSegment *segment, uint32_t offset_in_block) {
-		tail_segments.push_back({data, segment, offset_in_block});
+	// move over the segments
+	for (auto &segment : other.segments) {
+		AddSegmentToTail(segment.data, segment.segment, segment.offset_in_block + offset);
 	}
-};
+
+	other.Clear();
+}
+
+void PartialBlockForCheckpoint::AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block) {
+	segments.emplace_back(data, segment, offset_in_block);
+}
+
+void PartialBlockForCheckpoint::Clear() {
+	uninitialized_regions.clear();
+	block_handle.reset();
+	segments.clear();
+}
 
 void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size) {
 	D_ASSERT(segment_size <= Storage::BLOCK_SIZE);
@@ -96,7 +122,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 	} // LCOV_EXCL_STOP
 
 	// merge the segment stats into the global stats
-	global_stats->Merge(*segment->stats.statistics);
+	global_stats->Merge(segment->stats.statistics);
 
 	// get the buffer of the segment and pin it
 	auto &db = column_data.GetDatabase();
@@ -104,23 +130,23 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 	block_id_t block_id = INVALID_BLOCK;
 	uint32_t offset_in_block = 0;
 
-	if (!segment->stats.statistics->IsConstant()) {
+	if (!segment->stats.statistics.IsConstant()) {
 		// non-constant block
 		PartialBlockAllocation allocation = partial_block_manager.GetBlockAllocation(segment_size);
 		block_id = allocation.state.block_id;
-		offset_in_block = allocation.state.offset_in_block;
+		offset_in_block = allocation.state.offset;
 
 		if (allocation.partial_block) {
 			// Use an existing block.
 			D_ASSERT(offset_in_block > 0);
-			auto pstate = (PartialBlockForCheckpoint *)allocation.partial_block.get();
+			auto &pstate = allocation.partial_block->Cast<PartialBlockForCheckpoint>();
 			// pin the source block
 			auto old_handle = buffer_manager.Pin(segment->block);
 			// pin the target block
-			auto new_handle = buffer_manager.Pin(pstate->first_segment->block);
+			auto new_handle = buffer_manager.Pin(pstate.block_handle);
 			// memcpy the contents of the old block to the new block
 			memcpy(new_handle.Ptr() + offset_in_block, old_handle.Ptr(), segment_size);
-			pstate->AddSegmentToTail(&column_data, segment.get(), offset_in_block);
+			pstate.AddSegmentToTail(column_data, *segment, offset_in_block);
 		} else {
 			// Create a new block for future reuse.
 			if (segment->SegmentSize() != Storage::BLOCK_SIZE) {
@@ -130,22 +156,22 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 				segment->Resize(Storage::BLOCK_SIZE);
 			}
 			D_ASSERT(offset_in_block == 0);
-			allocation.partial_block = make_unique<PartialBlockForCheckpoint>(
-			    &column_data, segment.get(), *allocation.block_manager, allocation.state);
+			allocation.partial_block = make_uniq<PartialBlockForCheckpoint>(column_data, *segment, allocation.state,
+			                                                                *allocation.block_manager);
 		}
 		// Writer will decide whether to reuse this block.
-		partial_block_manager.RegisterPartialBlock(move(allocation));
+		partial_block_manager.RegisterPartialBlock(std::move(allocation));
 	} else {
 		// constant block: no need to write anything to disk besides the stats
 		// set up the compression function to constant
 		auto &config = DBConfig::GetConfig(db);
 		segment->function =
-		    config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, segment->type.InternalType());
+		    *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, segment->type.InternalType());
 		segment->ConvertToPersistent(nullptr, INVALID_BLOCK);
 	}
 
 	// construct the data pointer
-	DataPointer data_pointer;
+	DataPointer data_pointer(segment->stats.statistics.Copy());
 	data_pointer.block_pointer.block_id = block_id;
 	data_pointer.block_pointer.offset = offset_in_block;
 	data_pointer.row_start = row_group.start;
@@ -154,25 +180,18 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
 	}
 	data_pointer.tuple_count = tuple_count;
-	data_pointer.compression_type = segment->function->type;
-	data_pointer.statistics = segment->stats.statistics->Copy();
+	data_pointer.compression_type = segment->function.get().type;
+	if (segment->function.get().serialize_state) {
+		data_pointer.segment_state = segment->function.get().serialize_state(*segment);
+	}
 
 	// append the segment to the new segment tree
-	new_tree.AppendSegment(move(segment));
-	data_pointers.push_back(move(data_pointer));
+	new_tree.AppendSegment(std::move(segment));
+	data_pointers.push_back(std::move(data_pointer));
 }
 
-void ColumnCheckpointState::WriteDataPointers(RowGroupWriter &writer) {
-	writer.WriteColumnDataPointers(*this);
-}
-
-void ColumnCheckpointState::GetBlockIds(unordered_set<block_id_t> &result) {
-	for (auto &pointer : data_pointers) {
-		if (pointer.block_pointer.block_id == INVALID_BLOCK) {
-			continue;
-		}
-		result.insert(pointer.block_pointer.block_id);
-	}
+void ColumnCheckpointState::WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) {
+	writer.WriteColumnDataPointers(*this, serializer);
 }
 
 } // namespace duckdb

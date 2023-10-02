@@ -1,0 +1,107 @@
+# name: test/sql/copy/csv/parallel/parallel_csv_union_by_name.test
+# description: Test parallel CSV reader with union by name
+# group: [parallel]
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+PRAGMA verify_parallelism
+
+loop thr 1 8
+
+statement ok
+pragma threads=${thr}
+
+
+query IIII
+SELECT id, value, a, part
+FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
+ORDER BY id
+----
+1	value1	aaa	a
+2	value2	NULL	b
+
+query IIII
+SELECT k, c, ts, replace(filename, '\', '/')
+FROM read_csv_auto('data/csv/union-by-name/ubn[!1-2].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE)
+ORDER BY c
+----
+6	3	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
+6	5	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
+6	6	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
+NULL	100	Monday	data/csv/union-by-name/ubn4.csv
+NULL	200	Sunday	data/csv/union-by-name/ubn4.csv
+NULL	300	Friday	data/csv/union-by-name/ubn4.csv
+
+query IIIII
+SELECT  a, b, c, ts, k
+FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+ORDER BY a, c, ts
+----
+NULL	NULL	3	2003-06-30 12:03:10	6
+NULL	NULL	5	2003-06-30 12:03:10	6
+NULL	NULL	6	2003-06-30 12:03:10	6
+NULL	NULL	100	Monday	NULL
+NULL	NULL	200	Sunday	NULL
+NULL	NULL	300	Friday	NULL
+1	2	3	NULL	NULL
+3	4	5	NULL	NULL
+34fd321	91	NULL	2020-12-30 03:25:58.745232+01	NULL
+4	5	6	NULL	NULL
+8cb123cb8	90	NULL	2020-12-30 02:25:58.745232+01	NULL
+fg5391jn4	92	NULL	2020-12-30 04:25:58.745232+01	NULL
+test	88	NULL	2020-12-30 01:25:58.745232+01	NULL
+
+mode unskip
+
+query TTTTT
+SELECT  typeof(a), typeof(b), typeof(c), typeof(ts), typeof(k)
+FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+LIMIT 1;
+----
+VARCHAR	BIGINT	BIGINT	VARCHAR	BIGINT
+
+mode skip
+
+# projection pushdown
+query II
+SELECT  c, k
+FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+ORDER BY c NULLS LAST, k NULLS LAST
+----
+3	6
+3	NULL
+5	6
+5	NULL
+6	6
+6	NULL
+100	NULL
+200	NULL
+300	NULL
+NULL	NULL
+NULL	NULL
+NULL	NULL
+NULL	NULL
+
+# projection pushdown
+query I
+SELECT  ts
+FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+ORDER BY ts NULLS LAST
+----
+2003-06-30 12:03:10
+2003-06-30 12:03:10
+2003-06-30 12:03:10
+2020-12-30 01:25:58.745232+01
+2020-12-30 02:25:58.745232+01
+2020-12-30 03:25:58.745232+01
+2020-12-30 04:25:58.745232+01
+Friday
+Monday
+Sunday
+NULL
+NULL
+NULL
+
+endloop

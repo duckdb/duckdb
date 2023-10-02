@@ -20,7 +20,7 @@
 	public:                                                                                                            \
 		static NAME##Benchmark *GetInstance() {                                                                        \
 			static NAME##Benchmark singleton(true);                                                                    \
-			auto benchmark = unique_ptr<DuckDBBenchmark>(new NAME##Benchmark(false));                                  \
+			auto benchmark = duckdb::unique_ptr<DuckDBBenchmark>(new NAME##Benchmark(false));                          \
 			return &singleton;                                                                                         \
 		}
 

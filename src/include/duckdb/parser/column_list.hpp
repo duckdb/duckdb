@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/parser/column_definition.hpp"
-#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -19,7 +18,8 @@ public:
 	class ColumnListIterator;
 
 public:
-	ColumnList(bool allow_duplicate_names = false);
+	DUCKDB_API ColumnList(bool allow_duplicate_names = false);
+	DUCKDB_API explicit ColumnList(vector<ColumnDefinition> columns, bool allow_duplicate_names = false);
 
 	DUCKDB_API void AddColumn(ColumnDefinition column);
 	void Finalize();
@@ -30,6 +30,8 @@ public:
 	DUCKDB_API ColumnDefinition &GetColumnMutable(LogicalIndex index);
 	DUCKDB_API ColumnDefinition &GetColumnMutable(PhysicalIndex index);
 	DUCKDB_API ColumnDefinition &GetColumnMutable(const string &name);
+	DUCKDB_API vector<string> GetColumnNames() const;
+	DUCKDB_API vector<LogicalType> GetColumnTypes() const;
 
 	DUCKDB_API bool ColumnExists(const string &name) const;
 
@@ -48,8 +50,8 @@ public:
 	}
 
 	ColumnList Copy() const;
-	void Serialize(FieldWriter &writer) const;
-	static ColumnList Deserialize(FieldReader &reader);
+	void Serialize(Serializer &serializer) const;
+	static ColumnList Deserialize(Deserializer &deserializer);
 
 	DUCKDB_API ColumnListIterator Logical() const;
 	DUCKDB_API ColumnListIterator Physical() const;
@@ -74,7 +76,7 @@ public:
 	// logical iterator
 	class ColumnListIterator {
 	public:
-		DUCKDB_API ColumnListIterator(const ColumnList &list, bool physical) : list(list), physical(physical) {
+		ColumnListIterator(const ColumnList &list, bool physical) : list(list), physical(physical) {
 		}
 
 	private:
@@ -84,7 +86,7 @@ public:
 	private:
 		class ColumnLogicalIteratorInternal {
 		public:
-			DUCKDB_API ColumnLogicalIteratorInternal(const ColumnList &list, bool physical, idx_t pos, idx_t end)
+			ColumnLogicalIteratorInternal(const ColumnList &list, bool physical, idx_t pos, idx_t end)
 			    : list(list), physical(physical), pos(pos), end(end) {
 			}
 
@@ -94,14 +96,14 @@ public:
 			idx_t end;
 
 		public:
-			DUCKDB_API ColumnLogicalIteratorInternal &operator++() {
+			ColumnLogicalIteratorInternal &operator++() {
 				pos++;
 				return *this;
 			}
-			DUCKDB_API bool operator!=(const ColumnLogicalIteratorInternal &other) const {
+			bool operator!=(const ColumnLogicalIteratorInternal &other) const {
 				return pos != other.pos || end != other.end || &list != &other.list;
 			}
-			DUCKDB_API const ColumnDefinition &operator*() const {
+			const ColumnDefinition &operator*() const {
 				if (physical) {
 					return list.GetColumn(PhysicalIndex(pos));
 				} else {
@@ -115,10 +117,10 @@ public:
 			return physical ? list.PhysicalColumnCount() : list.LogicalColumnCount();
 		}
 
-		DUCKDB_API ColumnLogicalIteratorInternal begin() {
+		ColumnLogicalIteratorInternal begin() {
 			return ColumnLogicalIteratorInternal(list, physical, 0, Size());
 		}
-		DUCKDB_API ColumnLogicalIteratorInternal end() {
+		ColumnLogicalIteratorInternal end() {
 			return ColumnLogicalIteratorInternal(list, physical, Size(), Size());
 		}
 	};

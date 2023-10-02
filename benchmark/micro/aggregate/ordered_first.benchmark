@@ -1,0 +1,19 @@
+# name: benchmark/micro/aggregate/ordered_first.benchmark
+# description: FIRST(i ORDER BY i) over a bunch of integers
+# group: [aggregate]
+
+name Ordered First (Grouped)
+group aggregate
+
+#load
+#PRAGMA ordered_aggregate_threshold=262144
+
+run
+SELECT SUM(agg) FROM (
+	SELECT i // 2048 AS grp, FIRST(i ORDER BY i DESC) AS agg
+	FROM range(10000000) tbl(i)
+	GROUP BY ALL
+)
+
+result I
+24420932461

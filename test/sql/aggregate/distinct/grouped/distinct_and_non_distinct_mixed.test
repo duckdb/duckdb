@@ -30,7 +30,7 @@ from tbl group by groups;;
 10
 
 # D--
-query III
+query III rowsort
 select
 	sum(distinct i),
 	sum(i),
@@ -44,7 +44,7 @@ from tbl group by groups;;
 265	265000	515000
 
 # --D
-query III
+query III rowsort
 select
 	sum(i),
 	sum(j),
@@ -58,7 +58,7 @@ from tbl group by groups;;
 265000	515000	265
 
 # -D-
-query III
+query III rowsort
 select
 	sum(i),
 	sum(distinct i),
@@ -72,7 +72,7 @@ from tbl group by groups;;
 265000	265	515000
 
 # D-D
-query III
+query III rowsort
 select
 	sum(distinct i),
 	count(j),
@@ -86,7 +86,7 @@ from tbl group by groups;;
 265	10000	1030
 
 #-D-D
-query IIII
+query IIII rowsort
 select
 	sum(j),
 	sum(distinct i),
@@ -101,7 +101,7 @@ from tbl group by groups;;
 515000	265	10000	1030
 
 #-D-D
-query IIII
+query IIII rowsort
 select
 	sum(j),
 	sum(distinct i),
@@ -116,7 +116,7 @@ from tbl group by groups;;
 515000	265	10000	1030
 
 #D-D-
-query IIII
+query IIII rowsort
 select
 	sum(distinct i),
 	count(j),
@@ -149,7 +149,7 @@ from tbl group by groups;;
 
 # D--
 # -FF
-query III
+query III rowsort
 select
 	sum(distinct i),
 	sum(i) FILTER (WHERE j < 20),
@@ -164,7 +164,7 @@ from tbl group by groups;;
 
 # --D
 # -FF
-query III
+query III rowsort
 select
 	sum(i),
 	sum(j) FILTER (WHERE j == 0),
@@ -179,7 +179,7 @@ from tbl group by groups;;
 
 # -D-
 # F-F
-query III
+query III rowsort
 select
 	sum(i) FILTER (WHERE j == 5),
 	sum(distinct i),
@@ -194,7 +194,7 @@ NULL	265	NULL
 
 # D-D
 # F-F
-query III
+query III rowsort
 select
 	sum(distinct i) FILTER (WHERE i == 5),
 	count(j),
@@ -209,7 +209,7 @@ NULL	10000	NULL
 
 #-D-D
 #FF--
-query IIII
+query IIII rowsort
 select
 	sum(j) FILTER (WHERE j == 5),
 	sum(distinct i) FILTER (WHERE j == 5),
@@ -218,14 +218,14 @@ select
 from tbl group by groups;;
 ----
 2500	5	10000	950
-NULL	NULL	10000	970
-NULL	NULL	10000	990
 NULL	NULL	10000	1010
 NULL	NULL	10000	1030
+NULL	NULL	10000	970
+NULL	NULL	10000	990
 
 #-D-D
 #F--F
-query IIII
+query IIII rowsort
 select
 	sum(j) FILTER (WHERE i == 5),
 	sum(distinct i),
@@ -240,7 +240,7 @@ NULL	255	10000	NULL
 NULL	265	10000	NULL
 
 #D-D-
-query IIII
+query IIII rowsort
 select
 	sum(distinct i),
 	count(j),

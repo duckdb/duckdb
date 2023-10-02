@@ -135,6 +135,7 @@ static PGNode *makeNullAConst(int location);
 static PGNode *makeAConst(PGValue *v, int location);
 static PGNode *makeBoolAConst(bool state, int location);
 static PGNode *makeParamRef(int number, int location);
+static PGNode *makeNamedParamRef(char* name, int location);
 static void check_qualified_name(PGList *names, core_yyscan_t yyscanner);
 static PGList *check_func_name(PGList *names, core_yyscan_t yyscanner);
 static PGList *check_indirection(PGList *indirection, core_yyscan_t yyscanner);
@@ -149,8 +150,6 @@ static void doNegateFloat(PGValue *v);
 static PGNode *makeAndExpr(PGNode *lexpr, PGNode *rexpr, int location);
 static PGNode *makeOrExpr(PGNode *lexpr, PGNode *rexpr, int location);
 static PGNode *makeNotExpr(PGNode *expr, int location);
-static PGNode *makeSQLValueFunction(PGSQLValueFunctionOp op, int32_t typmod,
-								  int location);
 static void SplitColQualList(PGList *qualList,
 							 PGList **constraintList, PGCollateClause **collClause,
 							 core_yyscan_t yyscanner);

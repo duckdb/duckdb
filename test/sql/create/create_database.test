@@ -1,0 +1,20 @@
+# name: test/sql/create/create_database.test
+# description: The binder error from the feature not yet being supported in DuckDB
+# group: [create]
+
+require noforcestorage
+
+statement error
+CREATE DATABASE mydb;
+----
+syntax error at or near "DATABASE"
+
+statement error
+CREATE DATABASE mydb FROM './path';
+----
+syntax error at or near "DATABASE"
+
+statement error
+DROP DATABASE mydb
+----
+syntax error at or near "DATABASE"

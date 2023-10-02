@@ -38,6 +38,7 @@
 #define sqlite3_column_int             duckdb_shell_sqlite3_column_int
 #define sqlite3_column_int64           duckdb_shell_sqlite3_column_int64
 #define sqlite3_column_name            duckdb_shell_sqlite3_column_name
+#define sqlite3_column_table_name      duckdb_shell_sqlite3_column_table_name
 #define sqlite3_column_text            duckdb_shell_sqlite3_column_text
 #define sqlite3_column_type            duckdb_shell_sqlite3_column_type
 #define sqlite3_column_value           duckdb_shell_sqlite3_column_value

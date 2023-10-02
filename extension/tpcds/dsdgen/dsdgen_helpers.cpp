@@ -18,8 +18,8 @@ void InitializeDSDgen(double scale) {
 	InitConstants::Reset();
 	ResetCountCount();
 	std::string t = std::to_string(scale);
-	set_str("SCALE", (char*) t.c_str()); // set SF, which also does a default init (e.g. random seed)
-	init_rand();                 // no random numbers without this
+	set_str("SCALE", (char *)t.c_str()); // set SF, which also does a default init (e.g. random seed)
+	init_rand();                         // no random numbers without this
 }
 
 ds_key_t GetRowCount(int table_id) {
@@ -36,6 +36,7 @@ tpcds_table_def GetTDefByNumber(int table_id) {
 	def.name = tdef->name;
 	def.fl_child = tdef->flags & FL_CHILD ? 1 : 0;
 	def.fl_small = tdef->flags & FL_SMALL ? 1 : 0;
+	def.first_column = tdef->nFirstColumn;
 	return def;
 }
 

@@ -2,7 +2,7 @@
 
 void duckdb_destroy_value(duckdb_value *value) {
 	if (value && *value) {
-		auto val = (duckdb::Value *)*value;
+		auto val = reinterpret_cast<duckdb::Value *>(*value);
 		delete val;
 		*value = nullptr;
 	}
@@ -22,18 +22,18 @@ duckdb_value duckdb_create_int64(int64_t input) {
 }
 
 char *duckdb_get_varchar(duckdb_value value) {
-	auto val = (duckdb::Value *)value;
+	auto val = reinterpret_cast<duckdb::Value *>(value);
 	auto str_val = val->DefaultCastAs(duckdb::LogicalType::VARCHAR);
 	auto &str = duckdb::StringValue::Get(str_val);
 
-	auto result = (char *)malloc(sizeof(char *) * (str.size() + 1));
+	auto result = reinterpret_cast<char *>(malloc(sizeof(char) * (str.size() + 1)));
 	memcpy(result, str.c_str(), str.size());
 	result[str.size()] = '\0';
 	return result;
 }
 
 int64_t duckdb_get_int64(duckdb_value value) {
-	auto val = (duckdb::Value *)value;
+	auto val = reinterpret_cast<duckdb::Value *>(value);
 	if (!val->DefaultTryCastAs(duckdb::LogicalType::BIGINT)) {
 		return 0;
 	}

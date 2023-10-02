@@ -30,6 +30,7 @@ class DatabaseInstance;
 class DuckDB;
 class LogicalOperator;
 class SelectStatement;
+struct CSVReaderOptions;
 
 typedef void (*warning_callback)(std::string);
 
@@ -127,8 +128,10 @@ public:
 	DUCKDB_API shared_ptr<Relation> Values(const string &values);
 	DUCKDB_API shared_ptr<Relation> Values(const string &values, const vector<string> &column_names,
 	                                       const string &alias = "values");
+
 	//! Reads CSV file
 	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file);
+	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file, named_parameter_map_t &&options);
 	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file, const vector<string> &columns);
 
 	//! Reads Parquet file
@@ -166,20 +169,20 @@ public:
 	template <typename TR, typename... Args>
 	void CreateScalarFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                          TR (*udf_func)(Args...)) {
-		scalar_function_t function =
-		    UDFWrapper::CreateScalarFunction<TR, Args...>(name, args, move(ret_type), udf_func);
+		scalar_function_t function = UDFWrapper::CreateScalarFunction<TR, Args...>(name, args, ret_type, udf_func);
 		UDFWrapper::RegisterFunction(name, args, ret_type, function, *context);
 	}
 
 	template <typename TR, typename... Args>
 	void CreateVectorizedFunction(const string &name, scalar_function_t udf_func,
 	                              LogicalType varargs = LogicalType::INVALID) {
-		UDFWrapper::RegisterFunction<TR, Args...>(name, udf_func, *context, move(varargs));
+		UDFWrapper::RegisterFunction<TR, Args...>(name, udf_func, *context, std::move(varargs));
 	}
 
-	DUCKDB_API void CreateVectorizedFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
-	                                         scalar_function_t udf_func, LogicalType varargs = LogicalType::INVALID) {
-		UDFWrapper::RegisterFunction(name, move(args), move(ret_type), udf_func, *context, move(varargs));
+	void CreateVectorizedFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
+	                              scalar_function_t udf_func, LogicalType varargs = LogicalType::INVALID) {
+		UDFWrapper::RegisterFunction(name, std::move(args), std::move(ret_type), udf_func, *context,
+		                             std::move(varargs));
 	}
 
 	//------------------------------------- Aggreate Functions ----------------------------------------//
@@ -210,13 +213,12 @@ public:
 		UDFWrapper::RegisterAggrFunction(function, *context);
 	}
 
-	DUCKDB_API void CreateAggregateFunction(const string &name, vector<LogicalType> arguments, LogicalType return_type,
-	                                        aggregate_size_t state_size, aggregate_initialize_t initialize,
-	                                        aggregate_update_t update, aggregate_combine_t combine,
-	                                        aggregate_finalize_t finalize,
-	                                        aggregate_simple_update_t simple_update = nullptr,
-	                                        bind_aggregate_function_t bind = nullptr,
-	                                        aggregate_destructor_t destructor = nullptr) {
+	void CreateAggregateFunction(const string &name, vector<LogicalType> arguments, LogicalType return_type,
+	                             aggregate_size_t state_size, aggregate_initialize_t initialize,
+	                             aggregate_update_t update, aggregate_combine_t combine, aggregate_finalize_t finalize,
+	                             aggregate_simple_update_t simple_update = nullptr,
+	                             bind_aggregate_function_t bind = nullptr,
+	                             aggregate_destructor_t destructor = nullptr) {
 		AggregateFunction function =
 		    UDFWrapper::CreateAggregateFunction(name, arguments, return_type, state_size, initialize, update, combine,
 		                                        finalize, simple_update, bind, destructor);

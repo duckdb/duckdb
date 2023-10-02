@@ -118,7 +118,7 @@ static void parallel_pending_query(Connection *conn, bool *correct, size_t threa
 		try {
 			// this will randomly throw an exception if another thread calls pending query first
 			auto result = executor->Execute();
-			if (!CHECK_COLUMN(result, 0, {Value(), 1, 2, 3})) {
+			if (!CHECK_COLUMN(result, 0, {1, 2, 3, Value()})) {
 				correct[threadnr] = false;
 			}
 		} catch (...) {
@@ -128,8 +128,8 @@ static void parallel_pending_query(Connection *conn, bool *correct, size_t threa
 }
 
 TEST_CASE("Test parallel usage of pending query API", "[api][.]") {
-	auto db = make_unique<DuckDB>(nullptr);
-	auto conn = make_unique<Connection>(*db);
+	auto db = make_uniq<DuckDB>(nullptr);
+	auto conn = make_uniq<Connection>(*db);
 
 	REQUIRE_NO_FAIL(conn->Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
@@ -178,10 +178,10 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api][.]") {
 		auto prepare = con.Prepare("SELECT SUM(i+X) FROM range(1000000) tbl(i) WHERE i>=$1");
 		REQUIRE(prepare->HasError());
 
-		REQUIRE_THROWS(prepare->PendingQuery(0));
+		REQUIRE_FAIL(prepare->PendingQuery(0));
 	}
 	SECTION("Error during execution") {
-		vector<Value> parameters;
+		duckdb::vector<Value> parameters;
 		auto prepared = con.Prepare("SELECT concat(SUM(i)::varchar, CASE WHEN SUM(i) IS NULL THEN 0 ELSE 'hello' "
 		                            "END)::INT FROM range(1000000) tbl(i) WHERE i>$1");
 		// this succeeds initially

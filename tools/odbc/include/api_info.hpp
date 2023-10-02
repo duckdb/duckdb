@@ -8,6 +8,7 @@
 #include <sqlext.h>
 #include <unordered_set>
 #include <set>
+#include "duckdb/common/vector.hpp"
 
 #define NUM_FUNC_SUPPORTED 4000
 
@@ -46,7 +47,7 @@ private:
 
 	// static const std::unordered_set<SQLSMALLINT> ODBC_SUPPORTED_SQL_TYPES;
 
-	static const std::vector<TypeInfo> ODBC_SUPPORTED_SQL_TYPES;
+	static const vector<TypeInfo> ODBC_SUPPORTED_SQL_TYPES;
 
 	static void SetFunctionSupported(SQLUSMALLINT *flags, int function_id);
 
@@ -57,13 +58,13 @@ public:
 
 	static SQLSMALLINT FindRelatedSQLType(duckdb::LogicalTypeId type_id);
 
-	static void FindDataType(SQLSMALLINT data_type, std::vector<TypeInfo> &vec_types);
+	static void FindDataType(SQLSMALLINT data_type, vector<TypeInfo> &vec_types);
 
 	static SQLLEN PointerSizeOf(SQLSMALLINT sql_type);
 
-	static const std::vector<TypeInfo> &GetVectorTypesAddr();
+	static const vector<TypeInfo> &GetVectorTypesAddr();
 
-	static void WriteInfoTypesToQueryString(const std::vector<TypeInfo> &vec_types, string &query);
+	static void WriteInfoTypesToQueryString(const vector<TypeInfo> &vec_types, string &query);
 
 	static bool IsNumericDescriptorField(SQLSMALLINT field_identifier);
 

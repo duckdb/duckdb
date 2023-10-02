@@ -1,7 +1,7 @@
 s_store_name|s_company_id|s_street_number|s_street_name|s_street_type|s_suite_number|s_city|s_county|s_state|s_zip|30 days|31-60 days|61-90 days|91-120 days|>120 days
-able|1|255|Sycamore |Dr.|Suite 410|Midway|Williamson County|TN|31904|75|64|68|69|122
-ation|1|811|Lee |Circle|Suite T|Midway|Williamson County|TN|31904|82|66|64|50|118
-bar|1|175|4th |Court|Suite C|Midway|Williamson County|TN|31904|86|66|54|57|121
-eing|1|226|12th |Lane|Suite D|Fairview|Williamson County|TN|35709|93|52|53|56|133
-ese|1|27|Lake |Ln|Suite 260|Midway|Williamson County|TN|31904|80|47|50|49|120
-ought|1|767|Spring |Wy|Suite 250|Midway|Williamson County|TN|31904|82|77|61|61|114
+able|1|255|Sycamore |Dr.|Suite 410|Midway|Williamson County|TN|31904|64|61|58|56|108
+ation|1|811|Lee |Circle|Suite T|Midway|Williamson County|TN|31904|75|57|55|41|99
+bar|1|175|4th |Court|Suite C|Midway|Williamson County|TN|31904|73|51|46|55|108
+eing|1|226|12th |Lane|Suite D|Fairview|Williamson County|TN|35709|81|46|44|50|113
+ese|1|27|Lake |Ln|Suite 260|Midway|Williamson County|TN|31904|73|42|44|41|108
+ought|1|767|Spring |Wy|Suite 250|Midway|Williamson County|TN|31904|69|65|55|56|100

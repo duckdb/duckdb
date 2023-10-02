@@ -5,7 +5,7 @@ using duckdb::DatabaseData;
 
 struct CAPITaskState {
 	CAPITaskState(duckdb::DatabaseInstance &db)
-	    : db(db), marker(duckdb::make_unique<duckdb::atomic<bool>>(true)), execute_count(0) {
+	    : db(db), marker(duckdb::make_uniq<duckdb::atomic<bool>>(true)), execute_count(0) {
 	}
 
 	duckdb::DatabaseInstance &db;
@@ -77,4 +77,12 @@ void duckdb_destroy_task_state(duckdb_task_state state_p) {
 	}
 	auto state = (CAPITaskState *)state_p;
 	delete state;
+}
+
+bool duckdb_execution_is_finished(duckdb_connection con) {
+	if (!con) {
+		return false;
+	}
+	duckdb::Connection *conn = (duckdb::Connection *)con;
+	return conn->context->ExecutionIsFinished();
 }

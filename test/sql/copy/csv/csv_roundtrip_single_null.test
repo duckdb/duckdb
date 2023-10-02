@@ -1,0 +1,22 @@
+# name: test/sql/copy/csv/csv_roundtrip_single_null.test
+# description: Round-trip a single NULL value
+# group: [csv]
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+COPY (SELECT NULL) TO '__TEST_DIR__/single_null.csv' (HEADER 0)
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+COPY integers FROM '__TEST_DIR__/single_null.csv' (HEADER 0)
+
+query I
+FROM integers
+----
+NULL

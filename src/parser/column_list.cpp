@@ -6,6 +6,14 @@ namespace duckdb {
 
 ColumnList::ColumnList(bool allow_duplicate_names) : allow_duplicate_names(allow_duplicate_names) {
 }
+
+ColumnList::ColumnList(vector<ColumnDefinition> columns, bool allow_duplicate_names)
+    : allow_duplicate_names(allow_duplicate_names) {
+	for (auto &col : columns) {
+		AddColumn(std::move(col));
+	}
+}
+
 void ColumnList::AddColumn(ColumnDefinition column) {
 	auto oid = columns.size();
 	if (!column.Generated()) {
@@ -16,7 +24,7 @@ void ColumnList::AddColumn(ColumnDefinition column) {
 	}
 	column.SetOid(columns.size());
 	AddToNameMap(column);
-	columns.push_back(move(column));
+	columns.push_back(std::move(column));
 }
 
 void ColumnList::Finalize() {
@@ -93,6 +101,24 @@ const ColumnDefinition &ColumnList::GetColumn(const string &name) const {
 	return columns[logical_index];
 }
 
+vector<string> ColumnList::GetColumnNames() const {
+	vector<string> names;
+	names.reserve(columns.size());
+	for (auto &column : columns) {
+		names.push_back(column.Name());
+	}
+	return names;
+}
+
+vector<LogicalType> ColumnList::GetColumnTypes() const {
+	vector<LogicalType> types;
+	types.reserve(columns.size());
+	for (auto &column : columns) {
+		types.push_back(column.Type());
+	}
+	return types;
+}
+
 bool ColumnList::ColumnExists(const string &name) const {
 	auto entry = name_map.find(name);
 	return entry != name_map.end();
@@ -128,19 +154,6 @@ ColumnList ColumnList::Copy() const {
 	ColumnList result(allow_duplicate_names);
 	for (auto &col : columns) {
 		result.AddColumn(col.Copy());
-	}
-	return result;
-}
-
-void ColumnList::Serialize(FieldWriter &writer) const {
-	writer.WriteRegularSerializableList(columns);
-}
-
-ColumnList ColumnList::Deserialize(FieldReader &reader) {
-	ColumnList result;
-	auto columns = reader.ReadRequiredSerializableList<ColumnDefinition, ColumnDefinition>();
-	for (auto &col : columns) {
-		result.AddColumn(move(col));
 	}
 	return result;
 }

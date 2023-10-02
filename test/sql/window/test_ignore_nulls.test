@@ -26,6 +26,7 @@ SELECT
     ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	NULL
 1	1	NULL	614
@@ -44,6 +45,7 @@ SELECT
     ROWS BETWEEN 1 PRECEDING AND UNBOUNDED FOLLOWING
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	614
 1	1	NULL	614
@@ -62,6 +64,7 @@ SELECT
     ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	NULL
 1	1	NULL	NULL
@@ -79,6 +82,7 @@ SELECT
     ORDER BY id
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	639
 1	1	NULL	639
@@ -96,6 +100,7 @@ SELECT
     ORDER BY id
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	-1
 1	1	NULL	614
@@ -114,6 +119,7 @@ SELECT
     ORDER BY id
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	614
 1	1	NULL	NULL
@@ -135,6 +141,7 @@ SELECT
     ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	NULL
 1	1	NULL	614
@@ -153,6 +160,7 @@ SELECT
     ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	NULL
 1	1	NULL	614
@@ -171,6 +179,7 @@ SELECT
     ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	NULL
 1	1	NULL	NULL
@@ -188,6 +197,7 @@ SELECT
     ORDER BY id
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	NULL
 1	1	NULL	NULL
@@ -205,6 +215,7 @@ SELECT
     ORDER BY id
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	-1
 1	1	NULL	614
@@ -223,12 +234,49 @@ SELECT
     ORDER BY id
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	614
 1	1	NULL	NULL
 2	1	NULL	NULL
 3	1	639	639
 4	1	2027	2027
+
+# Edge cases for FIRST/LAST/NTH_VALUE
+statement ok
+CREATE TABLE IF NOT EXISTS issue6635(index INTEGER, data INTEGER);
+
+statement ok
+insert into issue6635 values 
+	(1,1),
+	(2,2),
+	(3,NULL),
+	(4,NULL),
+	(5,5),
+	(6,NULL),
+	(7,NULL)
+;
+
+query IIIII
+SELECT *, 
+	first(data IGNORE NULLS) OVER w, 
+	last(data IGNORE NULLS) OVER w,
+	nth_value(data, 1 IGNORE NULLS) OVER w
+FROM issue6635
+WINDOW w AS (
+	ORDER BY index 
+	ROWS BETWEEN 1 FOLLOWING 
+	 AND UNBOUNDED FOLLOWING
+)
+;
+----
+1	1	2	5	2
+2	2	5	5	5
+3	NULL	5	5	5
+4	NULL	5	5	5
+5	5	NULL	NULL	NULL
+6	NULL	NULL	NULL	NULL
+7	NULL	NULL	NULL	NULL
 
 # Multiple blocks for ignore nulls
 query IIII
@@ -251,6 +299,7 @@ SELECT *,
         ORDER BY id
     ) AS grade
 FROM lvl
+ORDER BY id
 ----
 40000 values hashing to c302c8b0f3c10c1e5cc7211c4af7a8d6
 

@@ -1,0 +1,21 @@
+# name: benchmark/micro/copy/from_parquet_medium_row_groups.benchmark
+# description: Import data from medium batches
+# group: [copy]
+
+name Import data from medium row groups
+group copy
+
+require parquet
+
+storage persistent
+
+load
+COPY (FROM range(100000000)) TO '${BENCHMARK_DIR}/medium_batches.parquet' (ROW_GROUP_SIZE 200000);
+
+run
+CREATE TABLE medium AS FROM '${BENCHMARK_DIR}/medium_batches.parquet';
+
+cleanup
+DROP TABLE medium;
+
+

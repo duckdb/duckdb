@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   transform_array_access.cpp
   transform_bool_expr.cpp
+  transform_boolean_test.cpp
   transform_case.cpp
   transform_cast.cpp
   transform_coalesce.cpp
@@ -17,7 +18,8 @@ add_library_unity(
   transform_operator.cpp
   transform_param_ref.cpp
   transform_positional_reference.cpp
-  transform_subquery.cpp)
+  transform_subquery.cpp
+  transform_multi_assign_reference.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_transformer_expression>
     PARENT_SCOPE)

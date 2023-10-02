@@ -7,7 +7,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test query profiler", "[api]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 	string output;
