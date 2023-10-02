@@ -140,7 +140,7 @@ class TestArrowDFFilterPushdown(object):
             'UBIGINT',
             'FLOAT',
             'DOUBLE',
-            'HUGEINT'
+            'HUGEINT',
         ]
         for data_type in numeric_types:
             tbl_name = "test_" + data_type
