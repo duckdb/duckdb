@@ -11,8 +11,6 @@ from duckdb.duckdb_query_graph import generate
 
 sys.path.insert(0, 'benchmark')
 
-from duckdb_query_graph import generate
-
 arguments = sys.argv
 if len(arguments) <= 1:
 	print("Usage: python generate_querygraph.py [input.json] [output.html] [open={1,0}]")
