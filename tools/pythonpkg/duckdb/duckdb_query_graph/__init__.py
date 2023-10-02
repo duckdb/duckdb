@@ -126,22 +126,12 @@ color_map = {
 }
 
 def get_node_body(name, result, cardinality, extra_info, timing):
-	node_class = ""
-
-	if name == "SEQ_SCAN":
-		node_class = "seq_scan"
-	if name == "HASH_JOIN":
-		node_class = "hash_join"
-	if name == "PROJECTION":
-		node_class = "projection"
-	if name == "UNGROUPED_AGGREGATE":
-		node_class = "ungrouped_aggregate"
 	node_style = ""
 	stripped_name = name.strip()
 	if stripped_name in color_map:
 		node_style = f"background-color: {color_map[stripped_name]};"
 
-	body = f"<span class=\"tf-nc {node_class}\" style=\"{node_style}\">"
+	body = f"<span class=\"tf-nc\" style=\"{node_style}\">"
 	body += "<div class=\"node-body\">"
 	new_name = name.replace("_", " ")
 	body += f"<p> <b>{new_name} ({result}s) </b></p>"
