@@ -4,11 +4,14 @@
 
 import os
 import sys
+from functools import reduce
 from python_helpers import open_utf8
+
+from duckdb.duckdb_query_graph import generate
 
 sys.path.insert(0, 'benchmark')
 
-from tools.pythonpkg.duckdb_query_graph import generate
+from duckdb_query_graph import generate
 
 arguments = sys.argv
 if len(arguments) <= 1:
