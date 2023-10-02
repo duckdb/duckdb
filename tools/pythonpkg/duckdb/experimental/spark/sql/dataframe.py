@@ -3,6 +3,7 @@ from ..exception import ContributionsAcceptedError
 from typing import TYPE_CHECKING, List, Optional, Union, Tuple, overload, Sequence, Any, Dict, cast, Callable
 from duckdb import StarExpression, ColumnExpression, Expression
 
+from ..errors import PySparkTypeError
 from .readwriter import DataFrameWriter
 from .types import Row, StructType
 from .type_utils import duckdb_to_spark_schema
@@ -74,7 +75,10 @@ class DataFrame:
 
     def withColumn(self, columnName: str, col: Column) -> "DataFrame":
         if not isinstance(col, Column):
-            raise TypeError("argument 'col' should be of type Column")
+            raise PySparkTypeError(
+                error_class="NOT_COLUMN",
+                message_parameters={"arg_name": "col", "arg_type": type(col).__name__},
+            )
         if columnName in self.relation:
             # We want to replace the existing column with this new expression
             cols = []
