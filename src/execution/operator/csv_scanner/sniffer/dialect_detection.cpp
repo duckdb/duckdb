@@ -299,7 +299,7 @@ void CSVSniffer::DetectDialect() {
 	unordered_map<uint8_t, vector<char>> quote_candidates_map;
 	// Candidates for the escape option
 	unordered_map<uint8_t, vector<char>> escape_candidates_map;
-	escape_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {'\"', '\'','\0'};
+	escape_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {'\"', '\'', '\0'};
 	escape_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER] = {'\\'};
 	escape_candidates_map[(uint8_t)QuoteRule::NO_QUOTES] = {'\0'};
 	// Number of rows read
