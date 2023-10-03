@@ -223,9 +223,18 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 	// with the same quote, we add this state_machine as a suitable candidate.
 	if (more_than_one_row && more_than_one_column && start_good && rows_consistent && !require_more_padding &&
 	    !invalid_padding) {
-		state_machine->start_row = start_row;
-		state_machine->dialect_options.num_cols = num_cols;
-		candidates.emplace_back(std::move(state_machine));
+		bool same_quote_is_candidate = false;
+		for (auto &candidate : candidates) {
+			if (state_machine->dialect_options.state_machine_options.quote ==
+			    candidate->dialect_options.state_machine_options.quote) {
+				same_quote_is_candidate = true;
+			}
+		}
+		if (!same_quote_is_candidate) {
+			state_machine->start_row = start_row;
+			state_machine->dialect_options.num_cols = num_cols;
+			candidates.emplace_back(std::move(state_machine));
+		}
 	}
 }
 
@@ -249,15 +258,19 @@ void CSVSniffer::RefineCandidates() {
 		// No candidates to refine
 		return;
 	}
-	vector<unique_ptr<CSVStateMachine>> successful_candidates;
+	if (candidates.size() == 1 || candidates[0]->csv_buffer_iterator.Finished()) {
+		// Only one candidate nothing to refine or all candidates already checked
+		return;
+	}
 	for (auto &cur_candidate : candidates) {
 		for (idx_t i = 1; i <= options.sample_size_chunks; i++) {
 			bool finished_file = cur_candidate->csv_buffer_iterator.Finished();
 			if (finished_file || i == options.sample_size_chunks) {
 				// we finished the file or our chunk sample successfully: stop
 				auto successful_candidate = std::move(cur_candidate);
-				successful_candidates.emplace_back(std::move(successful_candidate));
-				break;
+				candidates.clear();
+				candidates.emplace_back(std::move(successful_candidate));
+				return;
 			}
 			cur_candidate->cur_rows = 0;
 			cur_candidate->column_count = 1;
@@ -267,7 +280,7 @@ void CSVSniffer::RefineCandidates() {
 			}
 		}
 	}
-	candidates = std::move(successful_candidates);
+	candidates.clear();
 	return;
 }
 
@@ -286,7 +299,7 @@ void CSVSniffer::DetectDialect() {
 	unordered_map<uint8_t, vector<char>> quote_candidates_map;
 	// Candidates for the escape option
 	unordered_map<uint8_t, vector<char>> escape_candidates_map;
-	escape_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {'\0', '\"', '\''};
+	escape_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {'\"', '\'','\0'};
 	escape_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER] = {'\\'};
 	escape_candidates_map[(uint8_t)QuoteRule::NO_QUOTES] = {'\0'};
 	// Number of rows read
