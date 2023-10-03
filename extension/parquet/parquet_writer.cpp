@@ -315,7 +315,7 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 
 uint32_t ParquetWriter::Write(const duckdb_apache::thrift::TBase &object) {
 	if (encryption_key.empty()) {
-		return file_meta_data.write(protocol.get());
+		return object.write(protocol.get());
 	} else {
 		return ParquetCrypto::Write(object, *protocol, encryption_key);
 	}
@@ -488,7 +488,7 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 void ParquetWriter::Finalize() {
 	auto start_offset = writer->GetTotalWritten();
 	if (!encryption_key.empty()) {
-		// Write crypto metadata is written unencrypted
+		// Crypto metadata is written unencrypted
 		FileCryptoMetaData crypto_metadata;
 		duckdb_parquet::format::AesGcmV1 aes_gcm_v1;
 		duckdb_parquet::format::EncryptionAlgorithm alg;

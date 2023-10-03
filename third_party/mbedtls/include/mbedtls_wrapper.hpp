@@ -24,6 +24,8 @@ public:
 	static void Hmac256(const char *key, size_t key_len, const char *message, size_t message_len, char *out);
 	static void ToBase16(char *in, char *out, size_t len);
 
+	static void GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len);
+
 	static constexpr size_t SHA256_HASH_LENGTH_BYTES = 32;
 	static constexpr size_t SHA256_HASH_LENGTH_TEXT = 64;
 

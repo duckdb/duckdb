@@ -1,9 +1,10 @@
 #include "mbedtls_wrapper.hpp"
+
 // otherwise we have different definitions for mbedtls_pk_context / mbedtls_sha256_context
 #define MBEDTLS_ALLOW_PRIVATE_ACCESS
 
 #include "duckdb/common/helper.hpp"
-#include "mbedtls/aes.h"
+#include "mbedtls/entropy.h"
 #include "mbedtls/gcm.h"
 #include "mbedtls/pk.h"
 #include "mbedtls/sha256.h"
@@ -98,6 +99,22 @@ void MbedTlsWrapper::ToBase16(char *in, char *out, size_t len) {
 		int a = in[i];
 		out[j++] = HEX_CODES[(a >> 4) & 0xf];
 		out[j++] = HEX_CODES[a & 0xf];
+	}
+}
+
+void MbedTlsWrapper::GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) {
+	duckdb::data_t buf[MBEDTLS_ENTROPY_BLOCK_SIZE];
+	mbedtls_entropy_context entropy;
+	mbedtls_entropy_init(&entropy);
+
+	while (len != 0) {
+		if (mbedtls_entropy_func(&entropy, buf, MBEDTLS_ENTROPY_BLOCK_SIZE) != 0) {
+			throw runtime_error("Unable to generate random data");
+		}
+		auto next = duckdb::MinValue<duckdb::idx_t>(len, MBEDTLS_ENTROPY_BLOCK_SIZE);
+		memcpy(data, buf, next);
+		data += next;
+		len -= next;
 	}
 }
 

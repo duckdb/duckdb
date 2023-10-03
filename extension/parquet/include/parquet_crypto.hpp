@@ -25,7 +25,7 @@ public:
 	static constexpr uint32_t TAG_BYTES = 16;
 
 	//! Block size we encrypt/decrypt
-	static constexpr uint32_t CRYPTO_BLOCK_SIZE = 2048;
+	static constexpr uint32_t CRYPTO_BLOCK_SIZE = 4096;
 
 public:
 	//! Decrypt and read a Thrift object from the transport protocol

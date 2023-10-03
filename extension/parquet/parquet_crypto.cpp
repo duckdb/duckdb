@@ -13,10 +13,7 @@ using AESGCMState = duckdb_mbedtls::MbedTlsWrapper::AESGCMState;
 using duckdb_apache::thrift::protocol::TCompactProtocolFactoryT;
 
 static void GenerateNonce(const data_ptr_t nonce) {
-	// TODO actual nonce
-	for (idx_t i = 0; i < ParquetCrypto::NONCE_BYTES; i++) {
-		nonce[i] = i;
-	}
+	duckdb_mbedtls::MbedTlsWrapper::GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
 }
 
 //! Encryption wrapper for a transport protocol
