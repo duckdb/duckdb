@@ -41,7 +41,7 @@ struct ModeState {
 	};
 	using Counts = unordered_map<KEY_TYPE, ModeAttr>;
 
-	ModeState() : prevs(1) {
+	ModeState() {
 	}
 
 	vector<FrameBounds> prevs;
@@ -243,6 +243,10 @@ struct ModeFunction {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 		auto &prevs = state.prevs;
+		//	TODO: Hack around PerfectAggregateHashTable memory leak
+		if (prevs.empty()) {
+			prevs.resize(1);
+		}
 
 		ModeIncluded included(fmask, dmask);
 

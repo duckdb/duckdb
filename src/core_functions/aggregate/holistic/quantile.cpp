@@ -80,13 +80,17 @@ struct QuantileState {
 	// Windowed MAD indirection
 	vector<idx_t> m;
 
-	QuantileState() : prevs(1), count(0) {
+	QuantileState() : count(0) {
 	}
 
 	~QuantileState() {
 	}
 
 	inline void SetCount(const vector<FrameBounds> &frames) {
+		//	TODO: Hack around PerfectAggregateHashTable memory leak
+		if (prevs.empty()) {
+			prevs.resize(1);
+		}
 		count = FrameSet(frames).Size();
 		if (count >= w.size()) {
 			w.resize(count);
