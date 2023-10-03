@@ -122,7 +122,8 @@ color_map = {
 	"HASH_GROUP_BY": "#ffffba",
 	"NESTED_LOOP_JOIN": "#ffffba",
 	"STREAMING_LIMIT": "#facd60",
-	"COLUMN_DATA_SCAN": "#1ac0c6"
+	"COLUMN_DATA_SCAN": "#1ac0c6",
+	"TOP_N": "#ffdfba"
 }
 
 def get_node_body(name, result, cardinality, extra_info, timing):
@@ -135,11 +136,11 @@ def get_node_body(name, result, cardinality, extra_info, timing):
 	body += "<div class=\"node-body\">"
 	new_name = name.replace("_", " ")
 	body += f"<p> <b>{new_name} ({result}s) </b></p>"
-	body += f"<p> cardinality = {cardinality} </p>"
 	if extra_info:
 		extra_info = extra_info.replace("[INFOSEPARATOR]", "----")
-		extra_info = extra_info.replace("<br><br>", "<br>----<br>")
+		extra_info = extra_info.replace("<br><br>", "<br>")
 		body += f"<p> {extra_info} </p>"
+	body += f"<p> cardinality = {cardinality} </p>"
 	# TODO: Expand on timing. Usually available from a detailed profiling
 	body += "</div>"
 	body += "</span>"
