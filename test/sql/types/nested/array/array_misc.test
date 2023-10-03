@@ -1,0 +1,263 @@
+# name: test/sql/types/nested/array/array_misc.test
+# group: [array]
+
+require json
+
+require parquet
+
+statement ok
+PRAGMA verify_external
+
+statement ok
+CREATE TABLE arrays (a INTEGER[3])
+
+statement ok
+INSERT INTO arrays VALUES ([1, 2, 3]), ([1, 2, 4]), ([7, 8, 9]), ([-1, -2, -3]), (NULL), ([4, NULL, 2])
+
+query I
+SELECT a[3] FROM arrays
+----
+3
+4
+9
+-3
+NULL
+2
+
+query I
+SELECT DISTINCT a FROM arrays ORDER BY ALL
+----
+[-1, -2, -3]
+[1, 2, 3]
+[1, 2, 4]
+[4, NULL, 2]
+[7, 8, 9]
+NULL
+
+query I
+SELECT DISTINCT a FROM arrays WHERE a[1] > 0 ORDER BY ALL
+----
+[1, 2, 3]
+[1, 2, 4]
+[4, NULL, 2]
+[7, 8, 9]
+
+query I
+SELECT * FROM (
+    SELECT a FROM ARRAYS
+    UNION
+    SELECT a FROM ARRAYS
+)
+ORDER BY ALL
+----
+[-1, -2, -3]
+[1, 2, 3]
+[1, 2, 4]
+[4, NULL, 2]
+[7, 8, 9]
+NULL
+
+query I
+SELECT * FROM (
+    SELECT a FROM ARRAYS WHERE a[1] > 0
+    UNION
+    SELECT a FROM ARRAYS WHERE a[1] > 0
+)
+ORDER BY ALL
+----
+[1, 2, 3]
+[1, 2, 4]
+[4, NULL, 2]
+[7, 8, 9]
+
+query I
+SELECT first(DISTINCT a ORDER BY a) FROM arrays
+----
+[-1, -2, -3]
+
+query I
+SELECT a::VARCHAR FROM arrays ORDER BY ALL
+----
+[-1, -2, -3]
+[1, 2, 3]
+[1, 2, 4]
+[4, NULL, 2]
+[7, 8, 9]
+NULL
+
+query I
+SELECT TRY_CAST(a::INTEGER[] AS INTEGER[3]) FROM ARRAYS ORDER BY ALL
+----
+[-1, -2, -3]
+[1, 2, 3]
+[1, 2, 4]
+[4, NULL, 2]
+[7, 8, 9]
+NULL
+
+query I
+SELECT a[2:-1] FROM arrays
+----
+[2, 3]
+[2, 4]
+[8, 9]
+[-2, -3]
+NULL
+[NULL, 2]
+
+query I
+SELECT a[3:99] FROM arrays
+----
+[3]
+[4]
+[9]
+[-3]
+NULL
+[2]
+
+query IIIIII
+DESCRIBE SELECT * FROM arrays
+----
+a	INTEGER[3]	YES	NULL	NULL	NULL
+
+query I
+SELECT a.filter(x -> x > 0) FROM arrays
+----
+[1, 2, 3]
+[1, 2, 4]
+[7, 8, 9]
+[]
+NULL
+[4, 2]
+
+query I
+SELECT a.apply(x -> x + 1)::INTEGER[3] FROM arrays
+----
+[2, 3, 4]
+[2, 3, 5]
+[8, 9, 10]
+[0, -1, -2]
+NULL
+[5, NULL, 3]
+
+mode skip
+
+query I
+SELECT list(a ORDER BY a[3]) FROM arrays
+----
+# Shouldn't Internal Exception:
+# ABORT THROWN BY INTERNAL EXCEPTION: LIST aggregate not yet implemented for INTEGER[3]
+
+query I
+SELECT * FROM test_vector_types(NULL::INTEGER[3])
+----
+# This is probably OK?
+# Error: Not implemented Error: Unimplemented type for test_vector_types INTEGER[3]
+
+query I
+SELECT TRY_CAST(test_vector AS INT[2]) AS a FROM test_vector_types(NULL::INTEGER[])
+----
+# Should not fail but create NULL instead:
+# Conversion Error: Cannot cast list with length 0 to array with length 2
+
+# Also, why can't we cast length 0 to 2? Can't we just do list_resize(arr, 2), and then cast?
+# This would fill in the gaps with NULL
+
+query I
+SELECT a::JSON FROM arrays
+----
+# Shouldn't Internal Exception:
+# ABORT THROWN BY INTERNAL EXCEPTION: Unsupported type arrived at JSON create function
+
+statement ok
+COPY arrays to '__TEST_DIR__/arrays.parquet'
+# This is probably OK for now
+# Not implemented Error: Unimplemented type for Parquet "INTEGER[3]"
+
+foreach format parquet json csv
+
+statement ok
+CREATE OR REPLACE TABLE arrays2 (a INTEGER[3])
+
+statement ok
+COPY (SELECT [range, range + 1, range + 2] a FROM range(3)) TO '__TEST_DIR__/arrays.${format}'
+
+statement ok
+COPY arrays2 FROM '__TEST_DIR__/arrays.${format}'
+# CSV and JSON parser give an error, but probably OK for now
+# Invalid Input Error: Unimplemented type for cast (VARCHAR -> INTEGER[3]) at line 1 in column "a". Parser options:
+# Not implemented Error: Cannot read a value of type INTEGER[3] from a json file
+
+query I
+SELECT * FROM arrays2
+----
+[0, 1, 2]
+[1, 2, 3]
+[2, 3, 4]
+
+endloop
+
+query I
+SELECT array_value(arrays.*) FROM arrays
+----
+# This is broken with list_value apparently, if you do this you get empty lists
+# If we do this with array_value, we get this error
+# Invalid Input Error: array_value requires at least one argument
+# Is that OK? I guess we don't ever want to make size 0 arrays, e.g., INTEGER[0]
+
+query I
+SELECT '[1, 2, 3]'::INTEGER[3]
+----
+# Can't we just cast to INTEGER[] and then cast that to INTEGER[3] to make this cast possible?
+# Error: Conversion Error: Unimplemented type for cast (VARCHAR -> INTEGER[3])
+
+query I
+SELECT a1.a || a2.a FROM arrays a1, arrays a2;
+----
+# The || operator is shorthand for list_concat, which triggers this error
+# ABORT THROWN BY INTERNAL EXCEPTION: Assertion triggered in file "/Users/laurens/git/duckdb/main-duckdb/src/function/scalar/list/list_concat.cpp" on line 90: lhs.id() == LogicalTypeId::LIST
+
+query I
+SELECT list_resize(a, 3) FROM arrays
+----
+# ABORT THROWN BY INTERNAL EXCEPTION: Invalid PhysicalType for GetTypeIdSize
+
+query I
+SELECT list_position(a, 1) FROM arrays
+----
+# ABORT THROWN BY INTERNAL EXCEPTION: Assertion triggered in file "/Users/laurens/git/duckdb/main-duckdb/src/common/types.cpp" on line 871: type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP
+
+query I
+SELECT list_contains(a, 1) FROM arrays
+----
+# ABORT THROWN BY INTERNAL EXCEPTION: Assertion triggered in file "/Users/laurens/git/duckdb/main-duckdb/src/common/types.cpp" on line 871: type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP
+
+query IIIIIIIIIIII
+SUMMARIZE arrays
+----
+a	INTEGER[3]	[-1, -2, -3]	[7, 8, 9]	5	NULL	NULL	NULL	NULL	NULL	6	16.67%
+# wrong result for SUMMARIZE! the minimum value of column a should be [-1, -2, -3], but it returns [1, 2, 3]
+
+# if we investigate this, we see that ORDER BY works fine
+# these two queries should return the same
+query I
+SELECT a FROM arrays ORDER BY a LIMIT 1
+----
+[-1, -2, -3]
+
+query I
+SELECT min(a) FROM arrays
+----
+[-1, -2, -3]
+# wrong result! this one returns [1, 2, 3] instead of [-1, -2, -3]
+
+# the max() value also (sometimes) returns wrong results
+# if we insert these values into 'arrays'
+statement ok
+INSERT INTO arrays VALUES ([-7, -8, -9]), ([-8, -9, -10])
+
+query I
+SELECT max(a) FROM arrays
+----
+[7, 8, 9]
+# wrong result! we get back [-8, -9, -10]

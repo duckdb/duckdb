@@ -999,10 +999,18 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) {
 void Vector::RecursiveToUnifiedFormat(Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data) {
 
 	input.ToUnifiedFormat(count, data.unified);
+	data.logical_type = input.GetType();
 
 	if (input.GetType().InternalType() == PhysicalType::LIST) {
 		auto &child = ListVector::GetEntry(input);
 		auto child_count = ListVector::GetListSize(input);
+		data.children.emplace_back();
+		Vector::RecursiveToUnifiedFormat(child, child_count, data.children.back());
+
+	} else if (input.GetType().InternalType() == PhysicalType::ARRAY) {
+		auto &child = ArrayVector::GetEntry(input);
+		auto array_size = ArrayType::GetSize(input.GetType());
+		auto child_count = count * array_size;
 		data.children.emplace_back();
 		Vector::RecursiveToUnifiedFormat(child, child_count, data.children.back());
 

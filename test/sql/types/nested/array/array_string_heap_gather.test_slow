@@ -1,5 +1,8 @@
-# name: test/sql/types/nested/array/array_string_heap_gather.test
+# name: test/sql/types/nested/array/array_string_heap_gather.test_slow
 # group: [array]
+
+statement ok
+PRAGMA verify_external
 
 # Test for list
 statement ok
