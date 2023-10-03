@@ -40,7 +40,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
          AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
          const IndexStorageInfo &index_storage_info)
-    : Index("ART", name, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
+    : Index(name, "ART", index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
       allocators(allocators_ptr), owns_data(false) {
 	if (!Radix::IsLittleEndian()) {
 		throw NotImplementedException("ART indexes are not supported on big endian architectures");
@@ -980,6 +980,7 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 IndexStorageInfo ART::GetStorageInfo() const {
 
 	IndexStorageInfo info;
+	info.name = name;
 	info.properties.push_back(tree.Get());
 
 	for (const auto &allocator : *allocators) {

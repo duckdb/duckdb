@@ -431,9 +431,9 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	// get the matching index storage info
 	auto &data_table = table.GetStorage();
 	IndexStorageInfo index_storage_info;
-	for (auto const &index_storage_info_elem : data_table.info->index_pointers) {
-		if (index_storage_info.name == info.index_name) {
-			index_storage_info = index_storage_info_elem;
+	for (auto const &elem : data_table.info->index_pointers) {
+		if (elem.name == info.index_name) {
+			index_storage_info = elem;
 			break;
 		}
 	}
@@ -514,7 +514,9 @@ void CheckpointReader::ReadTableData(ClientContext &context, Deserializer &deser
 	auto table_pointer = deserializer.ReadProperty<MetaBlockPointer>(101, "table_pointer");
 	auto total_rows = deserializer.ReadProperty<idx_t>(102, "total_rows");
 	deserializer.ReadList(103, "index_storage_infos", [&](Deserializer::List &list, idx_t i) {
-		bound_info.indexes.push_back(list.ReadElement<IndexStorageInfo>());
+		auto index_storage_info = list.ReadElement<IndexStorageInfo>();
+		D_ASSERT(index_storage_info.IsValid());
+		bound_info.indexes.push_back(index_storage_info);
 	});
 
 	// FIXME: icky downcast to get the underlying MetadataReader
