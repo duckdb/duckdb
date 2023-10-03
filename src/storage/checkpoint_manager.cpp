@@ -534,9 +534,10 @@ void CheckpointReader::ReadTableData(ClientContext &context, Deserializer &deser
 	auto table_pointer = deserializer.ReadProperty<MetaBlockPointer>(101, "table_pointer");
 	auto total_rows = deserializer.ReadProperty<idx_t>(102, "total_rows");
 
-	// STABLE STORAGE NOTE: for current duckdb file versions, this will read an empty vector
+	// STABLE STORAGE NOTE: for current duckdb file versions, this will read a vector with exactly one invalid index
+	// pointer
 	auto index_pointers = deserializer.ReadProperty<vector<BlockPointer>>(103, "index_pointers");
-	if (index_pointers.empty()) {
+	if (!index_pointers.empty() && !index_pointers.front().IsValid() && index_pointers.front().offset == 42) {
 		deserializer.ReadList(104, "index_storage_infos", [&](Deserializer::List &list, idx_t i) {
 			auto index_storage_info = list.ReadElement<IndexStorageInfo>();
 			D_ASSERT(index_storage_info.IsValid());

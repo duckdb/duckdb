@@ -71,9 +71,12 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
-	// STABLE STORAGE NOTE: We write an empty index pointers vector, because when reading the file,
-	// we don't know if we're reading an older storage version (with BlockPointers) or not
-	serializer.WriteProperty(103, "index_pointers", vector<BlockPointer>());
+	// STABLE STORAGE NOTE: We write an index pointers vector with exactly one invalid index pointer with a valid
+	// offset, because when reading the file, we don't know if we're reading an older storage version (with
+	// BlockPointers) or not. The combination of invalid block ID and valid offset allows us to distinguish
+	vector<BlockPointer> index_pointers;
+	index_pointers.emplace_back(INVALID_BLOCK, 42);
+	serializer.WriteProperty(103, "index_pointers", index_pointers);
 
 	auto index_storage_infos = info->indexes.GetStorageInfos();
 	serializer.WriteList(104, "index_storage_infos", index_storage_infos.size(),

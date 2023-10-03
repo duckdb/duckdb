@@ -75,7 +75,9 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 			auto block_id = index_storage_info.properties.find("block_id")->second;
 			auto offset = index_storage_info.properties.find("offset")->second;
 			BlockPointer block_pointer(block_id.GetValue<block_id_t>(), offset.GetValue<uint32_t>());
-			Deserialize(block_pointer);
+			if (block_pointer.IsValid()) {
+				Deserialize(block_pointer);
+			}
 		}
 	}
 
