@@ -608,8 +608,18 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 		return SetNumericAttributePtr(hstmt, desc_record->sql_desc_precision, numeric_attribute_ptr);
 	case SQL_DESC_PRECISION:
 		return SetNumericAttributePtr(hstmt, desc_record->sql_desc_precision, numeric_attribute_ptr);
-	case SQL_COLUMN_SCALE:
+	case SQL_COLUMN_SCALE: {
+		if (desc_record->sql_desc_scale == -1) {
+			ret = SetNumericAttributePtr(hstmt, SQL_NO_TOTAL, numeric_attribute_ptr);
+			if (SQL_SUCCEEDED(ret)) {
+				return duckdb::SetDiagnosticRecord(hstmt, SQL_SUCCESS_WITH_INFO, "SQLColAttribute(s)",
+				                                   "SQL_NO_TOTAL: Scale is undefined for this column data type",
+				                                   SQLStateType::ST_01000, hstmt->dbc->GetDataSourceName());
+			}
+			return ret;
+		}
 		return SetNumericAttributePtr(hstmt, desc_record->sql_desc_scale, numeric_attribute_ptr);
+	}
 	case SQL_DESC_SCALE:
 		return SetNumericAttributePtr(hstmt, desc_record->sql_desc_scale, numeric_attribute_ptr);
 	case SQL_DESC_SCHEMA_NAME:
