@@ -12,7 +12,8 @@ query II
 SELECT tag_product, list_aggr(list_transform(
 	string_split(tag_product, ' '), word -> lower(word)),
     'string_agg', ',') AS tag_material,
-FROM tbl GROUP BY tag_product;
+FROM tbl GROUP BY tag_product
+ORDER BY ALL;
 ----
 chocolate pepper	chocolate,pepper
 milk chickpeas apples	milk,chickpeas,apples
