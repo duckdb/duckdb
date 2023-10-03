@@ -28,7 +28,7 @@ env:
 jobs:
   xcode-debug:
     name: OSX Debug
-    runs-on: macos-latest
+    runs-on: macos-latest-xlarge
 
     env:
       TREAT_WARNINGS_AS_ERRORS: 1
