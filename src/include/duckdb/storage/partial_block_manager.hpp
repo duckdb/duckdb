@@ -43,8 +43,7 @@ struct PartialBlockState {
 	uint32_t block_use_count;
 };
 
-class PartialBlock {
-public:
+struct PartialBlock {
 	PartialBlock(PartialBlockState state, BlockManager &block_manager, const shared_ptr<BlockHandle> &block_handle);
 	virtual ~PartialBlock() {
 	}

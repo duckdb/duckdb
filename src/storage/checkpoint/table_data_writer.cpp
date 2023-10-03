@@ -70,8 +70,13 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 	// Pointer to the table itself goes to the metadata stream.
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
+
+	// STABLE STORAGE NOTE: We write an empty index pointers vector, because when reading the file,
+	// we don't know if we're reading an older storage version (with BlockPointers) or not
+	serializer.WriteProperty(103, "index_pointers", vector<BlockPointer>());
+
 	auto index_storage_infos = info->indexes.GetStorageInfos();
-	serializer.WriteList(103, "index_storage_infos", index_storage_infos.size(),
+	serializer.WriteList(104, "index_storage_infos", index_storage_infos.size(),
 	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(index_storage_infos[i]); });
 }
 

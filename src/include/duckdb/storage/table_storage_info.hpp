@@ -50,7 +50,7 @@ struct IndexStorageInfo {
 	//! The name of the index
 	string name;
 	//! Arbitrary index properties
-	vector<idx_t> properties;
+	unordered_map<string, Value> properties;
 	//! Information to serialize the index memory
 	vector<IndexDataStorageInfo> index_data_storage_infos;
 

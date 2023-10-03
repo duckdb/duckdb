@@ -87,14 +87,14 @@ IndexDataStorageInfo IndexDataStorageInfo::Deserialize(Deserializer &deserialize
 
 void IndexStorageInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(100, "name", name);
-	serializer.WritePropertyWithDefault<vector<idx_t>>(101, "properties", properties);
+	serializer.WritePropertyWithDefault<unordered_map<string, Value>>(101, "properties", properties);
 	serializer.WritePropertyWithDefault<vector<IndexDataStorageInfo>>(102, "index_data_storage_infos", index_data_storage_infos);
 }
 
 IndexStorageInfo IndexStorageInfo::Deserialize(Deserializer &deserializer) {
 	IndexStorageInfo result;
 	deserializer.ReadPropertyWithDefault<string>(100, "name", result.name);
-	deserializer.ReadPropertyWithDefault<vector<idx_t>>(101, "properties", result.properties);
+	deserializer.ReadPropertyWithDefault<unordered_map<string, Value>>(101, "properties", result.properties);
 	deserializer.ReadPropertyWithDefault<vector<IndexDataStorageInfo>>(102, "index_data_storage_infos", result.index_data_storage_infos);
 	return result;
 }

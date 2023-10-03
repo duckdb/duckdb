@@ -18,7 +18,7 @@ namespace duckdb {
 class FixedSizeAllocator;
 class MetadataWriter;
 
-class PartialBlockForIndex : public PartialBlock {
+struct PartialBlockForIndex : public PartialBlock {
 public:
 	PartialBlockForIndex(PartialBlockState state, BlockManager &block_manager,
 	                     const shared_ptr<BlockHandle> &block_handle);

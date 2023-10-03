@@ -378,13 +378,23 @@ void CheckpointReader::ReadSequence(ClientContext &context, Deserializer &deseri
 void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog_entry, Serializer &serializer) {
 	// The index data is written as part of WriteTableData
 	// Here, we serialize the index catalog entry
-	serializer.WriteProperty(100, "index_catalog_entry", &index_catalog_entry);
+
+	// STABLE STORAGE NOTE: we need to keep the tag "index", even though it is slightly misleading.
+	// Also, we write a dummy BlockPointer, because when reading the file, we don't know if we're
+	// reading an older storage version (with BlockPointers) or not
+	serializer.WriteProperty(100, "index", &index_catalog_entry);
+	serializer.WriteProperty(101, "root_block_pointer", BlockPointer());
 }
 
 void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deserializer) {
 
-	// deserialize the index create info
-	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "index_catalog_entry");
+	// deserialize the CreateIndexInfo
+	// STABLE STORAGE NOTE: we need to keep the tag "index", even though it is slightly misleading.
+	// We also have to read the root_block_pointer, which will not be valid for newer storage versions.
+	// This leads to different code paths in this function.
+	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "index");
+	auto root_block_pointer = deserializer.ReadProperty<BlockPointer>(101, "root_block_pointer");
+
 	auto &info = create_info->Cast<CreateIndexInfo>();
 
 	// create the index in the catalog
@@ -428,13 +438,23 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 		unbound_expressions.push_back(idx_binder.Bind(expr));
 	}
 
-	// get the matching index storage info
 	auto &data_table = table.GetStorage();
 	IndexStorageInfo index_storage_info;
-	for (auto const &elem : data_table.info->index_pointers) {
-		if (elem.name == info.index_name) {
-			index_storage_info = elem;
-			break;
+	if (root_block_pointer.IsValid()) {
+		// STABLE STORAGE NOTE: this code path is necessary to read older duckdb files
+		index_storage_info.name = "ART_index";
+		auto block_id = make_pair<string, Value>("block_id", Value::BIGINT(root_block_pointer.block_id));
+		auto offset = make_pair<string, Value>("offset", Value::UINTEGER(root_block_pointer.offset));
+		index_storage_info.properties.insert(block_id);
+		index_storage_info.properties.insert(offset);
+
+	} else {
+		// get the matching index storage info
+		for (auto const &elem : data_table.info->index_pointers) {
+			if (elem.name == info.index_name) {
+				index_storage_info = elem;
+				break;
+			}
 		}
 	}
 
@@ -513,11 +533,28 @@ void CheckpointReader::ReadTableData(ClientContext &context, Deserializer &deser
 	// This is written in "SingleFileTableDataWriter::FinalizeTable"
 	auto table_pointer = deserializer.ReadProperty<MetaBlockPointer>(101, "table_pointer");
 	auto total_rows = deserializer.ReadProperty<idx_t>(102, "total_rows");
-	deserializer.ReadList(103, "index_storage_infos", [&](Deserializer::List &list, idx_t i) {
-		auto index_storage_info = list.ReadElement<IndexStorageInfo>();
-		D_ASSERT(index_storage_info.IsValid());
-		bound_info.indexes.push_back(index_storage_info);
-	});
+
+	// STABLE STORAGE NOTE: for current duckdb file versions, this will read an empty vector
+	auto index_pointers = deserializer.ReadProperty<vector<BlockPointer>>(103, "index_pointers");
+	if (index_pointers.empty()) {
+		deserializer.ReadList(104, "index_storage_infos", [&](Deserializer::List &list, idx_t i) {
+			auto index_storage_info = list.ReadElement<IndexStorageInfo>();
+			D_ASSERT(index_storage_info.IsValid());
+			bound_info.indexes.push_back(index_storage_info);
+		});
+
+	} else {
+		// STABLE STORAGE NOTE: old duckdb index pointers
+		for (idx_t i = 0; i < index_pointers.size(); i++) {
+			IndexStorageInfo index_storage_info;
+			index_storage_info.name = "ART_index";
+			auto block_id = make_pair<string, Value>("block_id", Value::BIGINT(index_pointers[i].block_id));
+			auto offset = make_pair<string, Value>("offset", Value::UINTEGER(index_pointers[i].offset));
+			index_storage_info.properties.insert(block_id);
+			index_storage_info.properties.insert(offset);
+			bound_info.indexes.push_back(index_storage_info);
+		}
+	}
 
 	// FIXME: icky downcast to get the underlying MetadataReader
 	auto &binary_deserializer = dynamic_cast<BinaryDeserializer &>(deserializer);

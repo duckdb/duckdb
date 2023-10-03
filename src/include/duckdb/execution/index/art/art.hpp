@@ -148,6 +148,8 @@ private:
 
 	//! Initialize the allocators of the ART
 	void InitAllocators(const IndexStorageInfo &info);
+	//! STABLE STORAGE NOTE: This is for old duckdb files, to deserialize the allocators of the ART
+	void Deserialize(const BlockPointer &pointer);
 };
 
 } // namespace duckdb

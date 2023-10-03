@@ -15,6 +15,7 @@
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
 
 #include <algorithm>
 
@@ -62,7 +63,20 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 	}
 
 	if (index_storage_info.IsValid()) {
-		InitAllocators(index_storage_info);
+
+		if (index_storage_info.properties.size() == 1) {
+			InitAllocators(index_storage_info);
+
+		} else {
+			// STABLE STORAGE NOTE: this code path is necessary to read older duckdb files
+			D_ASSERT(index_storage_info.properties.find("block_id") != index_storage_info.properties.end());
+			D_ASSERT(index_storage_info.properties.find("offset") != index_storage_info.properties.end());
+
+			auto block_id = index_storage_info.properties.find("block_id")->second;
+			auto offset = index_storage_info.properties.find("offset")->second;
+			BlockPointer block_pointer(block_id.GetValue<block_id_t>(), offset.GetValue<uint32_t>());
+			Deserialize(block_pointer);
+		}
 	}
 
 	// validate the types of the key columns
@@ -981,7 +995,8 @@ IndexStorageInfo ART::GetStorageInfo() const {
 
 	IndexStorageInfo info;
 	info.name = name;
-	info.properties.push_back(tree.Get());
+	auto property = make_pair<string, Value>("tree", Value::UBIGINT(tree.Get()));
+	info.properties.insert(property);
 
 	for (const auto &allocator : *allocators) {
 		info.index_data_storage_infos.push_back(allocator->GetInfo());
@@ -1007,10 +1022,24 @@ IndexStorageInfo ART::GetInfo() {
 
 void ART::InitAllocators(const IndexStorageInfo &info) {
 
-	tree.Set(info.properties.back());
+	D_ASSERT(info.properties.find("tree") != info.properties.end());
+	auto tree_value = info.properties.find("tree");
+	tree.Set(tree_value->second.GetValue<uint64_t>());
 	D_ASSERT(info.index_data_storage_infos.size() == ALLOCATOR_COUNT);
 	for (idx_t i = 0; i < info.index_data_storage_infos.size(); i++) {
 		(*allocators)[i]->Init(info.index_data_storage_infos[i]);
+	}
+}
+
+void ART::Deserialize(const BlockPointer &pointer) {
+
+	D_ASSERT(pointer.IsValid());
+	auto &metadata_manager = table_io_manager.GetMetadataManager();
+	MetadataReader reader(metadata_manager, pointer);
+	tree = reader.Read<Node>();
+
+	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
+		(*allocators)[i]->Deserialize(metadata_manager, reader.Read<BlockPointer>());
 	}
 }
 

@@ -1,6 +1,7 @@
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 
-#include "duckdb/storage/partial_block_manager.hpp"
+#include "duckdb/storage/metadata/metadata_manager.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
 
 namespace duckdb {
 
@@ -306,6 +307,29 @@ void FixedSizeAllocator::Init(const IndexDataStorageInfo &info) {
 
 	for (const auto &buffer_id : info.buffers_with_free_space_vec) {
 		buffers_with_free_space.insert(buffer_id);
+	}
+}
+
+void FixedSizeAllocator::Deserialize(MetadataManager &metadata_manager, const BlockPointer &block_pointer) {
+
+	MetadataReader reader(metadata_manager, block_pointer);
+	segment_size = reader.Read<idx_t>();
+	auto buffer_count = reader.Read<idx_t>();
+	auto buffers_with_free_space_count = reader.Read<idx_t>();
+
+	total_segment_count = 0;
+
+	for (idx_t i = 0; i < buffer_count; i++) {
+		auto buffer_id = reader.Read<idx_t>();
+		auto buffer_block_pointer = reader.Read<BlockPointer>();
+		auto segment_count = reader.Read<idx_t>();
+		auto allocation_size = reader.Read<idx_t>();
+		FixedSizeBuffer new_buffer(block_manager, segment_count, allocation_size, buffer_block_pointer);
+		buffers.insert(make_pair(buffer_id, std::move(new_buffer)));
+		total_segment_count += segment_count;
+	}
+	for (idx_t i = 0; i < buffers_with_free_space_count; i++) {
+		buffers_with_free_space.insert(reader.Read<idx_t>());
 	}
 }
 

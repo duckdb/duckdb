@@ -1,8 +1,5 @@
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
-
 namespace duckdb {
 
 IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info)

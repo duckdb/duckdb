@@ -79,6 +79,8 @@ public:
 	void SerializeBuffers(PartialBlockManager &partial_block_manager);
 	//! Initialize a fixed-size allocator from allocator storage information
 	void Init(const IndexDataStorageInfo &info);
+	//! STABLE STORAGE NOTE: This is for old duckdb files, to deserializes all metadata
+	void Deserialize(MetadataManager &metadata_manager, const BlockPointer &block_pointer);
 
 private:
 	//! Allocation size of one segment in a buffer
