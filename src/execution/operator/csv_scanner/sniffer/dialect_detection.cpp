@@ -249,15 +249,15 @@ void CSVSniffer::RefineCandidates() {
 		// No candidates to refine
 		return;
 	}
+	vector<unique_ptr<CSVStateMachine>> successful_candidates;
 	for (auto &cur_candidate : candidates) {
 		for (idx_t i = 1; i <= options.sample_size_chunks; i++) {
 			bool finished_file = cur_candidate->csv_buffer_iterator.Finished();
 			if (finished_file || i == options.sample_size_chunks) {
 				// we finished the file or our chunk sample successfully: stop
 				auto successful_candidate = std::move(cur_candidate);
-				candidates.clear();
-				candidates.emplace_back(std::move(successful_candidate));
-				return;
+				successful_candidates.emplace_back(std::move(successful_candidate));
+				break;
 			}
 			cur_candidate->cur_rows = 0;
 			cur_candidate->column_count = 1;
@@ -267,7 +267,7 @@ void CSVSniffer::RefineCandidates() {
 			}
 		}
 	}
-	candidates.clear();
+	candidates = std::move(successful_candidates);
 	return;
 }
 
