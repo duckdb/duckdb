@@ -12,7 +12,17 @@ public:
 
 	explicit ExpectedResult(const std::string &n_s) : s(n_s) {
 	};
+
+	ExpectedResult(const ExpectedResult &other) {
+		*this = other;
+	}
 };
+
+static void DeleteExpectedMap(std::map<SQLLEN, ExpectedResult *> &expected) {
+	for (auto &it : expected) {
+		delete it.second;
+	}
+}
 
 static void CheckString(SQLHANDLE handle, const std::string &expected, SQLSMALLINT field_identifier) {
 	SQLCHAR buffer[64];
@@ -31,7 +41,7 @@ static void ExpectError(SQLHANDLE handle, SQLSMALLINT field_identifier) {
 	REQUIRE(ret == SQL_ERROR);
 }
 
-static void TestAllFields(SQLHANDLE hstmt, std::map<SQLLEN, ExpectedResult> &expected) {
+static void TestAllFields(SQLHANDLE hstmt, std::map<SQLLEN, ExpectedResult *> expected) {
 	// SQL_DESC_AUTO_UNIQUE_VALUE
 	SQLLEN n;
 	SQLRETURN ret = SQLColAttribute(hstmt, 1, SQL_DESC_AUTO_UNIQUE_VALUE, nullptr, 0, nullptr, &n);
@@ -42,73 +52,75 @@ static void TestAllFields(SQLHANDLE hstmt, std::map<SQLLEN, ExpectedResult> &exp
 	ExpectError(hstmt, SQL_DESC_BASE_TABLE_NAME);
 
 	// SQL_DESC_CASE_SENSITIVE [expected: both: SQL_FALSE]
-	CheckInteger(hstmt, expected[SQL_DESC_CASE_SENSITIVE].n, SQL_DESC_CASE_SENSITIVE);
+	CheckInteger(hstmt, expected[SQL_DESC_CASE_SENSITIVE]->n, SQL_DESC_CASE_SENSITIVE);
 
 	// SQL_DESC_CATALOG_NAME [expected: both :"system"]
-	CheckString(hstmt, expected[SQL_DESC_CATALOG_NAME].s, SQL_DESC_CATALOG_NAME);
+	CheckString(hstmt, expected[SQL_DESC_CATALOG_NAME]->s, SQL_DESC_CATALOG_NAME);
 
 	// SQL_DESC_CONCISE_TYPE [expected: int: SQL_INTEGER, char: SQL_VARCHAR]
-	CheckInteger(hstmt, expected[SQL_DESC_CONCISE_TYPE].n, SQL_DESC_CONCISE_TYPE);
+	CheckInteger(hstmt, expected[SQL_DESC_CONCISE_TYPE]->n, SQL_DESC_CONCISE_TYPE);
 
 	// SQL_DESC_COUNT [expected: int 2, char 1]
-	CheckInteger(hstmt, expected[SQL_DESC_COUNT].n, SQL_DESC_COUNT);
+	CheckInteger(hstmt, expected[SQL_DESC_COUNT]->n, SQL_DESC_COUNT);
 
 	// SQL_DESC_DISPLAY_SIZE [expected: int 11, char 11]
-	CheckInteger(hstmt, expected[SQL_DESC_DISPLAY_SIZE].n, SQL_DESC_DISPLAY_SIZE);
+	CheckInteger(hstmt, expected[SQL_DESC_DISPLAY_SIZE]->n, SQL_DESC_DISPLAY_SIZE);
 
 	// SQL_DESC_FIXED_PREC_SCALE [expected: both: SQL_FALSE]
-	CheckInteger(hstmt, expected[SQL_DESC_FIXED_PREC_SCALE].n, SQL_DESC_FIXED_PREC_SCALE);
+	CheckInteger(hstmt, expected[SQL_DESC_FIXED_PREC_SCALE]->n, SQL_DESC_FIXED_PREC_SCALE);
 
 	// SQL_DESC_LENGTH
-	CheckInteger(hstmt, expected[SQL_DESC_LENGTH].n, SQL_DESC_LENGTH);
+	CheckInteger(hstmt, expected[SQL_DESC_LENGTH]->n, SQL_DESC_LENGTH);
 
 	// SQL_DESC_LITERAL_PREFIX
-	CheckString(hstmt, expected[SQL_DESC_LITERAL_PREFIX].s, SQL_DESC_LITERAL_PREFIX);
+	CheckString(hstmt, expected[SQL_DESC_LITERAL_PREFIX]->s, SQL_DESC_LITERAL_PREFIX);
 
 	// SQL_DESC_LITERAL_SUFFIX
-	CheckString(hstmt, expected[SQL_DESC_LITERAL_SUFFIX].s, SQL_DESC_LITERAL_SUFFIX);
+	CheckString(hstmt, expected[SQL_DESC_LITERAL_SUFFIX]->s, SQL_DESC_LITERAL_SUFFIX);
 
 	// SQL_DESC_LOCAL_TYPE_NAME
-	CheckString(hstmt, expected[SQL_DESC_LOCAL_TYPE_NAME].s, SQL_DESC_LOCAL_TYPE_NAME);
+	CheckString(hstmt, expected[SQL_DESC_LOCAL_TYPE_NAME]->s, SQL_DESC_LOCAL_TYPE_NAME);
 
 	// SQL_DESC_NULLABLE
-	CheckInteger(hstmt, expected[SQL_DESC_NULLABLE].n, SQL_DESC_NULLABLE);
+	CheckInteger(hstmt, expected[SQL_DESC_NULLABLE]->n, SQL_DESC_NULLABLE);
 
 	// SQL_DESC_NUM_PREC_RADIX
-	CheckInteger(hstmt, expected[SQL_DESC_NUM_PREC_RADIX].n, SQL_DESC_NUM_PREC_RADIX);
+	CheckInteger(hstmt, expected[SQL_DESC_NUM_PREC_RADIX]->n, SQL_DESC_NUM_PREC_RADIX);
 
 	// SQL_DESC_PRECISION
-	CheckInteger(hstmt, expected[SQL_DESC_PRECISION].n, SQL_DESC_PRECISION);
+	CheckInteger(hstmt, expected[SQL_DESC_PRECISION]->n, SQL_DESC_PRECISION);
 
 	// SQL_COLUMN_SCALE
-	if (expected[SQL_COLUMN_SCALE].n == SQL_NO_TOTAL) {
+	if (expected[SQL_COLUMN_SCALE]->n == SQL_NO_TOTAL) {
 		ret = SQLColAttribute(hstmt, 1, SQL_COLUMN_SCALE, nullptr, 0, nullptr, &n);
 		REQUIRE(ret == SQL_SUCCESS_WITH_INFO);
-		REQUIRE(n == expected[SQL_COLUMN_SCALE].n);
+		REQUIRE(n == expected[SQL_COLUMN_SCALE]->n);
 	} else {
-		CheckInteger(hstmt, expected[SQL_COLUMN_SCALE].n, SQL_COLUMN_SCALE);
+		CheckInteger(hstmt, expected[SQL_COLUMN_SCALE]->n, SQL_COLUMN_SCALE);
 	}
 
 	// SQL_DESC_SCALE
-	CheckInteger(hstmt, expected[SQL_DESC_SCALE].n, SQL_DESC_SCALE);
+	CheckInteger(hstmt, expected[SQL_DESC_SCALE]->n, SQL_DESC_SCALE);
 
 	// SQL_DESC_SCHEMA_NAME
-	CheckString(hstmt, expected[SQL_DESC_SCHEMA_NAME].s, SQL_DESC_SCHEMA_NAME);
+	CheckString(hstmt, expected[SQL_DESC_SCHEMA_NAME]->s, SQL_DESC_SCHEMA_NAME);
 
 	// SQL_DESC_SEARCHABLE
-	CheckInteger(hstmt, expected[SQL_DESC_SEARCHABLE].n, SQL_DESC_SEARCHABLE);
+	CheckInteger(hstmt, expected[SQL_DESC_SEARCHABLE]->n, SQL_DESC_SEARCHABLE);
 
 	// SQL_DESC_TYPE
-	CheckInteger(hstmt, expected[SQL_DESC_TYPE].n, SQL_DESC_TYPE);
+	CheckInteger(hstmt, expected[SQL_DESC_TYPE]->n, SQL_DESC_TYPE);
 
 	// SQL_DESC_UNNAMED
-	CheckInteger(hstmt, expected[SQL_DESC_UNNAMED].n, SQL_DESC_UNNAMED);
+	CheckInteger(hstmt, expected[SQL_DESC_UNNAMED]->n, SQL_DESC_UNNAMED);
 
 	// SQL_DESC_UNSIGNED
-	CheckInteger(hstmt, expected[SQL_DESC_UNSIGNED].n, SQL_DESC_UNSIGNED);
+	CheckInteger(hstmt, expected[SQL_DESC_UNSIGNED]->n, SQL_DESC_UNSIGNED);
 
 	// SQL_DESC_UPDATABLE
-	CheckInteger(hstmt, expected[SQL_DESC_UPDATABLE].n, SQL_DESC_UPDATABLE);
+	CheckInteger(hstmt, expected[SQL_DESC_UPDATABLE]->n, SQL_DESC_UPDATABLE);
+
+	DeleteExpectedMap(expected);
 }
 
 TEST_CASE("Test SQLColAttribute (descriptor information for a column)", "[odbc]") {
@@ -213,56 +225,54 @@ TEST_CASE("Test SQLColAttribute (descriptor information for a column)", "[odbc]"
 
 	// run simple query  with ints to get a result set
 	EXECUTE_AND_CHECK("SQLExecDirect", SQLExecDirect, hstmt, ConvertToSQLCHAR("SELECT 1 AS a, 2 AS b"), SQL_NTS);
-	std::map<SQLLEN, ExpectedResult> expected_int = {
-	    {SQL_DESC_CASE_SENSITIVE, ExpectedResult(SQL_FALSE)},
-	    {SQL_DESC_CATALOG_NAME, ExpectedResult("system")},
-	    {SQL_DESC_CONCISE_TYPE, ExpectedResult(SQL_INTEGER)},
-	    {SQL_DESC_COUNT, ExpectedResult(2)},
-	    {SQL_DESC_DISPLAY_SIZE, ExpectedResult(11)},
-	    {SQL_DESC_FIXED_PREC_SCALE, ExpectedResult(SQL_FALSE)},
-	    {SQL_DESC_LENGTH, ExpectedResult(10)},
-	    {SQL_DESC_LITERAL_PREFIX, ExpectedResult("NULL")},
-	    {SQL_DESC_LITERAL_SUFFIX, ExpectedResult("NULL")},
-	    {SQL_DESC_LOCAL_TYPE_NAME, ExpectedResult("")},
-	    {SQL_DESC_NULLABLE, ExpectedResult(SQL_NULLABLE)},
-	    {SQL_DESC_NUM_PREC_RADIX, ExpectedResult(2)},
-	    {SQL_DESC_PRECISION, ExpectedResult(10)},
-	    {SQL_COLUMN_SCALE, ExpectedResult(0)},
-		{SQL_DESC_SCALE, ExpectedResult(0)},
-	    {SQL_DESC_SCHEMA_NAME, ExpectedResult("")},
-	    {SQL_DESC_SEARCHABLE, ExpectedResult(SQL_PRED_BASIC)},
-	    {SQL_DESC_TYPE, ExpectedResult(SQL_INTEGER)},
-	    {SQL_DESC_UNNAMED, ExpectedResult(SQL_NAMED)},
-	    {SQL_DESC_UNSIGNED, ExpectedResult(SQL_FALSE)},
-	    {SQL_DESC_UPDATABLE, ExpectedResult(SQL_ATTR_READONLY)},
-	};
+	std::map<SQLLEN, ExpectedResult *> expected_int;
+	expected_int[SQL_DESC_CASE_SENSITIVE] = new ExpectedResult(SQL_FALSE);
+	expected_int[SQL_DESC_CATALOG_NAME] = new ExpectedResult("system");
+	expected_int[SQL_DESC_CONCISE_TYPE] = new ExpectedResult(SQL_INTEGER);
+	expected_int[SQL_DESC_COUNT] = new ExpectedResult(2);
+	expected_int[SQL_DESC_DISPLAY_SIZE] = new ExpectedResult(11);
+	expected_int[SQL_DESC_FIXED_PREC_SCALE] = new ExpectedResult(SQL_FALSE);
+	expected_int[SQL_DESC_LENGTH] = new ExpectedResult(10);
+	expected_int[SQL_DESC_LITERAL_PREFIX] = new ExpectedResult("NULL");
+	expected_int[SQL_DESC_LITERAL_SUFFIX] = new ExpectedResult("NULL");
+	expected_int[SQL_DESC_LOCAL_TYPE_NAME] = new ExpectedResult("");
+	expected_int[SQL_DESC_NULLABLE] = new ExpectedResult(SQL_NULLABLE);
+	expected_int[SQL_DESC_NUM_PREC_RADIX] = new ExpectedResult(2);
+	expected_int[SQL_DESC_PRECISION] = new ExpectedResult(10);
+	expected_int[SQL_COLUMN_SCALE] = new ExpectedResult(0);
+	expected_int[SQL_DESC_SCALE] = new ExpectedResult(0);
+	expected_int[SQL_DESC_SCHEMA_NAME] = new ExpectedResult("");
+	expected_int[SQL_DESC_SEARCHABLE] = new ExpectedResult(SQL_PRED_BASIC);
+	expected_int[SQL_DESC_TYPE] = new ExpectedResult(SQL_INTEGER);
+	expected_int[SQL_DESC_UNNAMED] = new ExpectedResult(SQL_NAMED);
+	expected_int[SQL_DESC_UNSIGNED] = new ExpectedResult(SQL_FALSE);
+	expected_int[SQL_DESC_UPDATABLE] = new ExpectedResult(SQL_ATTR_READONLY);
 	TestAllFields(hstmt, expected_int);
 
 	// run a simple query with chars to get a result set
 	EXECUTE_AND_CHECK("SQLExecDirect", SQLExecDirect, hstmt, ConvertToSQLCHAR("SELECT 'a' AS a, 'b' AS b"), SQL_NTS);
-	std::map<SQLLEN, ExpectedResult> expected_chars = {
-	    {SQL_DESC_CASE_SENSITIVE, ExpectedResult(SQL_FALSE)},
-	    {SQL_DESC_CATALOG_NAME, ExpectedResult("system")},
-	    {SQL_DESC_CONCISE_TYPE, ExpectedResult(SQL_VARCHAR)},
-	    {SQL_DESC_COUNT, ExpectedResult(2)},
-	    {SQL_DESC_DISPLAY_SIZE, ExpectedResult(256)},
-	    {SQL_DESC_FIXED_PREC_SCALE, ExpectedResult(SQL_FALSE)},
-	    {SQL_DESC_LENGTH, ExpectedResult(-1)},
-	    {SQL_DESC_LITERAL_PREFIX, ExpectedResult("''''")},
-	    {SQL_DESC_LITERAL_SUFFIX, ExpectedResult("''''")},
-		{SQL_DESC_LOCAL_TYPE_NAME, ExpectedResult("")},
-	    {SQL_DESC_NULLABLE, ExpectedResult(SQL_NULLABLE)},
-	    {SQL_DESC_NUM_PREC_RADIX, ExpectedResult(0)},
-	    {SQL_DESC_PRECISION, ExpectedResult(-1)},
-	    {SQL_COLUMN_SCALE, ExpectedResult(SQL_NO_TOTAL)},
-	    {SQL_DESC_SCALE, ExpectedResult(-1)},
-	    {SQL_DESC_SCHEMA_NAME, ExpectedResult("")},
-	    {SQL_DESC_SEARCHABLE, ExpectedResult(SQL_SEARCHABLE)},
-	    {SQL_DESC_TYPE, ExpectedResult(SQL_VARCHAR)},
-	    {SQL_DESC_UNNAMED, ExpectedResult(SQL_NAMED)},
-	    {SQL_DESC_UNSIGNED, ExpectedResult(SQL_TRUE)},
-	    {SQL_DESC_UPDATABLE, ExpectedResult(SQL_ATTR_READONLY)},
-	};
+	std::map<SQLLEN, ExpectedResult *> expected_chars;
+	expected_chars[SQL_DESC_CASE_SENSITIVE] = new ExpectedResult(SQL_TRUE);
+	expected_chars[SQL_DESC_CATALOG_NAME] = new ExpectedResult("system");
+	expected_chars[SQL_DESC_CONCISE_TYPE] = new ExpectedResult(SQL_VARCHAR);
+	expected_chars[SQL_DESC_COUNT] = new ExpectedResult(2);
+	expected_chars[SQL_DESC_DISPLAY_SIZE] = new ExpectedResult(256);
+	expected_chars[SQL_DESC_FIXED_PREC_SCALE] = new ExpectedResult(SQL_FALSE);
+	expected_chars[SQL_DESC_LENGTH] = new ExpectedResult(-1);
+	expected_chars[SQL_DESC_LITERAL_PREFIX] = new ExpectedResult("''''");
+	expected_chars[SQL_DESC_LITERAL_SUFFIX] = new ExpectedResult("''''");
+	expected_chars[SQL_DESC_LOCAL_TYPE_NAME] = new ExpectedResult("");
+	expected_chars[SQL_DESC_NULLABLE] = new ExpectedResult(SQL_NULLABLE);
+	expected_chars[SQL_DESC_NUM_PREC_RADIX] = new ExpectedResult(0);
+	expected_chars[SQL_DESC_PRECISION] = new ExpectedResult(-1);
+	expected_chars[SQL_COLUMN_SCALE] = new ExpectedResult(SQL_NO_TOTAL);
+	expected_chars[SQL_DESC_SCALE] = new ExpectedResult(-1);
+	expected_chars[SQL_DESC_SCHEMA_NAME] = new ExpectedResult("");
+	expected_chars[SQL_DESC_SEARCHABLE] = new ExpectedResult(SQL_SEARCHABLE);
+	expected_chars[SQL_DESC_TYPE] = new ExpectedResult(SQL_VARCHAR);
+	expected_chars[SQL_DESC_UNNAMED] = new ExpectedResult(SQL_NAMED);
+	expected_chars[SQL_DESC_UNSIGNED] = new ExpectedResult(SQL_TRUE);
+	expected_chars[SQL_DESC_UPDATABLE] = new ExpectedResult(SQL_ATTR_READONLY);
 	TestAllFields(hstmt, expected_chars);
 
 	// SQLColAttribute should fail if the column number is out of bounds
