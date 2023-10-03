@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/index_type.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 

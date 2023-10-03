@@ -1,5 +1,7 @@
 #include "duckdb/planner/operator/logical_create_table.hpp"
 
+#include "duckdb/planner/binder.hpp"
+
 namespace duckdb {
 
 LogicalCreateTable::LogicalCreateTable(SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info)
