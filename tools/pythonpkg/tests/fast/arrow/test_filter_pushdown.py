@@ -3,6 +3,7 @@ import duckdb
 import os
 import pytest
 import tempfile
+from conftest import pandas_supports_arrow_backend
 
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
@@ -12,6 +13,8 @@ re = pytest.importorskip("re")
 
 
 def create_pyarrow_pandas(rel):
+    if not pandas_supports_arrow_backend():
+        pytest.skip(reason="Pandas version doesn't support 'pyarrow' backend")
     return rel.df().convert_dtypes(dtype_backend='pyarrow')
 
 
