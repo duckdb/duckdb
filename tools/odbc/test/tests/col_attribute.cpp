@@ -7,11 +7,9 @@ public:
 	std::string s;
 	SQLLEN n;
 
-	explicit ExpectedResult(SQLLEN n_n) : n(n_n) {
-	};
+	explicit ExpectedResult(SQLLEN n_n) : n(n_n) {};
 
-	explicit ExpectedResult(const std::string &n_s) : s(n_s) {
-	};
+	explicit ExpectedResult(const std::string &n_s) : s(n_s) {};
 
 	ExpectedResult(const ExpectedResult &other) {
 		*this = other;
@@ -26,7 +24,8 @@ static void DeleteExpectedMap(std::map<SQLLEN, ExpectedResult *> &expected) {
 
 static void CheckString(SQLHANDLE handle, const std::string &expected, SQLSMALLINT field_identifier) {
 	SQLCHAR buffer[64];
-	EXECUTE_AND_CHECK("SQLColAttribute", SQLColAttribute, handle, 1, field_identifier, buffer, sizeof(buffer), nullptr, nullptr);
+	EXECUTE_AND_CHECK("SQLColAttribute", SQLColAttribute, handle, 1, field_identifier, buffer, sizeof(buffer), nullptr,
+	                  nullptr);
 	REQUIRE(ConvertToString(buffer) == expected);
 }
 
