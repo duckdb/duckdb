@@ -45,21 +45,13 @@ struct ModeState {
 	}
 
 	vector<FrameBounds> prevs;
-	Counts *frequency_map;
-	KEY_TYPE *mode;
-	size_t nonzero;
-	bool valid;
-	size_t count;
+	Counts *frequency_map = nullptr;
+	KEY_TYPE *mode = nullptr;
+	size_t nonzero = 0;
+	bool valid = false;
+	size_t count = 0;
 
-	void Initialize() {
-		frequency_map = nullptr;
-		mode = nullptr;
-		nonzero = 0;
-		valid = false;
-		count = 0;
-	}
-
-	void Destroy() {
+	~ModeState() {
 		if (frequency_map) {
 			delete frequency_map;
 		}
@@ -152,7 +144,7 @@ template <typename KEY_TYPE, typename ASSIGN_OP>
 struct ModeFunction {
 	template <class STATE>
 	static void Initialize(STATE &state) {
-		state.Initialize();
+		new (&state) STATE();
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -299,7 +291,7 @@ struct ModeFunction {
 
 	template <class STATE>
 	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		state.Destroy();
+		state.~STATE();
 	}
 };
 
