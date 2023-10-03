@@ -14,13 +14,13 @@
 namespace duckdb {
 
 class ConflictManager;
+struct IndexStorageInfo;
 
 class TableIndexList {
 public:
-	//! Scan the catalog set, invoking the callback method for every entry
+	//! Scan the indexes, invoking the callback method for every entry
 	template <class T>
 	void Scan(T &&callback) {
-		// lock the catalog set
 		lock_guard<mutex> lock(indexes_lock);
 		for (auto &index : indexes) {
 			if (callback(*index)) {
@@ -28,14 +28,16 @@ public:
 			}
 		}
 	}
-
+	//! Returns a reference to the indexes of this table
 	const vector<unique_ptr<Index>> &Indexes() const {
 		return indexes;
 	}
-
+	//! Adds an index to the list of indexes of this table
 	void AddIndex(unique_ptr<Index> index);
-
-	void RemoveIndex(Index &index);
+	//! Removes an index from the list of indexes of this table
+	void RemoveIndex(const string &name);
+	//! Completely removes all remaining memory of an index after dropping the catalog entry
+	void CommitDrop(const string &name);
 
 	bool Empty();
 
@@ -46,8 +48,8 @@ public:
 	Index *FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, ForeignKeyType fk_type);
 	void VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, DataChunk &chunk, ConflictManager &conflict_manager);
 
-	//! Serialize all indexes owned by this table
-	void Serialize(Serializer &serializer);
+	//! Serialize all indexes of this table
+	vector<IndexStorageInfo> GetStorageInfos();
 
 	vector<column_t> GetRequiredColumns();
 

@@ -15,7 +15,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"
-#include "duckdb/execution/index/fixed_size_allocator.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
 
 namespace duckdb {
 
@@ -26,25 +26,6 @@ class ConflictManager;
 
 struct IndexLock;
 struct IndexScanState;
-struct FixedSizeAllocatorInfo;
-
-//! Information to serialize an index
-struct IndexStorageInfo {
-	//! The name of the index
-	string name;
-	//! Arbitrary index properties
-	vector<idx_t> properties;
-	//! Information to serialize the index memory
-	vector<FixedSizeAllocatorInfo> allocator_infos;
-
-	//! Returns true, if the struct contains index information
-	inline bool IsValid() const {
-		return !name.empty();
-	}
-
-	void Serialize(Serializer &serializer) const;
-	static IndexStorageInfo Deserialize(Deserializer &deserializer);
-};
 
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
@@ -138,7 +119,8 @@ public:
 
 	//! Returns unique flag
 	bool IsUnique() {
-		return (index_constraint_type == IndexConstraintType::UNIQUE || index_constraint_type == IndexConstraintType::PRIMARY);
+		return (index_constraint_type == IndexConstraintType::UNIQUE ||
+		        index_constraint_type == IndexConstraintType::PRIMARY);
 	}
 	//! Returns primary key flag
 	bool IsPrimary() {
@@ -149,8 +131,8 @@ public:
 		return (index_constraint_type == IndexConstraintType::FOREIGN);
 	}
 
-	//! Serializes the index
-	virtual void Serialize(Serializer &serializer);
+	//! Returns all storage information about the index
+	virtual IndexStorageInfo GetInfo();
 
 	//! Execute the index expressions on an input chunk
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);
@@ -159,8 +141,6 @@ public:
 protected:
 	//! Lock used for any changes to the index
 	mutex lock;
-	//! Pointer to the index on disk
-	BlockPointer root_block_pointer;
 
 private:
 	//! Bound expressions used during expression execution

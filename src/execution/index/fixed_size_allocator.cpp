@@ -1,81 +1,12 @@
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 
 namespace duckdb {
 
-//===--------------------------------------------------------------------===//
-// FixedSizeAllocatorInfo
-//===--------------------------------------------------------------------===//
-
-void FixedSizeAllocatorInfo::Serialize(Serializer &serializer) const {
-
-	serializer.WriteProperty(100, "segment_size", segment_size);
-
-	serializer.WriteList(101, "buffer_ids", buffer_ids.size(),
-	                     [&](Serializer::List &list, idx_t i) {
-		                     list.WriteElement(buffer_ids[i]);
-	                     });
-
-	serializer.WriteList(102, "buffer_block_pointers", buffer_block_pointers.size(),
-	                     [&](Serializer::List &list, idx_t i) {
-		                     list.WriteElement(buffer_block_pointers[i]);
-	                     });
-
-	serializer.WriteList(103, "buffer_segment_counts", buffer_segment_counts.size(),
-	                     [&](Serializer::List &list, idx_t i) {
-		                     list.WriteElement(buffer_segment_counts[i]);
-	                     });
-
-	serializer.WriteList(104, "buffer_allocation_sizes", buffer_allocation_sizes.size(),
-	                     [&](Serializer::List &list, idx_t i) {
-		                     list.WriteElement(buffer_allocation_sizes[i]);
-	                     });
-
-	serializer.WriteList(105, "buffers_with_free_space_vec", buffers_with_free_space_vec.size(),
-	                     [&](Serializer::List &list, idx_t i) {
-		                     list.WriteElement(buffers_with_free_space_vec[i]);
-	                     });
-}
-
-FixedSizeAllocatorInfo FixedSizeAllocatorInfo::Deserialize(Deserializer &deserializer) {
-
-	FixedSizeAllocatorInfo info;
-
-	info.segment_size = deserializer.ReadProperty<idx_t>(100, "segment_size");
-
-	deserializer.ReadList(101, "buffer_ids", [&](Deserializer::List &list, idx_t i) {
-		info.buffer_ids.push_back(list.ReadElement<idx_t>());
-	});
-
-	deserializer.ReadList(102, "buffer_block_pointers", [&](Deserializer::List &list, idx_t i) {
-		info.buffer_block_pointers.push_back(list.ReadElement<BlockPointer>());
-	});
-
-	deserializer.ReadList(103, "buffer_segment_counts", [&](Deserializer::List &list, idx_t i) {
-		info.buffer_segment_counts.push_back(list.ReadElement<idx_t>());
-	});
-
-	deserializer.ReadList(104, "buffer_allocation_sizes", [&](Deserializer::List &list, idx_t i) {
-		info.buffer_allocation_sizes.push_back(list.ReadElement<idx_t>());
-	});
-
-	deserializer.ReadList(105, "buffers_with_free_space_vec", [&](Deserializer::List &list, idx_t i) {
-		info.buffers_with_free_space_vec.push_back(list.ReadElement<idx_t>());
-	});
-
-	return info;
-}
-
-//===--------------------------------------------------------------------===//
-// FixedSizeAllocator
-//===--------------------------------------------------------------------===//
-
 FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager)
-    : block_manager(block_manager), buffer_manager(block_manager.buffer_manager),
-     segment_size(segment_size), total_segment_count(0) {
+    : block_manager(block_manager), buffer_manager(block_manager.buffer_manager), segment_size(segment_size),
+      total_segment_count(0) {
 
 	if (segment_size > Storage::BLOCK_SIZE - sizeof(validity_t)) {
 		throw InternalException("The maximum segment size of fixed-size allocators is " +
@@ -333,9 +264,9 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
 	return new_ptr;
 }
 
-FixedSizeAllocatorInfo FixedSizeAllocator::GetInfo() const {
+IndexDataStorageInfo FixedSizeAllocator::GetInfo() const {
 
-	FixedSizeAllocatorInfo info;
+	IndexDataStorageInfo info;
 	info.segment_size = segment_size;
 
 	for (const auto &buffer : buffers) {
@@ -358,7 +289,7 @@ void FixedSizeAllocator::SerializeBuffers(PartialBlockManager &partial_block_man
 	}
 }
 
-void FixedSizeAllocator::Deserialize(const FixedSizeAllocatorInfo &info) {
+void FixedSizeAllocator::Init(const IndexDataStorageInfo &info) {
 
 	segment_size = info.segment_size;
 	total_segment_count = 0;

@@ -148,7 +148,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 		}
 		case CatalogType::PREPARED_STATEMENT:
 		case CatalogType::SCALAR_FUNCTION_ENTRY:
-			// do nothing, indexes/prepared statements/functions aren't persisted to disk
+			// do nothing, prepared statements and scalar functions aren't persisted to disk
 			break;
 		default:
 			throw InternalException("Don't know how to drop this type!");

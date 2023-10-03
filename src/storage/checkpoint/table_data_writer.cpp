@@ -66,15 +66,13 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 		row_group_serializer.End();
 	}
 
-	BinarySerializer index_serializer(table_data_writer);
-	index_serializer.Begin();
-	info->indexes.Serialize(index_serializer);
-	index_serializer.End();
-
 	// Now begin the metadata as a unit
 	// Pointer to the table itself goes to the metadata stream.
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
+	auto index_storage_infos = info->indexes.GetStorageInfos();
+	serializer.WriteList(103, "index_storage_infos", index_storage_infos.size(),
+	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(index_storage_infos[i]); });
 }
 
 } // namespace duckdb

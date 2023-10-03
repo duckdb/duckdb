@@ -15,8 +15,6 @@
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 
 #include <algorithm>
 
@@ -64,7 +62,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 	}
 
 	if (index_storage_info.IsValid()) {
-		Deserialize(index_storage_info);
+		InitAllocators(index_storage_info);
 	}
 
 	// validate the types of the key columns
@@ -976,22 +974,22 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 }
 
 //===--------------------------------------------------------------------===//
-// Serialization
+// Helper functions for (de)serialization
 //===--------------------------------------------------------------------===//
 
-IndexStorageInfo ART::GetInfo() const {
+IndexStorageInfo ART::GetStorageInfo() const {
 
 	IndexStorageInfo info;
 	info.properties.push_back(tree.Get());
 
-	for (const auto &allocator: *allocators) {
-		info.allocator_infos.push_back(allocator->GetInfo());
+	for (const auto &allocator : *allocators) {
+		info.index_data_storage_infos.push_back(allocator->GetInfo());
 	}
 
 	return info;
 }
 
-void ART::Serialize(Serializer &serializer) {
+IndexStorageInfo ART::GetInfo() {
 
 	// use the partial block manager to serialize all allocator data
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
@@ -1002,17 +1000,16 @@ void ART::Serialize(Serializer &serializer) {
 	}
 	partial_block_manager.FlushPartialBlocks();
 
-	// use the serializer to serialize ART meta data
-	auto index_storage_info = GetInfo();
-	serializer.WriteProperty(100, "index_storage_info", index_storage_info);
+	// return all remaining information to serialize the index
+	return GetStorageInfo();
 }
 
-void ART::Deserialize(const IndexStorageInfo &index_storage_info) {
+void ART::InitAllocators(const IndexStorageInfo &info) {
 
-	tree.Set(index_storage_info.properties.back());
-	D_ASSERT(index_storage_info.allocator_infos.size() == ALLOCATOR_COUNT);
-	for (idx_t i = 0; i < index_storage_info.allocator_infos.size(); i++) {
-		(*allocators)[i]->Deserialize(index_storage_info.allocator_infos[i]);
+	tree.Set(info.properties.back());
+	D_ASSERT(info.index_data_storage_infos.size() == ALLOCATOR_COUNT);
+	for (idx_t i = 0; i < info.index_data_storage_infos.size(); i++) {
+		(*allocators)[i]->Init(info.index_data_storage_infos[i]);
 	}
 }
 

@@ -12,19 +12,20 @@
 
 namespace duckdb {
 
-//! An index catalog entry
+//! A duck index entry
 class DuckIndexEntry : public IndexCatalogEntry {
 public:
-	//! Create an IndexCatalogEntry and initialize storage for it
+	//! Create a DuckIndexEntry
 	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info);
-	~DuckIndexEntry();
+	~DuckIndexEntry() override;
 
 	shared_ptr<DataTableInfo> info;
 
 public:
 	string GetSchemaName() const override;
 	string GetTableName() const override;
-	//! This drops in-memory index data and marks all blocks on disk as free blocks, allowing to reclaim them
+
+	//! Drops in-memory index data and marks all blocks on disk as free blocks, allowing to reclaim them
 	void CommitDrop();
 };
 

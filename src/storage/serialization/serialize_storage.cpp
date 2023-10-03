@@ -6,6 +6,8 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/storage/block.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 
@@ -60,6 +62,40 @@ unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(Deserializer &des
 	auto total_count = deserializer.ReadPropertyWithDefault<idx_t>(101, "total_count");
 	auto log = deserializer.ReadPropertyWithDefault<unique_ptr<HyperLogLog>>(102, "log");
 	auto result = duckdb::unique_ptr<DistinctStatistics>(new DistinctStatistics(std::move(log), sample_count, total_count));
+	return result;
+}
+
+void IndexDataStorageInfo::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<idx_t>(100, "segment_size", segment_size);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(101, "buffer_ids", buffer_ids);
+	serializer.WritePropertyWithDefault<vector<BlockPointer>>(102, "buffer_block_pointers", buffer_block_pointers);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(103, "buffer_segment_counts", buffer_segment_counts);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(104, "buffer_allocation_sizes", buffer_allocation_sizes);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(105, "buffers_with_free_space_vec", buffers_with_free_space_vec);
+}
+
+IndexDataStorageInfo IndexDataStorageInfo::Deserialize(Deserializer &deserializer) {
+	IndexDataStorageInfo result;
+	deserializer.ReadPropertyWithDefault<idx_t>(100, "segment_size", result.segment_size);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(101, "buffer_ids", result.buffer_ids);
+	deserializer.ReadPropertyWithDefault<vector<BlockPointer>>(102, "buffer_block_pointers", result.buffer_block_pointers);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(103, "buffer_segment_counts", result.buffer_segment_counts);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(104, "buffer_allocation_sizes", result.buffer_allocation_sizes);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(105, "buffers_with_free_space_vec", result.buffers_with_free_space_vec);
+	return result;
+}
+
+void IndexStorageInfo::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(100, "name", name);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(101, "properties", properties);
+	serializer.WritePropertyWithDefault<vector<IndexDataStorageInfo>>(102, "index_data_storage_infos", index_data_storage_infos);
+}
+
+IndexStorageInfo IndexStorageInfo::Deserialize(Deserializer &deserializer) {
+	IndexStorageInfo result;
+	deserializer.ReadPropertyWithDefault<string>(100, "name", result.name);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(101, "properties", result.properties);
+	deserializer.ReadPropertyWithDefault<vector<IndexDataStorageInfo>>(102, "index_data_storage_infos", result.index_data_storage_infos);
 	return result;
 }
 

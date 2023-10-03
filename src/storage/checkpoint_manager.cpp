@@ -395,13 +395,10 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	auto &index = schema.CreateIndex(context, info, table)->Cast<DuckIndexEntry>();
 
 	index.info = table.GetStorage().info;
-	// insert the parsed expressions into the stored index so that we correctly (de)serialize it during consecutive
-	// checkpoints
+	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
 	for (auto &parsed_expr : info.parsed_expressions) {
 		index.parsed_expressions.push_back(parsed_expr->Copy());
 	}
-
-
 
 	// obtain the parsed expressions of the ART from the index metadata
 	vector<unique_ptr<ParsedExpression>> parsed_expressions;
@@ -431,19 +428,20 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 		unbound_expressions.push_back(idx_binder.Bind(expr));
 	}
 
-	// create the index and add it to the storage
-	switch (info.index_type) {
-	case IndexType::ART: {
-		auto &storage = table.GetStorage();
-		auto art = make_uniq<ART>(info.column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
-		                          info.constraint_type, storage.db, nullptr, root_block_pointer);
-
-		index.index = art.get();
-		storage.info->indexes.AddIndex(std::move(art));
-	} break;
-	default:
-		throw InternalException("Unknown index type for ReadIndex");
+	// get the matching index storage info
+	auto &data_table = table.GetStorage();
+	IndexStorageInfo index_storage_info;
+	for (auto const &index_storage_info_elem : data_table.info->index_pointers) {
+		if (index_storage_info.name == info.index_name) {
+			index_storage_info = index_storage_info_elem;
+			break;
+		}
 	}
+
+	D_ASSERT(index_storage_info.IsValid());
+	auto art = make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
+	                          std::move(unbound_expressions), data_table.db, nullptr, index_storage_info);
+	data_table.info->indexes.AddIndex(std::move(art));
 }
 
 //===--------------------------------------------------------------------===//
@@ -486,7 +484,7 @@ void CheckpointReader::ReadTableMacro(ClientContext &context, Deserializer &dese
 // Table Metadata
 //===--------------------------------------------------------------------===//
 void CheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer &serializer) {
-	// Write the table meta data
+	// Write the table metadata
 	serializer.WriteProperty(100, "table", &table);
 
 	// Write the table data
@@ -502,7 +500,7 @@ void CheckpointReader::ReadTable(ClientContext &context, Deserializer &deseriali
 	auto &schema = catalog.GetSchema(context, info->schema);
 	auto bound_info = binder->BindCreateTableInfo(std::move(info), schema);
 
-	// now read the actual table data and place it into the create table info
+	// now read the actual table data and place it into the CreateTableInfo
 	ReadTableData(context, deserializer, *bound_info);
 
 	// finally create the table in the catalog
@@ -515,7 +513,9 @@ void CheckpointReader::ReadTableData(ClientContext &context, Deserializer &deser
 	// This is written in "SingleFileTableDataWriter::FinalizeTable"
 	auto table_pointer = deserializer.ReadProperty<MetaBlockPointer>(101, "table_pointer");
 	auto total_rows = deserializer.ReadProperty<idx_t>(102, "total_rows");
-	auto index_pointers = deserializer.ReadProperty<vector<BlockPointer>>(103, "index_pointers");
+	deserializer.ReadList(103, "index_storage_infos", [&](Deserializer::List &list, idx_t i) {
+		bound_info.indexes.push_back(list.ReadElement<IndexStorageInfo>());
+	});
 
 	// FIXME: icky downcast to get the underlying MetadataReader
 	auto &binary_deserializer = dynamic_cast<BinaryDeserializer &>(deserializer);
@@ -526,7 +526,6 @@ void CheckpointReader::ReadTableData(ClientContext &context, Deserializer &deser
 	data_reader.ReadTableData();
 
 	bound_info.data->total_rows = total_rows;
-	bound_info.indexes = index_pointers;
 }
 
 } // namespace duckdb

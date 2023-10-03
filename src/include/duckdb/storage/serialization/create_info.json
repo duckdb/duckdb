@@ -56,9 +56,8 @@
     "members": [
       {
         "id": 200,
-        "name": "name",
-        "type": "string",
-        "property": "index_name"
+        "name": "index_name",
+        "type": "string"
       },
       {
         "id": 201,
@@ -68,7 +67,7 @@
       {
         "id": 202,
         "name": "index_type",
-        "type": "IndexType"
+        "type": "string"
       },
       {
         "id": 203,
@@ -99,11 +98,6 @@
         "id": 208,
         "name": "options",
         "type": "case_insensitive_map_t<Value>"
-      },
-      {
-        "id": 209,
-        "name": "index_type_name",
-        "type": "string"
       }
     ]
   },

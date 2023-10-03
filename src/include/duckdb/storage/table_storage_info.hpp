@@ -11,6 +11,7 @@
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/storage/block.hpp"
 
 namespace duckdb {
 
@@ -29,6 +30,37 @@ struct ColumnSegmentInfo {
 	block_id_t block_id;
 	idx_t block_offset;
 	string segment_info;
+};
+
+//! Information to serialize the underlying data of an index
+struct IndexDataStorageInfo {
+	idx_t segment_size;
+	vector<idx_t> buffer_ids;
+	vector<BlockPointer> buffer_block_pointers;
+	vector<idx_t> buffer_segment_counts;
+	vector<idx_t> buffer_allocation_sizes;
+	vector<idx_t> buffers_with_free_space_vec;
+
+	void Serialize(Serializer &serializer) const;
+	static IndexDataStorageInfo Deserialize(Deserializer &deserializer);
+};
+
+//! Information to serialize an index
+struct IndexStorageInfo {
+	//! The name of the index
+	string name;
+	//! Arbitrary index properties
+	vector<idx_t> properties;
+	//! Information to serialize the index memory
+	vector<IndexDataStorageInfo> index_data_storage_infos;
+
+	//! Returns true, if the struct contains index information
+	bool IsValid() const {
+		return !name.empty() && (!properties.empty() || !index_data_storage_infos.empty());
+	}
+
+	void Serialize(Serializer &serializer) const;
+	static IndexStorageInfo Deserialize(Deserializer &deserializer);
 };
 
 struct IndexInfo {

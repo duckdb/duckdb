@@ -20,18 +20,6 @@
 
 namespace duckdb {
 
-struct FixedSizeAllocatorInfo {
-	idx_t segment_size;
-	vector<idx_t> buffer_ids;
-	vector<BlockPointer> buffer_block_pointers;
-	vector<idx_t> buffer_segment_counts;
-	vector<idx_t> buffer_allocation_sizes;
-	vector<idx_t> buffers_with_free_space_vec;
-
-	void Serialize(Serializer &serializer) const;
-	static FixedSizeAllocatorInfo Deserialize(Deserializer &deserializer);
-};
-
 //! The FixedSizeAllocator provides pointers to fixed-size memory segments of pre-allocated memory buffers.
 //! The pointers are IndexPointers, and the leftmost byte (metadata) must always be zero.
 //! It is also possible to directly request a C++ pointer to the underlying segment of an index pointer.
@@ -86,11 +74,11 @@ public:
 	IndexPointer VacuumPointer(const IndexPointer ptr);
 
 	//! Returns all FixedSizeAllocator information for serialization
-	FixedSizeAllocatorInfo GetInfo() const;
-	//! Serializes all in-memory buffers and the metadata
+	IndexDataStorageInfo GetInfo() const;
+	//! Serializes all in-memory buffers
 	void SerializeBuffers(PartialBlockManager &partial_block_manager);
-	//! Initialize a fixed-size allocator from deserialize data
-	void Deserialize(const FixedSizeAllocatorInfo &info);
+	//! Initialize a fixed-size allocator from allocator storage information
+	void Init(const IndexDataStorageInfo &info);
 
 private:
 	//! Allocation size of one segment in a buffer

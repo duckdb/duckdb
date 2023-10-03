@@ -363,10 +363,11 @@ idx_t LocateErrorIndex(bool is_append, const ManagedSelection &matches) {
 
 [[noreturn]] static void ThrowForeignKeyConstraintError(idx_t failed_index, bool is_append, Index &index,
                                                         DataChunk &input) {
+
 	auto verify_type = is_append ? VerifyExistenceType::APPEND_FK : VerifyExistenceType::DELETE_FK;
 
 	D_ASSERT(failed_index != DConstants::INVALID_INDEX);
-	D_ASSERT(index.type == IndexType::ART);
+	D_ASSERT(index.index_type == "ART");
 	auto &art_index = index.Cast<ART>();
 	auto key_name = art_index.GenerateErrorKeyName(input, failed_index);
 	auto exception_msg = art_index.GenerateConstraintErrorMessage(verify_type, key_name);
@@ -375,7 +376,7 @@ idx_t LocateErrorIndex(bool is_append, const ManagedSelection &matches) {
 
 bool IsForeignKeyConstraintError(bool is_append, idx_t input_count, const ManagedSelection &matches) {
 	if (is_append) {
-		// We need to find a match for all of the values
+		// We need to find a match for all values
 		return matches.Count() != input_count;
 	} else {
 		// We should not find any matches
@@ -1293,14 +1294,14 @@ void DataTable::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> d
 // Checkpoint
 //===--------------------------------------------------------------------===//
 void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
+
 	// checkpoint each individual row group
 	// FIXME: we might want to combine adjacent row groups in case they have had deletions...
 	TableStatistics global_stats;
 	row_groups->CopyStats(global_stats);
-
 	row_groups->Checkpoint(writer, global_stats);
 
-	// The rowgroup payload data has been written. Now write:
+	// The row group payload data has been written. Now write:
 	//   column stats
 	//   row-group pointers
 	//   table pointer

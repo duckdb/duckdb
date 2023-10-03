@@ -1,0 +1,81 @@
+# name: test/sql/index/art/storage/test_art_names.test
+# description: Test names ART indexes
+# group: [storage]
+
+load __TEST_DIR__/test_art_names.db
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE tbl (i INTEGER PRIMARY KEY, j INTEGER UNIQUE);
+
+statement ok
+INSERT INTO tbl SELECT range, range FROM range (3000);
+
+restart
+
+statement ok
+CREATE INDEX pk_tbl_0 ON tbl(i);
+
+statement ok
+CREATE INDEX unique_tbl_1 ON tbl(j);
+
+restart
+
+statement ok
+DROP INDEX unique_tbl_1;
+
+statement ok
+DROP INDEX pk_tbl_0;
+
+statement ok
+DROP TABLE tbl;
+
+restart
+
+statement ok
+CREATE TABLE tbl (i INTEGER PRIMARY KEY, j INTEGER UNIQUE);
+
+statement ok
+CREATE TABLE fk_tbl (i INTEGER, j INTEGER,
+	FOREIGN KEY (i) REFERENCES tbl(i),
+	FOREIGN KEY (j) REFERENCES tbl(j));
+
+statement ok
+INSERT INTO tbl SELECT range, range FROM range (3000);
+
+statement ok
+INSERT INTO fk_tbl SELECT range, range FROM range (3000);
+
+restart
+
+statement ok
+CREATE INDEX pk_tbl_0 ON tbl(i);
+
+statement ok
+CREATE INDEX unique_tbl_1 ON tbl(j);
+
+statement ok
+CREATE INDEX fk_tbl_0 ON fk_tbl(i);
+
+statement ok
+CREATE INDEX fk_tbl_1 ON fk_tbl(j);
+
+restart
+
+statement ok
+DROP INDEX fk_tbl_1;
+
+statement ok
+DROP INDEX fk_tbl_0;
+
+statement ok
+DROP INDEX unique_tbl_1;
+
+statement ok
+DROP INDEX pk_tbl_0;
+
+restart
+
+

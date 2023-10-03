@@ -1,7 +1,4 @@
 #include "duckdb/storage/table/table_index_list.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/types/conflict_manager.hpp"
-#include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
 void TableIndexList::AddIndex(unique_ptr<Index> index) {
@@ -10,13 +7,25 @@ void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	indexes.push_back(std::move(index));
 }
 
-void TableIndexList::RemoveIndex(Index &index) {
+void TableIndexList::RemoveIndex(const string &name) {
 	lock_guard<mutex> lock(indexes_lock);
 
 	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
 		auto &index_entry = indexes[index_idx];
-		if (index_entry.get() == &index) {
+		if (index_entry->name == name) {
 			indexes.erase(indexes.begin() + index_idx);
+			break;
+		}
+	}
+}
+
+void TableIndexList::CommitDrop(const string &name) {
+	lock_guard<mutex> lock(indexes_lock);
+
+	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
+		auto &index_entry = indexes[index_idx];
+		if (index_entry->name == name) {
+			index_entry->CommitDrop();
 			break;
 		}
 	}
@@ -79,11 +88,13 @@ vector<column_t> TableIndexList::GetRequiredColumns() {
 	return result;
 }
 
-void TableIndexList::Serialize(Serializer &serializer) {
+vector<IndexStorageInfo> TableIndexList::GetStorageInfos() {
 
+	vector<IndexStorageInfo> index_storage_infos;
 	for (auto &index : indexes) {
-		index->Serialize(serializer);
+		index_storage_infos.push_back(index->GetInfo());
 	}
+	return index_storage_infos;
 }
 
 } // namespace duckdb

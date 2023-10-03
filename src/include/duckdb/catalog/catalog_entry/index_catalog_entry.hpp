@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/catalog/standard_entry.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
 
 namespace duckdb {
 
@@ -24,10 +25,20 @@ public:
 	//! Create an IndexCatalogEntry
 	IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info);
 
+	//! The SQL of the CREATE INDEX statement
 	string sql;
+	//! Additional index options
+	case_insensitive_map_t<Value> options;
+
+	//! The index type (ART, B+-tree, Skip-List, ...)
+	string index_type;
+	//! The index constraint type
+	IndexConstraintType index_constraint_type;
+	//! The column ids of the indexed table
+	vector<column_t> column_ids;
+	//! The set of expressions to index by
 	vector<unique_ptr<ParsedExpression>> expressions;
 	vector<unique_ptr<ParsedExpression>> parsed_expressions;
-	case_insensitive_map_t<Value> options;
 
 public:
 	//! Returns the CreateIndexInfo
@@ -37,6 +48,11 @@ public:
 
 	virtual string GetSchemaName() const = 0;
 	virtual string GetTableName() const = 0;
+
+	//! Returns true, if this index is UNIQUE
+	bool IsUnique();
+	//! Returns true, if this index is a PRIMARY KEY
+	bool IsPrimary();
 };
 
 } // namespace duckdb

@@ -1,4 +1,5 @@
 #include "duckdb/storage/index.hpp"
+
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -6,42 +7,6 @@
 #include "duckdb/storage/table/append_state.hpp"
 
 namespace duckdb {
-
-//===--------------------------------------------------------------------===//
-// IndexStorageInfo
-//===--------------------------------------------------------------------===//
-
-void IndexStorageInfo::Serialize(Serializer &serializer) const {
-
-	serializer.WriteProperty(100, "name", name);
-	serializer.WriteList(101, "properties", properties.size(),
-	                     [&](Serializer::List &list, idx_t i) {
-		                     list.WriteElement(properties[i]);
-	                     });
-	serializer.WriteList(102, "allocator_infos", allocator_infos.size(),
-	                     [&](Serializer::List &list, idx_t i) {
-		                     list.WriteElement(allocator_infos[i]);
-	                     });
-}
-
-IndexStorageInfo IndexStorageInfo::Deserialize(Deserializer &deserializer) {
-
-	IndexStorageInfo info;
-
-	info.name = deserializer.ReadProperty<string>(100, "name");
-	deserializer.ReadList(101, "properties", [&](Deserializer::List &list, idx_t i) {
-		info.properties.push_back(list.ReadElement<idx_t>());
-	});
-	deserializer.ReadList(102, "allocator_infos", [&](Deserializer::List &list, idx_t i) {
-		info.allocator_infos.push_back(list.ReadElement<FixedSizeAllocatorInfo>());
-	});
-
-	return info;
-}
-
-//===--------------------------------------------------------------------===//
-// Index
-//===--------------------------------------------------------------------===//
 
 Index::Index(const string &name, const string &index_type, IndexConstraintType index_constraint_type,
              const vector<column_t> &column_ids, TableIOManager &table_io_manager,
@@ -128,7 +93,7 @@ bool Index::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const {
 	return false;
 }
 
-void Index::Serialize(Serializer &serializer) {
+IndexStorageInfo Index::GetInfo() {
 	throw NotImplementedException("The implementation of this index serialization does not exist.");
 }
 
