@@ -490,7 +490,10 @@ void ParquetWriter::Finalize() {
 	if (!encryption_key.empty()) {
 		// Write crypto metadata is written unencrypted
 		FileCryptoMetaData crypto_metadata;
-		crypto_metadata.encryption_algorithm.__isset.AES_GCM_V1 = true;
+		duckdb_parquet::format::AesGcmV1 aes_gcm_v1;
+		duckdb_parquet::format::EncryptionAlgorithm alg;
+		alg.__set_AES_GCM_V1(aes_gcm_v1);
+		crypto_metadata.__set_encryption_algorithm(alg);
 		crypto_metadata.write(protocol.get());
 	}
 	Write(file_meta_data);

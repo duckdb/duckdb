@@ -295,13 +295,12 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	// copy repeats & defines as-is because FOR SOME REASON they are uncompressed
 	auto uncompressed_bytes = page_hdr.data_page_header_v2.repetition_levels_byte_length +
 	                          page_hdr.data_page_header_v2.definition_levels_byte_length;
-	// TODO: ParquetCrypto::ReadData here
 	trans.read(block->ptr, uncompressed_bytes);
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 
 	AllocateCompressed(compressed_bytes);
-	trans.read(compressed_buffer.ptr, compressed_bytes);
+	reader.ReadData(*protocol, compressed_buffer.ptr, compressed_bytes);
 
 	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_bytes, block->ptr + uncompressed_bytes,
 	                   page_hdr.uncompressed_page_size - uncompressed_bytes);
@@ -320,8 +319,6 @@ void ColumnReader::AllocateCompressed(idx_t size) {
 }
 
 void ColumnReader::PreparePage(PageHeader &page_hdr) {
-	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
-
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
@@ -331,9 +328,8 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 		return;
 	}
 
-	// TODO: ParquetCrypto::ReadData here
 	AllocateCompressed(page_hdr.compressed_page_size + 1);
-	trans.read((uint8_t *)compressed_buffer.ptr, page_hdr.compressed_page_size);
+	reader.ReadData(*protocol, compressed_buffer.ptr, page_hdr.compressed_page_size);
 
 	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, page_hdr.compressed_page_size, block->ptr,
 	                   page_hdr.uncompressed_page_size);

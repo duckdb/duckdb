@@ -41,31 +41,21 @@ public:
 	}
 
 	void write_virt(const uint8_t *buf, uint32_t len) override {
-		const auto &tail = *allocator.GetTail();
-
-		// Make sure we fill up the last block
-		const auto copy_bytes = MinValue<idx_t>(tail.maximum_size - tail.current_position, len);
-		memcpy(allocator.Allocate(copy_bytes), buf, copy_bytes);
-		buf += copy_bytes;
-		len -= copy_bytes;
-
-		if (len != 0) {
-			memcpy(allocator.Allocate(copy_bytes), buf, len);
-		}
+		memcpy(allocator.Allocate(len), buf, len);
 	}
 
 	uint32_t Finalize() {
 		// Write length
 		const auto ciphertext_length = allocator.SizeInBytes();
 		const uint32_t total_length = ParquetCrypto::NONCE_BYTES + ciphertext_length + ParquetCrypto::TAG_BYTES;
-		trans.write(reinterpret_cast<const uint8_t *>(&total_length), ParquetCrypto::LENGTH_BYTES);
+		trans.write(const_data_ptr_cast(&total_length), ParquetCrypto::LENGTH_BYTES);
 
 		// Write nonce
 		trans.write(nonce, ParquetCrypto::NONCE_BYTES);
 
 		// Encrypt and write data
 		data_t aes_buffer[ParquetCrypto::CRYPTO_BLOCK_SIZE];
-		auto current = allocator.GetHead();
+		auto current = allocator.GetTail();
 		while (current != nullptr) {
 			for (idx_t pos = 0; pos < current->current_position; pos += ParquetCrypto::CRYPTO_BLOCK_SIZE) {
 				auto next = MinValue<idx_t>(current->current_position - pos, ParquetCrypto::CRYPTO_BLOCK_SIZE);
@@ -73,7 +63,7 @@ public:
 				    aes.Process(current->data.get() + pos, next, aes_buffer, ParquetCrypto::CRYPTO_BLOCK_SIZE);
 				trans.write(aes_buffer, write_size);
 			}
-			current = current->next.get();
+			current = current->prev;
 		}
 
 		// Finalize the last encrypted data and write tag
@@ -87,9 +77,6 @@ public:
 
 private:
 	void Initialize() {
-		// Initialize allocator so we have at least 1 block
-		allocator.Allocate(0);
-
 		// Generate nonce and initialize AES
 		GenerateNonce(nonce);
 		aes.InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES);
@@ -128,6 +115,7 @@ public:
 			const auto next = MinValue(read_buffer_size - read_buffer_offset, len);
 			memcpy(buf, read_buffer + read_buffer_offset, next);
 			read_buffer_offset += next;
+			buf += next;
 			len -= next;
 		}
 
@@ -182,7 +170,7 @@ private:
 		D_ASSERT(size == read_buffer_size);
 #else
 		aes.Process(read_buffer + AESGCMState::BLOCK_SIZE, read_buffer_size, read_buffer,
-		            CRYPTO_BLOCK_SIZE + AESGCMState::BLOCK_SIZE);
+		            ParquetCrypto::CRYPTO_BLOCK_SIZE + AESGCMState::BLOCK_SIZE);
 #endif
 		read_buffer_offset = 0;
 	}
@@ -249,6 +237,7 @@ uint32_t ParquetCrypto::ReadData(TProtocol &iprot, const data_ptr_t buffer, cons
 
 uint32_t ParquetCrypto::WriteData(TProtocol &oprot, const const_data_ptr_t buffer, const uint32_t buffer_size,
                                   const string &key) {
+	// FIXME: we know the size upfront so we could do a streaming write instead of this
 	// Create encryption protocol
 	TCompactProtocolFactoryT<EncryptionTransport> tproto_factory;
 	auto eprot = tproto_factory.getProtocol(make_shared<EncryptionTransport>(oprot, key));

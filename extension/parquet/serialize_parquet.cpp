@@ -12,14 +12,16 @@ namespace duckdb {
 void ParquetOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(100, "binary_as_string", binary_as_string);
 	serializer.WritePropertyWithDefault<bool>(101, "file_row_number", file_row_number);
-	serializer.WriteProperty<MultiFileReaderOptions>(102, "file_options", file_options);
+	serializer.WritePropertyWithDefault<string>(102, "encryption_key", encryption_key);
+	serializer.WriteProperty<MultiFileReaderOptions>(103, "file_options", file_options);
 }
 
 ParquetOptions ParquetOptions::Deserialize(Deserializer &deserializer) {
 	ParquetOptions result;
 	deserializer.ReadPropertyWithDefault<bool>(100, "binary_as_string", result.binary_as_string);
 	deserializer.ReadPropertyWithDefault<bool>(101, "file_row_number", result.file_row_number);
-	deserializer.ReadProperty<MultiFileReaderOptions>(102, "file_options", result.file_options);
+	deserializer.ReadPropertyWithDefault<string>(102, "encryption_key", result.encryption_key);
+	deserializer.ReadProperty<MultiFileReaderOptions>(103, "file_options", result.file_options);
 	return result;
 }
 
