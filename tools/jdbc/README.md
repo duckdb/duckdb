@@ -1,6 +1,6 @@
 
 It's required to have a JDK installed to build.
-If the build can't find the env variable `$JAVA_HOME` You must set `$JAVA_HOME` yourself.
+Make sure the `JAVA_HOME` environment variable is set.
 
 If you are on a Mac and install `openjdk` via `brew` then additionally, it's required to set:
 ```
