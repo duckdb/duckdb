@@ -8,11 +8,14 @@
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
 
+#include "duckdb/main/capi/capi_internal.hpp"
+
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/main/connection.hpp"
 #endif
 
 #include "duckdb/common/adbc/single_batch_array_stream.hpp"
+
 #include "duckdb/common/adbc/options.h"
 #include <string.h>
 #include <stdlib.h>
@@ -762,6 +765,9 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			return ADBC_STATUS_INVALID_ARGUMENT;
 		}
 		duckdb::unique_ptr<duckdb::DataChunk> chunk;
+		auto prepared_statement_params =
+		    reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)->statement->n_param;
+
 		while ((chunk = result->Fetch()) != nullptr) {
 			if (chunk->size() == 0) {
 				SetError(error, "Please provide a non-empty chunk to be bound");
@@ -771,6 +777,10 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 				// TODO: add support for binding multiple rows
 				SetError(error, "Binding multiple rows at once is not supported yet");
 				return ADBC_STATUS_NOT_IMPLEMENTED;
+			}
+			if (chunk->ColumnCount() > prepared_statement_params) {
+				SetError(error, "Input data has more column than prepared statement has parameters");
+				return ADBC_STATUS_INVALID_ARGUMENT;
 			}
 			duckdb_clear_bindings(wrapper->statement);
 			for (idx_t col_idx = 0; col_idx < chunk->ColumnCount(); col_idx++) {
