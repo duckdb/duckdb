@@ -41,9 +41,6 @@ void FuzzyDuck::Fuzz() {
 		LogMessage("Query " + to_string(i) + "\n");
 		auto query = GenerateQuery();
 		RunQuery(std::move(query));
-
-		// TODO: Get database context again if statement
-		//  is not a select statement.
 	}
 	EndFuzzing();
 }
