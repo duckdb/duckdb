@@ -66,7 +66,7 @@ struct ParquetReaderScanState {
 
 struct ParquetColumnDefinition {
 public:
-	static ParquetColumnDefinition FromSchemaValue(const Value &column_value);
+	static ParquetColumnDefinition FromSchemaValue(ClientContext &context, const Value &column_value);
 
 public:
 	int32_t field_id;

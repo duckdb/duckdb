@@ -425,7 +425,7 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	}
 }
 
-ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(const Value &column_value) {
+ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &context, const Value &column_value) {
 	ParquetColumnDefinition result;
 	result.field_id = IntegerValue::Get(StructValue::GetChildren(column_value)[0]);
 
@@ -437,7 +437,7 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(const Value &co
 	result.name = StringValue::Get(children[0]);
 	result.type = TransformStringToLogicalType(StringValue::Get(children[1]));
 	string error_message;
-	if (!children[2].DefaultTryCastAs(result.type, result.default_value, &error_message)) {
+	if (!children[2].TryCastAs(context, result.type, result.default_value, &error_message)) {
 		throw BinderException("Unable to cast Parquet schema default_value \"%s\" to %s", children[2].ToString(),
 		                      result.type.ToString());
 	}
