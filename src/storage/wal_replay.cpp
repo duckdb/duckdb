@@ -1,10 +1,14 @@
+#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
@@ -14,13 +18,8 @@
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/storage/write_ahead_log.hpp"
 
 namespace duckdb {
 
@@ -403,41 +402,58 @@ void ReplayState::ReplayDropTableMacro(BinaryDeserializer &deserializer) {
 // Replay Index
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateIndex(BinaryDeserializer &deserializer) {
-	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "index");
+
+	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "index_catalog_entry");
+	auto index_storage_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
+	D_ASSERT(index_storage_info.IsValid());
+
 	if (deserialize_only) {
 		return;
 	}
-	auto &index_info = info->Cast<CreateIndexInfo>();
+	auto &info = create_info->Cast<CreateIndexInfo>();
 
-	// get the physical table to which we'll add the index
-	auto &table = catalog.GetEntry<TableCatalogEntry>(context, info->schema, index_info.table);
-	auto &data_table = table.GetStorage();
+	// create the index in the catalog
+	auto &table = catalog.GetEntry<TableCatalogEntry>(context, create_info->schema, info.table).Cast<DuckTableEntry>();
+	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
+	index.info = table.GetStorage().info;
 
-	// bind the parsed expressions
-	if (index_info.expressions.empty()) {
-		for (auto &parsed_expr : index_info.parsed_expressions) {
-			index_info.expressions.push_back(parsed_expr->Copy());
-		}
+	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
+	for (auto &parsed_expr : info.parsed_expressions) {
+		index.parsed_expressions.push_back(parsed_expr->Copy());
 	}
+
+	// obtain the parsed expressions of the ART from the index metadata
+	vector<unique_ptr<ParsedExpression>> parsed_expressions;
+	for (auto &parsed_expr : info.parsed_expressions) {
+		parsed_expressions.push_back(parsed_expr->Copy());
+	}
+	D_ASSERT(!parsed_expressions.empty());
+
+	// add the table to the bind context to bind the parsed expressions
 	auto binder = Binder::CreateBinder(context);
-	auto expressions = binder->BindCreateIndexExpressions(table, index_info);
-
-	// create the empty index
-	unique_ptr<Index> index;
-	D_ASSERT(index_info.index_type == "ART");
-	index = make_uniq<ART>(index_info.index_name, index_info.constraint_type, index_info.column_ids,
-	                       TableIOManager::Get(data_table), expressions, data_table.db);
-
-	// add the index to the catalog
-	auto &index_entry = catalog.CreateIndex(context, index_info)->Cast<DuckIndexEntry>();
-
-	index_entry.info = data_table.info;
-	for (auto &parsed_expr : index_info.parsed_expressions) {
-		index_entry.parsed_expressions.push_back(parsed_expr->Copy());
+	vector<LogicalType> column_types;
+	vector<string> column_names;
+	for (auto &col : table.GetColumns().Logical()) {
+		column_types.push_back(col.Type());
+		column_names.push_back(col.Name());
 	}
 
-	// physically add the index to the data table storage
-	data_table.WALAddIndex(context, std::move(index), expressions);
+	// create a binder to bind the parsed expressions
+	vector<column_t> column_ids;
+	binder->bind_context.AddBaseTable(0, info.table, column_names, column_types, column_ids, &table);
+	IndexBinder idx_binder(*binder, context);
+
+	// bind the parsed expressions to create unbound expressions
+	vector<unique_ptr<Expression>> unbound_expressions;
+	unbound_expressions.reserve(parsed_expressions.size());
+	for (auto &expr : parsed_expressions) {
+		unbound_expressions.push_back(idx_binder.Bind(expr));
+	}
+
+	auto &data_table = table.GetStorage();
+	auto art = make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
+	                          std::move(unbound_expressions), data_table.db, nullptr, index_storage_info);
+	data_table.info->indexes.AddIndex(std::move(art));
 }
 
 void ReplayState::ReplayDropIndex(BinaryDeserializer &deserializer) {

@@ -398,13 +398,11 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	auto &info = create_info->Cast<CreateIndexInfo>();
 
 	// create the index in the catalog
-	auto &schema = catalog.GetSchema(context, create_info->schema);
 	auto &table =
 	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info->schema, info.table).Cast<DuckTableEntry>();
-
-	auto &index = schema.CreateIndex(context, info, table)->Cast<DuckIndexEntry>();
-
+	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
 	index.info = table.GetStorage().info;
+
 	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
 	for (auto &parsed_expr : info.parsed_expressions) {
 		index.parsed_expressions.push_back(parsed_expr->Copy());
