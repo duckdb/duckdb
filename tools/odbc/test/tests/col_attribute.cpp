@@ -104,14 +104,14 @@ static void TestAllFields(SQLHANDLE hstmt, std::map<SQLLEN, ExpectedResult *> ex
 
 	// SQL_NO_TOTAL -> Returns SQL_SUCCESS_WITH_INFO
 	if (expected[SQL_COLUMN_SCALE]->n == SQL_NO_TOTAL) {
-	// SQL_COLUMN_SCALE
-	// [expected: int: 0, char: SQL_NO_TOTAL]
+		// SQL_COLUMN_SCALE
+		// [expected: int: 0, char: SQL_NO_TOTAL]
 		ret = SQLColAttribute(hstmt, 1, SQL_COLUMN_SCALE, nullptr, 0, nullptr, &n);
 		REQUIRE(ret == SQL_SUCCESS_WITH_INFO);
 		REQUIRE(n == expected[SQL_COLUMN_SCALE]->n);
 
-	// SQL_DESC_SCALE
-	// [expected: int: 0, char: SQL_NO_TOTAL]
+		// SQL_DESC_SCALE
+		// [expected: int: 0, char: SQL_NO_TOTAL]
 		ret = SQLColAttribute(hstmt, 1, SQL_DESC_SCALE, nullptr, 0, nullptr, &n);
 		REQUIRE(ret == SQL_SUCCESS_WITH_INFO);
 		REQUIRE(n == expected[SQL_DESC_SCALE]->n);
@@ -119,8 +119,6 @@ static void TestAllFields(SQLHANDLE hstmt, std::map<SQLLEN, ExpectedResult *> ex
 		CheckInteger(hstmt, expected[SQL_COLUMN_SCALE]->n, SQL_COLUMN_SCALE);
 		CheckInteger(hstmt, expected[SQL_DESC_SCALE]->n, SQL_DESC_SCALE);
 	}
-
-
 	// SQL_DESC_SCHEMA_NAME
 	// [expected: int: "", char: ""]
 	CheckString(hstmt, expected[SQL_DESC_SCHEMA_NAME]->s, SQL_DESC_SCHEMA_NAME);
