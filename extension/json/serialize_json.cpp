@@ -37,11 +37,11 @@ void JSONScanData::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(106, "auto_detect", auto_detect);
 	serializer.WritePropertyWithDefault<idx_t>(107, "sample_size", sample_size);
 	serializer.WritePropertyWithDefault<idx_t>(108, "max_depth", max_depth);
-	serializer.WriteProperty<double>(109, "field_appearance_threshold", field_appearance_threshold);
-	serializer.WriteProperty<JSONTransformOptions>(110, "transform_options", transform_options);
-	serializer.WritePropertyWithDefault<vector<string>>(111, "names", names);
-	serializer.WritePropertyWithDefault<string>(112, "date_format", GetDateFormat());
-	serializer.WritePropertyWithDefault<string>(113, "timestamp_format", GetTimestampFormat());
+	serializer.WriteProperty<JSONTransformOptions>(109, "transform_options", transform_options);
+	serializer.WritePropertyWithDefault<vector<string>>(110, "names", names);
+	serializer.WritePropertyWithDefault<string>(111, "date_format", GetDateFormat());
+	serializer.WritePropertyWithDefault<string>(112, "timestamp_format", GetTimestampFormat());
+	serializer.WriteProperty<double>(113, "field_appearance_threshold", field_appearance_threshold);
 }
 
 unique_ptr<JSONScanData> JSONScanData::Deserialize(Deserializer &deserializer) {
@@ -54,11 +54,10 @@ unique_ptr<JSONScanData> JSONScanData::Deserialize(Deserializer &deserializer) {
 	auto auto_detect = deserializer.ReadPropertyWithDefault<bool>(106, "auto_detect");
 	auto sample_size = deserializer.ReadPropertyWithDefault<idx_t>(107, "sample_size");
 	auto max_depth = deserializer.ReadPropertyWithDefault<idx_t>(108, "max_depth");
-	auto field_appearance_threshold = deserializer.ReadProperty<double>(109, "field_appearance_threshold");
-	auto transform_options = deserializer.ReadProperty<JSONTransformOptions>(110, "transform_options");
-	auto names = deserializer.ReadPropertyWithDefault<vector<string>>(111, "names");
-	auto date_format = deserializer.ReadPropertyWithDefault<string>(112, "date_format");
-	auto timestamp_format = deserializer.ReadPropertyWithDefault<string>(113, "timestamp_format");
+	auto transform_options = deserializer.ReadProperty<JSONTransformOptions>(109, "transform_options");
+	auto names = deserializer.ReadPropertyWithDefault<vector<string>>(110, "names");
+	auto date_format = deserializer.ReadPropertyWithDefault<string>(111, "date_format");
+	auto timestamp_format = deserializer.ReadPropertyWithDefault<string>(112, "timestamp_format");
 	auto result = duckdb::unique_ptr<JSONScanData>(new JSONScanData(deserializer.Get<ClientContext &>(), std::move(files), std::move(date_format), std::move(timestamp_format)));
 	result->type = type;
 	result->options = options;
@@ -68,9 +67,9 @@ unique_ptr<JSONScanData> JSONScanData::Deserialize(Deserializer &deserializer) {
 	result->auto_detect = auto_detect;
 	result->sample_size = sample_size;
 	result->max_depth = max_depth;
-	result->field_appearance_threshold = field_appearance_threshold;
 	result->transform_options = transform_options;
 	result->names = std::move(names);
+	deserializer.ReadProperty<double>(113, "field_appearance_threshold", result->field_appearance_threshold);
 	return result;
 }
 

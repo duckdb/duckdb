@@ -116,30 +116,30 @@
       },
       {
         "id": 109,
-        "name": "field_appearance_threshold",
-        "type": "double"
-      },
-      {
-        "id": 110,
         "name": "transform_options",
         "type": "JSONTransformOptions"
       },
       {
-        "id": 111,
+        "id": 110,
         "name": "names",
         "type": "vector<string>"
       },
       {
-        "id": 112,
+        "id": 111,
         "name": "date_format",
         "type": "string",
         "serialize_property": "GetDateFormat()"
       },
       {
-        "id": 113,
+        "id": 112,
         "name": "timestamp_format",
         "type": "string",
         "serialize_property": "GetTimestampFormat()"
+      },
+      {
+        "id": 113,
+        "name": "field_appearance_threshold",
+        "type": "double"
       }
     ],
     "constructor": ["$ClientContext", "files", "date_format", "timestamp_format"]
