@@ -658,13 +658,12 @@ class TestArrowFilterPushdown(object):
 
     # https://github.com/duckdb/duckdb/pull/4817/files#r1339973721
     @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
-    @pytest.mark.skip(reason="This test is likely not testing what it's supposed to")
     def test_filter_column_removal(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
             """
             CREATE TABLE test AS SELECT
                 range a,
-                range 100 - b
+                100 - range b
             FROM range(100)
         """
         )
