@@ -24,11 +24,32 @@ struct SnifferResult {
 	vector<string> names;
 };
 
+
+//! This represents the data related to columns that have been set by the user
+//! e.g., from a copy command
+struct SetColumns{
+	SetColumns(const vector<LogicalType> *types_p,const vector<string> *names_p): types(types_p), names(names_p){
+	   if (!types){
+		   D_ASSERT(!types && !names);
+	   } else{
+		   D_ASSERT(types->size() == names->size());
+	   }
+	}
+	SetColumns(){};
+	//! Return Types that were detected
+	const vector<LogicalType> *types = nullptr;
+	//! Column Names that were detected
+	const vector<string> *names = nullptr;
+	//! If columns are set
+	bool IsSet();
+	idx_t Size();
+};
+
 //! Sniffer that detects Header, Dialect and Types of CSV Files
 class CSVSniffer {
 public:
 	explicit CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-	                    CSVStateMachineCache &state_machine_cache, bool explicit_set_columns = false);
+	                    CSVStateMachineCache &state_machine_cache, SetColumns set_columns = {});
 
 	//! Main method that sniffs the CSV file, returns the types, names and options as a result
 	//! CSV Sniffing consists of five steps:
@@ -50,7 +71,8 @@ private:
 	CSVReaderOptions &options;
 	//! Buffer being used on sniffer
 	shared_ptr<CSVBufferManager> buffer_manager;
-
+	//! Information regarding columns that were set by user/query
+	SetColumns set_columns;
 	//! ------------------------------------------------------//
 	//! ----------------- Dialect Detection ----------------- //
 	//! ------------------------------------------------------//
@@ -110,8 +132,6 @@ private:
 	//! ------------------------------------------------------//
 	void DetectHeader();
 	vector<string> names;
-	//! If Column Names and Types have been explicitly set
-	const bool explicit_set_columns;
 
 	//! ------------------------------------------------------//
 	//! ------------------ Type Replacement ----------------- //
