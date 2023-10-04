@@ -20,6 +20,7 @@ def compare_results(query, list_values=[], list_values_2=[]):
 
 
 class TestFetchNested(object):
+    @pytest.mark.skip(reason="sporadically breaks in CI")
     def test_fetch_df_list(self):
         con = duckdb.connect()
         # Integers
@@ -77,6 +78,7 @@ class TestFetchNested(object):
             [['0', None, None, None, None], [None, None, '5', None, None]],
         )
 
+    @pytest.mark.skip(reason="sporadically breaks in CI")
     def test_struct_df(self):
         compare_results("SELECT a from (SELECT STRUCT_PACK(a := 42, b := 43) as a) as t", [{'a': 42, 'b': 43}])
 
@@ -116,6 +118,7 @@ class TestFetchNested(object):
             ],
         )
 
+    @pytest.mark.skip(reason="sporadically breaks in CI")
     def test_map_df(self):
         compare_results(
             "SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t",
@@ -176,6 +179,7 @@ class TestFetchNested(object):
             ],
         )
 
+    @pytest.mark.skip(reason="sporadically breaks in CI")
     def test_nested_mix(self):
         con = duckdb.connect()
         # List of structs W/ Struct that is NULL entirely

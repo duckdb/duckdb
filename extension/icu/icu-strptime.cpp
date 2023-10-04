@@ -15,6 +15,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
+#include "duckdb/main/extension_util.hpp"
 
 namespace duckdb {
 
@@ -211,32 +212,32 @@ struct ICUStrptime : public ICUDateFunc {
 		return bind_strptime(context, bound_function, arguments);
 	}
 
-	static void TailPatch(const string &name, ClientContext &context, const vector<LogicalType> &types) {
+	static void TailPatch(const string &name, DatabaseInstance &db, const vector<LogicalType> &types) {
 		// Find the old function
-		auto &catalog = Catalog::GetSystemCatalog(context);
-		auto &entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
-		D_ASSERT(entry.type == CatalogType::SCALAR_FUNCTION_ENTRY);
-		auto &func = entry.Cast<ScalarFunctionCatalogEntry>();
-		string error;
-
-		FunctionBinder function_binder(context);
-		const idx_t best_function = function_binder.BindFunction(func.name, func.functions, types, error);
-		if (best_function == DConstants::INVALID_INDEX) {
-			return;
+		auto &scalar_function = ExtensionUtil::GetFunction(db, name);
+		auto &functions = scalar_function.functions.functions;
+		optional_idx best_index;
+		for (idx_t i = 0; i < functions.size(); i++) {
+			auto &function = functions[i];
+			if (types == function.arguments) {
+				best_index = i;
+				break;
+			}
 		}
-
-		// Tail patch the old binder
-		auto &bound_function = func.functions.GetFunctionReferenceByOffset(best_function);
+		if (!best_index.IsValid()) {
+			throw InternalException("ICU - Function for TailPatch not found");
+		}
+		auto &bound_function = functions[best_index.GetIndex()];
 		bind_strptime = bound_function.bind;
 		bound_function.bind = StrpTimeBindFunction;
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {
+	static void AddBinaryTimestampFunction(const string &name, DatabaseInstance &db) {
 		vector<LogicalType> types {LogicalType::VARCHAR, LogicalType::VARCHAR};
-		TailPatch(name, context, types);
+		TailPatch(name, db, types);
 
 		types[1] = LogicalType::LIST(LogicalType::VARCHAR);
-		TailPatch(name, context, types);
+		TailPatch(name, db, types);
 	}
 
 	static bool CastFromVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -284,8 +285,8 @@ struct ICUStrptime : public ICUDateFunc {
 		return BoundCastInfo(CastFromVarchar, std::move(cast_data));
 	}
 
-	static void AddCasts(ClientContext &context) {
-		auto &config = DBConfig::GetConfig(context);
+	static void AddCasts(DatabaseInstance &db) {
+		auto &config = DBConfig::GetConfig(db);
 		auto &casts = config.GetCastFunctions();
 
 		casts.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ, BindCastFromVarchar);
@@ -383,14 +384,11 @@ struct ICUStrftime : public ICUDateFunc {
 		}
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {
+	static void AddBinaryTimestampFunction(const string &name, DatabaseInstance &db) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 		                               ICUStrftimeFunction, Bind));
-
-		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, func_info);
+		ExtensionUtil::AddFunctionOverload(db, set);
 	}
 
 	static string_t CastOperation(icu::Calendar *calendar, timestamp_t input, Vector &result) {
@@ -469,23 +467,23 @@ struct ICUStrftime : public ICUDateFunc {
 		return BoundCastInfo(CastToVarchar, std::move(cast_data));
 	}
 
-	static void AddCasts(ClientContext &context) {
-		auto &config = DBConfig::GetConfig(context);
+	static void AddCasts(DatabaseInstance &db) {
+		auto &config = DBConfig::GetConfig(db);
 		auto &casts = config.GetCastFunctions();
 
 		casts.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR, BindCastToVarchar);
 	}
 };
 
-void RegisterICUStrptimeFunctions(ClientContext &context) {
-	ICUStrptime::AddBinaryTimestampFunction("strptime", context);
-	ICUStrptime::AddBinaryTimestampFunction("try_strptime", context);
+void RegisterICUStrptimeFunctions(DatabaseInstance &db) {
+	ICUStrptime::AddBinaryTimestampFunction("strptime", db);
+	ICUStrptime::AddBinaryTimestampFunction("try_strptime", db);
 
-	ICUStrftime::AddBinaryTimestampFunction("strftime", context);
+	ICUStrftime::AddBinaryTimestampFunction("strftime", db);
 
 	// Add string casts
-	ICUStrptime::AddCasts(context);
-	ICUStrftime::AddCasts(context);
+	ICUStrptime::AddCasts(db);
+	ICUStrftime::AddCasts(db);
 }
 
 } // namespace duckdb
