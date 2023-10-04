@@ -1,5 +1,8 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/types/conflict_manager.hpp"
+
 namespace duckdb {
 void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	D_ASSERT(index);
