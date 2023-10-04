@@ -1095,6 +1095,21 @@ void ART::Vacuum(IndexLock &state) {
 }
 
 //===--------------------------------------------------------------------===//
+// Size
+//===--------------------------------------------------------------------===//
+
+idx_t ART::GetInMemorySize(IndexLock &index_lock) {
+
+	D_ASSERT(owns_data);
+
+	idx_t in_memory_size = 0;
+	for (auto &allocator : *allocators) {
+		in_memory_size += allocator->GetInMemorySize();
+	}
+	return in_memory_size;
+}
+
+//===--------------------------------------------------------------------===//
 // Merging
 //===--------------------------------------------------------------------===//
 

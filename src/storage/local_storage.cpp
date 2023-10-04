@@ -91,8 +91,15 @@ idx_t LocalTableStorage::EstimatedSize() {
 		row_size += GetTypeIdSize(type.InternalType());
 	}
 
+	// get the index size
+	idx_t index_sizes = 0;
+	indexes.Scan([&](Index &index) {
+		index_sizes += index.GetInMemorySize();
+		return false;
+	});
+
 	// return the size of the appended rows and the index size
-	return appended_rows * row_size;
+	return appended_rows * row_size + index_sizes;
 }
 
 void LocalTableStorage::WriteNewRowGroup() {

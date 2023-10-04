@@ -74,6 +74,12 @@ void Index::Vacuum() {
 	Vacuum(state);
 }
 
+idx_t Index::GetInMemorySize() {
+	IndexLock state;
+	InitializeLock(state);
+	return GetInMemorySize(state);
+}
+
 void Index::ExecuteExpressions(DataChunk &input, DataChunk &result) {
 	executor.Execute(input, result);
 }

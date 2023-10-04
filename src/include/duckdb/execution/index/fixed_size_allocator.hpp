@@ -51,8 +51,8 @@ public:
 	//! Resets the allocator, e.g., during 'DELETE FROM table'
 	void Reset();
 
-	//! Returns the in-memory usage in bytes
-	idx_t GetInMemoryUsage() const;
+	//! Returns the in-memory size in bytes
+	idx_t GetInMemorySize() const;
 
 	//! Returns the upper bound of the available buffer IDs, i.e., upper_bound > max_buffer_id
 	idx_t GetUpperBoundBufferId() const;
