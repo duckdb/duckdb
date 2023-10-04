@@ -11,7 +11,7 @@ pyarrow = pytest.importorskip("pyarrow")
 
 # When testing local, if you build via BUILD_PYTHON=1 make, you need to manually set up the
 # dylib duckdb path.
-driver_path = '/Users/holanda/Documents/Projects/duckdb/build/debug/src/libduckdb.dylib'
+driver_path = duckdb.duckdb.__file__
 
 
 @pytest.fixture
