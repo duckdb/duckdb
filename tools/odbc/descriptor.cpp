@@ -768,7 +768,6 @@ void OdbcHandleDesc::AddMoreRecords(SQLSMALLINT new_size) {
 
 // Copy constructor
 DescRecord::DescRecord(const DescRecord &other) {
-	sql_desc_auto_unique_value = other.sql_desc_auto_unique_value;
 	sql_desc_base_column_name = other.sql_desc_base_column_name;
 	sql_desc_base_table_name = other.sql_desc_base_table_name;
 	sql_desc_case_sensitive = other.sql_desc_case_sensitive;
@@ -833,22 +832,24 @@ SQLRETURN DescRecord::SetSqlDescType(SQLSMALLINT type) {
 	sql_desc_precision = type_info.column_size;
 	sql_desc_datetime_interval_precision = type_info.interval_precision;
 	sql_desc_length = type_info.column_size;
+	sql_desc_literal_prefix = type_info.literal_prefix;
+	sql_desc_literal_suffix = type_info.literal_suffix;
+	sql_desc_local_type_name = !strcmp(type_info.local_type_name, "NULL") ? "" : type_info.local_type_name;
+	sql_desc_nullable = type_info.nullable;
+	sql_desc_case_sensitive = type_info.case_sensitive;
 	sql_desc_scale = type_info.maximum_scale;
+	sql_desc_searchable = type_info.searchable;
 	sql_desc_fixed_prec_scale = type_info.fixed_prec_scale;
 	sql_desc_num_prec_radix = type_info.num_prec_radix;
+	sql_desc_unsigned = type_info.unsigned_attribute;
 	return SQL_SUCCESS;
 }
 
 void DescRecord::SetDescUnsignedField(const duckdb::LogicalType &type) {
-	switch (type.id()) {
-	case LogicalTypeId::UTINYINT:
-	case LogicalTypeId::USMALLINT:
-	case LogicalTypeId::UINTEGER:
-	case LogicalTypeId::UBIGINT:
+	// TRUE if the column is unsigned, or non-numeric or
+	// UTINYINT, USMALLINT, UINTEGER, UBIGINT
+	if (sql_desc_unsigned == -1 || (type.id() >= LogicalTypeId::UTINYINT && type.id() <= LogicalTypeId::UBIGINT)) {
 		sql_desc_unsigned = SQL_TRUE;
-		break;
-	default:
-		sql_desc_unsigned = SQL_FALSE;
 	}
 }
 //! DescHeader functions ******************************************************

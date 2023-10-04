@@ -1,0 +1,12 @@
+# name: test/sql/copy/csv/inconsistent_cells_error.test
+# description: Test that inconsistent cells up the data are ignored as notes
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query IIIII
+from 'data/csv/inconsistent_cells.csv'
+----
+1	2	3	4	5
+1	2	3	4	5

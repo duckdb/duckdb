@@ -1,0 +1,11 @@
+# name: test/sql/copy/csv/test_soccer_kaggle.test
+# description: Test read CSV function with the kaggle soccer data sample
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select count(*) from 'data/csv/soccer_kaggle.csv'
+----
+14

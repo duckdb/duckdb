@@ -3,9 +3,9 @@
 namespace duckdb {
 struct Parse {
 	inline static void Initialize(CSVStateMachine &machine) {
-		machine.state = CSVState::STANDARD;
-		machine.previous_state = CSVState::STANDARD;
-		machine.pre_previous_state = CSVState::STANDARD;
+		machine.state = CSVState::EMPTY_LINE;
+		machine.previous_state = CSVState::EMPTY_LINE;
+		machine.pre_previous_state = CSVState::EMPTY_LINE;
 
 		machine.cur_rows = 0;
 		machine.column_count = 0;
@@ -14,22 +14,18 @@ struct Parse {
 
 	inline static bool Process(CSVStateMachine &machine, DataChunk &parse_chunk, char current_char, idx_t current_pos) {
 
-		machine.pre_previous_state = machine.previous_state;
-		machine.previous_state = machine.state;
-		machine.state = static_cast<CSVState>(
-		    machine.transition_array[static_cast<uint8_t>(machine.state)][static_cast<uint8_t>(current_char)]);
+		machine.Transition(current_char);
 
 		bool carriage_return = machine.previous_state == CSVState::CARRIAGE_RETURN;
-		if (machine.previous_state == CSVState::DELIMITER ||
-		    (machine.previous_state == CSVState::RECORD_SEPARATOR && machine.state != CSVState::EMPTY_LINE) ||
+		if (machine.previous_state == CSVState::DELIMITER || (machine.previous_state == CSVState::RECORD_SEPARATOR) ||
 		    (machine.state != CSVState::RECORD_SEPARATOR && carriage_return)) {
 			// Started a new value
 			// Check if it's UTF-8 (Or not?)
 			machine.VerifyUTF8();
 			auto &v = parse_chunk.data[machine.column_count++];
 			auto parse_data = FlatVector::GetData<string_t>(v);
-			auto &validity_mask = FlatVector::Validity(v);
 			if (machine.value.empty()) {
+				auto &validity_mask = FlatVector::Validity(v);
 				validity_mask.SetInvalid(machine.cur_rows);
 			} else {
 				parse_data[machine.cur_rows] = StringVector::AddStringOrBlob(v, string_t(machine.value));
@@ -50,12 +46,11 @@ struct Parse {
 		    (machine.state == CSVState::QUOTED && machine.previous_state == CSVState::QUOTED)) {
 			machine.value += current_char;
 		}
-		machine.cur_rows +=
-		    machine.previous_state == CSVState::RECORD_SEPARATOR && machine.state != CSVState::EMPTY_LINE;
+		machine.cur_rows += machine.previous_state == CSVState::RECORD_SEPARATOR && machine.column_count > 0;
 		machine.column_count -= machine.column_count * (machine.previous_state == CSVState::RECORD_SEPARATOR);
 
 		// It means our carriage return is actually a record separator
-		machine.cur_rows += machine.state != CSVState::RECORD_SEPARATOR && carriage_return;
+		machine.cur_rows += machine.state != CSVState::RECORD_SEPARATOR && carriage_return && machine.column_count > 0;
 		machine.column_count -= machine.column_count * (machine.state != CSVState::RECORD_SEPARATOR && carriage_return);
 
 		if (machine.cur_rows >= STANDARD_VECTOR_SIZE) {
