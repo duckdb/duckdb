@@ -176,9 +176,6 @@ jobs:
         pip install cibuildwheel twine build pip setuptools wheel -U
         python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
 
-    - run: pip install git+https://github.com/pypa/pip#egg=pip
-      name: Install pre-pre-release pip
-
     - uses: actions/download-artifact@v3
       if: ${{ matrix.arch == 'x86_64' }}
       with:
