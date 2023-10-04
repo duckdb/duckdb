@@ -1,9 +1,9 @@
 #include "duckdb/storage/index.hpp"
 
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/common/radix.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 
 namespace duckdb {
@@ -14,6 +14,10 @@ Index::Index(const string &name, const string &index_type, IndexConstraintType i
 
     : name(name), index_type(index_type), index_constraint_type(index_constraint_type), column_ids(column_ids),
       table_io_manager(table_io_manager), db(db) {
+
+	if (!Radix::IsLittleEndian()) {
+		throw NotImplementedException("indexes are not supported on big endian architectures");
+	}
 
 	for (auto &expr : unbound_expressions) {
 		types.push_back(expr->return_type.InternalType());

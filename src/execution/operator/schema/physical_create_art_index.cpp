@@ -1,15 +1,14 @@
 #include "duckdb/execution/operator/schema/physical_create_art_index.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
+#include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/storage/index.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/main/database_manager.hpp"
-#include "duckdb/execution/index/art/art_key.hpp"
-#include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
 

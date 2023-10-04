@@ -2,23 +2,23 @@
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/storage/table/row_version_manager.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/append_info.hpp"
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
-#include "duckdb/storage/table/row_version_manager.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
 
 namespace duckdb {
 

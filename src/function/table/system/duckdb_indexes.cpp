@@ -1,13 +1,10 @@
-#include "duckdb/function/table/system_functions.hpp"
-
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/index.hpp"
 
 namespace duckdb {
 

@@ -1,6 +1,5 @@
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 
-#include "duckdb/storage/metadata/metadata_manager.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 
 namespace duckdb {
@@ -123,7 +122,7 @@ void FixedSizeAllocator::Reset() {
 	total_segment_count = 0;
 }
 
-idx_t FixedSizeAllocator::GetMemoryUsage() const {
+idx_t FixedSizeAllocator::GetInMemoryUsage() const {
 	idx_t memory_usage = 0;
 	for (auto &buffer : buffers) {
 		if (buffer.second.InMemory()) {
@@ -209,7 +208,7 @@ bool FixedSizeAllocator::InitializeVacuum() {
 
 	// calculate the vacuum threshold adaptively
 	D_ASSERT(excess_buffer_count < temporary_vacuum_buffers.size());
-	idx_t memory_usage = GetMemoryUsage();
+	idx_t memory_usage = GetInMemoryUsage();
 	idx_t excess_memory_usage = excess_buffer_count * Storage::BLOCK_SIZE;
 	auto excess_percentage = double(excess_memory_usage) / double(memory_usage);
 	auto threshold = double(VACUUM_THRESHOLD) / 100.0;

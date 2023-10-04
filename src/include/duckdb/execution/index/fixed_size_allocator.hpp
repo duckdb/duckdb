@@ -8,14 +8,14 @@
 
 #pragma once
 
-#include "duckdb/common/types/validity_mask.hpp"
-#include "duckdb/common/unordered_set.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/execution/index/fixed_size_buffer.hpp"
-#include "duckdb/execution/index/index_pointer.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/execution/index/fixed_size_buffer.hpp"
+#include "duckdb/execution/index/index_pointer.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 
 namespace duckdb {
@@ -52,7 +52,7 @@ public:
 	void Reset();
 
 	//! Returns the in-memory usage in bytes
-	inline idx_t GetMemoryUsage() const;
+	idx_t GetInMemoryUsage() const;
 
 	//! Returns the upper bound of the available buffer IDs, i.e., upper_bound > max_buffer_id
 	idx_t GetUpperBoundBufferId() const;

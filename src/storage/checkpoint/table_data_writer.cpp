@@ -2,9 +2,9 @@
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
 
 namespace duckdb {
 

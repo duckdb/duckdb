@@ -1,23 +1,20 @@
 #include "duckdb/execution/index/art/art.hpp"
 
-#include "duckdb/common/radix.hpp"
+#include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
-#include "duckdb/execution/index/art/prefix.hpp"
-#include "duckdb/execution/index/art/leaf.hpp"
-#include "duckdb/execution/index/art/node4.hpp"
-#include "duckdb/execution/index/art/node16.hpp"
-#include "duckdb/execution/index/art/node48.hpp"
-#include "duckdb/execution/index/art/node256.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
-#include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/execution/index/art/leaf.hpp"
+#include "duckdb/execution/index/art/node16.hpp"
+#include "duckdb/execution/index/art/node256.hpp"
+#include "duckdb/execution/index/art/node4.hpp"
+#include "duckdb/execution/index/art/node48.hpp"
+#include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
-#include "duckdb/storage/metadata/metadata_reader.hpp"
-
-#include <algorithm>
 
 namespace duckdb {
 
@@ -43,9 +40,6 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
          const IndexStorageInfo &index_storage_info)
     : Index(name, "ART", index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
       allocators(allocators_ptr), owns_data(false) {
-	if (!Radix::IsLittleEndian()) {
-		throw NotImplementedException("ART indexes are not supported on big endian architectures");
-	}
 
 	// initialize all allocators
 	if (!allocators) {
