@@ -139,7 +139,8 @@
       {
         "id": 113,
         "name": "field_appearance_threshold",
-        "type": "double"
+        "type": "double",
+        "default": 0.1
       }
     ],
     "constructor": ["$ClientContext", "files", "date_format", "timestamp_format"]
