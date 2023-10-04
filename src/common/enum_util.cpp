@@ -68,7 +68,7 @@
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/operator/scan/csv/base_csv_reader.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_state_machine.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_state.hpp"
 #include "duckdb/execution/operator/scan/csv/quote_rules.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/function.hpp"

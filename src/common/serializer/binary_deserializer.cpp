@@ -8,7 +8,8 @@ namespace duckdb {
 void BinaryDeserializer::OnPropertyBegin(const field_id_t field_id, const char *) {
 	auto field = NextField();
 	if (field != field_id) {
-		throw InternalException("Failed to deserialize: field id mismatch, expected: %d, got: %d", field_id, field);
+		throw SerializationException("Failed to deserialize: field id mismatch, expected: %d, got: %d", field_id,
+		                             field);
 	}
 }
 
@@ -34,7 +35,8 @@ void BinaryDeserializer::OnObjectBegin() {
 void BinaryDeserializer::OnObjectEnd() {
 	auto next_field = NextField();
 	if (next_field != MESSAGE_TERMINATOR_FIELD_ID) {
-		throw InternalException("Failed to deserialize: expected end of object, but found field id: %d", next_field);
+		throw SerializationException("Failed to deserialize: expected end of object, but found field id: %d",
+		                             next_field);
 	}
 	nesting_level--;
 }
