@@ -33,7 +33,7 @@ struct DataTableInfo {
 	//! The physical list of indexes of this table
 	TableIndexList indexes;
 	//! Index storage information of the indexes created by this table
-	vector<IndexStorageInfo> index_pointers;
+	vector<IndexStorageInfo> index_storage_infos;
 
 	bool IsTemporary() const;
 };

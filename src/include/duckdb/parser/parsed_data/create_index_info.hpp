@@ -13,6 +13,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 

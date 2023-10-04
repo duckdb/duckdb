@@ -123,7 +123,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			}
 		}
 	}
-	storage->info->index_pointers = info.indexes;
+	storage->info->index_storage_infos = info.indexes;
 }
 
 unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context, column_t column_id) {

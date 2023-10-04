@@ -21,9 +21,6 @@
   },
   {
     "class": "IndexDataStorageInfo",
-    "includes": [
-      "duckdb/storage/block.hpp"
-    ],
     "members": [
       {
         "id": 100,

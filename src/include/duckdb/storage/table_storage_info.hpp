@@ -12,6 +12,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 
