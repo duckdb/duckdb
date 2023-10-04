@@ -20,20 +20,22 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager>
 		auto &logical_type = format_template.first;
 		best_format_candidates[logical_type].clear();
 	}
+	// Initialize max columns found to either 0 or however many were set
+	max_columns_found = set_columns.Size();
 }
 
-bool SetColumns::IsSet(){
+bool SetColumns::IsSet() {
 	return !types;
 }
 
-idx_t SetColumns::Size(){
-	if (!types){
+idx_t SetColumns::Size() {
+	if (!types) {
 		return 0;
 	}
 	return types->size();
 }
 
-	// Set the CSV Options in the reference
+// Set the CSV Options in the reference
 void CSVSniffer::SetResultOptions() {
 	options.dialect_options = best_candidate->dialect_options;
 	options.dialect_options.new_line = best_candidate->dialect_options.new_line;
@@ -44,15 +46,10 @@ void CSVSniffer::SetResultOptions() {
 	} else {
 		options.dialect_options.true_start = best_start_without_header;
 	}
-
 }
 
 SnifferResult CSVSniffer::SniffCSV() {
-		if (set_columns.IsSet()){
-		// We already know how many columns the snifefr must return
-		max_columns_found = set_columns.Size();
-	}
-		// 1. Dialect Detection
+	// 1. Dialect Detection
 	DetectDialect();
 	// 2. Type Detection
 	DetectTypes();
@@ -60,7 +57,7 @@ SnifferResult CSVSniffer::SniffCSV() {
 	RefineTypes();
 	// 4. Header Detection
 	DetectHeader();
-	if (explicit_set_columns) {
+	if (set_columns.IsSet()) {
 		SetResultOptions();
 		// We do not need to run type refinement, since the types have been given by the user
 		return SnifferResult({}, {});

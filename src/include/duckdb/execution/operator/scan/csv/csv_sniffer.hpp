@@ -24,18 +24,17 @@ struct SnifferResult {
 	vector<string> names;
 };
 
-
 //! This represents the data related to columns that have been set by the user
 //! e.g., from a copy command
-struct SetColumns{
-	SetColumns(const vector<LogicalType> *types_p,const vector<string> *names_p): types(types_p), names(names_p){
-	   if (!types){
-		   D_ASSERT(!types && !names);
-	   } else{
-		   D_ASSERT(types->size() == names->size());
-	   }
+struct SetColumns {
+	SetColumns(const vector<LogicalType> *types_p, const vector<string> *names_p) : types(types_p), names(names_p) {
+		if (!types) {
+			D_ASSERT(!types && !names);
+		} else {
+			D_ASSERT(types->size() == names->size());
+		}
 	}
-	SetColumns(){};
+	SetColumns() {};
 	//! Return Types that were detected
 	const vector<LogicalType> *types = nullptr;
 	//! Column Names that were detected

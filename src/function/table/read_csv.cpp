@@ -93,7 +93,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "CSV");
 
 	options.FromNamedParameters(input.named_parameters, context, return_types, names);
-	bool explicitly_set_columns = options.explicitly_set_columns;
 
 	options.file_options.AutoDetectHivePartitioning(result->files, context);
 
@@ -107,22 +106,21 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		// Initialize Buffer Manager and Sniffer
 		auto file_handle = BaseCSVReader::OpenCSV(context, options);
 		result->buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), options);
-		CSVSniffer sniffer(options, result->buffer_manager, result->state_machine_cache, explicitly_set_columns);
+		CSVSniffer sniffer(options, result->buffer_manager, result->state_machine_cache, {&return_types, &names});
 		auto sniffer_result = sniffer.SniffCSV();
 		if (names.empty()) {
 			names = sniffer_result.names;
 			return_types = sniffer_result.return_types;
 		} else {
-			if (explicitly_set_columns) {
-				// The user has influenced the names, can't assume they are valid anymore
-				if (return_types.size() != names.size()) {
-					throw BinderException("The amount of names specified (%d) and the observed amount of types (%d) in "
-					                      "the file don't match",
-					                      names.size(), return_types.size());
-				}
-			} else {
-				D_ASSERT(return_types.size() == names.size());
-			}
+			//			if (explicitly_set_columns) {
+			//				// The user has influenced the names, can't assume they are valid anymore
+			//				if (return_types.size() != names.size()) {
+			//					throw BinderException("The amount of names specified (%d) and the observed amount of types (%d)
+			//in " 					                      "the file don't match", 					                      names.size(), return_types.size());
+			//				}
+			//			} else {
+			D_ASSERT(return_types.size() == names.size());
+			//			}
 		}
 
 	} else {

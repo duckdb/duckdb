@@ -162,7 +162,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 		// We must run the sniffer, but this is a copy csv, hence names and types have already been previsouly defined.
 		auto file_handle = BaseCSVReader::OpenCSV(context, options);
 		auto buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), options);
-		CSVSniffer sniffer(options, buffer_manager, bind_data->state_machine_cache, true);
+		CSVSniffer sniffer(options, buffer_manager, bind_data->state_machine_cache, {&expected_types, &expected_names});
 		sniffer.SniffCSV();
 	}
 	return std::move(bind_data);

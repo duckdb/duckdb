@@ -202,9 +202,5 @@ struct CSVReaderOptions {
 	string ToString() const;
 
 	named_parameter_map_t OutputReadSettings();
-
-public:
-	//! Whether columns were explicitly provided through named parameters
-	bool explicitly_set_columns = false;
 };
 } // namespace duckdb

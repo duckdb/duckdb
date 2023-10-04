@@ -152,7 +152,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 		rows_read = sniffed_column_counts.size();
 	}
 	for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
-		if (sniffed_column_counts[row] == num_cols) {
+		if (sniffed_column_counts[row] == num_cols || options.ignore_errors) {
 			consistent_rows++;
 		} else if (num_cols < sniffed_column_counts[row] && !options.skip_rows_set) {
 			// all rows up to this point will need padding
@@ -244,7 +244,7 @@ bool CSVSniffer::RefineCandidateNextChunk(CSVStateMachine &candidate) {
 	bool allow_padding = options.null_padding;
 
 	for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
-		if (max_columns_found != sniffed_column_counts[row] && !allow_padding) {
+		if (max_columns_found != sniffed_column_counts[row] && (!allow_padding || !options.ignore_errors)) {
 			return false;
 		}
 	}
