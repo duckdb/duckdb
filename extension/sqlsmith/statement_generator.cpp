@@ -52,9 +52,9 @@ shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientContext 
 		            [&](CatalogEntry &entry) { result->scalar_functions.push_back(entry); });
 		schema.Scan(context, CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
 			// don't include fuzz functions
-			if (entry.name.find("fuzzyduck") == std::string::npos ||
-			    entry.name.find("fuzz_all_functions") == std::string::npos ||
-			    entry.name.find("reduce_sql_statement") == std::string::npos ||
+			if (entry.name.find("fuzzyduck") == std::string::npos &&
+			    entry.name.find("fuzz_all_functions") == std::string::npos &&
+			    entry.name.find("reduce_sql_statement") == std::string::npos &&
 			    entry.name.find("sqlsmith") == std::string::npos) {
 				result->table_functions.push_back(entry);
 			}

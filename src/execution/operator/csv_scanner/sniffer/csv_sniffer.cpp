@@ -22,30 +22,9 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager>
 	}
 }
 
-SnifferResult CSVSniffer::SniffCSV() {
-	// 1. Dialect Detection
-	DetectDialect();
-	if (explicit_set_columns) {
-		if (!candidates.empty()) {
-			options.dialect_options.state_machine_options = candidates[0]->dialect_options.state_machine_options;
-			options.dialect_options.new_line = candidates[0]->dialect_options.new_line;
-		}
-		// We do not need to run type and header detection as these were defined by the user
-		return SnifferResult(detected_types, names);
-	}
-	// 2. Type Detection
-	DetectTypes();
-	// 3. Header Detection
-	DetectHeader();
-	D_ASSERT(best_sql_types_candidates_per_column_idx.size() == names.size());
-	// 4. Type Replacement
-	ReplaceTypes();
-	// 5. Type Refinement
-	RefineTypes();
-	// We are done, construct and return the result.
-
-	// Set the CSV Options in the reference
+void CSVSniffer::SetResultOptions() {
 	options.dialect_options = best_candidate->dialect_options;
+	options.dialect_options.new_line = best_candidate->dialect_options.new_line;
 	options.has_header = best_candidate->dialect_options.header;
 	options.skip_rows_set = options.dialect_options.skip_rows > 0;
 	if (options.has_header) {
@@ -53,8 +32,27 @@ SnifferResult CSVSniffer::SniffCSV() {
 	} else {
 		options.dialect_options.true_start = best_start_without_header;
 	}
+}
 
-	// Return the types and names
+SnifferResult CSVSniffer::SniffCSV() {
+	// 1. Dialect Detection
+	DetectDialect();
+	// 2. Type Detection
+	DetectTypes();
+	// 3. Header Detection
+	DetectHeader();
+	if (explicit_set_columns) {
+		SetResultOptions();
+		// We do not need to run type refinement, since the types have been given by the user
+		return SnifferResult({}, {});
+	}
+	D_ASSERT(best_sql_types_candidates_per_column_idx.size() == names.size());
+	// 4. Type Replacement
+	ReplaceTypes();
+	// 5. Type Refinement
+	RefineTypes();
+	// We are done, Set the CSV Options in the reference. Construct and return the result.
+	SetResultOptions();
 	return SnifferResult(detected_types, names);
 }
 
