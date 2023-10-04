@@ -196,6 +196,9 @@ string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context
 }
 
 bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept {
+	if (context.db->ExtensionIsLoaded(extension_name)) {
+		return true;
+	}
 	auto &dbconfig = DBConfig::GetConfig(context);
 	try {
 		if (dbconfig.options.autoinstall_known_extensions) {
@@ -211,6 +214,10 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 }
 
 void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {
+	if (context.db->ExtensionIsLoaded(extension_name)) {
+		// Avoid downloading again
+		return;
+	}
 	auto &dbconfig = DBConfig::GetConfig(context);
 	try {
 #ifndef DUCKDB_WASM
