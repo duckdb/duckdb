@@ -122,7 +122,7 @@ public:
 	//! The windowed aggregate custom function (may be null)
 	aggregate_window_t window;
 	//! The windowed aggregate custom initialization function (may be null)
-	aggregate_wininit_t wininit;
+	aggregate_wininit_t wininit = nullptr;
 
 	//! The bind function (may be null)
 	bind_aggregate_function_t bind;

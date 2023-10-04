@@ -43,6 +43,10 @@ struct QuantileSortTree : public MergeSortTree<uint32_t, uint32_t, std::less<uin
 	}
 
 	size_t SelectNth(const FrameBounds &frame, ElementType n) const;
+
+	inline ElementType NthElement(size_t i) const {
+		return tree.front().first[i];
+	}
 };
 
 size_t QuantileSortTree::SelectNth(const FrameBounds &frame, ElementType n) const {
@@ -446,6 +450,18 @@ struct Interpolator {
 	}
 
 	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
+	TARGET_TYPE Interpolate(INPUT_TYPE lidx, INPUT_TYPE hidx, Vector &result, const ACCESSOR &accessor) const {
+		using ACCESS_TYPE = typename ACCESSOR::RESULT_TYPE;
+		if (lidx == hidx) {
+			return CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(lidx), result);
+		} else {
+			auto lo = CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(lidx), result);
+			auto hi = CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(hidx), result);
+			return CastInterpolation::Interpolate<TARGET_TYPE>(lo, RN - FRN, hi);
+		}
+	}
+
+	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
 	TARGET_TYPE Operation(INPUT_TYPE *v_t, Vector &result, const ACCESSOR &accessor = ACCESSOR()) const {
 		using ACCESS_TYPE = typename ACCESSOR::RESULT_TYPE;
 		QuantileCompare<ACCESSOR> comp(accessor, desc);
@@ -508,6 +524,12 @@ struct Interpolator<true> {
 
 	Interpolator(const QuantileValue &q, const idx_t n_p, bool desc_p)
 	    : desc(desc_p), FRN(Index(q, n_p)), CRN(FRN), begin(0), end(n_p) {
+	}
+
+	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
+	TARGET_TYPE Interpolate(INPUT_TYPE lidx, INPUT_TYPE hidx, Vector &result, const ACCESSOR &accessor) const {
+		using ACCESS_TYPE = typename ACCESSOR::RESULT_TYPE;
+		return CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(lidx), result);
 	}
 
 	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
@@ -704,8 +726,11 @@ struct QuantileOperation {
 		}
 
 		//	Sort it
-		std::sort(sorted.begin(), sorted.end(),
-		          [&](const ElementType &lhs, const ElementType &rhs) { return data[lhs] < data[rhs]; });
+		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
+		using Accessor = QuantileIndirect<INPUT_TYPE>;
+		Accessor indirect(data);
+		QuantileCompare<Accessor> cmp(indirect, bind_data.desc);
+		std::sort(sorted.begin(), sorted.end(), cmp);
 
 		//	Build the tree
 		auto &state = *reinterpret_cast<STATE *>(state_p);
@@ -748,18 +773,48 @@ struct QuantileScalarOperation : public QuantileOperation {
 
 		QuantileIncluded included(fmask, dmask, 0);
 
+		D_ASSERT(aggr_input_data.bind_data);
+		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
+
+		// Find the two positions needed
+		const auto &q = bind_data.quantiles[0];
+#if 1
+		//	Count the number of valid values
+		auto n = frame.end - frame.start;
+		if (!included.AllValid()) {
+			//	NULLs or FILTERed values,
+			n = 0;
+			for (auto i = frame.start; i < frame.end; ++i) {
+				n += included(i);
+			}
+		}
+
+		if (n) {
+			//	Find the interpolated indicies within the frame
+			Interpolator<DISCRETE> interp(q, n, false);
+			const auto lo_idx = gstate->qst->SelectNth(frame, interp.FRN);
+			const auto lo_data = gstate->qst->NthElement(lo_idx);
+			auto hi_idx = lo_idx;
+			auto hi_data = lo_data;
+			if (interp.CRN != interp.FRN) {
+				hi_idx = gstate->qst->SelectNth(frame, interp.CRN);
+				hi_data = gstate->qst->NthElement(hi_idx);
+			}
+
+			//	Interpolate indirectly
+			using ID = QuantileIndirect<INPUT_TYPE>;
+			ID indirect(data);
+			rdata[ridx] = interp.template Interpolate<idx_t, RESULT_TYPE, ID>(lo_data, hi_data, result, indirect);
+		} else {
+			rmask.Set(ridx, false);
+		}
+#else
 		//  Lazily initialise frame state
 		auto prev_pos = state.pos;
 		state.SetPos(frame.end - frame.start);
 
 		auto index = state.w.data();
 		D_ASSERT(index);
-
-		D_ASSERT(aggr_input_data.bind_data);
-		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
-
-		// Find the two positions needed
-		const auto &q = bind_data.quantiles[0];
 
 		bool replace = false;
 		auto &prev = state.prev;
@@ -794,6 +849,7 @@ struct QuantileScalarOperation : public QuantileOperation {
 		}
 
 		prev = frame;
+#endif
 	}
 };
 
@@ -911,7 +967,41 @@ struct QuantileListOperation : public QuantileOperation {
 		ListVector::SetListSize(list, lentry.offset + lentry.length);
 		auto &result = ListVector::GetEntry(list);
 		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
+#if 1
+		//	Count the number of valid values
+		auto n = frame.end - frame.start;
+		if (!included.AllValid()) {
+			//	NULLs or FILTERed values,
+			n = 0;
+			for (auto i = frame.start; i < frame.end; ++i) {
+				n += included(i);
+			}
+		}
 
+		if (n) {
+			using ID = QuantileIndirect<INPUT_TYPE>;
+			ID indirect(data);
+			for (const auto &q : bind_data.order) {
+				const auto &quantile = bind_data.quantiles[q];
+				Interpolator<DISCRETE> interp(quantile, n, false);
+
+				const auto lo_idx = gstate->qst->SelectNth(frame, interp.FRN);
+				const auto lo_data = gstate->qst->NthElement(lo_idx);
+				auto hi_idx = lo_idx;
+				auto hi_data = lo_data;
+				if (interp.CRN != interp.FRN) {
+					hi_idx = gstate->qst->SelectNth(frame, interp.CRN);
+					hi_data = gstate->qst->NthElement(hi_idx);
+				}
+
+				//	Interpolate indirectly
+				rdata[lentry.offset + q] =
+				    interp.template Interpolate<idx_t, CHILD_TYPE, ID>(lo_data, hi_data, result, indirect);
+			}
+		} else {
+			lmask.Set(lidx, false);
+		}
+#else
 		//  Lazily initialise frame state
 		auto prev_pos = state.pos;
 		state.SetPos(frame.end - frame.start);
@@ -986,6 +1076,7 @@ struct QuantileListOperation : public QuantileOperation {
 		}
 
 		prev = frame;
+#endif
 	}
 };
 
