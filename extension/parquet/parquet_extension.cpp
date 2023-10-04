@@ -217,7 +217,22 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 	}
 
 	// loop through the schema definition
-	for (idx_t global_column_index = 0; global_column_index < parquet_options.schema.size(); global_column_index++) {
+	for (idx_t i = 0; i < global_column_ids.size(); i++) {
+		auto global_column_index = global_column_ids[i];
+
+		// check if this is a constant column
+		bool constant = false;
+		for (auto &entry : reader_data.constant_map) {
+			if (entry.column_id == i) {
+				constant = true;
+				break;
+			}
+		}
+		if (constant) {
+			// this column is constant for this file
+			continue;
+		}
+
 		const auto &column_definition = parquet_options.schema[global_column_index];
 		auto it = field_id_to_column_index.find(column_definition.field_id);
 		if (it == field_id_to_column_index.end()) {
@@ -236,6 +251,7 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 		reader_data.column_mapping.push_back(global_column_index);
 		reader_data.column_ids.push_back(local_column_index);
 	}
+	reader_data.empty_columns = reader_data.column_ids.empty();
 
 	// Finally, initialize the filters
 	MultiFileReader::CreateFilterMap(bind_data.types, table_filters, reader_data);
