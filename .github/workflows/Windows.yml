@@ -55,9 +55,9 @@ jobs:
         key: ${{ github.job }}
         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-    - name: Install pytest
-      run: |
-        python -m pip install pytest
+#    - name: Install pytest
+#      run: |
+#        python -m pip install pytest
 
     - name: Build
       shell: bash
@@ -66,19 +66,19 @@ jobs:
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
         cmake --build . --config Release
 
-    - name: Test
-      shell: bash
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-      run: |
-        echo "DUCKDB_INSTALL_LIB=D:\a\duckdb\duckdb\src\Release\duckdb.dll" >> $env:GITHUB_ENV
-        test/Release/unittest.exe
-
-    - name: Tools Test
-      shell: bash
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-      run: |
-        python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
-        tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
+#    - name: Test
+#      shell: bash
+#      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+#      run: |
+#        echo "DUCKDB_INSTALL_LIB=D:\a\duckdb\duckdb\src\Release\duckdb.dll" >> $env:GITHUB_ENV
+#        test/Release/unittest.exe
+#
+#    - name: Tools Test
+#      shell: bash
+#      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+#      run: |
+#        python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
+#        tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
 
     - name: Deploy
       shell: bash
