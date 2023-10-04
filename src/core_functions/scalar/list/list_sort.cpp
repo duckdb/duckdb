@@ -385,11 +385,11 @@ ScalarFunctionSet ListGradeUpFun::GetFunctions() {
 	ScalarFunction sort_orders({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                           LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListGradeUpBind);
 
-	ScalarFunctionSet list_GradeUp;
-	list_GradeUp.AddFunction(sort);
-	list_GradeUp.AddFunction(sort_order);
-	list_GradeUp.AddFunction(sort_orders);
-	return list_GradeUp;
+	ScalarFunctionSet list_grade_up;
+	list_grade_up.AddFunction(sort);
+	list_grade_up.AddFunction(sort_order);
+	list_grade_up.AddFunction(sort_orders);
+	return list_grade_up;
 }
 
 ScalarFunctionSet ListReverseSortFun::GetFunctions() {
