@@ -96,12 +96,17 @@ string GetTestDirectory() {
 	return custom_test_directory;
 }
 
-string TestDirectoryPath() {
+string CreateTestDirectory(const string &path) {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	auto test_directory = GetTestDirectory();
-	if (!fs->DirectoryExists(test_directory)) {
-		fs->CreateDirectory(test_directory);
+	if (!fs->DirectoryExists(path)) {
+		fs->CreateDirectory(path);
 	}
+	return path;
+}
+
+string TestDirectoryPath() {
+	auto test_directory = GetTestDirectory();
+	CreateTestDirectory(test_directory);
 	string path;
 	if (custom_test_directory.empty()) {
 		// add the PID to the test directory - but only if it was not specified explicitly by the user
@@ -109,9 +114,7 @@ string TestDirectoryPath() {
 	} else {
 		path = test_directory;
 	}
-	if (!fs->DirectoryExists(path)) {
-		fs->CreateDirectory(path);
-	}
+	CreateTestDirectory(path);
 	return path;
 }
 

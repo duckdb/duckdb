@@ -602,9 +602,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 			auto test_directory = TestDirectoryPath();
 			auto path = StringUtil::Format("%s/%s", test_directory, param);
-			if (!fs->DirectoryExists(path)) {
-				fs->CreateDirectory(path);
-			}
+			CreateTestDirectory(path);
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
 			if (InLoop()) {
 				parser.Fail("load cannot be called in a loop");

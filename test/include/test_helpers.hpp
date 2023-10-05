@@ -38,6 +38,7 @@ void TestCreateDirectory(string path);
 void TestDeleteFile(string path);
 void TestChangeDirectory(string path);
 string TestGetCurrentDirectory();
+string CreateTestDirectory(const string &path);
 string TestDirectoryPath();
 string TestCreatePath(string suffix);
 unique_ptr<DBConfig> GetTestConfig();
