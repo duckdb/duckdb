@@ -496,7 +496,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 
 		idx_t null_count = 0;
 
-		if ((dict_decoder || dbp_decoder || rle_decoder) && HasDefines()) {
+		if ((dict_decoder || dbp_decoder || rle_decoder || bss_decoder) && HasDefines()) {
 			// we need the null count because the dictionary offsets have no entries for nulls
 			for (idx_t i = 0; i < read_now; i++) {
 				if (define_out[i + result_offset] != max_define) {

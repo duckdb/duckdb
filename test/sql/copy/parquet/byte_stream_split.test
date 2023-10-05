@@ -7,7 +7,7 @@ require parquet
 statement ok
 PRAGMA enable_verification
 
-query II
+query III
 SELECT * FROM 'data/parquet-testing/byte_stream_split.parquet'
 ----
 <FILE>:data/parquet-testing/byte_stream_split.csv
