@@ -23,6 +23,7 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/parser/tableref.hpp"
 #include "duckdb_python/arrow/arrow_array_stream.hpp"
 #include "duckdb_python/map.hpp"
 #include "duckdb_python/pandas/pandas_scan.hpp"
@@ -1321,7 +1322,7 @@ static unique_ptr<TableFunctionRef> CreateArrowScan(py::object entry, ClientProp
 	table_function->function = make_uniq<FunctionExpression>("arrow_scan", std::move(children));
 	table_function->external_dependency =
 	    make_uniq<PythonDependencies>(make_uniq<RegisteredArrow>(std::move(stream_factory), entry));
-	return table_function;
+	return return std::move(table_function);
 }
 
 static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, ClientProperties &client_properties,
@@ -1347,7 +1348,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 		table_function->function = make_uniq<FunctionExpression>("pandas_scan", std::move(children));
 		table_function->external_dependency =
 		    make_uniq<PythonDependencies>(make_uniq<RegisteredObject>(entry), make_uniq<RegisteredObject>(new_df));
-		return table_function;
+		return std::move(table_function);
 	}
 
 	if (DuckDBPyConnection::IsAcceptedArrowObject(entry)) {
@@ -1412,7 +1413,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 		table_function->function = make_uniq<FunctionExpression>("pandas_scan", std::move(children));
 		table_function->external_dependency =
 		    make_uniq<PythonDependencies>(make_uniq<RegisteredObject>(entry), make_uniq<RegisteredObject>(data));
-		return table_function;
+		return std::move(table_function);
 	}
 
 	std::string location = py::cast<py::str>(current_frame.attr("f_code").attr("co_filename"));
