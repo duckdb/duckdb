@@ -54,6 +54,6 @@ add_library(
 set_target_properties(duckdb_odbc PROPERTIES DEFINE_SYMBOL "DUCKDB_ODBC_API")
 target_link_libraries(duckdb_odbc ${LINK_LIB_LIST} duckdb_static)
 
-if(NOT WIN32 AND NOT CLANG_TIDY)
+if(NOT CLANG_TIDY)
   add_subdirectory(test)
 endif()
