@@ -186,7 +186,7 @@ def test_insertion(duck_conn):
 
 def test_read(duck_conn):
     with duck_conn.cursor() as cursor:
-        filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "category.csv")
+        filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "category.csv")
         cursor.execute(f"SELECT * FROM '{filename}'")
         assert cursor.fetch_arrow_table().to_pydict() == {
             "CATEGORY_ID": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
