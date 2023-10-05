@@ -75,7 +75,7 @@ struct TableFunctionData : public FunctionData {
 
 struct PyTableFunctionData : public TableFunctionData {
 	//! External dependencies of this table function
-	unique_ptr<ExternalDependency> external_dependency;
+	shared_ptr<ExternalDependency> external_dependency;
 };
 
 struct FunctionParameters {

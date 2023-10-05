@@ -261,6 +261,7 @@ public:
 	static bool IsRelation(const py::object &object);
 
 	Relation &GetRel();
+	shared_ptr<Relation> GetRelPtr();
 
 	bool ContainsColumnByName(const string &name) const;
 

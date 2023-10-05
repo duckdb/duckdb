@@ -80,6 +80,7 @@ unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 	auto table_function = make_uniq<TableFunctionRef>();
 	auto function = make_uniq<FunctionExpression>(name, std::move(children));
 	table_function->function = std::move(function);
+	table_function->external_dependency = this->extra_dependencies;
 	return std::move(table_function);
 }
 

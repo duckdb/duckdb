@@ -309,7 +309,7 @@ private:
 	BindTableFunctionInternal(TableFunction &table_function, const string &function_name, vector<Value> parameters,
 	                          named_parameter_map_t named_parameters, vector<LogicalType> input_table_types,
 	                          vector<string> input_table_names, const vector<string> &column_name_alias,
-	                          unique_ptr<ExternalDependency> external_dependency);
+	                          shared_ptr<ExternalDependency> external_dependency);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundBaseTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);

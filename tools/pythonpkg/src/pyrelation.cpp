@@ -227,10 +227,13 @@ py::list DuckDBPyRelation::Description() {
 }
 
 Relation &DuckDBPyRelation::GetRel() {
-	if (!rel) {
-		throw InternalException("DuckDBPyRelation - calling GetRel, but no rel was present");
-	}
+	AssertRelation();
 	return *rel;
+}
+
+shared_ptr<Relation> DuckDBPyRelation::GetRelPtr() {
+	AssertRelation();
+	return rel;
 }
 
 struct DescribeAggregateInfo {
