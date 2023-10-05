@@ -178,10 +178,11 @@ COPY test FROM 'test/sql/copy/csv/data/test/invalid_utf.csv' DELIMITER '|';
 statement ok
 CREATE TABLE empty_table (a INTEGER, b INTEGER, c VARCHAR(10));
 
-query I
+statement error
 COPY empty_table FROM 'test/sql/copy/csv/data/test/empty.csv' (HEADER 0);
 ----
-0
+CSV options could not be auto-detected. Consider setting parser options manually.
+
 
 # unterminated quotes
 statement ok
