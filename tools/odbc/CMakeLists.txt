@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.12.0)
 find_package(ODBC)
 
 if(NOT ODBC_FOUND)
-  message(FATAL_ERROR No ODBC found)
+  message(FATAL_ERROR "No ODBC found; you need to install unixodbc-dev.")
 endif()
 
 set(LINK_LIB_LIST "")
