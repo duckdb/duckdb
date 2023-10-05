@@ -163,10 +163,14 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 	if (sniffed_column_counts.size() > rows_read) {
 		rows_read = sniffed_column_counts.size();
 	}
+	if (set_columns.IsSet() && !options.ignore_errors && num_cols != max_columns_found){
+		// columns are set and don't match with what is was found.
+		return;
+	}
 	for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
 		if (sniffed_column_counts[row] == num_cols || options.ignore_errors) {
 			consistent_rows++;
-		} else if (num_cols < sniffed_column_counts[row] && !options.skip_rows_set) {
+		} else if (num_cols < sniffed_column_counts[row] && !options.skip_rows_set && !set_columns.IsSet()) {
 			// all rows up to this point will need padding
 			padding_count = 0;
 			// we use the maximum amount of num_cols that we find
