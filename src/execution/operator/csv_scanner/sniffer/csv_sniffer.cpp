@@ -37,11 +37,16 @@ idx_t SetColumns::Size() {
 
 // Set the CSV Options in the reference
 void CSVSniffer::SetResultOptions() {
+	bool og_header = options.dialect_options.header;
 	options.dialect_options = best_candidate->dialect_options;
 	options.dialect_options.new_line = best_candidate->dialect_options.new_line;
-	options.has_header = best_candidate->dialect_options.header;
 	options.skip_rows_set = options.dialect_options.skip_rows > 0;
-	if (options.has_header) {
+	if (options.has_header){
+		// If header was manually set, we ignore the sniffer findings
+		options.dialect_options.header = og_header;
+	}
+	options.has_header = true;
+	if (options.dialect_options.header) {
 		options.dialect_options.true_start = best_start_with_header;
 	} else {
 		options.dialect_options.true_start = best_start_without_header;

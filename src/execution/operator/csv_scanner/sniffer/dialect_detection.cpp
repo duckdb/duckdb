@@ -78,6 +78,13 @@ struct SniffDialect {
 	}
 };
 
+bool IsQuoteDefault(char quote){
+	if (quote == '\"' || quote == '\'' || quote == '\0'){
+		return true;
+	}
+	return false;
+}
+
 void CSVSniffer::GenerateCandidateDetectionSearchSpace(vector<char> &delim_candidates,
                                                        vector<QuoteRule> &quoterule_candidates,
                                                        unordered_map<uint8_t, vector<char>> &quote_candidates_map,
@@ -94,6 +101,10 @@ void CSVSniffer::GenerateCandidateDetectionSearchSpace(vector<char> &delim_candi
 		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {options.dialect_options.state_machine_options.quote};
 		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER] = {options.dialect_options.state_machine_options.quote};
 		quote_candidates_map[(uint8_t)QuoteRule::NO_QUOTES] = {options.dialect_options.state_machine_options.quote};
+		// also add it as a escape rule
+		if (!IsQuoteDefault(options.dialect_options.state_machine_options.quote)){
+			escape_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC].emplace_back(options.dialect_options.state_machine_options.quote);
+		}
 	} else {
 		// no quote rule provided: use standard/common quotes
 		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {'\"'};
