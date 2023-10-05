@@ -16,7 +16,7 @@ on:
       extension_name:
         required: true
         type: string
-      # DuckDB version to build against
+      # DuckDB version to build against, should in most cases be identical to
       duckdb_version:
         required: true
         type: string
@@ -43,7 +43,7 @@ on:
 
 jobs:
   generate_matrix:
-    name: Generate build matrix
+    name: Generate matrix
     runs-on: ubuntu-latest
     outputs:
       linux_matrix: ${{ steps.set-matrix-linux.outputs.linux_matrix }}
@@ -54,6 +54,11 @@ jobs:
         with:
           fetch-depth: 0
           submodules: 'true'
+
+      - name: Checkout DuckDB to version
+        run: |
+          cd duckdb
+          git checkout ${{ inputs.duckdb_version }}
 
       - id: parse-matrices
         run: |
