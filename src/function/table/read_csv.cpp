@@ -115,8 +115,10 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			//			if (explicitly_set_columns) {
 			//				// The user has influenced the names, can't assume they are valid anymore
 			//				if (return_types.size() != names.size()) {
-			//					throw BinderException("The amount of names specified (%d) and the observed amount of types (%d)
-			//in " 					                      "the file don't match", 					                      names.size(), return_types.size());
+			//					throw BinderException("The amount of names specified (%d) and the observed amount of types
+			//(%d)
+			// in " 					                      "the file don't match", 					                      names.size(),
+			// return_types.size());
 			//				}
 			//			} else {
 			D_ASSERT(return_types.size() == names.size());
@@ -157,7 +159,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, TableFunctionBindInput &input,
                                                 vector<LogicalType> &return_types, vector<string> &names) {
-	input.named_parameters["auto_detect"] = Value::BOOLEAN(true);
+	// input.named_parameters["auto_detect"] = Value::BOOLEAN(true);
 	return ReadCSVBind(context, input, return_types, names);
 }
 

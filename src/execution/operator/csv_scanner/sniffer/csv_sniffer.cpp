@@ -25,7 +25,10 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager>
 }
 
 bool SetColumns::IsSet() {
-	return !types;
+	if (!types) {
+		return false;
+	}
+	return !types->empty();
 }
 
 idx_t SetColumns::Size() {
@@ -41,7 +44,7 @@ void CSVSniffer::SetResultOptions() {
 	options.dialect_options = best_candidate->dialect_options;
 	options.dialect_options.new_line = best_candidate->dialect_options.new_line;
 	options.skip_rows_set = options.dialect_options.skip_rows > 0;
-	if (options.has_header){
+	if (options.has_header) {
 		// If header was manually set, we ignore the sniffer findings
 		options.dialect_options.header = og_header;
 	}
