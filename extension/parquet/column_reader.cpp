@@ -542,20 +542,20 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 		} else if (byte_array_data) {
 			// DELTA_BYTE_ARRAY or DELTA_LENGTH_BYTE_ARRAY
 			DeltaByteArray(define_out, read_now, filter, result_offset, result);
-    } else if (bss_decoder) {
+		} else if (bss_decoder) {
 			auto read_buf = make_shared<ResizeableBuffer>();
 
 			switch (schema.type) {
-				case duckdb_parquet::format::Type::FLOAT:
-					read_buf->resize(reader.allocator, sizeof(float) * (read_now - null_count));
-					bss_decoder->GetBatch<float>(read_buf->ptr, read_now - null_count);
-					break;
-				case duckdb_parquet::format::Type::DOUBLE:
-					read_buf->resize(reader.allocator, sizeof(double) * (read_now - null_count));
-					bss_decoder->GetBatch<double>(read_buf->ptr, read_now - null_count);
-					break;
-				default:
-					throw std::runtime_error("BYTE_STREAM_SPLIT encoding is only supported for FLOAT or DOUBLE data");
+			case duckdb_parquet::format::Type::FLOAT:
+				read_buf->resize(reader.allocator, sizeof(float) * (read_now - null_count));
+				bss_decoder->GetBatch<float>(read_buf->ptr, read_now - null_count);
+				break;
+			case duckdb_parquet::format::Type::DOUBLE:
+				read_buf->resize(reader.allocator, sizeof(double) * (read_now - null_count));
+				bss_decoder->GetBatch<double>(read_buf->ptr, read_now - null_count);
+				break;
+			default:
+				throw std::runtime_error("BYTE_STREAM_SPLIT encoding is only supported for FLOAT or DOUBLE data");
 			}
 
 			Plain(read_buf, define_out, read_now, filter, result_offset, result);

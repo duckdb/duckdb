@@ -16,17 +16,16 @@ namespace duckdb {
 class BssDecoder {
 public:
 	/// Create a decoder object. buffer/buffer_len is the encoded data.
-	BssDecoder(data_ptr_t buffer, uint32_t buffer_len)
-		: buffer_(buffer, buffer_len), value_offset_(0) {
+	BssDecoder(data_ptr_t buffer, uint32_t buffer_len) : buffer_(buffer, buffer_len), value_offset_(0) {
 	}
 
+public:
 	template <typename T>
 	void GetBatch(data_ptr_t values_target_ptr, uint32_t batch_size) {
 		if (buffer_.len % sizeof(T) != 0) {
 			std::stringstream error;
-			error << "Data buffer size for the BYTE_STREAM_SPLIT encoding ("
-			      << buffer_.len << ") should be a multiple of the type size ("
-			      << sizeof(T) << ")";
+			error << "Data buffer size for the BYTE_STREAM_SPLIT encoding (" << buffer_.len
+			      << ") should be a multiple of the type size (" << sizeof(T) << ")";
 			throw std::runtime_error(error.str());
 		}
 		uint32_t num_buffer_values = buffer_.len / sizeof(T);
