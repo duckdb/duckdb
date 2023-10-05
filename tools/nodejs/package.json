@@ -16,7 +16,7 @@
     "host": "https://duckdb-node.s3.amazonaws.com"
   },
   "scripts": {
-    "install": "node-pre-gyp install --fallback-to-build",
+    "install": "node-pre-gyp install --fallback-to-build -j max",
     "pretest": "node test/support/createdb.js",
     "test": "mocha -R spec --timeout 480000 --expose-gc",
     "test-path": "mocha -R spec --timeout 480000 --expose-gc --exclude 'test/*.ts'",
