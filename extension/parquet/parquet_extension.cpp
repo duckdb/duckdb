@@ -803,7 +803,13 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 			for (idx_t i = 0; i < values.size(); i++) {
 				auto value = values[i];
 				auto key = StructType::GetChildName(kv_struct_type, i);
-				bind_data->kv_metadata.emplace_back(key, value.ToString());
+				// If the value is a blob, write the raw blob bytes
+				// otherwise, cast to string
+				if (value.type().id() == LogicalTypeId::BLOB) {
+					bind_data->kv_metadata.emplace_back(key, StringValue::Get(value));
+				} else {
+					bind_data->kv_metadata.emplace_back(key, value.ToString());
+				}
 			}
 		} else {
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
