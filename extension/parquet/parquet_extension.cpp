@@ -118,6 +118,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 	vector<LogicalType> sql_types;
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
+	vector<pair<string, string>> kv_metadata;
 	idx_t row_group_size = Storage::ROW_GROUP_SIZE;
 
 	//! If row_group_size_bytes is not set, we default to row_group_size * BYTES_PER_ROW
@@ -792,6 +793,24 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 				}
 				GetFieldIDs(option.second[0], bind_data->field_ids, unique_field_ids, name_to_type_map);
 			}
+		} else if (loption == "kv_metadata") {
+			auto &kv_struct = option.second[0];
+			auto &kv_struct_type = kv_struct.type();
+			if (kv_struct_type.id() != LogicalTypeId::STRUCT) {
+				throw BinderException("Expected kv_metadata argument to be a STRUCT");
+			}
+			auto values = StructValue::GetChildren(kv_struct);
+			for (idx_t i = 0; i < values.size(); i++) {
+				auto value = values[i];
+				auto key = StructType::GetChildName(kv_struct_type, i);
+				// If the value is a blob, write the raw blob bytes
+				// otherwise, cast to string
+				if (value.type().id() == LogicalTypeId::BLOB) {
+					bind_data->kv_metadata.emplace_back(key, StringValue::Get(value));
+				} else {
+					bind_data->kv_metadata.emplace_back(key, value.ToString());
+				}
+			}
 		} else {
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
@@ -811,8 +830,9 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	auto &parquet_bind = bind_data.Cast<ParquetWriteBindData>();
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	global_state->writer = make_uniq<ParquetWriter>(fs, file_path, parquet_bind.sql_types, parquet_bind.column_names,
-	                                                parquet_bind.codec, parquet_bind.field_ids.Copy());
+	global_state->writer =
+	    make_uniq<ParquetWriter>(fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
+	                             parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata);
 	return std::move(global_state);
 }
 
@@ -1018,6 +1038,10 @@ void ParquetExtension::Load(DuckDB &db) {
 	// parquet_schema
 	ParquetSchemaFunction schema_fun;
 	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(schema_fun));
+
+	// parquet_key_value_metadata
+	ParquetKeyValueMetadataFunction kv_meta_fun;
+	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(kv_meta_fun));
 
 	CopyFunction function("parquet");
 	function.copy_to_bind = ParquetWriteBind;
