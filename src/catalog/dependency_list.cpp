@@ -123,7 +123,7 @@ LogicalDependencyList LogicalDependencyList::Deserialize(Deserializer &deseriali
 	return dependency;
 }
 
-bool LogicalDependencyList::operator==(const LogicalDependencyList &other) {
+bool LogicalDependencyList::operator==(const LogicalDependencyList &other) const {
 	if (set.size() != other.set.size()) {
 		return false;
 	}
