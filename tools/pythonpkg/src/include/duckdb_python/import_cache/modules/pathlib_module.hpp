@@ -1,3 +1,4 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -12,17 +13,17 @@
 
 namespace duckdb {
 
-struct PathLibCacheItem : public PythonImportCacheItem {
+struct PathlibCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "pathlib";
 
 public:
-	PathLibCacheItem() : PythonImportCacheItem("pathlib"), Path("Path", this) {
+	PathlibCacheItem() : PythonImportCacheItem("pathlib"), Path("Path", this) {
 	}
-	~PathLibCacheItem() override {
+	~PathlibCacheItem() override {
 	}
 
-public:
 	PythonImportCacheItem Path;
 
 protected:

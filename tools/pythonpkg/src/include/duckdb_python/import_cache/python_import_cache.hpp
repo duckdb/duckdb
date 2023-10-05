@@ -1,3 +1,4 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -22,20 +23,20 @@ public:
 	~PythonImportCache();
 
 public:
-	NumpyCacheItem numpy;
-	TypesCacheItem types;
-	TypingCacheItem typing;
-	PathLibCacheItem pathlib;
-	PyDuckDBCacheItem pyduckdb;
+	PyarrowCacheItem pyarrow;
+	PandasCacheItem pandas;
 	DatetimeCacheItem datetime;
 	DecimalCacheItem decimal;
-	PyTzCacheItem pytz;
-	UUIDCacheItem uuid;
-	PandasCacheItem pandas;
-	PolarsCacheItem polars;
-	ArrowLibCacheItem arrow;
-	IPythonCacheItem IPython;
+	IpythonCacheItem IPython;
 	IpywidgetsCacheItem ipywidgets;
+	NumpyCacheItem numpy;
+	PathlibCacheItem pathlib;
+	PolarsCacheItem polars;
+	DuckdbCacheItem duckdb;
+	PytzCacheItem pytz;
+	TypesCacheItem types;
+	TypingCacheItem typing;
+	UuidCacheItem uuid;
 
 public:
 	py::handle AddCache(py::object item);

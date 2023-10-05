@@ -24,10 +24,7 @@ void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, ArrowArray &data, py::
 
 void VerifyArrowDatasetLoaded() {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	auto loaded = import_cache.arrow.dataset.IsLoaded();
-	// Have to check 'ModuleIsLoaded' because it could be monkeypatched
-	// so we think it's loaded, but it's not present in the sys modules
-	if (!loaded || !ModuleIsLoaded<ArrowDatasetCacheItem>()) {
+	if (!import_cache.pyarrow.dataset() || !ModuleIsLoaded<PyarrowDatasetCacheItem>()) {
 		throw InvalidInputException("Optional module 'pyarrow.dataset' is required to perform this action");
 	}
 }
@@ -35,16 +32,16 @@ void VerifyArrowDatasetLoaded() {
 PyArrowObjectType GetArrowType(const py::handle &obj) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	// First Verify Lib Types
-	auto table_class = import_cache.arrow.Table();
-	auto record_batch_reader_class = import_cache.arrow.RecordBatchReader();
+	auto table_class = import_cache.pyarrow.Table();
+	auto record_batch_reader_class = import_cache.pyarrow.RecordBatchReader();
 	if (py::isinstance(obj, table_class)) {
 		return PyArrowObjectType::Table;
 	} else if (py::isinstance(obj, record_batch_reader_class)) {
 		return PyArrowObjectType::RecordBatchReader;
 	}
 	// Then Verify dataset types
-	auto dataset_class = import_cache.arrow.dataset.Dataset();
-	auto scanner_class = import_cache.arrow.dataset.Scanner();
+	auto dataset_class = import_cache.pyarrow.dataset.Dataset();
+	auto scanner_class = import_cache.pyarrow.dataset.Scanner();
 
 	if (py::isinstance(obj, scanner_class)) {
 		return PyArrowObjectType::Scanner;
@@ -94,10 +91,10 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	py::object scanner;
-	py::object arrow_batch_scanner = import_cache.arrow.dataset.Scanner().attr("from_batches");
+	py::object arrow_batch_scanner = import_cache.pyarrow.dataset.Scanner().attr("from_batches");
 	switch (arrow_object_type) {
 	case PyArrowObjectType::Table: {
-		auto arrow_dataset = import_cache.arrow.dataset().attr("dataset");
+		auto arrow_dataset = import_cache.pyarrow.dataset().attr("dataset");
 		auto dataset = arrow_dataset(arrow_obj_handle);
 		py::object arrow_scanner = dataset.attr("__class__").attr("scanner");
 		scanner = ProduceScanner(arrow_scanner, dataset, parameters, factory->client_properties);
@@ -144,7 +141,7 @@ void PythonTableArrowArrayStreamFactory::GetSchemaInternal(py::handle arrow_obj_
 	VerifyArrowDatasetLoaded();
 
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	auto scanner_class = import_cache.arrow.dataset.Scanner();
+	auto scanner_class = import_cache.pyarrow.dataset.Scanner();
 
 	if (py::isinstance(arrow_obj_handle, scanner_class)) {
 		auto obj_schema = arrow_obj_handle.attr("projected_schema");
@@ -198,7 +195,7 @@ int64_t ConvertTimestampTZValue(int64_t base_value, ArrowDateTimeType datetime_t
 py::object GetScalar(Value &constant, const string &timezone_config, const ArrowType &type) {
 	py::object scalar = py::module_::import("pyarrow").attr("scalar");
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	py::object dataset_scalar = import_cache.arrow.dataset().attr("scalar");
+	py::object dataset_scalar = import_cache.pyarrow.dataset().attr("scalar");
 	py::object scalar_value;
 	switch (constant.type().id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -297,7 +294,7 @@ py::object GetScalar(Value &constant, const string &timezone_config, const Arrow
 py::object TransformFilterRecursive(TableFilter *filter, const string &column_name, const string &timezone_config,
                                     const ArrowType &type) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	py::object field = import_cache.arrow.dataset().attr("field");
+	py::object field = import_cache.pyarrow.dataset().attr("field");
 	switch (filter->filter_type) {
 	case TableFilterType::CONSTANT_COMPARISON: {
 		auto &constant_filter = filter->Cast<ConstantFilter>();

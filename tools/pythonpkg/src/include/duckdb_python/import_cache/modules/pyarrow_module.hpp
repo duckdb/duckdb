@@ -1,7 +1,8 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/import_cache/modules/arrow_module.hpp
+// duckdb_python/import_cache/modules/pyarrow_module.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,37 +13,36 @@
 
 namespace duckdb {
 
-struct ArrowDatasetCacheItem : public PythonImportCacheItem {
+struct PyarrowDatasetCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "pyarrow.dataset";
-	ArrowDatasetCacheItem()
-	    : PythonImportCacheItem("pyarrow.dataset"), Dataset("Dataset", this), Scanner("Scanner", this) {
-	}
-	~ArrowDatasetCacheItem() override {
-	}
 
 public:
-	PythonImportCacheItem Dataset;
-	PythonImportCacheItem Scanner;
-
-protected:
-	bool IsRequired() const final {
-		return false;
+	PyarrowDatasetCacheItem()
+	    : PythonImportCacheItem("pyarrow.dataset"), Scanner("Scanner", this), Dataset("Dataset", this) {
 	}
+	~PyarrowDatasetCacheItem() override {
+	}
+
+	PythonImportCacheItem Scanner;
+	PythonImportCacheItem Dataset;
 };
 
-struct ArrowLibCacheItem : public PythonImportCacheItem {
+struct PyarrowCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "pyarrow";
-	ArrowLibCacheItem()
+
+public:
+	PyarrowCacheItem()
 	    : PythonImportCacheItem("pyarrow"), dataset(), Table("Table", this),
 	      RecordBatchReader("RecordBatchReader", this) {
 	}
-	~ArrowLibCacheItem() override {
+	~PyarrowCacheItem() override {
 	}
 
-public:
-	ArrowDatasetCacheItem dataset;
+	PyarrowDatasetCacheItem dataset;
 	PythonImportCacheItem Table;
 	PythonImportCacheItem RecordBatchReader;
 };

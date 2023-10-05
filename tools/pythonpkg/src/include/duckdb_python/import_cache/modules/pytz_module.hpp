@@ -1,3 +1,4 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -12,18 +13,17 @@
 
 namespace duckdb {
 
-struct PyTzCacheItem : public PythonImportCacheItem {
+struct PytzCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "pytz";
 
 public:
-	PyTzCacheItem() : PythonImportCacheItem("pytz"), timezone("timezone", this) {
+	PytzCacheItem() : PythonImportCacheItem("pytz"), timezone("timezone", this) {
 	}
-	~PyTzCacheItem() override {
+	~PytzCacheItem() override {
 	}
 
-public:
-	//! pytz.timezone
 	PythonImportCacheItem timezone;
 };
 

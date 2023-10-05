@@ -1,3 +1,4 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -13,6 +14,7 @@
 namespace duckdb {
 
 struct PolarsCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "polars";
 
@@ -22,8 +24,6 @@ public:
 	~PolarsCacheItem() override {
 	}
 
-public:
-	//! pandas.DataFrame
 	PythonImportCacheItem DataFrame;
 	PythonImportCacheItem LazyFrame;
 

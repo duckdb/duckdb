@@ -1,7 +1,8 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/import_cache/modules/types_module.hpp
+// duckdb_python/import_cache/modules/typing_module.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,6 +14,7 @@
 namespace duckdb {
 
 struct TypingCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "typing";
 
@@ -22,7 +24,6 @@ public:
 	~TypingCacheItem() override {
 	}
 
-public:
 	PythonImportCacheItem _UnionGenericAlias;
 };
 
