@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 from .functions import _to_column
 
+from ..errors import PySparkValueError
 
 class DataFrame:
     def __init__(self, relation: duckdb.DuckDBPyRelation, session: "SparkSession"):
@@ -927,7 +928,10 @@ class DataFrame:
     def toDF(self, *cols) -> "DataFrame":
         existing_columns = self.relation.columns
         column_count = len(cols)
-        assert column_count == len(existing_columns)
+        if column_count != len(existing_columns):
+            raise PySparkValueError(
+                message="Provided column names and number of columns in the DataFrame don't match"
+            )
 
         existing_columns = [ColumnExpression(x) for x in existing_columns]
         projections = [existing.alias(new) for existing, new in zip(existing_columns, cols)]
@@ -937,7 +941,11 @@ class DataFrame:
     def collect(self) -> List[Row]:
         columns = self.relation.columns
         result = self.relation.fetchall()
-        rows = [Row(**dict(zip(columns, x))) for x in result]
+        def construct_row(values, names) -> Row:
+            row = tuple.__new__(Row, list(values))
+            row.__fields__ = list(names)
+            return row
+        rows = [construct_row(x, columns) for x in result]
         return rows
 
 

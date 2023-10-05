@@ -10,7 +10,9 @@ class PySparkException(Exception):
     def __init__(
         self,
         message: Optional[str] = None,
+        # The error class, decides the message format, must be one of the valid options listed in 'error_classes.py'
         error_class: Optional[str] = None,
+        # The dictionary listing the arguments specified in the message (or the error_class)
         message_parameters: Optional[Dict[str, str]] = None,
     ):
         # `message` vs `error_class` & `message_parameters` are mutually exclusive.
