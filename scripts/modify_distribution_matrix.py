@@ -24,6 +24,7 @@ select_os = args.select_os
 with open(input_json_file_path, "r") as json_file:
     data = json.load(json_file)
 
+
 # Function to filter entries based on duckdb_arch values
 def filter_entries(data, arch_values):
     for os, config in data.items():
@@ -33,6 +34,7 @@ def filter_entries(data, arch_values):
             del config["include"]
 
     return data
+
 
 # Filter the JSON data
 filtered_data = filter_entries(data, excluded_arch_values)
@@ -50,11 +52,9 @@ elif args.deploy_matrix:
     for os, config in filtered_data.items():
         if "include" in config:
             for item in config["include"]:
-                deploy_archs.append({"duckdb_arch" :item["duckdb_arch"]})
+                deploy_archs.append({"duckdb_arch": item["duckdb_arch"]})
 
-    filtered_data = {
-        "include": deploy_archs
-    }
+    filtered_data = {"include": deploy_archs}
 
 # Determine the JSON formatting
 indent = 2 if args.pretty else None
