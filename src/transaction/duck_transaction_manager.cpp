@@ -252,6 +252,7 @@ void DuckTransactionManager::RollbackTransaction(Transaction *transaction_p) {
 }
 
 void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noexcept {
+	bool changes_made = transaction.ChangesMade();
 	// remove the transaction from the list of active transactions
 	idx_t t_index = active_transactions.size();
 	// check for the lowest and highest start time in the list of transactions
@@ -275,15 +276,18 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noe
 	D_ASSERT(t_index != active_transactions.size());
 	auto current_transaction = std::move(active_transactions[t_index]);
 	auto current_query = DatabaseManager::Get(db).ActiveQueryNumber();
-	if (transaction.commit_id != 0) {
-		// the transaction was committed, add it to the list of recently
-		// committed transactions
-		recently_committed_transactions.push_back(std::move(current_transaction));
-	} else {
-		// the transaction was aborted, but we might still need its information
-		// add it to the set of transactions awaiting GC
-		current_transaction->highest_active_query = current_query;
-		old_transactions.push_back(std::move(current_transaction));
+	if (changes_made) {
+		// if the transaction made any changes we need to keep it around
+		if (transaction.commit_id != 0) {
+			// the transaction was committed, add it to the list of recently
+			// committed transactions
+			recently_committed_transactions.push_back(std::move(current_transaction));
+		} else {
+			// the transaction was aborted, but we might still need its information
+			// add it to the set of transactions awaiting GC
+			current_transaction->highest_active_query = current_query;
+			old_transactions.push_back(std::move(current_transaction));
+		}
 	}
 	// remove the transaction from the set of currently active transactions
 	active_transactions.erase(active_transactions.begin() + t_index);
