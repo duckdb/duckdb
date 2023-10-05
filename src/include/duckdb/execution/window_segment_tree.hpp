@@ -40,7 +40,7 @@ public:
 
 class WindowAggregator {
 public:
-	WindowAggregator(AggregateObject aggr, const LogicalType &result_type_p, WindowExclusion exclude_mode_p,
+	WindowAggregator(AggregateObject aggr, const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p,
 	                 idx_t partition_count);
 	virtual ~WindowAggregator();
 
@@ -74,13 +74,13 @@ protected:
 
 public:
 	//! The window exclusion clause
-	const WindowExclusion exclude_mode;
+	const WindowExcludeMode exclude_mode;
 };
 
 class WindowConstantAggregator : public WindowAggregator {
 public:
 	WindowConstantAggregator(AggregateObject aggr, const LogicalType &result_type_p, const ValidityMask &partition_mask,
-	                         WindowExclusion exclude_mode_p, const idx_t count);
+	                         WindowExcludeMode exclude_mode_p, const idx_t count);
 	~WindowConstantAggregator() override {
 	}
 
@@ -113,8 +113,8 @@ private:
 
 class WindowCustomAggregator : public WindowAggregator {
 public:
-	WindowCustomAggregator(AggregateObject aggr, const LogicalType &result_type_p, WindowExclusion exclude_mode_p,
-	                       idx_t partition_count);
+	WindowCustomAggregator(AggregateObject aggr, const LogicalType &result_type_p,
+	                       const WindowExcludeMode exclude_mode_p, idx_t partition_count);
 	~WindowCustomAggregator() override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState() const override;
@@ -126,7 +126,7 @@ class WindowSegmentTree : public WindowAggregator {
 
 public:
 	WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, WindowAggregationMode mode_p,
-	                  WindowExclusion exclude_mode_p, idx_t count);
+	                  const WindowExcludeMode exclude_mode_p, idx_t count);
 	~WindowSegmentTree() override;
 
 	void Finalize() override;

@@ -290,7 +290,7 @@ enum class WindowAggregationMode : uint32_t;
 
 enum class WindowBoundary : uint8_t;
 
-enum class WindowExclusion : uint8_t;
+enum class WindowExcludeMode : uint8_t;
 
 
 template<>
@@ -681,7 +681,7 @@ template<>
 const char* EnumUtil::ToChars<WindowBoundary>(WindowBoundary value);
 
 template<>
-const char* EnumUtil::ToChars<WindowExclusion>(WindowExclusion value);
+const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value);
 
 
 template<>
@@ -1072,7 +1072,7 @@ template<>
 WindowBoundary EnumUtil::FromString<WindowBoundary>(const char *value);
 
 template<>
-WindowExclusion EnumUtil::FromString<WindowExclusion>(const char *value);
+WindowExcludeMode EnumUtil::FromString<WindowExcludeMode>(const char *value);
 
 
 }

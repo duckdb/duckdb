@@ -411,8 +411,8 @@
       {
         "id": 214,
         "name": "exclude_clause",
-        "type": "WindowExclusion",
-        "default": "WindowExclusion::NO_OTHER"
+        "type": "WindowExcludeMode",
+        "default": "WindowExcludeMode::NO_OTHER"
       }
     ],
     "constructor": ["type"]

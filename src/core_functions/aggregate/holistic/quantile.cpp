@@ -37,9 +37,9 @@ inline interval_t operator-(const interval_t &lhs, const interval_t &rhs) {
 }
 
 struct FrameSet {
-	using FrameVec = vector<FrameBounds>;
+	using Frames = vector<FrameBounds>;
 
-	inline explicit FrameSet(const FrameVec &frames_p) : frames(frames_p) {
+	inline explicit FrameSet(const Frames &frames_p) : frames(frames_p) {
 	}
 
 	inline idx_t Size() const {
@@ -52,7 +52,7 @@ struct FrameSet {
 	}
 
 	inline bool Contains(idx_t i) const {
-		for (size_t f = 0; f < frames.size(); ++f) {
+		for (idx_t f = 0; f < frames.size(); ++f) {
 			const auto &frame = frames[f];
 			if (frame.start <= i && i < frame.end) {
 				return true;
@@ -60,7 +60,7 @@ struct FrameSet {
 		}
 		return false;
 	}
-	const FrameVec &frames;
+	const Frames &frames;
 };
 
 template <typename SAVE_TYPE>

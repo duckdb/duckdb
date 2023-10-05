@@ -46,12 +46,12 @@ struct CountStarFunction : public BaseCountFunction {
 			const auto end = frame.end;
 
 			// Slice to any filtered rows
-			if (!filter_mask.AllValid()) {
-				for (auto i = begin; i < end; ++i) {
-					total += filter_mask.RowIsValid(i);
-				}
-			} else {
+			if (filter_mask.AllValid()) {
 				total += end - begin;
+				continue;
+			}
+			for (auto i = begin; i < end; ++i) {
+				total += filter_mask.RowIsValid(i);
 			}
 		}
 		data[rid] = total;

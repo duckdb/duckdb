@@ -397,28 +397,28 @@ public:
 
 	template <typename OP>
 	static void IntersectFrames(const Frames &lefts, const Frames &rights, OP &op) {
-		const auto union_start = MinValue(rights[0].start, lefts[0].start);
-		const auto union_end = MaxValue(rights.back().end, lefts.back().end);
-		const FrameBounds last(union_end, union_end);
+		const auto cover_start = MinValue(rights[0].start, lefts[0].start);
+		const auto cover_end = MaxValue(rights.back().end, lefts.back().end);
+		const FrameBounds last(cover_end, cover_end);
 
 		//	Subframe indices
 		idx_t l = 0;
 		idx_t r = 0;
-		for (auto i = union_start; i < union_end;) {
-			int overlap = 0;
+		for (auto i = cover_start; i < cover_end;) {
+			uint8_t overlap = 0;
 
 			// Are we in the previous frame?
 			auto left = &last;
 			if (l < lefts.size()) {
 				left = &lefts[l];
-				overlap |= int(left->start <= i && i < left->end) << 0;
+				overlap |= uint8_t(left->start <= i && i < left->end) << 0;
 			}
 
 			// Are we in the current frame?
 			auto right = &last;
 			if (r < rights.size()) {
 				right = &rights[r];
-				overlap |= int(right->start <= i && i < right->end) << 1;
+				overlap |= uint8_t(right->start <= i && i < right->end) << 1;
 			}
 
 			auto limit = i;

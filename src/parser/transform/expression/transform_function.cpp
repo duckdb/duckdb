@@ -74,13 +74,13 @@ void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef &window_sp
 	}
 
 	if (window_spec.frameOptions & FRAMEOPTION_EXCLUDE_CURRENT_ROW) {
-		expr.exclude_clause = WindowExclusion::CURRENT_ROW;
+		expr.exclude_clause = WindowExcludeMode::CURRENT_ROW;
 	} else if (window_spec.frameOptions & FRAMEOPTION_EXCLUDE_GROUP) {
-		expr.exclude_clause = WindowExclusion::GROUP;
+		expr.exclude_clause = WindowExcludeMode::GROUP;
 	} else if (window_spec.frameOptions & FRAMEOPTION_EXCLUDE_TIES) {
-		expr.exclude_clause = WindowExclusion::TIES;
+		expr.exclude_clause = WindowExcludeMode::TIES;
 	} else {
-		expr.exclude_clause = WindowExclusion::NO_OTHER;
+		expr.exclude_clause = WindowExcludeMode::NO_OTHER;
 	}
 }
 

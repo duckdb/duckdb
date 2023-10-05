@@ -6460,15 +6460,15 @@ WindowBoundary EnumUtil::FromString<WindowBoundary>(const char *value) {
 }
 
 template<>
-const char* EnumUtil::ToChars<WindowExclusion>(WindowExclusion value) {
+const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value) {
 	switch(value) {
-	case WindowExclusion::NO_OTHER:
+	case WindowExcludeMode::NO_OTHER:
 		return "NO_OTHER";
-	case WindowExclusion::CURRENT_ROW:
+	case WindowExcludeMode::CURRENT_ROW:
 		return "CURRENT_ROW";
-	case WindowExclusion::GROUP:
+	case WindowExcludeMode::GROUP:
 		return "GROUP";
-	case WindowExclusion::TIES:
+	case WindowExcludeMode::TIES:
 		return "TIES";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
@@ -6476,18 +6476,18 @@ const char* EnumUtil::ToChars<WindowExclusion>(WindowExclusion value) {
 }
 
 template<>
-WindowExclusion EnumUtil::FromString<WindowExclusion>(const char *value) {
+WindowExcludeMode EnumUtil::FromString<WindowExcludeMode>(const char *value) {
 	if (StringUtil::Equals(value, "NO_OTHER")) {
-		return WindowExclusion::NO_OTHER;
+		return WindowExcludeMode::NO_OTHER;
 	}
 	if (StringUtil::Equals(value, "CURRENT_ROW")) {
-		return WindowExclusion::CURRENT_ROW;
+		return WindowExcludeMode::CURRENT_ROW;
 	}
 	if (StringUtil::Equals(value, "GROUP")) {
-		return WindowExclusion::GROUP;
+		return WindowExcludeMode::GROUP;
 	}
 	if (StringUtil::Equals(value, "TIES")) {
-		return WindowExclusion::TIES;
+		return WindowExcludeMode::TIES;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

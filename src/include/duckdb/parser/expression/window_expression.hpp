@@ -26,7 +26,7 @@ enum class WindowBoundary : uint8_t {
 };
 
 //! Represents the window exclusion mode
-enum class WindowExclusion : uint8_t { NO_OTHER = 0, CURRENT_ROW = 1, GROUP = 2, TIES = 3 };
+enum class WindowExcludeMode : uint8_t { NO_OTHER = 0, CURRENT_ROW = 1, GROUP = 2, TIES = 3 };
 
 const char *ToString(WindowBoundary value);
 
@@ -59,7 +59,7 @@ public:
 	WindowBoundary start = WindowBoundary::INVALID;
 	WindowBoundary end = WindowBoundary::INVALID;
 	//! The EXCLUDE clause
-	WindowExclusion exclude_clause = WindowExclusion::NO_OTHER;
+	WindowExcludeMode exclude_clause = WindowExcludeMode::NO_OTHER;
 
 	unique_ptr<ParsedExpression> start_expr;
 	unique_ptr<ParsedExpression> end_expr;
@@ -209,17 +209,17 @@ public:
 			result += to;
 		}
 
-		if (entry.exclude_clause != WindowExclusion::NO_OTHER) {
+		if (entry.exclude_clause != WindowExcludeMode::NO_OTHER) {
 			result += " EXCLUDE ";
 		}
 		switch (entry.exclude_clause) {
-		case WindowExclusion::CURRENT_ROW:
+		case WindowExcludeMode::CURRENT_ROW:
 			result += "CURRENT ROW";
 			break;
-		case WindowExclusion::GROUP:
+		case WindowExcludeMode::GROUP:
 			result += "GROUP";
 			break;
-		case WindowExclusion::TIES:
+		case WindowExcludeMode::TIES:
 			result += "TIES";
 			break;
 		default:

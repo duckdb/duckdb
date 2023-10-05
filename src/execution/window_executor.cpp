@@ -535,7 +535,7 @@ WindowBoundariesState::WindowBoundariesState(BoundWindowExpression &wexpr, const
       has_preceding_range(HasPrecedingRange(wexpr)), has_following_range(HasFollowingRange(wexpr)),
       // if we have EXCLUDE GROUP / TIES, we also need peer boundaries
       needs_peer(BoundaryNeedsPeer(wexpr.end) || wexpr.type == ExpressionType::WINDOW_CUME_DIST ||
-                 wexpr.exclude_clause >= WindowExclusion::GROUP) {
+                 wexpr.exclude_clause >= WindowExcludeMode::GROUP) {
 }
 
 void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, const WindowInputColumn &range, const idx_t count,
@@ -613,20 +613,12 @@ void WindowExecutorBoundsState::UpdateBounds(idx_t row_idx, DataChunk &input_chu
 //! (needed for first_value, last_value, nth_value)
 class ExclusionFilter {
 public:
-	ExclusionFilter(WindowExclusion exclude_mode_p, idx_t total_count, const ValidityMask &src) : mode(exclude_mode_p) {
+	ExclusionFilter(const WindowExcludeMode exclude_mode_p, idx_t total_count, const ValidityMask &src)
+	    : mode(exclude_mode_p), mask_src(src) {
 		mask.Initialize(total_count);
 
-		// initialize mask_src:
-		if (src.GetData()) {
-			mask_src = &src;
-		} else {
-			// if src has no data (= represents only one entries), set the mask source to all_ones_mask)
-			one_bits.resize(ValidityMask::ValidityMaskSize(total_count), ~0);
-			all_ones_mask.Initialize(one_bits.data());
-			mask_src = &all_ones_mask;
-		}
 		// copy the data from mask_src
-		FetchFromSource(0, total_count - 1);
+		FetchFromSource(0, total_count);
 	}
 
 	//! Copy the entries from mask_src to mask, in the index range [begin, end)
@@ -643,36 +635,35 @@ public:
 	//! The current peer group's end
 	idx_t curr_peer_end;
 	//! The window exclusion mode
-	WindowExclusion mode;
+	WindowExcludeMode mode;
 	//! The validity mask representing the exclusion
 	ValidityMask mask;
 	//! The validity mask upon which mask is based
-	const ValidityMask *mask_src;
+	const ValidityMask &mask_src;
 	//! A validity mask consisting of only one entries (needed if no ignore_nulls mask is supplied)
 	ValidityMask all_ones_mask;
-	//! A field of one bits
-	vector<validity_t> one_bits;
 };
 
 void ExclusionFilter::FetchFromSource(idx_t begin, idx_t end) {
-	idx_t begin_entry_idx, end_entry_idx, buf;
-	mask.GetEntryIndex(begin, begin_entry_idx, buf);
-	mask.GetEntryIndex(end, end_entry_idx, buf);
+	idx_t begin_entry_idx;
+	idx_t end_entry_idx;
+	idx_t idx_in_entry;
+	mask.GetEntryIndex(begin, begin_entry_idx, idx_in_entry);
+	mask.GetEntryIndex(end - 1, end_entry_idx, idx_in_entry);
 	auto dst = mask.GetData() + begin_entry_idx;
-	auto src = mask_src->GetData() + begin_entry_idx;
-	for (idx_t entry_idx = begin_entry_idx; entry_idx++ <= end_entry_idx;) {
-		*dst++ = *src++;
+	for (idx_t entry_idx = begin_entry_idx; entry_idx <= end_entry_idx; ++entry_idx) {
+		*dst++ = mask_src.GetValidityEntry(entry_idx);
 	}
 }
 
 void ExclusionFilter::ApplyExclusion(DataChunk &bounds, idx_t row_idx, idx_t offset) {
 	// flip the bits in mask according to the window exclusion mode
 	switch (mode) {
-	case WindowExclusion::CURRENT_ROW:
+	case WindowExcludeMode::CURRENT_ROW:
 		mask.SetInvalid(row_idx);
 		break;
-	case WindowExclusion::TIES:
-	case WindowExclusion::GROUP: {
+	case WindowExcludeMode::TIES:
+	case WindowExcludeMode::GROUP: {
 		if (curr_peer_end == row_idx || offset == 0) {
 			// new peer group or input chunk: set entire peer group to invalid
 			auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
@@ -683,8 +674,8 @@ void ExclusionFilter::ApplyExclusion(DataChunk &bounds, idx_t row_idx, idx_t off
 				mask.SetInvalid(i);
 			}
 		}
-		if (mode == WindowExclusion::TIES) {
-			mask.Set(row_idx, mask_src->RowIsValid(row_idx));
+		if (mode == WindowExcludeMode::TIES) {
+			mask.Set(row_idx, mask_src.RowIsValid(row_idx));
 		}
 		break;
 	}
@@ -696,16 +687,16 @@ void ExclusionFilter::ApplyExclusion(DataChunk &bounds, idx_t row_idx, idx_t off
 void ExclusionFilter::ResetMask(idx_t row_idx, idx_t offset) {
 	// flip the bits that were modified in ApplyExclusion back
 	switch (mode) {
-	case WindowExclusion::CURRENT_ROW:
-		mask.Set(row_idx, mask_src->RowIsValid(row_idx));
+	case WindowExcludeMode::CURRENT_ROW:
+		mask.Set(row_idx, mask_src.RowIsValid(row_idx));
 		break;
-	case WindowExclusion::TIES:
+	case WindowExcludeMode::TIES:
 		mask.SetInvalid(row_idx);
 		DUCKDB_EXPLICIT_FALLTHROUGH;
-	case WindowExclusion::GROUP:
+	case WindowExcludeMode::GROUP:
 		if (curr_peer_end == row_idx + 1) {
 			// if we've reached the peer group's end, restore the entire peer group
-			FetchFromSource(curr_peer_begin, row_idx);
+			FetchFromSource(curr_peer_begin, curr_peer_end);
 		}
 		break;
 	default:
@@ -726,7 +717,7 @@ public:
 	    : WindowExecutorBoundsState(wexpr, context, count, partition_mask_p, order_mask_p)
 
 	{
-		if (wexpr.exclude_clause == WindowExclusion::NO_OTHER) {
+		if (wexpr.exclude_clause == WindowExcludeMode::NO_OTHER) {
 			exclusion_filter = nullptr;
 			ignore_nulls_exclude = &ignore_nulls;
 		} else {
@@ -792,7 +783,7 @@ bool WindowAggregateExecutor::IsConstantAggregate() {
 		return false;
 	}
 	// window exclusion cannot be handled by constant aggregates
-	if (wexpr.exclude_clause != WindowExclusion::NO_OTHER) {
+	if (wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
 		return false;
 	}
 

@@ -16,7 +16,7 @@ WindowAggregatorState::WindowAggregatorState() : allocator(Allocator::DefaultAll
 }
 
 WindowAggregator::WindowAggregator(AggregateObject aggr, const LogicalType &result_type_p,
-                                   WindowExclusion exclude_mode_p, idx_t partition_count_p)
+                                   const WindowExcludeMode exclude_mode_p, idx_t partition_count_p)
     : aggr(std::move(aggr)), result_type(result_type_p), partition_count(partition_count_p),
       state_size(aggr.function.state_size()), filter_pos(0), exclude_mode(exclude_mode_p) {
 }
@@ -52,8 +52,8 @@ void WindowAggregator::Finalize() {
 // WindowConstantAggregate
 //===--------------------------------------------------------------------===//
 WindowConstantAggregator::WindowConstantAggregator(AggregateObject aggr, const LogicalType &result_type,
-                                                   const ValidityMask &partition_mask, WindowExclusion exclude_mode_p,
-                                                   const idx_t count)
+                                                   const ValidityMask &partition_mask,
+                                                   const WindowExcludeMode exclude_mode_p, const idx_t count)
     : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, count), partition(0), row(0), state(state_size),
       statep(Value::POINTER(CastPointerToValue(state.data()))),
       statef(Value::POINTER(CastPointerToValue(state.data()))) {
@@ -239,7 +239,7 @@ void WindowConstantAggregator::Evaluate(WindowAggregatorState &lstate, const Dat
 // WindowCustomAggregator
 //===--------------------------------------------------------------------===//
 WindowCustomAggregator::WindowCustomAggregator(AggregateObject aggr, const LogicalType &result_type,
-                                               WindowExclusion exclude_mode_p, idx_t count)
+                                               const WindowExcludeMode exclude_mode_p, idx_t count)
     : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, count) {
 }
 
@@ -248,7 +248,7 @@ WindowCustomAggregator::~WindowCustomAggregator() {
 
 class WindowCustomAggregatorState : public WindowAggregatorState {
 public:
-	explicit WindowCustomAggregatorState(const AggregateObject &aggr, DataChunk &inputs, WindowExclusion exclude_mode);
+	WindowCustomAggregatorState(const AggregateObject &aggr, DataChunk &inputs, const WindowExcludeMode exclude_mode);
 	~WindowCustomAggregatorState() override;
 
 public:
@@ -265,7 +265,7 @@ public:
 };
 
 WindowCustomAggregatorState::WindowCustomAggregatorState(const AggregateObject &aggr, DataChunk &inputs,
-                                                         WindowExclusion exclude_mode)
+                                                         const WindowExcludeMode exclude_mode)
     : aggr(aggr), inputs(inputs), state(aggr.function.state_size()),
       statef(Value::POINTER(CastPointerToValue(state.data()))), frames(3, {0, 0}) {
 	// if we have a frame-by-frame method, share the single state
@@ -273,14 +273,14 @@ WindowCustomAggregatorState::WindowCustomAggregatorState(const AggregateObject &
 
 	idx_t nframes = 0;
 	switch (exclude_mode) {
-	case WindowExclusion::NO_OTHER:
+	case WindowExcludeMode::NO_OTHER:
 		nframes = 1;
 		break;
-	case WindowExclusion::TIES:
+	case WindowExcludeMode::TIES:
 		nframes = 3;
 		break;
-	case WindowExclusion::CURRENT_ROW:
-	case WindowExclusion::GROUP:
+	case WindowExcludeMode::CURRENT_ROW:
+	case WindowExcludeMode::GROUP:
 		nframes = 2;
 		break;
 	}
@@ -313,7 +313,7 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 	for (idx_t i = 0, cur_row = row_idx; i < count; ++i, ++cur_row) {
 		idx_t nframes = 0;
 		idx_t non_empty = 0;
-		if (exclude_mode == WindowExclusion::NO_OTHER) {
+		if (exclude_mode == WindowExcludeMode::NO_OTHER) {
 			auto begin = begins[i];
 			auto end = ends[i];
 			non_empty += (begin < end);
@@ -340,21 +340,21 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 
 			//	WindowSegmentTreePart::LEFT
 			auto begin = begins[i];
-			auto end = (exclude_mode == WindowExclusion::CURRENT_ROW) ? cur_row : peer_begin[i];
+			auto end = (exclude_mode == WindowExcludeMode::CURRENT_ROW) ? cur_row : peer_begin[i];
 			end = MaxValue(begin, end);
 			non_empty += (begin < end);
 			frames[nframes++] = FrameBounds(begin, end);
 
 			// with EXCLUDE TIES, in addition to the frame part right of the peer group's end,
 			// we also need to consider the current row
-			if (exclude_mode == WindowExclusion::TIES) {
+			if (exclude_mode == WindowExcludeMode::TIES) {
 				++non_empty;
 				frames[nframes++] = FrameBounds(cur_row, cur_row + 1);
 			}
 
 			//	WindowSegmentTreePart::RIGHT
 			end = ends[i];
-			begin = (exclude_mode == WindowExclusion::CURRENT_ROW) ? (cur_row + 1) : peer_end[i];
+			begin = (exclude_mode == WindowExcludeMode::CURRENT_ROW) ? (cur_row + 1) : peer_end[i];
 			begin = MinValue(begin, end);
 			non_empty += (begin < end);
 			frames[nframes++] = FrameBounds(begin, end);
@@ -377,7 +377,7 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 // WindowSegmentTree
 //===--------------------------------------------------------------------===//
 WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, WindowAggregationMode mode_p,
-                                     WindowExclusion exclude_mode_p, idx_t count)
+                                     const WindowExcludeMode exclude_mode_p, idx_t count)
     : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, count), internal_nodes(0), mode(mode_p) {
 }
 
@@ -651,7 +651,7 @@ void WindowSegmentTree::Evaluate(WindowAggregatorState &lstate, const DataChunk 
 	auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
 
 	auto &part = ltstate.part;
-	if (exclude_mode != WindowExclusion::NO_OTHER) {
+	if (exclude_mode != WindowExcludeMode::NO_OTHER) {
 		// 1. evaluate the tree left of the excluded part
 		part.Evaluate(*this, window_begin, peer_begin, result, count, row_idx, WindowSegmentTreePart::LEFT);
 
@@ -691,11 +691,11 @@ void WindowSegmentTreePart::Evaluate(const WindowSegmentTree &tree, const idx_t 
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
 
 	const auto exclude_mode = tree.exclude_mode;
-	const bool begin_on_curr_row = frame_part == FramePart::RIGHT && exclude_mode == WindowExclusion::CURRENT_ROW;
-	const bool end_on_curr_row = frame_part == FramePart::LEFT && exclude_mode == WindowExclusion::CURRENT_ROW;
+	const bool begin_on_curr_row = frame_part == FramePart::RIGHT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
+	const bool end_on_curr_row = frame_part == FramePart::LEFT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
 	// with EXCLUDE TIES, in addition to the frame part right of the peer group's end, we also need to consider the
 	// current row
-	const bool add_curr_row = frame_part == FramePart::RIGHT && exclude_mode == WindowExclusion::TIES;
+	const bool add_curr_row = frame_part == FramePart::RIGHT && exclude_mode == WindowExcludeMode::TIES;
 
 	//	First pass: aggregate the segment tree nodes
 	//	Share adjacent identical states
