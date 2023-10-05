@@ -171,6 +171,7 @@ class DataFrameReader:
             date_format=dateFormat,
             timestamp_format=timestampFormat,
         )
+        from ..sql.dataframe import DataFrame
         df = DataFrame(rel, self.session)
         if names:
             df = df.toDF(*names)
