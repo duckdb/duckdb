@@ -400,7 +400,8 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 			first_position = 0;
 			local_batch_index = 0;
 
-			line_info.lines_read[file_index++][local_batch_index] = (bind_data.options.has_header && bind_data.options.dialect_options.header ? 1 : 0);
+			line_info.lines_read[file_index++][local_batch_index] =
+			    (bind_data.options.has_header && bind_data.options.dialect_options.header ? 1 : 0);
 
 			current_buffer = buffer_manager->GetBuffer(cur_buffer_idx);
 			next_buffer = buffer_manager->GetBuffer(cur_buffer_idx + 1);
