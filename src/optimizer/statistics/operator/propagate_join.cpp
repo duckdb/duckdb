@@ -36,12 +36,12 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
 				// filter is always false or null, none of the join conditions matter
 				switch (join.join_type) {
-				case JoinType::SEMI:
+				case JoinType::LEFT_SEMI:
 				case JoinType::INNER:
 					// semi or inner join on false; entire node can be pruned
 					ReplaceWithEmptyResult(*node_ptr);
 					return;
-				case JoinType::ANTI: {
+				case JoinType::LEFT_ANTI: {
 					// when the right child has data, return the left child
 					// when the right child has no data, return an empty set
 					auto limit = make_uniq<LogicalLimit>(1, 0, nullptr, nullptr);
@@ -77,7 +77,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				} else {
 					// this is the only condition and it is always true: all conditions are true
 					switch (join.join_type) {
-					case JoinType::SEMI: {
+					case JoinType::LEFT_SEMI: {
 						// when the right child has data, return the left child
 						// when the right child has no data, return an empty set
 						auto limit = make_uniq<LogicalLimit>(1, 0, nullptr, nullptr);
@@ -93,7 +93,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 						*node_ptr = std::move(cross_product);
 						return;
 					}
-					case JoinType::ANTI:
+					case JoinType::LEFT_ANTI:
 						// anti join on true: empty result
 						ReplaceWithEmptyResult(*node_ptr);
 						return;
@@ -125,7 +125,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 		}
 		switch (join.join_type) {
 		case JoinType::INNER:
-		case JoinType::SEMI: {
+		case JoinType::LEFT_SEMI: {
 			UpdateFilterStatistics(*condition.left, *condition.right, condition.comparison);
 			auto updated_stats_left = PropagateExpression(condition.left);
 			auto updated_stats_right = PropagateExpression(condition.right);

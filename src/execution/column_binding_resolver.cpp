@@ -49,7 +49,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		VisitOperatorChildren(op);
 		bindings = op.GetColumnBindings();
 		auto &any_join = op.Cast<LogicalAnyJoin>();
-		if (any_join.join_type == JoinType::SEMI || any_join.join_type == JoinType::ANTI) {
+		if (any_join.join_type == JoinType::LEFT_SEMI || any_join.join_type == JoinType::LEFT_ANTI) {
 			auto right_bindings = op.children[1]->GetColumnBindings();
 			bindings.insert(bindings.end(), right_bindings.begin(), right_bindings.end());
 		}

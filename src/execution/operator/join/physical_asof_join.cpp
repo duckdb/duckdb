@@ -554,10 +554,10 @@ void AsOfProbeBuffer::ResolveSimpleJoin(ExecutionContext &context, DataChunk &ch
 
 	// now construct the result based on the join result
 	switch (op.join_type) {
-	case JoinType::SEMI:
+	case JoinType::LEFT_SEMI:
 		PhysicalJoin::ConstructSemiJoinResult(lhs_payload, chunk, found_match);
 		break;
-	case JoinType::ANTI:
+	case JoinType::LEFT_ANTI:
 		PhysicalJoin::ConstructAntiJoinResult(lhs_payload, chunk, found_match);
 		break;
 	default:
@@ -618,8 +618,8 @@ void AsOfProbeBuffer::GetData(ExecutionContext &context, DataChunk &chunk) {
 	}
 
 	switch (op.join_type) {
-	case JoinType::SEMI:
-	case JoinType::ANTI:
+	case JoinType::LEFT_SEMI:
+	case JoinType::LEFT_ANTI:
 	case JoinType::MARK:
 		// simple joins can have max STANDARD_VECTOR_SIZE matches per chunk
 		ResolveSimpleJoin(context, chunk);

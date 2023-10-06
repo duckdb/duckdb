@@ -283,8 +283,8 @@ OperatorResultType PhysicalNestedLoopJoin::ExecuteInternal(ExecutionContext &con
 	}
 
 	switch (join_type) {
-	case JoinType::SEMI:
-	case JoinType::ANTI:
+	case JoinType::LEFT_SEMI:
+	case JoinType::LEFT_ANTI:
 	case JoinType::MARK:
 		// simple joins can have max STANDARD_VECTOR_SIZE matches per chunk
 		ResolveSimpleJoin(context, input, chunk, state_p);
@@ -315,11 +315,11 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataCh
 		// now construct the mark join result from the found matches
 		PhysicalJoin::ConstructMarkJoinResult(state.left_condition, input, chunk, found_match, gstate.has_null);
 		break;
-	case JoinType::SEMI:
+	case JoinType::LEFT_SEMI:
 		// construct the semi join result from the found matches
 		PhysicalJoin::ConstructSemiJoinResult(input, chunk, found_match);
 		break;
-	case JoinType::ANTI:
+	case JoinType::LEFT_ANTI:
 		// construct the anti join result from the found matches
 		PhysicalJoin::ConstructAntiJoinResult(input, chunk, found_match);
 		break;
