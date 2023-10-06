@@ -56,6 +56,9 @@ struct SniffDialect {
 		if (machine.cur_rows < STANDARD_VECTOR_SIZE && machine.state != CSVState::EMPTY_LINE) {
 			sniffed_column_counts[machine.cur_rows++] = machine.column_count;
 		}
+		if (machine.cur_rows == 0 && machine.state == CSVState::EMPTY_LINE){
+			sniffed_column_counts[machine.cur_rows++] = machine.column_count;
+		}
 		NewLineIdentifier suggested_newline;
 		if (machine.carry_on_separator) {
 			if (machine.single_record_separator) {
@@ -163,14 +166,18 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 	if (sniffed_column_counts.size() > rows_read) {
 		rows_read = sniffed_column_counts.size();
 	}
-	if (set_columns.IsSet() && !options.ignore_errors && num_cols != max_columns_found){
+	if (set_columns.IsSet() && ((!options.ignore_errors && num_cols < max_columns_found) || (!options.null_padding && num_cols > max_columns_found))){
 		// columns are set and don't match with what is was found.
 		return;
 	}
 	for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
+		if (set_columns.IsSet() && ((!options.ignore_errors && num_cols < max_columns_found) || (!options.null_padding && num_cols > max_columns_found))){
+			// columns are set and don't match with what is was found.
+			return;
+		}
 		if (sniffed_column_counts[row] == num_cols || options.ignore_errors) {
 			consistent_rows++;
-		} else if (num_cols < sniffed_column_counts[row] && !options.skip_rows_set && !set_columns.IsSet()) {
+		} else if (num_cols < sniffed_column_counts[row] && !options.skip_rows_set && (!set_columns.IsSet() || options.null_padding)) {
 			// all rows up to this point will need padding
 			padding_count = 0;
 			// we use the maximum amount of num_cols that we find
@@ -257,11 +264,13 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 bool CSVSniffer::RefineCandidateNextChunk(CSVStateMachine &candidate) {
 	vector<idx_t> sniffed_column_counts(STANDARD_VECTOR_SIZE);
 	candidate.csv_buffer_iterator.Process<SniffDialect>(candidate, sniffed_column_counts);
-	bool allow_padding = options.null_padding;
-
 	for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
-		if (max_columns_found != sniffed_column_counts[row] && (!allow_padding || !options.ignore_errors)) {
+		if (set_columns.IsSet() && ((!options.ignore_errors && sniffed_column_counts[row] < max_columns_found) || (!options.null_padding && sniffed_column_counts[row] > max_columns_found))){
 			return false;
+		} else{
+			if (max_columns_found != sniffed_column_counts[row] && (!options.null_padding  || !options.ignore_errors)) {
+				return false;
+			}
 		}
 	}
 	return true;

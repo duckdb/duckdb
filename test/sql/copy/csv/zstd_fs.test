@@ -25,7 +25,8 @@ CREATE TABLE lineitem(l_orderkey INT NOT NULL,
                       l_receiptdate DATE NOT NULL,
                       l_shipinstruct VARCHAR(25) NOT NULL,
                       l_shipmode VARCHAR(10) NOT NULL,
-                      l_comment VARCHAR(44) NOT NULL);
+                      l_comment VARCHAR(44) NOT NULL,
+                      extra VARCHAR(1));
 
 statement ok
 COPY lineitem FROM 'test/sql/copy/csv/data/zstd/lineitem1k.tbl.zst' DELIMITER '|';
