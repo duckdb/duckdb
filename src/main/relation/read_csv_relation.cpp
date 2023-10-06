@@ -29,7 +29,6 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 	D_ASSERT(!files.empty());
 
 	auto &file_name = files[0];
-
 	CSVReaderOptions csv_options;
 	csv_options.file_path = file_name;
 	vector<string> empty;
@@ -49,6 +48,11 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 	for (idx_t i = 0; i < types.size(); i++) {
 		columns.emplace_back(names[i], types[i]);
 	}
+
+	// After sniffing we can consider these set, so they are exported as named parameters
+	csv_options.has_delimiter = true;
+	csv_options.has_quote = true;
+	csv_options.has_escape = true;
 
 	//! Capture the options potentially set/altered by the auto detection phase
 	csv_options.ToNamedParameters(options);
