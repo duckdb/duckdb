@@ -36,12 +36,12 @@ NULL
 statement error
 SELECT array_cross_product([1,NULL,3]::${TYPE}[3], [1,5,7]::${TYPE}[3]);
 ----
-'array_cross_product' left argument can not contain NULL values
+array_cross_product: left argument can not contain NULL values
 
 statement error
 SELECT array_cross_product([1,5,7]::${TYPE}[3], [1,NULL,3]::${TYPE}[3]);
 ----
-'array_cross_product' right argument can not contain NULL values
+array_cross_product: right argument can not contain NULL values
 
 # Now we can also try implict casts
 query I

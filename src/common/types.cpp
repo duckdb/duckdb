@@ -218,6 +218,11 @@ const vector<LogicalType> LogicalType::Integral() {
 	return types;
 }
 
+const vector<LogicalType> LogicalType::Real() {
+	vector<LogicalType> types = {LogicalType::FLOAT, LogicalType::DOUBLE};
+	return types;
+}
+
 const vector<LogicalType> LogicalType::AllTypes() {
 	vector<LogicalType> types = {
 	    LogicalType::BOOLEAN,   LogicalType::TINYINT,  LogicalType::SMALLINT,  LogicalType::INTEGER,
@@ -391,7 +396,11 @@ string LogicalType::ToString() const {
 			return "ARRAY";
 		}
 		auto size = ArrayType::GetSize(*this);
-		return ArrayType::GetChildType(*this).ToString() + "[" + to_string(size) + "]";
+		if (size == 0) {
+			return ArrayType::GetChildType(*this).ToString() + "[ANY]";
+		} else {
+			return ArrayType::GetChildType(*this).ToString() + "[" + to_string(size) + "]";
+		}
 	}
 	case LogicalTypeId::DECIMAL: {
 		if (!type_info_) {
@@ -1099,10 +1108,22 @@ uint32_t ArrayType::GetSize(const LogicalType &type) {
 	return info->Cast<ArrayTypeInfo>().size;
 }
 
+bool ArrayType::IsAnySize(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ARRAY);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return info->Cast<ArrayTypeInfo>().size == 0;
+}
+
 LogicalType LogicalType::ARRAY(const LogicalType &child, uint32_t size) {
 	D_ASSERT(size > 0);
 	D_ASSERT(size < ArrayType::MAX_ARRAY_SIZE);
 	auto info = make_shared<ArrayTypeInfo>(child, size);
+	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
+}
+
+LogicalType LogicalType::ARRAY(const LogicalType &child) {
+	auto info = make_shared<ArrayTypeInfo>(child, 0);
 	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
 }
 

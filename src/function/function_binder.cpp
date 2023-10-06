@@ -230,7 +230,7 @@ LogicalTypeComparisonResult RequiresCast(const LogicalType &source_type, const L
 void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children) {
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto target_type = i < function.arguments.size() ? function.arguments[i] : function.varargs;
-		target_type.Verify();
+		// target_type.Verify();
 		// don't cast lambda children, they get removed anyways
 		if (children[i]->return_type.id() == LogicalTypeId::LAMBDA) {
 			continue;

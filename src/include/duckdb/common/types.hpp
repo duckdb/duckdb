@@ -366,6 +366,8 @@ public:
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
 	DUCKDB_API static LogicalType UNION( child_list_t<LogicalType> members);     // NOLINT
 	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, uint32_t size);     // NOLINT
+	// an array of unknown size (only used for binding)
+	DUCKDB_API static LogicalType ARRAY(const LogicalType &child);     // NOLINT
 	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
 	// DEPRECATED - provided for backwards compatibility
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
@@ -374,6 +376,8 @@ public:
 	DUCKDB_API static const vector<LogicalType> Numeric();
 	//! A list of all INTEGRAL types
 	DUCKDB_API static const vector<LogicalType> Integral();
+	//! A list of all REAL types
+	DUCKDB_API static const vector<LogicalType> Real();
 	//! A list of ALL SQL types
 	DUCKDB_API static const vector<LogicalType> AllTypes();
 };
@@ -429,7 +433,8 @@ struct UnionType {
 struct ArrayType {
 	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type);
 	DUCKDB_API static uint32_t GetSize(const LogicalType &type);
-	DUCKDB_API static constexpr uint64_t MAX_ARRAY_SIZE = 32768; 
+	DUCKDB_API static constexpr uint64_t MAX_ARRAY_SIZE = 32768;
+	DUCKDB_API static bool IsAnySize(const LogicalType &type);
 };
 
 struct AggregateStateType {

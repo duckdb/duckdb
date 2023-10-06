@@ -168,13 +168,12 @@ static inline void ArrayGenericBinaryExecute(Vector &left, Vector &right, Vector
 
 		auto left_offset = left_idx * size;
 		if (!left_child_validity.CheckAllValid(left_offset + size, left_offset)) {
-			throw InvalidInputException(StringUtil::Format("'%s' left argument can not contain NULL values", OP::NAME));
+			throw InvalidInputException(StringUtil::Format("%s: left argument can not contain NULL values", OP::NAME));
 		}
 
 		auto right_offset = right_idx * size;
 		if (!right_child_validity.CheckAllValid(right_offset + size, right_offset)) {
-			throw InvalidInputException(
-			    StringUtil::Format("'%s' right argument can not contain NULL values", OP::NAME));
+			throw InvalidInputException(StringUtil::Format("%s: right argument can not contain NULL values", OP::NAME));
 		}
 
 		OP::template Operation<TYPE>(left_data, left_idx, right_data, right_idx, result_data, i, size);
@@ -197,7 +196,7 @@ static void ArrayGenericBinaryFunction(DataChunk &args, ExpressionState &, Vecto
 		ArrayGenericBinaryExecute<OP, float>(args.data[0], args.data[1], result, size, args.size());
 		break;
 	default:
-		throw NotImplementedException(StringUtil::Format("Unsupported child type for '%s'", OP::NAME));
+		throw NotImplementedException(StringUtil::Format("%s: Unsupported element type", OP::NAME));
 	}
 }
 
@@ -209,23 +208,27 @@ static unique_ptr<FunctionData> ArrayGenericBinaryBind(ClientContext &context, S
 	auto &left_type = arguments[0]->return_type;
 	auto &right_type = arguments[1]->return_type;
 
-	if (left_type.id() != LogicalTypeId::ARRAY || right_type.id() != LogicalTypeId::ARRAY) {
-		throw BinderException(StringUtil::Format("'%s' requires both arguments to be of type array", OP::NAME));
+	auto left_size = ArrayType::GetSize(left_type);
+	auto right_size = ArrayType::GetSize(right_type);
+	if (left_size != right_size) {
+		throw InvalidInputException(StringUtil::Format("%s: Array arguments must be of the same size", OP::NAME));
+	}
+	auto size = left_size;
+
+	auto child_type =
+	    LogicalType::MaxLogicalType(ArrayType::GetChildType(left_type), ArrayType::GetChildType(right_type));
+	if (child_type != LogicalTypeId::FLOAT && child_type != LogicalTypeId::DOUBLE) {
+		throw InvalidInputException(
+		    StringUtil::Format("%s: Array arguments must be of type FLOAT or DOUBLE", OP::NAME));
 	}
 
-	if (left_type != right_type) {
-		throw BinderException(
-		    StringUtil::Format("'%s' requires both arguments to be arrays of the same type (and length)", OP::NAME));
-	}
+	// the important part here is that we resolve the array size
+	auto array_type = LogicalType::ARRAY(child_type, size);
 
-	auto &child_type = ArrayType::GetChildType(left_type);
-
-	if (child_type.id() != LogicalTypeId::DOUBLE && child_type.id() != LogicalTypeId::FLOAT) {
-		throw BinderException(
-		    StringUtil::Format("'%s' requires both arguments to be arrays of either FLOAT or DOUBLE", OP::NAME));
-	}
-
+	bound_function.arguments[0] = array_type;
+	bound_function.arguments[1] = array_type;
 	bound_function.return_type = child_type;
+
 	return nullptr;
 }
 
@@ -245,30 +248,38 @@ static inline void ArrayFixedBinaryFunction(DataChunk &args, ExpressionState &, 
 ScalarFunctionSet ArrayInnerProductFun::GetFunctions() {
 	ScalarFunctionSet set("array_inner_product");
 	// Generic array inner product function
-	set.AddFunction(ScalarFunction({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
-	                               ArrayGenericBinaryFunction<InnerProductOp>, ArrayGenericBinaryBind<InnerProductOp>));
+	for (auto &type : LogicalType::Real()) {
+		set.AddFunction(ScalarFunction({LogicalType::ARRAY(type), LogicalType::ARRAY(type)}, type,
+		                               ArrayGenericBinaryFunction<InnerProductOp>,
+		                               ArrayGenericBinaryBind<InnerProductOp>));
+	}
 	return set;
 }
 
 ScalarFunctionSet ArrayDistanceFun::GetFunctions() {
 	ScalarFunctionSet set("array_distance");
 	// Generic array distance function
-	set.AddFunction(ScalarFunction({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
-	                               ArrayGenericBinaryFunction<DistanceOp>, ArrayGenericBinaryBind<DistanceOp>));
+	for (auto &type : LogicalType::Real()) {
+		set.AddFunction(ScalarFunction({LogicalType::ARRAY(type), LogicalType::ARRAY(type)}, type,
+		                               ArrayGenericBinaryFunction<DistanceOp>, ArrayGenericBinaryBind<DistanceOp>));
+	}
 	return set;
 }
 
 ScalarFunctionSet ArrayCosineSimilarityFun::GetFunctions() {
 	ScalarFunctionSet set("array_cosine_similarity");
 	// Generic array cosine similarity function
-	set.AddFunction(ScalarFunction({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
-	                               ArrayGenericBinaryFunction<CosineSimilarityOp>,
-	                               ArrayGenericBinaryBind<CosineSimilarityOp>));
+	for (auto &type : LogicalType::Real()) {
+		set.AddFunction(ScalarFunction({LogicalType::ARRAY(type), LogicalType::ARRAY(type)}, type,
+		                               ArrayGenericBinaryFunction<CosineSimilarityOp>,
+		                               ArrayGenericBinaryBind<CosineSimilarityOp>));
+	}
 	return set;
 }
 
 ScalarFunctionSet ArrayCrossProductFun::GetFunctions() {
 	ScalarFunctionSet set("array_cross_product");
+
 	// Generic array cross product function
 	auto double_arr = LogicalType::ARRAY(LogicalType::DOUBLE, 3);
 	set.AddFunction(

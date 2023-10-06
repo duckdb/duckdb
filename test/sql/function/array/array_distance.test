@@ -37,7 +37,7 @@ right argument can not contain NULL values
 statement error
 SELECT array_distance([1, 2, 3]::${type}[3], [1, 2, 3, 4]::${type}[4]);
 ----
-'array_distance' requires both arguments to be arrays of the same type (and length)
+array_distance: Array arguments must be of the same size
 
 
 endloop

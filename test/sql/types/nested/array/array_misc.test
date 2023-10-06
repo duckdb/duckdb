@@ -143,12 +143,6 @@ NULL
 mode skip
 
 query I
-SELECT list(a ORDER BY a[3]) FROM arrays
-----
-# Shouldn't Internal Exception:
-# ABORT THROWN BY INTERNAL EXCEPTION: LIST aggregate not yet implemented for INTEGER[3]
-
-query I
 SELECT * FROM test_vector_types(NULL::INTEGER[3])
 ----
 # This is probably OK?

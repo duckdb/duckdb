@@ -36,7 +36,7 @@ right argument can not contain NULL values
 statement error
 SELECT array_cosine_similarity([1, 2, 3]::${type}[3], [1, 2, 3, 4]::${type}[4]);
 ----
-'array_cosine_similarity' requires both arguments to be arrays of the same type (and length)
+array_cosine_similarity: Array arguments must be of the same size
 
 
 

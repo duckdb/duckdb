@@ -31,3 +31,14 @@ query I
 SELECT list_filter(array_value(3,2,1), x -> x > 1) = list_filter([3,2,1], x -> x > 1);
 ----
 true
+
+# Concat example(s)
+query I
+SELECT list_concat(array_value(1,2,3), array_value(4,5,6));
+----
+[1, 2, 3, 4, 5, 6]
+
+query II
+SELECT list_concat(array_value(1,2,3), NULL), list_concat(NULL, array_value(4,5,6));
+----
+[1, 2, 3]	[4, 5, 6]

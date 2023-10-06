@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
@@ -72,12 +73,25 @@ static void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &
 	}
 }
 
+static unique_ptr<Expression> ConvertArrayToListCast(ClientContext &context, unique_ptr<Expression> expr) {
+	if (expr->return_type.id() != LogicalTypeId::ARRAY) {
+		return expr;
+	}
+	auto &child_type = ArrayType::GetChildType(expr->return_type);
+	return BoundCastExpression::AddCastToType(context, std::move(expr), LogicalType::LIST(child_type));
+}
+
 static unique_ptr<FunctionData> ListConcatBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 
+	// if either argument is an array, we cast it to a list
+	arguments[0] = ConvertArrayToListCast(context, std::move(arguments[0]));
+	arguments[1] = ConvertArrayToListCast(context, std::move(arguments[1]));
+
 	auto &lhs = arguments[0]->return_type;
 	auto &rhs = arguments[1]->return_type;
+
 	if (lhs.id() == LogicalTypeId::UNKNOWN || rhs.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	} else if (lhs.id() == LogicalTypeId::SQLNULL || rhs.id() == LogicalTypeId::SQLNULL) {

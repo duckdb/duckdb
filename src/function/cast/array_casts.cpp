@@ -1,6 +1,5 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
-#include "duckdb/function/cast/bound_cast_data.hpp"
 
 namespace duckdb {
 
