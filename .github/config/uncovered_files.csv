@@ -68,7 +68,7 @@ common/tree_renderer.cpp	9
 common/types.cpp	88
 common/extra_type_info.cpp	34
 common/virtual_file_system.cpp	32
-common/types/batched_data_collection.cpp	11
+common/types/batched_data_collection.cpp	39
 common/types/bit.cpp	9
 common/types/blob.cpp	3
 common/types/chunk_collection.cpp	94
