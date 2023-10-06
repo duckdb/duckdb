@@ -13,6 +13,7 @@ def test_nested():
 
 
 def test_union_contains_nested_data():
+    _ = importorskip("pyarrow", minversion="11")
     res = run("select ['hello']::UNION(first_name VARCHAR, middle_names VARCHAR[]) as res")
     assert types.is_union(res.type)
     assert res.value == scalar(['hello'], type=list_(string()))

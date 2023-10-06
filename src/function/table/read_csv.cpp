@@ -38,7 +38,7 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 	auto number_of_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	//! If we have many csv files, we run single-threaded on each file and parallelize on the number of files
 	bool many_csv_files = files.size() > 1 && int64_t(files.size() * 2) >= number_of_threads;
-	if (options.parallel_mode != ParallelMode::PARALLEL && many_csv_files) {
+	if (options.parallel_mode != ParallelMode::PARALLEL && (many_csv_files || number_of_threads == 1)) {
 		single_threaded = true;
 	}
 	if (options.parallel_mode == ParallelMode::SINGLE_THREADED || not_supported_options ||
