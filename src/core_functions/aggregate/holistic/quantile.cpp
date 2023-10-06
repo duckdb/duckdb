@@ -105,7 +105,6 @@ size_t QuantileSortTree::SelectNth(const FrameBounds &frame, ElementType n) cons
 					cascade_idx.second = (upper_idx / CASCADING + 2 * result) * FANOUT;
 					result *= FANOUT;
 					level_width /= FANOUT;
-					--level_no;
 					break;
 				}
 
