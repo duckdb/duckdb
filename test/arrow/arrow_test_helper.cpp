@@ -45,12 +45,13 @@ const char *ArrowTestFactory::ArrowArrayStreamGetLastError(struct ArrowArrayStre
 }
 
 void ArrowTestFactory::ArrowArrayStreamRelease(struct ArrowArrayStream *stream) {
-	if (!stream->private_data) {
+	if (!stream || !stream->private_data) {
 		return;
 	}
 	auto data = (ArrowArrayStreamData *)stream->private_data;
 	delete data;
 	stream->private_data = nullptr;
+	stream->release = nullptr;
 }
 
 duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> ArrowTestFactory::CreateStream(uintptr_t this_ptr,

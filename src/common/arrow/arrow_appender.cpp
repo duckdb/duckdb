@@ -39,16 +39,22 @@ void ArrowAppender::ReleaseArray(ArrowArray *array) {
 	if (!array || !array->release) {
 		return;
 	}
+	auto holder = static_cast<ArrowAppendData *>(array->private_data);
 	for (int64_t i = 0; i < array->n_children; i++) {
 		auto child = array->children[i];
-		if (!child) {
+		D_ASSERT(child);
+		if (!child || !child->release) {
 			// Child was moved out of the array
 			continue;
 		}
 		child->release(child);
+		array->children[i] = nullptr;
+	}
+	if (array->dictionary && array->dictionary->release) {
+		array->dictionary->release(array->dictionary);
+		D_ASSERT(!array->dictionary->release);
 	}
 	array->release = nullptr;
-	auto holder = static_cast<ArrowAppendData *>(array->private_data);
 	delete holder;
 }
 
