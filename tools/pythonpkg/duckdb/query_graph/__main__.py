@@ -95,15 +95,10 @@ class AllTimings:
 def open_utf8(fpath, flags):
     import sys
     if sys.version_info[0] < 3:
-        return open(fpath, flags)
+        print("Please use python3")
+        exit(1)
     else:
         return open(fpath, flags, encoding="utf8")
-
-
-# if detailed profiling is enabled, then information on the timing of each stage of the query is available
-# that is "top level timing information"
-def get_top_level_timings(json):
-    return []
 
 def get_child_timings(top_node, query_timings):
     node_timing = NodeTiming(top_node['name'], float(top_node['timing']))
@@ -237,12 +232,10 @@ def generate_style_html(graph_json, include_meta_info):
         'chart_script': ''
     }
 
-# ????
 def gather_timing_information(json, query_timings):
     # add up all of the times
     # measure each time as a percentage of the total time.
     # then you can return a list of [phase, time, percentage]
-    top_level_timings = get_top_level_timings(json)
     child_timings = get_child_timings(json['children'][0], query_timings)
 
 def translate_json_to_html(input_file, output_file):
@@ -287,7 +280,7 @@ def main():
 
     parser = argparse.ArgumentParser(
         prog='Query Graph Generator',
-        description='Given a json profile output, generates an html file that shows the query graph')
+        description='Given a json profile output, generate a html file showing the query graph and timings of operators')
     parser.add_argument('profile_input', help='profile input in json')
     parser.add_argument('--out', required=False, default=False)
     parser.add_argument('--open', required=False, action='store_true', default=True)
@@ -312,11 +305,8 @@ def main():
 
     translate_json_to_html(input, output)
 
-    with open(output, 'r') as f:
-        text = f.read()
-
     if open_output:
-        webbrowser.open('file:///Users/tomebergen/scripts/run_imdb/tpch_new_html/q08.html', new=2)
+        webbrowser.open('file://' + os.path.abspath(output), new=2)
 
 
 if __name__ == '__main__':
