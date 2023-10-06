@@ -321,7 +321,7 @@ unique_ptr<TableRef> StatementGenerator::GenerateJoinRef() {
 		}
 	}
 	join->type = Choose<JoinType>(
-	    {JoinType::LEFT, JoinType::RIGHT, JoinType::INNER, JoinType::OUTER, JoinType::SEMI, JoinType::ANTI});
+	    {JoinType::LEFT, JoinType::RIGHT, JoinType::INNER, JoinType::OUTER, JoinType::LEFT_SEMI, JoinType::LEFT_ANTI});
 	return std::move(join);
 }
 
