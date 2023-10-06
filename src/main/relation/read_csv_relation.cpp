@@ -20,12 +20,13 @@ namespace duckdb {
 ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const string &csv_file,
                                  named_parameter_map_t &&options, string alias_p)
     : TableFunctionRelation(context, "read_csv_auto", {Value(csv_file)}, nullptr, false), alias(std::move(alias_p)) {
+    : TableFunctionRelation(context, "read_csv_auto", {CreateValueFromFileList(input)}, nullptr, false),
+      alias(std::move(alias_p)), auto_detect(true) {
 
-	if (alias.empty()) {
-		alias = StringUtil::Split(csv_file, ".")[0];
-	}
+	InitializeAlias(input);
 
-	auto files = MultiFileReader::GetFileList(*context, csv_file, "CSV");
+	auto file_list = CreateValueFromFileList(input);
+	auto files = MultiFileReader::GetFileList(*context, file_list, "CSV");
 	D_ASSERT(!files.empty());
 
 	auto &file_name = files[0];

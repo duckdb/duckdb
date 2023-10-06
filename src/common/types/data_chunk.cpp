@@ -64,7 +64,7 @@ void DataChunk::InitializeEmpty(vector<LogicalType>::const_iterator begin, vecto
 }
 
 void DataChunk::Reset() {
-	if (data.empty()) {
+	if (data.empty() || vector_caches.empty()) {
 		return;
 	}
 	if (vector_caches.size() != data.size()) {

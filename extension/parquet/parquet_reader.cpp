@@ -1,41 +1,37 @@
 #include "parquet_reader.hpp"
-#include "parquet_timestamp.hpp"
-#include "parquet_statistics.hpp"
-#include "column_reader.hpp"
 
 #include "boolean_column_reader.hpp"
-#include "row_number_column_reader.hpp"
-#include "cast_column_reader.hpp"
 #include "callback_column_reader.hpp"
+#include "cast_column_reader.hpp"
+#include "column_reader.hpp"
+#include "duckdb.hpp"
 #include "list_column_reader.hpp"
+#include "parquet_file_metadata_cache.hpp"
+#include "parquet_statistics.hpp"
+#include "parquet_timestamp.hpp"
+#include "row_number_column_reader.hpp"
 #include "string_column_reader.hpp"
 #include "struct_column_reader.hpp"
 #include "templated_column_reader.hpp"
-
 #include "thrift_tools.hpp"
-
-#include "parquet_file_metadata_cache.hpp"
-
-#include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/planner/table_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
-#include "duckdb/common/pair.hpp"
-#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #endif
 
-#include <sstream>
 #include <cassert>
 #include <chrono>
 #include <cstring>
+#include <sstream>
 
 namespace duckdb {
 
@@ -427,6 +423,26 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	if (context.TryGetCurrentSetting("binary_as_string", binary_as_string_val)) {
 		binary_as_string = binary_as_string_val.GetValue<bool>();
 	}
+}
+
+ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &context, const Value &column_value) {
+	ParquetColumnDefinition result;
+	result.field_id = IntegerValue::Get(StructValue::GetChildren(column_value)[0]);
+
+	const auto &column_def = StructValue::GetChildren(column_value)[1];
+	const auto &column_type = column_def.type();
+	D_ASSERT(column_type.id() == LogicalTypeId::STRUCT);
+
+	const auto children = StructValue::GetChildren(column_def);
+	result.name = StringValue::Get(children[0]);
+	result.type = TransformStringToLogicalType(StringValue::Get(children[1]));
+	string error_message;
+	if (!children[2].TryCastAs(context, result.type, result.default_value, &error_message)) {
+		throw BinderException("Unable to cast Parquet schema default_value \"%s\" to %s", children[2].ToString(),
+		                      result.type.ToString());
+	}
+
+	return result;
 }
 
 ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, ParquetOptions parquet_options_p)
