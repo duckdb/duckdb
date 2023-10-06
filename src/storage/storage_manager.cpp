@@ -106,7 +106,7 @@ void SingleFileStorageManager::LoadDatabase() {
 	}
 	auto &fs = FileSystem::Get(db);
 	auto &config = DBConfig::Get(db);
-	bool truncate_wal = false;
+	WriteAheadLog::ReplayStatus replay_status = {false, false};
 	if (!config.options.enable_external_access) {
 		if (!db.IsInitialDatabase()) {
 			throw PermissionException("Attaching on-disk databases is disabled through configuration");
@@ -146,13 +146,16 @@ void SingleFileStorageManager::LoadDatabase() {
 		// check if the WAL file exists
 		if (fs.FileExists(wal_path)) {
 			// replay the WAL
-			truncate_wal = WriteAheadLog::Replay(db, wal_path);
+			replay_status = WriteAheadLog::Replay(db, wal_path);
 		}
 	}
 	// initialize the WAL file
 	if (!read_only) {
 		wal = make_uniq<WriteAheadLog>(db, wal_path);
-		if (truncate_wal) {
+		if (replay_status.should_checkpoint) {
+			CreateCheckpoint(true, true);
+			D_ASSERT(wal->GetWALSize() == 0);
+		} else if (replay_status.should_truncate_wal) {
 			wal->Truncate(0);
 		}
 	}

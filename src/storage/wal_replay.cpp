@@ -24,12 +24,12 @@
 
 namespace duckdb {
 
-bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
+WriteAheadLog::ReplayStatus WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 	Connection con(database.GetDatabase());
 	auto initial_source = make_uniq<BufferedFileReader>(FileSystem::Get(database), path.c_str());
 	if (initial_source->Finished()) {
 		// WAL is empty
-		return false;
+		return {false, false};
 	}
 
 	con.BeginTransaction();
@@ -62,10 +62,10 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 		                                   // continue reading
 	} catch (std::exception &ex) {
 		Printer::PrintF("Exception in WAL playback during initial read: %s\n", ex.what());
-		return false;
+		return {false, false};
 	} catch (...) {
 		Printer::Print("Unknown Exception in WAL playback during initial read");
-		return false;
+		return {false, false};
 	} // LCOV_EXCL_STOP
 	initial_source.reset();
 	if (checkpoint_state.checkpoint_id.IsValid()) {
@@ -74,7 +74,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 		if (manager.IsCheckpointClean(checkpoint_state.checkpoint_id)) {
 			// the contents of the WAL have already been checkpointed
 			// we can safely truncate the WAL and ignore its contents
-			return true;
+			return {true, false};
 		}
 	}
 
@@ -120,7 +120,10 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 		// exception thrown in WAL replay: rollback
 		con.Rollback();
 	} // LCOV_EXCL_STOP
-	return false;
+
+	// Force a checkpoint if we saw a checkpoint_id in the WAL, but not the updated database header.
+	// This means a previous DuckDB attempted a checkpoint, but was interrupted. Let's drive it to completion.
+	return {false, checkpoint_state.checkpoint_id.IsValid()};
 }
 
 //===--------------------------------------------------------------------===//

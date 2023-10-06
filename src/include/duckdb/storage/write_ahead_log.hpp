@@ -99,8 +99,12 @@ public:
 	bool skip_writing;
 
 public:
+	struct ReplayStatus {
+		bool should_truncate_wal;
+		bool should_checkpoint;
+	};
 	//! Replay the WAL
-	static bool Replay(AttachedDatabase &database, string &path);
+	static ReplayStatus Replay(AttachedDatabase &database, string &path);
 
 	//! Returns the current size of the WAL in bytes
 	int64_t GetWALSize();
