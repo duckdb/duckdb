@@ -143,9 +143,9 @@ jobs:
           - isRelease: false
             python_build: 'cp39-*'
           - isRelease: false
-            python_build: 'cp311-*'
-          - isRelease: false
             python_build: 'cp310-*'
+          - isRelease: false
+            python_build: 'cp311-*'
           - isRelease: false
             arch: aarch64
     needs: manylinux-extensions-x64
@@ -293,9 +293,9 @@ jobs:
           - isRelease: false
             python_build: 'cp39-*'
           - isRelease: false
-            python_build: 'cp311-*'
+            python_build: 'cp310-*'
           - isRelease: false
-            python_build: 'cp312-*'
+            python_build: 'cp311-*'
       needs: linux-python3-9
 
       env:
