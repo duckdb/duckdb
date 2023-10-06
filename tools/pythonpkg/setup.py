@@ -319,7 +319,7 @@ data_files = setup_data_files(extra_files + header_files)
 packages = [
     lib_name,
     'duckdb.typing',
-    'duckdb.duckdb_query_graph',
+    'duckdb.query_graph',
     'duckdb.functional',
     'duckdb.value',
     'duckdb-stubs',

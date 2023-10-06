@@ -3,11 +3,11 @@ _exported_symbols = []
 # Modules
 import duckdb.functional as functional
 import duckdb.typing as typing
-import duckdb.duckdb_query_graph as duckdb_query_graph
+import duckdb.query_graph as query_graph
 _exported_symbols.extend([
     "typing",
     "functional",
-    "duckdb_query_graph"
+    "query_graph"
 ])
 
 # Classes
