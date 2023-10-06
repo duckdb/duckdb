@@ -244,7 +244,8 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 		auto &col_def = col_list.GetColumnMutable(LogicalIndex(0));
 		column_list.push_back({col_def.GetName(), col_def.GetType().ToString()});
 	}
-	return make_shared<ReadCSVRelation>(context, csv_file, std::move(options));
+	vector<string> files {csv_file};
+	return make_shared<ReadCSVRelation>(context, files, std::move(options));
 }
 
 shared_ptr<Relation> Connection::ReadParquet(const string &parquet_file, bool binary_as_string) {
