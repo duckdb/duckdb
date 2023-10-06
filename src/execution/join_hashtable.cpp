@@ -384,6 +384,7 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	switch (ht.join_type) {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
+	case JoinType::RIGHT_SEMI:
 		NextInnerJoin(keys, left, result);
 		break;
 	case JoinType::LEFT_SEMI:
@@ -505,16 +506,21 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 				Store<bool>(true, ptrs[idx] + ht.tuple_size);
 			}
 		}
-		// matches were found
-		// construct the result
-		// on the LHS, we create a slice using the result vector
-		result.Slice(left, result_vector, result_count);
+		// for right semi join, just mark the entry as found and move on
+		if (ht.join_type == JoinType::RIGHT_SEMI) {
+			result.SetCardinality(0);
+		} else {
+			// matches were found
+			// construct the result
+			// on the LHS, we create a slice using the result vector
+			result.Slice(left, result_vector, result_count);
 
-		// on the RHS, we need to fetch the data from the hash table
-		for (idx_t i = 0; i < ht.build_types.size(); i++) {
-			auto &vector = result.data[left.ColumnCount() + i];
-			D_ASSERT(vector.GetType() == ht.build_types[i]);
-			GatherResult(vector, result_vector, result_count, i + ht.condition_types.size());
+			// on the RHS, we need to fetch the data from the hash table
+			for (idx_t i = 0; i < ht.build_types.size(); i++) {
+				auto &vector = result.data[left.ColumnCount() + i];
+				D_ASSERT(vector.GetType() == ht.build_types[i]);
+				GatherResult(vector, result_vector, result_count, i + ht.condition_types.size());
+			}
 		}
 		AdvancePointers();
 	}
@@ -786,12 +792,20 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 		return;
 	}
 
+	// When scanning Full Outer for right semi joins, we only propagate matches that have true
+	// Right Semi Joins do not propagate values during the probe phase, since we do not want to
+	// duplicate RHS rows.
+	bool match_propagation_value = false;
+	if (join_type == JoinType::RIGHT_SEMI) {
+		match_propagation_value = true;
+	}
+
 	const auto row_locations = iterator.GetRowLocations();
 	do {
 		const auto count = iterator.GetCurrentChunkCount();
 		for (idx_t i = state.offset_in_chunk; i < count; i++) {
 			auto found_match = Load<bool>(row_locations[i] + tuple_size);
-			if (!found_match) {
+			if (found_match == match_propagation_value) {
 				key_locations[found_entries++] = row_locations[i];
 				if (found_entries == STANDARD_VECTOR_SIZE) {
 					state.offset_in_chunk = i + 1;
