@@ -44,7 +44,7 @@ namespace duckdb {
 // Implementation of a generic merge-sort-tree
 // Rewrite of the original, which was in C++17 and targeted for research,
 // instead of deployment.
-template <typename E = idx_t, typename O = idx_t, typename CMP = std::less<E>, uint64_t F = 64, uint64_t C = 64>
+template <typename E = idx_t, typename O = idx_t, typename CMP = std::less<E>, uint64_t F = 32, uint64_t C = 32>
 struct MergeSortTree {
 	using ElementType = E;
 	using OffsetType = O;
@@ -78,6 +78,13 @@ struct MergeSortTree {
 	}
 	explicit MergeSortTree(Elements &&lowest_level, const CMP &cmp = CMP());
 
+	size_t SelectNth(const FrameBounds &frame, size_t n) const;
+
+	inline ElementType NthElement(size_t i) const {
+		return tree.front().first[i];
+	}
+
+protected:
 	RunElement StartGames(Games &losers, const RunElements &elements, const RunElement &sentinel) {
 		const auto elem_nodes = elements.size();
 		const auto game_nodes = losers.size();
@@ -167,8 +174,8 @@ struct MergeSortTree {
 	}
 };
 
-template <typename E, typename P, typename CMP, uint64_t F, uint64_t C>
-MergeSortTree<E, P, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP &cmp) : cmp(cmp) {
+template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
+MergeSortTree<E, O, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP &cmp) : cmp(cmp) {
 	const auto fanout = F;
 	const auto cascading = C;
 	const auto count = lowest_level.size();
@@ -257,18 +264,8 @@ MergeSortTree<E, P, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP
 	}
 }
 
-struct QuantileSortTree : public MergeSortTree<uint32_t, uint32_t, std::less<uint32_t>, 64, 64> {
-	explicit QuantileSortTree(Elements &&lowest_level) : MergeSortTree(std::move(lowest_level)) {
-	}
-
-	size_t SelectNth(const FrameBounds &frame, ElementType n) const;
-
-	inline ElementType NthElement(size_t i) const {
-		return tree.front().first[i];
-	}
-};
-
-inline size_t QuantileSortTree::SelectNth(const FrameBounds &frame, ElementType n) const {
+template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
+size_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const FrameBounds &frame, size_t n) const {
 	//	Empty frames should be handled by the caller
 	D_ASSERT(frame.start < frame.end);
 
@@ -317,7 +314,7 @@ inline size_t QuantileSortTree::SelectNth(const FrameBounds &frame, ElementType 
 				const auto upper_end = level_data + level_cascades[cascade_idx.second + FANOUT];
 				const auto upper_idx = std::lower_bound(upper_begin, upper_end, frame.end) - level_data;
 
-				const auto matched = upper_idx - lower_idx;
+				const auto matched = size_t(upper_idx - lower_idx);
 				if (matched > n) {
 					// 	Enough in this level, so move down to leftmost child candidate within the cascade range
 					cascade_idx.first = (lower_idx / CASCADING + 2 * result) * FANOUT;
@@ -344,7 +341,7 @@ inline size_t QuantileSortTree::SelectNth(const FrameBounds &frame, ElementType 
 		while (range_end < level.end()) {
 			const auto lower_match = std::lower_bound(range_begin, range_end, frame.start);
 			const auto upper_match = std::lower_bound(lower_match, range_end, frame.end);
-			const auto matched = upper_match - lower_match;
+			const auto matched = size_t(upper_match - lower_match);
 			if (matched > n) {
 				// 	Enough in this level, so move down to leftmost child candidate
 				//	Since we have no cascade pointers left, this is just the start of the next level.
