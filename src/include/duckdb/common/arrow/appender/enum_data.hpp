@@ -62,7 +62,7 @@ struct ArrowEnumData : public ArrowScalarBaseData<TGT> {
 		result->n_buffers = 2;
 		result->buffers[1] = append_data.main_buffer.data();
 		// finalize the enum child data, and assign it to the dictionary
-		result->dictionary = ArrowAppender::FinalizeChild(LogicalType::VARCHAR, *append_data.child_data[0]);
+		result->dictionary = ArrowAppender::FinalizeChild(LogicalType::VARCHAR, std::move(append_data.child_data[0]));
 	}
 };
 

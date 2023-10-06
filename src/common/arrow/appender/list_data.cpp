@@ -72,7 +72,7 @@ void ArrowListData::Finalize(ArrowAppendData &append_data, const LogicalType &ty
 	append_data.child_pointers.resize(1);
 	result->children = append_data.child_pointers.data();
 	result->n_children = 1;
-	append_data.child_pointers[0] = ArrowAppender::FinalizeChild(child_type, *append_data.child_data[0]);
+	append_data.child_pointers[0] = ArrowAppender::FinalizeChild(child_type, std::move(append_data.child_data[0]));
 }
 
 } // namespace duckdb

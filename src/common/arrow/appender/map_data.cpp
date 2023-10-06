@@ -59,10 +59,11 @@ void ArrowMapData::Finalize(ArrowAppendData &append_data, const LogicalType &typ
 	append_data.child_pointers.resize(1);
 	result->children = append_data.child_pointers.data();
 	result->n_children = 1;
-	append_data.child_pointers[0] = ArrowAppender::FinalizeChild(type, *append_data.child_data[0]);
+
+	auto &struct_data = *append_data.child_data[0];
+	append_data.child_pointers[0] = ArrowAppender::FinalizeChild(type, std::move(append_data.child_data[0]));
 
 	// now that struct has two children: the key and the value type
-	auto &struct_data = *append_data.child_data[0];
 	auto &struct_result = append_data.child_pointers[0];
 	struct_data.child_pointers.resize(2);
 	struct_result->n_buffers = 1;
@@ -74,8 +75,8 @@ void ArrowMapData::Finalize(ArrowAppendData &append_data, const LogicalType &typ
 
 	auto &key_type = MapType::KeyType(type);
 	auto &value_type = MapType::ValueType(type);
-	struct_data.child_pointers[0] = ArrowAppender::FinalizeChild(key_type, *struct_data.child_data[0]);
-	struct_data.child_pointers[1] = ArrowAppender::FinalizeChild(value_type, *struct_data.child_data[1]);
+	struct_data.child_pointers[0] = ArrowAppender::FinalizeChild(key_type, std::move(struct_data.child_data[0]));
+	struct_data.child_pointers[1] = ArrowAppender::FinalizeChild(value_type, std::move(struct_data.child_data[1]));
 
 	// keys cannot have null values
 	if (struct_data.child_pointers[0]->null_count > 0) {

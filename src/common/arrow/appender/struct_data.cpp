@@ -38,7 +38,7 @@ void ArrowStructData::Finalize(ArrowAppendData &append_data, const LogicalType &
 	result->n_children = child_types.size();
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		auto &child_type = child_types[i].second;
-		append_data.child_pointers[i] = ArrowAppender::FinalizeChild(child_type, *append_data.child_data[i]);
+		append_data.child_pointers[i] = ArrowAppender::FinalizeChild(child_type, std::move(append_data.child_data[i]));
 	}
 }
 
