@@ -1105,6 +1105,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 			break;
 		}
 		case PhysicalType::ARRAY: {
+			Flatten(count);
 			auto &child = ArrayVector::GetEntry(*this);
 			auto array_size = ArrayType::GetSize(type);
 			auto child_size = array_size * count;

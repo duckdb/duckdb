@@ -111,6 +111,8 @@ void ArrayColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Ve
 	auto array_size = ArrayType::GetSize(type);
 	auto &child_vec = ArrayVector::GetEntry(vector);
 	child_column->Append(ArrayStats::GetChildStats(stats), state.child_appends[1], child_vec, count * array_size);
+
+	this->count += count;
 }
 
 void ArrayColumnData::RevertAppend(row_t start_row) {
@@ -119,6 +121,8 @@ void ArrayColumnData::RevertAppend(row_t start_row) {
 	// Revert child column
 	auto array_size = ArrayType::GetSize(type);
 	child_column->RevertAppend(start_row * array_size);
+
+	this->count = start_row - this->start;
 }
 
 idx_t ArrayColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
