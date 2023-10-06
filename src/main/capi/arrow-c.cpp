@@ -155,14 +155,17 @@ struct PrivateData {
 
 // LCOV_EXCL_START
 // This function is never called, but used to set ArrowSchema's release functions to a non-null NOOP.
-void EmptySchemaRelease(ArrowSchema *) {
+void EmptySchemaRelease(ArrowSchema *schema) {
+	schema->release = nullptr;
 }
 // LCOV_EXCL_STOP
 
-void EmptyArrayRelease(ArrowArray *) {
+void EmptyArrayRelease(ArrowArray *array) {
+	array->release = nullptr;
 }
 
-void EmptyStreamRelease(ArrowArrayStream *) {
+void EmptyStreamRelease(ArrowArrayStream *stream) {
+	stream->release = nullptr;
 }
 
 void FactoryGetSchema(uintptr_t stream_factory_ptr, duckdb::ArrowSchemaWrapper &schema) {
