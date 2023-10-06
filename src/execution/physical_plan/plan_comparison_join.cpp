@@ -285,8 +285,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 	bool can_merge = has_range > 0;
 	bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();
 	switch (op.join_type) {
-	case JoinType::SEMI:
-	case JoinType::ANTI:
+	case JoinType::LEFT_SEMI:
+	case JoinType::LEFT_ANTI:
 	case JoinType::MARK:
 		can_merge = can_merge && op.conditions.size() == 1;
 		can_iejoin = false;
