@@ -87,7 +87,7 @@ SELECT * FROM test WHERE NOT EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND
 11	1	a
 
 query IIT
-SELECT * FROM test WHERE EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b<>test2.c) AND test.a > 11;
+SELECT * FROM test WHERE EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b<>test2.c) AND test.a > 11 order by b;
 ----
 12	2	b
 13	3	c

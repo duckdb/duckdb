@@ -1,0 +1,15 @@
+# name: test/optimizer/joins/test_right_semi_joins.test
+# description: Test right semi joins.
+# group: [joins]
+
+statement ok
+create table my_left as select range*2 as a from range(100);
+
+statement ok
+create table my_right as select range*4 as b from range(100);
+
+statement ok
+insert into my_right (select range*8 as b from range(300));
+
+statement ok
+select * from my_left SEMI JOIN my_right on (a = b);
