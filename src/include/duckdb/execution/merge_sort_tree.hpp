@@ -13,10 +13,37 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector_operations/aggregate_executor.hpp"
 
 namespace duckdb {
 
+// MIT License Text:
+//
+// Copyright 2022 salesforce.com, inc.
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+// BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+// ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+// CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 // Implementation of a generic merge-sort-tree
+// Rewrite of the original, which was in C++17 and targeted for research,
+// instead of deployment.
 template <typename E = idx_t, typename O = idx_t, typename CMP = std::less<E>, uint64_t F = 64, uint64_t C = 64>
 struct MergeSortTree {
 	using ElementType = E;
@@ -228,6 +255,124 @@ MergeSortTree<E, P, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP
 		tree.emplace_back(std::move(elements), std::move(cascades));
 		child_run_length = run_length;
 	}
+}
+
+struct QuantileSortTree : public MergeSortTree<uint32_t, uint32_t, std::less<uint32_t>, 64, 64> {
+	explicit QuantileSortTree(Elements &&lowest_level) : MergeSortTree(std::move(lowest_level)) {
+	}
+
+	size_t SelectNth(const FrameBounds &frame, ElementType n) const;
+
+	inline ElementType NthElement(size_t i) const {
+		return tree.front().first[i];
+	}
+};
+
+inline size_t QuantileSortTree::SelectNth(const FrameBounds &frame, ElementType n) const {
+	//	Empty frames should be handled by the caller
+	D_ASSERT(frame.start < frame.end);
+
+	// Handle special case of a one-element tree
+	if (tree.size() < 2) {
+		return 0;
+	}
+
+	// 	The first level contains a single run,
+	//	so the only thing we need is any cascading pointers
+	auto level_no = tree.size() - 2;
+	auto level_width = 1;
+	for (size_t i = 0; i < level_no; ++i) {
+		level_width *= FANOUT;
+	}
+
+	// Find Nth element in a top-down traversal
+	size_t result = 0;
+
+	// First, handle levels with cascading pointers
+	const auto min_cascaded = LowestCascadingLevel();
+	if (level_no > min_cascaded) {
+		//	Initialise the cascade indicies from the previous level
+		pair<size_t, size_t> cascade_idx;
+		{
+			const auto &level = tree[level_no + 1].first;
+			const auto lower_idx = std::lower_bound(level.begin(), level.end(), frame.start) - level.begin();
+			cascade_idx.first = lower_idx / CASCADING * FANOUT;
+			const auto upper_idx = std::lower_bound(level.begin(), level.end(), frame.end) - level.begin();
+			cascade_idx.second = upper_idx / CASCADING * FANOUT;
+		}
+
+		// 	Walk the cascaded levels
+		for (; level_no >= min_cascaded; --level_no) {
+			//	The cascade indicies into this level are in the previous level
+			const auto &level_cascades = tree[level_no + 1].second;
+
+			// Go over all children until we found enough in range
+			const auto *level_data = tree[level_no].first.data();
+			while (true) {
+				const auto lower_begin = level_data + level_cascades[cascade_idx.first];
+				const auto lower_end = level_data + level_cascades[cascade_idx.first + FANOUT];
+				const auto lower_idx = std::lower_bound(lower_begin, lower_end, frame.start) - level_data;
+
+				const auto upper_begin = level_data + level_cascades[cascade_idx.second];
+				const auto upper_end = level_data + level_cascades[cascade_idx.second + FANOUT];
+				const auto upper_idx = std::lower_bound(upper_begin, upper_end, frame.end) - level_data;
+
+				const auto matched = upper_idx - lower_idx;
+				if (matched > n) {
+					// 	Enough in this level, so move down to leftmost child candidate within the cascade range
+					cascade_idx.first = (lower_idx / CASCADING + 2 * result) * FANOUT;
+					cascade_idx.second = (upper_idx / CASCADING + 2 * result) * FANOUT;
+					result *= FANOUT;
+					level_width /= FANOUT;
+					break;
+				}
+
+				//	Not enough in this child, so move right
+				++cascade_idx.first;
+				++cascade_idx.second;
+				++result;
+				n -= matched;
+			}
+		}
+	}
+
+	//	Continue with the uncascaded levels (except the first)
+	for (; level_no > 0; --level_no) {
+		const auto &level = tree[level_no].first;
+		auto range_begin = level.begin() + result * level_width;
+		auto range_end = range_begin + level_width;
+		while (range_end < level.end()) {
+			const auto lower_match = std::lower_bound(range_begin, range_end, frame.start);
+			const auto upper_match = std::lower_bound(lower_match, range_end, frame.end);
+			const auto matched = upper_match - lower_match;
+			if (matched > n) {
+				// 	Enough in this level, so move down to leftmost child candidate
+				//	Since we have no cascade pointers left, this is just the start of the next level.
+				result *= FANOUT;
+				level_width /= FANOUT;
+				break;
+			}
+			//	Not enough in this child, so move right
+			range_begin = range_end;
+			range_end += level_width;
+			++result;
+			n -= matched;
+		}
+	}
+
+	// The last level
+	const auto *level_data = tree[level_no].first.data();
+	++n;
+	while (true) {
+		const auto v = level_data[result];
+		n -= (v >= frame.start) && (v < frame.end);
+		if (!n) {
+			break;
+		}
+		++result;
+	}
+
+	return result;
 }
 
 } // namespace duckdb
