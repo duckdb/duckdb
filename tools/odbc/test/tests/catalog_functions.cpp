@@ -93,6 +93,9 @@ void TestGetTypeInfo(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 		REQUIRE(data_type == data_types[row_count]);
 		row_count++;
 	}
+
+	// unbind column
+	EXECUTE_AND_CHECK("SQLBindCol", SQLBindCol, hstmt, 2, SQL_INTEGER, nullptr, 0, nullptr);
 }
 
 static void TestSQLTables(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
