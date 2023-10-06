@@ -16,7 +16,7 @@ select count(*) from '__TEST_DIR__/t1.csv'
 ----
 3000
 
-statement error
+query I
 select count(*) from read_csv('data/csv/empty.csv', columns=STRUCT_PACK(d := 'BIGINT'), header=0)
 ----
-CSV options could not be auto-detected. Consider setting parser options manually.
+0

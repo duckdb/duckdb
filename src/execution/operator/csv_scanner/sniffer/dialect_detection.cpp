@@ -166,12 +166,12 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 	if (sniffed_column_counts.size() > rows_read) {
 		rows_read = sniffed_column_counts.size();
 	}
-	if (set_columns.IsSet() && ((!options.ignore_errors && num_cols < max_columns_found) || (!options.null_padding && num_cols > max_columns_found))){
+	if (set_columns.IsSet() && ((!options.ignore_errors && num_cols < max_columns_found) || (!options.ignore_errors && !options.null_padding && num_cols > max_columns_found))){
 		// columns are set and don't match with what is was found.
 		return;
 	}
 	for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
-		if (set_columns.IsSet() && ((!options.ignore_errors && num_cols < max_columns_found) || (!options.null_padding && num_cols > max_columns_found))){
+		if (set_columns.IsSet() && ((!options.ignore_errors && num_cols < max_columns_found) || (!options.ignore_errors && !options.null_padding && num_cols > max_columns_found))){
 			// columns are set and don't match with what is was found.
 			return;
 		}
@@ -268,7 +268,7 @@ bool CSVSniffer::RefineCandidateNextChunk(CSVStateMachine &candidate) {
 		if (set_columns.IsSet() && ((!options.ignore_errors && sniffed_column_counts[row] < max_columns_found) || (!options.null_padding && sniffed_column_counts[row] > max_columns_found))){
 			return false;
 		} else{
-			if (max_columns_found != sniffed_column_counts[row] && (!options.null_padding  || !options.ignore_errors)) {
+			if (max_columns_found != sniffed_column_counts[row] && (!options.null_padding  && !options.ignore_errors)) {
 				return false;
 			}
 		}

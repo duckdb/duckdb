@@ -34,7 +34,7 @@ struct Parse {
 		}
 		if (((machine.previous_state == CSVState::RECORD_SEPARATOR && machine.state != CSVState::EMPTY_LINE) ||
 		     (machine.state != CSVState::RECORD_SEPARATOR && carriage_return)) &&
-		    machine.options.null_padding && machine.column_count < parse_chunk.ColumnCount()) {
+		    (machine.options.null_padding||machine.options.ignore_errors) && machine.column_count < parse_chunk.ColumnCount()) {
 			// It's a new row, check if we need to pad stuff
 			while (machine.column_count < parse_chunk.ColumnCount()) {
 				auto &v = parse_chunk.data[machine.column_count++];
