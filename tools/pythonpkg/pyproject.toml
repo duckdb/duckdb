@@ -1,5 +1,5 @@
 [build-system]
-requires = ['setuptools', 'wheel']
+requires = ['setuptools', 'setuptools_scm<7.0.0', 'pybind11>=2.6.0', 'wheel']
 
 # Config for cibuildwheel, some values are overridden by env variables of specific jobs
 
