@@ -208,10 +208,7 @@ SQLRETURN SQL_API SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_
 		*data_type_ptr = duckdb::ApiInfo::FindRelatedSQLType(col_type.id());
 	}
 	if (column_size_ptr) {
-		auto ret = duckdb::ApiInfo::GetColumnSize(hstmt->stmt->GetTypes()[col_idx], column_size_ptr);
-		if (ret == SQL_ERROR) {
-			*column_size_ptr = 0;
-		}
+		*column_size_ptr = duckdb::ApiInfo::GetColumnSize(hstmt->stmt->GetTypes()[col_idx]);
 	}
 	if (decimal_digits_ptr) {
 		*decimal_digits_ptr = 0;
