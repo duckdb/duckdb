@@ -52,7 +52,6 @@ void ArrowAppender::ReleaseArray(ArrowArray *array) {
 	}
 	if (array->dictionary && array->dictionary->release) {
 		array->dictionary->release(array->dictionary);
-		D_ASSERT(!array->dictionary->release);
 	}
 	array->release = nullptr;
 	delete holder;
