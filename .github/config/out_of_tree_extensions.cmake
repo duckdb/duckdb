@@ -25,7 +25,7 @@ duckdb_extension_load(aws
 duckdb_extension_load(azure
         LOAD_TESTS
         GIT_URL https://github.com/duckdblabs/duckdb_azure
-        GIT_TAG 1fe568d3eb3c8842118e395ba8031e2a8566daed
+        GIT_TAG 10d4cf6a0ed00ea8aecb9bf1433fdfff166e6c44
         )
 
 ################# ICEBERG
