@@ -706,7 +706,7 @@ void JSONFunctions::RegisterJSONCreateCastFunctions(CastFunctionSet &casts) {
 		}
 		// We prefer going to JSON over going to VARCHAR if a function can do either
 		const auto source_to_json_cost =
-		    MaxValue<int64_t>(casts.ImplicitCastCost(source_type, JSONCommon::JSONType()) - 1, 0);
+		    MaxValue<int64_t>(casts.ImplicitCastCost(source_type, LogicalType::VARCHAR) - 1, 0);
 		casts.RegisterCastFunction(source_type, JSONCommon::JSONType(), AnyToJSONCastBind, source_to_json_cost);
 	}
 }

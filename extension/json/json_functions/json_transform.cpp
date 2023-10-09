@@ -921,7 +921,7 @@ void JSONFunctions::RegisterJSONTransformCastFunctions(CastFunctionSet &casts) {
 			target_type = type;
 		}
 		// Going from JSON to another type has the same cost as going from VARCHAR to that type
-		const auto json_to_target_cost = casts.ImplicitCastCost(JSONCommon::JSONType(), target_type);
+		const auto json_to_target_cost = casts.ImplicitCastCost(LogicalType::VARCHAR, target_type);
 		casts.RegisterCastFunction(JSONCommon::JSONType(), target_type, JSONToAnyCastBind, json_to_target_cost);
 	}
 }
