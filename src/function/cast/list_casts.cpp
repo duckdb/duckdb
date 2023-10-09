@@ -147,7 +147,9 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 			// Cant cast to array, list size mismatch
 			auto msg = StringUtil::Format("Cannot cast list with length %llu to array with length %u", ldata.length,
 			                              array_size);
-			throw CastException(msg);
+			HandleCastError::AssignError(msg, parameters.error_message);
+			ConstantVector::SetNull(result, true);
+			return false;
 		}
 
 		auto &source_cc = ListVector::GetEntry(source);
