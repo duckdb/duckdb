@@ -14,7 +14,7 @@ void CSVSniffer::ReplaceTypes() {
 		for (idx_t i = 0; i < names.size(); i++) {
 			auto it = best_candidate->options.sql_types_per_column.find(names[i]);
 			if (it != best_candidate->options.sql_types_per_column.end()) {
-				best_sql_types_candidates_per_column_idx[i] = {best_candidate->options.sql_type_list[it->second]};
+				detected_types[i] = best_candidate->options.sql_type_list[it->second];
 				found++;
 			}
 		}
@@ -33,7 +33,7 @@ void CSVSniffer::ReplaceTypes() {
 		                      best_candidate->options.sql_type_list.size(), names.size());
 	}
 	for (idx_t i = 0; i < best_candidate->options.sql_type_list.size(); i++) {
-		best_sql_types_candidates_per_column_idx[i] = {best_candidate->options.sql_type_list[i]};
+		detected_types[i] = best_candidate->options.sql_type_list[i];
 	}
 }
 } // namespace duckdb

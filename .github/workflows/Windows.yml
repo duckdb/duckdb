@@ -121,18 +121,10 @@ jobs:
         echo "----------------------------------------------------------------"
         Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC"
 
-    - name: Install psqlodbc
+    - name: Test Standard ODBC tests
       shell: bash
       run: |
-        git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout edd9890a5046a2006f210849abb97c6a6589a45c && make release)
-
-    - name: Test psqlodbc
-      shell: bash
-      run: |
-        cd psqlodbc
-        export PSQLODBC_TEST_DSN=DuckDB
-        build/release/Release/psql_odbc_test.exe -f ../tools/odbc/test/psql_supported_tests
+        tools/odbc/bin/Release/test_odbc.exe
 
     - name: Print ODBC trace on failure
       if: ${{ failure() }}
