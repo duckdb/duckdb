@@ -3,13 +3,36 @@
 # group: [joins]
 
 statement ok
-create table my_left as select range*2 as a from range(100);
+create table my_left as select range*2 as a, (range+1)::VARCHAR as a2 from range(7);
 
 statement ok
-create table my_right as select range*4 as b from range(100);
+create table my_right as select range*4 as b, (range+2)::VARCHAR as b2 from range(5);
 
 statement ok
-insert into my_right (select range*8 as b from range(300));
+insert into my_right (select range*8, 'what' from range(15));
 
-statement ok
-select * from my_left SEMI JOIN my_right on (a = b);
+query II
+select * from my_left l WHERE EXISTS (select * from my_right r where r.b = l.a) order by l.a;
+----
+0	1
+4	3
+8	5
+12	7
+
+#
+#statement ok
+#create table my_left as select range*2 as a from range(7);
+#
+#statement ok
+#create table my_right as select range*4 as b from range(5);
+#
+#statement ok
+#insert into my_right (select range*8 as b from range(15));
+#
+#query I
+#select * from my_left SEMI JOIN my_right on (a = b) order by a;
+#----
+#0
+#4
+#8
+#12
