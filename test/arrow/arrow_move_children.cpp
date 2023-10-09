@@ -5,10 +5,12 @@
 using namespace duckdb;
 
 template <class T>
-void AssertExpectedResult(ArrowArrayWrapper array, T expected_value, bool is_null = false) {
+void AssertExpectedResult(ArrowArrayWrapper &array, T expected_value, bool is_null = false) {
+	array.arrow_array.release(&array.arrow_array);
 }
 
 vector<ArrowArrayWrapper> FetchChildrenFromArray(shared_ptr<ArrowArrayWrapper> parent) {
+	D_ASSERT(parent->arrow_array.release);
 	vector<ArrowArrayWrapper> children;
 	children.resize(parent->arrow_array.n_children);
 	for (int64_t i = 0; i < parent->arrow_array.n_children; i++) {
@@ -55,22 +57,22 @@ TEST_CASE("Test move children", "[arrow]") {
 	// For every array, extract the children and scan them
 	while (true) {
 		auto chunk = stream->GetNextChunk();
-		if (!chunk) {
+		if (!chunk || !chunk->arrow_array.release) {
 			break;
 		}
 		auto children = FetchChildrenFromArray(std::move(chunk));
 		D_ASSERT(children.size() == 5);
 		for (idx_t i = 0; i < children.size(); i++) {
 			if (i == 0) {
-				AssertExpectedResult<string>(std::move(children[i]), "a");
+				AssertExpectedResult<string>(children[i], "a");
 			} else if (i == 1) {
-				AssertExpectedResult<string>(std::move(children[i]), "this is a long string");
+				AssertExpectedResult<string>(children[i], "this is a long string");
 			} else if (i == 2) {
-				AssertExpectedResult<int32_t>(std::move(children[i]), 42);
+				AssertExpectedResult<int32_t>(children[i], 42);
 			} else if (i == 3) {
-				AssertExpectedResult<bool>(std::move(children[i]), true);
+				AssertExpectedResult<bool>(children[i], true);
 			} else if (i == 4) {
-				AssertExpectedResult<int32_t>(std::move(children[i]), 0, true);
+				AssertExpectedResult<int32_t>(children[i], 0, true);
 			} else {
 				// Not possible
 				REQUIRE(false);
