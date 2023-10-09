@@ -167,6 +167,8 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 		auto &result_cc = ArrayVector::GetEntry(result);
 		auto ldata = FlatVector::GetData<list_entry_t>(source);
 
+		bool all_lengths_match = true;
+
 		// Now, here's where things get funky.
 		// We need to slice out the data from the child vector, since the list
 		// wont store child data for null entries, which is the case for arrays.
@@ -191,10 +193,17 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 			}
 
 			if (ldata[i].length != array_size) {
-				// Cant cast to array, list size mismatch
-				auto msg = StringUtil::Format("Cannot cast list with length %llu to array with length %u",
-				                              ldata[i].length, array_size);
-				throw CastException(msg);
+				if (all_lengths_match) {
+					// Cant cast to array, list size mismatch
+					all_lengths_match = false;
+					auto msg = StringUtil::Format("Cannot cast list with length %llu to array with length %u",
+					                              ldata[i].length, array_size);
+					if (parameters.strict) {
+						throw CastException(msg);
+					}
+					HandleCastError::AssignError(msg, parameters.error_message);
+				}
+				FlatVector::SetNull(result, i, true);
 			}
 			// Set the selection vector to point to the correct offsets
 			for (idx_t array_elem = 0; array_elem < array_size; array_elem++) {
@@ -207,7 +216,7 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 
 		// Take a last pass and null out the child elems
 		for (idx_t i = 0; i < count; i++) {
-			if (FlatVector::IsNull(source, i)) {
+			if (FlatVector::IsNull(source, i) || FlatVector::IsNull(result, i)) {
 				for (idx_t array_elem = 0; array_elem < array_size; array_elem++) {
 					FlatVector::SetNull(payload_vector, i * array_size + array_elem, true);
 				}
@@ -215,9 +224,14 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 		}
 
 		CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
-		bool all_succeeded =
+		bool child_succeeded =
 		    cast_data.child_cast_info.function(payload_vector, result_cc, child_count, child_parameters);
-		return all_succeeded;
+
+		if (!child_succeeded) {
+			HandleCastError::AssignError(*child_parameters.error_message, parameters.error_message);
+		}
+
+		return all_lengths_match && child_succeeded;
 	}
 }
 

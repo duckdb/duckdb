@@ -151,3 +151,9 @@ query I
 select (NULL::INT[3])::VARCHAR[3];
 ----
 NULL
+
+# Should be able to cast from varchar
+query I
+SELECT '[1, 2, 3]'::INTEGER[3]
+----
+[1, 2, 3]
