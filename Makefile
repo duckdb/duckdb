@@ -269,6 +269,18 @@ release: ${EXTENSION_CONFIG_STEP}
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build . --config Release
 
+wasm_mvp: ${EXTENSION_CONFIG_STEP}
+	mkdir -p ./build/wasm_mvp && \
+	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_mvp -DCMAKE_CXX_FLAGS="-DDUCKDB_CUSTOM_PLATFORM=wasm_mvp" && \
+	emmake make -j8 -Cbuild/wasm_mvp && \
+	cd build/wasm_mvp && bash ../../scripts/link-wasm-extensions.sh
+
+wasm_eh: ${EXTENSION_CONFIG_STEP}
+	mkdir -p ./build/wasm_eh && \
+	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_eh -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh" && \
+	emmake make -j8 -Cbuild/wasm_eh && \
+	cd build/wasm_eh && bash ../../scripts/link-wasm-extensions.sh
+
 cldebug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/cldebug && \
 	cd build/cldebug && \
