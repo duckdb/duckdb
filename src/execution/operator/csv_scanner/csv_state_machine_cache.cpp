@@ -70,6 +70,8 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	// 8) Empty Line State
 	transition_array[CSVState::EMPTY_LINE][static_cast<uint8_t>('\r')] = CSVState::EMPTY_LINE;
 	transition_array[CSVState::EMPTY_LINE][static_cast<uint8_t>('\n')] = CSVState::EMPTY_LINE;
+	transition_array[CSVState::EMPTY_LINE][static_cast<uint8_t>(state_machine_options.delimiter)] = CSVState::DELIMITER;
+	transition_array[CSVState::EMPTY_LINE][static_cast<uint8_t>(state_machine_options.quote)] = CSVState::QUOTED;
 }
 
 CSVStateMachineCache::CSVStateMachineCache() {
