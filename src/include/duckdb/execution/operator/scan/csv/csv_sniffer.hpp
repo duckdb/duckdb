@@ -41,7 +41,31 @@ struct SetColumns {
 	const vector<string> *names = nullptr;
 	//! If columns are set
 	bool IsSet();
+	//! How many columns
 	idx_t Size();
+	//! Helper function that checks if candidate is acceptable based on the number of columns it produces
+	inline bool IsCandidateUnacceptable(idx_t num_cols, bool null_padding, bool ignore_errors) {
+		if (!IsSet() || ignore_errors) {
+			// We can't say its unacceptable if it's not set or if we ignore errors
+			return false;
+		}
+		idx_t size = Size();
+		// If the columns are set and there is a mismatch with the expected number of columns, with null_padding and
+		// ignore_errors not set, we don't have a suitable candidate.
+		// Note that we compare with max_columns_found + 1, because some broken files have the behaviour where two
+		// columns are represented as: | col 1 | col_2 |
+		if (num_cols == size || num_cols == size + 1) {
+			// Good Candidate
+			return false;
+		}
+		// if we detected more columns than we have set, it's all good because we can null-pad them
+		if (null_padding && num_cols > size) {
+			return false;
+		}
+
+		// Unacceptable
+		return true;
+	}
 };
 
 //! Sniffer that detects Header, Dialect and Types of CSV Files

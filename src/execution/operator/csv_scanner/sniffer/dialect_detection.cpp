@@ -166,16 +166,14 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 	if (sniffed_column_counts.size() > rows_read) {
 		rows_read = sniffed_column_counts.size();
 	}
-	if (set_columns.IsSet() && ((!options.ignore_errors && num_cols < max_columns_found) ||
-	                            (!options.ignore_errors && !options.null_padding && num_cols > max_columns_found))) {
-		// columns are set and don't match with what is was found.
+	if (set_columns.IsCandidateUnacceptable(num_cols, options.null_padding, options.ignore_errors)) {
+		// Not acceptable
 		return;
 	}
 	for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
-		if (set_columns.IsSet() &&
-		    ((!options.ignore_errors && num_cols < max_columns_found) ||
-		     (!options.ignore_errors && !options.null_padding && num_cols > max_columns_found))) {
-			// columns are set and don't match with what is was found.
+		if (set_columns.IsCandidateUnacceptable(sniffed_column_counts[row], options.null_padding,
+		                                        options.ignore_errors)) {
+			// Not acceptable
 			return;
 		}
 		if (sniffed_column_counts[row] == num_cols || options.ignore_errors) {
@@ -269,10 +267,8 @@ bool CSVSniffer::RefineCandidateNextChunk(CSVStateMachine &candidate) {
 	vector<idx_t> sniffed_column_counts(STANDARD_VECTOR_SIZE);
 	candidate.csv_buffer_iterator.Process<SniffDialect>(candidate, sniffed_column_counts);
 	for (auto &num_cols : sniffed_column_counts) {
-		if (set_columns.IsSet() &&
-		    ((!options.ignore_errors && num_cols < max_columns_found) ||
-		     (!options.ignore_errors && !options.null_padding && num_cols > max_columns_found))) {
-			return false;
+		if (set_columns.IsSet()) {
+			return !set_columns.IsCandidateUnacceptable(num_cols, options.null_padding, options.ignore_errors);
 		} else {
 			if (max_columns_found != num_cols && (!options.null_padding && !options.ignore_errors)) {
 				return false;
