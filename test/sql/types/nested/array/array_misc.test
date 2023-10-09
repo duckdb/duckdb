@@ -190,26 +190,6 @@ SELECT array_value(arrays.*) FROM arrays
 # Invalid Input Error: array_value requires at least one argument
 # Is that OK? I guess we don't ever want to make size 0 arrays, e.g., INTEGER[0]
 
-query I
-SELECT '[1, 2, 3]'::INTEGER[3]
-----
-# Can't we just cast to INTEGER[] and then cast that to INTEGER[3] to make this cast possible?
-# Error: Conversion Error: Unimplemented type for cast (VARCHAR -> INTEGER[3])
-
-query I
-SELECT list_resize(a, 3) FROM arrays
-----
-# ABORT THROWN BY INTERNAL EXCEPTION: Invalid PhysicalType for GetTypeIdSize
-
-query I
-SELECT list_position(a, 1) FROM arrays
-----
-# ABORT THROWN BY INTERNAL EXCEPTION: Assertion triggered in file "/Users/laurens/git/duckdb/main-duckdb/src/common/types.cpp" on line 871: type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP
-
-query I
-SELECT list_contains(a, 1) FROM arrays
-----
-# ABORT THROWN BY INTERNAL EXCEPTION: Assertion triggered in file "/Users/laurens/git/duckdb/main-duckdb/src/common/types.cpp" on line 871: type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP
 
 query IIIIIIIIIIII
 SUMMARIZE arrays

@@ -115,6 +115,13 @@ static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFun
 	D_ASSERT(bound_function.arguments.size() == 2 || arguments.size() == 3);
 	bound_function.arguments[1] = LogicalType::UBIGINT;
 
+	// If the first argument is an array, cast it to a list
+	if (arguments[0]->return_type.id() == LogicalTypeId::ARRAY) {
+		auto &child_type = ArrayType::GetChildType(arguments[0]->return_type);
+		arguments[0] =
+		    BoundCastExpression::AddCastToType(context, std::move(arguments[0]), LogicalType::LIST(child_type));
+	}
+
 	// first argument is constant NULL
 	if (arguments[0]->return_type == LogicalType::SQLNULL) {
 		bound_function.arguments[0] = LogicalType::SQLNULL;

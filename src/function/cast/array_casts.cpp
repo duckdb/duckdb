@@ -1,6 +1,8 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+
 namespace duckdb {
 
 unique_ptr<BoundCastData> ArrayBoundCastData::BindArrayToArrayCast(BindCastInput &input, const LogicalType &source,
@@ -42,7 +44,15 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 	auto target_array_size = ArrayType::GetSize(result.GetType());
 	if (source_array_size != target_array_size) {
 		// Cant cast between arrays of different sizes
-		throw CastException(source.GetType(), result.GetType());
+		auto msg = StringUtil::Format("Cannot cast array of size %u to array of size %u", source_array_size,
+		                              target_array_size);
+		HandleCastError::AssignError(msg, parameters.error_message);
+		if (!parameters.strict) {
+			// if this was a TRY_CAST, we know every row will fail, so just return null
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(result, true);
+			return false;
+		}
 	}
 
 	auto &cast_data = parameters.cast_data->Cast<ArrayBoundCastData>();

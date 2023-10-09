@@ -198,9 +198,6 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 					all_lengths_match = false;
 					auto msg = StringUtil::Format("Cannot cast list with length %llu to array with length %u",
 					                              ldata[i].length, array_size);
-					if (parameters.strict) {
-						throw CastException(msg);
-					}
 					HandleCastError::AssignError(msg, parameters.error_message);
 				}
 				FlatVector::SetNull(result, i, true);

@@ -1,6 +1,16 @@
 # name: test/sql/types/nested/array/array_try_cast.test
 # group: [array]
 
+query I
+SELECT TRY_CAST(array_value(1,2) as INTEGER[3]);
+----
+NULL
+
+statement error
+SELECT CAST(array_value(1,2) as INTEGER[3]);
+----
+Conversion Error: Cannot cast array of size 2 to array of size 3
+
 # Array try cast
 query I rowsort
 SELECT TRY_CAST(test_vector AS INT[2]) AS a FROM test_vector_types(NULL::INTEGER[])
