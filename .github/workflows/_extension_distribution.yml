@@ -1,7 +1,12 @@
-# This is a reusable workflow to be used by extensions for CI. It:
+# Reusable workflow for building DuckDB extensions using a standardized environment
+#
+# The workflow:
 #   - builds the extension using the CI workflow from the corresponding DuckDB version
-#   - runs the tests using `make test` in the extension repository
-#   - (optionally) deploys the binaries to S3
+#   - uploads the extensions as gh actions artifacts in the following format:
+#         <ext_name>-<duckdb_version>-extension-<arch><optional_postfix>
+#
+# note: extensions are simply uploaded to GitHub actions, deploying the extensions is done a separate step. More info on
+#       this can be found in https://github.com/duckdb/extension-template
 
 name: Extension distribution
 on:
@@ -11,48 +16,82 @@ on:
       extension_name:
         required: true
         type: string
-      # GitHub ref of the extension repo
-      extension_ref:
-        required: true
-        type: string
-      # Whether the extension is deployed to the specified s3 bucket
-      release_s3:
-        required: false
-        type: boolean
-        default: true
-      # DuckDB version to build against
+      # DuckDB version to build against, should in most cases be identical to
       duckdb_version:
         required: true
         type: string
-      # Json formatted list of excluded target architectures, e.g. "[ 'linux_amd64', 'linux_amd64_gcc4' ]"
+      # ';' separated list of architectures to exclude, for example: 'linux_amd64;osx_arm64'
       exclude_archs:
         required: false
         type: string
-        default: "[]"
-      # Allows overriding the default s3 deploy script with a custom script
-      deploy_script:
+        default: ""
+      # Postfix added to artifact names. Can be used to guarantee unique names when this workflow is called multiple times
+      artifact_postfix:
         required: false
         type: string
-        default: "./duckdb/scripts/extension-upload-oote.sh"
+        default: ""
+      # Override the default vcpkg commit used by this version of DuckDB
+      vcpkg_commit:
+        required: false
+        type: string
+        default: "501db0f17ef6df184fcdbfbe0f87cde2313b6ab1"
+      # Override the default script producing the matrices. Allows specifying custom matrices.
+      matrix_parse_script:
+        required: false
+        type: string
+        default: "./duckdb/scripts/modify_distribution_matrix.py"
+
 jobs:
+  generate_matrix:
+    name: Generate matrix
+    runs-on: ubuntu-latest
+    outputs:
+      linux_matrix: ${{ steps.set-matrix-linux.outputs.linux_matrix }}
+      windows_matrix: ${{ steps.set-matrix-windows.outputs.windows_matrix }}
+      osx_matrix: ${{ steps.set-matrix-osx.outputs.osx_matrix }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          submodules: 'true'
+
+      - name: Checkout DuckDB to version
+        run: |
+          cd duckdb
+          git checkout ${{ inputs.duckdb_version }}
+
+      - id: parse-matrices
+        run: |
+          python3 ${{ inputs.matrix_parse_script }} --input ./duckdb/.github/config/distribution_matrix.json --select_os linux --output linux_matrix.json --exclude "${{ inputs.exclude_archs }}" --pretty 
+          python3 ${{ inputs.matrix_parse_script }} --input ./duckdb/.github/config/distribution_matrix.json --select_os osx --output osx_matrix.json --exclude "${{ inputs.exclude_archs }}" --pretty 
+          python3 ${{ inputs.matrix_parse_script }} --input ./duckdb/.github/config/distribution_matrix.json --select_os windows --output windows_matrix.json --exclude "${{ inputs.exclude_archs }}" --pretty          
+
+      - id: set-matrix-linux
+        run: |
+          linux_matrix="`cat linux_matrix.json`"
+          echo linux_matrix=$linux_matrix >> $GITHUB_OUTPUT
+          echo `cat $GITHUB_OUTPUT`
+
+      - id: set-matrix-osx
+        run: |
+          osx_matrix="`cat osx_matrix.json`"
+          echo osx_matrix=$osx_matrix >> $GITHUB_OUTPUT
+          echo `cat $GITHUB_OUTPUT`
+
+      - id: set-matrix-windows
+        run: |
+          windows_matrix="`cat windows_matrix.json`"
+          echo windows_matrix=$windows_matrix >> $GITHUB_OUTPUT
+          echo `cat $GITHUB_OUTPUT`
+
   linux:
-    name: Release
+    name: Linux
     runs-on: ubuntu-latest
     container: ${{ matrix.container }}
+    needs: generate_matrix
+    if: ${{ needs.generate_matrix.outputs.linux_matrix != '{}' && needs.generate_matrix.outputs.linux_matrix != '' }}
     strategy:
-      matrix:
-        duckdb_arch: [ 'linux_amd64', 'linux_arm64', 'linux_amd64_gcc4' ]
-        include:
-          - duckdb_arch: 'linux_amd64_gcc4'
-            container: 'quay.io/pypa/manylinux2014_x86_64'
-            vcpkg_triplet: 'x64-linux'
-          - duckdb_arch: 'linux_amd64'
-            container: 'ubuntu:18.04'
-            vcpkg_triplet: 'x64-linux'
-          - duckdb_arch: 'linux_arm64'
-            container: 'ubuntu:18.04'
-            vcpkg_triplet: 'arm64-linux'
-        exclude: ${{ fromJson(inputs.exclude_archs) }}
+      matrix: ${{fromJson(needs.generate_matrix.outputs.linux_matrix)}}
     env:
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
       VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
@@ -107,7 +146,7 @@ jobs:
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
+          vcpkgGitCommitId: ${{ inputs.vcpkg_commit }}
 
       - name: Build extension
         env:
@@ -124,49 +163,17 @@ jobs:
 
       - uses: actions/upload-artifact@v2
         with:
-          name: ${{ inputs.extension_name }}-extension-${{matrix.duckdb_arch}}
+          name: ${{ inputs.extension_name }}-${{ inputs.duckdb_version }}-extension-${{matrix.duckdb_arch}}${{inputs.artifact_postfix}}
           path: |
             build/release/extension/${{ inputs.extension_name }}/${{ inputs.extension_name }}.duckdb_extension
 
-      - name: Deploy
-        shell: bash
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DEPLOY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DEPLOY_KEY }}
-          AWS_DEFAULT_REGION: ${{ secrets.S3_REGION }}
-          BUCKET_NAME: ${{ secrets.S3_BUCKET }}
-          DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_KEY }}
-          # Catchall for secrets, allows overriding the deploy script with a custom one
-          SECRETS_CONTEXT: ${{ toJson(secrets) }}
-        run: |
-          git config --global --add safe.directory '*'
-          cd duckdb
-          git fetch --tags
-          export DUCKDB_VERSION=`git tag --points-at HEAD`
-          export DUCKDB_VERSION=${DUCKDB_VERSION:=`git log -1 --format=%h`}
-          cd ..
-          if [[ "${{ inputs.extension_ref }}" =~ ^(refs/tags/v.+)$ ]] ; then
-            python3 -m pip install pip awscli
-            ${{ inputs.deploy_script }} ${{ inputs.extension_name }} ${{ inputs.extension_ref }} $DUCKDB_VERSION ${{matrix.duckdb_arch}} $BUCKET_NAME true
-          elif [[ "${{ inputs.extension_ref }}" =~ ^(refs/heads/main)$ ]] ; then
-            python3 -m pip install pip awscli
-            ${{ inputs.deploy_script }} ${{ inputs.extension_name }} `git log -1 --format=%h` $DUCKDB_VERSION ${{matrix.duckdb_arch}} $BUCKET_NAME false
-          fi
-
   macos:
-    name: Release (${{ matrix.duckdb_arch }})
+    name: MacOS
     runs-on: macos-latest
+    needs: generate_matrix
+    if: ${{ needs.generate_matrix.outputs.osx_matrix != '{}' && needs.generate_matrix.outputs.osx_matrix != '' }}
     strategy:
-      matrix:
-        vcpkg_triplet: [ 'x64-osx', 'arm64-osx' ]
-        include:
-          - vcpkg_triplet: 'x64-osx'
-            osx_build_arch: 'x86_64'
-            duckdb_arch: 'osx_amd64'
-          - vcpkg_triplet: 'arm64-osx'
-            osx_build_arch: 'arm64'
-            duckdb_arch: 'osx_arm64'
-
+      matrix: ${{fromJson(needs.generate_matrix.outputs.osx_matrix)}}
     env:
       VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
@@ -181,8 +188,6 @@ jobs:
 
       - name: Install Ninja
         run: |
-          echo "$GITHUB_REF"
-          echo "hiii"
           brew install ninja
 
       - name: Setup Ccache
@@ -202,7 +207,7 @@ jobs:
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
+          vcpkgGitCommitId: ${{ inputs.vcpkg_commit }}
 
       - name: Build extension
         shell: bash
@@ -217,46 +222,17 @@ jobs:
 
       - uses: actions/upload-artifact@v2
         with:
-          name: ${{ inputs.extension_name }}-extension-${{ matrix.duckdb_arch }}
+          name: ${{ inputs.extension_name }}-${{ inputs.duckdb_version }}-extension-${{matrix.duckdb_arch}}${{inputs.artifact_postfix}}
           path: |
             build/release/extension/${{ inputs.extension_name }}/${{ inputs.extension_name }}.duckdb_extension
 
-      - name: Deploy
-        if: ${{ inputs.release_s3 }}
-        shell: bash
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DEPLOY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DEPLOY_KEY }}
-          AWS_DEFAULT_REGION: ${{ secrets.S3_REGION }}
-          BUCKET_NAME: ${{ secrets.S3_BUCKET }}
-          DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_KEY }}
-          # Catchall for secrets, allows overriding the deploy script with a custom one
-          SECRETS_CONTEXT: ${{ toJson(secrets) }}
-        run: |
-          git config --global --add safe.directory '*'
-          cd duckdb
-          git fetch --tags
-          export DUCKDB_VERSION=`git tag --points-at HEAD`
-          export DUCKDB_VERSION=${DUCKDB_VERSION:=`git log -1 --format=%h`}
-          cd ..
-          if [[ "${{ inputs.extension_ref }}" =~ ^(refs/tags/v.+)$ ]] ; then
-            python3 -m pip install pip awscli
-            ${{ inputs.deploy_script }} ${{ inputs.extension_name }} ${{ inputs.extension_ref }} $DUCKDB_VERSION ${{matrix.duckdb_arch}} $BUCKET_NAME true
-          elif [[ "${{ inputs.extension_ref }}" =~ ^(refs/heads/main)$ ]] ; then
-            python3 -m pip install pip awscli
-            ${{ inputs.deploy_script }} ${{ inputs.extension_name }} `git log -1 --format=%h` $DUCKDB_VERSION ${{matrix.duckdb_arch}} $BUCKET_NAME false
-          fi
-
   windows:
-    name: Release
+    name: Windows
     runs-on: windows-latest
+    needs: generate_matrix
+    if: ${{ needs.generate_matrix.outputs.windows_matrix != '{}' && needs.generate_matrix.outputs.windows_matrix != '' }}
     strategy:
-      matrix:
-        # Add commits/tags to build against other DuckDB versions
-        duckdb_arch: [ 'windows_amd64' ]
-        include:
-          - duckdb_arch: 'windows_amd64'
-            vcpkg_triplet: 'x64-windows-static-md'
+      matrix: ${{fromJson(needs.generate_matrix.outputs.windows_matrix)}}
     env:
       GEN: Ninja
       VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
@@ -285,7 +261,7 @@ jobs:
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
+          vcpkgGitCommitId: ${{ inputs.vcpkg_commit }}
 
       - name: Build extension
         run: |
@@ -298,32 +274,6 @@ jobs:
 
       - uses: actions/upload-artifact@v2
         with:
-          name: ${{ inputs.extension_name }}-extension-${{ matrix.duckdb_arch }}
+          name: ${{ inputs.extension_name }}-${{ inputs.duckdb_version }}-extension-${{matrix.duckdb_arch}}${{inputs.artifact_postfix}}
           path: |
             build/release/extension/${{ inputs.extension_name }}/${{ inputs.extension_name }}.duckdb_extension
-
-      - name: Deploy
-        if: ${{ inputs.release_s3 }}
-        shell: bash
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DEPLOY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DEPLOY_KEY }}
-          AWS_DEFAULT_REGION: ${{ secrets.S3_REGION }}
-          BUCKET_NAME: ${{ secrets.S3_BUCKET }}
-          DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_KEY }}
-          # Catchall for secrets, allows overriding the deploy script with a custom one
-          SECRETS_CONTEXT: ${{ toJson(secrets) }}
-        run: |
-          git config --global --add safe.directory '*'
-          cd duckdb
-          git fetch --tags
-          export DUCKDB_VERSION=`git tag --points-at HEAD`
-          export DUCKDB_VERSION=${DUCKDB_VERSION:=`git log -1 --format=%h`}
-          cd ..
-          if [[ "${{ inputs.extension_ref }}" =~ ^(refs/tags/v.+)$ ]] ; then
-            python -m pip install awscli
-            ${{ inputs.deploy_script }} ${{ inputs.extension_name }} ${{ inputs.extension_ref }} $DUCKDB_VERSION ${{ matrix.duckdb_arch }} $BUCKET_NAME true 
-          elif [[ "${{ inputs.extension_ref }}" =~ ^(refs/heads/main)$ ]] ; then
-            python -m pip install awscli
-            ${{ inputs.deploy_script }} ${{ inputs.extension_name }} `git log -1 --format=%h` $DUCKDB_VERSION ${{ matrix.duckdb_arch }} $BUCKET_NAME false 
-          fi
