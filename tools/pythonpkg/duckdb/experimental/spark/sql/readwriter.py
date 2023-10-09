@@ -177,5 +177,17 @@ class DataFrameReader:
             df = df.toDF(*names)
         return df
 
+    def parquet(self, *paths: str, **options: "OptionalPrimitiveType") -> "DataFrame":
+        input = list(paths)
+        if len(input) != 1:
+            raise NotImplementedError("Only single paths are supported for now")
+        option_amount = len(options.keys())
+        if option_amount != 0:
+            raise ContributionsAcceptedError("Options are not supported")
+        path = input[0]
+        rel = self.session.conn.read_parquet(path)
+        from ..sql.dataframe import DataFrame
+        df = DataFrame(rel, self.session)
+        return df
 
 __all__ = ["DataFrameWriter", "DataFrameReader"]
