@@ -129,6 +129,9 @@ hugeint_t Hugeint::DivModPositive(hugeint_t lhs, uint64_t rhs, uint64_t &remaind
 string Hugeint::ToString(hugeint_t input) {
 	uint64_t remainder;
 	string result;
+	if (input == NumericLimits<hugeint_t>::Minimum()) {
+		return string(Hugeint::HUGEINT_MINIMUM_STRING);
+	}
 	bool negative = input.upper < 0;
 	if (negative) {
 		NegateInPlace(input);
@@ -151,6 +154,16 @@ string Hugeint::ToString(hugeint_t input) {
 // Multiply
 //===--------------------------------------------------------------------===//
 bool Hugeint::TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result) {
+	// Check if one of the sides is hugeint_t minimum, as that can't be negated.
+	// You can only multiply the minimum by 1, any other value will result in overflow
+	if (lhs == NumericLimits<hugeint_t>::Minimum() || rhs == NumericLimits<hugeint_t>::Minimum()) {
+		if (lhs == 1 || rhs == 1) {
+			result = NumericLimits<hugeint_t>::Minimum();
+			return true;
+		}
+		return false;
+	}
+
 	bool lhs_negative = lhs.upper < 0;
 	bool rhs_negative = rhs.upper < 0;
 	if (lhs_negative) {
@@ -257,9 +270,41 @@ hugeint_t Hugeint::Multiply(hugeint_t lhs, hugeint_t rhs) {
 //===--------------------------------------------------------------------===//
 // Divide
 //===--------------------------------------------------------------------===//
+static hugeint_t DivModMinimum(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainder) {
+
+	if (rhs == NumericLimits<hugeint_t>::Minimum()) {
+		if (lhs == NumericLimits<hugeint_t>::Minimum()) {
+			remainder = 0;
+			return 1;
+		}
+		remainder = lhs;
+		return 0;
+	}
+
+	if (rhs < 0) {
+		throw OutOfRangeException("Overflow in HUGEINT division! (%s // %s)", lhs.ToString().c_str(), rhs.ToString().c_str());
+	}
+
+	hugeint_t result = Hugeint::DivMod(NumericLimits<hugeint_t>::Minimum() + 1, rhs, remainder);
+	if (remainder + 1 == rhs) {
+		if (result > 0) {
+			result += 1;
+		} else {
+			result -= 1;
+		}
+		remainder = 0;
+	}
+	return result;
+}
+
 hugeint_t Hugeint::DivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainder) {
 	// division by zero not allowed
 	D_ASSERT(!(rhs.upper == 0 && rhs.lower == 0));
+
+	// Check if one of the sides is hugeint_t minimum, as that can't be negated.
+	if (lhs == NumericLimits<hugeint_t>::Minimum() || rhs == NumericLimits<hugeint_t>::Minimum()) {
+		return DivModMinimum(lhs, rhs, remainder);
+	}
 
 	bool lhs_negative = lhs.upper < 0;
 	bool rhs_negative = rhs.upper < 0;
@@ -336,9 +381,9 @@ bool Hugeint::AddInPlace(hugeint_t &lhs, hugeint_t rhs) {
 		lhs.upper = lhs.upper + (overflow + rhs.upper);
 	}
 	lhs.lower += rhs.lower;
-	if (lhs.upper == std::numeric_limits<int64_t>::min() && lhs.lower == 0) {
-		return false;
-	}
+	// if (lhs.upper == std::numeric_limits<int64_t>::min() && lhs.lower == 0) {
+	// 	return false;
+	// }
 	return true;
 }
 
@@ -360,22 +405,22 @@ bool Hugeint::SubtractInPlace(hugeint_t &lhs, hugeint_t rhs) {
 		lhs.upper = lhs.upper - (rhs.upper + underflow);
 	}
 	lhs.lower -= rhs.lower;
-	if (lhs.upper == std::numeric_limits<int64_t>::min() && lhs.lower == 0) {
-		return false;
-	}
+	// if (lhs.upper == std::numeric_limits<int64_t>::min() && lhs.lower == 0) {
+	// 	return false;
+	// }
 	return true;
 }
 
 hugeint_t Hugeint::Add(hugeint_t lhs, hugeint_t rhs) {
 	if (!AddInPlace(lhs, rhs)) {
-		throw OutOfRangeException("Overflow in HUGEINT addition");
+		throw OutOfRangeException("Overflow in HUGEINT addition: %s + %s", lhs.ToString(), rhs.ToString());
 	}
 	return lhs;
 }
 
 hugeint_t Hugeint::Subtract(hugeint_t lhs, hugeint_t rhs) {
 	if (!SubtractInPlace(lhs, rhs)) {
-		throw OutOfRangeException("Underflow in HUGEINT addition");
+		throw OutOfRangeException("Underflow in HUGEINT addition: %s - %s", lhs.ToString(), rhs.ToString());
 	}
 	return lhs;
 }

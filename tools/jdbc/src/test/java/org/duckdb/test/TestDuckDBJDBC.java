@@ -3496,7 +3496,7 @@ public class TestDuckDBJDBC {
         correct_answer_map.put("smallint", asList((short) -32768, (short) 32767, null));
         correct_answer_map.put("int", asList(-2147483648, 2147483647, null));
         correct_answer_map.put("bigint", asList(-9223372036854775808L, 9223372036854775807L, null));
-        correct_answer_map.put("hugeint", asList(new BigInteger("-170141183460469231731687303715884105727"),
+        correct_answer_map.put("hugeint", asList(new BigInteger("-170141183460469231731687303715884105728"),
                                                  new BigInteger("170141183460469231731687303715884105727"), null));
         correct_answer_map.put("utinyint", asList((short) 0, (short) 255, null));
         correct_answer_map.put("usmallint", asList(0, 65535, null));

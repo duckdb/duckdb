@@ -18,6 +18,8 @@ namespace duckdb {
 //! The Hugeint class contains static operations for the INT128 type
 class Hugeint {
 public:
+	constexpr static const char *HUGEINT_MINIMUM_STRING = "-170141183460469231731687303715884105728";
+
 	//! Convert a hugeint object to a string
 	static string ToString(hugeint_t input);
 

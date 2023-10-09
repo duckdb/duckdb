@@ -248,6 +248,11 @@ struct HugeintToStringCast {
 	static string_t FormatSigned(hugeint_t value, Vector &vector) {
 		int negative = value.upper < 0;
 		if (negative) {
+			if (value == NumericLimits<hugeint_t>::Minimum()) {
+				string_t result = StringVector::AddString(vector, Hugeint::HUGEINT_MINIMUM_STRING);
+				result.Finalize();
+				return result;
+			}
 			Hugeint::NegateInPlace(value);
 		}
 		int length = UnsignedLength(value) + negative;
@@ -270,6 +275,11 @@ struct HugeintToStringCast {
 
 	static int DecimalLength(hugeint_t value, uint8_t width, uint8_t scale) {
 		int negative;
+
+		// Can't negate if it's the minimum value
+		if (value == NumericLimits<hugeint_t>::Minimum()) {
+			value += 1;
+		}
 		if (value.upper < 0) {
 			Hugeint::NegateInPlace(value);
 			negative = 1;
@@ -313,6 +323,13 @@ struct HugeintToStringCast {
 		hugeint_t major = Hugeint::DivMod(value, Hugeint::POWERS_OF_TEN[scale], minor);
 
 		// write the number after the decimal
+		// if (minor == NumericLimits<hugeint_t>::Minimum()) {
+		// 	auto digits =  NumericLimits<hugeint_t>::Digits();
+		// 	dst = endptr - digits;
+		// 	memcpy(dst, Hugeint::HUGEINT_MINIMUM_STRING, digits);
+		// } else {
+		// 	dst = FormatUnsigned(Hugeint::Negate(minor), endptr);
+		// }
 		dst = FormatUnsigned(minor, endptr);
 		// (optionally) pad with zeros and add the decimal point
 		while (dst > (endptr - scale)) {
@@ -322,6 +339,13 @@ struct HugeintToStringCast {
 		// now write the part before the decimal
 		D_ASSERT(width > scale || major == 0);
 		if (width > scale) {
+			// if (minor == NumericLimits<hugeint_t>::Minimum()) {
+			// 	auto digits =  NumericLimits<hugeint_t>::Digits();
+			// 	dst = dst - digits;
+			// 	memcpy(dst, Hugeint::HUGEINT_MINIMUM_STRING, digits);
+			// } else {
+			// 	dst = FormatUnsigned(Hugeint::Negate(major), dst);
+			// }
 			dst = FormatUnsigned(major, dst);
 		}
 	}
