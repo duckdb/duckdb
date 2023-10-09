@@ -29,7 +29,8 @@ string TypeCatalogEntry::ToSQL() const {
 	case (LogicalTypeId::ENUM): {
 		auto create_type_info = GetInfo();
 		return create_type_info->ToString();
-	} default:
+	}
+	default:
 		throw InternalException("Logical Type can't be used as a User Defined Type");
 	}
 }
