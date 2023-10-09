@@ -104,6 +104,9 @@ unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ExecutionCon
 		}
 		result->intermediate_chunk.Initialize(Allocator::DefaultAllocator(), intermediate_types);
 	}
+	if (join_type == JoinType::RIGHT_ANTI || join_type == JoinType::RIGHT_SEMI) {
+		throw InternalException("physical blockwise RIGHT_SEMI/RIGHT_ANTI join not yet supported");
+	}
 	return std::move(result);
 }
 

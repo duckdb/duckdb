@@ -486,7 +486,9 @@ void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vect
 }
 
 void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	D_ASSERT(result.ColumnCount() == left.ColumnCount() + ht.build_types.size());
+	if (ht.join_type != JoinType::RIGHT_SEMI) {
+		D_ASSERT(result.ColumnCount() == left.ColumnCount() + ht.build_types.size());
+	}
 	if (this->count == 0) {
 		// no pointers left to chase
 		return;
@@ -824,7 +826,11 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 		return;
 	}
 	result.SetCardinality(found_entries);
+
 	idx_t left_column_count = result.ColumnCount() - build_types.size();
+	if (join_type == JoinType::RIGHT_SEMI) {
+		left_column_count = 0;
+	}
 	const auto &sel_vector = *FlatVector::IncrementalSelectionVector();
 	// set the left side as a constant NULL
 	for (idx_t i = 0; i < left_column_count; i++) {
