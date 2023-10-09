@@ -78,9 +78,11 @@ public:
 	static bool RunArrowComparison(Connection &con, const string &query, ArrowArrayStream &arrow_stream);
 
 private:
-	static unique_ptr<QueryResult> ScanArrowObject(Connection &con, vector<Value> &params);
 	static bool CompareResults(unique_ptr<QueryResult> arrow, unique_ptr<MaterializedQueryResult> duck,
 	                           const string &query);
+
+public:
+	static unique_ptr<QueryResult> ScanArrowObject(Connection &con, vector<Value> &params);
 	static vector<Value> ConstructArrowScan(ArrowTestFactory &factory);
 	static vector<Value> ConstructArrowScan(ArrowArrayStream &stream);
 };
