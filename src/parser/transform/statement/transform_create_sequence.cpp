@@ -83,7 +83,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 
 				info->max_value = opt_value;
 				if (info->increment < 0) {
-					info->start_value = info->max_value;
+					default_start_value = info->max_value;
 				}
 			} else if (opt_name == "start") {
 				if (used.find(SequenceInfo::SEQ_START) != used.end()) {
