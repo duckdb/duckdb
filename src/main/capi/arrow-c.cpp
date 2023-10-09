@@ -64,7 +64,7 @@ duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared, du
 	if (result_schema->release) {
 		// Need to release the existing schema before we overwrite it
 		result_schema->release(result_schema);
-		result_schema->release = nullptr;
+		D_ASSERT(!result_schema->release);
 	}
 
 	ArrowConverter::ToArrowSchema(result_schema, prepared_types, prepared_names, properties);

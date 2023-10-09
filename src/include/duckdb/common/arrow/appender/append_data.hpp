@@ -27,6 +27,7 @@ typedef void (*finalize_t)(ArrowAppendData &append_data, const LogicalType &type
 // ArrowAppendState
 struct ArrowAppendData {
 	explicit ArrowAppendData(ClientProperties &options_p) : options(options_p) {
+		dictionary.release = nullptr;
 	}
 	// the buffers of the arrow vector
 	ArrowBuffer validity;
@@ -50,6 +51,7 @@ struct ArrowAppendData {
 	vector<ArrowArray *> child_pointers;
 	// Arrays so the children can be moved
 	vector<ArrowArray> child_arrays;
+	ArrowArray dictionary;
 
 	ClientProperties options;
 };
