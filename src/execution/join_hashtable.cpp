@@ -6,6 +6,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "iostream"
 
 namespace duckdb {
 
@@ -497,21 +498,22 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 	SelectionVector result_vector(STANDARD_VECTOR_SIZE);
 
 	idx_t result_count = ScanInnerJoin(keys, result_vector);
+	std::cout << "result count = " << result_count << std::endl;
 	if (result_count > 0) {
 		if (IsRightOuterJoin(ht.join_type)) {
 			// full/right outer join: mark join matches as FOUND in the HT
 			auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
 			for (idx_t i = 0; i < result_count; i++) {
+
 				auto idx = result_vector.get_index(i);
+				std::cout << "idx = " << idx << std::endl;
 				// NOTE: threadsan reports this as a data race because this can be set concurrently by separate threads
 				// Technically it is, but it does not matter, since the only value that can be written is "true"
 				Store<bool>(true, ptrs[idx] + ht.tuple_size);
 			}
 		}
 		// for right semi join, just mark the entry as found and move on
-		if (ht.join_type == JoinType::RIGHT_SEMI) {
-			result.SetCardinality(0);
-		} else {
+		if (ht.join_type != JoinType::RIGHT_SEMI) {
 			// matches were found
 			// construct the result
 			// on the LHS, we create a slice using the result vector
