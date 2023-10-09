@@ -394,17 +394,28 @@ static bool TemplatedOptimumArray(Vector &left, idx_t lidx_p, idx_t lcount, Vect
 
 	auto &lchild = ArrayVector::GetEntry(left);
 	auto &rchild = ArrayVector::GetEntry(right);
+	auto left_array_size = ArrayType::GetSize(left.GetType());
+	auto right_array_size = ArrayType::GetSize(right.GetType());
 
-	D_ASSERT(ArrayType::GetSize(left.GetType()) == ArrayType::GetSize(right.GetType()));
+	D_ASSERT(left_array_size == right_array_size);
 
-	// Strict comparisons use the OP for definite
-	if (TemplatedOptimumValue<OP>(lchild, lidx_p, lcount, rchild, ridx_p, rcount)) {
-		return true;
-	}
+	auto lchild_count = lcount * left_array_size;
+	auto rchild_count = rcount * right_array_size;
 
-	// Strict comparisons use IS NOT DISTINCT for possible
-	if (!TemplatedOptimumValue<NotDistinctFrom>(lchild, lidx_p, lcount, rchild, ridx_p, rcount)) {
-		return false;
+	for (idx_t elem_idx = 0; elem_idx < left_array_size; elem_idx++) {
+		auto left_elem_idx = lidx * left_array_size + elem_idx;
+		auto right_elem_idx = ridx * right_array_size + elem_idx;
+
+		// Strict comparisons use the OP for definite
+		if (TemplatedOptimumValue<OP>(lchild, left_elem_idx, lchild_count, rchild, right_elem_idx, rchild_count)) {
+			return true;
+		}
+
+		// Strict comparisons use IS NOT DISTINCT for possible
+		if (!TemplatedOptimumValue<NotDistinctFrom>(lchild, left_elem_idx, lchild_count, rchild, right_elem_idx,
+		                                            rchild_count)) {
+			return false;
+		}
 	}
 	return false;
 }
