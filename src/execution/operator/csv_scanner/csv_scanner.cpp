@@ -21,13 +21,11 @@ CSVScanner::CSVScanner(ClientContext &context, CSVReaderOptions &options) {
 	csv_iterator.buffer_pos = buffer_manager->GetStartPos();
 }
 
-// CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p,
-//                       idx_t buffer_idx, idx_t start_buffer_p, idx_t end_buffer_p, idx_t scanner_id_p)
-//    : buffer_manager(std::move(buffer_manager_p)), state_machine(std::move(state_machine_p)),
-//      cur_buffer_idx(buffer_idx), start_buffer(start_buffer_p), end_buffer(end_buffer_p),
-//      initial_buffer_set(buffer_idx), scanner_id(scanner_id_p) {
-//	cur_pos = start_buffer;
-//}
+ CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p,
+                       CSVIterator csv_iterator_p)
+    : buffer_manager(std::move(buffer_manager_p)), state_machine(std::move(state_machine_p)),
+      csv_iterator(csv_iterator_p) {
+}
 
 //! Skips all empty lines, until a non-empty line shows up
 struct ProcessSkipEmptyLines {

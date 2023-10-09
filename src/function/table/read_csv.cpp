@@ -162,39 +162,27 @@ static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, TableFun
 // Parallel CSV Reader CSV Global State
 //===--------------------------------------------------------------------===//
 
-struct ParallelCSVGlobalState : public GlobalTableFunctionState {
+struct CSVGlobalState : public GlobalTableFunctionState {
 public:
-	ParallelCSVGlobalState(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager_p,
-	                       const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files_path_p,
+	CSVGlobalState(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager_p,
+	                       const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
 	                       bool force_parallelism_p, vector<column_t> column_ids_p)
 	    : buffer_manager(std::move(buffer_manager_p)), system_threads(system_threads_p),
 	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)),
 	      line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
-		CSVFileHandle *file_handle_ptr;
 
-		if (!buffer_manager || (options.skip_rows_set && options.dialect_options.skip_rows > 0)) {
-			// If our buffers are too small, and we skip too many rows there is a chance things will go over-buffer
-			// for now don't reuse the buffer manager
-			buffer_manager.reset();
-		} else {
-			file_handle_ptr = buffer_manager->file_handle.get();
+		// If the buffer manager has not yet being initialized, we do it now.
+		if (!buffer_manager) {
+			buffer_manager = make_shared<CSVBufferManager>(context, options, files);
 		}
-
-		file_size = file_handle_ptr->FileSize();
-		first_file_size = file_size;
-		on_disk_file = file_handle_ptr->OnDiskFile();
-		bytes_read = 0;
+		//! Set information regarding file_size, if it's on disk and use that to set number of threads that will
+		//! be used in this scanner
+		file_size = buffer_manager->file_handle->FileSize();
+		on_disk_file = buffer_manager->file_handle->OnDiskFile();
 		running_threads = MaxThreads();
 
 		// Initialize all the book-keeping variables
-		auto file_count = files_path_p.size();
-		line_info.current_batches.resize(file_count);
-		line_info.lines_read.resize(file_count);
-		line_info.lines_errored.resize(file_count);
-		tuple_start.resize(file_count);
-		tuple_end.resize(file_count);
-		tuple_end_to_batch.resize(file_count);
-		batch_to_tuple_end.resize(file_count);
+		InitializeVerificationVariables(files.size());
 
 		// Initialize the lines read
 		line_info.lines_read[0][0] = options.dialect_options.skip_rows;
@@ -203,25 +191,37 @@ public:
 		}
 		first_position = options.dialect_options.true_start;
 	}
-	explicit ParallelCSVGlobalState(idx_t system_threads_p)
+	explicit CSVGlobalState(idx_t system_threads_p)
 	    : system_threads(system_threads_p), line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
 		running_threads = MaxThreads();
 	}
 
-	~ParallelCSVGlobalState() override {
+	~CSVGlobalState() override {
 	}
 
+	void InitializeVerificationVariables(idx_t file_count){
+		line_info.current_batches.resize(file_count);
+		line_info.lines_read.resize(file_count);
+		line_info.lines_errored.resize(file_count);
+		tuple_start.resize(file_count);
+		tuple_end.resize(file_count);
+		tuple_end_to_batch.resize(file_count);
+		batch_to_tuple_end.resize(file_count);
+
+	}
 	//! How many bytes were read up to this point
-	atomic<idx_t> bytes_read;
-	//! Size of current file
+	atomic<idx_t> bytes_read {0};
+	//! Size of the first file
+	// TODO: we now have an assumption that all files have similar sizes, we possibly should do more fine-grained
+	// Optimizations to multi-file readers.
 	idx_t file_size;
 
 public:
 	idx_t MaxThreads() const override;
 
-	//! Updates the CSV scanner with the next piece of buffer it should read.
-	//! It also properly moves to different files.
-	bool Next(ClientContext &context, const ReadCSVData &bind_data, unique_ptr<CSVScanner> &reader);
+	//! Generates a CSV Scanner, with information regarding the piece of buffer it should be read.
+	//! In case it returns a nullptr it means we are done reading these files.
+	unique_ptr<CSVScanner> Next(ClientContext &context, const ReadCSVData &bind_data);
 	//! Verify if the CSV File was read correctly
 	void Verify();
 
@@ -243,7 +243,7 @@ public:
 			progress = double(bytes_read) / double(file_size);
 		}
 		// now get the total percentage of files read
-		double percentage = double(file_index - 1) / total_files;
+		double percentage = double(cur_file_idx) / total_files;
 		percentage += (double(1) / double(total_files)) * progress;
 		return percentage * 100;
 	}
@@ -251,15 +251,18 @@ public:
 private:
 	//! File Handle for current file
 	shared_ptr<CSVBufferManager> buffer_manager;
+	//! Information to set CSV Scanners
+	//! The index of the current file being read
+	idx_t cur_file_idx = 0;
+	//! The index of the current buffer from the current file
+	idx_t cur_buffer_idx = 0;
+	//! How many bytes each thread should read
+	const idx_t bytes_per_thread = 0;
 
-	//! The index of the next file to read (i.e. current file + 1)
-	idx_t file_index = 1;
 	//! Mutex to lock when getting next batch of bytes (Parallel Only)
 	mutex main_mutex;
 	//! Byte set from for last thread
 	idx_t next_byte = 0;
-	//! Size of first file
-	idx_t first_file_size = 0;
 	//! Whether or not this is an on-disk file
 	bool on_disk_file = true;
 	//! Basically max number of threads in DuckDB
@@ -288,16 +291,18 @@ private:
 	vector<column_t> column_ids;
 	//! Line Info used in error messages
 	LineInfo line_info;
-	//! Current Buffer index
-	idx_t cur_buffer_idx = 0;
 };
 
-idx_t ParallelCSVGlobalState::MaxThreads() const {
+idx_t CSVGlobalState::MaxThreads() const {
 	if (force_parallelism || !on_disk_file) {
+		// If parallelism is forced we run with max threads, this should only be used for tested or by
+		// advanced users
+		// If file is not on disk, in many cases we can't guess how big it is, hence we also run with max threads.
 		return system_threads;
 	}
-	idx_t one_mb = 1000000; // We initialize max one thread per Mb
-	idx_t threads_per_mb = first_file_size / one_mb + 1;
+	// We initialize max one thread per Mb
+	const idx_t one_mb = 1000000;
+	idx_t threads_per_mb = file_size / one_mb + 1;
 	if (threads_per_mb < system_threads || threads_per_mb == 1) {
 		return threads_per_mb;
 	}
@@ -305,18 +310,18 @@ idx_t ParallelCSVGlobalState::MaxThreads() const {
 	return system_threads;
 }
 
-void ParallelCSVGlobalState::DecrementThread() {
+void CSVGlobalState::DecrementThread() {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	D_ASSERT(running_threads > 0);
 	running_threads--;
 }
 
-bool ParallelCSVGlobalState::Finished() {
+bool CSVGlobalState::Finished() {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	return running_threads == 0;
 }
 
-void ParallelCSVGlobalState::Verify() {
+void CSVGlobalState::Verify() {
 	// All threads are done, we run some magic sweet verification code
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (running_threads == 0) {
@@ -383,40 +388,17 @@ void LineInfo::Verify(idx_t file_idx, idx_t batch_idx, idx_t cur_first_pos) {
 		    problematic_line);
 	}
 }
-bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bind_data,
-                                  unique_ptr<CSVScanner> &reader) {
+unique_ptr<CSVScanner> CSVGlobalState::Next(ClientContext &context, const ReadCSVData &bind_data) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	if (!buffer_manager) {
-		buffer_manager = make_shared<CSVBufferManager>(context, bind_data.options, bind_data.files);
-	}
-	if (!buffer_manager) {
-		return false;
-	}
-	auto current_buffer = buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx);
-	auto next_buffer = buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx + 1);
 
-	if (!current_buffer) {
-		// This means we are done with the current file, we need to go to the next one (if exists).
-		if (file_index < bind_data.files.size()) {
-			cur_buffer_idx = 0;
-			first_position = 0;
-			local_batch_index = 0;
+	// Generate CSV Iterator
+	CSVIterator csv_iterator (cur_file_idx, cur_buffer_idx, cur_, bytes_to_read );
 
-			line_info.lines_read[file_index++][local_batch_index] = (bind_data.options.has_header ? 1 : 0);
-
-			current_buffer = buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx);
-			next_buffer = buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx + 1);
-		} else {
-			// We are done scanning.
-			reader.reset();
-			return false;
-		}
-	}
 	// set up the current buffer
 	line_info.current_batches[file_index - 1].insert(local_batch_index);
 	idx_t bytes_per_local_state = current_buffer->actual_size / MaxThreads() + 1;
 	auto result =
-	    make_uniq<CSVBufferRead>(buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx),
+	    make_uniq<CSVBuffer>(buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx),
 	                             buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx + 1), next_byte,
 	                             next_byte + bytes_per_local_state, batch_index++, local_batch_index++, &line_info);
 	// move the byte index of the CSV reader to the next buffer
@@ -462,12 +444,12 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		//		                                  bind_data.files.front(), context);
 	} else {
 		// update the current reader
-		reader->SetBufferRead(std::move(result));
+//		reader->SetBufferRead(std::move(result));
 	}
 
 	return true;
 }
-void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions, idx_t file_number_p, idx_t batch_idx) {
+void CSVGlobalState::UpdateVerification(VerificationPositions positions, idx_t file_number_p, idx_t batch_idx) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (positions.end_of_last_line > max_tuple_end) {
 		max_tuple_end = positions.end_of_last_line;
@@ -478,7 +460,7 @@ void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions,
 	tuple_end[file_number_p].push_back(positions.end_of_last_line);
 }
 
-void ParallelCSVGlobalState::UpdateLinesRead(CSVScanner &buffer_read, idx_t file_idx) {
+void CSVGlobalState::UpdateLinesRead(CSVScanner &buffer_read, idx_t file_idx) {
 	auto batch_idx = buffer_read.scanner_id;
 	auto lines_read = buffer_read.GetTotalRowsEmmited();
 	lock_guard<mutex> parallel_lock(main_mutex);
@@ -574,11 +556,9 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 	}
 	if (bind_data.files.empty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
-		return make_uniq<ParallelCSVGlobalState>(context.db->NumberOfThreads());
+		return make_uniq<CSVGlobalState>(context.db->NumberOfThreads());
 	}
-	bind_data.options.file_path = bind_data.files[0];
-	auto buffer_manager = bind_data.buffer_manager;
-	return make_uniq<ParallelCSVGlobalState>(context, buffer_manager, bind_data.options, context.db->NumberOfThreads(),
+	return make_uniq<CSVGlobalState>(context, bind_data.buffer_manager, bind_data.options, context.db->NumberOfThreads(),
 	                                         bind_data.files, ClientConfig::GetConfig(context).verify_parallelism,
 	                                         input.column_ids);
 }
@@ -586,7 +566,7 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
                                                      GlobalTableFunctionState *global_state_p) {
 	auto &csv_data = input.bind_data->Cast<ReadCSVData>();
-	auto &global_state = global_state_p->Cast<ParallelCSVGlobalState>();
+	auto &global_state = global_state_p->Cast<CSVGlobalState>();
 	unique_ptr<CSVScanner> csv_scanner;
 	auto has_next = global_state.Next(context.client, csv_data, csv_scanner);
 	if (!has_next) {
@@ -598,7 +578,7 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
 
 static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = data_p.bind_data->Cast<ReadCSVData>();
-	auto &csv_global_state = data_p.global_state->Cast<ParallelCSVGlobalState>();
+	auto &csv_global_state = data_p.global_state->Cast<CSVGlobalState>();
 	auto &csv_local_state = data_p.local_state->Cast<CSVLocalState>();
 
 	if (!csv_local_state.csv_reader) {
@@ -679,7 +659,7 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
                          const GlobalTableFunctionState *global_state) {
 	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
-	auto &data = global_state->Cast<ParallelCSVGlobalState>();
+	auto &data = global_state->Cast<CSVGlobalState>();
 	return data.GetProgress(bind_data);
 }
 

@@ -33,6 +33,7 @@ struct CSVIterator {
 	//! Resets the Iterator, only used in the sniffing where scanners must be restarted for dialect/type detection
 	void Reset();
 
+
 	//! File index where we start scanning [0-idx], a scanner can never go over one file.
 	const idx_t file_idx = 0;
 	//! Start Buffer index of the file where we start scanning
@@ -58,7 +59,7 @@ public:
 	explicit CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p);
 	//! Constructor used when parsing
 	explicit CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p,
-	                    idx_t buffer_idx, idx_t start_buffer, idx_t end_buffer, idx_t scanner_id);
+	                    CSVIterator csv_iterator);
 
 	//! This functions templates an operation over the CSV File
 	template <class OP, class T>
