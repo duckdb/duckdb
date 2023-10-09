@@ -93,12 +93,7 @@ class AllTimings:
 
 
 def open_utf8(fpath, flags):
-    import sys
-    if sys.version_info[0] < 3:
-        print("Please use python3")
-        exit(1)
-    else:
-        return open(fpath, flags, encoding="utf8")
+    return open(fpath, flags, encoding="utf8")
 
 def get_child_timings(top_node, query_timings):
     node_timing = NodeTiming(top_node['name'], float(top_node['timing']))
@@ -236,7 +231,7 @@ def gather_timing_information(json, query_timings):
     # add up all of the times
     # measure each time as a percentage of the total time.
     # then you can return a list of [phase, time, percentage]
-    child_timings = get_child_timings(json['children'][0], query_timings)
+    get_child_timings(json['children'][0], query_timings)
 
 def translate_json_to_html(input_file, output_file):
     query_timings = AllTimings()
@@ -276,8 +271,9 @@ def translate_json_to_html(input_file, output_file):
         f.write(html)
 
 def main():
-    sys.path.insert(0, 'benchmark')
-
+    if sys.version_info[0] < 3:
+        print("Please use python3")
+        exit(1)
     parser = argparse.ArgumentParser(
         prog='Query Graph Generator',
         description='Given a json profile output, generate a html file showing the query graph and timings of operators')
