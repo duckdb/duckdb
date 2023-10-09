@@ -266,6 +266,7 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 	}
 
 	switch (target_type) {
+	case SQL_C_SHORT:
 	case SQL_C_SSHORT:
 		return GetInternalValue<int16_t, SQLSMALLINT>(hstmt, val, LogicalType::SMALLINT, target_value_ptr,
 		                                              str_len_or_ind_ptr);
@@ -288,6 +289,7 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 		LogicalType char_type = LogicalType(LogicalTypeId::CHAR);
 		return GetInternalValue<SQLCHAR>(hstmt, val, char_type, target_value_ptr, str_len_or_ind_ptr);
 	}
+	case SQL_C_TINYINT:
 	case SQL_C_STINYINT:
 		return GetInternalValue<int8_t, SQLSCHAR>(hstmt, val, LogicalType::TINYINT, target_value_ptr,
 		                                          str_len_or_ind_ptr);

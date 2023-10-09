@@ -1,0 +1,13 @@
+# name: test/sql/copy/parquet/byte_stream_split.test
+# description: Read a Parquet file with floats and doubles encoded using the byte stream split encoding
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+query III
+SELECT * FROM 'data/parquet-testing/byte_stream_split.parquet'
+----
+<FILE>:data/parquet-testing/byte_stream_split.csv
