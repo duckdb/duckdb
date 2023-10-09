@@ -4,6 +4,24 @@
 
 require json
 
+# test automatic detection even with .gz
+statement ok
+create table integers as select 42 i
+
+statement ok
+copy integers to '__TEST_DIR__/integers.json.gz' (FORMAT JSON, COMPRESSION GZIP)
+
+statement ok
+delete from integers
+
+statement ok
+copy integers from '__TEST_DIR__/integers.json.gz'
+
+query T
+select i from integers
+----
+42
+
 # test writing all types to file
 statement ok
 create type small_enum as enum ('DUCK_DUCK_ENUM', 'GOOSE');
