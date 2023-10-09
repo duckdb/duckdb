@@ -16,7 +16,7 @@ static void EmptyRelease(ArrowArray *array) {
 }
 
 template <class T>
-void AssertExpectedResult(ArrowSchema schema, ArrowArrayWrapper &array, T expected_value, bool is_null = false) {
+void AssertExpectedResult(ArrowSchema *schema, ArrowArrayWrapper &array, T expected_value, bool is_null = false) {
 	ArrowArrayStream stream;
 	stream.release = nullptr;
 
@@ -29,12 +29,11 @@ void AssertExpectedResult(ArrowSchema schema, ArrowArrayWrapper &array, T expect
 	struct_array.release = EmptyRelease;
 
 	duckdb_adbc::AdbcError unused;
-	(void)BatchToArrayStream(&struct_array, &schema, &stream, &unused);
+	(void)BatchToArrayStream(&struct_array, schema, &stream, &unused);
 
 	DuckDB db(nullptr);
 	Connection conn(db);
 	auto params = ArrowTestHelper::ConstructArrowScan(stream);
-	stream.release = nullptr;
 
 	auto result = ArrowTestHelper::ScanArrowObject(conn, params);
 	unique_ptr<DataChunk> chunk;
@@ -56,8 +55,8 @@ void AssertExpectedResult(ArrowSchema schema, ArrowArrayWrapper &array, T expect
 			}
 		}
 	}
-	if (schema.release) {
-		schema.release(&schema);
+	if (schema->release) {
+		schema->release(schema);
 	}
 }
 
@@ -125,18 +124,21 @@ TEST_CASE("Test move children", "[arrow]") {
 			ArrowConverter::ToArrowSchema(&schema, single_type, single_name, res_properties);
 
 			if (i == 0) {
-				AssertExpectedResult<string>(schema, children[i], "a");
+				AssertExpectedResult<string>(&schema, children[i], "a");
 			} else if (i == 1) {
-				AssertExpectedResult<string>(schema, children[i], "this is a long string");
+				AssertExpectedResult<string>(&schema, children[i], "this is a long string");
 			} else if (i == 2) {
-				AssertExpectedResult<int32_t>(schema, children[i], 42);
+				AssertExpectedResult<int32_t>(&schema, children[i], 42);
 			} else if (i == 3) {
-				AssertExpectedResult<bool>(schema, children[i], true);
+				AssertExpectedResult<bool>(&schema, children[i], true);
 			} else if (i == 4) {
-				AssertExpectedResult<int32_t>(schema, children[i], 0, true);
+				AssertExpectedResult<int32_t>(&schema, children[i], 0, true);
 			} else {
 				// Not possible
 				REQUIRE(false);
+			}
+			if (schema.release) {
+				schema.release(&schema);
 			}
 		}
 	}
