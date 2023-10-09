@@ -48,6 +48,8 @@ struct ArrowAppendData {
 	unique_ptr<ArrowArray> array;
 	duckdb::array<const void *, 3> buffers = {{nullptr, nullptr, nullptr}};
 	vector<ArrowArray *> child_pointers;
+	// Arrays so the children can be moved
+	vector<ArrowArray> child_arrays;
 
 	ClientProperties options;
 };

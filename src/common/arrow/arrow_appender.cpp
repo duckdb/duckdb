@@ -89,7 +89,7 @@ ArrowArray ArrowAppender::Finalize() {
 	auto root_holder = make_uniq<ArrowAppendData>(options);
 
 	ArrowArray result;
-	root_holder->child_pointers.resize(types.size());
+	AddChildren(*root_holder, types.size());
 	result.children = root_holder->child_pointers.data();
 	result.n_children = types.size();
 
@@ -248,6 +248,14 @@ unique_ptr<ArrowAppendData> ArrowAppender::InitializeChild(const LogicalType &ty
 	result->validity.reserve(byte_count);
 	result->initialize(*result, type, capacity);
 	return result;
+}
+
+void ArrowAppender::AddChildren(ArrowAppendData &data, idx_t count) {
+	data.child_pointers.resize(count);
+	data.child_arrays.resize(count);
+	for (idx_t i = 0; i < count; i++) {
+		data.child_pointers[i] = &data.child_arrays[i];
+	}
 }
 
 } // namespace duckdb
