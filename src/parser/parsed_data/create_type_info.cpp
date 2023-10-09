@@ -25,8 +25,8 @@ unique_ptr<CreateInfo> CreateTypeInfo::Copy() const {
 string CreateTypeInfo::ToString() const {
 	string result = "";
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
-	auto &values_insert_order = EnumType::GetValuesInsertOrder(type.id());
-	idx_t size = EnumType::GetSize(type.id());
+	auto &values_insert_order = EnumType::GetValuesInsertOrder(type);
+	idx_t size = EnumType::GetSize(type);
 	result += "CREATE TYPE ";
 	result += KeywordHelper::WriteOptionallyQuoted(name);
 	result += " AS ENUM ( ";

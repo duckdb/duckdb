@@ -41,7 +41,7 @@ string CreateTableInfo::ToString() const {
 	if (query != nullptr) {
 		ret += " AS " + query->ToString();
 	} else {
-		ret += TableCatalogEntry::ColumnsToSQL(columns, constraints);
+		ret += TableCatalogEntry::ColumnsToSQL(columns, constraints) + ";";
 	}
 	return ret;
 }
