@@ -368,15 +368,30 @@ unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr
 							cond.comparison = FlipComparisonExpression(cond.comparison);
 						}
 					}
-				} else if (join.join_type == JoinType::LEFT_SEMI) {
+				}
+				else if (join.join_type == JoinType::LEFT_SEMI) {
 					auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
 					auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
 					// FIXME! only do this when build/right side is twice as big as probe.
-					join.join_type = JoinType::RIGHT_SEMI;
-					std::swap(join.children[0], join.children[1]);
-					for (auto &cond : join.conditions) {
-						std::swap(cond.left, cond.right);
-						cond.comparison = FlipComparisonExpression(cond.comparison);
+					if (lhs_cardinality < rhs_cardinality * 2) {
+						join.join_type = JoinType::RIGHT_SEMI;
+						std::swap(join.children[0], join.children[1]);
+						for (auto &cond : join.conditions) {
+							std::swap(cond.left, cond.right);
+							cond.comparison = FlipComparisonExpression(cond.comparison);
+						}
+					}
+				} else if (join.join_type == JoinType::LEFT_ANTI) {
+					auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
+					auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
+					// FIXME! only do this when build/right side is twice as big as probe.
+					if (lhs_cardinality < rhs_cardinality * 2) {
+						join.join_type = JoinType::RIGHT_ANTI;
+						std::swap(join.children[0], join.children[1]);
+						for (auto &cond : join.conditions) {
+							std::swap(cond.left, cond.right);
+							cond.comparison = FlipComparisonExpression(cond.comparison);
+						}
 					}
 				}
 				break;

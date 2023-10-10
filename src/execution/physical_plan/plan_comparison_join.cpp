@@ -287,6 +287,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 	switch (op.join_type) {
 	case JoinType::LEFT_SEMI:
 	case JoinType::LEFT_ANTI:
+	case JoinType::RIGHT_ANTI:
+	case JoinType::RIGHT_SEMI:
 	case JoinType::MARK:
 		can_merge = can_merge && op.conditions.size() == 1;
 		can_iejoin = false;
@@ -313,8 +315,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 
 	} else {
 		static constexpr const idx_t NESTED_LOOP_JOIN_THRESHOLD = 5;
-		if (left->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD ||
-		    right->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD) {
+		if ((left->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD ||
+		    right->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD) &&
+		    (op.join_type != JoinType::LEFT_ANTI && op.join_type != JoinType::LEFT_SEMI &&
+		     op.join_type != JoinType::RIGHT_ANTI && op.join_type != JoinType::RIGHT_SEMI)) {
 			can_iejoin = false;
 			can_merge = false;
 		}
