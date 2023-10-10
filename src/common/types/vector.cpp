@@ -367,13 +367,14 @@ void Vector::SetValue(idx_t index, const Value &val) {
 
 	validity.EnsureWritable();
 	validity.Set(index, !val.IsNull());
-	if (val.IsNull() && GetType().InternalType() != PhysicalType::STRUCT) {
-		// for structs we still need to set the child-entries to NULL
+	auto physical_type = GetType().InternalType();
+	if (val.IsNull() && physical_type != PhysicalType::STRUCT && physical_type != PhysicalType::ARRAY) {
+		// for structs and arrays we still need to set the child-entries to NULL
 		// so we do not bail out yet
 		return;
 	}
 
-	switch (GetType().InternalType()) {
+	switch (physical_type) {
 	case PhysicalType::BOOL:
 		reinterpret_cast<bool *>(data)[index] = val.GetValueUnsafe<bool>();
 		break;
@@ -451,14 +452,20 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		break;
 	}
 	case PhysicalType::ARRAY: {
-		auto &val_children = ArrayValue::GetChildren(val);
-		auto stride = ArrayType::GetSize(GetType());
-		auto &entry = ArrayVector::GetEntry(*this);
-		if (!entry.validity.IsMaskSet()) {
-			entry.validity.Initialize(static_cast<idx_t>(stride) * STANDARD_VECTOR_SIZE);
-		}
-		for (idx_t i = 0; i < stride; i++) {
-			entry.SetValue((index * stride) + i, val_children[i]);
+		auto array_size = ArrayType::GetSize(GetType());
+		auto &child = ArrayVector::GetEntry(*this);
+		if (val.IsNull()) {
+			for (idx_t i = 0; i < array_size; i++) {
+				child.SetValue(index * array_size + i, Value());
+			}
+		} else {
+			auto &val_children = ArrayValue::GetChildren(val);
+			if (!child.validity.IsMaskSet()) {
+				child.validity.Initialize(static_cast<idx_t>(array_size) * STANDARD_VECTOR_SIZE);
+			}
+			for (idx_t i = 0; i < array_size; i++) {
+				child.SetValue(index * array_size + i, val_children[i]);
+			}
 		}
 		break;
 	}

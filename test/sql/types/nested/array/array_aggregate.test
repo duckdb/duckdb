@@ -18,14 +18,14 @@ SELECT COUNT(*), max(a) FROM tbl1 GROUP BY list_sum(a::INT[]) % 2 == 0;
 ----
 1	NULL
 1	[10, 11, 12]
-3	[4, NULL, 6]
+3	[7, 8, 9]
 
 
 query II rowsort
 SELECT COUNT(*), max(a) FROM tbl1 GROUP BY list_sum(a::INT[]) % 2 == 0 HAVING list_sum(a::INT[]) % 2 == 0 NOT NULL;
 ----
 1	[10, 11, 12]
-3	[4, NULL, 6]
+3	[7, 8, 9]
 
 
 query II

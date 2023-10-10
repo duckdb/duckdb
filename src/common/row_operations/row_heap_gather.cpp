@@ -148,10 +148,16 @@ static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const Selection
 	// array must have a validitymask for its elements
 	auto array_validitymask_size = (array_size + 7) / 8;
 
+	auto &child_validity = FlatVector::Validity(child_vector);
+
 	for (idx_t i = 0; i < vcount; i++) {
 		// row idx
 		const auto col_idx = sel.get_index(i);
 		if (!validity.RowIsValid(col_idx)) {
+			// we still need to zero out the child validity corresponding to this row
+			for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
+				child_validity.Set(col_idx * array_size + elem_idx, false);
+			}
 			continue;
 		}
 
@@ -174,8 +180,6 @@ static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const Selection
 
 		while (elem_remaining > 0) {
 			auto chunk_size = MinValue((uint32_t)STANDARD_VECTOR_SIZE, elem_remaining);
-
-			auto &child_validity = FlatVector::Validity(child_vector);
 			for (idx_t elem_idx = 0; elem_idx < chunk_size; elem_idx++) {
 				child_validity.Set(array_start + elem_idx, *(array_validitymask_location) & (1 << offset_in_byte));
 				if (++offset_in_byte == 8) {

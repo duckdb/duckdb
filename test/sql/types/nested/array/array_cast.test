@@ -47,13 +47,13 @@ SELECT array_value('1.0', '2.0', '3.0')::DOUBLE[3]
 statement error
 SELECT array_value(1, 2, 3)::INT[2]
 ----
-Conversion Error: Type INTEGER[3] can't be cast as INTEGER[2]
+Conversion Error: Cannot cast array of size 3 to array of size 2
 
 # Should not be able to cast arrays of different lengths
 statement error
 SELECT array_value(1, 2, 3)::INT[4]
 ----
-Conversion Error: Type INTEGER[3] can't be cast as INTEGER[4]
+Conversion Error: Cannot cast array of size 3 to array of size 4
 
 # Should be able to cast from list to array
 query I

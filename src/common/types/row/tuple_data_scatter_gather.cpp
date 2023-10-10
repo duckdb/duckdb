@@ -1175,6 +1175,9 @@ static void TupleDataArrayGather(const TupleDataLayout &layout, Vector &row_loca
 	// Target
 	auto target_list_entries = FlatVector::GetData<list_entry_t>(target);
 	auto &target_validity = FlatVector::Validity(target);
+	auto &target_child = ArrayVector::GetEntry(target);
+	auto &target_child_validity = FlatVector::Validity(target_child);
+	auto target_array_size = ArrayType::GetSize(target.GetType());
 
 	// Precompute mask indexes
 	idx_t entry_idx;
@@ -1208,6 +1211,10 @@ static void TupleDataArrayGather(const TupleDataLayout &layout, Vector &row_loca
 		} else {
 			source_heap_validity.SetInvalid(source_idx);
 			target_validity.SetInvalid(target_idx);
+			// We also need to invalidate the corresponding elements in the child array.
+			for (idx_t elem_idx = 0; elem_idx < target_array_size; elem_idx++) {
+				target_child_validity.SetInvalid(target_idx * target_array_size + elem_idx);
+			}
 		}
 	}
 
@@ -1216,8 +1223,8 @@ static void TupleDataArrayGather(const TupleDataLayout &layout, Vector &row_loca
 	// Recurse
 	D_ASSERT(child_functions.size() == 1);
 	const auto &child_function = child_functions[0];
-	child_function.function(layout, heap_locations, list_size_before, scan_sel, scan_count,
-	                        ArrayVector::GetEntry(target), target_sel, target, child_function.child_functions);
+	child_function.function(layout, heap_locations, list_size_before, scan_sel, scan_count, target_child, target_sel,
+	                        target, child_function.child_functions);
 }
 
 //------------------------------------------------------------------------------

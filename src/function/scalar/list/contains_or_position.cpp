@@ -2,6 +2,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 

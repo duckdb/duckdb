@@ -2,6 +2,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/built_in_functions.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
