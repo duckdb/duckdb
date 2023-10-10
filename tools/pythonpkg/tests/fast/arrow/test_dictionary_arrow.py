@@ -98,10 +98,11 @@ class TestArrowDictionary(object):
             """
             [{'a': 'hello'::ENUM('hello', 'bye')}]
         """,
-            # list of union(enum)
-            """
-            [{'a': 'hello'::ENUM('hello', 'bye')}::UNION(a integer, b bool, c struct(a enum('hello', 'bye')))]
-        """,
+            # Disabled because of duckdb-internal/issues/477
+            #    # list of union(enum)
+            #    """
+            #    [{'a': 'hello'::ENUM('hello', 'bye')}::UNION(a integer, b bool, c struct(a enum('hello', 'bye')))]
+            # """,
             # list of list
             """
             [['hello'::ENUM('hello', 'bye')], [], NULL, ['hello'::ENUM('hello', 'bye'), 'bye'::ENUM('hello', 'bye')]]
@@ -113,13 +114,13 @@ class TestArrowDictionary(object):
         [
             1,
             10,
-            # 1024,
+            1024,
             # 2048,
             # 2047,
             # 2049,
             # 4000,
             # 4096,
-            # 5000
+            5000,
         ],
     )
     def test_dictionary_roundtrip(self, query, duckdb_cursor, count):
