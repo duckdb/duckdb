@@ -222,10 +222,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 			for (auto &target_distinct : distinct.target_distincts) {
 				auto &bound_colref = target_distinct->Cast<BoundColumnRefExpression>();
 				const auto &sql_type = sql_types[bound_colref.binding.column_index];
-				if (sql_type.id() == LogicalTypeId::VARCHAR) {
-					target_distinct = ExpressionBinder::PushCollation(context, std::move(target_distinct),
-					                                                  StringType::GetCollation(sql_type), true);
-				}
+				ExpressionBinder::PushCollation(context, target_distinct, sql_type, true);
 			}
 			break;
 		}
@@ -253,10 +250,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 				D_ASSERT(bound_colref.binding.column_index < sql_types.size());
 				const auto &sql_type = sql_types[bound_colref.binding.column_index];
 				bound_colref.return_type = sql_types[bound_colref.binding.column_index];
-				if (sql_type.id() == LogicalTypeId::VARCHAR) {
-					order_node.expression = ExpressionBinder::PushCollation(context, std::move(order_node.expression),
-					                                                        StringType::GetCollation(sql_type));
-				}
+				ExpressionBinder::PushCollation(context, order_node.expression, sql_type);
 			}
 			break;
 		}
@@ -389,9 +383,8 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			bool contains_subquery = bound_expr_ref.HasSubquery();
 
 			// push a potential collation, if necessary
-			auto collated_expr = ExpressionBinder::PushCollation(context, std::move(bound_expr),
-			                                                     StringType::GetCollation(group_type), true);
-			if (!contains_subquery && !collated_expr->Equals(bound_expr_ref)) {
+			bool requires_collation = ExpressionBinder::PushCollation(context, bound_expr, group_type, true);
+			if (!contains_subquery && requires_collation) {
 				// if there is a collation on a group x, we should group by the collated expr,
 				// but also push a first(x) aggregate in case x is selected (uncollated)
 				info.collated_groups[i] = result->aggregates.size();
@@ -405,7 +398,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
 				result->aggregates.push_back(std::move(function));
 			}
-			result->groups.group_expressions.push_back(std::move(collated_expr));
+			result->groups.group_expressions.push_back(std::move(bound_expr));
 
 			// in the unbound expression we DO bind the table names of any ColumnRefs
 			// we do this to make sure that "table.a" and "a" are treated the same

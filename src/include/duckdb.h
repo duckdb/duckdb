@@ -317,7 +317,7 @@ typedef enum {
 //===--------------------------------------------------------------------===//
 
 /*!
-Creates a new database or opens an existing database file stored at the the given path.
+Creates a new database or opens an existing database file stored at the given path.
 If no path is given a new in-memory database is created instead.
 The instantiated database should be closed with 'duckdb_close'
 
@@ -328,7 +328,7 @@ The instantiated database should be closed with 'duckdb_close'
 DUCKDB_API duckdb_state duckdb_open(const char *path, duckdb_database *out_database);
 
 /*!
-Extended version of duckdb_open. Creates a new database or opens an existing database file stored at the the given path.
+Extended version of duckdb_open. Creates a new database or opens an existing database file stored at the given path.
 
 * path: Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.
 * out_database: The result database object.
@@ -1009,7 +1009,7 @@ Binds an int64_t value to the prepared statement at the specified index.
 DUCKDB_API duckdb_state duckdb_bind_int64(duckdb_prepared_statement prepared_statement, idx_t param_idx, int64_t val);
 
 /*!
-Binds an duckdb_hugeint value to the prepared statement at the specified index.
+Binds a duckdb_hugeint value to the prepared statement at the specified index.
 */
 DUCKDB_API duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                             duckdb_hugeint val);
@@ -1040,12 +1040,12 @@ Binds an uint64_t value to the prepared statement at the specified index.
 DUCKDB_API duckdb_state duckdb_bind_uint64(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint64_t val);
 
 /*!
-Binds an float value to the prepared statement at the specified index.
+Binds a float value to the prepared statement at the specified index.
 */
 DUCKDB_API duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_statement, idx_t param_idx, float val);
 
 /*!
-Binds an double value to the prepared statement at the specified index.
+Binds a double value to the prepared statement at the specified index.
 */
 DUCKDB_API duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_statement, idx_t param_idx, double val);
 

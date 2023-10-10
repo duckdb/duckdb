@@ -34,9 +34,9 @@ public:
 	//! CSV Sniffing consists of five steps:
 	//! 1. Dialect Detection: Generate the CSV Options (delimiter, quote, escape, etc.)
 	//! 2. Type Detection: Figures out the types of the columns (For one chunk)
-	//! 3. Header Detection: Figures out if  the CSV file has a header and produces the names of the columns
-	//! 4. Type Replacement: Replaces the types of the columns if the user specified them
-	//! 5. Type Refinement: Refines the types of the columns for the remaining chunks
+	//! 3. Type Refinement: Refines the types of the columns for the remaining chunks
+	//! 4. Header Detection: Figures out if  the CSV file has a header and produces the names of the columns
+	//! 5. Type Replacement: Replaces the types of the columns if the user specified them
 	SnifferResult SniffCSV();
 
 private:
@@ -108,6 +108,13 @@ private:
 	vector<Value> best_header_row;
 
 	//! ------------------------------------------------------//
+	//! ------------------ Type Refinement ------------------ //
+	//! ------------------------------------------------------//
+	void RefineTypes();
+	bool TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type);
+	vector<LogicalType> detected_types;
+
+	//! ------------------------------------------------------//
 	//! ------------------ Header Detection ----------------- //
 	//! ------------------------------------------------------//
 	void DetectHeader();
@@ -119,13 +126,6 @@ private:
 	//! ------------------ Type Replacement ----------------- //
 	//! ------------------------------------------------------//
 	void ReplaceTypes();
-
-	//! ------------------------------------------------------//
-	//! ------------------ Type Refinement ------------------ //
-	//! ------------------------------------------------------//
-	void RefineTypes();
-	bool TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type);
-	vector<LogicalType> detected_types;
 };
 
 } // namespace duckdb
