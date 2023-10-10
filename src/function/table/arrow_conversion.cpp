@@ -639,10 +639,11 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLoca
 		for (idx_t type_idx = 0; type_idx < static_cast<idx_t>(array.n_children); type_idx++) {
 			Vector child(members[type_idx].second);
 			auto arrow_array = array.children[type_idx];
+			auto &child_type = arrow_type[type_idx];
 
 			SetValidityMask(child, *arrow_array, scan_state, size, nested_offset);
 
-			ColumnArrowToDuckDB(child, *arrow_array, scan_state, size, arrow_type, nested_offset, &validity_mask);
+			ColumnArrowToDuckDB(child, *arrow_array, scan_state, size, child_type, nested_offset, &validity_mask);
 
 			children.push_back(std::move(child));
 		}

@@ -122,6 +122,10 @@ public:
 	idx_t sample_size = idx_t(STANDARD_VECTOR_SIZE) * 10;
 	//! Max depth we go to detect nested JSON schema (defaults to unlimited)
 	idx_t max_depth = NumericLimits<idx_t>::Maximum();
+	//! We divide the number of appearances of each JSON field by the auto-detection sample size
+	//! If the average over the fields of an object is less than this threshold,
+	//! we default to the JSON type for this object rather than the shredded type
+	double field_appearance_threshold = 0.1;
 
 	//! All column names (in order)
 	vector<string> names;
