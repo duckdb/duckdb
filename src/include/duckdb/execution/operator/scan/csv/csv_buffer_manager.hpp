@@ -33,7 +33,10 @@ public:
 	void Initialize();
 
 	void UnpinBuffer(const idx_t file_idx, const idx_t cache_idx);
-
+	//! Returns the buffer size set for this CSV buffer manager
+	idx_t GetBufferSize();
+	//! How many files are part of this buffer manager
+	idx_t FileCount();
 	ClientContext &context;
 	idx_t skip_rows = 0;
 	bool done = false;
