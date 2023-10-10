@@ -80,12 +80,13 @@ static void SetValidityMask(Vector &vector, ArrowArray &array, ArrowScanLocalSta
 	GetValidityMask(mask, array, scan_state, size, nested_offset, add_null);
 }
 
-static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArrayScanState &scan_state, idx_t size,
+static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
                                 const ArrowType &arrow_type, int64_t nested_offset = -1,
                                 ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0);
 
 static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state,
-                                          idx_t size, const ArrowType &arrow_type);
+                                          idx_t size, const ArrowType &arrow_type, int64_t nested_offset = -1,
+                                          ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0);
 
 static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
                               const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask) {
@@ -161,11 +162,12 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanS
 	auto &child_array = *array.children[0];
 	auto &child_type = arrow_type[0];
 	if (list_size == 0 && start_offset == 0) {
+		D_ASSERT(!child_array.dictionary);
 		ColumnArrowToDuckDB(child_vector, child_array, child_state, list_size, child_type, -1);
 	} else {
 		if (child_array.dictionary) {
 			// TODO: add support for offsets
-			ColumnArrowToDuckDBDictionary(child_vector, child_array, child_state, list_size, child_type);
+			ColumnArrowToDuckDBDictionary(child_vector, child_array, child_state, list_size, child_type, start_offset);
 		} else {
 			ColumnArrowToDuckDB(child_vector, child_array, child_state, list_size, child_type, start_offset);
 		}
@@ -645,7 +647,8 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 			}
 			if (child_array.dictionary) {
 				// TODO: add support for offsets
-				ColumnArrowToDuckDBDictionary(child_entry, child_array, child_state, size, child_type);
+				ColumnArrowToDuckDBDictionary(child_entry, child_array, child_state, size, child_type, nested_offset,
+				                              &struct_validity_mask, array.offset);
 			} else {
 				ColumnArrowToDuckDB(child_entry, child_array, child_state, size, child_type, nested_offset,
 				                    &struct_validity_mask, array.offset);
@@ -821,7 +824,8 @@ static void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, Logic
 }
 
 static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state,
-                                          idx_t size, const ArrowType &arrow_type) {
+                                          idx_t size, const ArrowType &arrow_type, int64_t nested_offset,
+                                          ValidityMask *parent_mask, uint64_t parent_offset) {
 	SelectionVector sel;
 	auto &scan_state = array_state.state;
 	if (!array_state.HasDictionary()) {
