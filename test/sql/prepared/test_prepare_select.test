@@ -35,3 +35,11 @@ SELECT * FROM a WHERE i=CAST($1 AS VARCHAR)
 ----
 Invalid Error: Expected 1 parameters, but none were supplied
 
+# issue that swallows an UNKNOWN type, if not explicitly setting the rebind-flag
+
+statement ok
+PREPARE s1 AS SELECT to_years($1), CAST(list_value($1) AS BIGINT[]);
+
+statement ok
+EXECUTE s1(1);
+
