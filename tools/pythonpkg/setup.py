@@ -327,7 +327,12 @@ packages = [
     'adbc_driver_duckdb',
 ]
 
-spark_packages = ['duckdb.experimental.spark', 'duckdb.experimental.spark.sql']
+spark_packages = [
+    'duckdb.experimental.spark',
+    'duckdb.experimental.spark.sql',
+    'duckdb.experimental.spark.errors',
+    'duckdb.experimental.spark.errors.exceptions',
+]
 
 packages.extend(spark_packages)
 

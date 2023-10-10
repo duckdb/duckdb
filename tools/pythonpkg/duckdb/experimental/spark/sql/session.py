@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from pandas.core.frame import DataFrame as PandasDataFrame
 
 from ..exception import ContributionsAcceptedError
-
+ 
 from .types import StructType, AtomicType, DataType
 from ..conf import SparkConf
 from .dataframe import DataFrame
@@ -16,6 +16,13 @@ from ..context import SparkContext
 from .udf import UDFRegistration
 from .streaming import DataStreamReader
 import duckdb
+
+from ..errors import (
+    PySparkTypeError,
+    PySparkValueError
+)
+
+from ..errors.error_classes import *
 
 # In spark:
 # SparkSession holds a SparkContext
@@ -30,9 +37,6 @@ import duckdb
 # every value in each row needs to be turned into a Value
 def _combine_data_and_schema(data: Iterable[Any], schema: StructType):
     from duckdb import Value
-
-    ## FIXME: this is not true
-    # assert not isinstance(data, PandasDataFrame)
 
     new_data = []
     for row in data:
@@ -62,7 +66,20 @@ class SparkSession:
         def verify_tuple_integrity(tuples):
             if len(tuples) <= 1:
                 return
-            assert all([len(x) == len(tuples[0]) for x in tuples[1:]])
+            expected_length = len(tuples[0])
+            for i, item in enumerate(tuples[1:]):
+                actual_length = len(item)
+                if expected_length == actual_length:
+                    continue
+                raise PySparkTypeError(
+                    error_class="LENGTH_SHOULD_BE_THE_SAME",
+                    message_parameters={
+                        "arg1": f"data{i}",
+                        "arg2": f"data{i+1}",
+                        "arg1_length": str(expected_length),
+                        "arg2_length": str(actual_length)
+                    },
+                )
 
         if not isinstance(data, list):
             data = list(data)
@@ -121,6 +138,12 @@ class SparkSession:
             raise NotImplementedError
         types = None
         names = None
+
+        if isinstance(data, DataFrame):
+            raise PySparkTypeError(
+                error_class="SHOULD_NOT_DATAFRAME",
+                message_parameters={"arg_name": "data"},
+            )
 
         if schema:
             if isinstance(schema, StructType):
