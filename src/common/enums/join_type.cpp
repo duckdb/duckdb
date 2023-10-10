@@ -8,7 +8,7 @@ bool IsLeftOuterJoin(JoinType type) {
 }
 
 bool IsRightOuterJoin(JoinType type) {
-	return type == JoinType::OUTER || type == JoinType::RIGHT || type == JoinType::RIGHT_SEMI;
+	return type == JoinType::OUTER || type == JoinType::RIGHT || type == JoinType::RIGHT_SEMI || type == JoinType::RIGHT_ANTI;
 }
 
 // **DEPRECATED**: Use EnumUtil directly instead.
