@@ -166,6 +166,14 @@ class TestArrowDictionary(object):
         ] * 1000
         assert rel.execute().fetchall() == result
 
+    def test_dictionary_in_child_arrays(self, duckdb_cursor):
+        rel = duckdb_cursor.sql("select ['hello'::ENUM('hello', 'bye')] as a")
+        tbl = rel.arrow()
+
+        rel2 = duckdb_cursor.sql("select * from tbl")
+        res = rel2.fetchall()
+        assert res == [(['hello'],)]
+
     def test_dictionary_timestamps(self, duckdb_cursor):
         if not can_run:
             return
