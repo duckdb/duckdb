@@ -65,6 +65,8 @@ public:
 
 	void SetDictionary(unique_ptr<ArrowType> dictionary);
 
+	bool HasDictionary() const;
+
 	ArrowDateTimeType GetDateTimeType() const;
 
 	const ArrowType &GetDictionary() const;

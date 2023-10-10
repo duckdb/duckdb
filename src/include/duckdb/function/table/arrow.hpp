@@ -61,6 +61,33 @@ public:
 	ArrowTableType arrow_table;
 };
 
+struct ArrowArrayScanState {
+public:
+	unordered_map<idx_t, unique_ptr<ArrowArrayScanState>> children;
+	// Cache the (optional) dictionary of this array
+	unique_ptr<Vector> dictionary;
+public:
+	ArrowArrayScanState &GetChild(idx_t child_idx) {
+		auto it = children.find(child_idx);
+		if (it == children.end()) {
+			auto child_p = make_uniq<ArrowArrayScanState>();
+			auto &child = *child_p;
+			children.emplace(std::make_pair(child_idx, std::move(child_p)));
+			return child;
+		}
+		return *it->second;
+	}
+	void AddDictionary(unique_ptr<Vector> dictionary_p) {
+		this->dictionary = std::move(dictionary_p);
+	}
+	bool HasDictionary() const {
+		return dictionary != nullptr;
+	}
+	Vector &GetDictionary() {
+		return *dictionary;
+	}
+};
+
 struct ArrowScanLocalState : public LocalTableFunctionState {
 	explicit ArrowScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk) : chunk(current_chunk.release()) {
 	}
@@ -148,6 +175,7 @@ protected:
 	                            const GlobalTableFunctionState *global_state);
 	//! Renames repeated columns and case sensitive columns
 	static void RenameArrowColumns(vector<string> &names);
+public:
 	//! Helper function to get the DuckDB logical type
 	static unique_ptr<ArrowType> GetArrowLogicalType(ArrowSchema &schema);
 };

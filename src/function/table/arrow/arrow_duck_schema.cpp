@@ -27,6 +27,10 @@ void ArrowType::SetDictionary(unique_ptr<ArrowType> dictionary) {
 	dictionary_type = std::move(dictionary);
 }
 
+bool ArrowType::HasDictionary() const {
+	return dictionary_type != nullptr;
+}
+
 const ArrowType &ArrowType::GetDictionary() const {
 	D_ASSERT(dictionary_type);
 	return *dictionary_type;
