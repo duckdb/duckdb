@@ -56,6 +56,7 @@ struct CSVIterator {
 	//! How many bytes this CSV Scanner should read
 	//! If higher than the remainder of the file, will read the file in its entirety
 	idx_t bytes_to_read = NumericLimits<idx_t>::Maximum();
+	idx_t iterator_id = 0;
 };
 
 //! The CSV Scanner is what iterates over CSV Buffers
@@ -63,7 +64,6 @@ class CSVScanner {
 public:
 	//! Constructor used for result checking in unit-testing
 	CSVScanner(ClientContext &context, CSVReaderOptions &options);
-
 	//! Constructor used when sniffing
 	explicit CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p);
 	//! Constructor used when parsing

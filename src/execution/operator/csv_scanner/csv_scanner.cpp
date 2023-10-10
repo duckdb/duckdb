@@ -214,6 +214,7 @@ bool CSVIterator::Next(CSVBufferManager& buffer_manager){
 		// We are done
 		return false;
 	}
+	iterator_id++;
 	// This is our start buffer
 	auto buffer = buffer_manager.GetBuffer(file_idx,buffer_idx);
 	// 1) We are done with the current file, we must move to the next file

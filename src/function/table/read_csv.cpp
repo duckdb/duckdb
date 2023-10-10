@@ -175,6 +175,7 @@ public:
 		if (!buffer_manager) {
 			buffer_manager = make_shared<CSVBufferManager>(context, options, files);
 		}
+		state_machine_options{};
 
 		//! Set information regarding file_size, if it's on disk and use that to set number of threads that will
 		//! be used in this scanner
@@ -259,6 +260,8 @@ private:
 	CSVIterator cur_pos;
 	//! If this scan is finished, no more files or buffers to read.
 	bool finished = false;
+	//! CSV Dialect Options used to create the parsing state machine
+	CSVStateMachineOptions state_machine_options;
 
 
 	//! Mutex to lock when getting next batch of bytes (Parallel Only)
@@ -392,7 +395,12 @@ void LineInfo::Verify(idx_t file_idx, idx_t batch_idx, idx_t cur_first_pos) {
 }
 unique_ptr<CSVScanner> CSVGlobalState::Next(ClientContext &context, const ReadCSVData &bind_data) {
 	lock_guard<mutex> parallel_lock(main_mutex);
+	if (finished){
+		return nullptr;
+	}
+	CSVStateMachineCache state_machine_cache;
 
+	auto scanner =  make_uniq<CSVScanner>(buffer_manager,state_machine_cache.Get({opt}), cur_pos);
 	// Generate CSV Iterator
 //	CSVIterator csv_iterator (cur_file_idx, cur_buffer_idx, cur, bytes_to_read );
 
