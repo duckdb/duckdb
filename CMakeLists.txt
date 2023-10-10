@@ -308,6 +308,7 @@ if(WIN32 OR ZOS)
   set(EXTENSION_STATIC_BUILD TRUE)
 endif()
 
+option(BUILD_EXTENSIONS_ONLY "Build all extension as linkable, overriding DONT_LINK, and don't build core." FALSE)
 option(BUILD_CORE_FUNCTIONS_EXTENSION "Build the core functions." TRUE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
@@ -346,6 +347,10 @@ option(TEST_REMOTE_INSTALL "Test installation of specific extensions." FALSE)
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
+endif()
+
+if(BUILD_EXTENSIONS_ONLY)
+  set(BUILD_MAIN_DUCKDB_LIBRARY FALSE)
 endif()
 
 if(EXTENSION_CONFIG_BUILD)
@@ -740,10 +745,14 @@ function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PA
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LOAD_TESTS FALSE PARENT_SCOPE)
   endif()
 
-  if (NOT ${DONT_LINK} AND NOT DISABLE_BUILTIN_EXTENSIONS)
+  if (${BUILD_EXTENSIONS_ONLY})
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK TRUE PARENT_SCOPE)
-  else()
-    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK FALSE PARENT_SCOPE)
+  else ()
+    if (NOT ${DONT_LINK} AND NOT DISABLE_BUILTIN_EXTENSIONS)
+      set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK TRUE PARENT_SCOPE)
+    else()
+      set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK FALSE PARENT_SCOPE)
+    endif()
   endif()
 
   # Allows explicitly disabling extensions that may be specified in other configurations
