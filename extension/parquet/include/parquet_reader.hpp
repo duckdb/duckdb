@@ -111,6 +111,9 @@ public:
 	MultiFileReaderData reader_data;
 	unique_ptr<ColumnReader> root_reader;
 
+	//! Index of the file_row_number column
+	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
+
 public:
 	void InitializeScan(ParquetReaderScanState &state, vector<idx_t> groups_to_read);
 	void Scan(ParquetReaderScanState &state, DataChunk &output);
