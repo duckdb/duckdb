@@ -71,6 +71,55 @@ class TestArrowDictionary(object):
         result = [(None, None), (100, 1), (None, None), (100, 1), (100, 2), (100, 1), (10, 0)] * 1000
         assert rel.execute().fetchall() == result
 
+    @pytest.mark.parametrize(
+        'query',
+        [
+            # list
+            """
+            select ['hello'::ENUM('hello', 'bye')] as a
+        """,
+            # struct
+            """
+            select {'a': 'hello'::ENUM('hello', 'bye')} as a
+        """,
+            # union
+            """
+            select {'a': 'hello'::ENUM('hello', 'bye')}::UNION(a integer, b bool, c struct(a enum('hello', 'bye'))) as a;
+        """,
+            # map (key)
+            """
+            select map {'hello'::ENUM('hello', 'bye') : 'test'} as a
+        """,
+            # map (val)
+            """
+            select map {'test': 'hello'::ENUM('hello', 'bye')} as a
+        """,
+            # list of struct(enum)
+            """
+            select [{'a': 'hello'::ENUM('hello', 'bye')}] as a
+        """,
+            # list of union(enum)
+            """
+            select [{'a': 'hello'::ENUM('hello', 'bye')}::UNION(a integer, b bool, c struct(a enum('hello', 'bye')))] as a
+        """,
+            # list of list
+            """
+            select [['hello'::ENUM('hello', 'bye')], [], NULL, ['hello'::ENUM('hello', 'bye'), 'bye'::ENUM('hello', 'bye')]] as a
+        """,
+        ],
+    )
+    def test_dictionary_roundtrip(self, query, duckdb_cursor):
+        original_rel = duckdb_cursor.sql(query)
+        expected = original_rel.fetchall()
+        arrow_res = original_rel.arrow()
+
+        roundtrip_rel = duckdb_cursor.sql('select * from arrow_res')
+        actual = roundtrip_rel.fetchall()
+        assert expected == actual
+        assert original_rel.columns == roundtrip_rel.columns
+        # Note: we can't check the types, because originally these are ENUM
+        # but because the dictionary of the ENUM can not be known before execution we output VARCHAR instead.
+
     def test_dictionary_batches(self, duckdb_cursor):
         indices_list = [None, 1, None, 1, 2, 1, 0]
         indices = pa.array(indices_list * 10000)
