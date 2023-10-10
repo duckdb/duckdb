@@ -210,7 +210,7 @@ copy (select range as i from range(10)) to '__TEST_DIR__/my.json' (COMPRESSION)
 Binder Error
 
 statement ok
-copy (select range as i from range(10)) to '__TEST_DIR__/my.json.gz' (COMPRESSION GZIP, HEADER 0)
+copy (select range as i from range(10)) to '__TEST_DIR__/my.json.gz' (COMPRESSION GZIP)
 
 statement ok
 create table my_range (i bigint)
@@ -227,7 +227,7 @@ select * from '__TEST_DIR__/my.json.gz'
 mode skip
 
 statement ok
-copy (select range as i from range(10)) to '__TEST_DIR__/my.json.zst' (COMPRESSION ZSTD, HEADER 0)
+copy (select range as i from range(10)) to '__TEST_DIR__/my.json.zst' (COMPRESSION ZSTD)
 
 statement ok
 select * from '__TEST_DIR__/my.json.zst'
