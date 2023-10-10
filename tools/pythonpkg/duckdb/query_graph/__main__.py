@@ -46,37 +46,39 @@ qgraph_css = """
 }
 """
 
+
 class NodeTiming:
 
-    def __init__(self, phase, time):
+    def __init__(self, phase: str, time: float) -> object:
         self.phase = phase
         self.time = time
         # percentage is determined later.
         self.percentage = 0
 
-    def calculate_percentage(self, total_time):
-        self.percentage = self.time/total_time
+    def calculate_percentage(self, total_time: float) -> None:
+        self.percentage = self.time / total_time
 
-    def combine_timing(l, r):
+    def combine_timing(l: object, r: object) -> object:
         # TODO: can only add timings for same-phase nodes
         total_time = l.time + r.time
         return NodeTiming(l.phase, total_time)
+
 
 class AllTimings:
 
     def __init__(self):
         self.phase_to_timings = {}
 
-    def add_node_timing(self, node_timing):
+    def add_node_timing(self, node_timing: NodeTiming):
         if node_timing.phase in self.phase_to_timings:
             self.phase_to_timings[node_timing.phase].append(node_timing)
             return
         self.phase_to_timings[node_timing.phase] = [node_timing]
 
-    def get_phase_timings(self, phase):
+    def get_phase_timings(self, phase: str):
         return self.phase_to_timings[phase]
 
-    def get_summary_phase_timings(self, phase):
+    def get_summary_phase_timings(self, phase: str):
         return reduce(NodeTiming.combine_timing, self.phase_to_timings[phase])
 
     def get_phases(self):
@@ -92,14 +94,16 @@ class AllTimings:
         return total_timing_sum
 
 
-def open_utf8(fpath, flags):
+def open_utf8(fpath: str, flags: str) -> object:
     return open(fpath, flags, encoding="utf8")
 
-def get_child_timings(top_node, query_timings):
+
+def get_child_timings(top_node: object, query_timings: object) -> str:
     node_timing = NodeTiming(top_node['name'], float(top_node['timing']))
     query_timings.add_node_timing(node_timing)
     for child in top_node['children']:
         get_child_timings(child, query_timings)
+
 
 color_map = {
     "HASH_JOIN": "#ffffba",
@@ -116,7 +120,8 @@ color_map = {
     "TOP_N": "#ffdfba"
 }
 
-def get_node_body(name, result, cardinality, extra_info, timing):
+
+def get_node_body(name: str, result: str, cardinality: float, extra_info: str, timing: object) -> str:
     node_style = ""
     stripped_name = name.strip()
     if stripped_name in color_map:
@@ -137,7 +142,7 @@ def get_node_body(name, result, cardinality, extra_info, timing):
     return body
 
 
-def generate_tree_recursive(json_graph):
+def generate_tree_recursive(json_graph: object) -> str:
     node_prefix_html = "<li>"
     node_suffix_html = "</li>"
     node_body = get_node_body(json_graph["name"],
@@ -154,8 +159,9 @@ def generate_tree_recursive(json_graph):
         children_html += "</ul>"
     return node_prefix_html + node_body + children_html + node_suffix_html
 
+
 # For generating the table in the top left.
-def generate_timing_html(graph_json, query_timings):
+def generate_timing_html(graph_json: object, query_timings: object) -> object:
     json_graph = json.loads(graph_json)
     gather_timing_information(json_graph, query_timings)
     total_time = float(json_graph['timing'])
@@ -192,7 +198,8 @@ def generate_timing_html(graph_json, query_timings):
     table_body += table_end
     return table_head + table_body
 
-def generate_tree_html(graph_json):
+
+def generate_tree_html(graph_json: object) -> str:
     json_graph = json.loads(graph_json)
     tree_prefix = "<div class=\"tf-tree tf-gap-lg\"> \n <ul>"
     tree_suffix = "</ul> </div>"
@@ -202,20 +209,22 @@ def generate_tree_html(graph_json):
     return tree_prefix + tree_body + tree_suffix
 
 
-def generate_ipython(json_input):
+def generate_ipython(json_input: str) -> str:
     from IPython.core.display import HTML
 
     html_output = generate_html(json_input, False)
 
-    return HTML("""
-	${CSS}
-	${LIBRARIES}
-	<div class="chart" id="query-profile"></div>
-	${CHART_SCRIPT}
-	""".replace("${CSS}", html_output['css']).replace('${CHART_SCRIPT}', html_output['chart_script']).replace('${LIBRARIES}', html_output['libraries']))
+    return HTML(("\n"
+                 "	${CSS}\n"
+                 "	${LIBRARIES}\n"
+                 "	<div class=\"chart\" id=\"query-profile\"></div>\n"
+                 "	${CHART_SCRIPT}\n"
+                 "	").replace("${CSS}", html_output['css']).replace('${CHART_SCRIPT}',
+                                                                       html_output['chart_script']).replace(
+        '${LIBRARIES}', html_output['libraries']))
 
 
-def generate_style_html(graph_json, include_meta_info):
+def generate_style_html(graph_json: str, include_meta_info: bool) -> None:
     treeflex_css = "<link rel=\"stylesheet\" href=\"https://unpkg.com/treeflex/dist/css/treeflex.css\">\n"
     css = "<style>\n"
     css += qgraph_css + "\n"
@@ -227,13 +236,15 @@ def generate_style_html(graph_json, include_meta_info):
         'chart_script': ''
     }
 
-def gather_timing_information(json, query_timings):
+
+def gather_timing_information(json: str, query_timings: object) -> None:
     # add up all of the times
     # measure each time as a percentage of the total time.
     # then you can return a list of [phase, time, percentage]
     get_child_timings(json['children'][0], query_timings)
 
-def translate_json_to_html(input_file, output_file):
+
+def translate_json_to_html(input_file: str, output_file: str) -> None:
     query_timings = AllTimings()
     with open_utf8(input_file, 'r') as f:
         text = f.read()
@@ -270,7 +281,8 @@ def translate_json_to_html(input_file, output_file):
         html = html.replace('${TREE}', tree_output)
         f.write(html)
 
-def main():
+
+def main() -> None:
     if sys.version_info[0] < 3:
         print("Please use python3")
         exit(1)
