@@ -225,11 +225,7 @@ void ArrowTableFunction::PopulateArrowTableType(ArrowTableType &arrow_table, Arr
 			throw InvalidInputException("arrow_scan: released schema passed");
 		}
 		auto arrow_type = GetArrowLogicalType(schema);
-		if (arrow_type->HasDictionary()) {
-			return_types.emplace_back(arrow_type->GetDictionary().GetDuckType());
-		} else {
-			return_types.emplace_back(arrow_type->GetDuckType());
-		}
+		return_types.emplace_back(arrow_type->GetDuckType(true));
 		arrow_table.AddColumn(col_idx, std::move(arrow_type));
 		auto format = string(schema.format);
 		auto name = string(schema.name);

@@ -84,6 +84,9 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
                                 const ArrowType &arrow_type, int64_t nested_offset = -1,
                                 ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0);
 
+static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state,
+                                          idx_t size, const ArrowType &arrow_type);
+
 static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
                               const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask) {
 	auto size_type = arrow_type.GetSizeType();
@@ -669,8 +672,7 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 			if (child_array.dictionary) {
 				ColumnArrowToDuckDBDictionary(child, child_array, child_state, size, child_type);
 			} else {
-				// FIXME: should this be 'arrow_type' and not 'child_type' ?
-				ColumnArrowToDuckDB(child, child_array, child_state, size, arrow_type, nested_offset, &validity_mask);
+				ColumnArrowToDuckDB(child, child_array, child_state, size, child_type, nested_offset, &validity_mask);
 			}
 
 			children.push_back(std::move(child));

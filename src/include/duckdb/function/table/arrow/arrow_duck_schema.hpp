@@ -57,7 +57,7 @@ public:
 
 	void AssignChildren(vector<unique_ptr<ArrowType>> children);
 
-	const LogicalType &GetDuckType() const;
+	LogicalType GetDuckType(bool use_dictionary = false) const;
 
 	ArrowVariableSizeType GetSizeType() const;
 
