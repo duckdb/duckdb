@@ -460,9 +460,6 @@ void Vector::SetValue(idx_t index, const Value &val) {
 			}
 		} else {
 			auto &val_children = ArrayValue::GetChildren(val);
-			if (!child.validity.IsMaskSet()) {
-				child.validity.Initialize(static_cast<idx_t>(array_size) * STANDARD_VECTOR_SIZE);
-			}
 			for (idx_t i = 0; i < array_size; i++) {
 				child.SetValue(index * array_size + i, val_children[i]);
 			}
