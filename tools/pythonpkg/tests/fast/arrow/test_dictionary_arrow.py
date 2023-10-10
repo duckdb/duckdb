@@ -76,39 +76,56 @@ class TestArrowDictionary(object):
         [
             # list
             """
-            select ['hello'::ENUM('hello', 'bye')] as a
+            ['hello'::ENUM('hello', 'bye')]
         """,
             # struct
             """
-            select {'a': 'hello'::ENUM('hello', 'bye')} as a
+            {'a': 'hello'::ENUM('hello', 'bye')}
         """,
             # union
             """
-            select {'a': 'hello'::ENUM('hello', 'bye')}::UNION(a integer, b bool, c struct(a enum('hello', 'bye'))) as a;
+            {'a': 'hello'::ENUM('hello', 'bye')}::UNION(a integer, b bool, c struct(a enum('hello', 'bye')))
         """,
             # map (key)
             """
-            select map {'hello'::ENUM('hello', 'bye') : 'test'} as a
+            map {'hello'::ENUM('hello', 'bye') : 'test'}
         """,
             # map (val)
             """
-            select map {'test': 'hello'::ENUM('hello', 'bye')} as a
+            map {'test': 'hello'::ENUM('hello', 'bye')}
         """,
             # list of struct(enum)
             """
-            select [{'a': 'hello'::ENUM('hello', 'bye')}] as a
+            [{'a': 'hello'::ENUM('hello', 'bye')}]
         """,
             # list of union(enum)
             """
-            select [{'a': 'hello'::ENUM('hello', 'bye')}::UNION(a integer, b bool, c struct(a enum('hello', 'bye')))] as a
+            [{'a': 'hello'::ENUM('hello', 'bye')}::UNION(a integer, b bool, c struct(a enum('hello', 'bye')))]
         """,
             # list of list
             """
-            select [['hello'::ENUM('hello', 'bye')], [], NULL, ['hello'::ENUM('hello', 'bye'), 'bye'::ENUM('hello', 'bye')]] as a
+            [['hello'::ENUM('hello', 'bye')], [], NULL, ['hello'::ENUM('hello', 'bye'), 'bye'::ENUM('hello', 'bye')]]
         """,
         ],
     )
-    def test_dictionary_roundtrip(self, query, duckdb_cursor):
+    @pytest.mark.parametrize(
+        'count',
+        [
+            1,
+            10,
+            # 1024,
+            # 2048,
+            # 2047,
+            # 2049,
+            # 4000,
+            # 4096,
+            # 5000
+        ],
+    )
+    def test_dictionary_roundtrip(self, query, duckdb_cursor, count):
+        query = f"""
+            select {query} as a from range({count})
+        """
         original_rel = duckdb_cursor.sql(query)
         expected = original_rel.fetchall()
         arrow_res = original_rel.arrow()
