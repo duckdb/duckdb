@@ -234,6 +234,10 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 	    (single_column_before || (more_values && !require_more_padding) ||
 	     (more_than_one_column && require_less_padding)) &&
 	    !invalid_padding) {
+		if (!candidates.empty() && set_columns.IsSet() && max_columns_found == candidates.size()) {
+			// We have a candidate that fits our requirements better
+			return;
+		}
 		best_consistent_rows = consistent_rows;
 		max_columns_found = num_cols;
 		prev_padding_count = padding_count;
