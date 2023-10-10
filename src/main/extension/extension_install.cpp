@@ -282,7 +282,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		// create suggestions
 		string message;
 		auto exact_match = ExtensionHelper::CreateSuggestions(extension_name, message);
-		if (exact_match) {
+		if (exact_match && !IsRelease(DuckDB::LibraryVersion())) {
 			message += "\nAre you using a development build? In this case, extensions might not (yet) be uploaded.";
 		}
 		if (res.error() == duckdb_httplib::Error::Success) {
