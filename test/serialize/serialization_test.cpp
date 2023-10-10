@@ -142,7 +142,7 @@ struct FooV2 {
 
 		// Because this is a new field, we have to provide a default value
 		// to try to preserve backwards compatability (in best case)
-		serializer.WritePropertyWithDefault<unique_ptr<Complex>>(5, "p5", p5, (unique_ptr<Complex>)nullptr);
+		serializer.WritePropertyWithDefault<unique_ptr<Complex>>(5, "p5", p5);
 	}
 
 	static unique_ptr<FooV2> Deserialize(Deserializer &deserializer) {
@@ -151,7 +151,7 @@ struct FooV2 {
 		deserializer.ReadDeletedProperty<vector<unique_ptr<Complex>>>(2, "p2");
 		deserializer.ReadProperty(3, "p3", result->p3);
 		deserializer.ReadProperty(4, "p4", result->p4);
-		deserializer.ReadPropertyWithDefault(5, "p5", result->p5, (unique_ptr<Complex>)nullptr);
+		deserializer.ReadPropertyWithDefault<unique_ptr<Complex>>(5, "p5", result->p5);
 		return result;
 	}
 };

@@ -233,6 +233,20 @@ void DBConfig::SetDefaultMaxMemory() {
 	}
 }
 
+void DBConfig::CheckLock(const string &name) {
+	if (!options.lock_configuration) {
+		// not locked
+		return;
+	}
+	case_insensitive_set_t allowed_settings {"schema", "search_path"};
+	if (allowed_settings.find(name) != allowed_settings.end()) {
+		// we are always allowed to change these settings
+		return;
+	}
+	// not allowed!
+	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
+}
+
 idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 	static constexpr const char *CPU_MAX = "/sys/fs/cgroup/cpu.max";
 	static constexpr const char *CFS_QUOTA = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us";
