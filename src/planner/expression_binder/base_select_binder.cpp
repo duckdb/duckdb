@@ -98,11 +98,8 @@ BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_pt
 				                      " This is not yet supported.",
 				                      colref.column_names[0]);
 			}
-			auto result = BindResult(node.select_list[index]->Copy());
-			if (result.expression->type == ExpressionType::BOUND_COLUMN_REF) {
-				auto &result_expr = result.expression->Cast<BoundColumnRefExpression>();
-				result_expr.depth = depth;
-			}
+			auto copied_expression = node.original_expressions[index]->Copy();
+			result = BindExpression(copied_expression, depth, false);
 			return result;
 		}
 	}
