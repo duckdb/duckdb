@@ -61,9 +61,9 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 		return LogicalType::LIST(child->GetDuckType(true));
 	}
 	case LogicalTypeId::MAP: {
-		auto &key = children[0];
-		auto &val = children[1];
-		return LogicalType::MAP(key->GetDuckType(true), val->GetDuckType(true));
+		auto &struct_child = children[0];
+		auto struct_type = struct_child->GetDuckType(true);
+		return LogicalType::MAP(StructType::GetChildType(struct_type, 0), StructType::GetChildType(struct_type, 1));
 	}
 	case LogicalTypeId::UNION: {
 		child_list_t<LogicalType> new_children;
@@ -72,7 +72,7 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 			auto &child_name = UnionType::GetMemberName(type, i);
 			new_children.emplace_back(std::make_pair(child_name, child->GetDuckType(true)));
 		}
-		return LogicalType::STRUCT(std::move(new_children));
+		return LogicalType::UNION(std::move(new_children));
 	}
 	default: {
 		return type;
