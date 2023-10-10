@@ -100,13 +100,13 @@ unique_ptr<SQLStatement> StatementGenerator::GenerateStatement(StatementType typ
 unique_ptr<SelectStatement> StatementGenerator::GenerateSelect() {
 	auto select = make_uniq<SelectStatement>();
 	select->node = GenerateQueryNode();
-	return std::move(select);
+	return select;
 }
 
 unique_ptr<CreateStatement> StatementGenerator::GenerateCreate() {
 	auto create = make_uniq<CreateStatement>();
 	create->info = GenerateCreateInfo();
-	return std::move(create);
+	return create;
 }
 
 //===--------------------------------------------------------------------===//

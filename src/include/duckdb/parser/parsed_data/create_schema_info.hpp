@@ -30,19 +30,19 @@ public:
 		string ret = "";
 		switch (on_conflict) {
 		case OnCreateConflict::ALTER_ON_CONFLICT: {
-			ret += "CREATE SCHEMA " + schema + " ON CONFLICT INSERT OR REPLACE";
+			ret += "CREATE SCHEMA " + schema + " ON CONFLICT INSERT OR REPLACE;";
 			break;
 		}
 		case OnCreateConflict::IGNORE_ON_CONFLICT: {
-			ret += "CREATE SCHEMA " + schema + " IF NOT EXISTS";
+			ret += "CREATE SCHEMA " + schema + " IF NOT EXISTS;";
 			break;
 		}
 		case OnCreateConflict::REPLACE_ON_CONFLICT: {
-			ret += "CREATE OR REPLACE SCHEMA " + schema;
+			ret += "CREATE OR REPLACE SCHEMA " + schema + ";";
 			break;
 		}
 		case OnCreateConflict::ERROR_ON_CONFLICT: {
-			ret += "CREATE SCHEMA " + schema;
+			ret += "CREATE SCHEMA " + schema + ";";
 			break;
 		}
 		}
