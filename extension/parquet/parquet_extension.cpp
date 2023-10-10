@@ -250,7 +250,7 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 		}
 
 		// Handle any generate columns that are not in the schema (currently only file_row_number)
-		if (global_column_index >=  parquet_options.schema.size()) {
+		if (global_column_index >= parquet_options.schema.size()) {
 			if (bind_data.reader_bind.file_row_number_idx == global_column_index) {
 				reader_data.column_mapping.push_back(i);
 				reader_data.column_ids.push_back(reader.file_row_number_idx);
