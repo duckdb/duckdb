@@ -45,6 +45,8 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers
 
 statement error
 CHECKPOINT;
+----
+FATAL Error: Failed to create checkpoint because of error: FATAL Error: Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag
 
 restart
 
@@ -73,6 +75,8 @@ UPDATE integers SET i=i;
 
 statement error
 CHECKPOINT;
+----
+FATAL Error: Failed to create checkpoint because of error: FATAL Error: Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag
 
 restart
 

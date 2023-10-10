@@ -2,8 +2,11 @@
 # description: Test scanning many big varchar strings with limited memory
 # group: [string]
 
+# FIXME: is this the right expected error?
 statement error
 PRAGMA memory_limit=100000000
+----
+Parser Error: Unknown unit for memory_limit:  (expected: b, mb, gb or tb)
 
 statement ok
 CREATE TABLE test (a VARCHAR);

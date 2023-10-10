@@ -102,6 +102,8 @@ endloop
 
 statement error
 SELECT datediff('microseconds',DATE '4151706-4-6',DATE '-5559461-6-26');
+----
+Conversion Error: Could not convert DATE
 
 
 query I
@@ -170,6 +172,8 @@ foreach datepart year quarter month day dayofyear decade century millennium week
 
 statement error
 SELECT DATEDIFF('${datepart}', startdate, enddate) FROM time1
+----
+Not implemented Error: "time" units
 
 endloop
 
@@ -339,6 +343,8 @@ endloop
 # Issue #5239: Overflow
 statement error
 SELECT datediff('microseconds',TIMESTAMP '276858-10-21 9:36:33',TIMESTAMP '-222154-6-30 5:19:49');----
+----
+Out of Range Error: Overflow in subtraction of INT64 (-7072654732811000000 - 8674652828193000000)!
 
 #
 # VARCHAR
@@ -383,5 +389,6 @@ statement ok
 INSERT into parts VALUES('duck');
 
 statement error
-SELECT datepart, DATEDIFF(datepart, '2005-12-31 23:59:59.9999999'::TIMESTAMP, '2006-01-01 00:00:00.0000000'::TIMESTAMP)
-FROM parts;
+SELECT datepart, DATEDIFF(datepart, '2005-12-31 23:59:59.9999999'::TIMESTAMP, '2006-01-01 00:00:00.0000000'::TIMESTAMP) FROM parts;
+----
+Conversion Error: extract specifier "duck" not recognized

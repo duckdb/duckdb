@@ -20,6 +20,8 @@ SELECT * FROM b
 
 statement error
 EXECUTE s1 (42, 41, 10000)
+----
+Conversion Error: Type INT32 with value 10000 can't be cast because the value is out of range for the destination type INT8
 
 statement ok
 CREATE TABLE c (i INTEGER)

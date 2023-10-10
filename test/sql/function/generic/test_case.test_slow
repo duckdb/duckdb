@@ -83,6 +83,8 @@ NULL
 # fail case on types that can't be cast to boolean
 statement error
 SELECT CASE WHEN 'hello' THEN b ELSE a END FROM test
+----
+Conversion Error: Could not convert string 'hello' to BOOL
 
 # but only when cast cannot be performed
 query I

@@ -27,6 +27,8 @@ INSERT INTO integers SELECT * FROM range(100000, 200000) tbl(i);
 
 statement error
 CHECKPOINT;
+----
+FATAL Error: Failed to create checkpoint because of error: FATAL Error: Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag
 
 restart
 
@@ -55,6 +57,8 @@ UPDATE integers SET i=i;
 
 statement error
 CHECKPOINT;
+----
+FATAL Error: Failed to create checkpoint because of error: FATAL Error: Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag
 
 restart
 

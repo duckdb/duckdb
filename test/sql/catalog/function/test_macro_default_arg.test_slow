@@ -39,6 +39,8 @@ statement error
 select f(
 	x := j
 ) from tbl;
+----
+Binder Error: Referenced column "j" not found in FROM clause!
 
 # cast
 statement ok

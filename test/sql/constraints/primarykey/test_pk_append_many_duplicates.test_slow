@@ -45,6 +45,8 @@ loop it 0 10
 
 statement error
 INSERT INTO integers VALUES ($val)
+----
+Invalid Error: Expected 1 parameters, but none were supplied
 
 endloop
 

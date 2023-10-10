@@ -22,6 +22,8 @@ SELECT COUNT(*), SUM(a) FROM test
 concurrentloop threadid 0 10
 
 statement error
-INSERT INTO test VALUES ({${threadid} * 17171)
+INSERT INTO test VALUES (${threadid} * 17171)
+----
+violates primary key constraint
 
 endloop

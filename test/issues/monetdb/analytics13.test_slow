@@ -21,6 +21,8 @@ statement error
 SELECT
     (SELECT GROUPING(colID) FROM tbl_ProductSales)
 FROM another_T t1
+----
+Binder Error: GROUPING statement cannot be used without groups
 
 query I rowsort
 SELECT
