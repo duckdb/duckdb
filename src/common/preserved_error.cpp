@@ -32,9 +32,9 @@ PreservedError::PreservedError(const string &message)
 	string err = raw_message.substr(0, position_semicolon);
 	string msg = raw_message.substr(position_semicolon + 2);
 	if (err.size() > 6 && err.substr(err.size() - 6) == " Error" && !msg.empty()) {
-		ExceptionType newType = Exception::StringToExceptionType(err.substr(0, err.size() - 6));
-		if (newType != type) {
-			type = newType;
+		ExceptionType new_type = Exception::StringToExceptionType(err.substr(0, err.size() - 6));
+		if (new_type != type) {
+			type = new_type;
 			raw_message = msg;
 		}
 	}
