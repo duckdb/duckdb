@@ -385,6 +385,7 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	switch (ht.join_type) {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
+	case JoinType::RIGHT_ANTI:
 	case JoinType::RIGHT_SEMI:
 		NextInnerJoin(keys, left, result);
 		break;
@@ -407,6 +408,19 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	default:
 		throw InternalException("Unhandled join type in JoinHashTable");
 	}
+}
+
+bool ScanStructure::PointersExhausted() {
+	const auto ptrs = FlatVector::GetData<data_ptr_t>(this->pointers);
+	const auto &sel = this->sel_vector;
+	const auto sel_count = this->count;
+	for (idx_t i = 0; i < sel_count; i++) {
+		auto idx = sel.get_index(i);
+		if (ptrs[idx]) {
+			return false;
+		}
+	}
+	return true;
 }
 
 idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector *no_match_sel) {
@@ -487,7 +501,7 @@ void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vect
 }
 
 void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	if (ht.join_type != JoinType::RIGHT_SEMI) {
+	if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
 		D_ASSERT(result.ColumnCount() == left.ColumnCount() + ht.build_types.size());
 	}
 	if (this->count == 0) {
@@ -498,22 +512,19 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 	SelectionVector result_vector(STANDARD_VECTOR_SIZE);
 
 	idx_t result_count = ScanInnerJoin(keys, result_vector);
-	std::cout << "result count = " << result_count << std::endl;
 	if (result_count > 0) {
 		if (IsRightOuterJoin(ht.join_type)) {
 			// full/right outer join: mark join matches as FOUND in the HT
 			auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
 			for (idx_t i = 0; i < result_count; i++) {
-
 				auto idx = result_vector.get_index(i);
-				std::cout << "idx = " << idx << std::endl;
 				// NOTE: threadsan reports this as a data race because this can be set concurrently by separate threads
 				// Technically it is, but it does not matter, since the only value that can be written is "true"
 				Store<bool>(true, ptrs[idx] + ht.tuple_size);
 			}
 		}
 		// for right semi join, just mark the entry as found and move on
-		if (ht.join_type != JoinType::RIGHT_SEMI) {
+		if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
 			// matches were found
 			// construct the result
 			// on the LHS, we create a slice using the result vector
@@ -830,7 +841,7 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 	result.SetCardinality(found_entries);
 
 	idx_t left_column_count = result.ColumnCount() - build_types.size();
-	if (join_type == JoinType::RIGHT_SEMI) {
+	if (join_type == JoinType::RIGHT_SEMI || join_type == JoinType::RIGHT_ANTI) {
 		left_column_count = 0;
 	}
 	const auto &sel_vector = *FlatVector::IncrementalSelectionVector();
