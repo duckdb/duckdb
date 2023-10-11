@@ -280,6 +280,19 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 	// TODO: look at child distinct count to better estimate cardinality.
 	stats.cardinality = child_stats.cardinality;
 	stats.column_distinct_count = child_stats.column_distinct_count;
+	double new_card = -1;
+	for (auto &g_set: aggr.grouping_sets) {
+		for (auto &ind : g_set) {
+			D_ASSERT(ind < child_stats.column_distinct_count.size());
+			if (new_card < child_stats.column_distinct_count[ind].distinct_count) {
+				new_card = child_stats.column_distinct_count[ind].distinct_count;
+			}
+		}
+	}
+	if (new_card < 0 || new_card > child_stats.cardinality) {
+		new_card = child_stats.cardinality;
+	}
+	stats.cardinality = new_card;
 	stats.column_names = child_stats.column_names;
 	stats.stats_initialized = true;
 	auto num_child_columns = aggr.GetColumnBindings().size();
