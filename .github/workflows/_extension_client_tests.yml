@@ -8,6 +8,7 @@ on:
         required: true
         type: string
 
+jobs:
   python:
     name: Python
     runs-on: ubuntu-latest
