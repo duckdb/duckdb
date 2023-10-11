@@ -1558,9 +1558,6 @@ bool CastFromBitToNumeric::Operation(string_t input, hugeint_t &result, bool str
 		throw ConversionException("Bitstring doesn't fit inside of %s", GetTypeId<hugeint_t>());
 	}
 	Bit::BitToNumeric(input, result);
-	if (result < NumericLimits<hugeint_t>::Minimum()) {
-		throw ConversionException("Minimum limit for HUGEINT is %s", NumericLimits<hugeint_t>::Minimum().ToString());
-	}
 	return (true);
 }
 
