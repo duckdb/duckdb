@@ -60,6 +60,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		new_logical_plan = std::move(plan);
 		if (relation_stats.size() == 1) {
 			new_logical_plan->estimated_cardinality = relation_stats.at(0).cardinality;
+			new_logical_plan->has_estimated_cardinality = true;
 		}
 	}
 
