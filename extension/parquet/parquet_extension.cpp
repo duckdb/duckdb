@@ -1125,8 +1125,7 @@ idx_t ParquetWriteDesiredBatchSize(ClientContext &context, FunctionData &bind_da
 //===--------------------------------------------------------------------===//
 unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, const string &table_name,
                                             ReplacementScanData *data) {
-	auto lower_name = StringUtil::Lower(table_name);
-	if (!StringUtil::EndsWith(lower_name, ".parquet") && !StringUtil::Contains(lower_name, ".parquet?")) {
+	if (!ReplacementScan::CanReplace(table_name, {"parquet"})) {
 		return nullptr;
 	}
 	auto table_function = make_uniq<TableFunctionRef>();
