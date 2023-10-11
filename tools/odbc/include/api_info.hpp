@@ -100,10 +100,11 @@ public:
 			return 20;
 		case SQL_VARCHAR:
 			// https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/column-size?view=sql-server-ver15
+			// TODO: this is not correct, but we don't know the number of characters, but set because of ADO
 			// return SQL_NO_TOTAL; // causes bad alloc
 			return 256;
 		case SQL_VARBINARY:
-			// we don't know the number of characters, but set because of ADO
+			// TODO: this is not correct, but we don't know the number of characters, but set because of ADO
 			return 512;
 		default:
 			return 0;
