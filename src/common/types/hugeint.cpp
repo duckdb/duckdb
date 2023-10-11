@@ -282,7 +282,8 @@ static hugeint_t DivModMinimum(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainde
 	}
 
 	if (rhs < 0) {
-		throw OutOfRangeException("Overflow in HUGEINT division! (%s // %s)", lhs.ToString().c_str(), rhs.ToString().c_str());
+		throw OutOfRangeException("Overflow in HUGEINT division! (%s // %s)", lhs.ToString().c_str(),
+		                          rhs.ToString().c_str());
 	}
 
 	hugeint_t result = Hugeint::DivMod(NumericLimits<hugeint_t>::Minimum() + 1, rhs, remainder);
