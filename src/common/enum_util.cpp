@@ -65,6 +65,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
+#include "duckdb/core_functions/lambda_functions.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/operator/scan/csv/base_csv_reader.hpp"
@@ -1558,6 +1559,8 @@ const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value) {
 		return "POSITIONAL_REFERENCE";
 	case ExpressionClass::BETWEEN:
 		return "BETWEEN";
+	case ExpressionClass::LAMBDA_REF:
+		return "LAMBDA_REF";
 	case ExpressionClass::BOUND_AGGREGATE:
 		return "BOUND_AGGREGATE";
 	case ExpressionClass::BOUND_CASE:
@@ -1659,6 +1662,9 @@ ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "BETWEEN")) {
 		return ExpressionClass::BETWEEN;
+	}
+	if (StringUtil::Equals(value, "LAMBDA_REF")) {
+		return ExpressionClass::LAMBDA_REF;
 	}
 	if (StringUtil::Equals(value, "BOUND_AGGREGATE")) {
 		return ExpressionClass::BOUND_AGGREGATE;
@@ -1841,6 +1847,8 @@ const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value) {
 		return "FUNCTION_REF";
 	case ExpressionType::TABLE_REF:
 		return "TABLE_REF";
+	case ExpressionType::LAMBDA_REF:
+		return "LAMBDA_REF";
 	case ExpressionType::CAST:
 		return "CAST";
 	case ExpressionType::BOUND_REF:
@@ -2040,6 +2048,9 @@ ExpressionType EnumUtil::FromString<ExpressionType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "TABLE_REF")) {
 		return ExpressionType::TABLE_REF;
+	}
+	if (StringUtil::Equals(value, "LAMBDA_REF")) {
+		return ExpressionType::LAMBDA_REF;
 	}
 	if (StringUtil::Equals(value, "CAST")) {
 		return ExpressionType::CAST;
@@ -2643,6 +2654,34 @@ KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "KEYWORD_COL_NAME")) {
 		return KeywordCategory::KEYWORD_COL_NAME;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<LambdaType>(LambdaType value) {
+	switch(value) {
+	case LambdaType::TRANSFORM:
+		return "TRANSFORM";
+	case LambdaType::FILTER:
+		return "FILTER";
+	case LambdaType::REDUCE:
+		return "REDUCE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+LambdaType EnumUtil::FromString<LambdaType>(const char *value) {
+	if (StringUtil::Equals(value, "TRANSFORM")) {
+		return LambdaType::TRANSFORM;
+	}
+	if (StringUtil::Equals(value, "FILTER")) {
+		return LambdaType::FILTER;
+	}
+	if (StringUtil::Equals(value, "REDUCE")) {
+		return LambdaType::REDUCE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

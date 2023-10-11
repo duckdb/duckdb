@@ -194,6 +194,7 @@ void BufferedCSVReader::ParseCSV(ParserMode mode) {
 }
 
 bool BufferedCSVReader::TryParseCSV(ParserMode parser_mode, DataChunk &insert_chunk, string &error_message) {
+	cached_buffers.clear();
 	mode = parser_mode;
 	// used for parsing algorithm
 	bool finished_chunk = false;
@@ -429,7 +430,6 @@ final_state:
 		Flush(insert_chunk);
 	}
 
-	end_of_file_reached = true;
 	return true;
 }
 
