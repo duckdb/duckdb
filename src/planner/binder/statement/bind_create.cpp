@@ -68,6 +68,16 @@ void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
 	BindSchemaOrCatalog(context, catalog, schema);
 }
 
+const string Binder::BindCatalog(string &catalog) {
+	auto &db_manager = DatabaseManager::Get(context);
+	optional_ptr<AttachedDatabase> database = db_manager.GetDatabase(context, catalog);
+	if (database) {
+		return db_manager.GetDatabase(context, catalog).get()->GetName();
+	} else {
+		return db_manager.GetDefaultDatabase(context);
+	}
+}
+
 SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 	BindSchemaOrCatalog(info.catalog, info.schema);
 	if (IsInvalidCatalog(info.catalog) && info.temporary) {
@@ -456,9 +466,13 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 	auto catalog_type = stmt.info->type;
 	switch (catalog_type) {
-	case CatalogType::SCHEMA_ENTRY:
+	case CatalogType::SCHEMA_ENTRY: {
+		auto &base = stmt.info->Cast<CreateInfo>();
+		auto catalog = BindCatalog(base.catalog);
+		properties.modified_databases.insert(catalog);
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
 		break;
+	}
 	case CatalogType::VIEW_ENTRY: {
 		auto &base = stmt.info->Cast<CreateViewInfo>();
 		// bind the schema
