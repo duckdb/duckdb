@@ -281,7 +281,7 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 	stats.cardinality = child_stats.cardinality;
 	stats.column_distinct_count = child_stats.column_distinct_count;
 	double new_card = -1;
-	for (auto &g_set: aggr.grouping_sets) {
+	for (auto &g_set : aggr.grouping_sets) {
 		for (auto &ind : g_set) {
 			D_ASSERT(ind < child_stats.column_distinct_count.size());
 			if (new_card < child_stats.column_distinct_count[ind].distinct_count) {
