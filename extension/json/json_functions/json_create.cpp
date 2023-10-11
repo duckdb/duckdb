@@ -682,20 +682,33 @@ BoundCastInfo AnyToJSONCastBind(BindCastInput &input, const LogicalType &source,
 }
 
 void JSONFunctions::RegisterJSONCreateCastFunctions(CastFunctionSet &casts) {
-	auto json_to_any_cost = casts.ImplicitCastCost(LogicalType::ANY, JSONCommon::JSONType());
-	casts.RegisterCastFunction(LogicalType::ANY, JSONCommon::JSONType(), AnyToJSONCastBind, json_to_any_cost);
-
-	const auto struct_type = LogicalType::STRUCT({{"any", LogicalType::ANY}});
-	auto struct_to_json_cost = casts.ImplicitCastCost(struct_type, LogicalType::VARCHAR) - 2;
-	casts.RegisterCastFunction(struct_type, JSONCommon::JSONType(), AnyToJSONCastBind, struct_to_json_cost);
-
-	const auto list_type = LogicalType::LIST(LogicalType::ANY);
-	auto list_to_json_cost = casts.ImplicitCastCost(list_type, LogicalType::VARCHAR) - 2;
-	casts.RegisterCastFunction(list_type, JSONCommon::JSONType(), AnyToJSONCastBind, list_to_json_cost);
-
-	const auto map_type = LogicalType::MAP(LogicalType::ANY, LogicalType::ANY);
-	auto map_to_json_cost = casts.ImplicitCastCost(map_type, LogicalType::VARCHAR) - 2;
-	casts.RegisterCastFunction(map_type, JSONCommon::JSONType(), AnyToJSONCastBind, map_to_json_cost);
+	// Anything can be cast to JSON
+	for (const auto &type : LogicalType::AllTypes()) {
+		LogicalType source_type;
+		switch (type.id()) {
+		case LogicalTypeId::STRUCT:
+			source_type = LogicalType::STRUCT({{"any", LogicalType::ANY}});
+			break;
+		case LogicalTypeId::LIST:
+			source_type = LogicalType::LIST(LogicalType::ANY);
+			break;
+		case LogicalTypeId::MAP:
+			source_type = LogicalType::MAP(LogicalType::ANY, LogicalType::ANY);
+			break;
+		case LogicalTypeId::UNION:
+			source_type = LogicalType::UNION({{"any", LogicalType::ANY}});
+			break;
+		case LogicalTypeId::VARCHAR:
+			// We skip this one here as it's handled in json_functions.cpp
+			continue;
+		default:
+			source_type = type;
+		}
+		// We prefer going to JSON over going to VARCHAR if a function can do either
+		const auto source_to_json_cost =
+		    MaxValue<int64_t>(casts.ImplicitCastCost(source_type, LogicalType::VARCHAR) - 1, 0);
+		casts.RegisterCastFunction(source_type, JSONCommon::JSONType(), AnyToJSONCastBind, source_to_json_cost);
+	}
 }
 
 } // namespace duckdb

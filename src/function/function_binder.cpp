@@ -228,7 +228,7 @@ void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<un
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto target_type = i < function.arguments.size() ? function.arguments[i] : function.varargs;
 		target_type.Verify();
-		// don't cast lambda children, they get removed anyways
+		// don't cast lambda children, they get removed before execution
 		if (children[i]->return_type.id() == LogicalTypeId::LAMBDA) {
 			continue;
 		}

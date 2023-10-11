@@ -43,19 +43,30 @@ shared_ptr<BoundParameterData> BoundParameterMap::CreateOrGetData(const string &
 }
 
 unique_ptr<BoundParameterExpression> BoundParameterMap::BindParameterExpression(ParameterExpression &expr) {
-	auto &identifier = expr.identifier;
-	auto return_type = GetReturnType(identifier);
 
+	auto &identifier = expr.identifier;
 	D_ASSERT(!parameter_data.count(identifier));
 
 	// No value has been supplied yet,
-	// We return a shared pointer to an object that will get populated wtih a Value later
-	// When the BoundParameterExpression get executed, this will be used to get the corresponding value
+	// We return a shared pointer to an object that will get populated with a Value later
+	// When the BoundParameterExpression gets executed, this will be used to get the corresponding value
 	auto param_data = CreateOrGetData(identifier);
 	auto bound_expr = make_uniq<BoundParameterExpression>(identifier);
+
 	bound_expr->parameter_data = param_data;
-	bound_expr->return_type = return_type;
 	bound_expr->alias = expr.alias;
+
+	auto param_type = param_data->return_type;
+	auto identifier_type = GetReturnType(identifier);
+
+	// we found a type for this bound parameter, but now we found another occurrence with the same identifier,
+	// a CAST around this consecutive occurrence might swallow the unknown type of this consecutive occurrence,
+	// then, if we do not rebind, we potentially have unknown data types during execution
+	if (identifier_type == LogicalType::UNKNOWN && param_type != LogicalType::UNKNOWN) {
+		rebind = true;
+	}
+
+	bound_expr->return_type = identifier_type;
 	return bound_expr;
 }
 
