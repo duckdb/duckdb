@@ -1,0 +1,30 @@
+# name: test/sql/settings/lock_configuration_schema.test
+# description: Test lock configuration and schema changes
+# group: [settings]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create schema s1;
+
+statement ok
+create schema s2;
+
+statement ok
+use s1;
+
+statement ok
+use s2;
+
+statement ok
+SET lock_configuration=true;
+
+statement ok
+use s1;
+
+statement ok
+reset schema;
+
+statement ok
+reset search_path

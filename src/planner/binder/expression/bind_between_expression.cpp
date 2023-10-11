@@ -34,13 +34,11 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 	input = BoundCastExpression::AddCastToType(context, std::move(input), input_type);
 	lower = BoundCastExpression::AddCastToType(context, std::move(lower), input_type);
 	upper = BoundCastExpression::AddCastToType(context, std::move(upper), input_type);
-	if (input_type.id() == LogicalTypeId::VARCHAR) {
-		// handle collation
-		auto collation = StringType::GetCollation(input_type);
-		input = PushCollation(context, std::move(input), collation, false);
-		lower = PushCollation(context, std::move(lower), collation, false);
-		upper = PushCollation(context, std::move(upper), collation, false);
-	}
+	// handle collation
+	PushCollation(context, input, input_type, false);
+	PushCollation(context, lower, input_type, false);
+	PushCollation(context, upper, input_type, false);
+
 	if (!input->HasSideEffects() && !input->HasParameter() && !input->HasSubquery()) {
 		// the expression does not have side effects and can be copied: create two comparisons
 		// the reason we do this is that individual comparisons are easier to handle in optimizers

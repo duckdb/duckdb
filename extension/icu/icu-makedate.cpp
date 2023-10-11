@@ -23,7 +23,7 @@ struct ICUMakeDate : public ICUDateFunc {
 		}
 
 		// Extract the time zone parts
-		auto micros = SetTime(calendar, instant);
+		SetTime(calendar, instant);
 		const auto era = ExtractField(calendar, UCAL_ERA);
 		const auto year = ExtractField(calendar, UCAL_YEAR);
 		const auto mm = ExtractField(calendar, UCAL_MONTH) + 1;

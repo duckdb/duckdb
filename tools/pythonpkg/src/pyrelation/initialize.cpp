@@ -102,6 +102,9 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
 	    .def("count", &DuckDBPyRelation::Count, "Computes the number of elements present in a given column",
 	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("value_counts", &DuckDBPyRelation::ValueCounts,
+	         "Computes the number of elements present in a given column, also projecting the original column",
+	         py::arg("column"), py::arg("groups") = "")
 	    .def("favg", &DuckDBPyRelation::FAvg,
 	         "Computes the average of all values present in a given column using a more accurate floating point "
 	         "summation (Kahan Sum)",

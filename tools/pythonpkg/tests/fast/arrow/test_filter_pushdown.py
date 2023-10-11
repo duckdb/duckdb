@@ -658,25 +658,28 @@ class TestArrowFilterPushdown(object):
 
     # https://github.com/duckdb/duckdb/pull/4817/files#r1339973721
     @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
-    @pytest.mark.skip(reason="This test is likely not testing what it's supposed to")
     def test_filter_column_removal(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
             """
             CREATE TABLE test AS SELECT
-                range i,
-                range j
-            FROM range(5)
+                range a,
+                100 - range b
+            FROM range(100)
         """
         )
         duck_test_table = duckdb_cursor.table("test")
-        arrow_test_table = create_table(duck_test_table)
+        arrow_table = create_table(duck_test_table)
 
         # PR 4817 - remove filter columns that are unused in the remainder of the query plan from the table function
         query_res = duckdb_cursor.execute(
             """
-            EXPLAIN SELECT count(*) from testarrow where
-                a = 100 or b = 1
+            EXPLAIN SELECT count(*) FROM arrow_table WHERE
+                a > 25 AND b > 25
         """
         ).fetchall()
-        match = re.search("│ +j +│", query_res[0][1])
+
+        # scanned columns that come out of the scan are displayed like this, so we shouldn't see them
+        match = re.search("│ +a +│", query_res[0][1])
+        assert not match
+        match = re.search("│ +b +│", query_res[0][1])
         assert not match

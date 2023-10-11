@@ -344,7 +344,8 @@ void VerifyUniqueNames(const vector<string> &names) {
 }
 
 ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalType> types_p, vector<string> names_p,
-                             CompressionCodec::type codec, ChildFieldIDs field_ids_p, string encryption_key_p)
+                             CompressionCodec::type codec, ChildFieldIDs field_ids_p,
+                             const vector<pair<string, string>> &kv_metadata, string encryption_key_p)
     : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec),
       field_ids(std::move(field_ids_p)), encryption_key(std::move(encryption_key_p)) {
 	// initialize the file writer
@@ -369,6 +370,14 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalT
 	file_meta_data.created_by = "DuckDB";
 
 	file_meta_data.schema.resize(1);
+
+	for (auto &kv_pair : kv_metadata) {
+		duckdb_parquet::format::KeyValue kv;
+		kv.__set_key(kv_pair.first);
+		kv.__set_value(kv_pair.second);
+		file_meta_data.key_value_metadata.push_back(kv);
+		file_meta_data.__isset.key_value_metadata = true;
+	}
 
 	// populate root schema object
 	file_meta_data.schema[0].name = "duckdb_schema";

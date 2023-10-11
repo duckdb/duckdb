@@ -449,6 +449,26 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	}
 }
 
+ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &context, const Value &column_value) {
+	ParquetColumnDefinition result;
+	result.field_id = IntegerValue::Get(StructValue::GetChildren(column_value)[0]);
+
+	const auto &column_def = StructValue::GetChildren(column_value)[1];
+	const auto &column_type = column_def.type();
+	D_ASSERT(column_type.id() == LogicalTypeId::STRUCT);
+
+	const auto children = StructValue::GetChildren(column_def);
+	result.name = StringValue::Get(children[0]);
+	result.type = TransformStringToLogicalType(StringValue::Get(children[1]));
+	string error_message;
+	if (!children[2].TryCastAs(context, result.type, result.default_value, &error_message)) {
+		throw BinderException("Unable to cast Parquet schema default_value \"%s\" to %s", children[2].ToString(),
+		                      result.type.ToString());
+	}
+
+	return result;
+}
+
 ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, ParquetOptions parquet_options_p)
     : fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
       parquet_options(std::move(parquet_options_p)) {

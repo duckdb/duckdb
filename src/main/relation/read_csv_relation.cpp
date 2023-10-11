@@ -17,15 +17,18 @@
 
 namespace duckdb {
 
+void ReadCSVRelation::InitializeAlias(const vector<string> &input) {
+	D_ASSERT(input.size() >= 1);
+	auto csv_file = input[0];
+	alias = StringUtil::Split(csv_file, ".")[0];
+}
+
 ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const string &csv_file,
                                  vector<ColumnDefinition> columns_p, string alias_p)
     : TableFunctionRelation(context, "read_csv", {Value(csv_file)}, nullptr, false), alias(std::move(alias_p)),
       auto_detect(false) {
 
-	if (alias.empty()) {
-		alias = StringUtil::Split(csv_file, ".")[0];
-	}
-
+	InitializeAlias({csv_file});
 	columns = std::move(columns_p);
 
 	child_list_t<Value> column_names;
@@ -36,16 +39,23 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 	AddNamedParameter("columns", Value::STRUCT(std::move(column_names)));
 }
 
-ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const string &csv_file,
-                                 named_parameter_map_t &&options, string alias_p)
-    : TableFunctionRelation(context, "read_csv_auto", {Value(csv_file)}, nullptr, false), alias(std::move(alias_p)),
-      auto_detect(true) {
-
-	if (alias.empty()) {
-		alias = StringUtil::Split(csv_file, ".")[0];
+static Value CreateValueFromFileList(const vector<string> &file_list) {
+	vector<Value> files;
+	for (auto &file : file_list) {
+		files.push_back(file);
 	}
+	return Value::LIST(std::move(files));
+}
 
-	auto files = MultiFileReader::GetFileList(*context, csv_file, "CSV");
+ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const vector<string> &input,
+                                 named_parameter_map_t &&options, string alias_p)
+    : TableFunctionRelation(context, "read_csv_auto", {CreateValueFromFileList(input)}, nullptr, false),
+      alias(std::move(alias_p)), auto_detect(true) {
+
+	InitializeAlias(input);
+
+	auto file_list = CreateValueFromFileList(input);
+	auto files = MultiFileReader::GetFileList(*context, file_list, "CSV");
 	D_ASSERT(!files.empty());
 
 	auto &file_name = files[0];
