@@ -14,21 +14,20 @@
 namespace duckdb {
 
 //! A BoundLambdaRef expression represents a LambdaRef expression that was bound to an lambda parameter
-//! in the lambda bindings vector. When capturing lambdas the BoundLambdaRef becomes a
-//! BoundReferenceExpresssion, indexing the corresponding lambda parameter in the lambda bindings vector,
+//! in the lambda bindings vector. When capturing lambdas, the BoundLambdaRef becomes a
+//! BoundReferenceExpression, indexing the corresponding lambda parameter in the lambda bindings vector,
 //! which refers to the physical chunk of the lambda parameter during execution.
 class BoundLambdaRefExpression : public Expression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_LAMBDA_REF;
 
 public:
-	BoundLambdaRefExpression(LogicalType type, ColumnBinding binding, idx_t lambda_index, idx_t depth = 0);
-	BoundLambdaRefExpression(string alias, LogicalType type, ColumnBinding binding, idx_t lambda_index,
-	                         idx_t depth = 0);
+	BoundLambdaRefExpression(LogicalType type, ColumnBinding binding, idx_t lambda_idx, idx_t depth = 0);
+	BoundLambdaRefExpression(string alias, LogicalType type, ColumnBinding binding, idx_t lambda_idx, idx_t depth = 0);
 	//! Column index set by the binder, used to generate the final BoundExpression
 	ColumnBinding binding;
 	//! The index of the lambda parameter in the lambda bindings vector
-	idx_t lambda_index;
+	idx_t lambda_idx;
 	//! The subquery depth (i.e. depth 0 = current query, depth 1 = parent query, depth 2 = parent of parent, etc...).
 	//! This is only non-zero for correlated expressions inside subqueries.
 	idx_t depth;
