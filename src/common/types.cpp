@@ -727,7 +727,7 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 	}
 	if (type_id == LogicalTypeId::ARRAY) {
 		auto new_child = MaxLogicalType(ArrayType::GetChildType(left), ArrayType::GetChildType(right));
-		auto new_size = MaxValue<uint32_t>(ArrayType::GetSize(left), ArrayType::GetSize(right));
+		auto new_size = MaxValue(ArrayType::GetSize(left), ArrayType::GetSize(right));
 		return LogicalType::ARRAY(new_child, new_size);
 	}
 	if (type_id == LogicalTypeId::MAP) {
@@ -1117,6 +1117,7 @@ bool ArrayType::IsAnySize(const LogicalType &type) {
 
 LogicalType LogicalType::ARRAY(const LogicalType &child, idx_t size) {
 	D_ASSERT(size > 0);
+	D_ASSERT(size < ArrayType::MAX_ARRAY_SIZE);
 	auto info = make_shared<ArrayTypeInfo>(child, size);
 	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
 }

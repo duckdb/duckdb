@@ -1349,7 +1349,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 		auto array_size = ArrayType::GetSize(type);
 
 		if (child.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			D_ASSERT(ConstantVector::IsNull(child) || array_size == 1);
+			D_ASSERT(ConstantVector::IsNull(child));
 		} else {
 			D_ASSERT(child.GetVectorType() == VectorType::FLAT_VECTOR);
 		}

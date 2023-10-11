@@ -434,6 +434,7 @@ struct ArrayType {
 	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type);
 	DUCKDB_API static idx_t GetSize(const LogicalType &type);
 	DUCKDB_API static bool IsAnySize(const LogicalType &type);
+	DUCKDB_API static constexpr idx_t MAX_ARRAY_SIZE = 100000; //100k for now
 };
 
 struct AggregateStateType {

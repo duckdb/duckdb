@@ -236,6 +236,8 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 			} else if (array_size == 0) {
 				// Empty arrays are not supported
 				throw ParserException("Arrays must have a size of at least 1");
+			} else if (array_size > static_cast<int64_t>(ArrayType::MAX_ARRAY_SIZE)) {
+				throw ParserException("Arrays must have a size of at most %d", ArrayType::MAX_ARRAY_SIZE);
 			} else {
 				result_type = LogicalType::ARRAY(result_type, array_size);
 			}

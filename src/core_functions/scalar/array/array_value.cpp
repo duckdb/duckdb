@@ -54,8 +54,8 @@ static unique_ptr<FunctionData> ArrayValueBind(ClientContext &context, ScalarFun
 		child_type = LogicalType::MaxLogicalType(child_type, arguments[i]->return_type);
 	}
 
-	if (arguments.size() >= NumericLimits<uint32_t>::Maximum()) {
-		throw Exception("Too many arguments for array_value");
+	if (arguments.size() > ArrayType::MAX_ARRAY_SIZE) {
+		throw OutOfRangeException("Array size exceeds maximum allowed size");
 	}
 
 	// this is more for completeness reasons
