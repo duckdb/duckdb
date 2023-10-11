@@ -6010,6 +6010,8 @@ const char* EnumUtil::ToChars<UnionInvalidReason>(UnionInvalidReason value) {
 		return "VALIDITY_OVERLAP";
 	case UnionInvalidReason::TAG_MISMATCH:
 		return "TAG_MISMATCH";
+	case UnionInvalidReason::NULL_TAG:
+		return "NULL_TAG";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -6031,6 +6033,9 @@ UnionInvalidReason EnumUtil::FromString<UnionInvalidReason>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "TAG_MISMATCH")) {
 		return UnionInvalidReason::TAG_MISMATCH;
+	}
+	if (StringUtil::Equals(value, "NULL_TAG")) {
+		return UnionInvalidReason::NULL_TAG;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
