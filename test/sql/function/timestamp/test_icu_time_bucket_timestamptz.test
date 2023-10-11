@@ -1330,3 +1330,17 @@ order by origin
 2023-10-06 22:30:00+05:30
 2023-10-06 23:30:00+05:30
 2023-10-07 00:30:00+05:30
+
+query I
+select
+  bool_and(
+    date_part('epoch', time_bucket(interval '3' day, timestamptz '2023-10-07 16:08:09+00', origin))
+    = date_part('epoch', time_bucket(interval '3' day, timestamp   '2023-10-07 16:08:09', origin at time zone 'UTC'))
+  )
+from
+  generate_series(timestamptz '2001-01-03 00:00:00+05',
+                  timestamptz '2002-01-04 00:00:00+05',
+                  interval '7877' minute) as t(origin)
+;
+----
+true
