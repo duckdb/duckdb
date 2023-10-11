@@ -840,7 +840,7 @@ SQLRETURN DescRecord::SetSqlDescType(SQLSMALLINT type) {
 	sql_desc_scale = type_info.maximum_scale;
 	sql_desc_searchable = type_info.searchable;
 	sql_desc_fixed_prec_scale = type_info.fixed_prec_scale;
-	sql_desc_num_prec_radix = type_info.num_prec_radix;
+	sql_desc_num_prec_radix = type_info.num_prec_radix == -1 ? 0 : type_info.num_prec_radix;
 	sql_desc_unsigned = type_info.unsigned_attribute;
 	return SQL_SUCCESS;
 }
