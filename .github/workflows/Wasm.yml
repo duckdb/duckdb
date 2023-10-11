@@ -43,10 +43,11 @@ jobs:
             - name: Setup Ccache
               uses: hendrikmuhs/ccache-action@main
               with:
-                  key: ${{ github.job }}
+                  key: ${{ github.job }}-${{ matrix.duckdb_wasm_arch }}
 
             - name: Build Wasm module
               run: |
+                  curl https://raw.githubusercontent.com/duckdb/duckdb-wasm/main/.github/config/extension_config_wasm.cmake -o extension/extension_config.cmake
                   make ${{ env.DUCKDB_PLATFORM }}
 
             - name: Sign and deploy Wasm extensions
@@ -57,13 +58,13 @@ jobs:
                   AWS_DEFAULT_REGION: us-east-1
                   DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
               run: |
-                  bash ./duckdb/scripts/extension-upload-wasm.sh ${{ env.DUCKDB_PLATFORM }} ${{ github.event.inputs.duckdb-ref }}
+                  bash ./scripts/extension-upload-wasm.sh ${{ env.DUCKDB_PLATFORM }} ${{ github.event.inputs.duckdb-ref }}
 
             - name: Upload artifact
               uses: actions/upload-artifact@v3
               with:
                   name: duckdb-wasm-${{ matrix.duckdb_wasm_arch }}
-                  path: loadable_extensions/
+                  path: build/${{ env.DUCKDB_PLATFORM }}/built_extensions
                   retention-days: 1
 
   trigger_github_pages_build:
