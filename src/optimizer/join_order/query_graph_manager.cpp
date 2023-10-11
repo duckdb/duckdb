@@ -5,6 +5,7 @@
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/assert.hpp"
@@ -368,15 +369,17 @@ unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr
 							cond.comparison = FlipComparisonExpression(cond.comparison);
 						}
 					}
-				}
-				else if (join.join_type == JoinType::LEFT_SEMI || join.join_type == JoinType::LEFT_ANTI) {
-					if (!SemiAntiConditionsCanFlip(op)) {
+				} else if (join.join_type == JoinType::LEFT_SEMI || join.join_type == JoinType::LEFT_ANTI) {
+					size_t has_range = 0;
+					if (!PhysicalPlanGenerator::HasEquality(join.conditions, has_range)) {
 						break;
 					}
 					auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
 					auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
-					if (lhs_cardinality < rhs_cardinality * 2) {
-						join.join_type = join.join_type == JoinType::LEFT_SEMI ? JoinType::RIGHT_SEMI : JoinType::RIGHT_ANTI;
+					if (lhs_cardinality < rhs_cardinality * 2 ||
+					    ClientConfig::GetConfig(context).query_verification_enabled) {
+						join.join_type =
+						    join.join_type == JoinType::LEFT_SEMI ? JoinType::RIGHT_SEMI : JoinType::RIGHT_ANTI;
 						std::swap(join.children[0], join.children[1]);
 						for (auto &cond : join.conditions) {
 							std::swap(cond.left, cond.right);

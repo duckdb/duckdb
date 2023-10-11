@@ -242,6 +242,30 @@ static void RewriteJoinCondition(Expression &expr, idx_t offset) {
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { RewriteJoinCondition(child, offset); });
 }
 
+bool PhysicalPlanGenerator::HasEquality(vector<JoinCondition> &conds, size_t &has_range) {
+	bool has_equality = false;
+	for (size_t c = 0; c < conds.size(); ++c) {
+		auto &cond = conds[c];
+		switch (cond.comparison) {
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			return true;
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			++has_range;
+			break;
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			break;
+		default:
+			throw NotImplementedException("Unimplemented comparison join");
+		}
+	}
+	return false;
+}
+
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoin &op) {
 	// now visit the children
 	D_ASSERT(op.children.size() == 2);
@@ -258,29 +282,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 		return make_uniq<PhysicalCrossProduct>(op.types, std::move(left), std::move(right), op.estimated_cardinality);
 	}
 
-	bool has_equality = false;
 	size_t has_range = 0;
-	for (size_t c = 0; c < op.conditions.size(); ++c) {
-		auto &cond = op.conditions[c];
-		switch (cond.comparison) {
-		case ExpressionType::COMPARE_EQUAL:
-		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-			has_equality = true;
-			break;
-		case ExpressionType::COMPARE_LESSTHAN:
-		case ExpressionType::COMPARE_GREATERTHAN:
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			++has_range;
-			break;
-		case ExpressionType::COMPARE_NOTEQUAL:
-		case ExpressionType::COMPARE_DISTINCT_FROM:
-			break;
-		default:
-			throw NotImplementedException("Unimplemented comparison join");
-		}
-	}
-
+	bool has_equality = HasEquality(op.conditions, has_range);
 	bool can_merge = has_range > 0;
 	bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();
 	switch (op.join_type) {
@@ -314,10 +317,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 
 	} else {
 		static constexpr const idx_t NESTED_LOOP_JOIN_THRESHOLD = 5;
-		if ((left->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD ||
-		     right->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD) &&
-		    (op.join_type != JoinType::LEFT_ANTI && op.join_type != JoinType::LEFT_SEMI &&
-		     op.join_type != JoinType::RIGHT_ANTI && op.join_type != JoinType::RIGHT_SEMI)) {
+		if (left->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD ||
+		    right->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD) {
 			can_iejoin = false;
 			can_merge = false;
 		}
