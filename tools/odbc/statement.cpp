@@ -512,7 +512,7 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 		return ret;
 	}
 
-	if (field_identifier != SQL_DESC_COUNT &&
+	if (field_identifier != SQL_DESC_COUNT && hstmt->res &&
 	    hstmt->res->properties.return_type != duckdb::StatementReturnType::QUERY_RESULT) {
 		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLColAttribute(s)",
 		                                   "Prepared statement not a cursor-specification", SQLStateType::ST_07005,
