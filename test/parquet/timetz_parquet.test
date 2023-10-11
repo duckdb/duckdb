@@ -1,0 +1,12 @@
+# name: test/parquet/timetz_parquet.test
+# description: Test parquet file with time with time zone data
+# group: [parquet]
+
+require parquet
+
+query I
+select * from 'data/parquet-testing/timetz.parquet' ;
+----
+14:30:00+00
+11:35:00+00
+01:59:00+00
