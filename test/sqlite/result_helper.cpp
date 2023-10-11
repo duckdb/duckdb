@@ -267,8 +267,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 		} else {
 			expected_result = ExpectedResult::RESULT_SUCCESS;
 		}
-		if (result.HasError()) {
-			D_ASSERT(!statement.expected_error.empty());
+		if (result.HasError() && !statement.expected_error.empty()) {
 			if (!StringUtil::Contains(result.GetError(), statement.expected_error)) {
 				logger.ExpectedErrorMismatch(statement.expected_error, result);
 				return false;
