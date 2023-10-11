@@ -6,7 +6,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "iostream"
 
 namespace duckdb {
 
