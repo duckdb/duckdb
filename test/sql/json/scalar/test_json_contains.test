@@ -16,6 +16,8 @@ True
 
 statement error
 SELECT JSON_CONTAINS('{"a": 1, "b": 2, "c": {"d": 3}}', '"c": {"d": 3}') AS Result;
+----
+Invalid Input Error: Malformed JSON at byte 3 of input: unexpected content after document.  Input: "c": {"d": 3}
 
 # some home-made tests
 

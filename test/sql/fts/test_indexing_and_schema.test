@@ -17,6 +17,8 @@ INSERT INTO test.documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING'), ('
 
 statement error
 PRAGMA create_fts_index('documents', 'id', 'body')
+----
+Catalog Error: Table with name documents does not exist!
 
 statement ok
 SET SCHEMA='test'
@@ -29,6 +31,8 @@ SET SCHEMA='main'
 
 statement error
 PRAGMA drop_fts_index('documents')
+----
+Catalog Error: a FTS index does not exist on table 'main.documents'
 
 statement ok
 SET SCHEMA='test'

@@ -50,6 +50,8 @@ Göbel
 # but not with NOACCENT
 statement error
 SELECT * FROM strings WHERE 'goethe' > s COLLATE NOACCENT.de ORDER BY 1
+----
+Binder Error: Cannot combine collation types "noaccent" and "de"
 
 # japanese collation
 statement ok

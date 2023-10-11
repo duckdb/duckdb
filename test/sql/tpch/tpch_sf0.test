@@ -17,12 +17,20 @@ endloop
 # out of range
 statement error
 PRAGMA tpch(-1)
+----
+Syntax Error: Out of range TPC-H query number -1
 
 statement error
 PRAGMA tpch(3290819023812038903)
+----
+Invalid Input Error: Type INT64 with value 3290819023812038903 can't be cast because the value is out of range for the destination type INT32
 
 statement error
 PRAGMA tpch(32908301298)
+----
+Invalid Input Error: Type INT64 with value 32908301298 can't be cast because the value is out of range for the destination type INT32
 
 statement error
 PRAGMA tpch(1.1)
+----
+No function matches the given name and argument types 'tpch(DECIMAL(2,1))'

@@ -13,6 +13,8 @@ PRAGMA enable_verification
 
 statement error
 PRAGMA drop_fts_index('test')
+----
+Catalog Error: a FTS index does not exist on table 'main.test'
 
 statement ok
 CREATE SCHEMA fts_main_test
@@ -29,6 +31,8 @@ INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING'), ('doc2'
 # non-existant parameters should yield an error
 statement error
 PRAGMA create_fts_index('documents', 'id', 'body', nonexistant_param='dummy')
+----
+Invalid named parameter "nonexistant_param" for function create_fts_index
 
 # test different stemmer
 statement ok
@@ -37,6 +41,8 @@ PRAGMA create_fts_index('documents', 'id', 'body', stemmer='turkish')
 # cannot overwrite without supplying the 'overwrite' param
 statement error
 PRAGMA create_fts_index('documents', 'id', 'body')
+----
+Supply 'overwrite=1' to overwrite, or drop the existing index with 'PRAGMA drop_fts_index()'
 
 statement ok
 PRAGMA create_fts_index('documents', 'id', 'body', overwrite=true)
@@ -47,6 +53,8 @@ PRAGMA drop_fts_index('documents')
 
 statement error
 PRAGMA create_fts_index('documents', 'id', 'body', stopwords='nonexistant_stopwords_table')
+----
+Catalog Error: Table with name nonexistant_stopwords_table does not exist!
 
 statement ok
 PRAGMA create_fts_index('documents', 'id', 'body', stopwords='english')

@@ -39,24 +39,40 @@ INET
 
 statement error
 select '127'::inet;
+----
+Conversion Error: Failed to convert string "127" to inet: Expected a dot
 
 statement error
 select '127..1'::inet;
+----
+Conversion Error: Failed to convert string "127..1" to inet: Expected a number
 
 statement error
 SELECT '256.0.0.1'::INET::VARCHAR
+----
+Conversion Error: Failed to convert string "256.0.0.1" to inet: Expected a number between 0 and 255
 
 statement error
 SELECT '-1.0.0.1'::INET::VARCHAR
+----
+Conversion Error: Failed to convert string "-1.0.0.1" to inet: Expected a number
 
 statement error
 SELECT '127..0.1'::INET::VARCHAR
+----
+Conversion Error: Failed to convert string "127..0.1" to inet: Expected a number
 
 statement error
 SELECT '127.0.0.1/33'::INET::VARCHAR
+----
+Conversion Error: Failed to convert string "127.0.0.1/33" to inet: Expected a number between 0 and 32
 
 statement error
 SELECT '127.0.0.1/333'::INET::VARCHAR
+----
+Conversion Error: Failed to convert string "127.0.0.1/333" to inet: Expected a number between 0 and 32
 
 statement error
 SELECT '127.0.0.1/33333333333333333333'::INET::VARCHAR
+----
+Conversion Error: Failed to convert string "127.0.0.1/33333333333333333333" to inet: Expected a number between 0 and 32

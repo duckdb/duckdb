@@ -20,6 +20,8 @@ select from_json_strict('42', '"UBIGINT"')
 
 statement error
 select from_json_strict('42', '"DATE"')
+----
+Invalid Input Error: Unable to cast '42' to DATE
 
 # singletons
 statement error
@@ -95,6 +97,8 @@ select json_transform('{"a": 42}', '{"a":"NULL"}')
 
 statement error
 select json_transform('{"a": 42}', '{"a":"ARRAY"}')
+----
+Parser Error: syntax error at or near "ARRAY"
 
 # arrays
 statement error
@@ -151,6 +155,8 @@ NULL
 # conflicting names
 statement error
 select json_transform('{"a": 4, "a": 2}', '{"a": "UBIGINT", "a": "UBIGINT"}')
+----
+Invalid Input Error: Duplicate keys in object in JSON structure: "UBIGINT"
 
 # can actually get parts of the JSON back as string
 query T
@@ -200,9 +206,13 @@ NULL
 
 statement error
 select json_transform_strict('[]', '"${type}"')
+----
+Invalid Input Error: Failed to cast value to numerical: []
 
 statement error
 select json_transform_strict('{}', '"${type}"')
+----
+Invalid Input Error: Failed to cast value to numerical: {}
 
 query T
 select json_transform('null', '"${type}"')
@@ -223,6 +233,8 @@ NULL
 
 statement error
 select json_transform_strict('-42', '"UINTEGER"')
+----
+Invalid Input Error: Failed to cast value to numerical: -42
 
 # varchar
 query T
@@ -353,15 +365,23 @@ NULL
 
 statement error
 select json_transform_strict('42', '"DECIMAL(2,1)"')
+----
+Invalid Input Error: Failed to cast value to decimal: 42
 
 statement error
 select json_transform('42', '"DECIMAL(39)"')
+----
+Parser Error: Width must be between 1 and 38!
 
 statement error
 select json_transform('42', '"DECIMAL(2,4)"')
+----
+Parser Error: Scale cannot be bigger than width
 
 statement error
 select json_transform('42', '"DECIMAL(5,1,1)"')
+----
+Parser Error: A maximum of two modifiers is supported
 
 # uuid
 query T
@@ -406,6 +426,8 @@ NULL
 
 statement error
 select json_transform_strict('42', '"UUID"')
+----
+Invalid Input Error: Unable to cast '42' to UUID
 
 # date / time
 query T
@@ -465,6 +487,8 @@ NULL
 
 statement error
 select json_transform_strict('false', '"DATE"')
+----
+Invalid Input Error: Unable to cast 'false' to DATE
 
 # timestamp
 query T
@@ -499,3 +523,5 @@ NULL
 
 statement error
 select json_transform_strict('42', '"TIMESTAMP"')
+----
+Invalid Input Error: Unable to cast '42' to TIMESTAMP

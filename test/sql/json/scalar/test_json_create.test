@@ -167,6 +167,8 @@ select json_quote(map(list(c), list(d))) from test
 # Histogram not implemented for INT[]
 statement error
 select json_quote(map(list(d), list(e))) from test
+----
+Invalid Input Error: Map keys can not be NULL
 
 query T
 select json_quote(map(list(c), list(e))) from test
@@ -191,6 +193,8 @@ NULL
 
 statement error
 select row_to_json([42])
+----
+Invalid Input Error: row_to_json() argument type must be STRUCT
 
 query T
 select array_to_json([42])
@@ -209,6 +213,8 @@ NULL
 
 statement error
 select array_to_json({a: 42})
+----
+Invalid Input Error: array_to_json() argument type must be LIST
 
 # Some SQLite tests
 query T
@@ -224,6 +230,8 @@ SELECT json_object('a',1,'b',2.5,'c',null,'d','String Test');
 # must have even number of args
 statement error
 SELECT json_object('a',1,'b');
+----
+Invalid Input Error: json_object() requires an even number of arguments
 
 query T
 SELECT json_array(1,2.5,null,'hello');

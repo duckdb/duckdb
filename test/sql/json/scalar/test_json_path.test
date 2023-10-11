@@ -109,32 +109,48 @@ with tbl as (
 )
 select json_extract(j, p) from tbl
 ----
-Invalid Input Error
+Invalid Input Error: JSON path error near 'duck'
 
 # path error
 statement error
 select json_extract('{"a": {"b": "c"}}', '$[]');
+----
+Binder Error: JSON path error near '[]'
 
 statement error
 select json_extract('{"a": {"b": "c"}}', '$[#');
+----
+Binder Error: JSON path error near '#'
 
 statement error
 select json_extract(j, '$.my_field[my_nested_field[#-3]') from test
+----
+Binder Error: JSON path error near '[my_nested_field[#-3]'
 
 statement error
 select json_extract(j, '$.my_field.my_nested_field[!]') from test
+----
+Binder Error: JSON path error near '[!]'
 
 statement error
 select json_extract('{"a": {"b": "c"}}', '$.a..');
+----
+Binder Error: JSON path error near '..'
 
 statement error
 select json_extract('{"a": {"b": "c"}}', '$[[');
+----
+Binder Error: JSON path error near '[['
 
 statement error
 select json_extract('{"a": {"b": "c"}}', '$[.');
+----
+Binder Error: JSON path error near '[.'
 
 statement error
 select json_extract('{"a": {"b": "c"}}', '$]');
+----
+Binder Error: JSON path error near ']'
 
 # with JSON path we support wildcards in arrays and objects, this results in a LIST
 query T

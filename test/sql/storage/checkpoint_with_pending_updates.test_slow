@@ -20,6 +20,8 @@ UPDATE test SET i=i+1;
 # cannot checkpoint: this transaction has transaction-local changes
 statement error
 CHECKPOINT
+----
+TransactionContext Error: Cannot CHECKPOINT: the current transaction has transaction local changes
 
 statement ok
 ROLLBACK
@@ -37,6 +39,8 @@ UPDATE test SET i=i+1;
 # We ALSO cannot force checkpoint when we have transaction local changes ourselves (can only abort OTHER transactions)
 statement error
 FORCE CHECKPOINT
+----
+TransactionContext Error: Cannot CHECKPOINT: the current transaction has transaction local changes
 
 statement ok
 ROLLBACK

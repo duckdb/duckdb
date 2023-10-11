@@ -331,20 +331,28 @@ INSERT INTO multiples VALUES
 
 statement error
 SELECT strptime(s, f) FROM multiples;
+----
+Invalid Input Error: strptime format must be a constant
 
 # Invalid format
 statement error
 select strptime('2022-03-05 17:59:17.877 CST', '%C');
+----
+Invalid Input Error: Failed to parse format specifier %C: Unrecognized format for strftime/strptime: %C
 
 # Parse error
 statement error
 select strptime('2022-03-05 17:59:17.877 CST', '%Y-%m-%d %H:%M:%S.%g');
+----
+Invalid Input Error: Could not parse string "2022-03-05 17:59:17.877 CST" according to format specifier "%Y-%m-%d %H:%M:%S.%g"
 
 #
 # Cast VARCHAR => TIMESTAMPTZ
 #
 statement error
 select 'fnord'::timestamptz;
+----
+Conversion Error: timestamp field value out of range: "fnord", expected format is (YYYY-MM-DD HH:MM:SS[.US][±HH:MM| ZONE])
 
 query I
 select TRY_CAST('fnord' AS timestamptz);

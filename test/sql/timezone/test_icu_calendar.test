@@ -42,6 +42,8 @@ Calendar	gregorian	The current calendar	VARCHAR
 
 statement error
 SET Calendar = 'fnord';
+----
+Not implemented Error: Unknown Calendar setting
 
 #
 # Japanese calendar testing

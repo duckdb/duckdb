@@ -266,6 +266,8 @@ endloop
 #
 statement error
 SELECT ts, strftime(ts, '%C') FROM timestamps;
+----
+Invalid Input Error: Failed to parse format specifier %C: Unrecognized format for strftime/strptime: %C
 
 #
 # Tests for fix of nr3 in list of https://github.com/duckdb/duckdb/issues/5984

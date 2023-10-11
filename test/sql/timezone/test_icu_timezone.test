@@ -9,6 +9,8 @@ SET Calendar = 'gregorian';
 
 statement error
 SET TimeZone = 'Europe/Duck';
+----
+Not implemented Error: Unknown TimeZone setting
 
 statement ok
 SET TimeZone = 'America/Los_Angeles';
