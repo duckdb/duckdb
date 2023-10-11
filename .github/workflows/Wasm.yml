@@ -47,7 +47,7 @@ jobs:
 
             - name: Build Wasm module
               run: |
-                  make ${{ matrix.duckdb_wasm_arch }}
+                  make ${{ env.DUCKDB_PLATFORM }}
 
             - name: Sign and deploy Wasm extensions
               if: ${{ github.event.inputs.release_s3 }}
