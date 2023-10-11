@@ -23,10 +23,6 @@ static void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto num_rows = args.size();
 	auto num_columns = args.ColumnCount();
 
-	if (num_columns > ArrayType::MAX_ARRAY_SIZE) {
-		throw OutOfRangeException("Array size exceeds maximum allowed size");
-	}
-
 	auto &child = ArrayVector::GetEntry(result);
 
 	if (num_columns > 1) {

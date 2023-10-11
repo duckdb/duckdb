@@ -22,11 +22,7 @@ static unique_ptr<FunctionData> ListContainsOrPositionBind(ClientContext &contex
 	D_ASSERT(bound_function.arguments.size() == 2);
 
 	// If the first argument is an array, cast it to a list
-	if (arguments[0]->return_type.id() == LogicalTypeId::ARRAY) {
-		auto &child_type = ArrayType::GetChildType(arguments[0]->return_type);
-		arguments[0] =
-		    BoundCastExpression::AddCastToType(context, std::move(arguments[0]), LogicalType::LIST(child_type));
-	}
+	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
 	const auto &list = arguments[0]->return_type; // change to list
 	const auto &value = arguments[1]->return_type;

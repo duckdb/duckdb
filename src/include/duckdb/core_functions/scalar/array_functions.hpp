@@ -27,7 +27,7 @@ struct ArrayValueFun {
 struct ArrayCrossProductFun {
 	static constexpr const char *Name = "array_cross_product";
 	static constexpr const char *Parameters = "array, array";
-	static constexpr const char *Description = "Compute the cross product of two arrays with length 3.";
+	static constexpr const char *Description = "Compute the cross product of two arrays of size 3. The array elements can not be NULL.";
 	static constexpr const char *Example = "array_cross_product([1, 2, 3], [1, 2, 3])";
 
 	static ScalarFunctionSet GetFunctions();
@@ -36,7 +36,7 @@ struct ArrayCrossProductFun {
 struct ArrayCosineSimilarityFun {
 	static constexpr const char *Name = "array_cosine_similarity";
 	static constexpr const char *Parameters = "array1,array2";
-	static constexpr const char *Description = "Compute the cosine similarity between two arrays.";
+	static constexpr const char *Description = "Compute the cosine similarity between two arrays of the same size. The array elements can not be NULL. The arrays can have any size as long as the size is the same for both arguments.";
 	static constexpr const char *Example = "array_cosine_similarity([1, 2, 3], [1, 2, 3])";
 
 	static ScalarFunctionSet GetFunctions();
@@ -45,7 +45,7 @@ struct ArrayCosineSimilarityFun {
 struct ArrayDistanceFun {
 	static constexpr const char *Name = "array_distance";
 	static constexpr const char *Parameters = "array1,array2";
-	static constexpr const char *Description = "Compute the distance between two arrays.";
+	static constexpr const char *Description = "Compute the distance between two arrays of the same size. The array elements can not be NULL. The arrays can have any size as long as the size is the same for both arguments.";
 	static constexpr const char *Example = "array_distance([1, 2, 3], [1, 2, 3])";
 
 	static ScalarFunctionSet GetFunctions();
@@ -54,7 +54,7 @@ struct ArrayDistanceFun {
 struct ArrayInnerProductFun {
 	static constexpr const char *Name = "array_inner_product";
 	static constexpr const char *Parameters = "array1,array2";
-	static constexpr const char *Description = "Compute the inner product between two arrays.";
+	static constexpr const char *Description = "Compute the inner product between two arrays of the same size. The array elements can not be NULL. The arrays can have any size as long as the size is the same for both arguments.";
 	static constexpr const char *Example = "array_inner_product([1, 2, 3], [1, 2, 3])";
 
 	static ScalarFunctionSet GetFunctions();

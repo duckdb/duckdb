@@ -1372,7 +1372,7 @@ string Value::ToSQLString() const {
 		string ret = "{";
 		auto &child_types = StructType::GetChildTypes(type_);
 		auto &struct_values = StructValue::GetChildren(*this);
-		for (size_t i = 0; i < struct_values.size(); i++) {
+		for (idx_t i = 0; i < struct_values.size(); i++) {
 			auto &name = child_types[i].first;
 			auto &child = struct_values[i];
 			ret += "'" + name + "': " + child.ToSQLString();
@@ -1402,7 +1402,7 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::LIST: {
 		string ret = "[";
 		auto &list_values = ListValue::GetChildren(*this);
-		for (size_t i = 0; i < list_values.size(); i++) {
+		for (idx_t i = 0; i < list_values.size(); i++) {
 			auto &child = list_values[i];
 			ret += child.ToSQLString();
 			if (i < list_values.size() - 1) {
@@ -1415,7 +1415,7 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::ARRAY: {
 		string ret = "[";
 		auto &array_values = ArrayValue::GetChildren(*this);
-		for (size_t i = 0; i < array_values.size(); i++) {
+		for (idx_t i = 0; i < array_values.size(); i++) {
 			auto &child = array_values[i];
 			ret += child.ToSQLString();
 			if (i < array_values.size() - 1) {

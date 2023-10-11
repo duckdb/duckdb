@@ -1,6 +1,8 @@
 # name: test/sql/types/nested/array/array_statistics.test
 # group: [array]
 
+# TODO: this does not work with verification, bug is reproducible on main (with list_value), issue has been filed.
+
 query I
 SELECT STATS(array_value(1,2));
 ----

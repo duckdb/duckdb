@@ -4,6 +4,9 @@
 statement ok
 PRAGMA verify_external
 
+statement ok
+PRAGMA enable_verification
+
 # Test for list
 statement ok
 CREATE TABLE test_list AS

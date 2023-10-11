@@ -2285,10 +2285,10 @@ idx_t ArrayVector::GetTotalSize(const Vector &vector) {
 		auto &child = DictionaryVector::Child(vector);
 		return ArrayVector::GetTotalSize(child);
 	}
-	return vector.auxiliary->Cast<VectorArrayBuffer>().GetInnerSize();
+	return vector.auxiliary->Cast<VectorArrayBuffer>().GetChildSize();
 }
 
-void ArrayVector::AllocateFakeListEntries(Vector &vector) {
+void ArrayVector::AllocateDummyListEntries(Vector &vector) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::ARRAY);
 	auto array_size = ArrayType::GetSize(vector.GetType());
 	auto array_count = ArrayVector::GetTotalSize(vector) / array_size;

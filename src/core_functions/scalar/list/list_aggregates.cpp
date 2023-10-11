@@ -422,6 +422,9 @@ ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_functio
 template <bool IS_AGGR = false>
 static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
+
+	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
+
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
 		return ListAggregatesBindFailure(bound_function);
 	}
@@ -433,11 +436,6 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 	} else if (arguments[0]->return_type.id() == LogicalTypeId::LIST ||
 	           arguments[0]->return_type.id() == LogicalTypeId::MAP) {
 		child_type = ListType::GetChildType(arguments[0]->return_type);
-	} else if (arguments[0]->return_type.id() == LogicalTypeId::ARRAY) {
-		// Insert cast to list from array
-		child_type = ArrayType::GetChildType(arguments[0]->return_type);
-		arguments[0] =
-		    BoundCastExpression::AddCastToType(context, std::move(arguments[0]), LogicalType::LIST(child_type));
 	} else {
 		// Unreachable
 		throw InvalidInputException("First argument of list aggregate must be a list, map or array");
@@ -509,11 +507,8 @@ static unique_ptr<FunctionData> ListDistinctBind(ClientContext &context, ScalarF
 	D_ASSERT(bound_function.arguments.size() == 1);
 	D_ASSERT(arguments.size() == 1);
 
-	if (arguments[0]->return_type.id() == LogicalTypeId::ARRAY) {
-		bound_function.return_type = LogicalType::LIST(ArrayType::GetChildType(arguments[0]->return_type));
-	} else {
-		bound_function.return_type = arguments[0]->return_type;
-	}
+	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
+	bound_function.return_type = arguments[0]->return_type;
 
 	return ListAggregatesBind<>(context, bound_function, arguments);
 }

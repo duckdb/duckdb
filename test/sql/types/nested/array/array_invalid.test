@@ -11,13 +11,6 @@ PRAGMA verify_external
 statement error
 CREATE TABLE t1(a INT, b INT[0]);
 
-# Should not be able to create an array above limit
-statement error
-CREATE TABLE t1(a INT, b INT[4294967295]);
-
-statement error
-CREATE TABLE t1(a INT, b INT[2147483647]);
-
 # Should not be able to create an array with 0 elements
 statement error
 SELECT array_value();

@@ -104,14 +104,14 @@ static void ComputeArrayEntrySizes(Vector &v, UnifiedVectorFormat &vdata, idx_t 
 
 		// the array could span multiple vectors, so we divide it into chunks
 		while (elem_remaining > 0) {
-			auto chunk_size = MinValue((uint32_t)STANDARD_VECTOR_SIZE, elem_remaining);
+			auto chunk_size = MinValue(static_cast<idx_t>(STANDARD_VECTOR_SIZE), elem_remaining);
 
 			// compute and add to the total
 			std::fill_n(array_entry_sizes, chunk_size, 0);
 			RowOperations::ComputeEntrySizes(child_vector, array_entry_sizes, chunk_size, chunk_size,
 			                                 *FlatVector::IncrementalSelectionVector(), array_start);
-			for (idx_t elem_idx = 0; elem_idx < chunk_size; elem_idx++) {
-				entry_sizes[i] += array_entry_sizes[elem_idx];
+			for (idx_t arr_elem_idx = 0; arr_elem_idx < chunk_size; arr_elem_idx++) {
+				entry_sizes[i] += array_entry_sizes[arr_elem_idx];
 			}
 			// update for next iteration
 			elem_remaining -= chunk_size;
@@ -430,7 +430,7 @@ static void HeapScatterArrayVector(Vector &v, idx_t vcount, const SelectionVecto
 
 		while (elem_remaining > 0) {
 			// the array elements can span multiple vectors, so we divide it into chunks
-			auto chunk_size = MinValue((uint32_t)STANDARD_VECTOR_SIZE, elem_remaining);
+			auto chunk_size = MinValue(static_cast<idx_t>(STANDARD_VECTOR_SIZE), elem_remaining);
 
 			// serialize list validity
 			for (idx_t elem_idx = 0; elem_idx < chunk_size; elem_idx++) {

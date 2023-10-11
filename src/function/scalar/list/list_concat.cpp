@@ -73,21 +73,13 @@ static void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &
 	}
 }
 
-static unique_ptr<Expression> ConvertArrayToListCast(ClientContext &context, unique_ptr<Expression> expr) {
-	if (expr->return_type.id() != LogicalTypeId::ARRAY) {
-		return expr;
-	}
-	auto &child_type = ArrayType::GetChildType(expr->return_type);
-	return BoundCastExpression::AddCastToType(context, std::move(expr), LogicalType::LIST(child_type));
-}
-
 static unique_ptr<FunctionData> ListConcatBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 
 	// if either argument is an array, we cast it to a list
-	arguments[0] = ConvertArrayToListCast(context, std::move(arguments[0]));
-	arguments[1] = ConvertArrayToListCast(context, std::move(arguments[1]));
+	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
+	arguments[1] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[1]));
 
 	auto &lhs = arguments[0]->return_type;
 	auto &rhs = arguments[1]->return_type;

@@ -1170,7 +1170,7 @@ static void TupleDataArrayGather(const TupleDataLayout &layout, Vector &row_loca
 	auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
 
 	// Setup fake list_entry_t's for the target
-	ArrayVector::AllocateFakeListEntries(target);
+	ArrayVector::AllocateDummyListEntries(target);
 
 	// Target
 	auto target_list_entries = FlatVector::GetData<list_entry_t>(target);
@@ -1339,7 +1339,7 @@ struct CollectionVector {
 template <>
 struct CollectionVector<ArrayVector> {
 	static inline void Setup(Vector &collection) {
-		ArrayVector::AllocateFakeListEntries(collection);
+		ArrayVector::AllocateDummyListEntries(collection);
 	}
 	static inline idx_t GetSize(Vector &collection) {
 		return ArrayVector::GetTotalSize(collection);

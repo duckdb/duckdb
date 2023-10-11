@@ -179,7 +179,7 @@ static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const Selection
 		idx_t offset_in_byte = 0;
 
 		while (elem_remaining > 0) {
-			auto chunk_size = MinValue((uint32_t)STANDARD_VECTOR_SIZE, elem_remaining);
+			auto chunk_size = MinValue(static_cast<idx_t>(STANDARD_VECTOR_SIZE), elem_remaining);
 			for (idx_t elem_idx = 0; elem_idx < chunk_size; elem_idx++) {
 				child_validity.Set(array_start + elem_idx, *(array_validitymask_location) & (1 << offset_in_byte));
 				if (++offset_in_byte == 8) {

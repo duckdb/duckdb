@@ -1101,7 +1101,7 @@ const LogicalType &ArrayType::GetChildType(const LogicalType &type) {
 	return info->Cast<ArrayTypeInfo>().child_type;
 }
 
-uint32_t ArrayType::GetSize(const LogicalType &type) {
+idx_t ArrayType::GetSize(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ARRAY);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
@@ -1115,9 +1115,8 @@ bool ArrayType::IsAnySize(const LogicalType &type) {
 	return info->Cast<ArrayTypeInfo>().size == 0;
 }
 
-LogicalType LogicalType::ARRAY(const LogicalType &child, uint32_t size) {
+LogicalType LogicalType::ARRAY(const LogicalType &child, idx_t size) {
 	D_ASSERT(size > 0);
-	D_ASSERT(size < ArrayType::MAX_ARRAY_SIZE);
 	auto info = make_shared<ArrayTypeInfo>(child, size);
 	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
 }

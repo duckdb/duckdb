@@ -375,6 +375,7 @@ static bool TemplatedOptimumList(Vector &left, idx_t lidx, idx_t lcount, Vector 
 	return false;
 }
 
+// FIXME: We should try to unify this with TemplatedOptimumList
 template <class OP>
 static bool TemplatedOptimumArray(Vector &left, idx_t lidx_p, idx_t lcount, Vector &right, idx_t ridx_p, idx_t rcount) {
 	// so map the indexes first

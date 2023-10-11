@@ -151,7 +151,7 @@ enum class PhysicalType : uint8_t {
 	///// Custom data type, implemented by user
 	//EXTENSION = 28,
 
-	///// Fixed size list of some logical type
+	///// Array with fixed length of some logical type (a fixed-size list)
 	ARRAY = 29,
 
 	///// Measure of elapsed time in either seconds, milliseconds, microseconds
@@ -365,7 +365,7 @@ public:
 	DUCKDB_API static LogicalType MAP(const LogicalType &child);				// NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
 	DUCKDB_API static LogicalType UNION( child_list_t<LogicalType> members);     // NOLINT
-	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, uint32_t size);     // NOLINT
+	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, idx_t size);     // NOLINT
 	// an array of unknown size (only used for binding)
 	DUCKDB_API static LogicalType ARRAY(const LogicalType &child);     // NOLINT
 	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
@@ -432,8 +432,7 @@ struct UnionType {
 
 struct ArrayType {
 	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type);
-	DUCKDB_API static uint32_t GetSize(const LogicalType &type);
-	DUCKDB_API static constexpr uint64_t MAX_ARRAY_SIZE = 32768;
+	DUCKDB_API static idx_t GetSize(const LogicalType &type);
 	DUCKDB_API static bool IsAnySize(const LogicalType &type);
 };
 
