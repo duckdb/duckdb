@@ -1911,7 +1911,13 @@ void UnionVector::SetToMember(Vector &union_vector, union_tag_t tag, Vector &mem
 		// if the member vector is constant, we can set the union to constant as well
 		union_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::GetData<union_tag_t>(tag_vector)[0] = tag;
-		ConstantVector::SetNull(union_vector, ConstantVector::IsNull(member_vector));
+		if (keep_tags_for_null) {
+			ConstantVector::SetNull(union_vector, false);
+			ConstantVector::SetNull(tag_vector, false);
+		} else {
+			ConstantVector::SetNull(union_vector, ConstantVector::IsNull(member_vector));
+			ConstantVector::SetNull(tag_vector, ConstantVector::IsNull(member_vector));
+		}
 
 	} else {
 		// otherwise flatten and set to flatvector
@@ -1978,17 +1984,19 @@ UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector, idx_t count, 
 
 	// check that only one member is valid at a time
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		auto union_mapped_row_idx = sel.get_index(row_idx);
-		if (!union_vdata.validity.RowIsValid(union_mapped_row_idx)) {
+		auto idx = sel.get_index(row_idx);
+		if (!union_vdata.validity.RowIsValid(union_vdata.sel->get_index(idx))) {
 			continue;
 		}
 
-		auto tag_mapped_row_idx = tags_vdata.sel->get_index(row_idx);
-		if (!tags_vdata.validity.RowIsValid(tag_mapped_row_idx)) {
-			continue;
+		auto tag_row_idx = tags_vdata.sel->get_index(idx);
+
+		// we can't have null tags in unions
+		if (!tags_vdata.validity.RowIsValid(tag_row_idx)) {
+			return UnionInvalidReason::NULL_TAG;
 		}
 
-		auto tag = (UnifiedVectorFormat::GetData<union_tag_t>(tags_vdata))[tag_mapped_row_idx];
+		auto tag = (UnifiedVectorFormat::GetData<union_tag_t>(tags_vdata))[tag_row_idx];
 		if (tag >= member_count) {
 			return UnionInvalidReason::TAG_OUT_OF_RANGE;
 		}
@@ -2000,13 +2008,15 @@ UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector, idx_t count, 
 			auto &member = UnionVector::GetMember(vector, member_idx);
 			member.ToUnifiedFormat(count, member_vdata);
 
-			auto mapped_row_idx = member_vdata.sel->get_index(row_idx);
-			if (member_vdata.validity.RowIsValid(mapped_row_idx)) {
+			auto member_row_idx = member_vdata.sel->get_index(idx);
+			if (member_vdata.validity.RowIsValid(member_row_idx)) {
 				if (found_valid) {
+					// Only one member can be valid at a time
 					return UnionInvalidReason::VALIDITY_OVERLAP;
 				}
 				found_valid = true;
 				if (tag != static_cast<union_tag_t>(member_idx)) {
+					// The tag does not match the valid member
 					return UnionInvalidReason::TAG_MISMATCH;
 				}
 			}

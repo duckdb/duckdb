@@ -59,6 +59,14 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 		D_ASSERT(converted);
 	}
 
+	auto &tag_vec = *target_children[0];
+	for (idx_t i = 0; i < count; i++) {
+		// if the tag is NULL, the union is NULL
+		if (FlatVector::IsNull(tag_vec, i)) {
+			FlatVector::SetNull(result, i, true);
+		}
+	}
+
 	auto check_tags = UnionVector::CheckUnionValidity(result, count);
 	switch (check_tags) {
 	case UnionInvalidReason::TAG_OUT_OF_RANGE:
@@ -68,6 +76,8 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 	case UnionInvalidReason::TAG_MISMATCH:
 		throw ConversionException(
 		    "One or more rows in the produced UNION have tags that don't point to the valid member");
+	case UnionInvalidReason::NULL_TAG:
+		throw ConversionException("One or more rows in the produced UNION have a NULL tag");
 	case UnionInvalidReason::VALID:
 		break;
 	default:
