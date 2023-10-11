@@ -156,9 +156,6 @@ endif
 ifeq (${PYTHON_USER_SPACE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DUSER_SPACE=1
 endif
-ifeq (${BUILD_NODE}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_NODE=1 -DDUCKDB_EXTENSION_CONFIGS="tools/nodejs/duckdb_extension_config.cmake"
-endif
 ifeq (${CONFIGURE_R}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DCONFIGURE_R=1
 endif

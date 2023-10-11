@@ -136,7 +136,7 @@ option(
   FORCE_SANITIZER
   "Forces building with sanitizers even if the Python and R modules are enabled."
   FALSE)
-if((BUILD_PYTHON OR BUILD_NODE)
+if((BUILD_PYTHON)
    AND (ENABLE_SANITIZER OR ENABLE_UBSAN)
    AND ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug"))
   if(FORCE_SANITIZER)
@@ -316,7 +316,6 @@ option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
 option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_ODBC_DRIVER "Build the DuckDB ODBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
-option(BUILD_NODE "Build the DuckDB Node extension" FALSE)
 option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
 option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
@@ -912,9 +911,6 @@ endif()
 if(BUILD_PYTHON)
   include(${CMAKE_CURRENT_SOURCE_DIR}/tools/pythonpkg/duckdb_extension_config.cmake)
 endif()
-if(BUILD_NODE)
-  include(${CMAKE_CURRENT_SOURCE_DIR}/tools/nodejs/duckdb_extension_config.cmake)
-endif()
 if (JDBC_DRIVER)
   include(${CMAKE_CURRENT_SOURCE_DIR}/tools/jdbc/duckdb_extension_config.cmake)
 endif()
@@ -1029,8 +1025,7 @@ if(${EXTENSION_CONFIG_BUILD})
   endforeach()
 endif()
 
-if(BUILD_PYTHON
-        OR BUILD_NODE)
+if(BUILD_PYTHON)
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG}")
   elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -1066,19 +1061,6 @@ if(BUILD_PYTHON
               Python package)
     endif()
     add_extension_dependencies(duckdb_python)
-  endif()
-  if(BUILD_NODE)
-    add_custom_target(
-            duckdb_node ALL
-            COMMAND
-            make complete_build DUCKDB_NODE_BINDIR=${CMAKE_BINARY_DIR}
-            DUCKDB_NODE_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
-            DUCKDB_NODE_LIBS=\"${duckdb_libs}\"
-            DEPENDS duckdb duckdb_static
-            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/nodejs
-            COMMENT Build
-            Node package)
-    add_extension_dependencies(duckdb_node)
   endif()
 endif()
 
