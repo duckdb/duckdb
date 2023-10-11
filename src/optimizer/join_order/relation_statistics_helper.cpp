@@ -283,9 +283,14 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 	double new_card = -1;
 	for (auto &g_set : aggr.grouping_sets) {
 		for (auto &ind : g_set) {
-			D_ASSERT(ind < child_stats.column_distinct_count.size());
-			if (new_card < child_stats.column_distinct_count[ind].distinct_count) {
-				new_card = child_stats.column_distinct_count[ind].distinct_count;
+			if (aggr.groups[ind]->expression_class != ExpressionClass::BOUND_COLUMN_REF) {
+				continue;
+			}
+			auto bound_col = &aggr.groups[ind]->Cast<BoundColumnRefExpression>();
+			auto col_index = bound_col->binding.column_index;
+			D_ASSERT(col_index < child_stats.column_distinct_count.size());
+			if (new_card < child_stats.column_distinct_count[col_index].distinct_count) {
+				new_card = child_stats.column_distinct_count[col_index].distinct_count;
 			}
 		}
 	}
