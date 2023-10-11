@@ -16,7 +16,6 @@ jobs:
     # Builds extensions for windows_amd64_rtools
     name: R Package Windows (Extensions)
     if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
-    needs: rstats-linux
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3
