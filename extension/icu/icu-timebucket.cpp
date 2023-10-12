@@ -83,16 +83,18 @@ struct ICUTimeBucket : public ICUDateFunc {
 		if (result_days < NumericLimits<int32_t>::Minimum() || result_days > NumericLimits<int32_t>::Maximum()) {
 			throw OutOfRangeException("Timestamp out of range");
 		}
-		timestamp_t result = Add(calendar, origin, interval_t {0, static_cast<int32_t>(result_days), 0});
-		if (ts < origin && ts != result) {
-			D_ASSERT(ts < result);
+		timestamp_t bucket = Add(calendar, origin, interval_t {0, static_cast<int32_t>(result_days), 0});
+		if (ts < bucket) {
+			D_ASSERT(ts < origin);
+			// correct bucket is the closest one less than the ts
+			// calculate: bucket -= bucket_width_days * Interval::MICROS_PER_DAY;
 			result_days =
 			    SubtractOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(result_days, bucket_width_days);
-			result = Add(calendar, origin, interval_t {0, static_cast<int32_t>(result_days), 0});
-			D_ASSERT(ts > result);
+			bucket = Add(calendar, origin, interval_t {0, static_cast<int32_t>(result_days), 0});
+			D_ASSERT(ts > bucket);
 		}
 
-		return result;
+		return bucket;
 	}
 
 	static inline timestamp_t WidthConvertibleToMonthsCommon(int32_t bucket_width_months, const timestamp_t ts,
