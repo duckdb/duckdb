@@ -65,6 +65,8 @@ set(INSTALL_CMAKE_DIR
     ${DEF_INSTALL_CMAKE_DIR}
     CACHE PATH "Installation directory for CMake files")
 set(DUCKDB_EXPORT_SET "DuckDBExports")
+set(ENV{DUCKDB_INSTALL_LIB} "${CMAKE_CURRENT_SOURCE_DIR}/src/${CMAKE_BUILD_TYPE}/duckdb.dll")
+set(DUCKDB_EXTENSION_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/.github/config/bundled_extensions.cmake")
 
 # Make relative install paths absolute
 foreach(p LIB BIN INCLUDE CMAKE)
