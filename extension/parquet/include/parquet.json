@@ -1,5 +1,34 @@
 [
   {
+    "class": "ParquetColumnDefinition",
+    "includes": [
+      "parquet_reader.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "field_id",
+        "type": "int32_t"
+      },
+      {
+        "id": 101,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 103,
+        "name": "type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 104,
+        "name": "default_value",
+        "type": "Value"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
     "class": "ParquetOptions",
     "includes": [
       "parquet_reader.hpp"
@@ -19,6 +48,11 @@
         "id": 102,
         "name": "file_options",
         "type": "MultiFileReaderOptions"
+      },
+      {
+        "id": 103,
+        "name": "schema",
+        "type": "vector<ParquetColumnDefinition>"
       }
     ],
     "pointer_type": "none"

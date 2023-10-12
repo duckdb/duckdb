@@ -1,12 +1,13 @@
 #include "duckdb/common/multi_file_reader.hpp"
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/common/types/value.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
+
 #include "duckdb/common/exception.hpp"
-#include "duckdb/function/function_set.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 namespace duckdb {
 
@@ -306,6 +307,11 @@ void MultiFileReader::CreateMapping(const string &file_name, const vector<Logica
                                     const string &initial_file) {
 	CreateNameMapping(file_name, local_types, local_names, global_types, global_names, global_column_ids, reader_data,
 	                  initial_file);
+	CreateFilterMap(global_types, filters, reader_data);
+}
+
+void MultiFileReader::CreateFilterMap(const vector<LogicalType> &global_types, optional_ptr<TableFilterSet> filters,
+                                      MultiFileReaderData &reader_data) {
 	if (filters) {
 		reader_data.filter_map.resize(global_types.size());
 		for (idx_t c = 0; c < reader_data.column_mapping.size(); c++) {

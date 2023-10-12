@@ -68,6 +68,16 @@ void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
 	BindSchemaOrCatalog(context, catalog, schema);
 }
 
+const string Binder::BindCatalog(string &catalog) {
+	auto &db_manager = DatabaseManager::Get(context);
+	optional_ptr<AttachedDatabase> database = db_manager.GetDatabase(context, catalog);
+	if (database) {
+		return db_manager.GetDatabase(context, catalog).get()->GetName();
+	} else {
+		return db_manager.GetDefaultDatabase(context);
+	}
+}
+
 SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 	BindSchemaOrCatalog(info.catalog, info.schema);
 	if (IsInvalidCatalog(info.catalog) && info.temporary) {
@@ -203,6 +213,13 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		// Generate new Struct Type
 		auto alias = type.GetAlias();
 		type = LogicalType::STRUCT(child_types);
+		type.SetAlias(alias);
+	} else if (type.id() == LogicalTypeId::ARRAY) {
+		auto child_type = ArrayType::GetChildType(type);
+		auto array_size = ArrayType::GetSize(type);
+		BindLogicalType(context, child_type, catalog, schema);
+		auto alias = type.GetAlias();
+		type = LogicalType::ARRAY(child_type, array_size);
 		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::UNION) {
 		auto member_types = UnionType::CopyMemberTypes(type);
@@ -456,9 +473,13 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 	auto catalog_type = stmt.info->type;
 	switch (catalog_type) {
-	case CatalogType::SCHEMA_ENTRY:
+	case CatalogType::SCHEMA_ENTRY: {
+		auto &base = stmt.info->Cast<CreateInfo>();
+		auto catalog = BindCatalog(base.catalog);
+		properties.modified_databases.insert(catalog);
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
 		break;
+	}
 	case CatalogType::VIEW_ENTRY: {
 		auto &base = stmt.info->Cast<CreateViewInfo>();
 		// bind the schema

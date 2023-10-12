@@ -29,7 +29,8 @@ enum class VectorBufferType : uint8_t {
 	STRUCT_BUFFER,       // struct buffer, holds a ordered mapping from name to child vector
 	LIST_BUFFER,         // list buffer, holds a single flatvector child
 	MANAGED_BUFFER,      // managed buffer, holds a buffer managed by the buffermanager
-	OPAQUE_BUFFER        // opaque buffer, can be created for example by the parquet reader
+	OPAQUE_BUFFER,       // opaque buffer, can be created for example by the parquet reader
+	ARRAY_BUFFER         // array buffer, holds a single flatvector child
 };
 
 enum class VectorAuxiliaryDataType : uint8_t {
@@ -268,6 +269,26 @@ private:
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
 	idx_t capacity = 0;
+	idx_t size = 0;
+};
+
+class VectorArrayBuffer : public VectorBuffer {
+public:
+	explicit VectorArrayBuffer(unique_ptr<Vector> child_vector, idx_t array_size, idx_t initial_capacity);
+	explicit VectorArrayBuffer(const LogicalType &array, idx_t initial = STANDARD_VECTOR_SIZE);
+	~VectorArrayBuffer() override;
+
+public:
+	Vector &GetChild();
+	idx_t GetArraySize();
+	idx_t GetChildSize();
+
+private:
+	unique_ptr<Vector> child;
+	// The size of each array in this buffer
+	idx_t array_size = 0;
+	// How many arrays are currently stored in this buffer
+	// The child vector has size (array_size * size)
 	idx_t size = 0;
 };
 

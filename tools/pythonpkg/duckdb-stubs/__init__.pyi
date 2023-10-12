@@ -298,8 +298,8 @@ class DuckDBPyConnection:
         self,
         name: str,
         func: Callable,
-        args: Optional[List[DuckDBPyType]],
-        return_type: Optional[DuckDBPyType],
+        args: Optional[List[DuckDBPyType]] = None,
+        return_type: Optional[DuckDBPyType] = None,
         vectorized: Optional[bool] = False,
         null_handling: Optional[FunctionNullHandling] = FunctionNullHandling.DEFAULT,
         exception_handling: Optional[PythonExceptionHandling] = PythonExceptionHandling.DEFAULT,
@@ -351,6 +351,7 @@ class DuckDBPyRelation:
     def bool_and(self, column: str, groups: str, window_spec: str, projected_columns: str) -> DuckDBPyRelation: ...
     def bool_or(self, column: str, groups: str, window_spec: str, projected_columns: str) -> DuckDBPyRelation: ...
     def count(self, column: str, groups: str, window_spec: str, projected_columns: str) -> DuckDBPyRelation: ...
+    def value_counts(self, column: str, groups: str) -> DuckDBPyRelation: ...
     def create(self, table_name: str) -> None: ...
     def create_view(self, view_name: str, replace: bool = ...) -> DuckDBPyRelation: ...
     def cume_dist(self, window_spec: str, projected_columns: str) -> DuckDBPyRelation: ...
@@ -681,8 +682,8 @@ def remove_function(name: str, connection : DuckDBPyConnection = ...) -> DuckDBP
 def create_function(
     name: str,
     func: Callable,
-    args: Optional[List[DuckDBPyType]],
-    return_type: Optional[DuckDBPyType],
+    args: Optional[List[DuckDBPyType]] = None,
+    return_type: Optional[DuckDBPyType] = None,
     vectorized: Optional[bool] = False,
     null_handling: Optional[FunctionNullHandling] = FunctionNullHandling.DEFAULT,
     exception_handling: Optional[PythonExceptionHandling] = PythonExceptionHandling.DEFAULT,
