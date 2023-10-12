@@ -222,10 +222,10 @@ string TableBinding::ColumnNotFoundError(const string &column_name) const {
 	return StringUtil::Format("Table \"%s\" does not have a column named \"%s\"", alias, column_name);
 }
 
-DummyBinding::DummyBinding(vector<LogicalType> types_p, vector<string> names_p, string dummy_name_p)
-    : Binding(BindingType::DUMMY, DummyBinding::DUMMY_NAME + dummy_name_p, std::move(types_p), std::move(names_p),
+DummyBinding::DummyBinding(vector<LogicalType> types, vector<string> names, string dummy_name)
+    : Binding(BindingType::DUMMY, DummyBinding::DUMMY_NAME + dummy_name, std::move(types), std::move(names),
               DConstants::INVALID_INDEX),
-      dummy_name(std::move(dummy_name_p)) {
+      dummy_name(std::move(dummy_name)) {
 }
 
 BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
@@ -239,14 +239,14 @@ BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), types[column_index], binding, depth));
 }
 
-BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t lambda_index, idx_t depth) {
+BindResult DummyBinding::Bind(LambdaRefExpression &lambdaref, idx_t depth) {
 	column_t column_index;
-	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
-		throw InternalException("Column %s not found in bindings", colref.GetColumnName());
+	if (!TryGetBindingIndex(lambdaref.GetName(), column_index)) {
+		throw InternalException("Column %s not found in bindings", lambdaref.GetName());
 	}
 	ColumnBinding binding(index, column_index);
-	return BindResult(
-	    make_uniq<BoundLambdaRefExpression>(colref.GetName(), types[column_index], binding, lambda_index, depth));
+	return BindResult(make_uniq<BoundLambdaRefExpression>(lambdaref.GetName(), types[column_index], binding,
+	                                                      lambdaref.lambda_idx, depth));
 }
 
 unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colref) {

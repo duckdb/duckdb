@@ -137,9 +137,16 @@ def git_commit_hash():
         return "deadbeeff"
 
 
+def prefix_version(version):
+    """Make sure the version is prefixed with 'v' to be of the form vX.Y.Z"""
+    if version.startswith('v'):
+        return version
+    return 'v' + version
+
+
 def git_dev_version():
     if 'SETUPTOOLS_SCM_PRETEND_VERSION' in os.environ:
-        return os.environ['SETUPTOOLS_SCM_PRETEND_VERSION']
+        return prefix_version(os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'])
     try:
         version = subprocess.check_output(['git', 'describe', '--tags', '--abbrev=0']).strip().decode('utf8')
         long_version = subprocess.check_output(['git', 'describe', '--tags', '--long']).strip().decode('utf8')
@@ -147,13 +154,13 @@ def git_dev_version():
         dev_version = long_version.split('-')[1]
         if int(dev_version) == 0:
             # directly on a tag: emit the regular version
-            return '.'.join(version_splits)
+            return "v" + '.'.join(version_splits)
         else:
             # not on a tag: increment the version by one and add a -devX suffix
             version_splits[2] = str(int(version_splits[2]) + 1)
-            return '.'.join(version_splits) + "-dev" + dev_version
+            return "v" + '.'.join(version_splits) + "-dev" + dev_version
     except:
-        return "0.0.0"
+        return "v0.0.0"
 
 
 def include_package(pkg_name, pkg_dir, include_files, include_list, source_list):

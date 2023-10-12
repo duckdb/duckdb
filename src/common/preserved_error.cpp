@@ -18,6 +18,26 @@ PreservedError::PreservedError(const Exception &exception)
 PreservedError::PreservedError(const string &message)
     : initialized(true), type(ExceptionType::INVALID), raw_message(SanitizeErrorMessage(message)),
       exception_instance(nullptr) {
+	// Given a message in the form: 	xxxxx Error: yyyyy
+	// Try to match xxxxxxx with known error so to potentially reconstruct the original error type
+	auto position_semicolon = raw_message.find(':');
+	if (position_semicolon == std::string::npos) {
+		// Semicolon not found, bail out
+		return;
+	}
+	if (position_semicolon + 2 >= raw_message.size()) {
+		// Not enough characters afterward, bail out
+		return;
+	}
+	string err = raw_message.substr(0, position_semicolon);
+	string msg = raw_message.substr(position_semicolon + 2);
+	if (err.size() > 6 && err.substr(err.size() - 6) == " Error" && !msg.empty()) {
+		ExceptionType new_type = Exception::StringToExceptionType(err.substr(0, err.size() - 6));
+		if (new_type != type) {
+			type = new_type;
+			raw_message = msg;
+		}
+	}
 }
 
 const string &PreservedError::Message() {

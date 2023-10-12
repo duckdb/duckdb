@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
@@ -76,8 +77,13 @@ static unique_ptr<FunctionData> ListConcatBind(ClientContext &context, ScalarFun
                                                vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 
+	// if either argument is an array, we cast it to a list
+	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
+	arguments[1] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[1]));
+
 	auto &lhs = arguments[0]->return_type;
 	auto &rhs = arguments[1]->return_type;
+
 	if (lhs.id() == LogicalTypeId::UNKNOWN || rhs.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	} else if (lhs.id() == LogicalTypeId::SQLNULL || rhs.id() == LogicalTypeId::SQLNULL) {

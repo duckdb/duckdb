@@ -154,6 +154,22 @@ string StringUtil::Join(const vector<string> &input, const string &separator) {
 	return StringUtil::Join(input, input.size(), separator, [](const string &s) { return s; });
 }
 
+string StringUtil::Join(const set<string> &input, const string &separator) {
+	// The result
+	std::string result;
+
+	auto it = input.begin();
+	while (it != input.end()) {
+		result += *it;
+		it++;
+		if (it == input.end()) {
+			break;
+		}
+		result += separator;
+	}
+	return result;
+}
+
 string StringUtil::BytesToHumanReadableString(idx_t bytes) {
 	string db_size;
 	auto kilobytes = bytes / 1000;

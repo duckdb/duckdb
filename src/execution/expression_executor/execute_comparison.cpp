@@ -95,6 +95,7 @@ static idx_t TemplatedSelectOperation(Vector &left, Vector &right, const Selecti
 		return BinaryExecutor::Select<string_t, string_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::LIST:
 	case PhysicalType::STRUCT:
+	case PhysicalType::ARRAY:
 		return NestedSelectOperation<OP>(left, right, sel, count, true_sel, false_sel);
 	default:
 		throw InternalException("Invalid type for comparison");

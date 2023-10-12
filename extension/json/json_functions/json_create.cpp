@@ -424,6 +424,33 @@ static void CreateValuesList(const StructNames &names, yyjson_mut_doc *doc, yyjs
 	}
 }
 
+static void CreateValuesArray(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
+                              idx_t count) {
+	// Initialize array for the nested values
+	auto &child_v = ArrayVector::GetEntry(value_v);
+	auto array_size = ArrayType::GetSize(value_v.GetType());
+	auto child_count = count * array_size;
+
+	auto nested_vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, child_count);
+	// Fill nested_vals with list values
+	CreateValues(names, doc, nested_vals, child_v, child_count);
+	// Now we add the values to the appropriate JSON arrays
+	UnifiedVectorFormat list_data;
+	value_v.ToUnifiedFormat(count, list_data);
+	for (idx_t i = 0; i < count; i++) {
+		idx_t idx = list_data.sel->get_index(i);
+		if (!list_data.validity.RowIsValid(idx)) {
+			vals[i] = yyjson_mut_null(doc);
+		} else {
+			vals[i] = yyjson_mut_arr(doc);
+			auto offset = idx * array_size;
+			for (idx_t child_i = offset; child_i < offset + array_size; child_i++) {
+				yyjson_mut_arr_append(vals[i], nested_vals[child_i]);
+			}
+		}
+	}
+}
+
 static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
                          idx_t count) {
 	switch (value_v.GetType().id()) {
@@ -482,6 +509,9 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		break;
 	case LogicalTypeId::UNION:
 		CreateValuesUnion(names, doc, vals, value_v, count);
+		break;
+	case LogicalTypeId::ARRAY:
+		CreateValuesArray(names, doc, vals, value_v, count);
 		break;
 	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::ENUM:
@@ -682,20 +712,36 @@ BoundCastInfo AnyToJSONCastBind(BindCastInput &input, const LogicalType &source,
 }
 
 void JSONFunctions::RegisterJSONCreateCastFunctions(CastFunctionSet &casts) {
-	auto json_to_any_cost = casts.ImplicitCastCost(LogicalType::ANY, JSONCommon::JSONType());
-	casts.RegisterCastFunction(LogicalType::ANY, JSONCommon::JSONType(), AnyToJSONCastBind, json_to_any_cost);
-
-	const auto struct_type = LogicalType::STRUCT({{"any", LogicalType::ANY}});
-	auto struct_to_json_cost = casts.ImplicitCastCost(struct_type, LogicalType::VARCHAR) - 2;
-	casts.RegisterCastFunction(struct_type, JSONCommon::JSONType(), AnyToJSONCastBind, struct_to_json_cost);
-
-	const auto list_type = LogicalType::LIST(LogicalType::ANY);
-	auto list_to_json_cost = casts.ImplicitCastCost(list_type, LogicalType::VARCHAR) - 2;
-	casts.RegisterCastFunction(list_type, JSONCommon::JSONType(), AnyToJSONCastBind, list_to_json_cost);
-
-	const auto map_type = LogicalType::MAP(LogicalType::ANY, LogicalType::ANY);
-	auto map_to_json_cost = casts.ImplicitCastCost(map_type, LogicalType::VARCHAR) - 2;
-	casts.RegisterCastFunction(map_type, JSONCommon::JSONType(), AnyToJSONCastBind, map_to_json_cost);
+	// Anything can be cast to JSON
+	for (const auto &type : LogicalType::AllTypes()) {
+		LogicalType source_type;
+		switch (type.id()) {
+		case LogicalTypeId::STRUCT:
+			source_type = LogicalType::STRUCT({{"any", LogicalType::ANY}});
+			break;
+		case LogicalTypeId::LIST:
+			source_type = LogicalType::LIST(LogicalType::ANY);
+			break;
+		case LogicalTypeId::MAP:
+			source_type = LogicalType::MAP(LogicalType::ANY, LogicalType::ANY);
+			break;
+		case LogicalTypeId::UNION:
+			source_type = LogicalType::UNION({{"any", LogicalType::ANY}});
+			break;
+		case LogicalTypeId::ARRAY:
+			source_type = LogicalType::ARRAY(LogicalType::ANY);
+			break;
+		case LogicalTypeId::VARCHAR:
+			// We skip this one here as it's handled in json_functions.cpp
+			continue;
+		default:
+			source_type = type;
+		}
+		// We prefer going to JSON over going to VARCHAR if a function can do either
+		const auto source_to_json_cost =
+		    MaxValue<int64_t>(casts.ImplicitCastCost(source_type, LogicalType::VARCHAR) - 1, 0);
+		casts.RegisterCastFunction(source_type, JSONCommon::JSONType(), AnyToJSONCastBind, source_to_json_cost);
+	}
 }
 
 } // namespace duckdb

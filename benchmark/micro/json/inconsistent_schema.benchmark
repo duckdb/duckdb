@@ -1,0 +1,14 @@
+# name: benchmark/micro/json/inconsistent_schema.benchmark
+# description: Read JSON file with inconsistent schema
+# group: [json]
+
+name JSON inconsistent schema
+group json
+
+require json
+
+run
+CREATE OR REPLACE TABLE test AS SELECT * FROM 'data/json/5000.jsonl'
+
+result I
+5000

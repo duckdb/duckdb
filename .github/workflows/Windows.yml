@@ -68,12 +68,14 @@ jobs:
 
     - name: Test
       shell: bash
+      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       run: |
         echo "DUCKDB_INSTALL_LIB=D:\a\duckdb\duckdb\src\Release\duckdb.dll" >> $env:GITHUB_ENV
         test/Release/unittest.exe
 
     - name: Tools Test
       shell: bash
+      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       run: |
         python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
         tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
@@ -119,18 +121,10 @@ jobs:
         echo "----------------------------------------------------------------"
         Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC"
 
-    - name: Install psqlodbc
+    - name: Test Standard ODBC tests
       shell: bash
       run: |
-        git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout edd9890a5046a2006f210849abb97c6a6589a45c && make release)
-
-    - name: Test psqlodbc
-      shell: bash
-      run: |
-        cd psqlodbc
-        export PSQLODBC_TEST_DSN=DuckDB
-        build/release/Release/psql_odbc_test.exe -f ../tools/odbc/test/psql_supported_tests
+        tools/odbc/bin/Release/test_odbc.exe
 
     - name: Print ODBC trace on failure
       if: ${{ failure() }}
@@ -139,7 +133,7 @@ jobs:
 
  win-release-32:
     name: Windows (32 Bit)
-    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb'
+    if: github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb'
     runs-on: windows-2019
     needs: win-release-64
 
@@ -181,6 +175,7 @@ jobs:
  mingw:
      name: MingW (64 Bit)
      runs-on: windows-latest
+     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
      needs: win-release-64
      steps:
        - uses: actions/checkout@v3
@@ -240,4 +235,6 @@ jobs:
          s3_id: ${{ secrets.S3_ID }}
          s3_key: ${{ secrets.S3_KEY }}
          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
+         run_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+         run_autoload_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
          unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe
