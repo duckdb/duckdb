@@ -75,6 +75,7 @@ else()
       duckdb_utf8proc
       duckdb_hyperloglog
       duckdb_fastpforlib
+      duckdb_skiplistlib
       duckdb_mbedtls)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})
