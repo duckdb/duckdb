@@ -8,16 +8,16 @@ def setup_and_teardown_of_table(duckdb_cursor):
     duckdb_cursor.execute("create table agg(id int, v int, t int, f float, s varchar);")
     duckdb_cursor.execute(
         """
-		insert into agg values
-		(1, 1, 2, 0.54, 'h'),
-		(1, 1, 1, 0.21, 'e'),
-		(1, 2, 3, 0.001, 'l'),
-		(2, 10, 4, 0.04, 'l'),
-		(2, 11, -1, 10.45, 'o'),
-		(3, -1, 0, 13.32, ','),
-		(3, 5, -2, 9.87, 'wor'),
-		(3, null, 10, 6.56, 'ld');
-		"""
+        insert into agg values
+        (1, 1, 2, 0.54, 'h'),
+        (1, 1, 1, 0.21, 'e'),
+        (1, 2, 3, 0.001, 'l'),
+        (2, 10, 4, 0.04, 'l'),
+        (2, 11, -1, 10.45, 'o'),
+        (3, -1, 0, 13.32, ','),
+        (3, 5, -2, 9.87, 'wor'),
+        (3, null, 10, 6.56, 'ld');
+        """
     )
     yield
     duckdb_cursor.execute("drop table agg")
@@ -145,6 +145,16 @@ class TestRAPIAggregations(object):
         assert all([r == e for r, e in zip(result, expected)])
         result = table.count("*", groups="id", projected_columns="id").order("id").execute().fetchall()
         expected = [(1, 3), (2, 2), (3, 3)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    def test_value_counts(self, table):
+        result = table.value_counts("v").execute().fetchall()
+        expected = [(None, 0), (-1, 1), (1, 2), (2, 1), (5, 1), (10, 1), (11, 1)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = table.value_counts("v", groups="v").order("v").execute().fetchall()
+        expected = [(-1, 1), (1, 2), (2, 1), (5, 1), (10, 1), (11, 1), (None, 0)]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 

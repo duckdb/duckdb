@@ -3,6 +3,7 @@ from ..exception import ContributionsAcceptedError
 from typing import TYPE_CHECKING, List, Optional, Union, Tuple, overload, Sequence, Any, Dict, cast, Callable
 from duckdb import StarExpression, ColumnExpression, Expression
 
+from ..errors import PySparkTypeError
 from .readwriter import DataFrameWriter
 from .types import Row, StructType
 from .type_utils import duckdb_to_spark_schema
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
 
 from .functions import _to_column
 
+from ..errors import PySparkValueError
 
 class DataFrame:
     def __init__(self, relation: duckdb.DuckDBPyRelation, session: "SparkSession"):
@@ -74,7 +76,10 @@ class DataFrame:
 
     def withColumn(self, columnName: str, col: Column) -> "DataFrame":
         if not isinstance(col, Column):
-            raise TypeError("argument 'col' should be of type Column")
+            raise PySparkTypeError(
+                error_class="NOT_COLUMN",
+                message_parameters={"arg_name": "col", "arg_type": type(col).__name__},
+            )
         if columnName in self.relation:
             # We want to replace the existing column with this new expression
             cols = []
@@ -923,7 +928,10 @@ class DataFrame:
     def toDF(self, *cols) -> "DataFrame":
         existing_columns = self.relation.columns
         column_count = len(cols)
-        assert column_count == len(existing_columns)
+        if column_count != len(existing_columns):
+            raise PySparkValueError(
+                message="Provided column names and number of columns in the DataFrame don't match"
+            )
 
         existing_columns = [ColumnExpression(x) for x in existing_columns]
         projections = [existing.alias(new) for existing, new in zip(existing_columns, cols)]
@@ -933,7 +941,11 @@ class DataFrame:
     def collect(self) -> List[Row]:
         columns = self.relation.columns
         result = self.relation.fetchall()
-        rows = [Row(**dict(zip(columns, x))) for x in result]
+        def construct_row(values, names) -> Row:
+            row = tuple.__new__(Row, list(values))
+            row.__fields__ = list(names)
+            return row
+        rows = [construct_row(x, columns) for x in result]
         return rows
 
 

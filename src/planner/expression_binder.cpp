@@ -61,6 +61,8 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindExpression(expr_ref.Cast<CollateExpression>(), depth);
 	case ExpressionClass::COLUMN_REF:
 		return BindExpression(expr_ref.Cast<ColumnRefExpression>(), depth);
+	case ExpressionClass::LAMBDA_REF:
+		return BindExpression(expr_ref.Cast<LambdaRefExpression>(), depth);
 	case ExpressionClass::COMPARISON:
 		return BindExpression(expr_ref.Cast<ComparisonExpression>(), depth);
 	case ExpressionClass::CONJUNCTION:
@@ -77,7 +79,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindExpression(function, depth, expr);
 	}
 	case ExpressionClass::LAMBDA:
-		return BindExpression(expr_ref.Cast<LambdaExpression>(), depth, false, LogicalTypeId::INVALID);
+		return BindExpression(expr_ref.Cast<LambdaExpression>(), depth, LogicalTypeId::INVALID, nullptr);
 	case ExpressionClass::OPERATOR:
 		return BindExpression(expr_ref.Cast<OperatorExpression>(), depth);
 	case ExpressionClass::SUBQUERY:
@@ -166,6 +168,8 @@ bool ExpressionBinder::ContainsType(const LogicalType &type, LogicalTypeId targe
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
 		return ContainsType(ListType::GetChildType(type), target);
+	case LogicalTypeId::ARRAY:
+		return ContainsType(ArrayType::GetChildType(type), target);
 	default:
 		return false;
 	}
@@ -195,6 +199,9 @@ LogicalType ExpressionBinder::ExchangeType(const LogicalType &type, LogicalTypeI
 		return LogicalType::LIST(ExchangeType(ListType::GetChildType(type), target, new_type));
 	case LogicalTypeId::MAP:
 		return LogicalType::MAP(ExchangeType(ListType::GetChildType(type), target, new_type));
+	case LogicalTypeId::ARRAY:
+		return LogicalType::ARRAY(ExchangeType(ArrayType::GetChildType(type), target, new_type),
+		                          ArrayType::GetSize(type));
 	default:
 		return type;
 	}

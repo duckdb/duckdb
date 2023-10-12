@@ -17,6 +17,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 	info->name = qname.name;
 
 	if (stmt.options) {
+		int64_t default_start_value = info->start_value;
+		bool has_start_value = false;
 		unordered_set<SequenceInfo, EnumClassHash> used;
 		duckdb_libpgquery::PGListCell *cell = nullptr;
 		for_each_cell(cell, stmt.options->head) {
@@ -51,10 +53,10 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 					throw ParserException("Increment must not be zero");
 				}
 				if (info->increment < 0) {
-					info->start_value = info->max_value = -1;
+					default_start_value = info->max_value = -1;
 					info->min_value = NumericLimits<int64_t>::Minimum();
 				} else {
-					info->start_value = info->min_value = 1;
+					default_start_value = info->min_value = 1;
 					info->max_value = NumericLimits<int64_t>::Maximum();
 				}
 			} else if (opt_name == "minvalue") {
@@ -68,7 +70,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 
 				info->min_value = opt_value;
 				if (info->increment > 0) {
-					info->start_value = info->min_value;
+					default_start_value = info->min_value;
 				}
 			} else if (opt_name == "maxvalue") {
 				if (used.find(SequenceInfo::SEQ_MAX) != used.end()) {
@@ -81,7 +83,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 
 				info->max_value = opt_value;
 				if (info->increment < 0) {
-					info->start_value = info->max_value;
+					default_start_value = info->max_value;
 				}
 			} else if (opt_name == "start") {
 				if (used.find(SequenceInfo::SEQ_START) != used.end()) {
@@ -91,7 +93,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 				if (nodef) {
 					continue;
 				}
-
+				has_start_value = true;
 				info->start_value = opt_value;
 			} else if (opt_name == "cycle") {
 				if (used.find(SequenceInfo::SEQ_CYCLE) != used.end()) {
@@ -106,6 +108,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 			} else {
 				throw ParserException("Unrecognized option \"%s\" for CREATE SEQUENCE", opt_name);
 			}
+		}
+		if (!has_start_value) {
+			info->start_value = default_start_value;
 		}
 	}
 	info->temporary = !stmt.sequence->relpersistence;
