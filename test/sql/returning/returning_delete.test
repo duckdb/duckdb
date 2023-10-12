@@ -110,7 +110,7 @@ query III
 DELETE FROM table3
 WHERE a3 IN (
 	SELECT a2 from table2
-) RETURNING *;
+) RETURNING * order by 1;
 ----
 1	4	4
 2	6	7
