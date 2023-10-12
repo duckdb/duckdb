@@ -244,7 +244,6 @@ static void RewriteJoinCondition(Expression &expr, idx_t offset) {
 }
 
 bool PhysicalPlanGenerator::HasEquality(vector<JoinCondition> &conds, size_t &has_range) {
-	bool has_equality = false;
 	for (size_t c = 0; c < conds.size(); ++c) {
 		auto &cond = conds[c];
 		switch (cond.comparison) {
