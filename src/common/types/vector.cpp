@@ -1989,14 +1989,12 @@ UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector, idx_t count, 
 			continue;
 		}
 
-		auto tag_row_idx = tags_vdata.sel->get_index(idx);
-
 		// we can't have null tags in unions
-		if (!tags_vdata.validity.RowIsValid(tag_row_idx)) {
+		if (!tags_vdata.validity.RowIsValid(tags_vdata.sel->get_index(idx))) {
 			return UnionInvalidReason::NULL_TAG;
 		}
 
-		auto tag = (UnifiedVectorFormat::GetData<union_tag_t>(tags_vdata))[tag_row_idx];
+		auto tag = (UnifiedVectorFormat::GetData<union_tag_t>(tags_vdata))[tags_vdata.sel->get_index(idx)];
 		if (tag >= member_count) {
 			return UnionInvalidReason::TAG_OUT_OF_RANGE;
 		}
@@ -2008,8 +2006,7 @@ UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector, idx_t count, 
 			auto &member = UnionVector::GetMember(vector, member_idx);
 			member.ToUnifiedFormat(count, member_vdata);
 
-			auto member_row_idx = member_vdata.sel->get_index(idx);
-			if (member_vdata.validity.RowIsValid(member_row_idx)) {
+			if (member_vdata.validity.RowIsValid(member_vdata.sel->get_index(idx))) {
 				if (found_valid) {
 					// Only one member can be valid at a time
 					return UnionInvalidReason::VALIDITY_OVERLAP;

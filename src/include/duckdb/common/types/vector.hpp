@@ -467,7 +467,12 @@ struct UnionVector {
 	//	2.	The validity of the tag vector always matches the validity of the
 	//		union vector itself.
 	//
-	//	3.	For each tag in the tag vector, 0 <= tag < |members|
+	//  3.  A valid union cannot have a NULL tag, but the selected member can
+	//  	be NULL. therefore, there is a difference between a union that "is"
+	//  	NULL and a union that "holds" a NULL. The latter still has a valid
+	//  	tag.
+	//
+	//	4.	For each tag in the tag vector, 0 <= tag < |members|
 
 	//! Get the tag vector of a union vector
 	DUCKDB_API static const Vector &GetTags(const Vector &v);
