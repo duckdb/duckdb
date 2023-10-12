@@ -16,21 +16,21 @@ namespace duckdb {
 ArrowSchemaWrapper::~ArrowSchemaWrapper() {
 	if (arrow_schema.release) {
 		arrow_schema.release(&arrow_schema);
-		arrow_schema.release = nullptr;
+		D_ASSERT(!arrow_schema.release);
 	}
 }
 
 ArrowArrayWrapper::~ArrowArrayWrapper() {
 	if (arrow_array.release) {
 		arrow_array.release(&arrow_array);
-		arrow_array.release = nullptr;
+		D_ASSERT(!arrow_array.release);
 	}
 }
 
 ArrowArrayStreamWrapper::~ArrowArrayStreamWrapper() {
 	if (arrow_array_stream.release) {
 		arrow_array_stream.release(&arrow_array_stream);
-		arrow_array_stream.release = nullptr;
+		D_ASSERT(!arrow_array_stream.release);
 	}
 }
 
