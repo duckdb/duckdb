@@ -91,25 +91,6 @@ void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &pre
 	}
 }
 
-static idx_t ReplaceIndex(idx_t *index, const FrameBounds &frame, const FrameBounds &prev) { // NOLINT
-	D_ASSERT(index);
-
-	idx_t j = 0;
-	for (idx_t p = 0; p < (prev.end - prev.start); ++p) {
-		auto idx = index[p];
-		if (j != p) {
-			break;
-		}
-
-		if (frame.start <= idx && idx < frame.end) {
-			++j;
-		}
-	}
-	index[j] = frame.end - 1;
-
-	return j;
-}
-
 template <class INPUT_TYPE>
 static inline int CanReplace(const idx_t *index, const INPUT_TYPE *fdata, const idx_t j, const idx_t k0, const idx_t k1,
                              const QuantileIncluded &validity) {
@@ -326,18 +307,6 @@ struct Interpolator {
 		}
 	}
 
-	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
-	TARGET_TYPE Replace(const INPUT_TYPE *v_t, Vector &result, const ACCESSOR &accessor = ACCESSOR()) const {
-		using ACCESS_TYPE = typename ACCESSOR::RESULT_TYPE;
-		if (CRN == FRN) {
-			return CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[FRN]), result);
-		} else {
-			auto lo = CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[FRN]), result);
-			auto hi = CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[CRN]), result);
-			return CastInterpolation::Interpolate<TARGET_TYPE>(lo, RN - FRN, hi);
-		}
-	}
-
 	const bool desc;
 	const double RN;
 	const idx_t FRN;
@@ -386,12 +355,6 @@ struct Interpolator<true> {
 		using ACCESS_TYPE = typename ACCESSOR::RESULT_TYPE;
 		QuantileCompare<ACCESSOR> comp(accessor, desc);
 		std::nth_element(v_t + begin, v_t + FRN, v_t + end, comp);
-		return CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[FRN]), result);
-	}
-
-	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
-	TARGET_TYPE Replace(const INPUT_TYPE *v_t, Vector &result, const ACCESSOR &accessor = ACCESSOR()) const {
-		using ACCESS_TYPE = typename ACCESSOR::RESULT_TYPE;
 		return CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[FRN]), result);
 	}
 
@@ -555,25 +518,49 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 	}
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE, bool DISCRETE>
-	void WindowScalar(const INPUT_TYPE *data, const QuantileIncluded &included, const FrameBounds &frame,
-	                  Vector &result, const idx_t ridx, const QuantileBindData &bind_data) {
-		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
-		auto &rmask = FlatVector::Validity(result);
+	RESULT_TYPE WindowScalar(const INPUT_TYPE *data, const FrameBounds &frame, const idx_t n, Vector &result,
+	                         const QuantileValue &q) const {
+		D_ASSERT(n > 0);
 
-		//	Count the number of valid values
-		auto n = frame.end - frame.start;
-		if (!included.AllValid()) {
-			//	NULLs or FILTERed values,
-			n = 0;
-			for (auto i = frame.start; i < frame.end; ++i) {
-				n += included(i);
-			}
+		//	Find the interpolated indicies within the frame
+		Interpolator<DISCRETE> interp(q, n, false);
+		const auto lo_idx = BaseTree::SelectNth(frame, interp.FRN);
+		const auto lo_data = BaseTree::NthElement(lo_idx);
+		auto hi_idx = lo_idx;
+		auto hi_data = lo_data;
+		if (interp.CRN != interp.FRN) {
+			hi_idx = BaseTree::SelectNth(frame, interp.CRN);
+			hi_data = BaseTree::NthElement(hi_idx);
 		}
 
-		const auto &q = bind_data.quantiles[0];
-		if (n) {
-			//	Find the interpolated indicies within the frame
-			Interpolator<DISCRETE> interp(q, n, false);
+		//	Interpolate indirectly
+		using ID = QuantileIndirect<INPUT_TYPE>;
+		ID indirect(data);
+		return interp.template Interpolate<idx_t, RESULT_TYPE, ID>(lo_data, hi_data, result, indirect);
+	}
+
+	template <typename INPUT_TYPE, typename CHILD_TYPE, bool DISCRETE>
+	void WindowList(const INPUT_TYPE *data, const FrameBounds &frame, const idx_t n, Vector &list, const idx_t lidx,
+	                const QuantileBindData &bind_data) const {
+		D_ASSERT(n > 0);
+
+		// Result is a constant LIST<CHILD_TYPE> with a fixed length
+		auto ldata = FlatVector::GetData<list_entry_t>(list);
+		auto &lentry = ldata[lidx];
+		lentry.offset = ListVector::GetListSize(list);
+		lentry.length = bind_data.quantiles.size();
+
+		ListVector::Reserve(list, lentry.offset + lentry.length);
+		ListVector::SetListSize(list, lentry.offset + lentry.length);
+		auto &result = ListVector::GetEntry(list);
+		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
+
+		using ID = QuantileIndirect<INPUT_TYPE>;
+		ID indirect(data);
+		for (const auto &q : bind_data.order) {
+			const auto &quantile = bind_data.quantiles[q];
+			Interpolator<DISCRETE> interp(quantile, n, false);
+
 			const auto lo_idx = BaseTree::SelectNth(frame, interp.FRN);
 			const auto lo_data = BaseTree::NthElement(lo_idx);
 			auto hi_idx = lo_idx;
@@ -584,62 +571,8 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 			}
 
 			//	Interpolate indirectly
-			using ID = QuantileIndirect<INPUT_TYPE>;
-			ID indirect(data);
-			rdata[ridx] = interp.template Interpolate<size_t, RESULT_TYPE, ID>(lo_data, hi_data, result, indirect);
-		} else {
-			rmask.Set(ridx, false);
-		}
-	}
-
-	template <typename INPUT_TYPE, typename CHILD_TYPE, bool DISCRETE>
-	void WindowList(const INPUT_TYPE *data, const QuantileIncluded &included, const FrameBounds &frame, Vector &list,
-	                const idx_t lidx, const QuantileBindData &bind_data) {
-
-		// Result is a constant LIST<CHILD_TYPE> with a fixed length
-		auto ldata = FlatVector::GetData<list_entry_t>(list);
-		auto &lmask = FlatVector::Validity(list);
-		auto &lentry = ldata[lidx];
-		lentry.offset = ListVector::GetListSize(list);
-		lentry.length = bind_data.quantiles.size();
-
-		ListVector::Reserve(list, lentry.offset + lentry.length);
-		ListVector::SetListSize(list, lentry.offset + lentry.length);
-		auto &result = ListVector::GetEntry(list);
-		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
-
-		//	Count the number of valid values
-		auto n = frame.end - frame.start;
-		if (!included.AllValid()) {
-			//	NULLs or FILTERed values,
-			n = 0;
-			for (auto i = frame.start; i < frame.end; ++i) {
-				n += included(i);
-			}
-		}
-
-		if (n) {
-			using ID = QuantileIndirect<INPUT_TYPE>;
-			ID indirect(data);
-			for (const auto &q : bind_data.order) {
-				const auto &quantile = bind_data.quantiles[q];
-				Interpolator<DISCRETE> interp(quantile, n, false);
-
-				const auto lo_idx = BaseTree::SelectNth(frame, interp.FRN);
-				const auto lo_data = BaseTree::NthElement(lo_idx);
-				auto hi_idx = lo_idx;
-				auto hi_data = lo_data;
-				if (interp.CRN != interp.FRN) {
-					hi_idx = BaseTree::SelectNth(frame, interp.CRN);
-					hi_data = BaseTree::NthElement(hi_idx);
-				}
-
-				//	Interpolate indirectly
-				rdata[lentry.offset + q] =
-				    interp.template Interpolate<idx_t, CHILD_TYPE, ID>(lo_data, hi_data, result, indirect);
-			}
-		} else {
-			lmask.Set(lidx, false);
+			rdata[lentry.offset + q] =
+			    interp.template Interpolate<idx_t, CHILD_TYPE, ID>(lo_data, hi_data, result, indirect);
 		}
 	}
 };
@@ -655,14 +588,13 @@ struct QuantileState {
 
 	// Windowed Quantile indirection
 	FrameBounds prev;
-	vector<idx_t> w;
-	idx_t pos;
 
 	// Windowed Quantile merge sort trees
 	unique_ptr<QuantileSortTree32> qst32;
 	unique_ptr<QuantileSortTree64> qst64;
 
 	// Windowed MAD indirection
+	idx_t pos;
 	vector<idx_t> m;
 
 	QuantileState() : pos(0) {
@@ -673,8 +605,34 @@ struct QuantileState {
 
 	inline void SetPos(size_t pos_p) {
 		pos = pos_p;
-		if (pos >= w.size()) {
-			w.resize(pos);
+		if (pos >= m.size()) {
+			m.resize(pos);
+		}
+	}
+
+	template <typename INPUT_TYPE, typename RESULT_TYPE, bool DISCRETE>
+	RESULT_TYPE WindowScalar(const INPUT_TYPE *data, const FrameBounds &frame, const idx_t n, Vector &result,
+	                         const QuantileValue &q) const {
+		D_ASSERT(n > 0);
+		if (qst32) {
+			return qst32->WindowScalar<INPUT_TYPE, RESULT_TYPE, DISCRETE>(data, frame, n, result, q);
+		} else if (qst64) {
+			return qst64->WindowScalar<INPUT_TYPE, RESULT_TYPE, DISCRETE>(data, frame, n, result, q);
+		} else {
+			throw InternalException("No accelerator for scalar QUANTILE");
+		}
+	}
+
+	template <typename INPUT_TYPE, typename CHILD_TYPE, bool DISCRETE>
+	void WindowList(const INPUT_TYPE *data, const FrameBounds &frame, const idx_t n, Vector &list, const idx_t lidx,
+	                const QuantileBindData &bind_data) const {
+		D_ASSERT(n > 0);
+		if (qst32) {
+			return qst32->WindowList<INPUT_TYPE, CHILD_TYPE, DISCRETE>(data, frame, n, list, lidx, bind_data);
+		} else if (qst64) {
+			return qst64->WindowList<INPUT_TYPE, CHILD_TYPE, DISCRETE>(data, frame, n, list, lidx, bind_data);
+		} else {
+			throw InternalException("No accelerator for list QUANTILE");
 		}
 	}
 };
@@ -732,6 +690,20 @@ struct QuantileOperation {
 			                                                                 filter_mask, count);
 		}
 	}
+
+	static idx_t FrameSize(const QuantileIncluded &included, const FrameBounds &frame) {
+		//	Count the number of valid values
+		auto n = frame.end - frame.start;
+		if (!included.AllValid()) {
+			//	NULLs or FILTERed values,
+			n = 0;
+			for (auto i = frame.start; i < frame.end; ++i) {
+				n += included(i);
+			}
+		}
+
+		return n;
+	}
 };
 
 template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
@@ -765,69 +737,20 @@ struct QuantileScalarOperation : public QuantileOperation {
 	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds &frame, Vector &result,
 	                   idx_t ridx, const STATE *gstate) {
 		QuantileIncluded included(fmask, dmask, 0);
+		const auto n = FrameSize(included, frame);
 
 		D_ASSERT(aggr_input_data.bind_data);
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
-		// Find the two positions needed
-#if 1
-		if (gstate->qst32) {
-			gstate->qst32->template WindowScalar<INPUT_TYPE, RESULT_TYPE, DISCRETE>(data, included, frame, result, ridx,
-			                                                                        bind_data);
-		} else if (gstate->qst64) {
-			gstate->qst64->template WindowScalar<INPUT_TYPE, RESULT_TYPE, DISCRETE>(data, included, frame, result, ridx,
-			                                                                        bind_data);
-		} else {
-			auto &rmask = FlatVector::Validity(result);
-			rmask.Set(ridx, false);
-		}
-#else
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
-		const auto &q = bind_data.quantiles[0];
-
-		//  Lazily initialise frame state
-		auto prev_pos = state.pos;
-		state.SetPos(frame.end - frame.start);
-
-		auto index = state.w.data();
-		D_ASSERT(index);
-
-		bool replace = false;
-		auto &prev = state.prev;
-		if (frame.start == prev.start + 1 && frame.end == prev.end + 1) {
-			//  Fixed frame size
-			const auto j = ReplaceIndex(index, frame, prev);
-			//	We can only replace if the number of NULLs has not changed
-			if (included.AllValid() || included(prev.start) == included(prev.end)) {
-				Interpolator<DISCRETE> interp(q, prev_pos, false);
-				replace = CanReplace(index, data, j, interp.FRN, interp.CRN, included);
-				if (replace) {
-					state.pos = prev_pos;
-				}
-			}
-		} else {
-			ReuseIndexes(index, frame, prev);
-		}
-
-		if (!replace && !included.AllValid()) {
-			// Remove the NULLs
-			state.pos = std::partition(index, index + state.pos, included) - index;
-		}
-		if (state.pos) {
-			Interpolator<DISCRETE> interp(q, state.pos, false);
-
-			using ID = QuantileIndirect<INPUT_TYPE>;
-			ID indirect(data);
-			rdata[ridx] = replace ? interp.template Replace<idx_t, RESULT_TYPE, ID>(index, result, indirect)
-			                      : interp.template Operation<idx_t, RESULT_TYPE, ID>(index, result, indirect);
+		if (n) {
+			const auto &q = bind_data.quantiles[0];
+			rdata[ridx] = gstate->template WindowScalar<INPUT_TYPE, RESULT_TYPE, DISCRETE>(data, frame, n, result, q);
 		} else {
 			rmask.Set(ridx, false);
 		}
-
-		prev = frame;
-#endif
 	}
 };
 
@@ -933,106 +856,15 @@ struct QuantileListOperation : public QuantileOperation {
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
 		QuantileIncluded included(fmask, dmask, 0);
+		const auto n = FrameSize(included, frame);
 
-#if 1
-		if (gstate->qst32) {
-			gstate->qst32->template WindowList<INPUT_TYPE, CHILD_TYPE, DISCRETE>(data, included, frame, list, lidx,
-			                                                                     bind_data);
-		} else if (gstate->qst64) {
-			gstate->qst64->template WindowList<INPUT_TYPE, CHILD_TYPE, DISCRETE>(data, included, frame, list, lidx,
-			                                                                     bind_data);
+		// Result is a constant LIST<RESULT_TYPE> with a fixed length
+		if (n) {
+			gstate->template WindowList<INPUT_TYPE, CHILD_TYPE, DISCRETE>(data, frame, n, list, lidx, bind_data);
 		} else {
 			auto &lmask = FlatVector::Validity(list);
 			lmask.Set(lidx, false);
 		}
-#else
-		// Result is a constant LIST<RESULT_TYPE> with a fixed length
-		auto ldata = FlatVector::GetData<RESULT_TYPE>(list);
-		auto &lmask = FlatVector::Validity(list);
-		auto &lentry = ldata[lidx];
-		lentry.offset = ListVector::GetListSize(list);
-		lentry.length = bind_data.quantiles.size();
-
-		ListVector::Reserve(list, lentry.offset + lentry.length);
-		ListVector::SetListSize(list, lentry.offset + lentry.length);
-		auto &result = ListVector::GetEntry(list);
-		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
-
-		//  Lazily initialise frame state
-		auto prev_pos = state.pos;
-		state.SetPos(frame.end - frame.start);
-
-		auto index = state.w.data();
-		auto &prev = state.prev;
-
-		// We can generalise replacement for quantile lists by observing that when a replacement is
-		// valid for a single quantile, it is valid for all quantiles greater/less than that quantile
-		// based on whether the insertion is below/above the quantile location.
-		// So if a replaced index in an IQR is located between Q25 and Q50, but has a value below Q25,
-		// then Q25 must be recomputed, but Q50 and Q75 are unaffected.
-		// For a single element list, this reduces to the scalar case.
-		std::pair<idx_t, idx_t> replaceable {state.pos, 0};
-		if (frame.start == prev.start + 1 && frame.end == prev.end + 1) {
-			//  Fixed frame size
-			const auto j = ReplaceIndex(index, frame, prev);
-			//	We can only replace if the number of NULLs has not changed
-			if (included.AllValid() || included(prev.start) == included(prev.end)) {
-				for (const auto &q : bind_data.order) {
-					const auto &quantile = bind_data.quantiles[q];
-					Interpolator<DISCRETE> interp(quantile, prev_pos, false);
-					const auto replace = CanReplace(index, data, j, interp.FRN, interp.CRN, included);
-					if (replace < 0) {
-						//	Replacement is before this quantile, so the rest will be replaceable too.
-						replaceable.first = MinValue(replaceable.first, interp.FRN);
-						replaceable.second = prev_pos;
-						break;
-					} else if (replace > 0) {
-						//	Replacement is after this quantile, so everything before it is replaceable too.
-						replaceable.first = 0;
-						replaceable.second = MaxValue(replaceable.second, interp.CRN);
-					}
-				}
-				if (replaceable.first < replaceable.second) {
-					state.pos = prev_pos;
-				}
-			}
-		} else {
-			ReuseIndexes(index, frame, prev);
-		}
-
-		if (replaceable.first >= replaceable.second && !included.AllValid()) {
-			// Remove the NULLs
-			state.pos = std::partition(index, index + state.pos, included) - index;
-		}
-
-		if (state.pos) {
-			using ID = QuantileIndirect<INPUT_TYPE>;
-			ID indirect(data);
-			for (const auto &q : bind_data.order) {
-				const auto &quantile = bind_data.quantiles[q];
-				Interpolator<DISCRETE> interp(quantile, state.pos, false);
-				if (replaceable.first <= interp.FRN && interp.CRN <= replaceable.second) {
-					rdata[lentry.offset + q] = interp.template Replace<idx_t, CHILD_TYPE, ID>(index, result, indirect);
-				} else {
-					// Make sure we don't disturb any replacements
-					if (replaceable.first < replaceable.second) {
-						if (interp.FRN < replaceable.first) {
-							interp.end = replaceable.first;
-						}
-						if (replaceable.second < interp.CRN) {
-							interp.begin = replaceable.second;
-						}
-					}
-					rdata[lentry.offset + q] =
-					    interp.template Operation<idx_t, CHILD_TYPE, ID>(index, result, indirect);
-				}
-			}
-		} else {
-			lmask.Set(lidx, false);
-		}
-
-		prev = frame;
-#endif
 	}
 };
 
@@ -1307,69 +1139,38 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds &frame, Vector &result,
 	                   idx_t ridx, const STATE *gstate) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
-		auto &rmask = FlatVector::Validity(result);
 
 		QuantileIncluded included(fmask, dmask, 0);
+		const auto n = FrameSize(included, frame);
 
-		//  Lazily initialise frame state
-		auto prev_pos = state.pos;
-		state.SetPos(frame.end - frame.start);
-
-		auto index = state.w.data();
-		D_ASSERT(index);
-
-		// We need a second index for the second pass.
-		if (state.pos > state.m.size()) {
-			state.m.resize(state.pos);
-		}
-
-		auto index2 = state.m.data();
-		D_ASSERT(index2);
-
-		// The replacement trick does not work on the second index because if
-		// the median has changed, the previous order is not correct.
-		// It is probably close, however, and so reuse is helpful.
 		auto &prev = state.prev;
-		ReuseIndexes(index2, frame, prev);
-		std::partition(index2, index2 + state.pos, included);
 
-		// Find the two positions needed for the median
-		D_ASSERT(aggr_input_data.bind_data);
-		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
-		D_ASSERT(bind_data.quantiles.size() == 1);
-		const auto &q = bind_data.quantiles[0];
+		if (n) {
+			//	Compute the median
+			D_ASSERT(aggr_input_data.bind_data);
+			auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
-		bool replace = false;
-		if (frame.start == prev.start + 1 && frame.end == prev.end + 1) {
-			//  Fixed frame size
-			const auto j = ReplaceIndex(index, frame, prev);
-			//	We can only replace if the number of NULLs has not changed
-			if (included.AllValid() || included(prev.start) == included(prev.end)) {
-				Interpolator<false> interp(q, prev_pos, false);
-				replace = CanReplace(index, data, j, interp.FRN, interp.CRN, included);
-				if (replace) {
-					state.pos = prev_pos;
-				}
-			}
-		} else {
-			ReuseIndexes(index, frame, prev);
-		}
+			D_ASSERT(bind_data.quantiles.size() == 1);
+			const auto &q = bind_data.quantiles[0];
+			const auto med = gstate->template WindowScalar<INPUT_TYPE, MEDIAN_TYPE, false>(data, frame, n, result, q);
 
-		if (!replace && !included.AllValid()) {
-			// Remove the NULLs
-			state.pos = std::partition(index, index + state.pos, included) - index;
-		}
+			//  Lazily initialise frame state
+			state.SetPos(frame.end - frame.start);
+			auto index2 = state.m.data();
+			D_ASSERT(index2);
 
-		if (state.pos) {
-			Interpolator<false> interp(q, state.pos, false);
+			// The replacement trick does not work on the second index because if
+			// the median has changed, the previous order is not correct.
+			// It is probably close, however, and so reuse is helpful.
+			ReuseIndexes(index2, frame, prev);
+			std::partition(index2, index2 + state.pos, included);
 
-			// Compute or replace median from the first index
-			using ID = QuantileIndirect<INPUT_TYPE>;
-			ID indirect(data);
-			const auto med = replace ? interp.template Replace<idx_t, MEDIAN_TYPE, ID>(index, result, indirect)
-			                         : interp.template Operation<idx_t, MEDIAN_TYPE, ID>(index, result, indirect);
+			Interpolator<false> interp(q, n, false);
 
 			// Compute mad from the second index
+			using ID = QuantileIndirect<INPUT_TYPE>;
+			ID indirect(data);
+
 			using MAD = MadAccessor<INPUT_TYPE, RESULT_TYPE, MEDIAN_TYPE>;
 			MAD mad(med);
 
@@ -1377,7 +1178,9 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 			MadIndirect mad_indirect(mad, indirect);
 			rdata[ridx] = interp.template Operation<idx_t, RESULT_TYPE, MadIndirect>(index2, result, mad_indirect);
 		} else {
+			auto &rmask = FlatVector::Validity(result);
 			rmask.Set(ridx, false);
+			return;
 		}
 
 		prev = frame;
