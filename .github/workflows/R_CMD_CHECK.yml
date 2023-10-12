@@ -88,14 +88,11 @@ jobs:
           mkdir -p ~/.R
           echo 'MAKEFLAGS = -j2' >> ~/.R/Makevars
 
-      - name: Setup upterm session
-        uses: lhotari/action-upterm@v1
-
       # error is from git_dev_version() but does not affect this workflow
       - name: update duckdb-r src code with PR code
         shell: bash
         working-directory: ${{ env.DUCKDB_R_SRC }}
-        run: ./vendor.sh $HOME/$DUCKDB_SRC
+        run: ./vendor.sh $GITHUB_WORKSPACE/$DUCKDB_SRC
 
       - uses: r-lib/actions/check-r-package@v2
         with:
