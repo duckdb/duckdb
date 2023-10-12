@@ -1,6 +1,7 @@
 #include "duckdb/core_functions/scalar/list_functions.hpp"
 
 #include "duckdb/core_functions/lambda_functions.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
@@ -16,6 +17,8 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
 	if (arguments[1]->expression_class != ExpressionClass::BOUND_LAMBDA) {
 		throw BinderException("Invalid lambda expression!");
 	}
+
+	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	bound_function.return_type = LogicalType::LIST(bound_lambda_expr.lambda_expr->return_type);

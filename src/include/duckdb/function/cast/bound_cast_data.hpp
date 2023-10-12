@@ -27,6 +27,22 @@ public:
 	}
 };
 
+struct ArrayBoundCastData : public BoundCastData {
+	explicit ArrayBoundCastData(BoundCastInfo child_cast) : child_cast_info(std::move(child_cast)) {
+	}
+
+	BoundCastInfo child_cast_info;
+
+	static unique_ptr<BoundCastData> BindArrayToArrayCast(BindCastInput &input, const LogicalType &source,
+	                                                      const LogicalType &target);
+	static unique_ptr<FunctionLocalState> InitArrayLocalState(CastLocalStateParameters &parameters);
+
+public:
+	unique_ptr<BoundCastData> Copy() const override {
+		return make_uniq<ArrayBoundCastData>(child_cast_info.Copy());
+	}
+};
+
 struct ListCast {
 	static bool ListToListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 };

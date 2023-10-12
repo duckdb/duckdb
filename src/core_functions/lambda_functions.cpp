@@ -4,6 +4,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
@@ -352,7 +353,7 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 	}
 }
 
-unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &, ScalarFunction &bound_function,
+unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context, ScalarFunction &bound_function,
                                                          vector<unique_ptr<Expression>> &arguments,
                                                          const bool has_index) {
 
@@ -365,6 +366,8 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &, Scalar
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
+
+	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
 	D_ASSERT(arguments[0]->return_type.id() == LogicalTypeId::LIST);
 
