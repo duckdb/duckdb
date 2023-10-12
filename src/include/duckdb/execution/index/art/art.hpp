@@ -87,9 +87,9 @@ public:
 	void SearchEqualJoinNoFetch(ARTKey &key, idx_t &result_size);
 
 	//! Returns all ART storage information for serialization
-	IndexStorageInfo GetStorageInfo() const;
+	IndexStorageInfo GetStorageInfo(const bool get_block_ids) const;
 	//! Initializes the serialization of the index
-	IndexStorageInfo GetInfo() override;
+	IndexStorageInfo GetInfo(const bool get_block_ids) override;
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge

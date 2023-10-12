@@ -137,7 +137,7 @@ public:
 	}
 
 	//! Returns all storage information about the index
-	virtual IndexStorageInfo GetInfo();
+	virtual IndexStorageInfo GetInfo(const bool get_block_ids);
 
 	//! Execute the index expressions on an input chunk
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);

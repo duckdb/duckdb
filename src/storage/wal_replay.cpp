@@ -407,6 +407,28 @@ void ReplayState::ReplayCreateIndex(BinaryDeserializer &deserializer) {
 	auto index_storage_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
 	D_ASSERT(index_storage_info.IsValid());
 
+	auto &storage_manager = db.GetStorageManager();
+	auto &singel_file_sm = storage_manager.Cast<SingleFileStorageManager>();
+	auto &block_manager = singel_file_sm.block_manager;
+	auto &buffer_manager = block_manager->buffer_manager;
+
+	deserializer.ReadList(103, "index_storage", [&](Deserializer::List &list, idx_t i) {
+		// read the data into a buffer handle
+		shared_ptr<BlockHandle> block_handle;
+		buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &block_handle);
+		auto buffer_handle = buffer_manager.Pin(block_handle);
+		auto data_ptr = buffer_handle.Ptr();
+
+		list.ReadElement<bool>(data_ptr, Storage::BLOCK_SIZE);
+
+		// now convert the buffer handle to a persistent block and remember the block id mapping
+		auto old_block_id = index_storage_info.block_ids[i];
+		auto new_block_id = block_manager->GetFreeBlockId();
+
+		block_manager->ConvertToPersistent(new_block_id, std::move(block_handle));
+		index_storage_info.new_block_ids[old_block_id] = new_block_id;
+	});
+
 	if (deserialize_only) {
 		return;
 	}

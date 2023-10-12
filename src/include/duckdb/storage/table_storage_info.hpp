@@ -55,6 +55,13 @@ struct IndexStorageInfo {
 	//! Information to serialize the index memory
 	vector<IndexDataStorageInfo> index_data_storage_infos;
 
+	//! If serializing to the WAL, then this contains all block ids of blocks that need to be written to the WAL
+	unordered_set<block_id_t> block_ids_set;
+	//! We move the elements into a vector for easier (de)serialization
+	vector<block_id_t> block_ids;
+	//! A mapping used during WAL deserialization, as block IDs can change
+	unordered_map<block_id_t, block_id_t> new_block_ids;
+
 	//! Returns true, if the struct contains index information
 	bool IsValid() const {
 		return !name.empty() && (!properties.empty() || !index_data_storage_infos.empty());

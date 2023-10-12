@@ -30,9 +30,6 @@
   },
   {
     "class": "ParquetOptions",
-    "includes": [
-      "parquet_reader.hpp"
-    ],
     "members": [
       {
         "id": 100,

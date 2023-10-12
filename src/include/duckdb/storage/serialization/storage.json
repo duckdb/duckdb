@@ -75,6 +75,11 @@
         "id": 102,
         "name": "index_data_storage_infos",
         "type": "vector<IndexDataStorageInfo>"
+      },
+      {
+        "id": 103,
+        "name": "block_ids",
+        "type": "vector<block_id_t>"
       }
     ],
     "pointer_type": "none"

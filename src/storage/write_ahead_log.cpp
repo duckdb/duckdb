@@ -191,6 +191,30 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 //===--------------------------------------------------------------------===//
 // Indexes
 //===--------------------------------------------------------------------===//
+
+void SerializeIndexToWAL(BinarySerializer &serializer, const unique_ptr<Index> &index) {
+
+	auto index_storage_info = index->GetInfo(true);
+	for (const auto &block_id : index_storage_info.block_ids_set) {
+		index_storage_info.block_ids.push_back(block_id);
+	}
+
+	serializer.WriteProperty(102, "index_storage_info", index_storage_info);
+
+	// after writing all storage information, we need to serialize the bytes of the written blocks
+	auto &block_manager = index->table_io_manager.GetIndexBlockManager();
+	auto &buffer_manager = block_manager.buffer_manager;
+
+	serializer.WriteList(103, "index_storage", index_storage_info.block_ids.size(),
+	                     [&](Serializer::List &list, idx_t i) {
+		                     auto block_id = index_storage_info.block_ids[i];
+		                     auto block_handle = block_manager.RegisterBlock(block_id);
+		                     auto buffer_handle = buffer_manager.Pin(block_handle);
+
+		                     list.WriteElement(buffer_handle.Ptr(), Storage::BLOCK_SIZE);
+	                     });
+}
+
 void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 	if (skip_writing) {
 		return;
@@ -208,8 +232,7 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 	// get the matching index and serialize its storage info
 	for (auto const &index : indexes) {
 		if (duck_index_entry.name == index->name) {
-			auto index_storage_info = index->GetInfo();
-			serializer.WriteProperty(102, "index_storage_info", index_storage_info);
+			SerializeIndexToWAL(serializer, index);
 			break;
 		}
 	}

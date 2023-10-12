@@ -6,7 +6,6 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "parquet_reader.hpp"
-#include "parquet_reader.hpp"
 
 namespace duckdb {
 

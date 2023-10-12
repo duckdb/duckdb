@@ -987,7 +987,7 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 // Helper functions for (de)serialization
 //===--------------------------------------------------------------------===//
 
-IndexStorageInfo ART::GetStorageInfo() const {
+IndexStorageInfo ART::GetStorageInfo(const bool get_block_ids) const {
 
 	IndexStorageInfo info;
 	info.name = name;
@@ -998,10 +998,16 @@ IndexStorageInfo ART::GetStorageInfo() const {
 		info.index_data_storage_infos.push_back(allocator->GetInfo());
 	}
 
+	if (get_block_ids) {
+		for (const auto &allocator : *allocators) {
+			allocator->GetBlockIds(info.block_ids_set);
+		}
+	}
+
 	return info;
 }
 
-IndexStorageInfo ART::GetInfo() {
+IndexStorageInfo ART::GetInfo(const bool get_block_ids) {
 
 	// use the partial block manager to serialize all allocator data
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
@@ -1013,17 +1019,20 @@ IndexStorageInfo ART::GetInfo() {
 	partial_block_manager.FlushPartialBlocks();
 
 	// return all remaining information to serialize the index
-	return GetStorageInfo();
+	return GetStorageInfo(get_block_ids);
 }
 
 void ART::InitAllocators(const IndexStorageInfo &info) {
 
+	// set the root node
 	D_ASSERT(info.properties.find("tree") != info.properties.end());
 	auto tree_value = info.properties.find("tree");
 	tree.Set(tree_value->second.GetValue<uint64_t>());
+
+	// initialize the allocators
 	D_ASSERT(info.index_data_storage_infos.size() == ALLOCATOR_COUNT);
 	for (idx_t i = 0; i < info.index_data_storage_infos.size(); i++) {
-		(*allocators)[i]->Init(info.index_data_storage_infos[i]);
+		(*allocators)[i]->Init(info.index_data_storage_infos[i], info.new_block_ids);
 	}
 }
 

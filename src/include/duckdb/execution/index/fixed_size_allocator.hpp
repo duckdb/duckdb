@@ -77,8 +77,10 @@ public:
 	IndexDataStorageInfo GetInfo() const;
 	//! Serializes all in-memory buffers
 	void SerializeBuffers(PartialBlockManager &partial_block_manager);
+	//! Returns all distinct block Ids of flushed blocks of this allocator's buffers
+	void GetBlockIds(unordered_set<block_id_t> &block_ids_set) const;
 	//! Initialize a fixed-size allocator from allocator storage information
-	void Init(const IndexDataStorageInfo &info);
+	void Init(const IndexDataStorageInfo &info, const unordered_map<block_id_t, block_id_t> &new_block_ids);
 	//! STABLE STORAGE NOTE: This is for old duckdb files, to deserializes all metadata
 	void Deserialize(MetadataManager &metadata_manager, const BlockPointer &block_pointer);
 

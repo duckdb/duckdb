@@ -289,16 +289,36 @@ void FixedSizeAllocator::SerializeBuffers(PartialBlockManager &partial_block_man
 	}
 }
 
-void FixedSizeAllocator::Init(const IndexDataStorageInfo &info) {
+void FixedSizeAllocator::GetBlockIds(unordered_set<block_id_t> &block_ids_set) const {
+
+	for (const auto &buffer : buffers) {
+		D_ASSERT(buffer.second.OnDisk() && !buffer.second.dirty);
+		block_ids_set.insert(buffer.second.block_pointer.block_id);
+	}
+}
+
+void FixedSizeAllocator::Init(const IndexDataStorageInfo &info,
+                              const unordered_map<block_id_t, block_id_t> &new_block_ids) {
 
 	segment_size = info.segment_size;
 	total_segment_count = 0;
 
 	for (idx_t i = 0; i < info.buffer_ids.size(); i++) {
+
+		// read all FixedSizeBuffer data
 		auto buffer_id = info.buffer_ids[i];
 		auto buffer_block_pointer = info.buffer_block_pointers[i];
 		auto segment_count = info.buffer_segment_counts[i];
 		auto allocation_size = info.buffer_allocation_sizes[i];
+
+		// possibly update the block ID
+		if (!new_block_ids.empty()) {
+			D_ASSERT(new_block_ids.find(buffer_block_pointer.block_id) != new_block_ids.end());
+			auto new_block_id = new_block_ids.find((buffer_block_pointer.block_id));
+			buffer_block_pointer.block_id = new_block_id->second;
+		}
+
+		// create the FixedSizeBuffer
 		FixedSizeBuffer new_buffer(block_manager, segment_count, allocation_size, buffer_block_pointer);
 		buffers.insert(make_pair(buffer_id, std::move(new_buffer)));
 		total_segment_count += segment_count;

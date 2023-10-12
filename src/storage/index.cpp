@@ -103,7 +103,7 @@ bool Index::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const {
 	return false;
 }
 
-IndexStorageInfo Index::GetInfo() {
+IndexStorageInfo Index::GetInfo(const bool get_block_ids) {
 	throw NotImplementedException("The implementation of this index serialization does not exist.");
 }
 
