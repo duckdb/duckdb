@@ -61,7 +61,7 @@ NULL	NULL
 3	NULL
 
 query I
-SELECT i FROM integers WHERE i = ANY(SELECT i FROM integers)
+SELECT i FROM integers WHERE i = ANY(SELECT i FROM integers) order by i
 ----
 1
 2
