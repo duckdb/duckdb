@@ -99,7 +99,6 @@ NATURAL ANTI JOIN (select right_table.a FROM right_table JOIN other ON (other.a 
 ----
 43	1	1
 
-mode skip
 # right_table.a and left_table.a have the value 42
 # only left_table.a has the value 43
 # test inequality joins
@@ -156,4 +155,3 @@ SELECT a as outer_a, (SELECT b FROM right_table where right_table.a != outer_a) 
 43	20
 2000	20
 
-mode unskip
