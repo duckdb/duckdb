@@ -8,12 +8,13 @@
 
 #pragma once
 
-#include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
+
 class BoundColumnRefExpression;
 
 //! The IndexBinder is responsible for binding an expression within an index statement
