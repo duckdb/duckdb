@@ -2,6 +2,9 @@
 # description: Test nested lambda parameters in the rhs of lambda expressions
 # group: [lambdas]
 
+statement ok
+PRAGMA enable_verification
+
 # issue #5795
 query I
 SELECT list_apply([1,2], x -> list_apply([3,4], y -> {'x': x, 'y': y})) AS bug;
