@@ -175,6 +175,7 @@ SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &eve
 		return SinkFinalizeType::READY;
 	}
 	auto &index = index_entry->Cast<DuckIndexEntry>();
+	index.initial_index_size = state.global_index->GetInMemorySize();
 
 	index.info = storage.info;
 	for (auto &parsed_expr : info->parsed_expressions) {

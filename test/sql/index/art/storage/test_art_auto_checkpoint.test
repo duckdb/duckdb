@@ -2,8 +2,6 @@
 # description: Test auto checkpointing of the ART after CREATE and INSERT
 # group: [storage]
 
-mode skip
-
 load __TEST_DIR__/idx_checkpoint_create.db
 
 statement ok

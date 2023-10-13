@@ -21,6 +21,10 @@ public:
 
 	shared_ptr<DataTableInfo> info;
 
+	//! We need the initial size of the index after the CREATE INDEX statement,
+	//! as it is necessary to determine the auto checkpoint threshold
+	idx_t initial_index_size;
+
 public:
 	string GetSchemaName() const override;
 	string GetTableName() const override;

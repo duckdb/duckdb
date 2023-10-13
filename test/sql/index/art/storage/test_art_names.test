@@ -11,54 +11,23 @@ statement ok
 CREATE TABLE tbl (i INTEGER PRIMARY KEY, j INTEGER UNIQUE);
 
 statement ok
-CHECKPOINT
-
-restart
-
-statement ok
 INSERT INTO tbl SELECT range, range FROM range (3000);
 
-statement ok
-CHECKPOINT
-
 restart
-
 
 statement ok
 CREATE INDEX pk_tbl_0 ON tbl(i);
 
 statement ok
-CHECKPOINT
-
-restart
-
-
-statement ok
 CREATE INDEX unique_tbl_1 ON tbl(j);
 
-statement ok
-CHECKPOINT
-
 restart
-
 
 statement ok
 DROP INDEX unique_tbl_1;
 
 statement ok
-CHECKPOINT
-
-restart
-
-
-statement ok
 DROP INDEX pk_tbl_0;
-
-statement ok
-CHECKPOINT
-
-restart
-
 
 statement ok
 DROP TABLE tbl;
