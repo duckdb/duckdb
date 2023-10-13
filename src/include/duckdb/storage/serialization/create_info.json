@@ -56,8 +56,9 @@
     "members": [
       {
         "id": 200,
-        "name": "index_name",
-        "type": "string"
+        "name": "name",
+        "type": "string",
+        "property": "index_name"
       },
       {
         "id": 201,
