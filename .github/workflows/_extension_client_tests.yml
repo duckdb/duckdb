@@ -9,38 +9,6 @@ on:
         type: string
 
 jobs:
-  nodejs:
-    name: NodeJS
-    runs-on: ubuntu-latest
-    env:
-      GEN: ninja
-
-    steps:
-      - name: Install Ninja
-        run: |
-          sudo apt-get update -y -qq
-          sudo apt-get install -y -qq ninja-build
-
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-          submodules: 'true'
-
-      - name: Checkout DuckDB to version
-        run: |
-          cd duckdb
-          git checkout ${{ inputs.duckdb_version }}
-
-      - uses: actions/setup-python@v2
-        with:
-          python-version: '3.9'
-
-      - name: Build DuckDB NodeJS client
-        run: make debug_js
-
-      - name: Run NodeJS client tests
-        run: make test_debug_js
-
   python:
     name: Python
     runs-on: ubuntu-latest

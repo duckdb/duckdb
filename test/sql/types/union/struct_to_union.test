@@ -53,7 +53,7 @@ statement ok
 INSERT INTO struct_tbl VALUES
 	(ROW(0, True, NULL, NULL)),
 	(ROW(1, NULL, 23423, NULL)),
-	(ROW(0, True, NULL, NULL))
+    (ROW(0, True, NULL, NULL))
 
 # Verify case-insensitive
 statement ok
