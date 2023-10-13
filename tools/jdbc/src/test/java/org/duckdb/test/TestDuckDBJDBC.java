@@ -3511,7 +3511,7 @@ public class TestDuckDBJDBC {
             "dec_18_6", asList(new BigDecimal("-999999999999.999999"), (new BigDecimal("999999999999.999999")), null));
         correct_answer_map.put("dec38_10", asList(new BigDecimal("-9999999999999999999999999999.9999999999"),
                                                   (new BigDecimal("9999999999999999999999999999.9999999999")), null));
-        correct_answer_map.put("uuid", asList(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+        correct_answer_map.put("uuid", asList(UUID.fromString("00000000-0000-0000-0000-000000000000"),
                                               (UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff")), null));
         correct_answer_map.put("varchar", asList("🦆🦆🦆🦆🦆🦆", "goo\u0000se", null));
         correct_answer_map.put("json", asList("🦆🦆🦆🦆🦆", "goose", null));

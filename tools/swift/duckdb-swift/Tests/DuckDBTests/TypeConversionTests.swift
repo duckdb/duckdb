@@ -96,7 +96,7 @@ final class TypeConversionTests: XCTestCase {
   
   func test_extract_from_uuid() throws {
     let expected = [
-      UUID(uuidString: "00000000-0000-0000-0000-000000000001"),
+      UUID(uuidString: "00000000-0000-0000-0000-000000000000"),
       UUID(uuidString: "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF"),
       nil
     ]

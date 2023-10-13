@@ -140,7 +140,7 @@ class TestAllTypes(object):
                 (None,),
             ],
             'uuid': [
-                (UUID('00000000-0000-0000-0000-000000000001'),),
+                (UUID('00000000-0000-0000-0000-000000000000'),),
                 (UUID('ffffffff-ffff-ffff-ffff-ffffffffffff'),),
                 (None,),
             ],
@@ -293,7 +293,7 @@ class TestAllTypes(object):
             ),
             'uuid': np.ma.array(
                 [
-                    UUID('00000000-0000-0000-0000-000000000001'),
+                    UUID('00000000-0000-0000-0000-000000000000'),
                     UUID('ffffffff-ffff-ffff-ffff-ffffffffffff'),
                     UUID('00000000-0000-0000-0000-000000000042'),
                 ],
