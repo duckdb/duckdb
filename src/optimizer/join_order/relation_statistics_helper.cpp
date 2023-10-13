@@ -310,6 +310,15 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 	return stats;
 }
 
+RelationStats RelationStatisticsHelper::ExtractEmptyResultStats(LogicalEmptyResult &empty) {
+	RelationStats stats;
+	for (idx_t i = 0; i < empty.GetColumnBindings().size(); i++) {
+		stats.column_distinct_count.push_back(DistinctCount({0, false}));
+		stats.column_names.push_back("empty_result_column");
+	}
+	return stats;
+}
+
 idx_t RelationStatisticsHelper::InspectConjunctionAND(idx_t cardinality, idx_t column_index,
                                                       ConjunctionAndFilter &filter, BaseStatistics &base_stats) {
 	auto cardinality_after_filters = cardinality;
