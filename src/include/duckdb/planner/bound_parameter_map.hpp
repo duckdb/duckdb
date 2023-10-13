@@ -35,6 +35,9 @@ public:
 
 	unique_ptr<BoundParameterExpression> BindParameterExpression(ParameterExpression &expr);
 
+	//! Flag to indicate that we need to rebind this prepared statement before execution
+	bool rebind = false;
+
 private:
 	shared_ptr<BoundParameterData> CreateOrGetData(const string &identifier);
 	void CreateNewParameter(const string &id, const shared_ptr<BoundParameterData> &param_data);

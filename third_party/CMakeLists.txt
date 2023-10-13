@@ -17,7 +17,6 @@ if(NOT WIN32
    AND NOT SUN
    AND ${BUILD_UNITTESTS})
   add_subdirectory(imdb)
-  add_subdirectory(sqlite)
   if(${BUILD_TPCE})
     add_subdirectory(tpce-tool)
   endif()

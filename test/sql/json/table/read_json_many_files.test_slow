@@ -23,7 +23,7 @@ select count(*) from read_json_auto('__TEST_DIR__/input*.json');
 loop i 0 2000
 
 statement ok
-copy input to '__TEST_DIR__/input${i}.json.gz' (HEADER 0);
+copy input to '__TEST_DIR__/input${i}.json.gz' (COMPRESSION GZIP);
 
 endloop
 
