@@ -360,6 +360,10 @@ select * from read_json('__TEST_DIR__/my_file.json', format='array', records='au
 8
 9
 
+# lower thread count so the next tests don't OOM on many-core machines
+statement ok
+SET threads=2
+
 # issue 6646, this is not an array, but we try to read it as one
 statement error
 select json_structure(json ->> '$.metadata') as structure,
