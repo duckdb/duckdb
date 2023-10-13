@@ -788,23 +788,35 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 	auto &left_node = GetNode(*comparison.left);
 	reference<Expression> right_node = GetNode(*comparison.right);
 	// In case with filters like CAST(i) = j and i = 5 we replace the COLUMN_REF i with the constant 5
-	if (right_node.get().type == ExpressionType::OPERATOR_CAST) {
-		auto &bound_cast_expr = right_node.get().Cast<BoundCastExpression>();
-		if (bound_cast_expr.child->type == ExpressionType::BOUND_COLUMN_REF) {
-			auto &col_ref = bound_cast_expr.child->Cast<BoundColumnRefExpression>();
-			for (auto &stored_exp : stored_expressions) {
-				if (stored_exp.first.get().type == ExpressionType::BOUND_COLUMN_REF) {
-					auto &st_col_ref = stored_exp.second->Cast<BoundColumnRefExpression>();
-					if (st_col_ref.binding == col_ref.binding &&
-					    bound_cast_expr.return_type == stored_exp.second->return_type) {
-						bound_cast_expr.child = stored_exp.second->Copy();
-						right_node = GetNode(*bound_cast_expr.child);
-						break;
-					}
-				}
-			}
+	do {
+		if (right_node.get().type != ExpressionType::OPERATOR_CAST) {
+			break;
 		}
-	}
+		auto &bound_cast_expr = right_node.get().Cast<BoundCastExpression>();
+		if (bound_cast_expr.child->type != ExpressionType::BOUND_COLUMN_REF) {
+			break;
+		}
+		auto &col_ref = bound_cast_expr.child->Cast<BoundColumnRefExpression>();
+		for (auto &stored_exp : stored_expressions) {
+			reference<Expression> expr = stored_exp.first;
+			if (expr.get().type == ExpressionType::OPERATOR_CAST) {
+				expr = *(right_node.get().Cast<BoundCastExpression>().child);
+			}
+			if (expr.get().type != ExpressionType::BOUND_COLUMN_REF) {
+				continue;
+			}
+			auto &st_col_ref = expr.get().Cast<BoundColumnRefExpression>();
+			if (st_col_ref.binding != col_ref.binding) {
+				continue;
+			}
+			if (bound_cast_expr.return_type != stored_exp.second->return_type) {
+				continue;
+			}
+			bound_cast_expr.child = stored_exp.second->Copy();
+			right_node = GetNode(*bound_cast_expr.child);
+			break;
+		}
+	} while (false);
 
 	if (left_node.Equals(right_node)) {
 		return FilterResult::UNSUPPORTED;
