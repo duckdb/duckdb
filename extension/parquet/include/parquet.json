@@ -46,11 +46,6 @@
       },
       {
         "id": 102,
-        "name": "encryption_key",
-        "type": "string"
-      },
-      {
-        "id": 103,
         "name": "file_options",
         "type": "MultiFileReaderOptions"
       },
@@ -58,6 +53,12 @@
         "id": 103,
         "name": "schema",
         "type": "vector<ParquetColumnDefinition>"
+      },
+      {
+        "id": 104,
+        "name": "decrypt",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "pointer_type": "none"

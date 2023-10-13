@@ -182,6 +182,17 @@ MbedTlsWrapper::AESGCMState::~AESGCMState() {
 	delete context;
 }
 
+bool MbedTlsWrapper::AESGCMState::ValidKey(const std::string &key) {
+	switch (key.size()) {
+	case 16:
+	case 24:
+	case 32:
+		return true;
+	default:
+		return false;
+	}
+}
+
 void MbedTlsWrapper::AESGCMState::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len) {
 	auto context = reinterpret_cast<mbedtls_gcm_context *>(gcm_context);
 	if (mbedtls_gcm_starts(context, MBEDTLS_GCM_ENCRYPT, iv, iv_len) != 0) {

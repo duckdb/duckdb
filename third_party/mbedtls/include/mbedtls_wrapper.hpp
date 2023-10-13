@@ -47,6 +47,7 @@ public:
 		~AESGCMState();
 
 	public:
+		static bool ValidKey(const std::string &key);
 		void InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len);
 		void InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len);
 		size_t Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,

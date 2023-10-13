@@ -105,6 +105,10 @@ public:
 	uint32_t read_virt(uint8_t *buf, uint32_t len) override {
 		const uint32_t result = len;
 
+		if (len > transport_remaining - ParquetCrypto::TAG_BYTES + read_buffer_size - read_buffer_offset) {
+			throw InvalidInputException("Too many bytes requested from crypto buffer");
+		}
+
 		while (len != 0) {
 			if (read_buffer_offset == read_buffer_size) {
 				ReadBlock();
@@ -245,6 +249,27 @@ uint32_t ParquetCrypto::WriteData(TProtocol &oprot, const const_data_ptr_t buffe
 
 	// Encrypt and write to oprot
 	return etrans.Finalize();
+}
+
+void ParquetCrypto::SetKey(ClientContext &context, const FunctionParameters &parameters) {
+	auto &cache = ObjectCache::GetObjectCache(context);
+	const auto &key = StringValue::Get(parameters.values[0]);
+	if (!AESGCMState::ValidKey(key)) {
+		throw InvalidInputException(
+		    "Invalid AES key. Must have a length of 128, 192, or 256 bits (16, 24, or 32 bytes)");
+	}
+	cache.Put(ParquetKey::ObjectType(), make_shared<ParquetKey>(key));
+}
+
+bool ParquetCrypto::HasKey(ClientContext &context) {
+	auto &cache = ObjectCache::GetObjectCache(context);
+	return cache.Get<ParquetKey>(ParquetKey::ObjectType()).get();
+}
+
+string ParquetCrypto::GetKey(ClientContext &context) {
+	auto &cache = ObjectCache::GetObjectCache(context);
+	auto entry = cache.Get<ParquetKey>(ParquetKey::ObjectType());
+	return entry ? entry->key : "";
 }
 
 } // namespace duckdb

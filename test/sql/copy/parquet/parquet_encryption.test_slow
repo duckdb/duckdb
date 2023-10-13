@@ -7,14 +7,94 @@ require parquet
 statement ok
 PRAGMA enable_verification
 
+# AES key must have one of the three specified lengths
+statement error
+PRAGMA parquet_key('42')
+----
+Invalid Input Error: Invalid AES key. Must have a length of 128, 192, or 256 bits (16, 24, or 32 bytes)
+
+# test all valid AES key lengths
+foreach parquet_key '0123456789112345' '012345678911234501234567' '01234567891123450123456789112345'
+
 statement ok
-COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION_KEY '0123456789112345')
+PRAGMA parquet_key(${parquet_key})
+
+statement ok
+COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION)
 
 query I
-SELECT * FROM read_parquet('__TEST_DIR__/encrypted.parquet', encryption_key='0123456789112345')
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted.parquet', encryption=true)
 ----
 42
 
+statement ok
+COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION TRUE)
+
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted.parquet', encryption=true)
+----
+42
+
+statement ok
+CREATE OR REPLACE TABLE test (i INTEGER)
+
+statement ok
+COPY test FROM '__TEST_DIR__/encrypted.parquet' (ENCRYPTION)
+
+query I
+SELECT * FROM test
+----
+42
+
+statement ok
+CREATE OR REPLACE TABLE test (i INTEGER)
+
+statement ok
+COPY test FROM '__TEST_DIR__/encrypted.parquet' (ENCRYPTION TRUE)
+
+query I
+SELECT * FROM test
+----
+42
+
+endloop
+
+# validate parameter parsing
+statement error
+COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION 'yes')
+----
+Invalid Input Error
+
+statement error
+COPY test FROM '__TEST_DIR__/encrypted.parquet' (ENCRYPTION 'yes')
+----
+Invalid Input Error
+
+# what happens if we don't try to decrypt even if the file is encrypted?
+statement error
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted.parquet', encryption=false)
+----
+Invalid Input Error
+
+# what if we try to decrypt with the wrong key?
+statement ok
+PRAGMA parquet_key('4242424242424242')
+
+statement error
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted.parquet', encryption=true)
+----
+Invalid
+
+# what if we don't encrypt, but try to decrypt?
+statement ok
+COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet'
+
+statement error
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted.parquet', encryption=true)
+----
+Invalid Input Error
+
+# roundtrip all of TPCH
 statement ok
 PRAGMA disable_verification
 
@@ -23,10 +103,18 @@ require tpch
 statement ok
 CALL dbgen(sf=1)
 
+# set the 128-bit key
 statement ok
-EXPORT DATABASE '__TEST_DIR__/tpch_encrypted' (FORMAT 'parquet', ENCRYPTION_KEY '0123456789112345')
+PRAGMA parquet_key('0123456789112345')
+
+statement ok
+EXPORT DATABASE '__TEST_DIR__/tpch_encrypted' (FORMAT 'parquet', ENCRYPTION)
 
 load :memory:
+
+# re-set key upon loading the DB again
+statement ok
+PRAGMA parquet_key('0123456789112345')
 
 statement ok
 IMPORT DATABASE '__TEST_DIR__/tpch_encrypted'

@@ -86,7 +86,7 @@ struct ParquetOptions {
 
 	bool binary_as_string = false;
 	bool file_row_number = false;
-	string encryption_key;
+	bool decrypt = false;
 	MultiFileReaderOptions file_options;
 	vector<ParquetColumnDefinition> schema;
 
@@ -111,6 +111,7 @@ public:
 	ParquetOptions parquet_options;
 	MultiFileReaderData reader_data;
 	unique_ptr<ColumnReader> root_reader;
+	const string decryption_key;
 
 public:
 	void InitializeScan(ParquetReaderScanState &state, vector<idx_t> groups_to_read);
