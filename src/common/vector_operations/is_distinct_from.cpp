@@ -671,6 +671,119 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const 
 	return match_count;
 }
 
+static void PositionArrayCursor(SelectionVector &cursor, UnifiedVectorFormat &vdata, const idx_t pos,
+                                const SelectionVector &slice_sel, const idx_t count, idx_t array_size) {
+	for (idx_t i = 0; i < count; ++i) {
+		const auto slice_idx = slice_sel.get_index(i);
+		const auto lidx = vdata.sel->get_index(slice_idx);
+		const auto offset = array_size * lidx;
+		cursor.set_index(i, offset + pos);
+	}
+}
+
+template <class OP>
+static idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const SelectionVector &sel,
+                                 OptionalSelection &true_opt, OptionalSelection &false_opt) {
+	if (count == 0) {
+		return count;
+	}
+
+	// FIXME: This function can probably be optimized since we know the array size is fixed for every entry.
+
+	D_ASSERT(ArrayType::GetSize(left.GetType()) == ArrayType::GetSize(right.GetType()));
+	auto array_size = ArrayType::GetSize(left.GetType());
+
+	// Create dictionary views of the children so we can vectorise the positional comparisons.
+	SelectionVector lcursor(count);
+	SelectionVector rcursor(count);
+
+	Vector lentry_flattened(ArrayVector::GetEntry(left));
+	Vector rentry_flattened(ArrayVector::GetEntry(right));
+	lentry_flattened.Flatten(ArrayVector::GetTotalSize(left));
+	rentry_flattened.Flatten(ArrayVector::GetTotalSize(right));
+	Vector lchild(lentry_flattened, lcursor, count);
+	Vector rchild(rentry_flattened, rcursor, count);
+
+	// Get pointers to the list entries
+	UnifiedVectorFormat lvdata;
+	left.ToUnifiedFormat(count, lvdata);
+
+	UnifiedVectorFormat rvdata;
+	right.ToUnifiedFormat(count, rvdata);
+
+	// In order to reuse the comparators, we have to track what passed and failed internally.
+	// To do that, we need local SVs that we then merge back into the real ones after every pass.
+	SelectionVector slice_sel(count);
+	for (idx_t i = 0; i < count; ++i) {
+		slice_sel.set_index(i, i);
+	}
+
+	SelectionVector true_sel(count);
+	SelectionVector false_sel(count);
+
+	idx_t match_count = 0;
+	for (idx_t pos = 0; count > 0; ++pos) {
+		// Set up the cursors for the current position
+		PositionArrayCursor(lcursor, lvdata, pos, slice_sel, count, array_size);
+		PositionArrayCursor(rcursor, rvdata, pos, slice_sel, count, array_size);
+
+		// Tie-break the pairs where one of the LISTs is exhausted.
+		idx_t true_count = 0;
+		idx_t false_count = 0;
+		idx_t maybe_count = 0;
+		for (idx_t i = 0; i < count; ++i) {
+			const auto slice_idx = slice_sel.get_index(i);
+			if (array_size == pos) {
+				const auto idx = sel.get_index(slice_idx);
+				if (PositionComparator::TieBreak<OP>(array_size, array_size)) {
+					true_opt.Append(true_count, idx);
+				} else {
+					false_opt.Append(false_count, idx);
+				}
+			} else {
+				true_sel.set_index(maybe_count++, slice_idx);
+			}
+		}
+		true_opt.Advance(true_count);
+		false_opt.Advance(false_count);
+		match_count += true_count;
+
+		// Redensify the list cursors
+		if (maybe_count < count) {
+			count = maybe_count;
+			DensifyNestedSelection(true_sel, count, slice_sel);
+			PositionArrayCursor(lcursor, lvdata, pos, slice_sel, count, array_size);
+			PositionArrayCursor(rcursor, rvdata, pos, slice_sel, count, array_size);
+		}
+
+		// Find everything that definitely matches
+		true_count = PositionComparator::Definite<OP>(lchild, rchild, slice_sel, count, &true_sel, false_sel);
+		if (true_count) {
+			false_count = count - true_count;
+			ExtractNestedSelection(false_count ? true_sel : slice_sel, true_count, sel, true_opt);
+			match_count += true_count;
+
+			// Redensify the list cursors
+			count -= true_count;
+			DensifyNestedSelection(false_sel, count, slice_sel);
+			PositionArrayCursor(lcursor, lvdata, pos, slice_sel, count, array_size);
+			PositionArrayCursor(rcursor, rvdata, pos, slice_sel, count, array_size);
+		}
+
+		// Find what might match on the next position
+		true_count = PositionComparator::Possible<OP>(lchild, rchild, slice_sel, count, true_sel, &false_sel);
+		false_count = count - true_count;
+		ExtractNestedSelection(true_count ? false_sel : slice_sel, false_count, sel, false_opt);
+
+		if (false_count) {
+			DensifyNestedSelection(true_sel, true_count, slice_sel);
+		}
+		count = true_count;
+	}
+
+	return match_count;
+}
+
 template <class OP, class OPNESTED>
 static idx_t DistinctSelectNested(Vector &left, Vector &right, const SelectionVector *sel, const idx_t count,
                                   SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -700,10 +813,18 @@ static idx_t DistinctSelectNested(Vector &left, Vector &right, const SelectionVe
 	auto unknown =
 	    DistinctSelectNotNull<OP>(l_not_null, r_not_null, count, match_count, *sel, maybe_vec, true_opt, false_opt);
 
-	if (PhysicalType::LIST == left.GetType().InternalType()) {
+	switch (left.GetType().InternalType()) {
+	case PhysicalType::LIST:
 		match_count += DistinctSelectList<OPNESTED>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt);
-	} else {
+		break;
+	case PhysicalType::STRUCT:
 		match_count += DistinctSelectStruct<OPNESTED>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt);
+		break;
+	case PhysicalType::ARRAY:
+		match_count += DistinctSelectArray<OPNESTED>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt);
+		break;
+	default:
+		throw NotImplementedException("Unimplemented type for DISTINCT");
 	}
 
 	// Copy the buffered selections to the output selections
@@ -772,6 +893,7 @@ static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t c
 		break;
 	case PhysicalType::LIST:
 	case PhysicalType::STRUCT:
+	case PhysicalType::ARRAY:
 		NestedDistinctExecute<OP>(left, right, result, count);
 		break;
 	default:
@@ -813,6 +935,7 @@ static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, const
 		return DistinctSelect<string_t, string_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
+	case PhysicalType::ARRAY:
 		return DistinctSelectNested<OP, OPNESTED>(left, right, sel, count, true_sel, false_sel);
 	default:
 		throw InternalException("Invalid type for distinct selection");

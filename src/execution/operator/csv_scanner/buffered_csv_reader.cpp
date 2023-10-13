@@ -18,6 +18,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "utf8proc.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/set.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -97,10 +98,11 @@ string BufferedCSVReader::ColumnTypesError(case_insensitive_map_t<idx_t> sql_typ
 		return string();
 	}
 	string exception = "COLUMN_TYPES error: Columns with names: ";
+	set<string> problematic_columns;
 	for (auto &col : sql_types_per_column) {
-		exception += "\"" + col.first + "\",";
+		problematic_columns.insert("\"" + col.first + "\"");
 	}
-	exception.pop_back();
+	exception += StringUtil::Join(problematic_columns, ",");
 	exception += " do not exist in the CSV File";
 	return exception;
 }

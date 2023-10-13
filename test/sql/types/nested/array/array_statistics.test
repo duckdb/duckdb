@@ -1,0 +1,14 @@
+# name: test/sql/types/nested/array/array_statistics.test
+# group: [array]
+
+# TODO: this does not work with verification, bug is reproducible on main (with list_value), issue has been filed.
+
+query I
+SELECT STATS(array_value(1,2));
+----
+[[Min: 1, Max: 2][Has Null: false, Has No Null: true]][Has Null: false, Has No Null: true][Approx Unique: 1]
+
+
+# Trigger unknown statistics propagation
+statement ok
+PREPARE v1 AS SELECT array_cross_product($1::float[3], $2::float[3])

@@ -312,4 +312,17 @@ void EnumTypeInfo::Serialize(Serializer &serializer) const {
 	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(strings[i]); });
 }
 
+//===--------------------------------------------------------------------===//
+// ArrayTypeInfo
+//===--------------------------------------------------------------------===//
+
+ArrayTypeInfo::ArrayTypeInfo(LogicalType child_type_p, idx_t size_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::ARRAY_TYPE_INFO), child_type(std::move(child_type_p)), size(size_p) {
+}
+
+bool ArrayTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
+	auto &other = other_p->Cast<ArrayTypeInfo>();
+	return child_type == other.child_type && size == other.size;
+}
+
 } // namespace duckdb

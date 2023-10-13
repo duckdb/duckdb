@@ -33,13 +33,14 @@ enum class StatsInfo : uint8_t {
 	CAN_HAVE_NULL_AND_VALID_VALUES = 4
 };
 
-enum class StatisticsType : uint8_t { NUMERIC_STATS, STRING_STATS, LIST_STATS, STRUCT_STATS, BASE_STATS };
+enum class StatisticsType : uint8_t { NUMERIC_STATS, STRING_STATS, LIST_STATS, STRUCT_STATS, BASE_STATS, ARRAY_STATS };
 
 class BaseStatistics {
 	friend struct NumericStats;
 	friend struct StringStats;
 	friend struct StructStats;
 	friend struct ListStats;
+	friend struct ArrayStats;
 
 public:
 	DUCKDB_API ~BaseStatistics();

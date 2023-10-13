@@ -102,6 +102,14 @@ unique_ptr<Expression> BoundCastExpression::AddCastToType(ClientContext &context
 	return AddCastToTypeInternal(std::move(expr), target_type, cast_functions, get_input, try_cast);
 }
 
+unique_ptr<Expression> BoundCastExpression::AddArrayCastToList(ClientContext &context, unique_ptr<Expression> expr) {
+	if (expr->return_type.id() != LogicalTypeId::ARRAY) {
+		return expr;
+	}
+	auto &child_type = ArrayType::GetChildType(expr->return_type);
+	return BoundCastExpression::AddCastToType(context, std::move(expr), LogicalType::LIST(child_type));
+}
+
 bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const LogicalType &target_type) {
 	D_ASSERT(source_type.IsValid() && target_type.IsValid());
 	if (source_type.id() == LogicalTypeId::BOOLEAN || target_type.id() == LogicalTypeId::BOOLEAN) {
