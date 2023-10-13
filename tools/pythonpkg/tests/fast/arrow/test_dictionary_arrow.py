@@ -72,7 +72,7 @@ class TestArrowDictionary(object):
         assert rel.execute().fetchall() == result
 
     @pytest.mark.parametrize(
-        'query',
+        'element',
         [
             # list
             """
@@ -123,10 +123,18 @@ class TestArrowDictionary(object):
             5000,
         ],
     )
-    def test_dictionary_roundtrip(self, query, duckdb_cursor, count):
-        query = f"""
-            select {query} as a from range({count})
-        """
+    @pytest.mark.parametrize(
+        'query',
+        [
+            "select {} as a from range({})",
+            "select [{} for x in range({})] as a"
+        ]
+    )
+    def test_dictionary_roundtrip(self, query, element, duckdb_cursor, count):
+        if 'x' in query and '::UNION' in element:
+	        # Same as the commented out element, LIST of UNION is bugged
+            return
+        query = query.format(element, count)
         original_rel = duckdb_cursor.sql(query)
         expected = original_rel.fetchall()
         arrow_res = original_rel.arrow()
@@ -137,6 +145,33 @@ class TestArrowDictionary(object):
         assert original_rel.columns == roundtrip_rel.columns
         # Note: we can't check the types, because originally these are ENUM
         # but because the dictionary of the ENUM can not be known before execution we output VARCHAR instead.
+
+    #@pytest.mark.parametrize(
+    #    'count',
+    #    [
+    #        1,
+    #        10,
+    #        1024,
+    #        # 2048,
+    #        # 2047,
+    #        # 2049,
+    #        # 4000,
+    #        # 4096,
+    #        5000,
+    #    ],
+    #)
+    #def test_dictionary_list_roundtrip(self, query, duckdb_cursor, count):
+    #    query = f"""
+    #        select [{query} for x in range(4000)] as a from range({count})
+    #    """
+    #    original_rel = duckdb_cursor.sql(query)
+    #    expected = original_rel.fetchall()
+    #    arrow_res = original_rel.arrow()
+
+    #    roundtrip_rel = duckdb_cursor.sql('select * from arrow_res')
+    #    actual = roundtrip_rel.fetchall()
+    #    assert expected == actual
+    #    assert original_rel.columns == roundtrip_rel.columns
 
     def test_dictionary_batches(self, duckdb_cursor):
         indices_list = [None, 1, None, 1, 2, 1, 0]
@@ -214,14 +249,6 @@ class TestArrowDictionary(object):
             (None,),
         ] * 1000
         assert rel.execute().fetchall() == result
-
-    def test_dictionary_in_child_arrays(self, duckdb_cursor):
-        rel = duckdb_cursor.sql("select ['hello'::ENUM('hello', 'bye')] as a")
-        tbl = rel.arrow()
-
-        rel2 = duckdb_cursor.sql("select * from tbl")
-        res = rel2.fetchall()
-        assert res == [(['hello'],)]
 
     def test_dictionary_timestamps(self, duckdb_cursor):
         indices_list = [None, 0, 1, 2, None]

@@ -836,16 +836,16 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 		                    arrow_type.GetDictionary());
 		array_state.AddDictionary(std::move(base_vector));
 	}
-	auto dictionary_type = arrow_type.GetDuckType();
+	auto offset_type = arrow_type.GetDuckType();
 	//! Get Pointer to Indices of Dictionary
 	auto indices = ArrowBufferData<data_t>(array, 1) +
-	               GetTypeIdSize(dictionary_type.InternalType()) * (scan_state.chunk_offset + array.offset);
+	               GetTypeIdSize(offset_type.InternalType()) * (scan_state.chunk_offset + array.offset);
 	if (array.null_count > 0) {
 		ValidityMask indices_validity;
 		GetValidityMask(indices_validity, array, scan_state, size);
-		SetSelectionVector(sel, indices, dictionary_type, size, &indices_validity, array.dictionary->length);
+		SetSelectionVector(sel, indices, offset_type, size, &indices_validity, array.dictionary->length);
 	} else {
-		SetSelectionVector(sel, indices, dictionary_type, size);
+		SetSelectionVector(sel, indices, offset_type, size);
 	}
 	vector.Slice(array_state.GetDictionary(), sel, size);
 }
