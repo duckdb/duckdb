@@ -59,13 +59,25 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 		D_ASSERT(converted);
 	}
 
-	auto &tag_vec = *target_children[0];
-	UnifiedVectorFormat tag_data;
-	tag_vec.ToUnifiedFormat(count, tag_data);
-	for (idx_t i = 0; i < count; i++) {
-		// if the tag is NULL, the union is NULL
-		if (!tag_data.validity.RowIsValid(tag_data.sel->get_index(i))) {
-			FlatVector::SetNull(result, i, true);
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
+
+		// if the tag is NULL, the union should be NULL
+		auto &tag_vec = *target_children[0];
+		ConstantVector::SetNull(result, ConstantVector::IsNull(tag_vec));
+	} else {
+		source.Flatten(count);
+		FlatVector::Validity(result) = FlatVector::Validity(source);
+
+		// if the tag is NULL, the union should be NULL
+		auto &tag_vec = *target_children[0];
+		UnifiedVectorFormat tag_data;
+		tag_vec.ToUnifiedFormat(count, tag_data);
+		for (idx_t i = 0; i < count; i++) {
+			if (!tag_data.validity.RowIsValid(tag_data.sel->get_index(i))) {
+				FlatVector::SetNull(result, i, true);
+			}
 		}
 	}
 
@@ -86,13 +98,6 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 		throw InternalException("Struct to union cast failed for unknown reason");
 	}
 
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
-	} else {
-		source.Flatten(count);
-		FlatVector::Validity(result) = FlatVector::Validity(source);
-	}
 	result.Verify(count);
 	return true;
 }
