@@ -70,7 +70,7 @@ jobs:
       shell: bash
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       run: |
-        echo "DUCKDB_INSTALL_LIB=D:\a\duckdb\duckdb\src\Release\duckdb.dll" >> $env:GITHUB_ENV
+        echo "DUCKDB_INSTALL_LIB=$((Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName)" >> $GITHUB_ENV
         test/Release/unittest.exe
 
     - name: Tools Test

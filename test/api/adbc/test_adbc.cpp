@@ -13,12 +13,15 @@ bool SUCCESS(AdbcStatusCode status) {
 	return status == ADBC_STATUS_OK;
 }
 const char *duckdb_lib = std::getenv("DUCKDB_INSTALL_LIB");
-
 class ADBCTestDatabase {
 public:
 	explicit ADBCTestDatabase(const string &path_parameter = ":memory:") {
 		duckdb_adbc::InitializeADBCError(&adbc_error);
-		path = TestCreatePath(path_parameter);
+		if (path_parameter != ":memory:") {
+			path = TestCreatePath(path_parameter);
+		} else {
+			path = path_parameter;
+		}
 		REQUIRE(duckdb_lib);
 		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
@@ -43,13 +46,17 @@ public:
 	}
 
 	bool QueryAndCheck(const string &query) {
-		Query(query);
-		DuckDB db(path);
-		Connection con(db);
-		return ArrowTestHelper::RunArrowComparison(con, query, arrow_stream);
+		QueryArrow(query);
+		auto cconn = (duckdb::Connection *)adbc_connection.private_data;
+		return ArrowTestHelper::RunArrowComparison(*cconn, query, arrow_stream);
 	}
 
-	ArrowArrayStream &Query(const string &query) {
+	std::unique_ptr<MaterializedQueryResult> Query(const string &query) {
+		auto cconn = (duckdb::Connection *)adbc_connection.private_data;
+		return cconn->Query(query);
+	}
+
+	ArrowArrayStream &QueryArrow(const string &query) {
 		if (arrow_stream.release) {
 			arrow_stream.release(&arrow_stream);
 			arrow_stream.release = nullptr;
@@ -100,7 +107,7 @@ TEST_CASE("ADBC - Test ingestion", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
-	auto input_data = db.Query("SELECT 42");
+	auto input_data = db.QueryArrow("SELECT 42");
 
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("my_table", input_data);
@@ -115,7 +122,7 @@ TEST_CASE("ADBC - Test ingestion - Lineitem", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
-	auto input_data = db.Query("SELECT * FROM read_csv_auto(\'data/csv/lineitem-carriage.csv\')");
+	auto input_data = db.QueryArrow("SELECT * FROM read_csv_auto(\'data/csv/lineitem-carriage.csv\')");
 
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("lineitem", input_data);
@@ -162,9 +169,7 @@ TEST_CASE("Test Invalid Path", "[adbc]") {
 
 	REQUIRE(!SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
 
-	REQUIRE(std::strcmp(
-	            adbc_error.message,
-	            "IO Error: Cannot open file \"/this/path/is/imaginary/hopefully/\": No such file or directory") == 0);
+	REQUIRE(std::strstr(adbc_error.message, "Cannot open file"));
 }
 
 TEST_CASE("Error Release", "[adbc]") {
@@ -392,7 +397,7 @@ TEST_CASE("Test ADBC Statement Bind (unhappy)", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcStatementPrepare(&adbc_statement, &adbc_error)));
 
 	ADBCTestDatabase db;
-	auto &input_data = db.Query("SELECT 42, true, 'this is a string'");
+	auto &input_data = db.QueryArrow("SELECT 42, true, 'this is a string'");
 	ArrowArray prepared_array;
 	ArrowSchema prepared_schema;
 	input_data.get_next(&input_data, &prepared_array);
@@ -454,7 +459,7 @@ TEST_CASE("Test ADBC Statement Bind", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create prepared parameter array
-	auto &input_data = db.Query("SELECT 42, true, 'this is a string'");
+	auto &input_data = db.QueryArrow("SELECT 42, true, 'this is a string'");
 	string query = "select ?, ?, ?";
 
 	AdbcDatabase adbc_database;
@@ -522,7 +527,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
-	auto &input_data = db.Query("SELECT 42");
+	auto &input_data = db.QueryArrow("SELECT 42");
 	string table_name = "test";
 	string query = "select count(*) from test";
 
@@ -578,7 +583,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	// Now lets insert with Auto-Commit Off
 	REQUIRE(SUCCESS(AdbcConnectionSetOption(&adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
 	                                        ADBC_OPTION_VALUE_DISABLED, &adbc_error)));
-	input_data = db.Query("SELECT 42;");
+	input_data = db.QueryArrow("SELECT 42;");
 
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
@@ -625,7 +630,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	arrow_stream.release(&arrow_stream);
 
 	// Lets do a rollback
-	input_data = db.Query("SELECT 42;");
+	input_data = db.QueryArrow("SELECT 42;");
 
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
@@ -675,7 +680,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	arrow_stream.release(&arrow_stream);
 
 	// Let's change the Auto commit config mid-transaction
-	input_data = db.Query("SELECT 42;");
+	input_data = db.QueryArrow("SELECT 42;");
 
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
@@ -711,7 +716,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	arrow_array.release(&arrow_array);
 	arrow_stream.release(&arrow_stream);
 
-	input_data = db.Query("SELECT 42;");
+	input_data = db.QueryArrow("SELECT 42;");
 
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
@@ -892,7 +897,7 @@ TEST_CASE("Test ADBC Substrait", "[adbc]") {
 	}
 	// Insert Data
 	ADBCTestDatabase db;
-	auto &input_data = db.Query("SELECT 'Push Ups' as exercise, 3 as difficulty_level;");
+	auto &input_data = db.QueryArrow("SELECT 'Push Ups' as exercise, 3 as difficulty_level;");
 	string table_name = "crossfit";
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
@@ -987,26 +992,26 @@ TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
 	}
+	string path_db;
+
 	ADBCTestDatabase db("AdbcConnectionGetTableTypes.db");
 
 	// Create Arrow Result
-	auto input_data = db.Query("SELECT 42");
+	auto input_data = db.QueryArrow("SELECT 42");
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("my_table", input_data);
-
 	ArrowArrayStream arrow_stream;
 	duckdb_adbc::AdbcError adbc_error;
 	duckdb_adbc::InitializeADBCError(&adbc_error);
 	AdbcConnectionGetTableTypes(&db.adbc_connection, &arrow_stream, &adbc_error);
 
 	db.CreateTable("result", arrow_stream);
+	path_db = db.path;
+	db.arrow_stream.release = nullptr;
 
-	DuckDB db_check(db.path);
-	Connection con(db_check);
-	auto res = con.Query("Select * from result");
+	auto res = db.Query("Select * from result");
 	REQUIRE(res->ColumnCount() == 1);
 	REQUIRE(res->GetValue(0, 0).ToString() == "BASE TABLE");
-	db.arrow_stream.release = nullptr;
 }
 
 void TestFilters(ADBCTestDatabase &db, duckdb_adbc::AdbcError &adbc_error, idx_t depth) {
@@ -1015,33 +1020,27 @@ void TestFilters(ADBCTestDatabase &db, duckdb_adbc::AdbcError &adbc_error, idx_t
 		AdbcConnectionGetObjects(&db.adbc_connection, depth, nullptr, "bla", nullptr, nullptr, nullptr, &arrow_stream,
 		                         &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		DuckDB db_check(db.path);
-		Connection con(db_check);
-		auto res = con.Query("Select * from result");
+		auto res = db.Query("Select * from result");
 		REQUIRE(res->RowCount() == 0);
-		db.Query("Drop table result;");
+		db.QueryArrow("Drop table result;");
 	}
 	{
 		ArrowArrayStream arrow_stream;
 		AdbcConnectionGetObjects(&db.adbc_connection, depth, nullptr, nullptr, "bla", nullptr, nullptr, &arrow_stream,
 		                         &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		DuckDB db_check(db.path);
-		Connection con(db_check);
-		auto res = con.Query("Select * from result");
+		auto res = db.Query("Select * from result");
 		REQUIRE(res->RowCount() == 0);
-		db.Query("Drop table result;");
+		db.QueryArrow("Drop table result;");
 	}
 	{
 		ArrowArrayStream arrow_stream;
 		AdbcConnectionGetObjects(&db.adbc_connection, depth, nullptr, nullptr, nullptr, nullptr, "bla", &arrow_stream,
 		                         &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		DuckDB db_check(db.path);
-		Connection con(db_check);
-		auto res = con.Query("Select * from result");
+		auto res = db.Query("Select * from result");
 		REQUIRE(res->RowCount() == 0);
-		db.Query("Drop table result;");
+		db.QueryArrow("Drop table result;");
 	}
 }
 
@@ -1052,11 +1051,10 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 
 	// Lets first try what works
 	// 1. Test ADBC_OBJECT_DEPTH_DB_SCHEMAS
-
 	{
 		ADBCTestDatabase db("ADBC_OBJECT_DEPTH_DB_SCHEMAS.db");
 		// Create Arrow Result
-		auto input_data = db.Query("SELECT 42");
+		auto input_data = db.QueryArrow("SELECT 42");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 
@@ -1067,12 +1065,10 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr, nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		DuckDB db_check(db.path);
-		Connection con(db_check);
-		auto res = con.Query("Select * from result");
+		auto res = db.Query("Select * from result");
 		REQUIRE(res->ColumnCount() == 1);
 		REQUIRE(res->GetValue(0, 0).ToString() == "main");
-		db.Query("Drop table result;");
+		db.QueryArrow("Drop table result;");
 		TestFilters(db, adbc_error, ADBC_OBJECT_DEPTH_DB_SCHEMAS);
 	}
 
@@ -1080,7 +1076,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("test_table_depth");
 		// Create Arrow Result
-		auto input_data = db.Query("SELECT 42");
+		auto input_data = db.QueryArrow("SELECT 42");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 
@@ -1090,13 +1086,11 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		DuckDB db_check(db.path);
-		Connection con(db_check);
-		auto res = con.Query("Select * from result");
+		auto res = db.Query("Select * from result");
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->GetValue(0, 0).ToString() == "main");
 		REQUIRE(res->GetValue(1, 0).ToString() == "[{'table_name': my_table}]");
-		db.Query("Drop table result;");
+		db.QueryArrow("Drop table result;");
 		TestFilters(db, adbc_error, ADBC_OBJECT_DEPTH_TABLES);
 	}
 
@@ -1104,7 +1098,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("test_column_depth");
 		// Create Arrow Result
-		auto input_data = db.Query("SELECT 42");
+		auto input_data = db.QueryArrow("SELECT 42");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 
@@ -1114,22 +1108,20 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		DuckDB db_check(db.path);
-		Connection con(db_check);
-		auto res = con.Query("Select * from result");
+		auto res = db.Query("Select * from result");
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->GetValue(0, 0).ToString() == "main");
 		REQUIRE(
 		    res->GetValue(1, 0).ToString() ==
 		    "[{'table_name': my_table, 'table_columns': [{'column_name': 42, 'ordinal_position': 2, 'remarks': }]}]");
-		db.Query("Drop table result;");
+		db.QueryArrow("Drop table result;");
 		TestFilters(db, adbc_error, ADBC_OBJECT_DEPTH_COLUMNS);
 	}
 	// 4.Test ADBC_OBJECT_DEPTH_ALL
 	{
 		ADBCTestDatabase db("test_all_depth");
 		// Create Arrow Result
-		auto input_data = db.Query("SELECT 42");
+		auto input_data = db.QueryArrow("SELECT 42");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 
@@ -1139,22 +1131,20 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_ALL, nullptr, nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		DuckDB db_check(db.path);
-		Connection con(db_check);
-		auto res = con.Query("Select * from result");
+		auto res = db.Query("Select * from result");
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->GetValue(0, 0).ToString() == "main");
 		REQUIRE(
 		    res->GetValue(1, 0).ToString() ==
 		    "[{'table_name': my_table, 'table_columns': [{'column_name': 42, 'ordinal_position': 2, 'remarks': }]}]");
-		db.Query("Drop table result;");
+		db.QueryArrow("Drop table result;");
 		TestFilters(db, adbc_error, ADBC_OBJECT_DEPTH_ALL);
 	}
-	// Now lets test some errors
+	//	 Now lets test some errors
 	{
 		ADBCTestDatabase db("test_errors");
 		// Create Arrow Result
-		auto input_data = db.Query("SELECT 42");
+		auto input_data = db.QueryArrow("SELECT 42");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 
