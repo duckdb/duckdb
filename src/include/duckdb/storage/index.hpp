@@ -136,8 +136,8 @@ public:
 		return (index_constraint_type == IndexConstraintType::FOREIGN);
 	}
 
-	//! Returns all storage information about the index
-	virtual IndexStorageInfo GetInfo(const bool get_block_ids);
+	//! Returns all index storage information for serialization
+	virtual IndexStorageInfo GetStorageInfo(const bool get_buffers);
 
 	//! Execute the index expressions on an input chunk
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);

@@ -987,27 +987,33 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 // Helper functions for (de)serialization
 //===--------------------------------------------------------------------===//
 
-IndexStorageInfo ART::GetStorageInfo(const bool get_block_ids) const {
+IndexStorageInfo ART::GetStorageInfo(const bool get_buffers) {
 
+	// set the name and root node
 	IndexStorageInfo info;
 	info.name = name;
 	auto property = make_pair<string, Value>("tree", Value::UBIGINT(tree.Get()));
 	info.properties.insert(property);
 
-	for (const auto &allocator : *allocators) {
-		info.index_data_storage_infos.push_back(allocator->GetInfo());
+	if (!get_buffers) {
+		// store the data on disk as partial blocks and set the block ids
+		WritePartialBlocks();
+
+	} else {
+		// set the correct allocation sizes and get the map containing all buffers
+		for (const auto &allocator : *allocators) {
+			info.buffers.push_back(allocator->InitSerializationToWAL());
+		}
 	}
 
-	if (get_block_ids) {
-		for (const auto &allocator : *allocators) {
-			allocator->GetBlockIds(info.block_ids_set);
-		}
+	for (const auto &allocator : *allocators) {
+		info.data_infos.push_back(allocator->GetInfo());
 	}
 
 	return info;
 }
 
-IndexStorageInfo ART::GetInfo(const bool get_block_ids) {
+void ART::WritePartialBlocks() {
 
 	// use the partial block manager to serialize all allocator data
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
@@ -1017,9 +1023,6 @@ IndexStorageInfo ART::GetInfo(const bool get_block_ids) {
 		allocator->SerializeBuffers(partial_block_manager);
 	}
 	partial_block_manager.FlushPartialBlocks();
-
-	// return all remaining information to serialize the index
-	return GetStorageInfo(get_block_ids);
 }
 
 void ART::InitAllocators(const IndexStorageInfo &info) {
@@ -1030,9 +1033,10 @@ void ART::InitAllocators(const IndexStorageInfo &info) {
 	tree.Set(tree_value->second.GetValue<uint64_t>());
 
 	// initialize the allocators
-	D_ASSERT(info.index_data_storage_infos.size() == ALLOCATOR_COUNT);
-	for (idx_t i = 0; i < info.index_data_storage_infos.size(); i++) {
-		(*allocators)[i]->Init(info.index_data_storage_infos[i], info.new_block_ids);
+	D_ASSERT(info.data_infos.size() == ALLOCATOR_COUNT);
+
+	for (idx_t i = 0; i < info.data_infos.size(); i++) {
+		(*allocators)[i]->Init(info.data_infos[i]);
 	}
 }
 

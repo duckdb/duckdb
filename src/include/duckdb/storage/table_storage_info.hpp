@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/block.hpp"
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
@@ -34,7 +34,7 @@ struct ColumnSegmentInfo {
 };
 
 //! Information to serialize the underlying data of an index
-struct IndexDataStorageInfo {
+struct IndexDataInfo {
 	idx_t segment_size;
 	vector<idx_t> buffer_ids;
 	vector<BlockPointer> buffer_block_pointers;
@@ -43,7 +43,7 @@ struct IndexDataStorageInfo {
 	vector<idx_t> buffers_with_free_space_vec;
 
 	void Serialize(Serializer &serializer) const;
-	static IndexDataStorageInfo Deserialize(Deserializer &deserializer);
+	static IndexDataInfo Deserialize(Deserializer &deserializer);
 };
 
 //! Information to serialize an index
@@ -53,18 +53,16 @@ struct IndexStorageInfo {
 	//! Arbitrary index properties
 	unordered_map<string, Value> properties;
 	//! Information to serialize the index memory
-	vector<IndexDataStorageInfo> index_data_storage_infos;
+	vector<IndexDataInfo> data_infos;
+	//! The buffer count for deserialization of each allocator
+	vector<idx_t> buffer_counts;
 
-	//! If serializing to the WAL, then this contains all block ids of blocks that need to be written to the WAL
-	unordered_set<block_id_t> block_ids_set;
-	//! We move the elements into a vector for easier (de)serialization
-	vector<block_id_t> block_ids;
-	//! A mapping used during WAL deserialization, as block IDs can change
-	unordered_map<block_id_t, block_id_t> new_block_ids;
+	//! When serializing to the WAL, this contains data_ptr_t to each pinned buffer, and their allocation size
+	vector<vector<pair<data_ptr_t, idx_t>>> buffers;
 
 	//! Returns true, if the struct contains index information
 	bool IsValid() const {
-		return !name.empty() && (!properties.empty() || !index_data_storage_infos.empty());
+		return !name.empty() && (!properties.empty() || !data_infos.empty());
 	}
 
 	void Serialize(Serializer &serializer) const;

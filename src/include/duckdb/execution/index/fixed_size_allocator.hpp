@@ -74,14 +74,14 @@ public:
 	IndexPointer VacuumPointer(const IndexPointer ptr);
 
 	//! Returns all FixedSizeAllocator information for serialization
-	IndexDataStorageInfo GetInfo() const;
+	IndexDataInfo GetInfo() const;
 	//! Serializes all in-memory buffers
 	void SerializeBuffers(PartialBlockManager &partial_block_manager);
-	//! Returns all distinct block Ids of flushed blocks of this allocator's buffers
-	void GetBlockIds(unordered_set<block_id_t> &block_ids_set) const;
+	//! Sets the allocation sizes and returns data to serialize each buffer
+	vector<pair<data_ptr_t, idx_t>> InitSerializationToWAL();
 	//! Initialize a fixed-size allocator from allocator storage information
-	void Init(const IndexDataStorageInfo &info, const unordered_map<block_id_t, block_id_t> &new_block_ids);
-	//! STABLE STORAGE NOTE: This is for old duckdb files, to deserializes all metadata
+	void Init(const IndexDataInfo &info);
+	//! STABLE STORAGE NOTE: This is for old storage files, to deserializes all metadata
 	void Deserialize(MetadataManager &metadata_manager, const BlockPointer &block_pointer);
 
 private:

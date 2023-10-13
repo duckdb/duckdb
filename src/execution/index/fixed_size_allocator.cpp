@@ -264,9 +264,9 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
 	return new_ptr;
 }
 
-IndexDataStorageInfo FixedSizeAllocator::GetInfo() const {
+IndexDataInfo FixedSizeAllocator::GetInfo() const {
 
-	IndexDataStorageInfo info;
+	IndexDataInfo info;
 	info.segment_size = segment_size;
 
 	for (const auto &buffer : buffers) {
@@ -289,16 +289,17 @@ void FixedSizeAllocator::SerializeBuffers(PartialBlockManager &partial_block_man
 	}
 }
 
-void FixedSizeAllocator::GetBlockIds(unordered_set<block_id_t> &block_ids_set) const {
+vector<pair<data_ptr_t, idx_t>> FixedSizeAllocator::InitSerializationToWAL() {
 
-	for (const auto &buffer : buffers) {
-		D_ASSERT(buffer.second.OnDisk() && !buffer.second.dirty);
-		block_ids_set.insert(buffer.second.block_pointer.block_id);
+	vector<pair<data_ptr_t, idx_t>> buffer_infos;
+	for (auto &buffer : buffers) {
+		buffer.second.SetAllocationSize(available_segments_per_buffer, segment_size, bitmask_offset);
+		buffer_infos.push_back(make_pair(buffer.second.Get(), buffer.second.allocation_size));
 	}
+	return buffer_infos;
 }
 
-void FixedSizeAllocator::Init(const IndexDataStorageInfo &info,
-                              const unordered_map<block_id_t, block_id_t> &new_block_ids) {
+void FixedSizeAllocator::Init(const IndexDataInfo &info) {
 
 	segment_size = info.segment_size;
 	total_segment_count = 0;
@@ -310,13 +311,6 @@ void FixedSizeAllocator::Init(const IndexDataStorageInfo &info,
 		auto buffer_block_pointer = info.buffer_block_pointers[i];
 		auto segment_count = info.buffer_segment_counts[i];
 		auto allocation_size = info.buffer_allocation_sizes[i];
-
-		// possibly update the block ID
-		if (!new_block_ids.empty()) {
-			D_ASSERT(new_block_ids.find(buffer_block_pointer.block_id) != new_block_ids.end());
-			auto new_block_id = new_block_ids.find((buffer_block_pointer.block_id));
-			buffer_block_pointer.block_id = new_block_id->second;
-		}
 
 		// create the FixedSizeBuffer
 		FixedSizeBuffer new_buffer(block_manager, segment_count, allocation_size, buffer_block_pointer);

@@ -20,7 +20,7 @@
     "constructor": ["block_pointer", "offset"]
   },
   {
-    "class": "IndexDataStorageInfo",
+    "class": "IndexDataInfo",
     "members": [
       {
         "id": 100,
@@ -73,13 +73,13 @@
       },
       {
         "id": 102,
-        "name": "index_data_storage_infos",
-        "type": "vector<IndexDataStorageInfo>"
+        "name": "data_infos",
+        "type": "vector<IndexDataInfo>"
       },
       {
         "id": 103,
-        "name": "block_ids",
-        "type": "vector<block_id_t>"
+        "name": "buffer_counts",
+        "type": "vector<idx_t>"
       }
     ],
     "pointer_type": "none"

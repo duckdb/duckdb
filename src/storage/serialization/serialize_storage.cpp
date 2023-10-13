@@ -64,7 +64,7 @@ unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(Deserializer &des
 	return result;
 }
 
-void IndexDataStorageInfo::Serialize(Serializer &serializer) const {
+void IndexDataInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(100, "segment_size", segment_size);
 	serializer.WritePropertyWithDefault<vector<idx_t>>(101, "buffer_ids", buffer_ids);
 	serializer.WritePropertyWithDefault<vector<BlockPointer>>(102, "buffer_block_pointers", buffer_block_pointers);
@@ -73,8 +73,8 @@ void IndexDataStorageInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<idx_t>>(105, "buffers_with_free_space_vec", buffers_with_free_space_vec);
 }
 
-IndexDataStorageInfo IndexDataStorageInfo::Deserialize(Deserializer &deserializer) {
-	IndexDataStorageInfo result;
+IndexDataInfo IndexDataInfo::Deserialize(Deserializer &deserializer) {
+	IndexDataInfo result;
 	deserializer.ReadPropertyWithDefault<idx_t>(100, "segment_size", result.segment_size);
 	deserializer.ReadPropertyWithDefault<vector<idx_t>>(101, "buffer_ids", result.buffer_ids);
 	deserializer.ReadPropertyWithDefault<vector<BlockPointer>>(102, "buffer_block_pointers", result.buffer_block_pointers);
@@ -87,16 +87,16 @@ IndexDataStorageInfo IndexDataStorageInfo::Deserialize(Deserializer &deserialize
 void IndexStorageInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(100, "name", name);
 	serializer.WritePropertyWithDefault<unordered_map<string, Value>>(101, "properties", properties);
-	serializer.WritePropertyWithDefault<vector<IndexDataStorageInfo>>(102, "index_data_storage_infos", index_data_storage_infos);
-	serializer.WritePropertyWithDefault<vector<block_id_t>>(103, "block_ids", block_ids);
+	serializer.WritePropertyWithDefault<vector<IndexDataInfo>>(102, "data_infos", data_infos);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(103, "buffer_counts", buffer_counts);
 }
 
 IndexStorageInfo IndexStorageInfo::Deserialize(Deserializer &deserializer) {
 	IndexStorageInfo result;
 	deserializer.ReadPropertyWithDefault<string>(100, "name", result.name);
 	deserializer.ReadPropertyWithDefault<unordered_map<string, Value>>(101, "properties", result.properties);
-	deserializer.ReadPropertyWithDefault<vector<IndexDataStorageInfo>>(102, "index_data_storage_infos", result.index_data_storage_infos);
-	deserializer.ReadPropertyWithDefault<vector<block_id_t>>(103, "block_ids", result.block_ids);
+	deserializer.ReadPropertyWithDefault<vector<IndexDataInfo>>(102, "data_infos", result.data_infos);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(103, "buffer_counts", result.buffer_counts);
 	return result;
 }
 

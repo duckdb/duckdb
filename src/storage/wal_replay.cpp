@@ -406,29 +406,35 @@ void ReplayState::ReplayDropTableMacro(BinaryDeserializer &deserializer) {
 void ReplayState::ReplayCreateIndex(BinaryDeserializer &deserializer) {
 
 	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "index_catalog_entry");
-	auto index_storage_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
-	D_ASSERT(index_storage_info.IsValid());
+	auto index_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
+	D_ASSERT(index_info.IsValid());
 
 	auto &storage_manager = db.GetStorageManager();
-	auto &singel_file_sm = storage_manager.Cast<SingleFileStorageManager>();
-	auto &block_manager = singel_file_sm.block_manager;
+	auto &single_file_sm = storage_manager.Cast<SingleFileStorageManager>();
+	auto &block_manager = single_file_sm.block_manager;
 	auto &buffer_manager = block_manager->buffer_manager;
 
 	deserializer.ReadList(103, "index_storage", [&](Deserializer::List &list, idx_t i) {
-		// read the data into a buffer handle
-		shared_ptr<BlockHandle> block_handle;
-		buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &block_handle);
-		auto buffer_handle = buffer_manager.Pin(block_handle);
-		auto data_ptr = buffer_handle.Ptr();
+		auto &data_info = index_info.data_infos[i];
+		D_ASSERT(data_info.buffer_block_pointers.size() == index_info.buffer_counts[i]);
 
-		list.ReadElement<bool>(data_ptr, Storage::BLOCK_SIZE);
+		// read the data into buffer handles and convert them to blocks on disk
+		// then, update the block pointer
+		for (idx_t j = 0; j < data_info.buffer_block_pointers.size(); j++) {
 
-		// now convert the buffer handle to a persistent block and remember the block id mapping
-		auto old_block_id = index_storage_info.block_ids[i];
-		auto new_block_id = block_manager->GetFreeBlockId();
+			// read the data into a buffer handle
+			shared_ptr<BlockHandle> block_handle;
+			buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &block_handle);
+			auto buffer_handle = buffer_manager.Pin(block_handle);
+			auto data_ptr = buffer_handle.Ptr();
 
-		block_manager->ConvertToPersistent(new_block_id, std::move(block_handle));
-		index_storage_info.new_block_ids[old_block_id] = new_block_id;
+			list.ReadElement<bool>(data_ptr, data_info.buffer_allocation_sizes[j]);
+
+			// now convert the buffer handle to a persistent block and remember the block id
+			auto block_id = block_manager->GetFreeBlockId();
+			block_manager->ConvertToPersistent(block_id, std::move(block_handle));
+			data_info.buffer_block_pointers[j].block_id = block_id;
+		}
 	});
 
 	if (deserialize_only) {
@@ -476,7 +482,7 @@ void ReplayState::ReplayCreateIndex(BinaryDeserializer &deserializer) {
 
 	auto &data_table = table.GetStorage();
 	auto art = make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
-	                          std::move(unbound_expressions), data_table.db, nullptr, index_storage_info);
+	                          std::move(unbound_expressions), data_table.db, nullptr, index_info);
 	data_table.info->indexes.AddIndex(std::move(art));
 }
 

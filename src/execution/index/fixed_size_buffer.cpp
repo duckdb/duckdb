@@ -81,11 +81,8 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 		return;
 	}
 
-	if (dirty) {
-		// the allocation possibly changed
-		auto max_offset = GetMaxOffset(available_segments);
-		allocation_size = max_offset * segment_size + bitmask_offset;
-	}
+	// the allocation possibly changed
+	SetAllocationSize(available_segments, segment_size, bitmask_offset);
 
 	// the buffer is in memory, so we copied it onto a new buffer when pinning
 	D_ASSERT(InMemory() && !OnDisk());
@@ -193,6 +190,15 @@ uint32_t FixedSizeBuffer::GetOffset(const idx_t bitmask_count) {
 	}
 
 	throw InternalException("Invalid bitmask for FixedSizeAllocator");
+}
+
+void FixedSizeBuffer::SetAllocationSize(const idx_t available_segments, const idx_t segment_size,
+                                        const idx_t bitmask_offset) {
+
+	if (dirty) {
+		auto max_offset = GetMaxOffset(available_segments);
+		allocation_size = max_offset * segment_size + bitmask_offset;
+	}
 }
 
 uint32_t FixedSizeBuffer::GetMaxOffset(const idx_t available_segments) {

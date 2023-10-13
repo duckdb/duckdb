@@ -87,9 +87,7 @@ public:
 	void SearchEqualJoinNoFetch(ARTKey &key, idx_t &result_size);
 
 	//! Returns all ART storage information for serialization
-	IndexStorageInfo GetStorageInfo(const bool get_block_ids) const;
-	//! Initializes the serialization of the index
-	IndexStorageInfo GetInfo(const bool get_block_ids) override;
+	IndexStorageInfo GetStorageInfo(const bool get_buffers) override;
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
@@ -151,8 +149,10 @@ private:
 
 	//! Initialize the allocators of the ART
 	void InitAllocators(const IndexStorageInfo &info);
-	//! STABLE STORAGE NOTE: This is for old duckdb files, to deserialize the allocators of the ART
+	//! STABLE STORAGE NOTE: This is for old storage files, to deserialize the allocators of the ART
 	void Deserialize(const BlockPointer &pointer);
+	//! Initializes the serialization of the index by combining the allocator data onto partial blocks
+	void WritePartialBlocks();
 };
 
 } // namespace duckdb
