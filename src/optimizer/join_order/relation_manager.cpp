@@ -247,6 +247,14 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		AddRelation(input_op, parent, proj_stats);
 		return true;
 	}
+	case LogicalOperatorType::LOGICAL_EMPTY_RESULT: {
+		// optimize the child and copy the stats
+		auto &empty_result = op->Cast<LogicalEmptyResult>();
+		// Projection can create columns so we need to add them here
+		auto stats = RelationStatisticsHelper::ExtractEmptyResultStats(empty_result);
+		AddRelation(input_op, parent, stats);
+		return true;
+	}
 	default:
 		return false;
 	}
