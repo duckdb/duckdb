@@ -119,6 +119,7 @@ static void MarkJoinComparisonSwitch(Vector &left, Vector &right, idx_t lcount, 
 	switch (left.GetType().InternalType()) {
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
+	case PhysicalType::ARRAY:
 		return MarkJoinNested(left, right, lcount, rcount, found_match, comparison_type);
 	default:
 		break;

@@ -2,6 +2,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/config.hpp"
@@ -245,9 +246,11 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunct
 		return make_uniq<ListSortBindData>(order, null_order, bound_function.return_type, child_type, context);
 	}
 
+	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
+	child_type = ListType::GetChildType(arguments[0]->return_type);
+
 	bound_function.arguments[0] = arguments[0]->return_type;
 	bound_function.return_type = arguments[0]->return_type;
-	child_type = ListType::GetChildType(arguments[0]->return_type);
 
 	return make_uniq<ListSortBindData>(order, null_order, bound_function.return_type, child_type, context);
 }

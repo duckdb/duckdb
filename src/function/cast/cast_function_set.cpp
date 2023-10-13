@@ -91,6 +91,8 @@ static auto RelaxedTypeMatch(type_map_t<MAP_VALUE_TYPE> &map, const LogicalType 
 		return map.end();
 	case LogicalTypeId::UNION:
 		return map.find(LogicalType::UNION({{"any", LogicalType::ANY}}));
+	case LogicalTypeId::ARRAY:
+		return map.find(LogicalType::ARRAY(LogicalType::ANY));
 	default:
 		return map.find(LogicalType::ANY);
 	}
