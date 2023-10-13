@@ -374,7 +374,6 @@ void ReadCSVData::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(104, "return_names", return_names);
 	serializer.WriteProperty(105, "filename_col_idx", filename_col_idx);
 	serializer.WriteProperty(106, "options", options);
-	serializer.WriteProperty(107, "single_threaded", single_threaded);
 	serializer.WriteProperty(108, "reader_bind", reader_bind);
 	serializer.WriteProperty(109, "column_info", column_info);
 }
@@ -388,7 +387,6 @@ unique_ptr<ReadCSVData> ReadCSVData::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty(104, "return_names", result->return_names);
 	deserializer.ReadProperty(105, "filename_col_idx", result->filename_col_idx);
 	deserializer.ReadProperty(106, "options", result->options);
-	deserializer.ReadProperty(107, "single_threaded", result->single_threaded);
 	deserializer.ReadProperty(108, "reader_bind", result->reader_bind);
 	deserializer.ReadProperty(109, "column_info", result->column_info);
 	return result;

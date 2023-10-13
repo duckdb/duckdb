@@ -167,7 +167,7 @@ public:
 	CSVGlobalState(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager_p,
 	                       const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
 	                       bool force_parallelism_p, vector<column_t> column_ids_p)
-	    : buffer_manager(std::move(buffer_manager_p)), system_threads(system_threads_p),
+	    : buffer_manager(std::move(buffer_manager_p)), state_machine(cache.Get(options.dialect_options.state_machine_options)), system_threads(system_threads_p),
 	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)),
 	      line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
 
@@ -175,7 +175,8 @@ public:
 		if (!buffer_manager) {
 			buffer_manager = make_shared<CSVBufferManager>(context, options, files);
 		}
-		state_machine_options{};
+
+
 
 		//! Set information regarding file_size, if it's on disk and use that to set number of threads that will
 		//! be used in this scanner
@@ -196,10 +197,10 @@ public:
 		}
 	}
 
-	explicit CSVGlobalState(idx_t system_threads_p)
-	    : system_threads(system_threads_p), line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
-		running_threads = MaxThreads();
-	}
+//	explicit CSVGlobalState(idx_t system_threads_p)
+//	    : system_threads(system_threads_p), line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
+//		running_threads = MaxThreads();
+//	}
 
 	~CSVGlobalState() override {
 	}
@@ -260,8 +261,10 @@ private:
 	CSVIterator cur_pos;
 	//! If this scan is finished, no more files or buffers to read.
 	bool finished = false;
+	//! CSV Cache FIXME: This should probably not be here
+	CSVStateMachineCache cache;
 	//! CSV Dialect Options used to create the parsing state machine
-	CSVStateMachineOptions state_machine_options;
+	const state_machine_t &state_machine;
 
 
 	//! Mutex to lock when getting next batch of bytes (Parallel Only)
@@ -566,7 +569,7 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 	}
 	if (bind_data.files.empty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
-		return make_uniq<CSVGlobalState>(context.db->NumberOfThreads());
+		return nullptr;
 	}
 	return make_uniq<CSVGlobalState>(context, bind_data.buffer_manager, bind_data.options, context.db->NumberOfThreads(),
 	                                         bind_data.files, ClientConfig::GetConfig(context).verify_parallelism,
