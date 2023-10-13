@@ -106,6 +106,7 @@ public:
 	                                     const string &window_spec = "", const string &projected_columns = "");
 	unique_ptr<DuckDBPyRelation> BoolOr(const string &column, const string &groups = "", const string &window_spec = "",
 	                                    const string &projected_columns = "");
+	unique_ptr<DuckDBPyRelation> ValueCounts(const string &column, const string &groups = "");
 	unique_ptr<DuckDBPyRelation> Count(const string &column, const string &groups = "", const string &window_spec = "",
 	                                   const string &projected_columns = "");
 	unique_ptr<DuckDBPyRelation> FAvg(const string &column, const string &groups = "", const string &window_spec = "",
