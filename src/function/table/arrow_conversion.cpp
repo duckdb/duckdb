@@ -665,7 +665,7 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 
 		duckdb::vector<Vector> children;
 		for (int64_t child_idx = 0; child_idx < array.n_children; child_idx++) {
-			Vector child(members[child_idx].second);
+			Vector child(members[child_idx].second, size);
 			auto &child_array = *array.children[child_idx];
 			auto &child_state = array_state.GetChild(child_idx);
 			auto &child_type = arrow_type[child_idx];

@@ -98,11 +98,10 @@ class TestArrowDictionary(object):
             """
             [{'a': 'hello'::ENUM('hello', 'bye')}]
         """,
-            # Disabled because of duckdb-internal/issues/477
-            #    # list of union(enum)
-            #    """
-            #    [{'a': 'hello'::ENUM('hello', 'bye')}::UNION(a integer, b bool, c struct(a enum('hello', 'bye')))]
-            # """,
+            # list of union(enum)
+            """
+			[{'a': 'hello'::ENUM('hello', 'bye')}::UNION(a integer, b bool, c struct(a enum('hello', 'bye')))]
+		""",
             # list of list
             """
             [['hello'::ENUM('hello', 'bye')], [], NULL, ['hello'::ENUM('hello', 'bye'), 'bye'::ENUM('hello', 'bye')]]
@@ -123,17 +122,8 @@ class TestArrowDictionary(object):
             5000,
         ],
     )
-    @pytest.mark.parametrize(
-        'query',
-        [
-            "select {} as a from range({})",
-            "select [{} for x in range({})] as a"
-        ]
-    )
+    @pytest.mark.parametrize('query', ["select {} as a from range({})", "select [{} for x in range({})] as a"])
     def test_dictionary_roundtrip(self, query, element, duckdb_cursor, count):
-        if 'x' in query and '::UNION' in element:
-	        # Same as the commented out element, LIST of UNION is bugged
-            return
         query = query.format(element, count)
         original_rel = duckdb_cursor.sql(query)
         expected = original_rel.fetchall()
@@ -146,7 +136,7 @@ class TestArrowDictionary(object):
         # Note: we can't check the types, because originally these are ENUM
         # but because the dictionary of the ENUM can not be known before execution we output VARCHAR instead.
 
-    #@pytest.mark.parametrize(
+    # @pytest.mark.parametrize(
     #    'count',
     #    [
     #        1,
@@ -159,8 +149,8 @@ class TestArrowDictionary(object):
     #        # 4096,
     #        5000,
     #    ],
-    #)
-    #def test_dictionary_list_roundtrip(self, query, duckdb_cursor, count):
+    # )
+    # def test_dictionary_list_roundtrip(self, query, duckdb_cursor, count):
     #    query = f"""
     #        select [{query} for x in range(4000)] as a from range({count})
     #    """
