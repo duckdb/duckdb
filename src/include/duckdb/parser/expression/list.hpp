@@ -4,6 +4,7 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/lambdaref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"

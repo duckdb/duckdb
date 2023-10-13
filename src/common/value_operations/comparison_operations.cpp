@@ -170,6 +170,23 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 		}
 		return false;
 	}
+	case PhysicalType::ARRAY: {
+		auto &left_children = ArrayValue::GetChildren(left);
+		auto &right_children = ArrayValue::GetChildren(right);
+
+		// Should be enforced by the type
+		D_ASSERT(left_children.size() == right_children.size());
+
+		for (idx_t i = 0; i < left_children.size(); i++) {
+			if (ValuePositionComparator::Definite<OP>(left_children[i], right_children[i])) {
+				return true;
+			}
+			if (!ValuePositionComparator::Possible<OP>(left_children[i], right_children[i])) {
+				return false;
+			}
+		}
+		return true;
+	}
 	default:
 		throw InternalException("Unimplemented type for value comparison");
 	}

@@ -177,6 +177,34 @@ static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVe
 	}
 }
 
+template <bool HAS_RSEL, bool FIRST_HASH>
+static inline void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
+	auto hdata = FlatVector::GetData<hash_t>(hashes);
+
+	UnifiedVectorFormat idata;
+	input.ToUnifiedFormat(count, idata);
+
+	// Hash the children into a temporary
+	auto &child = ArrayVector::GetEntry(input);
+	auto array_size = ArrayType::GetSize(input.GetType());
+	auto child_count = array_size * count;
+
+	Vector child_hashes(LogicalType::HASH, child_count);
+	if (child_count > 0) {
+		child_hashes.Flatten(child_count);
+		VectorOperations::Hash(child, child_hashes, child_count);
+	}
+	auto chdata = FlatVector::GetData<hash_t>(child_hashes);
+
+	// Combine hashes for every array
+	// TODO: Branch on FIRST_HASH and HAS_RSEL
+	for (idx_t i = 0; i < count; i++) {
+		for (idx_t j = i * array_size; j < (i + 1) * array_size; j++) {
+			hdata[i] = CombineHashScalar(hdata[i], chdata[j]);
+		}
+	}
+}
+
 template <bool HAS_RSEL>
 static inline void HashTypeSwitch(Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
 	D_ASSERT(result.GetType().id() == LogicalType::HASH);
@@ -226,6 +254,9 @@ static inline void HashTypeSwitch(Vector &input, Vector &result, const Selection
 		break;
 	case PhysicalType::LIST:
 		ListLoopHash<HAS_RSEL, true>(input, result, rsel, count);
+		break;
+	case PhysicalType::ARRAY:
+		ArrayLoopHash<HAS_RSEL, true>(input, result, rsel, count);
 		break;
 	default:
 		throw InvalidTypeException(input.GetType(), "Invalid type for hash");
@@ -359,6 +390,9 @@ static inline void CombineHashTypeSwitch(Vector &hashes, Vector &input, const Se
 		break;
 	case PhysicalType::LIST:
 		ListLoopHash<HAS_RSEL, false>(input, hashes, rsel, count);
+		break;
+	case PhysicalType::ARRAY:
+		ArrayLoopHash<HAS_RSEL, false>(input, hashes, rsel, count);
 		break;
 	default:
 		throw InvalidTypeException(input.GetType(), "Invalid type for hash");

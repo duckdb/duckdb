@@ -6,6 +6,7 @@ add_library_unity(
   column_data_checkpointer.cpp
   column_data.cpp
   column_segment.cpp
+  array_column_data.cpp
   list_column_data.cpp
   update_segment.cpp
   persistent_table_data.cpp

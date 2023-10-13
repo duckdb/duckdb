@@ -1,0 +1,35 @@
+# name: test/sql/types/nested/array/array_storage_3.test
+# group: [array]
+
+# Test arrays that span row groups
+
+load __TEST_DIR__/temp_array_storage_3.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+pragma preserve_insertion_order=true
+
+statement ok
+CREATE TABLE tbl1 AS SELECT array_value(a, a) FROM range(0,122881) AS r1(a)
+
+query I
+SELECT * FROM tbl1 LIMIT 1 OFFSET 0;
+----
+[0, 0]
+
+query I
+SELECT * FROM tbl1 LIMIT 1 OFFSET 122880 // 2
+----
+[61440, 61440]
+
+query I
+SELECT * FROM tbl1 LIMIT 1 OFFSET 122879
+----
+[122879, 122879]
+
+query I
+SELECT * FROM tbl1 LIMIT 1 OFFSET 122880
+----
+[122880, 122880]

@@ -133,6 +133,88 @@ static void HeapGatherListVector(Vector &v, const idx_t vcount, const SelectionV
 	}
 }
 
+static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const SelectionVector &sel,
+                                  data_ptr_t *key_locations) {
+	// Setup
+	auto &validity = FlatVector::Validity(v);
+	auto &child_type = ArrayType::GetChildType(v.GetType());
+	auto array_size = ArrayType::GetSize(v.GetType());
+	auto &child_vector = ArrayVector::GetEntry(v);
+	auto child_type_size = GetTypeIdSize(child_type.InternalType());
+	auto child_type_is_var_size = !TypeIsConstantSize(child_type.InternalType());
+
+	data_ptr_t array_entry_locations[STANDARD_VECTOR_SIZE];
+
+	// array must have a validitymask for its elements
+	auto array_validitymask_size = (array_size + 7) / 8;
+
+	auto &child_validity = FlatVector::Validity(child_vector);
+
+	for (idx_t i = 0; i < vcount; i++) {
+		// row idx
+		const auto col_idx = sel.get_index(i);
+		if (!validity.RowIsValid(col_idx)) {
+			// we still need to zero out the child validity corresponding to this row
+			for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
+				child_validity.Set(col_idx * array_size + elem_idx, false);
+			}
+			continue;
+		}
+
+		// Setup validity mask
+		data_ptr_t array_validitymask_location = key_locations[i];
+		key_locations[i] += array_validitymask_size;
+
+		// The size of each variable size entry is stored after the validity mask
+		// (if the child type is variable size)
+		data_ptr_t var_entry_size_ptr = nullptr;
+		if (child_type_is_var_size) {
+			var_entry_size_ptr = key_locations[i];
+			key_locations[i] += array_size * sizeof(idx_t);
+		}
+
+		auto array_start = col_idx * array_size;
+		auto elem_remaining = array_size;
+
+		idx_t offset_in_byte = 0;
+
+		while (elem_remaining > 0) {
+			auto chunk_size = MinValue(static_cast<idx_t>(STANDARD_VECTOR_SIZE), elem_remaining);
+			for (idx_t elem_idx = 0; elem_idx < chunk_size; elem_idx++) {
+				child_validity.Set(array_start + elem_idx, *(array_validitymask_location) & (1 << offset_in_byte));
+				if (++offset_in_byte == 8) {
+					array_validitymask_location++;
+					offset_in_byte = 0;
+				}
+			}
+
+			SelectionVector array_sel(STANDARD_VECTOR_SIZE);
+
+			if (child_type_is_var_size) {
+				// variable size list entries
+				for (idx_t elem_idx = 0; elem_idx < chunk_size; elem_idx++) {
+					array_entry_locations[elem_idx] = key_locations[i];
+					key_locations[i] += Load<idx_t>(var_entry_size_ptr);
+					var_entry_size_ptr += sizeof(idx_t);
+					array_sel.set_index(elem_idx, array_start + elem_idx);
+				}
+			} else {
+				// constant size list entries
+				for (idx_t elem_idx = 0; elem_idx < chunk_size; elem_idx++) {
+					array_entry_locations[elem_idx] = key_locations[i];
+					key_locations[i] += child_type_size;
+					array_sel.set_index(elem_idx, array_start + elem_idx);
+				}
+			}
+
+			RowOperations::HeapGather(child_vector, chunk_size, array_sel, 0, array_entry_locations, nullptr);
+
+			elem_remaining -= chunk_size;
+			array_start += chunk_size;
+		}
+	}
+}
+
 void RowOperations::HeapGather(Vector &v, const idx_t &vcount, const SelectionVector &sel, const idx_t &col_no,
                                data_ptr_t *key_locations, data_ptr_t *validitymask_locations) {
 	v.SetVectorType(VectorType::FLAT_VECTOR);
@@ -199,6 +281,9 @@ void RowOperations::HeapGather(Vector &v, const idx_t &vcount, const SelectionVe
 		break;
 	case PhysicalType::LIST:
 		HeapGatherListVector(v, vcount, sel, key_locations);
+		break;
+	case PhysicalType::ARRAY:
+		HeapGatherArrayVector(v, vcount, sel, key_locations);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented deserialize from row-format");

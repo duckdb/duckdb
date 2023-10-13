@@ -454,8 +454,7 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &
 	result.field_id = IntegerValue::Get(StructValue::GetChildren(column_value)[0]);
 
 	const auto &column_def = StructValue::GetChildren(column_value)[1];
-	const auto &column_type = column_def.type();
-	D_ASSERT(column_type.id() == LogicalTypeId::STRUCT);
+	D_ASSERT(column_def.type().id() == LogicalTypeId::STRUCT);
 
 	const auto children = StructValue::GetChildren(column_def);
 	result.name = StringValue::Get(children[0]);
