@@ -1,6 +1,14 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 
-Value *UnwrapValue(duckdb_value *value) {
+static duckdb_value WrapValue(Value *list_value) {
+	return reinterpret_cast<duckdb_value>(list_value);
+}
+
+static LogicalType UnwrapType(duckdb_logical_type type) {
+	return *(reinterpret_cast<duckdb::LogicalType *>(type));
+}
+
+static Value *UnwrapValue(duckdb_value *value) {
 	if (value && *value) {
 		return reinterpret_cast<duckdb::Value *>(*value);
 	}
@@ -68,4 +76,22 @@ duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *
 	duckdb::Value *struct_value = new duckdb::Value;
 	*struct_value = duckdb::Value::STRUCT(unwrapped_values);
 	return reinterpret_cast<duckdb_value>(struct_value);
+}
+duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count) {
+	if (!type) {
+		return nullptr;
+	}
+	auto ltype = UnwrapType(type);
+	duckdb::vector<Value> unwrapped_values = duckdb::vector<Value>();
+
+	for (idx_t i = 0; i < value_count; i++) {
+		auto val = UnwrapValue(&values[i]);
+		if (!val) {
+			return nullptr;
+		}
+		unwrapped_values.push_back(*val);
+	}
+	duckdb::Value *list_value = new duckdb::Value;
+	*list_value = duckdb::Value::LIST(ltype, unwrapped_values);
+	return WrapValue(list_value);
 }
