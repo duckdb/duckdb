@@ -10,6 +10,8 @@ CALL dsdgen(sf=0)
 # tables already exist
 statement error
 CALL dsdgen(sf=0)
+----
+Catalog Error: Table with name "call_center" already exists!
 
 # overwrite should work
 statement ok

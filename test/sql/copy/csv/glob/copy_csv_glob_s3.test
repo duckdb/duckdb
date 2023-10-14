@@ -64,6 +64,8 @@ SELECT * FROM dates ORDER BY 1
 
 # nothing matches the glob
 statement error
-COPY dates FROM read_csv('s3://test-bucket/copy_csv_glob_s3/copy/*/a*a.csv', auto_detect=1)
+COPY dates FROM 's3://test-bucket/copy_csv_glob_s3/copy/*/a*a.csv' (FORMAT CSV, auto_detect TRUE)
+----
+IO Error: No files found that match the pattern
 
 endloop

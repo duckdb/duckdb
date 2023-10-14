@@ -152,6 +152,8 @@ SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_use_ssl=false" L
 
 statement error
 SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_use_ssl=bla" LIMIT 3
+----
+IO Error: Incorrect setting found for s3_use_ssl, allowed values are: 'true' or 'false'
 
 #test url_style
 statement ok
@@ -173,6 +175,10 @@ SET s3_access_key_id='${AWS_ACCESS_KEY_ID}'; SET s3_region='${AWS_DEFAULT_REGION
 # test faulty input
 statement error
 SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=${AWS_DEFAULT_REGION}&s3_access_key_id=incorrect_key_id" LIMIT 3
+----
+HTTP Error: HTTP GET error on 'http://duckdb-minio.com:9000/test-bucket/s3_query_params/test.parquet' (HTTP 403)
 
 statement error
 SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=${AWS_DEFAULT_REGION}&bla=bla" LIMIT 3
+----
+IO Error: Invalid query parameters found

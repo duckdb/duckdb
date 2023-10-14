@@ -9,18 +9,26 @@ require parquet
 # non existent host
 statement error
 SELECT * FROM PARQUET_SCAN('https://this-host-does-not-exist-for-sure/test.parquet');
+----
+IO Error: Connection error for HTTP HEAD to
 
 # non existent file
 statement error
 SELECT * FROM PARQUET_SCAN('https://duckdb.org/test.parquet');
+----
+404 (Not Found)
 
 # missing path
 statement error
 SELECT * FROM PARQUET_SCAN('https://duckdb.org');
+----
+IO Error: URL needs to contain a '/' after the host
 
 # empty path
 statement error
 SELECT * FROM PARQUET_SCAN('https://duckdb.org/');
+----
+Invalid Input Error: No magic bytes found at end of file
 
 # straightforward
 query IIII

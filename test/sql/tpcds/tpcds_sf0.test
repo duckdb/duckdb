@@ -17,15 +17,23 @@ endloop
 # out of range
 statement error
 PRAGMA tpcds(-1)
+----
+Syntax Error: Out of range TPC-DS query number -1
 
 statement error
 PRAGMA tpcds(3290819023812038903)
+----
+Invalid Input Error: Type INT64 with value 3290819023812038903 can't be cast because the value is out of range for the destination type INT32
 
 statement error
 PRAGMA tpcds(32908301298)
+----
+Invalid Input Error: Type INT64 with value 32908301298 can't be cast because the value is out of range for the destination type INT32
 
 statement error
 PRAGMA tpcds(1.1)
+----
+Binder Error: No function matches the given name and argument types 'tpcds(DECIMAL(2,1))'
 
 # queries
 statement ok
