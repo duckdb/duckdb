@@ -200,3 +200,65 @@ TEST_CASE("Test struct types creation C API", "[capi]") {
 	}
 	duckdb_destroy_logical_type(&logical_type);
 }
+
+TEST_CASE("Binding values", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	duckdb_prepared_statement prepared;
+	REQUIRE_SUCCESS(duckdb_prepare(tester.connection, "SELECT ?", &prepared));
+
+	auto member_name = "hello";
+	const char** child_names = {&member_name};
+	duckdb::vector<duckdb_type> child_types = {DUCKDB_TYPE_INTEGER};
+	auto member_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	idx_t member_count = 1;
+	auto struct_type = duckdb_create_struct_type(&member_type, &member_name, member_count);
+	duckdb_destroy_logical_type(&member_type);
+
+	auto value = duckdb_create_int64(42);
+	auto struct_value = duckdb_create_struct_value(struct_type, &value);
+	duckdb_destroy_value(&value);
+	duckdb_destroy_logical_type(&struct_type);
+
+	duckdb_bind_value(prepared, 1, struct_value);
+
+	duckdb_destroy_value(&struct_value);
+
+	auto result = tester.QueryPrepared(prepared);
+	duckdb_destroy_prepare(&prepared);
+
+	REQUIRE(result->ErrorMessage() == nullptr);
+	REQUIRE(result->ColumnCount() == 1);
+
+	// fetch the first chunk
+	REQUIRE(result->ChunkCount() == 1);
+	auto chunk = result->FetchChunk(0);
+	REQUIRE(chunk);
+	for (idx_t i = 0; i < result->ColumnCount(); i++) {
+		duckdb_data_chunk current_chunk = chunk->GetChunk();
+		auto current_vector = duckdb_data_chunk_get_vector(current_chunk, i);
+		auto logical_type = duckdb_vector_get_column_type(current_vector);
+		REQUIRE(logical_type);
+
+		for (idx_t c_idx = 0; c_idx < member_count; c_idx++) {
+			auto val = duckdb_struct_type_child_name(logical_type, c_idx);
+			string str_val(val);
+			duckdb_free(val);
+
+			REQUIRE(child_names[c_idx] == str_val);
+			auto child_type = duckdb_struct_type_child_type(logical_type, c_idx);
+			REQUIRE(duckdb_get_type_id(child_type) == DUCKDB_TYPE_BIGINT);
+			duckdb_destroy_logical_type(&child_type);
+
+			auto struct_vector = duckdb_data_chunk_get_vector(current_chunk, 0);
+			auto int64_vector = duckdb_struct_vector_get_child(struct_vector, i);
+
+			auto int64_data = (int64_t *) duckdb_vector_get_data(int64_vector);
+
+			REQUIRE(int64_data[0] == 42);
+		}
+
+		duckdb_destroy_logical_type(&logical_type);
+	}
+}

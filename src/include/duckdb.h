@@ -1311,6 +1311,8 @@ Creates a value from an int64
 */
 DUCKDB_API duckdb_value duckdb_create_int64(int64_t val);
 
+DUCKDB_API duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *values);
+
 /*!
 Obtains a string representation of the given value.
 The result must be destroyed with `duckdb_free`.
