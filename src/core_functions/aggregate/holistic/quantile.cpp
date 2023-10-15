@@ -659,6 +659,10 @@ struct QuantileState {
 		}
 	}
 
+	bool HasTrees() const {
+		return qst32 || qst64;
+	}
+
 	template <typename RESULT_TYPE, bool DISCRETE>
 	RESULT_TYPE WindowScalar(const INPUT_TYPE *data, const FrameBounds &frame, const idx_t n, Vector &result,
 	                         const QuantileValue &q) const {
@@ -739,7 +743,20 @@ struct QuantileOperation {
 	static void WindowInit(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                       const ValidityMask &filter_mask, data_ptr_t state_p, idx_t count, const FrameStats *stats) {
 		D_ASSERT(input_count == 1);
-		const auto data = FlatVector::GetData<const INPUT_TYPE>(inputs[0]);
+
+        //	If frames overlap significantly, then use local skip lists.
+		D_ASSERT(stats);
+		if (stats[0].end <= stats[1].begin) {
+			//	Frames can overlap
+			const auto overlap = double(stats[1].begin - stats[0].end);
+			const auto cover = double(stats[1].end - stats[0].begin);
+			const auto ratio = overlap / cover;
+			if (ratio > .75) {
+				return;
+			}
+		}
+
+        const auto data = FlatVector::GetData<const INPUT_TYPE>(inputs[0]);
 		const auto &data_mask = FlatVector::Validity(inputs[0]);
 
 		//	Build the tree
@@ -813,7 +830,7 @@ struct QuantileScalarOperation : public QuantileOperation {
 		}
 
 		const auto &quantile = bind_data.quantiles[0];
-		if (gstate) {
+		if (gstate && gstate->HasTrees()) {
 			rdata[ridx] = gstate->template WindowScalar<RESULT_TYPE, DISCRETE>(data, frame, n, result, quantile);
 		} else {
 			//	Update the skip list
@@ -939,7 +956,7 @@ struct QuantileListOperation : public QuantileOperation {
 			return;
 		}
 
-		if (gstate) {
+		if (gstate && gstate->HasTrees()) {
 			gstate->template WindowList<CHILD_TYPE, DISCRETE>(data, frame, n, list, lidx, bind_data);
 		} else {
 			//
@@ -1240,7 +1257,7 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 		D_ASSERT(bind_data.quantiles.size() == 1);
 		const auto &quantile = bind_data.quantiles[0];
 		MEDIAN_TYPE med;
-		if (gstate) {
+		if (gstate && gstate->HasTrees()) {
 			med = gstate->template WindowScalar<MEDIAN_TYPE, false>(data, frame, n, result, quantile);
 		} else {
 			state.UpdateSkip(data, frame, included);
