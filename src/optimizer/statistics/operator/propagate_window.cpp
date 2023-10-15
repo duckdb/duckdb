@@ -11,12 +11,36 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalWind
 
 	// then propagate to each of the order expressions
 	for (auto &window_expr : window.expressions) {
-		auto over_expr = reinterpret_cast<BoundWindowExpression *>(window_expr.get());
-		for (auto &expr : over_expr->partitions) {
-			over_expr->partitions_stats.push_back(PropagateExpression(expr));
+		auto &over_expr = window_expr->Cast<BoundWindowExpression>();
+		for (auto &expr : over_expr.partitions) {
+			over_expr.partitions_stats.push_back(PropagateExpression(expr));
 		}
-		for (auto &bound_order : over_expr->orders) {
+		for (auto &bound_order : over_expr.orders) {
 			bound_order.stats = PropagateExpression(bound_order.expression);
+		}
+
+		if (over_expr.start_expr) {
+			over_expr.expr_stats.push_back(PropagateExpression(over_expr.start_expr));
+		} else {
+			over_expr.expr_stats.push_back(nullptr);
+		}
+
+		if (over_expr.end_expr) {
+			over_expr.expr_stats.push_back(PropagateExpression(over_expr.end_expr));
+		} else {
+			over_expr.expr_stats.push_back(nullptr);
+		}
+
+		if (over_expr.offset_expr) {
+			over_expr.expr_stats.push_back(PropagateExpression(over_expr.offset_expr));
+		} else {
+			over_expr.expr_stats.push_back(nullptr);
+		}
+
+		if (over_expr.default_expr) {
+			over_expr.expr_stats.push_back(PropagateExpression(over_expr.default_expr));
+		} else {
+			over_expr.expr_stats.push_back(nullptr);
 		}
 	}
 	return std::move(node_stats);

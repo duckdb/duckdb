@@ -43,7 +43,7 @@ void WindowAggregator::Sink(DataChunk &payload_chunk, SelectionVector *filter_se
 	}
 }
 
-void WindowAggregator::Finalize() {
+void WindowAggregator::Finalize(const FrameStats *stats) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -180,7 +180,7 @@ void WindowConstantAggregator::Sink(DataChunk &payload_chunk, SelectionVector *f
 	}
 }
 
-void WindowConstantAggregator::Finalize() {
+void WindowConstantAggregator::Finalize(const FrameStats *stats) {
 	AggegateFinal(*results, partition++);
 }
 
@@ -271,14 +271,14 @@ WindowCustomAggregatorState::~WindowCustomAggregatorState() {
 	}
 }
 
-void WindowCustomAggregator::Finalize() {
+void WindowCustomAggregator::Finalize(const FrameStats *stats) {
 	if (aggr.function.wininit) {
 		gstate = GetLocalState();
 		auto &gcstate = gstate->Cast<WindowCustomAggregatorState>();
 
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), gcstate.allocator);
 		aggr.function.wininit(inputs.data.data(), aggr_input_data, inputs.ColumnCount(), filter_mask,
-		                      gcstate.state.data(), inputs.size());
+		                      gcstate.state.data(), inputs.size(), stats);
 	}
 }
 
@@ -325,7 +325,7 @@ WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const LogicalType &re
     : WindowAggregator(std::move(aggr), result_type, count), internal_nodes(0), mode(mode_p) {
 }
 
-void WindowSegmentTree::Finalize() {
+void WindowSegmentTree::Finalize(const FrameStats *stats) {
 	gstate = GetLocalState();
 	if (inputs.ColumnCount() > 0) {
 		if (aggr.function.combine && UseCombineAPI()) {

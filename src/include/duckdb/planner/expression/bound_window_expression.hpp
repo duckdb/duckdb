@@ -50,6 +50,9 @@ public:
 	unique_ptr<Expression> offset_expr;
 	unique_ptr<Expression> default_expr;
 
+	//! Statistics belonging to the other expressions (start, end, offset, default)
+	vector<unique_ptr<BaseStatistics>> expr_stats;
+
 public:
 	bool IsWindow() const override {
 		return true;

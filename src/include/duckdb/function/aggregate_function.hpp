@@ -15,6 +15,14 @@
 
 namespace duckdb {
 
+//! The half-open range of frame boundary values relative to the current row
+struct FrameStats {
+	FrameStats() : begin(0), end(0) {};
+	FrameStats(int64_t begin, int64_t end) : begin(begin), end(end) {};
+	int64_t begin = 0;
+	int64_t end = 0;
+};
+
 //! The type used for sizing hashed aggregate function states
 typedef idx_t (*aggregate_size_t)();
 //! The type used for initializing hashed aggregate function states
@@ -47,7 +55,8 @@ typedef void (*aggregate_window_t)(Vector inputs[], const ValidityMask &filter_m
 
 //! The type used for initializing shared complex/custom windowed aggregate state (optional)
 typedef void (*aggregate_wininit_t)(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
-                                    const ValidityMask &filter_mask, data_ptr_t win_state, idx_t count);
+                                    const ValidityMask &filter_mask, data_ptr_t win_state, idx_t count,
+                                    const FrameStats *stats);
 
 typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                       const AggregateFunction &function);

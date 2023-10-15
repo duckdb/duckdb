@@ -105,6 +105,13 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 	new_window->default_expr = default_expr ? default_expr->Copy() : nullptr;
 	new_window->ignore_nulls = ignore_nulls;
 
+	for (auto &es : expr_stats) {
+		if (es) {
+			new_window->expr_stats.push_back(es->ToUnique());
+		} else {
+			new_window->expr_stats.push_back(nullptr);
+		}
+	}
 	return std::move(new_window);
 }
 

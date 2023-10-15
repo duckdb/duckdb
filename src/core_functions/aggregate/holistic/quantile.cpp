@@ -737,7 +737,7 @@ struct QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE>
 	static void WindowInit(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
-	                       const ValidityMask &filter_mask, data_ptr_t state_p, idx_t count) {
+	                       const ValidityMask &filter_mask, data_ptr_t state_p, idx_t count, const FrameStats *stats) {
 		D_ASSERT(input_count == 1);
 		const auto data = FlatVector::GetData<const INPUT_TYPE>(inputs[0]);
 		const auto &data_mask = FlatVector::Validity(inputs[0]);

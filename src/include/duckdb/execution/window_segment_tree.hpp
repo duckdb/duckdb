@@ -42,9 +42,14 @@ public:
 	WindowAggregator(AggregateObject aggr, const LogicalType &result_type_p, idx_t partition_count);
 	virtual ~WindowAggregator();
 
+	//	Access
+	const DataChunk &GetInputs() const {
+		return inputs;
+	}
+
 	//	Build
 	virtual void Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered);
-	virtual void Finalize();
+	virtual void Finalize(const FrameStats *stats);
 
 	//	Probe
 	virtual unique_ptr<WindowAggregatorState> GetLocalState() const = 0;
@@ -79,7 +84,7 @@ public:
 	}
 
 	void Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered) override;
-	void Finalize() override;
+	void Finalize(const FrameStats *stats) override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState() const override;
 	void Evaluate(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends, Vector &result,
@@ -110,7 +115,7 @@ public:
 	WindowCustomAggregator(AggregateObject aggr, const LogicalType &result_type_p, idx_t partition_count);
 	~WindowCustomAggregator() override;
 
-	void Finalize() override;
+	void Finalize(const FrameStats *stats) override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState() const override;
 	void Evaluate(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends, Vector &result,
@@ -125,7 +130,7 @@ public:
 	WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, idx_t count, WindowAggregationMode mode_p);
 	~WindowSegmentTree() override;
 
-	void Finalize() override;
+	void Finalize(const FrameStats *stats) override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState() const override;
 	void Evaluate(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends, Vector &result,
