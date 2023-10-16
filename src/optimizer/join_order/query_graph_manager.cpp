@@ -372,8 +372,8 @@ unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr
 				} else if (join.join_type == JoinType::LEFT_SEMI || join.join_type == JoinType::LEFT_ANTI) {
 					size_t has_range = 0;
 					if (!PhysicalPlanGenerator::HasEquality(join.conditions, has_range)) {
-						// if no equality, do not flip. There is no physical join operator (yet) that
-						// can do a right_semi/anti join.
+						// if the conditions have no equality, do not flip the children.
+						// There is no physical join operator (yet) that can do a right_semi/anti join.
 						break;
 					}
 					auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
