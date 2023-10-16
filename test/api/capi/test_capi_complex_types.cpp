@@ -242,3 +242,18 @@ TEST_CASE("Logical types with aliases", "[capi]") {
 		duckdb_destroy_logical_type(&logical_type);
 	}
 }
+
+TEST_CASE("Statement types", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	duckdb_prepared_statement prepared;
+	REQUIRE_SUCCESS(duckdb_prepare(tester.connection, "select ?", &prepared));
+
+	REQUIRE(duckdb_prepared_statement_type(prepared) == DUCKDB_STATEMENT_TYPE_SELECT);
+	duckdb_destroy_prepare(&prepared);
+
+	auto result = tester.Query("CREATE TABLE t1 (id int)");
+
+	REQUIRE(duckdb_result_statement_type(result->InternalResult()) == DUCKDB_STATEMENT_TYPE_CREATE);
+}
