@@ -76,4 +76,21 @@ unique_ptr<CreateViewInfo> CreateViewInfo::FromCreateView(ClientContext &context
 	return result;
 }
 
+string CreateViewInfo::ToString() const {
+	string ret = "";
+	ret += "CREATE VIEW " + view_name;
+	if (!aliases.empty()) {
+		ret += " (";
+		for (idx_t i = 0; i < aliases.size(); i++) {
+			ret += aliases.at(i);
+			if (i < aliases.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += ")";
+	}
+	ret += " AS " + query->ToString();
+	return ret;
+}
+
 } // namespace duckdb

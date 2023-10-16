@@ -43,8 +43,7 @@ typedef void (*aggregate_simple_update_t)(Vector inputs[], AggregateInputData &a
 //! The type used for updating complex windowed aggregate functions (optional)
 typedef void (*aggregate_window_t)(Vector inputs[], const ValidityMask &filter_mask,
                                    AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
-                                   const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t rid,
-                                   idx_t bias);
+                                   const vector<FrameBounds> &frames, Vector &result, idx_t rid);
 
 typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                       const AggregateFunction &function);
@@ -219,11 +218,11 @@ public:
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static void UnaryWindow(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
-	                        idx_t input_count, data_ptr_t state, const FrameBounds &frame, const FrameBounds &prev,
-	                        Vector &result, idx_t rid, idx_t bias) {
+	                        idx_t input_count, data_ptr_t state, const vector<FrameBounds> &frames, Vector &result,
+	                        idx_t rid) {
 		D_ASSERT(input_count == 1);
 		AggregateExecutor::UnaryWindow<STATE, INPUT_TYPE, RESULT_TYPE, OP>(inputs[0], filter_mask, aggr_input_data,
-		                                                                   state, frame, prev, result, rid, bias);
+		                                                                   state, frames, result, rid);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>

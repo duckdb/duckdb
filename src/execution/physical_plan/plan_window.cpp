@@ -12,7 +12,8 @@ namespace duckdb {
 
 static bool IsStreamingWindow(unique_ptr<Expression> &expr) {
 	auto &wexpr = expr->Cast<BoundWindowExpression>();
-	if (!wexpr.partitions.empty() || !wexpr.orders.empty() || wexpr.ignore_nulls) {
+	if (!wexpr.partitions.empty() || !wexpr.orders.empty() || wexpr.ignore_nulls ||
+	    wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
 		return false;
 	}
 	switch (wexpr.type) {
