@@ -536,6 +536,14 @@ Returns `DUCKDB_TYPE_INVALID` if the column is out of range.
 DUCKDB_API duckdb_type duckdb_column_type(duckdb_result *result, idx_t col);
 
 /*!
+Returns the statement type of the statement that was executed
+
+* result: The result object to fetch the statement type from.
+ * returns: duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID
+ */
+DUCKDB_API duckdb_statement_type duckdb_result_statement_type(duckdb_result result);
+
+/*!
 Returns the logical column type of the specified column.
 
 The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
@@ -1017,6 +1025,14 @@ DUCKDB_API duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_stat
 Clear the params bind to the prepared statement.
 */
 DUCKDB_API duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement);
+
+/*!
+Returns the statement type of the statement to be executed
+
+ * statement: The prepared statement.
+ * returns: duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID
+ */
+DUCKDB_API duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement statement);
 
 /*!
 Binds a value to the prepared statement at the specified index.
