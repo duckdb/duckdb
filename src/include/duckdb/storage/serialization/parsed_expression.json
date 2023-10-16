@@ -425,6 +425,12 @@
         "id": 213,
         "name": "filter_expr",
         "type": "ParsedExpression*"
+      },
+      {
+        "id": 214,
+        "name": "exclude_clause",
+        "type": "WindowExcludeMode",
+        "default": "WindowExcludeMode::NO_OTHER"
       }
     ],
     "constructor": ["type"]

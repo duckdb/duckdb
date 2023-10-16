@@ -250,6 +250,9 @@ MatchFunction RowMatcher::GetMatchFunction(const LogicalType &type, const Expres
 		return GetStructMatchFunction<NO_MATCH_SEL>(type, predicate);
 	case PhysicalType::LIST:
 		return GetListMatchFunction<NO_MATCH_SEL>(predicate);
+	case PhysicalType::ARRAY:
+		// Same logic as for lists
+		return GetListMatchFunction<NO_MATCH_SEL>(predicate);
 	default:
 		throw InternalException("Unsupported PhysicalType for RowMatcher::GetMatchFunction: %s",
 		                        EnumUtil::ToString(type.InternalType()));

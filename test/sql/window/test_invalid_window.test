@@ -24,3 +24,21 @@ select row_number() over (range between unbounded preceding and unbounded preced
 # ORDER BY is not implemented for window functions
 statement error
 select LIST(salary ORDER BY enroll_date) OVER (PARTITION BY depname) FROM empsalary
+
+# GROUPS frame spec is not implemented yet for window functions
+statement error
+SELECT sum(i) OVER (ORDER BY i GROUPS 1 PRECEDING) FROM generate_series(1,10) AS _(i);
+----
+not implemented
+
+# Invalid window names
+foreach invalid PARTITION RANGE ROWS GROUPS
+
+statement error
+SELECT array_agg(i) OVER (${invalid} ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM generate_series(1,5) AS _(i)
+WINDOW ${invalid} AS (ORDER BY i);
+----
+syntax error at or near
+
+endloop

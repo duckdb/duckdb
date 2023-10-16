@@ -174,7 +174,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// get the logical type of the children of the list
 	auto &list_child = BoundExpression::GetExpression(*function.children[0]);
-	if (list_child->return_type.id() != LogicalTypeId::LIST && list_child->return_type.id() != LogicalTypeId::SQLNULL &&
+	if (list_child->return_type.id() != LogicalTypeId::LIST && list_child->return_type.id() != LogicalTypeId::ARRAY &&
+	    list_child->return_type.id() != LogicalTypeId::SQLNULL &&
 	    list_child->return_type.id() != LogicalTypeId::UNKNOWN) {
 		return BindResult("Invalid LIST argument during lambda function binding!");
 	}
@@ -182,7 +183,12 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	LogicalType list_child_type = list_child->return_type.id();
 	if (list_child->return_type.id() != LogicalTypeId::SQLNULL &&
 	    list_child->return_type.id() != LogicalTypeId::UNKNOWN) {
-		list_child_type = ListType::GetChildType(list_child->return_type);
+
+		if (list_child->return_type.id() == LogicalTypeId::ARRAY) {
+			list_child_type = ArrayType::GetChildType(list_child->return_type);
+		} else {
+			list_child_type = ListType::GetChildType(list_child->return_type);
+		}
 	}
 
 	// bind the lambda parameter

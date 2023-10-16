@@ -10,6 +10,7 @@ scalar_functions = [
     'enum',
     'generic',
     'list',
+    'array',
     'map',
     'math',
     'operators',

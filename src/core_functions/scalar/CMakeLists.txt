@@ -1,3 +1,4 @@
+add_subdirectory(array)
 add_subdirectory(bit)
 add_subdirectory(blob)
 add_subdirectory(date)

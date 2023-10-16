@@ -120,6 +120,8 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
 		return PhysicalType::LIST;
+	case LogicalTypeId::ARRAY:
+		return PhysicalType::ARRAY;
 	case LogicalTypeId::POINTER:
 		// LCOV_EXCL_START
 		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
@@ -216,6 +218,11 @@ const vector<LogicalType> LogicalType::Integral() {
 	return types;
 }
 
+const vector<LogicalType> LogicalType::Real() {
+	vector<LogicalType> types = {LogicalType::FLOAT, LogicalType::DOUBLE};
+	return types;
+}
+
 const vector<LogicalType> LogicalType::AllTypes() {
 	vector<LogicalType> types = {
 	    LogicalType::BOOLEAN,   LogicalType::TINYINT,  LogicalType::SMALLINT,  LogicalType::INTEGER,
@@ -224,7 +231,7 @@ const vector<LogicalType> LogicalType::AllTypes() {
 	    LogicalType::INTERVAL,  LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
 	    LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,
 	    LogicalTypeId::LIST,    LogicalTypeId::STRUCT, LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ,
-	    LogicalTypeId::MAP,     LogicalTypeId::UNION,  LogicalType::UUID};
+	    LogicalTypeId::MAP,     LogicalTypeId::UNION,  LogicalType::UUID,      LogicalTypeId::ARRAY};
 	return types;
 }
 
@@ -265,6 +272,8 @@ string TypeIdToString(PhysicalType type) {
 		return "STRUCT";
 	case PhysicalType::LIST:
 		return "LIST";
+	case PhysicalType::ARRAY:
+		return "ARRAY";
 	case PhysicalType::INVALID:
 		return "INVALID";
 	case PhysicalType::BIT:
@@ -309,6 +318,7 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return sizeof(interval_t);
 	case PhysicalType::STRUCT:
 	case PhysicalType::UNKNOWN:
+	case PhysicalType::ARRAY:
 		return 0; // no own payload
 	case PhysicalType::LIST:
 		return sizeof(list_entry_t); // offset + len
@@ -380,6 +390,17 @@ string LogicalType::ToString() const {
 		}
 		ret += ")";
 		return ret;
+	}
+	case LogicalTypeId::ARRAY: {
+		if (!type_info_) {
+			return "ARRAY";
+		}
+		auto size = ArrayType::GetSize(*this);
+		if (size == 0) {
+			return ArrayType::GetChildType(*this).ToString() + "[ANY]";
+		} else {
+			return ArrayType::GetChildType(*this).ToString() + "[" + to_string(size) + "]";
+		}
 	}
 	case LogicalTypeId::DECIMAL: {
 		if (!type_info_) {
@@ -703,6 +724,11 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 		// list: perform max recursively on child type
 		auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
 		return LogicalType::LIST(new_child);
+	}
+	if (type_id == LogicalTypeId::ARRAY) {
+		auto new_child = MaxLogicalType(ArrayType::GetChildType(left), ArrayType::GetChildType(right));
+		auto new_size = MaxValue(ArrayType::GetSize(left), ArrayType::GetSize(right));
+		return LogicalType::ARRAY(new_child, new_size);
 	}
 	if (type_id == LogicalTypeId::MAP) {
 		// list: perform max recursively on child type
@@ -1062,6 +1088,43 @@ PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 	auto &info = aux_info->Cast<EnumTypeInfo>();
 	D_ASSERT(info.GetEnumDictType() == EnumDictType::VECTOR_DICT);
 	return EnumTypeInfo::DictType(info.GetDictSize());
+}
+
+//===--------------------------------------------------------------------===//
+// Array Type
+//===--------------------------------------------------------------------===//
+
+const LogicalType &ArrayType::GetChildType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ARRAY);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return info->Cast<ArrayTypeInfo>().child_type;
+}
+
+idx_t ArrayType::GetSize(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ARRAY);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return info->Cast<ArrayTypeInfo>().size;
+}
+
+bool ArrayType::IsAnySize(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ARRAY);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return info->Cast<ArrayTypeInfo>().size == 0;
+}
+
+LogicalType LogicalType::ARRAY(const LogicalType &child, idx_t size) {
+	D_ASSERT(size > 0);
+	D_ASSERT(size < ArrayType::MAX_ARRAY_SIZE);
+	auto info = make_shared<ArrayTypeInfo>(child, size);
+	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
+}
+
+LogicalType LogicalType::ARRAY(const LogicalType &child) {
+	auto info = make_shared<ArrayTypeInfo>(child, 0);
+	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
 }
 
 //===--------------------------------------------------------------------===//

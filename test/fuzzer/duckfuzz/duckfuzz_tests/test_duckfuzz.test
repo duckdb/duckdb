@@ -1,0 +1,16 @@
+# name: test/fuzzer/duckfuzz/duckfuzz_tests/test_duckfuzz.test
+# description: Invalid make time
+# group: [duckfuzz_tests]
+
+# To run these tests make remove require not_available
+require not_available
+
+require sqlsmith
+
+loop i 1000 2000
+
+statement ok
+call fuzzyduck(max_queries=1, seed=${i}, verbose_output=1);
+
+endloop
+
