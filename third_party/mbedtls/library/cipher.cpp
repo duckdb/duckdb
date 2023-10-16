@@ -34,9 +34,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(MBEDTLS_CHACHAPOLY_C)
-#include "mbedtls/chachapoly.h"
-#endif
+//#if defined(MBEDTLS_CHACHAPOLY_C)
+//#include "mbedtls/chachapoly.h"
+//#endif
 
 #if defined(MBEDTLS_GCM_C)
 #include "mbedtls/gcm.h"
@@ -46,22 +46,22 @@
 #include "mbedtls/ccm.h"
 #endif
 
-#if defined(MBEDTLS_CHACHA20_C)
-#include "mbedtls/chacha20.h"
-#endif
+//#if defined(MBEDTLS_CHACHA20_C)
+//#include "mbedtls/chacha20.h"
+//#endif
 
-#if defined(MBEDTLS_CMAC_C)
-#include "mbedtls/cmac.h"
-#endif
+//#if defined(MBEDTLS_CMAC_C)
+//#include "mbedtls/cmac.h"
+//#endif
 
 #if defined(MBEDTLS_USE_PSA_CRYPTO)
 #include "psa/crypto.h"
 #include "mbedtls/psa_util.h"
 #endif /* MBEDTLS_USE_PSA_CRYPTO */
 
-#if defined(MBEDTLS_NIST_KW_C)
-#include "mbedtls/nist_kw.h"
-#endif
+//#if defined(MBEDTLS_NIST_KW_C)
+//#include "mbedtls/nist_kw.h"
+//#endif
 
 #if defined(MBEDTLS_PLATFORM_C)
 #include "mbedtls/platform.h"

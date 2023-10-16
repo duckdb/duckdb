@@ -69,9 +69,9 @@ typedef struct mbedtls_aria_context
 }
 mbedtls_aria_context;
 
-#else  /* MBEDTLS_ARIA_ALT */
-#include "aria_alt.h"
-#endif /* MBEDTLS_ARIA_ALT */
+//#else  /* MBEDTLS_ARIA_ALT */
+//#include "aria_alt.h"
+//#endif /* MBEDTLS_ARIA_ALT */
 
 /**
  * \brief          This function initializes the specified ARIA context.

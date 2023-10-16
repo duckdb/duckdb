@@ -73,9 +73,9 @@ typedef struct mbedtls_gcm_context
 }
 mbedtls_gcm_context;
 
-#else  /* !MBEDTLS_GCM_ALT */
-#include "gcm_alt.h"
-#endif /* !MBEDTLS_GCM_ALT */
+//#else  /* !MBEDTLS_GCM_ALT */
+//#include "gcm_alt.h"
+//#endif /* !MBEDTLS_GCM_ALT */
 
 /**
  * \brief           This function initializes the specified GCM context,

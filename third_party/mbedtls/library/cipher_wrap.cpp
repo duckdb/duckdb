@@ -28,9 +28,9 @@
 #include "cipher_wrap.h"
 #include "mbedtls/error.h"
 
-#if defined(MBEDTLS_CHACHAPOLY_C)
-#include "mbedtls/chachapoly.h"
-#endif
+//#if defined(MBEDTLS_CHACHAPOLY_C)
+//#include "mbedtls/chachapoly.h"
+//#endif
 
 #if defined(MBEDTLS_AES_C)
 #include "mbedtls/aes.h"
@@ -48,9 +48,9 @@
 #include "mbedtls/des.h"
 #endif
 
-#if defined(MBEDTLS_CHACHA20_C)
-#include "mbedtls/chacha20.h"
-#endif
+//#if defined(MBEDTLS_CHACHA20_C)
+//#include "mbedtls/chacha20.h"
+//#endif
 
 #if defined(MBEDTLS_GCM_C)
 #include "mbedtls/gcm.h"
@@ -60,9 +60,9 @@
 #include "mbedtls/ccm.h"
 #endif
 
-#if defined(MBEDTLS_NIST_KW_C)
-#include "mbedtls/nist_kw.h"
-#endif
+//#if defined(MBEDTLS_NIST_KW_C)
+//#include "mbedtls/nist_kw.h"
+//#endif
 
 #if defined(MBEDTLS_CIPHER_NULL_CIPHER)
 #include <string.h>

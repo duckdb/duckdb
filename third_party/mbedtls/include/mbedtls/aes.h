@@ -105,9 +105,9 @@ typedef struct mbedtls_aes_xts_context
 } mbedtls_aes_xts_context;
 #endif /* MBEDTLS_CIPHER_MODE_XTS */
 
-#else  /* MBEDTLS_AES_ALT */
-#include "aes_alt.h"
-#endif /* MBEDTLS_AES_ALT */
+//#else  /* MBEDTLS_AES_ALT */
+//#include "aes_alt.h"
+//#endif /* MBEDTLS_AES_ALT */
 
 /**
 * \brief          This function initializes the specified AES context.
