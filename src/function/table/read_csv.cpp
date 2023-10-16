@@ -167,7 +167,7 @@ public:
 	CSVGlobalState(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager_p,
 	                       const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
 	                       bool force_parallelism_p, vector<column_t> column_ids_p)
-	    : buffer_manager(std::move(buffer_manager_p)), state_machine(cache.Get(options.dialect_options.state_machine_options)), system_threads(system_threads_p),
+	    : buffer_manager(std::move(buffer_manager_p)), csv_reader_options(options), system_threads(system_threads_p),
 	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)),
 	      line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
 
@@ -175,8 +175,6 @@ public:
 		if (!buffer_manager) {
 			buffer_manager = make_shared<CSVBufferManager>(context, options, files);
 		}
-
-
 
 		//! Set information regarding file_size, if it's on disk and use that to set number of threads that will
 		//! be used in this scanner
@@ -261,10 +259,10 @@ private:
 	CSVIterator cur_pos;
 	//! If this scan is finished, no more files or buffers to read.
 	bool finished = false;
-	//! CSV Cache FIXME: This should probably not be here
-	CSVStateMachineCache cache;
-	//! CSV Dialect Options used to create the parsing state machine
-	const state_machine_t &state_machine;
+
+	//! State Machine Cache used to generate CSV Scanners
+	CSVStateMachineCache state_machine_cache;
+	CSVReaderOptions csv_reader_options;
 
 
 	//! Mutex to lock when getting next batch of bytes (Parallel Only)
@@ -401,9 +399,10 @@ unique_ptr<CSVScanner> CSVGlobalState::Next(ClientContext &context, const ReadCS
 	if (finished){
 		return nullptr;
 	}
-	CSVStateMachineCache state_machine_cache;
+	// Create a CSV State machine
+	auto csv_state_machine = make_uniq<CSVStateMachine>()
 
-	auto scanner =  make_uniq<CSVScanner>(buffer_manager,state_machine_cache.Get({opt}), cur_pos);
+	auto scanner =  make_uniq<CSVScanner>(buffer_manager,state_machine, cur_pos);
 	// Generate CSV Iterator
 //	CSVIterator csv_iterator (cur_file_idx, cur_buffer_idx, cur, bytes_to_read );
 
