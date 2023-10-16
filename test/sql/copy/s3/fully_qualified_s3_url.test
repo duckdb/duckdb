@@ -36,7 +36,7 @@ SET s3_url_style='path';
 statement error
 COPY test TO 's3://test-bucket/s3_query_params/test.csv';
 ----
-HTTP Error: Unable to connect to URL
+IO Error: Unable to connect to URL
 
 #test with .csv file
 statement ok
