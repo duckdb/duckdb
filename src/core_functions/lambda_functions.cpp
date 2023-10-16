@@ -198,6 +198,7 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<ListLambdaBindData>();
 	auto &lambda_expr = info.lambda_expr;
+	bool has_side_effects = lambda_expr->HasSideEffects();
 
 	// get the child vector and child data
 	// FIXME: no more flatten, we should be able to use dictionary vectors
@@ -348,7 +349,7 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 		                       appended_lists_cnt, lists_len, curr_original_list_len, input_chunk, info.has_index);
 	}
 
-	if (args.AllConstant()) {
+	if (args.AllConstant() && !has_side_effects) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
