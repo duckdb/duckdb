@@ -316,6 +316,7 @@ RelationStats RelationStatisticsHelper::ExtractEmptyResultStats(LogicalEmptyResu
 		stats.column_distinct_count.push_back(DistinctCount({0, false}));
 		stats.column_names.push_back("empty_result_column");
 	}
+	stats.stats_initialized = true;
 	return stats;
 }
 
