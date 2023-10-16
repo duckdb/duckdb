@@ -6525,6 +6525,39 @@ WindowBoundary EnumUtil::FromString<WindowBoundary>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value) {
+	switch(value) {
+	case WindowExcludeMode::NO_OTHER:
+		return "NO_OTHER";
+	case WindowExcludeMode::CURRENT_ROW:
+		return "CURRENT_ROW";
+	case WindowExcludeMode::GROUP:
+		return "GROUP";
+	case WindowExcludeMode::TIES:
+		return "TIES";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+WindowExcludeMode EnumUtil::FromString<WindowExcludeMode>(const char *value) {
+	if (StringUtil::Equals(value, "NO_OTHER")) {
+		return WindowExcludeMode::NO_OTHER;
+	}
+	if (StringUtil::Equals(value, "CURRENT_ROW")) {
+		return WindowExcludeMode::CURRENT_ROW;
+	}
+	if (StringUtil::Equals(value, "GROUP")) {
+		return WindowExcludeMode::GROUP;
+	}
+	if (StringUtil::Equals(value, "TIES")) {
+		return WindowExcludeMode::TIES;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<WithinCollection>(WithinCollection value) {
 	switch(value) {
 	case WithinCollection::NO:
