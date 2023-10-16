@@ -2614,10 +2614,10 @@ JoinType EnumUtil::FromString<JoinType>(const char *value) {
 	if (StringUtil::Equals(value, "FULL")) {
 		return JoinType::OUTER;
 	}
-	if (StringUtil::Equals(value, "LEFT_SEMI")) {
+	if (StringUtil::Equals(value, "SEMI")) {
 		return JoinType::LEFT_SEMI;
 	}
-	if (StringUtil::Equals(value, "LEFT_ANTI")) {
+	if (StringUtil::Equals(value, "ANTI")) {
 		return JoinType::LEFT_ANTI;
 	}
 	if (StringUtil::Equals(value, "MARK")) {
@@ -2626,10 +2626,10 @@ JoinType EnumUtil::FromString<JoinType>(const char *value) {
 	if (StringUtil::Equals(value, "SINGLE")) {
 		return JoinType::SINGLE;
 	}
-	if (StringUtil::Equals(value, "RIGHT_SEMI")) {
+	if (StringUtil::Equals(value, "SEMI")) {
 		return JoinType::RIGHT_SEMI;
 	}
-	if (StringUtil::Equals(value, "RIGHT_ANTI")) {
+	if (StringUtil::Equals(value, "ANTI")) {
 		return JoinType::RIGHT_ANTI;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
