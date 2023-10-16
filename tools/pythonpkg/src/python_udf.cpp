@@ -279,9 +279,20 @@ public:
 		}
 	}
 
-	void AnalyzeSignature(const py::object &udf) {
+	py::object GetSignature(const py::object &udf) {
+		const int32_t PYTHON_3_10_HEX = 0x030a00f0;
+		auto python_version = PY_VERSION_HEX;
+
 		auto signature_func = py::module_::import("inspect").attr("signature");
-		auto signature = signature_func(udf);
+		if (python_version >= PYTHON_3_10_HEX) {
+			return signature_func(udf, py::arg("eval_str") = true);
+		} else {
+			return signature_func(udf);
+		}
+	}
+
+	void AnalyzeSignature(const py::object &udf) {
+		auto signature = GetSignature(udf);
 		auto sig_params = signature.attr("parameters");
 		auto return_annotation = signature.attr("return_annotation");
 		if (!py::none().is(return_annotation)) {
