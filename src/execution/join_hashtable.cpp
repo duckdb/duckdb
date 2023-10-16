@@ -410,16 +410,10 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 }
 
 bool ScanStructure::PointersExhausted() {
-	const auto ptrs = FlatVector::GetData<data_ptr_t>(this->pointers);
-	const auto &sel = this->sel_vector;
-	const auto sel_count = this->count;
-	for (idx_t i = 0; i < sel_count; i++) {
-		auto idx = sel.get_index(i);
-		if (ptrs[idx]) {
-			return false;
-		}
-	}
-	return true;
+	// AdvancePointers creates a "new_count" for every pointer advanced during the
+	// previous advance pointers call. If no pointers are advanced, new_count = 0.
+	// count is then set ot new_count.
+	return count == 0;
 }
 
 idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector *no_match_sel) {
