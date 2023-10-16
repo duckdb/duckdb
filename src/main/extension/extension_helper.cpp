@@ -246,7 +246,7 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	}
 
 #if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
-	for (auto &ext : linked_extensions) {
+	for (const auto &ext : LinkedExtensions()) {
 		LoadExtensionInternal(db, ext, true);
 	}
 #endif

@@ -214,15 +214,20 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 
 idx_t JSONGlobalTableFunctionState::MaxThreads() const {
 	auto &bind_data = state.bind_data;
-	if (bind_data.options.format == JSONFormat::NEWLINE_DELIMITED) {
-		return state.system_threads;
-	}
 
 	if (!state.json_readers.empty() && state.json_readers[0]->HasFileHandle()) {
+		// We opened and auto-detected a file, so we can get a better estimate
 		auto &reader = *state.json_readers[0];
-		if (reader.GetFormat() == JSONFormat::NEWLINE_DELIMITED) { // Auto-detected NDJSON
-			return state.system_threads;
+		if (bind_data.options.format == JSONFormat::NEWLINE_DELIMITED ||
+		    reader.GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
+			return MaxValue<idx_t>(state.json_readers[0]->GetFileHandle().FileSize() / bind_data.maximum_object_size,
+			                       1);
 		}
+	}
+
+	if (bind_data.options.format == JSONFormat::NEWLINE_DELIMITED) {
+		// We haven't opened any files, so this is our best bet
+		return state.system_threads;
 	}
 
 	// One reader per file
