@@ -100,6 +100,26 @@ bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, 
 			}
 			value = Value::STRUCT(std::move(values));
 			return true;
+		} else if (function.function_name == "list_value") {
+			vector<Value> values;
+			values.reserve(function.children.size());
+			for (const auto &child : function.children) {
+				Value child_value;
+				if (!ConstructConstantFromExpression(*child, child_value)) {
+					return false;
+				}
+				values.emplace_back(std::move(child_value));
+			}
+
+			// figure out child type
+			LogicalType child_type(LogicalTypeId::INTEGER);
+			for (auto &child_value : values) {
+				child_type = LogicalType::MaxLogicalType(child_type, child_value.type());
+			}
+
+			// finally create the list
+			value = Value::LIST(child_type, values);
+			return true;
 		} else {
 			return false;
 		}

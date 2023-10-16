@@ -18,21 +18,42 @@ using duckdb_apache::thrift::protocol::TProtocol;
 
 class BufferedFileWriter;
 
-class ParquetKey : public ObjectCacheEntry {
+class ParquetKeys : public ObjectCacheEntry {
 public:
-	explicit ParquetKey(string key_p) : key(std::move(key_p)) {
-	}
-
-	string key;
+	static ParquetKeys &Get(ClientContext &context);
 
 public:
-	static string ObjectType() {
-		return "parquet_key";
-	}
+	void AddKey(const string &key_name, const string &key);
+	bool HasKey(const string &key_name) const;
+	const string &GetKey(const string &key_name) const;
 
-	string GetObjectType() override {
-		return ObjectType();
-	}
+public:
+	static string ObjectType();
+	string GetObjectType() override;
+
+private:
+	unordered_map<string, string> keys;
+};
+
+class ParquetEncryptionConfig {
+public:
+	explicit ParquetEncryptionConfig(ClientContext &context);
+	ParquetEncryptionConfig(ClientContext &context, const Value &arg);
+
+public:
+	static shared_ptr<ParquetEncryptionConfig> Create(ClientContext &context, const Value &arg);
+	const string &GetFooterKey() const;
+
+public:
+	void Serialize(Serializer &serializer) const;
+	static shared_ptr<ParquetEncryptionConfig> Deserialize(Deserializer &deserializer);
+
+private:
+	ClientContext &context;
+	//! Name of the key used for the footer
+	string footer_key;
+	//! Mapping from column name to key name
+	unordered_map<string, string> column_keys;
 };
 
 class ParquetCrypto {
@@ -57,9 +78,7 @@ public:
 	                          const string &key);
 
 public:
-	static void SetKey(ClientContext &context, const FunctionParameters &parameters);
-	static bool HasKey(ClientContext &context);
-	static string GetKey(ClientContext &context);
+	static void AddKey(ClientContext &context, const FunctionParameters &parameters);
 };
 
 } // namespace duckdb

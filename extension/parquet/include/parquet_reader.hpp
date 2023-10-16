@@ -40,6 +40,7 @@ class Allocator;
 class ClientContext;
 class BaseStatistics;
 class TableFilterSet;
+class ParquetEncryptionConfig;
 
 struct ParquetReaderPrefetchConfig {
 	// Percentage of data in a row group span that should be scanned for enabling whole group prefetch
@@ -86,7 +87,8 @@ struct ParquetOptions {
 
 	bool binary_as_string = false;
 	bool file_row_number = false;
-	bool decrypt = false;
+	shared_ptr<ParquetEncryptionConfig> encryption_config;
+
 	MultiFileReaderOptions file_options;
 	vector<ParquetColumnDefinition> schema;
 
@@ -111,7 +113,6 @@ public:
 	ParquetOptions parquet_options;
 	MultiFileReaderData reader_data;
 	unique_ptr<ColumnReader> root_reader;
-	const string decryption_key;
 
 public:
 	void InitializeScan(ParquetReaderScanState &state, vector<idx_t> groups_to_read);

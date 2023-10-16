@@ -25,6 +25,7 @@
 namespace duckdb {
 class FileSystem;
 class FileOpener;
+class ParquetEncryptionConfig;
 
 struct PreparedRowGroup {
 	duckdb_parquet::format::RowGroup row_group;
@@ -53,7 +54,8 @@ class ParquetWriter {
 public:
 	ParquetWriter(FileSystem &fs, string file_name, vector<LogicalType> types, vector<string> names,
 	              duckdb_parquet::format::CompressionCodec::type codec, ChildFieldIDs field_ids,
-	              const vector<pair<string, string>> &kv_metadata, string encryption_key);
+	              const vector<pair<string, string>> &kv_metadata,
+	              shared_ptr<ParquetEncryptionConfig> encryption_config);
 
 public:
 	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);
@@ -90,7 +92,7 @@ private:
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec;
 	ChildFieldIDs field_ids;
-	const string encryption_key;
+	shared_ptr<ParquetEncryptionConfig> encryption_config;
 
 	unique_ptr<BufferedFileWriter> writer;
 	shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;

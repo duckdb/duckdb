@@ -35,14 +35,6 @@ static void WriteStringStreamToFile(FileSystem &fs, stringstream &ss, const stri
 	handle.reset();
 }
 
-static void WriteValueAsSQL(stringstream &ss, Value &val) {
-	if (val.type().IsNumeric()) {
-		ss << val.ToString();
-	} else {
-		ss << "'" << val.ToString() << "'";
-	}
-}
-
 static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info, ExportedTableData &exported_table,
                                CopyFunction const &function) {
 	ss << "COPY ";
@@ -79,7 +71,7 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 		}
 		ss << ", " << copy_option.first << " ";
 		if (copy_option.second.size() == 1) {
-			WriteValueAsSQL(ss, copy_option.second[0]);
+			ss << copy_option.second[0].ToSQLString();
 		} else {
 			// FIXME handle multiple options
 			throw NotImplementedException("FIXME: serialize list of options");

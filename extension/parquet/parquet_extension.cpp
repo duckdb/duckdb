@@ -129,8 +129,8 @@ struct ParquetWriteBindData : public TableFunctionData {
 	static constexpr const idx_t BYTES_PER_ROW = 1024;
 	idx_t row_group_size_bytes;
 
-	//! Whether to encrypt the data
-	bool encrypt = false;
+	//! How/Whether to encrypt the data
+	shared_ptr<ParquetEncryptionConfig> encryption_config;
 
 	ChildFieldIDs field_ids;
 };
@@ -292,7 +292,7 @@ public:
 		    LogicalType::MAP(LogicalType::INTEGER, LogicalType::STRUCT({{{"name", LogicalType::VARCHAR},
 		                                                                 {"type", LogicalType::VARCHAR},
 		                                                                 {"default_value", LogicalType::VARCHAR}}}));
-		table_function.named_parameters["encryption"] = LogicalType::BOOLEAN;
+		table_function.named_parameters["encryption_config"] = LogicalTypeId::ANY;
 		MultiFileReader::AddParameters(table_function);
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.serialize = ParquetScanSerialize;
@@ -321,8 +321,11 @@ public:
 				parquet_options.binary_as_string = GetBooleanArgument(option);
 			} else if (loption == "file_row_number") {
 				parquet_options.file_row_number = GetBooleanArgument(option);
-			} else if (loption == "encryption") {
-				parquet_options.decrypt = GetBooleanArgument(option);
+			} else if (loption == "encryption_config") {
+				if (option.second.size() != 1) {
+					throw BinderException("Parquet encryption_config cannot be empty!");
+				}
+				parquet_options.encryption_config = ParquetEncryptionConfig::Create(context, option.second[0]);
 			} else {
 				throw NotImplementedException("Unsupported option for COPY FROM parquet: %s", option.first);
 			}
@@ -418,10 +421,6 @@ public:
 			// expected types - overwrite the types we want to read instead
 			result->types = return_types;
 		}
-		if (parquet_options.decrypt && !ParquetCrypto::HasKey(context)) {
-			throw InvalidInputException("The Parquet reader was set to decrypt but the key was empty. Set a key using "
-			                            "\"PRAGMA parquet_key=('<key>')\"");
-		}
 		result->parquet_options = parquet_options;
 		return std::move(result);
 	}
@@ -454,8 +453,8 @@ public:
 
 				// cannot be combined with hive_partitioning=true, so we disable auto-detection
 				parquet_options.file_options.auto_detect_hive_partitioning = false;
-			} else if (loption == "encryption") {
-				parquet_options.decrypt = BooleanValue::Get(kv.second);
+			} else if (loption == "encryption_config") {
+				parquet_options.encryption_config = ParquetEncryptionConfig::Create(context, kv.second);
 			} else {
 				throw BinderException("Unknown option for Parquet scan \"%s\"", loption);
 			}
@@ -899,10 +898,6 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 	auto bind_data = make_uniq<ParquetWriteBindData>();
 	for (auto &option : info.options) {
 		const auto loption = StringUtil::Lower(option.first);
-		if (loption == "encryption") {
-			bind_data->encrypt = GetBooleanArgument(option);
-			continue;
-		}
 		if (option.second.size() != 1) {
 			// All parquet write options require exactly one argument
 			throw BinderException("%s requires exactly one argument", StringUtil::Upper(loption));
@@ -966,16 +961,14 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 					bind_data->kv_metadata.emplace_back(key, value.ToString());
 				}
 			}
+		} else if (loption == "encryption_config") {
+			bind_data->encryption_config = ParquetEncryptionConfig::Create(context, option.second[0]);
 		} else {
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
 	}
 	if (!row_group_size_bytes_set) {
 		bind_data->row_group_size_bytes = bind_data->row_group_size * ParquetWriteBindData::BYTES_PER_ROW;
-	}
-	if (bind_data->encrypt && !ParquetCrypto::HasKey(context)) {
-		throw InvalidInputException("The Parquet writer was set to encrypt but the key was empty. Set a key using "
-		                            "\"PRAGMA parquet_key=('<key>')\"");
 	}
 
 	bind_data->sql_types = sql_types;
@@ -989,10 +982,9 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	auto &parquet_bind = bind_data.Cast<ParquetWriteBindData>();
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	const auto key = parquet_bind.encrypt ? ParquetCrypto::GetKey(context) : "";
-	global_state->writer =
-	    make_uniq<ParquetWriter>(fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
-	                             parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata, key);
+	global_state->writer = make_uniq<ParquetWriter>(fs, file_path, parquet_bind.sql_types, parquet_bind.column_names,
+	                                                parquet_bind.codec, parquet_bind.field_ids.Copy(),
+	                                                parquet_bind.kv_metadata, parquet_bind.encryption_config);
 	return std::move(global_state);
 }
 
@@ -1101,7 +1093,8 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	serializer.WriteProperty(102, "codec", bind_data.codec);
 	serializer.WriteProperty(103, "row_group_size", bind_data.row_group_size);
 	serializer.WriteProperty(104, "row_group_size_bytes", bind_data.row_group_size_bytes);
-	serializer.WriteProperty(105, "encryption", bind_data.encrypt);
+	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(105, "encryption_config",
+	                                                                         bind_data.encryption_config, nullptr);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -1111,7 +1104,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	data->codec = deserializer.ReadProperty<duckdb_parquet::format::CompressionCodec::type>(102, "codec");
 	data->row_group_size = deserializer.ReadProperty<idx_t>(103, "row_group_size");
 	data->row_group_size_bytes = deserializer.ReadProperty<idx_t>(104, "row_group_size_bytes");
-	data->encrypt = deserializer.ReadProperty<bool>(105, "encryption");
+	deserializer.ReadPropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(105, "encryption_config",
+	                                                                          data->encryption_config, nullptr);
 	return std::move(data);
 }
 // LCOV_EXCL_STOP
@@ -1227,7 +1221,8 @@ void ParquetExtension::Load(DuckDB &db) {
 	ExtensionUtil::RegisterFunction(db_instance, function);
 
 	// parquet_key
-	auto parquet_key_fun = PragmaFunction::PragmaCall("parquet_key", ParquetCrypto::SetKey, {LogicalType::VARCHAR});
+	auto parquet_key_fun = PragmaFunction::PragmaCall("add_parquet_key", ParquetCrypto::AddKey,
+	                                                  {LogicalType::VARCHAR, LogicalType::VARCHAR});
 	ExtensionUtil::RegisterFunction(db_instance, parquet_key_fun);
 
 	auto &config = DBConfig::GetConfig(*db.instance);

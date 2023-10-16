@@ -29,6 +29,26 @@
     "pointer_type": "none"
   },
   {
+    "class": "ParquetEncryptionConfig",
+    "includes": [
+      "parquet_crypto.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "footer_key",
+        "type": "string"
+      },
+      {
+        "id": 101,
+        "name": "column_keys",
+        "type": "unordered_map<string, string>"
+      }
+    ],
+    "pointer_type": "shared_ptr",
+    "constructor": ["$ClientContext"]
+  },
+  {
     "class": "ParquetOptions",
     "includes": [
       "parquet_reader.hpp"
@@ -56,9 +76,9 @@
       },
       {
         "id": 104,
-        "name": "decrypt",
-        "type": "bool",
-        "default": "false"
+        "name": "encryption_config",
+        "type": "shared_ptr<ParquetEncryptionConfig>",
+        "default": "nullptr"
       }
     ],
     "pointer_type": "none"

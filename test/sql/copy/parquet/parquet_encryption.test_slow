@@ -9,29 +9,45 @@ PRAGMA enable_verification
 
 # AES key must have one of the three specified lengths
 statement error
-PRAGMA parquet_key('42')
+PRAGMA add_parquet_key('my_cool_key', '42')
 ----
 Invalid Input Error: Invalid AES key. Must have a length of 128, 192, or 256 bits (16, 24, or 32 bytes)
 
+# we dont support this yet
+statement error
+COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION_CONFIG {column_keys: {key_name: ['col0', 'col1']}})
+----
+Not implemented Error: Parquet encryption_config column_keys not yet implemented
+
+# just some code coverage for transform_constant.cpp
+statement error
+COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION_CONFIG {column_keys: {key_name: map {}}})
+----
+Parser Error: Unsupported expression in COPY options
+
+statement error
+COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION_CONFIG {footer_key: 'nonexistant'})
+----
+Binder Error: No key with name "nonexistant" exists. Add it with PRAGMA add_parquet_key('<key_name>','<key>');
+
+# add keys of 3 different lengths
+statement ok
+PRAGMA add_parquet_key('key128', '0123456789112345')
+
+statement ok
+PRAGMA add_parquet_key('key192', '012345678911234501234567')
+
+statement ok
+PRAGMA add_parquet_key('key256', '01234567891123450123456789112345')
+
 # test all valid AES key lengths
-foreach parquet_key '0123456789112345' '012345678911234501234567' '01234567891123450123456789112345'
+foreach key_len 128 192 256
 
 statement ok
-PRAGMA parquet_key(${parquet_key})
-
-statement ok
-COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION)
+COPY (SELECT 42 i) to '__TEST_DIR__/encrypted${key_len}.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
 
 query I
-SELECT * FROM read_parquet('__TEST_DIR__/encrypted.parquet', encryption=true)
-----
-42
-
-statement ok
-COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION TRUE)
-
-query I
-SELECT * FROM read_parquet('__TEST_DIR__/encrypted.parquet', encryption=true)
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted${key_len}.parquet', encryption_config={footer_key: 'key${key_len}'})
 ----
 42
 
@@ -39,18 +55,7 @@ statement ok
 CREATE OR REPLACE TABLE test (i INTEGER)
 
 statement ok
-COPY test FROM '__TEST_DIR__/encrypted.parquet' (ENCRYPTION)
-
-query I
-SELECT * FROM test
-----
-42
-
-statement ok
-CREATE OR REPLACE TABLE test (i INTEGER)
-
-statement ok
-COPY test FROM '__TEST_DIR__/encrypted.parquet' (ENCRYPTION TRUE)
+COPY test FROM '__TEST_DIR__/encrypted${key_len}.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
 
 query I
 SELECT * FROM test
@@ -59,38 +64,24 @@ SELECT * FROM test
 
 endloop
 
-# validate parameter parsing
-statement error
-COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION 'yes')
-----
-Invalid Input Error
-
-statement error
-COPY test FROM '__TEST_DIR__/encrypted.parquet' (ENCRYPTION 'yes')
-----
-Invalid Input Error
-
 # what happens if we don't try to decrypt even if the file is encrypted?
 statement error
-SELECT * FROM read_parquet('__TEST_DIR__/encrypted.parquet', encryption=false)
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted128.parquet')
 ----
 Invalid Input Error
 
 # what if we try to decrypt with the wrong key?
-statement ok
-PRAGMA parquet_key('4242424242424242')
-
 statement error
-SELECT * FROM read_parquet('__TEST_DIR__/encrypted.parquet', encryption=true)
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted128.parquet', encryption_config={footer_key: 'key192'})
 ----
-Invalid
+Invalid Input Error: Computed AES tag differs from read AES tag
 
 # what if we don't encrypt, but try to decrypt?
 statement ok
-COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet'
+COPY (SELECT 42 i) to '__TEST_DIR__/unencrypted.parquet'
 
 statement error
-SELECT * FROM read_parquet('__TEST_DIR__/encrypted.parquet', encryption=true)
+SELECT * FROM read_parquet('__TEST_DIR__/unencrypted.parquet', encryption_config={footer_key: 'key256'})
 ----
 Invalid Input Error
 
@@ -103,18 +94,14 @@ require tpch
 statement ok
 CALL dbgen(sf=1)
 
-# set the 128-bit key
 statement ok
-PRAGMA parquet_key('0123456789112345')
-
-statement ok
-EXPORT DATABASE '__TEST_DIR__/tpch_encrypted' (FORMAT 'parquet', ENCRYPTION)
+EXPORT DATABASE '__TEST_DIR__/tpch_encrypted' (FORMAT 'parquet', ENCRYPTION_CONFIG {footer_key: 'key128'})
 
 load :memory:
 
-# re-set key upon loading the DB again
+# re-add key upon loading the DB again
 statement ok
-PRAGMA parquet_key('0123456789112345')
+PRAGMA add_parquet_key('key128', '0123456789112345')
 
 statement ok
 IMPORT DATABASE '__TEST_DIR__/tpch_encrypted'
@@ -140,33 +127,33 @@ endloop
 # now again without importing the DB, just with views, so we can test projection/filter pushdown
 load :memory:
 
-# re-set key upon loading the DB again
+# re-add key upon loading the DB again
 statement ok
-PRAGMA parquet_key('0123456789112345')
+PRAGMA add_parquet_key('key128', '0123456789112345')
 
 statement ok
-CREATE VIEW lineitem AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/lineitem.parquet', encryption=true);
+CREATE VIEW lineitem AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/lineitem.parquet', encryption_config={footer_key: 'key128'});
 
 statement ok
-CREATE VIEW orders AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/orders.parquet', encryption=true);
+CREATE VIEW orders AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/orders.parquet', encryption_config={footer_key: 'key128'});
 
 statement ok
-CREATE VIEW partsupp AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/partsupp.parquet', encryption=true);
+CREATE VIEW partsupp AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/partsupp.parquet', encryption_config={footer_key: 'key128'});
 
 statement ok
-CREATE VIEW part AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/part.parquet', encryption=true);
+CREATE VIEW part AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/part.parquet', encryption_config={footer_key: 'key128'});
 
 statement ok
-CREATE VIEW customer AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/customer.parquet', encryption=true);
+CREATE VIEW customer AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/customer.parquet', encryption_config={footer_key: 'key128'});
 
 statement ok
-CREATE VIEW supplier AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/supplier.parquet', encryption=true);
+CREATE VIEW supplier AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/supplier.parquet', encryption_config={footer_key: 'key128'});
 
 statement ok
-CREATE VIEW nation AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/nation.parquet', encryption=true);
+CREATE VIEW nation AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/nation.parquet', encryption_config={footer_key: 'key128'});
 
 statement ok
-CREATE VIEW region AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/region.parquet', encryption=true);
+CREATE VIEW region AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/region.parquet', encryption_config={footer_key: 'key128'});
 
 loop i 1 9
 

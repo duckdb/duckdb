@@ -314,19 +314,19 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 }
 
 uint32_t ParquetWriter::Write(const duckdb_apache::thrift::TBase &object) {
-	if (encryption_key.empty()) {
-		return object.write(protocol.get());
+	if (encryption_config) {
+		return ParquetCrypto::Write(object, *protocol, encryption_config->GetFooterKey());
 	} else {
-		return ParquetCrypto::Write(object, *protocol, encryption_key);
+		return object.write(protocol.get());
 	}
 }
 
 uint32_t ParquetWriter::WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size) {
-	if (encryption_key.empty()) {
+	if (encryption_config) {
+		return ParquetCrypto::WriteData(*protocol, buffer, buffer_size, encryption_config->GetFooterKey());
+	} else {
 		protocol->getTransport()->write(buffer, buffer_size);
 		return buffer_size;
-	} else {
-		return ParquetCrypto::WriteData(*protocol, buffer, buffer_size, encryption_key);
 	}
 }
 
@@ -345,20 +345,21 @@ void VerifyUniqueNames(const vector<string> &names) {
 
 ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalType> types_p, vector<string> names_p,
                              CompressionCodec::type codec, ChildFieldIDs field_ids_p,
-                             const vector<pair<string, string>> &kv_metadata, string encryption_key_p)
+                             const vector<pair<string, string>> &kv_metadata,
+                             shared_ptr<ParquetEncryptionConfig> encryption_config_p)
     : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec),
-      field_ids(std::move(field_ids_p)), encryption_key(std::move(encryption_key_p)) {
+      field_ids(std::move(field_ids_p)), encryption_config(std::move(encryption_config_p)) {
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
-	if (encryption_key.empty()) {
-		// parquet files start with the string "PAR1"
-		writer->WriteData(const_data_ptr_cast("PAR1"), 4);
-	} else {
+	if (encryption_config) {
 		// encrypted parquet files start with the string "PARE"
 		writer->WriteData(const_data_ptr_cast("PARE"), 4);
 		// we only support this one for now, not "AES_GCM_CTR_V1"
 		file_meta_data.encryption_algorithm.__isset.AES_GCM_V1 = true;
+	} else {
+		// parquet files start with the string "PAR1"
+		writer->WriteData(const_data_ptr_cast("PAR1"), 4);
 	}
 	TCompactProtocolFactoryT<MyTransport> tproto_factory;
 	protocol = tproto_factory.getProtocol(make_shared<MyTransport>(*writer));
@@ -496,7 +497,7 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 
 void ParquetWriter::Finalize() {
 	auto start_offset = writer->GetTotalWritten();
-	if (!encryption_key.empty()) {
+	if (encryption_config) {
 		// Crypto metadata is written unencrypted
 		FileCryptoMetaData crypto_metadata;
 		duckdb_parquet::format::AesGcmV1 aes_gcm_v1;
@@ -509,12 +510,12 @@ void ParquetWriter::Finalize() {
 
 	writer->Write<uint32_t>(writer->GetTotalWritten() - start_offset);
 
-	if (encryption_key.empty()) {
-		// parquet files also end with the string "PAR1"
-		writer->WriteData(const_data_ptr_cast("PAR1"), 4);
-	} else {
+	if (encryption_config) {
 		// encrypted parquet files also end with the string "PARE"
 		writer->WriteData(const_data_ptr_cast("PARE"), 4);
+	} else {
+		// parquet files also end with the string "PAR1"
+		writer->WriteData(const_data_ptr_cast("PAR1"), 4);
 	}
 
 	// flush to disk
