@@ -23,6 +23,8 @@ struct FrameStats {
 	int64_t end = 0;
 };
 
+using IncludedFrames = vector<FrameBounds>;
+
 //! The type used for sizing hashed aggregate function states
 typedef idx_t (*aggregate_size_t)();
 //! The type used for initializing hashed aggregate function states
@@ -51,7 +53,8 @@ typedef void (*aggregate_simple_update_t)(Vector inputs[], AggregateInputData &a
 //! The type used for computing complex/custom windowed aggregate functions (optional)
 typedef void (*aggregate_window_t)(Vector inputs[], const ValidityMask &filter_mask,
                                    AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
-                                   const FrameBounds &frame, Vector &result, idx_t rid, const_data_ptr_t win_state);
+                                   const IncludedFrames &frames, Vector &result, idx_t rid,
+                                   const_data_ptr_t win_state);
 
 //! The type used for initializing shared complex/custom windowed aggregate state (optional)
 typedef void (*aggregate_wininit_t)(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
@@ -233,11 +236,11 @@ public:
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static void UnaryWindow(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
-	                        idx_t input_count, data_ptr_t state, const FrameBounds &frame, Vector &result, idx_t ridx,
-	                        const_data_ptr_t gstate) {
+	                        idx_t input_count, data_ptr_t state, const IncludedFrames &frames,
+	                        Vector &result, idx_t ridx, const_data_ptr_t gstate) {
 		D_ASSERT(input_count == 1);
 		AggregateExecutor::UnaryWindow<STATE, INPUT_TYPE, RESULT_TYPE, OP>(inputs[0], filter_mask, aggr_input_data,
-		                                                                   state, frame, result, ridx, gstate);
+		                                                                   state, frames, result, ridx, gstate);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>

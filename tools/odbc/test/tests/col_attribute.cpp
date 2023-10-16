@@ -308,6 +308,16 @@ TEST_CASE("Test SQLColAttribute (descriptor information for a column)", "[odbc]"
 	                  ConvertToSQLCHAR("CREATE TABLE test (a INTEGER, b INTEGER)"), SQL_NTS);
 	ExpectError(hstmt, SQL_DESC_BASE_TABLE_NAME);
 
+	// Prepare a statement and call SQLColAttribute, succeeds but is undefined
+	EXECUTE_AND_CHECK("SQLExecDirect", SQLExecDirect, hstmt,
+	                  ConvertToSQLCHAR("create table colattrfoo(col1 int, col2 varchar(20))"), SQL_NTS);
+
+	EXECUTE_AND_CHECK("SQLPrepare", SQLPrepare, hstmt, ConvertToSQLCHAR("select * From colattrfoo"), SQL_NTS);
+
+	SQLLEN fixed_prec_scale;
+	EXECUTE_AND_CHECK("SQLColAttribute", SQLColAttribute, hstmt, 1, SQL_DESC_FIXED_PREC_SCALE, nullptr, 0, nullptr,
+	                  &fixed_prec_scale);
+
 	// Free the statement handle
 	EXECUTE_AND_CHECK("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);
 	EXECUTE_AND_CHECK("SQLFreeHandle (HSTMT)", SQLFreeHandle, SQL_HANDLE_STMT, hstmt);

@@ -40,13 +40,38 @@ inline interval_t operator-(const interval_t &lhs, const interval_t &rhs) {
 	return Interval::FromMicro(Interval::GetMicro(lhs) - Interval::GetMicro(rhs));
 }
 
+struct FrameSet {
+	inline explicit FrameSet(const IncludedFrames &frames_p) : frames(frames_p) {
+	}
+
+	inline idx_t Size() const {
+		idx_t result = 0;
+		for (const auto &frame : frames) {
+			result += frame.end - frame.start;
+		}
+
+		return result;
+	}
+
+	inline bool Contains(idx_t i) const {
+		for (idx_t f = 0; f < frames.size(); ++f) {
+			const auto &frame = frames[f];
+			if (frame.start <= i && i < frame.end) {
+				return true;
+			}
+		}
+		return false;
+	}
+	const IncludedFrames &frames;
+};
+
 struct QuantileIncluded {
-	inline explicit QuantileIncluded(const ValidityMask &fmask_p, const ValidityMask &dmask_p, idx_t bias_p)
-	    : fmask(fmask_p), dmask(dmask_p), bias(bias_p) {
+	inline explicit QuantileIncluded(const ValidityMask &fmask_p, const ValidityMask &dmask_p)
+	    : fmask(fmask_p), dmask(dmask_p) {
 	}
 
 	inline bool operator()(const idx_t &idx) const {
-		return fmask.RowIsValid(idx) && dmask.RowIsValid(idx - bias);
+		return fmask.RowIsValid(idx) && dmask.RowIsValid(idx);
 	}
 
 	inline bool AllValid() const {
@@ -55,14 +80,40 @@ struct QuantileIncluded {
 
 	const ValidityMask &fmask;
 	const ValidityMask &dmask;
-	const idx_t bias;
 };
 
-void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &prev) {
-	idx_t j = 0;
+struct QuantileReuseUpdater {
+	idx_t *index;
+	idx_t j;
 
-	//  Copy overlapping indices
-	for (idx_t p = 0; p < (prev.end - prev.start); ++p) {
+	inline QuantileReuseUpdater(idx_t *index, idx_t j) : index(index), j(j) {
+	}
+
+	inline void Neither(idx_t begin, idx_t end) {
+	}
+
+	inline void Left(idx_t begin, idx_t end) {
+	}
+
+	inline void Right(idx_t begin, idx_t end) {
+		for (; begin < end; ++begin) {
+			index[j++] = begin;
+		}
+	}
+
+	inline void Both(idx_t begin, idx_t end) {
+	}
+};
+
+void ReuseIndexes(idx_t *index, const IncludedFrames &currs, const IncludedFrames &prevs) {
+
+	//  Copy overlapping indices by scanning the previous set and copying down into holes.
+	//	We copy instead of leaving gaps in case there are fewer values in the current frame.
+	FrameSet prev_set(prevs);
+	FrameSet curr_set(currs);
+	const auto prev_count = prev_set.Size();
+	idx_t j = 0;
+	for (idx_t p = 0; p < prev_count; ++p) {
 		auto idx = index[p];
 
 		//  Shift down into any hole
@@ -71,24 +122,21 @@ void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &pre
 		}
 
 		//  Skip overlapping values
-		if (frame.start <= idx && idx < frame.end) {
+		if (curr_set.Contains(idx)) {
 			++j;
 		}
 	}
 
 	//  Insert new indices
 	if (j > 0) {
-		// Overlap: append the new ends
-		for (auto f = frame.start; f < prev.start; ++f, ++j) {
-			index[j] = f;
-		}
-		for (auto f = prev.end; f < frame.end; ++f, ++j) {
-			index[j] = f;
-		}
+		QuantileReuseUpdater updater(index, j);
+		AggregateExecutor::IntersectFrames(prevs, currs, updater);
 	} else {
 		//  No overlap: overwrite with new values
-		for (auto f = frame.start; f < frame.end; ++f, ++j) {
-			index[j] = f;
+		for (const auto &curr : currs) {
+			for (auto idx = curr.start; idx < curr.end; ++idx) {
+				index[j++] = idx;
+			}
 		}
 	}
 }
@@ -491,7 +539,7 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 			std::iota(sorted.begin(), sorted.end(), 0);
 		} else {
 			size_t valid = 0;
-			QuantileIncluded included(filter_mask, data_mask, 0);
+			QuantileIncluded included(filter_mask, data_mask);
 			for (ElementType i = 0; i < count; ++i) {
 				if (included(i)) {
 					sorted[valid++] = i;
@@ -594,24 +642,24 @@ struct QuantileState {
 	// Windowed Quantile skip lists
 	using PointerType = const InputType *;
 	using SkipListType = duckdb_skiplistlib::skip_list::HeadNode<PointerType, PointerLess<PointerType>>;
-	FrameBounds prev;
+	IncludedFrames prevs;
 	unique_ptr<SkipListType> s;
 	mutable vector<PointerType> dest;
 
 	// Windowed MAD indirection
-	idx_t pos;
+	idx_t count;
 	vector<idx_t> m;
 
-	QuantileState() : pos(0) {
+	QuantileState() : count(0) {
 	}
 
 	~QuantileState() {
 	}
 
-	inline void SetPos(size_t pos_p) {
-		pos = pos_p;
-		if (pos >= m.size()) {
-			m.resize(pos);
+	inline void SetCount(size_t count_p) {
+		count = count_p;
+		if (count >= m.size()) {
+			m.resize(count);
 		}
 	}
 
@@ -623,39 +671,53 @@ struct QuantileState {
 		return *s;
 	}
 
-	void UpdateSkip(const INPUT_TYPE *data, const FrameBounds &frame, const QuantileIncluded &included) {
+	struct SkipListUpdater {
+		SkipListType &skip;
+		const INPUT_TYPE *data;
+		const QuantileIncluded &included;
+
+		inline SkipListUpdater(SkipListType &skip, const INPUT_TYPE *data, const QuantileIncluded &included)
+		    : skip(skip), data(data), included(included) {
+		}
+
+		inline void Neither(idx_t begin, idx_t end) {
+		}
+
+		inline void Left(idx_t begin, idx_t end) {
+			for (; begin < end; ++begin) {
+				if (included(begin)) {
+					skip.remove(data + begin);
+				}
+			}
+		}
+
+		inline void Right(idx_t begin, idx_t end) {
+			for (; begin < end; ++begin) {
+				if (included(begin)) {
+					skip.insert(data + begin);
+				}
+			}
+		}
+
+		inline void Both(idx_t begin, idx_t end) {
+		}
+	};
+
+	void UpdateSkip(const INPUT_TYPE *data, const IncludedFrames &frames, const QuantileIncluded &included) {
 		//	No overlap, or no data
-		if (!s || prev.end <= frame.start || frame.end <= prev.start) {
+		if (!s || prevs.back().end <= frames.front().start || frames.back().end <= prevs.front().start) {
 			auto &skip = GetSkipList(true);
-			for (auto i = frame.start; i < frame.end; ++i) {
-				if (included(i)) {
-					skip.insert(data + i);
+			for (const auto &frame : frames) {
+				for (auto i = frame.start; i < frame.end; ++i) {
+					if (included(i)) {
+						skip.insert(data + i);
+					}
 				}
 			}
 		} else {
 			auto &skip = GetSkipList();
-			//	Remove old data
-			for (auto i = prev.start; i < frame.start; ++i) {
-				if (included(i)) {
-					skip.remove(data + i);
-				}
-			}
-			for (auto i = frame.end; i < prev.end; ++i) {
-				if (included(i)) {
-					skip.remove(data + i);
-				}
-			}
-			//	Add new data
-			for (auto i = frame.start; i < prev.start; ++i) {
-				if (included(i)) {
-					skip.insert(data + i);
-				}
-			}
-			for (auto i = prev.end; i < frame.end; ++i) {
-				if (included(i)) {
-					skip.insert(data + i);
-				}
-			}
+			SkipListUpdater updater(skip, data, included);
+			AggregateExecutor::IntersectFrames(prevs, frames, updater);
 		}
 	}
 
@@ -664,13 +726,13 @@ struct QuantileState {
 	}
 
 	template <typename RESULT_TYPE, bool DISCRETE>
-	RESULT_TYPE WindowScalar(const INPUT_TYPE *data, const FrameBounds &frame, const idx_t n, Vector &result,
+	RESULT_TYPE WindowScalar(const INPUT_TYPE *data, const IncludedFrames &frames, const idx_t n, Vector &result,
 	                         const QuantileValue &q) const {
 		D_ASSERT(n > 0);
 		if (qst32) {
-			return qst32->WindowScalar<INPUT_TYPE, RESULT_TYPE, DISCRETE>(data, frame, n, result, q);
+			return qst32->WindowScalar<INPUT_TYPE, RESULT_TYPE, DISCRETE>(data, frames[0], n, result, q);
 		} else if (qst64) {
-			return qst64->WindowScalar<INPUT_TYPE, RESULT_TYPE, DISCRETE>(data, frame, n, result, q);
+			return qst64->WindowScalar<INPUT_TYPE, RESULT_TYPE, DISCRETE>(data, frames[0], n, result, q);
 		} else if (s) {
 			// Find the position(s) needed
 			Interpolator<DISCRETE> interp(q, s->size(), false);
@@ -682,7 +744,7 @@ struct QuantileState {
 	}
 
 	template <typename CHILD_TYPE, bool DISCRETE>
-	void WindowList(const INPUT_TYPE *data, const FrameBounds &frame, const idx_t n, Vector &list, const idx_t lidx,
+	void WindowList(const INPUT_TYPE *data, const IncludedFrames &frames, const idx_t n, Vector &list, const idx_t lidx,
 	                const QuantileBindData &bind_data) const {
 		D_ASSERT(n > 0);
 		// Result is a constant LIST<CHILD_TYPE> with a fixed length
@@ -698,7 +760,7 @@ struct QuantileState {
 
 		for (const auto &q : bind_data.order) {
 			const auto &quantile = bind_data.quantiles[q];
-			rdata[lentry.offset + q] = WindowScalar<CHILD_TYPE, DISCRETE>(data, frame, n, result, quantile);
+			rdata[lentry.offset + q] = WindowScalar<CHILD_TYPE, DISCRETE>(data, frames, n, result, quantile);
 		}
 	}
 };
@@ -770,14 +832,19 @@ struct QuantileOperation {
 		}
 	}
 
-	static idx_t FrameSize(const QuantileIncluded &included, const FrameBounds &frame) {
+	static idx_t FrameSize(const QuantileIncluded &included, const IncludedFrames &frames) {
 		//	Count the number of valid values
-		auto n = frame.end - frame.start;
-		if (!included.AllValid()) {
+		idx_t n = 0;
+		if (included.AllValid()) {
+			for (const auto &frame : frames) {
+				n += frame.end  - frame.start;
+			}
+		} else {
 			//	NULLs or FILTERed values,
-			n = 0;
-			for (auto i = frame.start; i < frame.end; ++i) {
-				n += included(i);
+			for (const auto &frame : frames) {
+				for (auto i = frame.start; i < frame.end; ++i) {
+					n += included(i);
+				}
 			}
 		}
 
@@ -813,10 +880,10 @@ struct QuantileScalarOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds &frame, Vector &result,
-	                   idx_t ridx, const STATE *gstate) {
-		QuantileIncluded included(fmask, dmask, 0);
-		const auto n = FrameSize(included, frame);
+	                   AggregateInputData &aggr_input_data, STATE &state, const IncludedFrames &frames,
+	                   Vector &result, idx_t ridx, const STATE *gstate) {
+		QuantileIncluded included(fmask, dmask);
+		const auto n = FrameSize(included, frames);
 
 		D_ASSERT(aggr_input_data.bind_data);
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
@@ -830,17 +897,17 @@ struct QuantileScalarOperation : public QuantileOperation {
 		}
 
 		const auto &quantile = bind_data.quantiles[0];
-		if (gstate && gstate->HasTrees()) {
-			rdata[ridx] = gstate->template WindowScalar<RESULT_TYPE, DISCRETE>(data, frame, n, result, quantile);
+		if (gstate && gstate->HasTrees() && frames.size() == 1) {
+			rdata[ridx] = gstate->template WindowScalar<RESULT_TYPE, DISCRETE>(data, frames, n, result, quantile);
 		} else {
 			//	Update the skip list
-			state.UpdateSkip(data, frame, included);
+			state.UpdateSkip(data, frames, included);
 
 			// Find the position(s) needed
-			rdata[ridx] = state.template WindowScalar<RESULT_TYPE, DISCRETE>(data, frame, n, result, quantile);
+			rdata[ridx] = state.template WindowScalar<RESULT_TYPE, DISCRETE>(data, frames, n, result, quantile);
 
 			//	Save the previous state for next time
-			state.prev = frame;
+			state.prevs = frames;
 		}
 	}
 };
@@ -941,13 +1008,13 @@ struct QuantileListOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds &frame, Vector &list,
-	                   idx_t lidx, const STATE *gstate) {
+	                   AggregateInputData &aggr_input_data, STATE &state, const IncludedFrames &frames,
+	                   Vector &list, idx_t lidx, const STATE *gstate) {
 		D_ASSERT(aggr_input_data.bind_data);
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
-		QuantileIncluded included(fmask, dmask, 0);
-		const auto n = FrameSize(included, frame);
+		QuantileIncluded included(fmask, dmask);
+		const auto n = FrameSize(included, frames);
 
 		// Result is a constant LIST<RESULT_TYPE> with a fixed length
 		if (!n) {
@@ -956,13 +1023,13 @@ struct QuantileListOperation : public QuantileOperation {
 			return;
 		}
 
-		if (gstate && gstate->HasTrees()) {
-			gstate->template WindowList<CHILD_TYPE, DISCRETE>(data, frame, n, list, lidx, bind_data);
+		if (gstate && gstate->HasTrees() && frames.size() == 1) {
+			gstate->template WindowList<CHILD_TYPE, DISCRETE>(data, frames, n, list, lidx, bind_data);
 		} else {
 			//
-			state.UpdateSkip(data, frame, included);
-			state.template WindowList<CHILD_TYPE, DISCRETE>(data, frame, n, list, lidx, bind_data);
-			state.prev = frame;
+			state.UpdateSkip(data, frames, included);
+			state.template WindowList<CHILD_TYPE, DISCRETE>(data, frames, n, list, lidx, bind_data);
+			state.prevs = frames;
 		}
 	}
 };
@@ -1235,14 +1302,12 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds &frame, Vector &result,
+	                   AggregateInputData &aggr_input_data, STATE &state, const IncludedFrames &frames, Vector &result,
 	                   idx_t ridx, const STATE *gstate) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 
-		QuantileIncluded included(fmask, dmask, 0);
-		const auto n = FrameSize(included, frame);
-
-		auto &prev = state.prev;
+		QuantileIncluded included(fmask, dmask);
+		const auto n = FrameSize(included, frames);
 
 		if (!n) {
 			auto &rmask = FlatVector::Validity(result);
@@ -1257,23 +1322,24 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 		D_ASSERT(bind_data.quantiles.size() == 1);
 		const auto &quantile = bind_data.quantiles[0];
 		MEDIAN_TYPE med;
-		if (gstate && gstate->HasTrees()) {
-			med = gstate->template WindowScalar<MEDIAN_TYPE, false>(data, frame, n, result, quantile);
+		if (gstate && gstate->HasTrees() && frames.size() == 1) {
+			med = gstate->template WindowScalar<MEDIAN_TYPE, false>(data, frames, n, result, quantile);
 		} else {
-			state.UpdateSkip(data, frame, included);
-			med = state.template WindowScalar<MEDIAN_TYPE, false>(data, frame, n, result, quantile);
+			state.UpdateSkip(data, frames, included);
+			med = state.template WindowScalar<MEDIAN_TYPE, false>(data, frames, n, result, quantile);
 		}
 
 		//  Lazily initialise frame state
-		state.SetPos(frame.end - frame.start);
+		state.SetCount(frames.back().end - frames.front().start);
 		auto index2 = state.m.data();
 		D_ASSERT(index2);
 
 		// The replacement trick does not work on the second index because if
 		// the median has changed, the previous order is not correct.
 		// It is probably close, however, and so reuse is helpful.
-		ReuseIndexes(index2, frame, prev);
-		std::partition(index2, index2 + state.pos, included);
+		auto &prevs = state.prevs;
+		ReuseIndexes(index2, frames, prevs);
+		std::partition(index2, index2 + state.count, included);
 
 		Interpolator<false> interp(quantile, n, false);
 
@@ -1289,7 +1355,7 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 		rdata[ridx] = interp.template Operation<idx_t, RESULT_TYPE, MadIndirect>(index2, result, mad_indirect);
 
 		//	Prev is used by both skip lists and increments
-		prev = frame;
+		prevs = frames;
 	}
 };
 

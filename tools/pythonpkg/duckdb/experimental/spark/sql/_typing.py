@@ -25,7 +25,10 @@ from typing import (
     TypeVar,
     Union,
 )
-from typing_extensions import Literal, Protocol
+try:
+    from typing import Literal, Protocol
+except ImportError:
+    from typing_extensions import Literal, Protocol
 
 import datetime
 import decimal
