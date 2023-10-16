@@ -22,4 +22,23 @@ unique_ptr<CreateInfo> CreateTypeInfo::Copy() const {
 	return std::move(result);
 }
 
+string CreateTypeInfo::ToString() const {
+	string result = "";
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto &values_insert_order = EnumType::GetValuesInsertOrder(type);
+	idx_t size = EnumType::GetSize(type);
+	result += "CREATE TYPE ";
+	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += " AS ENUM ( ";
+
+	for (idx_t i = 0; i < size; i++) {
+		result += "'" + values_insert_order.GetValue(i).ToString() + "'";
+		if (i != size - 1) {
+			result += ", ";
+		}
+	}
+	result += " );";
+	return result;
+}
+
 } // namespace duckdb

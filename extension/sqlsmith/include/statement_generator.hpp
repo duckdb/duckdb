@@ -50,8 +50,11 @@ public:
 private:
 	unique_ptr<SQLStatement> GenerateStatement(StatementType type);
 
-	unique_ptr<SQLStatement> GenerateSelect();
+	unique_ptr<SelectStatement> GenerateSelect();
+	unique_ptr<CreateStatement> GenerateCreate();
 	unique_ptr<QueryNode> GenerateQueryNode();
+
+	unique_ptr<CreateInfo> GenerateCreateInfo();
 
 	void GenerateCTEs(QueryNode &node);
 	unique_ptr<TableRef> GenerateTableRef();
@@ -94,18 +97,26 @@ private:
 	bool RandomBoolean();
 	//! Returns true with a percentage change (0-100)
 	bool RandomPercentage(idx_t percentage);
+	string RandomString(idx_t length);
 	unique_ptr<ParsedExpression> RandomExpression(idx_t percentage);
 
+	//! Generate identifier for a column or parent using "t" or "c" prefixes. ie. t0, or c0
 	string GenerateIdentifier();
 	string GenerateTableIdentifier();
+	string GenerateSchemaIdentifier();
+	string GenerateViewIdentifier();
 
+	//! using the parent generate a relation name. ie. t0
 	string GenerateRelationName();
+	//! using the parent, generate a valid column name. ie. c0
 	string GenerateColumnName();
 	idx_t GetIndex();
 
 	Value GenerateConstantValue();
 
 	ExpressionType GenerateComparisonType();
+
+	//! used to create columns when creating new tables;
 
 private:
 	ClientContext &context;
