@@ -61,6 +61,7 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"json_merge_patch", "json"},
     {"json_object", "json"},
     {"json_quote", "json"},
+    {"json_serialize_plan", "json"},
     {"json_serialize_sql", "json"},
     {"json_structure", "json"},
     {"json_transform", "json"},
