@@ -30,7 +30,7 @@ struct CreateTableInfo : public CreateInfo {
 	ColumnList columns;
 	//! List of constraints on the table
 	vector<unique_ptr<Constraint>> constraints;
-	//! CREATE TABLE from QUERY
+	//! CREATE TABLE as QUERY
 	unique_ptr<SelectStatement> query;
 
 public:
@@ -38,6 +38,8 @@ public:
 
 	DUCKDB_API void Serialize(Serializer &serializer) const override;
 	DUCKDB_API static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
+
+	string ToString() const override;
 };
 
 } // namespace duckdb

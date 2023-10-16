@@ -13,226 +13,228 @@
 
 namespace duckdb_parquet { namespace format {
 
-int _kTypeValues[] = {
-  Type::BOOLEAN,
-  Type::INT32,
-  Type::INT64,
-  Type::INT96,
-  Type::FLOAT,
-  Type::DOUBLE,
-  Type::BYTE_ARRAY,
-  Type::FIXED_LEN_BYTE_ARRAY
-};
-const char* _kTypeNames[] = {
-  "BOOLEAN",
-  "INT32",
-  "INT64",
-  "INT96",
-  "FLOAT",
-  "DOUBLE",
-  "BYTE_ARRAY",
-  "FIXED_LEN_BYTE_ARRAY"
-};
-const std::map<int, const char*> _Type_VALUES_TO_NAMES(::duckdb_apache::thrift::TEnumIterator(8, _kTypeValues, _kTypeNames), ::duckdb_apache::thrift::TEnumIterator(-1, NULL, NULL));
-
-std::ostream& operator<<(std::ostream& out, const Type::type& val) {
-  std::map<int, const char*>::const_iterator it = _Type_VALUES_TO_NAMES.find(val);
-  if (it != _Type_VALUES_TO_NAMES.end()) {
-    out << it->second;
-  } else {
-    out << static_cast<int>(val);
-  }
-  return out;
+std::ostream &operator<<(std::ostream &out, const Type::type &val) {
+	switch (val) {
+	case Type::BOOLEAN:
+		out << "BOOLEAN";
+		return out;
+	case Type::INT32:
+		out << "INT32";
+		return out;
+	case Type::INT64:
+		out << "INT64";
+		return out;
+	case Type::INT96:
+		out << "INT96";
+		return out;
+	case Type::FLOAT:
+		out << "FLOAT";
+		return out;
+	case Type::DOUBLE:
+		out << "DOUBLE";
+		return out;
+	case Type::BYTE_ARRAY:
+		out << "BYTE_ARRAY";
+		return out;
+	case Type::FIXED_LEN_BYTE_ARRAY:
+		out << "FIXED_LEN_BYTE_ARRAY";
+		return out;
+		//  no default for compiler error on missing enum
+	}
+	out << static_cast<int>(val);
+	return out;
 }
 
-int _kConvertedTypeValues[] = {
-  ConvertedType::UTF8,
-  ConvertedType::MAP,
-  ConvertedType::MAP_KEY_VALUE,
-  ConvertedType::LIST,
-  ConvertedType::ENUM,
-  ConvertedType::DECIMAL,
-  ConvertedType::DATE,
-  ConvertedType::TIME_MILLIS,
-  ConvertedType::TIME_MICROS,
-  ConvertedType::TIMESTAMP_MILLIS,
-  ConvertedType::TIMESTAMP_MICROS,
-  ConvertedType::UINT_8,
-  ConvertedType::UINT_16,
-  ConvertedType::UINT_32,
-  ConvertedType::UINT_64,
-  ConvertedType::INT_8,
-  ConvertedType::INT_16,
-  ConvertedType::INT_32,
-  ConvertedType::INT_64,
-  ConvertedType::JSON,
-  ConvertedType::BSON,
-  ConvertedType::INTERVAL
-};
-const char* _kConvertedTypeNames[] = {
-  "UTF8",
-  "MAP",
-  "MAP_KEY_VALUE",
-  "LIST",
-  "ENUM",
-  "DECIMAL",
-  "DATE",
-  "TIME_MILLIS",
-  "TIME_MICROS",
-  "TIMESTAMP_MILLIS",
-  "TIMESTAMP_MICROS",
-  "UINT_8",
-  "UINT_16",
-  "UINT_32",
-  "UINT_64",
-  "INT_8",
-  "INT_16",
-  "INT_32",
-  "INT_64",
-  "JSON",
-  "BSON",
-  "INTERVAL"
-};
-const std::map<int, const char*> _ConvertedType_VALUES_TO_NAMES(::duckdb_apache::thrift::TEnumIterator(22, _kConvertedTypeValues, _kConvertedTypeNames), ::duckdb_apache::thrift::TEnumIterator(-1, NULL, NULL));
-
-std::ostream& operator<<(std::ostream& out, const ConvertedType::type& val) {
-  std::map<int, const char*>::const_iterator it = _ConvertedType_VALUES_TO_NAMES.find(val);
-  if (it != _ConvertedType_VALUES_TO_NAMES.end()) {
-    out << it->second;
-  } else {
-    out << static_cast<int>(val);
-  }
-  return out;
+std::ostream &operator<<(std::ostream &out, const ConvertedType::type &val) {
+	switch (val) {
+	case ConvertedType::UTF8:
+		out << "UTF8";
+		return out;
+	case ConvertedType::MAP:
+		out << "MAP";
+		return out;
+	case ConvertedType::MAP_KEY_VALUE:
+		out << "MAP_KEY_VALUE";
+		return out;
+	case ConvertedType::LIST:
+		out << "LIST";
+		return out;
+	case ConvertedType::ENUM:
+		out << "ENUM";
+		return out;
+	case ConvertedType::DECIMAL:
+		out << "DECIMAL";
+		return out;
+	case ConvertedType::DATE:
+		out << "DATE";
+		return out;
+	case ConvertedType::TIME_MILLIS:
+		out << "TIME_MILLIS";
+		return out;
+	case ConvertedType::TIME_MICROS:
+		out << "TIME_MICROS";
+		return out;
+	case ConvertedType::TIMESTAMP_MILLIS:
+		out << "TIMESTAMP_MILLIS";
+		return out;
+	case ConvertedType::TIMESTAMP_MICROS:
+		out << "TIMESTAMP_MICROS";
+		return out;
+	case ConvertedType::UINT_8:
+		out << "UINT_8";
+		return out;
+	case ConvertedType::UINT_16:
+		out << "UINT_16";
+		return out;
+	case ConvertedType::UINT_32:
+		out << "UINT_32";
+		return out;
+	case ConvertedType::UINT_64:
+		out << "UINT_64";
+		return out;
+	case ConvertedType::INT_8:
+		out << "INT_8";
+		return out;
+	case ConvertedType::INT_16:
+		out << "INT_16";
+		return out;
+	case ConvertedType::INT_32:
+		out << "INT_32";
+		return out;
+	case ConvertedType::INT_64:
+		out << "INT_64";
+		return out;
+	case ConvertedType::JSON:
+		out << "JSON";
+		return out;
+	case ConvertedType::BSON:
+		out << "BSON";
+		return out;
+	case ConvertedType::INTERVAL:
+		out << "INTERVAL";
+		return out;
+		//  no default for compiler error on missing enum
+	}
+	out << static_cast<int>(val);
+	return out;
 }
 
-int _kFieldRepetitionTypeValues[] = {
-  FieldRepetitionType::REQUIRED,
-  FieldRepetitionType::OPTIONAL,
-  FieldRepetitionType::REPEATED
-};
-const char* _kFieldRepetitionTypeNames[] = {
-  "REQUIRED",
-  "OPTIONAL",
-  "REPEATED"
-};
-const std::map<int, const char*> _FieldRepetitionType_VALUES_TO_NAMES(::duckdb_apache::thrift::TEnumIterator(3, _kFieldRepetitionTypeValues, _kFieldRepetitionTypeNames), ::duckdb_apache::thrift::TEnumIterator(-1, NULL, NULL));
-
-std::ostream& operator<<(std::ostream& out, const FieldRepetitionType::type& val) {
-  std::map<int, const char*>::const_iterator it = _FieldRepetitionType_VALUES_TO_NAMES.find(val);
-  if (it != _FieldRepetitionType_VALUES_TO_NAMES.end()) {
-    out << it->second;
-  } else {
-    out << static_cast<int>(val);
-  }
-  return out;
+std::ostream &operator<<(std::ostream &out, const FieldRepetitionType::type &val) {
+	switch (val) {
+	case FieldRepetitionType::REQUIRED:
+		out << "REQUIRED";
+		return out;
+	case FieldRepetitionType::OPTIONAL:
+		out << "OPTIONAL";
+		return out;
+	case FieldRepetitionType::REPEATED:
+		out << "REPEATED";
+		return out;
+		//  no default for compiler error on missing enum
+	}
+	out << static_cast<int>(val);
+	return out;
 }
 
-int _kEncodingValues[] = {
-  Encoding::PLAIN,
-  Encoding::PLAIN_DICTIONARY,
-  Encoding::RLE,
-  Encoding::BIT_PACKED,
-  Encoding::DELTA_BINARY_PACKED,
-  Encoding::DELTA_LENGTH_BYTE_ARRAY,
-  Encoding::DELTA_BYTE_ARRAY,
-  Encoding::RLE_DICTIONARY
-};
-const char* _kEncodingNames[] = {
-  "PLAIN",
-  "PLAIN_DICTIONARY",
-  "RLE",
-  "BIT_PACKED",
-  "DELTA_BINARY_PACKED",
-  "DELTA_LENGTH_BYTE_ARRAY",
-  "DELTA_BYTE_ARRAY",
-  "RLE_DICTIONARY"
-};
-const std::map<int, const char*> _Encoding_VALUES_TO_NAMES(::duckdb_apache::thrift::TEnumIterator(8, _kEncodingValues, _kEncodingNames), ::duckdb_apache::thrift::TEnumIterator(-1, NULL, NULL));
-
-std::ostream& operator<<(std::ostream& out, const Encoding::type& val) {
-  std::map<int, const char*>::const_iterator it = _Encoding_VALUES_TO_NAMES.find(val);
-  if (it != _Encoding_VALUES_TO_NAMES.end()) {
-    out << it->second;
-  } else {
-    out << static_cast<int>(val);
-  }
-  return out;
+std::ostream &operator<<(std::ostream &out, const Encoding::type &val) {
+	switch (val) {
+	case Encoding::PLAIN:
+		out << "PLAIN";
+		return out;
+	case Encoding::PLAIN_DICTIONARY:
+		out << "PLAIN_DICTIONARY";
+		return out;
+	case Encoding::RLE:
+		out << "RLE";
+		return out;
+	case Encoding::BIT_PACKED:
+		out << "BIT_PACKED";
+		return out;
+	case Encoding::DELTA_BINARY_PACKED:
+		out << "DELTA_BINARY_PACKED";
+		return out;
+	case Encoding::DELTA_LENGTH_BYTE_ARRAY:
+		out << "DELTA_LENGTH_BYTE_ARRAY";
+		return out;
+	case Encoding::DELTA_BYTE_ARRAY:
+		out << "DELTA_BYTE_ARRAY";
+		return out;
+	case Encoding::RLE_DICTIONARY:
+		out << "RLE_DICTIONARY";
+		return out;
+	case Encoding::BYTE_STREAM_SPLIT:
+		out << "BYTE_STREAM_SPLIT";
+		return out;
+		//  no default for compiler error on missing enum
+	}
+	out << static_cast<int>(val);
+	return out;
 }
 
-int _kCompressionCodecValues[] = {
-  CompressionCodec::UNCOMPRESSED,
-  CompressionCodec::SNAPPY,
-  CompressionCodec::GZIP,
-  CompressionCodec::LZO,
-  CompressionCodec::BROTLI,
-  CompressionCodec::LZ4,
-  CompressionCodec::ZSTD
-};
-const char* _kCompressionCodecNames[] = {
-  "UNCOMPRESSED",
-  "SNAPPY",
-  "GZIP",
-  "LZO",
-  "BROTLI",
-  "LZ4",
-  "ZSTD"
-};
-const std::map<int, const char*> _CompressionCodec_VALUES_TO_NAMES(::duckdb_apache::thrift::TEnumIterator(7, _kCompressionCodecValues, _kCompressionCodecNames), ::duckdb_apache::thrift::TEnumIterator(-1, NULL, NULL));
-
-std::ostream& operator<<(std::ostream& out, const CompressionCodec::type& val) {
-  std::map<int, const char*>::const_iterator it = _CompressionCodec_VALUES_TO_NAMES.find(val);
-  if (it != _CompressionCodec_VALUES_TO_NAMES.end()) {
-    out << it->second;
-  } else {
-    out << static_cast<int>(val);
-  }
-  return out;
+std::ostream &operator<<(std::ostream &out, const CompressionCodec::type &val) {
+	switch (val) {
+	case CompressionCodec::UNCOMPRESSED:
+		out << "UNCOMPRESSED";
+		return out;
+	case CompressionCodec::SNAPPY:
+		out << "SNAPPY";
+		return out;
+	case CompressionCodec::GZIP:
+		out << "GZIP";
+		return out;
+	case CompressionCodec::LZO:
+		out << "LZO";
+		return out;
+	case CompressionCodec::BROTLI:
+		out << "BROTLI";
+		return out;
+	case CompressionCodec::LZ4:
+		out << "LZ4";
+		return out;
+	case CompressionCodec::ZSTD:
+		out << "ZSTD";
+		return out;
+		//  no default for compiler error on missing enum
+	}
+	out << static_cast<int>(val);
+	return out;
 }
 
-int _kPageTypeValues[] = {
-  PageType::DATA_PAGE,
-  PageType::INDEX_PAGE,
-  PageType::DICTIONARY_PAGE,
-  PageType::DATA_PAGE_V2
-};
-const char* _kPageTypeNames[] = {
-  "DATA_PAGE",
-  "INDEX_PAGE",
-  "DICTIONARY_PAGE",
-  "DATA_PAGE_V2"
-};
-const std::map<int, const char*> _PageType_VALUES_TO_NAMES(::duckdb_apache::thrift::TEnumIterator(4, _kPageTypeValues, _kPageTypeNames), ::duckdb_apache::thrift::TEnumIterator(-1, NULL, NULL));
-
-std::ostream& operator<<(std::ostream& out, const PageType::type& val) {
-  std::map<int, const char*>::const_iterator it = _PageType_VALUES_TO_NAMES.find(val);
-  if (it != _PageType_VALUES_TO_NAMES.end()) {
-    out << it->second;
-  } else {
-    out << static_cast<int>(val);
-  }
-  return out;
+std::ostream &operator<<(std::ostream &out, const PageType::type &val) {
+	switch (val) {
+	case PageType::DATA_PAGE:
+		out << "DATA_PAGE";
+		return out;
+	case PageType::INDEX_PAGE:
+		out << "INDEX_PAGE";
+		return out;
+	case PageType::DICTIONARY_PAGE:
+		out << "DICTIONARY_PAGE";
+		return out;
+	case PageType::DATA_PAGE_V2:
+		out << "DATA_PAGE_V2";
+		return out;
+		//  no default for compiler error on missing enum
+	}
+	out << static_cast<int>(val);
+	return out;
 }
 
-int _kBoundaryOrderValues[] = {
-  BoundaryOrder::UNORDERED,
-  BoundaryOrder::ASCENDING,
-  BoundaryOrder::DESCENDING
-};
-const char* _kBoundaryOrderNames[] = {
-  "UNORDERED",
-  "ASCENDING",
-  "DESCENDING"
-};
-const std::map<int, const char*> _BoundaryOrder_VALUES_TO_NAMES(::duckdb_apache::thrift::TEnumIterator(3, _kBoundaryOrderValues, _kBoundaryOrderNames), ::duckdb_apache::thrift::TEnumIterator(-1, NULL, NULL));
-
-std::ostream& operator<<(std::ostream& out, const BoundaryOrder::type& val) {
-  std::map<int, const char*>::const_iterator it = _BoundaryOrder_VALUES_TO_NAMES.find(val);
-  if (it != _BoundaryOrder_VALUES_TO_NAMES.end()) {
-    out << it->second;
-  } else {
-    out << static_cast<int>(val);
-  }
-  return out;
+std::ostream &operator<<(std::ostream &out, const BoundaryOrder::type &val) {
+	switch (val) {
+	case BoundaryOrder::UNORDERED:
+		out << "UNORDERED";
+		return out;
+	case BoundaryOrder::ASCENDING:
+		out << "ASCENDING";
+		return out;
+	case BoundaryOrder::DESCENDING:
+		out << "DESCENDING";
+		return out;
+		//  no default for compiler error on missing enum
+	}
+	out << static_cast<int>(val);
+	return out;
 }
 
 
@@ -6674,5 +6676,6 @@ void FileCryptoMetaData::printTo(std::ostream& out) const {
   out << ", " << "key_metadata="; (__isset.key_metadata ? (out << to_string(key_metadata)) : (out << "<null>"));
   out << ")";
 }
+
 
 }} // namespace

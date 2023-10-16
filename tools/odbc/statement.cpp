@@ -388,6 +388,11 @@ SQLRETURN SQL_API SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQ
 	string table_filter = OdbcUtils::ParseStringFilter("\"TABLE_NAME\"", table_n, hstmt->dbc->sql_attr_metadata_id);
 
 	auto table_tp = OdbcUtils::ReadString(table_type, name_length4);
+
+	// .Net ODBC driver GetSchema() call includes "SYSTEM TABLE" (doesn't exist in DuckDB),
+	// and the regex tweaks below break if "SYSTEM TABLE" is in the query, so remove it
+	table_tp = std::regex_replace(table_tp, std::regex("('SYSTEM TABLE'|SYSTEM TABLE)"), "");
+
 	table_tp = std::regex_replace(table_tp, std::regex("('TABLE'|TABLE)"), "'BASE TABLE'");
 	table_tp = std::regex_replace(table_tp, std::regex("('VIEW'|VIEW)"), "'VIEW'");
 	table_tp = std::regex_replace(table_tp, std::regex("('%'|%)"), "'%'");
@@ -512,7 +517,7 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 		return ret;
 	}
 
-	if (field_identifier != SQL_DESC_COUNT &&
+	if (field_identifier != SQL_DESC_COUNT && hstmt->res &&
 	    hstmt->res->properties.return_type != duckdb::StatementReturnType::QUERY_RESULT) {
 		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLColAttribute(s)",
 		                                   "Prepared statement not a cursor-specification", SQLStateType::ST_07005,
