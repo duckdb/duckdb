@@ -8,6 +8,7 @@ adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
 adbc_driver_duckdb = pytest.importorskip("adbc_driver_duckdb.dbapi")
 con = adbc_driver_duckdb.connect()
 
+
 def _import(handle):
     """Helper to import a C Data Interface handle."""
     if isinstance(handle, adbc_driver_manager.ArrowArrayStreamHandle):

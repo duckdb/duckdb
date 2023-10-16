@@ -9,7 +9,6 @@ adbc_driver_duckdb = pytest.importorskip("adbc_driver_duckdb.dbapi")
 con = adbc_driver_duckdb.connect()
 
 
-
 class TestADBCConnectionGetInfo(object):
     def test_connection_basic(self):
         con = adbc_driver_duckdb.connect()
