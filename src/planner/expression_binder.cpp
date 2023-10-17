@@ -214,6 +214,7 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	auto error_msg = Bind(expr, 0, root_expression);
 	if (!error_msg.empty()) {
 		// failed to bind: try to bind correlated columns in the expression (if any)
+		// Look here. here is probably the magic that happens between column0 and text
 		bool success = BindCorrelatedColumns(expr);
 		if (!success) {
 			throw BinderException(error_msg);
@@ -256,6 +257,7 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, b
 	// bind the expression
 	BindResult result = BindExpression(expr, depth, root_expression);
 	if (result.HasError()) {
+		// should error here with "referenced column \"text\" not in the from clause
 		return result.error;
 	}
 	// successfully bound: replace the node with a BoundExpression

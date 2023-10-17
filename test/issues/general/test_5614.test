@@ -5,10 +5,31 @@
 statement ok
 create table gutenburg as select * from read_csv_auto('/Users/tomebergen/duckdb/gutenburg.csv');
 
+
+# whats happening here is that the where subquery queries from an empty table. 
+# The whatever alias is properly evaluated, but there ends up being another 
+# scan from gutenburg (in reality this query can work using only one scan from gutenburg).
+# 
+
+# So then is the subquery select * from unnest(str_split(column0, ' ')))
+# able to add the proper delim scan but the other statement is not able
+# to do that?
+
+
+statement error
+explain select 
+row_number() over () as line_number, 
+column0 as whatever, 
+length(coalesce(column0, '')) as text_length 
+from 
+gutenburg
+where 'LORD' in (select * from unnest(str_split(whatever, ' ')));
+
+
 statement ok
 explain select 
 row_number() over () as line_number, 
-column0 as text, 
+column0 as whatever, 
 length(coalesce(column0, '')) as text_length 
 from 
 gutenburg
