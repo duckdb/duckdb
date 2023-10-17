@@ -104,7 +104,7 @@ NULL
 statement error
 SELECT list_select([1,2,3], [NULL])
 ----
-No NULLs are allowed in the selection list.
+NULLs are not allowed as list elements in the second input parameter.
 
 query I
 SELECT list_select(i, [2,3,4]) FROM integers
@@ -220,11 +220,10 @@ SELECT list_select(['2021-08-20'::TIMESTAMPTZ], [1])
 [2021-08-20 00:00:00+00]
 
 # interval
-# FIXME: Invalid PhysicalType for GetTypeIdSize
-#query I
-#SELECT list_select([INTERVAL 1 YEAR], [1])
-#----
-#[1 year]
+query I
+SELECT list_select([INTERVAL 1 YEAR], [1])
+----
+[1 year]
 
 foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval
 

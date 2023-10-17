@@ -27,37 +27,37 @@ INSERT INTO integers2 VALUES ([]), (NULL)
 query I
 SELECT list_zip([1,2,3])
 ----
-[{'v1': 1}, {'v1': 2}, {'v1': 3}]
+[{'list_1': 1}, {'list_1': 2}, {'list_1': 3}]
 
 query I
 SELECT list_zip([1,2,3], [2,3,4], [3,4,5], []);
 ----
-[{'v1': 1, 'v2': 2, 'v3': 3, 'v4': NULL}, {'v1': 2, 'v2': 3, 'v3': 4, 'v4': NULL}, {'v1': 3, 'v2': 4, 'v3': 5, 'v4': NULL}]
+[{'list_1': 1, 'list_2': 2, 'list_3': 3, 'list_4': NULL}, {'list_1': 2, 'list_2': 3, 'list_3': 4, 'list_4': NULL}, {'list_1': 3, 'list_2': 4, 'list_3': 5, 'list_4': NULL}]
 
 query I
 SELECT list_zip([1,2,3], [1,2,3])
 ----
-[{'v1': 1, 'v2': 1}, {'v1': 2, 'v2': 2}, {'v1': 3, 'v2': 3}]
+[{'list_1': 1, 'list_2': 1}, {'list_1': 2, 'list_2': 2}, {'list_1': 3, 'list_2': 3}]
 
 query I
 SELECT list_zip([1,2,3], [1,2])
 ----
-[{'v1': 1, 'v2': 1}, {'v1': 2, 'v2': 2}, {'v1': 3, 'v2': NULL}]
+[{'list_1': 1, 'list_2': 1}, {'list_1': 2, 'list_2': 2}, {'list_1': 3, 'list_2': NULL}]
 
 query I
 SELECT list_zip([1,2], [1,2,3])
 ----
-[{'v1': 1, 'v2': 1}, {'v1': 2, 'v2': 2}, {'v1': NULL, 'v2': 3}]
+[{'list_1': 1, 'list_2': 1}, {'list_1': 2, 'list_2': 2}, {'list_1': NULL, 'list_2': 3}]
 
 query I
 SELECT list_zip([1,2,3], NULL)
 ----
-[{'v1': 1, 'v2': NULL}, {'v1': 2, 'v2': NULL}, {'v1': 3, 'v2': NULL}]
+[{'list_1': 1, 'list_2': NULL}, {'list_1': 2, 'list_2': NULL}, {'list_1': 3, 'list_2': NULL}]
 
 query I
 SELECT list_zip([1,2,3], [])
 ----
-[{'v1': 1, 'v2': NULL}, {'v1': 2, 'v2': NULL}, {'v1': 3, 'v2': NULL}]
+[{'list_1': 1, 'list_2': NULL}, {'list_1': 2, 'list_2': NULL}, {'list_1': 3, 'list_2': NULL}]
 
 query I
 SELECT list_zip([1,2,3], NULL, true)
@@ -93,22 +93,22 @@ SELECT list_zip(a.i, b.i, b.i) FROM integers AS a, integers AS b
 query I
 SELECT list_zip([1,2,3], true)
 ----
-[{'v1': 1}, {'v1': 2}, {'v1': 3}]
+[{'list_1': 1}, {'list_1': 2}, {'list_1': 3}]
 
 query I
 SELECT list_zip([1,2,3], [1,2,3], true)
 ----
-[{'v1': 1, 'v2': 1}, {'v1': 2, 'v2': 2}, {'v1': 3, 'v2': 3}]
+[{'list_1': 1, 'list_2': 1}, {'list_1': 2, 'list_2': 2}, {'list_1': 3, 'list_2': 3}]
 
 query I
 SELECT list_zip([1,2,3], [1,2], true)
 ----
-[{'v1': 1, 'v2': 1}, {'v1': 2, 'v2': 2}]
+[{'list_1': 1, 'list_2': 1}, {'list_1': 2, 'list_2': 2}]
 
 query I
 SELECT list_zip([1,2], [1,2,3], true)
 ----
-[{'v1': 1, 'v2': 1}, {'v1': 2, 'v2': 2}]
+[{'list_1': 1, 'list_2': 1}, {'list_1': 2, 'list_2': 2}]
 
 query I
 SELECT list_zip(i, j, b) FROM integers, integers2, bools
@@ -130,6 +130,8 @@ CREATE TABLE lists AS SELECT range % 4 g, list(range) l FROM range(10000) GROUP 
 statement ok
 select g, list_zip(l, b) l from lists, bools
 
+statement ok
+SELECT list_zip([1,2,3], [true, false, NULL], [{'list_1': 1}, {'list_1': 2}, {'list_1': 3}],  ['a', 'b', 'c'], ['2021-08-20'::DATE, '2021-08-21'::DATE, '2021-08-22'::DATE], [1.0, 2.0, 3.0], [NULL, NULL, NULL])
 
 # test all types
 
@@ -137,23 +139,23 @@ select g, list_zip(l, b) l from lists, bools
 query I
 SELECT list_zip([true, false, NULL])
 ----
-[{'v1': true}, {'v1': false}, {'v1': NULL}]
+[{'list_1': true}, {'list_1': false}, {'list_1': NULL}]
 
 query I
 SELECT list_zip([NULL::BOOLEAN, true])
 ----
-[{'v1': NULL}, {'v1': true}]
+[{'list_1': NULL}, {'list_1': true}]
 
 # VARCHAR
 query I
 SELECT list_zip(['aa', 'a'])
 ----
-[{'v1': aa}, {'v1': a}]
+[{'list_1': aa}, {'list_1': a}]
 
 query I
 SELECT list_zip([NULL::VARCHAR])
 ----
-[{'v1': NULL}]
+[{'list_1': NULL}]
 
 # INTEGER types
 foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
@@ -161,12 +163,12 @@ foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger
 query I
 SELECT list_zip([1::${type}, NULL, 2::${type}])
 ----
-[{'v1': 1}, {'v1': NULL}, {'v1': 2}]
+[{'list_1': 1}, {'list_1': NULL}, {'list_1': 2}]
 
 query I
 SELECT list_zip([NULL::${type}])
 ----
-[{'v1': NULL}]
+[{'list_1': NULL}]
 
 endloop
 
@@ -180,7 +182,7 @@ SELECT list_zip([1::${type}])
 query I
 SELECT list_zip([NULL::${type}])
 ----
-[{'v1': NULL}]
+[{'list_1': NULL}]
 
 endloop
 
@@ -190,62 +192,62 @@ endloop
 query I
 SELECT list_zip(['2021-08-20'::DATE])
 ----
-[{'v1': 2021-08-20}]
+[{'list_1': 2021-08-20}]
 
 # time
 query I
 SELECT list_zip(['14:59:37'::TIME])
 ----
-[{'v1': 14:59:37}]
+[{'list_1': 14:59:37}]
 
 # timestamp
 query I
 SELECT list_zip(['2021-08-20'::TIMESTAMP])
 ----
-[{'v1': 2021-08-20 00:00:00}]
+[{'list_1': 2021-08-20 00:00:00}]
 
 # timestamp s
 query I
 SELECT list_zip(['2021-08-20'::TIMESTAMP_S])
 ----
-[{'v1': 2021-08-20 00:00:00}]
+[{'list_1': 2021-08-20 00:00:00}]
 
 # timestamp ms
 query I
 SELECT list_zip(['2021-08-20 00:00:00.123'::TIMESTAMP_MS])
 ----
-[{'v1': 2021-08-20 00:00:00.123}]
+[{'list_1': 2021-08-20 00:00:00.123}]
 
 # timestamp ns
 query I
 SELECT list_zip(['2021-08-20 00:00:00.123456'::TIMESTAMP_NS])
 ----
-[{'v1': 2021-08-20 00:00:00.123456}]
+[{'list_1': 2021-08-20 00:00:00.123456}]
 
 # time with time zone
 query I
 SELECT list_zip(['14:59:37'::TIMETZ])
 ----
-[{'v1': 14:59:37+00}]
+[{'list_1': 14:59:37+00}]
 
 # timestamp with time zone
 query I
 SELECT list_zip(['2021-08-20'::TIMESTAMPTZ])
 ----
-[{'v1': 2021-08-20 00:00:00+00}]
+[{'list_1': 2021-08-20 00:00:00+00}]
 
 # interval
 query I
 SELECT list_zip([INTERVAL 1 YEAR])
 ----
-[{'v1': 1 year}]
+[{'list_1': 1 year}]
 
 foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval
 
 query I
 SELECT list_zip([NULL::${type}])
 ----
-[{'v1': NULL}]
+[{'list_1': NULL}]
 
 endloop
 
@@ -254,12 +256,12 @@ endloop
 query I
 SELECT list_zip(['{a: 1}'::BLOB, '{a: 3}'::BLOB])
 ----
-[{'v1': {a: 1}}, {'v1': {a: 3}}]
+[{'list_1': {a: 1}}, {'list_1': {a: 3}}]
 
 query I
 SELECT list_zip([NULL::BLOB])
 ----
-[{'v1': NULL}]
+[{'list_1': NULL}]
 
 # ENUMS
 
@@ -282,10 +284,10 @@ SELECT list_zip(e) FROM enums
 query I
 SELECT list_zip([[1], [1, 2], NULL])
 ----
-[{'v1': [1]}, {'v1': [1, 2]}, {'v1': NULL}]
+[{'list_1': [1]}, {'list_1': [1, 2]}, {'list_1': NULL}]
 
 query I
 SELECT list_zip([{'a': 1}, {'a': 5}, {'a': 3}])
 ----
-[{'v1': {'a': 1}}, {'v1': {'a': 5}}, {'v1': {'a': 3}}]
+[{'list_1': {'a': 1}}, {'list_1': {'a': 5}}, {'list_1': {'a': 3}}]
 

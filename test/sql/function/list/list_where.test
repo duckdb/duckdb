@@ -41,7 +41,7 @@ SELECT list_where(i, j) FROM integers, selections
 statement error
 SELECT list_where([1,2,3], [True, NULL, FALSE]);
 ----
-No NULLs are allowed in the selection list.
+NULLs are not allowed as list elements in the second input parameter.
 
 query I
 SELECT list_where([1,2,3], [True, True, False, False]);

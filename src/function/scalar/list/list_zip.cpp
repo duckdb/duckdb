@@ -3,21 +3,21 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
 static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	int64_t bigint_reference_value = 3245234123123;
 	idx_t count = args.size();
 	idx_t args_size = args.ColumnCount();
 	auto *result_data = FlatVector::GetData<list_entry_t>(result);
 	auto &result_struct = ListVector::GetEntry(result);
 	auto &struct_entries = StructVector::GetEntries(result_struct);
-	bool flags_given = false;
+	bool truncate_flags_set = false;
 
 	// Check flag
 	if (args.data.back().GetType().id() == LogicalTypeId::BOOLEAN) {
-		flags_given = true;
+		truncate_flags_set = true;
 		args_size--;
 	}
 
@@ -34,15 +34,15 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 	for (idx_t j = 0; j < count; j++) {
 
 		// Is flag for current row set
-		bool is_flag = false;
-		if (flags_given) {
+		bool truncate_to_shortest = false;
+		if (truncate_flags_set) {
 			idx_t flag_idx = input_lists.back().sel->get_index(j);
 			auto flag_data = UnifiedVectorFormat::GetData<bool>(input_lists.back());
-			is_flag = flag_data[flag_idx];
+			truncate_to_shortest = flag_data[flag_idx];
 		}
 
 		// Calculation of the outgoing list size
-		idx_t len = is_flag ? bigint_reference_value : 0;
+		idx_t len = truncate_to_shortest ? NumericLimits<int>::Maximum() : 0;
 		for (idx_t i = 0; i < args_size; i++) {
 			idx_t curr_size;
 			if (args.data[i].GetType() == LogicalType::SQLNULL || ListVector::GetListSize(args.data[i]) == 0) {
@@ -54,7 +54,7 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 			}
 
 			// Dependent on flag using gt or lt
-			if (is_flag) {
+			if (truncate_to_shortest) {
 				len = len > curr_size ? curr_size : len;
 			} else {
 				len = len < curr_size ? curr_size : len;
@@ -133,7 +133,7 @@ static unique_ptr<FunctionData> ListZipBind(ClientContext &context, ScalarFuncti
 	for (idx_t i = 0; i < size; i++) {
 		auto &child = arguments[i];
 		if (child->alias.empty()) {
-			child->alias = "v" + std::to_string(i + 1);
+			child->alias = "list_" + to_string(i + 1);
 		}
 		switch (child->return_type.id()) {
 		case LogicalTypeId::LIST:

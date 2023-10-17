@@ -11,7 +11,7 @@ struct SetSelectionVectorSelect {
 	                               ValidityMask &input_validity, Vector &selection_entry, idx_t child_idx,
 	                               idx_t &target_offset, idx_t selection_offset, idx_t input_offset,
 	                               idx_t target_length) {
-		idx_t sel_idx = selection_entry.GetValue(selection_offset + child_idx).GetValue<int>() - 1;
+		int64_t sel_idx = selection_entry.GetValue(selection_offset + child_idx).GetValue<int>() - 1;
 		if (sel_idx < target_length) {
 			selection_vector.set_index(target_offset, input_offset + sel_idx);
 			if (!input_validity.RowIsValid(input_offset + sel_idx)) {
@@ -24,11 +24,9 @@ struct SetSelectionVectorSelect {
 		target_offset++;
 	}
 
-	static void GetResultLength(DataChunk &args, idx_t &result_length) {
-		idx_t count = args.size();
-		UnifiedVectorFormat unified_vec;
-		args.data[0].ToUnifiedFormat(count, unified_vec);
-		result_length = ListVector::GetListSize(args.data[1]) * unified_vec.validity.CountValid(count);
+	static void GetResultLength(DataChunk &args, idx_t &result_length, const list_entry_t *selection_data,
+	                            Vector selection_entry, idx_t selection_idx) {
+		result_length += selection_data[selection_idx].length;
 	}
 };
 
@@ -37,31 +35,36 @@ struct SetSelectionVectorWhere {
 	                               ValidityMask &input_validity, Vector &selection_entry, idx_t child_idx,
 	                               idx_t &target_offset, idx_t selection_offset, idx_t input_offset,
 	                               idx_t target_length) {
-		idx_t child_bool = selection_entry.GetValue(selection_offset + child_idx).GetValue<bool>();
-		if (child_bool) {
-			selection_vector.set_index(target_offset, input_offset + child_idx);
-			if (!input_validity.RowIsValid(input_offset + child_idx)) {
-				validity_mask.SetInvalid(target_offset);
-			}
-			target_offset++;
+		if (!selection_entry.GetValue(selection_offset + child_idx).GetValue<bool>()) {
+			return;
 		}
+
+		selection_vector.set_index(target_offset, input_offset + child_idx);
+		if (!input_validity.RowIsValid(input_offset + child_idx)) {
+			validity_mask.SetInvalid(target_offset);
+		}
+		target_offset++;
 	}
 
-	static void GetResultLength(DataChunk &args, idx_t &result_length) {
-		idx_t count = args.size();
-		UnifiedVectorFormat unified_vec;
-		args.data[0].ToUnifiedFormat(count, unified_vec);
-		result_length = ListVector::GetListSize(args.data[1]) * unified_vec.validity.CountValid(count);
+	static void GetResultLength(DataChunk &args, idx_t &result_length, const list_entry_t *selection_data,
+	                            Vector selection_entry, idx_t selection_idx) {
+		for (idx_t child_idx = 0; child_idx < selection_data[selection_idx].length; child_idx++) {
+			if (selection_entry.GetValue(selection_data[selection_idx].offset + child_idx).IsNull()) {
+				throw InvalidInputException("NULLs are not allowed as list elements in the second input parameter.");
+			}
+			if (selection_entry.GetValue(selection_data[selection_idx].offset + child_idx).GetValue<bool>()) {
+				result_length++;
+			}
+		}
 	}
 };
+
 template <class OP>
 static void ListSelectFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.data.size() == 2);
 	Vector &list = args.data[0];
 	Vector &selection_list = args.data[1];
 	idx_t count = args.size();
-	idx_t result_length;
-	OP::GetResultLength(args, result_length);
 
 	list_entry_t *result_data;
 	result_data = FlatVector::GetData<list_entry_t>(result);
@@ -77,6 +80,15 @@ static void ListSelectFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto input_lists_data = UnifiedVectorFormat::GetData<list_entry_t>(input_list);
 	auto &input_entry = ListVector::GetEntry(list);
 	auto &input_validity = FlatVector::Validity(input_entry);
+
+	idx_t result_length = 0;
+	for (idx_t i = 0; i < count; i++) {
+		idx_t input_idx = input_list.sel->get_index(i);
+		idx_t selection_idx = selection_lists.sel->get_index(i);
+		if (input_list.validity.RowIsValid(input_idx) && selection_lists.validity.RowIsValid(selection_idx)) {
+			OP::GetResultLength(args, result_length, selection_lists_data, selection_entry, selection_idx);
+		}
+	}
 
 	ListVector::Reserve(result, result_length);
 	SelectionVector result_selection_vec = SelectionVector(result_length);
@@ -111,7 +123,7 @@ static void ListSelectFunction(DataChunk &args, ExpressionState &state, Vector &
 		// Set all selected values in the result
 		for (idx_t child_idx = 0; child_idx < selection_len; child_idx++) {
 			if (selection_entry.GetValue(selection_offset + child_idx).IsNull()) {
-				throw InvalidInputException("No NULLs are allowed in the selection list.");
+				throw InvalidInputException("NULLs are not allowed as list elements in the second input parameter.");
 			}
 			OP::SetSelectionVector(result_selection_vec, entry_validity_mask, input_validity, selection_entry,
 			                       child_idx, offset, selection_offset, input_offset, input_length);
