@@ -846,7 +846,7 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	if (scan_structure) {
 		// Still have elements remaining (i.e. we got >STANDARD_VECTOR_SIZE elements in the previous probe)
 		scan_structure->Next(join_keys, payload, chunk);
-		if (chunk.size() != 0) {
+		if (chunk.size() != 0 || !scan_structure->PointersExhausted()) {
 			return;
 		}
 	}
