@@ -69,6 +69,7 @@ jobs:
     - name: Set ADBC driver path in GH Environment
       shell: pwsh
       run: |
+        echo (Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName
         echo "DUCKDB_INSTALL_LIB=$((Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName)" >> $GITHUB_ENV
 
     - name: Test

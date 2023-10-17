@@ -92,12 +92,19 @@ public:
 };
 
 TEST_CASE("ADBC - Select 42", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	REQUIRE(false);
 	ADBCTestDatabase db;
 
 	REQUIRE(db.QueryAndCheck("SELECT 42"));
 }
 
 TEST_CASE("ADBC - Test ingestion", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
