@@ -131,22 +131,16 @@ jobs:
       shell: bash
       run: cat ODBC_TRACE.log
       
-    - name: check out duckdbDotNetOdbcTests
-      uses: actions/checkout@v4
-      with:
-        repository: bucweat/duckdbDotNetOdbcTests
-        path: duckdbDotNetOdbcTests
-
     - name: Build and Run duckdbDotNetOdbcTests
       shell: bash
       run: |
-        cd duckdbDotNetOdbcTests
+        cd tools/odbc/test/tests/dotnet
         mkdir build
         cd build
         cmake -S .. -B . -G "Visual Studio 17 2022"
         cmake --build . --config Release
         Release/SystemDataODBC_tests.exe
-        cd ..
+        cd ../../../../../..
 
 
  win-release-32:
