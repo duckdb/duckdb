@@ -264,8 +264,8 @@ public:
 
 WindowCustomAggregatorState::WindowCustomAggregatorState(const AggregateObject &aggr,
                                                          const WindowExcludeMode exclude_mode)
-    : aggr(aggr), state(aggr.function.state_size()),
-      statef(Value::POINTER(CastPointerToValue(state.data()))), frames(3, {0, 0}) {
+    : aggr(aggr), state(aggr.function.state_size()), statef(Value::POINTER(CastPointerToValue(state.data()))),
+      frames(3, {0, 0}) {
 	// if we have a frame-by-frame method, share the single state
 	aggr.function.initialize(state.data());
 

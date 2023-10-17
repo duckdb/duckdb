@@ -252,9 +252,8 @@ struct ModeFunction {
 			state.frequency_map = new typename STATE::Counts;
 		}
 		const double tau = .25;
-		if (state.nonzero <= tau * state.frequency_map->size() ||
-			prevs.back().end <= frames.front().start ||
-			frames.back().end <= prevs.front().start) {
+		if (state.nonzero <= tau * state.frequency_map->size() || prevs.back().end <= frames.front().start ||
+		    frames.back().end <= prevs.front().start) {
 			state.Reset();
 			// for f ∈ F do
 			for (const auto &frame : frames) {
