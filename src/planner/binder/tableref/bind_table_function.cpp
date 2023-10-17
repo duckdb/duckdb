@@ -46,6 +46,8 @@ bool Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &e
 		subquery_node = std::move(select_node);
 	}
 	auto node = binder->BindNode(*subquery_node);
+	// Here maybe we need to check the node again. If the subquery is in the where clause
+	// and uses a list from the select list, the from_table cannot be empty.
 	subquery = make_uniq<BoundSubqueryRef>(std::move(binder), std::move(node));
 	MoveCorrelatedExpressions(*subquery->binder);
 	return true;

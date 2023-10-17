@@ -16,6 +16,24 @@ create table gutenburg as select * from read_csv_auto('/Users/tomebergen/duckdb/
 # to do that?
 
 
+statement ok
+explain select 
+row_number() over () as line_number, 
+column0 as whatever, 
+length(coalesce(column0, '')) as text_length 
+from 
+gutenburg
+where 'LORD' in (select unnest(str_split(column0, ' ')));
+
+statement ok
+explain select 
+row_number() over () as line_number, 
+column0 as whatever, 
+length(coalesce(column0, '')) as text_length 
+from 
+gutenburg
+where 'LORD' in (select * from unnest(str_split(column0, ' ')));
+
 statement error
 explain select 
 row_number() over () as line_number, 
@@ -25,6 +43,7 @@ from
 gutenburg
 where 'LORD' in (select * from unnest(str_split(whatever, ' ')));
 
+mode skip
 
 statement ok
 explain select 
