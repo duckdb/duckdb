@@ -19,9 +19,6 @@ BindResult IndexBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, i
 		return BindResult("window functions are not allowed in index expressions");
 	case ExpressionClass::SUBQUERY:
 		return BindResult("cannot use subquery in index expressions");
-	case ExpressionClass::COLUMN_REF: {
-		return ExpressionBinder::BindExpression(expr_ptr, depth);
-	}
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}

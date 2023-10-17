@@ -13,6 +13,15 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
+// Index Types
+//===--------------------------------------------------------------------===//
+enum class IndexType : uint8_t {
+	INVALID = 0,    // invalid index type
+	ART = 1,        // Adaptive Radix Tree
+	EXTENSION = 100 // Extension index
+};
+
+//===--------------------------------------------------------------------===//
 // Index Constraint Types
 //===--------------------------------------------------------------------===//
 enum class IndexConstraintType : uint8_t {

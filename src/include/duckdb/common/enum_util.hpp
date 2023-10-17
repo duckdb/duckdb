@@ -136,6 +136,8 @@ enum class HLLStorageType : uint8_t;
 
 enum class IndexConstraintType : uint8_t;
 
+enum class IndexType : uint8_t;
+
 enum class InsertColumnOrder : uint8_t;
 
 enum class InterruptMode : uint8_t;
@@ -450,6 +452,9 @@ const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
 
 template<>
 const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
+
+template<>
+const char* EnumUtil::ToChars<IndexType>(IndexType value);
 
 template<>
 const char* EnumUtil::ToChars<InsertColumnOrder>(InsertColumnOrder value);
@@ -844,6 +849,9 @@ HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
 
 template<>
 IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);
+
+template<>
+IndexType EnumUtil::FromString<IndexType>(const char *value);
 
 template<>
 InsertColumnOrder EnumUtil::FromString<InsertColumnOrder>(const char *value);

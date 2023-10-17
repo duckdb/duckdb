@@ -367,7 +367,7 @@ idx_t LocateErrorIndex(bool is_append, const ManagedSelection &matches) {
 	auto verify_type = is_append ? VerifyExistenceType::APPEND_FK : VerifyExistenceType::DELETE_FK;
 
 	D_ASSERT(failed_index != DConstants::INVALID_INDEX);
-	D_ASSERT(index.index_type == "ART");
+	D_ASSERT(index.index_type == IndexType::ART);
 	auto &art_index = index.Cast<ART>();
 	auto key_name = art_index.GenerateErrorKeyName(input, failed_index);
 	auto exception_msg = art_index.GenerateConstraintErrorMessage(verify_type, key_name);

@@ -38,7 +38,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
          AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
          const IndexStorageInfo &index_storage_info)
-    : Index(name, "ART", index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
+    : Index(name, IndexType::ART, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
       allocators(allocators_ptr), owns_data(false) {
 
 	// initialize all allocators

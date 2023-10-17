@@ -68,7 +68,7 @@
       {
         "id": 202,
         "name": "index_type",
-        "type": "string"
+        "type": "IndexType"
       },
       {
         "id": 203,

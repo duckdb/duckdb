@@ -42,17 +42,11 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vect
 		bound_expressions.push_back(make_uniq<BoundReferenceExpression>(column.Type(), key_nr++));
 		column_ids.push_back(column.StorageOid());
 	}
-	unique_ptr<ART> art;
 	// create an adaptive radix tree around the expressions
-	if (info.IsValid()) {
-		art = make_uniq<ART>(info.name, constraint_type, column_ids, TableIOManager::Get(storage),
-		                     std::move(unbound_expressions), storage.db, nullptr, info);
-	} else {
-		art = make_uniq<ART>(info.name, constraint_type, column_ids, TableIOManager::Get(storage),
-		                     std::move(unbound_expressions), storage.db);
-		if (!storage.IsRoot()) {
-			throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
-		}
+	auto art = make_uniq<ART>(info.name, constraint_type, column_ids, TableIOManager::Get(storage),
+	                          std::move(unbound_expressions), storage.db, nullptr, info);
+	if (!info.IsValid() && !storage.IsRoot()) {
+		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
 	}
 	storage.info->indexes.AddIndex(std::move(art));
 }

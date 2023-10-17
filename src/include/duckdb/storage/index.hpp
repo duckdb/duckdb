@@ -30,7 +30,7 @@ struct IndexScanState;
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
 public:
-	Index(const string &name, const string &index_type, IndexConstraintType index_constraint_type,
+	Index(const string &name, const IndexType &index_type, IndexConstraintType index_constraint_type,
 	      const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	      const vector<unique_ptr<Expression>> &unbound_expressions, AttachedDatabase &db);
 	virtual ~Index() = default;
@@ -38,7 +38,7 @@ public:
 	//! The name of the index
 	string name;
 	//! The index type (ART, B+-tree, Skip-List, ...)
-	string index_type;
+	IndexType index_type;
 	//! The index constraint type
 	IndexConstraintType index_constraint_type;
 	//! The logical column ids of the indexed table

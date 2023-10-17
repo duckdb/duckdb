@@ -1,3 +1,4 @@
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -43,7 +44,11 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 	info->on_conflict = TransformOnConflict(stmt.onconflict);
 	info->expressions = TransformIndexParameters(*stmt.indexParams, stmt.relation->relname);
 
-	info->index_type = StringUtil::Upper(string(stmt.accessMethod));
+	if (EnumUtil::ToString(IndexType::ART) == StringUtil::Upper(string(stmt.accessMethod))) {
+		info->index_type = IndexType::ART;
+	} else {
+		info->index_type = IndexType::EXTENSION;
+	}
 
 	if (stmt.relation->schemaname) {
 		info->schema = stmt.relation->schemaname;

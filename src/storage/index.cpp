@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-Index::Index(const string &name, const string &index_type, IndexConstraintType index_constraint_type,
+Index::Index(const string &name, const IndexType &index_type, IndexConstraintType index_constraint_type,
              const vector<column_t> &column_ids, TableIOManager &table_io_manager,
              const vector<unique_ptr<Expression>> &unbound_expressions, AttachedDatabase &db)
 

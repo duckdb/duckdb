@@ -35,7 +35,7 @@ string IndexCatalogEntry::ToSQL() const {
 	if (sql.empty()) {
 		return sql;
 	}
-	if (sql[sql.size() - 1] != ';') {
+	if (sql.back() != ';') {
 		return sql + ";";
 	}
 	return sql;
