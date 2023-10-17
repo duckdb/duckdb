@@ -186,9 +186,17 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
 		throw InvalidInputException("Subqueries are not supported in lambda expressions!");
 	}
 
+	// these are bound depth-first
+	D_ASSERT(expr->expression_class != ExpressionClass::BOUND_LAMBDA);
+
+	// we do not need to replace anything, as these will be constant in the lambda expression
+	// when executed by the expression executor
+	if (expr->expression_class == ExpressionClass::BOUND_CONSTANT) {
+		return;
+	}
+
 	// these expression classes do not have children, transform them
-	if (expr->expression_class == ExpressionClass::BOUND_CONSTANT ||
-	    expr->expression_class == ExpressionClass::BOUND_COLUMN_REF ||
+	if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF ||
 	    expr->expression_class == ExpressionClass::BOUND_PARAMETER ||
 	    expr->expression_class == ExpressionClass::BOUND_LAMBDA_REF) {
 
