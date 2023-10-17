@@ -316,7 +316,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: python.exe -m pip install 'cibuildwheel>=2.16.2' twine pip setuptools wheel -U
+        run: python.exe -m pip install 'cibuildwheel>=2.16.2' twine pip setuptools wheel virtualenv -U
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
