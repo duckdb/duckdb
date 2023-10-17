@@ -294,8 +294,10 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 			}
 		}
 	}
-	if (new_card < 0 || new_card > child_stats.cardinality) {
-		new_card = child_stats.cardinality;
+	if (new_card < 0 || new_card >= child_stats.cardinality) {
+		// We have no good statistics on distinct count.
+		// most likely we are running on parquet files. Therefore we divide by 2.
+		new_card = child_stats.cardinality / 2;
 	}
 	stats.cardinality = new_card;
 	stats.column_names = child_stats.column_names;
