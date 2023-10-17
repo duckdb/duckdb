@@ -78,7 +78,7 @@ struct MergeSortTree {
 	}
 	explicit MergeSortTree(Elements &&lowest_level, const CMP &cmp = CMP());
 
-	size_t SelectNth(const FrameBounds &frame, size_t n) const;
+	size_t SelectNth(const FrameBounds &frame, size_t &requested) const;
 
 	inline ElementType NthElement(size_t i) const {
 		return tree.front().first[i];
@@ -265,7 +265,7 @@ MergeSortTree<E, O, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP
 }
 
 template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
-size_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const FrameBounds &frame, size_t n) const {
+size_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const FrameBounds &frame, size_t &requested) const {
 	//	Empty frames should be handled by the caller
 	D_ASSERT(frame.start < frame.end);
 
@@ -284,6 +284,7 @@ size_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const FrameBounds &frame, size_
 
 	// Find Nth element in a top-down traversal
 	size_t result = 0;
+	auto n = requested;
 
 	// First, handle levels with cascading pointers
 	const auto min_cascaded = LowestCascadingLevel();
@@ -360,14 +361,17 @@ size_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const FrameBounds &frame, size_
 	// The last level
 	const auto *level_data = tree[level_no].first.data();
 	++n;
-	while (true) {
+
+	const auto count = tree[level_no].first.size();
+	for (const auto limit = MinValue<size_t>(result + FANOUT, count); result < limit; ++result) {
 		const auto v = level_data[result];
 		n -= (v >= frame.start) && (v < frame.end);
 		if (!n) {
 			break;
 		}
-		++result;
 	}
+
+	requested = n;
 
 	return result;
 }
