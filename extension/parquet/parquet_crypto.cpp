@@ -1,10 +1,12 @@
 #include "parquet_crypto.hpp"
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/serializer/buffered_file_writer.hpp"
-#include "duckdb/storage/arena_allocator.hpp"
 #include "mbedtls_wrapper.hpp"
-#include "thrift/protocol/TCompactProtocol.h"
+#include "thrift_tools.hpp"
+
+#ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/common.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
+#endif
 
 namespace duckdb {
 

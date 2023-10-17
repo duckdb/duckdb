@@ -4,6 +4,7 @@
 
 #include "cast_column_reader.hpp"
 #include "duckdb.hpp"
+#include "parquet_crypto.hpp"
 #include "parquet_metadata.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_writer.hpp"
@@ -39,7 +40,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/row_group.hpp"
-#include "parquet_crypto.hpp"
 #endif
 
 namespace duckdb {

@@ -8,8 +8,11 @@
 
 #pragma once
 
-#include "duckdb/storage/object_cache.hpp"
 #include "parquet_types.h"
+
+#ifndef DUCKDB_AMALGAMATION
+#include "duckdb/storage/object_cache.hpp"
+#endif
 
 namespace duckdb {
 
