@@ -183,6 +183,9 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		op->children[0] = optimizer.Optimize(std::move(op->children[0]), &child_stats);
 		auto &aggr = op->Cast<LogicalAggregate>();
 		auto operator_stats = RelationStatisticsHelper::ExtractAggregationStats(aggr, child_stats);
+		if (!datasource_filters.empty()) {
+			operator_stats.cardinality *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
+		}
 		AddAggregateRelation(input_op, parent, operator_stats);
 		return true;
 	}
