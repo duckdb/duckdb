@@ -217,6 +217,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
 	auto &fexpr = ref.function->Cast<FunctionExpression>();
 
+//	if (fexpr.function_name == "unnest" || fexpr.function_name == "unlist") {
+//		throw BinderException("unnest not supported here");
+//	}
 	// fetch the function from the catalog
 	auto &func_catalog = Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, fexpr.catalog, fexpr.schema,
 	                                       fexpr.function_name, error_context);
