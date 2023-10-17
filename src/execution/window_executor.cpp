@@ -919,7 +919,7 @@ void WindowAggregateExecutor::Finalize() {
 
 	//	First entry is the frame start
 	stats[0] = FrameStats(-count, count);
-	auto base = wexpr.expr_stats[0].get();
+	auto base = wexpr.expr_stats.empty() ? nullptr : wexpr.expr_stats[0].get();
 	switch (wexpr.start) {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
 		stats[0].end = 0;
@@ -951,7 +951,7 @@ void WindowAggregateExecutor::Finalize() {
 
 	//	Second entry is the frame end
 	stats[1] = FrameStats(-count, count);
-	base = wexpr.expr_stats[1].get();
+	base = wexpr.expr_stats.empty() ? nullptr : wexpr.expr_stats[1].get();
 	switch (wexpr.end) {
 	case WindowBoundary::UNBOUNDED_FOLLOWING:
 		stats[1].begin = 0;
