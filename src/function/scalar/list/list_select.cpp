@@ -10,8 +10,8 @@ struct SetSelectionVectorSelect {
 	static void SetSelectionVector(SelectionVector &selection_vector, ValidityMask &validity_mask,
 	                               ValidityMask &input_validity, Vector &selection_entry, idx_t child_idx,
 	                               idx_t &target_offset, idx_t selection_offset, idx_t input_offset,
-	                               int64_t target_length) {
-		int64_t sel_idx = selection_entry.GetValue(selection_offset + child_idx).GetValue<int>() - 1;
+	                               idx_t target_length) {
+		idx_t sel_idx = selection_entry.GetValue(selection_offset + child_idx).GetValue<int>() - 1;
 		if (sel_idx < target_length) {
 			selection_vector.set_index(target_offset, input_offset + sel_idx);
 			if (!input_validity.RowIsValid(input_offset + sel_idx)) {
@@ -25,7 +25,7 @@ struct SetSelectionVectorSelect {
 	}
 
 	static void GetResultLength(DataChunk &args, idx_t &result_length, const list_entry_t *selection_data,
-	                            Vector selection_entry, int64_t selection_idx) {
+	                            Vector selection_entry, idx_t selection_idx) {
 		result_length += selection_data[selection_idx].length;
 	}
 };
