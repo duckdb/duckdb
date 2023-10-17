@@ -5,8 +5,40 @@
 # we need to be a bit more clever here for testing random
 # it's very unlikely that three random variables are exactly equivalent
 
-require skip_reload
+# test random in lambdas and ranges
+statement ok
+CREATE TABLE t1 AS SELECT [random() for a IN range(1)] FROM range(2);
 
+statement ok
+CREATE TABLE t2 AS SELECT random() FROM range(2);
+
+statement ok
+CREATE TABLE t3 AS SELECT [random()] FROM range(2);
+
+statement ok
+CREATE TABLE t4 AS SELECT [random() + range * 0 for a IN range(1)]  FROM range(2);
+
+query I
+SELECT count(*) FROM t1 WHERE (SELECT min(#1) FROM t1 ) == (SELECT max(#1) FROM t1);
+----
+0
+
+query I
+SELECT count(*) FROM t2 WHERE (SELECT min(#1) FROM t2 ) == (SELECT max(#1) FROM t2);
+----
+0
+
+query I
+SELECT count(*) FROM t3 WHERE (SELECT min(#1) FROM t3 ) == (SELECT max(#1) FROM t3);
+----
+0
+
+query I
+SELECT count(*) FROM t4 WHERE (SELECT min(#1) FROM t4 ) == (SELECT max(#1) FROM t4);
+----
+0
+
+require skip_reload
 
 statement ok
 BEGIN TRANSACTION
