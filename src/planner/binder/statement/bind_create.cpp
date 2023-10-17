@@ -136,6 +136,9 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	if (base.aliases.size() > query_node.names.size()) {
 		throw BinderException("More VIEW aliases than columns in query result");
 	}
+	// Save the explicitly set aliases to be able to recreate the query
+	base.explicit_aliases = base.aliases;
+
 	// fill up the aliases with the remaining names of the bound query
 	base.aliases.reserve(query_node.names.size());
 	for (idx_t i = base.aliases.size(); i < query_node.names.size(); i++) {

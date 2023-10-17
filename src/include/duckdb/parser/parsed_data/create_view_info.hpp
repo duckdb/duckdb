@@ -19,10 +19,12 @@ struct CreateViewInfo : public CreateInfo {
 	CreateViewInfo(SchemaCatalogEntry &schema, string view_name);
 	CreateViewInfo(string catalog_p, string schema_p, string view_name);
 
-	//! Table name to insert to
+	//! View name
 	string view_name;
 	//! Aliases of the view
 	vector<string> aliases;
+	//! Explicit aliases specified by the user
+	vector<string> explicit_aliases;
 	//! Return types
 	vector<LogicalType> types;
 	//! The SelectStatement of the view
@@ -38,6 +40,7 @@ public:
 
 	DUCKDB_API void Serialize(Serializer &serializer) const override;
 	DUCKDB_API static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
+	string ToString() const override;
 };
 
 } // namespace duckdb
