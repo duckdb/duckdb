@@ -130,6 +130,24 @@ jobs:
       if: ${{ failure() }}
       shell: bash
       run: cat ODBC_TRACE.log
+      
+    - name: check out duckdbDotNetOdbcTests
+      uses: actions/checkout@v4
+      with:
+        repository: bucweat/duckdbDotNetOdbcTests
+        path: duckdbDotNetOdbcTests
+
+    - name: Build and Run duckdbDotNetOdbcTests
+      shell: bash
+      run: |
+        cd duckdbDotNetOdbcTests
+        mkdir build
+        cd build
+        cmake -S .. -B . -G "Visual Studio 17 2022"
+        cmake --build . --config Release
+        Release/SystemDataODBC_tests.exe
+        cd ..
+
 
  win-release-32:
     name: Windows (32 Bit)
