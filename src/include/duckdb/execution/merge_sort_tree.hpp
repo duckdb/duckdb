@@ -319,8 +319,6 @@ size_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const FrameBounds &frame, size_
 					// 	Enough in this level, so move down to leftmost child candidate within the cascade range
 					cascade_idx.first = (lower_idx / CASCADING + 2 * result) * FANOUT;
 					cascade_idx.second = (upper_idx / CASCADING + 2 * result) * FANOUT;
-					result *= FANOUT;
-					level_width /= FANOUT;
 					break;
 				}
 
@@ -330,6 +328,8 @@ size_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const FrameBounds &frame, size_
 				++result;
 				n -= matched;
 			}
+			result *= FANOUT;
+			level_width /= FANOUT;
 		}
 	}
 
@@ -345,8 +345,6 @@ size_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const FrameBounds &frame, size_
 			if (matched > n) {
 				// 	Enough in this level, so move down to leftmost child candidate
 				//	Since we have no cascade pointers left, this is just the start of the next level.
-				result *= FANOUT;
-				level_width /= FANOUT;
 				break;
 			}
 			//	Not enough in this child, so move right
@@ -355,6 +353,8 @@ size_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const FrameBounds &frame, size_
 			++result;
 			n -= matched;
 		}
+		result *= FANOUT;
+		level_width /= FANOUT;
 	}
 
 	// The last level
