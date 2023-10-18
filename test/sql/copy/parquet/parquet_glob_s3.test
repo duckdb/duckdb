@@ -94,7 +94,7 @@ select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/with*/*.parq
 statement error
 select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/notglob/*.parquet')
 ----
-PLACEHOLDER
+IO Error: No files found that match the pattern
 
 # parallel testing
 statement ok
