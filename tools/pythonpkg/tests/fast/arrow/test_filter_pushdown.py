@@ -504,6 +504,32 @@ class TestArrowFilterPushdown(object):
         actual = duckdb_cursor.execute("select * from arrow_table where i = ?", (value,)).fetchall()
         assert expected == actual
 
+    def test_9371(self, duckdb_cursor, tmp_path):
+        import datetime
+        import pathlib
+
+        # connect to an in-memory database
+        duckdb_cursor.execute("SET TimeZone='UTC';")
+        base_path = tmp_path / "parquet_folder"
+        base_path.mkdir(exist_ok=True)
+        file_path = base_path / "test.parquet"
+
+        duckdb_cursor.execute("SET TimeZone='UTC';")
+
+        # Example data
+        dt = datetime.datetime(2023, 8, 29, 1, tzinfo=datetime.timezone.utc)
+
+        my_arrow_table = pa.Table.from_pydict({'ts': [dt, dt, dt], 'value': [1, 2, 3]})
+        df = my_arrow_table.to_pandas()
+        df = df.set_index("ts")  # SET INDEX! (It all works correctly when the index is not set)
+        df.to_parquet(str(file_path))
+
+        my_arrow_dataset = ds.dataset(str(file_path))
+        res = duckdb_cursor.execute("SELECT * FROM my_arrow_dataset WHERE ts = ?", parameters=[dt]).arrow()
+        output = duckdb_cursor.sql("select * from res").fetchall()
+        expected = [(1, dt), (2, dt), (3, dt)]
+        assert output == expected
+
     @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
     def test_filter_pushdown_date(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(

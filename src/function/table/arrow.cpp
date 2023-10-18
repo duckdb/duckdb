@@ -266,6 +266,7 @@ unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(const ArrowScanFunctionData
 			auto &schema = *function.schema_root.arrow_schema.children[col_idx];
 			parameters.projected_columns.projection_map[idx] = schema.name;
 			parameters.projected_columns.columns.emplace_back(schema.name);
+			parameters.projected_columns.filter_to_col[idx] = col_idx;
 		}
 	}
 	parameters.filters = filters;
