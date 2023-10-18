@@ -50,7 +50,7 @@ column0 as text,
 length(coalesce(column0, '')) as text_length 
 from 
 t0
-where 'LORD' in unnest(str_split(text, ' '));
+where 'LORD' in (select * from unnest(str_split(text, ' ')));
 
 mode skip
 
