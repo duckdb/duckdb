@@ -21,38 +21,38 @@
 #include <stdlib.h>
 
 // We must leak the symbols of the init function
-duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::AdbcDriver *driver,
-                                             struct duckdb_adbc::AdbcError *error) {
+duckdb_adbc::AdbcStatusCode duckdb_adbc_init(int version, void *driver, struct AdbcError *error) {
 	if (!driver) {
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
+	auto adbc_driver = reinterpret_cast<duckdb_adbc::AdbcDriver *> (driver);
 
-	driver->DatabaseNew = duckdb_adbc::DatabaseNew;
-	driver->DatabaseSetOption = duckdb_adbc::DatabaseSetOption;
-	driver->DatabaseInit = duckdb_adbc::DatabaseInit;
-	driver->DatabaseRelease = duckdb_adbc::DatabaseRelease;
-	driver->ConnectionNew = duckdb_adbc::ConnectionNew;
-	driver->ConnectionSetOption = duckdb_adbc::ConnectionSetOption;
-	driver->ConnectionInit = duckdb_adbc::ConnectionInit;
-	driver->ConnectionRelease = duckdb_adbc::ConnectionRelease;
-	driver->ConnectionGetTableTypes = duckdb_adbc::ConnectionGetTableTypes;
-	driver->StatementNew = duckdb_adbc::StatementNew;
-	driver->StatementRelease = duckdb_adbc::StatementRelease;
-	driver->StatementBind = duckdb_adbc::StatementBind;
-	driver->StatementBindStream = duckdb_adbc::StatementBindStream;
-	driver->StatementExecuteQuery = duckdb_adbc::StatementExecuteQuery;
-	driver->StatementPrepare = duckdb_adbc::StatementPrepare;
-	driver->StatementSetOption = duckdb_adbc::StatementSetOption;
-	driver->StatementSetSqlQuery = duckdb_adbc::StatementSetSqlQuery;
-	driver->ConnectionGetObjects = duckdb_adbc::ConnectionGetObjects;
-	driver->ConnectionCommit = duckdb_adbc::ConnectionCommit;
-	driver->ConnectionRollback = duckdb_adbc::ConnectionRollback;
-	driver->ConnectionReadPartition = duckdb_adbc::ConnectionReadPartition;
-	driver->StatementExecutePartitions = duckdb_adbc::StatementExecutePartitions;
-	driver->ConnectionGetInfo = duckdb_adbc::ConnectionGetInfo;
-	driver->StatementGetParameterSchema = duckdb_adbc::StatementGetParameterSchema;
-	driver->ConnectionGetTableSchema = duckdb_adbc::ConnectionGetTableSchema;
-	driver->StatementSetSubstraitPlan = duckdb_adbc::StatementSetSubstraitPlan;
+	adbc_driver->DatabaseNew = duckdb_adbc::DatabaseNew;
+	adbc_driver->DatabaseSetOption = duckdb_adbc::DatabaseSetOption;
+	adbc_driver->DatabaseInit = duckdb_adbc::DatabaseInit;
+	adbc_driver->DatabaseRelease = duckdb_adbc::DatabaseRelease;
+	adbc_driver->ConnectionNew = duckdb_adbc::ConnectionNew;
+	adbc_driver->ConnectionSetOption = duckdb_adbc::ConnectionSetOption;
+	adbc_driver->ConnectionInit = duckdb_adbc::ConnectionInit;
+	adbc_driver->ConnectionRelease = duckdb_adbc::ConnectionRelease;
+	adbc_driver->ConnectionGetTableTypes = duckdb_adbc::ConnectionGetTableTypes;
+	adbc_driver->StatementNew = duckdb_adbc::StatementNew;
+	adbc_driver->StatementRelease = duckdb_adbc::StatementRelease;
+	adbc_driver->StatementBind = duckdb_adbc::StatementBind;
+	adbc_driver->StatementBindStream = duckdb_adbc::StatementBindStream;
+	adbc_driver->StatementExecuteQuery = duckdb_adbc::StatementExecuteQuery;
+	adbc_driver->StatementPrepare = duckdb_adbc::StatementPrepare;
+	adbc_driver->StatementSetOption = duckdb_adbc::StatementSetOption;
+	adbc_driver->StatementSetSqlQuery = duckdb_adbc::StatementSetSqlQuery;
+	adbc_driver->ConnectionGetObjects = duckdb_adbc::ConnectionGetObjects;
+	adbc_driver->ConnectionCommit = duckdb_adbc::ConnectionCommit;
+	adbc_driver->ConnectionRollback = duckdb_adbc::ConnectionRollback;
+	adbc_driver->ConnectionReadPartition = duckdb_adbc::ConnectionReadPartition;
+	adbc_driver->StatementExecutePartitions = duckdb_adbc::StatementExecutePartitions;
+	adbc_driver->ConnectionGetInfo = duckdb_adbc::ConnectionGetInfo;
+	adbc_driver->StatementGetParameterSchema = duckdb_adbc::StatementGetParameterSchema;
+	adbc_driver->ConnectionGetTableSchema = duckdb_adbc::ConnectionGetTableSchema;
+	adbc_driver->StatementSetSubstraitPlan = duckdb_adbc::StatementSetSubstraitPlan;
 	return ADBC_STATUS_OK;
 }
 
