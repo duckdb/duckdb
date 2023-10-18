@@ -196,10 +196,6 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 		names.emplace_back("file_row_number");
 	}
 
-	// Create initial reader
-	auto reader = make_shared<ParquetReader>(context, result.files[0], options);
-	result.Initialize(std::move(reader));
-
 	return bind_data;
 }
 

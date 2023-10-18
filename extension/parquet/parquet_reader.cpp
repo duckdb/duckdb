@@ -382,8 +382,10 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader() {
 	}
 	if (parquet_options.file_row_number) {
 		file_row_number_idx = root_struct_reader.child_readers.size();
+
+		generated_column_schema.push_back(SchemaElement());
 		root_struct_reader.child_readers.push_back(
-		    make_uniq<RowNumberColumnReader>(*this, LogicalType::BIGINT, SchemaElement(), next_file_idx, 0, 0));
+		    make_uniq<RowNumberColumnReader>(*this, LogicalType::BIGINT, generated_column_schema.back(), next_file_idx, 0, 0));
 	}
 
 	return ret;

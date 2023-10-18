@@ -113,6 +113,8 @@ public:
 
 	//! Index of the file_row_number column
 	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
+	//! Parquet schema for the generated columns
+	vector<duckdb_parquet::format::SchemaElement> generated_column_schema;
 
 public:
 	void InitializeScan(ParquetReaderScanState &state, vector<idx_t> groups_to_read);
