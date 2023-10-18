@@ -37,9 +37,9 @@
 
 #include <string.h>
 
-//#if defined(MBEDTLS_AESNI_C)
-//#include "aesni.h"
-//#endif
+#if defined(MBEDTLS_AESNI_C)
+#include "aesni.h"
+#endif
 
 #if defined(MBEDTLS_SELF_TEST) && defined(MBEDTLS_AES_C)
 #include "mbedtls/aes.h"

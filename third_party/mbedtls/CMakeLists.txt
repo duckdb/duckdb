@@ -35,8 +35,6 @@ add_library(duckdb_mbedtls STATIC
 
 set_property(TARGET duckdb_mbedtls PROPERTY C_STANDARD 99)
 
-target_compile_definitions(duckdb_mbedtls PRIVATE MBEDTLS_AES_C MBEDTLS_CIPHER_C MBEDTLS_CAMELLIA_C MBEDTLS_ARIA_C MBEDTLS_GCM_C MBEDTLS_ENTROPY_C)
-
 install(TARGETS duckdb_mbedtls
         EXPORT "${DUCKDB_EXPORT_SET}"
         LIBRARY DESTINATION "${INSTALL_LIB_DIR}"

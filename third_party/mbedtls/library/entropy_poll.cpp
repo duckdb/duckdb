@@ -32,9 +32,9 @@
 #include "entropy_poll.h"
 #include "mbedtls/error.h"
 
-//#if defined(MBEDTLS_TIMING_C)
-//#include "mbedtls/timing.h"
-//#endif
+#if defined(MBEDTLS_TIMING_C)
+#include "mbedtls/timing.h"
+#endif
 #if defined(MBEDTLS_ENTROPY_NV_SEED)
 #include "mbedtls/platform.h"
 #endif

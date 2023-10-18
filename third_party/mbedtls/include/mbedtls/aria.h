@@ -70,7 +70,7 @@ typedef struct mbedtls_aria_context
 mbedtls_aria_context;
 
 #else  /* MBEDTLS_ARIA_ALT */
-//#include "aria_alt.h"
+#include "mbedtls/aria_alt.h"
 #endif /* MBEDTLS_ARIA_ALT */
 
 /**

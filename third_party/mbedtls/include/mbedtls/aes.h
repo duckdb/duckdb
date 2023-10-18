@@ -106,7 +106,7 @@ typedef struct mbedtls_aes_xts_context
 #endif /* MBEDTLS_CIPHER_MODE_XTS */
 
 #else  /* MBEDTLS_AES_ALT */
-//#include "aes_alt.h"
+#include "mbedtls/aes_alt.h"
 #endif /* MBEDTLS_AES_ALT */
 
 /**

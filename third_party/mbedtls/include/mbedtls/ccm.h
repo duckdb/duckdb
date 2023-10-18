@@ -100,9 +100,9 @@ typedef struct mbedtls_ccm_context
 }
 mbedtls_ccm_context;
 
-//#else  /* MBEDTLS_CCM_ALT */
-//#include "ccm_alt.h"
-//#endif /* MBEDTLS_CCM_ALT */
+#else  /* MBEDTLS_CCM_ALT */
+#include "mbedtls/ccm_alt.h"
+#endif /* MBEDTLS_CCM_ALT */
 
 /**
  * \brief           This function initializes the specified CCM context,

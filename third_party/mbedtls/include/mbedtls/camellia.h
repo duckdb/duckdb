@@ -58,7 +58,7 @@ typedef struct mbedtls_camellia_context
 mbedtls_camellia_context;
 
 #else  /* MBEDTLS_CAMELLIA_ALT */
-//#include "camellia_alt.h"
+#include "mbedtls/camellia_alt.h"
 #endif /* MBEDTLS_CAMELLIA_ALT */
 
 /**
