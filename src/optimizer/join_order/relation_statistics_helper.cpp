@@ -228,7 +228,7 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 	ret.cardinality = MaxValue(child_1_card, child_2_card);
 	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		auto &join = op.Cast<LogicalComparisonJoin>();
-		switch(join.join_type) {
+		switch (join.join_type) {
 		case JoinType::RIGHT_ANTI:
 		case JoinType::RIGHT_SEMI:
 			ret.cardinality = child_2_card;
