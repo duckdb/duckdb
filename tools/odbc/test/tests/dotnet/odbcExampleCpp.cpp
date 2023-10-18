@@ -23,28 +23,29 @@ static std::string toss(System::String ^ s) {
 	return sstr;
 }
 
-TEST_CASE( "System.Data.ODBC", "test .NET OdbcDataAdapter functionality" ){
+TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 
 	OdbcConnection ^ Conn = nullptr;
 	try {
-		
+
 		int rtn;
 		System::String ^ connStr = "Driver=DuckDB Driver;Database=test.duckdb;";
 		Conn = gcnew OdbcConnection(connStr);
 		Conn->Open();
 
 		OdbcCommand ^ DbCmd = Conn->CreateCommand();
-			
+
 		DbCmd->CommandText = "drop table if exists weather;";
 		DbCmd->ExecuteNonQuery();
-			
-		DbCmd->CommandText = "CREATE TABLE weather(city VARCHAR, temp_lo INTEGER, temp_hi INTEGER, prcp FLOAT, date DATE);";
+
+		DbCmd->CommandText =
+		    "CREATE TABLE weather(city VARCHAR, temp_lo INTEGER, temp_hi INTEGER, prcp FLOAT, date DATE);";
 		DbCmd->ExecuteNonQuery();
-			
+
 		DbCmd->CommandText = "INSERT INTO weather VALUES ('San Francisco', 46, 50, 0.25, '1994-11-27');";
-		rtn = (int) DbCmd->ExecuteNonQuery();
+		rtn = (int)DbCmd->ExecuteNonQuery();
 		REQUIRE(rtn == 1);
-			
+
 		DbCmd->CommandText = "select count(1) from weather;";
 		rtn = (Int64)DbCmd->ExecuteScalar();
 		REQUIRE(rtn == 1);
@@ -90,17 +91,14 @@ TEST_CASE( "System.Data.ODBC", "test .NET OdbcDataAdapter functionality" ){
 		REQUIRE(toss(dt->Rows[0]->ItemArray[2]->ToString()) == "0.25");
 		REQUIRE(toss(dt->Rows[0]->ItemArray[3]->ToString()) == "11/27/1994 12:00:00 AM");
 
-	}
-	catch (OdbcException ^ ex) {
-		
-		FAIL( "OdbcException: {" << toss(ex->Message) << "}");
-		
-	}
-	finally {
-		
+	} catch (OdbcException ^ ex) {
+
+		FAIL("OdbcException: {" << toss(ex->Message) << "}");
+
+	} finally {
+
 		if (Conn != nullptr) {
 			delete Conn;
 		}
-		
 	}
 }
