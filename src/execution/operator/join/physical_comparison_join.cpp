@@ -26,7 +26,7 @@ PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOper
 
 string PhysicalComparisonJoin::ParamsToString() const {
 	string extra_info = EnumUtil::ToString(join_type) + "\n";
-	switch(join_type) {
+	switch (join_type) {
 	case JoinType::LEFT_SEMI:
 	case JoinType::LEFT_ANTI:
 		extra_info = "LEFT " + extra_info;
