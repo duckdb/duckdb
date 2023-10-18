@@ -455,8 +455,6 @@ public:
 				parquet_options.file_options.auto_detect_hive_partitioning = false;
 			} else if (loption == "encryption_config") {
 				parquet_options.encryption_config = ParquetEncryptionConfig::Create(context, kv.second);
-			} else {
-				throw BinderException("Unknown option for Parquet scan \"%s\"", loption);
 			}
 		}
 		parquet_options.file_options.AutoDetectHivePartitioning(files, context);
