@@ -2,7 +2,7 @@
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/execution/expression_executor.hpp"
+
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 
@@ -13,7 +13,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 struct LambdaColumnData {
-	explicit LambdaColumnData(const VectorType &vector_type, Vector &vector)
+	LambdaColumnData(const VectorType &vector_type, Vector &vector)
 	    : is_const(vector_type == VectorType::CONSTANT_VECTOR), sel_vector(SelectionVector(STANDARD_VECTOR_SIZE)),
 	      vector(vector) {};
 
@@ -23,30 +23,134 @@ struct LambdaColumnData {
 	reference<Vector> vector;
 };
 
-vector<LogicalType> GetInputTypes(DataChunk &args, bool has_index, const LogicalType &child_type) {
+struct ExecuteExprData {
+	ExecuteExprData(ClientContext &context, const Expression &lambda_expr, const DataChunk &args, const bool has_index,
+	                const Vector &child_vector)
+	    : has_index(has_index) {
 
-	vector<LogicalType> types;
-	if (has_index) {
-		types.push_back(LogicalType::BIGINT);
+		expr_executor = make_uniq<ExpressionExecutor>(context, lambda_expr);
+
+		// get the input types
+		vector<LogicalType> input_types;
+		if (has_index) {
+			input_types.push_back(LogicalType::BIGINT);
+		}
+		input_types.push_back(child_vector.GetType());
+		for (idx_t i = 1; i < args.ColumnCount(); i++) {
+			input_types.push_back(args.data[i].GetType());
+		}
+
+		// get the result types
+		vector<LogicalType> result_types {lambda_expr.return_type};
+
+		// initialize the data chunks
+		input_chunk.InitializeEmpty(input_types);
+		lambda_chunk.Initialize(Allocator::DefaultAllocator(), result_types);
+	};
+
+	DataChunk input_chunk;
+	DataChunk lambda_chunk;
+	unique_ptr<ExpressionExecutor> expr_executor;
+	bool has_index;
+};
+
+struct ListFilterInfo {
+	vector<idx_t> list_entry_lengths;
+	idx_t curr_list_len = 0;
+	idx_t curr_list_offset = 0;
+	idx_t curr_child_entry_count = 0;
+	idx_t curr_src_list_len = 0;
+};
+
+struct ListTransformFunctor {
+	static void ReserveNewLengths(vector<idx_t> &, const idx_t) {
 	}
-	types.push_back(child_type);
-
-	for (idx_t i = 1; i < args.ColumnCount(); i++) {
-		types.push_back(args.data[i].GetType());
+	static void PushEmptyList(vector<idx_t> &) {
 	}
+	static void SetResultEntry(list_entry_t *result_entries, idx_t &offset, const list_entry_t &list_entry,
+	                           const idx_t row_idx, vector<idx_t> &) {
+		result_entries[row_idx].offset = offset;
+		result_entries[row_idx].length = list_entry.length;
+		offset += list_entry.length;
+	}
+	static void AppendResult(Vector &result, Vector &lambda_vector, const idx_t elem_cnt, list_entry_t *,
+	                         ListFilterInfo &, ExecuteExprData &) {
+		ListVector::Append(result, lambda_vector, elem_cnt, 0);
+	}
+};
 
-	return types;
-}
+struct ListFilterFunctor {
+	static void ReserveNewLengths(vector<idx_t> &list_entry_lengths, const idx_t row_count) {
+		list_entry_lengths.reserve(row_count);
+	}
+	static void PushEmptyList(vector<idx_t> &list_entry_lengths) {
+		list_entry_lengths.emplace_back(0);
+	}
+	static void SetResultEntry(list_entry_t *, idx_t &, const list_entry_t &list_entry, const idx_t,
+	                           vector<idx_t> &list_entry_lengths) {
+		list_entry_lengths.push_back(list_entry.length);
+	}
+	static void AppendResult(Vector &result, Vector &lambda_vector, const idx_t elem_cnt, list_entry_t *result_entries,
+	                         ListFilterInfo &info, ExecuteExprData &data) {
+
+		idx_t true_count = 0;
+		SelectionVector true_sel(elem_cnt);
+		UnifiedVectorFormat lambda_data;
+		lambda_vector.ToUnifiedFormat(elem_cnt, lambda_data);
+
+		auto lambda_values = UnifiedVectorFormat::GetData<bool>(lambda_data);
+		auto &lambda_validity = lambda_data.validity;
+
+		// compute the new lengths and offsets, and create a selection vector
+		for (idx_t i = 0; i < elem_cnt; i++) {
+			auto entry = lambda_data.sel->get_index(i);
+
+			while (info.curr_child_entry_count < info.list_entry_lengths.size() &&
+			       info.list_entry_lengths[info.curr_child_entry_count] == 0) {
+				result_entries[info.curr_child_entry_count].offset = info.curr_list_offset;
+				result_entries[info.curr_child_entry_count].length = 0;
+				info.curr_child_entry_count++;
+			}
+
+			// found a true value
+			if (lambda_validity.RowIsValid(entry) && lambda_values[entry]) {
+				true_sel.set_index(true_count++, i);
+				info.curr_list_len++;
+			}
+
+			info.curr_src_list_len++;
+
+			if (info.list_entry_lengths[info.curr_child_entry_count] == info.curr_src_list_len) {
+				result_entries[info.curr_child_entry_count].offset = info.curr_list_offset;
+				result_entries[info.curr_child_entry_count].length = info.curr_list_len;
+				info.curr_list_offset += info.curr_list_len;
+				info.curr_child_entry_count++;
+				info.curr_list_len = 0;
+				info.curr_src_list_len = 0;
+			}
+		}
+
+		while (info.curr_child_entry_count < info.list_entry_lengths.size() &&
+		       info.list_entry_lengths[info.curr_child_entry_count] == 0) {
+			result_entries[info.curr_child_entry_count].offset = info.curr_list_offset;
+			result_entries[info.curr_child_entry_count].length = 0;
+			info.curr_child_entry_count++;
+		}
+
+		// slice to get the new lists and append them to the result
+		auto new_lists_idx = data.has_index ? 1 : 0;
+		Vector new_lists(data.input_chunk.data[new_lists_idx], true_sel, true_count);
+		ListVector::Append(result, new_lists, true_count, 0);
+	}
+};
 
 vector<LambdaColumnData> GetLambdaColumnData(DataChunk &args, idx_t row_count) {
 
 	vector<LambdaColumnData> data;
-
 	for (idx_t i = 1; i < args.ColumnCount(); i++) {
 		data.emplace_back(args.data[i].GetVectorType(), args.data[i]);
 		args.data[i].ToUnifiedFormat(row_count, data.back().format);
 	}
-
 	return data;
 }
 
@@ -61,95 +165,37 @@ vector<reference<LambdaColumnData>> GetNonConstData(vector<LambdaColumnData> &da
 	return non_const_data;
 }
 
-// FIXME: move these parameters into a struct/ more const
-void ExecuteExpression(idx_t &elem_cnt, DataChunk &input_chunk, DataChunk &lambda_chunk, LambdaColumnData &child_data,
-                       vector<LambdaColumnData> &column_data, ExpressionExecutor &expr_executor, const bool has_index,
-                       Vector &index_vector) {
+void ExecuteExpression(idx_t &elem_cnt, LambdaColumnData &child_data, vector<LambdaColumnData> &column_data,
+                       Vector &index_vector, ExecuteExprData &data) {
 
-	input_chunk.SetCardinality(elem_cnt);
-	lambda_chunk.SetCardinality(elem_cnt);
+	data.input_chunk.SetCardinality(elem_cnt);
+	data.lambda_chunk.SetCardinality(elem_cnt);
 
 	// set the list child vector
 	Vector slice(child_data.vector, child_data.sel_vector, elem_cnt);
 
 	// check if the lambda expression has an index parameter
-	if (has_index) {
-		input_chunk.data[0].Reference(index_vector);
-		input_chunk.data[1].Reference(slice);
+	if (data.has_index) {
+		data.input_chunk.data[0].Reference(index_vector);
+		data.input_chunk.data[1].Reference(slice);
 	} else {
-		input_chunk.data[0].Reference(slice);
+		data.input_chunk.data[0].Reference(slice);
 	}
-	idx_t slice_offset = has_index ? 2 : 1;
+	idx_t slice_offset = data.has_index ? 2 : 1;
 
-	// set the other vectors (outer lambdas and captures)
+	// (slice and) reference the other columns
 	vector<Vector> slices;
-	idx_t col_idx = 0;
-	for (auto &entry : column_data) {
-		if (entry.is_const) {
-			input_chunk.data[col_idx + slice_offset].Reference(entry.vector);
+	for (idx_t i = 0; i < column_data.size(); i++) {
+		if (column_data[i].is_const) {
+			data.input_chunk.data[i + slice_offset].Reference(column_data[i].vector);
 		} else {
-			slices.emplace_back(entry.vector, entry.sel_vector, elem_cnt);
-			input_chunk.data[col_idx + slice_offset].Reference(slices.back());
+			slices.emplace_back(column_data[i].vector, column_data[i].sel_vector, elem_cnt);
+			data.input_chunk.data[i + slice_offset].Reference(slices.back());
 		}
-		col_idx++;
 	}
 
 	// execute the lambda expression
-	expr_executor.Execute(input_chunk, lambda_chunk);
-}
-
-// FIXME: move these parameters into a struct/ more const
-void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_entries, idx_t &elem_cnt, Vector &result,
-                            idx_t &curr_list_len, idx_t &curr_list_offset, idx_t &appended_lists_cnt,
-                            vector<idx_t> &lists_len, idx_t &curr_original_list_len, DataChunk &input_chunk,
-                            const bool has_index) {
-
-	idx_t true_count = 0;
-	SelectionVector true_sel(elem_cnt);
-	UnifiedVectorFormat lambda_data;
-	lambda_vector.ToUnifiedFormat(elem_cnt, lambda_data);
-
-	auto lambda_values = UnifiedVectorFormat::GetData<bool>(lambda_data);
-	auto &lambda_validity = lambda_data.validity;
-
-	// compute the new lengths and offsets, and create a selection vector
-	for (idx_t i = 0; i < elem_cnt; i++) {
-		auto entry = lambda_data.sel->get_index(i);
-
-		while (appended_lists_cnt < lists_len.size() && lists_len[appended_lists_cnt] == 0) {
-			result_entries[appended_lists_cnt].offset = curr_list_offset;
-			result_entries[appended_lists_cnt].length = 0;
-			appended_lists_cnt++;
-		}
-
-		// found a true value
-		if (lambda_validity.RowIsValid(entry) && lambda_values[entry]) {
-			true_sel.set_index(true_count++, i);
-			curr_list_len++;
-		}
-
-		curr_original_list_len++;
-
-		if (lists_len[appended_lists_cnt] == curr_original_list_len) {
-			result_entries[appended_lists_cnt].offset = curr_list_offset;
-			result_entries[appended_lists_cnt].length = curr_list_len;
-			curr_list_offset += curr_list_len;
-			appended_lists_cnt++;
-			curr_list_len = 0;
-			curr_original_list_len = 0;
-		}
-	}
-
-	while (appended_lists_cnt < lists_len.size() && lists_len[appended_lists_cnt] == 0) {
-		result_entries[appended_lists_cnt].offset = curr_list_offset;
-		result_entries[appended_lists_cnt].length = 0;
-		appended_lists_cnt++;
-	}
-
-	// slice to get the new lists and append them to the result
-	auto new_lists_idx = has_index ? 1 : 0;
-	Vector new_lists(input_chunk.data[new_lists_idx], true_sel, true_count);
-	ListVector::Append(result, new_lists, true_count, 0);
+	data.expr_executor->Execute(data.input_chunk, data.lambda_chunk);
 }
 
 //===--------------------------------------------------------------------===//
@@ -198,7 +244,8 @@ LogicalType LambdaFunctions::BindBinaryLambda(const idx_t parameter_idx, const L
 	}
 }
 
-void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result, LambdaType lambda_type) {
+template <class FUNCTION_FUNCTOR>
+void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
 
 	auto row_count = args.size();
 	Vector &list_column = args.data[0];
@@ -218,10 +265,6 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 	auto &lambda_expr = info.lambda_expr;
 	bool has_side_effects = lambda_expr->HasSideEffects();
 
-	// this vector never contains more than one element
-	vector<LogicalType> result_types;
-	result_types.push_back(lambda_expr->return_type);
-
 	// get the list column entries
 	UnifiedVectorFormat list_column_format;
 	list_column.ToUnifiedFormat(row_count, list_column_format);
@@ -238,25 +281,11 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 	auto non_const_column_data = GetNonConstData(column_data);
 
 	// get the expression executor
-	ExpressionExecutor expr_executor(state.GetContext(), *lambda_expr);
+	ExecuteExprData execute_expr_data(state.GetContext(), *lambda_expr, args, info.has_index, child_vector);
 
-	// FIXME: this function should be more generic and not contain these if-else code paths
-	// FIXME: for different scalar functions
-	// these are only for LIST_FILTER
-	vector<idx_t> lists_len;
-	idx_t curr_list_len = 0;
-	idx_t curr_list_offset = 0;
-	idx_t appended_lists_cnt = 0;
-	idx_t curr_original_list_len = 0;
-
-	if (lambda_type != LambdaType::TRANSFORM) {
-		lists_len.reserve(row_count);
-	}
-
-	DataChunk input_chunk;
-	DataChunk lambda_chunk;
-	input_chunk.InitializeEmpty(GetInputTypes(args, info.has_index, child_vector.GetType()));
-	lambda_chunk.Initialize(Allocator::DefaultAllocator(), result_types);
+	// get list_filter specific info
+	ListFilterInfo list_filter_info;
+	FUNCTION_FUNCTOR::ReserveNewLengths(list_filter_info.list_entry_lengths, row_count);
 
 	// additional index vector
 	Vector index_vector(LogicalType::BIGINT);
@@ -272,20 +301,12 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 		// set the result to NULL for this row
 		if (!list_column_format.validity.RowIsValid(list_row_idx)) {
 			result_validity.SetInvalid(row_idx);
-			if (lambda_type != LambdaType::TRANSFORM) {
-				lists_len.push_back(0);
-			}
+			FUNCTION_FUNCTOR::PushEmptyList(list_filter_info.list_entry_lengths);
 			continue;
 		}
 
-		// set the length and offset for the resulting lists
-		if (lambda_type == LambdaType::TRANSFORM) {
-			result_entries[row_idx].offset = offset;
-			result_entries[row_idx].length = list_entry.length;
-			offset += list_entry.length;
-		} else {
-			lists_len.push_back(list_entry.length);
-		}
+		FUNCTION_FUNCTOR::SetResultEntry(result_entries, offset, list_entry, row_idx,
+		                                 list_filter_info.list_entry_lengths);
 
 		// empty list, nothing to execute
 		if (list_entry.length == 0) {
@@ -298,18 +319,12 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 			// reached STANDARD_VECTOR_SIZE elements
 			if (elem_cnt == STANDARD_VECTOR_SIZE) {
 
-				lambda_chunk.Reset();
-				ExecuteExpression(elem_cnt, input_chunk, lambda_chunk, child_data, column_data, expr_executor,
-				                  info.has_index, index_vector);
-				auto &lambda_vector = lambda_chunk.data[0];
+				execute_expr_data.lambda_chunk.Reset();
+				ExecuteExpression(elem_cnt, child_data, column_data, index_vector, execute_expr_data);
+				auto &lambda_vector = execute_expr_data.lambda_chunk.data[0];
 
-				if (lambda_type == LambdaType::TRANSFORM) {
-					ListVector::Append(result, lambda_vector, elem_cnt, 0);
-				} else {
-					AppendFilteredToResult(lambda_vector, result_entries, elem_cnt, result, curr_list_len,
-					                       curr_list_offset, appended_lists_cnt, lists_len, curr_original_list_len,
-					                       input_chunk, info.has_index);
-				}
+				FUNCTION_FUNCTOR::AppendResult(result, lambda_vector, elem_cnt, result_entries, list_filter_info,
+				                               execute_expr_data);
 				elem_cnt = 0;
 			}
 
@@ -328,17 +343,12 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 		}
 	}
 
-	lambda_chunk.Reset();
-	ExecuteExpression(elem_cnt, input_chunk, lambda_chunk, child_data, column_data, expr_executor, info.has_index,
-	                  index_vector);
-	auto &lambda_vector = lambda_chunk.data[0];
+	execute_expr_data.lambda_chunk.Reset();
+	ExecuteExpression(elem_cnt, child_data, column_data, index_vector, execute_expr_data);
+	auto &lambda_vector = execute_expr_data.lambda_chunk.data[0];
 
-	if (lambda_type == LambdaType::TRANSFORM) {
-		ListVector::Append(result, lambda_vector, elem_cnt, 0);
-	} else {
-		AppendFilteredToResult(lambda_vector, result_entries, elem_cnt, result, curr_list_len, curr_list_offset,
-		                       appended_lists_cnt, lists_len, curr_original_list_len, input_chunk, info.has_index);
-	}
+	FUNCTION_FUNCTOR::AppendResult(result, lambda_vector, elem_cnt, result_entries, list_filter_info,
+	                               execute_expr_data);
 
 	if (args.AllConstant() && !has_side_effects) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -367,6 +377,14 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context,
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	auto lambda_expr = std::move(bound_lambda_expr.lambda_expr);
 	return make_uniq<ListLambdaBindData>(bound_function.return_type, std::move(lambda_expr), has_index);
+}
+
+void LambdaFunctions::ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	ExecuteLambda<ListTransformFunctor>(args, state, result);
+}
+
+void LambdaFunctions::ListFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	ExecuteLambda<ListFilterFunctor>(args, state, result);
 }
 
 } // namespace duckdb

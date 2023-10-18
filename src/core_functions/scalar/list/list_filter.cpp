@@ -5,10 +5,6 @@
 
 namespace duckdb {
 
-static void ListFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	LambdaFunctions::ExecuteLambda(args, state, result, LambdaType::FILTER);
-}
-
 static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 
@@ -40,7 +36,7 @@ static LogicalType ListFilterBindLambda(const idx_t parameter_idx, const Logical
 
 ScalarFunction ListFilterFun::GetFunction() {
 	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA}, LogicalType::LIST(LogicalType::ANY),
-	                   ListFilterFunction, ListFilterBind, nullptr, nullptr);
+	                   LambdaFunctions::ListFilterFunction, ListFilterBind, nullptr, nullptr);
 
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.serialize = ListLambdaBindData::Serialize;
