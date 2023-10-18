@@ -6,6 +6,8 @@ project(SystemDataODBC_tests VERSION 0.0.0)
 
 include(CSharpUtilities)
 
+include_directories(../../../../../third_party/catch/)
+
 add_executable(SystemDataODBC_tests odbcExampleCpp.cpp AssemblyInfo.cpp pch.cpp)
 
 set(CMAKE_CSharp_FLAGS "/langversion:latest /platform:x64")
@@ -13,8 +15,6 @@ set(CMAKE_CSharp_FLAGS "/langversion:latest /platform:x64")
 csharp_set_designer_cs_properties(AssemblyInfo.cpp)
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY COMMON_LANGUAGE_RUNTIME "")
-
-# set_property(TARGET ${PROJECT_NAME} PROPERTY COMPILE_FLAGS "/clr /EHa")
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DOTNET_TARGET_FRAMEWORK_VERSION
                                              "v4.8.1")
