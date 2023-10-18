@@ -148,8 +148,8 @@ static void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_d
 }
 
 static void ListWindow(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
-                       idx_t input_count, data_ptr_t state, const vector<FrameBounds> &frames, Vector &result,
-                       idx_t rid, const_data_ptr_t gstate) {
+                       idx_t input_count, data_ptr_t state, const SubFrames &frames, Vector &result, idx_t rid,
+                       const_data_ptr_t gstate) {
 
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
 	LinkedList linked_list;

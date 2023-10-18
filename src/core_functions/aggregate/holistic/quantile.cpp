@@ -41,7 +41,7 @@ inline interval_t operator-(const interval_t &lhs, const interval_t &rhs) {
 }
 
 struct FrameSet {
-	inline explicit FrameSet(const IncludedFrames &frames_p) : frames(frames_p) {
+	inline explicit FrameSet(const SubFrames &frames_p) : frames(frames_p) {
 	}
 
 	inline idx_t Size() const {
@@ -62,7 +62,7 @@ struct FrameSet {
 		}
 		return false;
 	}
-	const IncludedFrames &frames;
+	const SubFrames &frames;
 };
 
 struct QuantileIncluded {
@@ -105,7 +105,7 @@ struct QuantileReuseUpdater {
 	}
 };
 
-void ReuseIndexes(idx_t *index, const IncludedFrames &currs, const IncludedFrames &prevs) {
+void ReuseIndexes(idx_t *index, const SubFrames &currs, const SubFrames &prevs) {
 
 	//  Copy overlapping indices by scanning the previous set and copying down into holes.
 	//	We copy instead of leaving gaps in case there are fewer values in the current frame.
@@ -558,7 +558,7 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 		return make_uniq<QuantileSortTree>(std::move(sorted));
 	}
 
-	IDX SelectNth(const IncludedFrames &frames, size_t n) const {
+	IDX SelectNth(const SubFrames &frames, size_t n) const {
 		size_t result = 0;
 
 		//	To find the element at position n we need to find n+1 elements.
@@ -587,7 +587,7 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 	}
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE, bool DISCRETE>
-	RESULT_TYPE WindowScalar(const INPUT_TYPE *data, const IncludedFrames &frames, const idx_t n, Vector &result,
+	RESULT_TYPE WindowScalar(const INPUT_TYPE *data, const SubFrames &frames, const idx_t n, Vector &result,
 	                         const QuantileValue &q) const {
 		D_ASSERT(n > 0);
 
@@ -606,7 +606,7 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 	}
 
 	template <typename INPUT_TYPE, typename CHILD_TYPE, bool DISCRETE>
-	void WindowList(const INPUT_TYPE *data, const IncludedFrames &frames, const idx_t n, Vector &list, const idx_t lidx,
+	void WindowList(const INPUT_TYPE *data, const SubFrames &frames, const idx_t n, Vector &list, const idx_t lidx,
 	                const QuantileBindData &bind_data) const {
 		D_ASSERT(n > 0);
 
@@ -664,7 +664,7 @@ struct QuantileState {
 	// Windowed Quantile skip lists
 	using PointerType = const InputType *;
 	using SkipListType = duckdb_skiplistlib::skip_list::HeadNode<PointerType, PointerLess<PointerType>>;
-	IncludedFrames prevs;
+	SubFrames prevs;
 	unique_ptr<SkipListType> s;
 	mutable vector<PointerType> dest;
 
@@ -725,7 +725,7 @@ struct QuantileState {
 		}
 	};
 
-	void UpdateSkip(const INPUT_TYPE *data, const IncludedFrames &frames, const QuantileIncluded &included) {
+	void UpdateSkip(const INPUT_TYPE *data, const SubFrames &frames, const QuantileIncluded &included) {
 		//	No overlap, or no data
 		if (!s || prevs.back().end <= frames.front().start || frames.back().end <= prevs.front().start) {
 			auto &skip = GetSkipList(true);
@@ -748,7 +748,7 @@ struct QuantileState {
 	}
 
 	template <typename RESULT_TYPE, bool DISCRETE>
-	RESULT_TYPE WindowScalar(const INPUT_TYPE *data, const IncludedFrames &frames, const idx_t n, Vector &result,
+	RESULT_TYPE WindowScalar(const INPUT_TYPE *data, const SubFrames &frames, const idx_t n, Vector &result,
 	                         const QuantileValue &q) const {
 		D_ASSERT(n > 0);
 		if (qst32) {
@@ -766,7 +766,7 @@ struct QuantileState {
 	}
 
 	template <typename CHILD_TYPE, bool DISCRETE>
-	void WindowList(const INPUT_TYPE *data, const IncludedFrames &frames, const idx_t n, Vector &list, const idx_t lidx,
+	void WindowList(const INPUT_TYPE *data, const SubFrames &frames, const idx_t n, Vector &list, const idx_t lidx,
 	                const QuantileBindData &bind_data) const {
 		D_ASSERT(n > 0);
 		// Result is a constant LIST<CHILD_TYPE> with a fixed length
@@ -854,7 +854,7 @@ struct QuantileOperation {
 		}
 	}
 
-	static idx_t FrameSize(const QuantileIncluded &included, const IncludedFrames &frames) {
+	static idx_t FrameSize(const QuantileIncluded &included, const SubFrames &frames) {
 		//	Count the number of valid values
 		idx_t n = 0;
 		if (included.AllValid()) {
@@ -902,7 +902,7 @@ struct QuantileScalarOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const IncludedFrames &frames, Vector &result,
+	                   AggregateInputData &aggr_input_data, STATE &state, const SubFrames &frames, Vector &result,
 	                   idx_t ridx, const STATE *gstate) {
 		QuantileIncluded included(fmask, dmask);
 		const auto n = FrameSize(included, frames);
@@ -1030,7 +1030,7 @@ struct QuantileListOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const IncludedFrames &frames, Vector &list,
+	                   AggregateInputData &aggr_input_data, STATE &state, const SubFrames &frames, Vector &list,
 	                   idx_t lidx, const STATE *gstate) {
 		D_ASSERT(aggr_input_data.bind_data);
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
@@ -1324,7 +1324,7 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const IncludedFrames &frames, Vector &result,
+	                   AggregateInputData &aggr_input_data, STATE &state, const SubFrames &frames, Vector &result,
 	                   idx_t ridx, const STATE *gstate) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 

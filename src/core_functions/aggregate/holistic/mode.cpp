@@ -44,7 +44,7 @@ struct ModeState {
 	ModeState() {
 	}
 
-	vector<FrameBounds> prevs;
+	SubFrames prevs;
 	Counts *frequency_map = nullptr;
 	KEY_TYPE *mode = nullptr;
 	size_t nonzero = 0;
@@ -237,8 +237,8 @@ struct ModeFunction {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const vector<FrameBounds> &frames,
-	                   Vector &result, idx_t rid, const STATE *gstate) {
+	                   AggregateInputData &aggr_input_data, STATE &state, const SubFrames &frames, Vector &result,
+	                   idx_t rid, const STATE *gstate) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 		auto &prevs = state.prevs;

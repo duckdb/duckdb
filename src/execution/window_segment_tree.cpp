@@ -259,7 +259,7 @@ public:
 	//! Reused result state container for the window functions
 	Vector statef;
 	//! The frame boundaries, used for the window functions
-	vector<FrameBounds> frames;
+	SubFrames frames;
 };
 
 WindowCustomAggregatorState::WindowCustomAggregatorState(const AggregateObject &aggr,
