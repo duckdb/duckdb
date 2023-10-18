@@ -52,8 +52,9 @@ CreateThriftFileProtocol(Allocator &allocator, FileHandle &file_handle, bool pre
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
-static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, FileHandle &file_handle,
-                                                         shared_ptr<ParquetEncryptionConfig> encryption_config) {
+static shared_ptr<ParquetFileMetadataCache>
+LoadMetadata(Allocator &allocator, FileHandle &file_handle,
+             const shared_ptr<const ParquetEncryptionConfig> &encryption_config) {
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
 	auto file_proto = CreateThriftFileProtocol(allocator, file_handle, false);

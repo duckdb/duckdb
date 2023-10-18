@@ -22,6 +22,7 @@ struct ExtensionEntry {
 
 static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"->>", "json"},
+    {"add_parquet_key", "parquet"},
     {"array_to_json", "json"},
     {"create_fts_index", "fts"},
     {"current_localtime", "icu"},
