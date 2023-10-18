@@ -43,16 +43,16 @@ public:
 
 	class AESGCMState {
 	public:
-		AESGCMState(const std::string &key);
-		~AESGCMState();
+		DUCKDB_API AESGCMState(const std::string &key);
+		DUCKDB_API ~AESGCMState();
 
 	public:
-		static bool ValidKey(const std::string &key);
-		void InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len);
-		void InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len);
-		size_t Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
+		DUCKDB_API static bool ValidKey(const std::string &key);
+		DUCKDB_API void InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len);
+		DUCKDB_API void InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len);
+		DUCKDB_API size_t Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
 		               duckdb::idx_t out_len);
-		size_t Finalize(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag, duckdb::idx_t tag_len);
+		DUCKDB_API size_t Finalize(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag, duckdb::idx_t tag_len);
 
 	public:
 		static constexpr size_t BLOCK_SIZE = 16;

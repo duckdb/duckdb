@@ -59,33 +59,6 @@ if(NOT CLANG_TIDY)
       ../../third_party/zstd/compress/zstd_lazy.cpp
       ../../third_party/zstd/compress/zstd_ldm.cpp
       ../../third_party/zstd/compress/zstd_opt.cpp)
-  # mbedtls
-  set(PARQUET_EXTENSION_FILES
-      ${PARQUET_EXTENSION_FILES}
-      ../../third_party/mbedtls/library/aes.cpp
-      ../../third_party/mbedtls/library/aria.cpp
-      ../../third_party/mbedtls/library/asn1parse.cpp
-      ../../third_party/mbedtls/library/base64.cpp
-      ../../third_party/mbedtls/library/bignum.cpp
-      ../../third_party/mbedtls/library/camellia.cpp
-      ../../third_party/mbedtls/library/cipher.cpp
-      ../../third_party/mbedtls/library/cipher_wrap.cpp
-      ../../third_party/mbedtls/library/constant_time.cpp
-      ../../third_party/mbedtls/library/entropy.cpp
-      ../../third_party/mbedtls/library/entropy_poll.cpp
-      ../../third_party/mbedtls/library/gcm.cpp
-      ../../third_party/mbedtls/library/md.cpp
-      ../../third_party/mbedtls/library/oid.cpp
-      ../../third_party/mbedtls/library/pem.cpp
-      ../../third_party/mbedtls/library/pk.cpp
-      ../../third_party/mbedtls/library/pk_wrap.cpp
-      ../../third_party/mbedtls/library/pkparse.cpp
-      ../../third_party/mbedtls/library/platform_util.cpp
-      ../../third_party/mbedtls/library/rsa.cpp
-      ../../third_party/mbedtls/library/rsa_alt_helpers.cpp
-      ../../third_party/mbedtls/library/sha1.cpp
-      ../../third_party/mbedtls/library/sha256.cpp
-      ../../third_party/mbedtls/library/sha512.cpp)
 endif()
 
 build_static_extension(parquet ${PARQUET_EXTENSION_FILES})
