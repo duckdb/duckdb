@@ -49,6 +49,9 @@ struct IndexDataInfo {
 
 //! Information to serialize an index
 struct IndexStorageInfo {
+	IndexStorageInfo() {};
+	explicit IndexStorageInfo(string name) : name(std::move(name)) {};
+
 	//! The name of the index
 	string name;
 	//! Arbitrary index properties
