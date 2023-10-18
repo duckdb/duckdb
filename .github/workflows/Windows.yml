@@ -140,7 +140,6 @@ jobs:
         cmake -S .. -B . -G "Visual Studio 17 2022"
         cmake --build . --config Release
         Release/SystemDataODBC_tests.exe
-        cd ../../../../../..
 
 
  win-release-32:
