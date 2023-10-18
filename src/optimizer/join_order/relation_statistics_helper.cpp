@@ -226,6 +226,22 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 	idx_t child_1_card = child_stats[0].stats_initialized ? child_stats[0].cardinality : 0;
 	idx_t child_2_card = child_stats[1].stats_initialized ? child_stats[1].cardinality : 0;
 	ret.cardinality = MaxValue(child_1_card, child_2_card);
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		switch(join.join_type) {
+		case JoinType::RIGHT_ANTI:
+		case JoinType::RIGHT_SEMI:
+			ret.cardinality = child_2_card;
+			break;
+		case JoinType::LEFT_ANTI:
+		case JoinType::LEFT_SEMI:
+		case JoinType::SINGLE:
+			ret.cardinality = child_1_card;
+			break;
+		default:
+			break;
+		}
+	}
 	ret.stats_initialized = true;
 	ret.filter_strength = 1;
 	ret.table_name = child_stats[0].table_name + " joined with " + child_stats[1].table_name;
@@ -297,7 +313,7 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 	if (new_card < 0 || new_card >= child_stats.cardinality) {
 		// We have no good statistics on distinct count.
 		// most likely we are running on parquet files. Therefore we divide by 2.
-		new_card = child_stats.cardinality / 2;
+		new_card = (double)child_stats.cardinality / 2;
 	}
 	stats.cardinality = new_card;
 	stats.column_names = child_stats.column_names;
