@@ -47,9 +47,6 @@
 
 #include "IntegrityEnums.h"
 
-#pragma mark -
-#pragma mark class HeadNode definition
-
 /** HeadNode
  *
  * @brief A HeadNode is a skip list. This is the single node leading to all other content Nodes.
@@ -110,7 +107,7 @@ public:
     // Remove a value and return it.
     // Will throw a ValueError is value not present.
     T remove(const T &value);
-    
+
     // Const methods that are mostly used for debugging and visualisation.
     //
     // Number of linked lists that are in the skip list.
@@ -121,23 +118,23 @@ public:
     // The skip width of the node at index has.
     // May throw a SkipList::IndexError
     size_t width(size_t idx, size_t level) const;
-    
+
 #ifdef INCLUDE_METHODS_THAT_USE_STREAMS
     void dotFile(std::ostream &os) const;
     void dotFileFinalise(std::ostream &os) const;
 #endif // INCLUDE_METHODS_THAT_USE_STREAMS
-    
+
     // Returns non-zero if the integrity of this data structure is compromised
     // This is a thorough but expensive check!
     IntegrityCheck lacksIntegrity() const;
     // Estimate of the number of bytes used by the skip list
     size_t size_of() const;
     virtual ~HeadNode();
-    
+
 protected:
     void _adjRemoveRefs(size_t level, Node<T, _Compare> *pNode);
     const Node<T, _Compare> *_nodeAt(size_t idx) const;
-    
+
 protected:
     // Standardised way of throwing a ValueError
     void _throwValueErrorNotFound(const T &value) const;
@@ -164,11 +161,6 @@ private:
     HeadNode(const HeadNode &that);
     HeadNode &operator=(const HeadNode &that) const;
 };
-
-#pragma mark -
-#pragma mark class HeadNode implementation
-
-#pragma mark class HeadNode public const methods
 
 /**
  * Returns true if the value is present in the skip list.
@@ -265,7 +257,7 @@ template <typename T, typename _Compare>
 size_t HeadNode<T, _Compare>::index(const T& value) const {
     _throwIfValueDoesNotCompare(value);
     size_t idx;
-    
+
 #ifdef SKIPLIST_THREAD_SUPPORT
     std::lock_guard<std::mutex> lock(gSkipListMutex);
 #endif
@@ -374,8 +366,6 @@ const Node<T, _Compare> *HeadNode<T, _Compare>::_nodeAt(size_t idx) const {
     return NULL;
 }
 
-#pragma mark class HeadNode public non-const methods
-
 /**
  * Insert a value.
  *
@@ -393,7 +383,7 @@ void HeadNode<T, _Compare>::insert(const T &value) {
 #endif
     Node<T, _Compare> *pNode = nullptr;
     size_t level = _nodeRefs.height();
-    
+
     _throwIfValueDoesNotCompare(value);
     while (level-- > 0) {
         assert(_nodeRefs[level].pNode);
@@ -472,7 +462,7 @@ void HeadNode<T, _Compare>::_adjRemoveRefs(size_t level,
                                            Node<T, _Compare> *pNode) {
     assert(pNode);
     SwappableNodeRefStack<T, _Compare> &thatRefs = pNode->nodeRefs();
-    
+
     // Swap all remaining levels
     // This assertion checks that if swapping can take place we must be at the
     // same level.
@@ -662,7 +652,7 @@ IntegrityCheck HeadNode<T, _Compare>::_lacksIntegrityNodeReferencesNotInList() c
     std::set<const Node<T, _Compare>*> nodeSet;
     const Node<T, _Compare> *pNode = _nodeRefs[0].pNode;
     assert(pNode);
-    
+
     // First gather all nodes, slightly awkward code here is so that
     // NULL is always included.
     nodeSet.insert(pNode);

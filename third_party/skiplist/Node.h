@@ -44,8 +44,6 @@
 #endif
 
 /**************************** Node *********************************/
-#pragma mark -
-#pragma mark class Node definition
 
 /**
  * @brief A single node in a Skip List containing a value and references to other downstream Node objects.
@@ -77,7 +75,7 @@ public:
     // Return the node pointer at given level, only used for HeadNode
     // integrity checks.
     const Node<T, _Compare> *pNode(size_t level) const;
-    
+
     // Non-const methods
     /// Get a reference to the node references
     SwappableNodeRefStack<T, _Compare> &nodeRefs() { return _nodeRefs; }
@@ -89,19 +87,19 @@ public:
     Node<T, _Compare> *remove(size_t call_level, const T &value);
     // An estimate of the number of bytes used by this node
     size_t size_of() const;
-    
+
 #ifdef INCLUDE_METHODS_THAT_USE_STREAMS
     void dotFile(std::ostream &os, size_t suffix = 0) const;
     void writeNode(std::ostream &os, size_t suffix = 0) const;
 #endif // INCLUDE_METHODS_THAT_USE_STREAMS
-    
+
     // Integrity checks, returns non-zero on failure
     IntegrityCheck lacksIntegrity(size_t headnode_height) const;
     IntegrityCheck lacksIntegrityRefsInSet(const std::set<const Node<T, _Compare>*> &nodeSet) const;
-    
+
 protected:
     Node<T, _Compare> *_adjRemoveRefs(size_t level, Node<T, _Compare> *pNode);
-    
+
 protected:
     T _value;
     SwappableNodeRefStack<T, _Compare> _nodeRefs;
@@ -112,9 +110,6 @@ private:
     Node(const Node &that);
     Node &operator=(const Node &that) const;
 };
-
-#pragma mark -
-#pragma mark class Node implementation
 
 /**
  * Constructor.
@@ -230,7 +225,7 @@ bool Node<T, _Compare>::index(const T& value, size_t &idx, size_t level) const {
 
 /**
  * Return the pointer to the next node at level 0.
- * 
+ *
  * @tparam T The type of the Skip List Node values.
  * @tparam _Compare A comparison function for type T.
  * @return The next node at level 0.
@@ -243,11 +238,11 @@ const Node<T, _Compare> *Node<T, _Compare>::next() const {
 
 /**
  * Return the width at given level.
- * 
+ *
  * @tparam T The type of the Skip List Node values.
  * @tparam _Compare A comparison function for type T.
  * @param level The requested level.
- * @return The width. 
+ * @return The width.
  */
 template <typename T, typename _Compare>
 size_t Node<T, _Compare>::width(size_t level) const {
@@ -257,10 +252,10 @@ size_t Node<T, _Compare>::width(size_t level) const {
 
 /**
  * Return the node pointer at given level, only used for HeadNode integrity checks.
- * 
+ *
  * @tparam T The type of the Skip List Node values.
  * @tparam _Compare A comparison function for type T.
- * @param level The requested level. 
+ * @param level The requested level.
  * @return The Node.
  */
 template <typename T, typename _Compare>
@@ -271,7 +266,7 @@ const Node<T, _Compare> *Node<T, _Compare>::pNode(size_t level) const {
 
 /**
  * Insert a new node with a value.
- * 
+ *
  * @tparam T The type of the Skip List Node values.
  * @tparam _Compare A comparison function for type T.
  * @param value The value of the Node to insert.
@@ -382,7 +377,7 @@ template <typename T, typename _Compare>
 Node<T, _Compare> *Node<T, _Compare>::_adjRemoveRefs(size_t level, Node<T, _Compare> *pNode) {
     assert(pNode);
     SwappableNodeRefStack<T, _Compare> &thatRefs = pNode->_nodeRefs;
-    
+
     assert(pNode != this);
     if (level < thatRefs.swapLevel()) {
         assert(level == thatRefs.swapLevel() - 1);
@@ -424,7 +419,7 @@ Node<T, _Compare> *Node<T, _Compare>::remove(size_t call_level,
                          const T &value) {
     assert(_nodeRefs.height());
     assert(_nodeRefs.noNodePointerMatches(this));
-    
+
     Node<T, _Compare> *pNode = nullptr;
     // Effectively: if (value >= _value) {
     if (!_compare(value, _value)) {
