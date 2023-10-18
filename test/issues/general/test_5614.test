@@ -3,45 +3,67 @@
 # group: [general]
 
 statement ok
-create table gutenburg as select * from read_csv_auto('/Users/tomebergen/duckdb/gutenburg.csv');
+create table t0 as select (UNNEST(['hello', 'duckdb', 'duck LORD', 'lord duck'])) as column0;
 
 
 # whats happening here is that the where subquery queries from an empty table. 
 # The whatever alias is properly evaluated, but there ends up being another 
-# scan from gutenburg (in reality this query can work using only one scan from gutenburg).
+# scan from t0 (in reality this query can work using only one scan from t0).
 # 
 
 # So then is the subquery select * from unnest(str_split(column0, ' ')))
 # able to add the proper delim scan but the other statement is not able
 # to do that?
 
+# works. Column0 (i think) just scans the table again and then there is a duplicate eliminated
+# scan.
+# Works because column0 in the unnest is determined to be a correlated column. Then PlanCorrelatedSubquery
+# plans in the correlated subquery like it is supposed to.
 
 statement ok
 explain select 
 row_number() over () as line_number, 
-column0 as whatever, 
+column0 as text, 
 length(coalesce(column0, '')) as text_length 
 from 
-gutenburg
-where 'LORD' in (select unnest(str_split(column0, ' ')));
-
-statement ok
-explain select 
-row_number() over () as line_number, 
-column0 as whatever, 
-length(coalesce(column0, '')) as text_length 
-from 
-gutenburg
+t0
 where 'LORD' in (select * from unnest(str_split(column0, ' ')));
 
+# doesn't work because text is not thought of as a correlated subquery.
+# I think the binder/planner are confused. Since this is in the where clause
+# the condition should be a filter on top of the scan and window.
+# but since we have an (in with a table in/out function, it becomes a correlated subquery).
+statement ok
+explain select 
+row_number() over () as line_number, 
+column0 as text, 
+length(coalesce(column0, '')) as text_length 
+from 
+t0
+where 'LORD' in (select * from unnest(str_split(text, ' ')));
+
+
+statement ok
+explain select 
+row_number() over () as line_number, 
+column0 as text, 
+length(coalesce(column0, '')) as text_length 
+from 
+t0
+where 'LORD' in unnest(str_split(text, ' '));
+
+mode skip
+
+# does not work. column0_alias is correctly bound using the alias map.
+# but for some reason I think the ExtractCorrelatedExpressions is wrong.
 statement error
 explain select 
 row_number() over () as line_number, 
-column0 as whatever, 
+column0 as column0_alias, 
 length(coalesce(column0, '')) as text_length 
 from 
-gutenburg
-where 'LORD' in (select * from unnest(str_split(whatever, ' ')));
+t0
+where 'LORD' in (select * from unnest(str_split(column0_alias, ' ')));
 
 mode skip
 
@@ -51,7 +73,7 @@ row_number() over () as line_number,
 column0 as whatever, 
 length(coalesce(column0, '')) as text_length 
 from 
-gutenburg
+t0
 where 'LORD' in (select * from unnest(str_split(column0, ' ')));
 
 mode skip

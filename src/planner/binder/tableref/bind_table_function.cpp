@@ -33,8 +33,8 @@ bool Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &e
                                          unique_ptr<BoundSubqueryRef> &subquery, string &error) {
 	auto binder = Binder::CreateBinder(this->context, this, true);
 	unique_ptr<QueryNode> subquery_node;
+	// maybe here
 	if (expressions.size() == 1 && expressions[0]->type == ExpressionType::SUBQUERY) {
-		// general case: argument is a subquery, bind it as part of the node
 		auto &se = expressions[0]->Cast<SubqueryExpression>();
 		subquery_node = std::move(se.subquery->node);
 	} else {
@@ -297,6 +297,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		get->children.push_back(Binder::CreatePlan(*subquery));
 	}
 
+	// here is where the dummy scan comes in?
 	return make_uniq_base<BoundTableRef, BoundTableFunction>(std::move(get));
 }
 

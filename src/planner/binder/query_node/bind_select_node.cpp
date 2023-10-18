@@ -265,6 +265,10 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	// first bind the FROM table statement
 	auto from = std::move(statement.from_table);
 	auto from_table = Bind(*from);
+//	if (from_table->type == TableReferenceType::TABLE_FUNCTION) {
+//		auto &func_get = from_table->Cast<BoundTableFunction>();
+//
+//	}
 	return BindSelectNode(statement, std::move(from_table));
 }
 
