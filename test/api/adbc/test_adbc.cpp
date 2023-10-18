@@ -40,19 +40,18 @@ public:
 			arrow_stream.release(&arrow_stream);
 			arrow_stream.release = nullptr;
 		}
-		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 	}
 
 	bool QueryAndCheck(const string &query) {
 		QueryArrow(query);
-		auto cconn = (duckdb::Connection *)adbc_connection.private_data;
+		auto cconn = reinterpret_cast<duckdb::Connection *>(adbc_connection.private_data);
 		return ArrowTestHelper::RunArrowComparison(*cconn, query, arrow_stream);
 	}
 
 	std::unique_ptr<MaterializedQueryResult> Query(const string &query) {
-		auto cconn = (duckdb::Connection *)adbc_connection.private_data;
+		auto cconn = reinterpret_cast<duckdb::Connection *>(adbc_connection.private_data);
 		return cconn->Query(query);
 	}
 
@@ -61,24 +60,29 @@ public:
 			arrow_stream.release(&arrow_stream);
 			arrow_stream.release = nullptr;
 		}
+		AdbcStatement adbc_statement;
 		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, query.c_str(), &adbc_error)));
 		int64_t rows_affected;
 		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &arrow_stream, &rows_affected, &adbc_error)));
+		// Release the statement
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 		return arrow_stream;
 	}
 
 	void CreateTable(const string &table_name, ArrowArrayStream &input_data) {
 		REQUIRE(input_data.release);
-
-		REQUIRE(SUCCESS(StatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
 		REQUIRE(SUCCESS(
-		    StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(), &adbc_error)));
+		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(), &adbc_error)));
 
-		REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &adbc_error)));
 
-		REQUIRE(SUCCESS(duckdb_adbc::StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
+		// Release the statement
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 		input_data.release = nullptr;
 		arrow_stream.release = nullptr;
 	}
@@ -86,7 +90,7 @@ public:
 	AdbcError adbc_error;
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
-	AdbcStatement adbc_statement;
+
 	ArrowArrayStream arrow_stream;
 	std::string path;
 };

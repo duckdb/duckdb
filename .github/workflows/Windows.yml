@@ -71,6 +71,7 @@ jobs:
       run: echo "DUCKDB_INSTALL_LIB=$((Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName)" >> $GITHUB_ENV
 
     - name: Test DUCKDB_INSTALL_LIB variable
+      shell: bash
       run: echo $DUCKDB_INSTALL_LIB
 
     - name: Test

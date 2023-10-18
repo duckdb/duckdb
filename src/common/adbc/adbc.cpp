@@ -25,7 +25,7 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(int version, void *driver, struct A
 	if (!driver) {
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	auto adbc_driver = reinterpret_cast<duckdb_adbc::AdbcDriver *> (driver);
+	auto adbc_driver = reinterpret_cast<duckdb_adbc::AdbcDriver *>(driver);
 
 	adbc_driver->DatabaseNew = duckdb_adbc::DatabaseNew;
 	adbc_driver->DatabaseSetOption = duckdb_adbc::DatabaseSetOption;
