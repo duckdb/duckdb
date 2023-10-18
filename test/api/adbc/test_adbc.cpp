@@ -95,7 +95,6 @@ TEST_CASE("ADBC - Select 42", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
 	}
-	REQUIRE(false);
 	ADBCTestDatabase db;
 
 	REQUIRE(db.QueryAndCheck("SELECT 42"));
