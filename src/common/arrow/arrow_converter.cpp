@@ -187,7 +187,11 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		child.format = "+l";
+		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			child.format = "+L";
+		} else {
+			child.format = "+l";
+		}
 		child.n_children = 1;
 		root_holder.nested_children.emplace_back();
 		root_holder.nested_children.back().resize(1);

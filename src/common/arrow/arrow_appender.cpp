@@ -193,26 +193,26 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			InitializeAppenderForType<ArrowVarcharData<string_t>>(append_data);
 		} else {
-			InitializeAppenderForType<ArrowVarcharData<string_t, ArrowVarcharConverter, uint32_t>>(append_data);
+			InitializeAppenderForType<ArrowVarcharData<string_t, ArrowVarcharConverter, int32_t>>(append_data);
 		}
 		break;
 	case LogicalTypeId::UUID:
 		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			InitializeAppenderForType<ArrowVarcharData<hugeint_t, ArrowUUIDConverter>>(append_data);
 		} else {
-			InitializeAppenderForType<ArrowVarcharData<hugeint_t, ArrowUUIDConverter, uint32_t>>(append_data);
+			InitializeAppenderForType<ArrowVarcharData<hugeint_t, ArrowUUIDConverter, int32_t>>(append_data);
 		}
 		break;
 	case LogicalTypeId::ENUM:
 		switch (type.InternalType()) {
 		case PhysicalType::UINT8:
-			InitializeAppenderForType<ArrowEnumData<uint8_t>>(append_data);
+			InitializeAppenderForType<ArrowEnumData<int8_t>>(append_data);
 			break;
 		case PhysicalType::UINT16:
-			InitializeAppenderForType<ArrowEnumData<uint16_t>>(append_data);
+			InitializeAppenderForType<ArrowEnumData<int16_t>>(append_data);
 			break;
 		case PhysicalType::UINT32:
-			InitializeAppenderForType<ArrowEnumData<uint32_t>>(append_data);
+			InitializeAppenderForType<ArrowEnumData<int32_t>>(append_data);
 			break;
 		default:
 			throw InternalException("Unsupported internal enum type");
@@ -227,11 +227,20 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::STRUCT:
 		InitializeAppenderForType<ArrowStructData>(append_data);
 		break;
-	case LogicalTypeId::LIST:
-		InitializeAppenderForType<ArrowListData>(append_data);
+	case LogicalTypeId::LIST: {
+		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			InitializeAppenderForType<ArrowListData<int64_t>>(append_data);
+		} else {
+			InitializeAppenderForType<ArrowListData<int32_t>>(append_data);
+		}
 		break;
+	}
 	case LogicalTypeId::MAP:
-		InitializeAppenderForType<ArrowMapData>(append_data);
+		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			InitializeAppenderForType<ArrowMapData<int64_t>>(append_data);
+		} else {
+			InitializeAppenderForType<ArrowMapData<int32_t>>(append_data);
+		}
 		break;
 	default:
 		throw NotImplementedException("Unsupported type in DuckDB -> Arrow Conversion: %s\n", type.ToString());
