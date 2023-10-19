@@ -34,8 +34,6 @@ public:
 	string sql;
 	//! The set of aliases associated with the view
 	vector<string> aliases;
-	//! The explicitly set aliases set by the user
-	vector<string> explicit_aliases;
 	//! The returned types of the view
 	vector<LogicalType> types;
 

@@ -15,22 +15,30 @@ namespace duckdb {
 class SchemaCatalogEntry;
 
 struct CreateViewInfo : public CreateInfo {
+public:
 	CreateViewInfo();
 	CreateViewInfo(SchemaCatalogEntry &schema, string view_name);
 	CreateViewInfo(string catalog_p, string schema_p, string view_name);
 
+public:
 	//! View name
 	string view_name;
-	//! Aliases of the view
+	//! Explicit column aliases of the view
 	vector<string> aliases;
-	//! Explicit aliases specified by the user
-	vector<string> explicit_aliases;
-	//! Return types
-	vector<LogicalType> types;
 	//! The SelectStatement of the view
 	unique_ptr<SelectStatement> query;
 
+private:
+	// Bound names and types
+	vector<LogicalType> types;
+	// Do not serialize the bound names
+	vector<string> names;
+
 public:
+	void SetBoundNames(vector<string> names);
+	void SetBoundTypes(vector<LogicalType> types);
+	const vector<string> &BoundNames();
+	const vector<LogicalType> &BoundTypes();
 	unique_ptr<CreateInfo> Copy() const override;
 
 	//! Gets a bound CreateViewInfo object from a SELECT statement and a view name, schema name, etc

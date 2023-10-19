@@ -184,7 +184,6 @@ void CreateViewInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<string>>(201, "aliases", aliases);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "types", types);
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", query);
-	serializer.WritePropertyWithDefault<vector<string>>(204, "explicit_aliases", explicit_aliases);
 }
 
 unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
@@ -193,7 +192,6 @@ unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<string>>(201, "aliases", result->aliases);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "types", result->types);
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", result->query);
-	deserializer.ReadPropertyWithDefault<vector<string>>(204, "explicit_aliases", result->explicit_aliases);
 	return std::move(result);
 }
 

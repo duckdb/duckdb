@@ -35,15 +35,33 @@ string CreateViewInfo::ToString() const {
 		result += ".";
 	}
 	result += KeywordHelper::WriteOptionallyQuoted(view_name);
-	if (!explicit_aliases.empty()) {
+	if (!aliases.empty()) {
 		result += " (";
-		result += StringUtil::Join(explicit_aliases, explicit_aliases.size(), ", ",
+		result += StringUtil::Join(aliases, aliases.size(), ", ",
 		                           [](const string &name) { return KeywordHelper::WriteOptionallyQuoted(name); });
 		result += ")";
 	}
 	result += " AS ";
 	result += query->ToString();
 	return result;
+}
+
+void CreateViewInfo::SetBoundNames(vector<string> names_p) {
+	names = std::move(names_p);
+}
+
+void CreateViewInfo::SetBoundTypes(vector<LogicalType> types_p) {
+	types = std::move(types_p);
+}
+
+const vector<string> &CreateViewInfo::BoundNames() {
+	D_ASSERT(!names.empty());
+	return names;
+}
+
+const vector<LogicalType> &CreateViewInfo::BoundTypes() {
+	D_ASSERT(!types.empty());
+	return types;
 }
 
 unique_ptr<CreateInfo> CreateViewInfo::Copy() const {

@@ -174,11 +174,6 @@
         "id": 203,
         "name": "query",
         "type": "SelectStatement*"
-      },
-      {
-        "id": 204,
-        "name": "explicit_aliases",
-        "type": "vector<string>"
       }
     ]
   },

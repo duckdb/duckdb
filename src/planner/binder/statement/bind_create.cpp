@@ -136,15 +136,9 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	if (base.aliases.size() > query_node.names.size()) {
 		throw BinderException("More VIEW aliases than columns in query result");
 	}
-	// Save the explicitly set aliases to be able to recreate the query
-	base.explicit_aliases = base.aliases;
 
-	// fill up the aliases with the remaining names of the bound query
-	base.aliases.reserve(query_node.names.size());
-	for (idx_t i = base.aliases.size(); i < query_node.names.size(); i++) {
-		base.aliases.push_back(query_node.names[i]);
-	}
-	base.types = query_node.types;
+	base.SetBoundNames(query_node.names);
+	base.SetBoundTypes(query_node.types);
 }
 
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {

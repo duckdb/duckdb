@@ -7,6 +7,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
 
 #include <set>
 
@@ -91,7 +92,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBColumnsInit(ClientContext &context, T
 
 class ColumnHelper {
 public:
-	static unique_ptr<ColumnHelper> Create(CatalogEntry &entry);
+	static unique_ptr<ColumnHelper> Create(CatalogEntry &entry, ClientContext &context);
 
 	virtual ~ColumnHelper() {
 	}
@@ -149,20 +150,27 @@ private:
 
 class ViewColumnHelper : public ColumnHelper {
 public:
-	explicit ViewColumnHelper(ViewCatalogEntry &entry) : entry(entry) {
+	explicit ViewColumnHelper(ViewCatalogEntry &entry, ClientContext &context) : entry(entry) {
+		auto info = entry.GetInfo();
+		auto binder = Binder::CreateBinder(context);
+		auto &view_info = info->Cast<CreateViewInfo>();
+		binder->BindCreateViewInfo(view_info);
+		names = view_info.BoundNames();
+		types = view_info.BoundTypes();
+		D_ASSERT(names.size() == types.size());
 	}
 
 	StandardEntry &Entry() override {
 		return entry;
 	}
 	idx_t NumColumns() override {
-		return entry.types.size();
+		return types.size();
 	}
 	const string &ColumnName(idx_t col) override {
-		return entry.aliases[col];
+		return names[col];
 	}
 	const LogicalType &ColumnType(idx_t col) override {
-		return entry.types[col];
+		return types[col];
 	}
 	const Value ColumnDefault(idx_t col) override {
 		return Value();
@@ -173,14 +181,16 @@ public:
 
 private:
 	ViewCatalogEntry &entry;
+	vector<string> names;
+	vector<LogicalType> types;
 };
 
-unique_ptr<ColumnHelper> ColumnHelper::Create(CatalogEntry &entry) {
+unique_ptr<ColumnHelper> ColumnHelper::Create(CatalogEntry &entry, ClientContext &context) {
 	switch (entry.type) {
 	case CatalogType::TABLE_ENTRY:
 		return make_uniq<TableColumnHelper>(entry.Cast<TableCatalogEntry>());
 	case CatalogType::VIEW_ENTRY:
-		return make_uniq<ViewColumnHelper>(entry.Cast<ViewCatalogEntry>());
+		return make_uniq<ViewColumnHelper>(entry.Cast<ViewCatalogEntry>(), context);
 	default:
 		throw NotImplementedException("Unsupported catalog type for duckdb_columns");
 	}
@@ -301,7 +311,7 @@ void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &data_p, D
 	idx_t column_offset = data.column_offset;
 	idx_t index = 0;
 	while (next < data.entries.size() && index < STANDARD_VECTOR_SIZE) {
-		auto column_helper = ColumnHelper::Create(data.entries[next].get());
+		auto column_helper = ColumnHelper::Create(data.entries[next].get(), context);
 		idx_t columns = column_helper->NumColumns();
 
 		// Check to see if we are going to exceed the maximum index for a DataChunk
