@@ -1,0 +1,13 @@
+diff --git a/src/iceberg_functions/iceberg_scan.cpp b/src/iceberg_functions/iceberg_scan.cpp
+index 3459cce..b9f1c98 100644
+--- a/src/iceberg_functions/iceberg_scan.cpp
++++ b/src/iceberg_functions/iceberg_scan.cpp
+@@ -119,7 +119,7 @@ static unique_ptr<TableRef> MakeScanExpression(vector<Value> &data_file_values,
+ 	        : make_uniq<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
+ 	                                          make_uniq<ColumnRefExpression>("filename", "iceberg_scan_data"),
+ 	                                          make_uniq<ColumnRefExpression>("file_path", "iceberg_scan_deletes"));
+-	join_node->type = JoinType::ANTI;
++	join_node->type = JoinType::LEFT_ANTI;
+ 	join_node->condition = make_uniq<ConjunctionExpression>(
+ 	    ExpressionType::CONJUNCTION_AND, std::move(filename_match_expr),
+ 	    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
