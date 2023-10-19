@@ -1,5 +1,5 @@
 # name: test/issues/general/test_5614.test
-# description: Issue 5614: 
+# description: Issue 5614:
 # group: [general]
 
 statement ok
