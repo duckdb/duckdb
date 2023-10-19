@@ -332,6 +332,10 @@ void CSVSniffer::DetectTypes() {
 		const idx_t start_idx_detection = row_idx;
 		for (; row_idx < tuples.size(); row_idx++) {
 			for (idx_t col = 0; col < tuples[row_idx].values.size(); col++) {
+				if (options.ignore_errors && col >= max_columns_found) {
+					// ignore this, since it's an error.
+					continue;
+				}
 				auto &col_type_candidates = info_sql_types_candidates[col];
 				// col_type_candidates can't be empty since anything in a CSV file should at least be a string
 				// and we validate utf-8 compatibility when creating the type
