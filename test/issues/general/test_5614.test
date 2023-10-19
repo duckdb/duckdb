@@ -42,7 +42,6 @@ from
 t0
 where 'LORD' in (select * from unnest(str_split(text, ' ')));
 
-
 statement ok
 explain select 
 row_number() over () as line_number, 
@@ -51,32 +50,6 @@ length(coalesce(column0, '')) as text_length
 from 
 t0
 where 'LORD' in (select * from unnest(str_split(text, ' ')));
-
-mode skip
-
-# does not work. column0_alias is correctly bound using the alias map.
-# but for some reason I think the ExtractCorrelatedExpressions is wrong.
-statement error
-explain select 
-row_number() over () as line_number, 
-column0 as column0_alias, 
-length(coalesce(column0, '')) as text_length 
-from 
-t0
-where 'LORD' in (select * from unnest(str_split(column0_alias, ' ')));
-
-mode skip
-
-statement ok
-explain select 
-row_number() over () as line_number, 
-column0 as whatever, 
-length(coalesce(column0, '')) as text_length 
-from 
-t0
-where 'LORD' in (select * from unnest(str_split(column0, ' ')));
-
-mode skip
 
 statement ok
 CREATE or replace TABLE brands (category VARCHAR, brand_name VARCHAR);

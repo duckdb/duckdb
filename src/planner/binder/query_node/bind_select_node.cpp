@@ -265,9 +265,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	// first bind the FROM table statement
 	auto from = std::move(statement.from_table);
 	auto from_table = Bind(*from);
-
-
-
 	return BindSelectNode(statement, std::move(from_table));
 }
 

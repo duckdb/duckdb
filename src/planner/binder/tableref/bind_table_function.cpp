@@ -33,7 +33,6 @@ bool Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &e
                                          unique_ptr<BoundSubqueryRef> &subquery, string &error) {
 	auto binder = Binder::CreateBinder(this->context, this, true);
 	unique_ptr<QueryNode> subquery_node;
-	// maybe here
 	if (expressions.size() == 1 && expressions[0]->type == ExpressionType::SUBQUERY) {
 		auto &se = expressions[0]->Cast<SubqueryExpression>();
 		subquery_node = std::move(se.subquery->node);
@@ -46,8 +45,6 @@ bool Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &e
 		subquery_node = std::move(select_node);
 	}
 	auto node = binder->BindNode(*subquery_node);
-	// Here maybe we need to check the node again. If the subquery is in the where clause
-	// and uses a list from the select list, the from_table cannot be empty.
 	subquery = make_uniq<BoundSubqueryRef>(std::move(binder), std::move(node));
 	MoveCorrelatedExpressions(*subquery->binder);
 	return true;
@@ -219,9 +216,6 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
 	auto &fexpr = ref.function->Cast<FunctionExpression>();
 
-//	if (fexpr.function_name == "unnest" || fexpr.function_name == "unlist") {
-//		throw BinderException("unnest not supported here");
-//	}
 	// fetch the function from the catalog
 	auto &func_catalog = Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, fexpr.catalog, fexpr.schema,
 	                                       fexpr.function_name, error_context);
@@ -297,7 +291,6 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		get->children.push_back(Binder::CreatePlan(*subquery));
 	}
 
-	// here is where the dummy scan comes in?
 	return make_uniq_base<BoundTableRef, BoundTableFunction>(std::move(get));
 }
 

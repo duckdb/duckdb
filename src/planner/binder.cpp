@@ -160,7 +160,6 @@ BoundStatement Binder::Bind(QueryNode &node) {
 	result.types = bound_node->types;
 
 	// and plan it
-	// HERE THIS IS STILL PLANNING ON TOP OF A LOGICAL DUMMY SCAN
 	result.plan = CreatePlan(*bound_node);
 	return result;
 }
