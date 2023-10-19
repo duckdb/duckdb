@@ -12,12 +12,13 @@
 
 namespace duckdb {
 
-//! The Table function binder can bind standard table function parameters (i.e. non-table-in-out functions)
+//! The table function binder can bind standard table function parameters (i.e., non-table-in-out functions)
 class TableFunctionBinder : public ExpressionBinder {
 public:
 	TableFunctionBinder(Binder &binder, ClientContext &context);
 
 protected:
+	BindResult BindLambdaReference(LambdaRefExpression &expr, idx_t depth);
 	BindResult BindColumnReference(ColumnRefExpression &expr, idx_t depth, bool root_expression);
 	BindResult BindExpression(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false) override;
 

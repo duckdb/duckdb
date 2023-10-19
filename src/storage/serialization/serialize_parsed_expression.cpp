@@ -55,6 +55,9 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &deseria
 	case ExpressionClass::LAMBDA:
 		result = LambdaExpression::Deserialize(deserializer);
 		break;
+	case ExpressionClass::LAMBDA_REF:
+		result = LambdaRefExpression::Deserialize(deserializer);
+		break;
 	case ExpressionClass::OPERATOR:
 		result = OperatorExpression::Deserialize(deserializer);
 		break;
@@ -233,6 +236,19 @@ unique_ptr<ParsedExpression> LambdaExpression::Deserialize(Deserializer &deseria
 	return std::move(result);
 }
 
+void LambdaRefExpression::Serialize(Serializer &serializer) const {
+	ParsedExpression::Serialize(serializer);
+	serializer.WritePropertyWithDefault<idx_t>(200, "lambda_idx", lambda_idx);
+	serializer.WritePropertyWithDefault<string>(201, "column_name", column_name);
+}
+
+unique_ptr<ParsedExpression> LambdaRefExpression::Deserialize(Deserializer &deserializer) {
+	auto lambda_idx = deserializer.ReadPropertyWithDefault<idx_t>(200, "lambda_idx");
+	auto column_name = deserializer.ReadPropertyWithDefault<string>(201, "column_name");
+	auto result = duckdb::unique_ptr<LambdaRefExpression>(new LambdaRefExpression(lambda_idx, std::move(column_name)));
+	return std::move(result);
+}
+
 void OperatorExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(200, "children", children);
@@ -318,6 +334,7 @@ void WindowExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(211, "default_expr", default_expr);
 	serializer.WritePropertyWithDefault<bool>(212, "ignore_nulls", ignore_nulls);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(213, "filter_expr", filter_expr);
+	serializer.WritePropertyWithDefault<WindowExcludeMode>(214, "exclude_clause", exclude_clause, WindowExcludeMode::NO_OTHER);
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deserializer) {
@@ -336,6 +353,7 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deseria
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(211, "default_expr", result->default_expr);
 	deserializer.ReadPropertyWithDefault<bool>(212, "ignore_nulls", result->ignore_nulls);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(213, "filter_expr", result->filter_expr);
+	deserializer.ReadPropertyWithDefault<WindowExcludeMode>(214, "exclude_clause", result->exclude_clause, WindowExcludeMode::NO_OTHER);
 	return std::move(result);
 }
 

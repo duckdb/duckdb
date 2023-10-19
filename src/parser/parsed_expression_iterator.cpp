@@ -141,6 +141,7 @@ void ParsedExpressionIterator::EnumerateChildren(
 	}
 	case ExpressionClass::BOUND_EXPRESSION:
 	case ExpressionClass::COLUMN_REF:
+	case ExpressionClass::LAMBDA_REF:
 	case ExpressionClass::CONSTANT:
 	case ExpressionClass::DEFAULT:
 	case ExpressionClass::PARAMETER:

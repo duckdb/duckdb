@@ -6,13 +6,31 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "parquet_reader.hpp"
+#include "parquet_reader.hpp"
 
 namespace duckdb {
+
+void ParquetColumnDefinition::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<int32_t>(100, "field_id", field_id);
+	serializer.WritePropertyWithDefault<string>(101, "name", name);
+	serializer.WriteProperty<LogicalType>(103, "type", type);
+	serializer.WriteProperty<Value>(104, "default_value", default_value);
+}
+
+ParquetColumnDefinition ParquetColumnDefinition::Deserialize(Deserializer &deserializer) {
+	ParquetColumnDefinition result;
+	deserializer.ReadPropertyWithDefault<int32_t>(100, "field_id", result.field_id);
+	deserializer.ReadPropertyWithDefault<string>(101, "name", result.name);
+	deserializer.ReadProperty<LogicalType>(103, "type", result.type);
+	deserializer.ReadProperty<Value>(104, "default_value", result.default_value);
+	return result;
+}
 
 void ParquetOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(100, "binary_as_string", binary_as_string);
 	serializer.WritePropertyWithDefault<bool>(101, "file_row_number", file_row_number);
 	serializer.WriteProperty<MultiFileReaderOptions>(102, "file_options", file_options);
+	serializer.WritePropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", schema);
 }
 
 ParquetOptions ParquetOptions::Deserialize(Deserializer &deserializer) {
@@ -20,6 +38,7 @@ ParquetOptions ParquetOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<bool>(100, "binary_as_string", result.binary_as_string);
 	deserializer.ReadPropertyWithDefault<bool>(101, "file_row_number", result.file_row_number);
 	deserializer.ReadProperty<MultiFileReaderOptions>(102, "file_options", result.file_options);
+	deserializer.ReadPropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", result.schema);
 	return result;
 }
 

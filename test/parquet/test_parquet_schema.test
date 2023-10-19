@@ -1,0 +1,261 @@
+# name: test/parquet/test_parquet_schema.test
+# description: Parquet reader schema parameter tests
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+COPY (SELECT 42::INTEGER i) TO '__TEST_DIR__/integers.parquet' (FIELD_IDS {i: 0})
+
+statement error
+SELECT *
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map{})
+----
+Binder Error: Parquet schema cannot be empty
+
+# can't combine with union_by_name
+statement error
+SELECT *
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    0: {name: 'renamed_i', type: 'BIGINT', default_value: NULL},
+                    1: {name: 'new_column', type: 'UTINYINT', default_value: 43}
+                  }, union_by_name=true)
+----
+Binder Error: Parquet schema cannot be combined with union_by_name=true or hive_partitioning=true
+
+# can't combine with hive_partitioning
+statement error
+SELECT *
+FROM read_parquet('__TEST_DIR__/*.parquet', schema=map {
+                    0: {name: 'renamed_i', type: 'BIGINT', default_value: NULL},
+                    1: {name: 'new_column', type: 'UTINYINT', default_value: 43}
+                  }, hive_partitioning=true)
+----
+Binder Error: Parquet schema cannot be combined with union_by_name=true or hive_partitioning=true
+
+statement ok
+COPY (
+    SELECT 1 i1, 3 i3, 4 i4, 5 i5 UNION ALL
+    SELECT 2 i1, 3 i3, 4 i4, 5 i5
+) TO '__TEST_DIR__/partitioned' (FIELD_IDS {i1: 5, i3: 3, i4: 2, i5: 1}, PARTITION_BY i1, FORMAT parquet)
+
+# auto-detection of hive partitioning is enabled by default,
+# but automatically disabled when a schema is supplied, so this should succeed
+query IIII
+SELECT *
+FROM read_parquet('__TEST_DIR__/partitioned/*/*.parquet', schema=map {
+                    1: {name: 'i1', type: 'BIGINT', default_value: NULL},
+                    3: {name: 'i3', type: 'BIGINT', default_value: NULL},
+                    4: {name: 'i4', type: 'BIGINT', default_value: 2},
+                    5: {name: 'i5', type: 'BIGINT', default_value: NULL}
+                  })
+----
+5	3	2	1
+5	3	2	2
+
+# cannot duplicate field_ids
+statement error
+SELECT *
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    0: {name: 'renamed_i', type: 'BIGINT', default_value: NULL},
+                    0: {name: 'new_column', type: 'UTINYINT', default_value: 43}
+                  })
+----
+Invalid Input Error: Map keys have to be unique
+
+# cannot duplicate column names
+statement error
+SELECT *
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    0: {name: 'cool_column', type: 'BIGINT', default_value: NULL},
+                    1: {name: 'cool_column', type: 'UTINYINT', default_value: 43}
+                  }) pq
+----
+Binder Error: table "pq" has duplicate column name "cool_column"
+
+# the supplied default value must be castable to the given type for that column
+statement error
+SELECT *
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    0: {name: 'cool_column', type: 'BIGINT', default_value: NULL},
+                    1: {name: 'cool_column', type: 'UTINYINT', default_value: 'bla'}
+                  }) pq
+----
+Binder Error: Unable to cast Parquet schema default_value "bla" to UTINYINT
+
+query IIIIII
+DESCRIBE SELECT *
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    0: {name: 'renamed_i', type: 'BIGINT', default_value: NULL},
+                    1: {name: 'new_column', type: 'UTINYINT', default_value: 43}
+                  })
+----
+renamed_i	BIGINT	YES	NULL	NULL	NULL
+new_column	UTINYINT	YES	NULL	NULL	NULL
+
+query IIIIII
+DESCRIBE SELECT *
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    0: {name: 'renamed_i', type: 'BIGINT', default_value: NULL},
+                    1: {name: 'new_column', type: 'UTINYINT', default_value: 43}
+                  }, filename=true)
+----
+renamed_i	BIGINT	YES	NULL	NULL	NULL
+new_column	UTINYINT	YES	NULL	NULL	NULL
+filename	VARCHAR	YES	NULL	NULL	NULL
+
+# we'll test if filename works on a persistent file otherwise __TEST_DIR__ will be different every time
+query II
+SELECT *
+FROM read_parquet('data/parquet-testing/enum.parquet', schema=map {
+                    1: {name: 'cool_column', type: 'VARCHAR', default_value: NULL}
+                  }, filename=true)
+LIMIT 1
+----
+1	data/parquet-testing/enum.parquet
+
+query II
+SELECT *
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    0: {name: 'renamed_i', type: 'BIGINT', default_value: NULL},
+                    1: {name: 'new_column', type: 'UTINYINT', default_value: 43}
+                  })
+----
+42	43
+
+# we just get a cast error when we can't cast to the supplied type
+statement error
+SELECT *
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    0: {name: 'renamed_i', type: 'DATE', default_value: NULL}
+                  })
+----
+Conversion Error
+
+# if we don't supply a field id, we can't refer to it using the schema parameter
+statement ok
+COPY (SELECT 42::INTEGER i) TO '__TEST_DIR__/integers.parquet'
+
+query II
+SELECT *
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    0: {name: 'renamed_i', type: 'BIGINT', default_value: NULL},
+                    1: {name: 'new_column', type: 'UTINYINT', default_value: 43}
+                  })
+----
+NULL	43
+
+# let's spice it up with more columns
+statement ok
+COPY (
+    SELECT 1 i1, 3 i3, 4 i4, 5 i5
+) TO '__TEST_DIR__/integers.parquet' (FIELD_IDS {i1: 5, i3: 3, i4: 2, i5: 1})
+
+# this is purposely a bit confusing but we're:
+# 1. deleting field id 2
+# 2. creating field id 4
+# 3. reversing the order of the columns
+# 4. renaming them (except i3)
+# 5. upcasting them
+query IIII
+SELECT *
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    1: {name: 'i1', type: 'BIGINT', default_value: NULL},
+                    3: {name: 'i3', type: 'BIGINT', default_value: NULL},
+                    4: {name: 'i4', type: 'BIGINT', default_value: 2},
+                    5: {name: 'i5', type: 'BIGINT', default_value: NULL}
+                  })
+----
+5	3	2	1
+
+# projection still ok
+query I
+SELECT i1
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    1: {name: 'i1', type: 'BIGINT', default_value: NULL},
+                    3: {name: 'i3', type: 'BIGINT', default_value: NULL},
+                    4: {name: 'i4', type: 'BIGINT', default_value: 2},
+                    5: {name: 'i5', type: 'BIGINT', default_value: NULL}
+                  })
+----
+5
+
+# projection still, even with different generated columns
+query III
+SELECT file_row_number, filename[-16:], i4
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    1: {name: 'i1', type: 'BIGINT', default_value: NULL},
+                    3: {name: 'i3', type: 'BIGINT', default_value: NULL},
+                    4: {name: 'i4', type: 'BIGINT', default_value: 2},
+                    5: {name: 'i5', type: 'BIGINT', default_value: NULL}
+                  }, file_row_number=1, filename=1)
+----
+0	integers.parquet	2
+
+# count(*) still ok
+query I
+SELECT count(*)
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    1: {name: 'i1', type: 'BIGINT', default_value: NULL},
+                    3: {name: 'i3', type: 'BIGINT', default_value: NULL},
+                    4: {name: 'i4', type: 'BIGINT', default_value: 2},
+                    5: {name: 'i5', type: 'BIGINT', default_value: NULL}
+                  })
+----
+1
+
+# combine with constant column
+query II
+SELECT i1, filename[-16:]
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    1: {name: 'i1', type: 'BIGINT', default_value: NULL},
+                    3: {name: 'i3', type: 'BIGINT', default_value: NULL},
+                    4: {name: 'i4', type: 'BIGINT', default_value: 2},
+                    5: {name: 'i5', type: 'BIGINT', default_value: NULL}
+                  }, filename=true)
+----
+5	integers.parquet
+
+statement ok
+COPY (
+    SELECT range % 4 g, range i FROM range(1000)
+) TO '__TEST_DIR__/integers.parquet' (FIELD_IDS {g: 33, i: 42})
+
+# let's also do a query with a filter and a downcast
+query II
+SELECT my_cool_group, sum(my_cool_value)
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    33: {name: 'my_cool_group', type: 'UINTEGER', default_value: NULL},
+                    42: {name: 'my_cool_value', type: 'UINTEGER', default_value: NULL}
+                  })
+WHERE my_cool_group = 2
+GROUP BY my_cool_group
+----
+2	125000
+
+# also test multi-file reading with different field ids
+statement ok
+COPY (
+    SELECT 1 i1, 3 i3, 4 i4, 5 i5
+) TO '__TEST_DIR__/multifile1.parquet' (FIELD_IDS {i1: 5, i3: 3, i4: 2, i5: 1})
+
+statement ok
+COPY (
+    SELECT 1 j1, 3 j3, 4 j4, 5 j5
+) TO '__TEST_DIR__/multifile2.parquet' (FIELD_IDS {j1: 1, j3: 2, j4: 3, j5: 4})
+
+query IIIII
+SELECT i1, i3, i4, i5, filename[-18:]
+FROM read_parquet('__TEST_DIR__/multifile*.parquet', schema=map {
+                    1: {name: 'i1', type: 'BIGINT', default_value: NULL},
+                    3: {name: 'i3', type: 'BIGINT', default_value: NULL},
+                    4: {name: 'i4', type: 'BIGINT', default_value: 2},
+                    5: {name: 'i5', type: 'BIGINT', default_value: NULL}
+                  }, filename=true)
+ORDER BY filename
+----
+5	3	2	1	multifile1.parquet
+1	4	5	NULL	multifile2.parquet
