@@ -46,7 +46,9 @@ public:
 	                                               vector<unique_ptr<Expression>> &arguments,
 	                                               const bool has_index = false);
 
+	//! Internally executes list_transform
 	static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result);
+	//! Internally executes list_filter
 	static void ListFilterFunction(DataChunk &args, ExpressionState &state, Vector &result);
 };
 
