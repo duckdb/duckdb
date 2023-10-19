@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://duckdb.org/images/logo-dl/DuckDB_Logo.png" height="120">
+  <img src="https://duckdb.org/images/logo-dl/DuckDB_Logo-stacked.svg" height="120">
 </div>
 <br>
 

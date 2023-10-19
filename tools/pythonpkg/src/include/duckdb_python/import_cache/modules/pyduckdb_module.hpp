@@ -22,6 +22,11 @@ public:
 		modified_memory_filesystem.LoadAttribute("ModifiedMemoryFileSystem", cache, *this);
 	}
 
+protected:
+	bool IsRequired() const override {
+		return false;
+	}
+
 public:
 	PythonImportCacheItem modified_memory_filesystem;
 };

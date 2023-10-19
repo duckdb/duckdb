@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.5)
 
 if(POLICY CMP0026)
   cmake_policy(SET CMP0026 NEW)
@@ -22,12 +22,7 @@ find_package(Threads REQUIRED)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-if (CMAKE_VERSION VERSION_LESS "3.1")
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-else ()
-  set (CMAKE_CXX_STANDARD 11)
-endif ()
-
+set (CMAKE_CXX_STANDARD 11)
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -136,7 +131,7 @@ option(
   FORCE_SANITIZER
   "Forces building with sanitizers even if the Python and R modules are enabled."
   FALSE)
-if((BUILD_PYTHON OR BUILD_NODE)
+if((BUILD_PYTHON)
    AND (ENABLE_SANITIZER OR ENABLE_UBSAN)
    AND ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug"))
   if(FORCE_SANITIZER)
@@ -308,6 +303,7 @@ if(WIN32 OR ZOS)
   set(EXTENSION_STATIC_BUILD TRUE)
 endif()
 
+option(BUILD_EXTENSIONS_ONLY "Build all extension as linkable, overriding DONT_LINK, and don't build core." FALSE)
 option(BUILD_CORE_FUNCTIONS_EXTENSION "Build the core functions." TRUE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
@@ -315,7 +311,6 @@ option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
 option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_ODBC_DRIVER "Build the DuckDB ODBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
-option(BUILD_NODE "Build the DuckDB Node extension" FALSE)
 option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
 option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
@@ -346,6 +341,10 @@ option(TEST_REMOTE_INSTALL "Test installation of specific extensions." FALSE)
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
+endif()
+
+if(BUILD_EXTENSIONS_ONLY)
+  set(BUILD_MAIN_DUCKDB_LIBRARY FALSE)
 endif()
 
 if(EXTENSION_CONFIG_BUILD)
@@ -625,12 +624,7 @@ function(link_extension_libraries LIBRARY)
 endfunction()
 
 function(link_threads LIBRARY)
-  if (CMAKE_VERSION VERSION_LESS "3.1")
-    target_link_libraries(${LIBRARY} pthread)
-
-  else()
     target_link_libraries(${LIBRARY} Threads::Threads)
-  endif()
 endfunction()
 
 function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
@@ -740,10 +734,14 @@ function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PA
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LOAD_TESTS FALSE PARENT_SCOPE)
   endif()
 
-  if (NOT ${DONT_LINK} AND NOT DISABLE_BUILTIN_EXTENSIONS)
+  if (${BUILD_EXTENSIONS_ONLY})
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK TRUE PARENT_SCOPE)
-  else()
-    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK FALSE PARENT_SCOPE)
+  else ()
+    if (NOT ${DONT_LINK} AND NOT DISABLE_BUILTIN_EXTENSIONS)
+      set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK TRUE PARENT_SCOPE)
+    else()
+      set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK FALSE PARENT_SCOPE)
+    endif()
   endif()
 
   # Allows explicitly disabling extensions that may be specified in other configurations
@@ -903,9 +901,6 @@ endif()
 if(BUILD_PYTHON)
   include(${CMAKE_CURRENT_SOURCE_DIR}/tools/pythonpkg/duckdb_extension_config.cmake)
 endif()
-if(BUILD_NODE)
-  include(${CMAKE_CURRENT_SOURCE_DIR}/tools/nodejs/duckdb_extension_config.cmake)
-endif()
 if (JDBC_DRIVER)
   include(${CMAKE_CURRENT_SOURCE_DIR}/tools/jdbc/duckdb_extension_config.cmake)
 endif()
@@ -1020,8 +1015,7 @@ if(${EXTENSION_CONFIG_BUILD})
   endforeach()
 endif()
 
-if(BUILD_PYTHON
-        OR BUILD_NODE)
+if(BUILD_PYTHON)
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG}")
   elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -1058,19 +1052,6 @@ if(BUILD_PYTHON
     endif()
     add_extension_dependencies(duckdb_python)
   endif()
-  if(BUILD_NODE)
-    add_custom_target(
-            duckdb_node ALL
-            COMMAND
-            make complete_build DUCKDB_NODE_BINDIR=${CMAKE_BINARY_DIR}
-            DUCKDB_NODE_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
-            DUCKDB_NODE_LIBS=\"${duckdb_libs}\"
-            DEPENDS duckdb duckdb_static
-            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/nodejs
-            COMMENT Build
-            Node package)
-    add_extension_dependencies(duckdb_node)
-  endif()
 endif()
 
 if(NOT CLANG_TIDY)
@@ -1103,7 +1084,7 @@ if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "")
   message(STATUS "Extensions will be deployed to: ${LOCAL_EXTENSION_REPO}")
 endif()
 
-if (CMAKE_VERSION VERSION_GREATER "3.0" AND NOT EXTENSION_CONFIG_BUILD ) # this does not work with 2.8
+if (NOT EXTENSION_CONFIG_BUILD )
 # Write the export set for build and install tree
 install(EXPORT "${DUCKDB_EXPORT_SET}" DESTINATION "${INSTALL_CMAKE_DIR}")
 export(EXPORT "${DUCKDB_EXPORT_SET}"

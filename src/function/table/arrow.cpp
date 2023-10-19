@@ -237,6 +237,10 @@ void ArrowTableFunction::PopulateArrowTableType(ArrowTableType &arrow_table, Arr
 
 unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
                                                            vector<LogicalType> &return_types, vector<string> &names) {
+	if (input.inputs[0].IsNull() || input.inputs[1].IsNull() || input.inputs[2].IsNull()) {
+		throw BinderException("arrow_scan: pointers cannot be null");
+	}
+
 	auto stream_factory_ptr = input.inputs[0].GetPointer();
 	auto stream_factory_produce = (stream_factory_produce_t)input.inputs[1].GetPointer();       // NOLINT
 	auto stream_factory_get_schema = (stream_factory_get_schema_t)input.inputs[2].GetPointer(); // NOLINT
@@ -262,6 +266,7 @@ unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(const ArrowScanFunctionData
 			auto &schema = *function.schema_root.arrow_schema.children[col_idx];
 			parameters.projected_columns.projection_map[idx] = schema.name;
 			parameters.projected_columns.columns.emplace_back(schema.name);
+			parameters.projected_columns.filter_to_col[idx] = col_idx;
 		}
 	}
 	parameters.filters = filters;

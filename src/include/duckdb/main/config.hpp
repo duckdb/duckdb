@@ -39,6 +39,7 @@ class CompressionFunction;
 class TableFunctionRef;
 class OperatorExtension;
 class StorageExtension;
+class ExtensionCallback;
 
 struct CompressionFunctionSet;
 struct DBConfig;
@@ -212,6 +213,8 @@ public:
 	case_insensitive_map_t<duckdb::unique_ptr<StorageExtension>> storage_extensions;
 	//! A buffer pool can be shared across multiple databases (if desired).
 	shared_ptr<BufferPool> buffer_pool;
+	//! Set of callbacks that can be installed by extensions
+	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
@@ -236,6 +239,8 @@ public:
 	DUCKDB_API void ResetOption(DatabaseInstance *db, const ConfigurationOption &option);
 	DUCKDB_API void SetOption(const string &name, Value value);
 	DUCKDB_API void ResetOption(const string &name);
+
+	DUCKDB_API void CheckLock(const string &name);
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 

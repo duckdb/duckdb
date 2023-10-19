@@ -76,12 +76,12 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	}
 	this->properties = binder->properties;
 	this->properties.parameter_count = parameter_count;
-	properties.bound_all_parameters = parameters_resolved;
+	properties.bound_all_parameters = !bound_parameters.rebind && parameters_resolved;
 
-	Planner::VerifyPlan(context, plan, &bound_parameters.parameters);
+	Planner::VerifyPlan(context, plan, bound_parameters.GetParametersPtr());
 
 	// set up a map of parameter number -> value entries
-	for (auto &kv : bound_parameters.parameters) {
+	for (auto &kv : bound_parameters.GetParameters()) {
 		auto &identifier = kv.first;
 		auto &param = kv.second;
 		// check if the type of the parameter could be resolved

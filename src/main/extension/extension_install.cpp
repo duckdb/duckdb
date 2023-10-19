@@ -208,18 +208,20 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		fs.RemoveFile(temp_path);
 	}
 	auto is_http_url = StringUtil::Contains(extension, "http://");
-	if (fs.FileExists(extension)) {
-		idx_t file_size;
-		auto in_buffer = ReadExtensionFileFromDisk(fs, extension, file_size);
-		WriteExtensionFileToDisk(fs, temp_path, in_buffer.get(), file_size);
+	if (ExtensionHelper::IsFullPath(extension)) {
+		if (fs.FileExists(extension)) {
+			idx_t file_size;
+			auto in_buffer = ReadExtensionFileFromDisk(fs, extension, file_size);
+			WriteExtensionFileToDisk(fs, temp_path, in_buffer.get(), file_size);
 
-		if (fs.FileExists(local_extension_path) && force_install) {
-			fs.RemoveFile(local_extension_path);
+			if (fs.FileExists(local_extension_path) && force_install) {
+				fs.RemoveFile(local_extension_path);
+			}
+			fs.MoveFile(temp_path, local_extension_path);
+			return;
+		} else if (!is_http_url) {
+			throw IOException("Failed to read extension from \"%s\": no such file", extension);
 		}
-		fs.MoveFile(temp_path, local_extension_path);
-		return;
-	} else if (StringUtil::Contains(extension, "/") && !is_http_url) {
-		throw IOException("Failed to read extension from \"%s\": no such file", extension);
 	}
 
 #ifdef DISABLE_DUCKDB_REMOTE_INSTALL
@@ -280,7 +282,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		// create suggestions
 		string message;
 		auto exact_match = ExtensionHelper::CreateSuggestions(extension_name, message);
-		if (exact_match) {
+		if (exact_match && !IsRelease(DuckDB::LibraryVersion())) {
 			message += "\nAre you using a development build? In this case, extensions might not (yet) be uploaded.";
 		}
 		if (res.error() == duckdb_httplib::Error::Success) {

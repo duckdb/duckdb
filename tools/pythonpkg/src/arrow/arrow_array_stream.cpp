@@ -66,11 +66,12 @@ py::object PythonTableArrowArrayStreamFactory::ProduceScanner(py::object &arrow_
 
 	auto filters = parameters.filters;
 	auto &column_list = parameters.projected_columns.columns;
+	auto &filter_to_col = parameters.projected_columns.filter_to_col;
 	bool has_filter = filters && !filters->filters.empty();
 	py::list projection_list = py::cast(column_list);
 	if (has_filter) {
-		auto filter =
-		    TransformFilter(*filters, parameters.projected_columns.projection_map, client_properties, arrow_table);
+		auto filter = TransformFilter(*filters, parameters.projected_columns.projection_map, filter_to_col,
+		                              client_properties, arrow_table);
 		if (column_list.empty()) {
 			return arrow_scanner(arrow_obj_handle, py::arg("filter") = filter);
 		} else {
@@ -176,7 +177,7 @@ string ConvertTimestampUnit(ArrowDateTimeType unit) {
 	case ArrowDateTimeType::SECONDS:
 		return "s";
 	default:
-		throw NotImplementedException("DatetimeType not recognized in ConvertTimestampUnit");
+		throw NotImplementedException("DatetimeType not recognized in ConvertTimestampUnit: %d", (int)unit);
 	}
 }
 
@@ -243,14 +244,22 @@ py::object GetScalar(Value &constant, const string &timezone_config, const Arrow
 		py::object date_type = py::module_::import("pyarrow").attr("timestamp");
 		return dataset_scalar(scalar(converted_value, date_type(time_unit_string, py::arg("tz") = timezone_config)));
 	}
-	case LogicalTypeId::UTINYINT:
-		return dataset_scalar(constant.GetValue<uint8_t>());
-	case LogicalTypeId::USMALLINT:
-		return dataset_scalar(constant.GetValue<uint16_t>());
-	case LogicalTypeId::UINTEGER:
-		return dataset_scalar(constant.GetValue<uint32_t>());
-	case LogicalTypeId::UBIGINT:
-		return dataset_scalar(constant.GetValue<uint64_t>());
+	case LogicalTypeId::UTINYINT: {
+		py::object integer_type = py::module_::import("pyarrow").attr("uint8");
+		return dataset_scalar(scalar(constant.GetValue<uint8_t>(), integer_type()));
+	}
+	case LogicalTypeId::USMALLINT: {
+		py::object integer_type = py::module_::import("pyarrow").attr("uint16");
+		return dataset_scalar(scalar(constant.GetValue<uint16_t>(), integer_type()));
+	}
+	case LogicalTypeId::UINTEGER: {
+		py::object integer_type = py::module_::import("pyarrow").attr("uint32");
+		return dataset_scalar(scalar(constant.GetValue<uint32_t>(), integer_type()));
+	}
+	case LogicalTypeId::UBIGINT: {
+		py::object integer_type = py::module_::import("pyarrow").attr("uint64");
+		return dataset_scalar(scalar(constant.GetValue<uint64_t>(), integer_type()));
+	}
 	case LogicalTypeId::FLOAT:
 		return dataset_scalar(constant.GetValue<float>());
 	case LogicalTypeId::DOUBLE:
@@ -357,12 +366,13 @@ py::object TransformFilterRecursive(TableFilter *filter, const string &column_na
 
 py::object PythonTableArrowArrayStreamFactory::TransformFilter(TableFilterSet &filter_collection,
                                                                std::unordered_map<idx_t, string> &columns,
+                                                               unordered_map<idx_t, idx_t> filter_to_col,
                                                                const ClientProperties &config,
                                                                const ArrowTableType &arrow_table) {
 	auto filters_map = &filter_collection.filters;
 	auto it = filters_map->begin();
 	D_ASSERT(columns.find(it->first) != columns.end());
-	auto &arrow_type = *arrow_table.GetColumns().at(it->first);
+	auto &arrow_type = *arrow_table.GetColumns().at(filter_to_col.at(it->first));
 	py::object expression =
 	    TransformFilterRecursive(it->second.get(), columns[it->first], config.time_zone, arrow_type);
 	while (it != filters_map->end()) {

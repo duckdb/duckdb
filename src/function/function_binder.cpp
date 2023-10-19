@@ -228,7 +228,7 @@ void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<un
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto target_type = i < function.arguments.size() ? function.arguments[i] : function.varargs;
 		target_type.Verify();
-		// don't cast lambda children, they get removed anyways
+		// don't cast lambda children, they get removed before execution
 		if (children[i]->return_type.id() == LogicalTypeId::LAMBDA) {
 			continue;
 		}
@@ -268,8 +268,17 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 
 	if (bound_function.null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		for (auto &child : children) {
-			if (child->return_type == LogicalTypeId::SQLNULL ||
-			    (child->IsFoldable() && ExpressionExecutor::EvaluateScalar(context, *child).IsNull())) {
+			if (child->return_type == LogicalTypeId::SQLNULL) {
+				return make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL));
+			}
+			if (!child->IsFoldable()) {
+				continue;
+			}
+			Value result;
+			if (!ExpressionExecutor::TryEvaluateScalar(context, *child, result)) {
+				continue;
+			}
+			if (result.IsNull()) {
 				return make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL));
 			}
 		}
