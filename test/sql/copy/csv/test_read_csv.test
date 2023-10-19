@@ -10,12 +10,8 @@ statement ok
 CREATE TABLE dates (d DATE);
 
 # base date format does not work here
-statement error
-INSERT INTO dates SELECT * FROM read_csv('test/sql/copy/csv/data/test/dateformat.csv', columns=STRUCT_PACK(d := 'DATE'), header=0)
-
-# have to specify it ourselves
 statement ok
-INSERT INTO dates SELECT * FROM read_csv('test/sql/copy/csv/data/test/dateformat.csv', columns=STRUCT_PACK(d := 'DATE'), header=0, dateformat='%d/%m/%Y')
+INSERT INTO dates SELECT * FROM read_csv('test/sql/copy/csv/data/test/dateformat.csv', columns=STRUCT_PACK(d := 'DATE'), header=0)
 
 query I
 SELECT * FROM dates

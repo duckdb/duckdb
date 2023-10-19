@@ -3,9 +3,9 @@
 namespace duckdb {
 
 CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-                       CSVStateMachineCache &state_machine_cache_p, bool explicit_set_columns_p)
+                       CSVStateMachineCache &state_machine_cache_p, SetColumns set_columns_p)
     : state_machine_cache(state_machine_cache_p), options(options_p), buffer_manager(std::move(buffer_manager_p)),
-      explicit_set_columns(explicit_set_columns_p) {
+      set_columns(set_columns_p) {
 
 	// Check if any type is BLOB
 	for (auto &type : options.sql_type_list) {
@@ -20,14 +20,36 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager>
 		auto &logical_type = format_template.first;
 		best_format_candidates[logical_type].clear();
 	}
+	// Initialize max columns found to either 0 or however many were set
+	max_columns_found = set_columns.Size();
 }
 
+bool SetColumns::IsSet() {
+	if (!types) {
+		return false;
+	}
+	return !types->empty();
+}
+
+idx_t SetColumns::Size() {
+	if (!types) {
+		return 0;
+	}
+	return types->size();
+}
+
+// Set the CSV Options in the reference
 void CSVSniffer::SetResultOptions() {
+	bool og_header = options.dialect_options.header;
 	options.dialect_options = best_candidate->dialect_options;
 	options.dialect_options.new_line = best_candidate->dialect_options.new_line;
-	options.has_header = best_candidate->dialect_options.header;
 	options.skip_rows_set = options.dialect_options.skip_rows > 0;
 	if (options.has_header) {
+		// If header was manually set, we ignore the sniffer findings
+		options.dialect_options.header = og_header;
+	}
+	options.has_header = true;
+	if (options.dialect_options.header) {
 		options.dialect_options.true_start = best_start_with_header;
 	} else {
 		options.dialect_options.true_start = best_start_without_header;
@@ -43,7 +65,7 @@ SnifferResult CSVSniffer::SniffCSV() {
 	RefineTypes();
 	// 4. Header Detection
 	DetectHeader();
-	if (explicit_set_columns) {
+	if (set_columns.IsSet()) {
 		SetResultOptions();
 		// We do not need to run type refinement, since the types have been given by the user
 		return SnifferResult({}, {});
