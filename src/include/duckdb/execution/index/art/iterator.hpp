@@ -41,11 +41,11 @@ public:
 		return key_bytes[idx];
 	}
 	//! Greater than operator
-	bool operator>(const ARTKey &k) const;
+	bool operator>(const ARTKey &key) const;
 	//! Greater than or equal to operator
-	bool operator>=(const ARTKey &k) const;
+	bool operator>=(const ARTKey &key) const;
 	//! Equal to operator
-	bool operator==(const ARTKey &k) const;
+	bool operator==(const ARTKey &key) const;
 
 private:
 	vector<uint8_t> key_bytes;
@@ -62,16 +62,16 @@ public:
 	//! If upper_bound is the empty ARTKey, than there is no upper bound
 	bool Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row_t> &result_ids, const bool equal);
 	//! Finds the minimum (leaf) of the current subtree
-	void FindMinimum(Node &node);
+	void FindMinimum(const Node &node);
 	//! Finds the lower bound of the ART and adds the nodes to the stack. Returns false, if the lower
 	//! bound exceeds the maximum value of the ART
-	bool LowerBound(Node &node, const ARTKey &key, const bool equal, idx_t depth);
+	bool LowerBound(const Node &node, const ARTKey &key, const bool equal, idx_t depth);
 
 private:
 	//! Stack of nodes from the root to the currently active node
 	stack<IteratorEntry> nodes;
-	//! Last visited leaf
-	optional_ptr<Leaf> last_leaf = nullptr;
+	//! Last visited leaf node
+	Node last_leaf = Node();
 
 	//! Goes to the next leaf in the ART and sets it as last_leaf,
 	//! returns false if there is no next leaf

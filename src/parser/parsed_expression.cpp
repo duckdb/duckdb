@@ -1,12 +1,11 @@
 #include "duckdb/main/client_context.hpp"
 
 #include "duckdb/parser/parsed_expression.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/expression_util.hpp"
 
 namespace duckdb {
@@ -99,152 +98,6 @@ hash_t ParsedExpression::Hash() const {
 	ParsedExpressionIterator::EnumerateChildren(
 	    *this, [&](const ParsedExpression &child) { hash = CombineHash(child.Hash(), hash); });
 	return hash;
-}
-
-void ParsedExpression::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteField<ExpressionClass>(GetExpressionClass());
-	writer.WriteField<ExpressionType>(type);
-	writer.WriteString(alias);
-	Serialize(writer);
-	writer.Finalize();
-}
-
-void ParsedExpression::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("class", GetExpressionClass());
-	serializer.WriteProperty("type", type);
-	serializer.WriteProperty("alias", alias);
-}
-
-unique_ptr<ParsedExpression> ParsedExpression::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto expression_class = deserializer.ReadProperty<ExpressionClass>("class");
-	auto type = deserializer.ReadProperty<ExpressionType>("type");
-	auto alias = deserializer.ReadProperty<string>("alias");
-	unique_ptr<ParsedExpression> result;
-	switch (expression_class) {
-	case ExpressionClass::BETWEEN:
-		result = BetweenExpression::FormatDeserialize(type, deserializer);
-		break;
-	case ExpressionClass::CASE:
-		result = CaseExpression::FormatDeserialize(type, deserializer);
-		break;
-	case ExpressionClass::CAST:
-		result = CastExpression::FormatDeserialize(type, deserializer);
-		break;
-	case ExpressionClass::COLLATE:
-		result = CollateExpression::FormatDeserialize(type, deserializer);
-		break;
-	case ExpressionClass::COLUMN_REF:
-		result = ColumnRefExpression::FormatDeserialize(type, deserializer);
-		break;
-	case ExpressionClass::COMPARISON:
-		result = ComparisonExpression::FormatDeserialize(type, deserializer);
-		break;
-	case ExpressionClass::CONJUNCTION:
-		result = ConjunctionExpression::FormatDeserialize(type, deserializer);
-		break;
-	case ExpressionClass::CONSTANT:
-		result = ConstantExpression::FormatDeserialize(type, deserializer);
-		break;
-	case ExpressionClass::DEFAULT:
-		result = make_uniq<DefaultExpression>();
-		break;
-	case ExpressionClass::FUNCTION:
-		result = FunctionExpression::FormatDeserialize(type, deserializer);
-		break;
-	case ExpressionClass::LAMBDA:
-		result = LambdaExpression::FormatDeserialize(type, deserializer);
-		break;
-	case ExpressionClass::OPERATOR:
-		result = OperatorExpression::FormatDeserialize(type, deserializer);
-		break;
-	case ExpressionClass::PARAMETER:
-		result = ParameterExpression::FormatDeserialize(type, deserializer);
-		break;
-	case ExpressionClass::POSITIONAL_REFERENCE:
-		result = PositionalReferenceExpression::FormatDeserialize(type, deserializer);
-		break;
-	case ExpressionClass::STAR:
-		result = StarExpression::FormatDeserialize(type, deserializer);
-		break;
-	case ExpressionClass::SUBQUERY:
-		result = SubqueryExpression::FormatDeserialize(type, deserializer);
-		break;
-	case ExpressionClass::WINDOW:
-		result = WindowExpression::FormatDeserialize(type, deserializer);
-		break;
-	default:
-		throw SerializationException("Unsupported type for expression deserialization!");
-	}
-	result->alias = alias;
-	return result;
-}
-
-unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source) {
-	FieldReader reader(source);
-	auto expression_class = reader.ReadRequired<ExpressionClass>();
-	auto type = reader.ReadRequired<ExpressionType>();
-	auto alias = reader.ReadRequired<string>();
-	unique_ptr<ParsedExpression> result;
-	switch (expression_class) {
-	case ExpressionClass::BETWEEN:
-		result = BetweenExpression::Deserialize(type, reader);
-		break;
-	case ExpressionClass::CASE:
-		result = CaseExpression::Deserialize(type, reader);
-		break;
-	case ExpressionClass::CAST:
-		result = CastExpression::Deserialize(type, reader);
-		break;
-	case ExpressionClass::COLLATE:
-		result = CollateExpression::Deserialize(type, reader);
-		break;
-	case ExpressionClass::COLUMN_REF:
-		result = ColumnRefExpression::Deserialize(type, reader);
-		break;
-	case ExpressionClass::COMPARISON:
-		result = ComparisonExpression::Deserialize(type, reader);
-		break;
-	case ExpressionClass::CONJUNCTION:
-		result = ConjunctionExpression::Deserialize(type, reader);
-		break;
-	case ExpressionClass::CONSTANT:
-		result = ConstantExpression::Deserialize(type, reader);
-		break;
-	case ExpressionClass::DEFAULT:
-		result = DefaultExpression::Deserialize(type, reader);
-		break;
-	case ExpressionClass::FUNCTION:
-		result = FunctionExpression::Deserialize(type, reader);
-		break;
-	case ExpressionClass::LAMBDA:
-		result = LambdaExpression::Deserialize(type, reader);
-		break;
-	case ExpressionClass::OPERATOR:
-		result = OperatorExpression::Deserialize(type, reader);
-		break;
-	case ExpressionClass::PARAMETER:
-		result = ParameterExpression::Deserialize(type, reader);
-		break;
-	case ExpressionClass::POSITIONAL_REFERENCE:
-		result = PositionalReferenceExpression::Deserialize(type, reader);
-		break;
-	case ExpressionClass::STAR:
-		result = StarExpression::Deserialize(type, reader);
-		break;
-	case ExpressionClass::SUBQUERY:
-		result = SubqueryExpression::Deserialize(type, reader);
-		break;
-	case ExpressionClass::WINDOW:
-		result = WindowExpression::Deserialize(type, reader);
-		break;
-	default:
-		throw SerializationException("Unsupported type for expression deserialization: '%s'!",
-		                             ExpressionClassToString(expression_class));
-	}
-	result->alias = alias;
-	reader.Finalize();
-	return result;
 }
 
 bool ParsedExpression::Equals(const unique_ptr<ParsedExpression> &left, const unique_ptr<ParsedExpression> &right) {

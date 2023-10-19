@@ -30,3 +30,72 @@ SELECT j FROM integers where i = 3;
 
 statement ok
 DROP INDEX i_index
+
+# test (de)serialization of leaves
+
+statement ok
+CREATE TABLE tbl_deser_scan(id INTEGER);
+
+statement ok
+INSERT INTO tbl_deser_scan SELECT range FROM range(100000);
+
+statement ok
+INSERT INTO tbl_deser_scan SELECT 424242 FROM range(5);
+
+statement ok
+INSERT INTO tbl_deser_scan SELECT 424243 FROM range(5);
+
+statement ok
+INSERT INTO tbl_deser_scan SELECT 1 FROM range(5);
+
+statement ok
+CREATE INDEX idx_deser_scan ON tbl_deser_scan(id);
+
+restart
+
+query I
+SELECT id FROM tbl_deser_scan WHERE id >= 424242;
+----
+424242
+424242
+424242
+424242
+424242
+424243
+424243
+424243
+424243
+424243
+
+statement ok
+CREATE TABLE max_row_id AS
+SELECT max(rowid) AS id FROM tbl_deser_scan WHERE id = 424242;
+
+restart
+
+statement ok
+DELETE FROM tbl_deser_scan WHERE rowid = (SELECT MAX(id) FROM max_row_id);
+
+restart
+
+statement ok
+INSERT INTO tbl_deser_scan VALUES (1);
+
+# ensure that we correctly (de)serialize parsed expressions of the index
+
+statement ok
+CREATE MACRO m(x, y := 7) AS x + y;
+
+statement ok
+CREATE TABLE tbl_m (x integer, y varchar);
+
+statement ok
+CREATE UNIQUE INDEX idx_m on tbl_m (m(tbl_m.x));
+
+statement ok
+insert into tbl_m VALUES (10, 'hello');
+
+statement error
+insert into tbl_m VALUES (10, 'world');
+----
+Constraint Error: Duplicate key "(x + 7): 17" violates unique constraint.

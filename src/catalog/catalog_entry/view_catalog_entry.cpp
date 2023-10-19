@@ -2,7 +2,6 @@
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/common/limits.hpp"
@@ -25,6 +24,17 @@ ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
 	Initialize(info);
 }
 
+unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
+	auto result = make_uniq<CreateViewInfo>();
+	result->schema = schema.name;
+	result->view_name = name;
+	result->sql = sql;
+	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
+	result->aliases = aliases;
+	result->types = types;
+	return std::move(result);
+}
+
 unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
 	D_ASSERT(!internal);
 	if (info.type != AlterType::ALTER_VIEW) {
@@ -41,33 +51,6 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 	default:
 		throw InternalException("Unrecognized alter view type!");
 	}
-}
-
-void ViewCatalogEntry::Serialize(Serializer &serializer) const {
-	D_ASSERT(!internal);
-	FieldWriter writer(serializer);
-	writer.WriteString(schema.name);
-	writer.WriteString(name);
-	writer.WriteString(sql);
-	writer.WriteSerializable(*query);
-	writer.WriteList<string>(aliases);
-	writer.WriteRegularSerializableList<LogicalType>(types);
-	writer.Finalize();
-}
-
-unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source, ClientContext &context) {
-	auto info = make_uniq<CreateViewInfo>();
-
-	FieldReader reader(source);
-	info->schema = reader.ReadRequired<string>();
-	info->view_name = reader.ReadRequired<string>();
-	info->sql = reader.ReadRequired<string>();
-	info->query = reader.ReadRequiredSerializable<SelectStatement>();
-	info->aliases = reader.ReadRequiredList<string>();
-	info->types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-	reader.Finalize();
-
-	return info;
 }
 
 string ViewCatalogEntry::ToSQL() const {

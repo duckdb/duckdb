@@ -1,0 +1,28 @@
+# name: test/sql/copy/csv/code_cov/csv_dialect_detection.test
+# description: Test to reach missing Dialect Detection code.
+# group: [code_cov]
+
+statement ok
+PRAGMA enable_verification
+
+# Test with wrong new line delimiter
+
+statement error
+SELECT count(*) from read_csv_auto('test/sql/copy/csv/data/auto/multi_column_string_r_n.csv', new_line = '\n')
+----
+CSV options could not be auto-detected.
+
+query I
+SELECT * from read_csv_auto('data/csv/escape.csv', escape=']')
+----
+"bla"
+
+query I
+SELECT * from read_csv_auto('data/csv/escape.csv')
+----
+"]"bla]""
+
+statement error
+SELECT * from read_csv_auto('data/csv/no_opt.csv', delim = ';')
+----
+CSV options could not be auto-detected.

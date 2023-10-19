@@ -27,14 +27,21 @@ jobs:
   linux-extensions-64-rebuild:
     name: Linux Extensions (64 Bit)
     runs-on: ubuntu-latest
-    container: ubuntu:16.04
+    container: quay.io/pypa/manylinux2014_x86_64
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
-    - uses: ./.github/actions/ubuntu_16_setup
+    - uses: ./.github/actions/manylinux_2014_setup
+      with:
+        aws-cli: 1
+        ninja-build: 1
+        vcpkg: 1
+        openssl: 1
+        ccache: 1
+        ssh: 1
 
     - name: Checkout specific DuckDB version
       shell: bash
@@ -64,7 +71,8 @@ jobs:
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-
+        python_name: python3.7
+        vcpkg_target_triplet: x64-linux
 
   xcode-extensions-rebuild:
     name: OSX Extensions Release
@@ -141,6 +149,7 @@ jobs:
        with:
          build_in_tree_extensions: 0
          deploy_as: windows_amd64
+         vcpkg_target_triplet: x64-windows
          deploy_version: ${{ inputs.duckdb_ref }}
          run_tests: 0
          treat_warn_as_error: 0
@@ -148,7 +157,6 @@ jobs:
          s3_id: ${{ secrets.S3_ID }}
          s3_key: ${{ secrets.S3_KEY }}
          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-         python_name: python
 
 
   manylinux-extensions-rebuild:
@@ -193,6 +201,7 @@ jobs:
         run_tests: 0
         build_dir: duckdb-old
         deploy_as: linux_amd64_gcc4
+        vcpkg_target_triplet: x64-linux
         deploy_version: ${{ inputs.duckdb_ref }}
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}

@@ -9,11 +9,12 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/stack_checker.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 
@@ -51,6 +52,8 @@ struct BindResult {
 };
 
 class ExpressionBinder {
+	friend class StackChecker<ExpressionBinder>;
+
 public:
 	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
 	virtual ~ExpressionBinder();
@@ -87,8 +90,8 @@ public:
 	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr);
 	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr);
 
-	static unique_ptr<Expression> PushCollation(ClientContext &context, unique_ptr<Expression> source,
-	                                            const string &collation, bool equality_only = false);
+	static bool PushCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type,
+	                          bool equality_only = false);
 	static void TestCollation(ClientContext &context, const string &collation);
 
 	bool BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
@@ -109,6 +112,15 @@ public:
 	                                  bool root_expression = false);
 
 	void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
+
+private:
+	//! Maximum stack depth
+	static constexpr const idx_t MAXIMUM_STACK_DEPTH = 128;
+	//! Current stack depth
+	idx_t stack_depth = DConstants::INVALID_INDEX;
+
+	void InitializeStackCheck();
+	StackChecker<ExpressionBinder> StackCheck(const ParsedExpression &expr, idx_t extra_stack = 1);
 
 protected:
 	BindResult BindExpression(BetweenExpression &expr, idx_t depth);

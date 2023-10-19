@@ -8,13 +8,18 @@
 
 #pragma once
 
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/operator/convert_to_string.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/bit.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 struct ValidityMask;
@@ -68,7 +73,7 @@ struct Cast {
 };
 
 struct HandleCastError {
-	static void AssignError(string error_message, string *error_message_ptr) {
+	static void AssignError(const string &error_message, string *error_message_ptr) {
 		if (!error_message_ptr) {
 			throw ConversionException(error_message);
 		}
@@ -465,6 +470,16 @@ DUCKDB_API bool TryCast::Operation(date_t input, timestamp_t &result, bool stric
 //===--------------------------------------------------------------------===//
 template <>
 DUCKDB_API bool TryCast::Operation(dtime_t input, dtime_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(dtime_t input, dtime_tz_t &result, bool strict);
+
+//===--------------------------------------------------------------------===//
+// Time With Time Zone Casts (Offset)
+//===--------------------------------------------------------------------===//
+template <>
+DUCKDB_API bool TryCast::Operation(dtime_tz_t input, dtime_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(dtime_tz_t input, dtime_tz_t &result, bool strict);
 
 //===--------------------------------------------------------------------===//
 // Timestamp Casts
@@ -473,6 +488,8 @@ template <>
 DUCKDB_API bool TryCast::Operation(timestamp_t input, date_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCast::Operation(timestamp_t input, dtime_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_t input, dtime_tz_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCast::Operation(timestamp_t input, timestamp_t &result, bool strict);
 
@@ -500,6 +517,15 @@ template <>
 DUCKDB_API bool TryCast::Operation(string_t input, dtime_t &result, bool strict);
 template <>
 dtime_t Cast::Operation(string_t input);
+//===--------------------------------------------------------------------===//
+// String -> TimeTZ Casts
+//===--------------------------------------------------------------------===//
+template <>
+DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, dtime_tz_t &result, string *error_message, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(string_t input, dtime_tz_t &result, bool strict);
+template <>
+dtime_tz_t Cast::Operation(string_t input);
 //===--------------------------------------------------------------------===//
 // String -> Timestamp Casts
 //===--------------------------------------------------------------------===//
@@ -606,6 +632,13 @@ struct CastTimestampMsToUs {
 	}
 };
 
+struct CastTimestampMsToNs {
+	template <class SRC, class DST>
+	static inline DST Operation(SRC input) {
+		throw duckdb::NotImplementedException("Cast to TIMESTAMP_NS could not be performed!");
+	}
+};
+
 struct CastTimestampNsToUs {
 	template <class SRC, class DST>
 	static inline DST Operation(SRC input) {
@@ -613,10 +646,24 @@ struct CastTimestampNsToUs {
 	}
 };
 
+struct CastTimestampSecToMs {
+	template <class SRC, class DST>
+	static inline DST Operation(SRC input) {
+		throw duckdb::NotImplementedException("Cast to TIMESTAMP_MS could not be performed!");
+	}
+};
+
 struct CastTimestampSecToUs {
 	template <class SRC, class DST>
 	static inline DST Operation(SRC input) {
 		throw duckdb::NotImplementedException("Cast to timestamp could not be performed!");
+	}
+};
+
+struct CastTimestampSecToNs {
+	template <class SRC, class DST>
+	static inline DST Operation(SRC input) {
+		throw duckdb::NotImplementedException("Cast to TIMESTAMP_NS could not be performed!");
 	}
 };
 
@@ -629,9 +676,15 @@ duckdb::timestamp_t CastTimestampUsToSec::Operation(duckdb::timestamp_t input);
 template <>
 duckdb::timestamp_t CastTimestampMsToUs::Operation(duckdb::timestamp_t input);
 template <>
+duckdb::timestamp_t CastTimestampMsToNs::Operation(duckdb::timestamp_t input);
+template <>
 duckdb::timestamp_t CastTimestampNsToUs::Operation(duckdb::timestamp_t input);
 template <>
+duckdb::timestamp_t CastTimestampSecToMs::Operation(duckdb::timestamp_t input);
+template <>
 duckdb::timestamp_t CastTimestampSecToUs::Operation(duckdb::timestamp_t input);
+template <>
+duckdb::timestamp_t CastTimestampSecToNs::Operation(duckdb::timestamp_t input);
 
 template <>
 duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_t input, Vector &result);
@@ -652,6 +705,15 @@ struct CastFromBlob {
 template <>
 duckdb::string_t CastFromBlob::Operation(duckdb::string_t input, Vector &vector);
 
+struct CastFromBlobToBit {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		throw NotImplementedException("Cast from blob could not be performed!");
+	}
+};
+template <>
+string_t CastFromBlobToBit::Operation(string_t input, Vector &result);
+
 struct TryCastToBlob {
 	template <class SRC, class DST>
 	static inline bool Operation(SRC input, DST &result, Vector &result_vector, string *error_message,
@@ -659,7 +721,6 @@ struct TryCastToBlob {
 		throw InternalException("Unsupported type for try cast to blob");
 	}
 };
-
 template <>
 bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
                               bool strict);
@@ -667,14 +728,41 @@ bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_v
 //===--------------------------------------------------------------------===//
 // Bits
 //===--------------------------------------------------------------------===//
-struct CastFromBit {
+struct CastFromBitToString {
 	template <class SRC>
 	static inline string_t Operation(SRC input, Vector &result) {
 		throw duckdb::NotImplementedException("Cast from bit could not be performed!");
 	}
 };
 template <>
-duckdb::string_t CastFromBit::Operation(duckdb::string_t input, Vector &vector);
+duckdb::string_t CastFromBitToString::Operation(duckdb::string_t input, Vector &vector);
+
+struct CastFromBitToNumeric {
+	template <class SRC = string_t, class DST>
+	static inline bool Operation(SRC input, DST &result, bool strict = false) {
+		D_ASSERT(input.GetSize() > 1);
+
+		// TODO: Allow conversion if the significant bytes of the bitstring can be cast to the target type
+		// Currently only allows bitstring -> numeric if the full bitstring fits inside the numeric type
+		if (input.GetSize() - 1 > sizeof(DST)) {
+			throw ConversionException("Bitstring doesn't fit inside of %s", GetTypeId<DST>());
+		}
+		Bit::BitToNumeric(input, result);
+		return (true);
+	}
+};
+template <>
+bool CastFromBitToNumeric::Operation(string_t input, bool &result, bool strict);
+template <>
+bool CastFromBitToNumeric::Operation(string_t input, hugeint_t &result, bool strict);
+
+struct CastFromBitToBlob {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		D_ASSERT(input.GetSize() > 1);
+		return StringVector::AddStringOrBlob(result, Bit::BitToBlob(input));
+	}
+};
 
 struct TryCastToBit {
 	template <class SRC, class DST>

@@ -12,12 +12,12 @@ statement ok
 SET force_download=true;
 
 query II
-explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
 ----
 analyzed_plan	<REGEX>:.*GET: 1.*
 
 query I
-SELECT count(*) FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+SELECT count(*) FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
 ----
 1000
 
@@ -25,12 +25,12 @@ statement ok
 SET force_download=false;
 
 query II
-explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
 ----
 analyzed_plan	<REGEX>:.*GET: 3.*
 
 query I
-SELECT count(*) FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+SELECT count(*) FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
 ----
 1000
 
@@ -55,18 +55,18 @@ statement ok
 SET threads=1
 
 statement ok
-create table user_info as SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
-UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
-UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
-UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
-UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
-UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
-UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
-UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
-UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+create table user_info as SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
 
 statement ok
-COPY (from user_info) TO 'row-user-data.parquet' (FORMAT PARQUET,  ROW_GROUP_SIZE 2048);
+COPY (from user_info) TO 's3://test-bucket/row-user-data.parquet' (FORMAT PARQUET,  ROW_GROUP_SIZE 2048);
 
 statement ok
 COPY (from user_info limit 100) TO 's3://test-bucket/row-user-data_1.parquet' (FORMAT PARQUET,  ROW_GROUP_SIZE 2048);

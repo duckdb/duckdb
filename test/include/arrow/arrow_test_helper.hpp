@@ -26,7 +26,7 @@ namespace duckdb {
 class ArrowTestFactory {
 public:
 	ArrowTestFactory(vector<LogicalType> types_p, vector<string> names_p, duckdb::unique_ptr<QueryResult> result_p,
-	                 bool big_result, ArrowOptions options)
+	                 bool big_result, ClientProperties options)
 	    : types(std::move(types_p)), names(std::move(names_p)), result(std::move(result_p)), big_result(big_result),
 	      options(options) {
 	}
@@ -35,15 +35,15 @@ public:
 	vector<string> names;
 	duckdb::unique_ptr<QueryResult> result;
 	bool big_result;
-	ArrowOptions options;
+	ClientProperties options;
 
 	struct ArrowArrayStreamData {
-		explicit ArrowArrayStreamData(ArrowTestFactory &factory, ArrowOptions options)
+		explicit ArrowArrayStreamData(ArrowTestFactory &factory, ClientProperties options)
 		    : factory(factory), options(options) {
 		}
 
 		ArrowTestFactory &factory;
-		ArrowOptions options;
+		ClientProperties options;
 	};
 
 	static int ArrowArrayStreamGetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out);
@@ -78,9 +78,12 @@ public:
 	static bool RunArrowComparison(Connection &con, const string &query, ArrowArrayStream &arrow_stream);
 
 private:
-	static unique_ptr<QueryResult> ScanArrowObject(Connection &con, vector<Value> &params);
 	static bool CompareResults(unique_ptr<QueryResult> arrow, unique_ptr<MaterializedQueryResult> duck,
 	                           const string &query);
-	static vector<Value> ConstructArrowScan(uintptr_t arrow_object, bool from_duckdb_result);
+
+public:
+	static unique_ptr<QueryResult> ScanArrowObject(Connection &con, vector<Value> &params);
+	static vector<Value> ConstructArrowScan(ArrowTestFactory &factory);
+	static vector<Value> ConstructArrowScan(ArrowArrayStream &stream);
 };
 } // namespace duckdb

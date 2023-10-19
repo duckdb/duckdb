@@ -1,5 +1,4 @@
 #include "duckdb_python/pandas/pandas_bind.hpp"
-#include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb_python/pandas/pandas_analyzer.hpp"
 #include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
 
@@ -9,13 +8,14 @@ namespace {
 
 struct PandasBindColumn {
 public:
-	PandasBindColumn(py::handle name, py::handle type, py::handle column) : name(name), type(type), handle(column) {
+	PandasBindColumn(py::handle name, py::handle type, py::object column)
+	    : name(name), type(type), handle(std::move(column)) {
 	}
 
 public:
 	py::handle name;
 	py::handle type;
-	py::handle handle;
+	py::object handle;
 };
 
 struct PandasDataFrameBind {
@@ -27,7 +27,7 @@ public:
 	}
 	PandasBindColumn operator[](idx_t index) const {
 		D_ASSERT(index < names.size());
-		auto column = getter(names[index]);
+		auto column = py::reinterpret_borrow<py::object>(getter(names[index]));
 		auto type = types[index];
 		auto name = names[index];
 		return PandasBindColumn(name, type, column);
@@ -43,7 +43,7 @@ private:
 
 }; // namespace
 
-static LogicalType BindColumn(PandasBindColumn column_p, PandasColumnBindData &bind_data,
+static LogicalType BindColumn(PandasBindColumn &column_p, PandasColumnBindData &bind_data,
                               const ClientContext &context) {
 	LogicalType column_type;
 	auto &column = column_p.handle;
@@ -57,15 +57,15 @@ static LogicalType BindColumn(PandasBindColumn column_p, PandasColumnBindData &b
 		bind_data.mask = make_uniq<RegisteredArray>(column.attr("array").attr("_mask"));
 	}
 
-	if (bind_data.numpy_type == NumpyNullableType::CATEGORY) {
+	if (bind_data.numpy_type.type == NumpyNullableType::CATEGORY) {
 		// for category types, we create an ENUM type for string or use the converted numpy type for the rest
 		D_ASSERT(py::hasattr(column, "cat"));
 		D_ASSERT(py::hasattr(column.attr("cat"), "categories"));
 		auto categories = py::array(column.attr("cat").attr("categories"));
 		auto categories_pd_type = ConvertNumpyType(categories.attr("dtype"));
-		if (categories_pd_type == NumpyNullableType::OBJECT) {
+		if (categories_pd_type.type == NumpyNullableType::OBJECT) {
 			// Let's hope the object type is a string.
-			bind_data.numpy_type = NumpyNullableType::CATEGORY;
+			bind_data.numpy_type.type = NumpyNullableType::CATEGORY;
 			auto enum_name = string(py::str(column_p.name));
 			vector<string> enum_entries = py::cast<vector<string>>(categories);
 			idx_t size = enum_entries.size();
@@ -75,7 +75,7 @@ static LogicalType BindColumn(PandasBindColumn column_p, PandasColumnBindData &b
 				enum_entries_ptr[i] = StringVector::AddStringOrBlob(enum_entries_vec, enum_entries[i]);
 			}
 			D_ASSERT(py::hasattr(column.attr("cat"), "codes"));
-			column_type = LogicalType::ENUM(enum_name, enum_entries_vec, size);
+			column_type = LogicalType::ENUM(enum_entries_vec, size);
 			auto pandas_col = py::array(column.attr("cat").attr("codes"));
 			bind_data.internal_categorical_type = string(py::str(pandas_col.attr("dtype")));
 			bind_data.pandas_col = make_uniq<PandasNumpyColumn>(pandas_col);
@@ -87,10 +87,10 @@ static LogicalType BindColumn(PandasBindColumn column_p, PandasColumnBindData &b
 			bind_data.numpy_type = ConvertNumpyType(numpy_type);
 			column_type = NumpyToLogicalType(bind_data.numpy_type);
 		}
-	} else if (bind_data.numpy_type == NumpyNullableType::FLOAT_16) {
+	} else if (bind_data.numpy_type.type == NumpyNullableType::FLOAT_16) {
 		auto pandas_array = column.attr("array");
 		bind_data.pandas_col = make_uniq<PandasNumpyColumn>(py::array(column.attr("to_numpy")("float32")));
-		bind_data.numpy_type = NumpyNullableType::FLOAT_32;
+		bind_data.numpy_type.type = NumpyNullableType::FLOAT_32;
 		column_type = NumpyToLogicalType(bind_data.numpy_type);
 	} else {
 		auto pandas_array = column.attr("array");
@@ -107,7 +107,7 @@ static LogicalType BindColumn(PandasBindColumn column_p, PandasColumnBindData &b
 		column_type = NumpyToLogicalType(bind_data.numpy_type);
 	}
 	// Analyze the inner data type of the 'object' column
-	if (bind_data.numpy_type == NumpyNullableType::OBJECT) {
+	if (bind_data.numpy_type.type == NumpyNullableType::OBJECT) {
 		PandasAnalyzer analyzer(config);
 		if (analyzer.Analyze(column)) {
 			column_type = analyzer.AnalyzedType();
@@ -132,7 +132,8 @@ void Pandas::Bind(const ClientContext &context, py::handle df_p, vector<PandasCo
 		PandasColumnBindData bind_data;
 
 		names.emplace_back(py::str(df.names[col_idx]));
-		auto column_type = BindColumn(df[col_idx], bind_data, context);
+		auto column = df[col_idx];
+		auto column_type = BindColumn(column, bind_data, context);
 
 		return_types.push_back(column_type);
 		bind_columns.push_back(std::move(bind_data));

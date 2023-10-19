@@ -1,6 +1,7 @@
 import duckdb
 import pytest
 
+
 class TestDBApiFetch(object):
     def test_multiple_fetch_one(self, duckdb_cursor):
         con = duckdb.connect()

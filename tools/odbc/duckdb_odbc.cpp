@@ -5,6 +5,8 @@
 #include "odbc_interval.hpp"
 #include "parameter_descriptor.hpp"
 #include "row_descriptor.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 using duckdb::OdbcDiagnostic;
 using duckdb::OdbcHandle;
@@ -39,7 +41,6 @@ OdbcHandle::OdbcHandle(const OdbcHandle &other) {
 
 OdbcHandle &OdbcHandle::operator=(const OdbcHandle &other) {
 	type = other.type;
-	std::copy(other.error_messages.begin(), other.error_messages.end(), std::back_inserter(error_messages));
 	return *this;
 }
 
@@ -118,7 +119,6 @@ void OdbcHandleStmt::Close() {
 	// the parameter values can be reused after
 	param_desc->Reset();
 	// stmt->stmt.reset(); // the statment can be reuse in prepared statement
-	error_messages.clear();
 }
 
 SQLRETURN OdbcHandleStmt::MaterializeResult() {
@@ -149,11 +149,14 @@ void OdbcHandleStmt::FillIRD() {
 		duckdb::DescRecord new_record;
 		auto col_type = stmt->GetTypes()[col_idx];
 
-		new_record.sql_desc_base_column_name = stmt->GetNames()[col_idx];
-		new_record.sql_desc_name = new_record.sql_desc_base_column_name;
-		new_record.sql_desc_label = stmt->GetNames()[col_idx];
+		// TODO: Make more specific?
+		auto name = stmt->GetNames()[col_idx];
+		new_record.sql_desc_base_column_name = name;
+		new_record.sql_desc_name = name;
+		new_record.sql_desc_label = name;
 		new_record.sql_desc_length = new_record.sql_desc_label.size();
-		new_record.sql_desc_octet_length = 0;
+
+		new_record.sql_desc_unnamed = new_record.sql_desc_name.empty() ? SQL_UNNAMED : SQL_NAMED;
 
 		auto sql_type = duckdb::ApiInfo::FindRelatedSQLType(col_type.id());
 		if (sql_type == SQL_INTERVAL) {
@@ -163,11 +166,18 @@ void OdbcHandleStmt::FillIRD() {
 			new_record.SetSqlDescType(sql_type);
 		}
 
-		new_record.sql_desc_type_name = col_type.ToString();
-		duckdb::ApiInfo::GetColumnSize<SQLINTEGER>(col_type, &new_record.sql_desc_display_size);
+		new_record.sql_desc_type_name = duckdb::TypeIdToString(col_type.InternalType());
+		new_record.sql_desc_display_size = duckdb::ApiInfo::GetColumnSize(col_type);
 		new_record.SetDescUnsignedField(col_type);
 
-		new_record.sql_desc_nullable = SQL_NULLABLE;
+		auto &db_manager = dbc->env->db->instance->GetDatabaseManager();
+		auto &catalog_name = db_manager.GetSystemCatalog().GetAttached().GetName();
+
+		new_record.sql_desc_catalog_name = catalog_name;
+
+		// TODO: this is not correct, we need to get the schema name from the table, but the docs say that if it cannot
+		// be determined, to return an empty string
+		new_record.sql_desc_schema_name = "";
 
 		ird->records.emplace_back(new_record);
 	}

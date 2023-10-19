@@ -10,6 +10,7 @@
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 
@@ -22,120 +23,62 @@ public:
 	                                FileCompressionType compression = FileCompressionType::UNCOMPRESSED,
 	                                FileOpener *opener = nullptr) override;
 
-	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
-		handle.file_system.Read(handle, buffer, nr_bytes, location);
-	};
+	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
+	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 
-	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
-		handle.file_system.Write(handle, buffer, nr_bytes, location);
-	}
+	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 
-	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
-		return handle.file_system.Read(handle, buffer, nr_bytes);
-	}
+	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 
-	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
-		return handle.file_system.Write(handle, buffer, nr_bytes);
-	}
+	int64_t GetFileSize(FileHandle &handle) override;
+	time_t GetLastModifiedTime(FileHandle &handle) override;
+	FileType GetFileType(FileHandle &handle) override;
 
-	int64_t GetFileSize(FileHandle &handle) override {
-		return handle.file_system.GetFileSize(handle);
-	}
-	time_t GetLastModifiedTime(FileHandle &handle) override {
-		return handle.file_system.GetLastModifiedTime(handle);
-	}
-	FileType GetFileType(FileHandle &handle) override {
-		return handle.file_system.GetFileType(handle);
-	}
+	void Truncate(FileHandle &handle, int64_t new_size) override;
 
-	void Truncate(FileHandle &handle, int64_t new_size) override {
-		handle.file_system.Truncate(handle, new_size);
-	}
-
-	void FileSync(FileHandle &handle) override {
-		handle.file_system.FileSync(handle);
-	}
+	void FileSync(FileHandle &handle) override;
 
 	// need to look up correct fs for this
-	bool DirectoryExists(const string &directory) override {
-		return FindFileSystem(directory)->DirectoryExists(directory);
-	}
-	void CreateDirectory(const string &directory) override {
-		FindFileSystem(directory)->CreateDirectory(directory);
-	}
+	bool DirectoryExists(const string &directory) override;
+	void CreateDirectory(const string &directory) override;
 
-	void RemoveDirectory(const string &directory) override {
-		FindFileSystem(directory)->RemoveDirectory(directory);
-	}
+	void RemoveDirectory(const string &directory) override;
 
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
-	               FileOpener *opener = nullptr) override {
-		return FindFileSystem(directory)->ListFiles(directory, callback, opener);
-	}
+	               FileOpener *opener = nullptr) override;
 
-	void MoveFile(const string &source, const string &target) override {
-		FindFileSystem(source)->MoveFile(source, target);
-	}
+	void MoveFile(const string &source, const string &target) override;
 
-	bool FileExists(const string &filename) override {
-		return FindFileSystem(filename)->FileExists(filename);
-	}
+	bool FileExists(const string &filename) override;
 
-	bool IsPipe(const string &filename) override {
-		return FindFileSystem(filename)->IsPipe(filename);
-	}
-	virtual void RemoveFile(const string &filename) override {
-		FindFileSystem(filename)->RemoveFile(filename);
-	}
+	bool IsPipe(const string &filename) override;
+	virtual void RemoveFile(const string &filename) override;
 
-	virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr) override {
-		return FindFileSystem(path)->Glob(path, opener);
-	}
+	virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr) override;
 
-	void RegisterSubSystem(unique_ptr<FileSystem> fs) override {
-		sub_systems.push_back(std::move(fs));
-	}
+	void RegisterSubSystem(unique_ptr<FileSystem> fs) override;
 
-	void UnregisterSubSystem(const string &name) override {
-		for (auto sub_system = sub_systems.begin(); sub_system != sub_systems.end(); sub_system++) {
-			if (sub_system->get()->GetName() == name) {
-				sub_systems.erase(sub_system);
-				return;
-			}
-		}
-		throw InvalidInputException("Could not find filesystem with name %s", name);
-	}
+	void UnregisterSubSystem(const string &name) override;
 
-	void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override {
-		compressed_fs[compression_type] = std::move(fs);
-	}
+	void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override;
 
-	vector<string> ListSubSystems() override {
-		vector<string> names(sub_systems.size());
-		for (idx_t i = 0; i < sub_systems.size(); i++) {
-			names[i] = sub_systems[i]->GetName();
-		}
-		return names;
-	}
+	vector<string> ListSubSystems() override;
 
-	std::string GetName() const override {
-		return "VirtualFileSystem";
-	}
+	std::string GetName() const override;
+
+	void SetDisabledFileSystems(const vector<string> &names) override;
+
+	string PathSeparator(const string &path) override;
 
 private:
-	FileSystem *FindFileSystem(const string &path) {
-		for (auto &sub_system : sub_systems) {
-			if (sub_system->CanHandleFile(path)) {
-				return sub_system.get();
-			}
-		}
-		return default_fs.get();
-	}
+	FileSystem &FindFileSystem(const string &path);
+	FileSystem &FindFileSystemInternal(const string &path);
 
 private:
 	vector<unique_ptr<FileSystem>> sub_systems;
 	map<FileCompressionType, unique_ptr<FileSystem>> compressed_fs;
 	const unique_ptr<FileSystem> default_fs;
+	unordered_set<string> disabled_file_systems;
 };
 
 } // namespace duckdb

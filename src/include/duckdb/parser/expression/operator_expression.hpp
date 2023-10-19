@@ -12,6 +12,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 //! Represents a built-in operator expression
@@ -33,10 +34,8 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
 public:
 	template <class T, class BASE>
@@ -86,9 +85,25 @@ public:
 			return "(" + entry.children[0]->ToString() + " IS NOT NULL)";
 		case ExpressionType::ARRAY_EXTRACT:
 			return entry.children[0]->ToString() + "[" + entry.children[1]->ToString() + "]";
-		case ExpressionType::ARRAY_SLICE:
-			return entry.children[0]->ToString() + "[" + entry.children[1]->ToString() + ":" +
-			       entry.children[2]->ToString() + "]";
+		case ExpressionType::ARRAY_SLICE: {
+			string begin = entry.children[1]->ToString();
+			if (begin == "[]") {
+				begin = "";
+			}
+			string end = entry.children[2]->ToString();
+			if (end == "[]") {
+				if (entry.children.size() == 4) {
+					end = "-";
+				} else {
+					end = "";
+				}
+			}
+			if (entry.children.size() == 4) {
+				return entry.children[0]->ToString() + "[" + begin + ":" + end + ":" + entry.children[3]->ToString() +
+				       "]";
+			}
+			return entry.children[0]->ToString() + "[" + begin + ":" + end + "]";
+		}
 		case ExpressionType::STRUCT_EXTRACT: {
 			if (entry.children[1]->type != ExpressionType::VALUE_CONSTANT) {
 				return string();

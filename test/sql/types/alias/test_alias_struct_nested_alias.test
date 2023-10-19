@@ -1,0 +1,37 @@
+# name: test/sql/types/alias/test_alias_struct_nested_alias.test
+# description: Test creates alias for struct type
+# group: [alias]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+# Create a USER type
+statement ok
+CREATE TYPE foobar AS ENUM(
+	'Foo',
+	'Bar'
+);
+
+# Create a USER type which is a STRUCT that contains another USER type
+statement ok
+CREATE TYPE top_nest AS STRUCT(
+    foobar FOOBAR
+);
+
+# Create a table out of this type
+statement ok
+CREATE TABLE failing (
+    top_nest TOP_NEST
+);
+
+statement ok
+insert into failing VALUES (
+	{'foobar': 'Foo'}
+)
+
+query I
+SELECT top_nest FROM failing;
+----
+{'foobar': Foo}

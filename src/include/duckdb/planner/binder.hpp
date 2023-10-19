@@ -218,6 +218,10 @@ private:
 	reference_set_t<ViewCatalogEntry> bound_views;
 
 private:
+	//! Get the root binder (binder with no parent)
+	Binder *GetRootBinder();
+	//! Determine the depth of the binder
+	idx_t GetBinderDepth() const;
 	//! Bind the expressions of generated columns to check for errors
 	void BindGeneratedColumns(BoundCreateTableInfo &info);
 	//! Bind the default values of the columns of a table
@@ -229,6 +233,10 @@ private:
 
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);
+
+	//! Tries to bind the table name with replacement scans
+	unique_ptr<BoundTableRef> BindWithReplacementScan(ClientContext &context, const string &table_name,
+	                                                  BaseTableRef &ref);
 
 	BoundStatement Bind(SelectStatement &stmt);
 	BoundStatement Bind(InsertStatement &stmt);
@@ -354,6 +362,7 @@ private:
 
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
 	void BindSchemaOrCatalog(string &catalog_name, string &schema_name);
+	const string BindCatalog(string &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 
 	unique_ptr<BoundQueryNode> BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table);

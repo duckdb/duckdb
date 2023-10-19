@@ -94,6 +94,16 @@ ScalarFunctionSet StrfTimeFun::GetFunctions() {
 	return strftime;
 }
 
+StrpTimeFormat::StrpTimeFormat() {
+}
+
+StrpTimeFormat::StrpTimeFormat(const string &format_string) {
+	if (format_string.empty()) {
+		return;
+	}
+	StrTimeFormat::ParseFormatSpecifier(format_string, *this);
+}
+
 struct StrpTimeBindData : public FunctionData {
 	StrpTimeBindData(const StrpTimeFormat &format, const string &format_string)
 	    : formats(1, format), format_strings(1, format_string) {
@@ -173,7 +183,7 @@ struct StrpTimeFunction {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<StrpTimeBindData>();
 
-		if (ConstantVector::IsNull(args.data[1])) {
+		if (args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(args.data[1])) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result, true);
 			return;
@@ -193,7 +203,7 @@ struct StrpTimeFunction {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<StrpTimeBindData>();
 
-		if (ConstantVector::IsNull(args.data[1])) {
+		if (args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(args.data[1])) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result, true);
 			return;

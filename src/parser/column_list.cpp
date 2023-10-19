@@ -6,6 +6,14 @@ namespace duckdb {
 
 ColumnList::ColumnList(bool allow_duplicate_names) : allow_duplicate_names(allow_duplicate_names) {
 }
+
+ColumnList::ColumnList(vector<ColumnDefinition> columns, bool allow_duplicate_names)
+    : allow_duplicate_names(allow_duplicate_names) {
+	for (auto &col : columns) {
+		AddColumn(std::move(col));
+	}
+}
+
 void ColumnList::AddColumn(ColumnDefinition column) {
 	auto oid = columns.size();
 	if (!column.Generated()) {
@@ -146,19 +154,6 @@ ColumnList ColumnList::Copy() const {
 	ColumnList result(allow_duplicate_names);
 	for (auto &col : columns) {
 		result.AddColumn(col.Copy());
-	}
-	return result;
-}
-
-void ColumnList::Serialize(FieldWriter &writer) const {
-	writer.WriteRegularSerializableList(columns);
-}
-
-ColumnList ColumnList::Deserialize(FieldReader &reader) {
-	ColumnList result;
-	auto columns = reader.ReadRequiredSerializableList<ColumnDefinition, ColumnDefinition>();
-	for (auto &col : columns) {
-		result.AddColumn(std::move(col));
 	}
 	return result;
 }

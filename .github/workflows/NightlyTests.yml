@@ -5,24 +5,30 @@ on:
   push:
     branches:
       - '**'
-      - '!master'
+      - '!main'
       - '!feature'
     tags:
       - '**'
     paths-ignore:
-      - '**.md'
-      - '.github/workflows/**'
+      - '**'
       - '!.github/workflows/NightlyTests.yml'
-      - '.github/config/uncovered_files.csv'
+      - '!.github/patches/duckdb-wasm/**'
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    paths-ignore:
+      - '**'
+      - '!.github/workflows/NightlyTests.yml'
+      - '!.github/patches/duckdb-wasm/**'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  DUCKDB_WASM_VERSION: 7bf2a73
+  DUCKDB_WASM_VERSION: "9f2f87b"
   CCACHE_SAVE: ${{ github.repository != 'duckdb/duckdb' }}
+  BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
 
 jobs:
   linux-memory-leaks:
@@ -148,36 +154,58 @@ jobs:
 
   old-gcc:
     name: GCC 4.8
-    runs-on: ubuntu-20.04
     needs: linux-memory-leaks
-    container: ubuntu:16.04
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux2014_x86_64
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
-    - uses: ./.github/actions/ubuntu_16_setup
-
-    - uses: actions/setup-python@v4
+    - uses: ./.github/actions/manylinux_2014_setup
       with:
-        python-version: '3.7'
-
-    - name: Install
-      shell: bash
-      run: apt-get update -y -qq && apt-get install -y -qq g++-4.8 binutils
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ env.CCACHE_SAVE }}
+        ninja-build: 1
+        ccache: 1
+        gcc_4_8: 1
 
     - name: Test
       shell: bash
       run: make unit
       env:
-        CC: gcc-4.8
-        CXX: g++-4.8
+        CC: /usr/bin/gcc
+        CXX: /usr/bin/g++
+        GEN: ninja
+
+  linux-release-32:
+    name: Linux (32 Bit)
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux2014_x86_64
+    needs: linux-memory-leaks
+    env:
+      CC: /usr/bin/gcc
+      CXX: /usr/bin/g++
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/manylinux_2014_setup
+        with:
+          ninja-build: 1
+          ccache: 1
+          glibc32: 1
+          gcc_4_8: 1 # Note: we run this job on the older gcc 4.8 toolchain
+
+      - name: Build
+        shell: bash
+        run: |
+          mkdir -p build/release
+          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DBUILD_EXTENSIONS='icu;parquet;fts;json;excel' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+
+      - name: Test
+        shell: bash
+        run: build/release/test/unittest "*"
 
   linux-tarball:
      name: Python 3 Tarball
@@ -222,7 +250,7 @@ jobs:
      name: Python Address Sanitizer (Linux)
      runs-on: ubuntu-latest
      needs: linux-memory-leaks
-     container: ubuntu:16.04
+     container: ubuntu:18.04
      env:
         GEN: ninja
         DUCKDEBUG: 1
@@ -233,7 +261,7 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: ./.github/actions/ubuntu_16_setup
+     - uses: ./.github/actions/ubuntu_18_setup
        with:
          openssl: 0
          python: 0
@@ -280,8 +308,7 @@ jobs:
      - name: Run Python Tests
        shell: bash
        run: |
-         cd tools/pythonpkg
-         ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pytest tests/fast --skiplist TestMemoryLeaks
+         ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pytest tools/pythonpkg/tests/fast --skiplist TestMemoryLeaks
 
   sqllogic:
      name: Sqllogic tests
@@ -382,11 +409,11 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make debug
+        run: make relassert
 
       - name: Test
         shell: bash
-        run: build/debug/test/unittest
+        run: build/relassert/test/unittest
 
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
@@ -514,69 +541,6 @@ jobs:
          python scripts/regression_test_runner.py --old=unsafe/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/imdb.csv --verbose --threads=2
 
 
-  rstats-windows-warnings:
-    name: R Package Windows (Warnings)
-    needs: linux-memory-leaks
-    runs-on: windows-latest
-    env:
-      TREAT_WARNINGS_AS_ERRORS: true
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - uses: r-lib/actions/setup-r@v2
-      with:
-        r-version: 'devel'
-        update-rtools: true
-
-    - uses: r-lib/actions/setup-pandoc@v2
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ env.CCACHE_SAVE }}
-
-    - name: Install
-      shell: bash
-      run: |
-        R -f tools/rpkg/dependencies.R
-
-    - name: Build
-      shell: bash
-      run: |
-        cd tools/rpkg
-        ./configure
-        R CMD build .
-        R CMD INSTALL duckdb_*.tar.gz
-
-  rubsan:
-    name: R UBSAN
-    runs-on: ubuntu-latest
-    needs: linux-memory-leaks
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ env.CCACHE_SAVE }}
-
-    - name: Run
-      shell: bash
-      run: |
-        (cd tools/rpkg && ./configure && R CMD build .)
-        docker run -v `pwd`:/duckdb --cap-add SYS_PTRACE wch1/r-debug:latest bash -c /duckdb/scripts/r_ubsan.sh
-
-
   threadsan:
     name: Thread Sanitizer
     runs-on: ubuntu-20.04
@@ -661,18 +625,20 @@ jobs:
 
     - uses: mymindstorm/setup-emsdk@v12
       with:
-        version: 3.1.41
+        version: 'latest'
 
     - name: Setup
       shell: bash
       run: |
-        git clone --recurse-submodules https://github.com/duckdb/duckdb-wasm
+        git clone https://github.com/duckdb/duckdb-wasm
         cd duckdb-wasm
         git checkout ${{ env.DUCKDB_WASM_VERSION }}
         shopt -s nullglob
         for filename in ../.github/patches/duckdb-wasm/*.patch; do
           git apply $filename
         done
+        git submodule init
+        git submodule update
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -713,3 +679,47 @@ jobs:
         name: duckdb-wasm32
         path: |
           duckdb-wasm32.zip
+
+  codecov:
+    name: Code Coverage
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    strategy:
+      fail-fast: false
+    env:
+      GEN: ninja
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov curl g++ zip
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install pytest
+        run: |
+          python3 -m pip install pytest
+
+      - name: Check Coverage
+        shell: bash
+        run: |
+          make coverage-check
+
+      - name: Create Archive
+        if: always()
+        shell: bash
+        run: |
+          zip -r coverage.zip coverage_html
+
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: coverage
+          path: coverage.zip
+          if-no-files-found: error

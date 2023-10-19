@@ -11,6 +11,9 @@
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/string_util.hpp"
 
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+
 namespace duckdb {
 
 bool Interval::FromString(const string &str, interval_t &result) {
@@ -116,6 +119,9 @@ interval_parse_time : {
 	}
 	result.micros += time.micros;
 	found_any = true;
+	if (negative) {
+		result.micros = -result.micros;
+	}
 	goto end_of_string;
 }
 interval_parse_identifier:

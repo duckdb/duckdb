@@ -2,142 +2,134 @@
 
 namespace duckdb {
 
-void BinaryDeserializer::SetTag(const char *tag) {
-	current_tag = tag;
-	stack.back().read_field_count++;
+//-------------------------------------------------------------------------
+// Nested Type Hooks
+//-------------------------------------------------------------------------
+void BinaryDeserializer::OnPropertyBegin(const field_id_t field_id, const char *) {
+	auto field = NextField();
+	if (field != field_id) {
+		throw SerializationException("Failed to deserialize: field id mismatch, expected: %d, got: %d", field_id,
+		                             field);
+	}
 }
 
-//===--------------------------------------------------------------------===//
-// Nested Types Hooks
-//===--------------------------------------------------------------------===//
-void BinaryDeserializer::OnObjectBegin() {
-	auto expected_field_count = ReadPrimitive<uint32_t>();
-	auto expected_size = ReadPrimitive<uint64_t>();
-	D_ASSERT(expected_field_count > 0);
-	D_ASSERT(expected_size > 0);
+void BinaryDeserializer::OnPropertyEnd() {
+}
 
-	stack.emplace_back(expected_field_count, expected_size);
+bool BinaryDeserializer::OnOptionalPropertyBegin(const field_id_t field_id, const char *s) {
+	auto next_field = PeekField();
+	auto present = next_field == field_id;
+	if (present) {
+		ConsumeField();
+	}
+	return present;
+}
+
+void BinaryDeserializer::OnOptionalPropertyEnd(bool present) {
+}
+
+void BinaryDeserializer::OnObjectBegin() {
+	nesting_level++;
 }
 
 void BinaryDeserializer::OnObjectEnd() {
-	auto &frame = stack.back();
-	if (frame.read_field_count < frame.expected_field_count) {
-		throw SerializationException("Not all fields were read. This file might have been written with a newer version "
-		                             "of DuckDB and is incompatible with this version of DuckDB.");
+	auto next_field = NextField();
+	if (next_field != MESSAGE_TERMINATOR_FIELD_ID) {
+		throw SerializationException("Failed to deserialize: expected end of object, but found field id: %d",
+		                             next_field);
 	}
-	stack.pop_back();
+	nesting_level--;
 }
 
 idx_t BinaryDeserializer::OnListBegin() {
-	return ReadPrimitive<idx_t>();
+	return VarIntDecode<idx_t>();
 }
 
 void BinaryDeserializer::OnListEnd() {
 }
 
-// Deserialize maps as [ { key: ..., value: ... } ]
-idx_t BinaryDeserializer::OnMapBegin() {
-	return ReadPrimitive<idx_t>();
+bool BinaryDeserializer::OnNullableBegin() {
+	return ReadBool();
 }
 
-void BinaryDeserializer::OnMapEntryBegin() {
+void BinaryDeserializer::OnNullableEnd() {
 }
 
-void BinaryDeserializer::OnMapKeyBegin() {
-}
-
-void BinaryDeserializer::OnMapValueBegin() {
-}
-
-void BinaryDeserializer::OnMapEntryEnd() {
-}
-
-void BinaryDeserializer::OnMapEnd() {
-}
-
-void BinaryDeserializer::OnPairBegin() {
-}
-
-void BinaryDeserializer::OnPairKeyBegin() {
-}
-
-void BinaryDeserializer::OnPairValueBegin() {
-}
-
-void BinaryDeserializer::OnPairEnd() {
-}
-
-bool BinaryDeserializer::OnOptionalBegin() {
-	return ReadPrimitive<bool>();
-}
-
-//===--------------------------------------------------------------------===//
+//-------------------------------------------------------------------------
 // Primitive Types
-//===--------------------------------------------------------------------===//
+//-------------------------------------------------------------------------
 bool BinaryDeserializer::ReadBool() {
-	return ReadPrimitive<bool>();
+	return static_cast<bool>(ReadPrimitive<uint8_t>());
+}
+
+char BinaryDeserializer::ReadChar() {
+	return ReadPrimitive<char>();
 }
 
 int8_t BinaryDeserializer::ReadSignedInt8() {
-	return ReadPrimitive<int8_t>();
+	return VarIntDecode<int8_t>();
 }
 
 uint8_t BinaryDeserializer::ReadUnsignedInt8() {
-	return ReadPrimitive<uint8_t>();
+	return VarIntDecode<uint8_t>();
 }
 
 int16_t BinaryDeserializer::ReadSignedInt16() {
-	return ReadPrimitive<int16_t>();
+	return VarIntDecode<int16_t>();
 }
 
 uint16_t BinaryDeserializer::ReadUnsignedInt16() {
-	return ReadPrimitive<uint16_t>();
+	return VarIntDecode<uint16_t>();
 }
 
 int32_t BinaryDeserializer::ReadSignedInt32() {
-	return ReadPrimitive<int32_t>();
+	return VarIntDecode<int32_t>();
 }
 
 uint32_t BinaryDeserializer::ReadUnsignedInt32() {
-	return ReadPrimitive<uint32_t>();
+	return VarIntDecode<uint32_t>();
 }
 
 int64_t BinaryDeserializer::ReadSignedInt64() {
-	return ReadPrimitive<int64_t>();
+	return VarIntDecode<int64_t>();
 }
 
 uint64_t BinaryDeserializer::ReadUnsignedInt64() {
-	return ReadPrimitive<uint64_t>();
+	return VarIntDecode<uint64_t>();
 }
 
 float BinaryDeserializer::ReadFloat() {
-	return ReadPrimitive<float>();
+	auto value = ReadPrimitive<float>();
+	return value;
 }
 
 double BinaryDeserializer::ReadDouble() {
-	return ReadPrimitive<double>();
+	auto value = ReadPrimitive<double>();
+	return value;
 }
 
 string BinaryDeserializer::ReadString() {
-	uint32_t size = ReadPrimitive<uint32_t>();
-	if (size == 0) {
+	auto len = VarIntDecode<uint32_t>();
+	if (len == 0) {
 		return string();
 	}
-	auto buffer = make_unsafe_uniq_array<data_t>(size);
-	ReadData(buffer.get(), size);
-	return string(const_char_ptr_cast(buffer.get()), size);
-}
-
-interval_t BinaryDeserializer::ReadInterval() {
-	return ReadPrimitive<interval_t>();
+	auto buffer = make_unsafe_uniq_array<data_t>(len);
+	ReadData(buffer.get(), len);
+	return string(const_char_ptr_cast(buffer.get()), len);
 }
 
 hugeint_t BinaryDeserializer::ReadHugeInt() {
-	return ReadPrimitive<hugeint_t>();
+	auto upper = VarIntDecode<int64_t>();
+	auto lower = VarIntDecode<uint64_t>();
+	return hugeint_t(upper, lower);
 }
 
-void BinaryDeserializer::ReadDataPtr(data_ptr_t &ptr, idx_t count) {
-	ReadData(ptr, count);
+void BinaryDeserializer::ReadDataPtr(data_ptr_t &ptr_p, idx_t count) {
+	auto len = VarIntDecode<uint64_t>();
+	if (len != count) {
+		throw SerializationException("Tried to read blob of %d size, but only %d elements are available", count, len);
+	}
+	ReadData(ptr_p, count);
 }
 
 } // namespace duckdb

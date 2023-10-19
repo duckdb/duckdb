@@ -8,6 +8,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/main/client_properties.hpp"
 
 #include "datetime.h" //from python
 
@@ -37,7 +38,7 @@ public:
 	idx_t len;
 
 public:
-	PyObject *operator[](const py::object &obj) const {
+	py::handle operator[](const py::object &obj) const {
 		return PyDict_GetItem(dict.ptr(), obj.ptr());
 	}
 
@@ -117,9 +118,9 @@ public:
 	interval_t ToInterval();
 
 private:
-	static int64_t GetDays(PyObject *obj);
-	static int64_t GetSeconds(PyObject *obj);
-	static int64_t GetMicros(PyObject *obj);
+	static int64_t GetDays(py::handle &obj);
+	static int64_t GetSeconds(py::handle &obj);
+	static int64_t GetMicros(py::handle &obj);
 };
 
 struct PyTime {
@@ -130,18 +131,18 @@ public:
 	int32_t minute;
 	int32_t second;
 	int32_t microsecond;
-	PyObject *timezone_obj;
+	py::object timezone_obj;
 
 public:
 	dtime_t ToDuckTime();
 	Value ToDuckValue();
 
 private:
-	static int32_t GetHours(PyObject *obj);
-	static int32_t GetMinutes(PyObject *obj);
-	static int32_t GetSeconds(PyObject *obj);
-	static int32_t GetMicros(PyObject *obj);
-	static PyObject *GetTZInfo(PyObject *obj);
+	static int32_t GetHours(py::handle &obj);
+	static int32_t GetMinutes(py::handle &obj);
+	static int32_t GetSeconds(py::handle &obj);
+	static int32_t GetMicros(py::handle &obj);
+	static py::object GetTZInfo(py::handle &obj);
 };
 
 struct PyDateTime {
@@ -155,23 +156,25 @@ public:
 	int32_t minute;
 	int32_t second;
 	int32_t micros;
-	PyObject *tzone_obj;
+	py::object tzone_obj;
 
 public:
 	timestamp_t ToTimestamp();
 	date_t ToDate();
 	dtime_t ToDuckTime();
-	Value ToDuckValue();
+	Value ToDuckValue(const LogicalType &target_type);
+	bool IsPositiveInfinity() const;
+	bool IsNegativeInfinity() const;
 
 public:
-	static int32_t GetYears(PyObject *obj);
-	static int32_t GetMonths(PyObject *obj);
-	static int32_t GetDays(PyObject *obj);
-	static int32_t GetHours(PyObject *obj);
-	static int32_t GetMinutes(PyObject *obj);
-	static int32_t GetSeconds(PyObject *obj);
-	static int32_t GetMicros(PyObject *obj);
-	static PyObject *GetTZInfo(PyObject *obj);
+	static int32_t GetYears(py::handle &obj);
+	static int32_t GetMonths(py::handle &obj);
+	static int32_t GetDays(py::handle &obj);
+	static int32_t GetHours(py::handle &obj);
+	static int32_t GetMinutes(py::handle &obj);
+	static int32_t GetSeconds(py::handle &obj);
+	static int32_t GetMicros(py::handle &obj);
+	static py::object GetTZInfo(py::handle &obj);
 };
 
 struct PyDate {
@@ -183,6 +186,8 @@ public:
 
 public:
 	Value ToDuckValue();
+	bool IsPositiveInfinity() const;
+	bool IsNegativeInfinity() const;
 };
 
 struct PyTimezone {
@@ -190,12 +195,12 @@ public:
 	PyTimezone() = delete;
 
 public:
-	DUCKDB_API static interval_t GetUTCOffset(PyObject *tzone_obj);
+	DUCKDB_API static interval_t GetUTCOffset(py::handle &tzone_obj);
 };
 
 struct PythonObject {
 	static void Initialize();
-	static py::object FromValue(const Value &value, const LogicalType &id);
+	static py::object FromValue(const Value &value, const LogicalType &id, const ClientProperties &client_properties);
 };
 
 template <class T>

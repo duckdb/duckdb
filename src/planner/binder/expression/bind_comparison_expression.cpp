@@ -18,20 +18,25 @@
 
 namespace duckdb {
 
-unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, unique_ptr<Expression> source,
-                                                       const string &collation_p, bool equality_only) {
+bool ExpressionBinder::PushCollation(ClientContext &context, unique_ptr<Expression> &source,
+                                     const LogicalType &sql_type, bool equality_only) {
+	if (sql_type.id() != LogicalTypeId::VARCHAR) {
+		// only VARCHAR columns require collation
+		return false;
+	}
 	// replace default collation with system collation
+	auto str_collation = StringType::GetCollation(sql_type);
 	string collation;
-	if (collation_p.empty()) {
+	if (str_collation.empty()) {
 		collation = DBConfig::GetConfig(context).options.collation;
 	} else {
-		collation = collation_p;
+		collation = str_collation;
 	}
 	collation = StringUtil::Lower(collation);
 	// bind the collation
 	if (collation.empty() || collation == "binary" || collation == "c" || collation == "posix") {
-		// binary collation: just skip
-		return source;
+		// no collation or binary collation: skip
+		return false;
 	}
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto splits = StringUtil::Split(StringUtil::Lower(collation), ".");
@@ -60,11 +65,12 @@ unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, u
 		auto function = function_binder.BindScalarFunction(collation_entry.function, std::move(children));
 		source = std::move(function);
 	}
-	return source;
+	return true;
 }
 
 void ExpressionBinder::TestCollation(ClientContext &context, const string &collation) {
-	PushCollation(context, make_uniq<BoundConstantExpression>(Value("")), collation);
+	auto expr = make_uniq_base<Expression, BoundConstantExpression>(Value(""));
+	PushCollation(context, expr, LogicalType::VARCHAR_COLLATION(collation));
 }
 
 LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, LogicalType right_type) {
@@ -119,6 +125,7 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	if (!error.empty()) {
 		return BindResult(error);
 	}
+
 	// the children have been successfully resolved
 	auto &left = BoundExpression::GetExpression(*expr.left);
 	auto &right = BoundExpression::GetExpression(*expr.right);
@@ -133,12 +140,9 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	right = BoundCastExpression::AddCastToType(context, std::move(right), input_type,
 	                                           input_type.id() == LogicalTypeId::ENUM);
 
-	if (input_type.id() == LogicalTypeId::VARCHAR) {
-		// handle collation
-		auto collation = StringType::GetCollation(input_type);
-		left = PushCollation(context, std::move(left), collation, expr.type == ExpressionType::COMPARE_EQUAL);
-		right = PushCollation(context, std::move(right), collation, expr.type == ExpressionType::COMPARE_EQUAL);
-	}
+	PushCollation(context, left, input_type, expr.type == ExpressionType::COMPARE_EQUAL);
+	PushCollation(context, right, input_type, expr.type == ExpressionType::COMPARE_EQUAL);
+
 	// now create the bound comparison expression
 	return BindResult(make_uniq<BoundComparisonExpression>(expr.type, std::move(left), std::move(right)));
 }

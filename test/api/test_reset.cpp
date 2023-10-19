@@ -45,7 +45,6 @@ void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &
 
 OptionValueSet &GetValueForOption(const string &name) {
 	static unordered_map<string, OptionValueSet> value_map = {
-	    {"access_mode", {Value("READ_ONLY"), Value("read_only")}},
 	    {"threads", {Value::BIGINT(42), Value::BIGINT(42)}},
 	    {"checkpoint_threshold", {"4.2GB"}},
 	    {"debug_checkpoint_abort", {{"none", "before_truncate", "before_header", "after_free_list_write"}}},
@@ -57,7 +56,19 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"debug_force_external", {Value(true)}},
 	    {"debug_force_no_cross_product", {Value(true)}},
 	    {"debug_force_external", {Value(true)}},
+	    {"prefer_range_joins", {Value(true)}},
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
+	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
+#ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
+	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
+#else
+	    {"autoload_known_extensions", {true}},
+#endif
+#ifdef DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT
+	    {"autoinstall_known_extensions", {!DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT}},
+#else
+	    {"autoinstall_known_extensions", {true}},
+#endif
 	    {"enable_fsst_vectors", {true}},
 	    {"enable_object_cache", {true}},
 	    {"enable_profiling", {"json"}},
@@ -90,8 +101,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"enable_http_metadata_cache", {true}},
 	    {"force_bitpacking_mode", {"constant"}},
 	    {"allocator_flush_threshold", {"4.2GB"}},
-	    {"arrow_large_buffer_size", {true}},
-	};
+	    {"arrow_large_buffer_size", {true}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		REQUIRE(name == "MISSING_FROM_MAP");
@@ -101,11 +111,13 @@ OptionValueSet &GetValueForOption(const string &name) {
 
 bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
+	    "access_mode",
 	    "schema",
 	    "search_path",
 	    "debug_window_mode",
 	    "experimental_parallel_csv",
 	    "lock_configuration",        // cant change this while db is running
+	    "disabled_filesystems",      // cant change this while db is running
 	    "enable_external_access",    // cant change this while db is running
 	    "allow_unsigned_extensions", // cant change this while db is running
 	    "log_query_path",

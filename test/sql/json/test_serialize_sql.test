@@ -84,8 +84,15 @@ PRAGMA json_execute_serialized_sql(
 24
 
 # TODO: We should add an option for the deserializer to allow missing properties in the JSON if they can be default constructed
-# Alternatively, make them optional for all the FormatDeserializer's.
+# Alternatively, make them optional for all the Deserializer's.
 statement error
 SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT * FROM tbl2', skip_null := true, skip_empty := true));
 ----
-Parser Error: Expected but did not find property 'modifiers' in json object: '{"type":"SELECT_NODE","select_list":[{"class":"STAR","type":"STAR","columns":false}],"from_table":{"type":"BASE_TABLE","table_name":"tbl2"},"aggregate_handling":"STANDARD_HANDLING"}'
+Parser Error: Expected but did not find property 'cte_map' in json object: '{"type":"SELECT_NODE","select_list":[{"class":"STAR","type":"STAR","columns":false}],"from_table":{"type":"BASE_TABLE","table_name":"tbl2"},"aggregate_handling":"STANDARD_HANDLING"}'
+
+
+# Test execute json serialized sql with multiple nested type tags
+query II
+SELECT * FROM json_execute_serialized_sql(json_serialize_sql('WITH a(i) as (SELECT 1) SELECT a1.i as i1, a2.i as i2 FROM a as a1, a as a2'));
+----
+1	1

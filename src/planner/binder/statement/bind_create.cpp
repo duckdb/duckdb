@@ -24,7 +24,6 @@
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
@@ -39,6 +38,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/function/table/table_scan.hpp"
 
 namespace duckdb {
 
@@ -66,6 +66,16 @@ void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string
 
 void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
 	BindSchemaOrCatalog(context, catalog, schema);
+}
+
+const string Binder::BindCatalog(string &catalog) {
+	auto &db_manager = DatabaseManager::Get(context);
+	optional_ptr<AttachedDatabase> database = db_manager.GetDatabase(context, catalog);
+	if (database) {
+		return db_manager.GetDatabase(context, catalog).get()->GetName();
+	} else {
+		return db_manager.GetDefaultDatabase(context);
+	}
 }
 
 SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
@@ -134,33 +144,6 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	base.types = query_node.types;
 }
 
-static void QualifyFunctionNames(ClientContext &context, unique_ptr<ParsedExpression> &expr) {
-	switch (expr->GetExpressionClass()) {
-	case ExpressionClass::FUNCTION: {
-		auto &func = expr->Cast<FunctionExpression>();
-		auto function = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, func.catalog, func.schema,
-		                                  func.function_name, OnEntryNotFound::RETURN_NULL);
-		if (function) {
-			func.catalog = function->ParentCatalog().GetName();
-			func.schema = function->ParentSchema().name;
-		}
-		break;
-	}
-	case ExpressionClass::SUBQUERY: {
-		// replacing parameters within a subquery is slightly different
-		auto &sq = (expr->Cast<SubqueryExpression>()).subquery;
-		ParsedExpressionIterator::EnumerateQueryNodeChildren(
-		    *sq->node, [&](unique_ptr<ParsedExpression> &child) { QualifyFunctionNames(context, child); });
-		break;
-	}
-	default: // fall through
-		break;
-	}
-	// unfold child expressions
-	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { QualifyFunctionNames(context, child); });
-}
-
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = info.Cast<CreateMacroInfo>();
 	auto &scalar_function = base.function->Cast<ScalarMacroFunction>();
@@ -190,7 +173,6 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name);
 	macro_binding = this_macro_binding.get();
 	ExpressionBinder::QualifyColumnNames(*this, scalar_function.expression);
-	QualifyFunctionNames(context, scalar_function.expression);
 
 	// create a copy of the expression because we do not want to alter the original
 	auto expression = scalar_function.expression->Copy();
@@ -260,23 +242,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		} else {
 			type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
 		}
-	} else if (type.id() == LogicalTypeId::ENUM) {
-		auto enum_type_name = EnumType::GetTypeName(type);
-		optional_ptr<TypeCatalogEntry> enum_type_catalog;
-		if (catalog) {
-			enum_type_catalog =
-			    catalog->GetEntry<TypeCatalogEntry>(context, schema, enum_type_name, OnEntryNotFound::RETURN_NULL);
-			if (!enum_type_catalog) {
-				// look in the system catalog if the type was not found
-				enum_type_catalog = Catalog::GetEntry<TypeCatalogEntry>(context, SYSTEM_CATALOG, schema, enum_type_name,
-				                                                        OnEntryNotFound::RETURN_NULL);
-			}
-		} else {
-			enum_type_catalog = Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, schema, enum_type_name,
-			                                                        OnEntryNotFound::RETURN_NULL);
-		}
-
-		EnumType::SetCatalog(type, enum_type_catalog.get());
+		BindLogicalType(context, type, catalog, schema);
 	}
 }
 
@@ -483,10 +449,14 @@ unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateS
 	create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
 	create_index_info->names = get.names;
 	create_index_info->column_ids = get.column_ids;
+	auto &bind_data = get.bind_data->Cast<TableScanBindData>();
+	bind_data.is_create_index = true;
+	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 
 	// the logical CREATE INDEX also needs all fields to scan the referenced table
-	return make_uniq<LogicalCreateIndex>(std::move(get.bind_data), std::move(create_index_info), std::move(expressions),
-	                                     table, std::move(get.function));
+	auto result = make_uniq<LogicalCreateIndex>(std::move(create_index_info), std::move(expressions), table);
+	result->children.push_back(std::move(plan));
+	return std::move(result);
 }
 
 BoundStatement Binder::Bind(CreateStatement &stmt) {
@@ -496,9 +466,13 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 	auto catalog_type = stmt.info->type;
 	switch (catalog_type) {
-	case CatalogType::SCHEMA_ENTRY:
+	case CatalogType::SCHEMA_ENTRY: {
+		auto &base = stmt.info->Cast<CreateInfo>();
+		auto catalog = BindCatalog(base.catalog);
+		properties.modified_databases.insert(catalog);
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
 		break;
+	}
 	case CatalogType::VIEW_ENTRY: {
 		auto &base = stmt.info->Cast<CreateViewInfo>();
 		// bind the schema
@@ -529,7 +503,12 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &base = stmt.info->Cast<CreateIndexInfo>();
 
 		// visit the table reference
-		auto bound_table = Bind(*base.table);
+		auto table_ref = make_uniq<BaseTableRef>();
+		table_ref->catalog_name = base.catalog;
+		table_ref->schema_name = base.schema;
+		table_ref->table_name = base.table;
+
+		auto bound_table = Bind(*table_ref);
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
 			throw BinderException("Can only create an index over a base table!");
 		}
@@ -543,7 +522,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (plan->type != LogicalOperatorType::LOGICAL_GET) {
 			throw BinderException("Cannot create index on a view!");
 		}
-
 		result.plan = table.catalog.BindCreateIndex(*this, stmt, table, std::move(plan));
 		break;
 	}
@@ -648,8 +626,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			// We set b to be an alias for the underlying type of a
 			auto inner_type = Catalog::GetType(context, schema.catalog.GetName(), schema.name,
 			                                   UserType::GetTypeName(create_type_info.type));
-			// clear to nullptr, we don't need this
-			EnumType::SetCatalog(inner_type, nullptr);
 			inner_type.SetAlias(create_type_info.name);
 			create_type_info.type = inner_type;
 		}

@@ -1,5 +1,4 @@
 #include "duckdb/common/exception.hpp"
-
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types.hpp"
@@ -62,11 +61,11 @@ string Exception::ConstructMessageRecursive(const string &msg, std::vector<Excep
 #ifdef DEBUG
 	// Verify that we have the required amount of values for the message
 	idx_t parameter_count = 0;
-	for (idx_t i = 0; i < msg.size(); i++) {
+	for (idx_t i = 0; i + 1 < msg.size(); i++) {
 		if (msg[i] != '%') {
 			continue;
 		}
-		if (i < msg.size() && msg[i + 1] == '%') {
+		if (msg[i + 1] == '%') {
 			i++;
 			continue;
 		}
@@ -82,87 +81,68 @@ string Exception::ConstructMessageRecursive(const string &msg, std::vector<Excep
 	return ExceptionFormatValue::Format(msg, values);
 }
 
+struct ExceptionEntry {
+	ExceptionType type;
+	char text[48];
+};
+
+static constexpr ExceptionEntry EXCEPTION_MAP[] = {{ExceptionType::INVALID, "Invalid"},
+                                                   {ExceptionType::OUT_OF_RANGE, "Out of Range"},
+                                                   {ExceptionType::CONVERSION, "Conversion"},
+                                                   {ExceptionType::UNKNOWN_TYPE, "Unknown Type"},
+                                                   {ExceptionType::DECIMAL, "Decimal"},
+                                                   {ExceptionType::MISMATCH_TYPE, "Mismatch Type"},
+                                                   {ExceptionType::DIVIDE_BY_ZERO, "Divide by Zero"},
+                                                   {ExceptionType::OBJECT_SIZE, "Object Size"},
+                                                   {ExceptionType::INVALID_TYPE, "Invalid type"},
+                                                   {ExceptionType::SERIALIZATION, "Serialization"},
+                                                   {ExceptionType::TRANSACTION, "TransactionContext"},
+                                                   {ExceptionType::NOT_IMPLEMENTED, "Not implemented"},
+                                                   {ExceptionType::EXPRESSION, "Expression"},
+                                                   {ExceptionType::CATALOG, "Catalog"},
+                                                   {ExceptionType::PARSER, "Parser"},
+                                                   {ExceptionType::BINDER, "Binder"},
+                                                   {ExceptionType::PLANNER, "Planner"},
+                                                   {ExceptionType::SCHEDULER, "Scheduler"},
+                                                   {ExceptionType::EXECUTOR, "Executor"},
+                                                   {ExceptionType::CONSTRAINT, "Constraint"},
+                                                   {ExceptionType::INDEX, "Index"},
+                                                   {ExceptionType::STAT, "Stat"},
+                                                   {ExceptionType::CONNECTION, "Connection"},
+                                                   {ExceptionType::SYNTAX, "Syntax"},
+                                                   {ExceptionType::SETTINGS, "Settings"},
+                                                   {ExceptionType::OPTIMIZER, "Optimizer"},
+                                                   {ExceptionType::NULL_POINTER, "NullPointer"},
+                                                   {ExceptionType::IO, "IO"},
+                                                   {ExceptionType::INTERRUPT, "INTERRUPT"},
+                                                   {ExceptionType::FATAL, "FATAL"},
+                                                   {ExceptionType::INTERNAL, "INTERNAL"},
+                                                   {ExceptionType::INVALID_INPUT, "Invalid Input"},
+                                                   {ExceptionType::OUT_OF_MEMORY, "Out of Memory"},
+                                                   {ExceptionType::PERMISSION, "Permission"},
+                                                   {ExceptionType::PARAMETER_NOT_RESOLVED, "Parameter Not Resolved"},
+                                                   {ExceptionType::PARAMETER_NOT_ALLOWED, "Parameter Not Allowed"},
+                                                   {ExceptionType::DEPENDENCY, "Dependency"},
+                                                   {ExceptionType::MISSING_EXTENSION, "Missing Extension"},
+                                                   {ExceptionType::HTTP, "HTTP"},
+                                                   {ExceptionType::AUTOLOAD, "Extension Autoloading"}};
+
 string Exception::ExceptionTypeToString(ExceptionType type) {
-	switch (type) {
-	case ExceptionType::INVALID:
-		return "Invalid";
-	case ExceptionType::OUT_OF_RANGE:
-		return "Out of Range";
-	case ExceptionType::CONVERSION:
-		return "Conversion";
-	case ExceptionType::UNKNOWN_TYPE:
-		return "Unknown Type";
-	case ExceptionType::DECIMAL:
-		return "Decimal";
-	case ExceptionType::MISMATCH_TYPE:
-		return "Mismatch Type";
-	case ExceptionType::DIVIDE_BY_ZERO:
-		return "Divide by Zero";
-	case ExceptionType::OBJECT_SIZE:
-		return "Object Size";
-	case ExceptionType::INVALID_TYPE:
-		return "Invalid type";
-	case ExceptionType::SERIALIZATION:
-		return "Serialization";
-	case ExceptionType::TRANSACTION:
-		return "TransactionContext";
-	case ExceptionType::NOT_IMPLEMENTED:
-		return "Not implemented";
-	case ExceptionType::EXPRESSION:
-		return "Expression";
-	case ExceptionType::CATALOG:
-		return "Catalog";
-	case ExceptionType::PARSER:
-		return "Parser";
-	case ExceptionType::BINDER:
-		return "Binder";
-	case ExceptionType::PLANNER:
-		return "Planner";
-	case ExceptionType::SCHEDULER:
-		return "Scheduler";
-	case ExceptionType::EXECUTOR:
-		return "Executor";
-	case ExceptionType::CONSTRAINT:
-		return "Constraint";
-	case ExceptionType::INDEX:
-		return "Index";
-	case ExceptionType::STAT:
-		return "Stat";
-	case ExceptionType::CONNECTION:
-		return "Connection";
-	case ExceptionType::SYNTAX:
-		return "Syntax";
-	case ExceptionType::SETTINGS:
-		return "Settings";
-	case ExceptionType::OPTIMIZER:
-		return "Optimizer";
-	case ExceptionType::NULL_POINTER:
-		return "NullPointer";
-	case ExceptionType::IO:
-		return "IO";
-	case ExceptionType::INTERRUPT:
-		return "INTERRUPT";
-	case ExceptionType::FATAL:
-		return "FATAL";
-	case ExceptionType::INTERNAL:
-		return "INTERNAL";
-	case ExceptionType::INVALID_INPUT:
-		return "Invalid Input";
-	case ExceptionType::OUT_OF_MEMORY:
-		return "Out of Memory";
-	case ExceptionType::PERMISSION:
-		return "Permission";
-	case ExceptionType::PARAMETER_NOT_RESOLVED:
-		return "Parameter Not Resolved";
-	case ExceptionType::PARAMETER_NOT_ALLOWED:
-		return "Parameter Not Allowed";
-	case ExceptionType::DEPENDENCY:
-		return "Dependency";
-	case ExceptionType::HTTP:
-		return "HTTP";
-	default:
-		return "Unknown";
+	for (auto &e : EXCEPTION_MAP) {
+		if (e.type == type) {
+			return e.text;
+		}
 	}
+	return "Unknown";
+}
+
+ExceptionType Exception::StringToExceptionType(const string &type) {
+	for (auto &e : EXCEPTION_MAP) {
+		if (e.text == type) {
+			return e.type;
+		}
+	}
+	return ExceptionType::INVALID;
 }
 
 const HTTPException &Exception::AsHTTPException() const {
@@ -225,6 +205,8 @@ void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message
 	case ExceptionType::HTTP: {
 		original->AsHTTPException().Throw();
 	}
+	case ExceptionType::MISSING_EXTENSION:
+		throw MissingExtensionException(message);
 	default:
 		throw Exception(type, message);
 	}
@@ -345,6 +327,13 @@ IOException::IOException(const string &msg) : Exception(ExceptionType::IO, msg) 
 
 MissingExtensionException::MissingExtensionException(const string &msg)
     : Exception(ExceptionType::MISSING_EXTENSION, msg) {
+}
+
+AutoloadException::AutoloadException(const string &extension_name, Exception &e)
+    : Exception(ExceptionType::AUTOLOAD,
+                "An error occurred while trying to automatically install the required extension '" + extension_name +
+                    "':\n" + e.RawMessage()),
+      wrapped_exception(e) {
 }
 
 SerializationException::SerializationException(const string &msg) : Exception(ExceptionType::SERIALIZATION, msg) {

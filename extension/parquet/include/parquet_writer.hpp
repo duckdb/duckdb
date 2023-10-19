@@ -15,6 +15,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/function/copy_function.hpp"
 #endif
 
 #include "column_writer.hpp"
@@ -75,7 +76,11 @@ public:
 		return *writer;
 	}
 
+	static CopyTypeSupport TypeIsSupported(const LogicalType &type);
+
 private:
+	static CopyTypeSupport DuckDBTypeToParquetTypeInternal(const LogicalType &duckdb_type,
+	                                                       duckdb_parquet::format::Type::type &type);
 	string file_name;
 	vector<LogicalType> sql_types;
 	vector<string> column_names;

@@ -1,0 +1,59 @@
+# name: test/sql/aggregate/external/simple_external_aggregate.test_slow
+# description: Test simple external aggregate
+# group: [external]
+
+load __TEST_DIR__/simple_external_aggregate.db
+
+statement ok
+pragma threads=4
+
+statement ok
+create table t1 (c0 bigint, c1 bigint, c2 bigint, c3 varchar)
+
+# materialized rows should be > 400MB (not including HT of ~50MB)
+# parallelize range using unions
+statement ok
+insert into t1 select range c0,
+                      range c1,
+                      range c2,
+                      concat(range::VARCHAR, repeat('0', 50)) c3
+from (
+    select * from (
+        select * from range(0, 1000000)
+        union all
+        select * from range(1000000, 2000000)
+        union all
+        select * from range(2000000, 3000000)
+        union all
+        select * from range(3000000, 4000000)
+    ) order by random()
+)
+
+# we don't want to compress to smaller sizes,
+# otherwise the size estimates (and therefore this test) won't test what we want it to
+statement ok
+set disabled_optimizers to 'compressed_materialization'
+
+# fairly high memory limit for a 400MB data set, but the out-of-core aggregate has a base memory consumption per thread
+# we can aggregate much more than fits in memory, but at low memory limits this is a bit more tricky
+# however, a large data set will make this test much slower
+statement ok
+pragma memory_limit='300MB'
+
+query I
+select count(*) from (select distinct * from t1)
+----
+4000000
+
+# add some strings that are longer than Storage::BLOCK_SIZE (another ~30MB, for a total of ~430MB)
+statement ok
+insert into t1 select range c0,
+                      range c1,
+                      range c2,
+                      concat(range::VARCHAR, repeat('0', 300000)) c3
+from range(100)
+
+query I
+select count(*) from (select distinct * from t1)
+----
+4000100

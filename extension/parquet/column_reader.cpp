@@ -243,6 +243,7 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChun
 void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 	dict_decoder.reset();
 	defined_decoder.reset();
+	bss_decoder.reset();
 	block.reset();
 	PageHeader page_hdr;
 	page_hdr.read(protocol);
@@ -443,6 +444,13 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		PrepareDeltaByteArray(*block);
 		break;
 	}
+	case Encoding::BYTE_STREAM_SPLIT: {
+		// Subtract 1 from length as the block is allocated with 1 extra byte,
+		// but the byte stream split encoder needs to know the correct data size.
+		bss_decoder = make_uniq<BssDecoder>(block->ptr, block->len - 1);
+		block->inc(block->len);
+		break;
+	}
 	case Encoding::PLAIN:
 		// nothing to do here, will be read directly below
 		break;
@@ -488,7 +496,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 
 		idx_t null_count = 0;
 
-		if ((dict_decoder || dbp_decoder || rle_decoder) && HasDefines()) {
+		if ((dict_decoder || dbp_decoder || rle_decoder || bss_decoder) && HasDefines()) {
 			// we need the null count because the dictionary offsets have no entries for nulls
 			for (idx_t i = 0; i < read_now; i++) {
 				if (define_out[i + result_offset] != max_define) {
@@ -507,13 +515,13 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			// TODO keep this in the state
 			auto read_buf = make_shared<ResizeableBuffer>();
 
-			switch (type.InternalType()) {
-			case PhysicalType::INT32:
+			switch (schema.type) {
+			case duckdb_parquet::format::Type::INT32:
 				read_buf->resize(reader.allocator, sizeof(int32_t) * (read_now - null_count));
 				dbp_decoder->GetBatch<int32_t>(read_buf->ptr, read_now - null_count);
 
 				break;
-			case PhysicalType::INT64:
+			case duckdb_parquet::format::Type::INT64:
 				read_buf->resize(reader.allocator, sizeof(int64_t) * (read_now - null_count));
 				dbp_decoder->GetBatch<int64_t>(read_buf->ptr, read_now - null_count);
 				break;
@@ -534,6 +542,23 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 		} else if (byte_array_data) {
 			// DELTA_BYTE_ARRAY or DELTA_LENGTH_BYTE_ARRAY
 			DeltaByteArray(define_out, read_now, filter, result_offset, result);
+		} else if (bss_decoder) {
+			auto read_buf = make_shared<ResizeableBuffer>();
+
+			switch (schema.type) {
+			case duckdb_parquet::format::Type::FLOAT:
+				read_buf->resize(reader.allocator, sizeof(float) * (read_now - null_count));
+				bss_decoder->GetBatch<float>(read_buf->ptr, read_now - null_count);
+				break;
+			case duckdb_parquet::format::Type::DOUBLE:
+				read_buf->resize(reader.allocator, sizeof(double) * (read_now - null_count));
+				bss_decoder->GetBatch<double>(read_buf->ptr, read_now - null_count);
+				break;
+			default:
+				throw std::runtime_error("BYTE_STREAM_SPLIT encoding is only supported for FLOAT or DOUBLE data");
+			}
+
+			Plain(read_buf, define_out, read_now, filter, result_offset, result);
 		} else {
 			PlainReference(block, result);
 			Plain(block, define_out, read_now, filter, result_offset, result);
@@ -1389,7 +1414,6 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 		return make_uniq<CallbackColumnReader<int32_t, date_t, ParquetIntToDate>>(reader, type_p, schema_p, file_idx_p,
 		                                                                          max_define, max_repeat);
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIME) {
 			if (schema_p.logicalType.TIME.unit.__isset.MILLIS) {
 				return make_uniq<CallbackColumnReader<int32_t, dtime_t, ParquetIntToTimeMs>>(
@@ -1408,6 +1432,21 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 			case ConvertedType::TIME_MILLIS:
 				return make_uniq<CallbackColumnReader<int32_t, dtime_t, ParquetIntToTimeMs>>(
+				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			default:
+				break;
+			}
+		}
+	case LogicalTypeId::TIME_TZ:
+		if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIME) {
+			if (schema_p.logicalType.TIME.unit.__isset.MICROS) {
+				return make_uniq<CallbackColumnReader<int64_t, dtime_tz_t, ParquetIntToTimeTZ>>(
+				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			}
+		} else if (schema_p.__isset.converted_type) {
+			switch (schema_p.converted_type) {
+			case ConvertedType::TIME_MICROS:
+				return make_uniq<CallbackColumnReader<int64_t, dtime_tz_t, ParquetIntToTimeTZ>>(
 				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 			default:
 				break;

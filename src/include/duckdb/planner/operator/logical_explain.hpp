@@ -32,8 +32,9 @@ public:
 	string logical_plan_opt;
 
 public:
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
+
 	idx_t EstimateCardinality(ClientContext &context) override {
 		return 3;
 	}

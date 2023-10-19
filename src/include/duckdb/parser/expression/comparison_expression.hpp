@@ -31,10 +31,8 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
 public:
 	template <class T, class BASE>
@@ -42,5 +40,8 @@ public:
 		return StringUtil::Format("(%s %s %s)", entry.left->ToString(), ExpressionTypeToOperator(entry.type),
 		                          entry.right->ToString());
 	}
+
+private:
+	explicit ComparisonExpression(ExpressionType type);
 };
 } // namespace duckdb

@@ -97,9 +97,9 @@ static string CreateDirRecursive(const vector<idx_t> &cols, const vector<string>
 	return path;
 }
 
-void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
-	auto &g = gstate.Cast<CopyToFunctionGlobalState>();
-	auto &l = lstate.Cast<CopyToFunctionLocalState>();
+SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &g = input.global_state.Cast<CopyToFunctionGlobalState>();
+	auto &l = input.local_state.Cast<CopyToFunctionLocalState>();
 
 	if (partition_output) {
 		auto &fs = FileSystem::GetFileSystem(context.client);
@@ -108,7 +108,7 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 		auto partition_key_map = l.part_buffer->GetReverseMap();
 
 		string trimmed_path = file_path;
-		StringUtil::RTrim(trimmed_path, fs.PathSeparator());
+		StringUtil::RTrim(trimmed_path, fs.PathSeparator(trimmed_path));
 
 		for (idx_t i = 0; i < partitions.size(); i++) {
 			string hive_path =
@@ -130,7 +130,7 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 			function.copy_to_finalize(context.client, *bind_data, *fun_data_global);
 		}
 
-		return;
+		return SinkCombineResultType::FINISHED;
 	}
 
 	if (function.copy_to_combine) {
@@ -141,11 +141,13 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 			function.copy_to_finalize(context.client, *bind_data, *l.global_state);
 		}
 	}
+
+	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                              GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<CopyToFunctionGlobalState>();
+                                              OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<CopyToFunctionGlobalState>();
 	if (per_thread_output || partition_output) {
 		// already happened in combine
 		return SinkFinalizeType::READY;

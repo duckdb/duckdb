@@ -2,6 +2,9 @@
 # description: Test BITSTRING_AGG operator
 # group: [aggregates]
 
+statement ok
+PRAGMA verify_external
+
 require skip_reload
 
 # test tinyints
@@ -183,7 +186,7 @@ SELECT BITSTRING_AGG(i) FROM null_table
 
 # test on csv files - csvs do not provide column statistics
 statement ok
-COPY (SELECT i FROM ints) TO '__TEST_DIR__/bitstring_agg.csv';
+COPY (SELECT i FROM ints) TO '__TEST_DIR__/bitstring_agg.csv' (HEADER 0);
 
 statement error
 SELECT BITSTRING_AGG(column0) FROM '__TEST_DIR__/bitstring_agg.csv';

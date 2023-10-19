@@ -2,10 +2,9 @@
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
 
 namespace duckdb {
 
@@ -16,9 +15,9 @@ TableDataWriter::TableDataWriter(TableCatalogEntry &table_p) : table(table_p.Cas
 TableDataWriter::~TableDataWriter() {
 }
 
-void TableDataWriter::WriteTableData() {
+void TableDataWriter::WriteTableData(Serializer &metadata_serializer) {
 	// start scanning the table and append the data to the uncompressed segments
-	table.GetStorage().Checkpoint(*this);
+	table.GetStorage().Checkpoint(*this, metadata_serializer);
 }
 
 CompressionType TableDataWriter::GetColumnCompressionType(idx_t i) {
@@ -31,22 +30,25 @@ void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_pt
 }
 
 SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager,
-                                                     TableCatalogEntry &table, MetaBlockWriter &table_data_writer,
-                                                     MetaBlockWriter &meta_data_writer)
-    : TableDataWriter(table), checkpoint_manager(checkpoint_manager), table_data_writer(table_data_writer),
-      meta_data_writer(meta_data_writer) {
+                                                     TableCatalogEntry &table, MetadataWriter &table_data_writer)
+    : TableDataWriter(table), checkpoint_manager(checkpoint_manager), table_data_writer(table_data_writer) {
 }
 
 unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup &row_group) {
 	return make_uniq<SingleFileRowGroupWriter>(table, checkpoint_manager.partial_block_manager, table_data_writer);
 }
 
-void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info) {
+void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info,
+                                              Serializer &metadata_serializer) {
 	// store the current position in the metadata writer
 	// this is where the row groups for this table start
-	auto pointer = table_data_writer.GetBlockPointer();
+	auto pointer = table_data_writer.GetMetaBlockPointer();
 
-	global_stats.Serialize(table_data_writer);
+	// Serialize statistics as a single unit
+	BinarySerializer stats_serializer(table_data_writer);
+	stats_serializer.Begin();
+	global_stats.Serialize(stats_serializer);
+	stats_serializer.End();
 
 	// now start writing the row group pointers to disk
 	table_data_writer.Write<uint64_t>(row_group_pointers.size());
@@ -56,23 +58,21 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 		if (row_group_count > total_rows) {
 			total_rows = row_group_count;
 		}
-		RowGroup::Serialize(row_group_pointer, table_data_writer);
+
+		// Each RowGroup is its own unit
+		BinarySerializer row_group_serializer(table_data_writer);
+		row_group_serializer.Begin();
+		RowGroup::Serialize(row_group_pointer, row_group_serializer);
+		row_group_serializer.End();
 	}
 
+	auto index_pointers = info->indexes.SerializeIndexes(table_data_writer);
+
+	// Now begin the metadata as a unit
 	// Pointer to the table itself goes to the metadata stream.
-	meta_data_writer.Write<block_id_t>(pointer.block_id);
-	meta_data_writer.Write<uint64_t>(pointer.offset);
-	meta_data_writer.Write<idx_t>(total_rows);
-
-	// Now we serialize indexes in the table_metadata_writer
-	vector<BlockPointer> index_pointers = info->indexes.SerializeIndexes(table_data_writer);
-
-	// Write-off to metadata block ids and offsets of indexes
-	meta_data_writer.Write<idx_t>(index_pointers.size());
-	for (auto &block_info : index_pointers) {
-		meta_data_writer.Write<idx_t>(block_info.block_id);
-		meta_data_writer.Write<idx_t>(block_info.offset);
-	}
+	metadata_serializer.WriteProperty(101, "table_pointer", pointer);
+	metadata_serializer.WriteProperty(102, "total_rows", total_rows);
+	metadata_serializer.WriteProperty(103, "index_pointers", index_pointers);
 }
 
 } // namespace duckdb

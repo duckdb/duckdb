@@ -13,5 +13,4 @@ multicolumn-param-bind-test
 numeric-test
 quotes-test
 result-conversions-test
-row-wise-fetching-test
 select-test

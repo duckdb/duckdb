@@ -7,21 +7,14 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/optimizer/join_order/join_node.hpp"
-#include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/optimizer/join_order/query_graph.hpp"
+
+#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 
 namespace duckdb {
 
-struct RelationAttributes {
-	string original_name;
-	// the relation columns used in join filters
-	// Needed when iterating over columns and initializing total domain values.
-	unordered_set<idx_t> columns;
-	double cardinality;
-};
+struct FilterInfo;
 
 struct RelationsToTDom {
 	//! column binding sets that are equivalent in a join plan.
@@ -33,17 +26,11 @@ struct RelationsToTDom {
 	idx_t tdom_no_hll;
 	bool has_tdom_hll;
 	vector<FilterInfo *> filters;
+	vector<string> column_names;
 
-	RelationsToTDom(column_binding_set_t column_binding_set)
+	RelationsToTDom(const column_binding_set_t &column_binding_set)
 	    : equivalent_relations(column_binding_set), tdom_hll(0), tdom_no_hll(NumericLimits<idx_t>::Maximum()),
 	      has_tdom_hll(false) {};
-};
-
-struct NodeOp {
-	unique_ptr<JoinNode> node;
-	LogicalOperator &op;
-
-	NodeOp(unique_ptr<JoinNode> node, LogicalOperator &op) : node(std::move(node)), op(op) {};
 };
 
 struct Subgraph2Denominator {
@@ -53,69 +40,56 @@ struct Subgraph2Denominator {
 	Subgraph2Denominator() : relations(), denom(1) {};
 };
 
+class CardinalityHelper {
+public:
+	CardinalityHelper() {
+	}
+	CardinalityHelper(double cardinality_before_filters, double filter_string)
+	    : cardinality_before_filters(cardinality_before_filters), filter_strength(filter_string) {};
+
+public:
+	double cardinality_before_filters;
+	double filter_strength;
+
+	vector<string> table_names_joined;
+	vector<string> column_names;
+};
+
 class CardinalityEstimator {
 public:
-	explicit CardinalityEstimator(ClientContext &context) : context(context) {
-	}
+	explicit CardinalityEstimator() {};
 
 private:
-	ClientContext &context;
-
-	//! A mapping of relation id -> RelationAttributes
-	unordered_map<idx_t, RelationAttributes> relation_attributes;
-	//! A mapping of (relation, bound_column) -> (actual table, actual column)
-	column_binding_map_t<ColumnBinding> relation_column_to_original_column;
-
 	vector<RelationsToTDom> relations_to_tdoms;
+	unordered_map<string, CardinalityHelper> relation_set_2_cardinality;
+	JoinRelationSetManager set_manager;
+	vector<RelationStats> relation_stats;
 
 public:
-	static constexpr double DEFAULT_SELECTIVITY = 0.2;
+	void RemoveEmptyTotalDomains();
+	void UpdateTotalDomains(optional_ptr<JoinRelationSet> set, RelationStats &stats);
+	void InitEquivalentRelations(const vector<unique_ptr<FilterInfo>> &filter_infos);
 
-	static void VerifySymmetry(JoinNode &result, JoinNode &entry);
+	void InitCardinalityEstimatorProps(optional_ptr<JoinRelationSet> set, RelationStats &stats);
 
-	//! given a binding of (relation, column) used for DP, and a (table, column) in that catalog
-	//! Add the key value entry into the relation_column_to_original_column
-	void AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value);
-	//! Add a column to the relation_to_columns map.
-	void AddColumnToRelationMap(idx_t table_index, idx_t column_index);
-	//! Dump all bindings in relation_column_to_original_column into the child_binding_map
-	// If you have a non-reorderable join, this function is used to keep track of bindings
-	// in the child join plan.
-	void CopyRelationMap(column_binding_map_t<ColumnBinding> &child_binding_map);
-	void MergeBindings(idx_t, idx_t relation_id, vector<column_binding_map_t<ColumnBinding>> &child_binding_maps);
-	void AddRelationColumnMapping(LogicalGet &get, idx_t relation_id);
+	//! cost model needs estimated cardinalities to the fraction since the formula captures
+	//! distinct count selectivities and multiplicities. Hence the template
+	template <class T>
+	T EstimateCardinalityWithSet(JoinRelationSet &new_set);
 
-	void InitTotalDomains();
-	void UpdateTotalDomains(JoinNode &node, LogicalOperator &op);
-	void InitEquivalentRelations(vector<unique_ptr<FilterInfo>> &filter_infos);
-
-	void InitCardinalityEstimatorProps(vector<NodeOp> &node_ops, vector<unique_ptr<FilterInfo>> &filter_infos);
-	double EstimateCardinalityWithSet(JoinRelationSet &new_set);
-	void EstimateBaseTableCardinality(JoinNode &node, LogicalOperator &op);
-	double EstimateCrossProduct(const JoinNode &left, const JoinNode &right);
-	static double ComputeCost(JoinNode &left, JoinNode &right, double expected_cardinality);
+	//! used for debugging.
+	void AddRelationNamesToTdoms(vector<RelationStats> &stats);
+	void PrintRelationToTdomInfo();
 
 private:
 	bool SingleColumnFilter(FilterInfo &filter_info);
-	//! Filter & bindings -> list of indexes into the equivalent_relations array.
-	// The column binding set at each index is an equivalence set.
 	vector<idx_t> DetermineMatchingEquivalentSets(FilterInfo *filter_info);
-
 	//! Given a filter, add the column bindings to the matching equivalent set at the index
 	//! given in matching equivalent sets.
 	//! If there are multiple equivalence sets, they are merged.
 	void AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets);
-
-	optional_ptr<TableFilterSet> GetTableFilters(LogicalOperator &op, idx_t table_index);
-
 	void AddRelationTdom(FilterInfo &filter_info);
 	bool EmptyFilter(FilterInfo &filter_info);
-
-	idx_t InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter &fil,
-	                            unique_ptr<BaseStatistics> base_stats);
-	idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &fil,
-	                           unique_ptr<BaseStatistics> base_stats);
-	idx_t InspectTableFilters(idx_t cardinality, LogicalOperator &op, TableFilterSet &table_filters, idx_t table_index);
 };
 
 } // namespace duckdb

@@ -2,7 +2,7 @@
     {
         "name": "@",
         "parameters": "x",
-        "description": "absolute value",
+        "description": "Absolute value",
         "example": "abs(-17.4)",
         "type": "scalar_function_set",
         "struct": "AbsOperatorFun",
@@ -11,7 +11,7 @@
     {
         "name": "**",
         "parameters": "x,y",
-        "description": "computes x to the power of y",
+        "description": "Computes x to the power of y",
         "example": "pow(2, 3)",
         "type": "scalar_function",
         "struct": "PowOperatorFun",
@@ -20,7 +20,7 @@
     {
         "name": "!__postfix",
         "parameters": "x",
-        "description": "factorial of x. Computes the product of the current integer and all integers below it",
+        "description": "Factorial of x. Computes the product of the current integer and all integers below it",
         "example": "4!",
         "type": "scalar_function",
         "struct": "FactorialOperatorFun",
@@ -29,49 +29,49 @@
     {
         "name": "acos",
         "parameters": "x",
-        "description": "computes the arccosine of x",
+        "description": "Computes the arccosine of x",
         "example": "acos(0.5)",
         "type": "scalar_function"
     },
     {
         "name": "asin",
         "parameters": "x",
-        "description": "computes the arcsine of x",
+        "description": "Computes the arcsine of x",
         "example": "asin(0.5)",
         "type": "scalar_function"
     },
     {
         "name": "atan",
         "parameters": "x",
-        "description": "computes the arctangent of x",
+        "description": "Computes the arctangent of x",
         "example": "atan(0.5)",
         "type": "scalar_function"
     },
     {
         "name": "atan2",
-        "parameters": "x,y",
-        "description": "computes the arctangent (x, y)",
-        "example": "atan2(0.5, 0.5)",
+        "parameters": "y,x",
+        "description": "Computes the arctangent (y, x)",
+        "example": "atan2(1.0, 0.0)",
         "type": "scalar_function"
     },
     {
         "name": "bit_count",
         "parameters": "x",
-        "description": "returns the number of bits that are set",
+        "description": "Returns the number of bits that are set",
         "example": "bit_count(31)",
         "type": "scalar_function_set"
     },
     {
         "name": "cbrt",
         "parameters": "x",
-        "description": "returns the cube root of x",
+        "description": "Returns the cube root of x",
         "example": "cbrt(8)",
         "type": "scalar_function"
     },
     {
         "name": "ceil",
         "parameters": "x",
-        "description": "rounds the number up",
+        "description": "Rounds the number up",
         "example": "ceil(17.4)",
         "type": "scalar_function_set",
         "aliases": ["ceiling"]
@@ -79,42 +79,42 @@
     {
         "name": "cos",
         "parameters": "x",
-        "description": "computes the cos of x",
+        "description": "Computes the cos of x",
         "example": "cos(90)",
         "type": "scalar_function"
     },
     {
         "name": "cot",
         "parameters": "x",
-        "description": "computes the cotangent of x",
+        "description": "Computes the cotangent of x",
         "example": "cot(0.5)",
         "type": "scalar_function"
     },
     {
         "name": "degrees",
         "parameters": "x",
-        "description": "converts radians to degrees",
+        "description": "Converts radians to degrees",
         "example": "degrees(pi())",
         "type": "scalar_function"
     },
     {
         "name": "even",
         "parameters": "x",
-        "description": "round to next even number by rounding away from zero.",
+        "description": "Rounds x to next even number by rounding away from zero",
         "example": "even(2.9)",
         "type": "scalar_function"
     },
     {
         "name": "exp",
         "parameters": "x",
-        "description": "computes e to the power of x",
+        "description": "Computes e to the power of x",
         "example": "exp(1)",
         "type": "scalar_function"
     },
     {
         "name": "floor",
         "parameters": "x",
-        "description": "rounds the number down",
+        "description": "Rounds the number down",
         "example": "floor(17.4)",
         "type": "scalar_function_set"
     },
@@ -145,14 +145,14 @@
     {
         "name": "gamma",
         "parameters": "x",
-        "description": "interpolation of (x-1) factorial (so decimal inputs are allowed)",
+        "description": "Interpolation of (x-1) factorial (so decimal inputs are allowed)",
         "example": "gamma(5.5)",
         "type": "scalar_function"
     },
     {
         "name": "greatest_common_divisor",
         "parameters": "x,y",
-        "description": "computes the greatest common divisor of x and y",
+        "description": "Computes the greatest common divisor of x and y",
         "example": "greatest_common_divisor(42, 57)",
         "type": "scalar_function_set",
         "aliases": ["gcd"]
@@ -160,7 +160,7 @@
     {
         "name": "least_common_multiple",
         "parameters": "x,y",
-        "description": "computes the least common multiple of x and y",
+        "description": "Computes the least common multiple of x and y",
         "example": "least_common_multiple(42, 57)",
         "type": "scalar_function_set",
         "aliases": ["lcm"]
@@ -168,7 +168,7 @@
     {
         "name": "lgamma",
         "parameters": "x",
-        "description": "computes the log of the gamma function.",
+        "description": "Computes the log of the gamma function",
         "example": "lgamma(2)",
         "type": "scalar_function",
         "struct": "LogGammaFun"
@@ -176,21 +176,21 @@
     {
         "name": "ln",
         "parameters": "x",
-        "description": "computes the natural logarithm of x",
+        "description": "Computes the natural logarithm of x",
         "example": "ln(2)",
         "type": "scalar_function"
     },
     {
         "name": "log2",
         "parameters": "x",
-        "description": "computes the 2-log of x",
+        "description": "Computes the 2-log of x",
         "example": "log2(8)",
         "type": "scalar_function"
     },
     {
         "name": "log10",
         "parameters": "x",
-        "description": "computes the 10-log of x",
+        "description": "Computes the 10-log of x",
         "example": "log10(1000)",
         "type": "scalar_function",
         "aliases": ["log"]
@@ -198,42 +198,42 @@
     {
         "name": "nextafter",
         "parameters": "x, y",
-        "description": "return the next floating point value after x in the direction of y",
+        "description": "Returns the next floating point value after x in the direction of y",
         "example": "nextafter(1::float, 2::float)",
         "type": "scalar_function_set",
         "struct": "NextAfterFun"
     },
     {
         "name": "pi",
-        "description": "returns the value of pi",
+        "description": "Returns the value of pi",
         "example": "pi()",
         "type": "scalar_function"
     },
     {
         "name": "radians",
         "parameters": "x",
-        "description": "converts degrees to radians",
+        "description": "Converts degrees to radians",
         "example": "radians(90)",
         "type": "scalar_function"
     },
     {
         "name": "round",
         "parameters": "x,precision",
-        "description": "round to s decimal places",
+        "description": "Rounds x to s decimal places",
         "example": "round(42.4332, 2)",
         "type": "scalar_function_set"
     },
     {
         "name": "sign",
         "parameters": "x",
-        "description": "returns the sign of x as -1, 0 or 1",
+        "description": "Returns the sign of x as -1, 0 or 1",
         "example": "sign(-349)",
         "type": "scalar_function_set"
     },
     {
         "name": "signbit",
         "parameters": "x",
-        "description": "returns whether the signbit is set or not",
+        "description": "Returns whether the signbit is set or not",
         "example": "signbit(-0.0)",
         "type": "scalar_function_set",
         "struct": "SignBitFun"
@@ -241,28 +241,28 @@
     {
         "name": "sin",
         "parameters": "x",
-        "description": "computes the sin of x",
+        "description": "Computes the sin of x",
         "example": "sin(90)",
         "type": "scalar_function"
     },
     {
         "name": "sqrt",
         "parameters": "x",
-        "description": "returns the square root of x",
+        "description": "Returns the square root of x",
         "example": "sqrt(4)",
         "type": "scalar_function"
     },
     {
         "name": "tan",
         "parameters": "x",
-        "description": "computes the tan of x",
+        "description": "Computes the tan of x",
         "example": "tan(90)",
         "type": "scalar_function"
     },
     {
         "name": "trunc",
         "parameters": "x",
-        "description": "truncates the number",
+        "description": "Truncates the number",
         "example": "trunc(17.4)",
         "type": "scalar_function_set"
     }

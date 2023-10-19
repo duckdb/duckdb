@@ -1,18 +1,18 @@
 #include "duckdb/catalog/catalog_set.hpp"
 
-#include "duckdb/catalog/duck_catalog.hpp"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
-#include "duckdb/common/serializer/buffered_serializer.hpp"
-#include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include "duckdb/catalog/dependency_manager.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/column_definition.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/catalog/mapping_value.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/catalog/mapping_value.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -252,15 +252,17 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	PutEntry(std::move(entry_index), std::move(value));
 
 	// serialize the AlterInfo into a temporary buffer
-	BufferedSerializer serializer;
-	serializer.WriteString(alter_info.GetColumnName());
-	alter_info.Serialize(serializer);
-	BinaryData serialized_alter = serializer.GetData();
+	MemoryStream stream;
+	BinarySerializer serializer(stream);
+	serializer.Begin();
+	serializer.WriteProperty(100, "column_name", alter_info.GetColumnName());
+	serializer.WriteProperty(101, "alter_info", &alter_info);
+	serializer.End();
 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
 		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-		dtransaction.PushCatalogEntry(*new_entry->child, serialized_alter.data.get(), serialized_alter.size);
+		dtransaction.PushCatalogEntry(*new_entry->child, stream.GetData(), stream.GetPosition());
 	}
 
 	// Check the dependency manager to verify that there are no conflicting dependencies with this alter
@@ -543,67 +545,6 @@ void CatalogSet::UpdateTimestamp(CatalogEntry &entry, transaction_t timestamp) {
 	mapping[entry.name]->timestamp = timestamp;
 }
 
-void CatalogSet::AdjustUserDependency(CatalogEntry &entry, ColumnDefinition &column, bool remove) {
-	auto user_type_catalog_p = EnumType::GetCatalog(column.Type());
-	if (!user_type_catalog_p) {
-		return;
-	}
-	auto &user_type_catalog = user_type_catalog_p->Cast<CatalogEntry>();
-	auto &dependency_manager = catalog.GetDependencyManager();
-	if (remove) {
-		dependency_manager.dependents_map[user_type_catalog].erase(*entry.parent);
-		dependency_manager.dependencies_map[*entry.parent].erase(user_type_catalog);
-	} else {
-		dependency_manager.dependents_map[user_type_catalog].insert(entry);
-		dependency_manager.dependencies_map[entry].insert(user_type_catalog);
-	}
-}
-
-void CatalogSet::AdjustDependency(CatalogEntry &entry, TableCatalogEntry &table, ColumnDefinition &column,
-                                  bool remove) {
-	bool found = false;
-	if (column.Type().id() == LogicalTypeId::ENUM) {
-		for (auto &old_column : table.GetColumns().Logical()) {
-			if (old_column.Name() == column.Name() && old_column.Type().id() != LogicalTypeId::ENUM) {
-				AdjustUserDependency(entry, column, remove);
-				found = true;
-			}
-		}
-		if (!found) {
-			AdjustUserDependency(entry, column, remove);
-		}
-	} else if (!(column.Type().GetAlias().empty())) {
-		auto alias = column.Type().GetAlias();
-		for (auto &old_column : table.GetColumns().Logical()) {
-			auto old_alias = old_column.Type().GetAlias();
-			if (old_column.Name() == column.Name() && old_alias != alias) {
-				AdjustUserDependency(entry, column, remove);
-				found = true;
-			}
-		}
-		if (!found) {
-			AdjustUserDependency(entry, column, remove);
-		}
-	}
-}
-
-void CatalogSet::AdjustTableDependencies(CatalogEntry &entry) {
-	if (entry.type == CatalogType::TABLE_ENTRY && entry.parent->type == CatalogType::TABLE_ENTRY) {
-		// If it's a table entry we have to check for possibly removing or adding user type dependencies
-		auto &old_table = entry.parent->Cast<TableCatalogEntry>();
-		auto &new_table = entry.Cast<TableCatalogEntry>();
-
-		for (idx_t i = 0; i < new_table.GetColumns().LogicalColumnCount(); i++) {
-			auto &new_column = new_table.GetColumnsMutable().GetColumnMutable(LogicalIndex(i));
-			AdjustDependency(entry, old_table, new_column, false);
-		}
-		for (idx_t i = 0; i < old_table.GetColumns().LogicalColumnCount(); i++) {
-			auto &old_column = old_table.GetColumnsMutable().GetColumnMutable(LogicalIndex(i));
-			AdjustDependency(entry, new_table, old_column, true);
-		}
-	}
-}
-
 void CatalogSet::Undo(CatalogEntry &entry) {
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	lock_guard<mutex> lock(catalog_lock);
@@ -613,8 +554,6 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 
 	// i.e. we have to place (entry) as (entry->parent) again
 	auto &to_be_removed_node = *entry.parent;
-
-	AdjustTableDependencies(entry);
 
 	if (!to_be_removed_node.deleted) {
 		// delete the entry from the dependency manager as well

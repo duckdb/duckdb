@@ -7,7 +7,8 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/queue.hpp"
-#include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 #include <algorithm>
 #include <stdlib.h>
@@ -34,8 +35,6 @@ inline interval_t operator+(const interval_t &lhs, const interval_t &rhs) {
 inline interval_t operator-(const interval_t &lhs, const interval_t &rhs) {
 	return Interval::FromMicro(Interval::GetMicro(lhs) - Interval::GetMicro(rhs));
 }
-
-using FrameBounds = std::pair<idx_t, idx_t>;
 
 template <typename SAVE_TYPE>
 struct QuantileState {
@@ -87,7 +86,7 @@ void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &pre
 	idx_t j = 0;
 
 	//  Copy overlapping indices
-	for (idx_t p = 0; p < (prev.second - prev.first); ++p) {
+	for (idx_t p = 0; p < (prev.end - prev.start); ++p) {
 		auto idx = index[p];
 
 		//  Shift down into any hole
@@ -96,7 +95,7 @@ void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &pre
 		}
 
 		//  Skip overlapping values
-		if (frame.first <= idx && idx < frame.second) {
+		if (frame.start <= idx && idx < frame.end) {
 			++j;
 		}
 	}
@@ -104,15 +103,15 @@ void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &pre
 	//  Insert new indices
 	if (j > 0) {
 		// Overlap: append the new ends
-		for (auto f = frame.first; f < prev.first; ++f, ++j) {
+		for (auto f = frame.start; f < prev.start; ++f, ++j) {
 			index[j] = f;
 		}
-		for (auto f = prev.second; f < frame.second; ++f, ++j) {
+		for (auto f = prev.end; f < frame.end; ++f, ++j) {
 			index[j] = f;
 		}
 	} else {
 		//  No overlap: overwrite with new values
-		for (auto f = frame.first; f < frame.second; ++f, ++j) {
+		for (auto f = frame.start; f < frame.end; ++f, ++j) {
 			index[j] = f;
 		}
 	}
@@ -122,17 +121,17 @@ static idx_t ReplaceIndex(idx_t *index, const FrameBounds &frame, const FrameBou
 	D_ASSERT(index);
 
 	idx_t j = 0;
-	for (idx_t p = 0; p < (prev.second - prev.first); ++p) {
+	for (idx_t p = 0; p < (prev.end - prev.start); ++p) {
 		auto idx = index[p];
 		if (j != p) {
 			break;
 		}
 
-		if (frame.first <= idx && idx < frame.second) {
+		if (frame.start <= idx && idx < frame.end) {
 			++j;
 		}
 	}
-	index[j] = frame.second - 1;
+	index[j] = frame.end - 1;
 
 	return j;
 }
@@ -289,12 +288,40 @@ struct QuantileCompare {
 	}
 };
 
+//	Avoid using naked Values in inner loops...
+struct QuantileValue {
+	explicit QuantileValue(const Value &v) : val(v), dbl(v.GetValue<double>()) {
+		const auto &type = val.type();
+		switch (type.id()) {
+		case LogicalTypeId::DECIMAL: {
+			integral = IntegralValue::Get(v);
+			scaling = Hugeint::POWERS_OF_TEN[DecimalType::GetScale(type)];
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
+	Value val;
+
+	//	DOUBLE
+	double dbl;
+
+	//	DECIMAL
+	hugeint_t integral;
+	hugeint_t scaling;
+};
+
+bool operator==(const QuantileValue &x, const QuantileValue &y) {
+	return x.val == y.val;
+}
+
 // Continuous interpolation
 template <bool DISCRETE>
 struct Interpolator {
-	Interpolator(const Value &q, const idx_t n_p, const bool desc_p)
-	    : desc(desc_p), RN((double)(n_p - 1) * q.GetValue<double>()), FRN(floor(RN)), CRN(ceil(RN)), begin(0),
-	      end(n_p) {
+	Interpolator(const QuantileValue &q, const idx_t n_p, const bool desc_p)
+	    : desc(desc_p), RN((double)(n_p - 1) * q.dbl), FRN(floor(RN)), CRN(ceil(RN)), begin(0), end(n_p) {
 	}
 
 	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
@@ -337,21 +364,20 @@ struct Interpolator {
 // Discrete "interpolation"
 template <>
 struct Interpolator<true> {
-	static inline idx_t Index(const Value &q, const idx_t n) {
+	static inline idx_t Index(const QuantileValue &q, const idx_t n) {
 		idx_t floored;
-		const auto &type = q.type();
-		switch (type.id()) {
+		switch (q.val.type().id()) {
 		case LogicalTypeId::DECIMAL: {
 			//	Integer arithmetic for accuracy
-			const auto integral = IntegralValue::Get(q);
-			const auto scaling = Hugeint::POWERS_OF_TEN[DecimalType::GetScale(type)];
+			const auto integral = q.integral;
+			const auto scaling = q.scaling;
 			const auto scaled_q = DecimalMultiplyOverflowCheck::Operation<hugeint_t, hugeint_t, hugeint_t>(n, integral);
 			const auto scaled_n = DecimalMultiplyOverflowCheck::Operation<hugeint_t, hugeint_t, hugeint_t>(n, scaling);
 			floored = Cast::Operation<hugeint_t, idx_t>((scaled_n - scaled_q) / scaling);
 			break;
 		}
 		default:
-			const auto scaled_q = (double)(n * q.GetValue<double>());
+			const auto scaled_q = (double)(n * q.dbl);
 			floored = floor(n - scaled_q);
 			break;
 		}
@@ -359,7 +385,7 @@ struct Interpolator<true> {
 		return MaxValue<idx_t>(1, n - floored) - 1;
 	}
 
-	Interpolator(const Value &q, const idx_t n_p, bool desc_p)
+	Interpolator(const QuantileValue &q, const idx_t n_p, bool desc_p)
 	    : desc(desc_p), FRN(Index(q, n_p)), CRN(FRN), begin(0), end(n_p) {
 	}
 
@@ -417,19 +443,22 @@ inline Value QuantileAbs(const Value &v) {
 }
 
 struct QuantileBindData : public FunctionData {
+	QuantileBindData() {
+	}
 
 	explicit QuantileBindData(const Value &quantile_p)
-	    : quantiles(1, QuantileAbs(quantile_p)), order(1, 0), desc(quantile_p < 0) {
+	    : quantiles(1, QuantileValue(QuantileAbs(quantile_p))), order(1, 0), desc(quantile_p < 0) {
 	}
 
 	explicit QuantileBindData(const vector<Value> &quantiles_p) {
+		vector<Value> normalised;
 		size_t pos = 0;
 		size_t neg = 0;
 		for (idx_t i = 0; i < quantiles_p.size(); ++i) {
 			const auto &q = quantiles_p[i];
 			pos += (q > 0);
 			neg += (q < 0);
-			quantiles.emplace_back(QuantileAbs(q));
+			normalised.emplace_back(QuantileAbs(q));
 			order.push_back(i);
 		}
 		if (pos && neg) {
@@ -437,8 +466,12 @@ struct QuantileBindData : public FunctionData {
 		}
 		desc = (neg > 0);
 
-		IndirectLess<Value> lt(quantiles.data());
+		IndirectLess<Value> lt(normalised.data());
 		std::sort(order.begin(), order.end(), lt);
+
+		for (const auto &q : normalised) {
+			quantiles.emplace_back(QuantileValue(q));
+		}
 	}
 
 	QuantileBindData(const QuantileBindData &other) : order(other.order), desc(other.desc) {
@@ -456,7 +489,36 @@ struct QuantileBindData : public FunctionData {
 		return desc == other.desc && quantiles == other.quantiles && order == other.order;
 	}
 
-	vector<Value> quantiles;
+	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                      const AggregateFunction &function) {
+		auto &bind_data = bind_data_p->Cast<QuantileBindData>();
+		vector<Value> raw;
+		for (const auto &q : bind_data.quantiles) {
+			raw.emplace_back(q.val);
+		}
+		serializer.WriteProperty(100, "quantiles", raw);
+		serializer.WriteProperty(101, "order", bind_data.order);
+		serializer.WriteProperty(102, "desc", bind_data.desc);
+	}
+
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, AggregateFunction &function) {
+		auto result = make_uniq<QuantileBindData>();
+		vector<Value> raw;
+		deserializer.ReadProperty(100, "quantiles", raw);
+		deserializer.ReadProperty(101, "order", result->order);
+		deserializer.ReadProperty(102, "desc", result->desc);
+		for (const auto &r : raw) {
+			result->quantiles.emplace_back(QuantileValue(r));
+		}
+		return std::move(result);
+	}
+
+	static void SerializeDecimal(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                             const AggregateFunction &function) {
+		throw NotImplementedException("FIXME: serializing quantiles with decimals is not supported right now");
+	}
+
+	vector<QuantileValue> quantiles;
 	vector<idx_t> order;
 	bool desc;
 };
@@ -535,7 +597,7 @@ struct QuantileScalarOperation : public QuantileOperation {
 
 		//  Lazily initialise frame state
 		auto prev_pos = state.pos;
-		state.SetPos(frame.second - frame.first);
+		state.SetPos(frame.end - frame.start);
 
 		auto index = state.w.data();
 		D_ASSERT(index);
@@ -544,14 +606,14 @@ struct QuantileScalarOperation : public QuantileOperation {
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
 		// Find the two positions needed
-		const auto q = bind_data.quantiles[0];
+		const auto &q = bind_data.quantiles[0];
 
 		bool replace = false;
-		if (frame.first == prev.first + 1 && frame.second == prev.second + 1) {
+		if (frame.start == prev.start + 1 && frame.end == prev.end + 1) {
 			//  Fixed frame size
 			const auto j = ReplaceIndex(index, frame, prev);
 			//	We can only replace if the number of NULLs has not changed
-			if (included.AllValid() || included(prev.first) == included(prev.second)) {
+			if (included.AllValid() || included(prev.start) == included(prev.end)) {
 				Interpolator<DISCRETE> interp(q, prev_pos, false);
 				replace = CanReplace(index, data, j, interp.FRN, interp.CRN, included);
 				if (replace) {
@@ -695,7 +757,7 @@ struct QuantileListOperation : public QuantileOperation {
 
 		//  Lazily initialise frame state
 		auto prev_pos = state.pos;
-		state.SetPos(frame.second - frame.first);
+		state.SetPos(frame.end - frame.start);
 
 		auto index = state.w.data();
 
@@ -706,11 +768,11 @@ struct QuantileListOperation : public QuantileOperation {
 		// then Q25 must be recomputed, but Q50 and Q75 are unaffected.
 		// For a single element list, this reduces to the scalar case.
 		std::pair<idx_t, idx_t> replaceable {state.pos, 0};
-		if (frame.first == prev.first + 1 && frame.second == prev.second + 1) {
+		if (frame.start == prev.start + 1 && frame.end == prev.end + 1) {
 			//  Fixed frame size
 			const auto j = ReplaceIndex(index, frame, prev);
 			//	We can only replace if the number of NULLs has not changed
-			if (included.AllValid() || included(prev.first) == included(prev.second)) {
+			if (included.AllValid() || included(prev.start) == included(prev.end)) {
 				for (const auto &q : bind_data.order) {
 					const auto &quantile = bind_data.quantiles[q];
 					Interpolator<DISCRETE> interp(quantile, prev_pos, false);
@@ -1019,7 +1081,11 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 			return;
 		}
 		using SAVE_TYPE = typename STATE::SaveType;
-		Interpolator<false> interp(0.5, state.v.size(), false);
+		D_ASSERT(finalize_data.input.bind_data);
+		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
+		D_ASSERT(bind_data.quantiles.size() == 1);
+		const auto &q = bind_data.quantiles[0];
+		Interpolator<false> interp(q, state.v.size(), false);
 		const auto med = interp.template Operation<SAVE_TYPE, MEDIAN_TYPE>(state.v.data(), finalize_data.result);
 
 		MadAccessor<SAVE_TYPE, T, MEDIAN_TYPE> accessor(med);
@@ -1028,8 +1094,8 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &, STATE &state, const FrameBounds &frame, const FrameBounds &prev,
-	                   Vector &result, idx_t ridx, idx_t bias) {
+	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds &frame,
+	                   const FrameBounds &prev, Vector &result, idx_t ridx, idx_t bias) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
@@ -1037,7 +1103,7 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 
 		//  Lazily initialise frame state
 		auto prev_pos = state.pos;
-		state.SetPos(frame.second - frame.first);
+		state.SetPos(frame.end - frame.start);
 
 		auto index = state.w.data();
 		D_ASSERT(index);
@@ -1057,14 +1123,17 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 		std::partition(index2, index2 + state.pos, included);
 
 		// Find the two positions needed for the median
-		const float q = 0.5;
+		D_ASSERT(aggr_input_data.bind_data);
+		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
+		D_ASSERT(bind_data.quantiles.size() == 1);
+		const auto &q = bind_data.quantiles[0];
 
 		bool replace = false;
-		if (frame.first == prev.first + 1 && frame.second == prev.second + 1) {
+		if (frame.start == prev.start + 1 && frame.end == prev.end + 1) {
 			//  Fixed frame size
 			const auto j = ReplaceIndex(index, frame, prev);
 			//	We can only replace if the number of NULLs has not changed
-			if (included.AllValid() || included(prev.first) == included(prev.second)) {
+			if (included.AllValid() || included(prev.start) == included(prev.end)) {
 				Interpolator<false> interp(q, prev_pos, false);
 				replace = CanReplace(index, data, j, interp.FRN, interp.CRN, included);
 				if (replace) {
@@ -1102,12 +1171,18 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 	}
 };
 
+unique_ptr<FunctionData> BindMedian(ClientContext &context, AggregateFunction &function,
+                                    vector<unique_ptr<Expression>> &arguments) {
+	return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
+}
+
 template <typename INPUT_TYPE, typename MEDIAN_TYPE, typename TARGET_TYPE>
 AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const LogicalType &input_type,
                                                                    const LogicalType &target_type) {
 	using STATE = QuantileState<INPUT_TYPE>;
 	using OP = MedianAbsoluteDeviationOperation<MEDIAN_TYPE>;
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
+	fun.bind = BindMedian;
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, TARGET_TYPE, OP>;
 	return fun;
@@ -1151,44 +1226,14 @@ AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType 
 	}
 }
 
-static void QuantileSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const AggregateFunction &function) {
-	D_ASSERT(bind_data_p);
-	auto bind_data = dynamic_cast<const QuantileBindData *>(bind_data_p);
-	D_ASSERT(bind_data);
-	writer.WriteRegularSerializableList<Value>(bind_data->quantiles);
-	writer.WriteList<idx_t>(bind_data->order);
-	writer.WriteField<bool>(bind_data->desc);
-}
-
-unique_ptr<FunctionData> QuantileDeserialize(PlanDeserializationState &state, FieldReader &reader,
-                                             AggregateFunction &bound_function) {
-	auto quantiles = reader.ReadRequiredSerializableList<Value, Value>();
-	auto bind_data = make_uniq<QuantileBindData>(quantiles);
-	bind_data->quantiles = quantiles;
-	bind_data->order = reader.ReadRequiredList<idx_t>();
-	bind_data->desc = reader.ReadRequired<bool>();
-
-	return std::move(bind_data);
-}
-
-static void QuantileDecimalSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
-                                     const AggregateFunction &function) {
-	throw NotImplementedException("FIXME: serializing quantiles with decimals is not supported right now");
-}
-
-unique_ptr<FunctionData> BindMedian(ClientContext &context, AggregateFunction &function,
-                                    vector<unique_ptr<Expression>> &arguments) {
-	return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
-}
-
 unique_ptr<FunctionData> BindMedianDecimal(ClientContext &context, AggregateFunction &function,
                                            vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = BindMedian(context, function, arguments);
 
 	function = GetDiscreteQuantileAggregateFunction(arguments[0]->return_type);
 	function.name = "median";
-	function.serialize = QuantileDecimalSerialize;
-	function.deserialize = QuantileDeserialize;
+	function.serialize = QuantileBindData::SerializeDecimal;
+	function.deserialize = QuantileBindData::Deserialize;
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return bind_data;
 }
@@ -1198,7 +1243,7 @@ unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(ClientContext &conte
 	function = GetMedianAbsoluteDeviationAggregateFunction(arguments[0]->return_type);
 	function.name = "mad";
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-	return nullptr;
+	return BindMedian(context, function, arguments);
 }
 
 static const Value &CheckQuantile(const Value &quantile_val) {
@@ -1243,8 +1288,8 @@ unique_ptr<FunctionData> BindDiscreteQuantileDecimal(ClientContext &context, Agg
 	auto bind_data = BindQuantile(context, function, arguments);
 	function = GetDiscreteQuantileAggregateFunction(arguments[0]->return_type);
 	function.name = "quantile_disc";
-	function.serialize = QuantileDecimalSerialize;
-	function.deserialize = QuantileDeserialize;
+	function.serialize = QuantileBindData::SerializeDecimal;
+	function.deserialize = QuantileBindData::Deserialize;
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return bind_data;
 }
@@ -1254,8 +1299,8 @@ unique_ptr<FunctionData> BindDiscreteQuantileDecimalList(ClientContext &context,
 	auto bind_data = BindQuantile(context, function, arguments);
 	function = GetDiscreteQuantileListAggregateFunction(arguments[0]->return_type);
 	function.name = "quantile_disc";
-	function.serialize = QuantileDecimalSerialize;
-	function.deserialize = QuantileDeserialize;
+	function.serialize = QuantileBindData::SerializeDecimal;
+	function.deserialize = QuantileBindData::Deserialize;
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return bind_data;
 }
@@ -1265,8 +1310,8 @@ unique_ptr<FunctionData> BindContinuousQuantileDecimal(ClientContext &context, A
 	auto bind_data = BindQuantile(context, function, arguments);
 	function = GetContinuousQuantileAggregateFunction(arguments[0]->return_type);
 	function.name = "quantile_cont";
-	function.serialize = QuantileDecimalSerialize;
-	function.deserialize = QuantileDeserialize;
+	function.serialize = QuantileBindData::SerializeDecimal;
+	function.deserialize = QuantileBindData::Deserialize;
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return bind_data;
 }
@@ -1276,8 +1321,8 @@ unique_ptr<FunctionData> BindContinuousQuantileDecimalList(ClientContext &contex
 	auto bind_data = BindQuantile(context, function, arguments);
 	function = GetContinuousQuantileListAggregateFunction(arguments[0]->return_type);
 	function.name = "quantile_cont";
-	function.serialize = QuantileDecimalSerialize;
-	function.deserialize = QuantileDeserialize;
+	function.serialize = QuantileBindData::SerializeDecimal;
+	function.deserialize = QuantileBindData::Deserialize;
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return bind_data;
 }
@@ -1296,16 +1341,16 @@ AggregateFunction GetMedianAggregate(const LogicalType &type) {
 	auto fun = CanInterpolate(type) ? GetContinuousQuantileAggregateFunction(type)
 	                                : GetDiscreteQuantileAggregateFunction(type);
 	fun.bind = BindMedian;
-	fun.serialize = QuantileSerialize;
-	fun.deserialize = QuantileDeserialize;
+	fun.serialize = QuantileBindData::Serialize;
+	fun.deserialize = QuantileBindData::Deserialize;
 	return fun;
 }
 
 AggregateFunction GetDiscreteQuantileAggregate(const LogicalType &type) {
 	auto fun = GetDiscreteQuantileAggregateFunction(type);
 	fun.bind = BindQuantile;
-	fun.serialize = QuantileSerialize;
-	fun.deserialize = QuantileDeserialize;
+	fun.serialize = QuantileBindData::Serialize;
+	fun.deserialize = QuantileBindData::Deserialize;
 	// temporarily push an argument so we can bind the actual quantile
 	fun.arguments.emplace_back(LogicalType::DOUBLE);
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
@@ -1315,8 +1360,8 @@ AggregateFunction GetDiscreteQuantileAggregate(const LogicalType &type) {
 AggregateFunction GetDiscreteQuantileListAggregate(const LogicalType &type) {
 	auto fun = GetDiscreteQuantileListAggregateFunction(type);
 	fun.bind = BindQuantile;
-	fun.serialize = QuantileSerialize;
-	fun.deserialize = QuantileDeserialize;
+	fun.serialize = QuantileBindData::Serialize;
+	fun.deserialize = QuantileBindData::Deserialize;
 	// temporarily push an argument so we can bind the actual quantile
 	auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
 	fun.arguments.push_back(list_of_double);
@@ -1327,8 +1372,8 @@ AggregateFunction GetDiscreteQuantileListAggregate(const LogicalType &type) {
 AggregateFunction GetContinuousQuantileAggregate(const LogicalType &type) {
 	auto fun = GetContinuousQuantileAggregateFunction(type);
 	fun.bind = BindQuantile;
-	fun.serialize = QuantileSerialize;
-	fun.deserialize = QuantileDeserialize;
+	fun.serialize = QuantileBindData::Serialize;
+	fun.deserialize = QuantileBindData::Deserialize;
 	// temporarily push an argument so we can bind the actual quantile
 	fun.arguments.emplace_back(LogicalType::DOUBLE);
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
@@ -1338,8 +1383,8 @@ AggregateFunction GetContinuousQuantileAggregate(const LogicalType &type) {
 AggregateFunction GetContinuousQuantileListAggregate(const LogicalType &type) {
 	auto fun = GetContinuousQuantileListAggregateFunction(type);
 	fun.bind = BindQuantile;
-	fun.serialize = QuantileSerialize;
-	fun.deserialize = QuantileDeserialize;
+	fun.serialize = QuantileBindData::Serialize;
+	fun.deserialize = QuantileBindData::Deserialize;
 	// temporarily push an argument so we can bind the actual quantile
 	auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
 	fun.arguments.push_back(list_of_double);
@@ -1351,8 +1396,8 @@ AggregateFunction GetQuantileDecimalAggregate(const vector<LogicalType> &argumen
                                               bind_aggregate_function_t bind) {
 	AggregateFunction fun(arguments, return_type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, bind);
 	fun.bind = bind;
-	fun.serialize = QuantileSerialize;
-	fun.deserialize = QuantileDeserialize;
+	fun.serialize = QuantileBindData::Serialize;
+	fun.deserialize = QuantileBindData::Deserialize;
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return fun;
 }

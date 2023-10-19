@@ -20,13 +20,14 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 
 namespace duckdb {
 
 bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 	Connection con(database.GetDatabase());
-	auto initial_reader = make_uniq<BufferedFileReader>(FileSystem::Get(database), path.c_str(), con.context.get());
-	if (initial_reader->Finished()) {
+	auto initial_source = make_uniq<BufferedFileReader>(FileSystem::Get(database), path.c_str());
+	if (initial_source->Finished()) {
 		// WAL is empty
 		return false;
 	}
@@ -35,33 +36,39 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 
 	// first deserialize the WAL to look for a checkpoint flag
 	// if there is a checkpoint flag, we might have already flushed the contents of the WAL to disk
-	ReplayState checkpoint_state(database, *con.context, *initial_reader);
-	initial_reader->SetCatalog(checkpoint_state.catalog);
+	ReplayState checkpoint_state(database, *con.context);
 	checkpoint_state.deserialize_only = true;
 	try {
 		while (true) {
 			// read the current entry
-			WALType entry_type = initial_reader->Read<WALType>();
+			BinaryDeserializer deserializer(*initial_source);
+			deserializer.Begin();
+			auto entry_type = deserializer.ReadProperty<WALType>(100, "wal_type");
 			if (entry_type == WALType::WAL_FLUSH) {
+				deserializer.End();
 				// check if the file is exhausted
-				if (initial_reader->Finished()) {
+				if (initial_source->Finished()) {
 					// we finished reading the file: break
 					break;
 				}
 			} else {
 				// replay the entry
-				checkpoint_state.ReplayEntry(entry_type);
+				checkpoint_state.ReplayEntry(entry_type, deserializer);
+				deserializer.End();
 			}
 		}
-	} catch (std::exception &ex) { // LCOV_EXCL_START
-		Printer::Print(StringUtil::Format("Exception in WAL playback during initial read: %s\n", ex.what()));
+	} catch (SerializationException &ex) { // LCOV_EXCL_START
+		                                   // serialization exception - torn WAL
+		                                   // continue reading
+	} catch (std::exception &ex) {
+		Printer::PrintF("Exception in WAL playback during initial read: %s\n", ex.what());
 		return false;
 	} catch (...) {
 		Printer::Print("Unknown Exception in WAL playback during initial read");
 		return false;
 	} // LCOV_EXCL_STOP
-	initial_reader.reset();
-	if (checkpoint_state.checkpoint_id != INVALID_BLOCK) {
+	initial_source.reset();
+	if (checkpoint_state.checkpoint_id.IsValid()) {
 		// there is a checkpoint flag: check if we need to deserialize the WAL
 		auto &manager = database.GetStorageManager();
 		if (manager.IsCheckpointClean(checkpoint_state.checkpoint_id)) {
@@ -72,9 +79,8 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 	}
 
 	// we need to recover from the WAL: actually set up the replay state
-	BufferedFileReader reader(FileSystem::Get(database), path.c_str(), con.context.get());
-	reader.SetCatalog(checkpoint_state.catalog);
-	ReplayState state(database, *con.context, reader);
+	BufferedFileReader reader(FileSystem::Get(database), path.c_str());
+	ReplayState state(database, *con.context);
 
 	// replay the WAL
 	// note that everything is wrapped inside a try/catch block here
@@ -83,25 +89,30 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 	try {
 		while (true) {
 			// read the current entry
-			WALType entry_type = reader.Read<WALType>();
+			BinaryDeserializer deserializer(reader);
+			deserializer.Begin();
+			auto entry_type = deserializer.ReadProperty<WALType>(100, "wal_type");
 			if (entry_type == WALType::WAL_FLUSH) {
-				// flush: commit the current transaction
+				deserializer.End();
 				con.Commit();
 				// check if the file is exhausted
 				if (reader.Finished()) {
 					// we finished reading the file: break
 					break;
 				}
-				// otherwise we keep on reading
 				con.BeginTransaction();
 			} else {
 				// replay the entry
-				state.ReplayEntry(entry_type);
+				state.ReplayEntry(entry_type, deserializer);
+				deserializer.End();
 			}
 		}
-	} catch (std::exception &ex) { // LCOV_EXCL_START
+	} catch (SerializationException &ex) { // LCOV_EXCL_START
+		// serialization error during WAL replay: rollback
+		con.Rollback();
+	} catch (std::exception &ex) {
 		// FIXME: this should report a proper warning in the connection
-		Printer::Print(StringUtil::Format("Exception in WAL playback: %s\n", ex.what()));
+		Printer::PrintF("Exception in WAL playback: %s\n", ex.what());
 		// exception thrown in WAL replay: rollback
 		con.Rollback();
 	} catch (...) {
@@ -115,76 +126,76 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 //===--------------------------------------------------------------------===//
 // Replay Entries
 //===--------------------------------------------------------------------===//
-void ReplayState::ReplayEntry(WALType entry_type) {
+void ReplayState::ReplayEntry(WALType entry_type, BinaryDeserializer &deserializer) {
 	switch (entry_type) {
 	case WALType::CREATE_TABLE:
-		ReplayCreateTable();
+		ReplayCreateTable(deserializer);
 		break;
 	case WALType::DROP_TABLE:
-		ReplayDropTable();
+		ReplayDropTable(deserializer);
 		break;
 	case WALType::ALTER_INFO:
-		ReplayAlter();
+		ReplayAlter(deserializer);
 		break;
 	case WALType::CREATE_VIEW:
-		ReplayCreateView();
+		ReplayCreateView(deserializer);
 		break;
 	case WALType::DROP_VIEW:
-		ReplayDropView();
+		ReplayDropView(deserializer);
 		break;
 	case WALType::CREATE_SCHEMA:
-		ReplayCreateSchema();
+		ReplayCreateSchema(deserializer);
 		break;
 	case WALType::DROP_SCHEMA:
-		ReplayDropSchema();
+		ReplayDropSchema(deserializer);
 		break;
 	case WALType::CREATE_SEQUENCE:
-		ReplayCreateSequence();
+		ReplayCreateSequence(deserializer);
 		break;
 	case WALType::DROP_SEQUENCE:
-		ReplayDropSequence();
+		ReplayDropSequence(deserializer);
 		break;
 	case WALType::SEQUENCE_VALUE:
-		ReplaySequenceValue();
+		ReplaySequenceValue(deserializer);
 		break;
 	case WALType::CREATE_MACRO:
-		ReplayCreateMacro();
+		ReplayCreateMacro(deserializer);
 		break;
 	case WALType::DROP_MACRO:
-		ReplayDropMacro();
+		ReplayDropMacro(deserializer);
 		break;
 	case WALType::CREATE_TABLE_MACRO:
-		ReplayCreateTableMacro();
+		ReplayCreateTableMacro(deserializer);
 		break;
 	case WALType::DROP_TABLE_MACRO:
-		ReplayDropTableMacro();
+		ReplayDropTableMacro(deserializer);
 		break;
 	case WALType::CREATE_INDEX:
-		ReplayCreateIndex();
+		ReplayCreateIndex(deserializer);
 		break;
 	case WALType::DROP_INDEX:
-		ReplayDropIndex();
+		ReplayDropIndex(deserializer);
 		break;
 	case WALType::USE_TABLE:
-		ReplayUseTable();
+		ReplayUseTable(deserializer);
 		break;
 	case WALType::INSERT_TUPLE:
-		ReplayInsert();
+		ReplayInsert(deserializer);
 		break;
 	case WALType::DELETE_TUPLE:
-		ReplayDelete();
+		ReplayDelete(deserializer);
 		break;
 	case WALType::UPDATE_TUPLE:
-		ReplayUpdate();
+		ReplayUpdate(deserializer);
 		break;
 	case WALType::CHECKPOINT:
-		ReplayCheckpoint();
+		ReplayCheckpoint(deserializer);
 		break;
 	case WALType::CREATE_TYPE:
-		ReplayCreateType();
+		ReplayCreateType(deserializer);
 		break;
 	case WALType::DROP_TYPE:
-		ReplayDropType();
+		ReplayDropType(deserializer);
 		break;
 	default:
 		throw InternalException("Invalid WAL entry type!");
@@ -194,14 +205,12 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 //===--------------------------------------------------------------------===//
 // Replay Table
 //===--------------------------------------------------------------------===//
-void ReplayState::ReplayCreateTable() {
-	auto info = TableCatalogEntry::Deserialize(source, context);
+void ReplayState::ReplayCreateTable(BinaryDeserializer &deserializer) {
+	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "table");
 	if (deserialize_only) {
 		return;
 	}
-
 	// bind the constraints to the table again
-
 	auto binder = Binder::CreateBinder(context);
 	auto &schema = catalog.GetSchema(context, info->schema);
 	auto bound_info = binder->BindCreateTableInfo(std::move(info), schema);
@@ -209,12 +218,13 @@ void ReplayState::ReplayCreateTable() {
 	catalog.CreateTable(context, *bound_info);
 }
 
-void ReplayState::ReplayDropTable() {
+void ReplayState::ReplayDropTable(BinaryDeserializer &deserializer) {
+
 	DropInfo info;
 
 	info.type = CatalogType::TABLE_ENTRY;
-	info.schema = source.Read<string>();
-	info.name = source.Read<string>();
+	info.schema = deserializer.ReadProperty<string>(101, "schema");
+	info.name = deserializer.ReadProperty<string>(102, "name");
 	if (deserialize_only) {
 		return;
 	}
@@ -222,31 +232,32 @@ void ReplayState::ReplayDropTable() {
 	catalog.DropEntry(context, info);
 }
 
-void ReplayState::ReplayAlter() {
-	auto info = AlterInfo::Deserialize(source);
+void ReplayState::ReplayAlter(BinaryDeserializer &deserializer) {
+
+	auto info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "info");
+	auto &alter_info = info->Cast<AlterInfo>();
 	if (deserialize_only) {
 		return;
 	}
-	catalog.Alter(context, *info);
+	catalog.Alter(context, alter_info);
 }
 
 //===--------------------------------------------------------------------===//
 // Replay View
 //===--------------------------------------------------------------------===//
-void ReplayState::ReplayCreateView() {
-	auto entry = ViewCatalogEntry::Deserialize(source, context);
+void ReplayState::ReplayCreateView(BinaryDeserializer &deserializer) {
+	auto entry = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "view");
 	if (deserialize_only) {
 		return;
 	}
-
-	catalog.CreateView(context, *entry);
+	catalog.CreateView(context, entry->Cast<CreateViewInfo>());
 }
 
-void ReplayState::ReplayDropView() {
+void ReplayState::ReplayDropView(BinaryDeserializer &deserializer) {
 	DropInfo info;
 	info.type = CatalogType::VIEW_ENTRY;
-	info.schema = source.Read<string>();
-	info.name = source.Read<string>();
+	info.schema = deserializer.ReadProperty<string>(101, "schema");
+	info.name = deserializer.ReadProperty<string>(102, "name");
 	if (deserialize_only) {
 		return;
 	}
@@ -256,9 +267,9 @@ void ReplayState::ReplayDropView() {
 //===--------------------------------------------------------------------===//
 // Replay Schema
 //===--------------------------------------------------------------------===//
-void ReplayState::ReplayCreateSchema() {
+void ReplayState::ReplayCreateSchema(BinaryDeserializer &deserializer) {
 	CreateSchemaInfo info;
-	info.schema = source.Read<string>();
+	info.schema = deserializer.ReadProperty<string>(101, "schema");
 	if (deserialize_only) {
 		return;
 	}
@@ -266,11 +277,11 @@ void ReplayState::ReplayCreateSchema() {
 	catalog.CreateSchema(context, info);
 }
 
-void ReplayState::ReplayDropSchema() {
+void ReplayState::ReplayDropSchema(BinaryDeserializer &deserializer) {
 	DropInfo info;
 
 	info.type = CatalogType::SCHEMA_ENTRY;
-	info.name = source.Read<string>();
+	info.name = deserializer.ReadProperty<string>(101, "schema");
 	if (deserialize_only) {
 		return;
 	}
@@ -281,18 +292,18 @@ void ReplayState::ReplayDropSchema() {
 //===--------------------------------------------------------------------===//
 // Replay Custom Type
 //===--------------------------------------------------------------------===//
-void ReplayState::ReplayCreateType() {
-	auto info = TypeCatalogEntry::Deserialize(source);
+void ReplayState::ReplayCreateType(BinaryDeserializer &deserializer) {
+	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "type");
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-	catalog.CreateType(context, *info);
+	catalog.CreateType(context, info->Cast<CreateTypeInfo>());
 }
 
-void ReplayState::ReplayDropType() {
+void ReplayState::ReplayDropType(BinaryDeserializer &deserializer) {
 	DropInfo info;
 
 	info.type = CatalogType::TYPE_ENTRY;
-	info.schema = source.Read<string>();
-	info.name = source.Read<string>();
+	info.schema = deserializer.ReadProperty<string>(101, "schema");
+	info.name = deserializer.ReadProperty<string>(102, "name");
 	if (deserialize_only) {
 		return;
 	}
@@ -303,20 +314,20 @@ void ReplayState::ReplayDropType() {
 //===--------------------------------------------------------------------===//
 // Replay Sequence
 //===--------------------------------------------------------------------===//
-void ReplayState::ReplayCreateSequence() {
-	auto entry = SequenceCatalogEntry::Deserialize(source);
+void ReplayState::ReplayCreateSequence(BinaryDeserializer &deserializer) {
+	auto entry = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "sequence");
 	if (deserialize_only) {
 		return;
 	}
 
-	catalog.CreateSequence(context, *entry);
+	catalog.CreateSequence(context, entry->Cast<CreateSequenceInfo>());
 }
 
-void ReplayState::ReplayDropSequence() {
+void ReplayState::ReplayDropSequence(BinaryDeserializer &deserializer) {
 	DropInfo info;
 	info.type = CatalogType::SEQUENCE_ENTRY;
-	info.schema = source.Read<string>();
-	info.name = source.Read<string>();
+	info.schema = deserializer.ReadProperty<string>(101, "schema");
+	info.name = deserializer.ReadProperty<string>(102, "name");
 	if (deserialize_only) {
 		return;
 	}
@@ -324,11 +335,11 @@ void ReplayState::ReplayDropSequence() {
 	catalog.DropEntry(context, info);
 }
 
-void ReplayState::ReplaySequenceValue() {
-	auto schema = source.Read<string>();
-	auto name = source.Read<string>();
-	auto usage_count = source.Read<uint64_t>();
-	auto counter = source.Read<int64_t>();
+void ReplayState::ReplaySequenceValue(BinaryDeserializer &deserializer) {
+	auto schema = deserializer.ReadProperty<string>(101, "schema");
+	auto name = deserializer.ReadProperty<string>(102, "name");
+	auto usage_count = deserializer.ReadProperty<uint64_t>(103, "usage_count");
+	auto counter = deserializer.ReadProperty<int64_t>(104, "counter");
 	if (deserialize_only) {
 		return;
 	}
@@ -344,20 +355,20 @@ void ReplayState::ReplaySequenceValue() {
 //===--------------------------------------------------------------------===//
 // Replay Macro
 //===--------------------------------------------------------------------===//
-void ReplayState::ReplayCreateMacro() {
-	auto entry = ScalarMacroCatalogEntry::Deserialize(source, context);
+void ReplayState::ReplayCreateMacro(BinaryDeserializer &deserializer) {
+	auto entry = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "macro");
 	if (deserialize_only) {
 		return;
 	}
 
-	catalog.CreateFunction(context, *entry);
+	catalog.CreateFunction(context, entry->Cast<CreateMacroInfo>());
 }
 
-void ReplayState::ReplayDropMacro() {
+void ReplayState::ReplayDropMacro(BinaryDeserializer &deserializer) {
 	DropInfo info;
 	info.type = CatalogType::MACRO_ENTRY;
-	info.schema = source.Read<string>();
-	info.name = source.Read<string>();
+	info.schema = deserializer.ReadProperty<string>(101, "schema");
+	info.name = deserializer.ReadProperty<string>(102, "name");
 	if (deserialize_only) {
 		return;
 	}
@@ -368,20 +379,19 @@ void ReplayState::ReplayDropMacro() {
 //===--------------------------------------------------------------------===//
 // Replay Table Macro
 //===--------------------------------------------------------------------===//
-void ReplayState::ReplayCreateTableMacro() {
-	auto entry = TableMacroCatalogEntry::Deserialize(source, context);
+void ReplayState::ReplayCreateTableMacro(BinaryDeserializer &deserializer) {
+	auto entry = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "table_macro");
 	if (deserialize_only) {
 		return;
 	}
-
-	catalog.CreateFunction(context, *entry);
+	catalog.CreateFunction(context, entry->Cast<CreateMacroInfo>());
 }
 
-void ReplayState::ReplayDropTableMacro() {
+void ReplayState::ReplayDropTableMacro(BinaryDeserializer &deserializer) {
 	DropInfo info;
 	info.type = CatalogType::TABLE_MACRO_ENTRY;
-	info.schema = source.Read<string>();
-	info.name = source.Read<string>();
+	info.schema = deserializer.ReadProperty<string>(101, "schema");
+	info.name = deserializer.ReadProperty<string>(102, "name");
 	if (deserialize_only) {
 		return;
 	}
@@ -392,31 +402,32 @@ void ReplayState::ReplayDropTableMacro() {
 //===--------------------------------------------------------------------===//
 // Replay Index
 //===--------------------------------------------------------------------===//
-void ReplayState::ReplayCreateIndex() {
-	auto info = IndexCatalogEntry::Deserialize(source, context);
+void ReplayState::ReplayCreateIndex(BinaryDeserializer &deserializer) {
+	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "index");
 	if (deserialize_only) {
 		return;
 	}
+	auto &index_info = info->Cast<CreateIndexInfo>();
 
 	// get the physical table to which we'll add the index
-	auto &table = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table->table_name);
+	auto &table = catalog.GetEntry<TableCatalogEntry>(context, info->schema, index_info.table);
 	auto &data_table = table.GetStorage();
 
 	// bind the parsed expressions
-	if (info->expressions.empty()) {
-		for (auto &parsed_expr : info->parsed_expressions) {
-			info->expressions.push_back(parsed_expr->Copy());
+	if (index_info.expressions.empty()) {
+		for (auto &parsed_expr : index_info.parsed_expressions) {
+			index_info.expressions.push_back(parsed_expr->Copy());
 		}
 	}
 	auto binder = Binder::CreateBinder(context);
-	auto expressions = binder->BindCreateIndexExpressions(table, *info);
+	auto expressions = binder->BindCreateIndexExpressions(table, index_info);
 
 	// create the empty index
 	unique_ptr<Index> index;
-	switch (info->index_type) {
+	switch (index_info.index_type) {
 	case IndexType::ART: {
-		index = make_uniq<ART>(info->column_ids, TableIOManager::Get(data_table), expressions, info->constraint_type,
-		                       data_table.db);
+		index = make_uniq<ART>(index_info.column_ids, TableIOManager::Get(data_table), expressions,
+		                       index_info.constraint_type, data_table.db);
 		break;
 	}
 	default:
@@ -424,10 +435,10 @@ void ReplayState::ReplayCreateIndex() {
 	}
 
 	// add the index to the catalog
-	auto &index_entry = catalog.CreateIndex(context, *info)->Cast<DuckIndexEntry>();
+	auto &index_entry = catalog.CreateIndex(context, index_info)->Cast<DuckIndexEntry>();
 	index_entry.index = index.get();
 	index_entry.info = data_table.info;
-	for (auto &parsed_expr : info->parsed_expressions) {
+	for (auto &parsed_expr : index_info.parsed_expressions) {
 		index_entry.parsed_expressions.push_back(parsed_expr->Copy());
 	}
 
@@ -435,11 +446,11 @@ void ReplayState::ReplayCreateIndex() {
 	data_table.WALAddIndex(context, std::move(index), expressions);
 }
 
-void ReplayState::ReplayDropIndex() {
+void ReplayState::ReplayDropIndex(BinaryDeserializer &deserializer) {
 	DropInfo info;
 	info.type = CatalogType::INDEX_ENTRY;
-	info.schema = source.Read<string>();
-	info.name = source.Read<string>();
+	info.schema = deserializer.ReadProperty<string>(101, "schema");
+	info.name = deserializer.ReadProperty<string>(102, "name");
 	if (deserialize_only) {
 		return;
 	}
@@ -450,18 +461,18 @@ void ReplayState::ReplayDropIndex() {
 //===--------------------------------------------------------------------===//
 // Replay Data
 //===--------------------------------------------------------------------===//
-void ReplayState::ReplayUseTable() {
-	auto schema_name = source.Read<string>();
-	auto table_name = source.Read<string>();
+void ReplayState::ReplayUseTable(BinaryDeserializer &deserializer) {
+	auto schema_name = deserializer.ReadProperty<string>(101, "schema");
+	auto table_name = deserializer.ReadProperty<string>(102, "table");
 	if (deserialize_only) {
 		return;
 	}
 	current_table = &catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name);
 }
 
-void ReplayState::ReplayInsert() {
+void ReplayState::ReplayInsert(BinaryDeserializer &deserializer) {
 	DataChunk chunk;
-	chunk.Deserialize(source);
+	deserializer.ReadObject(101, "chunk", [&](Deserializer &object) { chunk.Deserialize(object); });
 	if (deserialize_only) {
 		return;
 	}
@@ -473,9 +484,9 @@ void ReplayState::ReplayInsert() {
 	current_table->GetStorage().LocalAppend(*current_table, context, chunk);
 }
 
-void ReplayState::ReplayDelete() {
+void ReplayState::ReplayDelete(BinaryDeserializer &deserializer) {
 	DataChunk chunk;
-	chunk.Deserialize(source);
+	deserializer.ReadObject(101, "chunk", [&](Deserializer &object) { chunk.Deserialize(object); });
 	if (deserialize_only) {
 		return;
 	}
@@ -495,15 +506,12 @@ void ReplayState::ReplayDelete() {
 	}
 }
 
-void ReplayState::ReplayUpdate() {
-	vector<column_t> column_path;
-	auto column_index_count = source.Read<idx_t>();
-	column_path.reserve(column_index_count);
-	for (idx_t i = 0; i < column_index_count; i++) {
-		column_path.push_back(source.Read<column_t>());
-	}
+void ReplayState::ReplayUpdate(BinaryDeserializer &deserializer) {
+	auto column_path = deserializer.ReadProperty<vector<column_t>>(101, "column_indexes");
+
 	DataChunk chunk;
-	chunk.Deserialize(source);
+	deserializer.ReadObject(102, "chunk", [&](Deserializer &object) { chunk.Deserialize(object); });
+
 	if (deserialize_only) {
 		return;
 	}
@@ -523,8 +531,8 @@ void ReplayState::ReplayUpdate() {
 	current_table->GetStorage().UpdateColumn(*current_table, context, row_ids, column_path, chunk);
 }
 
-void ReplayState::ReplayCheckpoint() {
-	checkpoint_id = source.Read<block_id_t>();
+void ReplayState::ReplayCheckpoint(BinaryDeserializer &deserializer) {
+	checkpoint_id = deserializer.ReadProperty<MetaBlockPointer>(101, "meta_block");
 }
 
 } // namespace duckdb

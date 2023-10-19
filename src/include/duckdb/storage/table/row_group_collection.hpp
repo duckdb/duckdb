@@ -27,6 +27,7 @@ class DuckTransaction;
 class BoundConstraint;
 class RowGroupSegmentTree;
 struct ColumnSegmentInfo;
+class MetadataManager;
 
 class RowGroupCollection {
 public:
@@ -72,7 +73,7 @@ public:
 	//! FinalizeAppend flushes an append with a variable number of rows.
 	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
-	void RevertAppendInternal(idx_t start_row, idx_t count);
+	void RevertAppendInternal(idx_t start_row);
 
 	void MergeStorage(RowGroupCollection &data);
 
@@ -106,6 +107,7 @@ public:
 	BlockManager &GetBlockManager() {
 		return block_manager;
 	}
+	MetadataManager &GetMetadataManager();
 	DataTableInfo &GetTableInfo() {
 		return *info;
 	}

@@ -42,8 +42,8 @@ public:
 	idx_t object_index = DConstants::INVALID_INDEX;
 
 public:
-	void Serialize(FieldWriter &writer) const;
-	void Deserialize(FieldReader &reader);
+	void Serialize(Serializer &serializer) const;
+	static JSONTransformOptions Deserialize(Deserializer &deserializer);
 };
 
 struct TryParseDate {

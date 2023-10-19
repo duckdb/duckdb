@@ -328,7 +328,7 @@ void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &re
 	idx_t start_vector = start_row / STANDARD_VECTOR_SIZE;
 	idx_t end_vector = (end_row - 1) / STANDARD_VECTOR_SIZE;
 	D_ASSERT(start_vector <= end_vector);
-	D_ASSERT(end_vector < RowGroup::ROW_GROUP_VECTOR_COUNT);
+	D_ASSERT(end_vector < Storage::ROW_GROUP_VECTOR_COUNT);
 
 	for (idx_t vector_idx = start_vector; vector_idx <= end_vector; vector_idx++) {
 		if (!root->info[vector_idx]) {
@@ -427,7 +427,7 @@ void UpdateSegment::FetchRow(TransactionData transaction, idx_t row_id, Vector &
 	if (!root->info[vector_index]) {
 		return;
 	}
-	idx_t row_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
+	idx_t row_in_vector = (row_id - column_data.start) - vector_index * STANDARD_VECTOR_SIZE;
 	fetch_row_function(transaction.start_time, transaction.transaction_id, root->info[vector_index]->info.get(),
 	                   row_in_vector, result, result_idx);
 }
@@ -1089,7 +1089,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 	idx_t vector_offset = column_data.start + vector_index * STANDARD_VECTOR_SIZE;
 
 	D_ASSERT(idx_t(first_id) >= column_data.start);
-	D_ASSERT(vector_index < RowGroup::ROW_GROUP_VECTOR_COUNT);
+	D_ASSERT(vector_index < Storage::ROW_GROUP_VECTOR_COUNT);
 
 	// first check the version chain
 	UpdateInfo *node = nullptr;

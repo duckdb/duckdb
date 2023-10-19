@@ -17,23 +17,6 @@ INSERT INTO events0 VALUES
 	(8, 3)
 ;
 
-# ASOF join on a constant (e.g. ON 1=1)
-query II
-SELECT p.ts, e.value
-FROM range(0,10) p(ts) ASOF JOIN events0 e
-ON 1 = 1 AND p.ts >= e.begin
-ORDER BY p.ts ASC
-----
-1	0
-2	0
-3	1
-4	1
-5	1
-6	2
-7	2
-8	3
-9	3
-
 # Use an ASOF join inside of a correlated subquery
 
 
@@ -49,6 +32,15 @@ ON p.ts <> e.begin
 ORDER BY p.ts ASC
 ----
 Binder Error: Invalid ASOF JOIN comparison
+
+# Invalid ASOF JOIN condition
+statement error
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF JOIN events0 e
+ON 1 = 1 AND p.ts >= e.begin
+ORDER BY p.ts ASC
+----
+Binder Error: Invalid ASOF JOIN condition
 
 # Missing ASOF JOIN inequality
 statement error
@@ -67,21 +59,3 @@ ON p.ts >= e.begin AND p.ts >= e.value
 ORDER BY p.ts ASC
 ----
 Binder Error: Multiple ASOF JOIN inequalities
-
-# What if we invert the comparisons
-statement error
-SELECT p.ts, e.value
-FROM range(0,10) p(ts) ASOF JOIN events0 e
-ON p.ts <= e.begin
-ORDER BY p.ts ASC
-----
-Binder Error: Invalid ASOF JOIN comparison
-
-# What if we have a different closed range
-statement error
-SELECT p.ts, e.value
-FROM range(0,10) p(ts) ASOF JOIN events0 e
-ON p.ts > e.begin
-ORDER BY p.ts ASC
-----
-Binder Error: Invalid ASOF JOIN comparison

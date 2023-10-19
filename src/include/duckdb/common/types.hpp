@@ -17,28 +17,12 @@
 
 namespace duckdb {
 
-class FormatSerializer;
-class FormatDeserializer;
 class Serializer;
 class Deserializer;
 class Value;
 class TypeCatalogEntry;
 class Vector;
 class ClientContext;
-class FieldWriter;
-
-//! Extra Type Info Type
-enum class ExtraTypeInfoType : uint8_t {
-	INVALID_TYPE_INFO = 0,
-	GENERIC_TYPE_INFO = 1,
-	DECIMAL_TYPE_INFO = 2,
-	STRING_TYPE_INFO = 3,
-	LIST_TYPE_INFO = 4,
-	STRUCT_TYPE_INFO = 5,
-	ENUM_TYPE_INFO = 6,
-	USER_TYPE_INFO = 7,
-	AGGREGATE_STATE_TYPE_INFO = 8
-};
 
 struct string_t;
 
@@ -296,16 +280,8 @@ struct LogicalType {
 		return !(*this == rhs);
 	}
 
-	//! Serializes a LogicalType to a stand-alone binary blob
 	DUCKDB_API void Serialize(Serializer &serializer) const;
-
-	DUCKDB_API void SerializeEnumType(Serializer &serializer) const;
-
-	//! Deserializes a blob back into an LogicalType
-	DUCKDB_API static LogicalType Deserialize(Deserializer &source);
-
-	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
-	DUCKDB_API static LogicalType FormatDeserialize(FormatDeserializer &deserializer);
+	DUCKDB_API static LogicalType Deserialize(Deserializer &deserializer);
 
 
 	static bool TypeIsTimestamp(LogicalTypeId id) {
@@ -327,8 +303,6 @@ struct LogicalType {
 	DUCKDB_API string GetAlias() const;
 
 	DUCKDB_API static LogicalType MaxLogicalType(const LogicalType &left, const LogicalType &right);
-
-	DUCKDB_API static ExtraTypeInfoType GetExtraTypeInfoType(const ExtraTypeInfo &type);
 
 	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
 	DUCKDB_API bool GetDecimalProperties(uint8_t &width, uint8_t &scale) const;
@@ -388,9 +362,10 @@ public:
 	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
 	DUCKDB_API static LogicalType AGGREGATE_STATE(aggregate_state_t state_type);    // NOLINT
 	DUCKDB_API static LogicalType MAP(const LogicalType &child);				// NOLINT
-	DUCKDB_API static LogicalType MAP( child_list_t<LogicalType> children);       // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
 	DUCKDB_API static LogicalType UNION( child_list_t<LogicalType> members);     // NOLINT
+	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
+	// DEPRECATED - provided for backwards compatibility
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
@@ -415,21 +390,17 @@ struct ListType {
 	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type);
 };
 
-struct UserType{
+struct UserType {
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
 };
 
-struct EnumType{
-	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
+struct EnumType {
 	DUCKDB_API static int64_t GetPos(const LogicalType &type, const string_t& key);
 	DUCKDB_API static const Vector &GetValuesInsertOrder(const LogicalType &type);
 	DUCKDB_API static idx_t GetSize(const LogicalType &type);
 	DUCKDB_API static const string GetValue(const Value &val);
-	DUCKDB_API static void SetCatalog(LogicalType &type, optional_ptr<TypeCatalogEntry> catalog_entry);
-	DUCKDB_API static optional_ptr<TypeCatalogEntry> GetCatalog(const LogicalType &type);
-	DUCKDB_API static string GetSchemaName(const LogicalType &type);
 	DUCKDB_API static PhysicalType GetPhysicalType(const LogicalType &type);
-	DUCKDB_API static void Serialize(FieldWriter& writer, const ExtraTypeInfo& type_info, bool serialize_internals);
+	DUCKDB_API static string_t GetString(const LogicalType &type, idx_t pos);
 };
 
 struct StructType {
@@ -437,6 +408,7 @@ struct StructType {
 	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type, idx_t index);
 	DUCKDB_API static const string &GetChildName(const LogicalType &type, idx_t index);
 	DUCKDB_API static idx_t GetChildCount(const LogicalType &type);
+	DUCKDB_API static bool IsUnnamed(const LogicalType &type);
 };
 
 struct MapType {
@@ -480,6 +452,7 @@ bool ApproxEqual(float l, float r);
 bool ApproxEqual(double l, double r);
 
 struct aggregate_state_t {
+	aggregate_state_t() {}
 	aggregate_state_t(string function_name_p, LogicalType return_type_p, vector<LogicalType> bound_argument_types_p) : function_name(std::move(function_name_p)), return_type(std::move(return_type_p)), bound_argument_types(std::move(bound_argument_types_p)) {
 	}
 

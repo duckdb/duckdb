@@ -1,7 +1,6 @@
 #include "duckdb/parser/query_node/cte_node.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -36,39 +35,6 @@ unique_ptr<QueryNode> CTENode::Copy() const {
 	result->child = child->Copy();
 	result->aliases = aliases;
 	this->CopyProperties(*result);
-	return std::move(result);
-}
-
-void CTENode::Serialize(FieldWriter &writer) const {
-	writer.WriteString(ctename);
-	writer.WriteSerializable(*query);
-	writer.WriteSerializable(*child);
-	writer.WriteList<string>(aliases);
-}
-
-unique_ptr<QueryNode> CTENode::Deserialize(FieldReader &reader) {
-	auto result = make_uniq<CTENode>();
-	result->ctename = reader.ReadRequired<string>();
-	result->query = reader.ReadRequiredSerializable<QueryNode>();
-	result->child = reader.ReadRequiredSerializable<QueryNode>();
-	result->aliases = reader.ReadRequiredList<string>();
-	return std::move(result);
-}
-
-void CTENode::FormatSerialize(FormatSerializer &serializer) const {
-	QueryNode::FormatSerialize(serializer);
-	serializer.WriteProperty("cte_name", ctename);
-	serializer.WriteProperty("query", *query);
-	serializer.WriteProperty("child", *child);
-	serializer.WriteProperty("aliases", aliases);
-}
-
-unique_ptr<QueryNode> CTENode::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_uniq<CTENode>();
-	deserializer.ReadProperty("cte_name", result->ctename);
-	deserializer.ReadProperty("query", result->query);
-	deserializer.ReadProperty("child", result->child);
-	deserializer.ReadProperty("aliases", result->aliases);
 	return std::move(result);
 }
 

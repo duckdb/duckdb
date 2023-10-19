@@ -36,7 +36,6 @@ bool StringEnumCastLoop(const string_t *source_data, ValidityMask &source_mask, 
 template <class T>
 bool StringEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
-	auto enum_name = EnumType::GetTypeName(result.GetType());
 	switch (source.GetVectorType()) {
 	case VectorType::CONSTANT_VECTOR: {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -368,8 +367,9 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 	case LogicalTypeId::DATE:
 		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, date_t, duckdb::TryCastErrorMessage>);
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, dtime_t, duckdb::TryCastErrorMessage>);
+	case LogicalTypeId::TIME_TZ:
+		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, dtime_tz_t, duckdb::TryCastErrorMessage>);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, timestamp_t, duckdb::TryCastErrorMessage>);

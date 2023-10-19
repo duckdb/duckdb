@@ -7,34 +7,34 @@
 
 namespace duckdb {
 
-bool IteratorKey::operator>(const ARTKey &k) const {
-	for (idx_t i = 0; i < MinValue<idx_t>(key_bytes.size(), k.len); i++) {
-		if (key_bytes[i] > k.data[i]) {
+bool IteratorKey::operator>(const ARTKey &key) const {
+	for (idx_t i = 0; i < MinValue<idx_t>(key_bytes.size(), key.len); i++) {
+		if (key_bytes[i] > key.data[i]) {
 			return true;
-		} else if (key_bytes[i] < k.data[i]) {
+		} else if (key_bytes[i] < key.data[i]) {
 			return false;
 		}
 	}
-	return key_bytes.size() > k.len;
+	return key_bytes.size() > key.len;
 }
 
-bool IteratorKey::operator>=(const ARTKey &k) const {
-	for (idx_t i = 0; i < MinValue<idx_t>(key_bytes.size(), k.len); i++) {
-		if (key_bytes[i] > k.data[i]) {
+bool IteratorKey::operator>=(const ARTKey &key) const {
+	for (idx_t i = 0; i < MinValue<idx_t>(key_bytes.size(), key.len); i++) {
+		if (key_bytes[i] > key.data[i]) {
 			return true;
-		} else if (key_bytes[i] < k.data[i]) {
+		} else if (key_bytes[i] < key.data[i]) {
 			return false;
 		}
 	}
-	return key_bytes.size() >= k.len;
+	return key_bytes.size() >= key.len;
 }
 
-bool IteratorKey::operator==(const ARTKey &k) const {
+bool IteratorKey::operator==(const ARTKey &key) const {
 	// NOTE: we only use this for finding the LowerBound, in which case the length
 	// has to be equal
-	D_ASSERT(key_bytes.size() == k.len);
+	D_ASSERT(key_bytes.size() == key.len);
 	for (idx_t i = 0; i < key_bytes.size(); i++) {
-		if (key_bytes[i] != k.data[i]) {
+		if (key_bytes[i] != key.data[i]) {
 			return false;
 		}
 	}
@@ -58,15 +58,9 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row
 			}
 		}
 
-		// adding more elements would exceed the maximum count
-		if (result_ids.size() + last_leaf->count > max_count) {
+		// copy all row IDs of this leaf into the result IDs (if they don't exceed max_count)
+		if (!Leaf::GetRowIds(*art, last_leaf, result_ids, max_count)) {
 			return false;
-		}
-
-		// FIXME: copy all at once to improve performance
-		for (idx_t i = 0; i < last_leaf->count; i++) {
-			row_t row_id = last_leaf->GetRowId(*art, i);
-			result_ids.push_back(row_id);
 		}
 
 		// get the next leaf
@@ -77,22 +71,19 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row
 	return true;
 }
 
-void Iterator::FindMinimum(Node &node) {
+void Iterator::FindMinimum(const Node &node) {
 
-	D_ASSERT(node.IsSet());
-	if (node.IsSwizzled()) {
-		node.Deserialize(*art);
-	}
+	D_ASSERT(node.HasMetadata());
 
 	// found the minimum
-	if (node.DecodeARTNodeType() == NType::LEAF) {
-		last_leaf = Node::GetAllocator(*art, NType::LEAF).Get<Leaf>(node);
+	if (node.GetType() == NType::LEAF || node.GetType() == NType::LEAF_INLINED) {
+		last_leaf = node;
 		return;
 	}
 
 	// traverse the prefix
-	if (node.DecodeARTNodeType() == NType::PREFIX) {
-		auto &prefix = Prefix::Get(*art, node);
+	if (node.GetType() == NType::PREFIX) {
+		auto &prefix = Node::Ref<const Prefix>(*art, node, NType::PREFIX);
 		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 			current_key.Push(prefix.data[i]);
 		}
@@ -109,26 +100,22 @@ void Iterator::FindMinimum(Node &node) {
 	FindMinimum(*next);
 }
 
-bool Iterator::LowerBound(Node &node, const ARTKey &key, const bool equal, idx_t depth) {
+bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal, idx_t depth) {
 
-	if (!node.IsSet()) {
+	if (!node.HasMetadata()) {
 		return false;
 	}
 
-	if (node.IsSwizzled()) {
-		node.Deserialize(*art);
-	}
-
 	// we found the lower bound
-	if (node.DecodeARTNodeType() == NType::LEAF) {
+	if (node.GetType() == NType::LEAF || node.GetType() == NType::LEAF_INLINED) {
 		if (!equal && current_key == key) {
 			return Next();
 		}
-		last_leaf = Node::GetAllocator(*art, NType::LEAF).Get<Leaf>(node);
+		last_leaf = node;
 		return true;
 	}
 
-	if (node.DecodeARTNodeType() != NType::PREFIX) {
+	if (node.GetType() != NType::PREFIX) {
 		auto next_byte = key[depth];
 		auto child = node.GetNextChild(*art, next_byte);
 		if (!child) {
@@ -151,7 +138,7 @@ bool Iterator::LowerBound(Node &node, const ARTKey &key, const bool equal, idx_t
 	}
 
 	// resolve the prefix
-	auto &prefix = Prefix::Get(*art, node);
+	auto &prefix = Node::Ref<const Prefix>(*art, node, NType::PREFIX);
 	for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 		current_key.Push(prefix.data[i]);
 	}
@@ -181,9 +168,9 @@ bool Iterator::Next() {
 	while (!nodes.empty()) {
 
 		auto &top = nodes.top();
-		D_ASSERT(top.node.DecodeARTNodeType() != NType::LEAF);
+		D_ASSERT(top.node.GetType() != NType::LEAF && top.node.GetType() != NType::LEAF_INLINED);
 
-		if (top.node.DecodeARTNodeType() == NType::PREFIX) {
+		if (top.node.GetType() == NType::PREFIX) {
 			PopNode();
 			continue;
 		}
@@ -211,8 +198,9 @@ bool Iterator::Next() {
 }
 
 void Iterator::PopNode() {
-	if (nodes.top().node.DecodeARTNodeType() == NType::PREFIX) {
-		auto prefix_byte_count = Prefix::Get(*art, nodes.top().node).data[Node::PREFIX_SIZE];
+	if (nodes.top().node.GetType() == NType::PREFIX) {
+		auto &prefix = Node::Ref<const Prefix>(*art, nodes.top().node, NType::PREFIX);
+		auto prefix_byte_count = prefix.data[Node::PREFIX_SIZE];
 		current_key.Pop(prefix_byte_count);
 	} else {
 		current_key.Pop(1);

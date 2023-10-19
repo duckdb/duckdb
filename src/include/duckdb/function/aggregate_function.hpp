@@ -8,10 +8,10 @@
 
 #pragma once
 
+#include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/common/vector_operations/aggregate_executor.hpp"
 
 namespace duckdb {
 
@@ -41,16 +41,14 @@ typedef void (*aggregate_simple_update_t)(Vector inputs[], AggregateInputData &a
                                           data_ptr_t state, idx_t count);
 
 //! The type used for updating complex windowed aggregate functions (optional)
-typedef std::pair<idx_t, idx_t> FrameBounds;
 typedef void (*aggregate_window_t)(Vector inputs[], const ValidityMask &filter_mask,
                                    AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
                                    const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t rid,
                                    idx_t bias);
 
-typedef void (*aggregate_serialize_t)(FieldWriter &writer, const FunctionData *bind_data,
+typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                       const AggregateFunction &function);
-typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(PlanDeserializationState &context, FieldReader &reader,
-                                                            AggregateFunction &function);
+typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deserializer, AggregateFunction &function);
 
 class AggregateFunction : public BaseScalarFunction {
 public:

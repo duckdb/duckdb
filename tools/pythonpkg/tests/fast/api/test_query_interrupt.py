@@ -5,11 +5,13 @@ import pytest
 import threading
 import _thread as thread
 
+
 def send_keyboard_interrupt():
     # Wait a little, so we're sure the 'execute' has started
     time.sleep(0.1)
     # Send an interrupt to the main thread
     thread.interrupt_main()
+
 
 class TestQueryInterruption(object):
     def test_query_interruption(self):

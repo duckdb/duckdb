@@ -17,10 +17,11 @@ namespace duckdb {
 class TupleDataAllocator;
 struct TupleDataScatterFunction;
 struct TupleDataGatherFunction;
+struct RowOperationsState;
 
 typedef void (*tuple_data_scatter_function_t)(const Vector &source, const TupleDataVectorFormat &source_format,
                                               const SelectionVector &append_sel, const idx_t append_count,
-                                              const TupleDataLayout &layout, Vector &row_locations,
+                                              const TupleDataLayout &layout, const Vector &row_locations,
                                               Vector &heap_locations, const idx_t col_idx,
                                               const UnifiedVectorFormat &list_format,
                                               const vector<TupleDataScatterFunction> &child_functions);
@@ -44,6 +45,7 @@ struct TupleDataGatherFunction {
 //! FIXME: rename to RowDataCollection after we phase it out
 class TupleDataCollection {
 	friend class TupleDataChunkIterator;
+	friend class PartitionedTupleData;
 
 public:
 	//! Constructs a TupleDataCollection with the specified layout
@@ -62,8 +64,6 @@ public:
 	idx_t ChunkCount() const;
 	//! The size (in bytes) of the blocks held by this tuple data collection
 	idx_t SizeInBytes() const;
-	//! Get pointers to the pinned blocks
-	void GetBlockPointers(vector<data_ptr_t> &block_pointers) const;
 	//! Unpins all held pins
 	void Unpin();
 
@@ -84,7 +84,11 @@ public:
 	                      TupleDataPinProperties = TupleDataPinProperties::UNPIN_AFTER_DONE);
 	//! Initializes the Chunk state of an Append state
 	//! - Useful for optimizing many appends made to the same tuple data collection
-	void InitializeAppend(TupleDataChunkState &chunk_state, vector<column_t> column_ids = {});
+	void InitializeChunkState(TupleDataChunkState &chunk_state, vector<column_t> column_ids = {});
+	//! Initializes the Chunk state of an Append state
+	//! - Useful for optimizing many appends made to the same tuple data collection
+	static void InitializeChunkState(TupleDataChunkState &chunk_state, const vector<LogicalType> &types,
+	                                 vector<column_t> column_ids = {});
 	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally
 	void Append(DataChunk &new_chunk, const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
 	            idx_t append_count = DConstants::INVALID_INDEX);
@@ -159,6 +163,8 @@ public:
 	bool Scan(TupleDataScanState &state, DataChunk &result);
 	//! Scans a DataChunk from the TupleDataCollection
 	bool Scan(TupleDataParallelScanState &gstate, TupleDataLocalScanState &lstate, DataChunk &result);
+	//! Whether the last scan has been completed on this TupleDataCollection
+	bool ScanComplete(const TupleDataScanState &state) const;
 
 	//! Gathers a DataChunk from the TupleDataCollection, given the specific row locations (requires full pin)
 	void Gather(Vector &row_locations, const SelectionVector &scan_sel, const idx_t scan_count, DataChunk &result,
@@ -185,6 +191,8 @@ private:
 	void Initialize();
 	//! Gets all column ids
 	void GetAllColumnIDs(vector<column_t> &column_ids);
+	//! Adds a segment to this TupleDataCollection
+	void AddSegment(TupleDataSegment &&segment);
 
 	//! Computes the heap sizes for the specific Vector that will be appended
 	static void ComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v, TupleDataVectorFormat &source,
@@ -218,7 +226,7 @@ private:
 	void ScanAtIndex(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, const vector<column_t> &column_ids,
 	                 idx_t segment_index, idx_t chunk_index, DataChunk &result);
 
-	//! Verify counts of the segments in this collection
+	//! Verify count/data size of this collection
 	void Verify() const;
 
 private:
@@ -228,6 +236,8 @@ private:
 	shared_ptr<TupleDataAllocator> allocator;
 	//! The number of entries stored in the TupleDataCollection
 	idx_t count;
+	//! The size (in bytes) of this TupleDataCollection
+	idx_t data_size;
 	//! The data segments of the TupleDataCollection
 	unsafe_vector<TupleDataSegment> segments;
 	//! The set of scatter functions

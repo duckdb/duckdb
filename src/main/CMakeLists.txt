@@ -4,6 +4,7 @@ endif()
 add_subdirectory(extension)
 add_subdirectory(relation)
 add_subdirectory(settings)
+add_subdirectory(chunk_scan_state)
 
 if(FORCE_QUERY_LOG)
   add_definitions(-DDUCKDB_FORCE_QUERY_LOG="\""${FORCE_QUERY_LOG}"\"")
@@ -18,6 +19,7 @@ add_library_unity(
   client_context.cpp
   client_data.cpp
   client_verify.cpp
+  chunk_scan_state.cpp
   config.cpp
   connection.cpp
   database.cpp

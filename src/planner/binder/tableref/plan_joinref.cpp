@@ -7,7 +7,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
-#include "duckdb/planner/operator/logical_asof_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
@@ -52,6 +51,7 @@ void LogicalComparisonJoin::ExtractJoinConditions(
     unique_ptr<LogicalOperator> &right_child, const unordered_set<idx_t> &left_bindings,
     const unordered_set<idx_t> &right_bindings, vector<unique_ptr<Expression>> &expressions,
     vector<JoinCondition> &conditions, vector<unique_ptr<Expression>> &arbitrary_expressions) {
+
 	for (auto &expr : expressions) {
 		auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
 		if (total_side != JoinSide::BOTH) {
@@ -78,10 +78,17 @@ void LogicalComparisonJoin::ExtractJoinConditions(
 					continue;
 				}
 			}
-		} else if ((expr->type >= ExpressionType::COMPARE_EQUAL &&
-		            expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) ||
-		           expr->type == ExpressionType::COMPARE_DISTINCT_FROM ||
-		           expr->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		} else if (expr->type == ExpressionType::COMPARE_EQUAL || expr->type == ExpressionType::COMPARE_NOTEQUAL ||
+		           expr->type == ExpressionType::COMPARE_BOUNDARY_START ||
+		           expr->type == ExpressionType::COMPARE_LESSTHAN ||
+		           expr->type == ExpressionType::COMPARE_GREATERTHAN ||
+		           expr->type == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
+		           expr->type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+		           expr->type == ExpressionType::COMPARE_BOUNDARY_START ||
+		           expr->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
+		           expr->type == ExpressionType::COMPARE_DISTINCT_FROM)
+
+		{
 			// comparison, check if we can create a comparison JoinCondition
 			if (CreateJoinCondition(*expr, left_bindings, right_bindings, conditions)) {
 				// successfully created the join condition
@@ -128,6 +135,9 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 	bool need_to_consider_arbitrary_expressions = true;
 	switch (reftype) {
 	case JoinRefType::ASOF: {
+		if (!arbitrary_expressions.empty()) {
+			throw BinderException("Invalid ASOF JOIN condition");
+		}
 		need_to_consider_arbitrary_expressions = false;
 		auto asof_idx = conditions.size();
 		for (size_t c = 0; c < conditions.size(); ++c) {
@@ -137,6 +147,9 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 			case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 				break;
 			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			case ExpressionType::COMPARE_GREATERTHAN:
+			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+			case ExpressionType::COMPARE_LESSTHAN:
 				if (asof_idx < conditions.size()) {
 					throw BinderException("Multiple ASOF JOIN inequalities");
 				}
@@ -190,12 +203,11 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 	} else {
 		// we successfully converted expressions into JoinConditions
 		// create a LogicalComparisonJoin
-		unique_ptr<LogicalComparisonJoin> comp_join;
+		auto logical_type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
 		if (reftype == JoinRefType::ASOF) {
-			comp_join = make_uniq<LogicalAsOfJoin>(type);
-		} else {
-			comp_join = make_uniq<LogicalComparisonJoin>(type);
+			logical_type = LogicalOperatorType::LOGICAL_ASOF_JOIN;
 		}
+		auto comp_join = make_uniq<LogicalComparisonJoin>(type, logical_type);
 		comp_join->conditions = std::move(conditions);
 		comp_join->children.push_back(std::move(left_child));
 		comp_join->children.push_back(std::move(right_child));

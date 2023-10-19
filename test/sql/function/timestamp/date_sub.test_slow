@@ -55,7 +55,7 @@ select DATESUB('millennium', '1004-02-29'::DATE, '2004-02-29'::DATE);
 1
 
 # Sub-month
-foreach datepart day doy dow isodow
+foreach datepart day doy dow isodow julian
 
 query I
 select DATESUB('${datepart}', '2004-01-31'::DATE, '2004-02-29'::DATE);
@@ -235,7 +235,7 @@ select DATESUB('millennium', '1004-02-29 12:00:00'::TIMESTAMP, '2004-02-28 13:00
 0
 
 # Sub-month
-foreach datepart day doy dow isodow
+foreach datepart day doy dow isodow julian
 
 query I
 select DATESUB('${datepart}', '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-29 13:00:00'::TIMESTAMP);
