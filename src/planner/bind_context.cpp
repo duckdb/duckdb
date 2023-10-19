@@ -458,13 +458,9 @@ static string AddColumnNameToBinding(const string &base_name, case_insensitive_s
 	return name;
 }
 
-vector<string> BindContext::AliasColumnNames(const string &table_name, const vector<string> &names,
-                                             const vector<string> &column_aliases) {
+vector<string> BindContext::AliasColumnNamesUnchecked(const vector<string> &names,
+                                                      const vector<string> &column_aliases) {
 	vector<string> result;
-	if (column_aliases.size() > names.size()) {
-		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", table_name,
-		                      names.size(), column_aliases.size());
-	}
 	case_insensitive_set_t current_names;
 	// use any provided column aliases first
 	for (idx_t i = 0; i < column_aliases.size(); i++) {
@@ -475,6 +471,15 @@ vector<string> BindContext::AliasColumnNames(const string &table_name, const vec
 		result.push_back(AddColumnNameToBinding(names[i], current_names));
 	}
 	return result;
+}
+
+vector<string> BindContext::AliasColumnNames(const string &table_name, const vector<string> &names,
+                                             const vector<string> &column_aliases) {
+	if (column_aliases.size() > names.size()) {
+		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", table_name,
+		                      names.size(), column_aliases.size());
+	}
+	return AliasColumnNamesUnchecked(names, column_aliases);
 }
 
 void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {

@@ -137,6 +137,10 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 		throw BinderException("More VIEW aliases than columns in query result");
 	}
 
+	auto names = query_node.names;
+	for (idx_t i = 0; i < base.aliases.size(); i++) {
+		names[i] = base.aliases[i];
+	}
 	base.SetBoundNames(query_node.names);
 	base.SetBoundTypes(query_node.types);
 }

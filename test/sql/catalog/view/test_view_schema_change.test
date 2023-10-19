@@ -52,9 +52,15 @@ DROP TABLE t1
 statement ok
 CREATE TABLE t1(k INTEGER)
 
-# this is fine: types still match, and the original names will be applied as alias!
-query I
+# this is not fine: no aliases was applied, so the view uses the column aliases of the table
+statement error
 SELECT i FROM v1
+----
+Binder Error: Referenced column "i" not found in FROM clause!
+
+# Instead we need to use the column name of the table it references
+query I
+select k from v1
 ----
 
 statement ok

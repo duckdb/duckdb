@@ -26,14 +26,13 @@ PRAGMA table_info('test.v')
 statement ok
 DROP TABLE test.t
 
-# we can still query the types and column names
-query IIIIII
+# we cant query the types and column names because those depend on the table
+statement error
 PRAGMA table_info('test.v')
 ----
-0	a	INTEGER	0	NULL	0
-1	b	INTEGER	0	NULL	0
+Catalog Error: Table with name t does not exist!
 
-# but querying the view fails
+# querying the view also fails
 statement error
 SELECT * FROM test.v
 
@@ -43,13 +42,11 @@ loop i 0 2
 # restart the system
 restart
 
-# the view still exists, but the table does not
-# we can check the types, but not query it
-query IIIIII
+# the view exists, but we cant check the types
+statement error
 PRAGMA table_info('test.v')
 ----
-0	a	INTEGER	0	NULL	0
-1	b	INTEGER	0	NULL	0
+Catalog Error: Table with name t does not exist!
 
 statement error
 SELECT * FROM test.v

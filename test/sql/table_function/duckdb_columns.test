@@ -26,3 +26,5 @@ memory	integers	i	INTEGER	NULL	True	32	2	0
 memory	test	i	INTEGER	NULL	False	32	2	0
 memory	test	j	DECIMAL(18,3)	NULL	True	18	10	3
 memory	test	k	VARCHAR	'hello'	True	NULL	NULL	NULL
+
+# TODO: add test with duckdb_columns on VIEW with/without explicit aliases

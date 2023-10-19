@@ -15,6 +15,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
 
 namespace duckdb {
 
@@ -223,10 +224,12 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		bool inherit_ctes = false;
 		auto view_binder = Binder::CreateBinder(context, this, inherit_ctes);
 		view_binder->can_contain_nulls = true;
+
 		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(view_catalog_entry.query->Copy()));
 		subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
+
 		subquery.column_name_alias =
-		    BindContext::AliasColumnNames(subquery.alias, view_catalog_entry.aliases, ref.column_name_alias);
+		    BindContext::AliasColumnNamesUnchecked(view_catalog_entry.aliases, ref.column_name_alias);
 		// bind the child subquery
 		view_binder->AddBoundView(view_catalog_entry);
 		auto bound_child = view_binder->Bind(subquery);

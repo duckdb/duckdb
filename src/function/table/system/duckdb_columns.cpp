@@ -158,6 +158,15 @@ public:
 		names = view_info.BoundNames();
 		types = view_info.BoundTypes();
 		D_ASSERT(names.size() == types.size());
+
+		auto &aliases = entry.aliases;
+		if (aliases.size() > names.size()) {
+			throw InvalidInputException("View contains more aliases than the columns it's wrapping");
+		}
+		// Apply the aliases to the names
+		for (idx_t i = 0; i < aliases.size(); i++) {
+			names[i] = aliases[i];
+		}
 	}
 
 	StandardEntry &Entry() override {
