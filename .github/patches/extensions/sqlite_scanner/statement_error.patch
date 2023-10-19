@@ -1,0 +1,27 @@
+diff --git a/test/sql/storage/attach_detach.test b/test/sql/storage/attach_detach.test
+index 930dd45..830d587 100644
+--- a/test/sql/storage/attach_detach.test
++++ b/test/sql/storage/attach_detach.test
+@@ -18,7 +18,8 @@ DETACH s1
+ 
+ statement error
+ SELECT * FROM s1.test
+-
++----
++Catalog Error: Table with name test does not exist!
+ 
+ statement ok
+ ATTACH '__TEST_DIR__/attach_detach.db' AS s1 (TYPE SQLITE)
+diff --git a/test/sql/storage/attach_drop.test b/test/sql/storage/attach_drop.test
+index 0cf6aa5..3cbbad8 100644
+--- a/test/sql/storage/attach_drop.test
++++ b/test/sql/storage/attach_drop.test
+@@ -19,6 +19,8 @@ DROP TABLE simple.test
+ # verify the drop was successful
+ statement error
+ SELECT * FROM simple.test;
++----
++Catalog Error: Table with name test does not exist!
+ 
+ statement error
+ DROP TABLE simple.testx

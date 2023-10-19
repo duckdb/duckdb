@@ -1,0 +1,64 @@
+diff --git a/test/sql/test_substrait.test b/test/sql/test_substrait.test
+index cbbd37f..e1b13f8 100644
+--- a/test/sql/test_substrait.test
++++ b/test/sql/test_substrait.test
+@@ -45,36 +45,56 @@ Bar Muscle Up	10
+ # Should fail with empty
+ statement error
+ CALL get_substrait()
++----
++No function matches the given name and argument types 'get_substrait()'
+ 
+ statement error
+ CALL get_substrait_json()
++----
++No function matches the given name and argument types 'get_substrait_json()'
+ 
+ statement error
+ CALL from_substrait()
++----
++No function matches the given name and argument types 'from_substrait()'
+ 
+ # Should fail with NULL
+ statement error
+ CALL get_substrait(NULL)
++----
++syntax error at or near "NULL"
+ 
+ statement error
+ CALL get_substrait_json(NULL)
++----
++syntax error at or near "NULL"
+ 
+ statement error
+ CALL from_substrait(NULL)
++----
++No function matches the given name and argument types 'from_substrait(INTEGER)'
+ 
+ 
+ 
+ # Should fail with Invalid Query
+ statement error
+-CALL get_substrait(select bla from t)
++CALL get_substrait('select bla from t')
++----
++Catalog Error: Table with name t does not exist!
+ 
+ statement error
+-CALL get_substrait_json(select bla from t)
++CALL get_substrait_json('select bla from t')
++----
++Catalog Error: Table with name t does not exist!
+ 
+ #Shoud fail with invalid binary
+ statement error
+-CALL from_substrait(ongezoutennoten)
++CALL from_substrait('ongezoutennoten')
++----
++No function matches the given name and argument types 'from_substrait(VARCHAR)'
+ 
+ # Should fail on empty plan
+ statement error
+ CALL from_substrait(''::BLOB);
++----
++Substrait Plan does not have a SELECT statement
