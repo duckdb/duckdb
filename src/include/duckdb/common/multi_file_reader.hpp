@@ -40,6 +40,8 @@ struct MultiFileReaderBindData {
 	idx_t filename_idx = DConstants::INVALID_INDEX;
 	//! The set of hive partitioning indexes (if any)
 	vector<HivePartitioningIndex> hive_partitioning_indexes;
+	//! The index of the file_row_number column (if any)
+	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static MultiFileReaderBindData Deserialize(Deserializer &deserializer);
