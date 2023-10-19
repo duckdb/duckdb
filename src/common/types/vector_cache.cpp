@@ -25,7 +25,7 @@ public:
 			auto &child_type = ArrayType::GetChildType(type);
 			auto array_size = ArrayType::GetSize(type);
 			child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type, array_size * capacity));
-			auto child_vector = make_uniq<Vector>(child_type, false, false, array_size * capacity);
+			auto child_vector = make_uniq<Vector>(child_type, true, false, array_size * capacity);
 			auxiliary = make_shared<VectorArrayBuffer>(std::move(child_vector), array_size, capacity);
 			break;
 		}
