@@ -23,7 +23,9 @@ class DataFrame:
     def __init__(self, relation: duckdb.DuckDBPyRelation, session: "SparkSession"):
         self.relation = relation
         self.session = session
-        self._schema = duckdb_to_spark_schema(self.relation.columns, self.relation.types) if self.relation else None
+        self._schema = None
+        if (self.relation != None):
+            self._schema = duckdb_to_spark_schema(self.relation.columns, self.relation.types)
 
     def show(self, **kwargs) -> None:
         self.relation.show()
