@@ -76,24 +76,21 @@ struct ICUTimeBucket : public ICUDateFunc {
 
 	static inline timestamp_t WidthConvertibleToDaysCommon(int32_t bucket_width_days, const timestamp_t ts,
 	                                                       const timestamp_t origin, icu::Calendar *calendar) {
-		const auto trunc_days = TruncationFactory(DatePartSpecifier::DAY);
 		const auto sub_days = SubtractFactory(DatePartSpecifier::DAY);
 
-		uint64_t tmp_micros = SetTime(calendar, ts);
-		trunc_days(calendar, tmp_micros);
-		timestamp_t truncated_ts = GetTimeUnsafe(calendar, tmp_micros);
-
-		int64_t ts_days = sub_days(calendar, origin, truncated_ts);
+		int64_t ts_days = sub_days(calendar, origin, ts);
 		int64_t result_days = (ts_days / bucket_width_days) * bucket_width_days;
 		if (result_days < NumericLimits<int32_t>::Minimum() || result_days > NumericLimits<int32_t>::Maximum()) {
 			throw OutOfRangeException("Timestamp out of range");
 		}
-		if (ts_days < 0 && ts_days % bucket_width_days != 0) {
-			result_days =
-			    SubtractOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(result_days, bucket_width_days);
+		timestamp_t bucket = Add(calendar, origin, interval_t {0, static_cast<int32_t>(result_days), 0});
+		if (ts < bucket) {
+			D_ASSERT(ts < origin);
+			bucket = Add(calendar, bucket, interval_t {0, -bucket_width_days, 0});
+			D_ASSERT(ts > bucket);
 		}
 
-		return Add(calendar, origin, interval_t {0, static_cast<int32_t>(result_days), 0});
+		return bucket;
 	}
 
 	static inline timestamp_t WidthConvertibleToMonthsCommon(int32_t bucket_width_months, const timestamp_t ts,

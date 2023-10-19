@@ -1,0 +1,19 @@
+# name: test/fuzzer/pedro/signed_and_unsigned_comparison.test
+# description: Issue #9329: Signed and unsigned integer predicate with wrong result
+# group: [pedro]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+CREATE TABLE t1 (
+	c1 UINT32,
+	c2 INT32
+);
+
+statement ok
+INSERT INTO t1 VALUES (0,0);
+
+query I
+SELECT 1 FROM t1 WHERE t1.c2 = t1.c1 AND t1.c2 < t1.c1;
+----

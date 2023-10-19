@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.5)
 
 if(POLICY CMP0026)
   cmake_policy(SET CMP0026 NEW)
@@ -22,12 +22,7 @@ find_package(Threads REQUIRED)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-if (CMAKE_VERSION VERSION_LESS "3.1")
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-else ()
-  set (CMAKE_CXX_STANDARD 11)
-endif ()
-
+set (CMAKE_CXX_STANDARD 11)
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -629,12 +624,7 @@ function(link_extension_libraries LIBRARY)
 endfunction()
 
 function(link_threads LIBRARY)
-  if (CMAKE_VERSION VERSION_LESS "3.1")
-    target_link_libraries(${LIBRARY} pthread)
-
-  else()
     target_link_libraries(${LIBRARY} Threads::Threads)
-  endif()
 endfunction()
 
 function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
@@ -1094,7 +1084,7 @@ if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "")
   message(STATUS "Extensions will be deployed to: ${LOCAL_EXTENSION_REPO}")
 endif()
 
-if (CMAKE_VERSION VERSION_GREATER "3.0" AND NOT EXTENSION_CONFIG_BUILD ) # this does not work with 2.8
+if (NOT EXTENSION_CONFIG_BUILD )
 # Write the export set for build and install tree
 install(EXPORT "${DUCKDB_EXPORT_SET}" DESTINATION "${INSTALL_CMAKE_DIR}")
 export(EXPORT "${DUCKDB_EXPORT_SET}"

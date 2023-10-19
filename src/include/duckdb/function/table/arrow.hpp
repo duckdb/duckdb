@@ -33,6 +33,8 @@ struct ArrowInterval {
 struct ArrowProjectedColumns {
 	unordered_map<idx_t, string> projection_map;
 	vector<string> columns;
+	// Map from filter index to column index
+	unordered_map<idx_t, idx_t> filter_to_col;
 };
 
 struct ArrowStreamParameters {
