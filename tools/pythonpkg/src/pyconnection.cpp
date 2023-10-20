@@ -67,13 +67,13 @@ void DuckDBPyConnection::DetectEnvironment() {
 		return;
 	}
 	DuckDBPyConnection::environment = PythonEnvironmentType::INTERACTIVE;
-	if (!ModuleIsLoaded<IPythonCacheItem>()) {
+	if (!ModuleIsLoaded<IpythonCacheItem>()) {
 		return;
 	}
 
 	// Check to see if we are in a Jupyter Notebook
 	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	auto get_ipython = import_cache_py.IPython().get_ipython();
+	auto get_ipython = import_cache_py.IPython.get_ipython();
 	if (get_ipython.ptr() == nullptr) {
 		// Could either not load the IPython module, or it has no 'get_ipython' attribute
 		return;
@@ -1482,7 +1482,7 @@ void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig
 
 static bool HasJupyterProgressBarDependencies() {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	if (!import_cache.ipywidgets().IsLoaded()) {
+	if (!import_cache.ipywidgets()) {
 		// ipywidgets not installed, needed to support the progress bar
 		return false;
 	}
@@ -1591,7 +1591,7 @@ ModifiedMemoryFileSystem &DuckDBPyConnection::GetObjectFileSystem() {
 	if (!internal_object_filesystem) {
 		D_ASSERT(!FileSystemIsRegistered("DUCKDB_INTERNAL_OBJECTSTORE"));
 		auto &import_cache_py = *ImportCache();
-		auto modified_memory_fs = import_cache_py.pyduckdb().filesystem.modified_memory_filesystem();
+		auto modified_memory_fs = import_cache_py.duckdb.filesystem.ModifiedMemoryFileSystem();
 		if (modified_memory_fs.ptr() == nullptr) {
 			throw InvalidInputException(
 			    "This operation could not be completed because required module 'fsspec' is not installed");
@@ -1631,7 +1631,7 @@ bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
 		return false;
 	}
 	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, import_cache_py.pandas().DataFrame());
+	return py::isinstance(object, import_cache_py.pandas.DataFrame());
 }
 
 bool DuckDBPyConnection::IsPolarsDataframe(const py::object &object) {
@@ -1639,15 +1639,15 @@ bool DuckDBPyConnection::IsPolarsDataframe(const py::object &object) {
 		return false;
 	}
 	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, import_cache_py.polars().DataFrame()) ||
-	       py::isinstance(object, import_cache_py.polars().LazyFrame());
+	return py::isinstance(object, import_cache_py.polars.DataFrame()) ||
+	       py::isinstance(object, import_cache_py.polars.LazyFrame());
 }
 
 bool IsValidNumpyDimensions(const py::handle &object, int &dim) {
 	// check the dimensions of numpy arrays
 	// should only be called by IsAcceptedNumpyObject
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	if (!py::isinstance(object, import_cache.numpy().ndarray())) {
+	if (!py::isinstance(object, import_cache.numpy.ndarray())) {
 		return false;
 	}
 	auto shape = (py::cast<py::array>(object)).attr("shape");
@@ -1663,7 +1663,7 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 		return NumpyObjectType::INVALID;
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	if (py::isinstance(object, import_cache.numpy().ndarray())) {
+	if (py::isinstance(object, import_cache.numpy.ndarray())) {
 		auto len = py::len((py::cast<py::array>(object)).attr("shape"));
 		switch (len) {
 		case 1:
@@ -1694,19 +1694,19 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 }
 
 bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
-	if (!ModuleIsLoaded<ArrowLibCacheItem>()) {
+	if (!ModuleIsLoaded<PyarrowCacheItem>()) {
 		return false;
 	}
 	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	if (py::isinstance(object, import_cache_py.arrow_lib().Table()) ||
-	    py::isinstance(object, import_cache_py.arrow_lib().RecordBatchReader())) {
+	if (py::isinstance(object, import_cache_py.pyarrow.Table()) ||
+	    py::isinstance(object, import_cache_py.pyarrow.RecordBatchReader())) {
 		return true;
 	}
-	if (!ModuleIsLoaded<ArrowDatasetCacheItem>()) {
+	if (!ModuleIsLoaded<PyarrowDatasetCacheItem>()) {
 		return false;
 	}
-	return (py::isinstance(object, import_cache_py.arrow_dataset().Dataset()) ||
-	        py::isinstance(object, import_cache_py.arrow_dataset().Scanner()));
+	return (py::isinstance(object, import_cache_py.pyarrow.dataset.Dataset()) ||
+	        py::isinstance(object, import_cache_py.pyarrow.dataset.Scanner()));
 }
 
 unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {

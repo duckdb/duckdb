@@ -1,3 +1,4 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -13,42 +14,25 @@
 namespace duckdb {
 
 struct NumpyCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "numpy";
 
 public:
+	NumpyCacheItem()
+	    : PythonImportCacheItem("numpy"), ndarray("ndarray", this), datetime64("datetime64", this),
+	      generic("generic", this), int64("int64", this), bool_("bool_", this), byte("byte", this),
+	      ubyte("ubyte", this), short_("short", this), ushort_("ushort", this), intc("intc", this),
+	      uintc("uintc", this), int_("int_", this), uint("uint", this), longlong("longlong", this),
+	      ulonglong("ulonglong", this), half("half", this), float16("float16", this), single("single", this),
+	      longdouble("longdouble", this), csingle("csingle", this), cdouble("cdouble", this),
+	      clongdouble("clongdouble", this) {
+	}
 	~NumpyCacheItem() override {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		ndarray.LoadAttribute("ndarray", cache, *this);
-		datetime64.LoadAttribute("datetime64", cache, *this);
-		int64.LoadAttribute("int64", cache, *this);
-		generic.LoadAttribute("generic", cache, *this);
-		int64.LoadAttribute("int64", cache, *this);
-		bool_.LoadAttribute("bool_", cache, *this);
-		byte.LoadAttribute("byte", cache, *this);
-		ubyte.LoadAttribute("ubyte", cache, *this);
-		short_.LoadAttribute("short_", cache, *this);
-		ushort_.LoadAttribute("ushort_", cache, *this);
-		intc.LoadAttribute("intc", cache, *this);
-		uintc.LoadAttribute("uintc", cache, *this);
-		int_.LoadAttribute("int_", cache, *this);
-		uint.LoadAttribute("uint", cache, *this);
-		longlong.LoadAttribute("longlong", cache, *this);
-		ulonglong.LoadAttribute("ulonglong", cache, *this);
-		half.LoadAttribute("half", cache, *this);
-		float16.LoadAttribute("float16", cache, *this);
-		single.LoadAttribute("single", cache, *this);
-		longdouble.LoadAttribute("longdouble", cache, *this);
-		csingle.LoadAttribute("csingle", cache, *this);
-		cdouble.LoadAttribute("cdouble", cache, *this);
-		clongdouble.LoadAttribute("clongdouble", cache, *this);
-	}
 
-public:
 	PythonImportCacheItem ndarray;
 	PythonImportCacheItem datetime64;
-
 	PythonImportCacheItem generic;
 	PythonImportCacheItem int64;
 	PythonImportCacheItem bool_;
