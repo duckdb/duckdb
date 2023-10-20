@@ -25,7 +25,7 @@ public:
 	string view_name;
 	//! Aliases of the view
 	vector<string> aliases;
-	// Return types
+	//! Return types
 	vector<LogicalType> types;
 	//! The SelectStatement of the view
 	unique_ptr<SelectStatement> query;
