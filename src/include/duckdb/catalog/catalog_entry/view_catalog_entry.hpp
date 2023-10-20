@@ -48,6 +48,6 @@ public:
 	string ToSQL() const override;
 
 private:
-	void Initialize(CreateViewInfo &info, Catalog &catalog);
+	void Initialize(CreateViewInfo &info);
 };
 } // namespace duckdb
