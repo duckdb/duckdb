@@ -1131,9 +1131,12 @@ void Vector::VerifyMap(Vector &vector_p, const SelectionVector &sel_p, idx_t cou
 
 void Vector::VerifyUnion(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
 #ifdef DEBUG
+
 	D_ASSERT(vector_p.GetType().id() == LogicalTypeId::UNION);
 	auto valid_check = UnionVector::CheckUnionValidity(vector_p, count, sel_p);
-	D_ASSERT(valid_check == UnionInvalidReason::VALID);
+	if (valid_check != UnionInvalidReason::VALID) {
+		throw InternalException("Union not valid, reason: %s", EnumUtil::ToString(valid_check));
+	}
 #endif // DEBUG
 }
 
@@ -1250,7 +1253,8 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 		}
 
 		if (vector->GetType().id() == LogicalTypeId::UNION) {
-			VerifyUnion(*vector, sel_p, count);
+			// Pass in raw vector
+			VerifyUnion(vector_p, sel_p, count);
 		}
 	}
 
@@ -1968,9 +1972,27 @@ union_tag_t UnionVector::GetTag(const Vector &vector, idx_t index) {
 	return FlatVector::GetData<union_tag_t>(tag_vector)[index];
 }
 
-UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector_p, idx_t count, const SelectionVector &sel) {
-
+//! Raw selection vector passed in (not merged with any other selection vectors)
+UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector_p, idx_t count, const SelectionVector &sel_p) {
 	D_ASSERT(vector_p.GetType().id() == LogicalTypeId::UNION);
+
+	// Will contain the (possibly) merged selection vector
+	const SelectionVector *sel = &sel_p;
+	SelectionVector owned_sel;
+	Vector *vector = &vector_p;
+	if (vector->GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		// In the case of a dictionary vector, unwrap the Vector, and merge the selection vectors.
+		auto &child = DictionaryVector::Child(*vector);
+		D_ASSERT(child.GetVectorType() != VectorType::DICTIONARY_VECTOR);
+		auto &dict_sel = DictionaryVector::SelVector(*vector);
+		// merge the selection vectors and verify the child
+		auto new_buffer = dict_sel.Slice(*sel, count);
+		owned_sel.Initialize(new_buffer);
+		sel = &owned_sel;
+		vector = &child;
+	} else if (vector->GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		sel = ConstantVector::ZeroSelectionVector(count, owned_sel);
+	}
 
 	auto member_count = UnionType::GetMemberCount(vector_p.GetType());
 	if (member_count == 0) {
@@ -1981,7 +2003,7 @@ UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector_p, idx_t count
 	vector_p.ToUnifiedFormat(count, vector_vdata);
 
 	auto &entries = StructVector::GetEntries(vector_p);
-	vector<UnifiedVectorFormat> child_vdata(entries.size());
+	duckdb::vector<UnifiedVectorFormat> child_vdata(entries.size());
 	for (idx_t entry_idx = 0; entry_idx < entries.size(); entry_idx++) {
 		auto &child = *entries[entry_idx];
 		child.ToUnifiedFormat(count, child_vdata[entry_idx]);
@@ -1990,33 +2012,34 @@ UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector_p, idx_t count
 	auto &tag_vdata = child_vdata[0];
 
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		auto mapped_idx = sel.get_index(row_idx);
+		auto mapped_idx = sel->get_index(row_idx);
 
-		if (!vector_vdata.validity.RowIsValid(vector_vdata.sel->get_index(mapped_idx))) {
+		if (!vector_vdata.validity.RowIsValid(mapped_idx)) {
 			continue;
 		}
 
-		if (!tag_vdata.validity.RowIsValid(tag_vdata.sel->get_index(mapped_idx))) {
+		auto tag_idx = tag_vdata.sel->get_index(sel_p.get_index(row_idx));
+		if (!tag_vdata.validity.RowIsValid(tag_idx)) {
 			// we can't have NULL tags!
 			return UnionInvalidReason::NULL_TAG;
 		}
-
-		auto tag = UnifiedVectorFormat::GetData<union_tag_t>(tag_vdata)[tag_vdata.sel->get_index(mapped_idx)];
+		auto tag = UnifiedVectorFormat::GetData<union_tag_t>(tag_vdata)[tag_idx];
 		if (tag >= member_count) {
 			return UnionInvalidReason::TAG_OUT_OF_RANGE;
 		}
 
 		bool found_valid = false;
-		for (idx_t member_idx = 0; member_idx < member_count; member_idx++) {
-			auto &member_vdata = child_vdata[1 + member_idx]; // skip the tag
-			if (!member_vdata.validity.RowIsValid(member_vdata.sel->get_index(mapped_idx))) {
+		for (idx_t i = 0; i < member_count; i++) {
+			auto &member_vdata = child_vdata[1 + i]; // skip the tag
+			idx_t member_idx = member_vdata.sel->get_index(sel_p.get_index(row_idx));
+			if (!member_vdata.validity.RowIsValid(member_idx)) {
 				continue;
 			}
 			if (found_valid) {
 				return UnionInvalidReason::VALIDITY_OVERLAP;
 			}
 			found_valid = true;
-			if (tag != static_cast<union_tag_t>(member_idx)) {
+			if (tag != static_cast<union_tag_t>(i)) {
 				return UnionInvalidReason::TAG_MISMATCH;
 			}
 		}
