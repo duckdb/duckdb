@@ -83,6 +83,7 @@ jobs:
         shell: bash
         working-directory: ${{ env.DUCKDB_SRC }}
         run: |
+          shopt -s nullglob
           for filename in .github/patches/duckdb-r/*.patch; do
             git apply $filename
           done
