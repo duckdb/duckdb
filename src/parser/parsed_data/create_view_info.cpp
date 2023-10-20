@@ -46,24 +46,6 @@ string CreateViewInfo::ToString() const {
 	return result;
 }
 
-void CreateViewInfo::SetBoundNames(vector<string> names_p) {
-	names = std::move(names_p);
-}
-
-void CreateViewInfo::SetBoundTypes(vector<LogicalType> types_p) {
-	types = std::move(types_p);
-}
-
-const vector<string> &CreateViewInfo::BoundNames() {
-	D_ASSERT(!names.empty());
-	return names;
-}
-
-const vector<LogicalType> &CreateViewInfo::BoundTypes() {
-	D_ASSERT(!types.empty());
-	return types;
-}
-
 unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
 	auto result = make_uniq<CreateViewInfo>(catalog, schema, view_name);
 	CopyProperties(*result);

@@ -1,7 +1,6 @@
 #include "duckdb/function/table/system_functions.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/parser/qualified_name.hpp"
@@ -9,7 +8,6 @@
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/parser/parsed_data/create_view_info.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
@@ -21,41 +19,9 @@ namespace duckdb {
 struct PragmaTableFunctionData : public TableFunctionData {
 	explicit PragmaTableFunctionData(CatalogEntry &entry_p) : entry(entry_p) {
 	}
+
 	CatalogEntry &entry;
 };
-
-namespace {
-struct TableEntryFunctionData : public PragmaTableFunctionData {
-	explicit TableEntryFunctionData(CatalogEntry &entry_p) : PragmaTableFunctionData(entry_p) {
-		D_ASSERT(entry.type == CatalogType::TABLE_ENTRY);
-	}
-};
-
-struct ViewEntryFunctionData : public PragmaTableFunctionData {
-	explicit ViewEntryFunctionData(CatalogEntry &entry_p, ClientContext &context) : PragmaTableFunctionData(entry_p) {
-		D_ASSERT(entry.type == CatalogType::VIEW_ENTRY);
-		auto &view_entry = entry.Cast<ViewCatalogEntry>();
-		auto info = view_entry.GetInfo();
-		auto &view_info = info->Cast<CreateViewInfo>();
-		auto binder = Binder::CreateBinder(context);
-		binder->BindCreateViewInfo(view_info);
-
-		names = view_info.BoundNames();
-		types = view_info.BoundTypes();
-		auto &aliases = view_entry.aliases;
-		if (aliases.size() > names.size()) {
-			throw InvalidInputException("View contains more aliases than the columns it's wrapping");
-		}
-		// Apply the aliases to the names
-		for (idx_t i = 0; i < aliases.size(); i++) {
-			names[i] = aliases[i];
-		}
-	}
-	vector<string> names;
-	vector<LogicalType> types;
-};
-
-} // namespace
 
 struct PragmaTableOperatorData : public GlobalTableFunctionState {
 	PragmaTableOperatorData() : offset(0) {
@@ -89,16 +55,7 @@ static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, Tabl
 	// look up the table name in the catalog
 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
 	auto &entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog, qname.schema, qname.name);
-	switch (entry.type) {
-	case CatalogType::TABLE_ENTRY: {
-		return make_uniq<TableEntryFunctionData>(entry);
-	}
-	case CatalogType::VIEW_ENTRY: {
-		return make_uniq<ViewEntryFunctionData>(entry, context);
-	}
-	default:
-		throw NotImplementedException("Unimplemented catalog type for pragma_table_info");
-	}
+	return make_uniq<PragmaTableFunctionData>(entry);
 }
 
 unique_ptr<GlobalTableFunctionState> PragmaTableInfoInit(ClientContext &context, TableFunctionInitInput &input) {
@@ -138,9 +95,7 @@ static void CheckConstraints(TableCatalogEntry &table, const ColumnDefinition &c
 	}
 }
 
-static void PragmaTableInfoTable(PragmaTableOperatorData &data, const TableEntryFunctionData &bind_data,
-                                 DataChunk &output) {
-	auto &table = bind_data.entry.Cast<TableCatalogEntry>();
+static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntry &table, DataChunk &output) {
 	if (data.offset >= table.GetColumns().LogicalColumnCount()) {
 		// finished returning values
 		return;
@@ -175,12 +130,7 @@ static void PragmaTableInfoTable(PragmaTableOperatorData &data, const TableEntry
 	data.offset = next;
 }
 
-static void PragmaTableInfoView(PragmaTableOperatorData &data, const ViewEntryFunctionData &bind_data,
-                                DataChunk &output) {
-	auto &view = bind_data.entry.Cast<ViewCatalogEntry>();
-	auto &types = bind_data.types;
-	auto &names = bind_data.names;
-
+static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry &view, DataChunk &output) {
 	if (data.offset >= view.types.size()) {
 		// finished returning values
 		return;
@@ -192,8 +142,8 @@ static void PragmaTableInfoView(PragmaTableOperatorData &data, const ViewEntryFu
 
 	for (idx_t i = data.offset; i < next; i++) {
 		auto index = i - data.offset;
-		auto type = types[i];
-		auto &name = names[i];
+		auto type = view.types[i];
+		auto &name = view.aliases[i];
 		// return values:
 		// "cid", PhysicalType::INT32
 
@@ -217,10 +167,10 @@ static void PragmaTableInfoFunction(ClientContext &context, TableFunctionInput &
 	auto &state = data_p.global_state->Cast<PragmaTableOperatorData>();
 	switch (bind_data.entry.type) {
 	case CatalogType::TABLE_ENTRY:
-		PragmaTableInfoTable(state, bind_data.Cast<TableEntryFunctionData>(), output);
+		PragmaTableInfoTable(state, bind_data.entry.Cast<TableCatalogEntry>(), output);
 		break;
 	case CatalogType::VIEW_ENTRY:
-		PragmaTableInfoView(state, bind_data.Cast<ViewEntryFunctionData>(), output);
+		PragmaTableInfoView(state, bind_data.entry.Cast<ViewCatalogEntry>(), output);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented catalog type for pragma_table_info");

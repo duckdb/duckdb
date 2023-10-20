@@ -135,8 +135,6 @@ public:
 
 	//! Alias a set of column names for the specified table, using the original names if there are not enough aliases
 	//! specified.
-	static vector<string> AliasColumnNamesUnchecked(const vector<string> &names, const vector<string> &column_aliases);
-	//! Same as Unchecked, but throws if the amount of column aliases exceeds the amount of names
 	static vector<string> AliasColumnNames(const string &table_name, const vector<string> &names,
 	                                       const vector<string> &column_aliases);
 

@@ -40,12 +40,12 @@ v1	k
 statement ok
 alter table test rename column j to renamed
 
-# Rename of the base table is reflected in the view's info
+# Rename of the base table is not reflected in the view's info
 query II
 select table_name, column_name from duckdb_columns where table_name = 'v1'
 ----
 v1	i
-v1	renamed
+v1	j
 v1	k
 
 statement ok
@@ -75,10 +75,10 @@ v1	k
 statement ok
 alter table test rename column k to not_k
 
-# The rename of 'k' is reflected in the view's info because it was not aliased
+# The rename of 'k' is also not reflected in the view's info even though it was not aliased
 query II
 select table_name, column_name from duckdb_columns where table_name = 'v1'
 ----
 v1	a
 v1	b
-v1	not_k
+v1	k

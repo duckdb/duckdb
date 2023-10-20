@@ -13,7 +13,7 @@ namespace duckdb {
 void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 	query = std::move(info.query);
 	this->aliases = info.aliases;
-	this->types = info.BoundTypes();
+	this->types = info.types;
 	this->temporary = info.temporary;
 	this->sql = info.sql;
 	this->internal = info.internal;
@@ -31,8 +31,7 @@ unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	result->sql = sql;
 	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	result->aliases = aliases;
-	result->SetBoundTypes(types);
-	result->temporary = temporary;
+	result->types = types;
 	return std::move(result);
 }
 
@@ -59,16 +58,23 @@ string ViewCatalogEntry::ToSQL() const {
 		//! Return empty sql with view name so pragma view_tables don't complain
 		return sql;
 	}
-	auto info = GetInfo();
-	auto result = info->ToString();
-	return result + ";\n";
+	return sql + "\n;";
 }
 
 unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) const {
 	D_ASSERT(!internal);
-	auto create_info = GetInfo();
+	CreateViewInfo create_info(schema, name);
+	create_info.query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
+	for (idx_t i = 0; i < aliases.size(); i++) {
+		create_info.aliases.push_back(aliases[i]);
+	}
+	for (idx_t i = 0; i < types.size(); i++) {
+		create_info.types.push_back(types[i]);
+	}
+	create_info.temporary = temporary;
+	create_info.sql = sql;
 
-	return make_uniq<ViewCatalogEntry>(catalog, schema, create_info->Cast<CreateViewInfo>());
+	return make_uniq<ViewCatalogEntry>(catalog, schema, create_info);
 }
 
 } // namespace duckdb

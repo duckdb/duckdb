@@ -36,11 +36,10 @@ SELECT * FROM test.v
 statement ok
 DROP TABLE test.t
 
-# we cant query this after the table is gone
-statement error
+# we can still query this after the table is gone
+query II nosort view_info
 PRAGMA table_info('test.v')
 ----
-Catalog Error: Table with name t does not exist!
 
 loop i 0 2
 
@@ -50,11 +49,10 @@ restart
 statement ok
 PRAGMA disable_checkpoint_on_shutdown
 
-# cant check info, or query the view
-statement error
+# can check info, but not query the view
+query II nosort view_info
 PRAGMA table_info('test.v')
 ----
-Catalog Error: Table with name t does not exist!
 
 statement error
 SELECT * FROM test.v

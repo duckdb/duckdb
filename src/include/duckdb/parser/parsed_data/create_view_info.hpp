@@ -23,22 +23,14 @@ public:
 public:
 	//! View name
 	string view_name;
-	//! Explicit column aliases of the view
+	//! Aliases of the view
 	vector<string> aliases;
+	// Return types
+	vector<LogicalType> types;
 	//! The SelectStatement of the view
 	unique_ptr<SelectStatement> query;
 
-private:
-	// Bound names and types
-	vector<LogicalType> types;
-	// Do not serialize the bound names
-	vector<string> names;
-
 public:
-	void SetBoundNames(vector<string> names);
-	void SetBoundTypes(vector<LogicalType> types);
-	const vector<string> &BoundNames();
-	const vector<LogicalType> &BoundTypes();
 	unique_ptr<CreateInfo> Copy() const override;
 
 	//! Gets a bound CreateViewInfo object from a SELECT statement and a view name, schema name, etc
