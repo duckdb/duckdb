@@ -185,6 +185,17 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 	return_types = schema_col_types;
 	D_ASSERT(names.size() == return_types.size());
 
+	if (options.file_row_number) {
+		if (std::find(names.begin(), names.end(), "file_row_number") != names.end()) {
+			throw BinderException(
+			    "Using file_row_number option on file with column named file_row_number is not supported");
+		}
+
+		bind_data.file_row_number_idx = names.size();
+		return_types.emplace_back(LogicalType::BIGINT);
+		names.emplace_back("file_row_number");
+	}
+
 	return bind_data;
 }
 
@@ -234,11 +245,20 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 			continue;
 		}
 
+		// Handle any generate columns that are not in the schema (currently only file_row_number)
+		if (global_column_index >= parquet_options.schema.size()) {
+			if (bind_data.reader_bind.file_row_number_idx == global_column_index) {
+				reader_data.column_mapping.push_back(i);
+				reader_data.column_ids.push_back(reader.file_row_number_idx);
+			}
+			continue;
+		}
+
 		const auto &column_definition = parquet_options.schema[global_column_index];
 		auto it = field_id_to_column_index.find(column_definition.field_id);
 		if (it == field_id_to_column_index.end()) {
 			// field id not present in file, use default value
-			reader_data.constant_map.emplace_back(global_column_index, column_definition.default_value);
+			reader_data.constant_map.emplace_back(i, column_definition.default_value);
 			continue;
 		}
 
@@ -249,7 +269,7 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 			reader_data.cast_map[local_column_index] = column_definition.type;
 		}
 
-		reader_data.column_mapping.push_back(global_column_index);
+		reader_data.column_mapping.push_back(i);
 		reader_data.column_ids.push_back(local_column_index);
 	}
 	reader_data.empty_columns = reader_data.column_ids.empty();
@@ -384,6 +404,7 @@ public:
 			// a schema was supplied
 			result->reader_bind = BindSchema(context, result->types, result->names, *result, parquet_options);
 		}
+
 		if (return_types.empty()) {
 			// no expected types - just copy the types
 			return_types = result->types;

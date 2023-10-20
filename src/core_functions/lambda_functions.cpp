@@ -133,18 +133,18 @@ bool ListLambdaBindData::Equals(const FunctionData &other_p) const {
 
 void ListLambdaBindData::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                    const ScalarFunction &) {
-	//	auto &bind_data = bind_data_p->Cast<ListLambdaBindData>();
-	//	serializer.WriteProperty(100, "return_type", bind_data.return_type);
-	//	serializer.WritePropertyWithDefault(101, "lambda_expr", bind_data.lambda_expr, unique_ptr<Expression>());
-	throw NotImplementedException("FIXME: list lambda serialize");
+	auto &bind_data = bind_data_p->Cast<ListLambdaBindData>();
+	serializer.WriteProperty(100, "return_type", bind_data.return_type);
+	serializer.WritePropertyWithDefault(101, "lambda_expr", bind_data.lambda_expr, unique_ptr<Expression>());
+	serializer.WriteProperty(102, "has_index", bind_data.has_index);
 }
 
 unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deserializer, ScalarFunction &) {
-	//	auto return_type = deserializer.ReadProperty<LogicalType>(100, "return_type");
-	//	auto lambda_expr =
-	//	    deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "lambda_expr", unique_ptr<Expression>());
-	//	return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr));
-	throw NotImplementedException("FIXME: list lambda deserialize");
+	auto return_type = deserializer.ReadProperty<LogicalType>(100, "return_type");
+	auto lambda_expr =
+	    deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "lambda_expr", unique_ptr<Expression>());
+	auto has_index = deserializer.ReadProperty<bool>(102, "has_index");
+	return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr), has_index);
 }
 
 //===--------------------------------------------------------------------===//
@@ -198,6 +198,7 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<ListLambdaBindData>();
 	auto &lambda_expr = info.lambda_expr;
+	bool has_side_effects = lambda_expr->HasSideEffects();
 
 	// get the child vector and child data
 	// FIXME: no more flatten, we should be able to use dictionary vectors
@@ -348,7 +349,7 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 		                       appended_lists_cnt, lists_len, curr_original_list_len, input_chunk, info.has_index);
 	}
 
-	if (args.AllConstant()) {
+	if (args.AllConstant() && !has_side_effects) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }

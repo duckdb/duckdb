@@ -348,7 +348,6 @@ void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientCont
 		}
 		auto loption = StringUtil::Lower(kv.first);
 		if (loption == "columns") {
-			explicitly_set_columns = true;
 			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::STRUCT) {
 				throw BinderException("read_csv columns requires a struct as input");

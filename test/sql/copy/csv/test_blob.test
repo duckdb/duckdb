@@ -8,8 +8,9 @@
 statement ok
 CREATE TABLE blobs (b BYTEA);
 
+# We must set auto_detect to 0 since blobs are not supported in auto-detection
 query I
-COPY blobs FROM 'test/sql/copy/csv/data/test/blob.csv' (HEADER 0);
+COPY blobs FROM 'test/sql/copy/csv/data/test/blob.csv' (HEADER 0, AUTO_DETECT 0);
 ----
 1
 
@@ -29,7 +30,7 @@ statement ok
 DELETE FROM blobs
 
 query I
-COPY blobs FROM '__TEST_DIR__/blob.csv' (HEADER 1);
+COPY blobs FROM '__TEST_DIR__/blob.csv' (HEADER 1, AUTO_DETECT 0);
 ----
 1
 
@@ -48,7 +49,7 @@ statement ok
 DELETE FROM blobs
 
 query I
-COPY blobs FROM '__TEST_DIR__/blob.csv' (DELIMITER 'A', QUOTE 'B', ESCAPE 'C', HEADER 1);
+COPY blobs FROM '__TEST_DIR__/blob.csv' (DELIMITER 'A', QUOTE 'B', ESCAPE 'C', HEADER 1, AUTO_DETECT 0);
 ----
 1
 
