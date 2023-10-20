@@ -27,8 +27,7 @@ public:
 
 public:
 	//! Create a real TableCatalogEntry and initialize storage for it
-	ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info,
-	                 optional_ptr<ClientContext> context);
+	ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info);
 
 	//! The query of the view
 	unique_ptr<SelectStatement> query;
@@ -49,6 +48,6 @@ public:
 	string ToSQL() const override;
 
 private:
-	void Initialize(CreateViewInfo &info, optional_ptr<ClientContext> context, Catalog &catalog);
+	void Initialize(CreateViewInfo &info, Catalog &catalog);
 };
 } // namespace duckdb

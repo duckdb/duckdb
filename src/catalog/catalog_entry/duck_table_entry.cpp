@@ -66,7 +66,7 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, vector<Log
 
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
                                optional_ptr<ClientContext> context, std::shared_ptr<DataTable> inherited_storage)
-    : TableCatalogEntry(catalog, schema, info.Base(), context), storage(std::move(inherited_storage)),
+    : TableCatalogEntry(catalog, schema, info.Base()), storage(std::move(inherited_storage)),
       bound_constraints(std::move(info.bound_constraints)),
       column_dependency_manager(std::move(info.column_dependency_manager)) {
 	if (!storage) {

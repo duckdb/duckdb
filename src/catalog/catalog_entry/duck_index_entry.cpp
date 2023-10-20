@@ -4,9 +4,8 @@
 
 namespace duckdb {
 
-DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info,
-                               optional_ptr<ClientContext> context)
-    : IndexCatalogEntry(catalog, schema, info, context) {
+DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info)
+    : IndexCatalogEntry(catalog, schema, info) {
 }
 
 DuckIndexEntry::~DuckIndexEntry() {

@@ -27,7 +27,7 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	result->max_value = max_value;
 	result->start_value = counter;
 	result->cycle = cycle;
-	result->dependencies = dependencies.GetLogical();
+	result->dependencies = dependencies;
 	return std::move(result);
 }
 

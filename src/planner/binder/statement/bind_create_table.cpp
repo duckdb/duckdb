@@ -227,7 +227,7 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 	}
 }
 
-static void ExtractExpressionDependencies(Expression &expr, PhysicalDependencyList &dependencies) {
+static void ExtractExpressionDependencies(Expression &expr, LogicalDependencyList &dependencies) {
 	if (expr.type == ExpressionType::BOUND_FUNCTION) {
 		auto &function = expr.Cast<BoundFunctionExpression>();
 		if (function.function.dependency) {
@@ -300,7 +300,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		}
 		BindLogicalType(column.TypeMutable(), &result->schema.catalog);
 	}
-	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
+	// result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
 	properties.allow_stream_result = false;
 	return result;
 }

@@ -23,8 +23,7 @@ public:
 
 public:
 	//! Create a TypeCatalogEntry and initialize storage for it
-	TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTypeInfo &info,
-	                 optional_ptr<ClientContext> context);
+	TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTypeInfo &info);
 
 	LogicalType user_type;
 

@@ -16,8 +16,7 @@ namespace duckdb {
 class DuckIndexEntry : public IndexCatalogEntry {
 public:
 	//! Create an IndexCatalogEntry and initialize storage for it
-	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info,
-	               optional_ptr<ClientContext> context);
+	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info);
 	~DuckIndexEntry();
 
 	shared_ptr<DataTableInfo> info;

@@ -9,12 +9,11 @@
 
 namespace duckdb {
 
-TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTypeInfo &info,
-                                   optional_ptr<ClientContext> context)
+TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTypeInfo &info)
     : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info.name), user_type(info.type) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
-	this->dependencies = info.dependencies.GetPhysical(catalog, context);
+	this->dependencies = info.dependencies;
 }
 
 unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
@@ -23,7 +22,7 @@ unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 	result->schema = schema.name;
 	result->name = name;
 	result->type = user_type;
-	result->dependencies = dependencies.GetLogical();
+	result->dependencies = dependencies;
 	return std::move(result);
 }
 

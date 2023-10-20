@@ -22,7 +22,6 @@ public:
 	static constexpr const char *Name = "macro function";
 
 public:
-	ScalarMacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info,
-	                        optional_ptr<ClientContext> context);
+	ScalarMacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info);
 };
 } // namespace duckdb

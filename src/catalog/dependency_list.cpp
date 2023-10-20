@@ -96,6 +96,11 @@ void LogicalDependencyList::AddDependency(CatalogEntry &entry) {
 	set.insert(dependency);
 }
 
+bool LogicalDependencyList::Contains(CatalogEntry &entry_p) {
+	LogicalDependency logical_entry(entry_p);
+	return set.count(logical_entry);
+}
+
 PhysicalDependencyList LogicalDependencyList::GetPhysical(Catalog &catalog, optional_ptr<ClientContext> context) const {
 	PhysicalDependencyList dependencies;
 
@@ -105,16 +110,27 @@ PhysicalDependencyList LogicalDependencyList::GetPhysical(Catalog &catalog, opti
 		auto &schema = entry.schema;
 		auto &type = entry.type;
 
-		auto lookup = catalog.LookupEntry(*context, type, schema, name, OnEntryNotFound::THROW_EXCEPTION);
-		D_ASSERT(lookup.Found());
-		auto catalog_entry = lookup.entry;
-		dependencies.AddDependency(*catalog_entry);
+		CatalogEntryLookup lookup;
+		if (type == CatalogType::SCHEMA_ENTRY) {
+			auto lookup = catalog.GetSchema(*context, entry.catalog, name, OnEntryNotFound::RETURN_NULL);
+			D_ASSERT(lookup);
+			dependencies.AddDependency(*lookup);
+		} else {
+			auto lookup = catalog.LookupEntry(*context, type, schema, name, OnEntryNotFound::THROW_EXCEPTION);
+			D_ASSERT(lookup.Found());
+			auto catalog_entry = lookup.entry;
+			dependencies.AddDependency(*catalog_entry);
+		}
 	}
 	return dependencies;
 }
 
 void LogicalDependencyList::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(0, "logical_dependencies", set);
+}
+
+const LogicalDependencyList::create_info_set_t &LogicalDependencyList::Set() const {
+	return set;
 }
 
 LogicalDependencyList LogicalDependencyList::Deserialize(Deserializer &deserializer) {

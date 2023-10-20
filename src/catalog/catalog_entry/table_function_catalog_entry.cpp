@@ -4,9 +4,8 @@
 namespace duckdb {
 
 TableFunctionCatalogEntry::TableFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
-                                                     CreateTableFunctionInfo &info, optional_ptr<ClientContext> context)
-    : FunctionEntry(CatalogType::TABLE_FUNCTION_ENTRY, catalog, schema, info, context),
-      functions(std::move(info.functions)) {
+                                                     CreateTableFunctionInfo &info)
+    : FunctionEntry(CatalogType::TABLE_FUNCTION_ENTRY, catalog, schema, info), functions(std::move(info.functions)) {
 	D_ASSERT(this->functions.Size() > 0);
 }
 
@@ -26,7 +25,7 @@ unique_ptr<CatalogEntry> TableFunctionCatalogEntry::AlterEntry(ClientContext &co
 		throw BinderException("Failed to add new function overloads to function \"%s\": function already exists", name);
 	}
 	CreateTableFunctionInfo new_info(std::move(new_set));
-	return make_uniq<TableFunctionCatalogEntry>(catalog, schema, new_info, &context);
+	return make_uniq<TableFunctionCatalogEntry>(catalog, schema, new_info);
 }
 
 } // namespace duckdb
