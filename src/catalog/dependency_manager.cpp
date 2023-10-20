@@ -16,33 +16,9 @@ namespace duckdb {
 DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog) {
 }
 
-static PhysicalDependencyList ConvertToPhysical(LogicalDependencyList &logical, CatalogTransaction &transaction,
-                                                CatalogEntry &entry) {
-	if (!transaction.context) {
-		// This is an internal transaction, it does not have a client context
-		// we should not have any dependencies when creating internal entries
-		bool system_only = true;
-		for (auto &dep : logical.Set()) {
-			if (dep.catalog != SYSTEM_CATALOG) {
-				system_only = false;
-			}
-		}
-		D_ASSERT(system_only);
-		return PhysicalDependencyList();
-	}
-	if (logical.Set().empty()) {
-		return PhysicalDependencyList();
-	}
-	auto &context = transaction.GetContext();
-	D_ASSERT(entry.set);
-	auto &set = *entry.set;
-	auto &catalog = (Catalog &)set.GetCatalog();
-	return logical.GetPhysical(catalog, &context);
-}
-
 void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &object,
-                                  LogicalDependencyList &logical_dependencies) {
-	auto dependencies = ConvertToPhysical(logical_dependencies, transaction, object);
+                                  PhysicalDependencyList &dependencies) {
+
 	// check for each object in the sources if they were not deleted yet
 	for (auto &dep : dependencies.set) {
 		auto &dependency = dep.get();

@@ -66,8 +66,28 @@ void CatalogSet::PutEntry(EntryIndex index, unique_ptr<CatalogEntry> catalog_ent
 	entry->second.entry = std::move(catalog_entry);
 }
 
+static PhysicalDependencyList ConvertToPhysical(LogicalDependencyList &logical, CatalogTransaction &transaction,
+                                                CatalogEntry &entry) {
+	if (!transaction.context) {
+		// This is an internal transaction, it does not have a client context
+		// we should not have any dependencies when creating internal entries
+		bool system_only = true;
+		for (auto &dep : logical.Set()) {
+			if (dep.catalog != SYSTEM_CATALOG) {
+				system_only = false;
+			}
+		}
+		D_ASSERT(system_only);
+		return PhysicalDependencyList();
+	}
+	if (logical.Set().empty()) {
+		return PhysicalDependencyList();
+	}
+	return logical.GetPhysical(transaction.context);
+}
+
 bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
-                             LogicalDependencyList &dependencies) {
+                             LogicalDependencyList &logical_dependencies) {
 	if (value->internal && !catalog.IsSystemCatalog() && name != DEFAULT_SCHEMA) {
 		throw InternalException("Attempting to create internal entry \"%s\" in non-system catalog - internal entries "
 		                        "can only be created in the system catalog",
@@ -87,6 +107,8 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 			throw InvalidInputException("Cannot create non-temporary entry \"%s\" in temporary catalog", name);
 		}
 	}
+	auto dependencies = ConvertToPhysical(logical_dependencies, transaction, *value);
+
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	// lock this catalog set to disallow reading

@@ -101,10 +101,15 @@ bool LogicalDependencyList::Contains(CatalogEntry &entry_p) {
 	return set.count(logical_entry);
 }
 
-PhysicalDependencyList LogicalDependencyList::GetPhysical(Catalog &catalog, optional_ptr<ClientContext> context) const {
+PhysicalDependencyList LogicalDependencyList::GetPhysical(optional_ptr<ClientContext> context) const {
 	PhysicalDependencyList dependencies;
 
+	optional_ptr<Catalog> catalog;
+
 	for (auto &entry : set) {
+		if (!catalog) {
+			catalog = &Catalog::GetCatalog(*context, entry.catalog);
+		}
 		auto &name = entry.name;
 		// Don't use the serialized catalog name, could be attached with a different name
 		auto &schema = entry.schema;
@@ -112,11 +117,11 @@ PhysicalDependencyList LogicalDependencyList::GetPhysical(Catalog &catalog, opti
 
 		CatalogEntryLookup lookup;
 		if (type == CatalogType::SCHEMA_ENTRY) {
-			auto lookup = catalog.GetSchema(*context, entry.catalog, name, OnEntryNotFound::RETURN_NULL);
+			auto lookup = catalog->GetSchema(*context, entry.catalog, name, OnEntryNotFound::THROW_EXCEPTION);
 			D_ASSERT(lookup);
 			dependencies.AddDependency(*lookup);
 		} else {
-			auto lookup = catalog.LookupEntry(*context, type, schema, name, OnEntryNotFound::THROW_EXCEPTION);
+			auto lookup = catalog->LookupEntry(*context, type, schema, name, OnEntryNotFound::THROW_EXCEPTION);
 			D_ASSERT(lookup.Found());
 			auto catalog_entry = lookup.entry;
 			dependencies.AddDependency(*catalog_entry);

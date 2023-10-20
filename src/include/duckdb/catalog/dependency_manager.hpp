@@ -79,7 +79,7 @@ private:
 	catalog_entry_map_t<catalog_entry_set_t> dependencies_map;
 
 private:
-	void AddObject(CatalogTransaction transaction, CatalogEntry &object, LogicalDependencyList &dependencies);
+	void AddObject(CatalogTransaction transaction, CatalogEntry &object, PhysicalDependencyList &dependencies);
 	void DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
 	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
 	void EraseObjectInternal(CatalogEntry &object);

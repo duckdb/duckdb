@@ -70,7 +70,7 @@ class LogicalDependencyList {
 
 public:
 	DUCKDB_API void AddDependency(CatalogEntry &entry);
-	DUCKDB_API PhysicalDependencyList GetPhysical(Catalog &catalog, optional_ptr<ClientContext> context) const;
+	DUCKDB_API PhysicalDependencyList GetPhysical(optional_ptr<ClientContext> context) const;
 	DUCKDB_API bool Contains(CatalogEntry &entry);
 
 public:
