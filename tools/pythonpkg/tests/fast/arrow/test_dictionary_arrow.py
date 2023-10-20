@@ -100,8 +100,8 @@ class TestArrowDictionary(object):
         """,
             # list of union(enum)
             """
-			[{'a': 'hello'::ENUM('hello', 'bye')}::UNION(a integer, b bool, c struct(a enum('hello', 'bye')))]
-		""",
+            [{'a': 'hello'::ENUM('hello', 'bye')}::UNION(a integer, b bool, c struct(a enum('hello', 'bye')))]
+        """,
             # list of list
             """
             [['hello'::ENUM('hello', 'bye')], [], NULL, ['hello'::ENUM('hello', 'bye'), 'bye'::ENUM('hello', 'bye')]]
@@ -135,33 +135,6 @@ class TestArrowDictionary(object):
         assert original_rel.columns == roundtrip_rel.columns
         # Note: we can't check the types, because originally these are ENUM
         # but because the dictionary of the ENUM can not be known before execution we output VARCHAR instead.
-
-    # @pytest.mark.parametrize(
-    #    'count',
-    #    [
-    #        1,
-    #        10,
-    #        1024,
-    #        # 2048,
-    #        # 2047,
-    #        # 2049,
-    #        # 4000,
-    #        # 4096,
-    #        5000,
-    #    ],
-    # )
-    # def test_dictionary_list_roundtrip(self, query, duckdb_cursor, count):
-    #    query = f"""
-    #        select [{query} for x in range(4000)] as a from range({count})
-    #    """
-    #    original_rel = duckdb_cursor.sql(query)
-    #    expected = original_rel.fetchall()
-    #    arrow_res = original_rel.arrow()
-
-    #    roundtrip_rel = duckdb_cursor.sql('select * from arrow_res')
-    #    actual = roundtrip_rel.fetchall()
-    #    assert expected == actual
-    #    assert original_rel.columns == roundtrip_rel.columns
 
     def test_dictionary_batches(self, duckdb_cursor):
         indices_list = [None, 1, None, 1, 2, 1, 0]
