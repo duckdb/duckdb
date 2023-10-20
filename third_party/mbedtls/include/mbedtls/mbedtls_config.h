@@ -17,3 +17,6 @@
 #define MBEDTLS_ARIA_C
 #define MBEDTLS_GCM_C
 #define MBEDTLS_ENTROPY_C
+#if defined(_WIN32)
+#define MBEDTLS_NO_PLATFORM_ENTROPY
+#endif

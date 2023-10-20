@@ -9,6 +9,11 @@
 #include "mbedtls/pk.h"
 #include "mbedtls/sha256.h"
 
+#ifdef MBEDTLS_NO_ENTROPY_SOURCE
+#include "duckdb/common/random_engine.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#endif
+
 #include <stdexcept>
 
 using namespace std;
@@ -103,6 +108,16 @@ void MbedTlsWrapper::ToBase16(char *in, char *out, size_t len) {
 }
 
 void MbedTlsWrapper::GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) {
+#ifdef MBEDTLS_NO_ENTROPY_SOURCE
+	duckdb::RandomEngine random_engine(duckdb::Timestamp::GetCurrentTimestamp().value);
+	while (len != 0) {
+		const auto random_integer = random_engine.NextRandomInteger();
+		const auto next = duckdb::MinValue<duckdb::idx_t>(len, sizeof(random_integer));
+		memcpy(data, duckdb::const_data_ptr_cast(&random_integer), next);
+		data += next;
+		len -= next;
+	}
+#else
 	duckdb::data_t buf[MBEDTLS_ENTROPY_BLOCK_SIZE];
 	mbedtls_entropy_context entropy;
 	mbedtls_entropy_init(&entropy);
@@ -111,11 +126,12 @@ void MbedTlsWrapper::GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t l
 		if (mbedtls_entropy_func(&entropy, buf, MBEDTLS_ENTROPY_BLOCK_SIZE) != 0) {
 			throw runtime_error("Unable to generate random data");
 		}
-		auto next = duckdb::MinValue<duckdb::idx_t>(len, MBEDTLS_ENTROPY_BLOCK_SIZE);
+		const auto next = duckdb::MinValue<duckdb::idx_t>(len, MBEDTLS_ENTROPY_BLOCK_SIZE);
 		memcpy(data, buf, next);
 		data += next;
 		len -= next;
 	}
+#endif
 }
 
 MbedTlsWrapper::SHA256State::SHA256State() : sha_context(new mbedtls_sha256_context()) {
