@@ -17,12 +17,7 @@ HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNo
 
 BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
 	auto &expr = expr_ptr->Cast<ColumnRefExpression>();
-	// with a having binder we pass a depth of 0.
-	// This is mostly to prevent silent errors when expressions in correlated subqueries in the having clause
-	// are bound. If the column alias binder fails, then we thow a bindResult with an error.
-	// If the depth is 0, then the BindResult(error) is thrown. If depth >= 1, we are most likely attempting
-	// to bind a correlated subquery. Since we are also in the Having clause, we should just auto yeet.
-	auto alias_result = column_alias_binder.BindAlias(*this, expr, 0, root_expression);
+	auto alias_result = column_alias_binder.BindAlias(*this, expr, depth, root_expression);
 	if (!alias_result.HasError()) {
 		if (depth > 0) {
 			throw BinderException("Having clause cannot reference alias in correlated subquery");

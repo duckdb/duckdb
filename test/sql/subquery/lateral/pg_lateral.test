@@ -497,7 +497,7 @@ select x.* from
 statement error
 select 1 from tenk1 a, lateral (select max(a.unique1) from int4_tbl b) ss;
 ----
-not found
+Binder Error: LATERAL join cannot contain aggregates
 
 statement ok
 create table xx1 as select f1 as x1, -f1 as x2 from int4_tbl;

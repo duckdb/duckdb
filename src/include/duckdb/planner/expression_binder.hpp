@@ -94,7 +94,7 @@ public:
 	                          bool equality_only = false);
 	static void TestCollation(ClientContext &context, const string &collation);
 
-	bool BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
+	BindResult BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, string error_message);
 
 	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error);
 	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
