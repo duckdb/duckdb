@@ -21,7 +21,7 @@
 #include <stdlib.h>
 
 // We must leak the symbols of the init function
-duckdb_adbc::AdbcStatusCode duckdb_adbc_init(int version, void *driver, struct AdbcError *error) {
+AdbcStatusCode duckdb_adbc_init(int version, void *driver, struct AdbcError *error) {
 	if (!driver) {
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
