@@ -14,12 +14,14 @@ duckdb_state duckdb_open_ext(const char *path, duckdb_database *out, duckdb_conf
 		if (error) {
 			*error = strdup(ex.what());
 		}
+		*out = nullptr;
 		delete wrapper;
 		return DuckDBError;
 	} catch (...) { // LCOV_EXCL_START
 		if (error) {
 			*error = strdup("Unknown error");
 		}
+		*out = nullptr;
 		delete wrapper;
 		return DuckDBError;
 	} // LCOV_EXCL_STOP

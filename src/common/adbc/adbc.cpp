@@ -93,9 +93,9 @@ static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct Ar
 
 struct DuckDBAdbcDatabaseWrapper {
 	//! The DuckDB Database Configuration
-	::duckdb_config config;
+	::duckdb_config config = nullptr;
 	//! The DuckDB Database
-	::duckdb_database database;
+	::duckdb_database database = nullptr;
 	//! Path of Disk-Based Database or :memory: database
 	std::string path;
 };
