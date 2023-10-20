@@ -101,10 +101,10 @@ py::object ArrowTableFromDataframe(const py::object &df) {
 	try {
 		return py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_pandas")(df);
 	} catch (py::error_already_set &e) {
-		// We don't fetch the original python exception because it can cause a segfault
+		// We don't fetch the original Python exception because it can cause a segfault
 		// The cause of this is not known yet, for now we just side-step the issue.
 		throw InvalidInputException(
-		    "The dataframe could not be converted to a pyarrow.lib.Table, because a python exception occurred.");
+		    "The dataframe could not be converted to a pyarrow.lib.Table, because a Python exception occurred.");
 	}
 }
 
@@ -120,7 +120,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "Check if a filesystem with the provided name is currently registered", py::arg("name"));
 
 	m.def("create_function", &DuckDBPyConnection::RegisterScalarUDF,
-	      "Create a DuckDB function out of the passing in python function so it can be used in queries",
+	      "Create a DuckDB function out of the passing in Python function so it can be used in queries",
 	      py::arg("name"), py::arg("function"), py::arg("return_type") = py::none(), py::arg("parameters") = py::none(),
 	      py::kw_only(), py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = 0,
 	      py::arg("exception_handling") = 0, py::arg("side_effects") = false);
