@@ -67,23 +67,20 @@ void CatalogSet::PutEntry(EntryIndex index, unique_ptr<CatalogEntry> catalog_ent
 }
 
 static PhysicalDependencyList ConvertToPhysical(LogicalDependencyList &logical, CatalogTransaction &transaction,
-                                                CatalogEntry &entry) {
-	if (!transaction.context) {
+                                                Catalog &catalog) {
+	bool system_only = true;
+	for (auto &dep : logical.Set()) {
+		if (dep.catalog != SYSTEM_CATALOG) {
+			system_only = false;
+		}
+	}
+	if (!transaction.context || system_only) {
 		// This is an internal transaction, it does not have a client context
 		// we should not have any dependencies when creating internal entries
-		bool system_only = true;
-		for (auto &dep : logical.Set()) {
-			if (dep.catalog != SYSTEM_CATALOG) {
-				system_only = false;
-			}
-		}
 		D_ASSERT(system_only);
 		return PhysicalDependencyList();
 	}
-	if (logical.Set().empty()) {
-		return PhysicalDependencyList();
-	}
-	return logical.GetPhysical(transaction.context);
+	return logical.GetPhysical(*transaction.context, catalog);
 }
 
 bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
@@ -107,7 +104,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 			throw InvalidInputException("Cannot create non-temporary entry \"%s\" in temporary catalog", name);
 		}
 	}
-	auto dependencies = ConvertToPhysical(logical_dependencies, transaction, *value);
+	auto dependencies = ConvertToPhysical(logical_dependencies, transaction, catalog);
 
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());

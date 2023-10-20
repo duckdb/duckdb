@@ -70,10 +70,11 @@ class LogicalDependencyList {
 
 public:
 	DUCKDB_API void AddDependency(CatalogEntry &entry);
-	DUCKDB_API PhysicalDependencyList GetPhysical(optional_ptr<ClientContext> context) const;
+	DUCKDB_API PhysicalDependencyList GetPhysical(ClientContext &context, Catalog &catalog) const;
 	DUCKDB_API bool Contains(CatalogEntry &entry);
 
 public:
+	DUCKDB_API void VerifyDependencies(Catalog &catalog, const string &name);
 	void Serialize(Serializer &serializer) const;
 	static LogicalDependencyList Deserialize(Deserializer &deserializer);
 	bool operator==(const LogicalDependencyList &other) const;
