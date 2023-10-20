@@ -1,0 +1,26 @@
+diff --git a/src/from_substrait.cpp b/src/from_substrait.cpp
+index 509364e..811f3e0 100644
+--- a/src/from_substrait.cpp
++++ b/src/from_substrait.cpp
+@@ -375,7 +375,7 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformJoinOp(const substrait::Rel &so
+ 		djointype = JoinType::SINGLE;
+ 		break;
+ 	case substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_SEMI:
+-		djointype = JoinType::SEMI;
++		djointype = JoinType::LEFT_SEMI;
+ 		break;
+ 	default:
+ 		throw InternalException("Unsupported join type");
+diff --git a/src/to_substrait.cpp b/src/to_substrait.cpp
+index a381e20..1fd7d41 100644
+--- a/src/to_substrait.cpp
++++ b/src/to_substrait.cpp
+@@ -775,7 +775,7 @@ substrait::Rel *DuckDBToSubstrait::TransformComparisonJoin(LogicalOperator &dop)
+ 	case JoinType::SINGLE:
+ 		sjoin->set_type(substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_SINGLE);
+ 		break;
+-	case JoinType::SEMI:
++	case JoinType::LEFT_SEMI:
+ 		sjoin->set_type(substrait::JoinRel::JoinType::JoinRel_JoinType_JOIN_TYPE_SEMI);
+ 		break;
+ 	default:
