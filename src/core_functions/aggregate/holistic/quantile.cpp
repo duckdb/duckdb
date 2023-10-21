@@ -558,32 +558,8 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 		return make_uniq<QuantileSortTree>(std::move(sorted));
 	}
 
-	IDX SelectNth(const SubFrames &frames, size_t n) const {
-		size_t result = 0;
-
-		//	To find the element at position n we need to find n+1 elements.
-		auto needed = n + 1;
-		for (const auto &frame : frames) {
-			//	Skip empty frames
-			if (frame.end <= frame.start) {
-				continue;
-			}
-
-			//	The frame can't supply more elements than it contains
-			//	Don't look for more than we need
-			const auto available = MinValue<size_t>(needed, frame.end - frame.start);
-			auto frame_n = available - 1;
-			result = BaseTree::SelectNth(frame, frame_n);
-
-			//	Reduce the count by the number we found
-			needed -= (available - frame_n);
-			if (!needed) {
-				break;
-			}
-		}
-		D_ASSERT(!needed);
-
-		return BaseTree::NthElement(result);
+	inline IDX SelectNth(const SubFrames &frames, size_t n) const {
+		return BaseTree::NthElement(BaseTree::SelectNth(frames, n));
 	}
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE, bool DISCRETE>
