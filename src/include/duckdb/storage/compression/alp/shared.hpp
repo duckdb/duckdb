@@ -13,10 +13,21 @@ namespace duckdb {
 class AlpConstants {
 public:
 	static constexpr uint32_t ALP_VECTOR_SIZE = 1024;
-	static constexpr uint32_t RG_SAMPLES_VECTOR_JUMP = 15; // We take every 15 vectors; Assuming row groups of 120K
-	static constexpr uint16_t SAMPLES_PER_VECTOR = 64;
+	static constexpr uint32_t RG_SAMPLES = 8;
+	static constexpr uint16_t SAMPLES_PER_VECTOR = 32;
+	// We calculate how many equidistant vector we must jump within a rowgroup
+	static constexpr uint32_t RG_SAMPLES_DUCKDB_JUMP = (STANDARD_ROW_GROUPS_SIZE / RG_SAMPLES ) / STANDARD_VECTOR_SIZE;
+
 	static constexpr uint8_t HEADER_SIZE = sizeof(uint32_t);
+	static constexpr uint8_t EXPONENT_SIZE = sizeof(uint8_t);
+	static constexpr uint8_t FACTOR_SIZE = sizeof(uint8_t);
+	static constexpr uint8_t EXCEPTIONS_COUNT_SIZE = sizeof(uint16_t);
 	static constexpr uint8_t EXCEPTION_POSITION_SIZE = sizeof(uint16_t);
+	static constexpr uint8_t FOR_SIZE = sizeof(uint64_t);
+	static constexpr uint8_t BW_SIZE = sizeof(uint8_t);
+	static constexpr uint8_t METADATA_POINTER_SIZE = sizeof(uint32_t);
+
+
 	static constexpr double MAX_COMBINATIONS = 5;
 
 	static constexpr const int64_t FACT_ARR[] = {1,

@@ -67,6 +67,9 @@ struct AlpCompression {
 		if (std::isinf(n) || std::isnan(n) || n > std::numeric_limits<int64_t>::max()){ //! TODO: Better strategy to prevent overflow undefined behaviour
 			return std::numeric_limits<int64_t>::max();
 		}
+//		if (n > std::numeric_limits<int64_t>::max()){ //! TODO: Better strategy to prevent overflow undefined behaviour
+//			return std::numeric_limits<int64_t>::max();
+//		}
 		return static_cast<int64_t>(n);
 	}
 
@@ -90,15 +93,13 @@ struct AlpCompression {
 		    ((t1.second == t2.second && t2.first.first == t1.first.first) && (t2.first.second < t1.first.second));
 	}
 
-	static void FindTopNCombinations(vector<T> smp_arr, idx_t vectors_sampled, State &state){
-		//uint32_t smp_size = smp_arr.size();
-		uint32_t smp_per_vector = AlpConstants::SAMPLES_PER_VECTOR;
+	static void FindTopNCombinations(vector<vector<T>> vectors_sampled, State &state){
 
 		map<pair<int, int>, int> global_combinations;
-		idx_t smp_offset = 0;
 
 		// For each vector in the rg_sample
-		for (idx_t smp_vector_i = 0; smp_vector_i < vectors_sampled; smp_vector_i++){
+		for (auto &smp_arr : vectors_sampled){
+			idx_t smp_per_vector = smp_arr.size();
 			vector<pair<int, int>> local_combinations;
 			uint8_t found_factor {AlpPrimitives<T>::MAX_EXPONENT};
 			uint8_t found_exponent {AlpPrimitives<T>::MAX_EXPONENT};
@@ -116,7 +117,7 @@ struct AlpCompression {
 					int64_t  local_min_digits {std::numeric_limits<int64_t>().max()};
 					for (idx_t i = 0; i < smp_per_vector; i++){
 						int64_t digits;
-						T  dbl = smp_arr[smp_offset + i]; // TODO: Change to EXACT TYPE
+						T  dbl = smp_arr[i]; // TODO: Change to EXACT TYPE
 						//printf("dbl %d - ", +smp_arr[i]);
 						T  orig;
 						T  cd;
@@ -165,7 +166,6 @@ struct AlpCompression {
 			} else {
 				global_combinations[cmb] = 1;
 			}
-			smp_offset += smp_per_vector;
 		}
 		std::vector<std::pair<std::pair<int, int>, int>> comb_pairs;
 		// Convert map pairs to vector for sort
@@ -190,7 +190,15 @@ struct AlpCompression {
 		}
 	}
 
-	static void FindFactorAndExponent(vector<T> smp_arr, State &state){
+	static void FindFactorAndExponent(vector<T> input_vector, idx_t n_values, State &state){
+
+		// TODO: Move sampling to another function
+		vector<T> smp_arr;
+		uint32_t idx_increments = MinValue(1, (int) floor(n_values / AlpConstants::SAMPLES_PER_VECTOR));
+		for (idx_t i = 0; i < n_values; i += idx_increments){
+			smp_arr.push_back(input_vector[i]);
+		}
+		printf("My vector sample has %d elements \n", smp_arr.size());
 		uint8_t  found_exponent {0};
 		uint8_t  found_factor 	{0};
 		uint64_t previous_bit_count {0};
@@ -254,34 +262,32 @@ struct AlpCompression {
 		state.v_factor   = found_factor;
 	}
 
-	static void Compress(vector<T> input_vector, State &state){
+	static void Compress(vector<T> input_vector, idx_t n_values, State &state){
 		int64_t  tmp_digit {0};
 		uint16_t exc_c {0};
 		T   cd {0};
 		T   orig {0};
 		uint64_t pos {0};
-		vector<T> tmp_dbl_arr(input_vector.size());
-		vector<uint64_t> tmp_index(input_vector.size());
-
-		// printf("Number of combinations %d\n", state.combinations.size());
+		vector<T> tmp_dbl_arr(n_values, 0);
+		vector<uint64_t> tmp_index(n_values, 0);
 
 		if (state.combinations.size() > 1){
-			FindFactorAndExponent(input_vector, state);
+			// TODO: Missing to take sample
+			FindFactorAndExponent(input_vector, n_values, state);
 		} else {
 			state.v_exponent = state.combinations[0].first;
 			state.v_factor = state.combinations[0].second;
 		}
 
-		printf("Encoding %d values\n",  input_vector.size());
+		printf("Encoding %d values\n",  n_values);
 		printf("Exponent %d\n",  state.v_exponent);
 		printf("Factor %d\n",  state.v_factor);
 
-		for (idx_t i {0}; i < input_vector.size(); i++) {
+		for (idx_t i {0}; i < n_values; i++) {
 			auto dbl = input_vector[i];
 			//printf("dbl %f | ", dbl);
 			// Attempt conversion
 			cd = dbl * AlpPrimitives<T>::EXP_ARR[state.v_exponent] * AlpPrimitives<T>::FRAC_ARR[state.v_factor];
-			//printf("cd %f | ", cd);
 			tmp_digit = NumberToInt64_WO(cd);
 			//printf("tmpdigit %lld | ", (long long) tmp_digit);
 			state.dig[i] = tmp_digit;
@@ -290,7 +296,7 @@ struct AlpCompression {
 			tmp_dbl_arr[i] = orig;
 		}
 		printf("Finding Exceptions Positions\n");
-		for (idx_t i {0}; i < input_vector.size(); i++) {
+		for (idx_t i {0}; i < n_values; i++) {
 			auto l         = tmp_dbl_arr[i];
 			auto r         = input_vector[i];
 			auto compare_r = (l != r);
@@ -298,8 +304,8 @@ struct AlpCompression {
 			pos += compare_r;
 		}
 		printf("Finding first encoded value\n");
-		int64_t for_sure;
-		for (idx_t i {0}; i < input_vector.size(); i++) {
+		int64_t for_sure = 0;
+		for (idx_t i {0}; i < n_values; i++) {
 			if (i != tmp_index[i]) {
 				for_sure = state.dig[i];
 				break;
@@ -322,7 +328,7 @@ struct AlpCompression {
 		// Analyze FFOR
 		auto min = std::numeric_limits<int64_t>::max();
 		auto max = std::numeric_limits<int64_t>::min();
-		for (idx_t i {0}; i < input_vector.size(); ++i) {
+		for (idx_t i {0}; i < n_values; ++i) {
 			if (state.dig[i] < min) { min = state.dig[i]; }
 			if (state.dig[i] > max) { max = state.dig[i]; }
 		}
@@ -335,7 +341,7 @@ struct AlpCompression {
 
 		// Subtract FOR
 		if (!EMPTY){ // only if not analyze
-			for (idx_t i = 0; i < input_vector.size(); i++) {
+			for (idx_t i = 0; i < n_values; i++) {
 				//state.dig[i] -= min;
 				//printf("ENCa %lld | ", (long long) dig_u[i]);
 				dig_u[i] -= min_u;
@@ -344,7 +350,7 @@ struct AlpCompression {
 		}
 
 		auto width = BitpackingPrimitives::MinimumBitWidth<uint64_t, false>(min_max_diff);
-		auto bp_size = BitpackingPrimitives::GetRequiredSize(input_vector.size(), width);
+		auto bp_size = BitpackingPrimitives::GetRequiredSize(n_values, width);
 		printf("BP SIZE %d\n", bp_size);
 		printf("BW %d\n", width);
 		printf("FOR %d\n", min);
@@ -355,7 +361,7 @@ struct AlpCompression {
 			BitpackingPrimitives::PackBuffer<uint64_t, false>(
 			    state.encoded,
 			    dig_u,
-			    input_vector.size(),
+			    n_values,
 			    width);
 		}
 		state.bit_width = width; // in bits
