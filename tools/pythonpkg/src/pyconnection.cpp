@@ -969,12 +969,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
 	if (qualified_name.schema.empty()) {
 		qualified_name.schema = DEFAULT_SCHEMA;
 	}
-	auto table_info = connection->TableInfo(qualified_name.schema, qualified_name.name);
-	if (table_info) {
+	try {
 		return make_uniq<DuckDBPyRelation>(connection->Table(qualified_name.schema, qualified_name.name));
+	} catch (const CatalogException &e) {
+		// CatalogException will be of the type '... is not a table'
+		// Not a table in the database, make a query relation that can perform replacement scans
+		return RunQuery(StringUtil::Format("from %s", tname), tname);
 	}
-	// Not a table in the database, make a query relation that can perform replacement scans
-	return RunQuery(StringUtil::Format("from %s", tname), tname);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
