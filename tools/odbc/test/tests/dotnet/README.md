@@ -1,9 +1,13 @@
-# duckdbDotNetOdbcTests
-System.Data.ODBC test code for DuckDB
+# System.Data.ODBC tests for DuckDB ODBC
 
-Originally written to run in CI, but can be built locally 
-using the build.bat. Just run in a standard cmd window. You 
-do need Visual Studio 2019/2022 installed. build.bat will discover
-the latest version of Visual Studio installed. 
+It is written in C++/CLI using .NET Framework. 
 
-After successful build, run build\Release\SystemDataODBC_tests.exe.
+Cmake Visual Studio Generator is required. 
+
+It is built as part of a standard DuckDB build. 
+
+After successful build, the test executable can be found in:
+
+[build directory]\release\tools\odbc\bin\Release\SystemDataODBC_tests.exe
+
+
