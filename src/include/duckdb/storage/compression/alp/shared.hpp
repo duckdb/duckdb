@@ -33,7 +33,7 @@ public:
 
 	static constexpr int64_t ENCODING_LIMIT = NumericLimits<int64_t>::Maximum();
 
-	static constexpr double MAX_COMBINATIONS = 5;
+	static constexpr uint8_t MAX_COMBINATIONS = 5;
 
 	static constexpr const int64_t FACT_ARR[] = {1,
 	                            10,

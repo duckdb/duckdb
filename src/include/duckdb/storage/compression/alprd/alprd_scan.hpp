@@ -46,7 +46,6 @@ public:
 	template <bool SKIP>
 	void LoadValues(EXACT_TYPE *value_buffer, idx_t count) {
 		if (SKIP) {
-			printf("AQUI POR ALGUNA RAZON...\n");
 			return;
 		}
 		value_buffer[0] = (EXACT_TYPE)0;
@@ -60,7 +59,7 @@ public:
 	uint8_t left_encoded[AlpRDConstants::ALP_VECTOR_SIZE * 8];
 	uint8_t right_encoded[AlpRDConstants::ALP_VECTOR_SIZE * 8];
 	EXACT_TYPE values[AlpRDConstants::ALP_VECTOR_SIZE];
-	EXACT_TYPE exceptions[AlpRDConstants::ALP_VECTOR_SIZE];
+	uint16_t exceptions[AlpRDConstants::ALP_VECTOR_SIZE];
 	uint16_t exceptions_positions[AlpRDConstants::ALP_VECTOR_SIZE];
 	uint16_t exceptions_count;
 	uint8_t right_bit_width;
@@ -73,7 +72,6 @@ public:
 	using EXACT_TYPE = typename FloatingToExact<T>::type;
 
 	explicit AlpRDScanState(ColumnSegment &segment) : segment(segment), count(segment.count) {
-		printf("AQUI POR ALGUNA RAZON ALPRD...\n");
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 
 		handle = buffer_manager.Pin(segment.block);
@@ -113,7 +111,6 @@ public:
 	void ScanGroup(EXACT_TYPE *values, idx_t group_size) {
 		D_ASSERT(group_size <= AlpRDConstants::ALP_VECTOR_SIZE);
 		D_ASSERT(group_size <= LeftInGroup());
-		printf("ScanGroup of %ld\n", group_size);
 		if (GroupFinished() && total_value_count < count) {
 			if (group_size == AlpRDConstants::ALP_VECTOR_SIZE) {
 				LoadGroup<SKIP>(values);
@@ -144,7 +141,6 @@ public:
 		// Load the offset indicating where a groups data starts
 		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
-		printf("data_byte_offset %d\n", data_byte_offset);
 		D_ASSERT(data_byte_offset < Storage::BLOCK_SIZE);
 
 		idx_t group_size = MinValue((idx_t)AlpRDConstants::ALP_VECTOR_SIZE, (count - total_value_count));
@@ -157,9 +153,6 @@ public:
 
 		auto left_bp_size = BitpackingPrimitives::GetRequiredSize(group_size, AlpRDConstants::DICTIONARY_BW);
 		auto right_bp_size = BitpackingPrimitives::GetRequiredSize(group_size, group_state.right_bit_width);
-
-		printf("LEFT BP SIZE %d\n", left_bp_size);
-		printf("RIGHT BP SIZE %d\n", right_bp_size);
 
 		memcpy(group_state.left_encoded, (void*) group_ptr, left_bp_size);
 		group_ptr += left_bp_size;
@@ -206,7 +199,6 @@ public:
 
 template <class T>
 unique_ptr<SegmentScanState> AlpRDInitScan(ColumnSegment &segment) {
-	printf("Init Scan\n");
 	auto result = make_uniq_base<SegmentScanState, AlpRDScanState<T>>(segment);
 	return result;
 }
@@ -217,7 +209,6 @@ unique_ptr<SegmentScanState> AlpRDInitScan(ColumnSegment &segment) {
 template <class T>
 void AlpRDScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                       idx_t result_offset) {
-	printf("Scan partial\n");
 	using EXACT_TYPE = typename FloatingToExact<T>::type;
 	auto &scan_state = (AlpRDScanState<T> &)*state.scan_state;
 
@@ -238,14 +229,12 @@ void AlpRDScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 
 template <class T>
 void AlpRDSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
-	printf("SKIP\n");
 	auto &scan_state = (AlpRDScanState<T> &)*state.scan_state;
 	scan_state.Skip(segment, skip_count);
 }
 
 template <class T>
 void AlpRDScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	printf("SCAN\n");
 	AlpRDScanPartial<T>(segment, state, scan_count, result, 0);
 }
 

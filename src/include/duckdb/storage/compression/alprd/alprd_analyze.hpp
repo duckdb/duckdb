@@ -41,7 +41,7 @@ unique_ptr<AnalyzeState> AlpRDInitAnalyze(ColumnData &col_data, PhysicalType typ
 template <class T>
 // Takes the samples per rowgroup and per vector
 bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
-	printf("INIT Analyze\n");
+	//printf("INIT Analyze\n");
 	using EXACT_TYPE = typename FloatingToExact<T>::type;
 
 	auto &analyze_state = (AlpRDAnalyzeState<T> &)state;
@@ -72,10 +72,10 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	vector<uint16_t> null_positions(n_lookup_values, 0);
 	vector<EXACT_TYPE> current_vector_sample(n_sampled_values, 0);
 
-	printf("N Total Values %d ====\n", count);
-	printf("N Lookup Values %d ====\n", n_lookup_values);
-	printf("N Sampled Increments %d ====\n", n_sampled_increments);
-	printf("N Sampled Values %d ====\n", n_sampled_values);
+	//printf("N Total Values %d ====\n", count);
+	//printf("N Lookup Values %d ====\n", n_lookup_values);
+	//printf("N Sampled Increments %d ====\n", n_sampled_increments);
+	//printf("N Sampled Values %d ====\n", n_sampled_values);
 
 	// Storing the sample of that vector
 	idx_t v_i = 0;
@@ -90,7 +90,7 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 
 		v_i++;
 	}
-	printf("Actual Sampled Values %d ====\n", v_i);
+	//printf("Actual Sampled Values %d ====\n", v_i);
 	D_ASSERT(v_i == n_sampled_values);
 
 	// Finding the first non-null value
@@ -120,9 +120,6 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 // Size can be completely estimated without a per-vector processing
 template <class T>
 idx_t AlpRDFinalAnalyze(AnalyzeState &state) {
-	printf("Final Analyze\n");
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
-
 	auto &analyze_state = (AlpRDAnalyzeState<T> &)state;
 	double factor_of_sampling = analyze_state.rg_sample.size() / analyze_state.total_values_count;
 
@@ -143,7 +140,6 @@ idx_t AlpRDFinalAnalyze(AnalyzeState &state) {
 
 	auto final_analyze_size = estimated_base_size +
 	                          (num_blocks * per_segment_overhead);
-	printf("Final Analyze END ====\n");
 	return final_analyze_size; // return size of data in bytes
 }
 

@@ -43,9 +43,7 @@ public:
 		null_positions = vector<uint16_t>(AlpRDConstants::ALP_VECTOR_SIZE, 0);
 
 		// State variables from the analyze step that are needed for compression
-		printf("SIZE OF DICT::: %d \n", AlpRDConstants::DICTIONARY_SIZE_BYTES);
 		memcpy((void*) state.alp_state.dict, (void*) analyze_state->state.alp_state.dict, AlpRDConstants::DICTIONARY_SIZE_BYTES);
-		//state.alp_state.dict = analyze_state->state.alp_state.dict;
 		state.alp_state.dict_map = analyze_state->state.alp_state.dict_map;
 		state.alp_state.left_bw = analyze_state->state.alp_state.left_bw;
 		state.alp_state.right_bw = analyze_state->state.alp_state.right_bw;
@@ -87,8 +85,8 @@ public:
 		idx_t required_space =
 		    state.alp_state.left_bp_size +
 		    state.alp_state.right_bp_size +
-		    state.alp_state.exceptions_count * (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE) + // Exceptions
-		    AlpRDConstants::EXCEPTIONS_COUNT_SIZE; // Exceptions Count
+		    state.alp_state.exceptions_count * (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE) +
+		    AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 			//! Pointer to next group not needed because HasEnoughSpace already take it into account
 		return required_space;
 	}
@@ -154,7 +152,7 @@ public:
 		alp::AlpRDCompression<T, false>::Compress(input_vector, group_idx, state.alp_state);
 		// Check if group fits on current segment
 		if (!HasEnoughSpace()){
-			printf("\n\nNOT ENOUGH SPACE; FLUSHING SEGMENT \n");
+			//printf("\n\nNOT ENOUGH SPACE; FLUSHING SEGMENT \n");
 			auto row_start = current_segment->start + current_segment->count;
 			FlushSegment();
 			CreateEmptySegment(row_start);
@@ -180,7 +178,6 @@ public:
 		data_ptr += state.alp_state.right_bp_size;
 
 		if (state.alp_state.exceptions_count > 0){
-			// TODO: Exceptions are not sizeof(EXACT_TYPE)
 			memcpy((void *) data_ptr, (void*) state.alp_state.exceptions,
 			       AlpRDConstants::EXCEPTION_SIZE * state.alp_state.exceptions_count);
 			data_ptr += AlpRDConstants::EXCEPTION_SIZE * state.alp_state.exceptions_count;
@@ -192,15 +189,13 @@ public:
 		data_bytes_used +=
 		    state.alp_state.left_bp_size +
 		    state.alp_state.right_bp_size +
-		    (state.alp_state.exceptions_count * (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE)) + // Exceptions TODO: Exceptions are not sizeof(EXACT_TYPE)
-		    AlpRDConstants::EXCEPTIONS_COUNT_SIZE; // Exceptions Count Size
+		    (state.alp_state.exceptions_count * (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE)) +
+		    AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 
 		// Write MetaData
 		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
-		printf("compress_data_byte_offset %d\n", next_group_byte_index_start);
 		Store<uint32_t>(next_group_byte_index_start, metadata_ptr);
 		next_group_byte_index_start = UsedSpace();
-		printf("NEXT GROUP BYTE START!!!! %d\n", next_group_byte_index_start);
 
 		groups_flushed++;
 		group_idx = 0;
@@ -226,11 +221,11 @@ public:
 		const auto used_space_percentage =
 		    static_cast<float>(metadata_offset + bytes_used_by_metadata) / static_cast<float>(total_segment_size);
 		if (used_space_percentage < AlpConstants::COMPACT_BLOCK_THRESHOLD){
-			printf("COMPACTING BLOCK!!!! %f\n", used_space_percentage);
+			//printf("COMPACTING BLOCK!!!! %f\n", used_space_percentage);
 #ifdef DEBUG
 			//! Copy the first 4 bytes of the metadata
 			uint32_t verify_bytes;
-			std::memcpy((void *)&verify_bytes, metadata_ptr, 4);
+			memcpy((void *)&verify_bytes, metadata_ptr, 4);
 #endif
 			memmove(dataptr + metadata_offset, metadata_ptr, bytes_used_by_metadata);
 #ifdef DEBUG
@@ -239,7 +234,6 @@ public:
 #endif
 			total_segment_size = metadata_offset + bytes_used_by_metadata;
 		}
-		printf("NOT COMPACTING BLOCK!!!! %f\n", used_space_percentage);
 
 		// Store the offset to the end of metadata (to be used as a backwards pointer)
 		Store<uint32_t>(total_segment_size, dataptr);
@@ -253,13 +247,12 @@ public:
 		memcpy((void *) dataptr, (void*) state.alp_state.dict, AlpRDConstants::DICTIONARY_SIZE_BYTES);
 
 		handle.Destroy();
-		printf("FUNCTIONNN %s\n",CompressionTypeToString(current_segment->function.get().type).c_str());
-		printf("First dictionary elem %d\n", state.alp_state.dict[0]);
+
 		checkpoint_state.FlushSegment(std::move(current_segment), total_segment_size);
-		printf("Total bytes used %ld\n", data_bytes_used);
-		printf("Total segment size %ld\n", total_segment_size);
-		printf("Block size %d\n", Storage::BLOCK_SIZE);
-		printf("Groups flushed %ld\n", groups_flushed);
+		//		printf("Total bytes used %ld\n", data_bytes_used);
+		//		printf("Total segment size %ld\n", total_segment_size);
+		//		printf("Block size %d\n", Storage::BLOCK_SIZE);
+		//		printf("Groups flushed %ld\n", groups_flushed);
 		data_bytes_used = 0;
 		groups_flushed = 0;
 	}
@@ -268,11 +261,11 @@ public:
 		if (group_idx != 0){
 			CompressGroup();
 		}
-		printf("\n\nFINALIZE; FLUSHING SEGMENT \n");
+		//printf("\n\nFINALIZE; FLUSHING SEGMENT \n");
 		FlushSegment();
 		//printf("Block size %d\n", Storage::BLOCK_SIZE);
 		current_segment.reset();
-		printf("=============================== FINISH COMPRESSION\n");
+		//printf("=============================== FINISH COMPRESSION\n");
 	}
 
 
@@ -288,9 +281,9 @@ public:
 			input_vector_t[group_idx] = data[idx];
 			group_idx++;
 			if (group_idx == AlpConstants::ALP_VECTOR_SIZE){
-				printf("Group Starting... \n");
+				//printf("Group Starting... \n");
 				CompressGroup();
-				printf("Group Finished... \n");
+				//printf("Group Finished... \n");
 			}
 
 		}
@@ -307,7 +300,6 @@ unique_ptr<CompressionState> AlpRDInitCompression(ColumnDataCheckpointer &checkp
 
 template <class T>
 void AlpRDCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	printf("COMPRESS start\n");
 	auto &state = (AlpRDCompressionState<T> &)state_p;
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);

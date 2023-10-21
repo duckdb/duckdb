@@ -22,7 +22,7 @@ public:
 	static constexpr uint8_t DICTIONARY_SIZE_BYTES = 16;
 
 
-	static constexpr uint8_t EXCEPTION_SIZE = sizeof(uint64_t); //! TODO: Must be sizeof(uint16_t);
+	static constexpr uint8_t EXCEPTION_SIZE = sizeof(uint16_t);
 
 	static constexpr uint8_t METADATA_POINTER_SIZE = sizeof(uint32_t);
 	static constexpr uint8_t EXCEPTIONS_COUNT_SIZE = sizeof(uint16_t);

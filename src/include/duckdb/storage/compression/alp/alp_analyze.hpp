@@ -83,14 +83,12 @@ unique_ptr<AnalyzeState> AlpInitAnalyze(ColumnData &col_data, PhysicalType type)
 template <class T>
 // Takes the samples per rowgroup and per vector
 bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
-
 	auto &analyze_state = (AlpAnalyzeState<T> &)state;
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 
-	printf("JUMP MATE JUMP %d", AlpConstants::RG_SAMPLES_DUCKDB_JUMP);
+	//printf("JUMP MATE JUMP %d", AlpConstants::RG_SAMPLES_DUCKDB_JUMP);
 
 	bool select_rg_samples = (analyze_state.vector_idx % AlpConstants::RG_SAMPLES_DUCKDB_JUMP) == 0;
 	analyze_state.vector_idx += 1;
@@ -117,10 +115,10 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	T a_non_null_value = 0;
 	idx_t nulls_idx = 0;
 
-	printf("N Total Values %d ====\n", count);
-	printf("N Lookup Values %d ====\n", n_lookup_values);
-	printf("N Sampled Increments %d ====\n", n_sampled_increments);
-	printf("N Sampled Values %d ====\n", n_sampled_values);
+	//printf("N Total Values %d ====\n", count);
+	//printf("N Lookup Values %d ====\n", n_lookup_values);
+	//printf("N Sampled Increments %d ====\n", n_sampled_increments);
+	//printf("N Sampled Values %d ====\n", n_sampled_values);
 
 	vector<uint16_t> null_positions(n_lookup_values, 0);
 	vector<T> current_vector_values(n_lookup_values, 0);
@@ -130,13 +128,13 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	for (idx_t i = 0; i < n_lookup_values; i++) {
 		auto idx = vdata.sel->get_index(i);
 		T value = data[idx];
-		printf("RAW VALUE %f ", value);
+		//printf("RAW VALUE %f ", value);
 		bool is_valid = !vdata.validity.RowIsValid(idx);
 		null_positions[nulls_idx] = i;
 		nulls_idx += is_valid;
 		current_vector_values[i] = value;
 	}
-	printf("RAW VALUES \n");
+	//printf("RAW VALUES \n");
 
 	// Finding the first non-null value
 	idx_t tmp_null_idx = 0;
@@ -174,12 +172,12 @@ idx_t AlpFinalAnalyze(AnalyzeState &state) {
 
 	auto &analyze_state = (AlpAnalyzeState<T> &)state;
 	// For now I will not use 2nd level sampling neither optimize the analyze step
-	printf("Starting First Level Sampling with %d vectors\n", analyze_state.rg_sample.size());
+	//printf("Starting First Level Sampling with %d vectors\n", analyze_state.rg_sample.size());
 	alp::AlpCompression<T, true>::FindTopNCombinations(analyze_state.rg_sample,analyze_state.state.alp_state);
 	// printf("Finished First Level Sampling\n");
-	printf("BEST COMB %d - %d\n", analyze_state.state.alp_state.combinations[0].first,
-	       analyze_state.state.alp_state.combinations[0].second);
-	printf("Here\n");
+	//printf("BEST COMB %d - %d\n", analyze_state.state.alp_state.combinations[0].first,
+	//       analyze_state.state.alp_state.combinations[0].second);
+	//printf("Here\n");
 	idx_t compressed_values = 0;
 	for (auto &vector_to_compress : analyze_state.vectors_sampled){
 			alp::AlpCompression<T, true>::Compress(
@@ -187,7 +185,7 @@ idx_t AlpFinalAnalyze(AnalyzeState &state) {
 		    vector_to_compress.size(),
 		    analyze_state.state.alp_state);
 			if (!analyze_state.HasEnoughSpace()) {
-				printf("\n\nNOT ENOUGH SPACE; FLUSHING SEGMENT \n");
+				//printf("\n\nNOT ENOUGH SPACE; FLUSHING SEGMENT \n");
 				analyze_state.FlushSegment();
 			}
 			analyze_state.FlushGroup();
@@ -200,10 +198,10 @@ idx_t AlpFinalAnalyze(AnalyzeState &state) {
 	// We estimate the size by taking into account the portion of values we took
 	const auto factor_of_sampling = analyze_state.total_analyze_values / compressed_values;
 	const auto final_analyze_size = analyze_state.TotalUsedBytes() * factor_of_sampling;
-	printf("Finished Analyzing | Total size in bytes %d:\n", final_analyze_size);
+	//printf("Finished Analyzing | Total size in bytes %d:\n", final_analyze_size);
 	// printf("%d Vectors\n", analyze_state.vector_idx);
 	// printf("Real %d | Mult Factor %d\n", analyze_state.TotalUsedBytes(), factor_of_sampling);
-	printf(" =========================== FINISH ANALYZE ========= \n\n");
+	//printf(" =========================== FINISH ANALYZE ========= \n\n");
 	return final_analyze_size; // return size of data in bytes
 }
 

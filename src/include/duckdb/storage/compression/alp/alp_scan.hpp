@@ -74,7 +74,6 @@ public:
 	using EXACT_TYPE = typename FloatingToExact<T>::type;
 
 	explicit AlpScanState(ColumnSegment &segment) : segment(segment), count(segment.count) {
-		printf("AQUI POR ALGUNA RAZON ALP...\n");
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 
 		handle = buffer_manager.Pin(segment.block);
@@ -138,7 +137,7 @@ public:
 		// Load the offset indicating where a groups data starts
 		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
-		printf("data_byte_offset %d\n", data_byte_offset);
+		//printf("data_byte_offset %d\n", data_byte_offset);
 		D_ASSERT(data_byte_offset < Storage::BLOCK_SIZE);
 
 		idx_t group_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, (count - total_value_count));
@@ -155,11 +154,11 @@ public:
 		group_state.bit_width = Load<uint8_t>(group_ptr);
 		group_ptr += AlpConstants::BW_SIZE;
 
-		printf("v_exponent %d\n", group_state.v_exponent);
-		printf("v_factor %d\n", group_state.v_factor);
-		printf("for %ld\n", group_state.frame_of_reference);
-		printf("bit_width %d\n", group_state.bit_width);
-		printf("exp count %d\n", group_state.exceptions_count);
+		//printf("v_exponent %d\n", group_state.v_exponent);
+		//printf("v_factor %d\n", group_state.v_factor);
+		//printf("for %ld\n", group_state.frame_of_reference);
+		//printf("bit_width %d\n", group_state.bit_width);
+		//printf("exp count %d\n", group_state.exceptions_count);
 
 		D_ASSERT(group_state.exceptions_count <= group_size);
 		D_ASSERT(group_state.v_exponent <= AlpPrimitives<T>::MAX_EXPONENT);
@@ -211,7 +210,6 @@ public:
 
 template <class T>
 unique_ptr<SegmentScanState> AlpInitScan(ColumnSegment &segment) {
-	printf("Init Scan\n");
 	auto result = make_uniq_base<SegmentScanState, AlpScanState<T>>(segment);
 	return result;
 }
@@ -222,8 +220,6 @@ unique_ptr<SegmentScanState> AlpInitScan(ColumnSegment &segment) {
 template <class T>
 void AlpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                       idx_t result_offset) {
-	printf("Scan partial\n");
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
 	auto &scan_state = (AlpScanState<T> &)*state.scan_state;
 
 	// Get the pointer to the result values
@@ -243,14 +239,12 @@ void AlpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_c
 
 template <class T>
 void AlpSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
-	printf("SKIP\n");
 	auto &scan_state = (AlpScanState<T> &)*state.scan_state;
 	scan_state.Skip(segment, skip_count);
 }
 
 template <class T>
 void AlpScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	printf("SCAN\n");
 	AlpScanPartial<T>(segment, state, scan_count, result, 0);
 }
 

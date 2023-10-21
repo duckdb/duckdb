@@ -146,7 +146,6 @@ public:
 		alp::AlpCompression<T, false>::Compress(input_vector, group_idx, state.alp_state);
 		// Check if group fits on current segment
 		if (!HasEnoughSpace()){
-			printf("\n\nNOT ENOUGH SPACE; FLUSHING SEGMENT \n");
 			auto row_start = current_segment->start + current_segment->count;
 			FlushSegment();
 			CreateEmptySegment(row_start);
@@ -163,8 +162,8 @@ public:
 
 	void FlushGroup(){
 		// Write Data
-		printf("Flushing Group Exponent %d\n", state.alp_state.v_exponent);
-		printf("Flushing Group Exponent %d\n", state.alp_state.v_factor);
+		//printf("Flushing Group Exponent %d\n", state.alp_state.v_exponent);
+		//printf("Flushing Group Exponent %d\n", state.alp_state.v_factor);
 		Store<uint8_t>(state.alp_state.v_exponent ,data_ptr);
 		data_ptr += AlpConstants::EXPONENT_SIZE;
 		Store<uint8_t>(state.alp_state.v_factor ,data_ptr);
@@ -199,7 +198,7 @@ public:
 		metadata_ptr -= sizeof(uint32_t);
 		Store<uint32_t>(next_group_byte_index_start, metadata_ptr);
 		next_group_byte_index_start = UsedSpace();
-		printf("NEXT GROUP BYTE START!!!! %d\n", next_group_byte_index_start);
+		//printf("NEXT GROUP BYTE START!!!! %d\n", next_group_byte_index_start);
 
 		groups_flushed++;
 		group_idx = 0;
@@ -225,11 +224,10 @@ public:
 		const auto used_space_percentage =
 		    static_cast<float>(metadata_offset + bytes_used_by_metadata) / static_cast<float>(total_segment_size);
 		if (used_space_percentage < AlpConstants::COMPACT_BLOCK_THRESHOLD){
-			printf("COMPACTING BLOCK!!!! %f\n", used_space_percentage);
 #ifdef DEBUG
 			//! Copy the first 4 bytes of the metadata
 			uint32_t verify_bytes;
-			std::memcpy((void *)&verify_bytes, metadata_ptr, 4);
+			memcpy((void *)&verify_bytes, metadata_ptr, 4);
 #endif
 			memmove(dataptr + metadata_offset, metadata_ptr, bytes_used_by_metadata);
 #ifdef DEBUG
@@ -242,10 +240,10 @@ public:
 		Store<uint32_t>(total_segment_size, dataptr);
 		handle.Destroy();
 		checkpoint_state.FlushSegment(std::move(current_segment), total_segment_size);
-		printf("Total bytes used %ld\n", data_bytes_used);
-		printf("Total segment size %ld\n", total_segment_size);
-		printf("Block size %d\n", Storage::BLOCK_SIZE);
-		printf("Groups flushed %ld\n", groups_flushed);
+		//printf("Total bytes used %ld\n", data_bytes_used);
+		//printf("Total segment size %ld\n", total_segment_size);
+		//printf("Block size %d\n", Storage::BLOCK_SIZE);
+		//printf("Groups flushed %ld\n", groups_flushed);
 		data_bytes_used = 0;
 		groups_flushed = 0;
 	}
@@ -254,11 +252,11 @@ public:
 		if (group_idx != 0){
 			CompressGroup();
 		}
-		printf("\n\nFINALIZE; FLUSHING SEGMENT \n");
+		//printf("\n\nFINALIZE; FLUSHING SEGMENT \n");
 		FlushSegment();
 		//printf("Block size %d\n", Storage::BLOCK_SIZE);
 		current_segment.reset();
-		printf("=============================== FINISH COMPRESSION\n");
+		//printf("=============================== FINISH COMPRESSION\n");
 	}
 
 
@@ -273,9 +271,9 @@ public:
 			input_vector[group_idx] = value;
 			group_idx++;
 			if (group_idx == AlpConstants::ALP_VECTOR_SIZE){
-				printf("Group Starting... \n");
+				//printf("Group Starting... \n");
 				CompressGroup();
-				printf("Group Finished... \n");
+				//printf("Group Finished... \n");
 			}
 		}
 	}
@@ -291,7 +289,6 @@ unique_ptr<CompressionState> AlpInitCompression(ColumnDataCheckpointer &checkpoi
 
 template <class T>
 void AlpCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	printf("Compression Starting... \n");
 	auto &state = (AlpCompressionState<T> &)state_p;
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);
