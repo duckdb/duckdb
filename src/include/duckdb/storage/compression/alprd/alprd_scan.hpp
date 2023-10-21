@@ -83,8 +83,8 @@ public:
 		auto metadata_offset = Load<uint32_t>(segment_data);
 		metadata_ptr = segment_data + metadata_offset;
 
-		// Load Right Bit Width
-		group_state.right_bit_width = Load<uint8_t>(segment_data + sizeof(uint32_t));
+		// Load Right Bit Width which is on the header after the pointer to the first metadata
+		group_state.right_bit_width = Load<uint8_t>(segment_data + AlpRDConstants::METADATA_POINTER_SIZE);
 
 		// Load dictionary
 		memcpy(group_state.dict, (void*) (segment_data + AlpRDConstants::HEADER_SIZE), AlpRDConstants::DICTIONARY_SIZE_BYTES);
@@ -132,7 +132,7 @@ public:
 	// Using the metadata, we can avoid loading any of the data if we don't care about the group at all
 	void SkipGroup() {
 		// Skip the offset indicating where the data starts
-		metadata_ptr -= sizeof(uint32_t);
+		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
 		idx_t group_size = MinValue((idx_t)AlpRDConstants::ALP_VECTOR_SIZE, count - total_value_count);
 		total_value_count += group_size;
 	}
@@ -142,7 +142,7 @@ public:
 		group_state.Reset();
 
 		// Load the offset indicating where a groups data starts
-		metadata_ptr -= sizeof(uint32_t);
+		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
 		printf("data_byte_offset %d\n", data_byte_offset);
 		D_ASSERT(data_byte_offset < Storage::BLOCK_SIZE);
@@ -151,7 +151,7 @@ public:
 
 		data_ptr_t group_ptr = segment_data + data_byte_offset;
 		group_state.exceptions_count = Load<uint16_t>(group_ptr);
-		group_ptr += sizeof(uint16_t);
+		group_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 
 		D_ASSERT(group_state.exceptions_count <= group_size);
 
@@ -171,7 +171,6 @@ public:
 			memcpy(group_state.exceptions, (void*) group_ptr, AlpRDConstants::EXCEPTION_SIZE * group_state.exceptions_count);
 			group_ptr += AlpRDConstants::EXCEPTION_SIZE * group_state.exceptions_count;
 			memcpy(group_state.exceptions_positions, (void*) group_ptr, AlpRDConstants::EXCEPTION_POSITION_SIZE * group_state.exceptions_count);
-			// group_ptr += sizeof(uint16_t) * group_state.exceptions_count; // TODO: Not needed probably
 		}
 
 		// Read all the values to the specified 'value_buffer'

@@ -14,7 +14,7 @@ class AlpConstants {
 public:
 	static constexpr uint32_t ALP_VECTOR_SIZE = 1024;
 	static constexpr uint32_t RG_SAMPLES = 8;
-	static constexpr uint16_t SAMPLES_PER_VECTOR = 32;
+	static constexpr uint16_t SAMPLES_PER_VECTOR = 1024;
 	// We calculate how many equidistant vector we must jump within a rowgroup
 	static constexpr uint32_t RG_SAMPLES_DUCKDB_JUMP = (STANDARD_ROW_GROUPS_SIZE / RG_SAMPLES ) / STANDARD_VECTOR_SIZE;
 
@@ -27,6 +27,11 @@ public:
 	static constexpr uint8_t BW_SIZE = sizeof(uint8_t);
 	static constexpr uint8_t METADATA_POINTER_SIZE = sizeof(uint32_t);
 
+	static constexpr uint8_t SAMPLING_EARLY_EXIT_THRESHOLD = 2;
+
+	static constexpr double COMPACT_BLOCK_THRESHOLD = 0.80;
+
+	static constexpr int64_t ENCODING_LIMIT = NumericLimits<int64_t>::Maximum();
 
 	static constexpr double MAX_COMBINATIONS = 5;
 
@@ -80,7 +85,7 @@ template <>
 struct AlpPrimitives<float> {
 
 	static constexpr float MAGIC_NUMBER = 12582912.0; //! 2^22 + 2^23
-	static constexpr uint8_t MAX_EXPONENT = 9;
+	static constexpr uint8_t MAX_EXPONENT = 10;
 
 	static constexpr const float EXP_ARR[] = {
 	    1.0,
@@ -115,7 +120,7 @@ template <>
 struct AlpPrimitives<double> {
 
 	static constexpr double MAGIC_NUMBER = 6755399441055744.0; //! 2^51 + 2^52
-	static constexpr uint8_t MAX_EXPONENT = 18;
+	static constexpr uint8_t MAX_EXPONENT = 18; //! 10^18 is the maximum int64
 
 	static constexpr const double EXP_ARR[] = {
 	    1.0,

@@ -176,7 +176,6 @@ public:
 			memcpy(group_state.exceptions, (void*) group_ptr, sizeof(EXACT_TYPE) * group_state.exceptions_count);
 			group_ptr += sizeof(EXACT_TYPE) * group_state.exceptions_count;
 			memcpy(group_state.exceptions_positions, (void*) group_ptr, AlpConstants::EXCEPTION_POSITION_SIZE * group_state.exceptions_count);
-			// group_ptr += sizeof(uint16_t) * group_state.exceptions_count; // TODO: Not needed probably
 		}
 
 		// Read all the values to the specified 'value_buffer'

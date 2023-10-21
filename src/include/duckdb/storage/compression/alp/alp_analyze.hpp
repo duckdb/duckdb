@@ -8,10 +8,11 @@
 
 #pragma once
 
-#include "duckdb/storage/compression/alp/alp.hpp"
-#include "duckdb/function/compression_function.hpp"
-#include "duckdb/storage/compression/alp/shared.hpp"
 #include "duckdb/common/random_engine.hpp"
+#include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/compression/alp/alp.hpp"
+#include "duckdb/storage/compression/alp/shared.hpp"
+#include "duckdb/storage/compression/patas/patas.hpp"
 
 namespace duckdb {
 
@@ -116,6 +117,11 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	T a_non_null_value = 0;
 	idx_t nulls_idx = 0;
 
+	printf("N Total Values %d ====\n", count);
+	printf("N Lookup Values %d ====\n", n_lookup_values);
+	printf("N Sampled Increments %d ====\n", n_sampled_increments);
+	printf("N Sampled Values %d ====\n", n_sampled_values);
+
 	vector<uint16_t> null_positions(n_lookup_values, 0);
 	vector<T> current_vector_values(n_lookup_values, 0);
 	vector<T> current_vector_sample(n_sampled_values, 0);
@@ -124,11 +130,13 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	for (idx_t i = 0; i < n_lookup_values; i++) {
 		auto idx = vdata.sel->get_index(i);
 		T value = data[idx];
+		printf("RAW VALUE %f ", value);
 		bool is_valid = !vdata.validity.RowIsValid(idx);
 		null_positions[nulls_idx] = i;
 		nulls_idx += is_valid;
 		current_vector_values[i] = value;
 	}
+	printf("RAW VALUES \n");
 
 	// Finding the first non-null value
 	idx_t tmp_null_idx = 0;
@@ -149,7 +157,7 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	// Storing the sample of that vector
 	idx_t v_i = 0;
 	for (idx_t i = 0; i < n_lookup_values; i+= n_sampled_increments){
-		current_vector_sample.push_back(current_vector_values[i]);
+		current_vector_sample[v_i] = current_vector_values[i];
 		v_i++;
 	}
 	D_ASSERT(v_i == n_sampled_values);
@@ -166,7 +174,7 @@ idx_t AlpFinalAnalyze(AnalyzeState &state) {
 
 	auto &analyze_state = (AlpAnalyzeState<T> &)state;
 	// For now I will not use 2nd level sampling neither optimize the analyze step
-	// printf("Starting First Level Sampling with %d saples from %d vectors\n", analyze_state.rg_sample.size(), analyze_state.vectors_sampled);
+	printf("Starting First Level Sampling with %d vectors\n", analyze_state.rg_sample.size());
 	alp::AlpCompression<T, true>::FindTopNCombinations(analyze_state.rg_sample,analyze_state.state.alp_state);
 	// printf("Finished First Level Sampling\n");
 	printf("BEST COMB %d - %d\n", analyze_state.state.alp_state.combinations[0].first,

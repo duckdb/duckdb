@@ -88,8 +88,8 @@ public:
 		    state.alp_state.left_bp_size +
 		    state.alp_state.right_bp_size +
 		    state.alp_state.exceptions_count * (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE) + // Exceptions
-		    sizeof(uint16_t); // Exceptions Count
-		    // + sizeof(uint32_t); // Pointer to next group not needed because HasEnoughSpace already take it into acc.
+		    AlpRDConstants::EXCEPTIONS_COUNT_SIZE; // Exceptions Count
+			//! Pointer to next group not needed because HasEnoughSpace already take it into account
 		return required_space;
 	}
 
@@ -97,7 +97,7 @@ public:
 	bool HasEnoughSpace() {
 		// If start of block + used space + required space is more than whats left (current position
 		// of metadata pointer - the size of the new metadata pointer to data)
-		if ((handle.Ptr() + AlignValue(UsedSpace() + RequiredSpace())) >= (metadata_ptr - sizeof(uint32_t))){
+		if ((handle.Ptr() + AlignValue(UsedSpace() + RequiredSpace())) >= (metadata_ptr - AlpRDConstants::METADATA_POINTER_SIZE)){
 			return false;
 		}
 		return true;
@@ -171,7 +171,7 @@ public:
 	void FlushGroup(){
 		// Write Data
 		Store<uint16_t>(state.alp_state.exceptions_count ,data_ptr);
-		data_ptr += sizeof(uint16_t);
+		data_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 
 		memcpy((void *) data_ptr, (void*) state.alp_state.left_parts_encoded, state.alp_state.left_bp_size);
 		data_ptr += state.alp_state.left_bp_size;
@@ -193,10 +193,10 @@ public:
 		    state.alp_state.left_bp_size +
 		    state.alp_state.right_bp_size +
 		    (state.alp_state.exceptions_count * (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE)) + // Exceptions TODO: Exceptions are not sizeof(EXACT_TYPE)
-		    sizeof(uint16_t); // Exceptions Count Size
+		    AlpRDConstants::EXCEPTIONS_COUNT_SIZE; // Exceptions Count Size
 
 		// Write MetaData
-		metadata_ptr -= sizeof(uint32_t);
+		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
 		printf("compress_data_byte_offset %d\n", next_group_byte_index_start);
 		Store<uint32_t>(next_group_byte_index_start, metadata_ptr);
 		next_group_byte_index_start = UsedSpace();
@@ -209,7 +209,6 @@ public:
 	}
 
 	void FlushSegment(){
-		// TODO: Flush Segment must also flush the dictionary
 		auto &checkpoint_state = checkpointer.GetCheckpointState();
 		auto dataptr = handle.Ptr();
 
@@ -226,7 +225,7 @@ public:
 		// Compact the block only if the space used is less than 80%
 		const auto used_space_percentage =
 		    static_cast<float>(metadata_offset + bytes_used_by_metadata) / static_cast<float>(total_segment_size);
-		if (used_space_percentage < 0.80){
+		if (used_space_percentage < AlpConstants::COMPACT_BLOCK_THRESHOLD){
 			printf("COMPACTING BLOCK!!!! %f\n", used_space_percentage);
 #ifdef DEBUG
 			//! Copy the first 4 bytes of the metadata
@@ -244,11 +243,11 @@ public:
 
 		// Store the offset to the end of metadata (to be used as a backwards pointer)
 		Store<uint32_t>(total_segment_size, dataptr);
-		dataptr += sizeof(uint32_t);
+		dataptr += AlpRDConstants::METADATA_POINTER_SIZE;
 
 		// Store the Right BW for the segment
 		Store<uint8_t>(state.alp_state.right_bw, dataptr);
-		dataptr += sizeof(uint8_t);
+		dataptr += AlpRDConstants::R_BW_SIZE;
 
 		// Store the Dictionary
 		memcpy((void *) dataptr, (void*) state.alp_state.dict, AlpRDConstants::DICTIONARY_SIZE_BYTES);

@@ -224,7 +224,7 @@ public:
 		// Compact the block only if the space used is less than 80%
 		const auto used_space_percentage =
 		    static_cast<float>(metadata_offset + bytes_used_by_metadata) / static_cast<float>(total_segment_size);
-		if (used_space_percentage < 0.80){
+		if (used_space_percentage < AlpConstants::COMPACT_BLOCK_THRESHOLD){
 			printf("COMPACTING BLOCK!!!! %f\n", used_space_percentage);
 #ifdef DEBUG
 			//! Copy the first 4 bytes of the metadata
