@@ -18,9 +18,9 @@ using namespace System::Data::Odbc;
 static std::string toss(System::String ^ s) {
 	using Runtime::InteropServices::Marshal;
 	System::IntPtr pointer = Marshal::StringToHGlobalAnsi(s);
-	char * charPointer = reinterpret_cast<char *>(pointer.ToPointer());
+	char *charPointer = reinterpret_cast<char *>(pointer.ToPointer());
 	std::string returnString(charPointer, s->Length);
-	Marshal::FreeHGlobal(pointer); 
+	Marshal::FreeHGlobal(pointer);
 	return returnString;
 }
 
