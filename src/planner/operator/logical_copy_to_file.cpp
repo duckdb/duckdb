@@ -49,7 +49,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 
 	// Deserialize function
 	auto &context = deserializer.Get<ClientContext &>();
-	auto name = deserializer.ReadProperty<string>(209, "function_name");
+	auto name = deserializer.ReadProperty<string>(210, "function_name");
 
 	auto &func_catalog_entry =
 	    Catalog::GetEntry(context, CatalogType::COPY_FUNCTION_ENTRY, SYSTEM_CATALOG, DEFAULT_SCHEMA, name);
@@ -61,9 +61,9 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 
 	// Deserialize function data
 	unique_ptr<FunctionData> bind_data;
-	auto has_serialize = deserializer.ReadProperty<bool>(210, "function_has_serialize");
+	auto has_serialize = deserializer.ReadProperty<bool>(211, "function_has_serialize");
 	if (has_serialize) {
-		deserializer.ReadObject(211, "function_data",
+		deserializer.ReadObject(212, "function_data",
 		                        [&](Deserializer &obj) { bind_data = function.deserialize(obj, function); });
 	} else {
 		if (!function.copy_to_bind) {
