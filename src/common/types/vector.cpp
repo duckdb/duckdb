@@ -247,8 +247,9 @@ void Vector::Initialize(bool zero_data, idx_t capacity) {
 			memset(data, 0, capacity * type_size);
 		}
 	}
-	if (capacity > STANDARD_VECTOR_SIZE) {
-		validity.Resize(STANDARD_VECTOR_SIZE, capacity);
+
+	if (capacity > validity.TargetCount()) {
+		validity.Resize(validity.TargetCount(), capacity);
 	}
 }
 
@@ -1050,6 +1051,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 	serializer.WriteProperty(100, "all_valid", all_valid);
 	if (all_valid) {
 		ValidityMask flat_mask(count);
+		flat_mask.Initialize();
 		for (idx_t i = 0; i < count; ++i) {
 			auto row_idx = vdata.sel->get_index(i);
 			flat_mask.Set(i, vdata.validity.RowIsValid(row_idx));
