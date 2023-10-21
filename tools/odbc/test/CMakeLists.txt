@@ -24,5 +24,9 @@ add_executable(
   tests/numeric.cpp
   tests/quotes.cpp
   tests/result_conversion.cpp)
+  
+if (MSVC)
+	add_subdirectory(tests/dotnet)
+endif()
 
 target_link_libraries(test_odbc duckdb_odbc ODBC::ODBC)

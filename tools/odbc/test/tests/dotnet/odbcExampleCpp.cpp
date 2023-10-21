@@ -16,11 +16,12 @@ using namespace System::Data::Odbc;
 //*************************************************************
 // convert .NET System::String to std::string
 static std::string toss(System::String ^ s) {
-	using namespace Runtime::InteropServices;
-	const char *cstr = (const char *)(Marshal::StringToHGlobalAnsi(s)).ToPointer();
-	std::string sstr = cstr;
-	Marshal::FreeHGlobal(System::IntPtr((void *)cstr));
-	return sstr;
+	using Runtime::InteropServices::Marshal;
+	System::IntPtr pointer = Marshal::StringToHGlobalAnsi(s);
+	char * charPointer = reinterpret_cast<char *>(pointer.ToPointer());
+	std::string returnString(charPointer, s->Length);
+	Marshal::FreeHGlobal(pointer); 
+	return returnString;
 }
 
 TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
@@ -28,7 +29,6 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 	OdbcConnection ^ Conn = nullptr;
 	try {
 
-		int rtn;
 		System::String ^ connStr = "Driver=DuckDB Driver;Database=test.duckdb;";
 		Conn = gcnew OdbcConnection(connStr);
 		Conn->Open();
@@ -43,12 +43,12 @@ TEST_CASE("System.Data.ODBC", "test .NET OdbcDataAdapter functionality") {
 		DbCmd->ExecuteNonQuery();
 
 		DbCmd->CommandText = "INSERT INTO weather VALUES ('San Francisco', 46, 50, 0.25, '1994-11-27');";
-		rtn = (int)DbCmd->ExecuteNonQuery();
-		REQUIRE(rtn == 1);
+		int i = DbCmd->ExecuteNonQuery();
+		REQUIRE(i == 1);
 
 		DbCmd->CommandText = "select count(1) from weather;";
-		rtn = (Int64)DbCmd->ExecuteScalar();
-		REQUIRE(rtn == 1);
+		Int64 i64 = static_cast<Int64>(DbCmd->ExecuteScalar());
+		REQUIRE(i64 == 1);
 
 		DataTable ^ dt = gcnew DataTable();
 		OdbcDataAdapter ^ adapter =
