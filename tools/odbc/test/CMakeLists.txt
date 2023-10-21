@@ -25,7 +25,8 @@ add_executable(
   tests/quotes.cpp
   tests/result_conversion.cpp)
   
-if (MSVC)
+if (CMAKE_GENERATOR MATCHES "Visual Studio")
+    # System.Data.ODBC tests Visual Studio Generator due to use of C++ CLI and .NET.
 	add_subdirectory(tests/dotnet)
 endif()
 
