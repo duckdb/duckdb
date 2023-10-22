@@ -59,6 +59,28 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 		D_ASSERT(converted);
 	}
 
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
+
+		// if the tag is NULL, the union should be NULL
+		auto &tag_vec = *target_children[0];
+		ConstantVector::SetNull(result, ConstantVector::IsNull(tag_vec));
+	} else {
+		source.Flatten(count);
+		FlatVector::Validity(result) = FlatVector::Validity(source);
+
+		// if the tag is NULL, the union should be NULL
+		auto &tag_vec = *target_children[0];
+		UnifiedVectorFormat tag_data;
+		tag_vec.ToUnifiedFormat(count, tag_data);
+		for (idx_t i = 0; i < count; i++) {
+			if (!tag_data.validity.RowIsValid(tag_data.sel->get_index(i))) {
+				FlatVector::SetNull(result, i, true);
+			}
+		}
+	}
+
 	auto check_tags = UnionVector::CheckUnionValidity(result, count);
 	switch (check_tags) {
 	case UnionInvalidReason::TAG_OUT_OF_RANGE:
@@ -68,19 +90,14 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 	case UnionInvalidReason::TAG_MISMATCH:
 		throw ConversionException(
 		    "One or more rows in the produced UNION have tags that don't point to the valid member");
+	case UnionInvalidReason::NULL_TAG:
+		throw ConversionException("One or more rows in the produced UNION have a NULL tag");
 	case UnionInvalidReason::VALID:
 		break;
 	default:
 		throw InternalException("Struct to union cast failed for unknown reason");
 	}
 
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
-	} else {
-		source.Flatten(count);
-		FlatVector::Validity(result) = FlatVector::Validity(source);
-	}
 	result.Verify(count);
 	return true;
 }

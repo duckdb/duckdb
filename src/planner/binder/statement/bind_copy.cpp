@@ -145,7 +145,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	auto function_data =
 	    copy_function.function.copy_to_bind(context, *stmt.info, unique_column_names, select_node.types);
 	// now create the copy information
-	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data));
+	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data), stmt.info->Copy());
 	copy->file_path = stmt.info->file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->overwrite_or_ignore = overwrite_or_ignore;
