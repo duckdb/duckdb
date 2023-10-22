@@ -545,7 +545,8 @@ WindowBoundariesState::WindowBoundariesState(BoundWindowExpression &wexpr, const
       partition_count(wexpr.partitions.size()), order_count(wexpr.orders.size()),
       range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
       has_preceding_range(HasPrecedingRange(wexpr)), has_following_range(HasFollowingRange(wexpr)),
-      needs_peer(BoundaryNeedsPeer(wexpr.end) || ExpressionNeedsPeer(wexpr.type) || wexpr.exclude_clause >= WindowExcludeMode::GROUP) {
+      needs_peer(BoundaryNeedsPeer(wexpr.end) || ExpressionNeedsPeer(wexpr.type) ||
+                 wexpr.exclude_clause >= WindowExcludeMode::GROUP) {
 }
 
 void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, const WindowInputColumn &range, const idx_t count,
