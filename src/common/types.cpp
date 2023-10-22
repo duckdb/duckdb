@@ -373,7 +373,9 @@ string LogicalType::ToString() const {
 		string ret = "UNION(";
 		size_t count = UnionType::GetMemberCount(*this);
 		for (size_t i = 0; i < count; i++) {
-			ret += UnionType::GetMemberName(*this, i) + " " + UnionType::GetMemberType(*this, i).ToString();
+			auto member_name = UnionType::GetMemberName(*this, i);
+			auto member_type = UnionType::GetMemberType(*this, i).ToString();
+			ret += StringUtil::Format("%s %s", SQLIdentifier(member_name), member_type);
 			if (i < count - 1) {
 				ret += ", ";
 			}
