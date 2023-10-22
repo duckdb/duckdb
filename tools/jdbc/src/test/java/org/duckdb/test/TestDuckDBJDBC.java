@@ -49,6 +49,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.ResolverStyle;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -2263,6 +2264,59 @@ public class TestDuckDBJDBC {
         conn.close();
     }
 
+    public static void test_appender_date_and_time() throws Exception {
+        DuckDBConnection conn = DriverManager.getConnection("jdbc:duckdb:").unwrap(DuckDBConnection.class);
+        Statement stmt = conn.createStatement();
+
+        stmt.execute("CREATE TABLE date_and_time (id INT4, a TIMESTAMP)");
+        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "date_and_time");
+
+        LocalDateTime ldt1 = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
+        LocalDateTime ldt2 = LocalDateTime.of(-23434, 3, 5, 23, 2);
+        LocalDateTime ldt3 = LocalDateTime.of(1970, 1, 1, 0, 0);
+        LocalDateTime ldt4 = LocalDateTime.of(11111, 12, 31, 23, 59, 59, 999999000);
+
+        appender.beginRow();
+        appender.append(1);
+        appender.appendLocalDateTime(ldt1);
+        appender.endRow();
+        appender.beginRow();
+        appender.append(2);
+        appender.appendLocalDateTime(ldt2);
+        appender.endRow();
+        appender.beginRow();
+        appender.append(3);
+        appender.appendLocalDateTime(ldt3);
+        appender.endRow();
+        appender.beginRow();
+        appender.append(4);
+        appender.appendLocalDateTime(ldt4);
+        appender.endRow();
+        appender.close();
+
+        ResultSet rs = stmt.executeQuery("SELECT a FROM date_and_time ORDER BY id");
+        assertFalse(rs.isClosed());
+        assertTrue(rs.next());
+
+        LocalDateTime res1 = (LocalDateTime) rs.getObject(1, LocalDateTime.class);
+        assertEquals(res1, ldt1);
+        assertTrue(rs.next());
+
+        LocalDateTime res2 = (LocalDateTime) rs.getObject(1, LocalDateTime.class);
+        assertEquals(res2, ldt2);
+        assertTrue(rs.next());
+
+        LocalDateTime res3 = (LocalDateTime) rs.getObject(1, LocalDateTime.class);
+        assertEquals(res3, ldt3);
+        assertTrue(rs.next());
+
+        LocalDateTime res4 = (LocalDateTime) rs.getObject(1, LocalDateTime.class);
+        assertEquals(res4, ldt4);
+
+        rs.close();
+        stmt.close();
+        conn.close();
+    }
     public static void test_appender_int_string() throws Exception {
         DuckDBConnection conn = DriverManager.getConnection("jdbc:duckdb:").unwrap(DuckDBConnection.class);
         Statement stmt = conn.createStatement();

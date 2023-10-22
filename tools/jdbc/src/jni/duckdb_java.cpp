@@ -950,6 +950,11 @@ void _duckdb_jdbc_appender_append_double(JNIEnv *env, jclass, jobject appender_r
 	get_appender(env, appender_ref_buf)->Append((double)value);
 }
 
+void _duckdb_jdbc_appender_append_timestamp(JNIEnv *env, jclass, jobject appender_ref_buf, jlong value) {
+	timestamp_t timestamp = timestamp_t((long)value);
+	get_appender(env, appender_ref_buf)->Append(Value::TIMESTAMP(timestamp));
+}
+
 void _duckdb_jdbc_appender_append_string(JNIEnv *env, jclass, jobject appender_ref_buf, jbyteArray value) {
 	if (env->IsSameObject(value, NULL)) {
 		get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
