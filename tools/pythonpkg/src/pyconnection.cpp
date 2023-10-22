@@ -48,6 +48,7 @@
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/main/pending_query_result.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 #include <random>
 
@@ -974,7 +975,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
 	} catch (const CatalogException &e) {
 		// CatalogException will be of the type '... is not a table'
 		// Not a table in the database, make a query relation that can perform replacement scans
-		return RunQuery(StringUtil::Format("from %s", tname), tname);
+		return RunQuery(StringUtil::Format("from %s", KeywordHelper::WriteOptionallyQuoted(tname)), tname);
 	}
 }
 

@@ -5,12 +5,13 @@ import pytest
 pl = pytest.importorskip("polars")
 
 
-# NOTE: the name has to be 'to_scan' to match the place it's returned into
-def using_table(con, to_scan):
-    return con.table('to_scan')
+def using_table(con, to_scan, object_name):
+    exec(f"{object_name} = to_scan")
+    return con.table(object_name)
 
 
-def using_sql(con, to_scan):
+def using_sql(con, to_scan, object_name):
+    exec(f"{object_name} = to_scan")
     return con.sql(f"select * from to_scan")
 
 
@@ -62,12 +63,13 @@ class TestReplacementScan(object):
         'fetch_method',
         [fetch_polars, fetch_df, fetch_arrow, fetch_arrow_table, fetch_arrow_record_batch, fetch_relation],
     )
-    def test_table_replacement_scans(self, duckdb_cursor, get_relation, fetch_method):
+    @pytest.mark.parametrize('object_name', ['tbl', 'table', 'select', 'update'])
+    def test_table_replacement_scans(self, duckdb_cursor, get_relation, fetch_method, object_name):
         base_rel = duckdb_cursor.values([1, 2, 3])
-        # NOTE: do not rename 'to_scan'
         to_scan = fetch_method(base_rel)
+        exec(f"{object_name} = to_scan")
 
-        rel = get_relation(duckdb_cursor, to_scan)
+        rel = get_relation(duckdb_cursor, to_scan, object_name)
         res = rel.fetchall()
         assert res == [(1, 2, 3)]
 
