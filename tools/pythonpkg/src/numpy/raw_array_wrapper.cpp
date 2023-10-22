@@ -114,8 +114,7 @@ string RawArrayWrapper::DuckDBToNumpyDtype(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return "datetime64[s]";
 	case LogicalTypeId::DATE:
-		// FIXME: should this not be 'date64[ns]' ?
-		return "datetime64[ns]";
+		return "datetime64[us]";
 	case LogicalTypeId::INTERVAL:
 		return "timedelta64[ns]";
 	case LogicalTypeId::TIME:
