@@ -4,6 +4,8 @@ import pytest
 from conftest import NumpyPandas, ArrowPandas
 from datetime import datetime, timezone, time, timedelta
 
+_ = pytest.importorskip("pandas", minversion="2.0.0")
+
 
 class TestDateTimeTime(object):
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
@@ -23,14 +25,17 @@ class TestDateTimeTime(object):
         pandas.testing.assert_frame_equal(df_out, duckdb_time)
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
-    def test_pandas_datetime_overflow(self, pandas):
+    @pytest.mark.parametrize('input', ['2263-02-28', '9999-01-01'])
+    def test_pandas_datetime_big(self, pandas, input):
         duckdb_con = duckdb.connect()
 
         duckdb_con.execute("create table test (date DATE)")
-        duckdb_con.execute("INSERT INTO TEST VALUES ('2263-02-28')")
+        duckdb_con.execute(f"INSERT INTO TEST VALUES ('{input}')")
 
-        with pytest.raises(duckdb.ConversionException):
-            res = duckdb_con.execute("select * from test").df()
+        res = duckdb_con.execute("select * from test").df()
+        date_value = np.array([f'{input}'], dtype='datetime64[us]')
+        df = pandas.DataFrame({'date': date_value})
+        pandas.testing.assert_frame_equal(res, df)
 
     def test_timezone_datetime(self):
         con = duckdb.connect()
