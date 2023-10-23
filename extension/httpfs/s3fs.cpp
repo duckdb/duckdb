@@ -191,15 +191,17 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener, FileOpenerInfo &info) {
 	}
 
 	if (FileOpener::TryGetCurrentSetting(opener, "s3_endpoint", value, info)) {
-		endpoint = value.ToString();
-	} else {
-		if (StringUtil::StartsWith(info.file_path, "gcs://")) {
-			endpoint = "storage.googleapis.com";
-		} else if (StringUtil::StartsWith(info.file_path, "r2://")) {
-			endpoint = "r2.cloudflarestorage.com";
+		if (value.ToString().empty()) {
+			if (StringUtil::StartsWith(info.file_path, "gcs://")) {
+				endpoint = "storage.googleapis.com";
+			} else {
+				endpoint = "s3.amazonaws.com";
+			}
 		} else {
-			endpoint = "s3.amazonaws.com";
+			endpoint = value.ToString();
 		}
+	} else {
+		endpoint = "s3.amazonaws.com";
 	}
 
 	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_style", value, info)) {

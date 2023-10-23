@@ -102,21 +102,6 @@ SELECT * FROM "${prefix}test-bucket-public/url_encode/question?marks?and*stars[a
 ----
 4
 
-statement error
-SELECT * FROM 's3://test-bucket/whatever';
-----
-Catalog Error: Table with name s3://test-bucket/whatever does not exist!
-
-statement error
-SELECT * FROM 'gcs://test-bucket/whatever';
-----
-Catalog Error: Table with name gcs://test-bucket/whatever does not exist!
-
-statement error
-SELECT * FROM 'r2://test-bucket/whatever';
-----
-Catalog Error: Table with name r2://test-bucket/whatever does not exist!
-
 # HTTP urls will be encoded here
 query I
 SELECT * FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/url_encode/question%3Fmarks%3Fand%2Astars%5Band%5Dbrackets.parquet" LIMIT 1;
@@ -126,4 +111,35 @@ SELECT * FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/url_encode/questi
 statement ok
 SET s3_url_compatibility_mode=false;
 
-endloop 
+# Check that the generated urls are correct
+statement ok
+set s3_endpoint='s3.some.random.endpoint.com';
+
+statement error
+SELECT * FROM '${prefix}test-bucket/whatever.parquet';
+----
+IO Error: Connection error for HTTP HEAD to 'http://test-bucket.s3.some.random.endpoint.com/whatever.parquet'
+
+statement ok
+set s3_endpoint='${DUCKDB_S3_ENDPOINT}'
+
+endloop
+
+# Check that the generated urls are correct for an empty endpoint
+statement ok
+set s3_endpoint='';
+
+statement error
+SELECT * FROM 's3://test-bucket/whatever.parquet';
+----
+IO Error: HTTP GET error on 'http://test-bucket.s3.amazonaws.com/whatever.parquet'
+
+statement error
+SELECT * FROM 'r2://test-bucket/whatever.parquet';
+----
+IO Error: HTTP GET error on 'http://test-bucket.s3.amazonaws.com/whatever.parquet'
+
+statement error
+SELECT * FROM 'gcs://test-bucket/whatever.parquet';
+----
+IO Error: HTTP GET error on 'http://test-bucket.storage.googleapis.com/whatever.parquet'
