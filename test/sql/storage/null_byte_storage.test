@@ -30,7 +30,7 @@ goo\042
 statement error
 CREATE INDEX i_index ON null_byte(v)
 ----
-Not implemented Error: Indexes cannot contain BLOBs that contain null-terminated bytes.
+ART indexes cannot contain BLOBs with zero bytes.
 
 query I
 SELECT * FROM null_byte WHERE v=concat('goo', chr(0), 42)

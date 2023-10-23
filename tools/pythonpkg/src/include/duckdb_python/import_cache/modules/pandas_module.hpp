@@ -1,3 +1,4 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -12,17 +13,28 @@
 
 namespace duckdb {
 
-// pandas.libs
-struct PandasLibsCacheItem : public PythonImportCacheItem {
-public:
-	~PandasLibsCacheItem() override {
-	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		NAType.LoadAttribute("NAType", cache, *this);
-	}
+struct PandasLibsMissingCacheItem : public PythonImportCacheItem {
 
 public:
+	PandasLibsMissingCacheItem(optional_ptr<PythonImportCacheItem> parent)
+	    : PythonImportCacheItem("missing", parent), NAType("NAType", this) {
+	}
+	~PandasLibsMissingCacheItem() override {
+	}
+
 	PythonImportCacheItem NAType;
+};
+
+struct PandasLibsCacheItem : public PythonImportCacheItem {
+
+public:
+	PandasLibsCacheItem(optional_ptr<PythonImportCacheItem> parent)
+	    : PythonImportCacheItem("_libs", parent), missing(this) {
+	}
+	~PandasLibsCacheItem() override {
+	}
+
+	PandasLibsMissingCacheItem missing;
 
 protected:
 	bool IsRequired() const override final {
@@ -31,23 +43,20 @@ protected:
 };
 
 struct PandasCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "pandas";
 
 public:
+	PandasCacheItem()
+	    : PythonImportCacheItem("pandas"), DataFrame("DataFrame", this), _libs(this), isnull("isnull", this),
+	      ArrowDtype("ArrowDtype", this) {
+	}
 	~PandasCacheItem() override {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		DataFrame.LoadAttribute("DataFrame", cache, *this);
-		libs.LoadModule("pandas._libs.missing", cache);
-		isnull.LoadAttribute("isnull", cache, *this);
-		ArrowDtype.LoadAttribute("ArrowDtype", cache, *this);
-	}
 
-public:
-	//! pandas.DataFrame
 	PythonImportCacheItem DataFrame;
-	PandasLibsCacheItem libs;
+	PandasLibsCacheItem _libs;
 	PythonImportCacheItem isnull;
 	PythonImportCacheItem ArrowDtype;
 

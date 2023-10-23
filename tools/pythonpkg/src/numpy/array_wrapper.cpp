@@ -83,7 +83,7 @@ struct TimestampConvertNano {
 struct DateConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static int64_t ConvertValue(date_t val) {
-		return Date::EpochNanoseconds(val);
+		return Date::EpochMicroseconds(val);
 	}
 
 	template <class NUMPY_T, bool PANDAS>
@@ -253,7 +253,7 @@ struct UUIDConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static PyObject *ConvertValue(hugeint_t val) {
 		auto &import_cache = *DuckDBPyConnection::ImportCache();
-		py::handle h = import_cache.uuid().UUID()(UUID::ToString(val)).release();
+		py::handle h = import_cache.uuid.UUID()(UUID::ToString(val)).release();
 		return h.ptr();
 	}
 

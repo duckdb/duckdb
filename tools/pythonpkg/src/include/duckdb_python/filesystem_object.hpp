@@ -20,8 +20,7 @@ public:
 	virtual ~FileSystemObject() {
 		py::gil_scoped_acquire acquire;
 		// Assert that the 'obj' is a filesystem
-		D_ASSERT(
-		    py::isinstance(obj, DuckDBPyConnection::ImportCache()->pyduckdb().filesystem.modified_memory_filesystem()));
+		D_ASSERT(py::isinstance(obj, DuckDBPyConnection::ImportCache()->duckdb.filesystem.ModifiedMemoryFileSystem()));
 		for (auto &file : filenames) {
 			obj.attr("delete")(file);
 		}
