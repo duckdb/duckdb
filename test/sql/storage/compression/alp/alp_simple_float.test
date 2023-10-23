@@ -11,7 +11,7 @@ PRAGMA force_compression='uncompressed'
 # Create a table with random floats of limited precision compressed as Uncompressed
 # This data should achieve x6 compression ratio
 statement ok
-create table random_float as select round(random(), 3)::FLOAT as data from range(1024) tbl(i);
+create table random_float as select round(random(), 6)::FLOAT as data from range(1024) tbl(i);
 
 statement ok
 checkpoint

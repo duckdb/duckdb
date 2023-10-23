@@ -10,7 +10,7 @@ PRAGMA force_compression='uncompressed'
 
 # Create a table with random doubles of limited precision compressed as Uncompressed
 statement ok
-create table random_double as select random()::DOUBLE as data from range(30) tbl(i);
+create table random_double as select random()::DOUBLE as data from range(1024) tbl(i);
 
 statement ok
 checkpoint
