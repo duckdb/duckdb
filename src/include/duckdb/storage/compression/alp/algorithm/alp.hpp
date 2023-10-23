@@ -31,10 +31,6 @@ public:
 		bit_width = 0;
 	}
 
-	void ResetCombinations(){
-		combinations.clear();
-	}
-
 public:
 	uint8_t v_exponent;
 	uint8_t v_factor;
@@ -80,7 +76,7 @@ struct AlpCompression {
 		    ((t1.second == t2.second && t2.first.first == t1.first.first) && (t2.first.second < t1.first.second));
 	}
 
-	static void FindTopNCombinations(vector<vector<T>> vectors_sampled, State &state){
+	static void FindTopKCombinations(vector<vector<T>> vectors_sampled, State &state){
 
 		map<pair<int, int>, int> global_combinations;
 

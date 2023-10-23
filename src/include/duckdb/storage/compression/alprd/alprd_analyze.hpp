@@ -36,6 +36,9 @@ unique_ptr<AnalyzeState> AlpRDInitAnalyze(ColumnData &col_data, PhysicalType typ
 	return make_uniq<AlpRDAnalyzeState<T>>();
 }
 
+/*
+ * ALPRD Analyze step only pushes the needed samples to estimate the compression size in the finalize step
+ */
 template <class T>
 bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	using EXACT_TYPE = typename FloatingToExact<T>::type;
@@ -49,6 +52,7 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	analyze_state.vectors_count += 1;
 	analyze_state.total_values_count += count;
 
+	//! If we are not in the correct jump, we do not take sample from this vector
 	if (!must_select_rowgroup_samples) {
 		return true;
 	}
@@ -61,7 +65,8 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 
 	uint32_t n_lookup_values = MinValue(count, (idx_t) AlpConstants::ALP_VECTOR_SIZE);
 	//! We sample equidistant values within a vector; to do this we jump a fixed number of values
-	uint32_t n_sampled_increments = MaxValue(1, (int) ceil((double) n_lookup_values / AlpConstants::SAMPLES_PER_VECTOR));
+	uint32_t n_sampled_increments =
+	    MaxValue(1, (int) ceil((double) n_lookup_values / AlpConstants::SAMPLES_PER_VECTOR));
 	uint32_t n_sampled_values = ceil((double) n_lookup_values / n_sampled_increments);
 
 	vector<EXACT_TYPE> current_vector_sample(n_sampled_values, 0);
@@ -94,12 +99,12 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	}
 
 	// Replacing that first non-null value on the vector
-	for (idx_t j = 0; j < nulls_idx; j++){
-		uint16_t null_value_pos = current_vector_null_positions[j];
+	for (idx_t i = 0; i < nulls_idx; i++){
+		uint16_t null_value_pos = current_vector_null_positions[i];
 		current_vector_sample[null_value_pos] = a_non_null_value;
 	}
 
-	// Pushing the sampled vector into the rowgroup samples
+	// Pushing the sampled vector samples into the rowgroup samples
 	for (auto &value : current_vector_sample){
 		analyze_state.rowgroup_sample.push_back(value);
 	}
@@ -108,6 +113,9 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	return true;
 }
 
+/*
+ * Estimate the compression size of ALPRD using the taken samples
+ */
 template <class T>
 idx_t AlpRDFinalAnalyze(AnalyzeState &state) {
 	auto &analyze_state = (AlpRDAnalyzeState<T> &)state;

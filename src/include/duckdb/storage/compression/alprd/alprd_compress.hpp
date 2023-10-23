@@ -86,7 +86,6 @@ public:
 		    state.alp_state.exceptions_count *
 		        (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE) +
 		    AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
-			//! Pointer to next vector not added because HasEnoughSpace already take it into account
 		return required_space;
 	}
 
@@ -140,8 +139,8 @@ public:
 			tmp_null_idx += 1;
 		}
 		// Replacing it on the vector
-		for (idx_t j = 0; j < nulls_idx; j++){
-			uint16_t null_value_pos = vector_null_positions[j];
+		for (idx_t i = 0; i < nulls_idx; i++){
+			uint16_t null_value_pos = vector_null_positions[i];
 			input_vector[null_value_pos] = a_non_null_value;
 			raw_input_vector[null_value_pos] = a_non_null_raw_value;
 		}
@@ -192,7 +191,7 @@ public:
 		     (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE)) +
 		    AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 
-		// Write MetaData
+		// Write pointer to the vector data (metadata)
 		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
 		Store<uint32_t>(next_vector_byte_index_start, metadata_ptr);
 		next_vector_byte_index_start = UsedSpace();
@@ -238,7 +237,7 @@ public:
 		Store<uint32_t>(total_segment_size, dataptr);
 		dataptr += AlpRDConstants::METADATA_POINTER_SIZE;
 
-		// Store the Right bw for the segment
+		// Store the right bw for the segment
 		Store<uint8_t>(state.alp_state.right_bw, dataptr);
 		dataptr += AlpRDConstants::R_BW_SIZE;
 
