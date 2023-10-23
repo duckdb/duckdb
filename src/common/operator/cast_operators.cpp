@@ -4,6 +4,8 @@
 #include "duckdb/common/operator/numeric_cast.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
@@ -792,7 +794,8 @@ template <typename T>
 struct IntegerCastData {
 	using Result = T;
 	Result result;
-	bool seen_decimal;
+	Result decimal;
+	uint16_t decimal_digits;
 };
 
 struct IntegerCastOperation {
@@ -836,43 +839,79 @@ struct IntegerCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int32_t exponent) {
 		using result_t = typename T::Result;
-		double dbl_res = state.result * std::pow(10.0L, exponent);
-		if (dbl_res < (double)NumericLimits<result_t>::Minimum() ||
-		    dbl_res > (double)NumericLimits<result_t>::Maximum()) {
+		// double dbl_res = state.result * std::pow(10.0L, exponent);
+		// if (dbl_res < (double)NumericLimits<result_t>::Minimum() ||
+		//     dbl_res > (double)NumericLimits<result_t>::Maximum()) {
+		// 	return false;
+		// }
+		// state.result = (result_t)std::nearbyint(dbl_res);
+
+		int32_t i = exponent;
+		result_t result = state.result;
+		while (i-- > 0) {
+			if (!TryMultiplyOperator::Operation(result, (result_t)10, result)) {
+				return false;
+			}
+		}
+		state.result = result;
+
+		if (state.decimal == 0) {
+			printf("state.decimal == 0\n");
+			return true;
+		}
+
+		i = exponent - state.decimal_digits;
+		result_t remainder = 0;
+		if (i < 0) {
+			result_t power = 1;
+			while (i++ < 0) {
+				power *= 10;
+			}
+			remainder = state.decimal % power;
+			state.decimal /= power;
+		} else {
+			while (i-- > 0) {
+				if (!TryMultiplyOperator::Operation(state.decimal, (result_t)10, state.decimal)) {
+					return false;
+				}
+			}
+		}
+
+		if (NEGATIVE) {
+			state.decimal *= -1;
+		}
+		if (!TryAddOperator::Operation(state.result, state.decimal, state.result)) {
 			return false;
 		}
-		state.result = (result_t)std::nearbyint(dbl_res);
-		return true;
+		state.decimal = remainder;
+		return Finalize<T, NEGATIVE>(state);
 	}
 
 	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
 	static bool HandleDecimal(T &state, uint8_t digit) {
-		if (state.seen_decimal) {
+		using result_t = typename T::Result;
+		if (state.decimal > (NumericLimits<result_t>::Maximum() - digit) / 10) {
+			// Simply ignore any more decimals
 			return true;
 		}
-		state.seen_decimal = true;
-		// round the integer based on what is after the decimal point
-		// if digit >= 5, then we round up (or down in case of negative numbers)
-		auto increment = digit >= 5;
-		if (!increment) {
-			return true;
-		}
-		if (NEGATIVE) {
-			if (state.result == NumericLimits<typename T::Result>::Minimum()) {
-				return false;
-			}
-			state.result--;
-		} else {
-			if (state.result == NumericLimits<typename T::Result>::Maximum()) {
-				return false;
-			}
-			state.result++;
-		}
+		state.decimal_digits++;
+		state.decimal = state.decimal * 10 + digit;
 		return true;
 	}
 
 	template <class T, bool NEGATIVE>
 	static bool Finalize(T &state) {
+		using result_t = typename T::Result;
+		while (state.decimal > 10) {
+			state.decimal /= 10;
+		}
+		if (state.decimal >= 5) {
+			if (NEGATIVE) {
+				return TrySubtractOperator::Operation(state.result, (result_t)1, state.result);
+			} else {
+				return TryAddOperator::Operation(state.result, (result_t)1, state.result);
+			}
+		}
 		return true;
 	}
 };
