@@ -271,7 +271,7 @@ hugeint_t Hugeint::Multiply(hugeint_t lhs, hugeint_t rhs) {
 // Divide
 //===--------------------------------------------------------------------===//
 static hugeint_t DivModMinimum(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainder) {
-
+	D_ASSERT(lhs == NumericLimits<hugeint_t>::Minimum() || rhs == NumericLimits<hugeint_t>::Minimum());
 	if (rhs == NumericLimits<hugeint_t>::Minimum()) {
 		if (lhs == NumericLimits<hugeint_t>::Minimum()) {
 			remainder = 0;
