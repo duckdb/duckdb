@@ -99,7 +99,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, const CopyI
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
-		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(std::move(set)));
+		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(set));
 	}
 	// verify the parsed options
 	if (bind_data->options.force_quote.empty()) {
