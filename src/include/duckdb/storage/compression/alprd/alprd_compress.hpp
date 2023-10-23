@@ -138,7 +138,7 @@ public:
 			}
 			tmp_null_idx += 1;
 		}
-		// Replacing it on the vector
+		// Replacing that first non-null value on the vector
 		for (idx_t i = 0; i < nulls_idx; i++){
 			uint16_t null_value_pos = vector_null_positions[i];
 			input_vector[null_value_pos] = a_non_null_value;

@@ -17,32 +17,43 @@ namespace duckdb {
 
 namespace alp {
 
+struct AlpCombination {
+	int8_t exponent;
+	int8_t factor;
+	int64_t n_appearances;
+
+	AlpCombination(int8_t exponent, int8_t factor, int64_t n_appearances):
+	      exponent(exponent), factor(factor), n_appearances(n_appearances){
+	}
+
+};
+
 template <class T, bool EMPTY>
 class AlpCompressionState {
 public:
-	AlpCompressionState() : v_exponent(0), v_factor(0), exceptions_count(0), bit_width(0) {
+	AlpCompressionState() : vector_exponent(0), vector_factor(0), exceptions_count(0), bit_width(0) {
 
 	}
 
 	void Reset() {
-		v_exponent = 0;
-		v_factor = 0;
+		vector_exponent = 0;
+		vector_factor = 0;
 		exceptions_count = 0;
 		bit_width = 0;
 	}
 
 public:
-	uint8_t v_exponent;
-	uint8_t v_factor;
+	uint8_t vector_exponent;
+	uint8_t vector_factor;
 	uint16_t exceptions_count;
 	uint16_t bit_width;
 	uint64_t bp_size;
 	uint64_t frame_of_reference;
-	int64_t dig[AlpConstants::ALP_VECTOR_SIZE];
+	int64_t encoded_integers[AlpConstants::ALP_VECTOR_SIZE];
 	T exceptions[AlpConstants::ALP_VECTOR_SIZE];
 	uint16_t exceptions_positions[AlpConstants::ALP_VECTOR_SIZE];
-	vector<pair<uint8_t, uint8_t>> combinations;
-	uint8_t encoded[AlpConstants::ALP_VECTOR_SIZE * 8];
+	vector<AlpCombination> best_k_combinations;
+	uint8_t values_encoded[AlpConstants::ALP_VECTOR_SIZE * 8];
 
 };
 
@@ -52,6 +63,9 @@ struct AlpCompression {
 	using State = AlpCompressionState<T, EMPTY>;
 	static constexpr uint8_t EXACT_TYPE_BITSIZE = sizeof(T) * 8;
 
+	/*
+	 * Conversion from a Floating-Point number to Int64 without rounding
+	 */
 	static int64_t NumberToInt64(T n){
 		n = n + AlpPrimitives<T>::MAGIC_NUMBER - AlpPrimitives<T>::MAGIC_NUMBER;
 		//! Special values which cannot be casted to int64 without an undefined behaviour
@@ -62,291 +76,288 @@ struct AlpCompression {
 	}
 
 	/*
-	 * Function to sort best combinations from each vector sampled from the rowgroup
-	 * First criteria is number of times it appears
+	 * Sort combinations of factor-exponent from each vector sampled from the rowgroup
+	 * First criteria is number of times it appears as best combination
 	 * Second criteria is bigger exponent
 	 * Thrid criteria is bigger factor
 	 */
-	static bool CompareBestCombinations(
-	    const pair<pair<int, int>, int>& t1,
-	    const pair<pair<int, int>, int>& t2){
+	static bool CompareALPCombinations(const AlpCombination& c1, const AlpCombination& c2){
 		return
-		    (t1.second > t2.second) ||
-		    (t1.second == t2.second && (t2.first.first < t1.first.first)) ||
-		    ((t1.second == t2.second && t2.first.first == t1.first.first) && (t2.first.second < t1.first.second));
+		    (c1.n_appearances > c2.n_appearances) ||
+		    (c1.n_appearances == c2.n_appearances && (c2.exponent < c1.exponent)) ||
+		    ((c1.n_appearances == c2.n_appearances && c2.exponent == c1.exponent) && (c2.factor < c1.factor));
 	}
 
+	/*
+	 * Find the best combinations of factor-exponent from each vector sampled from a rowgroup
+	 */
 	static void FindTopKCombinations(vector<vector<T>> vectors_sampled, State &state){
 
-		map<pair<int, int>, int> global_combinations;
+		// We use a 'pair' to hash it easily
+		map<pair<int8_t, int8_t>, int32_t> best_k_combinations_hash;
 
-		// For each vector in the rg_sample
-		for (auto &smp_arr : vectors_sampled){
-			idx_t smp_per_vector = smp_arr.size();
-			vector<pair<int, int>> local_combinations;
-			uint8_t found_factor {AlpPrimitives<T>::MAX_EXPONENT};
-			uint8_t found_exponent {AlpPrimitives<T>::MAX_EXPONENT};
-			idx_t best_total_bits = (smp_per_vector * (EXACT_TYPE_BITSIZE + AlpConstants::EXCEPTION_POSITION_SIZE * 8)) + (smp_per_vector * EXACT_TYPE_BITSIZE);
+		// For each vector sampled
+		for (auto &sampled_vector : vectors_sampled){
+			idx_t n_samples = sampled_vector.size();
+			uint8_t best_factor = AlpPrimitives<T>::MAX_EXPONENT;
+			uint8_t best_exponent = AlpPrimitives<T>::MAX_EXPONENT;
 
-			//printf("Going through %d samples of vector\n", smp_per_vector);
-			// We test all combinations (~170 combinations)
-			for (int exp_ref = AlpPrimitives<T>::MAX_EXPONENT; exp_ref >= 0; exp_ref--){
-				for (int factor_idx = exp_ref; factor_idx >= 0; factor_idx--){
-					//printf("Factor %d | ", factor_idx);
-					uint32_t exception_c = 0;
-					uint32_t matches_c = 0;
-					uint32_t bits_per_digit = 0;
-					uint64_t local_total_bits = 0;
-					int64_t  local_max_digits {NumericLimits<int64_t>::Minimum()};
-					int64_t  local_min_digits {NumericLimits<int64_t>::Maximum()};
-					for (idx_t i = 0; i < smp_per_vector; i++){
-						int64_t digits;
-						T  dbl = smp_arr[i];
-						T  orig;
-						T  cd;
+			//! We start our optimization with the worst possible total bits obtained from compression
+			idx_t best_total_bits = (n_samples * (EXACT_TYPE_BITSIZE + AlpConstants::EXCEPTION_POSITION_SIZE * 8))
+			                        + (n_samples * EXACT_TYPE_BITSIZE);
 
-						//printf("%f : ", dbl);
+			//! We try all combinations in search for the one which minimize the compression size
+			for (int8_t exp_idx = AlpPrimitives<T>::MAX_EXPONENT; exp_idx >= 0; exp_idx--){
+				for (int8_t factor_idx = exp_idx; factor_idx >= 0; factor_idx--){
+					idx_t exceptions_count = 0;
+					idx_t non_exceptions_count = 0;
+					uint32_t estimated_bits_per_value = 0;
+					uint64_t estimated_compression_size = 0;
+					int64_t max_encoded_value = NumericLimits<int64_t>::Minimum();
+					int64_t min_encoded_value = NumericLimits<int64_t>::Maximum();
 
-						cd     = dbl * AlpPrimitives<T>::EXP_ARR[exp_ref] * AlpPrimitives<T>::FRAC_ARR[factor_idx];
-						digits = NumberToInt64(cd);
-						//printf("%lu : ", digits);
+					for (idx_t sample_idx = 0; sample_idx < n_samples; sample_idx++){
+						T value = sampled_vector[sample_idx];
+
+						T decoded_value;
+						T tmp_encoded_value;
+						int64_t encoded_value;
+
+						tmp_encoded_value =
+						    value * AlpPrimitives<T>::EXP_ARR[exp_idx] * AlpPrimitives<T>::FRAC_ARR[factor_idx];
+						encoded_value = NumberToInt64(tmp_encoded_value);
+
 						//! The cast to T is needed to prevent a signed integer overflow
-						orig   = static_cast<T>(digits) * AlpConstants::FACT_ARR[factor_idx] * AlpPrimitives<T>::FRAC_ARR[exp_ref];
-						if (orig == dbl) {
-							matches_c++;
-							if (digits > local_max_digits) { local_max_digits = digits; };
-							if (digits < local_min_digits) { local_min_digits = digits; };
+						decoded_value = static_cast<T>(encoded_value) * AlpConstants::FACT_ARR[factor_idx] *
+						                AlpPrimitives<T>::FRAC_ARR[exp_idx];
+						if (decoded_value == value) {
+							non_exceptions_count++;
+							max_encoded_value = MaxValue(encoded_value, max_encoded_value);
+							min_encoded_value = MinValue(encoded_value, min_encoded_value);
 							continue;
 						}
-						exception_c++;
+						exceptions_count++;
 					}
-					// We skip combinations which yields to all exceptions
-					if (matches_c < 2) { // We skip combinations which yields to less than 2 matches
+
+					if (non_exceptions_count < 2) { // We skip combinations which yields to almost all exceptions
 						continue;
 					}
-					//printf("Factor2 %d | ", factor_idx);
-					// Evaluate factor/exponent performance (we optimize for FOR)
-					uint64_t delta = local_max_digits - local_min_digits;
-					bits_per_digit = ceil(log2(delta + 1));
-					local_total_bits += smp_per_vector * bits_per_digit;
-					local_total_bits += exception_c * (EXACT_TYPE_BITSIZE + (AlpConstants::EXCEPTION_POSITION_SIZE * 8));
-					//printf("Factor3 %d | ", factor_idx);
+					// Evaluate factor/exponent compression size (we optimize for FOR)
+					uint64_t delta = max_encoded_value - min_encoded_value;
+					estimated_bits_per_value = ceil(log2(delta + 1));
+					estimated_compression_size += n_samples * estimated_bits_per_value;
+					estimated_compression_size +=
+					    exceptions_count * (EXACT_TYPE_BITSIZE + (AlpConstants::EXCEPTION_POSITION_SIZE * 8));
+
 					if (
-					    (local_total_bits < best_total_bits) ||
+					    (estimated_compression_size < best_total_bits) ||
 					    // We prefer bigger exponents
-					    (local_total_bits == best_total_bits && (found_exponent < exp_ref)) ||
+					    (estimated_compression_size == best_total_bits && (best_exponent < exp_idx)) ||
 					    // We prefer bigger factors
-					    ((local_total_bits == best_total_bits && found_exponent == exp_ref)
-					     && (found_factor < factor_idx))
+					    ((estimated_compression_size == best_total_bits && best_exponent == exp_idx)
+					     && (best_factor < factor_idx))
 					){
-						best_total_bits = local_total_bits;
-						found_exponent = exp_ref;
-						found_factor = factor_idx;
+						best_total_bits = estimated_compression_size;
+						best_exponent = exp_idx;
+						best_factor = factor_idx;
 					}
 				}
 			}
-			pair<int, int> cmb = make_pair(found_exponent, found_factor);
-			//printf("ff %d | ee %d \n", found_exponent, found_factor);
-			if (global_combinations.count(cmb)){
-				global_combinations[cmb] += 1;
+
+			pair<int8_t, int8_t> best_combination = make_pair(best_exponent, best_factor);
+			if (best_k_combinations_hash.count(best_combination)){
+				best_k_combinations_hash[best_combination] += 1;
 			} else {
-				global_combinations[cmb] = 1;
+				best_k_combinations_hash[best_combination] = 1;
 			}
 		}
-		vector<pair<pair<int, int>, int>> comb_pairs;
-		// Convert map pairs to vector for sort
-		for (auto const& itr : global_combinations){
-			//printf("fff %d | eee %d \n", itr.first.first, itr.first.second);
-			comb_pairs.emplace_back(
-			    itr.first, // Pair exp, fac
-			    itr.second // N of times it appeared
+
+		// Convert our hash pairs to a Combination vector to be able to sort
+		vector<AlpCombination> best_k_combinations;
+		for (auto const& combination : best_k_combinations_hash){
+			best_k_combinations.emplace_back(
+			    combination.first.first, // Exponent
+			    combination.first.second, // Factor
+			    combination.second // N of times it appeared (hash value)
 			    );
 		}
-		// We sort combinations based on times they appeared
-		sort(comb_pairs.begin(), comb_pairs.end(), CompareBestCombinations);
+		sort(best_k_combinations.begin(), best_k_combinations.end(), CompareALPCombinations);
 
-		uint32_t n_comb = MinValue(AlpConstants::MAX_COMBINATIONS, (uint8_t) comb_pairs.size());
-		// Save best exp,fac pairs
-		for (idx_t i = 0; i < n_comb; i++){
-			state.combinations.push_back(comb_pairs[i].first);
+		// Save k' best combinations
+		for (idx_t i = 0; i < MinValue(AlpConstants::MAX_COMBINATIONS, (uint8_t) best_k_combinations.size()); i++){
+			state.best_k_combinations.push_back(best_k_combinations[i]);
 		}
 	}
 
-	static void FindFactorAndExponent(vector<T> input_vector, idx_t n_values, State &state){
+	/*
+	 * Find the best combination of factor-exponent for a vector from within the best k combinations
+	 */
+	static void FindBestFactorAndExponent(vector<T> input_vector, idx_t n_values, State &state){
 
-		// Taking sample from vector
-		vector<T> smp_arr;
-		uint32_t idx_increments = MinValue(1, (int) floor(n_values / AlpConstants::SAMPLES_PER_VECTOR));
+		//! We sample equidistant values within a vector; to do this we skip a fixed number of values
+		vector<T> vector_sample;
+		uint32_t idx_increments = MinValue(1, (int32_t) floor(n_values / AlpConstants::SAMPLES_PER_VECTOR));
 		for (idx_t i = 0; i < n_values; i += idx_increments){
-			smp_arr.push_back(input_vector[i]);
+			vector_sample.push_back(input_vector[i]);
 		}
 
-		uint8_t found_exponent = 0;
-		uint8_t found_factor = 0;
-		uint64_t previous_bit_count = 0;
-		uint8_t worse_threshold = 0;
-		idx_t top_n = state.combinations.size();
-		uint32_t smp_size = smp_arr.size(); // AlpPrimitives::SAMPLES_PER_VECTOR;
-		for (idx_t k = 0; k < top_n; k++){
-			int exp_ref		 	= state.combinations[k].first;
-			int factor_idx 		= state.combinations[k].second;
-			uint32_t exception_c = 0;
-			uint32_t bits_per_digit;
-			uint64_t local_total_bits = 0;
-			int64_t  local_max_digits	{NumericLimits<int64_t>::Minimum()};
-			int64_t  local_min_digits 	{NumericLimits<int64_t>::Maximum()};
+		uint8_t best_exponent = 0;
+		uint8_t best_factor = 0;
+		uint64_t best_total_bits = 0;
+		idx_t worse_total_bits_counter = 0;
+		idx_t n_samples = vector_sample.size();
 
-			// Test combination of exponent and factor for the sample
-			for (idx_t i = 0; i < smp_size; ++i) {
-				int64_t digits;
-				T  dbl = smp_arr[i];
-				T  orig;
-				T  cd;
+		//! We try each K combination in search for the one which minimize the compression size in the vector
+		for (idx_t combination_idx = 0; combination_idx < state.best_k_combinations.size(); combination_idx++){
+			int32_t exponent_idx = state.best_k_combinations[combination_idx].exponent;
+			int32_t factor_idx = state.best_k_combinations[combination_idx].factor;
+			idx_t exceptions_count = 0;
+			uint32_t estimated_bits_per_value;
+			uint64_t estimated_compression_size = 0;
+			int64_t max_encoded_value = NumericLimits<int64_t>::Minimum();
+			int64_t min_encoded_value = NumericLimits<int64_t>::Maximum();
 
-				cd     = dbl * AlpPrimitives<T>::EXP_ARR[exp_ref] * AlpPrimitives<T>::FRAC_ARR[factor_idx];
-				digits = NumberToInt64(cd);
+			for (idx_t sample_idx = 0; sample_idx < n_samples; ++sample_idx) {
+				T value = vector_sample[sample_idx];
+
+				T decoded_value;
+				int64_t encoded_value;
+				T tmp_encoded_value;
+				tmp_encoded_value =
+				    value * AlpPrimitives<T>::EXP_ARR[exponent_idx] * AlpPrimitives<T>::FRAC_ARR[factor_idx];
+				encoded_value = NumberToInt64(tmp_encoded_value);
+
 				//! The cast to T is needed to prevent a signed integer overflow
-				orig   = static_cast<T>(digits) * AlpConstants::FACT_ARR[factor_idx] * AlpPrimitives<T>::FRAC_ARR[exp_ref];
-				if (orig == dbl) {
-					if (digits > local_max_digits) { local_max_digits = digits; }
-					if (digits < local_min_digits) { local_min_digits = digits; }
-				} else {
-					exception_c++;
+				decoded_value = static_cast<T>(encoded_value) * AlpConstants::FACT_ARR[factor_idx] *
+				                AlpPrimitives<T>::FRAC_ARR[exponent_idx];
+
+				if (decoded_value == value) {
+					max_encoded_value = MaxValue(encoded_value, max_encoded_value);
+					min_encoded_value = MinValue(encoded_value, min_encoded_value);
+					continue;
 				}
+				exceptions_count++;
 			}
 
-			// Evaluate factor/exponent performance (we optimize for FOR)
-			uint64_t delta          = local_max_digits - local_min_digits;
-			bits_per_digit 			= ceil(log2(delta + 1));
-			local_total_bits 		+= smp_size * bits_per_digit;
-			local_total_bits 		+= exception_c * (EXACT_TYPE_BITSIZE + (AlpConstants::EXCEPTION_POSITION_SIZE * 8));
+			// Evaluate factor/exponent compression size (we optimize for FOR)
+			uint64_t delta          = max_encoded_value - min_encoded_value;
+			estimated_bits_per_value = ceil(log2(delta + 1));
+			estimated_compression_size += n_samples * estimated_bits_per_value;
+			estimated_compression_size +=
+			    exceptions_count * (EXACT_TYPE_BITSIZE + (AlpConstants::EXCEPTION_POSITION_SIZE * 8));
 
-			if (k == 0) {  // First try with first combination
-				previous_bit_count = local_total_bits;
-				found_factor      = factor_idx;
-				found_exponent    = exp_ref;
-				continue; // Go to second
-			}
-			if (local_total_bits >= previous_bit_count){ // If current is worse or equal than previous
-				worse_threshold += 1;
-				if (worse_threshold == AlpConstants::SAMPLING_EARLY_EXIT_THRESHOLD) { break; } // We stop only if two are worse
+			if (combination_idx == 0) {  // First combination tried
+				best_total_bits = estimated_compression_size;
+				best_factor = factor_idx;
+				best_exponent = exponent_idx;
 				continue;
 			}
-			// Otherwise we replace best and continue with next
-			previous_bit_count = local_total_bits;
-			found_factor      = factor_idx;
-			found_exponent    = exp_ref;
-			worse_threshold = 0;
+
+			// If current compression size is worse (higher) or equal than the current best combination
+			if (estimated_compression_size >= best_total_bits){
+				worse_total_bits_counter += 1;
+				// Early exit strategy
+				if (worse_total_bits_counter == AlpConstants::SAMPLING_EARLY_EXIT_THRESHOLD) {
+					break;
+				}
+				continue;
+			}
+			// Otherwise we replace the best and continue trying with the next combination
+			best_total_bits = estimated_compression_size;
+			best_factor = factor_idx;
+			best_exponent = exponent_idx;
+			worse_total_bits_counter = 0;
 		}
-		state.v_exponent = found_exponent;
-		state.v_factor   = found_factor;
+		state.vector_exponent = best_exponent;
+		state.vector_factor = best_factor;
 	}
 
 	static void Compress(vector<T> input_vector, idx_t n_values, State &state){
-		int64_t  tmp_digit;
-		uint16_t exc_c = 0;
-		T cd;
-		T orig;
-		uint64_t pos = 0;
-		vector<T> tmp_dbl_arr(n_values, 0);
-		vector<uint64_t> tmp_index(n_values, 0);
-
-		if (state.combinations.size() > 1){
-			FindFactorAndExponent(input_vector, n_values, state);
+		if (state.best_k_combinations.size() > 1){
+			FindBestFactorAndExponent(input_vector, n_values, state);
 		} else {
-			state.v_exponent = state.combinations[0].first;
-			state.v_factor = state.combinations[0].second;
+			state.vector_exponent = state.best_k_combinations[0].exponent;
+			state.vector_factor = state.best_k_combinations[0].factor;
 		}
 
-		//printf("Encoding %d values\n",  n_values);
-		//printf("Exponent %d\n",  state.v_exponent);
-		//printf("Factor %d\n",  state.v_factor);
+		// Encoding Floating-Point to Int64
+		//! We encode all the values regardless of their correctness to recover the original floating-point
+		//! We detect exceptions later using a predicated comparison
+		vector<T> tmp_decoded_values(n_values, 0); // Tmp array to check wether the encoded values are exceptions
+		for (idx_t i = 0; i < n_values; i++) {
+			T value = input_vector[i];
+			T tmp_encoded_value = value * AlpPrimitives<T>::EXP_ARR[state.vector_exponent]
+			                    * AlpPrimitives<T>::FRAC_ARR[state.vector_factor];
+			int64_t encoded_value = NumberToInt64(tmp_encoded_value);
+			state.encoded_integers[i] = encoded_value;
 
-		for (idx_t i = 0; i < n_values; i++) {
-			auto dbl = input_vector[i];
-			//printf("dbl %f | ", dbl);
-			// Attempt conversion
-			cd = dbl * AlpPrimitives<T>::EXP_ARR[state.v_exponent] * AlpPrimitives<T>::FRAC_ARR[state.v_factor];
-			tmp_digit = NumberToInt64(cd);
-			//printf("tmpdigit %lld | ", (long long) tmp_digit);
-			state.dig[i] = tmp_digit;
-			orig = static_cast<T>(tmp_digit) * AlpConstants::FACT_ARR[state.v_factor] *
-			       AlpPrimitives<T>::FRAC_ARR[state.v_exponent];
-			tmp_dbl_arr[i] = orig;
+			T decoded_value = static_cast<T>(encoded_value) * AlpConstants::FACT_ARR[state.vector_factor]
+			                 * AlpPrimitives<T>::FRAC_ARR[state.vector_exponent];
+			tmp_decoded_values[i] = decoded_value;
 		}
-		//printf("Finding Exceptions Positions\n");
+
+		// Detecting exceptions with predicated comparison
+		idx_t exceptions_idx = 0;
+		vector<uint64_t> exceptions_positions(n_values, 0);
 		for (idx_t i = 0; i < n_values; i++) {
-			auto l         = tmp_dbl_arr[i];
-			auto r         = input_vector[i];
-			auto compare_r = (l != r);
-			tmp_index[pos] = i;
-			pos += compare_r;
+			T decoded_value = tmp_decoded_values[i];
+			T actual_value = input_vector[i];
+			auto is_exception = (decoded_value != actual_value);
+			exceptions_positions[exceptions_idx] = i;
+			exceptions_idx += is_exception;
 		}
-		//printf("Finding first encoded value\n");
-		int64_t for_sure = 0;
+
+		// Finding first non exception value
+		int64_t a_non_exception_value = 0;
 		for (idx_t i = 0; i < n_values; i++) {
-			if (i != tmp_index[i]) {
-				for_sure = state.dig[i];
+			if (i != exceptions_positions[i]) {
+				a_non_exception_value = state.encoded_integers[i];
 				break;
 			}
 		}
-		//printf("Building Exceptions\n");
-		for (idx_t j = 0; j < pos; j++) {
-			idx_t i   = tmp_index[j];
-			T dbl = input_vector[i];
-			state.dig[i]       = for_sure;
-			state.exceptions[exc_c] = dbl;
-			state.exceptions_positions[exc_c] = i;
-			//printf("EXCEPTION %f | ", dbl);
-			exc_c  += 1;
-		}
-		state.exceptions_count = exc_c;
-		//printf("Found %d exceptions\n", state.exceptions_count);
 
-		//printf("Doing FFOR\n");
+		// Replacing that first non exception value on the vector exceptions
+		uint16_t exceptions_count = 0;
+		for (idx_t i = 0; i < exceptions_idx; i++) {
+			idx_t exception_pos = exceptions_positions[i];
+			T actual_value = input_vector[exception_pos];
+			state.encoded_integers[exception_pos] = a_non_exception_value;
+			state.exceptions[exceptions_count] = actual_value;
+			state.exceptions_positions[exceptions_count] = exception_pos;
+			exceptions_count += 1;
+		}
+		state.exceptions_count = exceptions_count;
+
 		// Analyze FFOR
-		auto min = NumericLimits<int64_t>::Maximum();
-		auto max = NumericLimits<int64_t>::Minimum();
+		auto min_value = NumericLimits<int64_t>::Maximum();
+		auto max_value = NumericLimits<int64_t>::Minimum();
 		for (idx_t i = 0; i < n_values; i++) {
-			if (state.dig[i] < min) { min = state.dig[i]; }
-			if (state.dig[i] > max) { max = state.dig[i]; }
+			max_value = MaxValue(max_value, state.encoded_integers[i]);
+			min_value = MinValue(min_value, state.encoded_integers[i]);
 		}
-		uint64_t min_max_diff = (static_cast<uint64_t>(max) - static_cast<uint64_t>(min));
+		uint64_t min_max_diff = (static_cast<uint64_t>(max_value) - static_cast<uint64_t>(min_value));
 
-		auto* dig_u = reinterpret_cast<uint64_t*>(state.dig);
-		auto const min_u = static_cast<uint64_t>(min);
-
-		//printf("min_u %d | ", min_u);
+		auto *u_encoded_integers = reinterpret_cast<uint64_t*>(state.encoded_integers);
+		auto const u_min_value = static_cast<uint64_t>(min_value);
 
 		// Subtract FOR
-		if (!EMPTY){ // only if not analyze
+		if (!EMPTY){ //! We only execute the FOR if we are writing the data
 			for (idx_t i = 0; i < n_values; i++) {
-				//state.dig[i] -= min;
-				//printf("ENCa %lld | ", (long long) dig_u[i]);
-				dig_u[i] -= min_u;
-				//printf("ENCb %lld | ", (long long) dig_u[i]);
+				u_encoded_integers[i] -= u_min_value;
 			}
 		}
 
-		auto width = BitpackingPrimitives::MinimumBitWidth<uint64_t, false>(min_max_diff);
-		auto bp_size = BitpackingPrimitives::GetRequiredSize(n_values, width);
-		//printf("BP SIZE %d\n", bp_size);
-		//printf("BW %d\n", width);
-		//printf("FOR %d\n", min);
-		if (!EMPTY && width > 0){ // only if not analyze
-			// state.encoded.reserve(bp_size); // reserving
-			//data_ptr_t src = data_ptr_cast(state.dig);
-			//data_ptr_t dst = data_ptr_cast(state.encoded.get());
+		auto bit_width = BitpackingPrimitives::MinimumBitWidth<uint64_t, false>(min_max_diff);
+		auto bp_size = BitpackingPrimitives::GetRequiredSize(n_values, bit_width);
+		if (!EMPTY && bit_width > 0){ //! We only execute the BP if we are writing the data
 			BitpackingPrimitives::PackBuffer<uint64_t, false>(
-			    state.encoded,
-			    dig_u,
+			    state.values_encoded, u_encoded_integers,
 			    n_values,
-			    width);
+			    bit_width);
 		}
-		state.bit_width = width; // in bits
+		state.bit_width = bit_width; // in bits
 		state.bp_size = bp_size; // in bytes
-		state.frame_of_reference = min;
-
+		state.frame_of_reference = min_value;
 	}
 
 };
@@ -354,36 +365,33 @@ struct AlpCompression {
 
 template <class T>
 struct AlpDecompression {
-	static void Decompress(uint8_t *for_encoded, T* out, idx_t count, uint8_t v_factor, uint8_t v_exponent,
+	static void Decompress(uint8_t *for_encoded, T* output, idx_t count, uint8_t vector_factor, uint8_t vector_exponent,
 	                       uint16_t exceptions_count, T* exceptions, uint16_t* exceptions_positions,
 	                       uint64_t frame_of_reference, uint8_t bit_width) {
-		//printf("Factor %d, Exponent %d", v_factor, v_exponent);
-		uint64_t factor = AlpConstants::U_FACT_ARR[v_factor];
-		T frac10 = AlpPrimitives<T>::FRAC_ARR[v_exponent];
+		uint64_t factor = AlpConstants::U_FACT_ARR[vector_factor];
+		T exponent = AlpPrimitives<T>::FRAC_ARR[vector_exponent];
 
+		// Bit Unpacking
 		uint8_t for_decoded[AlpConstants::ALP_VECTOR_SIZE * 8] = {0};
-
 		if (bit_width > 0){
 			BitpackingPrimitives::UnPackBuffer<uint64_t>(for_decoded, for_encoded, count, bit_width);
 		}
+		uint64_t *encoded_integers = reinterpret_cast<uint64_t*>(data_ptr_cast(for_decoded));
 
-		uint64_t *dig = reinterpret_cast<uint64_t*>(data_ptr_cast(for_decoded));
-
-		// UNFOR
+		// unFOR
 		for (idx_t i = 0; i < count; i++) {
-			dig[i] += frame_of_reference;
+			encoded_integers[i] += frame_of_reference;
 		}
 
+		// Decoding
 		for (idx_t i = 0; i < count; i++) {
-			auto digit = dig[i];
-			//printf("DECa %lld | ", (long long) digit);
-			out[i] = static_cast<T>(static_cast<int64_t>(digit)) * factor * frac10;
-			//printf("OUT %f | ", out[i]);
+			auto encoded_integer = encoded_integers[i];
+			output[i] = static_cast<T>(static_cast<int64_t>(encoded_integer)) * factor * exponent;
 		}
-		//printf("EXCEPTIONS COUNT DECOMPRESS %d", exceptions_count);
+
+		// Exceptions Patching
 		for (idx_t i = 0; i < exceptions_count; i++) {
-			//printf("EXCEPTION %f, %d | ", exceptions[i], exceptions_positions[i]);
-			out[exceptions_positions[i]] = static_cast<T>(exceptions[i]);
+			output[exceptions_positions[i]] = static_cast<T>(exceptions[i]);
 		}
 	}
 };

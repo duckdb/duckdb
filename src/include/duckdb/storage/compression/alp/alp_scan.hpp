@@ -26,18 +26,18 @@
 namespace duckdb {
 
 template <class T>
-struct AlpGroupState {
+struct AlpVectorState {
 public:
 
 	void Reset() {
 		index = 0;
 	}
 
-	// This is the scan of the data itself, values must have the decoded vector
+	// Scan of the data itself
 	template <bool SKIP = false>
 	void Scan(uint8_t *dest, idx_t count) {
 		if (!SKIP) {
-			memcpy(dest, (void *)(values + index), sizeof(T) * count);
+			memcpy(dest, (void *)(decoded_values + index), sizeof(T) * count);
 		}
 		index += count;
 	}
@@ -55,10 +55,9 @@ public:
 
 public:
 	idx_t index;
-	T values[AlpConstants::ALP_VECTOR_SIZE];
+	T decoded_values[AlpConstants::ALP_VECTOR_SIZE];
 	T exceptions[AlpConstants::ALP_VECTOR_SIZE];
 	uint16_t exceptions_positions[AlpConstants::ALP_VECTOR_SIZE];
-	//! Make room for decompression
 	uint8_t for_encoded[AlpConstants::ALP_VECTOR_SIZE * 8];
 	uint8_t v_exponent;
 	uint8_t v_factor;
@@ -88,123 +87,121 @@ public:
 	data_ptr_t metadata_ptr;
 	data_ptr_t segment_data;
 	idx_t total_value_count = 0;
-	AlpGroupState<T> group_state;
+	AlpVectorState<T> vector_state;
 
 	ColumnSegment &segment;
 	idx_t count;
 
-	idx_t LeftInGroup() const {
+	idx_t LeftInVector() const {
 		return AlpConstants::ALP_VECTOR_SIZE - (total_value_count % AlpConstants::ALP_VECTOR_SIZE);
 	}
 
-	inline bool GroupFinished() const {
+	inline bool VectorFinished() const {
 		return (total_value_count % AlpConstants::ALP_VECTOR_SIZE) == 0;
 	}
 
-	// Scan up to a group boundary
+	// Scan up to a vector boundary
 	template <class EXACT_TYPE, bool SKIP = false>
-	void ScanGroup(T *values, idx_t group_size) {
-		D_ASSERT(group_size <= AlpConstants::ALP_VECTOR_SIZE);
-		D_ASSERT(group_size <= LeftInGroup());
-		//printf("ScanGroup of %ld\n", group_size);
-		if (GroupFinished() && total_value_count < count) {
-			if (group_size == AlpConstants::ALP_VECTOR_SIZE) {
-				LoadGroup<SKIP>(values);
-				total_value_count += group_size;
+	void ScanVector(T *values, idx_t vector_size) {
+		D_ASSERT(vector_size <= AlpConstants::ALP_VECTOR_SIZE);
+		D_ASSERT(vector_size <= LeftInVector());
+		if (VectorFinished() && total_value_count < count) {
+			if (vector_size == AlpConstants::ALP_VECTOR_SIZE) {
+				LoadVector<SKIP>(values);
+				total_value_count += vector_size;
 				return;
 			} else {
-				// Even if SKIP is given, group size is not big enough to be able to fully skip the entire group
-				LoadGroup<false>(group_state.values);
+				// Even if SKIP is given, the vector size is not big enough to be able to fully skip the entire vector
+				LoadVector<false>(vector_state.decoded_values);
 			}
 		}
-		group_state.template Scan<SKIP>((uint8_t *)values, group_size);
+		vector_state.template Scan<SKIP>((uint8_t *)values, vector_size);
 
-		total_value_count += group_size;
+		total_value_count += vector_size;
 	}
 
-	// Using the metadata, we can avoid loading any of the data if we don't care about the group at all
-	void SkipGroup() {
+	// Using the metadata, we can avoid loading any of the data if we don't care about the vector at all
+	void SkipVector() {
 		// Skip the offset indicating where the data starts
 		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
-		idx_t group_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, count - total_value_count);
-		total_value_count += group_size;
+		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, count - total_value_count);
+		total_value_count += vector_size;
 	}
 
 	template <bool SKIP = false>
-	void LoadGroup(T *value_buffer) {
-		group_state.Reset();
+	void LoadVector(T *value_buffer) {
+		vector_state.Reset();
 
-		// Load the offset indicating where a groups data starts
+		// Load the offset (metadata) indicating where the vector data starts
 		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
-		//printf("data_byte_offset %d\n", data_byte_offset);
 		D_ASSERT(data_byte_offset < Storage::BLOCK_SIZE);
 
-		idx_t group_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, (count - total_value_count));
+		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, (count - total_value_count));
 
-		data_ptr_t group_ptr = segment_data + data_byte_offset;
-		group_state.v_exponent = Load<uint8_t>(group_ptr);
-		group_ptr += AlpConstants::EXPONENT_SIZE;
-		group_state.v_factor = Load<uint8_t>(group_ptr);
-		group_ptr += AlpConstants::FACTOR_SIZE;
-		group_state.exceptions_count = Load<uint16_t>(group_ptr);
-		group_ptr += AlpConstants::EXCEPTIONS_COUNT_SIZE;
-		group_state.frame_of_reference = Load<uint64_t>(group_ptr);
-		group_ptr += AlpConstants::FOR_SIZE;
-		group_state.bit_width = Load<uint8_t>(group_ptr);
-		group_ptr += AlpConstants::BW_SIZE;
+		data_ptr_t vector_ptr = segment_data + data_byte_offset;
 
-		//printf("v_exponent %d\n", group_state.v_exponent);
-		//printf("v_factor %d\n", group_state.v_factor);
-		//printf("for %ld\n", group_state.frame_of_reference);
-		//printf("bit_width %d\n", group_state.bit_width);
-		//printf("exp count %d\n", group_state.exceptions_count);
+		// Load the vector data
+		vector_state.v_exponent = Load<uint8_t>(vector_ptr);
+		vector_ptr += AlpConstants::EXPONENT_SIZE;
 
-		D_ASSERT(group_state.exceptions_count <= group_size);
-		D_ASSERT(group_state.v_exponent <= AlpPrimitives<T>::MAX_EXPONENT);
-		D_ASSERT(group_state.v_factor <= group_state.v_exponent);
-		D_ASSERT(group_state.bit_width <= sizeof(uint64_t) * 8);
+		vector_state.v_factor = Load<uint8_t>(vector_ptr);
+		vector_ptr += AlpConstants::FACTOR_SIZE;
 
-		if (group_state.bit_width > 0){
-			auto bp_size = BitpackingPrimitives::GetRequiredSize(group_size, group_state.bit_width);
-			memcpy(group_state.for_encoded, (void*) group_ptr, bp_size);
-			group_ptr += bp_size;
+		vector_state.exceptions_count = Load<uint16_t>(vector_ptr);
+		vector_ptr += AlpConstants::EXCEPTIONS_COUNT_SIZE;
+
+		vector_state.frame_of_reference = Load<uint64_t>(vector_ptr);
+		vector_ptr += AlpConstants::FOR_SIZE;
+
+		vector_state.bit_width = Load<uint8_t>(vector_ptr);
+		vector_ptr += AlpConstants::BW_SIZE;
+
+		D_ASSERT(vector_state.exceptions_count <= vector_size);
+		D_ASSERT(vector_state.v_exponent <= AlpPrimitives<T>::MAX_EXPONENT);
+		D_ASSERT(vector_state.v_factor <= vector_state.v_exponent);
+		D_ASSERT(vector_state.bit_width <= sizeof(uint64_t) * 8);
+
+		if (vector_state.bit_width > 0){
+			auto bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.bit_width);
+			memcpy(vector_state.for_encoded, (void*)vector_ptr, bp_size);
+			vector_ptr += bp_size;
 		}
 
-		if (group_state.exceptions_count > 0){
-			memcpy(group_state.exceptions, (void*) group_ptr, sizeof(EXACT_TYPE) * group_state.exceptions_count);
-			group_ptr += sizeof(EXACT_TYPE) * group_state.exceptions_count;
-			memcpy(group_state.exceptions_positions, (void*) group_ptr, AlpConstants::EXCEPTION_POSITION_SIZE * group_state.exceptions_count);
+		if (vector_state.exceptions_count > 0){
+			memcpy(vector_state.exceptions, (void*)vector_ptr, sizeof(EXACT_TYPE) * vector_state.exceptions_count);
+			vector_ptr += sizeof(EXACT_TYPE) * vector_state.exceptions_count;
+			memcpy(vector_state.exceptions_positions, (void*)vector_ptr, AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count);
 		}
 
-		// Read all the values to the specified 'value_buffer'
-		group_state.template LoadValues<SKIP>(value_buffer, group_size);
+		// Decode all the vector values to the specified 'value_buffer'
+		vector_state.template LoadValues<SKIP>(value_buffer, vector_size);
 	}
 
 public:
 	//! Skip the next 'skip_count' values, we don't store the values
 	void Skip(ColumnSegment &col_segment, idx_t skip_count) {
 
-		if (total_value_count != 0 && !GroupFinished()) {
-			// Finish skipping the current group
-			idx_t to_skip = LeftInGroup();
+		if (total_value_count != 0 && !VectorFinished()) {
+			// Finish skipping the current vector
+			idx_t to_skip = LeftInVector();
 			skip_count -= to_skip;
-			ScanGroup<T, true>(nullptr, to_skip);
+			ScanVector<T, true>(nullptr, to_skip);
 		}
-		// Figure out how many entire groups we can skip
-		// For these groups, we don't even need to process the metadata or values
-		idx_t groups_to_skip = skip_count / AlpConstants::ALP_VECTOR_SIZE;
-		for (idx_t i = 0; i < groups_to_skip; i++) {
-			SkipGroup();
+		// Figure out how many entire vectors we can skip
+		// For these vectors, we don't even need to process the metadata or values
+		idx_t vectors_to_skip = skip_count / AlpConstants::ALP_VECTOR_SIZE;
+		for (idx_t i = 0; i < vectors_to_skip; i++) {
+			SkipVector();
 		}
-		skip_count -= AlpConstants::ALP_VECTOR_SIZE * groups_to_skip;
+		skip_count -= AlpConstants::ALP_VECTOR_SIZE * vectors_to_skip;
 		if (skip_count == 0) {
 			return;
 		}
-		// For the last group that this skip (partially) touches, we do need to
-		// load the metadata and values into the group_state because
+		// For the last vector that this skip (partially) touches, we do need to
+		// load the metadata and values into the vector_state because
 		// we don't know exactly how many they are
-		ScanGroup<T, true>(nullptr, skip_count);
+		ScanVector<T, true>(nullptr, skip_count);
 	}
 };
 
@@ -230,9 +227,9 @@ void AlpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_c
 	idx_t scanned = 0;
 	while (scanned < scan_count) {
 		const auto remaining = scan_count - scanned;
-		const idx_t to_scan = MinValue(remaining, scan_state.LeftInGroup());
+		const idx_t to_scan = MinValue(remaining, scan_state.LeftInVector());
 
-		scan_state.template ScanGroup<T>(current_result_ptr + scanned, to_scan);
+		scan_state.template ScanVector<T>(current_result_ptr + scanned, to_scan);
 		scanned += to_scan;
 	}
 }

@@ -42,7 +42,7 @@ public:
 		vector_null_positions = vector<uint16_t>(AlpConstants::ALP_VECTOR_SIZE, 0);
 
 		//! Combinations found on the analyze step are needed for compression
-		state.alp_state.combinations = analyze_state->state.alp_state.combinations;
+		state.alp_state.best_k_combinations = analyze_state->state.alp_state.best_k_combinations;
 
 	}
 
@@ -129,7 +129,7 @@ public:
 			}
 			tmp_null_idx += 1;
 		}
-		// Replacing it on the vector
+		// Replacing that first non-null value on the vector
 		for (idx_t j = 0; j < nulls_idx; j++){
 			uint16_t null_value_pos = vector_null_positions[j];
 			input_vector[null_value_pos] = a_non_null_value;
@@ -157,10 +157,10 @@ public:
 
 	// Stores the vector and its metadata
 	void FlushVector(){
-		Store<uint8_t>(state.alp_state.v_exponent ,data_ptr);
+		Store<uint8_t>(state.alp_state.vector_exponent,data_ptr);
 		data_ptr += AlpConstants::EXPONENT_SIZE;
 
-		Store<uint8_t>(state.alp_state.v_factor ,data_ptr);
+		Store<uint8_t>(state.alp_state.vector_factor,data_ptr);
 		data_ptr += AlpConstants::FACTOR_SIZE;
 
 		Store<uint16_t>(state.alp_state.exceptions_count ,data_ptr);
@@ -172,7 +172,7 @@ public:
 		Store<uint8_t>(state.alp_state.bit_width ,data_ptr);
 		data_ptr += AlpConstants::BW_SIZE;
 
-		memcpy((void *) data_ptr, (void*) state.alp_state.encoded, state.alp_state.bp_size);
+		memcpy((void *) data_ptr, (void*) state.alp_state.values_encoded, state.alp_state.bp_size);
 		data_ptr += state.alp_state.bp_size;
 
 		if (state.alp_state.exceptions_count > 0){

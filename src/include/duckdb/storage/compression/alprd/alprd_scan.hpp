@@ -117,7 +117,7 @@ public:
 				total_value_count += vector_size;
 				return;
 			} else {
-				// The vector size is not big enough to be able to fully skip the entire vector
+				// Even if SKIP is given, the vector size is not big enough to be able to fully skip the entire vector
 				LoadVector<false>(vector_state.decoded_values);
 			}
 		}
@@ -126,9 +126,9 @@ public:
 		total_value_count += vector_size;
 	}
 
+	// Using the metadata, we can avoid loading any of the data if we don't care about the vector at all
 	void SkipVector() {
-		// Using the metadata, we can avoid loading any of the data if we don't care about the vector at all
-		// and skip to the next vector in the segment
+		// Skip the offset indicating where the data starts
 		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
 		idx_t vector_size = MinValue((idx_t)AlpRDConstants::ALP_VECTOR_SIZE, count - total_value_count);
 		total_value_count += vector_size;

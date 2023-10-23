@@ -33,10 +33,10 @@ void AlpFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, 
 	auto result_data = FlatVector::GetData<EXACT_TYPE>(result);
 	result_data[result_idx] = (EXACT_TYPE)0;
 
-	if (scan_state.GroupFinished() && scan_state.total_value_count < scan_state.count) {
-		scan_state.LoadGroup(scan_state.group_state.values);
+	if (scan_state.VectorFinished() && scan_state.total_value_count < scan_state.count) {
+		scan_state.LoadVector(scan_state.vector_state.decoded_values);
 	}
-	scan_state.group_state.Scan((uint8_t *)(result_data + result_idx), 1);
+	scan_state.vector_state.Scan((uint8_t *)(result_data + result_idx), 1);
 	scan_state.total_value_count++;
 }
 
