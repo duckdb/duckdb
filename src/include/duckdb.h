@@ -1311,7 +1311,23 @@ Creates a value from an int64
 */
 DUCKDB_API duckdb_value duckdb_create_int64(int64_t val);
 
+/*!
+Creates a struct value from a type and an array of values
+
+* type: The type of the struct
+* values: The values for the struct fields
+* returns: The value. This must be destroyed with `duckdb_destroy_value`.
+*/
 DUCKDB_API duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *values);
+
+/*!
+Creates a list value from a type and an array of values of length `value_count`
+
+* type: The type of the list
+* values: The values for the list
+* value_count: The number of values in the list
+* returns: The value. This must be destroyed with `duckdb_destroy_value`.
+*/
 DUCKDB_API duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 
 /*!
