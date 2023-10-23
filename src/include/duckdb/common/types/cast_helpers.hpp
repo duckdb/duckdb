@@ -250,7 +250,6 @@ struct HugeintToStringCast {
 		if (negative) {
 			if (value == NumericLimits<hugeint_t>::Minimum()) {
 				string_t result = StringVector::AddString(vector, Hugeint::HUGEINT_MINIMUM_STRING);
-				result.Finalize();
 				return result;
 			}
 			Hugeint::NegateInPlace(value);
