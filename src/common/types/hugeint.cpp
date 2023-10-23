@@ -393,9 +393,6 @@ bool Hugeint::AddInPlace(hugeint_t &lhs, hugeint_t rhs) {
 		lhs.upper = lhs.upper + (overflow + rhs.upper);
 	}
 	lhs.lower += rhs.lower;
-	// if (lhs.upper == std::numeric_limits<int64_t>::min() && lhs.lower == 0) {
-	// 	return false;
-	// }
 	return true;
 }
 
@@ -417,9 +414,6 @@ bool Hugeint::SubtractInPlace(hugeint_t &lhs, hugeint_t rhs) {
 		lhs.upper = lhs.upper - (rhs.upper + underflow);
 	}
 	lhs.lower -= rhs.lower;
-	// if (lhs.upper == std::numeric_limits<int64_t>::min() && lhs.lower == 0) {
-	// 	return false;
-	// }
 	return true;
 }
 
