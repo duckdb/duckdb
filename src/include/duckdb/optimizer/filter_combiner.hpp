@@ -54,7 +54,7 @@ public:
 private:
 	FilterResult AddFilter(Expression &expr);
 	FilterResult AddBoundComparisonFilter(Expression &expr);
-	FilterResult AddTransitiveFilters(BoundComparisonExpression &comparison);
+	FilterResult AddTransitiveFilters(BoundComparisonExpression &comparison, bool is_root = true);
 	unique_ptr<Expression> FindTransitiveFilter(Expression &expr);
 	// unordered_map<idx_t, std::pair<Value *, Value *>>
 	// FindZonemapChecks(vector<idx_t> &column_ids, unordered_set<idx_t> &not_constants, Expression *filter);

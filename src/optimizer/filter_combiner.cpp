@@ -782,7 +782,7 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
  * Create and add new transitive filters from a two non-scalar filter such as j > i, j >= i, j < i, and j <= i
  * It's missing to create another method to add transitive filters from scalar filters, e.g, i > 10
  */
-FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &comparison) {
+FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &comparison, bool is_root) {
 	D_ASSERT(IsGreaterThan(comparison.type) || IsLessThan(comparison.type));
 	// get the LHS and RHS nodes
 	auto &left_node = GetNode(*comparison.left);
@@ -886,14 +886,16 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 		is_successful = true;
 	}
 	if (is_successful) {
-		// now check for remaining trasitive filters from the left column
-		auto transitive_filter = FindTransitiveFilter(*comparison.left);
-		if (transitive_filter != nullptr) {
-			// try to add transitive filters
-			if (AddTransitiveFilters(transitive_filter->Cast<BoundComparisonExpression>()) ==
-			    FilterResult::UNSUPPORTED) {
-				// in case of unsuccessful re-add filter into remaining ones
-				remaining_filters.push_back(std::move(transitive_filter));
+		if (is_root) {
+			// now check for remaining transitive filters from the left column
+			auto transitive_filter = FindTransitiveFilter(*comparison.left);
+			if (transitive_filter != nullptr) {
+				// try to add transitive filters
+				auto &transitive_cast = transitive_filter->Cast<BoundComparisonExpression>();
+				if (AddTransitiveFilters(transitive_cast, false) == FilterResult::UNSUPPORTED) {
+					// in case of unsuccessful re-add filter into remaining ones
+					remaining_filters.push_back(std::move(transitive_filter));
+				}
 			}
 		}
 		return FilterResult::SUCCESS;
