@@ -293,7 +293,7 @@ static hugeint_t DivModMinimum(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainde
 
 	if (rhs == -1) {
 		throw OutOfRangeException("Overflow in division of INT128 (%s // %s)!", lhs.ToString().c_str(),
-                                  rhs.ToString().c_str());
+		                          rhs.ToString().c_str());
 	}
 
 	// Add 1 to minimum and run through DivMod again
