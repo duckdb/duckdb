@@ -27,8 +27,26 @@ WindowAggregator::~WindowAggregator() {
 void WindowAggregator::Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered) {
 	if (!inputs.ColumnCount() && payload_chunk.ColumnCount()) {
 		inputs.Initialize(Allocator::DefaultAllocator(), payload_chunk.GetTypes());
+		validity_hack.resize(payload_chunk.ColumnCount(), false);
 	}
 	if (inputs.ColumnCount()) {
+		for (column_t i = 0; i < payload_chunk.ColumnCount(); ++i) {
+			if (validity_hack[i]) {
+				continue;
+			}
+			const auto &v = payload_chunk.data[i];
+			switch (v.GetVectorType()) {
+			case VectorType::CONSTANT_VECTOR:
+				validity_hack[i] = ConstantVector::IsNull(v);
+				break;
+			case VectorType::FLAT_VECTOR:
+				validity_hack[i] = !FlatVector::Validity(v).AllValid();
+				break;
+			default:
+				validity_hack[i] = true;
+				break;
+			}
+		}
 		inputs.Append(payload_chunk, true);
 	}
 	if (filter_sel) {
@@ -46,6 +64,14 @@ void WindowAggregator::Sink(DataChunk &payload_chunk, SelectionVector *filter_se
 }
 
 void WindowAggregator::Finalize(const FrameStats *stats) {
+	if (!validity_hack.empty()) {
+		D_ASSERT(validity_hack.size() == inputs.ColumnCount());
+		for (column_t i = 0; i < inputs.ColumnCount(); ++i) {
+			if (!validity_hack[i]) {
+				FlatVector::Validity(inputs.data[i]).Reset();
+			}
+		}
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -293,6 +319,7 @@ WindowCustomAggregatorState::~WindowCustomAggregatorState() {
 }
 
 void WindowCustomAggregator::Finalize(const FrameStats *stats) {
+	WindowAggregator::Finalize(stats);
 	if (aggr.function.wininit) {
 		gstate = GetLocalState();
 		auto &gcstate = gstate->Cast<WindowCustomAggregatorState>();
@@ -396,6 +423,8 @@ WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const LogicalType &re
 }
 
 void WindowSegmentTree::Finalize(const FrameStats *stats) {
+	WindowAggregator::Finalize(stats);
+
 	gstate = GetLocalState();
 	if (inputs.ColumnCount() > 0) {
 		if (aggr.function.combine && UseCombineAPI()) {
