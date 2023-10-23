@@ -533,46 +533,70 @@ duckdb_result_type duckdb_result_return_type(duckdb_result result) {
 	}
 }
 
-#define SHORT(name)                                                                                                    \
-	case duckdb::StatementType::name##_STATEMENT:                                                                      \
-		return DUCKDB_STATEMENT_TYPE_##name;
-
 static duckdb_statement_type StatementTypeToC(duckdb::StatementType statement_type) {
 	switch (statement_type) {
-		SHORT(SELECT)
-		SHORT(INVALID)
-		SHORT(INSERT)
-		SHORT(UPDATE)
-		SHORT(EXPLAIN)
-		SHORT(DELETE)
-		SHORT(PREPARE)
-		SHORT(CREATE)
-		SHORT(EXECUTE)
-		SHORT(ALTER)
-		SHORT(TRANSACTION)
-		SHORT(COPY)
-		SHORT(ANALYZE)
-		SHORT(VARIABLE_SET)
-		SHORT(CREATE_FUNC)
-		SHORT(DROP)
-		SHORT(EXPORT)
-		SHORT(PRAGMA)
-		SHORT(SHOW)
-		SHORT(VACUUM)
-		SHORT(CALL)
-		SHORT(SET)
-		SHORT(LOAD)
-		SHORT(RELATION)
-		SHORT(EXTENSION)
-		SHORT(LOGICAL_PLAN)
-		SHORT(ATTACH)
-		SHORT(DETACH)
-		SHORT(MULTI)
+	case duckdb::StatementType::SELECT_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_SELECT;
+	case duckdb::StatementType::INVALID_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_INVALID;
+	case duckdb::StatementType::INSERT_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_INSERT;
+	case duckdb::StatementType::UPDATE_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_UPDATE;
+	case duckdb::StatementType::EXPLAIN_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_EXPLAIN;
+	case duckdb::StatementType::DELETE_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_DELETE;
+	case duckdb::StatementType::PREPARE_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_PREPARE;
+	case duckdb::StatementType::CREATE_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_CREATE;
+	case duckdb::StatementType::EXECUTE_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_EXECUTE;
+	case duckdb::StatementType::ALTER_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_ALTER;
+	case duckdb::StatementType::TRANSACTION_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_TRANSACTION;
+	case duckdb::StatementType::COPY_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_COPY;
+	case duckdb::StatementType::ANALYZE_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_ANALYZE;
+	case duckdb::StatementType::VARIABLE_SET_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_VARIABLE_SET;
+	case duckdb::StatementType::CREATE_FUNC_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_CREATE_FUNC;
+	case duckdb::StatementType::DROP_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_DROP;
+	case duckdb::StatementType::EXPORT_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_EXPORT;
+	case duckdb::StatementType::PRAGMA_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_PRAGMA;
+	case duckdb::StatementType::SHOW_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_SHOW;
+	case duckdb::StatementType::VACUUM_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_VACUUM;
+	case duckdb::StatementType::CALL_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_CALL;
+	case duckdb::StatementType::SET_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_SET;
+	case duckdb::StatementType::LOAD_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_LOAD;
+	case duckdb::StatementType::RELATION_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_RELATION;
+	case duckdb::StatementType::EXTENSION_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_EXTENSION;
+	case duckdb::StatementType::LOGICAL_PLAN_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_LOGICAL_PLAN;
+	case duckdb::StatementType::ATTACH_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_ATTACH;
+	case duckdb::StatementType::DETACH_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_DETACH;
+	case duckdb::StatementType::MULTI_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_MULTI;
 	default:
 		return DUCKDB_STATEMENT_TYPE_INVALID;
 	}
 }
-#undef SHORT
 
 duckdb_statement_type duckdb_result_statement_type(duckdb_result result) {
 	if (!result.internal_data || duckdb_result_error(&result) != nullptr) {
