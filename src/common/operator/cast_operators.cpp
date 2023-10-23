@@ -839,12 +839,6 @@ struct IntegerCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int32_t exponent) {
 		using result_t = typename T::Result;
-		// double dbl_res = state.result * std::pow(10.0L, exponent);
-		// if (dbl_res < (double)NumericLimits<result_t>::Minimum() ||
-		//     dbl_res > (double)NumericLimits<result_t>::Maximum()) {
-		// 	return false;
-		// }
-		// state.result = (result_t)std::nearbyint(dbl_res);
 
 		int32_t i = exponent;
 		result_t result = state.result;
@@ -856,10 +850,10 @@ struct IntegerCastOperation {
 		state.result = result;
 
 		if (state.decimal == 0) {
-			printf("state.decimal == 0\n");
 			return true;
 		}
 
+		// Handle decimals
 		i = exponent - state.decimal_digits;
 		result_t remainder = 0;
 		if (i < 0) {
