@@ -141,15 +141,13 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	}
 
 	auto unique_column_names = GetUniqueNames(select_node.names);
-
-	// the bind may modify the copy info, so keep a copy for de/serialization purposes.
-	auto raw_info = stmt.info->Copy();
+	auto file_path = stmt.info->file_path;
 
 	auto function_data =
 	    copy_function.function.copy_to_bind(context, *stmt.info, unique_column_names, select_node.types);
 	// now create the copy information
-	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data), std::move(raw_info));
-	copy->file_path = stmt.info->file_path;
+	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data), std::move(stmt.info));
+	copy->file_path = file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->overwrite_or_ignore = overwrite_or_ignore;
 	copy->filename_pattern = filename_pattern;

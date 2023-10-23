@@ -62,21 +62,15 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	unique_ptr<FunctionData> bind_data;
 	auto has_serialize = deserializer.ReadProperty<bool>(211, "function_has_serialize");
 	if (has_serialize) {
+		// Just deserialize the bind data
 		deserializer.ReadObject(212, "function_data",
 		                        [&](Deserializer &obj) { bind_data = function.deserialize(obj, function); });
 	} else {
+		// Otherwise, re-bind with the copy info
 		if (!function.copy_to_bind) {
 			throw InternalException("Copy function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
-		vector<LogicalType> bind_types;
-		vector<string> bind_names;
-		bind_data = function.copy_to_bind(context, *copy_info->Copy(), names, expected_types);
-		// if (bind_names != names) {
-		//	throw InternalException("Copy function \"%s\" has different names in bind and deserialize", function.name);
-		//}
-		// if (bind_types != expected_types) {
-		//	throw InternalException("Copy function \"%s\" has different types in bind and deserialize", function.name);
-		//}
+		bind_data = function.copy_to_bind(context, *copy_info, names, expected_types);
 	}
 
 	auto result = make_uniq<LogicalCopyToFile>(function, std::move(bind_data), std::move(copy_info));

@@ -91,8 +91,8 @@ void BaseCSVData::Finalize() {
 	}
 }
 
-static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &info, vector<string> &names,
-                                             vector<LogicalType> &sql_types) {
+static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, const CopyInfo &info, const vector<string> &names,
+                                             const vector<LogicalType> &sql_types) {
 	auto bind_data = make_uniq<WriteCSVData>(info.file_path, sql_types, names);
 
 	// check all the options in the copy info

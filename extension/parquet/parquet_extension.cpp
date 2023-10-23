@@ -740,8 +740,8 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 	}
 }
 
-unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info, vector<string> &names,
-                                          vector<LogicalType> &sql_types) {
+unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, const CopyInfo &info, const vector<string> &names,
+                                          const vector<LogicalType> &sql_types) {
 	D_ASSERT(names.size() == sql_types.size());
 	bool row_group_size_bytes_set = false;
 	auto bind_data = make_uniq<ParquetWriteBindData>();
