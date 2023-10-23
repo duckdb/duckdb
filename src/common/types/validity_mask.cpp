@@ -67,9 +67,6 @@ void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
 		}
 		validity_data = std::move(new_validity_data);
 		validity_mask = validity_data->owned_data.get();
-	} else {
-		// TODO: We shouldn't have to initialize here, just update the target count
-		Initialize(new_size);
 	}
 }
 

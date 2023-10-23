@@ -77,8 +77,6 @@ protected:
 	//! The state used by the aggregator to build.
 	unique_ptr<WindowAggregatorState> gstate;
 
-	vector<bool> validity_hack;
-
 public:
 	//! The window exclusion clause
 	const WindowExcludeMode exclude_mode;
