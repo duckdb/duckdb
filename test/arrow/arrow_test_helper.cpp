@@ -93,9 +93,8 @@ ArrowStreamTestFactory::CreateStream(uintptr_t this_ptr, ArrowStreamParameters &
 	return stream_wrapper;
 }
 
-void ArrowStreamTestFactory::GetSchema(uintptr_t factory_ptr, duckdb::ArrowSchemaWrapper &schema) {
-	auto &factory = *reinterpret_cast<ArrowArrayStreamWrapper *>(factory_ptr); //! NOLINT
-	factory.arrow_array_stream.get_schema(&factory.arrow_array_stream, &schema.arrow_schema);
+void ArrowStreamTestFactory::GetSchema(ArrowArrayStreamWrapper * factory_ptr, duckdb::ArrowSchemaWrapper &schema) {
+	factory_ptr->arrow_array_stream.get_schema(&factory_ptr->arrow_array_stream, &schema.arrow_schema);
 }
 
 unique_ptr<QueryResult> ArrowTestHelper::ScanArrowObject(Connection &con, vector<Value> &params) {
