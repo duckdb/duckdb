@@ -221,11 +221,7 @@ dtime_t PyTime::ToDuckTime() {
 Value PyTime::ToDuckValue() {
 	auto duckdb_time = this->ToDuckTime();
 	if (!py::none().is(this->timezone_obj)) {
-		auto utc_offset = PyTimezone::GetUTCOffset(this->timezone_obj);
-		// 'Add' requires a date_t for overflows
-		date_t ignored_date;
-		utc_offset = Interval::Invert(utc_offset);
-		duckdb_time = Interval::Add(duckdb_time, utc_offset, ignored_date);
+		return Value::TIMETZ(dtime_tz_t(duckdb_time, 0));
 	}
 	return Value::TIME(duckdb_time);
 }
@@ -487,12 +483,32 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		}
 		return py_timestamp;
 	}
+	case LogicalTypeId::TIME_TZ: {
+		D_ASSERT(type.InternalType() == PhysicalType::INT64);
+		int32_t hour, min, sec, microsec;
+		auto time_tz = val.GetValueUnsafe<dtime_tz_t>();
+		auto time = time_tz.time();
+		auto offset = time_tz.offset();
+		if (offset != 0) {
+			throw NotImplementedException("TIME_TZ with non-zero offset not supported");
+		}
+		duckdb::Time::Convert(time, hour, min, sec, microsec);
+		auto py_time = py::reinterpret_steal<py::object>(PyTime_FromTime(hour, min, sec, microsec));
+		if (type.id() == LogicalTypeId::TIME_TZ) {
+			// We have to add the timezone info
+			auto tz_utc = import_cache.pytz().timezone()("UTC");
+			auto timestamp_utc = tz_utc.attr("localize")(py_time);
+			auto tz_info = import_cache.pytz().timezone()(client_properties.time_zone);
+			return timestamp_utc.attr("replace")(py::arg("tzinfo") = tz_info);
+		}
+	}
 	case LogicalTypeId::TIME: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT64);
 		int32_t hour, min, sec, microsec;
 		auto time = val.GetValueUnsafe<dtime_t>();
 		duckdb::Time::Convert(time, hour, min, sec, microsec);
-		return py::reinterpret_steal<py::object>(PyTime_FromTime(hour, min, sec, microsec));
+		auto py_time = py::reinterpret_steal<py::object>(PyTime_FromTime(hour, min, sec, microsec));
+		return py_time;
 	}
 	case LogicalTypeId::DATE: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT32);

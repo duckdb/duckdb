@@ -1280,6 +1280,12 @@ dtime_t Value::GetValueUnsafe() const {
 }
 
 template <>
+dtime_tz_t Value::GetValueUnsafe() const {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
+	return value_.timetz;
+}
+
+template <>
 timestamp_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
 	return value_.timestamp;
