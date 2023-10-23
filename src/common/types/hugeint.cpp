@@ -270,6 +270,16 @@ hugeint_t Hugeint::Multiply(hugeint_t lhs, hugeint_t rhs) {
 //===--------------------------------------------------------------------===//
 // Divide
 //===--------------------------------------------------------------------===//
+
+static hugeint_t Sign(hugeint_t n) {
+	return ((n > 0) - (n < 0));
+}
+
+static hugeint_t Abs(hugeint_t n) {
+	D_ASSERT(n != NumericLimits<hugeint_t>::Minimum());
+	return (Sign(n) * n);
+}
+
 static hugeint_t DivModMinimum(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainder) {
 	D_ASSERT(lhs == NumericLimits<hugeint_t>::Minimum() || rhs == NumericLimits<hugeint_t>::Minimum());
 	if (rhs == NumericLimits<hugeint_t>::Minimum()) {
@@ -281,19 +291,20 @@ static hugeint_t DivModMinimum(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainde
 		return 0;
 	}
 
-	if (rhs < 0) {
-		throw OutOfRangeException("Overflow in HUGEINT division! (%s // %s)", lhs.ToString().c_str(),
-		                          rhs.ToString().c_str());
+	if (rhs == -1) {
+		throw OutOfRangeException("Overflow in division of INT128 (%s // %s)!", lhs.ToString().c_str(),
+                                  rhs.ToString().c_str());
 	}
 
+	// Add 1 to minimum and run through DivMod again
 	hugeint_t result = Hugeint::DivMod(NumericLimits<hugeint_t>::Minimum() + 1, rhs, remainder);
-	if (remainder + 1 == rhs) {
-		if (result > 0) {
-			result += 1;
-		} else {
-			result -= 1;
-		}
+
+	// If the 1 mattered we need to adjust the result, otherwise the remainder
+	if (Abs(remainder) + 1 == Abs(rhs)) {
+		result -= Sign(rhs);
 		remainder = 0;
+	} else {
+		remainder -= 1;
 	}
 	return result;
 }
