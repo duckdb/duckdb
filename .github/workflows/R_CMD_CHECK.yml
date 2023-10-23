@@ -81,10 +81,10 @@ jobs:
 
       - name: Apply duckdb-r patches
         shell: bash
-        working-directory: ${{ env.DUCKDB_SRC }}
+        working-directory: ${{ env.DUCKDB_R_SRC }}
         run: |
           shopt -s nullglob
-          for filename in .github/patches/duckdb-r/*.patch; do
+          for filename in $GITHUB_WORKSPACE/$DUCKDB_SRC/.github/patches/duckdb-r/*.patch; do
             git apply $filename
           done
 
