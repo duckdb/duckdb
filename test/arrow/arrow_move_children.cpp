@@ -28,8 +28,8 @@ void AssertExpectedResult(ArrowSchema *schema, ArrowArrayWrapper &array, T expec
 	struct_array.length = array.arrow_array.length;
 	struct_array.release = EmptyRelease;
 
-	duckdb_adbc::AdbcError unused;
-	(void)BatchToArrayStream(&struct_array, schema, &stream, &unused);
+		AdbcError unused;
+		(void)duckdb_adbc::BatchToArrayStream(&struct_array, schema, &stream, &unused);
 
 	DuckDB db(nullptr);
 	Connection conn(db);

@@ -25,7 +25,7 @@ AdbcStatusCode duckdb_adbc_init(int version, void *driver, struct AdbcError *err
 	if (!driver) {
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	auto adbc_driver = reinterpret_cast<duckdb_adbc::AdbcDriver *>(driver);
+	auto adbc_driver = reinterpret_cast<AdbcDriver *>(driver);
 
 	adbc_driver->DatabaseNew = duckdb_adbc::DatabaseNew;
 	adbc_driver->DatabaseSetOption = duckdb_adbc::DatabaseSetOption;
@@ -124,7 +124,7 @@ AdbcStatusCode CheckResult(duckdb_state &res, AdbcError *error, const char *erro
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	if (res != DuckDBSuccess) {
-		duckdb_adbc::SetError(error, error_msg);
+		SetError(error, error_msg);
 		return ADBC_STATUS_INTERNAL;
 	}
 	return ADBC_STATUS_OK;
@@ -197,7 +197,7 @@ AdbcStatusCode DatabaseInit(struct AdbcDatabase *database, struct AdbcError *err
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	if (!database) {
-		duckdb_adbc::SetError(error, "ADBC Database has an invalid pointer");
+		SetError(error, "ADBC Database has an invalid pointer");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	char *errormsg;
