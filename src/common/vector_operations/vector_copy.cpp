@@ -114,8 +114,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 				} else {
 					// set invalid
 					if (tmask.AllValid()) {
-						auto init_size = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, target_offset + copy_count);
-						tmask.Initialize(init_size);
+						tmask.Initialize();
 					}
 					tmask.SetInvalidUnsafe(target_offset + i);
 				}
