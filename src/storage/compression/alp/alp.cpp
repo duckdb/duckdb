@@ -5,6 +5,10 @@
 
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/main/config.hpp"
+
+#include <cmath>
+#include <functional>
 
 namespace duckdb {
 
