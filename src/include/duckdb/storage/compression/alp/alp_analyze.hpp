@@ -103,7 +103,8 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 
 	uint32_t n_lookup_values = MinValue(count, (idx_t)AlpConstants::ALP_VECTOR_SIZE);
 	//! We sample equidistant values within a vector; to do this we jump a fixed number of values
-	uint32_t n_sampled_increments = MaxValue(1, (int)std::ceil((double)n_lookup_values / AlpConstants::SAMPLES_PER_VECTOR));
+	uint32_t n_sampled_increments =
+	    MaxValue(1, (int)std::ceil((double)n_lookup_values / AlpConstants::SAMPLES_PER_VECTOR));
 	uint32_t n_sampled_values = std::ceil((double)n_lookup_values / n_sampled_increments);
 
 	T a_non_null_value = 0;
