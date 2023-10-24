@@ -26,3 +26,59 @@ memory	integers	i	INTEGER	NULL	True	32	2	0
 memory	test	i	INTEGER	NULL	False	32	2	0
 memory	test	j	DECIMAL(18,3)	NULL	True	18	10	3
 memory	test	k	VARCHAR	'hello'	True	NULL	NULL	NULL
+
+statement ok
+create view v1 as select * from test
+
+query II
+select table_name, column_name from duckdb_columns where table_name = 'v1'
+----
+v1	i
+v1	j
+v1	k
+
+statement ok
+alter table test rename column j to renamed
+
+# Rename of the base table is not reflected in the view's info
+query II
+select table_name, column_name from duckdb_columns where table_name = 'v1'
+----
+v1	i
+v1	j
+v1	k
+
+statement ok
+alter table test rename column renamed to j
+
+statement ok
+create or replace view v1 (a, b) as select * from test;
+
+query II
+select table_name, column_name from duckdb_columns where table_name = 'v1'
+----
+v1	a
+v1	b
+v1	k
+
+statement ok
+alter table test rename column j to renamed
+
+# The rename of 'j' is not reflected in the view's info because it was aliased to 'b'
+query II
+select table_name, column_name from duckdb_columns where table_name = 'v1'
+----
+v1	a
+v1	b
+v1	k
+
+statement ok
+alter table test rename column k to not_k
+
+# The rename of 'k' is also not reflected in the view's info even though it was not aliased
+query II
+select table_name, column_name from duckdb_columns where table_name = 'v1'
+----
+v1	a
+v1	b
+v1	k

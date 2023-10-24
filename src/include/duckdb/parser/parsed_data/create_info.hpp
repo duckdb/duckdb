@@ -10,6 +10,7 @@
 
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 struct AlterInfo;
@@ -61,6 +62,10 @@ public:
 	DUCKDB_API void CopyProperties(CreateInfo &other) const;
 	//! Generates an alter statement from the create statement - used for OnCreateConflict::ALTER_ON_CONFLICT
 	DUCKDB_API virtual unique_ptr<AlterInfo> GetAlterInfo() const;
+	virtual string ToString() const {
+		throw InternalException("ToString not supported for this type of CreateInfo: '%s'",
+		                        EnumUtil::ToString(info_type));
+	}
 };
 
 } // namespace duckdb
