@@ -41,10 +41,10 @@ using catalog_entry_t = idx_t;
 struct EntryValue {
 public:
 	EntryValue() = delete;
-
-public:
 	explicit EntryValue(unique_ptr<CatalogEntry> entry_p) : entry(std::move(entry_p)), reference_count(0) {
 	}
+
+public:
 	//! enable move constructors
 	EntryValue(EntryValue &&other) noexcept {
 		Swap(other);
@@ -70,6 +70,8 @@ public:
 		reference_count--;
 		return reference_count == 0;
 	}
+
+private:
 	void Swap(EntryValue &other) {
 		std::swap(entry, other.entry);
 		idx_t count = reference_count;

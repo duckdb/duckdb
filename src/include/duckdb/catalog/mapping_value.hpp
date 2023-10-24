@@ -19,7 +19,7 @@ class ClientContext;
 struct EntryIndex {
 	EntryIndex() : catalog(nullptr), index(DConstants::INVALID_INDEX) {
 	}
-	EntryIndex(CatalogSet &catalog, idx_t index) : catalog(&catalog), index(index) {
+	EntryIndex(CatalogSet &catalog, catalog_entry_t index) : catalog(&catalog), index(index) {
 		auto entry = catalog.entries.find(index);
 		if (entry == catalog.entries.end()) {
 			throw InternalException("EntryIndex - Catalog entry not found in constructor!?");
@@ -55,7 +55,7 @@ struct EntryIndex {
 	}
 
 private:
-	EntryValue &GetEntryInternal(idx_t index) {
+	EntryValue &GetEntryInternal(catalog_entry_t index) {
 		auto entry = catalog->entries.find(index);
 		if (entry == catalog->entries.end()) {
 			throw InternalException("EntryIndex - Catalog entry not found!?");
@@ -76,7 +76,7 @@ public:
 		auto &entry_value = GetEntryInternal(index);
 		entry_value.SetEntry(std::move(entry));
 	}
-	idx_t GetIndex() {
+	catalog_entry_t GetIndex() {
 		return index;
 	}
 	EntryIndex Copy() {
