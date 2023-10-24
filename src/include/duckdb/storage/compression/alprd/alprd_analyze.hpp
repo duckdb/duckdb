@@ -64,8 +64,9 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 
 	uint32_t n_lookup_values = MinValue(count, (idx_t)AlpConstants::ALP_VECTOR_SIZE);
 	//! We sample equidistant values within a vector; to do this we jump a fixed number of values
-	uint32_t n_sampled_increments = MaxValue(1, (int)ceil((double)n_lookup_values / AlpConstants::SAMPLES_PER_VECTOR));
-	uint32_t n_sampled_values = ceil((double)n_lookup_values / n_sampled_increments);
+	uint32_t n_sampled_increments =
+	    MaxValue(1, (int)std::ceil((double)n_lookup_values / AlpConstants::SAMPLES_PER_VECTOR));
+	uint32_t n_sampled_values = std::ceil((double)n_lookup_values / n_sampled_increments);
 
 	vector<EXACT_TYPE> current_vector_sample(n_sampled_values, 0);
 	vector<uint16_t> current_vector_null_positions(n_lookup_values, 0);
@@ -131,10 +132,10 @@ idx_t AlpRDFinalAnalyze(AnalyzeState &state) {
 	//! Overhead per vector: Pointer to data + Exceptions count
 	double per_vector_overhead = AlpRDConstants::METADATA_POINTER_SIZE + AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 
-	uint32_t n_vectors = ceil((double)analyze_state.total_values_count / AlpRDConstants::ALP_VECTOR_SIZE);
+	uint32_t n_vectors = std::ceil((double)analyze_state.total_values_count / AlpRDConstants::ALP_VECTOR_SIZE);
 
 	auto estimated_size = (estimed_compressed_bytes * factor_of_sampling) + (n_vectors * per_vector_overhead);
-	uint32_t estimated_n_blocks = ceil(estimated_size / (Storage::BLOCK_SIZE - per_segment_overhead));
+	uint32_t estimated_n_blocks = std::ceil(estimated_size / (Storage::BLOCK_SIZE - per_segment_overhead));
 
 	auto final_analyze_size = estimated_size + (estimated_n_blocks * per_segment_overhead);
 	return final_analyze_size;
