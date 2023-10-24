@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/alp/alp_simple.test
+# name: test/sql/storage/compression/alp/alp_simple_float.test
 # description: Test storage of alp, but simple
 # group: [alp]
 

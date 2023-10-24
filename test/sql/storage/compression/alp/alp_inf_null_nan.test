@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/alp/alp_nulls.test
+# name: test/sql/storage/compression/alp/alp_inf_null_nan.test
 # group: [alp]
 
 # load the DB from disk
