@@ -99,7 +99,7 @@ BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> 
 	auto &active_binders = binder.GetActiveBinders();
 	// make a copy of the set of binders, so we can restore it later
 	auto binders = active_binders;
-	auto bind_error = error_message;
+	auto bind_error = std::move(error_message);
 	// we already failed with the current binder
 	active_binders.pop_back();
 	idx_t depth = 1;
