@@ -27,11 +27,11 @@ class EntryDropper {
 public:
 	//! Both constructor and destructor are privates because they should only be called by DropEntryDependencies
 	explicit EntryDropper(EntryIndex &entry_index_p) : entry_index(entry_index_p) {
-		old_deleted = entry_index.GetEntry()->deleted;
+		old_deleted = entry_index.GetEntry().deleted;
 	}
 
 	~EntryDropper() {
-		entry_index.GetEntry()->deleted = old_deleted;
+		entry_index.GetEntry().deleted = old_deleted;
 	}
 
 private:
@@ -61,9 +61,9 @@ void CatalogSet::PutEntry(EntryIndex index, unique_ptr<CatalogEntry> catalog_ent
 	if (entry == entries.end()) {
 		throw InternalException("Entry with entry index \"%llu\" does not exist", index.GetIndex());
 	}
-	catalog_entry->child = std::move(entry->second.entry);
+	catalog_entry->child = entry->second.TakeEntry();
 	catalog_entry->child->parent = catalog_entry.get();
-	entry->second.entry = std::move(catalog_entry);
+	entry->second.SetEntry(std::move(catalog_entry));
 }
 
 bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
@@ -112,12 +112,12 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 		dummy_node->deleted = true;
 		dummy_node->set = this;
 
-		auto entry_index = PutEntry(current_entry++, std::move(dummy_node));
+		auto entry_index = PutEntry(GenerateCatalogEntryIndex(), std::move(dummy_node));
 		index = entry_index.GetIndex();
 		PutMapping(transaction, name, std::move(entry_index));
 	} else {
 		index = mapping_value->index.GetIndex();
-		auto &current = *mapping_value->index.GetEntry();
+		auto &current = mapping_value->index.GetEntry();
 		// if it does, we have to check version numbers
 		if (HasConflict(transaction, current.timestamp)) {
 			// current version has been written to by a currently active
@@ -156,7 +156,7 @@ bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_
 }
 
 optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction transaction, EntryIndex &entry_index) {
-	auto &catalog_entry = *entry_index.GetEntry();
+	auto &catalog_entry = entry_index.GetEntry();
 	// if it does: we have to retrieve the entry and to check version numbers
 	if (HasConflict(transaction, catalog_entry.timestamp)) {
 		// current version has been written to by a currently active
@@ -230,7 +230,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	if (value->name != original_name) {
 		auto mapping_value = GetMapping(transaction, value->name);
 		if (mapping_value && !mapping_value->deleted) {
-			auto &original_entry = GetEntryForTransaction(transaction, *mapping_value->index.GetEntry());
+			auto &original_entry = GetEntryForTransaction(transaction, mapping_value->index.GetEntry());
 			if (!original_entry.deleted) {
 				entry->UndoAlter(context, alter_info);
 				string rename_err_msg =
@@ -280,7 +280,7 @@ void CatalogSet::DropEntryDependencies(CatalogTransaction transaction, EntryInde
 	EntryDropper dropper(entry_index);
 
 	// To correctly delete the object and its dependencies, it temporarily is set to deleted.
-	entry_index.GetEntry()->deleted = true;
+	entry_index.GetEntry().deleted = true;
 
 	// check any dependencies of this object
 	D_ASSERT(entry.ParentCatalog().IsDuckCatalog());
@@ -356,8 +356,7 @@ void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
 			auto mapping_entry = mapping.find(parent->name);
 			D_ASSERT(mapping_entry != mapping.end());
 			auto &entry = mapping_entry->second->index.GetEntry();
-			D_ASSERT(entry);
-			if (entry.get() == parent.get()) {
+			if (&entry == parent.get()) {
 				mapping.erase(mapping_entry);
 			}
 		}
@@ -375,7 +374,6 @@ optional_ptr<MappingValue> CatalogSet::GetMapping(CatalogTransaction transaction
 	if (entry != mapping.end()) {
 		mapping_value = entry->second.get();
 	} else {
-
 		return nullptr;
 	}
 	if (get_latest) {
@@ -426,6 +424,10 @@ bool CatalogSet::UseTimestamp(CatalogTransaction transaction, transaction_t time
 		return true;
 	}
 	return false;
+}
+
+catalog_entry_t CatalogSet::GenerateCatalogEntryIndex() {
+	return current_entry++;
 }
 
 CatalogEntry &CatalogSet::GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current) {
@@ -480,7 +482,7 @@ optional_ptr<CatalogEntry> CatalogSet::CreateEntryInternal(CatalogTransaction tr
 	entry->set = this;
 	entry->timestamp = 0;
 
-	auto entry_index = PutEntry(current_entry++, std::move(entry));
+	auto entry_index = PutEntry(GenerateCatalogEntryIndex(), std::move(entry));
 	PutMapping(transaction, name, std::move(entry_index));
 	mapping[name]->timestamp = 0;
 	return catalog_entry;
@@ -526,7 +528,7 @@ optional_ptr<CatalogEntry> CatalogSet::GetEntry(CatalogTransaction transaction, 
 		// we found an entry for this name
 		// check the version numbers
 
-		auto &catalog_entry = *mapping_value->index.GetEntry();
+		auto &catalog_entry = mapping_value->index.GetEntry();
 		auto &current = GetEntryForTransaction(transaction, catalog_entry);
 		if (current.deleted || (current.name != name && !UseTimestamp(transaction, mapping_value->timestamp))) {
 			return nullptr;
@@ -579,7 +581,7 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 		// otherwise we need to update the base entry tables
 		auto &name = entry.name;
 		to_be_removed_node.child->SetAsRoot();
-		mapping[name]->index.GetEntry() = std::move(to_be_removed_node.child);
+		mapping[name]->index.SetEntry(std::move(to_be_removed_node.child));
 		entry.parent = nullptr;
 	}
 
@@ -627,7 +629,7 @@ void CatalogSet::Scan(CatalogTransaction transaction, const std::function<void(C
 	CreateDefaultEntries(transaction, lock);
 
 	for (auto &kv : entries) {
-		auto &entry = *kv.second.entry.get();
+		auto &entry = kv.second.Entry();
 		auto &entry_for_transaction = GetEntryForTransaction(transaction, entry);
 		if (!entry_for_transaction.deleted) {
 			callback(entry_for_transaction);
@@ -643,8 +645,8 @@ void CatalogSet::Scan(const std::function<void(CatalogEntry &)> &callback) {
 	// lock the catalog set
 	lock_guard<mutex> lock(catalog_lock);
 	for (auto &kv : entries) {
-		auto entry = kv.second.entry.get();
-		auto &commited_entry = GetCommittedEntry(*entry);
+		auto &entry = kv.second.Entry();
+		auto &commited_entry = GetCommittedEntry(entry);
 		if (!commited_entry.deleted) {
 			callback(commited_entry);
 		}
