@@ -28,7 +28,6 @@ namespace duckdb {
 template <class T>
 struct AlpVectorState {
 public:
-
 	void Reset() {
 		index = 0;
 	}
@@ -48,9 +47,8 @@ public:
 			return;
 		}
 		value_buffer[0] = (T)0;
-		alp::AlpDecompression<T>::Decompress(
-		    for_encoded, value_buffer, count, v_factor, v_exponent,
-		    exceptions_count, exceptions, exceptions_positions, frame_of_reference, bit_width);
+		alp::AlpDecompression<T>::Decompress(for_encoded, value_buffer, count, v_factor, v_exponent, exceptions_count,
+		                                     exceptions, exceptions_positions, frame_of_reference, bit_width);
 	}
 
 public:
@@ -64,7 +62,6 @@ public:
 	uint16_t exceptions_count;
 	uint64_t frame_of_reference;
 	uint8_t bit_width;
-
 };
 
 template <class T>
@@ -161,16 +158,17 @@ public:
 		D_ASSERT(vector_state.v_factor <= vector_state.v_exponent);
 		D_ASSERT(vector_state.bit_width <= sizeof(uint64_t) * 8);
 
-		if (vector_state.bit_width > 0){
+		if (vector_state.bit_width > 0) {
 			auto bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.bit_width);
-			memcpy(vector_state.for_encoded, (void*)vector_ptr, bp_size);
+			memcpy(vector_state.for_encoded, (void *)vector_ptr, bp_size);
 			vector_ptr += bp_size;
 		}
 
-		if (vector_state.exceptions_count > 0){
-			memcpy(vector_state.exceptions, (void*)vector_ptr, sizeof(EXACT_TYPE) * vector_state.exceptions_count);
+		if (vector_state.exceptions_count > 0) {
+			memcpy(vector_state.exceptions, (void *)vector_ptr, sizeof(EXACT_TYPE) * vector_state.exceptions_count);
 			vector_ptr += sizeof(EXACT_TYPE) * vector_state.exceptions_count;
-			memcpy(vector_state.exceptions_positions, (void*)vector_ptr, AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count);
+			memcpy(vector_state.exceptions_positions, (void *)vector_ptr,
+			       AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count);
 		}
 
 		// Decode all the vector values to the specified 'value_buffer'
@@ -215,7 +213,7 @@ unique_ptr<SegmentScanState> AlpInitScan(ColumnSegment &segment) {
 //===--------------------------------------------------------------------===//
 template <class T>
 void AlpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
-                      idx_t result_offset) {
+                    idx_t result_offset) {
 	auto &scan_state = (AlpScanState<T> &)*state.scan_state;
 
 	// Get the pointer to the result values

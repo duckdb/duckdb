@@ -49,9 +49,8 @@ public:
 			return;
 		}
 		values_buffer[0] = (EXACT_TYPE)0;
-		alp::AlpRDDecompression<T>::Decompress(
-		    left_encoded, right_encoded, left_parts_dict, values_buffer, count,
-		    exceptions_count, exceptions, exceptions_positions, right_bit_width);
+		alp::AlpRDDecompression<T>::Decompress(left_encoded, right_encoded, left_parts_dict, values_buffer, count,
+		                                       exceptions_count, exceptions, exceptions_positions, right_bit_width);
 	}
 
 public:
@@ -85,8 +84,8 @@ public:
 		vector_state.right_bit_width = Load<uint8_t>(segment_data + AlpRDConstants::METADATA_POINTER_SIZE);
 
 		// Load the left parts dictionary which is after the segment header and is of a fixed size
-		memcpy(vector_state.left_parts_dict, (void*) (segment_data + AlpRDConstants::HEADER_SIZE), AlpRDConstants::DICTIONARY_SIZE_BYTES);
-
+		memcpy(vector_state.left_parts_dict, (void *)(segment_data + AlpRDConstants::HEADER_SIZE),
+		       AlpRDConstants::DICTIONARY_SIZE_BYTES);
 	}
 
 	BufferHandle handle;
@@ -155,16 +154,18 @@ public:
 		auto left_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, AlpRDConstants::DICTIONARY_BW);
 		auto right_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.right_bit_width);
 
-		memcpy(vector_state.left_encoded, (void*)vector_ptr, left_bp_size);
+		memcpy(vector_state.left_encoded, (void *)vector_ptr, left_bp_size);
 		vector_ptr += left_bp_size;
 
-		memcpy(vector_state.right_encoded, (void*)vector_ptr, right_bp_size);
+		memcpy(vector_state.right_encoded, (void *)vector_ptr, right_bp_size);
 		vector_ptr += right_bp_size;
 
-		if (vector_state.exceptions_count > 0){
-			memcpy(vector_state.exceptions, (void*)vector_ptr, AlpRDConstants::EXCEPTION_SIZE * vector_state.exceptions_count);
+		if (vector_state.exceptions_count > 0) {
+			memcpy(vector_state.exceptions, (void *)vector_ptr,
+			       AlpRDConstants::EXCEPTION_SIZE * vector_state.exceptions_count);
 			vector_ptr += AlpRDConstants::EXCEPTION_SIZE * vector_state.exceptions_count;
-			memcpy(vector_state.exceptions_positions, (void*)vector_ptr, AlpRDConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count);
+			memcpy(vector_state.exceptions_positions, (void *)vector_ptr,
+			       AlpRDConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count);
 		}
 
 		// Decode all the vector values to the specified 'value_buffer'

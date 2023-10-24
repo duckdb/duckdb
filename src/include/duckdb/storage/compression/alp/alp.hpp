@@ -26,7 +26,6 @@ public:
 	//! The Compress/Analyze State
 	void *data_ptr;
 	alp::AlpCompressionState<T, EMPTY> alp_state;
-
 };
 
 } // namespace duckdb

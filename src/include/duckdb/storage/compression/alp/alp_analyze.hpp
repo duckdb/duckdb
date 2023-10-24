@@ -45,12 +45,8 @@ public:
 		idx_t required_space =
 		    state.alp_state.bp_size +
 		    state.alp_state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE) +
-		    AlpConstants::EXPONENT_SIZE +
-		    AlpConstants::FACTOR_SIZE +
-		    AlpConstants::EXCEPTIONS_COUNT_SIZE +
-		    AlpConstants::FOR_SIZE +
-		    AlpConstants::BW_SIZE +
-		    AlpConstants::METADATA_POINTER_SIZE;
+		    AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE +
+		    AlpConstants::FOR_SIZE + AlpConstants::BW_SIZE + AlpConstants::METADATA_POINTER_SIZE;
 		return required_space;
 	}
 
@@ -99,16 +95,14 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 
 	//! We do not take samples of non-complete duckdb vectors (usually the last one)
 	//! Except in the case of too little data
-	if (count < AlpConstants::SAMPLES_PER_VECTOR && analyze_state.vectors_sampled_count != 0){
+	if (count < AlpConstants::SAMPLES_PER_VECTOR && analyze_state.vectors_sampled_count != 0) {
 		return true;
 	}
 
-
-	uint32_t n_lookup_values = MinValue(count, (idx_t) AlpConstants::ALP_VECTOR_SIZE);
+	uint32_t n_lookup_values = MinValue(count, (idx_t)AlpConstants::ALP_VECTOR_SIZE);
 	//! We sample equidistant values within a vector; to do this we jump a fixed number of values
-	uint32_t n_sampled_increments =
-	    MaxValue(1, (int) ceil((double) n_lookup_values / AlpConstants::SAMPLES_PER_VECTOR));
-	uint32_t n_sampled_values = ceil((double) n_lookup_values / n_sampled_increments);
+	uint32_t n_sampled_increments = MaxValue(1, (int)ceil((double)n_lookup_values / AlpConstants::SAMPLES_PER_VECTOR));
+	uint32_t n_sampled_values = ceil((double)n_lookup_values / n_sampled_increments);
 
 	T a_non_null_value = 0;
 	idx_t nulls_idx = 0;
@@ -131,8 +125,8 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 
 	// Finding the first non-null value
 	idx_t tmp_null_idx = 0;
-	for (idx_t i = 0; i < n_lookup_values; i++){
-		if (i != current_vector_null_positions[tmp_null_idx]){
+	for (idx_t i = 0; i < n_lookup_values; i++) {
+		if (i != current_vector_null_positions[tmp_null_idx]) {
 			a_non_null_value = current_vector_values[i];
 			break;
 		}
@@ -140,14 +134,14 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	}
 
 	// Replacing that first non-null value on the vector
-	for (idx_t i = 0; i < nulls_idx; i++){
+	for (idx_t i = 0; i < nulls_idx; i++) {
 		uint16_t null_value_pos = current_vector_null_positions[i];
 		current_vector_values[null_value_pos] = a_non_null_value;
 	}
 
 	// Storing the sample of that vector
 	idx_t sample_idx = 0;
-	for (idx_t i = 0; i < n_lookup_values; i+= n_sampled_increments){
+	for (idx_t i = 0; i < n_lookup_values; i += n_sampled_increments) {
 		current_vector_sample[sample_idx] = current_vector_values[i];
 		sample_idx++;
 	}
@@ -159,7 +153,6 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	return true;
 }
 
-
 /*
  * Estimate the compression size of ALP using the taken samples
  */
@@ -168,21 +161,18 @@ idx_t AlpFinalAnalyze(AnalyzeState &state) {
 	auto &analyze_state = (AlpAnalyzeState<T> &)state;
 
 	// Finding the Top K combinations of Exponent and Factor
-	alp::AlpCompression<T, true>::FindTopKCombinations(
-	    analyze_state.rowgroup_sample, analyze_state.state.alp_state);
+	alp::AlpCompression<T, true>::FindTopKCombinations(analyze_state.rowgroup_sample, analyze_state.state.alp_state);
 
 	// Encode the entire sampled vectors to estimate a compression size
 	idx_t compressed_values = 0;
-	for (auto &vector_to_compress : analyze_state.complete_vectors_sampled){
-			alp::AlpCompression<T, true>::Compress(
-		    vector_to_compress,
-		    vector_to_compress.size(),
-		    analyze_state.state.alp_state);
-			if (!analyze_state.HasEnoughSpace()) {
-				analyze_state.FlushSegment();
-			}
-		    analyze_state.FlushVector();
-		    compressed_values += vector_to_compress.size();
+	for (auto &vector_to_compress : analyze_state.complete_vectors_sampled) {
+		alp::AlpCompression<T, true>::Compress(vector_to_compress, vector_to_compress.size(),
+		                                       analyze_state.state.alp_state);
+		if (!analyze_state.HasEnoughSpace()) {
+			analyze_state.FlushSegment();
+		}
+		analyze_state.FlushVector();
+		compressed_values += vector_to_compress.size();
 	}
 
 	// Flush last unfinished segment

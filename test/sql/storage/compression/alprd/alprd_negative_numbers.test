@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/alprd/alprd_simple.test
+# name: test/sql/storage/compression/alprd/alprd_negative_numbers.test
 # description: Test storage of alprd, but simple
 # group: [alprd]
 
