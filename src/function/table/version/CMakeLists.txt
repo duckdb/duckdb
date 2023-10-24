@@ -1,8 +1,8 @@
 add_definitions(-DDUCKDB_SOURCE_ID="\""${GIT_COMMIT_HASH}"\"")
 add_definitions(-DDUCKDB_VERSION="\""${DUCKDB_VERSION}"\"")
-add_definitions(-DDUCKDB_VERSION_MAJOR=${DUCKDB_VERSION_MAJOR})
-add_definitions(-DDUCKDB_VERSION_MINOR=${DUCKDB_VERSION_MINOR})
-add_definitions(-DDUCKDB_VERSION_PATCH=${DUCKDB_VERSION_PATCH})
+add_definitions(-DUCKDB_MAJOR_VERSION=${DUCKDB_MAJOR_VERSION})
+add_definitions(-DUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
+add_definitions(-DUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})
 
 add_library_unity(duckdb_func_table_version OBJECT pragma_version.cpp)
 
