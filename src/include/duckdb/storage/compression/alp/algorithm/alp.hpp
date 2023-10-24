@@ -15,6 +15,8 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/storage/compression/alp/alp_constants.hpp"
 
+#include <cmath>
+
 namespace duckdb {
 
 namespace alp {

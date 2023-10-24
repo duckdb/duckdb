@@ -13,6 +13,8 @@
 #include "duckdb/storage/compression/alprd/alprd_constants.hpp"
 #include "duckdb/storage/compression/alp/alp_constants.hpp"
 
+#include <cmath>
+
 namespace duckdb {
 
 template <class T>
