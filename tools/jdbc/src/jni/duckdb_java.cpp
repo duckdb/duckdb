@@ -306,9 +306,14 @@ static Connection *get_connection(JNIEnv *env, jobject conn_ref_buf) {
 //! The database instance cache, used so that multiple connections to the same file point to the same database object
 duckdb::DBInstanceCache instance_cache;
 
+static const char *const JDBC_STREAM_RESULTS = "jdbc_stream_results";
 jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolean read_only, jobject props) {
 	auto database = byte_array_to_string(env, database_j);
 	DBConfig config;
+	config.AddExtensionOption(
+	    JDBC_STREAM_RESULTS,
+	    "Whether to stream results. Only one ResultSet on a connection can be open at once when true",
+	    LogicalType::BOOLEAN);
 	if (read_only) {
 		config.options.access_mode = AccessMode::READ_ONLY;
 	}
@@ -555,7 +560,11 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 		}
 	}
 
-	res_ref->res = stmt_ref->stmt->Execute(duckdb_params, false);
+	Value result;
+	bool stream_results =
+	    stmt_ref->stmt->context->TryGetCurrentSetting(JDBC_STREAM_RESULTS, result) ? result.GetValue<bool>() : false;
+
+	res_ref->res = stmt_ref->stmt->Execute(duckdb_params, stream_results);
 	if (res_ref->res->HasError()) {
 		string error_msg = string(res_ref->res->GetError());
 		res_ref->res = nullptr;
