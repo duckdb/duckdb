@@ -10,6 +10,7 @@
 
 #include "duckdb/storage/compression/alprd/alprd.hpp"
 #include "duckdb/storage/compression/alprd/algorithm/alprd.hpp"
+#include "duckdb/storage/compression/alprd/alprd_constants.hpp"
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/null_value.hpp"

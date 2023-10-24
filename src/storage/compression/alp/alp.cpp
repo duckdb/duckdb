@@ -3,7 +3,6 @@
 #include "duckdb/storage/compression/alp/alp_fetch.hpp"
 #include "duckdb/storage/compression/alp/alp_analyze.hpp"
 
-#include "duckdb/common/limits.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 

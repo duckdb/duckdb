@@ -154,7 +154,7 @@ public:
 		vector_ptr += AlpConstants::BW_SIZE;
 
 		D_ASSERT(vector_state.exceptions_count <= vector_size);
-		D_ASSERT(vector_state.v_exponent <= AlpPrimitives<T>::MAX_EXPONENT);
+		D_ASSERT(vector_state.v_exponent <= AlpTypedConstants<T>::MAX_EXPONENT);
 		D_ASSERT(vector_state.v_factor <= vector_state.v_exponent);
 		D_ASSERT(vector_state.bit_width <= sizeof(uint64_t) * 8);
 

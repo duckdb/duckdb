@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include "duckdb/storage/compression/alp/shared.hpp"
-
+#include "duckdb/common/bitpacking.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/bitpacking.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/storage/compression/alp/alp_constants.hpp"
 
 namespace duckdb {
 
@@ -65,7 +65,7 @@ struct AlpCompression {
 	 * Conversion from a Floating-Point number to Int64 without rounding
 	 */
 	static int64_t NumberToInt64(T n) {
-		n = n + AlpPrimitives<T>::MAGIC_NUMBER - AlpPrimitives<T>::MAGIC_NUMBER;
+		n = n + AlpTypedConstants<T>::MAGIC_NUMBER - AlpTypedConstants<T>::MAGIC_NUMBER;
 		//! Special values which cannot be casted to int64 without an undefined behaviour
 		if (!Value::IsFinite(n) || Value::IsNan(n) || n > AlpConstants::ENCODING_UPPER_LIMIT ||
 		    n < AlpConstants::ENCODING_LOWER_LIMIT) {
@@ -97,15 +97,15 @@ struct AlpCompression {
 		// For each vector sampled
 		for (auto &sampled_vector : vectors_sampled) {
 			idx_t n_samples = sampled_vector.size();
-			uint8_t best_factor = AlpPrimitives<T>::MAX_EXPONENT;
-			uint8_t best_exponent = AlpPrimitives<T>::MAX_EXPONENT;
+			uint8_t best_factor = AlpTypedConstants<T>::MAX_EXPONENT;
+			uint8_t best_exponent = AlpTypedConstants<T>::MAX_EXPONENT;
 
 			//! We start our optimization with the worst possible total bits obtained from compression
 			idx_t best_total_bits = (n_samples * (EXACT_TYPE_BITSIZE + AlpConstants::EXCEPTION_POSITION_SIZE * 8)) +
 			                        (n_samples * EXACT_TYPE_BITSIZE);
 
 			//! We try all combinations in search for the one which minimize the compression size
-			for (int8_t exp_idx = AlpPrimitives<T>::MAX_EXPONENT; exp_idx >= 0; exp_idx--) {
+			for (int8_t exp_idx = AlpTypedConstants<T>::MAX_EXPONENT; exp_idx >= 0; exp_idx--) {
 				for (int8_t factor_idx = exp_idx; factor_idx >= 0; factor_idx--) {
 					idx_t exceptions_count = 0;
 					idx_t non_exceptions_count = 0;
@@ -122,12 +122,12 @@ struct AlpCompression {
 						int64_t encoded_value;
 
 						tmp_encoded_value =
-						    value * AlpPrimitives<T>::EXP_ARR[exp_idx] * AlpPrimitives<T>::FRAC_ARR[factor_idx];
+						    value * AlpTypedConstants<T>::EXP_ARR[exp_idx] * AlpTypedConstants<T>::FRAC_ARR[factor_idx];
 						encoded_value = NumberToInt64(tmp_encoded_value);
 
 						//! The cast to T is needed to prevent a signed integer overflow
 						decoded_value = static_cast<T>(encoded_value) * AlpConstants::FACT_ARR[factor_idx] *
-						                AlpPrimitives<T>::FRAC_ARR[exp_idx];
+						                AlpTypedConstants<T>::FRAC_ARR[exp_idx];
 						if (decoded_value == value) {
 							non_exceptions_count++;
 							max_encoded_value = MaxValue(encoded_value, max_encoded_value);
@@ -219,12 +219,12 @@ struct AlpCompression {
 				int64_t encoded_value;
 				T tmp_encoded_value;
 				tmp_encoded_value =
-				    value * AlpPrimitives<T>::EXP_ARR[exponent_idx] * AlpPrimitives<T>::FRAC_ARR[factor_idx];
+				    value * AlpTypedConstants<T>::EXP_ARR[exponent_idx] * AlpTypedConstants<T>::FRAC_ARR[factor_idx];
 				encoded_value = NumberToInt64(tmp_encoded_value);
 
 				//! The cast to T is needed to prevent a signed integer overflow
 				decoded_value = static_cast<T>(encoded_value) * AlpConstants::FACT_ARR[factor_idx] *
-				                AlpPrimitives<T>::FRAC_ARR[exponent_idx];
+				                AlpTypedConstants<T>::FRAC_ARR[exponent_idx];
 
 				if (decoded_value == value) {
 					max_encoded_value = MaxValue(encoded_value, max_encoded_value);
@@ -281,13 +281,13 @@ struct AlpCompression {
 		vector<T> tmp_decoded_values(n_values, 0); // Tmp array to check wether the encoded values are exceptions
 		for (idx_t i = 0; i < n_values; i++) {
 			T value = input_vector[i];
-			T tmp_encoded_value = value * AlpPrimitives<T>::EXP_ARR[state.vector_exponent] *
-			                      AlpPrimitives<T>::FRAC_ARR[state.vector_factor];
+			T tmp_encoded_value = value * AlpTypedConstants<T>::EXP_ARR[state.vector_exponent] *
+			                      AlpTypedConstants<T>::FRAC_ARR[state.vector_factor];
 			int64_t encoded_value = NumberToInt64(tmp_encoded_value);
 			state.encoded_integers[i] = encoded_value;
 
 			T decoded_value = static_cast<T>(encoded_value) * AlpConstants::FACT_ARR[state.vector_factor] *
-			                  AlpPrimitives<T>::FRAC_ARR[state.vector_exponent];
+			                  AlpTypedConstants<T>::FRAC_ARR[state.vector_exponent];
 			tmp_decoded_values[i] = decoded_value;
 		}
 
@@ -360,7 +360,7 @@ struct AlpDecompression {
 	                       uint16_t exceptions_count, T *exceptions, uint16_t *exceptions_positions,
 	                       uint64_t frame_of_reference, uint8_t bit_width) {
 		uint64_t factor = AlpConstants::U_FACT_ARR[vector_factor];
-		T exponent = AlpPrimitives<T>::FRAC_ARR[vector_exponent];
+		T exponent = AlpTypedConstants<T>::FRAC_ARR[vector_exponent];
 
 		// Bit Unpacking
 		uint8_t for_decoded[AlpConstants::ALP_VECTOR_SIZE * 8] = {0};

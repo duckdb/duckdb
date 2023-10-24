@@ -8,9 +8,12 @@
 
 #pragma once
 
+#include "duckdb/storage/compression/patas/patas.hpp"
 #include "duckdb/storage/compression/alprd/alprd.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/compression/alprd/alprd_analyze.hpp"
+#include "duckdb/storage/compression/alprd/alprd_constants.hpp"
+#include "duckdb/storage/compression/alp/alp_constants.hpp"
 
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/limits.hpp"

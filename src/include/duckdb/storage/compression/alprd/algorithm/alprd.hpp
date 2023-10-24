@@ -8,12 +8,13 @@
 
 #pragma once
 
-#include "duckdb/storage/compression/alprd/shared.hpp"
+#include "duckdb/storage/compression/alprd/alprd_constants.hpp"
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/bitpacking.hpp"
+#include "duckdb/common/common.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 

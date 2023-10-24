@@ -10,7 +10,7 @@
 
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/compression/alp/alp.hpp"
-#include "duckdb/storage/compression/alp/shared.hpp"
+#include "duckdb/storage/compression/alp/alp_constants.hpp"
 #include "duckdb/storage/compression/patas/patas.hpp"
 
 namespace duckdb {
