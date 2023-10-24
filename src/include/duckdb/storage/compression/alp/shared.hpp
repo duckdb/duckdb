@@ -31,7 +31,8 @@ public:
 
 	static constexpr double COMPACT_BLOCK_THRESHOLD = 0.80;
 
-	static constexpr int64_t ENCODING_LIMIT = NumericLimits<int64_t>::Maximum();
+	static constexpr int64_t ENCODING_UPPER_LIMIT = NumericLimits<int64_t>::Maximum();
+	static constexpr int64_t ENCODING_LOWER_LIMIT = NumericLimits<int64_t>::Minimum();
 
 	static constexpr uint8_t MAX_COMBINATIONS = 5;
 

@@ -69,8 +69,8 @@ struct AlpCompression {
 	static int64_t NumberToInt64(T n){
 		n = n + AlpPrimitives<T>::MAGIC_NUMBER - AlpPrimitives<T>::MAGIC_NUMBER;
 		//! Special values which cannot be casted to int64 without an undefined behaviour
-		if (isinf(n) || isnan(n) || n > AlpConstants::ENCODING_LIMIT){
-			return AlpConstants::ENCODING_LIMIT;
+		if (isinf(n) || isnan(n) || n > AlpConstants::ENCODING_UPPER_LIMIT || n < AlpConstants::ENCODING_LOWER_LIMIT){
+			return AlpConstants::ENCODING_UPPER_LIMIT;
 		}
 		return static_cast<int64_t>(n);
 	}
