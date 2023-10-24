@@ -74,7 +74,6 @@ public:
 
 	explicit AlpScanState(ColumnSegment &segment) : segment(segment), count(segment.count) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-
 		handle = buffer_manager.Pin(segment.block);
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
