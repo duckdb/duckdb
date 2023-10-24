@@ -66,7 +66,7 @@ static bool SkipToClose(idx_t &idx, const char *buf, idx_t &len, idx_t &lvl, cha
 
 static idx_t StringTrim(const char *buf, idx_t &start_pos, idx_t pos) {
 	idx_t trailing_whitespace = 0;
-	while (StringUtil::CharacterIsSpace(buf[pos - trailing_whitespace - 1])) {
+	while (pos > start_pos && StringUtil::CharacterIsSpace(buf[pos - trailing_whitespace - 1])) {
 		trailing_whitespace++;
 	}
 	if ((buf[start_pos] == '"' && buf[pos - trailing_whitespace - 1] == '"') ||
