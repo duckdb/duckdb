@@ -19,6 +19,7 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/planner/extension_callback.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -234,7 +235,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		if (!config.file_system) {
 			throw InternalException("No file system!?");
 		}
-		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
+		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type, nullptr);
 	}
 
 	if (!config.options.unrecognized_options.empty()) {
@@ -381,6 +382,11 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
 	loaded_extensions.insert(extension_name);
+
+	auto &callbacks = DBConfig::GetConfig(*this).extension_callbacks;
+	for (auto &callback : callbacks) {
+		callback->OnExtensionLoaded(*this, name);
+	}
 }
 
 bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {

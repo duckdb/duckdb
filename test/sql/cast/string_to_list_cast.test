@@ -33,6 +33,48 @@ SELECT '[Cast like this]':: VARCHAR[];
 ----
 [Cast like this]
 
+# Issue 8797
+query I
+select UNNEST('[NULL, , NULL]'::varchar[]);
+----
+NULL
+(empty)
+NULL
+
+query I
+select UNNEST('[NULL,, NULL]'::varchar[]);
+----
+NULL
+(empty)
+NULL
+
+query I
+select UNNEST('[NULL,   , NULL]'::varchar[]);
+----
+NULL
+(empty)
+NULL
+
+query I
+SELECT UNNEST('[NULL, NULL , ]'::varchar[]);
+----
+NULL
+NULL
+(empty)
+
+query I
+SELECT UNNEST('[NULL, NULL ,]'::varchar[]);
+----
+NULL
+NULL
+(empty)
+
+query I
+SELECT UNNEST('[NULL, NULL,]'::varchar[]);
+----
+NULL
+NULL
+(empty)
 
 #               Nested lists
 # ---------------------------------------------------
@@ -422,7 +464,7 @@ statement ok
 CREATE TABLE int_list(col INT[]);
 
 statement ok
-COPY (SELECT [1,2,3]) TO '__TEST_DIR__/int_list.csv';
+COPY (SELECT [1,2,3]) TO '__TEST_DIR__/int_list.csv' (Header 0);
 
 statement ok
 COPY int_list FROM '__TEST_DIR__/int_list.csv';
@@ -436,7 +478,7 @@ statement ok
 CREATE TABLE assorted_lists(col1 INT[], col2 VARCHAR[], col3 DATE[]);
 
 statement ok
-COPY (SELECT [8,7,6], '[hello, Duck''DB]', '[2022-12-2, 1929-01-25]') TO '__TEST_DIR__/assorted_lists.csv';
+COPY (SELECT [8,7,6], '[hello, Duck''DB]', '[2022-12-2, 1929-01-25]') TO '__TEST_DIR__/assorted_lists.csv' (Header 0);
 
 statement ok
 COPY assorted_lists FROM '__TEST_DIR__/assorted_lists.csv';
@@ -445,3 +487,28 @@ query III
 SELECT * FROM assorted_lists;
 ----
 [8, 7, 6]	[hello, Duck'DB]	[2022-12-02, 1929-01-25]
+
+#              Escape tests
+#---------------------------------------------------
+
+# regular escape
+query I
+select '[{"bar":"\""}]'::VARCHAR[];
+----
+[{"bar":"\""}]
+
+# escaped '\', does not count as an escape for "
+statement error
+select '[{"bar":"\\""}]'::VARCHAR[];
+
+# uneven amount of escapes does escape the "
+query I
+select '[{"bar":"\\\""}]'::VARCHAR[];
+----
+[{"bar":"\\\""}]
+
+# all are escaped except for the last one
+query I
+select '[{"bar":"\"\"\\\"\"\"\\"}]'::VARCHAR[];
+----
+[{"bar":"\"\"\\\"\"\"\\"}]

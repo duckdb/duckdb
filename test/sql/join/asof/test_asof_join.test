@@ -17,22 +17,25 @@ INSERT INTO events0 VALUES
 	(8, 3)
 ;
 
-# ASOF join on a constant (e.g. ON 1=1)
-query II
-SELECT p.ts, e.value
-FROM range(0,10) p(ts) ASOF JOIN events0 e
-ON 1 = 1 AND p.ts >= e.begin
-ORDER BY p.ts ASC
+# Prevent optimiser from removing true inequalities
+statement ok
+create table prices("when" timestamp, symbol int, price int);
+
+statement ok
+insert into prices values ('2020-01-01 00:00:00', 1, 42);
+
+statement ok
+create table trades("when" timestamp, symbol int);
+
+statement ok
+insert into trades values ('2020-01-01 00:00:03', 1);
+
+query III
+SELECT t.*, p.price
+FROM trades t ASOF JOIN prices p 
+  ON t.symbol = p.symbol AND t.when >= p.when;
 ----
-1	0
-2	0
-3	1
-4	1
-5	1
-6	2
-7	2
-8	3
-9	3
+2020-01-01 00:00:03	1	42
 
 # Use an ASOF join inside of a correlated subquery
 
@@ -49,6 +52,15 @@ ON p.ts <> e.begin
 ORDER BY p.ts ASC
 ----
 Binder Error: Invalid ASOF JOIN comparison
+
+# Invalid ASOF JOIN condition
+statement error
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF JOIN events0 e
+ON 1 = 1 AND p.ts >= e.begin
+ORDER BY p.ts ASC
+----
+Binder Error: Invalid ASOF JOIN condition
 
 # Missing ASOF JOIN inequality
 statement error

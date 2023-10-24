@@ -8,17 +8,18 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/parser/group_by_node.hpp"
-#include "duckdb/execution/radix_partitioned_hashtable.hpp"
-#include "duckdb/execution/operator/aggregate/grouped_aggregate_data.hpp"
 #include "duckdb/execution/operator/aggregate/distinct_aggregate_data.hpp"
+#include "duckdb/execution/operator/aggregate/grouped_aggregate_data.hpp"
+#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/radix_partitioned_hashtable.hpp"
+#include "duckdb/parser/group_by_node.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
 class ClientContext;
 class BufferManager;
+class PhysicalHashAggregate;
 
 struct HashAggregateGroupingData {
 public:

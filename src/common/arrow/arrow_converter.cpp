@@ -4,7 +4,6 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
@@ -43,6 +42,7 @@ struct DuckDBArrowSchemaHolder {
 	std::list<vector<ArrowSchema *>> nested_children_ptr;
 	//! This holds strings created to represent decimal types
 	vector<unsafe_unique_array<char>> owned_type_names;
+	vector<unsafe_unique_array<char>> owned_column_names;
 };
 
 static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
@@ -59,7 +59,7 @@ void InitializeChild(ArrowSchema &child, DuckDBArrowSchemaHolder &root_holder, c
 	child.private_data = nullptr;
 	child.release = ReleaseDuckDBArrowSchema;
 
-	//! Store the child schema
+	// Store the child schema
 	child.flags = ARROW_FLAG_NULLABLE;
 	root_holder.owned_type_names.push_back(AddName(name));
 
@@ -69,6 +69,7 @@ void InitializeChild(ArrowSchema &child, DuckDBArrowSchemaHolder &root_holder, c
 	child.metadata = nullptr;
 	child.dictionary = nullptr;
 }
+
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
                     const ClientProperties &options);
 
@@ -137,6 +138,9 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::DATE:
 		child.format = "tdD";
 		break;
+#ifdef DUCKDB_WASM
+	case LogicalTypeId::TIME_TZ:
+#endif
 	case LogicalTypeId::TIME:
 		child.format = "ttu";
 		break;
@@ -309,7 +313,7 @@ void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<Logical
 
 	// Configure all child schemas
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
-
+		root_holder->owned_column_names.push_back(AddName(names[col_idx]));
 		auto &child = root_holder->children[col_idx];
 		InitializeChild(child, *root_holder, names[col_idx]);
 		SetArrowFormat(*root_holder, child, types[col_idx], options);

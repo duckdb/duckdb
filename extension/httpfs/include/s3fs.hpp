@@ -1,9 +1,9 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/common/chrono.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "httpfs.hpp"
@@ -44,7 +44,7 @@ struct S3AuthParams {
 	bool use_ssl;
 	bool s3_url_compatibility_mode;
 
-	static S3AuthParams ReadFrom(FileOpener *opener);
+	static S3AuthParams ReadFrom(FileOpener *opener, FileOpenerInfo &info);
 };
 
 struct ParsedS3Url {

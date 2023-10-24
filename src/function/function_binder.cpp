@@ -1,16 +1,16 @@
 #include "duckdb/function/function_binder.hpp"
-#include "duckdb/common/limits.hpp"
 
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-
-#include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/cast_rules.hpp"
-#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
@@ -228,7 +228,7 @@ void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<un
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto target_type = i < function.arguments.size() ? function.arguments[i] : function.varargs;
 		target_type.Verify();
-		// don't cast lambda children, they get removed anyways
+		// don't cast lambda children, they get removed before execution
 		if (children[i]->return_type.id() == LogicalTypeId::LAMBDA) {
 			continue;
 		}
@@ -269,6 +269,16 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	if (bound_function.null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		for (auto &child : children) {
 			if (child->return_type == LogicalTypeId::SQLNULL) {
+				return make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL));
+			}
+			if (!child->IsFoldable()) {
+				continue;
+			}
+			Value result;
+			if (!ExpressionExecutor::TryEvaluateScalar(context, *child, result)) {
+				continue;
+			}
+			if (result.IsNull()) {
 				return make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL));
 			}
 		}

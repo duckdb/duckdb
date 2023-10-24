@@ -7,15 +7,16 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "id",
         "type": "LogicalTypeId",
         "serialize_property": "id_"
       },
       {
+        "id": 101,
         "name": "type_info",
         "type": "shared_ptr<ExtraTypeInfo>",
-        "serialize_property": "type_info_",
-        "optional": true
+        "serialize_property": "type_info_"
       }
     ],
     "pointer_type": "none",
@@ -28,14 +29,17 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "aliases",
         "type": "vector<string>"
       },
       {
+        "id": 101,
         "name": "query",
         "type": "SelectStatement*"
       },
       {
+        "id": 102,
         "name": "materialized",
         "type": "CTEMaterialize"
       }
@@ -48,8 +52,9 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "map",
-        "type": "unordered_map<string, CommonTableExpressionInfo*>"
+        "type": "case_insensitive_map_t<CommonTableExpressionInfo*>"
       }
     ],
     "pointer_type": "none"
@@ -61,14 +66,17 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "type",
         "type": "OrderType"
       },
       {
+        "id": 101,
         "name": "null_order",
         "type": "OrderByNullType"
       },
       {
+        "id": 102,
         "name": "expression",
         "type": "ParsedExpression*"
       }
@@ -83,14 +91,17 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "type",
         "type": "OrderType"
       },
       {
+        "id": 101,
         "name": "null_order",
         "type": "OrderByNullType"
       },
       {
+        "id": 102,
         "name": "expression",
         "type": "Expression*"
       }
@@ -105,10 +116,12 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "when_expr",
         "type": "ParsedExpression*"
       },
       {
+        "id": 101,
         "name": "then_expr",
         "type": "ParsedExpression*"
       }
@@ -122,10 +135,12 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "when_expr",
         "type": "Expression*"
       },
       {
+        "id": 101,
         "name": "then_expr",
         "type": "Expression*"
       }
@@ -139,18 +154,22 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "sample_size",
         "type": "Value"
       },
       {
+        "id": 101,
         "name": "is_percentage",
         "type": "bool"
       },
       {
+        "id": 102,
         "name": "method",
         "type": "SampleMethod"
       },
       {
+        "id": 103,
         "name": "seed",
         "type": "int64_t"
       }
@@ -163,19 +182,45 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "pivot_expressions",
         "type": "vector<ParsedExpression*>"
       },
       {
+        "id": 101,
         "name": "unpivot_names",
         "type": "vector<string>"
       },
       {
+        "id": 102,
         "name": "entries",
         "type": "vector<PivotColumnEntry>"
       },
       {
+        "id": 103,
         "name": "pivot_enum",
+        "type": "string"
+      }
+    ],
+    "pointer_type": "none"
+  },
+
+  {
+    "class": "PivotColumnEntry",
+    "members": [
+      {
+        "id": 100,
+        "name": "values",
+        "type": "vector<Value>"
+      },
+      {
+        "id": 101,
+        "name": "star_expr",
+        "type": "ParsedExpression*"
+      },
+      {
+        "id": 102,
+        "name": "alias",
         "type": "string"
       }
     ],
@@ -188,18 +233,22 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "group_count",
         "type": "idx_t"
       },
       {
+        "id": 101,
         "name": "types",
         "type": "vector<LogicalType>"
       },
       {
+        "id": 102,
         "name": "pivot_values",
         "type": "vector<string>"
       },
       {
+        "id": 103,
         "name": "aggregates",
         "type": "vector<Expression*>"
       }
@@ -213,25 +262,29 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "name",
         "type": "string"
       },
       {
+        "id": 101,
         "name": "type",
         "type": "LogicalType"
       },
       {
+        "id": 102,
         "name": "expression",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       },
       {
+        "id": 103,
         "name": "category",
         "type": "TableColumnType"
       },
       {
+        "id": 104,
         "name": "compression_type",
-        "type": "CompressionType"
+        "type": "duckdb::CompressionType"
       }
     ],
     "constructor": ["name", "type", "expression", "category"],
@@ -244,6 +297,7 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "columns",
         "type": "vector<ColumnDefinition>"
       }
@@ -258,10 +312,12 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "table_index",
         "type": "idx_t"
       },
       {
+        "id": 101,
         "name": "column_index",
         "type": "idx_t"
       }
@@ -275,10 +331,12 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "value",
         "type": "Value"
       },
       {
+        "id": 101,
         "name": "return_type",
         "type": "LogicalType"
       }
@@ -293,14 +351,17 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "left",
         "type": "Expression*"
       },
       {
+        "id": 101,
         "name": "right",
         "type": "Expression*"
       },
       {
+        "id": 102,
         "name": "comparison",
         "type": "ExpressionType"
       }
@@ -314,10 +375,12 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "vacuum",
         "type": "bool"
       },
       {
+        "id": 101,
         "name": "analyze",
         "type": "bool"
       }
@@ -331,6 +394,7 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "filters",
         "type": "unordered_map<idx_t, TableFilter*>"
       }
@@ -344,28 +408,34 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "filename",
         "type": "bool"
       },
       {
+        "id": 101,
         "name": "hive_partitioning",
         "type": "bool"
       },
       {
+        "id": 102,
         "name": "auto_detect_hive_partitioning",
         "type": "bool"
       },
       {
+        "id": 103,
         "name": "union_by_name",
         "type": "bool"
       },
       {
+        "id": 104,
         "name": "hive_types_autocast",
         "type": "bool"
       },
       {
+        "id": 105,
         "name": "hive_types_schema",
-        "type": "unordered_map<string, LogicalType>"
+        "type": "case_insensitive_map_t<LogicalType>"
       }
     ],
     "pointer_type": "none"
@@ -377,10 +447,12 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "filename_idx",
         "type": "idx_t"
       },
       {
+        "id": 101,
         "name": "hive_partitioning_indexes",
         "type": "vector<HivePartitioningIndex>"
       }
@@ -391,10 +463,12 @@
     "class": "HivePartitioningIndex",
     "members": [
       {
+        "id": 100,
         "name": "value",
         "type": "string"
       },
       {
+        "id": 101,
         "name": "index",
         "type": "idx_t"
       }
@@ -403,154 +477,151 @@
     "constructor": ["value", "index"]
   },
   {
-    "class": "BufferedCSVReaderOptions",
+    "class": "CSVReaderOptions",
     "includes": [
-      "duckdb/execution/operator/persistent/csv_reader_options.hpp"
+      "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
     ],
     "members": [
       {
+        "id": 100,
         "name": "has_delimiter",
         "type": "bool"
       },
-      {
-        "name": "delimiter",
-        "type": "string"
-      },
-      {
+      {"id": 101,
         "name": "has_quote",
         "type": "bool"
       },
-      {
-        "name": "quote",
-        "type": "string"
-      },
-      {
+      {"id": 102,
         "name": "has_escape",
         "type": "bool"
       },
-      {
-        "name": "escape",
-        "type": "string"
-      },
-      {
+      {"id": 103,
         "name": "has_header",
         "type": "bool"
       },
-      {
-        "name": "header",
-        "type": "bool"
-      },
-      {
+      {"id": 104,
         "name": "ignore_errors",
         "type": "bool"
       },
-      {
-        "name": "num_cols",
-        "type": "idx_t"
-      },
-      {
+      {"id": 105,
         "name": "buffer_sample_size",
         "type": "idx_t"
       },
-      {
+      {"id": 106,
         "name": "null_str",
         "type": "string"
       },
-      {
+      {"id": 107,
         "name": "compression",
         "type": "FileCompressionType"
       },
-      {
-        "name": "new_line",
-        "type": "NewLineIdentifier"
-      },
-      {
+      {"id": 108,
         "name": "allow_quoted_nulls",
         "type": "bool"
       },
-      {
-        "name": "skip_rows",
-        "type": "idx_t"
-      },
-      {
+      {"id": 109,
         "name": "skip_rows_set",
         "type": "bool"
       },
-      {
+      {"id": 110,
         "name": "maximum_line_size",
         "type": "idx_t"
       },
-      {
+      {"id": 111,
         "name": "normalize_names",
         "type": "bool"
       },
-      {
+      {"id": 112,
         "name": "force_not_null",
         "type": "vector<bool>"
       },
-      {
+      {"id": 113,
         "name": "all_varchar",
         "type": "bool"
       },
-      {
-        "name": "sample_chunk_size",
+      {"id": 114,
+        "name": "sample_size_chunks",
         "type": "idx_t"
       },
-      {
-        "name": "sample_chunks",
-        "type": "idx_t"
-      },
-      {
+      {"id": 115,
         "name": "auto_detect",
         "type": "bool"
       },
-      {
+      {"id": 116,
         "name": "file_path",
         "type": "string"
       },
-      {
+      {"id": 117,
         "name": "decimal_separator",
         "type": "string"
       },
-      {
+      {"id": 118,
         "name": "null_padding",
         "type": "bool"
       },
-      {
+      {"id": 119,
         "name": "buffer_size",
         "type": "idx_t"
       },
-      {
+      {"id": 120,
         "name": "file_options",
         "type": "MultiFileReaderOptions"
       },
-      {
+      {"id": 121,
         "name": "force_quote",
         "type": "vector<bool>"
       },
-      {
-        "name": "date_format",
-        "type": "unordered_map<LogicalTypeId, StrpTimeFormat> date_format"
-      },
-      {
-        "name": "has_format",
-        "type": "unordered_map<bool, StrpTimeFormat> date_format"
-      },
-      {
+      {"id": 122,
         "name": "rejects_table_name",
         "type": "string"
       },
-      {
+      {"id": 123,
         "name": "rejects_limit",
         "type": "idx_t"
       },
-      {
+      {"id": 124,
         "name": "rejects_recovery_columns",
         "type": "vector<string>"
       },
-      {
+      {"id": 125,
         "name": "rejects_recovery_column_ids",
         "type": "vector<idx_t>"
+      },
+      {"id": 126,
+        "name": "dialect_options.state_machine_options.delimiter",
+        "type": "char"
+      },
+      {"id": 127,
+        "name": "dialect_options.state_machine_options.quote",
+        "type": "char"
+      },
+      {"id": 128,
+        "name": "dialect_options.state_machine_options.escape",
+        "type": "char"
+      },
+       {"id": 129,
+        "name": "dialect_options.header",
+        "type": "bool"
+      },
+            {"id": 130,
+        "name": "dialect_options.num_cols",
+        "type": "idx_t"
+      },
+            {"id": 131,
+        "name": "dialect_options.new_line",
+        "type": "NewLineIdentifier"
+      },
+            {"id": 132,
+        "name": "dialect_options.skip_rows",
+        "type": "idx_t"
+      },
+      {"id": 133,
+        "name": "dialect_options.date_format",
+        "type": "map<LogicalTypeId, StrpTimeFormat>"
+      },
+      {"id": 134,
+        "name": "dialect_options.has_format",
+        "type": "map<LogicalTypeId, bool>"
       }
     ],
     "pointer_type": "none"
@@ -562,6 +633,7 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "format_specifier",
         "type": "string"
       }
@@ -576,42 +648,52 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "files",
         "type": "vector<string>"
       },
       {
+        "id": 101,
         "name": "csv_types",
         "type": "vector<LogicalType>"
       },
       {
+        "id": 102,
         "name": "csv_names",
         "type": "vector<string>"
       },
       {
+        "id": 103,
         "name": "return_types",
         "type": "vector<LogicalType>"
       },
       {
+        "id": 104,
         "name": "return_names",
         "type": "vector<string>"
       },
       {
+        "id": 105,
         "name": "filename_col_idx",
         "type": "idx_t"
       },
       {
+        "id": 106,
         "name": "options",
-        "type": "BufferedCSVReaderOptions"
+        "type": "CSVReaderOptions"
       },
       {
+        "id": 107,
         "name": "single_threaded",
         "type": "bool"
       },
       {
+        "id": 108,
         "name": "reader_bind",
         "type": "MultiFileReaderBindData"
       },
       {
+        "id": 109,
         "name": "column_info",
         "type": "vector<ColumnInfo>"
       }
@@ -621,12 +703,38 @@
     "class": "ColumnInfo",
     "members": [
       {
+        "id": 100,
         "name": "names",
         "type": "vector<string>"
       },
       {
+        "id": 101,
         "name": "types",
         "type": "vector<LogicalType>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "interval_t",
+    "includes": [
+      "duckdb/common/types/interval.hpp"
+    ],
+    "members": [
+      {
+        "id": 1,
+        "name": "months",
+        "type": "int32_t"
+      },
+      {
+          "id": 2,
+          "name": "days",
+          "type": "int32_t"
+      },
+      {
+          "id": 3,
+          "name": "micros",
+          "type": "int64_t"
       }
     ],
     "pointer_type": "none"

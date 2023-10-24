@@ -12,6 +12,6 @@
 
 namespace duckdb {
 
-void RegisterICUTimeBucketFunctions(ClientContext &context);
+void RegisterICUTimeBucketFunctions(DatabaseInstance &db);
 
 } // namespace duckdb

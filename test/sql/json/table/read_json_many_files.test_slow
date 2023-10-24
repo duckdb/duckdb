@@ -1,0 +1,33 @@
+# name: test/sql/json/table/read_json_many_files.test_slow
+# description: Read > 1000 json files (issue #6249)
+# group: [table]
+
+require json
+
+statement ok
+create table input as select range as a from range(1, 4);
+
+loop i 0 2000
+
+statement ok
+copy input to '__TEST_DIR__/input${i}.json';
+
+endloop
+
+query T
+select count(*) from read_json_auto('__TEST_DIR__/input*.json');
+----
+6000
+
+# also test gzipped (issue #6588)
+loop i 0 2000
+
+statement ok
+copy input to '__TEST_DIR__/input${i}.json.gz' (COMPRESSION GZIP);
+
+endloop
+
+query T
+select count(*) from read_json_auto('__TEST_DIR__/input*.json.gz');
+----
+6000

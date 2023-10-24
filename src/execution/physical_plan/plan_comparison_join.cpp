@@ -184,19 +184,21 @@ static bool PlanIndexJoin(ClientContext &context, LogicalComparisonJoin &op, uni
 	if (!index) {
 		return false;
 	}
-	// index joins are not supported if there are pushed down table filters
-	D_ASSERT(right->type == PhysicalOperatorType::TABLE_SCAN);
-	auto &tbl_scan = right->Cast<PhysicalTableScan>();
-	//	if (tbl_scan.table_filters && !tbl_scan.table_filters->filters.empty()) {
-	//		return false;
-	//	}
+
 	// index joins are disabled if enable_optimizer is false
 	if (!ClientConfig::GetConfig(context).enable_optimizer) {
 		return false;
 	}
+
+	// index joins are disabled on default
+	auto force_index_join = ClientConfig::GetConfig(context).force_index_join;
+	if (!ClientConfig::GetConfig(context).enable_index_join && !force_index_join) {
+		return false;
+	}
+
 	// check if the cardinality difference justifies an index join
-	if (!((ClientConfig::GetConfig(context).force_index_join ||
-	       left->estimated_cardinality < 0.01 * right->estimated_cardinality))) {
+	auto index_join_is_applicable = left->estimated_cardinality < 0.01 * right->estimated_cardinality;
+	if (!index_join_is_applicable && !force_index_join) {
 		return false;
 	}
 
@@ -205,6 +207,9 @@ static bool PlanIndexJoin(ClientContext &context, LogicalComparisonJoin &op, uni
 		swap(op.conditions[0].left, op.conditions[0].right);
 		swap(op.left_projection_map, op.right_projection_map);
 	}
+	D_ASSERT(right->type == PhysicalOperatorType::TABLE_SCAN);
+	auto &tbl_scan = right->Cast<PhysicalTableScan>();
+
 	plan = make_uniq<PhysicalIndexJoin>(op, std::move(left), std::move(right), std::move(op.conditions), op.join_type,
 	                                    op.left_projection_map, op.right_projection_map, tbl_scan.column_ids, *index,
 	                                    !swap_condition, op.estimated_cardinality);
@@ -254,7 +259,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 	}
 
 	bool has_equality = false;
-	// bool has_inequality = false;
 	size_t has_range = 0;
 	for (size_t c = 0; c < op.conditions.size(); ++c) {
 		auto &cond = op.conditions[c];
@@ -271,7 +275,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
 		case ExpressionType::COMPARE_DISTINCT_FROM:
-			// has_inequality = true;
 			break;
 		default:
 			throw NotImplementedException("Unimplemented comparison join");

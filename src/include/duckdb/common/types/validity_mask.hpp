@@ -148,6 +148,9 @@ public:
 		if (!validity_mask) {
 			return ValidityBuffer::MAX_ENTRY;
 		}
+		return GetValidityEntryUnsafe(entry_idx);
+	}
+	inline V &GetValidityEntryUnsafe(idx_t entry_idx) const {
 		return validity_mask[entry_idx];
 	}
 	static inline bool AllValid(V entry) {
@@ -156,7 +159,7 @@ public:
 	static inline bool NoneValid(V entry) {
 		return entry == 0;
 	}
-	static inline bool RowIsValid(V entry, idx_t idx_in_entry) {
+	static inline bool RowIsValid(const V &entry, const idx_t &idx_in_entry) {
 		return entry & (V(1) << V(idx_in_entry));
 	}
 	static inline void GetEntryIndex(idx_t row_idx, idx_t &entry_idx, idx_t &idx_in_entry) {
@@ -332,6 +335,9 @@ public:
 	DUCKDB_API string ToString(idx_t count) const;
 
 	DUCKDB_API static bool IsAligned(idx_t count);
+
+	void Write(WriteStream &writer, idx_t count);
+	void Read(ReadStream &reader, idx_t count);
 };
 
 } // namespace duckdb

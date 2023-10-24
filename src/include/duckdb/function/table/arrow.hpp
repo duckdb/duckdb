@@ -33,6 +33,8 @@ struct ArrowInterval {
 struct ArrowProjectedColumns {
 	unordered_map<idx_t, string> projection_map;
 	vector<string> columns;
+	// Map from filter index to column index
+	unordered_map<idx_t, idx_t> filter_to_col;
 };
 
 struct ArrowStreamParameters {
@@ -67,6 +69,9 @@ struct ArrowScanLocalState : public LocalTableFunctionState {
 
 	unique_ptr<ArrowArrayStreamWrapper> stream;
 	shared_ptr<ArrowArrayWrapper> chunk;
+	// This vector hold the Arrow Vectors owned by DuckDB to allow for zero-copy
+	// Note that only DuckDB can release these vectors
+	unordered_map<idx_t, shared_ptr<ArrowArrayWrapper>> arrow_owned_data;
 	idx_t chunk_offset = 0;
 	idx_t batch_index = 0;
 	vector<column_t> column_ids;
@@ -126,6 +131,8 @@ public:
 
 	//! Scan Function
 	static void ArrowScanFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output);
+	static void PopulateArrowTableType(ArrowTableType &arrow_table, ArrowSchemaWrapper &schema_p, vector<string> &names,
+	                                   vector<LogicalType> &return_types);
 
 protected:
 	//! Defines Maximum Number of Threads

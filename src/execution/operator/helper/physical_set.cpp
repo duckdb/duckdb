@@ -24,16 +24,16 @@ void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &
 
 SourceResultType PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &config = DBConfig::GetConfig(context.client);
-	if (config.options.lock_configuration) {
-		throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked",
-		                            name);
-	}
+	// check if we are allowed to change the configuration option
+	config.CheckLock(name);
 	auto option = DBConfig::GetOptionByName(name);
 	if (!option) {
 		// check if this is an extra extension variable
 		auto entry = config.extension_parameters.find(name);
 		if (entry == config.extension_parameters.end()) {
-			throw Catalog::UnrecognizedConfigurationError(context.client, name);
+			Catalog::AutoloadExtensionByConfigName(context.client, name);
+			entry = config.extension_parameters.find(name);
+			D_ASSERT(entry != config.extension_parameters.end());
 		}
 		SetExtensionVariable(context.client, entry->second, name, scope, value);
 		return SourceResultType::FINISHED;

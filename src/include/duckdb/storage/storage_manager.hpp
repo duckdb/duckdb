@@ -65,9 +65,10 @@ public:
 
 	virtual bool AutomaticCheckpoint(idx_t estimated_wal_bytes) = 0;
 	virtual unique_ptr<StorageCommitState> GenStorageCommitState(Transaction &transaction, bool checkpoint) = 0;
-	virtual bool IsCheckpointClean(block_id_t checkpoint_id) = 0;
+	virtual bool IsCheckpointClean(MetaBlockPointer checkpoint_id) = 0;
 	virtual void CreateCheckpoint(bool delete_wal = false, bool force_checkpoint = false) = 0;
 	virtual DatabaseSize GetDatabaseSize() = 0;
+	virtual vector<MetadataBlockInfo> GetMetadataInfo() = 0;
 	virtual shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) = 0;
 
 protected:
@@ -109,9 +110,10 @@ public:
 public:
 	bool AutomaticCheckpoint(idx_t estimated_wal_bytes) override;
 	unique_ptr<StorageCommitState> GenStorageCommitState(Transaction &transaction, bool checkpoint) override;
-	bool IsCheckpointClean(block_id_t checkpoint_id) override;
+	bool IsCheckpointClean(MetaBlockPointer checkpoint_id) override;
 	void CreateCheckpoint(bool delete_wal, bool force_checkpoint) override;
 	DatabaseSize GetDatabaseSize() override;
+	vector<MetadataBlockInfo> GetMetadataInfo() override;
 	shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) override;
 
 protected:

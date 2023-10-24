@@ -14,7 +14,7 @@ npm install --build-from-source
 npm test
 npx node-pre-gyp package testpackage testbinary
 
-if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ ]] ; then
   npx node-pre-gyp publish
   npx node-pre-gyp info
 fi

@@ -6,6 +6,7 @@ from conftest import pandas_supports_arrow_backend
 
 pd = pytest.importorskip("pandas", '2.0.0')
 import numpy as np
+from pandas.api.types import is_integer_dtype
 
 
 @pytest.mark.skipif(not pandas_supports_arrow_backend(), reason="pandas does not support the 'pyarrow' backend")
@@ -35,7 +36,9 @@ class TestPandasArrow(object):
         )
         pyarrow_df = df.convert_dtypes(dtype_backend='pyarrow')
         con = duckdb.connect()
-        with pytest.raises(duckdb.InvalidInputException, match='Conversion failed for column objects with type object'):
+        with pytest.raises(
+            duckdb.InvalidInputException, match='The dataframe could not be converted to a pyarrow.lib.Table'
+        ):
             res = con.sql('select * from pyarrow_df').fetchall()
 
         numpy_df = pd.DataFrame(
@@ -56,11 +59,13 @@ class TestPandasArrow(object):
         python_df = pd.DataFrame({'a': pd.Series(['test', [5, 4, 3], {'a': 42}])}).convert_dtypes()
 
         df = pd.concat([numpy_df['a'], arrow_df['a'], python_df['a']], axis=1, keys=['numpy', 'arrow', 'python'])
-        assert isinstance(df.dtypes[0], pd.core.arrays.integer.IntegerDtype)
-        assert isinstance(df.dtypes[1], pd.core.arrays.arrow.dtype.ArrowDtype)
-        assert isinstance(df.dtypes[2], np.dtype('O').__class__)
+        assert is_integer_dtype(df.dtypes['numpy'])
+        assert isinstance(df.dtypes['arrow'], pd.ArrowDtype)
+        assert isinstance(df.dtypes['python'], np.dtype('O').__class__)
 
-        with pytest.raises(duckdb.InvalidInputException, match='Conversion failed for column python with type object'):
+        with pytest.raises(
+            duckdb.InvalidInputException, match='The dataframe could not be converted to a pyarrow.lib.Table'
+        ):
             res = con.sql('select * from df').fetchall()
 
     def test_empty_df(self):

@@ -3,16 +3,23 @@
 namespace duckdb{
 
 //! Looks through the CMake-generated list of extensions that are linked into DuckDB currently to try load <extension>
-bool TryLoadLinkedExtension(DuckDB &db, const std::string &extension) {
+bool TryLoadLinkedExtension(DuckDB &db, const string &extension) {
 
 ${EXT_LOADER_BODY}
     return false;
 }
 
-vector<string> linked_extensions = {${EXT_NAME_VECTOR_INITIALIZER}
-};
+const vector<string>& LinkedExtensions(){
+    static vector<string> VEC = {${EXT_NAME_VECTOR_INITIALIZER}
+    };
+    return VEC;
+}
 
-vector<string> loaded_extension_test_paths = {${EXT_TEST_PATH_INITIALIZER}
-};
+
+const vector<string>& LoadedExtensionTestPaths(){
+    static vector<string> VEC = {${EXT_TEST_PATH_INITIALIZER}
+    };
+    return VEC;
+}
 
 }

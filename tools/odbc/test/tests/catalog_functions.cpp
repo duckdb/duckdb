@@ -94,22 +94,8 @@ void TestGetTypeInfo(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 		row_count++;
 	}
 
-	// When type is not supported, SQLGetTypeInfo returns SQL_SUCCESS_WITH_INFO
-	EXECUTE_AND_CHECK("SQLBindCol", SQLBindCol, hstmt, 2, SQL_C_SHORT, &data_type, sizeof(data_type), &len_or_ind_ptr);
-	EXECUTE_AND_CHECK("SQLGetTypeInfo(SQL_ALL_TYPES)", SQLGetTypeInfo, hstmt, SQL_ALL_TYPES);
-
-	SQLRETURN ret;
-	while ((ret = SQLFetch(hstmt)) != SQL_NO_DATA) {
-		std::string state, message;
-		REQUIRE(ret == SQL_SUCCESS_WITH_INFO);
-		ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
-		REQUIRE(state == "07006");
-		REQUIRE(duckdb::StringUtil::Contains(message, "Unsupported type"));
-		row_count++;
-	}
-
 	// unbind column
-	EXECUTE_AND_CHECK("SQLBindCol", SQLBindCol, hstmt, 2, SQL_C_SHORT, nullptr, 0, nullptr);
+	EXECUTE_AND_CHECK("SQLBindCol", SQLBindCol, hstmt, 2, SQL_INTEGER, nullptr, 0, nullptr);
 }
 
 static void TestSQLTables(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {

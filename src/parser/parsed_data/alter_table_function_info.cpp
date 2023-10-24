@@ -1,6 +1,5 @@
 #include "duckdb/parser/parsed_data/alter_table_function_info.hpp"
 
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/constraint.hpp"
 
 namespace duckdb {
@@ -18,18 +17,6 @@ AlterTableFunctionInfo::~AlterTableFunctionInfo() {
 
 CatalogType AlterTableFunctionInfo::GetCatalogType() const {
 	return CatalogType::TABLE_FUNCTION_ENTRY;
-}
-
-void AlterTableFunctionInfo::Serialize(FieldWriter &writer) const {
-	writer.WriteField<AlterTableFunctionType>(alter_table_function_type);
-	writer.WriteString(catalog);
-	writer.WriteString(schema);
-	writer.WriteString(name);
-	writer.WriteField(if_not_found);
-}
-
-unique_ptr<AlterInfo> AlterTableFunctionInfo::Deserialize(FieldReader &reader) {
-	throw NotImplementedException("AlterTableFunctionInfo cannot be deserialized");
 }
 
 //===--------------------------------------------------------------------===//

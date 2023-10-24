@@ -17,8 +17,7 @@ COPY no_newline FROM 'test/sql/copy/csv/data/test/no_newline.csv';
 statement ok
 CREATE TABLE no_newline_unicode (a INTEGER, b INTEGER, c VARCHAR(10));
 
-query I
+statement error
 COPY no_newline_unicode FROM 'test/sql/copy/csv/data/test/no_newline_unicode.csv' DELIMITER '🦆';
 ----
-1024
-
+The delimiter option cannot exceed a size of 1 byte.

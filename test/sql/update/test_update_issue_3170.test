@@ -1,0 +1,110 @@
+# name: test/sql/update/test_update_issue_3170.test
+# description: Update indexed table rows with large row_id ( > 122879) which cross the first segment/row_group.
+# group: [update]
+
+statement ok
+PRAGMA enable_verification
+
+# create a table
+statement ok
+CREATE TABLE student(id INTEGER, name VARCHAR, PRIMARY KEY(id));
+
+statement ok
+INSERT INTO student SELECT i, 'creator' FROM RANGE(260001) tbl(i)
+
+# read
+# rowgroup 0
+query I
+SELECT name FROM student WHERE id = 122879
+----
+creator
+
+# rowgroup 1
+query I
+SELECT name FROM student WHERE id = 122881
+----
+creator
+
+# rowgroup 2
+query I
+SELECT name FROM student WHERE id = 245780
+----
+creator
+
+# rowgroup 1 vector > 0
+query I
+SELECT name FROM student WHERE id = 150881
+----
+creator
+
+# Update
+# rowgroup 0
+statement ok
+UPDATE student SET name = 'updator0' WHERE id = 122879
+
+# rowgroup 1
+statement ok
+UPDATE student SET name = 'updator1' WHERE id = 122881
+
+# rowgroup 2 
+statement ok
+UPDATE student SET name = 'updator2' WHERE id = 245780
+
+# rowgroup 1 vector > 0
+statement ok
+UPDATE student SET name = 'updator3' WHERE id = 150881
+
+
+# read again
+# rowgroup 0
+query I
+SELECT name FROM student WHERE id = 122879
+----
+updator0
+
+# rowgroup 1
+query I
+SELECT name FROM student WHERE id = 122881
+----
+updator1
+
+# rowgroup 2
+query I
+SELECT name FROM student WHERE id = 245780
+----
+updator2
+
+# rowgroup 1 vector > 0
+query I
+SELECT name FROM student WHERE id = 150881
+----
+updator3
+
+# original issue
+load __TEST_DIR__/list_index_compression.db
+
+statement ok
+CREATE TABLE student(id INTEGER, name VARCHAR, PRIMARY KEY(id));
+
+statement ok
+insert into student select i, 'creator' from range(130001) tbl(i);
+
+query II
+select id, name from student where id=122881;
+----
+122881	creator
+
+statement ok
+update student set name = 'updator' where id = 122881;
+
+query II
+select id, name from student where id=122881;
+----
+122881	updator
+
+restart
+
+query II
+select id, name from student where id=122881;
+----
+122881	updator

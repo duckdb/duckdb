@@ -289,6 +289,7 @@ cmake_build
 .cmake_build
 cmake-build-debug
 cmake-build-release
+cmake-build-relwithdebinfo
 
 # Generated documentation
 docs
@@ -323,10 +324,6 @@ tools/duckdb.Rcheck/
 tools/*.tar.gz
 .Rhistory
 ub_*.cpp
-
-# python parquet files used in tests
-tools/pythonpkg/tests/unsigned.parquet
-tools/pythonpkg/tests/userdata1.parquet
 
 # node tests
 __nvm
