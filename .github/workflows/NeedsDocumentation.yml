@@ -3,14 +3,16 @@ on:
   issues:
     types:
       - labeled
-  pull_request:
+  pull_request_target:
     types:
       - labeled
 
 env:
   GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
-  TITLE_PREFIX: "duckdb/#${{ github.event.issue.number }}]"
-  PUBLIC_ISSUE_TITLE: ${{ github.event.issue.title }}
+  # an event triggering this workflow is either an issue or a pull request,
+  # hence only one of the numbers will be filled in the TITLE_PREFIX
+  TITLE_PREFIX: "[duckdb/#${{ github.event.issue.number || github.event.pull_request.number }}]"
+  PUBLIC_ISSUE_TITLE: ${{ github.event.issue.title || github.event.pull_request.title }}
 
 jobs:
   create_documentation_issue:
