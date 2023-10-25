@@ -871,7 +871,7 @@ struct IntegerCastOperation {
 		}
 
 		if (state.decimal == 0) {
-			return true;
+			return Finalize<T, NEGATIVE>(state);
 		}
 
 		// Handle decimals
