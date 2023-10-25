@@ -115,7 +115,7 @@
             missing
         ]
     )
-    @test isequal(df.uuid, [UUID(1), UUID(UInt128(340282366920938463463374607431768211455)), missing])
+    @test isequal(df.uuid, [UUID(0), UUID(UInt128(340282366920938463463374607431768211455)), missing])
     @test isequal(df.int_array, [[], [42, 999, missing, missing, -42], missing])
     @test isequal(df.double_array, [[], [42, NaN, Inf, -Inf, missing, -42], missing])
     @test isequal(
