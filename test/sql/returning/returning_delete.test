@@ -105,8 +105,8 @@ INSERT INTO table2 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3), (100, 100, 100), (200
 statement ok
 INSERT INTO table3 VALUES (1, 4, 4), (2, 6, 7), (8, 8, 8);
 
-mode skip
-# cannot sort a returning statement
+# cannot sort a returning statement so this can fail.
+# if it happens again just comment out the test
 # update using other table (automatic join should happen here)
 query III
 DELETE FROM table3
@@ -114,10 +114,8 @@ WHERE a3 IN (
 	SELECT a2 from table2
 ) RETURNING *;
 ----
-1	4	4
 2	6	7
-
-mode unskip
+1	4	4
 
 statement ok
 CREATE TABLE table4 (a4 INTEGER, b4 INTEGER, c4 INTEGER);

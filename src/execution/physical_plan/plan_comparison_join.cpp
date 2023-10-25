@@ -243,7 +243,7 @@ static void RewriteJoinCondition(Expression &expr, idx_t offset) {
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { RewriteJoinCondition(child, offset); });
 }
 
-bool PhysicalPlanGenerator::HasEquality(vector<JoinCondition> &conds, size_t &has_range) {
+bool PhysicalPlanGenerator::HasEquality(vector<JoinCondition> &conds, idx_t &has_range) {
 	for (size_t c = 0; c < conds.size(); ++c) {
 		auto &cond = conds[c];
 		switch (cond.comparison) {
@@ -282,7 +282,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 		return make_uniq<PhysicalCrossProduct>(op.types, std::move(left), std::move(right), op.estimated_cardinality);
 	}
 
-	size_t has_range = 0;
+	idx_t has_range = 0;
 	bool has_equality = HasEquality(op.conditions, has_range);
 	bool can_merge = has_range > 0;
 	bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();

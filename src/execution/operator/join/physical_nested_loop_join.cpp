@@ -286,8 +286,6 @@ OperatorResultType PhysicalNestedLoopJoin::ExecuteInternal(ExecutionContext &con
 	switch (join_type) {
 	case JoinType::LEFT_SEMI:
 	case JoinType::LEFT_ANTI:
-	case JoinType::RIGHT_SEMI:
-	case JoinType::RIGHT_ANTI:
 	case JoinType::MARK:
 		// simple joins can have max STANDARD_VECTOR_SIZE matches per chunk
 		ResolveSimpleJoin(context, input, chunk, state_p);
@@ -298,7 +296,7 @@ OperatorResultType PhysicalNestedLoopJoin::ExecuteInternal(ExecutionContext &con
 	case JoinType::RIGHT:
 		return ResolveComplexJoin(context, input, chunk, state_p);
 	default:
-		throw NotImplementedException("Unimplemented type for nested loop join!");
+		throw NotImplementedException("Unimplemented type " + JoinTypeToString(join_type) + " for nested loop join!");
 	}
 }
 
