@@ -840,31 +840,41 @@ struct IntegerCastOperation {
 	static bool HandleExponent(T &state, int32_t exponent) {
 		using result_t = typename T::Result;
 
-		int32_t i = exponent;
-		result_t result = state.result;
-		while (i-- > 0) {
-			if (!TryMultiplyOperator::Operation(result, (result_t)10, result)) {
+		int32_t e = exponent;
+		// Negative Exponent
+		if (e < 0) {
+			result_t mod;
+			while (e++ < 0) {
+				mod = state.result % 10;
+				state.result /= 10;
+			}
+			state.result += (mod >= 5);
+			return true;
+		}
+
+		// Positive Exponent
+		while (e-- > 0) {
+			if (!TryMultiplyOperator::Operation(state.result, (result_t)10, state.result)) {
 				return false;
 			}
 		}
-		state.result = result;
 
 		if (state.decimal == 0) {
 			return true;
 		}
 
 		// Handle decimals
-		i = exponent - state.decimal_digits;
+		e = exponent - state.decimal_digits;
 		result_t remainder = 0;
-		if (i < 0) {
+		if (e < 0) {
 			result_t power = 1;
-			while (i++ < 0) {
+			while (e++ < 0) {
 				power *= 10;
 			}
 			remainder = state.decimal % power;
 			state.decimal /= power;
 		} else {
-			while (i-- > 0) {
+			while (e-- > 0) {
 				if (!TryMultiplyOperator::Operation(state.decimal, (result_t)10, state.decimal)) {
 					return false;
 				}
