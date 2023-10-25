@@ -1,0 +1,13 @@
+# name: benchmark/micro/lambdas/list_transform_select.benchmark
+# description: Simulate a select-function with lambda functions on 100K values
+# group: [lambdas]
+
+name Benchmark list_transform
+group lambdas
+
+load
+CREATE TABLE tbl (l INTEGER[], sel INTEGER[]);
+INSERT INTO tbl VALUES (range(100000), range(100000));
+
+run
+SELECT list_transform(sel, x -> l[x]) FROM tbl;

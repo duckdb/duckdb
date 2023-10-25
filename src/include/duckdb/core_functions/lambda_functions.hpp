@@ -10,14 +10,9 @@
 
 #include "duckdb/function/function.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
-
-enum class LambdaType : uint8_t {
-	TRANSFORM = 1,
-	FILTER = 2,
-	REDUCE = 3,
-};
 
 struct ListLambdaBindData : public FunctionData {
 public:
@@ -46,12 +41,15 @@ class LambdaFunctions {
 public:
 	//! Returns the parameter type for binary lambdas
 	static LogicalType BindBinaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type);
-	//! Prepares the input for the expression executor and then executes the lambda expression on it for each row
-	static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result, LambdaType lambda_type);
 	//! Returns the ListLambdaBindData containing the lambda expression
 	static unique_ptr<FunctionData> ListLambdaBind(ClientContext &, ScalarFunction &bound_function,
 	                                               vector<unique_ptr<Expression>> &arguments,
 	                                               const bool has_index = false);
+
+	//! Internally executes list_transform
+	static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result);
+	//! Internally executes list_filter
+	static void ListFilterFunction(DataChunk &args, ExpressionState &state, Vector &result);
 };
 
 } // namespace duckdb

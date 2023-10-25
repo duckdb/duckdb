@@ -35,7 +35,7 @@ class TestRAPIQuery(object):
         result = rel.execute()
         assert result.fetchall() == [tuple([x]) for x in input]
 
-    def test_query_table_unrelated(self, tbl_table):
+    def test_query_table_basic(self, tbl_table):
         con = duckdb.default_connection
         rel = con.table("tbl")
         # Querying a table relation
