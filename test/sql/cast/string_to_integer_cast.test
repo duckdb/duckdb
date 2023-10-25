@@ -1,0 +1,52 @@
+# name: test/sql/cast/string_to_integer_cast.test
+# description: String to Integer casts
+# group: [cast]
+
+statement ok
+PRAGMA enable_verification
+
+foreach type tinyint int bigint
+
+# Positive Number - Positive Exponent
+query I
+select '1e2'::${type};
+----
+100
+
+query I
+select '1.23e2'::${type};
+----
+123
+
+query I
+select '1.234e2'::${type};
+----
+123
+
+query I
+select '1.235e2'::${type};
+----
+124
+
+# Positive Number - Negative Exponent
+query I
+select '1e-2'::${type};
+----
+0
+
+query I
+select '123.456e-2'::${type};
+----
+1
+
+query I
+select '15e-1'::${type};
+----
+2
+
+query I
+select '1214.235e2-2'::${type};
+----
+12
+
+endloop
