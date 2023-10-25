@@ -5,23 +5,30 @@
 statement ok
 create table t0 as select (UNNEST(['hello', 'duckdb', 'duck LORD', 'lord duck'])) as column0;
 
-statement ok
-explain select 
+
+# create the alias but use the column name
+query III
+select 
 row_number() over () as line_number, 
 column0 as text, 
 length(coalesce(column0, '')) as text_length 
 from 
 t0
 where 'LORD' in (select * from unnest(str_split(column0, ' ')));
+----
+1	duck LORD	9
 
-statement ok
-explain select 
+# Using alias now in Where clause
+query III
+select 
 row_number() over () as line_number, 
 column0 as text, 
 length(coalesce(column0, '')) as text_length 
 from 
 t0
 where 'LORD' in (select * from unnest(str_split(text, ' ')));
+----
+1	duck LORD	9
 
 statement ok
 CREATE or replace TABLE brands (category VARCHAR, brand_name VARCHAR);
@@ -42,4 +49,4 @@ select
   brand_name
 from cte;
 ----
-Binder Error
+Binder Error: window function calls cannot be nested
