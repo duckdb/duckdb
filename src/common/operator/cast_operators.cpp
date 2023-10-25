@@ -794,7 +794,7 @@ template <typename T>
 struct IntegerCastData {
 	using Result = T;
 	Result result;
-	Result decimal;
+	int64_t decimal;
 	uint16_t decimal_digits;
 };
 
@@ -843,12 +843,16 @@ struct IntegerCastOperation {
 		int32_t e = exponent;
 		// Negative Exponent
 		if (e < 0) {
-			result_t mod;
+			int8_t mod;
 			while (e++ < 0) {
 				mod = state.result % 10;
 				state.result /= 10;
 			}
-			state.result += (mod >= 5);
+			if (NEGATIVE) {
+				state.result -= (mod <= -5);
+			} else {
+				state.result += (mod >= 5);
+			}
 			return true;
 		}
 
@@ -865,9 +869,9 @@ struct IntegerCastOperation {
 
 		// Handle decimals
 		e = exponent - state.decimal_digits;
-		result_t remainder = 0;
+		int64_t remainder = 0;
 		if (e < 0) {
-			result_t power = 1;
+			int64_t power = 1;
 			while (e++ < 0) {
 				power *= 10;
 			}
@@ -875,7 +879,7 @@ struct IntegerCastOperation {
 			state.decimal /= power;
 		} else {
 			while (e-- > 0) {
-				if (!TryMultiplyOperator::Operation(state.decimal, (result_t)10, state.decimal)) {
+				if (!TryMultiplyOperator::Operation(state.decimal, 10, state.decimal)) {
 					return false;
 				}
 			}
@@ -884,7 +888,8 @@ struct IntegerCastOperation {
 		if (NEGATIVE) {
 			state.decimal *= -1;
 		}
-		if (!TryAddOperator::Operation(state.result, state.decimal, state.result)) {
+		result_t n;
+		if (!TryCast::Operation<int64_t, result_t>(state.decimal, n) || !TryAddOperator::Operation(state.result, n, state.result)) {
 			return false;
 		}
 		state.decimal = remainder;
@@ -893,8 +898,7 @@ struct IntegerCastOperation {
 
 	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
 	static bool HandleDecimal(T &state, uint8_t digit) {
-		using result_t = typename T::Result;
-		if (state.decimal > (NumericLimits<result_t>::Maximum() - digit) / 10) {
+		if (state.decimal > (NumericLimits<int64_t>::Maximum() - digit) / 10) {
 			// Simply ignore any more decimals
 			return true;
 		}
