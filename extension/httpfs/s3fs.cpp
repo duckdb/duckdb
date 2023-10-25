@@ -830,7 +830,7 @@ void S3FileHandle::Initialize(FileOpener *opener) {
 }
 
 bool S3FileSystem::CanHandleFile(const string &fpath) {
-	return this->IsRemoteFile(fpath);
+	return fpath.rfind("s3://", 0) * fpath.rfind("gcs://", 0) * fpath.rfind("r2://", 0) == 0;
 }
 
 void S3FileSystem::FileSync(FileHandle &handle) {
