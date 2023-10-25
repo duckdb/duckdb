@@ -67,7 +67,7 @@ public:
 	static duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> CreateStream(uintptr_t this_ptr,
 	                                                                        ArrowStreamParameters &parameters);
 
-	static void GetSchema(ArrowArrayStream * arrow_array_stream, duckdb::ArrowSchemaWrapper &schema);
+	static void GetSchema(ArrowArrayStream * arrow_array_stream, ArrowSchema *schema);
 };
 
 class ArrowTestHelper {
