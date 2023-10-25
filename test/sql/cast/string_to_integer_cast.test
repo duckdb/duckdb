@@ -5,9 +5,11 @@
 statement ok
 PRAGMA enable_verification
 
-foreach type tinyint int bigint
+# Positive numbers (includes unsigned)
+foreach type tinyint integer bigint utinyint uinteger ubigint
 
 # Positive Number - Positive Exponent
+
 query I
 select '1e2'::${type};
 ----
@@ -29,6 +31,7 @@ select '1.235e2'::${type};
 124
 
 # Positive Number - Negative Exponent
+
 query I
 select '1e-2'::${type};
 ----
@@ -40,13 +43,74 @@ select '123.456e-2'::${type};
 1
 
 query I
-select '15e-1'::${type};
+select '1584.92e-2'::${type};
 ----
-2
+16
 
 query I
-select '1214.235e2-2'::${type};
+select '1214.235e-2'::${type};
 ----
 12
+
+# Out of range
+
+statement error
+select '10e40'::${type};
+----
+Conversion Error
+
+endloop
+
+# Negative numbers (excludes unsigned)
+foreach type tinyint integer bigint
+
+# Negative Number - Positive Exponent
+
+query I
+select '-1e2'::${type};
+----
+-100
+
+query I
+select '-1.23456e2'::${type};
+----
+-123
+
+query I
+select '-0.158492e2'::${type};
+----
+-16
+
+query I
+select '-1.235e2'::${type};
+----
+-124
+
+# Negative Number - Negative Exponent
+
+query I
+select '-100e-2'::${type};
+----
+-1
+
+query I
+select '-50.23456e-2'::${type};
+----
+-1
+
+query I
+select '-1584.92e-2'::${type};
+----
+-16
+
+query I
+select '-1.235e-2'::${type};
+----
+0
+
+statement error
+select '-10e40'::${type};
+----
+Conversion Error
 
 endloop
