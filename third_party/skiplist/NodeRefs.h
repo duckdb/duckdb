@@ -105,6 +105,9 @@ public:
     // Returns an estimate of the memory usage of an instance
     size_t size_of() const;
 
+	// Resets to the construction state
+	void clear() { _swapLevel = 0; _nodes.clear(); }
+
 protected:
     /// Stack of NodeRef node references.
     std::vector<struct NodeRef<T, _Compare> > _nodes;

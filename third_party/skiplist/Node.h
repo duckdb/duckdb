@@ -54,7 +54,35 @@
 template <typename T, typename _Compare>
 class Node {
 public:
-    Node(const T &value, _Compare _cmp);
+	struct _Pool {
+		explicit _Pool(_Compare _cmp) : _compare(_cmp), cache(nullptr) {
+		}
+		~_Pool() {
+			delete cache;
+		}
+		Node *Allocate(const T &value) {
+			if (cache) {
+				Node *result = cache;
+				cache = nullptr;
+				result->Initialize(value);
+				return result;
+			}
+
+			return new Node(value, _compare, *this);
+		}
+
+		T Release(Node *pNode) {
+			T result = pNode->value();
+			std::swap(pNode, cache);
+			delete pNode;
+			return result;
+		}
+
+		_Compare _compare;
+		Node* cache;
+	};
+
+    Node(const T &value, _Compare _cmp, _Pool &pool);
     // Const methods
     //
     /// Returns the node value
@@ -100,11 +128,20 @@ public:
 protected:
     Node<T, _Compare> *_adjRemoveRefs(size_t level, Node<T, _Compare> *pNode);
 
+	void Initialize(const T &value) {
+		_value = value;
+		_nodeRefs.clear();
+		do {
+			_nodeRefs.push_back(this, _nodeRefs.height() ? 0 : 1);
+		} while (tossCoin());
+	}
+
 protected:
     T _value;
     SwappableNodeRefStack<T, _Compare> _nodeRefs;
     // Comparison function
     _Compare _compare;
+    _Pool &_pool;
 private:
     // Prevent cctor and operator=
     Node(const Node &that);
@@ -121,11 +158,9 @@ private:
  * @param _cmp The comparison function.
  */
 template <typename T, typename _Compare>
-Node<T, _Compare>::Node(const T &value, _Compare _cmp) : \
-    _value(value), _compare(_cmp) {
-    do {
-        _nodeRefs.push_back(this, _nodeRefs.height() ? 0 : 1);
-    } while (tossCoin());
+Node<T, _Compare>::Node(const T &value, _Compare _cmp, _Pool &pool) : \
+    _value(value), _compare(_cmp), _pool(pool) {
+    Initialize(value);
 }
 
 /**
@@ -300,7 +335,7 @@ Node<T, _Compare> *Node<T, _Compare>::insert(const T &value) {
     // Effectively: if (! pNode && value >= _value) {
     if (! pNode && !_compare(value, _value)) {
         // Insert new node here
-        pNode = new Node<T, _Compare>(value, _compare);
+        pNode = _pool.Allocate(value);
         level = 0;
     }
     assert(pNode); // Should never get here unless a NaN has slipped through

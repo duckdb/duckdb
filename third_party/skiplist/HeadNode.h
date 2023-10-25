@@ -78,7 +78,7 @@ public:
      *
      * @param cmp The comparison function for comparing Node values.
      */
-    HeadNode(_Compare cmp=_Compare()) : _count(0), _compare(cmp) {
+    HeadNode(_Compare cmp=_Compare()) : _count(0), _compare(cmp), _pool(cmp) {
 #ifdef INCLUDE_METHODS_THAT_USE_STREAMS
         _dot_file_subgraph = 0;
 #endif
@@ -151,6 +151,7 @@ protected:
     SwappableNodeRefStack<T, _Compare> _nodeRefs;
     /// Comparison function.
     _Compare _compare;
+    typename Node<T, _Compare>::_Pool _pool;
 #ifdef INCLUDE_METHODS_THAT_USE_STREAMS
     /// Used to count how many sub-graphs have been plotted
     mutable size_t _dot_file_subgraph;
@@ -393,7 +394,7 @@ void HeadNode<T, _Compare>::insert(const T &value) {
         }
     }
     if (! pNode) {
-        pNode = new Node<T, _Compare>(value, _compare);
+        pNode = _pool.Allocate(value);
         level = 0;
     }
     assert(pNode);
@@ -523,8 +524,7 @@ T HeadNode<T, _Compare>::remove(const T &value) {
     // Take swap level as some swaps will have been dealt with by the remove() above.
     _adjRemoveRefs(pNode->nodeRefs().swapLevel(), pNode);
     --_count;
-    T ret_val = pNode->value();
-    delete pNode;
+    T ret_val = _pool.Release(pNode);
 #ifdef SKIPLIST_THREAD_SUPPORT_TRACE
     std::cout << "HeadNode remove() thread: " << std::this_thread::get_id() << " DONE" << std::endl;
 #endif
