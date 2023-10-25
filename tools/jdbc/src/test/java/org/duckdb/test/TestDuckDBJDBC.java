@@ -82,6 +82,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toMap;
+import static org.duckdb.DuckDBDriver.JDBC_STREAM_RESULTS;
 
 public class TestDuckDBJDBC {
 
@@ -3729,6 +3730,20 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_stream_multiple_open_results() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(JDBC_STREAM_RESULTS, String.valueOf(true));
+
+        String QUERY = "SELECT * FROM range(100000)";
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:", props);
+             Statement stmt1 = conn.createStatement(); Statement stmt2 = conn.createStatement()) {
+
+            try (ResultSet rs1 = stmt1.executeQuery(QUERY); ResultSet ignored = stmt2.executeQuery(QUERY)) {
+                assertThrows(rs1::next, SQLException.class);
+            }
+        }
+    }
+
     public static void test_offset_limit() throws Exception {
         try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
              Statement s = connection.createStatement()) {
@@ -3751,12 +3766,27 @@ public class TestDuckDBJDBC {
         }
     }
 
+
     public static void test_UUID_binding() throws Exception {
         try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
              PreparedStatement statement = conn.prepareStatement("select '0b17ce61-375c-4ad8-97b3-349d96d35ab1'::UUID");
              ResultSet resultSet = statement.executeQuery()) {
             resultSet.next();
             assertEquals(UUID.fromString("0b17ce61-375c-4ad8-97b3-349d96d35ab1"), resultSet.getObject(1));
+        }
+    }
+
+    public static void test_result_streaming() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(JDBC_STREAM_RESULTS, String.valueOf(true));
+
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:", props);
+             PreparedStatement stmt1 = conn.prepareStatement("SELECT * FROM range(100000)");
+             ResultSet rs = stmt1.executeQuery()) {
+            while (rs.next()) {
+                rs.getInt(1);
+            }
+            assertFalse(rs.next()); // is exhausted
         }
     }
 

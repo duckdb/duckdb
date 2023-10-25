@@ -10,7 +10,8 @@ import java.util.logging.Logger;
 
 public class DuckDBDriver implements java.sql.Driver {
 
-    static final String DUCKDB_READONLY_PROPERTY = "duckdb.read_only";
+    public static final String DUCKDB_READONLY_PROPERTY = "duckdb.read_only";
+    public static final String JDBC_STREAM_RESULTS = "jdbc_stream_results";
 
     static {
         try {

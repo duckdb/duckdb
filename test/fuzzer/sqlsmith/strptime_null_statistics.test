@@ -1,0 +1,12 @@
+# name: test/fuzzer/sqlsmith/strptime_null_statistics.test
+# description: have you seen the fnords?
+# group: [sqlsmith]
+
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
+
+statement error
+SELECT (COLUMNS(list_filter(*, (c6 -> strptime(c6, TRY_CAST(c3 AS BIGINT))))) BETWEEN c3 AND 6509) 
+FROM duckdb_databases() AS t5(c1, c2, c3, c4)
+----
+Binder Error: Star expression

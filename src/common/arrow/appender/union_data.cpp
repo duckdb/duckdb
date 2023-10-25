@@ -24,7 +24,7 @@ void ArrowUnionData::Append(ArrowAppendData &append_data, Vector &input, idx_t f
 
 	duckdb::vector<Vector> child_vectors;
 	for (const auto &child : UnionType::CopyMemberTypes(input.GetType())) {
-		child_vectors.emplace_back(child.second);
+		child_vectors.emplace_back(child.second, size);
 	}
 
 	for (idx_t input_idx = from; input_idx < to; input_idx++) {
