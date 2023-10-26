@@ -66,23 +66,6 @@ void CatalogSet::PutEntry(EntryIndex index, unique_ptr<CatalogEntry> catalog_ent
 	entry->second.entry = std::move(catalog_entry);
 }
 
-static PhysicalDependencyList ConvertToPhysical(LogicalDependencyList &logical, CatalogTransaction &transaction,
-                                                Catalog &catalog) {
-	bool system_only = true;
-	for (auto &dep : logical.Set()) {
-		if (dep.catalog != SYSTEM_CATALOG) {
-			system_only = false;
-		}
-	}
-	if (!transaction.context || system_only) {
-		// This is an internal transaction, it does not have a client context
-		// we should not have any dependencies when creating internal entries
-		D_ASSERT(system_only);
-		return PhysicalDependencyList();
-	}
-	return logical.GetPhysical(*transaction.context, catalog);
-}
-
 bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
                              LogicalDependencyList &logical_dependencies) {
 	if (value->internal && !catalog.IsSystemCatalog() && name != DEFAULT_SCHEMA) {
@@ -104,7 +87,6 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 			throw InvalidInputException("Cannot create non-temporary entry \"%s\" in temporary catalog", name);
 		}
 	}
-	auto dependencies = ConvertToPhysical(logical_dependencies, transaction, catalog);
 
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
@@ -155,8 +137,10 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	value->timestamp = transaction.transaction_id;
 	value->set = this;
 
+	read_lock.unlock();
 	// now add the dependency set of this object to the dependency manager
-	catalog.GetDependencyManager().AddObject(transaction, *value, dependencies);
+	catalog.GetDependencyManager().AddObject(transaction, *value, logical_dependencies);
+	read_lock.lock();
 
 	auto value_ptr = value.get();
 	EntryIndex entry_index(*this, index);

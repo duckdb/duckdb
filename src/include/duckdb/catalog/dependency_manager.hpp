@@ -20,7 +20,7 @@
 namespace duckdb {
 class DuckCatalog;
 class ClientContext;
-class PhysicalDependencyList;
+class LogicalDependencyList;
 
 struct ExportDependencies {
 public:
@@ -79,7 +79,7 @@ private:
 	catalog_entry_map_t<catalog_entry_set_t> dependencies_map;
 
 private:
-	void AddObject(CatalogTransaction transaction, CatalogEntry &object, PhysicalDependencyList &dependencies);
+	void AddObject(CatalogTransaction transaction, CatalogEntry &object, LogicalDependencyList &logical_dependencies);
 	void DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
 	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
 	void EraseObjectInternal(CatalogEntry &object);
