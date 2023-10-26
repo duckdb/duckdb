@@ -45,6 +45,9 @@ public:
 	bool HasDependencyOn(CatalogEntry &entry);
 	bool IsDependencyOf(CatalogEntry &entry);
 
+public:
+	const string &Name() const;
+
 private:
 	string name;
 	CatalogSet dependencies;

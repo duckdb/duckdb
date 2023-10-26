@@ -20,6 +20,10 @@ CatalogSet &DependencySetCatalogEntry::Dependents() {
 DependencySetCatalogEntry::~DependencySetCatalogEntry() {
 }
 
+const string &DependencySetCatalogEntry::Name() const {
+	return name;
+}
+
 // From Dependency Set
 void DependencySetCatalogEntry::AddDependencies(CatalogTransaction transaction, dependency_set_t &to_add) {
 	DependencyList empty_dependencies;
