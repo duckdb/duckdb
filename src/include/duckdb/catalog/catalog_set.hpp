@@ -158,6 +158,7 @@ private:
 	void DropEntryInternal(CatalogTransaction transaction, EntryIndex entry_index, CatalogEntry &entry, bool cascade);
 	optional_ptr<CatalogEntry> CreateEntryInternal(CatalogTransaction transaction, unique_ptr<CatalogEntry> entry);
 	optional_ptr<MappingValue> GetMapping(CatalogTransaction transaction, const string &name, bool get_latest = false);
+	optional_ptr<MappingValue> GetLatestMapping(const string &name);
 	void PutMapping(CatalogTransaction transaction, const string &name, EntryIndex entry_index);
 	void DeleteMapping(CatalogTransaction transaction, const string &name);
 	void DropEntryDependencies(CatalogTransaction transaction, EntryIndex &entry_index, CatalogEntry &entry,

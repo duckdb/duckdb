@@ -52,6 +52,7 @@ private:
 	bool IsDependencyEntry(CatalogEntry &entry) const;
 	DependencySetCatalogEntry &GetOrCreateDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
 	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
+	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogEntry &entry);
 	void DropObjectInternalNew(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
 	void AlterObjectInternalNew(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
 

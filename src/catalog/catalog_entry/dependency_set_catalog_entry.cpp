@@ -70,7 +70,28 @@ void DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction, Dep
 	AddDependent(transaction, to_add.entry, to_add.dependency_type);
 }
 
-bool DependencySetCatalogEntry::HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry) {
+bool DependencySetCatalogEntry::IsDependencyOf(CatalogEntry &entry) {
+	bool is_dependency_of = false;
+	dependents.Scan([&](CatalogEntry &dependent) {
+		auto &dependent_entry = dependent.Cast<DependencyCatalogEntry>();
+		auto schema = entry.type == CatalogType::SCHEMA_ENTRY ? entry.name : entry.ParentSchema().name;
+		if (dependent_entry.schema != schema) {
+			return;
+		}
+		if (dependent_entry.entry_type != entry.type) {
+			return;
+		}
+		if (dependent_entry.name != entry.name) {
+			// FIXME: this could change I think??
+			return;
+		}
+		// 'entry' is a dependency of this object
+		is_dependency_of = true;
+	});
+	return is_dependency_of;
+}
+
+bool DependencySetCatalogEntry::HasDependencyOn(CatalogEntry &entry) {
 	bool has_dependency_on = false;
 	dependencies.Scan([&](CatalogEntry &dependency) {
 		auto &dependency_entry = dependency.Cast<DependencyCatalogEntry>();

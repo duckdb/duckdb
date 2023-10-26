@@ -368,7 +368,7 @@ bool CatalogSet::HasConflict(CatalogTransaction transaction, transaction_t times
 	       (timestamp < TRANSACTION_ID_START && timestamp > transaction.start_time);
 }
 
-optional_ptr<MappingValue> CatalogSet::GetMapping(CatalogTransaction transaction, const string &name, bool get_latest) {
+optional_ptr<MappingValue> CatalogSet::GetLatestMapping(const string &name) {
 	optional_ptr<MappingValue> mapping_value;
 	auto entry = mapping.find(name);
 	if (entry != mapping.end()) {
@@ -376,9 +376,15 @@ optional_ptr<MappingValue> CatalogSet::GetMapping(CatalogTransaction transaction
 	} else {
 		return nullptr;
 	}
+	return mapping_value;
+}
+
+optional_ptr<MappingValue> CatalogSet::GetMapping(CatalogTransaction transaction, const string &name, bool get_latest) {
+	auto mapping_value = GetLatestMapping(name);
 	if (get_latest) {
 		return mapping_value;
 	}
+	// Find the mapping value that is up-to-date with the current transaction
 	while (mapping_value->child) {
 		if (UseTimestamp(transaction, mapping_value->timestamp)) {
 			break;

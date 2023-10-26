@@ -42,7 +42,8 @@ public:
 	void AddDependents(CatalogTransaction transaction, DependencyList &dependents);
 	void AddDependents(CatalogTransaction transaction, dependency_set_t &dependents);
 
-	bool HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry);
+	bool HasDependencyOn(CatalogEntry &entry);
+	bool IsDependencyOf(CatalogEntry &entry);
 
 private:
 	string name;

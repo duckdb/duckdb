@@ -43,6 +43,23 @@ static string GetMangledName(CatalogEntry &entry) {
 	return StringUtil::Format("%s\0%s\0%s", CatalogTypeToString(entry.type), schema, entry.name);
 }
 
+optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(CatalogEntry &object) {
+	auto name = GetMangledName(object);
+	auto mapping = connections.GetLatestMapping(name);
+	if (!mapping) {
+		return nullptr;
+	}
+	auto it = connections.entries.find(mapping->index.GetIndex());
+	if (it == connections.entries.end()) {
+		return nullptr;
+	}
+	auto &entry_value = it->second;
+	auto &dependency_set_entry = entry_value.Entry();
+
+	D_ASSERT(dependency_set_entry.type == CatalogType::DEPENDENCY_SET);
+	return dynamic_cast<DependencySetCatalogEntry *>(&dependency_set_entry);
+}
+
 optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(CatalogTransaction transaction,
                                                                             CatalogEntry &object) {
 	auto name = GetMangledName(object);
@@ -191,7 +208,7 @@ void DependencyManager::DropObjectInternalNew(CatalogTransaction transaction, Ca
 			return;
 		}
 		auto &other_connections = *other_connections_p;
-		D_ASSERT(other_connections.HasDependencyOn(transaction, object));
+		D_ASSERT(other_connections.HasDependencyOn(object));
 
 		if (!CascadeDrop(cascade, other_entry.dependency_type)) {
 			// no cascade and there are objects that depend on this object: throw error
@@ -277,7 +294,7 @@ void DependencyManager::AlterObjectInternalNew(CatalogTransaction transaction, C
 			// Already deleted
 			return;
 		}
-		D_ASSERT(other_connections_p->HasDependencyOn(transaction, old_obj));
+		D_ASSERT(other_connections_p->HasDependencyOn(old_obj));
 
 		// It makes no sense to have a schema depend on anything
 		D_ASSERT(other_entry.entry_type != CatalogType::SCHEMA_ENTRY);
@@ -416,25 +433,37 @@ void DependencyManager::EraseObject(CatalogEntry &object) {
 }
 
 void DependencyManager::EraseObjectInternal(CatalogEntry &object) {
-	D_ASSERT(!IsDependencyEntry(object));
+	// NOTE: I think this is no longer a necessary step?
 
-	if (dependents_map.find(object) == dependents_map.end()) {
-		// dependencies already removed
-		return;
-	}
-	D_ASSERT(dependents_map.find(object) != dependents_map.end());
-	D_ASSERT(dependencies_map.find(object) != dependencies_map.end());
-	// now for each of the dependencies, erase the entries from the dependents_map
-	for (auto &dependency : dependencies_map[object]) {
-		auto entry = dependents_map.find(dependency);
-		if (entry != dependents_map.end()) {
-			D_ASSERT(entry->second.find(object) != entry->second.end());
-			entry->second.erase(object);
-		}
-	}
-	// erase the dependents and dependencies for this object
-	dependents_map.erase(object);
-	dependencies_map.erase(object);
+	//D_ASSERT(!IsDependencyEntry(object));
+
+	//auto connections_p = GetDependencySet(object);
+	//if (!connections_p) {
+	//	// dependencies already removed
+	//	return;
+	//}
+	//auto &connections = *connections_p;
+
+	//auto &dependencies = connections.Dependencies();
+	//dependencies.Scan([&](CatalogEntry &other) {
+	//	auto other_connections_p = GetDependencySet(other);
+	//	if (!other_connections_p) {
+	//		return;
+	//	}
+	//	auto &other_connections = *other_connections_p;
+	//	other_connections.IsDependencyOf(object);
+	//});
+	//// now for each of the dependencies, erase the entries from the dependents_map
+	//for (auto &dependency : dependencies_map[object]) {
+	//	auto entry = dependents_map.find(dependency);
+	//	if (entry != dependents_map.end()) {
+	//		D_ASSERT(entry->second.find(object) != entry->second.end());
+	//		entry->second.erase(object);
+	//	}
+	//}
+	//// erase the dependents and dependencies for this object
+	//dependents_map.erase(object);
+	//dependencies_map.erase(object);
 }
 
 void DependencyManager::Scan(const std::function<void(CatalogEntry &, CatalogEntry &, DependencyType)> &callback) {
