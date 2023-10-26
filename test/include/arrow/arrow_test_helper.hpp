@@ -22,6 +22,14 @@
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/main/extension_helper.hpp"
 
+class ArrowStreamTestFactory {
+public:
+	static duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> CreateStream(uintptr_t this_ptr,
+	                                                                        duckdb::ArrowStreamParameters &parameters);
+
+	static void GetSchema(ArrowArrayStream * arrow_array_stream, ArrowSchema *schema);
+};
+
 namespace duckdb {
 class ArrowTestFactory {
 public:
@@ -60,14 +68,6 @@ public:
 	static void GetSchema(uintptr_t factory_ptr, duckdb::ArrowSchemaWrapper &schema);
 
 	void ToArrowSchema(struct ArrowSchema *out);
-};
-
-class ArrowStreamTestFactory {
-public:
-	static duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> CreateStream(uintptr_t this_ptr,
-	                                                                        ArrowStreamParameters &parameters);
-
-	static void GetSchema(ArrowArrayStream * arrow_array_stream, ArrowSchema *schema);
 };
 
 class ArrowTestHelper {
