@@ -17,6 +17,7 @@ struct AlterInfo;
 class ClientContext;
 
 struct EntryIndex {
+public:
 	EntryIndex() : catalog(nullptr), index(DConstants::INVALID_INDEX) {
 	}
 	EntryIndex(CatalogSet &catalog, catalog_entry_t index) : catalog(&catalog), index(index) {
@@ -85,6 +86,9 @@ public:
 		} else {
 			return EntryIndex();
 		}
+	}
+	bool IsValid() const {
+		return catalog != nullptr;
 	}
 
 private:

@@ -14,7 +14,7 @@
 namespace duckdb {
 class CatalogEntry;
 
-enum class DependencyType {
+enum class DependencyType : uint8_t {
 	DEPENDENCY_REGULAR = 0,
 	DEPENDENCY_AUTOMATIC = 1,
 	DEPENDENCY_OWNS = 2,

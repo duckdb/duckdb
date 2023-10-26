@@ -98,6 +98,10 @@ enum class DebugInitialize : uint8_t;
 
 enum class DefaultOrderByNullType : uint8_t;
 
+enum class DependencyConnectionType : uint8_t;
+
+enum class DependencyType : uint8_t;
+
 enum class DistinctType : uint8_t;
 
 enum class ErrorType : uint16_t;
@@ -389,6 +393,12 @@ const char* EnumUtil::ToChars<DebugInitialize>(DebugInitialize value);
 
 template<>
 const char* EnumUtil::ToChars<DefaultOrderByNullType>(DefaultOrderByNullType value);
+
+template<>
+const char* EnumUtil::ToChars<DependencyConnectionType>(DependencyConnectionType value);
+
+template<>
+const char* EnumUtil::ToChars<DependencyType>(DependencyType value);
 
 template<>
 const char* EnumUtil::ToChars<DistinctType>(DistinctType value);
@@ -777,6 +787,12 @@ DebugInitialize EnumUtil::FromString<DebugInitialize>(const char *value);
 
 template<>
 DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *value);
+
+template<>
+DependencyConnectionType EnumUtil::FromString<DependencyConnectionType>(const char *value);
+
+template<>
+DependencyType EnumUtil::FromString<DependencyType>(const char *value);
 
 template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value);

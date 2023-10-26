@@ -29,10 +29,13 @@ static string GetMangledNameFromDependency(CatalogEntry &entry) {
 	D_ASSERT(entry.type == CatalogType::DEPENDENCY_ENTRY);
 	auto &dependency_entry = entry.Cast<DependencyCatalogEntry>();
 
-	auto &type = dependency_entry.type;
+	auto &type = dependency_entry.entry_type;
 	auto &name = dependency_entry.name;
 	auto &schema = dependency_entry.schema;
-	return StringUtil::Format("%s\0%s\0%s", CatalogTypeToString(type), schema, name);
+
+	static constexpr const char *mangle_format = "%s\0%s\0%s";
+	static constexpr const idx_t mangle_format_size = 8;
+	return StringUtil::Format(std::string(mangle_format, mangle_format_size), CatalogTypeToString(type), schema, name);
 }
 
 static string GetMangledName(CatalogEntry &entry) {
@@ -169,7 +172,7 @@ void GetLookupProperties(CatalogEntry &entry, string &schema, string &name, Cata
 
 		schema = dependency_entry.schema;
 		name = dependency_entry.name;
-		type = dependency_entry.type;
+		type = dependency_entry.entry_type;
 	} else if (entry.type == CatalogType::DEPENDENCY_SET) {
 		auto &dependency_set = entry.Cast<DependencySetCatalogEntry>();
 
@@ -189,17 +192,21 @@ optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction tra
 	GetLookupProperties(dependency, schema, name, type);
 
 	// Lookup the schema
-	auto schema_entry_p = catalog.GetSchema(transaction, schema, OnEntryNotFound::THROW_EXCEPTION);
+	EntryIndex index;
+	// Use 'GetEntryInternal' because we don't care if the schema is deleted
+	catalog.schemas->GetEntryInternal(transaction, schema, &index);
+	D_ASSERT(index.IsValid());
+	auto &schema_entry = index.GetEntry();
 	if (type == CatalogType::SCHEMA_ENTRY) {
 		// This is a schema entry, perform the callback only providing the schema
-		auto entry = dynamic_cast<CatalogEntry *>(schema_entry_p.get());
+		auto entry = dynamic_cast<CatalogEntry *>(&schema_entry);
 		callback(entry, nullptr, nullptr);
 		return nullptr;
 	}
-	auto &schema_entry = schema_entry_p->Cast<DuckSchemaEntry>();
+	auto &duck_schema_entry = schema_entry.Cast<DuckSchemaEntry>();
 
 	// Lookup the catalog set
-	auto &catalog_set = schema_entry.GetCatalogSet(type);
+	auto &catalog_set = duck_schema_entry.GetCatalogSet(type);
 
 	// Get the mapping from name -> index
 	auto mapping_value = catalog_set.GetMapping(transaction, name, /* get_latest = */ true);
@@ -209,7 +216,9 @@ optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction tra
 	}
 	// Use the index to find the actual entry
 	auto entry = catalog_set.GetEntryInternal(transaction, mapping_value->index);
-	callback(entry, &catalog_set, mapping_value);
+	if (callback) {
+		callback(entry, &catalog_set, mapping_value);
+	}
 	return entry;
 }
 
@@ -221,6 +230,7 @@ void DependencyManager::DropObjectInternalNew(CatalogTransaction transaction, Ca
 	}
 	auto &object_connections = *object_connections_p;
 
+	// Check if there are any entries that block the DROP because they still depend on the object
 	auto &dependents = object_connections.Dependents();
 	dependents.Scan([&](CatalogEntry &other) {
 		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
@@ -231,23 +241,26 @@ void DependencyManager::DropObjectInternalNew(CatalogTransaction transaction, Ca
 			return;
 		}
 		auto &other_connections = *other_connections_p;
-		D_ASSERT(other_connections.HasDependencyOn(object));
-
-		if (!CascadeDrop(cascade, other_entry.dependency_type)) {
-			// no cascade and there are objects that depend on this object: throw error
-			throw DependencyException("Cannot drop entry \"%s\" because there are entries that "
-			                          "depend on it. Use DROP...CASCADE to drop all dependents.",
-			                          object.name);
-		}
-
-		// It makes no sense to have a schema depend on anything
-		D_ASSERT(other_entry.entry_type != CatalogType::SCHEMA_ENTRY);
+#ifdef DEBUG
+		const auto has_dependency_on = other_connections.HasDependencyOn(object, other_entry.dependency_type);
+		D_ASSERT(has_dependency_on);
+#endif
 
 		LookupEntry(
 		    transaction, other_entry,
 		    [&](optional_ptr<CatalogEntry> entry, optional_ptr<CatalogSet> set, optional_ptr<MappingValue> mapping) {
 			    if (!entry) {
 				    return;
+			    }
+
+			    // It makes no sense to have a schema depend on anything
+			    D_ASSERT(other_entry.entry_type != CatalogType::SCHEMA_ENTRY);
+
+			    if (!CascadeDrop(cascade, other_entry.dependency_type)) {
+				    // no cascade and there are objects that depend on this object: throw error
+				    throw DependencyException("Cannot drop entry \"%s\" because there are entries that "
+				                              "depend on it. Use DROP...CASCADE to drop all dependents.",
+				                              object.name);
 			    }
 			    set->DropEntryInternal(transaction, mapping->index.Copy(), *entry, cascade);
 		    });
@@ -283,7 +296,7 @@ void DependencyManager::AlterObjectInternalNew(CatalogTransaction transaction, C
 			// Already deleted
 			return;
 		}
-		D_ASSERT(other_connections_p->HasDependencyOn(old_obj));
+		D_ASSERT(other_connections_p->HasDependencyOn(old_obj, other_entry.dependency_type));
 
 		// It makes no sense to have a schema depend on anything
 		D_ASSERT(other_entry.entry_type != CatalogType::SCHEMA_ENTRY);
@@ -441,9 +454,13 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 		}
 	});
 	entry_connections.AddDependent(transaction, owner, DependencyType::DEPENDENCY_OWNED_BY);
-	owner_connections.AddDependent(transaction, entry, DependencyType::DEPENDENCY_OWNS);
 	// We use an automatic dependency because if the Owner gets deleted, then the owned objects are also deleted
 	owner_connections.AddDependency(transaction, entry);
+
+	owner_connections.AddDependent(transaction, entry, DependencyType::DEPENDENCY_OWNS);
+	// We explicitly don't complete this link the other way, so we don't have recursive dependencies
+	// If we would 'entry_connection.AddDependency(owner)' then we would try to delete 'owner'
+	// when 'entry' gets deleted, but this delete can only be initiated by 'owner'
 }
 
 } // namespace duckdb

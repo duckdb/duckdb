@@ -2,6 +2,7 @@
 #include "duckdb/catalog/catalog_entry/dependency_catalog_entry.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
@@ -95,7 +96,12 @@ bool DependencySetCatalogEntry::IsDependencyOf(CatalogEntry &entry) {
 	return is_dependency_of;
 }
 
-bool DependencySetCatalogEntry::HasDependencyOn(CatalogEntry &entry) {
+bool DependencySetCatalogEntry::HasDependencyOn(CatalogEntry &entry, DependencyType dependent_type) {
+	if (dependent_type == DependencyType::DEPENDENCY_OWNS) {
+		// This link is deliberately left uncompleted
+		return true;
+	}
+
 	bool has_dependency_on = false;
 	dependencies.Scan([&](CatalogEntry &dependency) {
 		auto &dependency_entry = dependency.Cast<DependencyCatalogEntry>();
@@ -114,6 +120,27 @@ bool DependencySetCatalogEntry::HasDependencyOn(CatalogEntry &entry) {
 		has_dependency_on = true;
 	});
 	return has_dependency_on;
+}
+
+void DependencySetCatalogEntry::PrintDependencies() {
+	dependencies.Scan([&](CatalogEntry &dependency) {
+		auto &dep = dependency.Cast<DependencyCatalogEntry>();
+		auto &name = dep.name;
+		auto &schema = dep.schema;
+		auto type = dep.entry_type;
+		Printer::Print(StringUtil::Format("Schema: %s | Name: %s | Type: %s | DependencyType: %s", schema, name,
+		                                  CatalogTypeToString(type), EnumUtil::ToString(dep.dependency_type)));
+	});
+}
+void DependencySetCatalogEntry::PrintDependents() {
+	dependents.Scan([&](CatalogEntry &dependent) {
+		auto &dep = dependent.Cast<DependencyCatalogEntry>();
+		auto &name = dep.name;
+		auto &schema = dep.schema;
+		auto type = dep.entry_type;
+		Printer::Print(StringUtil::Format("Schema: %s | Name: %s | Type: %s | DependencyType: %s", schema, name,
+		                                  CatalogTypeToString(type), EnumUtil::ToString(dep.dependency_type)));
+	});
 }
 
 } // namespace duckdb

@@ -42,8 +42,11 @@ public:
 	void AddDependents(CatalogTransaction transaction, DependencyList &dependents);
 	void AddDependents(CatalogTransaction transaction, dependency_set_t &dependents);
 
-	bool HasDependencyOn(CatalogEntry &entry);
+	bool HasDependencyOn(CatalogEntry &entry, DependencyType type);
 	bool IsDependencyOf(CatalogEntry &entry);
+
+	void PrintDependencies();
+	void PrintDependents();
 
 public:
 	const string &Name() const;

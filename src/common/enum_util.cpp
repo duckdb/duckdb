@@ -10,7 +10,9 @@
 
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/catalog/catalog_entry/dependency_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
+#include "duckdb/catalog/dependency.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/aggregate_handling.hpp"
@@ -775,6 +777,10 @@ const char* EnumUtil::ToChars<CatalogType>(CatalogType value) {
 		return "UPDATED_ENTRY";
 	case CatalogType::DELETED_ENTRY:
 		return "DELETED_ENTRY";
+	case CatalogType::DEPENDENCY_SET:
+		return "DEPENDENCY_SET";
+	case CatalogType::DEPENDENCY_ENTRY:
+		return "DEPENDENCY_ENTRY";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -838,6 +844,12 @@ CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "DELETED_ENTRY")) {
 		return CatalogType::DELETED_ENTRY;
+	}
+	if (StringUtil::Equals(value, "DEPENDENCY_SET")) {
+		return CatalogType::DEPENDENCY_SET;
+	}
+	if (StringUtil::Equals(value, "DEPENDENCY_ENTRY")) {
+		return CatalogType::DEPENDENCY_ENTRY;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -1372,6 +1384,62 @@ DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *
 	}
 	if (StringUtil::Equals(value, "NULLS_LAST_ON_ASC_FIRST_ON_DESC")) {
 		return DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<DependencyConnectionType>(DependencyConnectionType value) {
+	switch(value) {
+	case DependencyConnectionType::DEPENDENCY:
+		return "DEPENDENCY";
+	case DependencyConnectionType::DEPENDENT:
+		return "DEPENDENT";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+DependencyConnectionType EnumUtil::FromString<DependencyConnectionType>(const char *value) {
+	if (StringUtil::Equals(value, "DEPENDENCY")) {
+		return DependencyConnectionType::DEPENDENCY;
+	}
+	if (StringUtil::Equals(value, "DEPENDENT")) {
+		return DependencyConnectionType::DEPENDENT;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<DependencyType>(DependencyType value) {
+	switch(value) {
+	case DependencyType::DEPENDENCY_REGULAR:
+		return "DEPENDENCY_REGULAR";
+	case DependencyType::DEPENDENCY_AUTOMATIC:
+		return "DEPENDENCY_AUTOMATIC";
+	case DependencyType::DEPENDENCY_OWNS:
+		return "DEPENDENCY_OWNS";
+	case DependencyType::DEPENDENCY_OWNED_BY:
+		return "DEPENDENCY_OWNED_BY";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+DependencyType EnumUtil::FromString<DependencyType>(const char *value) {
+	if (StringUtil::Equals(value, "DEPENDENCY_REGULAR")) {
+		return DependencyType::DEPENDENCY_REGULAR;
+	}
+	if (StringUtil::Equals(value, "DEPENDENCY_AUTOMATIC")) {
+		return DependencyType::DEPENDENCY_AUTOMATIC;
+	}
+	if (StringUtil::Equals(value, "DEPENDENCY_OWNS")) {
+		return DependencyType::DEPENDENCY_OWNS;
+	}
+	if (StringUtil::Equals(value, "DEPENDENCY_OWNED_BY")) {
+		return DependencyType::DEPENDENCY_OWNED_BY;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
