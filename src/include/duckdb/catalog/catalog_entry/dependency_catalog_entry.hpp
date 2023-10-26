@@ -15,6 +15,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/catalog/dependency.hpp"
 #include <memory>
 
 namespace duckdb {
@@ -23,14 +24,13 @@ namespace duckdb {
 //! identifiers listed here
 class DependencyCatalogEntry : public InCatalogEntry {
 public:
-	DependencyCatalogEntry(Catalog &catalog, const string &name);
+	DependencyCatalogEntry(Catalog &catalog, CatalogEntry &entry, DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	~DependencyCatalogEntry() override;
 
-private:
 	string name;
 	string schema;
-	CatalogType type;
-	// DependencyType dependency_type;
+	CatalogType entry_type;
+	DependencyType dependency_type;
 };
 
 } // namespace duckdb

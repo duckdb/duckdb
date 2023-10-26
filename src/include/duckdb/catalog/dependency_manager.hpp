@@ -49,14 +49,15 @@ private:
 
 private:
 	bool IsDependencyEntry(CatalogEntry &entry) const;
-	DependencySetCatalogEntry &GetDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
-	CatalogSet &GetDependenciesOfObject(CatalogTransaction, CatalogEntry &object);
-	CatalogSet &GetEntriesThatDependOnObject(CatalogTransaction, CatalogEntry &object);
+	DependencySetCatalogEntry &GetOrCreateDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
+	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
+	void DropObjectInternalNew(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
 
 private:
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, DependencyList &dependencies);
 	void DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
 	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
 	void EraseObjectInternal(CatalogEntry &object);
+	void DropObjectInternalOld(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
 };
 } // namespace duckdb

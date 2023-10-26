@@ -10,6 +10,7 @@
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/catalog/catalog_entry/dependency_set_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/dependency_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -23,12 +24,35 @@ static string GetSchema(CatalogEntry &entry) {
 	return entry.ParentSchema().name;
 }
 
+static string GetMangledNameFromDependency(CatalogEntry &entry) {
+	D_ASSERT(entry.type == CatalogType::DEPENDENCY_ENTRY);
+	auto &dependency_entry = entry.Cast<DependencyCatalogEntry>();
+
+	auto &type = dependency_entry.type;
+	auto &name = dependency_entry.name;
+	auto &schema = dependency_entry.schema;
+	return StringUtil::Format("%s\0%s\0%s", type, schema, name);
+}
+
 static string GetMangledName(CatalogEntry &entry) {
+	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
+		return GetMangledNameFromDependency(entry);
+	}
 	auto schema = GetSchema(entry);
 	return StringUtil::Format("%s\0%s\0%s", CatalogTypeToString(entry.type), schema, entry.name);
 }
 
-DependencySetCatalogEntry &DependencyManager::GetDependencySet(CatalogTransaction transaction, CatalogEntry &object) {
+optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(CatalogTransaction transaction, CatalogEntry &object) {
+	auto name = GetMangledName(object);
+	auto connection_p = connections.GetEntry(transaction, name);
+	if (!connection_p) {
+		return nullptr;
+	}
+	D_ASSERT(connection_p->type == CatalogType::DEPENDENCY_SET);
+	return dynamic_cast<DependencySetCatalogEntry *>(connection_p.get());
+}
+
+DependencySetCatalogEntry &DependencyManager::GetOrCreateDependencySet(CatalogTransaction transaction, CatalogEntry &object) {
 	auto name = GetMangledName(object);
 	auto connection_p = connections.GetEntry(transaction, name);
 	if (!connection_p) {
@@ -42,11 +66,6 @@ DependencySetCatalogEntry &DependencyManager::GetDependencySet(CatalogTransactio
 	}
 	D_ASSERT(connection_p->type == CatalogType::DEPENDENCY_SET);
 	return connection_p->Cast<DependencySetCatalogEntry>();
-}
-
-CatalogSet &DependencyManager::GetDependenciesOfObject(CatalogTransaction transaction, CatalogEntry &object) {
-	auto &set = GetDependencySet(transaction, object);
-	return set.
 }
 
 bool DependencyManager::IsDependencyEntry(CatalogEntry &entry) const {
@@ -76,30 +95,82 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 			throw InternalException("Dependency has already been deleted?");
 		}
 	}
-	auto &mappings = GetDependencyMappings(transaction, object);
 
 	// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
 	auto dependency_type = object.type == CatalogType::INDEX_ENTRY ? DependencyType::DEPENDENCY_AUTOMATIC
 	                                                               : DependencyType::DEPENDENCY_REGULAR;
 	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies.set) {
+		// NEW
+		auto &dependency_connections = GetOrCreateDependencySet(transaction, dependency);
+		dependency_connections.AddDependent(transaction, object, dependency_type);
+
+		// OLD
 		auto &set = dependents_map[dependency];
 		set.insert(Dependency(object, dependency_type));
 	}
 	// create the dependents map for this object: it starts out empty
+
+	// NEW
+	auto &object_connections = GetOrCreateDependencySet(transaction, object);
+	object_connections.AddDependencies(transaction, dependencies);
+
+	// OLD
 	dependents_map[object] = dependency_set_t();
 	dependencies_map[object] = dependencies.set;
 }
 
-void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade) {
-	if (IsDependencyEntry(object)) {
-		// Don't do anything for this
+static bool CascadeDrop(bool cascade, DependencyType dependency_type) {
+	if (cascade) {
+		return true;
+	}
+	if (dependency_type == DependencyType::DEPENDENCY_AUTOMATIC) {
+		// These dependencies are automatically dropped implicitly
+		return true;
+	}
+	if (dependency_type == DependencyType::DEPENDENCY_OWNS) {
+		// The object has explicit ownership over the dependency
+		return true;
+	}
+	return false;
+}
+
+void DependencyManager::DropObjectInternalNew(CatalogTransaction transaction, CatalogEntry &object, bool cascade) {
+	// first check the objects that depend on this object
+	auto object_connections_p = GetDependencySet(transaction, object);
+	if (!object_connections_p) {
 		return;
 	}
+	auto &object_connections = *object_connections_p;
+
+	auto &dependents = object_connections.Dependents();
+	dependents.Scan([&](CatalogEntry &other) {
+		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
+		auto &other_entry = other.Cast<DependencyCatalogEntry>();
+		auto other_connections_p = GetDependencySet(transaction, other);
+		if (!other_connections_p) {
+			// Already deleted
+			return;
+		}
+		auto &other_connections = *other_connections_p;
+		D_ASSERT(other_connections.HasDependencyOn(transaction, object));
+		if (CascadeDrop(cascade, other_entry.dependency_type)) {
+			catalog_set.DropEntryInternal(transaction, mapping_value->index.Copy(), *dependency_entry, cascade)
+		} else {
+			// no cascade and there are objects that depend on this object: throw error
+			throw DependencyException("Cannot drop entry \"%s\" because there are entries that "
+			                          "depend on it. Use DROP...CASCADE to drop all dependents.",
+			                          object.name);
+		}
+	});
+}
+
+void DependencyManager::DropObjectInternalOld(CatalogTransaction transaction, CatalogEntry &object, bool cascade) {
 	D_ASSERT(dependents_map.find(object) != dependents_map.end());
 
 	// first check the objects that depend on this object
 	auto &dependent_objects = dependents_map[object];
+
 	for (auto &dep : dependent_objects) {
 		// look up the entry in the catalog set
 		auto &entry = dep.entry.get();
@@ -125,6 +196,15 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 			                          object.name);
 		}
 	}
+}
+
+void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade) {
+	if (IsDependencyEntry(object)) {
+		// Don't do anything for this
+		return;
+	}
+	DropObjectInternalNew(transaction, object, cascade);
+	DropObjectInternalOld(transaction, object, cascade);
 }
 
 void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj) {
