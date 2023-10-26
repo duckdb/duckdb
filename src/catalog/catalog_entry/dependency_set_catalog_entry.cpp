@@ -7,7 +7,8 @@
 namespace duckdb {
 
 DependencySetCatalogEntry::DependencySetCatalogEntry(Catalog &catalog, const string &name)
-    : InCatalogEntry(CatalogType::DEPENDENCY_SET, catalog, name), dependencies(catalog), dependents(catalog) {
+    : InCatalogEntry(CatalogType::DEPENDENCY_SET, catalog, name), name(name), dependencies(catalog),
+      dependents(catalog) {
 }
 
 CatalogSet &DependencySetCatalogEntry::Dependencies() {

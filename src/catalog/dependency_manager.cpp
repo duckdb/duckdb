@@ -159,11 +159,11 @@ static bool CascadeDrop(bool cascade, DependencyType dependency_type) {
 }
 
 void UnmangleName(const string &mangled, string &schema, string &name, CatalogType &type) {
-	auto parts = StringUtil::Split(mangled, "\0");
+	auto parts = StringUtil::Split(mangled, std::string("\0", 1));
 	D_ASSERT(parts.size() == 3);
-	schema = std::move(parts[0]);
-	name = std::move(parts[1]);
-	type = CatalogTypeFromString(parts[2]);
+	type = CatalogTypeFromString(parts[0]);
+	schema = std::move(parts[1]);
+	name = std::move(parts[2]);
 }
 
 void GetLookupProperties(CatalogEntry &entry, string &schema, string &name, CatalogType &type) {
@@ -200,8 +200,10 @@ optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction tra
 	if (type == CatalogType::SCHEMA_ENTRY) {
 		// This is a schema entry, perform the callback only providing the schema
 		auto entry = dynamic_cast<CatalogEntry *>(&schema_entry);
-		callback(entry, nullptr, nullptr);
-		return nullptr;
+		if (callback) {
+			callback(entry, nullptr, nullptr);
+		}
+		return entry;
 	}
 	auto &duck_schema_entry = schema_entry.Cast<DuckSchemaEntry>();
 
@@ -211,7 +213,9 @@ optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction tra
 	// Get the mapping from name -> index
 	auto mapping_value = catalog_set.GetMapping(transaction, name, /* get_latest = */ true);
 	if (!mapping_value) {
-		callback(nullptr, &catalog_set, nullptr);
+		if (callback) {
+			callback(nullptr, &catalog_set, nullptr);
+		}
 		return nullptr;
 	}
 	// Use the index to find the actual entry
