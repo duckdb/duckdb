@@ -23,7 +23,7 @@ import re
 
 def exec(cmd):
     print(cmd)
-    res = subprocess.run(cmd.split(' '), capture_output=True)
+    res = subprocess.run(cmd.split(' '), capture_output=True, text=True)
     if res.returncode == 0:
         return res.stdout
     raise ValueError(res.stdout + res.stderr)
@@ -41,7 +41,7 @@ is_release = True
 if release_tag == 'main':
     # for SNAPSHOT builds we increment the minor version and set patch level to zero.
     # seemed the most sensible
-    last_tag = exec('git tag --sort=-committerdate').decode('utf8').split('\n')[0]
+    last_tag = exec('git tag --sort=-committerdate').split('\n')[0]
     re_result = version_regex.search(last_tag)
     if re_result is None:
         raise ValueError("Could not parse last tag %s" % last_tag)
@@ -202,7 +202,7 @@ print("Close/Release steps")
 os.environ["MAVEN_OPTS"] = '--add-opens=java.base/java.util=ALL-UNNAMED'
 
 # this list has horrid output, lets try to parse. What we want starts with orgduckdb- and then a number
-repo_id = re.search(r'(orgduckdb-\d+)', exec("mvn -f %s nexus-staging:rc-list" % (pom)).decode('utf8')).groups()[0]
+repo_id = re.search(r'(orgduckdb-\d+)', exec("mvn -f %s nexus-staging:rc-list" % (pom))).groups()[0]
 exec("mvn -f %s nexus-staging:rc-close -DstagingRepositoryId=%s" % (pom, repo_id))
 exec("mvn -f %s nexus-staging:rc-release -DstagingRepositoryId=%s" % (pom, repo_id))
 
