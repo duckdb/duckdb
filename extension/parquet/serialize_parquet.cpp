@@ -7,8 +7,34 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_reader.hpp"
+#include "parquet_writer.hpp"
+#include "parquet_writer.hpp"
 
 namespace duckdb {
+
+void ChildFieldIDs::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<FieldID>>(100, "ids", ids);
+}
+
+ChildFieldIDs ChildFieldIDs::Deserialize(Deserializer &deserializer) {
+	ChildFieldIDs result;
+	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<FieldID>>(100, "ids", result.ids);
+	return result;
+}
+
+void FieldID::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<bool>(100, "set", set);
+	serializer.WritePropertyWithDefault<int32_t>(101, "field_id", field_id);
+	serializer.WriteProperty<ChildFieldIDs>(102, "child_field_ids", child_field_ids);
+}
+
+FieldID FieldID::Deserialize(Deserializer &deserializer) {
+	FieldID result;
+	deserializer.ReadPropertyWithDefault<bool>(100, "set", result.set);
+	deserializer.ReadPropertyWithDefault<int32_t>(101, "field_id", result.field_id);
+	deserializer.ReadProperty<ChildFieldIDs>(102, "child_field_ids", result.child_field_ids);
+	return result;
+}
 
 void ParquetColumnDefinition::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<int32_t>(100, "field_id", field_id);

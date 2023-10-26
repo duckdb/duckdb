@@ -56,5 +56,43 @@
       }
     ],
     "pointer_type": "none"
+  },
+  {
+    "class": "FieldID",
+    "includes": [
+      "parquet_writer.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "set",
+        "type": "bool"
+      },
+      {
+        "id": 101,
+        "name": "field_id",
+        "type": "int32_t"
+      },
+      {
+        "id": 102,
+        "name": "child_field_ids",
+        "type": "ChildFieldIDs"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ChildFieldIDs",
+    "includes": [
+      "parquet_writer.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "ids",
+        "type": "case_insensitive_map_t<FieldID>"
+      }
+    ],
+    "pointer_type": "none"
   }
 ]

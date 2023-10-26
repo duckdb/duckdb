@@ -1825,8 +1825,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 	optional_ptr<const FieldID> field_id;
 	optional_ptr<const ChildFieldIDs> child_field_ids;
 	if (field_ids) {
-		auto field_id_it = field_ids->ids->find(name);
-		if (field_id_it != field_ids->ids->end()) {
+		auto field_id_it = field_ids->ids.find(name);
+		if (field_id_it != field_ids->ids.end()) {
 			field_id = &field_id_it->second;
 			child_field_ids = &field_id->child_field_ids;
 		}
