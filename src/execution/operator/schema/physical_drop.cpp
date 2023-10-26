@@ -24,7 +24,6 @@ SourceResultType PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chu
 	case CatalogType::SCHEMA_ENTRY: {
 		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
 		catalog.DropEntry(context.client, *info);
-		auto qualified_name = QualifiedName::Parse(info->name);
 
 		// Check if the dropped schema was set as the current schema
 		auto &client_data = ClientData::Get(context.client);
