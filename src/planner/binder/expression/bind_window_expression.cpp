@@ -139,12 +139,6 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	}
 	for (auto &order : window.orders) {
 		BindChild(order.expression, depth, error);
-		if (error.empty()) {
-			//	Restore any collation expressions
-			auto &order_expr = order.expression;
-			auto &bound_order = BoundExpression::GetExpression(*order_expr);
-			ExpressionBinder::PushCollation(context, bound_order, bound_order->return_type, false);
-		}
 	}
 	BindChild(window.filter_expr, depth, error);
 	BindChild(window.start_expr, depth, error);
@@ -156,6 +150,13 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	if (!error.empty()) {
 		// failed to bind children of window function
 		return BindResult(error);
+	}
+
+	//	Restore any collation expressions
+	for (auto &order : window.orders) {
+		auto &order_expr = order.expression;
+		auto &bound_order = BoundExpression::GetExpression(*order_expr);
+		ExpressionBinder::PushCollation(context, bound_order, bound_order->return_type, false);
 	}
 	// successfully bound all children: create bound window function
 	vector<LogicalType> types;
