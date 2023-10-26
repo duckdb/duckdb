@@ -31,12 +31,12 @@ public:
 	                       DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	~DependencyCatalogEntry() override;
 
+	DependencyConnectionType connection_type;
+
 	string name;
 	string schema;
 	CatalogType entry_type;
 	DependencyType dependency_type;
-
-	DependencyConnectionType connection_type;
 };
 
 } // namespace duckdb

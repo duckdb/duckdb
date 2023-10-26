@@ -66,6 +66,10 @@ void CatalogSet::PutEntry(EntryIndex index, unique_ptr<CatalogEntry> catalog_ent
 	entry->second.SetEntry(std::move(catalog_entry));
 }
 
+bool IsDependencyEntry(CatalogEntry &entry) {
+	return entry.type == CatalogType::DEPENDENCY_ENTRY || entry.type == CatalogType::DEPENDENCY_SET;
+}
+
 bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
                              DependencyList &dependencies) {
 	if (value->internal && !catalog.IsSystemCatalog() && name != DEFAULT_SCHEMA) {
@@ -74,7 +78,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 		                        name);
 	}
 	if (!value->internal) {
-		if (!value->temporary && catalog.IsSystemCatalog()) {
+		if (!value->temporary && catalog.IsSystemCatalog() && !IsDependencyEntry(*value)) {
 			throw InternalException(
 			    "Attempting to create non-internal entry \"%s\" in system catalog - the system catalog "
 			    "can only contain internal entries",
@@ -381,7 +385,7 @@ optional_ptr<MappingValue> CatalogSet::GetLatestMapping(const string &name) {
 
 optional_ptr<MappingValue> CatalogSet::GetMapping(CatalogTransaction transaction, const string &name, bool get_latest) {
 	auto mapping_value = GetLatestMapping(name);
-	if (get_latest) {
+	if (get_latest || !mapping_value) {
 		return mapping_value;
 	}
 	// Find the mapping value that is up-to-date with the current transaction

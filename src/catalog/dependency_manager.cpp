@@ -40,7 +40,10 @@ static string GetMangledName(CatalogEntry &entry) {
 		return GetMangledNameFromDependency(entry);
 	}
 	auto schema = GetSchema(entry);
-	return StringUtil::Format("%s\0%s\0%s", CatalogTypeToString(entry.type), schema, entry.name);
+	static constexpr const char *mangle_format = "%s\0%s\0%s";
+	static constexpr const idx_t mangle_format_size = 8;
+	return StringUtil::Format(std::string(mangle_format, mangle_format_size), CatalogTypeToString(entry.type), schema,
+	                          entry.name);
 }
 
 optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(CatalogEntry &object) {
@@ -78,8 +81,7 @@ DependencySetCatalogEntry &DependencyManager::GetOrCreateDependencySet(CatalogTr
 	if (!connection_p) {
 		auto new_connection = make_uniq<DependencySetCatalogEntry>(catalog, name);
 		auto &connection = *new_connection;
-		DependencyList empty_dependencies;
-		auto res = connections.CreateEntry(transaction, name, std::move(new_connection), empty_dependencies);
+		auto res = connections.CreateEntryInternal(transaction, std::move(new_connection));
 		(void)res;
 		D_ASSERT(res);
 		return connection;
@@ -88,12 +90,19 @@ DependencySetCatalogEntry &DependencyManager::GetOrCreateDependencySet(CatalogTr
 	return connection_p->Cast<DependencySetCatalogEntry>();
 }
 
-bool DependencyManager::IsDependencyEntry(CatalogEntry &entry) const {
-	return entry.type == CatalogType::DEPENDENCY_SET || entry.type == CatalogType::DEPENDENCY_ENTRY;
+bool DependencyManager::IsSystemEntry(CatalogEntry &entry) const {
+	switch (entry.type) {
+	case CatalogType::DEPENDENCY_ENTRY:
+	case CatalogType::DEPENDENCY_SET:
+	case CatalogType::DATABASE_ENTRY:
+		return true;
+	default:
+		return false;
+	}
 }
 
 void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &object, DependencyList &dependencies) {
-	if (IsDependencyEntry(object)) {
+	if (IsSystemEntry(object)) {
 		// Don't do anything for this
 		return;
 	}
@@ -246,7 +255,7 @@ void DependencyManager::DropObjectInternalNew(CatalogTransaction transaction, Ca
 }
 
 void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade) {
-	if (IsDependencyEntry(object)) {
+	if (IsSystemEntry(object)) {
 		// Don't do anything for this
 		return;
 	}
@@ -343,8 +352,8 @@ void DependencyManager::AlterObjectInternalNew(CatalogTransaction transaction, C
 }
 
 void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj) {
-	if (IsDependencyEntry(new_obj)) {
-		D_ASSERT(IsDependencyEntry(old_obj));
+	if (IsSystemEntry(new_obj)) {
+		D_ASSERT(IsSystemEntry(old_obj));
 		// Don't do anything for this
 		return;
 	}
@@ -353,7 +362,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 }
 
 void DependencyManager::EraseObject(CatalogEntry &object) {
-	if (IsDependencyEntry(object)) {
+	if (IsSystemEntry(object)) {
 		// Don't do anything for this
 		return;
 	}
@@ -393,8 +402,8 @@ void DependencyManager::Scan(ClientContext &context,
 }
 
 void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry) {
-	D_ASSERT(!IsDependencyEntry(entry));
-	D_ASSERT(!IsDependencyEntry(owner));
+	D_ASSERT(!IsSystemEntry(entry));
+	D_ASSERT(!IsSystemEntry(owner));
 
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());

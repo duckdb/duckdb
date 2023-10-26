@@ -57,13 +57,13 @@ void DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction, Ca
                                               DependencyType type) {
 	static DependencyList empty_dependencies;
 	auto dependency = make_uniq<DependencyCatalogEntry>(DependencyConnectionType::DEPENDENCY, catalog, to_add, type);
-	dependencies.CreateEntry(transaction, to_add.name, std::move(dependency), empty_dependencies);
+	dependencies.CreateEntryInternal(transaction, std::move(dependency));
 }
 void DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction, CatalogEntry &to_add,
                                              DependencyType type) {
 	static DependencyList empty_dependencies;
 	auto dependent = make_uniq<DependencyCatalogEntry>(DependencyConnectionType::DEPENDENT, catalog, to_add, type);
-	dependents.CreateEntry(transaction, to_add.name, std::move(dependent), empty_dependencies);
+	dependents.CreateEntryInternal(transaction, std::move(dependent));
 }
 
 // From a Dependency

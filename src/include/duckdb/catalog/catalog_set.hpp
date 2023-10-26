@@ -33,6 +33,7 @@ struct EntryIndex;
 class DuckCatalog;
 class TableCatalogEntry;
 class SequenceCatalogEntry;
+class DependencySetCatalogEntry;
 
 typedef unordered_map<CatalogSet *, unique_lock<mutex>> set_lock_map_t;
 
@@ -89,6 +90,7 @@ class CatalogSet {
 	friend class DependencyManager;
 	friend class EntryDropper;
 	friend struct EntryIndex;
+	friend class DependencySetCatalogEntry;
 
 public:
 	DUCKDB_API explicit CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults = nullptr);

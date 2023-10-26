@@ -44,7 +44,7 @@ private:
 	CatalogSet connections;
 
 private:
-	bool IsDependencyEntry(CatalogEntry &entry) const;
+	bool IsSystemEntry(CatalogEntry &entry) const;
 	DependencySetCatalogEntry &GetOrCreateDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
 	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
 	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogEntry &entry);
