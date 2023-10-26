@@ -27,7 +27,8 @@ void DependencySetCatalogEntry::AddDependencies(CatalogTransaction transaction, 
 		dependencies.CreateEntry(transaction, entry.get().name, std::move(dependency), empty_dependencies);
 	}
 }
-void DependencySetCatalogEntry::AddDependents(CatalogTransaction transaction, DependencyList &to_add, DependencyType type) {
+void DependencySetCatalogEntry::AddDependents(CatalogTransaction transaction, DependencyList &to_add,
+                                              DependencyType type) {
 	DependencyList empty_dependencies;
 	for (auto &entry : to_add.set) {
 		auto dependency = make_uniq<DependencyCatalogEntry>(catalog, entry);
@@ -40,7 +41,8 @@ void DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction, Ca
 	single_dependency.AddDependency(dependency);
 	AddDependencies(transaction, single_dependency);
 }
-void DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction, CatalogEntry &dependend, DependencyType type) {
+void DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction, CatalogEntry &dependend,
+                                             DependencyType type) {
 	DependencyList single_dependend;
 	single_dependend.AddDependency(dependend);
 	AddDependents(transaction, single_dependend, type);

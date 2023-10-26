@@ -24,7 +24,8 @@ namespace duckdb {
 //! identifiers listed here
 class DependencyCatalogEntry : public InCatalogEntry {
 public:
-	DependencyCatalogEntry(Catalog &catalog, CatalogEntry &entry, DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
+	DependencyCatalogEntry(Catalog &catalog, CatalogEntry &entry,
+	                       DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	~DependencyCatalogEntry() override;
 
 	string name;

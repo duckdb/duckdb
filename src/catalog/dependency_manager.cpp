@@ -42,7 +42,8 @@ static string GetMangledName(CatalogEntry &entry) {
 	return StringUtil::Format("%s\0%s\0%s", CatalogTypeToString(entry.type), schema, entry.name);
 }
 
-optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(CatalogTransaction transaction, CatalogEntry &object) {
+optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(CatalogTransaction transaction,
+                                                                            CatalogEntry &object) {
 	auto name = GetMangledName(object);
 	auto connection_p = connections.GetEntry(transaction, name);
 	if (!connection_p) {
@@ -52,7 +53,8 @@ optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(Cata
 	return dynamic_cast<DependencySetCatalogEntry *>(connection_p.get());
 }
 
-DependencySetCatalogEntry &DependencyManager::GetOrCreateDependencySet(CatalogTransaction transaction, CatalogEntry &object) {
+DependencySetCatalogEntry &DependencyManager::GetOrCreateDependencySet(CatalogTransaction transaction,
+                                                                       CatalogEntry &object) {
 	auto name = GetMangledName(object);
 	auto connection_p = connections.GetEntry(transaction, name);
 	if (!connection_p) {

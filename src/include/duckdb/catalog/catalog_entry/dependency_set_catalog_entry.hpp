@@ -28,6 +28,7 @@ public:
 public:
 	CatalogSet &Dependencies();
 	CatalogSet &Dependents();
+
 public:
 	void AddDependency(CatalogTransaction transaction, CatalogEntry &dependency);
 	void AddDependencies(CatalogTransaction transaction, DependencyList &dependencies);
@@ -36,11 +37,11 @@ public:
 	void AddDependents(CatalogTransaction transaction, DependencyList &dependents, DependencyType type);
 
 	bool HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry);
+
 private:
 	string name;
 	CatalogSet dependencies;
 	CatalogSet dependents;
 };
-
 
 } // namespace duckdb

@@ -11,7 +11,8 @@ static string GetSchema(CatalogEntry &entry) {
 }
 
 DependencyCatalogEntry::DependencyCatalogEntry(Catalog &catalog, CatalogEntry &entry, DependencyType dependency_type)
-    : InCatalogEntry(CatalogType::DEPENDENCY_ENTRY, catalog, entry.name), name(entry.name), schema(GetSchema(entry)), entry_type(entry.type), dependency_type(dependency_type) {
+    : InCatalogEntry(CatalogType::DEPENDENCY_ENTRY, catalog, entry.name), name(entry.name), schema(GetSchema(entry)),
+      entry_type(entry.type), dependency_type(dependency_type) {
 }
 
 DependencyCatalogEntry::~DependencyCatalogEntry() {
