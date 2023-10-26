@@ -163,6 +163,23 @@ void AWSEnvironmentCredentialsProvider::SetAll() {
 	this->SetExtensionOptionValue("s3_use_ssl", this->DUCKDB_USE_SSL_ENV_VAR);
 }
 
+unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(FileOpener *opener, string path) {
+
+	auto context = opener->TryGetClientContext();
+	if (!context) {
+		return nullptr;
+	}
+
+	auto credentials = context->db->GetCredentialManager().GetCredentials(path, "HTTPFileSystem");
+	if (!credentials) {
+		return nullptr;
+	}
+
+	// Return the stored credentials
+	auto s3_credentials = dynamic_cast<S3RegisteredCredential&>(*credentials);
+	return make_uniq<S3AuthParams>(s3_credentials.GetParams());
+}
+
 S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener, FileOpenerInfo &info) {
 	string region;
 	string access_key_id;
@@ -692,7 +709,14 @@ unique_ptr<ResponseWrapper> S3FileSystem::GetRangeRequest(FileHandle &handle, st
 unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, uint8_t flags, FileLockType lock,
                                                       FileCompressionType compression, FileOpener *opener) {
 	FileOpenerInfo info = {path};
-	auto auth_params = S3AuthParams::ReadFrom(opener, info);
+
+	S3AuthParams auth_params;
+	auto registered_params = S3AuthParams::ReadFromStoredCredentials(opener, path);
+	if (registered_params) {
+		auth_params = *registered_params;
+	} else {
+		auth_params = S3AuthParams::ReadFrom(opener, info);
+	}
 
 	// Scan the query string for any s3 authentication parameters
 	auto parsed_s3_url = S3UrlParse(path, auth_params);
@@ -891,7 +915,13 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	FileOpenerInfo info = {glob_pattern};
 
 	// Trim any query parameters from the string
-	auto s3_auth_params = S3AuthParams::ReadFrom(opener, info);
+	S3AuthParams s3_auth_params;
+	auto registered_params = S3AuthParams::ReadFromStoredCredentials(opener, glob_pattern);
+	if (registered_params) {
+		s3_auth_params = *registered_params;
+	} else {
+		s3_auth_params = S3AuthParams::ReadFrom(opener, info);
+	}
 
 	// In url compatibility mode, we ignore globs allowing users to query files with the glob chars
 	if (s3_auth_params.s3_url_compatibility_mode) {

@@ -266,6 +266,10 @@ DuckDB::DuckDB(DatabaseInstance &instance_p) : instance(instance_p.shared_from_t
 DuckDB::~DuckDB() {
 }
 
+CredentialManager &DatabaseInstance::GetCredentialManager() {
+	return *config.credential_manager;
+}
+
 BufferManager &DatabaseInstance::GetBufferManager() {
 	return *buffer_manager;
 }
@@ -323,6 +327,11 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 		config.file_system = std::move(new_config.file_system);
 	} else {
 		config.file_system = make_uniq<VirtualFileSystem>();
+	}
+	if (new_config.credential_manager) {
+		config.credential_manager = std::move(new_config.credential_manager);
+	} else {
+		config.credential_manager = make_uniq<CredentialManager>();
 	}
 	if (config.options.maximum_memory == (idx_t)-1) {
 		config.SetDefaultMaxMemory();

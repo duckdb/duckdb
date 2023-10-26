@@ -177,6 +177,129 @@ struct DBConfigOptions {
 	bool operator==(const DBConfigOptions &other) const;
 };
 
+//! Base class from which Registered Credential classes can be made.
+//! TODO thread-safety?
+class RegisteredCredential {
+	friend class CredentialManager;
+
+public:
+	RegisteredCredential(vector<string> &prefix_paths, string& filesystem_p) : prefix_paths(prefix_paths), filesystem(filesystem_p), credential_id(0) {
+	};
+	virtual ~RegisteredCredential() = default;
+
+	//! Returns the longest prefix that matches, -1 for no match
+	//! Note: some credentials may want to override this function when paths are platform dependent
+	virtual int LongestMatch(const string& path) {
+		int longest_match = -1;
+		for (const auto& prefix: prefix_paths) {
+			if (prefix == "*") {
+				longest_match = 0;
+				continue;
+			}
+			if (StringUtil::StartsWith(path, prefix)) {
+				longest_match = MaxValue<int>(prefix.length(), longest_match);
+			};
+		}
+		return longest_match;
+	}
+
+	string& GetFileSystemName() {
+		return filesystem;
+	}
+
+	//! Credential classes can set implement these to be shown in registered_credentials(). These values can only be
+	//! strings. It is recommended to represent this as a ';' separated list of 'key=value' pairs with at a unique
+	//! identifier as a key value pair
+	virtual Value GetCredentialsAsValue(bool redact) {
+		return Value();
+	}
+
+	vector<string>& GetScope() {
+		return prefix_paths;
+	}
+
+	//! Adds the default named parameters to a table function
+	static void AddNamedParametersToSetFunction(TableFunction& table_function) {
+		table_function.named_parameters["scope"] = LogicalType::LIST(LogicalType::VARCHAR);
+		table_function.named_parameters["alias"] = LogicalType::VARCHAR;
+	}
+
+	//! Get the registered id of the current set of credentials
+	idx_t GetId() {
+		if (credential_id == 0) {
+			throw InternalException("Can not get credential id of credentials that are not registered!");
+		}
+		return credential_id;
+	}
+	const string &GetAlias() const {
+		return alias;
+	}
+	void SetAlias(const string& alias_p) {
+		if (credential_id != 0) {
+			throw InternalException("The credential alias can only set before registering it");
+		}
+		alias = alias_p;
+	}
+
+protected:
+	//! prefixes to which the credentials apply
+	vector<string> prefix_paths;
+	//! Name of the FS that registered the credentials
+	string filesystem;
+	//! incremental_id assigned by manager, 0 means not set
+	idx_t credential_id;
+	//! alias for easy identification and deletion
+	string alias;
+};
+
+//! TODO thread-safety!
+class CredentialManager {
+public:
+	//! Add a new set of registered credentials
+	void RegisterCredentials(shared_ptr<RegisteredCredential> credentials) {
+
+		// Assert the alias does not exist already
+		if (!credentials->GetAlias().empty()) {
+			for (const auto& cred : registered_credentials) {
+				if (cred->GetAlias() == credentials->GetAlias()) {
+					throw InvalidInputException("Alias '" + credentials->GetAlias() + "' already exists!");
+				}
+			}
+		}
+
+		registered_credentials.push_back(std::move(credentials));
+		registered_credentials.back()->credential_id = current_id++;
+	}
+
+	//! Find the best matching set of credentials for this path. (In case of multiple, longest prefix wins)
+	shared_ptr<RegisteredCredential> GetCredentials(string& path, string filesystem) {
+		int longest_match = -1;
+		shared_ptr<RegisteredCredential> best_match;
+
+		for (const auto& cred: registered_credentials) {
+			if (cred->GetFileSystemName() != filesystem) {
+				continue;
+			}
+			auto match = cred->LongestMatch(path);
+
+			if (match > longest_match) {
+				longest_match = MaxValue<idx_t>(match, longest_match);
+				best_match = cred;
+			}
+		}
+		return best_match;
+	}
+
+	//! Find the best matching set of credentials for this path. (In case of multiple, longest prefix wins)
+	vector<shared_ptr<RegisteredCredential>>& AllCredentials() {
+		return registered_credentials;
+	}
+
+protected:
+	vector<shared_ptr<RegisteredCredential>> registered_credentials;
+	idx_t current_id = 1;
+};
+
 struct DBConfig {
 	friend class DatabaseInstance;
 	friend class StorageManager;
@@ -195,6 +318,8 @@ public:
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
 	//! RamFS or something similar)
 	unique_ptr<FileSystem> file_system;
+	//! Credential manager
+	unique_ptr<CredentialManager> credential_manager;
 	//! The allocator used by the system
 	unique_ptr<Allocator> allocator;
 	//! Database configuration options

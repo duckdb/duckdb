@@ -36,6 +36,7 @@ public:
 
 public:
 	BufferPool &GetBufferPool();
+	DUCKDB_API CredentialManager &GetCredentialManager();
 	DUCKDB_API BufferManager &GetBufferManager();
 	DUCKDB_API DatabaseManager &GetDatabaseManager();
 	DUCKDB_API FileSystem &GetFileSystem();

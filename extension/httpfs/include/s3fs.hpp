@@ -45,6 +45,7 @@ struct S3AuthParams {
 	bool s3_url_compatibility_mode;
 
 	static S3AuthParams ReadFrom(FileOpener *opener, FileOpenerInfo &info);
+	static unique_ptr<S3AuthParams> ReadFromStoredCredentials(FileOpener *opener, string path);
 };
 
 struct ParsedS3Url {
@@ -68,6 +69,42 @@ struct S3ConfigParams {
 	uint64_t max_upload_threads;
 
 	static S3ConfigParams ReadFrom(FileOpener *opener);
+};
+
+//! Registered Credential class for S3.
+class S3RegisteredCredential : public RegisteredCredential {
+public:
+	S3RegisteredCredential(vector<string> &prefix_paths_p, string &filesystem_p, S3AuthParams params_p)
+	    : RegisteredCredential(prefix_paths_p, filesystem_p), params(params_p) {};
+
+	S3AuthParams GetParams(){
+		return params;
+	}
+
+	//! S3 credentials returned as connection string like value
+	Value GetCredentialsAsValue(bool redact) {
+		string value;
+
+		value += "region=" + params.region;
+		value += ";access_key_id=" + params.access_key_id;
+
+		if (redact && !params.secret_access_key.empty()) {
+			value += ";secret_access_key=<redacted>";
+		} else {
+			value += ";secret_access_key=" + params.secret_access_key;
+		}
+
+		value += ";session_token=" + params.session_token;
+		value += ";endpoint=" + params.endpoint;
+		value += ";url_style=" + params.url_style;
+		value += string(";use_ssl=") + (params.use_ssl ? "1" : "0");
+		value += string(";s3_url_compatibility_mode=") + (params.s3_url_compatibility_mode ? "1" : "0");
+
+		return value;
+	}
+
+protected:
+	S3AuthParams params;
 };
 
 class S3FileSystem;
