@@ -30,11 +30,17 @@ public:
 	CatalogSet &Dependents();
 
 public:
-	void AddDependency(CatalogTransaction transaction, CatalogEntry &dependency);
+	void AddDependency(CatalogTransaction transaction, CatalogEntry &dependent,
+	                   DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
+	void AddDependency(CatalogTransaction transaction, Dependency dependent);
 	void AddDependencies(CatalogTransaction transaction, DependencyList &dependencies);
+	void AddDependencies(CatalogTransaction transaction, dependency_set_t &dependencies);
 
-	void AddDependent(CatalogTransaction transaction, CatalogEntry &dependent, DependencyType type);
-	void AddDependents(CatalogTransaction transaction, DependencyList &dependents, DependencyType type);
+	void AddDependent(CatalogTransaction transaction, CatalogEntry &dependent,
+	                  DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
+	void AddDependent(CatalogTransaction transaction, Dependency dependent);
+	void AddDependents(CatalogTransaction transaction, DependencyList &dependents);
+	void AddDependents(CatalogTransaction transaction, dependency_set_t &dependents);
 
 	bool HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry);
 

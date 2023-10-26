@@ -22,9 +22,12 @@ namespace duckdb {
 
 //! Resembles a connection between an object and the CatalogEntry that can be retrieved from the Catalog using the
 //! identifiers listed here
+
+enum class DependencyConnectionType : uint8_t { DEPENDENCY, DEPENDENT };
+
 class DependencyCatalogEntry : public InCatalogEntry {
 public:
-	DependencyCatalogEntry(Catalog &catalog, CatalogEntry &entry,
+	DependencyCatalogEntry(DependencyConnectionType type, Catalog &catalog, CatalogEntry &entry,
 	                       DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	~DependencyCatalogEntry() override;
 
@@ -32,6 +35,8 @@ public:
 	string schema;
 	CatalogType entry_type;
 	DependencyType dependency_type;
+
+	DependencyConnectionType connection_type;
 };
 
 } // namespace duckdb

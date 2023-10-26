@@ -65,8 +65,6 @@ public:
 	SimilarCatalogEntry GetSimilarEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
 
 	void Verify(Catalog &catalog) override;
-
-private:
 	//! Get the catalog set for the specified type
 	CatalogSet &GetCatalogSet(CatalogType type);
 };

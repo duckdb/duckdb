@@ -21,6 +21,7 @@ namespace duckdb {
 class DuckCatalog;
 class ClientContext;
 class DependencyList;
+class DependencyCatalogEntry;
 
 //! The DependencyManager is in charge of managing dependencies between catalog entries
 class DependencyManager {
@@ -52,12 +53,20 @@ private:
 	DependencySetCatalogEntry &GetOrCreateDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
 	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
 	void DropObjectInternalNew(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
+	void AlterObjectInternalNew(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
+
+	using lookup_callback_t = std::function<void(optional_ptr<CatalogEntry> entry, optional_ptr<CatalogSet> set,
+	                                             optional_ptr<MappingValue> mapping)>;
+	void LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency, lookup_callback_t callback);
 
 private:
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, DependencyList &dependencies);
 	void DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
 	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
 	void EraseObjectInternal(CatalogEntry &object);
+
 	void DropObjectInternalOld(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
+	void AlterObjectInternalOld(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
 };
+
 } // namespace duckdb

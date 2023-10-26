@@ -42,6 +42,8 @@ string CatalogTypeToString(CatalogType type) {
 	case CatalogType::INVALID:
 	case CatalogType::DELETED_ENTRY:
 	case CatalogType::UPDATED_ENTRY:
+	case CatalogType::DEPENDENCY_ENTRY:
+	case CatalogType::DEPENDENCY_SET:
 		break;
 	}
 	return "INVALID";
