@@ -13,6 +13,7 @@
 #include "duckdb/catalog/dependency.hpp"
 #include "duckdb/catalog/catalog_entry_map.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
+#include "duckdb/catalog/catalog_entry/dependency_set_catalog_entry.hpp"
 
 #include <functional>
 
@@ -44,6 +45,13 @@ private:
 	//! Map of objects that the source object DEPENDS on, i.e. when any of the entries in the vector perform a CASCADE
 	//! drop then [object] is deleted as well
 	catalog_entry_map_t<catalog_entry_set_t> dependencies_map;
+	CatalogSet connections;
+
+private:
+	bool IsDependencyEntry(CatalogEntry &entry) const;
+	DependencySetCatalogEntry &GetDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
+	CatalogSet &GetDependenciesOfObject(CatalogTransaction, CatalogEntry &object);
+	CatalogSet &GetEntriesThatDependOnObject(CatalogTransaction, CatalogEntry &object);
 
 private:
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, DependencyList &dependencies);

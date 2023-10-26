@@ -8,13 +8,57 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/catalog/mapping_value.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/catalog/catalog_entry/dependency_set_catalog_entry.hpp"
 
 namespace duckdb {
 
-DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog) {
+DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog), connections(catalog) {
+}
+
+static string GetSchema(CatalogEntry &entry) {
+	if (entry.type == CatalogType::SCHEMA_ENTRY) {
+		return entry.name;
+	}
+	return entry.ParentSchema().name;
+}
+
+static string GetMangledName(CatalogEntry &entry) {
+	auto schema = GetSchema(entry);
+	return StringUtil::Format("%s\0%s\0%s", CatalogTypeToString(entry.type), schema, entry.name);
+}
+
+DependencySetCatalogEntry &DependencyManager::GetDependencySet(CatalogTransaction transaction, CatalogEntry &object) {
+	auto name = GetMangledName(object);
+	auto connection_p = connections.GetEntry(transaction, name);
+	if (!connection_p) {
+		auto new_connection = make_uniq<DependencySetCatalogEntry>(catalog, name);
+		auto &connection = *new_connection;
+		DependencyList empty_dependencies;
+		auto res = connections.CreateEntry(transaction, name, std::move(new_connection), empty_dependencies);
+		(void)res;
+		D_ASSERT(res);
+		return connection;
+	}
+	D_ASSERT(connection_p->type == CatalogType::DEPENDENCY_SET);
+	return connection_p->Cast<DependencySetCatalogEntry>();
+}
+
+CatalogSet &DependencyManager::GetDependenciesOfObject(CatalogTransaction transaction, CatalogEntry &object) {
+	auto &set = GetDependencySet(transaction, object);
+	return set.
+}
+
+bool DependencyManager::IsDependencyEntry(CatalogEntry &entry) const {
+	return entry.type == CatalogType::DEPENDENCY_SET || entry.type == CatalogType::DEPENDENCY_ENTRY;
 }
 
 void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &object, DependencyList &dependencies) {
+	if (IsDependencyEntry(object)) {
+		// Don't do anything for this
+		return;
+	}
+
 	// check for each object in the sources if they were not deleted yet
 	for (auto &dep : dependencies.set) {
 		auto &dependency = dep.get();
@@ -32,6 +76,8 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 			throw InternalException("Dependency has already been deleted?");
 		}
 	}
+	auto &mappings = GetDependencyMappings(transaction, object);
+
 	// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
 	auto dependency_type = object.type == CatalogType::INDEX_ENTRY ? DependencyType::DEPENDENCY_AUTOMATIC
 	                                                               : DependencyType::DEPENDENCY_REGULAR;
@@ -46,6 +92,10 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 }
 
 void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade) {
+	if (IsDependencyEntry(object)) {
+		// Don't do anything for this
+		return;
+	}
 	D_ASSERT(dependents_map.find(object) != dependents_map.end());
 
 	// first check the objects that depend on this object
@@ -78,6 +128,12 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 }
 
 void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj) {
+	if (IsDependencyEntry(new_obj)) {
+		D_ASSERT(IsDependencyEntry(old_obj));
+		// Don't do anything for this
+		return;
+	}
+
 	D_ASSERT(dependents_map.find(old_obj) != dependents_map.end());
 	D_ASSERT(dependencies_map.find(old_obj) != dependencies_map.end());
 
@@ -124,11 +180,18 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 }
 
 void DependencyManager::EraseObject(CatalogEntry &object) {
+	if (IsDependencyEntry(object)) {
+		// Don't do anything for this
+		return;
+	}
+
 	// obtain the writing lock
 	EraseObjectInternal(object);
 }
 
 void DependencyManager::EraseObjectInternal(CatalogEntry &object) {
+	D_ASSERT(!IsDependencyEntry(object));
+
 	if (dependents_map.find(object) == dependents_map.end()) {
 		// dependencies already removed
 		return;
@@ -158,6 +221,9 @@ void DependencyManager::Scan(const std::function<void(CatalogEntry &, CatalogEnt
 }
 
 void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry) {
+	D_ASSERT(!IsDependencyEntry(entry));
+	D_ASSERT(!IsDependencyEntry(owner));
+
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 

@@ -39,6 +39,10 @@ enum class CatalogType : uint8_t {
 	// version info
 	UPDATED_ENTRY = 50,
 	DELETED_ENTRY = 51,
+
+	// dependency info
+	DEPENDENCY_SET = 100,
+	DEPENDENCY_ENTRY = 101
 };
 
 DUCKDB_API string CatalogTypeToString(CatalogType type);
