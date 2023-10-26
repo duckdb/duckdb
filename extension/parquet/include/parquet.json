@@ -90,7 +90,7 @@
       {
         "id": 100,
         "name": "ids",
-        "type": "case_insensitive_map_t<FieldID>"
+        "type": "unique_ptr<case_insensitive_map_t<FieldID>>"
       }
     ],
     "pointer_type": "none"

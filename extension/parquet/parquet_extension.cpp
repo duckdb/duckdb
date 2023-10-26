@@ -789,7 +789,7 @@ static void GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const ve
 	D_ASSERT(names.size() == sql_types.size());
 	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
 		const auto &col_name = names[col_idx];
-		auto inserted = field_ids.ids.insert(make_pair(col_name, FieldID(field_id++)));
+		auto inserted = field_ids.ids->insert(make_pair(col_name, FieldID(field_id++)));
 		D_ASSERT(inserted.second);
 
 		const auto &col_type = sql_types[col_idx];
@@ -836,7 +836,7 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 			throw BinderException("Column name \"%s\" specified in FIELD_IDS not found. Available column names: [%s]",
 			                      col_name, names);
 		}
-		D_ASSERT(field_ids.ids.find(col_name) == field_ids.ids.end()); // Caught by STRUCT - deduplicates keys
+		D_ASSERT(field_ids.ids->find(col_name) == field_ids.ids->end()); // Caught by STRUCT - deduplicates keys
 
 		const auto &child_value = struct_children[i];
 		const auto &child_type = child_value.type();
@@ -867,7 +867,7 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 			}
 			field_id = FieldID(field_id_int);
 		}
-		auto inserted = field_ids.ids.insert(make_pair(col_name, std::move(field_id)));
+		auto inserted = field_ids.ids->insert(make_pair(col_name, std::move(field_id)));
 		D_ASSERT(inserted.second);
 
 		if (child_field_ids_value) {

@@ -39,7 +39,7 @@ struct FieldID;
 struct ChildFieldIDs {
 	ChildFieldIDs();
 	ChildFieldIDs Copy() const;
-	case_insensitive_map_t<FieldID> ids;
+	unique_ptr<case_insensitive_map_t<FieldID>> ids;
 
 	void Serialize(Serializer &serializer) const;
 	static ChildFieldIDs Deserialize(Deserializer &source);
