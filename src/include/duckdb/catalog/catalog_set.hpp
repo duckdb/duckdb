@@ -53,8 +53,13 @@ public:
 		Swap(other);
 		return *this;
 	}
+	template <bool UNSAFE = false>
 	CatalogEntry &Entry() {
-		return *entry;
+		if (UNSAFE) {
+			return *entry.get();
+		} else {
+			return *entry;
+		}
 	}
 	unique_ptr<CatalogEntry> TakeEntry() {
 		return std::move(entry);

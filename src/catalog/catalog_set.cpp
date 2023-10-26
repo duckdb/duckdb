@@ -31,7 +31,7 @@ public:
 	}
 
 	~EntryDropper() {
-		entry_index.GetEntry().deleted = old_deleted;
+		entry_index.GetEntry<true>().deleted = old_deleted;
 	}
 
 private:

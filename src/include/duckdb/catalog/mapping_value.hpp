@@ -55,18 +55,22 @@ struct EntryIndex {
 	}
 
 private:
+	template <bool UNSAFE = false>
 	EntryValue &GetEntryInternal(catalog_entry_t index) {
 		auto entry = catalog->entries.find(index);
-		if (entry == catalog->entries.end()) {
+		if (UNSAFE) {
+			D_ASSERT(entry != catalog->entries.end());
+		} else if (entry == catalog->entries.end()) {
 			throw InternalException("EntryIndex - Catalog entry not found!?");
 		}
 		return entry->second;
 	}
 
 public:
+	template <bool UNSAFE = false>
 	CatalogEntry &GetEntry() {
-		auto &entry_value = GetEntryInternal(index);
-		return entry_value.Entry();
+		auto &entry_value = GetEntryInternal<UNSAFE>(index);
+		return entry_value.template Entry<UNSAFE>();
 	}
 	unique_ptr<CatalogEntry> TakeEntry() {
 		auto &entry_value = GetEntryInternal(index);
