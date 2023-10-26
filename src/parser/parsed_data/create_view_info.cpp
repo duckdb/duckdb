@@ -19,6 +19,33 @@ CreateViewInfo::CreateViewInfo(SchemaCatalogEntry &schema, string view_name)
     : CreateViewInfo(schema.catalog.GetName(), schema.name, std::move(view_name)) {
 }
 
+string CreateViewInfo::ToString() const {
+	string result;
+
+	result += "CREATE";
+	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+		result += " OR REPLACE";
+	}
+	if (temporary) {
+		result += " TEMPORARY";
+	}
+	result += " VIEW ";
+	if (schema != DEFAULT_SCHEMA) {
+		result += KeywordHelper::WriteOptionallyQuoted(schema);
+		result += ".";
+	}
+	result += KeywordHelper::WriteOptionallyQuoted(view_name);
+	if (!aliases.empty()) {
+		result += " (";
+		result += StringUtil::Join(aliases, aliases.size(), ", ",
+		                           [](const string &name) { return KeywordHelper::WriteOptionallyQuoted(name); });
+		result += ")";
+	}
+	result += " AS ";
+	result += query->ToString();
+	return result;
+}
+
 unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
 	auto result = make_uniq<CreateViewInfo>(catalog, schema, view_name);
 	CopyProperties(*result);
@@ -74,23 +101,6 @@ unique_ptr<CreateViewInfo> CreateViewInfo::FromCreateView(ClientContext &context
 	binder->BindCreateViewInfo(*result);
 
 	return result;
-}
-
-string CreateViewInfo::ToString() const {
-	string ret = "";
-	ret += "CREATE VIEW " + view_name;
-	if (!aliases.empty()) {
-		ret += " (";
-		for (idx_t i = 0; i < aliases.size(); i++) {
-			ret += aliases.at(i);
-			if (i < aliases.size() - 1) {
-				ret += ", ";
-			}
-		}
-		ret += ")";
-	}
-	ret += " AS " + query->ToString();
-	return ret;
 }
 
 } // namespace duckdb

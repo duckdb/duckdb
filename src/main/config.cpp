@@ -169,6 +169,13 @@ void DBConfig::SetOptionByName(const string &name, const Value &value) {
 	auto option = DBConfig::GetOptionByName(name);
 	if (option) {
 		SetOption(*option, value);
+		return;
+	}
+
+	auto param = extension_parameters.find(name);
+	if (param != extension_parameters.end()) {
+		Value target_value = value.DefaultCastAs(param->second.type);
+		SetOption(name, std::move(target_value));
 	} else {
 		options.unrecognized_options[name] = value;
 	}

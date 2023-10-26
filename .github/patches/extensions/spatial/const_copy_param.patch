@@ -1,0 +1,15 @@
+diff --git a/spatial/src/spatial/gdal/functions/st_write.cpp b/spatial/src/spatial/gdal/functions/st_write.cpp
+index 36a71da..15ebcf4 100644
+--- a/spatial/src/spatial/gdal/functions/st_write.cpp
++++ b/spatial/src/spatial/gdal/functions/st_write.cpp
+@@ -55,8 +55,8 @@ struct GlobalState : public GlobalFunctionData {
+ //===--------------------------------------------------------------------===//
+ // Bind
+ //===--------------------------------------------------------------------===//
+-static unique_ptr<FunctionData> Bind(ClientContext &context, CopyInfo &info, vector<string> &names,
+-                                     vector<LogicalType> &sql_types) {
++static unique_ptr<FunctionData> Bind(ClientContext &context, const CopyInfo &info, const vector<string> &names,
++                                     const vector<LogicalType> &sql_types) {
+ 
+ 	GdalFileHandler::SetLocalClientContext(context);
+ 
