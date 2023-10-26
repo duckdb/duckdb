@@ -1083,8 +1083,9 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	serializer.WriteProperty(101, "column_names", bind_data.column_names);
 	serializer.WriteProperty(102, "codec", bind_data.codec);
 	serializer.WriteProperty(103, "row_group_size", bind_data.row_group_size);
-	serializer.WriteProperty(104, "kv_metadata", bind_data.kv_metadata);
-	serializer.WriteProperty(105, "field_ids", bind_data.field_ids);
+	serializer.WriteProperty(104, "row_group_size_bytes", bind_data.row_group_size_bytes);
+	serializer.WriteProperty(105, "kv_metadata", bind_data.kv_metadata);
+	serializer.WriteProperty(106, "field_ids", bind_data.field_ids);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -1093,8 +1094,9 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	data->column_names = deserializer.ReadProperty<vector<string>>(101, "column_names");
 	data->codec = deserializer.ReadProperty<duckdb_parquet::format::CompressionCodec::type>(102, "codec");
 	data->row_group_size = deserializer.ReadProperty<idx_t>(103, "row_group_size");
-	data->kv_metadata = deserializer.ReadProperty<vector<pair<string, string>>>(104, "kv_metadata");
-	data->field_ids = deserializer.ReadProperty<ChildFieldIDs>(105, "field_ids");
+	data->row_group_size_bytes = deserializer.ReadProperty<idx_t>(104, "row_group_size_bytes");
+	data->kv_metadata = deserializer.ReadProperty<vector<pair<string, string>>>(105, "kv_metadata");
+	data->field_ids = deserializer.ReadProperty<ChildFieldIDs>(106, "field_ids");
 	return std::move(data);
 }
 // LCOV_EXCL_STOP

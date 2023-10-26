@@ -3766,7 +3766,6 @@ public class TestDuckDBJDBC {
         }
     }
 
-
     public static void test_UUID_binding() throws Exception {
         try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
              PreparedStatement statement = conn.prepareStatement("select '0b17ce61-375c-4ad8-97b3-349d96d35ab1'::UUID");
