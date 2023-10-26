@@ -176,3 +176,17 @@ SELECT a-10 AS k FROM test UNION SELECT a-11 AS l FROM test ORDER BY a-11;
 2
 3
 
+# issue #9433
+
+statement ok
+CREATE TABLE tbl AS SELECT {'a': 2.0, 'b': 'hello', 'c': [1, 2]} AS s;
+
+statement ok
+INSERT INTO tbl VALUES ({'a': 1.0, 'b': 'yay', 'c': [10, 20]});
+
+query IIII
+SELECT UNNEST(s), s.a AS id FROM tbl ORDER BY id;
+----
+1.0	yay	[10, 20]	1.0
+2.0	hello	[1, 2]	2.0
+
