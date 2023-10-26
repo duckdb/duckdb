@@ -163,7 +163,11 @@ unordered_set<idx_t> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) 
 
 void ColumnBindingResolver::Verify(LogicalOperator &op) {
 #ifdef DEBUG
+	op.GetColumnBindings();
 	VerifyInternal(op);
+	for(auto &child : op.children) {
+		Verify(*child);
+	}
 #endif
 }
 

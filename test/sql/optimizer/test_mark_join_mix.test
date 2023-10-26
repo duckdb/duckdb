@@ -1,0 +1,37 @@
+# name: test/sql/optimizer/test_mark_join_mix.test
+# description: Issue #9455 - INTERNAL Error: Attempted to access index 7 within vector of size 7
+# group: [optimizer]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE visit_occurrence(visit_occurrence_id BIGINT, person_id BIGINT);
+
+statement ok
+INSERT INTO visit_occurrence VALUES(1,1);
+
+statement ok
+INSERT INTO visit_occurrence VALUES(2,1);
+
+statement ok
+CREATE TABLE procedure_occurrence(visit_occurrence_id BIGINT, person_id BIGINT, procedure_concept_id BIGINT);
+
+statement ok
+INSERT INTO procedure_occurrence VALUES(1, 1, 1);
+
+statement ok
+CREATE TABLE procedure_vocab(procedure_concept_id BIGINT);
+
+statement ok
+INSERT INTO procedure_vocab VALUES(1);
+
+query IIII
+SELECT *
+FROM
+    visit_occurrence AS vo
+    JOIN procedure_occurrence po USING(visit_occurrence_id, person_id)
+    JOIN procedure_vocab pm ON po.procedure_concept_id = pm.procedure_concept_id
+WHERE vo.person_id IN (1,2,3,4,5,6,7,8,9,10,12);
+----
+1	1	1	1
