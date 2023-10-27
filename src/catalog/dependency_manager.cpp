@@ -362,12 +362,6 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	old_dependencies.Scan([&](CatalogEntry &other) {
 		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
 		auto &other_entry = other.Cast<DependencyCatalogEntry>();
-		auto other_connections_p = GetDependencySet(transaction, other);
-		if (!other_connections_p) {
-			// Already deleted
-			return;
-		}
-		auto &other_connections = *other_connections_p;
 
 		LookupEntry(
 		    transaction, other_entry,

@@ -148,6 +148,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 		}
 		case CatalogType::PREPARED_STATEMENT:
 		case CatalogType::SCALAR_FUNCTION_ENTRY:
+		case CatalogType::DEPENDENCY_ENTRY:
+		case CatalogType::DEPENDENCY_SET:
 			// do nothing, indexes/prepared statements/functions aren't persisted to disk
 			break;
 		default:
@@ -161,6 +163,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 	case CatalogType::COPY_FUNCTION_ENTRY:
 	case CatalogType::PRAGMA_FUNCTION_ENTRY:
 	case CatalogType::COLLATION_ENTRY:
+	case CatalogType::DEPENDENCY_ENTRY:
+	case CatalogType::DEPENDENCY_SET:
 		// do nothing, these entries are not persisted to disk
 		break;
 	default:
