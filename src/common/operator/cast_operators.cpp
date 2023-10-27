@@ -1894,8 +1894,10 @@ struct HugeIntegerCastOperation {
 		}
 
 		// Positive Exponent
-		if (!TryMultiplyOperator::Operation(state.result, Hugeint::POWERS_OF_TEN[e], state.result)) {
-			return false;
+		if (state.result != 0) {
+			if (e > 38 || !TryMultiplyOperator::Operation(state.result, Hugeint::POWERS_OF_TEN[e], state.result)) {
+				return false;
+			}
 		}
 		if (!state.FlushDecimal()) {
 			return false;
@@ -1909,7 +1911,7 @@ struct HugeIntegerCastOperation {
 			state.decimal = Hugeint::DivMod(state.decimal, Hugeint::POWERS_OF_TEN[-e], remainder);
 			state.decimal_total_digits -= (exponent + 1);
 		} else {
-			if (!TryMultiplyOperator::Operation(state.decimal, Hugeint::POWERS_OF_TEN[e], state.decimal)) {
+			if (e > 38 || !TryMultiplyOperator::Operation(state.decimal, Hugeint::POWERS_OF_TEN[e], state.decimal)) {
 				return false;
 			}
 		}
@@ -1949,7 +1951,7 @@ struct HugeIntegerCastOperation {
 		// Get the first (left-most) digit of the decimals
 		state.decimal /= Hugeint::POWERS_OF_TEN[state.decimal_total_digits];
 
-		if (state.decimal >= 5) {
+		if (state.decimal >= 5 || state.decimal <= -5) {
 			if (NEGATIVE) {
 				return TrySubtractOperator::Operation(state.result, hugeint_t(1), state.result);
 			} else {
