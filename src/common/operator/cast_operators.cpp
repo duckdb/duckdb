@@ -1769,130 +1769,204 @@ bool TryCastErrorMessage::Operation(string_t input, interval_t &result, string *
 // when that value is full, we perform a HUGEINT multiplication to flush it into the hugeint
 // this takes the number of HUGEINT multiplications down from [0-38] to [0-2]
 struct HugeIntCastData {
-	hugeint_t hugeint;
+	hugeint_t result;
 	int64_t intermediate;
 	uint8_t digits;
-	bool decimal;
+
+	hugeint_t decimal;
+	uint16_t decimal_total_digits;
+	int64_t decimal_intermediate;
+	uint16_t decimal_intermediate_digits;
 
 	bool Flush() {
 		if (digits == 0 && intermediate == 0) {
 			return true;
 		}
-		if (hugeint.lower != 0 || hugeint.upper != 0) {
+		if (result.lower != 0 || result.upper != 0) {
 			if (digits > 38) {
 				return false;
 			}
-			if (!Hugeint::TryMultiply(hugeint, Hugeint::POWERS_OF_TEN[digits], hugeint)) {
+			if (!Hugeint::TryMultiply(result, Hugeint::POWERS_OF_TEN[digits], result)) {
 				return false;
 			}
 		}
-		if (!Hugeint::AddInPlace(hugeint, hugeint_t(intermediate))) {
+		if (!Hugeint::AddInPlace(result, hugeint_t(intermediate))) {
 			return false;
 		}
 		digits = 0;
 		intermediate = 0;
 		return true;
 	}
+
+	bool FlushDecimal() {
+		if (decimal_intermediate_digits == 0 && decimal_intermediate == 0) {
+			return true;
+		}
+		if (decimal.lower != 0 || decimal.upper != 0) {
+			if (decimal_intermediate_digits > 38) {
+				return false;
+			}
+			if (!Hugeint::TryMultiply(decimal, Hugeint::POWERS_OF_TEN[decimal_intermediate_digits], decimal)) {
+				return false;
+			}
+		}
+		if (!Hugeint::AddInPlace(decimal, hugeint_t(decimal_intermediate))) {
+			return false;
+		}
+		decimal_total_digits += decimal_intermediate_digits;
+		decimal_intermediate_digits = 0;
+		decimal_intermediate = 0;
+		return true;
+	}
 };
 
 struct HugeIntegerCastOperation {
 	template <class T, bool NEGATIVE>
-	static bool HandleDigit(T &result, uint8_t digit) {
+	static bool HandleDigit(T &state, uint8_t digit) {
 		if (NEGATIVE) {
-			if (result.intermediate < (NumericLimits<int64_t>::Minimum() + digit) / 10) {
+			if (state.intermediate < (NumericLimits<int64_t>::Minimum() + digit) / 10) {
 				// intermediate is full: need to flush it
-				if (!result.Flush()) {
+				if (!state.Flush()) {
 					return false;
 				}
 			}
-			result.intermediate = result.intermediate * 10 - digit;
+			state.intermediate = state.intermediate * 10 - digit;
 		} else {
-			if (result.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 10) {
-				if (!result.Flush()) {
+			if (state.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 10) {
+				if (!state.Flush()) {
 					return false;
 				}
 			}
-			result.intermediate = result.intermediate * 10 + digit;
+			state.intermediate = state.intermediate * 10 + digit;
 		}
-		result.digits++;
+		state.digits++;
 		return true;
 	}
 
 	template <class T, bool NEGATIVE>
-	static bool HandleHexDigit(T &result, uint8_t digit) {
-		return false;
-	}
-
-	template <class T, bool NEGATIVE>
-	static bool HandleBinaryDigit(T &result, uint8_t digit) {
-		if (result.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 2) {
+	static bool HandleHexDigit(T &state, uint8_t digit) {
+		if (state.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 16) {
 			// intermediate is full: need to flush it
-			if (!result.Flush()) {
+			if (!state.Flush()) {
 				return false;
 			}
 		}
-		result.intermediate = result.intermediate * 2 + digit;
-		result.digits++;
+		state.intermediate = state.intermediate * 16 + digit;
+		state.digits++;
 		return true;
 	}
 
 	template <class T, bool NEGATIVE>
-	static bool HandleExponent(T &result, int32_t exponent) {
-		if (!result.Flush()) {
+	static bool HandleBinaryDigit(T &state, uint8_t digit) {
+		if (state.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 2) {
+			// intermediate is full: need to flush it
+			if (!state.Flush()) {
+				return false;
+			}
+		}
+		state.intermediate = state.intermediate * 2 + digit;
+		state.digits++;
+		return true;
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool HandleExponent(T &state, int32_t exponent) {
+		if (!state.Flush()) {
 			return false;
 		}
-		if (exponent < -38 || exponent > 38) {
-			// out of range for exact exponent: use double and convert
-			double dbl_res = Hugeint::Cast<double>(result.hugeint) * std::pow(10.0L, exponent);
-			if (dbl_res < Hugeint::Cast<double>(NumericLimits<hugeint_t>::Minimum()) ||
-			    dbl_res > Hugeint::Cast<double>(NumericLimits<hugeint_t>::Maximum())) {
+
+		int32_t e = exponent;
+		if (e < -38) {
+			state.result = 0;
+			return true;
+		}
+
+		// Negative Exponent
+		hugeint_t remainder = 0;
+		if (e < 0) {
+			state.result = Hugeint::DivMod(state.result, Hugeint::POWERS_OF_TEN[-e], remainder);
+			state.decimal = remainder;
+			state.decimal_total_digits = -e - 1;
+			state.decimal_intermediate = 0;
+			state.decimal_intermediate_digits = 0;
+			return Finalize<T, NEGATIVE>(state);
+		}
+
+		// Positive Exponent
+		if (!TryMultiplyOperator::Operation(state.result, Hugeint::POWERS_OF_TEN[e], state.result)) {
+			return false;
+		}
+		if (!state.FlushDecimal()) {
+			return false;
+		}
+		if (state.decimal == 0) {
+			return Finalize<T, NEGATIVE>(state);
+		}
+
+		e = exponent - state.decimal_total_digits;
+		if (e < 0) {
+			state.decimal = Hugeint::DivMod(state.decimal, Hugeint::POWERS_OF_TEN[-e], remainder);
+			state.decimal_total_digits -= (exponent + 1);
+		} else {
+			if (!TryMultiplyOperator::Operation(state.decimal, Hugeint::POWERS_OF_TEN[e], state.decimal)) {
 				return false;
 			}
-			result.hugeint = Hugeint::Convert(dbl_res);
-			return true;
 		}
-		if (exponent < 0) {
-			// negative exponent: divide by power of 10
-			result.hugeint = Hugeint::Divide(result.hugeint, Hugeint::POWERS_OF_TEN[-exponent]);
-			return true;
-		} else {
-			// positive exponent: multiply by power of 10
-			return Hugeint::TryMultiply(result.hugeint, Hugeint::POWERS_OF_TEN[exponent], result.hugeint);
+
+		if (NEGATIVE) {
+			if (!TrySubtractOperator::Operation(state.result, state.decimal, state.result)) {
+				return false;
+			}
+		} else if (!TryAddOperator::Operation(state.result, state.decimal, state.result)) {
+			return false;
 		}
+		state.decimal = remainder;
+		return Finalize<T, NEGATIVE>(state);
 	}
 
 	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
-	static bool HandleDecimal(T &result, uint8_t digit) {
-		// Integer casts round
-		if (!result.decimal) {
-			if (!result.Flush()) {
+	static bool HandleDecimal(T &state, uint8_t digit) {
+		if (!state.Flush()) {
+			return false;
+		}
+		if (state.decimal_intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 10) {
+			if (!state.FlushDecimal()) {
 				return false;
 			}
-			if (NEGATIVE) {
-				result.intermediate = -(digit >= 5);
-			} else {
-				result.intermediate = (digit >= 5);
-			}
 		}
-		result.decimal = true;
-
+		state.decimal_intermediate = state.decimal_intermediate * 10 + digit;
+		state.decimal_intermediate_digits++;
 		return true;
 	}
 
 	template <class T, bool NEGATIVE>
-	static bool Finalize(T &result) {
-		return result.Flush();
+	static bool Finalize(T &state) {
+		if (!state.Flush() || !state.FlushDecimal()) {
+			return false;
+		}
+
+		// Get the first (left-most) digit of the decimals
+		state.decimal /= Hugeint::POWERS_OF_TEN[state.decimal_total_digits];
+
+		if (state.decimal >= 5) {
+			if (NEGATIVE) {
+				return TrySubtractOperator::Operation(state.result, hugeint_t(1), state.result);
+			} else {
+				return TryAddOperator::Operation(state.result, hugeint_t(1), state.result);
+			}
+		}
+		return true;
 	}
 };
 
 template <>
 bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
-	HugeIntCastData data;
-	if (!TryIntegerCast<HugeIntCastData, true, true, HugeIntegerCastOperation>(input.GetData(), input.GetSize(), data,
+	HugeIntCastData state = {};
+	if (!TryIntegerCast<HugeIntCastData, true, true, HugeIntegerCastOperation>(input.GetData(), input.GetSize(), state,
 	                                                                           strict)) {
 		return false;
 	}
-	result = data.hugeint;
+	result = state.result;
 	return true;
 }
 
