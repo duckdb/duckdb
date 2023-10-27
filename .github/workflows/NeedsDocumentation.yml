@@ -35,5 +35,5 @@ jobs:
       - name: Create mirror issue if it does not yet exist
         run: |
           if [ "${MIRROR_ISSUE_NUMBER}" == "" ]; then
-            gh issue create --repo duckdb/duckdb-web --title "${TITLE_PREFIX} - ${PUBLIC_ISSUE_TITLE} needs documentation" --body "See https://github.com/duckdb/duckdb/issues/${{ github.event.issue.number }}"
+            gh issue create --repo duckdb/duckdb-web --title "${TITLE_PREFIX} - ${PUBLIC_ISSUE_TITLE} needs documentation" --body "See https://github.com/duckdb/duckdb/issues/${{ github.event.issue.number || github.event.pull_request.number }}"
           fi
