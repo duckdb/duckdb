@@ -17,6 +17,7 @@
 #include "duckdb/core_functions/scalar/string_functions.hpp"
 #include "duckdb/core_functions/scalar/struct_functions.hpp"
 #include "duckdb/core_functions/scalar/union_functions.hpp"
+#include "duckdb/core_functions/scalar/array_functions.hpp"
 #include "duckdb/core_functions/scalar/debug_functions.hpp"
 
 namespace duckdb {
@@ -73,13 +74,19 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayAggrFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayAggregateFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayApplyFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ArrayCosineSimilarityFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ArrayCrossProductFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ArrayDistanceFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayDistinctFun),
+	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ArrayDotProductFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayFilterFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ArrayInnerProductFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ArrayReverseSortFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ArraySliceFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ArraySortFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayTransformFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayUniqueFun),
+	DUCKDB_SCALAR_FUNCTION(ArrayValueFun),
 	DUCKDB_SCALAR_FUNCTION(ASCIIFun),
 	DUCKDB_SCALAR_FUNCTION(AsinFun),
 	DUCKDB_SCALAR_FUNCTION(AtanFun),

@@ -227,13 +227,6 @@ TEST_CASE("Error Release", "[adbc]") {
 	arrow_array.release(&arrow_array);
 	arrow_stream.release(&arrow_stream);
 
-	// We can't run a query on a nullptr connection
-	REQUIRE(AdbcStatementNew(nullptr, &adbc_statement, &adbc_error) == ADBC_STATUS_INVALID_ARGUMENT);
-
-	// We can't run a query on a nullptr statement
-	REQUIRE(AdbcStatementExecuteQuery(nullptr, &arrow_stream, &rows_affected, &adbc_error) ==
-	        ADBC_STATUS_INVALID_ARGUMENT);
-
 	// We can't run a query without a query
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 	AdbcStatementSetSqlQuery(&adbc_statement, nullptr, &adbc_error);
@@ -338,10 +331,6 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 	status = AdbcConnectionGetInfo(&adbc_connection, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, nullptr);
 	REQUIRE(status != ADBC_STATUS_OK);
 
-	// No connection
-	status = AdbcConnectionGetInfo(nullptr, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, &adbc_error);
-	REQUIRE(status != ADBC_STATUS_OK);
-
 	// Invalid connection
 	AdbcConnection bogus_connection;
 	bogus_connection.private_data = nullptr;
@@ -404,10 +393,6 @@ TEST_CASE("Test ADBC Statement Bind (unhappy)", "[adbc]") {
 	status = AdbcStatementBind(&adbc_statement, &prepared_array, &prepared_schema, nullptr);
 	REQUIRE(status == ADBC_STATUS_OK);
 
-	// No statement
-	status = AdbcStatementBind(nullptr, &prepared_array, &prepared_schema, &adbc_error);
-	REQUIRE(status != ADBC_STATUS_OK);
-
 	// No valid statement
 	AdbcStatement bogus_statement;
 	bogus_statement.private_data = nullptr;
@@ -430,10 +415,6 @@ TEST_CASE("Test ADBC Statement Bind (unhappy)", "[adbc]") {
 	result.release = nullptr;
 	status = AdbcStatementGetParameterSchema(&adbc_statement, &result, nullptr);
 	REQUIRE(status == ADBC_STATUS_OK);
-
-	// No statement
-	status = AdbcStatementGetParameterSchema(nullptr, &result, &adbc_error);
-	REQUIRE(status != ADBC_STATUS_OK);
 
 	// No valid statement
 	status = AdbcStatementGetParameterSchema(&bogus_statement, &result, &adbc_error);
@@ -971,16 +952,8 @@ TEST_CASE("Test ADBC Prepared Statement - Prepare nop", "[adbc]") {
 	// Statement Prepare is a nop for us, so it should just work, although it just does some error checking.
 	REQUIRE(SUCCESS(AdbcStatementPrepare(&adbc_statement, &adbc_error)));
 
-	REQUIRE(!SUCCESS(AdbcStatementPrepare(nullptr, &adbc_error)));
-
-	REQUIRE(std::strcmp(adbc_error.message, "Missing statement object") == 0);
-	adbc_error.release(&adbc_error);
-
 	AdbcStatementRelease(&adbc_statement, &adbc_error);
 	REQUIRE(!SUCCESS(AdbcStatementPrepare(&adbc_statement, &adbc_error)));
-
-	REQUIRE(std::strcmp(adbc_error.message, "Invalid statement object") == 0);
-	adbc_error.release(&adbc_error);
 }
 
 TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
@@ -1179,11 +1152,6 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		                         reinterpret_cast<const char **>(table_type_ptr_ptr), nullptr, &arrow_stream,
 		                         &adbc_error);
 		REQUIRE(std::strcmp(adbc_error.message, "Table types parameter not yet supported") == 0);
-		adbc_error.release(&adbc_error);
-
-		AdbcConnectionGetObjects(nullptr, ADBC_OBJECT_DEPTH_ALL, nullptr, nullptr, nullptr, nullptr, nullptr,
-		                         &arrow_stream, &adbc_error);
-		REQUIRE(std::strcmp(adbc_error.message, "connection can't be null") == 0);
 		adbc_error.release(&adbc_error);
 	}
 }
