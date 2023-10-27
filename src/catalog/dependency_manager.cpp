@@ -40,8 +40,10 @@ string DependencyManager::MangleName(CatalogEntry &entry) {
 	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
 		auto &dependency_entry = entry.Cast<DependencyCatalogEntry>();
 		return dependency_entry.MangledName();
+	} else if (entry.type == CatalogType::DEPENDENCY_SET) {
+		auto &dependency_set = entry.Cast<DependencySetCatalogEntry>();
+		return dependency_set.MangledName();
 	} else {
-		D_ASSERT(entry.type != CatalogType::DEPENDENCY_SET);
 		type = entry.type;
 		schema = GetSchema(entry);
 		name = entry.name;
@@ -51,6 +53,7 @@ string DependencyManager::MangleName(CatalogEntry &entry) {
 }
 
 optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(CatalogEntry &object) {
+	D_ASSERT(object.type != CatalogType::DEPENDENCY_SET);
 	auto name = MangleName(object);
 	auto mapping = connections.GetLatestMapping(name);
 	if (!mapping) {
@@ -232,30 +235,27 @@ void DependencyManager::CleanupDependencies(CatalogTransaction transaction, Cata
 	D_ASSERT(connections_p);
 	auto &connections = *connections_p;
 
+	// Collect the dependencies
+	catalog_entry_set_t dependencies_to_remove;
+	connections.Dependencies().Scan([&](CatalogEntry &other) { dependencies_to_remove.insert(other); });
+	// Also collect the dependents
 	catalog_entry_set_t dependents_to_remove;
-	connections.Dependents().Scan([&](CatalogEntry &other) {
-		auto &other_entry = other.Cast<DependencyCatalogEntry>();
-		auto other_connections_p = GetDependencySet(transaction, other_entry);
-		if (!other_connections_p) {
-			return;
-		}
-		auto &other_connections = *other_connections_p;
-		// FIXME:
-		// If we delete the dependency entries here, and later on in the loop a DependencyException is thrown
-		// are the deletes reverted because CatalogEntrys are transaction aware?
-		other_connections.RemoveDependency(transaction, other_entry);
-		if (other_entry.Type() == DependencyType::DEPENDENCY_OWNS) {
-			// We have an ownership over this entry, in the case of ALTER, we need to also remove the
-			// connection that the object has to this object.
-			D_ASSERT(other_connections.IsDependencyOf(object));
-			other_connections.RemoveDependent(transaction, connections);
-		}
-
-		dependents_to_remove.insert(other_entry);
-	});
+	connections.Dependents().Scan([&](CatalogEntry &other) { dependents_to_remove.insert(other); });
 
 	// Remove the dependency entries
+	for (auto &dependency : dependencies_to_remove) {
+		auto other_connections_p = GetDependencySet(transaction, dependency);
+		auto &other_connections = *other_connections_p;
+
+		other_connections.RemoveDependent(transaction, connections);
+		connections.RemoveDependency(transaction, dependency);
+	}
+	// Remove the dependent entries
 	for (auto &dependent : dependents_to_remove) {
+		auto other_connections_p = GetDependencySet(transaction, dependent);
+		auto &other_connections = *other_connections_p;
+
+		other_connections.RemoveDependency(transaction, connections);
 		connections.RemoveDependent(transaction, dependent);
 	}
 }
@@ -275,7 +275,6 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 
 	// Check if there are any entries that block the DROP because they still depend on the object
 	auto &dependents = object_connections.Dependents();
-	object_connections.PrintDependents();
 	catalog_entry_set_t dependents_to_remove;
 	dependents.Scan([&](CatalogEntry &other) {
 		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
@@ -286,7 +285,6 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 			return;
 		}
 		auto &other_connections = *other_connections_p;
-		other_connections.PrintDependencies();
 		D_ASSERT(other_connections.HasDependencyOn(object, other_entry.Type()));
 
 		// It makes no sense to have a schema depend on anything
@@ -324,8 +322,6 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		return;
 	}
 	auto &old_connections = *old_connections_p;
-
-	// FIXME: what if we change the type of a column, gaining/losing a dependency on a type entry??
 
 	dependency_set_t preserved_dependents;
 	auto &dependents = old_connections.Dependents();
@@ -380,22 +376,29 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 				    return;
 			    }
 			    dependency_list.insert(Dependency(*entry, other_entry.Type()));
-			    // Register that the new version of this object still has this dependency.
-			    // FIXME: what should the dependency type be???
-			    other_connections.AddDependent(transaction, new_obj, DependencyType::DEPENDENCY_REGULAR);
 		    });
 	});
 
-	// Clean up the old dependencies, this needs to be done before we add the new dependencies
-	// in case the object name is the same, we don't want to immediately delete our newly created dependencies
-	CleanupDependencies(transaction, old_obj);
+	// FIXME: we should update dependencies in the future
+	// some alters could cause dependencies to change (imagine types of table columns)
+	if (old_obj.name != new_obj.name) {
+		CleanupDependencies(transaction, old_obj);
+	}
+
+	for (auto &dep : dependency_list) {
+		auto &other = dep.entry.get();
+		auto other_connections = GetDependencySet(transaction, other);
+		// Register that the new version of this object still has this dependency.
+		// FIXME: what should the dependency type be???
+		other_connections->AddDependent(transaction, new_obj, DependencyType::DEPENDENCY_REGULAR);
+	}
 
 	// Add the dependencies to the new object
 	auto &connections = GetOrCreateDependencySet(transaction, new_obj);
 	for (auto &dep : preserved_dependents) {
 		auto &entry = dep.entry.get();
 		// Create a regular dependency on 'entry', so the drop of 'entry' is blocked by the object
-		dependency_list.insert(Dependency(entry));
+		dependency_list.insert(Dependency(entry, DependencyType::DEPENDENCY_REGULAR));
 	}
 	connections.AddDependencies(transaction, dependency_list);
 
@@ -404,9 +407,10 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 
 	for (auto &dependency : preserved_dependents) {
 		auto &entry = dependency.entry.get();
-		auto &dependency_connections = GetOrCreateDependencySet(transaction, entry);
+		auto dependency_connections = GetDependencySet(transaction, entry);
+		D_ASSERT(dependency_connections);
 
-		dependency_connections.AddDependent(transaction, new_obj, DependencyType::DEPENDENCY_OWNED_BY);
+		dependency_connections->AddDependent(transaction, new_obj, DependencyType::DEPENDENCY_OWNED_BY);
 	}
 }
 
@@ -481,8 +485,6 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 				    return;
 			    }
 			    auto &dep = *dep_p;
-
-			    auto &mapping = *mapping_p;
 
 			    // if the entry is already owned, throw error
 			    if (&dep != &owner) {
