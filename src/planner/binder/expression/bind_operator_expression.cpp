@@ -108,13 +108,17 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		auto &extract_exp = BoundExpression::GetExpression(*op.children[0]);
 		auto &name_exp = BoundExpression::GetExpression(*op.children[1]);
 		auto extract_expr_type = extract_exp->return_type.id();
+		auto is_json = (extract_exp->return_type.HasAlias() && extract_exp->return_type.GetAlias() == "JSON") ||
+		               extract_expr_type == LogicalTypeId::VARCHAR;
 		if (extract_expr_type != LogicalTypeId::STRUCT && extract_expr_type != LogicalTypeId::UNION &&
-		    extract_expr_type != LogicalTypeId::SQLNULL) {
+		    extract_expr_type != LogicalTypeId::SQLNULL && !is_json) {
 			return BindResult(StringUtil::Format(
-			    "Cannot extract field %s from expression \"%s\" because it is not a struct or a union",
+			    "Cannot extract field %s from expression \"%s\" because it is not a struct, union, or json",
 			    name_exp->ToString(), extract_exp->ToString()));
 		}
-		function_name = extract_expr_type == LogicalTypeId::UNION ? "union_extract" : "struct_extract";
+		function_name = extract_expr_type == LogicalTypeId::UNION ? "union_extract"
+		                : is_json                                 ? "json_extract_string"
+		                                                          : "struct_extract";
 		break;
 	}
 	case ExpressionType::ARRAY_CONSTRUCTOR:
