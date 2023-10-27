@@ -2151,4 +2151,16 @@ typedef struct PGUseStmt {
 } PGUseStmt;
 
 
+/* ----------------------
+ *		Create Secret Statement
+ * ----------------------
+ */
+typedef struct PGCreateSecretStmt {
+	PGNodeTag type;
+	char *secret_name;                    /* name of the secret */
+	char *secret_type;                    /* type of secret */
+	PGList *options;                      /* Secret options */
+	PGOnCreateConflict onconflict;        /* what to do on create conflict */
+} PGCreateSecretStmt;
+
 }
