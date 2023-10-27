@@ -31,9 +31,16 @@ public:
 	                       DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	~DependencyCatalogEntry() override;
 
-	DependencyConnectionType connection_type;
+public:
+	const string &MangledName() const;
+	CatalogType EntryType() const;
+	const string &EntrySchema() const;
+	const string &EntryName() const;
+	DependencyType Type() const;
 
-	string name;
+private:
+	DependencyConnectionType connection_type;
+	string entry_name;
 	string schema;
 	CatalogType entry_type;
 	DependencyType dependency_type;

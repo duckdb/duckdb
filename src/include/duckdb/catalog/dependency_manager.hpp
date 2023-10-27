@@ -47,14 +47,20 @@ private:
 	bool IsSystemEntry(CatalogEntry &entry) const;
 	DependencySetCatalogEntry &GetOrCreateDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
 	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
+	// Alternative to get the latest entry if no CatalogTransaction is available.
 	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogEntry &entry);
-	void DropObjectInternalNew(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
-	void AlterObjectInternalNew(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
 
 	using lookup_callback_t = std::function<void(optional_ptr<CatalogEntry> entry, optional_ptr<CatalogSet> set,
 	                                             optional_ptr<MappingValue> mapping)>;
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency,
 	                                       lookup_callback_t callback);
+
+	void CleanupDependencies(CatalogTransaction transaction, CatalogEntry &entry);
+
+public:
+	static string MangleName(CatalogType type, const string &schema, const string &name);
+	static string MangleName(CatalogEntry &entry);
+	static void UnmangleName(const string &mangled, CatalogType &type, string &schema, string &name);
 
 private:
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, DependencyList &dependencies);

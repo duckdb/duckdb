@@ -12,6 +12,7 @@
 #include "duckdb/catalog/catalog_entry/dependency_set_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/dependency_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
+#include "duckdb/catalog/mapping_value.hpp"
 
 namespace duckdb {
 
@@ -25,32 +26,32 @@ static string GetSchema(CatalogEntry &entry) {
 	return entry.ParentSchema().name;
 }
 
-static string GetMangledNameFromDependency(CatalogEntry &entry) {
-	D_ASSERT(entry.type == CatalogType::DEPENDENCY_ENTRY);
-	auto &dependency_entry = entry.Cast<DependencyCatalogEntry>();
-
-	auto &type = dependency_entry.entry_type;
-	auto &name = dependency_entry.name;
-	auto &schema = dependency_entry.schema;
-
+string DependencyManager::MangleName(CatalogType type, const string &schema, const string &name) {
 	static constexpr const char *mangle_format = "%s\0%s\0%s";
 	static constexpr const idx_t mangle_format_size = 8;
 	return StringUtil::Format(std::string(mangle_format, mangle_format_size), CatalogTypeToString(type), schema, name);
 }
 
-static string GetMangledName(CatalogEntry &entry) {
+string DependencyManager::MangleName(CatalogEntry &entry) {
+	CatalogType type = CatalogType::INVALID;
+	string schema;
+	string name;
+
 	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
-		return GetMangledNameFromDependency(entry);
+		auto &dependency_entry = entry.Cast<DependencyCatalogEntry>();
+		return dependency_entry.MangledName();
+	} else {
+		D_ASSERT(entry.type != CatalogType::DEPENDENCY_SET);
+		type = entry.type;
+		schema = GetSchema(entry);
+		name = entry.name;
 	}
-	auto schema = GetSchema(entry);
-	static constexpr const char *mangle_format = "%s\0%s\0%s";
-	static constexpr const idx_t mangle_format_size = 8;
-	return StringUtil::Format(std::string(mangle_format, mangle_format_size), CatalogTypeToString(entry.type), schema,
-	                          entry.name);
+	D_ASSERT(type != CatalogType::INVALID);
+	return MangleName(type, schema, name);
 }
 
 optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(CatalogEntry &object) {
-	auto name = GetMangledName(object);
+	auto name = MangleName(object);
 	auto mapping = connections.GetLatestMapping(name);
 	if (!mapping) {
 		return nullptr;
@@ -68,7 +69,7 @@ optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(Cata
 
 optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(CatalogTransaction transaction,
                                                                             CatalogEntry &object) {
-	auto name = GetMangledName(object);
+	auto name = MangleName(object);
 	auto connection_p = connections.GetEntry(transaction, name);
 	if (!connection_p) {
 		return nullptr;
@@ -79,7 +80,7 @@ optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(Cata
 
 DependencySetCatalogEntry &DependencyManager::GetOrCreateDependencySet(CatalogTransaction transaction,
                                                                        CatalogEntry &object) {
-	auto name = GetMangledName(object);
+	auto name = MangleName(object);
 	auto connection_p = connections.GetEntry(transaction, name);
 	if (!connection_p) {
 		auto new_connection = make_uniq<DependencySetCatalogEntry>(catalog, name);
@@ -158,7 +159,7 @@ static bool CascadeDrop(bool cascade, DependencyType dependency_type) {
 	return false;
 }
 
-void UnmangleName(const string &mangled, string &schema, string &name, CatalogType &type) {
+void DependencyManager::UnmangleName(const string &mangled, CatalogType &type, string &schema, string &name) {
 	auto parts = StringUtil::Split(mangled, std::string("\0", 1));
 	D_ASSERT(parts.size() == 3);
 	type = CatalogTypeFromString(parts[0]);
@@ -170,14 +171,14 @@ void GetLookupProperties(CatalogEntry &entry, string &schema, string &name, Cata
 	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
 		auto &dependency_entry = entry.Cast<DependencyCatalogEntry>();
 
-		schema = dependency_entry.schema;
-		name = dependency_entry.name;
-		type = dependency_entry.entry_type;
+		schema = dependency_entry.EntrySchema();
+		name = dependency_entry.EntryName();
+		type = dependency_entry.EntryType();
 	} else if (entry.type == CatalogType::DEPENDENCY_SET) {
 		auto &dependency_set = entry.Cast<DependencySetCatalogEntry>();
 
-		auto &mangled_name = dependency_set.Name();
-		UnmangleName(mangled_name, schema, name, type);
+		auto &mangled_name = dependency_set.MangledName();
+		DependencyManager::UnmangleName(mangled_name, type, schema, name);
 	} else {
 		throw InternalException("Unrecognized CatalogType in 'GetLookupProperties'");
 	}
@@ -226,8 +227,46 @@ optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction tra
 	return entry;
 }
 
-void DependencyManager::DropObjectInternalNew(CatalogTransaction transaction, CatalogEntry &object, bool cascade) {
-	// first check the objects that depend on this object
+void DependencyManager::CleanupDependencies(CatalogTransaction transaction, CatalogEntry &object) {
+	auto connections_p = GetDependencySet(transaction, object);
+	D_ASSERT(connections_p);
+	auto &connections = *connections_p;
+
+	catalog_entry_set_t dependents_to_remove;
+	connections.Dependents().Scan([&](CatalogEntry &other) {
+		auto &other_entry = other.Cast<DependencyCatalogEntry>();
+		auto other_connections_p = GetDependencySet(transaction, other_entry);
+		if (!other_connections_p) {
+			return;
+		}
+		auto &other_connections = *other_connections_p;
+		// FIXME:
+		// If we delete the dependency entries here, and later on in the loop a DependencyException is thrown
+		// are the deletes reverted because CatalogEntrys are transaction aware?
+		other_connections.RemoveDependency(transaction, other_entry);
+		if (other_entry.Type() == DependencyType::DEPENDENCY_OWNS) {
+			// We have an ownership over this entry, in the case of ALTER, we need to also remove the
+			// connection that the object has to this object.
+			D_ASSERT(other_connections.IsDependencyOf(object));
+			other_connections.RemoveDependent(transaction, connections);
+		}
+
+		dependents_to_remove.insert(other_entry);
+	});
+
+	// Remove the dependency entries
+	for (auto &dependent : dependents_to_remove) {
+		connections.RemoveDependent(transaction, dependent);
+	}
+}
+
+void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade) {
+	if (IsSystemEntry(object)) {
+		// Don't do anything for this
+		return;
+	}
+
+	// Check if there are any dependencies registered on this object
 	auto object_connections_p = GetDependencySet(transaction, object);
 	if (!object_connections_p) {
 		return;
@@ -236,6 +275,8 @@ void DependencyManager::DropObjectInternalNew(CatalogTransaction transaction, Ca
 
 	// Check if there are any entries that block the DROP because they still depend on the object
 	auto &dependents = object_connections.Dependents();
+	object_connections.PrintDependents();
+	catalog_entry_set_t dependents_to_remove;
 	dependents.Scan([&](CatalogEntry &other) {
 		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
 		auto &other_entry = other.Cast<DependencyCatalogEntry>();
@@ -245,11 +286,11 @@ void DependencyManager::DropObjectInternalNew(CatalogTransaction transaction, Ca
 			return;
 		}
 		auto &other_connections = *other_connections_p;
-#ifdef DEBUG
-		const auto has_dependency_on = other_connections.HasDependencyOn(object, other_entry.dependency_type);
-		D_ASSERT(has_dependency_on);
-#endif
+		other_connections.PrintDependencies();
+		D_ASSERT(other_connections.HasDependencyOn(object, other_entry.Type()));
 
+		// It makes no sense to have a schema depend on anything
+		D_ASSERT(other_entry.EntryType() != CatalogType::SCHEMA_ENTRY);
 		LookupEntry(
 		    transaction, other_entry,
 		    [&](optional_ptr<CatalogEntry> entry, optional_ptr<CatalogSet> set, optional_ptr<MappingValue> mapping) {
@@ -257,10 +298,7 @@ void DependencyManager::DropObjectInternalNew(CatalogTransaction transaction, Ca
 				    return;
 			    }
 
-			    // It makes no sense to have a schema depend on anything
-			    D_ASSERT(other_entry.entry_type != CatalogType::SCHEMA_ENTRY);
-
-			    if (!CascadeDrop(cascade, other_entry.dependency_type)) {
+			    if (!CascadeDrop(cascade, other_entry.Type())) {
 				    // no cascade and there are objects that depend on this object: throw error
 				    throw DependencyException("Cannot drop entry \"%s\" because there are entries that "
 				                              "depend on it. Use DROP...CASCADE to drop all dependents.",
@@ -269,18 +307,17 @@ void DependencyManager::DropObjectInternalNew(CatalogTransaction transaction, Ca
 			    set->DropEntryInternal(transaction, mapping->index.Copy(), *entry, cascade);
 		    });
 	});
+
+	CleanupDependencies(transaction, object);
 }
 
-void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade) {
-	if (IsSystemEntry(object)) {
+void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj) {
+	if (IsSystemEntry(new_obj)) {
+		D_ASSERT(IsSystemEntry(old_obj));
 		// Don't do anything for this
 		return;
 	}
-	DropObjectInternalNew(transaction, object, cascade);
-}
 
-void DependencyManager::AlterObjectInternalNew(CatalogTransaction transaction, CatalogEntry &old_obj,
-                                               CatalogEntry &new_obj) {
 	auto old_connections_p = GetDependencySet(transaction, old_obj);
 	if (!old_connections_p) {
 		// Nothing depends on this object and this object doesn't depend on anything either
@@ -300,10 +337,10 @@ void DependencyManager::AlterObjectInternalNew(CatalogTransaction transaction, C
 			// Already deleted
 			return;
 		}
-		D_ASSERT(other_connections_p->HasDependencyOn(old_obj, other_entry.dependency_type));
+		D_ASSERT(other_connections_p->HasDependencyOn(old_obj, other_entry.Type()));
 
 		// It makes no sense to have a schema depend on anything
-		D_ASSERT(other_entry.entry_type != CatalogType::SCHEMA_ENTRY);
+		D_ASSERT(other_entry.EntryType() != CatalogType::SCHEMA_ENTRY);
 
 		LookupEntry(
 		    transaction, other_entry,
@@ -311,8 +348,8 @@ void DependencyManager::AlterObjectInternalNew(CatalogTransaction transaction, C
 			    if (!entry) {
 				    return;
 			    }
-			    if (other_entry.dependency_type == DependencyType::DEPENDENCY_OWNS) {
-				    preserved_dependents.insert(Dependency(*entry, other_entry.dependency_type));
+			    if (other_entry.Type() == DependencyType::DEPENDENCY_OWNS) {
+				    preserved_dependents.insert(Dependency(*entry, other_entry.Type()));
 				    return;
 			    }
 			    // conflict: attempting to alter this object but the dependent object still exists
@@ -342,12 +379,17 @@ void DependencyManager::AlterObjectInternalNew(CatalogTransaction transaction, C
 			    if (!entry) {
 				    return;
 			    }
-			    dependency_list.insert(Dependency(*entry, other_entry.dependency_type));
+			    dependency_list.insert(Dependency(*entry, other_entry.Type()));
 			    // Register that the new version of this object still has this dependency.
 			    // FIXME: what should the dependency type be???
 			    other_connections.AddDependent(transaction, new_obj, DependencyType::DEPENDENCY_REGULAR);
 		    });
 	});
+
+	// Clean up the old dependencies, this needs to be done before we add the new dependencies
+	// in case the object name is the same, we don't want to immediately delete our newly created dependencies
+	CleanupDependencies(transaction, old_obj);
+
 	// Add the dependencies to the new object
 	auto &connections = GetOrCreateDependencySet(transaction, new_obj);
 	for (auto &dep : preserved_dependents) {
@@ -364,18 +406,8 @@ void DependencyManager::AlterObjectInternalNew(CatalogTransaction transaction, C
 		auto &entry = dependency.entry.get();
 		auto &dependency_connections = GetOrCreateDependencySet(transaction, entry);
 
-		dependency_connections.AddDependent(transaction, entry, DependencyType::DEPENDENCY_OWNED_BY);
+		dependency_connections.AddDependent(transaction, new_obj, DependencyType::DEPENDENCY_OWNED_BY);
 	}
-}
-
-void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj) {
-	if (IsSystemEntry(new_obj)) {
-		D_ASSERT(IsSystemEntry(old_obj));
-		// Don't do anything for this
-		return;
-	}
-
-	AlterObjectInternalNew(transaction, old_obj, new_obj);
 }
 
 void DependencyManager::EraseObject(CatalogEntry &object) {
@@ -413,7 +445,7 @@ void DependencyManager::Scan(ClientContext &context,
 				return;
 			}
 			auto &dependent_entry = *dependent_entry_p;
-			callback(entry, dependent_entry, dependency_entry.dependency_type);
+			callback(entry, dependent_entry, dependency_entry.Type());
 		});
 	});
 }
@@ -430,7 +462,7 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 	auto &owner_dependents = owner_connections.Dependents();
 	owner_dependents.Scan([&](CatalogEntry &dependent) {
 		auto &dependent_entry = dependent.Cast<DependencyCatalogEntry>();
-		if (dependent_entry.dependency_type == DependencyType::DEPENDENCY_OWNED_BY) {
+		if (dependent_entry.Type() == DependencyType::DEPENDENCY_OWNED_BY) {
 			throw DependencyException(owner.name + " already owned by " + dependent_entry.name);
 		}
 	});
@@ -440,22 +472,29 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 	auto &entry_dependents = entry_connections.Dependents();
 	entry_dependents.Scan([&](CatalogEntry &dependent) {
 		auto &dependent_entry = dependent.Cast<DependencyCatalogEntry>();
-		auto dependency_type = dependent_entry.dependency_type;
+		auto dependency_type = dependent_entry.Type();
 
-		auto lookup = LookupEntry(transaction, dependent, nullptr);
-		D_ASSERT(lookup);
-		auto &dep = *lookup;
+		LookupEntry(
+		    transaction, dependent,
+		    [&](optional_ptr<CatalogEntry> dep_p, optional_ptr<CatalogSet> set, optional_ptr<MappingValue> mapping_p) {
+			    if (!dep_p) {
+				    return;
+			    }
+			    auto &dep = *dep_p;
 
-		// if the entry is already owned, throw error
-		if (&dep != &owner) {
-			throw DependencyException(entry.name + " already depends on " + dep.name);
-		}
+			    auto &mapping = *mapping_p;
 
-		// if the entry owns the owner, throw error
-		if (&dep == &owner && dependency_type == DependencyType::DEPENDENCY_OWNS) {
-			throw DependencyException(entry.name + " already owns " + owner.name +
-			                          ". Cannot have circular dependencies");
-		}
+			    // if the entry is already owned, throw error
+			    if (&dep != &owner) {
+				    throw DependencyException(entry.name + " already depends on " + dep.name);
+			    }
+
+			    // if the entry owns the owner, throw error
+			    if (&dep == &owner && dependency_type == DependencyType::DEPENDENCY_OWNS) {
+				    throw DependencyException(entry.name + " already owns " + owner.name +
+				                              ". Cannot have circular dependencies");
+			    }
+		    });
 	});
 	entry_connections.AddDependent(transaction, owner, DependencyType::DEPENDENCY_OWNED_BY);
 	// We use an automatic dependency because if the Owner gets deleted, then the owned objects are also deleted

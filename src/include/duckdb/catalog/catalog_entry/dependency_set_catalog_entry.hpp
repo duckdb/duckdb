@@ -30,26 +30,38 @@ public:
 	CatalogSet &Dependents();
 
 public:
+	// Add Dependencies
 	void AddDependency(CatalogTransaction transaction, CatalogEntry &dependent,
 	                   DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	void AddDependency(CatalogTransaction transaction, Dependency dependent);
 	void AddDependencies(CatalogTransaction transaction, DependencyList &dependencies);
 	void AddDependencies(CatalogTransaction transaction, dependency_set_t &dependencies);
 
+	// Add Dependents
 	void AddDependent(CatalogTransaction transaction, CatalogEntry &dependent,
 	                  DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	void AddDependent(CatalogTransaction transaction, Dependency dependent);
 	void AddDependents(CatalogTransaction transaction, DependencyList &dependents);
 	void AddDependents(CatalogTransaction transaction, dependency_set_t &dependents);
 
+public:
+	void RemoveDependency(CatalogTransaction transaction, CatalogEntry &dependency);
+	void RemoveDependent(CatalogTransaction transaction, CatalogEntry &dependent);
+
+public:
 	bool HasDependencyOn(CatalogEntry &entry, DependencyType type);
 	bool IsDependencyOf(CatalogEntry &entry);
 
+private:
+	//! Skips the exemption for DEPENDENCY_OWNS, use 'HasDependencyOn' instead for that
+	bool HasDependencyOnInternal(CatalogEntry &entry);
+
+public:
 	void PrintDependencies();
 	void PrintDependents();
 
 public:
-	const string &Name() const;
+	const string &MangledName() const;
 
 private:
 	string name;
