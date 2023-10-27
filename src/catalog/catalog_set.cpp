@@ -349,11 +349,6 @@ void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
 	if (catalog_entry.parent->type != CatalogType::UPDATED_ENTRY) {
 		lock_guard<mutex> write_lock(catalog.GetWriteLock());
 		lock_guard<mutex> lock(catalog_lock);
-		if (!catalog_entry.deleted) {
-			// delete the entry from the dependency manager, if it is not deleted yet
-			D_ASSERT(catalog_entry.ParentCatalog().IsDuckCatalog());
-			catalog_entry.ParentCatalog().Cast<DuckCatalog>().GetDependencyManager().EraseObject(catalog_entry);
-		}
 		auto parent = catalog_entry.parent;
 		parent->child = std::move(catalog_entry.child);
 		if (parent->deleted && !parent->child && !parent->parent) {
@@ -567,11 +562,6 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 	// i.e. we have to place (entry) as (entry->parent) again
 	auto &to_be_removed_node = *entry.parent;
 
-	if (!to_be_removed_node.deleted) {
-		// delete the entry from the dependency manager as well
-		auto &dependency_manager = catalog.GetDependencyManager();
-		dependency_manager.EraseObject(to_be_removed_node);
-	}
 	if (!StringUtil::CIEquals(entry.name, to_be_removed_node.name)) {
 		// rename: clean up the new name when the rename is rolled back
 		auto removed_entry = mapping.find(to_be_removed_node.name);

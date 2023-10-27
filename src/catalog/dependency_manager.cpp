@@ -27,9 +27,8 @@ static string GetSchema(CatalogEntry &entry) {
 }
 
 string DependencyManager::MangleName(CatalogType type, const string &schema, const string &name) {
-	static constexpr const char *mangle_format = "%s\0%s\0%s";
-	static constexpr const idx_t mangle_format_size = 8;
-	return StringUtil::Format(std::string(mangle_format, mangle_format_size), CatalogTypeToString(type), schema, name);
+	auto null_byte = string(1, '\0');
+	return CatalogTypeToString(type) + null_byte + schema + null_byte + name;
 }
 
 string DependencyManager::MangleName(CatalogEntry &entry) {
@@ -375,6 +374,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 
 	// FIXME: we should update dependencies in the future
 	// some alters could cause dependencies to change (imagine types of table columns)
+	// or DEFAULT depending on a sequence
 	if (old_obj.name != new_obj.name) {
 		CleanupDependencies(transaction, old_obj);
 	}
@@ -406,20 +406,6 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 
 		dependency_connections->AddDependent(transaction, new_obj, DependencyType::DEPENDENCY_OWNED_BY);
 	}
-}
-
-void DependencyManager::EraseObject(CatalogEntry &object) {
-	if (IsSystemEntry(object)) {
-		// Don't do anything for this
-		return;
-	}
-
-	// obtain the writing lock
-	EraseObjectInternal(object);
-}
-
-void DependencyManager::EraseObjectInternal(CatalogEntry &object) {
-	// NOTE: I think this is no longer a necessary step?
 }
 
 void DependencyManager::Scan(ClientContext &context,

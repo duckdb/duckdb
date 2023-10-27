@@ -30,9 +30,6 @@ class DependencyManager {
 public:
 	explicit DependencyManager(DuckCatalog &catalog);
 
-	//! Erase the object from the DependencyManager; this should only happen when the object itself is destroyed
-	void EraseObject(CatalogEntry &object);
-
 	//! Scans all dependencies, returning pairs of (object, dependent)
 	void Scan(ClientContext &context,
 	          const std::function<void(CatalogEntry &, CatalogEntry &, DependencyType)> &callback);
@@ -66,7 +63,6 @@ private:
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, DependencyList &dependencies);
 	void DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
 	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
-	void EraseObjectInternal(CatalogEntry &object);
 };
 
 } // namespace duckdb
