@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 # Positive numbers (includes unsigned)
-foreach type tinyint integer bigint utinyint uinteger ubigint
+foreach type <integral>
 
 # Positive Number - Positive Exponent
 
@@ -62,7 +62,7 @@ Conversion Error
 endloop
 
 # Negative numbers (excludes unsigned)
-foreach type tinyint integer bigint
+foreach type <signed>
 
 # Negative Number - Positive Exponent
 
@@ -114,3 +114,30 @@ select '-10e40'::${type};
 Conversion Error
 
 endloop
+
+# Check limits
+
+query II
+select '12.7e1'::TINYINT, '-12.8e1'::TINYINT;
+----
+127	-128
+
+query II
+select '3276.7e1'::SMALLINT, '-3276.8e1'::SMALLINT;
+----
+32767	-32768
+
+query II
+select '214748364.7e1'::INTEGER, '-214748364.8e1'::INTEGER;
+----
+2147483647	-2147483648
+
+query II
+select '922337203685477580.7e1'::BIGINT, '-922337203685477580.8e1'::BIGINT;
+----
+9223372036854775807	-9223372036854775808
+
+query II
+select '17014118346046923173168730371588410572.7e1'::HUGEINT, '-17014118346046923173168730371588410572.8e1'::HUGEINT;
+----
+170141183460469231731687303715884105727	-170141183460469231731687303715884105728
