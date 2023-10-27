@@ -853,10 +853,6 @@ struct IntegerCastOperation {
 
 		int32_t e = exponent;
 		// Negative Exponent
-		if (e < -NumericLimits<result_t>::Digits()) {
-			state.result = 0;
-			return true;
-		}
 		if (e < 0) {
 			while (e++ < 0) {
 				state.decimal = state.result % 10;
