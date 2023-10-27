@@ -47,10 +47,18 @@ private:
 	// Alternative to get the latest entry if no CatalogTransaction is available.
 	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogEntry &entry);
 
-	using lookup_callback_t = std::function<void(optional_ptr<CatalogEntry> entry, optional_ptr<CatalogSet> set,
-	                                             optional_ptr<MappingValue> mapping)>;
-	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency,
-	                                       lookup_callback_t callback);
+	struct LookupResult {
+	public:
+		LookupResult(optional_ptr<CatalogEntry> entry);
+		LookupResult(optional_ptr<CatalogSet> set, optional_ptr<MappingValue> mapping_value,
+		             optional_ptr<CatalogEntry> entry);
+
+	public:
+		optional_ptr<CatalogSet> set;
+		optional_ptr<MappingValue> mapping_value;
+		optional_ptr<CatalogEntry> entry;
+	};
+	LookupResult LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency);
 
 	void CleanupDependencies(CatalogTransaction transaction, CatalogEntry &entry);
 
