@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/catalog/mapping_value.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 
 namespace duckdb {
 
@@ -97,28 +98,14 @@ void DependencySetCatalogEntry::RemoveDependency(CatalogTransaction transaction,
 		return;
 	}
 	auto &name = dependency.name;
-	EntryIndex index;
-	auto entry = dependencies.GetEntryInternal(transaction, name, &index);
-	if (!entry) {
-		// Already removed
-		return;
-	}
-	D_ASSERT(index.IsValid());
-	dependencies.DropEntryInternal(transaction, std::move(index), *entry, false);
+	dependencies.DropEntry(transaction, name, false);
 }
 
 // Remove dependent from a DependencyEntry
 void DependencySetCatalogEntry::RemoveDependent(CatalogTransaction transaction, CatalogEntry &dependent) {
 	D_ASSERT(dependent.type == CatalogType::DEPENDENCY_ENTRY || dependent.type == CatalogType::DEPENDENCY_SET);
 	auto &name = dependent.name;
-	EntryIndex index;
-	auto entry = dependents.GetEntryInternal(transaction, name, &index);
-	if (!entry) {
-		// Already removed
-		return;
-	}
-	D_ASSERT(index.IsValid());
-	dependents.DropEntryInternal(transaction, std::move(index), *entry, false);
+	dependents.DropEntry(transaction, name, false);
 }
 
 bool DependencySetCatalogEntry::IsDependencyOf(CatalogEntry &entry) {

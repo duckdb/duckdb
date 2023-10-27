@@ -92,7 +92,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 		}
 	}
 	// lock the catalog for writing
-	lock_guard<mutex> write_lock(catalog.GetWriteLock());
+	unique_lock<mutex> write_lock(catalog.GetWriteLock());
 	// lock this catalog set to disallow reading
 	unique_lock<mutex> read_lock(catalog_lock);
 
@@ -140,8 +140,12 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	value->timestamp = transaction.transaction_id;
 	value->set = this;
 
+	write_lock.unlock();
+	read_lock.unlock();
 	// now add the dependency set of this object to the dependency manager
 	catalog.GetDependencyManager().AddObject(transaction, *value, dependencies);
+	write_lock.lock();
+	read_lock.lock();
 
 	auto value_ptr = value.get();
 	EntryIndex entry_index(*this, index);
@@ -202,7 +206,7 @@ bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipI
 
 bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, AlterInfo &alter_info) {
 	// lock the catalog for writing
-	lock_guard<mutex> write_lock(catalog.GetWriteLock());
+	unique_lock<mutex> write_lock(catalog.GetWriteLock());
 
 	// first check if the entry exists in the unordered set
 	EntryIndex entry_index;
@@ -215,7 +219,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	}
 
 	// lock this catalog set to disallow reading
-	lock_guard<mutex> read_lock(catalog_lock);
+	unique_lock<mutex> read_lock(catalog_lock);
 
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
@@ -273,6 +277,8 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	// Note that we do this AFTER the new entry has been entirely set up in the catalog set
 	// that is because in case the alter fails because of a dependency conflict, we need to be able to cleanly roll back
 	// to the old entry.
+	read_lock.unlock();
+	write_lock.unlock();
 	catalog.GetDependencyManager().AlterObject(transaction, *entry, *new_entry);
 
 	return true;
@@ -298,7 +304,6 @@ void CatalogSet::DropEntryDependencies(CatalogTransaction transaction, EntryInde
 
 void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex entry_index, CatalogEntry &entry,
                                    bool cascade) {
-	DropEntryDependencies(transaction, entry_index, entry, cascade);
 
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
@@ -319,7 +324,7 @@ void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex en
 
 bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, bool cascade, bool allow_drop_internal) {
 	// lock the catalog for writing
-	lock_guard<mutex> write_lock(catalog.GetWriteLock());
+	unique_lock<mutex> write_lock(catalog.GetWriteLock());
 	// we can only delete an entry that exists
 	EntryIndex entry_index;
 	auto entry = GetEntryInternal(transaction, name, &entry_index);
@@ -330,6 +335,9 @@ bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, b
 		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
 	}
 
+	write_lock.unlock();
+	DropEntryDependencies(transaction, entry_index, *entry, cascade);
+	write_lock.lock();
 	lock_guard<mutex> read_lock(catalog_lock);
 	DropEntryInternal(transaction, std::move(entry_index), *entry, cascade);
 	return true;

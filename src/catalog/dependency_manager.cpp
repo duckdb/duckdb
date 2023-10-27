@@ -86,8 +86,12 @@ DependencySetCatalogEntry &DependencyManager::GetOrCreateDependencySet(CatalogTr
 	auto connection_p = connections.GetEntry(transaction, name);
 	if (!connection_p) {
 		auto new_connection = make_uniq<DependencySetCatalogEntry>(catalog, name);
+		if (catalog.IsTemporaryCatalog()) {
+			new_connection->temporary = true;
+		}
 		auto &connection = *new_connection;
-		auto res = connections.CreateEntryInternal(transaction, std::move(new_connection));
+		DependencyList empty_dependencies;
+		auto res = connections.CreateEntry(transaction, name, std::move(new_connection), empty_dependencies);
 		(void)res;
 		D_ASSERT(res);
 		return connection;
@@ -97,6 +101,10 @@ DependencySetCatalogEntry &DependencyManager::GetOrCreateDependencySet(CatalogTr
 }
 
 bool DependencyManager::IsSystemEntry(CatalogEntry &entry) const {
+	if (entry.internal) {
+		return true;
+	}
+
 	switch (entry.type) {
 	case CatalogType::DEPENDENCY_ENTRY:
 	case CatalogType::DEPENDENCY_SET:
@@ -302,9 +310,8 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 
 	for (auto &lookup : to_drop) {
 		auto set = lookup.set;
-		auto mapping = lookup.mapping_value;
 		auto entry = lookup.entry;
-		set->DropEntryInternal(transaction, mapping->index.Copy(), *entry, cascade);
+		set->DropEntry(transaction, entry->name, cascade);
 	}
 
 	CleanupDependencies(transaction, object);
@@ -418,9 +425,6 @@ void DependencyManager::Scan(ClientContext &context,
 		auto lookup = LookupEntry(transaction, set);
 		D_ASSERT(lookup.entry);
 		auto &entry = *lookup.entry;
-
-		auto &dependency_set = set.Cast<DependencySetCatalogEntry>();
-		auto &dependents = dependency_set.Dependents();
 		entries.insert(entry);
 	});
 
