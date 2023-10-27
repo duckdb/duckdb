@@ -9,6 +9,8 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
 
 void MultiFileReader::AddParameters(TableFunction &table_function) {
@@ -33,6 +35,10 @@ vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value 
 	if (input.type().id() == LogicalTypeId::VARCHAR) {
 		auto file_name = StringValue::Get(input);
 		files = fs.GlobFiles(file_name, context, options);
+
+		// Sort the files to ensure that the order is deterministic
+		std::sort(files.begin(), files.end());
+
 	} else if (input.type().id() == LogicalTypeId::LIST) {
 		for (auto &val : ListValue::GetChildren(input)) {
 			if (val.IsNull()) {
@@ -50,6 +56,7 @@ vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value 
 	if (files.empty() && options == FileGlobOptions::DISALLOW_EMPTY) {
 		throw IOException("%s reader needs at least one file to read", name);
 	}
+
 	return files;
 }
 
