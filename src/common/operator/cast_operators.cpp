@@ -849,9 +849,14 @@ struct IntegerCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int32_t exponent) {
 		using store_t = typename T::StoreType;
+		using result_t = typename T::ResultType;
 
 		int32_t e = exponent;
 		// Negative Exponent
+		if (e < -NumericLimits<result_t>::Digits()) {
+			state.result = 0;
+			return true;
+		}
 		if (e < 0) {
 			while (e++ < 0) {
 				state.decimal = state.result % 10;
