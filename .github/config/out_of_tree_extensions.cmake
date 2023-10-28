@@ -51,14 +51,6 @@ duckdb_extension_load(postgres_scanner
         GIT_TAG 844f46536b5d5f9e65b57b7ff92f4ce3346e2829
         )
 
-################# MYSQL_SCANNER
-# Note: tests for mysql_scanner are currently not run. All of them need a mysql server running.
-duckdb_extension_load(mysql_scanner
-        DONT_LINK
-        GIT_URL https://github.com/duckdb/duckdb_mysql
-        GIT_TAG e9ac678490ab8ee3f2679f188884c7a148c3655a
-        )
-
 ################# SPATIAL
 duckdb_extension_load(spatial
         DONT_LINK LOAD_TESTS
