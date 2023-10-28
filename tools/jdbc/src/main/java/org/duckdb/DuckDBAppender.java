@@ -55,7 +55,7 @@ public class DuckDBAppender implements AutoCloseable {
         if (value == null) {
             DuckDBNative.duckdb_jdbc_appender_append_null(appender_ref);
         } else {
-            long timeInMicros = new DuckDBTimestamp(value).getMicrosEpoch();
+            long timeInMicros = DuckDBTimestamp.localDateTime2Micros(value);
             DuckDBNative.duckdb_jdbc_appender_append_timestamp(appender_ref, timeInMicros);
         }
     }
