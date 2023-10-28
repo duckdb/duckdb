@@ -91,6 +91,15 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 			throw InvalidInputException("Cannot create non-temporary entry \"%s\" in temporary catalog", name);
 		}
 	}
+
+	// create a new entry and replace the currently stored one
+	// set the timestamp to the timestamp of the current transaction
+	// and point it at the dummy node
+	value->timestamp = transaction.transaction_id;
+	value->set = this;
+	// now add the dependency set of this object to the dependency manager
+	catalog.GetDependencyManager().AddObject(transaction, *value, dependencies);
+
 	// lock the catalog for writing
 	unique_lock<mutex> write_lock(catalog.GetWriteLock());
 	// lock this catalog set to disallow reading
@@ -134,18 +143,6 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 			return false;
 		}
 	}
-	// create a new entry and replace the currently stored one
-	// set the timestamp to the timestamp of the current transaction
-	// and point it at the dummy node
-	value->timestamp = transaction.transaction_id;
-	value->set = this;
-
-	write_lock.unlock();
-	read_lock.unlock();
-	// now add the dependency set of this object to the dependency manager
-	catalog.GetDependencyManager().AddObject(transaction, *value, dependencies);
-	write_lock.lock();
-	read_lock.lock();
 
 	auto value_ptr = value.get();
 	EntryIndex entry_index(*this, index);
@@ -323,9 +320,6 @@ void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex en
 }
 
 bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, bool cascade, bool allow_drop_internal) {
-	// lock the catalog for writing
-	unique_lock<mutex> write_lock(catalog.GetWriteLock());
-	// we can only delete an entry that exists
 	EntryIndex entry_index;
 	auto entry = GetEntryInternal(transaction, name, &entry_index);
 	if (!entry) {
@@ -334,10 +328,11 @@ bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, b
 	if (entry->internal && !allow_drop_internal) {
 		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
 	}
-
-	write_lock.unlock();
 	DropEntryDependencies(transaction, entry_index, *entry, cascade);
-	write_lock.lock();
+
+	// lock the catalog for writing
+	// we can only delete an entry that exists
+	unique_lock<mutex> write_lock(catalog.GetWriteLock());
 	lock_guard<mutex> read_lock(catalog_lock);
 	DropEntryInternal(transaction, std::move(entry_index), *entry, cascade);
 	return true;
