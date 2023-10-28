@@ -61,8 +61,7 @@ void CatalogSet::PutEntry(EntryIndex index, unique_ptr<CatalogEntry> catalog_ent
 	if (entry == entries.end()) {
 		throw InternalException("Entry with entry index \"%llu\" does not exist", index.GetIndex());
 	}
-	catalog_entry->child = entry->second.TakeEntry();
-	catalog_entry->child->parent = catalog_entry.get();
+	catalog_entry->SetChild(entry->second.TakeEntry());
 	entry->second.SetEntry(std::move(catalog_entry));
 }
 
@@ -145,7 +144,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
 		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-		dtransaction.PushCatalogEntry(*value_ptr->child);
+		dtransaction.PushCatalogEntry(value_ptr->Child());
 	}
 	return true;
 }
@@ -262,7 +261,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
 		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-		dtransaction.PushCatalogEntry(*new_entry->child, stream.GetData(), stream.GetPosition());
+		dtransaction.PushCatalogEntry(new_entry->Child(), stream.GetData(), stream.GetPosition());
 	}
 
 	// Check the dependency manager to verify that there are no conflicting dependencies with this alter
@@ -309,7 +308,7 @@ void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex en
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
 		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-		dtransaction.PushCatalogEntry(*value_ptr->child);
+		dtransaction.PushCatalogEntry(value_ptr->Child());
 	}
 }
 
@@ -341,8 +340,9 @@ DuckCatalog &CatalogSet::GetCatalog() {
 
 void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
 	// destroy the backed up entry: it is no longer required
-	D_ASSERT(catalog_entry.parent);
-	if (catalog_entry.parent->type != CatalogType::UPDATED_ENTRY) {
+	auto parent_p = catalog_entry.Parent();
+	D_ASSERT(parent_p);
+	if (parent_p->type != CatalogType::UPDATED_ENTRY) {
 		lock_guard<mutex> write_lock(catalog.GetWriteLock());
 		lock_guard<mutex> lock(catalog_lock);
 		if (!catalog_entry.deleted) {
@@ -350,13 +350,14 @@ void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
 			D_ASSERT(catalog_entry.ParentCatalog().IsDuckCatalog());
 			catalog_entry.ParentCatalog().Cast<DuckCatalog>().GetDependencyManager().EraseObject(catalog_entry);
 		}
-		auto parent = catalog_entry.parent;
-		parent->child = std::move(catalog_entry.child);
-		if (parent->deleted && !parent->child && !parent->parent) {
-			auto mapping_entry = mapping.find(parent->name);
+		parent_p = catalog_entry.Parent();
+		auto &parent = *parent_p;
+		parent.SetChild(catalog_entry.TakeChild());
+		if (parent.deleted && !parent.HasChild() && !parent.HasParent()) {
+			auto mapping_entry = mapping.find(parent.name);
 			D_ASSERT(mapping_entry != mapping.end());
 			auto &entry = mapping_entry->second->index.GetEntry();
-			if (&entry == parent.get()) {
+			if (&entry == parent_p.get()) {
 				mapping.erase(mapping_entry);
 			}
 		}
@@ -432,23 +433,23 @@ catalog_entry_t CatalogSet::GenerateCatalogEntryIndex() {
 
 CatalogEntry &CatalogSet::GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current) {
 	reference<CatalogEntry> entry(current);
-	while (entry.get().child) {
+	while (entry.get().HasChild()) {
 		if (UseTimestamp(transaction, entry.get().timestamp)) {
 			break;
 		}
-		entry = *entry.get().child;
+		entry = entry.get().Child();
 	}
 	return entry.get();
 }
 
 CatalogEntry &CatalogSet::GetCommittedEntry(CatalogEntry &current) {
 	reference<CatalogEntry> entry(current);
-	while (entry.get().child) {
+	while (entry.get().HasChild()) {
 		if (entry.get().timestamp < TRANSACTION_ID_START) {
 			// this entry is committed: use it
 			break;
 		}
-		entry = *entry.get().child;
+		entry = entry.get().Child();
 	}
 	return entry.get();
 }
@@ -555,7 +556,7 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 	// and entry->parent has to be removed ("rolled back")
 
 	// i.e. we have to place (entry) as (entry->parent) again
-	auto &to_be_removed_node = *entry.parent;
+	auto &to_be_removed_node = *entry.Parent();
 
 	if (!to_be_removed_node.deleted) {
 		// delete the entry from the dependency manager as well
@@ -572,17 +573,15 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 			mapping.erase(removed_entry);
 		}
 	}
-	if (to_be_removed_node.parent) {
+	if (to_be_removed_node.HasParent()) {
 		// if the to be removed node has a parent, set the child pointer to the
 		// to be restored node
-		to_be_removed_node.parent->child = std::move(to_be_removed_node.child);
-		entry.parent = to_be_removed_node.parent;
+		to_be_removed_node.Parent()->SetChild(to_be_removed_node.TakeChild());
 	} else {
 		// otherwise we need to update the base entry tables
 		auto &name = entry.name;
-		to_be_removed_node.child->SetAsRoot();
-		mapping[name]->index.SetEntry(std::move(to_be_removed_node.child));
-		entry.parent = nullptr;
+		to_be_removed_node.Child().SetAsRoot();
+		mapping[name]->index.SetEntry(to_be_removed_node.TakeChild());
 	}
 
 	// restore the name if it was deleted

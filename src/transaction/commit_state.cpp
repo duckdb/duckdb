@@ -35,13 +35,13 @@ void CommitState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {
 }
 
 void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
-	if (entry.temporary || entry.parent->temporary) {
+	if (entry.temporary || entry.Parent()->temporary) {
 		return;
 	}
 	D_ASSERT(log);
 	// look at the type of the parent entry
-	auto parent = entry.parent;
-	switch (parent->type) {
+	auto &parent = *entry.Parent();
+	switch (parent.type) {
 	case CatalogType::TABLE_ENTRY:
 		if (entry.type == CatalogType::TABLE_ENTRY) {
 			auto &table_entry = entry.Cast<DuckTableEntry>();
@@ -66,7 +66,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			log->WriteAlter(alter_info);
 		} else {
 			// CREATE TABLE statement
-			log->WriteCreateTable(parent->Cast<TableCatalogEntry>());
+			log->WriteCreateTable(parent.Cast<TableCatalogEntry>());
 		}
 		break;
 	case CatalogType::SCHEMA_ENTRY:
@@ -74,7 +74,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			// ALTER TABLE statement, skip it
 			return;
 		}
-		log->WriteCreateSchema(parent->Cast<SchemaCatalogEntry>());
+		log->WriteCreateSchema(parent.Cast<SchemaCatalogEntry>());
 		break;
 	case CatalogType::VIEW_ENTRY:
 		if (entry.type == CatalogType::VIEW_ENTRY) {
@@ -95,23 +95,23 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			auto &alter_info = parse_info->Cast<AlterInfo>();
 			log->WriteAlter(alter_info);
 		} else {
-			log->WriteCreateView(parent->Cast<ViewCatalogEntry>());
+			log->WriteCreateView(parent.Cast<ViewCatalogEntry>());
 		}
 		break;
 	case CatalogType::SEQUENCE_ENTRY:
-		log->WriteCreateSequence(parent->Cast<SequenceCatalogEntry>());
+		log->WriteCreateSequence(parent.Cast<SequenceCatalogEntry>());
 		break;
 	case CatalogType::MACRO_ENTRY:
-		log->WriteCreateMacro(parent->Cast<ScalarMacroCatalogEntry>());
+		log->WriteCreateMacro(parent.Cast<ScalarMacroCatalogEntry>());
 		break;
 	case CatalogType::TABLE_MACRO_ENTRY:
-		log->WriteCreateTableMacro(parent->Cast<TableMacroCatalogEntry>());
+		log->WriteCreateTableMacro(parent.Cast<TableMacroCatalogEntry>());
 		break;
 	case CatalogType::INDEX_ENTRY:
-		log->WriteCreateIndex(parent->Cast<IndexCatalogEntry>());
+		log->WriteCreateIndex(parent.Cast<IndexCatalogEntry>());
 		break;
 	case CatalogType::TYPE_ENTRY:
-		log->WriteCreateType(parent->Cast<TypeCatalogEntry>());
+		log->WriteCreateType(parent.Cast<TypeCatalogEntry>());
 		break;
 	case CatalogType::DELETED_ENTRY:
 		switch (entry.type) {
@@ -246,7 +246,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::CATALOG_ENTRY: {
 		// set the commit timestamp of the catalog entry to the given id
 		auto catalog_entry = Load<CatalogEntry *>(data);
-		D_ASSERT(catalog_entry->parent);
+		D_ASSERT(catalog_entry->HasParent());
 
 		auto &catalog = catalog_entry->ParentCatalog();
 		D_ASSERT(catalog.IsDuckCatalog());
@@ -254,8 +254,8 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		// Grab a write lock on the catalog
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		lock_guard<mutex> write_lock(duck_catalog.GetWriteLock());
-		catalog_entry->set->UpdateTimestamp(*catalog_entry->parent, commit_id);
-		if (catalog_entry->name != catalog_entry->parent->name) {
+		catalog_entry->set->UpdateTimestamp(*catalog_entry->Parent(), commit_id);
+		if (catalog_entry->name != catalog_entry->Parent()->name) {
 			catalog_entry->set->UpdateTimestamp(*catalog_entry, commit_id);
 		}
 		if (HAS_LOG) {
@@ -304,9 +304,9 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::CATALOG_ENTRY: {
 		// set the commit timestamp of the catalog entry to the given id
 		auto catalog_entry = Load<CatalogEntry *>(data);
-		D_ASSERT(catalog_entry->parent);
-		catalog_entry->set->UpdateTimestamp(*catalog_entry->parent, transaction_id);
-		if (catalog_entry->name != catalog_entry->parent->name) {
+		D_ASSERT(catalog_entry->HasParent());
+		catalog_entry->set->UpdateTimestamp(*catalog_entry->Parent(), transaction_id);
+		if (catalog_entry->name != catalog_entry->Parent()->name) {
 			catalog_entry->set->UpdateTimestamp(*catalog_entry, transaction_id);
 		}
 		break;
