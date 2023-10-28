@@ -280,24 +280,6 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	return true;
 }
 
-void CatalogSet::DropEntryDependencies(CatalogTransaction transaction, EntryIndex &entry_index, CatalogEntry &entry,
-                                       bool cascade) {
-	// Stores the deleted value of the entry before starting the process
-	EntryDropper dropper(entry_index);
-
-	// To correctly delete the object and its dependencies, it temporarily is set to deleted.
-	entry_index.GetEntry().deleted = true;
-
-	// check any dependencies of this object
-	D_ASSERT(entry.ParentCatalog().IsDuckCatalog());
-	auto &duck_catalog = entry.ParentCatalog().Cast<DuckCatalog>();
-	duck_catalog.GetDependencyManager().DropObject(transaction, entry, cascade);
-
-	// dropper destructor is called here
-	// the destructor makes sure to return the value to the previous state
-	// dropper.~EntryDropper()
-}
-
 void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex entry_index, CatalogEntry &entry,
                                    bool cascade) {
 
@@ -330,9 +312,20 @@ bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, b
 	if (entry->internal && !allow_drop_internal) {
 		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
 	}
-	write_lock.unlock();
-	DropEntryDependencies(transaction, entry_index, *entry, cascade);
-	write_lock.lock();
+	{
+		// Stores the deleted value of the entry before starting the process
+		EntryDropper dropper(entry_index);
+
+		// To correctly delete the object and its dependencies, it temporarily is set to deleted.
+		entry_index.GetEntry().deleted = true;
+
+		// check any dependencies of this object
+		D_ASSERT(entry->ParentCatalog().IsDuckCatalog());
+		auto &duck_catalog = entry->ParentCatalog().Cast<DuckCatalog>();
+		write_lock.unlock();
+		duck_catalog.GetDependencyManager().DropObject(transaction, *entry, cascade);
+		write_lock.lock();
+	}
 
 	lock_guard<mutex> read_lock(catalog_lock);
 	DropEntryInternal(transaction, std::move(entry_index), *entry, cascade);

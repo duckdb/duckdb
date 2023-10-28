@@ -163,8 +163,6 @@ private:
 	optional_ptr<MappingValue> GetLatestMapping(const string &name);
 	void PutMapping(CatalogTransaction transaction, const string &name, EntryIndex entry_index);
 	void DeleteMapping(CatalogTransaction transaction, const string &name);
-	void DropEntryDependencies(CatalogTransaction transaction, EntryIndex &entry_index, CatalogEntry &entry,
-	                           bool cascade);
 
 	//! Create all default entries
 	void CreateDefaultEntries(CatalogTransaction transaction, unique_lock<mutex> &lock);
