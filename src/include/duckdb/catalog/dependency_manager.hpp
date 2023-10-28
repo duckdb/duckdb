@@ -44,8 +44,6 @@ private:
 	bool IsSystemEntry(CatalogEntry &entry) const;
 	DependencySetCatalogEntry &GetOrCreateDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
 	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
-	// Alternative to get the latest entry if no CatalogTransaction is available.
-	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogEntry &entry);
 
 	struct LookupResult {
 	public:

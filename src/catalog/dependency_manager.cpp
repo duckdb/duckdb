@@ -51,24 +51,6 @@ string DependencyManager::MangleName(CatalogEntry &entry) {
 	return MangleName(type, schema, name);
 }
 
-optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(CatalogEntry &object) {
-	D_ASSERT(object.type != CatalogType::DEPENDENCY_SET);
-	auto name = MangleName(object);
-	auto mapping = connections.GetLatestMapping(name);
-	if (!mapping) {
-		return nullptr;
-	}
-	auto it = connections.entries.find(mapping->index.GetIndex());
-	if (it == connections.entries.end()) {
-		return nullptr;
-	}
-	auto &entry_value = it->second;
-	auto &dependency_set_entry = entry_value.Entry();
-
-	D_ASSERT(dependency_set_entry.type == CatalogType::DEPENDENCY_SET);
-	return dynamic_cast<DependencySetCatalogEntry *>(&dependency_set_entry);
-}
-
 optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(CatalogTransaction transaction,
                                                                             CatalogEntry &object) {
 	auto name = MangleName(object);

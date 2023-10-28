@@ -87,7 +87,6 @@ private:
 
 //! The Catalog Set stores (key, value) map of a set of CatalogEntries
 class CatalogSet {
-	friend class DependencyManager;
 	friend class EntryDropper;
 	friend struct EntryIndex;
 	friend class DependencySetCatalogEntry;
