@@ -2318,6 +2318,154 @@ public class TestDuckDBJDBC {
         stmt.close();
         conn.close();
     }
+
+    public static void test_appender_decimal() throws Exception {
+        DuckDBConnection conn = DriverManager.getConnection("jdbc:duckdb:").unwrap(DuckDBConnection.class);
+        Statement stmt = conn.createStatement();
+
+        stmt.execute(
+            "CREATE TABLE decimals (id INT4, a DECIMAL(4,2), b DECIMAL(8,4), c DECIMAL(18,6), d DECIMAL(38,20))");
+        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "decimals");
+
+        BigDecimal bd16 = new BigDecimal("12.34").setScale(2);
+        BigDecimal bd32 = new BigDecimal("1234.5678").setScale(4);
+        BigDecimal bd64 = new BigDecimal("123456789012.345678").setScale(6);
+        BigDecimal bd128 = new BigDecimal("123456789012345678.90123456789012345678").setScale(20);
+        BigDecimal nbd16 = new BigDecimal("-12.34").setScale(2);
+        BigDecimal nbd32 = new BigDecimal("-1234.5678").setScale(4);
+        BigDecimal nbd64 = new BigDecimal("-123456789012.345678").setScale(6);
+        BigDecimal nbd128 = new BigDecimal("-123456789012345678.90123456789012345678").setScale(20);
+        BigDecimal sbd16 = new BigDecimal("-1.34").setScale(2);
+        BigDecimal sbd32 = new BigDecimal("-123.5678").setScale(4);
+        BigDecimal sbd64 = new BigDecimal("-12345678901.345678").setScale(6);
+        BigDecimal sbd128 = new BigDecimal("-12345678901234567.90123456789012345678").setScale(20);
+        BigDecimal ibd16 = new BigDecimal("-1").setScale(2);
+        BigDecimal ibd32 = new BigDecimal("-123").setScale(4);
+        BigDecimal ibd64 = new BigDecimal("-12345678901").setScale(6);
+        BigDecimal ibd128 = new BigDecimal("-12345678901234567").setScale(20);
+        BigDecimal onebd16 = new BigDecimal("1").setScale(2);
+        BigDecimal onebd32 = new BigDecimal("1").setScale(4);
+        BigDecimal onebd64 = new BigDecimal("1").setScale(6);
+        BigDecimal onebd128 = new BigDecimal("1").setScale(20);
+
+        BigDecimal td16 = new BigDecimal("121.14").setScale(2);
+        BigDecimal td32 = new BigDecimal("12134.5678").setScale(4);
+        BigDecimal td64 = new BigDecimal("123456789012.345678").setScale(6);
+        BigDecimal td128 = new BigDecimal("123456789012345678.9012345678901234567").setScale(19);
+
+        appender.beginRow();
+        appender.append(1);
+        appender.appendBigDecimal(bd16);
+        appender.appendBigDecimal(bd32);
+        appender.appendBigDecimal(bd64);
+        appender.appendBigDecimal(bd128);
+        appender.endRow();
+        appender.beginRow();
+        appender.append(2);
+        appender.appendBigDecimal(nbd16);
+        appender.appendBigDecimal(nbd32);
+        appender.appendBigDecimal(nbd64);
+        appender.appendBigDecimal(nbd128);
+        appender.endRow();
+        appender.beginRow();
+        appender.append(3);
+        appender.appendBigDecimal(sbd16);
+        appender.appendBigDecimal(sbd32);
+        appender.appendBigDecimal(sbd64);
+        appender.appendBigDecimal(sbd128);
+        appender.endRow();
+        appender.beginRow();
+        appender.append(4);
+        appender.appendBigDecimal(ibd16);
+        appender.appendBigDecimal(ibd32);
+        appender.appendBigDecimal(ibd64);
+        appender.appendBigDecimal(ibd128);
+        appender.endRow();
+        appender.beginRow();
+        appender.append(5);
+        appender.appendBigDecimal(onebd16);
+        appender.appendBigDecimal(onebd32);
+        appender.appendBigDecimal(onebd64);
+        appender.appendBigDecimal(onebd128);
+        appender.endRow();
+        appender.close();
+
+        ResultSet rs = stmt.executeQuery("SELECT a,b,c,d FROM decimals ORDER BY id");
+        assertFalse(rs.isClosed());
+        assertTrue(rs.next());
+
+        BigDecimal rs1 = (BigDecimal) rs.getObject(1, BigDecimal.class);
+        BigDecimal rs2 = (BigDecimal) rs.getObject(2, BigDecimal.class);
+        BigDecimal rs3 = (BigDecimal) rs.getObject(3, BigDecimal.class);
+        BigDecimal rs4 = (BigDecimal) rs.getObject(4, BigDecimal.class);
+
+        assertEquals(rs1, bd16);
+        assertEquals(rs2, bd32);
+        assertEquals(rs3, bd64);
+        assertEquals(rs4, bd128);
+        assertTrue(rs.next());
+
+        BigDecimal nrs1 = (BigDecimal) rs.getObject(1, BigDecimal.class);
+        BigDecimal nrs2 = (BigDecimal) rs.getObject(2, BigDecimal.class);
+        BigDecimal nrs3 = (BigDecimal) rs.getObject(3, BigDecimal.class);
+        BigDecimal nrs4 = (BigDecimal) rs.getObject(4, BigDecimal.class);
+
+        assertEquals(nrs1, nbd16);
+        assertEquals(nrs2, nbd32);
+        assertEquals(nrs3, nbd64);
+        assertEquals(nrs4, nbd128);
+        assertTrue(rs.next());
+
+        BigDecimal srs1 = (BigDecimal) rs.getObject(1, BigDecimal.class);
+        BigDecimal srs2 = (BigDecimal) rs.getObject(2, BigDecimal.class);
+        BigDecimal srs3 = (BigDecimal) rs.getObject(3, BigDecimal.class);
+        BigDecimal srs4 = (BigDecimal) rs.getObject(4, BigDecimal.class);
+
+        assertEquals(srs1, sbd16);
+        assertEquals(srs2, sbd32);
+        assertEquals(srs3, sbd64);
+        assertEquals(srs4, sbd128);
+        assertTrue(rs.next());
+
+        BigDecimal irs1 = (BigDecimal) rs.getObject(1, BigDecimal.class);
+        BigDecimal irs2 = (BigDecimal) rs.getObject(2, BigDecimal.class);
+        BigDecimal irs3 = (BigDecimal) rs.getObject(3, BigDecimal.class);
+        BigDecimal irs4 = (BigDecimal) rs.getObject(4, BigDecimal.class);
+
+        assertEquals(irs1, ibd16);
+        assertEquals(irs2, ibd32);
+        assertEquals(irs3, ibd64);
+        assertEquals(irs4, ibd128);
+        assertTrue(rs.next());
+
+        BigDecimal oners1 = (BigDecimal) rs.getObject(1, BigDecimal.class);
+        BigDecimal oners2 = (BigDecimal) rs.getObject(2, BigDecimal.class);
+        BigDecimal oners3 = (BigDecimal) rs.getObject(3, BigDecimal.class);
+        BigDecimal oners4 = (BigDecimal) rs.getObject(4, BigDecimal.class);
+
+        assertEquals(oners1, onebd16);
+        assertEquals(oners2, onebd32);
+        assertEquals(oners3, onebd64);
+        assertEquals(oners4, onebd128);
+
+        rs.close();
+        stmt.close();
+
+        appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "decimals");
+        appender.beginRow();
+        appender.append(6);
+        boolean exceptionRaised = false;
+
+        try {
+            appender.appendBigDecimal(new BigDecimal("121.14").setScale(2));
+        } catch (SQLException e) {
+            exceptionRaised = true;
+        }
+        assertTrue(exceptionRaised);
+
+        conn.close();
+    }
+
     public static void test_appender_int_string() throws Exception {
         DuckDBConnection conn = DriverManager.getConnection("jdbc:duckdb:").unwrap(DuckDBConnection.class);
         Statement stmt = conn.createStatement();

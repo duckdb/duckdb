@@ -964,6 +964,38 @@ void _duckdb_jdbc_appender_append_timestamp(JNIEnv *env, jclass, jobject appende
 	get_appender(env, appender_ref_buf)->Append(Value::TIMESTAMP(timestamp));
 }
 
+void _duckdb_jdbc_appender_append_decimal(JNIEnv *env, jclass, jobject appender_ref_buf, jobject value) {
+	jint precision = env->CallIntMethod(value, J_Decimal_precision);
+	jint scale = env->CallIntMethod(value, J_Decimal_scale);
+
+	// Java BigDecimal type can have scale that exceeds the precision
+	// Which our DECIMAL type does not support (assert(width >= scale))
+	if (scale > precision) {
+		precision = scale;
+	}
+
+	// DECIMAL scale is unsigned, so negative values are not supported
+	if (scale < 0) {
+		throw InvalidInputException("Converting from a BigDecimal with negative scale is not supported");
+	}
+
+	Value val;
+
+	if (precision <= 18) { // normal sizes -> avoid string processing
+		jobject no_point_dec = env->CallObjectMethod(value, J_Decimal_scaleByPowTen, scale);
+		jlong result = env->CallLongMethod(no_point_dec, J_Decimal_longValue);
+		val = Value::DECIMAL((int64_t)result, (uint8_t)precision, (uint8_t)scale);
+	} else if (precision <= 38) { // larger than int64 -> get string and cast
+		jobject str_val = env->CallObjectMethod(value, J_Decimal_toPlainString);
+		auto *str_char = env->GetStringUTFChars((jstring)str_val, 0);
+		val = Value(str_char);
+		val = val.DefaultCastAs(LogicalType::DECIMAL(precision, scale));
+
+		env->ReleaseStringUTFChars((jstring)str_val, str_char);
+	}
+	get_appender(env, appender_ref_buf)->Append(val);
+}
+
 void _duckdb_jdbc_appender_append_string(JNIEnv *env, jclass, jobject appender_ref_buf, jbyteArray value) {
 	if (env->IsSameObject(value, NULL)) {
 		get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);

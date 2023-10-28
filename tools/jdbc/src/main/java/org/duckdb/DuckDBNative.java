@@ -10,6 +10,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.sql.SQLException;
 import java.util.Properties;
+import java.math.BigDecimal;
 
 public class DuckDBNative {
     static {
@@ -152,6 +153,9 @@ public class DuckDBNative {
         throws SQLException;
 
     protected static native void duckdb_jdbc_appender_append_timestamp(ByteBuffer appender_ref, long value)
+        throws SQLException;
+
+    protected static native void duckdb_jdbc_appender_append_decimal(ByteBuffer appender_ref, BigDecimal value)
         throws SQLException;
 
     protected static native void duckdb_jdbc_appender_append_null(ByteBuffer appender_ref) throws SQLException;
