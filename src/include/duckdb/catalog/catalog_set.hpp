@@ -33,7 +33,6 @@ struct EntryIndex;
 class DuckCatalog;
 class TableCatalogEntry;
 class SequenceCatalogEntry;
-class DependencySetCatalogEntry;
 
 typedef unordered_map<CatalogSet *, unique_lock<mutex>> set_lock_map_t;
 
@@ -87,9 +86,7 @@ private:
 
 //! The Catalog Set stores (key, value) map of a set of CatalogEntries
 class CatalogSet {
-	friend class EntryDropper;
 	friend struct EntryIndex;
-	friend class DependencySetCatalogEntry;
 
 public:
 	DUCKDB_API explicit CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults = nullptr);
@@ -156,8 +153,6 @@ private:
 	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, const string &name,
 	                                            EntryIndex *entry_index);
 	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, EntryIndex &entry_index);
-	//! Drops an entry from the catalog set; must hold the catalog_lock to safely call this
-	void DropEntryInternal(CatalogTransaction transaction, EntryIndex entry_index, CatalogEntry &entry, bool cascade);
 	optional_ptr<CatalogEntry> CreateEntryInternal(CatalogTransaction transaction, unique_ptr<CatalogEntry> entry);
 	optional_ptr<MappingValue> GetMapping(CatalogTransaction transaction, const string &name, bool get_latest = false);
 	optional_ptr<MappingValue> GetLatestMapping(const string &name);

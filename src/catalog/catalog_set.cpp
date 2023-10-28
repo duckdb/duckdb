@@ -16,31 +16,6 @@
 
 namespace duckdb {
 
-//! Class responsible to keep track of state when removing entries from the catalog.
-//! When deleting, many types of errors can be thrown, since we want to avoid try/catch blocks
-//! this class makes sure that whatever elements were modified are returned to a correct state
-//! when exceptions are thrown.
-//! The idea here is to use RAII (Resource acquisition is initialization) to mimic a try/catch/finally block.
-//! If any exception is raised when this object exists, then its destructor will be called
-//! and the entry will return to its previous state during deconstruction.
-class EntryDropper {
-public:
-	//! Both constructor and destructor are privates because they should only be called by DropEntryDependencies
-	explicit EntryDropper(EntryIndex &entry_index_p) : entry_index(entry_index_p) {
-		old_deleted = entry_index.GetEntry().deleted;
-	}
-
-	~EntryDropper() {
-		entry_index.GetEntry<true>().deleted = old_deleted;
-	}
-
-private:
-	//! Keeps track of the state of the entry before starting the delete
-	bool old_deleted;
-	//! Index of entry to be deleted
-	EntryIndex &entry_index;
-};
-
 CatalogSet::CatalogSet(Catalog &catalog_p, unique_ptr<DefaultGenerator> defaults)
     : catalog(catalog_p.Cast<DuckCatalog>()), defaults(std::move(defaults)) {
 	D_ASSERT(catalog_p.IsDuckCatalog());
@@ -280,26 +255,6 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	return true;
 }
 
-void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex entry_index, CatalogEntry &entry,
-                                   bool cascade) {
-
-	// create a new entry and replace the currently stored one
-	// set the timestamp to the timestamp of the current transaction
-	// and point it at the dummy node
-	auto value = make_uniq<InCatalogEntry>(CatalogType::DELETED_ENTRY, entry.ParentCatalog(), entry.name);
-	value->timestamp = transaction.transaction_id;
-	value->set = this;
-	value->deleted = true;
-	auto value_ptr = value.get();
-	PutEntry(std::move(entry_index), std::move(value));
-
-	// push the old entry in the undo buffer for this transaction
-	if (transaction.transaction) {
-		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-		dtransaction.PushCatalogEntry(value_ptr->Child());
-	}
-}
-
 bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, bool cascade, bool allow_drop_internal) {
 	EntryIndex entry_index;
 	// lock the catalog for writing
@@ -312,23 +267,29 @@ bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, b
 	if (entry->internal && !allow_drop_internal) {
 		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
 	}
-	{
-		// Stores the deleted value of the entry before starting the process
-		EntryDropper dropper(entry_index);
-
-		// To correctly delete the object and its dependencies, it temporarily is set to deleted.
-		entry_index.GetEntry().deleted = true;
-
-		// check any dependencies of this object
-		D_ASSERT(entry->ParentCatalog().IsDuckCatalog());
-		auto &duck_catalog = entry->ParentCatalog().Cast<DuckCatalog>();
-		write_lock.unlock();
-		duck_catalog.GetDependencyManager().DropObject(transaction, *entry, cascade);
-		write_lock.lock();
-	}
+	// check any dependencies of this object
+	D_ASSERT(entry->ParentCatalog().IsDuckCatalog());
+	auto &duck_catalog = entry->ParentCatalog().Cast<DuckCatalog>();
+	write_lock.unlock();
+	duck_catalog.GetDependencyManager().DropObject(transaction, *entry, cascade);
+	write_lock.lock();
 
 	lock_guard<mutex> read_lock(catalog_lock);
-	DropEntryInternal(transaction, std::move(entry_index), *entry, cascade);
+	// create a new entry and replace the currently stored one
+	// set the timestamp to the timestamp of the current transaction
+	// and point it at the dummy node
+	auto value = make_uniq<InCatalogEntry>(CatalogType::DELETED_ENTRY, entry->ParentCatalog(), entry->name);
+	value->timestamp = transaction.transaction_id;
+	value->set = this;
+	value->deleted = true;
+	auto value_ptr = value.get();
+	PutEntry(std::move(entry_index), std::move(value));
+
+	// push the old entry in the undo buffer for this transaction
+	if (transaction.transaction) {
+		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
+		dtransaction.PushCatalogEntry(value_ptr->Child());
+	}
 	return true;
 }
 
