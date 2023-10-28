@@ -33,10 +33,9 @@ public:
 	CatalogSet &Dependents();
 
 public:
-	void ScanDependents(CatalogTransaction transaction,
-	                    const std::function<void(DependencyCatalogEntry &, DependencySetCatalogEntry &)> &callback);
-	void ScanDependencies(CatalogTransaction transaction,
-	                      const std::function<void(DependencyCatalogEntry &, DependencySetCatalogEntry &)> &callback);
+	using dependency_callback_t = const std::function<void(DependencyCatalogEntry &)>;
+	void ScanDependents(CatalogTransaction transaction, dependency_callback_t &callback);
+	void ScanDependencies(CatalogTransaction transaction, dependency_callback_t &callback);
 
 public:
 	// Add Dependencies
@@ -64,6 +63,7 @@ public:
 private:
 	//! Skips the exemption for DEPENDENCY_OWNS, use 'HasDependencyOn' instead for that
 	bool HasDependencyOnInternal(CatalogEntry &entry);
+	void ScanSetInternal(CatalogTransaction transaction, bool dependencies, dependency_callback_t &callback);
 
 public:
 	void PrintDependencies();

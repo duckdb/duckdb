@@ -281,8 +281,9 @@ bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, b
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	auto entry = GetEntryInternal(transaction, name, &entry_index);
 	if (!entry) {
-		// FIXME: this is a little weird, this is reached when deleting a table that owns a sequence.
-		// DropDependencies must have deleted the entry
+		// If this entry owns an object, we will delete the dependency, then drop the owned object
+		// which will drop its dependencies - and this object is one of those.
+		// This is caused by DropDependencies
 		return true;
 	}
 	if (entry->internal && !allow_drop_internal) {

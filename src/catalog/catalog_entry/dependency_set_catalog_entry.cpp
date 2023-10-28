@@ -23,10 +23,9 @@ CatalogSet &DependencySetCatalogEntry::Dependents() {
 	return dependents;
 }
 
-void DependencySetCatalogEntry::ScanDependents(
-    CatalogTransaction transaction,
-    const std::function<void(DependencyCatalogEntry &, DependencySetCatalogEntry &)> &callback) {
-	dependents.Scan(transaction, [&](CatalogEntry &other) {
+void DependencySetCatalogEntry::ScanSetInternal(CatalogTransaction transaction, bool dependencies,
+                                                dependency_callback_t &callback) {
+	auto cb = [&](CatalogEntry &other) {
 		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
 		auto &other_entry = other.Cast<DependencyCatalogEntry>();
 		auto other_connections_p = dependency_manager.GetDependencySet(transaction, other);
@@ -35,24 +34,29 @@ void DependencySetCatalogEntry::ScanDependents(
 			return;
 		}
 		auto &other_connections = *other_connections_p;
-		callback(other_entry, other_connections);
-	});
+
+		// Assert some invariants of the connections
+		if (dependencies) {
+			D_ASSERT(other_connections.IsDependencyOf(*this));
+		} else {
+			D_ASSERT(other_connections.HasDependencyOn(*this, other_entry.Type()));
+		}
+		callback(other_entry);
+	};
+
+	if (dependencies) {
+		this->dependencies.Scan(transaction, cb);
+	} else {
+		this->dependents.Scan(transaction, cb);
+	}
 }
 
-void DependencySetCatalogEntry::ScanDependencies(
-    CatalogTransaction transaction,
-    const std::function<void(DependencyCatalogEntry &, DependencySetCatalogEntry &)> &callback) {
-	dependencies.Scan(transaction, [&](CatalogEntry &other) {
-		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
-		auto &other_entry = other.Cast<DependencyCatalogEntry>();
-		auto other_connections_p = dependency_manager.GetDependencySet(transaction, other);
-		if (!other_connections_p) {
-			// Already deleted
-			return;
-		}
-		auto &other_connections = *other_connections_p;
-		callback(other_entry, other_connections);
-	});
+void DependencySetCatalogEntry::ScanDependents(CatalogTransaction transaction, dependency_callback_t &callback) {
+	ScanSetInternal(transaction, false, callback);
+}
+
+void DependencySetCatalogEntry::ScanDependencies(CatalogTransaction transaction, dependency_callback_t &callback) {
+	ScanSetInternal(transaction, true, callback);
 }
 
 DependencySetCatalogEntry::~DependencySetCatalogEntry() {
