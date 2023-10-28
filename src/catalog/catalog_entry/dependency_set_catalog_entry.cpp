@@ -5,12 +5,14 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/catalog/mapping_value.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
 
-DependencySetCatalogEntry::DependencySetCatalogEntry(Catalog &catalog, const string &name)
+DependencySetCatalogEntry::DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager,
+                                                     const string &name)
     : InCatalogEntry(CatalogType::DEPENDENCY_SET, catalog, name), name(name), dependencies(catalog),
-      dependents(catalog) {
+      dependents(catalog), dependency_manager(dependency_manager) {
 }
 
 CatalogSet &DependencySetCatalogEntry::Dependencies() {
@@ -19,6 +21,38 @@ CatalogSet &DependencySetCatalogEntry::Dependencies() {
 
 CatalogSet &DependencySetCatalogEntry::Dependents() {
 	return dependents;
+}
+
+void DependencySetCatalogEntry::ScanDependents(
+    CatalogTransaction transaction,
+    const std::function<void(DependencyCatalogEntry &, DependencySetCatalogEntry &)> &callback) {
+	dependents.Scan(transaction, [&](CatalogEntry &other) {
+		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
+		auto &other_entry = other.Cast<DependencyCatalogEntry>();
+		auto other_connections_p = dependency_manager.GetDependencySet(transaction, other);
+		if (!other_connections_p) {
+			// Already deleted
+			return;
+		}
+		auto &other_connections = *other_connections_p;
+		callback(other_entry, other_connections);
+	});
+}
+
+void DependencySetCatalogEntry::ScanDependencies(
+    CatalogTransaction transaction,
+    const std::function<void(DependencyCatalogEntry &, DependencySetCatalogEntry &)> &callback) {
+	dependencies.Scan(transaction, [&](CatalogEntry &other) {
+		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
+		auto &other_entry = other.Cast<DependencyCatalogEntry>();
+		auto other_connections_p = dependency_manager.GetDependencySet(transaction, other);
+		if (!other_connections_p) {
+			// Already deleted
+			return;
+		}
+		auto &other_connections = *other_connections_p;
+		callback(other_entry, other_connections);
+	});
 }
 
 DependencySetCatalogEntry::~DependencySetCatalogEntry() {
@@ -63,6 +97,9 @@ void DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction, Ca
 	auto dependency = make_uniq<DependencyCatalogEntry>(DependencyConnectionType::DEPENDENCY, catalog, to_add, type);
 	auto dependency_name = dependency->name;
 	D_ASSERT(dependency_name != name);
+	if (catalog.IsTemporaryCatalog()) {
+		dependency->temporary = true;
+	}
 	dependencies.CreateEntry(transaction, dependency_name, std::move(dependency), empty_dependencies);
 }
 void DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction, CatalogEntry &to_add,
@@ -71,6 +108,9 @@ void DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction, Cat
 	auto dependent = make_uniq<DependencyCatalogEntry>(DependencyConnectionType::DEPENDENT, catalog, to_add, type);
 	auto dependent_name = dependent->name;
 	D_ASSERT(dependent_name != name);
+	if (catalog.IsTemporaryCatalog()) {
+		dependent->temporary = true;
+	}
 	dependents.CreateEntry(transaction, dependent_name, std::move(dependent), empty_dependencies);
 }
 

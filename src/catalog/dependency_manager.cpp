@@ -67,7 +67,7 @@ DependencySetCatalogEntry &DependencyManager::GetOrCreateDependencySet(CatalogTr
 	auto name = MangleName(object);
 	auto connection_p = connections.GetEntry(transaction, name);
 	if (!connection_p) {
-		auto new_connection = make_uniq<DependencySetCatalogEntry>(catalog, name);
+		auto new_connection = make_uniq<DependencySetCatalogEntry>(catalog, *this, name);
 		if (catalog.IsTemporaryCatalog()) {
 			new_connection->temporary = true;
 		}
@@ -190,9 +190,8 @@ DependencyManager::LookupResult DependencyManager::LookupEntry(CatalogTransactio
 	CatalogType type;
 	GetLookupProperties(dependency, schema, name, type);
 
-	// Lookup the schema, 'include_deleted' is true so we can still find the entries that are part of the schema
-	// that is currently being dropped
-	auto schema_entry = catalog.schemas->GetEntry(transaction, schema, /* include_deleted = */ true);
+	// Lookup the schema
+	auto schema_entry = catalog.schemas->GetEntry(transaction, schema);
 	if (type == CatalogType::SCHEMA_ENTRY || !schema_entry) {
 		// This is a schema entry, perform the callback only providing the schema
 		return LookupResult(schema_entry);
@@ -280,13 +279,13 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 		to_drop.emplace_back(std::move(lookup));
 	});
 
+	CleanupDependencies(transaction, object);
+
 	for (auto &lookup : to_drop) {
 		auto set = lookup.set;
 		auto entry = lookup.entry;
 		set->DropEntry(transaction, entry->name, cascade);
 	}
-
-	CleanupDependencies(transaction, object);
 }
 
 void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj) {
@@ -419,9 +418,6 @@ void DependencyManager::Scan(ClientContext &context,
 void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry) {
 	D_ASSERT(!IsSystemEntry(entry));
 	D_ASSERT(!IsSystemEntry(owner));
-
-	// lock the catalog for writing
-	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 
 	// If the owner is already owned by something else, throw an error
 	auto &owner_connections = GetOrCreateDependencySet(transaction, owner);

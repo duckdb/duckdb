@@ -13,7 +13,6 @@
 #include "duckdb/catalog/dependency.hpp"
 #include "duckdb/catalog/catalog_entry_map.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
-#include "duckdb/catalog/catalog_entry/dependency_set_catalog_entry.hpp"
 
 #include <functional>
 
@@ -22,10 +21,12 @@ class DuckCatalog;
 class ClientContext;
 class DependencyList;
 class DependencyCatalogEntry;
+class DependencySetCatalogEntry;
 
 //! The DependencyManager is in charge of managing dependencies between catalog entries
 class DependencyManager {
 	friend class CatalogSet;
+	friend class DependencySetCatalogEntry;
 
 public:
 	explicit DependencyManager(DuckCatalog &catalog);

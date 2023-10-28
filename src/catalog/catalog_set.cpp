@@ -255,12 +255,9 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	return true;
 }
 
-bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, bool cascade, bool allow_drop_internal) {
-	EntryIndex entry_index;
-	// lock the catalog for writing
-	// we can only delete an entry that exists
-	unique_lock<mutex> write_lock(catalog.GetWriteLock());
-	auto entry = GetEntryInternal(transaction, name, &entry_index);
+bool CatalogSet::DropDependencies(CatalogTransaction transaction, const string &name, bool cascade,
+                                  bool allow_drop_internal) {
+	auto entry = GetEntry(transaction, name);
 	if (!entry) {
 		return false;
 	}
@@ -270,9 +267,25 @@ bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, b
 	// check any dependencies of this object
 	D_ASSERT(entry->ParentCatalog().IsDuckCatalog());
 	auto &duck_catalog = entry->ParentCatalog().Cast<DuckCatalog>();
-	write_lock.unlock();
 	duck_catalog.GetDependencyManager().DropObject(transaction, *entry, cascade);
-	write_lock.lock();
+	return true;
+}
+
+bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, bool cascade, bool allow_drop_internal) {
+	if (!DropDependencies(transaction, name, cascade, allow_drop_internal)) {
+		return false;
+	}
+	EntryIndex entry_index;
+	// lock the catalog for writing
+	// we can only delete an entry that exists
+	lock_guard<mutex> write_lock(catalog.GetWriteLock());
+	auto entry = GetEntryInternal(transaction, name, &entry_index);
+	if (!entry) {
+		return false;
+	}
+	if (entry->internal && !allow_drop_internal) {
+		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
+	}
 
 	lock_guard<mutex> read_lock(catalog_lock);
 	// create a new entry and replace the currently stored one
@@ -485,18 +498,10 @@ optional_ptr<CatalogEntry> CatalogSet::CreateDefaultEntry(CatalogTransaction tra
 	return GetEntry(transaction, name);
 }
 
-static bool IncludeEntry(bool include_deleted, bool deleted) {
-	if (!deleted) {
-		return true;
-	}
-	return include_deleted;
-}
-
-optional_ptr<CatalogEntry> CatalogSet::GetEntry(CatalogTransaction transaction, const string &name,
-                                                bool include_deleted) {
+optional_ptr<CatalogEntry> CatalogSet::GetEntry(CatalogTransaction transaction, const string &name) {
 	unique_lock<mutex> lock(catalog_lock);
 	auto mapping_value = GetMapping(transaction, name);
-	if (!mapping_value || !IncludeEntry(include_deleted, mapping_value->deleted)) {
+	if (!mapping_value || mapping_value->deleted) {
 		return CreateDefaultEntry(transaction, name, lock);
 	}
 	// we found an entry for this name
@@ -504,7 +509,7 @@ optional_ptr<CatalogEntry> CatalogSet::GetEntry(CatalogTransaction transaction, 
 
 	auto &catalog_entry = mapping_value->index.GetEntry();
 	auto &current = GetEntryForTransaction(transaction, catalog_entry);
-	const bool entry_is_invalid = !IncludeEntry(include_deleted, current.deleted);
+	const bool entry_is_invalid = current.deleted;
 	const bool entry_is_out_of_date = current.name != name && !UseTimestamp(transaction, mapping_value->timestamp);
 	if (entry_is_invalid || entry_is_out_of_date) {
 		return nullptr;

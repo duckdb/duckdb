@@ -20,14 +20,23 @@
 
 namespace duckdb {
 
+class DependencyManager;
+class DependencyCatalogEntry;
+
 class DependencySetCatalogEntry : public InCatalogEntry {
 public:
-	DependencySetCatalogEntry(Catalog &catalog, const string &name);
+	DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager, const string &name);
 	~DependencySetCatalogEntry() override;
 
 public:
 	CatalogSet &Dependencies();
 	CatalogSet &Dependents();
+
+public:
+	void ScanDependents(CatalogTransaction transaction,
+	                    const std::function<void(DependencyCatalogEntry &, DependencySetCatalogEntry &)> &callback);
+	void ScanDependencies(CatalogTransaction transaction,
+	                      const std::function<void(DependencyCatalogEntry &, DependencySetCatalogEntry &)> &callback);
 
 public:
 	// Add Dependencies
@@ -67,6 +76,7 @@ private:
 	string name;
 	CatalogSet dependencies;
 	CatalogSet dependents;
+	DependencyManager &dependency_manager;
 };
 
 } // namespace duckdb
