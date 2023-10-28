@@ -133,7 +133,7 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 		if (!dependency.set) {
 			throw InternalException("Dependency has no set");
 		}
-		auto catalog_entry = dependency.set->GetEntryInternal(transaction, dependency.name, nullptr);
+		auto catalog_entry = dependency.set->GetEntry(transaction, dependency.name);
 		if (!catalog_entry) {
 			throw InternalException("Dependency has already been deleted?");
 		}
@@ -196,9 +196,8 @@ void GetLookupProperties(CatalogEntry &entry, string &schema, string &name, Cata
 
 DependencyManager::LookupResult::LookupResult(optional_ptr<CatalogEntry> entry) : entry(entry) {
 }
-DependencyManager::LookupResult::LookupResult(optional_ptr<CatalogSet> set, optional_ptr<MappingValue> mapping_value,
-                                              optional_ptr<CatalogEntry> entry)
-    : set(set), mapping_value(mapping_value), entry(entry) {
+DependencyManager::LookupResult::LookupResult(optional_ptr<CatalogSet> set, optional_ptr<CatalogEntry> entry)
+    : set(set), entry(entry) {
 }
 
 // Always performs the callback, it's up to the callback to determine what to do based on the lookup result
@@ -209,30 +208,21 @@ DependencyManager::LookupResult DependencyManager::LookupEntry(CatalogTransactio
 	CatalogType type;
 	GetLookupProperties(dependency, schema, name, type);
 
-	// Lookup the schema
-	EntryIndex index;
-	// Use 'GetEntryInternal' because we don't care if the schema is deleted
-	catalog.schemas->GetEntryInternal(transaction, schema, &index);
-	D_ASSERT(index.IsValid());
-	auto &schema_entry = index.GetEntry();
-	if (type == CatalogType::SCHEMA_ENTRY) {
+	// Lookup the schema, 'include_deleted' is true so we can still find the entries that are part of the schema
+	// that is currently being dropped
+	auto schema_entry = catalog.schemas->GetEntry(transaction, schema, /* include_deleted = */ true);
+	if (type == CatalogType::SCHEMA_ENTRY || !schema_entry) {
 		// This is a schema entry, perform the callback only providing the schema
-		auto entry = dynamic_cast<CatalogEntry *>(&schema_entry);
-		return LookupResult(entry);
+		return LookupResult(schema_entry);
 	}
-	auto &duck_schema_entry = schema_entry.Cast<DuckSchemaEntry>();
+	auto &duck_schema_entry = schema_entry->Cast<DuckSchemaEntry>();
 
 	// Lookup the catalog set
 	auto &catalog_set = duck_schema_entry.GetCatalogSet(type);
 
-	// Get the mapping from name -> index
-	auto mapping_value = catalog_set.GetMapping(transaction, name, /* get_latest = */ true);
-	if (!mapping_value) {
-		return LookupResult(&catalog_set, nullptr, nullptr);
-	}
 	// Use the index to find the actual entry
-	auto entry = catalog_set.GetEntryInternal(transaction, mapping_value->index);
-	return LookupResult(&catalog_set, mapping_value, entry);
+	auto entry = catalog_set.GetEntry(transaction, name);
+	return LookupResult(&catalog_set, entry);
 }
 
 void DependencyManager::CleanupDependencies(CatalogTransaction transaction, CatalogEntry &object) {

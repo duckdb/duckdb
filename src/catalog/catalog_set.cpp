@@ -534,21 +534,31 @@ optional_ptr<CatalogEntry> CatalogSet::CreateDefaultEntry(CatalogTransaction tra
 	return GetEntry(transaction, name);
 }
 
-optional_ptr<CatalogEntry> CatalogSet::GetEntry(CatalogTransaction transaction, const string &name) {
+static bool IncludeEntry(bool include_deleted, bool deleted) {
+	if (!deleted) {
+		return true;
+	}
+	return include_deleted;
+}
+
+optional_ptr<CatalogEntry> CatalogSet::GetEntry(CatalogTransaction transaction, const string &name,
+                                                bool include_deleted) {
 	unique_lock<mutex> lock(catalog_lock);
 	auto mapping_value = GetMapping(transaction, name);
-	if (mapping_value != nullptr && !mapping_value->deleted) {
-		// we found an entry for this name
-		// check the version numbers
-
-		auto &catalog_entry = mapping_value->index.GetEntry();
-		auto &current = GetEntryForTransaction(transaction, catalog_entry);
-		if (current.deleted || (current.name != name && !UseTimestamp(transaction, mapping_value->timestamp))) {
-			return nullptr;
-		}
-		return &current;
+	if (!mapping_value || !IncludeEntry(include_deleted, mapping_value->deleted)) {
+		return CreateDefaultEntry(transaction, name, lock);
 	}
-	return CreateDefaultEntry(transaction, name, lock);
+	// we found an entry for this name
+	// check the version numbers
+
+	auto &catalog_entry = mapping_value->index.GetEntry();
+	auto &current = GetEntryForTransaction(transaction, catalog_entry);
+	const bool entry_is_invalid = !IncludeEntry(include_deleted, current.deleted);
+	const bool entry_is_out_of_date = current.name != name && !UseTimestamp(transaction, mapping_value->timestamp);
+	if (entry_is_invalid || entry_is_out_of_date) {
+		return nullptr;
+	}
+	return &current;
 }
 
 optional_ptr<CatalogEntry> CatalogSet::GetEntry(ClientContext &context, const string &name) {

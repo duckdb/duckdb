@@ -50,12 +50,10 @@ private:
 	struct LookupResult {
 	public:
 		LookupResult(optional_ptr<CatalogEntry> entry);
-		LookupResult(optional_ptr<CatalogSet> set, optional_ptr<MappingValue> mapping_value,
-		             optional_ptr<CatalogEntry> entry);
+		LookupResult(optional_ptr<CatalogSet> set, optional_ptr<CatalogEntry> entry);
 
 	public:
 		optional_ptr<CatalogSet> set;
-		optional_ptr<MappingValue> mapping_value;
 		optional_ptr<CatalogEntry> entry;
 	};
 	LookupResult LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency);
