@@ -20,12 +20,12 @@ struct EntryIndex {
 public:
 	EntryIndex() : catalog(nullptr), index(DConstants::INVALID_INDEX) {
 	}
-	EntryIndex(CatalogSet &catalog, catalog_entry_t index) : catalog(&catalog), index(index) {
+	EntryIndex(CatalogSet &catalog, idx_t index) : catalog(&catalog), index(index) {
 		auto entry = catalog.entries.find(index);
 		if (entry == catalog.entries.end()) {
 			throw InternalException("EntryIndex - Catalog entry not found in constructor!?");
 		}
-		catalog.entries.at(index).IncreaseRefCount();
+		catalog.entries[index].reference_count++;
 	}
 	~EntryIndex() {
 		if (!catalog) {
@@ -33,8 +33,8 @@ public:
 		}
 		auto entry = catalog->entries.find(index);
 		D_ASSERT(entry != catalog->entries.end());
-		const bool reached_zero = entry->second.DecreaseRefCount();
-		if (reached_zero) {
+		auto remaining_ref = --entry->second.reference_count;
+		if (remaining_ref == 0) {
 			catalog->entries.erase(index);
 		}
 		catalog = nullptr;
@@ -55,29 +55,14 @@ public:
 		return *this;
 	}
 
-private:
-	EntryValue &GetEntryInternal(catalog_entry_t index) {
+	unique_ptr<CatalogEntry> &GetEntry() {
 		auto entry = catalog->entries.find(index);
 		if (entry == catalog->entries.end()) {
 			throw InternalException("EntryIndex - Catalog entry not found!?");
 		}
-		return entry->second;
+		return entry->second.entry;
 	}
-
-public:
-	CatalogEntry &GetEntry() {
-		auto &entry_value = GetEntryInternal(index);
-		return entry_value.Entry();
-	}
-	unique_ptr<CatalogEntry> TakeEntry() {
-		auto &entry_value = GetEntryInternal(index);
-		return entry_value.TakeEntry();
-	}
-	void SetEntry(unique_ptr<CatalogEntry> entry) {
-		auto &entry_value = GetEntryInternal(index);
-		entry_value.SetEntry(std::move(entry));
-	}
-	catalog_entry_t GetIndex() {
+	idx_t GetIndex() {
 		return index;
 	}
 	EntryIndex Copy() {
@@ -93,7 +78,7 @@ public:
 
 private:
 	CatalogSet *catalog;
-	catalog_entry_t index;
+	idx_t index;
 };
 
 struct MappingValue {
