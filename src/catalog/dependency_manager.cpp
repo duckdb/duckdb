@@ -213,10 +213,10 @@ void DependencyManager::CleanupDependencies(CatalogTransaction transaction, Cata
 
 	// Collect the dependencies
 	catalog_entry_set_t dependencies_to_remove;
-	connections.Dependencies().Scan([&](CatalogEntry &other) { dependencies_to_remove.insert(other); });
+	connections.Dependencies().Scan(transaction, [&](CatalogEntry &other) { dependencies_to_remove.insert(other); });
 	// Also collect the dependents
 	catalog_entry_set_t dependents_to_remove;
-	connections.Dependents().Scan([&](CatalogEntry &other) { dependents_to_remove.insert(other); });
+	connections.Dependents().Scan(transaction, [&](CatalogEntry &other) { dependents_to_remove.insert(other); });
 
 	// Remove the dependency entries
 	for (auto &dependency : dependencies_to_remove) {
@@ -252,7 +252,7 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 	// Check if there are any entries that block the DROP because they still depend on the object
 	auto &dependents = object_connections.Dependents();
 	vector<LookupResult> to_drop;
-	dependents.Scan([&](CatalogEntry &other) {
+	dependents.Scan(transaction, [&](CatalogEntry &other) {
 		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
 		auto &other_entry = other.Cast<DependencyCatalogEntry>();
 		auto other_connections_p = GetDependencySet(transaction, other);
@@ -304,7 +304,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 
 	dependency_set_t preserved_dependents;
 	auto &dependents = old_connections.Dependents();
-	dependents.Scan([&](CatalogEntry &other) {
+	dependents.Scan(transaction, [&](CatalogEntry &other) {
 		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
 		auto &other_entry = other.Cast<DependencyCatalogEntry>();
 		auto other_connections_p = GetDependencySet(transaction, other);
@@ -337,7 +337,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	// Keep old dependencies
 	auto &old_dependencies = old_connections.Dependencies();
 	dependency_set_t dependency_list;
-	old_dependencies.Scan([&](CatalogEntry &other) {
+	old_dependencies.Scan(transaction, [&](CatalogEntry &other) {
 		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
 		auto &other_entry = other.Cast<DependencyCatalogEntry>();
 
@@ -392,7 +392,7 @@ void DependencyManager::Scan(ClientContext &context,
 
 	// Scan all the dependency sets
 	catalog_entry_set_t entries;
-	connections.Scan([&](CatalogEntry &set) {
+	connections.Scan(transaction, [&](CatalogEntry &set) {
 		auto lookup = LookupEntry(transaction, set);
 		D_ASSERT(lookup.entry);
 		auto &entry = *lookup.entry;
@@ -403,7 +403,7 @@ void DependencyManager::Scan(ClientContext &context,
 		auto set = GetDependencySet(transaction, entry);
 		auto &dependents = set->Dependents();
 		// Scan all the dependents of the entry
-		dependents.Scan([&](CatalogEntry &dependent) {
+		dependents.Scan(transaction, [&](CatalogEntry &dependent) {
 			auto &dependency_entry = dependent.Cast<DependencyCatalogEntry>();
 			auto lookup = LookupEntry(transaction, dependent);
 			if (!lookup.entry) {
@@ -422,7 +422,7 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 	// If the owner is already owned by something else, throw an error
 	auto &owner_connections = GetOrCreateDependencySet(transaction, owner);
 	auto &owner_dependents = owner_connections.Dependents();
-	owner_dependents.Scan([&](CatalogEntry &dependent) {
+	owner_dependents.Scan(transaction, [&](CatalogEntry &dependent) {
 		auto &dependent_entry = dependent.Cast<DependencyCatalogEntry>();
 		if (dependent_entry.Type() == DependencyType::DEPENDENCY_OWNED_BY) {
 			throw DependencyException(owner.name + " already owned by " + dependent_entry.name);
@@ -432,7 +432,7 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 	// If the entry is already owned, throw an error
 	auto &entry_connections = GetOrCreateDependencySet(transaction, entry);
 	auto &entry_dependents = entry_connections.Dependents();
-	entry_dependents.Scan([&](CatalogEntry &dependent) {
+	entry_dependents.Scan(transaction, [&](CatalogEntry &dependent) {
 		auto &dependent_entry = dependent.Cast<DependencyCatalogEntry>();
 		auto dependency_type = dependent_entry.Type();
 
