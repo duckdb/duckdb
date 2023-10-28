@@ -37,11 +37,9 @@ class DependencySetCatalogEntry;
 
 typedef unordered_map<CatalogSet *, unique_lock<mutex>> set_lock_map_t;
 
+using catalog_entry_t = idx_t;
 struct EntryValue {
-	EntryValue() {
-		throw InternalException("EntryValue called without a catalog entry");
-	}
-
+	EntryValue() = delete;
 	explicit EntryValue(unique_ptr<CatalogEntry> entry_p) : entry(std::move(entry_p)), reference_count(0) {
 	}
 	//! enable move constructors
@@ -52,6 +50,30 @@ struct EntryValue {
 		Swap(other);
 		return *this;
 	}
+	template <bool UNSAFE = false>
+	CatalogEntry &Entry() {
+		if (UNSAFE) {
+			return *entry.get();
+		} else {
+			return *entry;
+		}
+	}
+	unique_ptr<CatalogEntry> TakeEntry() {
+		return std::move(entry);
+	}
+	void SetEntry(unique_ptr<CatalogEntry> entry_p) {
+		entry = std::move(entry_p);
+	}
+	void IncreaseRefCount() {
+		reference_count++;
+	}
+	bool DecreaseRefCount() {
+		D_ASSERT(reference_count != 0);
+		reference_count--;
+		return reference_count == 0;
+	}
+
+private:
 	void Swap(EntryValue &other) {
 		std::swap(entry, other.entry);
 		idx_t count = reference_count;
@@ -127,6 +149,7 @@ public:
 	void Verify(Catalog &catalog);
 
 private:
+	catalog_entry_t GenerateCatalogEntryIndex();
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current);
 	CatalogEntry &GetCommittedEntry(CatalogEntry &current);
@@ -157,11 +180,11 @@ private:
 	//! The catalog lock is used to make changes to the data
 	mutex catalog_lock;
 	//! The set of catalog entries
-	unordered_map<idx_t, EntryValue> entries;
+	unordered_map<catalog_entry_t, EntryValue> entries;
 	//! Mapping of string to catalog entry
 	case_insensitive_map_t<unique_ptr<MappingValue>> mapping;
 	//! The current catalog entry index
-	idx_t current_entry = 0;
+	catalog_entry_t current_entry = 0;
 	//! The generator used to generate default internal entries
 	unique_ptr<DefaultGenerator> defaults;
 };

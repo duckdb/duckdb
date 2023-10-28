@@ -20,12 +20,12 @@ struct EntryIndex {
 public:
 	EntryIndex() : catalog(nullptr), index(DConstants::INVALID_INDEX) {
 	}
-	EntryIndex(CatalogSet &catalog, idx_t index) : catalog(&catalog), index(index) {
+	EntryIndex(CatalogSet &catalog, catalog_entry_t index) : catalog(&catalog), index(index) {
 		auto entry = catalog.entries.find(index);
 		if (entry == catalog.entries.end()) {
 			throw InternalException("EntryIndex - Catalog entry not found in constructor!?");
 		}
-		catalog.entries[index].reference_count++;
+		catalog.entries.at(index).IncreaseRefCount();
 	}
 	~EntryIndex() {
 		if (!catalog) {
@@ -33,8 +33,8 @@ public:
 		}
 		auto entry = catalog->entries.find(index);
 		D_ASSERT(entry != catalog->entries.end());
-		auto remaining_ref = --entry->second.reference_count;
-		if (remaining_ref == 0) {
+		const bool reached_zero = entry->second.DecreaseRefCount();
+		if (reached_zero) {
 			catalog->entries.erase(index);
 		}
 		catalog = nullptr;
@@ -55,14 +55,33 @@ public:
 		return *this;
 	}
 
-	unique_ptr<CatalogEntry> &GetEntry() {
+private:
+	template <bool UNSAFE = false>
+	EntryValue &GetEntryInternal(catalog_entry_t index) {
 		auto entry = catalog->entries.find(index);
-		if (entry == catalog->entries.end()) {
+		if (UNSAFE) {
+			D_ASSERT(entry != catalog->entries.end());
+		} else if (entry == catalog->entries.end()) {
 			throw InternalException("EntryIndex - Catalog entry not found!?");
 		}
-		return entry->second.entry;
+		return entry->second;
 	}
-	idx_t GetIndex() {
+
+public:
+	template <bool UNSAFE = false>
+	CatalogEntry &GetEntry() {
+		auto &entry_value = GetEntryInternal<UNSAFE>(index);
+		return entry_value.template Entry<UNSAFE>();
+	}
+	unique_ptr<CatalogEntry> TakeEntry() {
+		auto &entry_value = GetEntryInternal(index);
+		return entry_value.TakeEntry();
+	}
+	void SetEntry(unique_ptr<CatalogEntry> entry) {
+		auto &entry_value = GetEntryInternal(index);
+		entry_value.SetEntry(std::move(entry));
+	}
+	catalog_entry_t GetIndex() {
 		return index;
 	}
 	EntryIndex Copy() {
@@ -78,7 +97,7 @@ public:
 
 private:
 	CatalogSet *catalog;
-	idx_t index;
+	catalog_entry_t index;
 };
 
 struct MappingValue {

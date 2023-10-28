@@ -27,11 +27,11 @@ class EntryDropper {
 public:
 	//! Both constructor and destructor are privates because they should only be called by DropEntryDependencies
 	explicit EntryDropper(EntryIndex &entry_index_p) : entry_index(entry_index_p) {
-		old_deleted = entry_index.GetEntry()->deleted;
+		old_deleted = entry_index.GetEntry().deleted;
 	}
 
 	~EntryDropper() {
-		entry_index.GetEntry()->deleted = old_deleted;
+		entry_index.GetEntry<true>().deleted = old_deleted;
 	}
 
 private:
@@ -61,9 +61,8 @@ void CatalogSet::PutEntry(EntryIndex index, unique_ptr<CatalogEntry> catalog_ent
 	if (entry == entries.end()) {
 		throw InternalException("Entry with entry index \"%llu\" does not exist", index.GetIndex());
 	}
-	catalog_entry->child = std::move(entry->second.entry);
-	catalog_entry->child->parent = catalog_entry.get();
-	entry->second.entry = std::move(catalog_entry);
+	catalog_entry->SetChild(entry->second.TakeEntry());
+	entry->second.SetEntry(std::move(catalog_entry));
 }
 
 bool IsDependencyEntry(CatalogEntry &entry) {
@@ -130,7 +129,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 		PutMapping(transaction, name, std::move(entry_index));
 	} else {
 		index = mapping_value->index.GetIndex();
-		auto &current = *mapping_value->index.GetEntry();
+		auto &current = mapping_value->index.GetEntry();
 		// if it does, we have to check version numbers
 		if (HasConflict(transaction, current.timestamp)) {
 			// current version has been written to by a currently active
@@ -150,7 +149,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
 		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-		dtransaction.PushCatalogEntry(*value_ptr->child);
+		dtransaction.PushCatalogEntry(value_ptr->Child());
 	}
 	return true;
 }
@@ -161,7 +160,7 @@ bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_
 }
 
 optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction transaction, EntryIndex &entry_index) {
-	auto &catalog_entry = *entry_index.GetEntry();
+	auto &catalog_entry = entry_index.GetEntry();
 	// if it does: we have to retrieve the entry and to check version numbers
 	if (HasConflict(transaction, catalog_entry.timestamp)) {
 		// current version has been written to by a currently active
@@ -235,7 +234,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	if (value->name != original_name) {
 		auto mapping_value = GetMapping(transaction, value->name);
 		if (mapping_value && !mapping_value->deleted) {
-			auto &original_entry = GetEntryForTransaction(transaction, *mapping_value->index.GetEntry());
+			auto &original_entry = GetEntryForTransaction(transaction, mapping_value->index.GetEntry());
 			if (!original_entry.deleted) {
 				entry->UndoAlter(context, alter_info);
 				string rename_err_msg =
@@ -267,7 +266,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
 		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-		dtransaction.PushCatalogEntry(*new_entry->child, stream.GetData(), stream.GetPosition());
+		dtransaction.PushCatalogEntry(new_entry->Child(), stream.GetData(), stream.GetPosition());
 	}
 
 	// Check the dependency manager to verify that there are no conflicting dependencies with this alter
@@ -287,7 +286,7 @@ void CatalogSet::DropEntryDependencies(CatalogTransaction transaction, EntryInde
 	EntryDropper dropper(entry_index);
 
 	// To correctly delete the object and its dependencies, it temporarily is set to deleted.
-	entry_index.GetEntry()->deleted = true;
+	entry_index.GetEntry().deleted = true;
 
 	// check any dependencies of this object
 	D_ASSERT(entry.ParentCatalog().IsDuckCatalog());
@@ -315,7 +314,7 @@ void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex en
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
 		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-		dtransaction.PushCatalogEntry(*value_ptr->child);
+		dtransaction.PushCatalogEntry(value_ptr->Child());
 	}
 }
 
@@ -350,21 +349,25 @@ DuckCatalog &CatalogSet::GetCatalog() {
 
 void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
 	// destroy the backed up entry: it is no longer required
-	D_ASSERT(catalog_entry.parent);
-
+	auto parent_p = catalog_entry.Parent();
+	D_ASSERT(parent_p);
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	lock_guard<mutex> lock(catalog_lock);
-	auto parent = catalog_entry.parent;
-	parent->child = std::move(catalog_entry.child);
-	if (parent->deleted && !parent->child && !parent->parent) {
-		auto mapping_entry = mapping.find(parent->name);
+	parent_p = catalog_entry.Parent();
+	auto &parent = *parent_p;
+	parent.SetChild(catalog_entry.TakeChild());
+	if (parent.deleted && !parent.HasChild() && !parent.HasParent()) {
+		auto mapping_entry = mapping.find(parent.name);
 		D_ASSERT(mapping_entry != mapping.end());
 		auto &entry = mapping_entry->second->index.GetEntry();
-		D_ASSERT(entry);
-		if (entry.get() == parent.get()) {
+		if (&entry == parent_p.get()) {
 			mapping.erase(mapping_entry);
 		}
 	}
+}
+
+catalog_entry_t CatalogSet::GenerateCatalogEntryIndex() {
+	return current_entry++;
 }
 
 bool CatalogSet::HasConflict(CatalogTransaction transaction, transaction_t timestamp) {
@@ -439,23 +442,23 @@ bool CatalogSet::UseTimestamp(CatalogTransaction transaction, transaction_t time
 
 CatalogEntry &CatalogSet::GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current) {
 	reference<CatalogEntry> entry(current);
-	while (entry.get().child) {
+	while (entry.get().HasChild()) {
 		if (UseTimestamp(transaction, entry.get().timestamp)) {
 			break;
 		}
-		entry = *entry.get().child;
+		entry = entry.get().Child();
 	}
 	return entry.get();
 }
 
 CatalogEntry &CatalogSet::GetCommittedEntry(CatalogEntry &current) {
 	reference<CatalogEntry> entry(current);
-	while (entry.get().child) {
+	while (entry.get().HasChild()) {
 		if (entry.get().timestamp < TRANSACTION_ID_START) {
 			// this entry is committed: use it
 			break;
 		}
-		entry = *entry.get().child;
+		entry = entry.get().Child();
 	}
 	return entry.get();
 }
@@ -489,7 +492,7 @@ optional_ptr<CatalogEntry> CatalogSet::CreateEntryInternal(CatalogTransaction tr
 	entry->set = this;
 	entry->timestamp = 0;
 
-	auto entry_index = PutEntry(current_entry++, std::move(entry));
+	auto entry_index = PutEntry(GenerateCatalogEntryIndex(), std::move(entry));
 	PutMapping(transaction, name, std::move(entry_index));
 	mapping[name]->timestamp = 0;
 	return catalog_entry;
@@ -545,7 +548,7 @@ optional_ptr<CatalogEntry> CatalogSet::GetEntry(CatalogTransaction transaction, 
 	// we found an entry for this name
 	// check the version numbers
 
-	auto &catalog_entry = *mapping_value->index.GetEntry();
+	auto &catalog_entry = mapping_value->index.GetEntry();
 	auto &current = GetEntryForTransaction(transaction, catalog_entry);
 	const bool entry_is_invalid = !IncludeEntry(include_deleted, current.deleted);
 	const bool entry_is_out_of_date = current.name != name && !UseTimestamp(transaction, mapping_value->timestamp);
@@ -572,7 +575,7 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 	// and entry->parent has to be removed ("rolled back")
 
 	// i.e. we have to place (entry) as (entry->parent) again
-	auto &to_be_removed_node = *entry.parent;
+	auto &to_be_removed_node = *entry.Parent();
 
 	if (!StringUtil::CIEquals(entry.name, to_be_removed_node.name)) {
 		// rename: clean up the new name when the rename is rolled back
@@ -584,18 +587,15 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 			mapping.erase(removed_entry);
 		}
 	}
-	if (to_be_removed_node.parent) {
+	if (to_be_removed_node.HasParent()) {
 		// if the to be removed node has a parent, set the child pointer to the
 		// to be restored node
-		auto preserved_child = std::move(to_be_removed_node.parent->child);
-		to_be_removed_node.parent->child = std::move(to_be_removed_node.child);
-		entry.parent = to_be_removed_node.parent;
+		to_be_removed_node.Parent()->SetChild(to_be_removed_node.TakeChild());
 	} else {
 		// otherwise we need to update the base entry tables
 		auto &name = entry.name;
-		to_be_removed_node.child->SetAsRoot();
-		mapping[name]->index.GetEntry() = std::move(to_be_removed_node.child);
-		entry.parent = nullptr;
+		to_be_removed_node.Child().SetAsRoot();
+		mapping[name]->index.SetEntry(to_be_removed_node.TakeChild());
 	}
 
 	// restore the name if it was deleted
@@ -642,7 +642,7 @@ void CatalogSet::Scan(CatalogTransaction transaction, const std::function<void(C
 	CreateDefaultEntries(transaction, lock);
 
 	for (auto &kv : entries) {
-		auto &entry = *kv.second.entry.get();
+		auto &entry = kv.second.Entry();
 		auto &entry_for_transaction = GetEntryForTransaction(transaction, entry);
 		if (!entry_for_transaction.deleted) {
 			callback(entry_for_transaction);
@@ -658,8 +658,8 @@ void CatalogSet::Scan(const std::function<void(CatalogEntry &)> &callback) {
 	// lock the catalog set
 	lock_guard<mutex> lock(catalog_lock);
 	for (auto &kv : entries) {
-		auto entry = kv.second.entry.get();
-		auto &commited_entry = GetCommittedEntry(*entry);
+		auto &entry = kv.second.Entry();
+		auto &commited_entry = GetCommittedEntry(entry);
 		if (!commited_entry.deleted) {
 			callback(commited_entry);
 		}
