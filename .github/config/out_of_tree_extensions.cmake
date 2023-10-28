@@ -48,7 +48,7 @@ duckdb_extension_load(iceberg
 duckdb_extension_load(postgres_scanner
         DONT_LINK
         GIT_URL https://github.com/duckdblabs/postgres_scanner
-        GIT_TAG 67255160a28b5b8fe4c919eb5199cf9a9fc51b88
+        GIT_TAG 5688123b8da4cd34d13e128f51e1d32b9085bdf4
         )
 
 ################# SPATIAL
