@@ -321,6 +321,9 @@ void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex en
 
 bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, bool cascade, bool allow_drop_internal) {
 	EntryIndex entry_index;
+	// lock the catalog for writing
+	// we can only delete an entry that exists
+	unique_lock<mutex> write_lock(catalog.GetWriteLock());
 	auto entry = GetEntryInternal(transaction, name, &entry_index);
 	if (!entry) {
 		return false;
@@ -328,11 +331,10 @@ bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, b
 	if (entry->internal && !allow_drop_internal) {
 		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
 	}
+	write_lock.unlock();
 	DropEntryDependencies(transaction, entry_index, *entry, cascade);
+	write_lock.lock();
 
-	// lock the catalog for writing
-	// we can only delete an entry that exists
-	unique_lock<mutex> write_lock(catalog.GetWriteLock());
 	lock_guard<mutex> read_lock(catalog_lock);
 	DropEntryInternal(transaction, std::move(entry_index), *entry, cascade);
 	return true;
@@ -347,8 +349,9 @@ DuckCatalog &CatalogSet::GetCatalog() {
 }
 
 void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
-// destroy the backed up entry: it is no longer required
-D_ASSERT(catalog_entry.parent);
+	// destroy the backed up entry: it is no longer required
+	D_ASSERT(catalog_entry.parent);
+
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	lock_guard<mutex> lock(catalog_lock);
 	auto parent = catalog_entry.parent;
@@ -584,6 +587,7 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 	if (to_be_removed_node.parent) {
 		// if the to be removed node has a parent, set the child pointer to the
 		// to be restored node
+		auto preserved_child = std::move(to_be_removed_node.parent->child);
 		to_be_removed_node.parent->child = std::move(to_be_removed_node.child);
 		entry.parent = to_be_removed_node.parent;
 	} else {
