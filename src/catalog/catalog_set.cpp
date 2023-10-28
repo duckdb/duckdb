@@ -354,18 +354,16 @@ DuckCatalog &CatalogSet::GetCatalog() {
 void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
 	// destroy the backed up entry: it is no longer required
 	D_ASSERT(catalog_entry.parent);
-	if (catalog_entry.parent->type != CatalogType::UPDATED_ENTRY) {
-		lock_guard<mutex> write_lock(catalog.GetWriteLock());
-		lock_guard<mutex> lock(catalog_lock);
-		auto parent = catalog_entry.parent;
-		parent->child = std::move(catalog_entry.child);
-		if (parent->deleted && !parent->child && !parent->parent) {
-			auto mapping_entry = mapping.find(parent->name);
-			D_ASSERT(mapping_entry != mapping.end());
-			auto &entry = mapping_entry->second->index.GetEntry();
-			if (&entry == parent.get()) {
-				mapping.erase(mapping_entry);
-			}
+	lock_guard<mutex> write_lock(catalog.GetWriteLock());
+	lock_guard<mutex> lock(catalog_lock);
+	auto parent = catalog_entry.parent;
+	parent->child = std::move(catalog_entry.child);
+	if (parent->deleted && !parent->child && !parent->parent) {
+		auto mapping_entry = mapping.find(parent->name);
+		D_ASSERT(mapping_entry != mapping.end());
+		auto &entry = mapping_entry->second->index.GetEntry();
+		if (&entry == parent.get()) {
+			mapping.erase(mapping_entry);
 		}
 	}
 }
