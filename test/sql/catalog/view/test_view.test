@@ -13,10 +13,14 @@ statement ok
 INSERT INTO t1 VALUES (41), (42), (43)
 
 statement ok
-CREATE VIEW v1 AS SELECT i AS j FROM t1 WHERE i < 43
+CREATE VIEW v1 AS SELECT
+	i AS j
+FROM t1 WHERE i < 43
 
 statement error
 CREATE VIEW v1 AS SELECT 'whatever'
+----
+Catalog Error: View with name "v1" already exists!
 
 query I
 SELECT j FROM v1 WHERE j > 41
