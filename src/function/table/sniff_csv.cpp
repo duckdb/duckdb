@@ -52,6 +52,19 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 	return std::move(result);
 }
 
+string NewLineIdentifierToString(NewLineIdentifier identifier){
+	switch (identifier) {
+	case NewLineIdentifier::SINGLE:
+		return "single";
+	case NewLineIdentifier::CARRY_ON:
+		return "carry_on";
+	case NewLineIdentifier::MIX:
+		return "mix";
+	case NewLineIdentifier::NOT_SET:
+		throw InternalException("NewLine Identifier must always be set after running the CSV sniffer");
+	}
+}
+
 static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	const CSVFunctionData &data = data_p.bind_data->Cast<CSVFunctionData>();
 	// We must run the sniffer.
@@ -72,13 +85,11 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	// 2. Quote
 	output.SetValue(0,1,options.dialect_options.state_machine_options.quote);
 	// 3. Escape
-	output.SetValue(0,1,options.dialect_options.state_machine_options.escape);
+	output.SetValue(0,2,options.dialect_options.state_machine_options.escape);
 	// 4. NewLine Delimiter
-	NewLineIdentifier::CARRY_ON;
-//	output.SetValue(0,1,options.dialect_options.new_line);
+	output.SetValue(0,3,NewLineIdentifierToString(options.dialect_options.new_line));
 	// 5. Skip Rows
-	return_types.emplace_back(LogicalType::UINTEGER);
-	names.emplace_back("Skip Rows");
+	output.SetValue(0,4,NewLineIdentifierToString(options.dialect_options.new_line));
 	// 6. Has Header
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Has Header");
