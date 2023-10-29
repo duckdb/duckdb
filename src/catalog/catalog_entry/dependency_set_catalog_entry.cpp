@@ -152,30 +152,16 @@ void DependencySetCatalogEntry::RemoveDependent(CatalogTransaction transaction, 
 }
 
 bool DependencySetCatalogEntry::IsDependencyOf(CatalogTransaction transaction, CatalogEntry &entry) {
-	bool is_dependency_of = false;
-	dependents.Scan(transaction, [&](CatalogEntry &dependent) {
-		auto &dependent_entry = dependent.Cast<DependencyCatalogEntry>();
-		if (dependent_entry.MangledName() != DependencyManager::MangleName(entry)) {
-			return;
-		}
-		// 'entry' is a dependency of this object
-		is_dependency_of = true;
-	});
-	return is_dependency_of;
+	auto mangled_name = DependencyManager::MangleName(entry);
+	auto dependent = dependents.GetEntry(transaction, mangled_name);
+	return dependent != nullptr;
 }
 
 bool DependencySetCatalogEntry::HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry,
                                                 DependencyType dependent_type) {
-	bool has_dependency_on = false;
-	dependencies.Scan(transaction, [&](CatalogEntry &dependency) {
-		auto &dependency_entry = dependency.Cast<DependencyCatalogEntry>();
-		if (dependency_entry.MangledName() != DependencyManager::MangleName(entry)) {
-			return;
-		}
-		// this object has a dependency on 'entry'
-		has_dependency_on = true;
-	});
-	return has_dependency_on;
+	auto mangled_name = DependencyManager::MangleName(entry);
+	auto dependency = dependencies.GetEntry(transaction, mangled_name);
+	return dependency != nullptr;
 }
 
 static string FormatString(string input) {
