@@ -20,12 +20,17 @@
 
 namespace duckdb {
 
+class DependencyManager;
+
 //! Resembles a connection between an object and the CatalogEntry that can be retrieved from the Catalog using the
 //! identifiers listed here
 
+enum class DependencyLinkSide { DEPENDENCY, DEPENDENT };
+
 class DependencyCatalogEntry : public InCatalogEntry {
 public:
-	DependencyCatalogEntry(Catalog &catalog, CatalogEntry &entry,
+	DependencyCatalogEntry(DependencyLinkSide side, Catalog &catalog, DependencySetCatalogEntry &set,
+	                       CatalogType entry_type, const string &entry_schema, const string &entry_name,
 	                       DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	~DependencyCatalogEntry() override;
 
@@ -36,11 +41,17 @@ public:
 	const string &EntryName() const;
 	DependencyType Type() const;
 
+	// Create the corresponding dependency/dependent in the other set
+	void CompleteLink(CatalogTransaction transaction, DependencyType type = DependencyType::DEPENDENCY_REGULAR);
+
 private:
 	const string entry_name;
 	const string schema;
 	const CatalogType entry_type;
 	DependencyType dependency_type;
+
+	DependencyLinkSide side;
+	DependencySetCatalogEntry &set;
 };
 
 } // namespace duckdb

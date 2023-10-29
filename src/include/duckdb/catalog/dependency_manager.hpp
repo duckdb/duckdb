@@ -36,6 +36,10 @@ public:
 	          const std::function<void(CatalogEntry &, CatalogEntry &, DependencyType)> &callback);
 
 	void AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry);
+	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogTransaction transaction,
+	                                                         const string &mangled_name);
+	DependencySetCatalogEntry &GetOrCreateDependencySet(CatalogTransaction transaction, CatalogType entry_type,
+	                                                    const string &entry_schema, const string &entry_name);
 
 private:
 	DuckCatalog &catalog;
@@ -44,8 +48,8 @@ private:
 private:
 	bool IsSystemEntry(CatalogEntry &entry) const;
 	DependencySetCatalogEntry &GetOrCreateDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
-	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
 	void DropDependencySet(CatalogTransaction, CatalogEntry &entry);
+	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
 
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency);
 
@@ -55,6 +59,7 @@ public:
 	static string GetSchema(CatalogEntry &entry);
 	static string MangleName(CatalogType type, const string &schema, const string &name);
 	static string MangleName(CatalogEntry &entry);
+	static void GetLookupProperties(CatalogEntry &entry, string &schema, string &name, CatalogType &type);
 
 private:
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, const DependencyList &dependencies);

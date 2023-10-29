@@ -25,12 +25,14 @@ class DependencyCatalogEntry;
 
 class DependencySetCatalogEntry : public InCatalogEntry {
 public:
-	DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager, CatalogEntry &object);
+	DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager, CatalogType entry_type,
+	                          const string &entry_schema, const string &entry_name);
 	~DependencySetCatalogEntry() override;
 
 public:
 	CatalogSet &Dependencies();
 	CatalogSet &Dependents();
+	DependencyManager &Manager();
 
 public:
 	using dependency_callback_t = const std::function<void(DependencyCatalogEntry &)>;
@@ -39,18 +41,22 @@ public:
 
 public:
 	// Add Dependencies
-	void AddDependency(CatalogTransaction transaction, CatalogEntry &dependent,
-	                   DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
-	void AddDependency(CatalogTransaction transaction, Dependency dependent);
+	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, CatalogEntry &dependent,
+	                                      DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
+	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, Dependency dependent);
 	void AddDependencies(CatalogTransaction transaction, const DependencyList &dependencies);
 	void AddDependencies(CatalogTransaction transaction, const dependency_set_t &dependencies);
 
 	// Add Dependents
-	void AddDependent(CatalogTransaction transaction, CatalogEntry &dependent,
-	                  DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
-	void AddDependent(CatalogTransaction transaction, const Dependency dependent);
+	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, CatalogEntry &dependent,
+	                                     DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
+	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, const Dependency dependent);
 	void AddDependents(CatalogTransaction transaction, const DependencyList &dependents);
 	void AddDependents(CatalogTransaction transaction, const dependency_set_t &dependents);
+
+	// Get dependent/dependency
+	DependencyCatalogEntry &GetDependency(CatalogTransaction &transaction, CatalogEntry &object);
+	DependencyCatalogEntry &GetDependent(CatalogTransaction &transaction, CatalogEntry &object);
 
 public:
 	void RemoveDependency(CatalogTransaction transaction, CatalogEntry &dependency);
