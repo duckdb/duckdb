@@ -48,6 +48,7 @@ vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value 
 				throw ParserException("%s reader can only take a list of strings as a parameter", name);
 			}
 			auto glob_files = fs.GlobFiles(StringValue::Get(val), context, options);
+			std::sort(glob_files.begin(), glob_files.end());
 			files.insert(files.end(), glob_files.begin(), glob_files.end());
 		}
 	} else {
