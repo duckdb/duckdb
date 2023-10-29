@@ -25,7 +25,7 @@ class DependencyCatalogEntry;
 
 class DependencySetCatalogEntry : public InCatalogEntry {
 public:
-	DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager, const string &name);
+	DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager, CatalogEntry &object);
 	~DependencySetCatalogEntry() override;
 
 public:
@@ -70,9 +70,15 @@ public:
 
 public:
 	const string &MangledName() const;
+	CatalogType EntryType() const;
+	const string &EntrySchema() const;
+	const string &EntryName() const;
 
 private:
-	string name;
+	const string entry_name;
+	const string schema;
+	const CatalogType entry_type;
+
 	CatalogSet dependencies;
 	CatalogSet dependents;
 	DependencyManager &dependency_manager;

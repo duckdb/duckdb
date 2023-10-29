@@ -18,7 +18,7 @@ namespace duckdb {
 DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog), connections(catalog) {
 }
 
-static string GetSchema(CatalogEntry &entry) {
+string DependencyManager::GetSchema(CatalogEntry &entry) {
 	if (entry.type == CatalogType::SCHEMA_ENTRY) {
 		return entry.name;
 	}
@@ -63,22 +63,21 @@ optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(Cata
 
 DependencySetCatalogEntry &DependencyManager::GetOrCreateDependencySet(CatalogTransaction transaction,
                                                                        CatalogEntry &object) {
-	auto name = MangleName(object);
-	auto connection_p = connections.GetEntry(transaction, name);
-	if (!connection_p) {
-		auto new_connection = make_uniq<DependencySetCatalogEntry>(catalog, *this, name);
-		if (catalog.IsTemporaryCatalog()) {
-			new_connection->temporary = true;
-		}
-		auto &connection = *new_connection;
-		DependencyList empty_dependencies;
-		auto res = connections.CreateEntry(transaction, name, std::move(new_connection), empty_dependencies);
-		(void)res;
-		D_ASSERT(res);
-		return connection;
+	auto connection_p = GetDependencySet(transaction, object);
+	if (connection_p) {
+		return *connection_p;
 	}
-	D_ASSERT(connection_p->type == CatalogType::DEPENDENCY_SET);
-	return connection_p->Cast<DependencySetCatalogEntry>();
+	static const DependencyList EMPTY_DEPENDENCIES;
+	auto new_connection = make_uniq<DependencySetCatalogEntry>(catalog, *this, object);
+	if (catalog.IsTemporaryCatalog()) {
+		new_connection->temporary = true;
+	}
+	auto &connection = *new_connection;
+	auto name = new_connection->MangledName();
+	auto res = connections.CreateEntry(transaction, name, std::move(new_connection), EMPTY_DEPENDENCIES);
+	(void)res;
+	D_ASSERT(res);
+	return connection;
 }
 
 bool DependencyManager::IsSystemEntry(CatalogEntry &entry) const {
@@ -150,14 +149,6 @@ static bool CascadeDrop(bool cascade, DependencyType dependency_type) {
 	return false;
 }
 
-void DependencyManager::UnmangleName(const string &mangled, CatalogType &type, string &schema, string &name) {
-	auto parts = StringUtil::Split(mangled, std::string("\0", 1));
-	D_ASSERT(parts.size() == 3);
-	type = CatalogTypeFromString(parts[0]);
-	schema = std::move(parts[1]);
-	name = std::move(parts[2]);
-}
-
 void GetLookupProperties(CatalogEntry &entry, string &schema, string &name, CatalogType &type) {
 	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
 		auto &dependency_entry = entry.Cast<DependencyCatalogEntry>();
@@ -168,8 +159,9 @@ void GetLookupProperties(CatalogEntry &entry, string &schema, string &name, Cata
 	} else if (entry.type == CatalogType::DEPENDENCY_SET) {
 		auto &dependency_set = entry.Cast<DependencySetCatalogEntry>();
 
-		auto &mangled_name = dependency_set.MangledName();
-		DependencyManager::UnmangleName(mangled_name, type, schema, name);
+		schema = dependency_set.EntrySchema();
+		name = dependency_set.EntryName();
+		type = dependency_set.EntryType();
 	} else {
 		throw InternalException("Unrecognized CatalogType in 'GetLookupProperties'");
 	}

@@ -4,16 +4,10 @@
 
 namespace duckdb {
 
-static string GetSchema(CatalogEntry &entry) {
-	if (entry.type == CatalogType::SCHEMA_ENTRY) {
-		return entry.name;
-	}
-	return entry.ParentSchema().name;
-}
-
 DependencyCatalogEntry::DependencyCatalogEntry(Catalog &catalog, CatalogEntry &entry, DependencyType dependency_type)
     : InCatalogEntry(CatalogType::DEPENDENCY_ENTRY, catalog, DependencyManager::MangleName(entry)),
-      entry_name(entry.name), schema(GetSchema(entry)), entry_type(entry.type), dependency_type(dependency_type) {
+      entry_name(entry.name), schema(DependencyManager::GetSchema(entry)), entry_type(entry.type),
+      dependency_type(dependency_type) {
 	D_ASSERT(entry.type != CatalogType::DEPENDENCY_ENTRY);
 	D_ASSERT(entry.type != CatalogType::DEPENDENCY_SET);
 }

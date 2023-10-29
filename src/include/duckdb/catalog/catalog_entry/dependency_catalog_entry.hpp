@@ -37,9 +37,9 @@ public:
 	DependencyType Type() const;
 
 private:
-	string entry_name;
-	string schema;
-	CatalogType entry_type;
+	const string entry_name;
+	const string schema;
+	const CatalogType entry_type;
 	DependencyType dependency_type;
 };
 

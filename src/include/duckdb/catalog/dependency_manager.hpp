@@ -51,9 +51,9 @@ private:
 	void CleanupDependencies(CatalogTransaction transaction, CatalogEntry &entry);
 
 public:
+	static string GetSchema(CatalogEntry &entry);
 	static string MangleName(CatalogType type, const string &schema, const string &name);
 	static string MangleName(CatalogEntry &entry);
-	static void UnmangleName(const string &mangled, CatalogType &type, string &schema, string &name);
 
 private:
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, const DependencyList &dependencies);
