@@ -45,6 +45,7 @@ private:
 	bool IsSystemEntry(CatalogEntry &entry) const;
 	DependencySetCatalogEntry &GetOrCreateDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
 	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
+	void DropDependencySet(CatalogTransaction, CatalogEntry &entry);
 
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency);
 

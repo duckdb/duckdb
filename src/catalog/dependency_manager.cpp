@@ -50,6 +50,11 @@ string DependencyManager::MangleName(CatalogEntry &entry) {
 	return MangleName(type, schema, name);
 }
 
+void DependencyManager::DropDependencySet(CatalogTransaction transaction, CatalogEntry &object) {
+	auto name = MangleName(object);
+	connections.DropEntry(transaction, name, false);
+}
+
 optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(CatalogTransaction transaction,
                                                                             CatalogEntry &object) {
 	auto name = MangleName(object);
@@ -218,6 +223,8 @@ void DependencyManager::CleanupDependencies(CatalogTransaction transaction, Cata
 		other_connections.RemoveDependency(transaction, connections);
 		connections.RemoveDependent(transaction, dependent);
 	}
+
+	DropDependencySet(transaction, object);
 }
 
 void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade) {
