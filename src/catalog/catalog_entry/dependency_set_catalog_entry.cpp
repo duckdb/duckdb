@@ -67,15 +67,13 @@ const string &DependencySetCatalogEntry::MangledName() const {
 }
 
 // Add from a Dependency Set
-void DependencySetCatalogEntry::AddDependencies(CatalogTransaction transaction, dependency_set_t &to_add) {
-	DependencyList empty_dependencies;
+void DependencySetCatalogEntry::AddDependencies(CatalogTransaction transaction, const dependency_set_t &to_add) {
 	for (auto &dep : to_add) {
 		auto &entry = dep.entry;
 		AddDependency(transaction, entry, dep.dependency_type);
 	}
 }
-void DependencySetCatalogEntry::AddDependents(CatalogTransaction transaction, dependency_set_t &to_add) {
-	DependencyList empty_dependencies;
+void DependencySetCatalogEntry::AddDependents(CatalogTransaction transaction, const dependency_set_t &to_add) {
 	for (auto &dep : to_add) {
 		auto &entry = dep.entry;
 		AddDependent(transaction, entry, dep.dependency_type);
@@ -83,12 +81,12 @@ void DependencySetCatalogEntry::AddDependents(CatalogTransaction transaction, de
 }
 
 // Add from a DependencyList
-void DependencySetCatalogEntry::AddDependencies(CatalogTransaction transaction, DependencyList &to_add) {
+void DependencySetCatalogEntry::AddDependencies(CatalogTransaction transaction, const DependencyList &to_add) {
 	for (auto &entry : to_add.set) {
 		AddDependency(transaction, entry);
 	}
 }
-void DependencySetCatalogEntry::AddDependents(CatalogTransaction transaction, DependencyList &to_add) {
+void DependencySetCatalogEntry::AddDependents(CatalogTransaction transaction, const DependencyList &to_add) {
 	for (auto &entry : to_add.set) {
 		AddDependent(transaction, entry);
 	}
@@ -97,25 +95,25 @@ void DependencySetCatalogEntry::AddDependents(CatalogTransaction transaction, De
 // Add from a single CatalogEntry
 void DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction, CatalogEntry &to_add,
                                               DependencyType type) {
-	static DependencyList empty_dependencies;
-	auto dependency = make_uniq<DependencyCatalogEntry>(DependencyConnectionType::DEPENDENCY, catalog, to_add, type);
+	static const DependencyList EMPTY_DEPENDENCIES;
+	auto dependency = make_uniq<DependencyCatalogEntry>(catalog, to_add, type);
 	auto dependency_name = dependency->name;
 	D_ASSERT(dependency_name != name);
 	if (catalog.IsTemporaryCatalog()) {
 		dependency->temporary = true;
 	}
-	dependencies.CreateEntry(transaction, dependency_name, std::move(dependency), empty_dependencies);
+	dependencies.CreateEntry(transaction, dependency_name, std::move(dependency), EMPTY_DEPENDENCIES);
 }
 void DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction, CatalogEntry &to_add,
                                              DependencyType type) {
-	static DependencyList empty_dependencies;
-	auto dependent = make_uniq<DependencyCatalogEntry>(DependencyConnectionType::DEPENDENT, catalog, to_add, type);
+	static const DependencyList EMPTY_DEPENDENCIES;
+	auto dependent = make_uniq<DependencyCatalogEntry>(catalog, to_add, type);
 	auto dependent_name = dependent->name;
 	D_ASSERT(dependent_name != name);
 	if (catalog.IsTemporaryCatalog()) {
 		dependent->temporary = true;
 	}
-	dependents.CreateEntry(transaction, dependent_name, std::move(dependent), empty_dependencies);
+	dependents.CreateEntry(transaction, dependent_name, std::move(dependent), EMPTY_DEPENDENCIES);
 }
 
 // Add from a Dependency
@@ -191,7 +189,11 @@ bool DependencySetCatalogEntry::HasDependencyOn(CatalogTransaction transaction, 
 }
 
 static string FormatString(string input) {
-	std::replace(input.begin(), input.end(), '\0', '_');
+	for (size_t i = 0; i < input.size(); i++) {
+		if (input[i] == '\0') {
+			input[i] = '_';
+		}
+	}
 	return input;
 }
 

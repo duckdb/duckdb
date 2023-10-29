@@ -11,11 +11,9 @@ static string GetSchema(CatalogEntry &entry) {
 	return entry.ParentSchema().name;
 }
 
-DependencyCatalogEntry::DependencyCatalogEntry(DependencyConnectionType type, Catalog &catalog, CatalogEntry &entry,
-                                               DependencyType dependency_type)
+DependencyCatalogEntry::DependencyCatalogEntry(Catalog &catalog, CatalogEntry &entry, DependencyType dependency_type)
     : InCatalogEntry(CatalogType::DEPENDENCY_ENTRY, catalog, DependencyManager::MangleName(entry)),
-      connection_type(type), entry_name(entry.name), schema(GetSchema(entry)), entry_type(entry.type),
-      dependency_type(dependency_type) {
+      entry_name(entry.name), schema(GetSchema(entry)), entry_type(entry.type), dependency_type(dependency_type) {
 	D_ASSERT(entry.type != CatalogType::DEPENDENCY_ENTRY);
 	D_ASSERT(entry.type != CatalogType::DEPENDENCY_SET);
 }

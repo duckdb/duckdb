@@ -65,7 +65,7 @@ public:
 	static void UnmangleName(const string &mangled, CatalogType &type, string &schema, string &name);
 
 private:
-	void AddObject(CatalogTransaction transaction, CatalogEntry &object, DependencyList &dependencies);
+	void AddObject(CatalogTransaction transaction, CatalogEntry &object, const DependencyList &dependencies);
 	void DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
 	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
 };

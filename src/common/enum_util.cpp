@@ -10,7 +10,6 @@
 
 
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/catalog/catalog_entry/dependency_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/catalog/dependency.hpp"
 #include "duckdb/common/box_renderer.hpp"
@@ -1379,29 +1378,6 @@ DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *
 	}
 	if (StringUtil::Equals(value, "NULLS_LAST_ON_ASC_FIRST_ON_DESC")) {
 		return DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
-}
-
-template<>
-const char* EnumUtil::ToChars<DependencyConnectionType>(DependencyConnectionType value) {
-	switch(value) {
-	case DependencyConnectionType::DEPENDENCY:
-		return "DEPENDENCY";
-	case DependencyConnectionType::DEPENDENT:
-		return "DEPENDENT";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
-	}
-}
-
-template<>
-DependencyConnectionType EnumUtil::FromString<DependencyConnectionType>(const char *value) {
-	if (StringUtil::Equals(value, "DEPENDENCY")) {
-		return DependencyConnectionType::DEPENDENCY;
-	}
-	if (StringUtil::Equals(value, "DEPENDENT")) {
-		return DependencyConnectionType::DEPENDENT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

@@ -96,7 +96,8 @@ bool DependencyManager::IsSystemEntry(CatalogEntry &entry) const {
 	}
 }
 
-void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &object, DependencyList &dependencies) {
+void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &object,
+                                  const DependencyList &dependencies) {
 	if (IsSystemEntry(object)) {
 		// Don't do anything for this
 		return;
@@ -125,7 +126,6 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 	                                                               : DependencyType::DEPENDENCY_REGULAR;
 	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies.set) {
-		// NEW
 		auto &dependency_connections = GetOrCreateDependencySet(transaction, dependency);
 		dependency_connections.AddDependent(transaction, object, dependency_type);
 	}
@@ -264,7 +264,7 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 			                          "depend on it. Use DROP...CASCADE to drop all dependents.",
 			                          object.name);
 		}
-		to_drop.emplace_back(std::move(lookup));
+		to_drop.emplace_back(lookup);
 	});
 
 	CleanupDependencies(transaction, object);
