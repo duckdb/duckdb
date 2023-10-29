@@ -75,7 +75,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	catalog.GetDependencyManager().AddObject(transaction, *value, dependencies);
 
 	// lock the catalog for writing
-	unique_lock<mutex> write_lock(catalog.GetWriteLock());
+	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	// lock this catalog set to disallow reading
 	unique_lock<mutex> read_lock(catalog_lock);
 
