@@ -37,9 +37,9 @@ void DependencySetCatalogEntry::ScanSetInternal(CatalogTransaction transaction, 
 
 		// Assert some invariants of the connections
 		if (dependencies) {
-			D_ASSERT(other_connections.IsDependencyOf(*this));
+			D_ASSERT(other_connections.IsDependencyOf(transaction, *this));
 		} else {
-			D_ASSERT(other_connections.HasDependencyOn(*this, other_entry.Type()));
+			D_ASSERT(other_connections.HasDependencyOn(transaction, *this, other_entry.Type()));
 		}
 		callback(other_entry);
 	};
@@ -140,7 +140,7 @@ static bool SkipDependencyRemoval(CatalogEntry &dependency) {
 void DependencySetCatalogEntry::RemoveDependency(CatalogTransaction transaction, CatalogEntry &dependency) {
 	D_ASSERT(dependency.type == CatalogType::DEPENDENCY_ENTRY || dependency.type == CatalogType::DEPENDENCY_SET);
 	if (SkipDependencyRemoval(dependency)) {
-		D_ASSERT(!HasDependencyOnInternal(dependency));
+		D_ASSERT(!HasDependencyOnInternal(transaction, dependency));
 		return;
 	}
 	auto &name = dependency.name;
@@ -154,9 +154,9 @@ void DependencySetCatalogEntry::RemoveDependent(CatalogTransaction transaction, 
 	dependents.DropEntry(transaction, name, false);
 }
 
-bool DependencySetCatalogEntry::IsDependencyOf(CatalogEntry &entry) {
+bool DependencySetCatalogEntry::IsDependencyOf(CatalogTransaction transaction, CatalogEntry &entry) {
 	bool is_dependency_of = false;
-	dependents.Scan([&](CatalogEntry &dependent) {
+	dependents.Scan(transaction, [&](CatalogEntry &dependent) {
 		auto &dependent_entry = dependent.Cast<DependencyCatalogEntry>();
 		if (dependent_entry.MangledName() != DependencyManager::MangleName(entry)) {
 			return;
@@ -167,9 +167,9 @@ bool DependencySetCatalogEntry::IsDependencyOf(CatalogEntry &entry) {
 	return is_dependency_of;
 }
 
-bool DependencySetCatalogEntry::HasDependencyOnInternal(CatalogEntry &entry) {
+bool DependencySetCatalogEntry::HasDependencyOnInternal(CatalogTransaction transaction, CatalogEntry &entry) {
 	bool has_dependency_on = false;
-	dependencies.Scan([&](CatalogEntry &dependency) {
+	dependencies.Scan(transaction, [&](CatalogEntry &dependency) {
 		auto &dependency_entry = dependency.Cast<DependencyCatalogEntry>();
 		if (dependency_entry.MangledName() != DependencyManager::MangleName(entry)) {
 			return;
@@ -180,13 +180,14 @@ bool DependencySetCatalogEntry::HasDependencyOnInternal(CatalogEntry &entry) {
 	return has_dependency_on;
 }
 
-bool DependencySetCatalogEntry::HasDependencyOn(CatalogEntry &entry, DependencyType dependent_type) {
+bool DependencySetCatalogEntry::HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry,
+                                                DependencyType dependent_type) {
 	if (dependent_type == DependencyType::DEPENDENCY_OWNS) {
 		// This link is deliberately left uncompleted
 		return true;
 	}
 
-	return HasDependencyOnInternal(entry);
+	return HasDependencyOnInternal(transaction, entry);
 }
 
 static string FormatString(string input) {

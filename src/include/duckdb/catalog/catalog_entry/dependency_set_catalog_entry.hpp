@@ -57,12 +57,12 @@ public:
 	void RemoveDependent(CatalogTransaction transaction, CatalogEntry &dependent);
 
 public:
-	bool HasDependencyOn(CatalogEntry &entry, DependencyType type);
-	bool IsDependencyOf(CatalogEntry &entry);
+	bool HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry, DependencyType type);
+	bool IsDependencyOf(CatalogTransaction transaction, CatalogEntry &entry);
 
 private:
 	//! Skips the exemption for DEPENDENCY_OWNS, use 'HasDependencyOn' instead for that
-	bool HasDependencyOnInternal(CatalogEntry &entry);
+	bool HasDependencyOnInternal(CatalogTransaction transaction, CatalogEntry &entry);
 	void ScanSetInternal(CatalogTransaction transaction, bool dependencies, dependency_callback_t &callback);
 
 public:
