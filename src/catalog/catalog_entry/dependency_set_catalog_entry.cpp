@@ -124,23 +124,9 @@ void DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction, Dep
 	AddDependent(transaction, to_add.entry, to_add.dependency_type);
 }
 
-static bool SkipDependencyRemoval(CatalogEntry &dependency) {
-	if (dependency.type != CatalogType::DEPENDENCY_ENTRY) {
-		return false;
-	}
-	auto &dep = dependency.Cast<DependencyCatalogEntry>();
-
-	// This link is not completed, so there is no dependency to remove
-	return dep.Type() == DependencyType::DEPENDENCY_OWNS;
-}
-
 // Remove dependency from a DependencyEntry
 void DependencySetCatalogEntry::RemoveDependency(CatalogTransaction transaction, CatalogEntry &dependency) {
 	D_ASSERT(dependency.type == CatalogType::DEPENDENCY_ENTRY || dependency.type == CatalogType::DEPENDENCY_SET);
-	if (SkipDependencyRemoval(dependency)) {
-		D_ASSERT(!HasDependencyOnInternal(transaction, dependency));
-		return;
-	}
 	auto &name = dependency.name;
 	dependencies.DropEntry(transaction, name, false);
 }
@@ -165,7 +151,8 @@ bool DependencySetCatalogEntry::IsDependencyOf(CatalogTransaction transaction, C
 	return is_dependency_of;
 }
 
-bool DependencySetCatalogEntry::HasDependencyOnInternal(CatalogTransaction transaction, CatalogEntry &entry) {
+bool DependencySetCatalogEntry::HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry,
+                                                DependencyType dependent_type) {
 	bool has_dependency_on = false;
 	dependencies.Scan(transaction, [&](CatalogEntry &dependency) {
 		auto &dependency_entry = dependency.Cast<DependencyCatalogEntry>();
@@ -178,16 +165,6 @@ bool DependencySetCatalogEntry::HasDependencyOnInternal(CatalogTransaction trans
 	return has_dependency_on;
 }
 
-bool DependencySetCatalogEntry::HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry,
-                                                DependencyType dependent_type) {
-	if (dependent_type == DependencyType::DEPENDENCY_OWNS) {
-		// This link is deliberately left uncompleted
-		return true;
-	}
-
-	return HasDependencyOnInternal(transaction, entry);
-}
-
 static string FormatString(string input) {
 	for (size_t i = 0; i < input.size(); i++) {
 		if (input[i] == '\0') {
@@ -197,9 +174,9 @@ static string FormatString(string input) {
 	return input;
 }
 
-void DependencySetCatalogEntry::PrintDependencies() {
+void DependencySetCatalogEntry::PrintDependencies(CatalogTransaction transaction) {
 	Printer::Print(StringUtil::Format("Dependencies of %s", FormatString(name)));
-	dependencies.Scan([&](CatalogEntry &dependency) {
+	dependencies.Scan(transaction, [&](CatalogEntry &dependency) {
 		auto &dep = dependency.Cast<DependencyCatalogEntry>();
 		auto &name = dep.EntryName();
 		auto &schema = dep.EntrySchema();
@@ -208,9 +185,9 @@ void DependencySetCatalogEntry::PrintDependencies() {
 		                                  CatalogTypeToString(type), EnumUtil::ToString(dep.Type())));
 	});
 }
-void DependencySetCatalogEntry::PrintDependents() {
+void DependencySetCatalogEntry::PrintDependents(CatalogTransaction transaction) {
 	Printer::Print(StringUtil::Format("Dependents of %s", FormatString(name)));
-	dependents.Scan([&](CatalogEntry &dependent) {
+	dependents.Scan(transaction, [&](CatalogEntry &dependent) {
 		auto &dep = dependent.Cast<DependencyCatalogEntry>();
 		auto &name = dep.EntryName();
 		auto &schema = dep.EntrySchema();

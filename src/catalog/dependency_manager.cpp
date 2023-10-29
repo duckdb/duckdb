@@ -346,6 +346,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		D_ASSERT(dependency_connections);
 
 		dependency_connections->AddDependent(transaction, new_obj, DependencyType::DEPENDENCY_OWNED_BY);
+		dependency_connections->AddDependency(transaction, new_obj, DependencyType::DEPENDENCY_REGULAR);
 	}
 }
 
@@ -377,8 +378,9 @@ void DependencyManager::Scan(ClientContext &context,
 }
 
 void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry) {
-	D_ASSERT(!IsSystemEntry(entry));
-	D_ASSERT(!IsSystemEntry(owner));
+	if (IsSystemEntry(entry) || IsSystemEntry(owner)) {
+		return;
+	}
 
 	// If the owner is already owned by something else, throw an error
 	auto &owner_connections = GetOrCreateDependencySet(transaction, owner);

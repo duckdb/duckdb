@@ -62,12 +62,11 @@ public:
 
 private:
 	//! Skips the exemption for DEPENDENCY_OWNS, use 'HasDependencyOn' instead for that
-	bool HasDependencyOnInternal(CatalogTransaction transaction, CatalogEntry &entry);
 	void ScanSetInternal(CatalogTransaction transaction, bool dependencies, dependency_callback_t &callback);
 
 public:
-	void PrintDependencies();
-	void PrintDependents();
+	void PrintDependencies(CatalogTransaction transaction);
+	void PrintDependents(CatalogTransaction transaction);
 
 public:
 	const string &MangledName() const;
