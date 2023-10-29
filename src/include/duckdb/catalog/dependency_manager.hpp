@@ -46,16 +46,7 @@ private:
 	DependencySetCatalogEntry &GetOrCreateDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
 	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
 
-	struct LookupResult {
-	public:
-		LookupResult(optional_ptr<CatalogEntry> entry);
-		LookupResult(optional_ptr<CatalogSet> set, optional_ptr<CatalogEntry> entry);
-
-	public:
-		optional_ptr<CatalogSet> set;
-		optional_ptr<CatalogEntry> entry;
-	};
-	LookupResult LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency);
+	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency);
 
 	void CleanupDependencies(CatalogTransaction transaction, CatalogEntry &entry);
 

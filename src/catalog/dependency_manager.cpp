@@ -175,15 +175,8 @@ void GetLookupProperties(CatalogEntry &entry, string &schema, string &name, Cata
 	}
 }
 
-DependencyManager::LookupResult::LookupResult(optional_ptr<CatalogEntry> entry) : entry(entry) {
-}
-DependencyManager::LookupResult::LookupResult(optional_ptr<CatalogSet> set, optional_ptr<CatalogEntry> entry)
-    : set(set), entry(entry) {
-}
-
 // Always performs the callback, it's up to the callback to determine what to do based on the lookup result
-DependencyManager::LookupResult DependencyManager::LookupEntry(CatalogTransaction transaction,
-                                                               CatalogEntry &dependency) {
+optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency) {
 	string schema;
 	string name;
 	CatalogType type;
@@ -193,7 +186,7 @@ DependencyManager::LookupResult DependencyManager::LookupEntry(CatalogTransactio
 	auto schema_entry = catalog.schemas->GetEntry(transaction, schema);
 	if (type == CatalogType::SCHEMA_ENTRY || !schema_entry) {
 		// This is a schema entry, perform the callback only providing the schema
-		return LookupResult(schema_entry);
+		return schema_entry;
 	}
 	auto &duck_schema_entry = schema_entry->Cast<DuckSchemaEntry>();
 
@@ -202,7 +195,7 @@ DependencyManager::LookupResult DependencyManager::LookupEntry(CatalogTransactio
 
 	// Use the index to find the actual entry
 	auto entry = catalog_set.GetEntry(transaction, name);
-	return LookupResult(&catalog_set, entry);
+	return entry;
 }
 
 void DependencyManager::CleanupDependencies(CatalogTransaction transaction, CatalogEntry &object) {
@@ -249,12 +242,12 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 	auto &object_connections = *object_connections_p;
 
 	// Check if there are any entries that block the DROP because they still depend on the object
-	vector<LookupResult> to_drop;
+	catalog_entry_set_t to_drop;
 	object_connections.ScanDependents(transaction, [&](DependencyCatalogEntry &dep) {
 		// It makes no sense to have a schema depend on anything
 		D_ASSERT(dep.EntryType() != CatalogType::SCHEMA_ENTRY);
-		auto lookup = LookupEntry(transaction, dep);
-		if (!lookup.entry) {
+		auto entry = LookupEntry(transaction, dep);
+		if (!entry) {
 			return;
 		}
 
@@ -264,15 +257,15 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 			                          "depend on it. Use DROP...CASCADE to drop all dependents.",
 			                          object.name);
 		}
-		to_drop.emplace_back(lookup);
+		to_drop.insert(*entry);
 	});
 
 	CleanupDependencies(transaction, object);
 
-	for (auto &lookup : to_drop) {
-		auto set = lookup.set;
-		auto entry = lookup.entry;
-		set->DropEntry(transaction, entry->name, cascade);
+	for (auto &entry : to_drop) {
+		auto set = entry.get().set;
+		D_ASSERT(set);
+		set->DropEntry(transaction, entry.get().name, cascade);
 	}
 }
 
@@ -295,12 +288,10 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		// It makes no sense to have a schema depend on anything
 		D_ASSERT(dep.EntryType() != CatalogType::SCHEMA_ENTRY);
 
-		auto lookup = LookupEntry(transaction, dep);
-
-		if (!lookup.entry) {
+		auto entry = LookupEntry(transaction, dep);
+		if (!entry) {
 			return;
 		}
-		auto entry = lookup.entry;
 		if (dep.Type() == DependencyType::DEPENDENCY_OWNS) {
 			preserved_dependents.insert(Dependency(*entry, dep.Type()));
 			return;
@@ -315,11 +306,10 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	// Keep old dependencies
 	dependency_set_t dependency_list;
 	old_connections.ScanDependencies(transaction, [&](DependencyCatalogEntry &dep) {
-		auto lookup = LookupEntry(transaction, dep);
-		if (!lookup.entry) {
+		auto entry = LookupEntry(transaction, dep);
+		if (!entry) {
 			return;
 		}
-		auto entry = lookup.entry;
 		dependency_list.insert(Dependency(*entry, dep.Type()));
 	});
 
@@ -364,24 +354,23 @@ void DependencyManager::Scan(ClientContext &context,
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	auto transaction = catalog.GetCatalogTransaction(context);
 
-	// Scan all the dependency sets
+	// All the objects registered in the dependency manager
 	catalog_entry_set_t entries;
 	connections.Scan(transaction, [&](CatalogEntry &set) {
-		auto lookup = LookupEntry(transaction, set);
-		D_ASSERT(lookup.entry);
-		auto &entry = *lookup.entry;
-		entries.insert(entry);
+		auto entry = LookupEntry(transaction, set);
+		entries.insert(*entry);
 	});
 
+	// For every registered entry, get the dependents
 	for (auto &entry : entries) {
 		auto set = GetDependencySet(transaction, entry);
 		// Scan all the dependents of the entry
 		set->ScanDependents(transaction, [&](DependencyCatalogEntry &dependent) {
-			auto lookup = LookupEntry(transaction, dependent);
-			if (!lookup.entry) {
+			auto dep = LookupEntry(transaction, dependent);
+			if (!dep) {
 				return;
 			}
-			auto &dependent_entry = *lookup.entry;
+			auto &dependent_entry = *dep;
 			callback(entry, dependent_entry, dependent.Type());
 		});
 	}
@@ -404,11 +393,11 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 	entry_connections.ScanDependents(transaction, [&](DependencyCatalogEntry &other) {
 		auto dependency_type = other.Type();
 
-		auto lookup = LookupEntry(transaction, other);
-		if (!lookup.entry) {
+		auto dependent_entry = LookupEntry(transaction, other);
+		if (!dependent_entry) {
 			return;
 		}
-		auto &dep = *lookup.entry;
+		auto &dep = *dependent_entry;
 
 		// FIXME: should this not check for DEPENDENCY_OWNS first??
 
