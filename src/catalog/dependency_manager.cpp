@@ -417,9 +417,7 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 	owner_connections.AddDependency(transaction, entry);
 
 	owner_connections.AddDependent(transaction, entry, DependencyType::DEPENDENCY_OWNS);
-	// We explicitly don't complete this link the other way, so we don't have recursive dependencies
-	// If we would 'entry_connection.AddDependency(owner)' then we would try to delete 'owner'
-	// when 'entry' gets deleted, but this delete can only be initiated by 'owner'
+	entry_connections.AddDependency(transaction, owner, DependencyType::DEPENDENCY_REGULAR);
 }
 
 } // namespace duckdb
