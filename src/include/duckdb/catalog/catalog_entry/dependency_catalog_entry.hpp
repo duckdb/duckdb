@@ -22,6 +22,8 @@ namespace duckdb {
 
 class DependencyManager;
 
+class DependencySetCatalogEntry;
+
 //! Resembles a connection between an object and the CatalogEntry that can be retrieved from the Catalog using the
 //! identifiers listed here
 

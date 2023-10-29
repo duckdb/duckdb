@@ -46,10 +46,12 @@ void DependencyCatalogEntry::CompleteLink(CatalogTransaction transaction, Depend
 	case DependencyLinkSide::DEPENDENCY: {
 		auto &other_set = manager.GetOrCreateDependencySet(transaction, EntryType(), EntrySchema(), EntryName());
 		other_set.AddDependent(transaction, set, type);
+		break;
 	}
 	case DependencyLinkSide::DEPENDENT: {
 		auto &other_set = manager.GetOrCreateDependencySet(transaction, EntryType(), EntrySchema(), EntryName());
 		other_set.AddDependency(transaction, set, type);
+		break;
 	}
 	}
 }
