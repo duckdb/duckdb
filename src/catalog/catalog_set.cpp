@@ -206,7 +206,8 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 		return true;
 	}
 
-	if (value->name != original_name) {
+	const bool name_changed = !StringUtil::CIEquals(value->name, original_name);
+	if (name_changed) {
 		auto mapping_value = GetMapping(transaction, value->name);
 		if (mapping_value && !mapping_value->deleted) {
 			auto &original_entry = GetEntryForTransaction(transaction, mapping_value->index.GetEntry());
@@ -219,7 +220,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 		}
 	}
 
-	if (value->name != original_name) {
+	if (name_changed) {
 		// Do PutMapping and DeleteMapping after dependency check
 		PutMapping(transaction, value->name, entry_index.Copy());
 		DeleteMapping(transaction, original_name);
@@ -348,7 +349,6 @@ optional_ptr<MappingValue> CatalogSet::GetLatestMapping(const string &name) {
 	if (entry != mapping.end()) {
 		mapping_value = entry->second.get();
 	} else {
-
 		return nullptr;
 	}
 	return mapping_value;

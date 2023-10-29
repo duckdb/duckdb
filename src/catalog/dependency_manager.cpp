@@ -308,7 +308,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	// FIXME: we should update dependencies in the future
 	// some alters could cause dependencies to change (imagine types of table columns)
 	// or DEFAULT depending on a sequence
-	if (old_obj.name != new_obj.name) {
+	if (!StringUtil::CIEquals(old_obj.name, new_obj.name)) {
 		CleanupDependencies(transaction, old_obj);
 	}
 
