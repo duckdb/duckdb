@@ -6,7 +6,7 @@ statement ok
 CREATE TABLE left_table (a INTEGER, b INTEGER, c INTEGER);
 
 statement ok
-INSERT INTO left_table VALUES (42, 1, 1), (43, 1, 1);
+INSERT INTO left_table VALUES (42, 1, 1), (43, 1, 1), (42, 1, 1), (41, 1, 1), (41, 2, 2), (41, 7, 7);
 
 statement ok
 CREATE TABLE right_table (a INTEGER, b INTEGER);
@@ -35,7 +35,7 @@ analyzed_plan	<REGEX>:.*RIGHT ANTI.*
 
 # right table can be a subquery, but using equality we still flip
 query II
-explain analyze SELECT * FROM left_table ANTI JOIN (SELECT a as foo from right_table where b = 1) buzz ON left_table.a = buzz.foo
+explain analyze SELECT * FROM left_table ANTI JOIN (SELECT a as foo from right_table where b > 5) buzz ON left_table.a = buzz.foo
 ----
 analyzed_plan	<REGEX>:.*RIGHT ANTI.*
 
