@@ -1021,7 +1021,7 @@ struct IntegerCastOperation {
 	}
 };
 
-template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = IntegerCastOperation, char decimal_separator = '.'>
+template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = SimpleIntegerCastOperation, char decimal_separator = '.'>
 static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) {
 	idx_t start_pos;
 	if (NEGATIVE) {
@@ -1091,12 +1091,12 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 					ExponentData exponent {};
 					int negative = buf[pos] == '-';
 					if (negative) {
-						if (!IntegerCastLoop<ExponentData, true, false, IntegerCastOperation, decimal_separator>(
+						if (!IntegerCastLoop<ExponentData, true, false, SimpleIntegerCastOperation, decimal_separator>(
 						        buf + pos, len - pos, exponent, strict)) {
 							return false;
 						}
 					} else {
-						if (!IntegerCastLoop<ExponentData, false, false, IntegerCastOperation, decimal_separator>(
+						if (!IntegerCastLoop<ExponentData, false, false, SimpleIntegerCastOperation, decimal_separator>(
 						        buf + pos, len - pos, exponent, strict)) {
 							return false;
 						}
@@ -1970,7 +1970,7 @@ struct HugeIntegerCastOperation {
 		if (e < 0) {
 			state.result = Hugeint::DivMod(state.result, Hugeint::POWERS_OF_TEN[-e], remainder);
 			state.decimal = remainder;
-			state.decimal_total_digits = -e - 1;
+			state.decimal_total_digits = -e;
 			state.decimal_intermediate = 0;
 			state.decimal_intermediate_digits = 0;
 			return Finalize<T, NEGATIVE>(state);
@@ -1992,7 +1992,7 @@ struct HugeIntegerCastOperation {
 		e = exponent - state.decimal_total_digits;
 		if (e < 0) {
 			state.decimal = Hugeint::DivMod(state.decimal, Hugeint::POWERS_OF_TEN[-e], remainder);
-			state.decimal_total_digits -= (exponent + 1);
+			state.decimal_total_digits -= (exponent);
 		} else {
 			if (e > 38 || !TryMultiplyOperator::Operation(state.decimal, Hugeint::POWERS_OF_TEN[e], state.decimal)) {
 				return false;
@@ -2031,8 +2031,12 @@ struct HugeIntegerCastOperation {
 			return false;
 		}
 
+		if (state.decimal_total_digits == 0) {
+			return true;
+		}
+
 		// Get the first (left-most) digit of the decimals
-		state.decimal /= Hugeint::POWERS_OF_TEN[state.decimal_total_digits];
+		state.decimal /= Hugeint::POWERS_OF_TEN[state.decimal_total_digits - 1];
 
 		if (state.decimal >= 5 || state.decimal <= -5) {
 			if (NEGATIVE) {
