@@ -59,8 +59,7 @@ public class DuckDBArray implements Array {
 
     @Override
     public ResultSet getResultSet() throws SQLException {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'getResultSet'");
+        return new DuckDBArrayResultSet(vector, offset, length);
     }
 
     @Override
