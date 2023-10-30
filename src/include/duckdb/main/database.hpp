@@ -99,8 +99,12 @@ public:
 	DUCKDB_API FileSystem &GetFileSystem();
 
 	DUCKDB_API idx_t NumberOfThreads();
-	DUCKDB_API static const char *SourceID();
-	DUCKDB_API static const char *LibraryVersion();
+	static constexpr const char *SourceID() {
+		return DUCKDB_SOURCE_ID;
+	}
+	static constexpr const char *LibraryVersion() {
+		return DUCKDB_VERSION;
+	}
 	DUCKDB_API static idx_t StandardVectorSize();
 	DUCKDB_API static string Platform();
 	DUCKDB_API bool ExtensionIsLoaded(const std::string &name);
