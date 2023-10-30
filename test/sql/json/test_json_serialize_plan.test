@@ -38,8 +38,3 @@ query I
 SELECT json_serialize_plan('SELECT * FROM nonexistent_table') LIKE '{"error":true,"error_type":"catalog","error_message":"Table with name nonexistent_table does not exist%';
 ----
 true
-
-query I
-SELECT json_serialize_plan('COPY (SELECT 1) TO ''foobar''');
-----
-{"error":true,"error_type":"invalid input","error_message":"Operator 'LOGICAL_COPY_TO_FILE' does not support serialization"}

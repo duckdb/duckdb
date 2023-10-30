@@ -189,6 +189,20 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	return result;
 }
 
+void FilenamePattern::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(200, "base", _base);
+	serializer.WritePropertyWithDefault<idx_t>(201, "pos", _pos);
+	serializer.WritePropertyWithDefault<bool>(202, "uuid", _uuid);
+}
+
+FilenamePattern FilenamePattern::Deserialize(Deserializer &deserializer) {
+	FilenamePattern result;
+	deserializer.ReadPropertyWithDefault<string>(200, "base", result._base);
+	deserializer.ReadPropertyWithDefault<idx_t>(201, "pos", result._pos);
+	deserializer.ReadPropertyWithDefault<bool>(202, "uuid", result._uuid);
+	return result;
+}
+
 void LogicalAggregate::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(200, "expressions", expressions);
