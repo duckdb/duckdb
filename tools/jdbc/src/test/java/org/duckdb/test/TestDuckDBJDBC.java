@@ -3287,6 +3287,11 @@ public class TestDuckDBJDBC {
                 assertTrue(rs.next());
                 assertTrue(arrayToList(rs.getArray(1)).isEmpty());
             }
+
+            try (ResultSet rs = statement.executeQuery("SELECT [0.0]::DECIMAL[]")) {
+                assertTrue(rs.next());
+                assertEquals(arrayToList(rs.getArray(1)), singletonList(new BigDecimal("0.000")));
+            }
         }
     }
 
