@@ -446,6 +446,7 @@
 #include <vector>
 #include <set> // Used for HeadNode::_lacksIntegrityNodeReferencesNotInList()
 #include <string> // Used for class Exception
+#include <random>
 
 #ifdef DEBUG
 #include <cassert>

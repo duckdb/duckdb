@@ -733,9 +733,13 @@ struct QuantileState {
 			return qst64->WindowScalar<INPUT_TYPE, RESULT_TYPE, DISCRETE>(data, frames, n, result, q);
 		} else if (s) {
 			// Find the position(s) needed
-			Interpolator<DISCRETE> interp(q, s->size(), false);
-			s->at(interp.FRN, interp.CRN - interp.FRN + 1, dest);
-			return interp.template Extract<INPUT_TYPE, RESULT_TYPE>(dest.data(), result);
+			try {
+				Interpolator<DISCRETE> interp(q, s->size(), false);
+				s->at(interp.FRN, interp.CRN - interp.FRN + 1, dest);
+				return interp.template Extract<INPUT_TYPE, RESULT_TYPE>(dest.data(), result);
+			} catch (const duckdb_skiplistlib::skip_list::IndexError &idx_err) {
+				throw InternalException(idx_err.message());
+			}
 		} else {
 			throw InternalException("No accelerator for scalar QUANTILE");
 		}

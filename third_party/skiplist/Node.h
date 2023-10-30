@@ -38,6 +38,7 @@
 #define SkipList_Node_h
 
 #include "IntegrityEnums.h"
+#include <random>
 
 #if __cplusplus < 201103L
 #define nullptr NULL
@@ -129,7 +130,7 @@ protected:
     Node<T, _Compare> *_adjRemoveRefs(size_t level, Node<T, _Compare> *pNode);
 
 	void Initialize(const T &value) {
-		_value = value;
+		::std::independent_bits_engine<::std::default_random_engine, /*bits*/ 1, int> tossCoin;
 		_nodeRefs.clear();
 		do {
 			_nodeRefs.push_back(this, _nodeRefs.height() ? 0 : 1);
