@@ -58,11 +58,13 @@ def get_query(sql_query, load_query):
     query_result = os.popen(query).read()
     return query_result.split("\n")[1:-1]
 
+
 def get_functions(load="") -> Set[Tuple[str, str]]:
     results = set(get_query(get_functions_query, load))
     results = set([tuple(x.split(',')) for x in results])
     results = cast(Set[Tuple[str, str]], results)
     return results
+
 
 def get_settings(load=""):
     return set(get_query(get_settings_query, load))
@@ -78,23 +80,23 @@ settings_map = {}
 # root_dir needs a trailing slash (i.e. /root/dir/)
 extension_path = {}
 extension_dir = pathlib.Path('../build/release/extension')
-#extension_dir = pathlib.Path('/tmp/') / '**/*.duckdb_extension'
+# extension_dir = pathlib.Path('/tmp/') / '**/*.duckdb_extension'
 for location in glob.iglob(str(extension_dir / '**/*.duckdb_extension'), recursive=True):
     name = os.path.splitext(os.path.basename(location))[0]
     print(f"Located extension: {name} in path: '{location}'")
     extension_path[name] = location
 
+
 # Update global maps with settings/functions from `extension_name`
 def update_extensions(extension_name, function_list, settings_list):
     global function_map, settings_map
-    #for name, type in function_list:
+    # for name, type in function_list:
     #    print(name, type)
 
-    diff = (set(function_list) - base_functions)
+    diff = set(function_list) - base_functions
 
     functions_to_add = {
-        function_name.lower(): (extension_name.lower(), function_type)
-        for function_name, function_type in diff
+        function_name.lower(): (extension_name.lower(), function_type) for function_name, function_type in diff
     }
 
     function_map.update(functions_to_add)

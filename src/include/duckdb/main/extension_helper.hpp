@@ -77,11 +77,12 @@ public:
 
 	//! Lookup a name + type in an ExtensionFunctionEntry list
 	template <size_t N>
-	static pair<string, string> FindExtensionInFunctionEntries(const string &name, const ExtensionFunctionEntry (&entries)[N]) {
+	static pair<string, string> FindExtensionInFunctionEntries(const string &name,
+	                                                           const ExtensionFunctionEntry (&entries)[N]) {
 		auto lcase = StringUtil::Lower(name);
 
-		auto it =
-		    std::find_if(entries, entries + N, [&](const ExtensionFunctionEntry &element) { return element.name == lcase; });
+		auto it = std::find_if(entries, entries + N,
+		                       [&](const ExtensionFunctionEntry &element) { return element.name == lcase; });
 
 		if (it != entries + N && it->name == lcase) {
 			return make_pair(it->extension, it->type);

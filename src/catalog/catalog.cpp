@@ -576,7 +576,10 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 				// Found the function in an extension and it matches the type that we're looking for.
 				break;
 			}
-			auto error = CatalogException("%s with name \"%s\" is not in the catalog, a function by this name exists in the %s extension, but it's of a different type, namely %s", CatalogTypeToString(type), entry_name, extension_name, CatalogTypeToString(function_type));
+			auto error = CatalogException("%s with name \"%s\" is not in the catalog, a function by this name exists "
+			                              "in the %s extension, but it's of a different type, namely %s",
+			                              CatalogTypeToString(type), entry_name, extension_name,
+			                              CatalogTypeToString(function_type));
 			return error;
 		} while (false);
 	} else if (type == CatalogType::TYPE_ENTRY) {
