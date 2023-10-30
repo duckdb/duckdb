@@ -6,7 +6,7 @@ struct CSVSniffFunctionData : public TableFunctionData {
 	CSVSniffFunctionData() {
 	}
 	string path;
-	uint64_t sample_size = 20480;
+	int64_t sample_size = 20480;
 };
 
 struct CSVSniffGlobalState : public GlobalTableFunctionState {
@@ -26,7 +26,10 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 	if (input.named_parameters.size() == 1) {
 		auto loption = StringUtil::Lower(input.named_parameters.begin()->first);
 		if (loption == "sample_size") {
-			result->sample_size = UBigIntValue::Get(input.named_parameters.begin()->second);
+			result->sample_size = BigIntValue::Get(input.named_parameters.begin()->second);
+			if (result->sample_size == -1) {
+				result->sample_size = NumericLimits<int64_t>::Maximum();
+			}
 		} else {
 			throw InvalidInputException("Invalid sniff_csv named parameter: %s . Only sample_size is accepted",
 			                            loption);
@@ -83,6 +86,15 @@ string NewLineIdentifierToString(NewLineIdentifier identifier) {
 	}
 }
 
+string FormatOptions(char opt) {
+	if (opt == '\'') {
+		return "''";
+	}
+	string result;
+	result += opt;
+	return result;
+}
+
 static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &global_state = data_p.global_state->Cast<CSVSniffGlobalState>();
 	// Are we done?
@@ -132,14 +144,14 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	columns << "}";
 	output.SetValue(6, 0, columns.str());
 	// 8. Date Format
-	if (options.has_format[LogicalType::DATE] &&
+	if (options.dialect_options.has_format[LogicalType::DATE] &&
 	    options.dialect_options.date_format.find(LogicalType::DATE) != options.dialect_options.date_format.end()) {
 		output.SetValue(7, 0, options.dialect_options.date_format[LogicalType::DATE].format_specifier);
 	} else {
 		output.SetValue(7, 0, Value());
 	}
 	// 9. Timestamp Format
-	if (options.has_format[LogicalType::TIMESTAMP] &&
+	if (options.dialect_options.has_format[LogicalType::TIMESTAMP] &&
 	    options.dialect_options.date_format.find(LogicalType::TIMESTAMP) != options.dialect_options.date_format.end()) {
 		output.SetValue(8, 0, options.dialect_options.date_format[LogicalType::TIMESTAMP].format_specifier);
 	} else {
@@ -150,29 +162,28 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 
 	// Base, Path and auto_detect=false
 	csv_read << "FROM read_csv('" << data.path << "'" << separator << "auto_detect=false" << separator;
-	// 1. Delimiter
+	// 10.1. Delimiter
 	csv_read << "delim="
-	         << "'" << options.dialect_options.state_machine_options.delimiter << "'" << separator;
-	// 2. Quote
+	         << "'" << FormatOptions(options.dialect_options.state_machine_options.delimiter) << "'" << separator;
+	// 10.2. Quote
 	csv_read << "quote="
-	         << "'" << options.dialect_options.state_machine_options.quote << "'" << separator;
-	// 3. Escape
+	         << "'" << FormatOptions(options.dialect_options.state_machine_options.quote) << "'" << separator;
+	// 10.3. Escape
 	csv_read << "escape="
-	         << "'" << options.dialect_options.state_machine_options.escape << "'" << separator;
-	// 4. NewLine Delimiter
+	         << "'" << FormatOptions(options.dialect_options.state_machine_options.escape) << "'" << separator;
+	// 10.4. NewLine Delimiter
 	if (new_line_identifier != "mix") {
 		csv_read << "new_line="
 		         << "'" << new_line_identifier << "'" << separator;
 	}
-	// 5. Skip Rows
+	// 10.5. Skip Rows
 	csv_read << "skip=" << options.dialect_options.skip_rows << separator;
-	// 6. Has Header
-	csv_read << "header="
-	         << "'" << options.dialect_options.header << "'" << separator;
-	// 7. column={'col1': 'INTEGER', 'col2': 'VARCHAR'}
+	// 10.6. Has Header
+	csv_read << "header=" << options.dialect_options.header << separator;
+	// 10.7. column={'col1': 'INTEGER', 'col2': 'VARCHAR'}
 	csv_read << "columns=" << columns.str();
-	// 8. Date Format
-	if (options.has_format[LogicalType::DATE] &&
+	// 10.8. Date Format
+	if (options.dialect_options.has_format[LogicalType::DATE] &&
 	    options.dialect_options.date_format.find(LogicalType::DATE) != options.dialect_options.date_format.end()) {
 		if (options.dialect_options.date_format[LogicalType::DATE].format_specifier != "") {
 			csv_read << separator << "dateformat="
@@ -180,7 +191,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 		}
 	}
 	// 9. Timestamp Format
-	if (options.has_format[LogicalType::TIMESTAMP] &&
+	if (options.dialect_options.has_format[LogicalType::TIMESTAMP] &&
 	    options.dialect_options.date_format.find(LogicalType::TIMESTAMP) != options.dialect_options.date_format.end()) {
 		if (options.dialect_options.date_format[LogicalType::TIMESTAMP].format_specifier != "") {
 			csv_read << separator << "timestampformat="
@@ -194,6 +205,8 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 
 void CSVSnifferFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction csv_sniffer("sniff_csv", {LogicalType::VARCHAR}, CSVSniffFunction, CSVSniffBind, CSVSniffInitGlobal);
+	csv_sniffer.named_parameters["sample_size"] = LogicalType::BIGINT;
+
 	set.AddFunction(csv_sniffer);
 }
 } // namespace duckdb
