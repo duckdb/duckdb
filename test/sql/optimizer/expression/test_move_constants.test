@@ -64,6 +64,10 @@ query I
 SELECT * FROM vals WHERE v*(-1)::${type}=(${min})::${type};
 ----
 
+query I
+SELECT * FROM vals WHERE v*(-2)::${type}=(${min})::${type};
+----
+
 endloop
 
 # move constants with unsigned values
