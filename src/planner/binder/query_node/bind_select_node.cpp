@@ -28,7 +28,7 @@
 namespace duckdb {
 
 unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr) {
-	// we treat the Distinct list as a order by
+	// we treat the distinct list as an ORDER BY
 	auto bound_expr = order_binder.Bind(std::move(expr));
 	if (!bound_expr) {
 		// DISTINCT ON non-integer constant
@@ -203,7 +203,7 @@ static void AssignReturnType(unique_ptr<Expression> &expr, const vector<LogicalT
 	bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 }
 
-void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index,
+void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t,
                                const vector<idx_t> &expansion_count) {
 	for (auto &bound_mod : result.modifiers) {
 		switch (bound_mod->type) {
@@ -217,7 +217,13 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 				if (bound_colref.binding.column_index == DConstants::INVALID_INDEX) {
 					throw BinderException("Ambiguous name in DISTINCT ON!");
 				}
-				D_ASSERT(bound_colref.binding.column_index < sql_types.size());
+
+				idx_t max_count = sql_types.size();
+				if (bound_colref.binding.column_index > max_count - 1) {
+					D_ASSERT(bound_colref.return_type == LogicalType::ANY);
+					throw BinderException("ORDER term out of range - should be between 1 and %lld", max_count);
+				}
+
 				bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 			}
 			for (auto &target_distinct : distinct.target_distincts) {
@@ -240,6 +246,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
+
 			auto &order = bound_mod->Cast<BoundOrderModifier>();
 			for (auto &order_node : order.orders) {
 
@@ -250,14 +257,18 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 					throw BinderException("Ambiguous name in ORDER BY!");
 				}
 
-				D_ASSERT(bound_colref.binding.column_index < sql_types.size());
+				if (!expansion_count.empty() && bound_colref.return_type.id() != LogicalTypeId::ANY) {
+					bound_colref.binding.column_index = expansion_count[bound_colref.binding.column_index];
+				}
+
+				idx_t max_count = sql_types.size();
+				if (bound_colref.binding.column_index > max_count - 1) {
+					D_ASSERT(bound_colref.return_type == LogicalType::ANY);
+					throw BinderException("ORDER term out of range - should be between 1 and %lld", max_count);
+				}
+
 				const auto &sql_type = sql_types[bound_colref.binding.column_index];
 				bound_colref.return_type = sql_type;
-
-				if (!expansion_count.empty()) {
-					D_ASSERT(expansion_count.size() == sql_types.size());
-					bound_colref.binding.column_index += expansion_count[bound_colref.binding.column_index];
-				}
 
 				ExpressionBinder::PushCollation(context, order_node.expression, sql_type);
 			}
@@ -461,12 +472,6 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		bool can_group_by_all =
 		    statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && is_original_column;
 
-		// we still need to push back a dummy result, as we might bound a modifier (ORDER BY) previously,
-		// which will otherwise have a wrong column index in BindModifierTypes
-		modifier_sql_types.push_back(result_type);
-		auto prev_count = modifier_expansion_count.empty() ? 0 : modifier_expansion_count.back();
-		modifier_expansion_count.emplace_back(prev_count);
-
 		if (select_binder.HasExpandedExpressions()) {
 			if (!is_original_column) {
 				throw InternalException("Only original columns can have expanded expressions");
@@ -477,16 +482,22 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 
 			auto &struct_expressions = select_binder.ExpandedExpressions();
 			D_ASSERT(!struct_expressions.empty());
-			modifier_expansion_count.back() += struct_expressions.size() - 1;
+			modifier_expansion_count.push_back(modifier_sql_types.size());
 
 			for (auto &struct_expr : struct_expressions) {
+				modifier_sql_types.push_back(struct_expr->return_type);
 				new_names.push_back(struct_expr->GetName());
 				result->types.push_back(struct_expr->return_type);
 				result->select_list.push_back(std::move(struct_expr));
 			}
+
 			struct_expressions.clear();
 			continue;
 		}
+
+		// not an expanded expression
+		modifier_expansion_count.push_back(modifier_sql_types.size());
+		modifier_sql_types.push_back(result_type);
 
 		if (can_group_by_all && select_binder.HasBoundColumns()) {
 			if (select_binder.BoundAggregates()) {
