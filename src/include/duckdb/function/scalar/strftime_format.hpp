@@ -139,6 +139,7 @@ public:
 
 		DUCKDB_API string FormatError(string_t input, const string &format_specifier);
 	};
+	const string format_string;
 
 public:
 	DUCKDB_API static ParseResult Parse(const string &format, const string &text);
