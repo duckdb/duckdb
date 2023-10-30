@@ -48,6 +48,7 @@
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/main/pending_query_result.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 #include <random>
 
@@ -969,7 +970,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
 	if (qualified_name.schema.empty()) {
 		qualified_name.schema = DEFAULT_SCHEMA;
 	}
-	return make_uniq<DuckDBPyRelation>(connection->Table(qualified_name.schema, qualified_name.name));
+	try {
+		return make_uniq<DuckDBPyRelation>(connection->Table(qualified_name.schema, qualified_name.name));
+	} catch (const CatalogException &e) {
+		// CatalogException will be of the type '... is not a table'
+		// Not a table in the database, make a query relation that can perform replacement scans
+		return RunQuery(StringUtil::Format("from %s", KeywordHelper::WriteOptionallyQuoted(tname)), tname);
+	}
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
