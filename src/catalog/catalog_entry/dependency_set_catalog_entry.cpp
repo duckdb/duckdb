@@ -35,19 +35,19 @@ void DependencySetCatalogEntry::ScanSetInternal(CatalogTransaction transaction, 
 	auto cb = [&](CatalogEntry &other) {
 		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
 		auto &other_entry = other.Cast<DependencyCatalogEntry>();
-		auto other_connections_p = dependency_manager.GetDependencySet(transaction, other);
-		if (!other_connections_p) {
+		auto other_dependency_set_p = dependency_manager.GetDependencySet(transaction, other);
+		if (!other_dependency_set_p) {
 			// Already deleted
 			return;
 		}
-		auto &other_connections = *other_connections_p;
-		(void)other_connections;
+		auto &other_dependency_set = *other_dependency_set_p;
+		(void)other_dependency_set;
 
-		// Assert some invariants of the connections
+		// Assert some invariants of the dependency_set
 		if (dependencies) {
-			D_ASSERT(other_connections.IsDependencyOf(transaction, *this));
+			D_ASSERT(other_dependency_set.IsDependencyOf(transaction, *this));
 		} else {
-			D_ASSERT(other_connections.HasDependencyOn(transaction, *this, other_entry.Type()));
+			D_ASSERT(other_dependency_set.HasDependencyOn(transaction, *this, other_entry.Type()));
 		}
 		callback(other_entry);
 	};

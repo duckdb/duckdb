@@ -43,7 +43,7 @@ public:
 
 private:
 	DuckCatalog &catalog;
-	CatalogSet connections;
+	CatalogSet dependency_sets;
 
 private:
 	bool IsSystemEntry(CatalogEntry &entry) const;
