@@ -644,6 +644,11 @@ void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state,
 		column_chunk.meta_data.statistics.__isset.max_value = true;
 		column_chunk.meta_data.__isset.statistics = true;
 	}
+	if (HasDictionary(state)) {
+		column_chunk.meta_data.statistics.distinct_count = DictionarySize(state);
+		column_chunk.meta_data.statistics.__isset.distinct_count = true;
+		column_chunk.meta_data.__isset.statistics = true;
+	}
 	for (const auto &write_info : state.write_info) {
 		column_chunk.meta_data.encodings.push_back(write_info.page_header.data_page_header.encoding);
 	}
@@ -1274,7 +1279,6 @@ public:
 		idx_t run_count = 0;
 		auto strings = FlatVector::GetData<string_t>(vector);
 		for (idx_t i = 0; i < vcount; i++) {
-
 			if (parent && !parent->is_empty.empty() && parent->is_empty[parent_index + i]) {
 				continue;
 			}
