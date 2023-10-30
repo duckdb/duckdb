@@ -50,12 +50,12 @@ typedef void (*aggregate_simple_update_t)(Vector inputs[], AggregateInputData &a
 
 //! The type used for computing complex/custom windowed aggregate functions (optional)
 typedef void (*aggregate_window_t)(Vector inputs[], const ValidityMask &filter_mask,
-                                   AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
-                                   const SubFrames &frames, Vector &result, idx_t rid, const_data_ptr_t win_state);
+                                   AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t l_state,
+                                   const SubFrames &frames, Vector &result, idx_t rid, const_data_ptr_t g_state);
 
 //! The type used for initializing shared complex/custom windowed aggregate state (optional)
 typedef void (*aggregate_wininit_t)(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
-                                    const ValidityMask &filter_mask, data_ptr_t win_state, idx_t count,
+                                    const ValidityMask &filter_mask, data_ptr_t g_state, idx_t count,
                                     const FrameStats *stats);
 
 typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
@@ -131,7 +131,7 @@ public:
 	//! The windowed aggregate custom function (may be null)
 	aggregate_window_t window;
 	//! The windowed aggregate custom initialization function (may be null)
-	aggregate_wininit_t wininit = nullptr;
+	aggregate_wininit_t window_init = nullptr;
 
 	//! The bind function (may be null)
 	bind_aggregate_function_t bind;

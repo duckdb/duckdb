@@ -294,13 +294,13 @@ WindowCustomAggregatorState::~WindowCustomAggregatorState() {
 
 void WindowCustomAggregator::Finalize(const FrameStats *stats) {
 	WindowAggregator::Finalize(stats);
-	if (aggr.function.wininit) {
+	if (aggr.function.window_init) {
 		gstate = GetLocalState();
 		auto &gcstate = gstate->Cast<WindowCustomAggregatorState>();
 
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), gcstate.allocator);
-		aggr.function.wininit(inputs.data.data(), aggr_input_data, inputs.ColumnCount(), filter_mask,
-		                      gcstate.state.data(), inputs.size(), stats);
+		aggr.function.window_init(inputs.data.data(), aggr_input_data, inputs.ColumnCount(), filter_mask,
+		                          gcstate.state.data(), inputs.size(), stats);
 	}
 }
 

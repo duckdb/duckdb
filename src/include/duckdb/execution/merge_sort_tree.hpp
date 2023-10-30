@@ -53,7 +53,7 @@ struct MergeSortTree {
 	using Level = pair<Elements, Offsets>;
 	using Tree = vector<Level>;
 
-	using RunElement = pair<ElementType, size_t>;
+	using RunElement = pair<ElementType, idx_t>;
 	using RunElements = array<RunElement, F>;
 	using Games = array<RunElement, F - 1>;
 
@@ -78,9 +78,9 @@ struct MergeSortTree {
 	}
 	explicit MergeSortTree(Elements &&lowest_level, const CMP &cmp = CMP());
 
-	size_t SelectNth(const SubFrames &frames, size_t n) const;
+	idx_t SelectNth(const SubFrames &frames, idx_t n) const;
 
-	inline ElementType NthElement(size_t i) const {
+	inline ElementType NthElement(idx_t i) const {
 		return tree.front().first[i];
 	}
 
@@ -97,7 +97,7 @@ protected:
 		auto winners_base = winners.data() + base_offset;
 
 		const auto base_count = elem_nodes / 2;
-		for (size_t i = 0; i < base_count; ++i) {
+		for (idx_t i = 0; i < base_count; ++i) {
 			const auto &e0 = elements[i * 2 + 0];
 			const auto &e1 = elements[i * 2 + 1];
 			if (cmp(e0, e1)) {
@@ -117,14 +117,14 @@ protected:
 
 		//	Pad to a power of 2
 		const auto base_size = (game_nodes + 1) / 2;
-		for (size_t i = (elem_nodes + 1) / 2; i < base_size; ++i) {
+		for (idx_t i = (elem_nodes + 1) / 2; i < base_size; ++i) {
 			winners_base[i] = sentinel;
 			losers_base[i] = sentinel;
 		}
 
 		//	Play the winners against each other
 		//	and stick the losers in the upper levels of the tournament tree
-		for (size_t i = base_offset; i-- > 0;) {
+		for (idx_t i = base_offset; i-- > 0;) {
 			//	Indexing backwards
 			const auto &e0 = winners[i * 2 + 1];
 			const auto &e1 = winners[i * 2 + 2];
@@ -141,7 +141,7 @@ protected:
 		return winners[0];
 	}
 
-	RunElement ReplayGames(Games &losers, size_t slot_idx, const RunElement &insert_val) {
+	RunElement ReplayGames(Games &losers, idx_t slot_idx, const RunElement &insert_val) {
 		RunElement smallest = insert_val;
 		//	Start at a fake level below
 		auto idx = slot_idx + losers.size();
@@ -163,9 +163,9 @@ protected:
 	static constexpr auto FANOUT = F;
 	static constexpr auto CASCADING = C;
 
-	static size_t LowestCascadingLevel() {
-		size_t level = 0;
-		size_t level_width = 1;
+	static idx_t LowestCascadingLevel() {
+		idx_t level = 0;
+		idx_t level_width = 1;
 		while (level_width <= CASCADING) {
 			++level;
 			level_width *= FANOUT;
@@ -181,11 +181,11 @@ MergeSortTree<E, O, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP
 	const auto count = lowest_level.size();
 	tree.emplace_back(Level(lowest_level, Offsets()));
 
-	const RunElement SENTINEL(std::numeric_limits<ElementType>::max(), std::numeric_limits<size_t>::max());
+	const RunElement SENTINEL(std::numeric_limits<ElementType>::max(), std::numeric_limits<idx_t>::max());
 
 	//	Fan in parent levels until we are at the top
 	//	Note that we don't build the top layer as that would just be all the data.
-	for (size_t child_run_length = 1; child_run_length < count;) {
+	for (idx_t child_run_length = 1; child_run_length < count;) {
 		const auto run_length = child_run_length * fanout;
 		const auto num_runs = (count + run_length - 1) / run_length;
 
@@ -203,17 +203,17 @@ MergeSortTree<E, O, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP
 		// 	https://en.wikipedia.org/wiki/K-way_merge_algorithm
 		//	TODO: Because the runs are independent, they can be parallelised with parallel_for
 		const auto &child_level = tree.back();
-		for (size_t run_idx = 0; run_idx < num_runs; ++run_idx) {
+		for (idx_t run_idx = 0; run_idx < num_runs; ++run_idx) {
 			//	Position markers for scanning the children.
-			using Bounds = pair<size_t, size_t>;
+			using Bounds = pair<idx_t, idx_t>;
 			array<Bounds, fanout> bounds;
 			//	Start with first element of each (sorted) child run
 			RunElements players;
 			const auto child_base = run_idx * run_length;
-			for (size_t child_run = 0; child_run < fanout; ++child_run) {
+			for (idx_t child_run = 0; child_run < fanout; ++child_run) {
 				const auto child_idx = child_base + child_run * child_run_length;
-				bounds[child_run] = {MinValue<size_t>(child_idx, count),
-				                     MinValue<size_t>(child_idx + child_run_length, count)};
+				bounds[child_run] = {MinValue<idx_t>(child_idx, count),
+				                     MinValue<idx_t>(child_idx + child_run_length, count)};
 				if (bounds[child_run].first != bounds[child_run].second) {
 					players[child_run] = {child_level.first[child_idx], child_run};
 				} else {
@@ -229,7 +229,7 @@ MergeSortTree<E, O, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP
 				// Add fractional cascading pointers
 				// if we are on a fraction boundary
 				if (cascading > 0 && run_length > cascading && elements.size() % cascading == 0) {
-					for (size_t i = 0; i < fanout; ++i) {
+					for (idx_t i = 0; i < fanout; ++i) {
 						cascades.emplace_back(bounds[i].first);
 					}
 				}
@@ -250,8 +250,8 @@ MergeSortTree<E, O, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP
 
 			// Add terminal cascade pointers to the end
 			if (cascading > 0 && run_length > cascading) {
-				for (size_t j = 0; j < 2; ++j) {
-					for (size_t i = 0; i < fanout; ++i) {
+				for (idx_t j = 0; j < 2; ++j) {
+					for (idx_t i = 0; i < fanout; ++i) {
 						cascades.emplace_back(bounds[i].first);
 					}
 				}
@@ -265,7 +265,7 @@ MergeSortTree<E, O, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP
 }
 
 template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
-size_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, size_t n) const {
+idx_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, idx_t n) const {
 	// Handle special case of a one-element tree
 	if (tree.size() < 2) {
 		return 0;
@@ -275,21 +275,21 @@ size_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, size_t
 	//	so the only thing we need is any cascading pointers
 	auto level_no = tree.size() - 2;
 	auto level_width = 1;
-	for (size_t i = 0; i < level_no; ++i) {
+	for (idx_t i = 0; i < level_no; ++i) {
 		level_width *= FANOUT;
 	}
 
 	// Find Nth element in a top-down traversal
-	size_t result = 0;
+	idx_t result = 0;
 
 	// First, handle levels with cascading pointers
 	const auto min_cascaded = LowestCascadingLevel();
 	if (level_no > min_cascaded) {
 		//	Initialise the cascade indicies from the previous level
-		using CascadeRange = pair<size_t, size_t>;
+		using CascadeRange = pair<idx_t, idx_t>;
 		std::array<CascadeRange, 3> cascades;
 		const auto &level = tree[level_no + 1].first;
-		for (size_t f = 0; f < frames.size(); ++f) {
+		for (idx_t f = 0; f < frames.size(); ++f) {
 			const auto &frame = frames[f];
 			auto &cascade_idx = cascades[f];
 			const auto lower_idx = std::lower_bound(level.begin(), level.end(), frame.start) - level.begin();
@@ -306,9 +306,9 @@ size_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, size_t
 			// Go over all children until we found enough in range
 			const auto *level_data = tree[level_no].first.data();
 			while (true) {
-				size_t matched = 0;
+				idx_t matched = 0;
 				std::array<CascadeRange, 3> matches;
-				for (size_t f = 0; f < frames.size(); ++f) {
+				for (idx_t f = 0; f < frames.size(); ++f) {
 					const auto &frame = frames[f];
 					auto &cascade_idx = cascades[f];
 					auto &match = matches[f];
@@ -321,11 +321,11 @@ size_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, size_t
 					const auto upper_end = level_data + level_cascades[cascade_idx.second + FANOUT];
 					match.second = std::lower_bound(upper_begin, upper_end, frame.end) - level_data;
 
-					matched += size_t(match.second - match.first);
+					matched += idx_t(match.second - match.first);
 				}
 				if (matched > n) {
 					// 	Too much in this level, so move down to leftmost child candidate within the cascade range
-					for (size_t f = 0; f < frames.size(); ++f) {
+					for (idx_t f = 0; f < frames.size(); ++f) {
 						auto &cascade_idx = cascades[f];
 						auto &match = matches[f];
 						cascade_idx.first = (match.first / CASCADING + 2 * result) * FANOUT;
@@ -335,7 +335,7 @@ size_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, size_t
 				}
 
 				//	Not enough in this child, so move right
-				for (size_t f = 0; f < frames.size(); ++f) {
+				for (idx_t f = 0; f < frames.size(); ++f) {
 					auto &cascade_idx = cascades[f];
 					++cascade_idx.first;
 					++cascade_idx.second;
@@ -354,12 +354,12 @@ size_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, size_t
 		auto range_begin = level.begin() + result * level_width;
 		auto range_end = range_begin + level_width;
 		while (range_end < level.end()) {
-			size_t matched = 0;
-			for (size_t f = 0; f < frames.size(); ++f) {
+			idx_t matched = 0;
+			for (idx_t f = 0; f < frames.size(); ++f) {
 				const auto &frame = frames[f];
 				const auto lower_match = std::lower_bound(range_begin, range_end, frame.start);
 				const auto upper_match = std::lower_bound(lower_match, range_end, frame.end);
-				matched += size_t(upper_match - lower_match);
+				matched += idx_t(upper_match - lower_match);
 			}
 			if (matched > n) {
 				// 	Too much in this level, so move down to leftmost child candidate
@@ -381,7 +381,7 @@ size_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, size_t
 	++n;
 
 	const auto count = tree[level_no].first.size();
-	for (const auto limit = MinValue<size_t>(result + FANOUT, count); result < limit; ++result) {
+	for (const auto limit = MinValue<idx_t>(result + FANOUT, count); result < limit; ++result) {
 		const auto v = level_data[result];
 		for (const auto &frame : frames) {
 			n -= (v >= frame.start) && (v < frame.end);

@@ -3,7 +3,7 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 
-#include <array>
+#include "duckdb/common/array.hpp"
 
 namespace duckdb {
 
@@ -926,9 +926,9 @@ void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx
 void WindowAggregateExecutor::Finalize() {
 	D_ASSERT(aggregator);
 
-	//	Estimate the from statistics
+	//	Estimate the frame statistics
 	//	Default to the entire partition if we don't know anything
-	std::array<FrameStats, 2> stats;
+	array<FrameStats, 2> stats;
 	const int64_t count = aggregator->GetInputs().size();
 
 	//	First entry is the frame start

@@ -916,7 +916,7 @@ AggregateFunction GetTypedDiscreteQuantileAggregateFunction(const LogicalType &t
 	using OP = QuantileScalarOperation<true>;
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
-	fun.wininit = OP::WindowInit<STATE, INPUT_TYPE>;
+	fun.window_init = OP::WindowInit<STATE, INPUT_TYPE>;
 	return fun;
 }
 
@@ -1039,7 +1039,7 @@ AggregateFunction GetTypedDiscreteQuantileListAggregateFunction(const LogicalTyp
 	auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(type, type);
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;
-	fun.wininit = OP::template WindowInit<STATE, INPUT_TYPE>;
+	fun.window_init = OP::template WindowInit<STATE, INPUT_TYPE>;
 	return fun;
 }
 
@@ -1097,7 +1097,7 @@ AggregateFunction GetTypedContinuousQuantileAggregateFunction(const LogicalType 
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, TARGET_TYPE, OP>;
-	fun.wininit = OP::template WindowInit<STATE, INPUT_TYPE>;
+	fun.window_init = OP::template WindowInit<STATE, INPUT_TYPE>;
 	return fun;
 }
 
@@ -1152,7 +1152,7 @@ AggregateFunction GetTypedContinuousQuantileListAggregateFunction(const LogicalT
 	auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(input_type, result_type);
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;
-	fun.wininit = OP::template WindowInit<STATE, INPUT_TYPE>;
+	fun.window_init = OP::template WindowInit<STATE, INPUT_TYPE>;
 	return fun;
 }
 
@@ -1371,7 +1371,7 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
 	fun.bind = BindMedian;
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, TARGET_TYPE, OP>;
-	fun.wininit = OP::template WindowInit<STATE, INPUT_TYPE>;
+	fun.window_init = OP::template WindowInit<STATE, INPUT_TYPE>;
 	return fun;
 }
 
