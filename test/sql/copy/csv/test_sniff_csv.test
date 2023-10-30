@@ -50,11 +50,9 @@ FROM sniff_csv('test/sql/copy/csv/data/test/dateformat.csv')
 ,	"	"	\n	0	0	{'column0': 'DATE'}	%d/%m/%Y	NULL	FROM read_csv('test/sql/copy/csv/data/test/dateformat.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=0, columns={'column0': 'DATE'}, dateformat='%d/%m/%Y');
 
 query I
-FROM read_csv('test/sql/copy/csv/data/test/dateformat.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=0, columns={'column0': 'DATE'}, dateformat='%d/%m/%Y');----
+FROM read_csv('test/sql/copy/csv/data/test/dateformat.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=0, columns={'column0': 'DATE'}, dateformat='%d/%m/%Y');
 ----
 2019-06-05
-
-
 
 # Test backslash option
 query IIIIIIIIII

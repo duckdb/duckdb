@@ -84,6 +84,7 @@ string NewLineIdentifierToString(NewLineIdentifier identifier) {
 	case NewLineIdentifier::NOT_SET:
 		throw InternalException("NewLine Identifier must always be set after running the CSV sniffer");
 	}
+	return "invalid";
 }
 
 string FormatOptions(char opt) {
