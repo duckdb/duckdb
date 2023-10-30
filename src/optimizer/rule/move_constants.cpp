@@ -117,7 +117,8 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 		}
 		// check out of range for HUGEINT or not cleanly divisible
 		// HUGEINT is not cleanly divisible when outer_value == minimum and inner value == -1. (modulo overflow)
-		if ((outer_value == NumericLimits<hugeint_t>::Minimum() && inner_value == -1) || outer_value % inner_value != 0) {
+		if ((outer_value == NumericLimits<hugeint_t>::Minimum() && inner_value == -1) ||
+		    outer_value % inner_value != 0) {
 			bool is_equality = comparison.type == ExpressionType::COMPARE_EQUAL;
 			bool is_inequality = comparison.type == ExpressionType::COMPARE_NOTEQUAL;
 			if (is_equality || is_inequality) {
