@@ -60,6 +60,7 @@ static void AssertMangledName(const string &mangled_name) {
 	for (auto &ch : mangled_name) {
 		nullbyte_count += ch == '\0';
 	}
+	(void)nullbyte_count;
 	D_ASSERT(nullbyte_count == 2);
 }
 

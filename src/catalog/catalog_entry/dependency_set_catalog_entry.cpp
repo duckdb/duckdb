@@ -41,6 +41,7 @@ void DependencySetCatalogEntry::ScanSetInternal(CatalogTransaction transaction, 
 			return;
 		}
 		auto &other_connections = *other_connections_p;
+		(void)other_connections;
 
 		// Assert some invariants of the connections
 		if (dependencies) {
