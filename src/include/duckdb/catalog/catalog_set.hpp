@@ -49,13 +49,8 @@ struct EntryValue {
 		Swap(other);
 		return *this;
 	}
-	template <bool UNSAFE = false>
 	CatalogEntry &Entry() {
-		if (UNSAFE) {
-			return *entry.get();
-		} else {
-			return *entry;
-		}
+		return *entry;
 	}
 	unique_ptr<CatalogEntry> TakeEntry() {
 		return std::move(entry);
@@ -141,6 +136,10 @@ public:
 	DUCKDB_API bool UseTimestamp(CatalogTransaction transaction, transaction_t timestamp);
 
 	void UpdateTimestamp(CatalogEntry &entry, transaction_t timestamp);
+
+	mutex &GetCatalogLock() {
+		return catalog_lock;
+	}
 
 	void Verify(Catalog &catalog);
 

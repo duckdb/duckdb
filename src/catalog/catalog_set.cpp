@@ -165,12 +165,16 @@ optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction trans
 }
 
 bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipInfo &info) {
+	// lock the catalog for writing
+	unique_lock<mutex> write_lock(catalog.GetWriteLock());
+
 	auto entry = GetEntryInternal(transaction, info.name, nullptr);
 	if (!entry) {
 		return false;
 	}
 
 	auto &owner_entry = catalog.GetEntry(transaction.GetContext(), info.owner_schema, info.owner_name);
+	write_lock.unlock();
 	catalog.GetDependencyManager().AddOwnership(transaction, owner_entry, *entry);
 	return true;
 }
@@ -178,6 +182,8 @@ bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipI
 bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, AlterInfo &alter_info) {
 	// lock the catalog for writing
 	unique_lock<mutex> write_lock(catalog.GetWriteLock());
+	// lock this catalog set to disallow reading
+	unique_lock<mutex> read_lock(catalog_lock);
 
 	// first check if the entry exists in the unordered set
 	EntryIndex entry_index;
@@ -188,9 +194,6 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	if (!alter_info.allow_internal && entry->internal) {
 		throw CatalogException("Cannot alter entry \"%s\" because it is an internal system entry", entry->name);
 	}
-
-	// lock this catalog set to disallow reading
-	unique_lock<mutex> read_lock(catalog_lock);
 
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
