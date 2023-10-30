@@ -97,11 +97,11 @@ ScalarFunctionSet StrfTimeFun::GetFunctions() {
 StrpTimeFormat::StrpTimeFormat() {
 }
 
-StrpTimeFormat::StrpTimeFormat(const string &format_string_p) : format_string(format_string_p) {
-	if (format_string_p.empty()) {
+StrpTimeFormat::StrpTimeFormat(const string &format_string) {
+	if (format_string.empty()) {
 		return;
 	}
-	StrTimeFormat::ParseFormatSpecifier(format_string_p, *this);
+	StrTimeFormat::ParseFormatSpecifier(format_string, *this);
 }
 
 struct StrpTimeBindData : public FunctionData {

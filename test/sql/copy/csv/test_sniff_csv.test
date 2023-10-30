@@ -1,0 +1,31 @@
+# name: test/sql/copy/csv/test_sniff_csv.test
+# description: Test sniff_csv function
+# group: [csv]
+
+statement ok
+set threads = 1
+
+query I
+SELECT Prompt FROM sniff_csv('test/sql/copy/csv/data/real/lineitem_sample.csv');
+----
+FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, header='0', columns={'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'});
+
+query IIIIIIIIIIIIIIII
+FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, header='0', columns={'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}) limit 1;
+----
+1	15519	785	1	17	24386.67	0.04	0.02	N	O	1996-03-13	1996-02-12	1996-03-22	DELIVER IN PERSON	TRUCK	egular courts above the
+
+query IIIIIIIIII
+FROM sniff_csv('test/sql/copy/csv/data/real/lineitem_sample.csv');
+----
+|	"	"	\n	0	false	{'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}	NULL	NULL	FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, header='0', columns={'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'});
+
+# Test Invalid Path
+
+# Test different sample sizes
+
+# Test \0 option
+
+# Test with defined time and timestamp
+
+# Test with setrow
