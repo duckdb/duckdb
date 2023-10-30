@@ -99,10 +99,10 @@ public:
 	DUCKDB_API FileSystem &GetFileSystem();
 
 	DUCKDB_API idx_t NumberOfThreads();
-	static constexpr const char *SourceID() {
+	__attribute__((__visibility__("default"))) static constexpr const char *SourceID() {
 		return DUCKDB_SOURCE_ID;
 	}
-	static constexpr const char *LibraryVersion() {
+	__attribute__((__visibility__("default"))) static constexpr const char *LibraryVersion() {
 		return DUCKDB_VERSION;
 	}
 	DUCKDB_API static idx_t StandardVectorSize();
