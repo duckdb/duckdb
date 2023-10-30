@@ -1,6 +1,7 @@
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_secret_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
@@ -43,6 +44,22 @@ void ExtensionUtil::RegisterFunction(DatabaseInstance &db, AggregateFunctionSet 
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, info);
+}
+
+void ExtensionUtil::RegisterFunction(DatabaseInstance &db, CreateSecretFunction function) {
+	D_ASSERT(!function.name.empty());
+	CreateSecretFunctionSet set(function.name);
+	set.AddFunction(std::move(function));
+	RegisterFunction(db, std::move(set));
+}
+
+void ExtensionUtil::RegisterFunction(DatabaseInstance &db, CreateSecretFunctionSet function) {
+	D_ASSERT(!function.name.empty());
+	auto function_name = function.name;
+	CreateSecretFunctionInfo info(std::move(function_name), std::move(function));
+	auto &system_catalog = Catalog::GetSystemCatalog(db);
+	auto data = CatalogTransaction::GetSystemTransaction(db);
+	system_catalog.CreateSecretFunction(data, info);
 }
 
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, TableFunction function) {

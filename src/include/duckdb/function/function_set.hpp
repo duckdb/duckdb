@@ -12,6 +12,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/pragma_function.hpp"
+#include "duckdb/function/create_secret_function.hpp"
 
 namespace duckdb {
 
@@ -91,6 +92,12 @@ class PragmaFunctionSet : public FunctionSet<PragmaFunction> {
 public:
 	DUCKDB_API explicit PragmaFunctionSet(string name);
 	DUCKDB_API explicit PragmaFunctionSet(PragmaFunction fun);
+};
+
+class CreateSecretFunctionSet : public FunctionSet<CreateSecretFunction> {
+public:
+	DUCKDB_API explicit CreateSecretFunctionSet(string name);
+	DUCKDB_API explicit CreateSecretFunctionSet(CreateSecretFunction fun);
 };
 
 } // namespace duckdb

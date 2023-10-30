@@ -12,139 +12,32 @@
 
 namespace duckdb {
 
-struct SetS3CredentialsFunctionData : public TableFunctionData {
-	vector<Value> scope;
-	string alias;
-	bool finished = false;
-};
-
-enum class SetS3CredentialsMode {
-	DUCKDB_SETTINGS,
-	ENV,
-	MANUAL
-};
-
-static unique_ptr<FunctionData> LoadS3CredentialsBind(ClientContext &context, TableFunctionBindInput &input,
-                                                       vector<LogicalType> &return_types, vector<string> &names) {
-	auto result = make_uniq<SetS3CredentialsFunctionData>();
-
-/*	// Default mode is MANUAL for now
-	SetS3CredentialsMode mode = SetS3CredentialsMode::MANUAL;
-
-	for (auto &option : input.named_parameters) {
-		auto loption = StringUtil::Lower(option.first);
-		if (loption == "mode") {
-			if (option.second.ToString() == "duckdb_settings") {
-				mode = SetS3CredentialsMode::DUCKDB_SETTINGS;
-			} else if (option.second.ToString() == "env") {
-				mode = SetS3CredentialsMode::ENV;
-			} else if (option.second.ToString() == "manual") {
-				mode = SetS3CredentialsMode::MANUAL;
-			}
-		}
-	}*/
-
-	for (auto &option : input.named_parameters) {
-		auto loption = StringUtil::Lower(option.first);
-		if (loption == "scope") {
-			result->scope = ListValue::GetChildren(option.second);
-		} else if (loption == "alias") {
-			result->alias = option.second.ToString();
-		} else if (loption == "mode") {
-			// Already processed in first loop
-			continue;
-		} else {
-			throw NotImplementedException("Unsupported option for set_s3_credentials %s", option.first);
-		}
-	}
-
-	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
-	names.emplace_back("scope");
-
-	return_types.emplace_back(LogicalType::VARCHAR);
-	names.emplace_back("loaded_credentials");
-
-	return std::move(result);
-}
-
-static void LoadS3CredentialsFun(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (SetS3CredentialsFunctionData &)*data_p.bind_data;
-	if (data.finished) {
-		return;
-	}
-
+void CreateS3Credentials(ClientContext &context, named_parameter_map_t named_parameters) {
 	auto& opener = context.client_data->file_opener;
 	FileOpenerInfo info;
 
 	vector<string> scope_paths;
 	Value scope;
-	if (!data.scope.empty()) {
-		for (const auto& path : data.scope) {
-			scope_paths.push_back(path.ToString());
-		}
-		scope = Value::LIST(data.scope);
-	} else {
-		scope_paths = {"s3://"};
-		scope =  Value::LIST({"s3://"});
-	}
+
+	scope_paths = {"s3://"};
+	scope =  Value::LIST({"s3://"});
 
 	string filesystem_name = "HTTPFileSystem";
 	auto params = S3AuthParams::ReadFrom(opener.get(), info);
 	auto cred = make_shared<S3RegisteredCredential>(scope_paths, filesystem_name, params);
-	cred->SetAlias(data.alias);
+	cred->SetAlias("alias_hardcoded_1");
 
+	// TODO return credentials instead of doing this
 	context.db->config.credential_manager->RegisterCredentials(cred);
-
-	auto ret_val = Value(nullptr);
-
-	output.SetValue(0,0,scope);
-	output.SetValue(1,0,cred->GetCredentialsAsValue(true));
-	output.SetCardinality(1);
-
-	data.finished = true;
 }
 
 static void AddNamedParameters(TableFunction& table_function) {
 	RegisteredCredential::AddNamedParametersToSetFunction(table_function);
 }
 
-static unique_ptr<TableRef> SetS3CredentialsBindReplace(ClientContext &context, TableFunctionBindInput &input) {
-	//! Step 1: determine the mode
-	string mode;
-	for (auto &option : input.named_parameters) {
-		auto loption = StringUtil::Lower(option.first);
-		if (loption == "mode") {
-			mode = option.second.ToString();
-		}
-	}
-	if (mode.empty()){
-		mode = "duckdb_settings";
-	}
-
-	auto table_function_ref_data = make_uniq<TableFunctionRef>();
-	table_function_ref_data->alias = "set_s3_credentials_" + mode;
-
-	// forward all named parameters
-	vector<unique_ptr<ParsedExpression>> left_children;
-	for (const auto& it: input.named_parameters) {
-		left_children.push_back(make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL,
-		                                                        make_uniq<ColumnRefExpression>(it.first),
-		                                                        make_uniq<ConstantExpression>(it.second)));
-	}
-	table_function_ref_data->function = make_uniq<FunctionExpression>("set_s3_credentials_" + mode, std::move(left_children));
-	return std::move(table_function_ref_data);
-}
-
 static void RegisterSetCredentialFunction(DatabaseInstance &instance) {
-	TableFunction base_fun ("set_s3_credentials_duckdb_settings", {}, LoadS3CredentialsFun, LoadS3CredentialsBind);
-	RegisteredCredential::AddNamedParametersToSetFunction(base_fun);
-	AddNamedParameters(base_fun);
-	ExtensionUtil::RegisterFunction(instance, base_fun);
-
-	TableFunction super_fun ("set_s3_credentials", {}, nullptr, nullptr);
-	super_fun.bind_replace = SetS3CredentialsBindReplace;
-	AddNamedParameters(super_fun);
-	ExtensionUtil::RegisterFunction(instance, super_fun);
+	CreateSecretFunction create_secret_fun("s3", "", CreateS3Credentials);
+	ExtensionUtil::RegisterFunction(instance, create_secret_fun);
 }
 
 static void LoadInternal(DatabaseInstance &instance) {

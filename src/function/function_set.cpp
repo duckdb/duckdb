@@ -89,4 +89,11 @@ PragmaFunctionSet::PragmaFunctionSet(PragmaFunction fun) : FunctionSet(std::move
 	functions.push_back(std::move(fun));
 }
 
+CreateSecretFunctionSet::CreateSecretFunctionSet(string name) : FunctionSet(std::move(name)) {
+}
+
+CreateSecretFunctionSet::CreateSecretFunctionSet(CreateSecretFunction fun) : FunctionSet(std::move(fun.name)) {
+	functions.push_back(std::move(fun));
+}
+
 } // namespace duckdb

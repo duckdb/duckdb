@@ -21,6 +21,7 @@ class LogicalCreate;
 class LogicalCreateTable;
 class LogicalCreateIndex;
 class LogicalCreateTable;
+class LogicalCreateSecret;
 class LogicalCrossProduct;
 class LogicalCTERef;
 class LogicalDelete;

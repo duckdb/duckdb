@@ -19,6 +19,7 @@ class AlterStatement;
 class AttachStatement;
 class CallStatement;
 class CopyStatement;
+class CreateSecretStatement;
 class CreateStatement;
 class DetachStatement;
 class DeleteStatement;

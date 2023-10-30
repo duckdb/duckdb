@@ -18,6 +18,7 @@
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
@@ -230,6 +231,24 @@ optional_ptr<CatalogEntry> Catalog::CreatePragmaFunction(ClientContext &context,
 optional_ptr<CatalogEntry> Catalog::CreatePragmaFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
                                                          CreatePragmaFunctionInfo &info) {
 	return schema.CreatePragmaFunction(transaction, info);
+}
+
+//===--------------------------------------------------------------------===//
+// Create secret Function
+//===--------------------------------------------------------------------===//
+optional_ptr<CatalogEntry> Catalog::CreateSecretFunction(CatalogTransaction transaction,
+                                                         CreateSecretFunctionInfo &info) {
+	auto &schema = GetSchema(transaction, DEFAULT_SCHEMA);
+	return CreateSecretFunction(transaction, schema, info);
+}
+
+optional_ptr<CatalogEntry> Catalog::CreateSecretFunction(ClientContext &context, CreateSecretFunctionInfo &info) {
+	return CreateSecretFunction(GetCatalogTransaction(context), info);
+}
+
+optional_ptr<CatalogEntry> Catalog::CreateSecretFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+                                                         CreateSecretFunctionInfo &info) {
+	return schema.CreateSecretFunction(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//

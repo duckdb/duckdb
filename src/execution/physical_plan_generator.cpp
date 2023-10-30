@@ -153,6 +153,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
 		plan = CreatePlan(op.Cast<LogicalCreateIndex>());
 		break;
+	case LogicalOperatorType::LOGICAL_CREATE_SECRET:
+		plan = CreatePlan(op.Cast<LogicalCreateSecret>());
+		break;
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
 		plan = CreatePlan(op.Cast<LogicalExplain>());
 		break;

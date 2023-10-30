@@ -11,6 +11,7 @@
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/create_secret_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
@@ -28,6 +29,7 @@
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_secret_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
@@ -65,10 +67,10 @@ void FindForeignKeyInformation(CatalogEntry &entry, AlterForeignKeyType alter_fk
 
 DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, string name_p, bool is_internal)
     : SchemaCatalogEntry(catalog, std::move(name_p), is_internal),
-      tables(catalog, make_uniq<DefaultViewGenerator>(catalog, *this)), indexes(catalog), table_functions(catalog),
-      copy_functions(catalog), pragma_functions(catalog),
-      functions(catalog, make_uniq<DefaultFunctionGenerator>(catalog, *this)), sequences(catalog), collations(catalog),
-      types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)) {
+      tables(catalog, make_uniq<DefaultViewGenerator>(catalog, *this) ), indexes(catalog), table_functions(catalog),
+      copy_functions(catalog), pragma_functions(catalog), create_secret_functions(catalog),
+	  functions(catalog, make_uniq<DefaultFunctionGenerator>(catalog, *this)), sequences(catalog), collations(catalog),
+      types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)){
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction transaction,
@@ -230,6 +232,13 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreatePragmaFunction(CatalogTransact
 	return AddEntry(transaction, std::move(pragma_function), info.on_conflict);
 }
 
+optional_ptr<CatalogEntry> DuckSchemaEntry::CreateSecretFunction(CatalogTransaction transaction,
+                                                                 CreateSecretFunctionInfo &info) {
+	auto create_secret_fun = make_uniq<CreateSecretFunctionCatalogEntry>(catalog, *this, info);
+	create_secret_fun->internal = info.internal;
+	return AddEntry(transaction, std::move(create_secret_fun), info.on_conflict);
+}
+
 void DuckSchemaEntry::Alter(ClientContext &context, AlterInfo &info) {
 	CatalogType type = info.GetCatalogType();
 	auto &set = GetCatalogSet(type);
@@ -320,6 +329,8 @@ CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {
 		return collations;
 	case CatalogType::TYPE_ENTRY:
 		return types;
+	case CatalogType::CREATE_SECRET_FUNCTION_ENTRY:
+		return create_secret_functions;
 	default:
 		throw InternalException("Unsupported catalog type in schema");
 	}

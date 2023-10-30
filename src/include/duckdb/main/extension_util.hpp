@@ -36,6 +36,10 @@ public:
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, PragmaFunction function);
 	//! Register a new pragma function set - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, PragmaFunctionSet function);
+	//! Register a new create secret function - throw an exception if the function already exists
+	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, CreateSecretFunction function);
+	//! Register a new create secret function set - throw an exception if the function already exists
+	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, CreateSecretFunctionSet function);
 	//! Register a new copy function - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, CopyFunction function);
 	//! Register a new macro function - throw an exception if the function already exists

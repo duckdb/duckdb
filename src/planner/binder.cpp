@@ -117,6 +117,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<AttachStatement>());
 	case StatementType::DETACH_STATEMENT:
 		return Bind(statement.Cast<DetachStatement>());
+	case StatementType::CREATE_SECRET_STATEMENT:
+		return Bind(statement.Cast<CreateSecretStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));

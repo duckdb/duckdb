@@ -182,6 +182,17 @@ idx_t FunctionBinder::BindFunction(const string &name, PragmaFunctionSet &functi
 	return entry;
 }
 
+idx_t FunctionBinder::BindFunction(const string &name, CreateSecretFunctionSet &functions, CreateSecretInfo &info, string &error) {
+	// TODO: bind by standardized variable mode here?
+	// 		 that would allow throwing nice errors like, the binding is incorrect for mode x
+	idx_t entry = BindFunctionFromArguments(name, functions, {}, error);
+	if (entry == DConstants::INVALID_INDEX) {
+		throw BinderException(error);
+	}
+	auto candidate_function = functions.GetFunctionByOffset(entry);
+	return entry;
+}
+
 vector<LogicalType> FunctionBinder::GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>> &arguments) {
 	vector<LogicalType> types;
 	types.reserve(arguments.size());

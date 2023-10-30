@@ -28,6 +28,8 @@ private:
 	CatalogSet copy_functions;
 	//! The catalog set holding the pragma functions
 	CatalogSet pragma_functions;
+	//! The catalog set holding the create secret functions
+	CatalogSet create_secret_functions;
 	//! The catalog set holding the scalar and aggregate functions
 	CatalogSet functions;
 	//! The catalog set holding the sequences
@@ -55,6 +57,8 @@ public:
 	                                              CreateCopyFunctionInfo &info) override;
 	optional_ptr<CatalogEntry> CreatePragmaFunction(CatalogTransaction transaction,
 	                                                CreatePragmaFunctionInfo &info) override;
+	optional_ptr<CatalogEntry> CreateSecretFunction(CatalogTransaction transaction,
+	                                                CreateSecretFunctionInfo &info) override;
 	optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) override;
 	optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, CreateTypeInfo &info) override;
 	void Alter(ClientContext &context, AlterInfo &info) override;
