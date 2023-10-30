@@ -790,6 +790,84 @@ bool TryCast::Operation(double input, double &result, bool strict) {
 //===--------------------------------------------------------------------===//
 // Cast String -> Numeric
 //===--------------------------------------------------------------------===//
+
+template <typename T>
+struct SimpleIntegerCastData {
+	using ResultType = T;
+	ResultType result;
+};
+
+struct SimpleIntegerCastOperation {
+	template <class T, bool NEGATIVE>
+	static bool HandleDigit(T &state, uint8_t digit) {
+		using result_t = typename T::ResultType;
+// #if ((__GNUC__ >= 5) || defined(__clang__))
+// 		if (__builtin_mul_overflow(&state.result, result_t(10), &state.result)) {
+// 			return false;
+// 		}
+// 		if (NEGATIVE) {
+// 			if (__builtin_sub_overflow(&state.result, result_t(digit), &state.result)) {
+// 				return false;
+// 			}
+// 		} else {
+// 			if (__builtin_add_overflow(&state.result, result_t(digit), &state.result)) {
+// 				return false;
+// 			}
+// 		}
+// #else
+		if (NEGATIVE) {
+			if (state.result < (NumericLimits<result_t>::Minimum() + digit) / 10) {
+				return false;
+			}
+			state.result = state.result * 10 - digit;
+		} else {
+			if (state.result > (NumericLimits<result_t>::Maximum() - digit) / 10) {
+				return false;
+			}
+			state.result = state.result * 10 + digit;
+		}
+		return true;
+// #endif
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool HandleHexDigit(T &state, uint8_t digit) {
+		using result_t = typename T::ResultType;
+		if (state.result > (NumericLimits<result_t>::Maximum() - digit) / 16) {
+			return false;
+		}
+		state.result = state.result * 16 + digit;
+		return true;
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool HandleBinaryDigit(T &state, uint8_t digit) {
+		using result_t = typename T::ResultType;
+		if (state.result > (NumericLimits<result_t>::Maximum() - digit) / 2) {
+			return false;
+		}
+		state.result = state.result * 2 + digit;
+		return true;
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool HandleExponent(T &state, int32_t exponent) {
+		// SimpleIntegerCast doesn't deal with Exponents
+		return false;
+	}
+
+	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
+	static bool HandleDecimal(T &state, uint8_t digit) {
+		// SimpleIntegerCast doesn't deal with Decimals
+		return false;
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool Finalize(T &state) {
+		return true;
+	}
+};
+
 template <typename T>
 struct IntegerCastData {
 	using ResultType = T;
@@ -1106,7 +1184,7 @@ static bool IntegerBinaryCastLoop(const char *buf, idx_t len, T &result, bool st
 	return pos > start_pos;
 }
 
-template <class T, bool IS_SIGNED = true, bool ALLOW_EXPONENT = true, class OP = IntegerCastOperation,
+template <class T, bool IS_SIGNED = true, bool ALLOW_EXPONENT = true, class OP = SimpleIntegerCastOperation,
           bool ZERO_INITIALIZE = true, char decimal_separator = '.'>
 static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	// skip any spaces at the start
@@ -1154,9 +1232,14 @@ static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 
 template <typename T, bool IS_SIGNED = true>
 static inline bool TrySimpleIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
-	IntegerCastData<T> data;
-	if (TryIntegerCast<IntegerCastData<T>, IS_SIGNED>(buf, len, data, strict)) {
-		result = (T)data.result;
+	SimpleIntegerCastData<T> simple_data;
+	if (TryIntegerCast<SimpleIntegerCastData<T>, IS_SIGNED, true, SimpleIntegerCastOperation>(buf, len, simple_data, strict)) {
+		result = (T)simple_data.result;
+		return true;
+	}
+	IntegerCastData<T> cast_data;
+	if (TryIntegerCast<IntegerCastData<T>, IS_SIGNED, true, IntegerCastOperation>(buf, len, cast_data, strict)) {
+		result = (T)cast_data.result;
 		return true;
 	}
 	return false;

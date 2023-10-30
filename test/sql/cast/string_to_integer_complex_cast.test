@@ -1,5 +1,5 @@
-# name: test/sql/cast/string_to_integer_cast.test
-# description: String to Integer casts
+# name: test/sql/cast/string_to_integer_complex_cast.test
+# description: String to Integer casts with Decimals/Exponents
 # group: [cast]
 
 statement ok
