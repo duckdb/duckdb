@@ -315,6 +315,7 @@ class TestDataFrameJoin(object):
                 col("emp2.name").alias("superior_emp_name"),
             )
         )
+        df = df.orderBy(*df.columns)
         res = df.collect()
         assert res == [
             Row(emp_id=2, name='Rose', superior_emp_id=1, superior_emp_name='Smith'),
