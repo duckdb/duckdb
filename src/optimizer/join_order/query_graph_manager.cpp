@@ -374,7 +374,14 @@ unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr
 		if (op->children.size() == 2) {
 			switch (op->type) {
 			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+				if (context.config.force_index_join) {
+					// TODO: force index join may be false, but we may still plan it.
+					//  that will give an incorrect result. need to figure this one out.
+					// don't switch index joins, I don't think we support that
+					break;
+				}
 				auto &join = op->Cast<LogicalComparisonJoin>();
+
 				if (join.join_type == JoinType::INNER) {
 					TryFlipChildren(join, JoinType::INNER);
 				} else if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
