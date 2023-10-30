@@ -1,6 +1,6 @@
 # name: test/optimizer/column_lifetime_analyzer/no_unnecessary_projections.test
 # description: Test column lifetime
-# group: [column lifetime analyzer]
+# group: [column_lifetime_analyzer]
 
 statement ok
 CREATE TABLE lhs AS SELECT range % 5 i, range j FROM range(100);

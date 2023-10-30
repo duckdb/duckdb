@@ -342,8 +342,7 @@ bool QueryGraphManager::LeftCardLessThanRight(LogicalOperator &op) {
 	return op.children[0]->EstimateCardinality(context) < op.children[1]->EstimateCardinality(context);
 }
 
-void QueryGraphManager::TryFlipChildren(LogicalOperator &op, JoinType inverse, bool flip_comparison_expression,
-                                        idx_t cardinality_ratio) {
+void QueryGraphManager::TryFlipChildren(LogicalOperator &op, JoinType inverse, idx_t cardinality_ratio) {
 	auto &left_child = op.children[0];
 	auto &right_child = op.children[1];
 	auto lhs_cardinality = left_child->has_estimated_cardinality ? left_child->estimated_cardinality
@@ -354,9 +353,6 @@ void QueryGraphManager::TryFlipChildren(LogicalOperator &op, JoinType inverse, b
 		return;
 	}
 	std::swap(left_child, right_child);
-	if (!flip_comparison_expression) {
-		return;
-	}
 	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		join.join_type = inverse;
@@ -364,6 +360,10 @@ void QueryGraphManager::TryFlipChildren(LogicalOperator &op, JoinType inverse, b
 			std::swap(cond.left, cond.right);
 			cond.comparison = FlipComparisonExpression(cond.comparison);
 		}
+	}
+	if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+		auto &join = op.Cast<LogicalAnyJoin>();
+		join.join_type = inverse;
 	}
 }
 
@@ -376,9 +376,9 @@ unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr
 			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 				auto &join = op->Cast<LogicalComparisonJoin>();
 				if (join.join_type == JoinType::INNER) {
-					TryFlipChildren(join, JoinType::INNER, true);
+					TryFlipChildren(join, JoinType::INNER);
 				} else if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
-					TryFlipChildren(join, JoinType::RIGHT, true, 2);
+					TryFlipChildren(join, JoinType::RIGHT, 2);
 				} else if (join.join_type == JoinType::LEFT_SEMI) {
 					idx_t has_range = 0;
 					if (!PhysicalPlanGenerator::HasEquality(join.conditions, has_range)) {
@@ -386,7 +386,7 @@ unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr
 						// There is no physical join operator (yet) that can do a right_semi/anti join.
 						break;
 					}
-					TryFlipChildren(join, JoinType::RIGHT_SEMI, true, 2);
+					TryFlipChildren(join, JoinType::RIGHT_SEMI, 2);
 				} else if (join.join_type == JoinType::LEFT_ANTI) {
 					idx_t has_range = 0;
 					if (!PhysicalPlanGenerator::HasEquality(join.conditions, has_range)) {
@@ -394,21 +394,21 @@ unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr
 						// There is no physical join operator (yet) that can do a right_semi/anti join.
 						break;
 					}
-					TryFlipChildren(join, JoinType::RIGHT_ANTI, true, 2);
+					TryFlipChildren(join, JoinType::RIGHT_ANTI, 2);
 				}
 				break;
 			}
 			case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
 				// cross product not a comparison join so JoinType::INNER will get ignored
-				TryFlipChildren(*op, JoinType::INNER, false, 1);
+				TryFlipChildren(*op, JoinType::INNER, 1);
 				break;
 			}
 			case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 				auto &join = op->Cast<LogicalAnyJoin>();
 				if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
-					TryFlipChildren(join, JoinType::RIGHT, false, 2);
+					TryFlipChildren(join, JoinType::RIGHT, 2);
 				} else if (join.join_type == JoinType::INNER) {
-					TryFlipChildren(join, JoinType::INNER, false, 1);
+					TryFlipChildren(join, JoinType::INNER, 1);
 				}
 				break;
 			}

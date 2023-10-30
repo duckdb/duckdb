@@ -108,14 +108,14 @@ INSERT INTO table3 VALUES (1, 4, 4), (2, 6, 7), (8, 8, 8);
 # cannot sort a returning statement so this can fail.
 # if it happens again just comment out the test
 # update using other table (automatic join should happen here)
-query III
+query III valuesort
 DELETE FROM table3
 WHERE a3 IN (
 	SELECT a2 from table2
 ) RETURNING *;
 ----
-2	6	7
-1	4	4
+1	2	4
+4	6	7
 
 statement ok
 CREATE TABLE table4 (a4 INTEGER, b4 INTEGER, c4 INTEGER);
