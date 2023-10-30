@@ -72,6 +72,7 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"parquet_metadata", "parquet"},
     {"parquet_scan", "parquet"},
     {"parquet_schema", "parquet"},
+    {"pg_clear_cache", "postgres_scanner"},
     {"pg_timezone_names", "icu"},
     {"postgres_attach", "postgres_scanner"},
     {"postgres_scan", "postgres_scanner"},
