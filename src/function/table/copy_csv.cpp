@@ -91,15 +91,15 @@ void BaseCSVData::Finalize() {
 	}
 }
 
-static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &info, vector<string> &names,
-                                             vector<LogicalType> &sql_types) {
+static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, const CopyInfo &info, const vector<string> &names,
+                                             const vector<LogicalType> &sql_types) {
 	auto bind_data = make_uniq<WriteCSVData>(info.file_path, sql_types, names);
 
 	// check all the options in the copy info
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
-		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(std::move(set)));
+		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(set));
 	}
 	// verify the parsed options
 	if (bind_data->options.force_quote.empty()) {
@@ -159,15 +159,11 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	bind_data->FinalizeRead(context);
 
 	if (options.auto_detect) {
-		// We must run the sniffer.
+		// We must run the sniffer, but this is a copy csv, hence names and types have already been previsouly defined.
 		auto file_handle = BaseCSVReader::OpenCSV(context, options);
 		auto buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), options);
-		CSVSniffer sniffer(options, buffer_manager, bind_data->state_machine_cache);
-		auto sniffer_result = sniffer.SniffCSV();
-		bind_data->csv_types = sniffer_result.return_types;
-		bind_data->csv_names = sniffer_result.names;
-		bind_data->return_types = sniffer_result.return_types;
-		bind_data->return_names = sniffer_result.names;
+		CSVSniffer sniffer(options, buffer_manager, bind_data->state_machine_cache, {&expected_types, &expected_names});
+		sniffer.SniffCSV();
 	}
 	return std::move(bind_data);
 }

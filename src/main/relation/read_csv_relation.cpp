@@ -18,25 +18,9 @@
 namespace duckdb {
 
 void ReadCSVRelation::InitializeAlias(const vector<string> &input) {
-	D_ASSERT(input.size() >= 1);
-	auto csv_file = input[0];
+	D_ASSERT(!input.empty());
+	const auto &csv_file = input[0];
 	alias = StringUtil::Split(csv_file, ".")[0];
-}
-
-ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const string &csv_file,
-                                 vector<ColumnDefinition> columns_p, string alias_p)
-    : TableFunctionRelation(context, "read_csv", {Value(csv_file)}, nullptr, false), alias(std::move(alias_p)),
-      auto_detect(false) {
-
-	InitializeAlias({csv_file});
-	columns = std::move(columns_p);
-
-	child_list_t<Value> column_names;
-	for (idx_t i = 0; i < columns.size(); i++) {
-		column_names.push_back(make_pair(columns[i].Name(), Value(columns[i].Type().ToString())));
-	}
-
-	AddNamedParameter("columns", Value::STRUCT(std::move(column_names)));
 }
 
 static Value CreateValueFromFileList(const vector<string> &file_list) {
@@ -50,7 +34,7 @@ static Value CreateValueFromFileList(const vector<string> &file_list) {
 ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const vector<string> &input,
                                  named_parameter_map_t &&options, string alias_p)
     : TableFunctionRelation(context, "read_csv_auto", {CreateValueFromFileList(input)}, nullptr, false),
-      alias(std::move(alias_p)), auto_detect(true) {
+      alias(std::move(alias_p)) {
 
 	InitializeAlias(input);
 
@@ -59,7 +43,6 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 	D_ASSERT(!files.empty());
 
 	auto &file_name = files[0];
-	options["auto_detect"] = Value::BOOLEAN(true);
 	CSVReaderOptions csv_options;
 	csv_options.file_path = file_name;
 	vector<string> empty;
@@ -67,8 +50,8 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 	vector<LogicalType> unused_types;
 	vector<string> unused_names;
 	csv_options.FromNamedParameters(options, *context, unused_types, unused_names);
-	// Run the auto-detect, populating the options with the detected settings
 
+	// Run the auto-detect, populating the options with the detected settings
 	auto bm_file_handle = BaseCSVReader::OpenCSV(*context, csv_options);
 	auto buffer_manager = make_shared<CSVBufferManager>(*context, std::move(bm_file_handle), csv_options);
 	CSVStateMachineCache state_machine_cache;
@@ -80,12 +63,24 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 		columns.emplace_back(names[i], types[i]);
 	}
 
+	// After sniffing we can consider these set, so they are exported as named parameters
+	csv_options.has_delimiter = true;
+	csv_options.has_quote = true;
+	csv_options.has_escape = true;
+
 	//! Capture the options potentially set/altered by the auto detection phase
 	csv_options.ToNamedParameters(options);
 
 	// No need to auto-detect again
 	options["auto_detect"] = Value::BOOLEAN(false);
 	SetNamedParameters(std::move(options));
+
+	child_list_t<Value> column_names;
+	for (idx_t i = 0; i < columns.size(); i++) {
+		column_names.push_back(make_pair(columns[i].Name(), Value(columns[i].Type().ToString())));
+	}
+
+	AddNamedParameter("columns", Value::STRUCT(std::move(column_names)));
 }
 
 string ReadCSVRelation::GetAlias() {

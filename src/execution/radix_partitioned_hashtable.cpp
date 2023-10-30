@@ -346,6 +346,11 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 		}
 	}
 
+	// We can go external when there is only one active thread, but we shouldn't repartition here
+	if (gstate.count_before_combining < 2) {
+		return false;
+	}
+
 	const auto partition_count = partitioned_data->PartitionCount();
 	const auto current_radix_bits = RadixPartitioning::RadixBits(partition_count);
 	D_ASSERT(current_radix_bits <= config.GetRadixBits());

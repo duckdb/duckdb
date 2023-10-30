@@ -67,6 +67,21 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				break;
 			case FilterPropagateResult::FILTER_ALWAYS_TRUE:
 				// filter is always true
+				// If this is the inequality for an AsOf join,
+				// then we must leave it in because it also flags
+				// the semantics of restricting to a single match
+				// so we can't replace it with an equi-join on the remaining conditions.
+				if (join.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+					switch (condition.comparison) {
+					case ExpressionType::COMPARE_GREATERTHAN:
+					case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+					case ExpressionType::COMPARE_LESSTHAN:
+					case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+						continue;
+					default:
+						break;
+					}
+				}
 				if (join.conditions.size() > 1) {
 					// there are multiple conditions: erase this condition
 					join.conditions.erase(join.conditions.begin() + i);

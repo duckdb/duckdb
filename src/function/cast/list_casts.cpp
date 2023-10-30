@@ -163,7 +163,6 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 	} else {
 		source.Flatten(count);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		FlatVector::SetValidity(result, FlatVector::Validity(source));
 
 		auto child_type = ArrayType::GetChildType(result.GetType());
 		auto &source_cc = ListVector::GetEntry(source);
@@ -187,15 +186,13 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 		for (idx_t i = 0; i < count; i++) {
 			// If the list is null, set the entire array to null
 			if (FlatVector::IsNull(source, i)) {
+				FlatVector::SetNull(result, i, true);
 				for (idx_t array_elem = 0; array_elem < array_size; array_elem++) {
 					FlatVector::SetNull(payload_vector, i * array_size + array_elem, true);
-					// just select whatever, it won't be used anyway
-					sel.set_index(i * array_size + array_elem, i * array_size + array_elem);
+					// just select the first value, it won't be used anyway
+					sel.set_index(i * array_size + array_elem, 0);
 				}
-				continue;
-			}
-
-			if (ldata[i].length != array_size) {
+			} else if (ldata[i].length != array_size) {
 				if (all_lengths_match) {
 					// Cant cast to array, list size mismatch
 					all_lengths_match = false;
@@ -204,10 +201,16 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 					HandleCastError::AssignError(msg, parameters.error_message);
 				}
 				FlatVector::SetNull(result, i, true);
-			}
-			// Set the selection vector to point to the correct offsets
-			for (idx_t array_elem = 0; array_elem < array_size; array_elem++) {
-				sel.set_index(i * array_size + array_elem, ldata[i].offset + array_elem);
+				for (idx_t array_elem = 0; array_elem < array_size; array_elem++) {
+					FlatVector::SetNull(payload_vector, i * array_size + array_elem, true);
+					// just select the first value, it won't be used anyway
+					sel.set_index(i * array_size + array_elem, 0);
+				}
+			} else {
+				// Set the selection vector to point to the correct offsets
+				for (idx_t array_elem = 0; array_elem < array_size; array_elem++) {
+					sel.set_index(i * array_size + array_elem, ldata[i].offset + array_elem);
+				}
 			}
 		}
 

@@ -56,6 +56,9 @@ struct SniffDialect {
 		if (machine.cur_rows < STANDARD_VECTOR_SIZE && machine.state != CSVState::EMPTY_LINE) {
 			sniffed_column_counts[machine.cur_rows++] = machine.column_count;
 		}
+		if (machine.cur_rows == 0 && machine.state == CSVState::EMPTY_LINE) {
+			sniffed_column_counts[machine.cur_rows++] = machine.column_count;
+		}
 		NewLineIdentifier suggested_newline;
 		if (machine.carry_on_separator) {
 			if (machine.single_record_separator) {
@@ -78,6 +81,13 @@ struct SniffDialect {
 	}
 };
 
+bool IsQuoteDefault(char quote) {
+	if (quote == '\"' || quote == '\'' || quote == '\0') {
+		return true;
+	}
+	return false;
+}
+
 void CSVSniffer::GenerateCandidateDetectionSearchSpace(vector<char> &delim_candidates,
                                                        vector<QuoteRule> &quoterule_candidates,
                                                        unordered_map<uint8_t, vector<char>> &quote_candidates_map,
@@ -94,6 +104,11 @@ void CSVSniffer::GenerateCandidateDetectionSearchSpace(vector<char> &delim_candi
 		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {options.dialect_options.state_machine_options.quote};
 		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER] = {options.dialect_options.state_machine_options.quote};
 		quote_candidates_map[(uint8_t)QuoteRule::NO_QUOTES] = {options.dialect_options.state_machine_options.quote};
+		// also add it as a escape rule
+		if (!IsQuoteDefault(options.dialect_options.state_machine_options.quote)) {
+			escape_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC].emplace_back(
+			    options.dialect_options.state_machine_options.quote);
+		}
 	} else {
 		// no quote rule provided: use standard/common quotes
 		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {'\"'};
@@ -151,10 +166,20 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 	if (sniffed_column_counts.size() > rows_read) {
 		rows_read = sniffed_column_counts.size();
 	}
+	if (set_columns.IsCandidateUnacceptable(num_cols, options.null_padding, options.ignore_errors)) {
+		// Not acceptable
+		return;
+	}
 	for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
-		if (sniffed_column_counts[row] == num_cols) {
+		if (set_columns.IsCandidateUnacceptable(sniffed_column_counts[row], options.null_padding,
+		                                        options.ignore_errors)) {
+			// Not acceptable
+			return;
+		}
+		if (sniffed_column_counts[row] == num_cols || options.ignore_errors) {
 			consistent_rows++;
-		} else if (num_cols < sniffed_column_counts[row] && !options.skip_rows_set) {
+		} else if (num_cols < sniffed_column_counts[row] && !options.skip_rows_set &&
+		           (!set_columns.IsSet() || options.null_padding)) {
 			// all rows up to this point will need padding
 			padding_count = 0;
 			// we use the maximum amount of num_cols that we find
@@ -209,6 +234,10 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 	    (single_column_before || (more_values && !require_more_padding) ||
 	     (more_than_one_column && require_less_padding)) &&
 	    !invalid_padding) {
+		if (!candidates.empty() && set_columns.IsSet() && max_columns_found == candidates.size()) {
+			// We have a candidate that fits our requirements better
+			return;
+		}
 		best_consistent_rows = consistent_rows;
 		max_columns_found = num_cols;
 		prev_padding_count = padding_count;
@@ -241,11 +270,13 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 bool CSVSniffer::RefineCandidateNextChunk(CSVStateMachine &candidate) {
 	vector<idx_t> sniffed_column_counts(STANDARD_VECTOR_SIZE);
 	candidate.csv_buffer_iterator.Process<SniffDialect>(candidate, sniffed_column_counts);
-	bool allow_padding = options.null_padding;
-
-	for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
-		if (max_columns_found != sniffed_column_counts[row] && !allow_padding) {
-			return false;
+	for (auto &num_cols : sniffed_column_counts) {
+		if (set_columns.IsSet()) {
+			return !set_columns.IsCandidateUnacceptable(num_cols, options.null_padding, options.ignore_errors);
+		} else {
+			if (max_columns_found != num_cols && (!options.null_padding && !options.ignore_errors)) {
+				return false;
+			}
 		}
 	}
 	return true;

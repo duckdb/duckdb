@@ -65,7 +65,6 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
-#include "duckdb/core_functions/lambda_functions.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/operator/scan/csv/base_csv_reader.hpp"
@@ -2654,34 +2653,6 @@ KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "KEYWORD_COL_NAME")) {
 		return KeywordCategory::KEYWORD_COL_NAME;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
-}
-
-template<>
-const char* EnumUtil::ToChars<LambdaType>(LambdaType value) {
-	switch(value) {
-	case LambdaType::TRANSFORM:
-		return "TRANSFORM";
-	case LambdaType::FILTER:
-		return "FILTER";
-	case LambdaType::REDUCE:
-		return "REDUCE";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
-	}
-}
-
-template<>
-LambdaType EnumUtil::FromString<LambdaType>(const char *value) {
-	if (StringUtil::Equals(value, "TRANSFORM")) {
-		return LambdaType::TRANSFORM;
-	}
-	if (StringUtil::Equals(value, "FILTER")) {
-		return LambdaType::FILTER;
-	}
-	if (StringUtil::Equals(value, "REDUCE")) {
-		return LambdaType::REDUCE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -6070,6 +6041,8 @@ const char* EnumUtil::ToChars<UnionInvalidReason>(UnionInvalidReason value) {
 		return "VALIDITY_OVERLAP";
 	case UnionInvalidReason::TAG_MISMATCH:
 		return "TAG_MISMATCH";
+	case UnionInvalidReason::NULL_TAG:
+		return "NULL_TAG";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -6091,6 +6064,9 @@ UnionInvalidReason EnumUtil::FromString<UnionInvalidReason>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "TAG_MISMATCH")) {
 		return UnionInvalidReason::TAG_MISMATCH;
+	}
+	if (StringUtil::Equals(value, "NULL_TAG")) {
+		return UnionInvalidReason::NULL_TAG;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

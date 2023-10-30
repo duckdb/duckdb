@@ -130,6 +130,12 @@ jobs:
       if: ${{ failure() }}
       shell: bash
       run: cat ODBC_TRACE.log
+      
+    - name: System.Data.ODBC tests
+      shell: bash
+      run: |
+        tools/odbc/bin/Release/SystemDataODBC_tests.exe
+
 
  win-release-32:
     name: Windows (32 Bit)
