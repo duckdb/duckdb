@@ -3,6 +3,8 @@ import csv
 import re
 import argparse
 import glob
+from typing import Set, Tuple, cast
+import pathlib
 
 os.chdir(os.path.dirname(__file__))
 
@@ -46,18 +48,21 @@ if "jemalloc" in extension_names:
     extension_names.remove("jemalloc")
 
 ext_hpp = os.path.join("..", "src", "include", "duckdb", "main", "extension_entries.hpp")
-get_functions_query = "select distinct function_name from duckdb_functions();"
+get_functions_query = "select distinct function_name, function_type from duckdb_functions();"
 get_settings_query = "select distinct name from duckdb_settings();"
 duckdb_path = os.path.join("..", 'build', 'release', 'duckdb')
 
 
 def get_query(sql_query, load_query):
-    return os.popen(f'{duckdb_path} -csv -unsigned -c "{load_query}{sql_query}" ').read().split("\n")[1:-1]
+    query = f'{duckdb_path} -csv -unsigned -c "{load_query}{sql_query}" '
+    query_result = os.popen(query).read()
+    return query_result.split("\n")[1:-1]
 
-
-def get_functions(load=""):
-    return set(get_query(get_functions_query, load))
-
+def get_functions(load="") -> Set[Tuple[str, str]]:
+    results = set(get_query(get_functions_query, load))
+    results = set([tuple(x.split(',')) for x in results])
+    results = cast(Set[Tuple[str, str]], results)
+    return results
 
 def get_settings(load=""):
     return set(get_query(get_settings_query, load))
@@ -66,24 +71,33 @@ def get_settings(load=""):
 base_functions = get_functions()
 base_settings = get_settings()
 
+# Map from 'function_name': ('extension_name', 'function_type')
 function_map = {}
 settings_map = {}
 
 # root_dir needs a trailing slash (i.e. /root/dir/)
 extension_path = {}
-for filename in glob.iglob('/tmp/' + '**/*.duckdb_extension', recursive=True):
-    extension_path[os.path.splitext(os.path.basename(filename))[0]] = filename
-
+extension_dir = pathlib.Path('../build/release/extension')
+#extension_dir = pathlib.Path('/tmp/') / '**/*.duckdb_extension'
+for location in glob.iglob(str(extension_dir / '**/*.duckdb_extension'), recursive=True):
+    name = os.path.splitext(os.path.basename(location))[0]
+    print(f"Located extension: {name} in path: '{location}'")
+    extension_path[name] = location
 
 # Update global maps with settings/functions from `extension_name`
 def update_extensions(extension_name, function_list, settings_list):
     global function_map, settings_map
-    function_map.update(
-        {
-            extension_function.lower(): extension_name.lower()
-            for extension_function in (set(function_list) - base_functions)
-        }
-    )
+    #for name, type in function_list:
+    #    print(name, type)
+
+    diff = (set(function_list) - base_functions)
+
+    functions_to_add = {
+        function_name.lower(): (extension_name.lower(), function_type)
+        for function_name, function_type in diff
+    }
+
+    function_map.update(functions_to_add)
     settings_map.update(
         {
             extension_setting.lower(): extension_name.lower()
@@ -94,6 +108,7 @@ def update_extensions(extension_name, function_list, settings_list):
 
 # Get all extension entries from DuckDB's catalog
 for extension_name in extension_names:
+    print(extension_name)
     if extension_name not in extension_path:
         if extension_name not in stored_functions or extension_name not in stored_settings:
             print(f"Missing extension {extension_name} and not found in stored_functions/stored_settings")
@@ -198,15 +213,22 @@ struct ExtensionEntry {
     char extension[48];
 };
 
-static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
+struct ExtensionFunctionEntry {
+	char name[48];
+	char extension[48];
+	char type[48];
+};
+
+static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
 """
     file.write(header)
     # functions
     sorted_function = sorted(function_map)
 
     for function_name in sorted_function:
+        extension_name, function_type = function_map[function_name]
         file.write("    {")
-        file.write(f'"{function_name}", "{function_map[function_name]}"')
+        file.write(f'"{function_name}", "{extension_name}", "{function_type}"')
         file.write("}, \n")
     file.write("}; // END_OF_EXTENSION_FUNCTIONS\n")
 

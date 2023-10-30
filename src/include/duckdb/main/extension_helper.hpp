@@ -75,6 +75,20 @@ public:
 	static string GetExtensionName(const string &extension);
 	static bool IsFullPath(const string &extension);
 
+	//! Lookup a name + type in an ExtensionFunctionEntry list
+	template <size_t N>
+	static pair<string, string> FindExtensionInFunctionEntries(const string &name, const ExtensionFunctionEntry (&entries)[N]) {
+		auto lcase = StringUtil::Lower(name);
+
+		auto it =
+		    std::find_if(entries, entries + N, [&](const ExtensionFunctionEntry &element) { return element.name == lcase; });
+
+		if (it != entries + N && it->name == lcase) {
+			return make_pair(it->extension, it->type);
+		}
+		return make_pair("", "");
+	}
+
 	//! Lookup a name in an ExtensionEntry list
 	template <size_t N>
 	static string FindExtensionInEntries(const string &name, const ExtensionEntry (&entries)[N]) {

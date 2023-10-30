@@ -468,6 +468,28 @@ void Catalog::AutoloadExtensionByConfigName(ClientContext &context, const string
 	throw Catalog::UnrecognizedConfigurationError(context, configuration_name);
 }
 
+static CatalogType ConvertFunctionType(const string &function_type) {
+	if (function_type == "scalar") {
+		return CatalogType::SCALAR_FUNCTION_ENTRY;
+	}
+	if (function_type == "table") {
+		return CatalogType::TABLE_FUNCTION_ENTRY;
+	}
+	if (function_type == "aggregate") {
+		return CatalogType::AGGREGATE_FUNCTION_ENTRY;
+	}
+	if (function_type == "macro") {
+		return CatalogType::MACRO_ENTRY;
+	}
+	if (function_type == "table_macro") {
+		return CatalogType::TABLE_MACRO_ENTRY;
+	}
+	if (function_type == "pragma") {
+		return CatalogType::PRAGMA_FUNCTION_ENTRY;
+	}
+	throw InternalException("Unrecognized function type: '%s'", function_type);
+}
+
 bool Catalog::AutoLoadExtensionByCatalogEntry(ClientContext &context, CatalogType type, const string &entry_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	auto &dbconfig = DBConfig::GetConfig(context);
@@ -475,7 +497,17 @@ bool Catalog::AutoLoadExtensionByCatalogEntry(ClientContext &context, CatalogTyp
 		string extension_name;
 		if (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
 		    type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY) {
-			extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_FUNCTIONS);
+			auto lookup_result = ExtensionHelper::FindExtensionInFunctionEntries(entry_name, EXTENSION_FUNCTIONS);
+			do {
+				if (lookup_result.first.empty()) {
+					break;
+				}
+				auto function_type = ConvertFunctionType(lookup_result.second);
+				if (type != function_type) {
+					// FIXME: Do we still want to autoload if the function is recognized?
+					return false;
+				}
+			} while (false);
 		} else if (type == CatalogType::COPY_FUNCTION_ENTRY) {
 			extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_COPY_FUNCTIONS);
 		} else if (type == CatalogType::TYPE_ENTRY) {
@@ -534,7 +566,19 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 	string extension_name;
 	if (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
 	    type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY) {
-		extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_FUNCTIONS);
+		auto lookup_result = ExtensionHelper::FindExtensionInFunctionEntries(entry_name, EXTENSION_FUNCTIONS);
+		do {
+			if (lookup_result.first.empty()) {
+				break;
+			}
+			auto function_type = ConvertFunctionType(lookup_result.second);
+			if (type == function_type) {
+				// Found the function in an extension and it matches the type that we're looking for.
+				break;
+			}
+			auto error = CatalogException("%s with name \"%s\" is not in the catalog, a function by this name exists in the %s extension, but it's of a different type, namely %s", CatalogTypeToString(type), entry_name, extension_name, CatalogTypeToString(function_type));
+			return error;
+		} while (false);
 	} else if (type == CatalogType::TYPE_ENTRY) {
 		extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_TYPES);
 	} else if (type == CatalogType::COPY_FUNCTION_ENTRY) {
