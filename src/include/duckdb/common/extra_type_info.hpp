@@ -23,7 +23,8 @@ enum class ExtraTypeInfoType : uint8_t {
 	STRUCT_TYPE_INFO = 5,
 	ENUM_TYPE_INFO = 6,
 	USER_TYPE_INFO = 7,
-	AGGREGATE_STATE_TYPE_INFO = 8
+	AGGREGATE_STATE_TYPE_INFO = 8,
+	ARRAY_TYPE_INFO = 9,
 };
 
 struct ExtraTypeInfo {
@@ -180,6 +181,19 @@ protected:
 private:
 	EnumDictType dict_type;
 	idx_t dict_size;
+};
+
+struct ArrayTypeInfo : public ExtraTypeInfo {
+	LogicalType child_type;
+	idx_t size;
+	explicit ArrayTypeInfo(LogicalType child_type_p, idx_t size_p);
+
+public:
+	void Serialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &reader);
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
 };
 
 } // namespace duckdb

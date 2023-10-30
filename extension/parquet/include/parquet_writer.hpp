@@ -52,7 +52,8 @@ struct FieldID {
 class ParquetWriter {
 public:
 	ParquetWriter(FileSystem &fs, string file_name, vector<LogicalType> types, vector<string> names,
-	              duckdb_parquet::format::CompressionCodec::type codec, ChildFieldIDs field_ids);
+	              duckdb_parquet::format::CompressionCodec::type codec, ChildFieldIDs field_ids,
+	              const vector<pair<string, string>> &kv_metadata);
 
 public:
 	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);

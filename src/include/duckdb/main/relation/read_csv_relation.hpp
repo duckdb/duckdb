@@ -17,13 +17,13 @@ namespace duckdb {
 
 class ReadCSVRelation : public TableFunctionRelation {
 public:
-	ReadCSVRelation(const shared_ptr<ClientContext> &context, const string &csv_file, vector<ColumnDefinition> columns,
-	                string alias = string());
-	ReadCSVRelation(const shared_ptr<ClientContext> &context, const string &csv_file, named_parameter_map_t &&options,
-	                string alias = string());
+	ReadCSVRelation(const shared_ptr<ClientContext> &context, const vector<string> &csv_files,
+	                named_parameter_map_t &&options, string alias = string());
 
 	string alias;
-	bool auto_detect;
+
+protected:
+	void InitializeAlias(const vector<string> &input);
 
 public:
 	string GetAlias() override;
