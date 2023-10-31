@@ -1,4 +1,11 @@
 #include "duckdb/function/built_in_functions.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_sniffer.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/function/table/range.hpp"
 
 namespace duckdb {
 
