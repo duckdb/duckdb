@@ -83,6 +83,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toMap;
+import static org.duckdb.DuckDBDriver.DUCKDB_USER_AGENT_PROPERTY;
 import static org.duckdb.DuckDBDriver.JDBC_STREAM_RESULTS;
 
 public class TestDuckDBJDBC {
@@ -3944,6 +3945,42 @@ public class TestDuckDBJDBC {
                 rs.getInt(1);
             }
             assertFalse(rs.next()); // is exhausted
+        }
+    }
+
+    public static void test_user_agent() throws Exception {
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+            try (PreparedStatement stmt1 =
+                     conn.prepareStatement("SELECT value FROM duckdb_settings() WHERE name = 'custom_user_agent'");
+                 ResultSet rs = stmt1.executeQuery()) {
+                assertTrue(rs.next());
+                assertTrue(rs.getString(1).matches(""));
+            }
+            try (PreparedStatement stmt1 = conn.prepareStatement("PRAGMA user_agent");
+                 ResultSet rs = stmt1.executeQuery()) {
+                assertTrue(rs.next());
+                assertTrue(rs.getString(1).matches("duckdb/.*(.*) jdbc"));
+            }
+        }
+    }
+
+    public static void test_custom_user_agent() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(DUCKDB_USER_AGENT_PROPERTY, "CUSTOM_STRING");
+
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:", props)) {
+            try (PreparedStatement stmt1 =
+                     conn.prepareStatement("SELECT value FROM duckdb_settings() WHERE name = 'custom_user_agent'");
+                 ResultSet rs = stmt1.executeQuery()) {
+                assertTrue(rs.next());
+                assertEquals("CUSTOM_STRING", rs.getString(1));
+            }
+
+            try (PreparedStatement stmt1 = conn.prepareStatement("PRAGMA user_agent");
+                 ResultSet rs = stmt1.executeQuery()) {
+                assertTrue(rs.next());
+                assertTrue(rs.getString(1).matches("duckdb/.*(.*) jdbc CUSTOM_STRING"));
+            }
         }
     }
 

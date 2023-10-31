@@ -8,7 +8,16 @@ using duckdb::DuckDB;
 duckdb_state duckdb_open_ext(const char *path, duckdb_database *out, duckdb_config config, char **error) {
 	auto wrapper = new DatabaseData();
 	try {
-		auto db_config = (DBConfig *)config;
+		DBConfig default_config;
+		DBConfig *db_config = &default_config;
+		DBConfig *user_config = (DBConfig *)config;
+		if (user_config) {
+			db_config = user_config;
+		}
+
+		if (db_config->options.duckdb_api.empty()) {
+			db_config->options.duckdb_api = "capi";
+		}
 		wrapper->database = duckdb::make_uniq<DuckDB>(path, db_config);
 	} catch (std::exception &ex) {
 		if (error) {

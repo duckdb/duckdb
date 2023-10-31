@@ -552,4 +552,13 @@ struct FlushAllocatorSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct CustomUserAgentSetting {
+	static constexpr const char *Name = "custom_user_agent";
+	static constexpr const char *Description = "Metadata from DuckDB callers";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
 } // namespace duckdb

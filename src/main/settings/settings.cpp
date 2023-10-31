@@ -1203,4 +1203,28 @@ Value FlushAllocatorSetting::GetSetting(ClientContext &context) {
 	return Value(StringUtil::BytesToHumanReadableString(config.options.allocator_flush_threshold));
 }
 
+//===--------------------------------------------------------------------===//
+// UserAgent Setting
+//===--------------------------------------------------------------------===//
+
+void CustomUserAgentSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_value = input.GetValue<string>();
+	if (db) {
+		throw InvalidInputException("Cannot change custom_user_agent setting while database is running");
+	}
+	config.options.custom_user_agent = new_value;
+}
+
+void CustomUserAgentSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (db) {
+		throw InvalidInputException("Cannot change custom_user_agent setting while database is running");
+	}
+	config.options.custom_user_agent = DBConfig().options.custom_user_agent;
+}
+
+Value CustomUserAgentSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.custom_user_agent);
+}
+
 } // namespace duckdb

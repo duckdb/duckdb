@@ -45,7 +45,11 @@ duckdb_state duckdb_set_config(duckdb_config config, const char *name, const cha
 
 	try {
 		auto db_config = (DBConfig *)config;
-		db_config->SetOptionByName(name, Value(option));
+		if (strcmp(name, "duckdb_api") == 0) {
+			db_config->options.duckdb_api = std::string(option);
+		} else {
+			db_config->SetOptionByName(name, Value(option));
+		}
 	} catch (...) {
 		return DuckDBError;
 	}
