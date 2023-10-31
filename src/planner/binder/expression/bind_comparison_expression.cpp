@@ -1,20 +1,17 @@
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/decimal.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
-#include "duckdb/common/string_util.hpp"
-
-#include "duckdb/function/scalar/string_functions.hpp"
-
-#include "duckdb/common/types/decimal.hpp"
-
-#include "duckdb/main/config.hpp"
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -75,6 +72,8 @@ void ExpressionBinder::TestCollation(ClientContext &context, const string &colla
 
 LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, LogicalType right_type) {
 	auto result_type = LogicalType::MaxLogicalType(left_type, right_type);
+	fprintf(stderr, "left %s right %s result %s\n", left_type.ToString().c_str(), right_type.ToString().c_str(),
+	        result_type.ToString().c_str());
 	switch (result_type.id()) {
 	case LogicalTypeId::DECIMAL: {
 		// result is a decimal: we need the maximum width and the maximum scale over width
@@ -118,6 +117,7 @@ LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, Log
 }
 
 BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t depth) {
+	fprintf(stderr, "BINDING %s\n", expr.ToString().c_str());
 	// first try to bind the children of the case expression
 	string error;
 	BindChild(expr.left, depth, error);
@@ -134,6 +134,7 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	// cast the input types to the same type
 	// now obtain the result type of the input types
 	auto input_type = BoundComparisonExpression::BindComparison(left_sql_type, right_sql_type);
+	fprintf(stderr, "RESULTING INPUT TYPE %s\n", input_type.ToString().c_str());
 	// add casts (if necessary)
 	left = BoundCastExpression::AddCastToType(context, std::move(left), input_type,
 	                                          input_type.id() == LogicalTypeId::ENUM);

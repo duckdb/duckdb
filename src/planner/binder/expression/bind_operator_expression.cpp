@@ -1,9 +1,9 @@
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
-#include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
@@ -108,8 +108,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		auto &extract_exp = BoundExpression::GetExpression(*op.children[0]);
 		auto &name_exp = BoundExpression::GetExpression(*op.children[1]);
 		auto extract_expr_type = extract_exp->return_type.id();
-		auto is_json = (extract_exp->return_type.HasAlias() && extract_exp->return_type.GetAlias() == "JSON") ||
-		               extract_expr_type == LogicalTypeId::VARCHAR;
+		auto is_json = (extract_exp->return_type.HasAlias() && extract_exp->return_type.GetAlias() == "JSON");
 		if (extract_expr_type != LogicalTypeId::STRUCT && extract_expr_type != LogicalTypeId::UNION &&
 		    extract_expr_type != LogicalTypeId::SQLNULL && !is_json) {
 			return BindResult(StringUtil::Format(
@@ -117,7 +116,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			    name_exp->ToString(), extract_exp->ToString()));
 		}
 		function_name = extract_expr_type == LogicalTypeId::UNION ? "union_extract"
-		                : is_json                                 ? "json_extract_string"
+		                : is_json                                 ? "json_extract"
 		                                                          : "struct_extract";
 		break;
 	}

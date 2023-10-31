@@ -1,9 +1,10 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+
+#include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/function/cast_rules.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
-#include "duckdb/function/cast_rules.hpp"
-#include "duckdb/function/cast/cast_function_set.hpp"
-#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -45,6 +46,9 @@ unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, co
 unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
                                              CastFunctionSet &cast_functions, GetCastFunctionInput &get_input,
                                              bool try_cast) {
+
+	auto is_json = (target_type.HasAlias() && target_type.GetAlias() == "JSON");
+	fprintf(stderr, "ADDING CAST %d\n", is_json);
 	D_ASSERT(expr);
 	if (expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
 		auto &parameter = expr->Cast<BoundParameterExpression>();
@@ -90,6 +94,7 @@ unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const 
 
 unique_ptr<Expression> BoundCastExpression::AddDefaultCastToType(unique_ptr<Expression> expr,
                                                                  const LogicalType &target_type, bool try_cast) {
+	fprintf(stderr, "ADDING DEFAULT CAST TO TYPE\n");
 	CastFunctionSet default_set;
 	GetCastFunctionInput get_input;
 	return AddCastToTypeInternal(std::move(expr), target_type, default_set, get_input, try_cast);
@@ -97,6 +102,8 @@ unique_ptr<Expression> BoundCastExpression::AddDefaultCastToType(unique_ptr<Expr
 
 unique_ptr<Expression> BoundCastExpression::AddCastToType(ClientContext &context, unique_ptr<Expression> expr,
                                                           const LogicalType &target_type, bool try_cast) {
+	auto is_json = (target_type.HasAlias() && target_type.GetAlias() == "JSON");
+	fprintf(stderr, "ADDING CAST TO TYPE %s is_json %d\n", expr.get()->ToString().c_str(), is_json);
 	auto &cast_functions = DBConfig::GetConfig(context).GetCastFunctions();
 	GetCastFunctionInput get_input(context);
 	return AddCastToTypeInternal(std::move(expr), target_type, cast_functions, get_input, try_cast);
@@ -104,6 +111,7 @@ unique_ptr<Expression> BoundCastExpression::AddCastToType(ClientContext &context
 
 bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const LogicalType &target_type) {
 	D_ASSERT(source_type.IsValid() && target_type.IsValid());
+	fprintf(stderr, "CHECKING INVERTIBILITY\n");
 	if (source_type.id() == LogicalTypeId::BOOLEAN || target_type.id() == LogicalTypeId::BOOLEAN) {
 		return false;
 	}
