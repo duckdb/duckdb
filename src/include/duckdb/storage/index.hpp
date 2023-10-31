@@ -170,4 +170,19 @@ public:
 	}
 };
 
+//===--------------------------------------------------------------------===//
+// Stable storage functions
+//===--------------------------------------------------------------------===//
+
+//! This struct contains function that prevent breaking the storage format
+struct IndexStorage {
+
+	//! We write an index pointers vector with exactly one invalid index pointer with a valid
+	//! offset, because when reading the file, we don't know if we're reading an older storage version (with
+	//! BlockPointers) or not. The combination of invalid block ID and valid offset allows us to distinguish
+	static void WriteDummyBlockPointers(Serializer &serializer);
+
+	static BlockPointer GetBlockPointer(const IndexStorageInfo &info);
+};
+
 } // namespace duckdb

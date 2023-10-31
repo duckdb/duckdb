@@ -62,13 +62,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 			InitAllocators(index_storage_info);
 
 		} else {
-			// STABLE STORAGE NOTE: this code path is necessary to read older duckdb files
-			D_ASSERT(index_storage_info.properties.find("block_id") != index_storage_info.properties.end());
-			D_ASSERT(index_storage_info.properties.find("offset") != index_storage_info.properties.end());
-
-			auto block_id = index_storage_info.properties.find("block_id")->second;
-			auto offset = index_storage_info.properties.find("offset")->second;
-			BlockPointer block_pointer(block_id.GetValue<block_id_t>(), offset.GetValue<uint32_t>());
+			auto block_pointer = IndexStorage::GetBlockPointer(index_storage_info);
 			if (block_pointer.IsValid()) {
 				Deserialize(block_pointer);
 			}

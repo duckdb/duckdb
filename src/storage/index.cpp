@@ -118,4 +118,27 @@ string Index::AppendRowError(DataChunk &input, idx_t index) {
 	return error;
 }
 
+//===--------------------------------------------------------------------===//
+// Stable storage functions
+//===--------------------------------------------------------------------===//
+
+void IndexStorage::WriteDummyBlockPointers(Serializer &serializer) {
+
+	vector<BlockPointer> index_pointers;
+	index_pointers.emplace_back(INVALID_BLOCK, 42);
+	serializer.WriteProperty(103, "index_pointers", index_pointers);
+}
+
+BlockPointer IndexStorage::GetBlockPointer(const IndexStorageInfo &info) {
+
+	D_ASSERT(info.properties.find("block_id") != info.properties.end());
+	D_ASSERT(info.properties.find("offset") != info.properties.end());
+
+	auto block_id = info.properties.find("block_id")->second;
+	auto offset = info.properties.find("offset")->second;
+
+	BlockPointer block_pointer(block_id.GetValue<block_id_t>(), offset.GetValue<uint32_t>());
+	return block_pointer;
+}
+
 } // namespace duckdb

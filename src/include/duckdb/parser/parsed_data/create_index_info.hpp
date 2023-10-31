@@ -18,7 +18,8 @@
 namespace duckdb {
 
 struct CreateIndexInfo : public CreateInfo {
-	CreateIndexInfo() : CreateInfo(CatalogType::INDEX_ENTRY) {};
+	CreateIndexInfo();
+	CreateIndexInfo(const CreateIndexInfo &info);
 
 	//! The table name of the underlying table
 	string table;
