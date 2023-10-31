@@ -288,7 +288,7 @@ America/Fort_Nelson	America/Fort_Nelson	-07:00:00
 America/Fort_Wayne	IET	-05:00:00
 America/Fortaleza	America/Fortaleza	-03:00:00
 America/Glace_Bay	America/Glace_Bay	-04:00:00
-America/Godthab	America/Godthab	-03:00:00
+America/Godthab	America/Godthab	-02:00:00
 America/Goose_Bay	America/Goose_Bay	-04:00:00
 America/Grand_Turk	America/Grand_Turk	-05:00:00
 America/Grenada	PRT	-04:00:00
@@ -348,7 +348,7 @@ America/Noronha	America/Noronha	-02:00:00
 America/North_Dakota/Beulah	America/North_Dakota/Beulah	-06:00:00
 America/North_Dakota/Center	America/North_Dakota/Center	-06:00:00
 America/North_Dakota/New_Salem	America/North_Dakota/New_Salem	-06:00:00
-America/Nuuk	America/Nuuk	-03:00:00
+America/Nuuk	America/Nuuk	-02:00:00
 America/Ojinaga	America/Ojinaga	-06:00:00
 America/Panama	America/Panama	-05:00:00
 America/Pangnirtung	America/Pangnirtung	-05:00:00
@@ -868,3 +868,13 @@ query II
 SELECT '2023-03-26 12:00:00+00'::TIMESTAMPTZ, '2023-04-21 12:00:00+00'::TIMESTAMPTZ;
 ----
 2023-03-26 15:00:00+03	2023-04-21 15:00:00+03
+
+
+# Greenland 2023 time zone change
+statement ok
+SET TimeZone = 'America/Nuuk';
+
+query II
+SELECT '2022-10-30 03:00:00-07'::TIMESTAMPTZ, '2023-10-30 02:00:00-07'::TIMESTAMPTZ;
+----
+2022-10-30 07:00:00-03	2023-10-30 07:00:00-02

@@ -40,6 +40,11 @@ on:
         required: false
         type: string
         default: "./duckdb/scripts/modify_distribution_matrix.py"
+      # Enable building the DuckDB Shell
+      build_duckdb_shell:
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   generate_matrix:
@@ -96,6 +101,7 @@ jobs:
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
       VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
       GEN: Ninja
+      BUILD_SHELL: ${{ inputs.build_duckdb_shell && '1' || '0' }}
 
     steps:
       - name: Install required ubuntu packages
@@ -179,6 +185,7 @@ jobs:
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
       OSX_BUILD_ARCH: ${{ matrix.osx_build_arch }}
       GEN: Ninja
+      BUILD_SHELL: ${{ inputs.build_duckdb_shell && '1' || '0' }}
 
     steps:
       - uses: actions/checkout@v3
@@ -237,6 +244,7 @@ jobs:
       GEN: Ninja
       VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
+      BUILD_SHELL: ${{ inputs.build_duckdb_shell && '1' || '0' }}
 
     steps:
       - uses: actions/checkout@v3

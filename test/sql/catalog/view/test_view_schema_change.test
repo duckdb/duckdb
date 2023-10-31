@@ -68,3 +68,12 @@ query I
 SELECT * FROM v1
 ----
 
+# Changing the types of the table that the view references also makes the view unusable
+
+statement ok
+ALTER TABLE t1 ALTER i TYPE VARCHAR;
+
+statement error
+select * from v1;
+----
+Binder Error: Contents of view were altered: types don't match!

@@ -24,7 +24,9 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateVectorInternal(const Logica
 	meta_data.count = 0;
 
 	auto internal_type = type.InternalType();
-	auto type_size = internal_type == PhysicalType::STRUCT ? 0 : GetTypeIdSize(internal_type);
+	auto type_size = ((internal_type == PhysicalType::STRUCT) || (internal_type == PhysicalType::ARRAY))
+	                     ? 0
+	                     : GetTypeIdSize(internal_type);
 	allocator->AllocateData(GetDataSize(type_size) + ValidityMask::STANDARD_MASK_SIZE, meta_data.block_id,
 	                        meta_data.offset, chunk_state);
 	if (allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR ||
@@ -194,6 +196,11 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 		auto &child_vector = ListVector::GetEntry(result);
 		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
 		ListVector::SetListSize(result, child_count);
+
+	} else if (internal_type == PhysicalType::ARRAY) {
+		auto &child_vector = ArrayVector::GetEntry(result);
+		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
+		(void)child_count;
 	} else if (internal_type == PhysicalType::STRUCT) {
 		auto &child_vectors = StructVector::GetEntries(result);
 		for (idx_t child_idx = 0; child_idx < child_vectors.size(); child_idx++) {

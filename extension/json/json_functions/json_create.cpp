@@ -424,6 +424,33 @@ static void CreateValuesList(const StructNames &names, yyjson_mut_doc *doc, yyjs
 	}
 }
 
+static void CreateValuesArray(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
+                              idx_t count) {
+	// Initialize array for the nested values
+	auto &child_v = ArrayVector::GetEntry(value_v);
+	auto array_size = ArrayType::GetSize(value_v.GetType());
+	auto child_count = count * array_size;
+
+	auto nested_vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, child_count);
+	// Fill nested_vals with list values
+	CreateValues(names, doc, nested_vals, child_v, child_count);
+	// Now we add the values to the appropriate JSON arrays
+	UnifiedVectorFormat list_data;
+	value_v.ToUnifiedFormat(count, list_data);
+	for (idx_t i = 0; i < count; i++) {
+		idx_t idx = list_data.sel->get_index(i);
+		if (!list_data.validity.RowIsValid(idx)) {
+			vals[i] = yyjson_mut_null(doc);
+		} else {
+			vals[i] = yyjson_mut_arr(doc);
+			auto offset = idx * array_size;
+			for (idx_t child_i = offset; child_i < offset + array_size; child_i++) {
+				yyjson_mut_arr_append(vals[i], nested_vals[child_i]);
+			}
+		}
+	}
+}
+
 static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
                          idx_t count) {
 	switch (value_v.GetType().id()) {
@@ -482,6 +509,9 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		break;
 	case LogicalTypeId::UNION:
 		CreateValuesUnion(names, doc, vals, value_v, count);
+		break;
+	case LogicalTypeId::ARRAY:
+		CreateValuesArray(names, doc, vals, value_v, count);
 		break;
 	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::ENUM:
@@ -697,6 +727,9 @@ void JSONFunctions::RegisterJSONCreateCastFunctions(CastFunctionSet &casts) {
 			break;
 		case LogicalTypeId::UNION:
 			source_type = LogicalType::UNION({{"any", LogicalType::ANY}});
+			break;
+		case LogicalTypeId::ARRAY:
+			source_type = LogicalType::ARRAY(LogicalType::ANY);
 			break;
 		case LogicalTypeId::VARCHAR:
 			// We skip this one here as it's handled in json_functions.cpp
