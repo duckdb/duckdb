@@ -370,7 +370,7 @@ double ClientContext::GetProgress() {
 }
 
 uint64_t ClientContext::TotalCardinality() {
-	return total_cardinality;
+	return total_cardinality.load();
 }
 
 uint64_t ClientContext::CurrentRowsRead() {
@@ -424,14 +424,13 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		query_progress = 0;
 		total_cardinality = 0;
 		current_rows = 0;
-
 	}
 	auto stream_result = parameters.allow_stream_result && statement.properties.allow_stream_result;
 	if (!stream_result && statement.properties.return_type == StatementReturnType::QUERY_RESULT) {
 		unique_ptr<PhysicalResultCollector> collector;
 		auto &client_config = ClientConfig::GetConfig(*this);
-		auto get_method =
-		    client_config.result_collector ? client_config.result_collector : PhysicalResultCollector::GetResultCollector;
+		auto get_method = client_config.result_collector ? client_config.result_collector
+		                                                 : PhysicalResultCollector::GetResultCollector;
 		collector = get_method(*this, statement);
 		D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
 		executor.Initialize(std::move(collector));

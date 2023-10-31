@@ -269,7 +269,7 @@ private:
 	//! The current query progress
 	atomic<double> query_progress;
 	//! The total cardinality (a sum of how many tuples from scanners)
-	uint64_t total_cardinality = 0;
+	atomic<uint64_t> total_cardinality;
 	//! How many tuples (from scanners) have currently been read
 	atomic<uint64_t> current_rows;
 };

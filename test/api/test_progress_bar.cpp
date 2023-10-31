@@ -24,6 +24,7 @@ public:
 
 	void CheckProgressThread() {
 		double prev_percentage = -1;
+		uint64_t total_cardinality, cur_rows_read;
 		while (!stop) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 			double new_percentage = context->GetProgress();
@@ -33,6 +34,15 @@ public:
 			if (!(new_percentage <= 100)) {
 				correct = false;
 			}
+			total_cardinality = context->TotalCardinality();
+			cur_rows_read = context->CurrentRowsRead();
+			if (cur_rows_read > total_cardinality) {
+				correct = false;
+			}
+		}
+		if (cur_rows_read != total_cardinality) {
+
+			correct = false;
 		}
 	}
 	void Start() {

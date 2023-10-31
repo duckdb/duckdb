@@ -577,13 +577,13 @@ void Executor::Flush(ThreadContext &tcontext) {
 	profiler->Flush(tcontext.profiler);
 }
 
-bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_cardinality, uint64_t &total_cardinality) { // LCOV_EXCL_START
+bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_cardinality,
+                                    uint64_t &total_cardinality) { // LCOV_EXCL_START
 	lock_guard<mutex> elock(executor_lock);
 
 	vector<double> progress;
 	vector<idx_t> cardinality;
 	total_cardinality = 0;
-	current_cardinality = 0;
 	for (auto &pipeline : pipelines) {
 		double child_percentage;
 		idx_t child_cardinality;
@@ -596,11 +596,13 @@ bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_
 		total_cardinality += child_cardinality;
 	}
 	current_progress = 0;
+	current_cardinality = 0;
+
 	if (total_cardinality == 0) {
 		return true;
 	}
 	for (size_t i = 0; i < progress.size(); i++) {
-		current_cardinality += cardinality[i];
+		current_cardinality += double(progress[i]) * double(cardinality[i]) / double(100);
 		current_progress += progress[i] * double(cardinality[i]) / double(total_cardinality);
 	}
 	return true;
