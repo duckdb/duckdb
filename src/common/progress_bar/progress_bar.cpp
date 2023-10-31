@@ -17,7 +17,7 @@ unique_ptr<ProgressBarDisplay> ProgressBar::DefaultProgressBarDisplay() {
 
 ProgressBar::ProgressBar(Executor &executor, idx_t show_progress_after,
                          progress_bar_display_create_func_t create_display_func)
-    : executor(executor), show_progress_after(show_progress_after), current_percentage(-1) {
+    : executor(executor), show_progress_after(show_progress_after), current_percentage(-1), total_cardinality(0), current_rows_read(0) {
 	if (create_display_func) {
 		display = create_display_func();
 	}
@@ -25,6 +25,15 @@ ProgressBar::ProgressBar(Executor &executor, idx_t show_progress_after,
 
 double ProgressBar::GetCurrentPercentage() {
 	return current_percentage;
+}
+
+
+uint64_t ProgressBar::GetCurrentRows(){
+	return current_rows_read;
+}
+
+uint64_t ProgressBar::GetTotalCardinality(){
+	return total_cardinality;
 }
 
 void ProgressBar::Start() {
@@ -63,7 +72,7 @@ void ProgressBar::Update(bool final) {
 		return;
 	}
 	double new_percentage;
-	supported = executor.GetPipelinesProgress(new_percentage);
+	supported = executor.GetPipelinesProgress(new_percentage,current_rows_read,total_cardinality);
 	if (!final && !supported) {
 		return;
 	}
@@ -81,9 +90,9 @@ void ProgressBar::Update(bool final) {
 	}
 }
 
-void ProgressBar::PrintProgress(int current_percentage) {
+void ProgressBar::PrintProgress(int current_percentage_p) {
 	D_ASSERT(display);
-	display->Update(current_percentage);
+	display->Update(current_percentage_p);
 }
 
 void ProgressBar::FinishProgressBarPrint() {

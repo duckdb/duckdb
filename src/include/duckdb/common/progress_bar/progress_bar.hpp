@@ -34,7 +34,10 @@ public:
 	void Update(bool final);
 	//! Gets current percentage
 	double GetCurrentPercentage();
-
+	//! Gets Current Rows Read
+	uint64_t GetCurrentRows();
+	//! Gets Total Cardinality
+	uint64_t GetTotalCardinality();
 	void PrintProgressInternal(int percentage);
 	void PrintProgress(int percentage);
 	void FinishProgressBarPrint();
@@ -50,6 +53,10 @@ private:
 	idx_t show_progress_after;
 	//! The current progress percentage
 	double current_percentage;
+	//! Total cardinality
+	uint64_t total_cardinality;
+	//! Current rows read
+	uint64_t current_rows_read;
 	//! The display used to print the progress
 	unique_ptr<ProgressBarDisplay> display;
 	//! Whether or not profiling is supported for the current query
