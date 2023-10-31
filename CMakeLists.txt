@@ -604,7 +604,10 @@ endfunction()
 
 function(add_extension_dependencies LIBRARY)
   foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
-    add_dependencies(${LIBRARY} ${EXT_NAME}_extension)
+    string(TOUPPER ${EXT_NAME} EXTENSION_NAME_UPPERCASE)
+    if (DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK)
+      add_dependencies(${LIBRARY} ${EXT_NAME}_extension)
+    endif()
   endforeach()
 endfunction()
 
