@@ -43,7 +43,13 @@
         "id": 106,
         "name": "sql",
         "type": "string"
-      }
+      },
+	  {
+		"id": 107,
+		"name": "dependencies",
+		"type": "LogicalDependencyList",
+		"default": "LogicalDependencyList()"
+	  }
     ]
   },
   {

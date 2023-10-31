@@ -5,10 +5,10 @@ import pytest
 @pytest.fixture()
 def tbl_table():
     con = duckdb.default_connection
-    con.execute("drop table if exists tbl")
+    con.execute("drop table if exists tbl CASCADE")
     con.execute("create table tbl (i integer)")
     yield
-    con.execute('drop table tbl')
+    con.execute('drop table tbl CASCADE')
 
 
 class TestRAPIQuery(object):
@@ -35,7 +35,7 @@ class TestRAPIQuery(object):
         result = rel.execute()
         assert result.fetchall() == [tuple([x]) for x in input]
 
-    def test_query_table_unrelated(self, tbl_table):
+    def test_query_table_basic(self, tbl_table):
         con = duckdb.default_connection
         rel = con.table("tbl")
         # Querying a table relation

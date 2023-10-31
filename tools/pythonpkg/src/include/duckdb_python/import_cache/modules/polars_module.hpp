@@ -1,3 +1,4 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -13,19 +14,16 @@
 namespace duckdb {
 
 struct PolarsCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "polars";
 
 public:
+	PolarsCacheItem() : PythonImportCacheItem("polars"), DataFrame("DataFrame", this), LazyFrame("LazyFrame", this) {
+	}
 	~PolarsCacheItem() override {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		DataFrame.LoadAttribute("DataFrame", cache, *this);
-		LazyFrame.LoadAttribute("LazyFrame", cache, *this);
-	}
 
-public:
-	//! pandas.DataFrame
 	PythonImportCacheItem DataFrame;
 	PythonImportCacheItem LazyFrame;
 

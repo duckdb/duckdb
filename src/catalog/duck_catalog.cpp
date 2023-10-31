@@ -54,7 +54,7 @@ bool DuckCatalog::IsDuckCatalog() {
 // Schema
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> DuckCatalog::CreateSchemaInternal(CatalogTransaction transaction, CreateSchemaInfo &info) {
-	DependencyList dependencies;
+	LogicalDependencyList dependencies;
 	auto entry = make_uniq<DuckSchemaEntry>(*this, info.schema, info.internal);
 	auto result = entry.get();
 	if (!schemas->CreateEntry(transaction, info.schema, std::move(entry), dependencies)) {
@@ -109,10 +109,6 @@ void DuckCatalog::DropSchema(ClientContext &context, DropInfo &info) {
 void DuckCatalog::ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) {
 	schemas->Scan(GetCatalogTransaction(context),
 	              [&](CatalogEntry &entry) { callback(entry.Cast<SchemaCatalogEntry>()); });
-}
-
-void DuckCatalog::ScanSchemas(std::function<void(SchemaCatalogEntry &)> callback) {
-	schemas->Scan([&](CatalogEntry &entry) { callback(entry.Cast<SchemaCatalogEntry>()); });
 }
 
 optional_ptr<SchemaCatalogEntry> DuckCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name,

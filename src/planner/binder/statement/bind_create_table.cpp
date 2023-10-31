@@ -168,6 +168,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 
 	// Create a new binder because we dont need (or want) these bindings in this scope
 	auto binder = Binder::CreateBinder(context);
+	binder->SetCatalogLookupCallback(entry_retriever.GetCallback());
 	binder->bind_context.AddGenericBinding(table_index, base.table, names, types);
 	auto expr_binder = ExpressionBinder(*binder, context);
 	string ignore;
@@ -226,7 +227,7 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 	}
 }
 
-static void ExtractExpressionDependencies(Expression &expr, DependencyList &dependencies) {
+static void ExtractExpressionDependencies(Expression &expr, LogicalDependencyList &dependencies) {
 	if (expr.type == ExpressionType::BOUND_FUNCTION) {
 		auto &function = expr.Cast<BoundFunctionExpression>();
 		if (function.function.dependency) {
@@ -250,9 +251,11 @@ static void ExtractDependencies(BoundCreateTableInfo &info) {
 		}
 	}
 }
+
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema) {
 	auto &base = info->Cast<CreateTableInfo>();
 	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
+	auto &dependencies = result->dependencies;
 	if (base.query) {
 		// construct the result object
 		auto query_obj = Bind(*base.query);
@@ -267,10 +270,14 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		for (idx_t i = 0; i < names.size(); i++) {
 			base.columns.AddColumn(ColumnDefinition(names[i], sql_types[i]));
 		}
-		CreateColumnDependencyManager(*result);
-		// bind the generated column expressions
-		BindGeneratedColumns(*result);
 	} else {
+		SetCatalogLookupCallback([&dependencies, &schema](CatalogEntry &entry) {
+			if (&schema.ParentCatalog() != &entry.ParentCatalog()) {
+				// Don't register dependencies between catalogs
+				return;
+			}
+			dependencies.AddDependency(entry);
+		});
 		CreateColumnDependencyManager(*result);
 		// bind the generated column expressions
 		BindGeneratedColumns(*result);
@@ -291,7 +298,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		if (column.Type().id() == LogicalTypeId::VARCHAR) {
 			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 		}
-		BindLogicalType(context, column.TypeMutable(), &result->schema.catalog);
+		BindLogicalType(column.TypeMutable(), &result->schema.catalog);
 	}
 	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
 	properties.allow_stream_result = false;

@@ -39,9 +39,8 @@ unique_ptr<CreateInfo> SchemaCatalogEntry::GetInfo() const {
 }
 
 string SchemaCatalogEntry::ToSQL() const {
-	std::stringstream ss;
-	ss << "CREATE SCHEMA " << name << ";";
-	return ss.str();
+	auto create_schema_info = GetInfo();
+	return create_schema_info->ToString();
 }
 
 } // namespace duckdb

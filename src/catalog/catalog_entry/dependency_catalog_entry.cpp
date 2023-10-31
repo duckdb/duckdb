@@ -6,15 +6,12 @@
 namespace duckdb {
 
 DependencyCatalogEntry::DependencyCatalogEntry(DependencyLinkSide side, Catalog &catalog,
-                                               DependencySetCatalogEntry &set, CatalogType entry_type,
-                                               const string &entry_schema, const string &entry_name,
+                                               DependencySetCatalogEntry &set, LogicalDependency internal,
                                                DependencyType dependency_type)
-    : InCatalogEntry(CatalogType::DEPENDENCY_ENTRY, catalog,
-                     DependencyManager::MangleName(entry_type, entry_schema, entry_name)),
-      entry_name(entry_name), schema(entry_schema), entry_type(entry_type), dependency_type(dependency_type),
-      side(side), set(set) {
-	D_ASSERT(entry_type != CatalogType::DEPENDENCY_ENTRY);
-	D_ASSERT(entry_type != CatalogType::DEPENDENCY_SET);
+    : InCatalogEntry(CatalogType::DEPENDENCY_ENTRY, catalog, DependencyManager::MangleName(internal)),
+      internal(internal), dependency_type(dependency_type), side(side), set(set) {
+	D_ASSERT(EntryType() != CatalogType::DEPENDENCY_ENTRY);
+	D_ASSERT(EntryType() != CatalogType::DEPENDENCY_SET);
 }
 
 const string &DependencyCatalogEntry::MangledName() const {
@@ -22,15 +19,15 @@ const string &DependencyCatalogEntry::MangledName() const {
 }
 
 CatalogType DependencyCatalogEntry::EntryType() const {
-	return entry_type;
+	return internal.type;
 }
 
 const string &DependencyCatalogEntry::EntrySchema() const {
-	return schema;
+	return internal.schema;
 }
 
 const string &DependencyCatalogEntry::EntryName() const {
-	return entry_name;
+	return internal.name;
 }
 
 DependencyType DependencyCatalogEntry::Type() const {
@@ -44,12 +41,12 @@ void DependencyCatalogEntry::CompleteLink(CatalogTransaction transaction, Depend
 	auto &manager = set.Manager();
 	switch (side) {
 	case DependencyLinkSide::DEPENDENCY: {
-		auto &other_set = manager.GetOrCreateDependencySet(transaction, EntryType(), EntrySchema(), EntryName());
+		auto &other_set = manager.GetOrCreateDependencySet(transaction, internal);
 		other_set.AddDependent(transaction, set, type);
 		break;
 	}
 	case DependencyLinkSide::DEPENDENT: {
-		auto &other_set = manager.GetOrCreateDependencySet(transaction, EntryType(), EntrySchema(), EntryName());
+		auto &other_set = manager.GetOrCreateDependencySet(transaction, internal);
 		other_set.AddDependency(transaction, set, type);
 		break;
 	}

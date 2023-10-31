@@ -45,7 +45,7 @@ bool IsDependencyEntry(CatalogEntry &entry) {
 }
 
 bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
-                             const DependencyList &dependencies) {
+                             const LogicalDependencyList &logical_dependencies) {
 	if (value->internal && !catalog.IsSystemCatalog() && name != DEFAULT_SCHEMA) {
 		throw InternalException("Attempting to create internal entry \"%s\" in non-system catalog - internal entries "
 		                        "can only be created in the system catalog",
@@ -72,7 +72,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	value->timestamp = transaction.transaction_id;
 	value->set = this;
 	// now add the dependency set of this object to the dependency manager
-	catalog.GetDependencyManager().AddObject(transaction, *value, dependencies);
+	catalog.GetDependencyManager().AddObject(transaction, *value, logical_dependencies);
 
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
@@ -130,7 +130,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 }
 
 bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
-                             const DependencyList &dependencies) {
+                             const LogicalDependencyList &dependencies) {
 	return CreateEntry(catalog.GetCatalogTransaction(context), name, std::move(value), dependencies);
 }
 

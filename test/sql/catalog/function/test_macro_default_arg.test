@@ -61,14 +61,19 @@ select my_macro2(can_not_be_empty)
 ----
 5
 
-statement ok
+statement error
 drop table integers;
+----
+Dependency Error: Cannot drop entry "integers" because there are entries that depend on it. Use DROP...CASCADE to drop all dependents.
+
+statement ok
+drop table integers cascade;
 
 # The macro still exists, but points to a non existant table
 statement error
 select my_macro2(5);
 ----
-Catalog Error: Table with name integers does not exist!
+Catalog Error: Scalar Function with name my_macro2 does not exist!
 
 statement ok
 Create table t1 (a int, b int);

@@ -6,16 +6,14 @@
 #include "duckdb/catalog/mapping_value.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 
 DependencySetCatalogEntry::DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager,
-                                                     CatalogType entry_type, const string &entry_schema,
-                                                     const string &entry_name)
-    : InCatalogEntry(CatalogType::DEPENDENCY_SET, catalog,
-                     DependencyManager::MangleName(entry_type, entry_schema, entry_name)),
-      entry_name(entry_name), schema(entry_schema), entry_type(entry_type), dependencies(catalog), dependents(catalog),
-      dependency_manager(dependency_manager) {
+                                                     LogicalDependency internal)
+    : InCatalogEntry(CatalogType::DEPENDENCY_SET, catalog, DependencyManager::MangleName(internal)), internal(internal),
+      dependencies(catalog), dependents(catalog), dependency_manager(dependency_manager) {
 }
 
 CatalogSet &DependencySetCatalogEntry::Dependencies() {
@@ -75,15 +73,15 @@ const string &DependencySetCatalogEntry::MangledName() const {
 }
 
 CatalogType DependencySetCatalogEntry::EntryType() const {
-	return entry_type;
+	return internal.type;
 }
 
 const string &DependencySetCatalogEntry::EntrySchema() const {
-	return schema;
+	return internal.schema;
 }
 
 const string &DependencySetCatalogEntry::EntryName() const {
-	return entry_name;
+	return internal.name;
 }
 
 // Add from a Dependency Set
@@ -101,21 +99,21 @@ void DependencySetCatalogEntry::AddDependents(CatalogTransaction transaction, co
 }
 
 // Add from a DependencyList
-void DependencySetCatalogEntry::AddDependencies(CatalogTransaction transaction, const DependencyList &to_add) {
-	for (auto &entry : to_add.set) {
+void DependencySetCatalogEntry::AddDependencies(CatalogTransaction transaction, const LogicalDependencyList &to_add) {
+	for (auto &entry : to_add.Set()) {
 		AddDependency(transaction, entry);
 	}
 }
-void DependencySetCatalogEntry::AddDependents(CatalogTransaction transaction, const DependencyList &to_add) {
-	for (auto &entry : to_add.set) {
+void DependencySetCatalogEntry::AddDependents(CatalogTransaction transaction, const LogicalDependencyList &to_add) {
+	for (auto &entry : to_add.Set()) {
 		AddDependent(transaction, entry);
 	}
 }
 
 // Add from a single CatalogEntry
-DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction, CatalogEntry &to_add,
-                                                                 DependencyType type) {
-	static const DependencyList EMPTY_DEPENDENCIES;
+DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction,
+                                                                 LogicalDependency to_add, DependencyType type) {
+	static const LogicalDependencyList EMPTY_DEPENDENCIES;
 
 	{
 		auto mangled_name = DependencyManager::MangleName(to_add);
@@ -125,13 +123,7 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransact
 		}
 	}
 
-	string entry_schema;
-	string entry_name;
-	CatalogType entry_type;
-
-	DependencyManager::GetLookupProperties(to_add, entry_schema, entry_name, entry_type);
-	auto dependency_p = make_uniq<DependencyCatalogEntry>(DependencyLinkSide::DEPENDENCY, catalog, *this, entry_type,
-	                                                      entry_schema, entry_name, type);
+	auto dependency_p = make_uniq<DependencyCatalogEntry>(DependencyLinkSide::DEPENDENCY, catalog, *this, to_add, type);
 	auto dependency_name = dependency_p->name;
 	D_ASSERT(dependency_name != name);
 	if (catalog.IsTemporaryCatalog()) {
@@ -142,9 +134,14 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransact
 	return dependency;
 }
 
-DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction, CatalogEntry &to_add,
-                                                                DependencyType type) {
-	static const DependencyList EMPTY_DEPENDENCIES;
+DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction, CatalogEntry &to_add,
+                                                                 DependencyType type) {
+	return AddDependency(transaction, LogicalDependency(to_add), type);
+}
+
+DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction,
+                                                                LogicalDependency to_add, DependencyType type) {
+	static const LogicalDependencyList EMPTY_DEPENDENCIES;
 
 	{
 		auto mangled_name = DependencyManager::MangleName(to_add);
@@ -154,13 +151,7 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransacti
 		}
 	}
 
-	string entry_schema;
-	string entry_name;
-	CatalogType entry_type;
-
-	DependencyManager::GetLookupProperties(to_add, entry_schema, entry_name, entry_type);
-	auto dependent_p = make_uniq<DependencyCatalogEntry>(DependencyLinkSide::DEPENDENT, catalog, *this, entry_type,
-	                                                     entry_schema, entry_name, type);
+	auto dependent_p = make_uniq<DependencyCatalogEntry>(DependencyLinkSide::DEPENDENT, catalog, *this, to_add, type);
 	auto dependent_name = dependent_p->name;
 	D_ASSERT(dependent_name != name);
 	if (catalog.IsTemporaryCatalog()) {
@@ -169,6 +160,11 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransacti
 	auto &dependent = *dependent_p;
 	dependents.CreateEntry(transaction, dependent_name, std::move(dependent_p), EMPTY_DEPENDENCIES);
 	return dependent;
+}
+
+DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction, CatalogEntry &to_add,
+                                                                DependencyType type) {
+	return AddDependent(transaction, LogicalDependency(to_add), type);
 }
 
 // Add from a Dependency

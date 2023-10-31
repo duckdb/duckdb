@@ -25,8 +25,7 @@ class DependencyCatalogEntry;
 
 class DependencySetCatalogEntry : public InCatalogEntry {
 public:
-	DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager, CatalogType entry_type,
-	                          const string &entry_schema, const string &entry_name);
+	DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager, LogicalDependency internal);
 	~DependencySetCatalogEntry() override;
 
 public:
@@ -43,15 +42,19 @@ public:
 	// Add Dependencies
 	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, CatalogEntry &dependent,
 	                                      DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
+	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, LogicalDependency dependent,
+	                                      DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, Dependency dependent);
-	void AddDependencies(CatalogTransaction transaction, const DependencyList &dependencies);
+	void AddDependencies(CatalogTransaction transaction, const LogicalDependencyList &dependencies);
 	void AddDependencies(CatalogTransaction transaction, const dependency_set_t &dependencies);
 
 	// Add Dependents
 	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, CatalogEntry &dependent,
 	                                     DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
+	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, LogicalDependency dependent,
+	                                     DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, const Dependency dependent);
-	void AddDependents(CatalogTransaction transaction, const DependencyList &dependents);
+	void AddDependents(CatalogTransaction transaction, const LogicalDependencyList &dependents);
 	void AddDependents(CatalogTransaction transaction, const dependency_set_t &dependents);
 
 	// Get dependent/dependency
@@ -81,9 +84,7 @@ public:
 	const string &EntryName() const;
 
 private:
-	const string entry_name;
-	const string schema;
-	const CatalogType entry_type;
+	LogicalDependency internal;
 
 	CatalogSet dependencies;
 	CatalogSet dependents;

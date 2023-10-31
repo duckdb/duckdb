@@ -12,6 +12,7 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 

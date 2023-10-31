@@ -33,7 +33,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 void DatabaseManager::AddDatabase(ClientContext &context, unique_ptr<AttachedDatabase> db_instance) {
 	auto name = db_instance->GetName();
 	db_instance->oid = ModifyCatalog();
-	DependencyList dependencies;
+	LogicalDependencyList dependencies;
 	if (default_database.empty()) {
 		default_database = name;
 	}

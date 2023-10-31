@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 class SchemaCatalogEntry;

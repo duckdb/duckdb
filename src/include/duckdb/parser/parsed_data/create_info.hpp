@@ -10,6 +10,7 @@
 
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
@@ -52,6 +53,8 @@ public:
 	bool internal;
 	//! The SQL string of the CREATE statement
 	string sql;
+	//! The inherent dependencies of the created entry
+	LogicalDependencyList dependencies;
 
 public:
 	void Serialize(Serializer &serializer) const override;
@@ -62,6 +65,7 @@ public:
 	DUCKDB_API void CopyProperties(CreateInfo &other) const;
 	//! Generates an alter statement from the create statement - used for OnCreateConflict::ALTER_ON_CONFLICT
 	DUCKDB_API virtual unique_ptr<AlterInfo> GetAlterInfo() const;
+
 	virtual string ToString() const {
 		throw InternalException("ToString not supported for this type of CreateInfo: '%s'",
 		                        EnumUtil::ToString(info_type));
