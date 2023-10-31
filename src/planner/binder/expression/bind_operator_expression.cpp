@@ -1,9 +1,9 @@
-#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
-#include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {

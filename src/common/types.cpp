@@ -1,16 +1,11 @@
 #include "duckdb/common/types.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
-#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
@@ -26,7 +21,11 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
-
+#include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include <cmath>
 
 namespace duckdb {
