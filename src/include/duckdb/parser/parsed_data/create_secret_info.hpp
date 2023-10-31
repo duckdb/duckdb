@@ -31,10 +31,11 @@ public:
 	string mode;
 	//! (optionally) the name of the secret
 	string name;
+	//! (optionally) the scope of the secret
+	vector<string> scope;
 	//! Named parameter list (if any)
 	named_parameter_map_t named_parameters;
 
-	// TODO: split off scope
 	unique_ptr<CreateSecretInfo> Copy() const;
 };
 

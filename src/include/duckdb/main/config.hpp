@@ -26,6 +26,7 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/main/client_properties.hpp"
@@ -183,7 +184,7 @@ class RegisteredCredential {
 	friend class CredentialManager;
 
 public:
-	RegisteredCredential(vector<string> &prefix_paths, string& filesystem_p) : prefix_paths(prefix_paths), filesystem(filesystem_p), credential_id(0) {
+	RegisteredCredential(vector<string> &prefix_paths, string& type, string& mode) : prefix_paths(prefix_paths), type(StringUtil::Lower(type)), mode(StringUtil::Lower(mode)), credential_id(0) {
 	};
 	virtual ~RegisteredCredential() = default;
 
@@ -203,10 +204,6 @@ public:
 		return longest_match;
 	}
 
-	string& GetFileSystemName() {
-		return filesystem;
-	}
-
 	//! Credential classes can set implement these to be shown in registered_credentials(). These values can only be
 	//! strings. It is recommended to represent this as a ';' separated list of 'key=value' pairs with at a unique
 	//! identifier as a key value pair
@@ -216,6 +213,14 @@ public:
 
 	vector<string>& GetScope() {
 		return prefix_paths;
+	}
+
+	const string& GetType() {
+		return type;
+	}
+
+	const string& GetMode() {
+		return mode;
 	}
 
 	//! Adds the default named parameters to a table function
@@ -238,14 +243,18 @@ public:
 		if (credential_id != 0) {
 			throw InternalException("The credential alias can only set before registering it");
 		}
-		alias = alias_p;
+		alias = StringUtil::Lower(alias_p);
 	}
 
 protected:
 	//! prefixes to which the credentials apply
 	vector<string> prefix_paths;
-	//! Name of the FS that registered the credentials
-	string filesystem;
+
+	//! Type of credentials
+	string type;
+	//! Mode of credential acquiring
+	string mode;
+
 	//! incremental_id assigned by manager, 0 means not set
 	idx_t credential_id;
 	//! alias for easy identification and deletion
@@ -256,28 +265,45 @@ protected:
 class CredentialManager {
 public:
 	//! Add a new set of registered credentials
-	void RegisterCredentials(shared_ptr<RegisteredCredential> credentials) {
+	void RegisterCredentials(shared_ptr<RegisteredCredential> credentials, OnCreateConflict on_conflict) {
+		bool conflict = false;
+		idx_t conflict_idx;
 
 		// Assert the alias does not exist already
 		if (!credentials->GetAlias().empty()) {
-			for (const auto& cred : registered_credentials) {
+			for(idx_t cred_idx = 0; cred_idx < registered_credentials.size(); cred_idx++) {
+				const auto& cred = registered_credentials[cred_idx];
 				if (cred->GetAlias() == credentials->GetAlias()) {
-					throw InvalidInputException("Alias '" + credentials->GetAlias() + "' already exists!");
+					conflict = true;
+					conflict_idx = cred_idx;
 				}
 			}
 		}
 
-		registered_credentials.push_back(std::move(credentials));
-		registered_credentials.back()->credential_id = current_id++;
+		if (conflict) {
+			if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
+				throw InvalidInputException("Secret with alias '" + credentials->GetAlias() + "' already exists!");
+			} else if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+				return;
+			} else if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+				credentials->credential_id = registered_credentials[conflict_idx]->credential_id;
+				registered_credentials[conflict_idx] = credentials;
+			} else {
+				throw InternalException("unknown OnCreateConflict found while registering credentials");
+			}
+		} else {
+			registered_credentials.push_back(std::move(credentials));
+			registered_credentials.back()->credential_id = current_id++;
+		}
 	}
 
 	//! Find the best matching set of credentials for this path. (In case of multiple, longest prefix wins)
-	shared_ptr<RegisteredCredential> GetCredentials(string& path, string filesystem) {
+	shared_ptr<RegisteredCredential> GetCredentials(string& path, string type) {
 		int longest_match = -1;
 		shared_ptr<RegisteredCredential> best_match;
 
 		for (const auto& cred: registered_credentials) {
-			if (cred->GetFileSystemName() != filesystem) {
+			if (cred->GetType() != type) {
 				continue;
 			}
 			auto match = cred->LongestMatch(path);

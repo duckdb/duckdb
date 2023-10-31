@@ -170,7 +170,8 @@ unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(FileOpener *ope
 		return nullptr;
 	}
 
-	auto credentials = context->db->GetCredentialManager().GetCredentials(path, "HTTPFileSystem");
+	// TODO: this doesnt work with multiple types?
+	auto credentials = context->db->GetCredentialManager().GetCredentials(path, "s3");
 	if (!credentials) {
 		return nullptr;
 	}

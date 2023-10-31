@@ -74,8 +74,8 @@ struct S3ConfigParams {
 //! Registered Credential class for S3.
 class S3RegisteredCredential : public RegisteredCredential {
 public:
-	S3RegisteredCredential(vector<string> &prefix_paths_p, string &filesystem_p, S3AuthParams params_p)
-	    : RegisteredCredential(prefix_paths_p, filesystem_p), params(params_p) {};
+	S3RegisteredCredential(vector<string> &prefix_paths_p, string &type, string &mode, S3AuthParams params_p)
+	    : RegisteredCredential(prefix_paths_p, type, mode), params(params_p) {};
 
 	S3AuthParams GetParams(){
 		return params;

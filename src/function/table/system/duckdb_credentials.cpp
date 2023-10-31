@@ -24,7 +24,10 @@ static unique_ptr<FunctionData> DuckDBCredentialsBind(ClientContext &context, Ta
 	names.emplace_back("alias");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	names.emplace_back("file_system");
+	names.emplace_back("type");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("mode");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("scope");
@@ -64,9 +67,10 @@ void DuckDBCredentialsFunction(ClientContext &context, TableFunctionInput &data_
 
 		output.SetValue(0, count, Value((int64_t)credential_entry->GetId()));
 		output.SetValue(1, count, credential_entry->GetAlias());
-		output.SetValue(2, count, Value(credential_entry->GetFileSystemName()));
-		output.SetValue(3, count, Value::LIST(scope_value));
-		output.SetValue(4, count, credential_entry->GetCredentialsAsValue(true));
+		output.SetValue(2, count, Value(credential_entry->GetType()));
+		output.SetValue(3, count, Value(credential_entry->GetMode()));
+		output.SetValue(4, count, Value::LIST(LogicalType::VARCHAR, scope_value));
+		output.SetValue(5, count, credential_entry->GetCredentialsAsValue(true));
 
 		data.offset++;
 		count++;

@@ -4,10 +4,10 @@
 namespace duckdb {
 
 unique_ptr<CreateSecretStatement> Transformer::TransformSecret(duckdb_libpgquery::PGCreateSecretStmt &stmt) {
-	auto result = make_uniq<CreateSecretStatement>(stmt.secret_type, TransformOnConflict(stmt.onconflict));
+	auto result = make_uniq<CreateSecretStatement>(StringUtil::Lower(stmt.secret_type), TransformOnConflict(stmt.onconflict));
 
 	if (stmt.secret_name) {
-		result->info->name = stmt.secret_name;
+		result->info->name = StringUtil::Lower(stmt.secret_name);
 	}
 
 	if (stmt.options) {
@@ -24,6 +24,14 @@ unique_ptr<CreateSecretStatement> Transformer::TransformSecret(duckdb_libpgquery
 	auto lu = result->info->named_parameters.find("mode");
 	if (lu != result->info->named_parameters.end()) {
 		result->info->mode = lu->second.ToString();
+		result->info->named_parameters.erase("mode");
+	}
+
+	// Pull up the scope param as its used to identify the correct function TODO: clean this up and make list
+	lu = result->info->named_parameters.find("scope");
+	if (lu != result->info->named_parameters.end()) {
+		result->info->scope = {lu->second.ToString()};
+		result->info->named_parameters.erase("scope");
 	}
 
 	return result;

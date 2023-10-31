@@ -12,27 +12,23 @@
 
 namespace duckdb {
 
-void CreateS3Credentials(ClientContext &context, named_parameter_map_t named_parameters) {
+shared_ptr<RegisteredCredential> CreateS3Credentials(ClientContext &context, CreateSecretInput& input) {
 	auto& opener = context.client_data->file_opener;
 	FileOpenerInfo info;
-
-	vector<string> scope_paths;
-	Value scope;
-
-	scope_paths = {"s3://"};
-	scope =  Value::LIST({"s3://"});
-
 	string filesystem_name = "HTTPFileSystem";
 	auto params = S3AuthParams::ReadFrom(opener.get(), info);
-	auto cred = make_shared<S3RegisteredCredential>(scope_paths, filesystem_name, params);
-	cred->SetAlias("alias_hardcoded_1");
 
-	// TODO return credentials instead of doing this
-	context.db->config.credential_manager->RegisterCredentials(cred);
-}
+	auto scope = input.scope;
+	
+	if (scope.empty()) {
+		scope.push_back("s3://");
+		scope.push_back("r2://");
+		scope.push_back("gcs://");
+	}
 
-static void AddNamedParameters(TableFunction& table_function) {
-	RegisteredCredential::AddNamedParametersToSetFunction(table_function);
+	auto cred = make_shared<S3RegisteredCredential>(scope, input.type, input.mode, params);
+	cred->SetAlias(input.name);
+	return cred;
 }
 
 static void RegisterSetCredentialFunction(DatabaseInstance &instance) {
