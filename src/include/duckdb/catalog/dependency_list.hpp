@@ -50,6 +50,7 @@ public:
 public:
 	LogicalDependency(CatalogEntry &entry);
 	LogicalDependency();
+	bool operator==(const LogicalDependency &other) const;
 
 public:
 	void Serialize(Serializer &serializer) const;

@@ -84,6 +84,10 @@ const string &DependencySetCatalogEntry::EntryName() const {
 	return internal.name;
 }
 
+const LogicalDependency &DependencySetCatalogEntry::Internal() const {
+	return internal;
+}
+
 // Add from a Dependency Set
 void DependencySetCatalogEntry::AddDependencies(CatalogTransaction transaction, const dependency_set_t &to_add) {
 	for (auto &dep : to_add) {
@@ -213,6 +217,20 @@ bool DependencySetCatalogEntry::HasDependencyOn(CatalogTransaction transaction, 
 	auto mangled_name = DependencyManager::MangleName(entry);
 	auto dependency = dependencies.GetEntry(transaction, mangled_name);
 	return dependency != nullptr;
+}
+
+catalog_entry_vector_t
+DependencySetCatalogEntry::GetEntriesThatDependOnUs(optional_ptr<CatalogTransaction> transaction) {
+	catalog_entry_vector_t entries;
+	dependents.Scan(*transaction, [&](CatalogEntry &entry) { entries.push_back(entry); });
+	return entries;
+}
+
+catalog_entry_vector_t
+DependencySetCatalogEntry::GetEntriesThatWeDependOn(optional_ptr<CatalogTransaction> transaction) {
+	catalog_entry_vector_t entries;
+	dependencies.Scan(*transaction, [&](CatalogEntry &entry) { entries.push_back(entry); });
+	return entries;
 }
 
 static string FormatString(string input) {

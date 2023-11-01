@@ -225,6 +225,7 @@ string DuckTransactionManager::CommitTransaction(ClientContext &context, Transac
 		client_locks.clear();
 	}
 
+	D_ASSERT(lock);
 	// commit successful: remove the transaction id from the list of active transactions
 	// potentially resulting in garbage collection
 	RemoveTransaction(transaction);

@@ -352,144 +352,89 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	}
 }
 
-// bool AllExportDependenciesWritten(CatalogEntry &object, optional_ptr<catalog_entry_set_t> dependencies_p,
-//                                  catalog_entry_set_t &exported) {
-//	if (!dependencies_p) {
-//		// This object has no dependencies at all
-//		return true;
-//	}
-//	auto &dependencies = *dependencies_p;
-//	for (auto &entry : dependencies) {
-//		// This is an entry that needs to be written before 'object' can be written
-//		if (exported.find(entry) == exported.end()) {
-//			// It has not been written yet, abort
-//			return false;
-//		}
-//		// We do not need to check recursively, if the object is written
-//		// that means that the objects it depends on have also been written
-//	}
-//	return true;
-//}
+static const string &MangledName(CatalogEntry &entry) {
+	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
+		auto &to_check = entry.Cast<DependencyCatalogEntry>();
+		return to_check.MangledName();
+	} else {
+		auto &to_check = entry.Cast<DependencySetCatalogEntry>();
+		return to_check.MangledName();
+	}
+}
 
-// void AddDependentsToBacklog(stack<reference<CatalogEntry>> &backlog, optional_ptr<dependency_set_t> dependents) {
-//	catalog_entry_vector_t tables;
-//	D_ASSERT(dependents);
-//	for (auto &dependent : *dependents) {
-//		auto &entry = dependent.entry.get();
-//		if (entry.type == CatalogType::TABLE_ENTRY) {
-//			tables.push_back(entry);
-//		}
-//		// This could be a foreign key reference, in which case we have to write it before other dependents
-//		backlog.push(entry);
-//	}
-//	for (auto &entry : tables) {
-//		backlog.push(entry.get());
-//	}
-//}
+bool AllExportDependenciesWritten(CatalogEntry &object, catalog_entry_vector_t dependencies,
+                                  catalog_entry_set_t &exported) {
+	for (auto &entry : dependencies) {
+		// This is an entry that needs to be written before 'object' can be written
+		auto it = std::find_if(exported.begin(), exported.end(),
+		                       [&](CatalogEntry &to_check_p) { return MangledName(to_check_p) == MangledName(entry); });
+		if (it == exported.end()) {
+			// It has not been written yet, abort
+			return false;
+		}
+		// We do not need to check recursively, if the object is written
+		// that means that the objects it depends on have also been written
+	}
+	return true;
+}
 
-// void OrderEntries(ExportDependencies &map, CatalogEntryOrdering &ordering, stack<reference<CatalogEntry>> &backlog) {
-//	auto &export_order = ordering.ordered_vector;
-//	auto &entries = ordering.ordered_set;
+void AddDependentsToBacklog(stack<reference<CatalogEntry>> &backlog, catalog_entry_vector_t dependents) {
+	catalog_entry_vector_t tables;
+	for (auto &dependent : dependents) {
+		backlog.push(dependent);
+	}
+}
 
-//	while (!backlog.empty()) {
-//		auto &object = backlog.top();
-//		backlog.pop();
-//		if (entries.count(object)) {
-//			// This entry has already been written
-//			continue;
-//		}
-//		auto dependencies = map.GetEntriesThatObjectDependsOn(object);
-//		auto is_ordered = AllExportDependenciesWritten(object, dependencies, entries);
-//		if (!is_ordered) {
-//			if (dependencies) {
-//				for (auto &dependency : *dependencies) {
-//					backlog.emplace(dependency);
-//				}
-//			}
-//			continue;
-//		}
-//		// All dependencies written, we can write this now
-//		auto insert_result = entries.insert(object);
-//		(void)insert_result;
-//		D_ASSERT(insert_result.second);
-//		export_order.push_back(object);
-//		auto dependents = map.GetEntriesThatDependOnObject(object);
-//		AddDependentsToBacklog(backlog, dependents);
-//	}
-//}
+DependencySetCatalogEntry &DependencyManager::LookupSet(CatalogTransaction transaction, CatalogEntry &entry) {
+	if (entry.type == CatalogType::DEPENDENCY_SET) {
+		return entry.Cast<DependencySetCatalogEntry>();
+	} else {
+		D_ASSERT(entry.type == CatalogType::DEPENDENCY_ENTRY);
+		return *GetDependencySet(transaction, entry);
+	}
+}
 
-// void ExportDependencies::AddForeignKeyConnection(CatalogEntry &entry, const string &fk_table) {
-//	for (auto &object : dependencies) {
-//		auto &other = object.first.get();
-//		if (other.type != CatalogType::TABLE_ENTRY) {
-//			continue;
-//		}
-//		if (!StringUtil::CIEquals(fk_table, other.name)) {
-//			continue;
-//		}
-//		// Register that 'object' depends on 'entry'
-//		D_ASSERT(dependents.count(entry));
-//		auto &other_deps = dependents[entry];
-//		other_deps.insert(Dependency(other));
+catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTransaction> transaction) {
+	CatalogEntryOrdering ordering;
+	auto &entries = ordering.ordered_set;
+	auto &export_order = ordering.ordered_vector;
 
-//		// Register that 'entry' is a dependency of 'object'
-//		D_ASSERT(dependencies.count(other));
-//		auto &entry_deps = dependencies[other];
-//		entry_deps.insert(entry);
-//	}
-//}
+	stack<reference<CatalogEntry>> backlog;
 
-// catalog_entry_vector_t DependencyManager::GetExportOrder() {
-//	CatalogEntryOrdering ordering;
-//	auto &entries = ordering.ordered_set;
-//	auto &export_order = ordering.ordered_vector;
+	dependency_sets.Scan(*transaction, [&](CatalogEntry &set) { backlog.emplace(set); });
 
-//	stack<reference<CatalogEntry>> backlog;
+	while (!backlog.empty()) {
+		// As long as we still have unordered entries
+		auto &object = backlog.top();
+		backlog.pop();
+		auto it = std::find_if(entries.begin(), entries.end(), [&](CatalogEntry &to_check_p) {
+			return MangledName(to_check_p) == MangledName(object);
+		});
+		if (it != entries.end()) {
+			// This entry has already been written
+			continue;
+		}
+		auto &set = LookupSet(*transaction, object);
+		auto dependencies = set.GetEntriesThatWeDependOn(transaction);
+		auto is_ordered = AllExportDependenciesWritten(object, dependencies, entries);
+		if (!is_ordered) {
+			for (auto &dependency : dependencies) {
+				backlog.emplace(dependency);
+			}
+			continue;
+		}
+		// All dependencies written, we can write this now
+		auto insert_result = entries.insert(object);
+		(void)insert_result;
+		D_ASSERT(insert_result.second);
+		auto entry = LookupEntry(*transaction, object);
+		export_order.push_back(*entry);
+		auto dependents = set.GetEntriesThatDependOnUs(transaction);
+		AddDependentsToBacklog(backlog, dependents);
+	}
 
-//	catalog_entry_map_t<dependency_set_t> dependents = dependents_map;
-//	catalog_entry_map_t<catalog_entry_set_t> dependencies = dependencies_map;
-//	ExportDependencies map(dependents, dependencies);
-
-//	for (auto &entry_p : dependencies) {
-//		auto &entry = entry_p.first.get();
-//		if (entry.type != CatalogType::TABLE_ENTRY) {
-//			continue;
-//		}
-//		auto &table_entry = entry.Cast<TableCatalogEntry>();
-//		auto &constraints = table_entry.GetConstraints();
-//		for (auto &con : constraints) {
-//			if (con->type != ConstraintType::FOREIGN_KEY) {
-//				continue;
-//			}
-//			auto &fk_con = con->Cast<ForeignKeyConstraint>();
-//			if (fk_con.info.type != ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
-//				continue;
-//			}
-//			map.AddForeignKeyConnection(entry, fk_con.info.table);
-//		}
-//	}
-
-//	for (auto &entry_p : dependencies) {
-//		auto &entry = entry_p.first;
-//		if (entry.get().type == CatalogType::SEQUENCE_ENTRY) {
-//			auto result = GetEntriesThatObjectDependsOn(entry.get());
-//			if (result) {
-//				for (auto &dependency : *result) {
-//					// Sequences can only depend on schemas, which can't have dependencies
-//					entries.insert(dependency);
-//					export_order.push_back(dependency);
-//				}
-//			}
-//			entries.insert(entry);
-//			export_order.push_back(entry);
-//		} else {
-//			backlog.push(entry);
-//		}
-//	}
-
-//	OrderEntries(map, ordering, backlog);
-//	return std::move(ordering.ordered_vector);
-//}
+	return std::move(ordering.ordered_vector);
+}
 
 void DependencyManager::Scan(ClientContext &context,
                              const std::function<void(CatalogEntry &, CatalogEntry &, DependencyType)> &callback) {

@@ -29,6 +29,7 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -83,7 +84,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 	auto &duck_catalog = catalog.Cast<DuckCatalog>();
 	auto &dependency_manager = duck_catalog.GetDependencyManager();
-	// catalog_entries = dependency_manager.GetExportOrder();
+	catalog_entries = dependency_manager.GetExportOrder();
 
 	// write the actual data into the database
 

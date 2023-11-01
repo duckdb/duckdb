@@ -74,6 +74,10 @@ private:
 	void ScanSetInternal(CatalogTransaction transaction, bool dependencies, dependency_callback_t &callback);
 
 public:
+	catalog_entry_vector_t GetEntriesThatDependOnUs(optional_ptr<CatalogTransaction> transaction);
+	catalog_entry_vector_t GetEntriesThatWeDependOn(optional_ptr<CatalogTransaction> transaction);
+
+public:
 	void PrintDependencies(CatalogTransaction transaction);
 	void PrintDependents(CatalogTransaction transaction);
 
@@ -82,6 +86,7 @@ public:
 	CatalogType EntryType() const;
 	const string &EntrySchema() const;
 	const string &EntryName() const;
+	const LogicalDependency &Internal() const;
 
 private:
 	LogicalDependency internal;

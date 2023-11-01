@@ -114,6 +114,10 @@ LogicalDependency LogicalDependency::Deserialize(Deserializer &deserializer) {
 	return dependency;
 }
 
+bool LogicalDependency::operator==(const LogicalDependency &other) const {
+	return other.name == name && other.schema == schema && other.type == type;
+}
+
 void LogicalDependencyList::AddDependency(CatalogEntry &entry) {
 	LogicalDependency dependency(entry);
 	set.insert(dependency);

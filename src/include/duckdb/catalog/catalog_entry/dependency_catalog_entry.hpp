@@ -41,6 +41,7 @@ public:
 	CatalogType EntryType() const;
 	const string &EntrySchema() const;
 	const string &EntryName() const;
+	const LogicalDependency &Internal() const;
 	DependencyType Type() const;
 
 	// Create the corresponding dependency/dependent in the other set

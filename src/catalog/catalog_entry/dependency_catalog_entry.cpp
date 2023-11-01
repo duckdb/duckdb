@@ -34,6 +34,10 @@ DependencyType DependencyCatalogEntry::Type() const {
 	return dependency_type;
 }
 
+const LogicalDependency &DependencyCatalogEntry::Internal() const {
+	return internal;
+}
+
 DependencyCatalogEntry::~DependencyCatalogEntry() {
 }
 
