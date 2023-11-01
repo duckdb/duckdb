@@ -76,7 +76,6 @@ public:
 	hive_partition_map_t partition_map;
 	//! Used for incremental updating local copies of the partition map;
 	vector<hive_partition_map_t::const_iterator> partitions;
-	std::map<idx_t, const HivePartitionKey *> GetReverseMap();
 };
 
 class HivePartitionedColumnData : public PartitionedColumnData {
