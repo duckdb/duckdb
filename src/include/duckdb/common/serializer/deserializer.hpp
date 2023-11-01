@@ -178,14 +178,28 @@ private:
 		return val;
 	}
 
-	template <class T = void>
-	inline typename std::enable_if<is_unique_ptr<T>::value, T>::type Read() {
-		using ELEMENT_TYPE = typename is_unique_ptr<T>::ELEMENT_TYPE;
+	// Deserialize unique_ptr if the element type has a Deserialize method
+	template <class T, typename ELEMENT_TYPE = typename is_unique_ptr<T>::ELEMENT_TYPE>
+	inline typename std::enable_if<is_unique_ptr<T>::value && has_deserialize<ELEMENT_TYPE>::value, T>::type Read() {
 		unique_ptr<ELEMENT_TYPE> ptr = nullptr;
 		auto is_present = OnNullableBegin();
 		if (is_present) {
 			OnObjectBegin();
 			ptr = ELEMENT_TYPE::Deserialize(*this);
+			OnObjectEnd();
+		}
+		OnNullableEnd();
+		return ptr;
+	}
+
+	// Deserialize a unique_ptr if the element type does not have a Deserialize method
+	template <class T, typename ELEMENT_TYPE = typename is_unique_ptr<T>::ELEMENT_TYPE>
+	inline typename std::enable_if<is_unique_ptr<T>::value && !has_deserialize<ELEMENT_TYPE>::value, T>::type Read() {
+		unique_ptr<ELEMENT_TYPE> ptr = nullptr;
+		auto is_present = OnNullableBegin();
+		if (is_present) {
+			OnObjectBegin();
+			ptr = make_uniq<ELEMENT_TYPE>(Read<ELEMENT_TYPE>());
 			OnObjectEnd();
 		}
 		OnNullableEnd();
