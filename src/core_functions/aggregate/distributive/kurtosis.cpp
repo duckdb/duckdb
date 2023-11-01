@@ -14,6 +14,11 @@ struct KurtosisState {
 	double sum_four;
 };
 
+struct KurtosisFlagBiasCorrection {};
+
+struct KurtosisFlagNoBiasCorrection {};
+
+template <class KURTOSIS_FLAG>
 struct KurtosisOperation {
 	template <class STATE>
 	static void Initialize(STATE &state) {
@@ -74,7 +79,11 @@ struct KurtosisOperation {
 			finalize_data.ReturnNull();
 			return;
 		}
-		target = (n - 1) * ((n + 1) * m4 / (m2 * m2) - 3 * (n - 1)) / ((n - 2) * (n - 3));
+		if (std::is_same<KURTOSIS_FLAG, KurtosisFlagNoBiasCorrection>::value) {
+			target = m4 / (m2 * m2) - 3;
+		} else {
+			target = (n - 1) * ((n + 1) * m4 / (m2 * m2) - 3 * (n - 1)) / ((n - 2) * (n - 3));
+		}
 		if (!Value::DoubleIsFinite(target)) {
 			throw OutOfRangeException("Kurtosis is out of range!");
 		}
@@ -86,8 +95,15 @@ struct KurtosisOperation {
 };
 
 AggregateFunction KurtosisFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<KurtosisState, double, double, KurtosisOperation>(LogicalType::DOUBLE,
-	                                                                                           LogicalType::DOUBLE);
+	return AggregateFunction::UnaryAggregate<KurtosisState, double, double,
+	                                         KurtosisOperation<KurtosisFlagBiasCorrection>>(LogicalType::DOUBLE,
+	                                                                                        LogicalType::DOUBLE);
+}
+
+AggregateFunction KurtosisPopFun::GetFunction() {
+	return AggregateFunction::UnaryAggregate<KurtosisState, double, double,
+	                                         KurtosisOperation<KurtosisFlagNoBiasCorrection>>(LogicalType::DOUBLE,
+	                                                                                          LogicalType::DOUBLE);
 }
 
 } // namespace duckdb
