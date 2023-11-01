@@ -17,6 +17,20 @@
 
 namespace duckdb {
 
+struct S3AuthParams {
+	string region;
+	string access_key_id;
+	string secret_access_key;
+	string session_token;
+	string endpoint;
+	string url_style;
+	bool use_ssl;
+	bool s3_url_compatibility_mode;
+
+	static S3AuthParams ReadFrom(FileOpener *opener, FileOpenerInfo &info);
+	static unique_ptr<S3AuthParams> ReadFromStoredCredentials(FileOpener *opener, string path);
+};
+
 struct AWSEnvironmentCredentialsProvider {
 	static constexpr const char *REGION_ENV_VAR = "AWS_REGION";
 	static constexpr const char *DEFAULT_REGION_ENV_VAR = "AWS_DEFAULT_REGION";
@@ -32,20 +46,7 @@ struct AWSEnvironmentCredentialsProvider {
 
 	void SetExtensionOptionValue(string key, const char *env_var);
 	void SetAll();
-};
-
-struct S3AuthParams {
-	string region;
-	string access_key_id;
-	string secret_access_key;
-	string session_token;
-	string endpoint;
-	string url_style;
-	bool use_ssl;
-	bool s3_url_compatibility_mode;
-
-	static S3AuthParams ReadFrom(FileOpener *opener, FileOpenerInfo &info);
-	static unique_ptr<S3AuthParams> ReadFromStoredCredentials(FileOpener *opener, string path);
+	S3AuthParams CreateParams();
 };
 
 struct ParsedS3Url {
@@ -74,8 +75,8 @@ struct S3ConfigParams {
 //! Registered Credential class for S3.
 class S3RegisteredCredential : public RegisteredCredential {
 public:
-	S3RegisteredCredential(vector<string> &prefix_paths_p, string &type, string &mode, S3AuthParams params_p)
-	    : RegisteredCredential(prefix_paths_p, type, mode), params(params_p) {};
+	S3RegisteredCredential(vector<string> &prefix_paths_p, string &type, string &provider, S3AuthParams params_p)
+	    : RegisteredCredential(prefix_paths_p, type, provider), params(params_p) {};
 
 	S3AuthParams GetParams(){
 		return params;

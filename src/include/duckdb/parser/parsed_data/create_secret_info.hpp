@@ -27,8 +27,8 @@ public:
 	OnCreateConflict on_conflict;
 	//! The type of secret
 	string type;
-	//! (optionally) the mode of the secret credentials
-	string mode;
+	//! (optionally) the provider of the secret credentials
+	string provider;
 	//! (optionally) the name of the secret
 	string name;
 	//! (optionally) the scope of the secret

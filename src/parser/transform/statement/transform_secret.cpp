@@ -10,6 +10,17 @@ unique_ptr<CreateSecretStatement> Transformer::TransformSecret(duckdb_libpgquery
 		result->info->name = StringUtil::Lower(stmt.secret_name);
 	}
 
+	if (stmt.secret_provider) {
+		result->info->provider = StringUtil::Lower(stmt.secret_provider);
+	}
+
+	if (stmt.scope) {
+		for (auto cell = stmt.scope->head; cell; cell = cell->next) {
+			string scope = (char*)cell->data.ptr_value;
+			result->info->scope.push_back(scope);
+		}
+	}
+
 	if (stmt.options) {
 		for (auto cell = stmt.options->head; cell; cell = cell->next) {
 			auto option_list = PGPointerCast<duckdb_libpgquery::PGList>(cell->data.ptr_value);
@@ -20,15 +31,8 @@ unique_ptr<CreateSecretStatement> Transformer::TransformSecret(duckdb_libpgquery
 		}
 	}
 
-	// Pull up the mode param as its used to identify the correct function TODO: clean this up
-	auto lu = result->info->named_parameters.find("mode");
-	if (lu != result->info->named_parameters.end()) {
-		result->info->mode = lu->second.ToString();
-		result->info->named_parameters.erase("mode");
-	}
-
 	// Pull up the scope param as its used to identify the correct function TODO: clean this up and make list
-	lu = result->info->named_parameters.find("scope");
+	auto lu = result->info->named_parameters.find("scope");
 	if (lu != result->info->named_parameters.end()) {
 		result->info->scope = {lu->second.ToString()};
 		result->info->named_parameters.erase("scope");

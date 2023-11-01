@@ -20,7 +20,7 @@ struct CreateSecretInput {
 	//! type
 	string type;
 	//! mode
-	string mode;
+	string provider;
 	//! (optional) alias provided by user
 	string name;
 	//! (optional) scope provided by user

@@ -6,6 +6,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -182,10 +183,25 @@ idx_t FunctionBinder::BindFunction(const string &name, PragmaFunctionSet &functi
 	return entry;
 }
 
-idx_t FunctionBinder::BindFunction(const string &name, CreateSecretFunctionSet &functions, CreateSecretInfo &info, string &error) {
-	// TODO: bind by standardized variable mode here?
-	// 		 that would allow throwing nice errors like, the binding is incorrect for mode x
-	idx_t entry = BindFunctionFromArguments(name, functions, {}, error);
+idx_t FunctionBinder::BindFunction(const string &name, CreateSecretFunctionSet &functions, CreateSecretInfo &info,
+                                   string &error) {
+	idx_t entry = DConstants::INVALID_INDEX;
+
+	auto candidate_functions = BindFunctionsFromArguments(name, functions, {}, error);
+	if (candidate_functions.size() > 1) {
+		for (const auto &function : candidate_functions) {
+			auto fun = functions.GetFunctionByOffset(function);
+			if (fun.extra_info == info.provider) {
+				entry = function;
+				break;
+			}
+		}
+		if (entry == DConstants::INVALID_INDEX) {
+			throw BinderException(
+			    "Multiple CREATE SECRET functions exists of type '%s', but the specified provider '%s' was not found.",
+			    info.type, info.provider);
+		}
+	}
 	if (entry == DConstants::INVALID_INDEX) {
 		throw BinderException(error);
 	}

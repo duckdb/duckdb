@@ -12,28 +12,93 @@
 
 namespace duckdb {
 
-shared_ptr<RegisteredCredential> CreateS3Credentials(ClientContext &context, CreateSecretInput& input) {
-	auto& opener = context.client_data->file_opener;
-	FileOpenerInfo info;
-	string filesystem_name = "HTTPFileSystem";
-	auto params = S3AuthParams::ReadFrom(opener.get(), info);
-
-	auto scope = input.scope;
-	
-	if (scope.empty()) {
-		scope.push_back("s3://");
-		scope.push_back("r2://");
-		scope.push_back("gcs://");
+//! Internal function to create RegisteredCredential from S3AuthParams
+shared_ptr<RegisteredCredential> CreateCredentialsInternal(ClientContext &context, CreateSecretInput& input, S3AuthParams params) {
+	// apply any overridden settings
+	for(const auto& named_param : input.named_parameters) {
+		if (named_param.first == "key_id") {
+			params.access_key_id = named_param.second.ToString();
+		} else if (named_param.first == "secret") {
+			params.secret_access_key = named_param.second.ToString();
+		} else if (named_param.first == "region") {
+			params.region = named_param.second.ToString();
+		} else if (named_param.first == "session_token") {
+			params.session_token = named_param.second.ToString();
+		} else if (named_param.first == "endpoint") {
+			params.endpoint = named_param.second.ToString();
+		} else if (named_param.first == "url_style") {
+			params.url_style = named_param.second.ToString();
+		} else if (named_param.first == "use_ssl") {
+			params.url_style = named_param.second.GetValue<bool>();
+		} else if (named_param.first == "url_compatibility_mode") {
+			params.s3_url_compatibility_mode = named_param.second.GetValue<bool>();
+		} else {
+			throw InternalException("Unknown named parameter passed to CreateCredentialsInternal: " + named_param.first);
+		}
 	}
 
-	auto cred = make_shared<S3RegisteredCredential>(scope, input.type, input.mode, params);
+	// Set scope to user provided scope or the default
+	auto scope = input.scope;
+	if (scope.empty()) {
+		scope.push_back("s3://");
+	}
+	auto cred = make_shared<S3RegisteredCredential>(scope, input.type, input.provider, params);
 	cred->SetAlias(input.name);
 	return cred;
 }
 
+shared_ptr<RegisteredCredential> CreateS3CredentialsFromSettings(ClientContext &context, CreateSecretInput& input) {
+	auto& opener = context.client_data->file_opener;
+	FileOpenerInfo info;
+	auto params = S3AuthParams::ReadFrom(opener.get(), info);
+	return CreateCredentialsInternal(context, input, params);
+}
+
+shared_ptr<RegisteredCredential> CreateS3CredentialsFromEnv(ClientContext &context, CreateSecretInput& input) {
+	auto &config = DBConfig::GetConfig(context);
+	auto provider = make_uniq<AWSEnvironmentCredentialsProvider>(config);
+	auto params = provider->CreateParams();
+	return CreateCredentialsInternal(context, input, params);
+}
+
+shared_ptr<RegisteredCredential> CreateS3CredentialsFromConfig(ClientContext &context, CreateSecretInput& input) {
+	S3AuthParams empty_params;
+	empty_params.use_ssl = true;
+	empty_params.s3_url_compatibility_mode = false;
+	return CreateCredentialsInternal(context, input, empty_params);
+}
+
+static void SetBaseNamedParams(CreateSecretFunction &function) {
+	function.named_parameters["key_id"] = LogicalType::VARCHAR;
+	function.named_parameters["secret"] = LogicalType::VARCHAR;
+	function.named_parameters["region"] = LogicalType::VARCHAR;
+	function.named_parameters["session_token"] = LogicalType::VARCHAR;
+	function.named_parameters["endpoint"] = LogicalType::VARCHAR;
+	function.named_parameters["url_style"] = LogicalType::VARCHAR;
+	function.named_parameters["use_ssl"] = LogicalType::VARCHAR;
+	function.named_parameters["url_compatibility_mode"] = LogicalType::VARCHAR;
+}
+
 static void RegisterSetCredentialFunction(DatabaseInstance &instance) {
-	CreateSecretFunction create_secret_fun("s3", "", CreateS3Credentials);
-	ExtensionUtil::RegisterFunction(instance, create_secret_fun);
+	// Default function
+	auto default_fun = CreateSecretFunction("s3", "", CreateS3CredentialsFromConfig);
+	SetBaseNamedParams(default_fun);
+	ExtensionUtil::RegisterFunction(instance, default_fun);
+
+	//! Create from config
+	CreateSecretFunction from_empty_config_fun("s3", "config", CreateS3CredentialsFromConfig);
+	SetBaseNamedParams(from_empty_config_fun);
+	ExtensionUtil::AddFunctionOverload(instance, from_empty_config_fun);
+
+	//! Create from empty config
+	CreateSecretFunction from_settings_fun("s3", "duckdb_settings", CreateS3CredentialsFromSettings);
+	SetBaseNamedParams(from_settings_fun);
+	ExtensionUtil::AddFunctionOverload(instance, from_settings_fun);
+
+	//! Create from env
+	CreateSecretFunction from_env_fun("s3", "env", CreateS3CredentialsFromEnv);
+	SetBaseNamedParams(from_env_fun);
+	ExtensionUtil::AddFunctionOverload(instance, from_env_fun);
 }
 
 static void LoadInternal(DatabaseInstance &instance) {

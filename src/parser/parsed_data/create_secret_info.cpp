@@ -11,7 +11,7 @@ CreateSecretInfo::CreateSecretInfo(string type, OnCreateConflict on_conflict)
 unique_ptr<CreateSecretInfo> CreateSecretInfo::Copy() const {
 	auto result = make_uniq<CreateSecretInfo>(type, on_conflict);
 	result->named_parameters = named_parameters;
-	result->mode = mode;
+	result->provider = provider;
 	return result;
 }
 

@@ -13,7 +13,7 @@ SourceResultType PhysicalCreateSecret::GetData(ExecutionContext &context, DataCh
 	// Call create secret function
 	CreateSecretInput secret_input {
 	    info.type,
-	    info.mode,
+	    info.provider,
 	    info.name,
 	    info.scope,
 	    info.named_parameters

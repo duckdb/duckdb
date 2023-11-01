@@ -2159,6 +2159,8 @@ typedef struct PGCreateSecretStmt {
 	PGNodeTag type;
 	char *secret_name;                    /* name of the secret */
 	char *secret_type;                    /* type of secret */
+	char *secret_provider;                /* the optional provider of the secret */
+	PGList *scope;                        /* optionally the scopes of the secret */
 	PGList *options;                      /* Secret options */
 	PGOnCreateConflict onconflict;        /* what to do on create conflict */
 } PGCreateSecretStmt;

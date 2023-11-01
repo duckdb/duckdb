@@ -13,17 +13,8 @@ namespace duckdb {
 
 BoundStatement Binder::Bind(CreateSecretStatement &stmt) {
 	auto type = stmt.info->type;
-	auto create_secret_mode = stmt.info->mode;
-	string combined_name;
 
-	// TODO how bad is this?
-	if (create_secret_mode.empty()) {
-		combined_name = type;
-	} else {
-		combined_name = type + ":" + create_secret_mode;
-	}
-
-	auto &entry = Catalog::GetEntry<CreateSecretFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, combined_name);
+	auto &entry = Catalog::GetEntry<CreateSecretFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, type);
 	string error;
 	FunctionBinder function_binder(context);
 	idx_t bound_idx = function_binder.BindFunction(entry.name, entry.functions, *stmt.info, error);

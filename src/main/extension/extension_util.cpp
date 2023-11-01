@@ -8,6 +8,7 @@
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
+#include "duckdb/catalog/catalog_entry/create_secret_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
@@ -135,6 +136,20 @@ void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, TableFunctionSet f
 	}
 }
 
+void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, CreateSecretFunction function) { // NOLINT
+	auto &create_secret_function = ExtensionUtil::GetCreateSecretFunction(db, function.name);
+	function.name = function.name;
+	create_secret_function.functions.AddFunction(std::move(function));
+}
+
+void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, CreateSecretFunctionSet functions) { // NOLINT
+	auto &create_secret_function = ExtensionUtil::GetCreateSecretFunction(db, functions.name);
+	for (auto &function : functions.functions) {
+		function.name = functions.name;
+		create_secret_function.functions.AddFunction(std::move(function));
+	}
+}
+
 ScalarFunctionCatalogEntry &ExtensionUtil::GetFunction(DatabaseInstance &db, const string &name) {
 	D_ASSERT(!name.empty());
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
@@ -157,6 +172,18 @@ TableFunctionCatalogEntry &ExtensionUtil::GetTableFunction(DatabaseInstance &db,
 		throw InvalidInputException("Function with name \"%s\" not found in ExtensionUtil::GetTableFunction", name);
 	}
 	return catalog_entry->Cast<TableFunctionCatalogEntry>();
+}
+
+CreateSecretFunctionCatalogEntry &ExtensionUtil::GetCreateSecretFunction(DatabaseInstance &db, const string &name) {
+	D_ASSERT(!name.empty());
+	auto &system_catalog = Catalog::GetSystemCatalog(db);
+	auto data = CatalogTransaction::GetSystemTransaction(db);
+	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
+	auto catalog_entry = schema.GetEntry(data, CatalogType::CREATE_SECRET_FUNCTION_ENTRY, name);
+	if (!catalog_entry) {
+		throw InvalidInputException("Function with name \"%s\" not found in ExtensionUtil::GetCreateSecretFunction", name);
+	}
+	return catalog_entry->Cast<CreateSecretFunctionCatalogEntry>();
 }
 
 void ExtensionUtil::RegisterType(DatabaseInstance &db, string type_name, LogicalType type) {

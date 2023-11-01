@@ -184,7 +184,7 @@ class RegisteredCredential {
 	friend class CredentialManager;
 
 public:
-	RegisteredCredential(vector<string> &prefix_paths, string& type, string& mode) : prefix_paths(prefix_paths), type(StringUtil::Lower(type)), mode(StringUtil::Lower(mode)), credential_id(0) {
+	RegisteredCredential(vector<string> &prefix_paths, string& type, string& provider) : prefix_paths(prefix_paths), type(type), provider(provider), credential_id(0) {
 	};
 	virtual ~RegisteredCredential() = default;
 
@@ -219,14 +219,8 @@ public:
 		return type;
 	}
 
-	const string& GetMode() {
-		return mode;
-	}
-
-	//! Adds the default named parameters to a table function
-	static void AddNamedParametersToSetFunction(TableFunction& table_function) {
-		table_function.named_parameters["scope"] = LogicalType::LIST(LogicalType::VARCHAR);
-		table_function.named_parameters["alias"] = LogicalType::VARCHAR;
+	const string& GetProvider() {
+		return provider;
 	}
 
 	//! Get the registered id of the current set of credentials
@@ -252,8 +246,8 @@ protected:
 
 	//! Type of credentials
 	string type;
-	//! Mode of credential acquiring
-	string mode;
+	//! Provider of the credential
+	string provider;
 
 	//! incremental_id assigned by manager, 0 means not set
 	idx_t credential_id;

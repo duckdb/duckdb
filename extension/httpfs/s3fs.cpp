@@ -163,6 +163,22 @@ void AWSEnvironmentCredentialsProvider::SetAll() {
 	this->SetExtensionOptionValue("s3_use_ssl", this->DUCKDB_USE_SSL_ENV_VAR);
 }
 
+S3AuthParams AWSEnvironmentCredentialsProvider::CreateParams() {
+	S3AuthParams params;
+
+	params.region = this->DEFAULT_REGION_ENV_VAR;
+	params.region = this->REGION_ENV_VAR;
+	params.access_key_id = this->ACCESS_KEY_ENV_VAR;
+	params.secret_access_key = this->SECRET_KEY_ENV_VAR;
+	params.session_token = this->SESSION_TOKEN_ENV_VAR;
+	params.endpoint = this->DUCKDB_ENDPOINT_ENV_VAR;
+	params.use_ssl = this->DUCKDB_USE_SSL_ENV_VAR;
+
+	return params;
+}
+
+
+
 unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(FileOpener *opener, string path) {
 
 	auto context = opener->TryGetClientContext();
