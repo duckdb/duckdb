@@ -57,4 +57,18 @@ void DependencyCatalogEntry::CompleteLink(CatalogTransaction transaction, Depend
 	}
 }
 
+DependencyCatalogEntry &DependencyCatalogEntry::GetLink(CatalogTransaction transaction) {
+	auto &manager = set.Manager();
+	switch (side) {
+	case DependencyLinkSide::DEPENDENCY: {
+		auto &other_set = *manager.GetDependencySet(transaction, internal);
+		return other_set.GetDependent(transaction, set);
+	}
+	case DependencyLinkSide::DEPENDENT: {
+		auto &other_set = *manager.GetDependencySet(transaction, internal);
+		return other_set.GetDependency(transaction, set);
+	}
+	}
+}
+
 } // namespace duckdb

@@ -40,6 +40,8 @@ public:
 	void AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry);
 	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogTransaction transaction,
 	                                                         const string &mangled_name);
+	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogTransaction transaction,
+	                                                         const LogicalDependency &entry);
 	DependencySetCatalogEntry &GetOrCreateDependencySet(CatalogTransaction transaction, const LogicalDependency &entry);
 
 	//! Get the order of entries needed by EXPORT, the objects with no dependencies are exported first

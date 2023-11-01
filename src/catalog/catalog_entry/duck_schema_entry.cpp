@@ -278,7 +278,8 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 	// if there is a foreign key constraint, get that information
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
 	if (existing_entry->type == CatalogType::TABLE_ENTRY) {
-		FindForeignKeyInformation(existing_entry->Cast<TableCatalogEntry>(), AlterForeignKeyType::AFT_DELETE, fk_arrays);
+		FindForeignKeyInformation(existing_entry->Cast<TableCatalogEntry>(), AlterForeignKeyType::AFT_DELETE,
+		                          fk_arrays);
 	}
 
 	if (!set.DropEntry(transaction, info.name, info.cascade, info.allow_drop_internal)) {

@@ -83,7 +83,7 @@ optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(Cata
 }
 
 optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(CatalogTransaction transaction,
-                                                                            CatalogEntry &object) {
+                                                                            const LogicalDependency &object) {
 	auto mangled_name = MangleName(object);
 	return GetDependencySet(transaction, mangled_name);
 }
@@ -92,6 +92,12 @@ DependencySetCatalogEntry &DependencyManager::GetOrCreateDependencySet(CatalogTr
                                                                        CatalogEntry &object) {
 	LogicalDependency dep(object);
 	return GetOrCreateDependencySet(transaction, dep);
+}
+
+optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(CatalogTransaction transaction,
+                                                                            CatalogEntry &object) {
+	LogicalDependency dep(object);
+	return GetDependencySet(transaction, dep);
 }
 
 DependencySetCatalogEntry &DependencyManager::GetOrCreateDependencySet(CatalogTransaction transaction,
@@ -362,14 +368,33 @@ static const string &MangledName(CatalogEntry &entry) {
 	}
 }
 
-bool AllExportDependenciesWritten(CatalogEntry &object, catalog_entry_vector_t dependencies,
-                                  catalog_entry_set_t &exported) {
+bool AllExportDependenciesWritten(CatalogTransaction transaction, CatalogEntry &object,
+                                  catalog_entry_vector_t dependencies, catalog_entry_set_t &exported) {
 	for (auto &entry : dependencies) {
 		// This is an entry that needs to be written before 'object' can be written
-		auto it = std::find_if(exported.begin(), exported.end(),
-		                       [&](CatalogEntry &to_check_p) { return MangledName(to_check_p) == MangledName(entry); });
-		if (it == exported.end()) {
-			// It has not been written yet, abort
+		bool contains = false;
+		for (auto &to_check : exported) {
+			LogicalDependency a(entry);
+			LogicalDependency b(to_check);
+
+			if (a == b) {
+				contains = true;
+				break;
+			}
+			// 'a' not found in exported, check outliers
+			if (entry.get().type != CatalogType::DEPENDENCY_ENTRY) {
+				continue;
+			}
+			auto &dep = entry.get().Cast<DependencyCatalogEntry>();
+			auto &dependent = dep.GetLink(transaction);
+			if (dependent.Type() == DependencyType::DEPENDENCY_OWNED_BY) {
+				// Fake it, we need to write the table first
+				contains = true;
+				break;
+			}
+			continue;
+		}
+		if (!contains) {
 			return false;
 		}
 		// We do not need to check recursively, if the object is written
@@ -416,7 +441,7 @@ catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTra
 		}
 		auto &set = LookupSet(*transaction, object);
 		auto dependencies = set.GetEntriesThatWeDependOn(transaction);
-		auto is_ordered = AllExportDependenciesWritten(object, dependencies, entries);
+		auto is_ordered = AllExportDependenciesWritten(*transaction, object, dependencies, entries);
 		if (!is_ordered) {
 			for (auto &dependency : dependencies) {
 				backlog.emplace(dependency);
