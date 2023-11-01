@@ -48,13 +48,13 @@ struct ListAggregatesBindData : public FunctionData {
 		return result;
 	}
 
-	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                      const ScalarFunction &function) {
+	static void SerializeFunction(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                              const ScalarFunction &function) {
 		auto bind_data = dynamic_cast<const ListAggregatesBindData *>(bind_data_p.get());
 		serializer.WritePropertyWithDefault(100, "bind_data", bind_data, (const ListAggregatesBindData *)nullptr);
 	}
 
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &bound_function) {
+	static unique_ptr<FunctionData> DeserializeFunction(Deserializer &deserializer, ScalarFunction &bound_function) {
 		auto result = deserializer.ReadPropertyWithDefault<unique_ptr<ListAggregatesBindData>>(
 		    100, "bind_data", unique_ptr<ListAggregatesBindData>(nullptr));
 		if (!result) {
@@ -528,8 +528,8 @@ ScalarFunction ListAggregateFun::GetFunction() {
 	                             ListAggregateFunction, ListAggregateBind);
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	result.varargs = LogicalType::ANY;
-	result.serialize = ListAggregatesBindData::Serialize;
-	result.deserialize = ListAggregatesBindData::Deserialize;
+	result.serialize = ListAggregatesBindData::SerializeFunction;
+	result.deserialize = ListAggregatesBindData::DeserializeFunction;
 	return result;
 }
 
