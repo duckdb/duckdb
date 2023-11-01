@@ -27,8 +27,9 @@ double RandomEngine::NextRandom(double min, double max) {
 	return min + (NextRandom() * (max - min));
 }
 
+static const float ld22 = std::ldexp(1.0f, -22);
 double RandomEngine::NextRandom() {
-	return std::ldexp(random_state->pcg(), -32);
+	return ((random_state->pcg() >> 10) + 0.5f) * ld22;
 }
 uint32_t RandomEngine::NextRandomInteger() {
 	return random_state->pcg();
