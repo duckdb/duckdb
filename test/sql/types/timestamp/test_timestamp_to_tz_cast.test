@@ -1,0 +1,43 @@
+# name: test/sql/types/timestamp/test_timestamp_to_tz_cast.test
+# description: Test casting to TIMESTAMP WITH TIME ZONE from any unit
+# group: [timestamp]
+
+require icu
+
+# This breaks the 'verification_stats' check
+#statement ok
+#PRAGMA enable_verification
+
+# Set up some timestamp data
+statement ok
+create table ts_tbl as select '1990/12/21'::TIMESTAMP as ts;
+
+statement ok
+SET TimeZone='UTC'
+
+query I nosort result_utc
+select ts as base, base::TIMESTAMPTZ as tstz from ts_tbl;
+----
+
+foreach unit TIMESTAMP_MS TIMESTAMP_NS TIMESTAMP_S
+
+query I nosort result_utc
+select '1990/12/21'::${unit} as base, base::TIMESTAMPTZ as tstz
+----
+
+endloop
+
+statement ok
+SET TimeZone='America/Los_Angeles'
+
+query I nosort result_america
+select ts as base, base::TIMESTAMPTZ as tstz from ts_tbl;
+----
+
+foreach unit TIMESTAMP_MS TIMESTAMP_NS TIMESTAMP_S
+
+query I nosort result_america
+select '1990/12/21'::${unit} as base, base::TIMESTAMPTZ as tstz
+----
+
+endloop
