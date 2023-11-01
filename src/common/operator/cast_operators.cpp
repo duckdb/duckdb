@@ -801,20 +801,20 @@ struct SimpleIntegerCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleDigit(T &state, uint8_t digit) {
 		using result_t = typename T::ResultType;
-// #if ((__GNUC__ >= 5) || defined(__clang__))
-// 		if (__builtin_mul_overflow(&state.result, result_t(10), &state.result)) {
-// 			return false;
-// 		}
-// 		if (NEGATIVE) {
-// 			if (__builtin_sub_overflow(&state.result, result_t(digit), &state.result)) {
-// 				return false;
-// 			}
-// 		} else {
-// 			if (__builtin_add_overflow(&state.result, result_t(digit), &state.result)) {
-// 				return false;
-// 			}
-// 		}
-// #else
+#if ((__GNUC__ >= 5) || defined(__clang__)) && DISABLE
+		if (__builtin_mul_overflow(state.result, result_t(10), &state.result)) {
+			return false;
+		}
+		if (NEGATIVE) {
+			if (__builtin_sub_overflow(state.result, result_t(digit), &state.result)) {
+				return false;
+			}
+		} else {
+			if (__builtin_add_overflow(state.result, result_t(digit), &state.result)) {
+				return false;
+			}
+		}
+#else
 		if (NEGATIVE) {
 			if (state.result < (NumericLimits<result_t>::Minimum() + digit) / 10) {
 				return false;
@@ -826,8 +826,8 @@ struct SimpleIntegerCastOperation {
 			}
 			state.result = state.result * 10 + digit;
 		}
+#endif
 		return true;
-// #endif
 	}
 
 	template <class T, bool NEGATIVE>
@@ -1021,7 +1021,8 @@ struct IntegerCastOperation {
 	}
 };
 
-template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = SimpleIntegerCastOperation, char decimal_separator = '.'>
+template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = SimpleIntegerCastOperation,
+          char decimal_separator = '.'>
 static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) {
 	idx_t start_pos;
 	if (NEGATIVE) {
@@ -1233,10 +1234,13 @@ static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 template <typename T, bool IS_SIGNED = true>
 static inline bool TrySimpleIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	SimpleIntegerCastData<T> simple_data;
-	if (TryIntegerCast<SimpleIntegerCastData<T>, IS_SIGNED, true, SimpleIntegerCastOperation>(buf, len, simple_data, strict)) {
+	if (TryIntegerCast<SimpleIntegerCastData<T>, IS_SIGNED, false, SimpleIntegerCastOperation>(buf, len, simple_data,
+	                                                                                           strict)) {
 		result = (T)simple_data.result;
 		return true;
 	}
+
+	// Simple integer cast failed, try again with decimals/exponents included
 	IntegerCastData<T> cast_data;
 	if (TryIntegerCast<IntegerCastData<T>, IS_SIGNED, true, IntegerCastOperation>(buf, len, cast_data, strict)) {
 		result = (T)cast_data.result;
