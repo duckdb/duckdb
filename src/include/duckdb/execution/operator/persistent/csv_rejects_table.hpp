@@ -1,13 +1,16 @@
 #pragma once
 
-#include "duckdb.hpp"
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/storage/object_cache.hpp"
-#endif
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/string.hpp"
 
 namespace duckdb {
 
 struct ReadCSVData;
+class TableCatalogEntry;
+class ClientContext;
 
 class CSVRejectsTable : public ObjectCacheEntry {
 public:

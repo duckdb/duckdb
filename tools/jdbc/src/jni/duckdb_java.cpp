@@ -78,6 +78,10 @@ static jmethodID J_Iterator_next;
 static jmethodID J_Entry_getKey;
 static jmethodID J_Entry_getValue;
 
+static jclass J_UUID;
+static jmethodID J_UUID_getMostSignificantBits;
+static jmethodID J_UUID_getLeastSignificantBits;
+
 void ThrowJNI(JNIEnv *env, const char *message) {
 	D_ASSERT(J_SQLException);
 	env->ThrowNew(J_SQLException, message);
@@ -156,6 +160,12 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	tmpLocalRef = env->FindClass("java/util/Iterator");
 	J_Iterator_hasNext = env->GetMethodID(tmpLocalRef, "hasNext", "()Z");
 	J_Iterator_next = env->GetMethodID(tmpLocalRef, "next", "()Ljava/lang/Object;");
+	env->DeleteLocalRef(tmpLocalRef);
+
+	tmpLocalRef = env->FindClass("java/util/UUID");
+	J_UUID = (jclass)env->NewGlobalRef(tmpLocalRef);
+	J_UUID_getMostSignificantBits = env->GetMethodID(J_UUID, "getMostSignificantBits", "()J");
+	J_UUID_getLeastSignificantBits = env->GetMethodID(J_UUID, "getLeastSignificantBits", "()J");
 	env->DeleteLocalRef(tmpLocalRef);
 
 	tmpLocalRef = env->FindClass("org/duckdb/DuckDBArray");
@@ -306,9 +316,14 @@ static Connection *get_connection(JNIEnv *env, jobject conn_ref_buf) {
 //! The database instance cache, used so that multiple connections to the same file point to the same database object
 duckdb::DBInstanceCache instance_cache;
 
+static const char *const JDBC_STREAM_RESULTS = "jdbc_stream_results";
 jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolean read_only, jobject props) {
 	auto database = byte_array_to_string(env, database_j);
 	DBConfig config;
+	config.AddExtensionOption(
+	    JDBC_STREAM_RESULTS,
+	    "Whether to stream results. Only one ResultSet on a connection can be open at once when true",
+	    LogicalType::BOOLEAN);
 	if (read_only) {
 		config.options.access_mode = AccessMode::READ_ONLY;
 	}
@@ -549,13 +564,21 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 			} else if (env->IsInstanceOf(param, J_String)) {
 				auto param_string = jstring_to_string(env, (jstring)param);
 				duckdb_params.push_back(Value(param_string));
+			} else if (env->IsInstanceOf(param, J_UUID)) {
+				auto most_significant = (jlong)env->CallObjectMethod(param, J_UUID_getMostSignificantBits);
+				auto least_significant = (jlong)env->CallObjectMethod(param, J_UUID_getLeastSignificantBits);
+				duckdb_params.push_back(Value::UUID(hugeint_t(most_significant, least_significant)));
 			} else {
 				throw InvalidInputException("Unsupported parameter type");
 			}
 		}
 	}
 
-	res_ref->res = stmt_ref->stmt->Execute(duckdb_params, false);
+	Value result;
+	bool stream_results =
+	    stmt_ref->stmt->context->TryGetCurrentSetting(JDBC_STREAM_RESULTS, result) ? result.GetValue<bool>() : false;
+
+	res_ref->res = stmt_ref->stmt->Execute(duckdb_params, stream_results);
 	if (res_ref->res->HasError()) {
 		string error_msg = string(res_ref->res->GetError());
 		res_ref->res = nullptr;

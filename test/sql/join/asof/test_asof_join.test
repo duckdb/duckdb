@@ -17,6 +17,26 @@ INSERT INTO events0 VALUES
 	(8, 3)
 ;
 
+# Prevent optimiser from removing true inequalities
+statement ok
+create table prices("when" timestamp, symbol int, price int);
+
+statement ok
+insert into prices values ('2020-01-01 00:00:00', 1, 42);
+
+statement ok
+create table trades("when" timestamp, symbol int);
+
+statement ok
+insert into trades values ('2020-01-01 00:00:03', 1);
+
+query III
+SELECT t.*, p.price
+FROM trades t ASOF JOIN prices p 
+  ON t.symbol = p.symbol AND t.when >= p.when;
+----
+2020-01-01 00:00:03	1	42
+
 # Use an ASOF join inside of a correlated subquery
 
 

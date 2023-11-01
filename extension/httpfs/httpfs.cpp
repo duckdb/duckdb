@@ -122,7 +122,7 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 			if (caught_e) {
 				std::rethrow_exception(caught_e);
 			} else if (err == duckdb_httplib_openssl::Error::Success) {
-				throw HTTPException(response, "Request returned HTTP %d for HTTP %s to '%s'", status, method, url);
+				throw IOException("Request returned HTTP %d for HTTP %s to '%s'", status, method, url);
 			} else {
 				throw IOException("%s error for HTTP %s to '%s'", to_string(err), method, url);
 			}
@@ -310,7 +310,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 					    error += " This could mean the file was changed. Try disabling the duckdb http metadata cache "
 					             "if enabled, and confirm the server supports range requests.";
 				    }
-				    throw HTTPException(response, error);
+				    throw IOException(error);
 			    }
 			    if (response.status < 300) { // done redirecting
 				    out_offset = 0;
@@ -600,8 +600,8 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 				}
 				res = std::move(range_res);
 			} else {
-				throw HTTPException(*res, "Unable to connect to URL \"%s\": %s (%s)", res->http_url,
-				                    to_string(res->code), res->error);
+				throw IOException("Unable to connect to URL \"%s\": %s (%s)", res->http_url, to_string(res->code),
+				                  res->error);
 			}
 		}
 	}
@@ -634,9 +634,8 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 			// Try to fully download the file first
 			auto full_download_result = hfs.GetRequest(*this, path, {});
 			if (full_download_result->code != 200) {
-				throw HTTPException(*res, "Full download failed to to URL \"%s\": %s (%s)",
-				                    full_download_result->http_url, to_string(full_download_result->code),
-				                    full_download_result->error);
+				throw IOException("Full download failed to to URL \"%s\": %s (%s)", full_download_result->http_url,
+				                  to_string(full_download_result->code), full_download_result->error);
 			}
 			// Mark the file as initialized, unlocking it and allowing parallel reads
 			cached_file_handle->SetInitialized();
