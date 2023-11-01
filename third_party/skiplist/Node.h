@@ -129,7 +129,7 @@ protected:
     Node<T, _Compare> *_adjRemoveRefs(size_t level, Node<T, _Compare> *pNode);
 
 	void Initialize(const T &value) {
-		::std::independent_bits_engine<::std::default_random_engine, /*bits*/ 1, uint32_t> tossCoin;
+		_value = value;
 		_nodeRefs.clear();
 		do {
 			_nodeRefs.push_back(this, _nodeRefs.height() ? 0 : 1);
