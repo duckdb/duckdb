@@ -3,7 +3,6 @@ import pandas as pd
 from typing import final
 import pytest
 
-pyarrow = pytest.importorskip("pyarrow")
 
 
 def test_9182():
