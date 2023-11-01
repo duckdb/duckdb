@@ -316,6 +316,14 @@ std::map<idx_t, const HivePartitionKey *> HivePartitionedColumnData::GetReverseM
 	return ret;
 }
 
+std::map<idx_t, const HivePartitionKey *> GlobalHivePartitionState::GetReverseMap() {
+	std::map<idx_t, const HivePartitionKey *> ret;
+	for (const auto &pair : partition_map) {
+		ret[pair.second] = &(pair.first);
+	}
+	return ret;
+}
+
 void HivePartitionedColumnData::GrowAllocators() {
 	unique_lock<mutex> lck_gstate(allocators->lock);
 

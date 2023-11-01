@@ -123,8 +123,9 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 			// create directories
 			lock_guard<mutex> global_lock(g.lock);
 			if (!g.created_directories) {
-				for (idx_t i = 0; i < partitions.size(); i++) {
-					CreateDirectories(partition_columns, names, partition_key_map[i]->values, trimmed_path, fs);
+				auto global_partition_key_map = g.partition_state->GetReverseMap();
+				for (auto &it : global_partition_key_map) {
+					CreateDirectories(partition_columns, names, it.second->values, trimmed_path, fs);
 				}
 				g.created_directories = true;
 			}
