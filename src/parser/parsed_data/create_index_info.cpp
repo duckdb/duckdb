@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-CreateIndexInfo::CreateIndexInfo() : CreateInfo(CatalogType::INDEX_ENTRY) {};
+CreateIndexInfo::CreateIndexInfo() : CreateInfo(CatalogType::INDEX_ENTRY) {
+}
 
 CreateIndexInfo::CreateIndexInfo(const duckdb::CreateIndexInfo &info)
     : CreateInfo(CatalogType::INDEX_ENTRY), table(info.table), index_name(info.index_name), options(info.options),
