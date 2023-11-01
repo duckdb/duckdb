@@ -60,6 +60,9 @@ idx_t BufferPool::GetUsedMemory() {
 idx_t BufferPool::GetMaxMemory() {
 	return maximum_memory;
 }
+idx_t BufferPool::GetTxWorkingMemoryBudget() {
+	return GetMaxMemory();
+}
 
 BufferPool::EvictionResult BufferPool::EvictBlocks(idx_t extra_memory, idx_t memory_limit,
                                                    unique_ptr<FileBuffer> *buffer) {
