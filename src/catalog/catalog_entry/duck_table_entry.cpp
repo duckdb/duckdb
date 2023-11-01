@@ -45,7 +45,7 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vect
 	// create an adaptive radix tree around the expressions
 	auto art = make_uniq<ART>(info.name, constraint_type, column_ids, TableIOManager::Get(storage),
 	                          std::move(unbound_expressions), storage.db, nullptr, info);
-	if (!info.IsValid() && !storage.IsRoot()) {
+	if (!info.IsValid() && !info.name.empty() && !storage.IsRoot()) {
 		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
 	}
 	storage.info->indexes.AddIndex(std::move(art));
@@ -103,6 +103,14 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 					AddDataTableIndex(*storage, columns, unique.keys, constraint_type,
 					                  GetIndexInfo(constraint_type, info.base, i));
 				} else {
+					// STABLE STORAGE NOTE: we read the index from an old storage version, so we have to apply a dummy
+					// name
+					if (info.indexes[indexes_idx].name.empty()) {
+						auto name_info = GetIndexInfo(constraint_type, info.base, i);
+						info.indexes[indexes_idx].name = name_info.name;
+					}
+
+					// now add the index
 					AddDataTableIndex(*storage, columns, unique.keys, constraint_type, info.indexes[indexes_idx++]);
 				}
 
@@ -119,6 +127,14 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 						                  GetIndexInfo(constraint_type, info.base, i));
 
 					} else {
+						// STABLE STORAGE NOTE: we read the index from an old storage version, so we have to apply a
+						// dummy name
+						if (info.indexes[indexes_idx].name.empty()) {
+							auto name_info = GetIndexInfo(IndexConstraintType::FOREIGN, info.base, i);
+							info.indexes[indexes_idx].name = name_info.name;
+						}
+
+						// now add the index
 						AddDataTableIndex(*storage, columns, bfk.info.fk_keys, IndexConstraintType::FOREIGN,
 						                  info.indexes[indexes_idx++]);
 					}

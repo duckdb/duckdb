@@ -96,7 +96,7 @@ vector<IndexStorageInfo> TableIndexList::GetStorageInfos() {
 	vector<IndexStorageInfo> index_storage_infos;
 	for (auto &index : indexes) {
 		auto index_storage_info = index->GetStorageInfo(false);
-		D_ASSERT(index_storage_info.IsValid());
+		D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
 		index_storage_infos.push_back(index_storage_info);
 	}
 	return index_storage_infos;

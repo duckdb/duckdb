@@ -66,7 +66,7 @@ struct IndexStorageInfo {
 
 	//! Returns true, if the struct contains index information
 	bool IsValid() const {
-		return !name.empty() && (!properties.empty() || !data_infos.empty());
+		return !properties.empty() || !data_infos.empty();
 	}
 
 	void Serialize(Serializer &serializer) const;

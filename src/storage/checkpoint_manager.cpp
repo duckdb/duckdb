@@ -440,7 +440,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	IndexStorageInfo index_storage_info;
 	if (root_block_pointer.IsValid()) {
 		// STABLE STORAGE NOTE: this code path is necessary to read older duckdb files
-		index_storage_info.name = "ART_index";
+		index_storage_info.name = info.index_name;
 		auto block_id = make_pair<string, Value>("block_id", Value::BIGINT(root_block_pointer.block_id));
 		auto offset = make_pair<string, Value>("offset", Value::UINTEGER(root_block_pointer.offset));
 		index_storage_info.properties.insert(block_id);
@@ -456,7 +456,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 		}
 	}
 
-	D_ASSERT(index_storage_info.IsValid());
+	D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
 	auto art = make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
 	                          std::move(unbound_expressions), data_table.db, nullptr, index_storage_info);
 	data_table.info->indexes.AddIndex(std::move(art));
@@ -535,10 +535,11 @@ void CheckpointReader::ReadTableData(ClientContext &context, Deserializer &deser
 	// STABLE STORAGE NOTE: for current duckdb file versions, this will read a vector with exactly one invalid index
 	// pointer
 	auto index_pointers = deserializer.ReadProperty<vector<BlockPointer>>(103, "index_pointers");
+
 	if (!index_pointers.empty() && !index_pointers.front().IsValid() && index_pointers.front().offset == 42) {
 		deserializer.ReadList(104, "index_storage_infos", [&](Deserializer::List &list, idx_t i) {
 			auto index_storage_info = list.ReadElement<IndexStorageInfo>();
-			D_ASSERT(index_storage_info.IsValid());
+			D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
 			bound_info.indexes.push_back(index_storage_info);
 		});
 
@@ -546,7 +547,6 @@ void CheckpointReader::ReadTableData(ClientContext &context, Deserializer &deser
 		// STABLE STORAGE NOTE: old duckdb index pointers
 		for (idx_t i = 0; i < index_pointers.size(); i++) {
 			IndexStorageInfo index_storage_info;
-			index_storage_info.name = "ART_index";
 			auto block_id = make_pair<string, Value>("block_id", Value::BIGINT(index_pointers[i].block_id));
 			auto offset = make_pair<string, Value>("offset", Value::UINTEGER(index_pointers[i].offset));
 			index_storage_info.properties.insert(block_id);
