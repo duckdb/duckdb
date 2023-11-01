@@ -180,14 +180,18 @@ S3AuthParams AWSEnvironmentCredentialsProvider::CreateParams() {
 
 
 unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(FileOpener *opener, string path) {
-
 	auto context = opener->TryGetClientContext();
 	if (!context) {
 		return nullptr;
 	}
 
-	// TODO: this doesnt work with multiple types?
 	auto credentials = context->db->GetCredentialManager().GetCredentials(path, "s3");
+	if (!credentials) {
+		credentials = context->db->GetCredentialManager().GetCredentials(path, "r2");
+	}
+	if (!credentials) {
+		credentials = context->db->GetCredentialManager().GetCredentials(path, "gcs");
+	}
 	if (!credentials) {
 		return nullptr;
 	}
