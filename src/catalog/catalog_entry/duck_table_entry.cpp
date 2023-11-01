@@ -103,8 +103,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 					AddDataTableIndex(*storage, columns, unique.keys, constraint_type,
 					                  GetIndexInfo(constraint_type, info.base, i));
 				} else {
-					// STABLE STORAGE NOTE: we read the index from an old storage version, so we have to apply a dummy
-					// name
+					// we read the index from an old storage version, so we have to apply a dummy name
 					if (info.indexes[indexes_idx].name.empty()) {
 						auto name_info = GetIndexInfo(constraint_type, info.base, i);
 						info.indexes[indexes_idx].name = name_info.name;
@@ -127,8 +126,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 						                  GetIndexInfo(constraint_type, info.base, i));
 
 					} else {
-						// STABLE STORAGE NOTE: we read the index from an old storage version, so we have to apply a
-						// dummy name
+						// we read the index from an old storage version, so we have to apply a dummy name
 						if (info.indexes[indexes_idx].name.empty()) {
 							auto name_info = GetIndexInfo(IndexConstraintType::FOREIGN, info.base, i);
 							info.indexes[indexes_idx].name = name_info.name;

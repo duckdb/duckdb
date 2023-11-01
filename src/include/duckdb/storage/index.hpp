@@ -182,7 +182,14 @@ struct IndexStorage {
 	//! BlockPointers) or not. The combination of invalid block ID and valid offset allows us to distinguish
 	static void WriteDummyBlockPointers(Serializer &serializer);
 
+	//! Returns the block pointer from the properties of info
 	static BlockPointer GetBlockPointer(const IndexStorageInfo &info);
+
+	//! Fills the infos vector with index pointer information
+	static void SetBlockPointerInfos(vector<BlockPointer> &pointers, vector<IndexStorageInfo> &infos);
+
+	//! Fills the index storage info with exactly one valid block pointer
+	static void SetBlockPointerInfo(BlockPointer &pointer, IndexStorageInfo &info);
 };
 
 } // namespace duckdb

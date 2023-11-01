@@ -99,6 +99,11 @@
         "id": 208,
         "name": "options",
         "type": "case_insensitive_map_t<Value>"
+      },
+      {
+        "id": 209,
+        "name": "index_type_name",
+        "type": "string"
       }
     ]
   },

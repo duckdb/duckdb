@@ -44,6 +44,9 @@ struct CreateIndexInfo : public CreateInfo {
 	//! The names of the logical columns (necessary for scanning the table during CREATE INDEX)
 	vector<string> names;
 
+	// FIXME: this is a deprecated dummy field for (de)serialization, we should remove this eventually
+	string index_type_name;
+
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;
 
