@@ -71,6 +71,11 @@ select kurtosis_pop(k), kurtosis_pop(v), kurtosis_pop(v2) from aggr;
 6.100000	-1.676857	-1.358688
 
 query I
+with onetwo as (select range::float as v from range(1,3)) select kurtosis_pop(v) from onetwo;
+----
+-2.0
+
+query I
 select  kurtosis(v2) from aggr group by v ORDER BY ALL;
 ----
 -3.977599

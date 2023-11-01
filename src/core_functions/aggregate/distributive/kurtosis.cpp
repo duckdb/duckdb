@@ -58,7 +58,11 @@ struct KurtosisOperation {
 	template <class TARGET_TYPE, class STATE>
 	static void Finalize(STATE &state, TARGET_TYPE &target, AggregateFinalizeData &finalize_data) {
 		auto n = (double)state.n;
-		if (n <= 3) {
+		if (n <= 1) {
+			finalize_data.ReturnNull();
+			return;
+		}
+		if (std::is_same<KURTOSIS_FLAG, KurtosisFlagBiasCorrection>::value && n <= 3) {
 			finalize_data.ReturnNull();
 			return;
 		}
@@ -75,7 +79,7 @@ struct KurtosisOperation {
 		            6 * state.sum_sqr * state.sum * state.sum * temp * temp - 3 * pow(state.sum, 4) * pow(temp, 3));
 
 		double m2 = temp * (state.sum_sqr - state.sum * state.sum * temp);
-		if (m2 <= 0 || ((n - 2) * (n - 3)) == 0) { // m2 shouldn't be below 0 but floating points are weird
+		if (m2 <= 0) { // m2 shouldn't be below 0 but floating points are weird
 			finalize_data.ReturnNull();
 			return;
 		}
