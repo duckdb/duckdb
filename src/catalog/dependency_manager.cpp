@@ -426,7 +426,12 @@ catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTra
 
 	stack<reference<CatalogEntry>> backlog;
 
-	dependency_sets.Scan(*transaction, [&](CatalogEntry &set) { backlog.emplace(set); });
+	dependency_sets.Scan(*transaction, [&](CatalogEntry &set_p) {
+		auto &set = set_p.Cast<DependencySetCatalogEntry>();
+		set.PrintDependencies(*transaction);
+		set.PrintDependents(*transaction);
+		backlog.emplace(set);
+	});
 
 	while (!backlog.empty()) {
 		// As long as we still have unordered entries
