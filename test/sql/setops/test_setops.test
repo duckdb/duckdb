@@ -115,3 +115,9 @@ SELECT 1, 'a' UNION ALL SELECT 1, 'a' UNION SELECT 2, 'b' UNION SELECT 1, 'a' OR
 2	b
 1	a
 
+
+statement error
+FROM (VALUES (42), (42)) e1 INTERSECT ALL FROM (VALUES(42), (42)) e2;
+
+statement error
+FROM (VALUES (42), (42)) e1 EXCEPT ALL FROM (VALUES(42), (42)) e2;

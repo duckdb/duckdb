@@ -132,9 +132,15 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 			result.setop_type = SetOperationType::UNION;
 			break;
 		case duckdb_libpgquery::PG_SETOP_EXCEPT:
+			if (stmt.all) {
+				throw NotImplementedException("EXCEPT ALL is not supported");
+			}
 			result.setop_type = SetOperationType::EXCEPT;
 			break;
 		case duckdb_libpgquery::PG_SETOP_INTERSECT:
+			if (stmt.all) {
+				throw NotImplementedException("INTERSECT ALL is not supported");
+			}
 			result.setop_type = SetOperationType::INTERSECT;
 			break;
 		case duckdb_libpgquery::PG_SETOP_UNION_BY_NAME:
