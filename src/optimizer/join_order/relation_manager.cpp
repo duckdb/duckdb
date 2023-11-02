@@ -201,10 +201,6 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		// Adding relations to the current join order optimizer
 		bool can_reorder_left = ExtractJoinRelations(*op->children[0], filter_operators, op);
 		bool can_reorder_right = ExtractJoinRelations(*op->children[1], filter_operators, op);
-		if (!can_reorder_right) {
-			// optimize left
-			// return false;
-		}
 		return can_reorder_left && can_reorder_right;
 	}
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
