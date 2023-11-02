@@ -201,6 +201,10 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		// Adding relations to the current join order optimizer
 		bool can_reorder_left = ExtractJoinRelations(*op->children[0], filter_operators, op);
 		bool can_reorder_right = ExtractJoinRelations(*op->children[1], filter_operators, op);
+		if (!can_reorder_right) {
+			// optimize left
+			// return false;
+		}
 		return can_reorder_left && can_reorder_right;
 	}
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
@@ -231,10 +235,11 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_GET: {
-		auto &delim_get = op->Cast<LogicalDelimGet>();
-		auto stats = RelationStatisticsHelper::ExtractDelimGetStats(delim_get, context);
-		AddRelation(input_op, parent, stats);
-		return true;
+//      Removed until we can extract better stats from delim gets. See #596
+//		auto &delim_get = op->Cast<LogicalDelimGet>();
+//		auto stats = RelationStatisticsHelper::ExtractDelimGetStats(delim_get, context);
+//		AddRelation(input_op, parent, stats);
+		return false;
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto child_stats = RelationStats();
