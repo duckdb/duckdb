@@ -123,6 +123,10 @@ void LogicalDependencyList::AddDependency(CatalogEntry &entry) {
 	set.insert(dependency);
 }
 
+void LogicalDependencyList::AddDependency(LogicalDependency entry) {
+	set.insert(entry);
+}
+
 bool LogicalDependencyList::Contains(CatalogEntry &entry_p) {
 	LogicalDependency logical_entry(entry_p);
 	return set.count(logical_entry);

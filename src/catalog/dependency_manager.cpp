@@ -153,7 +153,7 @@ bool DependencyManager::IsSystemEntry(CatalogEntry &entry) const {
 }
 
 void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &object,
-                                  const LogicalDependencyList &dependencies) {
+                                  const LogicalDependencyList &unfiltered_dependencies) {
 	if (IsSystemEntry(object)) {
 		// Don't do anything for this
 		return;
@@ -162,14 +162,13 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 	// Create a dependency set for the object
 	GetOrCreateDependencySet(transaction, object);
 
+	LogicalDependencyList dependencies;
 	// check for each object in the sources if they were not deleted yet
-	for (auto &dependency : dependencies.Set()) {
+	for (auto &dependency : unfiltered_dependencies.Set()) {
 		if (dependency.catalog != object.ParentCatalog().GetName()) {
-			throw DependencyException(
-			    "Error adding dependency for object \"%s\" - dependency \"%s\" is in catalog "
-			    "\"%s\", which does not match the catalog \"%s\".\nCross catalog dependencies are not supported.",
-			    object.name, dependency.name, dependency.catalog, object.ParentCatalog().GetName());
+			continue;
 		}
+		dependencies.AddDependency(dependency);
 	}
 
 	// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
