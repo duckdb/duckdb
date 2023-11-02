@@ -1,10 +1,31 @@
 #include "duckdb/main/secret_manager.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 
 namespace duckdb {
+
+unique_ptr<RegisteredSecret> SecretManager::DeserializeSecret(Deserializer& deserializer) {
+	throw NotImplementedException("SerializeSecret");
+}
+
+void SecretManager::SerializeSecret(RegisteredSecret& secret, Serializer& serializer) {
+	throw NotImplementedException("SerializeSecret");
+}
+
+void SecretManager::RegisterSecretType(SecretType& type) {
+	if (registered_types.find(type.name) != registered_types.end()) {
+		throw InternalException("Attempted to register an already registered secret type: '%s'", type.name);
+	}
+
+	registered_types[type.name] = type;
+}
 
 void SecretManager::RegisterSecret(shared_ptr<RegisteredSecret> secret, OnCreateConflict on_conflict) {
 	bool conflict = false;
 	idx_t conflict_idx;
+
+	//! Ensure we only create secrets for known types;
+	LookupType(secret->type);
 
 	// Assert the alias does not exist already
 	if (!secret->GetName().empty()) {
@@ -50,8 +71,18 @@ shared_ptr<RegisteredSecret> SecretManager::GetSecretByPath(string& path, string
 	return best_match;
 }
 
-shared_ptr<RegisteredSecret> GetSecretByName(string& name) {
+shared_ptr<RegisteredSecret> SecretManager::GetSecretByName(string& name) {
 	throw NotImplementedException("GetSecretByName");
+}
+
+SecretType SecretManager::LookupType(string &type) {
+	auto lu = registered_types.find(type);
+
+	if (lu == registered_types.end()) {
+		throw InvalidInputException("Secret type '%s' not found", type);
+	}
+
+	return lu->second;
 }
 
 vector<shared_ptr<RegisteredSecret>>& SecretManager::AllSecrets() {

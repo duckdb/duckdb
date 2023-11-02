@@ -65,6 +65,9 @@ public:
 	//! Registers a new type
 	DUCKDB_API static void RegisterType(DatabaseInstance &db, string type_name, LogicalType type);
 
+	//! Registers a new secret type
+	DUCKDB_API static void RegisterSecretType(DatabaseInstance &db, SecretType secret_type);
+
 	//! Registers a cast between two types
 	DUCKDB_API static void RegisterCastFunction(DatabaseInstance &db, const LogicalType &source,
 	                                            const LogicalType &target, BoundCastInfo function,

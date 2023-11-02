@@ -175,6 +175,7 @@ TableFunctionCatalogEntry &ExtensionUtil::GetTableFunction(DatabaseInstance &db,
 }
 
 CreateSecretFunctionCatalogEntry &ExtensionUtil::GetCreateSecretFunction(DatabaseInstance &db, const string &name) {
+	// TODO: this should probably not go in the catalog but in the secret_manager
 	D_ASSERT(!name.empty());
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
@@ -194,6 +195,11 @@ void ExtensionUtil::RegisterType(DatabaseInstance &db, string type_name, Logical
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateType(data, info);
+}
+
+void ExtensionUtil::RegisterSecretType(DatabaseInstance &db, SecretType secret_type) {
+	auto &config = DBConfig::GetConfig(db);
+	config.secret_manager->RegisterSecretType(secret_type);
 }
 
 void ExtensionUtil::RegisterCastFunction(DatabaseInstance &db, const LogicalType &source, const LogicalType &target,

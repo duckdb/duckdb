@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/secret_manager.hpp"
 
 namespace duckdb {
 
@@ -19,11 +20,10 @@ class RegisteredSecret {
 
 public:
 	RegisteredSecret(vector<string> &prefix_paths, string &type, string &provider, string &name)
-	    : prefix_paths(prefix_paths), type(type), provider(provider), name(name) {};
+	    : prefix_paths(prefix_paths), type(type), provider(provider), name(name), serializable(false) {};
 	virtual ~RegisteredSecret() = default;
 
 	//! Returns the longest prefix that matches, -1 for no match
-	//! Note: some secrets may want to override this function when paths are platform dependent
 	virtual int LongestMatch(const string &path);
 
 	//! The ToString method prints the secret, the redact option determines whether secret data is allowed to be printed
@@ -31,6 +31,11 @@ public:
 	virtual string ToString(bool redact) {
 		return "";
 	}
+
+	//! Serialize this secret
+	virtual void Serialize(Serializer &serializer) const {
+	    throw InternalException("Attempted to serialize secret without ");
+	};
 
 	//! Getters
 	vector<string> &GetScope() {
@@ -45,6 +50,9 @@ public:
 	const string &GetName() const {
 		return name;
 	}
+	bool IsSerializable() const {
+		return serializable;
+	}
 
 protected:
 	//! prefixes to which the secret applies
@@ -56,6 +64,9 @@ protected:
 	string provider;
 	//! Name of the secret
 	string name;
+
+	//! Whether the secret can be serialized/deserialized
+	bool serializable;
 };
 
 } // namespace duckdb

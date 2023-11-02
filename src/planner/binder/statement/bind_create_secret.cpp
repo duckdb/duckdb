@@ -13,6 +13,7 @@ namespace duckdb {
 
 BoundStatement Binder::Bind(CreateSecretStatement &stmt) {
 	auto type = stmt.info->type;
+	auto provider = stmt.info->provider;
 
 	auto &entry = Catalog::GetEntry<CreateSecretFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, type);
 	string error;
