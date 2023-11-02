@@ -4,7 +4,6 @@ from typing import final
 import pytest
 
 
-
 def test_9182():
     pd.set_option('future.infer_string', True)
 
