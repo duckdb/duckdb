@@ -23,7 +23,9 @@ add_executable(
   tests/multicolumn_param_bind.cpp
   tests/numeric.cpp
   tests/quotes.cpp
-  tests/result_conversion.cpp)
+  tests/result_conversion.cpp
+  tests/time.cpp
+)
 
 if(CMAKE_GENERATOR MATCHES "Visual Studio")
   # System.Data.ODBC tests Visual Studio Generator due to use of C++ CLI and
