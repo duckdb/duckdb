@@ -8,21 +8,62 @@ require icu
 #statement ok
 #PRAGMA enable_verification
 
-# Set up some timestamp data
+# Note: this also contains TIMESTAMP_NS
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
+
+# Basic value
 statement ok
-create table ts_tbl as select '1990/12/21'::TIMESTAMP as ts;
+create table ts_${unit}_tbl_1 as from VALUES
+	('1990/12/21'::${unit})
+as t(ts);
+
+endloop
+
+foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
+
+# Extreme positive
+statement ok
+create table ts_${unit}_tbl_2 as from VALUES
+	('294247-01-10'::${unit})
+as t(ts);
+
+# Extreme negative
+statement ok
+create table ts_${unit}_tbl_3 as from VALUES
+	('29720-04-05 (BC) 22:13:20'::${unit})
+as t(ts);
+
+endloop
 
 statement ok
-SET TimeZone='UTC'
+SET Calendar='gregorian';
 
-query I nosort result_utc
-select ts as base, base::TIMESTAMPTZ as tstz from ts_tbl;
+statement ok
+SET TimeZone='UTC';
+
+# Table 1 - UTC +0
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
+
+query I nosort result_utc_1
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_1;
 ----
 
-foreach unit TIMESTAMP_MS TIMESTAMP_NS TIMESTAMP_S
+endloop
 
-query I nosort result_utc
-select '1990/12/21'::${unit} as base, base::TIMESTAMPTZ as tstz
+# Table 2 - UTC +0
+foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
+
+query I nosort result_utc_2
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_2;
+----
+
+endloop
+
+# Table 3 - UTC +0
+foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
+
+query I nosort result_utc_3
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_3;
 ----
 
 endloop
@@ -30,14 +71,62 @@ endloop
 statement ok
 SET TimeZone='America/Los_Angeles'
 
-query I nosort result_america
-select ts as base, base::TIMESTAMPTZ as tstz from ts_tbl;
+# Table 1 - America +8
+foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
+
+query I nosort result_america_1
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_1;
 ----
 
-foreach unit TIMESTAMP_MS TIMESTAMP_NS TIMESTAMP_S
+endloop
 
-query I nosort result_america
-select '1990/12/21'::${unit} as base, base::TIMESTAMPTZ as tstz
+# Table 2 - America +8
+foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
+
+# This timestamp is near the end of the valid range, this timezone would overflow the value
+statement error
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_2;
+----
+Conversion Error: Unable to convert ICU date to timestamp
+
+endloop
+
+# Table 3 - America +8
+foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
+
+query I nosort result_america_3
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_3;
+----
+
+endloop
+
+statement ok
+SET TimeZone='Etc/GMT-6'
+
+# Table 1 - ETC -6
+foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
+
+query I nosort result_etc_1
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_1;
+----
+
+endloop
+
+# Table 2 - ETC -6
+foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
+
+query I nosort result_etc_2
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_2;
+----
+
+endloop
+
+# Table 3 - ETC -6
+foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
+
+# FIXME: I would expect this to overflow???
+query I nosort result_etc_3
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_3;
 ----
 
 endloop

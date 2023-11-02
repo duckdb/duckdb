@@ -332,11 +332,15 @@ int64_t Timestamp::GetEpochMicroSeconds(timestamp_t timestamp) {
 	return timestamp.value;
 }
 
-int64_t Timestamp::GetEpochNanoSeconds(timestamp_t timestamp) {
+int64_t Timestamp::GetEpochNanoSeconds(timestamp_t timestamp, const string &error_message) {
 	int64_t result;
 	int64_t ns_in_us = 1000;
 	if (!TryMultiplyOperator::Operation(timestamp.value, ns_in_us, result)) {
-		throw ConversionException("Could not convert Timestamp(US) to Timestamp(NS)");
+		if (error_message.empty()) {
+			throw ConversionException("Could not convert Timestamp(US) to Timestamp(NS)");
+		} else {
+			throw ConversionException(error_message);
+		}
 	}
 	return result;
 }
