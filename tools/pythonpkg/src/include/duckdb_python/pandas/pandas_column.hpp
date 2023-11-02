@@ -1,12 +1,20 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb_python/pandas/pandas_scan.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 namespace duckdb {
 
-enum class PandasColumnBackend { NUMPY };
+enum class PandasColumnBackend { NUMPY, ARROW };
 
 class PandasColumn {
 public:
-	PandasColumn(PandasColumnBackend backend) : backend(backend) {
+	explicit PandasColumn(PandasColumnBackend backend) : backend(backend) {
 	}
 	virtual ~PandasColumn() {
 	}

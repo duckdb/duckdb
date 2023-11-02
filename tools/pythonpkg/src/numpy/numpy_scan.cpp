@@ -193,8 +193,8 @@ void NumpyScan::ScanObjectColumn(PyObject **col, idx_t stride, idx_t count, idx_
 	VerifyTypeConstraints(out, count);
 }
 
-//! 'offset' is the offset within the column
-//! 'count' is the amount of values we will convert in this batch
+// 'offset' is the offset within the column
+// 'count' is the amount of values we will convert in this batch
 void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
 	D_ASSERT(bind_data.pandas_col->Backend() == PandasColumnBackend::NUMPY);
 	auto &numpy_col = reinterpret_cast<PandasNumpyColumn &>(*bind_data.pandas_col);
@@ -315,7 +315,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 		break;
 	}
 	case NumpyNullableType::OBJECT: {
-		//! We have determined the underlying logical type of this object column
+		// We have determined the underlying logical type of this object column
 		// Get the source pointer of the numpy array
 		auto src_ptr = (PyObject **)array.data(); // NOLINT
 		if (out.GetType().id() != LogicalTypeId::VARCHAR) {

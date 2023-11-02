@@ -1,6 +1,7 @@
 #include "duckdb_python/pandas/pandas_bind.hpp"
 #include "duckdb_python/pandas/pandas_analyzer.hpp"
 #include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
+#include "duckdb_python/pandas/column/pandas_arrow_column.hpp"
 
 namespace duckdb {
 
@@ -95,8 +96,8 @@ static LogicalType BindColumn(PandasBindColumn &column_p, PandasColumnBindData &
 	} else {
 		auto pandas_array = column.attr("array");
 		if (py::hasattr(pandas_array, "_pa_array")) {
-			// This means we can access the numpy array directly
-			bind_data.pandas_col = make_uniq<PandasNumpyColumn>(pandas_array.attr("_pa_array"));
+			// This means we can access the arrow array directly
+			bind_data.pandas_col = make_uniq<PandasArrowColumn>(PyObject(pandas_array.attr("_pa_array")));
 		} else if (py::hasattr(pandas_array, "_data")) {
 			// This means we can access the numpy array directly
 			bind_data.pandas_col = make_uniq<PandasNumpyColumn>(pandas_array.attr("_data"));

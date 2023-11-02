@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/numpy/numpy_scan.hpp
+// duckdb_python/numpy/arrow_scan.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -15,9 +15,8 @@ namespace duckdb {
 
 struct PandasColumnBindData;
 
-struct NumpyScan {
+struct ArrowScan {
 	static void Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out);
-	static void ScanObjectColumn(PyObject **col, idx_t stride, idx_t count, idx_t offset, Vector &out);
 };
 
 } // namespace duckdb

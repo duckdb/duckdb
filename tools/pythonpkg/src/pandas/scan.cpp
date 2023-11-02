@@ -1,4 +1,5 @@
 #include "duckdb_python/pandas/pandas_scan.hpp"
+#include "duckdb_python/arrow/arrow_scan.hpp"
 #include "duckdb_python/pandas/pandas_bind.hpp"
 #include "duckdb_python/numpy/array_wrapper.hpp"
 #include "utf8proc_wrapper.hpp"
@@ -151,13 +152,14 @@ void PandasScanFunction::PandasBackendScanSwitch(PandasColumnBindData &bind_data
                                                  Vector &out) {
 	auto backend = bind_data.pandas_col->Backend();
 	switch (backend) {
-	case PandasColumnBackend::NUMPY: {
+	case PandasColumnBackend::NUMPY:
 		NumpyScan::Scan(bind_data, count, offset, out);
 		break;
-	}
-	default: {
+	case PandasColumnBackend::ARROW:
+		ArrowScan::Scan(bind_data,count,offset,out);
+	default:
 		throw NotImplementedException("Type not implemented for PandasColumnBackend");
-	}
+
 	}
 }
 
