@@ -35,7 +35,7 @@ enum class ArrowDateTimeType : uint8_t {
 class ArrowType {
 public:
 	//! From a DuckDB type
-	ArrowType(LogicalType type_p)
+	explicit ArrowType(LogicalType type_p)
 	    : type(std::move(type_p)), size_type(ArrowVariableSizeType::NORMAL),
 	      date_time_precision(ArrowDateTimeType::DAYS) {};
 

@@ -11,6 +11,7 @@
 //#include "duckdb_python/pandas/pandas_analyzer.hpp"
 //#include "duckdb_python/numpy/numpy_type.hpp"
 //#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb_python/arrow/arrow_scan.hpp"
 #include "duckdb_python/pandas/column/pandas_arrow_column.hpp"
 #include "duckdb_python/pandas/pandas_bind.hpp"
@@ -22,9 +23,10 @@ void ArrowScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 	D_ASSERT(bind_data.pandas_col->Backend() == PandasColumnBackend::NUMPY);
 	auto &arrow_col = reinterpret_cast<PandasArrowColumn &>(*bind_data.pandas_col);
 	auto &chunked_array = arrow_col.array;
+	// Turn chunked_array into Arrow Array
 	switch (bind_data.numpy_type.type) {
-	case NumpyNullableType::
-		ScanNumpyMasked<bool>(bind_data, count, offset, out);
+	case NumpyNullableType::OBJECT:
+	    ArrowConverter::ColumnArrowToDuckDB(out, array, array_state, output.size(), arrow_type);
 		break;
 	default:
 		throw NotImplementedException("Unsupported Pandas-Arrow type");

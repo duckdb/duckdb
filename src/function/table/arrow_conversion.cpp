@@ -4,6 +4,7 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
 
 namespace duckdb {
 
@@ -79,10 +80,6 @@ static void SetValidityMask(Vector &vector, ArrowArray &array, ArrowScanLocalSta
 	auto &mask = FlatVector::Validity(vector);
 	GetValidityMask(mask, array, scan_state, size, nested_offset, add_null);
 }
-
-static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
-                                const ArrowType &arrow_type, int64_t nested_offset = -1,
-                                ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0);
 
 static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state,
                                           idx_t size, const ArrowType &arrow_type, int64_t nested_offset = -1,
@@ -163,13 +160,13 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanS
 	auto &child_type = arrow_type[0];
 	if (list_size == 0 && start_offset == 0) {
 		D_ASSERT(!child_array.dictionary);
-		ColumnArrowToDuckDB(child_vector, child_array, child_state, list_size, child_type, -1);
+		ArrowConverter::ColumnArrowToDuckDB(child_vector, child_array, child_state, list_size, child_type, -1);
 	} else {
 		if (child_array.dictionary) {
 			// TODO: add support for offsets
 			ColumnArrowToDuckDBDictionary(child_vector, child_array, child_state, list_size, child_type, start_offset);
 		} else {
-			ColumnArrowToDuckDB(child_vector, child_array, child_state, list_size, child_type, start_offset);
+			ArrowConverter::ColumnArrowToDuckDB(child_vector, child_array, child_state, list_size, child_type, start_offset);
 		}
 	}
 }
@@ -358,7 +355,7 @@ static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, A
 	}
 }
 
-static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
+void ArrowConverter::ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
                                 const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
                                 uint64_t parent_offset) {
 	auto &scan_state = array_state.state;
@@ -832,7 +829,7 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 		//! We need to set the dictionary data for this column
 		auto base_vector = make_uniq<Vector>(vector.GetType(), array.dictionary->length);
 		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, 0, array.null_count > 0);
-		ColumnArrowToDuckDB(*base_vector, *array.dictionary, array_state, array.dictionary->length,
+		ArrowConverter::ColumnArrowToDuckDB(*base_vector, *array.dictionary, array_state, array.dictionary->length,
 		                    arrow_type.GetDictionary());
 		array_state.AddDictionary(std::move(base_vector));
 	}
@@ -889,7 +886,7 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const ar
 			ColumnArrowToDuckDBDictionary(output.data[idx], array, array_state, output.size(), arrow_type);
 		} else {
 			SetValidityMask(output.data[idx], array, scan_state, output.size(), -1);
-			ColumnArrowToDuckDB(output.data[idx], array, array_state, output.size(), arrow_type);
+			ArrowConverter::ColumnArrowToDuckDB(output.data[idx], array, array_state, output.size(), arrow_type);
 		}
 	}
 }
