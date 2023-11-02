@@ -102,7 +102,7 @@ void CreateS3SecretFunctions::SetBaseNamedParams(CreateSecretFunction &function,
 
 void CreateS3SecretFunctions::RegisterCreateSecretFunction(DatabaseInstance &instance, string type) {
 	// Register the new type
-	ExtensionUtil::RegisterSecretType(instance, {type, nullptr});
+	ExtensionUtil::RegisterSecretType(instance, {type, S3Secret::Deserialize});
 
 	// Default function
 	auto default_fun = CreateSecretFunction(type, "", CreateS3SecretFromConfig);

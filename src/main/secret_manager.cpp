@@ -5,7 +5,21 @@
 namespace duckdb {
 
 unique_ptr<RegisteredSecret> SecretManager::DeserializeSecret(Deserializer& deserializer) {
-	throw NotImplementedException("SerializeSecret");
+	auto type = deserializer.ReadProperty<string>(100, "type");
+	auto provider = deserializer.ReadProperty<string>(101, "provider");
+	auto name = deserializer.ReadProperty<string>(102, "name");
+	vector<string> scope;
+	deserializer.ReadList(103, "scope", [&](Deserializer::List &list, idx_t i) {
+		scope.push_back(list.ReadElement<string>());
+	});
+
+	auto secret_type = LookupType(type);
+
+	if (!secret_type.deserializer) {
+		throw InternalException("Attempted to deserialize secret type '%s' which does not have a deserialization method", type);
+	}
+
+	return secret_type.deserializer(deserializer, {scope, type, provider, name});
 }
 
 void SecretManager::SerializeSecret(RegisteredSecret& secret, Serializer& serializer) {

@@ -4,6 +4,7 @@
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/secret.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -78,6 +79,9 @@ class S3Secret : public RegisteredSecret {
 public:
 	S3Secret(vector<string> &prefix_paths_p, string &type, string &provider, string& name, S3AuthParams params_p)
 	    : RegisteredSecret(prefix_paths_p, type, provider, name), params(params_p) {};
+	S3Secret(RegisteredSecret secret, S3AuthParams params_p)
+	    : RegisteredSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()), params(params_p) {};
+
 
 	S3AuthParams GetParams(){
 		return params;
@@ -103,6 +107,31 @@ public:
 		value += string(";s3_url_compatibility_mode=") + (params.s3_url_compatibility_mode ? "1" : "0");
 
 		return value;
+	}
+
+	void Serialize(Serializer &serializer) const override {
+		RegisteredSecret::SerializeBaseSecret(serializer);
+		serializer.WriteProperty(10001, "region", params.region);
+		serializer.WriteProperty(10002, "access_key_id", params.access_key_id);
+		serializer.WriteProperty(10003, "secret_access_key", params.secret_access_key);
+		serializer.WriteProperty(10004, "session_token", params.session_token);
+		serializer.WriteProperty(10005, "endpoint", params.endpoint);
+		serializer.WriteProperty(10006, "url_style", params.url_style);
+		serializer.WriteProperty(10007, "use_ssl", params.use_ssl);
+		serializer.WriteProperty(10008, "s3_url_compatibility_mode", params.s3_url_compatibility_mode);
+	};
+
+	static unique_ptr<RegisteredSecret> Deserialize(Deserializer &deserializer, RegisteredSecret base_secret) {
+		S3AuthParams params;
+		deserializer.ReadProperty(10001, "region", params.region);
+		deserializer.ReadProperty(10002, "access_key_id", params.access_key_id);
+		deserializer.ReadProperty(10003, "secret_access_key", params.secret_access_key);
+		deserializer.ReadProperty(10004, "session_token", params.session_token);
+		deserializer.ReadProperty(10005, "endpoint", params.endpoint);
+		deserializer.ReadProperty(10006, "url_style", params.url_style);
+		deserializer.ReadProperty(10007, "use_ssl", params.use_ssl);
+		deserializer.ReadProperty(10008, "s3_url_compatibility_mode", params.s3_url_compatibility_mode);
+		return make_uniq<S3Secret>(base_secret, params);
 	}
 
 protected:

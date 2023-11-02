@@ -65,7 +65,7 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 
 		output.SetValue(0, count, secret_entry->GetName());
 		output.SetValue(1, count, Value(secret_entry->GetType()));
-		output.SetValue(2, count, Value(secret_entry->GetType()));
+		output.SetValue(2, count, Value(secret_entry->GetProvider()));
 		output.SetValue(3, count, Value::LIST(LogicalType::VARCHAR, scope_value));
 		output.SetValue(4, count, secret_entry->ToString(true));
 

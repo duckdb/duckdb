@@ -15,7 +15,7 @@ namespace duckdb {
 class ClientContext;
 class RegisteredSecret;
 
-typedef unique_ptr<RegisteredSecret> (*secret_deserializer_t)(Deserializer& deserializer);
+typedef unique_ptr<RegisteredSecret> (*secret_deserializer_t)(Deserializer& deserializer, RegisteredSecret base_secret);
 
 //! Secret types describe which secret types are currently registered and how to deserialize them
 struct SecretType {
@@ -30,7 +30,7 @@ struct SecretType {
 class SecretManager {
 public:
 	//! Deserialize the secret. Will look up the deserialized type, then call the deserialize for the registered type.
-	static unique_ptr<RegisteredSecret> DeserializeSecret(Deserializer& deserializer);
+	unique_ptr<RegisteredSecret> DeserializeSecret(Deserializer& deserializer);
 	//! Serialize the secret. Calls the virtual serialize function of the secret;
 	static void SerializeSecret(RegisteredSecret& secret, Serializer& serializer);
 
