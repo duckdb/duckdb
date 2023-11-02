@@ -9,6 +9,7 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/cse_optimizer.hpp"
 #include "duckdb/optimizer/deliminator.hpp"
+#include "duckdb/optimizer/operation_converter.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
@@ -117,6 +118,12 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	RunOptimizer(OptimizerType::DELIMINATOR, [&]() {
 		Deliminator deliminator;
 		plan = deliminator.Optimize(std::move(plan));
+	});
+
+	// Convert setop operations to joins if possible
+	RunOptimizer(OptimizerType::OPERATION_CONVERTER, [&]() {
+		OperationConverter optimizer;
+		plan = optimizer.Optimize(std::move(plan));
 	});
 
 	// then we perform the join ordering optimization

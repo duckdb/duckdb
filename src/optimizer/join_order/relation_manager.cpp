@@ -90,7 +90,10 @@ static bool OperatorIsNonReorderable(LogicalOperatorType op_type) {
 	switch (op_type) {
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
-	case LogicalOperatorType::LOGICAL_INTERSECT:
+	case LogicalOperatorType::LOGICAL_INTERSECT: {
+		auto a = 0;
+		return true;
+	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
