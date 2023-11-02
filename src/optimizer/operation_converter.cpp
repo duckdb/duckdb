@@ -8,7 +8,7 @@ namespace duckdb {
 
 
 unique_ptr<LogicalOperator> OperationConverter::Optimize(unique_ptr<LogicalOperator> op) {
-	return op;
+	return std::move(op);
 }
 
 } // namespace duckdb
