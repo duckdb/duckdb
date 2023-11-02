@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/helper/physical_create_secret.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/secret_manager.hpp"
 
 namespace duckdb {
 

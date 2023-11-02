@@ -7,6 +7,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/secret_manager.hpp"
 
 namespace duckdb {
 
@@ -62,7 +63,7 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 			scope_value.push_back(scope_entry);
 		}
 
-		output.SetValue(0, count, secret_entry->GetAlias());
+		output.SetValue(0, count, secret_entry->GetName());
 		output.SetValue(1, count, Value(secret_entry->GetType()));
 		output.SetValue(2, count, Value(secret_entry->GetType()));
 		output.SetValue(3, count, Value::LIST(LogicalType::VARCHAR, scope_value));

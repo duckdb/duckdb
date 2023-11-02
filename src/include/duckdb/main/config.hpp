@@ -30,6 +30,7 @@
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/main/client_properties.hpp"
+#include "duckdb/main/secret_manager.hpp"
 
 namespace duckdb {
 class BufferPool;
@@ -176,131 +177,6 @@ struct DBConfigOptions {
 	idx_t allocator_flush_threshold = 134217728;
 
 	bool operator==(const DBConfigOptions &other) const;
-};
-
-//! Base class from which RegisteredSecret classes can be made.
-//! TODO thread-safety?
-class RegisteredSecret {
-	friend class SecretManager;
-
-public:
-	RegisteredSecret(vector<string> &prefix_paths, string& type, string& provider) : prefix_paths(prefix_paths), type(type), provider(provider) {
-	};
-	virtual ~RegisteredSecret() = default;
-
-	//! Returns the longest prefix that matches, -1 for no match
-	//! Note: some secret may want to override this function when paths are platform dependent
-	virtual int LongestMatch(const string& path) {
-		int longest_match = -1;
-		for (const auto& prefix: prefix_paths) {
-			if (prefix == "*") {
-				longest_match = 0;
-				continue;
-			}
-			if (StringUtil::StartsWith(path, prefix)) {
-				longest_match = MaxValue<int>(prefix.length(), longest_match);
-			};
-		}
-		return longest_match;
-	}
-
-	//! The ToString method prints the secret, the redact option determines whether secret data is allowed to be printed
-	//! in clear text. This is to be decided by the secret implementation
-	virtual string ToString(bool redact) {
-		return "";
-	}
-
-	vector<string>& GetScope() {
-		return prefix_paths;
-	}
-
-	const string& GetType() {
-		return type;
-	}
-
-	const string& GetProvider() {
-		return provider;
-	}
-
-	const string &GetAlias() const {
-		return alias;
-	}
-	void SetAlias(const string& alias_p) {
-		alias = StringUtil::Lower(alias_p);
-	}
-
-protected:
-	//! prefixes to which the secret applies
-	vector<string> prefix_paths;
-
-	//! Type of secret
-	string type;
-	//! Provider of the secret
-	string provider;
-
-	//! alias for easy identification and deletion
-	string alias;
-};
-
-//! TODO thread-safety!
-class SecretManager {
-public:
-	void RegisterSecret(shared_ptr<RegisteredSecret> secret, OnCreateConflict on_conflict) {
-		bool conflict = false;
-		idx_t conflict_idx;
-
-		// Assert the alias does not exist already
-		if (!secret->GetAlias().empty()) {
-			for(idx_t cred_idx = 0; cred_idx < registered_secrets.size(); cred_idx++) {
-				const auto& cred = registered_secrets[cred_idx];
-				if (cred->GetAlias() == secret->GetAlias()) {
-					conflict = true;
-					conflict_idx = cred_idx;
-				}
-			}
-		}
-
-		if (conflict) {
-			if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
-				throw InvalidInputException("Secret with alias '" + secret->GetAlias() + "' already exists!");
-			} else if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
-				return;
-			} else if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
-				registered_secrets[conflict_idx] = secret;
-			} else {
-				throw InternalException("unknown OnCreateConflict found while registering secret");
-			}
-		} else {
-			registered_secrets.push_back(std::move(secret));
-		}
-	}
-
-	//! Find the best matching set of credentials for this path. (In case of multiple, longest prefix wins)
-	shared_ptr<RegisteredSecret> GetSecretByPath(string& path, string type) {
-		int longest_match = -1;
-		shared_ptr<RegisteredSecret> best_match;
-
-		for (const auto& secret: registered_secrets) {
-			if (secret->GetType() != type) {
-				continue;
-			}
-			auto match = secret->LongestMatch(path);
-
-			if (match > longest_match) {
-				longest_match = MaxValue<idx_t>(match, longest_match);
-				best_match = secret;
-			}
-		}
-		return best_match;
-	}
-
-	//! Find the best matching set of secrets for this path. (In case of multiple, longest prefix wins)
-	vector<shared_ptr<RegisteredSecret>>&AllSecrets() {
-		return registered_secrets;
-	}
-
-protected:
-	vector<shared_ptr<RegisteredSecret>> registered_secrets;
 };
 
 struct DBConfig {

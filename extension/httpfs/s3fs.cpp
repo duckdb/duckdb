@@ -11,6 +11,7 @@
 
 #include <duckdb/function/scalar/string_functions.hpp>
 #include <duckdb/storage/buffer_manager.hpp>
+#include <duckdb/main/secret_manager.hpp>
 #include <iostream>
 #include <thread>
 

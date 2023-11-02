@@ -5,6 +5,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/secret.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "httpfs.hpp"
 
@@ -75,8 +76,8 @@ struct S3ConfigParams {
 //! Registered Credential class for S3.
 class S3Secret : public RegisteredSecret {
 public:
-	S3Secret(vector<string> &prefix_paths_p, string &type, string &provider, S3AuthParams params_p)
-	    : RegisteredSecret(prefix_paths_p, type, provider), params(params_p) {};
+	S3Secret(vector<string> &prefix_paths_p, string &type, string &provider, string& name, S3AuthParams params_p)
+	    : RegisteredSecret(prefix_paths_p, type, provider, name), params(params_p) {};
 
 	S3AuthParams GetParams(){
 		return params;
