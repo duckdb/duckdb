@@ -79,6 +79,15 @@ jobs:
           extra-packages: any::rcmdcheck
           needs: check
 
+      - name: Apply duckdb-r patches
+        shell: bash
+        working-directory: ${{ env.DUCKDB_SRC }}
+        run: |
+          shopt -s nullglob
+          for filename in .github/patches/duckdb-r/*.patch; do
+            git apply $filename
+          done
+
       # needed so we can run git commit in vendor.sh
       - name: setup github and create parallel builds
         shell: bash

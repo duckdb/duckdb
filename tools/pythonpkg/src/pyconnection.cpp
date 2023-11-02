@@ -47,6 +47,7 @@
 #include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/main/pending_query_result.hpp"
 
 #include <random>
 
@@ -101,10 +102,10 @@ py::object ArrowTableFromDataframe(const py::object &df) {
 	try {
 		return py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_pandas")(df);
 	} catch (py::error_already_set &e) {
-		// We don't fetch the original python exception because it can cause a segfault
+		// We don't fetch the original Python exception because it can cause a segfault
 		// The cause of this is not known yet, for now we just side-step the issue.
 		throw InvalidInputException(
-		    "The dataframe could not be converted to a pyarrow.lib.Table, because a python exception occurred.");
+		    "The dataframe could not be converted to a pyarrow.lib.Table, because a Python exception occurred.");
 	}
 }
 
@@ -120,7 +121,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "Check if a filesystem with the provided name is currently registered", py::arg("name"));
 
 	m.def("create_function", &DuckDBPyConnection::RegisterScalarUDF,
-	      "Create a DuckDB function out of the passing in python function so it can be used in queries",
+	      "Create a DuckDB function out of the passing in Python function so it can be used in queries",
 	      py::arg("name"), py::arg("function"), py::arg("return_type") = py::none(), py::arg("parameters") = py::none(),
 	      py::kw_only(), py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = 0,
 	      py::arg("exception_handling") = 0, py::arg("side_effects") = false);
@@ -448,7 +449,11 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 		// if there are multiple statements, we directly execute the statements besides the last one
 		// we only return the result of the last statement to the user, unless one of the previous statements fails
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
-			// TODO: this doesn't take in any prepared parameters?
+			if (statements[i]->n_param != 0) {
+				throw NotImplementedException(
+				    "Prepared parameters are only supported for the last statement, please split your query up into "
+				    "separate 'execute' calls if you want to use prepared parameters");
+			}
 			auto pending_query = connection->PendingQuery(std::move(statements[i]), false);
 			auto res = CompletePendingQuery(*pending_query);
 

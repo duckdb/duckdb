@@ -1,7 +1,10 @@
-#include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
-#include "duckdb/optimizer/join_order/query_graph_manager.hpp"
+
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/optimizer/join_order/join_node.hpp"
+#include "duckdb/optimizer/join_order/query_graph_manager.hpp"
+
+#include <cmath>
 
 namespace duckdb {
 
@@ -76,7 +79,7 @@ static vector<unordered_set<idx_t>> GetAllNeighborSets(vector<idx_t> neighbors) 
 	// drive by test to make sure we have an accurate amount of
 	// subsets, and that each neighbor is in a correct amount
 	// of those subsets.
-	D_ASSERT(ret.size() == pow(2, neighbors.size()) - 1);
+	D_ASSERT(ret.size() == std::pow(2, neighbors.size()) - 1);
 	for (auto &n : neighbors) {
 		idx_t count = 0;
 		for (auto &set : ret) {
@@ -84,7 +87,7 @@ static vector<unordered_set<idx_t>> GetAllNeighborSets(vector<idx_t> neighbors) 
 				count += 1;
 			}
 		}
-		D_ASSERT(count == pow(2, neighbors.size() - 1));
+		D_ASSERT(count == std::pow(2, neighbors.size() - 1));
 	}
 #endif
 	return ret;
