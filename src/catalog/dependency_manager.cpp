@@ -136,7 +136,9 @@ DependencySetCatalogEntry &DependencyManager::GetOrCreateDependencySet(CatalogTr
 }
 
 bool DependencyManager::IsSystemEntry(CatalogEntry &entry) const {
-	if (entry.internal) {
+	if (entry.type != CatalogType::SCHEMA_ENTRY && entry.internal) {
+		// We do create dependency sets for Schemas, they would be created at a later time regardless
+		// and that could cause a write-write conflict if used in separate connections
 		return true;
 	}
 
