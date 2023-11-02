@@ -75,8 +75,6 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// get the id of the first meta block
 	auto meta_block = metadata_writer->GetMetaBlockPointer();
 
-	vector<reference<SchemaCatalogEntry>> schemas;
-	// we scan the set of committed schemas
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
 
 	catalog_entry_vector_t catalog_entries;

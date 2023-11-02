@@ -71,10 +71,25 @@ static void AssertMangledName(const string &mangled_name) {
 	D_ASSERT(nullbyte_count == 2);
 }
 
-optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(CatalogTransaction transaction,
-                                                                            const string &mangled_name) {
+catalog_entry_vector_t DependencyManager::GetDependencySets(optional_ptr<CatalogTransaction> transaction) {
+	catalog_entry_vector_t sets;
+	if (!transaction) {
+		dependency_sets.Scan([&](CatalogEntry &set) { sets.push_back(set); });
+	} else {
+		dependency_sets.Scan(*transaction, [&](CatalogEntry &set) { sets.push_back(set); });
+	}
+	return sets;
+}
+
+optional_ptr<DependencySetCatalogEntry>
+DependencyManager::GetDependencySet(optional_ptr<CatalogTransaction> transaction, const string &mangled_name) {
 	AssertMangledName(mangled_name);
-	auto dependency_set_p = dependency_sets.GetEntry(transaction, mangled_name);
+	optional_ptr<CatalogEntry> dependency_set_p;
+	if (transaction) {
+		dependency_set_p = dependency_sets.GetEntry(*transaction, mangled_name);
+	} else {
+		dependency_set_p = dependency_sets.GetEntry(mangled_name);
+	}
 	if (!dependency_set_p) {
 		return nullptr;
 	}
@@ -82,8 +97,8 @@ optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(Cata
 	return dynamic_cast<DependencySetCatalogEntry *>(dependency_set_p.get());
 }
 
-optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(CatalogTransaction transaction,
-                                                                            const LogicalDependency &object) {
+optional_ptr<DependencySetCatalogEntry>
+DependencyManager::GetDependencySet(optional_ptr<CatalogTransaction> transaction, const LogicalDependency &object) {
 	auto mangled_name = MangleName(object);
 	return GetDependencySet(transaction, mangled_name);
 }
@@ -94,8 +109,8 @@ DependencySetCatalogEntry &DependencyManager::GetOrCreateDependencySet(CatalogTr
 	return GetOrCreateDependencySet(transaction, dep);
 }
 
-optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(CatalogTransaction transaction,
-                                                                            CatalogEntry &object) {
+optional_ptr<DependencySetCatalogEntry>
+DependencyManager::GetDependencySet(optional_ptr<CatalogTransaction> transaction, CatalogEntry &object) {
 	LogicalDependency dep(object);
 	return GetDependencySet(transaction, dep);
 }
@@ -103,7 +118,7 @@ optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(Cata
 DependencySetCatalogEntry &DependencyManager::GetOrCreateDependencySet(CatalogTransaction transaction,
                                                                        const LogicalDependency &object) {
 	auto mangled_name = MangleName(object);
-	auto dependency_set_p = GetDependencySet(transaction, mangled_name);
+	auto dependency_set_p = GetDependencySet(&transaction, mangled_name);
 	if (dependency_set_p) {
 		return *dependency_set_p;
 	}
@@ -142,6 +157,9 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 		return;
 	}
 
+	// Create a dependency set for the object
+	GetOrCreateDependencySet(transaction, object);
+
 	// check for each object in the sources if they were not deleted yet
 	for (auto &dependency : dependencies.Set()) {
 		if (dependency.catalog != object.ParentCatalog().GetName()) {
@@ -178,14 +196,19 @@ static bool CascadeDrop(bool cascade, DependencyType dependency_type) {
 	return false;
 }
 
-optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction,
+optional_ptr<CatalogEntry> DependencyManager::LookupEntry(optional_ptr<CatalogTransaction> transaction,
                                                           LogicalDependency dependency) {
 	auto &schema = dependency.schema;
 	auto &name = dependency.name;
 	auto &type = dependency.type;
 
 	// Lookup the schema
-	auto schema_entry = catalog.schemas->GetEntry(transaction, schema);
+	optional_ptr<CatalogEntry> schema_entry;
+	if (transaction) {
+		schema_entry = catalog.schemas->GetEntry(*transaction, schema);
+	} else {
+		schema_entry = catalog.schemas->GetEntry(schema);
+	}
 	if (type == CatalogType::SCHEMA_ENTRY || !schema_entry) {
 		// This is a schema entry, perform the callback only providing the schema
 		return schema_entry;
@@ -196,17 +219,21 @@ optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction tra
 	auto &catalog_set = duck_schema_entry.GetCatalogSet(type);
 
 	// Use the index to find the actual entry
-	auto entry = catalog_set.GetEntry(transaction, name);
-	return entry;
+	if (transaction) {
+		return catalog_set.GetEntry(*transaction, name);
+	} else {
+		return catalog_set.GetEntry(name);
+	}
 }
 
-optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency) {
+optional_ptr<CatalogEntry> DependencyManager::LookupEntry(optional_ptr<CatalogTransaction> transaction,
+                                                          CatalogEntry &dependency) {
 	LogicalDependency dep(dependency);
 	return LookupEntry(transaction, dep);
 }
 
 void DependencyManager::CleanupDependencies(CatalogTransaction transaction, CatalogEntry &object) {
-	auto dependency_set_p = GetDependencySet(transaction, object);
+	auto dependency_set_p = GetDependencySet(&transaction, object);
 	D_ASSERT(dependency_set_p);
 	auto &dependency_set = *dependency_set_p;
 
@@ -220,7 +247,7 @@ void DependencyManager::CleanupDependencies(CatalogTransaction transaction, Cata
 
 	// Remove the dependency entries
 	for (auto &dependency : dependencies_to_remove) {
-		auto other_dependency_set_p = GetDependencySet(transaction, dependency);
+		auto other_dependency_set_p = GetDependencySet(&transaction, dependency);
 		auto &other_dependency_set = *other_dependency_set_p;
 
 		other_dependency_set.RemoveDependent(transaction, dependency_set);
@@ -228,7 +255,7 @@ void DependencyManager::CleanupDependencies(CatalogTransaction transaction, Cata
 	}
 	// Remove the dependent entries
 	for (auto &dependent : dependents_to_remove) {
-		auto other_dependency_set_p = GetDependencySet(transaction, dependent);
+		auto other_dependency_set_p = GetDependencySet(&transaction, dependent);
 		auto &other_dependency_set = *other_dependency_set_p;
 
 		other_dependency_set.RemoveDependency(transaction, dependency_set);
@@ -245,7 +272,7 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 	}
 
 	// Check if there are any dependencies registered on this object
-	auto object_dependency_set_p = GetDependencySet(transaction, object);
+	auto object_dependency_set_p = GetDependencySet(&transaction, object);
 	if (!object_dependency_set_p) {
 		return;
 	}
@@ -256,7 +283,7 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 	object_dependency_set.ScanDependents(transaction, [&](DependencyCatalogEntry &dep) {
 		// It makes no sense to have a schema depend on anything
 		D_ASSERT(dep.EntryType() != CatalogType::SCHEMA_ENTRY);
-		auto entry = LookupEntry(transaction, dep);
+		auto entry = LookupEntry(&transaction, dep);
 		if (!entry) {
 			return;
 		}
@@ -286,7 +313,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		return;
 	}
 
-	auto old_dependency_set_p = GetDependencySet(transaction, old_obj);
+	auto old_dependency_set_p = GetDependencySet(&transaction, old_obj);
 	if (!old_dependency_set_p) {
 		// Nothing depends on this object and this object doesn't depend on anything either
 		return;
@@ -298,7 +325,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		// It makes no sense to have a schema depend on anything
 		D_ASSERT(dep.EntryType() != CatalogType::SCHEMA_ENTRY);
 
-		auto entry = LookupEntry(transaction, dep);
+		auto entry = LookupEntry(&transaction, dep);
 		if (!entry) {
 			return;
 		}
@@ -306,23 +333,18 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 			owned_objects.insert(Dependency(*entry, dep.Type()));
 			return;
 		}
-		// conflict: attempting to alter this object but the dependent object still exists
-		// no cascade and there are objects that depend on this object: throw error
-		throw DependencyException("Cannot alter entry \"%s\" because there are entries that "
-		                          "depend on it.",
-		                          old_obj.name);
 	});
 
 	// Keep old dependencies
 	dependency_set_t dependents;
 	old_dependency_set.ScanDependencies(transaction, [&](DependencyCatalogEntry &dep) {
-		auto entry = LookupEntry(transaction, dep);
+		auto entry = LookupEntry(&transaction, dep);
 		if (!entry) {
 			return;
 		}
-		auto other_dependency_set = GetDependencySet(transaction, dep);
+		auto other_dependency_set = GetDependencySet(&transaction, dep);
 		// Find the dependent entry so we can properly restore the type it has
-		auto &dependent = other_dependency_set->GetDependent(transaction, old_obj);
+		auto &dependent = other_dependency_set->GetDependent(&transaction, old_obj);
 		dependents.insert(Dependency(*entry, dependent.Type()));
 	});
 
@@ -337,7 +359,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 
 	for (auto &dep : dependents) {
 		auto &other = dep.entry.get();
-		auto other_dependency_set = GetDependencySet(transaction, other);
+		auto other_dependency_set = GetDependencySet(&transaction, other);
 		other_dependency_set->AddDependent(transaction, new_obj).CompleteLink(transaction);
 	}
 
@@ -346,7 +368,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	// For all the objects we own, re establish the dependency of the owner on the object
 	for (auto &object : owned_objects) {
 		auto &entry = object.entry.get();
-		auto other_dependency_set = GetDependencySet(transaction, entry);
+		auto other_dependency_set = GetDependencySet(&transaction, entry);
 		D_ASSERT(other_dependency_set);
 
 		auto &dependent_to =
@@ -368,7 +390,7 @@ static const string &MangledName(CatalogEntry &entry) {
 	}
 }
 
-bool AllExportDependenciesWritten(CatalogTransaction transaction, CatalogEntry &object,
+bool AllExportDependenciesWritten(optional_ptr<CatalogTransaction> transaction, CatalogEntry &object,
                                   catalog_entry_vector_t dependencies, catalog_entry_set_t &exported) {
 	for (auto &entry : dependencies) {
 		// This is an entry that needs to be written before 'object' can be written
@@ -410,7 +432,8 @@ void AddDependentsToBacklog(stack<reference<CatalogEntry>> &backlog, catalog_ent
 	}
 }
 
-DependencySetCatalogEntry &DependencyManager::LookupSet(CatalogTransaction transaction, CatalogEntry &entry) {
+DependencySetCatalogEntry &DependencyManager::LookupSet(optional_ptr<CatalogTransaction> transaction,
+                                                        CatalogEntry &entry) {
 	if (entry.type == CatalogType::DEPENDENCY_SET) {
 		return entry.Cast<DependencySetCatalogEntry>();
 	} else {
@@ -426,12 +449,10 @@ catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTra
 
 	stack<reference<CatalogEntry>> backlog;
 
-	dependency_sets.Scan(*transaction, [&](CatalogEntry &set_p) {
-		auto &set = set_p.Cast<DependencySetCatalogEntry>();
-		set.PrintDependencies(*transaction);
-		set.PrintDependents(*transaction);
-		backlog.emplace(set);
-	});
+	auto sets = GetDependencySets(transaction);
+	for (auto &set : sets) {
+		backlog.push(set);
+	}
 
 	while (!backlog.empty()) {
 		// As long as we still have unordered entries
@@ -444,9 +465,9 @@ catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTra
 			// This entry has already been written
 			continue;
 		}
-		auto &set = LookupSet(*transaction, object);
+		auto &set = LookupSet(transaction, object);
 		auto dependencies = set.GetEntriesThatWeDependOn(transaction);
-		auto is_ordered = AllExportDependenciesWritten(*transaction, object, dependencies, entries);
+		auto is_ordered = AllExportDependenciesWritten(transaction, object, dependencies, entries);
 		if (!is_ordered) {
 			for (auto &dependency : dependencies) {
 				backlog.emplace(dependency);
@@ -457,7 +478,7 @@ catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTra
 		auto insert_result = entries.insert(object);
 		(void)insert_result;
 		D_ASSERT(insert_result.second);
-		auto entry = LookupEntry(*transaction, object);
+		auto entry = LookupEntry(transaction, object);
 		export_order.push_back(*entry);
 		auto dependents = set.GetEntriesThatDependOnUs(transaction);
 		AddDependentsToBacklog(backlog, dependents);
@@ -468,22 +489,23 @@ catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTra
 
 void DependencyManager::Scan(ClientContext &context,
                              const std::function<void(CatalogEntry &, CatalogEntry &, DependencyType)> &callback) {
+	// FIXME: why do we take the write_lock here??
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	auto transaction = catalog.GetCatalogTransaction(context);
 
 	// All the objects registered in the dependency manager
 	catalog_entry_set_t entries;
 	dependency_sets.Scan(transaction, [&](CatalogEntry &set) {
-		auto entry = LookupEntry(transaction, set);
+		auto entry = LookupEntry(&transaction, set);
 		entries.insert(*entry);
 	});
 
 	// For every registered entry, get the dependents
 	for (auto &entry : entries) {
-		auto set = GetDependencySet(transaction, entry);
+		auto set = GetDependencySet(&transaction, entry);
 		// Scan all the dependents of the entry
 		set->ScanDependents(transaction, [&](DependencyCatalogEntry &dependent) {
-			auto dep = LookupEntry(transaction, dependent);
+			auto dep = LookupEntry(&transaction, dependent);
 			if (!dep) {
 				return;
 			}
@@ -511,7 +533,7 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 	entry_dependency_set.ScanDependents(transaction, [&](DependencyCatalogEntry &other) {
 		auto dependency_type = other.Type();
 
-		auto dependent_entry = LookupEntry(transaction, other);
+		auto dependent_entry = LookupEntry(&transaction, other);
 		if (!dependent_entry) {
 			return;
 		}

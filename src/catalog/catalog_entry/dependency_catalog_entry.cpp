@@ -57,7 +57,7 @@ void DependencyCatalogEntry::CompleteLink(CatalogTransaction transaction, Depend
 	}
 }
 
-DependencyCatalogEntry &DependencyCatalogEntry::GetLink(CatalogTransaction transaction) {
+DependencyCatalogEntry &DependencyCatalogEntry::GetLink(optional_ptr<CatalogTransaction> transaction) {
 	auto &manager = set.Manager();
 	switch (side) {
 	case DependencyLinkSide::DEPENDENCY: {

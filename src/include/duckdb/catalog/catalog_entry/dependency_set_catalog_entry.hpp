@@ -58,8 +58,8 @@ public:
 	void AddDependents(CatalogTransaction transaction, const dependency_set_t &dependents);
 
 	// Get dependent/dependency
-	DependencyCatalogEntry &GetDependency(CatalogTransaction &transaction, CatalogEntry &object);
-	DependencyCatalogEntry &GetDependent(CatalogTransaction &transaction, CatalogEntry &object);
+	DependencyCatalogEntry &GetDependency(optional_ptr<CatalogTransaction> transaction, CatalogEntry &object);
+	DependencyCatalogEntry &GetDependent(optional_ptr<CatalogTransaction> transaction, CatalogEntry &object);
 
 public:
 	void RemoveDependency(CatalogTransaction transaction, CatalogEntry &dependency);

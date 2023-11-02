@@ -3,6 +3,11 @@
 
 require 64bit
 
+# This is needed to first initialize the dependency set for the schema
+# otherwise we run into a write-write conflict
+statement ok
+create table tbl (a int);
+
 # Create 4000 threads that all run the contents of this loop
 concurrentloop threadid 0 300
 

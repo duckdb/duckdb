@@ -33,7 +33,7 @@ void DependencySetCatalogEntry::ScanSetInternal(CatalogTransaction transaction, 
 	auto cb = [&](CatalogEntry &other) {
 		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
 		auto &other_entry = other.Cast<DependencyCatalogEntry>();
-		auto other_dependency_set_p = dependency_manager.GetDependencySet(transaction, other);
+		auto other_dependency_set_p = dependency_manager.GetDependencySet(&transaction, other);
 		if (!other_dependency_set_p) {
 			// Already deleted
 			return;
@@ -193,16 +193,27 @@ void DependencySetCatalogEntry::RemoveDependent(CatalogTransaction transaction, 
 	dependents.DropEntry(transaction, name, false);
 }
 
-DependencyCatalogEntry &DependencySetCatalogEntry::GetDependency(CatalogTransaction &transaction,
+DependencyCatalogEntry &DependencySetCatalogEntry::GetDependency(optional_ptr<CatalogTransaction> transaction,
                                                                  CatalogEntry &object) {
 	auto mangled_name = DependencyManager::MangleName(object);
-	auto dependency = dependencies.GetEntry(transaction, mangled_name);
+	optional_ptr<CatalogEntry> dependency;
+	if (transaction) {
+		dependency = dependencies.GetEntry(*transaction, mangled_name);
+	} else {
+		dependency = dependencies.GetEntry(mangled_name);
+	}
 	return dependency->Cast<DependencyCatalogEntry>();
 }
 
-DependencyCatalogEntry &DependencySetCatalogEntry::GetDependent(CatalogTransaction &transaction, CatalogEntry &object) {
+DependencyCatalogEntry &DependencySetCatalogEntry::GetDependent(optional_ptr<CatalogTransaction> transaction,
+                                                                CatalogEntry &object) {
 	auto mangled_name = DependencyManager::MangleName(object);
-	auto dependent = dependents.GetEntry(transaction, mangled_name);
+	optional_ptr<CatalogEntry> dependent;
+	if (transaction) {
+		dependent = dependents.GetEntry(*transaction, mangled_name);
+	} else {
+		dependent = dependents.GetEntry(mangled_name);
+	}
 	return dependent->Cast<DependencyCatalogEntry>();
 }
 
@@ -222,14 +233,22 @@ bool DependencySetCatalogEntry::HasDependencyOn(CatalogTransaction transaction, 
 catalog_entry_vector_t
 DependencySetCatalogEntry::GetEntriesThatDependOnUs(optional_ptr<CatalogTransaction> transaction) {
 	catalog_entry_vector_t entries;
-	dependents.Scan(*transaction, [&](CatalogEntry &entry) { entries.push_back(entry); });
+	if (transaction) {
+		dependents.Scan(*transaction, [&](CatalogEntry &entry) { entries.push_back(entry); });
+	} else {
+		dependents.Scan([&](CatalogEntry &entry) { entries.push_back(entry); });
+	}
 	return entries;
 }
 
 catalog_entry_vector_t
 DependencySetCatalogEntry::GetEntriesThatWeDependOn(optional_ptr<CatalogTransaction> transaction) {
 	catalog_entry_vector_t entries;
-	dependencies.Scan(*transaction, [&](CatalogEntry &entry) { entries.push_back(entry); });
+	if (transaction) {
+		dependencies.Scan(*transaction, [&](CatalogEntry &entry) { entries.push_back(entry); });
+	} else {
+		dependencies.Scan([&](CatalogEntry &entry) { entries.push_back(entry); });
+	}
 	return entries;
 }
 

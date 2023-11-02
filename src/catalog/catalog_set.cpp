@@ -522,6 +522,19 @@ optional_ptr<CatalogEntry> CatalogSet::GetEntry(ClientContext &context, const st
 	return GetEntry(catalog.GetCatalogTransaction(context), name);
 }
 
+optional_ptr<CatalogEntry> CatalogSet::GetEntry(const string &name) {
+	auto mapping = GetLatestMapping(name);
+	if (!mapping) {
+		return nullptr;
+	}
+	auto &entry = mapping->index.GetEntry();
+	auto &committed_entry = GetCommittedEntry(entry);
+	if (committed_entry.deleted) {
+		return nullptr;
+	}
+	return &committed_entry;
+}
+
 void CatalogSet::UpdateTimestamp(CatalogEntry &entry, transaction_t timestamp) {
 	entry.timestamp = timestamp;
 	mapping[entry.name]->timestamp = timestamp;

@@ -46,7 +46,7 @@ public:
 
 	// Create the corresponding dependency/dependent in the other set
 	void CompleteLink(CatalogTransaction transaction, DependencyType type = DependencyType::DEPENDENCY_REGULAR);
-	DependencyCatalogEntry &GetLink(CatalogTransaction transaction);
+	DependencyCatalogEntry &GetLink(optional_ptr<CatalogTransaction> transaction);
 
 private:
 	LogicalDependency internal;

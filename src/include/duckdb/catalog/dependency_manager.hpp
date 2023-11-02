@@ -38,14 +38,16 @@ public:
 	          const std::function<void(CatalogEntry &, CatalogEntry &, DependencyType)> &callback);
 
 	void AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry);
-	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogTransaction transaction,
+	optional_ptr<DependencySetCatalogEntry> GetDependencySet(optional_ptr<CatalogTransaction> transaction,
 	                                                         const string &mangled_name);
-	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogTransaction transaction,
+	optional_ptr<DependencySetCatalogEntry> GetDependencySet(optional_ptr<CatalogTransaction> transaction,
 	                                                         const LogicalDependency &entry);
 	DependencySetCatalogEntry &GetOrCreateDependencySet(CatalogTransaction transaction, const LogicalDependency &entry);
 
 	//! Get the order of entries needed by EXPORT, the objects with no dependencies are exported first
 	catalog_entry_vector_t GetExportOrder(optional_ptr<CatalogTransaction> transaction = nullptr);
+
+	catalog_entry_vector_t GetDependencySets(optional_ptr<CatalogTransaction> transaction);
 
 private:
 	DuckCatalog &catalog;
@@ -55,10 +57,11 @@ private:
 	bool IsSystemEntry(CatalogEntry &entry) const;
 	DependencySetCatalogEntry &GetOrCreateDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
 	void DropDependencySet(CatalogTransaction, CatalogEntry &entry);
-	optional_ptr<DependencySetCatalogEntry> GetDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
+	optional_ptr<DependencySetCatalogEntry> GetDependencySet(optional_ptr<CatalogTransaction> transaction,
+	                                                         CatalogEntry &entry);
 
-	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, LogicalDependency dependency);
-	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency);
+	optional_ptr<CatalogEntry> LookupEntry(optional_ptr<CatalogTransaction> transaction, LogicalDependency dependency);
+	optional_ptr<CatalogEntry> LookupEntry(optional_ptr<CatalogTransaction> transaction, CatalogEntry &dependency);
 
 	void CleanupDependencies(CatalogTransaction transaction, CatalogEntry &entry);
 
@@ -73,7 +76,7 @@ private:
 	void DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
 	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
 
-	DependencySetCatalogEntry &LookupSet(CatalogTransaction transaction, CatalogEntry &entry);
+	DependencySetCatalogEntry &LookupSet(optional_ptr<CatalogTransaction> transaction, CatalogEntry &entry);
 };
 
 } // namespace duckdb
