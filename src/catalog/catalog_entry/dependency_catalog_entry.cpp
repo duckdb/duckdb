@@ -68,6 +68,9 @@ DependencyCatalogEntry &DependencyCatalogEntry::GetLink(optional_ptr<CatalogTran
 		auto &other_set = *manager.GetDependencySet(transaction, internal);
 		return other_set.GetDependency(transaction, set);
 	}
+	default:
+		throw InternalException(
+		    "This really shouldnt happen, there are only two parts to a link, DEPENDENCY and DEPENDENT");
 	}
 }
 
