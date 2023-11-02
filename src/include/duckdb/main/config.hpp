@@ -178,18 +178,18 @@ struct DBConfigOptions {
 	bool operator==(const DBConfigOptions &other) const;
 };
 
-//! Base class from which Registered Credential classes can be made.
+//! Base class from which RegisteredSecret classes can be made.
 //! TODO thread-safety?
-class RegisteredCredential {
-	friend class CredentialManager;
+class RegisteredSecret {
+	friend class SecretManager;
 
 public:
-	RegisteredCredential(vector<string> &prefix_paths, string& type, string& provider) : prefix_paths(prefix_paths), type(type), provider(provider), credential_id(0) {
+	RegisteredSecret(vector<string> &prefix_paths, string& type, string& provider) : prefix_paths(prefix_paths), type(type), provider(provider) {
 	};
-	virtual ~RegisteredCredential() = default;
+	virtual ~RegisteredSecret() = default;
 
 	//! Returns the longest prefix that matches, -1 for no match
-	//! Note: some credentials may want to override this function when paths are platform dependent
+	//! Note: some secret may want to override this function when paths are platform dependent
 	virtual int LongestMatch(const string& path) {
 		int longest_match = -1;
 		for (const auto& prefix: prefix_paths) {
@@ -204,11 +204,10 @@ public:
 		return longest_match;
 	}
 
-	//! Credential classes can set implement these to be shown in registered_credentials(). These values can only be
-	//! strings. It is recommended to represent this as a ';' separated list of 'key=value' pairs with at a unique
-	//! identifier as a key value pair
-	virtual Value GetCredentialsAsValue(bool redact) {
-		return Value();
+	//! The ToString method prints the secret, the redact option determines whether secret data is allowed to be printed
+	//! in clear text. This is to be decided by the secret implementation
+	virtual string ToString(bool redact) {
+		return "";
 	}
 
 	vector<string>& GetScope() {
@@ -223,51 +222,38 @@ public:
 		return provider;
 	}
 
-	//! Get the registered id of the current set of credentials
-	idx_t GetId() {
-		if (credential_id == 0) {
-			throw InternalException("Can not get credential id of credentials that are not registered!");
-		}
-		return credential_id;
-	}
 	const string &GetAlias() const {
 		return alias;
 	}
 	void SetAlias(const string& alias_p) {
-		if (credential_id != 0) {
-			throw InternalException("The credential alias can only set before registering it");
-		}
 		alias = StringUtil::Lower(alias_p);
 	}
 
 protected:
-	//! prefixes to which the credentials apply
+	//! prefixes to which the secret applies
 	vector<string> prefix_paths;
 
-	//! Type of credentials
+	//! Type of secret
 	string type;
-	//! Provider of the credential
+	//! Provider of the secret
 	string provider;
 
-	//! incremental_id assigned by manager, 0 means not set
-	idx_t credential_id;
 	//! alias for easy identification and deletion
 	string alias;
 };
 
 //! TODO thread-safety!
-class CredentialManager {
+class SecretManager {
 public:
-	//! Add a new set of registered credentials
-	void RegisterCredentials(shared_ptr<RegisteredCredential> credentials, OnCreateConflict on_conflict) {
+	void RegisterSecret(shared_ptr<RegisteredSecret> secret, OnCreateConflict on_conflict) {
 		bool conflict = false;
 		idx_t conflict_idx;
 
 		// Assert the alias does not exist already
-		if (!credentials->GetAlias().empty()) {
-			for(idx_t cred_idx = 0; cred_idx < registered_credentials.size(); cred_idx++) {
-				const auto& cred = registered_credentials[cred_idx];
-				if (cred->GetAlias() == credentials->GetAlias()) {
+		if (!secret->GetAlias().empty()) {
+			for(idx_t cred_idx = 0; cred_idx < registered_secrets.size(); cred_idx++) {
+				const auto& cred = registered_secrets[cred_idx];
+				if (cred->GetAlias() == secret->GetAlias()) {
 					conflict = true;
 					conflict_idx = cred_idx;
 				}
@@ -276,48 +262,45 @@ public:
 
 		if (conflict) {
 			if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
-				throw InvalidInputException("Secret with alias '" + credentials->GetAlias() + "' already exists!");
+				throw InvalidInputException("Secret with alias '" + secret->GetAlias() + "' already exists!");
 			} else if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 				return;
 			} else if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
-				credentials->credential_id = registered_credentials[conflict_idx]->credential_id;
-				registered_credentials[conflict_idx] = credentials;
+				registered_secrets[conflict_idx] = secret;
 			} else {
-				throw InternalException("unknown OnCreateConflict found while registering credentials");
+				throw InternalException("unknown OnCreateConflict found while registering secret");
 			}
 		} else {
-			registered_credentials.push_back(std::move(credentials));
-			registered_credentials.back()->credential_id = current_id++;
+			registered_secrets.push_back(std::move(secret));
 		}
 	}
 
 	//! Find the best matching set of credentials for this path. (In case of multiple, longest prefix wins)
-	shared_ptr<RegisteredCredential> GetCredentials(string& path, string type) {
+	shared_ptr<RegisteredSecret> GetSecretByPath(string& path, string type) {
 		int longest_match = -1;
-		shared_ptr<RegisteredCredential> best_match;
+		shared_ptr<RegisteredSecret> best_match;
 
-		for (const auto& cred: registered_credentials) {
-			if (cred->GetType() != type) {
+		for (const auto& secret: registered_secrets) {
+			if (secret->GetType() != type) {
 				continue;
 			}
-			auto match = cred->LongestMatch(path);
+			auto match = secret->LongestMatch(path);
 
 			if (match > longest_match) {
 				longest_match = MaxValue<idx_t>(match, longest_match);
-				best_match = cred;
+				best_match = secret;
 			}
 		}
 		return best_match;
 	}
 
-	//! Find the best matching set of credentials for this path. (In case of multiple, longest prefix wins)
-	vector<shared_ptr<RegisteredCredential>>& AllCredentials() {
-		return registered_credentials;
+	//! Find the best matching set of secrets for this path. (In case of multiple, longest prefix wins)
+	vector<shared_ptr<RegisteredSecret>>&AllSecrets() {
+		return registered_secrets;
 	}
 
 protected:
-	vector<shared_ptr<RegisteredCredential>> registered_credentials;
-	idx_t current_id = 1;
+	vector<shared_ptr<RegisteredSecret>> registered_secrets;
 };
 
 struct DBConfig {
@@ -338,8 +321,8 @@ public:
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
 	//! RamFS or something similar)
 	unique_ptr<FileSystem> file_system;
-	//! Credential manager
-	unique_ptr<CredentialManager> credential_manager;
+	//! Secret manager
+	unique_ptr<SecretManager> secret_manager;
 	//! The allocator used by the system
 	unique_ptr<Allocator> allocator;
 	//! Database configuration options

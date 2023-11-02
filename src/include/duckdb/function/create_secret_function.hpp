@@ -30,8 +30,8 @@ struct CreateSecretInput {
 };
 
 //! Execute the create secret function TODO: i guess this needs to return the Auth thingy, then the operator can
-//!		put it into the credential manager and call the extension hooks.
-typedef shared_ptr<RegisteredCredential> (*create_secret_function_t)(ClientContext &context, CreateSecretInput& input);
+//!		put it into the secret manager and call the extension hooks.
+typedef shared_ptr<RegisteredSecret> (*create_secret_function_t)(ClientContext &context, CreateSecretInput& input);
 
 class CreateSecretFunction : public SimpleNamedParameterFunction {
 public:

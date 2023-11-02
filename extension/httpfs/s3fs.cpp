@@ -184,20 +184,21 @@ unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(FileOpener *ope
 	if (!context) {
 		return nullptr;
 	}
+	auto& secret_manager = context->db->GetSecretManager();
 
-	auto credentials = context->db->GetCredentialManager().GetCredentials(path, "s3");
+	auto credentials = secret_manager.GetSecretByPath(path, "s3");
 	if (!credentials) {
-		credentials = context->db->GetCredentialManager().GetCredentials(path, "r2");
+		credentials = secret_manager.GetSecretByPath(path, "r2");
 	}
 	if (!credentials) {
-		credentials = context->db->GetCredentialManager().GetCredentials(path, "gcs");
+		credentials = secret_manager.GetSecretByPath(path, "gcs");
 	}
 	if (!credentials) {
 		return nullptr;
 	}
 
 	// Return the stored credentials
-	auto s3_credentials = dynamic_cast<S3RegisteredCredential&>(*credentials);
+	auto s3_credentials = dynamic_cast<S3Secret &>(*credentials);
 	return make_uniq<S3AuthParams>(s3_credentials.GetParams());
 }
 

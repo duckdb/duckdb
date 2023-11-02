@@ -73,17 +73,17 @@ struct S3ConfigParams {
 };
 
 //! Registered Credential class for S3.
-class S3RegisteredCredential : public RegisteredCredential {
+class S3Secret : public RegisteredSecret {
 public:
-	S3RegisteredCredential(vector<string> &prefix_paths_p, string &type, string &provider, S3AuthParams params_p)
-	    : RegisteredCredential(prefix_paths_p, type, provider), params(params_p) {};
+	S3Secret(vector<string> &prefix_paths_p, string &type, string &provider, S3AuthParams params_p)
+	    : RegisteredSecret(prefix_paths_p, type, provider), params(params_p) {};
 
 	S3AuthParams GetParams(){
 		return params;
 	}
 
 	//! S3 credentials returned as connection string like value
-	Value GetCredentialsAsValue(bool redact) {
+	string ToString(bool redact) override {
 		string value;
 
 		value += "region=" + params.region;

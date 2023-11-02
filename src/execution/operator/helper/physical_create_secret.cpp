@@ -8,7 +8,7 @@ SourceResultType PhysicalCreateSecret::GetData(ExecutionContext &context, DataCh
                                          OperatorSourceInput &input) const {
 	auto &client = context.client;
 
-	// TODO: we should probably check credentials before calling into a registered create secret?
+	// TODO: we should probably check availability before calling into a registered create secret?
 
 	// Call create secret function
 	CreateSecretInput secret_input {
@@ -18,14 +18,14 @@ SourceResultType PhysicalCreateSecret::GetData(ExecutionContext &context, DataCh
 	    info.scope,
 	    info.named_parameters
 	};
-	auto credential = function.function(client, secret_input);
+	auto secret = function.function(client, secret_input);
 
-	if (!credential) {
-		throw InternalException("Create secret function '" + function.name + "' did not return credentials!");
+	if (!secret) {
+		throw InternalException("CreateSecretFunction '" + function.name + "' did not return a secret!");
 	}
 
-	// Register the credentials at the credential manager
-	context.client.db->config.credential_manager->RegisterCredentials(credential, info.on_conflict);
+	// Register the secret at the secret_manager
+	context.client.db->config.secret_manager->RegisterSecret(secret, info.on_conflict);
 
 	// TODO return stuff?
 
