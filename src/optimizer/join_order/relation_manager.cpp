@@ -231,10 +231,10 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_GET: {
-//      Removed until we can extract better stats from delim gets. See #596
-//		auto &delim_get = op->Cast<LogicalDelimGet>();
-//		auto stats = RelationStatisticsHelper::ExtractDelimGetStats(delim_get, context);
-//		AddRelation(input_op, parent, stats);
+		//      Removed until we can extract better stats from delim gets. See #596
+		//		auto &delim_get = op->Cast<LogicalDelimGet>();
+		//		auto stats = RelationStatisticsHelper::ExtractDelimGetStats(delim_get, context);
+		//		AddRelation(input_op, parent, stats);
 		return false;
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {

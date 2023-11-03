@@ -1,4 +1,4 @@
-# name: test/optimizer/joins/delim_join_dont_explode.test
+# name: test/optimizer/joins/delim_join_dont_explode.test_slow
 # description: In the join order optimizer queries need to have the correct bindings
 # group: [joins]
 
