@@ -16,8 +16,17 @@
 
 namespace duckdb {
 
+//! A half-open range of frame boundary values _relative to the current row_
+//! This is why they are signed values.
+struct FrameDelta {
+	FrameDelta() : begin(0), end(0) {};
+	FrameDelta(int64_t begin, int64_t end) : begin(begin), end(end) {};
+	int64_t begin = 0;
+	int64_t end = 0;
+};
+
 //! The half-open ranges of frame boundary values relative to the current row
-using FrameStats = array<FrameBounds, 2>;
+using FrameStats = array<FrameDelta, 2>;
 
 //! The partition data for custom window functions
 struct WindowPartitionInput {

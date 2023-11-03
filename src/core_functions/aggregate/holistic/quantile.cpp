@@ -814,10 +814,10 @@ struct QuantileOperation {
 		const auto &stats = partition.stats;
 
 		//	If frames overlap significantly, then use local skip lists.
-		if (stats[0].end <= stats[1].start) {
+		if (stats[0].end <= stats[1].begin) {
 			//	Frames can overlap
-			const auto overlap = double(stats[1].start - stats[0].end);
-			const auto cover = double(stats[1].end - stats[0].start);
+			const auto overlap = double(stats[1].begin - stats[0].end);
+			const auto cover = double(stats[1].end - stats[0].begin);
 			const auto ratio = overlap / cover;
 			if (ratio > .75) {
 				return;
