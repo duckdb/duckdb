@@ -324,8 +324,19 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	auto &old_dependency_set = *old_dependency_set_p;
 
 	dependency_set_t dependents;
-	old_dependency_set.ScanDependents(
-	    transaction, [&](DependencyCatalogEntry &dep) { dependents.insert(Dependency(dep, dep.Flags())); });
+	old_dependency_set.ScanDependents(transaction, [&](DependencyCatalogEntry &dep) {
+		if (dep.EntryType() == CatalogType::INDEX_ENTRY) {
+			// FIXME: this is only done because the table name is baked into the SQL of the Index Entry
+			// If we update that then there is no reason this has to throw an exception.
+
+			// conflict: attempting to alter this object but the dependent object still exists
+			// no cascade and there are objects that depend on this object: throw error
+			throw DependencyException("Cannot alter entry \"%s\" because there are entries that "
+									"depend on it.",
+									old_obj.name);
+		}
+		dependents.insert(Dependency(dep, dep.Flags()));
+	});
 
 	// Keep old dependencies
 	dependency_set_t dependents_of_others;
