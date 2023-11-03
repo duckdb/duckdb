@@ -1,0 +1,10 @@
+# name: test/sql/function/list/lambdas/reduce.test
+# description: Test list_reduce function
+# group: [lambdas]
+
+statement ok
+PRAGMA enable_verification
+
+SELECT list_reduce([1, 2, 3], 0, lambda x, y: x + y);
+----
+6

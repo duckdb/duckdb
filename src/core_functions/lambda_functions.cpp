@@ -76,6 +76,7 @@ struct ListFilterInfo {
 	idx_t src_length = 0;
 };
 
+
 //! ListTransformFunctor contains list_transform specific functionality
 struct ListTransformFunctor {
 	static void ReserveNewLengths(vector<idx_t> &, const idx_t) {
@@ -172,6 +173,28 @@ struct ListFilterFunctor {
 		ListVector::Append(result, result_lists, count, 0);
 	}
 };
+
+////! ListReduceFunctor contains list_reduce specific functionality
+//struct ListReduceFunctor {
+//	static void ReserveNewLengths(vector<idx_t> &, const idx_t) {
+//		// NOP
+//	}
+//	static void PushEmptyList(vector<idx_t> &) {
+//		// NOP
+//	}
+//	//! Sets the list entries of the result vector
+//	static void SetResultEntry(list_entry_t *result_entries, idx_t &offset, const list_entry_t &entry,
+//	                           const idx_t row_idx, vector<idx_t> &) {
+//		result_entries[row_idx].offset = offset;
+//		result_entries[row_idx].length = 1;
+//		offset++;
+//	}
+//	//! Appends the lambda vector to the result's child vector
+//	static void AppendResult(Vector &result, Vector &lambda_vector, const idx_t elem_cnt, list_entry_t *,
+//	                         ListFilterInfo &, LambdaExecuteInfo &) {
+//
+//	}
+//};
 
 vector<LambdaColumnInfo> GetColumnInfo(DataChunk &args, const idx_t row_count) {
 
@@ -276,6 +299,19 @@ LogicalType LambdaFunctions::BindBinaryLambda(const idx_t parameter_idx, const L
 		return LogicalType::BIGINT;
 	default:
 		throw BinderException("This lambda function only supports up to two lambda parameters!");
+	}
+}
+
+LogicalType LambdaFunctions::BindReduceLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
+	switch (parameter_idx) {
+	case 0:
+		return list_child_type;
+	case 1:
+		return list_child_type;
+	case 2:
+		return LogicalType::BIGINT;
+	default:
+		throw BinderException("This lambda function only supports up to three lambda parameters!");
 	}
 }
 
@@ -418,6 +454,135 @@ void LambdaFunctions::ListTransformFunction(DataChunk &args, ExpressionState &st
 
 void LambdaFunctions::ListFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	ExecuteLambda<ListFilterFunctor>(args, state, result);
+}
+
+static SelectionVector ResizeSelVector(SelectionVector &old_vector, idx_t new_size, const std::vector<idx_t> &row_loc) {
+	SelectionVector new_vector(new_size);
+	for (idx_t i = 0; i < old_vector.sel_data().use_count(); i++) {
+		auto row_loc_index = std::find(row_loc.begin(), row_loc.end(), i);
+		if (row_loc_index == row_loc.end()) {
+			continue;
+		}
+		new_vector.set_index(i, old_vector.get_index(i));
+	}
+	return new_vector;
+}
+
+void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto row_count = args.size();
+	Vector &list_column = args.data[0];
+
+	// get the lambda expression
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &bind_info = func_expr.bind_info->Cast<ListLambdaBindData>();
+	auto &lambda_expr = bind_info.lambda_expr;
+	bool has_side_effects = lambda_expr->HasSideEffects();
+
+	// get the list column entries
+	UnifiedVectorFormat list_column_format;
+	list_column.ToUnifiedFormat(row_count, list_column_format);
+	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_column_format);
+
+	// special-handling for the child_vector
+	auto child_vector_size = ListVector::GetListSize(list_column);
+	auto &child_vector = ListVector::GetEntry(list_column);
+	UnifiedVectorFormat child_vector_format;
+	child_vector.ToUnifiedFormat(child_vector_size, child_vector_format);
+
+	// Initialize the result vector
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_entries = FlatVector::GetData<uint64_t>(result);
+	auto &result_validity = FlatVector::Validity(result);
+	//	auto &result_child = ListVector::GetEntry(result);
+	if (list_column.GetType().id() == LogicalTypeId::SQLNULL) {
+		result_validity.SetInvalid(0);
+		return;
+	}
+
+	ExpressionExecutor executor(state.GetContext());
+
+	std::vector<idx_t> row_loc(row_count);
+
+	idx_t finished_rows = 0;
+	// Initialize the left_vector & the result vector
+	SelectionVector left_vector(row_count);
+	for (idx_t i = 0; i < row_count; i++) {
+		auto list_column_format_index = list_column_format.sel->get_index(i);
+
+		if (list_column_format.validity.RowIsValid(list_column_format_index)) {
+			left_vector.set_index(i, list_entries[i].offset);
+			row_loc[i] = i;
+		} else {
+			result_validity.SetInvalid(i);
+			finished_rows++;
+		}
+	}
+
+	// get the lambda column data for all other input vectors
+	auto column_infos = GetColumnInfo(args, row_count);
+	auto inconstant_column_infos = GetInconstantColumnInfo(column_infos);
+
+	Vector index_vector(LogicalType::BIGINT);
+
+	idx_t loops = 0;
+	// Execute reduce until all rows are finished
+	while(finished_rows < row_count) {
+		// Initialize the right_vector
+		SelectionVector right_vector(row_count - finished_rows);
+		for (idx_t i = 0; i < row_count - finished_rows; i++) {
+			if (list_entries[i].length > loops + 1) {
+				right_vector.set_index(i, list_entries[i].offset + loops + 1);
+			} else {
+				result_entries[i] = left_vector.get_index(i);
+				auto row_loc_index = std::find(row_loc.begin(), row_loc.end(), i);
+				if (row_loc_index != row_loc.end()) {
+					row_loc.erase(row_loc_index);
+				}
+				finished_rows++;
+			}
+		}
+
+		// Remove the finished rows from the left_vector
+		left_vector = ResizeSelVector(left_vector, row_count - finished_rows, row_loc);
+		right_vector = ResizeSelVector(right_vector, row_count - finished_rows, row_loc);
+
+		// Execute the lambda function
+		LambdaExecuteInfo execute_info(state.GetContext(), *lambda_expr, args, bind_info.has_index, child_vector);
+
+		Vector left_slice = Vector(child_vector, left_vector, row_count - finished_rows);
+		left_slice.SetVectorType(VectorType::FLAT_VECTOR);
+
+		Vector right_slice = Vector(child_vector, right_vector, row_count - finished_rows);
+		right_slice.SetVectorType(VectorType::FLAT_VECTOR);
+
+
+		vector<LogicalType> input_types;
+		if (bind_info.has_index) {
+			input_types.push_back((LogicalType::BIGINT));
+		}
+		input_types.push_back(left_slice.GetType());
+		input_types.push_back(right_slice.GetType());
+
+		DataChunk input_chunk;
+		input_chunk.InitializeEmpty(input_types);
+
+		input_chunk.SetCardinality(row_count - finished_rows);
+		execute_info.lambda_chunk.SetCardinality(row_count - finished_rows);
+
+		idx_t slice_offset = bind_info.has_index ? 1 : 0;
+		if (bind_info.has_index) {
+			input_chunk.data[0].Reference(index_vector);
+		}
+
+		input_chunk.data[slice_offset].Reference(left_slice);
+		input_chunk.data[slice_offset].Reference(right_slice);
+
+		execute_info.expr_executor->Execute(input_chunk, execute_info.lambda_chunk);
+		loops++;
+
+		// Reset left vector
+
+	}
 }
 
 } // namespace duckdb

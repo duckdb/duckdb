@@ -41,6 +41,7 @@ class LambdaFunctions {
 public:
 	//! Returns the parameter type for binary lambdas
 	static LogicalType BindBinaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type);
+	static LogicalType BindReduceLambda(const idx_t parameter_idx, const LogicalType &list_child_type);
 	//! Returns the ListLambdaBindData containing the lambda expression
 	static unique_ptr<FunctionData> ListLambdaBind(ClientContext &, ScalarFunction &bound_function,
 	                                               vector<unique_ptr<Expression>> &arguments,
@@ -50,6 +51,8 @@ public:
 	static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result);
 	//! Internally executes list_filter
 	static void ListFilterFunction(DataChunk &args, ExpressionState &state, Vector &result);
+	//! Internally executes list_reduce
+	static void ListReduceFunction(DataChunk &args, ExpressionState &state, Vector &result);
 };
 
 } // namespace duckdb
