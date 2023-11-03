@@ -6,7 +6,6 @@
 #include "duckdb/catalog/mapping_value.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 

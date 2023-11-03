@@ -14,7 +14,6 @@
 #include "duckdb/common/queue.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
-#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 
