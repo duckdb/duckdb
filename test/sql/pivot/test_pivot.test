@@ -269,7 +269,6 @@ SELECT *
 ----
 Parser Error: syntax error at or near ")"
 LINE 3:     PIVOT(SUM(amount) FOR MONTH IN ())
-                                            ^
 
 
 # star

@@ -88,13 +88,10 @@ CREATE TABLE tbl1 (u UNION(
     a225 INT, a226 INT, a227 INT, a228 INT, a229 INT, a230 INT, a231 INT, a232 INT,
     a233 INT, a234 INT, a235 INT, a236 INT, a237 INT, a238 INT, a239 INT, a240 INT,
     a241 INT, a242 INT, a243 INT, a244 INT, a245 INT, a246 INT, a247 INT, a248 INT,
-    a249 INT, a250 INT, a251 INT, a252 INT, a253 INT, a254 INT, a255 INT, a256 INT, a257
+    a249 INT, a250 INT, a251 INT, a252 INT, a253 INT, a254 INT, a255 INT, a256 INT, a257 INT
 ))
 ----
-Parser Error: syntax error at or near ")"
-LINE 34: ))
-         ^
-
+Parser Error: Union types can have at most 256 members
 
 # Need at least one column
 statement error

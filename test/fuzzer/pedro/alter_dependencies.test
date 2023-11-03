@@ -22,9 +22,5 @@ COMMIT;
 
 statement error
 ALTER TABLE t1 ALTER c2 SET NOT NULL;
----
-Cannot alter
 ----
-Parser Error: syntax error at or near "Cannot"
-LINE 3: Cannot alter
-        ^
+Cannot alter

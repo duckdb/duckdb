@@ -91,8 +91,6 @@ FROM tbl_ProductSales
 GROUP BY ROLLUP ()
 ----
 Parser Error: syntax error at or near ")"
-LINE 4: GROUP BY ROLLUP ()
-                         ^
 
 query TI rowsort
 SELECT
@@ -178,8 +176,6 @@ FROM tbl_ProductSales
 GROUP BY CUBE()
 ----
 Parser Error: syntax error at or near ")"
-LINE 4: GROUP BY CUBE()
-                      ^
 
 query TI rowsort
 SELECT
@@ -773,8 +769,6 @@ FROM tbl_ProductSales
 GROUP BY GROUPING SETS()
 ----
 Parser Error: syntax error at or near ")"
-LINE 4: GROUP BY GROUPING SETS()
-                               ^
 
 query I rowsort
 SELECT

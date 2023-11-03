@@ -185,7 +185,6 @@ SELECT * FROM monthly_sales
 ----
 Parser Error: syntax error at or near ")"
 LINE 2:     UNPIVOT(sales FOR month IN ())
-                                        ^
 
 statement error
 SELECT * FROM monthly_sales
@@ -200,4 +199,3 @@ SELECT * FROM monthly_sales
 ----
 Parser Error: syntax error at or near "("
 LINE 2:     UNPIVOT(SUM(sales) FOR...
-                       ^

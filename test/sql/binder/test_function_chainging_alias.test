@@ -29,15 +29,11 @@ chaining
 # only_alphabet is used before defined
 statement error
 SELECT  v.trim('><') as trim_inequality,
-        only_alphabet.lower() as lower
+        only_alphabet.lower() as lower,
         trim_inequality.replace('%', '') as only_alphabet,
 FROM varchars
 ----
-Parser Error: syntax error at or near "trim_inequality"
-LINE 3:         trim_inequality.replace('%', '') as only_alphabet,
-FROM varchars...
-                ^
-
+Column "only_alphabet" referenced that exists in the SELECT clause - but this column cannot be referenced before it is defined
 
 query III
 SELECT  v.trim('><') as trim_inequality,

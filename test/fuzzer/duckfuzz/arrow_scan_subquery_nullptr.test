@@ -4,8 +4,5 @@
 
 statement error
 SELECT * FROM (SELECT * FROM arrow_scan(NULL, NULL, NULL));
-Binder Error: arrow_scan: pointers cannot be null
 ----
-Parser Error: syntax error at or near "Binder"
-LINE 2: Binder Error: arrow_scan: pointers cannot be null...
-        ^
+Binder Error: arrow_scan: pointers cannot be null
