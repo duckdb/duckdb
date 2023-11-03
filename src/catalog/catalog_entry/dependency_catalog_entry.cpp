@@ -7,9 +7,9 @@ namespace duckdb {
 
 DependencyCatalogEntry::DependencyCatalogEntry(DependencyLinkSide side, Catalog &catalog,
                                                DependencySetCatalogEntry &set, const LogicalDependency &internal,
-                                               DependencyType dependency_type)
+                                               DependencyFlags flags)
     : InCatalogEntry(CatalogType::DEPENDENCY_ENTRY, catalog, DependencyManager::MangleName(internal)),
-      internal(internal), dependency_type(dependency_type), side(side), set(set) {
+      internal(internal), flags(flags), side(side), set(set) {
 	D_ASSERT(EntryType() != CatalogType::DEPENDENCY_ENTRY);
 	D_ASSERT(EntryType() != CatalogType::DEPENDENCY_SET);
 }
@@ -30,8 +30,8 @@ const string &DependencyCatalogEntry::EntryName() const {
 	return internal.name;
 }
 
-DependencyType DependencyCatalogEntry::Type() const {
-	return dependency_type;
+const DependencyFlags &DependencyCatalogEntry::Flags() const {
+	return flags;
 }
 
 const LogicalDependency &DependencyCatalogEntry::Internal() const {
@@ -41,17 +41,17 @@ const LogicalDependency &DependencyCatalogEntry::Internal() const {
 DependencyCatalogEntry::~DependencyCatalogEntry() {
 }
 
-void DependencyCatalogEntry::CompleteLink(CatalogTransaction transaction, DependencyType type) {
+void DependencyCatalogEntry::CompleteLink(CatalogTransaction transaction, DependencyFlags other_flags) {
 	auto &manager = set.Manager();
 	switch (side) {
 	case DependencyLinkSide::DEPENDENCY: {
 		auto &other_set = manager.GetOrCreateDependencySet(transaction, internal);
-		other_set.AddDependent(transaction, set, type);
+		other_set.AddDependent(transaction, set, other_flags);
 		break;
 	}
 	case DependencyLinkSide::DEPENDENT: {
 		auto &other_set = manager.GetOrCreateDependencySet(transaction, internal);
-		other_set.AddDependency(transaction, set, type);
+		other_set.AddDependency(transaction, set, other_flags);
 		break;
 	}
 	}

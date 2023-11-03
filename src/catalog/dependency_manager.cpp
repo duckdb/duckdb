@@ -159,7 +159,7 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 	}
 
 	// Create a dependency set for the object
-	GetOrCreateDependencySet(transaction, object);
+	auto &new_set = GetOrCreateDependencySet(transaction, object);
 
 	LogicalDependencyList dependencies;
 	// check for each object in the sources if they were not deleted yet
@@ -170,30 +170,33 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 		dependencies.AddDependency(dependency);
 	}
 
-	// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
-	auto dependency_type = object.type == CatalogType::INDEX_ENTRY ? DependencyType::DEPENDENCY_AUTOMATIC
-	                                                               : DependencyType::DEPENDENCY_REGULAR;
+	DependencyFlags dependency_flags;
+	if (object.type != CatalogType::INDEX_ENTRY) {
+		// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
+		dependency_flags.SetBlocking();
+	}
+
 	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies.Set()) {
 		auto &dependency_set = GetOrCreateDependencySet(transaction, dependency);
 		// Create the dependent and complete the link by creating the dependency as well
-		dependency_set.AddDependent(transaction, object, dependency_type).CompleteLink(transaction);
+		dependency_set.AddDependent(transaction, object, dependency_flags).CompleteLink(transaction);
 	}
 }
 
-static bool CascadeDrop(bool cascade, DependencyType dependency_type) {
+static bool CascadeDrop(bool cascade, const DependencyFlags &flags) {
 	if (cascade) {
 		return true;
 	}
-	if (dependency_type == DependencyType::DEPENDENCY_AUTOMATIC) {
-		// These dependencies are automatically dropped implicitly
+	if (flags.IsOwnership()) {
+		// We own this object, it's automatically dropped
 		return true;
 	}
-	if (dependency_type == DependencyType::DEPENDENCY_OWNS) {
-		// The object has explicit ownership over the dependency
-		return true;
+	if (flags.IsOwned()) {
+		// We are owned by this object, while it exists we can not be dropped without cascade.
+		return false;
 	}
-	return false;
+	return !flags.IsBlocking();
 }
 
 optional_ptr<CatalogEntry> DependencyManager::LookupEntry(optional_ptr<CatalogTransaction> transaction,
@@ -288,7 +291,7 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 			return;
 		}
 
-		if (!CascadeDrop(cascade, dep.Type())) {
+		if (!CascadeDrop(cascade, dep.Flags())) {
 			// no cascade and there are objects that depend on this object: throw error
 			throw DependencyException("Cannot drop entry \"%s\" because there are entries that "
 			                          "depend on it. Use DROP...CASCADE to drop all dependents.",
@@ -322,7 +325,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 
 	dependency_set_t dependents;
 	old_dependency_set.ScanDependents(
-	    transaction, [&](DependencyCatalogEntry &dep) { dependents.insert(Dependency(dep, dep.Type())); });
+	    transaction, [&](DependencyCatalogEntry &dep) { dependents.insert(Dependency(dep, dep.Flags())); });
 
 	// Keep old dependencies
 	dependency_set_t dependents_of_others;
@@ -330,7 +333,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		auto other_dependency_set = GetDependencySet(&transaction, dep);
 		// Find the dependent entry so we can properly restore the type it has
 		auto &dependent = other_dependency_set->GetDependent(&transaction, old_obj);
-		dependents_of_others.insert(Dependency(dep, dependent.Type()));
+		dependents_of_others.insert(Dependency(dep, dependent.Flags()));
 	});
 
 	// FIXME: we should update dependencies in the future
@@ -349,7 +352,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	for (auto &dep : dependents_of_others) {
 		auto &other = dep.entry.get();
 		auto other_dependency_set = GetDependencySet(&transaction, other);
-		other_dependency_set->AddDependent(transaction, new_obj, dep.dependency_type).CompleteLink(transaction);
+		other_dependency_set->AddDependent(transaction, new_obj, dep.flags).CompleteLink(transaction);
 	}
 
 	// Recreate the dependents
@@ -387,7 +390,7 @@ bool AllExportDependenciesWritten(optional_ptr<CatalogTransaction> transaction, 
 			}
 			auto &dep = entry.get().Cast<DependencyCatalogEntry>();
 			auto &dependent = dep.GetLink(transaction);
-			if (dependent.Type() == DependencyType::DEPENDENCY_OWNED_BY) {
+			if (dependent.Flags().IsOwned()) {
 				// Fake it, we need to write the table first
 				contains = true;
 				break;
@@ -430,8 +433,8 @@ catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTra
 	auto sets = GetDependencySets(transaction);
 	for (auto &set_p : sets) {
 		auto &set = set_p.get().Cast<DependencySetCatalogEntry>();
-		 set.PrintDependencies(transaction);
-		 set.PrintDependents(transaction);
+		//set.PrintDependencies(transaction);
+		//set.PrintDependents(transaction);
 		backlog.push(set);
 	}
 
@@ -469,7 +472,7 @@ catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTra
 }
 
 void DependencyManager::Scan(ClientContext &context,
-                             const std::function<void(CatalogEntry &, CatalogEntry &, DependencyType)> &callback) {
+                             const std::function<void(CatalogEntry &, CatalogEntry &, DependencyFlags)> &callback) {
 	// FIXME: why do we take the write_lock here??
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	auto transaction = catalog.GetCatalogTransaction(context);
@@ -491,7 +494,7 @@ void DependencyManager::Scan(ClientContext &context,
 				return;
 			}
 			auto &dependent_entry = *dep;
-			callback(entry, dependent_entry, dependent.Type());
+			callback(entry, dependent_entry, dependent.Flags());
 		});
 	}
 }
@@ -504,7 +507,7 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 	// If the owner is already owned by something else, throw an error
 	auto &owner_dependency_set = GetOrCreateDependencySet(transaction, owner);
 	owner_dependency_set.ScanDependents(transaction, [&](DependencyCatalogEntry &dep) {
-		if (dep.Type() == DependencyType::DEPENDENCY_OWNED_BY) {
+		if (dep.Flags().IsOwned()) {
 			throw DependencyException(owner.name + " already owned by " + dep.EntryName());
 		}
 	});
@@ -512,19 +515,19 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 	// If the entry is already owned, throw an error
 	auto &entry_dependency_set = GetOrCreateDependencySet(transaction, entry);
 	entry_dependency_set.ScanDependents(transaction, [&](DependencyCatalogEntry &other) {
-		auto dependency_type = other.Type();
+		auto flags = other.Flags();
 
 		if (other.MangledName() != owner_dependency_set.MangledName()) {
 			// FIXME: this is much too broad, we should create a function to check for recursive dependencies instead.
 			throw DependencyException(entry.name + " already depends on " + other.EntryName());
 		}
 
-		if (dependency_type == DependencyType::DEPENDENCY_OWNED_BY) {
+		if (flags.IsOwned()) {
 			if (other.MangledName() == owner_dependency_set.MangledName()) {
 				return;
 			}
 			throw DependencyException(entry.name + " already depends on " + other.EntryName());
-		} else if (dependency_type == DependencyType::DEPENDENCY_OWNS) {
+		} else if (flags.IsOwnership()) {
 			// This entry is the owner of another entry
 			if (other.MangledName() != owner_dependency_set.MangledName()) {
 				return;
@@ -534,10 +537,9 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 		}
 	});
 	// 'entry' is owned by 'owner'
-	entry_dependency_set.AddDependent(transaction, owner, DependencyType::DEPENDENCY_OWNED_BY)
-	    .CompleteLink(transaction);
+	entry_dependency_set.AddDependent(transaction, owner, DependencyFlags::DependencyOwned()).CompleteLink(transaction);
 	// 'owner' owns 'entry'
-	owner_dependency_set.AddDependent(transaction, entry, DependencyType::DEPENDENCY_OWNS).CompleteLink(transaction);
+	owner_dependency_set.AddDependent(transaction, entry, DependencyFlags::DependencyOwns()).CompleteLink(transaction);
 }
 
 } // namespace duckdb

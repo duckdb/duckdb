@@ -42,18 +42,18 @@ public:
 public:
 	// Add Dependencies
 	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, CatalogEntry &dependency,
-	                                      DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
+	                                      DependencyFlags flags = DependencyFlags());
 	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, const LogicalDependency &dependency,
-	                                      DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
+	                                      DependencyFlags flags = DependencyFlags());
 	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, Dependency dependency);
 	void AddDependencies(CatalogTransaction transaction, const LogicalDependencyList &dependencies);
 	void AddDependencies(CatalogTransaction transaction, const dependency_set_t &dependencies);
 
 	// Add Dependents
 	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, CatalogEntry &dependent,
-	                                     DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
+	                                     DependencyFlags flags = DependencyFlags());
 	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, const LogicalDependency &dependent,
-	                                     DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
+	                                     DependencyFlags flags = DependencyFlags());
 	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, const Dependency dependent);
 	void AddDependents(CatalogTransaction transaction, const LogicalDependencyList &dependents);
 	void AddDependents(CatalogTransaction transaction, const dependency_set_t &dependents);
@@ -67,7 +67,7 @@ public:
 	void RemoveDependent(CatalogTransaction transaction, CatalogEntry &dependent);
 
 public:
-	bool HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry, DependencyType type);
+	bool HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry);
 	bool IsDependencyOf(CatalogTransaction transaction, CatalogEntry &entry);
 
 private:

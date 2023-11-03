@@ -32,8 +32,7 @@ enum class DependencyLinkSide { DEPENDENCY, DEPENDENT };
 class DependencyCatalogEntry : public InCatalogEntry {
 public:
 	DependencyCatalogEntry(DependencyLinkSide side, Catalog &catalog, DependencySetCatalogEntry &set,
-	                       const LogicalDependency &internal,
-	                       DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
+	                       const LogicalDependency &internal, DependencyFlags flags = DependencyFlags());
 	~DependencyCatalogEntry() override;
 
 public:
@@ -42,15 +41,15 @@ public:
 	const string &EntrySchema() const;
 	const string &EntryName() const;
 	const LogicalDependency &Internal() const;
-	DependencyType Type() const;
+	const DependencyFlags &Flags() const;
 
 	// Create the corresponding dependency/dependent in the other set
-	void CompleteLink(CatalogTransaction transaction, DependencyType type = DependencyType::DEPENDENCY_REGULAR);
+	void CompleteLink(CatalogTransaction transaction, DependencyFlags flags = DependencyFlags());
 	DependencyCatalogEntry &GetLink(optional_ptr<CatalogTransaction> transaction);
 
 private:
 	LogicalDependency internal;
-	DependencyType dependency_type;
+	const DependencyFlags flags;
 
 	DependencyLinkSide side;
 	DependencySetCatalogEntry &set;
