@@ -1409,6 +1409,9 @@ bool TryCastToTimestampNS::Operation(string_t input, timestamp_t &result, bool s
 	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
 		return false;
 	}
+	if (!Timestamp::IsFinite(result)) {
+		return true;
+	}
 	result = Timestamp::GetEpochNanoSeconds(
 	    result, StringUtil::Format("Could not convert VARCHAR value '%s' to Timestamp(NS)", input.GetString()));
 	return true;
@@ -1419,6 +1422,9 @@ bool TryCastToTimestampMS::Operation(string_t input, timestamp_t &result, bool s
 	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
 		return false;
 	}
+	if (!Timestamp::IsFinite(result)) {
+		return true;
+	}
 	result = Timestamp::GetEpochMs(result);
 	return true;
 }
@@ -1428,6 +1434,9 @@ bool TryCastToTimestampSec::Operation(string_t input, timestamp_t &result, bool 
 	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
 		return false;
 	}
+	if (!Timestamp::IsFinite(result)) {
+		return true;
+	}
 	result = Timestamp::GetEpochSeconds(result);
 	return true;
 }
@@ -1436,6 +1445,9 @@ template <>
 bool TryCastToTimestampNS::Operation(date_t input, timestamp_t &result, bool strict) {
 	if (!TryCast::Operation<date_t, timestamp_t>(input, result, strict)) {
 		return false;
+	}
+	if (!Timestamp::IsFinite(result)) {
+		return true;
 	}
 	if (!TryMultiplyOperator::Operation(result.value, Interval::NANOS_PER_MICRO, result.value)) {
 		return false;
@@ -1448,6 +1460,9 @@ bool TryCastToTimestampMS::Operation(date_t input, timestamp_t &result, bool str
 	if (!TryCast::Operation<date_t, timestamp_t>(input, result, strict)) {
 		return false;
 	}
+	if (!Timestamp::IsFinite(result)) {
+		return true;
+	}
 	result.value /= Interval::MICROS_PER_MSEC;
 	return true;
 }
@@ -1456,6 +1471,9 @@ template <>
 bool TryCastToTimestampSec::Operation(date_t input, timestamp_t &result, bool strict) {
 	if (!TryCast::Operation<date_t, timestamp_t>(input, result, strict)) {
 		return false;
+	}
+	if (!Timestamp::IsFinite(result)) {
+		return true;
 	}
 	result.value /= Interval::MICROS_PER_MSEC * Interval::MSECS_PER_SEC;
 	return true;

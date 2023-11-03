@@ -23,6 +23,18 @@ create table ts_${unit}_tbl_null as FROM VALUES
 	(NULL::${unit})
 as t(ts);
 
+# Positive infinity
+statement ok
+create table ts_${unit}_tbl_posinf as from VALUES
+	('infinity'::${unit})
+as t(ts);
+
+# Negative infinity
+statement ok
+create table ts_${unit}_tbl_mininf as from VALUES
+	('-infinity'::${unit})
+as t(ts);
+
 endloop
 
 foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
@@ -37,18 +49,6 @@ as t(ts);
 statement ok
 create table ts_${unit}_tbl_3 as from VALUES
 	('29720-04-05 (BC) 22:13:20'::${unit})
-as t(ts);
-
-# Positive infinity
-statement ok
-create table ts_${unit}_tbl_posinf as from VALUES
-	('infinity'::${unit})
-as t(ts);
-
-# Negative infinity
-statement ok
-create table ts_${unit}_tbl_mininf as from VALUES
-	('-infinity'::${unit})
 as t(ts);
 
 endloop
@@ -89,42 +89,26 @@ select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_3;
 endloop
 
 # Table +inf | UTC +0
-
-statement error
-select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_posinf;
-----
-Conversion Error: Unable to convert ICU date to timestamp
-
-# FIXME: this doesn't look correct
-query II
-select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_posinf;
-----
-294247-01-10 04:00:54	294247-01-10 04:00:54+00
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
 
 query II
-select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_posinf;
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_posinf;
 ----
 infinity	infinity
 
+endloop
+
 # Table -inf | UTC +0
-
-statement error
-select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_mininf;
-----
-Conversion Error: Date out of range in timestamp conversion
-
-statement error
-select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_mininf;
-----
-Conversion Error: Date out of range in timestamp conversion
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
 
 query II
-select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_mininf;
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_mininf;
 ----
 -infinity	-infinity
 
-# Table NULL | UTC +0
+endloop
 
+# Table NULL | UTC +0
 foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
 
 query II nosort result_utc_null
@@ -168,38 +152,24 @@ select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_3;
 endloop
 
 # Table +inf | America +8
-
-statement error
-select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_posinf;
-----
-Conversion Error: Unable to convert ICU date to timestamp
-
-statement error
-select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_posinf;
-----
-Conversion Error: Unable to convert ICU date to timestamp
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
 
 query II
-select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_posinf;
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_posinf;
 ----
 infinity	infinity
 
+endloop
+
 # Table -inf | America +8
-
-statement error
-select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_mininf;
-----
-Conversion Error: Date out of range in timestamp conversion
-
-statement error
-select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_mininf;
-----
-Conversion Error: Date out of range in timestamp conversion
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
 
 query II
-select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_mininf;
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_mininf;
 ----
 -infinity	-infinity
+
+endloop
 
 # Table NULL | America +8
 
@@ -245,40 +215,24 @@ select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_3;
 endloop
 
 # Table +inf | ETC -6
-
-# FIXME: these also dont look correct
-query II
-select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_posinf;
-----
-294247-01-10 04:00:54.775	294247-01-10 04:00:54.776+06
-
-# FIXME: these also dont look correct
-query II
-select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_posinf;
-----
-294247-01-10 04:00:54	294247-01-10 04:00:54+06
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
 
 query II
-select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_posinf;
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_posinf;
 ----
 infinity	infinity
 
+endloop
+
 # Table -inf | ETC -6
-
-statement error
-select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_mininf;
-----
-Conversion Error: Date out of range in timestamp conversion
-
-statement error
-select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_mininf;
-----
-Conversion Error: Date out of range in timestamp conversion
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
 
 query II
-select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_mininf;
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_mininf;
 ----
 -infinity	-infinity
+
+endloop
 
 # Table NULL | ETC -6
 

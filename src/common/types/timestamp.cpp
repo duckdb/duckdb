@@ -298,6 +298,9 @@ timestamp_t Timestamp::GetCurrentTimestamp() {
 
 timestamp_t Timestamp::FromEpochSeconds(int64_t sec) {
 	int64_t result;
+	if (!Timestamp::IsFinite(timestamp_t(sec))) {
+		return timestamp_t(sec);
+	}
 	if (!TryMultiplyOperator::Operation(sec, Interval::MICROS_PER_SEC, result)) {
 		throw ConversionException("Could not convert Timestamp(S) to Timestamp(US)");
 	}
@@ -306,6 +309,9 @@ timestamp_t Timestamp::FromEpochSeconds(int64_t sec) {
 
 timestamp_t Timestamp::FromEpochMs(int64_t ms) {
 	int64_t result;
+	if (!Timestamp::IsFinite(timestamp_t(ms))) {
+		return timestamp_t(ms);
+	}
 	if (!TryMultiplyOperator::Operation(ms, Interval::MICROS_PER_MSEC, result)) {
 		throw ConversionException("Could not convert Timestamp(MS) to Timestamp(US)");
 	}
@@ -313,28 +319,46 @@ timestamp_t Timestamp::FromEpochMs(int64_t ms) {
 }
 
 timestamp_t Timestamp::FromEpochMicroSeconds(int64_t micros) {
+	if (!Timestamp::IsFinite(timestamp_t(micros))) {
+		return timestamp_t(micros);
+	}
 	return timestamp_t(micros);
 }
 
 timestamp_t Timestamp::FromEpochNanoSeconds(int64_t ns) {
+	if (!Timestamp::IsFinite(timestamp_t(ns))) {
+		return timestamp_t(ns);
+	}
 	return timestamp_t(ns / 1000);
 }
 
 int64_t Timestamp::GetEpochSeconds(timestamp_t timestamp) {
+	if (!Timestamp::IsFinite(timestamp)) {
+		return timestamp.value;
+	}
 	return timestamp.value / Interval::MICROS_PER_SEC;
 }
 
 int64_t Timestamp::GetEpochMs(timestamp_t timestamp) {
+	if (!Timestamp::IsFinite(timestamp)) {
+		return timestamp.value;
+	}
 	return timestamp.value / Interval::MICROS_PER_MSEC;
 }
 
 int64_t Timestamp::GetEpochMicroSeconds(timestamp_t timestamp) {
+	if (!Timestamp::IsFinite(timestamp)) {
+		return timestamp.value;
+	}
 	return timestamp.value;
 }
 
 int64_t Timestamp::GetEpochNanoSeconds(timestamp_t timestamp, const string &error_message) {
 	int64_t result;
 	int64_t ns_in_us = 1000;
+	if (!Timestamp::IsFinite(timestamp)) {
+		return timestamp.value;
+	}
 	if (!TryMultiplyOperator::Operation(timestamp.value, ns_in_us, result)) {
 		if (error_message.empty()) {
 			throw ConversionException("Could not convert Timestamp(US) to Timestamp(NS)");
