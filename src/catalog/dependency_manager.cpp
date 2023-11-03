@@ -197,7 +197,7 @@ static bool CascadeDrop(bool cascade, DependencyType dependency_type) {
 }
 
 optional_ptr<CatalogEntry> DependencyManager::LookupEntry(optional_ptr<CatalogTransaction> transaction,
-                                                          LogicalDependency dependency) {
+                                                          const LogicalDependency &dependency) {
 	auto &schema = dependency.schema;
 	auto &name = dependency.name;
 	auto &type = dependency.type;
@@ -391,7 +391,7 @@ static const string &MangledName(CatalogEntry &entry) {
 }
 
 bool AllExportDependenciesWritten(optional_ptr<CatalogTransaction> transaction, CatalogEntry &object,
-                                  catalog_entry_vector_t dependencies, catalog_entry_set_t &exported) {
+                                  const catalog_entry_vector_t &dependencies, catalog_entry_set_t &exported) {
 	for (auto &entry : dependencies) {
 		// This is an entry that needs to be written before 'object' can be written
 		bool contains = false;
@@ -425,7 +425,7 @@ bool AllExportDependenciesWritten(optional_ptr<CatalogTransaction> transaction, 
 	return true;
 }
 
-void AddDependentsToBacklog(stack<reference<CatalogEntry>> &backlog, catalog_entry_vector_t dependents) {
+void AddDependentsToBacklog(stack<reference<CatalogEntry>> &backlog, const catalog_entry_vector_t &dependents) {
 	catalog_entry_vector_t tables;
 	for (auto &dependent : dependents) {
 		backlog.push(dependent);

@@ -123,7 +123,7 @@ void LogicalDependencyList::AddDependency(CatalogEntry &entry) {
 	set.insert(dependency);
 }
 
-void LogicalDependencyList::AddDependency(LogicalDependency entry) {
+void LogicalDependencyList::AddDependency(const LogicalDependency &entry) {
 	set.insert(entry);
 }
 

@@ -6,7 +6,7 @@
 namespace duckdb {
 
 DependencyCatalogEntry::DependencyCatalogEntry(DependencyLinkSide side, Catalog &catalog,
-                                               DependencySetCatalogEntry &set, LogicalDependency internal,
+                                               DependencySetCatalogEntry &set, const LogicalDependency &internal,
                                                DependencyType dependency_type)
     : InCatalogEntry(CatalogType::DEPENDENCY_ENTRY, catalog, DependencyManager::MangleName(internal)),
       internal(internal), dependency_type(dependency_type), side(side), set(set) {

@@ -25,7 +25,8 @@ class DependencyCatalogEntry;
 
 class DependencySetCatalogEntry : public InCatalogEntry {
 public:
-	DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager, LogicalDependency internal);
+	DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager,
+	                          const LogicalDependency &internal);
 	~DependencySetCatalogEntry() override;
 
 public:
@@ -40,18 +41,18 @@ public:
 
 public:
 	// Add Dependencies
-	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, CatalogEntry &dependent,
+	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, CatalogEntry &dependency,
 	                                      DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
-	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, LogicalDependency dependent,
+	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, const LogicalDependency &dependency,
 	                                      DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
-	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, Dependency dependent);
+	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, Dependency dependency);
 	void AddDependencies(CatalogTransaction transaction, const LogicalDependencyList &dependencies);
 	void AddDependencies(CatalogTransaction transaction, const dependency_set_t &dependencies);
 
 	// Add Dependents
 	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, CatalogEntry &dependent,
 	                                     DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
-	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, LogicalDependency dependent,
+	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, const LogicalDependency &dependent,
 	                                     DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, const Dependency dependent);
 	void AddDependents(CatalogTransaction transaction, const LogicalDependencyList &dependents);

@@ -32,7 +32,7 @@ enum class DependencyLinkSide { DEPENDENCY, DEPENDENT };
 class DependencyCatalogEntry : public InCatalogEntry {
 public:
 	DependencyCatalogEntry(DependencyLinkSide side, Catalog &catalog, DependencySetCatalogEntry &set,
-	                       LogicalDependency internal,
+	                       const LogicalDependency &internal,
 	                       DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	~DependencyCatalogEntry() override;
 

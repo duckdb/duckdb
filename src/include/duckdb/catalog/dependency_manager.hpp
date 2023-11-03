@@ -60,7 +60,8 @@ private:
 	optional_ptr<DependencySetCatalogEntry> GetDependencySet(optional_ptr<CatalogTransaction> transaction,
 	                                                         CatalogEntry &entry);
 
-	optional_ptr<CatalogEntry> LookupEntry(optional_ptr<CatalogTransaction> transaction, LogicalDependency dependency);
+	optional_ptr<CatalogEntry> LookupEntry(optional_ptr<CatalogTransaction> transaction,
+	                                       const LogicalDependency &dependency);
 	optional_ptr<CatalogEntry> LookupEntry(optional_ptr<CatalogTransaction> transaction, CatalogEntry &dependency);
 
 	void CleanupDependencies(CatalogTransaction transaction, CatalogEntry &entry);

@@ -10,7 +10,7 @@
 namespace duckdb {
 
 DependencySetCatalogEntry::DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager,
-                                                     LogicalDependency internal)
+                                                     const LogicalDependency &internal)
     : InCatalogEntry(CatalogType::DEPENDENCY_SET, catalog, DependencyManager::MangleName(internal)), internal(internal),
       dependencies(catalog), dependents(catalog), dependency_manager(dependency_manager) {
 }
@@ -115,7 +115,7 @@ void DependencySetCatalogEntry::AddDependents(CatalogTransaction transaction, co
 
 // Add from a single CatalogEntry
 DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction,
-                                                                 LogicalDependency to_add, DependencyType type) {
+                                                                 const LogicalDependency &to_add, DependencyType type) {
 	static const LogicalDependencyList EMPTY_DEPENDENCIES;
 
 	{
@@ -143,7 +143,7 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransact
 }
 
 DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction,
-                                                                LogicalDependency to_add, DependencyType type) {
+                                                                const LogicalDependency &to_add, DependencyType type) {
 	static const LogicalDependencyList EMPTY_DEPENDENCIES;
 
 	{
