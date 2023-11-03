@@ -21,6 +21,54 @@ enum class DependencyType : uint8_t {
 	DEPENDENCY_OWNED_BY = 3
 };
 
+struct DependencyFlags {
+private:
+	static constexpr uint8_t NON_BLOCKING = 0;
+	static constexpr uint8_t BLOCKING = 1;
+	static constexpr uint8_t OWNED = 2;
+	static constexpr uint8_t OWNERSHIP = 4;
+public:
+	DependencyFlags() : value(0) {}
+public:
+	bool IsBlocking() const {
+		return value & BLOCKING;
+	}
+	bool IsOwned() const {
+		return value & OWNED;
+	}
+	bool IsOwnership() const {
+		return value & OWNERSHIP;
+	}
+public:
+	DependencyFlags &SetOwnership() {
+		value &= OWNERSHIP;
+		return *this;
+	}
+	DependencyFlags &SetOwned() {
+		value &= OWNED;
+		return *this;
+	}
+	DependencyFlags &SetBlocking() {
+		value &= BLOCKING;
+		return *this;
+	}
+public:
+	static DependencyFlags DependencyOwns() {
+		return DependencyFlags().SetOwnership();
+	}
+	static DependencyFlags DependencyOwned() {
+		return DependencyFlags().SetOwned();
+	}
+	static DependencyFlags DependencyAutomatic() {
+		return DependencyFlags();
+	}
+	static DependencyFlags DependencyRegular() {
+		return DependencyFlags().SetBlocking();
+	}
+public:
+	uint8_t value;
+};
+
 struct Dependency {
 	Dependency(CatalogEntry &entry, DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR)
 	    : // NOLINT: Allow implicit conversion from `CatalogEntry`

@@ -79,8 +79,8 @@ public:
 	catalog_entry_vector_t GetEntriesThatWeDependOn(optional_ptr<CatalogTransaction> transaction);
 
 public:
-	void PrintDependencies(CatalogTransaction transaction);
-	void PrintDependents(CatalogTransaction transaction);
+	void PrintDependencies(optional_ptr<CatalogTransaction> transaction);
+	void PrintDependents(optional_ptr<CatalogTransaction> transaction);
 
 public:
 	const string &MangledName() const;

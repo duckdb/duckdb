@@ -122,7 +122,11 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransact
 		auto mangled_name = DependencyManager::MangleName(to_add);
 		auto dep = dependencies.GetEntry(transaction, mangled_name);
 		if (dep) {
-			return dep->Cast<DependencyCatalogEntry>();
+			auto &dependency = dep->Cast<DependencyCatalogEntry>();
+			if (dependency.Type() == type) {
+				// Only return the entry if no changes need to be made
+				return dependency;
+			}
 		}
 	}
 
@@ -133,7 +137,10 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransact
 		dependency_p->temporary = true;
 	}
 	auto &dependency = *dependency_p;
-	dependencies.CreateEntry(transaction, dependency_name, std::move(dependency_p), EMPTY_DEPENDENCIES);
+	const bool inserted =
+	    dependencies.CreateEntry(transaction, dependency_name, std::move(dependency_p), EMPTY_DEPENDENCIES);
+	(void)inserted;
+	D_ASSERT(inserted);
 	return dependency;
 }
 
@@ -142,15 +149,37 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransact
 	return AddDependency(transaction, LogicalDependency(to_add), type);
 }
 
+bool DependencyTypesAreCompatible(DependencyType current, DependencyType incoming) {
+	if (current == DependencyType::DEPENDENCY_OWNED_BY) {
+		// This trumps every other type
+		D_ASSERT(incoming != DependencyType::DEPENDENCY_OWNS);
+		return true;
+	}
+	if (current == DependencyType::DEPENDENCY_OWNS) {
+		// This trumps every other type
+		D_ASSERT(incoming != DependencyType::DEPENDENCY_OWNED_BY);
+		return true;
+	}
+	// If the incoming type is related to ownership, it's not compatible with the current type
+	return incoming != DependencyType::DEPENDENCY_OWNS && incoming != DependencyType::DEPENDENCY_OWNED_BY;
+}
+
 DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction,
                                                                 const LogicalDependency &to_add, DependencyType type) {
 	static const LogicalDependencyList EMPTY_DEPENDENCIES;
 
 	{
+		// Check if it already exists
 		auto mangled_name = DependencyManager::MangleName(to_add);
 		auto dep = dependents.GetEntry(transaction, mangled_name);
 		if (dep) {
-			return dep->Cast<DependencyCatalogEntry>();
+			auto &dependent = dep->Cast<DependencyCatalogEntry>();
+			if (DependencyTypesAreCompatible(dependent.Type(), type)) {
+				// Only return the entry if no changes need to be made
+				return dependent;
+			}
+			// It has to be dropped because the type needs to be updated
+			dependents.DropEntry(transaction, mangled_name, false, false);
 		}
 	}
 
@@ -161,7 +190,10 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransacti
 		dependent_p->temporary = true;
 	}
 	auto &dependent = *dependent_p;
-	dependents.CreateEntry(transaction, dependent_name, std::move(dependent_p), EMPTY_DEPENDENCIES);
+	const bool inserted =
+	    dependents.CreateEntry(transaction, dependent_name, std::move(dependent_p), EMPTY_DEPENDENCIES);
+	(void)inserted;
+	D_ASSERT(inserted);
 	return dependent;
 }
 
@@ -260,27 +292,37 @@ static string FormatString(string input) {
 	return input;
 }
 
-void DependencySetCatalogEntry::PrintDependencies(CatalogTransaction transaction) {
+void DependencySetCatalogEntry::PrintDependencies(optional_ptr<CatalogTransaction> transaction) {
 	Printer::Print(StringUtil::Format("Dependencies of %s", FormatString(name)));
-	dependencies.Scan(transaction, [&](CatalogEntry &dependency) {
+	auto cb = [&](CatalogEntry &dependency) {
 		auto &dep = dependency.Cast<DependencyCatalogEntry>();
 		auto &name = dep.EntryName();
 		auto &schema = dep.EntrySchema();
 		auto type = dep.EntryType();
 		Printer::Print(StringUtil::Format("Schema: %s | Name: %s | Type: %s | DependencyType: %s", schema, name,
 		                                  CatalogTypeToString(type), EnumUtil::ToString(dep.Type())));
-	});
+	};
+	if (transaction) {
+		dependencies.Scan(*transaction, cb);
+	} else {
+		dependencies.Scan(cb);
+	}
 }
-void DependencySetCatalogEntry::PrintDependents(CatalogTransaction transaction) {
+void DependencySetCatalogEntry::PrintDependents(optional_ptr<CatalogTransaction> transaction) {
 	Printer::Print(StringUtil::Format("Dependents of %s", FormatString(name)));
-	dependents.Scan(transaction, [&](CatalogEntry &dependent) {
+	auto cb = [&](CatalogEntry &dependent) {
 		auto &dep = dependent.Cast<DependencyCatalogEntry>();
 		auto &name = dep.EntryName();
 		auto &schema = dep.EntrySchema();
 		auto type = dep.EntryType();
 		Printer::Print(StringUtil::Format("Schema: %s | Name: %s | Type: %s | DependencyType: %s", schema, name,
 		                                  CatalogTypeToString(type), EnumUtil::ToString(dep.Type())));
-	});
+	};
+	if (transaction) {
+		dependencies.Scan(*transaction, cb);
+	} else {
+		dependencies.Scan(cb);
+	}
 }
 
 } // namespace duckdb

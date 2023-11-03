@@ -320,32 +320,17 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	}
 	auto &old_dependency_set = *old_dependency_set_p;
 
-	dependency_set_t owned_objects;
-	old_dependency_set.ScanDependents(transaction, [&](DependencyCatalogEntry &dep) {
-		// It makes no sense to have a schema depend on anything
-		D_ASSERT(dep.EntryType() != CatalogType::SCHEMA_ENTRY);
-
-		auto entry = LookupEntry(&transaction, dep);
-		if (!entry) {
-			return;
-		}
-		if (dep.Type() == DependencyType::DEPENDENCY_OWNS) {
-			owned_objects.insert(Dependency(*entry, dep.Type()));
-			return;
-		}
-	});
+	dependency_set_t dependents;
+	old_dependency_set.ScanDependents(
+	    transaction, [&](DependencyCatalogEntry &dep) { dependents.insert(Dependency(dep, dep.Type())); });
 
 	// Keep old dependencies
-	dependency_set_t dependents;
+	dependency_set_t dependents_of_others;
 	old_dependency_set.ScanDependencies(transaction, [&](DependencyCatalogEntry &dep) {
-		auto entry = LookupEntry(&transaction, dep);
-		if (!entry) {
-			return;
-		}
 		auto other_dependency_set = GetDependencySet(&transaction, dep);
 		// Find the dependent entry so we can properly restore the type it has
 		auto &dependent = other_dependency_set->GetDependent(&transaction, old_obj);
-		dependents.insert(Dependency(*entry, dependent.Type()));
+		dependents_of_others.insert(Dependency(dep, dependent.Type()));
 	});
 
 	// FIXME: we should update dependencies in the future
@@ -355,28 +340,21 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		// The name was not changed, we do not need to recreate the dependency links
 		return;
 	}
-	CleanupDependencies(transaction, old_obj);
 
-	for (auto &dep : dependents) {
-		auto &other = dep.entry.get();
-		auto other_dependency_set = GetDependencySet(&transaction, other);
-		other_dependency_set->AddDependent(transaction, new_obj).CompleteLink(transaction);
-	}
+	CleanupDependencies(transaction, old_obj);
 
 	auto &dependency_set = GetOrCreateDependencySet(transaction, new_obj);
 
-	// For all the objects we own, re establish the dependency of the owner on the object
-	for (auto &object : owned_objects) {
-		auto &entry = object.entry.get();
-		auto other_dependency_set = GetDependencySet(&transaction, entry);
-		D_ASSERT(other_dependency_set);
+	// Recreate the dependencies
+	for (auto &dep : dependents_of_others) {
+		auto &other = dep.entry.get();
+		auto other_dependency_set = GetDependencySet(&transaction, other);
+		other_dependency_set->AddDependent(transaction, new_obj, dep.dependency_type).CompleteLink(transaction);
+	}
 
-		auto &dependent_to =
-		    other_dependency_set->AddDependent(transaction, new_obj, DependencyType::DEPENDENCY_OWNED_BY);
-		dependent_to.CompleteLink(transaction);
-
-		auto &dependent_from = dependency_set.AddDependent(transaction, entry, DependencyType::DEPENDENCY_OWNS);
-		dependent_from.CompleteLink(transaction);
+	// Recreate the dependents
+	for (auto &dep : dependents) {
+		dependency_set.AddDependent(transaction, dep).CompleteLink(transaction);
 	}
 }
 
@@ -450,7 +428,10 @@ catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTra
 	stack<reference<CatalogEntry>> backlog;
 
 	auto sets = GetDependencySets(transaction);
-	for (auto &set : sets) {
+	for (auto &set_p : sets) {
+		auto &set = set_p.get().Cast<DependencySetCatalogEntry>();
+		 set.PrintDependencies(transaction);
+		 set.PrintDependents(transaction);
 		backlog.push(set);
 	}
 
@@ -533,27 +514,29 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 	entry_dependency_set.ScanDependents(transaction, [&](DependencyCatalogEntry &other) {
 		auto dependency_type = other.Type();
 
-		auto dependent_entry = LookupEntry(&transaction, other);
-		if (!dependent_entry) {
-			return;
-		}
-		auto &dep = *dependent_entry;
-
-		// FIXME: should this not check for DEPENDENCY_OWNS first??
-
-		// if the entry is already owned, throw error
-		if (&dep != &owner) {
-			throw DependencyException(entry.name + " already depends on " + dep.name);
+		if (other.MangledName() != owner_dependency_set.MangledName()) {
+			// FIXME: this is much too broad, we should create a function to check for recursive dependencies instead.
+			throw DependencyException(entry.name + " already depends on " + other.EntryName());
 		}
 
-		// if the entry owns the owner, throw error
-		if (&dep == &owner && dependency_type == DependencyType::DEPENDENCY_OWNS) {
-			throw DependencyException(entry.name + " already owns " + owner.name +
-			                          ". Cannot have circular dependencies");
+		if (dependency_type == DependencyType::DEPENDENCY_OWNED_BY) {
+			if (other.MangledName() == owner_dependency_set.MangledName()) {
+				return;
+			}
+			throw DependencyException(entry.name + " already depends on " + other.EntryName());
+		} else if (dependency_type == DependencyType::DEPENDENCY_OWNS) {
+			// This entry is the owner of another entry
+			if (other.MangledName() != owner_dependency_set.MangledName()) {
+				return;
+			}
+			throw DependencyException("%s already owns %s. Can not have circular dependencies.", entry.name,
+			                          owner.name);
 		}
 	});
+	// 'entry' is owned by 'owner'
 	entry_dependency_set.AddDependent(transaction, owner, DependencyType::DEPENDENCY_OWNED_BY)
 	    .CompleteLink(transaction);
+	// 'owner' owns 'entry'
 	owner_dependency_set.AddDependent(transaction, entry, DependencyType::DEPENDENCY_OWNS).CompleteLink(transaction);
 }
 
