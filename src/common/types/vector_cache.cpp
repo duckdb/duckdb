@@ -77,6 +77,9 @@ public:
 			auto &child_cache = child_caches[0]->Cast<VectorCacheBuffer>();
 			auto &array_child = result.auxiliary->Cast<VectorArrayBuffer>().GetChild();
 			child_cache.ResetFromCache(array_child, child_caches[0]);
+
+			// Ensure the child validity is (will be) large enough, even if its not initialized.
+			array_child.validity.Resize(array_child.validity.TargetCount(), child_cache.capacity);
 			break;
 		}
 		case PhysicalType::STRUCT: {

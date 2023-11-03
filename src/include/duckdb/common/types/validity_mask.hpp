@@ -138,6 +138,7 @@ public:
 	inline void Reset() {
 		validity_mask = nullptr;
 		validity_data.reset();
+		target_count = STANDARD_VECTOR_SIZE;
 	}
 
 	static inline idx_t EntryCount(idx_t count) {
