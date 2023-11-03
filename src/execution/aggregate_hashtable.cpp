@@ -370,7 +370,6 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			const auto index = sel_vector->get_index(i);
 			const auto &salt = hash_salts[index];
 			auto &ht_offset = ht_offsets[index];
-
 			while (true) {
 				auto &entry = entries[ht_offset];
 				if (entry.IsOccupied()) { // Cell is occupied: Compare salts
@@ -380,8 +379,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 						break;
 					} else {
 						// Different salts, move to next entry (linear probing)
-						ht_offset++;
-						if (ht_offset >= capacity) {
+						if (++ht_offset >= capacity) {
 							ht_offset = 0;
 						}
 						continue;
@@ -389,11 +387,9 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 				} else { // Cell is unoccupied, let's claim it
 					// Set salt (also marks as occupied)
 					entry.SetSalt(salt);
-
 					// Update selection lists for outer loops
 					state.empty_vector.set_index(new_entry_count++, index);
 					new_groups_out.set_index(new_group_count++, index);
-
 					break;
 				}
 			}
@@ -436,8 +432,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		// Linear probing: each of the entries that do not match move to the next entry in the HT
 		for (idx_t i = 0; i < no_match_count; i++) {
 			const auto index = state.no_match_vector.get_index(i);
-			auto &ht_offset = ++ht_offsets[index];
-			if (ht_offset >= capacity) {
+			auto &ht_offset = ht_offsets[index];
+			if (++ht_offset >= capacity) {
 				ht_offset = 0;
 			}
 		}
