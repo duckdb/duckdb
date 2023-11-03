@@ -18,9 +18,9 @@ class CatalogEntry;
 struct DependencyFlags {
 private:
 	static constexpr uint8_t NON_BLOCKING = 0;
-	static constexpr uint8_t BLOCKING = 1 << 1;
-	static constexpr uint8_t OWNED = 1 << 2;
-	static constexpr uint8_t OWNERSHIP = 1 << 3;
+	static constexpr uint8_t BLOCKING = 1 << 0;
+	static constexpr uint8_t OWNED = 1 << 1;
+	static constexpr uint8_t OWNERSHIP = 1 << 2;
 
 public:
 	DependencyFlags() : value(0) {

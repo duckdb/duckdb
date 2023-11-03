@@ -159,7 +159,7 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 	}
 
 	// Create a dependency set for the object
-	auto &new_set = GetOrCreateDependencySet(transaction, object);
+	GetOrCreateDependencySet(transaction, object);
 
 	LogicalDependencyList dependencies;
 	// check for each object in the sources if they were not deleted yet
@@ -390,8 +390,10 @@ bool AllExportDependenciesWritten(optional_ptr<CatalogTransaction> transaction, 
 			}
 			auto &dep = entry.get().Cast<DependencyCatalogEntry>();
 			auto &dependent = dep.GetLink(transaction);
-			if (dependent.Flags().IsOwned()) {
-				// Fake it, we need to write the table first
+			auto &flags = dependent.Flags();
+			if (flags.IsOwnership() && !flags.IsBlocking()) {
+				// 'object' is owned by this entry
+				// it needs to be written first
 				contains = true;
 				break;
 			}
@@ -433,8 +435,8 @@ catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTra
 	auto sets = GetDependencySets(transaction);
 	for (auto &set_p : sets) {
 		auto &set = set_p.get().Cast<DependencySetCatalogEntry>();
-		//set.PrintDependencies(transaction);
-		//set.PrintDependents(transaction);
+		// set.PrintDependencies(transaction);
+		// set.PrintDependents(transaction);
 		backlog.push(set);
 	}
 
