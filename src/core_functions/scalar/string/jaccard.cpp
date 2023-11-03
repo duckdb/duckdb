@@ -1,48 +1,46 @@
-#include "duckdb/core_functions/scalar/string_functions.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/core_functions/scalar/string_functions.hpp"
 
+#include <array>
 #include <ctype.h>
 
 namespace duckdb {
 
-static inline map<char, idx_t> GetSet(const string_t &str) {
-	auto map_of_chars = map<char, idx_t> {};
+namespace {
+constexpr size_t MAX_SIZE = std::numeric_limits<unsigned char>::max() + 1;
+}
+
+static inline std::array<char, MAX_SIZE> GetSet(const string_t &str) {
+	std::array<char, MAX_SIZE> array_set;
+	array_set.fill(0);
+
 	idx_t str_len = str.GetSize();
 	auto s = str.GetData();
 
 	for (idx_t pos = 0; pos < str_len; pos++) {
-		map_of_chars.insert(std::make_pair(s[pos], 1));
+		array_set[static_cast<unsigned char>(s[pos])] = 1;
 	}
-	return map_of_chars;
+	return array_set;
 }
 
 static double JaccardSimilarity(const string_t &str, const string_t &txt) {
 	if (str.GetSize() < 1 || txt.GetSize() < 1) {
 		throw InvalidInputException("Jaccard Function: An argument too short!");
 	}
-	map<char, idx_t> m_str, m_txt;
+	std::array<char, MAX_SIZE> m_str, m_txt;
 
 	m_str = GetSet(str);
 	m_txt = GetSet(txt);
 
-	if (m_str.size() > m_txt.size()) {
-		m_str.swap(m_txt);
-	}
-
-	for (auto const &achar : m_str) {
-		++m_txt[achar.first];
-	}
-	// m_txt.size is now size of union.
-
 	idx_t size_intersect = 0;
-	for (const auto &apair : m_txt) {
-		if (apair.second > 1) {
-			size_intersect++;
-		}
+	idx_t size_union = 0;
+	for (size_t i = 0; i < MAX_SIZE; ++i) {
+		size_intersect += m_str[i] & m_txt[i];
+		size_union += m_str[i] | m_txt[i];
 	}
 
-	return (double)size_intersect / (double)m_txt.size();
+	return static_cast<double>(size_intersect) / static_cast<double>(size_union);
 }
 
 static double JaccardScalarFunction(Vector &result, const string_t str, string_t tgt) {
