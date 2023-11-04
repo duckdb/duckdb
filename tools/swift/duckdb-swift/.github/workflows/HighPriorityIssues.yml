@@ -1,0 +1,36 @@
+name: Create Internal issue when the "High Priority" label is applied
+on:
+  issues:
+    types:
+      - labeled
+
+env:
+  GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
+  # an event triggering this workflow is either an issue or a pull request,
+  # hence only one of the numbers will be filled in the TITLE_PREFIX
+  TITLE_PREFIX: "[duckdb-swift/#${{ github.event.issue.number }}]"
+  PUBLIC_ISSUE_TITLE: ${{ github.event.issue.title }}
+
+jobs:
+  create_or_label_issue:
+    if: github.event.label.name == 'High Priority'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get mirror issue number
+        run: |
+          gh issue list --repo duckdblabs/duckdb-internal --search "${TITLE_PREFIX}" --json title,number --jq ".[] | select(.title | startswith(\"$TITLE_PREFIX\")).number" > mirror_issue_number.txt
+          echo "MIRROR_ISSUE_NUMBER=$(cat mirror_issue_number.txt)" >> $GITHUB_ENV
+
+      - name: Print whether mirror issue exists
+        run: |
+          if [ "$MIRROR_ISSUE_NUMBER" == "" ]; then
+            echo "Mirror issue with title prefix '$TITLE_PREFIX' does not exist yet"
+          else
+            echo "Mirror issue with title prefix '$TITLE_PREFIX' exists with number $MIRROR_ISSUE_NUMBER"
+          fi
+
+      - name: Create or label issue
+        run: |
+          if [ "$MIRROR_ISSUE_NUMBER" == "" ]; then
+            gh issue create --repo duckdblabs/duckdb-internal --label "Swift" --label "High Priority" --title "$TITLE_PREFIX - $PUBLIC_ISSUE_TITLE" --body "See https://github.com/duckdb/duckdb/issues/${{ github.event.issue.number }}"
+          fi

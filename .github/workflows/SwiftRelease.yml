@@ -42,6 +42,8 @@ jobs:
           mkdir updated-repo
           mv -v target-repo/.git updated-repo/.git
           mv -v source-repo/tools/swift/duckdb-swift/* updated-repo/
+          mv -v source-repo/tools/swift/duckdb-swift/.gitignore updated-repo/
+          mv -v source-repo/tools/swift/duckdb-swift/.github updated-repo/
 
       - name: Commit Updated Repo
         run: |
