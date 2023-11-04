@@ -953,7 +953,7 @@ Returns NULL if the index is out of range for the provided prepared statement.
 
 * prepared_statement: The prepared statement for which to get the parameter name from.
 */
-const char *duckdb_parameter_name(duckdb_prepared_statement prepared_statement, idx_t index);
+DUCKDB_API const char *duckdb_parameter_name(duckdb_prepared_statement prepared_statement, idx_t index);
 
 /*!
 Returns the parameter type for the parameter at the given index.
