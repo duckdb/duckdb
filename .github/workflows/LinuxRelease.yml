@@ -79,7 +79,9 @@ jobs:
     - name: Test
       shell: bash
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-      run: make allunit
+      run: |
+        make
+        python3.7 scripts/run_tests_one_by_one.py build/release/test/unittest "*"
 
     - name: Tools Tests
       shell: bash
