@@ -234,7 +234,6 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 }
 
 static bool CastJSONToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	fprintf(stderr, "CASTING JSON TO VARCHAR\n");
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator.Reset();
 	auto alc = lstate.json_allocator.GetYYAlc();
