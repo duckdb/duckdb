@@ -804,12 +804,16 @@ struct QuantileOperation {
 	}
 
 	template <class STATE, class INPUT_TYPE>
-	static void WindowInit(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
-	                       const ValidityMask &filter_mask, data_ptr_t state_p, idx_t count, const FrameStats *stats) {
-		D_ASSERT(input_count == 1);
+	static void WindowInit(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
+	                       data_ptr_t g_state) {
+		D_ASSERT(partition.input_count == 1);
+
+		auto inputs = partition.inputs;
+		const auto count = partition.count;
+		const auto &filter_mask = partition.filter_mask;
+		const auto &stats = partition.stats;
 
 		//	If frames overlap significantly, then use local skip lists.
-		D_ASSERT(stats);
 		if (stats[0].end <= stats[1].begin) {
 			//	Frames can overlap
 			const auto overlap = double(stats[1].begin - stats[0].end);
@@ -824,7 +828,7 @@ struct QuantileOperation {
 		const auto &data_mask = FlatVector::Validity(inputs[0]);
 
 		//	Build the tree
-		auto &state = *reinterpret_cast<STATE *>(state_p);
+		auto &state = *reinterpret_cast<STATE *>(g_state);
 		if (count < std::numeric_limits<uint32_t>::max()) {
 			state.qst32 = QuantileSortTree<uint32_t>::WindowInit<INPUT_TYPE>(data, aggr_input_data, data_mask,
 			                                                                 filter_mask, count);

@@ -928,11 +928,11 @@ void WindowAggregateExecutor::Finalize() {
 
 	//	Estimate the frame statistics
 	//	Default to the entire partition if we don't know anything
-	array<FrameStats, 2> stats;
+	FrameStats stats;
 	const int64_t count = aggregator->GetInputs().size();
 
 	//	First entry is the frame start
-	stats[0] = FrameStats(-count, count);
+	stats[0] = FrameDelta(-count, count);
 	auto base = wexpr.expr_stats.empty() ? nullptr : wexpr.expr_stats[0].get();
 	switch (wexpr.start) {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
@@ -964,7 +964,7 @@ void WindowAggregateExecutor::Finalize() {
 	}
 
 	//	Second entry is the frame end
-	stats[1] = FrameStats(-count, count);
+	stats[1] = FrameDelta(-count, count);
 	base = wexpr.expr_stats.empty() ? nullptr : wexpr.expr_stats[1].get();
 	switch (wexpr.end) {
 	case WindowBoundary::UNBOUNDED_FOLLOWING:
@@ -995,7 +995,7 @@ void WindowAggregateExecutor::Finalize() {
 		throw InternalException("Unsupported window end boundary");
 	}
 
-	aggregator->Finalize(stats.data());
+	aggregator->Finalize(stats);
 }
 
 class WindowAggregateState : public WindowExecutorBoundsState {

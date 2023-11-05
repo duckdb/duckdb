@@ -388,7 +388,7 @@ public:
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void UnaryWindow(Vector &input, const ValidityMask &ifilter, AggregateInputData &aggr_input_data,
+	static void UnaryWindow(const Vector &input, const ValidityMask &ifilter, AggregateInputData &aggr_input_data,
 	                        data_ptr_t state_p, const SubFrames &frames, Vector &result, idx_t ridx,
 	                        const_data_ptr_t gstate_p) {
 
