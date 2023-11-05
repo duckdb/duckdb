@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/aggregate_function.hpp"
@@ -166,6 +167,35 @@ public:
 
 	// TREE_FANOUT needs to cleanly divide STANDARD_VECTOR_SIZE
 	static constexpr idx_t TREE_FANOUT = 16;
+};
+
+class WindowDistinctAggregator : public WindowAggregator {
+public:
+	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
+
+	WindowDistinctAggregator(AggregateObject aggr, const LogicalType &result_type,
+	                         const WindowExcludeMode exclude_mode_p, idx_t count, BufferManager &buffer_manager);
+	~WindowDistinctAggregator() override;
+
+	//	Build
+	void Sink(DataChunk &args_chunk, SelectionVector *filter_sel, idx_t filtered) override;
+	void Finalize(const FrameStats *stats) override;
+
+	BufferManager &buffer_manager;
+	ArenaAllocator allocator;
+	GlobalSortStatePtr global_sort;
+
+	//	Single threaded sorting for now
+	LocalSortState local_sort;
+
+	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
+	unsafe_unique_array<data_t> levels_flat_native;
+	//! For each level, the starting location in the levels_flat_native array
+	vector<idx_t> levels_flat_start;
+
+	vector<LogicalType> payload_types;
+	DataChunk sort_chunk;
+	DataChunk payload_chunk;
 };
 
 } // namespace duckdb

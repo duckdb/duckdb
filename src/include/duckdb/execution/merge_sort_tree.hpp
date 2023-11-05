@@ -84,6 +84,12 @@ struct MergeSortTree {
 		return tree.front().first[i];
 	}
 
+	Tree tree;
+	CompareElements cmp;
+
+	static constexpr auto FANOUT = F;
+	static constexpr auto CASCADING = C;
+
 protected:
 	RunElement StartGames(Games &losers, const RunElements &elements, const RunElement &sentinel) {
 		const auto elem_nodes = elements.size();
@@ -156,12 +162,6 @@ protected:
 
 		return smallest;
 	}
-
-	Tree tree;
-	CompareElements cmp;
-
-	static constexpr auto FANOUT = F;
-	static constexpr auto CASCADING = C;
 
 	static idx_t LowestCascadingLevel() {
 		idx_t level = 0;

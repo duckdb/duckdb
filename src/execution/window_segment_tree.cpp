@@ -3,6 +3,8 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/merge_sort_tree.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/execution/window_executor.hpp"
 
 #include <utility>
@@ -816,6 +818,232 @@ void WindowSegmentTreePart::Evaluate(const WindowSegmentTree &tree, const idx_t 
 		}
 	}
 	FlushStates(false);
+}
+
+//===--------------------------------------------------------------------===//
+// WindowDistinctAggregator
+//===--------------------------------------------------------------------===//
+WindowDistinctAggregator::WindowDistinctAggregator(AggregateObject aggr, const LogicalType &result_type,
+                                                   const WindowExcludeMode exclude_mode_p, idx_t count,
+                                                   BufferManager &buffer_manager)
+    : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, count), buffer_manager(buffer_manager),
+      allocator(Allocator::DefaultAllocator()) {
+
+	payload_types.emplace_back(LogicalType::UBIGINT);
+	payload_chunk.Initialize(Allocator::DefaultAllocator(), payload_types);
+
+	payload_chunk.data[0].Sequence(0, 1, 0);
+}
+
+WindowDistinctAggregator::~WindowDistinctAggregator() {
+}
+
+void WindowDistinctAggregator::Sink(DataChunk &arg_chunk, SelectionVector *filter_sel, idx_t filtered) {
+	WindowAggregator::Sink(arg_chunk, filter_sel, filtered);
+
+	//	We sort the arguments and use the partition index as a tie-breaker.
+	if (!global_sort) {
+		//	1:	functionComputePrevIdcs(𝑖𝑛)
+		//	2:		sorted ← []
+		vector<LogicalType> sort_types;
+		for (const auto &col : arg_chunk.data) {
+			sort_types.emplace_back(col.GetType());
+		}
+
+		for (const auto &type : payload_types) {
+			sort_types.emplace_back(type);
+		}
+
+		vector<BoundOrderByNode> orders;
+		for (const auto &type : sort_types) {
+			auto expr = make_uniq<BoundConstantExpression>(Value(type));
+			orders.emplace_back(BoundOrderByNode(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, std::move(expr)));
+		}
+
+		RowLayout payload_layout;
+		payload_layout.Initialize(payload_types);
+
+		global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
+		local_sort.Initialize(*global_sort, global_sort->buffer_manager);
+
+		sort_chunk.Initialize(Allocator::DefaultAllocator(), sort_types);
+		sort_chunk.data.back().Reference(payload_chunk.data[0]);
+	}
+
+	//	3: 	for i ← 0 to in.size do
+	//	4: 		sorted[i] ← (in[i], i)
+
+	//	TODO: Filter out rows
+	int64_t start, increment, sequence_count;
+	SequenceVector::GetSequence(payload_chunk.data[0], start, increment, sequence_count);
+	sequence_count = arg_chunk.size();
+
+	for (column_t c = 0; c < arg_chunk.ColumnCount(); ++c) {
+		sort_chunk.data[c].Reference(arg_chunk.data[c]);
+	}
+
+	local_sort.SinkChunk(sort_chunk, payload_chunk);
+
+	// 	if (local_sort.SizeInBytes() > merge_state->memory_per_thread) {
+	// 		local_sort.Sort(global_sort, true);
+	// 	}
+
+	start += sequence_count;
+	sequence_count = 0;
+}
+
+void WindowDistinctAggregator::Finalize(const FrameStats *stats) {
+	//	5: Sort sorted lexicographically increasing
+	global_sort->AddLocalState(local_sort);
+	global_sort->PrepareMergePhase();
+	while (global_sort->sorted_blocks.size() > 1) {
+		global_sort->InitializeMergeRound();
+		MergeSorter merge_sorter(*global_sort, global_sort->buffer_manager);
+		merge_sorter.PerformInMergeRound();
+		global_sort->CompleteMergeRound(false);
+	}
+
+	//	6:	prevIdcs ← []
+	//	7:	prevIdcs[0] ← “-”
+	const auto count = inputs.size();
+	vector<idx_t> prev_idcs;
+	prev_idcs.reserve(count);
+	prev_idcs[0] = 0;
+
+	DataChunk scan_chunk;
+	scan_chunk.Initialize(Allocator::DefaultAllocator(), payload_types);
+
+	auto scanner = make_uniq<PayloadScanner>(*global_sort);
+	scanner->Scan(scan_chunk);
+	idx_t scan_idx = 0;
+	auto *second = FlatVector::GetData<idx_t>(scan_chunk.data[0]);
+
+	SBIterator curr(*global_sort, ExpressionType::COMPARE_LESSTHAN);
+	SBIterator prev(*global_sort, ExpressionType::COMPARE_LESSTHAN);
+	const auto &sort_layout = global_sort->sort_layout;
+
+	//	8:	for i ← 1 to in.size do
+	for (++curr; curr.GetIndex() < count; ++curr, ++prev) {
+		//	Scan second one chunk at a time
+		//	Note the scan is one behind the iterators
+		if (scan_idx >= scan_chunk.size()) {
+			scan_chunk.Reset();
+			scanner->Scan(scan_chunk);
+			scan_idx = 0;
+		}
+
+		int lt = 0;
+		if (sort_layout.all_constant) {
+			lt = FastMemcmp(prev.entry_ptr, curr.entry_ptr, sort_layout.comparison_size);
+		} else {
+			lt = Comparators::CompareTuple(prev.scan, curr.scan, prev.entry_ptr, curr.entry_ptr, sort_layout,
+			                               prev.external);
+		}
+
+		//	9:	if sorted[i].first == sorted[i-1].first then
+		//	10:		prevIdcs[i] ← sorted[i-1].second
+		//	11:	else
+		//	12:		prevIdcs[i] ← “-”
+		if (!lt) {
+			prev_idcs.emplace_back(second[scan_idx] + 1);
+		} else {
+			prev_idcs.emplace_back(0);
+		}
+	}
+	//	13:	return prevIdcs
+
+	using DistinctSortTree = MergeSortTree<idx_t, idx_t>;
+	DistinctSortTree merge_sort_tree(std::move(prev_idcs));
+
+	//! Input data chunk, used for leaf segment aggregation
+	DataChunk leaves;
+	leaves.Initialize(Allocator::DefaultAllocator(), inputs.GetTypes());
+	SelectionVector sel;
+	sel.Initialize();
+
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+
+	//! The states to update
+	Vector update_v(LogicalType::POINTER);
+	auto updates = FlatVector::GetData<data_ptr_t>(update_v);
+	idx_t nupdate = 0;
+
+	Vector source_v(LogicalType::POINTER);
+	auto sources = FlatVector::GetData<data_ptr_t>(source_v);
+	Vector target_v(LogicalType::POINTER);
+	auto targets = FlatVector::GetData<data_ptr_t>(target_v);
+	idx_t ncombine = 0;
+
+	// compute space required to store aggregation states of merge sort tree
+	// this is one aggregate state per entry per level
+	idx_t internal_nodes = 0;
+	for (idx_t level_nr = 0; level_nr < merge_sort_tree.tree.size(); ++level_nr) {
+		internal_nodes += merge_sort_tree.tree[level_nr].first.size();
+	}
+	levels_flat_native = make_unsafe_uniq_array<data_t>(internal_nodes * state_size);
+	levels_flat_start.push_back(0);
+	idx_t levels_flat_offset = 0;
+
+	//	Walk the distinct value tree building the intermediate aggregates
+	idx_t level_width = 1;
+	for (idx_t level_nr = 0; level_nr < merge_sort_tree.tree.size(); ++level_nr) {
+		auto &level = merge_sort_tree.tree[level_nr].first;
+
+		for (idx_t i = 0; i < level.size(); i += level_width) {
+			//	Reset the combine state
+			data_ptr_t prev_state = nullptr;
+			auto next_limit = MinValue<idx_t>(level.size(), i + level_width);
+			for (auto j = i; j < next_limit; ++j) {
+				//	Initialise the next aggregate
+				auto curr_state = levels_flat_native.get() + (levels_flat_offset++ * state_size);
+				aggr.function.initialize(curr_state);
+
+				//	Update this state (if it matches)
+				if (level[j] < i + 1) {
+					updates[nupdate] = curr_state;
+					sel[nupdate] = level[j];
+					++nupdate;
+				}
+
+				//	Merge the previous state (if any)
+				if (prev_state) {
+					sources[ncombine] = prev_state;
+					targets[ncombine] = curr_state;
+					++ncombine;
+				}
+				prev_state = curr_state;
+
+				//	Flush the states if one is maxed out.
+				if (MaxValue<idx_t>(ncombine, nupdate) >= STANDARD_VECTOR_SIZE) {
+					//	Push the updates first so they propagate
+					leaves.Reference(inputs);
+					leaves.Slice(sel, nupdate);
+					aggr.function.update(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), update_v, nupdate);
+					nupdate = 0;
+
+					//	Combine the states sequentially
+					aggr.function.combine(source_v, target_v, aggr_input_data, ncombine);
+					ncombine = 0;
+				}
+			}
+		}
+
+		levels_flat_start.push_back(levels_flat_offset);
+		level_width *= merge_sort_tree.FANOUT;
+	}
+
+	//	Flush any remaining states
+	if (ncombine || nupdate) {
+		//	Push  the updates
+		leaves.Reference(inputs);
+		leaves.Slice(sel, nupdate);
+		aggr.function.update(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), update_v, nupdate);
+		nupdate = 0;
+
+		//	Combine the states sequentially
+		aggr.function.combine(source_v, target_v, aggr_input_data, ncombine);
+		ncombine = 0;
+	}
 }
 
 } // namespace duckdb
