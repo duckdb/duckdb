@@ -13,7 +13,7 @@ try:
     pandas = import_module('pandas')
     warnings.resetwarnings()
 
-    pyarrow_dtype = pandas.ArrowDtype
+    pyarrow_dtype = getattr(pandas, 'ArrowDtype')
 except ImportError:
     pandas = None
     pyarrow_dtype = None
