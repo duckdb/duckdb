@@ -76,7 +76,7 @@ runs:
       shell: bash
       run: |
         ldd --version ldd
-        python3.7 --version
+        python3 --version
         git --version
         git log -1 --format=%h
 
