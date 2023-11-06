@@ -1241,6 +1241,8 @@ static inline bool TrySimpleIntegerCast(const char *buf, idx_t len, T &result, b
 	}
 
 	// Simple integer cast failed, try again with decimals/exponents included
+	// FIXME: This could definitely be improved as some extra work is being done here. It is more important that
+	//  "normal" integers (without exponent/decimals) are still being parsed quickly.
 	IntegerCastData<T> cast_data;
 	if (TryIntegerCast<IntegerCastData<T>, IS_SIGNED, true, IntegerCastOperation>(buf, len, cast_data, strict)) {
 		result = (T)cast_data.result;
