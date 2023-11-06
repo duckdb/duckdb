@@ -55,6 +55,8 @@ public:
 	unique_ptr<ParsedExpression> filter_expr;
 	//! True to ignore NULL values
 	bool ignore_nulls;
+	//! Whether or not the aggregate function is distinct, only used for aggregates
+	bool distinct;
 	//! The window boundaries
 	WindowBoundary start = WindowBoundary::INVALID;
 	WindowBoundary end = WindowBoundary::INVALID;
@@ -91,8 +93,9 @@ public:
 		string result = schema.empty() ? function_name : schema + "." + function_name;
 		result += "(";
 		if (entry.children.size()) {
-			result += StringUtil::Join(entry.children, entry.children.size(), ", ",
-			                           [](const unique_ptr<BASE> &child) { return child->ToString(); });
+			result += StringUtil::Join(entry.children, entry.children.size(), ", ", [&](const unique_ptr<BASE> &child) {
+				return (entry.distinct ? "DISTINCT " : "") + child->ToString();
+			});
 		}
 		// Lead/Lag extra arguments
 		if (entry.offset_expr.get()) {
