@@ -34,7 +34,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
         this.column_types = column_types_al.toArray(this.column_types);
 
         for (String column_type_detail : this.column_types_details) {
-            if (column_type_detail.startsWith("DECIMAL")) {
+            if (TypeNameToType(column_type_detail) == DuckDBColumnType.DECIMAL) {
                 column_types_meta.add(DuckDBColumnTypeMetaData.parseColumnTypeMetadata(column_type_detail));
             } else {
                 column_types_meta.add(null);

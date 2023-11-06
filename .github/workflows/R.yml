@@ -1,0 +1,69 @@
+name: R
+on:
+  workflow_dispatch:
+  repository_dispatch:
+  push:
+    branches:
+      - '**'
+      - '!main'
+      - '!feature'
+    tags:
+      - '**'
+    paths-ignore:
+      - '**'
+      - '!.github/workflows/R.yml'
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    paths-ignore:
+      - '**'
+      - '!.github/workflows/R.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  cancel-in-progress: true
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+jobs:
+  rstats-windows-extensions:
+    # Builds extensions for windows_amd64_rtools
+    name: R Package Windows (Extensions)
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.7'
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'devel'
+          update-rtools: true
+          rtools-version: '42' # linker bug in 43 ^^
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+      - uses: ./.github/actions/build_extensions
+        with:
+          deploy_as: windows_amd64_rtools
+          treat_warn_as_error: 0
+          s3_id: ${{ secrets.S3_ID }}
+          s3_key: ${{ secrets.S3_KEY }}
+          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
+          override_cc: gcc
+          override_cxx: g++
+          openssl_path: C:/rtools43/x86_64-w64-mingw32.static.posix # not sure if this is required, there seems to be an openssl there
+          run_tests: 0
+          run_autoload_tests: 0
+          build_out_of_tree_extensions: 0
+          vcpkg_build: 0
+          no_static_linking: 1

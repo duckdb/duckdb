@@ -319,6 +319,7 @@ data_files = setup_data_files(extra_files + header_files)
 packages = [
     lib_name,
     'duckdb.typing',
+    'duckdb.query_graph',
     'duckdb.functional',
     'duckdb.value',
     'duckdb-stubs',
@@ -327,7 +328,12 @@ packages = [
     'adbc_driver_duckdb',
 ]
 
-spark_packages = ['duckdb.experimental.spark', 'duckdb.experimental.spark.sql']
+spark_packages = [
+    'duckdb.experimental.spark',
+    'duckdb.experimental.spark.sql',
+    'duckdb.experimental.spark.errors',
+    'duckdb.experimental.spark.errors.exceptions',
+]
 
 packages.extend(spark_packages)
 

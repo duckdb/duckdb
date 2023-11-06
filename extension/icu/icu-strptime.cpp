@@ -96,7 +96,6 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &info = func_expr.bind_info->Cast<ICUStrptimeBindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
-		auto &formats = info.formats;
 
 		D_ASSERT(fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR);
 
@@ -126,7 +125,6 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &info = func_expr.bind_info->Cast<ICUStrptimeBindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
-		auto &formats = info.formats;
 
 		D_ASSERT(fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR);
 

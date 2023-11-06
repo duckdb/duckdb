@@ -223,7 +223,6 @@ static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parame
 
 void IcuExtension::Load(DuckDB &ddb) {
 	auto &db = *ddb.instance;
-	auto &catalog = Catalog::GetSystemCatalog(db);
 
 	// iterate over all the collations
 	int32_t count;

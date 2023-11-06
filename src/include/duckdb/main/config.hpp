@@ -240,6 +240,8 @@ public:
 	DUCKDB_API void SetOption(const string &name, Value value);
 	DUCKDB_API void ResetOption(const string &name);
 
+	DUCKDB_API void CheckLock(const string &name);
+
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 
 	//! Return the list of possible compression functions for the specific physical type

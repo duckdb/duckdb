@@ -1,6 +1,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/core_functions/scalar/struct_functions.hpp"
+#include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
@@ -82,9 +83,10 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(duckdb_libpgquery::PGCopySt
 		// copy to a file
 		info.file_path = stmt.filename;
 	}
-	if (StringUtil::EndsWith(info.file_path, ".parquet")) {
+
+	if (ReplacementScan::CanReplace(info.file_path, {"parquet"})) {
 		info.format = "parquet";
-	} else if (StringUtil::EndsWith(info.file_path, ".json") || StringUtil::EndsWith(info.file_path, ".ndjson")) {
+	} else if (ReplacementScan::CanReplace(info.file_path, {"json", "jsonl", "ndjson"})) {
 		info.format = "json";
 	} else {
 		info.format = "csv";

@@ -26,5 +26,26 @@ def test_unions_inside_lists_structs_maps():
     assert res[0].value == scalar('Frank', type=string())
 
 
+def test_unions_with_struct(duckdb_cursor):
+    duckdb_cursor.execute(
+        """
+		CREATE TABLE tbl (a UNION(a STRUCT(a INT, b BOOL)))
+	"""
+    )
+    duckdb_cursor.execute(
+        """
+		INSERT INTO tbl VALUES ({'a': 42, 'b': true})
+	"""
+    )
+
+    rel = duckdb_cursor.table('tbl')
+    arrow = rel.arrow()
+
+    duckdb_cursor.execute("create table other as select * from arrow")
+    rel2 = duckdb_cursor.table('other')
+    res = rel2.fetchall()
+    assert res == [({'a': 42, 'b': True},)]
+
+
 def run(query):
     return duckdb.sql(query).arrow().columns[0][0]

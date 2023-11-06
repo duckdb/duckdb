@@ -463,6 +463,10 @@ void SegmentPrimitiveFunction(ListSegmentFunctions &functions) {
 
 void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType &type) {
 
+	if (type.id() == LogicalTypeId::UNKNOWN) {
+		throw ParameterNotResolvedException();
+	}
+
 	auto physical_type = type.InternalType();
 	switch (physical_type) {
 	case PhysicalType::BIT:

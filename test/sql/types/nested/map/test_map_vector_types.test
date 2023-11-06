@@ -9,12 +9,18 @@ create macro input() as table
 	select *
 	from test_vector_types(NULL::INTEGER[]) t(i) where [x for x in i if x IS NOT NULL] != [] offset 3;
 
-query I
-select map(input, input) from input() t(input);
+query II nosort expected
+select true, true from input()
 ----
-{-2147483648=-2147483648, 2147483647=2147483647}
-{3=3, 5=5}
-{7=7}
+
+query II nosort expected
+select map_keys(m) = input, map_values(m) = input from (
+	select
+		map(input, input) m,
+		input
+	from input() t(input)
+) m;
+----
 
 statement ok
 create table tbl (

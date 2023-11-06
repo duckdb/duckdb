@@ -18,8 +18,83 @@ from duckdb.experimental.spark.sql.functions import col, struct, when
 import duckdb
 import re
 
+from duckdb.experimental.spark.errors import PySparkValueError, PySparkTypeError
+
 
 class TestDataFrame(object):
+    def test_dataframe_from_list_of_tuples(self, spark):
+        # Valid
+        address = [(1, "14851 Jeffrey Rd", "DE"), (2, "43421 Margarita St", "NY"), (3, "13111 Siemon Ave", "CA")]
+        df = spark.createDataFrame(address, ["id", "address", "state"])
+        res = df.collect()
+        assert res == [
+            Row(id=1, address='14851 Jeffrey Rd', state='DE'),
+            Row(id=2, address='43421 Margarita St', state='NY'),
+            Row(id=3, address='13111 Siemon Ave', state='CA'),
+        ]
+
+        # Tuples of different sizes
+        address = [(1, "14851 Jeffrey Rd", "DE"), (2, "43421 Margarita St", "NY"), (3, "13111 Siemon Ave")]
+        with pytest.raises(PySparkTypeError, match="LENGTH_SHOULD_BE_THE_SAME"):
+            df = spark.createDataFrame(address, ["id", "address", "state"])
+
+        # Dataframe instead of list
+        with pytest.raises(PySparkTypeError, match="SHOULD_NOT_DATAFRAME"):
+            df = spark.createDataFrame(df, ["id", "address", "state"])
+
+        # Not a list
+        with pytest.raises(TypeError, match="not iterable"):
+            df = spark.createDataFrame(5, ["id", "address", "test"])
+
+        # Empty list
+        df = spark.createDataFrame([], ["id", "address", "test"])
+        res = df.collect()
+        assert res == []
+
+        # Duplicate column names
+        address = [(1, "14851 Jeffrey Rd", "DE"), (2, "43421 Margarita St", "NY"), (3, "13111 Siemon Ave", "DE")]
+        df = spark.createDataFrame(address, ["id", "address", "id"])
+        res = df.collect()
+        assert (
+            str(res)
+            == "[Row(id=1, address='14851 Jeffrey Rd', id='DE'), Row(id=2, address='43421 Margarita St', id='NY'), Row(id=3, address='13111 Siemon Ave', id='DE')]"
+        )
+
+        # Not enough column names
+        with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
+            df = spark.createDataFrame(address, ["id", "address"])
+
+        # Empty column names list
+        # Columns are filled in with default names
+        # TODO: check against Spark behavior
+        df = spark.createDataFrame(address, [])
+        res = df.collect()
+        assert res == [
+            Row(col0=1, col1='14851 Jeffrey Rd', col2='DE'),
+            Row(col0=2, col1='43421 Margarita St', col2='NY'),
+            Row(col0=3, col1='13111 Siemon Ave', col2='DE'),
+        ]
+
+        # Too many column names
+        with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
+            df = spark.createDataFrame(address, ["id", "address", "one", "two", "three"])
+
+        # Column names is not a list (but is iterable)
+        df = spark.createDataFrame(address, {'a': 5, 'b': 6, 'c': 42})
+        res = df.collect()
+        assert res == [
+            Row(a=1, b='14851 Jeffrey Rd', c='DE'),
+            Row(a=2, b='43421 Margarita St', c='NY'),
+            Row(a=3, b='13111 Siemon Ave', c='DE'),
+        ]
+
+        # Column names is not a list (string, becomes a single column name)
+        with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
+            df = spark.createDataFrame(address, 'a')
+
+        with pytest.raises(TypeError, match="must be an iterable, not int"):
+            df = spark.createDataFrame(address, 5)
+
     def test_dataframe(self, spark):
         # Create DataFrame
         df = spark.createDataFrame([("Scala", 25000), ("Spark", 35000), ("PHP", 21000)])

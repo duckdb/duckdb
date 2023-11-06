@@ -906,5 +906,32 @@
     "base": "LogicalOperator",
     "enum": "LOGICAL_EXTENSION_OPERATOR",
     "custom_implementation": true
+  },
+  {
+    "class": "FilenamePattern",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 200,
+        "name": "base",
+        "type": "string",
+        "serialize_property": "_base",
+        "deserialize_property": "_base"
+      },
+      {
+        "id": 201,
+        "name": "pos",
+        "type": "idx_t",
+        "serialize_property": "_pos",
+        "deserialize_property": "_pos"
+      },
+      {
+        "id": 202,
+        "name": "uuid",
+        "type": "bool",
+        "serialize_property": "_uuid",
+        "deserialize_property": "_uuid"
+      }
+    ]
   }
 ]

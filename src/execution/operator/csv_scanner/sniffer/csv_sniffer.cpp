@@ -39,18 +39,18 @@ SnifferResult CSVSniffer::SniffCSV() {
 	DetectDialect();
 	// 2. Type Detection
 	DetectTypes();
-	// 3. Header Detection
+	// 3. Type Refinement
+	RefineTypes();
+	// 4. Header Detection
 	DetectHeader();
 	if (explicit_set_columns) {
 		SetResultOptions();
 		// We do not need to run type refinement, since the types have been given by the user
 		return SnifferResult({}, {});
 	}
-	D_ASSERT(best_sql_types_candidates_per_column_idx.size() == names.size());
-	// 4. Type Replacement
+	// 5. Type Replacement
 	ReplaceTypes();
-	// 5. Type Refinement
-	RefineTypes();
+	D_ASSERT(best_sql_types_candidates_per_column_idx.size() == names.size());
 	// We are done, Set the CSV Options in the reference. Construct and return the result.
 	SetResultOptions();
 	return SnifferResult(detected_types, names);
