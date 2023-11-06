@@ -2055,7 +2055,7 @@ struct HugeIntegerCastOperation {
 
 template <>
 bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
-	HugeIntCastData state = {};
+	HugeIntCastData state {};
 	if (!TryIntegerCast<HugeIntCastData, true, true, HugeIntegerCastOperation>(input.GetData(), input.GetSize(), state,
 	                                                                           strict)) {
 		return false;
@@ -2068,10 +2068,10 @@ bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
 // Decimal String Cast
 //===--------------------------------------------------------------------===//
 
-template <class TYPE>
+template <class T>
 struct DecimalCastData {
-	typedef TYPE type_t;
-	TYPE result;
+	using StoreType = T;
+	StoreType result;
 	uint8_t width;
 	uint8_t scale;
 	uint8_t digit_count;
@@ -2099,12 +2099,12 @@ struct DecimalCastOperation {
 		}
 		state.digit_count++;
 		if (NEGATIVE) {
-			if (state.result < (NumericLimits<typename T::type_t>::Minimum() / 10)) {
+			if (state.result < (NumericLimits<typename T::StoreType>::Minimum() / 10)) {
 				return false;
 			}
 			state.result = state.result * 10 - digit;
 		} else {
-			if (state.result > (NumericLimits<typename T::type_t>::Maximum() / 10)) {
+			if (state.result > (NumericLimits<typename T::StoreType>::Maximum() / 10)) {
 				return false;
 			}
 			state.result = state.result * 10 + digit;
