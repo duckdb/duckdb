@@ -49,6 +49,7 @@ struct S3AuthParams {
 
 struct ParsedS3Url {
 	const string http_proto;
+	const string prefix;
 	const string host;
 	const string bucket;
 	const string path;

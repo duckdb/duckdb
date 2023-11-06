@@ -19,7 +19,7 @@ public:
 	idx_t rows_copied;
 	idx_t last_file_offset;
 	unique_ptr<GlobalFunctionData> global_state;
-	bool created_directories = false;
+	idx_t created_directories = 0;
 
 	//! shared state for HivePartitionedColumnData
 	shared_ptr<GlobalHivePartitionState> partition_state;
@@ -122,12 +122,13 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 		{
 			// create directories
 			lock_guard<mutex> global_lock(g.lock);
-			if (!g.created_directories) {
-				for (idx_t i = 0; i < partitions.size(); i++) {
-					CreateDirectories(partition_columns, names, partition_key_map[i]->values, trimmed_path, fs);
-				}
-				g.created_directories = true;
+			const auto &global_partitions = g.partition_state->partitions;
+			// global_partitions have partitions added only at the back, so it's fine to only traverse the last part
+
+			for (idx_t i = g.created_directories; i < global_partitions.size(); i++) {
+				CreateDirectories(partition_columns, names, global_partitions[i]->first.values, trimmed_path, fs);
 			}
+			g.created_directories = global_partitions.size();
 		}
 
 		for (idx_t i = 0; i < partitions.size(); i++) {
