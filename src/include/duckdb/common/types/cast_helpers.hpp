@@ -273,12 +273,9 @@ struct HugeintToStringCast {
 	}
 
 	static int DecimalLength(hugeint_t value, uint8_t width, uint8_t scale) {
+		D_ASSERT(value > NumericLimits<hugeint_t>::Minimum());
 		int negative;
 
-		// Can't negate if it's the minimum value
-		if (value == NumericLimits<hugeint_t>::Minimum()) {
-			value += 1;
-		}
 		if (value.upper < 0) {
 			Hugeint::NegateInPlace(value);
 			negative = 1;
