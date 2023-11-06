@@ -927,7 +927,6 @@ struct IntegerCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int32_t exponent) {
 		using store_t = typename T::StoreType;
-		using result_t = typename T::ResultType;
 
 		int32_t e = exponent;
 		// Negative Exponent
