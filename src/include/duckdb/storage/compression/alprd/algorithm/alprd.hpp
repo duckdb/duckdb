@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/storage/compression/patas/patas.hpp"
 #include "duckdb/storage/compression/alprd/alprd_constants.hpp"
 
 #include "duckdb/common/bitpacking.hpp"
@@ -22,9 +23,9 @@ namespace alp {
 
 template <class T, bool EMPTY>
 class AlpRDCompressionState {
+public:
 	using EXACT_TYPE = typename FloatingToExact<T>::type;
 
-public:
 	AlpRDCompressionState() : right_bw(0), left_bw(0), exceptions_count(0) {
 	}
 

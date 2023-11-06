@@ -94,6 +94,7 @@ struct AlpCompression {
 	static void FindTopKCombinations(vector<vector<T>> vectors_sampled, State &state) {
 
 		// We use a 'pair' to hash it easily
+		state.best_k_combinations.clear();
 		map<pair<int8_t, int8_t>, int32_t> best_k_combinations_hash;
 
 		// For each vector sampled
@@ -143,7 +144,9 @@ struct AlpCompression {
 						continue;
 					}
 					// Evaluate factor/exponent compression size (we optimize for FOR)
-					uint64_t delta = max_encoded_value - min_encoded_value;
+
+					uint64_t delta =
+					    (static_cast<uint64_t>(max_encoded_value) - static_cast<uint64_t>(min_encoded_value));
 					estimated_bits_per_value = std::ceil(std::log2(delta + 1));
 					estimated_compression_size += n_samples * estimated_bits_per_value;
 					estimated_compression_size +=
@@ -193,7 +196,7 @@ struct AlpCompression {
 
 		//! We sample equidistant values within a vector; to do this we skip a fixed number of values
 		vector<T> vector_sample;
-		uint32_t idx_increments = MinValue(1, (int32_t)std::floor(n_values / AlpConstants::SAMPLES_PER_VECTOR));
+		uint32_t idx_increments = MinValue(1, (int32_t)std::ceil((double)n_values / AlpConstants::SAMPLES_PER_VECTOR));
 		for (idx_t i = 0; i < n_values; i += idx_increments) {
 			vector_sample.push_back(input_vector[i]);
 		}
@@ -237,7 +240,7 @@ struct AlpCompression {
 			}
 
 			// Evaluate factor/exponent compression size (we optimize for FOR)
-			uint64_t delta = max_encoded_value - min_encoded_value;
+			uint64_t delta = (static_cast<uint64_t>(max_encoded_value) - static_cast<uint64_t>(min_encoded_value));
 			estimated_bits_per_value = std::ceil(std::log2(delta + 1));
 			estimated_compression_size += n_samples * estimated_bits_per_value;
 			estimated_compression_size +=

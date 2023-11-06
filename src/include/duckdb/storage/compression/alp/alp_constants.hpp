@@ -34,8 +34,9 @@ public:
 
 	static constexpr double COMPACT_BLOCK_THRESHOLD = 0.80;
 
-	static constexpr int64_t ENCODING_UPPER_LIMIT = NumericLimits<int64_t>::Maximum();
-	static constexpr int64_t ENCODING_LOWER_LIMIT = NumericLimits<int64_t>::Minimum();
+	// This is the highest int64 that can be exactly encoded as a double
+	static constexpr double ENCODING_UPPER_LIMIT = 9223372036854774784;
+	static constexpr double ENCODING_LOWER_LIMIT = -9223372036854774784;
 
 	static constexpr uint8_t MAX_COMBINATIONS = 5;
 
