@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/assert.hpp"
@@ -332,14 +333,6 @@ unique_ptr<LogicalOperator> QueryGraphManager::RewritePlan(unique_ptr<LogicalOpe
 	// have to replace at this node
 	parent->children[0] = std::move(join_tree.op);
 	return plan;
-}
-
-bool QueryGraphManager::LeftCardLessThanRight(LogicalOperator &op) {
-	D_ASSERT(op.children.size() == 2);
-	if (op.children[0]->has_estimated_cardinality && op.children[1]->has_estimated_cardinality) {
-		return op.children[0]->estimated_cardinality < op.children[1]->estimated_cardinality;
-	}
-	return op.children[0]->EstimateCardinality(context) < op.children[1]->EstimateCardinality(context);
 }
 
 void QueryGraphManager::TryFlipChildren(LogicalOperator &op, JoinType inverse, idx_t cardinality_ratio) {
