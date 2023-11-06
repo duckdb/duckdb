@@ -11,27 +11,27 @@ pragma enable_verification
 query T
 select json_structure('42')
 ----
-"UBIGINT"
+UBIGINT
 
 query T
 select json_structure('4.2')
 ----
-"DOUBLE"
+DOUBLE
 
 query T
 select json_structure('null')
 ----
-"NULL"
+NULL
 
 query T
 select json_structure('true')
 ----
-"BOOLEAN"
+BOOLEAN
 
 query T
 select json_structure('"duck"')
 ----
-"VARCHAR"
+VARCHAR
 
 # simple values
 query T
