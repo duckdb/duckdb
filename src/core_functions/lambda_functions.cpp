@@ -524,6 +524,41 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 
 	Vector index_vector(LogicalType::BIGINT);
 
+	Vector left_slice = Vector(child_vector, left_vector, row_count - finished_rows);
+	left_slice.SetVectorType(VectorType::FLAT_VECTOR);
+
+	LambdaExecuteInfo execute_info(state.GetContext(), *lambda_expr, args, bind_info.has_index, child_vector);
+
+	vector<LogicalType> input_types;
+	if (bind_info.has_index) {
+		input_types.push_back((LogicalType::BIGINT));
+	}
+	input_types.push_back(left_slice.GetType());
+	input_types.push_back(left_slice.GetType());
+
+	DataChunk input_chunk;
+	input_chunk.InitializeEmpty(input_types);
+
+
+	idx_t slice_offset = bind_info.has_index ? 1 : 0;
+	if (bind_info.has_index) {
+		input_chunk.data[0].Reference(index_vector);
+	}
+
+	input_chunk.data[slice_offset].Reference(left_slice);
+
+	auto &left_column = input_chunk.data[slice_offset];
+
+	// get the list column entries
+	UnifiedVectorFormat left_column_format;
+	left_column.ToUnifiedFormat(row_count, left_column_format);
+	auto left_entries = UnifiedVectorFormat::GetData<list_entry_t>(left_column_format);
+
+	// special-handling for the child_vector
+	auto &left_child_vector = ListVector::GetEntry(left_column);
+	UnifiedVectorFormat left_child_vector_format;
+	child_vector.ToUnifiedFormat(row_count, child_vector_format);
+
 	idx_t loops = 0;
 	// Execute reduce until all rows are finished
 	while(finished_rows < row_count) {
@@ -533,7 +568,7 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 			if (list_entries[i].length > loops + 1) {
 				right_vector.set_index(i, list_entries[i].offset + loops + 1);
 			} else {
-				result_entries[i] = left_vector.get_index(i);
+				result_entries[i] = 1;
 				auto row_loc_index = std::find(row_loc.begin(), row_loc.end(), i);
 				if (row_loc_index != row_loc.end()) {
 					row_loc.erase(row_loc_index);
@@ -547,35 +582,13 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 		right_vector = ResizeSelVector(right_vector, row_count - finished_rows, row_loc);
 
 		// Execute the lambda function
-		LambdaExecuteInfo execute_info(state.GetContext(), *lambda_expr, args, bind_info.has_index, child_vector);
-
-		Vector left_slice = Vector(child_vector, left_vector, row_count - finished_rows);
-		left_slice.SetVectorType(VectorType::FLAT_VECTOR);
+		input_chunk.SetCardinality(row_count - finished_rows);
+		execute_info.lambda_chunk.SetCardinality(row_count - finished_rows);
 
 		Vector right_slice = Vector(child_vector, right_vector, row_count - finished_rows);
 		right_slice.SetVectorType(VectorType::FLAT_VECTOR);
 
-
-		vector<LogicalType> input_types;
-		if (bind_info.has_index) {
-			input_types.push_back((LogicalType::BIGINT));
-		}
-		input_types.push_back(left_slice.GetType());
-		input_types.push_back(right_slice.GetType());
-
-		DataChunk input_chunk;
-		input_chunk.InitializeEmpty(input_types);
-
-		input_chunk.SetCardinality(row_count - finished_rows);
-		execute_info.lambda_chunk.SetCardinality(row_count - finished_rows);
-
-		idx_t slice_offset = bind_info.has_index ? 1 : 0;
-		if (bind_info.has_index) {
-			input_chunk.data[0].Reference(index_vector);
-		}
-
-		input_chunk.data[slice_offset].Reference(left_slice);
-		input_chunk.data[slice_offset].Reference(right_slice);
+		input_chunk.data[slice_offset + 1].Reference(right_slice);
 
 		execute_info.expr_executor->Execute(input_chunk, execute_info.lambda_chunk);
 		loops++;
