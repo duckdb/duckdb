@@ -293,6 +293,18 @@ struct WindowBoundariesState {
 		}
 	}
 
+	static inline bool ExpressionNeedsPeer(const ExpressionType &type) {
+		switch (type) {
+		case ExpressionType::WINDOW_RANK:
+		case ExpressionType::WINDOW_RANK_DENSE:
+		case ExpressionType::WINDOW_PERCENT_RANK:
+		case ExpressionType::WINDOW_CUME_DIST:
+			return true;
+		default:
+			return false;
+		}
+	}
+
 	WindowBoundariesState(BoundWindowExpression &wexpr, const idx_t input_size);
 
 	void Update(const idx_t row_idx, const WindowInputColumn &range_collection, const idx_t chunk_idx,
@@ -532,7 +544,7 @@ WindowBoundariesState::WindowBoundariesState(BoundWindowExpression &wexpr, const
       partition_count(wexpr.partitions.size()), order_count(wexpr.orders.size()),
       range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
       has_preceding_range(HasPrecedingRange(wexpr)), has_following_range(HasFollowingRange(wexpr)),
-      needs_peer(BoundaryNeedsPeer(wexpr.end) || wexpr.type == ExpressionType::WINDOW_CUME_DIST) {
+      needs_peer(BoundaryNeedsPeer(wexpr.end) || ExpressionNeedsPeer(wexpr.type)) {
 }
 
 void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, const WindowInputColumn &range, const idx_t count,

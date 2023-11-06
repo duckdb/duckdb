@@ -199,6 +199,8 @@ bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipI
 bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, AlterInfo &alter_info) {
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
+	// lock this catalog set to disallow reading
+	lock_guard<mutex> read_lock(catalog_lock);
 
 	// first check if the entry exists in the unordered set
 	EntryIndex entry_index;
@@ -209,9 +211,6 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	if (!alter_info.allow_internal && entry->internal) {
 		throw CatalogException("Cannot alter entry \"%s\" because it is an internal system entry", entry->name);
 	}
-
-	// lock this catalog set to disallow reading
-	lock_guard<mutex> read_lock(catalog_lock);
 
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
@@ -316,6 +315,7 @@ void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex en
 bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, bool cascade, bool allow_drop_internal) {
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
+	lock_guard<mutex> read_lock(catalog_lock);
 	// we can only delete an entry that exists
 	EntryIndex entry_index;
 	auto entry = GetEntryInternal(transaction, name, &entry_index);
@@ -326,7 +326,6 @@ bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, b
 		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
 	}
 
-	lock_guard<mutex> read_lock(catalog_lock);
 	DropEntryInternal(transaction, std::move(entry_index), *entry, cascade);
 	return true;
 }
