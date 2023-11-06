@@ -12,6 +12,7 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 
@@ -58,6 +59,8 @@ public:
 	string name;
 	//! Allow altering internal entries
 	bool allow_internal;
+	//! Dependencies of the altered entry
+	LogicalDependencyList dependencies;
 
 public:
 	virtual CatalogType GetCatalogType() const = 0;

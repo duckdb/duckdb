@@ -309,11 +309,21 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 	}
 }
 
-void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj) {
+void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj,
+                                    const LogicalDependencyList &unfiltered_dependencies) {
 	if (IsSystemEntry(new_obj)) {
 		D_ASSERT(IsSystemEntry(old_obj));
 		// Don't do anything for this
 		return;
+	}
+
+	LogicalDependencyList dependencies;
+	// check for each object in the sources if they were not deleted yet
+	for (auto &dependency : unfiltered_dependencies.Set()) {
+		if (dependency.catalog != new_obj.ParentCatalog().GetName()) {
+			continue;
+		}
+		dependencies.AddDependency(dependency);
 	}
 
 	auto old_dependency_set_p = GetDependencySet(&transaction, old_obj);
@@ -332,8 +342,8 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 			// conflict: attempting to alter this object but the dependent object still exists
 			// no cascade and there are objects that depend on this object: throw error
 			throw DependencyException("Cannot alter entry \"%s\" because there are entries that "
-									"depend on it.",
-									old_obj.name);
+			                          "depend on it.",
+			                          old_obj.name);
 		}
 		dependents.insert(Dependency(dep, dep.Flags()));
 	});
@@ -350,12 +360,10 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	// FIXME: we should update dependencies in the future
 	// some alters could cause dependencies to change (imagine types of table columns)
 	// or DEFAULT depending on a sequence
-	if (StringUtil::CIEquals(old_obj.name, new_obj.name)) {
+	if (!StringUtil::CIEquals(old_obj.name, new_obj.name)) {
 		// The name was not changed, we do not need to recreate the dependency links
-		return;
+		CleanupDependencies(transaction, old_obj);
 	}
-
-	CleanupDependencies(transaction, old_obj);
 
 	auto &dependency_set = GetOrCreateDependencySet(transaction, new_obj);
 
@@ -369,6 +377,24 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	// Recreate the dependents
 	for (auto &dep : dependents) {
 		dependency_set.AddDependent(transaction, dep).CompleteLink(transaction);
+	}
+
+	DependencyFlags dependency_flags;
+	if (new_obj.type != CatalogType::INDEX_ENTRY) {
+		// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
+		dependency_flags.SetBlocking();
+	}
+
+	// add the object to the dependents_map of each object that it depends on
+	for (auto &dependency : dependencies.Set()) {
+		auto &dependency_set = GetOrCreateDependencySet(transaction, dependency);
+		auto mangled_name = MangleName(dependency);
+		if (dependency_set.MangledName() == mangled_name) {
+			// Object can not depend on itself
+			continue;
+		}
+		// Create the dependent and complete the link by creating the dependency as well
+		dependency_set.AddDependent(transaction, new_obj, dependency_flags).CompleteLink(transaction);
 	}
 }
 

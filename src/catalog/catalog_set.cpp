@@ -254,7 +254,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	// to the old entry.
 	read_lock.unlock();
 	write_lock.unlock();
-	catalog.GetDependencyManager().AlterObject(transaction, *entry, *new_entry);
+	catalog.GetDependencyManager().AlterObject(transaction, *entry, *new_entry, alter_info.dependencies);
 
 	return true;
 }

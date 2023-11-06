@@ -75,7 +75,8 @@ public:
 private:
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, const LogicalDependencyList &dependencies);
 	void DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
-	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
+	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj,
+	                 const LogicalDependencyList &dependencies);
 
 	DependencySetCatalogEntry &LookupSet(optional_ptr<CatalogTransaction> transaction, CatalogEntry &entry);
 };

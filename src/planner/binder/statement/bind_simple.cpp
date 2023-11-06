@@ -16,7 +16,10 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
+
 	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
+	auto &dependencies = stmt.info->dependencies;
+	SetCatalogLookupCallback([&dependencies](CatalogEntry &entry) { dependencies.AddDependency(entry); });
 	auto error_context = QueryErrorContext();
 	auto entry = entry_retriever.GetEntry(stmt.info->GetCatalogType(), stmt.info->catalog, stmt.info->schema,
 	                                      stmt.info->name, stmt.info->if_not_found, error_context);
