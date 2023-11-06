@@ -254,7 +254,7 @@ uhugeint_t Uhugeint::Add(uhugeint_t lhs, uhugeint_t rhs) {
 
 uhugeint_t Uhugeint::Subtract(uhugeint_t lhs, uhugeint_t rhs) {
 	if (!SubtractInPlace(lhs, rhs)) {
-		throw OutOfRangeException("Underflow in UHUGEINT addition");
+		throw OutOfRangeException("Underflow in UHUGEINT subtraction");
 	}
 	return lhs;
 }
