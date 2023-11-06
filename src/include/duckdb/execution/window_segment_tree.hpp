@@ -185,6 +185,8 @@ public:
 	void Sink(DataChunk &args_chunk, SelectionVector *filter_sel, idx_t filtered) override;
 	void Finalize(const FrameStats &stats) override;
 
+	//	Evaluate
+	unique_ptr<WindowAggregatorState> GetLocalState() const override;
 	void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
 	              idx_t row_idx) const override;
 

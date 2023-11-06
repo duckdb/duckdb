@@ -463,10 +463,10 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 				// Search based on cascading info from previous level
 				const auto *search_begin = level_data + cascading_idcs[cascading_idx.first];
 				const auto *search_end = level_data + cascading_idcs[cascading_idx.first + FANOUT];
-				const auto *it = std::lower_bound(search_begin, search_end, needle);
+				const auto run_pos = std::lower_bound(search_begin, search_end, needle) - level_data;
 				// Compute runBegin and pass it to our callback
-				const auto *run_begin = level_data + curr.first - level_width;
-				aggregate(level, run_begin, it);
+				const auto run_begin = curr.first - level_width;
+				aggregate(level, run_begin, run_pos);
 				// Update state for next round
 				curr.first -= level_width;
 				--cascading_idx.first;
@@ -485,10 +485,10 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 				// Search based on cascading info from previous level
 				const auto *search_begin = level_data + cascading_idcs[cascading_idx.second];
 				const auto *search_end = level_data + cascading_idcs[cascading_idx.second + FANOUT];
-				const auto *it = std::lower_bound(search_begin, search_end, needle);
+				const auto run_pos = std::lower_bound(search_begin, search_end, needle) - level_data;
 				// Compute runBegin and pass it to our callback
-				const auto *run_begin = level_data + curr.second;
-				aggregate(level, run_begin, it);
+				const auto run_begin = curr.second;
+				aggregate(level, run_begin, run_pos);
 				// Update state for next round
 				curr.second += level_width;
 				++cascading_idx.second;
@@ -510,18 +510,20 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 			auto *level_data = tree[level].first.data();
 			// Left side
 			while (curr.first - lower >= level_width) {
-				const auto *run_end = level_data + curr.first;
-				const auto *run_begin = run_end - level_width;
-				const auto *it = std::lower_bound(run_begin, run_end, needle);
-				aggregate(level, run_begin, it);
+				const auto *search_end = level_data + curr.first;
+				const auto *search_begin = search_end - level_width;
+				const auto run_pos = std::lower_bound(search_begin, search_end, needle) - level_data;
+				const auto run_begin = search_begin - level_data;
+				aggregate(level, run_begin, run_pos);
 				curr.first -= level_width;
 			}
 			// Right side
 			while (upper - curr.second >= level_width) {
-				const auto *run_begin = level_data + curr.second;
-				const auto *run_end = run_begin + level_width;
-				const auto *it = std::lower_bound(run_begin, run_end, needle);
-				aggregate(level, run_begin, it);
+				const auto *search_begin = level_data + curr.second;
+				const auto *search_end = search_begin + level_width;
+				const auto run_pos = std::lower_bound(search_begin, search_end, needle) - level_data;
+				const auto run_begin = search_begin - level_data;
+				aggregate(level, run_begin, run_pos);
 				curr.second += level_width;
 			}
 		}
@@ -533,16 +535,18 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 		// Left side
 		auto lower_it = lower;
 		while (lower_it != curr.first) {
-			const auto *run_begin = level_data + lower_it;
-			const auto *it = run_begin + (*run_begin < needle);
-			aggregate(level, run_begin, it);
+			const auto *search_begin = level_data + lower_it;
+			const auto run_begin = lower_it;
+			const auto run_pos = run_begin + (*search_begin < needle);
+			aggregate(level, run_begin, run_pos);
 			++lower_it;
 		}
 		// Right side
 		while (curr.second != upper) {
-			const auto *run_begin = level_data + curr.second;
-			const auto *it = run_begin + (*run_begin < needle);
-			aggregate(level, run_begin, it);
+			const auto *search_begin = level_data + curr.second;
+			const auto run_begin = curr.second;
+			const auto run_pos = run_begin + (*search_begin < needle);
+			aggregate(level, run_begin, run_pos);
 			++curr.second;
 		}
 	}
