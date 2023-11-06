@@ -3,7 +3,7 @@
 #include "duckdb.hpp"
 
 namespace duckdb {
-class CreateSecretInput;
+struct CreateSecretInput;
 class CreateSecretFunction;
 struct S3AuthParams;
 

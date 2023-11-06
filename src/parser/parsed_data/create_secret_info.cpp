@@ -4,12 +4,14 @@
 
 namespace duckdb {
 
-CreateSecretInfo::CreateSecretInfo(string type, OnCreateConflict on_conflict)
-    : ParseInfo(ParseInfoType::CREATE_SECRET_INFO), on_conflict(on_conflict), type(type), named_parameters() {
+CreateSecretInfo::CreateSecretInfo(OnCreateConflict on_conflict)
+    : ParseInfo(ParseInfoType::CREATE_SECRET_INFO), on_conflict(on_conflict), named_parameters() {
 }
 
 unique_ptr<CreateSecretInfo> CreateSecretInfo::Copy() const {
-	auto result = make_uniq<CreateSecretInfo>(type, on_conflict);
+	auto result = make_uniq<CreateSecretInfo>(on_conflict);
+	result->type = type;
+	result->name = name;
 	result->named_parameters = named_parameters;
 	result->provider = provider;
 	return result;

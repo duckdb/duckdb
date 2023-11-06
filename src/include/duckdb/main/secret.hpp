@@ -21,7 +21,9 @@ class RegisteredSecret {
 
 public:
 	RegisteredSecret(vector<string> &prefix_paths, const string &type, const string &provider, const string &name)
-	    : prefix_paths(prefix_paths), type(type), provider(provider), name(name), serializable(false) {};
+	    : prefix_paths(prefix_paths), type(type), provider(provider), name(name), serializable(false) {
+		D_ASSERT(!type.empty());
+	}
 	virtual ~RegisteredSecret() = default;
 
 	//! Returns the longest prefix that matches, -1 for no match

@@ -22,7 +22,7 @@ public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::CREATE_SECRET_INFO;
 
 public:
-	CreateSecretInfo(string type, OnCreateConflict on_conflict);
+	explicit CreateSecretInfo(OnCreateConflict on_conflict);
 	//! How to handle conflict
 	OnCreateConflict on_conflict;
 	//! The type of secret
