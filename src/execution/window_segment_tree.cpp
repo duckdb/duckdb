@@ -891,7 +891,21 @@ void WindowDistinctAggregator::Sink(DataChunk &arg_chunk, SelectionVector *filte
 	sequence_count = 0;
 }
 
-void WindowDistinctAggregator::Finalize(const FrameStats *stats) {
+class WindowDistinctAggregator::DistinctSortTree : public MergeSortTree<idx_t, idx_t> {
+public:
+	using BaseTree = MergeSortTree<idx_t, idx_t>;
+	DistinctSortTree(Elements &&lowest_level, WindowDistinctAggregator &wda);
+
+	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
+	unsafe_unique_array<data_t> levels_flat_native;
+	//! For each level, the starting location in the levels_flat_native array
+	vector<idx_t> levels_flat_start;
+
+	//! The total number of internal nodes of the tree, stored in levels_flat_native
+	idx_t internal_nodes;
+};
+
+void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
 	//	5: Sort sorted lexicographically increasing
 	global_sort->AddLocalState(local_sort);
 	global_sort->PrepareMergePhase();
@@ -951,8 +965,16 @@ void WindowDistinctAggregator::Finalize(const FrameStats *stats) {
 	}
 	//	13:	return prevIdcs
 
-	using DistinctSortTree = MergeSortTree<idx_t, idx_t>;
-	DistinctSortTree merge_sort_tree(std::move(prev_idcs));
+	merge_sort_tree = make_uniq<DistinctSortTree>(std::move(prev_idcs), *this);
+}
+
+WindowDistinctAggregator::DistinctSortTree::DistinctSortTree(Elements &&lowest_level, WindowDistinctAggregator &wda)
+    : BaseTree(std::move(lowest_level)) {
+
+	auto &inputs = wda.inputs;
+	auto &aggr = wda.aggr;
+	auto &allocator = wda.allocator;
+	const auto state_size = wda.state_size;
 
 	//! Input data chunk, used for leaf segment aggregation
 	DataChunk leaves;
@@ -975,9 +997,9 @@ void WindowDistinctAggregator::Finalize(const FrameStats *stats) {
 
 	// compute space required to store aggregation states of merge sort tree
 	// this is one aggregate state per entry per level
-	idx_t internal_nodes = 0;
-	for (idx_t level_nr = 0; level_nr < merge_sort_tree.tree.size(); ++level_nr) {
-		internal_nodes += merge_sort_tree.tree[level_nr].first.size();
+	internal_nodes = 0;
+	for (idx_t level_nr = 0; level_nr < tree.size(); ++level_nr) {
+		internal_nodes += tree[level_nr].first.size();
 	}
 	levels_flat_native = make_unsafe_uniq_array<data_t>(internal_nodes * state_size);
 	levels_flat_start.push_back(0);
@@ -985,8 +1007,8 @@ void WindowDistinctAggregator::Finalize(const FrameStats *stats) {
 
 	//	Walk the distinct value tree building the intermediate aggregates
 	idx_t level_width = 1;
-	for (idx_t level_nr = 0; level_nr < merge_sort_tree.tree.size(); ++level_nr) {
-		auto &level = merge_sort_tree.tree[level_nr].first;
+	for (idx_t level_nr = 0; level_nr < tree.size(); ++level_nr) {
+		auto &level = tree[level_nr].first;
 
 		for (idx_t i = 0; i < level.size(); i += level_width) {
 			//	Reset the combine state
@@ -1028,7 +1050,7 @@ void WindowDistinctAggregator::Finalize(const FrameStats *stats) {
 		}
 
 		levels_flat_start.push_back(levels_flat_offset);
-		level_width *= merge_sort_tree.FANOUT;
+		level_width *= FANOUT;
 	}
 
 	//	Flush any remaining states
@@ -1045,4 +1067,29 @@ void WindowDistinctAggregator::Finalize(const FrameStats *stats) {
 	}
 }
 
+void WindowDistinctAggregator::Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result,
+                                        idx_t count, idx_t row_idx) const {
+#if 0
+	auto window_begin = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_BEGIN]);
+	auto window_end = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_END]);
+	auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
+	auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
+
+	for (idx_t rid = 0, cur_row = row_idx; rid < count; ++rid, ++cur_row) {
+		const auto lower = window_begin[rid];
+		const auto upper = window_end[rid];
+
+    	// Compute COUNT DISTINCT using mergesort tree
+    	auto aggState = Agg::init();
+    	merge_sort_tree->AggregateLowerBound(lower, upper, lower + 1,
+    		[&](idx_t level, const idx_t* begin, const idx_t* pos) {
+      			if (pos != begin) {
+      				const auto idx = pos - merge_sort_tree.tree[level].first.data() - 1;
+        			aggState = Agg::merge(aggState, runningAggs[level][idx]);
+      			}
+    		});
+    	result.push_back(aggState);
+  	}
+#endif
+}
 } // namespace duckdb

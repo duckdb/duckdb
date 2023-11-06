@@ -84,6 +84,9 @@ struct MergeSortTree {
 		return tree.front().first[i];
 	}
 
+	template <typename L>
+	void AggregateLowerBound(const idx_t lower, const idx_t upper, const idx_t needle, L aggregate) const;
+
 	Tree tree;
 	CompareElements cmp;
 
@@ -392,6 +395,157 @@ idx_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, idx_t n
 	}
 
 	return result;
+}
+
+template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
+template <typename L>
+void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, const idx_t upper, const idx_t needle,
+                                                         L aggregate) const {
+
+	D_ASSERT(upper <= tree[0].first.size());
+	D_ASSERT(lower < upper);
+
+	using IdxRange = std::pair<idx_t, idx_t>;
+
+	// Find the entry point into the tree
+	IdxRange run_idx(lower, upper - 1);
+	idx_t level_width = 1;
+	idx_t level = 0;
+	IdxRange prev_run_idx;
+	IdxRange curr;
+	if (run_idx.first == run_idx.second) {
+		curr.first = curr.second = run_idx.first;
+	} else {
+		do {
+			prev_run_idx.second = run_idx.second;
+			run_idx.first /= FANOUT;
+			run_idx.second /= FANOUT;
+			level_width *= FANOUT;
+			++level;
+		} while (run_idx.first != run_idx.second);
+		curr.second = prev_run_idx.second * level_width / FANOUT;
+		curr.first = curr.second;
+	}
+
+	// Aggregate layers using the cascading indices
+	if (level > LowestCascadingLevel()) {
+		IdxRange cascading_idx;
+		// Find the initial cascading idcs
+		{
+			IdxRange entry;
+			entry.first = run_idx.first * level_width;
+			entry.second = std::min(entry.first + level_width, static_cast<idx_t>(tree[0].first.size()));
+			auto *level_data = tree[level].first.data();
+			idx_t entry_idx =
+			    std::lower_bound(level_data + entry.first, level_data + entry.second, needle) - level_data;
+			cascading_idx.first = cascading_idx.second =
+			    (entry_idx / CASCADING + 2 * (entry.first / level_width)) * FANOUT;
+
+			// We have to slightly shift the initial CASCADING idcs because at the top level
+			// we won't be exactly on a boundary
+			auto correction = (prev_run_idx.second - run_idx.second * FANOUT);
+			cascading_idx.first -= (FANOUT - correction);
+			cascading_idx.second += correction;
+		}
+
+		// Aggregate all layers until we reach a layer without cascading indices
+		// For the first layer, we already checked we have cascading indices available, otherwise
+		// we wouldn't have even searched the entry points. Hence, we use a `do-while` instead of `while`
+		do {
+			--level;
+			level_width /= FANOUT;
+			auto *level_data = tree[level].first.data();
+			auto &cascading_idcs = tree[level + 1].second;
+			// Left side of tree
+			// Handle all completely contained runs
+			cascading_idx.first += FANOUT - 1;
+			while (curr.first - lower >= level_width) {
+				// Search based on cascading info from previous level
+				const auto *search_begin = level_data + cascading_idcs[cascading_idx.first];
+				const auto *search_end = level_data + cascading_idcs[cascading_idx.first + FANOUT];
+				const auto *it = std::lower_bound(search_begin, search_end, needle);
+				// Compute runBegin and pass it to our callback
+				const auto *run_begin = level_data + curr.first - level_width;
+				aggregate(level, run_begin, it);
+				// Update state for next round
+				curr.first -= level_width;
+				--cascading_idx.first;
+			}
+			// Handle the partial last run to find the cascading entry point for the next level
+			if (curr.first != lower) {
+				const auto *search_begin = level_data + cascading_idcs[cascading_idx.first];
+				const auto *search_end = level_data + cascading_idcs[cascading_idx.first + FANOUT];
+				auto idx = std::lower_bound(search_begin, search_end, needle) - level_data;
+				cascading_idx.first = (idx / CASCADING + 2 * (lower / level_width)) * FANOUT;
+			}
+
+			// Right side of tree
+			// Handle all completely contained runs
+			while (upper - curr.second >= level_width) {
+				// Search based on cascading info from previous level
+				const auto *search_begin = level_data + cascading_idcs[cascading_idx.second];
+				const auto *search_end = level_data + cascading_idcs[cascading_idx.second + FANOUT];
+				const auto *it = std::lower_bound(search_begin, search_end, needle);
+				// Compute runBegin and pass it to our callback
+				const auto *run_begin = level_data + curr.second;
+				aggregate(level, run_begin, it);
+				// Update state for next round
+				curr.second += level_width;
+				++cascading_idx.second;
+			}
+			// Handle the partial last run to find the cascading entry point for the next level
+			if (curr.second != upper) {
+				const auto *search_begin = level_data + cascading_idcs[cascading_idx.second];
+				const auto *search_end = level_data + cascading_idcs[cascading_idx.second + FANOUT];
+				auto idx = std::lower_bound(search_begin, search_end, needle) - level_data;
+				cascading_idx.second = (idx / CASCADING + 2 * (upper / level_width)) * FANOUT;
+			}
+		} while (level >= LowestCascadingLevel());
+	}
+
+	// Handle lower levels which won't have cascading info
+	if (level) {
+		while (--level) {
+			level_width /= FANOUT;
+			auto *level_data = tree[level].first.data();
+			// Left side
+			while (curr.first - lower >= level_width) {
+				const auto *run_end = level_data + curr.first;
+				const auto *run_begin = run_end - level_width;
+				const auto *it = std::lower_bound(run_begin, run_end, needle);
+				aggregate(level, run_begin, it);
+				curr.first -= level_width;
+			}
+			// Right side
+			while (upper - curr.second >= level_width) {
+				const auto *run_begin = level_data + curr.second;
+				const auto *run_end = run_begin + level_width;
+				const auto *it = std::lower_bound(run_begin, run_end, needle);
+				aggregate(level, run_begin, it);
+				curr.second += level_width;
+			}
+		}
+	}
+
+	// The last layer
+	{
+		auto *level_data = tree[0].first.data();
+		// Left side
+		auto lower_it = lower;
+		while (lower_it != curr.first) {
+			const auto *run_begin = level_data + lower_it;
+			const auto *it = run_begin + (*run_begin < needle);
+			aggregate(level, run_begin, it);
+			++lower_it;
+		}
+		// Right side
+		while (curr.second != upper) {
+			const auto *run_begin = level_data + curr.second;
+			const auto *it = run_begin + (*run_begin < needle);
+			aggregate(level, run_begin, it);
+			++curr.second;
+		}
+	}
 }
 
 } // namespace duckdb

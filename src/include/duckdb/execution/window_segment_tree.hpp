@@ -175,6 +175,7 @@ public:
 class WindowDistinctAggregator : public WindowAggregator {
 public:
 	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
+	class DistinctSortTree;
 
 	WindowDistinctAggregator(AggregateObject aggr, const LogicalType &result_type,
 	                         const WindowExcludeMode exclude_mode_p, idx_t count, BufferManager &buffer_manager);
@@ -182,7 +183,10 @@ public:
 
 	//	Build
 	void Sink(DataChunk &args_chunk, SelectionVector *filter_sel, idx_t filtered) override;
-	void Finalize(const FrameStats *stats) override;
+	void Finalize(const FrameStats &stats) override;
+
+	void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
+	              idx_t row_idx) const override;
 
 	BufferManager &buffer_manager;
 	ArenaAllocator allocator;
@@ -191,10 +195,16 @@ public:
 	//	Single threaded sorting for now
 	LocalSortState local_sort;
 
+	//! The merge sort tree for the aggregate.
+	unique_ptr<DistinctSortTree> merge_sort_tree;
+
 	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
 	unsafe_unique_array<data_t> levels_flat_native;
 	//! For each level, the starting location in the levels_flat_native array
 	vector<idx_t> levels_flat_start;
+
+	//! The total number of internal nodes of the tree, stored in levels_flat_native
+	idx_t internal_nodes;
 
 	vector<LogicalType> payload_types;
 	DataChunk sort_chunk;
