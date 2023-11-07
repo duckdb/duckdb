@@ -75,6 +75,7 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"pg_clear_cache", "postgres_scanner"},
     {"pg_timezone_names", "icu"},
     {"postgres_attach", "postgres_scanner"},
+    {"postgres_query", "postgres_scanner"},
     {"postgres_scan", "postgres_scanner"},
     {"postgres_scan_pushdown", "postgres_scanner"},
     {"read_json", "json"},
