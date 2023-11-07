@@ -22,10 +22,10 @@ static unique_ptr<FunctionData> DuckDBSecretsBind(ClientContext &context, TableF
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	names.emplace_back("provider");
+	names.emplace_back("type");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	names.emplace_back("type");
+	names.emplace_back("provider");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("scope");

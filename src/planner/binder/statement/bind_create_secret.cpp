@@ -15,6 +15,11 @@ BoundStatement Binder::Bind(CreateSecretStatement &stmt) {
 	auto type = stmt.info->type;
 	auto provider = stmt.info->provider;
 
+	if (stmt.info->provider.empty()) {
+		auto secret_type = context.db->config.secret_manager->LookupType(type);
+		stmt.info->provider = secret_type.default_provider;
+	}
+
 	auto &entry = Catalog::GetEntry<CreateSecretFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, type);
 	string error;
 	FunctionBinder function_binder(context);

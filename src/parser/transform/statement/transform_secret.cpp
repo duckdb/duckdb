@@ -17,8 +17,13 @@ unique_ptr<CreateSecretStatement> Transformer::TransformSecret(duckdb_libpgquery
 			string key = StringUtil::Lower((char *) option_list->head->data.ptr_value);
 			auto value_node = PGPointerCast<duckdb_libpgquery::PGNode>(option_list->tail->data.ptr_value);
 			if (key == "scope") {
-				if (value_node->type != duckdb_libpgquery::T_PGList) {
-					throw ParserException("%s has to be a list of strings", key);
+				if (value_node->type == duckdb_libpgquery::T_PGString) {
+					auto &val = PGCast<duckdb_libpgquery::PGValue>(*value_node);
+					string value = val.val.str;
+					result->info->scope.push_back(value);
+					continue;
+				} else if (value_node->type != duckdb_libpgquery::T_PGList) {
+					throw ParserException("%s has to be a string, or a list of strings", key);
 				}
 				auto &list = PGCast<duckdb_libpgquery::PGList>(*value_node);
 				for (auto scope_cell = list.head; scope_cell; scope_cell = scope_cell->next) {
@@ -34,7 +39,7 @@ unique_ptr<CreateSecretStatement> Transformer::TransformSecret(duckdb_libpgquery
 			string value = val.val.str;
 			if (key == "type") {
 				result->info->type = StringUtil::Lower(value);
-			} else if (key == "using") {
+			} else if (key == "provider") {
 				result->info->provider = StringUtil::Lower(value);
 			} else {
 				result->info->named_parameters[key] = value;

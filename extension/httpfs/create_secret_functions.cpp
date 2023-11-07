@@ -101,18 +101,15 @@ void CreateS3SecretFunctions::SetBaseNamedParams(CreateSecretFunction &function,
 }
 
 void CreateS3SecretFunctions::RegisterCreateSecretFunction(DatabaseInstance &instance, string type) {
-	// Register the new type
-	ExtensionUtil::RegisterSecretType(instance, {type, S3Secret::Deserialize});
+	//TODO: handle case where this has already run
 
-	// Default function
-	auto default_fun = CreateSecretFunction(type, "", CreateS3SecretFromConfig);
-	SetBaseNamedParams(default_fun, type);
-	ExtensionUtil::RegisterFunction(instance, default_fun);
+	// Register the new type
+	ExtensionUtil::RegisterSecretType(instance, {type, S3Secret::Deserialize, "config"});
 
 	//! Create from config
 	CreateSecretFunction from_empty_config_fun(type, "config", CreateS3SecretFromConfig);
 	SetBaseNamedParams(from_empty_config_fun, type);
-	ExtensionUtil::AddFunctionOverload(instance, from_empty_config_fun);
+	ExtensionUtil::RegisterFunction(instance, from_empty_config_fun);
 
 	//! Create from empty config
 	CreateSecretFunction from_settings_fun(type, "duckdb_settings", CreateS3SecretFromSettings);

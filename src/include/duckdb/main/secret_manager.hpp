@@ -23,8 +23,8 @@ struct SecretType {
 	string name;
 	//! The deserialization function for the type
 	secret_deserializer_t deserializer;
-
-	// TODO add default provider
+	//! The default provider of the type
+	string default_provider;
 };
 
 class SecretManager {

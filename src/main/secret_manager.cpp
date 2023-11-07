@@ -23,7 +23,7 @@ unique_ptr<RegisteredSecret> SecretManager::DeserializeSecret(Deserializer& dese
 }
 
 void SecretManager::SerializeSecret(RegisteredSecret& secret, Serializer& serializer) {
-	throw NotImplementedException("SerializeSecret");
+	secret.Serialize(serializer);
 }
 
 void SecretManager::RegisterSecretType(SecretType& type) {
