@@ -9,8 +9,8 @@ import static org.duckdb.DuckDBResultSetMetaData.type_to_int;
 
 public class DuckDBArray implements Array {
     private final Object[] array;
-    private DuckDBVector vector;
-    int offset, length;
+    private final DuckDBVector vector;
+    final int offset, length;
 
     DuckDBArray(DuckDBVector vector, int offset, int length) throws SQLException {
         this.vector = vector;
