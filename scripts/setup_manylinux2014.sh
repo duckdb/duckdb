@@ -67,6 +67,9 @@ install_deps() {
   elif [ "$1" = "gcc_4_8" ]; then
     yum install -y gcc-c++
 
+  elif [ "$1" = "nodejs" ]; then
+    yum install -y nodejs
+
   else
       >&2 echo "unknown input for setup_manylinux2014.sh: '$1'"
       exit $exit_code
