@@ -34,7 +34,7 @@ interval_t PyTimeDelta::ToInterval() {
 	auto days_interval = interval_t {/*months = */ 0,
 	                                 /*days = */ days,
 	                                 /*micros = */ 0};
-	auto seconds_interval = ToSecondsOperator::Operation<int64_t, interval_t>(days);
+	auto seconds_interval = ToSecondsOperator::Operation<int64_t, interval_t>(seconds);
 
 	result = AddOperator::Operation<interval_t, interval_t, interval_t>(micros_interval, days_interval);
 	result = AddOperator::Operation<interval_t, interval_t, interval_t>(result, seconds_interval);
