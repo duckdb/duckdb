@@ -8,13 +8,19 @@ import java.util.Map;
 import static org.duckdb.DuckDBResultSetMetaData.type_to_int;
 
 public class DuckDBArray implements Array {
+    private final Object[] array;
     private DuckDBVector vector;
     int offset, length;
 
-    DuckDBArray(DuckDBVector vector, int offset, int length) {
+    DuckDBArray(DuckDBVector vector, int offset, int length) throws SQLException {
         this.vector = vector;
         this.length = length;
         this.offset = offset;
+
+        array = new Object[length];
+        for (int i = 0; i < length; i++) {
+            array[i] = vector.getObject(offset + i);
+        }
     }
 
     @Override
@@ -23,11 +29,7 @@ public class DuckDBArray implements Array {
     }
     @Override
     public Object getArray() throws SQLException {
-        Object[] out = new Object[length];
-        for (int i = 0; i < length; i++) {
-            out[i] = vector.getObject(offset + i);
-        }
-        return out;
+        return array;
     }
 
     @Override

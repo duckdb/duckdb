@@ -3947,6 +3947,17 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_struct_use_after_free() throws Exception {
+        Object arr;
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+             PreparedStatement stmt = conn.prepareStatement("SELECT struct_pack(hello := 2)");
+             ResultSet rs = stmt.executeQuery()) {
+            rs.next();
+            arr = rs.getObject(1);
+        }
+        assertEquals(arr.toString(), "{hello=2}");
+    }
+
     public static void main(String[] args) throws Exception {
         // Woo I can do reflection too, take this, JUnit!
         Method[] methods = TestDuckDBJDBC.class.getMethods();
