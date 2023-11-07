@@ -1,0 +1,347 @@
+# name: test/sql/catalog/dependencies/test_concurrent_alter.test
+# group: [dependencies]
+
+require skip_reload
+
+mode skip
+
+statement ok
+CREATE TABLE t2 AS (SELECT 42);
+
+statement ok
+create sequence seq;
+
+statement ok
+alter sequence seq owned by t2;
+
+statement ok
+pragma threads=1;
+
+query I
+select current_setting('threads');
+----
+1
+
+concurrentloop i 1 100
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+endloop
