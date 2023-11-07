@@ -4,7 +4,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 

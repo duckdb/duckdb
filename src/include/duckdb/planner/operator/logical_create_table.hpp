@@ -26,11 +26,8 @@ public:
 	unique_ptr<BoundCreateTableInfo> info;
 
 public:
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
-
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
 	idx_t EstimateCardinality(ClientContext &context) override;
 
@@ -38,7 +35,6 @@ protected:
 	void ResolveTypes() override;
 
 private:
-	LogicalCreateTable(ClientContext &context, const string &catalog, const string &schema,
-	                   unique_ptr<CreateInfo> info);
+	LogicalCreateTable(ClientContext &context, unique_ptr<CreateInfo> info);
 };
 } // namespace duckdb

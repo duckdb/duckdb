@@ -33,6 +33,8 @@ struct ArrowInterval {
 struct ArrowProjectedColumns {
 	unordered_map<idx_t, string> projection_map;
 	vector<string> columns;
+	// Map from filter index to column index
+	unordered_map<idx_t, idx_t> filter_to_col;
 };
 
 struct ArrowStreamParameters {
@@ -61,20 +63,54 @@ public:
 	ArrowTableType arrow_table;
 };
 
+struct ArrowScanLocalState;
+struct ArrowArrayScanState {
+public:
+	ArrowArrayScanState(ArrowScanLocalState &state);
+
+public:
+	ArrowScanLocalState &state;
+	unordered_map<idx_t, unique_ptr<ArrowArrayScanState>> children;
+	// Cache the (optional) dictionary of this array
+	unique_ptr<Vector> dictionary;
+
+public:
+	ArrowArrayScanState &GetChild(idx_t child_idx);
+	void AddDictionary(unique_ptr<Vector> dictionary_p);
+	bool HasDictionary() const;
+	Vector &GetDictionary();
+};
+
 struct ArrowScanLocalState : public LocalTableFunctionState {
+public:
 	explicit ArrowScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk) : chunk(current_chunk.release()) {
 	}
 
+public:
 	unique_ptr<ArrowArrayStreamWrapper> stream;
 	shared_ptr<ArrowArrayWrapper> chunk;
+	// This vector hold the Arrow Vectors owned by DuckDB to allow for zero-copy
+	// Note that only DuckDB can release these vectors
+	unordered_map<idx_t, shared_ptr<ArrowArrayWrapper>> arrow_owned_data;
 	idx_t chunk_offset = 0;
 	idx_t batch_index = 0;
 	vector<column_t> column_ids;
-	//! Store child vectors for Arrow Dictionary Vectors (col-idx,vector)
-	unordered_map<idx_t, unique_ptr<Vector>> arrow_dictionary_vectors;
+	unordered_map<idx_t, unique_ptr<ArrowArrayScanState>> array_states;
 	TableFilterSet *filters = nullptr;
 	//! The DataChunk containing all read columns (even filter columns that are immediately removed)
 	DataChunk all_columns;
+
+public:
+	ArrowArrayScanState &GetState(idx_t child_idx) {
+		auto it = array_states.find(child_idx);
+		if (it == array_states.end()) {
+			auto child_p = make_uniq<ArrowArrayScanState>(*this);
+			auto &child = *child_p;
+			array_states.emplace(std::make_pair(child_idx, std::move(child_p)));
+			return child;
+		}
+		return *it->second;
+	}
 };
 
 struct ArrowScanGlobalState : public GlobalTableFunctionState {
@@ -126,6 +162,8 @@ public:
 
 	//! Scan Function
 	static void ArrowScanFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output);
+	static void PopulateArrowTableType(ArrowTableType &arrow_table, ArrowSchemaWrapper &schema_p, vector<string> &names,
+	                                   vector<LogicalType> &return_types);
 
 protected:
 	//! Defines Maximum Number of Threads
@@ -143,6 +181,8 @@ protected:
 	                            const GlobalTableFunctionState *global_state);
 	//! Renames repeated columns and case sensitive columns
 	static void RenameArrowColumns(vector<string> &names);
+
+public:
 	//! Helper function to get the DuckDB logical type
 	static unique_ptr<ArrowType> GetArrowLogicalType(ArrowSchema &schema);
 };

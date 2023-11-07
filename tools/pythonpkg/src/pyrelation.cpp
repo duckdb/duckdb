@@ -1,3 +1,4 @@
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pytype.hpp"
@@ -17,6 +18,7 @@
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/main/relation/value_relation.hpp"
 #include "duckdb/main/relation/filter_relation.hpp"
+#include "duckdb_python/expression/pyexpression.hpp"
 
 namespace duckdb {
 
@@ -47,11 +49,36 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromExpression(const strin
 	return projected_relation;
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const py::args &args, const py::kwargs &kwargs) {
 	if (!rel) {
 		return nullptr;
 	}
-	return ProjectFromExpression(expr);
+	auto arg_count = args.size();
+	if (arg_count == 0) {
+		return nullptr;
+	}
+	py::handle first_arg = args[0];
+	if (arg_count == 1 && py::isinstance<py::str>(first_arg)) {
+		string expr_string = py::str(first_arg);
+		return ProjectFromExpression(expr_string);
+	} else {
+		vector<unique_ptr<ParsedExpression>> expressions;
+		for (auto arg : args) {
+			shared_ptr<DuckDBPyExpression> py_expr;
+			if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(arg, py_expr)) {
+				throw InvalidInputException("Please provide arguments of type Expression!");
+			}
+			auto expr = py_expr->GetExpression().Copy();
+			expressions.push_back(std::move(expr));
+		}
+		vector<string> empty_aliases;
+		auto groups = kwargs.contains("groups") ? std::string(py::cast<py::str>(kwargs["groups"])) : "";
+		if (groups.empty()) {
+			// No groups provided
+			return make_uniq<DuckDBPyRelation>(rel->Project(std::move(expressions), empty_aliases));
+		}
+		return make_uniq<DuckDBPyRelation>(rel->Aggregate(std::move(expressions), groups));
+	}
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromTypes(const py::object &obj) {
@@ -115,7 +142,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::EmptyResult(const std::shared_ptr
 	auto values_relation =
 	    make_uniq<DuckDBPyRelation>(make_shared<ValueRelation>(context, single_row, std::move(names)));
 	// Add a filter on an impossible condition
-	return values_relation->Filter("true = false");
+	return values_relation->FilterFromExpression("true = false");
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::SetAlias(const string &expr) {
@@ -126,7 +153,20 @@ py::str DuckDBPyRelation::GetAlias() {
 	return py::str(string(rel->GetAlias()));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Filter(const string &expr) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Filter(const py::object &expr) {
+	if (py::isinstance<py::str>(expr)) {
+		string expression = py::cast<py::str>(expr);
+		return FilterFromExpression(expression);
+	}
+	shared_ptr<DuckDBPyExpression> expression;
+	if (!py::try_cast(expr, expression)) {
+		throw InvalidInputException("Please provide either a string or a DuckDBPyExpression object to 'filter'");
+	}
+	auto expr_p = expression->GetExpression().Copy();
+	return make_uniq<DuckDBPyRelation>(rel->Filter(std::move(expr_p)));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FilterFromExpression(const string &expr) {
 	return make_uniq<DuckDBPyRelation>(rel->Filter(expr));
 }
 
@@ -136,6 +176,25 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Limit(int64_t n, int64_t offset) 
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Order(const string &expr) {
 	return make_uniq<DuckDBPyRelation>(rel->Order(expr));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Sort(const py::args &args) {
+	vector<OrderByNode> order_nodes;
+	order_nodes.reserve(args.size());
+
+	for (auto arg : args) {
+		shared_ptr<DuckDBPyExpression> py_expr;
+		if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(arg, py_expr)) {
+			string actual_type = py::str(arg.get_type());
+			throw InvalidInputException("Expected argument of type Expression, received '%s' instead", actual_type);
+		}
+		auto expr = py_expr->GetExpression().Copy();
+		order_nodes.emplace_back(py_expr->order_type, py_expr->null_order, std::move(expr));
+	}
+	if (order_nodes.empty()) {
+		throw InvalidInputException("Please provide at least one expression to sort on");
+	}
+	return make_uniq<DuckDBPyRelation>(rel->Order(std::move(order_nodes)));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, const string &groups) {
@@ -245,28 +304,35 @@ string DuckDBPyRelation::ToSQL() {
 	}
 	try {
 		return rel->GetQueryNode()->ToString();
-	} catch (const std::exception &e) {
+	} catch (const std::exception &) {
 		return "";
 	}
 }
 
 string DuckDBPyRelation::GenerateExpressionList(const string &function_name, const string &aggregated_columns,
                                                 const string &groups, const string &function_parameter,
-                                                const bool &ignore_nulls, const string &projected_columns,
+                                                bool ignore_nulls, const string &projected_columns,
                                                 const string &window_spec) {
 	auto input = StringUtil::Split(aggregated_columns, ',');
-	return GenerateExpressionList(function_name, input, groups, function_parameter, ignore_nulls, projected_columns,
-	                              window_spec);
+	return GenerateExpressionList(function_name, std::move(input), groups, function_parameter, ignore_nulls,
+	                              projected_columns, window_spec);
 }
 
-string DuckDBPyRelation::GenerateExpressionList(const string &function_name, const vector<string> &input,
+string DuckDBPyRelation::GenerateExpressionList(const string &function_name, vector<string> &&input,
                                                 const string &groups, const string &function_parameter,
-                                                const bool &ignore_nulls, const string &projected_columns,
+                                                bool ignore_nulls, const string &projected_columns,
                                                 const string &window_spec) {
 	string expr;
+
+	if (StringUtil::CIEquals("count", function_name) && input.empty()) {
+		// Insert an artificial '*'
+		input.push_back("*");
+	}
+
 	if (!projected_columns.empty()) {
 		expr = projected_columns + ", ";
 	}
+
 	if (input.empty() && !function_parameter.empty()) {
 		return expr +=
 		       function_name + "(" + function_parameter + ((ignore_nulls) ? " ignore nulls) " : ") ") + window_spec;
@@ -311,7 +377,7 @@ DuckDBPyRelation::GenericWindowFunction(const string &function_name, const strin
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ApplyAggOrWin(const string &function_name, const string &agg_columns,
                                                              const string &function_parameters, const string &groups,
                                                              const string &window_spec, const string &projected_columns,
-                                                             const bool &ignore_nulls) {
+                                                             bool ignore_nulls) {
 	if (!groups.empty() && !window_spec.empty()) {
 		throw InvalidInputException("Either groups or window must be set (can't be both at the same time)");
 	}
@@ -392,6 +458,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::BoolOr(const std::string &column,
                                                       const std::string &window_spec,
                                                       const std::string &projected_columns) {
 	return ApplyAggOrWin("bool_or", column, "", groups, window_spec, projected_columns);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ValueCounts(const std::string &column, const std::string &groups) {
+	return Count(column, groups, "", column);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Count(const std::string &column, const std::string &groups,
@@ -846,7 +916,8 @@ void DuckDBPyRelation::Close() {
 }
 
 bool DuckDBPyRelation::ContainsColumnByName(const string &name) const {
-	return std::find(names.begin(), names.end(), name) != names.end();
+	return std::find_if(names.begin(), names.end(),
+	                    [&](const string &item) { return StringUtil::CIEquals(name, item); }) != names.end();
 }
 
 static bool ContainsStructFieldByName(LogicalType &type, const string &name) {
@@ -890,17 +961,55 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Intersect(DuckDBPyRelation *other
 	return make_uniq<DuckDBPyRelation>(rel->Intersect(other->rel));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, const string &condition,
+namespace {
+struct SupportedPythonJoinType {
+	string name;
+	JoinType type;
+};
+} // namespace
+
+static const SupportedPythonJoinType *GetSupportedJoinTypes(idx_t &length) {
+	static const SupportedPythonJoinType SUPPORTED_TYPES[] = {{"left", JoinType::LEFT},   {"right", JoinType::RIGHT},
+	                                                          {"outer", JoinType::OUTER}, {"semi", JoinType::SEMI},
+	                                                          {"inner", JoinType::INNER}, {"anti", JoinType::ANTI}};
+	static const auto SUPPORTED_TYPES_COUNT = sizeof(SUPPORTED_TYPES) / sizeof(SupportedPythonJoinType);
+	length = SUPPORTED_TYPES_COUNT;
+	return reinterpret_cast<const SupportedPythonJoinType *>(SUPPORTED_TYPES);
+}
+
+static JoinType ParseJoinType(const string &type) {
+	idx_t supported_types_count;
+	auto supported_types = GetSupportedJoinTypes(supported_types_count);
+	for (idx_t i = 0; i < supported_types_count; i++) {
+		auto &supported_type = supported_types[i];
+		if (supported_type.name == type) {
+			return supported_type.type;
+		}
+	}
+	return JoinType::INVALID;
+}
+
+[[noreturn]] void ThrowUnsupportedJoinTypeError(const string &provided) {
+	vector<string> supported_options;
+	idx_t length;
+	auto supported_types = GetSupportedJoinTypes(length);
+	for (idx_t i = 0; i < length; i++) {
+		supported_options.push_back(StringUtil::Format("'%s'", supported_types[i].name));
+	}
+	auto options = StringUtil::Join(supported_options, ", ");
+	throw InvalidInputException("Unsupported join type %s, try one of: %s", provided, options);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, const py::object &condition,
                                                     const string &type) {
+
 	JoinType dtype;
 	string type_string = StringUtil::Lower(type);
 	StringUtil::Trim(type_string);
-	if (type_string == "inner") {
-		dtype = JoinType::INNER;
-	} else if (type_string == "left") {
-		dtype = JoinType::LEFT;
-	} else {
-		throw InvalidInputException("Unsupported join type %s	 try 'inner' or 'left'", type_string);
+
+	dtype = ParseJoinType(type_string);
+	if (dtype == JoinType::INVALID) {
+		ThrowUnsupportedJoinTypeError(type);
 	}
 	auto alias = GetAlias();
 	auto other_alias = other->GetAlias();
@@ -908,7 +1017,18 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 		throw InvalidInputException("Both relations have the same alias, please change the alias of one or both "
 		                            "relations using 'rel = rel.set_alias(<new alias>)'");
 	}
-	return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, condition, dtype));
+	if (py::isinstance<py::str>(condition)) {
+		auto condition_string = std::string(py::cast<py::str>(condition));
+		return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, condition_string, dtype));
+	}
+	shared_ptr<DuckDBPyExpression> condition_expr;
+	if (!py::try_cast(condition, condition_expr)) {
+		throw InvalidInputException(
+		    "Please provide condition as an expression either in string form or as an Expression object");
+	}
+	vector<unique_ptr<ParsedExpression>> conditions;
+	conditions.push_back(condition_expr->GetExpression().Copy());
+	return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, std::move(conditions), dtype));
 }
 
 void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compression) {
@@ -1126,24 +1246,61 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun, Optional<py
 	return relation;
 }
 
-string DuckDBPyRelation::ToString() {
+string DuckDBPyRelation::ToStringInternal(const BoxRendererConfig &config, bool invalidate_cache) {
 	AssertRelation();
-	if (rendered_result.empty()) {
-		idx_t limit_rows = 10000;
+	if (rendered_result.empty() || invalidate_cache) {
 		BoxRenderer renderer;
-		auto limit = Limit(limit_rows, 0);
+		auto limit = Limit(config.limit, 0);
 		auto res = limit->ExecuteInternal();
 
 		auto context = rel->context.GetContext();
-		BoxRendererConfig config;
-		config.limit = limit_rows;
 		rendered_result = res->ToBox(*context, config);
 	}
 	return rendered_result;
 }
 
-void DuckDBPyRelation::Print() {
-	py::print(py::str(ToString()));
+string DuckDBPyRelation::ToString() {
+	BoxRendererConfig config;
+	config.limit = 10000;
+	return ToStringInternal(config);
+}
+
+static idx_t IndexFromPyInt(const py::object &object) {
+	auto index = py::cast<idx_t>(object);
+	return index;
+}
+
+void DuckDBPyRelation::Print(const Optional<py::int_> &max_width, const Optional<py::int_> &max_rows,
+                             const Optional<py::int_> &max_col_width, const Optional<py::str> &null_value,
+                             const py::object &render_mode) {
+	BoxRendererConfig config;
+	config.limit = 10000;
+
+	bool invalidate_cache = false;
+	if (!py::none().is(max_width)) {
+		invalidate_cache = true;
+		config.max_width = IndexFromPyInt(max_width);
+	}
+	if (!py::none().is(max_rows)) {
+		invalidate_cache = true;
+		config.max_rows = IndexFromPyInt(max_rows);
+	}
+	if (!py::none().is(max_col_width)) {
+		invalidate_cache = true;
+		config.max_col_width = IndexFromPyInt(max_col_width);
+	}
+	if (!py::none().is(null_value)) {
+		invalidate_cache = true;
+		config.null_value = py::cast<std::string>(null_value);
+	}
+	if (!py::none().is(render_mode)) {
+		invalidate_cache = true;
+		if (!py::try_cast(render_mode, config.render_mode)) {
+			throw InvalidInputException("'render_mode' accepts either a string, RenderMode or int value");
+		}
+	}
+
+	py::print(py::str(ToStringInternal(config, invalidate_cache)));
 }
 
 string DuckDBPyRelation::Explain(ExplainType type) {

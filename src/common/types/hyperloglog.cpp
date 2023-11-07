@@ -1,9 +1,8 @@
 #include "duckdb/common/types/hyperloglog.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 #include "hyperloglog.hpp"
 
@@ -91,30 +90,12 @@ unique_ptr<HyperLogLog> HyperLogLog::Copy() {
 	return result;
 }
 
-void HyperLogLog::Serialize(FieldWriter &writer) const {
-	writer.WriteField<HLLStorageType>(HLLStorageType::UNCOMPRESSED);
-	writer.WriteBlob(GetPtr(), GetSize());
-}
-
-unique_ptr<HyperLogLog> HyperLogLog::Deserialize(FieldReader &reader) {
-	auto result = make_uniq<HyperLogLog>();
-	auto storage_type = reader.ReadRequired<HLLStorageType>();
-	switch (storage_type) {
-	case HLLStorageType::UNCOMPRESSED:
-		reader.ReadBlob(result->GetPtr(), GetSize());
-		break;
-	default:
-		throw SerializationException("Unknown HyperLogLog storage type!");
-	}
-	return result;
-}
-
-void HyperLogLog::FormatSerialize(FormatSerializer &serializer) const {
+void HyperLogLog::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "type", HLLStorageType::UNCOMPRESSED);
 	serializer.WriteProperty(101, "data", GetPtr(), GetSize());
 }
 
-unique_ptr<HyperLogLog> HyperLogLog::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<HyperLogLog> HyperLogLog::Deserialize(Deserializer &deserializer) {
 	auto result = make_uniq<HyperLogLog>();
 	auto storage_type = deserializer.ReadProperty<HLLStorageType>(100, "type");
 	switch (storage_type) {

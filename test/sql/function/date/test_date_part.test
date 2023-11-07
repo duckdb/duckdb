@@ -463,18 +463,18 @@ endloop
 
 # Date parts
 query II
-SELECT d, DATE_PART(['year', 'month', 'day'], d) AS parts
+SELECT d, DATE_PART(['year', 'month', 'day', 'epoch'], d) AS parts
 FROM dates
 ORDER BY 1;
 ----
 NULL	NULL
--infinity	{'year': NULL, 'month': NULL, 'day': NULL}
-0044-03-15 (BC)	{'year': -43, 'month': 3, 'day': 15}
-1992-01-01	{'year': 1992, 'month': 1, 'day': 1}
-1992-03-03	{'year': 1992, 'month': 3, 'day': 3}
-1992-05-05	{'year': 1992, 'month': 5, 'day': 5}
-2022-01-01	{'year': 2022, 'month': 1, 'day': 1}
-infinity	{'year': NULL, 'month': NULL, 'day': NULL}
+-infinity	{'year': NULL, 'month': NULL, 'day': NULL, 'epoch': NULL}
+0044-03-15 (BC)	{'year': -43, 'month': 3, 'day': 15, 'epoch': -63517824000.0}
+1992-01-01	{'year': 1992, 'month': 1, 'day': 1, 'epoch': 694224000.0}
+1992-03-03	{'year': 1992, 'month': 3, 'day': 3, 'epoch': 699580800.0}
+1992-05-05	{'year': 1992, 'month': 5, 'day': 5, 'epoch': 705024000.0}
+2022-01-01	{'year': 2022, 'month': 1, 'day': 1, 'epoch': 1640995200.0}
+infinity	{'year': NULL, 'month': NULL, 'day': NULL, 'epoch': NULL}
 
 # Year parts
 query II
@@ -537,14 +537,21 @@ ORDER BY 1;
 
 # Invalid parts
 
-foreach hour minute second millisecond microsecond timezone timezone_hour timezone_minute
+foreach datepart hour minute second millisecond microsecond timezone timezone_hour timezone_minute
 
 statement error
 SELECT d, DATE_PART(['${datepart}'], d) AS parts
 FROM dates
 ORDER BY 1;
+----
+not recognized
 
 endloop
+
+statement error
+SELECT DATE_PART(['hour', 'minute'], '2023-09-17'::DATE) AS parts
+----
+not recognized
 
 #
 # Infinities
@@ -573,6 +580,22 @@ NULL
 
 endloop
 
+# Struct entries should be NULL
+query I
+SELECT DATE_PART(['year', 'month', 'day', 'epoch'], '${special}'::${datatype}) AS parts
+----
+{'year': NULL, 'month': NULL, 'day': NULL, 'epoch': NULL}
+
 endloop
 
 endloop
+
+query T
+WITH cte AS (
+    SELECT NULL::VARCHAR part
+    FROM range(1)
+)
+SELECT date_part(part, TIMESTAMP '2019-01-06 04:03:02')
+FROM cte
+----
+NULL

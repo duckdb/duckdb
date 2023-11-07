@@ -1,4 +1,3 @@
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
@@ -192,20 +191,6 @@ unique_ptr<Expression> BoundCastExpression::Copy() {
 	auto copy = make_uniq<BoundCastExpression>(child->Copy(), return_type, bound_cast.Copy(), try_cast);
 	copy->CopyProperties(*this);
 	return std::move(copy);
-}
-
-void BoundCastExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializable(*child);
-	writer.WriteSerializable(return_type);
-	writer.WriteField(try_cast);
-}
-
-unique_ptr<Expression> BoundCastExpression::Deserialize(ExpressionDeserializationState &state, FieldReader &reader) {
-	auto child = reader.ReadRequiredSerializable<Expression>(state.gstate);
-	auto target_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto try_cast = reader.ReadRequired<bool>();
-	auto cast_function = BindCastFunction(state.gstate.context, child->return_type, target_type);
-	return make_uniq<BoundCastExpression>(std::move(child), std::move(target_type), std::move(cast_function), try_cast);
 }
 
 } // namespace duckdb

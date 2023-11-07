@@ -18,7 +18,6 @@ namespace duckdb {
 class PartitionGlobalHashGroup {
 public:
 	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
-	using LocalSortStatePtr = unique_ptr<LocalSortState>;
 	using Orders = vector<BoundOrderByNode>;
 	using Types = vector<LogicalType>;
 
@@ -53,6 +52,8 @@ public:
 	PartitionGlobalSinkState(ClientContext &context, const vector<unique_ptr<Expression>> &partition_bys,
 	                         const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
 	                         const vector<unique_ptr<BaseStatistics>> &partitions_stats, idx_t estimated_cardinality);
+
+	bool HasMergeTasks() const;
 
 	unique_ptr<RadixPartitionedTupleData> CreatePartition(idx_t new_bits) const;
 	void SyncPartitioning(const PartitionGlobalSinkState &other);
@@ -97,21 +98,26 @@ private:
 
 class PartitionLocalSinkState {
 public:
+	using LocalSortStatePtr = unique_ptr<LocalSortState>;
+
 	PartitionLocalSinkState(ClientContext &context, PartitionGlobalSinkState &gstate_p);
 
 	// Global state
 	PartitionGlobalSinkState &gstate;
 	Allocator &allocator;
 
-	// OVER(PARTITION BY...) (hash grouping)
+	//	Shared expression evaluation
 	ExpressionExecutor executor;
 	DataChunk group_chunk;
 	DataChunk payload_chunk;
+	size_t sort_cols;
+
+	// OVER(PARTITION BY...) (hash grouping)
 	unique_ptr<PartitionedTupleData> local_partition;
 	unique_ptr<PartitionedTupleDataAppendState> local_append;
 
-	// OVER(...) (sorting)
-	size_t sort_cols;
+	// OVER(ORDER BY...) (only sorting)
+	LocalSortStatePtr local_sort;
 
 	// OVER() (no sorting)
 	RowLayout payload_layout;
@@ -134,7 +140,11 @@ class PartitionGlobalMergeState {
 public:
 	using GroupDataPtr = unique_ptr<TupleDataCollection>;
 
+	//	OVER(PARTITION BY...)
 	PartitionGlobalMergeState(PartitionGlobalSinkState &sink, GroupDataPtr group_data, hash_t hash_bin);
+
+	//	OVER(ORDER BY...)
+	explicit PartitionGlobalMergeState(PartitionGlobalSinkState &sink);
 
 	bool IsSorted() const {
 		lock_guard<mutex> guard(lock);

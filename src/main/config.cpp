@@ -169,6 +169,13 @@ void DBConfig::SetOptionByName(const string &name, const Value &value) {
 	auto option = DBConfig::GetOptionByName(name);
 	if (option) {
 		SetOption(*option, value);
+		return;
+	}
+
+	auto param = extension_parameters.find(name);
+	if (param != extension_parameters.end()) {
+		Value target_value = value.DefaultCastAs(param->second.type);
+		SetOption(name, std::move(target_value));
 	} else {
 		options.unrecognized_options[name] = value;
 	}
@@ -177,7 +184,7 @@ void DBConfig::SetOptionByName(const string &name, const Value &value) {
 void DBConfig::SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value) {
 	lock_guard<mutex> l(config_lock);
 	if (!option.set_global) {
-		throw InternalException("Could not set option \"%s\" as a global option", option.name);
+		throw InvalidInputException("Could not set option \"%s\" as a global option", option.name);
 	}
 	D_ASSERT(option.reset_global);
 	Value input = value.DefaultCastAs(option.parameter_type);
@@ -231,6 +238,20 @@ void DBConfig::SetDefaultMaxMemory() {
 	if (memory != DConstants::INVALID_INDEX) {
 		options.maximum_memory = memory * 8 / 10;
 	}
+}
+
+void DBConfig::CheckLock(const string &name) {
+	if (!options.lock_configuration) {
+		// not locked
+		return;
+	}
+	case_insensitive_set_t allowed_settings {"schema", "search_path"};
+	if (allowed_settings.find(name) != allowed_settings.end()) {
+		// we are always allowed to change these settings
+		return;
+	}
+	// not allowed!
+	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
 }
 
 idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {

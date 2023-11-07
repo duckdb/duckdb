@@ -2,8 +2,8 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -116,64 +116,6 @@ void JSONScanData::SetCompression(const string &compression) {
 	options.compression = EnumUtil::FromString<FileCompressionType>(StringUtil::Upper(compression));
 }
 
-void JSONScanData::Serialize(FieldWriter &writer) const {
-	writer.WriteField<JSONScanType>(type);
-
-	options.Serialize(writer);
-
-	writer.WriteSerializable(reader_bind);
-
-	writer.WriteList<string>(files);
-
-	writer.WriteField<bool>(ignore_errors);
-	writer.WriteField<idx_t>(maximum_object_size);
-	writer.WriteField<bool>(auto_detect);
-	writer.WriteField<idx_t>(sample_size);
-	writer.WriteField<idx_t>(max_depth);
-
-	transform_options.Serialize(writer);
-	writer.WriteList<string>(names);
-	if (!date_format.empty()) {
-		writer.WriteString(date_format);
-	} else if (date_format_map.HasFormats(LogicalTypeId::DATE)) {
-		writer.WriteString(date_format_map.GetFormat(LogicalTypeId::DATE).format_specifier);
-	} else {
-		writer.WriteString("");
-	}
-	if (!timestamp_format.empty()) {
-		writer.WriteString(timestamp_format);
-	} else if (date_format_map.HasFormats(LogicalTypeId::TIMESTAMP)) {
-		writer.WriteString(date_format_map.GetFormat(LogicalTypeId::TIMESTAMP).format_specifier);
-	} else {
-		writer.WriteString("");
-	}
-}
-
-void JSONScanData::Deserialize(ClientContext &context, FieldReader &reader) {
-	type = reader.ReadRequired<JSONScanType>();
-
-	options.Deserialize(reader);
-
-	reader_bind = reader.ReadRequiredSerializable<MultiFileReaderBindData, MultiFileReaderBindData>();
-
-	files = reader.ReadRequiredList<string>();
-	InitializeReaders(context);
-
-	ignore_errors = reader.ReadRequired<bool>();
-	maximum_object_size = reader.ReadRequired<idx_t>();
-	auto_detect = reader.ReadRequired<bool>();
-	sample_size = reader.ReadRequired<idx_t>();
-	max_depth = reader.ReadRequired<idx_t>();
-
-	transform_options.Deserialize(reader);
-	names = reader.ReadRequiredList<string>();
-	date_format = reader.ReadRequired<string>();
-	timestamp_format = reader.ReadRequired<string>();
-
-	InitializeFormats();
-	transform_options.date_format_map = &date_format_map;
-}
-
 string JSONScanData::GetDateFormat() const {
 	if (!date_format.empty()) {
 		return date_format;
@@ -272,15 +214,20 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 
 idx_t JSONGlobalTableFunctionState::MaxThreads() const {
 	auto &bind_data = state.bind_data;
-	if (bind_data.options.format == JSONFormat::NEWLINE_DELIMITED) {
-		return state.system_threads;
-	}
 
 	if (!state.json_readers.empty() && state.json_readers[0]->HasFileHandle()) {
+		// We opened and auto-detected a file, so we can get a better estimate
 		auto &reader = *state.json_readers[0];
-		if (reader.GetFormat() == JSONFormat::NEWLINE_DELIMITED) { // Auto-detected NDJSON
-			return state.system_threads;
+		if (bind_data.options.format == JSONFormat::NEWLINE_DELIMITED ||
+		    reader.GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
+			return MaxValue<idx_t>(state.json_readers[0]->GetFileHandle().FileSize() / bind_data.maximum_object_size,
+			                       1);
 		}
+	}
+
+	if (bind_data.options.format == JSONFormat::NEWLINE_DELIMITED) {
+		// We haven't opened any files, so this is our best bet
+		return state.system_threads;
 	}
 
 	// One reader per file
@@ -616,10 +563,8 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		if (current_reader) {
 			// If we performed the final read of this reader in the previous iteration, close it now
 			if (is_last) {
-				if (gstate.bind_data.type != JSONScanType::SAMPLE) {
-					TryIncrementFileIndex(gstate);
-					current_reader->CloseJSONFile();
-				}
+				TryIncrementFileIndex(gstate);
+				current_reader->CloseJSONFile();
 				current_reader = nullptr;
 				continue;
 			}
@@ -988,26 +933,17 @@ void JSONScan::ComplexFilterPushdown(ClientContext &context, LogicalGet &get, Fu
 	}
 }
 
-void JSONScan::Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &) {
-	auto &bind_data = bind_data_p->Cast<JSONScanData>();
-	bind_data.Serialize(writer);
-}
-
-unique_ptr<FunctionData> JSONScan::Deserialize(PlanDeserializationState &state, FieldReader &reader, TableFunction &) {
-	auto result = make_uniq<JSONScanData>();
-	result->Deserialize(state.context, reader);
-	return std::move(result);
-}
-
-void JSONScan::FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                               const TableFunction &) {
+void JSONScan::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p, const TableFunction &) {
 	auto &bind_data = bind_data_p->Cast<JSONScanData>();
 	serializer.WriteProperty(100, "scan_data", &bind_data);
 }
 
-unique_ptr<FunctionData> JSONScan::FormatDeserialize(FormatDeserializer &deserializer, TableFunction &) {
+unique_ptr<FunctionData> JSONScan::Deserialize(Deserializer &deserializer, TableFunction &) {
 	unique_ptr<JSONScanData> result;
 	deserializer.ReadProperty(100, "scan_data", result);
+	result->InitializeReaders(deserializer.Get<ClientContext &>());
+	result->InitializeFormats();
+	result->transform_options.date_format_map = &result->date_format_map;
 	return std::move(result);
 }
 
@@ -1025,8 +961,6 @@ void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 
 	table_function.serialize = Serialize;
 	table_function.deserialize = Deserialize;
-	table_function.format_serialize = FormatSerialize;
-	table_function.format_deserialize = FormatDeserialize;
 
 	table_function.projection_pushdown = true;
 	table_function.filter_pushdown = false;

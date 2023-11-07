@@ -97,9 +97,14 @@ void CSVSniffer::DetectHeader() {
 	bool first_row_consistent = true;
 	// check if header row is all null and/or consistent with detected column data types
 	bool first_row_nulls = true;
-	// This case will fail in dialect detection, so we assert here just for sanity
-	D_ASSERT(best_candidate->options.null_padding ||
-	         best_sql_types_candidates_per_column_idx.size() == best_header_row.size());
+	// If null-padding is not allowed and there is a mismatch between our header candidate and the number of columns
+	// We can't detect the dialect/type options properly
+	if (!best_candidate->options.null_padding &&
+	    best_sql_types_candidates_per_column_idx.size() != best_header_row.size()) {
+		throw InvalidInputException(
+		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
+		    options.file_path);
+	}
 	for (idx_t col = 0; col < best_header_row.size(); col++) {
 		auto dummy_val = best_header_row[col];
 		if (!dummy_val.IsNull()) {
@@ -148,12 +153,18 @@ void CSVSniffer::DetectHeader() {
 			names.push_back(col_name);
 			name_collision_count[col_name] = 0;
 		}
+		if (best_header_row.size() < best_candidate->dialect_options.num_cols && options.null_padding) {
+			for (idx_t col = best_header_row.size(); col < best_candidate->dialect_options.num_cols; col++) {
+				names.push_back(GenerateColumnName(best_candidate->dialect_options.num_cols, col));
+			}
+		} else if (best_header_row.size() < best_candidate->dialect_options.num_cols) {
+			throw InternalException("Detected header has number of columns inferior to dialect detection");
+		}
 
 	} else {
 		best_candidate->dialect_options.header = false;
 		for (idx_t col = 0; col < best_candidate->dialect_options.num_cols; col++) {
-			string column_name = GenerateColumnName(best_candidate->dialect_options.num_cols, col);
-			names.push_back(column_name);
+			names.push_back(GenerateColumnName(best_candidate->dialect_options.num_cols, col));
 		}
 	}
 

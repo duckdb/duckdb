@@ -482,7 +482,7 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 
 	lock_guard<mutex> lock(gstate.lock);
 	gstate.insert_count += append_count;
-	if (append_count < RowGroup::ROW_GROUP_SIZE) {
+	if (append_count < Storage::ROW_GROUP_SIZE) {
 		// we have few rows - append to the local storage directly
 		auto &table = gstate.table;
 		auto &storage = table.GetStorage();

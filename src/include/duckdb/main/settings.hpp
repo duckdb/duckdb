@@ -508,7 +508,7 @@ struct SchemaSetting {
 struct SearchPathSetting {
 	static constexpr const char *Name = "search_path";
 	static constexpr const char *Description =
-	    "Sets the default search search path as a comma-separated list of values";
+	    "Sets the default catalog search path as a comma-separated list of values";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);

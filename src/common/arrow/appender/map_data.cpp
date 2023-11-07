@@ -52,33 +52,38 @@ void ArrowMapData::Append(ArrowAppendData &append_data, Vector &input, idx_t fro
 
 void ArrowMapData::Finalize(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result) {
 	// set up the main map buffer
+	D_ASSERT(result);
 	result->n_buffers = 2;
 	result->buffers[1] = append_data.main_buffer.data();
 
 	// the main map buffer has a single child: a struct
-	append_data.child_pointers.resize(1);
+	ArrowAppender::AddChildren(append_data, 1);
 	result->children = append_data.child_pointers.data();
 	result->n_children = 1;
-	append_data.child_pointers[0] = ArrowAppender::FinalizeChild(type, *append_data.child_data[0]);
 
-	// now that struct has two children: the key and the value type
 	auto &struct_data = *append_data.child_data[0];
-	auto &struct_result = append_data.child_pointers[0];
-	struct_data.child_pointers.resize(2);
-	struct_result->n_buffers = 1;
-	struct_result->n_children = 2;
-	struct_result->length = struct_data.child_data[0]->row_count;
+	auto struct_result = ArrowAppender::FinalizeChild(type, std::move(append_data.child_data[0]));
+
+	// Initialize the struct array data
+	const auto struct_child_count = 2;
+	ArrowAppender::AddChildren(struct_data, struct_child_count);
 	struct_result->children = struct_data.child_pointers.data();
+	struct_result->n_buffers = 1;
+	struct_result->n_children = struct_child_count;
+	struct_result->length = struct_data.child_data[0]->row_count;
+
+	append_data.child_arrays[0] = *struct_result;
 
 	D_ASSERT(struct_data.child_data[0]->row_count == struct_data.child_data[1]->row_count);
 
 	auto &key_type = MapType::KeyType(type);
 	auto &value_type = MapType::ValueType(type);
-	struct_data.child_pointers[0] = ArrowAppender::FinalizeChild(key_type, *struct_data.child_data[0]);
-	struct_data.child_pointers[1] = ArrowAppender::FinalizeChild(value_type, *struct_data.child_data[1]);
+	auto key_data = ArrowAppender::FinalizeChild(key_type, std::move(struct_data.child_data[0]));
+	struct_data.child_arrays[0] = *key_data;
+	struct_data.child_arrays[1] = *ArrowAppender::FinalizeChild(value_type, std::move(struct_data.child_data[1]));
 
 	// keys cannot have null values
-	if (struct_data.child_pointers[0]->null_count > 0) {
+	if (key_data->null_count > 0) {
 		throw std::runtime_error("Arrow doesn't accept NULL keys on Maps");
 	}
 }

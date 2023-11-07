@@ -119,7 +119,6 @@ NULL	NULL
 NULL	NULL
 NULL	NULL
 
-# ICU loses accuracy far from the epoch
 query II
 SELECT microsecond(ts), microsecond(ts::TIMESTAMP) FROM timestamps;
 ----
@@ -328,23 +327,24 @@ NULL	NULL
 query II
 SELECT epoch(ts), epoch(ts::TIMESTAMP) FROM timestamps;
 ----
--63517962378	-63517990756
--234185951	-234211151
-1609459200	1609430400
-1612224000	1612195200
-1637921713	1637892913
-1636972200	1636943400
-1636968600	1636939800
-1640383200	1640354400
+-63517962378.012344	-63517990756.012344
+-234185951.876544	-234211151.876544
+1609459200.0	1609430400.0
+1612224000.0	1612195200.0
+1637921713.123456	1637892913.123456
+1636972200.0	1636943400.0
+1636968600.0	1636939800.0
+1640383200.0	1640354400.0
 NULL	NULL
 NULL	NULL
 NULL	NULL
 
 query III
-SELECT date_part(part, ts), date_part(part, ts::TIMESTAMP), part FROM timestamps;
+SELECT date_part(part, ts), date_part(part, ts::TIMESTAMP), part 
+FROM timestamps
+WHERE part NOT IN ('epoch', 'julian')
 ----
 0	0	era
--234185951	-234211151	epoch
 2020	2020	year
 2	2	month
 13123456	13123456	microsecond
@@ -665,14 +665,14 @@ ORDER BY 2
 ----
 NULL	NULL
 {'epoch': NULL, 'second': NULL, 'timezone': NULL, 'timezone_hour': NULL, 'timezone_minute': NULL}	-infinity
-{'epoch': -63517962378, 'second': 43, 'timezone': -28378, 'timezone_hour': -7, 'timezone_minute': -52}	0044-03-13 (BC) 01:40:43.987654-07:52
-{'epoch': -234185951, 'second': 48, 'timezone': -25200, 'timezone_hour': -7, 'timezone_minute': 0}	1962-07-31 05:20:48.123456-07
-{'epoch': 1609459200, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2020-12-31 16:00:00-08
-{'epoch': 1612224000, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-02-01 16:00:00-08
-{'epoch': 1636968600, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-15 01:30:00-08
-{'epoch': 1636972200, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-15 02:30:00-08
-{'epoch': 1637921713, 'second': 13, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-26 02:15:13.123456-08
-{'epoch': 1640383200, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-12-24 14:00:00-08
+{'epoch': -63517962378.012344, 'second': 43, 'timezone': -28378, 'timezone_hour': -7, 'timezone_minute': -52}	0044-03-13 (BC) 01:40:43.987654-07:52
+{'epoch': -234185951.876544, 'second': 48, 'timezone': -25200, 'timezone_hour': -7, 'timezone_minute': 0}	1962-07-31 05:20:48.123456-07
+{'epoch': 1609459200.0, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2020-12-31 16:00:00-08
+{'epoch': 1612224000.0, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-02-01 16:00:00-08
+{'epoch': 1636968600.0, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-15 01:30:00-08
+{'epoch': 1636972200.0, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-15 02:30:00-08
+{'epoch': 1637921713.123456, 'second': 13, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-26 02:15:13.123456-08
+{'epoch': 1640383200.0, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-12-24 14:00:00-08
 {'epoch': NULL, 'second': NULL, 'timezone': NULL, 'timezone_hour': NULL, 'timezone_minute': NULL}	infinity
 
 # Correctness: Compare struct values with scalar values

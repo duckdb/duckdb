@@ -17,6 +17,7 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 	Vector string_vector(LogicalType::VARCHAR);
 
 	// Loop through the files (if union_by_name, else just sample the first file)
+	idx_t remaining = bind_data.sample_size;
 	for (idx_t file_idx = 0; file_idx < bind_data.files.size(); file_idx++) {
 		// Create global/local state and place the reader in the right field
 		JSONScanGlobalState gstate(context, bind_data);
@@ -28,7 +29,6 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 		}
 
 		// Read and detect schema
-		idx_t remaining = bind_data.sample_size;
 		while (remaining != 0) {
 			allocator.Reset();
 			auto read_count = lstate.ReadNext(gstate);
@@ -56,7 +56,11 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 		}
 
 		// Close the file and stop detection if not union_by_name
-		if (!bind_data.options.file_options.union_by_name) {
+		if (bind_data.options.file_options.union_by_name) {
+			// When union_by_name=true we sample sample_size per file
+			remaining = bind_data.sample_size;
+		} else if (remaining == 0) {
+			// When union_by_name=false, we sample sample_size in total (across the first files)
 			break;
 		}
 	}
@@ -224,6 +228,21 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	transform_options.error_missing_key = false;
 	transform_options.error_unknown_key = bind_data->auto_detect && !bind_data->ignore_errors;
 	transform_options.delay_error = true;
+
+	if (bind_data->auto_detect) {
+		// JSON may contain columns such as "id" and "Id", which are duplicates for us due to case-insensitivity
+		// We rename them so we can parse the file anyway. Note that we can't change bind_data->names,
+		// because the JSON reader gets columns by exact name, not position
+		case_insensitive_map_t<idx_t> name_count_map;
+		for (auto &name : names) {
+			auto it = name_count_map.find(name);
+			if (it == name_count_map.end()) {
+				name_count_map[name] = 1;
+			} else {
+				name = StringUtil::Format("%s_%llu", name, it->second++);
+			}
+		}
+	}
 
 	return std::move(bind_data);
 }

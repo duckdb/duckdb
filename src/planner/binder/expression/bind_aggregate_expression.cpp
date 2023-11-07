@@ -86,7 +86,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	this->bound_aggregate = true;
 	unique_ptr<Expression> bound_filter;
 	AggregateBinder aggregate_binder(binder, context);
-	string error, filter_error;
+	string error;
 
 	// Now we bind the filter (if any)
 	if (aggr.filter) {
@@ -166,9 +166,6 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		}
 	} else if (depth > 0 && !aggregate_binder.HasBoundColumns()) {
 		return BindResult("Aggregate with only constant parameters has to be bound in the root subquery");
-	}
-	if (!filter_error.empty()) {
-		return BindResult(filter_error);
 	}
 
 	if (aggr.filter) {

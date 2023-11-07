@@ -102,6 +102,9 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
 	    .def("count", &DuckDBPyRelation::Count, "Computes the number of elements present in a given column",
 	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("value_counts", &DuckDBPyRelation::ValueCounts,
+	         "Computes the number of elements present in a given column, also projecting the original column",
+	         py::arg("column"), py::arg("groups") = "")
 	    .def("favg", &DuckDBPyRelation::FAvg,
 	         "Computes the average of all values present in a given column using a more accurate floating point "
 	         "summation (Kahan Sum)",
@@ -222,16 +225,19 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	                    "Get a projection relation created from this relation, on the provided column name",
 	                    py::arg("name"));
 
-	relation_module
-	    .def("filter", &DuckDBPyRelation::Filter, "Filter the relation object by the filter in filter_expr",
-	         py::arg("filter_expr"))
-	    .def("project", &DuckDBPyRelation::Project, "Project the relation object by the projection in project_expr",
-	         py::arg("project_expr"));
+	relation_module.def("filter", &DuckDBPyRelation::Filter, "Filter the relation object by the filter in filter_expr",
+	                    py::arg("filter_expr"));
+	DefineMethod({"select", "project"}, relation_module, &DuckDBPyRelation::Project,
+	             "Project the relation object by the projection in project_expr");
 	DefineMethod({"select_types", "select_dtypes"}, relation_module, &DuckDBPyRelation::ProjectFromTypes,
 	             "Select columns from the relation, by filtering based on type(s)", py::arg("types"));
+
+	relation_module.def("__contains__", &DuckDBPyRelation::ContainsColumnByName, py::arg("name"));
+
 	relation_module
 	    .def("set_alias", &DuckDBPyRelation::SetAlias, "Rename the relation object to new alias", py::arg("alias"))
 	    .def("order", &DuckDBPyRelation::Order, "Reorder the relation object by order_expr", py::arg("order_expr"))
+	    .def("sort", &DuckDBPyRelation::Sort, "Reorder the relation object by the provided expressions")
 	    .def("aggregate", &DuckDBPyRelation::Aggregate,
 	         "Compute the aggregate aggr_expr by the optional groups group_expr on the relation", py::arg("aggr_expr"),
 	         py::arg("group_expr") = "")
@@ -271,7 +277,9 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	relation_module
 	    .def("map", &DuckDBPyRelation::Map, py::arg("map_function"), py::kw_only(), py::arg("schema") = py::none(),
 	         "Calls the passed function on the relation")
-	    .def("show", &DuckDBPyRelation::Print, "Display a summary of the data")
+	    .def("show", &DuckDBPyRelation::Print, "Display a summary of the data", py::kw_only(),
+	         py::arg("max_width") = py::none(), py::arg("max_rows") = py::none(), py::arg("max_col_width") = py::none(),
+	         py::arg("null_value") = py::none(), py::arg("render_mode") = py::none())
 	    .def("__str__", &DuckDBPyRelation::ToString)
 	    .def("__repr__", &DuckDBPyRelation::ToString);
 

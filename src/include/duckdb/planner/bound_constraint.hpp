@@ -10,7 +10,6 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/parser/constraint.hpp"
-#include "duckdb/common/serializer.hpp"
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {

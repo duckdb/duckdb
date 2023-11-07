@@ -5,7 +5,7 @@ import duckdb
 
 
 class TestMultipleResultSets(object):
-    def test_regular_selection(self, duckdb_cursor):
+    def test_regular_selection(self, duckdb_cursor, integers):
         duckdb_cursor.execute('SELECT * FROM integers')
         duckdb_cursor.execute('SELECT * FROM integers')
         result = duckdb_cursor.fetchall()
@@ -23,7 +23,7 @@ class TestMultipleResultSets(object):
             (None,),
         ], "Incorrect result returned"
 
-    def test_numpy_selection(self, duckdb_cursor):
+    def test_numpy_selection(self, duckdb_cursor, integers):
         duckdb_cursor.execute('SELECT * FROM integers')
         duckdb_cursor.execute('SELECT * FROM integers')
         result = duckdb_cursor.fetchnumpy()
@@ -31,7 +31,7 @@ class TestMultipleResultSets(object):
 
         numpy.testing.assert_array_equal(result['i'], expected)
 
-    def test_numpy_materialized(self, duckdb_cursor):
+    def test_numpy_materialized(self, duckdb_cursor, integers):
         connection = duckdb.connect('')
         cursor = connection.cursor()
         cursor.execute('CREATE TABLE integers (i integer)')

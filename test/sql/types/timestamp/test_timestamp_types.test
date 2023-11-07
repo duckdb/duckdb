@@ -65,27 +65,19 @@ select milli::TIME from timestamp;
 statement error
 select nano::TIME from timestamp;
 
-# Some timestamp direct conversions are not yet supported
-statement error
-select sec::TIMESTAMP_MS from timestamp;
+# Direct timestamp promotions
+foreach src sec milli micro nano
 
-statement error
-select sec::TIMESTAMP_NS from timestamp;
+foreach dst sec milli micro nano
 
+statement ok
+SELECT ${src}, ${dst} 
+FROM timestamp 
+WHERE ${src} = ${dst} ;
 
-statement error
-select milli::TIMESTAMP_SEC from timestamp;
+endloop
 
-
-statement error
-select milli::TIMESTAMP_NS from timestamp;
-
-
-statement error
-select nano::TIMESTAMP_SEC from timestamp;
-
-statement error
-select nano::TIMESTAMP_MS from timestamp;
+endloop
 
 #Sorting on the timestamps
 query T
@@ -195,23 +187,33 @@ select '2008-01-01 00:00:11.1'::TIMESTAMP_US = '2008-01-01 00:00:11.1'::TIMESTAM
 ----
 false
 
-# Missing casts
-statement error
+# Precision casts
+query I
 select '2008-01-01 00:00:11.1'::TIMESTAMP_MS = '2008-01-01 00:00:11'::TIMESTAMP_NS
+----
+false
 
-
-statement error
+query I
 select '2008-01-01 00:00:11.1'::TIMESTAMP_MS = '2008-01-01 00:00:11'::TIMESTAMP_S
+----
+false
 
-
-statement error
+query I
 select '2008-01-01 00:00:11.1'::TIMESTAMP_NS = '2008-01-01 00:00:11'::TIMESTAMP_S
+----
+false
 
-statement error
+query I
 select '2008-01-01 00:00:11'::TIMESTAMP_MS = '2008-01-01 00:00:11'::TIMESTAMP_NS
+----
+true
 
-statement error
+query I
 select '2008-01-01 00:00:11'::TIMESTAMP_MS = '2008-01-01 00:00:11'::TIMESTAMP_S
+----
+true
 
-statement error
+query I
 select '2008-01-01 00:00:11'::TIMESTAMP_NS = '2008-01-01 00:00:11'::TIMESTAMP_S
+----
+true

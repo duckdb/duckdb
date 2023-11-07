@@ -49,11 +49,12 @@ bool ParallelCSVReader::NewLineDelimiter(bool carry, bool carry_followed_by_nl, 
 	return (carry && carry_followed_by_nl) || (!carry && first_char);
 }
 
-void ParallelCSVReader::SkipEmptyLines() {
+bool ParallelCSVReader::SkipEmptyLines() {
+	const idx_t initial_position_buffer = position_buffer;
 	idx_t new_pos_buffer = position_buffer;
 	if (parse_chunk.data.size() == 1) {
 		// Empty lines are null data.
-		return;
+		return initial_position_buffer != position_buffer;
 	}
 	for (; new_pos_buffer < end_buffer; new_pos_buffer++) {
 		if (StringUtil::CharacterIsNewline((*buffer)[new_pos_buffer])) {
@@ -63,13 +64,14 @@ void ParallelCSVReader::SkipEmptyLines() {
 				position_buffer++;
 			}
 			if (new_pos_buffer > end_buffer) {
-				return;
+				return initial_position_buffer != position_buffer;
 			}
 			position_buffer = new_pos_buffer;
 		} else if ((*buffer)[new_pos_buffer] != ' ') {
-			return;
+			return initial_position_buffer != position_buffer;
 		}
 	}
+	return initial_position_buffer != position_buffer;
 }
 
 bool ParallelCSVReader::SetPosition() {
@@ -89,17 +91,19 @@ bool ParallelCSVReader::SetPosition() {
 						position_buffer++;
 					}
 					if (position_buffer > end_buffer) {
+						VerifyLineLength(position_buffer, buffer->batch_index);
 						return false;
 					}
 					SkipEmptyLines();
 					if (verification_positions.beginning_of_first_line == 0) {
 						verification_positions.beginning_of_first_line = position_buffer;
 					}
-
+					VerifyLineLength(position_buffer, buffer->batch_index);
 					verification_positions.end_of_last_line = position_buffer;
 					return true;
 				}
 			}
+			VerifyLineLength(position_buffer, buffer->batch_index);
 			return false;
 		}
 		SkipEmptyLines();
@@ -143,12 +147,13 @@ bool ParallelCSVReader::SetPosition() {
 			break;
 		}
 
-		if (position_buffer >= end_buffer && !StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1])) {
+		auto pos_check = position_buffer == 0 ? position_buffer : position_buffer - 1;
+		if (position_buffer >= end_buffer && !StringUtil::CharacterIsNewline((*buffer)[pos_check])) {
 			break;
 		}
 
 		if (position_buffer > end_buffer && options.dialect_options.new_line == NewLineIdentifier::CARRY_ON &&
-		    (*buffer)[position_buffer - 1] == '\n') {
+		    (*buffer)[pos_check] == '\n') {
 			break;
 		}
 		idx_t position_set = position_buffer;
@@ -182,7 +187,6 @@ bool ParallelCSVReader::SetPosition() {
 	}
 	// Ensure that parse_chunk has no gunk when trying to figure new line
 	parse_chunk.Reset();
-
 	verification_positions.end_of_last_line = position_buffer;
 	finished = false;
 	return successfully_read_first_line;
@@ -285,7 +289,7 @@ bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error
 	idx_t column = 0;
 	idx_t offset = 0;
 	bool has_quotes = false;
-
+	bool last_line_empty = false;
 	vector<idx_t> escape_positions;
 	if ((start_buffer == buffer->buffer_start || start_buffer == buffer->buffer_end) && !try_add_line) {
 		// First time reading this buffer piece
@@ -330,11 +334,23 @@ normal : {
 	for (; position_buffer < end_buffer; position_buffer++) {
 		auto c = (*buffer)[position_buffer];
 		if (c == options.dialect_options.state_machine_options.delimiter) {
+			// Check if previous character is a quote, if yes, this means we are in a non-initialized quoted value
+			// This only matters for when trying to figure out where csv lines start
+			if (position_buffer > 0 && try_add_line) {
+				if ((*buffer)[position_buffer - 1] == options.dialect_options.state_machine_options.quote) {
+					return false;
+				}
+			}
 			// delimiter: end the value and add it to the chunk
 			goto add_value;
-		} else if (c == options.dialect_options.state_machine_options.quote && try_add_line) {
-			return false;
 		} else if (StringUtil::CharacterIsNewline(c)) {
+			// Check if previous character is a quote, if yes, this means we are in a non-initialized quoted value
+			// This only matters for when trying to figure out where csv lines start
+			if (position_buffer > 0 && try_add_line) {
+				if ((*buffer)[position_buffer - 1] == options.dialect_options.state_machine_options.quote) {
+					return false;
+				}
+			}
 			// newline: add row
 			if (column > 0 || try_add_line || parse_chunk.data.size() == 1) {
 				goto add_row;
@@ -439,7 +455,10 @@ add_row : {
 		if (!BufferRemainder()) {
 			goto final_state;
 		}
-		SkipEmptyLines();
+		if (SkipEmptyLines() && reached_remainder_state) {
+			last_line_empty = true;
+			goto final_state;
+		}
 		if (position_buffer - verification_positions.end_of_last_line > options.buffer_size) {
 			error_message = "Line does not fit in one buffer. Increase the buffer size.";
 			return false;
@@ -568,8 +587,8 @@ final_state : {
 		return true;
 	}
 	// If this is the last buffer, we have to read the last value
-	if (buffer->buffer->is_last_buffer || !buffer->next_buffer ||
-	    (buffer->next_buffer && buffer->next_buffer->is_last_buffer)) {
+	if (!last_line_empty && (buffer->buffer->is_last_buffer || !buffer->next_buffer ||
+	                         (buffer->next_buffer && buffer->next_buffer->is_last_buffer))) {
 		if (column > 0 || start_buffer != position_buffer || try_add_line ||
 		    (insert_chunk.data.size() == 1 && start_buffer != position_buffer)) {
 			// remaining values to be added to the chunk
@@ -642,6 +661,10 @@ idx_t ParallelCSVReader::GetLineError(idx_t line_error, idx_t buffer_idx, bool s
 			return buffer->line_info->GetLine(buffer_idx, line_error, file_idx, cur_start, false, stop_at_first);
 		}
 	}
+}
+
+void ParallelCSVReader::Increment(idx_t buffer_idx) {
+	return buffer->line_info->Increment(file_idx, buffer_idx);
 }
 
 bool ParallelCSVReader::TryParseCSV(ParserMode mode) {

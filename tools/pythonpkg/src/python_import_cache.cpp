@@ -17,7 +17,11 @@ bool PythonImportCacheItem::LoadSucceeded() const {
 
 bool PythonImportCacheItem::IsLoaded() const {
 	auto type = (*this)();
-	return type.ptr() != nullptr;
+	bool loaded = type.ptr() != nullptr;
+	if (!loaded) {
+		return false;
+	}
+	return true;
 }
 
 py::handle PythonImportCacheItem::AddCache(PythonImportCache &cache, py::object object) {

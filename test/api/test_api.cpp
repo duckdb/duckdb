@@ -615,3 +615,27 @@ TEST_CASE("Test loading database with enable_external_access set to false", "[ap
 
 	REQUIRE_FAIL(con.Query("ATTACH 'mydb.db' AS external_access_test"));
 }
+
+TEST_CASE("Test insert returning in CPP API", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.Query("CREATE TABLE test(val VARCHAR);");
+
+	con.Query("INSERT INTO test(val) VALUES ('query_1')");
+	auto res = con.Query("INSERT INTO test(val) VALUES ('query_2') returning *");
+	REQUIRE(CHECK_COLUMN(res, 0, {"query_2"}));
+
+	con.Query("INSERT INTO test(val) VALUES (?);", "query_arg_1");
+	auto returning_args = con.Query("INSERT INTO test(val) VALUES (?) RETURNING *;", "query_arg_2");
+	REQUIRE(CHECK_COLUMN(returning_args, 0, {"query_arg_2"}));
+
+	con.Prepare("INSERT INTO test(val) VALUES (?);")->Execute("prepared_arg_1");
+	auto prepared_returning_args =
+	    con.Prepare("INSERT INTO test(val) VALUES (?) returning *;")->Execute("prepared_arg_2");
+	REQUIRE(CHECK_COLUMN(prepared_returning_args, 0, {"prepared_arg_2"}));
+
+	// make sure all inserts actually inserted
+	auto result = con.Query("SELECT * from test;");
+	REQUIRE(CHECK_COLUMN(result, 0,
+	                     {"query_1", "query_2", "query_arg_1", "query_arg_2", "prepared_arg_1", "prepared_arg_2"}));
+}

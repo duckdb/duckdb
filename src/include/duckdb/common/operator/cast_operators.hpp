@@ -632,6 +632,13 @@ struct CastTimestampMsToUs {
 	}
 };
 
+struct CastTimestampMsToNs {
+	template <class SRC, class DST>
+	static inline DST Operation(SRC input) {
+		throw duckdb::NotImplementedException("Cast to TIMESTAMP_NS could not be performed!");
+	}
+};
+
 struct CastTimestampNsToUs {
 	template <class SRC, class DST>
 	static inline DST Operation(SRC input) {
@@ -639,10 +646,24 @@ struct CastTimestampNsToUs {
 	}
 };
 
+struct CastTimestampSecToMs {
+	template <class SRC, class DST>
+	static inline DST Operation(SRC input) {
+		throw duckdb::NotImplementedException("Cast to TIMESTAMP_MS could not be performed!");
+	}
+};
+
 struct CastTimestampSecToUs {
 	template <class SRC, class DST>
 	static inline DST Operation(SRC input) {
 		throw duckdb::NotImplementedException("Cast to timestamp could not be performed!");
+	}
+};
+
+struct CastTimestampSecToNs {
+	template <class SRC, class DST>
+	static inline DST Operation(SRC input) {
+		throw duckdb::NotImplementedException("Cast to TIMESTAMP_NS could not be performed!");
 	}
 };
 
@@ -655,9 +676,15 @@ duckdb::timestamp_t CastTimestampUsToSec::Operation(duckdb::timestamp_t input);
 template <>
 duckdb::timestamp_t CastTimestampMsToUs::Operation(duckdb::timestamp_t input);
 template <>
+duckdb::timestamp_t CastTimestampMsToNs::Operation(duckdb::timestamp_t input);
+template <>
 duckdb::timestamp_t CastTimestampNsToUs::Operation(duckdb::timestamp_t input);
 template <>
+duckdb::timestamp_t CastTimestampSecToMs::Operation(duckdb::timestamp_t input);
+template <>
 duckdb::timestamp_t CastTimestampSecToUs::Operation(duckdb::timestamp_t input);
+template <>
+duckdb::timestamp_t CastTimestampSecToNs::Operation(duckdb::timestamp_t input);
 
 template <>
 duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_t input, Vector &result);

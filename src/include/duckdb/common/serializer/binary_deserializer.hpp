@@ -8,50 +8,64 @@
 
 #pragma once
 
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/encoding_util.hpp"
+#include "duckdb/common/serializer/read_stream.hpp"
 
 namespace duckdb {
 class ClientContext;
 
-class BinaryDeserializer : public FormatDeserializer {
+class BinaryDeserializer : public Deserializer {
 public:
+	explicit BinaryDeserializer(ReadStream &stream) : stream(stream) {
+		deserialize_enum_from_string = false;
+	}
+
 	template <class T>
 	unique_ptr<T> Deserialize() {
 		OnObjectBegin();
-		auto result = T::FormatDeserialize(*this);
+		auto result = T::Deserialize(*this);
 		OnObjectEnd();
 		D_ASSERT(nesting_level == 0); // make sure we are at the root level
 		return result;
 	}
 
 	template <class T>
-	static unique_ptr<T> Deserialize(data_ptr_t ptr, idx_t length) {
-		BinaryDeserializer deserializer(ptr, length);
+	static unique_ptr<T> Deserialize(ReadStream &stream) {
+		BinaryDeserializer deserializer(stream);
 		return deserializer.template Deserialize<T>();
 	}
 
 	template <class T>
-	static unique_ptr<T> Deserialize(ClientContext &context, bound_parameter_map_t &parameters, data_ptr_t ptr,
-	                                 idx_t length) {
-		BinaryDeserializer deserializer(ptr, length);
+	static unique_ptr<T> Deserialize(ReadStream &stream, ClientContext &context, bound_parameter_map_t &parameters) {
+		BinaryDeserializer deserializer(stream);
 		deserializer.Set<ClientContext &>(context);
 		deserializer.Set<bound_parameter_map_t &>(parameters);
 		return deserializer.template Deserialize<T>();
 	}
 
-private:
-	explicit BinaryDeserializer(data_ptr_t ptr, idx_t length) : ptr(ptr), end_ptr(ptr + length) {
-		deserialize_enum_from_string = false;
+	void Begin() {
+		OnObjectBegin();
 	}
 
-	data_ptr_t ptr;
-	data_ptr_t end_ptr;
+	void End() {
+		OnObjectEnd();
+		D_ASSERT(nesting_level == 0); // make sure we are at the root level
+	}
+
+	ReadStream &GetStream() {
+		return stream;
+	}
+
+private:
+	ReadStream &stream;
 	idx_t nesting_level = 0;
 
 	// Allow peeking 1 field ahead
 	bool has_buffered_field = false;
 	field_id_t buffered_field = 0;
+
+private:
 	field_id_t PeekField() {
 		if (!has_buffered_field) {
 			buffered_field = ReadPrimitive<field_id_t>();
@@ -74,6 +88,10 @@ private:
 		return ReadPrimitive<field_id_t>();
 	}
 
+	void ReadData(data_ptr_t buffer, idx_t read_size) {
+		stream.ReadData(buffer, read_size);
+	}
+
 	template <class T>
 	T ReadPrimitive() {
 		T value;
@@ -81,19 +99,22 @@ private:
 		return value;
 	}
 
-	void ReadData(data_ptr_t buffer, idx_t read_size) {
-		if (ptr + read_size > end_ptr) {
-			throw InternalException("Failed to deserialize: not enough data in buffer to fulfill read request");
-		}
-		memcpy(buffer, ptr, read_size);
-		ptr += read_size;
-	}
-
 	template <class T>
 	T VarIntDecode() {
+		// FIXME: maybe we should pass a source to EncodingUtil instead
+		uint8_t buffer[16];
+		idx_t varint_size;
+		for (varint_size = 0; varint_size < 16; varint_size++) {
+			ReadData(buffer + varint_size, 1);
+			if (!(buffer[varint_size] & 0x80)) {
+				varint_size++;
+				break;
+			}
+		}
 		T value;
-		auto read_size = EncodingUtil::DecodeLEB128<T>(ptr, value);
-		ptr += read_size;
+		auto read_size = EncodingUtil::DecodeLEB128<T>(buffer, value);
+		D_ASSERT(read_size == varint_size);
+		(void)read_size;
 		return value;
 	}
 

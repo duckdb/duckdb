@@ -55,17 +55,8 @@ void CatalogEntry::Serialize(Serializer &serializer) const {
 	info->Serialize(serializer);
 }
 
-unique_ptr<CreateInfo> CatalogEntry::Deserialize(Deserializer &source) {
-	return CreateInfo::Deserialize(source);
-}
-
-void CatalogEntry::FormatSerialize(FormatSerializer &serializer) const {
-	const auto info = GetInfo();
-	info->FormatSerialize(serializer);
-}
-
-unique_ptr<CreateInfo> CatalogEntry::FormatDeserialize(FormatDeserializer &deserializer) {
-	return CreateInfo::FormatDeserialize(deserializer);
+unique_ptr<CreateInfo> CatalogEntry::Deserialize(Deserializer &deserializer) {
+	return CreateInfo::Deserialize(deserializer);
 }
 
 void CatalogEntry::Verify(Catalog &catalog_p) {

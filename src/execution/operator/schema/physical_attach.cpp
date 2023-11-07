@@ -56,7 +56,10 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 
 	// if we are loading a database type from an extension - check if that extension is loaded
 	if (!type.empty()) {
-		if (!db.ExtensionIsLoaded(type)) {
+		if (!Catalog::TryAutoLoad(context.client, type)) {
+			// FIXME: Here it might be preferrable to use an AutoLoadOrThrow kind of function
+			// so that either there will be success or a message to throw, and load will be
+			// attempted only once respecting the autoloading options
 			ExtensionHelper::LoadExternalExtension(context.client, type);
 		}
 	}

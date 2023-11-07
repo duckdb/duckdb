@@ -17,9 +17,6 @@ add_library_unity(
   logical_distinct.cpp
   logical_dummy_scan.cpp
   logical_empty_result.cpp
-  logical_execute.cpp
-  logical_explain.cpp
-  logical_export.cpp
   logical_expression_get.cpp
   logical_extension_operator.cpp
   logical_filter.cpp
@@ -40,7 +37,6 @@ add_library_unity(
   logical_set.cpp
   logical_reset.cpp
   logical_set_operation.cpp
-  logical_show.cpp
   logical_simple.cpp
   logical_top_n.cpp
   logical_unconditional_join.cpp

@@ -14,6 +14,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
+#include "duckdb/planner/bound_parameter_map.hpp"
 
 namespace duckdb {
 class CatalogEntry;

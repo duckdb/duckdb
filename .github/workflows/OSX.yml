@@ -16,7 +16,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/OSX.yml'
-      - '.github/config/uncovered_files.csv'
+
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
@@ -57,12 +57,14 @@ jobs:
       run: GEN=ninja make debug
 
     - name: Test
+      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       shell: bash
       run: |
           echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.dylib" | head -n 1)" >> $GITHUB_ENV
           make unittestci
 
     - name: Amalgamation
+      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       shell: bash
       run: |
         python scripts/amalgamation.py --extended
@@ -109,6 +111,10 @@ jobs:
           brew remove --ignore-dependencies unixodbc
           CFLAGS="-arch x86_64 -arch arm64" ./scripts/install_unixodbc.sh
 
+      - name: Install pytest
+        run: |
+          python -m pip install pytest
+
       - name: Build
         shell: bash
         run: make
@@ -119,15 +125,18 @@ jobs:
 
       - name: Unit Test
         shell: bash
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: make allunit
 
       - name: Tools Tests
         shell: bash
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: |
-          python tools/shell/shell-test.py build/release/duckdb
+          python -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
       - name: Examples
         shell: bash
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: |
           (cd examples/embedded-c; make)
           (cd examples/embedded-c++; make)
@@ -278,7 +287,7 @@ jobs:
 
       # Run autoload unittests (including the out-of-tree tests) without any extensions linked, relying on the autoloader
       - name: Run tests with auto loading
-        if: ${{ matrix.osx_arch == 'x86_64' }}
+        if: ${{ matrix.osx_arch == 'x86_64' && !startsWith(github.ref, 'refs/tags/v') }}
         shell: bash
         env:
           LOCAL_EXTENSION_REPO: ${{ github.workspace }}

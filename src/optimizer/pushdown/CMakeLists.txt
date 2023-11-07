@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   pushdown_aggregate.cpp
   pushdown_cross_product.cpp
+  pushdown_distinct.cpp
   pushdown_filter.cpp
   pushdown_get.cpp
   pushdown_inner_join.cpp

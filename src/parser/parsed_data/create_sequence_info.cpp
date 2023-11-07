@@ -24,35 +24,4 @@ unique_ptr<CreateInfo> CreateSequenceInfo::Copy() const {
 	return std::move(result);
 }
 
-void CreateSequenceInfo::SerializeInternal(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteString(name);
-	writer.WriteString(schema);
-	writer.WriteField(usage_count);
-	writer.WriteField(increment);
-	writer.WriteField(min_value);
-	writer.WriteField(max_value);
-	writer.WriteField(start_value);
-	writer.WriteField(cycle);
-	writer.Finalize();
-}
-
-unique_ptr<CreateSequenceInfo> CreateSequenceInfo::Deserialize(Deserializer &deserializer) {
-	auto result = make_uniq<CreateSequenceInfo>();
-	result->DeserializeBase(deserializer);
-
-	FieldReader reader(deserializer);
-	result->name = reader.ReadRequired<string>();
-	result->schema = reader.ReadRequired<string>();
-	result->usage_count = reader.ReadRequired<uint64_t>();
-	result->increment = reader.ReadRequired<int64_t>();
-	result->min_value = reader.ReadRequired<int64_t>();
-	result->max_value = reader.ReadRequired<int64_t>();
-	result->start_value = reader.ReadRequired<int64_t>();
-	result->cycle = reader.ReadRequired<bool>();
-	reader.Finalize();
-
-	return result;
-}
-
 } // namespace duckdb

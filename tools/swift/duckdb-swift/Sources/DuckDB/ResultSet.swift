@@ -46,9 +46,14 @@ public final class ResultSet: Sendable {
   
   /// The total number of rows in the result set
   public var rowCount: DBInt {
-    guard chunkCount > 0 else { return DBInt(0) }
-    let lastChunk = dataChunk(at: chunkCount - 1)
-    return (chunkCount - 1) * Vector.vectorSize + lastChunk.count
+    var count = DBInt.zero
+    var chunkIndex = DBInt.zero
+    while chunkIndex < chunkCount {
+      let chunk = dataChunk(at: chunkIndex)
+      count += chunk.count
+      chunkIndex += 1
+    }
+    return count
   }
   
   private let ptr = UnsafeMutablePointer<duckdb_result>.allocate(capacity: 1)
@@ -260,12 +265,22 @@ private extension ResultSet {
       }
     }
     return { [self] itemIndex in
-      let chunkIndex = itemIndex / Vector.vectorSize
-      let rowIndex = itemIndex % Vector.vectorSize
-      let chunk = dataChunk(at: chunkIndex)
-      return chunk.withVector(at: columnIndex) { vector in
-        body(vector[Int(rowIndex)])
+      var chunkIndex = DBInt.zero
+      var chunkRowOffset = DBInt.zero
+      while chunkIndex < chunkCount {
+        let chunk = dataChunk(at: chunkIndex)
+        let chunkCount = chunk.count
+        if itemIndex < chunkRowOffset + chunkCount {
+          return chunk.withVector(at: columnIndex) { vector in
+            body(vector[Int(itemIndex - chunkRowOffset)])
+          }
+        }
+        else {
+          chunkIndex += 1
+          chunkRowOffset += chunkCount
+        }
       }
+      preconditionFailure("item out of bounds")
     }
   }
 }

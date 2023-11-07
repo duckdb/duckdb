@@ -89,7 +89,7 @@ public:
 private:
 	ClientContext &context;
 	//! Actual size can be smaller than the buffer size in case we allocate it too optimistically.
-	idx_t file_size;
+	idx_t actual_buffer_size;
 	//! We need to check for Byte Order Mark, to define the start position of this buffer
 	//! https://en.wikipedia.org/wiki/Byte_order_mark#UTF-8
 	idx_t start_position = 0;

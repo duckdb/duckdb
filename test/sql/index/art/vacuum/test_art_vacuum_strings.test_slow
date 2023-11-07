@@ -5,8 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-load __TEST_DIR__/test_art_vacuum_strings.db
-
 statement ok
 CREATE FUNCTION mem_to_bytes(x) AS CASE
     WHEN CONTAINS(x, 'KB') THEN REPLACE(x, 'KB', '')::INT * 1000
@@ -59,15 +57,7 @@ statement ok
 CREATE INDEX idx ON t(i);
 
 query I
-SELECT mem_to_bytes(current.memory_usage) > 5 * base.usage AND mem_to_bytes(current.memory_usage) < 11 * base.usage
-FROM base, pragma_database_size() current;
-----
-1
-
-restart
-
-query I
-SELECT mem_to_bytes(current.memory_usage) < base.usage
+SELECT mem_to_bytes(current.memory_usage) > 2 * base.usage AND mem_to_bytes(current.memory_usage) < 3 * base.usage
 FROM base, pragma_database_size() current;
 ----
 1
@@ -77,9 +67,8 @@ FROM base, pragma_database_size() current;
 statement ok
 INSERT INTO t SELECT (range * 4) || 'I am' || (range * 4) || 'a long not' || (range * 4) || 'inlined string' || (range * 4) FROM range(100000) AS range;
 
-# NOTE: the table itselt also takes up significant memory
 query I
-SELECT mem_to_bytes(current.memory_usage) > 10 * base.usage AND mem_to_bytes(current.memory_usage) < 26 * base.usage
+SELECT mem_to_bytes(current.memory_usage) > 4 * base.usage AND mem_to_bytes(current.memory_usage) < 6 * base.usage
 FROM base, pragma_database_size() current;
 ----
 1
@@ -137,14 +126,6 @@ DELETE FROM t;
 query I
 SELECT mem_to_bytes(current.memory_usage) <= db_size.usage
 FROM db_size, pragma_database_size() current;
-----
-1
-
-restart
-
-query I
-SELECT mem_to_bytes(current.memory_usage) <= base.usage
-FROM pragma_database_size() current, base;
 ----
 1
 

@@ -7,27 +7,27 @@ PRAGMA enable_verification
 
 # Mix of constant/non-constant aggregate (sum and lead over same OVER clause)
 query IIII
-SELECT part, id, sum(val) OVER(PARTITION BY part), lead(val) OVER(PARTITION BY part) 
+SELECT part, id, sum(val) OVER(PARTITION BY part ORDER BY id), lead(val) OVER(PARTITION BY part ORDER BY id)
 FROM (SELECT range AS id, range % 5 AS part, range AS val FROM range(13)) t
 ORDER BY ALL;
 ----
-0	0	15	5
-0	5	15	10
+0	0	0	5
+0	5	5	10
 0	10	15	NULL
-1	1	18	6
-1	6	18	11
+1	1	1	6
+1	6	7	11
 1	11	18	NULL
-2	2	21	7
-2	7	21	12
+2	2	2	7
+2	7	9	12
 2	12	21	NULL
-3	3	11	8
+3	3	3	8
 3	8	11	NULL
-4	4	13	9
+4	4	4	9
 4	9	13	NULL
 
 # Constant aggregate with non-simple_update 
 query III
-SELECT part, id, list(val) OVER(PARTITION BY part)
+SELECT part, id, list_sort(list(val) OVER(PARTITION BY part))
 FROM (SELECT range AS id, range % 5 AS part, range AS val FROM range(13)) t
 ORDER BY ALL;
 ----

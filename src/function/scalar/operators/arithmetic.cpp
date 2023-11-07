@@ -1,4 +1,3 @@
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
@@ -250,23 +249,22 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 	return std::move(bind_data);
 }
 
-static void SerializeDecimalArithmetic(FieldWriter &writer, const FunctionData *bind_data_p,
+static void SerializeDecimalArithmetic(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                        const ScalarFunction &function) {
 	auto &bind_data = bind_data_p->Cast<DecimalArithmeticBindData>();
-	writer.WriteField(bind_data.check_overflow);
-	writer.WriteSerializable(function.return_type);
-	writer.WriteRegularSerializableList(function.arguments);
+	serializer.WriteProperty(100, "check_overflow", bind_data.check_overflow);
+	serializer.WriteProperty(101, "return_type", function.return_type);
+	serializer.WriteProperty(102, "arguments", function.arguments);
 }
 
 // TODO this is partially duplicated from the bind
 template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
-unique_ptr<FunctionData> DeserializeDecimalArithmetic(PlanDeserializationState &state, FieldReader &reader,
-                                                      ScalarFunction &bound_function) {
-	// re-change the function pointers
-	auto check_overflow = reader.ReadRequired<bool>();
-	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto arguments = reader.template ReadRequiredSerializableList<LogicalType, LogicalType>();
+unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer, ScalarFunction &bound_function) {
 
+	//	// re-change the function pointers
+	auto check_overflow = deserializer.ReadProperty<bool>(100, "check_overflow");
+	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
+	auto arguments = deserializer.ReadProperty<vector<LogicalType>>(102, "arguments");
 	if (check_overflow) {
 		bound_function.function = GetScalarBinaryFunction<OPOVERFLOWCHECK>(return_type.InternalType());
 	} else {

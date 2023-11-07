@@ -4,6 +4,8 @@
 
 # test issue #7760
 
+require 64bit
+
 require vector_size 2048
 
 statement ok

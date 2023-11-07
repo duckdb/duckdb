@@ -292,7 +292,11 @@ void RLESkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
 	scan_state.Skip(segment, skip_count);
 }
 
+template <bool ENTIRE_VECTOR>
 static bool CanEmitConstantVector(idx_t position, idx_t run_length, idx_t scan_count) {
+	if (!ENTIRE_VECTOR) {
+		return false;
+	}
 	if (scan_count != STANDARD_VECTOR_SIZE) {
 		// Only when we can fill an entire Vector can we emit a ConstantVector, because subsequent scans require the
 		// input Vector to be flat
@@ -330,9 +334,9 @@ static void RLEScanConstant(RLEScanState<T> &scan_state, rle_count_t *index_poin
 	return;
 }
 
-template <class T>
-void RLEScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
-                    idx_t result_offset) {
+template <class T, bool ENTIRE_VECTOR>
+void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+                            idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
@@ -340,7 +344,8 @@ void RLEScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_c
 	auto index_pointer = reinterpret_cast<rle_count_t *>(data + scan_state.rle_count_offset);
 
 	// If we are scanning an entire Vector and it contains only a single run
-	if (CanEmitConstantVector(scan_state.position_in_entry, index_pointer[scan_state.entry_pos], scan_count)) {
+	if (CanEmitConstantVector<ENTIRE_VECTOR>(scan_state.position_in_entry, index_pointer[scan_state.entry_pos],
+	                                         scan_count)) {
 		RLEScanConstant<T>(scan_state, index_pointer, data_pointer, scan_count, result);
 		return;
 	}
@@ -358,8 +363,14 @@ void RLEScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_c
 }
 
 template <class T>
+void RLEScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+                    idx_t result_offset) {
+	return RLEScanPartialInternal<T, false>(segment, state, scan_count, result, result_offset);
+}
+
+template <class T>
 void RLEScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	RLEScanPartial<T>(segment, state, scan_count, result, 0);
+	RLEScanPartialInternal<T, true>(segment, state, scan_count, result, 0);
 }
 
 //===--------------------------------------------------------------------===//

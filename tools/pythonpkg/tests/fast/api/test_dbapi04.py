@@ -2,7 +2,7 @@
 
 
 class TestSimpleDBAPI(object):
-    def test_regular_selection(self, duckdb_cursor):
+    def test_regular_selection(self, duckdb_cursor, integers):
         duckdb_cursor.execute('SELECT * FROM integers')
         result = duckdb_cursor.fetchall()
         assert result == [

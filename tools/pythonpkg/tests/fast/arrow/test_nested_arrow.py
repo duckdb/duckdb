@@ -100,24 +100,26 @@ class TestArrowNested(object):
         # Big Lists
         compare_results("SELECT a from (SELECT LIST(i) as a FROM range(10000) tbl(i)) as t")
         # Multiple Lists
-        compare_results("SELECT a from (SELECT LIST(i) as a FROM range(10000) tbl(i) group by i%10) as t")
+        compare_results("SELECT a from (SELECT LIST(i) as a FROM range(10000) tbl(i) group by i%10 order by all) as t")
         # Unique Constants
         compare_results("SELECT a from (SELECT list_value(1) as a FROM range(10) tbl(i)) as t")
         # Nested Lists
-        compare_results("SELECT LIST(le) FROM (SELECT LIST(i) le from range(100) tbl(i) group by i%10) as t")
+        compare_results(
+            "SELECT LIST(le order by le) FROM (SELECT LIST(i order by i) le from range(100) tbl(i) group by i%10) as t"
+        )
 
         # LIST[LIST[LIST[LIST[LIST[INTEGER]]]]]]
         compare_results(
-            "SELECT list (lllle) llllle from (SELECT list (llle) lllle from (SELECT list(lle) llle from (SELECT LIST(le) lle FROM (SELECT LIST(i) le from range(100) tbl(i) group by i%10) as t) as t1) as t2) as t3"
+            "SELECT list (lllle order by lllle) llllle from (SELECT list (llle order by llle) lllle from (SELECT list(lle order by lle) llle from (SELECT LIST(le order by le) lle FROM (SELECT LIST(i order by i) le from range(100) tbl(i) group by i%10) as t) as t1) as t2) as t3"
         )
 
         compare_results(
             '''SELECT grp,lst,cs FROM (select grp, lst, case when grp>1 then lst else list_value(null) end as cs
-                        from (SELECT a%4 as grp, list(a) as lst FROM range(7) tbl(a) group by grp) as lst_tbl) as T;'''
+                        from (SELECT a%4 as grp, list(a order by a) as lst FROM range(7) tbl(a) group by grp) as lst_tbl) as T order by all;'''
         )
         # Tests for converting multiple lists to/from Arrow with NULL values and/or strings
         compare_results(
-            "SELECT list(st) from (select i, case when i%10 then NULL else i::VARCHAR end as st from range(1000) tbl(i)) as t group by i%5"
+            "SELECT list(st order by st) from (select i, case when i%10 then NULL else i::VARCHAR end as st from range(1000) tbl(i)) as t group by i%5 order by all"
         )
 
     def test_struct_roundtrip(self, duckdb_cursor):
@@ -147,7 +149,7 @@ class TestArrowNested(object):
         )
         compare_results("SELECT m from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(m)")
         compare_results(
-            "SELECT m from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10000) tbl(i) group by i%5) as lst_tbl) as T"
+            "SELECT m from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10000) tbl(i) group by i%5 order by all) as lst_tbl) as T"
         )
 
     def test_map_arrow_to_duckdb(self, duckdb_cursor):

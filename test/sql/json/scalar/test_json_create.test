@@ -123,7 +123,7 @@ insert into test values
 #	a		b		c						d								e
 
 query T
-select json_quote(row(a, b, c, d, e)) from test
+select json_quote(struct_pack(a := a, b := b, c := c, d := d, e := e)) from test
 ----
 {"a":0,"b":0.5,"c":"short","d":[0,1,2,3,4,5,6,7,9],"e":33}
 {"a":42,"b":1.0,"c":"looooooooooooooong","d":[],"e":42}

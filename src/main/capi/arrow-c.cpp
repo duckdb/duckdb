@@ -64,7 +64,7 @@ duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared, du
 	if (result_schema->release) {
 		// Need to release the existing schema before we overwrite it
 		result_schema->release(result_schema);
-		result_schema->release = nullptr;
+		D_ASSERT(!result_schema->release);
 	}
 
 	ArrowConverter::ToArrowSchema(result_schema, prepared_types, prepared_names, properties);
@@ -155,14 +155,17 @@ struct PrivateData {
 
 // LCOV_EXCL_START
 // This function is never called, but used to set ArrowSchema's release functions to a non-null NOOP.
-void EmptySchemaRelease(ArrowSchema *) {
+void EmptySchemaRelease(ArrowSchema *schema) {
+	schema->release = nullptr;
 }
 // LCOV_EXCL_STOP
 
-void EmptyArrayRelease(ArrowArray *) {
+void EmptyArrayRelease(ArrowArray *array) {
+	array->release = nullptr;
 }
 
-void EmptyStreamRelease(ArrowArrayStream *) {
+void EmptyStreamRelease(ArrowArrayStream *stream) {
+	stream->release = nullptr;
 }
 
 void FactoryGetSchema(uintptr_t stream_factory_ptr, duckdb::ArrowSchemaWrapper &schema) {

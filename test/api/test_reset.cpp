@@ -45,7 +45,6 @@ void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &
 
 OptionValueSet &GetValueForOption(const string &name) {
 	static unordered_map<string, OptionValueSet> value_map = {
-	    {"access_mode", {Value("READ_ONLY"), Value("read_only")}},
 	    {"threads", {Value::BIGINT(42), Value::BIGINT(42)}},
 	    {"checkpoint_threshold", {"4.2GB"}},
 	    {"debug_checkpoint_abort", {{"none", "before_truncate", "before_header", "after_free_list_write"}}},
@@ -112,6 +111,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 
 bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
+	    "access_mode",
 	    "schema",
 	    "search_path",
 	    "debug_window_mode",

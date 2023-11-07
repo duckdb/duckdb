@@ -38,7 +38,7 @@ import package_build
 # standardise paths
 source_list = [os.path.relpath(x, target_dir) if os.path.isabs(x) else x for x in source_list]
 include_list = [os.path.join(src_dir_name, x) for x in include_list]
-define_list = ['BUILD_{}_EXTENSION'.format(ext.upper()) for ext in extensions]
+define_list = ['DUCKDB_EXTENSION_{}_LINKED'.format(ext.upper()) for ext in extensions]
 # write Package.swift
 os.chdir(base_dir)
 

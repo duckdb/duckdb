@@ -24,6 +24,7 @@
 #include "nodes/primnodes.hpp"
 #include "pg_definitions.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
 
 namespace duckdb {
 

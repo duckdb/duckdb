@@ -13,7 +13,7 @@ statement ok
 CREATE TABLE csv_data AS SELECT * FROM 'test/sql/copy/csv/data/real/${csv_name}';
 
 statement ok
-COPY csv_data TO '__TEST_DIR__/${csv_name}.zst' (COMPRESSION ZSTD);
+COPY csv_data TO '__TEST_DIR__/${csv_name}.zst' (COMPRESSION ZSTD, HEADER 0);
 
 statement ok
 CREATE TABLE csv_data_zst AS SELECT * FROM '__TEST_DIR__/${csv_name}.zst';

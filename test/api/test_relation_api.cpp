@@ -417,6 +417,13 @@ TEST_CASE("Test view creation of relations", "[relation_api]") {
 	REQUIRE_NOTHROW(result = tbl->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 
+	duckdb::vector<duckdb::unique_ptr<ParsedExpression>> expressions;
+	expressions.push_back(duckdb::make_uniq<duckdb::ColumnRefExpression>("i"));
+	duckdb::vector<duckdb::string> aliases;
+	aliases.push_back("j");
+
+	REQUIRE_NOTHROW(result = tbl->Project(std::move(expressions), aliases)->Query("test", "SELECT * FROM test"));
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	// add a projection
 	REQUIRE_NOTHROW(result = tbl->Project("i + 1")->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
@@ -847,9 +854,10 @@ TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	// write a bunch of values to a CSV
 	auto csv_file = TestCreatePath("relationtest.csv");
 
-	con.Values("(1), (2), (3)", {"i"})->WriteCSV(csv_file);
-
-	REQUIRE_THROWS(con.Values("(1), (2), (3)", {"i"})->WriteCSV("//fef//gw/g/bla/bla"));
+	case_insensitive_map_t<duckdb::vector<Value>> options;
+	options["header"] = {duckdb::Value(0)};
+	con.Values("(1), (2), (3)", {"i"})->WriteCSV(csv_file, options);
+	REQUIRE_THROWS(con.Values("(1), (2), (3)", {"i"})->WriteCSV("//fef//gw/g/bla/bla", options));
 
 	// now scan the CSV file
 	auto csv_scan = con.ReadCSV(csv_file, {"i INTEGER"});

@@ -40,6 +40,8 @@ if [ ! -f "${duckdb_path}" ]; then
   unittest_path="testext/test/${CMAKE_CONFIG}/unittest.exe"
 fi
 
+${duckdb_path} -c "FROM duckdb_extensions()"
+
 for f in $FILES
 do
 	ext=`basename $f .duckdb_extension`
@@ -51,7 +53,7 @@ do
 		unsigned_flag=-unsigned
 	fi
 	echo ${install_path}
-	${duckdb_path} ${unsigned_flag} -c "INSTALL '${install_path}'"
+	${duckdb_path} ${unsigned_flag} -c "FORCE INSTALL '${install_path}'"
 	${duckdb_path} ${unsigned_flag} -c "LOAD '${ext}'"
 done
 

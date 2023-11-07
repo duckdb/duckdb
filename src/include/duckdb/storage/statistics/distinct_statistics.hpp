@@ -13,11 +13,9 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+class Vector;
 class Serializer;
 class Deserializer;
-class Vector;
-class FormatSerializer;
-class FormatDeserializer;
 
 class DistinctStatistics {
 public:
@@ -36,12 +34,6 @@ public:
 
 	unique_ptr<DistinctStatistics> Copy() const;
 
-	void Serialize(Serializer &serializer) const;
-	void Serialize(FieldWriter &writer) const;
-
-	static unique_ptr<DistinctStatistics> Deserialize(Deserializer &source);
-	static unique_ptr<DistinctStatistics> Deserialize(FieldReader &reader);
-
 	void Update(Vector &update, idx_t count, bool sample = true);
 	void Update(UnifiedVectorFormat &update_data, const LogicalType &ptype, idx_t count, bool sample = true);
 
@@ -50,8 +42,8 @@ public:
 
 	static bool TypeIsSupported(const LogicalType &type);
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<DistinctStatistics> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<DistinctStatistics> Deserialize(Deserializer &deserializer);
 
 private:
 	//! For distinct statistics we sample the input to speed up insertions

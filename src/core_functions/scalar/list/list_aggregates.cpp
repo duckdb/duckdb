@@ -36,25 +36,30 @@ struct ListAggregatesBindData : public FunctionData {
 		auto &other = other_p.Cast<ListAggregatesBindData>();
 		return stype == other.stype && aggr_expr->Equals(*other.aggr_expr);
 	}
-	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
-		auto bind_data = dynamic_cast<const ListAggregatesBindData *>(bind_data_p);
-		if (!bind_data) {
-			writer.WriteField<bool>(false);
-		} else {
-			writer.WriteField<bool>(true);
-			writer.WriteSerializable(bind_data->stype);
-			writer.WriteSerializable(*bind_data->aggr_expr);
-		}
+	void Serialize(Serializer &serializer) const {
+		serializer.WriteProperty(1, "stype", stype);
+		serializer.WriteProperty(2, "aggr_expr", aggr_expr);
 	}
-	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
-	                                            ScalarFunction &bound_function) {
-		if (reader.ReadRequired<bool>()) {
-			auto s_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-			auto expr = reader.ReadRequiredSerializable<Expression>(state);
-			return make_uniq<ListAggregatesBindData>(s_type, std::move(expr));
-		} else {
+	static unique_ptr<ListAggregatesBindData> Deserialize(Deserializer &deserializer) {
+		auto stype = deserializer.ReadProperty<LogicalType>(1, "stype");
+		auto aggr_expr = deserializer.ReadProperty<unique_ptr<Expression>>(2, "aggr_expr");
+		auto result = make_uniq<ListAggregatesBindData>(std::move(stype), std::move(aggr_expr));
+		return result;
+	}
+
+	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                      const ScalarFunction &function) {
+		auto bind_data = dynamic_cast<const ListAggregatesBindData *>(bind_data_p.get());
+		serializer.WritePropertyWithDefault(100, "bind_data", bind_data, (const ListAggregatesBindData *)nullptr);
+	}
+
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &bound_function) {
+		auto result = deserializer.ReadPropertyWithDefault<unique_ptr<ListAggregatesBindData>>(
+		    100, "bind_data", unique_ptr<ListAggregatesBindData>(nullptr));
+		if (!result) {
 			return ListAggregatesBindFailure(bound_function);
 		}
+		return std::move(result);
 	}
 };
 

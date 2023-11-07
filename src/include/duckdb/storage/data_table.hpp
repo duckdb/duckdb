@@ -144,7 +144,7 @@ public:
 	//! Revert a set of appends made by the given AppendState, used to revert appends in the event of an error during
 	//! commit (e.g. because of an I/O exception)
 	void RevertAppend(idx_t start_row, idx_t count);
-	void RevertAppendInternal(idx_t start_row, idx_t count);
+	void RevertAppendInternal(idx_t start_row);
 
 	void ScanTableSegment(idx_t start_row, idx_t count, const std::function<void(DataChunk &chunk)> &function);
 
@@ -175,7 +175,7 @@ public:
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
 	//! Checkpoint the table to the specified table data writer
-	void Checkpoint(TableDataWriter &writer);
+	void Checkpoint(TableDataWriter &writer, Serializer &metadata_serializer);
 	void CommitDropTable();
 	void CommitDropColumn(idx_t index);
 

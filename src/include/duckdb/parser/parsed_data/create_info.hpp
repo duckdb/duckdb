@@ -9,9 +9,8 @@
 #pragma once
 
 #include "duckdb/common/enums/catalog_type.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
-#include "duckdb/planner/plan_serialization.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 struct AlterInfo;
@@ -54,25 +53,19 @@ public:
 	//! The SQL string of the CREATE statement
 	string sql;
 
-protected:
-	virtual void SerializeInternal(Serializer &) const = 0;
-
-	void DeserializeBase(Deserializer &deserializer);
-
 public:
-	void Serialize(Serializer &serializer) const;
-
+	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
-	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer, PlanDeserializationState &state);
-
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<CreateInfo> FormatDeserialize(FormatDeserializer &deserializer);
 
 	virtual unique_ptr<CreateInfo> Copy() const = 0;
 
 	DUCKDB_API void CopyProperties(CreateInfo &other) const;
 	//! Generates an alter statement from the create statement - used for OnCreateConflict::ALTER_ON_CONFLICT
 	DUCKDB_API virtual unique_ptr<AlterInfo> GetAlterInfo() const;
+	virtual string ToString() const {
+		throw InternalException("ToString not supported for this type of CreateInfo: '%s'",
+		                        EnumUtil::ToString(info_type));
+	}
 };
 
 } // namespace duckdb

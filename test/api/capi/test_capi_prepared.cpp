@@ -281,6 +281,30 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	duckdb_destroy_prepare(&stmt);
 }
 
+TEST_CASE("Test duckdb_param_type", "[capi]") {
+	duckdb_database db;
+	duckdb_connection conn;
+	duckdb_prepared_statement stmt;
+
+	REQUIRE(duckdb_open("", &db) == DuckDBSuccess);
+	REQUIRE(duckdb_connect(db, &conn) == DuckDBSuccess);
+	REQUIRE(duckdb_prepare(conn, "select $1::integer, $2::integer", &stmt) == DuckDBSuccess);
+
+	REQUIRE(duckdb_param_type(stmt, 2) == DUCKDB_TYPE_INTEGER);
+	REQUIRE(duckdb_bind_null(stmt, 1) == DuckDBSuccess);
+	REQUIRE(duckdb_bind_int32(stmt, 2, 10) == DuckDBSuccess);
+
+	duckdb_result result;
+	REQUIRE(duckdb_execute_prepared(stmt, &result) == DuckDBSuccess);
+	REQUIRE(duckdb_param_type(stmt, 2) == DUCKDB_TYPE_INTEGER);
+	duckdb_clear_bindings(stmt);
+	duckdb_destroy_result(&result);
+
+	duckdb_destroy_prepare(&stmt);
+	duckdb_disconnect(&conn);
+	duckdb_close(&db);
+}
+
 TEST_CASE("Test prepared statements with named parameters in C API", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;

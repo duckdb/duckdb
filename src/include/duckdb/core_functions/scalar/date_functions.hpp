@@ -120,7 +120,7 @@ struct DayFun {
 struct DayNameFun {
 	static constexpr const char *Name = "dayname";
 	static constexpr const char *Parameters = "ts";
-	static constexpr const char *Description = "The (English) name of the weekday.";
+	static constexpr const char *Description = "The (English) name of the weekday";
 	static constexpr const char *Example = "dayname(TIMESTAMP '1992-03-22')";
 
 	static ScalarFunctionSet GetFunctions();
@@ -357,7 +357,7 @@ struct MonthFun {
 struct MonthNameFun {
 	static constexpr const char *Name = "monthname";
 	static constexpr const char *Parameters = "ts";
-	static constexpr const char *Description = "The (English) name of the month.";
+	static constexpr const char *Description = "The (English) name of the month";
 	static constexpr const char *Example = "monthname(TIMESTAMP '1992-09-20')";
 
 	static ScalarFunctionSet GetFunctions();
@@ -393,7 +393,7 @@ struct StrfTimeFun {
 struct StrpTimeFun {
 	static constexpr const char *Name = "strptime";
 	static constexpr const char *Parameters = "text,format";
-	static constexpr const char *Description = "Converts string to timestamp with time zone according to the format string if %Z is specified.";
+	static constexpr const char *Description = "Converts string to timestamp with time zone according to the format string if %Z is specified";
 	static constexpr const char *Example = "strptime('Wed, 1 January 1992 - 08:38:40 PST', '%a, %-d %B %Y - %H:%M:%S %Z')";
 
 	static ScalarFunctionSet GetFunctions();
@@ -402,7 +402,7 @@ struct StrpTimeFun {
 struct TimeBucketFun {
 	static constexpr const char *Name = "time_bucket";
 	static constexpr const char *Parameters = "bucket_width,timestamp,origin";
-	static constexpr const char *Description = "Truncate timestamptz by the specified interval bucket_width. Buckets are aligned relative to origin timestamptz. origin defaults to 2000-01-03 00:00:00+00 for buckets that don’t include a month or year interval, and to 2000-01-01 00:00:00+00 for month and year buckets.";
+	static constexpr const char *Description = "Truncate TIMESTAMPTZ by the specified interval bucket_width. Buckets are aligned relative to origin TIMESTAMPTZ. The origin defaults to 2000-01-03 00:00:00+00 for buckets that do not include a month or year interval, and to 2000-01-01 00:00:00+00 for month and year buckets";
 	static constexpr const char *Example = "time_bucket(INTERVAL '2 weeks', TIMESTAMP '1992-04-20 15:26:00-07', TIMESTAMP '1992-04-01 00:00:00-07')";
 
 	static ScalarFunctionSet GetFunctions();
@@ -519,7 +519,7 @@ struct ToYearsFun {
 struct TryStrpTimeFun {
 	static constexpr const char *Name = "try_strptime";
 	static constexpr const char *Parameters = "text,format";
-	static constexpr const char *Description = "Converts string to timestamp using the format string (timestamp with time zone if %Z is specified). Returns NULL on failure.";
+	static constexpr const char *Description = "Converts string to timestamp using the format string (timestamp with time zone if %Z is specified). Returns NULL on failure";
 	static constexpr const char *Example = "try_strptime('Wed, 1 January 1992 - 08:38:40 PM', '%a, %-d %B %Y - %I:%M:%S %p')";
 
 	static ScalarFunctionSet GetFunctions();

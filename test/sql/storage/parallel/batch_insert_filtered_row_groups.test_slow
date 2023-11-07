@@ -2,6 +2,8 @@
 # description: Test batch insert with small batches
 # group: [parallel]
 
+require vector_size 512
+
 require parquet
 
 load __TEST_DIR__/insert_mix_batches.db

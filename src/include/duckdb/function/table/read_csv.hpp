@@ -65,20 +65,8 @@ struct ColumnInfo {
 		names = std::move(names_p);
 		types = std::move(types_p);
 	}
-	void Serialize(FieldWriter &writer) const {
-		writer.WriteList<string>(names);
-		writer.WriteRegularSerializableList<LogicalType>(types);
-	}
-
-	static ColumnInfo Deserialize(FieldReader &reader) {
-		ColumnInfo info;
-		info.names = reader.ReadRequiredList<string>();
-		info.types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-		return info;
-	}
-
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static ColumnInfo FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static ColumnInfo Deserialize(Deserializer &deserializer);
 
 	vector<std::string> names;
 	vector<LogicalType> types;
@@ -115,8 +103,8 @@ struct ReadCSVData : public BaseCSVData {
 	}
 	void FinalizeRead(ClientContext &context);
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<ReadCSVData> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<ReadCSVData> Deserialize(Deserializer &deserializer);
 };
 
 struct CSVCopyFunction {

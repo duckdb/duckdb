@@ -26,6 +26,7 @@ void Leaf::New(ART &art, reference<Node> &node, const row_t *row_ids, idx_t coun
 		auto &leaf = Node::RefMutable<Leaf>(art, node, NType::LEAF);
 
 		leaf.count = MinValue((idx_t)Node::LEAF_SIZE, count);
+
 		for (idx_t i = 0; i < leaf.count; i++) {
 			leaf.row_ids[i] = row_ids[copy_count + i];
 		}
@@ -36,6 +37,16 @@ void Leaf::New(ART &art, reference<Node> &node, const row_t *row_ids, idx_t coun
 		node = leaf.ptr;
 		leaf.ptr.Clear();
 	}
+}
+
+Leaf &Leaf::New(ART &art, Node &node) {
+	node = Node::GetAllocator(art, NType::LEAF).New();
+	node.SetMetadata(static_cast<uint8_t>(NType::LEAF));
+	auto &leaf = Node::RefMutable<Leaf>(art, node, NType::LEAF);
+
+	leaf.count = 0;
+	leaf.ptr.Clear();
+	return leaf;
 }
 
 void Leaf::Free(ART &art, Node &node) {
@@ -313,13 +324,10 @@ void Leaf::MoveInlinedToLeaf(ART &art, Node &node) {
 
 	D_ASSERT(node.GetType() == NType::LEAF_INLINED);
 	auto row_id = node.GetRowId();
-	node = Node::GetAllocator(art, NType::LEAF).New();
-	node.SetMetadata(static_cast<uint8_t>(NType::LEAF));
+	auto &leaf = New(art, node);
 
-	auto &leaf = Node::RefMutable<Leaf>(art, node, NType::LEAF);
 	leaf.count = 1;
 	leaf.row_ids[0] = row_id;
-	leaf.ptr.Clear();
 }
 
 Leaf &Leaf::Append(ART &art, const row_t row_id) {
@@ -328,12 +336,7 @@ Leaf &Leaf::Append(ART &art, const row_t row_id) {
 
 	// we need a new leaf node
 	if (leaf.get().count == Node::LEAF_SIZE) {
-		leaf.get().ptr = Node::GetAllocator(art, NType::LEAF).New();
-		leaf.get().ptr.SetMetadata(static_cast<uint8_t>(NType::LEAF));
-
-		leaf = Node::RefMutable<Leaf>(art, leaf.get().ptr, NType::LEAF);
-		leaf.get().count = 0;
-		leaf.get().ptr.Clear();
+		leaf = New(art, leaf.get().ptr);
 	}
 
 	leaf.get().row_ids[leaf.get().count] = row_id;

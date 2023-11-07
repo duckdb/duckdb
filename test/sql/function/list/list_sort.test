@@ -3,6 +3,9 @@
 # group: [list]
 
 statement ok
+PRAGMA enable_verification;
+
+statement ok
 PRAGMA default_order='ASC';
 
 statement ok

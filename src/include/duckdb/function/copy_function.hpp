@@ -71,8 +71,8 @@ struct PreparedBatchData {
 enum class CopyFunctionExecutionMode { REGULAR_COPY_TO_FILE, PARALLEL_COPY_TO_FILE, BATCH_COPY_TO_FILE };
 
 typedef BoundStatement (*copy_to_plan_t)(Binder &binder, CopyStatement &stmt);
-typedef unique_ptr<FunctionData> (*copy_to_bind_t)(ClientContext &context, CopyInfo &info, vector<string> &names,
-                                                   vector<LogicalType> &sql_types);
+typedef unique_ptr<FunctionData> (*copy_to_bind_t)(ClientContext &context, const CopyInfo &info,
+                                                   const vector<string> &names, const vector<LogicalType> &sql_types);
 typedef unique_ptr<LocalFunctionData> (*copy_to_initialize_local_t)(ExecutionContext &context, FunctionData &bind_data);
 typedef unique_ptr<GlobalFunctionData> (*copy_to_initialize_global_t)(ClientContext &context, FunctionData &bind_data,
                                                                       const string &file_path);
@@ -82,10 +82,10 @@ typedef void (*copy_to_combine_t)(ExecutionContext &context, FunctionData &bind_
                                   LocalFunctionData &lstate);
 typedef void (*copy_to_finalize_t)(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate);
 
-typedef void (*copy_to_serialize_t)(FieldWriter &writer, const FunctionData &bind_data, const CopyFunction &function);
+typedef void (*copy_to_serialize_t)(Serializer &serializer, const FunctionData &bind_data,
+                                    const CopyFunction &function);
 
-typedef unique_ptr<FunctionData> (*copy_to_deserialize_t)(ClientContext &context, FieldReader &reader,
-                                                          CopyFunction &function);
+typedef unique_ptr<FunctionData> (*copy_to_deserialize_t)(Deserializer &deserializer, CopyFunction &function);
 
 typedef unique_ptr<FunctionData> (*copy_from_bind_t)(ClientContext &context, CopyInfo &info,
                                                      vector<string> &expected_names,
@@ -99,7 +99,9 @@ typedef void (*copy_flush_batch_t)(ClientContext &context, FunctionData &bind_da
                                    PreparedBatchData &batch);
 typedef idx_t (*copy_desired_batch_size_t)(ClientContext &context, FunctionData &bind_data);
 
-typedef bool (*copy_supports_type_t)(const LogicalType &type);
+enum class CopyTypeSupport { SUPPORTED, LOSSY, UNSUPPORTED };
+
+typedef CopyTypeSupport (*copy_supports_type_t)(const LogicalType &type);
 
 class CopyFunction : public Function {
 public:

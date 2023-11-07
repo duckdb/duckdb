@@ -26,6 +26,8 @@ idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
 		return 2;
+	case StrTimeSpecifier::NANOSECOND_PADDED:
+		return 9;
 	case StrTimeSpecifier::MICROSECOND_PADDED:
 		return 6;
 	case StrTimeSpecifier::MILLISECOND_PADDED:
@@ -183,9 +185,15 @@ char *StrfTimeFormat::WritePadded3(char *target, uint32_t value) {
 	}
 }
 
-// write a value in the range of 0..999999 padded to 6 digits
+// write a value in the range of 0..999999... padded to the given number of digits
 char *StrfTimeFormat::WritePadded(char *target, uint32_t value, size_t padding) {
-	D_ASSERT(padding % 2 == 0);
+	D_ASSERT(padding > 1);
+	if (padding % 2) {
+		int decimals = value % 1000;
+		WritePadded3(target + padding - 3, decimals);
+		value /= 1000;
+		padding -= 3;
+	}
 	for (size_t i = 0; i < padding / 2; i++) {
 		int decimals = value % 100;
 		WritePadded2(target + padding - 2 * (i + 1), decimals);
@@ -309,11 +317,14 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 	case StrTimeSpecifier::SECOND_PADDED:
 		target = WritePadded2(target, data[5]);
 		break;
+	case StrTimeSpecifier::NANOSECOND_PADDED:
+		target = WritePadded(target, data[6] * Interval::NANOS_PER_MICRO, 9);
+		break;
 	case StrTimeSpecifier::MICROSECOND_PADDED:
 		target = WritePadded(target, data[6], 6);
 		break;
 	case StrTimeSpecifier::MILLISECOND_PADDED:
-		target = WritePadded3(target, data[6] / 1000);
+		target = WritePadded3(target, data[6] / Interval::MICROS_PER_MSEC);
 		break;
 	case StrTimeSpecifier::UTC_OFFSET: {
 		*target++ = (data[7] < 0) ? '-' : '+';
@@ -516,6 +527,9 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 				case 'S':
 					specifier = StrTimeSpecifier::SECOND_PADDED;
 					break;
+				case 'n':
+					specifier = StrTimeSpecifier::NANOSECOND_PADDED;
+					break;
 				case 'f':
 					specifier = StrTimeSpecifier::MICROSECOND_PADDED;
 					break;
@@ -660,6 +674,8 @@ int StrpTimeFormat::NumericSpecifierWidth(StrTimeSpecifier specifier) {
 		return 4;
 	case StrTimeSpecifier::MICROSECOND_PADDED:
 		return 6;
+	case StrTimeSpecifier::NANOSECOND_PADDED:
+		return 9;
 	default:
 		return -1;
 	}
@@ -855,15 +871,20 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 				// seconds
 				result_data[5] = number;
 				break;
+			case StrTimeSpecifier::NANOSECOND_PADDED:
+				D_ASSERT(number < Interval::NANOS_PER_SEC); // enforced by the length of the number
+				// microseconds (rounded)
+				result_data[6] = (number + Interval::NANOS_PER_MICRO / 2) / Interval::NANOS_PER_MICRO;
+				break;
 			case StrTimeSpecifier::MICROSECOND_PADDED:
-				D_ASSERT(number < 1000000ULL); // enforced by the length of the number
-				// milliseconds
+				D_ASSERT(number < Interval::MICROS_PER_SEC); // enforced by the length of the number
+				// microseconds
 				result_data[6] = number;
 				break;
 			case StrTimeSpecifier::MILLISECOND_PADDED:
-				D_ASSERT(number < 1000ULL); // enforced by the length of the number
-				// milliseconds
-				result_data[6] = number * 1000;
+				D_ASSERT(number < Interval::MSECS_PER_SEC); // enforced by the length of the number
+				// microseconds
+				result_data[6] = number * Interval::MICROS_PER_MSEC;
 				break;
 			case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
 			case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:

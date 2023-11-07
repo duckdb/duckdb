@@ -28,15 +28,15 @@ struct SnifferResult {
 class CSVSniffer {
 public:
 	explicit CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-	                    CSVStateMachineCache &state_machine_cache);
+	                    CSVStateMachineCache &state_machine_cache, bool explicit_set_columns = false);
 
 	//! Main method that sniffs the CSV file, returns the types, names and options as a result
 	//! CSV Sniffing consists of five steps:
 	//! 1. Dialect Detection: Generate the CSV Options (delimiter, quote, escape, etc.)
 	//! 2. Type Detection: Figures out the types of the columns (For one chunk)
-	//! 3. Header Detection: Figures out if  the CSV file has a header and produces the names of the columns
-	//! 4. Type Replacement: Replaces the types of the columns if the user specified them
-	//! 5. Type Refinement: Refines the types of the columns for the remaining chunks
+	//! 3. Type Refinement: Refines the types of the columns for the remaining chunks
+	//! 4. Header Detection: Figures out if  the CSV file has a header and produces the names of the columns
+	//! 5. Type Replacement: Replaces the types of the columns if the user specified them
 	SnifferResult SniffCSV();
 
 private:
@@ -50,6 +50,8 @@ private:
 	CSVReaderOptions &options;
 	//! Buffer being used on sniffer
 	shared_ptr<CSVBufferManager> buffer_manager;
+	//! Sets the result options
+	void SetResultOptions();
 
 	//! ------------------------------------------------------//
 	//! ----------------- Dialect Detection ----------------- //
@@ -106,22 +108,24 @@ private:
 	vector<Value> best_header_row;
 
 	//! ------------------------------------------------------//
-	//! ------------------ Header Detection ----------------- //
-	//! ------------------------------------------------------//
-	void DetectHeader();
-	vector<string> names;
-
-	//! ------------------------------------------------------//
-	//! ------------------ Type Replacement ----------------- //
-	//! ------------------------------------------------------//
-	void ReplaceTypes();
-
-	//! ------------------------------------------------------//
 	//! ------------------ Type Refinement ------------------ //
 	//! ------------------------------------------------------//
 	void RefineTypes();
 	bool TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type);
 	vector<LogicalType> detected_types;
+
+	//! ------------------------------------------------------//
+	//! ------------------ Header Detection ----------------- //
+	//! ------------------------------------------------------//
+	void DetectHeader();
+	vector<string> names;
+	//! If Column Names and Types have been explicitly set
+	const bool explicit_set_columns;
+
+	//! ------------------------------------------------------//
+	//! ------------------ Type Replacement ----------------- //
+	//! ------------------------------------------------------//
+	void ReplaceTypes();
 };
 
 } // namespace duckdb

@@ -6,6 +6,7 @@ import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.sql.SQLException;
 import java.util.Properties;
@@ -46,13 +47,15 @@ public class DuckDBNative {
             Path lib_file = Files.createTempFile("libduckdb_java", ".so");
             URL lib_res = DuckDBNative.class.getResource(lib_res_name);
             if (lib_res == null) {
-                throw new IOException(lib_res_name + " not found");
+                System.load(
+                    Paths.get("../../build/debug/tools/jdbc", lib_res_name).normalize().toAbsolutePath().toString());
+            } else {
+                Files.copy(lib_res.openStream(), lib_file, StandardCopyOption.REPLACE_EXISTING);
+                new File(lib_file.toString()).deleteOnExit();
+                System.load(lib_file.toAbsolutePath().toString());
             }
-            Files.copy(lib_res.openStream(), lib_file, StandardCopyOption.REPLACE_EXISTING);
-            new File(lib_file.toString()).deleteOnExit();
-            System.load(lib_file.toAbsolutePath().toString());
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
     }
     // We use zero-length ByteBuffer-s as a hacky but cheap way to pass C++ pointers
@@ -146,6 +149,9 @@ public class DuckDBNative {
         throws SQLException;
 
     protected static native void duckdb_jdbc_appender_append_string(ByteBuffer appender_ref, byte[] value)
+        throws SQLException;
+
+    protected static native void duckdb_jdbc_appender_append_timestamp(ByteBuffer appender_ref, long value)
         throws SQLException;
 
     protected static native void duckdb_jdbc_appender_append_null(ByteBuffer appender_ref) throws SQLException;
