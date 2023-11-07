@@ -20,10 +20,10 @@ ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, const LogicalType &type, 
 
 	// FIXME: rethink this
 	if (type == LogicalType::BLOB || type == LogicalType::VARCHAR) {
-		// indexes cannot contain BLOBs (or BLOBs cast to VARCHARs) that contain null-terminated bytes
+		// indexes cannot contain BLOBs (or BLOBs cast to VARCHARs) that contain zero bytes
 		for (uint32_t i = 0; i < len - 1; i++) {
 			if (data[i] == '\0') {
-				throw NotImplementedException("Indexes cannot contain BLOBs that contain null-terminated bytes.");
+				throw NotImplementedException("ART indexes cannot contain BLOBs with zero bytes.");
 			}
 		}
 	}
@@ -45,10 +45,10 @@ void ARTKey::CreateARTKey(ArenaAllocator &allocator, const LogicalType &type, AR
 
 	// FIXME: rethink this
 	if (type == LogicalType::BLOB || type == LogicalType::VARCHAR) {
-		// indexes cannot contain BLOBs (or BLOBs cast to VARCHARs) that contain null-terminated bytes
+		// indexes cannot contain BLOBs (or BLOBs cast to VARCHARs) that contain zero bytes
 		for (uint32_t i = 0; i < key.len - 1; i++) {
 			if (key.data[i] == '\0') {
-				throw NotImplementedException("Indexes cannot contain BLOBs that contain null-terminated bytes.");
+				throw NotImplementedException("ART indexes cannot contain BLOBs with zero bytes.");
 			}
 		}
 	}

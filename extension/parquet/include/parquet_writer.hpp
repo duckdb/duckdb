@@ -26,6 +26,9 @@ namespace duckdb {
 class FileSystem;
 class FileOpener;
 
+class Serializer;
+class Deserializer;
+
 struct PreparedRowGroup {
 	duckdb_parquet::format::RowGroup row_group;
 	vector<unique_ptr<ColumnWriterState>> states;
@@ -37,6 +40,9 @@ struct ChildFieldIDs {
 	ChildFieldIDs();
 	ChildFieldIDs Copy() const;
 	unique_ptr<case_insensitive_map_t<FieldID>> ids;
+
+	void Serialize(Serializer &serializer) const;
+	static ChildFieldIDs Deserialize(Deserializer &source);
 };
 
 struct FieldID {
@@ -47,12 +53,16 @@ struct FieldID {
 	bool set;
 	int32_t field_id;
 	ChildFieldIDs child_field_ids;
+
+	void Serialize(Serializer &serializer) const;
+	static FieldID Deserialize(Deserializer &source);
 };
 
 class ParquetWriter {
 public:
 	ParquetWriter(FileSystem &fs, string file_name, vector<LogicalType> types, vector<string> names,
-	              duckdb_parquet::format::CompressionCodec::type codec, ChildFieldIDs field_ids);
+	              duckdb_parquet::format::CompressionCodec::type codec, ChildFieldIDs field_ids,
+	              const vector<pair<string, string>> &kv_metadata);
 
 public:
 	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);

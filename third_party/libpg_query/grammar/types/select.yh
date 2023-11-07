@@ -123,6 +123,7 @@
 %type <list>	window_clause window_definition_list opt_partition_clause
 %type <windef>	window_definition over_clause window_specification
 				opt_frame_clause frame_extent frame_bound
+%type <ival>     opt_window_exclusion_clause
 %type <str>		opt_existing_window_name
 
 %type <node> pivot_value pivot_column_entry single_pivot_value unpivot_value

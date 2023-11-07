@@ -87,7 +87,8 @@ void VerifyAppendColumns(const TupleDataLayout &layout, const vector<column_t> &
 		}
 		// This column will not be appended in the first go - verify that it is fixed-size - we cannot resize heap after
 		const auto physical_type = layout.GetTypes()[col_idx].InternalType();
-		D_ASSERT(physical_type != PhysicalType::VARCHAR && physical_type != PhysicalType::LIST);
+		D_ASSERT(physical_type != PhysicalType::VARCHAR && physical_type != PhysicalType::LIST &&
+		         physical_type != PhysicalType::ARRAY);
 		if (physical_type == PhysicalType::STRUCT) {
 			const auto &struct_layout = layout.GetStructLayout(col_idx);
 			vector<column_t> struct_column_ids;
@@ -139,6 +140,9 @@ static void InitializeVectorFormat(vector<TupleDataVectorFormat> &vector_data, c
 		}
 		case PhysicalType::LIST:
 			InitializeVectorFormat(vector_data[col_idx].children, {ListType::GetChildType(type)});
+			break;
+		case PhysicalType::ARRAY:
+			InitializeVectorFormat(vector_data[col_idx].children, {ArrayType::GetChildType(type)});
 			break;
 		default:
 			break;
@@ -238,6 +242,29 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 		ToUnifiedFormatInternal(reinterpret_cast<TupleDataVectorFormat &>(format.children[0]),
 		                        ListVector::GetEntry(vector), ListVector::GetListSize(vector));
 		break;
+	case PhysicalType::ARRAY: {
+		D_ASSERT(format.children.size() == 1);
+
+		// For arrays, we cheat a bit and pretend that they are lists by creating and assigning list_entry_t's to the
+		// vector This allows us to reuse all the list serialization functions for array types too.
+
+		// This is kind of hacky, but we need to create a list_entry_t for each array entry
+		idx_t array_count = ArrayVector::GetTotalSize(vector) / ArrayType::GetSize(vector.GetType());
+		format.array_list_entries = make_uniq_array<list_entry_t>(array_count);
+
+		auto array_size = ArrayType::GetSize(vector.GetType());
+		// create list entries
+		for (idx_t i = 0; i < array_count; i++) {
+			format.array_list_entries[i].length = array_size;
+			format.array_list_entries[i].offset = i * array_size;
+		}
+		format.unified.data = reinterpret_cast<data_ptr_t>(format.array_list_entries.get());
+
+		// Set the array size in the child format
+		format.children[0].parent_array_size = array_size;
+
+		ToUnifiedFormatInternal(format.children[0], ArrayVector::GetEntry(vector), ArrayVector::GetTotalSize(vector));
+	} break;
 	default:
 		break;
 	}
