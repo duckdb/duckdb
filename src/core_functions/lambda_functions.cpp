@@ -456,18 +456,6 @@ void LambdaFunctions::ListFilterFunction(DataChunk &args, ExpressionState &state
 	ExecuteLambda<ListFilterFunctor>(args, state, result);
 }
 
-static SelectionVector ResizeSelVector(SelectionVector &old_vector, idx_t new_size, const std::vector<idx_t> &row_loc) {
-	SelectionVector new_vector(new_size);
-	for (idx_t i = 0; i < old_vector.sel_data().use_count(); i++) {
-		auto row_loc_index = std::find(row_loc.begin(), row_loc.end(), i);
-		if (row_loc_index == row_loc.end()) {
-			continue;
-		}
-		new_vector.set_index(i, old_vector.get_index(i));
-	}
-	return new_vector;
-}
-
 void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto row_count = args.size();
 	Vector &list_column = args.data[0];
@@ -518,6 +506,8 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 		}
 	}
 
+	Vector left_slice = Vector(child_vector, left_vector, row_count);
+
 	// get the lambda column data for all other input vectors
 	auto column_infos = GetColumnInfo(args, row_count);
 	auto inconstant_column_infos = GetInconstantColumnInfo(column_infos);
@@ -527,34 +517,38 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 	idx_t loops = 0;
 	// Execute reduce until all rows are finished
 	while(finished_rows < row_count) {
+		SelectionVector new_sel(row_count - finished_rows);
+
 		// Initialize the right_vector
 		SelectionVector right_vector(row_count - finished_rows);
-		for (idx_t i = 0; i < row_count - finished_rows; i++) {
+		int sel_index = 0;
+		for (auto i : row_loc) {
 			if (list_entries[i].length > loops + 1) {
 				right_vector.set_index(i, list_entries[i].offset + loops + 1);
+				new_sel.set_index(sel_index++, i);
 			} else {
-				result_entries[i] = left_vector.get_index(i);
 				auto row_loc_index = std::find(row_loc.begin(), row_loc.end(), i);
 				if (row_loc_index != row_loc.end()) {
+					result_entries[*row_loc_index] = left_slice.GetValue(i).GetValue<uint64_t>();
 					row_loc.erase(row_loc_index);
 				}
 				finished_rows++;
 			}
 		}
 
-		// Remove the finished rows from the left_vector
-		left_vector = ResizeSelVector(left_vector, row_count - finished_rows, row_loc);
-		right_vector = ResizeSelVector(right_vector, row_count - finished_rows, row_loc);
+		auto new_count = row_count - finished_rows;
+		if (new_count == 0) {
+			break;
+		}
+
+		right_vector.Slice(new_sel, new_count);
 
 		// Execute the lambda function
 		LambdaExecuteInfo execute_info(state.GetContext(), *lambda_expr, args, bind_info.has_index, child_vector);
 
-		Vector left_slice = Vector(child_vector, left_vector, row_count - finished_rows);
-		left_slice.SetVectorType(VectorType::FLAT_VECTOR);
+		left_slice.Slice(left_slice, new_sel, new_count);
 
-		Vector right_slice = Vector(child_vector, right_vector, row_count - finished_rows);
-		right_slice.SetVectorType(VectorType::FLAT_VECTOR);
-
+		Vector right_slice = Vector(child_vector, right_vector, new_count);
 
 		vector<LogicalType> input_types;
 		if (bind_info.has_index) {
@@ -566,22 +560,24 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 		DataChunk input_chunk;
 		input_chunk.InitializeEmpty(input_types);
 
-		input_chunk.SetCardinality(row_count - finished_rows);
-		execute_info.lambda_chunk.SetCardinality(row_count - finished_rows);
+		input_chunk.SetCardinality(new_count);
+		execute_info.lambda_chunk.SetCardinality(new_count);
 
 		idx_t slice_offset = bind_info.has_index ? 1 : 0;
 		if (bind_info.has_index) {
 			input_chunk.data[0].Reference(index_vector);
 		}
-
 		input_chunk.data[slice_offset].Reference(left_slice);
-		input_chunk.data[slice_offset].Reference(right_slice);
+		input_chunk.data[slice_offset + 1].Reference(right_slice);
 
 		execute_info.expr_executor->Execute(input_chunk, execute_info.lambda_chunk);
+
+		left_slice.Reference(execute_info.lambda_chunk.data[0]);
 		loops++;
+	}
 
-		// Reset left vector
-
+	if (args.AllConstant() && !has_side_effects) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 
