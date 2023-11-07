@@ -104,11 +104,11 @@ statement ok
 CREATE OR REPLACE TABLE t1 AS SELECT * FROM (VALUES (1, [1,2,3]::${COLLECTION}), (2, [4,5,6]::${COLLECTION}), (3, [1,2,3]::${COLLECTION}));
 
 query IIII
-SELECT * FROM t1 as a JOIN t1 as b ON (a.col1 != b.col1);
+SELECT * FROM t1 as a JOIN t1 as b ON (a.col1 != b.col1) ORDER BY ALL;
 ----
-2	[4, 5, 6]	1	[1, 2, 3]
 1	[1, 2, 3]	2	[4, 5, 6]
-3	[1, 2, 3]	2	[4, 5, 6]
+2	[4, 5, 6]	1	[1, 2, 3]
 2	[4, 5, 6]	3	[1, 2, 3]
+3	[1, 2, 3]	2	[4, 5, 6]
 
 endloop

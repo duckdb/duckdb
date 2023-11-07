@@ -384,10 +384,10 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 
 	// For every grouping set there is one radix_table
 	for (idx_t i = 0; i < groupings.size(); i++) {
-		auto &grouping_local_state = global_state.grouping_states[i];
-		auto &grouping_global_state = local_state.grouping_states[i];
+		auto &grouping_global_state = global_state.grouping_states[i];
+		auto &grouping_local_state = local_state.grouping_states[i];
 		InterruptState interrupt_state;
-		OperatorSinkInput sink_input {*grouping_local_state.table_state, *grouping_global_state.table_state,
+		OperatorSinkInput sink_input {*grouping_global_state.table_state, *grouping_local_state.table_state,
 		                              interrupt_state};
 
 		auto &grouping = groupings[i];

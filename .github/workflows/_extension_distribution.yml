@@ -40,6 +40,11 @@ on:
         required: false
         type: string
         default: "./duckdb/scripts/modify_distribution_matrix.py"
+      # Enable building the DuckDB Shell
+      build_duckdb_shell:
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   generate_matrix:
@@ -96,6 +101,7 @@ jobs:
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
       VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
       GEN: Ninja
+      BUILD_SHELL: ${{ inputs.build_duckdb_shell && '1' || '0' }}
 
     steps:
       - name: Install required ubuntu packages
@@ -144,7 +150,7 @@ jobs:
           aarch64_cross_compile: ${{ matrix.duckdb_arch == 'linux_arm64' && 1 }}
 
       - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
+        uses: lukka/run-vcpkg@v11.1
         with:
           vcpkgGitCommitId: ${{ inputs.vcpkg_commit }}
 
@@ -179,6 +185,7 @@ jobs:
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
       OSX_BUILD_ARCH: ${{ matrix.osx_build_arch }}
       GEN: Ninja
+      BUILD_SHELL: ${{ inputs.build_duckdb_shell && '1' || '0' }}
 
     steps:
       - uses: actions/checkout@v3
@@ -205,7 +212,7 @@ jobs:
           git checkout ${{ inputs.duckdb_version }}
 
       - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
+        uses: lukka/run-vcpkg@v11.1
         with:
           vcpkgGitCommitId: ${{ inputs.vcpkg_commit }}
 
@@ -237,6 +244,7 @@ jobs:
       GEN: Ninja
       VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
+      BUILD_SHELL: ${{ inputs.build_duckdb_shell && '1' || '0' }}
 
     steps:
       - uses: actions/checkout@v3
@@ -259,7 +267,7 @@ jobs:
           key: ${{ github.job }}-${{ matrix.duckdb_arch }}
 
       - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
+        uses: lukka/run-vcpkg@v11.1
         with:
           vcpkgGitCommitId: ${{ inputs.vcpkg_commit }}
 

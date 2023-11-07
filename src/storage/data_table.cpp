@@ -1317,8 +1317,14 @@ idx_t DataTable::GetTotalRows() {
 }
 
 void DataTable::CommitDropTable() {
-	// commit a drop of this table: mark all blocks as modified so they can be reclaimed later on
+	// commit a drop of this table: mark all blocks as modified, so they can be reclaimed later on
 	row_groups->CommitDropTable();
+
+	// propagate dropping this table to its indexes: frees all index memory
+	info->indexes.Scan([&](Index &index) {
+		index.CommitDrop();
+		return false;
+	});
 }
 
 //===--------------------------------------------------------------------===//

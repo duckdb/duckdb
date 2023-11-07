@@ -41,7 +41,7 @@ void PathLikeProcessor::AddFile(const py::object &object) {
 		all_files.push_back(std::string(py::str(object)));
 		return;
 	}
-	if (py::isinstance(object, import_cache.pathlib().Path())) {
+	if (py::isinstance(object, import_cache.pathlib.Path())) {
 		all_files.push_back(std::string(py::str(object)));
 		return;
 	}

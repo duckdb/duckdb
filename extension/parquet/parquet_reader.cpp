@@ -98,7 +98,7 @@ LoadMetadata(Allocator &allocator, FileHandle &file_handle,
 	transport.SetLocation(metadata_pos);
 	transport.Prefetch(metadata_pos, footer_len);
 
-	unique_ptr<FileMetaData> metadata = make_uniq<FileMetaData>();
+	auto metadata = make_uniq<FileMetaData>();
 	if (footer_encrypted) {
 		auto crypto_metadata = make_uniq<FileCryptoMetaData>();
 		crypto_metadata->read(file_proto.get());

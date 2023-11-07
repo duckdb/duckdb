@@ -78,7 +78,7 @@ jobs:
       - name: Deploy
         shell: bash
         run: >
-          python3.7 scripts/asset-upload-gha.py
+          python3.8 scripts/asset-upload-gha.py
           duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
       - uses: actions/upload-artifact@v3
         with:
@@ -120,7 +120,7 @@ jobs:
       - name: Deploy
         shell: bash
         run: >
-          python3.7 scripts/asset-upload-gha.py
+          python3.8 scripts/asset-upload-gha.py
           duckdb_jdbc-linux-aarch64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
       - uses: actions/upload-artifact@v3

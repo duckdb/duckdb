@@ -27,6 +27,9 @@ class FileSystem;
 class FileOpener;
 class ParquetEncryptionConfig;
 
+class Serializer;
+class Deserializer;
+
 struct PreparedRowGroup {
 	duckdb_parquet::format::RowGroup row_group;
 	vector<unique_ptr<ColumnWriterState>> states;
@@ -38,6 +41,9 @@ struct ChildFieldIDs {
 	ChildFieldIDs();
 	ChildFieldIDs Copy() const;
 	unique_ptr<case_insensitive_map_t<FieldID>> ids;
+
+	void Serialize(Serializer &serializer) const;
+	static ChildFieldIDs Deserialize(Deserializer &source);
 };
 
 struct FieldID {
@@ -48,6 +54,9 @@ struct FieldID {
 	bool set;
 	int32_t field_id;
 	ChildFieldIDs child_field_ids;
+
+	void Serialize(Serializer &serializer) const;
+	static FieldID Deserialize(Deserializer &source);
 };
 
 class ParquetWriter {

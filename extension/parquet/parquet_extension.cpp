@@ -910,8 +910,8 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 	}
 }
 
-unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info, vector<string> &names,
-                                          vector<LogicalType> &sql_types) {
+unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, const CopyInfo &info, const vector<string> &names,
+                                          const vector<LogicalType> &sql_types) {
 	D_ASSERT(names.size() == sql_types.size());
 	bool row_group_size_bytes_set = false;
 	auto bind_data = make_uniq<ParquetWriteBindData>();
@@ -1112,7 +1112,9 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	serializer.WriteProperty(102, "codec", bind_data.codec);
 	serializer.WriteProperty(103, "row_group_size", bind_data.row_group_size);
 	serializer.WriteProperty(104, "row_group_size_bytes", bind_data.row_group_size_bytes);
-	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(105, "encryption_config",
+	serializer.WriteProperty(105, "kv_metadata", bind_data.kv_metadata);
+	serializer.WriteProperty(106, "field_ids", bind_data.field_ids);
+	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(107, "encryption_config",
 	                                                                         bind_data.encryption_config, nullptr);
 }
 
@@ -1123,7 +1125,9 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	data->codec = deserializer.ReadProperty<duckdb_parquet::format::CompressionCodec::type>(102, "codec");
 	data->row_group_size = deserializer.ReadProperty<idx_t>(103, "row_group_size");
 	data->row_group_size_bytes = deserializer.ReadProperty<idx_t>(104, "row_group_size_bytes");
-	deserializer.ReadPropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(105, "encryption_config",
+	data->kv_metadata = deserializer.ReadProperty<vector<pair<string, string>>>(105, "kv_metadata");
+	data->field_ids = deserializer.ReadProperty<ChildFieldIDs>(106, "field_ids");
+	deserializer.ReadPropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(107, "encryption_config",
 	                                                                          data->encryption_config, nullptr);
 	return std::move(data);
 }
