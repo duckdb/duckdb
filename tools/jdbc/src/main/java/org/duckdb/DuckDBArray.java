@@ -11,7 +11,7 @@ public class DuckDBArray implements Array {
     private DuckDBVector vector;
     int offset, length;
 
-    public DuckDBArray(DuckDBVector vector, int offset, int length) {
+    DuckDBArray(DuckDBVector vector, int offset, int length) {
         this.vector = vector;
         this.length = length;
         this.offset = offset;
