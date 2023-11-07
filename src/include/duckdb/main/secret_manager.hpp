@@ -13,9 +13,9 @@
 
 namespace duckdb {
 class ClientContext;
-class RegisteredSecret;
+class BaseSecret;
 
-typedef unique_ptr<RegisteredSecret> (*secret_deserializer_t)(Deserializer& deserializer, RegisteredSecret base_secret);
+typedef unique_ptr<BaseSecret> (*secret_deserializer_t)(Deserializer& deserializer, BaseSecret base_secret);
 
 //! Secret types describe which secret types are currently registered and how to deserialize them
 struct SecretType {
@@ -30,30 +30,28 @@ struct SecretType {
 class SecretManager {
 public:
 	//! Deserialize the secret. Will look up the deserialized type, then call the deserialize for the registered type.
-	unique_ptr<RegisteredSecret> DeserializeSecret(Deserializer& deserializer);
-	//! Serialize the secret. Calls the virtual serialize function of the secret;
-	static void SerializeSecret(RegisteredSecret& secret, Serializer& serializer);
+	unique_ptr<BaseSecret> DeserializeSecret(Deserializer& deserializer);
 
 	//! Registers a secret type
 	void RegisterSecretType(SecretType& type);
 
 	//! Register a new Secret in the secret
-	void RegisterSecret(shared_ptr<RegisteredSecret> secret, OnCreateConflict on_conflict);
+	void RegisterSecret(shared_ptr<BaseSecret> secret, OnCreateConflict on_conflict);
 
 	//! Get the secret that matches the path best (longest prefix match wins)
-	shared_ptr<RegisteredSecret> GetSecretByPath(string& path, string type);
+	shared_ptr<BaseSecret> GetSecretByPath(string& path, string type);
 	//! Get a secret by name
-	shared_ptr<RegisteredSecret> GetSecretByName(string& name);
+	shared_ptr<BaseSecret> GetSecretByName(string& name);
 
 	//! Get the registered type
 	SecretType LookupType(string &type);
 
 	//! Get a vector of all registered secrets
-	vector<shared_ptr<RegisteredSecret>>& AllSecrets();
+	vector<shared_ptr<BaseSecret>>& AllSecrets();
 
 protected:
 	//! The currently registered secrets
-	vector<shared_ptr<RegisteredSecret>> registered_secrets;
+	vector<shared_ptr<BaseSecret>> registered_secrets;
 	//! The currently registered secret types
 	case_insensitive_map_t<SecretType> registered_types;
 };

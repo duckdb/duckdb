@@ -12,19 +12,25 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/secret_manager.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
-//! Base class from which RegisteredSecret classes can be made. TODO thread-safety?
-class RegisteredSecret {
+//! Base class from which BaseSecret classes can be made.
+class BaseSecret {
 	friend class SecretManager;
 
 public:
-	RegisteredSecret(vector<string> &prefix_paths, const string &type, const string &provider, const string &name)
+	BaseSecret(vector<string> &prefix_paths, const string &type, const string &provider, const string &name)
 	    : prefix_paths(prefix_paths), type(type), provider(provider), name(name), serializable(false) {
 		D_ASSERT(!type.empty());
 	}
-	virtual ~RegisteredSecret() = default;
+	BaseSecret(BaseSecret& other)
+	    : prefix_paths(other.prefix_paths), type(other.type), provider(other.provider), name(other.name), serializable(other.serializable) {
+		D_ASSERT(!type.empty());
+	}
+
+	virtual ~BaseSecret() = default;
 
 	//! Returns the longest prefix that matches, -1 for no match
 	virtual int LongestMatch(const string &path);
@@ -58,7 +64,7 @@ public:
 	}
 
 protected:
-	//! Helper function to serialize the base RegisteredSecret class variables
+	//! Helper function to serialize the base BaseSecret class variables
 	virtual void SerializeBaseSecret(Serializer &serializer) const final {
 		serializer.WriteProperty(100, "type", type);
 		serializer.WriteProperty(101, "provider", provider);
@@ -79,6 +85,48 @@ protected:
 
 	//! Whether the secret can be serialized/deserialized
 	bool serializable;
+};
+
+//! The BaseKeyValueSecret is a base class that implements a Secret as a set of key -> value strings. This class
+//! implements some features that all secret implementations that consist of only a key->value map of strings need.
+class BaseKeyValueSecret : public BaseSecret {
+public:
+	BaseKeyValueSecret(vector<string> &prefix_paths, const string &type, const string &provider, const string &name)
+	    : BaseSecret(prefix_paths, type, provider, name) {
+		D_ASSERT(!type.empty());
+		serializable = true;
+	}
+	BaseKeyValueSecret(BaseSecret& secret)
+	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()){};
+	BaseKeyValueSecret(BaseKeyValueSecret& secret)
+	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()){
+		secret_map = secret.secret_map;
+	};
+
+	virtual string ToString(bool redact) override;
+	void Serialize(Serializer &serializer) const override;
+
+	template <class TYPE>
+	static unique_ptr<BaseSecret> Deserialize(Deserializer &deserializer, BaseSecret base_secret) {
+		auto result = make_uniq<TYPE>(base_secret);
+		Value secret_map_value;
+		deserializer.ReadProperty(201, "secret_map", secret_map_value);
+
+		auto list_of_map = ListValue::GetChildren(secret_map_value);
+		for(const auto& entry : list_of_map) {
+			auto kv_struct = StructValue::GetChildren(entry);
+			result->secret_map[kv_struct[0].ToString()] = kv_struct[1].ToString();
+		}
+
+		return result;
+	}
+
+protected:
+	//! the map of key -> values that make up the secret
+	case_insensitive_map_t<string> secret_map;
+
+	//! (optionally) a set of keys to be redacted for this type
+	case_insensitive_set_t redact_keys;
 };
 
 } // namespace duckdb

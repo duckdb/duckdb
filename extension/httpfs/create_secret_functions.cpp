@@ -11,7 +11,7 @@ void CreateS3SecretFunctions::Register(DatabaseInstance &instance) {
 	RegisterCreateSecretFunction(instance, "gcs");
 }
 
-shared_ptr<RegisteredSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(ClientContext &context, CreateSecretInput& input, S3AuthParams params) {
+shared_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(ClientContext &context, CreateSecretInput& input, S3AuthParams params) {
 	// for r2 we can set the endpoint using the account id
 	if (input.type == "r2" && input.named_parameters.find("account_id") != input.named_parameters.end()) {
 		params.endpoint = input.named_parameters["account_id"].ToString() + ".r2.cloudflarestorage.com";
@@ -32,7 +32,7 @@ shared_ptr<RegisteredSecret> CreateS3SecretFunctions::CreateSecretFunctionIntern
 		} else if (named_param.first == "url_style") {
 			params.url_style = named_param.second.ToString();
 		} else if (named_param.first == "use_ssl") {
-			params.url_style = named_param.second.GetValue<bool>();
+			params.use_ssl = named_param.second.GetValue<bool>();
 		} else if (named_param.first == "url_compatibility_mode") {
 			params.s3_url_compatibility_mode = named_param.second.GetValue<bool>();
 		} else if (named_param.first == "account_id") {
@@ -60,14 +60,14 @@ shared_ptr<RegisteredSecret> CreateS3SecretFunctions::CreateSecretFunctionIntern
 	return secret;
 }
 
-shared_ptr<RegisteredSecret> CreateS3SecretFunctions::CreateS3SecretFromSettings(ClientContext &context, CreateSecretInput& input) {
+shared_ptr<BaseSecret> CreateS3SecretFunctions::CreateS3SecretFromSettings(ClientContext &context, CreateSecretInput& input) {
 	auto& opener = context.client_data->file_opener;
 	FileOpenerInfo info;
 	auto params = S3AuthParams::ReadFrom(opener.get(), info);
 	return CreateSecretFunctionInternal(context, input, params);
 }
 
-shared_ptr<RegisteredSecret> CreateS3SecretFunctions::CreateS3SecretFromConfig(ClientContext &context, CreateSecretInput& input) {
+shared_ptr<BaseSecret> CreateS3SecretFunctions::CreateS3SecretFromConfig(ClientContext &context, CreateSecretInput& input) {
 	S3AuthParams empty_params;
 	empty_params.use_ssl = true;
 	empty_params.s3_url_compatibility_mode = false;
@@ -104,7 +104,12 @@ void CreateS3SecretFunctions::RegisterCreateSecretFunction(DatabaseInstance &ins
 	//TODO: handle case where this has already run
 
 	// Register the new type
-	ExtensionUtil::RegisterSecretType(instance, {type, S3Secret::Deserialize, "config"});
+	SecretType secret_type;
+	secret_type.name = type;
+	secret_type.deserializer = BaseKeyValueSecret::Deserialize<S3Secret>;
+	secret_type.default_provider = "config";
+
+	ExtensionUtil::RegisterSecretType(instance, secret_type);
 
 	//! Create from config
 	CreateSecretFunction from_empty_config_fun(type, "config", CreateS3SecretFromConfig);

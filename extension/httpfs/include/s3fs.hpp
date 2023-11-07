@@ -8,6 +8,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/secret.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "httpfs.hpp"
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
@@ -76,67 +77,45 @@ struct S3ConfigParams {
 };
 
 //! Registered Credential class for S3.
-class S3Secret : public RegisteredSecret {
+class S3Secret : public BaseKeyValueSecret {
 public:
-	S3Secret(vector<string> &prefix_paths_p, string &type, string &provider, string& name, S3AuthParams params_p)
-	    : RegisteredSecret(prefix_paths_p, type, provider, name), params(params_p) {};
-	S3Secret(RegisteredSecret secret, S3AuthParams params_p)
-	    : RegisteredSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()), params(params_p) {};
-
+	static case_insensitive_set_t GetRedactionSet() {
+		return {"secret_access_key", "session_token"};
+	}
+	S3Secret(BaseKeyValueSecret& secret)
+	    : BaseKeyValueSecret(secret){
+	          redact_keys = GetRedactionSet();
+	      };
+	S3Secret(BaseSecret& secret)
+	    : BaseKeyValueSecret(secret){
+		      redact_keys = GetRedactionSet();
+			};
+	S3Secret(vector<string> &prefix_paths_p, string &type, string &provider, string& name, S3AuthParams& params)
+	    : BaseKeyValueSecret(prefix_paths_p, type, provider, name){
+		 secret_map["region"] = params.region;
+		 secret_map["access_key_id"] = params.access_key_id;
+		 secret_map["secret_access_key"] = params.secret_access_key;
+		 secret_map["session_token"] = params.session_token;
+		 secret_map["endpoint"] = params.endpoint;
+		 secret_map["url_style"] = params.url_style;
+		 secret_map["use_ssl"] = params.use_ssl ? "true" : "false";
+		 secret_map["s3_url_compatibility_mode"] = params.s3_url_compatibility_mode ? "true" : "false";
+		 redact_keys = GetRedactionSet();
+  	};
 
 	S3AuthParams GetParams(){
+		S3AuthParams params;
+		params.region = secret_map["region"];
+		params.access_key_id = secret_map["access_key_id"];
+		params.secret_access_key = secret_map["secret_access_key"];
+		params.session_token = secret_map["session_token"];
+		params.endpoint = secret_map["endpoint"];
+		params.url_style = secret_map["url_style"];
+		params.use_ssl = BooleanValue::Get(Value(secret_map["use_ssl"]).DefaultCastAs(LogicalType::BOOLEAN));
+		params.s3_url_compatibility_mode = BooleanValue::Get(Value(secret_map["s3_url_compatibility_mode"]).DefaultCastAs(LogicalType::BOOLEAN));
+
 		return params;
 	}
-
-	//! S3 credentials returned as connection string like value
-	string ToString(bool redact) override {
-		string value;
-
-		value += "region=" + params.region;
-		value += ";access_key_id=" + params.access_key_id;
-
-		if (redact && !params.secret_access_key.empty()) {
-			value += ";secret_access_key=<redacted>";
-		} else {
-			value += ";secret_access_key=" + params.secret_access_key;
-		}
-
-		value += ";session_token=" + params.session_token;
-		value += ";endpoint=" + params.endpoint;
-		value += ";url_style=" + params.url_style;
-		value += string(";use_ssl=") + (params.use_ssl ? "1" : "0");
-		value += string(";s3_url_compatibility_mode=") + (params.s3_url_compatibility_mode ? "1" : "0");
-
-		return value;
-	}
-
-	void Serialize(Serializer &serializer) const override {
-		RegisteredSecret::SerializeBaseSecret(serializer);
-		serializer.WriteProperty(10001, "region", params.region);
-		serializer.WriteProperty(10002, "access_key_id", params.access_key_id);
-		serializer.WriteProperty(10003, "secret_access_key", params.secret_access_key);
-		serializer.WriteProperty(10004, "session_token", params.session_token);
-		serializer.WriteProperty(10005, "endpoint", params.endpoint);
-		serializer.WriteProperty(10006, "url_style", params.url_style);
-		serializer.WriteProperty(10007, "use_ssl", params.use_ssl);
-		serializer.WriteProperty(10008, "s3_url_compatibility_mode", params.s3_url_compatibility_mode);
-	};
-
-	static unique_ptr<RegisteredSecret> Deserialize(Deserializer &deserializer, RegisteredSecret base_secret) {
-		S3AuthParams params;
-		deserializer.ReadProperty(10001, "region", params.region);
-		deserializer.ReadProperty(10002, "access_key_id", params.access_key_id);
-		deserializer.ReadProperty(10003, "secret_access_key", params.secret_access_key);
-		deserializer.ReadProperty(10004, "session_token", params.session_token);
-		deserializer.ReadProperty(10005, "endpoint", params.endpoint);
-		deserializer.ReadProperty(10006, "url_style", params.url_style);
-		deserializer.ReadProperty(10007, "use_ssl", params.use_ssl);
-		deserializer.ReadProperty(10008, "s3_url_compatibility_mode", params.s3_url_compatibility_mode);
-		return make_uniq<S3Secret>(base_secret, params);
-	}
-
-protected:
-	S3AuthParams params;
 };
 
 class S3FileSystem;

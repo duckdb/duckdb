@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-unique_ptr<RegisteredSecret> SecretManager::DeserializeSecret(Deserializer& deserializer) {
+unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer& deserializer) {
 	auto type = deserializer.ReadProperty<string>(100, "type");
 	auto provider = deserializer.ReadProperty<string>(101, "provider");
 	auto name = deserializer.ReadProperty<string>(102, "name");
@@ -22,10 +22,6 @@ unique_ptr<RegisteredSecret> SecretManager::DeserializeSecret(Deserializer& dese
 	return secret_type.deserializer(deserializer, {scope, type, provider, name});
 }
 
-void SecretManager::SerializeSecret(RegisteredSecret& secret, Serializer& serializer) {
-	secret.Serialize(serializer);
-}
-
 void SecretManager::RegisterSecretType(SecretType& type) {
 	if (registered_types.find(type.name) != registered_types.end()) {
 		throw InternalException("Attempted to register an already registered secret type: '%s'", type.name);
@@ -34,7 +30,7 @@ void SecretManager::RegisterSecretType(SecretType& type) {
 	registered_types[type.name] = type;
 }
 
-void SecretManager::RegisterSecret(shared_ptr<RegisteredSecret> secret, OnCreateConflict on_conflict) {
+void SecretManager::RegisterSecret(shared_ptr<BaseSecret> secret, OnCreateConflict on_conflict) {
 	bool conflict = false;
 	idx_t conflict_idx;
 
@@ -67,9 +63,9 @@ void SecretManager::RegisterSecret(shared_ptr<RegisteredSecret> secret, OnCreate
 	}
 }
 
-shared_ptr<RegisteredSecret> SecretManager::GetSecretByPath(string& path, string type) {
+shared_ptr<BaseSecret> SecretManager::GetSecretByPath(string& path, string type) {
 	int longest_match = -1;
-	shared_ptr<RegisteredSecret> best_match;
+	shared_ptr<BaseSecret> best_match;
 
 	for (const auto& secret: registered_secrets) {
 		if (secret->GetType() != type) {
@@ -85,7 +81,7 @@ shared_ptr<RegisteredSecret> SecretManager::GetSecretByPath(string& path, string
 	return best_match;
 }
 
-shared_ptr<RegisteredSecret> SecretManager::GetSecretByName(string& name) {
+shared_ptr<BaseSecret> SecretManager::GetSecretByName(string& name) {
 	throw NotImplementedException("GetSecretByName");
 }
 
@@ -99,7 +95,7 @@ SecretType SecretManager::LookupType(string &type) {
 	return lu->second;
 }
 
-vector<shared_ptr<RegisteredSecret>>& SecretManager::AllSecrets() {
+vector<shared_ptr<BaseSecret>>& SecretManager::AllSecrets() {
 	return registered_secrets;
 }
 

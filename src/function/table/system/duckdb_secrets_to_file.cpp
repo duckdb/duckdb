@@ -64,12 +64,10 @@ static void DuckDBSecretsFromFileFunction(ClientContext &context, TableFunctionI
 	auto& bind_data = data_p.bind_data->Cast<DuckDBSecretsToFileBindData>();
 
 	auto file_reader = BufferedFileReader(*context.db->config.file_system, bind_data.file.c_str());
-
-
 	while(!file_reader.Finished()) {
 		BinaryDeserializer deserializer(file_reader);
 		deserializer.Begin();
-		shared_ptr<RegisteredSecret> deserialized_secret = secret_manager->DeserializeSecret(deserializer);
+		shared_ptr<BaseSecret> deserialized_secret = secret_manager->DeserializeSecret(deserializer);
 		secret_manager->RegisterSecret(deserialized_secret, OnCreateConflict::ERROR_ON_CONFLICT);
 
 		deserializer.End();

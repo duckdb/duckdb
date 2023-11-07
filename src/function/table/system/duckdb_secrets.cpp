@@ -17,8 +17,28 @@ struct DuckDBSecretsData : public GlobalTableFunctionState {
 	idx_t offset;
 };
 
+struct DuckDBSecretsBindData : public FunctionData {
+public:
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<DuckDBSecretsBindData>();
+	};
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<DuckDBSecretsBindData>();
+		return redact == other.redact;
+	}
+	bool redact = true;
+};
+
 static unique_ptr<FunctionData> DuckDBSecretsBind(ClientContext &context, TableFunctionBindInput &input,
                                                      vector<LogicalType> &return_types, vector<string> &names) {
+	auto result = make_uniq<DuckDBSecretsBindData>();
+
+	auto entry = input.named_parameters.find("redact");
+	if (entry != input.named_parameters.end()) {
+		result->redact = BooleanValue::Get(entry->second);
+	}
+
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -34,7 +54,7 @@ static unique_ptr<FunctionData> DuckDBSecretsBind(ClientContext &context, TableF
 	names.emplace_back("secret_string");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	return nullptr;
+	return result;
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBSecretsInit(ClientContext &context, TableFunctionInitInput &input) {
@@ -44,6 +64,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBSecretsInit(ClientContext &context, T
 
 void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBSecretsData>();
+	auto &bind_data = data_p.bind_data->Cast<DuckDBSecretsBindData>();
 
 	auto &secret_manager = context.db->config.secret_manager;
 	auto &secrets = secret_manager->AllSecrets();
@@ -67,7 +88,7 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 		output.SetValue(1, count, Value(secret_entry->GetType()));
 		output.SetValue(2, count, Value(secret_entry->GetProvider()));
 		output.SetValue(3, count, Value::LIST(LogicalType::VARCHAR, scope_value));
-		output.SetValue(4, count, secret_entry->ToString(true));
+		output.SetValue(4, count, secret_entry->ToString(bind_data.redact));
 
 		data.offset++;
 		count++;
@@ -77,7 +98,9 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 
 void DuckDBSecretsFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet functions("duckdb_secrets");
-	functions.AddFunction(TableFunction({}, DuckDBSecretsFunction, DuckDBSecretsBind, DuckDBSecretsInit));
+	auto fun = TableFunction({}, DuckDBSecretsFunction, DuckDBSecretsBind, DuckDBSecretsInit);
+	fun.named_parameters["redact"] = LogicalType::BOOLEAN;
+	functions.AddFunction(fun);
 	set.AddFunction(functions);
 }
 
