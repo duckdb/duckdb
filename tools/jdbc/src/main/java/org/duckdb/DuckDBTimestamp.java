@@ -20,7 +20,7 @@ public class DuckDBTimestamp {
     }
 
     public DuckDBTimestamp(LocalDateTime localDateTime) {
-        this.timeMicros = DuckDBTimestamp.RefLocalDateTime.until(localDateTime, ChronoUnit.MICROS);
+        this.timeMicros = localDateTime2Micros(localDateTime);
     }
 
     public DuckDBTimestamp(OffsetDateTime offsetDateTime) {
@@ -92,6 +92,10 @@ public class DuckDBTimestamp {
 
     public static Timestamp fromNanoInstant(long nanos) {
         return Timestamp.from(Instant.ofEpochSecond(nanos / 1_000_000_000, nanosPartNanos(nanos)));
+    }
+
+    public static long localDateTime2Micros(LocalDateTime localDateTime) {
+        return DuckDBTimestamp.RefLocalDateTime.until(localDateTime, ChronoUnit.MICROS);
     }
 
     public Timestamp toSqlTimestamp() {
