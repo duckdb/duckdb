@@ -4,6 +4,11 @@
 
 require parquet
 
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
 statement ok
 SELECT SETSEED(0.8675309);
 
