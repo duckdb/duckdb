@@ -178,7 +178,7 @@ public:
 	class DistinctSortTree;
 
 	WindowDistinctAggregator(AggregateObject aggr, const LogicalType &result_type,
-	                         const WindowExcludeMode exclude_mode_p, idx_t count, BufferManager &buffer_manager);
+	                         const WindowExcludeMode exclude_mode_p, idx_t count, ClientContext &context);
 	~WindowDistinctAggregator() override;
 
 	//	Build
@@ -190,12 +190,14 @@ public:
 	void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
 	              idx_t row_idx) const override;
 
-	BufferManager &buffer_manager;
+	ClientContext &context;
 	ArenaAllocator allocator;
-	GlobalSortStatePtr global_sort;
 
 	//	Single threaded sorting for now
+	GlobalSortStatePtr global_sort;
 	LocalSortState local_sort;
+	idx_t payload_pos;
+	idx_t memory_per_thread;
 
 	//! The merge sort tree for the aggregate.
 	unique_ptr<DistinctSortTree> merge_sort_tree;

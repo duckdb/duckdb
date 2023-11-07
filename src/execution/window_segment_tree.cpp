@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/execution/window_executor.hpp"
 
+#include <numeric>
 #include <utility>
 
 namespace duckdb {
@@ -837,14 +838,12 @@ void WindowSegmentTreePart::Evaluate(const WindowSegmentTree &tree, const idx_t 
 //===--------------------------------------------------------------------===//
 WindowDistinctAggregator::WindowDistinctAggregator(AggregateObject aggr, const LogicalType &result_type,
                                                    const WindowExcludeMode exclude_mode_p, idx_t count,
-                                                   BufferManager &buffer_manager)
-    : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, count), buffer_manager(buffer_manager),
+                                                   ClientContext &context)
+    : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, count), context(context),
       allocator(Allocator::DefaultAllocator()) {
 
 	payload_types.emplace_back(LogicalType::UBIGINT);
 	payload_chunk.Initialize(Allocator::DefaultAllocator(), payload_types);
-
-	payload_chunk.data[0].Sequence(0, 1, 0);
 }
 
 WindowDistinctAggregator::~WindowDistinctAggregator() {
@@ -854,6 +853,7 @@ void WindowDistinctAggregator::Sink(DataChunk &arg_chunk, SelectionVector *filte
 	WindowAggregator::Sink(arg_chunk, filter_sel, filtered);
 
 	//	We sort the arguments and use the partition index as a tie-breaker.
+	//	TODO: Use a hash table?
 	if (!global_sort) {
 		//	1:	functionComputePrevIdcs(𝑖𝑛)
 		//	2:		sorted ← []
@@ -875,47 +875,45 @@ void WindowDistinctAggregator::Sink(DataChunk &arg_chunk, SelectionVector *filte
 		RowLayout payload_layout;
 		payload_layout.Initialize(payload_types);
 
-		global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
+		global_sort = make_uniq<GlobalSortState>(BufferManager::GetBufferManager(context), orders, payload_layout);
 		local_sort.Initialize(*global_sort, global_sort->buffer_manager);
 
 		sort_chunk.Initialize(Allocator::DefaultAllocator(), sort_types);
 		sort_chunk.data.back().Reference(payload_chunk.data[0]);
+		payload_pos = 0;
+		memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
 	}
 
 	//	3: 	for i ← 0 to in.size do
 	//	4: 		sorted[i] ← (in[i], i)
-
-	//	TODO: Filter out rows
-	int64_t start, increment, sequence_count;
-	SequenceVector::GetSequence(payload_chunk.data[0], start, increment, sequence_count);
-	sequence_count = arg_chunk.size();
+	const auto count = arg_chunk.size();
+	auto payload_data = FlatVector::GetData<idx_t>(payload_chunk.data[0]);
+	std::iota(payload_data, payload_data + count, payload_pos);
+	payload_pos += count;
 
 	for (column_t c = 0; c < arg_chunk.ColumnCount(); ++c) {
 		sort_chunk.data[c].Reference(arg_chunk.data[c]);
 	}
+	sort_chunk.SetCardinality(arg_chunk);
+	payload_chunk.SetCardinality(sort_chunk);
+
+	//	Apply FILTER clause, if any
+	if (filter_sel) {
+		sort_chunk.Slice(*filter_sel, filtered);
+		payload_chunk.Slice(*filter_sel, filtered);
+	}
 
 	local_sort.SinkChunk(sort_chunk, payload_chunk);
 
-	// 	if (local_sort.SizeInBytes() > merge_state->memory_per_thread) {
-	// 		local_sort.Sort(global_sort, true);
-	// 	}
-
-	start += sequence_count;
-	sequence_count = 0;
+	if (local_sort.SizeInBytes() > memory_per_thread) {
+		local_sort.Sort(*global_sort, true);
+	}
 }
 
 class WindowDistinctAggregator::DistinctSortTree : public MergeSortTree<idx_t, idx_t> {
 public:
 	using BaseTree = MergeSortTree<idx_t, idx_t>;
 	DistinctSortTree(Elements &&lowest_level, WindowDistinctAggregator &wda);
-
-	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
-	unsafe_unique_array<data_t> levels_flat_native;
-	//! For each level, the starting location in the levels_flat_native array
-	vector<idx_t> levels_flat_start;
-
-	//! The total number of internal nodes of the tree, stored in levels_flat_native
-	idx_t internal_nodes;
 };
 
 void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
@@ -934,7 +932,7 @@ void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
 	const auto count = inputs.size();
 	vector<idx_t> prev_idcs;
 	prev_idcs.reserve(count);
-	prev_idcs[0] = 0;
+	prev_idcs.emplace_back(0);
 
 	DataChunk scan_chunk;
 	scan_chunk.Initialize(Allocator::DefaultAllocator(), payload_types);
@@ -946,7 +944,7 @@ void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
 
 	SBIterator curr(*global_sort, ExpressionType::COMPARE_LESSTHAN);
 	SBIterator prev(*global_sort, ExpressionType::COMPARE_LESSTHAN);
-	const auto &sort_layout = global_sort->sort_layout;
+	auto prefix_layout = global_sort->sort_layout.GetPrefixComparisonLayout(sort_chunk.ColumnCount() - 1);
 
 	//	8:	for i ← 1 to in.size do
 	for (++curr; curr.GetIndex() < count; ++curr, ++prev) {
@@ -956,13 +954,14 @@ void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
 			scan_chunk.Reset();
 			scanner->Scan(scan_chunk);
 			scan_idx = 0;
+			second = FlatVector::GetData<idx_t>(scan_chunk.data[0]);
 		}
 
 		int lt = 0;
-		if (sort_layout.all_constant) {
-			lt = FastMemcmp(prev.entry_ptr, curr.entry_ptr, sort_layout.comparison_size);
+		if (prefix_layout.all_constant) {
+			lt = FastMemcmp(prev.entry_ptr, curr.entry_ptr, prefix_layout.comparison_size);
 		} else {
-			lt = Comparators::CompareTuple(prev.scan, curr.scan, prev.entry_ptr, curr.entry_ptr, sort_layout,
+			lt = Comparators::CompareTuple(prev.scan, curr.scan, prev.entry_ptr, curr.entry_ptr, prefix_layout,
 			                               prev.external);
 		}
 
@@ -975,6 +974,7 @@ void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
 		} else {
 			prev_idcs.emplace_back(0);
 		}
+		++scan_idx;
 	}
 	//	13:	return prevIdcs
 
@@ -988,6 +988,9 @@ WindowDistinctAggregator::DistinctSortTree::DistinctSortTree(Elements &&lowest_l
 	auto &aggr = wda.aggr;
 	auto &allocator = wda.allocator;
 	const auto state_size = wda.state_size;
+	auto &internal_nodes = wda.internal_nodes;
+	auto &levels_flat_native = wda.levels_flat_native;
+	auto &levels_flat_start = wda.levels_flat_start;
 
 	//! Input data chunk, used for leaf segment aggregation
 	DataChunk leaves;

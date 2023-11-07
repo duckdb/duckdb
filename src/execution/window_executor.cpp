@@ -850,6 +850,14 @@ bool WindowAggregateExecutor::IsConstantAggregate() {
 	return true;
 }
 
+bool WindowAggregateExecutor::IsDistinctAggregate() {
+	if (!wexpr.aggregate) {
+		return false;
+	}
+
+	return wexpr.distinct;
+}
+
 bool WindowAggregateExecutor::IsCustomAggregate() {
 	if (!wexpr.aggregate) {
 		return false;
@@ -878,8 +886,10 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
                                                  const ValidityMask &order_mask, WindowAggregationMode mode)
     : WindowExecutor(wexpr, context, count, partition_mask, order_mask), mode(mode), filter_executor(context) {
 
-	//	Check for constant aggregate
-	if (IsConstantAggregate()) {
+	if (IsDistinctAggregate()) {
+		aggregator = make_uniq<WindowDistinctAggregator>(AggregateObject(wexpr), wexpr.return_type,
+		                                                 wexpr.exclude_clause, count, context);
+	} else if (IsConstantAggregate()) {
 		aggregator = make_uniq<WindowConstantAggregator>(AggregateObject(wexpr), wexpr.return_type, partition_mask,
 		                                                 wexpr.exclude_clause, count);
 	} else if (IsCustomAggregate()) {
