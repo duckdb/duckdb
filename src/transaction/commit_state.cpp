@@ -254,6 +254,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		// Grab a write lock on the catalog
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		lock_guard<mutex> write_lock(duck_catalog.GetWriteLock());
+		lock_guard<mutex> read_lock(catalog_entry->set->GetCatalogLock());
 		catalog_entry->set->UpdateTimestamp(*catalog_entry->parent, commit_id);
 		if (catalog_entry->name != catalog_entry->parent->name) {
 			catalog_entry->set->UpdateTimestamp(*catalog_entry, commit_id);
