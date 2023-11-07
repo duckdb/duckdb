@@ -167,6 +167,7 @@ private:
 
 	EntryIndex PutEntry(idx_t entry_index, unique_ptr<CatalogEntry> entry);
 	void PutEntry(EntryIndex index, unique_ptr<CatalogEntry> entry);
+	bool DropEntryInternal(CatalogTransaction transaction, const string &name, bool allow_drop_internal = false);
 
 private:
 	DuckCatalog &catalog;

@@ -221,9 +221,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 				throw CatalogException(rename_err_msg, original_name, value->name);
 			}
 		}
-	}
-
-	if (name_changed) {
+		DropEntryInternal(transaction, original_name, false);
 		// Do PutMapping and DeleteMapping after dependency check
 		PutMapping(transaction, value->name, entry_index.Copy());
 		DeleteMapping(transaction, original_name);
@@ -275,14 +273,10 @@ bool CatalogSet::DropDependencies(CatalogTransaction transaction, const string &
 	return true;
 }
 
-bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, bool cascade, bool allow_drop_internal) {
-	if (!DropDependencies(transaction, name, cascade, allow_drop_internal)) {
-		return false;
-	}
+bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const string &name, bool allow_drop_internal) {
 	EntryIndex entry_index;
 	// lock the catalog for writing
 	// we can only delete an entry that exists
-	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	auto entry = GetEntryInternal(transaction, name, &entry_index);
 	if (!entry) {
 		return false;
@@ -291,7 +285,6 @@ bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, b
 		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
 	}
 
-	lock_guard<mutex> read_lock(catalog_lock);
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
 	// and point it at the dummy node
@@ -308,6 +301,15 @@ bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, b
 		dtransaction.PushCatalogEntry(value_ptr->Child());
 	}
 	return true;
+}
+
+bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, bool cascade, bool allow_drop_internal) {
+	if (!DropDependencies(transaction, name, cascade, allow_drop_internal)) {
+		return false;
+	}
+	lock_guard<mutex> write_lock(catalog.GetWriteLock());
+	lock_guard<mutex> read_lock(catalog_lock);
+	return DropEntryInternal(transaction, name, allow_drop_internal);
 }
 
 bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool cascade, bool allow_drop_internal) {
