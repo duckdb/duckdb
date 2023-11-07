@@ -66,7 +66,7 @@ jobs:
 
     - name: Install pytest
       run: |
-        python3.7 -m pip install pytest
+        python3 -m pip install pytest
 
     - name: Build
       shell: bash
@@ -79,13 +79,15 @@ jobs:
     - name: Test
       shell: bash
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-      run: make allunit
+      run: |
+        make
+        python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*"
 
     - name: Tools Tests
       shell: bash
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       run: |
-        python3.7 -m pytest tools/shell/tests --shell-binary build/release/duckdb
+        python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
     - name: Examples
       shell: bash
@@ -99,12 +101,12 @@ jobs:
     - name: Deploy
       shell: bash
       run: |
-        python3.7 scripts/amalgamation.py
+        python3 scripts/amalgamation.py
         zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
         zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
         zip -j duckdb_odbc-linux-amd64.zip build/release/tools/odbc/libduckdb_odbc.so tools/odbc/linux_setup/unixodbc_setup.sh
-        python3.7 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_odbc-linux-amd64.zip
+        python3 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_odbc-linux-amd64.zip
 
     - uses: actions/upload-artifact@v3
       with:
@@ -158,11 +160,11 @@ jobs:
      - name: Deploy
        shell: bash
        run: |
-         python3.7 scripts/amalgamation.py
+         python3 scripts/amalgamation.py
          zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
          zip -j duckdb_odbc-linux-aarch64.zip build/release/tools/odbc/libduckdb_odbc.so
          zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
-         python3.7 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip
+         python3 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip
 
      - uses: actions/upload-artifact@v3
        with:
@@ -326,7 +328,7 @@ jobs:
 
     - name: Symbol Leakage Test
       shell: bash
-      run: python3.7 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
+      run: python3 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
 
  linux-httpfs:
     name: Linux HTTPFS

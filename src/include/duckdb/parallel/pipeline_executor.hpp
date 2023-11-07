@@ -106,6 +106,10 @@ private:
 	//! This flag is set when the pipeline gets interrupted by the Sink -> the final_chunk should be re-sink-ed.
 	bool remaining_sink_chunk = false;
 
+	//! This flag is set when the pipeline gets interrupted by NextBatch -> NextBatch should be called again and the
+	//! source_chunk should be sent through the pipeline
+	bool next_batch_blocked = false;
+
 	//! Current operator being flushed
 	idx_t flushing_idx;
 	//! Whether the current flushing_idx should be flushed: this needs to be stored to make flushing code re-entrant
@@ -131,6 +135,9 @@ private:
 	//! Returns whether or not a new input chunk is needed, or whether or not we are finished
 	OperatorResultType Execute(DataChunk &input, DataChunk &result, idx_t initial_index = 0);
 
+	//! Notifies the sink that a new batch has started
+	SinkNextBatchType NextBatch(DataChunk &source_chunk);
+
 	//! Tries to flush all state from intermediate operators. Will return true if all state is flushed, false in the
 	//! case of a blocked sink.
 	bool TryFlushCachingOperators();
@@ -143,6 +150,7 @@ private:
 	int debug_blocked_sink_count = 0;
 	int debug_blocked_source_count = 0;
 	int debug_blocked_combine_count = 0;
+	int debug_blocked_next_batch_count = 0;
 	//! Number of times the Sink/Source will block before actually returning data
 	int debug_blocked_target_count = 1;
 #endif
