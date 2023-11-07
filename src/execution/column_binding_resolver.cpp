@@ -165,7 +165,7 @@ void ColumnBindingResolver::Verify(LogicalOperator &op) {
 #ifdef DEBUG
 	op.GetColumnBindings();
 	VerifyInternal(op);
-	for(auto &child : op.children) {
+	for (auto &child : op.children) {
 		Verify(*child);
 	}
 #endif
