@@ -967,7 +967,7 @@ void _duckdb_jdbc_appender_append_double(JNIEnv *env, jclass, jobject appender_r
 }
 
 void _duckdb_jdbc_appender_append_timestamp(JNIEnv *env, jclass, jobject appender_ref_buf, jlong value) {
-	timestamp_t timestamp = timestamp_t((long)value);
+	timestamp_t timestamp = timestamp_t((int64_t)value);
 	get_appender(env, appender_ref_buf)->Append(Value::TIMESTAMP(timestamp));
 }
 
