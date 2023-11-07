@@ -14,7 +14,7 @@ bool PyGenericAlias::check_(const py::handle &object) {
 		return false;
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, import_cache.types().GenericAlias());
+	return py::isinstance(object, import_cache.types.GenericAlias());
 }
 
 // NOLINTNEXTLINE(readability-identifier-naming)
@@ -27,10 +27,10 @@ bool PyUnionType::check_(const py::handle &object) {
 	}
 
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	if (types_loaded && py::isinstance(object, import_cache.types().UnionType())) {
+	if (types_loaded && py::isinstance(object, import_cache.types.UnionType())) {
 		return true;
 	}
-	if (typing_loaded && py::isinstance(object, import_cache.typing()._UnionGenericAlias())) {
+	if (typing_loaded && py::isinstance(object, import_cache.typing._UnionGenericAlias())) {
 		return true;
 	}
 	return false;
