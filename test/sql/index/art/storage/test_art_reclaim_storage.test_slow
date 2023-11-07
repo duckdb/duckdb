@@ -1,5 +1,5 @@
 # name: test/sql/index/art/storage/test_art_reclaim_storage.test_slow
-# description: Test that the block manager reclaims blocks previously used for indexes
+# description: Test that the block manager reclaims index memory
 # group: [storage]
 
 load __TEST_DIR__/test_reclaim_space.db
