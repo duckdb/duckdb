@@ -3,6 +3,7 @@ package org.duckdb;
 import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.Map;
 
 import static org.duckdb.DuckDBResultSetMetaData.type_to_int;
@@ -80,5 +81,10 @@ public class DuckDBArray implements Array {
     public ResultSet getResultSet(long index, int count, Map<String, Class<?>> map) throws SQLException {
         // TODO Auto-generated method stub
         throw new UnsupportedOperationException("Unimplemented method 'getResultSet'");
+    }
+
+    @Override
+    public String toString() {
+        return Arrays.toString(array);
     }
 }
