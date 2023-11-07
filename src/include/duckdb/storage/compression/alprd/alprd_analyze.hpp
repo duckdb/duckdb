@@ -121,7 +121,7 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 template <class T>
 idx_t AlpRDFinalAnalyze(AnalyzeState &state) {
 	auto &analyze_state = (AlpRDAnalyzeState<T> &)state;
-	double factor_of_sampling = analyze_state.rowgroup_sample.size() / analyze_state.total_values_count;
+	double factor_of_sampling = 1 / ((double)analyze_state.rowgroup_sample.size() / analyze_state.total_values_count);
 
 	// Finding which is the best dictionary for the sample
 	double estimated_bits_per_value = alp::AlpRDCompression<T, true>::FindBestDictionary(analyze_state.rowgroup_sample,
