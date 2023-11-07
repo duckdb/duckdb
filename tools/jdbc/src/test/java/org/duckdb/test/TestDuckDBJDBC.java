@@ -2447,7 +2447,7 @@ public class TestDuckDBJDBC {
         stmt.close();
         conn.close();
     }
-    
+
     public static void test_appender_decimal_wrong_scale() throws Exception {
         DuckDBConnection conn = DriverManager.getConnection("jdbc:duckdb:").unwrap(DuckDBConnection.class);
         Statement stmt = conn.createStatement();
