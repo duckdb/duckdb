@@ -11,7 +11,7 @@ pragma enable_verification
 query I
 select json_structure('{}')
 ----
-"JSON"
+JSON
 
 statement error
 select json_transform('{}', '{}')

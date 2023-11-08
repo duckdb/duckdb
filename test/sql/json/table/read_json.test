@@ -148,11 +148,11 @@ SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=1)
 query II
 SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=2)
 ----
-1	["O", "Brother,", "Where", "Art", "Thou?"]
-2	["Home", "for", "the", "Holidays"]
-3	["The", "Firm"]
-4	["Broadcast", "News"]
-5	["Raising", "Arizona"]
+1	[O, Brother,, Where, Art, Thou?]
+2	[Home, for, the, Holidays]
+3	[The, Firm]
+4	[Broadcast, News]
+5	[Raising, Arizona]
 
 # at level 3 it's fully detected, and we get BIGINT and VARCHAR[]
 query II
@@ -188,21 +188,21 @@ SELECT id, typeof(name), unnest(name) FROM 'data/json/with_list.json'
 query III
 SELECT id, typeof(name), unnest(name) FROM read_json_auto('data/json/with_list.json', maximum_depth=2)
 ----
-1	JSON[]	"O"
-1	JSON[]	"Brother,"
-1	JSON[]	"Where"
-1	JSON[]	"Art"
-1	JSON[]	"Thou?"
-2	JSON[]	"Home"
-2	JSON[]	"for"
-2	JSON[]	"the"
-2	JSON[]	"Holidays"
-3	JSON[]	"The"
-3	JSON[]	"Firm"
-4	JSON[]	"Broadcast"
-4	JSON[]	"News"
-5	JSON[]	"Raising"
-5	JSON[]	"Arizona"
+1	JSON[]	O
+1	JSON[]	Brother,
+1	JSON[]	Where
+1	JSON[]	Art
+1	JSON[]	Thou?
+2	JSON[]	Home
+2	JSON[]	for
+2	JSON[]	the
+2	JSON[]	Holidays
+3	JSON[]	The
+3	JSON[]	Firm
+4	JSON[]	Broadcast
+4	JSON[]	News
+5	JSON[]	Raising
+5	JSON[]	Arizona
 
 # with depth 0 we don't bother detecting anything, everything defaults to JSON (even the "id" column in this case)
 query II
