@@ -1,6 +1,6 @@
 name: Pull Request Requires Maintainer Approval
 on:
-  pull_request:
+  pull_request_target:
     types:
       - labeled
 
