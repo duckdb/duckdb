@@ -17,7 +17,7 @@ class AlpConstants {
 public:
 	static constexpr uint32_t ALP_VECTOR_SIZE = 1024;
 	static constexpr uint32_t RG_SAMPLES = 8;
-	static constexpr uint16_t SAMPLES_PER_VECTOR = 1024;
+	static constexpr uint16_t SAMPLES_PER_VECTOR = 32;
 	// We calculate how many equidistant vector we must jump within a rowgroup
 	static constexpr uint32_t RG_SAMPLES_DUCKDB_JUMP = (STANDARD_ROW_GROUPS_SIZE / RG_SAMPLES) / STANDARD_VECTOR_SIZE;
 
