@@ -614,8 +614,7 @@ TEST_CASE("Test custom_user_agent config", "[capi]") {
 		REQUIRE(duckdb_open_ext(NULL, &db, config, NULL) != DuckDBError);
 		REQUIRE(duckdb_connect(db, &con) != DuckDBError);
 
-		duckdb_query(con, "SELECT value FROM duckdb_settings() WHERE name = 'custom_user_agent'",
-		             &result_custom_user_agent);
+		duckdb_query(con, "SELECT current_setting('custom_user_agent')", &result_custom_user_agent);
 		duckdb_query(con, "PRAGMA user_agent", &result_full_user_agent);
 
 		REQUIRE(duckdb_row_count(&result_custom_user_agent) == 1);

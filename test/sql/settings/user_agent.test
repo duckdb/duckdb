@@ -13,7 +13,7 @@ RESET custom_user_agent
 Cannot change custom_user_agent setting while database is running
 
 query T
-SELECT value FROM duckdb_settings() WHERE name = 'custom_user_agent'
+SELECT current_setting('custom_user_agent')
 ----
 (empty)
 

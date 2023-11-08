@@ -3961,14 +3961,10 @@ public class TestDuckDBJDBC {
         assertEquals(array.toString(), "[42]");
     }
 
-    public static void test_user_agent() throws Exception {
+    public static void test_user_agent_default() throws Exception {
         try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
-            try (PreparedStatement stmt1 =
-                     conn.prepareStatement("SELECT value FROM duckdb_settings() WHERE name = 'custom_user_agent'");
-                 ResultSet rs = stmt1.executeQuery()) {
-                assertTrue(rs.next());
-                assertTrue(rs.getString(1).matches(""));
-            }
+            assertEquals(getSetting(conn, "custom_user_agent"), "");
+
             try (PreparedStatement stmt1 = conn.prepareStatement("PRAGMA user_agent");
                  ResultSet rs = stmt1.executeQuery()) {
                 assertTrue(rs.next());
@@ -3977,17 +3973,12 @@ public class TestDuckDBJDBC {
         }
     }
 
-    public static void test_custom_user_agent() throws Exception {
+    public static void test_user_agent_custom() throws Exception {
         Properties props = new Properties();
         props.setProperty(DUCKDB_USER_AGENT_PROPERTY, "CUSTOM_STRING");
 
         try (Connection conn = DriverManager.getConnection("jdbc:duckdb:", props)) {
-            try (PreparedStatement stmt1 =
-                     conn.prepareStatement("SELECT value FROM duckdb_settings() WHERE name = 'custom_user_agent'");
-                 ResultSet rs = stmt1.executeQuery()) {
-                assertTrue(rs.next());
-                assertEquals("CUSTOM_STRING", rs.getString(1));
-            }
+            assertEquals(getSetting(conn, "custom_user_agent"), "CUSTOM_STRING");
 
             try (PreparedStatement stmt1 = conn.prepareStatement("PRAGMA user_agent");
                  ResultSet rs = stmt1.executeQuery()) {
