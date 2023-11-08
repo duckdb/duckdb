@@ -43,8 +43,6 @@ void CheckInteger(SQLHANDLE handle, SQLLEN expected, SQLSMALLINT field_identifie
  */
 void ExpectError(SQLHANDLE handle, SQLSMALLINT field_identifier);
 
-ExpectedResult FindKey(std::map<SQLLEN, ExpectedResult> expected, SQLLEN key);
-
 /*
  * @brief Executes SQLColAttribute for all fields and checks the result
  */
