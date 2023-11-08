@@ -27,7 +27,6 @@ void odbc_col_attribute_test::ExpectError(SQLHANDLE handle, SQLSMALLINT field_id
 }
 
 void odbc_col_attribute_test::TestAllFields(SQLHANDLE hstmt, std::map<SQLLEN, ExpectedResult> expected) {
-	// SQL_DESC_AUTO_UNIQUE_VALUE
 	SQLLEN n;
 	SQLRETURN ret = SQLColAttribute(hstmt, 1, SQL_DESC_AUTO_UNIQUE_VALUE, nullptr, 0, nullptr, &n);
 	REQUIRE(ret == SQL_SUCCESS_WITH_INFO);
