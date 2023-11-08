@@ -10,10 +10,13 @@ class ExpectedResult {
 public:
 	std::string s;
 	SQLLEN n;
+	bool is_int;
 
-	explicit ExpectedResult(SQLLEN n_n) : n(n_n) {};
+	ExpectedResult() {};
 
-	explicit ExpectedResult(const std::string &n_s) : s(n_s) {};
+	explicit ExpectedResult(SQLLEN n_n) : n(n_n), is_int(true) {};
+
+	explicit ExpectedResult(const std::string &n_s) : s(n_s), is_int(false) {};
 
 	ExpectedResult(const ExpectedResult &other) {
 		*this = other;
@@ -40,10 +43,12 @@ void CheckInteger(SQLHANDLE handle, SQLLEN expected, SQLSMALLINT field_identifie
  */
 void ExpectError(SQLHANDLE handle, SQLSMALLINT field_identifier);
 
+ExpectedResult FindKey(std::map<SQLLEN, ExpectedResult> expected, SQLLEN key);
+
 /*
  * @brief Executes SQLColAttribute for all fields and checks the result
  */
-void TestAllFields(SQLHANDLE hstmt, std::map<SQLLEN, ExpectedResult *> expected);
+void TestAllFields(SQLHANDLE hstmt, std::map<SQLLEN, ExpectedResult> expected);
 
 } // namespace odbc_col_attribute_test
 
