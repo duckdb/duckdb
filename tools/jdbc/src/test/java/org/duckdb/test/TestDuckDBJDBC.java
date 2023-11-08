@@ -3948,41 +3948,54 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_struct_use_after_free() throws Exception {
+        Object struct, array;
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+             PreparedStatement stmt = conn.prepareStatement("SELECT struct_pack(hello := 2), [42]");
+             ResultSet rs = stmt.executeQuery()) {
+            rs.next();
+            struct = rs.getObject(1);
+            array = rs.getObject(2);
+        }
+        assertEquals(struct.toString(), "{hello=2}");
+        assertEquals(array.toString(), "[42]");
+    }
+
     public static void test_user_agent() throws Exception {
-        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
-            try (PreparedStatement stmt1 =
-                     conn.prepareStatement("SELECT value FROM duckdb_settings() WHERE name = 'custom_user_agent'");
-                 ResultSet rs = stmt1.executeQuery()) {
-                assertTrue(rs.next());
-                assertTrue(rs.getString(1).matches(""));
-            }
-            try (PreparedStatement stmt1 = conn.prepareStatement("PRAGMA user_agent");
-                 ResultSet rs = stmt1.executeQuery()) {
-                assertTrue(rs.next());
-                assertTrue(rs.getString(1).matches("duckdb/.*(.*) jdbc"));
-            }
-        }
-    }
-
-    public static void test_custom_user_agent() throws Exception {
-        Properties props = new Properties();
-        props.setProperty(DUCKDB_USER_AGENT_PROPERTY, "CUSTOM_STRING");
-
-        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:", props)) {
-            try (PreparedStatement stmt1 =
-                     conn.prepareStatement("SELECT value FROM duckdb_settings() WHERE name = 'custom_user_agent'");
-                 ResultSet rs = stmt1.executeQuery()) {
-                assertTrue(rs.next());
-                assertEquals("CUSTOM_STRING", rs.getString(1));
-            }
-
-            try (PreparedStatement stmt1 = conn.prepareStatement("PRAGMA user_agent");
-                 ResultSet rs = stmt1.executeQuery()) {
-                assertTrue(rs.next());
-                assertTrue(rs.getString(1).matches("duckdb/.*(.*) jdbc CUSTOM_STRING"));
+            try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+                try (PreparedStatement stmt1 =
+                         conn.prepareStatement("SELECT value FROM duckdb_settings() WHERE name = 'custom_user_agent'");
+                     ResultSet rs = stmt1.executeQuery()) {
+                    assertTrue(rs.next());
+                    assertTrue(rs.getString(1).matches(""));
+                }
+                try (PreparedStatement stmt1 = conn.prepareStatement("PRAGMA user_agent");
+                     ResultSet rs = stmt1.executeQuery()) {
+                    assertTrue(rs.next());
+                    assertTrue(rs.getString(1).matches("duckdb/.*(.*) jdbc"));
+                }
             }
         }
-    }
+
+        public static void test_custom_user_agent() throws Exception {
+            Properties props = new Properties();
+            props.setProperty(DUCKDB_USER_AGENT_PROPERTY, "CUSTOM_STRING");
+
+            try (Connection conn = DriverManager.getConnection("jdbc:duckdb:", props)) {
+                try (PreparedStatement stmt1 =
+                         conn.prepareStatement("SELECT value FROM duckdb_settings() WHERE name = 'custom_user_agent'");
+                     ResultSet rs = stmt1.executeQuery()) {
+                    assertTrue(rs.next());
+                    assertEquals("CUSTOM_STRING", rs.getString(1));
+                }
+
+                try (PreparedStatement stmt1 = conn.prepareStatement("PRAGMA user_agent");
+                     ResultSet rs = stmt1.executeQuery()) {
+                    assertTrue(rs.next());
+                    assertTrue(rs.getString(1).matches("duckdb/.*(.*) jdbc CUSTOM_STRING"));
+                }
+            }
+        }
 
     public static void main(String[] args) throws Exception {
         // Woo I can do reflection too, take this, JUnit!
