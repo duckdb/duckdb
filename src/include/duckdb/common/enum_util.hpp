@@ -236,6 +236,8 @@ enum class SinkCombineResultType : uint8_t;
 
 enum class SinkFinalizeType : uint8_t;
 
+enum class SinkNextBatchType : uint8_t;
+
 enum class SinkResultType : uint8_t;
 
 enum class SourceResultType : uint8_t;
@@ -596,6 +598,9 @@ const char* EnumUtil::ToChars<SinkCombineResultType>(SinkCombineResultType value
 
 template<>
 const char* EnumUtil::ToChars<SinkFinalizeType>(SinkFinalizeType value);
+
+template<>
+const char* EnumUtil::ToChars<SinkNextBatchType>(SinkNextBatchType value);
 
 template<>
 const char* EnumUtil::ToChars<SinkResultType>(SinkResultType value);
@@ -984,6 +989,9 @@ SinkCombineResultType EnumUtil::FromString<SinkCombineResultType>(const char *va
 
 template<>
 SinkFinalizeType EnumUtil::FromString<SinkFinalizeType>(const char *value);
+
+template<>
+SinkNextBatchType EnumUtil::FromString<SinkNextBatchType>(const char *value);
 
 template<>
 SinkResultType EnumUtil::FromString<SinkResultType>(const char *value);
