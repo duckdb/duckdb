@@ -304,7 +304,13 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 			}
 			auto bound_col = &aggr.groups[ind]->Cast<BoundColumnRefExpression>();
 			auto col_index = bound_col->binding.column_index;
-			D_ASSERT(col_index < child_stats.column_distinct_count.size());
+			if (col_index >= child_stats.column_distinct_count.size()) {
+				// it is possible the column index of the grouping_set is not in the child stats.
+				// this can happen when delim joins are present, since delim scans are not currently
+				// reorderable. Meaning they don't add a relation or column_ids that could potentially
+				// be grouped by. Hopefully this can be fixed with duckdb-internal#606
+				continue;
+			}
 			if (new_card < child_stats.column_distinct_count[col_index].distinct_count) {
 				new_card = child_stats.column_distinct_count[col_index].distinct_count;
 			}
