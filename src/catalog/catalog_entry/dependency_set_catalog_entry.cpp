@@ -183,6 +183,11 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransacti
 void DependencySetCatalogEntry::RemoveDependency(CatalogTransaction transaction, CatalogEntry &dependency) {
 	D_ASSERT(dependency.type == CatalogType::DEPENDENCY_ENTRY || dependency.type == CatalogType::DEPENDENCY_SET);
 	auto &name = dependency.name;
+	auto entry = dependencies.GetEntry(transaction, name);
+	if (!entry) {
+		// Already deleted
+		return;
+	}
 	dependencies.DropEntry(transaction, name, false);
 }
 
@@ -190,6 +195,11 @@ void DependencySetCatalogEntry::RemoveDependency(CatalogTransaction transaction,
 void DependencySetCatalogEntry::RemoveDependent(CatalogTransaction transaction, CatalogEntry &dependent) {
 	D_ASSERT(dependent.type == CatalogType::DEPENDENCY_ENTRY || dependent.type == CatalogType::DEPENDENCY_SET);
 	auto &name = dependent.name;
+	auto entry = dependents.GetEntry(transaction, name);
+	if (!entry) {
+		// Already deleted
+		return;
+	}
 	dependents.DropEntry(transaction, name, false);
 }
 

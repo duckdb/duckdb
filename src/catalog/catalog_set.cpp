@@ -322,18 +322,18 @@ DuckCatalog &CatalogSet::GetCatalog() {
 
 void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
 	// destroy the backed up entry: it is no longer required
-	auto parent_p = catalog_entry.Parent();
-	D_ASSERT(parent_p);
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	lock_guard<mutex> lock(catalog_lock);
-	parent_p = catalog_entry.Parent();
-	auto &parent = *parent_p;
+	auto &parent = *catalog_entry.Parent();
+	// Replace the entry with its child, deleting it in the process
 	parent.SetChild(catalog_entry.TakeChild());
 	if (parent.deleted && !parent.HasChild() && !parent.HasParent()) {
+		// The entry's parent is a tombstone and the entry had no child
+		// clean up the mapping and the tombstone entry as well
 		auto mapping_entry = mapping.find(parent.name);
 		D_ASSERT(mapping_entry != mapping.end());
 		auto &entry = mapping_entry->second->index.GetEntry();
-		if (&entry == parent_p.get()) {
+		if (&entry == &parent) {
 			mapping.erase(mapping_entry);
 		}
 	}
