@@ -9,15 +9,14 @@ duckdb_state duckdb_open_ext(const char *path, duckdb_database *out, duckdb_conf
 	auto wrapper = new DatabaseData();
 	try {
 		DBConfig default_config;
+		default_config.SetOptionByName("duckdb_api", "capi");
+
 		DBConfig *db_config = &default_config;
 		DBConfig *user_config = (DBConfig *)config;
 		if (user_config) {
 			db_config = user_config;
 		}
 
-		if (db_config->options.duckdb_api.empty()) {
-			db_config->options.duckdb_api = "capi";
-		}
 		wrapper->database = duckdb::make_uniq<DuckDB>(path, db_config);
 	} catch (std::exception &ex) {
 		if (error) {

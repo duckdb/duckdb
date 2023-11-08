@@ -72,7 +72,6 @@ static jmethodID J_DuckStruct_init;
 static jclass J_ByteBuffer;
 
 static jmethodID J_Map_entrySet;
-static jmethodID J_Map_remove;
 static jmethodID J_Set_iterator;
 static jmethodID J_Iterator_hasNext;
 static jmethodID J_Iterator_next;
@@ -148,7 +147,6 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 
 	tmpLocalRef = env->FindClass("java/util/Map");
 	J_Map_entrySet = env->GetMethodID(tmpLocalRef, "entrySet", "()Ljava/util/Set;");
-	J_Map_remove = env->GetMethodID(tmpLocalRef, "remove", "(Ljava/lang/Object;)Ljava/lang/Object;");
 	env->DeleteLocalRef(tmpLocalRef);
 
 	tmpLocalRef = env->FindClass("java/util/Set");
@@ -312,21 +310,13 @@ static const char *const JDBC_STREAM_RESULTS = "jdbc_stream_results";
 jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolean read_only, jobject props) {
 	auto database = byte_array_to_string(env, database_j);
 	DBConfig config;
-	config.options.duckdb_api = "java";
+	config.SetOptionByName("duckdb_api", "java");
 	config.AddExtensionOption(
 	    JDBC_STREAM_RESULTS,
 	    "Whether to stream results. Only one ResultSet on a connection can be open at once when true",
 	    LogicalType::BOOLEAN);
 	if (read_only) {
 		config.options.access_mode = AccessMode::READ_ONLY;
-	}
-	const char *duckdb_api_key = "duckdb_api";
-	jstring jduckdb_api_key = env->NewStringUTF(duckdb_api_key);
-	jobject duckdb_api_value = env->CallObjectMethod(props, J_Map_remove, jduckdb_api_key);
-	if (duckdb_api_value) {
-		D_ASSERT(env->IsInstanceOf(duckdb_api_value, J_String));
-		const string &duckdb_api_value_str = jstring_to_string(env, (jstring)duckdb_api_value);
-		config.options.duckdb_api = duckdb_api_value_str;
 	}
 	jobject entry_set = env->CallObjectMethod(props, J_Map_entrySet);
 	jobject iterator = env->CallObjectMethod(entry_set, J_Set_iterator);

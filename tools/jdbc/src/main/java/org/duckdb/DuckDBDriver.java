@@ -33,12 +33,11 @@ public class DuckDBDriver implements java.sql.Driver {
             info = (Properties) info.clone();
         }
         String prop_val = (String) info.remove(DUCKDB_READONLY_PROPERTY);
-        info.put("duckdb_api", "jdbc");
-
         if (prop_val != null) {
             String prop_clean = prop_val.trim().toLowerCase();
             read_only = prop_clean.equals("1") || prop_clean.equals("true") || prop_clean.equals("yes");
         }
+        info.put("duckdb_api", "jdbc");
         return DuckDBConnection.newConnection(url, read_only, info);
     }
 

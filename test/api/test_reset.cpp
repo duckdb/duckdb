@@ -102,7 +102,6 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"force_bitpacking_mode", {"constant"}},
 	    {"allocator_flush_threshold", {"4.2GB"}},
 	    {"arrow_large_buffer_size", {true}}};
-
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		REQUIRE(name == "MISSING_FROM_MAP");
@@ -127,6 +126,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "user",
 	    "profiling_output", // just an alias
 	    "profiler_history_size",
+	    "duckdb_api",
 	    "custom_user_agent"};
 	return excluded_options.count(name) == 1;
 }

@@ -1,5 +1,4 @@
 #include "duckdb/main/config.hpp"
-#include "duckdb/main/database.hpp"
 
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -116,6 +115,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL_ALIAS("wal_autocheckpoint", CheckpointThresholdSetting),
                                                  DUCKDB_GLOBAL_ALIAS("worker_threads", ThreadsSetting),
                                                  DUCKDB_GLOBAL(FlushAllocatorSetting),
+                                                 DUCKDB_GLOBAL(DuckDBApiSetting),
                                                  DUCKDB_GLOBAL(CustomUserAgentSetting),
                                                  FINAL_SETTING};
 
@@ -421,10 +421,8 @@ OrderByNullType DBConfig::ResolveNullOrder(OrderType order_type, OrderByNullType
 }
 
 const std::string DBConfig::UserAgent() const {
-	auto user_agent = StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
-	if (!options.duckdb_api.empty()) {
-		user_agent += " " + options.duckdb_api;
-	}
+	auto user_agent = options.duckdb_api;
+
 	if (!options.custom_user_agent.empty()) {
 		user_agent += " " + options.custom_user_agent;
 	}

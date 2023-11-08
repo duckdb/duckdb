@@ -40,7 +40,7 @@ struct OdbcHandle {
 struct OdbcHandleEnv : public OdbcHandle {
 	OdbcHandleEnv() : OdbcHandle(OdbcHandleType::ENV) {
 		duckdb::DBConfig ODBC_CONFIG;
-		ODBC_CONFIG.options.duckdb_api = "odbc";
+		ODBC_CONFIG.SetOptionByName("duckdb_api", "odbc");
 		db = make_shared<DuckDB>(nullptr, &ODBC_CONFIG);
 	};
 

@@ -13,6 +13,7 @@ duckdb_state duckdb_create_config(duckdb_config *out_config) {
 	DBConfig *config;
 	try {
 		config = new DBConfig();
+		config->SetOptionByName("duckdb_api", "capi");
 	} catch (...) { // LCOV_EXCL_START
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
@@ -45,11 +46,7 @@ duckdb_state duckdb_set_config(duckdb_config config, const char *name, const cha
 
 	try {
 		auto db_config = (DBConfig *)config;
-		if (strcmp(name, "duckdb_api") == 0) {
-			db_config->options.duckdb_api = std::string(option);
-		} else {
-			db_config->SetOptionByName(name, Value(option));
-		}
+		db_config->SetOptionByName(name, Value(option));
 	} catch (...) {
 		return DuckDBError;
 	}
