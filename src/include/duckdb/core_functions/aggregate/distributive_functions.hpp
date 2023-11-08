@@ -210,6 +210,12 @@ struct GroupConcatFun {
 	static constexpr const char *Name = "group_concat";
 };
 
+struct ListAggFun {
+	using ALIAS = StringAggFun;
+
+	static constexpr const char *Name = "listagg";
+};
+
 struct SumFun {
 	static constexpr const char *Name = "sum";
 	static constexpr const char *Parameters = "arg";
