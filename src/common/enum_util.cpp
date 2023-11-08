@@ -5119,6 +5119,29 @@ SinkFinalizeType EnumUtil::FromString<SinkFinalizeType>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<SinkNextBatchType>(SinkNextBatchType value) {
+	switch(value) {
+	case SinkNextBatchType::READY:
+		return "READY";
+	case SinkNextBatchType::BLOCKED:
+		return "BLOCKED";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+SinkNextBatchType EnumUtil::FromString<SinkNextBatchType>(const char *value) {
+	if (StringUtil::Equals(value, "READY")) {
+		return SinkNextBatchType::READY;
+	}
+	if (StringUtil::Equals(value, "BLOCKED")) {
+		return SinkNextBatchType::BLOCKED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<SinkResultType>(SinkResultType value) {
 	switch(value) {
 	case SinkResultType::NEED_MORE_INPUT:

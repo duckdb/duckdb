@@ -502,6 +502,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::INDEX_ENTRY: {
 		auto &base = stmt.info->Cast<CreateIndexInfo>();
 
+		auto catalog = BindCatalog(base.catalog);
+		properties.modified_databases.insert(catalog);
+
 		// visit the table reference
 		auto table_ref = make_uniq<BaseTableRef>();
 		table_ref->catalog_name = base.catalog;

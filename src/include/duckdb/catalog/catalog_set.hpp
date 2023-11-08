@@ -149,6 +149,10 @@ public:
 
 	void UpdateTimestamp(CatalogEntry &entry, transaction_t timestamp);
 
+	mutex &GetCatalogLock() {
+		return catalog_lock;
+	}
+
 	void Verify(Catalog &catalog);
 
 private:

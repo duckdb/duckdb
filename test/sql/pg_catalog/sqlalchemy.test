@@ -158,7 +158,7 @@ JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'myschema' AND c.relname = 'v1'
 AND c.relkind IN ('v', 'm')
 ----
-CREATE VIEW myschema.v1 AS SELECT 42;
+CREATE VIEW myschema.v1 ("42") AS SELECT 42;
 
 # get_columns
 query IIII
