@@ -3664,7 +3664,7 @@ public class TestDuckDBJDBC {
         correct_answer_map.put("smallint", asList((short) -32768, (short) 32767, null));
         correct_answer_map.put("int", asList(-2147483648, 2147483647, null));
         correct_answer_map.put("bigint", asList(-9223372036854775808L, 9223372036854775807L, null));
-        correct_answer_map.put("hugeint", asList(new BigInteger("-170141183460469231731687303715884105727"),
+        correct_answer_map.put("hugeint", asList(new BigInteger("-170141183460469231731687303715884105728"),
                                                  new BigInteger("170141183460469231731687303715884105727"), null));
         correct_answer_map.put("utinyint", asList((short) 0, (short) 255, null));
         correct_answer_map.put("usmallint", asList(0, 65535, null));
@@ -3679,7 +3679,7 @@ public class TestDuckDBJDBC {
             "dec_18_6", asList(new BigDecimal("-999999999999.999999"), (new BigDecimal("999999999999.999999")), null));
         correct_answer_map.put("dec38_10", asList(new BigDecimal("-9999999999999999999999999999.9999999999"),
                                                   (new BigDecimal("9999999999999999999999999999.9999999999")), null));
-        correct_answer_map.put("uuid", asList(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+        correct_answer_map.put("uuid", asList(UUID.fromString("00000000-0000-0000-0000-000000000000"),
                                               (UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff")), null));
         correct_answer_map.put("varchar", asList("🦆🦆🦆🦆🦆🦆", "goo\u0000se", null));
         correct_answer_map.put("json", asList("🦆🦆🦆🦆🦆", "goose", null));
@@ -3940,6 +3940,33 @@ public class TestDuckDBJDBC {
             resultSet.next();
             assertEquals(UUID.fromString("0b17ce61-375c-4ad8-97b3-349d96d35ab1"), resultSet.getObject(1));
         }
+    }
+
+    public static void test_result_streaming() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(JDBC_STREAM_RESULTS, String.valueOf(true));
+
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:", props);
+             PreparedStatement stmt1 = conn.prepareStatement("SELECT * FROM range(100000)");
+             ResultSet rs = stmt1.executeQuery()) {
+            while (rs.next()) {
+                rs.getInt(1);
+            }
+            assertFalse(rs.next()); // is exhausted
+        }
+    }
+
+    public static void test_struct_use_after_free() throws Exception {
+        Object struct, array;
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+             PreparedStatement stmt = conn.prepareStatement("SELECT struct_pack(hello := 2), [42]");
+             ResultSet rs = stmt.executeQuery()) {
+            rs.next();
+            struct = rs.getObject(1);
+            array = rs.getObject(2);
+        }
+        assertEquals(struct.toString(), "{hello=2}");
+        assertEquals(array.toString(), "[42]");
     }
 
     public static void main(String[] args) throws Exception {

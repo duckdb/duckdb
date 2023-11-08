@@ -463,7 +463,14 @@ struct ArrayVector {
 	DUCKDB_API static void AllocateDummyListEntries(Vector &vector);
 };
 
-enum class UnionInvalidReason : uint8_t { VALID, TAG_OUT_OF_RANGE, NO_MEMBERS, VALIDITY_OVERLAP, TAG_MISMATCH };
+enum class UnionInvalidReason : uint8_t {
+	VALID,
+	TAG_OUT_OF_RANGE,
+	NO_MEMBERS,
+	VALIDITY_OVERLAP,
+	TAG_MISMATCH,
+	NULL_TAG
+};
 
 struct UnionVector {
 	// Unions are stored as structs, but the first child is always the "tag"

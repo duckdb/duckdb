@@ -234,15 +234,18 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_input, named_paramete
 
 shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<string> &columns) {
 	// parse columns
-	vector<ColumnDefinition> column_list;
+	named_parameter_map_t options;
+	child_list_t<Value> column_list;
 	for (auto &column : columns) {
 		auto col_list = Parser::ParseColumnList(column, context->GetParserOptions());
 		if (col_list.LogicalColumnCount() != 1) {
 			throw ParserException("Expected a single column definition");
 		}
-		column_list.push_back(std::move(col_list.GetColumnMutable(LogicalIndex(0))));
+		auto &col_def = col_list.GetColumnMutable(LogicalIndex(0));
+		column_list.push_back({col_def.GetName(), col_def.GetType().ToString()});
 	}
-	return make_shared<ReadCSVRelation>(context, csv_file, std::move(column_list));
+	vector<string> files {csv_file};
+	return make_shared<ReadCSVRelation>(context, files, std::move(options));
 }
 
 shared_ptr<Relation> Connection::ReadParquet(const string &parquet_file, bool binary_as_string) {

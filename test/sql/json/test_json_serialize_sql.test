@@ -1,4 +1,4 @@
-# name: test/sql/json/test_serialize_sql.test
+# name: test/sql/json/test_json_serialize_sql.test
 # group: [json]
 
 require json

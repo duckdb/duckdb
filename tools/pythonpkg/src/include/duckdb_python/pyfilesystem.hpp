@@ -16,7 +16,7 @@ public:
 
 public:
 	static bool check_(const py::handle &object) {
-		return py::isinstance(object, py::module::import("pyduckdb.filesystem").attr("ModifiedMemoryFileSystem"));
+		return py::isinstance(object, py::module::import("duckdb.filesystem").attr("ModifiedMemoryFileSystem"));
 	}
 };
 
