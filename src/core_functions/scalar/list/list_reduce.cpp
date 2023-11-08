@@ -1,16 +1,14 @@
 #include "duckdb/core_functions/scalar/list_functions.hpp"
 #include "duckdb/core_functions/lambda_functions.hpp"
 
-
 #include "duckdb/core_functions/lambda_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
-
 namespace duckdb {
 
 static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
+                                               vector<unique_ptr<Expression>> &arguments) {
 
 	// the list column and the bound lambda expression
 	D_ASSERT(arguments.size() == 2);

@@ -76,7 +76,6 @@ struct ListFilterInfo {
 	idx_t src_length = 0;
 };
 
-
 //! ListTransformFunctor contains list_transform specific functionality
 struct ListTransformFunctor {
 	static void ReserveNewLengths(vector<idx_t> &, const idx_t) {
@@ -175,7 +174,7 @@ struct ListFilterFunctor {
 };
 
 ////! ListReduceFunctor contains list_reduce specific functionality
-//struct ListReduceFunctor {
+// struct ListReduceFunctor {
 //	static void ReserveNewLengths(vector<idx_t> &, const idx_t) {
 //		// NOP
 //	}
@@ -479,9 +478,7 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 
 	// Initialize the result vector
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_entries = FlatVector::GetData<uint64_t>(result);
 	auto &result_validity = FlatVector::Validity(result);
-	//	auto &result_child = ListVector::GetEntry(result);
 	if (list_column.GetType().id() == LogicalTypeId::SQLNULL) {
 		result_validity.SetInvalid(0);
 		return;
@@ -489,21 +486,27 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 
 	ExpressionExecutor executor(state.GetContext());
 
-	std::vector<idx_t> row_loc(row_count);
+	std::vector<idx_t> active_rows(row_count);
 
-	idx_t finished_rows = 0;
 	// Initialize the left_vector & the result vector
 	SelectionVector left_vector(row_count);
-	for (idx_t i = 0; i < row_count; i++) {
-		auto list_column_format_index = list_column_format.sel->get_index(i);
 
+	idx_t old_count = 0;
+	idx_t new_count = 0;
+
+	auto it = active_rows.begin();
+	while (it != active_rows.end()) {
+		auto list_column_format_index = list_column_format.sel->get_index(old_count);
 		if (list_column_format.validity.RowIsValid(list_column_format_index)) {
-			left_vector.set_index(i, list_entries[i].offset);
-			row_loc[i] = i;
+			left_vector.set_index(new_count, list_entries[old_count].offset);
+			active_rows[new_count] = old_count;
+			new_count++;
+			it++;
 		} else {
-			result_validity.SetInvalid(i);
-			finished_rows++;
+			result_validity.SetInvalid(old_count);
+			active_rows.erase(it);
 		}
+		old_count++;
 	}
 
 	Vector left_slice = Vector(child_vector, left_vector, row_count);
@@ -516,39 +519,36 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 
 	idx_t loops = 0;
 	// Execute reduce until all rows are finished
-	while(finished_rows < row_count) {
-		SelectionVector new_sel(row_count - finished_rows);
+	while (!active_rows.empty()) {
+		SelectionVector right_sel(active_rows.size());
+		SelectionVector left_sel(active_rows.size());
 
-		// Initialize the right_vector
-		SelectionVector right_vector(row_count - finished_rows);
-		int sel_index = 0;
-		for (auto i : row_loc) {
-			if (list_entries[i].length > loops + 1) {
-				right_vector.set_index(i, list_entries[i].offset + loops + 1);
-				new_sel.set_index(sel_index++, i);
+		old_count = 0;
+		new_count = 0;
+
+		it = active_rows.begin();
+		while (it != active_rows.end()) {
+			if (list_entries[*it].length > loops + 1) {
+				right_sel.set_index(new_count, list_entries[*it].offset + loops + 1);
+				left_sel.set_index(new_count, old_count);
+				new_count++;
+				it++;
 			} else {
-				auto row_loc_index = std::find(row_loc.begin(), row_loc.end(), i);
-				if (row_loc_index != row_loc.end()) {
-					result_entries[*row_loc_index] = left_slice.GetValue(i).GetValue<uint64_t>();
-					row_loc.erase(row_loc_index);
-				}
-				finished_rows++;
+				result.SetValue(*it, left_slice.GetValue(old_count));
+				active_rows.erase(it);
 			}
+			old_count++;
 		}
 
-		auto new_count = row_count - finished_rows;
 		if (new_count == 0) {
 			break;
 		}
 
-		right_vector.Slice(new_sel, new_count);
-
 		// Execute the lambda function
+		left_slice.Slice(left_slice, left_sel, new_count);
+		Vector right_slice = Vector(child_vector, right_sel, new_count);
+
 		LambdaExecuteInfo execute_info(state.GetContext(), *lambda_expr, args, bind_info.has_index, child_vector);
-
-		left_slice.Slice(left_slice, new_sel, new_count);
-
-		Vector right_slice = Vector(child_vector, right_vector, new_count);
 
 		vector<LogicalType> input_types;
 		if (bind_info.has_index) {

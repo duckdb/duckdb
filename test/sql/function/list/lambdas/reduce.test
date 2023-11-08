@@ -3,8 +3,39 @@
 # group: [lambdas]
 
 statement ok
-PRAGMA enable_verification
+pragma enable_verification
 
-SELECT list_reduce([1, 2, 3], 0, lambda x, y: x + y);
+query I
+SELECT list_reduce([1, 2, 3], (x, y) -> x + y);
 ----
 6
+
+statement ok
+CREATE table t1(a int[]);
+
+statement ok
+INSERT INTO t1 VALUES ([1, 2, 3]);
+
+statement ok
+INSERT INTO t1 VALUES ([666]);
+
+statement ok
+INSERT INTO t1 VALUES (NULL);
+
+statement ok
+INSERT INTO t1 VALUES ([44, 55]);
+
+statement ok
+INSERT INTO t1 VALUES ([-1, NULL, -2]);
+
+query I
+SELECT list_reduce(a, (x, y) -> x + y) FROM t1;
+----
+6
+666
+NULL
+99
+NULL
+
+
+
