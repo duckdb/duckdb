@@ -136,6 +136,8 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 		return;
 	}
 
+	(void)GetOrCreateDependencySet(transaction, object);
+
 	// check for each object in the sources if they were not deleted yet
 	for (auto &dep : dependencies.set) {
 		auto &dependency = dep.get();
