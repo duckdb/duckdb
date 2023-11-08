@@ -44,9 +44,14 @@ public:
 	                 idx_t partition_count);
 	virtual ~WindowAggregator();
 
+	//	Access
+	const DataChunk &GetInputs() const {
+		return inputs;
+	}
+
 	//	Build
 	virtual void Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered);
-	virtual void Finalize();
+	virtual void Finalize(const FrameStats &stats);
 
 	//	Probe
 	virtual unique_ptr<WindowAggregatorState> GetLocalState() const = 0;
@@ -85,7 +90,7 @@ public:
 	}
 
 	void Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered) override;
-	void Finalize() override;
+	void Finalize(const FrameStats &stats) override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState() const override;
 	void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
@@ -117,9 +122,17 @@ public:
 	                       const WindowExcludeMode exclude_mode_p, idx_t partition_count);
 	~WindowCustomAggregator() override;
 
+	void Finalize(const FrameStats &stats) override;
+
 	unique_ptr<WindowAggregatorState> GetLocalState() const override;
 	void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
 	              idx_t row_idx) const override;
+
+	//! Partition description
+	unique_ptr<WindowPartitionInput> partition_input;
+
+	//! Data pointer that contains a single state, used for global custom window state
+	unique_ptr<WindowAggregatorState> gstate;
 };
 
 class WindowSegmentTree : public WindowAggregator {
@@ -129,7 +142,7 @@ public:
 	                  const WindowExcludeMode exclude_mode_p, idx_t count);
 	~WindowSegmentTree() override;
 
-	void Finalize() override;
+	void Finalize(const FrameStats &stats) override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState() const override;
 	void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
