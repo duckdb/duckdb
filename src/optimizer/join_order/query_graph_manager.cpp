@@ -342,7 +342,7 @@ void QueryGraphManager::TryFlipChildren(LogicalOperator &op, JoinType inverse, i
 	                                                             : left_child->EstimateCardinality(context);
 	auto rhs_cardinality = right_child->has_estimated_cardinality ? right_child->estimated_cardinality
 	                                                              : right_child->EstimateCardinality(context);
-	if (rhs_cardinality <= lhs_cardinality * cardinality_ratio) {
+	if (rhs_cardinality < lhs_cardinality * cardinality_ratio) {
 		return;
 	}
 	std::swap(left_child, right_child);
