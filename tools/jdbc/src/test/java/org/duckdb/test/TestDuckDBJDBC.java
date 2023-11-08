@@ -3962,40 +3962,40 @@ public class TestDuckDBJDBC {
     }
 
     public static void test_user_agent() throws Exception {
-            try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
-                try (PreparedStatement stmt1 =
-                         conn.prepareStatement("SELECT value FROM duckdb_settings() WHERE name = 'custom_user_agent'");
-                     ResultSet rs = stmt1.executeQuery()) {
-                    assertTrue(rs.next());
-                    assertTrue(rs.getString(1).matches(""));
-                }
-                try (PreparedStatement stmt1 = conn.prepareStatement("PRAGMA user_agent");
-                     ResultSet rs = stmt1.executeQuery()) {
-                    assertTrue(rs.next());
-                    assertTrue(rs.getString(1).matches("duckdb/.*(.*) jdbc"));
-                }
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+            try (PreparedStatement stmt1 =
+                     conn.prepareStatement("SELECT value FROM duckdb_settings() WHERE name = 'custom_user_agent'");
+                 ResultSet rs = stmt1.executeQuery()) {
+                assertTrue(rs.next());
+                assertTrue(rs.getString(1).matches(""));
+            }
+            try (PreparedStatement stmt1 = conn.prepareStatement("PRAGMA user_agent");
+                 ResultSet rs = stmt1.executeQuery()) {
+                assertTrue(rs.next());
+                assertTrue(rs.getString(1).matches("duckdb/.*(.*) jdbc"));
             }
         }
+    }
 
-        public static void test_custom_user_agent() throws Exception {
-            Properties props = new Properties();
-            props.setProperty(DUCKDB_USER_AGENT_PROPERTY, "CUSTOM_STRING");
+    public static void test_custom_user_agent() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(DUCKDB_USER_AGENT_PROPERTY, "CUSTOM_STRING");
 
-            try (Connection conn = DriverManager.getConnection("jdbc:duckdb:", props)) {
-                try (PreparedStatement stmt1 =
-                         conn.prepareStatement("SELECT value FROM duckdb_settings() WHERE name = 'custom_user_agent'");
-                     ResultSet rs = stmt1.executeQuery()) {
-                    assertTrue(rs.next());
-                    assertEquals("CUSTOM_STRING", rs.getString(1));
-                }
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:", props)) {
+            try (PreparedStatement stmt1 =
+                     conn.prepareStatement("SELECT value FROM duckdb_settings() WHERE name = 'custom_user_agent'");
+                 ResultSet rs = stmt1.executeQuery()) {
+                assertTrue(rs.next());
+                assertEquals("CUSTOM_STRING", rs.getString(1));
+            }
 
-                try (PreparedStatement stmt1 = conn.prepareStatement("PRAGMA user_agent");
-                     ResultSet rs = stmt1.executeQuery()) {
-                    assertTrue(rs.next());
-                    assertTrue(rs.getString(1).matches("duckdb/.*(.*) jdbc CUSTOM_STRING"));
-                }
+            try (PreparedStatement stmt1 = conn.prepareStatement("PRAGMA user_agent");
+                 ResultSet rs = stmt1.executeQuery()) {
+                assertTrue(rs.next());
+                assertTrue(rs.getString(1).matches("duckdb/.*(.*) jdbc CUSTOM_STRING"));
             }
         }
+    }
 
     public static void main(String[] args) throws Exception {
         // Woo I can do reflection too, take this, JUnit!
