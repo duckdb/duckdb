@@ -463,7 +463,7 @@ class UnsignedLongType(IntegralType):
 class HugeIntegerType(IntegralType):
     """Huge integer data type, i.e. a signed 128-bit integer.
 
-    If the values are beyond the range of [-170141183460469231731687303715884105727, 170141183460469231731687303715884105727],
+    If the values are beyond the range of [-170141183460469231731687303715884105728, 170141183460469231731687303715884105727],
     please use :class:`DecimalType`.
     """
 

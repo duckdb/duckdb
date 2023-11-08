@@ -106,7 +106,9 @@ SinkFinalizeType PhysicalOperator::Finalize(Pipeline &pipeline, Event &event, Cl
 	return SinkFinalizeType::READY;
 }
 
-void PhysicalOperator::NextBatch(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const {
+SinkNextBatchType PhysicalOperator::NextBatch(ExecutionContext &context, GlobalSinkState &state,
+                                              LocalSinkState &lstate_p) const {
+	return SinkNextBatchType::READY;
 }
 
 unique_ptr<LocalSinkState> PhysicalOperator::GetLocalSinkState(ExecutionContext &context) const {
