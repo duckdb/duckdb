@@ -38,6 +38,7 @@ enum class CatalogType : uint8_t {
 
 	// version info
 	DELETED_ENTRY = 51,
+	RENAMED_ENTRY = 52,
 
 	// dependency info
 	DEPENDENCY_SET = 100,

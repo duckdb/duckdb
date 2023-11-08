@@ -34,27 +34,31 @@ void CommitState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {
 	}
 }
 
+static CatalogEntry &GetTargetEntry(CatalogEntry &entry) {
+	if (entry.type == CatalogType::DELETED_ENTRY) {
+		// This is a rename, we pushed the deleted entry, but we're interested in the child
+		D_ASSERT(entry.HasChild());
+		auto &child = entry.Child();
+		D_ASSERT(entry.Parent()->type == child.type);
+		return child;
+	}
+	return entry;
+}
+
 void CommitState::WriteCatalogEntry(CatalogEntry &entry_p, data_ptr_t dataptr) {
-	reference<CatalogEntry> entry = entry_p;
-	if (entry.get().temporary || entry.get().Parent()->temporary) {
+	if (entry_p.temporary || entry_p.Parent()->temporary) {
 		return;
 	}
 	D_ASSERT(log);
-	// look at the type of the parent entry
-	auto &parent = *entry.get().Parent();
 
-	if (entry.get().type == CatalogType::DELETED_ENTRY) {
-		// This is a rename, we pushed the deleted entry, but we're interested in the child
-		D_ASSERT(entry.get().HasChild());
-		auto &child = entry.get().Child();
-		D_ASSERT(entry.get().Parent()->type == child.type);
-		entry = child;
-	}
+	// look at the type of the parent entry
+	auto &parent = *entry_p.Parent();
+	auto &entry = GetTargetEntry(entry_p);
 
 	switch (parent.type) {
 	case CatalogType::TABLE_ENTRY:
-		if (entry.get().type == CatalogType::TABLE_ENTRY) {
-			auto &table_entry = entry.get().Cast<DuckTableEntry>();
+		if (entry.type == CatalogType::TABLE_ENTRY) {
+			auto &table_entry = entry.Cast<DuckTableEntry>();
 			D_ASSERT(table_entry.IsDuckTable());
 			// ALTER TABLE statement, read the extra data after the entry
 
@@ -80,14 +84,14 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry_p, data_ptr_t dataptr) {
 		}
 		break;
 	case CatalogType::SCHEMA_ENTRY:
-		if (entry.get().type == CatalogType::SCHEMA_ENTRY) {
+		if (entry.type == CatalogType::SCHEMA_ENTRY) {
 			// ALTER TABLE statement, skip it
 			return;
 		}
 		log->WriteCreateSchema(parent.Cast<SchemaCatalogEntry>());
 		break;
 	case CatalogType::VIEW_ENTRY:
-		if (entry.get().type == CatalogType::VIEW_ENTRY) {
+		if (entry.type == CatalogType::VIEW_ENTRY) {
 			// ALTER TABLE statement, read the extra data after the entry
 			auto extra_data_size = Load<idx_t>(dataptr);
 			auto extra_data = data_ptr_cast(dataptr + sizeof(idx_t));
@@ -124,15 +128,14 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry_p, data_ptr_t dataptr) {
 		log->WriteCreateType(parent.Cast<TypeCatalogEntry>());
 		break;
 	case CatalogType::DELETED_ENTRY:
-		if (entry.get().Parent()->HasParent() &&
-		    !StringUtil::CIEquals(entry.get().name, entry.get().Parent()->Parent()->name)) {
-			D_ASSERT(entry.get().type == entry.get().Parent()->Parent()->type);
+		if (entry.Parent()->HasParent() && !StringUtil::CIEquals(entry.name, entry.Parent()->Parent()->name)) {
+			D_ASSERT(entry.type == entry.Parent()->Parent()->type);
 			// This is a rename, nothing needs to be done for this
 			break;
 		}
-		switch (entry.get().type) {
+		switch (entry.type) {
 		case CatalogType::TABLE_ENTRY: {
-			auto &table_entry = entry.get().Cast<DuckTableEntry>();
+			auto &table_entry = entry.Cast<DuckTableEntry>();
 			D_ASSERT(table_entry.IsDuckTable());
 
 			// If the table was renamed, we do not need to drop the DataTable.
@@ -141,27 +144,27 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry_p, data_ptr_t dataptr) {
 			break;
 		}
 		case CatalogType::SCHEMA_ENTRY:
-			log->WriteDropSchema(entry.get().Cast<SchemaCatalogEntry>());
+			log->WriteDropSchema(entry.Cast<SchemaCatalogEntry>());
 			break;
 		case CatalogType::VIEW_ENTRY:
-			log->WriteDropView(entry.get().Cast<ViewCatalogEntry>());
+			log->WriteDropView(entry.Cast<ViewCatalogEntry>());
 			break;
 		case CatalogType::SEQUENCE_ENTRY:
-			log->WriteDropSequence(entry.get().Cast<SequenceCatalogEntry>());
+			log->WriteDropSequence(entry.Cast<SequenceCatalogEntry>());
 			break;
 		case CatalogType::MACRO_ENTRY:
-			log->WriteDropMacro(entry.get().Cast<ScalarMacroCatalogEntry>());
+			log->WriteDropMacro(entry.Cast<ScalarMacroCatalogEntry>());
 			break;
 		case CatalogType::TABLE_MACRO_ENTRY:
-			log->WriteDropTableMacro(entry.get().Cast<TableMacroCatalogEntry>());
+			log->WriteDropTableMacro(entry.Cast<TableMacroCatalogEntry>());
 			break;
 		case CatalogType::TYPE_ENTRY:
-			log->WriteDropType(entry.get().Cast<TypeCatalogEntry>());
+			log->WriteDropType(entry.Cast<TypeCatalogEntry>());
 			break;
 		case CatalogType::INDEX_ENTRY: {
-			auto &index_entry = entry.get().Cast<DuckIndexEntry>();
+			auto &index_entry = entry.Cast<DuckIndexEntry>();
 			index_entry.CommitDrop();
-			log->WriteDropIndex(entry.get().Cast<IndexCatalogEntry>());
+			log->WriteDropIndex(entry.Cast<IndexCatalogEntry>());
 			break;
 		}
 		case CatalogType::PREPARED_STATEMENT:
@@ -183,6 +186,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry_p, data_ptr_t dataptr) {
 	case CatalogType::COLLATION_ENTRY:
 	case CatalogType::DEPENDENCY_ENTRY:
 	case CatalogType::DEPENDENCY_SET:
+	case CatalogType::RENAMED_ENTRY:
 		// do nothing, these entries are not persisted to disk
 		break;
 	default:

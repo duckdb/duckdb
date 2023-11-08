@@ -774,6 +774,8 @@ const char* EnumUtil::ToChars<CatalogType>(CatalogType value) {
 		return "TABLE_MACRO_ENTRY";
 	case CatalogType::DELETED_ENTRY:
 		return "DELETED_ENTRY";
+	case CatalogType::RENAMED_ENTRY:
+		return "RENAMED_ENTRY";
 	case CatalogType::DEPENDENCY_SET:
 		return "DEPENDENCY_SET";
 	case CatalogType::DEPENDENCY_ENTRY:
