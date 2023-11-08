@@ -21,7 +21,6 @@ TEST_CASE("Test TPC-H SF0.01 using streaming api", "[tpch][.]") {
 	REQUIRE_NO_FAIL(con.Query("CALL dbgen(sf=" + to_string(sf) + ")"));
 
 	for (idx_t tpch_num = 1; tpch_num <= 22; tpch_num++) {
-		printf("\n Query: %llu", tpch_num);
 		result = con.SendQuery("pragma tpch(" + to_string(tpch_num) + ");");
 
 		duckdb::ColumnDataCollection collection(duckdb::Allocator::DefaultAllocator(), result->types);
