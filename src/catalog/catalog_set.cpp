@@ -366,7 +366,7 @@ optional_ptr<MappingValue> CatalogSet::GetMapping(CatalogTransaction transaction
 	}
 	// Find the mapping value that is up-to-date with the current transaction
 	while (mapping_value->child) {
-		if (UseTimestamp(transaction, mapping_value->timestamp)) {
+		if (UseTimestamp(transaction, mapping_value->GetTimestamp())) {
 			break;
 		}
 		mapping_value = mapping_value->child.get();
@@ -378,9 +378,9 @@ optional_ptr<MappingValue> CatalogSet::GetMapping(CatalogTransaction transaction
 void CatalogSet::PutMapping(CatalogTransaction transaction, const string &name, EntryIndex entry_index) {
 	auto entry = mapping.find(name);
 	auto new_value = make_uniq<MappingValue>(std::move(entry_index));
-	new_value->timestamp = transaction.transaction_id;
+	new_value->SetTimestamp(transaction.transaction_id);
 	if (entry != mapping.end()) {
-		if (HasConflict(transaction, entry->second->timestamp)) {
+		if (HasConflict(transaction, entry->second->GetTimestamp())) {
 			throw TransactionException("Catalog write-write conflict on name \"%s\"", name);
 		}
 		new_value->child = std::move(entry->second);
@@ -394,7 +394,7 @@ void CatalogSet::DeleteMapping(CatalogTransaction transaction, const string &nam
 	D_ASSERT(entry != mapping.end());
 	auto delete_marker = make_uniq<MappingValue>(entry->second->index.Copy());
 	delete_marker->deleted = true;
-	delete_marker->timestamp = transaction.transaction_id;
+	delete_marker->SetTimestamp(transaction.transaction_id);
 	delete_marker->child = std::move(entry->second);
 	delete_marker->child->parent = delete_marker.get();
 	mapping[name] = std::move(delete_marker);
@@ -466,7 +466,7 @@ optional_ptr<CatalogEntry> CatalogSet::CreateEntryInternal(CatalogTransaction tr
 
 	auto entry_index = PutEntry(GenerateCatalogEntryIndex(), std::move(entry));
 	PutMapping(transaction, name, std::move(entry_index));
-	mapping[name]->timestamp = 0;
+	mapping[name]->SetTimestamp(0);
 	return catalog_entry;
 }
 
@@ -512,9 +512,13 @@ optional_ptr<CatalogEntry> CatalogSet::GetEntry(CatalogTransaction transaction, 
 
 		auto &catalog_entry = mapping_value->index.GetEntry();
 		auto &current = GetEntryForTransaction(transaction, catalog_entry);
-		if (current.deleted || (current.name != name && !UseTimestamp(transaction, mapping_value->timestamp))) {
+		if (current.deleted) {
 			return nullptr;
 		}
+		if (current.name != name && !UseTimestamp(transaction, mapping_value->GetTimestamp())) {
+			return nullptr;
+		}
+		D_ASSERT(StringUtil::CIEquals(name, current.name));
 		return &current;
 	}
 	return CreateDefaultEntry(transaction, name, lock);
@@ -526,7 +530,7 @@ optional_ptr<CatalogEntry> CatalogSet::GetEntry(ClientContext &context, const st
 
 void CatalogSet::UpdateTimestamp(CatalogEntry &entry, transaction_t timestamp) {
 	entry.timestamp = timestamp;
-	mapping[entry.name]->timestamp = timestamp;
+	mapping[entry.name]->SetTimestamp(timestamp);
 }
 
 void CatalogSet::Undo(CatalogEntry &entry) {

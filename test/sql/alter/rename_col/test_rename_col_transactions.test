@@ -4,7 +4,10 @@
 
 # CREATE TABLE
 statement ok con1
-CREATE TABLE test(i INTEGER, j INTEGER)
+CREATE TABLE test(
+	i INTEGER,
+	j INTEGER
+)
 
 # start two transactions
 statement ok con1
