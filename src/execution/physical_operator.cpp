@@ -106,8 +106,7 @@ SinkFinalizeType PhysicalOperator::Finalize(Pipeline &pipeline, Event &event, Cl
 	return SinkFinalizeType::READY;
 }
 
-SinkNextBatchType PhysicalOperator::NextBatch(ExecutionContext &context, GlobalSinkState &state,
-                                              LocalSinkState &lstate_p) const {
+SinkNextBatchType PhysicalOperator::NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const {
 	return SinkNextBatchType::READY;
 }
 
