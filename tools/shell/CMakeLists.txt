@@ -24,6 +24,15 @@ if(NOT AMALGAMATION_BUILD AND NOT WIN32)
   target_link_libraries(shell duckdb_utf8proc)
 endif()
 
+if(WIN32)
+  set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} -dDUCKDB_VERSION=\"${DUCKDB_VERSION}\"")
+  set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} -dDUCKDB_MAJOR_VERSION=\"${DUCKDB_MAJOR_VERSION}\"")
+  set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} -dDUCKDB_MINOR_VERSION=\"${DUCKDB_MINOR_VERSION}\"")
+  set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} -dDUCKDB_PATCH_VERSION=\"${DUCKDB_PATCH_VERSION}\"")
+  set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} -dDUCKDB_DEV_ITERATION=\"${DUCKDB_DEV_ITERATION}\"")
+  target_sources(shell PRIVATE rc/duckdb.rc)
+endif()
+
 set_target_properties(shell PROPERTIES OUTPUT_NAME duckdb)
 set_target_properties(shell PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                                        ${PROJECT_BINARY_DIR})
