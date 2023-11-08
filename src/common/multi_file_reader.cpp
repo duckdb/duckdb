@@ -427,24 +427,16 @@ void MultiFileReaderOptions::AutoDetectHiveTypesInternal(const string &file, Cli
 	}
 
 	const LogicalType candidates[] = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::BIGINT};
-	const bool strictness[] = {true, false};
 	for (auto &part : partitions) {
 		const string &name = part.first;
 		if (hive_types_schema.find(name) != hive_types_schema.end()) {
 			continue;
 		}
 		Value value(part.second);
-		bool matched = false;
-		for (auto &strict : strictness) {
-			for (auto &candidate : candidates) {
-				const bool success = value.TryCastAs(context, candidate, strict);
-				if (success) {
-					hive_types_schema[name] = candidate;
-					matched = true;
-					break;
-				}
-			}
-			if (matched) {
+		for (auto &candidate : candidates) {
+			const bool success = value.TryCastAs(context, candidate, true);
+			if (success) {
+				hive_types_schema[name] = candidate;
 				break;
 			}
 		}
