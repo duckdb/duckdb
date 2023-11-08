@@ -73,25 +73,22 @@ duckdb_logical_type duckdb_create_struct_type(duckdb_logical_type *member_types_
 	return reinterpret_cast<duckdb_logical_type>(mtype);
 }
 
-duckdb_logical_type duckdb_create_enum_type(const char *enum_name, const char **member_names, idx_t member_count) {
-	if (!enum_name || !member_names) {
+duckdb_logical_type duckdb_create_enum_type(const char **member_names, idx_t member_count) {
+	if (!member_names) {
 		return nullptr;
 	}
-	for (idx_t i = 0; i < member_count; i++) {
-		if (!member_names[i]) {
-			return nullptr;
-		}
-	}
-
 	duckdb::Vector enum_vector(duckdb::LogicalType::VARCHAR, member_count);
 	auto enum_vector_ptr = duckdb::FlatVector::GetData<duckdb::string_t>(enum_vector);
 
 	for (idx_t i = 0; i < member_count; i++) {
+		if (!member_names[i]) {
+			return nullptr;
+		}
 		enum_vector_ptr[i] = duckdb::StringVector::AddStringOrBlob(enum_vector, member_names[i]);
 	}
 
 	duckdb::LogicalType *mtype = new duckdb::LogicalType;
-	*mtype = duckdb::LogicalType::ENUM(enum_name, enum_vector, member_count);
+	*mtype = duckdb::LogicalType::ENUM(enum_vector, member_count);
 	return reinterpret_cast<duckdb_logical_type>(mtype);
 }
 

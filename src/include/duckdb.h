@@ -1393,8 +1393,7 @@ The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 * member_count: The number of elements that were specified in the array.
 * returns: The logical type.
 */
-DUCKDB_API duckdb_logical_type duckdb_create_enum_type(const char *enum_name, const char **member_names,
-                                                       idx_t member_count);
+DUCKDB_API duckdb_logical_type duckdb_create_enum_type(const char **member_names, idx_t member_count);
 
 /*!
 Creates a `duckdb_logical_type` of type decimal with the specified width and scale
