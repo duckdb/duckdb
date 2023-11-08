@@ -248,7 +248,7 @@ TEST_CASE("Statement types", "[capi]") {
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	duckdb_prepared_statement prepared;
-	REQUIRE_SUCCESS(duckdb_prepare(tester.connection, "select ?", &prepared));
+	REQUIRE(duckdb_prepare(tester.connection, "select ?", &prepared) == DuckDBSuccess);
 
 	REQUIRE(duckdb_prepared_statement_type(prepared) == DUCKDB_STATEMENT_TYPE_SELECT);
 	duckdb_destroy_prepare(&prepared);
