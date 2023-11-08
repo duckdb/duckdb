@@ -227,8 +227,6 @@ NULL
 NULL
 NULL
 
-mode skip
-
 statement ok
 create view strings as (with recursive t(a) as (select 1 union select a+1 from t where a < 5) select * from t order by a);
 
