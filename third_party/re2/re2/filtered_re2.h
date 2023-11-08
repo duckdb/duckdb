@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// NOLINTBEGIN
+
 #ifndef RE2_FILTERED_RE2_H_
 #define RE2_FILTERED_RE2_H_
 
@@ -108,3 +110,5 @@ class FilteredRE2 {
 }  // namespace duckdb_re2
 
 #endif  // RE2_FILTERED_RE2_H_
+
+// NOLINTEND

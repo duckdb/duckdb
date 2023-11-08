@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// NOLINTBEGIN
+
 #ifndef RE2_RE2_H_
 #define RE2_RE2_H_
 
@@ -953,3 +955,5 @@ using duckdb_re2::RE2;
 using duckdb_re2::LazyRE2;
 
 #endif  // RE2_RE2_H_
+
+// NOLINTEND
