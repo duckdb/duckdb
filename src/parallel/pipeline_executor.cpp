@@ -144,8 +144,9 @@ SinkNextBatchType PipelineExecutor::NextBatch(duckdb::DataChunk &source_chunk) {
 #endif
 	auto current_batch = partition_info.batch_index.GetIndex();
 	partition_info.batch_index = next_batch_index;
+	OperatorSinkNextBatchInput next_batch_input {*pipeline.sink->sink_state, *local_sink_state, interrupt_state};
 	// call NextBatch before updating min_batch_index to provide the opportunity to flush the previous batch
-	auto next_batch_result = pipeline.sink->NextBatch(context, *pipeline.sink->sink_state, *local_sink_state);
+	auto next_batch_result = pipeline.sink->NextBatch(context, next_batch_input);
 
 	if (next_batch_result == SinkNextBatchType::BLOCKED) {
 		partition_info.batch_index = current_batch; // set batch_index back to what it was before
