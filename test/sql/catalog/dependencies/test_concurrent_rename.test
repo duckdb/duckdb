@@ -1,0 +1,28 @@
+# name: test/sql/catalog/dependencies/test_concurrent_rename.test
+# description: Tests concurrent rename of tables
+# group: [dependencies]
+
+require skip_reload
+
+statement maybe
+CREATE TABLE t2 AS (SELECT 42);
+
+concurrentloop i 1 10
+
+loop j 1 10
+
+statement maybe
+alter table t2 rename to t3;
+
+statement maybe
+alter table t3 rename to t2;
+
+statement maybe
+select * from t3;
+
+statement maybe
+select * from t2;
+
+endloop
+
+endloop
