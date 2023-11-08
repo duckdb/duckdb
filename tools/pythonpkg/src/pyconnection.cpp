@@ -718,7 +718,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	}
 	CSVReaderOptions options;
 	auto path_like = GetPathLike(name_p);
-	auto &name = path_like.str;
+	auto &name = path_like.files;
 	auto file_like_object_wrapper = std::move(path_like.dependency);
 	named_parameter_map_t bind_parameters;
 
@@ -908,7 +908,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 		read_csv.extra_dependencies = std::move(file_like_object_wrapper);
 	}
 
-	return make_uniq<DuckDBPyRelation>(read_csv_p->Alias(name));
+	return make_uniq<DuckDBPyRelation>(read_csv_p->Alias(read_csv.alias));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, string alias, const py::object &params) {

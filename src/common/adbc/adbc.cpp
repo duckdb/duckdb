@@ -8,12 +8,15 @@
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
 
+#include "duckdb/main/capi/capi_internal.hpp"
+
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/main/connection.hpp"
 #endif
 
 #include "duckdb/common/adbc/single_batch_array_stream.hpp"
 
+#include "duckdb/common/adbc/options.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -50,9 +53,6 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::A
 	driver->StatementGetParameterSchema = duckdb_adbc::StatementGetParameterSchema;
 	driver->ConnectionGetTableSchema = duckdb_adbc::ConnectionGetTableSchema;
 	driver->StatementSetSubstraitPlan = duckdb_adbc::StatementSetSubstraitPlan;
-
-	driver->ConnectionGetInfo = duckdb_adbc::ConnectionGetInfo;
-	driver->StatementGetParameterSchema = duckdb_adbc::StatementGetParameterSchema;
 	return ADBC_STATUS_OK;
 }
 
@@ -395,8 +395,8 @@ static AdbcInfoCode ConvertToInfoCode(uint32_t info_code) {
 	}
 }
 
-AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *info_codes, size_t info_codes_length,
-                                 struct ArrowArrayStream *out, struct AdbcError *error) {
+AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, const uint32_t *info_codes,
+                                 size_t info_codes_length, struct ArrowArrayStream *out, struct AdbcError *error) {
 	if (!connection) {
 		SetError(error, "Missing connection object");
 		return ADBC_STATUS_INVALID_ARGUMENT;
@@ -765,6 +765,9 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			return ADBC_STATUS_INVALID_ARGUMENT;
 		}
 		duckdb::unique_ptr<duckdb::DataChunk> chunk;
+		auto prepared_statement_params =
+		    reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)->statement->n_param;
+
 		while ((chunk = result->Fetch()) != nullptr) {
 			if (chunk->size() == 0) {
 				SetError(error, "Please provide a non-empty chunk to be bound");
@@ -774,6 +777,10 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 				// TODO: add support for binding multiple rows
 				SetError(error, "Binding multiple rows at once is not supported yet");
 				return ADBC_STATUS_NOT_IMPLEMENTED;
+			}
+			if (chunk->ColumnCount() > prepared_statement_params) {
+				SetError(error, "Input data has more column than prepared statement has parameters");
+				return ADBC_STATUS_INVALID_ARGUMENT;
 			}
 			duckdb_clear_bindings(wrapper->statement);
 			for (idx_t col_idx = 0; col_idx < chunk->ColumnCount(); col_idx++) {
@@ -920,6 +927,12 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 
 	if (strcmp(key, ADBC_INGEST_OPTION_TARGET_TABLE) == 0) {
 		wrapper->ingestion_table_name = strdup(value);
+		return ADBC_STATUS_OK;
+	}
+	if (strcmp(key, ADBC_INGEST_OPTION_TEMPORARY) == 0) {
+		if (strcmp(value, "false") == 0) {
+			return ADBC_STATUS_NOT_IMPLEMENTED;
+		}
 		return ADBC_STATUS_OK;
 	}
 	if (strcmp(key, ADBC_INGEST_OPTION_MODE) == 0) {

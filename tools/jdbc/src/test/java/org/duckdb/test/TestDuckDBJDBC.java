@@ -3933,31 +3933,13 @@ public class TestDuckDBJDBC {
         }
     }
 
-    public static void test_result_streaming() throws Exception {
-        Properties props = new Properties();
-        props.setProperty(JDBC_STREAM_RESULTS, String.valueOf(true));
-
-        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:", props);
-             PreparedStatement stmt1 = conn.prepareStatement("SELECT * FROM range(100000)");
-             ResultSet rs = stmt1.executeQuery()) {
-            while (rs.next()) {
-                rs.getInt(1);
-            }
-            assertFalse(rs.next()); // is exhausted
-        }
-    }
-
-    public static void test_struct_use_after_free() throws Exception {
-        Object struct, array;
+    public static void test_UUID_binding() throws Exception {
         try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
-             PreparedStatement stmt = conn.prepareStatement("SELECT struct_pack(hello := 2), [42]");
-             ResultSet rs = stmt.executeQuery()) {
-            rs.next();
-            struct = rs.getObject(1);
-            array = rs.getObject(2);
+             PreparedStatement statement = conn.prepareStatement("select '0b17ce61-375c-4ad8-97b3-349d96d35ab1'::UUID");
+             ResultSet resultSet = statement.executeQuery()) {
+            resultSet.next();
+            assertEquals(UUID.fromString("0b17ce61-375c-4ad8-97b3-349d96d35ab1"), resultSet.getObject(1));
         }
-        assertEquals(struct.toString(), "{hello=2}");
-        assertEquals(array.toString(), "[42]");
     }
 
     public static void main(String[] args) throws Exception {

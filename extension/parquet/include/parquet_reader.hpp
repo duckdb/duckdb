@@ -10,16 +10,16 @@
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/planner/table_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/multi_file_reader_options.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/table_filter.hpp"
 #endif
 #include "column_reader.hpp"
 #include "parquet_file_metadata_cache.hpp"
@@ -64,6 +64,21 @@ struct ParquetReaderScanState {
 	bool current_group_prefetched = false;
 };
 
+struct ParquetColumnDefinition {
+public:
+	static ParquetColumnDefinition FromSchemaValue(ClientContext &context, const Value &column_value);
+
+public:
+	int32_t field_id;
+	string name;
+	LogicalType type;
+	Value default_value;
+
+public:
+	void Serialize(Serializer &serializer) const;
+	static ParquetColumnDefinition Deserialize(Deserializer &deserializer);
+};
+
 struct ParquetOptions {
 	explicit ParquetOptions() {
 	}
@@ -72,6 +87,7 @@ struct ParquetOptions {
 	bool binary_as_string = false;
 	bool file_row_number = false;
 	MultiFileReaderOptions file_options;
+	vector<ParquetColumnDefinition> schema;
 
 public:
 	void Serialize(Serializer &serializer) const;

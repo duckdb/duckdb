@@ -118,6 +118,24 @@
     ]
   },
   {
+    "class": "LambdaRefExpression",
+    "base": "ParsedExpression",
+    "enum": "LAMBDA_REF",
+    "members": [
+      {
+        "id": 200,
+        "name": "lambda_idx",
+        "type": "idx_t"
+      },
+      {
+        "id": 201,
+        "name": "column_name",
+        "type": "string"
+      }
+    ],
+    "constructor": ["lambda_idx", "column_name"]
+  },
+  {
     "class": "ComparisonExpression",
     "base": "ParsedExpression",
     "enum": "COMPARISON",

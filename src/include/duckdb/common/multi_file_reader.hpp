@@ -9,11 +9,11 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
-#include "duckdb/common/union_by_name.hpp"
+#include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/union_by_name.hpp"
 
 namespace duckdb {
 class TableFunction;
@@ -110,6 +110,9 @@ struct MultiFileReader {
 	                                     const vector<string> &global_names, const vector<column_t> &global_column_ids,
 	                                     optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
 	                                     const string &initial_file);
+	//! Populated the filter_map
+	DUCKDB_API static void CreateFilterMap(const vector<LogicalType> &global_types,
+	                                       optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data);
 	//! Finalize the reading of a chunk - applying any constants that are required
 	DUCKDB_API static void FinalizeChunk(const MultiFileReaderBindData &bind_data,
 	                                     const MultiFileReaderData &reader_data, DataChunk &chunk);
