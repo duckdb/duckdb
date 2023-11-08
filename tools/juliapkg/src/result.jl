@@ -117,7 +117,7 @@ function convert_uuid(column_data::ColumnConversionData, val::duckdb_hugeint)::U
     hugeint = convert_hugeint(column_data, val)
     base_value = Int128(170141183460469231731687303715884105727)
     if hugeint < 0
-        return UUID(UInt128(hugeint + base_value) + 1)
+        return UUID(UInt128(hugeint + base_value + 1))
     else
         return UUID(UInt128(hugeint) + base_value + 1)
     end
