@@ -772,6 +772,8 @@ const char* EnumUtil::ToChars<CatalogType>(CatalogType value) {
 		return "MACRO_ENTRY";
 	case CatalogType::TABLE_MACRO_ENTRY:
 		return "TABLE_MACRO_ENTRY";
+	case CatalogType::CREATE_SECRET_FUNCTION_ENTRY:
+		return "CREATE_SECRET_FUNCTION_ENTRY";
 	case CatalogType::UPDATED_ENTRY:
 		return "UPDATED_ENTRY";
 	case CatalogType::DELETED_ENTRY:
@@ -833,6 +835,9 @@ CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "TABLE_MACRO_ENTRY")) {
 		return CatalogType::TABLE_MACRO_ENTRY;
+	}
+	if (StringUtil::Equals(value, "CREATE_SECRET_FUNCTION_ENTRY")) {
+		return CatalogType::CREATE_SECRET_FUNCTION_ENTRY;
 	}
 	if (StringUtil::Equals(value, "UPDATED_ENTRY")) {
 		return CatalogType::UPDATED_ENTRY;
@@ -2806,6 +2811,8 @@ const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value) {
 		return "LOGICAL_LOAD";
 	case LogicalOperatorType::LOGICAL_RESET:
 		return "LOGICAL_RESET";
+	case LogicalOperatorType::LOGICAL_CREATE_SECRET:
+		return "LOGICAL_CREATE_SECRET";
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		return "LOGICAL_EXTENSION_OPERATOR";
 	default:
@@ -2991,6 +2998,9 @@ LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value)
 	}
 	if (StringUtil::Equals(value, "LOGICAL_RESET")) {
 		return LogicalOperatorType::LOGICAL_RESET;
+	}
+	if (StringUtil::Equals(value, "LOGICAL_CREATE_SECRET")) {
+		return LogicalOperatorType::LOGICAL_CREATE_SECRET;
 	}
 	if (StringUtil::Equals(value, "LOGICAL_EXTENSION_OPERATOR")) {
 		return LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR;
@@ -3777,6 +3787,8 @@ const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value) {
 		return "COPY_INFO";
 	case ParseInfoType::CREATE_INFO:
 		return "CREATE_INFO";
+	case ParseInfoType::CREATE_SECRET_INFO:
+		return "CREATE_SECRET_INFO";
 	case ParseInfoType::DETACH_INFO:
 		return "DETACH_INFO";
 	case ParseInfoType::DROP_INFO:
@@ -3811,6 +3823,9 @@ ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "CREATE_INFO")) {
 		return ParseInfoType::CREATE_INFO;
+	}
+	if (StringUtil::Equals(value, "CREATE_SECRET_INFO")) {
+		return ParseInfoType::CREATE_SECRET_INFO;
 	}
 	if (StringUtil::Equals(value, "DETACH_INFO")) {
 		return ParseInfoType::DETACH_INFO;
@@ -4168,6 +4183,8 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "RESET";
 	case PhysicalOperatorType::EXTENSION:
 		return "EXTENSION";
+	case PhysicalOperatorType::CREATE_SECRET:
+		return "CREATE_SECRET";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4396,6 +4413,9 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "EXTENSION")) {
 		return PhysicalOperatorType::EXTENSION;
+	}
+	if (StringUtil::Equals(value, "CREATE_SECRET")) {
+		return PhysicalOperatorType::CREATE_SECRET;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -5289,6 +5309,8 @@ const char* EnumUtil::ToChars<StatementType>(StatementType value) {
 		return "DETACH_STATEMENT";
 	case StatementType::MULTI_STATEMENT:
 		return "MULTI_STATEMENT";
+	case StatementType::CREATE_SECRET_STATEMENT:
+		return "CREATE_SECRET_STATEMENT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5382,6 +5404,9 @@ StatementType EnumUtil::FromString<StatementType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "MULTI_STATEMENT")) {
 		return StatementType::MULTI_STATEMENT;
+	}
+	if (StringUtil::Equals(value, "CREATE_SECRET_STATEMENT")) {
+		return StatementType::CREATE_SECRET_STATEMENT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
