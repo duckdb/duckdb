@@ -88,12 +88,9 @@ string NewLineIdentifierToString(NewLineIdentifier identifier) {
 		return "\\n";
 	case NewLineIdentifier::CARRY_ON:
 		return "\\r\\n";
-	case NewLineIdentifier::MIX:
-		return "mix";
-	case NewLineIdentifier::NOT_SET:
-		throw InternalException("NewLine Identifier must always be set after running the CSV sniffer");
+	default:
+		throw InternalException("Invalid Newline Detected.");
 	}
-	return "invalid";
 }
 
 string FormatOptions(char opt) {
@@ -195,7 +192,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	// 10.8. Date Format
 	if (options.dialect_options.has_format[LogicalType::DATE] &&
 	    options.dialect_options.date_format.find(LogicalType::DATE) != options.dialect_options.date_format.end()) {
-		if (options.dialect_options.date_format[LogicalType::DATE].format_specifier != "") {
+		if (!options.dialect_options.date_format[LogicalType::DATE].format_specifier.empty()) {
 			csv_read << separator << "dateformat="
 			         << "'" << options.dialect_options.date_format[LogicalType::DATE].format_specifier << "'";
 		}
@@ -203,7 +200,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	// 9. Timestamp Format
 	if (options.dialect_options.has_format[LogicalType::TIMESTAMP] &&
 	    options.dialect_options.date_format.find(LogicalType::TIMESTAMP) != options.dialect_options.date_format.end()) {
-		if (options.dialect_options.date_format[LogicalType::TIMESTAMP].format_specifier != "") {
+		if (!options.dialect_options.date_format[LogicalType::TIMESTAMP].format_specifier.empty()) {
 			csv_read << separator << "timestampformat="
 			         << "'" << options.dialect_options.date_format[LogicalType::TIMESTAMP].format_specifier << "'";
 		}
