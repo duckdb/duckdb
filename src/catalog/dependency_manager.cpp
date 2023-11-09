@@ -6,7 +6,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/catalog/mapping_value.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/catalog/catalog_entry/dependency_set_catalog_entry.hpp"
