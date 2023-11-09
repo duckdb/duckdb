@@ -27,7 +27,6 @@ struct AlterInfo;
 
 class ClientContext;
 class DependencyList;
-struct MappingValue;
 
 class DuckCatalog;
 class TableCatalogEntry;
@@ -80,7 +79,6 @@ private:
 
 //! The Catalog Set stores (key, value) map of a set of CatalogEntries
 class CatalogSet {
-	friend struct MappingValue;
 
 public:
 	DUCKDB_API explicit CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults = nullptr);
@@ -145,17 +143,12 @@ public:
 private:
 	bool DropDependencies(CatalogTransaction transaction, const string &name, bool cascade,
 	                      bool allow_drop_internal = false);
-	catalog_entry_t GenerateCatalogEntryIndex();
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current);
 	CatalogEntry &GetCommittedEntry(CatalogEntry &current);
-	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, const string &name,
-	                                            catalog_entry_t *entry_index);
+	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, const string &name);
 	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, CatalogEntry &entry);
 	optional_ptr<CatalogEntry> CreateEntryInternal(CatalogTransaction transaction, unique_ptr<CatalogEntry> entry);
-	optional_ptr<MappingValue> GetMapping(CatalogTransaction transaction, const string &name, bool get_latest = false);
-	optional_ptr<MappingValue> GetLatestMapping(const string &name);
-	void PutMapping(CatalogTransaction transaction, const string &name, catalog_entry_t entry_index);
 
 	//! Create all default entries
 	void CreateDefaultEntries(CatalogTransaction transaction, unique_lock<mutex> &lock);
@@ -163,8 +156,9 @@ private:
 	optional_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const string &name,
 	                                              unique_lock<mutex> &lock);
 
-	catalog_entry_t PopulateEntry(catalog_entry_t entry_index, unique_ptr<CatalogEntry> entry);
-	void UpdateEntry(catalog_entry_t index, unique_ptr<CatalogEntry> entry);
+	void PopulateEntry(unique_ptr<CatalogEntry> entry);
+	void UpdateEntry(unique_ptr<CatalogEntry> entry);
+	optional_ptr<EntryValue> GetEntryValue(CatalogTransaction, const string &name);
 	bool DropEntryInternal(CatalogTransaction transaction, const string &name, bool allow_drop_internal = false,
 	                       CatalogType tombstone_type = CatalogType::DELETED_ENTRY);
 
@@ -172,12 +166,8 @@ private:
 	DuckCatalog &catalog;
 	//! The catalog lock is used to make changes to the data
 	mutex catalog_lock;
-	//! The set of catalog entries
-	unordered_map<catalog_entry_t, EntryValue> entries;
 	//! Mapping of string to catalog entry
-	case_insensitive_map_t<unique_ptr<MappingValue>> mapping;
-	//! The current catalog entry index
-	catalog_entry_t current_entry = 0;
+	case_insensitive_map_t<EntryValue> entries;
 	//! The generator used to generate default internal entries
 	unique_ptr<DefaultGenerator> defaults;
 };

@@ -96,31 +96,31 @@ class ClientContext;
 //	catalog_entry_t index;
 //};
 
-struct MappingValue {
-public:
-	explicit MappingValue(CatalogSet &set, catalog_entry_t index)
-	    : deleted(false), parent(nullptr), set(set), index(std::move(index)), timestamp(0) {
-	}
+// struct MappingValue {
+// public:
+//	explicit MappingValue(CatalogSet &set, catalog_entry_t index)
+//	    : deleted(false), parent(nullptr), set(set), index(std::move(index)), timestamp(0) {
+//	}
 
-public:
-	void SetTimestamp(transaction_t timestamp);
-	transaction_t GetTimestamp() const;
-	CatalogEntry &GetEntry();
-	catalog_entry_t GetIndex();
-	void SetEntry(unique_ptr<CatalogEntry> entry);
+// public:
+//	void SetTimestamp(transaction_t timestamp);
+//	transaction_t GetTimestamp() const;
+//	CatalogEntry &GetEntry();
+//	catalog_entry_t GetIndex();
+//	void SetEntry(unique_ptr<CatalogEntry> entry);
 
-public:
-	bool deleted;
-	unique_ptr<MappingValue> child;
-	MappingValue *parent;
+// public:
+//	bool deleted;
+//	unique_ptr<MappingValue> child;
+//	MappingValue *parent;
 
-private:
-	EntryValue &GetEntryValue();
+// private:
+//	EntryValue &GetEntryValue();
 
-private:
-	CatalogSet &set;
-	catalog_entry_t index;
-	transaction_t timestamp;
-};
+// private:
+//	CatalogSet &set;
+//	catalog_entry_t index;
+//	transaction_t timestamp;
+//};
 
 } // namespace duckdb
