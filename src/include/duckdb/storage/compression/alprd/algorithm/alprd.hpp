@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/compression/alp/algorithm/alp.hpp
+// duckdb/storage/compression/alprd/algorithm/alprd.hpp
 //
 //
 //===----------------------------------------------------------------------===//
