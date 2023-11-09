@@ -16,6 +16,23 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk,
                                          OperatorSourceInput &input) const {
+	// check if the database is already attached
+	auto &name = info->name;
+	const auto &path = info->path;
+
+	if (name.empty()) {
+		auto &fs = FileSystem::GetFileSystem(context.client);
+		name = AttachedDatabase::ExtractDatabaseName(path, fs);
+	}
+	auto &db_manager = DatabaseManager::Get(context.client);
+	auto existing_db = db_manager.GetDatabaseFromPath(context.client, path);
+	if (existing_db) {
+		if (info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+			return SourceResultType::FINISHED;
+		}
+		throw BinderException("Database \"%s\" is already attached with alias \"%s\"", path, existing_db->GetName());
+	}
+
 	// parse the options
 	auto &config = DBConfig::GetConfig(context.client);
 	AccessMode access_mode = config.options.access_mode;
@@ -65,21 +82,6 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	}
 
 	// attach the database
-	auto &name = info->name;
-	const auto &path = info->path;
-
-	if (name.empty()) {
-		auto &fs = FileSystem::GetFileSystem(context.client);
-		name = AttachedDatabase::ExtractDatabaseName(path, fs);
-	}
-	auto &db_manager = DatabaseManager::Get(context.client);
-	auto existing_db = db_manager.GetDatabaseFromPath(context.client, path);
-	if (existing_db) {
-		if (info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
-			return SourceResultType::FINISHED;
-		}
-		throw BinderException("Database \"%s\" is already attached with alias \"%s\"", path, existing_db->GetName());
-	}
 	auto new_db = db.CreateAttachedDatabase(*info, type, access_mode);
 	new_db->Initialize();
 
