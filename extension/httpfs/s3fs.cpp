@@ -181,6 +181,9 @@ S3AuthParams AWSEnvironmentCredentialsProvider::CreateParams() {
 
 
 unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(FileOpener *opener, string path) {
+	if (!opener) {
+		return nullptr;
+	}
 	auto context = opener->TryGetClientContext();
 	if (!context) {
 		return nullptr;
