@@ -15,15 +15,7 @@
 
 namespace duckdb {
 
-CatalogSet::CatalogSet(Catalog &catalog_p, unique_ptr<DefaultGenerator> defaults)
-    : catalog(catalog_p.Cast<DuckCatalog>()), defaults(std::move(defaults)) {
-	D_ASSERT(catalog_p.IsDuckCatalog());
-}
-CatalogSet::~CatalogSet() {
-}
-
-// Create new
-void CatalogSet::PopulateEntry(unique_ptr<CatalogEntry> entry) {
+void CatalogEntryMap::AddEntry(unique_ptr<CatalogEntry> entry) {
 	auto name = entry->name;
 
 	if (entries.find(name) != entries.end()) {
@@ -32,16 +24,7 @@ void CatalogSet::PopulateEntry(unique_ptr<CatalogEntry> entry) {
 	entries.insert(make_pair(name, std::move(entry)));
 }
 
-optional_ptr<CatalogEntry> CatalogSet::GetEntryValue(CatalogTransaction transaction, const string &name) {
-	auto entry = entries.find(name);
-	if (entry == entries.end()) {
-		return nullptr;
-	}
-	return entry->second.get();
-}
-
-// Push to existing
-void CatalogSet::UpdateEntry(unique_ptr<CatalogEntry> catalog_entry) {
+void CatalogEntryMap::UpdateEntry(unique_ptr<CatalogEntry> catalog_entry) {
 	auto name = catalog_entry->name;
 
 	auto entry = entries.find(name);
@@ -52,6 +35,53 @@ void CatalogSet::UpdateEntry(unique_ptr<CatalogEntry> catalog_entry) {
 	auto existing = std::move(entry->second);
 	entry->second = std::move(catalog_entry);
 	entry->second->SetChild(std::move(existing));
+}
+
+case_insensitive_map_t<unique_ptr<CatalogEntry>> &CatalogEntryMap::Entries() {
+	return entries;
+}
+
+void CatalogEntryMap::DropEntry(CatalogEntry &entry) {
+	auto &name = entry.name;
+	auto chain = GetEntry(name);
+	if (!chain) {
+		throw InternalException("Attempting to drop entry with name \"%s\" but no chain with that name exists", name);
+	}
+	auto child = entry.TakeChild();
+	if (!entry.Parent()) {
+		// This is the top of the chain
+		D_ASSERT(chain.get() == &entry);
+		auto it = entries.find(name);
+		D_ASSERT(it != entries.end());
+
+		// Remove the entry
+		it->second.reset();
+		if (child) {
+			// Replace it with its child
+			it->second = std::move(child);
+		} else {
+			entries.erase(it);
+		}
+	} else {
+		// Just replace the entry with its child
+		auto parent = entry.Parent();
+		parent->SetChild(std::move(child));
+	}
+}
+
+optional_ptr<CatalogEntry> CatalogEntryMap::GetEntry(const string &name) {
+	auto entry = entries.find(name);
+	if (entry == entries.end()) {
+		return nullptr;
+	}
+	return entry->second.get();
+}
+
+CatalogSet::CatalogSet(Catalog &catalog_p, unique_ptr<DefaultGenerator> defaults)
+    : catalog(catalog_p.Cast<DuckCatalog>()), defaults(std::move(defaults)) {
+	D_ASSERT(catalog_p.IsDuckCatalog());
+}
+CatalogSet::~CatalogSet() {
 }
 
 bool IsDependencyEntry(CatalogEntry &entry) {
@@ -94,7 +124,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	unique_lock<mutex> read_lock(catalog_lock);
 
 	// first check if the entry exists in the unordered set
-	auto entry_value = GetEntryValue(transaction, name);
+	auto entry_value = map.GetEntry(name);
 	if (!entry_value) {
 		// if it does not: entry has never been created
 
@@ -112,7 +142,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 		dummy_node->deleted = true;
 		dummy_node->set = this;
 
-		PopulateEntry(std::move(dummy_node));
+		map.AddEntry(std::move(dummy_node));
 	} else {
 		auto &current = *entry_value;
 		// if it does, we have to check version numbers
@@ -129,7 +159,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	}
 
 	auto value_ptr = value.get();
-	UpdateEntry(std::move(value));
+	map.UpdateEntry(std::move(value));
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
 		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
@@ -160,7 +190,7 @@ optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction trans
 }
 
 optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction transaction, const string &name) {
-	auto entry_value = GetEntryValue(transaction, name);
+	auto entry_value = map.GetEntry(name);
 	if (!entry_value) {
 		// the entry does not exist, check if we can create a default entry
 		return nullptr;
@@ -218,7 +248,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 
 	const bool name_changed = !StringUtil::CIEquals(value->name, original_name);
 	if (name_changed) {
-		auto entry_value = GetEntryValue(transaction, value->name);
+		auto entry_value = map.GetEntry(value->name);
 		if (entry_value) {
 			auto &original_entry = GetEntryForTransaction(transaction, *entry_value);
 			if (!original_entry.deleted) {
@@ -247,9 +277,9 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 
 		auto lookup = GetEntryInternal(transaction, value->name);
 		D_ASSERT(lookup);
-		UpdateEntry(std::move(value));
+		map.UpdateEntry(std::move(value));
 	} else {
-		UpdateEntry(std::move(value));
+		map.UpdateEntry(std::move(value));
 	}
 
 	// push the old entry in the undo buffer for this transaction
@@ -313,7 +343,7 @@ bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const string 
 	value->set = this;
 	value->deleted = true;
 	auto value_ptr = value.get();
-	UpdateEntry(std::move(value));
+	map.UpdateEntry(std::move(value));
 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
@@ -345,17 +375,13 @@ void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	lock_guard<mutex> lock(catalog_lock);
 	auto &parent = *catalog_entry.Parent();
-	// Replace the entry with its child, deleting it in the process
-	parent.SetChild(catalog_entry.TakeChild());
+	map.DropEntry(catalog_entry);
 	if (parent.deleted && !parent.HasChild() && !parent.HasParent()) {
 		// The entry's parent is a tombstone and the entry had no child
 		// clean up the mapping and the tombstone entry as well
-		auto entry_value = entries.find(parent.name);
-		D_ASSERT(entry_value != entries.end());
-		auto entry = entry_value->second.get();
-		if (entry == &parent) {
-			entries.erase(entry_value);
-		}
+		auto entry = map.GetEntry(parent.name);
+		D_ASSERT(entry.get() == &parent);
+		map.DropEntry(parent);
 	}
 }
 
@@ -404,7 +430,7 @@ SimilarCatalogEntry CatalogSet::SimilarEntry(CatalogTransaction transaction, con
 	CreateDefaultEntries(transaction, lock);
 
 	SimilarCatalogEntry result;
-	for (auto &kv : entries) {
+	for (auto &kv : map.Entries()) {
 		auto ldist = StringUtil::SimilarityScore(kv.first, name);
 		if (ldist < result.distance) {
 			result.distance = ldist;
@@ -416,14 +442,16 @@ SimilarCatalogEntry CatalogSet::SimilarEntry(CatalogTransaction transaction, con
 
 optional_ptr<CatalogEntry> CatalogSet::CreateEntryInternal(CatalogTransaction transaction,
                                                            unique_ptr<CatalogEntry> entry) {
-	if (entries.find(entry->name) != entries.end()) {
+	auto existing_entry = map.GetEntry(entry->name);
+
+	if (existing_entry) {
 		return nullptr;
 	}
 	auto catalog_entry = entry.get();
 
 	entry->set = this;
 	entry->timestamp = 0;
-	PopulateEntry(std::move(entry));
+	map.AddEntry(std::move(entry));
 	return catalog_entry;
 }
 
@@ -462,7 +490,7 @@ optional_ptr<CatalogEntry> CatalogSet::CreateDefaultEntry(CatalogTransaction tra
 
 optional_ptr<CatalogEntry> CatalogSet::GetEntry(CatalogTransaction transaction, const string &name) {
 	unique_lock<mutex> lock(catalog_lock);
-	auto entry_value = GetEntryValue(transaction, name);
+	auto entry_value = map.GetEntry(name);
 	if (entry_value) {
 		// we found an entry for this name
 		// check the version numbers
@@ -500,39 +528,14 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 	auto &to_be_removed_node = *entry.Parent();
 
 	D_ASSERT(StringUtil::CIEquals(entry.name, to_be_removed_node.name));
-	if (to_be_removed_node.HasParent()) {
-		// if the to be removed node has a parent, set the child pointer to the
-		// to be restored node
-		to_be_removed_node.Parent()->SetChild(to_be_removed_node.TakeChild());
-	} else {
-		// This is the root entry, owned by the 'entries' map
-		auto &name = entry.name;
+	if (!to_be_removed_node.HasParent()) {
 		to_be_removed_node.Child().SetAsRoot();
-
-		auto it = entries.find(name);
-		D_ASSERT(it != entries.end());
-		auto existing = std::move(it->second);
-		it->second = to_be_removed_node.TakeChild();
-		// Explicitly clean up the old node
-		existing.reset();
 	}
-
-	// restore the name if it was deleted
-	auto restored_entry = entries.find(entry.name);
-	D_ASSERT(restored_entry != entries.end());
-	auto &entry_value = *restored_entry->second;
+	map.DropEntry(to_be_removed_node);
 
 	if (entry.type == CatalogType::INVALID) {
 		// This was the root of the entry chain
-		if (entry_value.HasChild()) {
-			auto existing = std::move(restored_entry->second);
-			restored_entry->second = entry_value.TakeChild();
-			existing.reset();
-		} else {
-			// The entry was not also created by a different transaction
-			// Remove the entire chain
-			entries.erase(restored_entry);
-		}
+		map.DropEntry(entry);
 	}
 	// we mark the catalog as being modified, since this action can lead to e.g. tables being dropped
 	catalog.ModifyCatalog();
@@ -545,8 +548,8 @@ void CatalogSet::CreateDefaultEntries(CatalogTransaction transaction, unique_loc
 	// this catalog set has a default set defined:
 	auto default_entries = defaults->GetDefaultEntries();
 	for (auto &default_entry : default_entries) {
-		auto entry_value = entries.find(default_entry);
-		if (entry_value == entries.end()) {
+		auto entry_value = map.GetEntry(default_entry);
+		if (!entry_value) {
 			// we unlock during the CreateEntry, since it might reference other catalog sets...
 			// specifically for views this can happen since the view will be bound
 			lock.unlock();
@@ -567,7 +570,7 @@ void CatalogSet::Scan(CatalogTransaction transaction, const std::function<void(C
 	unique_lock<mutex> lock(catalog_lock);
 	CreateDefaultEntries(transaction, lock);
 
-	for (auto &kv : entries) {
+	for (auto &kv : map.Entries()) {
 		auto &entry = *kv.second;
 		auto &entry_for_transaction = GetEntryForTransaction(transaction, entry);
 		if (!entry_for_transaction.deleted) {
@@ -583,7 +586,7 @@ void CatalogSet::Scan(ClientContext &context, const std::function<void(CatalogEn
 void CatalogSet::Scan(const std::function<void(CatalogEntry &)> &callback) {
 	// lock the catalog set
 	lock_guard<mutex> lock(catalog_lock);
-	for (auto &kv : entries) {
+	for (auto &kv : map.Entries()) {
 		auto &entry = *kv.second;
 		auto &commited_entry = GetCommittedEntry(entry);
 		if (!commited_entry.deleted) {

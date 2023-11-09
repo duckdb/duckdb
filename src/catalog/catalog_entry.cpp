@@ -65,6 +65,7 @@ bool CatalogEntry::HasParent() const {
 CatalogEntry &CatalogEntry::Child() {
 	return *child;
 }
+
 optional_ptr<CatalogEntry> CatalogEntry::Parent() {
 	return parent;
 }

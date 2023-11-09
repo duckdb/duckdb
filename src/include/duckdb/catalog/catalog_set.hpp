@@ -32,6 +32,23 @@ class DuckCatalog;
 class TableCatalogEntry;
 class SequenceCatalogEntry;
 
+class CatalogEntryMap {
+public:
+	CatalogEntryMap() {
+	}
+
+public:
+	void AddEntry(unique_ptr<CatalogEntry> entry);
+	void UpdateEntry(unique_ptr<CatalogEntry> entry);
+	void DropEntry(CatalogEntry &entry);
+	case_insensitive_map_t<unique_ptr<CatalogEntry>> &Entries();
+	optional_ptr<CatalogEntry> GetEntry(const string &name);
+
+private:
+	//! Mapping of string to catalog entry
+	case_insensitive_map_t<unique_ptr<CatalogEntry>> entries;
+};
+
 //! The Catalog Set stores (key, value) map of a set of CatalogEntries
 class CatalogSet {
 
@@ -111,9 +128,6 @@ private:
 	optional_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const string &name,
 	                                              unique_lock<mutex> &lock);
 
-	void PopulateEntry(unique_ptr<CatalogEntry> entry);
-	void UpdateEntry(unique_ptr<CatalogEntry> entry);
-	optional_ptr<CatalogEntry> GetEntryValue(CatalogTransaction transaction, const string &name);
 	bool DropEntryInternal(CatalogTransaction transaction, const string &name, bool allow_drop_internal = false,
 	                       CatalogType tombstone_type = CatalogType::DELETED_ENTRY);
 
@@ -121,8 +135,7 @@ private:
 	DuckCatalog &catalog;
 	//! The catalog lock is used to make changes to the data
 	mutex catalog_lock;
-	//! Mapping of string to catalog entry
-	case_insensitive_map_t<unique_ptr<CatalogEntry>> entries;
+	CatalogEntryMap map;
 	//! The generator used to generate default internal entries
 	unique_ptr<DefaultGenerator> defaults;
 };
