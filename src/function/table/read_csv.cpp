@@ -861,7 +861,7 @@ static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *
 	return data.csv_reader->buffer->batch_index;
 }
 
-static void ReadCSVAddNamedParameters(TableFunction &table_function) {
+void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["sep"] = LogicalType::VARCHAR;
 	table_function.named_parameters["delim"] = LogicalType::VARCHAR;
 	table_function.named_parameters["quote"] = LogicalType::VARCHAR;

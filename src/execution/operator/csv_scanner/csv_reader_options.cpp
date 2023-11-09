@@ -347,6 +347,7 @@ void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientCont
 			continue;
 		}
 		auto loption = StringUtil::Lower(kv.first);
+		user_defined_parameters += loption + "=" + kv.second.ToSQLString() + ", ";
 		if (loption == "columns") {
 			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::STRUCT) {
@@ -451,6 +452,7 @@ void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientCont
 			SetReadOption(loption, kv.second, names);
 		}
 	}
+	user_defined_parameters.pop_back();
 }
 
 //! This function is used to remember options set by the sniffer, for use in ReadCSVRelation

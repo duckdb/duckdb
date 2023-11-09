@@ -147,6 +147,9 @@ struct CSVReaderOptions {
 	//! When it can't execute a parallel run before execution. However, there are (rather specific) situations where
 	//! setting up this manually might be important
 	ParallelMode parallel_mode;
+
+	//! User defined parameters for the csv function concatenated on a string
+	string user_defined_parameters;
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
 	//===--------------------------------------------------------------------===//

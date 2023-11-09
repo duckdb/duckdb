@@ -16,6 +16,12 @@ struct CSVSniffFunctionData : public TableFunctionData {
 	}
 	string path;
 	int64_t sample_size = 20480;
+	// The CSV reader options
+	CSVReaderOptions options;
+	// Return Types of CSV (If given by the user)
+	vector<LogicalType> return_types_csv;
+	// Column Names of CSV (If given by the user)
+	vector<string> names_csv;
 };
 
 struct CSVSniffGlobalState : public GlobalTableFunctionState {
@@ -32,22 +38,7 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
                                              vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<CSVSniffFunctionData>();
 	result->path = input.inputs[0].ToString();
-	if (input.named_parameters.size() == 1) {
-		auto loption = StringUtil::Lower(input.named_parameters.begin()->first);
-		if (loption == "sample_size") {
-			result->sample_size = BigIntValue::Get(input.named_parameters.begin()->second);
-			if (result->sample_size == -1) {
-				result->sample_size = NumericLimits<int64_t>::Maximum();
-			}
-		} else {
-			throw InvalidInputException("Invalid sniff_csv named parameter: %s . Only sample_size is accepted",
-			                            loption);
-		}
-	}
-	if (input.named_parameters.size() > 1) {
-		throw InvalidInputException(
-		    "Invalid number of named parameters for sniff_csv function, only sample_size is accepted");
-	}
+	result->options.FromNamedParameters(input.named_parameters, context, result->return_types_csv, result->names_csv);
 	// We want to return the whole CSV Configuration
 	// 1. Delimiter
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -77,6 +68,9 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("Timestamp Format");
 	// 10. CSV read function with all the options used
+	return_types.emplace_back(LogicalType::VARCHAR);
+	names.emplace_back("User Arguments");
+	// 11. CSV read function with all the options used
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("Prompt");
 	return std::move(result);
@@ -164,7 +158,15 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	} else {
 		output.SetValue(8, 0, Value());
 	}
-	// 10. csv_read string
+
+	// 10. The Extra User Arguments
+	if (data.options.user_defined_parameters.empty()) {
+		output.SetValue(9, 0, Value());
+	} else {
+		output.SetValue(9, 0, Value(data.options.user_defined_parameters));
+	}
+
+	// 11. csv_read string
 	std::ostringstream csv_read;
 
 	// Base, Path and auto_detect=false
@@ -172,24 +174,24 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	// 10.1. Delimiter
 	csv_read << "delim="
 	         << "'" << FormatOptions(options.dialect_options.state_machine_options.delimiter) << "'" << separator;
-	// 10.2. Quote
+	// 11.2. Quote
 	csv_read << "quote="
 	         << "'" << FormatOptions(options.dialect_options.state_machine_options.quote) << "'" << separator;
-	// 10.3. Escape
+	// 11.3. Escape
 	csv_read << "escape="
 	         << "'" << FormatOptions(options.dialect_options.state_machine_options.escape) << "'" << separator;
-	// 10.4. NewLine Delimiter
+	// 11.4. NewLine Delimiter
 	if (new_line_identifier != "mix") {
 		csv_read << "new_line="
 		         << "'" << new_line_identifier << "'" << separator;
 	}
-	// 10.5. Skip Rows
+	// 11.5. Skip Rows
 	csv_read << "skip=" << options.dialect_options.skip_rows << separator;
-	// 10.6. Has Header
+	// 11.6. Has Header
 	csv_read << "header=" << options.dialect_options.header << separator;
-	// 10.7. column={'col1': 'INTEGER', 'col2': 'VARCHAR'}
+	// 11.7. column={'col1': 'INTEGER', 'col2': 'VARCHAR'}
 	csv_read << "columns=" << columns.str();
-	// 10.8. Date Format
+	// 11.8. Date Format
 	if (options.dialect_options.has_format[LogicalType::DATE] &&
 	    options.dialect_options.date_format.find(LogicalType::DATE) != options.dialect_options.date_format.end()) {
 		if (!options.dialect_options.date_format[LogicalType::DATE].format_specifier.empty()) {
@@ -197,7 +199,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 			         << "'" << options.dialect_options.date_format[LogicalType::DATE].format_specifier << "'";
 		}
 	}
-	// 9. Timestamp Format
+	// 11.9. Timestamp Format
 	if (options.dialect_options.has_format[LogicalType::TIMESTAMP] &&
 	    options.dialect_options.date_format.find(LogicalType::TIMESTAMP) != options.dialect_options.date_format.end()) {
 		if (!options.dialect_options.date_format[LogicalType::TIMESTAMP].format_specifier.empty()) {
@@ -206,14 +208,14 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 		}
 	}
 	csv_read << ");";
-	output.SetValue(9, 0, csv_read.str());
+	output.SetValue(10, 0, csv_read.str());
 	global_state.done = true;
 }
 
 void CSVSnifferFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction csv_sniffer("sniff_csv", {LogicalType::VARCHAR}, CSVSniffFunction, CSVSniffBind, CSVSniffInitGlobal);
-	csv_sniffer.named_parameters["sample_size"] = LogicalType::BIGINT;
-
+	// Accept same options as the actual csv reader
+	ReadCSVTableFunction::ReadCSVAddNamedParameters(csv_sniffer);
 	set.AddFunction(csv_sniffer);
 }
 } // namespace duckdb
