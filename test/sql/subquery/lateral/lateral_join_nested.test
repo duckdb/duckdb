@@ -213,11 +213,12 @@ WHERE i IN (SELECT l FROM (SELECT 42) t4(l)
 query I
 SELECT (SELECT res.*
         FROM (SELECT 1) AS t2(z),
-                   (SELECT (SELECT i
-                          FROM (SELECT MAX(k) FROM generate_series(1,10) t(k)) AS t(i)
-                          GROUP BY i
-                          HAVING (COUNT(*)) =
-                                 ((SELECT x)))) res)
+			   (SELECT (SELECT i
+					  FROM (SELECT MAX(k) FROM generate_series(1,10) t(k)) AS t(i)
+					  GROUP BY i
+					  HAVING (COUNT(*)) = x)
+				) as res 
+       )
 FROM generate_series(1, 5) t(x);
 ----
 10
