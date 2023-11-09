@@ -173,7 +173,14 @@ bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_
 	return CreateEntry(catalog.GetCatalogTransaction(context), name, std::move(value), dependencies);
 }
 
-optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction transaction, CatalogEntry &catalog_entry) {
+optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction transaction, const string &name) {
+	auto entry_value = map.GetEntry(name);
+	if (!entry_value) {
+		// the entry does not exist, check if we can create a default entry
+		return nullptr;
+	}
+	auto &catalog_entry = *entry_value;
+
 	// if it does: we have to retrieve the entry and to check version numbers
 	if (HasConflict(transaction, catalog_entry.timestamp)) {
 		// current version has been written to by a currently active
@@ -187,15 +194,6 @@ optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction trans
 		return nullptr;
 	}
 	return &catalog_entry;
-}
-
-optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction transaction, const string &name) {
-	auto entry_value = map.GetEntry(name);
-	if (!entry_value) {
-		// the entry does not exist, check if we can create a default entry
-		return nullptr;
-	}
-	return GetEntryInternal(transaction, *entry_value);
 }
 
 bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipInfo &info) {
@@ -274,13 +272,8 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 		CreateEntry(transaction, value->name, std::move(renamed_node), EMPTY_DEPENDENCIES);
 		write_lock.lock();
 		read_lock.lock();
-
-		auto lookup = GetEntryInternal(transaction, value->name);
-		D_ASSERT(lookup);
-		map.UpdateEntry(std::move(value));
-	} else {
-		map.UpdateEntry(std::move(value));
 	}
+	map.UpdateEntry(std::move(value));
 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
@@ -386,8 +379,13 @@ void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
 }
 
 bool CatalogSet::HasConflict(CatalogTransaction transaction, transaction_t timestamp) {
-	return (timestamp >= TRANSACTION_ID_START && timestamp != transaction.transaction_id) ||
-	       (timestamp < TRANSACTION_ID_START && timestamp > transaction.start_time);
+	if (timestamp >= TRANSACTION_ID_START && timestamp != transaction.transaction_id) {
+		return true;
+	}
+	if (timestamp < TRANSACTION_ID_START && timestamp > transaction.start_time) {
+		return true;
+	}
+	return false;
 }
 
 bool CatalogSet::UseTimestamp(CatalogTransaction transaction, transaction_t timestamp) {

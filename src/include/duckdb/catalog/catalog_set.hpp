@@ -119,7 +119,6 @@ private:
 	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current);
 	CatalogEntry &GetCommittedEntry(CatalogEntry &current);
 	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, const string &name);
-	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, CatalogEntry &entry);
 	optional_ptr<CatalogEntry> CreateEntryInternal(CatalogTransaction transaction, unique_ptr<CatalogEntry> entry);
 
 	//! Create all default entries
