@@ -48,11 +48,13 @@ unique_ptr<SetStatement> Transformer::TransformSetVariable(duckdb_libpgquery::PG
 		throw ParserException("SET needs a single scalar value parameter");
 	}
 	D_ASSERT(stmt.args->head && stmt.args->head->data.ptr_value);
-	auto const_val = PGPointerCast<duckdb_libpgquery::PGAConst>(stmt.args->head->data.ptr_value);
-	D_ASSERT(const_val->type == duckdb_libpgquery::T_PGAConst);
-
-	auto value = TransformValue(const_val->val)->value;
-	return make_uniq<SetVariableStatement>(name, value, ToSetScope(stmt.scope));
+	auto const_val = PGPointerCast<duckdb_libpgquery::PGNode>(stmt.args->head->data.ptr_value);
+	auto expr = TransformExpression(const_val);
+	if (expr->type == ExpressionType::VALUE_DEFAULT) {
+		// set to default = reset
+		return make_uniq<ResetVariableStatement>(name, ToSetScope(stmt.scope));
+	}
+	return make_uniq<SetVariableStatement>(name, std::move(expr), ToSetScope(stmt.scope));
 }
 
 unique_ptr<SetStatement> Transformer::TransformResetVariable(duckdb_libpgquery::PGVariableSetStmt &stmt) {
