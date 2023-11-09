@@ -1,0 +1,293 @@
+# name: test/sql/function/list/list_zip.test
+# description: Test list_zip function
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers (i int[])
+
+statement ok
+INSERT INTO integers VALUES  ([1,2,3]), ([4,5,6])
+
+statement ok
+CREATE TABLE bools (b bool)
+
+statement ok
+INSERT INTO bools VALUES (false), (true)
+
+statement ok
+CREATE TABLE integers2 (j int[])
+
+statement ok
+INSERT INTO integers2 VALUES ([]), (NULL)
+
+#normal use of list_zip
+query I
+SELECT list_zip([1,2,3])
+----
+[{'list_1': 1}, {'list_1': 2}, {'list_1': 3}]
+
+query I
+SELECT list_zip([1,2,3], [2,3,4], [3,4,5], []);
+----
+[{'list_1': 1, 'list_2': 2, 'list_3': 3, 'list_4': NULL}, {'list_1': 2, 'list_2': 3, 'list_3': 4, 'list_4': NULL}, {'list_1': 3, 'list_2': 4, 'list_3': 5, 'list_4': NULL}]
+
+query I
+SELECT list_zip([1,2,3], [1,2,3])
+----
+[{'list_1': 1, 'list_2': 1}, {'list_1': 2, 'list_2': 2}, {'list_1': 3, 'list_2': 3}]
+
+query I
+SELECT list_zip([1,2,3], [1,2])
+----
+[{'list_1': 1, 'list_2': 1}, {'list_1': 2, 'list_2': 2}, {'list_1': 3, 'list_2': NULL}]
+
+query I
+SELECT list_zip([1,2], [1,2,3])
+----
+[{'list_1': 1, 'list_2': 1}, {'list_1': 2, 'list_2': 2}, {'list_1': NULL, 'list_2': 3}]
+
+query I
+SELECT list_zip([1,2,3], NULL)
+----
+[{'list_1': 1, 'list_2': NULL}, {'list_1': 2, 'list_2': NULL}, {'list_1': 3, 'list_2': NULL}]
+
+query I
+SELECT list_zip([1,2,3], [])
+----
+[{'list_1': 1, 'list_2': NULL}, {'list_1': 2, 'list_2': NULL}, {'list_1': 3, 'list_2': NULL}]
+
+query I
+SELECT list_zip([1,2,3], NULL, true)
+----
+[]
+
+query I
+SELECT list_zip([1,2,3], [], true)
+----
+[]
+
+query I
+SELECT list_zip([1,2,3], [2,3,4], [3,4,5], [], true);
+----
+[]
+
+query I
+SELECT list_zip(a.i, b.i) FROM integers AS a, integers AS b
+----
+[{'i': 1, 'i': 1}, {'i': 2, 'i': 2}, {'i': 3, 'i': 3}]
+[{'i': 4, 'i': 1}, {'i': 5, 'i': 2}, {'i': 6, 'i': 3}]
+[{'i': 1, 'i': 4}, {'i': 2, 'i': 5}, {'i': 3, 'i': 6}]
+[{'i': 4, 'i': 4}, {'i': 5, 'i': 5}, {'i': 6, 'i': 6}]
+
+query I
+SELECT list_zip(a.i, b.i, b.i) FROM integers AS a, integers AS b
+----
+[{'i': 1, 'i': 1, 'i': 1}, {'i': 2, 'i': 2, 'i': 2}, {'i': 3, 'i': 3, 'i': 3}]
+[{'i': 4, 'i': 1, 'i': 1}, {'i': 5, 'i': 2, 'i': 2}, {'i': 6, 'i': 3, 'i': 3}]
+[{'i': 1, 'i': 4, 'i': 4}, {'i': 2, 'i': 5, 'i': 5}, {'i': 3, 'i': 6, 'i': 6}]
+[{'i': 4, 'i': 4, 'i': 4}, {'i': 5, 'i': 5, 'i': 5}, {'i': 6, 'i': 6, 'i': 6}]
+
+query I
+SELECT list_zip([1,2,3], true)
+----
+[{'list_1': 1}, {'list_1': 2}, {'list_1': 3}]
+
+query I
+SELECT list_zip([1,2,3], [1,2,3], true)
+----
+[{'list_1': 1, 'list_2': 1}, {'list_1': 2, 'list_2': 2}, {'list_1': 3, 'list_2': 3}]
+
+query I
+SELECT list_zip([1,2,3], [1,2], true)
+----
+[{'list_1': 1, 'list_2': 1}, {'list_1': 2, 'list_2': 2}]
+
+query I
+SELECT list_zip([1,2], [1,2,3], true)
+----
+[{'list_1': 1, 'list_2': 1}, {'list_1': 2, 'list_2': 2}]
+
+query I
+SELECT list_zip(i, j, b) FROM integers, integers2, bools
+----
+[{'i': 1, 'j': NULL}, {'i': 2, 'j': NULL}, {'i': 3, 'j': NULL}]
+[{'i': 1, 'j': NULL}, {'i': 2, 'j': NULL}, {'i': 3, 'j': NULL}]
+[{'i': 4, 'j': NULL}, {'i': 5, 'j': NULL}, {'i': 6, 'j': NULL}]
+[{'i': 4, 'j': NULL}, {'i': 5, 'j': NULL}, {'i': 6, 'j': NULL}]
+[]
+[]
+[]
+[]
+
+# very large lists
+
+statement ok
+CREATE TABLE lists AS SELECT range % 4 g, list(range) l FROM range(10000) GROUP BY range % 4;
+
+statement ok
+select g, list_zip(l, b) l from lists, bools
+
+statement ok
+SELECT list_zip([1,2,3], [true, false, NULL], [{'list_1': 1}, {'list_1': 2}, {'list_1': 3}],  ['a', 'b', 'c'], ['2021-08-20'::DATE, '2021-08-21'::DATE, '2021-08-22'::DATE], [1.0, 2.0, 3.0], [NULL, NULL, NULL])
+
+# test all types
+
+# BOOLEAN
+query I
+SELECT list_zip([true, false, NULL])
+----
+[{'list_1': true}, {'list_1': false}, {'list_1': NULL}]
+
+query I
+SELECT list_zip([NULL::BOOLEAN, true])
+----
+[{'list_1': NULL}, {'list_1': true}]
+
+# VARCHAR
+query I
+SELECT list_zip(['aa', 'a'])
+----
+[{'list_1': aa}, {'list_1': a}]
+
+query I
+SELECT list_zip([NULL::VARCHAR])
+----
+[{'list_1': NULL}]
+
+# INTEGER types
+foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
+
+query I
+SELECT list_zip([1::${type}, NULL, 2::${type}])
+----
+[{'list_1': 1}, {'list_1': NULL}, {'list_1': 2}]
+
+query I
+SELECT list_zip([NULL::${type}])
+----
+[{'list_1': NULL}]
+
+endloop
+
+# FLOAT, DOUBLE and DECIMAL types
+
+foreach type float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10)
+
+statement ok
+SELECT list_zip([1::${type}])
+
+query I
+SELECT list_zip([NULL::${type}])
+----
+[{'list_1': NULL}]
+
+endloop
+
+# TEMPORAL types
+
+# date
+query I
+SELECT list_zip(['2021-08-20'::DATE])
+----
+[{'list_1': 2021-08-20}]
+
+# time
+query I
+SELECT list_zip(['14:59:37'::TIME])
+----
+[{'list_1': 14:59:37}]
+
+# timestamp
+query I
+SELECT list_zip(['2021-08-20'::TIMESTAMP])
+----
+[{'list_1': 2021-08-20 00:00:00}]
+
+# timestamp s
+query I
+SELECT list_zip(['2021-08-20'::TIMESTAMP_S])
+----
+[{'list_1': 2021-08-20 00:00:00}]
+
+# timestamp ms
+query I
+SELECT list_zip(['2021-08-20 00:00:00.123'::TIMESTAMP_MS])
+----
+[{'list_1': 2021-08-20 00:00:00.123}]
+
+# timestamp ns
+query I
+SELECT list_zip(['2021-08-20 00:00:00.123456'::TIMESTAMP_NS])
+----
+[{'list_1': 2021-08-20 00:00:00.123456}]
+
+# time with time zone
+query I
+SELECT list_zip(['14:59:37'::TIMETZ])
+----
+[{'list_1': 14:59:37+00}]
+
+# timestamp with time zone
+query I
+SELECT list_zip(['2021-08-20'::TIMESTAMPTZ])
+----
+[{'list_1': 2021-08-20 00:00:00+00}]
+
+# interval
+query I
+SELECT list_zip([INTERVAL 1 YEAR])
+----
+[{'list_1': 1 year}]
+
+foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval
+
+query I
+SELECT list_zip([NULL::${type}])
+----
+[{'list_1': NULL}]
+
+endloop
+
+# BLOB
+
+query I
+SELECT list_zip(['{a: 1}'::BLOB, '{a: 3}'::BLOB])
+----
+[{'list_1': {a: 1}}, {'list_1': {a: 3}}]
+
+query I
+SELECT list_zip([NULL::BLOB])
+----
+[{'list_1': NULL}]
+
+# ENUMS
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')
+
+statement ok
+CREATE TABLE enums (e mood[])
+
+statement ok
+INSERT INTO enums VALUES (['happy', 'sad'])
+
+query I
+SELECT list_zip(e) FROM enums
+----
+[{'e': happy}, {'e': sad}]
+
+# NESTED types
+
+query I
+SELECT list_zip([[1], [1, 2], NULL])
+----
+[{'list_1': [1]}, {'list_1': [1, 2]}, {'list_1': NULL}]
+
+query I
+SELECT list_zip([{'a': 1}, {'a': 5}, {'a': 3}])
+----
+[{'list_1': {'a': 1}}, {'list_1': {'a': 5}}, {'list_1': {'a': 3}}]
+

@@ -132,6 +132,27 @@ struct ArraySortFun {
 	static constexpr const char *Name = "array_sort";
 };
 
+struct ListGradeUpFun {
+	static constexpr const char *Name = "list_grade_up";
+	static constexpr const char *Parameters = "list";
+	static constexpr const char *Description = "Returns the index of their sorted position.";
+	static constexpr const char *Example = "list_grade_up([3, 6, 1, 2])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ArrayGradeUpFun {
+	using ALIAS = ListGradeUpFun;
+
+	static constexpr const char *Name = "array_grade_up";
+};
+
+struct GradeUpFun {
+	using ALIAS = ListGradeUpFun;
+
+	static constexpr const char *Name = "grade_up";
+};
+
 struct ListReverseSortFun {
 	static constexpr const char *Name = "list_reverse_sort";
 	static constexpr const char *Parameters = "list";

@@ -176,6 +176,12 @@ struct OperatorSinkFinalizeInput {
 	InterruptState &interrupt_state;
 };
 
+struct OperatorSinkNextBatchInput {
+	GlobalSinkState &global_state;
+	LocalSinkState &local_state;
+	InterruptState &interrupt_state;
+};
+
 // LCOV_EXCL_STOP
 
 } // namespace duckdb
