@@ -51,6 +51,9 @@ string DependencyManager::MangleName(CatalogEntry &entry) {
 
 void DependencyManager::DropDependencySet(CatalogTransaction transaction, CatalogEntry &object) {
 	auto name = MangleName(object);
+	auto &set = *GetDependencySet(transaction, name);
+	set.ScanDependents(transaction, [&](DependencyCatalogEntry &dep) { D_ASSERT(dep.deleted); });
+	set.ScanDependencies(transaction, [&](DependencyCatalogEntry &dep) { D_ASSERT(dep.deleted); });
 	dependency_sets.DropEntry(transaction, name, false);
 }
 
@@ -67,7 +70,7 @@ optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(Cata
                                                                             const string &mangled_name) {
 	AssertMangledName(mangled_name);
 	auto dependency_set_p = dependency_sets.GetEntry(transaction, mangled_name);
-	if (!dependency_set_p) {
+	if (!dependency_set_p || dependency_set_p->deleted) {
 		return nullptr;
 	}
 	D_ASSERT(dependency_set_p->type == CatalogType::DEPENDENCY_SET);
