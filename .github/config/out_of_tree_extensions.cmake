@@ -58,6 +58,7 @@ duckdb_extension_load(spatial
         GIT_TAG a86c504d60e0f4400564c0f2d633547f39feef2c
         INCLUDE_DIR spatial/include
         TEST_DIR test/sql
+        APPLY_PATCHES
         )
 
 ################# SQLITE_SCANNER
