@@ -105,7 +105,7 @@ void SecretManager::DropSecretByName(const string &name, bool missing_ok) {
 	bool deleted = false;
 
 	std::vector<shared_ptr<BaseSecret>>::iterator iter;
-	for (iter = registered_secrets.begin(); iter != registered_secrets.end(); ) {
+	for (iter = registered_secrets.begin(); iter != registered_secrets.end();) {
 		if (iter->get()->GetName() == name) {
 			registered_secrets.erase(iter);
 			deleted = true;
@@ -145,7 +145,7 @@ shared_ptr<BaseSecret> DebugSecretManager::GetSecretByPath(const string &path, c
 
 void DebugSecretManager::RegisterSecret(shared_ptr<BaseSecret> secret, OnCreateConflict on_conflict) {
 	//	printf("\n  [RegisterSecret]  name=%s type=%s provider=%s", secret->GetName().c_str(),
-	//secret->GetType().c_str(), secret->GetProvider().c_str());
+	// secret->GetType().c_str(), secret->GetProvider().c_str());
 	SecretManager::RegisterSecret(secret, on_conflict);
 }
 
