@@ -2165,4 +2165,14 @@ typedef struct PGCreateSecretStmt {
 	PGOnCreateConflict onconflict;        /* what to do on create conflict */
 } PGCreateSecretStmt;
 
+
+/* ----------------------
+ *		Drop Secret Statement
+ * ----------------------
+ */
+typedef struct PGDropSecretStmt {
+	PGNodeTag type;
+	char *secret_name;                    /* name of the secret */
+	bool missing_ok;
+} PGDropSecretStmt;
 }

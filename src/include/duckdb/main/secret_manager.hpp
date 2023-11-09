@@ -39,6 +39,8 @@ public:
 	DUCKDB_API virtual shared_ptr<BaseSecret> GetSecretByPath(const string &path, const string &type);
 	//! Get a secret by name
 	DUCKDB_API virtual shared_ptr<BaseSecret> GetSecretByName(const string &name);
+	//! Drop a secret by name
+	DUCKDB_API virtual void DropSecretByName(const string &name, bool missing_ok);
 	//! Get the registered type
 	DUCKDB_API virtual SecretType LookupType(const string &type);
 	//! Get a vector of all registered secrets

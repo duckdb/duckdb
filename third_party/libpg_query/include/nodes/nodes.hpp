@@ -378,6 +378,7 @@ typedef enum PGNodeTag {
 	T_PGDeallocateStmt,
 	T_PGDeclareCursorStmt,
 	T_PGCreateTableSpaceStmt,
+	T_PGDropSecretStmt,
 	T_PGDropTableSpaceStmt,
 	T_PGAlterObjectDependsStmt,
 	T_PGAlterObjectSchemaStmt,

@@ -112,6 +112,14 @@ static void PragmaDisableCheckpointOnShutdown(ClientContext &context, const Func
 	DBConfig::GetConfig(context).options.checkpoint_on_shutdown = false;
 }
 
+static void PragmaDropSecret(ClientContext &context, const FunctionParameters &parameters) {
+	auto name = parameters.values[0].ToString();
+	bool missing_ok = parameters.values[1].DefaultCastAs(LogicalType::BOOLEAN).GetValue<bool>();
+
+	DBConfig::GetConfig(context).secret_manager->DropSecretByName(name, missing_ok);
+}
+
+
 static void PragmaEnableOptimizer(ClientContext &context, const FunctionParameters &parameters) {
 	ClientConfig::GetConfig(context).enable_optimizer = true;
 }
@@ -157,6 +165,8 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_checkpoint_on_shutdown", PragmaEnableCheckpointOnShutdown));
 	set.AddFunction(
 	    PragmaFunction::PragmaStatement("disable_checkpoint_on_shutdown", PragmaDisableCheckpointOnShutdown));
+
+	set.AddFunction(PragmaFunction::PragmaCall("duckdb_drop_secret", PragmaDropSecret, {LogicalType::VARCHAR, LogicalType::BOOLEAN}));
 }
 
 } // namespace duckdb

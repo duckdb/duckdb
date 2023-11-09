@@ -100,6 +100,25 @@ shared_ptr<BaseSecret> SecretManager::GetSecretByName(const string &name) {
 	throw InternalException("GetSecretByName called on unknown secret: %s", name);
 }
 
+void SecretManager::DropSecretByName(const string &name, bool missing_ok) {
+	lock_guard<mutex> lck(lock);
+	bool deleted = false;
+
+	std::vector<shared_ptr<BaseSecret>>::iterator iter;
+	for (iter = registered_secrets.begin(); iter != registered_secrets.end(); ) {
+		if (iter->get()->GetName() == name) {
+			registered_secrets.erase(iter);
+			deleted = true;
+			break;
+		}
+		++iter;
+	}
+
+	if (!deleted && !missing_ok) {
+		throw InvalidInputException("Failed to remove non-existent secret with name '%s'", name);
+	}
+}
+
 SecretType SecretManager::LookupType(const string &type) {
 	lock_guard<mutex> lck(lock);
 	return LookupTypeInternal(type);

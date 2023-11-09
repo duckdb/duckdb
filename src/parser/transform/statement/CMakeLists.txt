@@ -15,6 +15,7 @@ add_library_unity(
   transform_create_view.cpp
   transform_create_type.cpp
   transform_delete.cpp
+  transform_drop_secret.cpp
   transform_explain.cpp
   transform_export.cpp
   transform_drop.cpp
