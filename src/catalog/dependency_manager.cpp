@@ -91,14 +91,14 @@ DependencySetCatalogEntry &DependencyManager::GetOrCreateDependencySet(CatalogTr
 		return *dependency_set_p;
 	}
 	static const DependencyList EMPTY_DEPENDENCIES;
-	auto new_dependency_set =
-	    make_uniq<DependencySetCatalogEntry>(catalog, *this, entry_type, entry_schema, entry_name);
+	auto new_entry =
+	    make_uniq_base<CatalogEntry, DependencySetCatalogEntry>(catalog, *this, entry_type, entry_schema, entry_name);
+	auto &dependency_set = new_entry->Cast<DependencySetCatalogEntry>();
 	if (catalog.IsTemporaryCatalog()) {
-		new_dependency_set->temporary = true;
+		dependency_set.temporary = true;
 	}
-	auto &dependency_set = *new_dependency_set;
-	auto name = new_dependency_set->MangledName();
-	auto res = dependency_sets.CreateEntry(transaction, name, std::move(new_dependency_set), EMPTY_DEPENDENCIES);
+	auto name = dependency_set.MangledName();
+	auto res = dependency_sets.CreateEntry(transaction, name, std::move(new_entry), EMPTY_DEPENDENCIES);
 	(void)res;
 	D_ASSERT(res);
 	return dependency_set;

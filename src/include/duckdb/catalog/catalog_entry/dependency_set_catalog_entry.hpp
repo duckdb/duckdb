@@ -27,7 +27,7 @@ class DependencySetCatalogEntry : public InCatalogEntry {
 public:
 	DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager, CatalogType entry_type,
 	                          const string &entry_schema, const string &entry_name);
-	~DependencySetCatalogEntry() override;
+	virtual ~DependencySetCatalogEntry() override;
 
 public:
 	CatalogSet &Dependencies();

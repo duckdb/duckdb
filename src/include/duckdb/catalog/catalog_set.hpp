@@ -32,51 +32,6 @@ class DuckCatalog;
 class TableCatalogEntry;
 class SequenceCatalogEntry;
 
-typedef unordered_map<CatalogSet *, unique_lock<mutex>> set_lock_map_t;
-
-using catalog_entry_t = idx_t;
-struct EntryValue {
-	EntryValue() = delete;
-	explicit EntryValue(unique_ptr<CatalogEntry> entry_p) : entry(std::move(entry_p)), reference_count(0) {
-	}
-	//! enable move constructors
-	EntryValue(EntryValue &&other) noexcept {
-		Swap(other);
-	}
-	EntryValue &operator=(EntryValue &&other) noexcept {
-		Swap(other);
-		return *this;
-	}
-	CatalogEntry &Entry() {
-		return *entry;
-	}
-	unique_ptr<CatalogEntry> TakeEntry() {
-		return std::move(entry);
-	}
-	void SetEntry(unique_ptr<CatalogEntry> entry_p) {
-		entry = std::move(entry_p);
-	}
-	void IncreaseRefCount() {
-		reference_count++;
-	}
-	bool DecreaseRefCount() {
-		D_ASSERT(reference_count != 0);
-		reference_count--;
-		return reference_count == 0;
-	}
-
-private:
-	void Swap(EntryValue &other) {
-		std::swap(entry, other.entry);
-		idx_t count = reference_count;
-		reference_count = other.reference_count.load();
-		other.reference_count = count;
-	}
-
-	unique_ptr<CatalogEntry> entry;
-	atomic<idx_t> reference_count;
-};
-
 //! The Catalog Set stores (key, value) map of a set of CatalogEntries
 class CatalogSet {
 
@@ -158,7 +113,7 @@ private:
 
 	void PopulateEntry(unique_ptr<CatalogEntry> entry);
 	void UpdateEntry(unique_ptr<CatalogEntry> entry);
-	optional_ptr<EntryValue> GetEntryValue(CatalogTransaction, const string &name);
+	optional_ptr<CatalogEntry> GetEntryValue(CatalogTransaction transaction, const string &name);
 	bool DropEntryInternal(CatalogTransaction transaction, const string &name, bool allow_drop_internal = false,
 	                       CatalogType tombstone_type = CatalogType::DELETED_ENTRY);
 
@@ -167,7 +122,7 @@ private:
 	//! The catalog lock is used to make changes to the data
 	mutex catalog_lock;
 	//! Mapping of string to catalog entry
-	case_insensitive_map_t<EntryValue> entries;
+	case_insensitive_map_t<unique_ptr<CatalogEntry>> entries;
 	//! The generator used to generate default internal entries
 	unique_ptr<DefaultGenerator> defaults;
 };
