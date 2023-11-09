@@ -123,6 +123,7 @@ bool DependencyManager::IsSystemEntry(CatalogEntry &entry) const {
 	case CatalogType::DEPENDENCY_ENTRY:
 	case CatalogType::DEPENDENCY_SET:
 	case CatalogType::DATABASE_ENTRY:
+	case CatalogType::RENAMED_ENTRY:
 		return true;
 	default:
 		return false;

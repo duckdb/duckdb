@@ -34,34 +34,19 @@ void CommitState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {
 	}
 }
 
-static CatalogEntry &GetTargetEntry(CatalogEntry &entry) {
-	if (entry.type == CatalogType::DELETED_ENTRY) {
-		// This is a rename, we pushed the deleted entry, but we're interested in the child
-		D_ASSERT(entry.HasChild());
-		auto &child = entry.Child();
-		D_ASSERT(entry.Parent()->type == child.type);
-		return child;
-	}
-	return entry;
-}
-
-void CommitState::WriteCatalogEntry(CatalogEntry &entry_p, data_ptr_t dataptr) {
-	if (entry_p.temporary || entry_p.Parent()->temporary) {
+void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
+	if (entry.temporary || entry.Parent()->temporary) {
 		return;
 	}
 	D_ASSERT(log);
 
 	// look at the type of the parent entry
-	auto &parent = *entry_p.Parent();
-	auto &entry = GetTargetEntry(entry_p);
+	auto &parent = *entry.Parent();
 
 	switch (parent.type) {
 	case CatalogType::TABLE_ENTRY:
-		if (entry.type == CatalogType::TABLE_ENTRY) {
-			auto &table_entry = entry.Cast<DuckTableEntry>();
-			D_ASSERT(table_entry.IsDuckTable());
+		if (entry.type == CatalogType::RENAMED_ENTRY || entry.type == CatalogType::TABLE_ENTRY) {
 			// ALTER TABLE statement, read the extra data after the entry
-
 			auto extra_data_size = Load<idx_t>(dataptr);
 			auto extra_data = data_ptr_cast(dataptr + sizeof(idx_t));
 
@@ -73,6 +58,9 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry_p, data_ptr_t dataptr) {
 			deserializer.End();
 
 			if (!column_name.empty()) {
+				D_ASSERT(entry.type != CatalogType::RENAMED_ENTRY);
+				auto &table_entry = entry.Cast<DuckTableEntry>();
+				D_ASSERT(table_entry.IsDuckTable());
 				// write the alter table in the log
 				table_entry.CommitAlter(column_name);
 			}
@@ -84,14 +72,14 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry_p, data_ptr_t dataptr) {
 		}
 		break;
 	case CatalogType::SCHEMA_ENTRY:
-		if (entry.type == CatalogType::SCHEMA_ENTRY) {
+		if (entry.type == CatalogType::RENAMED_ENTRY || entry.type == CatalogType::SCHEMA_ENTRY) {
 			// ALTER TABLE statement, skip it
 			return;
 		}
 		log->WriteCreateSchema(parent.Cast<SchemaCatalogEntry>());
 		break;
 	case CatalogType::VIEW_ENTRY:
-		if (entry.type == CatalogType::VIEW_ENTRY) {
+		if (entry.type == CatalogType::RENAMED_ENTRY || entry.type == CatalogType::VIEW_ENTRY) {
 			// ALTER TABLE statement, read the extra data after the entry
 			auto extra_data_size = Load<idx_t>(dataptr);
 			auto extra_data = data_ptr_cast(dataptr + sizeof(idx_t));
@@ -127,12 +115,10 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry_p, data_ptr_t dataptr) {
 	case CatalogType::TYPE_ENTRY:
 		log->WriteCreateType(parent.Cast<TypeCatalogEntry>());
 		break;
+	case CatalogType::RENAMED_ENTRY:
+		// This is a rename, nothing needs to be done for this
+		break;
 	case CatalogType::DELETED_ENTRY:
-		if (entry.Parent()->HasParent() && !StringUtil::CIEquals(entry.name, entry.Parent()->Parent()->name)) {
-			D_ASSERT(entry.type == entry.Parent()->Parent()->type);
-			// This is a rename, nothing needs to be done for this
-			break;
-		}
 		switch (entry.type) {
 		case CatalogType::TABLE_ENTRY: {
 			auto &table_entry = entry.Cast<DuckTableEntry>();
@@ -186,7 +172,6 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry_p, data_ptr_t dataptr) {
 	case CatalogType::COLLATION_ENTRY:
 	case CatalogType::DEPENDENCY_ENTRY:
 	case CatalogType::DEPENDENCY_SET:
-	case CatalogType::RENAMED_ENTRY:
 		// do nothing, these entries are not persisted to disk
 		break;
 	default:

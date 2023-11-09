@@ -841,6 +841,9 @@ CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
 	if (StringUtil::Equals(value, "DELETED_ENTRY")) {
 		return CatalogType::DELETED_ENTRY;
 	}
+	if (StringUtil::Equals(value, "RENAMED_ENTRY")) {
+		return CatalogType::RENAMED_ENTRY;
+	}
 	if (StringUtil::Equals(value, "DEPENDENCY_SET")) {
 		return CatalogType::DEPENDENCY_SET;
 	}

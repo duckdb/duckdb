@@ -209,6 +209,10 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 		return true;
 	}
 
+	auto new_entry = value.get();
+	value->timestamp = transaction.transaction_id;
+	value->set = this;
+
 	const bool name_changed = !StringUtil::CIEquals(value->name, original_name);
 	if (name_changed) {
 		auto mapping_value = GetMapping(transaction, value->name);
@@ -221,27 +225,44 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 				throw CatalogException(rename_err_msg, original_name, value->name);
 			}
 		}
-		DropEntryInternal(transaction, original_name, false);
+		DropEntryInternal(transaction, original_name, false, CatalogType::RENAMED_ENTRY);
 		// Do PutMapping and DeleteMapping after dependency check
-		PutMapping(transaction, value->name, entry_index.Copy());
 		DeleteMapping(transaction, original_name);
+		static const DependencyList EMPTY_DEPENDENCIES;
+		read_lock.unlock();
+		write_lock.unlock();
+
+		// Create a dummy renamed entry for this entry
+		// so in the cleanup/commit/rollback state we can identify that this was a rename
+		auto renamed_node = make_uniq<InCatalogEntry>(CatalogType::RENAMED_ENTRY, value->ParentCatalog(), value->name);
+		renamed_node->timestamp = transaction.transaction_id;
+		renamed_node->deleted = false;
+		renamed_node->set = this;
+
+		// The 'renamed node' + 'value' get put into a different catalog entry chain
+		CreateEntry(transaction, value->name, std::move(renamed_node), EMPTY_DEPENDENCIES);
+		write_lock.lock();
+		read_lock.lock();
+
+		// Lookup the new EntryIndex and put 'value' into it
+		EntryIndex new_index;
+		auto lookup = GetEntryInternal(transaction, value->name, &new_index);
+		D_ASSERT(lookup);
+		PutEntry(std::move(new_index), std::move(value));
+	} else {
+		PutEntry(std::move(entry_index), std::move(value));
 	}
-
-	value->timestamp = transaction.transaction_id;
-	value->set = this;
-	auto new_entry = value.get();
-	PutEntry(std::move(entry_index), std::move(value));
-
-	// serialize the AlterInfo into a temporary buffer
-	MemoryStream stream;
-	BinarySerializer serializer(stream);
-	serializer.Begin();
-	serializer.WriteProperty(100, "column_name", alter_info.GetColumnName());
-	serializer.WriteProperty(101, "alter_info", &alter_info);
-	serializer.End();
 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
+		// serialize the AlterInfo into a temporary buffer
+		MemoryStream stream;
+		BinarySerializer serializer(stream);
+		serializer.Begin();
+		serializer.WriteProperty(100, "column_name", alter_info.GetColumnName());
+		serializer.WriteProperty(101, "alter_info", &alter_info);
+		serializer.End();
+
 		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
 		dtransaction.PushCatalogEntry(new_entry->Child(), stream.GetData(), stream.GetPosition());
 	}
@@ -273,7 +294,8 @@ bool CatalogSet::DropDependencies(CatalogTransaction transaction, const string &
 	return true;
 }
 
-bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const string &name, bool allow_drop_internal) {
+bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const string &name, bool allow_drop_internal,
+                                   CatalogType tombstone_type) {
 	EntryIndex entry_index;
 	// lock the catalog for writing
 	// we can only delete an entry that exists
@@ -285,10 +307,10 @@ bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const string 
 		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
 	}
 
-	// create a new entry and replace the currently stored one
+	// create a new tombstone entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
-	// and point it at the dummy node
-	auto value = make_uniq<InCatalogEntry>(CatalogType::DELETED_ENTRY, entry->ParentCatalog(), entry->name);
+	// and point it at the tombstone node
+	auto value = make_uniq<InCatalogEntry>(tombstone_type, entry->ParentCatalog(), entry->name);
 	value->timestamp = transaction.transaction_id;
 	value->set = this;
 	value->deleted = true;
