@@ -24,11 +24,6 @@ public:
 };
 
 /*
- * @brief A helper function that deletes all the ExpectedResult objects in the map
- */
-void DeleteExpectedMap(std::map<SQLLEN, ExpectedResult *> &expected);
-
-/*
  * @brief Executes SQLColAttribute, checks the result, and compares it to the expected string
  */
 void CheckString(SQLHANDLE handle, const std::string &expected, SQLSMALLINT field_identifier);

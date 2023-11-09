@@ -2,12 +2,6 @@
 
 using namespace odbc_col_attribute_test;
 
-void odbc_col_attribute_test::DeleteExpectedMap(std::map<SQLLEN, ExpectedResult *> &expected) {
-	for (auto &it : expected) {
-		delete it.second;
-	}
-}
-
 void odbc_col_attribute_test::CheckString(SQLHANDLE handle, const std::string &expected, SQLSMALLINT field_identifier) {
 	SQLCHAR buffer[64];
 	EXECUTE_AND_CHECK("SQLColAttribute", SQLColAttribute, handle, 1, field_identifier, buffer, sizeof(buffer), nullptr,
