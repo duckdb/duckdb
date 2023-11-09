@@ -343,7 +343,7 @@ PipelineExecuteResult PipelineExecutor::PushFinalize() {
 
 // TODO: Refactoring the StreamingQueryResult to use Push-based execution should eliminate the need for this code
 void PipelineExecutor::ExecutePull(DataChunk &result) {
-	if (IsFinished() && !in_process_operators.empty()) {
+	if (IsFinished()) {
 		return;
 	}
 	auto &executor = pipeline.executor;
