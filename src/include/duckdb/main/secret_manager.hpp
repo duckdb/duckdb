@@ -30,30 +30,38 @@ struct SecretType {
 class SecretManager {
 public:
 	//! Deserialize the secret. Will look up the deserialized type, then call the deserialize for the registered type.
-	unique_ptr<BaseSecret> DeserializeSecret(Deserializer& deserializer);
-
+	DUCKDB_API virtual unique_ptr<BaseSecret> DeserializeSecret(Deserializer& deserializer);
 	//! Registers a secret type
-	void RegisterSecretType(SecretType& type);
-
+	DUCKDB_API virtual void RegisterSecretType(SecretType& type);
 	//! Register a new Secret in the secret
-	void RegisterSecret(shared_ptr<BaseSecret> secret, OnCreateConflict on_conflict);
-
-	//! Get the secret that matches the path best (longest prefix match wins)
-	shared_ptr<BaseSecret> GetSecretByPath(string& path, string type);
+	DUCKDB_API virtual void RegisterSecret(shared_ptr<BaseSecret> secret, OnCreateConflict on_conflict);
+	//! Get the secret that matches the scope best. ( Default behaviour is to match longest matching prefix )
+	DUCKDB_API virtual shared_ptr<BaseSecret> GetSecretByPath(const string& path, const string& type);
 	//! Get a secret by name
-	shared_ptr<BaseSecret> GetSecretByName(string& name);
-
+	DUCKDB_API virtual shared_ptr<BaseSecret> GetSecretByName(const string& name);
 	//! Get the registered type
-	SecretType LookupType(string &type);
-
+	DUCKDB_API virtual SecretType LookupType(const string &type);
 	//! Get a vector of all registered secrets
-	vector<shared_ptr<BaseSecret>>& AllSecrets();
+	DUCKDB_API virtual vector<shared_ptr<BaseSecret>>& AllSecrets();
 
 protected:
+	//! Get the registered type
+	DUCKDB_API virtual SecretType LookupTypeInternal(const string &type);
+	//! The secret manager main lock
+	mutex lock;
 	//! The currently registered secrets
 	vector<shared_ptr<BaseSecret>> registered_secrets;
 	//! The currently registered secret types
 	case_insensitive_map_t<SecretType> registered_types;
+};
+
+//! Secret Manager that can be used for debugging
+class DebugSecretManager : public SecretManager {
+public:
+	//! Register a new Secret in the secret
+	DUCKDB_API virtual void RegisterSecret(shared_ptr<BaseSecret> secret, OnCreateConflict on_conflict) override;
+	//! Get the secret that matches the scope best. ( Default behaviour is to match longest matching prefix )
+	DUCKDB_API virtual shared_ptr<BaseSecret> GetSecretByPath(const string& path, const string& type) override;
 };
 
 } // namespace duckdb

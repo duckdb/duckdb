@@ -29,11 +29,10 @@ public:
 	    : prefix_paths(other.prefix_paths), type(other.type), provider(other.provider), name(other.name), serializable(other.serializable) {
 		D_ASSERT(!type.empty());
 	}
-
 	virtual ~BaseSecret() = default;
 
-	//! Returns the longest prefix that matches, -1 for no match
-	virtual int LongestMatch(const string &path);
+	//! The score of how well this secret's scope matches the path (by default: the length of the longest matching prefix)
+	virtual int MatchScore(const string &path);
 
 	//! The ToString method prints the secret, the redact option determines whether secret data is allowed to be printed
 	//! in clear text. This is to be decided by the secret implementation
