@@ -14,6 +14,22 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 	}
 	auto stack_checker = StackCheck();
 
+	if (type_name.names->length > 1) {
+		// qualified typename
+		vector<string> names;
+		for (auto cell = type_name.names->head; cell; cell = cell->next) {
+			names.push_back(PGPointerCast<duckdb_libpgquery::PGValue>(cell->data.ptr_value)->val.str);
+		}
+		switch (type_name.names->length) {
+		case 2:
+			return LogicalType::USER(INVALID_CATALOG, std::move(names[0]), std::move(names[1]));
+		case 3:
+			return LogicalType::USER(std::move(names[0]), std::move(names[1]), std::move(names[2]));
+		default:
+			throw ParserException(
+			    "Too many qualifications for type name - expected [catalog.schema.name] or [schema.name]");
+		}
+	}
 	auto name = PGPointerCast<duckdb_libpgquery::PGValue>(type_name.names->tail->data.ptr_value)->val.str;
 	// transform it to the SQL type
 	LogicalTypeId base_type = TransformStringToLogicalTypeId(name);

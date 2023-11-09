@@ -368,6 +368,7 @@ public:
 	// DEPRECATED - provided for backwards compatibility
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT
+	DUCKDB_API static LogicalType USER(string catalog, string schema, string name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> Numeric();
 	//! A list of all INTEGRAL types
@@ -391,6 +392,8 @@ struct ListType {
 };
 
 struct UserType {
+	DUCKDB_API static const string &GetCatalog(const LogicalType &type);
+	DUCKDB_API static const string &GetSchema(const LogicalType &type);
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
 };
 
