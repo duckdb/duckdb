@@ -273,7 +273,8 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 	auto url_base = "http://" + hostname_without_http;
 	duckdb_httplib::Client cli(url_base.c_str());
 
-	duckdb_httplib::Headers headers = {{"User-Agent", StringUtil::Format("%s %s", config.UserAgent(), DuckDB::SourceID())}};
+	duckdb_httplib::Headers headers = {
+	    {"User-Agent", StringUtil::Format("%s %s", config.UserAgent(), DuckDB::SourceID())}};
 
 	auto res = cli.Get(url_local_part.c_str(), headers);
 
