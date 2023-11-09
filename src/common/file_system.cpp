@@ -54,10 +54,7 @@ FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 }
 
 bool PathMatched(const string &path, const string &sub_path) {
-	if (path.rfind(sub_path, 0) == 0) {
-		return true;
-	}
-	return false;
+	return path.rfind(sub_path, 0) == 0;
 }
 
 #ifndef _WIN32
@@ -145,6 +142,10 @@ static bool StartsWithSingleBackslash(const string &path) {
 bool FileSystem::IsPathAbsolute(const string &path) {
 	// 1) A single backslash or forward-slash
 	if (StartsWithSingleBackslash(path)) {
+		return true;
+	}
+	// a network path
+	if (PathMatched(path_aux, "\\\\")) {
 		return true;
 	}
 	// 2) A disk designator with a backslash (e.g., C:\ or C:/)
