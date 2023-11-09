@@ -99,20 +99,24 @@ private:
 struct MappingValue {
 public:
 	explicit MappingValue(EntryIndex index_p)
-	    : index(std::move(index_p)), deleted(false), parent(nullptr), timestamp(0) {
+	    : deleted(false), parent(nullptr), index(std::move(index_p)), timestamp(0) {
 	}
 
 public:
 	void SetTimestamp(transaction_t timestamp);
 	transaction_t GetTimestamp() const;
+	EntryIndex &Index();
+	CatalogEntry &GetEntry();
+	catalog_entry_t GetIndex();
+	void SetEntry(unique_ptr<CatalogEntry> entry);
 
 public:
-	EntryIndex index;
 	bool deleted;
 	unique_ptr<MappingValue> child;
 	MappingValue *parent;
 
 private:
+	EntryIndex index;
 	transaction_t timestamp;
 };
 

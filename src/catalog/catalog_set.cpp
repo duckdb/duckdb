@@ -103,8 +103,8 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 		index = entry_index.GetIndex();
 		PutMapping(transaction, name, std::move(entry_index));
 	} else {
-		index = mapping_value->index.GetIndex();
-		auto &current = mapping_value->index.GetEntry();
+		index = mapping_value->GetIndex();
+		auto &current = mapping_value->GetEntry();
 		// if it does, we have to check version numbers
 		if (HasConflict(transaction, current.timestamp)) {
 			// current version has been written to by a currently active
@@ -159,9 +159,9 @@ optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction trans
 		return nullptr;
 	}
 	if (entry_index) {
-		*entry_index = mapping_value->index.Copy();
+		*entry_index = mapping_value->Index().Copy();
 	}
-	return GetEntryInternal(transaction, mapping_value->index);
+	return GetEntryInternal(transaction, mapping_value->Index());
 }
 
 bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipInfo &info) {
@@ -217,7 +217,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	if (name_changed) {
 		auto mapping_value = GetMapping(transaction, value->name);
 		if (mapping_value && !mapping_value->deleted) {
-			auto &original_entry = GetEntryForTransaction(transaction, mapping_value->index.GetEntry());
+			auto &original_entry = GetEntryForTransaction(transaction, mapping_value->GetEntry());
 			if (!original_entry.deleted) {
 				entry->UndoAlter(context, alter_info);
 				string rename_err_msg =
@@ -354,7 +354,7 @@ void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
 		// clean up the mapping and the tombstone entry as well
 		auto mapping_entry = mapping.find(parent.name);
 		D_ASSERT(mapping_entry != mapping.end());
-		auto &entry = mapping_entry->second->index.GetEntry();
+		auto &entry = mapping_entry->second->GetEntry();
 		if (&entry == &parent) {
 			mapping.erase(mapping_entry);
 		}
@@ -414,7 +414,7 @@ void CatalogSet::PutMapping(CatalogTransaction transaction, const string &name, 
 void CatalogSet::DeleteMapping(CatalogTransaction transaction, const string &name) {
 	auto entry = mapping.find(name);
 	D_ASSERT(entry != mapping.end());
-	auto delete_marker = make_uniq<MappingValue>(entry->second->index.Copy());
+	auto delete_marker = make_uniq<MappingValue>(entry->second->Index().Copy());
 	delete_marker->deleted = true;
 	delete_marker->SetTimestamp(transaction.transaction_id);
 	delete_marker->child = std::move(entry->second);
@@ -528,16 +528,17 @@ optional_ptr<CatalogEntry> CatalogSet::CreateDefaultEntry(CatalogTransaction tra
 optional_ptr<CatalogEntry> CatalogSet::GetEntry(CatalogTransaction transaction, const string &name) {
 	unique_lock<mutex> lock(catalog_lock);
 	auto mapping_value = GetMapping(transaction, name);
-	if (mapping_value != nullptr && !mapping_value->deleted) {
+	if (mapping_value && !mapping_value->deleted) {
 		// we found an entry for this name
 		// check the version numbers
 
-		auto &catalog_entry = mapping_value->index.GetEntry();
+		auto &catalog_entry = mapping_value->GetEntry();
 		auto &current = GetEntryForTransaction(transaction, catalog_entry);
 		if (current.deleted) {
 			return nullptr;
 		}
-		if (current.name != name && !UseTimestamp(transaction, mapping_value->GetTimestamp())) {
+		D_ASSERT(StringUtil::CIEquals(current.name, name));
+		if (!UseTimestamp(transaction, mapping_value->GetTimestamp())) {
 			return nullptr;
 		}
 		D_ASSERT(StringUtil::CIEquals(name, current.name));
@@ -583,7 +584,7 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 		// otherwise we need to update the base entry tables
 		auto &name = entry.name;
 		to_be_removed_node.Child().SetAsRoot();
-		mapping[name]->index.SetEntry(to_be_removed_node.TakeChild());
+		mapping[name]->SetEntry(to_be_removed_node.TakeChild());
 	}
 
 	// restore the name if it was deleted
