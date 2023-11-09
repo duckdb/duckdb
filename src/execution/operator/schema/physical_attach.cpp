@@ -75,6 +75,9 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	auto &db_manager = DatabaseManager::Get(context.client);
 	auto existing_db = db_manager.GetDatabaseFromPath(context.client, path);
 	if (existing_db) {
+		if (info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+			return SourceResultType::FINISHED;
+		}
 		throw BinderException("Database \"%s\" is already attached with alias \"%s\"", path, existing_db->GetName());
 	}
 	auto new_db = db.CreateAttachedDatabase(*info, type, access_mode);
