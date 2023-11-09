@@ -10,10 +10,12 @@ CreateSecretInfo::CreateSecretInfo(OnCreateConflict on_conflict)
 
 unique_ptr<CreateSecretInfo> CreateSecretInfo::Copy() const {
 	auto result = make_uniq<CreateSecretInfo>(on_conflict);
+	result->on_conflict = on_conflict;
 	result->type = type;
-	result->name = name;
-	result->named_parameters = named_parameters;
 	result->provider = provider;
+	result->name = name;
+	result->scope = scope;
+	result->named_parameters = named_parameters;
 	return result;
 }
 
