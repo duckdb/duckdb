@@ -144,8 +144,9 @@ SinkNextBatchType PipelineExecutor::NextBatch(duckdb::DataChunk &source_chunk) {
 #endif
 	auto current_batch = partition_info.batch_index.GetIndex();
 	partition_info.batch_index = next_batch_index;
+	OperatorSinkNextBatchInput next_batch_input {*pipeline.sink->sink_state, *local_sink_state, interrupt_state};
 	// call NextBatch before updating min_batch_index to provide the opportunity to flush the previous batch
-	auto next_batch_result = pipeline.sink->NextBatch(context, *pipeline.sink->sink_state, *local_sink_state);
+	auto next_batch_result = pipeline.sink->NextBatch(context, next_batch_input);
 
 	if (next_batch_result == SinkNextBatchType::BLOCKED) {
 		partition_info.batch_index = current_batch; // set batch_index back to what it was before
@@ -351,7 +352,7 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 		D_ASSERT(!pipeline.sink);
 		D_ASSERT(!requires_batch_index);
 		auto &source_chunk = pipeline.operators.empty() ? result : *intermediate_chunks[0];
-		while (result.size() == 0 && !exhausted_source) {
+		while (result.size() == 0 && (!exhausted_source || !in_process_operators.empty())) {
 			if (in_process_operators.empty()) {
 				source_chunk.Reset();
 
@@ -361,6 +362,7 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 
 				// Repeatedly try to fetch from the source until it doesn't block. Note that it may block multiple times
 				while (true) {
+					D_ASSERT(!exhausted_source);
 					source_result = FetchFromSource(source_chunk);
 
 					// No interrupt happened, all good.
