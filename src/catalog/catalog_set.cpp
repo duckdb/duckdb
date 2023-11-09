@@ -23,18 +23,20 @@ CatalogSet::CatalogSet(Catalog &catalog_p, unique_ptr<DefaultGenerator> defaults
 CatalogSet::~CatalogSet() {
 }
 
-EntryIndex CatalogSet::PutEntry(idx_t entry_index, unique_ptr<CatalogEntry> entry) {
+// Create new
+catalog_entry_t CatalogSet::PopulateEntry(catalog_entry_t entry_index, unique_ptr<CatalogEntry> entry) {
 	if (entries.find(entry_index) != entries.end()) {
 		throw InternalException("Entry with entry index \"%llu\" already exists", entry_index);
 	}
 	entries.insert(make_pair(entry_index, EntryValue(std::move(entry))));
-	return EntryIndex(*this, entry_index);
+	return entry_index;
 }
 
-void CatalogSet::PutEntry(EntryIndex index, unique_ptr<CatalogEntry> catalog_entry) {
-	auto entry = entries.find(index.GetIndex());
+// Push to existing
+void CatalogSet::UpdateEntry(catalog_entry_t index, unique_ptr<CatalogEntry> catalog_entry) {
+	auto entry = entries.find(index);
 	if (entry == entries.end()) {
-		throw InternalException("Entry with entry index \"%llu\" does not exist", index.GetIndex());
+		throw InternalException("Entry with entry index \"%llu\" does not exist", index);
 	}
 	catalog_entry->SetChild(entry->second.TakeEntry());
 	entry->second.SetEntry(std::move(catalog_entry));
@@ -80,7 +82,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	unique_lock<mutex> read_lock(catalog_lock);
 
 	// first check if the entry exists in the unordered set
-	idx_t index;
+	catalog_entry_t index;
 	auto mapping_value = GetMapping(transaction, name);
 	if (mapping_value == nullptr || mapping_value->deleted) {
 		// if it does not: entry has never been created
@@ -99,8 +101,8 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 		dummy_node->deleted = true;
 		dummy_node->set = this;
 
-		auto entry_index = PutEntry(current_entry++, std::move(dummy_node));
-		index = entry_index.GetIndex();
+		auto entry_index = PopulateEntry(current_entry++, std::move(dummy_node));
+		index = entry_index;
 		PutMapping(transaction, name, std::move(entry_index));
 	} else {
 		index = mapping_value->GetIndex();
@@ -119,8 +121,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	}
 
 	auto value_ptr = value.get();
-	EntryIndex entry_index(*this, index);
-	PutEntry(std::move(entry_index), std::move(value));
+	UpdateEntry(index, std::move(value));
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
 		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
@@ -134,8 +135,7 @@ bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_
 	return CreateEntry(catalog.GetCatalogTransaction(context), name, std::move(value), dependencies);
 }
 
-optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction transaction, EntryIndex &entry_index) {
-	auto &catalog_entry = entry_index.GetEntry();
+optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction transaction, CatalogEntry &catalog_entry) {
 	// if it does: we have to retrieve the entry and to check version numbers
 	if (HasConflict(transaction, catalog_entry.timestamp)) {
 		// current version has been written to by a currently active
@@ -152,16 +152,16 @@ optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction trans
 }
 
 optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction transaction, const string &name,
-                                                        EntryIndex *entry_index) {
+                                                        catalog_entry_t *entry_index) {
 	auto mapping_value = GetMapping(transaction, name);
 	if (mapping_value == nullptr || mapping_value->deleted) {
 		// the entry does not exist, check if we can create a default entry
 		return nullptr;
 	}
 	if (entry_index) {
-		*entry_index = mapping_value->Index().Copy();
+		*entry_index = mapping_value->GetIndex();
 	}
-	return GetEntryInternal(transaction, mapping_value->Index());
+	return GetEntryInternal(transaction, mapping_value->GetEntry());
 }
 
 bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipInfo &info) {
@@ -186,7 +186,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	unique_lock<mutex> read_lock(catalog_lock);
 
 	// first check if the entry exists in the unordered set
-	EntryIndex entry_index;
+	catalog_entry_t entry_index;
 	auto entry = GetEntryInternal(transaction, name, &entry_index);
 	if (!entry) {
 		return false;
@@ -226,8 +226,6 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 			}
 		}
 		DropEntryInternal(transaction, original_name, false, CatalogType::RENAMED_ENTRY);
-		// Do PutMapping and DeleteMapping after dependency check
-		DeleteMapping(transaction, original_name);
 		static const DependencyList EMPTY_DEPENDENCIES;
 		read_lock.unlock();
 		write_lock.unlock();
@@ -244,13 +242,12 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 		write_lock.lock();
 		read_lock.lock();
 
-		// Lookup the new EntryIndex and put 'value' into it
-		EntryIndex new_index;
+		catalog_entry_t new_index;
 		auto lookup = GetEntryInternal(transaction, value->name, &new_index);
 		D_ASSERT(lookup);
-		PutEntry(std::move(new_index), std::move(value));
+		UpdateEntry(std::move(new_index), std::move(value));
 	} else {
-		PutEntry(std::move(entry_index), std::move(value));
+		UpdateEntry(std::move(entry_index), std::move(value));
 	}
 
 	// push the old entry in the undo buffer for this transaction
@@ -296,7 +293,7 @@ bool CatalogSet::DropDependencies(CatalogTransaction transaction, const string &
 
 bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const string &name, bool allow_drop_internal,
                                    CatalogType tombstone_type) {
-	EntryIndex entry_index;
+	catalog_entry_t entry_index;
 	// lock the catalog for writing
 	// we can only delete an entry that exists
 	auto entry = GetEntryInternal(transaction, name, &entry_index);
@@ -315,7 +312,7 @@ bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const string 
 	value->set = this;
 	value->deleted = true;
 	auto value_ptr = value.get();
-	PutEntry(std::move(entry_index), std::move(value));
+	UpdateEntry(std::move(entry_index), std::move(value));
 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
@@ -397,9 +394,9 @@ optional_ptr<MappingValue> CatalogSet::GetMapping(CatalogTransaction transaction
 	return mapping_value;
 }
 
-void CatalogSet::PutMapping(CatalogTransaction transaction, const string &name, EntryIndex entry_index) {
+void CatalogSet::PutMapping(CatalogTransaction transaction, const string &name, catalog_entry_t entry_index) {
 	auto entry = mapping.find(name);
-	auto new_value = make_uniq<MappingValue>(std::move(entry_index));
+	auto new_value = make_uniq<MappingValue>(*this, std::move(entry_index));
 	new_value->SetTimestamp(transaction.transaction_id);
 	if (entry != mapping.end()) {
 		if (HasConflict(transaction, entry->second->GetTimestamp())) {
@@ -409,17 +406,6 @@ void CatalogSet::PutMapping(CatalogTransaction transaction, const string &name, 
 		new_value->child->parent = new_value.get();
 	}
 	mapping[name] = std::move(new_value);
-}
-
-void CatalogSet::DeleteMapping(CatalogTransaction transaction, const string &name) {
-	auto entry = mapping.find(name);
-	D_ASSERT(entry != mapping.end());
-	auto delete_marker = make_uniq<MappingValue>(entry->second->Index().Copy());
-	delete_marker->deleted = true;
-	delete_marker->SetTimestamp(transaction.transaction_id);
-	delete_marker->child = std::move(entry->second);
-	delete_marker->child->parent = delete_marker.get();
-	mapping[name] = std::move(delete_marker);
 }
 
 bool CatalogSet::UseTimestamp(CatalogTransaction transaction, transaction_t timestamp) {
@@ -486,7 +472,7 @@ optional_ptr<CatalogEntry> CatalogSet::CreateEntryInternal(CatalogTransaction tr
 	entry->set = this;
 	entry->timestamp = 0;
 
-	auto entry_index = PutEntry(GenerateCatalogEntryIndex(), std::move(entry));
+	auto entry_index = PopulateEntry(GenerateCatalogEntryIndex(), std::move(entry));
 	PutMapping(transaction, name, std::move(entry_index));
 	mapping[name]->SetTimestamp(0);
 	return catalog_entry;

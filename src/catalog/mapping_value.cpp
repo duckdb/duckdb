@@ -10,20 +10,26 @@ transaction_t MappingValue::GetTimestamp() const {
 	return timestamp;
 }
 
-EntryIndex &MappingValue::Index() {
-	return index;
-}
-
 CatalogEntry &MappingValue::GetEntry() {
-	return index.GetEntry();
+	auto &entry_value = GetEntryValue();
+	return entry_value.Entry();
 }
 
 catalog_entry_t MappingValue::GetIndex() {
-	return index.GetIndex();
+	return index;
 }
 
 void MappingValue::SetEntry(unique_ptr<CatalogEntry> entry) {
-	index.SetEntry(std::move(entry));
+	auto &entry_value = GetEntryValue();
+	entry_value.SetEntry(std::move(entry));
+}
+
+EntryValue &MappingValue::GetEntryValue() {
+	auto entry = set.entries.find(index);
+	if (entry == set.entries.end()) {
+		throw InternalException("MappingValue - Catalog entry not found!?");
+	}
+	return entry->second;
 }
 
 } // namespace duckdb
