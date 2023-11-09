@@ -733,17 +733,22 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 	}
 
 	//	Check for specials
+	//	Precheck for alphas for performance.
 	idx_t pos = 0;
 	result.is_special = false;
-	if (Date::TryConvertDateSpecial(data, size, pos, Date::PINF)) {
-		result.is_special = true;
-		result.special = date_t::infinity();
-	} else if (Date::TryConvertDateSpecial(data, size, pos, Date::NINF)) {
-		result.is_special = true;
-		result.special = date_t::ninfinity();
-	} else if (Date::TryConvertDateSpecial(data, size, pos, Date::EPOCH)) {
-		result.is_special = true;
-		result.special = date_t::epoch();
+	if (size > 4) {
+		if (StringUtil::CharacterIsAlpha(*data)) {
+			if (Date::TryConvertDateSpecial(data, size, pos, Date::PINF)) {
+				result.is_special = true;
+				result.special = date_t::infinity();
+			} else if (Date::TryConvertDateSpecial(data, size, pos, Date::EPOCH)) {
+				result.is_special = true;
+				result.special = date_t::epoch();
+			}
+		} else if (*data == '-' && Date::TryConvertDateSpecial(data, size, pos, Date::NINF)) {
+			result.is_special = true;
+			result.special = date_t::ninfinity();
+		}
 	}
 	if (result.is_special) {
 		// skip trailing spaces
