@@ -214,6 +214,13 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		auto alias = type.GetAlias();
 		type = LogicalType::STRUCT(child_types);
 		type.SetAlias(alias);
+	} else if (type.id() == LogicalTypeId::ARRAY) {
+		auto child_type = ArrayType::GetChildType(type);
+		auto array_size = ArrayType::GetSize(type);
+		BindLogicalType(context, child_type, catalog, schema);
+		auto alias = type.GetAlias();
+		type = LogicalType::ARRAY(child_type, array_size);
+		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::UNION) {
 		auto member_types = UnionType::CopyMemberTypes(type);
 		for (auto &member_type : member_types) {

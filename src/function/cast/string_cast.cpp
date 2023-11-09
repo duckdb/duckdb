@@ -333,6 +333,81 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 	return all_converted;
 }
 
+//===--------------------------------------------------------------------===//
+// string -> array casting
+//===--------------------------------------------------------------------===//
+bool VectorStringToArray::StringToNestedTypeCastLoop(const string_t *source_data, ValidityMask &source_mask,
+                                                     Vector &result, ValidityMask &result_mask, idx_t count,
+                                                     CastParameters &parameters, const SelectionVector *sel) {
+	idx_t array_size = ArrayType::GetSize(result.GetType());
+	bool all_lengths_match = true;
+
+	for (idx_t i = 0; i < count; i++) {
+		idx_t idx = i;
+		if (sel) {
+			idx = sel->get_index(i);
+		}
+		if (!source_mask.RowIsValid(idx)) {
+			continue;
+		}
+		auto str_array_size = VectorStringToList::CountPartsList(source_data[idx]);
+		if (array_size != str_array_size) {
+			if (all_lengths_match) {
+				all_lengths_match = false;
+				auto msg =
+				    StringUtil::Format("Type VARCHAR with value '%s' can't be cast to the destination type ARRAY[%u]"
+				                       ", the size of the array must match the destination type",
+				                       source_data[idx].GetString(), array_size);
+				if (parameters.strict) {
+					throw CastException(msg);
+				}
+				HandleCastError::AssignError(msg, parameters.error_message);
+			}
+			result_mask.SetInvalid(i);
+		}
+	}
+
+	auto child_count = array_size * count;
+	Vector varchar_vector(LogicalType::VARCHAR, child_count);
+	auto child_data = FlatVector::GetData<string_t>(varchar_vector);
+
+	bool all_converted = true;
+	idx_t total = 0;
+	for (idx_t i = 0; i < count; i++) {
+		idx_t idx = i;
+		if (sel) {
+			idx = sel->get_index(i);
+		}
+
+		if (!source_mask.RowIsValid(idx) || !result_mask.RowIsValid(i)) {
+			// The source is null, or there was a size-mismatch above, so dont try to split the string
+			result_mask.SetInvalid(i);
+
+			// Null the entire array
+			for (idx_t j = 0; j < array_size; j++) {
+				FlatVector::SetNull(varchar_vector, idx * array_size + j, true);
+			}
+
+			total += array_size;
+			continue;
+		}
+
+		if (!VectorStringToList::SplitStringList(source_data[idx], child_data, total, varchar_vector)) {
+			auto text = StringUtil::Format("Type VARCHAR with value '%s' can't be cast to the destination type ARRAY",
+			                               source_data[idx].GetString());
+			HandleVectorCastError::Operation<string_t>(text, result_mask, idx, parameters.error_message, all_converted);
+		}
+	}
+	D_ASSERT(total == child_count);
+
+	auto &result_child = ArrayVector::GetEntry(result);
+	auto &cast_data = parameters.cast_data->Cast<ArrayBoundCastData>();
+	CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
+	bool cast_result = cast_data.child_cast_info.function(varchar_vector, result_child, child_count, child_parameters);
+
+	return all_lengths_match && cast_result && all_converted;
+}
+
 template <class T>
 bool StringToNestedTypeCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
@@ -398,6 +473,12 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		    &StringToNestedTypeCast<VectorStringToList>,
 		    ListBoundCastData::BindListToListCast(input, LogicalType::LIST(LogicalType::VARCHAR), target),
 		    ListBoundCastData::InitListLocalState);
+	case LogicalTypeId::ARRAY:
+		// the second argument allows for a secondary casting function to be passed in the CastParameters
+		return BoundCastInfo(
+		    &StringToNestedTypeCast<VectorStringToArray>,
+		    ArrayBoundCastData::BindArrayToArrayCast(input, LogicalType::ARRAY(LogicalType::VARCHAR), target),
+		    ArrayBoundCastData::InitArrayLocalState);
 	case LogicalTypeId::STRUCT:
 		return BoundCastInfo(&StringToNestedTypeCast<VectorStringToStruct>,
 		                     StructBoundCastData::BindStructToStructCast(input, InitVarcharStructType(target), target),

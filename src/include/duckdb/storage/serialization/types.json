@@ -98,6 +98,24 @@
     ]
   },
   {
+    "class": "ArrayTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "ARRAY_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "child_type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 201,
+        "name": "size",
+        "type": "uint32_t"
+      }
+    ],
+    "constructor": ["child_type", "size"]
+  },
+  {
     "class": "UserTypeInfo",
     "base": "ExtraTypeInfo",
     "enum": "USER_TYPE_INFO",
