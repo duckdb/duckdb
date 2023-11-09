@@ -46,7 +46,8 @@ public:
 	//! Bind a pragma function from the set of functions and input arguments
 	DUCKDB_API idx_t BindFunction(const string &name, PragmaFunctionSet &functions, PragmaInfo &info, string &error);
 	//! Bind a create secret function from the set of create secret functions
-	DUCKDB_API idx_t BindFunction(const string &name, CreateSecretFunctionSet &functions, CreateSecretInfo &info, string &error);
+	DUCKDB_API idx_t BindFunction(const string &name, CreateSecretFunctionSet &functions, CreateSecretInfo &info,
+	                              string &error);
 
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const string &schema, const string &name,
 	                                                     vector<unique_ptr<Expression>> children, string &error,

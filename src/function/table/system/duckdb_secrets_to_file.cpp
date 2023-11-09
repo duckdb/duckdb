@@ -12,7 +12,6 @@
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 
-
 namespace duckdb {
 
 struct DuckDBSecretsToFileBindData : public FunctionData {
@@ -30,7 +29,7 @@ public:
 };
 
 static unique_ptr<FunctionData> DuckDBSecretsToFileBind(ClientContext &context, TableFunctionBindInput &input,
-                                                     vector<LogicalType> &return_types, vector<string> &names) {
+                                                        vector<LogicalType> &return_types, vector<string> &names) {
 	if (input.inputs.size() != 1) {
 		throw InvalidInputException("DuckDBSecretsToFileBind");
 	}
@@ -41,15 +40,14 @@ static unique_ptr<FunctionData> DuckDBSecretsToFileBind(ClientContext &context, 
 	return make_uniq<DuckDBSecretsToFileBindData>(input.inputs[0].ToString());
 }
 
-
 static void DuckDBSecretsToFileFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &secret_manager = context.db->config.secret_manager;
 	auto &secrets = secret_manager->AllSecrets();
-	auto& bind_data = data_p.bind_data->Cast<DuckDBSecretsToFileBindData>();
+	auto &bind_data = data_p.bind_data->Cast<DuckDBSecretsToFileBindData>();
 
 	auto file_writer = BufferedFileWriter(*context.db->config.file_system, bind_data.file);
 	auto serializer = BinarySerializer(file_writer);
-	for (auto& secret : secrets) {
+	for (auto &secret : secrets) {
 		serializer.Begin();
 		secret->Serialize(serializer);
 		serializer.End();
@@ -61,10 +59,10 @@ static void DuckDBSecretsToFileFunction(ClientContext &context, TableFunctionInp
 
 static void DuckDBSecretsFromFileFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &secret_manager = context.db->config.secret_manager;
-	auto& bind_data = data_p.bind_data->Cast<DuckDBSecretsToFileBindData>();
+	auto &bind_data = data_p.bind_data->Cast<DuckDBSecretsToFileBindData>();
 
 	auto file_reader = BufferedFileReader(*context.db->config.file_system, bind_data.file.c_str());
-	while(!file_reader.Finished()) {
+	while (!file_reader.Finished()) {
 		BinaryDeserializer deserializer(file_reader);
 		deserializer.Begin();
 		shared_ptr<BaseSecret> deserialized_secret = secret_manager->DeserializeSecret(deserializer);
@@ -78,11 +76,13 @@ static void DuckDBSecretsFromFileFunction(ClientContext &context, TableFunctionI
 
 void DuckDBSecretsToFileFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet function_to("duckdb_secrets_to_file");
-	function_to.AddFunction(TableFunction({LogicalType::VARCHAR}, DuckDBSecretsToFileFunction, DuckDBSecretsToFileBind));
+	function_to.AddFunction(
+	    TableFunction({LogicalType::VARCHAR}, DuckDBSecretsToFileFunction, DuckDBSecretsToFileBind));
 	set.AddFunction(function_to);
 
 	TableFunctionSet function_from("duckdb_secrets_from_file");
-	function_from.AddFunction(TableFunction({LogicalType::VARCHAR}, DuckDBSecretsFromFileFunction, DuckDBSecretsToFileBind));
+	function_from.AddFunction(
+	    TableFunction({LogicalType::VARCHAR}, DuckDBSecretsFromFileFunction, DuckDBSecretsToFileBind));
 	set.AddFunction(function_from);
 }
 

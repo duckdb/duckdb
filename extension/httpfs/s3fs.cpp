@@ -178,8 +178,6 @@ S3AuthParams AWSEnvironmentCredentialsProvider::CreateParams() {
 	return params;
 }
 
-
-
 unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(FileOpener *opener, string path) {
 	if (!opener) {
 		return nullptr;
@@ -188,7 +186,7 @@ unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(FileOpener *ope
 	if (!context) {
 		return nullptr;
 	}
-	auto& secret_manager = context->db->GetSecretManager();
+	auto &secret_manager = context->db->GetSecretManager();
 
 	auto credentials = secret_manager.GetSecretByPath(path, "s3");
 	if (!credentials) {

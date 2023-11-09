@@ -182,7 +182,8 @@ CreateSecretFunctionCatalogEntry &ExtensionUtil::GetCreateSecretFunction(Databas
 	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
 	auto catalog_entry = schema.GetEntry(data, CatalogType::CREATE_SECRET_FUNCTION_ENTRY, name);
 	if (!catalog_entry) {
-		throw InvalidInputException("Function with name \"%s\" not found in ExtensionUtil::GetCreateSecretFunction", name);
+		throw InvalidInputException("Function with name \"%s\" not found in ExtensionUtil::GetCreateSecretFunction",
+		                            name);
 	}
 	return catalog_entry->Cast<CreateSecretFunctionCatalogEntry>();
 }

@@ -25,13 +25,15 @@ public:
 	    : prefix_paths(prefix_paths), type(type), provider(provider), name(name), serializable(false) {
 		D_ASSERT(!type.empty());
 	}
-	BaseSecret(BaseSecret& other)
-	    : prefix_paths(other.prefix_paths), type(other.type), provider(other.provider), name(other.name), serializable(other.serializable) {
+	BaseSecret(BaseSecret &other)
+	    : prefix_paths(other.prefix_paths), type(other.type), provider(other.provider), name(other.name),
+	      serializable(other.serializable) {
 		D_ASSERT(!type.empty());
 	}
 	virtual ~BaseSecret() = default;
 
-	//! The score of how well this secret's scope matches the path (by default: the length of the longest matching prefix)
+	//! The score of how well this secret's scope matches the path (by default: the length of the longest matching
+	//! prefix)
 	virtual int MatchScore(const string &path);
 
 	//! The ToString method prints the secret, the redact option determines whether secret data is allowed to be printed
@@ -42,7 +44,7 @@ public:
 
 	//! Serialize this secret
 	virtual void Serialize(Serializer &serializer) const {
-	    throw InternalException("Attempted to serialize secret without serialize");
+		throw InternalException("Attempted to serialize secret without serialize");
 	};
 
 	//! Getters
@@ -95,10 +97,10 @@ public:
 		D_ASSERT(!type.empty());
 		serializable = true;
 	}
-	BaseKeyValueSecret(BaseSecret& secret)
-	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()){};
-	BaseKeyValueSecret(BaseKeyValueSecret& secret)
-	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()){
+	BaseKeyValueSecret(BaseSecret &secret)
+	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {};
+	BaseKeyValueSecret(BaseKeyValueSecret &secret)
+	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		secret_map = secret.secret_map;
 	};
 
@@ -112,7 +114,7 @@ public:
 		deserializer.ReadProperty(201, "secret_map", secret_map_value);
 
 		auto list_of_map = ListValue::GetChildren(secret_map_value);
-		for(const auto& entry : list_of_map) {
+		for (const auto &entry : list_of_map) {
 			auto kv_struct = StructValue::GetChildren(entry);
 			result->secret_map[kv_struct[0].ToString()] = kv_struct[1].ToString();
 		}

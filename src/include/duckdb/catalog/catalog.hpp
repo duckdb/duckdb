@@ -137,7 +137,8 @@ public:
 	                                                           CreatePragmaFunctionInfo &info);
 	DUCKDB_API optional_ptr<CatalogEntry> CreatePragmaFunction(ClientContext &context, CreatePragmaFunctionInfo &info);
 	//! Create a create secret function in the catalog
-	DUCKDB_API optional_ptr<CatalogEntry> CreateSecretFunction(CatalogTransaction transaction, CreateSecretFunctionInfo &info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateSecretFunction(CatalogTransaction transaction,
+	                                                           CreateSecretFunctionInfo &info);
 	DUCKDB_API optional_ptr<CatalogEntry> CreateSecretFunction(ClientContext &context, CreateSecretFunctionInfo &info);
 	//! Create a scalar or aggregate function in the catalog
 	DUCKDB_API optional_ptr<CatalogEntry> CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info);

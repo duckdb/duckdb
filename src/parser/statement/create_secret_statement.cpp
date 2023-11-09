@@ -2,11 +2,13 @@
 
 namespace duckdb {
 
-CreateSecretStatement::CreateSecretStatement(OnCreateConflict on_conflict) : SQLStatement(StatementType::CREATE_SECRET_STATEMENT) {
+CreateSecretStatement::CreateSecretStatement(OnCreateConflict on_conflict)
+    : SQLStatement(StatementType::CREATE_SECRET_STATEMENT) {
 	info = make_uniq<CreateSecretInfo>(on_conflict);
 }
 
-CreateSecretStatement::CreateSecretStatement(const CreateSecretStatement &other) : SQLStatement(other), info(other.info->Copy()) {
+CreateSecretStatement::CreateSecretStatement(const CreateSecretStatement &other)
+    : SQLStatement(other), info(other.info->Copy()) {
 }
 
 unique_ptr<SQLStatement> CreateSecretStatement::Copy() const {

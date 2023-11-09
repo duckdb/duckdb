@@ -82,28 +82,26 @@ public:
 	static case_insensitive_set_t GetRedactionSet() {
 		return {"secret_access_key", "session_token"};
 	}
-	S3Secret(BaseKeyValueSecret& secret)
-	    : BaseKeyValueSecret(secret){
-	          redact_keys = GetRedactionSet();
-	      };
-	S3Secret(BaseSecret& secret)
-	    : BaseKeyValueSecret(secret){
-		      redact_keys = GetRedactionSet();
-			};
-	S3Secret(vector<string> &prefix_paths_p, string &type, string &provider, string& name, S3AuthParams& params)
-	    : BaseKeyValueSecret(prefix_paths_p, type, provider, name){
-		 secret_map["region"] = params.region;
-		 secret_map["access_key_id"] = params.access_key_id;
-		 secret_map["secret_access_key"] = params.secret_access_key;
-		 secret_map["session_token"] = params.session_token;
-		 secret_map["endpoint"] = params.endpoint;
-		 secret_map["url_style"] = params.url_style;
-		 secret_map["use_ssl"] = params.use_ssl ? "true" : "false";
-		 secret_map["s3_url_compatibility_mode"] = params.s3_url_compatibility_mode ? "true" : "false";
-		 redact_keys = GetRedactionSet();
-  	};
+	S3Secret(BaseKeyValueSecret &secret) : BaseKeyValueSecret(secret) {
+		redact_keys = GetRedactionSet();
+	};
+	S3Secret(BaseSecret &secret) : BaseKeyValueSecret(secret) {
+		redact_keys = GetRedactionSet();
+	};
+	S3Secret(vector<string> &prefix_paths_p, string &type, string &provider, string &name, S3AuthParams &params)
+	    : BaseKeyValueSecret(prefix_paths_p, type, provider, name) {
+		secret_map["region"] = params.region;
+		secret_map["access_key_id"] = params.access_key_id;
+		secret_map["secret_access_key"] = params.secret_access_key;
+		secret_map["session_token"] = params.session_token;
+		secret_map["endpoint"] = params.endpoint;
+		secret_map["url_style"] = params.url_style;
+		secret_map["use_ssl"] = params.use_ssl ? "true" : "false";
+		secret_map["s3_url_compatibility_mode"] = params.s3_url_compatibility_mode ? "true" : "false";
+		redact_keys = GetRedactionSet();
+	};
 
-	S3AuthParams GetParams(){
+	S3AuthParams GetParams() {
 		S3AuthParams params;
 		params.region = secret_map["region"];
 		params.access_key_id = secret_map["access_key_id"];
@@ -112,7 +110,8 @@ public:
 		params.endpoint = secret_map["endpoint"];
 		params.url_style = secret_map["url_style"];
 		params.use_ssl = BooleanValue::Get(Value(secret_map["use_ssl"]).DefaultCastAs(LogicalType::BOOLEAN));
-		params.s3_url_compatibility_mode = BooleanValue::Get(Value(secret_map["s3_url_compatibility_mode"]).DefaultCastAs(LogicalType::BOOLEAN));
+		params.s3_url_compatibility_mode =
+		    BooleanValue::Get(Value(secret_map["s3_url_compatibility_mode"]).DefaultCastAs(LogicalType::BOOLEAN));
 
 		return params;
 	}

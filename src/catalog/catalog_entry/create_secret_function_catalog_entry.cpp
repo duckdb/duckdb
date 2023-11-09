@@ -4,8 +4,9 @@
 namespace duckdb {
 
 CreateSecretFunctionCatalogEntry::CreateSecretFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
-                                                       CreateSecretFunctionInfo &info)
-    : FunctionEntry(CatalogType::CREATE_SECRET_FUNCTION_ENTRY, catalog, schema, info), functions(std::move(info.functions)) {
+                                                                   CreateSecretFunctionInfo &info)
+    : FunctionEntry(CatalogType::CREATE_SECRET_FUNCTION_ENTRY, catalog, schema, info),
+      functions(std::move(info.functions)) {
 }
 
 } // namespace duckdb

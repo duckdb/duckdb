@@ -43,7 +43,6 @@ BoundStatement Binder::Bind(CreateSecretStatement &stmt) {
 	result.plan = make_uniq<LogicalCreateSecret>(bound_function, *stmt.info);
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
-
 }
 
 } // namespace duckdb

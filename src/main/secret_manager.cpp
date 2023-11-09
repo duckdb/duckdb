@@ -5,25 +5,25 @@
 
 namespace duckdb {
 
-unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer& deserializer) {
+unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<string>(100, "type");
 	auto provider = deserializer.ReadProperty<string>(101, "provider");
 	auto name = deserializer.ReadProperty<string>(102, "name");
 	vector<string> scope;
-	deserializer.ReadList(103, "scope", [&](Deserializer::List &list, idx_t i) {
-		scope.push_back(list.ReadElement<string>());
-	});
+	deserializer.ReadList(103, "scope",
+	                      [&](Deserializer::List &list, idx_t i) { scope.push_back(list.ReadElement<string>()); });
 
 	auto secret_type = LookupType(type);
 
 	if (!secret_type.deserializer) {
-		throw InternalException("Attempted to deserialize secret type '%s' which does not have a deserialization method", type);
+		throw InternalException(
+		    "Attempted to deserialize secret type '%s' which does not have a deserialization method", type);
 	}
 
 	return secret_type.deserializer(deserializer, {scope, type, provider, name});
 }
 
-void SecretManager::RegisterSecretType(SecretType& type) {
+void SecretManager::RegisterSecretType(SecretType &type) {
 	lock_guard<mutex> lck(lock);
 
 	if (registered_types.find(type.name) != registered_types.end()) {
@@ -44,8 +44,8 @@ void SecretManager::RegisterSecret(shared_ptr<BaseSecret> secret, OnCreateConfli
 
 	// Assert the alias does not exist already
 	if (!secret->GetName().empty()) {
-		for(idx_t cred_idx = 0; cred_idx < registered_secrets.size(); cred_idx++) {
-			const auto& cred = registered_secrets[cred_idx];
+		for (idx_t cred_idx = 0; cred_idx < registered_secrets.size(); cred_idx++) {
+			const auto &cred = registered_secrets[cred_idx];
 			if (cred->GetName() == secret->GetName()) {
 				conflict = true;
 				conflict_idx = cred_idx;
@@ -68,13 +68,13 @@ void SecretManager::RegisterSecret(shared_ptr<BaseSecret> secret, OnCreateConfli
 	}
 }
 
-shared_ptr<BaseSecret> SecretManager::GetSecretByPath(const string& path, const string& type) {
+shared_ptr<BaseSecret> SecretManager::GetSecretByPath(const string &path, const string &type) {
 	lock_guard<mutex> lck(lock);
 
 	int best_match_score = -1;
 	shared_ptr<BaseSecret> best_match;
 
-	for (const auto& secret: registered_secrets) {
+	for (const auto &secret : registered_secrets) {
 		if (secret->GetType() != type) {
 			continue;
 		}
@@ -88,10 +88,10 @@ shared_ptr<BaseSecret> SecretManager::GetSecretByPath(const string& path, const 
 	return best_match;
 }
 
-shared_ptr<BaseSecret> SecretManager::GetSecretByName(const string& name) {
+shared_ptr<BaseSecret> SecretManager::GetSecretByName(const string &name) {
 	lock_guard<mutex> lck(lock);
 
-	for (const auto& secret : registered_secrets) {
+	for (const auto &secret : registered_secrets) {
 		if (secret->name == name) {
 			return secret;
 		}
@@ -115,17 +115,18 @@ SecretType SecretManager::LookupTypeInternal(const string &type) {
 	return lu->second;
 }
 
-vector<shared_ptr<BaseSecret>>& SecretManager::AllSecrets() {
+vector<shared_ptr<BaseSecret>> &SecretManager::AllSecrets() {
 	return registered_secrets;
 }
 
-shared_ptr<BaseSecret> DebugSecretManager::GetSecretByPath(const string& path, const string& type) {
+shared_ptr<BaseSecret> DebugSecretManager::GetSecretByPath(const string &path, const string &type) {
 	//	printf("\n  [GetSecretByPath] path=%s type=%s", path.c_str(), type.c_str());
 	return SecretManager::GetSecretByPath(path, type);
 }
 
 void DebugSecretManager::RegisterSecret(shared_ptr<BaseSecret> secret, OnCreateConflict on_conflict) {
-//	printf("\n  [RegisterSecret]  name=%s type=%s provider=%s", secret->GetName().c_str(), secret->GetType().c_str(), secret->GetProvider().c_str());
+	//	printf("\n  [RegisterSecret]  name=%s type=%s provider=%s", secret->GetName().c_str(),
+	//secret->GetType().c_str(), secret->GetProvider().c_str());
 	SecretManager::RegisterSecret(secret, on_conflict);
 }
 

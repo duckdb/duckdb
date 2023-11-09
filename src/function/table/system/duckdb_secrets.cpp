@@ -31,7 +31,7 @@ public:
 };
 
 static unique_ptr<FunctionData> DuckDBSecretsBind(ClientContext &context, TableFunctionBindInput &input,
-                                                     vector<LogicalType> &return_types, vector<string> &names) {
+                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<DuckDBSecretsBindData>();
 
 	auto entry = input.named_parameters.find("redact");
@@ -80,7 +80,7 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 		auto &secret_entry = secrets[data.offset];
 
 		vector<Value> scope_value;
-		for (const auto& scope_entry : secret_entry->GetScope()) {
+		for (const auto &scope_entry : secret_entry->GetScope()) {
 			scope_value.push_back(scope_entry);
 		}
 

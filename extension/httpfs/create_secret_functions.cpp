@@ -11,14 +11,16 @@ void CreateS3SecretFunctions::Register(DatabaseInstance &instance) {
 	RegisterCreateSecretFunction(instance, "gcs");
 }
 
-shared_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(ClientContext &context, CreateSecretInput& input, S3AuthParams params) {
+shared_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(ClientContext &context,
+                                                                             CreateSecretInput &input,
+                                                                             S3AuthParams params) {
 	// for r2 we can set the endpoint using the account id
 	if (input.type == "r2" && input.named_parameters.find("account_id") != input.named_parameters.end()) {
 		params.endpoint = input.named_parameters["account_id"].ToString() + ".r2.cloudflarestorage.com";
 	}
 
 	// apply any overridden settings
-	for(const auto& named_param : input.named_parameters) {
+	for (const auto &named_param : input.named_parameters) {
 		if (named_param.first == "key_id") {
 			params.access_key_id = named_param.second.ToString();
 		} else if (named_param.first == "secret") {
@@ -38,7 +40,8 @@ shared_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(Cli
 		} else if (named_param.first == "account_id") {
 			continue; // handled already
 		} else {
-			throw InternalException("Unknown named parameter passed to CreateSecretFunctionInternal: " + named_param.first);
+			throw InternalException("Unknown named parameter passed to CreateSecretFunctionInternal: " +
+			                        named_param.first);
 		}
 	}
 
@@ -60,14 +63,16 @@ shared_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(Cli
 	return secret;
 }
 
-shared_ptr<BaseSecret> CreateS3SecretFunctions::CreateS3SecretFromSettings(ClientContext &context, CreateSecretInput& input) {
-	auto& opener = context.client_data->file_opener;
+shared_ptr<BaseSecret> CreateS3SecretFunctions::CreateS3SecretFromSettings(ClientContext &context,
+                                                                           CreateSecretInput &input) {
+	auto &opener = context.client_data->file_opener;
 	FileOpenerInfo info;
 	auto params = S3AuthParams::ReadFrom(opener.get(), info);
 	return CreateSecretFunctionInternal(context, input, params);
 }
 
-shared_ptr<BaseSecret> CreateS3SecretFunctions::CreateS3SecretFromConfig(ClientContext &context, CreateSecretInput& input) {
+shared_ptr<BaseSecret> CreateS3SecretFunctions::CreateS3SecretFromConfig(ClientContext &context,
+                                                                         CreateSecretInput &input) {
 	S3AuthParams empty_params;
 	empty_params.use_ssl = true;
 	empty_params.s3_url_compatibility_mode = false;
@@ -101,7 +106,7 @@ void CreateS3SecretFunctions::SetBaseNamedParams(CreateSecretFunction &function,
 }
 
 void CreateS3SecretFunctions::RegisterCreateSecretFunction(DatabaseInstance &instance, string type) {
-	//TODO: handle case where this has already run
+	// TODO: handle case where this has already run
 
 	// Register the new type
 	SecretType secret_type;

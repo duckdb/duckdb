@@ -52,7 +52,8 @@ public:
 	//! Returns a reference to the function in the catalog - throws an exception if it does not exist
 	DUCKDB_API static ScalarFunctionCatalogEntry &GetFunction(DatabaseInstance &db, const string &name);
 	DUCKDB_API static TableFunctionCatalogEntry &GetTableFunction(DatabaseInstance &db, const string &name);
-	DUCKDB_API static CreateSecretFunctionCatalogEntry &GetCreateSecretFunction(DatabaseInstance &db, const string &name);
+	DUCKDB_API static CreateSecretFunctionCatalogEntry &GetCreateSecretFunction(DatabaseInstance &db,
+	                                                                            const string &name);
 
 	//! Add a function overload
 	DUCKDB_API static void AddFunctionOverload(DatabaseInstance &db, ScalarFunction function);

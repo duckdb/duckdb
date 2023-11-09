@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-CreateSecretFunction::CreateSecretFunction(const string& type, const string& mode, create_secret_function_t function)
+CreateSecretFunction::CreateSecretFunction(const string &type, const string &mode, create_secret_function_t function)
     : SimpleNamedParameterFunction(type, {}), function(function) {
 	extra_info = mode;
 }
