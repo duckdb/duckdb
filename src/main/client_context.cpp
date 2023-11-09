@@ -143,9 +143,9 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	BeginTransactionInternal(lock, false);
 	LogQueryInternal(lock, query);
 	active_query->query = query;
-	query_progress = -1;
-	total_cardinality = 0;
-	current_rows = 0;
+	auto qp = query_progress.load();
+	qp.Initialize();
+	query_progress = qp;
 	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
 }
 
@@ -163,9 +163,9 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 
 	D_ASSERT(active_query.get());
 	active_query.reset();
-	query_progress = -1;
-	total_cardinality = 0;
-	current_rows = 0;
+	auto qp = query_progress.load();
+	qp.Initialize();
+	query_progress = qp;
 	PreservedError error;
 	try {
 		if (transaction.HasActiveTransaction()) {
@@ -246,9 +246,9 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	if (create_stream_result) {
 		D_ASSERT(!executor.HasResultCollector());
 		active_query->progress_bar.reset();
-		query_progress = -1;
-		total_cardinality = 0;
-		current_rows = 0;
+		auto qp = query_progress.load();
+		qp.Initialize();
+		query_progress = qp;
 
 		// successfully compiled SELECT clause, and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
@@ -365,16 +365,8 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 	return result;
 }
 
-double ClientContext::GetProgress() {
+QueryProgress ClientContext::GetQueryProgress() {
 	return query_progress.load();
-}
-
-uint64_t ClientContext::TotalCardinality() {
-	return total_cardinality.load();
-}
-
-uint64_t ClientContext::CurrentRowsRead() {
-	return current_rows.load();
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientContextLock &lock,
@@ -421,9 +413,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		}
 		active_query->progress_bar = make_uniq<ProgressBar>(executor, config.wait_time, display_create_func);
 		active_query->progress_bar->Start();
-		query_progress = 0;
-		total_cardinality = 0;
-		current_rows = 0;
+		auto qp = query_progress.load();
+		qp.Restart();
+		query_progress = qp;
 	}
 	auto stream_result = parameters.allow_stream_result && statement.properties.allow_stream_result;
 	if (!stream_result && statement.properties.return_type == StatementReturnType::QUERY_RESULT) {
@@ -455,9 +447,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 		auto query_result = active_query->executor->ExecuteTask();
 		if (active_query->progress_bar) {
 			active_query->progress_bar->Update(query_result == PendingExecutionResult::RESULT_READY);
-			query_progress = active_query->progress_bar->GetCurrentPercentage();
-			total_cardinality = active_query->progress_bar->GetTotalCardinality();
-			current_rows = active_query->progress_bar->GetCurrentRows();
+			query_progress = active_query->progress_bar->GetDetailedQueryProgress();
 		}
 		return query_result;
 	} catch (FatalException &ex) {

@@ -148,13 +148,7 @@ public:
 	                                           const PendingQueryParameters &parameters);
 
 	//! Gets current percentage of the query's progress, returns 0 in case the progress bar is disabled.
-	DUCKDB_API double GetProgress();
-
-	//! Gets the total cardinality (a sum of how many tuples from scanners) of the query
-	DUCKDB_API uint64_t TotalCardinality();
-
-	//! Gets how many tuples (from scanners) have currently been read
-	DUCKDB_API uint64_t CurrentRowsRead();
+	DUCKDB_API QueryProgress GetQueryProgress();
 
 	//! Register function in the temporary schema
 	DUCKDB_API void RegisterFunction(CreateFunctionInfo &info);
@@ -267,11 +261,7 @@ private:
 	//! The currently active query context
 	unique_ptr<ActiveQueryContext> active_query;
 	//! The current query progress
-	atomic<double> query_progress;
-	//! The total cardinality (a sum of how many tuples from scanners)
-	atomic<uint64_t> total_cardinality;
-	//! How many tuples (from scanners) have currently been read
-	atomic<uint64_t> current_rows;
+	atomic<QueryProgress> query_progress;
 };
 
 class ClientContextLock {

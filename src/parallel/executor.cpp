@@ -595,12 +595,12 @@ bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_
 		cardinality.push_back(child_cardinality);
 		total_cardinality += child_cardinality;
 	}
-	current_progress = 0;
 	current_cardinality = 0;
-
 	if (total_cardinality == 0) {
 		return true;
 	}
+	current_progress = 0;
+
 	for (size_t i = 0; i < progress.size(); i++) {
 		current_cardinality += double(progress[i]) * double(cardinality[i]) / double(100);
 		current_progress += progress[i] * double(cardinality[i]) / double(total_cardinality);

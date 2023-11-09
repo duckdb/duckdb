@@ -19,6 +19,23 @@ namespace duckdb {
 struct ClientConfig;
 typedef unique_ptr<ProgressBarDisplay> (*progress_bar_display_create_func_t)();
 
+struct QueryProgress {
+	friend class ProgressBar;
+
+public:
+	QueryProgress();
+	void Initialize();
+	void Restart();
+	double GetPercentage();
+	uint64_t GetRowsProcesseed();
+	uint64_t GetTotalRowsToProcess();
+
+private:
+	double percentage = -1;
+	uint64_t rows_processed = 0;
+	uint64_t total_rows_to_process = 0;
+};
+
 class ProgressBar {
 public:
 	static unique_ptr<ProgressBarDisplay> DefaultProgressBarDisplay();
@@ -32,13 +49,7 @@ public:
 	void Start();
 	//! Updates the progress bar and prints it to the screen
 	void Update(bool final);
-	//! Gets current percentage
-	double GetCurrentPercentage();
-	//! Gets Current Rows Read
-	uint64_t GetCurrentRows();
-	//! Gets Total Cardinality
-	uint64_t GetTotalCardinality();
-	void PrintProgressInternal(int percentage);
+	QueryProgress GetDetailedQueryProgress();
 	void PrintProgress(int percentage);
 	void FinishProgressBarPrint();
 	bool ShouldPrint(bool final) const;
@@ -51,12 +62,8 @@ private:
 	Profiler profiler;
 	//! The time in ms after which to start displaying the progress bar
 	idx_t show_progress_after;
-	//! The current progress percentage
-	double current_percentage;
-	//! Total cardinality
-	uint64_t total_cardinality;
-	//! Current rows read
-	uint64_t current_rows_read;
+	//! Keeps track of the total progress of a query
+	QueryProgress query_progress;
 	//! The display used to print the progress
 	unique_ptr<ProgressBarDisplay> display;
 	//! Whether or not profiling is supported for the current query

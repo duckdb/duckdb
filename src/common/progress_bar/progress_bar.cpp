@@ -4,6 +4,32 @@
 
 namespace duckdb {
 
+void QueryProgress::Initialize() {
+	percentage = -1;
+	rows_processed = 0;
+	total_rows_to_process = 0;
+}
+
+void QueryProgress::Restart() {
+	percentage = 0;
+	rows_processed = 0;
+	total_rows_to_process = 0;
+}
+
+double QueryProgress::GetPercentage() {
+	return percentage;
+}
+uint64_t QueryProgress::GetRowsProcesseed() {
+	return rows_processed;
+}
+uint64_t QueryProgress::GetTotalRowsToProcess() {
+	return total_rows_to_process;
+}
+
+QueryProgress::QueryProgress() {
+	Initialize();
+}
+
 void ProgressBar::SystemOverrideCheck(ClientConfig &config) {
 	if (config.system_progress_bar_disable_reason != nullptr) {
 		throw InvalidInputException("Could not change the progress bar setting because: '%s'",
@@ -17,28 +43,19 @@ unique_ptr<ProgressBarDisplay> ProgressBar::DefaultProgressBarDisplay() {
 
 ProgressBar::ProgressBar(Executor &executor, idx_t show_progress_after,
                          progress_bar_display_create_func_t create_display_func)
-    : executor(executor), show_progress_after(show_progress_after), current_percentage(-1), total_cardinality(0),
-      current_rows_read(0) {
+    : executor(executor), show_progress_after(show_progress_after) {
 	if (create_display_func) {
 		display = create_display_func();
 	}
 }
 
-double ProgressBar::GetCurrentPercentage() {
-	return current_percentage;
-}
-
-uint64_t ProgressBar::GetCurrentRows() {
-	return current_rows_read;
-}
-
-uint64_t ProgressBar::GetTotalCardinality() {
-	return total_cardinality;
+QueryProgress ProgressBar::GetDetailedQueryProgress() {
+	return query_progress;
 }
 
 void ProgressBar::Start() {
 	profiler.Start();
-	current_percentage = 0;
+	query_progress.Initialize();
 	supported = true;
 }
 
@@ -64,27 +81,28 @@ bool ProgressBar::ShouldPrint(bool final) const {
 	if (!supported) {
 		return false;
 	}
-	return current_percentage > -1;
+	return query_progress.percentage > -1;
 }
 
 void ProgressBar::Update(bool final) {
 	if (!final && !supported) {
 		return;
 	}
-	double new_percentage;
-	supported = executor.GetPipelinesProgress(new_percentage, current_rows_read, total_cardinality);
+	double new_percentage = -1;
+	supported = executor.GetPipelinesProgress(new_percentage, query_progress.rows_processed,
+	                                          query_progress.total_rows_to_process);
 	if (!final && !supported) {
 		return;
 	}
-	if (new_percentage > current_percentage) {
-		current_percentage = new_percentage;
+	if (new_percentage > query_progress.percentage) {
+		query_progress.percentage = new_percentage;
 	}
 	if (ShouldPrint(final)) {
 #ifndef DUCKDB_DISABLE_PRINT
 		if (final) {
 			FinishProgressBarPrint();
 		} else {
-			PrintProgress(current_percentage);
+			PrintProgress(query_progress.percentage);
 		}
 #endif
 	}
@@ -102,6 +120,9 @@ void ProgressBar::FinishProgressBarPrint() {
 	D_ASSERT(display);
 	display->Finish();
 	finished = true;
+	if (query_progress.percentage == 0) {
+		query_progress.Initialize();
+	}
 }
 
 } // namespace duckdb
