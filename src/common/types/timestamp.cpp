@@ -353,18 +353,22 @@ int64_t Timestamp::GetEpochMicroSeconds(timestamp_t timestamp) {
 	return timestamp.value;
 }
 
-int64_t Timestamp::GetEpochNanoSeconds(timestamp_t timestamp, const string &error_message) {
-	int64_t result;
-	int64_t ns_in_us = 1000;
+bool Timestamp::TryGetEpochNanoSeconds(timestamp_t timestamp, int64_t &result) {
+	constexpr static const int64_t NANOSECONDS_IN_MICROSECOND = 1000;
 	if (!Timestamp::IsFinite(timestamp)) {
-		return timestamp.value;
+		result = timestamp.value;
+		return true;
 	}
-	if (!TryMultiplyOperator::Operation(timestamp.value, ns_in_us, result)) {
-		if (error_message.empty()) {
-			throw ConversionException("Could not convert Timestamp(US) to Timestamp(NS)");
-		} else {
-			throw ConversionException(error_message);
-		}
+	if (!TryMultiplyOperator::Operation(timestamp.value, NANOSECONDS_IN_MICROSECOND, result)) {
+		return false;
+	}
+	return true;
+}
+
+int64_t Timestamp::GetEpochNanoSeconds(timestamp_t timestamp) {
+	int64_t result;
+	if (!TryGetEpochNanoSeconds(timestamp, result)) {
+		throw ConversionException("Could not convert Timestamp(US) to Timestamp(NS)");
 	}
 	return result;
 }

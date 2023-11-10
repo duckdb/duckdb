@@ -1412,8 +1412,12 @@ bool TryCastToTimestampNS::Operation(string_t input, timestamp_t &result, bool s
 	if (!Timestamp::IsFinite(result)) {
 		return true;
 	}
-	result = Timestamp::GetEpochNanoSeconds(
-	    result, StringUtil::Format("Could not convert VARCHAR value '%s' to Timestamp(NS)", input.GetString()));
+
+	int64_t nanoseconds;
+	if (!Timestamp::TryGetEpochNanoSeconds(result, nanoseconds)) {
+		throw ConversionException("Could not convert VARCHAR value '%s' to Timestamp(NS)", input.GetString());
+	}
+	result = nanoseconds;
 	return true;
 }
 

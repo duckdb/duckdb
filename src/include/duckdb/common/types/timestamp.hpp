@@ -143,6 +143,8 @@ public:
 	//! Convert the epoch (in nanoseconds) to a timestamp
 	DUCKDB_API static timestamp_t FromEpochNanoSeconds(int64_t micros);
 
+	//! Try convert a timestamp to epoch (in nanoseconds)
+	DUCKDB_API static bool TryGetEpochNanoSeconds(timestamp_t timestamp, int64_t &result);
 	//! Convert the epoch (in seconds) to a timestamp
 	DUCKDB_API static int64_t GetEpochSeconds(timestamp_t timestamp);
 	//! Convert the epoch (in ms) to a timestamp
@@ -150,7 +152,7 @@ public:
 	//! Convert a timestamp to epoch (in microseconds)
 	DUCKDB_API static int64_t GetEpochMicroSeconds(timestamp_t timestamp);
 	//! Convert a timestamp to epoch (in nanoseconds)
-	DUCKDB_API static int64_t GetEpochNanoSeconds(timestamp_t timestamp, const string &error_message = string());
+	DUCKDB_API static int64_t GetEpochNanoSeconds(timestamp_t timestamp);
 	//! Convert a timestamp to a Julian Day
 	DUCKDB_API static double GetJulianDay(timestamp_t timestamp);
 
