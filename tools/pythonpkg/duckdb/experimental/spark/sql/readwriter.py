@@ -20,6 +20,14 @@ class DataFrameWriter:
         relation = self.dataframe.relation
         relation.create(table_name)
 
+    def parquet(self, file_path:str) -> None:
+        relation = self.dataframe.relation
+        relation.write_parquet(file_path)
+    
+    def csv(self, file_path:str) -> None:
+        relation = self.dataframe.relation
+        relation.write_csv(file_path)
+
 
 class DataFrameReader:
     def __init__(self, session: "SparkSession"):
