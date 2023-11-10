@@ -114,9 +114,6 @@ public:
 	DUCKDB_API shared_ptr<Relation> Union(const shared_ptr<Relation> &other);
 	DUCKDB_API shared_ptr<Relation> Except(const shared_ptr<Relation> &other);
 	DUCKDB_API shared_ptr<Relation> Intersect(const shared_ptr<Relation> &other);
-	DUCKDB_API shared_ptr<Relation> UnionAll(const shared_ptr<Relation> &other);
-	DUCKDB_API shared_ptr<Relation> ExceptAll(const shared_ptr<Relation> &other);
-	DUCKDB_API shared_ptr<Relation> IntersectAll(const shared_ptr<Relation> &other);
 
 	// DISTINCT operation
 	DUCKDB_API shared_ptr<Relation> Distinct();
