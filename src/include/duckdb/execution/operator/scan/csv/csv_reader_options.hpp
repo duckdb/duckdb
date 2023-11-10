@@ -18,6 +18,65 @@
 
 namespace duckdb {
 
+//! Wrapper for CSV Options that can be manually set by the user
+//! It is important to make this difference for options that can be automatically sniffed AND manually set.
+template <typename T>
+struct CSVOption {
+public:
+	CSVOption(T value_p) : value(value_p) {};
+	CSVOption() {};
+
+	//! Sets value.
+	//! If by user it also toggles the set_by user flag
+	void Set(T value_p, bool by_user = true) {
+		D_ASSERT(!(by_user && set_by_user));
+		if (!set_by_user) {
+			// If it's not set by user we can change the value
+			value = value_p;
+			set_by_user = by_user;
+		}
+	}
+
+	//! Sets value.
+	//! If by user it also toggles the set_by user flag
+	void Set(CSVOption value_p, bool by_user = true) {
+		D_ASSERT(!(by_user && set_by_user));
+		if (!set_by_user) {
+			// If it's not set by user we can change the value
+			value = value_p;
+			set_by_user = by_user;
+		}
+	}
+
+	bool operator==(const CSVOption &other) const {
+		return value == other.value;
+	}
+
+	bool operator!=(const CSVOption &other) const {
+		return value != other.value;
+	}
+
+	const T GetValue() const {
+		return value;
+	}
+	bool IsSetByUser() const {
+		return set_by_user;
+	}
+
+private:
+	//! If this option was manually set by the user
+	bool set_by_user = false;
+	T value;
+
+	void Serialize(Serializer &serializer) const {
+	    //	    serializer.WriteProperty("100", "set_by_user", set_by_user);
+	};
+
+	static CSVOption<T> Deserialize(Deserializer &deserializer) {
+		return {};
+	};
+};
+
 enum class NewLineIdentifier : uint8_t {
 	SINGLE = 1,   // Either \r or \n
 	CARRY_ON = 2, // \r\n
@@ -35,11 +94,11 @@ struct CSVStateMachineOptions {
 	    : delimiter(delimiter_p), quote(quote_p), escape(escape_p) {};
 
 	//! Delimiter to separate columns within each line
-	char delimiter = ',';
+	CSVOption<char> delimiter = ',';
 	//! Quote used for columns that contain reserved characters, e.g '
-	char quote = '\"';
+	CSVOption<char> quote = '\"';
 	//! Escape character to escape quote character
-	char escape = '\0';
+	CSVOption<char> escape = '\0';
 
 	bool operator==(const CSVStateMachineOptions &other) const {
 		return delimiter == other.delimiter && quote == other.quote && escape == other.escape;
@@ -49,17 +108,18 @@ struct CSVStateMachineOptions {
 struct DialectOptions {
 	CSVStateMachineOptions state_machine_options;
 	//! New Line separator
-	NewLineIdentifier new_line = NewLineIdentifier::NOT_SET;
+	CSVOption<NewLineIdentifier> new_line = NewLineIdentifier::NOT_SET;
 	//! Expected number of columns
 	idx_t num_cols = 0;
 	//! Whether or not the file has a header line
-	bool header = false;
+	CSVOption<bool> header = false;
 	//! The date format to use (if any is specified)
-	map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
+	map<LogicalTypeId, CSVOption<StrpTimeFormat>> date_format = {{LogicalTypeId::DATE, {}},
+	                                                             {LogicalTypeId::TIMESTAMP, {}}};
 	//! Whether or not a type format is specified
 	map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 	//! How many leading rows to skip
-	idx_t skip_rows = 0;
+	CSVOption<idx_t> skip_rows = 0;
 	//! True start of the first CSV Buffer (After skipping empty lines, headers, notes and so on)
 	idx_t true_start = 0;
 };
@@ -70,16 +130,6 @@ struct CSVReaderOptions {
 	//===--------------------------------------------------------------------===//
 	//! See struct above.
 	DialectOptions dialect_options;
-	//! Whether or not a delimiter was defined by the user
-	bool has_delimiter = false;
-	//! Whether or not a new_line was defined by the user
-	bool has_newline = false;
-	//! Whether or not a quote was defined by the user
-	bool has_quote = false;
-	//! Whether or not an escape character was defined by the user
-	bool has_escape = false;
-	//! Whether or not a header information was given by the user
-	bool has_header = false;
 	//! Whether or not we should ignore InvalidInput errors
 	bool ignore_errors = false;
 	//! Rejects table name
@@ -91,7 +141,7 @@ struct CSVReaderOptions {
 	//! Index of the recovery columns
 	vector<idx_t> rejects_recovery_column_ids;
 	//! Number of samples to buffer
-	idx_t buffer_sample_size = STANDARD_VECTOR_SIZE * 50;
+	idx_t buffer_sample_size = (idx_t)STANDARD_VECTOR_SIZE * 50;
 	//! Specifies the string that represents a null value
 	string null_str;
 	//! Whether file is compressed or not, and if so which compression type
@@ -117,8 +167,6 @@ struct CSVReaderOptions {
 	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
 	//===--------------------------------------------------------------------===//
-	//! Whether or not the skip_rows is set by the user
-	bool skip_rows_set = false;
 	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
 	//! note that this is the guaranteed line length that will succeed, longer lines may be accepted if slightly above
 	idx_t maximum_line_size = 2097152;
@@ -203,7 +251,5 @@ struct CSVReaderOptions {
 	                         vector<string> &names);
 
 	string ToString() const;
-
-	named_parameter_map_t OutputReadSettings();
 };
 } // namespace duckdb

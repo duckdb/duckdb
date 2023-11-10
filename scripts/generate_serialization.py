@@ -255,6 +255,8 @@ def has_default_by_default(type):
     if is_container(type):
         if 'IndexVector' in type:
             return False
+        if 'CSVOption' in type:
+            return False
         return True
     if type == 'string':
         return True

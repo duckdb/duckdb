@@ -63,12 +63,12 @@ static int64_t ParseInteger(const Value &value, const string &loption) {
 }
 
 bool CSVReaderOptions::GetHeader() const {
-	return this->dialect_options.header;
+	return this->dialect_options.header.GetValue();
 }
 
 void CSVReaderOptions::SetHeader(bool input) {
-	this->dialect_options.header = input;
-	this->has_header = true;
+	D_ASSERT(0);
+	this->dialect_options.header.Set(input);
 }
 
 void CSVReaderOptions::SetCompression(const string &compression_p) {
@@ -76,7 +76,7 @@ void CSVReaderOptions::SetCompression(const string &compression_p) {
 }
 
 string CSVReaderOptions::GetEscape() const {
-	return std::string(1, this->dialect_options.state_machine_options.escape);
+	return std::string(1, this->dialect_options.state_machine_options.escape.GetValue());
 }
 
 void CSVReaderOptions::SetEscape(const string &input) {
@@ -87,21 +87,19 @@ void CSVReaderOptions::SetEscape(const string &input) {
 	if (escape_str.empty()) {
 		escape_str = string("\0", 1);
 	}
-	this->dialect_options.state_machine_options.escape = escape_str[0];
-	this->has_escape = true;
+	this->dialect_options.state_machine_options.escape.Set(escape_str[0]);
 }
 
 int64_t CSVReaderOptions::GetSkipRows() const {
-	return this->dialect_options.skip_rows;
+	return this->dialect_options.skip_rows.GetValue();
 }
 
 void CSVReaderOptions::SetSkipRows(int64_t skip_rows) {
-	dialect_options.skip_rows = skip_rows;
-	skip_rows_set = true;
+	dialect_options.skip_rows.Set(skip_rows);
 }
 
 string CSVReaderOptions::GetDelimiter() const {
-	return std::string(1, this->dialect_options.state_machine_options.delimiter);
+	return std::string(1, this->dialect_options.state_machine_options.delimiter.GetValue());
 }
 
 void CSVReaderOptions::SetDelimiter(const string &input) {
@@ -109,15 +107,14 @@ void CSVReaderOptions::SetDelimiter(const string &input) {
 	if (delim_str.size() > 1) {
 		throw InvalidInputException("The delimiter option cannot exceed a size of 1 byte.");
 	}
-	this->has_delimiter = true;
 	if (input.empty()) {
 		delim_str = string("\0", 1);
 	}
-	this->dialect_options.state_machine_options.delimiter = delim_str[0];
+	this->dialect_options.state_machine_options.delimiter.Set(delim_str[0]);
 }
 
 string CSVReaderOptions::GetQuote() const {
-	return std::string(1, this->dialect_options.state_machine_options.quote);
+	return std::string(1, this->dialect_options.state_machine_options.quote.GetValue());
 }
 
 void CSVReaderOptions::SetQuote(const string &quote_p) {
@@ -128,30 +125,29 @@ void CSVReaderOptions::SetQuote(const string &quote_p) {
 	if (quote_str.empty()) {
 		quote_str = string("\0", 1);
 	}
-	this->dialect_options.state_machine_options.quote = quote_str[0];
-	this->has_quote = true;
+	this->dialect_options.state_machine_options.quote.Set(quote_str[0]);
 }
 
 NewLineIdentifier CSVReaderOptions::GetNewline() const {
-	return dialect_options.new_line;
+	return dialect_options.new_line.GetValue();
 }
 
 void CSVReaderOptions::SetNewline(const string &input) {
 	if (input == "\\n" || input == "\\r") {
-		dialect_options.new_line = NewLineIdentifier::SINGLE;
+		dialect_options.new_line.Set(NewLineIdentifier::SINGLE);
 	} else if (input == "\\r\\n") {
-		dialect_options.new_line = NewLineIdentifier::CARRY_ON;
+		dialect_options.new_line.Set(NewLineIdentifier::CARRY_ON);
 	} else {
 		throw InvalidInputException("This is not accepted as a newline: " + input);
 	}
-	has_newline = true;
 }
 
 void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
 	string error;
 	if (read_format) {
-		error = StrTimeFormat::ParseFormatSpecifier(format, dialect_options.date_format[type]);
-		dialect_options.date_format[type].format_specifier = format;
+		StrpTimeFormat strpformat;
+		error = StrTimeFormat::ParseFormatSpecifier(format, strpformat);
+		dialect_options.date_format[type].Set(strpformat);
 	} else {
 		error = StrTimeFormat::ParseFormatSpecifier(format, write_date_format[type]);
 	}
@@ -300,14 +296,17 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value) 
 }
 
 string CSVReaderOptions::ToString() const {
-	return "  file=" + file_path + "\n  delimiter='" + dialect_options.state_machine_options.delimiter +
-	       (has_delimiter ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) + "\n  quote='" +
-	       dialect_options.state_machine_options.quote +
-	       (has_quote ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) + "\n  escape='" +
-	       dialect_options.state_machine_options.escape +
-	       (has_escape ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
-	       "\n  header=" + std::to_string(dialect_options.header) +
-	       (has_header ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +
+	auto &delimiter = dialect_options.state_machine_options.delimiter;
+	auto &quote = dialect_options.state_machine_options.quote;
+	auto &escape = dialect_options.state_machine_options.escape;
+	auto &header = dialect_options.header;
+	return "  file=" + file_path + "\n  delimiter='" + delimiter.GetValue() +
+	       (delimiter.IsSetByUser() ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) + "\n  quote='" +
+	       quote.GetValue() + (quote.IsSetByUser() ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
+	       "\n  escape='" + escape.GetValue() +
+	       (escape.IsSetByUser() ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
+	       "\n  header=" + std::to_string(header.GetValue()) +
+	       (header.IsSetByUser() ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +
 	       "\n  sample_size=" + std::to_string(sample_size_chunks * STANDARD_VECTOR_SIZE) +
 	       "\n  ignore_errors=" + std::to_string(ignore_errors) + "\n  all_varchar=" + std::to_string(all_varchar);
 }
@@ -452,30 +451,34 @@ void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientCont
 			SetReadOption(loption, kv.second, names);
 		}
 	}
-	if (user_defined_parameters.size() >=2){
-			user_defined_parameters.erase(user_defined_parameters.size()-2);
+	if (user_defined_parameters.size() >= 2) {
+		user_defined_parameters.erase(user_defined_parameters.size() - 2);
 	}
 }
 
 //! This function is used to remember options set by the sniffer, for use in ReadCSVRelation
 void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) {
-	if (has_delimiter) {
+	auto &delimiter = dialect_options.state_machine_options.delimiter;
+	auto &quote = dialect_options.state_machine_options.quote;
+	auto &escape = dialect_options.state_machine_options.escape;
+	auto &header = dialect_options.header;
+	if (delimiter.IsSetByUser()) {
 		named_params["delim"] = Value(GetDelimiter());
 	}
-	if (has_newline) {
+	if (dialect_options.new_line.IsSetByUser()) {
 		named_params["newline"] = Value(EnumUtil::ToString(GetNewline()));
 	}
-	if (has_quote) {
+	if (quote.IsSetByUser()) {
 		named_params["quote"] = Value(GetQuote());
 	}
-	if (has_escape) {
+	if (escape.IsSetByUser()) {
 		named_params["escape"] = Value(GetEscape());
 	}
-	if (has_header) {
+	if (header.IsSetByUser()) {
 		named_params["header"] = Value(GetHeader());
 	}
 	named_params["max_line_size"] = Value::BIGINT(maximum_line_size);
-	if (skip_rows_set) {
+	if (dialect_options.skip_rows.IsSetByUser()) {
 		named_params["skip"] = Value::BIGINT(GetSkipRows());
 	}
 	named_params["null_padding"] = Value::BOOLEAN(null_padding);

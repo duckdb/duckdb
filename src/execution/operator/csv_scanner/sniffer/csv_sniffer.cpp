@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "duckdb/execution/operator/scan/csv/csv_sniffer.hpp"
 
 namespace duckdb {
@@ -38,22 +40,51 @@ idx_t SetColumns::Size() {
 	return types->size();
 }
 
+template <class T>
+void MatchAndReplace(CSVOption<T> &original, CSVOption<T> &sniffed, string name) {
+	if (original.IsSetByUser()) {
+		// We verify that the user input matches the sniffed value
+		if (original != sniffed) {
+			throw InvalidInputException(
+			    "CSV Sniffer: Sniffer detected value different than the user input for the %s options",
+			    std::move(name));
+		}
+	} else {
+		// We replace the value of original with the sniffed value
+		original.Set(sniffed.GetValue(), false);
+	}
+}
+bool MatchAndRepaceUserSetVariables(CSVReaderOptions &original, CSVReaderOptions &sniffed) {
+	MatchAndReplace(original.dialect_options.header, sniffed.dialect_options.header, "Header");
+	MatchAndReplace(original.dialect_options.new_line, sniffed.dialect_options.new_line, "New Line");
+	MatchAndReplace(original.dialect_options.skip_rows, sniffed.dialect_options.skip_rows, "Skip Rows");
+	MatchAndReplace(original.dialect_options.state_machine_options.delimiter,
+	                sniffed.dialect_options.state_machine_options.delimiter, "Delimiter");
+	MatchAndReplace(original.dialect_options.state_machine_options.quote,
+	                sniffed.dialect_options.state_machine_options.quote, "Quote");
+	MatchAndReplace(original.dialect_options.state_machine_options.escape,
+	                sniffed.dialect_options.state_machine_options.escape, "Escape");
+	//! The date format to use (if any is specified)
+	map<LogicalTypeId, CSVOption<StrpTimeFormat>> date_format = {{LogicalTypeId::DATE, {}},
+	                                                             {LogicalTypeId::TIMESTAMP, {}}};
+}
 // Set the CSV Options in the reference
 void CSVSniffer::SetResultOptions() {
-	bool og_header = options.dialect_options.header;
-	options.dialect_options = best_candidate->dialect_options;
-	options.dialect_options.new_line = best_candidate->dialect_options.new_line;
-	options.skip_rows_set = options.dialect_options.skip_rows > 0;
-	if (options.has_header) {
-		// If header was manually set, we ignore the sniffer findings
-		options.dialect_options.header = og_header;
-	}
-	options.has_header = true;
-	if (options.dialect_options.header) {
-		options.dialect_options.true_start = best_start_with_header;
-	} else {
-		options.dialect_options.true_start = best_start_without_header;
-	}
+	//	bool og_header = options.dialect_options.header;
+	//	options.dialect_options = best_candidate->dialect_options;
+	//	options.dialect_options.new_line.Set(best_candidate->dialect_options.new_line.GetValue(),false);
+	//	options.dialect_options.header.Set()
+	////	options.skip_rows_set = options.dialect_options.skip_rows > 0;
+	//	if (options.has_header) {
+	//		// If header was manually set, we ignore the sniffer findings
+	//		options.dialect_options.header = og_header;
+	//	}
+	//	options.has_header = true;
+	//	if (options.dialect_options.header.GetValue()) {
+	//		options.dialect_options.true_start = best_start_with_header;
+	//	} else {
+	//		options.dialect_options.true_start = best_start_without_header;
+	//	}
 }
 
 SnifferResult CSVSniffer::SniffCSV() {
