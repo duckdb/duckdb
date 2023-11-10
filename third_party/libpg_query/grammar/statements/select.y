@@ -1625,25 +1625,37 @@ Typename:	SimpleTypename opt_array_bounds
 					$$->arrayBounds = list_make1(makeInteger(-1));
 					$$->setof = true;
 				}
-			| RowOrStruct '(' colid_type_list ')' opt_array_bounds {
-               $$ = SystemTypeName("struct");
-               $$->arrayBounds = $5;
-               $$->typmods = $3;
-               $$->location = @1;
+			| qualified_typename
+				{
+					$$ = makeTypeNameFromNameList($1);
+				}
+			| RowOrStruct '(' colid_type_list ')' opt_array_bounds
+				{
+				   $$ = SystemTypeName("struct");
+				   $$->arrayBounds = $5;
+				   $$->typmods = $3;
+				   $$->location = @1;
                }
-            | MAP '(' type_list ')' opt_array_bounds {
-               $$ = SystemTypeName("map");
-               $$->arrayBounds = $5;
-               $$->typmods = $3;
-               $$->location = @1;
-			}
-			| UNION '(' colid_type_list ')' opt_array_bounds {
-			   $$ = SystemTypeName("union");
-			   $$->arrayBounds = $5;
-			   $$->typmods = $3;
-			   $$->location = @1;
-			}
+            | MAP '(' type_list ')' opt_array_bounds
+            	{
+				   $$ = SystemTypeName("map");
+				   $$->arrayBounds = $5;
+				   $$->typmods = $3;
+				   $$->location = @1;
+				}
+			| UNION '(' colid_type_list ')' opt_array_bounds
+				{
+				   $$ = SystemTypeName("union");
+				   $$->arrayBounds = $5;
+				   $$->typmods = $3;
+				   $$->location = @1;
+				}
 		;
+
+qualified_typename:
+			IDENT '.' IDENT					{ $$ = list_make2(makeString($1), makeString($3)); }
+			| qualified_typename '.' IDENT	{ $$ = lappend($1, makeString($3)); }
+	;
 
 opt_array_bounds:
 			opt_array_bounds '[' ']'

@@ -352,7 +352,7 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 		D_ASSERT(!pipeline.sink);
 		D_ASSERT(!requires_batch_index);
 		auto &source_chunk = pipeline.operators.empty() ? result : *intermediate_chunks[0];
-		while (result.size() == 0 && !exhausted_source) {
+		while (result.size() == 0 && (!exhausted_source || !in_process_operators.empty())) {
 			if (in_process_operators.empty()) {
 				source_chunk.Reset();
 
@@ -362,6 +362,7 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 
 				// Repeatedly try to fetch from the source until it doesn't block. Note that it may block multiple times
 				while (true) {
+					D_ASSERT(!exhausted_source);
 					source_result = FetchFromSource(source_chunk);
 
 					// No interrupt happened, all good.

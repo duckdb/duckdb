@@ -83,6 +83,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toMap;
+import static org.duckdb.DuckDBDriver.DUCKDB_USER_AGENT_PROPERTY;
 import static org.duckdb.DuckDBDriver.JDBC_STREAM_RESULTS;
 
 public class TestDuckDBJDBC {
@@ -3967,6 +3968,33 @@ public class TestDuckDBJDBC {
         }
         assertEquals(struct.toString(), "{hello=2}");
         assertEquals(array.toString(), "[42]");
+    }
+
+    public static void test_user_agent_default() throws Exception {
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+            assertEquals(getSetting(conn, "custom_user_agent"), "");
+
+            try (PreparedStatement stmt1 = conn.prepareStatement("PRAGMA user_agent");
+                 ResultSet rs = stmt1.executeQuery()) {
+                assertTrue(rs.next());
+                assertTrue(rs.getString(1).matches("duckdb/.*(.*) jdbc"));
+            }
+        }
+    }
+
+    public static void test_user_agent_custom() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(DUCKDB_USER_AGENT_PROPERTY, "CUSTOM_STRING");
+
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:", props)) {
+            assertEquals(getSetting(conn, "custom_user_agent"), "CUSTOM_STRING");
+
+            try (PreparedStatement stmt1 = conn.prepareStatement("PRAGMA user_agent");
+                 ResultSet rs = stmt1.executeQuery()) {
+                assertTrue(rs.next());
+                assertTrue(rs.getString(1).matches("duckdb/.*(.*) jdbc CUSTOM_STRING"));
+            }
+        }
     }
 
     public static void main(String[] args) throws Exception {
