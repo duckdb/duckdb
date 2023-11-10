@@ -16,6 +16,13 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk,
                                          OperatorSourceInput &input) const {
+	// check if the database is already attached
+	auto &name = info->name;
+	const auto &path = info->path;
+	if (name.empty()) {
+		auto &fs = FileSystem::GetFileSystem(context.client);
+		name = AttachedDatabase::ExtractDatabaseName(path, fs);
+	}
 	// parse the options
 	auto &config = DBConfig::GetConfig(context.client);
 	AccessMode access_mode = config.options.access_mode;
@@ -42,9 +49,32 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 			unrecognized_option = entry.first;
 		}
 	}
+
+	// check ATTACH IF NOT EXISTS
+	auto &db_manager = DatabaseManager::Get(context.client);
+	if (info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+		auto existing_db = db_manager.GetDatabase(context.client, name);
+		if (existing_db) {
+			if ((existing_db->IsReadOnly() && access_mode == AccessMode::READ_WRITE) ||
+			    (!existing_db->IsReadOnly() && access_mode == AccessMode::READ_ONLY)) {
+				auto existing_mode = existing_db->IsReadOnly() ? AccessMode::READ_ONLY : AccessMode::READ_WRITE;
+				auto existing_mode_str = EnumUtil::ToString(existing_mode);
+				auto attached_mode = EnumUtil::ToString(access_mode);
+				throw BinderException("Database \"%s\" is already attached in %s mode, cannot re-attach in %s mode",
+				                      name, existing_mode_str, attached_mode);
+			}
+			return SourceResultType::FINISHED;
+		}
+	}
+	auto db_with_same_path = db_manager.GetDatabaseFromPath(context.client, path);
+	if (db_with_same_path) {
+		throw BinderException("Database \"%s\" is already attached with alias \"%s\"", path,
+		                      db_with_same_path->GetName());
+	}
+
 	auto &db = DatabaseInstance::GetDatabase(context.client);
 	if (type.empty()) {
-		// try to extract type from path
+		// try to extract database type from path
 		auto path_and_type = DBPathAndType::Parse(info->path, config);
 		type = path_and_type.type;
 		info->path = path_and_type.path;
@@ -65,18 +95,6 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	}
 
 	// attach the database
-	auto &name = info->name;
-	const auto &path = info->path;
-
-	if (name.empty()) {
-		auto &fs = FileSystem::GetFileSystem(context.client);
-		name = AttachedDatabase::ExtractDatabaseName(path, fs);
-	}
-	auto &db_manager = DatabaseManager::Get(context.client);
-	auto existing_db = db_manager.GetDatabaseFromPath(context.client, path);
-	if (existing_db) {
-		throw BinderException("Database \"%s\" is already attached with alias \"%s\"", path, existing_db->GetName());
-	}
 	auto new_db = db.CreateAttachedDatabase(*info, type, access_mode);
 	new_db->Initialize();
 
