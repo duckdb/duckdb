@@ -7,6 +7,7 @@ unique_ptr<AttachInfo> AttachInfo::Copy() const {
 	result->name = name;
 	result->path = path;
 	result->options = options;
+	result->on_conflict = on_conflict;
 	return result;
 }
 

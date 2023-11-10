@@ -75,7 +75,7 @@ final class TypeConversionTests: XCTestCase {
   }
   
   func test_extract_from_hugeint() throws {
-    let expected = [IntHuge.min + 1, IntHuge.max, nil]
+    let expected = [IntHuge.min, IntHuge.max, nil]
     try extractTest(testColumnName: "hugeint", expected: expected) { $0.cast(to: IntHuge.self) }
   }
   
@@ -96,7 +96,7 @@ final class TypeConversionTests: XCTestCase {
   
   func test_extract_from_uuid() throws {
     let expected = [
-      UUID(uuidString: "00000000-0000-0000-0000-000000000001"),
+      UUID(uuidString: "00000000-0000-0000-0000-000000000000"),
       UUID(uuidString: "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF"),
       nil
     ]

@@ -6,18 +6,34 @@ include_directories = [
     for x in [
         'extension/parquet/include',
         'third_party/parquet',
-        'third_party/snappy',
         'third_party/thrift',
+        'third_party/snappy',
         'third_party/zstd/include',
+        'third_party/mbedtls',
+        'third_party/mbedtls/include',
     ]
 ]
 # source files
 source_files = [
     os.path.sep.join(x.split('/'))
     for x in [
-        'extension/parquet/parquet_extension.cpp',
+        'extension/parquet/column_reader.cpp',
         'extension/parquet/column_writer.cpp',
+        'extension/parquet/parquet_crypto.cpp',
+        'extension/parquet/parquet_extension.cpp',
+        'extension/parquet/parquet_metadata.cpp',
+        'extension/parquet/parquet_reader.cpp',
+        'extension/parquet/parquet_statistics.cpp',
+        'extension/parquet/parquet_timestamp.cpp',
+        'extension/parquet/parquet_writer.cpp',
         'extension/parquet/serialize_parquet.cpp',
+        'extension/parquet/zstd_file_system.cpp',
+    ]
+]
+# parquet/thrift/snappy
+source_files += [
+    os.path.sep.join(x.split('/'))
+    for x in [
         'third_party/parquet/parquet_constants.cpp',
         'third_party/parquet/parquet_types.cpp',
         'third_party/thrift/thrift/protocol/TProtocol.cpp',
@@ -40,11 +56,6 @@ source_files += [
         'third_party/zstd/common/zstd_common.cpp',
         'third_party/zstd/common/error_private.cpp',
         'third_party/zstd/common/xxhash.cpp',
-    ]
-]
-source_files += [
-    os.path.sep.join(x.split('/'))
-    for x in [
         'third_party/zstd/compress/fse_compress.cpp',
         'third_party/zstd/compress/hist.cpp',
         'third_party/zstd/compress/huf_compress.cpp',
@@ -57,17 +68,5 @@ source_files += [
         'third_party/zstd/compress/zstd_lazy.cpp',
         'third_party/zstd/compress/zstd_ldm.cpp',
         'third_party/zstd/compress/zstd_opt.cpp',
-    ]
-]
-source_files += [
-    os.path.sep.join(x.split('/'))
-    for x in [
-        'extension/parquet/parquet_reader.cpp',
-        'extension/parquet/parquet_timestamp.cpp',
-        'extension/parquet/parquet_writer.cpp',
-        'extension/parquet/column_reader.cpp',
-        'extension/parquet/parquet_statistics.cpp',
-        'extension/parquet/parquet_metadata.cpp',
-        'extension/parquet/zstd_file_system.cpp',
     ]
 ]

@@ -46,16 +46,7 @@ INSERT INTO timestamp VALUES ('2008-01-01 00:00:11','2008-01-01 00:00:01.794','2
 statement error
 select '90000-01-19 03:14:07.999999'::TIMESTAMP_US::TIMESTAMP_NS
 
-#DATE/TIME conversions are not directly supported yet
-statement error
-select sec::DATE from timestamp;
-
-statement error
-select milli::DATE from timestamp;
-
-statement error
-select nano::DATE from timestamp;
-
+# TIME conversions are not directly supported yet
 statement error
 select sec::TIME from timestamp;
 
@@ -76,6 +67,18 @@ FROM timestamp
 WHERE ${src} = ${dst} ;
 
 endloop
+
+endloop
+
+# Cast to DATE
+foreach src sec milli micro nano
+
+query I
+SELECT ${src}::DATE from timestamp
+----
+2008-01-01
+2008-01-01
+2008-01-01
 
 endloop
 
