@@ -516,6 +516,15 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 	auto inconstant_column_infos = GetInconstantColumnInfo(column_infos);
 
 	Vector index_vector(LogicalType::BIGINT);
+	if (bind_info.has_index) {
+		it = active_rows.begin();
+		while (it != active_rows.end()) {
+			for (idx_t i = 0; i < list_entries[*it].length; i++) {
+				index_vector.SetValue(i + list_entries[*it].offset, Value::BIGINT(i + 1));
+			}
+			it++;
+		}
+	}
 
 	idx_t loops = 0;
 	// Execute reduce until all rows are finished
@@ -531,6 +540,7 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 			if (list_entries[*it].length > loops + 1) {
 				right_sel.set_index(new_count, list_entries[*it].offset + loops + 1);
 				left_sel.set_index(new_count, old_count);
+
 				new_count++;
 				it++;
 			} else {
@@ -545,23 +555,25 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 		}
 
 		// Execute the lambda function
+		if(bind_info.has_index) {
+			index_vector.Slice(index_vector, left_sel, new_count);
+		}
+
 		left_slice.Slice(left_slice, left_sel, new_count);
 		Vector right_slice = Vector(child_vector, right_sel, new_count);
 
-		LambdaExecuteInfo execute_info(state.GetContext(), *lambda_expr, args, bind_info.has_index, child_vector);
+		unique_ptr<ExpressionExecutor> expr_executor = make_uniq<ExpressionExecutor>(state.GetContext(), *lambda_expr);
 
 		vector<LogicalType> input_types;
 		if (bind_info.has_index) {
-			input_types.push_back((LogicalType::BIGINT));
+			input_types.push_back(LogicalType::BIGINT);
 		}
 		input_types.push_back(left_slice.GetType());
 		input_types.push_back(right_slice.GetType());
 
 		DataChunk input_chunk;
 		input_chunk.InitializeEmpty(input_types);
-
 		input_chunk.SetCardinality(new_count);
-		execute_info.lambda_chunk.SetCardinality(new_count);
 
 		idx_t slice_offset = bind_info.has_index ? 1 : 0;
 		if (bind_info.has_index) {
@@ -570,9 +582,13 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 		input_chunk.data[slice_offset].Reference(left_slice);
 		input_chunk.data[slice_offset + 1].Reference(right_slice);
 
-		execute_info.expr_executor->Execute(input_chunk, execute_info.lambda_chunk);
+		DataChunk lambda_chunk;
+		lambda_chunk.Initialize(Allocator::DefaultAllocator(), {lambda_expr->return_type});
+		lambda_chunk.SetCardinality(new_count);
 
-		left_slice.Reference(execute_info.lambda_chunk.data[0]);
+		expr_executor->Execute(input_chunk, lambda_chunk);
+
+		left_slice.Reference(lambda_chunk.data[slice_offset]);
 		loops++;
 	}
 
