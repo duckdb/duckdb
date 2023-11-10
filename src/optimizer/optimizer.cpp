@@ -122,8 +122,8 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	// Convert setop operations to joins if possible
 	RunOptimizer(OptimizerType::OPERATION_CONVERTER, [&]() {
-		OperationConverter optimizer;
-		plan = optimizer.Optimize(std::move(plan));
+		OperationConverter optimizer(*plan);
+		optimizer.Optimize(plan);
 	});
 
 	// then we perform the join ordering optimization

@@ -15,13 +15,14 @@ namespace duckdb {
 //! The Operation Converter converts Set operations to joins when possible
 class OperationConverter {
 public:
-	OperationConverter() {
+	OperationConverter(LogicalOperator &root) : root(root) {
+		root.ResolveOperatorTypes();
 	}
 	//! Perform DelimJoin elimination
-	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
+	void Optimize(unique_ptr<LogicalOperator> &op);
+	LogicalOperator &root;
 
 private:
-
 };
 
 } // namespace duckdb

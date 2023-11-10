@@ -1,0 +1,13 @@
+# name: test/optimizer/setops/operation_converter.test
+# description: converting intersect/except to semi anti
+# group: [setops]
+
+statement ok
+create table left_table as select range as a from range(100);
+
+statement ok
+create table right_table as select range*2 as b from range(10000);
+
+
+explain select * from left_table intersect select * from right_table;
+
