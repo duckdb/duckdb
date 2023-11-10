@@ -202,7 +202,7 @@ public:
 	//! RamFS or something similar)
 	unique_ptr<FileSystem> file_system;
 	//! Secret manager
-	unique_ptr<SecretManager> secret_manager;
+	unique_ptr<DebugSecretManager> secret_manager;
 	//! The allocator used by the system
 	unique_ptr<Allocator> allocator;
 	//! Database configuration options

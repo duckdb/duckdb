@@ -17,14 +17,22 @@
 
 namespace duckdb {
 
+enum class SecretPersistMode {
+	DEFAULT,
+	TEMPORARY,
+	PERMANENT
+};
+
 struct CreateSecretInfo : public ParseInfo {
 public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::CREATE_SECRET_INFO;
 
 public:
-	explicit CreateSecretInfo(OnCreateConflict on_conflict);
+	explicit CreateSecretInfo(OnCreateConflict on_conflict, SecretPersistMode persist_mode);
 	//! How to handle conflict
 	OnCreateConflict on_conflict;
+	//! Should the secret be persisted
+	SecretPersistMode persist_mode;
 	//! The type of secret
 	string type;
 	//! (optionally) the provider of the secret credentials

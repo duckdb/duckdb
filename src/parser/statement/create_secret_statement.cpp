@@ -2,9 +2,9 @@
 
 namespace duckdb {
 
-CreateSecretStatement::CreateSecretStatement(OnCreateConflict on_conflict)
+CreateSecretStatement::CreateSecretStatement(OnCreateConflict on_conflict, SecretPersistMode persist_mode)
     : SQLStatement(StatementType::CREATE_SECRET_STATEMENT) {
-	info = make_uniq<CreateSecretInfo>(on_conflict);
+	info = make_uniq<CreateSecretInfo>(on_conflict, persist_mode);
 }
 
 CreateSecretStatement::CreateSecretStatement(const CreateSecretStatement &other)

@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializer) {
+unique_ptr<BaseSecret> DuckSecretManager::DeserializeSecret(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<string>(100, "type");
 	auto provider = deserializer.ReadProperty<string>(101, "provider");
 	auto name = deserializer.ReadProperty<string>(102, "name");
@@ -23,7 +23,7 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializ
 	return secret_type.deserializer(deserializer, {scope, type, provider, name});
 }
 
-void SecretManager::RegisterSecretType(SecretType &type) {
+void DuckSecretManager::RegisterSecretType(SecretType &type) {
 	lock_guard<mutex> lck(lock);
 
 	if (registered_types.find(type.name) != registered_types.end()) {
@@ -33,14 +33,14 @@ void SecretManager::RegisterSecretType(SecretType &type) {
 	registered_types[type.name] = type;
 }
 
-void SecretManager::RegisterSecret(shared_ptr<BaseSecret> secret, OnCreateConflict on_conflict) {
+void DuckSecretManager::RegisterSecret(shared_ptr<BaseSecret> secret, OnCreateConflict on_conflict) {
 	lock_guard<mutex> lck(lock);
 
 	bool conflict = false;
 	idx_t conflict_idx;
 
 	//! Ensure we only create secrets for known types;
-	LookupTypeInternal(secret->type);
+	LookupTypeInternal(secret->GetType());
 
 	// Assert the alias does not exist already
 	if (!secret->GetName().empty()) {
@@ -68,7 +68,7 @@ void SecretManager::RegisterSecret(shared_ptr<BaseSecret> secret, OnCreateConfli
 	}
 }
 
-shared_ptr<BaseSecret> SecretManager::GetSecretByPath(const string &path, const string &type) {
+shared_ptr<BaseSecret> DuckSecretManager::GetSecretByPath(const string &path, const string &type) {
 	lock_guard<mutex> lck(lock);
 
 	int best_match_score = -1;
@@ -88,11 +88,11 @@ shared_ptr<BaseSecret> SecretManager::GetSecretByPath(const string &path, const 
 	return best_match;
 }
 
-shared_ptr<BaseSecret> SecretManager::GetSecretByName(const string &name) {
+shared_ptr<BaseSecret> DuckSecretManager::GetSecretByName(const string &name) {
 	lock_guard<mutex> lck(lock);
 
 	for (const auto &secret : registered_secrets) {
-		if (secret->name == name) {
+		if (secret->GetName() == name) {
 			return secret;
 		}
 	}
@@ -100,7 +100,7 @@ shared_ptr<BaseSecret> SecretManager::GetSecretByName(const string &name) {
 	throw InternalException("GetSecretByName called on unknown secret: %s", name);
 }
 
-void SecretManager::DropSecretByName(const string &name, bool missing_ok) {
+void DuckSecretManager::DropSecretByName(const string &name, bool missing_ok) {
 	lock_guard<mutex> lck(lock);
 	bool deleted = false;
 
@@ -119,12 +119,12 @@ void SecretManager::DropSecretByName(const string &name, bool missing_ok) {
 	}
 }
 
-SecretType SecretManager::LookupType(const string &type) {
+SecretType DuckSecretManager::LookupType(const string &type) {
 	lock_guard<mutex> lck(lock);
 	return LookupTypeInternal(type);
 }
 
-SecretType SecretManager::LookupTypeInternal(const string &type) {
+SecretType DuckSecretManager::LookupTypeInternal(const string &type) {
 	auto lu = registered_types.find(type);
 
 	if (lu == registered_types.end()) {
@@ -134,19 +134,40 @@ SecretType SecretManager::LookupTypeInternal(const string &type) {
 	return lu->second;
 }
 
-vector<shared_ptr<BaseSecret>> &SecretManager::AllSecrets() {
+vector<shared_ptr<BaseSecret>> &DuckSecretManager::AllSecrets() {
 	return registered_secrets;
 }
 
-shared_ptr<BaseSecret> DebugSecretManager::GetSecretByPath(const string &path, const string &type) {
-	//	printf("\n  [GetSecretByPath] path=%s type=%s", path.c_str(), type.c_str());
-	return SecretManager::GetSecretByPath(path, type);
+unique_ptr<BaseSecret> DebugSecretManager::DeserializeSecret(Deserializer &deserializer) {
+	return base_secret_manager->DeserializeSecret(deserializer);
+}
+
+void DebugSecretManager::RegisterSecretType(SecretType &type) {
+	base_secret_manager->RegisterSecretType(type);
 }
 
 void DebugSecretManager::RegisterSecret(shared_ptr<BaseSecret> secret, OnCreateConflict on_conflict) {
-	//	printf("\n  [RegisterSecret]  name=%s type=%s provider=%s", secret->GetName().c_str(),
-	// secret->GetType().c_str(), secret->GetProvider().c_str());
-	SecretManager::RegisterSecret(secret, on_conflict);
+	return base_secret_manager->RegisterSecret(secret, on_conflict);
+}
+
+shared_ptr<BaseSecret> DebugSecretManager::GetSecretByPath(const string &path, const string &type) {
+	return base_secret_manager->GetSecretByPath(path, type);
+}
+
+shared_ptr<BaseSecret> DebugSecretManager::GetSecretByName(const string &name) {
+	return base_secret_manager->GetSecretByName(name);
+}
+
+void DebugSecretManager::DropSecretByName(const string &name, bool missing_ok) {
+	return base_secret_manager->DropSecretByName(name, missing_ok);
+}
+
+SecretType DebugSecretManager::LookupType(const string &type) {
+	return base_secret_manager->LookupType(type);
+}
+
+vector<shared_ptr<BaseSecret>> &DebugSecretManager::AllSecrets() {
+	return base_secret_manager->AllSecrets();
 }
 
 } // namespace duckdb

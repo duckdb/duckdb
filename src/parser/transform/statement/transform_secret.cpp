@@ -4,6 +4,8 @@
 namespace duckdb {
 
 unique_ptr<CreateSecretStatement> Transformer::TransformSecret(duckdb_libpgquery::PGCreateSecretStmt &stmt) {
+
+	SecretPersistMode::
 	auto result = make_uniq<CreateSecretStatement>(TransformOnConflict(stmt.onconflict));
 
 	if (stmt.secret_name) {

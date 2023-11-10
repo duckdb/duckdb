@@ -19,7 +19,7 @@ public:
 	static constexpr const StatementType TYPE = StatementType::CREATE_SECRET_STATEMENT;
 
 public:
-	CreateSecretStatement(OnCreateConflict on_conflict);
+	CreateSecretStatement(OnCreateConflict on_conflict, SecretPersistMode persist_mode);
 
 	unique_ptr<CreateSecretInfo> info;
 

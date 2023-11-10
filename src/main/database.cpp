@@ -332,7 +332,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (new_config.secret_manager) {
 		config.secret_manager = std::move(new_config.secret_manager);
 	} else {
-		config.secret_manager = make_uniq<SecretManager>();
+		config.secret_manager = make_uniq<DebugSecretManager>(make_uniq<DuckSecretManager>());
 	}
 	if (config.options.maximum_memory == (idx_t)-1) {
 		config.SetDefaultMaxMemory();
