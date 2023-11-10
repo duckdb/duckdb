@@ -10,6 +10,7 @@ from .type_utils import duckdb_to_spark_schema
 from .column import Column
 import duckdb
 from functools import reduce
+from pandas import DataFrame as PandasDataFrame
 
 if TYPE_CHECKING:
     from .session import SparkSession
@@ -27,6 +28,9 @@ class DataFrame:
 
     def show(self, **kwargs) -> None:
         self.relation.show()
+    
+    def toPandas(self) -> PandasDataFrame:
+        return self.relation.df()
 
     def createOrReplaceTempView(self, name: str) -> None:
         """Creates or replaces a local temporary view with this :class:`DataFrame`.
