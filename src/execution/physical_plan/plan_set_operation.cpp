@@ -30,6 +30,8 @@ static JoinCondition CreateNotDistinctComparison(const LogicalType &type, idx_t 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 	D_ASSERT(op.children.size() == 2);
 
+	unique_ptr<PhysicalOperator> result;
+
 	auto left = CreatePlan(*op.children[0]);
 	auto right = CreatePlan(*op.children[1]);
 
@@ -38,25 +40,12 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 	}
 
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_UNION: {
-		// UNION
-		auto union_ = make_uniq<PhysicalUnion>(op.types, std::move(left), std::move(right), op.estimated_cardinality);
-		if (!op.setop_all) { // no ALL, use distinct semantics
-			auto &types = union_->GetTypes();
-			vector<unique_ptr<Expression>> groups, aggregates /* left empty */;
-			for (idx_t i = 0; i < types.size(); i++) {
-				groups.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
-			}
-			auto groupby = make_uniq<PhysicalHashAggregate>(context, op.types, std::move(aggregates), std::move(groups),
-			                                                union_->estimated_cardinality);
-			groupby->children.push_back(std::move(union_));
-			return (std::move(groupby));
-		}
-		return (std::move(union_));
-	}
+	case LogicalOperatorType::LOGICAL_UNION:
+		result = make_uniq<PhysicalUnion>(op.types, std::move(left), std::move(right), op.estimated_cardinality);
+		break;
+
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT: {
-		D_ASSERT(op.type == LogicalOperatorType::LOGICAL_EXCEPT || op.type == LogicalOperatorType::LOGICAL_INTERSECT);
 		auto &types = left->GetTypes();
 		vector<JoinCondition> conditions;
 		// create equality condition for all columns
@@ -89,8 +78,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 		// INTERSECT is SEMI join
 		PerfectHashJoinStats join_stats; // used in inner joins only
 		JoinType join_type = op.type == LogicalOperatorType::LOGICAL_EXCEPT ? JoinType::ANTI : JoinType::SEMI;
-		auto join = make_uniq<PhysicalHashJoin>(op, std::move(left), std::move(right), std::move(conditions), join_type,
-		                                        op.estimated_cardinality, join_stats);
+		result = make_uniq<PhysicalHashJoin>(op, std::move(left), std::move(right), std::move(conditions), join_type,
+		                                     op.estimated_cardinality, join_stats);
+
 		// For EXCEPT ALL / INTERSECT ALL we need to remove the row number column again
 		if (op.setop_all) {
 			vector<unique_ptr<Expression>> projection_select_list;
@@ -99,14 +89,30 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 			}
 			auto projection =
 			    make_uniq<PhysicalProjection>(types, std::move(projection_select_list), op.estimated_cardinality);
-			projection->children.push_back(std::move(join));
-			return (std::move(projection));
+			projection->children.push_back(std::move(result));
+			result = std::move(projection);
 		}
-		return std::move(join);
+		break;
 	}
 	default:
 		throw InternalException("Unexpected operator type for set operation");
 	}
+
+	// if the ALL specifier is not given, we have to ensure distinct results. Hence, push a GROUP BY ALL
+	if (!op.setop_all) { // no ALL, use distinct semantics
+		auto &types = result->GetTypes();
+		vector<unique_ptr<Expression>> groups, aggregates /* left empty */;
+		for (idx_t i = 0; i < types.size(); i++) {
+			groups.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
+		}
+		auto groupby = make_uniq<PhysicalHashAggregate>(context, op.types, std::move(aggregates), std::move(groups),
+		                                                result->estimated_cardinality);
+		groupby->children.push_back(std::move(result));
+		result = std::move(groupby);
+	}
+
+	D_ASSERT(result);
+	return (result);
 }
 
 } // namespace duckdb

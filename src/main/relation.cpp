@@ -161,15 +161,27 @@ shared_ptr<Relation> Relation::CrossProduct(const shared_ptr<Relation> &other, J
 }
 
 shared_ptr<Relation> Relation::Union(const shared_ptr<Relation> &other) {
-	return make_shared<SetOpRelation>(shared_from_this(), other, SetOperationType::UNION);
+	return make_shared<SetOpRelation>(shared_from_this(), other, SetOperationType::UNION, false);
 }
 
 shared_ptr<Relation> Relation::Except(const shared_ptr<Relation> &other) {
-	return make_shared<SetOpRelation>(shared_from_this(), other, SetOperationType::EXCEPT);
+	return make_shared<SetOpRelation>(shared_from_this(), other, SetOperationType::EXCEPT, false);
 }
 
 shared_ptr<Relation> Relation::Intersect(const shared_ptr<Relation> &other) {
-	return make_shared<SetOpRelation>(shared_from_this(), other, SetOperationType::INTERSECT);
+	return make_shared<SetOpRelation>(shared_from_this(), other, SetOperationType::INTERSECT, false);
+}
+
+shared_ptr<Relation> Relation::UnionAll(const shared_ptr<Relation> &other) {
+	return make_shared<SetOpRelation>(shared_from_this(), other, SetOperationType::UNION, true);
+}
+
+shared_ptr<Relation> Relation::ExceptAll(const shared_ptr<Relation> &other) {
+	return make_shared<SetOpRelation>(shared_from_this(), other, SetOperationType::EXCEPT, true);
+}
+
+shared_ptr<Relation> Relation::IntersectAll(const shared_ptr<Relation> &other) {
+	return make_shared<SetOpRelation>(shared_from_this(), other, SetOperationType::INTERSECT, true);
 }
 
 shared_ptr<Relation> Relation::Distinct() {
