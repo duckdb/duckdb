@@ -1,7 +1,8 @@
 #include "duckdb/main/materialized_query_result.hpp"
+
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {
 
@@ -28,8 +29,7 @@ string MaterializedQueryResult::ToString() {
 				if (col_idx > 0) {
 					result += "\t";
 				}
-				auto val = row.GetValue(col_idx);
-				result += val.IsNull() ? "NULL" : StringUtil::Replace(val.ToString(), string("\0", 1), "\\0");
+				result += StringUtil::Replace(row.GetValue(col_idx).ToString(), string("\0", 1), "\\0");
 			}
 			result += "\n";
 		}

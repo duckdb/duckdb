@@ -1310,6 +1310,9 @@ string Value::ToString() const {
 	if (IsNull()) {
 		return "NULL";
 	}
+	if (type_.IsJSONType()) {
+		return StringValue::Get(*this);
+	}
 	return StringValue::Get(DefaultCastAs(LogicalType::VARCHAR));
 }
 

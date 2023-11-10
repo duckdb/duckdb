@@ -502,10 +502,6 @@ bool LogicalType::IsValid() const {
 	return id() != LogicalTypeId::INVALID && id() != LogicalTypeId::UNKNOWN;
 }
 
-bool LogicalType::IsJSONType() const {
-	return id() == LogicalTypeId::VARCHAR && HasAlias() && GetAlias() == "JSON";
-}
-
 bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 	switch (id_) {
 	case LogicalTypeId::SQLNULL:
@@ -1075,6 +1071,19 @@ PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 	auto &info = aux_info->Cast<EnumTypeInfo>();
 	D_ASSERT(info.GetEnumDictType() == EnumDictType::VECTOR_DICT);
 	return EnumTypeInfo::DictType(info.GetDictSize());
+}
+
+//===--------------------------------------------------------------------===//
+// JSON Type
+//===--------------------------------------------------------------------===//
+LogicalType LogicalType::JSON() {
+	auto json_type = LogicalType(LogicalTypeId::VARCHAR);
+	json_type.SetAlias(JSON_TYPE_NAME);
+	return json_type;
+}
+
+bool LogicalType::IsJSONType() const {
+	return id() == LogicalTypeId::VARCHAR && HasAlias() && GetAlias() == JSON_TYPE_NAME;
 }
 
 //===--------------------------------------------------------------------===//

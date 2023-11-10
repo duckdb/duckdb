@@ -107,8 +107,8 @@ select * from read_json_auto('data/json/top_level_array.json', maximum_depth=0)
 query I
 select * from read_json_auto('data/json/top_level_array.json', maximum_depth=1)
 ----
-cancelled
-cancelled
+"cancelled"
+"cancelled"
 
 # if we read this with records='false', we get the struct instead of the unpacked columns
 query I
@@ -163,7 +163,7 @@ Invalid Input Error: JSON transform error in file "data/json/inconsistent_schema
 query II
 select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_size=2)
 ----
-1	NULL
+"1"	NULL
 2	Home for the Holidays
 [3]	The Firm
 4	Broadcast News

@@ -158,7 +158,13 @@ list<ColumnDataCollection> BoxRenderer::FetchRenderCollections(ClientContext &co
 
 		// cast all columns to varchar
 		for (idx_t c = 0; c < column_count; c++) {
-			VectorOperations::Cast(context, fetch_result.data[c], insert_result.data[c], insert_count);
+			auto &source = fetch_result.data[c];
+			auto &target = insert_result.data[c];
+			if (source.GetType().IsJSONType()) {
+				target.Reinterpret(source);
+			} else {
+				VectorOperations::Cast(context, source, target, insert_count);
+			}
 		}
 		insert_result.SetCardinality(insert_count);
 

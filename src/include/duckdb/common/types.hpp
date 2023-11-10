@@ -307,8 +307,6 @@ struct LogicalType {
 
 	DUCKDB_API bool IsValid() const;
 
-	DUCKDB_API bool IsJSONType() const;
-
 private:
 	LogicalTypeId id_;
 	PhysicalType physical_type_;
@@ -372,6 +370,12 @@ public:
 	DUCKDB_API static const vector<LogicalType> Integral();
 	//! A list of ALL SQL types
 	DUCKDB_API static const vector<LogicalType> AllTypes();
+
+public:
+	//! The JSON type lives in the JSON extension, but we need to define this here for special handling
+	static constexpr auto JSON_TYPE_NAME = "JSON";
+	DUCKDB_API static LogicalType JSON(); // NOLINT
+	DUCKDB_API bool IsJSONType() const;
 };
 
 struct DecimalType {

@@ -15,7 +15,7 @@ Binder Error
 query T
 select json_extract('{"my_field": "duck"}', '$.my_field')
 ----
-duck
+"duck"
 
 query T
 select json_extract('[0, 1, 2]', '$[1]')
@@ -42,18 +42,18 @@ Binder Error
 query T
 select json_extract(j, '$.my_field.my_nested_field[0]') from test
 ----
-goose
+"goose"
 
 # SQLite's indexing from back of the list requires '#'
 query T
 select json_extract(j, '$.my_field.my_nested_field[#-1]') from test
 ----
-duck
+"duck"
 
 query T
 select json_extract(j, '$.my_field.my_nested_field[#-2]') from test
 ----
-goose
+"goose"
 
 query T
 select json_extract(j, '$.my_field.my_nested_field[#-3]') from test
@@ -69,12 +69,12 @@ NULL
 query T
 select json_extract(j, '$.my_field.my_nested_field[-1]') from test
 ----
-duck
+"duck"
 
 query T
 select json_extract(j, '$.my_field.my_nested_field[-2]') from test
 ----
-goose
+"goose"
 
 query T
 select json_extract(j, '$.my_field.my_nested_field[-3]') from test
@@ -84,17 +84,17 @@ NULL
 query T
 select json_extract(j, q) from test
 ----
-goose
+"goose"
 
 query T
 select json_extract('{"my_field": [{"my_nested_field": ["duck", "goose"]}]}', '$.my_field[0].my_nested_field[0]')
 ----
-duck
+"duck"
 
 query T
 select json_extract('{"my_field": [{"my_nested_field": ["duck", "goose"]}]}', '$.my_field[#-1].my_nested_field[#-1]')
 ----
-goose
+"goose"
 
 # some NULLs
 query T
