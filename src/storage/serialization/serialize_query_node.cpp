@@ -109,7 +109,6 @@ void SetOperationNode::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<SetOperationType>(200, "setop_type", setop_type);
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(201, "left", left);
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(202, "right", right);
-	serializer.WritePropertyWithDefault<bool>(203, "setop_all", setop_all, false);
 }
 
 unique_ptr<QueryNode> SetOperationNode::Deserialize(Deserializer &deserializer) {
@@ -117,7 +116,6 @@ unique_ptr<QueryNode> SetOperationNode::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadProperty<SetOperationType>(200, "setop_type", result->setop_type);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(201, "left", result->left);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(202, "right", result->right);
-	deserializer.ReadPropertyWithDefault<bool>(203, "setop_all", result->setop_all, false);
 	return std::move(result);
 }
 
