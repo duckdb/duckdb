@@ -190,7 +190,7 @@ bool Date::ParseDoubleDigit(const char *buf, idx_t len, idx_t &pos, int32_t &res
 	return false;
 }
 
-static bool TryConvertDateSpecial(const char *buf, idx_t len, idx_t &pos, const char *special) {
+bool Date::TryConvertDateSpecial(const char *buf, idx_t len, idx_t &pos, const char *special) {
 	auto p = pos;
 	for (; p < len && *special; ++p) {
 		const auto s = *special++;
