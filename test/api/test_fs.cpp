@@ -10,8 +10,9 @@ TEST_CASE("filesystems", "[fs]") {
 	REQUIRE(!fs.IsPathAbsolute("./me"));
 	REQUIRE(!fs.IsPathAbsolute("me"));
 #else
-	REQUIRE(fs.IsPathAbsolute("\\\\network_drive\\filename.csv"))
-	REQUIRE(fs.IsPathAbsolute("C:\\folder\\filename.csv"))
-	REQUIRE(fs.IsPathAbsolute("C:/folder\\filename.csv"))
+	REQUIRE(fs.IsPathAbsolute("\\\\?\\D:\\very long path\\"));
+	REQUIRE(fs.IsPathAbsolute("\\\\network_drive\\filename.csv"));
+	REQUIRE(fs.IsPathAbsolute("C:\\folder\\filename.csv"));
+	REQUIRE(fs.IsPathAbsolute("C:/folder\\filename.csv"));
 #endif
 }
