@@ -45,7 +45,7 @@ void WindowAggregator::Sink(DataChunk &payload_chunk, SelectionVector *filter_se
 	}
 }
 
-void WindowAggregator::Finalize() {
+void WindowAggregator::Finalize(const FrameStats &stats) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -183,7 +183,7 @@ void WindowConstantAggregator::Sink(DataChunk &payload_chunk, SelectionVector *f
 	}
 }
 
-void WindowConstantAggregator::Finalize() {
+void WindowConstantAggregator::Finalize(const FrameStats &stats) {
 	AggegateFinal(*results, partition++);
 }
 
@@ -248,26 +248,24 @@ WindowCustomAggregator::~WindowCustomAggregator() {
 
 class WindowCustomAggregatorState : public WindowAggregatorState {
 public:
-	WindowCustomAggregatorState(const AggregateObject &aggr, DataChunk &inputs, const WindowExcludeMode exclude_mode);
+	WindowCustomAggregatorState(const AggregateObject &aggr, const WindowExcludeMode exclude_mode);
 	~WindowCustomAggregatorState() override;
 
 public:
 	//! The aggregate function
 	const AggregateObject &aggr;
-	//! The aggregate function
-	DataChunk &inputs;
 	//! Data pointer that contains a single state, shared by all the custom evaluators
 	vector<data_t> state;
 	//! Reused result state container for the window functions
 	Vector statef;
 	//! The frame boundaries, used for the window functions
-	vector<FrameBounds> frames;
+	SubFrames frames;
 };
 
-WindowCustomAggregatorState::WindowCustomAggregatorState(const AggregateObject &aggr, DataChunk &inputs,
+WindowCustomAggregatorState::WindowCustomAggregatorState(const AggregateObject &aggr,
                                                          const WindowExcludeMode exclude_mode)
-    : aggr(aggr), inputs(inputs), state(aggr.function.state_size()),
-      statef(Value::POINTER(CastPointerToValue(state.data()))), frames(3, {0, 0}) {
+    : aggr(aggr), state(aggr.function.state_size()), statef(Value::POINTER(CastPointerToValue(state.data()))),
+      frames(3, {0, 0}) {
 	// if we have a frame-by-frame method, share the single state
 	aggr.function.initialize(state.data());
 
@@ -294,8 +292,22 @@ WindowCustomAggregatorState::~WindowCustomAggregatorState() {
 	}
 }
 
+void WindowCustomAggregator::Finalize(const FrameStats &stats) {
+	WindowAggregator::Finalize(stats);
+	partition_input =
+	    make_uniq<WindowPartitionInput>(inputs.data.data(), inputs.ColumnCount(), inputs.size(), filter_mask, stats);
+
+	if (aggr.function.window_init) {
+		gstate = GetLocalState();
+		auto &gcstate = gstate->Cast<WindowCustomAggregatorState>();
+
+		AggregateInputData aggr_input_data(aggr.GetFunctionData(), gcstate.allocator);
+		aggr.function.window_init(aggr_input_data, *partition_input, gcstate.state.data());
+	}
+}
+
 unique_ptr<WindowAggregatorState> WindowCustomAggregator::GetLocalState() const {
-	return make_uniq<WindowCustomAggregatorState>(aggr, const_cast<DataChunk &>(inputs), exclude_mode);
+	return make_uniq<WindowCustomAggregatorState>(aggr, exclude_mode);
 }
 
 void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result,
@@ -305,11 +317,14 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 	auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
 	auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
 
-	//	TODO: window should take a const Vector*
 	auto &lcstate = lstate.Cast<WindowCustomAggregatorState>();
 	auto &frames = lcstate.frames;
-	auto params = lcstate.inputs.data.data();
 	auto &rmask = FlatVector::Validity(result);
+	const_data_ptr_t gstate_p = nullptr;
+	if (gstate) {
+		auto &gcstate = gstate->Cast<WindowCustomAggregatorState>();
+		gstate_p = gcstate.state.data();
+	}
 	for (idx_t i = 0, cur_row = row_idx; i < count; ++i, ++cur_row) {
 		idx_t nframes = 0;
 		idx_t non_empty = 0;
@@ -368,8 +383,7 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 
 		// Extract the range
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), lstate.allocator);
-		aggr.function.window(params, filter_mask, aggr_input_data, inputs.ColumnCount(), lcstate.state.data(), frames,
-		                     result, i);
+		aggr.function.window(aggr_input_data, *partition_input, gstate_p, lcstate.state.data(), frames, result, i);
 	}
 }
 
@@ -381,7 +395,9 @@ WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const LogicalType &re
     : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, count), internal_nodes(0), mode(mode_p) {
 }
 
-void WindowSegmentTree::Finalize() {
+void WindowSegmentTree::Finalize(const FrameStats &stats) {
+	WindowAggregator::Finalize(stats);
+
 	gstate = GetLocalState();
 	if (inputs.ColumnCount() > 0) {
 		if (aggr.function.combine && UseCombineAPI()) {

@@ -25,6 +25,7 @@
 namespace duckdb {
 class FileSystem;
 class FileOpener;
+class ParquetEncryptionConfig;
 
 class Serializer;
 class Deserializer;
@@ -62,7 +63,8 @@ class ParquetWriter {
 public:
 	ParquetWriter(FileSystem &fs, string file_name, vector<LogicalType> types, vector<string> names,
 	              duckdb_parquet::format::CompressionCodec::type codec, ChildFieldIDs field_ids,
-	              const vector<pair<string, string>> &kv_metadata);
+	              const vector<pair<string, string>> &kv_metadata,
+	              shared_ptr<ParquetEncryptionConfig> encryption_config);
 
 public:
 	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);
@@ -88,6 +90,9 @@ public:
 
 	static CopyTypeSupport TypeIsSupported(const LogicalType &type);
 
+	uint32_t Write(const duckdb_apache::thrift::TBase &object);
+	uint32_t WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size);
+
 private:
 	static CopyTypeSupport DuckDBTypeToParquetTypeInternal(const LogicalType &duckdb_type,
 	                                                       duckdb_parquet::format::Type::type &type);
@@ -96,6 +101,7 @@ private:
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec;
 	ChildFieldIDs field_ids;
+	shared_ptr<ParquetEncryptionConfig> encryption_config;
 
 	unique_ptr<BufferedFileWriter> writer;
 	shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;

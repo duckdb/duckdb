@@ -132,11 +132,15 @@ shared_ptr<ExtraTypeInfo> StructTypeInfo::Deserialize(Deserializer &deserializer
 void UserTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "user_type_name", user_type_name);
+	serializer.WritePropertyWithDefault<string>(201, "catalog", catalog, string());
+	serializer.WritePropertyWithDefault<string>(202, "schema", schema, string());
 }
 
 shared_ptr<ExtraTypeInfo> UserTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<UserTypeInfo>(new UserTypeInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "user_type_name", result->user_type_name);
+	deserializer.ReadPropertyWithDefault<string>(201, "catalog", result->catalog, string());
+	deserializer.ReadPropertyWithDefault<string>(202, "schema", result->schema, string());
 	return std::move(result);
 }
 

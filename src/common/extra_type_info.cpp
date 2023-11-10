@@ -134,6 +134,11 @@ UserTypeInfo::UserTypeInfo(string name_p)
     : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(std::move(name_p)) {
 }
 
+UserTypeInfo::UserTypeInfo(string catalog_p, string schema_p, string name_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), catalog(std::move(catalog_p)), schema(std::move(schema_p)),
+      user_type_name(std::move(name_p)) {
+}
+
 bool UserTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	auto &other = other_p->Cast<UserTypeInfo>();
 	return other.user_type_name == user_type_name;
