@@ -1423,6 +1423,17 @@ DUCKDB_API duckdb_logical_type duckdb_create_struct_type(duckdb_logical_type *me
                                                          idx_t member_count);
 
 /*!
+Creates an ENUM type from the passed member name array.
+The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+* enum_name: The name of the enum.
+* member_names: The array of names that the enum should consist of.
+* member_count: The number of elements that were specified in the array.
+* returns: The logical type.
+*/
+DUCKDB_API duckdb_logical_type duckdb_create_enum_type(const char **member_names, idx_t member_count);
+
+/*!
 Creates a `duckdb_logical_type` of type decimal with the specified width and scale
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
@@ -2393,9 +2404,17 @@ Fetch the internal arrow schema from the prepared statement.
 */
 DUCKDB_API duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared,
                                                      duckdb_arrow_schema *out_schema);
+/*!
+Convert a data chunk into an arrow struct array.
+
+* result: The result object the data chunk have been fetched from.
+* chunk: The data chunk to convert.
+* out_array: The output array.
+*/
+DUCKDB_API void duckdb_result_arrow_array(duckdb_result result, duckdb_data_chunk chunk, duckdb_arrow_array *out_array);
 
 /*!
-Fetch an internal arrow array from the arrow result.
+Fetch an internal arrow struct array from the arrow result.
 
 This function can be called multiple time to get next chunks, which will free the previous out_array.
 So consume the out_array before calling this function again.

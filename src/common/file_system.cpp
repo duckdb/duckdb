@@ -535,7 +535,7 @@ FileType FileHandle::GetType() {
 }
 
 bool FileSystem::IsRemoteFile(const string &path) {
-	const string prefixes[] = {"http://", "https://", "s3://"};
+	const string prefixes[] = {"http://", "https://", "s3://", "gcs://", "r2://"};
 	for (auto &prefix : prefixes) {
 		if (StringUtil::StartsWith(path, prefix)) {
 			return true;

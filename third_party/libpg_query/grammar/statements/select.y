@@ -1625,25 +1625,37 @@ Typename:	SimpleTypename opt_array_bounds
 					$$->arrayBounds = list_make1(makeInteger(-1));
 					$$->setof = true;
 				}
-			| RowOrStruct '(' colid_type_list ')' opt_array_bounds {
-               $$ = SystemTypeName("struct");
-               $$->arrayBounds = $5;
-               $$->typmods = $3;
-               $$->location = @1;
+			| qualified_typename
+				{
+					$$ = makeTypeNameFromNameList($1);
+				}
+			| RowOrStruct '(' colid_type_list ')' opt_array_bounds
+				{
+				   $$ = SystemTypeName("struct");
+				   $$->arrayBounds = $5;
+				   $$->typmods = $3;
+				   $$->location = @1;
                }
-            | MAP '(' type_list ')' opt_array_bounds {
-               $$ = SystemTypeName("map");
-               $$->arrayBounds = $5;
-               $$->typmods = $3;
-               $$->location = @1;
-			}
-			| UNION '(' colid_type_list ')' opt_array_bounds {
-			   $$ = SystemTypeName("union");
-			   $$->arrayBounds = $5;
-			   $$->typmods = $3;
-			   $$->location = @1;
-			}
+            | MAP '(' type_list ')' opt_array_bounds
+            	{
+				   $$ = SystemTypeName("map");
+				   $$->arrayBounds = $5;
+				   $$->typmods = $3;
+				   $$->location = @1;
+				}
+			| UNION '(' colid_type_list ')' opt_array_bounds
+				{
+				   $$ = SystemTypeName("union");
+				   $$->arrayBounds = $5;
+				   $$->typmods = $3;
+				   $$->location = @1;
+				}
 		;
+
+qualified_typename:
+			IDENT '.' IDENT					{ $$ = list_make2(makeString($1), makeString($3)); }
+			| qualified_typename '.' IDENT	{ $$ = lappend($1, makeString($3)); }
+	;
 
 opt_array_bounds:
 			opt_array_bounds '[' ']'
@@ -3080,7 +3092,7 @@ window_specification: '(' opt_existing_window_name opt_partition_clause
 		;
 
 /*
- * If we see PARTITION, RANGE, or ROWS as the first token after the '('
+ * If we see PARTITION, RANGE, ROWS or GROUPS as the first token after the '('
  * of a window_specification, we want the assumption to be that there is
  * no existing_window_name; but those keywords are unreserved and so could
  * be ColIds.  We fix this by making them have the same precedence as IDENT
@@ -3100,26 +3112,36 @@ opt_partition_clause: PARTITION BY expr_list		{ $$ = $3; }
 /*
  * For frame clauses, we return a PGWindowDef, but only some fields are used:
  * frameOptions, startOffset, and endOffset.
- *
- * This is only a subset of the full SQL:2008 frame_clause grammar.
- * We don't support <window frame exclusion> yet.
  */
 opt_frame_clause:
-			RANGE frame_extent
+			RANGE frame_extent opt_window_exclusion_clause
 				{
 					PGWindowDef *n = $2;
+
 					n->frameOptions |= FRAMEOPTION_NONDEFAULT | FRAMEOPTION_RANGE;
+					n->frameOptions |= $3;
 					$$ = n;
 				}
-			| ROWS frame_extent
+			| ROWS frame_extent opt_window_exclusion_clause
 				{
 					PGWindowDef *n = $2;
+
 					n->frameOptions |= FRAMEOPTION_NONDEFAULT | FRAMEOPTION_ROWS;
+					n->frameOptions |= $3;
+					$$ = n;
+				}
+			| GROUPS frame_extent opt_window_exclusion_clause
+				{
+					PGWindowDef *n = $2;
+
+					n->frameOptions |= FRAMEOPTION_NONDEFAULT | FRAMEOPTION_GROUPS;
+					n->frameOptions |= $3;
 					$$ = n;
 				}
 			| /*EMPTY*/
 				{
 					PGWindowDef *n = makeNode(PGWindowDef);
+
 					n->frameOptions = FRAMEOPTION_DEFAULTS;
 					n->startOffset = NULL;
 					n->endOffset = NULL;
@@ -3130,13 +3152,14 @@ opt_frame_clause:
 frame_extent: frame_bound
 				{
 					PGWindowDef *n = $1;
+
 					/* reject invalid cases */
 					if (n->frameOptions & FRAMEOPTION_START_UNBOUNDED_FOLLOWING)
 						ereport(ERROR,
 								(errcode(PG_ERRCODE_WINDOWING_ERROR),
 								 errmsg("frame start cannot be UNBOUNDED FOLLOWING"),
 								 parser_errposition(@1)));
-					if (n->frameOptions & FRAMEOPTION_START_VALUE_FOLLOWING)
+					if (n->frameOptions & FRAMEOPTION_START_OFFSET_FOLLOWING)
 						ereport(ERROR,
 								(errcode(PG_ERRCODE_WINDOWING_ERROR),
 								 errmsg("frame starting from following row cannot end with current row"),
@@ -3148,6 +3171,7 @@ frame_extent: frame_bound
 				{
 					PGWindowDef *n1 = $2;
 					PGWindowDef *n2 = $4;
+
 					/* form merged options */
 					int		frameOptions = n1->frameOptions;
 					/* shift converts START_ options to END_ options */
@@ -3165,13 +3189,13 @@ frame_extent: frame_bound
 								 errmsg("frame end cannot be UNBOUNDED PRECEDING"),
 								 parser_errposition(@4)));
 					if ((frameOptions & FRAMEOPTION_START_CURRENT_ROW) &&
-						(frameOptions & FRAMEOPTION_END_VALUE_PRECEDING))
+						(frameOptions & FRAMEOPTION_END_OFFSET_PRECEDING))
 						ereport(ERROR,
 								(errcode(PG_ERRCODE_WINDOWING_ERROR),
 								 errmsg("frame starting from current row cannot have preceding rows"),
 								 parser_errposition(@4)));
-					if ((frameOptions & FRAMEOPTION_START_VALUE_FOLLOWING) &&
-						(frameOptions & (FRAMEOPTION_END_VALUE_PRECEDING |
+					if ((frameOptions & FRAMEOPTION_START_OFFSET_FOLLOWING) &&
+						(frameOptions & (FRAMEOPTION_END_OFFSET_PRECEDING |
 										 FRAMEOPTION_END_CURRENT_ROW)))
 						ereport(ERROR,
 								(errcode(PG_ERRCODE_WINDOWING_ERROR),
@@ -3192,6 +3216,7 @@ frame_bound:
 			UNBOUNDED PRECEDING
 				{
 					PGWindowDef *n = makeNode(PGWindowDef);
+
 					n->frameOptions = FRAMEOPTION_START_UNBOUNDED_PRECEDING;
 					n->startOffset = NULL;
 					n->endOffset = NULL;
@@ -3200,6 +3225,7 @@ frame_bound:
 			| UNBOUNDED FOLLOWING
 				{
 					PGWindowDef *n = makeNode(PGWindowDef);
+
 					n->frameOptions = FRAMEOPTION_START_UNBOUNDED_FOLLOWING;
 					n->startOffset = NULL;
 					n->endOffset = NULL;
@@ -3208,6 +3234,7 @@ frame_bound:
 			| CURRENT_P ROW
 				{
 					PGWindowDef *n = makeNode(PGWindowDef);
+
 					n->frameOptions = FRAMEOPTION_START_CURRENT_ROW;
 					n->startOffset = NULL;
 					n->endOffset = NULL;
@@ -3216,7 +3243,8 @@ frame_bound:
 			| a_expr PRECEDING
 				{
 					PGWindowDef *n = makeNode(PGWindowDef);
-					n->frameOptions = FRAMEOPTION_START_VALUE_PRECEDING;
+
+					n->frameOptions = FRAMEOPTION_START_OFFSET_PRECEDING;
 					n->startOffset = $1;
 					n->endOffset = NULL;
 					$$ = n;
@@ -3224,11 +3252,20 @@ frame_bound:
 			| a_expr FOLLOWING
 				{
 					PGWindowDef *n = makeNode(PGWindowDef);
-					n->frameOptions = FRAMEOPTION_START_VALUE_FOLLOWING;
+
+					n->frameOptions = FRAMEOPTION_START_OFFSET_FOLLOWING;
 					n->startOffset = $1;
 					n->endOffset = NULL;
 					$$ = n;
 				}
+		;
+
+opt_window_exclusion_clause:
+			EXCLUDE CURRENT_P ROW	{ $$ = FRAMEOPTION_EXCLUDE_CURRENT_ROW; }
+			| EXCLUDE GROUP_P		{ $$ = FRAMEOPTION_EXCLUDE_GROUP; }
+			| EXCLUDE TIES			{ $$ = FRAMEOPTION_EXCLUDE_TIES; }
+			| EXCLUDE NO OTHERS		{ $$ = 0; }
+			| /*EMPTY*/				{ $$ = 0; }
 		;
 
 

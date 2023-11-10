@@ -83,6 +83,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toMap;
+import static org.duckdb.DuckDBDriver.DUCKDB_USER_AGENT_PROPERTY;
 import static org.duckdb.DuckDBDriver.JDBC_STREAM_RESULTS;
 
 public class TestDuckDBJDBC {
@@ -3665,7 +3666,7 @@ public class TestDuckDBJDBC {
         correct_answer_map.put("smallint", asList((short) -32768, (short) 32767, null));
         correct_answer_map.put("int", asList(-2147483648, 2147483647, null));
         correct_answer_map.put("bigint", asList(-9223372036854775808L, 9223372036854775807L, null));
-        correct_answer_map.put("hugeint", asList(new BigInteger("-170141183460469231731687303715884105727"),
+        correct_answer_map.put("hugeint", asList(new BigInteger("-170141183460469231731687303715884105728"),
                                                  new BigInteger("170141183460469231731687303715884105727"), null));
         correct_answer_map.put(
             "uhugeint", asList(new BigInteger("0"), new BigInteger("340282366920938463463374607431768211455"), null));
@@ -3682,7 +3683,7 @@ public class TestDuckDBJDBC {
             "dec_18_6", asList(new BigDecimal("-999999999999.999999"), (new BigDecimal("999999999999.999999")), null));
         correct_answer_map.put("dec38_10", asList(new BigDecimal("-9999999999999999999999999999.9999999999"),
                                                   (new BigDecimal("9999999999999999999999999999.9999999999")), null));
-        correct_answer_map.put("uuid", asList(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+        correct_answer_map.put("uuid", asList(UUID.fromString("00000000-0000-0000-0000-000000000000"),
                                               (UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff")), null));
         correct_answer_map.put("varchar", asList("🦆🦆🦆🦆🦆🦆", "goo\u0000se", null));
         correct_answer_map.put("json", asList("🦆🦆🦆🦆🦆", "goose", null));
@@ -3936,6 +3937,15 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_UUID_binding() throws Exception {
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+             PreparedStatement statement = conn.prepareStatement("select '0b17ce61-375c-4ad8-97b3-349d96d35ab1'::UUID");
+             ResultSet resultSet = statement.executeQuery()) {
+            resultSet.next();
+            assertEquals(UUID.fromString("0b17ce61-375c-4ad8-97b3-349d96d35ab1"), resultSet.getObject(1));
+        }
+    }
+
     public static void test_result_streaming() throws Exception {
         Properties props = new Properties();
         props.setProperty(JDBC_STREAM_RESULTS, String.valueOf(true));
@@ -3961,6 +3971,33 @@ public class TestDuckDBJDBC {
         }
         assertEquals(struct.toString(), "{hello=2}");
         assertEquals(array.toString(), "[42]");
+    }
+
+    public static void test_user_agent_default() throws Exception {
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+            assertEquals(getSetting(conn, "custom_user_agent"), "");
+
+            try (PreparedStatement stmt1 = conn.prepareStatement("PRAGMA user_agent");
+                 ResultSet rs = stmt1.executeQuery()) {
+                assertTrue(rs.next());
+                assertTrue(rs.getString(1).matches("duckdb/.*(.*) jdbc"));
+            }
+        }
+    }
+
+    public static void test_user_agent_custom() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(DUCKDB_USER_AGENT_PROPERTY, "CUSTOM_STRING");
+
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:", props)) {
+            assertEquals(getSetting(conn, "custom_user_agent"), "CUSTOM_STRING");
+
+            try (PreparedStatement stmt1 = conn.prepareStatement("PRAGMA user_agent");
+                 ResultSet rs = stmt1.executeQuery()) {
+                assertTrue(rs.next());
+                assertTrue(rs.getString(1).matches("duckdb/.*(.*) jdbc CUSTOM_STRING"));
+            }
+        }
     }
 
     public static void main(String[] args) throws Exception {

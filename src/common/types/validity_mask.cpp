@@ -53,6 +53,7 @@ string ValidityMask::ToString(idx_t count) const {
 
 void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
 	D_ASSERT(new_size >= old_size);
+	target_count = new_size;
 	if (validity_mask) {
 		auto new_size_count = EntryCount(new_size);
 		auto old_size_count = EntryCount(old_size);
@@ -66,9 +67,11 @@ void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
 		}
 		validity_data = std::move(new_validity_data);
 		validity_mask = validity_data->owned_data.get();
-	} else {
-		Initialize(new_size);
 	}
+}
+
+idx_t ValidityMask::TargetCount() {
+	return target_count;
 }
 
 void ValidityMask::Slice(const ValidityMask &other, idx_t source_offset, idx_t count) {
@@ -91,6 +94,7 @@ bool ValidityMask::IsAligned(idx_t count) {
 }
 
 void ValidityMask::SliceInPlace(const ValidityMask &other, idx_t target_offset, idx_t source_offset, idx_t count) {
+	EnsureWritable();
 	if (IsAligned(source_offset) && IsAligned(target_offset)) {
 		auto target_validity = GetData();
 		auto source_validity = other.GetData();
