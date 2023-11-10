@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/main/secret.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 
