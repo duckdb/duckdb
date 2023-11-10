@@ -57,6 +57,10 @@ const char *DuckDB::LibraryVersion() {
 	return DUCKDB_VERSION;
 }
 
+const char *DuckDB::Distribution() {
+	return DUCKDB_DISTRIBUTION;
+}
+
 string DuckDB::Platform() {
 #if defined(DUCKDB_CUSTOM_PLATFORM)
 	return DUCKDB_QUOTE_DEFINE(DUCKDB_CUSTOM_PLATFORM);

@@ -276,6 +276,10 @@ if(GIT_RESULT EQUAL "0")
     # not on a tag, increment the patch version by one and add a -devX suffix
     math(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
     set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
+
+    if (NOT DUCKDB_DISTRIBUTION)
+      add_definitions(-DDUCKDB_DISTRIBUTION=\"dev\")
+    endif()
   endif()
 else()
   # fallback for when building from tarball
