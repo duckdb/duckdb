@@ -304,9 +304,7 @@ struct LogFun {
 	static constexpr const char *Example = "log(2, 64)";
 
 	static ScalarFunctionSet GetFunctions();
-
 };
-
 
 struct NextAfterFun {
 	static constexpr const char *Name = "nextafter";
