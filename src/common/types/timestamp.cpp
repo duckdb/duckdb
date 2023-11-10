@@ -347,9 +347,6 @@ int64_t Timestamp::GetEpochMs(timestamp_t timestamp) {
 }
 
 int64_t Timestamp::GetEpochMicroSeconds(timestamp_t timestamp) {
-	if (!Timestamp::IsFinite(timestamp)) {
-		return timestamp.value;
-	}
 	return timestamp.value;
 }
 
