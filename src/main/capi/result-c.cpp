@@ -611,7 +611,7 @@ duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement s
 	if (!statement) {
 		return DUCKDB_STATEMENT_TYPE_INVALID;
 	}
-	auto &stmt = *(reinterpret_cast<PreparedStatementWrapper *>(statement));
+	auto stmt = reinterpret_cast<PreparedStatementWrapper *>(statement);
 
-	return StatementTypeToC(stmt.statement->GetStatementType());
+	return StatementTypeToC(stmt->statement->GetStatementType());
 }
