@@ -452,7 +452,9 @@ void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientCont
 			SetReadOption(loption, kv.second, names);
 		}
 	}
-	user_defined_parameters.pop_back();
+	if (user_defined_parameters.size() >=2){
+			user_defined_parameters.erase(user_defined_parameters.size()-2);
+	}
 }
 
 //! This function is used to remember options set by the sniffer, for use in ReadCSVRelation
