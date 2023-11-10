@@ -122,6 +122,7 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 		{
 			// create directories
 			lock_guard<mutex> global_lock(g.lock);
+			lock_guard<mutex> global_lock_on_partition_state(g.partition_state->lock);
 			const auto &global_partitions = g.partition_state->partitions;
 			// global_partitions have partitions added only at the back, so it's fine to only traverse the last part
 

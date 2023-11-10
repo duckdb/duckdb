@@ -434,7 +434,7 @@ void MultiFileReaderOptions::AutoDetectHiveTypesInternal(const string &file, Cli
 		}
 		Value value(part.second);
 		for (auto &candidate : candidates) {
-			const bool success = value.TryCastAs(context, candidate);
+			const bool success = value.TryCastAs(context, candidate, true);
 			if (success) {
 				hive_types_schema[name] = candidate;
 				break;
