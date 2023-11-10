@@ -97,3 +97,7 @@ select sign(3)
 ----
 1
 
+query I
+select log(2, 64)
+----
+6
