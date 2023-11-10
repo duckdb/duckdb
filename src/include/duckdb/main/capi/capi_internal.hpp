@@ -14,6 +14,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include <cstring>
 #include <cassert>
