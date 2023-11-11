@@ -452,12 +452,12 @@
       {
         "id": 201,
         "name": "parameters",
-        "type": "vector<Value>"
+        "type": "vector<ParsedExpression*>"
       },
       {
         "id": 202,
         "name": "named_parameters",
-        "type": "named_parameter_map_t"
+        "type": "case_insensitive_map_t<ParsedExpression*>"
       }
     ]
   },

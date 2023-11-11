@@ -20,7 +20,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::PRAGMA;
 
 public:
-	PhysicalPragma(PragmaFunction function_p, PragmaInfo info_p, idx_t estimated_cardinality)
+	PhysicalPragma(PragmaFunction function_p, unique_ptr<PragmaInfo> info_p, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::PRAGMA, {LogicalType::BOOLEAN}, estimated_cardinality),
 	      function(std::move(function_p)), info(std::move(info_p)) {
 	}
@@ -28,7 +28,7 @@ public:
 	//! The pragma function to call
 	PragmaFunction function;
 	//! The context of the call
-	PragmaInfo info;
+	unique_ptr<PragmaInfo> info;
 
 public:
 	// Source interface

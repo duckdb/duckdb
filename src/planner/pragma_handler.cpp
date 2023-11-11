@@ -69,7 +69,7 @@ void PragmaHandler::HandlePragmaStatements(ClientContextLock &lock, vector<uniqu
 }
 
 bool PragmaHandler::HandlePragma(SQLStatement *statement, string &resulting_query) { // PragmaInfo &info
-	auto info = *(statement->Cast<PragmaStatement>()).info;
+	auto &info = *(statement->Cast<PragmaStatement>()).info;
 	auto &entry = Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, info.name);
 	string error;
 
@@ -80,12 +80,13 @@ bool PragmaHandler::HandlePragma(SQLStatement *statement, string &resulting_quer
 	}
 	auto bound_function = entry.functions.GetFunctionByOffset(bound_idx);
 	if (bound_function.query) {
-		QueryErrorContext error_context(statement, statement->stmt_location);
-		Binder::BindNamedParameters(bound_function.named_parameters, info.named_parameters, error_context,
-		                            bound_function.name);
-		FunctionParameters parameters {info.parameters, info.named_parameters};
-		resulting_query = bound_function.query(context, parameters);
-		return true;
+		throw InternalException("FIXME: PragmaHandler::HandlePragma");
+//		QueryErrorContext error_context(statement, statement->stmt_location);
+//		Binder::BindNamedParameters(bound_function.named_parameters, info.named_parameters, error_context,
+//		                            bound_function.name);
+//		FunctionParameters parameters {info.parameters, info.named_parameters};
+//		resulting_query = bound_function.query(context, parameters);
+//		return true;
 	}
 	return false;
 }

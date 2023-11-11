@@ -22,17 +22,18 @@ BoundStatement Binder::Bind(PragmaStatement &stmt) {
 		throw BinderException("PRAGMA function does not have a function specified");
 	}
 
+	throw InternalException("FIXME: BindPragmaStatement");
 	// bind and check named params
-	QueryErrorContext error_context(root_statement, stmt.stmt_location);
-	BindNamedParameters(bound_function.named_parameters, stmt.info->named_parameters, error_context,
-	                    bound_function.name);
+//	QueryErrorContext error_context(root_statement, stmt.stmt_location);
+//	BindNamedParameters(bound_function.named_parameters, stmt.info->named_parameters, error_context,
+//	                    bound_function.name);
 
-	BoundStatement result;
-	result.names = {"Success"};
-	result.types = {LogicalType::BOOLEAN};
-	result.plan = make_uniq<LogicalPragma>(bound_function, *stmt.info);
-	properties.return_type = StatementReturnType::QUERY_RESULT;
-	return result;
+//	BoundStatement result;
+//	result.names = {"Success"};
+//	result.types = {LogicalType::BOOLEAN};
+//	result.plan = make_uniq<LogicalPragma>(bound_function, std::move(stmt.info));
+//	properties.return_type = StatementReturnType::QUERY_RESULT;
+//	return result;
 }
 
 } // namespace duckdb

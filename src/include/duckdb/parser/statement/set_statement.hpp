@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/set_type.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
 

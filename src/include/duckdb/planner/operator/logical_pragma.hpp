@@ -20,7 +20,7 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_PRAGMA;
 
 public:
-	LogicalPragma(PragmaFunction function_p, PragmaInfo info_p)
+	LogicalPragma(PragmaFunction function_p, unique_ptr<PragmaInfo> info_p)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_PRAGMA), function(std::move(function_p)),
 	      info(std::move(info_p)) {
 	}
@@ -28,7 +28,7 @@ public:
 	//! The pragma function to call
 	PragmaFunction function;
 	//! The context of the call
-	PragmaInfo info;
+	unique_ptr<PragmaInfo> info;
 
 public:
 	idx_t EstimateCardinality(ClientContext &context) override;
