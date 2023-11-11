@@ -60,6 +60,11 @@ select try_cast('  11:11:11  ' as time)
 query I
 select try_cast('24:00:00' as time)
 ----
+24:00:00
+
+query I
+select try_cast('24:00:01' as time)
+----
 NULL
 
 query I

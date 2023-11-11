@@ -98,6 +98,12 @@ select interval '-05:12:34.567890' as test_interval;
 ----
 -05:12:34.56789
 
+# Issue #9631 - Parse hms > 24:00:00
+query I
+SELECT ('35:10:00'::interval);
+----
+35:10:00
+
 # FIXME: we can also use the ISO 8601 interval format
 statement error
 SELECT INTERVAL 'P2MT1H1M';
