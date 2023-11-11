@@ -1,12 +1,12 @@
-#include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/statement/create_secret_statement.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
 
 unique_ptr<CreateSecretStatement> Transformer::TransformSecret(duckdb_libpgquery::PGCreateSecretStmt &stmt) {
-
-	SecretPersistMode::
-	auto result = make_uniq<CreateSecretStatement>(TransformOnConflict(stmt.onconflict));
+	auto result = make_uniq<CreateSecretStatement>(
+	    TransformOnConflict(stmt.onconflict),
+	    EnumUtil::FromString<SecretPersistMode>(StringUtil::Upper(stmt.persist_option)));
 
 	if (stmt.secret_name) {
 		result->info->name = StringUtil::Lower(stmt.secret_name);

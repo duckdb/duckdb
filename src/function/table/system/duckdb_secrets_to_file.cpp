@@ -11,6 +11,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/parser/parsed_data/create_secret_info.hpp"
 
 namespace duckdb {
 
@@ -49,7 +50,7 @@ static void DuckDBSecretsToFileFunction(ClientContext &context, TableFunctionInp
 	auto serializer = BinarySerializer(file_writer);
 	for (auto &secret : secrets) {
 		serializer.Begin();
-		secret->Serialize(serializer);
+		secret.secret->Serialize(serializer);
 		serializer.End();
 	}
 	file_writer.Flush();
@@ -66,7 +67,7 @@ static void DuckDBSecretsFromFileFunction(ClientContext &context, TableFunctionI
 		BinaryDeserializer deserializer(file_reader);
 		deserializer.Begin();
 		shared_ptr<BaseSecret> deserialized_secret = secret_manager->DeserializeSecret(deserializer);
-		secret_manager->RegisterSecret(deserialized_secret, OnCreateConflict::ERROR_ON_CONFLICT);
+		secret_manager->RegisterSecret(deserialized_secret, OnCreateConflict::ERROR_ON_CONFLICT, SecretPersistMode::DEFAULT);
 
 		deserializer.End();
 	}

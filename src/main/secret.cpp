@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-int BaseSecret::MatchScore(const string &path) {
+int BaseSecret::MatchScore(const string &path) const{
 	int longest_match = -1;
 	for (const auto &prefix : prefix_paths) {
 		if (prefix == "*") {
@@ -17,7 +17,7 @@ int BaseSecret::MatchScore(const string &path) {
 	return longest_match;
 }
 
-string BaseKeyValueSecret::ToString(bool redact) {
+string BaseKeyValueSecret::ToString(bool redact) const {
 	string result;
 
 	for (auto it = secret_map.begin(); it != secret_map.end(); it++) {

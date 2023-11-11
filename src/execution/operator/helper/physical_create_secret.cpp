@@ -12,7 +12,7 @@ SourceResultType PhysicalCreateSecret::GetData(ExecutionContext &context, DataCh
 	// TODO: we should probably check availability before calling into a registered create secret?
 
 	// Call create secret function
-	CreateSecretInput secret_input {info.type, info.provider, info.name, info.scope, info.named_parameters};
+	CreateSecretInput secret_input {info.type, info.provider,  info.persist_mode, info.name, info.scope, info.named_parameters};
 	auto secret = function.function(client, secret_input);
 
 	if (!secret) {
@@ -20,7 +20,7 @@ SourceResultType PhysicalCreateSecret::GetData(ExecutionContext &context, DataCh
 	}
 
 	// Register the secret at the secret_manager
-	context.client.db->config.secret_manager->RegisterSecret(secret, info.on_conflict);
+	context.client.db->config.secret_manager->RegisterSecret(secret, info.on_conflict, info.persist_mode);
 
 	// TODO return stuff?
 

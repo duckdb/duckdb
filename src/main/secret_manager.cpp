@@ -1,6 +1,7 @@
 #include "duckdb/main/secret_manager.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
@@ -33,7 +34,7 @@ void DuckSecretManager::RegisterSecretType(SecretType &type) {
 	registered_types[type.name] = type;
 }
 
-void DuckSecretManager::RegisterSecret(shared_ptr<BaseSecret> secret, OnCreateConflict on_conflict) {
+void DuckSecretManager::RegisterSecret(shared_ptr<const BaseSecret> secret, OnCreateConflict on_conflict, SecretPersistMode persist_mode) {
 	lock_guard<mutex> lck(lock);
 
 	bool conflict = false;
@@ -46,11 +47,17 @@ void DuckSecretManager::RegisterSecret(shared_ptr<BaseSecret> secret, OnCreateCo
 	if (!secret->GetName().empty()) {
 		for (idx_t cred_idx = 0; cred_idx < registered_secrets.size(); cred_idx++) {
 			const auto &cred = registered_secrets[cred_idx];
-			if (cred->GetName() == secret->GetName()) {
+			if (cred.secret->GetName() == secret->GetName()) {
 				conflict = true;
 				conflict_idx = cred_idx;
+				break;
 			}
 		}
+	}
+
+	// TODO move config elsewhere
+	if (persist_mode == SecretPersistMode::PERMANENT) {
+		throw NotImplementedException("DuckSecretManager does not implement persistent secrets yet!");
 	}
 
 	if (conflict) {
@@ -59,41 +66,53 @@ void DuckSecretManager::RegisterSecret(shared_ptr<BaseSecret> secret, OnCreateCo
 		} else if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 			return;
 		} else if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
-			registered_secrets[conflict_idx] = secret;
+			RegisteredSecret reg_secret(secret);
+			reg_secret.persistent = false;
+			reg_secret.storage_mode = "in-memory";
+			registered_secrets[conflict_idx] = std::move(reg_secret);
+			return;
 		} else {
 			throw InternalException("unknown OnCreateConflict found while registering secret");
 		}
-	} else {
-		registered_secrets.push_back(std::move(secret));
 	}
+
+	RegisteredSecret reg_secret(secret);
+	reg_secret.persistent = false;
+	reg_secret.storage_mode = "in-memory";
+	registered_secrets.push_back(std::move(reg_secret));
 }
 
-shared_ptr<BaseSecret> DuckSecretManager::GetSecretByPath(const string &path, const string &type) {
+RegisteredSecret DuckSecretManager::GetSecretByPath(const string &path, const string &type) {
 	lock_guard<mutex> lck(lock);
 
 	int best_match_score = -1;
-	shared_ptr<BaseSecret> best_match;
+	RegisteredSecret* best_match = nullptr;
 
-	for (const auto &secret : registered_secrets) {
-		if (secret->GetType() != type) {
+	for (auto &secret : registered_secrets) {
+		if (secret.secret->GetType() != type) {
 			continue;
 		}
-		auto match = secret->MatchScore(path);
+		auto match = secret.secret->MatchScore(path);
 
 		if (match > best_match_score) {
 			best_match_score = MaxValue<idx_t>(match, best_match_score);
-			best_match = secret;
+			best_match = &secret;
 		}
 	}
-	return best_match;
+
+	if (best_match) {
+		return *best_match;
+	}
+
+	return {nullptr};
 }
 
-shared_ptr<BaseSecret> DuckSecretManager::GetSecretByName(const string &name) {
+RegisteredSecret DuckSecretManager::GetSecretByName(const string &name) {
 	lock_guard<mutex> lck(lock);
 
-	for (const auto &secret : registered_secrets) {
-		if (secret->GetName() == name) {
-			return secret;
+	for (const auto &reg_secret : registered_secrets) {
+		if (reg_secret.secret->GetName() == name) {
+			return reg_secret;
 		}
 	}
 
@@ -104,9 +123,9 @@ void DuckSecretManager::DropSecretByName(const string &name, bool missing_ok) {
 	lock_guard<mutex> lck(lock);
 	bool deleted = false;
 
-	std::vector<shared_ptr<BaseSecret>>::iterator iter;
+	std::vector<RegisteredSecret>::iterator iter;
 	for (iter = registered_secrets.begin(); iter != registered_secrets.end();) {
-		if (iter->get()->GetName() == name) {
+		if (iter->secret->GetName() == name) {
 			registered_secrets.erase(iter);
 			deleted = true;
 			break;
@@ -134,7 +153,7 @@ SecretType DuckSecretManager::LookupTypeInternal(const string &type) {
 	return lu->second;
 }
 
-vector<shared_ptr<BaseSecret>> &DuckSecretManager::AllSecrets() {
+vector<RegisteredSecret> &DuckSecretManager::AllSecrets() {
 	return registered_secrets;
 }
 
@@ -146,15 +165,15 @@ void DebugSecretManager::RegisterSecretType(SecretType &type) {
 	base_secret_manager->RegisterSecretType(type);
 }
 
-void DebugSecretManager::RegisterSecret(shared_ptr<BaseSecret> secret, OnCreateConflict on_conflict) {
-	return base_secret_manager->RegisterSecret(secret, on_conflict);
+void DebugSecretManager::RegisterSecret(shared_ptr<const BaseSecret> secret, OnCreateConflict on_conflict, SecretPersistMode persist_mode) {
+	return base_secret_manager->RegisterSecret(secret, on_conflict, persist_mode);
 }
 
-shared_ptr<BaseSecret> DebugSecretManager::GetSecretByPath(const string &path, const string &type) {
+RegisteredSecret DebugSecretManager::GetSecretByPath(const string &path, const string &type) {
 	return base_secret_manager->GetSecretByPath(path, type);
 }
 
-shared_ptr<BaseSecret> DebugSecretManager::GetSecretByName(const string &name) {
+RegisteredSecret DebugSecretManager::GetSecretByName(const string &name) {
 	return base_secret_manager->GetSecretByName(name);
 }
 
@@ -166,7 +185,7 @@ SecretType DebugSecretManager::LookupType(const string &type) {
 	return base_secret_manager->LookupType(type);
 }
 
-vector<shared_ptr<BaseSecret>> &DebugSecretManager::AllSecrets() {
+vector<RegisteredSecret> &DebugSecretManager::AllSecrets() {
 	return base_secret_manager->AllSecrets();
 }
 

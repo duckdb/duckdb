@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/parser/parsed_data/alter_info.hpp
+// duckdb/parser/parsed_data/create_secret_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -17,7 +17,7 @@
 
 namespace duckdb {
 
-enum class SecretPersistMode {
+enum class SecretPersistMode : uint8_t {
 	DEFAULT,
 	TEMPORARY,
 	PERMANENT

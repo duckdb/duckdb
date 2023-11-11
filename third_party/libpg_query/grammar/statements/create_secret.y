@@ -6,7 +6,7 @@
 CreateSecretStmt:
 			CREATE_P opt_persist SECRET opt_secret_name '(' secret_key_val ')'
 				{
-					PGCreateSecretStmt *n = makeNode(permanent_option);
+					PGCreateSecretStmt *n = makeNode(PGCreateSecretStmt);
 					n->persist_option = $2;
 					n->secret_name = $4;
 					n->options = $6;

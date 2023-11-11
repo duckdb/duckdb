@@ -22,6 +22,8 @@ struct CreateSecretInput {
 	string type;
 	//! mode
 	string provider;
+	//! should the secret be persisted?
+	SecretPersistMode persist;
 	//! (optional) alias provided by user
 	string name;
 	//! (optional) scope provided by user

@@ -9,10 +9,10 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/secret_manager.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -21,7 +21,7 @@ class BaseSecret {
 	friend class SecretManager;
 
 public:
-	BaseSecret(vector<string> &prefix_paths, const string &type, const string &provider, const string &name)
+	BaseSecret(const vector<string> &prefix_paths, const string &type, const string &provider, const string &name)
 	    : prefix_paths(prefix_paths), type(type), provider(provider), name(name), serializable(false) {
 		D_ASSERT(!type.empty());
 	}
@@ -34,11 +34,11 @@ public:
 
 	//! The score of how well this secret's scope matches the path (by default: the length of the longest matching
 	//! prefix)
-	virtual int MatchScore(const string &path);
+	virtual int MatchScore(const string &path) const;
 
 	//! The ToString method prints the secret, the redact option determines whether secret data is allowed to be printed
 	//! in clear text. This is to be decided by the secret implementation
-	virtual string ToString(bool redact) {
+	virtual string ToString(bool redact) const {
 		return "";
 	}
 
@@ -48,16 +48,16 @@ public:
 	};
 
 	//! Getters
-	vector<string> &GetScope() {
+	const vector<string> &GetScope() const {
 		return prefix_paths;
 	}
-	const string &GetType() {
+	const string &GetType() const {
 		return type;
 	}
-	const string &GetProvider() {
+	const string &GetProvider() const {
 		return provider;
 	}
-	const string &GetName() {
+	const string &GetName() const {
 		return name;
 	}
 	bool IsSerializable() const {
@@ -83,7 +83,6 @@ protected:
 	string provider;
 	//! Name of the secret
 	string name;
-
 	//! Whether the secret can be serialized/deserialized
 	bool serializable;
 };
@@ -104,7 +103,7 @@ public:
 		secret_map = secret.secret_map;
 	};
 
-	virtual string ToString(bool redact) override;
+	virtual string ToString(bool redact) const override;
 	void Serialize(Serializer &serializer) const override;
 
 	template <class TYPE>

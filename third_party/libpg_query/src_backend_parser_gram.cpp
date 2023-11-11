@@ -20077,7 +20077,7 @@ yyreduce:
   case 201: /* CreateSecretStmt: CREATE_P opt_persist SECRET opt_secret_name '(' secret_key_val ')'  */
 #line 8 "third_party/libpg_query/grammar/statements/create_secret.y"
                                 {
-					PGCreateSecretStmt *n = makeNode(permanent_option);
+					PGCreateSecretStmt *n = makeNode(PGCreateSecretStmt);
 					n->persist_option = (yyvsp[-5].str);
 					n->secret_name = (yyvsp[-3].str);
 					n->options = (yyvsp[-1].list);

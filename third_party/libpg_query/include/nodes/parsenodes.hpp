@@ -2157,7 +2157,7 @@ typedef struct PGUseStmt {
  */
 typedef struct PGCreateSecretStmt {
 	PGNodeTag type;
-	char *persist_mode;                   /* the requested persist mode */
+	char *persist_option;                   /* the requested persist mode */
 	char *secret_name;                    /* name of the secret */
 	char *secret_type;                    /* type of secret */
 	char *secret_provider;                /* the optional provider of the secret */

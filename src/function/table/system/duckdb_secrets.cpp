@@ -48,6 +48,9 @@ static unique_ptr<FunctionData> DuckDBSecretsBind(ClientContext &context, TableF
 	names.emplace_back("provider");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("storage");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	names.emplace_back("scope");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 
@@ -80,15 +83,18 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 		auto &secret_entry = secrets[data.offset];
 
 		vector<Value> scope_value;
-		for (const auto &scope_entry : secret_entry->GetScope()) {
+		for (const auto& scope_entry : secret_entry.secret->GetScope()) {
 			scope_value.push_back(scope_entry);
 		}
 
-		output.SetValue(0, count, secret_entry->GetName());
-		output.SetValue(1, count, Value(secret_entry->GetType()));
-		output.SetValue(2, count, Value(secret_entry->GetProvider()));
-		output.SetValue(3, count, Value::LIST(LogicalType::VARCHAR, scope_value));
-		output.SetValue(4, count, secret_entry->ToString(bind_data.redact));
+		const auto secret_ptr = secret_entry.secret;
+
+		output.SetValue(0, count, secret_ptr->GetName());
+		output.SetValue(1, count, Value(secret_ptr->GetType()));
+		output.SetValue(2, count, Value(secret_ptr->GetProvider()));
+		output.SetValue(3, count, Value(secret_entry.storage_mode));
+		output.SetValue(4, count, Value::LIST(LogicalType::VARCHAR, scope_value));
+		output.SetValue(5, count, secret_ptr->ToString(bind_data.redact));
 
 		data.offset++;
 		count++;

@@ -101,17 +101,17 @@ public:
 		redact_keys = GetRedactionSet();
 	};
 
-	S3AuthParams GetParams() {
+	S3AuthParams GetParams() const {
 		S3AuthParams params;
-		params.region = secret_map["region"];
-		params.access_key_id = secret_map["access_key_id"];
-		params.secret_access_key = secret_map["secret_access_key"];
-		params.session_token = secret_map["session_token"];
-		params.endpoint = secret_map["endpoint"];
-		params.url_style = secret_map["url_style"];
-		params.use_ssl = BooleanValue::Get(Value(secret_map["use_ssl"]).DefaultCastAs(LogicalType::BOOLEAN));
+		params.region = secret_map.at("region");
+		params.access_key_id = secret_map.at("access_key_id");
+		params.secret_access_key = secret_map.at("secret_access_key");
+		params.session_token = secret_map.at("session_token");
+		params.endpoint = secret_map.at("endpoint");
+		params.url_style = secret_map.at("url_style");
+		params.use_ssl = BooleanValue::Get(Value(secret_map.at("use_ssl")).DefaultCastAs(LogicalType::BOOLEAN));
 		params.s3_url_compatibility_mode =
-		    BooleanValue::Get(Value(secret_map["s3_url_compatibility_mode"]).DefaultCastAs(LogicalType::BOOLEAN));
+		    BooleanValue::Get(Value(secret_map.at("s3_url_compatibility_mode")).DefaultCastAs(LogicalType::BOOLEAN));
 
 		return params;
 	}

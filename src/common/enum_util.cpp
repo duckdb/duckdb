@@ -93,6 +93,7 @@
 #include "duckdb/parser/parsed_data/alter_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/load_info.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
@@ -4929,6 +4930,34 @@ SampleMethod EnumUtil::FromString<SampleMethod>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "Reservoir")) {
 		return SampleMethod::RESERVOIR_SAMPLE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<SecretPersistMode>(SecretPersistMode value) {
+	switch(value) {
+	case SecretPersistMode::DEFAULT:
+		return "DEFAULT";
+	case SecretPersistMode::TEMPORARY:
+		return "TEMPORARY";
+	case SecretPersistMode::PERMANENT:
+		return "PERMANENT";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+SecretPersistMode EnumUtil::FromString<SecretPersistMode>(const char *value) {
+	if (StringUtil::Equals(value, "DEFAULT")) {
+		return SecretPersistMode::DEFAULT;
+	}
+	if (StringUtil::Equals(value, "TEMPORARY")) {
+		return SecretPersistMode::TEMPORARY;
+	}
+	if (StringUtil::Equals(value, "PERMANENT")) {
+		return SecretPersistMode::PERMANENT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
