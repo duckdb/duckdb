@@ -5,9 +5,8 @@ namespace duckdb {
 SourceResultType PhysicalPragma::GetData(ExecutionContext &context, DataChunk &chunk,
                                          OperatorSourceInput &input) const {
 	auto &client = context.client;
-	throw InternalException("FIXME: PhysicalPragma");
-//	FunctionParameters parameters {info.parameters, info.named_parameters};
-//	function.function(client, parameters);
+	FunctionParameters parameters { info->parameters, info->named_parameters};
+	info->function.function(client, parameters);
 
 	return SourceResultType::FINISHED;
 }

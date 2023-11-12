@@ -163,24 +163,23 @@ idx_t FunctionBinder::BindFunction(const string &name, TableFunctionSet &functio
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
-idx_t FunctionBinder::BindFunction(const string &name, PragmaFunctionSet &functions, PragmaInfo &info, string &error) {
-		throw InternalException("FIXME: BindFunction PragmaInfo");
-//	vector<LogicalType> types;
-//	for (auto &value : info.parameters) {
-//		types.push_back(value.type());
-//	}
-//	idx_t entry = BindFunctionFromArguments(name, functions, types, error);
-//	if (entry == DConstants::INVALID_INDEX) {
-//		throw BinderException(error);
-//	}
-//	auto candidate_function = functions.GetFunctionByOffset(entry);
-//	// cast the input parameters
-//	for (idx_t i = 0; i < info.parameters.size(); i++) {
-//		auto target_type =
-//		    i < candidate_function.arguments.size() ? candidate_function.arguments[i] : candidate_function.varargs;
-//		info.parameters[i] = info.parameters[i].CastAs(context, target_type);
-//	}
-//	return entry;
+idx_t FunctionBinder::BindFunction(const string &name, PragmaFunctionSet &functions, vector<Value> &parameters, string &error) {
+	vector<LogicalType> types;
+	for (auto &value : parameters) {
+		types.push_back(value.type());
+	}
+	idx_t entry = BindFunctionFromArguments(name, functions, types, error);
+	if (entry == DConstants::INVALID_INDEX) {
+		throw BinderException(error);
+	}
+	auto candidate_function = functions.GetFunctionByOffset(entry);
+	// cast the input parameters
+	for (idx_t i = 0; i < parameters.size(); i++) {
+		auto target_type =
+		    i < candidate_function.arguments.size() ? candidate_function.arguments[i] : candidate_function.varargs;
+		parameters[i] = parameters[i].CastAs(context, target_type);
+	}
+	return entry;
 }
 
 vector<LogicalType> FunctionBinder::GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>> &arguments) {
