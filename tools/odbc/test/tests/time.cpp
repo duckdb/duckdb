@@ -408,6 +408,3 @@ TEST_CASE("time_SQLBindCol", "[odbc][time]") {
 	ret = SQLFreeHandle(SQL_HANDLE_ENV, env);
 	ODBC_CHECK(ret, "SQLFreeHandle(env)");
 }
-
-
-
