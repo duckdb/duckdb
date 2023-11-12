@@ -500,6 +500,10 @@ bool FileHandle::CanSeek() {
 	return file_system.CanSeek();
 }
 
+bool FileHandle::IsPipe() {
+	return file_system.IsPipe(path);
+}
+
 string FileHandle::ReadLine() {
 	string result;
 	char buffer[1];
