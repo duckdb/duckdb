@@ -89,7 +89,11 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
                                           ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0);
 
 static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
-                              const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask) {
+                              const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
+                              int64_t parent_offset) {
+	if (array.offset) {
+		(void)array_state;
+	}
 	auto size_type = arrow_type.GetSizeType();
 	idx_t list_size = 0;
 	auto &scan_state = array_state.state;
@@ -114,7 +118,7 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanS
 		}
 		list_size = start_offset + cur_offset;
 	} else if (size_type == ArrowVariableSizeType::NORMAL) {
-		auto offsets = ArrowBufferData<uint32_t>(array, 1) + array.offset + scan_state.chunk_offset;
+		auto offsets = ArrowBufferData<uint32_t>(array, 1) + array.offset + parent_offset + scan_state.chunk_offset;
 		if (nested_offset != -1) {
 			offsets = ArrowBufferData<uint32_t>(array, 1) + nested_offset;
 		}
@@ -128,7 +132,7 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanS
 		}
 		list_size = offsets[size];
 	} else {
-		auto offsets = ArrowBufferData<uint64_t>(array, 1) + array.offset + scan_state.chunk_offset;
+		auto offsets = ArrowBufferData<uint64_t>(array, 1) + array.offset + parent_offset + scan_state.chunk_offset;
 		if (nested_offset != -1) {
 			offsets = ArrowBufferData<uint64_t>(array, 1) + nested_offset;
 		}
@@ -361,6 +365,9 @@ static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, A
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
                                 const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
                                 uint64_t parent_offset) {
+	if (array.offset) {
+		(void)array_state;
+	}
 	auto &scan_state = array_state.state;
 	D_ASSERT(!array.dictionary);
 	switch (vector.GetType().id()) {
@@ -417,13 +424,13 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		auto size_type = arrow_type.GetSizeType();
 		auto cdata = ArrowBufferData<char>(array, 2);
 		if (size_type == ArrowVariableSizeType::SUPER_SIZE) {
-			auto offsets = ArrowBufferData<uint64_t>(array, 1) + array.offset + scan_state.chunk_offset;
+			auto offsets = ArrowBufferData<uint64_t>(array, 1) + array.offset + parent_offset + scan_state.chunk_offset;
 			if (nested_offset != -1) {
 				offsets = ArrowBufferData<uint64_t>(array, 1) + array.offset + nested_offset;
 			}
 			SetVectorString(vector, size, cdata, offsets);
 		} else {
-			auto offsets = ArrowBufferData<uint32_t>(array, 1) + array.offset + scan_state.chunk_offset;
+			auto offsets = ArrowBufferData<uint32_t>(array, 1) + array.offset + parent_offset + scan_state.chunk_offset;
 			if (nested_offset != -1) {
 				offsets = ArrowBufferData<uint32_t>(array, 1) + array.offset + nested_offset;
 			}
@@ -618,11 +625,11 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		ArrowToDuckDBList(vector, array, array_state, size, arrow_type, nested_offset, parent_mask);
+		ArrowToDuckDBList(vector, array, array_state, size, arrow_type, nested_offset, parent_mask, parent_offset);
 		break;
 	}
 	case LogicalTypeId::MAP: {
-		ArrowToDuckDBList(vector, array, array_state, size, arrow_type, nested_offset, parent_mask);
+		ArrowToDuckDBList(vector, array, array_state, size, arrow_type, nested_offset, parent_mask, parent_offset);
 		ArrowToDuckDBMapVerify(vector, size);
 		break;
 	}
