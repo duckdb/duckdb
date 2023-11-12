@@ -104,7 +104,7 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanS
 	if (size_type == ArrowVariableSizeType::FIXED_SIZE) {
 		auto fixed_size = arrow_type.FixedSize();
 		//! Have to check validity mask before setting this up
-		idx_t offset = (scan_state.chunk_offset + array.offset) * fixed_size;
+		idx_t offset = (scan_state.chunk_offset + parent_offset + array.offset) * fixed_size;
 		if (nested_offset != -1) {
 			offset = fixed_size * nested_offset;
 		}
