@@ -46,7 +46,7 @@ TEST_CASE("timestamp_SQLGetData", "[odbc][time]") {
 
 	ret = SQLColAttribute(stmt, 1, 2, &target_value, buffer_length, &string_length, &numeric_attribute);
 	ODBC_CHECK(ret, "SQLColAttributeW(stmt)");
-	REQUIRE(numeric_attribute == 93);
+	REQUIRE(numeric_attribute == SQL_TYPE_TIMESTAMP);
 
 	ret = SQLFetch(stmt);
 	ODBC_CHECK(ret, "SQLFetch");
@@ -187,7 +187,7 @@ TEST_CASE("date_SQLGetData", "[odbc][time]") {
 
 	ret = SQLColAttribute(stmt, 1, 2, &target_value, buffer_length, &string_length, &numeric_attribute);
 	ODBC_CHECK(ret, "SQLColAttributeW(stmt)");
-	REQUIRE(numeric_attribute == 91);
+	REQUIRE(numeric_attribute == SQL_TYPE_DATE);
 
 	ret = SQLFetch(stmt);
 	ODBC_CHECK(ret, "SQLFetch");
@@ -320,7 +320,7 @@ TEST_CASE("time_SQLGetData", "[odbc][time]") {
 
 	ret = SQLColAttribute(stmt, 1, 2, &target_value, buffer_length, &string_length, &numeric_attribute);
 	ODBC_CHECK(ret, "SQLColAttributeW(stmt)");
-	REQUIRE(numeric_attribute == 92);
+	REQUIRE(numeric_attribute == SQL_TYPE_TIME);
 
 	ret = SQLFetch(stmt);
 	ODBC_CHECK(ret, "SQLFetch");
