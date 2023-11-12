@@ -298,9 +298,12 @@ struct Log10Fun {
 };
 
 struct LogFun {
-	using ALIAS = Log10Fun;
-
 	static constexpr const char *Name = "log";
+	static constexpr const char *Parameters = "b, x";
+	static constexpr const char *Description = "Computes the logarithm of x to base b. b may be omitted, in which case the default 10";
+	static constexpr const char *Example = "log(2, 64)";
+
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct NextAfterFun {
