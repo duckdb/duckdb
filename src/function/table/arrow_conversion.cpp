@@ -179,13 +179,13 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanS
 }
 
 static void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
-                              const ArrowType &arrow_type, int64_t nested_offset) {
+                              const ArrowType &arrow_type, int64_t nested_offset, int64_t parent_offset) {
 	auto size_type = arrow_type.GetSizeType();
 	SetValidityMask(vector, array, scan_state, size, nested_offset);
 	if (size_type == ArrowVariableSizeType::FIXED_SIZE) {
 		auto fixed_size = arrow_type.FixedSize();
 		//! Have to check validity mask before setting this up
-		idx_t offset = (scan_state.chunk_offset + array.offset) * fixed_size;
+		idx_t offset = (scan_state.chunk_offset + parent_offset + array.offset) * fixed_size;
 		if (nested_offset != -1) {
 			offset = fixed_size * nested_offset;
 		}
@@ -200,7 +200,7 @@ static void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanLocalS
 			offset += blob_len;
 		}
 	} else if (size_type == ArrowVariableSizeType::NORMAL) {
-		auto offsets = ArrowBufferData<uint32_t>(array, 1) + array.offset + scan_state.chunk_offset;
+		auto offsets = ArrowBufferData<uint32_t>(array, 1) + array.offset + parent_offset + scan_state.chunk_offset;
 		if (nested_offset != -1) {
 			offsets = ArrowBufferData<uint32_t>(array, 1) + array.offset + nested_offset;
 		}
@@ -218,7 +218,7 @@ static void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanLocalS
 		if (ArrowBufferData<uint64_t>(array, 1)[array.length] > NumericLimits<uint32_t>::Maximum()) { // LCOV_EXCL_START
 			throw ConversionException("DuckDB does not support Blobs over 4GB");
 		} // LCOV_EXCL_STOP
-		auto offsets = ArrowBufferData<uint64_t>(array, 1) + array.offset + scan_state.chunk_offset;
+		auto offsets = ArrowBufferData<uint64_t>(array, 1) + array.offset + parent_offset + scan_state.chunk_offset;
 		if (nested_offset != -1) {
 			offsets = ArrowBufferData<uint64_t>(array, 1) + array.offset + nested_offset;
 		}
@@ -621,7 +621,7 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		break;
 	}
 	case LogicalTypeId::BLOB: {
-		ArrowToDuckDBBlob(vector, array, scan_state, size, arrow_type, nested_offset);
+		ArrowToDuckDBBlob(vector, array, scan_state, size, arrow_type, nested_offset, parent_offset);
 		break;
 	}
 	case LogicalTypeId::LIST: {
