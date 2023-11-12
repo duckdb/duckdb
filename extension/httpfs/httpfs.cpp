@@ -34,6 +34,8 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	uint64_t retry_wait_ms = DEFAULT_RETRY_WAIT_MS;
 	float retry_backoff = DEFAULT_RETRY_BACKOFF;
 	bool force_download = DEFAULT_FORCE_DOWNLOAD;
+	bool keep_alive = DEFAULT_KEEP_ALIVE;
+
 	Value value;
 	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", value)) {
 		timeout = value.GetValue<uint64_t>();
@@ -50,8 +52,11 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	if (FileOpener::TryGetCurrentSetting(opener, "http_retry_backoff", value)) {
 		retry_backoff = value.GetValue<float>();
 	}
+	if (FileOpener::TryGetCurrentSetting(opener, "http_keep_alive", value)) {
+		keep_alive = value.GetValue<bool>();
+	}
 
-	return {timeout, retries, retry_wait_ms, retry_backoff, force_download};
+	return {timeout, retries, retry_wait_ms, retry_backoff, force_download, keep_alive};
 }
 
 void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_port_out) {
@@ -181,7 +186,7 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPP
                                                                      const char *proto_host_port) {
 	auto client = make_uniq<duckdb_httplib_openssl::Client>(proto_host_port);
 	client->set_follow_location(true);
-	client->set_keep_alive(true);
+	client->set_keep_alive(http_params.keep_alive);
 	client->enable_server_certificate_verification(false);
 	client->set_write_timeout(http_params.timeout);
 	client->set_read_timeout(http_params.timeout);
