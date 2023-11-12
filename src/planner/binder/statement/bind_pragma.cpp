@@ -15,21 +15,20 @@ unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorConte
 
 	// resolve the parameters
 	ConstantBinder pragma_binder(*this, context, "PRAGMA value");
-	for(auto &param : info.parameters) {
+	for (auto &param : info.parameters) {
 		auto bound_value = pragma_binder.Bind(param);
 		auto value = ExpressionExecutor::EvaluateScalar(context, *bound_value, true);
 		params.push_back(std::move(value));
 	}
 
-	for(auto &entry : info.named_parameters) {
+	for (auto &entry : info.named_parameters) {
 		auto bound_value = pragma_binder.Bind(entry.second);
 		auto value = ExpressionExecutor::EvaluateScalar(context, *bound_value, true);
 		named_parameters.insert(make_pair(entry.first, std::move(value)));
 	}
 
 	// bind the pragma function
-	auto &entry =
-	    Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, info.name);
+	auto &entry = Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, info.name);
 	FunctionBinder function_binder(context);
 	string error;
 	idx_t bound_idx = function_binder.BindFunction(entry.name, entry.functions, params, error);
@@ -38,10 +37,8 @@ unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorConte
 	}
 	auto bound_function = entry.functions.GetFunctionByOffset(bound_idx);
 	// bind and check named params
-	BindNamedParameters(bound_function.named_parameters, named_parameters, error_context,
-	                    bound_function.name);
+	BindNamedParameters(bound_function.named_parameters, named_parameters, error_context, bound_function.name);
 	return make_uniq<BoundPragmaInfo>(std::move(bound_function), std::move(params), std::move(named_parameters));
-
 }
 
 BoundStatement Binder::Bind(PragmaStatement &stmt) {

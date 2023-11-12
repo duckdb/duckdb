@@ -4,6 +4,7 @@ import subprocess
 import sys
 from typing import List, NamedTuple, Union
 
+
 def pytest_addoption(parser):
     parser.addoption(
         "--shell-binary", action="store", default=None, help="Provide the shell binary to use for the tests"
@@ -21,6 +22,7 @@ def pytest_collection_modifyitems(config, items):
     skipped_items = items[:start_offset]
     for item in skipped_items:
         item.add_marker(skipped)
+
 
 class TestResult:
     def __init__(self, stdout, stderr, status_code):
@@ -115,7 +117,7 @@ class ShellTest:
         output_pipe = self.get_output_pipe()
 
         my_env = os.environ.copy()
-        for key,val in self.environment.items():
+        for key, val in self.environment.items():
             my_env[key] = val
 
         res = subprocess.run(command, input=input_data, stdout=output_pipe, stderr=subprocess.PIPE, env=my_env)

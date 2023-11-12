@@ -1,6 +1,7 @@
 #include "shell_extension.hpp"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/main/config.hpp"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -17,9 +18,18 @@ void GetEnvFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	});
 }
 
+unique_ptr<FunctionData> GetEnvBind(ClientContext &context, ScalarFunction &bound_function,
+                                    vector<unique_ptr<Expression>> &arguments) {
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.options.enable_external_access) {
+		throw PermissionException("getenv is disabled through configuration");
+	}
+	return nullptr;
+}
+
 void ShellExtension::Load(DuckDB &db) {
-	ExtensionUtil::RegisterFunction(
-	    *db.instance, ScalarFunction("getenv", {LogicalType::VARCHAR}, LogicalType::VARCHAR, GetEnvFunction));
+	ExtensionUtil::RegisterFunction(*db.instance, ScalarFunction("getenv", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                                             GetEnvFunction, GetEnvBind));
 }
 
 std::string ShellExtension::Name() {

@@ -62,7 +62,8 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGPragm
 		if (sqlite_compat_pragmas.find(info.name) != sqlite_compat_pragmas.end()) {
 			break;
 		}
-		auto set_statement = make_uniq<SetVariableStatement>(info.name, std::move(info.parameters[0]), SetScope::AUTOMATIC);
+		auto set_statement =
+		    make_uniq<SetVariableStatement>(info.name, std::move(info.parameters[0]), SetScope::AUTOMATIC);
 		return std::move(set_statement);
 	}
 	case duckdb_libpgquery::PG_PRAGMA_TYPE_CALL:

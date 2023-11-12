@@ -36,10 +36,10 @@ public:
 	unique_ptr<PragmaInfo> Copy() const {
 		auto result = make_uniq<PragmaInfo>();
 		result->name = name;
-		for(auto &param : parameters) {
+		for (auto &param : parameters) {
 			result->parameters.push_back(param->Copy());
 		}
-		for(auto &entry : named_parameters) {
+		for (auto &entry : named_parameters) {
 			result->named_parameters.insert(make_pair(entry.first, entry.second->Copy()));
 		}
 		return result;

@@ -163,7 +163,8 @@ idx_t FunctionBinder::BindFunction(const string &name, TableFunctionSet &functio
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
-idx_t FunctionBinder::BindFunction(const string &name, PragmaFunctionSet &functions, vector<Value> &parameters, string &error) {
+idx_t FunctionBinder::BindFunction(const string &name, PragmaFunctionSet &functions, vector<Value> &parameters,
+                                   string &error) {
 	vector<LogicalType> types;
 	for (auto &value : parameters) {
 		types.push_back(value.type());

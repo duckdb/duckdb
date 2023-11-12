@@ -74,7 +74,7 @@ bool PragmaHandler::HandlePragma(SQLStatement &statement, string &resulting_quer
 	auto binder = Binder::CreateBinder(context);
 	auto bound_info = binder->BindPragma(*info, error_context);
 	if (bound_info->function.query) {
-		FunctionParameters parameters { bound_info->parameters, bound_info->named_parameters };
+		FunctionParameters parameters {bound_info->parameters, bound_info->named_parameters};
 		resulting_query = bound_info->function.query(context, parameters);
 		return true;
 	}
