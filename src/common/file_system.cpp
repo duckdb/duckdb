@@ -344,7 +344,7 @@ bool FileSystem::FileExists(const string &filename) {
 }
 
 bool FileSystem::IsPipe(const string &filename) {
-	throw NotImplementedException("%s: IsPipe is not implemented!", GetName());
+	return false;
 }
 
 void FileSystem::RemoveFile(const string &filename) {
