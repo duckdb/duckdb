@@ -29,6 +29,13 @@ set ignore_error_messages
 statement ok
 SET memory_limit='2.2GB';
 
+statement ok
+set http_timeout=120000;
+
+# More retries (longest wait will be 25600ms)
+statement ok
+set http_retries=6;
+
 # disable tmp dir to force OOM if we exceed our set limit
 statement ok
 PRAGMA temp_directory=''
