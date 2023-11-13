@@ -16,11 +16,6 @@
 
 namespace duckdb {
 
-AggregateFunction GetDiscreteQuantileAggregateFunction(const LogicalType &type);
-AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &type);
-AggregateFunction GetContinuousQuantileAggregateFunction(const LogicalType &type);
-AggregateFunction GetContinuousQuantileListAggregateFunction(const LogicalType &type);
-
 // Hugeint arithmetic
 static hugeint_t MultiplyByDouble(const hugeint_t &h, const double &d) {
 	D_ASSERT(d >= 0 && d <= 1);
@@ -447,6 +442,8 @@ inline Value QuantileAbs(const Value &v) {
 	}
 }
 
+void BindQuantileInner(AggregateFunction &function, const LogicalType &type, QuantileSerializationType quantile_type);
+
 struct QuantileBindData : public FunctionData {
 	QuantileBindData() {
 	}
@@ -512,38 +509,14 @@ struct QuantileBindData : public FunctionData {
 		deserializer.ReadProperty(100, "quantiles", raw);
 		deserializer.ReadProperty(101, "order", result->order);
 		deserializer.ReadProperty(102, "desc", result->desc);
-		int deserialization_kind;
-		deserializer.ReadPropertyWithDefault(103, "flag", deserialization_kind, 0);
+		QuantileSerializationType deserialization_type;
+		deserializer.ReadPropertyWithDefault(103, "type", deserialization_type, QuantileSerializationType::NON_DECIMAL);
 
-		if (deserialization_kind) {
-			LogicalType type;
-			deserializer.ReadProperty(104, "logical_type", type);
+		if (deserialization_type != QuantileSerializationType::NON_DECIMAL) {
+			LogicalType arg_type;
+			deserializer.ReadProperty(104, "logical_type", arg_type);
 
-			switch (deserialization_kind) {
-			case 1:
-				function = GetDiscreteQuantileAggregateFunction(type);
-				function.name = "quantile_disc";
-				function.serialize = QuantileBindData::SerializeDecimalDiscrete;
-				break;
-			case 2:
-				function = GetDiscreteQuantileListAggregateFunction(type);
-				function.name = "quantile_disc";
-				function.serialize = QuantileBindData::SerializeDecimalDiscreteList;
-				break;
-			case 3:
-				function = GetContinuousQuantileAggregateFunction(type);
-				function.name = "quantile_cont";
-				function.serialize = QuantileBindData::SerializeDecimalContinuous;
-				break;
-			case 4:
-				function = GetContinuousQuantileListAggregateFunction(type);
-				function.name = "quantile_cont";
-				function.serialize = QuantileBindData::SerializeDecimalContinuousList;
-				break;
-			}
-
-			function.deserialize = QuantileBindData::Deserialize;
-			function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+			BindQuantileInner(function, arg_type, deserialization_type);
 		}
 
 		for (const auto &r : raw) {
@@ -1348,47 +1321,60 @@ unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction 
 	return make_uniq<QuantileBindData>(quantiles);
 }
 
+void BindQuantileInner(AggregateFunction &function, const LogicalType &type, QuantileSerializationType quantile_type) {
+	switch (quantile_type) {
+	case QuantileSerializationType::DECIMAL_DISCRETE:
+		function = GetDiscreteQuantileAggregateFunction(type);
+		function.serialize = QuantileBindData::SerializeDecimalDiscrete;
+		function.name = "quantile_disc";
+		break;
+	case QuantileSerializationType::DECIMAL_DISCRETE_LIST:
+		function = GetDiscreteQuantileListAggregateFunction(type);
+		function.serialize = QuantileBindData::SerializeDecimalDiscreteList;
+		function.name = "quantile_disc";
+		break;
+	case QuantileSerializationType::DECIMAL_CONTINUOUS:
+		function = GetContinuousQuantileAggregateFunction(type);
+		function.serialize = QuantileBindData::SerializeDecimalContinuous;
+		function.name = "quantile_cont";
+		break;
+	case QuantileSerializationType::DECIMAL_CONTINUOUS_LIST:
+		function = GetContinuousQuantileListAggregateFunction(type);
+		function.serialize = QuantileBindData::SerializeDecimalContinuousList;
+		function.name = "quantile_cont";
+		break;
+	case QuantileSerializationType::NON_DECIMAL:
+		throw SerializationException("NON_DECIMAL is not a valid quantile_type for BindQuantileInner");
+	}
+	function.deserialize = QuantileBindData::Deserialize;
+	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+}
+
 unique_ptr<FunctionData> BindDiscreteQuantileDecimal(ClientContext &context, AggregateFunction &function,
                                                      vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = BindQuantile(context, function, arguments);
-	function = GetDiscreteQuantileAggregateFunction(arguments[0]->return_type);
-	function.name = "quantile_disc";
-	function.serialize = QuantileBindData::SerializeDecimalDiscrete;
-	function.deserialize = QuantileBindData::Deserialize;
-	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+	BindQuantileInner(function, arguments[0]->return_type, QuantileSerializationType::DECIMAL_DISCRETE);
 	return bind_data;
 }
 
 unique_ptr<FunctionData> BindDiscreteQuantileDecimalList(ClientContext &context, AggregateFunction &function,
                                                          vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = BindQuantile(context, function, arguments);
-	function = GetDiscreteQuantileListAggregateFunction(arguments[0]->return_type);
-	function.name = "quantile_disc";
-	function.serialize = QuantileBindData::SerializeDecimalDiscreteList;
-	function.deserialize = QuantileBindData::Deserialize;
-	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+	BindQuantileInner(function, arguments[0]->return_type, QuantileSerializationType::DECIMAL_DISCRETE_LIST);
 	return bind_data;
 }
 
 unique_ptr<FunctionData> BindContinuousQuantileDecimal(ClientContext &context, AggregateFunction &function,
                                                        vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = BindQuantile(context, function, arguments);
-	function = GetContinuousQuantileAggregateFunction(arguments[0]->return_type);
-	function.name = "quantile_cont";
-	function.serialize = QuantileBindData::SerializeDecimalContinuous;
-	function.deserialize = QuantileBindData::Deserialize;
-	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+	BindQuantileInner(function, arguments[0]->return_type, QuantileSerializationType::DECIMAL_CONTINUOUS);
 	return bind_data;
 }
 
 unique_ptr<FunctionData> BindContinuousQuantileDecimalList(ClientContext &context, AggregateFunction &function,
                                                            vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = BindQuantile(context, function, arguments);
-	function = GetContinuousQuantileListAggregateFunction(arguments[0]->return_type);
-	function.name = "quantile_cont";
-	function.serialize = QuantileBindData::SerializeDecimalContinuousList;
-	function.deserialize = QuantileBindData::Deserialize;
-	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+	BindQuantileInner(function, arguments[0]->return_type, QuantileSerializationType::DECIMAL_CONTINUOUS_LIST);
 	return bind_data;
 }
 static bool CanInterpolate(const LogicalType &type) {
