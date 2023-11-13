@@ -1,6 +1,7 @@
 import duckdb
 import pytest
 import datetime
+import pytz
 
 pa = pytest.importorskip("pyarrow")
 
@@ -15,6 +16,10 @@ def pa_time32():
 
 def pa_time64():
     return pa.time64
+
+
+def pa_timestamp():
+    return pa.timestamp
 
 
 class TestArrowOffsets(object):
@@ -77,6 +82,39 @@ class TestArrowOffsets(object):
         arrow_table = pa.Table.from_pydict(
             {"col1": col1, "col2": col2},
             schema=pa.schema([("col1", constructor(unit)), ("col2", pa.struct({"a": constructor(unit)}))]),
+        )
+
+        res = duckdb_cursor.sql(
+            f"""
+            SELECT
+                col1,
+                col2.a
+            FROM arrow_table offset {size-1}
+        """
+        ).fetchall()
+        assert res == [(expected, expected)]
+
+    @pytest.mark.parametrize(
+        ["constructor", "unit", "expected"],
+        [
+            (pa_timestamp(), 'ms', datetime.datetime(1970, 1, 1, 0, 2, 11, 72000, tzinfo=pytz.utc)),
+            (pa_timestamp(), 's', datetime.datetime(1970, 1, 2, 12, 24, 32, 0, tzinfo=pytz.utc)),
+            (pa_timestamp(), 'ns', datetime.datetime(1970, 1, 1, 0, 0, 0, 131, tzinfo=pytz.utc)),
+            (pa_timestamp(), 'us', datetime.datetime(1970, 1, 1, 0, 0, 0, 131072, tzinfo=pytz.utc)),
+        ],
+    )
+    def test_struct_of_timestamp_tz(self, duckdb_cursor, constructor, unit, expected):
+        size = MAGIC_ARRAY_SIZE
+
+        duckdb_cursor.execute("set timezone='UTC'")
+        col1 = [i for i in range(0, size)]
+        # "a" in the struct matches the value for col1
+        col2 = [{"a": i} for i in col1]
+        arrow_table = pa.Table.from_pydict(
+            {"col1": col1, "col2": col2},
+            schema=pa.schema(
+                [("col1", constructor(unit, 'UTC')), ("col2", pa.struct({"a": constructor(unit, 'UTC')}))]
+            ),
         )
 
         res = duckdb_cursor.sql(

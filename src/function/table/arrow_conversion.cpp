@@ -301,10 +301,10 @@ static void TimeConversion(Vector &vector, ArrowArray &array, ArrowScanLocalStat
 }
 
 static void TimestampTZConversion(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
-                                  int64_t nested_offset, idx_t size, int64_t conversion) {
+                                  int64_t nested_offset, int64_t parent_offset, idx_t size, int64_t conversion) {
 	auto tgt_ptr = FlatVector::GetData<timestamp_t>(vector);
 	auto &validity_mask = FlatVector::Validity(vector);
-	auto src_ptr = ArrowBufferData<int64_t>(array, 1) + scan_state.chunk_offset + array.offset;
+	auto src_ptr = ArrowBufferData<int64_t>(array, 1) + scan_state.chunk_offset + parent_offset + array.offset;
 	if (nested_offset != -1) {
 		src_ptr = ArrowBufferData<int64_t>(array, 1) + nested_offset + array.offset;
 	}
@@ -498,11 +498,11 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		auto precision = arrow_type.GetDateTimeType();
 		switch (precision) {
 		case ArrowDateTimeType::SECONDS: {
-			TimestampTZConversion(vector, array, scan_state, nested_offset, size, 1000000);
+			TimestampTZConversion(vector, array, scan_state, nested_offset, parent_offset, size, 1000000);
 			break;
 		}
 		case ArrowDateTimeType::MILLISECONDS: {
-			TimestampTZConversion(vector, array, scan_state, nested_offset, size, 1000);
+			TimestampTZConversion(vector, array, scan_state, nested_offset, parent_offset, size, 1000);
 			break;
 		}
 		case ArrowDateTimeType::MICROSECONDS: {
@@ -511,7 +511,7 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		}
 		case ArrowDateTimeType::NANOSECONDS: {
 			auto tgt_ptr = FlatVector::GetData<timestamp_t>(vector);
-			auto src_ptr = ArrowBufferData<int64_t>(array, 1) + scan_state.chunk_offset + array.offset;
+			auto src_ptr = ArrowBufferData<int64_t>(array, 1) + scan_state.chunk_offset + parent_offset + array.offset;
 			if (nested_offset != -1) {
 				src_ptr = ArrowBufferData<int64_t>(array, 1) + nested_offset + array.offset;
 			}
