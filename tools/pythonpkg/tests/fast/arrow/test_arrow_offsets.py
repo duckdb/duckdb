@@ -127,6 +127,28 @@ class TestArrowOffsets(object):
         ).fetchall()
         assert res == [(expected, expected)]
 
+    def test_struct_of_list_of_enum(self, duckdb_cursor):
+        enum_type = pa.dictionary(pa.int64(), pa.utf8())
+
+        tuples = ['red' for i in range(MAGIC_ARRAY_SIZE)]
+        tuples.append('green')
+
+        struct_tuples = [{"a": x} for x in tuples]
+
+        arrow_table = pa.Table.from_pydict(
+            {'col1': pa.array(tuples, enum_type), 'col2': pa.array(struct_tuples, pa.struct({"a": enum_type}))},
+            schema=pa.schema([("col1", enum_type), ("col2", pa.struct({"a": enum_type}))]),
+        )
+        res = duckdb_cursor.sql(
+            f"""
+            SELECT
+                col1,
+                col2.a
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE}
+        """
+        ).fetchall()
+        assert res == [('green', 'green')]
+
     def test_struct_of_blobs(self, duckdb_cursor):
         col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
         # "a" in the struct matches the value for col1
