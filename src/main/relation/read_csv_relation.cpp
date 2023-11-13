@@ -64,9 +64,12 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 	}
 
 	// After sniffing we can consider these set, so they are exported as named parameters
-	csv_options.has_delimiter = true;
-	csv_options.has_quote = true;
-	csv_options.has_escape = true;
+	csv_options.dialect_options.state_machine_options.escape.Set(
+	    csv_options.dialect_options.state_machine_options.escape.GetValue());
+	csv_options.dialect_options.state_machine_options.delimiter.Set(
+	    csv_options.dialect_options.state_machine_options.delimiter.GetValue());
+	csv_options.dialect_options.state_machine_options.quote.Set(
+	    csv_options.dialect_options.state_machine_options.quote.GetValue());
 
 	//! Capture the options potentially set/altered by the auto detection phase
 	csv_options.ToNamedParameters(options);

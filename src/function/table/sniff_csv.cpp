@@ -118,21 +118,21 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	output.SetCardinality(1);
 
 	// 1. Delimiter
-	str_opt = sniffer_options.dialect_options.state_machine_options.delimiter;
+	str_opt = sniffer_options.dialect_options.state_machine_options.delimiter.GetValue();
 	output.SetValue(0, 0, str_opt);
 	// 2. Quote
-	str_opt = sniffer_options.dialect_options.state_machine_options.quote;
+	str_opt = sniffer_options.dialect_options.state_machine_options.quote.GetValue();
 	output.SetValue(1, 0, str_opt);
 	// 3. Escape
-	str_opt = sniffer_options.dialect_options.state_machine_options.escape;
+	str_opt = sniffer_options.dialect_options.state_machine_options.escape.GetValue();
 	output.SetValue(2, 0, str_opt);
 	// 4. NewLine Delimiter
-	auto new_line_identifier = NewLineIdentifierToString(sniffer_options.dialect_options.new_line);
+	auto new_line_identifier = NewLineIdentifierToString(sniffer_options.dialect_options.new_line.GetValue());
 	output.SetValue(3, 0, new_line_identifier);
 	// 5. Skip Rows
-	output.SetValue(4, 0, Value::UINTEGER(sniffer_options.dialect_options.skip_rows));
+	output.SetValue(4, 0, Value::UINTEGER(sniffer_options.dialect_options.skip_rows.GetValue()));
 	// 6. Has Header
-	output.SetValue(5, 0, Value::BOOLEAN(sniffer_options.dialect_options.header));
+	output.SetValue(5, 0, Value::BOOLEAN(sniffer_options.dialect_options.header.GetValue()));
 	// 7. List<Struct<Column-Name:Types>> {'col1': 'INTEGER', 'col2': 'VARCHAR'}
 	std::ostringstream columns;
 	columns << "{";
@@ -148,7 +148,8 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	if (sniffer_options.dialect_options.has_format[LogicalType::DATE] &&
 	    sniffer_options.dialect_options.date_format.find(LogicalType::DATE) !=
 	        sniffer_options.dialect_options.date_format.end()) {
-		output.SetValue(7, 0, sniffer_options.dialect_options.date_format[LogicalType::DATE].format_specifier);
+		output.SetValue(7, 0,
+		                sniffer_options.dialect_options.date_format[LogicalType::DATE].GetValue().format_specifier);
 	} else {
 		output.SetValue(7, 0, Value());
 	}
@@ -156,7 +157,8 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	if (sniffer_options.dialect_options.has_format[LogicalType::TIMESTAMP] &&
 	    sniffer_options.dialect_options.date_format.find(LogicalType::TIMESTAMP) !=
 	        sniffer_options.dialect_options.date_format.end()) {
-		output.SetValue(8, 0, sniffer_options.dialect_options.date_format[LogicalType::TIMESTAMP].format_specifier);
+		output.SetValue(
+		    8, 0, sniffer_options.dialect_options.date_format[LogicalType::TIMESTAMP].GetValue().format_specifier);
 	} else {
 		output.SetValue(8, 0, Value());
 	}
@@ -174,37 +176,37 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	// Base, Path and auto_detect=false
 	csv_read << "FROM read_csv('" << data.path << "'" << separator << "auto_detect=false" << separator;
 	// 10.1. Delimiter
-	if (!sniffer_options.has_delimiter) {
+	if (!sniffer_options.dialect_options.state_machine_options.delimiter.IsSetByUser()) {
 		csv_read << "delim="
-		         << "'" << FormatOptions(sniffer_options.dialect_options.state_machine_options.delimiter) << "'"
-		         << separator;
+		         << "'" << FormatOptions(sniffer_options.dialect_options.state_machine_options.delimiter.GetValue())
+		         << "'" << separator;
 	}
 	// 11.2. Quote
-	if (!sniffer_options.has_quote) {
+	if (!sniffer_options.dialect_options.header.IsSetByUser()) {
 		csv_read << "quote="
-		         << "'" << FormatOptions(sniffer_options.dialect_options.state_machine_options.quote) << "'"
+		         << "'" << FormatOptions(sniffer_options.dialect_options.state_machine_options.quote.GetValue()) << "'"
 		         << separator;
 	}
 	// 11.3. Escape
-	if (!sniffer_options.has_escape) {
+	if (!sniffer_options.dialect_options.state_machine_options.escape.IsSetByUser()) {
 		csv_read << "escape="
-		         << "'" << FormatOptions(sniffer_options.dialect_options.state_machine_options.escape) << "'"
+		         << "'" << FormatOptions(sniffer_options.dialect_options.state_machine_options.escape.GetValue()) << "'"
 		         << separator;
 	}
 	// 11.4. NewLine Delimiter
-	if (!sniffer_options.has_newline) {
+	if (!sniffer_options.dialect_options.new_line.IsSetByUser()) {
 		if (new_line_identifier != "mix") {
 			csv_read << "new_line="
 			         << "'" << new_line_identifier << "'" << separator;
 		}
 	}
 	// 11.5. Skip Rows
-	if (!sniffer_options.skip_rows_set) {
-		csv_read << "skip=" << sniffer_options.dialect_options.skip_rows << separator;
+	if (!sniffer_options.dialect_options.skip_rows.IsSetByUser()) {
+		csv_read << "skip=" << sniffer_options.dialect_options.skip_rows.GetValue() << separator;
 	}
 	// 11.6. Has Header
-	if (!sniffer_options.has_header) {
-		csv_read << "header=" << sniffer_options.dialect_options.header << separator;
+	if (!sniffer_options.dialect_options.header.IsSetByUser()) {
+		csv_read << "header=" << sniffer_options.dialect_options.header.GetValue() << separator;
 	}
 	// 11.7. column={'col1': 'INTEGER', 'col2': 'VARCHAR'}
 	csv_read << "columns=" << columns.str();
@@ -212,18 +214,21 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	if (sniffer_options.dialect_options.has_format[LogicalType::DATE] &&
 	    sniffer_options.dialect_options.date_format.find(LogicalType::DATE) !=
 	        sniffer_options.dialect_options.date_format.end()) {
-		if (!sniffer_options.dialect_options.date_format[LogicalType::DATE].format_specifier.empty()) {
+		if (!sniffer_options.dialect_options.date_format[LogicalType::DATE].GetValue().format_specifier.empty()) {
 			csv_read << separator << "dateformat="
-			         << "'" << sniffer_options.dialect_options.date_format[LogicalType::DATE].format_specifier << "'";
+			         << "'"
+			         << sniffer_options.dialect_options.date_format[LogicalType::DATE].GetValue().format_specifier
+			         << "'";
 		}
 	}
 	// 11.9. Timestamp Format
 	if (sniffer_options.dialect_options.has_format[LogicalType::TIMESTAMP] &&
 	    sniffer_options.dialect_options.date_format.find(LogicalType::TIMESTAMP) !=
 	        sniffer_options.dialect_options.date_format.end()) {
-		if (!sniffer_options.dialect_options.date_format[LogicalType::TIMESTAMP].format_specifier.empty()) {
+		if (!sniffer_options.dialect_options.date_format[LogicalType::TIMESTAMP].GetValue().format_specifier.empty()) {
 			csv_read << separator << "timestampformat="
-			         << "'" << sniffer_options.dialect_options.date_format[LogicalType::TIMESTAMP].format_specifier
+			         << "'"
+			         << sniffer_options.dialect_options.date_format[LogicalType::TIMESTAMP].GetValue().format_specifier
 			         << "'";
 		}
 	}

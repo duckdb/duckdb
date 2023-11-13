@@ -99,14 +99,16 @@ bool CSVSniffer::TryCastValue(CSVStateMachine &candidate, const Value &value, co
 		date_t result;
 		string error_message;
 		return candidate.dialect_options.date_format.find(LogicalTypeId::DATE)
-		    ->second.TryParseDate(string_t(StringValue::Get(value)), result, error_message);
+		    ->second.GetValue()
+		    .TryParseDate(string_t(StringValue::Get(value)), result, error_message);
 	}
 	if (candidate.dialect_options.has_format.find(LogicalTypeId::TIMESTAMP)->second &&
 	    sql_type.id() == LogicalTypeId::TIMESTAMP) {
 		timestamp_t result;
 		string error_message;
 		return candidate.dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)
-		    ->second.TryParseTimestamp(string_t(StringValue::Get(value)), result, error_message);
+		    ->second.GetValue()
+		    .TryParseTimestamp(string_t(StringValue::Get(value)), result, error_message);
 	}
 	if (candidate.options.decimal_separator != "." && (sql_type.id() == LogicalTypeId::DOUBLE)) {
 		return TryCastFloatingOperator::Operation<TryCastErrorMessageCommaSeparated, double>(StringValue::Get(value));
@@ -119,9 +121,9 @@ bool CSVSniffer::TryCastValue(CSVStateMachine &candidate, const Value &value, co
 void CSVSniffer::SetDateFormat(CSVStateMachine &candidate, const string &format_specifier,
                                const LogicalTypeId &sql_type) {
 	candidate.dialect_options.has_format[sql_type] = true;
-	auto &date_format = candidate.dialect_options.date_format[sql_type];
-	date_format.format_specifier = format_specifier;
-	StrTimeFormat::ParseFormatSpecifier(date_format.format_specifier, date_format);
+	StrpTimeFormat strpformat;
+	StrTimeFormat::ParseFormatSpecifier(format_specifier, strpformat);
+	candidate.dialect_options.date_format[sql_type].Set(strpformat, false);
 }
 
 struct SniffValue {
@@ -232,7 +234,7 @@ void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate,
 	auto save_format_candidates = type_format_candidates;
 	while (!type_format_candidates.empty()) {
 		//	avoid using exceptions for flow control...
-		auto &current_format = candidate.dialect_options.date_format[sql_type.id()];
+		auto &current_format = candidate.dialect_options.date_format[sql_type.id()].GetValue();
 		if (current_format.Parse(StringValue::Get(dummy_val), result)) {
 			break;
 		}
@@ -320,7 +322,9 @@ void CSVSniffer::DetectTypes() {
 		}
 
 		idx_t row_idx = 0;
-		if (tuples.size() > 1 && (!options.has_header || (options.has_header && options.dialect_options.header))) {
+		if (tuples.size() > 1 &&
+		    (!options.dialect_options.header.IsSetByUser() ||
+		     (options.dialect_options.header.IsSetByUser() && options.dialect_options.header.GetValue()))) {
 			// This means we have more than one row, hence we can use the first row to detect if we have a header
 			row_idx = 1;
 		}
@@ -392,7 +396,8 @@ void CSVSniffer::DetectTypes() {
 			// we have a new best_options candidate
 			if (true_line_start > 0) {
 				// Add empty rows to skip_rows
-				candidate->dialect_options.skip_rows += true_line_start;
+				candidate->dialect_options.skip_rows.Set(
+				    candidate->dialect_options.skip_rows.GetValue() + true_line_start, false);
 			}
 			best_candidate = std::move(candidate);
 			min_varchar_cols = varchar_cols;

@@ -92,14 +92,14 @@ static bool TemplatedTryCastDateVector(map<LogicalTypeId, CSVOption<StrpTimeForm
 struct TryCastDateOperator {
 	static bool Operation(map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options, string_t input, date_t &result,
 	                      string &error_message) {
-		return options[LogicalTypeId::DATE].value.TryParseDate(input, result, error_message);
+		return options[LogicalTypeId::DATE].GetValue().TryParseDate(input, result, error_message);
 	}
 };
 
 struct TryCastTimestampOperator {
 	static bool Operation(map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options, string_t input, timestamp_t &result,
 	                      string &error_message) {
-		return options[LogicalTypeId::TIMESTAMP].value.TryParseTimestamp(input, result, error_message);
+		return options[LogicalTypeId::TIMESTAMP].GetValue().TryParseTimestamp(input, result, error_message);
 	}
 };
 

@@ -56,6 +56,14 @@ public:
 		return value != other.value;
 	}
 
+	bool operator==(const T &other) const {
+		return value == other;
+	}
+
+	bool operator!=(const T &other) const {
+		return value != other;
+	}
+
 	const T GetValue() const {
 		return value;
 	}

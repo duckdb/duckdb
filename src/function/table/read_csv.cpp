@@ -160,7 +160,7 @@ public:
 		current_file_path = files_path_p[0];
 		CSVFileHandle *file_handle_ptr;
 
-		if (!buffer_manager || (options.skip_rows_set && options.dialect_options.skip_rows > 0) ||
+		if (!buffer_manager || options.dialect_options.skip_rows.GetValue() > 0 ||
 		    buffer_manager->file_handle->GetFilePath() != current_file_path) {
 			// If our buffers are too small, and we skip too many rows there is a chance things will go over-buffer
 			// for now don't reuse the buffer manager
@@ -188,8 +188,8 @@ public:
 		batch_to_tuple_end.resize(file_count);
 
 		// Initialize the lines read
-		line_info.lines_read[0][0] = options.dialect_options.skip_rows;
-		if (options.has_header && options.dialect_options.header) {
+		line_info.lines_read[0][0] = options.dialect_options.skip_rows.GetValue();
+		if (options.dialect_options.header.GetValue()) {
 			line_info.lines_read[0][0]++;
 		}
 		first_position = options.dialect_options.true_start;
@@ -401,7 +401,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 			local_batch_index = 0;
 
 			line_info.lines_read[file_index++][local_batch_index] =
-			    (bind_data.options.has_header && bind_data.options.dialect_options.header ? 1 : 0);
+			    bind_data.options.dialect_options.header.GetValue() ? 1 : 0;
 
 			current_buffer = buffer_manager->GetBuffer(cur_buffer_idx);
 			next_buffer = buffer_manager->GetBuffer(cur_buffer_idx + 1);
