@@ -1,11 +1,20 @@
 import duckdb
 import pytest
+import datetime
 
 pa = pytest.importorskip("pyarrow")
 
 # This causes Arrow to output an array at the very end with an offset
 # the parent struct will have an offset that needs to be used when scanning the child array
 MAGIC_ARRAY_SIZE = 2**17 + 1
+
+
+def pa_time32():
+    return pa.time32
+
+
+def pa_time64():
+    return pa.time64
 
 
 class TestArrowOffsets(object):
@@ -47,15 +56,27 @@ class TestArrowOffsets(object):
         ).fetchall()
         assert res == [(b'131072', b'131072')]
 
-    def test_struct_of_time(self, duckdb_cursor):
-        import datetime
+    @pytest.mark.parametrize(
+        ["constructor", "unit", "expected"],
+        [
+            (pa_time32(), 'ms', datetime.time(0, 2, 11, 72000)),
+            (pa_time32(), 's', datetime.time(23, 59, 59)),
+            (pa_time64(), 'ns', datetime.time(0, 0, 0, 131)),
+            (pa_time64(), 'us', datetime.time(0, 0, 0, 131072)),
+        ],
+    )
+    def test_struct_of_time(self, duckdb_cursor, constructor, unit, expected):
+        size = MAGIC_ARRAY_SIZE
+        if unit == 's':
+            # FIXME: We limit the size because we don't support time values > 24 hours
+            size = 86400  # The amount of seconds in a day
 
-        col1 = [i for i in range(0, MAGIC_ARRAY_SIZE)]
+        col1 = [i for i in range(0, size)]
         # "a" in the struct matches the value for col1
         col2 = [{"a": i} for i in col1]
         arrow_table = pa.Table.from_pydict(
             {"col1": col1, "col2": col2},
-            schema=pa.schema([("col1", pa.time32('ms')), ("col2", pa.struct({"a": pa.time32('ms')}))]),
+            schema=pa.schema([("col1", constructor(unit)), ("col2", pa.struct({"a": constructor(unit)}))]),
         )
 
         res = duckdb_cursor.sql(
@@ -63,10 +84,10 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
+            FROM arrow_table offset {size-1}
         """
         ).fetchall()
-        assert res == [(datetime.time(0, 2, 11, 72000), datetime.time(0, 2, 11, 72000))]
+        assert res == [(expected, expected)]
 
     def test_struct_of_large_blobs(self, duckdb_cursor):
         col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
