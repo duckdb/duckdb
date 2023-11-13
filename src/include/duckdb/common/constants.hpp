@@ -56,6 +56,8 @@ extern const double PI;
 struct DConstants {
 	//! The value used to signify an invalid index entry
 	static constexpr const idx_t INVALID_INDEX = idx_t(-1);
+	//! The value used to signify an in-memory database
+	static constexpr const char *IN_MEMORY_PATH = ":memory:";
 };
 
 struct LogicalIndex {

@@ -62,6 +62,11 @@ public:
 		return !default_database.empty();
 	}
 
+	//! The lock to add entries to the database_paths set
+	mutex db_paths_lock;
+	//! A set containing all attached db paths for faster checks
+	case_insensitive_set_t db_paths;
+
 private:
 	//! The system database is a special database that holds system entries (e.g. functions)
 	unique_ptr<AttachedDatabase> system;

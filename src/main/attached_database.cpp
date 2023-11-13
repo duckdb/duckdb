@@ -1,7 +1,9 @@
 #include "duckdb/main/attached_database.hpp"
 
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -13,10 +15,12 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
     : CatalogEntry(CatalogType::DATABASE_ENTRY,
                    type == AttachedDatabaseType::SYSTEM_DATABASE ? SYSTEM_CATALOG : TEMP_CATALOG, 0),
       db(db), type(type) {
+
 	D_ASSERT(type == AttachedDatabaseType::TEMP_DATABASE || type == AttachedDatabaseType::SYSTEM_DATABASE);
 	if (type == AttachedDatabaseType::TEMP_DATABASE) {
-		storage = make_uniq<SingleFileStorageManager>(*this, ":memory:", false);
+		storage = make_uniq<SingleFileStorageManager>(*this, string(DConstants::IN_MEMORY_PATH), false);
 	}
+
 	catalog = make_uniq<DuckCatalog>(*this);
 	transaction_manager = make_uniq<DuckTransactionManager>(*this);
 	internal = true;
@@ -24,10 +28,21 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, string name_p, string file_path_p,
                                    AccessMode access_mode)
-    : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db),
-      type(access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
-                                                : AttachedDatabaseType::READ_WRITE_DATABASE),
-      parent_catalog(&catalog_p) {
+    : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
+
+	// ensure that we did not already attach a database with the same path
+	if (!file_path_p.empty() && file_path_p != DConstants::IN_MEMORY_PATH) {
+		db_manager = &db.GetDatabaseManager();
+		lock_guard<mutex> write_lock(db_manager->db_paths_lock);
+		if (db_manager->db_paths.find(file_path_p) != db_manager->db_paths.end()) {
+			throw BinderException("Database \"%s\" is already attached with path \"%s\"", name, file_path_p);
+		}
+		db_manager->db_paths.insert(file_path_p);
+	}
+
+	// finish construction
+	type = access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
+	                                            : AttachedDatabaseType::READ_WRITE_DATABASE;
 	storage = make_uniq<SingleFileStorageManager>(*this, std::move(file_path_p), access_mode == AccessMode::READ_ONLY);
 	catalog = make_uniq<DuckCatalog>(*this);
 	transaction_manager = make_uniq<DuckTransactionManager>(*this);
@@ -36,10 +51,21 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension,
                                    string name_p, AttachInfo &info, AccessMode access_mode)
-    : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db),
-      type(access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
-                                                : AttachedDatabaseType::READ_WRITE_DATABASE),
-      parent_catalog(&catalog_p) {
+    : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
+
+	// ensure that we did not already attach a database with the same path
+	if (!info.path.empty() && info.path != DConstants::IN_MEMORY_PATH) {
+		db_manager = &db.GetDatabaseManager();
+		lock_guard<mutex> write_lock(db_manager->db_paths_lock);
+		if (db_manager->db_paths.find(info.path) != db_manager->db_paths.end()) {
+			throw BinderException("Database \"%s\" is already attached with path \"%s\"", name, info.path);
+		}
+		db_manager->db_paths.insert(info.path);
+	}
+
+	// finish construction
+	type = access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
+	                                            : AttachedDatabaseType::READ_WRITE_DATABASE;
 	catalog = storage_extension.attach(storage_extension.storage_info.get(), *this, name, info, access_mode);
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
@@ -54,6 +80,14 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 }
 
 AttachedDatabase::~AttachedDatabase() {
+
+	if (!IsSystem() && !catalog->InMemory()) {
+		if (db_manager) {
+			lock_guard<mutex> write_lock(db_manager->db_paths_lock);
+			db_manager->db_paths.erase(db_manager->db_paths.find(storage->GetDBPath()));
+		}
+	}
+
 	if (Exception::UncaughtException()) {
 		return;
 	}
@@ -88,7 +122,7 @@ bool AttachedDatabase::IsReadOnly() const {
 }
 
 string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &fs) {
-	if (dbpath.empty() || dbpath == ":memory:") {
+	if (dbpath.empty() || dbpath == DConstants::IN_MEMORY_PATH) {
 		return "memory";
 	}
 	return fs.ExtractBaseName(dbpath);
