@@ -421,7 +421,7 @@ class TestAllTypes(object):
                 dtype=object,
             ),
             'time': np.ma.array(
-                ['00:00:00', '23:59:59.999999', None],
+                ['00:00:00', '24:00:00', None],
                 mask=[0, 0, 1],
                 dtype=object,
             ),

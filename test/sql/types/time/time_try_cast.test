@@ -86,3 +86,8 @@ query I
 select try_cast('23:59:59.999999' as time)
 ----
 23:59:59.999999
+
+query I
+select try_cast('24:00:00' as time)
+----
+24:00:00
