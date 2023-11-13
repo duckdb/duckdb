@@ -17,7 +17,7 @@ class OperationConverter {
 public:
 
 	OperationConverter(LogicalOperator &root) : root(root) {
-		//! don't want to resolve execute because execute is assumed to be resolved already.
+		//! We don't want to resolve execute because execute is assumed to be resolved already.
 		//! and the types are deleted if you call resolve types on a logical execute
 		//! this is bad, because when you want to add a relation in the join order optimizer,
 		//! and the execute doesn't have any types, then no table references are generated.
@@ -25,6 +25,9 @@ public:
 
 		//! but we do need to resolve all types so that the types of a projection match the
 		//! size of the column bindings.
+
+
+		//! Just need to know what the logical execute does. So confused.
 //		auto &op = root;
 //		while (root.type == LogicalOperatorType::LOGICAL_EXECUTE) {
 //			root = root.children[0];
@@ -32,7 +35,7 @@ public:
 
 		// What I want to know is why a logical execute is planned and what it is used for exactly.
 		// It doesn't make a lot of sense to me.
-		op.ResolveOperatorTypes();
+		root.ResolveOperatorTypes();
 	}
 	//! Perform DelimJoin elimination
 	void Optimize(unique_ptr<LogicalOperator> &op);
