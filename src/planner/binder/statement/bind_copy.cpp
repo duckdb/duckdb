@@ -5,7 +5,7 @@
 #include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/common/local_file_system.hpp"
-#include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
+#include "duckdb/execution/operator/scan/csv/parallel_csv_reader.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -129,19 +129,25 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	if (per_thread_output && !partition_cols.empty()) {
 		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY");
 	}
-	bool is_file_and_exists = config.file_system->FileExists(stmt.info->file_path);
-	bool is_stdout = stmt.info->file_path == "/dev/stdout";
-	if (!user_set_use_tmp_file) {
-		use_tmp_file = is_file_and_exists && !per_thread_output && partition_cols.empty() && !is_stdout;
+	bool is_remote_file = config.file_system->IsRemoteFile(stmt.info->file_path);
+	if (is_remote_file) {
+		use_tmp_file = false;
+	} else {
+		bool is_file_and_exists = config.file_system->FileExists(stmt.info->file_path);
+		bool is_stdout = stmt.info->file_path == "/dev/stdout";
+		if (!user_set_use_tmp_file) {
+			use_tmp_file = is_file_and_exists && !per_thread_output && partition_cols.empty() && !is_stdout;
+		}
 	}
 
 	auto unique_column_names = GetUniqueNames(select_node.names);
+	auto file_path = stmt.info->file_path;
 
 	auto function_data =
 	    copy_function.function.copy_to_bind(context, *stmt.info, unique_column_names, select_node.types);
 	// now create the copy information
-	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data));
-	copy->file_path = stmt.info->file_path;
+	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data), std::move(stmt.info));
+	copy->file_path = file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->overwrite_or_ignore = overwrite_or_ignore;
 	copy->filename_pattern = filename_pattern;

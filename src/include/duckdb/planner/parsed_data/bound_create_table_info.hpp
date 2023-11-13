@@ -49,11 +49,6 @@ struct BoundCreateTableInfo {
 	//! Indexes created by this table <Block_ID, Offset>
 	vector<BlockPointer> indexes;
 
-	//! Serializes a BoundCreateTableInfo to a stand-alone binary blob
-	void Serialize(Serializer &serializer) const;
-	//! Deserializes a blob back into a BoundCreateTableInfo
-	static unique_ptr<BoundCreateTableInfo> Deserialize(Deserializer &source, PlanDeserializationState &state);
-
 	CreateTableInfo &Base() {
 		D_ASSERT(base);
 		return (CreateTableInfo &)*base;

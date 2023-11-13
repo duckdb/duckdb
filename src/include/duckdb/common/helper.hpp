@@ -37,10 +37,18 @@ namespace duckdb {
 #define DUCKDB_EXPLICIT_FALLTHROUGH
 #endif
 
-template<class _Tp>
+template <class... T>
+struct AlwaysFalse {
+	static constexpr bool value = false;
+};
+
+template<typename T>
+using reference = std::reference_wrapper<T>;
+
+template<class _Tp, bool SAFE = true>
 struct __unique_if
 {
-    typedef unique_ptr<_Tp> __unique_single;
+    typedef unique_ptr<_Tp, std::default_delete<_Tp>, SAFE> __unique_single;
 };
 
 template<class _Tp>
@@ -57,19 +65,32 @@ struct __unique_if<_Tp[_Np]>
 
 template<class _Tp, class... _Args>
 inline 
-typename __unique_if<_Tp>::__unique_single
+typename __unique_if<_Tp, true>::__unique_single
 make_uniq(_Args&&... __args)
 {
-    return unique_ptr<_Tp>(new _Tp(std::forward<_Args>(__args)...));
+    return unique_ptr<_Tp, std::default_delete<_Tp>, true>(new _Tp(std::forward<_Args>(__args)...));
+}
+
+template<class _Tp, class... _Args>
+inline 
+typename __unique_if<_Tp, false>::__unique_single
+make_unsafe_uniq(_Args&&... __args)
+{
+    return unique_ptr<_Tp, std::default_delete<_Tp>, false>(new _Tp(std::forward<_Args>(__args)...));
 }
 
 template<class _Tp>
-inline 
-typename __unique_if<_Tp>::__unique_array_unknown_bound
-make_uniq(size_t __n)
+inline unique_ptr<_Tp[], std::default_delete<_Tp>, true>
+make_uniq_array(size_t __n)
 {
-    typedef typename std::remove_extent<_Tp>::type _Up;
-    return unique_ptr<_Tp>(new _Up[__n]());
+    return unique_ptr<_Tp[], std::default_delete<_Tp>, true>(new _Tp[__n]());
+}
+
+template<class _Tp>
+inline unique_ptr<_Tp[], std::default_delete<_Tp>, false>
+make_unsafe_uniq_array(size_t __n)
+{
+    return unique_ptr<_Tp[], std::default_delete<_Tp>, false>(new _Tp[__n]());
 }
 
 template<class _Tp, class... _Args>
@@ -179,9 +200,6 @@ void AssignSharedPointer(shared_ptr<T> &target, const shared_ptr<T> &source) {
 		target = source;
 	}
 }
-
-template<typename T>
-using reference = std::reference_wrapper<T>;
 
 template<typename T>
 using const_reference = std::reference_wrapper<const T>;

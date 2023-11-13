@@ -85,7 +85,7 @@ SortedBlock::SortedBlock(BufferManager &buffer_manager, GlobalSortState &state)
 }
 
 idx_t SortedBlock::Count() const {
-	idx_t count = std::accumulate(radix_sorting_data.begin(), radix_sorting_data.end(), 0,
+	idx_t count = std::accumulate(radix_sorting_data.begin(), radix_sorting_data.end(), (idx_t)0,
 	                              [](idx_t a, const unique_ptr<RowDataBlock> &b) { return a + b->count; });
 	if (!sort_layout.all_constant) {
 		D_ASSERT(count == blob_sorting_data->Count());

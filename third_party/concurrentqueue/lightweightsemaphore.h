@@ -27,6 +27,9 @@ extern "C" {
 #elif defined(__unix__)
 #include <semaphore.h>
 #include <chrono>
+#elif defined(__MVS__)
+#include <zos-semaphore.h>
+#include <chrono>
 #endif
 
 namespace duckdb_moodycamel
@@ -160,9 +163,9 @@ public:
 		}
 	}
 };
-#elif defined(__unix__)
+#elif defined(__unix__) || defined(__MVS__)
 //---------------------------------------------------------
-// Semaphore (POSIX, Linux)
+// Semaphore (POSIX, Linux, zOS aka MVS)
 //---------------------------------------------------------
 class Semaphore
 {

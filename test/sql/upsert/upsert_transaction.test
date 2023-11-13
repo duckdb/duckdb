@@ -1,0 +1,128 @@
+# name: test/sql/upsert/upsert_transaction.test
+# group: [upsert]
+
+# This tests the desired behavior when UPSERT is used on a conflict that only exists within the transaction local storage.
+# NOTE: This does not test behavior of conflicts that arise between transactions
+
+# DO UPDATE
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+CREATE TABLE tbl (a SHORT PRIMARY KEY, b SHORT);
+
+statement ok
+INSERT INTO tbl VALUES (1, 2) ON CONFLICT (a) DO UPDATE SET b = excluded.b;
+
+# Create a conflict within the transaction
+statement ok
+INSERT INTO tbl VALUES (1, 3) ON CONFLICT (a) DO UPDATE SET b = excluded.b;
+
+query II
+select * from tbl;
+----
+1	3
+
+statement ok
+COMMIT;
+
+query II
+select * from tbl;
+----
+1	3
+
+# DO NOTHING
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO tbl VALUES
+	(2, 1),
+	(3, 1),
+	(4, 1);
+
+statement ok
+INSERT INTO tbl VALUES
+	(2, 1),
+	(3, 1),
+	(4, 1) ON CONFLICT (a) DO NOTHING;
+
+statement ok
+COMMIT;
+
+# Attempt to update the same row twice within the same UPSERT
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO tbl VALUES
+	(5, 0)
+
+statement error
+insert into tbl VALUES
+	(5, 0),
+	(5, 1)
+ON CONFLICT (a) DO UPDATE SET
+	b = excluded.b;
+----
+ON CONFLICT DO UPDATE can not update the same row twice in the same command, Ensure that no rows proposed for insertion within the same command have duplicate constrained values
+
+statement ok
+COMMIT;
+
+# DO UPDATE 'affected_tuples' return value
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO tbl VALUES (6,0);
+
+# Both of these inserts turn into updates
+# The first affected tuple (5) is an update in the global storage
+# The second affected tuple (6) is an update in the local storage
+# The third affected tuple is an insert into the local storage
+query I
+INSERT INTO tbl VALUES (5,0), (6,0), (7,0) ON CONFLICT (a) DO UPDATE set b = excluded.b;
+----
+3
+
+# The only affected tuple is the insert into the local storage
+# (5,0) causes a constraint error in the global storage
+# (3,0) causes a constraint error in the local storage
+query I
+INSERT INTO tbl VALUES (-1, 0), (5,0), (6,0) ON CONFLICT (a) DO NOTHING;
+----
+1
+
+statement ok
+COMMIT;
+
+# DO UPDATE > STANDARD_VECTOR_SIZE
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+CREATE OR REPLACE TABLE tbl (a SHORT PRIMARY KEY, b SHORT);
+
+statement ok
+INSERT INTO tbl (select i, 0 from range(2500) tbl(i));
+
+query I
+select max(b) from tbl;
+----
+0
+
+statement ok
+INSERT INTO tbl (select i, i from range(2500) tbl(i)) ON CONFLICT (a) DO UPDATE SET b = excluded.b;
+
+query I
+select max(b) from tbl;
+----
+2499
+
+statement ok
+COMMIT;

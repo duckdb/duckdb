@@ -2,6 +2,9 @@
 # description: Test Regression Functions
 # group: [aggregates]
 
+statement ok
+PRAGMA enable_verification
+
 query I
 select regr_avgx(NULL,NULL)
 ----
@@ -178,55 +181,55 @@ insert into aggr values(1, 10, null), (2, 10, 11), (2, 20, 22), (2, 25, null), (
 
 
 query II
-select k, regr_avgx(v, v2) from aggr group by k;
+select k, regr_avgx(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	NULL
 2	22.666667
 
 query II
-select k, regr_avgy(v, v2) from aggr group by k;
+select k, regr_avgy(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	NULL
 2	20
 
 query III
-select k, count(*), regr_count(v, v2) from aggr group by k;
+select k, count(*), regr_count(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	1	0
 2	4	3
 
 query II
-select k, regr_slope(v, v2) from aggr group by k;
+select k, regr_slope(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	NULL
 2	0.831409
 
 query II
-select k, regr_r2(v, v2) from aggr group by k;
+select k, regr_r2(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	NULL
 2	0.997691
 
 query II
-select k, regr_sxx(v, v2) from aggr group by k;
+select k, regr_sxx(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	NULL
 2	288.666667
 
 query II
-select k, regr_syy(v, v2) from aggr group by k;
+select k, regr_syy(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	NULL
 2	200.000000
 
 query II
-select k, regr_sxy(v, v2) from aggr group by k;
+select k, regr_sxy(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	NULL
 2	240.000000
 
 query II
-select k, regr_intercept(v, v2) from aggr group by k;
+select k, regr_intercept(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	NULL
 2	1.154734

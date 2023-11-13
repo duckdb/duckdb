@@ -24,4 +24,9 @@ string DuckIndexEntry::GetTableName() const {
 	return info->table;
 }
 
+void DuckIndexEntry::CommitDrop() {
+	D_ASSERT(info && index);
+	index->CommitDrop();
+}
+
 } // namespace duckdb

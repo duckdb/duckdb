@@ -176,7 +176,7 @@ PREPARE v11 AS SELECT ROW(?, ?)
 query I
 EXECUTE v11(11, 'hello')
 ----
-{'v1': 11, 'v2': hello}
+{'': 11, '': hello}
 
 statement ok
 PREPARE v12 AS SELECT ? IS NULL

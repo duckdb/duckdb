@@ -2,23 +2,11 @@
 # description: Hashing and parallel execution
 # group: [window]
 
-#statement ok
-#PRAGMA enable_verification
-
 statement ok
 PRAGMA threads=4
 
 statement ok
 PRAGMA verify_parallelism
-
-statement ok
-PRAGMA enable_profiling
-
-statement ok
-PRAGMA profiling_output='__TEST_DIR__/test.json'
-
-statement ok
-PRAGMA profiling_mode = detailed
 
 # Create a table large enough to fill the partitions
 statement ok

@@ -125,12 +125,12 @@ public:
 	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                            Vector &scan_vector);
 
-	virtual void DeserializeColumn(Deserializer &source);
+	virtual void DeserializeColumn(Deserializer &deserializer);
 	static shared_ptr<ColumnData> Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-	                                          idx_t start_row, Deserializer &source, const LogicalType &type,
+	                                          idx_t start_row, ReadStream &source, const LogicalType &type,
 	                                          optional_ptr<ColumnData> parent);
 
-	virtual void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result);
+	virtual void GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path, vector<ColumnSegmentInfo> &result);
 	virtual void Verify(RowGroup &parent);
 
 	bool CheckZonemap(TableFilter &filter);
@@ -151,7 +151,7 @@ protected:
 	void AppendTransientSegment(SegmentLock &l, idx_t start_row);
 
 	//! Scans a base vector from the column
-	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining);
+	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, bool has_updates);
 	//! Scans a vector from the column merged with any potential updates
 	//! If ALLOW_UPDATES is set to false, the function will instead throw an exception if any updates are found
 	template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>

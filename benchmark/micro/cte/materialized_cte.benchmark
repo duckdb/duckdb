@@ -1,0 +1,17 @@
+# name: benchmark/micro/cte/materialized_cte.benchmark
+# description: Benchmark of materialized CTEs
+# group: [cte]
+
+name Materialized CTE
+group micro
+subgroup cte
+
+run
+WITH RECURSIVE t(x) AS MATERIALIZED (
+  SELECT 1
+    UNION ALL
+  SELECT x+1
+  FROM   t
+  WHERE  x < 400000
+)
+SELECT count(t1), count(t2) FROM t AS t1, t AS t2 WHERE t1.x=t2.x;

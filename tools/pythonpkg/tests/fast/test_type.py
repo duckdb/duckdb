@@ -2,9 +2,39 @@ import duckdb
 import os
 import pandas as pd
 import pytest
-from typing import Union
+from typing import Union, Optional
+import sys
 
-from duckdb.typing import SQLNULL, BOOLEAN, TINYINT, UTINYINT, SMALLINT, USMALLINT, INTEGER, UINTEGER, BIGINT, UBIGINT, HUGEINT, UUID, FLOAT, DOUBLE, DATE, TIMESTAMP, TIMESTAMP_MS, TIMESTAMP_NS, TIMESTAMP_S, TIME, TIME_TZ, TIMESTAMP_TZ, VARCHAR, BLOB, BIT, INTERVAL
+from duckdb.typing import (
+    SQLNULL,
+    BOOLEAN,
+    TINYINT,
+    UTINYINT,
+    SMALLINT,
+    USMALLINT,
+    INTEGER,
+    UINTEGER,
+    BIGINT,
+    UBIGINT,
+    HUGEINT,
+    UUID,
+    FLOAT,
+    DOUBLE,
+    DATE,
+    TIMESTAMP,
+    TIMESTAMP_MS,
+    TIMESTAMP_NS,
+    TIMESTAMP_S,
+    TIME,
+    TIME_TZ,
+    TIMESTAMP_TZ,
+    VARCHAR,
+    BLOB,
+    BIT,
+    INTERVAL,
+)
+import duckdb.typing
+
 
 class TestType(object):
     def test_sqltype(self):
@@ -47,6 +77,7 @@ class TestType(object):
         type = duckdb.struct_type({'a': BIGINT, 'b': BOOLEAN})
         assert str(type) == 'STRUCT(a BIGINT, b BOOLEAN)'
 
+        # FIXME: create an unnamed struct when fields are provided as a list
         type = duckdb.struct_type([BIGINT, BOOLEAN])
         assert str(type) == 'STRUCT(v1 BIGINT, v2 BOOLEAN)'
 
@@ -75,23 +106,17 @@ class TestType(object):
         assert str(type) == 'UNION(a BIGINT, b VARCHAR, c TINYINT)'
 
     import sys
-    @pytest.mark.skipif(sys.version_info < (3,9), reason="requires >= python3.9")
+
+    @pytest.mark.skipif(sys.version_info < (3, 9), reason="requires >= python3.9")
     def test_implicit_convert_from_builtin_type(self):
         type = duckdb.list_type(list[str])
         assert str(type.child) == "VARCHAR[]"
 
-        mapping = {
-            'VARCHAR': str,
-            'BIGINT': int,
-            'BLOB': bytes,
-            'BLOB': bytearray,
-            'BOOLEAN': bool,
-            'DOUBLE': float
-        }
+        mapping = {'VARCHAR': str, 'BIGINT': int, 'BLOB': bytes, 'BLOB': bytearray, 'BOOLEAN': bool, 'DOUBLE': float}
         for expected, type in mapping.items():
             res = duckdb.list_type(type)
             assert str(res.child) == expected
-        
+
         res = duckdb.list_type({'a': str, 'b': int})
         assert str(res.child) == 'STRUCT(a VARCHAR, b BIGINT)'
 
@@ -122,7 +147,7 @@ class TestType(object):
             'uint64': 'UBIGINT',
             'float16': 'FLOAT',
             'float32': 'FLOAT',
-            'float64': 'DOUBLE'
+            'float64': 'DOUBLE',
         }
 
         builtins = []
@@ -164,3 +189,26 @@ class TestType(object):
 
         child_type = type.v2.child
         assert str(child_type) == 'MAP(BLOB, BIT)'
+
+    def test_optional(self):
+        type = duckdb.typing.DuckDBPyType(Optional[str])
+        assert type == 'VARCHAR'
+        type = duckdb.typing.DuckDBPyType(Optional[Union[int, bool]])
+        assert type == 'UNION(u1 BIGINT, u2 BOOLEAN)'
+        type = duckdb.typing.DuckDBPyType(Optional[list[int]])
+        assert type == 'BIGINT[]'
+        type = duckdb.typing.DuckDBPyType(Optional[dict[int, str]])
+        assert type == 'MAP(BIGINT, VARCHAR)'
+        type = duckdb.typing.DuckDBPyType(Optional[dict[Optional[int], Optional[str]]])
+        assert type == 'MAP(BIGINT, VARCHAR)'
+        type = duckdb.typing.DuckDBPyType(Optional[dict[Optional[int], Optional[str]]])
+        assert type == 'MAP(BIGINT, VARCHAR)'
+        type = duckdb.typing.DuckDBPyType(Optional[Union[Optional[str], Optional[bool]]])
+        assert type == 'UNION(u1 VARCHAR, u2 BOOLEAN)'
+        type = duckdb.typing.DuckDBPyType(Union[str, None])
+        assert type == 'VARCHAR'
+
+    @pytest.mark.skipif(sys.version_info < (3, 10), reason="'str | None' syntax requires Python 3.10 or higher")
+    def test_optional_310(self):
+        type = duckdb.typing.DuckDBPyType(str | None)
+        assert type == 'VARCHAR'

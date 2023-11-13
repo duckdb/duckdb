@@ -1,11 +1,10 @@
 #include "catch.hpp"
-
 #include "duckdb.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/extension/generated_extension_loader.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "test_helpers.hpp"
-
 #include "sqllogic_test_runner.hpp"
+#include "test_helpers.hpp"
 
 #include <functional>
 #include <string>
@@ -33,7 +32,7 @@ static bool endsWith(const string &mainStr, const string &toMatch) {
 	        mainStr.compare(mainStr.size() - toMatch.size(), toMatch.size(), toMatch) == 0);
 }
 
-template <bool VERIFICATION>
+template <bool VERIFICATION, bool AUTO_SWITCH_TEST_DIR = false>
 static void testRunner() {
 	// this is an ugly hack that uses the test case name to pass the script file
 	// name if someone has a better idea...
@@ -49,7 +48,31 @@ static void testRunner() {
 	SQLLogicTestRunner runner(std::move(initial_dbpath));
 	runner.output_sql = Catch::getCurrentContext().getConfig()->outputSQL();
 	runner.enable_verification = VERIFICATION;
+
+	string prev_directory;
+
+	// We assume the test working dir for extensions to be one dir above the test/sql. Note that this is very hacky.
+	// however for now it suffices: we use it to run tests from out-of-tree extensions that are based on the extension
+	// template which adheres to this convention.
+	if (AUTO_SWITCH_TEST_DIR) {
+		prev_directory = TestGetCurrentDirectory();
+
+		std::size_t found = name.rfind("test/sql");
+		if (found == std::string::npos) {
+			throw Exception("Failed to auto detect working dir for test '" + name +
+			                "' because a non-standard path was used!");
+		}
+		auto test_working_dir = name.substr(0, found);
+
+		// Parse the test dir automatically
+		TestChangeDirectory(test_working_dir);
+	}
+
 	runner.ExecuteFile(name);
+
+	if (AUTO_SWITCH_TEST_DIR) {
+		TestChangeDirectory(prev_directory);
+	}
 }
 
 static string ParseGroupFromPath(string file) {
@@ -59,7 +82,7 @@ static string ParseGroupFromPath(string file) {
 		extension = "[.]";
 	}
 	if (file.find(".test_coverage") != std::string::npos) {
-		// "slow" in the name indicates a slow test (i.e. only run as part of allunit)
+		// "coverage" in the name indicates a coverage test (i.e. only run as part of coverage)
 		return "[coverage][.]";
 	}
 	// move backwards to the last slash
@@ -178,5 +201,16 @@ void RegisterSqllogictests() {
 			REGISTER_TEST_CASE(testRunner<false>, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
 		}
 	});
+
+#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS && !defined(DUCKDB_AMALGAMATION)
+	for (const auto &extension_test_path : LoadedExtensionTestPaths()) {
+		listFiles(*fs, extension_test_path, [&](const string &path) {
+			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
+				auto fun = testRunner<false, true>;
+				REGISTER_TEST_CASE(fun, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
+			}
+		});
+	}
+#endif
 }
 } // namespace duckdb

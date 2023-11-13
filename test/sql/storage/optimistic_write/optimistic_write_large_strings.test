@@ -1,0 +1,43 @@
+# name: test/sql/storage/optimistic_write/optimistic_write_large_strings.test
+# description: Issue #7887 - Test writing large strings using batch insertion
+# group: [optimistic_write]
+
+require parquet
+
+# load the DB from disk
+load __TEST_DIR__/optimistic_write_large_strings.db
+
+statement ok
+CREATE TABLE test(val VARCHAR);
+
+statement ok
+INSERT INTO test VALUES (NULL);
+
+statement ok
+COPY (SELECT repeat('X', len) FROM (VALUES (903), (4932)) t(len)) TO '__TEST_DIR__/large_strings.parquet';
+
+statement ok
+INSERT INTO test FROM read_parquet([
+	'__TEST_DIR__/large_strings.parquet',
+	'__TEST_DIR__/large_strings.parquet']
+);
+
+query I
+SELECT strlen(val) FROM test
+----
+NULL
+903
+4932
+903
+4932
+
+restart
+
+query I
+SELECT strlen(val) FROM test
+----
+NULL
+903
+4932
+903
+4932

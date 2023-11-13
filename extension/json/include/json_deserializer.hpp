@@ -1,10 +1,10 @@
 #pragma once
 #include "json_common.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
-class JsonDeserializer : public FormatDeserializer {
+class JsonDeserializer : public Deserializer {
 public:
 	JsonDeserializer(yyjson_val *val, yyjson_doc *doc) : doc(doc) {
 		deserialize_enum_from_string = true;
@@ -47,28 +47,20 @@ private:
 
 	void ThrowTypeError(yyjson_val *val, const char *expected);
 
-	// Set the 'tag' of the property to read
-	void SetTag(const char *tag) final;
-
 	//===--------------------------------------------------------------------===//
 	// Nested Types Hooks
 	//===--------------------------------------------------------------------===//
+	void OnPropertyBegin(const field_id_t field_id, const char *tag) final;
+	void OnPropertyEnd() final;
+	bool OnOptionalPropertyBegin(const field_id_t field_id, const char *tag) final;
+	void OnOptionalPropertyEnd(bool present) final;
+
 	void OnObjectBegin() final;
 	void OnObjectEnd() final;
 	idx_t OnListBegin() final;
 	void OnListEnd() final;
-	idx_t OnMapBegin() final;
-	void OnMapEnd() final;
-	void OnMapEntryBegin() final;
-	void OnMapEntryEnd() final;
-	void OnMapKeyBegin() final;
-	void OnMapValueBegin() final;
-	bool OnOptionalBegin() final;
-
-	void OnPairBegin() final;
-	void OnPairKeyBegin() final;
-	void OnPairValueBegin() final;
-	void OnPairEnd() final;
+	bool OnNullableBegin() final;
+	void OnNullableEnd() final;
 
 	//===--------------------------------------------------------------------===//
 	// Primitive Types
@@ -85,7 +77,6 @@ private:
 	float ReadFloat() final;
 	double ReadDouble() final;
 	string ReadString() final;
-	interval_t ReadInterval() final;
 	hugeint_t ReadHugeInt() final;
 	void ReadDataPtr(data_ptr_t &ptr, idx_t count) final;
 };

@@ -44,6 +44,7 @@ public:
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
 	static const string &GetDefaultDatabase(ClientContext &context);
+	void SetDefaultDatabase(ClientContext &context, const string &new_value);
 
 	optional_ptr<AttachedDatabase> GetDatabaseFromPath(ClientContext &context, const string &path);
 	vector<reference<AttachedDatabase>> GetDatabases(ClientContext &context);

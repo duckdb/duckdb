@@ -19,6 +19,7 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/planner/extension_callback.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -30,6 +31,7 @@ DBConfig::DBConfig() {
 	compression_functions = make_uniq<CompressionFunctionSet>();
 	cast_functions = make_uniq<CastFunctionSet>();
 	error_manager = make_uniq<ErrorManager>();
+	options.duckdb_api = StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
 }
 
 DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) : DBConfig::DBConfig() {
@@ -158,7 +160,7 @@ duckdb::unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(At
 
 void DatabaseInstance::CreateMainDatabase() {
 	AttachInfo info;
-	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
+	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem());
 	info.path = config.options.database_path;
 
 	auto attached_database = CreateAttachedDatabase(info, config.options.database_type, config.options.access_mode);
@@ -171,13 +173,14 @@ void DatabaseInstance::CreateMainDatabase() {
 	}
 
 	// initialize the database
+	initial_database->SetInitialDatabase();
 	initial_database->Initialize();
 }
 
 void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {
 	auto unrecognized_options_iter = unrecognized_options.begin();
 	string unrecognized_option_keys = unrecognized_options_iter->first;
-	for (; unrecognized_options_iter == unrecognized_options.end(); ++unrecognized_options_iter) {
+	while (++unrecognized_options_iter != unrecognized_options.end()) {
 		unrecognized_option_keys = "," + unrecognized_options_iter->first;
 	}
 	throw InvalidInputException("Unrecognized configuration property \"%s\"", unrecognized_option_keys);
@@ -230,7 +233,10 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	if (!config.options.database_type.empty()) {
 		// if we are opening an extension database - load the extension
-		ExtensionHelper::LoadExternalExtension(*this, nullptr, config.options.database_type);
+		if (!config.file_system) {
+			throw InternalException("No file system!?");
+		}
+		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type, nullptr);
 	}
 
 	if (!config.options.unrecognized_options.empty()) {
@@ -377,6 +383,11 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
 	loaded_extensions.insert(extension_name);
+
+	auto &callbacks = DBConfig::GetConfig(*this).extension_callbacks;
+	for (auto &callback : callbacks) {
+		callback->OnExtensionLoaded(*this, name);
+	}
 }
 
 bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {
@@ -391,15 +402,6 @@ bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &resul
 	}
 	result = global_value->second;
 	return true;
-}
-
-string ClientConfig::ExtractTimezone() const {
-	auto entry = set_variables.find("TimeZone");
-	if (entry == set_variables.end()) {
-		return "UTC";
-	} else {
-		return entry->second.GetValue<std::string>();
-	}
 }
 
 ValidChecker &DatabaseInstance::GetValidChecker() {

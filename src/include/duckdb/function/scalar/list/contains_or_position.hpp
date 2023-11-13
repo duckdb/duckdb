@@ -27,14 +27,14 @@ static void TemplatedContainsOrPosition(DataChunk &args, Vector &result, bool is
 
 	UnifiedVectorFormat list_data;
 	list.ToUnifiedFormat(count, list_data);
-	auto list_entries = (list_entry_t *)list_data.data;
+	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 
 	UnifiedVectorFormat value_data;
 	value_vector.ToUnifiedFormat(count, value_data);
 
 	// not required for a comparison of nested types
-	auto child_value = (CHILD_TYPE *)child_data.data;
-	auto values = (CHILD_TYPE *)value_data.data;
+	auto child_value = UnifiedVectorFormat::GetData<CHILD_TYPE>(child_data);
+	auto values = UnifiedVectorFormat::GetData<CHILD_TYPE>(value_data);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto list_index = list_data.sel->get_index(i);
@@ -130,7 +130,7 @@ void ListContainsOrPosition(DataChunk &args, Vector &result) {
 		TemplatedContainsOrPosition<int8_t, T, OP, LIST_ACCESSOR>(args, result, true);
 		break;
 	default:
-		throw NotImplementedException("This function has not been implemented for physical type %s",
+		throw NotImplementedException("This function has not been implemented for logical type %s",
 		                              TypeIdToString(physical_type));
 	}
 }

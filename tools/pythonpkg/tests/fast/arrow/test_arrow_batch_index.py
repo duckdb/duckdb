@@ -2,11 +2,14 @@ import duckdb
 import pytest
 import pandas as pd
 import duckdb
+
 try:
     import pyarrow as pa
+
     can_run = True
 except:
     can_run = False
+
 
 class TestArrowBatchIndex(object):
     def test_arrow_batch_index(self, duckdb_cursor):

@@ -1,0 +1,376 @@
+# name: test/sql/subquery/scalar/test_correlated_aggregate_subquery.test_slow
+# description: Test correlated aggregate subqueries
+# group: [scalar]
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# aggregate with correlation in final projection
+query II
+SELECT i, (SELECT MIN(i)+i1.i FROM integers) FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	2
+2	3
+3	4
+
+# aggregate with correlation inside aggregation
+query II
+SELECT i, (SELECT MIN(i+2*i1.i) FROM integers) FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	3
+2	5
+3	7
+
+query IRR
+SELECT i, SUM(i), (SELECT SUM(i)+SUM(i1.i) FROM integers) FROM integers i1 GROUP BY i ORDER BY i;
+----
+NULL	NULL	NULL
+1	1.000000	7.000000
+2	2.000000	8.000000
+3	3.000000	9.000000
+
+query IRR
+SELECT i, SUM(i), (SELECT SUM(i)+COUNT(i1.i) FROM integers) FROM integers i1 GROUP BY i ORDER BY i;
+----
+NULL	NULL	6.000000
+1	1.000000	7.000000
+2	2.000000	7.000000
+3	3.000000	7.000000
+
+# correlated COUNT(*)
+query II
+SELECT i, (SELECT COUNT(*) FROM integers i2 WHERE i2.i>i1.i) FROM integers i1 ORDER BY i;
+----
+NULL	0
+1	2
+2	1
+3	0
+
+# aggregate with correlation inside aggregation
+query II
+SELECT i, (SELECT MIN(i+2*i1.i) FROM integers) FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	3
+2	5
+3	7
+
+# aggregate ONLY inside subquery
+query R
+SELECT (SELECT SUM(i1.i)) FROM integers i1;
+----
+6.000000
+
+# aggregate ONLY inside subquery, with column reference outside of subquery
+query IR
+SELECT MIN(i), (SELECT SUM(i1.i)) FROM integers i1;
+----
+1	6.000000
+
+# this will fail, because "i" is not an aggregate but the SUM(i1.i) turns this query into an aggregate
+statement error
+SELECT i, (SELECT SUM(i1.i)) FROM integers i1;
+
+statement error
+SELECT i+1, (SELECT SUM(i1.i)) FROM integers i1;
+
+query IR
+SELECT MIN(i), (SELECT SUM(i1.i)) FROM integers i1;
+----
+1	6.000000
+
+query RR
+SELECT (SELECT SUM(i1.i)), (SELECT SUM(i1.i)) FROM integers i1;
+----
+6.000000	6.000000
+
+# subquery inside aggregation
+query RR
+SELECT SUM(i), SUM((SELECT i FROM integers WHERE i=i1.i)) FROM integers i1;
+----
+6.000000	6.000000
+
+query RR
+SELECT SUM(i), (SELECT SUM(i) FROM integers WHERE i>SUM(i1.i)) FROM integers i1;
+----
+6.000000	NULL
+
+# subquery with aggregation inside aggregation should fail
+statement error
+SELECT SUM((SELECT SUM(i))) FROM integers
+
+# aggregate with correlation in filter
+query II
+SELECT i, (SELECT MIN(i) FROM integers WHERE i>i1.i) FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	2
+2	3
+3	NULL
+
+# aggregate with correlation in both filter and projection
+query II
+SELECT i, (SELECT MIN(i)+i1.i FROM integers WHERE i>i1.i) FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	3
+2	5
+3	NULL
+
+# aggregate with correlation in GROUP BY
+query II
+SELECT i, (SELECT MIN(i) FROM integers GROUP BY i1.i) AS j FROM integers i1 ORDER BY i;
+----
+NULL	1
+1	1
+2	1
+3	1
+
+# aggregate with correlation in HAVING clause
+query II
+SELECT i, (SELECT i FROM integers GROUP BY i HAVING i=i1.i) AS j FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	1
+2	2
+3	3
+
+# correlated subquery in HAVING
+query IR
+SELECT i1.i, SUM(i) FROM integers i1 GROUP BY i1.i HAVING SUM(i)=(SELECT MIN(i) FROM integers WHERE i<>i1.i+1) ORDER BY 1;
+----
+1	1.000000
+
+query IR
+SELECT i % 2 AS j, SUM(i) FROM integers i1 GROUP BY j HAVING SUM(i)=(SELECT SUM(i) FROM integers WHERE i<>j+1) ORDER BY 1;
+----
+1	4.000000
+
+# aggregate query with non-aggregate subquery without group by
+query R
+SELECT (SELECT i+SUM(i1.i) FROM integers WHERE i=1 LIMIT 1) FROM integers i1;
+----
+7.000000
+
+query R
+SELECT (SELECT SUM(i)+SUM(i1.i) FROM integers) FROM integers i1 ORDER BY 1;
+----
+12.000000
+
+query R
+SELECT (SELECT SUM(i)+SUM((CASE WHEN i IS NOT NULL THEN i*0 ELSE 0 END)+i1.i) FROM integers) FROM integers i1 ORDER BY 1;
+----
+NULL
+10.000000
+14.000000
+18.000000
+
+# aggregate query with non-aggregate subquery with group by
+query IR
+SELECT i, (SELECT i+SUM(i1.i) FROM integers WHERE i=1) FROM integers i1 GROUP BY i ORDER BY i;
+----
+NULL	NULL
+1	2.000000
+2	3.000000
+3	4.000000
+
+# subquery inside aggregate
+query R
+SELECT SUM((SELECT i+i1.i FROM integers WHERE i=1)) FROM integers i1;
+----
+9.000000
+
+query IRR
+SELECT i, SUM(i1.i), (SELECT SUM(i1.i) FROM integers) AS k FROM integers i1 GROUP BY i ORDER BY i;
+----
+NULL	NULL	NULL
+1	1.000000	1.000000
+2	2.000000	2.000000
+3	3.000000	3.000000
+
+# aggregation of both entries inside subquery
+# aggregate on group inside subquery
+query IR
+SELECT i1.i AS j, (SELECT SUM(j+i) FROM integers) AS k FROM integers i1 GROUP BY j ORDER BY j;
+----
+NULL	NULL
+1	9.000000
+2	12.000000
+3	15.000000
+
+query R
+SELECT (SELECT SUM(i1.i*i) FROM integers) FROM integers i1 ORDER BY i;
+----
+NULL
+6.000000
+12.000000
+18.000000
+
+query IRR
+SELECT i, (SELECT SUM(i1.i)) AS k, (SELECT SUM(i1.i)) AS l FROM integers i1 GROUP BY i ORDER BY i;
+----
+NULL	NULL	NULL
+1	1.000000	1.000000
+2	2.000000	2.000000
+3	3.000000	3.000000
+
+# refer aggregation inside subquery
+query IR
+SELECT i, (SELECT SUM(i1.i)*SUM(i) FROM integers) AS k FROM integers i1 GROUP BY i ORDER BY i;
+----
+NULL	NULL
+1	6.000000
+2	12.000000
+3	18.000000
+
+# refer to GROUP BY inside subquery
+query IR
+SELECT i AS j, (SELECT j*SUM(i) FROM integers) AS k FROM integers i1 GROUP BY j ORDER BY j;
+----
+NULL	NULL
+1	6.000000
+2	12.000000
+3	18.000000
+
+# refer to GROUP BY without alias but with full name
+query IR
+SELECT i AS j, (SELECT i1.i*SUM(i) FROM integers) AS k FROM integers i1 GROUP BY j ORDER BY j;
+----
+NULL	NULL
+1	6.000000
+2	12.000000
+3	18.000000
+
+# perform SUM on subquery
+query IR
+SELECT i, SUM((SELECT SUM(i)*i1.i FROM integers)) AS k FROM integers i1 GROUP BY i ORDER BY i;
+----
+NULL	NULL
+1	6.000000
+2	12.000000
+3	18.000000
+
+# aggregate subqueries cannot be nested
+statement error
+SELECT i, SUM((SELECT SUM(i)*SUM(i1.i) FROM integers)) AS k FROM integers i1 GROUP BY i ORDER BY i;
+
+# aggregation but ONLY inside subquery results in implicit aggregation
+query R
+SELECT (SELECT SUM(i1.i)) FROM integers i1;
+----
+6.000000
+
+query IR
+SELECT FIRST(i), (SELECT SUM(i1.i)) FROM integers i1;
+----
+1	6.000000
+
+# aggregate that uses correlated column in aggregation
+query II
+SELECT i AS j, (SELECT MIN(i1.i) FROM integers GROUP BY i HAVING i=j) FROM integers i1 GROUP BY j ORDER BY j;
+----
+NULL	NULL
+1	1
+2	2
+3	3
+
+# ORDER BY correlated subquery
+query IR
+SELECT i, SUM(i1.i) FROM integers i1 GROUP BY i ORDER BY (SELECT SUM(i1.i) FROM integers);
+----
+NULL	NULL
+1	1.000000
+2	2.000000
+3	3.000000
+
+# LIMIT 0 on correlated subquery
+query IR
+SELECT i, SUM((SELECT SUM(i)*i1.i FROM integers LIMIT 0)) AS k FROM integers i1 GROUP BY i ORDER BY i;
+----
+NULL	NULL
+1	NULL
+2	NULL
+3	NULL
+
+# GROUP BY correlated subquery
+query IR
+SELECT (SELECT i+i1.i FROM integers WHERE i=1) AS k, SUM(i) AS j FROM integers i1 GROUP BY k ORDER BY 1;
+----
+NULL	NULL
+2	1.000000
+3	2.000000
+4	3.000000
+
+# correlated subquery in WHERE
+query R
+SELECT SUM(i) FROM integers i1 WHERE i>(SELECT (i+i1.i)/2 FROM integers WHERE i=1);
+----
+5.000000
+
+# correlated aggregate in WHERE
+query R
+SELECT SUM(i) FROM integers i1 WHERE i>(SELECT (SUM(i)+i1.i)/2 FROM integers WHERE i=1);
+----
+5.000000
+
+# use scalar subquery as argument to ALL/ANY
+query IT
+SELECT i, (SELECT MIN(i) FROM integers WHERE i=i1.i) >= ALL(SELECT i FROM integers WHERE i IS NOT NULL) FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	0
+2	0
+3	1
+
+query IT
+SELECT i, (SELECT MIN(i) FROM integers WHERE i<>i1.i) > ANY(SELECT i FROM integers WHERE i IS NOT NULL) FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	1
+2	0
+3	0
+
+query IT
+SELECT i, NOT((SELECT MIN(i) FROM integers WHERE i<>i1.i) > ANY(SELECT i FROM integers WHERE i IS NOT NULL)) FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	0
+2	1
+3	1
+
+# aggregates with multiple parameters
+query R
+SELECT (SELECT COVAR_POP(i1.i, i2.i) FROM integers i2) FROM integers i1 ORDER BY 1
+----
+NULL
+0.000000
+0.000000
+0.000000
+
+query R
+SELECT (SELECT COVAR_POP(i2.i, i1.i) FROM integers i2) FROM integers i1 ORDER BY 1
+----
+NULL
+0.000000
+0.000000
+0.000000
+
+query R
+SELECT (SELECT COVAR_POP(i1.i+i2.i, i1.i+i2.i) FROM integers i2) FROM integers i1 ORDER BY 1
+----
+NULL
+0.666667
+0.666667
+0.666667
+

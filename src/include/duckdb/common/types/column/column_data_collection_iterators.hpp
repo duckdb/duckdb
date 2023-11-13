@@ -43,10 +43,10 @@ private:
 	};
 
 public:
-	DUCKDB_API ColumnDataChunkIterator begin() {
+	ColumnDataChunkIterator begin() {
 		return ColumnDataChunkIterator(&collection, column_ids);
 	}
-	DUCKDB_API ColumnDataChunkIterator end() {
+	ColumnDataChunkIterator end() {
 		return ColumnDataChunkIterator(nullptr, vector<column_t>());
 	}
 };

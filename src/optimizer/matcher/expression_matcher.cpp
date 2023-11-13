@@ -19,7 +19,7 @@ bool ExpressionMatcher::Match(Expression &expr, vector<reference<Expression>> &b
 }
 
 bool ExpressionEqualityMatcher::Match(Expression &expr, vector<reference<Expression>> &bindings) {
-	if (!expr.Equals(&expression)) {
+	if (!expr.Equals(expression)) {
 		return false;
 	}
 	bindings.push_back(expr);

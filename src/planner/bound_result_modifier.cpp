@@ -1,5 +1,4 @@
 #include "duckdb/planner/bound_result_modifier.hpp"
-#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -29,7 +28,7 @@ bool BoundOrderByNode::Equals(const BoundOrderByNode &other) const {
 	if (type != other.type || null_order != other.null_order) {
 		return false;
 	}
-	if (!expression->Equals(other.expression.get())) {
+	if (!expression->Equals(*other.expression)) {
 		return false;
 	}
 
@@ -62,24 +61,6 @@ string BoundOrderByNode::ToString() const {
 	return str;
 }
 
-void BoundOrderByNode::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteField(type);
-	writer.WriteField(null_order);
-	writer.WriteSerializable(*expression);
-	// TODO statistics
-	writer.Finalize();
-}
-
-BoundOrderByNode BoundOrderByNode::Deserialize(Deserializer &source, PlanDeserializationState &state) {
-	FieldReader reader(source);
-	auto type = reader.ReadRequired<OrderType>();
-	auto null_order = reader.ReadRequired<OrderByNullType>();
-	auto expression = reader.ReadRequiredSerializable<Expression>(state);
-	reader.Finalize();
-	return BoundOrderByNode(type, null_order, std::move(expression));
-}
-
 unique_ptr<BoundOrderModifier> BoundOrderModifier::Copy() const {
 	auto result = make_uniq<BoundOrderModifier>();
 	for (auto &order : orders) {
@@ -88,22 +69,27 @@ unique_ptr<BoundOrderModifier> BoundOrderModifier::Copy() const {
 	return result;
 }
 
-bool BoundOrderModifier::Equals(const BoundOrderModifier *left, const BoundOrderModifier *right) {
-	if (left == right) {
+bool BoundOrderModifier::Equals(const BoundOrderModifier &left, const BoundOrderModifier &right) {
+	if (left.orders.size() != right.orders.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < left.orders.size(); i++) {
+		if (!left.orders[i].Equals(right.orders[i])) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool BoundOrderModifier::Equals(const unique_ptr<BoundOrderModifier> &left,
+                                const unique_ptr<BoundOrderModifier> &right) {
+	if (left.get() == right.get()) {
 		return true;
 	}
 	if (!left || !right) {
 		return false;
 	}
-	if (left->orders.size() != right->orders.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < left->orders.size(); i++) {
-		if (!left->orders[i].Equals(right->orders[i])) {
-			return false;
-		}
-	}
-	return true;
+	return BoundOrderModifier::Equals(*left, *right);
 }
 
 BoundLimitModifier::BoundLimitModifier() : BoundResultModifier(ResultModifierType::LIMIT_MODIFIER) {

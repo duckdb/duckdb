@@ -1,0 +1,30 @@
+# name: test/fuzzer/duckfuzz/bitstring_agg_unfoldable.test
+# description: Bitstring agg with unfoldable parameters
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT bitstring_agg(i, i, 42) FROM range(10) t(i);
+----
+requires a constant min and max argument
+
+statement error
+SELECT bitstring_agg(i, 42, i) FROM range(10) t(i);
+----
+requires a constant min and max argument
+
+# constant but not foldable
+statement error
+SELECT bitstring_agg(i, 0, (100 + random())::BIGINT) FROM range(10) t(i);
+----
+requires a constant min and max argument
+
+statement ok
+PRAGMA disable_verification
+
+statement error
+SELECT bitstring_agg(i, 0, 3) FROM range(10) t(i);
+----
+outside of provided min and max range

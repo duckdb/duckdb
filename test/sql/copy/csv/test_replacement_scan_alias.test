@@ -2,19 +2,27 @@
 # description: Test replacement scan aliases
 # group: [csv]
 
-# implicit alias is equal to the table name
-statement ok
-select "test/sql/copy/csv/data/abac/abac.csv".column0 from 'test/sql/copy/csv/data/abac/abac.csv';
+# implicit alias is equal to the file name
 
 statement ok
 select * from 'test/sql/copy/csv/data/test/dateformat.csv';
 
 statement ok
-select * from 'test/sql/copy/csv/data/abac/abac.csv', 'test/sql/copy/csv/data/test/dateformat.csv';
+select * from 'test/sql/copy/csv/data/test/dateformat.csv', 'test/sql/copy/csv/data/test/dateformat_2.csv';
 
 # explicit alias
 statement ok
-select mytbl.column0 from 'test/sql/copy/csv/data/abac/abac.csv' mytbl;
+select mytbl.column0 from 'test/sql/copy/csv/data/test/dateformat.csv'mytbl;
 
 statement ok
-select mytbl.mycol from 'test/sql/copy/csv/data/abac/abac.csv' mytbl(mycol);
+select mytbl.mycol from 'test/sql/copy/csv/data/test/dateformat.csv' mytbl(mycol);
+
+require parquet
+
+statement ok
+select blob.ids from 'data/parquet-testing/blob.parquet'
+
+require json
+
+statement ok
+select example_n.id from 'data/json/example_n.ndjson'

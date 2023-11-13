@@ -11,8 +11,7 @@ SetOpRelation::SetOpRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> r
 	if (left->context.GetContext() != right->context.GetContext()) {
 		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
-	vector<ColumnDefinition> dummy_columns;
-	context.GetContext()->TryBindRelation(*this, dummy_columns);
+	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 unique_ptr<QueryNode> SetOpRelation::GetQueryNode() {
@@ -31,7 +30,7 @@ string SetOpRelation::GetAlias() {
 }
 
 const vector<ColumnDefinition> &SetOpRelation::Columns() {
-	return left->Columns();
+	return this->columns;
 }
 
 string SetOpRelation::ToString(idx_t depth) {

@@ -1,0 +1,27 @@
+# name: test/sql/tpch/gzip_csv_auto_detect.test_slow
+# description: Issue #7377 - DuckDB significantly exceeds memory_limit when ingesting .csv.gz file with sample_size=-1
+# group: [tpch]
+
+require tpch
+
+# write lineitem to lineitem.csv.gz
+statement ok
+CALL dbgen(sf=1);
+
+statement ok
+COPY lineitem TO '__TEST_DIR__/lineitem.csv.gz' (HEADER)
+
+load __TEST_DIR__/store_tpch_auto_detect.db
+
+# now read the gzip compressed file with sample_size=-1
+statement ok
+SET memory_limit='500MB';
+
+statement ok
+CREATE OR REPLACE TABLE lineitem AS (SELECT * FROM read_csv_auto(['__TEST_DIR__/lineitem.csv.gz'], sample_size=-1));
+
+# run Q01 to verify the file was loaded correctly
+query I
+PRAGMA tpch(1)
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q01.csv

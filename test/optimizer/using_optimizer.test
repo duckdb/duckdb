@@ -105,7 +105,7 @@ explain select i from a left outer join b using (i) right join c using (i);
 ----
 
 query II nosort leftright
-explain select a.i from a left outer join b on (a.i=b.i) right join c on (a.i=c.i);
+explain select c.i from a left outer join b on (a.i=b.i) right join c on (a.i=c.i);
 ----
 
 # full outer join

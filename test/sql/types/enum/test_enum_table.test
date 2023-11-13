@@ -46,6 +46,10 @@ Mark	sad
 query TT
 select * from person where current_mood > 'sad'
 ----
+
+query TT
+select * from person where current_mood < 'sad'
+----
 Moe	happy
 Pedro	ok
 
@@ -173,11 +177,11 @@ statement ok
 INSERT INTO person VALUES ('Diego', 'sad', 'happy','Seat'), ('Tim', 'happy', 'sad','Fiets');
 
 query II
-select count(*), current_mood from person group by current_mood
+select count(*), current_mood from person group by current_mood order by all
 ----
 1	ok
-2	sad
 1	happy
+2	sad
 
 query II
 select name, current_mood from person order by current_mood

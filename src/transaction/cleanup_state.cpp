@@ -8,6 +8,7 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/storage/table/row_version_manager.hpp"
 
 namespace duckdb {
 
@@ -28,12 +29,12 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
-		auto info = (DeleteInfo *)data;
+		auto info = reinterpret_cast<DeleteInfo *>(data);
 		CleanupDelete(*info);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
-		auto info = (UpdateInfo *)data;
+		auto info = reinterpret_cast<UpdateInfo *>(data);
 		CleanupUpdate(*info);
 		break;
 	}
@@ -69,7 +70,7 @@ void CleanupState::CleanupDelete(DeleteInfo &info) {
 
 	count = 0;
 	for (idx_t i = 0; i < info.count; i++) {
-		row_numbers[count++] = info.vinfo->start + info.rows[i];
+		row_numbers[count++] = info.base_row + info.rows[i];
 	}
 	Flush();
 }
@@ -80,7 +81,7 @@ void CleanupState::Flush() {
 	}
 
 	// set up the row identifiers vector
-	Vector row_identifiers(LogicalType::ROW_TYPE, (data_ptr_t)row_numbers);
+	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_numbers));
 
 	// delete the tuples from all the indexes
 	try {

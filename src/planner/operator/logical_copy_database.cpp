@@ -15,12 +15,12 @@ LogicalCopyDatabase::LogicalCopyDatabase(unique_ptr<CopyDatabaseInfo> info_p)
 
 LogicalCopyDatabase::~LogicalCopyDatabase() {}
 
-void LogicalCopyDatabase::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
-}
+void LogicalCopyDatabase::Serialize(Serializer &serializer) const {
+	throw NotImplementedException("LogicalCopyDatabase::Serialize");
 
-unique_ptr<LogicalOperator> LogicalCopyDatabase::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
-	throw NotImplementedException(LogicalOperatorToString(state.type));
+}
+unique_ptr<LogicalOperator> LogicalCopyDatabase::Deserialize(Deserializer &deserializer) {
+	throw NotImplementedException("LogicalCopyDatabase::Deserialize");
 }
 
 void LogicalCopyDatabase::ResolveTypes() {

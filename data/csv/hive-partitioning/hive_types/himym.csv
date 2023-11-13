@@ -1,0 +1,206 @@
+season,overall,episode,title,director,writer,aired,code,viewers,seen
+1,1,1,"Pilot",Pamela Fryman,Carter Bays & Craig Thomas,2005-09-19,1ALH79,10.94,true
+1,2,2,"Purple Giraffe",Pamela Fryman,Carter Bays & Craig Thomas,2005-09-26,1ALH01,10.40,true
+1,3,3,"Sweet Taste of Liberty",Pamela Fryman,Phil Lord & Chris Miller,2005-10-3,1ALH02,10.44,true
+1,4,4,"Return of the Shirt",Pamela Fryman,Kourtney Kang,2005-10-10,1ALH03,9.84,true
+1,5,5,"Okay Awesome",Pamela Fryman,Chris Harris,2005-10-17,1ALH04,10.14,true
+1,6,6,"Slutty Pumpkin",Pamela Fryman,Brenda Hsueh,2005-10-24,1ALH05,10.89,true
+1,7,7,"Matchmaker",Pamela Fryman,Chris Marcil & Sam Johnson,2005-11-7,1ALH07,10.55,true
+1,8,8,"The Duel",Pamela Fryman,Gloria Calderon Kellett,2005-11-14,1ALH06,10.35,true
+1,9,9,"Belly Full of Turkey",Pamela Fryman,Phil Lord & Chris Miller,2005-11-21,1ALH09,10.29,true
+1,10,10,"The Pineapple Incident",Pamela Fryman,Carter Bays & Craig Thomas,2005-11-28,1ALH08,12.27,true
+1,11,11,"The Limo",Pamela Fryman,Sam Johnson & Chris Marcil,2005-12-19,1ALH10,10.36,true
+1,12,12,"The Wedding",Pamela Fryman,Kourtney Kang,2006-01-9,1ALH11,11.49,true
+1,13,13,"Drumroll, Please",Pamela Fryman,Gloria Calderon Kellett,2006-01-23,1ALH12,10.82,true
+1,14,14,"Zip, Zip, Zip",Pamela Fryman,Brenda Hsueh,2006-02-6,1ALH13,10.94,true
+1,15,15,"Game Night",Pamela Fryman,Chris Harris,2006-02-27,1ALH14,9.82,true
+1,16,16,"Cupcake",Pamela Fryman,Maria Ferrari,2006-03-6,1ALH15,10.15,true
+1,17,17,"Life Among the Gorillas",Pamela Fryman,Carter Bays & Craig Thomas,2006-03-20,1ALH16,9.80,true
+1,18,18,"Nothing Good Happens After 2 A.M.",Pamela Fryman,Carter Bays & Craig Thomas,2006-04-10,1ALH17,7.65,true
+1,19,19,"Mary the Paralegal",Pamela Fryman,Chris Harris,2006-04-24,1ALH18,7.60,true
+1,20,20,"Best Prom Ever",Pamela Fryman,Ira Ungerleider,2006-05-1,1ALH19,7.24,true
+1,21,21,"Milk",Pamela Fryman,Carter Bays & Craig Thomas,2006-05-8,1ALH20,8.07,true
+1,22,22,"Come On",Pamela Fryman,Carter Bays & Craig Thomas,2006-05-15,1ALH21,8.64,true
+2,23,1,"Where Were We?",Pamela Fryman,Carter Bays & Craig Thomas,2006-09-18,2ALH01,10.48,true
+2,24,2,"The Scorpion and the Toad",Rob Greenberg,Chris Harris,2006-09-25,2ALH02,9.14,true
+2,25,3,"Brunch",Pamela Fryman,Stephen Lloyd,2006-10-2,2ALH03,9.32,true
+2,26,4,"Ted Mosby, Architect",Pamela Fryman,Kristin Newman,2006-10-9,2ALH04,9.09,true
+2,27,5,"World's Greatest Couple",Pamela Fryman,Brenda Hsueh,2006-10-16,2ALH06,9.05,true
+2,28,6,"Aldrin Justice",Pamela Fryman,Jamie Rhonheimer,2006-10-23,2ALH05,9.59,true
+2,29,7,"Swarley",Pamela Fryman,Greg Malins,2006-11-6,2ALH07,8.22,true
+2,30,8,"Atlantic City",Pamela Fryman,Maria Ferrari,2006-11-13,2ALH08,9.33,true
+2,31,9,"Slap Bet",Pamela Fryman,Kourtney Kang,2006-11-20,2ALH09,8.85,true
+2,32,10,"Single Stamina",Pamela Fryman,Kristin Newman,2006-11-27,2ALH10,9.85,true
+2,33,11,"How Lily Stole Christmas",Pamela Fryman,Brenda Hsueh,2006-12-11,2ALH12,8.81,false
+2,34,12,"First Time in New York",Pamela Fryman,Gloria Calderon Kellett,2007-01-8,2ALH11,8.37,false
+2,35,13,"Columns",Rob Greenberg,Matt Kuhn,2007-01-22,2ALH14,9.42,false
+2,36,14,"Monday Night Football",Rob Greenberg,Carter Bays & Craig Thomas,2007-02-5,2ALH13,10.61,false
+2,37,15,"Lucky Penny",Pamela Fryman,Jamie Rhonheimer,2007-02-12,2ALH15,9.68,false
+2,38,16,"Stuff",Pamela Fryman,Kourtney Kang,2007-02-19,2ALH16,8.95,false
+2,39,17,"Arrivederci, Fiero",Pamela Fryman,Chris Harris,2007-02-26,2ALH17,9.33,false
+2,40,18,"Moving Day",Pamela Fryman,Maria Ferrari,2007-03-19,2ALH18,7.27,false
+2,41,19,"Bachelor Party",Pamela Fryman,Carter Bays & Craig Thomas,2007-04-9,2ALH19,9.90,false
+2,42,20,"Showdown",Pamela Fryman,Gloria Calderon Kellett,2007-04-30,2ALH20,7.24,false
+2,43,21,"Something Borrowed",Pamela Fryman,Greg Malins,2007-05-7,2ALH21,7.69,false
+2,44,22,"Something Blue",Pamela Fryman,Carter Bays & Craig Thomas,2007-05-14,2ALH22,9.90,false
+3,45,1,"Wait for It",Pamela Fryman,Carter Bays & Craig Thomas,2007-09-24,3ALH01,8.12,false
+3,46,2,"We're Not from Here",Pamela Fryman,Chris Harris,2007-10-1,3ALH02,7.88,false
+3,47,3,"Third Wheel",Pamela Fryman,David Hemingson,2007-10-8,3ALH04,7.96,false
+3,48,4,"Little Boys",Rob Greenberg,Kourtney Kang,2007-10-15,3ALH03,7.71,false
+3,49,5,"How I Met Everyone Else",Pamela Fryman,Gloria Calderon Kellett,2007-10-22,3ALH05,8.50,false
+3,50,6,"I'm Not That Guy",Pamela Fryman,Jonathan Groff,2007-10-29,3ALH07,8.55,false
+3,51,7,"Dowisetrepla",Pamela Fryman,Brenda Hsueh,2007-11-5,3ALH06,8.77,false
+3,52,8,"Spoiler Alert",Pamela Fryman,Stephen Lloyd,2007-11-12,3ALH08,8.58,false
+3,53,9,"Slapsgiving",Pamela Fryman,Matt Kuhn,2007-11-19,3ALH09,8.06,false
+3,54,10,"The Yips",Pamela Fryman,Jamie Rhonheimer,2007-11-26,3ALH10,7.91,false
+3,55,11,"The Platinum Rule",Pamela Fryman,Carter Bays & Craig Thomas,2007-12-10,3ALH11,,false
+3,56,12,"No Tomorrow",Pamela Fryman,Carter Bays & Craig Thomas,2008-03-17,3ALH12,9.73,false
+3,57,13,"Ten Sessions",Pamela Fryman,Chris Harris and Carter Bays & Craig Thomas,2008-03-24,3ALH14,10.67,false
+3,58,14,"The Bracket",Pamela Fryman,Joe Kelly,2008-03-31,3ALH13,9.50,false
+3,59,15,"The Chain of Screaming",Pamela Fryman,Carter Bays & Craig Thomas,2008-04-14,3ALH15,7.99,false
+3,60,16,"Sandcastles in the Sand",Pamela Fryman,Kourtney Kang,2008-04-21,3ALH16,8.45,false
+3,61,17,"The Goat",Pamela Fryman,Stephen Lloyd,2008-04-28,3ALH17,8.84,false
+3,62,18,"Rebound Bro",Pamela Fryman,Jamie Rhonheimer,2008-05-5,3ALH18,8.36,false
+3,63,19,"Everything Must Go",Pamela Fryman,Jonathan Groff & Chris Harris,2008-05-12,3ALH19,8.93,false
+3,64,20,"Miracles",Pamela Fryman,Carter Bays & Craig Thomas,2008-05-19,3ALH20,7.99,false
+4,65,1,"Do I Know You?",Pamela Fryman,Carter Bays & Craig Thomas,2008-09-22,4ALH01,9.79,false
+4,66,2,"The Best Burger in New York",Pamela Fryman,Carter Bays & Craig Thomas,2008-09-29,4ALH02,8.72,false
+4,67,3,"I Heart NJ",Pamela Fryman,Greg Malins,2008-10-6,4ALH04,8.97,false
+4,68,4,"Intervention",Michael Shea,Stephen Lloyd,2008-10-13,4ALH03,9.25,false
+4,69,5,"Shelter Island",Pamela Fryman,Chris Harris,2008-10-20,4ALH05,9.45,false
+4,70,6,"Happily Ever After",Pamela Fryman,Jamie Rhonheimer,2008-11-3,4ALH06,9.40,false
+4,71,7,"Not a Father's Day",Pamela Fryman,Robia Rashid,2008-11-10,4ALH07,9.79,false
+4,72,8,"Woooo!",Pamela Fryman,Carter Bays & Craig Thomas,2008-11-17,4ALH09,9.99,false
+4,73,9,"The Naked Man",Pamela Fryman,Joe Kelly,2008-11-24,4ALH08,10.04,false
+4,74,10,"The Fight",Pamela Fryman,Theresa Mulligan Rosenthal,2008-12-8,4ALH10,10.49,false
+4,75,11,"Little Minnesota",Pamela Fryman,Chuck Tatham,2008-12-15,4ALH12,11.44,false
+4,76,12,"Benefits",Pamela Fryman,Kourtney Kang,2009-01-12,4ALH11,11.76,false
+4,77,13,"Three Days of Snow",Pamela Fryman,Matt Kuhn,2009-01-19,4ALH13,10.69,false
+4,78,14,"The Possimpible",Pamela Fryman,Jonathan Groff,2009-02-2,4ALH14,10.30,false
+4,79,15,"The Stinsons",Pamela Fryman,Carter Bays & Craig Thomas,2009-03-2,4ALH15,11.08,false
+4,80,16,"Sorry, Bro",Pamela Fryman,Craig Gerard & Matthew Zinman,2009-03-9,4ALH16,8.51,false
+4,81,17,"The Front Porch",Rob Greenberg,Chris Harris,2009-03-16,4ALH17,9.29,false
+4,82,18,"Old King Clancy",Pamela Fryman,Jamie Rhonheimer,2009-03-23,4ALH19,7.36,false
+4,83,19,"Murtaugh",Pamela Fryman,Joe Kelly,2009-03-30,4ALH18,9.20,false
+4,84,20,"Mosbius Designs",Pamela Fryman,Kourtney Kang,2009-04-13,4ALH20,9.56,false
+4,85,21,"The Three Days Rule",Pamela Fryman,Greg Malins,2009-04-27,4ALH22,8.87,false
+4,86,22,"Right Place, Right Time",Pamela Fryman,Stephen Lloyd,2009-05-4,4ALH21,8.89,false
+4,87,23,"As Fast as She Can",Pamela Fryman,Carter Bays & Craig Thomas,2009-05-11,4ALH23,8.70,false
+4,88,24,"The Leap",Pamela Fryman,Carter Bays & Craig Thomas,2009-05-18,4ALH24,8.73,false
+5,89,1,"Definitions",Pamela Fryman,Carter Bays & Craig Thomas,2009-09-21,5ALH01,9.09,false
+5,90,2,"Double Date",Pamela Fryman,Matt Kuhn,2009-09-28,5ALH02,8.73,false
+5,91,3,"Robin 101",Pamela Fryman,Carter Bays & Craig Thomas,2009-10-5,5ALH03,8.23,false
+5,92,4,"The Sexless Innkeeper",Pamela Fryman,Kourtney Kang,2009-10-12,5ALH04,8.56,false
+5,93,5,"Duel Citizenship",Pamela Fryman,Chuck Tatham,2009-10-19,5ALH05,8.07,false
+5,94,6,"Bagpipes",Pamela Fryman,Robia Rashid,2009-11-2,5ALH06,8.82,false
+5,95,7,"The Rough Patch",Pamela Fryman,Chris Harris,2009-11-9,5ALH07,8.82,false
+5,96,8,"The Playbook",Pamela Fryman,Carter Bays & Craig Thomas,2009-11-16,5ALH08,8.44,false
+5,97,9,"Slapsgiving 2: Revenge of the Slap",Pamela Fryman,Jamie Rhonheimer,2009-11-23,5ALH09,8.75,false
+5,98,10,"The Window",Pamela Fryman,Joe Kelly,2009-12-7,5ALH11,8.79,false
+5,99,11,"Last Cigarette Ever",Pamela Fryman,Theresa Mulligan Rosenthal,2009-12-14,5ALH10,9.65,false
+5,100,12,"Girls Versus Suits",Pamela Fryman,Carter Bays & Craig Thomas,2010-01-11,5ALH12,9.78,false
+5,101,13,"Jenkins",Neil Patrick Harris,Greg Malins,2010-01-18,5ALH13,10.52,false
+5,102,14,"Perfect Week",Pamela Fryman,Craig Gerard & Matthew Zinman,2010-02-1,5ALH14,9.28,false
+5,103,15,"Rabbit or Duck",Pamela Fryman,Carter Bays & Craig Thomas,2010-02-8,5ALH15,10.00,false
+5,104,16,"Hooked",Pamela Fryman,Kourtney Kang,2010-03-1,5ALH16,10.37,false
+5,105,17,"Of Course",Pamela Fryman,Matt Kuhn,2010-03-8,5ALH18,10.06,false
+5,106,18,"Say Cheese",Pamela Fryman,Robia Rashid,2010-03-22,5ALH17,8.37,false
+5,107,19,"Zoo or False",Pamela Fryman,Stephen Lloyd,2010-04-12,5ALH22,6.88,false
+5,108,20,"Home Wreckers",Pamela Fryman,Chris Harris,2010-04-19,5ALH20,7.71,false
+5,109,21,"Twin Beds",Pamela Fryman,Theresa Mulligan Rosenthal,2010-05-3,5ALH19,7.70,false
+5,110,22,"Robots Versus Wrestlers",Rob Greenberg,Jamie Rhonheimer,2010-05-10,5ALH21,8.16,false
+5,111,23,"The Wedding Bride",Pamela Fryman,Stephen Lloyd,2010-05-17,5ALH24,7.69,false
+5,112,24,"Doppelgangers",Pamela Fryman,Carter Bays & Craig Thomas,2010-05-24,5ALH23,8.18,false
+6,113,1,"Big Days",Pamela Fryman,Carter Bays & Craig Thomas,2010-09-20,6ALH01,8.79,false
+6,114,2,"Cleaning House",Pamela Fryman,Stephen Lloyd,2010-09-27,6ALH02,9.00,false
+6,115,3,"Unfinished",Pamela Fryman,Jamie Rhonheimer,2010-10-4,6ALH03,8.60,false
+6,116,4,"Subway Wars",Pamela Fryman,Chris Harris,2010-10-11,6ALH04,8.48,false
+6,117,5,"Architect of Destruction",Pamela Fryman,Carter Bays & Craig Thomas,2010-10-18,6ALH05,8.05,false
+6,118,6,"Baby Talk",Pamela Fryman,Joe Kelly,2010-10-25,6ALH07,8.29,false
+6,119,7,"Canning Randy",Pamela Fryman,Chuck Tatham,2010-11-1,6ALH06,8.88,false
+6,120,8,"Natural History",Pamela Fryman,Carter Bays & Craig Thomas,2010-11-8,6ALH09,8.87,false
+6,121,9,"Glitter",Pamela Fryman,Kourtney Kang,2010-11-15,6ALH08,8.87,false
+6,122,10,"Blitzgiving",Pamela Fryman,Theresa Mulligan Rosenthal,2010-11-22,6ALH10,8.73,false
+6,123,11,"The Mermaid Theory",Pamela Fryman,Robia Rashid,2010-12-6,6ALH11,9.26,false
+6,124,12,"False Positive",Pamela Fryman,Craig Gerard & Matthew Zinman,2010-12-13,6ALH12,9.70,false
+6,125,13,"Bad News",Pamela Fryman,Jennifer Hendriks,2011-01-3,6ALH13,10.15,false
+6,126,14,"Last Words",Pamela Fryman,Carter Bays & Craig Thomas,2011-01-17,6ALH14,10.54,false
+6,127,15,"Oh Honey",Pamela Fryman,Carter Bays & Craig Thomas,2011-02-7,6ALH15,10.00,false
+6,128,16,"Desperation Day",Pamela Fryman,Tami Sagher,2011-02-14,6ALH16,9.51,false
+6,129,17,"Garbage Island",Michael Shea,Tom Ruprecht,2011-02-21,6ALH17,9.33,false
+6,130,18,"A Change of Heart",Pamela Fryman,Matt Kuhn,2011-02-28,6ALH19,9.24,false
+6,131,19,"Legendaddy",Pamela Fryman,Dan Gregor & Doug Mand,2011-03-21,6ALH18,8.03,false
+6,132,20,"The Exploding Meatball Sub",Pamela Fryman,Stephen Lloyd,2011-04-11,6ALH20,6.87,false
+6,133,21,"Hopeless",Pamela Fryman,Chris Harris,2011-04-18,6ALH22,6.49,false
+6,134,22,"The Perfect Cocktail",Pamela Fryman,Joe Kelly,2011-05-2,6ALH21,6.77,false
+6,135,23,"Landmarks",Pamela Fryman,Carter Bays & Craig Thomas,2011-05-9,6ALH24,6.41,false
+6,136,24,"Challenge Accepted",Pamela Fryman,Carter Bays & Craig Thomas,2011-05-16,6ALH23,7.15,false
+7,137,1,"The Best Man",Pamela Fryman,Carter Bays & Craig Thomas,2011-09-19,7ALH01,11.00,false
+7,138,2,"The Naked Truth",Pamela Fryman,Stephen Lloyd,2011-09-19,7ALH02,12.22,false
+7,139,3,"Ducky Tie",Rob Greenberg,Carter Bays & Craig Thomas,2011-09-26,7ALH03,10.50,false
+7,140,4,"The Stinson Missile Crisis",Pamela Fryman,Kourtney Kang,2011-10-3,7ALH04,10.39,false
+7,141,5,"Field Trip",Pamela Fryman,Jamie Rhonheimer,2011-10-10,7ALH06,8.89,false
+7,142,6,"Mystery vs. History",Pamela Fryman,Chuck Tatham,2011-10-17,7ALH05,9.81,false
+7,143,7,"Noretta",Pamela Fryman,Matt Kuhn,2011-10-24,7ALH07,9.87,false
+7,144,8,"The Slutty Pumpkin Returns",Pamela Fryman,Tami Sagher,2011-10-31,7ALH08,10.49,false
+7,145,9,"Disaster Averted",Michael Shea,Robia Rashid,2011-11-7,7ALH09,10.28,false
+7,146,10,"Tick, Tick, Tick",Pamela Fryman,Chris Harris,2011-11-14,7ALH10,10.42,false
+7,147,11,"The Rebound Girl",Pamela Fryman,Carter Bays & Craig Thomas,2011-11-21,7ALH11,10.01,false
+7,148,12,"Symphony of Illumination",Pamela Fryman,Joe Kelly,2011-12-5,7ALH12,11.51,false
+7,149,13,"Tailgate",Pamela Fryman,Carter Bays & Craig Thomas,2012-01-2,7ALH13,10.14,false
+7,150,14,"46 Minutes",Pamela Fryman,Dan Gregor & Doug Mand,2012-01-16,7ALH14,10.08,false
+7,151,15,"The Burning Beekeeper",Pamela Fryman,Carter Bays & Craig Thomas,2012-02-6,7ALH17,9.98,false
+7,152,16,"The Drunk Train",Pamela Fryman,Craig Gerard & Matthew Zinman,2012-02-13,7ALH16,9.01,false
+7,153,17,"No Pressure",Pamela Fryman,George Sloan,2012-02-20,7ALH15,9.68,false
+7,154,18,"Karma",Pamela Fryman,Stephen Lloyd,2012-02-27,7ALH18,9.07,false
+7,155,19,"The Broath",Pamela Fryman,Carter Bays & Craig Thomas,2012-03-19,7ALH19,8.15,false
+7,156,20,"Trilogy Time",Pamela Fryman,Kourtney Kang,2012-04-9,7ALH23,8.00,false
+7,157,21,"Now We're Even",Pamela Fryman,Chuck Tatham,2012-04-16,7ALH22,7.24,false
+7,158,22,"Good Crazy",Pamela Fryman,Carter Bays & Craig Thomas,2012-04-30,7ALH20,7.99,false
+7,159,23,"The Magician's Code",Pamela Fryman,Jennifer HendriksCarter Bays & Craig Thomas,2012-05-14,7ALH217ALH24,8.58,false
+8,161,1,"Farhampton",Pamela Fryman,Carter Bays & Craig Thomas,2012-09-24,8ALH01,8.84,false
+8,162,2,"The Pre-Nup",Pamela Fryman,Carter Bays & Craig Thomas,2012-10-1,8ALH02,8.17,false
+8,163,3,"Nannies",Pamela Fryman,Chuck Tatham,2012-10-8,8ALH03,7.82,false
+8,164,4,"Who Wants to Be a Godparent?",Pamela Fryman,Matt Kuhn,2012-10-15,8ALH04,7.93,false
+8,165,5,"The Autumn of Break-Ups",Pamela Fryman,Kourtney Kang,2012-11-5,8ALH06,7.22,false
+8,166,6,"Splitsville",Pamela Fryman,Stephen Lloyd,2012-11-12,8ALH05,7.95,false
+8,167,7,"The Stamp Tramp",Pamela Fryman,Tami Sagher,2012-11-19,8ALH07,7.45,false
+8,168,8,"Twelve Horny Women",Pamela Fryman,Eric Falconer & Romanski,2012-11-26,8ALH08,8.73,false
+8,169,9,"Lobster Crawl",Pamela Fryman,Barbara Adler,2012-12-3,8ALH09,8.26,false
+8,170,10,"The Over-Correction",Pamela Fryman,Craig Gerard & Matthew Zinman,2012-12-10,8ALH10,8.82,false
+8,171,11,"The Final Page",Pamela Fryman,Dan Gregor & Doug MandCarter Bays & Craig Thomas,2012-12-17,8ALH118ALH12,8.70,false
+8,173,13,"Band or DJ?",Pamela Fryman,Carter Bays & Craig Thomas,2013-01-14,8ALH13,10.51,false
+8,174,14,"Ring Up!",Pamela Fryman,Jennifer Hendriks,2013-01-21,8ALH14,10.07,false
+8,175,15,"P.S. I Love You",Pamela Fryman,Carter Bays & Craig Thomas,2013-02-4,8ALH15,10.30,false
+8,176,16,"Bad Crazy",Pamela Fryman,Carter Bays & Craig Thomas,2013-02-11,8ALH16,8.98,false
+8,177,17,"The Ashtray",Pamela Fryman,Carter Bays & Craig Thomas,2013-02-18,8ALH18,8.85,false
+8,178,18,"Weekend at Barney's",Pamela Fryman,George Sloan,2013-02-25,8ALH17,8.59,false
+8,179,19,"The Fortress",Michael Shea,Stephen Lloyd,2013-03-18,8ALH20,7.44,false
+8,180,20,"The Time Travelers",Pamela Fryman,Carter Bays & Craig Thomas,2013-03-25,8ALH19,6.99,false
+8,181,21,"Romeward Bound",Pamela Fryman,Chuck Tatham,2013-04-15,8ALH22,6.58,false
+8,182,22,"The Bro Mitzvah",Pamela Fryman,Chris Harris,2013-04-29,8ALH21,7.06,false
+8,183,23,"Something Old",Pamela Fryman,Carter Bays & Craig Thomas,2013-05-6,8ALH23,6.99,false
+8,184,24,"Something New",Pamela Fryman,Carter Bays & Craig Thomas,2013-05-13,8ALH24,8.57,false
+9,185,1,"The Locket",Pamela Fryman,Carter Bays & Craig Thomas,2013-09-23,9ALH01,9.40,false
+9,186,2,"Coming Back",Pamela Fryman,Carter Bays & Craig Thomas,2013-09-23,9ALH02,9.40,false
+9,187,3,"Last Time in New York",Pamela Fryman,Craig Gerard & Matthew Zinman,2013-09-30,9ALH04,7.87,false
+9,188,4,"The Broken Code",Pamela Fryman,Matt Kuhn,2013-10-7,9ALH03,7.53,false
+9,189,5,"The Poker Game",Pamela Fryman,Dan Gregor & Doug Mand,2013-10-14,9ALH05,7.98,false
+9,190,6,"Knight Vision",Pamela Fryman,Chris Harris,2013-10-21,9ALH07,7.64,false
+9,191,7,"No Questions Asked",Pamela Fryman,Stephen Lloyd,2013-10-28,9ALH06,7.63,false
+9,192,8,"The Lighthouse",Pamela Fryman,Rachel Axler,2013-11-4,9ALH08,8.67,false
+9,193,9,"Platonish",Pamela Fryman,George Sloan,2013-11-11,9ALH10,8.08,false
+9,194,10,"Mom and Dad",Pamela Fryman,Carter Bays & Craig Thomas,2013-11-18,9ALH09,8.11,false
+9,195,11,"Bedtime Stories",Pamela Fryman,Carter Bays & Craig Thomas,2013-11-25,9ALH12,7.64,false
+9,196,12,"The Rehearsal Dinner",Pamela Fryman,Chuck Tatham,2013-12-2,9ALH11,8.04,false
+9,197,13,"Bass Player Wanted",Pamela Fryman,Carter Bays & Craig Thomas,2013-12-16,9ALH13,7.71,false
+9,198,14,"Slapsgiving 3: Slappointment in Slapmarra",Pamela Fryman,Carter Bays & Craig Thomas,2014-01-13,9ALH15,8.59,false
+9,199,15,"Unpause",Pamela Fryman,Chris Harris,2014-01-20,9ALH14,8.83,false
+9,200,16,"How Your Mother Met Me",Pamela Fryman,Carter Bays & Craig Thomas,2014-01-27,9ALH16,10.81,false
+9,201,17,"Sunrise",Pamela Fryman,Carter Bays & Craig Thomas,2014-02-3,9ALH18,9.98,false
+9,202,18,"Rally",Pamela Fryman,Carter Bays & Craig Thomas,2014-02-24,9ALH17,9.28,false
+9,203,19,"Vesuvius",Pamela Fryman,Barbara Adler,2014-03-3,9ALH19,9.11,false
+9,204,20,"Daisy",Pamela Fryman,Carter Bays & Craig Thomas,2014-03-10,9ALH20,7.70,false
+9,205,21,"Gary Blauman",Pamela Fryman,Kourtney Kang,2014-03-17,9ALH22,7.78,false
+9,206,22,"The End of the Aisle",Pamela Fryman,Carter Bays & Craig Thomas,2014-03-24,9ALH21,9.04,false
+9,207,23,"Last Forever",Pamela Fryman,Carter Bays & Craig Thomas,2014-03-31,9ALH239ALH24,13.13,false

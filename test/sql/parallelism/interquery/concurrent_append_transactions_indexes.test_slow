@@ -1,0 +1,40 @@
+# name: test/sql/parallelism/interquery/concurrent_append_transactions_indexes.test_slow
+# description: Test concurrent appends and transaction isolation
+# group: [interquery]
+
+# FIXME: this test causes a data race in the statistics code
+# FIXME: reproducible by running this test with THREADSAN=1 make reldebug
+require nothreadsan
+
+statement ok
+CREATE TABLE integers(i INTEGER PRIMARY KEY)
+
+concurrentloop threadid 0 10
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE count_table_${threadid} AS SELECT COUNT(*) AS count FROM integers WHERE i >= 0
+
+loop i 0 100
+
+statement ok
+INSERT INTO integers VALUES (${threadid} * 1000 + ${i})
+
+# verify that we inserted exactly one element in this transaction
+query II
+SELECT COUNT(*), COUNT(DISTINCT i) FROM integers WHERE i >= 0 EXCEPT SELECT count+${i}+1, count+${i}+1 FROM count_table_${threadid}
+----
+
+endloop
+
+statement ok
+COMMIT
+
+endloop
+
+query II
+SELECT COUNT(*), COUNT(DISTINCT i) FROM integers
+----
+1000	1000

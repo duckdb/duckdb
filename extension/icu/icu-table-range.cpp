@@ -1,6 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -55,7 +56,7 @@ struct ICUTableRange {
 		bool greater_than_check;
 
 		bool Equals(const FunctionData &other_p) const override {
-			auto &other = (const BindData &)other_p;
+			auto &other = other_p.Cast<const BindData>();
 			return other.start == start && other.end == end && other.increment == increment &&
 			       other.inclusive_bound == inclusive_bound && other.greater_than_check == greater_than_check &&
 			       *calendar == *other.calendar;
@@ -65,7 +66,7 @@ struct ICUTableRange {
 			return make_uniq<BindData>(*this);
 		}
 
-		bool Finished(timestamp_t current_value) {
+		bool Finished(timestamp_t current_value) const {
 			if (greater_than_check) {
 				if (inclusive_bound) {
 					return current_value > end;
@@ -139,15 +140,15 @@ struct ICUTableRange {
 	};
 
 	static unique_ptr<GlobalTableFunctionState> Init(ClientContext &context, TableFunctionInitInput &input) {
-		auto &bind_data = (BindData &)*input.bind_data;
+		auto &bind_data = input.bind_data->Cast<BindData>();
 		return make_uniq<State>(bind_data.start);
 	}
 
 	static void ICUTableRangeFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-		auto &bind_data = (BindData &)*data_p.bind_data;
+		auto &bind_data = data_p.bind_data->Cast<BindData>();
 		CalendarPtr calendar_ptr(bind_data.calendar->clone());
 		auto calendar = calendar_ptr.get();
-		auto &state = (State &)*data_p.global_state;
+		auto &state = data_p.global_state->Cast<State>();
 		if (state.finished) {
 			return;
 		}
@@ -168,27 +169,23 @@ struct ICUTableRange {
 		output.SetCardinality(size);
 	}
 
-	static void AddICUTableRangeFunction(ClientContext &context) {
-		auto &catalog = Catalog::GetSystemCatalog(context);
-
+	static void AddICUTableRangeFunction(DatabaseInstance &db) {
 		TableFunctionSet range("range");
 		range.AddFunction(TableFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                                ICUTableRangeFunction, Bind<false>, Init));
-		CreateTableFunctionInfo range_func_info(range);
-		catalog.AddFunction(context, range_func_info);
+		ExtensionUtil::AddFunctionOverload(db, range);
 
 		// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 		TableFunctionSet generate_series("generate_series");
 		generate_series.AddFunction(
 		    TableFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                  ICUTableRangeFunction, Bind<true>, Init));
-		CreateTableFunctionInfo generate_series_func_info(generate_series);
-		catalog.AddFunction(context, generate_series_func_info);
+		ExtensionUtil::AddFunctionOverload(db, generate_series);
 	}
 };
 
-void RegisterICUTableRangeFunctions(ClientContext &context) {
-	ICUTableRange::AddICUTableRangeFunction(context);
+void RegisterICUTableRangeFunctions(DatabaseInstance &db) {
+	ICUTableRange::AddICUTableRangeFunction(db);
 }
 
 } // namespace duckdb

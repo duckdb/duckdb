@@ -16,7 +16,19 @@ SELECT epoch_ms(0) as epoch1, epoch_ms(1574802684123) as epoch2, epoch_ms(-29104
 query IIII
 SELECT to_timestamp(0), to_timestamp(1), to_timestamp(1574802684), to_timestamp(-1)
 ----
-1970-01-01 00:00:00
-1970-01-01 00:00:01
-2019-11-26 21:11:24
-1969-12-31 23:59:59
+1970-01-01 00:00:00+00
+1970-01-01 00:00:01+00
+2019-11-26 21:11:24+00
+1969-12-31 23:59:59+00
+
+# Frational seconds in UTC
+query I
+SELECT to_timestamp(1284352323.5);
+----
+2010-09-13 04:32:03.5+00
+
+# Coverage
+statement error
+SELECT to_timestamp(1284352323::DOUBLE * 100000000);
+----
+Could not convert epoch seconds to TIMESTAMP WITH TIME ZONE

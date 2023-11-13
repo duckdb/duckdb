@@ -300,7 +300,7 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 		if (i > 0) {
 			struct_definition += ", ";
 		}
-		struct_definition += KeywordHelper::WriteOptionallyQuoted(names[i]) + " := 'VARCHAR'";
+		struct_definition += StringUtil::Format("%s := VARCHAR", SQLIdentifier(names[i]));
 	}
 	struct_definition += ")";
 

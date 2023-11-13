@@ -17,7 +17,7 @@ bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &p
 	UnifiedVectorFormat vdata;
 	source.ToUnifiedFormat(count, vdata);
 
-	auto source_data = (SRC_TYPE *)vdata.data;
+	auto source_data = UnifiedVectorFormat::GetData<SRC_TYPE>(vdata);
 	auto source_sel = vdata.sel;
 	auto source_mask = vdata.validity;
 
@@ -71,7 +71,7 @@ static bool EnumToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	UnifiedVectorFormat vdata;
 	source.ToUnifiedFormat(count, vdata);
 
-	auto source_data = (SRC *)vdata.data;
+	auto source_data = UnifiedVectorFormat::GetData<SRC>(vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto source_idx = vdata.sel->get_index(i);
 		if (!vdata.validity.RowIsValid(source_idx)) {

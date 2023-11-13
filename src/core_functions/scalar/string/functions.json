@@ -2,7 +2,7 @@
     {
         "name": "^@",
         "parameters": "string,search_string",
-        "description": "Return true if string begins with search_string",
+        "description": "Returns true if string begins with search_string",
         "example": "starts_with('abc','a')",
         "type": "scalar_function",
         "struct": "StartsWithOperatorFun",
@@ -11,7 +11,7 @@
     {
         "name": "ascii",
         "parameters": "string",
-        "description": "Returns an integer that represents the Unicode code point of the first character of the string.",
+        "description": "Returns an integer that represents the Unicode code point of the first character of the string",
         "example": "ascii('Ω')",
         "type": "scalar_function",
         "struct": "ASCIIFun"
@@ -19,7 +19,7 @@
     {
         "name": "bar",
         "parameters": "x,min,max,width",
-        "description": "Draw a band whose width is proportional to (x - min) and equal to width characters when x = max. width defaults to 80.",
+        "description": "Draws a band whose width is proportional to (x - min) and equal to width characters when x = max. width defaults to 80",
         "example": "bar(5, 0, 20, 10)",
         "type": "scalar_function_set"
     },
@@ -34,14 +34,14 @@
     {
         "name": "chr",
         "parameters": "code_point",
-        "description": "returns a character which is corresponding the ASCII code value or Unicode code point",
+        "description": "Returns a character which is corresponding the ASCII code value or Unicode code point",
         "example": "chr(65)",
         "type": "scalar_function"
     },
     {
         "name": "damerau_levenshtein",
         "parameters": "str1,str2",
-        "description": "Extension of Levenshtein distance to also include transposition of adjacent characters as an allowed edit operation. In other words, the minimum number of edit operations (insertions, deletions, substitutions or transpositions) required to change one string to another. Different case is considered different.",
+        "description": "Extension of Levenshtein distance to also include transposition of adjacent characters as an allowed edit operation. In other words, the minimum number of edit operations (insertions, deletions, substitutions or transpositions) required to change one string to another. Different case is considered different",
         "example": "damerau_levenshtein('hello', 'world')",
         "type": "scalar_function"
     },
@@ -63,7 +63,7 @@
     {
         "name": "hamming",
         "parameters": "str1,str2",
-        "description": "The number of positions with different characters for 2 strings of equal length. Different case is considered different.",
+        "description": "The number of positions with different characters for 2 strings of equal length. Different case is considered different",
         "example": "hamming('duck','luck')",
         "type": "scalar_function",
         "aliases": ["mismatches"]
@@ -79,7 +79,7 @@
     {
         "name": "instr",
         "parameters": "haystack,needle",
-        "description": "Return location of first occurrence of needle in haystack, counting from 1. Returns 0 if no match found.",
+        "description": "Returns location of first occurrence of needle in haystack, counting from 1. Returns 0 if no match found",
         "example": "instr('test test','es')",
         "type": "scalar_function",
         "aliases": ["strpos", "position"]
@@ -87,21 +87,21 @@
     {
         "name": "jaccard",
         "parameters": "str1,str2",
-        "description": "The Jaccard similarity between two strings. Different case is considered different. Returns a number between 0 and 1.",
+        "description": "The Jaccard similarity between two strings. Different case is considered different. Returns a number between 0 and 1",
         "example": "jaccard('duck','luck')",
         "type": "scalar_function"
     },
     {
         "name": "jaro_similarity",
         "parameters": "str1,str2",
-        "description": "The Jaro similarity between two strings. Different case is considered different. Returns a number between 0 and 1.",
+        "description": "The Jaro similarity between two strings. Different case is considered different. Returns a number between 0 and 1",
         "example": "jaro_similarity('duck','duckdb')",
         "type": "scalar_function"
     },
     {
         "name": "jaro_winkler_similarity",
         "parameters": "str1,str2",
-        "description": "The Jaro-Winkler similarity between two strings. Different case is considered different. Returns a number between 0 and 1.",
+        "description": "The Jaro-Winkler similarity between two strings. Different case is considered different. Returns a number between 0 and 1",
         "example": "jaro_winkler_similarity('duck','duckdb')",
         "type": "scalar_function"
     },
@@ -122,7 +122,7 @@
     {
         "name": "levenshtein",
         "parameters": "str1,str2",
-        "description": "The minimum number of single-character edits (insertions, deletions or substitutions) required to change one string to the other. Different case is considered different.",
+        "description": "The minimum number of single-character edits (insertions, deletions or substitutions) required to change one string to the other. Different case is considered different",
         "example": "levenshtein('duck','db')",
         "type": "scalar_function",
         "aliases": ["editdist3"]
@@ -185,7 +185,7 @@
         "parameters": "string,count",
         "description": "Repeats the string count number of times",
         "example": "repeat('A', 5)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "replace",
@@ -230,6 +230,14 @@
         "type": "scalar_function_set"
     },
     {
+        "name": "sha256",
+        "parameters": "value",
+        "description": "Returns the SHA256 hash of the value",
+        "example": "sha256('hello')",
+        "type": "scalar_function",
+        "struct": "SHA256Fun"
+    },
+    {
         "name": "string_split",
         "parameters": "string,separator",
         "description": "Splits the string along the separator",
@@ -248,7 +256,7 @@
     {
         "name": "translate",
         "parameters": "string,from,to",
-        "description": "Replaces each character in string that matches a character in the from set with the corresponding character in the to set. If from is longer than to, occurrences of the extra characters in from are deleted.",
+        "description": "Replaces each character in string that matches a character in the from set with the corresponding character in the to set. If from is longer than to, occurrences of the extra characters in from are deleted",
         "example": "translate('12345', '143', 'ax')",
         "type": "scalar_function"
     },
@@ -282,5 +290,12 @@
         "example": "unicode('ü')",
         "type": "scalar_function",
         "aliases": ["ord"]
+    },
+    {
+        "name": "to_base",
+        "parameters": "number,radix,min_length",
+        "description": "Converts a value to a string in the given base radix, optionally padding with leading zeros to the minimum length",
+        "example": "to_base(42, 16)",
+        "type": "scalar_function_set"
     }
 ]

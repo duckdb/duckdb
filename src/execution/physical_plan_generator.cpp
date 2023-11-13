@@ -113,12 +113,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		plan = CreatePlan(op.Cast<LogicalAnyJoin>());
 		break;
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-		plan = CreatePlan(op.Cast<LogicalDelimJoin>());
-		break;
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-		plan = CreatePlan(op.Cast<LogicalAsOfJoin>());
-		break;
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		plan = CreatePlan(op.Cast<LogicalComparisonJoin>());
 		break;
@@ -194,6 +190,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 		plan = CreatePlan(op.Cast<LogicalRecursiveCTE>());
 		break;
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		plan = CreatePlan(op.Cast<LogicalMaterializedCTE>());
+		break;
 	case LogicalOperatorType::LOGICAL_CTE_REF:
 		plan = CreatePlan(op.Cast<LogicalCTERef>());
 		break;
@@ -207,19 +206,20 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		plan = CreatePlan(op.Cast<LogicalReset>());
 		break;
 	case LogicalOperatorType::LOGICAL_PIVOT:
-		plan = CreatePlan((LogicalPivot &)op);
+		plan = CreatePlan(op.Cast<LogicalPivot>());
 		break;
 	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
 		plan = CreatePlan(op.Cast<LogicalCopyDatabase>());
 		break;
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
-		plan = ((LogicalExtensionOperator &)op).CreatePlan(context, *this);
+		plan = op.Cast<LogicalExtensionOperator>().CreatePlan(context, *this);
 
 		if (!plan) {
 			throw InternalException("Missing PhysicalOperator for Extension Operator");
 		}
 		break;
 	case LogicalOperatorType::LOGICAL_JOIN:
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
 	case LogicalOperatorType::LOGICAL_INVALID: {
 		throw NotImplementedException("Unimplemented logical operator type!");
 	}
@@ -228,12 +228,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		throw InternalException("Physical plan generator - no plan generated");
 	}
 
-	if (op.estimated_props) {
-		plan->estimated_cardinality = op.estimated_props->GetCardinality<idx_t>();
-		plan->estimated_props = op.estimated_props->Copy();
-	} else {
-		plan->estimated_props = make_uniq<EstimatedProperties>();
-	}
+	plan->estimated_cardinality = op.estimated_cardinality;
 
 	return plan;
 }

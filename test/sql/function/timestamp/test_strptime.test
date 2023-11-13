@@ -197,17 +197,29 @@ SELECT strptime('Jun 30 2003  2:03:10AM', '%b %d %Y %-I:%M:%S%p');
 ----
 2003-06-30 02:03:10
 
+# Parse nanoseconds
+query I
+select strptime('2020-12-31 21:25:58.745232159', '%Y-%m-%d %H:%M:%S.%n');
+----
+2020-12-31 21:25:58.745232
+
+# Rounding of ns
+query I
+select strptime('2020-12-31 21:25:58.745232951', '%Y-%m-%d %H:%M:%S.%n');
+----
+2020-12-31 21:25:58.745233
+
+query I
+select strptime('2020-12-31 21:25:58.745232', '%Y-%m-%d %H:%M:%S.%f');
+----
+2020-12-31 21:25:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232', '%Y-%m-%d %H:%M:%S.%f');
+----
+2020-12-31 21:25:58.745232
+
 # UTC offset - produces TIMESTAMPTZ
-query I
-select strptime('2020-12-31 21:25:58.745232', '%Y-%m-%d %H:%M:%S.%f');
-----
-2020-12-31 21:25:58.745232
-
-query I
-select strptime('2020-12-31 21:25:58.745232', '%Y-%m-%d %H:%M:%S.%f');
-----
-2020-12-31 21:25:58.745232
-
 query I
 select strptime('2020-12-31 21:25:58.745232+00', '%Y-%m-%d %H:%M:%S.%f%z');
 ----
@@ -248,6 +260,24 @@ query I
 select strptime('2020-12-30 23:25:58.745232-04', '%Y-%m-%d %H:%M:%S.%f%z');
 ----
 2020-12-31 03:25:58.745232+00
+
+# infinities should always parse
+
+query I
+select strptime('infinity', '%m/%d/%Y');
+----
+infinity
+
+query I
+select strptime('-infinity', '%m/%d/%Y');
+----
+-infinity
+
+query I
+select strptime('epoch', '%m/%d/%Y');
+----
+1970-01-01 00:00:00
+
 
 # Don't swallow non-spaces
 query I

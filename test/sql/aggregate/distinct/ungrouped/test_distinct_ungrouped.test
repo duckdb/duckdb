@@ -13,6 +13,9 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
+PRAGMA verify_external
+
+statement ok
 create table tbl as
 	(select i%50 as i, i%100 as j from range(50000) tbl(i))
 ;

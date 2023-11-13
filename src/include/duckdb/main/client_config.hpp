@@ -67,6 +67,8 @@ struct ClientConfig {
 	bool enable_caching_operators = true;
 	//! Force parallelism of small tables, used for testing
 	bool verify_parallelism = false;
+	//! Enable the optimizer to consider index joins, which are disabled on default
+	bool enable_index_join = false;
 	//! Force index join independent of table cardinality, used for testing
 	bool force_index_join = false;
 	//! Force out-of-core computation for operators that support it, used for testing
@@ -75,6 +77,8 @@ struct ClientConfig {
 	bool force_no_cross_product = false;
 	//! Force use of IEJoin to implement AsOfJoin, used for testing
 	bool force_asof_iejoin = false;
+	//! Use range joins for inequalities, even if there are equality predicates
+	bool prefer_range_joins = false;
 	//! If this context should also try to use the available replacement scans
 	//! True by default
 	bool use_replacement_scans = true;
@@ -89,12 +93,17 @@ struct ClientConfig {
 
 	//! Override for the default extension repository
 	string custom_extension_repo = "";
+	//! Override for the default autoload extensoin repository
+	string autoinstall_extension_repo = "";
 
 	//! The explain output type used when none is specified (default: PHYSICAL_ONLY)
 	ExplainOutputType explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
 
 	//! The maximum amount of pivot columns
 	idx_t pivot_limit = 100000;
+
+	//! The threshold at which we switch from using filtered aggregates to LIST with a dedicated pivot operator
+	idx_t pivot_filter_threshold = 10;
 
 	//! Whether or not the "/" division operator defaults to integer division or floating point division
 	bool integer_division = false;
@@ -109,8 +118,6 @@ struct ClientConfig {
 public:
 	static ClientConfig &GetConfig(ClientContext &context);
 	static const ClientConfig &GetConfig(const ClientContext &context);
-
-	string ExtractTimezone() const;
 
 	bool AnyVerification() {
 		return query_verification_enabled || verify_external || verify_serializer;

@@ -1,0 +1,35 @@
+# name: test/sql/index/art/issues/test_art_issue_6799.test
+# description: Test index join issue 6799
+# group: [issues]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE key_value_pairs (key VARCHAR PRIMARY KEY, value VARCHAR)
+
+statement ok
+INSERT INTO key_value_pairs
+	SELECT concat('key_', i::VARCHAR), concat('value_', i::VARCHAR)
+	FROM range(10000) t(i)
+	WHERE random() < 0.5
+
+statement ok
+CREATE TABLE keys_to_lookup (key VARCHAR PRIMARY KEY)
+
+statement ok
+INSERT INTO keys_to_lookup
+	SELECT concat('key_', i::VARCHAR)
+	FROM range(100) t(i)
+
+statement ok
+PRAGMA force_index_join
+
+statement ok
+SELECT COUNT(*) FROM
+(
+	SELECT key, value
+	FROM
+		keys_to_lookup
+		JOIN key_value_pairs USING(key)
+)

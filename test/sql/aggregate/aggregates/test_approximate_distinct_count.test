@@ -2,6 +2,12 @@
 # description: Test approx_count_distinct operator
 # group: [aggregates]
 
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
 statement error
 select approx_count_distinct(*)
 
@@ -58,10 +64,10 @@ SELECT COUNT( a),approx_count_distinct(a),approx_count_distinct(b) from t
 2000	1991	10
 
 query I
-SELECT approx_count_distinct(a) from t group by a %2;
+SELECT approx_count_distinct(a) from t group by a %2 order by all;
 ----
-993
 986
+993
 
 query I
 SELECT count(*) from t where a < 10;

@@ -1,0 +1,725 @@
+name: NightlyTests
+on:
+  workflow_dispatch:
+  repository_dispatch:
+  push:
+    branches:
+      - '**'
+      - '!main'
+      - '!feature'
+    tags:
+      - '**'
+    paths-ignore:
+      - '**'
+      - '!.github/workflows/NightlyTests.yml'
+      - '!.github/patches/duckdb-wasm/**'
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    paths-ignore:
+      - '**'
+      - '!.github/workflows/NightlyTests.yml'
+      - '!.github/patches/duckdb-wasm/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  cancel-in-progress: true
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  DUCKDB_WASM_VERSION: "9f2f87b"
+  CCACHE_SAVE: ${{ github.repository != 'duckdb/duckdb' }}
+  BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
+
+jobs:
+  linux-memory-leaks:
+     name: Linux Memory Leaks
+     runs-on: ubuntu-20.04
+     env:
+       GEN: ninja
+
+     steps:
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+
+     - uses: actions/setup-python@v4
+       with:
+         python-version: '3.7'
+
+     - name: Install Ninja
+       shell: bash
+       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+     - name: Setup Ccache
+       uses: hendrikmuhs/ccache-action@main
+       with:
+         key: ${{ github.job }}
+         save: ${{ env.CCACHE_SAVE }}
+
+     - name: Build
+       shell: bash
+       run: make
+
+     - name: Test
+       shell: bash
+       run: |
+         python3 test/memoryleak/test_memory_leaks.py
+
+  release-assert:
+    name: Release Assertions
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_INET: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_EXCEL: 1
+      BUILD_VISUALIZER: 1
+      BUILD_JSON: 1
+      BUILD_JEMALLOC: 1
+      DISABLE_SANITIZER: 1
+      CRASH_ON_ASSERT: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ env.CCACHE_SAVE }}
+
+    - name: Build
+      shell: bash
+      run: make relassert
+
+    - name: Test
+      shell: bash
+      run: |
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*"
+
+
+  linux-clang:
+    name: Clang 14
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    env:
+      CC: /home/runner/work/llvm/bin/clang
+      CPP: /home/runner/work/llvm/bin/clang-cpp
+      CXX: /home/runner/work/llvm/bin/clang++
+      LD: /home/runner/work/llvm/bin/ld.lld
+      EXTENSION_STATIC_BUILD: 1
+      BUILD_JSON: 1
+      TREAT_WARNINGS_AS_ERRORS: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install LLVM and Clang
+      uses: KyleMayes/install-llvm-action@v1
+      with:
+        version: "14.0"
+        directory: '/home/runner/work/llvm'
+
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.7'
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ env.CCACHE_SAVE }}
+
+    - name: Build
+      shell: bash
+      run: make release
+
+    - name: Test
+      shell: bash
+      run: make allunit
+
+  old-gcc:
+    name: GCC 4.8
+    needs: linux-memory-leaks
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux2014_x86_64
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: ./.github/actions/manylinux_2014_setup
+      with:
+        ninja-build: 1
+        ccache: 1
+        gcc_4_8: 1
+
+    - name: Test
+      shell: bash
+      run: make unit
+      env:
+        CC: /usr/bin/gcc
+        CXX: /usr/bin/g++
+        GEN: ninja
+
+  linux-release-32:
+    name: Linux (32 Bit)
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux2014_x86_64
+    needs: linux-memory-leaks
+    env:
+      CC: /usr/bin/gcc
+      CXX: /usr/bin/g++
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/manylinux_2014_setup
+        with:
+          ninja-build: 1
+          ccache: 1
+          glibc32: 1
+          gcc_4_8: 1 # Note: we run this job on the older gcc 4.8 toolchain
+
+      - name: Build
+        shell: bash
+        run: |
+          mkdir -p build/release
+          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DBUILD_EXTENSIONS='icu;parquet;fts;json;excel' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+
+      - name: Test
+        shell: bash
+        run: build/release/test/unittest "*"
+
+  linux-tarball:
+     name: Python 3 Tarball
+     runs-on: ubuntu-20.04
+     needs: linux-memory-leaks
+     steps:
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+
+     - uses: actions/setup-python@v4
+       with:
+         python-version: '3.7'
+
+     - name: Install
+       shell: bash
+       working-directory: tools/pythonpkg
+       run: pip install -r requirements-dev.txt
+
+     - name: Setup Ccache
+       uses: hendrikmuhs/ccache-action@main
+       with:
+         key: ${{ github.job }}
+         save: ${{ env.CCACHE_SAVE }}
+
+     - name: Build
+       shell: bash
+       run: |
+         python --version
+         git archive --format zip --output test-tarball.zip HEAD
+         mkdir duckdb-test-tarball
+         mv test-tarball.zip duckdb-test-tarball
+         cd duckdb-test-tarball
+         unzip test-tarball.zip
+         cd tools/pythonpkg
+         export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
+         export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+         pip install . --user
+         (cd tests/ && python -m pytest)
+
+  python-address-sanitizer:
+     name: Python Address Sanitizer (Linux)
+     runs-on: ubuntu-latest
+     needs: linux-memory-leaks
+     container: ubuntu:18.04
+     env:
+        GEN: ninja
+        DUCKDEBUG: 1
+        ASAN_OPTIONS: detect_leaks=0
+
+     steps:
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+
+     - uses: ./.github/actions/ubuntu_18_setup
+       with:
+         openssl: 0
+         python: 0
+
+     - name: Install OpenSSL
+       shell: bash
+       run: |
+         apt-get install -y -qq libbz2-dev
+         wget https://www.openssl.org/source/openssl-1.0.2o.tar.gz
+         tar -xf openssl-1.0.2o.tar.gz
+         cd openssl-1.0.2o
+         ./config shared --prefix=/usr/local/
+         make
+         make install
+         mkdir lib
+         cp ./*.{so,so.1.0.0,a,pc} ./lib
+
+     - name: Install Python 3 With Sanitizers
+       shell: bash
+       run: |
+         wget https://github.com/python/cpython/archive/refs/tags/v3.9.12.zip
+         unzip v3.9.12.zip
+         rm v3.9.12.zip
+         cd cpython-3.9.12
+         mkdir debug-build
+         export LD_LIBRARY_PATH=${GITHUB_WORKSPACE}/openssl-1.0.2o/lib
+         ./configure --with-ensurepip=install --with-address-sanitizer --with-undefined-behavior-sanitizer --with-openssl=${GITHUB_WORKSPACE}/openssl-1.0.2o --prefix=${GITHUB_WORKSPACE}/debug-build
+         make -j
+         make install
+
+     - name: Install Python Test Dependencies
+       shell: bash
+       run: |
+         cd tools/pythonpkg
+         ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pip install -r requirements-dev.txt
+
+     - name: Install DuckDB Python
+       shell: bash
+       run: |
+         cd tools/pythonpkg
+         ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pip install .
+
+     # explicitly skip the TestMemoryLeaks tests, as the address sanitizer will increase the memory usage, causing the test to fail
+     - name: Run Python Tests
+       shell: bash
+       run: |
+         ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pytest tools/pythonpkg/tests/fast --skiplist TestMemoryLeaks
+
+  sqllogic:
+     name: Sqllogic tests
+     runs-on: ubuntu-20.04
+     needs: linux-memory-leaks
+     env:
+       CC: gcc-10
+       CXX: g++-10
+
+     steps:
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+
+     - name: Setup Ccache
+       uses: hendrikmuhs/ccache-action@main
+       with:
+         key: ${{ github.job }}
+         save: ${{ env.CCACHE_SAVE }}
+
+     # Build is implied by 'make sqlite' that will invoke implicitly 'make release' (we make it explicit)
+     - name: Build
+       shell: bash
+       run: make release
+
+     - name: Test
+       shell: bash
+       run: make sqlite
+
+  storage-initialization:
+     name: Storage Initialization Verification
+     runs-on: ubuntu-20.04
+     needs: linux-memory-leaks
+     env:
+       CC: gcc-10
+       CXX: g++-10
+       GEN: ninja
+
+     steps:
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+
+     - name: Install
+       shell: bash
+       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+     - name: Setup Ccache
+       uses: hendrikmuhs/ccache-action@main
+       with:
+         key: ${{ github.job }}
+         save: ${{ env.CCACHE_SAVE }}
+
+     - name: Build
+       shell: bash
+       run: make debug
+
+     - name: Test
+       shell: bash
+       run: python3 scripts/test_zero_initialize.py
+
+
+  no-string-inline:
+    name: No String Inline / Destroy Unpinned Blocks
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_INET: 1
+      BUILD_PARQUET: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+      DISABLE_STRING_INLINE: 1
+      DESTROY_UNPINNED_BLOCKS: 1
+      ALTERNATIVE_VERIFY: 1
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
+
+      - name: Build
+        shell: bash
+        run: make relassert
+
+      - name: Test
+        shell: bash
+        run: build/relassert/test/unittest
+
+  force-blocking-sink-source:
+    name: Forcing async Sinks/Sources
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_INET: 1
+      BUILD_PARQUET: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+      FORCE_ASYNC_SINK_SOURCE: 1
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
+
+      - name: Build
+        shell: bash
+        run: make relassert
+
+      - name: Test
+        shell: bash
+        run: build/relassert/test/unittest
+
+  regression-test-memory-safety:
+   name: Regression Tests between safe and unsafe builds
+   runs-on: ubuntu-20.04
+   needs: linux-memory-leaks
+   env:
+     CC: gcc-10
+     CXX: g++-10
+     GEN: ninja
+     BUILD_BENCHMARK: 1
+     BUILD_TPCH: 1
+     BUILD_TPCDS: 1
+     BUILD_HTTPFS: 1
+     BUILD_JEMALLOC: 1
+
+   steps:
+     - name: Checkout
+       uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+
+     - name: Checkout tools repo
+       uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+         path: unsafe
+
+     - uses: actions/setup-python@v4
+       with:
+         python-version: '3.7'
+
+     - name: Install
+       shell: bash
+       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
+
+     - name: Setup Ccache
+       uses: hendrikmuhs/ccache-action@main
+       with:
+         key: ${{ github.job }}
+         save: ${{ env.CCACHE_SAVE }}
+
+     - name: Build
+       shell: bash
+       run: |
+         make
+
+         cd unsafe
+         DISABLE_MEMORY_SAFETY=1 make
+
+     - name: Set up benchmarks
+       shell: bash
+       run: |
+         cp -r benchmark unsafe/
+
+     - name: Regression Test Micro
+       if: always()
+       shell: bash
+       run: |
+         python scripts/regression_test_runner.py --old=unsafe/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/micro.csv --verbose --threads=2
+
+     - name: Regression Test TPCH
+       if: always()
+       shell: bash
+       run: |
+         python scripts/regression_test_runner.py --old=unsafe/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch.csv --verbose --threads=2
+
+     - name: Regression Test TPCDS
+       if: always()
+       shell: bash
+       run: |
+         python scripts/regression_test_runner.py --old=unsafe/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpcds.csv --verbose --threads=2
+
+     - name: Regression Test H2OAI
+       if: always()
+       shell: bash
+       run: |
+         python scripts/regression_test_runner.py --old=unsafe/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/h2oai.csv --verbose --threads=2
+
+     - name: Regression Test IMDB
+       if: always()
+       shell: bash
+       run: |
+         python scripts/regression_test_runner.py --old=unsafe/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/imdb.csv --verbose --threads=2
+
+
+  threadsan:
+    name: Thread Sanitizer
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_INET: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+      BUILD_JEMALLOC: 1
+      TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ env.CCACHE_SAVE }}
+
+    - name: Build
+      shell: bash
+      run: THREADSAN=1 make reldebug
+
+    - name: Test
+      shell: bash
+      run: |
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]"
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]"
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]"
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
+
+  vector-sizes:
+    name: Vector Sizes
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    env:
+      CC: gcc-10
+      CXX: g++-10
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.7'
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ env.CCACHE_SAVE }}
+
+    - name: Test
+      shell: bash
+      run: python scripts/test_vector_sizes.py
+
+  linux-wasm-experimental:
+    name: WebAssembly duckdb-wasm builds
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: mymindstorm/setup-emsdk@v12
+      with:
+        version: 'latest'
+
+    - name: Setup
+      shell: bash
+      run: |
+        git clone https://github.com/duckdb/duckdb-wasm
+        cd duckdb-wasm
+        git checkout ${{ env.DUCKDB_WASM_VERSION }}
+        shopt -s nullglob
+        for filename in ../.github/patches/duckdb-wasm/*.patch; do
+          git apply $filename
+        done
+        git submodule init
+        git submodule update
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ env.CCACHE_SAVE }}
+
+    - name: Print version
+      shell: bash
+      run: |
+        emcc --version
+
+    - name: Build WebAssembly MVP
+      shell: bash
+      run: |
+        cd duckdb-wasm
+        bash scripts/wasm_build_lib.sh relsize mvp $(pwd)/..
+
+    - name: Build WebAssembly EH
+      shell: bash
+      run: |
+        cd duckdb-wasm
+        bash scripts/wasm_build_lib.sh relsize eh $(pwd)/..
+
+    - name: Build WebAssembly COI
+      shell: bash
+      run: |
+        cd duckdb-wasm
+        bash scripts/wasm_build_lib.sh relsize coi $(pwd)/..
+
+    - name: Package
+      shell: bash
+      run: |
+        zip -r duckdb-wasm32.zip duckdb-wasm/packages/duckdb-wasm/src/bindings
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: duckdb-wasm32
+        path: |
+          duckdb-wasm32.zip
+
+  codecov:
+    name: Code Coverage
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    strategy:
+      fail-fast: false
+    env:
+      GEN: ninja
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov curl g++ zip
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install pytest
+        run: |
+          python3 -m pip install pytest
+
+      - name: Check Coverage
+        shell: bash
+        run: |
+          make coverage-check
+
+      - name: Create Archive
+        if: always()
+        shell: bash
+        run: |
+          zip -r coverage.zip coverage_html
+
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: coverage
+          path: coverage.zip
+          if-no-files-found: error

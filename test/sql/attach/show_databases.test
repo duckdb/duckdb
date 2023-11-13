@@ -37,4 +37,4 @@ SELECT * FROM new_database.tbl
 statement error
 USE blablabla
 ----
-does not exist
+No catalog + schema named "blablabla" found

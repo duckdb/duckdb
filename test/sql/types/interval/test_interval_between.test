@@ -1,0 +1,35 @@
+# name: test/sql/types/interval/test_interval_between.test
+# group: [interval]
+
+query I nosort q1
+WITH d(y) AS (
+	SELECT UNNEST(range(
+		'2023-05-11 4:00:00'::TIMESTAMP,
+		'2023-05-11 4:00:00'::TIMESTAMP + TO_DAYS(7),
+		TO_HOURS(6)
+	))
+)
+SELECT
+	y,
+	y - ('2023-05-11 4:00:00'::TIMESTAMP) AS x
+FROM d
+WHERE
+	x BETWEEN TO_HOURS(-44) AND TO_HOURS(44)
+----
+
+# Verify that `x BETWEEN lhs AND rhs` is equivalent to `x >= lhs AND x <= rhs`
+query I nosort q1
+WITH d(y) AS (
+	SELECT UNNEST(range(
+		'2023-05-11 4:00:00'::TIMESTAMP,
+		'2023-05-11 4:00:00'::TIMESTAMP + TO_DAYS(7),
+		TO_HOURS(6)
+	))
+)
+SELECT
+	y,
+	y - ('2023-05-11 4:00:00'::TIMESTAMP) AS x
+FROM d
+WHERE
+	x >= TO_HOURS(-44) AND x <= TO_HOURS(44)
+----

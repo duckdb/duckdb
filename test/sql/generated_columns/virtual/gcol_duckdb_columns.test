@@ -1,0 +1,13 @@
+# name: test/sql/generated_columns/virtual/gcol_duckdb_columns.test
+# group: [virtual]
+
+# Create a table containing a generated column
+statement ok
+create table t (i int, j int as (1));
+
+# duckdb_columns should return the stringified generated column expression as 'column_default'
+query I
+select column_default from duckdb_columns;
+----
+NULL
+CAST(1 AS INTEGER)

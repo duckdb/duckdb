@@ -4,6 +4,73 @@
 
 require json
 
+# test automatic detection even with .gz
+statement ok
+create table integers as select 42 i
+
+statement ok
+copy integers to '__TEST_DIR__/integers.json.gz' (FORMAT JSON, COMPRESSION GZIP)
+
+statement ok
+delete from integers
+
+statement ok
+copy integers from '__TEST_DIR__/integers.json.gz'
+
+query T
+select i from integers
+----
+42
+
+# test writing all types to file
+statement ok
+create type small_enum as enum ('DUCK_DUCK_ENUM', 'GOOSE');
+
+query I nosort q0
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint)
+         replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
+from test_all_types()
+----
+
+statement ok
+copy (
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint)
+         replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
+from test_all_types()
+) to '__TEST_DIR__/all_types.ndjson'
+
+statement ok
+create table roundtrip as
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint)
+         replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
+from test_all_types()
+limit 0
+
+statement ok
+copy roundtrip from '__TEST_DIR__/all_types.ndjson'
+
+query I nosort q0
+select * from roundtrip
+----
+
+statement ok
+delete from roundtrip
+
+statement ok
+copy (
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint)
+         replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
+from test_all_types()
+) to '__TEST_DIR__/all_types.json' (array true)
+
+statement ok
+copy roundtrip from '__TEST_DIR__/all_types.json' (array true)
+
+query I nosort q0
+select * from roundtrip
+----
+
+
 # test issue #6305
 statement ok
 copy (
@@ -88,6 +155,100 @@ select * from '__TEST_DIR__/out.json'
 ----
 42	43
 
+statement ok
+create table conclusions (conclusion varchar)
+
+# this doesn't work because we assume NDJSON records
+statement error
+copy conclusions from 'data/json/top_level_array.json'
+
+# but works if we tell it to auto-detect
+statement ok
+copy conclusions from 'data/json/top_level_array.json' (AUTO_DETECT TRUE)
+
+statement ok
+delete from conclusions;
+
+# and also if we say it's an array
+statement ok
+copy conclusions from 'data/json/top_level_array.json' (ARRAY TRUE)
+
+query I
+select * from conclusions
+----
+cancelled
+cancelled
+
+# same with ARRAY FALSE
+statement error
+copy conclusions from 'data/json/top_level_array.json' (ARRAY FALSE)
+----
+Invalid Input Error
+
+# we can also write JSON arrays instead of newline-delimited
+statement ok
+copy (select range as i from range(10)) to '__TEST_DIR__/my.json' (ARRAY TRUE)
+
+query T
+select * from read_json_auto('__TEST_DIR__/my.json', format='array')
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+# compression stuff (cannot be empty)
+statement error
+copy (select range as i from range(10)) to '__TEST_DIR__/my.json' (COMPRESSION)
+----
+Binder Error
+
+statement ok
+copy (select range as i from range(10)) to '__TEST_DIR__/my.json.gz' (COMPRESSION GZIP)
+
+statement ok
+create table my_range (i bigint)
+
+statement ok
+copy my_range from '__TEST_DIR__/my.json.gz' (COMPRESSION GZIP)
+
+# we can auto-detect even though we have compressed
+statement ok
+select * from '__TEST_DIR__/my.json.gz'
+
+# works with zstd too, but we skip this test for now
+# it works in CLI, but not in unittest for some reason (ZSTD is not in VirtualFileSystem::compressed_fs)
+mode skip
+
+statement ok
+copy (select range as i from range(10)) to '__TEST_DIR__/my.json.zst' (COMPRESSION ZSTD)
+
+statement ok
+select * from '__TEST_DIR__/my.json.zst'
+
+mode unskip
+
+query I
+select * from my_range
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+# and now for the grand benchmark
 require tpch
 
 statement ok
@@ -96,8 +257,39 @@ start transaction
 statement ok
 call dbgen(sf=1)
 
+# export lineitem as array (ARRAY does not need TRUE to be passed)
+statement ok
+COPY lineitem TO '__TEST_DIR__/lineitem.json' (ARRAY)
+
+# also export the whole thing
 statement ok
 EXPORT DATABASE '__TEST_DIR__/export_json_test' (FORMAT JSON)
+
+statement ok
+rollback
+
+# test the array first
+statement ok
+start transaction
+
+statement ok
+call dbgen(sf=0)
+
+# lineitem json is ~2GB so this test that we can do streaming reads of json arrays
+statement ok
+set memory_limit='1gb'
+
+statement ok
+COPY lineitem from '__TEST_DIR__/lineitem.json' (ARRAY)
+
+# 4gb should be enough for the rest
+statement ok
+set memory_limit='4gb'
+
+query I
+PRAGMA tpch(1)
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q01.csv
 
 statement ok
 rollback
@@ -133,7 +325,7 @@ statement ok
 rollback
 
 statement ok
-CREATE VIEW lineitem AS SELECT * FROM read_json(
+CREATE VIEW lineitem AS SELECT * FROM read_ndjson(
 	'__TEST_DIR__/export_json_test/lineitem.json',
 	columns={
 		l_orderkey: 'INTEGER',
@@ -156,7 +348,7 @@ CREATE VIEW lineitem AS SELECT * FROM read_json(
 );
 
 statement ok
-CREATE VIEW orders AS SELECT * FROM read_json(
+CREATE VIEW orders AS SELECT * FROM read_ndjson(
 	'__TEST_DIR__/export_json_test/orders.json',
 	columns={
 	    o_orderkey: 'INTEGER',
@@ -172,7 +364,7 @@ CREATE VIEW orders AS SELECT * FROM read_json(
 );
 
 statement ok
-CREATE VIEW partsupp AS SELECT * FROM read_json(
+CREATE VIEW partsupp AS SELECT * FROM read_ndjson(
 	'__TEST_DIR__/export_json_test/partsupp.json',
 	columns={
 		ps_partkey: 'INTEGER',
@@ -184,7 +376,7 @@ CREATE VIEW partsupp AS SELECT * FROM read_json(
 );
 
 statement ok
-CREATE VIEW part AS SELECT * FROM read_json(
+CREATE VIEW part AS SELECT * FROM read_ndjson(
 	'__TEST_DIR__/export_json_test/part.json',
 	columns={
 		p_partkey: 'INTEGER',
@@ -200,7 +392,7 @@ CREATE VIEW part AS SELECT * FROM read_json(
 );
 
 statement ok
-CREATE VIEW customer AS SELECT * FROM read_json(
+CREATE VIEW customer AS SELECT * FROM read_ndjson(
 	'__TEST_DIR__/export_json_test/customer.json',
 	columns={
 		c_custkey: 'INTEGER',
@@ -215,7 +407,7 @@ CREATE VIEW customer AS SELECT * FROM read_json(
 );
 
 statement ok
-CREATE VIEW supplier AS SELECT * FROM read_json(
+CREATE VIEW supplier AS SELECT * FROM read_ndjson(
 	'__TEST_DIR__/export_json_test/supplier.json',
 	columns={
 		s_suppkey: 'INTEGER',
@@ -229,7 +421,7 @@ CREATE VIEW supplier AS SELECT * FROM read_json(
 );
 
 statement ok
-CREATE VIEW nation AS SELECT * FROM read_json(
+CREATE VIEW nation AS SELECT * FROM read_ndjson(
 	'__TEST_DIR__/export_json_test/nation.json',
 	columns={
 		n_nationkey: 'INTEGER',
@@ -240,7 +432,7 @@ CREATE VIEW nation AS SELECT * FROM read_json(
 );
 
 statement ok
-CREATE VIEW region AS SELECT * FROM read_json(
+CREATE VIEW region AS SELECT * FROM read_ndjson(
 	'__TEST_DIR__/export_json_test/region.json',
 	columns={
 		r_regionkey: 'INTEGER',

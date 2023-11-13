@@ -1,0 +1,23 @@
+# name: test/sql/aggregate/distinct/issue9241.test
+# description: Test DISTINCT ON
+# group: [distinct]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table foo (a int, b int);
+
+statement ok
+insert into foo values (1, 1), (2, 1), (2, 2);
+
+query II
+select * from (select distinct on (a) a, b from foo order by a, b desc) sub;
+----
+1	1
+2	2
+
+query II
+select * from (select distinct on (a) a, b from foo order by a, b desc) sub where b <> 2;
+----
+1	1

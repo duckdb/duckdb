@@ -18,7 +18,7 @@ struct RangeFunctionBindData : public TableFunctionData {
 
 public:
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const RangeFunctionBindData &)other_p;
+		auto &other = other_p.Cast<RangeFunctionBindData>();
 		return other.start == start && other.end == end && other.increment == increment;
 	}
 };
@@ -92,7 +92,7 @@ static unique_ptr<GlobalTableFunctionState> RangeFunctionInit(ClientContext &con
 
 static void RangeFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = data_p.bind_data->Cast<RangeFunctionBindData>();
-	auto &state = (RangeFunctionState &)*data_p.global_state;
+	auto &state = data_p.global_state->Cast<RangeFunctionState>();
 
 	auto increment = bind_data.increment;
 	auto end = bind_data.end;
@@ -129,7 +129,7 @@ struct RangeDateTimeBindData : public TableFunctionData {
 
 public:
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const RangeDateTimeBindData &)other_p;
+		auto &other = other_p.Cast<RangeDateTimeBindData>();
 		return other.start == start && other.end == end && other.increment == increment &&
 		       other.inclusive_bound == inclusive_bound && other.greater_than_check == greater_than_check;
 	}
@@ -213,7 +213,7 @@ static unique_ptr<GlobalTableFunctionState> RangeDateTimeInit(ClientContext &con
 
 static void RangeDateTimeFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = data_p.bind_data->Cast<RangeDateTimeBindData>();
-	auto &state = (RangeDateTimeState &)*data_p.global_state;
+	auto &state = data_p.global_state->Cast<RangeDateTimeState>();
 	if (state.finished) {
 		return;
 	}

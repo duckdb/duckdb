@@ -25,7 +25,7 @@ struct StrfTimeBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const StrfTimeBindData &)other_p;
+		auto &other = other_p.Cast<StrfTimeBindData>();
 		return format_string == other.format_string;
 	}
 };
@@ -94,6 +94,16 @@ ScalarFunctionSet StrfTimeFun::GetFunctions() {
 	return strftime;
 }
 
+StrpTimeFormat::StrpTimeFormat() {
+}
+
+StrpTimeFormat::StrpTimeFormat(const string &format_string) {
+	if (format_string.empty()) {
+		return;
+	}
+	StrTimeFormat::ParseFormatSpecifier(format_string, *this);
+}
+
 struct StrpTimeBindData : public FunctionData {
 	StrpTimeBindData(const StrpTimeFormat &format, const string &format_string)
 	    : formats(1, format), format_strings(1, format_string) {
@@ -111,7 +121,7 @@ struct StrpTimeBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const StrpTimeBindData &)other_p;
+		auto &other = other_p.Cast<StrpTimeBindData>();
 		return format_strings == other.format_strings;
 	}
 };
@@ -173,7 +183,14 @@ struct StrpTimeFunction {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<StrpTimeBindData>();
 
-		if (ConstantVector::IsNull(args.data[1])) {
+		//	There is a bizarre situation where the format column is foldable but not constant
+		//	(i.e., the statistics tell us it has only one value)
+		//	We have to check whether that value is NULL
+		const auto count = args.size();
+		UnifiedVectorFormat format_unified;
+		args.data[1].ToUnifiedFormat(count, format_unified);
+
+		if (!format_unified.validity.RowIsValid(0)) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result, true);
 			return;
@@ -193,7 +210,7 @@ struct StrpTimeFunction {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<StrpTimeBindData>();
 
-		if (ConstantVector::IsNull(args.data[1])) {
+		if (args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(args.data[1])) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result, true);
 			return;

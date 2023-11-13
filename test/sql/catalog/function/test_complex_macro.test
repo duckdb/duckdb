@@ -158,7 +158,7 @@ CREATE SCHEMA fts_main_documents
 statement ok
 CREATE TABLE fts_main_documents.docs AS (
     SELECT
-        row_number() OVER (PARTITION BY(SELECT NULL)) AS docid,
+        row_number() OVER () AS docid,
         id AS name
     FROM
         main.documents
@@ -173,7 +173,7 @@ CREATE TABLE fts_main_documents.terms AS (
     FROM (
         SELECT
             unnest(string_split_regex(regexp_replace(lower(strip_accents(body)), '[^a-z]', ' ', 'g'), '\s+')) AS term,
-            row_number() OVER (PARTITION BY (SELECT NULL)) AS docid
+            row_number() OVER () AS docid
         FROM main.documents
     ) AS sq
     WHERE
@@ -199,7 +199,7 @@ WITH distinct_terms AS (
     ORDER BY docid
 )
 SELECT
-    row_number() OVER (PARTITION BY (SELECT NULL)) AS termid,
+    row_number() OVER () AS termid,
     term
 FROM
     distinct_terms
@@ -231,22 +231,57 @@ SET df = (
 )
 
 query II
-WITH ppterms AS (SELECT unnest(string_split_regex(regexp_replace(lower(strip_accents('QUÁCK BÁRK')), '[^a-z]', ' ', 'g'), '\s+')) AS term),
-qtermids AS (SELECT termid FROM fts_main_documents.dict AS dict, ppterms WHERE dict.term = ppterms.term),
-qterms AS (SELECT termid, docid FROM fts_main_documents.terms AS terms WHERE termid IN (SELECT qtermids.termid FROM qtermids)),
-subscores AS (
-SELECT docs.docid, len, term_tf.termid,
-        tf, df, (log((3 - df + 0.5) / (df + 0.5))* ((tf * (1.2 + 1)/(tf + 1.2 * (1 - 0.75 + 0.75 * (len / 4)))))) AS subscore
-FROM (SELECT termid, docid, COUNT(*) AS tf FROM qterms
-    GROUP BY docid, termid) AS term_tf
-    JOIN (SELECT docid FROM qterms
-        GROUP BY docid) -- HAVING COUNT(DISTINCT termid) = 3)
-        AS cdocs ON term_tf.docid = cdocs.docid
-    JOIN fts_main_documents.docs AS docs ON term_tf.docid = docs.docid
-    JOIN fts_main_documents.dict AS dict ON term_tf.termid = dict.termid)
-SELECT name, score FROM (SELECT docid, sum(subscore) AS score
-    FROM subscores GROUP BY docid) AS scores JOIN fts_main_documents.docs AS docs ON
-    scores.docid = docs.docid ORDER BY score DESC LIMIT 1000
+WITH ppterms AS (
+    SELECT unnest(string_split_regex(regexp_replace(lower(strip_accents('QUÁCK BÁRK')), '[^a-z]', ' ', 'g'), '\s+')) AS term
+), qtermids AS (
+    SELECT termid
+    FROM fts_main_documents.dict AS dict
+    JOIN ppterms
+    USING (term)
+), qterms AS (
+    SELECT termid,
+           docid
+    FROM fts_main_documents.terms AS terms
+    WHERE termid IN (
+        SELECT qtermids.termid FROM qtermids
+    )
+), subscores AS (
+    SELECT docs.docid,
+           len,
+           term_tf.termid,
+           tf,
+           df,
+           (log((3 - df + 0.5) / (df + 0.5))* ((tf * (1.2 + 1)/(tf + 1.2 * (1 - 0.75 + 0.75 * (len / 4)))))) AS subscore
+    FROM (
+        SELECT termid,
+               docid,
+               COUNT(*) AS tf
+        FROM qterms
+        GROUP BY docid,
+                 termid
+    ) AS term_tf
+    JOIN (
+        SELECT DISTINCT docid
+        FROM qterms
+    ) AS cdocs
+    ON term_tf.docid = cdocs.docid
+    JOIN fts_main_documents.docs AS docs
+    ON term_tf.docid = docs.docid
+    JOIN fts_main_documents.dict AS dict
+    ON term_tf.termid = dict.termid
+)
+SELECT name,
+       score
+FROM (
+    SELECT docid,
+           sum(subscore) AS score
+    FROM subscores
+    GROUP BY docid
+) AS scores
+JOIN fts_main_documents.docs AS docs
+ON scores.docid = docs.docid
+ORDER BY score DESC
+LIMIT 1000
 ----
 doc2	0.37543634550460314
 doc1	0.3683526408724408

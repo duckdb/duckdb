@@ -1,8 +1,10 @@
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/extension_helper.hpp"
+
 namespace duckdb {
 
-string GetDBAbsolutePath(const string &database) {
+string GetDBAbsolutePath(const string &database_p, FileSystem &fs) {
+	auto database = FileSystem::ExpandPath(database_p, nullptr);
 	if (database.empty()) {
 		return ":memory:";
 	}
@@ -14,15 +16,17 @@ string GetDBAbsolutePath(const string &database) {
 		// this database path is handled by a replacement open and is not a file path
 		return database;
 	}
-	if (FileSystem::IsPathAbsolute(database)) {
-		return database;
+	if (fs.IsPathAbsolute(database)) {
+		return fs.NormalizeAbsolutePath(database);
 	}
-	return FileSystem::JoinPath(FileSystem::GetWorkingDirectory(), database);
+	return fs.NormalizeAbsolutePath(fs.JoinPath(FileSystem::GetWorkingDirectory(), database));
 }
 
 shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, const DBConfig &config) {
 	shared_ptr<DuckDB> db_instance;
-	auto abs_database_path = GetDBAbsolutePath(database);
+
+	auto local_fs = FileSystem::CreateLocal();
+	auto abs_database_path = GetDBAbsolutePath(database, *local_fs);
 	if (db_instances.find(abs_database_path) != db_instances.end()) {
 		db_instance = db_instances[abs_database_path].lock();
 		if (db_instance) {
@@ -46,7 +50,13 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstance(const string &database, const DB
 
 shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &database, DBConfig &config,
                                                            bool cache_instance) {
-	auto abs_database_path = GetDBAbsolutePath(database);
+	string abs_database_path;
+	if (config.file_system) {
+		abs_database_path = GetDBAbsolutePath(database, *config.file_system);
+	} else {
+		auto tmp_fs = FileSystem::CreateLocal();
+		abs_database_path = GetDBAbsolutePath(database, *tmp_fs);
+	}
 	if (db_instances.find(abs_database_path) != db_instances.end()) {
 		throw duckdb::Exception(ExceptionType::CONNECTION,
 		                        "Instance with path: " + abs_database_path + " already exists.");

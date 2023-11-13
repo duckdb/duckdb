@@ -1,0 +1,14 @@
+# name: benchmark/micro/csv/sniffer.benchmark
+# description: Run CSV auto-detection on the lineitem CSV, with a Describe to benchmark the sniffer
+# group: [csv]
+
+name CSV Sniffer Benchmark
+group csv
+
+require tpch
+load
+CALL dbgen(sf=2, suffix='_normal');
+COPY lineitem_normal TO '${BENCHMARK_DIR}/lineitem.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+
+run
+DESCRIBE SELECT * FROM '${BENCHMARK_DIR}/lineitem.csv'

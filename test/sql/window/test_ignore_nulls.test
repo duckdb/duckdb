@@ -26,6 +26,7 @@ SELECT
     ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	NULL
 1	1	NULL	614
@@ -44,6 +45,7 @@ SELECT
     ROWS BETWEEN 1 PRECEDING AND UNBOUNDED FOLLOWING
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	614
 1	1	NULL	614
@@ -62,6 +64,7 @@ SELECT
     ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	NULL
 1	1	NULL	NULL
@@ -79,6 +82,7 @@ SELECT
     ORDER BY id
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	639
 1	1	NULL	639
@@ -96,6 +100,7 @@ SELECT
     ORDER BY id
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	-1
 1	1	NULL	614
@@ -114,6 +119,7 @@ SELECT
     ORDER BY id
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	614
 1	1	NULL	NULL
@@ -135,6 +141,7 @@ SELECT
     ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	NULL
 1	1	NULL	614
@@ -153,6 +160,7 @@ SELECT
     ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	NULL
 1	1	NULL	614
@@ -171,6 +179,7 @@ SELECT
     ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	NULL
 1	1	NULL	NULL
@@ -188,6 +197,7 @@ SELECT
     ORDER BY id
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	NULL
 1	1	NULL	NULL
@@ -205,6 +215,7 @@ SELECT
     ORDER BY id
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	-1
 1	1	NULL	614
@@ -223,6 +234,7 @@ SELECT
     ORDER BY id
   ) AS last_order_id
 FROM issue2549
+ORDER BY ALL
 ----
 0	1	614	614
 1	1	NULL	NULL
@@ -287,6 +299,7 @@ SELECT *,
         ORDER BY id
     ) AS grade
 FROM lvl
+ORDER BY id
 ----
 40000 values hashing to c302c8b0f3c10c1e5cc7211c4af7a8d6
 

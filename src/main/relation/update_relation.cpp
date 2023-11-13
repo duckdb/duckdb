@@ -30,7 +30,7 @@ BoundStatement UpdateRelation::Bind(Binder &binder) {
 	for (auto &expr : expressions) {
 		stmt.set_info->expressions.push_back(expr->Copy());
 	}
-	return binder.Bind((SQLStatement &)stmt);
+	return binder.Bind(stmt.Cast<SQLStatement>());
 }
 
 const vector<ColumnDefinition> &UpdateRelation::Columns() {

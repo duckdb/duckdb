@@ -56,7 +56,8 @@ public:
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
 	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
 	                           idx_t result_idx);
-	static unique_ptr<CompressedSegmentState> StringInitSegment(ColumnSegment &segment, block_id_t block_id);
+	static unique_ptr<CompressedSegmentState> StringInitSegment(ColumnSegment &segment, block_id_t block_id,
+	                                                            optional_ptr<ColumnSegmentState> segment_state);
 
 	static unique_ptr<CompressionAppendState> StringInitAppend(ColumnSegment &segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
@@ -80,7 +81,7 @@ public:
 	                              UnifiedVectorFormat &data, idx_t offset, idx_t count) {
 		D_ASSERT(segment.GetBlockOffset() == 0);
 		auto handle_ptr = handle.Ptr();
-		auto source_data = (string_t *)data.data;
+		auto source_data = UnifiedVectorFormat::GetData<string_t>(data);
 		auto result_data = (int32_t *)(handle_ptr + DICTIONARY_HEADER_SIZE);
 		uint32_t *dictionary_size = (uint32_t *)handle_ptr;
 		uint32_t *dictionary_end = (uint32_t *)(handle_ptr + sizeof(uint32_t));
@@ -194,5 +195,9 @@ public:
 	                                    data_ptr_t baseptr, int32_t dict_offset, uint32_t string_length);
 	static string_t FetchString(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
 	                            data_ptr_t baseptr, string_location_t location, uint32_t string_length);
+
+	static unique_ptr<ColumnSegmentState> SerializeState(ColumnSegment &segment);
+	static unique_ptr<ColumnSegmentState> DeserializeState(Deserializer &deserializer);
+	static void CleanupState(ColumnSegment &segment);
 };
 } // namespace duckdb

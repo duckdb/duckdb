@@ -63,7 +63,7 @@
         "struct": "DayNameFun",
         "name": "dayname",
         "parameters": "ts",
-        "description": "The (English) name of the weekday.",
+        "description": "The (English) name of the weekday",
         "example": "dayname(TIMESTAMP '1992-03-22')",
         "type": "scalar_function_set"
     },
@@ -100,17 +100,31 @@
     },
     {
         "name": "epoch",
-        "parameters": "ts",
-        "description": "Extract the epoch component from a date or timestamp",
+        "parameters": "temporal",
+        "description": "Extract the epoch component from a temporal type",
         "example": "epoch(timestamp '2021-08-03 11:59:44.123456')",
         "type": "scalar_function_set"
     },
     {
         "name": "epoch_ms",
-        "parameters": "ms",
-        "description": "Converts ms since epoch to a timestamp",
-        "example": "epoch_ms(701222400000)",
-        "type": "scalar_function"
+        "parameters": "temporal",
+        "description": "Extract the epoch component in milliseconds from a temporal type",
+        "example": "epoch_ms(timestamp '2021-08-03 11:59:44.123456')",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "epoch_us",
+        "parameters": "temporal",
+        "description": "Extract the epoch component in microseconds from a temporal type",
+        "example": "epoch_us(timestamp '2021-08-03 11:59:44.123456')",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "epoch_ns",
+        "parameters": "temporal",
+        "description": "Extract the epoch component in nanoseconds from a temporal type",
+        "example": "epoch_ns(timestamp '2021-08-03 11:59:44.123456')",
+        "type": "scalar_function_set"
     },
     {
         "name": "era",
@@ -158,6 +172,14 @@
         "type": "scalar_function_set"
     },
     {
+        "struct": "JulianDayFun",
+        "name": "julian",
+        "parameters": "ts",
+        "description": "Extract the Julian Day number from a date or timestamp",
+        "example": "julian(timestamp '2006-01-01 12:00')",
+        "type": "scalar_function_set"
+    },
+    {
         "name": "last_day",
         "parameters": "ts",
         "description": "Returns the last day of the month",
@@ -183,7 +205,7 @@
         "parameters": "year,month,day,hour,minute,seconds",
         "description": "The timestamp for the given parts",
         "example": "make_timestamp(1992, 9, 20, 13, 34, 27.123456)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "struct": "MicrosecondsFun",
@@ -227,7 +249,7 @@
         "struct": "MonthNameFun",
         "name": "monthname",
         "parameters": "ts",
-        "description": "The (English) name of the month.",
+        "description": "The (English) name of the month",
         "example": "monthname(TIMESTAMP '1992-09-20')",
         "type": "scalar_function_set"
     },
@@ -258,14 +280,14 @@
         "struct": "StrpTimeFun",
         "name": "strptime",
         "parameters": "text,format",
-        "description": "Converts string to timestamp with time zone according to the format string if %Z is specified.",
+        "description": "Converts string to timestamp with time zone according to the format string if %Z is specified",
         "example": "strptime('Wed, 1 January 1992 - 08:38:40 PST', '%a, %-d %B %Y - %H:%M:%S %Z')",
         "type": "scalar_function_set"
     },
     {
         "name": "time_bucket",
         "parameters": "bucket_width,timestamp,origin",
-        "description": "Truncate timestamptz by the specified interval bucket_width. Buckets are aligned relative to origin timestamptz. origin defaults to 2000-01-03 00:00:00+00 for buckets that don\u2019t include a month or year interval, and to 2000-01-01 00:00:00+00 for month and year buckets.",
+        "description": "Truncate TIMESTAMPTZ by the specified interval bucket_width. Buckets are aligned relative to origin TIMESTAMPTZ. The origin defaults to 2000-01-03 00:00:00+00 for buckets that do not include a month or year interval, and to 2000-01-01 00:00:00+00 for month and year buckets",
         "example": "time_bucket(INTERVAL '2 weeks', TIMESTAMP '1992-04-20 15:26:00-07', TIMESTAMP '1992-04-01 00:00:00-07')",
         "type": "scalar_function_set"
     },
@@ -342,8 +364,8 @@
     {
         "name": "to_timestamp",
         "parameters": "sec",
-        "description": "Converts sec since epoch to a timestamp",
-        "example": "to_timestamp(701222400)",
+        "description": "Converts secs since epoch to a timestamp with time zone",
+        "example": "to_timestamp(1284352323.5)",
         "type": "scalar_function"
     },
     {
@@ -357,7 +379,7 @@
         "struct": "TryStrpTimeFun",
         "name": "try_strptime",
         "parameters": "text,format",
-        "description": "Converts string to timestamp with time zone according to the format string if %Z is specified. Returns NULL on failure.",
+        "description": "Converts string to timestamp using the format string (timestamp with time zone if %Z is specified). Returns NULL on failure",
         "example": "try_strptime('Wed, 1 January 1992 - 08:38:40 PM', '%a, %-d %B %Y - %I:%M:%S %p')",
         "type": "scalar_function_set"
     },

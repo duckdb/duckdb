@@ -3,10 +3,8 @@
 
 namespace duckdb {
 
-unique_ptr<CopyDatabaseStatement> Transformer::TransformCopyDatabase(duckdb_libpgquery::PGNode *node) {
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCopyDatabaseStmt *>(node);
-
-	auto result = make_uniq<CopyDatabaseStatement>(stmt->from_database, stmt->to_database);
+unique_ptr<CopyDatabaseStatement> Transformer::TransformCopyDatabase(duckdb_libpgquery::PGCopyDatabaseStmt &stmt) {
+	auto result = make_uniq<CopyDatabaseStatement>(stmt.from_database, stmt.to_database);
 	return result;
 }
 

@@ -30,7 +30,7 @@ InsertStatement::InsertStatement(const InsertStatement &other)
     : SQLStatement(other), select_statement(unique_ptr_cast<SQLStatement, SelectStatement>(
                                other.select_statement ? other.select_statement->Copy() : nullptr)),
       columns(other.columns), table(other.table), schema(other.schema), catalog(other.catalog),
-      default_values(other.default_values) {
+      default_values(other.default_values), column_order(other.column_order) {
 	cte_map = other.cte_map.Copy();
 	for (auto &expr : other.returning_list) {
 		returning_list.emplace_back(expr->Copy());
@@ -80,6 +80,9 @@ string InsertStatement::ToString() const {
 	// Write the (optional) alias of the insert target
 	if (table_ref && !table_ref->alias.empty()) {
 		result += StringUtil::Format(" AS %s", KeywordHelper::WriteOptionallyQuoted(table_ref->alias));
+	}
+	if (column_order == InsertColumnOrder::INSERT_BY_NAME) {
+		result += " BY NAME";
 	}
 	if (!columns.empty()) {
 		result += " (";

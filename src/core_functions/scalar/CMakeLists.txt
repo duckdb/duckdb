@@ -1,3 +1,4 @@
+add_subdirectory(array)
 add_subdirectory(bit)
 add_subdirectory(blob)
 add_subdirectory(date)
@@ -11,6 +12,7 @@ add_subdirectory(random)
 add_subdirectory(string)
 add_subdirectory(struct)
 add_subdirectory(union)
+add_subdirectory(debug)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES}

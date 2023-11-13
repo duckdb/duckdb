@@ -1,0 +1,45 @@
+# name: test/sql/attach/attach_index.test
+# description: Issue #6666 - ATTACH fails on duckdb database with INDEX
+# group: [attach]
+
+# USE memory is no longer correct when we load a different database
+require noforcestorage
+
+require skip_reload
+
+statement ok
+ATTACH '__TEST_DIR__/index_db.db'
+
+statement ok
+USE index_db
+
+statement ok
+CREATE TABLE tbl_a (a_id INTEGER PRIMARY KEY, value VARCHAR NOT NULL)
+
+statement ok
+CREATE INDEX idx_tbl_a ON tbl_a (value)
+
+statement ok
+INSERT INTO tbl_a VALUES(1, 'x')
+
+statement ok
+INSERT INTO tbl_a VALUES(2, 'y')
+
+query II
+SELECT * FROM tbl_a WHERE a_id=2
+----
+2	y
+
+statement ok
+USE memory
+
+statement ok
+DETACH index_db
+
+statement ok
+ATTACH '__TEST_DIR__/index_db.db'
+
+query II
+SELECT * FROM index_db.tbl_a WHERE a_id=2
+----
+2	y

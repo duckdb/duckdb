@@ -2,6 +2,8 @@
 # description: Test writing many compressible batches
 # group: [parallel]
 
+require vector_size 512
+
 load __TEST_DIR__/insert_many_compressible_batches.db
 
 require parquet
@@ -24,11 +26,11 @@ SELECT MEDIAN(count) FROM pragma_storage_info('integers');
 122880
 
 statement ok
-COPY integers TO 'integers.parquet'
+COPY integers TO '__TEST_DIR__/integers.parquet'
 
 # verify that reading while preserving insertion order creates the same size table
 statement ok
-CREATE TABLE integers_parquet AS FROM 'integers.parquet';
+CREATE TABLE integers_parquet AS FROM '__TEST_DIR__/integers.parquet';
 
 query I
 SELECT * FROM integers_parquet LIMIT 5

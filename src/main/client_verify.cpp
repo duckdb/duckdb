@@ -7,6 +7,20 @@
 
 namespace duckdb {
 
+static void ThrowIfExceptionIsInternal(StatementVerifier &verifier) {
+	if (!verifier.materialized_result) {
+		return;
+	}
+	auto &result = *verifier.materialized_result;
+	if (!result.HasError()) {
+		return;
+	}
+	auto &error = result.GetErrorObject();
+	if (error.Type() == ExceptionType::INTERNAL) {
+		error.Throw();
+	}
+}
+
 PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string &query,
                                           unique_ptr<SQLStatement> statement) {
 	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
@@ -26,7 +40,6 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	if (config.query_verification_enabled) {
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::COPIED, stmt));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::DESERIALIZED, stmt));
-		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::DESERIALIZED_V2, stmt));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::UNOPTIMIZED, stmt));
 		prepared_statement_verifier = StatementVerifier::Create(VerificationType::PREPARED, stmt);
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
@@ -81,6 +94,9 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		if (!failed) {
 			// PreparedStatementVerifier fails if it runs into a ParameterNotAllowedException, which is OK
 			statement_verifiers.push_back(std::move(prepared_statement_verifier));
+		} else {
+			// If it does fail, let's make sure it's not an internal exception
+			ThrowIfExceptionIsInternal(*prepared_statement_verifier);
 		}
 	} else {
 		if (ValidChecker::IsInvalidated(*db)) {

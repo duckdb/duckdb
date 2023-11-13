@@ -96,12 +96,12 @@ private:
 
 struct UpdateNodeData {
 	unique_ptr<UpdateInfo> info;
-	unique_ptr<sel_t[]> tuples;
-	unique_ptr<data_t[]> tuple_data;
+	unsafe_unique_array<sel_t> tuples;
+	unsafe_unique_array<data_t> tuple_data;
 };
 
 struct UpdateNode {
-	unique_ptr<UpdateNodeData> info[RowGroup::ROW_GROUP_VECTOR_COUNT];
+	unique_ptr<UpdateNodeData> info[Storage::ROW_GROUP_VECTOR_COUNT];
 };
 
 } // namespace duckdb

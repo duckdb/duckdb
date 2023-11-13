@@ -3,6 +3,9 @@
 # group: [list]
 
 statement ok
+PRAGMA enable_verification;
+
+statement ok
 PRAGMA default_order='ASC';
 
 statement ok
@@ -393,6 +396,58 @@ query IIII
 select k, v, map(k,v), map(k,v)[(array_sort(k,'DESC'))[1]] from (values ([1,2,3,4],[2,3,4,5])) as t(k,v);
 ----
 [1, 2, 3, 4]	[2, 3, 4, 5]	{1=2, 2=3, 3=4, 4=5}	[5]
+
+# bug fixes test for #7614
+
+query II
+select id, list(distinct foo order by foo) from (
+  values (1, '10'), (1, '15'), (2, '10')
+) v (id, foo)
+group by all
+order by id;
+----
+1	[10, 15]
+2	[10]
+
+query II
+select id, list(distinct foo order by foo) from (
+  values (1, '10'), (1, '10'), (1, '15'), (2, '10')
+) v (id, foo)
+group by id
+order by id;
+----
+1	[10, 15]
+2	[10]
+
+query II
+select id, list(foo order by foo) from (
+  values (1, '10'), (1, '10'), (1, '15'), (2, '10')
+) v (id, foo)
+group by id
+order by id;
+----
+1	[10, 10, 15]
+2	[10]
+
+query II
+select id, list(distinct foo order by foo) from (
+  values (1, '10'), (1, '10'), (1, '15'), (2, '10')
+) v (id, foo)
+group by id
+order by id;
+----
+1	[10, 15]
+2	[10]
+
+query II
+select id, list(distinct foo order by bar) from (
+  values (1, '10', 2), (1, '15', 1), (2, '10', 1)
+) v (id, foo, bar)
+group by all
+order by id;
+----
+1	[15, 10]
+2	[10]
 
 # bug fixes test for #5694
 

@@ -1,0 +1,11 @@
+# name: test/sql/copy/csv/code_cov/csv_sniffer_blob.test
+# description: Test Blob error in sniffer
+# group: [code_cov]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT typeof(#1),typeof(#3) from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK(column0 := 'BLOB')) LIMIT 1
+----
+CSV auto-detect for blobs not supported: there may be invalid UTF-8 in the file

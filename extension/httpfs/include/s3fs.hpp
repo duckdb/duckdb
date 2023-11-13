@@ -1,9 +1,9 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/common/chrono.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "httpfs.hpp"
@@ -44,11 +44,12 @@ struct S3AuthParams {
 	bool use_ssl;
 	bool s3_url_compatibility_mode;
 
-	static S3AuthParams ReadFrom(FileOpener *opener);
+	static S3AuthParams ReadFrom(FileOpener *opener, FileOpenerInfo &info);
 };
 
 struct ParsedS3Url {
 	const string http_proto;
+	const string prefix;
 	const string host;
 	const string bucket;
 	const string path;
@@ -233,7 +234,7 @@ protected:
 // Helper class to do s3 ListObjectV2 api call https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
 struct AWSListObjectV2 {
 	static string Request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
-	                      string &continuation_token, HTTPState *state, bool use_delimiter = false);
+	                      string &continuation_token, optional_ptr<HTTPState> state, bool use_delimiter = false);
 	static void ParseKey(string &aws_response, vector<string> &result);
 	static vector<string> ParseCommonPrefix(string &aws_response);
 	static string ParseContinuationToken(string &aws_response);

@@ -1,5 +1,6 @@
 import duckdb
 
+
 class Test6315(object):
     def test_6315(self, duckdb_cursor):
         # segfault when accessing description after fetching rows

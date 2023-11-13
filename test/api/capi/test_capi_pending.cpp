@@ -18,7 +18,7 @@ TEST_CASE("Test pending statements in C API", "[capi]") {
 	while (true) {
 		auto state = pending.ExecuteTask();
 		REQUIRE(state != DUCKDB_PENDING_ERROR);
-		if (state == DUCKDB_PENDING_RESULT_READY) {
+		if (duckdb_pending_execution_is_finished(state)) {
 			break;
 		}
 	}

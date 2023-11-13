@@ -81,8 +81,7 @@ static void append_to_integers(DuckDB *db, idx_t threadnr) {
 }
 
 TEST_CASE("Concurrent writes during index creation", "[index][.]") {
-	// FIXME: this breaks sporadically on CI
-	return;
+
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -355,8 +354,10 @@ static void join_integers(Connection *con, bool *index_join_success, idx_t threa
 }
 
 TEST_CASE("Concurrent appends during index join", "[interquery][.]") {
-	// FIXME: this test occassionally fails in the CI, likely due to a race condition in the index code
+
+	// FIXME: enable again once we find/fixed the cause of the spurious failure
 	return;
+
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

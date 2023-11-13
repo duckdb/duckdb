@@ -21,7 +21,7 @@ SourceResultType PhysicalCopyDatabase::GetData(ExecutionContext &context, DataCh
                                          OperatorSourceInput &input) const {
 	auto &catalog = info->to_database;
 	for(auto &schema : info->schemas) {
-		catalog.CreateSchema(context.client, *schema);
+		catalog.CreateSchema(context.client, schema->Cast<CreateSchemaInfo>());
 	}
 	for(auto &table : info->tables) {
 		// bind the constraints to the table again

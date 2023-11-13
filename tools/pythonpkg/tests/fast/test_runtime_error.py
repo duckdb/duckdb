@@ -5,6 +5,7 @@ from conftest import NumpyPandas, ArrowPandas
 closed = lambda: pytest.raises(duckdb.ConnectionException, match='Connection has already been closed')
 no_result_set = lambda: pytest.raises(duckdb.InvalidInputException, match='No open result set')
 
+
 class TestRuntimeError(object):
     def test_fetch_error(self):
         con = duckdb.connect()
@@ -29,7 +30,9 @@ class TestRuntimeError(object):
     def test_register_error(self):
         con = duckdb.connect()
         py_obj = "this is a string"
-        with pytest.raises(duckdb.InvalidInputException, match='Python Object str not suitable to be registered as a view'):
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Python Object str not suitable to be registered as a view'
+        ):
             con.register(py_obj, "v")
 
     def test_arrow_fetch_table_error(self):
@@ -54,11 +57,14 @@ class TestRuntimeError(object):
         with pytest.raises(duckdb.ProgrammingError, match='There is no query result'):
             res.fetch_arrow_reader(1)
 
-
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_relation_fetchall_error(self, pandas):
         conn = duckdb.connect()
-        df_in = pandas.DataFrame({'numbers': [1,2,3,4,5],})
+        df_in = pandas.DataFrame(
+            {
+                'numbers': [1, 2, 3, 4, 5],
+            }
+        )
         conn.execute("create view x as select * from df_in")
         rel = conn.query("select * from x")
         del df_in
@@ -68,7 +74,11 @@ class TestRuntimeError(object):
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_relation_fetchall_execute(self, pandas):
         conn = duckdb.connect()
-        df_in = pandas.DataFrame({'numbers': [1,2,3,4,5],})
+        df_in = pandas.DataFrame(
+            {
+                'numbers': [1, 2, 3, 4, 5],
+            }
+        )
         conn.execute("create view x as select * from df_in")
         rel = conn.query("select * from x")
         del df_in
@@ -78,7 +88,11 @@ class TestRuntimeError(object):
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_relation_query_error(self, pandas):
         conn = duckdb.connect()
-        df_in = pandas.DataFrame({'numbers': [1,2,3,4,5],})
+        df_in = pandas.DataFrame(
+            {
+                'numbers': [1, 2, 3, 4, 5],
+            }
+        )
         conn.execute("create view x as select * from df_in")
         rel = conn.query("select * from x")
         del df_in
@@ -88,7 +102,11 @@ class TestRuntimeError(object):
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_conn_broken_statement_error(self, pandas):
         conn = duckdb.connect()
-        df_in = pandas.DataFrame({'numbers': [1,2,3,4,5],})
+        df_in = pandas.DataFrame(
+            {
+                'numbers': [1, 2, 3, 4, 5],
+            }
+        )
         conn.execute("create view x as select * from df_in")
         del df_in
         with pytest.raises(duckdb.InvalidInputException):
@@ -98,16 +116,20 @@ class TestRuntimeError(object):
         conn = duckdb.connect()
         conn.execute("create table integers (a integer, b integer)")
         with pytest.raises(duckdb.InvalidInputException, match='Prepared statement needs 2 parameters, 1 given'):
-            conn.execute("select * from integers where a =? and b=?",[1])
+            conn.execute("select * from integers where a =? and b=?", [1])
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_closed_conn_exceptions(self, pandas):
         conn = duckdb.connect()
         conn.close()
-        df_in = pandas.DataFrame({'numbers': [1,2,3,4,5],})
+        df_in = pandas.DataFrame(
+            {
+                'numbers': [1, 2, 3, 4, 5],
+            }
+        )
 
         with closed():
-            conn.register("bla",df_in)
+            conn.register("bla", df_in)
 
         with closed():
             conn.from_query("select 1")

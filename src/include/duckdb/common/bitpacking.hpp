@@ -13,10 +13,16 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
 using bitpacking_width_t = uint8_t;
+
+struct HugeIntPacker {
+	static void Pack(const hugeint_t *__restrict in, uint32_t *__restrict out, bitpacking_width_t width);
+	static void Unpack(const uint32_t *__restrict in, hugeint_t *__restrict out, bitpacking_width_t width);
+};
 
 class BitpackingPrimitives {
 
@@ -37,9 +43,7 @@ public:
 			idx_t misaligned_count = count % BITPACKING_ALGORITHM_GROUP_SIZE;
 			T tmp_buffer[BITPACKING_ALGORITHM_GROUP_SIZE]; // TODO maybe faster on the heap?
 
-			if (misaligned_count) {
-				count -= misaligned_count;
-			}
+			count -= misaligned_count;
 
 			for (idx_t i = 0; i < count; i += BITPACKING_ALGORITHM_GROUP_SIZE) {
 				PackGroup<T>(dst + (i * width) / 8, src + i, width);
@@ -78,22 +82,22 @@ public:
 	}
 
 	// Calculates the minimum required number of bits per value that can store all values
-	template <class T>
+	template <class T, bool is_signed = NumericLimits<T>::IsSigned()>
 	inline static bitpacking_width_t MinimumBitWidth(T value) {
-		return FindMinimumBitWidth<T, BYTE_ALIGNED>(value, value);
+		return FindMinimumBitWidth<T, is_signed, BYTE_ALIGNED>(value, value);
 	}
 
 	// Calculates the minimum required number of bits per value that can store all values
-	template <class T>
+	template <class T, bool is_signed = NumericLimits<T>::IsSigned()>
 	inline static bitpacking_width_t MinimumBitWidth(T *values, idx_t count) {
-		return FindMinimumBitWidth<T, BYTE_ALIGNED>(values, count);
+		return FindMinimumBitWidth<T, is_signed, BYTE_ALIGNED>(values, count);
 	}
 
 	// Calculates the minimum required number of bits per value that can store all values,
 	// given a predetermined minimum and maximum value of the buffer
-	template <class T>
+	template <class T, bool is_signed = NumericLimits<T>::IsSigned()>
 	inline static bitpacking_width_t MinimumBitWidth(T minimum, T maximum) {
-		return FindMinimumBitWidth<T, BYTE_ALIGNED>(minimum, maximum);
+		return FindMinimumBitWidth<T, is_signed, BYTE_ALIGNED>(minimum, maximum);
 	}
 
 	inline static idx_t GetRequiredSize(idx_t count, bitpacking_width_t width) {
@@ -112,7 +116,7 @@ public:
 	}
 
 private:
-	template <class T, bool round_to_next_byte = false>
+	template <class T, bool is_signed, bool round_to_next_byte = false>
 	static bitpacking_width_t FindMinimumBitWidth(T *values, idx_t count) {
 		T min_value = values[0];
 		T max_value = values[0];
@@ -122,7 +126,7 @@ private:
 				max_value = values[i];
 			}
 
-			if (std::is_signed<T>::value) {
+			if (is_signed) {
 				if (values[i] < min_value) {
 					min_value = values[i];
 				}
@@ -132,12 +136,12 @@ private:
 		return FindMinimumBitWidth<T, round_to_next_byte>(min_value, max_value);
 	}
 
-	template <class T, bool round_to_next_byte = false>
+	template <class T, bool is_signed, bool round_to_next_byte = false>
 	static bitpacking_width_t FindMinimumBitWidth(T min_value, T max_value) {
 		bitpacking_width_t bitwidth;
 		T value;
 
-		if (std::is_signed<T>::value) {
+		if (is_signed) {
 			if (min_value == NumericLimits<T>::Minimum()) {
 				// handle special case of the minimal value, as it cannot be negated like all other values.
 				return sizeof(T) * 8;
@@ -152,7 +156,7 @@ private:
 			return 0;
 		}
 
-		if (std::is_signed<T>::value) {
+		if (is_signed) {
 			bitwidth = 1;
 		} else {
 			bitwidth = 0;
@@ -168,58 +172,37 @@ private:
 		// Assert results are correct
 #ifdef DEBUG
 		if (bitwidth < sizeof(T) * 8 && bitwidth != 0) {
-			if (std::is_signed<T>::value) {
-				D_ASSERT((int64_t)max_value <= (int64_t)(1L << (bitwidth - 1)) - 1);
-				D_ASSERT((int64_t)min_value >= (int64_t)(-1 * ((1L << (bitwidth - 1)) - 1) - 1));
+			if (is_signed) {
+				D_ASSERT(max_value <= (T(1) << (bitwidth - 1)) - 1);
+				D_ASSERT(min_value >= (T(-1) * ((T(1) << (bitwidth - 1)) - 1) - 1));
 			} else {
-				D_ASSERT((uint64_t)max_value <= (uint64_t)(1L << (bitwidth)) - 1);
+				D_ASSERT(max_value <= (T(1) << (bitwidth)) - 1);
 			}
 		}
 #endif
 		if (round_to_next_byte) {
 			return (bitwidth / 8 + (bitwidth % 8 != 0)) * 8;
-		} else {
-			return bitwidth;
 		}
+		return bitwidth;
 	}
 
 	// Sign bit extension
-	template <class T, class T_U = typename std::make_unsigned<T>::type>
+	template <class T, class T_U = typename MakeUnsigned<T>::type>
 	static void SignExtend(data_ptr_t dst, bitpacking_width_t width) {
-		T const mask = ((T_U)1) << (width - 1);
+		T const mask = T_U(1) << (width - 1);
 		for (idx_t i = 0; i < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE; ++i) {
 			T value = Load<T>(dst + i * sizeof(T));
-			value = value & ((((T_U)1) << width) - ((T_U)1));
+			value = value & ((T_U(1) << width) - T_U(1));
 			T result = (value ^ mask) - mask;
 			Store(result, dst + i * sizeof(T));
-		}
-	}
-
-	template <class T>
-	static void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
-	                        bool skip_sign_extension = false) {
-		if (std::is_same<T, uint8_t>::value || std::is_same<T, int8_t>::value) {
-			duckdb_fastpforlib::fastunpack((const uint8_t *)src, (uint8_t *)dst, (uint32_t)width);
-		} else if (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value) {
-			duckdb_fastpforlib::fastunpack((const uint16_t *)src, (uint16_t *)dst, (uint32_t)width);
-		} else if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
-			duckdb_fastpforlib::fastunpack((const uint32_t *)src, (uint32_t *)dst, (uint32_t)width);
-		} else if (std::is_same<T, uint64_t>::value || std::is_same<T, int64_t>::value) {
-			duckdb_fastpforlib::fastunpack((const uint32_t *)src, (uint64_t *)dst, (uint32_t)width);
-		} else {
-			throw InternalException("Unsupported type found in bitpacking.");
-		}
-
-		if (NumericLimits<T>::IsSigned() && !skip_sign_extension && width > 0 && width < sizeof(T) * 8) {
-			SignExtend<T>(dst, width);
 		}
 	}
 
 	// Prevent compression at widths that are ineffective
 	template <class T>
 	static bitpacking_width_t GetEffectiveWidth(bitpacking_width_t width) {
-		auto bits_of_type = sizeof(T) * 8;
-		auto type_size = sizeof(T);
+		bitpacking_width_t bits_of_type = sizeof(T) * 8;
+		bitpacking_width_t type_size = sizeof(T);
 		if (width + type_size > bits_of_type) {
 			return bits_of_type;
 		}
@@ -227,17 +210,49 @@ private:
 	}
 
 	template <class T>
-	static void PackGroup(data_ptr_t dst, T *values, bitpacking_width_t width) {
-		if (std::is_same<T, uint8_t>::value || std::is_same<T, int8_t>::value) {
-			duckdb_fastpforlib::fastpack((const uint8_t *)values, (uint8_t *)dst, (uint32_t)width);
-		} else if (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value) {
-			duckdb_fastpforlib::fastpack((const uint16_t *)values, (uint16_t *)dst, (uint32_t)width);
-		} else if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
-			duckdb_fastpforlib::fastpack((const uint32_t *)values, (uint32_t *)dst, (uint32_t)width);
-		} else if (std::is_same<T, uint64_t>::value || std::is_same<T, int64_t>::value) {
-			duckdb_fastpforlib::fastpack((const uint64_t *)values, (uint32_t *)dst, (uint32_t)width);
+	static inline void PackGroup(data_ptr_t dst, T *values, bitpacking_width_t width) {
+		if (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value) {
+			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint8_t *>(values), reinterpret_cast<uint8_t *>(dst),
+			                             static_cast<uint32_t>(width));
+		} else if (std::is_same<T, int16_t>::value || std::is_same<T, uint16_t>::value) {
+			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint16_t *>(values), reinterpret_cast<uint16_t *>(dst),
+			                             static_cast<uint32_t>(width));
+		} else if (std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value) {
+			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint32_t *>(values), reinterpret_cast<uint32_t *>(dst),
+			                             static_cast<uint32_t>(width));
+		} else if (std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value) {
+			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint64_t *>(values), reinterpret_cast<uint32_t *>(dst),
+			                             static_cast<uint32_t>(width));
+		} else if (std::is_same<T, hugeint_t>::value) {
+			HugeIntPacker::Pack(reinterpret_cast<const hugeint_t *>(values), reinterpret_cast<uint32_t *>(dst), width);
 		} else {
-			throw InternalException("Unsupported type found in bitpacking.");
+			throw InternalException("Unsupported type for bitpacking");
+		}
+	}
+
+	template <class T>
+	static inline void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
+	                               bool skip_sign_extension = false) {
+		if (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value) {
+			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint8_t *>(src), reinterpret_cast<uint8_t *>(dst),
+			                               static_cast<uint32_t>(width));
+		} else if (std::is_same<T, int16_t>::value || std::is_same<T, uint16_t>::value) {
+			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint16_t *>(src), reinterpret_cast<uint16_t *>(dst),
+			                               static_cast<uint32_t>(width));
+		} else if (std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value) {
+			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint32_t *>(dst),
+			                               static_cast<uint32_t>(width));
+		} else if (std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value) {
+			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst),
+			                               static_cast<uint32_t>(width));
+		} else if (std::is_same<T, hugeint_t>::value) {
+			HugeIntPacker::Unpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<hugeint_t *>(dst), width);
+		} else {
+			throw InternalException("Unsupported type for bitpacking");
+		}
+
+		if (NumericLimits<T>::IsSigned() && !skip_sign_extension && width > 0 && width < sizeof(T) * 8) {
+			SignExtend<T>(dst, width);
 		}
 	}
 };

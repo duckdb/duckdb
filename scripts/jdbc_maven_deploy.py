@@ -2,7 +2,7 @@
 # https://issues.sonatype.org/browse/OSSRH-58179
 
 # this is the pgp key we use to sign releases
-# if this key should be lost, generate a new one with `gpg --full-generate-key` 
+# if this key should be lost, generate a new one with `gpg --full-generate-key`
 # AND upload to keyserver: `gpg --keyserver hkp://keys.openpgp.org --send-keys [...]`
 # export the keys for GitHub Actions like so: `gpg --export-secret-keys | base64`
 # --------------------------------
@@ -20,38 +20,40 @@ import tempfile
 import zipfile
 import re
 
+
 def exec(cmd):
-  print(cmd)
-  res = subprocess.run(cmd.split(' '), capture_output=True)
-  if res.returncode == 0:
-    return res.stdout
-  raise ValueError(res.stdout + res.stderr)
+    print(cmd)
+    res = subprocess.run(cmd.split(' '), capture_output=True)
+    if res.returncode == 0:
+        return res.stdout
+    raise ValueError(res.stdout + res.stderr)
+
 
 if len(sys.argv) < 4 or not os.path.isdir(sys.argv[2]) or not os.path.isdir(sys.argv[3]):
-  print("Usage: [release_tag, format: v1.2.3] [artifact_dir] [jdbc_root_path]")
-  exit(1)
+    print("Usage: [release_tag, format: v1.2.3] [artifact_dir] [jdbc_root_path]")
+    exit(1)
 
 version_regex = re.compile(r'^v((\d+)\.(\d+)\.\d+)$')
 release_tag = sys.argv[1]
 deploy_url = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
 is_release = True
 
-if (release_tag == 'master'):
-  # for SNAPSHOT builds we increment the minor version and set patch level to zero.
-  # seemed the most sensible
-  last_tag = exec('git tag --sort=-committerdate').decode('utf8').split('\n')[0]
-  re_result = version_regex.search(last_tag)
-  if re_result is None:
-    raise ValueError("Could not parse last tag %s" % last_tag)
-  release_version = "%d.%d.0-SNAPSHOT" % (int(re_result.group(2)), int(re_result.group(3)) + 1)
-  # orssh uses a different deploy url for snapshots yay
-  deploy_url = 'https://oss.sonatype.org/content/repositories/snapshots/'
-  is_release = False
+if release_tag == 'main':
+    # for SNAPSHOT builds we increment the minor version and set patch level to zero.
+    # seemed the most sensible
+    last_tag = exec('git tag --sort=-committerdate').decode('utf8').split('\n')[0]
+    re_result = version_regex.search(last_tag)
+    if re_result is None:
+        raise ValueError("Could not parse last tag %s" % last_tag)
+    release_version = "%d.%d.0-SNAPSHOT" % (int(re_result.group(2)), int(re_result.group(3)) + 1)
+    # orssh uses a different deploy url for snapshots yay
+    deploy_url = 'https://oss.sonatype.org/content/repositories/snapshots/'
+    is_release = False
 elif version_regex.match(release_tag):
-  release_version = version_regex.search(release_tag).group(1)
+    release_version = version_regex.search(release_tag).group(1)
 else:
-  print("Not running on %s" % release_tag)
-  exit(0)
+    print("Not running on %s" % release_tag)
+    exit(0)
 
 jdbc_artifact_dir = sys.argv[2]
 jdbc_root_path = sys.argv[3]
@@ -79,7 +81,7 @@ pom_template = """
   <licenses>
     <license>
       <name>MIT License</name>
-      <url>https://raw.githubusercontent.com/duckdb/duckdb/master/LICENSE</url>
+      <url>https://raw.githubusercontent.com/duckdb/duckdb/main/LICENSE</url>
       <distribution>repo</distribution>
     </license>
   </licenses>
@@ -102,7 +104,7 @@ pom_template = """
   <scm>
     <connection>scm:git:git://github.com/duckdb/duckdb.git</connection>
     <developerConnection>scm:git:ssh://github.com:duckdb/duckdb.git</developerConnection>
-    <url>http://github.com/duckdb/duckdb/tree/master</url>
+    <url>http://github.com/duckdb/duckdb/tree/main</url>
   </scm>
 
   <build>
@@ -131,11 +133,11 @@ pom_path.write_text(pom_template.replace("${VERSION}", release_version))
 # fatten up jar to add other binaries, start with first one
 shutil.copyfile(os.path.join(jdbc_artifact_dir, "java-" + combine_builds[0], "duckdb_jdbc.jar"), binary_jar)
 for build in combine_builds[1:]:
-  old_jar = zipfile.ZipFile(os.path.join(jdbc_artifact_dir, "java-" + build, "duckdb_jdbc.jar"), 'r')
-  for zip_entry in old_jar.namelist():
-    if zip_entry.startswith('libduckdb_java.so'):
-      old_jar.extract(zip_entry, staging_dir)
-      exec("jar -uf %s -C %s %s" % (binary_jar, staging_dir, zip_entry))
+    old_jar = zipfile.ZipFile(os.path.join(jdbc_artifact_dir, "java-" + build, "duckdb_jdbc.jar"), 'r')
+    for zip_entry in old_jar.namelist():
+        if zip_entry.startswith('libduckdb_java.so'):
+            old_jar.extract(zip_entry, staging_dir)
+            exec("jar -uf %s -C %s %s" % (binary_jar, staging_dir, zip_entry))
 
 javadoc_stage_dir = tempfile.mkdtemp()
 
@@ -144,8 +146,13 @@ exec("jar -cvf %s -C %s ." % (javadoc_jar, javadoc_stage_dir))
 exec("jar -cvf %s -C %s/src/main/java org" % (sources_jar, jdbc_root_path))
 
 # make sure all files exist before continuing
-if not os.path.exists(javadoc_jar) or not os.path.exists(sources_jar) or not os.path.exists(pom) or not os.path.exists(binary_jar):
-  raise ValueError('could not create all required files') 
+if (
+    not os.path.exists(javadoc_jar)
+    or not os.path.exists(sources_jar)
+    or not os.path.exists(pom)
+    or not os.path.exists(binary_jar)
+):
+    raise ValueError('could not create all required files')
 
 # run basic tests, it should now work on whatever platform this is
 exec("java -cp %s org.duckdb.test.TestDuckDBJDBC" % binary_jar)
@@ -168,11 +175,11 @@ exec("java -cp %s org.duckdb.test.TestDuckDBJDBC" % binary_jar)
 
 results_dir = os.path.join(jdbc_artifact_dir, "results")
 if not os.path.exists(results_dir):
-  os.mkdir(results_dir)
+    os.mkdir(results_dir)
 
 
 for jar in [binary_jar, sources_jar, javadoc_jar]:
-  shutil.copyfile(jar, os.path.join(results_dir, os.path.basename(jar)))
+    shutil.copyfile(jar, os.path.join(results_dir, os.path.basename(jar)))
 
 print("JARs created, uploading (this can take a while!)")
 deploy_cmd_prefix = 'mvn gpg:sign-and-deploy-file -Durl=%s -DrepositoryId=ossrh' % deploy_url
@@ -182,14 +189,14 @@ exec("%s -Dclassifier=javadoc -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom,
 
 
 if not is_release:
-  print("Not a release, not closing repo")
-  exit(0)
+    print("Not a release, not closing repo")
+    exit(0)
 
 print("Close/Release steps")
 # # beautiful
 os.environ["MAVEN_OPTS"] = '--add-opens=java.base/java.util=ALL-UNNAMED'
 
-#this list has horrid output, lets try to parse. What we want starts with orgduckdb- and then a number
+# this list has horrid output, lets try to parse. What we want starts with orgduckdb- and then a number
 repo_id = re.search(r'(orgduckdb-\d+)', exec("mvn -f %s nexus-staging:rc-list" % (pom)).decode('utf8')).groups()[0]
 exec("mvn -f %s nexus-staging:rc-close -DstagingRepositoryId=%s" % (pom, repo_id))
 exec("mvn -f %s nexus-staging:rc-release -DstagingRepositoryId=%s" % (pom, repo_id))

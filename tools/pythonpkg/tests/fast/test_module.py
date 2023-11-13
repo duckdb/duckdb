@@ -9,4 +9,4 @@ class TestModule:
         assert duckdb.threadsafety == 1
 
     def test_apilevel(self):
-        assert duckdb.apilevel == "1.0"
+        assert duckdb.apilevel == "2.0"

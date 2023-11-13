@@ -14,8 +14,6 @@
 
 namespace duckdb {
 class BaseStatistics;
-class FieldWriter;
-class FieldReader;
 struct SelectionVector;
 class Vector;
 
@@ -28,8 +26,8 @@ struct ListStats {
 	DUCKDB_API static BaseStatistics &GetChildStats(BaseStatistics &stats);
 	DUCKDB_API static void SetChildStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats);
 
-	DUCKDB_API static void Serialize(const BaseStatistics &stats, FieldWriter &writer);
-	DUCKDB_API static BaseStatistics Deserialize(FieldReader &reader, LogicalType type);
+	DUCKDB_API static void Serialize(const BaseStatistics &stats, Serializer &serializer);
+	DUCKDB_API static void Deserialize(Deserializer &deserializer, BaseStatistics &base);
 
 	DUCKDB_API static string ToString(const BaseStatistics &stats);
 

@@ -1,0 +1,85 @@
+# name: test/sql/index/art/join/test_art_index_join.test_slow
+# description: Test ART index joins
+# group: [join]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+statement ok
+PRAGMA force_index_join
+
+statement ok
+CREATE TABLE t1(i INTEGER);
+
+statement ok
+CREATE TABLE t2(i INTEGER);
+
+statement ok
+CREATE TABLE t3(i INTEGER PRIMARY KEY);
+
+statement ok
+CREATE INDEX i_index ON t1 using art(i);
+
+statement ok
+INSERT INTO t1 SELECT i+1 FROM range(0,100) tbl(i);
+
+statement ok
+INSERT INTO t2 SELECT i+1 FROM range(50,100) tbl(i);
+
+statement ok
+INSERT INTO t3 SELECT i+1 FROM range(0,100) tbl(i);
+
+# have do disable this otherwise we get a perfect hash join
+statement ok
+set disabled_optimizers to 'statistics_propagation'
+
+# standalone limit
+query II
+EXPLAIN select count(t1.i) from t1 inner join t2 on (t1.i = t2.i)
+----
+physical_plan	<REGEX>:.*INDEX_JOIN.*
+
+query I
+select count(t1.i) from t1 inner join t2 on (t1.i = t2.i)
+----
+50
+
+# standalone limit
+query II
+EXPLAIN select count(t3.i) from t3 inner join t2 on (t3.i = t2.i)
+----
+physical_plan	<REGEX>:.*INDEX_JOIN.*
+
+query I
+select count(t3.i) from t3 inner join t2 on (t3.i = t2.i)
+----
+50
+
+statement ok
+CREATE TABLE words(
+    index INTEGER,
+    doc INTEGER,
+    word VARCHAR);
+
+statement ok
+CREATE INDEX w_index ON words using art(word);
+
+statement ok
+COPY words FROM 'data/csv/index_join.csv.gz' (DELIMITER ',' , AUTO_DETECT FALSE)
+
+query II
+SELECT w2.doc as doc2, COUNT(*) AS c FROM words AS w1 JOIN words AS w2 ON (w1.word=w2.word) GROUP BY doc2 ORDER BY c DESC LIMIT 10
+----
+144	24561086
+70	1896700
+366	1438250
+303	753789
+59	713489
+153	702810
+210	550678
+17	549485
+203	546133
+80	491060

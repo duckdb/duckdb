@@ -14,12 +14,14 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/helper.hpp"
+#include <memory>
 
 PYBIND11_DECLARE_HOLDER_TYPE(T, duckdb::unique_ptr<T>)
 
 namespace pybind11 {
 
 namespace detail {
+
 template <typename Type, bool SAFE>
 struct type_caster<duckdb::vector<Type, SAFE>> : list_caster<duckdb::vector<Type, SAFE>, Type> {};
 } // namespace detail
@@ -68,6 +70,16 @@ inline bool isinstance(handle obj, handle type) {
 		throw error_already_set();
 	}
 	return result != 0;
+}
+
+template <class T>
+bool try_cast(const handle &object, T &result) {
+	try {
+		result = cast<T>(object);
+	} catch (cast_error &e) {
+		return false;
+	}
+	return true;
 }
 
 } // namespace py

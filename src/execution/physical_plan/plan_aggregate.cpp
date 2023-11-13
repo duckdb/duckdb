@@ -5,12 +5,12 @@
 #include "duckdb/execution/operator/aggregate/physical_ungrouped_aggregate.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/operator/logical_aggregate.hpp"
-#include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
 
 namespace duckdb {
 
@@ -21,6 +21,11 @@ static uint32_t RequiredBitsForValue(uint32_t n) {
 		required_bits++;
 	}
 	return required_bits;
+}
+
+template <class T>
+hugeint_t GetRangeHugeint(const BaseStatistics &nstats) {
+	return Hugeint::Convert(NumericStats::GetMax<T>(nstats)) - Hugeint::Convert(NumericStats::GetMin<T>(nstats));
 }
 
 static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate &op, vector<idx_t> &bits_per_group) {
@@ -40,6 +45,10 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		case PhysicalType::INT16:
 		case PhysicalType::INT32:
 		case PhysicalType::INT64:
+		case PhysicalType::UINT8:
+		case PhysicalType::UINT16:
+		case PhysicalType::UINT32:
+		case PhysicalType::UINT64:
 			break;
 		default:
 			// we only support simple integer types for perfect hashing
@@ -53,6 +62,8 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 			switch (group_type.InternalType()) {
 			case PhysicalType::INT8:
 			case PhysicalType::INT16:
+			case PhysicalType::UINT8:
+			case PhysicalType::UINT16:
 				break;
 			default:
 				// type is too large and there are no stats: skip perfect hashing
@@ -68,33 +79,55 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		if (!NumericStats::HasMinMax(nstats)) {
 			return false;
 		}
+
+		if (NumericStats::Max(*stats) < NumericStats::Min(*stats)) {
+			// May result in underflow
+			return false;
+		}
+
 		// we have a min and a max value for the stats: use that to figure out how many bits we have
 		// we add two here, one for the NULL value, and one to make the computation one-indexed
 		// (e.g. if min and max are the same, we still need one entry in total)
-		int64_t range;
+		hugeint_t range_h;
 		switch (group_type.InternalType()) {
 		case PhysicalType::INT8:
-			range = int64_t(NumericStats::GetMax<int8_t>(nstats)) - int64_t(NumericStats::GetMin<int8_t>(nstats));
+			range_h = GetRangeHugeint<int8_t>(nstats);
 			break;
 		case PhysicalType::INT16:
-			range = int64_t(NumericStats::GetMax<int16_t>(nstats)) - int64_t(NumericStats::GetMin<int16_t>(nstats));
+			range_h = GetRangeHugeint<int16_t>(nstats);
 			break;
 		case PhysicalType::INT32:
-			range = int64_t(NumericStats::GetMax<int32_t>(nstats)) - int64_t(NumericStats::GetMin<int32_t>(nstats));
+			range_h = GetRangeHugeint<int32_t>(nstats);
 			break;
 		case PhysicalType::INT64:
-			if (!TrySubtractOperator::Operation(NumericStats::GetMax<int64_t>(nstats),
-			                                    NumericStats::GetMin<int64_t>(nstats), range)) {
-				return false;
-			}
+			range_h = GetRangeHugeint<int64_t>(nstats);
+			break;
+		case PhysicalType::UINT8:
+			range_h = GetRangeHugeint<uint8_t>(nstats);
+			break;
+		case PhysicalType::UINT16:
+			range_h = GetRangeHugeint<uint16_t>(nstats);
+			break;
+		case PhysicalType::UINT32:
+			range_h = GetRangeHugeint<uint32_t>(nstats);
+			break;
+		case PhysicalType::UINT64:
+			range_h = GetRangeHugeint<uint64_t>(nstats);
 			break;
 		default:
 			throw InternalException("Unsupported type for perfect hash (should be caught before)");
 		}
+
+		uint64_t range;
+		if (!Hugeint::TryCast(range_h, range)) {
+			return false;
+		}
+
 		// bail out on any range bigger than 2^32
 		if (range >= NumericLimits<int32_t>::Maximum()) {
 			return false;
 		}
+
 		range += 2;
 		// figure out how many bits we need
 		idx_t required_bits = RequiredBitsForValue(range);

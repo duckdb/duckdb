@@ -1,9 +1,9 @@
 #include "duckdb/main/query_result.hpp"
+
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/common/box_renderer.hpp"
-
 namespace duckdb {
 
 BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties_p,
@@ -58,20 +58,8 @@ QueryResult::QueryResult(QueryResultType type, StatementType statement_type, Sta
       client_properties(std::move(client_properties_p)) {
 }
 
-bool CurrentChunk::Valid() {
-	if (data_chunk) {
-		if (position < data_chunk->size()) {
-			return true;
-		}
-	}
-	return false;
-}
-
-idx_t CurrentChunk::RemainingSize() {
-	return data_chunk->size() - position;
-}
-
-QueryResult::QueryResult(QueryResultType type, PreservedError error) : BaseQueryResult(type, std::move(error)) {
+QueryResult::QueryResult(QueryResultType type, PreservedError error)
+    : BaseQueryResult(type, std::move(error)), client_properties("UTC", ArrowOffsetSize::REGULAR) {
 }
 
 QueryResult::~QueryResult() {
@@ -113,9 +101,17 @@ bool QueryResult::Equals(QueryResult &other) { // LCOV_EXCL_START
 	}
 	// now compare the actual values
 	// fetch chunks
+	unique_ptr<DataChunk> lchunk, rchunk;
+	idx_t lindex = 0, rindex = 0;
 	while (true) {
-		auto lchunk = Fetch();
-		auto rchunk = other.Fetch();
+		if (!lchunk || lindex == lchunk->size()) {
+			lchunk = Fetch();
+			lindex = 0;
+		}
+		if (!rchunk || rindex == rchunk->size()) {
+			rchunk = other.Fetch();
+			rindex = 0;
+		}
 		if (!lchunk && !rchunk) {
 			return true;
 		}
@@ -125,14 +121,11 @@ bool QueryResult::Equals(QueryResult &other) { // LCOV_EXCL_START
 		if (lchunk->size() == 0 && rchunk->size() == 0) {
 			return true;
 		}
-		if (lchunk->size() != rchunk->size()) {
-			return false;
-		}
 		D_ASSERT(lchunk->ColumnCount() == rchunk->ColumnCount());
-		for (idx_t col = 0; col < rchunk->ColumnCount(); col++) {
-			for (idx_t row = 0; row < rchunk->size(); row++) {
-				auto lvalue = lchunk->GetValue(col, row);
-				auto rvalue = rchunk->GetValue(col, row);
+		for (; lindex < lchunk->size() && rindex < rchunk->size(); lindex++, rindex++) {
+			for (idx_t col = 0; col < rchunk->ColumnCount(); col++) {
+				auto lvalue = lchunk->GetValue(col, lindex);
+				auto rvalue = rchunk->GetValue(col, rindex);
 				if (lvalue.IsNull() && rvalue.IsNull()) {
 					continue;
 				}
@@ -162,10 +155,6 @@ string QueryResult::HeaderToString() {
 	}
 	result += "\n";
 	return result;
-}
-
-string QueryResult::GetConfigTimezone(QueryResult &query_result) {
-	return query_result.client_properties.time_zone;
 }
 
 } // namespace duckdb

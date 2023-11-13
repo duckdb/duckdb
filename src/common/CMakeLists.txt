@@ -32,13 +32,14 @@ add_library_unity(
   cycle_counter.cpp
   exception.cpp
   exception_format_value.cpp
-  field_writer.cpp
+  extra_type_info.cpp
   file_buffer.cpp
   file_system.cpp
   filename_pattern.cpp
   fsst.cpp
   gzip_file_system.cpp
   hive_partitioning.cpp
+  http_state.cpp
   pipe_file_system.cpp
   local_file_system.cpp
   multi_file_reader.cpp
@@ -47,7 +48,6 @@ add_library_unity(
   radix_partitioning.cpp
   re2_regex.cpp
   random_engine.cpp
-  serializer.cpp
   string_util.cpp
   enum_util.cpp
   symbols.cpp
@@ -58,8 +58,3 @@ add_library_unity(
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common>
     PARENT_SCOPE)
-
-if(${BUILD_JEMALLOC_EXTENSION})
-  include_directories(${PROJECT_SOURCE_DIR}/extension/jemalloc/include)
-  add_definitions(-DBUILD_JEMALLOC_EXTENSION=${BUILD_JEMALLOC_EXTENSION})
-endif()

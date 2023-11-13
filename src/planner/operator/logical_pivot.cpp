@@ -4,6 +4,9 @@
 
 namespace duckdb {
 
+LogicalPivot::LogicalPivot() : LogicalOperator(LogicalOperatorType::LOGICAL_PIVOT) {
+}
+
 LogicalPivot::LogicalPivot(idx_t pivot_idx, unique_ptr<LogicalOperator> plan, BoundPivotInfo info_p)
     : LogicalOperator(LogicalOperatorType::LOGICAL_PIVOT), pivot_index(pivot_idx), bound_pivot(std::move(info_p)) {
 	D_ASSERT(plan);
@@ -16,14 +19,6 @@ vector<ColumnBinding> LogicalPivot::GetColumnBindings() {
 		result.emplace_back(pivot_index, i);
 	}
 	return result;
-}
-
-void LogicalPivot::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException("Serializing pivot is not supported yet");
-}
-
-unique_ptr<LogicalOperator> LogicalPivot::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
-	throw NotImplementedException("Deserializing pivot is not supported yet");
 }
 
 vector<idx_t> LogicalPivot::GetTableIndex() const {

@@ -2,6 +2,9 @@
 # description: Test skewness aggregate
 # group: [aggregates]
 
+statement ok
+PRAGMA enable_verification
+
 #Corner cases
 statement error
 select skewness()
@@ -58,12 +61,12 @@ select skewness(k), skewness(v), skewness(v2) from aggr
 -3.316625	-0.163444	0.365401
 
 query I
-select skewness(v2) from aggr group by v
+select skewness(v2) from aggr group by v ORDER BY ALL
 ----
 -0.423273
-NULL
-NULL
 -0.330141
+NULL
+NULL
 
 # Window Function
 query I

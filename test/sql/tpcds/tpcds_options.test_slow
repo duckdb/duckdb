@@ -30,3 +30,12 @@ CALL dsdgen(sf=0.01, schema='tpcds')
 
 statement ok
 SELECT COUNT(*) FROM tpcds.call_center
+
+statement ok
+ATTACH DATABASE ':memory:' AS db1;
+
+statement ok
+CALL dsdgen(sf=0.01, catalog='db1');
+
+statement ok
+SELECT COUNT(*) FROM db1.call_center

@@ -1,21 +1,17 @@
 add_library_unity(
-  duckdb_art_index_execution
+  duckdb_execution_index_art
   OBJECT
   art_key.cpp
   node.cpp
-  fixed_size_allocator.cpp
   iterator.cpp
   leaf.cpp
-  leaf_segment.cpp
   node4.cpp
   node16.cpp
   node48.cpp
   node256.cpp
-  swizzleable_pointer.cpp
   prefix.cpp
-  prefix_segment.cpp
   art.cpp)
 
 set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_art_index_execution>
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_execution_index_art>
     PARENT_SCOPE)

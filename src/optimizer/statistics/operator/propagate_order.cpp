@@ -11,7 +11,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOrde
 
 	// then propagate to each of the order expressions
 	for (auto &bound_order : order.orders) {
-		PropagateAndCompress(bound_order.expression, bound_order.stats);
+		bound_order.stats = PropagateExpression(bound_order.expression);
 	}
 	return std::move(node_stats);
 }

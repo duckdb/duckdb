@@ -1,0 +1,285 @@
+# name: test/sql/types/nested/list/test_list_slice_step.test
+# description: List slicing with steps test
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT ([1,2,3,4,5,6])[-10:-10];
+----
+[]
+
+query I 
+SELECT ([])[1:3:2];
+----
+[]
+
+query I 
+SELECT ([1,2,3,4,5,6])[5:3:2];
+----
+[]
+
+query I 
+SELECT ([1,2,3,4,5,6])[5:3];
+----
+[]
+
+query I
+SELECT ([1,2,3,4,5])[1:-:2];
+----
+[1, 3, 5]
+
+query I
+SELECT 'abcdefg'[1:3];
+----
+abc
+
+query I
+SELECT 'abcdefg'[:3];
+----
+abc
+
+query I
+SELECT list_slice([1,2,3,4,5], 1, 3, 1);
+----
+[1, 2, 3]
+
+# EMPTY LIST
+query I
+SELECT ([])[1:3];
+----
+[]
+
+# NEGATIVE INDEX
+query I
+SELECT ([1,2,3,4,5])[-1:3];
+----
+[]
+
+query I
+SELECT ([1,2,3,4,5])[1:-3];
+----
+[1, 2, 3]
+
+# OUT OF BOUNDS
+query I
+SELECT ([1,2,3,4,5])[6:8];
+----
+[]
+
+query I
+SELECT ([1,2,3,4,5])[1:10];
+----
+[1, 2, 3, 4, 5]
+
+# EMPTY START AND STOP
+query I
+SELECT ([1,2,3,4,5])[:3];
+----
+[1, 2, 3]
+
+query I
+SELECT ([1,2,3,4,5])[1:];
+----
+[1, 2, 3, 4, 5]
+
+query I
+SELECT ([1,2,3,4,5])[:];
+----
+[1, 2, 3, 4, 5]
+
+query I
+SELECT ([1,2,3,4,5])[NULL:3];
+----
+NULL
+
+query I
+SELECT ([1,2,3,4,5])[1:3:2];
+----
+[1, 3]
+
+query I
+SELECT ([1,2,3,4,5])[1:3:3];
+----
+[1]
+
+query I
+SELECT ([1,2,3,4,5,6])[1:5:2];
+----
+[1, 3, 5]
+
+query I
+SELECT ([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17])[1:17:20];
+----
+[1]
+
+query I
+SELECT ([1,2,3,4,5])[-4:-1:2];
+----
+[2, 4]
+
+statement ok
+CREATE TABLE tbl (a INT[], start int, stop int, step int);
+
+statement ok
+INSERT INTO tbl VALUES ([1,2,3,4,5], 1, 3, 2);
+
+statement ok
+INSERT INTO tbl VALUES ([1,4,5,6,7,8], 1, 3, 2);
+
+statement ok
+INSERT INTO tbl VALUES ([1,2,3,4,5], -4, -1, 2);
+
+statement ok
+INSERT INTO tbl VALUES ([1,2,3,4,5], 1, 3, 1);
+
+query I
+SELECT a[start:stop:step] FROM tbl;
+----
+[1, 3]
+[1, 5]
+[2, 4]
+[1, 2, 3]
+
+query I
+select a[:stop:step] from tbl;
+----
+[1, 3]
+[1, 5]
+[1, 3, 5]
+[1, 2, 3]
+
+query I
+select a[start:-:step] from tbl;
+----
+[1, 3, 5]
+[1, 5, 7]
+[2, 4]
+[1, 2, 3, 4, 5]
+
+query I
+select a[:-:step] from tbl;
+----
+[1, 3, 5]
+[1, 5, 7]
+[1, 3, 5]
+[1, 2, 3, 4, 5]
+
+# ERROR's
+statement error
+SELECT '12345'[1:3:2];
+
+statement error
+SELECT ([1,2,3,4,5])[1:3:0];
+
+statement ok
+CREATE TABLE err(a INT[], start int, stop int, step int);
+
+statement ok
+INSERT INTO err VALUES ([1,2,3,4,5], 1, 3, 0);
+
+statement ok
+INSERT INTO err VALUES ([1,4,5,6,7,8], 1, 3, 0);
+
+statement error
+SELECT a[start:stop:step] from err;
+
+# NULL's
+query I
+SELECT list_slice(NULL, 1, 3, 2);
+----
+NULL
+
+query I
+SELECT list_slice(NULL, 0, 0);
+----
+NULL
+
+query I
+SELECT list_slice(NULL, 1, 3, -1);
+----
+NULL
+
+query I
+SELECT ([1,2,3,4,5])[1:3:NULL];
+----
+NULL
+
+query I
+SELECT ([1,2,3,4,5])[1:NULL:2];
+----
+NULL
+
+query I
+SELECT ([1,2,3,4,5])[NULL:3:2];
+----
+NULL
+
+statement ok
+CREATE TABLE null_tbl (a INT[], start int, stop int, step int);
+
+statement ok
+INSERT INTO null_tbl VALUES ([1,2,3,4,5], NULL, 3, 2);
+
+statement ok
+INSERT INTO null_tbl VALUES ([1,4,5,6,7,8], 1, NULL, 2);
+
+statement ok
+INSERT INTO null_tbl VALUES ([1,2,3,4,5], -4, -1, NULL);
+
+statement ok
+INSERT INTO null_tbl VALUES (NULL, 1, 3, 2);
+
+statement ok
+INSERT INTO null_tbl VALUES ([1,2,NULL], 1, 3, 2);
+
+statement ok
+INSERT INTO null_tbl VALUES ([], 1, 3, 2);
+
+query I
+SELECT a[start:stop:step] FROM null_tbl;
+----
+NULL
+NULL
+NULL
+NULL
+[1, NULL]
+[]
+
+# A list of nulls
+statement error
+SELECT ([1,2,3,4,5])[1:[NULL]:2];
+----
+Binder Error: The upper and lower bounds of the slice must be a BIGINT
+
+statement error
+SELECT ([1,2,3,4,5])[[NULL]:3:2];
+----
+Binder Error: The upper and lower bounds of the slice must be a BIGINT
+
+# Invalid types
+statement error
+SELECT ([1,2,3,4,5])[1:'a':2];
+----
+Conversion Error: Could not convert string 'a' to INT64
+
+statement error
+SELECT ([1,2,3,4,5])['a':3:2];
+----
+Conversion Error: Could not convert string 'a' to INT64
+
+statement error
+SELECT ([1,2,3,4,5])[1:[]:2];
+----
+Binder Error: The upper and lower bounds of the slice must be a BIGINT
+
+statement error
+SELECT ([1,2,3,4,5])[1:list_slice([1,2,3,4,5], 2, 3):2];
+----
+Binder Error: The upper and lower bounds of the slice must be a BIGINT
+
+statement error
+SELECT ([1,2,3,4,5])[1:[1]:2];
+----
+Binder Error: The upper and lower bounds of the slice must be a BIGINT

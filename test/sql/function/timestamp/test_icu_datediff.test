@@ -18,7 +18,7 @@ statement ok
 CREATE TABLE datetime1 AS
 SELECT '2005-12-31 23:59:59.9999999-08'::TIMESTAMPTZ AS startdate, '2006-01-01 00:00:00.0000000-08'::TIMESTAMPTZ AS enddate;
 
-foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond julian
 
 query I
 SELECT DATEDIFF('${datepart}', startdate, enddate) FROM datetime1
@@ -45,7 +45,7 @@ SELECT DATEDIFF('isoyear', '2022-01-01 00:00:00-08'::TIMESTAMPTZ, '2022-01-03 00
 #
 # Infinities
 #
-foreach specifier year isoyear month day decade century millennium quarter week microseconds milliseconds second minute hour
+foreach specifier year isoyear month day decade century millennium quarter week microseconds milliseconds second minute hour julian
 
 foreach lspecial infinity -infinity 2004-01-31T12:00:00.000050-08
 
@@ -68,7 +68,7 @@ endloop
 endloop
 
 # Negation
-foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear julian
 
 query I
 SELECT DATEDIFF('${datepart}', startdate, enddate) + DATEDIFF('${datepart}', enddate, startdate) FROM datetime1

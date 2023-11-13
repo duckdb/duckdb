@@ -1,0 +1,109 @@
+# name: test/sql/index/art/constraints/test_art_eager_constraint_checking.test
+# description: Contains different tests triggering the eager ART constraint violation
+# group: [constraints]
+
+statement ok
+PRAGMA enable_verification
+
+# issue 7182
+
+statement ok
+CREATE TABLE t (it INTEGER PRIMARY KEY, jt INTEGER);
+
+statement ok
+CREATE TABLE u (iu INTEGER PRIMARY KEY, ju INTEGER REFERENCES t (it));
+
+statement ok
+INSERT INTO t VALUES (1, 1);
+
+statement ok
+INSERT INTO u VALUES (1, NULL);
+
+statement error
+UPDATE u SET ju = 1 WHERE iu = 1;
+----
+Constraint Error: Duplicate key "iu: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
+
+# issue #5807
+
+statement ok
+CREATE TABLE tunion (
+  id INTEGER PRIMARY KEY,
+  u UNION (i int));
+
+statement ok
+INSERT INTO tunion
+SELECT 1, 41;
+
+statement error
+UPDATE tunion SET u = 42 WHERE id = 1;
+----
+Constraint Error: Duplicate key "id: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
+
+# issue #5771
+
+statement ok
+CREATE TABLE IF NOT EXISTS workers (
+    id INTEGER PRIMARY KEY NOT NULL,
+    worker VARCHAR(150) UNIQUE NOT NULL,
+    phone VARCHAR(20) NOT NULL);
+
+statement ok
+INSERT INTO workers VALUES (1, 'wagner', '123');
+
+statement ok
+UPDATE workers SET phone = '345' WHERE id = 1;
+
+statement error
+UPDATE workers SET worker = 'leo' WHERE id = 1;
+----
+Constraint Error: Duplicate key "id: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
+
+# issue #4886
+
+statement ok
+CREATE TABLE test (i INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO test VALUES (1);
+
+statement ok
+START TRANSACTION;
+
+# we locally insert another value (4) into the ART, but do
+# not update the global ART yet (no COMMIT)
+statement ok
+UPDATE test SET i = 4 WHERE i = 1;
+
+# global ART still contains the value 1, and we do not keep track of
+# deletions from indexes during tx yet
+statement error
+INSERT INTO test VALUES (1);
+----
+Constraint Error: Duplicate key "i: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
+
+statement ok
+ROLLBACK
+
+# issue #1631
+
+statement ok
+DROP TABLE IF EXISTS tbl;
+
+statement ok
+CREATE TABLE tbl (
+	id INTEGER PRIMARY KEY,
+	sometext text NOT NULL UNIQUE,
+	someothertext text NOT NULL);
+
+statement ok
+INSERT INTO tbl VALUES (1, 'abc', 'def'), (2, 'ghi', 'jkl');
+
+statement error
+UPDATE tbl
+SET sometext = 'ghi', someothertext = 'mno'
+WHERE id = 2;
+----
+Constraint Error: Duplicate key "id: 2" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
+
+

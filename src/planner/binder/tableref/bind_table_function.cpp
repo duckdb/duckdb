@@ -78,6 +78,15 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			}
 		}
 		if (child->type == ExpressionType::SUBQUERY) {
+			auto fun = table_function.functions.GetFunctionByOffset(0);
+			if (table_function.functions.Size() != 1 || fun.arguments.empty() ||
+			    fun.arguments[0].id() != LogicalTypeId::TABLE) {
+				throw BinderException(
+				    "Only table-in-out functions can have subquery parameters - %s only accepts constant parameters",
+				    fun.name);
+			}
+			// this separate subquery binding path is only used by python_map
+			// FIXME: this should be unified with `BindTableInTableOutFunction` above
 			if (seen_subquery) {
 				error = "Table function can have at most one subquery parameter ";
 				return false;
@@ -88,6 +97,8 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			subquery = make_uniq<BoundSubqueryRef>(std::move(binder), std::move(node));
 			seen_subquery = true;
 			arguments.emplace_back(LogicalTypeId::TABLE);
+			parameters.emplace_back(
+			    Value(LogicalType::INVALID)); // this is a dummy value so the lengths of arguments and parameter match
 			continue;
 		}
 
@@ -98,8 +109,8 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			throw ParameterNotResolvedException();
 		}
 		if (!expr->IsScalar()) {
-			error = "Table function requires a constant parameter";
-			return false;
+			// should have been eliminated before
+			throw InternalException("Table function requires a constant parameter");
 		}
 		auto constant = ExpressionExecutor::EvaluateScalar(context, *expr, true);
 		if (parameter_name.empty()) {
@@ -141,8 +152,8 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 		}
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
 		if (table_function.name == "pandas_scan" || table_function.name == "arrow_scan") {
-			auto arrow_bind = (PyTableFunctionData *)bind_data.get();
-			arrow_bind->external_dependency = std::move(external_dependency);
+			auto &arrow_bind = bind_data->Cast<PyTableFunctionData>();
+			arrow_bind.external_dependency = std::move(external_dependency);
 		}
 		if (table_function.name == "read_csv" || table_function.name == "read_csv_auto") {
 			auto &csv_bind = bind_data->Cast<ReadCSVData>();
@@ -152,11 +163,12 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 				table_function.extra_info = "(Multi-Threaded)";
 			}
 		}
+	} else {
+		throw InvalidInputException("Cannot call function \"%s\" directly - it has no bind function",
+		                            table_function.name);
 	}
 	if (return_types.size() != return_names.size()) {
-		throw InternalException(
-		    "Failed to bind \"%s\": Table function return_types and return_names must be of the same size",
-		    table_function.name);
+		throw InternalException("Failed to bind \"%s\": return_types/names must have same size", table_function.name);
 	}
 	if (return_types.empty()) {
 		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",

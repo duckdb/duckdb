@@ -24,8 +24,7 @@ public:
 	unique_ptr<MacroFunction> function;
 
 public:
-	//! Serialize the meta information
-	virtual void Serialize(Serializer &serializer) const = 0;
+	unique_ptr<CreateInfo> GetInfo() const override;
 
 	string ToSQL() const override {
 		return function->ToSQL(schema.name, name);

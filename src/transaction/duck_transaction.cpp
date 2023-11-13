@@ -44,7 +44,7 @@ DuckTransaction &DuckTransaction::Get(ClientContext &context, Catalog &catalog) 
 	if (!transaction.IsDuckTransaction()) {
 		throw InternalException("DuckTransaction::Get called on non-DuckDB transaction");
 	}
-	return (DuckTransaction &)transaction;
+	return transaction.Cast<DuckTransaction>();
 }
 
 LocalStorage &DuckTransaction::GetLocalStorage() {
@@ -70,10 +70,12 @@ void DuckTransaction::PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_dat
 	}
 }
 
-void DuckTransaction::PushDelete(DataTable &table, ChunkVectorInfo *vinfo, row_t rows[], idx_t count, idx_t base_row) {
-	auto delete_info =
-	    (DeleteInfo *)undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo) + sizeof(row_t) * count);
-	delete_info->vinfo = vinfo;
+void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_t vector_idx, row_t rows[], idx_t count,
+                                 idx_t base_row) {
+	auto delete_info = reinterpret_cast<DeleteInfo *>(
+	    undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo) + sizeof(row_t) * count));
+	delete_info->version_info = &info;
+	delete_info->vector_idx = vector_idx;
 	delete_info->table = &table;
 	delete_info->count = count;
 	delete_info->base_row = base_row;
@@ -81,18 +83,20 @@ void DuckTransaction::PushDelete(DataTable &table, ChunkVectorInfo *vinfo, row_t
 }
 
 void DuckTransaction::PushAppend(DataTable &table, idx_t start_row, idx_t row_count) {
-	auto append_info = (AppendInfo *)undo_buffer.CreateEntry(UndoFlags::INSERT_TUPLE, sizeof(AppendInfo));
+	auto append_info =
+	    reinterpret_cast<AppendInfo *>(undo_buffer.CreateEntry(UndoFlags::INSERT_TUPLE, sizeof(AppendInfo)));
 	append_info->table = &table;
 	append_info->start_row = start_row;
 	append_info->count = row_count;
 }
 
 UpdateInfo *DuckTransaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
-	auto update_info = (UpdateInfo *)undo_buffer.CreateEntry(
+	data_ptr_t base_info = undo_buffer.CreateEntry(
 	    UndoFlags::UPDATE_TUPLE, sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
+	auto update_info = reinterpret_cast<UpdateInfo *>(base_info);
 	update_info->max = STANDARD_VECTOR_SIZE;
-	update_info->tuples = (sel_t *)(((data_ptr_t)update_info) + sizeof(UpdateInfo));
-	update_info->tuple_data = ((data_ptr_t)update_info) + sizeof(UpdateInfo) + sizeof(sel_t) * update_info->max;
+	update_info->tuples = reinterpret_cast<sel_t *>(base_info + sizeof(UpdateInfo));
+	update_info->tuple_data = base_info + sizeof(UpdateInfo) + sizeof(sel_t) * update_info->max;
 	update_info->version_number = transaction_id;
 	return update_info;
 }
@@ -138,7 +142,7 @@ string DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bo
 		}
 		return string();
 	} catch (std::exception &ex) {
-		undo_buffer.RevertCommit(iterator_state, transaction_id);
+		undo_buffer.RevertCommit(iterator_state, this->transaction_id);
 		return ex.what();
 	}
 }

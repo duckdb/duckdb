@@ -2,6 +2,7 @@ import duckdb
 import pandas as pd
 import pytest
 
+
 class TestPandasLimit(object):
     def test_pandas_limit(self, duckdb_cursor):
         con = duckdb.connect()

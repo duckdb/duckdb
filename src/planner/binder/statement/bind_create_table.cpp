@@ -256,6 +256,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	if (base.query) {
 		// construct the result object
 		auto query_obj = Bind(*base.query);
+		base.query.reset();
 		result->query = std::move(query_obj.plan);
 
 		// construct the set of columns based on the names and types of the query
@@ -291,12 +292,6 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 		}
 		BindLogicalType(context, column.TypeMutable(), &result->schema.catalog);
-		// We add a catalog dependency
-		auto type_dependency = EnumType::GetCatalog(column.Type());
-		if (type_dependency) {
-			// Only if the USER comes from a create type
-			result->dependencies.AddDependency(*type_dependency);
-		}
 	}
 	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
 	properties.allow_stream_result = false;

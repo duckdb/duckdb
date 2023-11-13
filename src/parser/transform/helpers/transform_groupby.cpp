@@ -72,7 +72,7 @@ static void AddCubeSets(const GroupingSet &current_set, vector<GroupingSet> &res
 	}
 }
 
-void Transformer::TransformGroupByExpression(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map,
+void Transformer::TransformGroupByExpression(duckdb_libpgquery::PGNode &n, GroupingExpressionMap &map,
                                              GroupByNode &result, vector<idx_t> &indexes) {
 	auto expression = TransformExpression(n);
 	AddGroupByExpression(std::move(expression), map, result, indexes);
@@ -80,11 +80,11 @@ void Transformer::TransformGroupByExpression(duckdb_libpgquery::PGNode *n, Group
 
 // If one GROUPING SETS clause is nested inside another,
 // the effect is the same as if all the elements of the inner clause had been written directly in the outer clause.
-void Transformer::TransformGroupByNode(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map, SelectNode &result,
+void Transformer::TransformGroupByNode(duckdb_libpgquery::PGNode &n, GroupingExpressionMap &map, SelectNode &result,
                                        vector<GroupingSet> &result_sets) {
-	if (n->type == duckdb_libpgquery::T_PGGroupingSet) {
-		auto grouping_set = (duckdb_libpgquery::PGGroupingSet *)n;
-		switch (grouping_set->kind) {
+	if (n.type == duckdb_libpgquery::T_PGGroupingSet) {
+		auto &grouping_set = PGCast<duckdb_libpgquery::PGGroupingSet>(n);
+		switch (grouping_set.kind) {
 		case duckdb_libpgquery::GROUPING_SET_EMPTY:
 			result_sets.emplace_back();
 			break;
@@ -93,18 +93,18 @@ void Transformer::TransformGroupByNode(duckdb_libpgquery::PGNode *n, GroupingExp
 			break;
 		}
 		case duckdb_libpgquery::GROUPING_SET_SETS: {
-			for (auto node = grouping_set->content->head; node; node = node->next) {
-				auto pg_node = (duckdb_libpgquery::PGNode *)node->data.ptr_value;
-				TransformGroupByNode(pg_node, map, result, result_sets);
+			for (auto node = grouping_set.content->head; node; node = node->next) {
+				auto pg_node = PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value);
+				TransformGroupByNode(*pg_node, map, result, result_sets);
 			}
 			break;
 		}
 		case duckdb_libpgquery::GROUPING_SET_ROLLUP: {
 			vector<GroupingSet> rollup_sets;
-			for (auto node = grouping_set->content->head; node; node = node->next) {
-				auto pg_node = (duckdb_libpgquery::PGNode *)node->data.ptr_value;
+			for (auto node = grouping_set.content->head; node; node = node->next) {
+				auto pg_node = PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value);
 				vector<idx_t> rollup_set;
-				TransformGroupByExpression(pg_node, map, result.groups, rollup_set);
+				TransformGroupByExpression(*pg_node, map, result.groups, rollup_set);
 				rollup_sets.push_back(VectorToGroupingSet(rollup_set));
 			}
 			// generate the subsets of the rollup set and add them to the grouping sets
@@ -118,10 +118,10 @@ void Transformer::TransformGroupByNode(duckdb_libpgquery::PGNode *n, GroupingExp
 		}
 		case duckdb_libpgquery::GROUPING_SET_CUBE: {
 			vector<GroupingSet> cube_sets;
-			for (auto node = grouping_set->content->head; node; node = node->next) {
-				auto pg_node = (duckdb_libpgquery::PGNode *)node->data.ptr_value;
+			for (auto node = grouping_set.content->head; node; node = node->next) {
+				auto pg_node = PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value);
 				vector<idx_t> cube_set;
-				TransformGroupByExpression(pg_node, map, result.groups, cube_set);
+				TransformGroupByExpression(*pg_node, map, result.groups, cube_set);
 				cube_sets.push_back(VectorToGroupingSet(cube_set));
 			}
 			// generate the subsets of the rollup set and add them to the grouping sets
@@ -132,7 +132,7 @@ void Transformer::TransformGroupByNode(duckdb_libpgquery::PGNode *n, GroupingExp
 			break;
 		}
 		default:
-			throw InternalException("Unsupported GROUPING SET type %d", grouping_set->kind);
+			throw InternalException("Unsupported GROUPING SET type %d", grouping_set.kind);
 		}
 	} else {
 		vector<idx_t> indexes;
@@ -143,16 +143,16 @@ void Transformer::TransformGroupByNode(duckdb_libpgquery::PGNode *n, GroupingExp
 
 // If multiple grouping items are specified in a single GROUP BY clause,
 // then the final list of grouping sets is the cross product of the individual items.
-bool Transformer::TransformGroupBy(duckdb_libpgquery::PGList *group, SelectNode &select_node) {
+bool Transformer::TransformGroupBy(optional_ptr<duckdb_libpgquery::PGList> group, SelectNode &select_node) {
 	if (!group) {
 		return false;
 	}
 	auto &result = select_node.groups;
 	GroupingExpressionMap map;
 	for (auto node = group->head; node != nullptr; node = node->next) {
-		auto n = reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value);
+		auto n = PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value);
 		vector<GroupingSet> result_sets;
-		TransformGroupByNode(n, map, select_node, result_sets);
+		TransformGroupByNode(*n, map, select_node, result_sets);
 		CheckGroupingSetMax(result_sets.size());
 		if (result.grouping_sets.empty()) {
 			// no grouping sets yet: use the current set of grouping sets

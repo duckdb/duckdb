@@ -132,18 +132,26 @@ NULL
 query T
 SELECT hello[NULL:length+NULL] FROM lists, hello
 ----
-[h, e, l, l, o]
-[h, e, l, l, o]
-[h, e, l, l, o]
-[h, e, l, l, o]
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT hello[:length] FROM lists, hello
+----
+[h, e]
+[h, e, l]
+[h]
+[h, e]
 
 query T
 SELECT hello[off:NULL+off] FROM lists, hello
 ----
-[h, e, l, l, o]
-[e, l, l, o]
-[h, e, l, l, o]
-[h, e, l, l, o]
+NULL
+NULL
+NULL
+NULL
 
 query T
 SELECT n[NULL:length+NULL] FROM lists, nulltable
@@ -156,10 +164,10 @@ NULL
 query T
 SELECT hello[NULL:NULL+NULL] FROM lists, hello
 ----
-[h, e, l, l, o]
-[h, e, l, l, o]
-[h, e, l, l, o]
-[h, e, l, l, o]
+NULL
+NULL
+NULL
+NULL
 
 query T
 SELECT n[off:NULL+off] FROM lists, nulltable
@@ -177,13 +185,21 @@ NULL
 NULL
 NULL
 
+query T
+SELECT n[:] FROM lists, nulltable
+----
+NULL
+NULL
+NULL
+NULL
+
 # fixed slice
 query T
 SELECT s[-2:] FROM lists
 ----
 [l, o]
 [l, d]
-NULL
+[b]
 NULL
 
 # length 1
@@ -199,9 +215,9 @@ NULL
 query T
 SELECT s[-4:-2] FROM lists
 ----
-[e, l]
-[o, r]
-NULL
+[e, l, l]
+[o, r, l]
+[]
 NULL
 
 # length 1
@@ -250,17 +266,17 @@ NULL
 query T
 SELECT s[(-2147483646-1):-1] FROM lists
 ----
-NULL
-NULL
-NULL
+[h, e, l, l, o]
+[w, o, r, l, d]
+[b]
 NULL
 
 query T
 SELECT s[(-2147483646-1):-2147483647] FROM lists
 ----
-NULL
-NULL
-NULL
+[]
+[]
+[]
 NULL
 
 # pop back
@@ -280,3 +296,6 @@ SELECT ARRAY_POP_FRONT(s) FROM lists;
 [o, r, l, d]
 []
 NULL
+
+statement error
+SELECT (1)[1:2];

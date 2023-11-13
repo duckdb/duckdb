@@ -35,7 +35,7 @@ SELECT INET '0.0.0.0/0', INET '255.255.255.255/31'
 query I
 SELECT typeof('127.0.0.1/17'::INET)
 ----
-inet
+INET
 
 statement error
 select '127'::inet;

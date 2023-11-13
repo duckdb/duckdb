@@ -17,16 +17,15 @@ struct DescRecord {
 public:
 	DescRecord() {};
 	DescRecord(const DescRecord &other);
-	SQLRETURN SetValueType(SQLSMALLINT value_type);
 	SQLRETURN SetSqlDescType(SQLSMALLINT type);
 	SQLRETURN SetSqlDataType(SQLSMALLINT type);
 	void SetDescUnsignedField(const duckdb::LogicalType &type);
 
 public:
-	SQLINTEGER sql_desc_auto_unique_value;
+	SQLSMALLINT sql_desc_auto_unique_value = SQL_FALSE; // DuckDB doesn't support auto unique value
 	std::string sql_desc_base_column_name;
 	std::string sql_desc_base_table_name;
-	SQLINTEGER sql_desc_case_sensitive;
+	SQLINTEGER sql_desc_case_sensitive = SQL_FALSE; // DuckDB is case insensitive
 	std::string sql_desc_catalog_name;
 	SQLSMALLINT sql_desc_concise_type;
 	SQLPOINTER sql_desc_data_ptr;
@@ -43,7 +42,7 @@ public:
 	std::string sql_desc_name;
 	SQLSMALLINT sql_desc_nullable = SQL_NULLABLE_UNKNOWN;
 	SQLINTEGER sql_desc_num_prec_radix;
-	SQLLEN sql_desc_octet_length;
+	SQLLEN sql_desc_octet_length = 0;
 	SQLLEN *sql_desc_octet_length_ptr;
 	SQLSMALLINT sql_desc_parameter_type;
 	SQLSMALLINT sql_desc_precision;
@@ -56,7 +55,7 @@ public:
 	std::string sql_desc_type_name;
 	SQLSMALLINT sql_desc_unnamed;
 	SQLSMALLINT sql_desc_unsigned;
-	SQLSMALLINT sql_desc_updatable;
+	SQLSMALLINT sql_desc_updatable = SQL_ATTR_READONLY;
 };
 
 struct DescHeader {
@@ -67,7 +66,7 @@ public:
 
 public:
 	SQLSMALLINT sql_desc_alloc_type;
-	// default value is 1 for array size, this should be use by odbc_fetch
+	// default value is 1 for array size, this should be used by odbc_fetch
 	SQLULEN sql_desc_array_size = 1;
 	SQLUSMALLINT *sql_desc_array_status_ptr;
 	SQLLEN *sql_desc_bind_offset_ptr = nullptr;

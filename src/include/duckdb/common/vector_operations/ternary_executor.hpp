@@ -41,11 +41,11 @@ struct TernaryLambdaWrapperWithNulls {
 struct TernaryExecutor {
 private:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class OPWRAPPER, class FUN>
-	static inline void ExecuteLoop(A_TYPE *__restrict adata, B_TYPE *__restrict bdata, C_TYPE *__restrict cdata,
-	                               RESULT_TYPE *__restrict result_data, idx_t count, const SelectionVector &asel,
-	                               const SelectionVector &bsel, const SelectionVector &csel, ValidityMask &avalidity,
-	                               ValidityMask &bvalidity, ValidityMask &cvalidity, ValidityMask &result_validity,
-	                               FUN fun) {
+	static inline void ExecuteLoop(const A_TYPE *__restrict adata, const B_TYPE *__restrict bdata,
+	                               const C_TYPE *__restrict cdata, RESULT_TYPE *__restrict result_data, idx_t count,
+	                               const SelectionVector &asel, const SelectionVector &bsel,
+	                               const SelectionVector &csel, ValidityMask &avalidity, ValidityMask &bvalidity,
+	                               ValidityMask &cvalidity, ValidityMask &result_validity, FUN fun) {
 		if (!avalidity.AllValid() || !bvalidity.AllValid() || !cvalidity.AllValid()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto aidx = asel.get_index(i);
@@ -95,9 +95,10 @@ public:
 			c.ToUnifiedFormat(count, cdata);
 
 			ExecuteLoop<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, OPWRAPPER>(
-			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data,
-			    FlatVector::GetData<RESULT_TYPE>(result), count, *adata.sel, *bdata.sel, *cdata.sel, adata.validity,
-			    bdata.validity, cdata.validity, FlatVector::Validity(result), fun);
+			    UnifiedVectorFormat::GetData<A_TYPE>(adata), UnifiedVectorFormat::GetData<B_TYPE>(bdata),
+			    UnifiedVectorFormat::GetData<C_TYPE>(cdata), FlatVector::GetData<RESULT_TYPE>(result), count,
+			    *adata.sel, *bdata.sel, *cdata.sel, adata.validity, bdata.validity, cdata.validity,
+			    FlatVector::Validity(result), fun);
 		}
 	}
 
@@ -122,11 +123,11 @@ public:
 
 private:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP, bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
-	static inline idx_t SelectLoop(A_TYPE *__restrict adata, B_TYPE *__restrict bdata, C_TYPE *__restrict cdata,
-	                               const SelectionVector *result_sel, idx_t count, const SelectionVector &asel,
-	                               const SelectionVector &bsel, const SelectionVector &csel, ValidityMask &avalidity,
-	                               ValidityMask &bvalidity, ValidityMask &cvalidity, SelectionVector *true_sel,
-	                               SelectionVector *false_sel) {
+	static inline idx_t SelectLoop(const A_TYPE *__restrict adata, const B_TYPE *__restrict bdata,
+	                               const C_TYPE *__restrict cdata, const SelectionVector *result_sel, idx_t count,
+	                               const SelectionVector &asel, const SelectionVector &bsel,
+	                               const SelectionVector &csel, ValidityMask &avalidity, ValidityMask &bvalidity,
+	                               ValidityMask &cvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
 		idx_t true_count = 0, false_count = 0;
 		for (idx_t i = 0; i < count; i++) {
 			auto result_idx = result_sel->get_index(i);
@@ -158,17 +159,20 @@ private:
 	                                        SelectionVector *true_sel, SelectionVector *false_sel) {
 		if (true_sel && false_sel) {
 			return SelectLoop<A_TYPE, B_TYPE, C_TYPE, OP, NO_NULL, true, true>(
-			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data, sel, count, *adata.sel, *bdata.sel,
-			    *cdata.sel, adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
+			    UnifiedVectorFormat::GetData<A_TYPE>(adata), UnifiedVectorFormat::GetData<B_TYPE>(bdata),
+			    UnifiedVectorFormat::GetData<C_TYPE>(cdata), sel, count, *adata.sel, *bdata.sel, *cdata.sel,
+			    adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
 		} else if (true_sel) {
 			return SelectLoop<A_TYPE, B_TYPE, C_TYPE, OP, NO_NULL, true, false>(
-			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data, sel, count, *adata.sel, *bdata.sel,
-			    *cdata.sel, adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
+			    UnifiedVectorFormat::GetData<A_TYPE>(adata), UnifiedVectorFormat::GetData<B_TYPE>(bdata),
+			    UnifiedVectorFormat::GetData<C_TYPE>(cdata), sel, count, *adata.sel, *bdata.sel, *cdata.sel,
+			    adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
 		} else {
 			D_ASSERT(false_sel);
 			return SelectLoop<A_TYPE, B_TYPE, C_TYPE, OP, NO_NULL, false, true>(
-			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data, sel, count, *adata.sel, *bdata.sel,
-			    *cdata.sel, adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
+			    UnifiedVectorFormat::GetData<A_TYPE>(adata), UnifiedVectorFormat::GetData<B_TYPE>(bdata),
+			    UnifiedVectorFormat::GetData<C_TYPE>(cdata), sel, count, *adata.sel, *bdata.sel, *cdata.sel,
+			    adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
 		}
 	}
 

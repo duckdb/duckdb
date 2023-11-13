@@ -24,9 +24,17 @@ set ignore_error_messages
 # copy files to S3 before beginning tests
 statement ok
 COPY (select * from 'test/sql/copy/csv/data/glob/a1/a1.csv') to 's3://test-bucket/copy_csv_glob_s3/copy/a1/a1.csv';
+
+statement ok
 COPY (select * from 'test/sql/copy/csv/data/glob/a2/a2.csv') to 's3://test-bucket/copy_csv_glob_s3/copy/a2/a2.csv';
+
+statement ok
 COPY (select * from 'test/sql/copy/csv/data/glob/a3/b1.csv') to 's3://test-bucket/copy_csv_glob_s3/copy/a3/b1.csv';
+
+statement ok
 COPY (select null) to 's3://test-bucket/glob/copy/empty/empty.csv';
+
+statement ok
 COPY (select * from 'test/sql/copy/csv/data/glob/i1/integer.csv') to 's3://test-bucket/copy_csv_glob_s3/copy/empty/integer.csv';
 
 statement ok

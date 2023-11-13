@@ -1,0 +1,49 @@
+# name: test/sql/index/art/join/test_art_index_join.test
+# description: Test ART index join
+# group: [join]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Person (id bigint PRIMARY KEY);
+
+statement ok
+CREATE TABLE Person_knows_Person (Person1id bigint, Person2id bigint);
+
+statement ok
+INSERT INTO Person VALUES (1), (2), (3), (4), (5);
+
+statement ok
+INSERT INTO Person_knows_Person VALUES (1, 2), (1, 3), (1, 4), (2, 3), (3, 4), (4, 5);
+
+statement ok
+PRAGMA force_index_join;
+
+query I
+SELECT p1.id
+FROM Person_knows_Person pkp
+JOIN Person p1
+  ON p1.id = pkp.Person1id
+----
+1
+1
+1
+2
+3
+4
+
+query II
+SELECT p1.id,p2.id
+FROM Person_knows_Person pkp
+JOIN Person p1
+  ON p1.id = pkp.Person1id
+JOIN Person p2
+  ON p2.id = pkp.Person2id;
+----
+1	2
+1	3
+1	4
+2	3
+3	4
+4	5

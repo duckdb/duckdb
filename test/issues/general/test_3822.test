@@ -6,7 +6,7 @@ statement ok
 pragma enable_verification
 
 statement ok
-CREATE MACRO pyfloats_to_floats(x) AS (CAST(string_split(x[2:-1], ',') AS FLOAT4[]))
+CREATE MACRO pyfloats_to_floats(x) AS (CAST(string_split(x[2:-2], ',') AS FLOAT4[]))
 
 query T
 select pyfloats_to_floats('[1.000000, 2.000000, 3.000000]')

@@ -102,7 +102,7 @@ class TestPythonFilesystem:
     def test_write(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
 
-        duckdb_cursor.execute("copy (select 1) to 'memory://01.csv' (FORMAT CSV)")
+        duckdb_cursor.execute("copy (select 1) to 'memory://01.csv' (FORMAT CSV, HEADER 0)")
 
         assert memory.open('01.csv').read() == b'1\n'
 
@@ -163,10 +163,12 @@ class TestPythonFilesystem:
 
         # setup a database to attach later
         with duckdb.connect(db_path) as conn:
-            conn.execute('''
+            conn.execute(
+                '''
                 CREATE TABLE t (id int);
                 INSERT INTO t VALUES (0)
-            ''')
+            '''
+            )
 
         assert exists(db_path)
 
@@ -174,34 +176,45 @@ class TestPythonFilesystem:
             fs = filesystem('file', skip_instance_cache=True)
             write_errors = intercept(monkeypatch, LocalFileOpener, 'write')
             conn.register_filesystem(fs)
-            conn.execute(f"ATTACH 'file://{db_path}'")
+            db_path_posix = str(PurePosixPath(tmp_path.as_posix()) / "hello.db")
+            conn.execute(f"ATTACH 'file://{db_path_posix}'")
 
             conn.execute('INSERT INTO hello.t VALUES (1)')
 
             conn.execute('FROM hello.t')
             assert conn.fetchall() == [(0,), (1,)]
 
-        # duckdb sometimes seems to swallow write errors, so we use this to ensure that 
+        # duckdb sometimes seems to swallow write errors, so we use this to ensure that
         # isn't happening
         assert not write_errors
 
     def test_copy_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
 
-        duckdb_cursor.execute("copy (select 1 as a) to 'memory://root' (partition_by (a))")
+        duckdb_cursor.execute("copy (select 1 as a) to 'memory://root' (partition_by (a), HEADER 0)")
 
-        assert memory.open(
-            '/root\\a=1\\data_0.csv'
-            if sys.platform == 'win32' else
-            '/root/a=1/data_0.csv'
-        ).read() == b'1\n'
+        assert memory.open('/root/a=1/data_0.csv').read() == b'1\n'
 
     def test_read_hive_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
+        duckdb_cursor.execute("copy (select 2 as a) to 'memory://partition' (partition_by (a), HEADER 0)")
 
-        with memory.open('/root/a=1/data_0.csv', 'wb') as fh:
-            fh.write(b'1\n')
+        path = 'memory:///partition/*/*.csv'
 
-        duckdb_cursor.execute('''SELECT * FROM read_csv_auto('memory://root/*/*.csv', HIVE_PARTITIONING = 1);''')
+        query = "SELECT * FROM read_csv_auto('" + path + "'"
 
-        assert duckdb_cursor.fetchall() == [(1, '1')]
+        # hive partitioning
+        duckdb_cursor.execute(query + ', HIVE_PARTITIONING=1' + ');')
+        assert duckdb_cursor.fetchall() == [(2, 2)]
+
+        # hive partitioning: auto detection
+        duckdb_cursor.execute(query + ');')
+        assert duckdb_cursor.fetchall() == [(2, 2)]
+
+        # hive partitioning: cast to int
+        duckdb_cursor.execute(query + ', HIVE_PARTITIONING=1' + ', HIVE_TYPES_AUTOCAST=1' + ');')
+        assert duckdb_cursor.fetchall() == [(2, 2)]
+
+        # hive partitioning: no cast to int
+        duckdb_cursor.execute(query + ', HIVE_PARTITIONING=1' + ', HIVE_TYPES_AUTOCAST=0' + ');')
+        assert duckdb_cursor.fetchall() == [(2, '2')]

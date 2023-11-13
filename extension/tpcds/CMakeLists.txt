@@ -1,14 +1,14 @@
 cmake_minimum_required(VERSION 2.8.12)
 
-project(TPCDSExtension)
+project(TpcdsExtension)
 
 include_directories(include)
 include_directories(dsdgen/include)
 add_subdirectory(dsdgen)
 
-add_library(tpcds_extension STATIC tpcds-extension.cpp ${DSDGEN_OBJECT_FILES})
+build_static_extension(tpcds tpcds_extension.cpp ${DSDGEN_OBJECT_FILES})
 set(PARAMETERS "-warnings")
-build_loadable_extension(tpcds ${PARAMETERS} tpcds-extension.cpp
+build_loadable_extension(tpcds ${PARAMETERS} tpcds_extension.cpp
                          ${DSDGEN_OBJECT_FILES})
 
 install(

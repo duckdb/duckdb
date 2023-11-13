@@ -22,7 +22,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::PIECEWISE_MERGE_JOIN;
 
 public:
-	PhysicalPiecewiseMergeJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
+	PhysicalPiecewiseMergeJoin(LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> left,
 	                           unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
 	                           idx_t estimated_cardinality);
 
@@ -60,9 +60,9 @@ public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
-	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
+	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-	                          GlobalSinkState &gstate) const override;
+	                          OperatorSinkFinalizeInput &input) const override;
 
 	bool IsSink() const override {
 		return true;

@@ -8,7 +8,7 @@ PRAGMA enable_verification
 statement error
 SELECT (SELECT UNNEST(a).a) FROM (VALUES ({'a': 42, 'b': 88})) t(a);
 ----
-can only be applied as the root element
+Binder Error: UNNEST() for correlated expressions is not supported yet
 
 query II
 SELECT UNNEST(a) FROM (VALUES ({'a': 42, 'b': 88})) t(a);

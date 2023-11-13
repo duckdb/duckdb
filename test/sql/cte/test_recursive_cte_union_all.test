@@ -71,6 +71,8 @@ with recursive t as (select 1 as x union all select sum(x+1) AS x from t where x
 2
 3
 
+require noalternativeverify
+
 # infinite aggregate function: will result in timeout if pipelining is not implemented
 query I
 with recursive t as (select 1 as x union all select sum(x+1) AS x from t where x < 3)

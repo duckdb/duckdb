@@ -1,0 +1,113 @@
+# name: test/sql/index/art/join/test_art_index_join_pushdown.test
+# description: Test index join pushdown
+# group: [join]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Person (name VARCHAR, phone HUGEINT, id bigint PRIMARY KEY, address VARCHAR, famous_percentage SMALLINT);
+
+statement ok
+CREATE TABLE Person_knows_Person (Person1id bigint, Person2id bigint, relation VARCHAR);
+
+statement ok
+INSERT INTO Person VALUES
+   ('John', 123456789, 1, 'Canada', 100),
+   ('Bill', 3754519434, 2, 'US', 80),
+   ('Moss', 1189998819901197253, 3, 'UK', 50),
+   ('Roy', 15, 4, 'UK', 40),
+   ('Douglas Reynholm', 1, 5, 'UK', 20);
+
+statement ok
+INSERT INTO Person_knows_Person VALUES
+   (3, 4, 'Coworker'),
+   (3, 5, 'Employee'),
+   (4, 5, 'Employee'),
+   (2, 5, 'Business Contact'),
+   (1, 2, 'Secret Admirer');
+
+statement ok
+PRAGMA force_index_join;
+
+query IIIIIIII nosort join_result
+SELECT pkp.*, p1.*
+FROM Person_knows_Person pkp
+JOIN Person p1
+  ON p1.id = pkp.Person1id
+ORDER BY ALL
+----
+
+# invert join condition
+query IIIIIIII nosort join_result
+SELECT pkp.*, p1.*
+FROM Person_knows_Person pkp
+JOIN Person p1
+  ON pkp.Person1id = p1.id
+ORDER BY ALL
+----
+
+# swap sides
+query IIIIIIII nosort join_result
+SELECT pkp.*, p1.*
+FROM Person p1
+JOIN Person_knows_Person pkp
+  ON p1.id = pkp.Person1id
+ORDER BY ALL
+----
+
+query IIIIIIII nosort join_result
+SELECT pkp.*, p1.*
+FROM Person p1
+JOIN Person_knows_Person pkp
+  ON pkp.Person1id = p1.id
+ORDER BY ALL
+----
+
+# now add filter pushdown
+query IIIIIIII nosort pushdown
+SELECT pkp.*, p1.*
+FROM Person_knows_Person pkp
+JOIN Person p1
+  ON p1.id = pkp.Person1id
+WHERE p1.phone >= 3754519434
+ORDER BY ALL
+----
+
+query IIIIIIII nosort pushdown
+SELECT pkp.*, p1.*
+FROM Person p1
+JOIN Person_knows_Person pkp
+  ON p1.id = pkp.Person1id
+WHERE p1.phone >= 3754519434
+ORDER BY ALL
+----
+
+# strip the columns of p1
+query II
+SELECT p1.id, p1.name
+FROM Person p1
+JOIN Person_knows_Person pkp
+  ON p1.id = pkp.Person1id
+WHERE p1.phone >= 3754519434
+ORDER BY ALL
+----
+2	Bill
+3	Moss
+3	Moss
+
+# multiple joins
+query IIIII
+SELECT p1.name, p2.name, pkp.relation, p1.famous_percentage, p2.famous_percentage
+FROM Person_knows_Person pkp
+JOIN Person p1
+  ON p1.id = pkp.Person1id
+JOIN Person p2
+  ON p2.id = pkp.Person2id
+ORDER BY ALL
+----
+Bill	Douglas Reynholm	Business Contact	80	20
+John	Bill	Secret Admirer	100	80
+Moss	Douglas Reynholm	Employee	50	20
+Moss	Roy	Coworker	50	40
+Roy	Douglas Reynholm	Employee	40	20

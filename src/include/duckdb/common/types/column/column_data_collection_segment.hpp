@@ -94,7 +94,7 @@ public:
 	//! The set of child indices
 	vector<VectorDataIndex> child_indices;
 	//! The string heap for the column data collection (only used for IN_MEMORY_ALLOCATOR)
-	StringHeap heap;
+	shared_ptr<StringHeap> heap;
 
 public:
 	void AllocateNewChunk();
@@ -126,6 +126,8 @@ public:
 	}
 
 	idx_t ChunkCount() const;
+	idx_t SizeInBytes() const;
+
 	void FetchChunk(idx_t chunk_idx, DataChunk &result);
 	void FetchChunk(idx_t chunk_idx, DataChunk &result, const vector<column_t> &column_ids);
 

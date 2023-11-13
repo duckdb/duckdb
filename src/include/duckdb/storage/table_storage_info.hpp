@@ -8,7 +8,9 @@
 
 #pragma once
 
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 
@@ -26,6 +28,7 @@ struct ColumnSegmentInfo {
 	bool persistent;
 	block_id_t block_id;
 	idx_t block_offset;
+	string segment_info;
 };
 
 struct IndexInfo {
@@ -41,8 +44,6 @@ public:
 	idx_t cardinality = DConstants::INVALID_INDEX;
 	//! Info of the indexes of a table
 	vector<IndexInfo> index_info;
-	//! Info of the column segments of the table
-	vector<ColumnSegmentInfo> column_segments;
 };
 
 } // namespace duckdb

@@ -62,15 +62,6 @@ SELECT generate_series(timestamp '2020-01-01', timestamp '2020-06-01', NULL);
 ----
 NULL
 
-
-# > vector size
-query I
-SELECT count(*) FROM (
-	SELECT unnest(generate_series(timestamp '2000-01-01', timestamp '2020-06-01', interval '1' day))
-);
-----
-7458
-
 # mixed sign interval not supported
 statement error
 SELECT generate_series(timestamp '2020-01-01', timestamp '2020-06-01', interval '3' month - interval '3' day);
@@ -87,3 +78,14 @@ SELECT generate_series('-infinity'::TIMESTAMP, '290309-12-22 (BC) 00:00:00'::TIM
 
 statement error
 SELECT range('-infinity'::TIMESTAMP, '290309-12-22 (BC) 00:00:00'::TIMESTAMP, INTERVAL '1 DAY');
+
+statement ok
+PRAGMA disable_verification
+
+# > vector size
+query I
+SELECT count(*) FROM (
+	SELECT unnest(generate_series(timestamp '2000-01-01', timestamp '2020-06-01', interval '1' day))
+);
+----
+7458

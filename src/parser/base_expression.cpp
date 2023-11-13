@@ -18,11 +18,8 @@ string BaseExpression::GetName() const {
 	return !alias.empty() ? alias : ToString();
 }
 
-bool BaseExpression::Equals(const BaseExpression *other) const {
-	if (!other) {
-		return false;
-	}
-	if (this->expression_class != other->expression_class || this->type != other->type) {
+bool BaseExpression::Equals(const BaseExpression &other) const {
+	if (expression_class != other.expression_class || type != other.type) {
 		return false;
 	}
 	return true;

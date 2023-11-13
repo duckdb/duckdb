@@ -8,7 +8,7 @@
 namespace duckdb {
 struct OdbcInterval {
 public:
-	static bool GetInterval(Value &value, interval_t &interval, OdbcHandleStmt *stmt);
+	static bool GetInterval(Value &value, interval_t &interval, OdbcHandleStmt *hstmt);
 
 	static void SetSignal(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
 

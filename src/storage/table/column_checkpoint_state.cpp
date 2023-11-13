@@ -22,9 +22,9 @@ unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
 	return std::move(global_stats);
 }
 
-PartialBlockForCheckpoint::PartialBlockForCheckpoint(ColumnData &data, ColumnSegment &segment,
-                                                     BlockManager &block_manager, PartialBlockState state)
-    : PartialBlock(state), block_manager(block_manager), block(segment.block) {
+PartialBlockForCheckpoint::PartialBlockForCheckpoint(ColumnData &data, ColumnSegment &segment, PartialBlockState state,
+                                                     BlockManager &block_manager)
+    : PartialBlock(state, block_manager, segment.block) {
 	AddSegmentToTail(data, segment, 0);
 }
 
@@ -37,24 +37,15 @@ bool PartialBlockForCheckpoint::IsFlushed() {
 	return segments.empty();
 }
 
-void PartialBlockForCheckpoint::AddUninitializedRegion(idx_t start, idx_t end) {
-	uninitialized_regions.push_back({start, end});
-}
+void PartialBlockForCheckpoint::Flush(const idx_t free_space_left) {
 
-void PartialBlockForCheckpoint::Flush(idx_t free_space_left) {
 	if (IsFlushed()) {
 		throw InternalException("Flush called on partial block that was already flushed");
 	}
-	// if we have any free space or uninitialized regions we need to zero-initialize them
-	if (free_space_left > 0 || !uninitialized_regions.empty()) {
-		auto handle = block_manager.buffer_manager.Pin(block);
-		// memset any uninitialized regions
-		for (auto &uninitialized : uninitialized_regions) {
-			memset(handle.Ptr() + uninitialized.start, 0, uninitialized.end - uninitialized.start);
-		}
-		// memset any free space at the end of the block to 0 prior to writing to disk
-		memset(handle.Ptr() + Storage::BLOCK_SIZE - free_space_left, 0, free_space_left);
-	}
+
+	// zero-initialize unused memory
+	FlushInternal(free_space_left);
+
 	// At this point, we've already copied all data from tail_segments
 	// into the page owned by first_segment. We flush all segment data to
 	// disk with the following call.
@@ -63,6 +54,7 @@ void PartialBlockForCheckpoint::Flush(idx_t free_space_left) {
 	if (fetch_new_block) {
 		state.block_id = block_manager.GetFreeBlockId();
 	}
+
 	for (idx_t i = 0; i < segments.size(); i++) {
 		auto &segment = segments[i];
 		segment.data.IncrementVersion();
@@ -71,23 +63,18 @@ void PartialBlockForCheckpoint::Flush(idx_t free_space_left) {
 			D_ASSERT(segment.offset_in_block == 0);
 			segment.segment.ConvertToPersistent(&block_manager, state.block_id);
 			// update the block after it has been converted to a persistent segment
-			block = segment.segment.block;
+			block_handle = segment.segment.block;
 		} else {
 			// subsequent segments are MARKED as persistent - they don't need to be rewritten
-			segment.segment.MarkAsPersistent(block, segment.offset_in_block);
+			segment.segment.MarkAsPersistent(block_handle, segment.offset_in_block);
 			if (fetch_new_block) {
 				// if we fetched a new block we need to increase the reference count to the block
 				block_manager.IncreaseBlockReferenceCount(state.block_id);
 			}
 		}
 	}
-	Clear();
-}
 
-void PartialBlockForCheckpoint::Clear() {
-	uninitialized_regions.clear();
-	block.reset();
-	segments.clear();
+	Clear();
 }
 
 void PartialBlockForCheckpoint::Merge(PartialBlock &other_p, idx_t offset, idx_t other_size) {
@@ -95,13 +82,13 @@ void PartialBlockForCheckpoint::Merge(PartialBlock &other_p, idx_t offset, idx_t
 
 	auto &buffer_manager = block_manager.buffer_manager;
 	// pin the source block
-	auto old_handle = buffer_manager.Pin(other.block);
+	auto old_handle = buffer_manager.Pin(other.block_handle);
 	// pin the target block
-	auto new_handle = buffer_manager.Pin(block);
+	auto new_handle = buffer_manager.Pin(block_handle);
 	// memcpy the contents of the old block to the new block
 	memcpy(new_handle.Ptr() + offset, old_handle.Ptr(), other_size);
 
-	// now copy over all of the segments to the new block
+	// now copy over all segments to the new block
 	// move over the uninitialized regions
 	for (auto &region : other.uninitialized_regions) {
 		region.start += offset;
@@ -113,11 +100,18 @@ void PartialBlockForCheckpoint::Merge(PartialBlock &other_p, idx_t offset, idx_t
 	for (auto &segment : other.segments) {
 		AddSegmentToTail(segment.data, segment.segment, segment.offset_in_block + offset);
 	}
+
 	other.Clear();
 }
 
 void PartialBlockForCheckpoint::AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block) {
 	segments.emplace_back(data, segment, offset_in_block);
+}
+
+void PartialBlockForCheckpoint::Clear() {
+	uninitialized_regions.clear();
+	block_handle.reset();
+	segments.clear();
 }
 
 void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size) {
@@ -140,7 +134,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 		// non-constant block
 		PartialBlockAllocation allocation = partial_block_manager.GetBlockAllocation(segment_size);
 		block_id = allocation.state.block_id;
-		offset_in_block = allocation.state.offset_in_block;
+		offset_in_block = allocation.state.offset;
 
 		if (allocation.partial_block) {
 			// Use an existing block.
@@ -149,7 +143,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 			// pin the source block
 			auto old_handle = buffer_manager.Pin(segment->block);
 			// pin the target block
-			auto new_handle = buffer_manager.Pin(pstate.block);
+			auto new_handle = buffer_manager.Pin(pstate.block_handle);
 			// memcpy the contents of the old block to the new block
 			memcpy(new_handle.Ptr() + offset_in_block, old_handle.Ptr(), segment_size);
 			pstate.AddSegmentToTail(column_data, *segment, offset_in_block);
@@ -162,8 +156,8 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 				segment->Resize(Storage::BLOCK_SIZE);
 			}
 			D_ASSERT(offset_in_block == 0);
-			allocation.partial_block = make_uniq<PartialBlockForCheckpoint>(
-			    column_data, *segment, *allocation.block_manager, allocation.state);
+			allocation.partial_block = make_uniq<PartialBlockForCheckpoint>(column_data, *segment, allocation.state,
+			                                                                *allocation.block_manager);
 		}
 		// Writer will decide whether to reuse this block.
 		partial_block_manager.RegisterPartialBlock(std::move(allocation));
@@ -187,14 +181,17 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 	}
 	data_pointer.tuple_count = tuple_count;
 	data_pointer.compression_type = segment->function.get().type;
+	if (segment->function.get().serialize_state) {
+		data_pointer.segment_state = segment->function.get().serialize_state(*segment);
+	}
 
 	// append the segment to the new segment tree
 	new_tree.AppendSegment(std::move(segment));
 	data_pointers.push_back(std::move(data_pointer));
 }
 
-void ColumnCheckpointState::WriteDataPointers(RowGroupWriter &writer) {
-	writer.WriteColumnDataPointers(*this);
+void ColumnCheckpointState::WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) {
+	writer.WriteColumnDataPointers(*this, serializer);
 }
 
 } // namespace duckdb

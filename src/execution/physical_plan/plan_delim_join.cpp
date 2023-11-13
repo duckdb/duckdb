@@ -1,10 +1,7 @@
-#include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/planner/operator/logical_delim_join.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 
@@ -19,9 +16,9 @@ static void GatherDelimScans(const PhysicalOperator &op, vector<const_reference<
 	}
 }
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin &op) {
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanDelimJoin(LogicalComparisonJoin &op) {
 	// first create the underlying join
-	auto plan = CreatePlan(op.Cast<LogicalComparisonJoin>());
+	auto plan = PlanComparisonJoin(op);
 	// this should create a join, not a cross product
 	D_ASSERT(plan && plan->type != PhysicalOperatorType::CROSS_PRODUCT);
 	// duplicate eliminated join

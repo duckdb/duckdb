@@ -6,7 +6,7 @@ namespace duckdb {
 template <class SIGNED, class UNSIGNED>
 string TemplatedDecimalToString(SIGNED value, uint8_t width, uint8_t scale) {
 	auto len = DecimalToString::DecimalLength<SIGNED, UNSIGNED>(value, width, scale);
-	auto data = unique_ptr<char[]>(new char[len + 1]);
+	auto data = make_unsafe_uniq_array<char>(len + 1);
 	DecimalToString::FormatDecimal<SIGNED, UNSIGNED>(value, width, scale, data.get(), len);
 	return string(data.get(), len);
 }
@@ -25,7 +25,7 @@ string Decimal::ToString(int64_t value, uint8_t width, uint8_t scale) {
 
 string Decimal::ToString(hugeint_t value, uint8_t width, uint8_t scale) {
 	auto len = HugeintToStringCast::DecimalLength(value, width, scale);
-	auto data = unique_ptr<char[]>(new char[len + 1]);
+	auto data = make_unsafe_uniq_array<char>(len + 1);
 	HugeintToStringCast::FormatDecimal(value, width, scale, data.get(), len);
 	return string(data.get(), len);
 }

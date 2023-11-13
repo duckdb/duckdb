@@ -41,12 +41,12 @@ public:
 public:
 	// Sink interface
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
-	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
+	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-	                          GlobalSinkState &gstate) const override;
+	                          OperatorSinkFinalizeInput &input) const override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
-	void NextBatch(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const override;
+	SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const override;
 
 	bool RequiresBatchIndex() const override {
 		return true;
@@ -64,5 +64,18 @@ private:
 	void PrepareBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t batch_index,
 	                      unique_ptr<ColumnDataCollection> collection) const;
 	void FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index) const;
+	SinkFinalizeType FinalFlush(ClientContext &context, GlobalSinkState &gstate_p) const;
 };
+
+struct ActiveFlushGuard {
+	explicit ActiveFlushGuard(atomic<bool> &bool_value_p) : bool_value(bool_value_p) {
+		bool_value = true;
+	}
+	~ActiveFlushGuard() {
+		bool_value = false;
+	}
+
+	atomic<bool> &bool_value;
+};
+
 } // namespace duckdb

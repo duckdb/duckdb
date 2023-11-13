@@ -1,0 +1,83 @@
+# name: test/sql/index/art/issues/test_art_issue_7349.test
+# description: Test ensuring that we do not rollback twice when throwing an exception during commit
+# group: [issues]
+
+statement ok
+PRAGMA enable_verification
+
+# setting up the different tables and the UNIQUE index
+
+statement ok
+CREATE TABLE td(tz VARCHAR(30) NOT NULL);
+
+statement ok
+CREATE UNIQUE INDEX sqlsim0 ON td(tz);
+
+statement ok
+CREATE TABLE tab0(c2 DATE NOT NULL);
+
+statement ok
+CREATE TABLE tab1(c2 DATE NOT NULL);
+
+statement ok
+INSERT INTO td VALUES (date '2008-02-29');
+
+# testing different orders of appending values
+
+# interleaved (original issue example)
+
+statement ok
+START TRANSACTION;
+
+statement ok
+INSERT INTO td VALUES('2006-12-25');
+
+statement ok
+INSERT INTO tab0 VALUES('2006-12-25');
+
+statement error
+INSERT INTO td VALUES (date '2008-02-29');
+----
+Constraint Error: Duplicate key "tz: 2008-02-29" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
+
+statement ok
+COMMIT TRANSACTION;
+
+# three tables
+
+statement ok
+START TRANSACTION;
+
+statement ok
+INSERT INTO tab0 VALUES('2006-12-25');
+
+statement error
+INSERT INTO td VALUES (date '2008-02-29');
+----
+Constraint Error: Duplicate key "tz: 2008-02-29" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
+
+statement ok
+COMMIT TRANSACTION;
+
+statement ok
+INSERT INTO tab1 VALUES('2006-12-25');
+
+# other table first
+
+statement ok
+START TRANSACTION;
+
+statement ok
+INSERT INTO tab0 VALUES('2006-12-25');
+
+statement ok
+INSERT INTO td VALUES('2006-12-25');
+
+statement ok
+COMMIT TRANSACTION;
+
+query I
+SELECT tz FROM td ORDER BY tz;
+----
+2006-12-25
+2008-02-29

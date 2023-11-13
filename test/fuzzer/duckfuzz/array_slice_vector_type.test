@@ -1,0 +1,52 @@
+# name: test/fuzzer/duckfuzz/array_slice_vector_type.test
+# description: Fuzzyduck issue #1228
+# group: [duckfuzz]
+
+# Verify that the array_pop_front() properly removes one element
+
+query II nosort expected
+SELECT
+	length(original) == length(altered) + 1
+from (
+	select
+		x as original,
+		array_pop_front(x) as altered
+	FROM test_vector_types('x') AS t1(x)
+);
+----
+
+query II nosort expected
+select case
+	when x IS NULL
+		then
+			NULL
+		else
+			true
+		end
+	from test_vector_types('x') t1(x);
+----
+
+statement ok
+create table tbl (i integer[]);
+
+statement ok
+insert into tbl VALUES
+(NULL),
+([5,3,2,1]),
+(NULL),
+(NULL),
+([1]),
+([NULL]),
+([345,2,31,23,123,1,2,1,1,1])
+
+# Check that NULLs are handled correctly
+query I
+select array_pop_front(i) from tbl;
+----
+NULL
+[3, 2, 1]
+NULL
+NULL
+[]
+[]
+[2, 31, 23, 123, 1, 2, 1, 1, 1]

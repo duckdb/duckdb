@@ -34,7 +34,7 @@ unique_ptr<PhysicalOperator> DuckCatalog::PlanCreateTableAs(ClientContext &conte
 }
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateTable &op) {
-	const auto &create_info = (CreateTableInfo &)*op.info->base;
+	const auto &create_info = op.info->base->Cast<CreateTableInfo>();
 	auto &catalog = op.info->schema.catalog;
 	auto existing_entry = catalog.GetEntry<TableCatalogEntry>(context, create_info.schema, create_info.table,
 	                                                          OnEntryNotFound::RETURN_NULL);

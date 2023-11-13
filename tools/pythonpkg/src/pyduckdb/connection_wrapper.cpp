@@ -97,6 +97,20 @@ shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Execute(const string &query,
 	return conn->Execute(query, params, many);
 }
 
+shared_ptr<DuckDBPyConnection> PyConnectionWrapper::UnregisterUDF(const string &name,
+                                                                  shared_ptr<DuckDBPyConnection> conn) {
+	return conn->UnregisterUDF(name);
+}
+
+shared_ptr<DuckDBPyConnection>
+PyConnectionWrapper::RegisterScalarUDF(const string &name, const py::function &udf, const py::object &parameters_p,
+                                       const shared_ptr<DuckDBPyType> &return_type_p, PythonUDFType type,
+                                       FunctionNullHandling null_handling, PythonExceptionHandling exception_handling,
+                                       bool side_effects, shared_ptr<DuckDBPyConnection> conn) {
+	return conn->RegisterScalarUDF(name, udf, parameters_p, return_type_p, type, null_handling, exception_handling,
+	                               side_effects);
+}
+
 shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Append(const string &name, PandasDataFrame value, bool by_name,
                                                            shared_ptr<DuckDBPyConnection> conn) {
 	return conn->Append(name, value, by_name);
@@ -201,6 +215,10 @@ void PyConnectionWrapper::Close(shared_ptr<DuckDBPyConnection> conn) {
 	conn->Close();
 }
 
+void PyConnectionWrapper::Interrupt(shared_ptr<DuckDBPyConnection> conn) {
+	conn->Interrupt();
+}
+
 shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Cursor(shared_ptr<DuckDBPyConnection> conn) {
 	return conn->Cursor();
 }
@@ -209,27 +227,36 @@ Optional<py::list> PyConnectionWrapper::GetDescription(shared_ptr<DuckDBPyConnec
 	return conn->GetDescription();
 }
 
+int PyConnectionWrapper::GetRowcount(shared_ptr<DuckDBPyConnection> conn) {
+	return conn->GetRowcount();
+}
+
 Optional<py::tuple> PyConnectionWrapper::FetchOne(shared_ptr<DuckDBPyConnection> conn) {
 	return conn->FetchOne();
 }
 
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ReadJSON(const string &filename, shared_ptr<DuckDBPyConnection> conn,
-                                                           const py::object &columns, const py::object &sample_size,
-                                                           const py::object &maximum_depth) {
+                                                           const Optional<py::object> &columns,
+                                                           const Optional<py::object> &sample_size,
+                                                           const Optional<py::object> &maximum_depth,
+                                                           const Optional<py::str> &records,
+                                                           const Optional<py::str> &format) {
 
-	return conn->ReadJSON(filename, columns, sample_size, maximum_depth);
+	return conn->ReadJSON(filename, columns, sample_size, maximum_depth, records, format);
 }
 
-unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ReadCSV(
-    const py::object &name, shared_ptr<DuckDBPyConnection> conn, const py::object &header,
-    const py::object &compression, const py::object &sep, const py::object &delimiter, const py::object &dtype,
-    const py::object &na_values, const py::object &skiprows, const py::object &quotechar, const py::object &escapechar,
-    const py::object &encoding, const py::object &parallel, const py::object &date_format,
-    const py::object &timestamp_format, const py::object &sample_size, const py::object &all_varchar,
-    const py::object &normalize_names, const py::object &filename) {
+unique_ptr<DuckDBPyRelation>
+PyConnectionWrapper::ReadCSV(const py::object &name, shared_ptr<DuckDBPyConnection> conn, const py::object &header,
+                             const py::object &compression, const py::object &sep, const py::object &delimiter,
+                             const py::object &dtype, const py::object &na_values, const py::object &skiprows,
+                             const py::object &quotechar, const py::object &escapechar, const py::object &encoding,
+                             const py::object &parallel, const py::object &date_format,
+                             const py::object &timestamp_format, const py::object &sample_size,
+                             const py::object &all_varchar, const py::object &normalize_names,
+                             const py::object &filename, const py::object &null_padding, const py::object &names) {
 	return conn->ReadCSV(name, header, compression, sep, delimiter, dtype, na_values, skiprows, quotechar, escapechar,
 	                     encoding, parallel, date_format, timestamp_format, sample_size, all_varchar, normalize_names,
-	                     filename);
+	                     filename, null_padding, names);
 }
 
 py::list PyConnectionWrapper::FetchMany(idx_t size, shared_ptr<DuckDBPyConnection> conn) {
@@ -291,18 +318,18 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::Values(py::object values, shar
 	return conn->Values(std::move(values));
 }
 
-unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FromQuery(const string &query, const string &alias,
-                                                            shared_ptr<DuckDBPyConnection> conn) {
-	return conn->FromQuery(query, alias);
-}
-
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::RunQuery(const string &query, const string &alias,
                                                            shared_ptr<DuckDBPyConnection> conn) {
 	return conn->RunQuery(query, alias);
 }
 
-unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ProjectDf(const PandasDataFrame &df, const string &expr,
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ProjectDf(const PandasDataFrame &df, const py::object &expr,
                                                             shared_ptr<DuckDBPyConnection> conn) {
+	// FIXME: if we want to support passing in DuckDBPyExpressions here
+	// we could also accept 'expr' as a List[DuckDBPyExpression], without changing the signature
+	if (!py::isinstance<py::str>(expr)) {
+		throw InvalidInputException("Please provide 'expr' as a string");
+	}
 	return conn->FromDF(df)->Project(expr);
 }
 
@@ -313,7 +340,7 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::AliasDF(const PandasDataFrame 
 
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FilterDf(const PandasDataFrame &df, const string &expr,
                                                            shared_ptr<DuckDBPyConnection> conn) {
-	return conn->FromDF(df)->Filter(expr);
+	return conn->FromDF(df)->FilterFromExpression(expr);
 }
 
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::LimitDF(const PandasDataFrame &df, int64_t n,

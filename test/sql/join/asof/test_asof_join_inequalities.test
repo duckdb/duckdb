@@ -1,0 +1,231 @@
+# name: test/sql/join/asof/test_asof_join_inequalities.test
+# description: Test As-Of joins for greater than and less thans
+# group: [asof]
+
+statement ok
+PRAGMA enable_verification
+
+# Join on a timestamp range
+
+statement ok
+CREATE TABLE events0 AS
+	SELECT '2023-03-21 13:00:00'::TIMESTAMP + INTERVAL (range) HOUR AS begin, range AS value
+	FROM range(0, 4);
+
+statement ok
+INSERT INTO events0 VALUES 
+	(NULL, -10),
+	('infinity', 9),
+	('-infinity', -1)
+;
+
+statement ok
+CREATE TABLE probe0 AS 
+	SELECT *
+	FROM range('2023-03-21 12:00:00'::TIMESTAMP, '2023-03-21 22:00:00'::TIMESTAMP, INTERVAL 1 HOUR) p(begin)
+;
+
+statement ok
+INSERT INTO probe0 VALUES 
+	(NULL),
+	('infinity')
+;
+
+# Check results against IEJoin
+foreach debug False True
+
+statement ok 
+PRAGMA debug_asof_iejoin=${debug}
+
+#
+# Strictly Greater Than
+#
+
+# INNER 
+query III
+SELECT p.begin, e.begin, e.value
+FROM probe0 p ASOF JOIN events0 e
+ON p.begin > e.begin
+ORDER BY ALL ASC
+----
+2023-03-21 12:00:00	-infinity	-1
+2023-03-21 13:00:00	-infinity	-1
+2023-03-21 14:00:00	2023-03-21 13:00:00	0
+2023-03-21 15:00:00	2023-03-21 14:00:00	1
+2023-03-21 16:00:00	2023-03-21 15:00:00	2
+2023-03-21 17:00:00	2023-03-21 16:00:00	3
+2023-03-21 18:00:00	2023-03-21 16:00:00	3
+2023-03-21 19:00:00	2023-03-21 16:00:00	3
+2023-03-21 20:00:00	2023-03-21 16:00:00	3
+2023-03-21 21:00:00	2023-03-21 16:00:00	3
+infinity	2023-03-21 16:00:00	3
+
+# LEFT 
+query III
+SELECT p.begin, e.begin, e.value
+FROM probe0 p ASOF LEFT JOIN events0 e
+ON p.begin > e.begin
+ORDER BY ALL ASC
+----
+2023-03-21 12:00:00	-infinity	-1
+2023-03-21 13:00:00	-infinity	-1
+2023-03-21 14:00:00	2023-03-21 13:00:00	0
+2023-03-21 15:00:00	2023-03-21 14:00:00	1
+2023-03-21 16:00:00	2023-03-21 15:00:00	2
+2023-03-21 17:00:00	2023-03-21 16:00:00	3
+2023-03-21 18:00:00	2023-03-21 16:00:00	3
+2023-03-21 19:00:00	2023-03-21 16:00:00	3
+2023-03-21 20:00:00	2023-03-21 16:00:00	3
+2023-03-21 21:00:00	2023-03-21 16:00:00	3
+infinity	2023-03-21 16:00:00	3
+NULL	NULL	NULL
+
+# RIGHT 
+query III
+SELECT p.begin, e.begin, e.value
+FROM probe0 p ASOF RIGHT JOIN events0 e
+ON p.begin > e.begin
+ORDER BY ALL ASC
+----
+2023-03-21 12:00:00	-infinity	-1
+2023-03-21 13:00:00	-infinity	-1
+2023-03-21 14:00:00	2023-03-21 13:00:00	0
+2023-03-21 15:00:00	2023-03-21 14:00:00	1
+2023-03-21 16:00:00	2023-03-21 15:00:00	2
+2023-03-21 17:00:00	2023-03-21 16:00:00	3
+2023-03-21 18:00:00	2023-03-21 16:00:00	3
+2023-03-21 19:00:00	2023-03-21 16:00:00	3
+2023-03-21 20:00:00	2023-03-21 16:00:00	3
+2023-03-21 21:00:00	2023-03-21 16:00:00	3
+infinity	2023-03-21 16:00:00	3
+NULL	infinity	9
+NULL	NULL	-10
+
+
+#
+# Less Than or Equal
+#
+
+# INNER
+query III
+SELECT p.begin, e.begin, e.value
+FROM probe0 p ASOF JOIN events0 e
+ON p.begin <= e.begin
+ORDER BY ALL ASC
+----
+2023-03-21 12:00:00	2023-03-21 13:00:00	0
+2023-03-21 13:00:00	2023-03-21 13:00:00	0
+2023-03-21 14:00:00	2023-03-21 14:00:00	1
+2023-03-21 15:00:00	2023-03-21 15:00:00	2
+2023-03-21 16:00:00	2023-03-21 16:00:00	3
+2023-03-21 17:00:00	infinity	9
+2023-03-21 18:00:00	infinity	9
+2023-03-21 19:00:00	infinity	9
+2023-03-21 20:00:00	infinity	9
+2023-03-21 21:00:00	infinity	9
+infinity	infinity	9
+
+# LEFT
+query III
+SELECT p.begin, e.begin, e.value
+FROM probe0 p ASOF LEFT JOIN events0 e
+ON p.begin <= e.begin
+ORDER BY ALL ASC
+----
+2023-03-21 12:00:00	2023-03-21 13:00:00	0
+2023-03-21 13:00:00	2023-03-21 13:00:00	0
+2023-03-21 14:00:00	2023-03-21 14:00:00	1
+2023-03-21 15:00:00	2023-03-21 15:00:00	2
+2023-03-21 16:00:00	2023-03-21 16:00:00	3
+2023-03-21 17:00:00	infinity	9
+2023-03-21 18:00:00	infinity	9
+2023-03-21 19:00:00	infinity	9
+2023-03-21 20:00:00	infinity	9
+2023-03-21 21:00:00	infinity	9
+infinity	infinity	9
+NULL	NULL	NULL
+
+# RIGHT
+query III
+SELECT p.begin, e.begin, e.value
+FROM probe0 p ASOF RIGHT JOIN events0 e
+ON p.begin <= e.begin
+ORDER BY ALL ASC
+----
+2023-03-21 12:00:00	2023-03-21 13:00:00	0
+2023-03-21 13:00:00	2023-03-21 13:00:00	0
+2023-03-21 14:00:00	2023-03-21 14:00:00	1
+2023-03-21 15:00:00	2023-03-21 15:00:00	2
+2023-03-21 16:00:00	2023-03-21 16:00:00	3
+2023-03-21 17:00:00	infinity	9
+2023-03-21 18:00:00	infinity	9
+2023-03-21 19:00:00	infinity	9
+2023-03-21 20:00:00	infinity	9
+2023-03-21 21:00:00	infinity	9
+infinity	infinity	9
+NULL	-infinity	-1
+NULL	NULL	-10
+
+#
+# Strictly Less Than 
+#
+
+# INNER
+query III
+SELECT p.begin, e.begin, e.value
+FROM probe0 p ASOF JOIN events0 e
+ON p.begin < e.begin
+ORDER BY ALL ASC
+----
+2023-03-21 12:00:00	2023-03-21 13:00:00	0
+2023-03-21 13:00:00	2023-03-21 14:00:00	1
+2023-03-21 14:00:00	2023-03-21 15:00:00	2
+2023-03-21 15:00:00	2023-03-21 16:00:00	3
+2023-03-21 16:00:00	infinity	9
+2023-03-21 17:00:00	infinity	9
+2023-03-21 18:00:00	infinity	9
+2023-03-21 19:00:00	infinity	9
+2023-03-21 20:00:00	infinity	9
+2023-03-21 21:00:00	infinity	9
+
+# LEFT
+query III
+SELECT p.begin, e.begin, e.value
+FROM probe0 p ASOF LEFT JOIN events0 e
+ON p.begin < e.begin
+ORDER BY ALL ASC
+----
+2023-03-21 12:00:00	2023-03-21 13:00:00	0
+2023-03-21 13:00:00	2023-03-21 14:00:00	1
+2023-03-21 14:00:00	2023-03-21 15:00:00	2
+2023-03-21 15:00:00	2023-03-21 16:00:00	3
+2023-03-21 16:00:00	infinity	9
+2023-03-21 17:00:00	infinity	9
+2023-03-21 18:00:00	infinity	9
+2023-03-21 19:00:00	infinity	9
+2023-03-21 20:00:00	infinity	9
+2023-03-21 21:00:00	infinity	9
+infinity	NULL	NULL
+NULL	NULL	NULL
+
+# RIGHT
+query III
+SELECT p.begin, e.begin, e.value
+FROM probe0 p ASOF RIGHT JOIN events0 e
+ON p.begin < e.begin
+ORDER BY ALL ASC
+----
+2023-03-21 12:00:00	2023-03-21 13:00:00	0
+2023-03-21 13:00:00	2023-03-21 14:00:00	1
+2023-03-21 14:00:00	2023-03-21 15:00:00	2
+2023-03-21 15:00:00	2023-03-21 16:00:00	3
+2023-03-21 16:00:00	infinity	9
+2023-03-21 17:00:00	infinity	9
+2023-03-21 18:00:00	infinity	9
+2023-03-21 19:00:00	infinity	9
+2023-03-21 20:00:00	infinity	9
+2023-03-21 21:00:00	infinity	9
+NULL	-infinity	-1
+NULL	NULL	-10
+
+endloop

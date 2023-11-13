@@ -1,0 +1,29 @@
+# name: test/sql/copy/csv/batched_write/csv_write_memory_limit.test_slow
+# description: Verify data is streamed and memory limit is not exceeded in CSV write
+# group: [batched_write]
+
+require parquet
+
+require 64bit
+
+# 100M rows, 2 BIGINT columns = 1.6GB uncompressed
+statement ok
+COPY (SELECT i, i // 5 AS j FROM range(100000000) t(i)) TO '__TEST_DIR__/large_integers.parquet'
+
+# set a memory limit of 300MB
+statement ok
+SET memory_limit='300MB'
+
+# stream from one parquet file to another
+query I
+COPY '__TEST_DIR__/large_integers.parquet' TO '__TEST_DIR__/large_integers.csv'
+----
+100000000
+
+# verify that the file is correctly written
+statement ok
+SET memory_limit='-1'
+
+query II
+SELECT * FROM '__TEST_DIR__/large_integers.parquet' EXCEPT FROM '__TEST_DIR__/large_integers.csv'
+----

@@ -1,0 +1,44 @@
+# name: test/sql/index/art/vacuum/test_art_vacuum.test
+# description: Test vacuuming leaves
+# group: [vacuum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE delete_vacuum (id INT);
+
+statement ok
+INSERT INTO delete_vacuum SELECT 10 FROM range(10000);
+
+statement ok
+INSERT INTO delete_vacuum SELECT 11 FROM range(10000);
+
+statement ok
+INSERT INTO delete_vacuum SELECT 12 FROM range(10000);
+
+statement ok
+INSERT INTO delete_vacuum SELECT 13 FROM range(10000);
+
+statement ok
+CREATE INDEX idx ON delete_vacuum(id);
+
+statement ok
+DELETE FROM delete_vacuum WHERE id = 11 OR id = 10;
+
+# test coverage of reusing buffer IDs of vacuumed buffers
+
+statement ok
+CREATE TABLE reuse_buffer_tbl (i INTEGER);
+
+statement ok
+INSERT INTO reuse_buffer_tbl SELECT range FROM range(200000);
+
+statement ok
+CREATE INDEX idx_reuse_buffer ON reuse_buffer_tbl(i);
+
+statement ok
+DELETE FROM reuse_buffer_tbl WHERE i < 100000;
+
+statement ok
+INSERT INTO reuse_buffer_tbl SELECT range FROM range(200000);

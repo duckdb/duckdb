@@ -70,7 +70,6 @@ void MetaPipeline::AssignNextBatchIndex(Pipeline *pipeline) {
 void MetaPipeline::Build(PhysicalOperator &op) {
 	D_ASSERT(pipelines.size() == 1);
 	D_ASSERT(children.empty());
-	D_ASSERT(final_pipelines.empty());
 	op.BuildPipelines(*pipelines.back(), *this);
 }
 
@@ -125,11 +124,26 @@ void MetaPipeline::AddDependenciesFrom(Pipeline *dependant, Pipeline *start, boo
 }
 
 void MetaPipeline::AddFinishEvent(Pipeline *pipeline) {
+	D_ASSERT(finish_pipelines.find(pipeline) == finish_pipelines.end());
 	finish_pipelines.insert(pipeline);
+
+	// add all pipelines that were added since 'pipeline' was added (including 'pipeline') to the finish group
+	auto it = pipelines.begin();
+	for (; it->get() != pipeline; it++) {
+	}
+	it++;
+	for (; it != pipelines.end(); it++) {
+		finish_map.emplace(it->get(), pipeline);
+	}
 }
 
-bool MetaPipeline::HasFinishEvent(Pipeline *pipeline) {
+bool MetaPipeline::HasFinishEvent(Pipeline *pipeline) const {
 	return finish_pipelines.find(pipeline) != finish_pipelines.end();
+}
+
+optional_ptr<Pipeline> MetaPipeline::GetFinishGroup(Pipeline *pipeline) const {
+	auto it = finish_map.find(pipeline);
+	return it == finish_map.end() ? nullptr : it->second;
 }
 
 Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matters) {
@@ -162,7 +176,7 @@ void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator &op, 
 	auto child_pipeline = pipelines.back().get();
 	child_pipeline->base_batch_index = current.base_batch_index;
 
-	// child pipeline has a depency (within this MetaPipeline on all pipelines that were scheduled
+	// child pipeline has a dependency (within this MetaPipeline on all pipelines that were scheduled
 	// between 'current' and now (including 'current') - set them up
 	dependencies[child_pipeline].push_back(&current);
 	AddDependenciesFrom(child_pipeline, last_pipeline, false);

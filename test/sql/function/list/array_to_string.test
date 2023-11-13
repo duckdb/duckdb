@@ -1,0 +1,45 @@
+# name: test/sql/function/list/array_to_string.test
+# description: Test array_to_string function
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT array_to_string([1,2,3], '')
+----
+123
+
+query I
+SELECT array_to_string([1,2,3], '-')
+----
+1-2-3
+
+query I
+SELECT array_to_string(NULL, '-')
+----
+NULL
+
+query I
+SELECT array_to_string([1, 2, 3], NULL)
+----
+1,2,3
+
+
+query I
+SELECT array_to_string([], '-')
+----
+NULL
+
+query I
+SELECT array_to_string([i, i + 1], '-') FROM range(6) t(i) WHERE i<=2 OR i>4
+----
+0-1
+1-2
+2-3
+5-6
+
+statement error
+SELECT array_to_string([1, 2, 3], k) FROM repeat(',', 5) t(k)
+----
+Separator argument to StringAgg must be a constant

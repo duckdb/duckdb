@@ -23,5 +23,6 @@ PreparableStmt:
 			SelectStmt
 			| InsertStmt
 			| UpdateStmt
+			| CopyStmt
 			| DeleteStmt					/* by default all are $$=$1 */
 		;

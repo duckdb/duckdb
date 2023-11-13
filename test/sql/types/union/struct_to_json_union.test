@@ -1,0 +1,63 @@
+# name: test/sql/types/union/struct_to_json_union.test
+# group: [union]
+
+require json
+
+require parquet
+
+statement ok
+begin transaction;
+
+statement ok
+create table union_tbl(
+	col UNION(
+		a JSON,
+		b INTEGER,
+		c TINYINT
+	)
+)
+
+# Can insert a struct containing VARCHAR
+statement ok
+insert into union_tbl VALUES (
+	{
+		tag: 0::UINT8,
+		a: '{"a": "hello", "b": true}',
+		b: null::INTEGER,
+		c: null::TINYINT
+	}
+)
+
+# Can insert a struct containing JSON directly
+statement ok
+insert into union_tbl VALUES (
+	{
+		tag: 0::UINT8,
+		a: '{"c": "world"}'::JSON,
+		b: null::INTEGER,
+		c: null::TINYINT
+	}
+)
+
+query I
+select * from union_tbl;
+----
+{"a": "hello", "b": true}
+{"c": "world"}
+
+statement ok
+EXPORT DATABASE '__TEST_DIR__/json_union' (FORMAT PARQUET);
+
+statement ok
+rollback;
+
+# Ensure export/import roundtrip
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/json_union';
+
+query I
+select * from union_tbl;
+----
+{"a": "hello", "b": true}
+{"c": "world"}

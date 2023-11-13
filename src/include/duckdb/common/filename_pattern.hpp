@@ -13,7 +13,11 @@
 
 namespace duckdb {
 
+class Serializer;
+class Deserializer;
+
 class FilenamePattern {
+	friend Deserializer;
 
 public:
 	FilenamePattern() : _base("data_"), _pos(_base.length()), _uuid(false) {
@@ -23,7 +27,10 @@ public:
 
 public:
 	void SetFilenamePattern(const string &pattern);
-	string CreateFilename(const FileSystem &fs, const string &path, const string &extension, idx_t offset) const;
+	string CreateFilename(FileSystem &fs, const string &path, const string &extension, idx_t offset) const;
+
+	void Serialize(Serializer &serializer) const;
+	static FilenamePattern Deserialize(Deserializer &deserializer);
 
 private:
 	string _base;

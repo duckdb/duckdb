@@ -42,7 +42,10 @@ Mark
 query I
 select typeof(name) from person limit 1
 ----
-name_enum
+ENUM('Pedro', 'Mark', 'Hannes')
+
+# FIXME: dependencies between enums and tables are currently disabled
+mode skip
 
 # This should not be possible
 statement error

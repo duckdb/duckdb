@@ -65,6 +65,8 @@ bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &resul
 		result = DatePartSpecifier::TIMEZONE_HOUR;
 	} else if (specifier == "timezone_minute") {
 		result = DatePartSpecifier::TIMEZONE_MINUTE;
+	} else if (specifier == "julian" || specifier == "jd") {
+		result = DatePartSpecifier::JULIAN_DAY;
 	} else {
 		return false;
 	}

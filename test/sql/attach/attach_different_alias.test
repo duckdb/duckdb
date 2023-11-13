@@ -1,0 +1,30 @@
+# name: test/sql/attach/attach_different_alias.test
+# description: Test ATTACH of a database with a different alias
+# group: [attach]
+
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/attach_alias.db' AS alias1
+
+statement ok
+create table alias1.tbl1 as select 1 as a;
+
+query I
+FROM alias1.tbl1
+----
+1
+
+statement ok
+DETACH alias1
+
+statement ok
+ATTACH '__TEST_DIR__/attach_alias.db' AS alias2
+
+query I
+FROM alias2.tbl1
+----
+1

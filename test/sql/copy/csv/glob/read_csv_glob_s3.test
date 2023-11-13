@@ -26,7 +26,7 @@ statement ok
 COPY (select * from read_csv_auto('test/sql/copy/csv/data/glob/a1/a1.csv', header=True)) to 's3://test-bucket/read_csv_glob_s3/glob/a1/a1.csv' ( HEADER );
 COPY (select * from read_csv_auto('test/sql/copy/csv/data/glob/a2/a2.csv', header=True)) to 's3://test-bucket/read_csv_glob_s3/glob/a2/a2.csv' ( HEADER );
 COPY (select * from read_csv_auto('test/sql/copy/csv/data/glob/a3/b1.csv', header=True)) to 's3://test-bucket/read_csv_glob_s3/glob/a3/b1.csv' ( HEADER );
-COPY (select null) to 's3://test-bucket/read_csv_glob_s3/glob/empty/empty.csv';
+COPY (select null) to 's3://test-bucket/read_csv_glob_s3/glob/empty/empty.csv' (HEADER 0);
 COPY (select * from read_csv_auto('test/sql/copy/csv/data/glob/i1/integer.csv', header=True)) to 's3://test-bucket/read_csv_glob_s3/glob/i1/integer.csv' ( HEADER );
 COPY (select * from read_csv_auto('test/sql/copy/csv/data/glob/a1/a1.csv', header=True)) to 's3://test-bucket/read_csv_glob_s3/glob/f1/f*.csv' ( HEADER );
 COPY (select * from read_csv_auto('test/sql/copy/csv/data/glob/a2/a2.csv', header=True)) to 's3://test-bucket/read_csv_glob_s3/glob/f2/f[a].csv' ( HEADER );

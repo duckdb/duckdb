@@ -21,6 +21,10 @@ class Catalog;
 class CatalogSet;
 class ClientContext;
 class SchemaCatalogEntry;
+class Serializer;
+class Deserializer;
+
+struct CreateInfo;
 
 //! Abstract base class of an entry in the catalog
 class CatalogEntry {
@@ -56,6 +60,8 @@ public:
 
 	virtual unique_ptr<CatalogEntry> Copy(ClientContext &context) const;
 
+	virtual unique_ptr<CreateInfo> GetInfo() const;
+
 	//! Sets the CatalogEntry as the new root entry (i.e. the newest entry)
 	// this is called on a rollback to an AlterEntry
 	virtual void SetAsRoot();
@@ -68,16 +74,19 @@ public:
 
 	virtual void Verify(Catalog &catalog);
 
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
+
 public:
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
