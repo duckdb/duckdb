@@ -19,6 +19,14 @@ def pa_time64():
     return pa.time64
 
 
+def pa_date32():
+    return pa.date32
+
+
+def pa_date64():
+    return pa.date64
+
+
 def pa_timestamp():
     return pa.timestamp
 
@@ -91,6 +99,33 @@ class TestArrowOffsets(object):
         """
         ).fetchall()
         assert res == [(True, True)]
+
+    @pytest.mark.parametrize(
+        ["constructor", "expected"],
+        [
+            (pa_date32(), datetime.date(2328, 11, 12)),
+            (pa_date64(), datetime.date(1970, 1, 1)),
+        ],
+    )
+    def test_struct_of_dates(self, duckdb_cursor, constructor, expected):
+        tuples = [i for i in range(0, MAGIC_ARRAY_SIZE)]
+
+        col1 = tuples
+        col2 = [{"a": i} for i in col1]
+        arrow_table = pa.Table.from_pydict(
+            {"col1": col1, "col2": col2},
+            schema=pa.schema([("col1", constructor()), ("col2", pa.struct({"a": constructor()}))]),
+        )
+
+        res = duckdb_cursor.sql(
+            f"""
+            SELECT
+                col1,
+                col2.a
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
+        """
+        ).fetchall()
+        assert res == [(expected, expected)]
 
     def test_struct_of_blobs(self, duckdb_cursor):
         col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
