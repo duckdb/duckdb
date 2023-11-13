@@ -43,16 +43,14 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 		return false;
 	}
 
-	if (!Date::ParseDoubleDigit(buf, len, pos, hour)) {
-		return false;
-	}
-	// Allow unbounded hours for intervals
-	if (hour < 0) {
-		return false;
-	}
-
-	if (pos >= len) {
-		return false;
+	// Allow up to 9 digit hours to support intervals
+	hour = 0;
+	for (int32_t digits = 9; pos < len && StringUtil::CharacterIsDigit(buf[pos]); ++pos) {
+		if (digits-- > 0) {
+			hour = hour * 10 + (buf[pos] - '0');
+		} else {
+			return false;
+		}
 	}
 
 	// fetch the separator
