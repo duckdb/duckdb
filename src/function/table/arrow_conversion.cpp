@@ -335,9 +335,9 @@ static void IntervalConversionUs(Vector &vector, ArrowArray &array, ArrowScanLoc
 }
 
 static void IntervalConversionMonths(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
-                                     int64_t nested_offset, idx_t size) {
+                                     int64_t nested_offset, int64_t parent_offset, idx_t size) {
 	auto tgt_ptr = FlatVector::GetData<interval_t>(vector);
-	auto src_ptr = ArrowBufferData<int32_t>(array, 1) + scan_state.chunk_offset + array.offset;
+	auto src_ptr = ArrowBufferData<int32_t>(array, 1) + scan_state.chunk_offset + parent_offset + array.offset;
 	if (nested_offset != -1) {
 		src_ptr = ArrowBufferData<int32_t>(array, 1) + nested_offset + array.offset;
 	}
@@ -349,9 +349,9 @@ static void IntervalConversionMonths(Vector &vector, ArrowArray &array, ArrowSca
 }
 
 static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
-                                            int64_t nested_offset, idx_t size) {
+                                            int64_t nested_offset, int64_t parent_offset, idx_t size) {
 	auto tgt_ptr = FlatVector::GetData<interval_t>(vector);
-	auto src_ptr = ArrowBufferData<ArrowInterval>(array, 1) + scan_state.chunk_offset + array.offset;
+	auto src_ptr = ArrowBufferData<ArrowInterval>(array, 1) + scan_state.chunk_offset + parent_offset + array.offset;
 	if (nested_offset != -1) {
 		src_ptr = ArrowBufferData<ArrowInterval>(array, 1) + nested_offset + array.offset;
 	}
@@ -555,11 +555,11 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 			break;
 		}
 		case ArrowDateTimeType::MONTHS: {
-			IntervalConversionMonths(vector, array, scan_state, nested_offset, size);
+			IntervalConversionMonths(vector, array, scan_state, nested_offset, parent_offset, size);
 			break;
 		}
 		case ArrowDateTimeType::MONTH_DAY_NANO: {
-			IntervalConversionMonthDayNanos(vector, array, scan_state, nested_offset, size);
+			IntervalConversionMonthDayNanos(vector, array, scan_state, nested_offset, parent_offset, size);
 			break;
 		}
 		default:

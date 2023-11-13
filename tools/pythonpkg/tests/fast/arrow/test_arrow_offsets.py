@@ -26,6 +26,22 @@ def pa_duration():
     return pa.duration
 
 
+def pa_month_day_nano_interval():
+    return pa.month_day_nano_interval
+
+
+def month_interval(months):
+    return (months, 0, 0)
+
+
+def day_interval(days):
+    return (0, days, 0)
+
+
+def nano_interval(nanos):
+    return (0, 0, nanos)
+
+
 class TestArrowOffsets(object):
     def test_struct_of_strings(self, duckdb_cursor):
         col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
@@ -86,6 +102,35 @@ class TestArrowOffsets(object):
         arrow_table = pa.Table.from_pydict(
             {"col1": col1, "col2": col2},
             schema=pa.schema([("col1", constructor(unit)), ("col2", pa.struct({"a": constructor(unit)}))]),
+        )
+
+        res = duckdb_cursor.sql(
+            f"""
+            SELECT
+                col1,
+                col2.a
+            FROM arrow_table offset {size-1}
+        """
+        ).fetchall()
+        assert res == [(expected, expected)]
+
+    @pytest.mark.parametrize(
+        ["constructor", "expected", "converter"],
+        [
+            (pa_month_day_nano_interval(), datetime.timedelta(days=3932160), month_interval),
+            (pa_month_day_nano_interval(), datetime.timedelta(days=131072), day_interval),
+            (pa_month_day_nano_interval(), datetime.timedelta(microseconds=131), nano_interval),
+        ],
+    )
+    def test_struct_of_interval(self, duckdb_cursor, constructor, expected, converter):
+        size = MAGIC_ARRAY_SIZE
+
+        col1 = [converter(i) for i in range(0, size)]
+        # "a" in the struct matches the value for col1
+        col2 = [{"a": i} for i in col1]
+        arrow_table = pa.Table.from_pydict(
+            {"col1": col1, "col2": col2},
+            schema=pa.schema([("col1", constructor()), ("col2", pa.struct({"a": constructor()}))]),
         )
 
         res = duckdb_cursor.sql(
