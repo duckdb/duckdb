@@ -286,9 +286,9 @@ static void TimeConversion(Vector &vector, ArrowArray &array, ArrowScanLocalStat
                            int64_t parent_offset, idx_t size, int64_t conversion) {
 	auto tgt_ptr = FlatVector::GetData<dtime_t>(vector);
 	auto &validity_mask = FlatVector::Validity(vector);
-	auto src_ptr = (T *)array.buffers[1] + scan_state.chunk_offset + parent_offset + array.offset;
+	auto src_ptr = ArrowBufferData<data_t>(array, 1) + scan_state.chunk_offset + parent_offset + array.offset;
 	if (nested_offset != -1) {
-		src_ptr = (T *)array.buffers[1] + nested_offset + array.offset;
+		src_ptr = ArrowBufferData<data_t>(array, 1) + nested_offset + array.offset;
 	}
 	for (idx_t row = 0; row < size; row++) {
 		if (!validity_mask.RowIsValid(row)) {
