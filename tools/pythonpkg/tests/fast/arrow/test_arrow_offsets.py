@@ -102,6 +102,25 @@ class TestArrowOffsets(object):
         ).fetchall()
         assert res == [('131072', [131072, 131073, 131074])]
 
+    def test_struct_of_list_of_blobs(self, duckdb_cursor):
+        col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
+        # "a" in the struct matches the value for col1
+        col2 = [{"a": [i, str(int(i) + 1), str(int(i) + 2)]} for i in col1]
+        arrow_table = pa.Table.from_pydict(
+            {"col1": col1, "col2": col2},
+            schema=pa.schema([("col1", pa.binary()), ("col2", pa.struct({"a": pa.list_(pa.binary())}))]),
+        )
+
+        res = duckdb_cursor.sql(
+            f"""
+			SELECT
+				col1,
+				col2.a
+			FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
+		"""
+        ).fetchall()
+        assert res == [(b'131072', [b'131072', b'131073', b'131074'])]
+
     def test_struct_of_list_of_list(self, duckdb_cursor):
         col1 = [i for i in range(0, MAGIC_ARRAY_SIZE)]
         # "a" in the struct matches the value for col1
