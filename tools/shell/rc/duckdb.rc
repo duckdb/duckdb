@@ -37,4 +37,4 @@ BEGIN
 	END
 END
 
-MAINICON ICON "..\..\..\logo\DuckDB.ico"
+MAINICON ICON "../../../logo/DuckDB.ico"
