@@ -6,9 +6,7 @@ import os
 _ = pytest.importorskip("duckdb.experimental.spark")
 
 from duckdb.experimental.spark.sql import SparkSession as session
-from duckdb import connect
-from duckdb import InvalidInputException
-from duckdb import read_csv
+from duckdb import connect, InvalidInputException, read_csv
 from conftest import NumpyPandas, ArrowPandas
 import pandas._testing as tm
 import datetime
