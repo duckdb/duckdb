@@ -71,6 +71,27 @@ class TestArrowOffsets(object):
         ).fetchall()
         assert res == [('131072', '131072')]
 
+    def test_struct_of_bools(self, duckdb_cursor):
+        tuples = [False for i in range(0, MAGIC_ARRAY_SIZE)]
+        tuples.append(True)
+
+        col1 = tuples
+        col2 = [{"a": i} for i in col1]
+        arrow_table = pa.Table.from_pydict(
+            {"col1": col1, "col2": col2},
+            schema=pa.schema([("col1", pa.bool_()), ("col2", pa.struct({"a": pa.bool_()}))]),
+        )
+
+        res = duckdb_cursor.sql(
+            f"""
+            SELECT
+                col1,
+                col2.a
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE}
+        """
+        ).fetchall()
+        assert res == [(True, True)]
+
     def test_struct_of_blobs(self, duckdb_cursor):
         col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
         # "a" in the struct matches the value for col1
