@@ -1,6 +1,6 @@
 # name: test/optimizer/setops/pushdown_set_op.test
 # description: Pushdown set operations
-# group: [optimizer]
+# group: [setops]
 
 statement ok
 PRAGMA explain_output = 'OPTIMIZED_ONLY'
