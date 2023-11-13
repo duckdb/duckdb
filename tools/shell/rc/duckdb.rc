@@ -24,7 +24,7 @@ BEGIN
 			VALUE "FileDescription",  "DuckDB shell"
 			VALUE "FileVersion",      QUOTE(DUCKDB_VERSION)
 			VALUE "InternalName",     "DuckDB shell"
-			VALUE "LegalCopyright",   "Copyright 2018-2023 Stichting DuckDB Foundation"
+			VALUE "LegalCopyright",   "Copyright 2018-" QUOTE(DUCKDB_COPYRIGHT_YEAR) " Stichting DuckDB Foundation"
 
 			VALUE "OriginalFilename", "duckdb.exe"
 			VALUE "ProductName",      "DuckDB"
