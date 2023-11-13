@@ -511,7 +511,8 @@ struct QuantileBindData : public FunctionData {
 		deserializer.ReadProperty(101, "order", result->order);
 		deserializer.ReadProperty(102, "desc", result->desc);
 		QuantileSerializationType deserialization_type;
-		deserializer.ReadPropertyWithDefault(103, "type", deserialization_type, QuantileSerializationType::NON_DECIMAL);
+		deserializer.ReadPropertyWithDefault(103, "quantile_type", deserialization_type,
+		                                     QuantileSerializationType::NON_DECIMAL);
 
 		if (deserialization_type != QuantileSerializationType::NON_DECIMAL) {
 			LogicalType arg_type;
@@ -530,7 +531,8 @@ struct QuantileBindData : public FunctionData {
 	                                     const AggregateFunction &function) {
 		Serialize(serializer, bind_data_p, function);
 
-		serializer.WritePropertyWithDefault<int>(103, "flag", 1, 0);
+		serializer.WritePropertyWithDefault<QuantileSerializationType>(
+		    103, "quantile_type", QuantileSerializationType::DECIMAL_DISCRETE, QuantileSerializationType::NON_DECIMAL);
 		serializer.WriteProperty(104, "logical_type", function.arguments[0]);
 	}
 	static void SerializeDecimalDiscreteList(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
@@ -538,14 +540,18 @@ struct QuantileBindData : public FunctionData {
 
 		Serialize(serializer, bind_data_p, function);
 
-		serializer.WritePropertyWithDefault<int>(103, "flag", 2, 0);
+		serializer.WritePropertyWithDefault<QuantileSerializationType>(103, "quantile_type",
+		                                                               QuantileSerializationType::DECIMAL_DISCRETE_LIST,
+		                                                               QuantileSerializationType::NON_DECIMAL);
 		serializer.WriteProperty(104, "logical_type", function.arguments[0]);
 	}
 	static void SerializeDecimalContinuous(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                                       const AggregateFunction &function) {
 		Serialize(serializer, bind_data_p, function);
 
-		serializer.WritePropertyWithDefault<int>(103, "flag", 3, 0);
+		serializer.WritePropertyWithDefault<QuantileSerializationType>(103, "quantile_type",
+		                                                               QuantileSerializationType::DECIMAL_CONTINUOUS,
+		                                                               QuantileSerializationType::NON_DECIMAL);
 		serializer.WriteProperty(104, "logical_type", function.arguments[0]);
 	}
 	static void SerializeDecimalContinuousList(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
@@ -553,7 +559,9 @@ struct QuantileBindData : public FunctionData {
 
 		Serialize(serializer, bind_data_p, function);
 
-		serializer.WritePropertyWithDefault<int>(103, "flag", 4, 0);
+		serializer.WritePropertyWithDefault<QuantileSerializationType>(
+		    103, "quantile_type", QuantileSerializationType::DECIMAL_CONTINUOUS_LIST,
+		    QuantileSerializationType::NON_DECIMAL);
 		serializer.WriteProperty(104, "logical_type", function.arguments[0]);
 	}
 
