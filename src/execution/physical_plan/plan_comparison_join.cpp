@@ -75,6 +75,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 		switch (type.InternalType()) {
 		case PhysicalType::STRUCT:
 		case PhysicalType::LIST:
+		case PhysicalType::ARRAY:
 			return;
 		default:
 			break;
