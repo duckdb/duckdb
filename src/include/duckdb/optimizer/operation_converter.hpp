@@ -16,7 +16,12 @@ namespace duckdb {
 class OperationConverter {
 public:
 	OperationConverter(LogicalOperator &root) : root(root) {
-		root.ResolveOperatorTypes();
+		switch (root.type) {
+		case LogicalOperatorType::LOGICAL_EXECUTE:
+			break;
+		default:
+			root.ResolveOperatorTypes();
+		}
 	}
 	//! Perform DelimJoin elimination
 	void Optimize(unique_ptr<LogicalOperator> &op);
