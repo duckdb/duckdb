@@ -102,9 +102,6 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
                               const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
                               int64_t parent_offset) {
-	if (array.offset) {
-		(void)array_state;
-	}
 	auto size_type = arrow_type.GetSizeType();
 	idx_t list_size = 0;
 	auto &scan_state = array_state.state;
@@ -348,9 +345,6 @@ static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, A
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
                                 const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
                                 uint64_t parent_offset) {
-	if (array.offset) {
-		(void)array_state;
-	}
 	auto &scan_state = array_state.state;
 	D_ASSERT(!array.dictionary);
 	switch (vector.GetType().id()) {

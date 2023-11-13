@@ -357,9 +357,6 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 			return;
 		}
 	}
-	if (state.chunk->arrow_array.offset != 0) {
-		(void)state;
-	}
 	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
 	data.lines_read += output_size;
 	if (global_state.CanRemoveFilterColumns()) {
