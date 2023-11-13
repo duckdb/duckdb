@@ -225,7 +225,4 @@ TEST_CASE("Get SQL TIME value via SQLBindCol", "[odbc][time]") {
 	REQUIRE(ts_val.second == 56);
 
 	DISCONNECT_FROM_DATABASE(env, dbc);
-}		
-
-
-
+}
