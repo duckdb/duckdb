@@ -319,9 +319,9 @@ static void TimestampTZConversion(Vector &vector, ArrowArray &array, ArrowScanLo
 }
 
 static void IntervalConversionUs(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
-                                 int64_t nested_offset, idx_t size, int64_t conversion) {
+                                 int64_t nested_offset, int64_t parent_offset, idx_t size, int64_t conversion) {
 	auto tgt_ptr = FlatVector::GetData<interval_t>(vector);
-	auto src_ptr = ArrowBufferData<int64_t>(array, 1) + scan_state.chunk_offset + array.offset;
+	auto src_ptr = ArrowBufferData<int64_t>(array, 1) + scan_state.chunk_offset + parent_offset + array.offset;
 	if (nested_offset != -1) {
 		src_ptr = ArrowBufferData<int64_t>(array, 1) + nested_offset + array.offset;
 	}
@@ -529,21 +529,21 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		auto precision = arrow_type.GetDateTimeType();
 		switch (precision) {
 		case ArrowDateTimeType::SECONDS: {
-			IntervalConversionUs(vector, array, scan_state, nested_offset, size, 1000000);
+			IntervalConversionUs(vector, array, scan_state, nested_offset, parent_offset, size, 1000000);
 			break;
 		}
 		case ArrowDateTimeType::DAYS:
 		case ArrowDateTimeType::MILLISECONDS: {
-			IntervalConversionUs(vector, array, scan_state, nested_offset, size, 1000);
+			IntervalConversionUs(vector, array, scan_state, nested_offset, parent_offset, size, 1000);
 			break;
 		}
 		case ArrowDateTimeType::MICROSECONDS: {
-			IntervalConversionUs(vector, array, scan_state, nested_offset, size, 1);
+			IntervalConversionUs(vector, array, scan_state, nested_offset, parent_offset, size, 1);
 			break;
 		}
 		case ArrowDateTimeType::NANOSECONDS: {
 			auto tgt_ptr = FlatVector::GetData<interval_t>(vector);
-			auto src_ptr = ArrowBufferData<int64_t>(array, 1) + scan_state.chunk_offset + array.offset;
+			auto src_ptr = ArrowBufferData<int64_t>(array, 1) + scan_state.chunk_offset + parent_offset + array.offset;
 			if (nested_offset != -1) {
 				src_ptr = ArrowBufferData<int64_t>(array, 1) + nested_offset + array.offset;
 			}

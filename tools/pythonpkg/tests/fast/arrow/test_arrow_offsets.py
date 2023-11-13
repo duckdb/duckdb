@@ -22,6 +22,10 @@ def pa_timestamp():
     return pa.timestamp
 
 
+def pa_duration():
+    return pa.duration
+
+
 class TestArrowOffsets(object):
     def test_struct_of_strings(self, duckdb_cursor):
         col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
@@ -75,6 +79,36 @@ class TestArrowOffsets(object):
         if unit == 's':
             # FIXME: We limit the size because we don't support time values > 24 hours
             size = 86400  # The amount of seconds in a day
+
+        col1 = [i for i in range(0, size)]
+        # "a" in the struct matches the value for col1
+        col2 = [{"a": i} for i in col1]
+        arrow_table = pa.Table.from_pydict(
+            {"col1": col1, "col2": col2},
+            schema=pa.schema([("col1", constructor(unit)), ("col2", pa.struct({"a": constructor(unit)}))]),
+        )
+
+        res = duckdb_cursor.sql(
+            f"""
+            SELECT
+                col1,
+                col2.a
+            FROM arrow_table offset {size-1}
+        """
+        ).fetchall()
+        assert res == [(expected, expected)]
+
+    @pytest.mark.parametrize(
+        ["constructor", "unit", "expected"],
+        [
+            (pa_duration(), 'ms', datetime.timedelta(seconds=131, microseconds=72000)),
+            (pa_duration(), 's', datetime.timedelta(days=1, seconds=44672)),
+            (pa_duration(), 'ns', datetime.timedelta(microseconds=131)),
+            (pa_duration(), 'us', datetime.timedelta(microseconds=131072)),
+        ],
+    )
+    def test_struct_of_duration(self, duckdb_cursor, constructor, unit, expected):
+        size = MAGIC_ARRAY_SIZE
 
         col1 = [i for i in range(0, size)]
         # "a" in the struct matches the value for col1
