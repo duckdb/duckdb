@@ -570,7 +570,7 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 	case LogicalTypeId::DECIMAL: {
 		auto val_mask = FlatVector::Validity(vector);
 		//! We have to convert from INT128
-		auto src_ptr = ArrowBufferData<hugeint_t>(array, 1) + scan_state.chunk_offset + array.offset;
+		auto src_ptr = ArrowBufferData<hugeint_t>(array, 1) + scan_state.chunk_offset + parent_offset + array.offset;
 		if (nested_offset != -1) {
 			src_ptr = ArrowBufferData<hugeint_t>(array, 1) + nested_offset + array.offset;
 		}
@@ -609,9 +609,9 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 			break;
 		}
 		case PhysicalType::INT128: {
-			FlatVector::SetData(vector,
-			                    ArrowBufferData<data_t>(array, 1) + GetTypeIdSize(vector.GetType().InternalType()) *
-			                                                            (scan_state.chunk_offset + array.offset));
+			FlatVector::SetData(vector, ArrowBufferData<data_t>(array, 1) +
+			                                GetTypeIdSize(vector.GetType().InternalType()) *
+			                                    (scan_state.chunk_offset + parent_offset + array.offset));
 			break;
 		}
 		default:

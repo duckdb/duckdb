@@ -1,6 +1,7 @@
 import duckdb
 import pytest
 import datetime
+import decimal
 import pytz
 
 pa = pytest.importorskip("pyarrow")
@@ -40,6 +41,14 @@ def day_interval(days):
 
 def nano_interval(nanos):
     return (0, 0, nanos)
+
+
+def decimal_value(value, precision, scale):
+    val = str(value)
+    actual_width = precision - scale
+    if len(val) > actual_width:
+        return decimal.Decimal('9' * actual_width)
+    return decimal.Decimal(val)
 
 
 class TestArrowOffsets(object):
@@ -225,6 +234,42 @@ class TestArrowOffsets(object):
         """
         ).fetchall()
         assert res == [(b'131072', b'131072')]
+
+    @pytest.mark.parametrize(
+        ["precision_scale", "expected"],
+        [
+            ((38, 37), decimal.Decimal('9.0000000000000000000000000000000000000')),
+            ((38, 24), decimal.Decimal('131072.000000000000000000000000')),
+            ((18, 14), decimal.Decimal('9999.00000000000000')),
+            ((18, 5), decimal.Decimal('131072.00000')),
+            ((9, 7), decimal.Decimal('99.0000000')),
+            ((9, 3), decimal.Decimal('131072.000')),
+            ((4, 2), decimal.Decimal('99.00')),
+            ((4, 0), decimal.Decimal('9999')),
+        ],
+    )
+    def test_struct_of_decimal(self, duckdb_cursor, precision_scale, expected):
+        precision, scale = precision_scale
+        col1 = [decimal_value(i, precision, scale) for i in range(0, MAGIC_ARRAY_SIZE)]
+        # "a" in the struct matches the value for col1
+        col2 = [{"a": i} for i in col1]
+
+        arrow_table = pa.Table.from_pydict(
+            {"col1": col1, "col2": col2},
+            schema=pa.schema(
+                [("col1", pa.decimal128(precision, scale)), ("col2", pa.struct({"a": pa.decimal128(precision, scale)}))]
+            ),
+        )
+
+        res = duckdb_cursor.sql(
+            f"""
+            SELECT
+                col1,
+                col2.a
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
+        """
+        ).fetchall()
+        assert res == [(expected, expected)]
 
     def test_struct_of_small_list(self, duckdb_cursor):
         col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
