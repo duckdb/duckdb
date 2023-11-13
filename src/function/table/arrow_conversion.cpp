@@ -106,7 +106,7 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanS
 		//! Have to check validity mask before setting this up
 		idx_t offset = (scan_state.chunk_offset + parent_offset + array.offset) * fixed_size;
 		if (nested_offset != -1) {
-			offset = fixed_size * nested_offset;
+			offset = fixed_size * (nested_offset + array.offset);
 		}
 		start_offset = offset;
 		auto list_data = FlatVector::GetData<list_entry_t>(vector);
@@ -120,7 +120,7 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanS
 	} else if (size_type == ArrowVariableSizeType::NORMAL) {
 		auto offsets = ArrowBufferData<uint32_t>(array, 1) + array.offset + parent_offset + scan_state.chunk_offset;
 		if (nested_offset != -1) {
-			offsets = ArrowBufferData<uint32_t>(array, 1) + nested_offset;
+			offsets = ArrowBufferData<uint32_t>(array, 1) + nested_offset + array.offset;
 		}
 		start_offset = offsets[0];
 		auto list_data = FlatVector::GetData<list_entry_t>(vector);
@@ -134,7 +134,7 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanS
 	} else {
 		auto offsets = ArrowBufferData<uint64_t>(array, 1) + array.offset + parent_offset + scan_state.chunk_offset;
 		if (nested_offset != -1) {
-			offsets = ArrowBufferData<uint64_t>(array, 1) + nested_offset;
+			offsets = ArrowBufferData<uint64_t>(array, 1) + nested_offset + array.offset;
 		}
 		start_offset = offsets[0];
 		auto list_data = FlatVector::GetData<list_entry_t>(vector);
@@ -187,7 +187,7 @@ static void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanLocalS
 		//! Have to check validity mask before setting this up
 		idx_t offset = (scan_state.chunk_offset + parent_offset + array.offset) * fixed_size;
 		if (nested_offset != -1) {
-			offset = fixed_size * nested_offset;
+			offset = fixed_size * (nested_offset + array.offset);
 		}
 		auto cdata = ArrowBufferData<char>(array, 1);
 		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
@@ -276,7 +276,7 @@ static void DirectConversion(Vector &vector, ArrowArray &array, ArrowScanLocalSt
 	auto data_ptr =
 	    ArrowBufferData<data_t>(array, 1) + internal_type * (scan_state.chunk_offset + array.offset + parent_offset);
 	if (nested_offset != -1) {
-		data_ptr = ArrowBufferData<data_t>(array, 1) + internal_type * (array.offset + nested_offset + parent_offset);
+		data_ptr = ArrowBufferData<data_t>(array, 1) + internal_type * (array.offset + nested_offset);
 	}
 	FlatVector::SetData(vector, data_ptr);
 }
