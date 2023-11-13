@@ -502,7 +502,8 @@
       {
         "id": 202,
         "name": "setop_all",
-        "type": "bool"
+        "type": "bool",
+        "default": "true"
       }
     ],
     "constructor": ["table_index", "column_count", "type", "setop_all"]
