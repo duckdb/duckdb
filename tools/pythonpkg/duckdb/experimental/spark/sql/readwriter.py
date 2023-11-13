@@ -24,9 +24,37 @@ class DataFrameWriter:
         relation = self.dataframe.relation
         relation.write_parquet(file_path)
     
-    def csv(self, file_path:str) -> None:
+    def csv(self, path, mode=None, compression=None, sep=None, quote=None, escape=None,
+            header=None, nullValue=None, escapeQuotes=None, quoteAll=None, dateFormat=None,
+            timestampFormat=None, ignoreLeadingWhiteSpace=None, ignoreTrailingWhiteSpace=None,
+            charToEscapeQuoteEscaping=None, encoding=None, emptyValue=None, lineSep=None):
+        if mode not in (None, "overwrite"):
+            raise NotImplementedError
+        if escapeQuotes:
+            raise NotImplementedError
+        if ignoreLeadingWhiteSpace:
+            raise NotImplementedError
+        if ignoreTrailingWhiteSpace:
+            raise NotImplementedError
+        if charToEscapeQuoteEscaping:
+            raise NotImplementedError
+        if emptyValue:
+            raise NotImplementedError
+        if lineSep:
+            raise NotImplementedError
         relation = self.dataframe.relation
-        relation.write_csv(file_path)
+        relation.write_csv(path,
+                        sep=sep, 
+                        na_rep=nullValue,
+                        quotechar=quote,
+                        compression=compression, 
+                        escapechar=escape,
+                        header=header if isinstance(header, bool) else header == "True",
+                        encoding=encoding,
+                        quoting=quoteAll, # ~ check this
+                        date_format=dateFormat,
+                        timestamp_format = timestampFormat
+                        )
 
 
 class DataFrameReader:
