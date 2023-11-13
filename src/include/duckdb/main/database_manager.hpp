@@ -64,8 +64,8 @@ public:
 
 	//! The lock to add entries to the database_paths set
 	mutex db_paths_lock;
-	//! A set containing all attached db paths for faster checks
-	case_insensitive_set_t db_paths;
+	//! A map containing all attached db path-name mappings for faster checks
+	case_insensitive_map_t<string> db_paths;
 
 private:
 	//! The system database is a special database that holds system entries (e.g. functions)

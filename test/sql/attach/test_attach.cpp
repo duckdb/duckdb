@@ -15,7 +15,7 @@ struct Config {
 	idx_t thread_count;
 	idx_t elapsed_ms;
 
-	void Print() {
+	void Print() const {
 		std::cout << "file count: " << file_count << "\n";
 		std::cout << "thread count: " << thread_count << "\n";
 		std::cout << "elapsed ms: " << elapsed_ms << "\n\n";
@@ -37,19 +37,24 @@ void FileWorker(const string &dir, const string &template_path, const idx_t star
 void CreateFiles(const idx_t file_count, string db_file_dir) {
 
 	db_file_dir += "/" + to_string(file_count) + "_files";
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	if (!fs->DirectoryExists(db_file_dir)) {
+		fs->CreateDirectory(db_file_dir);
+	}
+
 	DuckDB db(nullptr);
 	Connection con(db);
 
 	// create the template file
-	auto template_path = db_file_dir + "/template.db";
-	auto attach_result = con.Query("ATTACH " + template_path + "';");
+	auto template_path = db_file_dir + "/template_file.db";
+	auto attach_result = con.Query("ATTACH '" + template_path + "';");
 	REQUIRE_NO_FAIL(*attach_result);
 	auto create_table_result = con.Query("CREATE TABLE tbl AS "
 	                                     "SELECT range::INTEGER AS id, range::BIGINT AS status, range::DOUBLE AS "
-	                                     "amount, repeat(range::VARCHAR, 20) AS text"
+	                                     "amount, repeat(range::VARCHAR, 20) AS text "
 	                                     "FROM range(100);");
 	REQUIRE_NO_FAIL(*create_table_result);
-	auto detach_result = con.Query("DETACH template;");
+	auto detach_result = con.Query("DETACH template_file;");
 	REQUIRE_NO_FAIL(*detach_result);
 
 	// loop setup
@@ -87,7 +92,7 @@ void AttachWorker(const string &dir, const idx_t start, const idx_t end, DuckDB 
 	}
 }
 
-void Attach(const idx_t file_count, const idx_t thread_count, string db_file_dir) {
+Config Attach(const idx_t file_count, const idx_t thread_count, string db_file_dir) {
 
 	db_file_dir += "/" + to_string(file_count) + "_files";
 
@@ -123,48 +128,51 @@ void Attach(const idx_t file_count, const idx_t thread_count, string db_file_dir
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(CHECK_COLUMN(result, 0, {true}));
 
-	// print the elapsed time
+	// get the elapsed time
 	auto timer_stop = high_resolution_clock::now();
 	auto duration = duration_cast<std::chrono::milliseconds>(timer_stop - timer_start);
 
-	Config config(file_count, thread_count, duration.count());
-	config.Print();
+	return Config(file_count, thread_count, duration.count());
+	;
 }
 
-TEST_CASE("Attach perf", "[attach][.]") {
-
-	// NOTE: this test requires to increase the max_file_limit of the OS
-	return;
+TEST_CASE("Attach performance", "[attach][.]") {
 
 	// set up the directories
-	const string DB_DIR = "/Users/tania/DuckDB/mondaycom";
+	const string DB_DIR = TestDirectoryPath() + "/attach";
 	const string DB_FILE_DIR = DB_DIR + "/db_files";
 
-	//	// set up the directories
-	//	const string DB_DIR = TestDirectoryPath() + "/attach";
-	//	const string DB_FILE_DIR = DB_DIR + "/db_files";
-	//
-	//	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	//	if (!fs->DirectoryExists(DB_DIR)) {
-	//		fs->CreateDirectory(DB_DIR);
-	//	}
-	//	if (!fs->DirectoryExists(DB_FILE_DIR)) {
-	//		fs->CreateDirectory(DB_FILE_DIR);
-	//	}
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	if (!fs->DirectoryExists(DB_DIR)) {
+		fs->CreateDirectory(DB_DIR);
+	}
+	if (!fs->DirectoryExists(DB_FILE_DIR)) {
+		fs->CreateDirectory(DB_FILE_DIR);
+	}
 
 	// test different scenarios and collect results
-	//		vector<idx_t> file_counts = {1000, 10000, 30000, 50000, 60000};
-	//		vector<idx_t> thread_counts = {32, 64, 128, 256, 512};
+	// NOTE: the thread_counts and file_counts number is intentionally low. However, this test is intended to run with
+	// higher numbers after increasing the OS open file limit
 	vector<idx_t> thread_counts = {32};
-	vector<idx_t> file_counts = {30000};
-	for (const auto file_count : file_counts) {
+	vector<idx_t> file_counts = {100};
+	vector<Config> configs;
 
-		//		// create the files
-		//		CreateFiles(file_count, DB_FILE_DIR);
+	// five runs
+	for (idx_t i = 0; i < 5; i++) {
+		for (const auto file_count : file_counts) {
 
-		// run ATTACH
-		for (const auto thread_count : thread_counts) {
-			Attach(file_count, thread_count, DB_FILE_DIR);
+			// create the files
+			CreateFiles(file_count, DB_FILE_DIR);
+
+			// run ATTACH
+			for (const auto thread_count : thread_counts) {
+				configs.push_back(Attach(file_count, thread_count, DB_FILE_DIR));
+			}
 		}
 	}
+
+	// note: optionally print the elapsed time
+	//	for (const auto &config: configs) {
+	//		config.Print();
+	//	}
 }

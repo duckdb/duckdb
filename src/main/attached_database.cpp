@@ -37,7 +37,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 		if (db_manager->db_paths.find(file_path_p) != db_manager->db_paths.end()) {
 			throw BinderException("Database \"%s\" is already attached with path \"%s\"", name, file_path_p);
 		}
-		db_manager->db_paths.insert(file_path_p);
+		db_manager->db_paths.insert(make_pair(file_path_p, name));
 	}
 
 	// finish construction
@@ -60,7 +60,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 		if (db_manager->db_paths.find(info.path) != db_manager->db_paths.end()) {
 			throw BinderException("Database \"%s\" is already attached with path \"%s\"", name, info.path);
 		}
-		db_manager->db_paths.insert(info.path);
+		db_manager->db_paths.insert(make_pair(info.path, info.name));
 	}
 
 	// finish construction

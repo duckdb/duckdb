@@ -56,21 +56,17 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 }
 
 optional_ptr<AttachedDatabase> DatabaseManager::GetDatabaseFromPath(ClientContext &context, const string &path) {
-	auto databases = GetDatabases(context);
-	for (auto &db_ref : databases) {
-		auto &db = db_ref.get();
-		if (db.IsSystem()) {
-			continue;
-		}
-		auto &catalog = Catalog::GetCatalog(db);
-		if (catalog.InMemory()) {
-			continue;
-		}
-		auto db_path = catalog.GetDBPath();
-		if (StringUtil::CIEquals(path, db_path)) {
-			return &db;
-		}
+
+	if (path.empty() || path == DConstants::IN_MEMORY_PATH) {
+		return nullptr;
 	}
+
+	lock_guard<mutex> write_lock(db_paths_lock);
+	auto db_it = db_paths.find(path);
+	if (db_it != db_paths.end()) {
+		return GetDatabase(context, db_it->second);
+	}
+
 	return nullptr;
 }
 
