@@ -114,6 +114,7 @@ class TestArrowOffsets(object):
         ).fetchall()
         assert res == [(expected, expected)]
 
+    # NOTE: there is sadly no way to create a 'interval[months]' (tiM) type from pyarrow
     @pytest.mark.parametrize(
         ["constructor", "expected", "converter"],
         [
