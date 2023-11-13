@@ -289,7 +289,8 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::DATE:
 		return Value::DATE(Date::FromDate(Date::DATE_MAX_YEAR, Date::DATE_MAX_MONTH, Date::DATE_MAX_DAY));
 	case LogicalTypeId::TIME:
-		return Value::TIME(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1));
+		//	24:00:00 according to PG
+		return Value::TIME(dtime_t(Interval::MICROS_PER_DAY));
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIMESTAMP_MS:
