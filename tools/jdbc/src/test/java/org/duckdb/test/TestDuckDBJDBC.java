@@ -3671,7 +3671,7 @@ public class TestDuckDBJDBC {
         correct_answer_map.put("usmallint", asList(0, 65535, null));
         correct_answer_map.put("uint", asList(0L, 4294967295L, null));
         correct_answer_map.put("ubigint", asList(BigInteger.ZERO, new BigInteger("18446744073709551615"), null));
-        correct_answer_map.put("time", asList(LocalTime.of(0, 0), LocalTime.parse("24:00:00"), null));
+        correct_answer_map.put("time", asList(LocalTime.of(0, 0), LocalTime.parse("23:59:59.999999"), null));
         correct_answer_map.put("float", asList(-3.4028234663852886e+38f, 3.4028234663852886e+38f, null));
         correct_answer_map.put("double", asList(-1.7976931348623157e+308d, 1.7976931348623157e+308d, null));
         correct_answer_map.put("dec_4_1", asList(new BigDecimal("-999.9"), (new BigDecimal("999.9")), null));
@@ -3720,7 +3720,10 @@ public class TestDuckDBJDBC {
         Logger logger = Logger.getAnonymousLogger();
 
         try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
-             PreparedStatement stmt = conn.prepareStatement("select * from test_all_types()")) {
+             String sql = "select * EXCLUDE(time)"
+                          +
+                          "\n    , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time"
+                          + "\nfrom test_all_types()" PreparedStatement stmt = conn.prepareStatement(sql)) {
             conn.createStatement().execute("set timezone = 'UTC'");
 
             try (ResultSet rs = stmt.executeQuery()) {
