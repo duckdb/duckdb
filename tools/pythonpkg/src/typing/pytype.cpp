@@ -199,10 +199,22 @@ static bool IsMapType(const py::tuple &args) {
 	return true;
 }
 
-static LogicalType FromUnionType(const py::object &obj) {
+static py::tuple FilterNones(const py::tuple &args) {
+	py::list result;
+
+	for (const auto &arg : args) {
+		py::object object = py::reinterpret_borrow<py::object>(arg);
+		if (object.is(py::none().get_type())) {
+			continue;
+		}
+		result.append(object);
+	}
+	return py::tuple(result);
+}
+
+static LogicalType FromUnionTypeInternal(const py::tuple &args) {
 	idx_t index = 1;
 	child_list_t<LogicalType> members;
-	py::tuple args = obj.attr("__args__");
 
 	for (const auto &arg : args) {
 		auto name = StringUtil::Format("u%d", index++);
@@ -211,6 +223,19 @@ static LogicalType FromUnionType(const py::object &obj) {
 	}
 
 	return LogicalType::UNION(std::move(members));
+}
+
+static LogicalType FromUnionType(const py::object &obj) {
+	py::tuple args = obj.attr("__args__");
+
+	// Optional inserts NoneType into the Union
+	// all types are nullable in DuckDB so we just filter the Nones
+	auto filtered_args = FilterNones(args);
+	if (filtered_args.size() == 1) {
+		// If only a single type is left, dont construct a UNION
+		return FromObject(filtered_args[0]);
+	}
+	return FromUnionTypeInternal(filtered_args);
 };
 
 static LogicalType FromGenericAlias(const py::object &obj) {

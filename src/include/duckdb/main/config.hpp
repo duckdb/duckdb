@@ -173,6 +173,10 @@ struct DBConfigOptions {
 	static bool debug_print_bindings;
 	//! The peak allocation threshold at which to flush the allocator after completing a task (1 << 27, ~128MB)
 	idx_t allocator_flush_threshold = 134217728;
+	//! DuckDB API surface
+	string duckdb_api;
+	//! Metadata from DuckDB callers
+	string custom_user_agent;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -259,6 +263,7 @@ public:
 
 	OrderType ResolveOrder(OrderType order_type) const;
 	OrderByNullType ResolveNullOrder(OrderType order_type, OrderByNullType null_type) const;
+	const std::string UserAgent() const;
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;

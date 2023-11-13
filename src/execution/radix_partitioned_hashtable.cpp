@@ -347,7 +347,7 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	}
 
 	// We can go external when there is only one active thread, but we shouldn't repartition here
-	if (gstate.count_before_combining < 2) {
+	if (gstate.active_threads < 2) {
 		return false;
 	}
 
