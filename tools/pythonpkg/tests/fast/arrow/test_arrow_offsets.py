@@ -127,7 +127,7 @@ class TestArrowOffsets(object):
         ).fetchall()
         assert res == [(expected, expected)]
 
-    def test_struct_of_list_of_enum(self, duckdb_cursor):
+    def test_struct_of_enum(self, duckdb_cursor):
         enum_type = pa.dictionary(pa.int64(), pa.utf8())
 
         tuples = ['red' for i in range(MAGIC_ARRAY_SIZE)]
