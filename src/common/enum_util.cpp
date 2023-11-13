@@ -3560,6 +3560,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "JOIN_ORDER";
 	case OptimizerType::DELIMINATOR:
 		return "DELIMINATOR";
+	case OptimizerType::OPERATION_CONVERTER:
+		return "OPERATION_CONVERTER";
 	case OptimizerType::UNNEST_REWRITER:
 		return "UNNEST_REWRITER";
 	case OptimizerType::UNUSED_COLUMNS:
@@ -3612,6 +3614,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "DELIMINATOR")) {
 		return OptimizerType::DELIMINATOR;
+	}
+	if (StringUtil::Equals(value, "OPERATION_CONVERTER")) {
+		return OptimizerType::OPERATION_CONVERTER;
 	}
 	if (StringUtil::Equals(value, "UNNEST_REWRITER")) {
 		return OptimizerType::UNNEST_REWRITER;
