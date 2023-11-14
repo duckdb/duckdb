@@ -444,6 +444,14 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context,
 	// get the lambda expression and put it in the bind info
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	auto lambda_expr = std::move(bound_lambda_expr.lambda_expr);
+
+	// move (almost all of this stuff) into the listreduce special bind, then
+	// try to wrap lambda_expr in a cast to the list child type
+	// 1. get list child type
+	// 2. add cast
+	// 3. if cast not possible, throw binder exception
+	// 4. add tests for the exception
+
 	return make_uniq<ListLambdaBindData>(bound_function.return_type, std::move(lambda_expr), has_index);
 }
 
@@ -453,6 +461,64 @@ void LambdaFunctions::ListTransformFunction(DataChunk &args, ExpressionState &st
 
 void LambdaFunctions::ListFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	ExecuteLambda<ListFilterFunctor>(args, state, result);
+}
+
+static void ExecuteReduce(idx_t loops, std::vector<idx_t> &active_rows, const list_entry_t *list_entries, Vector &result,
+						  Vector &left_slice, Vector &child_vector, ClientContext &context, const Expression &lambda_expr, const bool has_index, DataChunk &lambda_chunk) {
+	SelectionVector right_sel(active_rows.size());
+	SelectionVector left_sel(active_rows.size());
+
+	idx_t old_count = 0;
+	idx_t new_count = 0;
+
+	auto it = active_rows.begin();
+	while (it != active_rows.end()) {
+		if (list_entries[*it].length > loops + 1) {
+			right_sel.set_index(new_count, list_entries[*it].offset + loops + 1);
+			left_sel.set_index(new_count, old_count);
+
+			new_count++;
+			it++;
+		} else {
+			result.SetValue(*it, left_slice.GetValue(old_count));
+			active_rows.erase(it);
+		}
+		old_count++;
+	}
+
+	if (new_count == 0) {
+		return;
+	}
+
+	// Execute the lambda function
+	Vector index_vector(Value::BIGINT(loops + 1));
+
+	left_slice.Slice(left_slice, left_sel, new_count);
+	Vector right_slice = Vector(child_vector, right_sel, new_count);
+
+	unique_ptr<ExpressionExecutor> expr_executor = make_uniq<ExpressionExecutor>(context, lambda_expr);
+
+	vector<LogicalType> input_types;
+	if (has_index) {
+		input_types.push_back(LogicalType::BIGINT);
+	}
+	input_types.push_back(left_slice.GetType());
+	input_types.push_back(right_slice.GetType());
+
+	DataChunk input_chunk;
+	input_chunk.InitializeEmpty(input_types);
+	input_chunk.SetCardinality(new_count);
+
+	idx_t slice_offset = has_index ? 1 : 0;
+	if (has_index) {
+		input_chunk.data[0].Reference(index_vector);
+	}
+	input_chunk.data[slice_offset].Reference(left_slice);
+	input_chunk.data[slice_offset + 1].Reference(right_slice);
+
+	lambda_chunk.SetCardinality(new_count);
+
+	expr_executor->Execute(input_chunk, lambda_chunk);
 }
 
 void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -509,86 +575,27 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 		old_count++;
 	}
 
-	Vector left_slice = Vector(child_vector, left_vector, row_count);
-
 	// get the lambda column data for all other input vectors
 	auto column_infos = GetColumnInfo(args, row_count);
 	auto inconstant_column_infos = GetInconstantColumnInfo(column_infos);
 
-	Vector index_vector(LogicalType::BIGINT);
-	if (bind_info.has_index) {
-		it = active_rows.begin();
-		while (it != active_rows.end()) {
-			for (idx_t i = 0; i < list_entries[*it].length; i++) {
-				index_vector.SetValue(i + list_entries[*it].offset, Value::BIGINT(i + 1));
-			}
-			it++;
-		}
-	}
+	Vector init_slice = Vector(child_vector, left_vector, row_count);
+	DataChunk lambda_chunk;
+	lambda_chunk.Initialize(Allocator::DefaultAllocator(), {lambda_expr->return_type});
+	ExecuteReduce(0, active_rows, list_entries, result, init_slice, child_vector, state.GetContext(), *lambda_expr, bind_info.has_index, lambda_chunk);
 
-	idx_t loops = 0;
+	Vector left_slice(lambda_chunk.data[0].GetType());
+	left_slice.Reference(lambda_chunk.data[0]);
+
+	idx_t loops = 1;
 	// Execute reduce until all rows are finished
 	while (!active_rows.empty()) {
-		SelectionVector right_sel(active_rows.size());
-		SelectionVector left_sel(active_rows.size());
+		ExecuteReduce(loops, active_rows, list_entries, result, left_slice, child_vector, state.GetContext(), *lambda_expr, bind_info.has_index, lambda_chunk);
 
-		old_count = 0;
-		new_count = 0;
-
-		it = active_rows.begin();
-		while (it != active_rows.end()) {
-			if (list_entries[*it].length > loops + 1) {
-				right_sel.set_index(new_count, list_entries[*it].offset + loops + 1);
-				left_sel.set_index(new_count, old_count);
-
-				new_count++;
-				it++;
-			} else {
-				result.SetValue(*it, left_slice.GetValue(old_count));
-				active_rows.erase(it);
-			}
-			old_count++;
-		}
-
-		if (new_count == 0) {
+		if (active_rows.empty()) {
 			break;
 		}
-
-		// Execute the lambda function
-		if(bind_info.has_index) {
-			index_vector.Slice(index_vector, left_sel, new_count);
-		}
-
-		left_slice.Slice(left_slice, left_sel, new_count);
-		Vector right_slice = Vector(child_vector, right_sel, new_count);
-
-		unique_ptr<ExpressionExecutor> expr_executor = make_uniq<ExpressionExecutor>(state.GetContext(), *lambda_expr);
-
-		vector<LogicalType> input_types;
-		if (bind_info.has_index) {
-			input_types.push_back(LogicalType::BIGINT);
-		}
-		input_types.push_back(left_slice.GetType());
-		input_types.push_back(right_slice.GetType());
-
-		DataChunk input_chunk;
-		input_chunk.InitializeEmpty(input_types);
-		input_chunk.SetCardinality(new_count);
-
-		idx_t slice_offset = bind_info.has_index ? 1 : 0;
-		if (bind_info.has_index) {
-			input_chunk.data[0].Reference(index_vector);
-		}
-		input_chunk.data[slice_offset].Reference(left_slice);
-		input_chunk.data[slice_offset + 1].Reference(right_slice);
-
-		DataChunk lambda_chunk;
-		lambda_chunk.Initialize(Allocator::DefaultAllocator(), {lambda_expr->return_type});
-		lambda_chunk.SetCardinality(new_count);
-
-		expr_executor->Execute(input_chunk, lambda_chunk);
-
-		left_slice.Reference(lambda_chunk.data[slice_offset]);
+		left_slice.Reference(lambda_chunk.data[0]);
 		loops++;
 	}
 
