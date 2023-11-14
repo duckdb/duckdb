@@ -1,0 +1,70 @@
+# name: test/sql/attach/attach_filepath_roundtrip.test
+# description: Test file path roundtripping and concurrency
+# group: [attach]
+
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+# roundtrip
+
+statement ok
+ATTACH '__TEST_DIR__/db1.db';
+
+statement ok
+DETACH db1;
+
+statement ok
+ATTACH '__TEST_DIR__/db1.db';
+
+# multiple connections
+
+statement ok con1
+START TRANSACTION;
+
+statement ok con2
+START TRANSACTION;
+
+# attach files in con1
+statement ok con1
+ATTACH 'con1.db';
+
+statement ok con1
+ATTACH 'con1_commit.db';
+
+# can't attach con1.db file in con2
+statement error con2
+ATTACH 'con1.db';
+----
+already attached
+
+statement ok con1
+DETACH con1;
+
+# now the file handle is available, we still can't attach
+
+statement error con2
+ATTACH 'con1.db';
+----
+write-write conflict
+
+statement ok con1
+COMMIT;
+
+statement ok con2
+ROLLBACK
+
+statement ok con2
+ATTACH 'con1.db';
+
+statement error con1
+ATTACH 'con1.db';
+----
+already attached
+
+statement error con2
+ATTACH 'con1_commit.db';
+----
+already attached
+

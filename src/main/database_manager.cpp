@@ -62,11 +62,18 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 		                      name);
 	}
 
+	// get the database to erase the file path
+	auto db = GetDatabase(context, name);
+	auto path = db->GetStorageManager().GetDBPath();
+
 	if (!databases->DropEntry(context, name, false, true)) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
 		}
 	}
+
+	// erase the path
+	EraseDbPath(path);
 }
 
 void DatabaseManager::InsertDbPath(const string &path, const string &name) {
@@ -77,7 +84,9 @@ void DatabaseManager::InsertDbPath(const string &path, const string &name) {
 
 		// ensure that we did not already attach a database with the same path
 		if (db_paths.find(path) != db_paths.end()) {
-			throw BinderException("Database \"%s\" is already attached with path \"%s\"", name, path);
+			throw BinderException("Unique file handle conflict: Database \"%s\" is already attached with path \"%s\", "
+			                      "possibly by another transaction",
+			                      name, path);
 		}
 
 		db_paths.insert(make_pair(path, name));
@@ -86,7 +95,10 @@ void DatabaseManager::InsertDbPath(const string &path, const string &name) {
 
 void DatabaseManager::EraseDbPath(const string &path) {
 	lock_guard<mutex> write_lock(db_paths_lock);
-	db_paths.erase(db_paths.find(path));
+	auto path_it = db_paths.find(path);
+	if (path_it != db_paths.end()) {
+		db_paths.erase(path_it);
+	}
 }
 
 optional_ptr<AttachedDatabase> DatabaseManager::GetDatabaseFromPath(ClientContext &context, const string &path) {
