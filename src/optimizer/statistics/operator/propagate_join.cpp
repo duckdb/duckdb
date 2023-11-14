@@ -117,11 +117,6 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 						*node_ptr = std::move(cross_product);
 						return;
 					}
-					case JoinType::RIGHT_ANTI:
-					case JoinType::LEFT_ANTI:
-						// anti join on true: empty result
-						ReplaceWithEmptyResult(*node_ptr);
-						return;
 					default:
 						// we don't handle mark/single join here yet
 						break;
