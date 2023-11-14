@@ -1555,8 +1555,8 @@ bool TryCastToChar::Operation(string_t input, string_t &result, Vector &result_v
 
 	auto padded_result =
 	    StringVector::EmptyString(result_vector, result.GetSize() + (char_type_width - substring_length));
-	memcpy(padded_result.GetDataWriteable(), result.GetData(), result.GetSize());
 	auto padded_data = padded_result.GetDataWriteable();
+	memcpy(padded_data, result.GetData(), result.GetSize());
 	for (idx_t i = result.GetSize(); i < padded_result.GetSize(); i++) {
 		padded_data[i] = ' ';
 	}
