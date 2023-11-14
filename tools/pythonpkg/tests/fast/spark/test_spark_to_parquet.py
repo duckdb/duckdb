@@ -5,10 +5,6 @@ import os
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from duckdb.experimental.spark.sql import SparkSession as session
-from duckdb import connect
-
-
 @pytest.fixture
 def df(spark):
     simpleData = (
