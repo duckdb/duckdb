@@ -73,6 +73,21 @@ struct BitStringLenOperator {
 	}
 };
 
+// char returns the amount of characters in the string without considering trailing spaces
+struct CharLenOperator {
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static idx_t Operation(string_t input, ValidityMask &mask, idx_t idx, void *dataptr) {
+		D_ASSERT(mask.RowIsValid(idx)); // TODO?
+		auto length = *reinterpret_cast<idx_t *>(dataptr);
+		D_ASSERT(input.GetSize() == length);
+		auto string_data = input.GetDataUnsafe();
+		while (length > 0 && string_data[length - 1] == ' ') {
+			length--;
+		}
+		return length;
+	}
+};
+
 static unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
@@ -93,6 +108,25 @@ static unique_ptr<FunctionData> ListLengthBind(ClientContext &context, ScalarFun
 	return nullptr;
 }
 
+static void CharLength(DataChunk &input, ExpressionState &state, Vector &result) {
+	D_ASSERT(input.ColumnCount() == 1);
+	D_ASSERT(input.GetTypes()[0].id() == LogicalTypeId::CHAR);
+	D_ASSERT(result.GetType() == LogicalType::BIGINT);
+	auto width = StringType::GetWidth(input.data[0].GetType());
+	return UnaryExecutor::GenericExecute<string_t, int64_t, CharLenOperator>(input.data[0], result, input.size(),
+	                                                                         &width);
+}
+
+static unique_ptr<FunctionData> CharLengthBind(ClientContext &context, ScalarFunction &bound_function,
+                                               vector<unique_ptr<Expression>> &arguments) {
+	auto &type = arguments[0]->return_type;
+	if (type.id() != LogicalTypeId::CHAR) {
+		throw ParameterNotResolvedException();
+	}
+	bound_function.arguments[0] = type;
+	return nullptr;
+}
+
 void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction array_length_unary =
 	    ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT,
@@ -103,6 +137,7 @@ void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 	                                  nullptr, LengthPropagateStats));
 	length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
 	                                  ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>));
+	length.AddFunction(ScalarFunction({LogicalType::CHAR(1)}, LogicalType::BIGINT, CharLength, CharLengthBind));
 	length.AddFunction(array_length_unary);
 	set.AddFunction(length);
 	length.name = "len";

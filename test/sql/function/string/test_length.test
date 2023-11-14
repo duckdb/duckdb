@@ -30,3 +30,7 @@ NULL
 7
 7
 
+query I
+select length(42)
+----
+2

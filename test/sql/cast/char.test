@@ -36,3 +36,52 @@ select 'asdf'::CHAR(0)
 
 statement error
 select 'asdf'::CHAR(-1)
+
+
+# TODO implement a LENGTH for CHAR that ignores the trailing spaces
+
+
+query I
+select LENGTH('asdf'::CHAR(4))
+----
+4
+
+query I
+select LENGTH('asdf'::CHAR(2))
+----
+2
+
+query I
+select LENGTH('asdf'::CHAR(10))
+----
+4
+
+query I
+select LENGTH('as f'::CHAR(3))
+----
+2
+
+
+query I
+select LENGTH('    '::CHAR(10))
+----
+0
+
+query I
+select LENGTH(''::CHAR(10))
+----
+0
+
+query I
+select LENGTH(NULL::CHAR(10))
+----
+NULL
+
+query I
+select LENGTH(a::CHAR(4)) FROM (VALUES ('asdfasdf'), ('asdf'), ('as'), (''), (NULL)) v(a)
+----
+4
+4
+2
+0
+NULL
