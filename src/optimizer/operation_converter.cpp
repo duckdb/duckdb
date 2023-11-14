@@ -6,6 +6,10 @@
 
 namespace duckdb {
 
+OperationConverter::OperationConverter(LogicalOperator &root) : root(root) {
+	root.ResolveOperatorTypes();
+}
+
 void OperationConverter::Optimize(unique_ptr<LogicalOperator> &op) {
 	for (auto &child : op->children) {
 		Optimize(child);
@@ -18,9 +22,7 @@ void OperationConverter::Optimize(unique_ptr<LogicalOperator> &op) {
 		auto left_bindings = left->GetColumnBindings();
 		auto right_bindings = right->GetColumnBindings();
 		D_ASSERT(left_bindings.size() == right_bindings.size());
-//		if (left->types.size() != left_bindings.size()) {
-//			auto cool = "a";
-//		}
+
 		D_ASSERT(left->types.size() == left_bindings.size());
 		D_ASSERT(right->types.size() == right_bindings.size());
 		vector<JoinCondition> conditions;

@@ -34,7 +34,7 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		auto whatever = 'sdfgs';
+		types = prepared->types;
 		// already resolved
 	}
 	vector<ColumnBinding> GetColumnBindings() override {
