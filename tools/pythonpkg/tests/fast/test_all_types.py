@@ -110,7 +110,7 @@ class TestAllTypes(object):
             'timestamptz_array': "[], ['1970-01-01 00:00:00Z'::TIMESTAMPTZ, NULL, '0001-01-01 00:00:00Z'::TIMESTAMPTZ, '9999-12-31 23:59:59.999999Z'::TIMESTAMPTZ,], [NULL::TIMESTAMPTZ,]",
         }
         adjusted_values = {
-            'time': "CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time",
+            'time': """CASE WHEN "time" = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE "time" END AS "time" """,
         }
         min_datetime = datetime.datetime.min
         min_datetime_with_utc = min_datetime.replace(tzinfo=pytz.UTC)
@@ -219,7 +219,7 @@ class TestAllTypes(object):
         if cur_type in replacement_values:
             result = conn.execute("select " + replacement_values[cur_type]).fetchall()
         elif cur_type in adjusted_values:
-            result = conn.execute(f'select "{adjusted_values[cur_type]}" from test_all_types()').df()
+            result = conn.execute(f'select {adjusted_values[cur_type]} from test_all_types()').df()
         else:
             result = conn.execute(f'select "{cur_type}" from test_all_types()').fetchall()
         correct_result = correct_answer_map[cur_type]
@@ -514,14 +514,14 @@ class TestAllTypes(object):
         }
 
         adjusted_values = {
-            'time': "CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time",
+            'time': """CASE WHEN "time" = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE "time" END AS "time" """,
         }
         conn = duckdb.connect()
         conn.execute("SET timezone = UTC")
         if cur_type in replacement_values:
             dataframe = conn.execute("select " + replacement_values[cur_type]).df()
         elif cur_type in adjusted_values:
-            dataframe = conn.execute(f'select "{adjusted_values[cur_type]}" from test_all_types()').df()
+            dataframe = conn.execute(f'select {adjusted_values[cur_type]} from test_all_types()').df()
         else:
             dataframe = conn.execute(f'select "{cur_type}" from test_all_types()').df()
         print(cur_type)
