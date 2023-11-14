@@ -805,9 +805,9 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 	}
 	auto offset_type = arrow_type.GetDuckType();
 	//! Get Pointer to Indices of Dictionary
-	// FIXME: not sure if this should use parent offset or not, I assume it doesn't for now
-	auto indices = ArrowBufferData<data_t>(array, 1) +
-	               GetTypeIdSize(offset_type.InternalType()) * GetEffectiveOffset(array, 0, scan_state, nested_offset);
+	auto indices =
+	    ArrowBufferData<data_t>(array, 1) +
+	    GetTypeIdSize(offset_type.InternalType()) * GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
 	if (array.null_count > 0) {
 		ValidityMask indices_validity;
 		GetValidityMask(indices_validity, array, scan_state, size);
