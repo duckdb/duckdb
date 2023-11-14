@@ -20,7 +20,7 @@ class DataFrameWriter:
         relation = self.dataframe.relation
         relation.create(table_name)
 
-    def parquet(self, path: str, mode: Optional[str] = None, partitionBy: Union[str, List[str], None] = None, compression: Optional[str] = None)  -> None:
+    def parquet(self, path: str, mode: Optional[str] = None, partitionBy: Union[str, List[str], None] = None, compression: Optional[str] = None) -> None:
         relation = self.dataframe.relation
         if mode:
             raise NotImplementedError
@@ -29,7 +29,7 @@ class DataFrameWriter:
 
         relation.write_parquet(path, compression=compression)
     
-    def csv(self, path, mode=None, compression=None, sep=None, quote=None, escape=None,
+    def csv(self, path: str, mode: Optional[str] = None, compression=None, sep=None, quote=None, escape=None,
             header=None, nullValue=None, escapeQuotes=None, quoteAll=None, dateFormat=None,
             timestampFormat=None, ignoreLeadingWhiteSpace=None, ignoreTrailingWhiteSpace=None,
             charToEscapeQuoteEscaping=None, encoding=None, emptyValue=None, lineSep=None):
