@@ -75,22 +75,22 @@ class TestSparkToCSV(object):
         pandas_df = pandas.DataFrame({'a': [5, None, 23, 2], 'b': [45, 234, 234, 2]})
 
         spark_session = session.builder.getOrCreate()
-        df = spark_session.createDataFrame(pandas_df)        
+        df = spark_session.createDataFrame(pandas_df)
 
         df.write.csv(temp_file_name, header=True)
 
         csv_rel = spark_session.read.csv(temp_file_name, header=True)
         assert df.collect() == csv_rel.collect()
-    
+
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_to_csv_quotechar(self, pandas):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
-        
+
         pandas_df = pandas.DataFrame({'a': ["\'a,b,c\'", None, "hello", "bye"], 'b': [45, 234, 234, 2]})
-        
+
         spark_session = session.builder.getOrCreate()
-        df = spark_session.createDataFrame(pandas_df)        
-        
+        df = spark_session.createDataFrame(pandas_df)
+
         df.write.csv(temp_file_name, quote='\'', sep=',', header=False)
 
         csv_rel = spark_session.read.csv(temp_file_name, sep=',', quote='\'')
@@ -99,15 +99,17 @@ class TestSparkToCSV(object):
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_to_csv_escapechar(self, pandas):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
-        pandas_df = pandas.DataFrame(            {
+        pandas_df = pandas.DataFrame(
+            {
                 "c_bool": [True, False],
                 "c_float": [1.0, 3.2],
                 "c_int": [42, None],
                 "c_string": ["a", "b,c"],
-            })
-        
+            }
+        )
+
         spark_session = session.builder.getOrCreate()
-        df = spark_session.createDataFrame(pandas_df)   
+        df = spark_session.createDataFrame(pandas_df)
 
         df.write.csv(temp_file_name, header=True, quote='"', escape='!')
         # ask a question about this - is header = False the default behaviour in Spark
@@ -120,7 +122,7 @@ class TestSparkToCSV(object):
         pandas_df = pandas.DataFrame(tm.getTimeSeriesData())
         dt_index = pandas_df.index
         pandas_df = pandas.DataFrame({"A": dt_index, "B": dt_index.shift(1)}, index=dt_index)
-        
+
         spark_session = session.builder.getOrCreate()
         df = spark_session.createDataFrame(pandas_df)
 
@@ -130,29 +132,27 @@ class TestSparkToCSV(object):
 
         assert df.collect() == csv_rel.collect()
 
-
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_to_csv_timestamp_format(self, pandas):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
         data = [datetime.time(hour=23, minute=1, second=34, microsecond=234345)]
         pandas_df = pandas.DataFrame({'0': pandas.Series(data=data, dtype='object')})
-        
+
         spark_session = session.builder.getOrCreate()
         df = spark_session.createDataFrame(pandas_df)
-        
+
         df.write.csv(temp_file_name, timestampFormat='%m/%d/%Y', header=False)
 
         csv_rel = spark_session.read.csv(temp_file_name, timestampFormat='%m/%d/%Y')
 
         assert df.collect() == csv_rel.collect()
 
-
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_to_csv_quoting_off(self, pandas):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
         pandas_df = pandas.DataFrame({'a': ['string1', 'string2', 'string3']})
         spark_session = session.builder.getOrCreate()
-        
+
         df = spark_session.createDataFrame(pandas_df)
         df.write.csv(temp_file_name, quoteAll=None, header=False)
 
@@ -209,7 +209,7 @@ class TestSparkToCSV(object):
         spark_session = session.builder.getOrCreate()
         df = spark_session.createDataFrame(pandas_df)
         df.write.csv(temp_file_name, compression="gzip", header=False)
-        
+
         # slightly convoluted - pyspark .read.csv does not take a compression argument
         csv_rel = spark_session.createDataFrame(read_csv(temp_file_name, compression="gzip").df())
         assert df.collect() == csv_rel.collect()
