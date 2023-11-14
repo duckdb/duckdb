@@ -307,7 +307,7 @@ string CSVReaderOptions::ToString() const {
 	auto &skip_rows = dialect_options.skip_rows;
 
 	auto &header = dialect_options.header;
-	string error = "  file=" + file_path + "\n ";
+	string error = "  file=" + file_path + "\n  ";
 	// Let's first print options that can either be set by the user or by the sniffer
 	// delimiter
 	error += FormatOptionLine("delimiter", delimiter);

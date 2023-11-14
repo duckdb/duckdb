@@ -54,37 +54,32 @@ void MatchAndReplace(CSVOption<T> &original, CSVOption<T> &sniffed, string name)
 		original.Set(sniffed.GetValue(), false);
 	}
 }
-bool MatchAndRepaceUserSetVariables(CSVReaderOptions &original, CSVReaderOptions &sniffed) {
-	MatchAndReplace(original.dialect_options.header, sniffed.dialect_options.header, "Header");
-	MatchAndReplace(original.dialect_options.new_line, sniffed.dialect_options.new_line, "New Line");
-	MatchAndReplace(original.dialect_options.skip_rows, sniffed.dialect_options.skip_rows, "Skip Rows");
+void MatchAndRepaceUserSetVariables(CSVReaderOptions &original, DialectOptions &sniffed) {
+	MatchAndReplace(original.dialect_options.header, sniffed.header, "Header");
+	MatchAndReplace(original.dialect_options.new_line, sniffed.new_line, "New Line");
+	MatchAndReplace(original.dialect_options.skip_rows, sniffed.skip_rows, "Skip Rows");
 	MatchAndReplace(original.dialect_options.state_machine_options.delimiter,
-	                sniffed.dialect_options.state_machine_options.delimiter, "Delimiter");
+	                sniffed.state_machine_options.delimiter, "Delimiter");
 	MatchAndReplace(original.dialect_options.state_machine_options.quote,
-	                sniffed.dialect_options.state_machine_options.quote, "Quote");
+	                sniffed.state_machine_options.quote, "Quote");
 	MatchAndReplace(original.dialect_options.state_machine_options.escape,
-	                sniffed.dialect_options.state_machine_options.escape, "Escape");
+	                sniffed.state_machine_options.escape, "Escape");
+	MatchAndReplace(original.dialect_options.skip_rows,
+	                sniffed.skip_rows, "Skip Rows");
+
+	//fixme: set date and timestamp and skiprows
 	//! The date format to use (if any is specified)
-	map<LogicalTypeId, CSVOption<StrpTimeFormat>> date_format = {{LogicalTypeId::DATE, {}},
-	                                                             {LogicalTypeId::TIMESTAMP, {}}};
+//	map<LogicalTypeId, CSVOption<StrpTimeFormat>> date_format = {{LogicalTypeId::DATE, {}},
+//	                                                             {LogicalTypeId::TIMESTAMP, {}}};
 }
 // Set the CSV Options in the reference
 void CSVSniffer::SetResultOptions() {
-	//	bool og_header = options.dialect_options.header;
-	//	options.dialect_options = best_candidate->dialect_options;
-	//	options.dialect_options.new_line.Set(best_candidate->dialect_options.new_line.GetValue(),false);
-	//	options.dialect_options.header.Set()
-	////	options.skip_rows_set = options.dialect_options.skip_rows > 0;
-	//	if (options.has_header) {
-	//		// If header was manually set, we ignore the sniffer findings
-	//		options.dialect_options.header = og_header;
-	//	}
-	//	options.has_header = true;
-	//	if (options.dialect_options.header.GetValue()) {
-	//		options.dialect_options.true_start = best_start_with_header;
-	//	} else {
-	//		options.dialect_options.true_start = best_start_without_header;
-	//	}
+	MatchAndRepaceUserSetVariables(options,best_candidate->dialect_options);
+	if (options.dialect_options.header.GetValue()) {
+		options.dialect_options.true_start = best_start_with_header;
+	} else {
+		options.dialect_options.true_start = best_start_without_header;
+	}
 }
 
 SnifferResult CSVSniffer::SniffCSV() {
