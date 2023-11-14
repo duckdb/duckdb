@@ -23,6 +23,8 @@
 #include "fmt/format.h"
 #include "duckdb/common/types/bit.hpp"
 
+#include "duckdb/function/scalar/string_functions.hpp"
+
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
@@ -1524,12 +1526,11 @@ bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_v
 }
 
 //===--------------------------------------------------------------------===//
-// Cast From CHAR
+// Cast From CHAR (NOP)
 //===--------------------------------------------------------------------===//
 template <>
 string_t CastFromChar::Operation(string_t input, Vector &vector) {
-	string_t result = StringVector::AddString(vector, input);
-	return result;
+	return StringVector::AddString(vector, input);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1538,15 +1539,29 @@ string_t CastFromChar::Operation(string_t input, Vector &vector) {
 template <>
 bool TryCastToChar::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
                               bool strict) {
-	auto width = StringType::GetWidth(result_vector.GetType());
-	D_ASSERT(width > 0);
-	result = StringVector::EmptyString(result_vector, width);
-	auto result_data = result.GetDataWriteable();
-	auto copy_bytes = MinValue(width, input.GetSize());
-	memcpy(result_data, input.GetData(), copy_bytes);
-	if (copy_bytes < width) {
-		memset(result_data + copy_bytes, ' ', width - copy_bytes);
+	auto char_type_width = StringType::GetWidth(result_vector.GetType());
+	if (char_type_width < 1) {
+		throw InternalException("Length for type char must be at least 1");
 	}
+	result = SubstringFun::SubstringUnicode(result_vector, input, 0, char_type_width + 1);
+
+	auto substring_length = LengthFun::Length<string_t, idx_t>(result);
+	D_ASSERT(substring_length <= char_type_width);
+	// string was longer than type width, we are done
+	if (substring_length == char_type_width) {
+		result.Finalize();
+		return true;
+	}
+
+	auto padded_result =
+	    StringVector::EmptyString(result_vector, result.GetSize() + (char_type_width - substring_length));
+	memcpy(padded_result.GetDataWriteable(), result.GetData(), result.GetSize());
+	auto padded_data = padded_result.GetDataWriteable();
+	for (idx_t i = result.GetSize(); i < padded_result.GetSize(); i++) {
+		padded_data[i] = ' ';
+	}
+	result = padded_result;
+
 	result.Finalize();
 	return true;
 }

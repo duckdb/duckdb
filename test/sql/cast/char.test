@@ -38,7 +38,7 @@ statement error
 select 'asdf'::CHAR(-1)
 
 
-# TODO implement a LENGTH for CHAR that ignores the trailing spaces
+# LENGTH for CHAR ignores trailing spaces
 
 
 query I
@@ -85,3 +85,33 @@ select LENGTH(a::CHAR(4)) FROM (VALUES ('asdfasdf'), ('asdf'), ('as'), (''), (NU
 2
 0
 NULL
+
+query I
+select '🦆🦆🦆🦆'::char(3);
+----
+🦆🦆🦆
+
+
+query I
+select '🦆🦆🦆🦆'::char(5);
+----
+🦆🦆🦆🦆 
+
+
+query I
+select '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆'::char(15);
+----
+🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆
+
+
+query I
+select '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆'::char(25);
+----
+🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆     
+
+
+query I
+select '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆'::char(20);
+----
+🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆
+
