@@ -20,8 +20,8 @@ def df(spark):
 
 
 class TestSparkToParquet(object):
-    def test_basic_to_parquet(self, df, spark):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+    def test_basic_to_parquet(self, df, spark, tmp_path):
+        temp_file_name = os.path.join(tmp_path, "temp_file.csv")
 
         df.write.parquet(temp_file_name)
 
@@ -29,8 +29,8 @@ class TestSparkToParquet(object):
 
         assert df.collect() == csv_rel.collect()
 
-    def test_compressed_to_parquet(self, df, spark):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+    def test_compressed_to_parquet(self, df, spark, tmp_path):
+        temp_file_name = os.path.join(tmp_path, "temp_file.csv")
 
         df.write.parquet(temp_file_name, compression="ZSTD")
 
