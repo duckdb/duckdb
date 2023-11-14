@@ -1,8 +1,10 @@
 #include "duckdb/optimizer/operation_converter.hpp"
-
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_delim_get.hpp"
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/planner/joinside.hpp"
 
 namespace duckdb {
 
