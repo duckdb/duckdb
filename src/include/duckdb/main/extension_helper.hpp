@@ -99,6 +99,8 @@ public:
 	static string AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
 	                                                const string &extension_name);
 
+	//! For tagged releases we use the tag, else we use the git commit hash
+	static const string GetVersionDirectoryName();
 private:
 	static void InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
 	                                     const string &local_path, const string &extension, bool force_install,
@@ -109,8 +111,6 @@ private:
 	                                       optional_ptr<const ClientConfig> client_config);
 	static bool TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension, ExtensionInitResult &result,
 	                           string &error, optional_ptr<const ClientConfig> client_config);
-	//! For tagged releases we use the tag, else we use the git commit hash
-	static const string GetVersionDirectoryName();
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
 	static bool IsRelease(const string &version_tag);

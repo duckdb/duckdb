@@ -70,7 +70,7 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 	auto &bind_data = data_p.bind_data->Cast<DuckDBSecretsBindData>();
 
 	auto &secret_manager = context.db->config.secret_manager;
-	auto &secrets = secret_manager->AllSecrets();
+	auto secrets = secret_manager->AllSecrets();
 
 	if (data.offset >= secrets.size()) {
 		// finished returning values

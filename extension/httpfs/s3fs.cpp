@@ -187,6 +187,7 @@ unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(FileOpener *ope
 		return nullptr;
 	}
 	auto &secret_manager = context->db->GetSecretManager();
+	auto &fs = FileSystem::GetFileSystem(*context);
 
 	auto secret_lookup = secret_manager.GetSecretByPath(path, "s3");
 	if (!secret_lookup.secret) {

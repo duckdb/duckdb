@@ -19,6 +19,7 @@ class CreateSecretFunction;
 struct CreateSecretInfo;
 struct CreateSecretInput;
 struct BoundStatement;
+class FileSystem;
 
 //! Deserialize Function
 typedef unique_ptr<BaseSecret> (*secret_deserializer_t)(Deserializer &deserializer, BaseSecret base_secret);
@@ -130,6 +131,7 @@ class DuckSecretManager : public SecretManager {
 	friend struct RegisteredSecret;
 
 public:
+	explicit DuckSecretManager(DatabaseInstance& instance);
 	virtual ~DuckSecretManager() override = default;
 
 	//! Deserialize the secret. Will look up the deserialized type, then call the deserialize for the registered type.
@@ -159,18 +161,40 @@ public:
 	DUCKDB_API virtual vector<RegisteredSecret> AllSecrets() override;
 
 private:
+	//! Main lock
+	mutex lock;
+
 	//! Get the registered type
 	SecretType LookupTypeInternal(const string &type);
 	CreateSecretFunction* LookupFunctionInternal(const string& type,const string& provider);
 
-	//! Main lock
-	mutex lock;
+	//! Write a secret to the secrets directory
+	void WriteSecretToFile(const BaseSecret& secret);
+	//! Stores all permanent secret files found in the loadable_permanent_secrets map for lazy loading
+	void PreloadPermanentSecrets();
+	//! Loads the lazily loaded secrets, will throw error when any of the secret functions is missing
+	void LoadPreloadedSecrets();
+	//! Load a specific secret by path
+	void LoadSecret(const string& path);
+	//! Load a secret from loadable_permanent_secrets by name
+	void LoadSecretFromPreloaded(const string& name);
+
+	//! Return secret directory
+	string GetSecretDirectory();
+
 	//! The currently registered secrets
 	vector<RegisteredSecret> registered_secrets;
 	//! The currently registered create secret functions
 	case_insensitive_map_t<CreateSecretFunctionSet> registered_functions;
 	//! The currently registered secret types
 	case_insensitive_map_t<SecretType> registered_types;
+
+	//! Because secrets may require specific extensions to be deserialized, permanent secrets are lazily loaded by
+	//! the secret manager. This stores the map of secret_name -> secret_file_path which can be loaded.
+	case_insensitive_map_t<string> loadable_permanent_secrets;
+
+	//! The secret manager requires access to the DatabaseInstance for the FileSystem
+	DatabaseInstance &db_instance;
 };
 
 //! The debug secret manager demonstrates how the Base Secret Manager can be extended

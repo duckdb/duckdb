@@ -43,7 +43,7 @@ static unique_ptr<FunctionData> DuckDBSecretsToFileBind(ClientContext &context, 
 
 static void DuckDBSecretsToFileFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &secret_manager = context.db->config.secret_manager;
-	auto &secrets = secret_manager->AllSecrets();
+	auto secrets = secret_manager->AllSecrets();
 	auto &bind_data = data_p.bind_data->Cast<DuckDBSecretsToFileBindData>();
 
 	auto file_writer = BufferedFileWriter(*context.db->config.file_system, bind_data.file);
