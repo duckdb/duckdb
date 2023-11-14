@@ -133,7 +133,6 @@ Config Attach(const idx_t file_count, const idx_t thread_count, string db_file_d
 	auto duration = duration_cast<std::chrono::milliseconds>(timer_stop - timer_start);
 
 	return Config(file_count, thread_count, duration.count());
-	;
 }
 
 TEST_CASE("Attach performance", "[attach][.]") {

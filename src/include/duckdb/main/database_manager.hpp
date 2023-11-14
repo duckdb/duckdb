@@ -46,8 +46,14 @@ public:
 	static const string &GetDefaultDatabase(ClientContext &context);
 	void SetDefaultDatabase(ClientContext &context, const string &new_value);
 
+	//! Returns a pointer to an attached database matching the path. If none exists, it returns nullptr
 	optional_ptr<AttachedDatabase> GetDatabaseFromPath(ClientContext &context, const string &path);
+	//! Scans the catalog set and adds each committed database entry, and each database entry of the current
+	//! transaction, to a vector holding these references.
 	vector<reference<AttachedDatabase>> GetDatabases(ClientContext &context);
+	//! Removes all databases from the catalog set. This is necessary for the database instance's destructor,
+	//! as the database manager has to be alive when destroying the catalog set objects.
+	void ResetDatabases();
 
 	transaction_t GetNewQueryNumber() {
 		return current_query_number++;
@@ -67,9 +73,6 @@ public:
 	}
 	case_insensitive_map_t<string> &GetDbPaths() {
 		return db_paths;
-	}
-	void ResetDatabases() {
-		databases.reset();
 	}
 
 private:

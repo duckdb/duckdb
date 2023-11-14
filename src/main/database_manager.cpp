@@ -107,6 +107,10 @@ vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext 
 	return result;
 }
 
+void DatabaseManager::ResetDatabases() {
+	databases.reset();
+}
+
 Catalog &DatabaseManager::GetSystemCatalog() {
 	D_ASSERT(system);
 	return system->GetCatalog();
