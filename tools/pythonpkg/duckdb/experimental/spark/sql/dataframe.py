@@ -10,7 +10,6 @@ from .type_utils import duckdb_to_spark_schema
 from .column import Column
 import duckdb
 from functools import reduce
-from __future__ import annotations
 
 if TYPE_CHECKING:
     from .session import SparkSession
