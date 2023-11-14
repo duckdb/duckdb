@@ -5,6 +5,7 @@ import os
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
+
 @pytest.fixture
 def df(spark):
     simpleData = (

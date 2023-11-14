@@ -26,17 +26,20 @@ def df(spark):
     dataframe = spark.createDataFrame(data=simpleData, schema=columns)
     yield dataframe
 
-@pytest.fixture(params = [NumpyPandas(), ArrowPandas()])
+
+@pytest.fixture(params=[NumpyPandas(), ArrowPandas()])
 def pandas_df_ints(request, spark):
     pandas = request.param
     dataframe = pandas.DataFrame({'a': [5, 3, 23, 2], 'b': [45, 234, 234, 2]})
     yield dataframe
 
-@pytest.fixture(params = [NumpyPandas(), ArrowPandas()])
+
+@pytest.fixture(params=[NumpyPandas(), ArrowPandas()])
 def pandas_df_strings(request, spark):
     pandas = request.param
     dataframe = pandas.DataFrame({'a': ['string1', 'string2', 'string3']})
     yield dataframe
+
 
 class TestSparkToCSV(object):
     def test_basic_to_csv(self, pandas_df_ints, spark, tmp_path):
