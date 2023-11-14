@@ -295,20 +295,53 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value) 
 	return true;
 }
 
+template <class T>
+string FormatOptionLine(string name, const CSVOption<T> option) {
+	return name + " = " + option.FormatValue() + " " + option.FormatSet() + "\n  ";
+}
 string CSVReaderOptions::ToString() const {
 	auto &delimiter = dialect_options.state_machine_options.delimiter;
 	auto &quote = dialect_options.state_machine_options.quote;
 	auto &escape = dialect_options.state_machine_options.escape;
+	auto &new_line = dialect_options.new_line;
+	auto &skip_rows = dialect_options.skip_rows;
+
 	auto &header = dialect_options.header;
-	return "  file=" + file_path + "\n  delimiter='" + delimiter.GetValue() +
-	       (delimiter.IsSetByUser() ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) + "\n  quote='" +
-	       quote.GetValue() + (quote.IsSetByUser() ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
-	       "\n  escape='" + escape.GetValue() +
-	       (escape.IsSetByUser() ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
-	       "\n  header=" + std::to_string(header.GetValue()) +
-	       (header.IsSetByUser() ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +
-	       "\n  sample_size=" + std::to_string(sample_size_chunks * STANDARD_VECTOR_SIZE) +
-	       "\n  ignore_errors=" + std::to_string(ignore_errors) + "\n  all_varchar=" + std::to_string(all_varchar);
+	string error = "  file=" + file_path + "\n ";
+	// Let's first print options that can either be set by the user or by the sniffer
+	// delimiter
+	error += FormatOptionLine("delimiter", delimiter);
+	// quote
+	error += FormatOptionLine("quote", quote);
+	// escape
+	error += FormatOptionLine("escape", escape);
+	// newline
+	error += FormatOptionLine("new_line", new_line);
+	// has_header
+	error += FormatOptionLine("header", header);
+	// skip_rows
+	error += FormatOptionLine("skip_rows", skip_rows);
+	// date format
+	if (dialect_options.has_format.at(LogicalType::DATE) &&
+	    dialect_options.date_format.find(LogicalType::DATE) != dialect_options.date_format.end()) {
+		error += FormatOptionLine("date_format", dialect_options.date_format.at(LogicalType::DATE));
+	}
+
+	// timestamp format
+	if (dialect_options.has_format.at(LogicalType::TIMESTAMP) &&
+	    dialect_options.date_format.find(LogicalType::TIMESTAMP) != dialect_options.date_format.end()) {
+		error += FormatOptionLine("timestamp_format", dialect_options.date_format.at(LogicalType::TIMESTAMP));
+	}
+	// Now we do options that can only be set by the user, that might hold some general significance
+	// null padding
+	error += "null_padding=" + std::to_string(null_padding) + "\n  ";
+	// sample_size
+	error += "sample_size=" + std::to_string(sample_size_chunks * STANDARD_VECTOR_SIZE) + "\n  ";
+	// ignore_errors
+	error += "ignore_errors=" + std::to_string(ignore_errors) + "\n  ";
+	// all_varchar
+	error += "all_varchar=" + std::to_string(all_varchar);
+	return error;
 }
 
 static Value StringVectorToValue(const vector<string> &vec) {

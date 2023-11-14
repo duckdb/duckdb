@@ -18,6 +18,15 @@
 
 namespace duckdb {
 
+enum class NewLineIdentifier : uint8_t {
+	SINGLE = 1,   // Either \r or \n
+	CARRY_ON = 2, // \r\n
+	MIX = 3,      // Hippie-Land, can't run it multithreaded
+	NOT_SET = 4
+};
+
+enum class ParallelMode { AUTOMATIC = 0, PARALLEL = 1, SINGLE_THREADED = 2 };
+
 //! Wrapper for CSV Options that can be manually set by the user
 //! It is important to make this difference for options that can be automatically sniffed AND manually set.
 template <typename T>
@@ -71,6 +80,19 @@ public:
 		return set_by_user;
 	}
 
+	//! Returns a formatted string with information regarding how this option was set
+	string FormatSet() const {
+		if (set_by_user) {
+			return "(Set By User)";
+		}
+		return "(Auto-Detected)";
+	}
+
+	//! Returns a formatted string with the actual value of this option
+	string FormatValue() const {
+		return FormatValueInternal(value);
+	}
+
 private:
 	//! If this option was manually set by the user
 	bool set_by_user = false;
@@ -83,16 +105,44 @@ private:
 	static CSVOption<T> Deserialize(Deserializer &deserializer) {
 		return {};
 	};
-};
 
-enum class NewLineIdentifier : uint8_t {
-	SINGLE = 1,   // Either \r or \n
-	CARRY_ON = 2, // \r\n
-	MIX = 3,      // Hippie-Land, can't run it multithreaded
-	NOT_SET = 4
-};
+	template <typename U>
+	std::string FormatValueInternal(const U &val) const {
+		throw InternalException("Type not accepted as CSV Option.");
+	}
 
-enum class ParallelMode { AUTOMATIC = 0, PARALLEL = 1, SINGLE_THREADED = 2 };
+	std::string FormatValueInternal(const std::string &val) const {
+		return val;
+	}
+
+	std::string FormatValueInternal(const idx_t &val) const {
+		return to_string(val);
+	}
+
+	std::string FormatValueInternal(const char &val) const {
+		string char_val;
+		char_val += val;
+		return char_val;
+	}
+
+	std::string FormatValueInternal(const NewLineIdentifier &val) const {
+		switch (val) {
+		case NewLineIdentifier::SINGLE:
+			return "\\n";
+		case NewLineIdentifier::CARRY_ON:
+			return "\\r\\n";
+		default:
+			throw InternalException("Invalid Newline Detected.");
+		}
+	}
+
+	std::string FormatValueInternal(const bool &val) const {
+		if (val) {
+			return "true";
+		}
+		return "false";
+	}
+};
 
 //! Struct that holds the configuration of a CSV State Machine
 //! Basically which char, quote and escape were used to generate it.

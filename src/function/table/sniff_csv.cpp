@@ -77,14 +77,7 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 }
 
 string NewLineIdentifierToString(NewLineIdentifier identifier) {
-	switch (identifier) {
-	case NewLineIdentifier::SINGLE:
-		return "\\n";
-	case NewLineIdentifier::CARRY_ON:
-		return "\\r\\n";
-	default:
-		throw InternalException("Invalid Newline Detected.");
-	}
+	return "";
 }
 
 string FormatOptions(char opt) {
