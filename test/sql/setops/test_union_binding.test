@@ -93,8 +93,17 @@ NULL
 4
 
 # if names are ambiguous, throw an error
-statement error
-SELECT 1, a FROM test UNION SELECT b AS a, 1 FROM test2 ORDER BY a;
+query II
+SELECT 1, a FROM test UNION SELECT b AS a, 1 FROM test2 ORDER BY a, 1;
+----
+1	NULL
+NULL	1
+1	1
+2	1
+3	1
+4	1
+1	2
+1	3
 
 # if expressions are ambiguous as well, throw an error
 statement error
@@ -133,9 +142,16 @@ NULL	NULL
 2	8
 1	9
 
-# ambiguous naming reference should fail
-statement error
+query II
 SELECT a, 10 - a AS b FROM test UNION SELECT b, b + 1 FROM test2 ORDER BY b;
+----
+NULL	NULL
+2	3
+3	4
+4	5
+3	7
+2	8
+1	9
 
 # and by constant references
 query I
