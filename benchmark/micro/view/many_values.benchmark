@@ -1,6 +1,6 @@
-# name: benchmark/micro/many_values.benchmark
+# name: benchmark/micro/view/many_values.benchmark
 # description: Summation over many statements in VALUES clause
-# group: [micro]
+# group: [view]
 
 name Many Values
 group micro

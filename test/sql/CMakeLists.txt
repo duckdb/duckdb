@@ -1,4 +1,3 @@
-add_subdirectory(attach)
 add_subdirectory(filter)
 add_subdirectory(function)
 add_subdirectory(index)
