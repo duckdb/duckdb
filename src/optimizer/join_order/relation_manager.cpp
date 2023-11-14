@@ -56,9 +56,6 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 		// Get the tables referenced in the non-reorderable relation and add them to the relation mapping
 		// This should all table references, even if there are nested non-reorderable joins.
 		unordered_set<idx_t> table_references;
-		if (op.type == LogicalOperatorType::LOGICAL_EXECUTE) {
-			auto stop_here = "stop here";
-		}
 		LogicalJoin::GetTableReferences(op, table_references);
 		D_ASSERT(table_references.size() > 0);
 		for (auto &reference : table_references) {
