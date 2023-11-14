@@ -163,17 +163,7 @@ class TestArrowOffsets(object):
         ).fetchall()
         assert res == expected_result(col1_null, col2_null, expected)
 
-    # FIXME: use this decorator once all cases are fixed
-    # @test_nulls()
-    @pytest.mark.parametrize(
-        ['col1_null', 'col2_null'],
-        [
-            # (False, True), #FIXME: We break an invariant if the struct is NULL and the child is a dictionary
-            (True, False),
-            # (True, True), ^ same as above
-            (False, False),
-        ],
-    )
+    @test_nulls()
     def test_struct_of_enum(self, duckdb_cursor, col1_null, col2_null):
         enum_type = pa.dictionary(pa.int64(), pa.utf8())
 

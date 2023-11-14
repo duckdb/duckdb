@@ -791,18 +791,26 @@ static void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, Logic
 	}
 }
 
+static bool CanContainNull(ArrowArray &array, ValidityMask *parent_mask) {
+	if (array.null_count > 0) {
+		return true;
+	}
+	if (!parent_mask) {
+		return false;
+	}
+	return !parent_mask->AllValid();
+}
+
 static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state,
                                           idx_t size, const ArrowType &arrow_type, int64_t nested_offset,
                                           ValidityMask *parent_mask, uint64_t parent_offset) {
-	if (parent_offset != 0) {
-		(void)array_state;
-	}
 	auto &scan_state = array_state.state;
+
+	const bool has_nulls = CanContainNull(array, parent_mask);
 	if (!array_state.HasDictionary()) {
 		//! We need to set the dictionary data for this column
 		auto base_vector = make_uniq<Vector>(vector.GetType(), array.dictionary->length);
-		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, 0, 0,
-		                array.null_count > 0);
+		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, 0, 0, has_nulls);
 		ColumnArrowToDuckDB(*base_vector, *array.dictionary, array_state, array.dictionary->length,
 		                    arrow_type.GetDictionary());
 		array_state.AddDictionary(std::move(base_vector));
@@ -814,9 +822,17 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 	    GetTypeIdSize(offset_type.InternalType()) * GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
 
 	SelectionVector sel;
-	if (array.null_count > 0) {
+	if (has_nulls) {
 		ValidityMask indices_validity;
 		GetValidityMask(indices_validity, array, scan_state, size, parent_offset);
+		if (parent_mask && !parent_mask->AllValid()) {
+			auto &struct_validity_mask = *parent_mask;
+			for (idx_t i = 0; i < size; i++) {
+				if (!struct_validity_mask.RowIsValid(i)) {
+					indices_validity.SetInvalid(i);
+				}
+			}
+		}
 		SetSelectionVector(sel, indices, offset_type, size, &indices_validity, array.dictionary->length);
 	} else {
 		SetSelectionVector(sel, indices, offset_type, size);
