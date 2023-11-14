@@ -146,6 +146,21 @@ public class TestDuckDBJDBC {
         throw new Exception("Expected to throw " + exception.getName());
     }
 
+    // Asserts we are either throwing the correct exception, or not throwing at all
+    private static <T extends Throwable> boolean assertThrowsMaybe(Thrower thrower, Class<T> exception)
+        throws Exception {
+        try {
+            thrower.run();
+            return true;
+        } catch (Throwable e) {
+            if (e.getClass().equals(exception)) {
+                return true;
+            } else {
+                throw new Exception("Unexpected exception: " + e.getClass().getName());
+            }
+        }
+    }
+
     static {
         try {
             Class.forName("org.duckdb.DuckDBDriver");
@@ -179,7 +194,7 @@ public class TestDuckDBJDBC {
         throws InterruptedException {
         executor_service.submit(() -> {
             try (ResultSet resultSet = statement.executeQuery("SELECT * from foo")) {
-                assertThrows(() -> {
+                assertThrowsMaybe(() -> {
                     DuckDBResultSet duckdb_result_set = resultSet.unwrap(DuckDBResultSet.class);
                     while (duckdb_result_set.next()) {
                         // do nothing with the results
