@@ -219,7 +219,7 @@ class TestAllTypes(object):
         if cur_type in replacement_values:
             result = conn.execute("select " + replacement_values[cur_type]).fetchall()
         elif cur_type in adjusted_values:
-            result = conn.execute(f'select {adjusted_values[cur_type]} from test_all_types()').df()
+            result = conn.execute(f'select {adjusted_values[cur_type]} from test_all_types()').fetchall()
         else:
             result = conn.execute(f'select "{cur_type}" from test_all_types()').fetchall()
         correct_result = correct_answer_map[cur_type]
