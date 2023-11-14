@@ -53,6 +53,7 @@ DatabaseInstance::DatabaseInstance() {
 }
 
 DatabaseInstance::~DatabaseInstance() {
+	GetDatabaseManager().ResetDatabases();
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {

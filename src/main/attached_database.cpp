@@ -3,6 +3,7 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/storage/storage_extension.hpp"
@@ -26,21 +27,27 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 	internal = true;
 }
 
+void AddDbPath(DatabaseInstance &db, const string &path, const string &name) {
+
+	if (!path.empty() && path != DConstants::IN_MEMORY_PATH) {
+		// lock the map
+		auto &db_manager = db.GetDatabaseManager();
+		lock_guard<mutex> write_lock(db_manager.GetDbPathsLock());
+
+		// ensure that we did not already attach a database with the same path
+		auto &db_paths = db_manager.GetDbPaths();
+		if (db_paths.find(path) != db_paths.end()) {
+			throw BinderException("Database \"%s\" is already attached with path \"%s\"", name, path);
+		}
+		db_paths.insert(make_pair(path, name));
+	}
+}
+
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, string name_p, string file_path_p,
                                    AccessMode access_mode)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
 
-	// ensure that we did not already attach a database with the same path
-	if (!file_path_p.empty() && file_path_p != DConstants::IN_MEMORY_PATH) {
-		db_manager = &db.GetDatabaseManager();
-		lock_guard<mutex> write_lock(db_manager->db_paths_lock);
-		if (db_manager->db_paths.find(file_path_p) != db_manager->db_paths.end()) {
-			throw BinderException("Database \"%s\" is already attached with path \"%s\"", name, file_path_p);
-		}
-		db_manager->db_paths.insert(make_pair(file_path_p, name));
-	}
-
-	// finish construction
+	AddDbPath(db, file_path_p, name);
 	type = access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
 	                                            : AttachedDatabaseType::READ_WRITE_DATABASE;
 	storage = make_uniq<SingleFileStorageManager>(*this, std::move(file_path_p), access_mode == AccessMode::READ_ONLY);
@@ -53,17 +60,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
                                    string name_p, AttachInfo &info, AccessMode access_mode)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
 
-	// ensure that we did not already attach a database with the same path
-	if (!info.path.empty() && info.path != DConstants::IN_MEMORY_PATH) {
-		db_manager = &db.GetDatabaseManager();
-		lock_guard<mutex> write_lock(db_manager->db_paths_lock);
-		if (db_manager->db_paths.find(info.path) != db_manager->db_paths.end()) {
-			throw BinderException("Database \"%s\" is already attached with path \"%s\"", name, info.path);
-		}
-		db_manager->db_paths.insert(make_pair(info.path, info.name));
-	}
-
-	// finish construction
+	AddDbPath(db, info.path, name);
 	type = access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
 	                                            : AttachedDatabaseType::READ_WRITE_DATABASE;
 	catalog = storage_extension.attach(storage_extension.storage_info.get(), *this, name, info, access_mode);
@@ -82,10 +79,10 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 AttachedDatabase::~AttachedDatabase() {
 
 	if (!IsSystem() && !catalog->InMemory()) {
-		if (db_manager) {
-			lock_guard<mutex> write_lock(db_manager->db_paths_lock);
-			db_manager->db_paths.erase(db_manager->db_paths.find(storage->GetDBPath()));
-		}
+		auto &db_manager = db.GetDatabaseManager();
+		lock_guard<mutex> write_lock(db.GetDatabaseManager().GetDbPathsLock());
+		auto &db_paths = db_manager.GetDbPaths();
+		db_paths.erase(db_paths.find(storage->GetDBPath()));
 	}
 
 	if (Exception::UncaughtException()) {

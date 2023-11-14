@@ -71,10 +71,6 @@ private:
 	AttachedDatabaseType type;
 	optional_ptr<Catalog> parent_catalog;
 	bool is_initial_database = false;
-
-	//! An optional pointer to the DatabaseManager of this attached DB
-	//! This is necessary in the destructor, as the database manager is already destroyed
-	optional_ptr<DatabaseManager> db_manager;
 };
 
 } // namespace duckdb

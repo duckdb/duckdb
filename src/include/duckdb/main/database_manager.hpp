@@ -62,10 +62,15 @@ public:
 		return !default_database.empty();
 	}
 
-	//! The lock to add entries to the database_paths set
-	mutex db_paths_lock;
-	//! A map containing all attached db path-name mappings for faster checks
-	case_insensitive_map_t<string> db_paths;
+	mutex &GetDbPathsLock() {
+		return db_paths_lock;
+	}
+	case_insensitive_map_t<string> &GetDbPaths() {
+		return db_paths;
+	}
+	void ResetDatabases() {
+		databases.reset();
+	}
 
 private:
 	//! The system database is a special database that holds system entries (e.g. functions)
@@ -78,6 +83,13 @@ private:
 	atomic<transaction_t> current_query_number;
 	//! The current default database
 	string default_database;
+
+	//! The lock to add entries to the database path map
+	mutex db_paths_lock;
+	//! A map containing all attached database path to name mappings
+	//! This allows to attach many databases efficiently, and to avoid attaching the
+	//! same file path twice
+	case_insensitive_map_t<string> db_paths;
 };
 
 } // namespace duckdb
