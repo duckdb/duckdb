@@ -19,7 +19,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 
 	D_ASSERT(type == AttachedDatabaseType::TEMP_DATABASE || type == AttachedDatabaseType::SYSTEM_DATABASE);
 	if (type == AttachedDatabaseType::TEMP_DATABASE) {
-		storage = make_uniq<SingleFileStorageManager>(*this, string(DConstants::IN_MEMORY_PATH), false);
+		storage = make_uniq<SingleFileStorageManager>(*this, string(IN_MEMORY_PATH), false);
 	}
 
 	catalog = make_uniq<DuckCatalog>(*this);
@@ -100,7 +100,7 @@ bool AttachedDatabase::IsReadOnly() const {
 }
 
 string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &fs) {
-	if (dbpath.empty() || dbpath == DConstants::IN_MEMORY_PATH) {
+	if (dbpath.empty() || dbpath == IN_MEMORY_PATH) {
 		return "memory";
 	}
 	return fs.ExtractBaseName(dbpath);

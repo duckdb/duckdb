@@ -33,6 +33,7 @@ using std::move;
 #define INVALID_CATALOG ""
 #define SYSTEM_CATALOG  "system"
 #define TEMP_CATALOG    "temp"
+#define IN_MEMORY_PATH  ":memory:"
 
 DUCKDB_API bool IsInvalidSchema(const string &str);
 DUCKDB_API bool IsInvalidCatalog(const string &str);
@@ -56,8 +57,6 @@ extern const double PI;
 struct DConstants {
 	//! The value used to signify an invalid index entry
 	static constexpr const idx_t INVALID_INDEX = idx_t(-1);
-	//! The value used to signify an in-memory database
-	static constexpr const char *IN_MEMORY_PATH = ":memory:";
 };
 
 struct LogicalIndex {

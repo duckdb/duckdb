@@ -198,7 +198,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config_ptr->options.temporary_directory = string(database_path) + ".tmp";
 
 		// special treatment for in-memory mode
-		if (strcmp(database_path, DConstants::IN_MEMORY_PATH) == 0) {
+		if (strcmp(database_path, IN_MEMORY_PATH) == 0) {
 			config_ptr->options.temporary_directory = ".tmp";
 		}
 	}

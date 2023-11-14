@@ -20,6 +20,9 @@ ATTACH '__TEST_DIR__/db1.db';
 
 # multiple connections
 
+statement ok con2
+ATTACH '__TEST_DIR__/con2_rollback_detach.db';
+
 statement ok con1
 START TRANSACTION;
 
@@ -27,27 +30,43 @@ statement ok con2
 START TRANSACTION;
 
 # attach files in con1
-statement ok con1
-ATTACH 'con1.db';
 
 statement ok con1
-ATTACH 'con1_commit.db';
+ATTACH '__TEST_DIR__/con1.db';
+
+statement ok con1
+ATTACH '__TEST_DIR__/con1_commit.db';
+
+# detach file in con2
+
+statement ok con2
+DETACH con2_rollback_detach;
+
+# we can't attach, because we did not commit the detach yet
+
+statement error con1
+ATTACH '__TEST_DIR__/con2_rollback_detach.db';
+----
+already attached
 
 # can't attach con1.db file in con2
+
 statement error con2
-ATTACH 'con1.db';
+ATTACH '__TEST_DIR__/con1.db';
 ----
 already attached
 
 statement ok con1
 DETACH con1;
 
-# now the file handle is available, we still can't attach
+# we still can't attach (need to commit the DETACH)
 
 statement error con2
-ATTACH 'con1.db';
+ATTACH '__TEST_DIR__/con1.db';
 ----
-write-write conflict
+already attached
+
+# commit con1 and roll back con2
 
 statement ok con1
 COMMIT;
@@ -55,16 +74,23 @@ COMMIT;
 statement ok con2
 ROLLBACK
 
+# now we can ATTACH, as we committed the DETACH
+
 statement ok con2
-ATTACH 'con1.db';
+ATTACH '__TEST_DIR__/con1.db';
 
 statement error con1
-ATTACH 'con1.db';
+ATTACH '__TEST_DIR__/con1.db';
 ----
 already attached
 
 statement error con2
-ATTACH 'con1_commit.db';
+ATTACH '__TEST_DIR__/con1_commit.db';
 ----
 already attached
+
+# we still can't ATTACH, as we rolled back the DETACH
+
+statement error con1
+ATTACH '__TEST_DIR__/con2_rollback_detach.db';
 
