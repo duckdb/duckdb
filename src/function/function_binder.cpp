@@ -183,32 +183,6 @@ idx_t FunctionBinder::BindFunction(const string &name, PragmaFunctionSet &functi
 	return entry;
 }
 
-idx_t FunctionBinder::BindFunction(const string &name, CreateSecretFunctionSet &functions, CreateSecretInfo &info,
-                                   string &error) {
-	idx_t entry = DConstants::INVALID_INDEX;
-
-	auto candidate_functions = BindFunctionsFromArguments(name, functions, {}, error);
-	if (candidate_functions.size() > 1) {
-		for (const auto &function : candidate_functions) {
-			auto fun = functions.GetFunctionByOffset(function);
-			if (fun.extra_info == info.provider) {
-				entry = function;
-				break;
-			}
-		}
-		if (entry == DConstants::INVALID_INDEX) {
-			throw BinderException(
-			    "Multiple CREATE SECRET functions exists of type '%s', but the specified provider '%s' was not found.",
-			    info.type, info.provider);
-		}
-	}
-	if (entry == DConstants::INVALID_INDEX) {
-		throw BinderException(error);
-	}
-	auto candidate_function = functions.GetFunctionByOffset(entry);
-	return entry;
-}
-
 vector<LogicalType> FunctionBinder::GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>> &arguments) {
 	vector<LogicalType> types;
 	types.reserve(arguments.size());

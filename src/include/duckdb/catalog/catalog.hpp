@@ -26,7 +26,6 @@ struct AlterTableInfo;
 struct CreateTableFunctionInfo;
 struct CreateCopyFunctionInfo;
 struct CreatePragmaFunctionInfo;
-struct CreateSecretFunctionInfo;
 struct CreateFunctionInfo;
 struct CreateViewInfo;
 struct CreateSecretInfo;
@@ -136,10 +135,6 @@ public:
 	DUCKDB_API optional_ptr<CatalogEntry> CreatePragmaFunction(CatalogTransaction transaction,
 	                                                           CreatePragmaFunctionInfo &info);
 	DUCKDB_API optional_ptr<CatalogEntry> CreatePragmaFunction(ClientContext &context, CreatePragmaFunctionInfo &info);
-	//! Create a create secret function in the catalog
-	DUCKDB_API optional_ptr<CatalogEntry> CreateSecretFunction(CatalogTransaction transaction,
-	                                                           CreateSecretFunctionInfo &info);
-	DUCKDB_API optional_ptr<CatalogEntry> CreateSecretFunction(ClientContext &context, CreateSecretFunctionInfo &info);
 	//! Create a scalar or aggregate function in the catalog
 	DUCKDB_API optional_ptr<CatalogEntry> CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info);
 	DUCKDB_API optional_ptr<CatalogEntry> CreateFunction(ClientContext &context, CreateFunctionInfo &info);
@@ -171,9 +166,6 @@ public:
 	//! Create a pragma function in the catalog
 	DUCKDB_API optional_ptr<CatalogEntry>
 	CreatePragmaFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema, CreatePragmaFunctionInfo &info);
-	//! Create a create secret function in the catalog
-	DUCKDB_API optional_ptr<CatalogEntry>
-	CreateSecretFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema, CreateSecretFunctionInfo &info);
 	//! Create a scalar or aggregate function in the catalog
 	DUCKDB_API optional_ptr<CatalogEntry> CreateFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
 	                                                     CreateFunctionInfo &info);

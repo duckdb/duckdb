@@ -234,24 +234,6 @@ optional_ptr<CatalogEntry> Catalog::CreatePragmaFunction(CatalogTransaction tran
 }
 
 //===--------------------------------------------------------------------===//
-// Create secret Function
-//===--------------------------------------------------------------------===//
-optional_ptr<CatalogEntry> Catalog::CreateSecretFunction(CatalogTransaction transaction,
-                                                         CreateSecretFunctionInfo &info) {
-	auto &schema = GetSchema(transaction, DEFAULT_SCHEMA);
-	return CreateSecretFunction(transaction, schema, info);
-}
-
-optional_ptr<CatalogEntry> Catalog::CreateSecretFunction(ClientContext &context, CreateSecretFunctionInfo &info) {
-	return CreateSecretFunction(GetCatalogTransaction(context), info);
-}
-
-optional_ptr<CatalogEntry> Catalog::CreateSecretFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-                                                         CreateSecretFunctionInfo &info) {
-	return schema.CreateSecretFunction(transaction, info);
-}
-
-//===--------------------------------------------------------------------===//
 // Function
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) {

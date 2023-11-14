@@ -9,20 +9,9 @@ SourceResultType PhysicalCreateSecret::GetData(ExecutionContext &context, DataCh
                                                OperatorSourceInput &input) const {
 	auto &client = context.client;
 
-	// TODO: we should probably check availability before calling into a registered create secret?
-
-	// Call create secret function
-	CreateSecretInput secret_input {info.type, info.provider,  info.persist_mode, info.name, info.scope, info.named_parameters};
-	auto secret = function.function(client, secret_input);
-
-	if (!secret) {
-		throw InternalException("CreateSecretFunction '" + function.name + "' did not return a secret!");
-	}
-
-	// Register the secret at the secret_manager
-	context.client.db->config.secret_manager->RegisterSecret(secret, info.on_conflict, info.persist_mode);
-
-	// TODO return stuff?
+	// TODO: we should probably not have to do the lookup again here: either not pass it through at all or use the fun
+	// from input. We could also not pass through the function during bind at all, just check its existence.
+	context.client.db->config.secret_manager->CreateSecret(client, info);
 
 	chunk.SetValue(0, 0, true);
 	chunk.SetCardinality(1);

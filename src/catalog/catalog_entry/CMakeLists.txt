@@ -1,7 +1,6 @@
 add_library_unity(
   duckdb_catalog_entries
   OBJECT
-  create_secret_function_catalog_entry.cpp
   copy_function_catalog_entry.cpp
   duck_index_entry.cpp
   duck_schema_entry.cpp

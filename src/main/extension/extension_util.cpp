@@ -1,19 +1,18 @@
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_secret_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
-#include "duckdb/catalog/catalog_entry/create_secret_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/secret_manager.hpp"
 
 namespace duckdb {
 
@@ -48,19 +47,9 @@ void ExtensionUtil::RegisterFunction(DatabaseInstance &db, AggregateFunctionSet 
 }
 
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, CreateSecretFunction function) {
-	D_ASSERT(!function.name.empty());
-	CreateSecretFunctionSet set(function.name);
-	set.AddFunction(std::move(function));
-	RegisterFunction(db, std::move(set));
-}
-
-void ExtensionUtil::RegisterFunction(DatabaseInstance &db, CreateSecretFunctionSet function) {
-	D_ASSERT(!function.name.empty());
-	auto function_name = function.name;
-	CreateSecretFunctionInfo info(std::move(function_name), std::move(function));
-	auto &system_catalog = Catalog::GetSystemCatalog(db);
-	auto data = CatalogTransaction::GetSystemTransaction(db);
-	system_catalog.CreateSecretFunction(data, info);
+	D_ASSERT(!function.secret_type.empty());
+	auto &config = DBConfig::GetConfig(db);
+	config.secret_manager->RegisterSecretFunction(std::move(function), OnCreateConflict::ERROR_ON_CONFLICT);
 }
 
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, TableFunction function) {
@@ -136,20 +125,6 @@ void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, TableFunctionSet f
 	}
 }
 
-void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, CreateSecretFunction function) { // NOLINT
-	auto &create_secret_function = ExtensionUtil::GetCreateSecretFunction(db, function.name);
-	function.name = function.name;
-	create_secret_function.functions.AddFunction(std::move(function));
-}
-
-void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, CreateSecretFunctionSet functions) { // NOLINT
-	auto &create_secret_function = ExtensionUtil::GetCreateSecretFunction(db, functions.name);
-	for (auto &function : functions.functions) {
-		function.name = functions.name;
-		create_secret_function.functions.AddFunction(std::move(function));
-	}
-}
-
 ScalarFunctionCatalogEntry &ExtensionUtil::GetFunction(DatabaseInstance &db, const string &name) {
 	D_ASSERT(!name.empty());
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
@@ -172,20 +147,6 @@ TableFunctionCatalogEntry &ExtensionUtil::GetTableFunction(DatabaseInstance &db,
 		throw InvalidInputException("Function with name \"%s\" not found in ExtensionUtil::GetTableFunction", name);
 	}
 	return catalog_entry->Cast<TableFunctionCatalogEntry>();
-}
-
-CreateSecretFunctionCatalogEntry &ExtensionUtil::GetCreateSecretFunction(DatabaseInstance &db, const string &name) {
-	// TODO: this should probably not go in the catalog but in the secret_manager
-	D_ASSERT(!name.empty());
-	auto &system_catalog = Catalog::GetSystemCatalog(db);
-	auto data = CatalogTransaction::GetSystemTransaction(db);
-	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
-	auto catalog_entry = schema.GetEntry(data, CatalogType::CREATE_SECRET_FUNCTION_ENTRY, name);
-	if (!catalog_entry) {
-		throw InvalidInputException("Function with name \"%s\" not found in ExtensionUtil::GetCreateSecretFunction",
-		                            name);
-	}
-	return catalog_entry->Cast<CreateSecretFunctionCatalogEntry>();
 }
 
 void ExtensionUtil::RegisterType(DatabaseInstance &db, string type_name, LogicalType type) {

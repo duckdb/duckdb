@@ -201,8 +201,8 @@ public:
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
 	//! RamFS or something similar)
 	unique_ptr<FileSystem> file_system;
-	//! Secret manager
-	unique_ptr<DebugSecretManager> secret_manager;
+	//! Secret manager, can be overwritten to for allow injection of custom secret management system.
+	shared_ptr<DebugSecretManager> secret_manager;
 	//! The allocator used by the system
 	unique_ptr<Allocator> allocator;
 	//! Database configuration options

@@ -94,10 +94,4 @@ public:
 	DUCKDB_API explicit PragmaFunctionSet(PragmaFunction fun);
 };
 
-class CreateSecretFunctionSet : public FunctionSet<CreateSecretFunction> {
-public:
-	DUCKDB_API explicit CreateSecretFunctionSet(string name);
-	DUCKDB_API explicit CreateSecretFunctionSet(CreateSecretFunction fun);
-};
-
 } // namespace duckdb

@@ -11,7 +11,6 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/catalog/catalog_entry/create_secret_function_catalog_entry.hpp"
 
 namespace duckdb {
 struct CreateMacroInfo;
@@ -37,10 +36,10 @@ public:
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, PragmaFunction function);
 	//! Register a new pragma function set - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, PragmaFunctionSet function);
-	//! Register a new create secret function - throw an exception if the function already exists
+
+	//! Register a CreateSecretFunction
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, CreateSecretFunction function);
-	//! Register a new create secret function set - throw an exception if the function already exists
-	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, CreateSecretFunctionSet function);
+
 	//! Register a new copy function - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, CopyFunction function);
 	//! Register a new macro function - throw an exception if the function already exists
@@ -52,16 +51,11 @@ public:
 	//! Returns a reference to the function in the catalog - throws an exception if it does not exist
 	DUCKDB_API static ScalarFunctionCatalogEntry &GetFunction(DatabaseInstance &db, const string &name);
 	DUCKDB_API static TableFunctionCatalogEntry &GetTableFunction(DatabaseInstance &db, const string &name);
-	DUCKDB_API static CreateSecretFunctionCatalogEntry &GetCreateSecretFunction(DatabaseInstance &db,
-	                                                                            const string &name);
 
 	//! Add a function overload
 	DUCKDB_API static void AddFunctionOverload(DatabaseInstance &db, ScalarFunction function);
 	DUCKDB_API static void AddFunctionOverload(DatabaseInstance &db, ScalarFunctionSet function);
-
 	DUCKDB_API static void AddFunctionOverload(DatabaseInstance &db, TableFunctionSet function);
-	DUCKDB_API static void AddFunctionOverload(DatabaseInstance &db, CreateSecretFunction function);
-	DUCKDB_API static void AddFunctionOverload(DatabaseInstance &db, CreateSecretFunctionSet function);
 
 	//! Registers a new type
 	DUCKDB_API static void RegisterType(DatabaseInstance &db, string type_name, LogicalType type);

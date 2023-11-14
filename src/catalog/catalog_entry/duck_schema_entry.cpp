@@ -11,7 +11,6 @@
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/create_secret_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
@@ -29,7 +28,6 @@
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
-#include "duckdb/parser/parsed_data/create_secret_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
@@ -230,13 +228,6 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreatePragmaFunction(CatalogTransact
 	auto pragma_function = make_uniq<PragmaFunctionCatalogEntry>(catalog, *this, info);
 	pragma_function->internal = info.internal;
 	return AddEntry(transaction, std::move(pragma_function), info.on_conflict);
-}
-
-optional_ptr<CatalogEntry> DuckSchemaEntry::CreateSecretFunction(CatalogTransaction transaction,
-                                                                 CreateSecretFunctionInfo &info) {
-	auto create_secret_fun = make_uniq<CreateSecretFunctionCatalogEntry>(catalog, *this, info);
-	create_secret_fun->internal = info.internal;
-	return AddEntry(transaction, std::move(create_secret_fun), info.on_conflict);
 }
 
 void DuckSchemaEntry::Alter(ClientContext &context, AlterInfo &info) {

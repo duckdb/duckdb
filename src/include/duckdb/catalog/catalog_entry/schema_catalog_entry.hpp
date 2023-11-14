@@ -29,7 +29,6 @@ struct CreateCollationInfo;
 struct CreateViewInfo;
 struct BoundCreateTableInfo;
 struct CreatePragmaFunctionInfo;
-struct CreateSecretFunctionInfo;
 struct CreateSequenceInfo;
 struct CreateSchemaInfo;
 struct CreateTableFunctionInfo;
@@ -79,9 +78,6 @@ public:
 	virtual optional_ptr<CatalogEntry> CreatePragmaFunction(CatalogTransaction transaction,
 	                                                        CreatePragmaFunctionInfo &info) = 0;
 
-	//! Create a pragma function within the given schema
-	virtual optional_ptr<CatalogEntry> CreateSecretFunction(CatalogTransaction transaction,
-	                                                        CreateSecretFunctionInfo &info) = 0;
 	//! Create a collation within the given schema
 	virtual optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) = 0;
 	//! Create a enum within the given schema

@@ -4,8 +4,8 @@
 
 namespace duckdb {
 struct CreateSecretInput;
-class CreateSecretFunction;
 struct S3AuthParams;
+class CreateSecretFunction;
 
 struct CreateS3SecretFunctions {
 public:
@@ -14,13 +14,13 @@ public:
 
 protected:
 	//! Internal function to create BaseSecret from S3AuthParams
-	static shared_ptr<BaseSecret> CreateSecretFunctionInternal(ClientContext &context, CreateSecretInput &input,
+	static unique_ptr<BaseSecret> CreateSecretFunctionInternal(ClientContext &context, CreateSecretInput &input,
 	                                                           S3AuthParams params);
 
 	//! Function for the "settings" provider: creates secret from current duckdb settings
-	static shared_ptr<BaseSecret> CreateS3SecretFromSettings(ClientContext &context, CreateSecretInput &input);
+	static unique_ptr<BaseSecret> CreateS3SecretFromSettings(ClientContext &context, CreateSecretInput &input);
 	//! Function for the "config" provider: creates secret from parameters passed by user
-	static shared_ptr<BaseSecret> CreateS3SecretFromConfig(ClientContext &context, CreateSecretInput &input);
+	static unique_ptr<BaseSecret> CreateS3SecretFromConfig(ClientContext &context, CreateSecretInput &input);
 
 	//! Helper function to set named params of secret function
 	static void SetBaseNamedParams(CreateSecretFunction &function, string &type);

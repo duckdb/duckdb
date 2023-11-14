@@ -2,6 +2,7 @@
 #include "s3fs.hpp"
 #include "duckdb/function/create_secret_function.hpp"
 #include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/secret_manager.hpp"
 
 namespace duckdb {
 
@@ -11,7 +12,7 @@ void CreateS3SecretFunctions::Register(DatabaseInstance &instance) {
 	RegisterCreateSecretFunction(instance, "gcs");
 }
 
-shared_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(ClientContext &context,
+unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(ClientContext &context,
                                                                              CreateSecretInput &input,
                                                                              S3AuthParams params) {
 	// for r2 we can set the endpoint using the account id
@@ -59,11 +60,11 @@ shared_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(Cli
 		}
 	}
 
-	auto secret = make_shared<S3Secret>(scope, input.type, input.provider, input.name, params);
+	auto secret = make_uniq<S3Secret>(scope, input.type, input.provider, input.name, params);
 	return secret;
 }
 
-shared_ptr<BaseSecret> CreateS3SecretFunctions::CreateS3SecretFromSettings(ClientContext &context,
+unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateS3SecretFromSettings(ClientContext &context,
                                                                            CreateSecretInput &input) {
 	auto &opener = context.client_data->file_opener;
 	FileOpenerInfo info;
@@ -71,7 +72,7 @@ shared_ptr<BaseSecret> CreateS3SecretFunctions::CreateS3SecretFromSettings(Clien
 	return CreateSecretFunctionInternal(context, input, params);
 }
 
-shared_ptr<BaseSecret> CreateS3SecretFunctions::CreateS3SecretFromConfig(ClientContext &context,
+unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateS3SecretFromConfig(ClientContext &context,
                                                                          CreateSecretInput &input) {
 	S3AuthParams empty_params;
 	empty_params.use_ssl = true;
@@ -106,8 +107,7 @@ void CreateS3SecretFunctions::SetBaseNamedParams(CreateSecretFunction &function,
 }
 
 void CreateS3SecretFunctions::RegisterCreateSecretFunction(DatabaseInstance &instance, string type) {
-	// TODO: handle case where this has already run
-
+	// TODO: handle case where this has already run?
 	// Register the new type
 	SecretType secret_type;
 	secret_type.name = type;
@@ -116,14 +116,11 @@ void CreateS3SecretFunctions::RegisterCreateSecretFunction(DatabaseInstance &ins
 
 	ExtensionUtil::RegisterSecretType(instance, secret_type);
 
-	//! Create from config
-	CreateSecretFunction from_empty_config_fun(type, "config", CreateS3SecretFromConfig);
-	SetBaseNamedParams(from_empty_config_fun, type);
-	ExtensionUtil::RegisterFunction(instance, from_empty_config_fun);
-
-	//! Create from empty config
-	CreateSecretFunction from_settings_fun(type, "duckdb_settings", CreateS3SecretFromSettings);
-	SetBaseNamedParams(from_settings_fun, type);
-	ExtensionUtil::AddFunctionOverload(instance, from_settings_fun);
+	CreateSecretFunction from_empty_config_fun2 = {type, "config", CreateS3SecretFromConfig};
+	CreateSecretFunction from_settings_fun2 = {type, "duckdb_settings", CreateS3SecretFromSettings};
+	SetBaseNamedParams(from_empty_config_fun2, type);
+	SetBaseNamedParams(from_settings_fun2, type);
+	ExtensionUtil::RegisterFunction(instance, from_empty_config_fun2);
+	ExtensionUtil::RegisterFunction(instance, from_settings_fun2);
 }
 } // namespace duckdb
