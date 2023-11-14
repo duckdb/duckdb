@@ -31,15 +31,8 @@ select NULL::CHAR(10)
 ----
 NULL
 
-statement error
-select 'asdf'::CHAR(0)
-
-statement error
-select 'asdf'::CHAR(-1)
-
 
 # LENGTH for CHAR ignores trailing spaces
-
 
 query I
 select LENGTH('asdf'::CHAR(4))

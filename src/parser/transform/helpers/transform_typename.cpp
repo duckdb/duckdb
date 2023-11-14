@@ -163,10 +163,8 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 			if (modifier_idx > 1) {
 				throw ParserException("CHAR only supports a single modifier");
 			}
-			if (width < 1) {
-				throw ParserException("CHAR width must be at least 1");
-			}
-			result_type = LogicalType::CHAR(width);
+			// if no length was specified blank padding makes no sense
+			result_type = width > 0 ? LogicalType::CHAR(width) : LogicalType::VARCHAR;
 			break;
 
 		case LogicalTypeId::DECIMAL:
