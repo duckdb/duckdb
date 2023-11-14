@@ -20,9 +20,14 @@ class DataFrameWriter:
         relation = self.dataframe.relation
         relation.create(table_name)
 
-    def parquet(self, file_path:str) -> None:
+    def parquet(self, path: str, mode: Optional[str] = None, partitionBy: Union[str, List[str], None] = None, compression: Optional[str] = None)  -> None:
         relation = self.dataframe.relation
-        relation.write_parquet(file_path)
+        if mode:
+            raise NotImplementedError
+        if partitionBy:
+            raise NotImplementedError
+
+        relation.write_parquet(path, compression=compression)
     
     def csv(self, path, mode=None, compression=None, sep=None, quote=None, escape=None,
             header=None, nullValue=None, escapeQuotes=None, quoteAll=None, dateFormat=None,
