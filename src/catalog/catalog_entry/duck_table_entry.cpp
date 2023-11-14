@@ -66,7 +66,7 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType &constraint_type, unique
 
 	auto &create_table_info = create_info->Cast<CreateTableInfo>();
 	auto constraint_name = EnumUtil::ToString(constraint_type) + "_";
-	return IndexStorageInfo(constraint_name + create_table_info.table + to_string(idx));
+	return IndexStorageInfo(constraint_name + create_table_info.table + "_" + to_string(idx));
 }
 
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,

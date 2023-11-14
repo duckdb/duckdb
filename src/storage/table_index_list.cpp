@@ -34,6 +34,22 @@ void TableIndexList::CommitDrop(const string &name) {
 	}
 }
 
+bool TableIndexList::NameIsUnique(const string &name) {
+	lock_guard<mutex> lock(indexes_lock);
+
+	// only cover PK, FK, and UNIQUE, which are not (yet) catalog entries
+	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
+		auto &index_entry = indexes[index_idx];
+		if (index_entry->IsPrimary() || index_entry->IsForeign() || index_entry->IsUnique()) {
+			if (index_entry->name == name) {
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
 bool TableIndexList::Empty() {
 	lock_guard<mutex> lock(indexes_lock);
 	return indexes.empty();

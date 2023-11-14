@@ -38,11 +38,11 @@ public:
 	void RemoveIndex(const string &name);
 	//! Completely removes all remaining memory of an index after dropping the catalog entry
 	void CommitDrop(const string &name);
+	//! Returns true, if the index name does not exist
+	bool NameIsUnique(const string &name);
 
 	bool Empty();
-
 	idx_t Count();
-
 	void Move(TableIndexList &other);
 
 	Index *FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, ForeignKeyType fk_type);

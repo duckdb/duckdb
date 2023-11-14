@@ -253,6 +253,10 @@ bool DataTable::CreateIndexScan(TableScanState &state, DataChunk &result, TableS
 	return state.table_state.ScanCommitted(result, type);
 }
 
+bool DataTable::IndexNameIsUnique(const string &name) {
+	return info->indexes.NameIsUnique(name);
+}
+
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//

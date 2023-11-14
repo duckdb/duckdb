@@ -178,10 +178,11 @@ public:
 	vector<ColumnSegmentInfo> GetColumnSegmentInfo();
 	static bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &index, ForeignKeyType fk_type);
 
-	//! Initializes a special scan that is used to create an index on the table, it keeps locks on the table
-	void InitializeWALCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids);
 	//! Scans the next chunk for the CREATE INDEX operator
 	bool CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type);
+	//! Returns true, if the index name is unique (i.e., no PK, UNIQUE, FK constraint has the same name)
+	//! FIXME: This is only necessary until we treat all indexes as catalog entries, allowing to alter constraints
+	bool IndexNameIsUnique(const string &name);
 
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,

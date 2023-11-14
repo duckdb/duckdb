@@ -7,32 +7,78 @@ load __TEST_DIR__/test_art_names.db
 statement ok
 PRAGMA enable_verification;
 
+# test PKs and UNIQUE
+
 statement ok
 CREATE TABLE tbl (i INTEGER PRIMARY KEY, j INTEGER UNIQUE);
+
+# names match the internal constraint names
+
+statement error
+CREATE INDEX PRIMARY_tbl_0 ON tbl(i);
+----
+already exists
+
+statement error
+CREATE INDEX UNIQUE_tbl_1 ON tbl(j);
+----
+already exists
 
 statement ok
 INSERT INTO tbl SELECT range, range FROM range (3000);
 
+statement error
+INSERT INTO tbl VALUES (4000, 20);
+----
+constraint violation
+
+statement error
+INSERT INTO tbl VALUES (20, 4000);
+----
+constraint violation
+
 restart
 
-statement ok
+# test that we deserialized the index names correctly
+
+statement error
+INSERT INTO tbl VALUES (4000, 20);
+----
+constraint violation
+
+statement error
+INSERT INTO tbl VALUES (20, 4000);
+----
+constraint violation
+
+statement error
 CREATE INDEX PRIMARY_tbl_0 ON tbl(i);
+----
+already exists
 
-statement ok
+statement error
 CREATE INDEX UNIQUE_tbl_1 ON tbl(j);
+----
+already exists
+
+statement error
+INSERT INTO tbl VALUES (20, 4000);
+----
+constraint violation
+
+statement error
+INSERT INTO tbl VALUES (4000, 20);
+----
+constraint violation
 
 restart
-
-statement ok
-DROP INDEX UNIQUE_tbl_1;
-
-statement ok
-DROP INDEX PRIMARY_tbl_0;
 
 statement ok
 DROP TABLE tbl;
 
 restart
+
+# test PKs, FKs, and UNIQUE
 
 statement ok
 CREATE TABLE tbl (i INTEGER PRIMARY KEY, j INTEGER UNIQUE);
@@ -48,34 +94,124 @@ INSERT INTO tbl SELECT range, range FROM range (3000);
 statement ok
 INSERT INTO fk_tbl SELECT range, range FROM range (3000);
 
-restart
+# check all constraints
 
-statement ok
+statement error
+INSERT INTO tbl VALUES (4000, 20);
+----
+constraint violation
+
+statement error
+INSERT INTO tbl VALUES (20, 4000);
+----
+constraint violation
+
+statement error
+INSERT INTO fk_tbl VALUES (4000, 20);
+----
+foreign key constraint
+
+statement error
+INSERT INTO fk_tbl VALUES (20, 4000);
+----
+foreign key constraint
+
+statement error
 CREATE INDEX PRIMARY_tbl_0 ON tbl(i);
+----
+already exists
 
-statement ok
+statement error
 CREATE INDEX UNIQUE_tbl_1 ON tbl(j);
+----
+already exists
 
-statement ok
-CREATE INDEX FOREIGN_tbl_0 ON fk_tbl(i);
+# fails on the FK table
 
-statement ok
-CREATE INDEX FOREIGN_tbl_1 ON fk_tbl(j);
+statement error
+CREATE INDEX FOREIGN_fk_tbl_0 ON fk_tbl(i);
+----
+already exists
+
+statement error
+CREATE INDEX FOREIGN_fk_tbl_1 ON fk_tbl(j);
+----
+already exists
+
+# check all constraints
+
+statement error
+INSERT INTO tbl VALUES (4000, 20);
+----
+constraint violation
+
+statement error
+INSERT INTO tbl VALUES (20, 4000);
+----
+constraint violation
+
+statement error
+INSERT INTO fk_tbl VALUES (4000, 20);
+----
+foreign key constraint
+
+statement error
+INSERT INTO fk_tbl VALUES (20, 4000);
+----
+foreign key constraint
+
+statement error
+CREATE INDEX PRIMARY_tbl_0 ON tbl(i);
+----
+already exists
+
+statement error
+CREATE INDEX UNIQUE_tbl_1 ON tbl(j);
+----
+already exists
 
 restart
 
-statement ok
-DROP INDEX FOREIGN_tbl_1;
+statement error
+CREATE INDEX PRIMARY_tbl_0 ON tbl(i);
+----
+already exists
 
-statement ok
-DROP INDEX FOREIGN_tbl_0;
+statement error
+CREATE INDEX UNIQUE_tbl_1 ON tbl(j);
+----
+already exists
 
-statement ok
-DROP INDEX UNIQUE_tbl_1;
+# fails on the FK table
 
-statement ok
-DROP INDEX PRIMARY_tbl_0;
+statement error
+CREATE INDEX FOREIGN_fk_tbl_0 ON fk_tbl(i);
+----
+already exists
 
-restart
+statement error
+CREATE INDEX FOREIGN_fk_tbl_1 ON fk_tbl(j);
+----
+already exists
 
+# check all constraints
 
+statement error
+INSERT INTO tbl VALUES (4000, 20);
+----
+constraint violation
+
+statement error
+INSERT INTO tbl VALUES (20, 4000);
+----
+constraint violation
+
+statement error
+INSERT INTO fk_tbl VALUES (4000, 20);
+----
+foreign key constraint
+
+statement error
+INSERT INTO fk_tbl VALUES (20, 4000);
+----
+foreign key constraint

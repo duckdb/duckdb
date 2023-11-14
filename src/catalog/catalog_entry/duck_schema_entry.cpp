@@ -199,6 +199,11 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(ClientContext &context, 
                                                         TableCatalogEntry &table) {
 	DependencyList dependencies;
 	dependencies.AddDependency(table);
+
+	if (!table.GetStorage().IndexNameIsUnique(info.index_name)) {
+		throw CatalogException("An index with the name " + info.index_name + "already exists!");
+	}
+
 	auto index = make_uniq<DuckIndexEntry>(catalog, *this, info);
 	return AddEntryInternal(GetCatalogTransaction(context), std::move(index), info.on_conflict, dependencies);
 }
