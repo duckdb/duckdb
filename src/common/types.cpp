@@ -405,6 +405,8 @@ string LogicalType::ToString() const {
 		ret += ")";
 		return ret;
 	}
+	case LogicalTypeId::CHAR:
+		return StringUtil::Format("CHAR(%d)", StringType::GetWidth(*this));
 	case LogicalTypeId::USER: {
 		return KeywordHelper::WriteOptionallyQuoted(UserType::GetTypeName(*this));
 	}
