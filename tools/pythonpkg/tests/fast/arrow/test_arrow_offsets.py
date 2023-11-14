@@ -1,5 +1,6 @@
 import duckdb
 import pytest
+from pytest import mark
 import datetime
 import decimal
 import pytz
@@ -59,11 +60,27 @@ def decimal_value(value, precision, scale):
     return decimal.Decimal(val)
 
 
+def expected_result(col1_null, col2_null, expected):
+    col1 = None if col1_null else expected
+    col2 = None if col2_null or col1_null else expected
+    return [(col1, col2)]
+
+
+test_nulls = lambda: mark.parametrize(
+    ['col1_null', 'col2_null'], [(False, True), (True, False), (True, True), (False, False)]
+)
+
+
 class TestArrowOffsets(object):
-    def test_struct_of_strings(self, duckdb_cursor):
+    @test_nulls()
+    def test_struct_of_strings(self, duckdb_cursor, col1_null, col2_null):
         col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
+        if col1_null:
+            col1[-1] = None
         # "a" in the struct matches the value for col1
         col2 = [{"a": i} for i in col1]
+        if col2_null:
+            col2[-1] = None
         arrow_table = pa.Table.from_pydict(
             {"col1": col1, "col2": col2},
             schema=pa.schema([("col1", pa.string()), ("col2", pa.struct({"a": pa.string()}))]),
@@ -77,14 +94,19 @@ class TestArrowOffsets(object):
             FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
         """
         ).fetchall()
-        assert res == [('131072', '131072')]
+        assert res == expected_result(col1_null, col2_null, '131072')
 
-    def test_struct_of_bools(self, duckdb_cursor):
+    @test_nulls()
+    def test_struct_of_bools(self, duckdb_cursor, col1_null, col2_null):
         tuples = [False for i in range(0, MAGIC_ARRAY_SIZE)]
-        tuples.append(True)
+        tuples[-1] = True
 
         col1 = tuples
+        if col1_null:
+            col1[-1] = None
         col2 = [{"a": i} for i in col1]
+        if col2_null:
+            col2[-1] = None
         arrow_table = pa.Table.from_pydict(
             {"col1": col1, "col2": col2},
             schema=pa.schema([("col1", pa.bool_()), ("col2", pa.struct({"a": pa.bool_()}))]),
@@ -95,10 +117,10 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {MAGIC_ARRAY_SIZE}
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
         """
         ).fetchall()
-        assert res == [(True, True)]
+        assert res == expected_result(col1_null, col2_null, True)
 
     @pytest.mark.parametrize(
         ["constructor", "expected"],
@@ -107,11 +129,16 @@ class TestArrowOffsets(object):
             (pa_date64(), datetime.date(1970, 1, 1)),
         ],
     )
-    def test_struct_of_dates(self, duckdb_cursor, constructor, expected):
+    @test_nulls()
+    def test_struct_of_dates(self, duckdb_cursor, constructor, expected, col1_null, col2_null):
         tuples = [i for i in range(0, MAGIC_ARRAY_SIZE)]
 
         col1 = tuples
+        if col1_null:
+            col1[-1] = None
         col2 = [{"a": i} for i in col1]
+        if col2_null:
+            col2[-1] = None
         arrow_table = pa.Table.from_pydict(
             {"col1": col1, "col2": col2},
             schema=pa.schema([("col1", constructor()), ("col2", pa.struct({"a": constructor()}))]),
@@ -125,15 +152,29 @@ class TestArrowOffsets(object):
             FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
         """
         ).fetchall()
-        assert res == [(expected, expected)]
+        assert res == expected_result(col1_null, col2_null, expected)
 
-    def test_struct_of_enum(self, duckdb_cursor):
+    # @test_nulls()
+    @pytest.mark.parametrize(
+        ['col1_null', 'col2_null'],
+        [
+            # (False, True), #FIXME: We break an invariant if the struct is NULL and the child is a dictionary
+            (True, False),
+            # (True, True), ^ same as above
+            (False, False),
+        ],
+    )
+    def test_struct_of_enum(self, duckdb_cursor, col1_null, col2_null):
         enum_type = pa.dictionary(pa.int64(), pa.utf8())
 
         tuples = ['red' for i in range(MAGIC_ARRAY_SIZE)]
-        tuples.append('green')
+        tuples[-1] = 'green'
+        if col1_null:
+            tuples[-1] = None
 
         struct_tuples = [{"a": x} for x in tuples]
+        if col2_null:
+            struct_tuples[-1] = None
 
         arrow_table = pa.Table.from_pydict(
             {'col1': pa.array(tuples, enum_type), 'col2': pa.array(struct_tuples, pa.struct({"a": enum_type}))},
@@ -144,10 +185,10 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {MAGIC_ARRAY_SIZE}
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
         """
         ).fetchall()
-        assert res == [('green', 'green')]
+        assert res == expected_result(col1_null, col2_null, 'green')
 
     def test_struct_of_blobs(self, duckdb_cursor):
         col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
