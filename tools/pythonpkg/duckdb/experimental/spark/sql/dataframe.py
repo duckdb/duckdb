@@ -10,10 +10,12 @@ from .type_utils import duckdb_to_spark_schema
 from .column import Column
 import duckdb
 from functools import reduce
+from __future__ import annotations
 
 if TYPE_CHECKING:
     from .session import SparkSession
     from .group import GroupedData, Grouping
+    from pandas.core.frame import DataFrame as PandasDataFrame
 
 from .functions import _to_column
 
@@ -29,7 +31,6 @@ class DataFrame:
         self.relation.show()
     
     def toPandas(self) -> PandasDataFrame:
-        from pandas import DataFrame as PandasDataFrame
         return self.relation.df()
 
     def createOrReplaceTempView(self, name: str) -> None:
