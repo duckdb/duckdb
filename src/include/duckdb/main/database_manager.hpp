@@ -8,12 +8,13 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/atomic.hpp"
-#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/parser/parsed_data/attach_info.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -36,20 +37,27 @@ public:
 	static DatabaseManager &Get(AttachedDatabase &db);
 
 	void InitializeSystemCatalog();
-	//! Get an attached database with the given name
+	//! Get an attached database by its name
 	optional_ptr<AttachedDatabase> GetDatabase(ClientContext &context, const string &name);
-	//! Add a new attached database to the database manager
-	void AddDatabase(ClientContext &context, unique_ptr<AttachedDatabase> db);
+	//! Attach a new database
+	optional_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, const AttachInfo &info, const string &db_type,
+	                                              AccessMode access_mode);
+	//! Detach an existing database
 	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found);
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
+
 	static const string &GetDefaultDatabase(ClientContext &context);
 	void SetDefaultDatabase(ClientContext &context, const string &new_value);
 
+	//! Inserts a path to name mapping to the database paths map
+	void InsertDbPath(const string &path, const string &name);
+	//! Erases a path from the database paths map
+	void EraseDbPath(const string &path);
 	//! Returns a pointer to an attached database matching the path. If none exists, it returns nullptr
 	optional_ptr<AttachedDatabase> GetDatabaseFromPath(ClientContext &context, const string &path);
 	//! Scans the catalog set and adds each committed database entry, and each database entry of the current
-	//! transaction, to a vector holding these references.
+	//! transaction, to a vector holding AttachedDatabase references
 	vector<reference<AttachedDatabase>> GetDatabases(ClientContext &context);
 	//! Removes all databases from the catalog set. This is necessary for the database instance's destructor,
 	//! as the database manager has to be alive when destroying the catalog set objects.
@@ -66,13 +74,6 @@ public:
 	}
 	bool HasDefaultDatabase() {
 		return !default_database.empty();
-	}
-
-	mutex &GetDbPathsLock() {
-		return db_paths_lock;
-	}
-	case_insensitive_map_t<string> &GetDbPaths() {
-		return db_paths;
 	}
 
 private:

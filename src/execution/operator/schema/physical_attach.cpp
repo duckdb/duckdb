@@ -84,14 +84,6 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		}
 	}
 
-	// we can never have two file handles to the same file/path
-	auto db_with_same_path = db_manager.GetDatabaseFromPath(context.client, path);
-	if (db_with_same_path) {
-		throw BinderException("Database \"%s\" is already attached with alias \"%s\"", path,
-		                      db_with_same_path->GetName());
-	}
-
-	auto &db = DatabaseInstance::GetDatabase(context.client);
 	if (db_type.empty()) {
 		// try to extract database type from path
 		auto path_and_type = DBPathAndType::Parse(info->path, config);
@@ -113,11 +105,8 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		}
 	}
 
-	// attach the database
-	auto new_db = db.CreateAttachedDatabase(*info, db_type, access_mode);
-	new_db->Initialize();
-	db_manager.AddDatabase(context.client, std::move(new_db));
-
+	auto attached_db = db_manager.AttachDatabase(context.client, *info, db_type, access_mode);
+	attached_db->Initialize();
 	return SourceResultType::FINISHED;
 }
 

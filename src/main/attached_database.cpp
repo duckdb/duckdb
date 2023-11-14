@@ -27,27 +27,11 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 	internal = true;
 }
 
-void AddDbPath(DatabaseInstance &db, const string &path, const string &name) {
-
-	if (!path.empty() && path != DConstants::IN_MEMORY_PATH) {
-		// lock the map
-		auto &db_manager = db.GetDatabaseManager();
-		lock_guard<mutex> write_lock(db_manager.GetDbPathsLock());
-
-		// ensure that we did not already attach a database with the same path
-		auto &db_paths = db_manager.GetDbPaths();
-		if (db_paths.find(path) != db_paths.end()) {
-			throw BinderException("Database \"%s\" is already attached with path \"%s\"", name, path);
-		}
-		db_paths.insert(make_pair(path, name));
-	}
-}
-
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, string name_p, string file_path_p,
                                    AccessMode access_mode)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
 
-	AddDbPath(db, file_path_p, name);
+	db.GetDatabaseManager().InsertDbPath(file_path_p, name);
 	type = access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
 	                                            : AttachedDatabaseType::READ_WRITE_DATABASE;
 	storage = make_uniq<SingleFileStorageManager>(*this, std::move(file_path_p), access_mode == AccessMode::READ_ONLY);
@@ -57,13 +41,13 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 }
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension,
-                                   string name_p, AttachInfo &info, AccessMode access_mode)
+                                   string name_p, const AttachInfo &info, AccessMode access_mode)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
 
-	AddDbPath(db, info.path, name);
+	db.GetDatabaseManager().InsertDbPath(info.path, name);
 	type = access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
 	                                            : AttachedDatabaseType::READ_WRITE_DATABASE;
-	catalog = storage_extension.attach(storage_extension.storage_info.get(), *this, name, info, access_mode);
+	catalog = storage_extension.attach(storage_extension.storage_info.get(), *this, name, *info.Copy(), access_mode);
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
 	}
@@ -79,10 +63,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 AttachedDatabase::~AttachedDatabase() {
 
 	if (!IsSystem() && !catalog->InMemory()) {
-		auto &db_manager = db.GetDatabaseManager();
-		lock_guard<mutex> write_lock(db.GetDatabaseManager().GetDbPathsLock());
-		auto &db_paths = db_manager.GetDbPaths();
-		db_paths.erase(db_paths.find(storage->GetDBPath()));
+		db.GetDatabaseManager().EraseDbPath(storage->GetDBPath());
 	}
 
 	if (Exception::UncaughtException()) {

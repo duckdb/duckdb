@@ -30,29 +30,61 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 	return reinterpret_cast<AttachedDatabase *>(databases->GetEntry(context, name).get());
 }
 
-void DatabaseManager::AddDatabase(ClientContext &context, unique_ptr<AttachedDatabase> db_instance) {
-	auto name = db_instance->GetName();
-	db_instance->oid = ModifyCatalog();
+optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, const AttachInfo &info,
+                                                               const string &db_type, AccessMode access_mode) {
+
+	// now create the attached database
+	auto &db = DatabaseInstance::GetDatabase(context);
+	auto attached_db = db.CreateAttachedDatabase(info, db_type, access_mode);
+
+	const auto name = attached_db->GetName();
+	attached_db->oid = ModifyCatalog();
 	DependencyList dependencies;
 	if (default_database.empty()) {
 		default_database = name;
 	}
-	if (!databases->CreateEntry(context, name, std::move(db_instance), dependencies)) {
+
+	// and add it to the databases catalog set
+	if (!databases->CreateEntry(context, name, std::move(attached_db), dependencies)) {
 		throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
 	}
+
+	return GetDatabase(context, name);
 }
 
 void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
+
 	if (GetDefaultDatabase(context) == name) {
 		throw BinderException("Cannot detach database \"%s\" because it is the default database. Select a different "
 		                      "database using `USE` to allow detaching this database",
 		                      name);
 	}
+
 	if (!databases->DropEntry(context, name, false, true)) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
 		}
 	}
+}
+
+void DatabaseManager::InsertDbPath(const string &path, const string &name) {
+
+	if (!path.empty() && path != DConstants::IN_MEMORY_PATH) {
+
+		lock_guard<mutex> write_lock(db_paths_lock);
+
+		// ensure that we did not already attach a database with the same path
+		if (db_paths.find(path) != db_paths.end()) {
+			throw BinderException("Database \"%s\" is already attached with path \"%s\"", name, path);
+		}
+
+		db_paths.insert(make_pair(path, name));
+	}
+}
+
+void DatabaseManager::EraseDbPath(const string &path) {
+	lock_guard<mutex> write_lock(db_paths_lock);
+	db_paths.erase(db_paths.find(path));
 }
 
 optional_ptr<AttachedDatabase> DatabaseManager::GetDatabaseFromPath(ClientContext &context, const string &path) {

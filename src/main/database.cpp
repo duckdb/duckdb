@@ -132,9 +132,9 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
 }
 
-duckdb::unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo &info, const string &type,
-                                                                              AccessMode access_mode) {
-	duckdb::unique_ptr<AttachedDatabase> attached_database;
+unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(const AttachInfo &info, const string &type,
+                                                                      AccessMode access_mode) {
+	unique_ptr<AttachedDatabase> attached_database;
 	if (!type.empty()) {
 		// find the storage extension
 		auto extension_name = ExtensionHelper::ApplyExtensionAlias(type);
@@ -164,16 +164,15 @@ void DatabaseInstance::CreateMainDatabase() {
 	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem());
 	info.path = config.options.database_path;
 
-	auto attached_database = CreateAttachedDatabase(info, config.options.database_type, config.options.access_mode);
-	auto initial_database = attached_database.get();
+	optional_ptr<AttachedDatabase> initial_database;
 	{
 		Connection con(*this);
 		con.BeginTransaction();
-		db_manager->AddDatabase(*con.context, std::move(attached_database));
+		initial_database =
+		    db_manager->AttachDatabase(*con.context, info, config.options.database_type, config.options.access_mode);
 		con.Commit();
 	}
 
-	// initialize the database
 	initial_database->SetInitialDatabase();
 	initial_database->Initialize();
 }
