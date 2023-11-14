@@ -328,7 +328,7 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 
 	// Check if we're approaching the memory limit
 	const idx_t n_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	const idx_t limit = BufferManager::GetBufferManager(context).GetBufferPool().GetTxWorkingMemoryBudget();
+	const idx_t limit = BufferManager::GetBufferManager(context).GetQueryMaxMemory();
 	const idx_t thread_limit = 0.6 * limit / n_threads;
 	if (ht.GetPartitionedData()->SizeInBytes() > thread_limit || context.config.force_external) {
 		if (gstate.config.SetRadixBitsToExternal()) {

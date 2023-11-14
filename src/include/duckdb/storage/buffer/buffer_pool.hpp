@@ -44,9 +44,9 @@ public:
 
 	idx_t GetUsedMemory();
 
-	idx_t GetMaxMemory();
+	idx_t GetMaxMemory() const;
 
-	virtual idx_t GetTxWorkingMemoryBudget();
+	virtual idx_t GetQueryMaxMemory() const;
 
 protected:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible

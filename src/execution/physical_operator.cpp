@@ -121,7 +121,7 @@ unique_ptr<GlobalSinkState> PhysicalOperator::GetGlobalSinkState(ClientContext &
 idx_t PhysicalOperator::GetMaxThreadMemory(ClientContext &context) {
 	// Memory usage per thread should scale with max mem / num threads
 	// We take 1/4th of this, to be conservative
-	idx_t max_memory = BufferManager::GetBufferManager(context).GetBufferPool().GetTxWorkingMemoryBudget();
+	idx_t max_memory = BufferManager::GetBufferManager(context).GetQueryMaxMemory();
 	idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	return (max_memory / num_threads) / 4;
 }

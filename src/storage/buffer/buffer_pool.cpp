@@ -57,10 +57,10 @@ void BufferPool::IncreaseUsedMemory(idx_t size) {
 idx_t BufferPool::GetUsedMemory() {
 	return current_memory;
 }
-idx_t BufferPool::GetMaxMemory() {
+idx_t BufferPool::GetMaxMemory() const {
 	return maximum_memory;
 }
-idx_t BufferPool::GetTxWorkingMemoryBudget() {
+idx_t BufferPool::GetQueryMaxMemory() const {
 	return GetMaxMemory();
 }
 

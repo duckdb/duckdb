@@ -270,7 +270,7 @@ BufferManager &DatabaseInstance::GetBufferManager() {
 	return *buffer_manager;
 }
 
-BufferPool &DatabaseInstance::GetBufferPool() {
+BufferPool &DatabaseInstance::GetBufferPool() const {
 	return *config.buffer_pool;
 }
 
