@@ -105,7 +105,6 @@ class TestSparkToCSV(object):
         df = spark.createDataFrame(pandas_df)
 
         df.write.csv(temp_file_name, header=True, quote='"', escape='!')
-        # ask a question about this - is header = False the default behaviour in Spark
         csv_rel = spark.read.csv(temp_file_name, quote='"', escape='!', header=True)
         assert df.collect() == csv_rel.collect()
 
