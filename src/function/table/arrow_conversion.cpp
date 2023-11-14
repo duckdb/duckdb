@@ -22,7 +22,7 @@ idx_t GetEffectiveOffset(ArrowArray &array, int64_t parent_offset, ArrowScanLoca
                          int64_t nested_offset = -1) {
 	if (nested_offset != -1) {
 		// The parent of this array is a list
-		D_ASSERT(parent_offset == 0);
+		// We just ignore the parent offset, it's already applied to the list
 		return array.offset + nested_offset;
 	}
 	// Parent offset is set in the case of a struct, it applies to all child arrays
@@ -150,7 +150,7 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanS
 	ListVector::Reserve(vector, list_size);
 	ListVector::SetListSize(vector, list_size);
 	auto &child_vector = ListVector::GetEntry(vector);
-	SetValidityMask(child_vector, *array.children[0], scan_state, list_size, parent_offset, start_offset);
+	SetValidityMask(child_vector, *array.children[0], scan_state, list_size, array.offset, start_offset);
 	auto &list_mask = FlatVector::Validity(vector);
 	if (parent_mask) {
 		//! Since this List is owned by a struct we must guarantee their validity map matches on Null
