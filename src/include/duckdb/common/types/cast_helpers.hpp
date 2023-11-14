@@ -248,6 +248,10 @@ struct HugeintToStringCast {
 	static string_t FormatSigned(hugeint_t value, Vector &vector) {
 		int negative = value.upper < 0;
 		if (negative) {
+			if (value == NumericLimits<hugeint_t>::Minimum()) {
+				string_t result = StringVector::AddString(vector, Hugeint::HUGEINT_MINIMUM_STRING);
+				return result;
+			}
 			Hugeint::NegateInPlace(value);
 		}
 		int length = UnsignedLength(value) + negative;
@@ -269,7 +273,9 @@ struct HugeintToStringCast {
 	}
 
 	static int DecimalLength(hugeint_t value, uint8_t width, uint8_t scale) {
+		D_ASSERT(value > NumericLimits<hugeint_t>::Minimum());
 		int negative;
+
 		if (value.upper < 0) {
 			Hugeint::NegateInPlace(value);
 			negative = 1;

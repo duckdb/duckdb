@@ -139,7 +139,10 @@ private:
 
 struct UserTypeInfo : public ExtraTypeInfo {
 	explicit UserTypeInfo(string name_p);
+	UserTypeInfo(string catalog_p, string schema_p, string name_p);
 
+	string catalog;
+	string schema;
 	string user_type_name;
 
 public:

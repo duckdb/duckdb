@@ -3,6 +3,8 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 
+#include "duckdb/common/array.hpp"
+
 namespace duckdb {
 
 static idx_t FindNextStart(const ValidityMask &mask, idx_t l, const idx_t r, idx_t &n) {
@@ -545,6 +547,7 @@ WindowBoundariesState::WindowBoundariesState(BoundWindowExpression &wexpr, const
       partition_count(wexpr.partitions.size()), order_count(wexpr.orders.size()),
       range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
       has_preceding_range(HasPrecedingRange(wexpr)), has_following_range(HasFollowingRange(wexpr)),
+      // if we have EXCLUDE GROUP / TIES, we also need peer boundaries
       needs_peer(BoundaryNeedsPeer(wexpr.end) || ExpressionNeedsPeer(wexpr.type) ||
                  wexpr.exclude_clause >= WindowExcludeMode::GROUP) {
 }
@@ -874,7 +877,6 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
                                                  const idx_t count, const ValidityMask &partition_mask,
                                                  const ValidityMask &order_mask, WindowAggregationMode mode)
     : WindowExecutor(wexpr, context, count, partition_mask, order_mask), mode(mode), filter_executor(context) {
-	// TODO we could evaluate those expressions in parallel
 
 	//	Check for constant aggregate
 	if (IsConstantAggregate()) {
@@ -898,6 +900,7 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
 }
 
 void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count) {
+	// TODO we could evaluate those expressions in parallel
 	idx_t filtered = 0;
 	SelectionVector *filtering = nullptr;
 	if (wexpr.filter_expr) {
@@ -922,7 +925,77 @@ void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx
 
 void WindowAggregateExecutor::Finalize() {
 	D_ASSERT(aggregator);
-	aggregator->Finalize();
+
+	//	Estimate the frame statistics
+	//	Default to the entire partition if we don't know anything
+	FrameStats stats;
+	const int64_t count = aggregator->GetInputs().size();
+
+	//	First entry is the frame start
+	stats[0] = FrameDelta(-count, count);
+	auto base = wexpr.expr_stats.empty() ? nullptr : wexpr.expr_stats[0].get();
+	switch (wexpr.start) {
+	case WindowBoundary::UNBOUNDED_PRECEDING:
+		stats[0].end = 0;
+		break;
+	case WindowBoundary::CURRENT_ROW_ROWS:
+		stats[0].begin = stats[0].end = 0;
+		break;
+	case WindowBoundary::EXPR_PRECEDING_ROWS:
+		if (base && base->GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(*base)) {
+			//	Preceding so negative offset from current row
+			stats[0].begin = -NumericStats::GetMax<int64_t>(*base);
+			stats[0].end = -NumericStats::GetMin<int64_t>(*base) + 1;
+		}
+		break;
+	case WindowBoundary::EXPR_FOLLOWING_ROWS:
+		if (base && base->GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(*base)) {
+			stats[0].begin = NumericStats::GetMin<int64_t>(*base);
+			stats[0].end = NumericStats::GetMax<int64_t>(*base) + 1;
+		}
+		break;
+
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::EXPR_PRECEDING_RANGE:
+	case WindowBoundary::EXPR_FOLLOWING_RANGE:
+		break;
+	default:
+		throw InternalException("Unsupported window start boundary");
+	}
+
+	//	Second entry is the frame end
+	stats[1] = FrameDelta(-count, count);
+	base = wexpr.expr_stats.empty() ? nullptr : wexpr.expr_stats[1].get();
+	switch (wexpr.end) {
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+		stats[1].begin = 0;
+		break;
+	case WindowBoundary::CURRENT_ROW_ROWS:
+		stats[1].begin = stats[1].end = 0;
+		break;
+	case WindowBoundary::EXPR_PRECEDING_ROWS:
+		if (base && base->GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(*base)) {
+			//	Preceding so negative offset from current row
+			stats[1].begin = -NumericStats::GetMax<int64_t>(*base);
+			stats[1].end = -NumericStats::GetMin<int64_t>(*base) + 1;
+		}
+		break;
+	case WindowBoundary::EXPR_FOLLOWING_ROWS:
+		if (base && base->GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(*base)) {
+			stats[1].begin = NumericStats::GetMin<int64_t>(*base);
+			stats[1].end = NumericStats::GetMax<int64_t>(*base) + 1;
+		}
+		break;
+
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::EXPR_PRECEDING_RANGE:
+	case WindowBoundary::EXPR_FOLLOWING_RANGE:
+		break;
+	default:
+		throw InternalException("Unsupported window end boundary");
+	}
+
+	aggregator->Finalize(stats);
 }
 
 class WindowAggregateState : public WindowExecutorBoundsState {

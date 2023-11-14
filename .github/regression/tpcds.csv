@@ -82,6 +82,7 @@ benchmark/tpcds/sf1/q81.benchmark
 benchmark/tpcds/sf1/q82.benchmark
 benchmark/tpcds/sf1/q83.benchmark
 benchmark/tpcds/sf1/q84.benchmark
+benchmark/tpcds/sf1/q85.benchmark
 benchmark/tpcds/sf1/q86.benchmark
 benchmark/tpcds/sf1/q87.benchmark
 benchmark/tpcds/sf1/q88.benchmark
