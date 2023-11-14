@@ -32,11 +32,11 @@ class TestSparkToParquet(object):
         csv_rel = spark.read.parquet(temp_file_name)
 
         assert df.collect() == csv_rel.collect()
-    
+
     def test_compressed_to_parquet(self, df, spark):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
 
-        df.write.parquet(temp_file_name, compression = "ZSTD")
+        df.write.parquet(temp_file_name, compression="ZSTD")
 
         csv_rel = spark.read.parquet(temp_file_name)
 

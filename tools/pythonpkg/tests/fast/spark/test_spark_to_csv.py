@@ -191,7 +191,7 @@ class TestSparkToCSV(object):
     def test_compression_gzip(self, pandas, spark):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
         pandas_df = pandas.DataFrame({'a': ['string1', 'string2', 'string3']})
-        df =spark.createDataFrame(pandas_df)
+        df = spark.createDataFrame(pandas_df)
         df.write.csv(temp_file_name, compression="gzip", header=False)
 
         # slightly convoluted - pyspark .read.csv does not take a compression argument
