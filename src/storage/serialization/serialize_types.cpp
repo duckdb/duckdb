@@ -94,11 +94,13 @@ shared_ptr<ExtraTypeInfo> ListTypeInfo::Deserialize(Deserializer &deserializer) 
 void StringTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "collation", collation);
+	serializer.WritePropertyWithDefault<idx_t>(201, "width", width, 0);
 }
 
 shared_ptr<ExtraTypeInfo> StringTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<StringTypeInfo>(new StringTypeInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "collation", result->collation);
+	deserializer.ReadPropertyWithDefault<idx_t>(201, "width", result->width, 0);
 	return std::move(result);
 }
 

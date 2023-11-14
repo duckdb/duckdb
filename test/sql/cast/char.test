@@ -1,0 +1,38 @@
+# name: test/sql/cast/char.test
+# description: Issue #2588: Incorrect result with date conversion
+# group: [cast]
+
+#statement ok
+#PRAGMA enable_verification
+
+query III
+select 'asdf'::CHAR(3), 'asdf'::CHARACTER(3), 'asdf'::BPCHAR(3)
+----
+asd	asd	asd
+
+query I
+select 'asdf'::CHAR(4)
+----
+asdf
+
+
+query I
+select 'asdf'::CHAR(10)
+----
+asdf      
+
+query I
+select ''::CHAR(10)
+----
+          
+
+query I
+select NULL::CHAR(10)
+----
+NULL
+
+statement error
+select 'asdf'::CHAR(0)
+
+statement error
+select 'asdf'::CHAR(-1)

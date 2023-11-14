@@ -73,9 +73,10 @@ private:
 };
 
 struct StringTypeInfo : public ExtraTypeInfo {
-	explicit StringTypeInfo(string collation_p);
+	explicit StringTypeInfo(string collation_p, idx_t width_p);
 
 	string collation;
+	idx_t width;
 
 public:
 	void Serialize(Serializer &serializer) const override;

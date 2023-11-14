@@ -45,6 +45,12 @@
         "id": 200,
         "name": "collation",
         "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "width",
+        "type": "idx_t",
+        "default": 0
       }
     ]
   },

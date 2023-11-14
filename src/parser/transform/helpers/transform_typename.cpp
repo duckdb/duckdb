@@ -159,6 +159,16 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 			width = 0;
 			result_type = LogicalType::VARCHAR;
 			break;
+		case LogicalTypeId::CHAR:
+			if (modifier_idx > 1) {
+				throw ParserException("CHAR only supports a single modifier");
+			}
+			if (width < 1) {
+				throw ParserException("CHAR width must be at least 1");
+			}
+			result_type = LogicalType::CHAR(width);
+			break;
+
 		case LogicalTypeId::DECIMAL:
 			if (modifier_idx == 1) {
 				// only width is provided: set scale to 0

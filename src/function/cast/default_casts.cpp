@@ -121,6 +121,8 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return IntervalCastSwitch(input, source, target);
 	case LogicalTypeId::VARCHAR:
 		return StringCastSwitch(input, source, target);
+	case LogicalTypeId::CHAR:
+		return CharCastSwitch(input, source, target);
 	case LogicalTypeId::BLOB:
 		return BlobCastSwitch(input, source, target);
 	case LogicalTypeId::BIT:

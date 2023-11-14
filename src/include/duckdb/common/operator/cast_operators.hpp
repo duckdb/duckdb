@@ -812,4 +812,28 @@ struct CastFromPointer {
 template <>
 duckdb::string_t CastFromPointer::Operation(uintptr_t input, Vector &vector);
 
+//===--------------------------------------------------------------------===//
+// CHAR (fixed-length, space-padded)
+//===--------------------------------------------------------------------===//
+struct CastFromChar {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		throw duckdb::NotImplementedException("Cast from CHAR could not be performed!");
+	}
+};
+template <>
+duckdb::string_t CastFromChar::Operation(duckdb::string_t input, Vector &vector);
+
+struct TryCastToChar {
+	template <class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, Vector &result_vector, string *error_message,
+	                             bool strict = false) {
+		throw InternalException("Unsupported type for try cast to CHAR");
+	}
+};
+
+template <>
+DUCKDB_API bool TryCastToChar::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
+                                         bool strict);
+
 } // namespace duckdb

@@ -542,6 +542,10 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		auto str = reinterpret_cast<string_t *>(data)[index];
 		return Value(str.GetString());
 	}
+	case LogicalTypeId::CHAR: {
+		auto str = reinterpret_cast<string_t *>(data)[index];
+		return Value::CHAR(str.GetString(), StringType::GetWidth(type));
+	}
 	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::BLOB: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
@@ -597,7 +601,6 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 		value.GetTypeMutable().CopyAuxInfo(v_p.GetType());
 	}
 	if (v_p.GetType().id() != LogicalTypeId::AGGREGATE_STATE && value.type().id() != LogicalTypeId::AGGREGATE_STATE) {
-
 		D_ASSERT(v_p.GetType() == value.type());
 	}
 	return value;

@@ -805,6 +805,17 @@ bool LogicalType::HasAlias() const {
 }
 
 //===--------------------------------------------------------------------===//
+// Blank-padded fixed-width CHAR Type
+//===--------------------------------------------------------------------===//
+LogicalType LogicalType::CHAR(int width) {
+	if (width < 1) {
+		throw InternalException("Length for type CHAR must be at least 1");
+	}
+	auto type_info = make_shared<StringTypeInfo>("", width);
+	return LogicalType(LogicalTypeId::CHAR, std::move(type_info));
+}
+
+//===--------------------------------------------------------------------===//
 // Decimal Type
 //===--------------------------------------------------------------------===//
 uint8_t DecimalType::GetWidth(const LogicalType &type) {
@@ -848,8 +859,22 @@ string StringType::GetCollation(const LogicalType &type) {
 	return info->Cast<StringTypeInfo>().collation;
 }
 
+idx_t StringType::GetWidth(const LogicalType &type) {
+	if (type.id() != LogicalTypeId::CHAR) {
+		return 0;
+	}
+	auto info = type.AuxInfo();
+	if (!info) {
+		return 0;
+	}
+	if (info->type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
+		return 0;
+	}
+	return info->Cast<StringTypeInfo>().width;
+}
+
 LogicalType LogicalType::VARCHAR_COLLATION(string collation) { // NOLINT
-	auto string_info = make_shared<StringTypeInfo>(std::move(collation));
+	auto string_info = make_shared<StringTypeInfo>(std::move(collation), 0);
 	return LogicalType(LogicalTypeId::VARCHAR, std::move(string_info));
 }
 

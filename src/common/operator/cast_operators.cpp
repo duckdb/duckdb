@@ -1524,6 +1524,34 @@ bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_v
 }
 
 //===--------------------------------------------------------------------===//
+// Cast From CHAR
+//===--------------------------------------------------------------------===//
+template <>
+string_t CastFromChar::Operation(string_t input, Vector &vector) {
+	string_t result = StringVector::AddString(vector, input);
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast To CHAR
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCastToChar::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
+                              bool strict) {
+	auto width = StringType::GetWidth(result_vector.GetType());
+	D_ASSERT(width > 0);
+	result = StringVector::EmptyString(result_vector, width);
+	auto result_data = result.GetDataWriteable();
+	auto copy_bytes = MinValue(width, input.GetSize());
+	memcpy(result_data, input.GetData(), copy_bytes);
+	if (copy_bytes < width) {
+		memset(result_data + copy_bytes, ' ', width - copy_bytes);
+	}
+	result.Finalize();
+	return true;
+}
+
+//===--------------------------------------------------------------------===//
 // Cast To Bit
 //===--------------------------------------------------------------------===//
 template <>

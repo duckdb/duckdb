@@ -802,6 +802,17 @@ Value Value::INTERVAL(interval_t interval) {
 	return Value::INTERVAL(interval.months, interval.days, interval.micros);
 }
 
+Value Value::CHAR(const string &value, idx_t width) {
+	if (!Value::StringIsValid(value.c_str(), value.size())) {
+		throw Exception(ErrorManager::InvalidUnicodeError(value, "value construction"));
+	}
+
+	Value result(LogicalType::CHAR(width));
+	result.value_info_ = make_shared<StringValueInfo>(value);
+	result.is_null = false;
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // CreateValue
 //===--------------------------------------------------------------------===//

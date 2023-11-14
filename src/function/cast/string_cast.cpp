@@ -110,6 +110,8 @@ static BoundCastInfo VectorStringCastNumericSwitch(BindCastInput &input, const L
 		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, interval_t, duckdb::TryCastErrorMessage>);
 	case LogicalTypeId::DECIMAL:
 		return BoundCastInfo(&VectorCastHelpers::ToDecimalCast<string_t>);
+	case LogicalTypeId::CHAR:
+		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, string_t, duckdb::TryCastToChar>);
 	default:
 		return DefaultCasts::TryVectorNullCast;
 	}
@@ -407,8 +409,21 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		                     MapBoundCastData::BindMapToMapCast(
 		                         input, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR), target),
 		                     InitMapCastLocalState);
+	case LogicalTypeId::CHAR:
+		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, string_t, duckdb::TryCastToChar>);
 	default:
 		return VectorStringCastNumericSwitch(input, source, target);
+	}
+}
+
+BoundCastInfo DefaultCasts::CharCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+	// now switch on the result type
+	switch (target.id()) {
+	case LogicalTypeId::VARCHAR:
+		// uuid to varchar
+		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, duckdb::CastFromChar>);
+	default:
+		return TryVectorNullCast;
 	}
 }
 

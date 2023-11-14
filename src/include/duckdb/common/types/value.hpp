@@ -171,6 +171,8 @@ public:
 	//! Creates a bitstring by casting a specified string to a bitstring
 	DUCKDB_API static Value BIT(const_data_ptr_t data, idx_t len);
 	DUCKDB_API static Value BIT(const string &data);
+	//! Creates a fixed-width char value with the given width
+	DUCKDB_API static Value CHAR(const string &value, idx_t width);
 
 	template <class T>
 	T GetValue() const;

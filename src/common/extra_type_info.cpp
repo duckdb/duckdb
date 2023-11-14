@@ -68,13 +68,14 @@ bool DecimalTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 StringTypeInfo::StringTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO) {
 }
 
-StringTypeInfo::StringTypeInfo(string collation_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO), collation(std::move(collation_p)) {
+StringTypeInfo::StringTypeInfo(string collation_p, idx_t width_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO), collation(std::move(collation_p)), width(width_p) {
 }
 
 bool StringTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	// collation info has no impact on equality
-	return true;
+	auto &other = other_p->Cast<StringTypeInfo>();
+	return width == other.width;
 }
 
 //===--------------------------------------------------------------------===//

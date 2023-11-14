@@ -356,6 +356,7 @@ public:
 	static constexpr const LogicalTypeId ROW_TYPE = LogicalTypeId::BIGINT;
 
 	// explicitly allowing these functions to be capitalized to be in-line with the remaining functions
+	DUCKDB_API static LogicalType CHAR(int width);                 // NOLINT
 	DUCKDB_API static LogicalType DECIMAL(int width, int scale);                 // NOLINT
 	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);           // NOLINT
 	DUCKDB_API static LogicalType LIST(const LogicalType &child);                       // NOLINT
@@ -384,6 +385,8 @@ struct DecimalType {
 
 struct StringType {
 	DUCKDB_API static string GetCollation(const LogicalType &type);
+	DUCKDB_API static idx_t GetWidth(const LogicalType &type);
+
 };
 
 struct ListType {
