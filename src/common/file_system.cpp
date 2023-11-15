@@ -344,7 +344,7 @@ bool FileSystem::FileExists(const string &filename) {
 }
 
 bool FileSystem::IsPipe(const string &filename) {
-	throw NotImplementedException("%s: IsPipe is not implemented!", GetName());
+	return false;
 }
 
 void FileSystem::RemoveFile(const string &filename) {
@@ -498,6 +498,10 @@ idx_t FileHandle::SeekPosition() {
 
 bool FileHandle::CanSeek() {
 	return file_system.CanSeek();
+}
+
+bool FileHandle::IsPipe() {
+	return file_system.IsPipe(path);
 }
 
 string FileHandle::ReadLine() {
