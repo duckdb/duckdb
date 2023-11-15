@@ -10,6 +10,7 @@
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/function/scalar/strftime_format.hpp"
 
 namespace duckdb {
 
@@ -124,6 +125,10 @@ private:
 		default:
 			throw InternalException("Invalid Newline Detected.");
 		}
+	}
+
+	std::string FormatValueInternal(const StrpTimeFormat &val) const {
+		return val.format_specifier;
 	}
 
 	std::string FormatValueInternal(const bool &val) const {

@@ -1127,6 +1127,10 @@ StrpTimeFormat::ParseResult StrpTimeFormat::Parse(const string &format_string, c
 	return result;
 }
 
+bool StrpTimeFormat::Empty() const {
+	return format_specifier.empty();
+}
+
 string StrpTimeFormat::FormatStrpTimeError(const string &input, idx_t position) {
 	if (position == DConstants::INVALID_INDEX) {
 		return string();

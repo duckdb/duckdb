@@ -94,7 +94,7 @@ bool CSVSniffer::TryCastValue(CSVStateMachine &candidate, const Value &value, co
 	if (value.IsNull()) {
 		return true;
 	}
-	if (candidate.dialect_options.has_format.find(LogicalTypeId::DATE)->second &&
+	if (!candidate.dialect_options.date_format.find(LogicalTypeId::DATE)->second.GetValue().Empty() &&
 	    sql_type.id() == LogicalTypeId::DATE) {
 		date_t result;
 		string error_message;
@@ -102,7 +102,7 @@ bool CSVSniffer::TryCastValue(CSVStateMachine &candidate, const Value &value, co
 		    ->second.GetValue()
 		    .TryParseDate(string_t(StringValue::Get(value)), result, error_message);
 	}
-	if (candidate.dialect_options.has_format.find(LogicalTypeId::TIMESTAMP)->second &&
+	if (!candidate.dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)->second.GetValue().Empty() &&
 	    sql_type.id() == LogicalTypeId::TIMESTAMP) {
 		timestamp_t result;
 		string error_message;
@@ -120,7 +120,6 @@ bool CSVSniffer::TryCastValue(CSVStateMachine &candidate, const Value &value, co
 
 void CSVSniffer::SetDateFormat(CSVStateMachine &candidate, const string &format_specifier,
                                const LogicalTypeId &sql_type) {
-	candidate.dialect_options.has_format[sql_type] = true;
 	StrpTimeFormat strpformat;
 	StrTimeFormat::ParseFormatSpecifier(format_specifier, strpformat);
 	candidate.dialect_options.date_format[sql_type].Set(strpformat, false);
@@ -225,7 +224,6 @@ void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate,
 			}
 		}
 		//	initialise the first candidate
-		candidate.dialect_options.has_format[sql_type.id()] = true;
 		//	all formats are constructed to be valid
 		SetDateFormat(candidate, type_format_candidates.back(), sql_type.id());
 	}
@@ -240,7 +238,6 @@ void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate,
 		}
 		//	doesn't work - move to the next one
 		type_format_candidates.pop_back();
-		candidate.dialect_options.has_format[sql_type.id()] = (!type_format_candidates.empty());
 		if (!type_format_candidates.empty()) {
 			SetDateFormat(candidate, type_format_candidates.back(), sql_type.id());
 		}
@@ -351,14 +348,8 @@ void CSVSniffer::DetectTypes() {
 					const auto &sql_type = col_type_candidates.back();
 					// try formatting for date types if the user did not specify one and it starts with numeric values.
 					string separator;
-					bool has_format_is_set = false;
-					auto format_iterator = candidate->dialect_options.has_format.find(sql_type.id());
-					if (format_iterator != candidate->dialect_options.has_format.end()) {
-						has_format_is_set = format_iterator->second;
-					}
-					if (has_format_candidates.count(sql_type.id()) &&
-					    (!has_format_is_set || format_candidates[sql_type.id()].size() > 1) && !dummy_val.IsNull() &&
-					    StartsWithNumericDate(separator, StringValue::Get(dummy_val))) {
+					if (has_format_candidates.count(sql_type.id()) && (format_candidates[sql_type.id()].size() > 1) &&
+					    !dummy_val.IsNull() && StartsWithNumericDate(separator, StringValue::Get(dummy_val))) {
 						DetectDateAndTimeStampFormats(*candidate, has_format_candidates, format_candidates, sql_type,
 						                              separator, dummy_val);
 					}

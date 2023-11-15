@@ -597,10 +597,6 @@
       {"id": 128,
         "name": "dialect_options.date_format",
         "type": "map<LogicalTypeId, CSVOption<StrpTimeFormat>>"
-      },
-      {"id": 129,
-        "name": "dialect_options.has_format",
-        "type": "map<LogicalTypeId, bool>"
       }
     ],
     "pointer_type": "none"

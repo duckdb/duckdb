@@ -154,7 +154,6 @@ void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, b
 	if (!error.empty()) {
 		throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
 	}
-	dialect_options.has_format[type] = true;
 }
 
 void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, vector<string> &expected_names) {
@@ -322,16 +321,10 @@ string CSVReaderOptions::ToString() const {
 	// skip_rows
 	error += FormatOptionLine("skip_rows", skip_rows);
 	// date format
-	if (dialect_options.has_format.at(LogicalType::DATE) &&
-	    dialect_options.date_format.find(LogicalType::DATE) != dialect_options.date_format.end()) {
-		error += FormatOptionLine("date_format", dialect_options.date_format.at(LogicalType::DATE));
-	}
-
+	error += FormatOptionLine("date_format", dialect_options.date_format.at(LogicalType::DATE));
 	// timestamp format
-	if (dialect_options.has_format.at(LogicalType::TIMESTAMP) &&
-	    dialect_options.date_format.find(LogicalType::TIMESTAMP) != dialect_options.date_format.end()) {
-		error += FormatOptionLine("timestamp_format", dialect_options.date_format.at(LogicalType::TIMESTAMP));
-	}
+	error += FormatOptionLine("timestamp_format", dialect_options.date_format.at(LogicalType::TIMESTAMP));
+
 	// Now we do options that can only be set by the user, that might hold some general significance
 	// null padding
 	error += "null_padding=" + std::to_string(null_padding) + "\n  ";

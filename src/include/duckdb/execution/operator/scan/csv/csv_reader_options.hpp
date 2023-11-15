@@ -51,8 +51,6 @@ struct DialectOptions {
 	//! The date format to use (if any is specified)
 	map<LogicalTypeId, CSVOption<StrpTimeFormat>> date_format = {{LogicalTypeId::DATE, {}},
 	                                                             {LogicalTypeId::TIMESTAMP, {}}};
-	//! Whether or not a type format is specified
-	map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 	//! How many leading rows to skip
 	CSVOption<idx_t> skip_rows = 0;
 	//! True start of the first CSV Buffer (After skipping empty lines, headers, notes and so on)

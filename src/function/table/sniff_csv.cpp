@@ -138,23 +138,11 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	columns << "}";
 	output.SetValue(6, 0, columns.str());
 	// 8. Date Format
-	if (sniffer_options.dialect_options.has_format[LogicalType::DATE] &&
-	    sniffer_options.dialect_options.date_format.find(LogicalType::DATE) !=
-	        sniffer_options.dialect_options.date_format.end()) {
-		output.SetValue(7, 0,
-		                sniffer_options.dialect_options.date_format[LogicalType::DATE].GetValue().format_specifier);
-	} else {
-		output.SetValue(7, 0, Value());
-	}
+	output.SetValue(7, 0, sniffer_options.dialect_options.date_format[LogicalType::DATE].GetValue().format_specifier);
+
 	// 9. Timestamp Format
-	if (sniffer_options.dialect_options.has_format[LogicalType::TIMESTAMP] &&
-	    sniffer_options.dialect_options.date_format.find(LogicalType::TIMESTAMP) !=
-	        sniffer_options.dialect_options.date_format.end()) {
-		output.SetValue(
-		    8, 0, sniffer_options.dialect_options.date_format[LogicalType::TIMESTAMP].GetValue().format_specifier);
-	} else {
-		output.SetValue(8, 0, Value());
-	}
+	output.SetValue(8, 0,
+	                sniffer_options.dialect_options.date_format[LogicalType::TIMESTAMP].GetValue().format_specifier);
 
 	// 10. The Extra User Arguments
 	if (data.options.user_defined_parameters.empty()) {
@@ -204,9 +192,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	// 11.7. column={'col1': 'INTEGER', 'col2': 'VARCHAR'}
 	csv_read << "columns=" << columns.str();
 	// 11.8. Date Format
-	if (sniffer_options.dialect_options.has_format[LogicalType::DATE] &&
-	    sniffer_options.dialect_options.date_format.find(LogicalType::DATE) !=
-	        sniffer_options.dialect_options.date_format.end()) {
+	if (!sniffer_options.dialect_options.date_format[LogicalType::DATE].IsSetByUser()) {
 		if (!sniffer_options.dialect_options.date_format[LogicalType::DATE].GetValue().format_specifier.empty()) {
 			csv_read << separator << "dateformat="
 			         << "'"
@@ -215,9 +201,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 		}
 	}
 	// 11.9. Timestamp Format
-	if (sniffer_options.dialect_options.has_format[LogicalType::TIMESTAMP] &&
-	    sniffer_options.dialect_options.date_format.find(LogicalType::TIMESTAMP) !=
-	        sniffer_options.dialect_options.date_format.end()) {
+	if (!sniffer_options.dialect_options.date_format[LogicalType::TIMESTAMP].IsSetByUser()) {
 		if (!sniffer_options.dialect_options.date_format[LogicalType::TIMESTAMP].GetValue().format_specifier.empty()) {
 			csv_read << separator << "timestampformat="
 			         << "'"

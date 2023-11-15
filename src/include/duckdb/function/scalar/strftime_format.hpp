@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/function/scalar/strftime.hpp
+// duckdb/function/scalar/strftime_format.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -141,6 +141,9 @@ public:
 	};
 
 public:
+	bool operator!=(const StrpTimeFormat &other) const {
+		return format_specifier != other.format_specifier;
+	}
 	DUCKDB_API static ParseResult Parse(const string &format, const string &text);
 
 	DUCKDB_API bool Parse(string_t str, ParseResult &result) const;
@@ -153,6 +156,8 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 	static StrpTimeFormat Deserialize(Deserializer &deserializer);
+	//! If the string format is empty
+	DUCKDB_API bool Empty() const;
 
 protected:
 	static string FormatStrpTimeError(const string &input, idx_t position);
