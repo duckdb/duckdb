@@ -4,9 +4,8 @@
 
 require icu
 
-# This breaks the 'verification_stats' check
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 # Note: this also contains TIMESTAMP_NS
 foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
