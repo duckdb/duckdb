@@ -118,19 +118,6 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "dialect_options.date_format", dialect_options.date_format);
 }
 
-template <typename T>
- CSVOption<T> CSVOption<T>::Deserialize(Deserializer &deserializer) {
-		bool set_by_user = deserializer.ReadProperty<bool>(100, "set_by_user");
-		T value = deserializer.ReadProperty<T>(101, "value");
-		return {value,set_by_user};
-	};
-   template <typename T>
-
-    void CSVOption<T>::Serialize(Serializer &serializer) const {
-	    serializer.WriteProperty(100, "set_by_user",set_by_user);
-		serializer.WriteProperty(101, "value",value);
-	};
-
 CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	CSVReaderOptions result;
 	deserializer.ReadPropertyWithDefault<bool>(100, "ignore_errors", result.ignore_errors);

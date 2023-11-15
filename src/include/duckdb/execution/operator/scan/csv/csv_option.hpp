@@ -32,64 +32,36 @@ public:
 
 	//! Sets value.
 	//! If by user it also toggles the set_by user flag
-	void Set(T value_p, bool by_user = true) {
-		D_ASSERT(!(by_user && set_by_user));
-		if (!set_by_user) {
-			// If it's not set by user we can change the value
-			value = value_p;
-			set_by_user = by_user;
-		}
-	}
+	void Set(T value_p, bool by_user = true);
 
 	//! Sets value.
 	//! If by user it also toggles the set_by user flag
-	void Set(CSVOption value_p, bool by_user = true) {
-		D_ASSERT(!(by_user && set_by_user));
-		if (!set_by_user) {
-			// If it's not set by user we can change the value
-			value = value_p;
-			set_by_user = by_user;
-		}
-	}
+	void Set(CSVOption value_p, bool by_user = true);
 
-	bool operator==(const CSVOption &other) const {
-		return value == other.value;
-	}
+	bool operator==(const CSVOption &other) const;
 
-	bool operator!=(const CSVOption &other) const {
-		return value != other.value;
-	}
+	bool operator!=(const CSVOption &other) const;
 
-	bool operator==(const T &other) const {
-		return value == other;
-	}
+	bool operator==(const T &other) const;
 
-	bool operator!=(const T &other) const {
-		return value != other;
-	}
+	bool operator!=(const T &other) const;
 
-	const T GetValue() const {
-		return value;
-	}
-	bool IsSetByUser() const {
-		return set_by_user;
-	}
+	//! Returns CSV Option value
+	const T GetValue() const;
+
+	//! Returns if option was manually set by the user
+	bool IsSetByUser() const;
 
 	//! Returns a formatted string with information regarding how this option was set
-	string FormatSet() const {
-		if (set_by_user) {
-			return "(Set By User)";
-		}
-		return "(Auto-Detected)";
-	}
+	string FormatSet() const;
 
 	//! Returns a formatted string with the actual value of this option
-	string FormatValue() const {
-		return FormatValueInternal(value);
-	}
+	string FormatValue() const;
 
+	//! Serializes CSV Option
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 
+	//! Deserializes CSV Option
 	DUCKDB_API static CSVOption<T> Deserialize(Deserializer &deserializer);
 
 private:
@@ -97,46 +69,26 @@ private:
 	bool set_by_user = false;
 	T value;
 
+	//! --------------------------------------------------- //
+	//! Functions used to convert a value to a string
+	//! --------------------------------------------------- //
+
 	template <typename U>
 	std::string FormatValueInternal(const U &val) const {
 		throw InternalException("Type not accepted as CSV Option.");
 	}
 
-	std::string FormatValueInternal(const std::string &val) const {
-		return val;
-	}
+	std::string FormatValueInternal(const std::string &val) const;
 
-	std::string FormatValueInternal(const idx_t &val) const {
-		return to_string(val);
-	}
+	std::string FormatValueInternal(const idx_t &val) const;
 
-	std::string FormatValueInternal(const char &val) const {
-		string char_val;
-		char_val += val;
-		return char_val;
-	}
+	std::string FormatValueInternal(const char &val) const;
 
-	std::string FormatValueInternal(const NewLineIdentifier &val) const {
-		switch (val) {
-		case NewLineIdentifier::SINGLE:
-			return "\\n";
-		case NewLineIdentifier::CARRY_ON:
-			return "\\r\\n";
-		default:
-			throw InternalException("Invalid Newline Detected.");
-		}
-	}
+	std::string FormatValueInternal(const NewLineIdentifier &val) const;
 
-	std::string FormatValueInternal(const StrpTimeFormat &val) const {
-		return val.format_specifier;
-	}
+	std::string FormatValueInternal(const StrpTimeFormat &val) const;
 
-	std::string FormatValueInternal(const bool &val) const {
-		if (val) {
-			return "true";
-		}
-		return "false";
-	}
+	std::string FormatValueInternal(const bool &val) const;
 };
 
 } // namespace duckdb
