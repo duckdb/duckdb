@@ -27,7 +27,7 @@ TEST_CASE("Get SQL TIMESTAMP value via SQLGetData", "[odbc][time]") {
 	EXECUTE_AND_CHECK("SQLAllocHandle()", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &stmt);
 
 	EXECUTE_AND_CHECK("SQLExecDirect()", SQLExecDirect, stmt,
-	                  (SQLCHAR *)"SELECT TIMESTAMP '1992-09-20 12:34:56.123456' as dt", SQL_NTS);
+	                  ConvertToSQLCHAR("SELECT TIMESTAMP '1992-09-20 12:34:56.123456' as dt"), SQL_NTS);
 
 	test_row_column_count(stmt);
 
@@ -69,7 +69,7 @@ TEST_CASE("Get SQL TIMESTAMP value via SQLBindCol", "[odbc][time]") {
 	EXECUTE_AND_CHECK("SQLAllocHandle()", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &stmt);
 
 	EXECUTE_AND_CHECK("SQLExecDirect()", SQLExecDirect, stmt,
-	                  (SQLCHAR *)"SELECT TIMESTAMP '1992-09-20 12:34:56.123456' as dt", SQL_NTS);
+	                  ConvertToSQLCHAR("SELECT TIMESTAMP '1992-09-20 12:34:56.123456' as dt"), SQL_NTS);
 
 	test_row_column_count(stmt);
 
@@ -110,7 +110,7 @@ TEST_CASE("Get SQL DATE value via SQLGetData", "[odbc][time]") {
 
 	EXECUTE_AND_CHECK("SQLAllocHandle()", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &stmt);
 
-	EXECUTE_AND_CHECK("SQLExecDirect()", SQLExecDirect, stmt, (SQLCHAR *)"SELECT DATE '1992-09-20' as d", SQL_NTS);
+	EXECUTE_AND_CHECK("SQLExecDirect()", SQLExecDirect, stmt, ConvertToSQLCHAR("SELECT DATE '1992-09-20' as d"), SQL_NTS);
 
 	test_row_column_count(stmt);
 
@@ -141,7 +141,7 @@ TEST_CASE("Get SQL DATE value via SQLBindCol", "[odbc][time]") {
 
 	EXECUTE_AND_CHECK("SQLAllocHandle()", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &stmt);
 
-	EXECUTE_AND_CHECK("SQLExecDirect()", SQLExecDirect, stmt, (SQLCHAR *)"SELECT DATE '1992-09-20' as d", SQL_NTS);
+	EXECUTE_AND_CHECK("SQLExecDirect()", SQLExecDirect, stmt, ConvertToSQLCHAR("SELECT DATE '1992-09-20' as d"), SQL_NTS);
 
 	test_row_column_count(stmt);
 
@@ -171,7 +171,7 @@ TEST_CASE("Get SQL TIME value via SQLGetData", "[odbc][time]") {
 
 	EXECUTE_AND_CHECK("SQLAllocHandle()", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &stmt);
 
-	EXECUTE_AND_CHECK("SQLExecDirect()", SQLExecDirect, stmt, (SQLCHAR *)"SELECT TIME '12:34:56' as t", SQL_NTS);
+	EXECUTE_AND_CHECK("SQLExecDirect()", SQLExecDirect, stmt, ConvertToSQLCHAR("SELECT TIME '12:34:56' as t"), SQL_NTS);
 
 	test_row_column_count(stmt);
 
@@ -208,7 +208,7 @@ TEST_CASE("Get SQL TIME value via SQLBindCol", "[odbc][time]") {
 
 	EXECUTE_AND_CHECK("SQLAllocHandle()", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &stmt);
 
-	EXECUTE_AND_CHECK("SQLExecDirect()", SQLExecDirect, stmt, (SQLCHAR *)"SELECT TIME '12:34:56' as t", SQL_NTS);
+	EXECUTE_AND_CHECK("SQLExecDirect()", SQLExecDirect, stmt, ConvertToSQLCHAR("SELECT TIME '12:34:56' as t"), SQL_NTS);
 
 	test_row_column_count(stmt);
 
