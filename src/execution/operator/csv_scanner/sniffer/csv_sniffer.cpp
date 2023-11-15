@@ -58,23 +58,21 @@ void MatchAndRepaceUserSetVariables(CSVReaderOptions &original, DialectOptions &
 	MatchAndReplace(original.dialect_options.header, sniffed.header, "Header");
 	MatchAndReplace(original.dialect_options.new_line, sniffed.new_line, "New Line");
 	MatchAndReplace(original.dialect_options.skip_rows, sniffed.skip_rows, "Skip Rows");
-	MatchAndReplace(original.dialect_options.state_machine_options.delimiter,
-	                sniffed.state_machine_options.delimiter, "Delimiter");
-	MatchAndReplace(original.dialect_options.state_machine_options.quote,
-	                sniffed.state_machine_options.quote, "Quote");
-	MatchAndReplace(original.dialect_options.state_machine_options.escape,
-	                sniffed.state_machine_options.escape, "Escape");
-	MatchAndReplace(original.dialect_options.skip_rows,
-	                sniffed.skip_rows, "Skip Rows");
+	MatchAndReplace(original.dialect_options.state_machine_options.delimiter, sniffed.state_machine_options.delimiter,
+	                "Delimiter");
+	MatchAndReplace(original.dialect_options.state_machine_options.quote, sniffed.state_machine_options.quote, "Quote");
+	MatchAndReplace(original.dialect_options.state_machine_options.escape, sniffed.state_machine_options.escape,
+	                "Escape");
+	MatchAndReplace(original.dialect_options.skip_rows, sniffed.skip_rows, "Skip Rows");
 
-	//fixme: set date and timestamp and skiprows
+	// fixme: set date and timestamp and skiprows
 	//! The date format to use (if any is specified)
-//	map<LogicalTypeId, CSVOption<StrpTimeFormat>> date_format = {{LogicalTypeId::DATE, {}},
-//	                                                             {LogicalTypeId::TIMESTAMP, {}}};
+	//	map<LogicalTypeId, CSVOption<StrpTimeFormat>> date_format = {{LogicalTypeId::DATE, {}},
+	//	                                                             {LogicalTypeId::TIMESTAMP, {}}};
 }
 // Set the CSV Options in the reference
 void CSVSniffer::SetResultOptions() {
-	MatchAndRepaceUserSetVariables(options,best_candidate->dialect_options);
+	MatchAndRepaceUserSetVariables(options, best_candidate->dialect_options);
 	if (options.dialect_options.header.GetValue()) {
 		options.dialect_options.true_start = best_start_with_header;
 	} else {
