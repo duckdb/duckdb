@@ -310,6 +310,7 @@ static const char *const JDBC_STREAM_RESULTS = "jdbc_stream_results";
 jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolean read_only, jobject props) {
 	auto database = byte_array_to_string(env, database_j);
 	DBConfig config;
+	config.SetOptionByName("duckdb_api", "java");
 	config.AddExtensionOption(
 	    JDBC_STREAM_RESULTS,
 	    "Whether to stream results. Only one ResultSet on a connection can be open at once when true",
@@ -957,6 +958,11 @@ void _duckdb_jdbc_appender_append_float(JNIEnv *env, jclass, jobject appender_re
 
 void _duckdb_jdbc_appender_append_double(JNIEnv *env, jclass, jobject appender_ref_buf, jdouble value) {
 	get_appender(env, appender_ref_buf)->Append((double)value);
+}
+
+void _duckdb_jdbc_appender_append_timestamp(JNIEnv *env, jclass, jobject appender_ref_buf, jlong value) {
+	timestamp_t timestamp = timestamp_t((int64_t)value);
+	get_appender(env, appender_ref_buf)->Append(Value::TIMESTAMP(timestamp));
 }
 
 void _duckdb_jdbc_appender_append_string(JNIEnv *env, jclass, jobject appender_ref_buf, jbyteArray value) {

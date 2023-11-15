@@ -21,7 +21,6 @@
 namespace duckdb {
 class ColumnSegment;
 class BlockManager;
-class ColumnSegment;
 class ColumnData;
 class DatabaseInstance;
 class Transaction;
