@@ -5,6 +5,7 @@
 #include "duckdb/planner/operator/logical_delim_get.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/planner/joinside.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 
 namespace duckdb {
 
