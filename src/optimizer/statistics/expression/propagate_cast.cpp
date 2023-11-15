@@ -37,61 +37,69 @@ static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatisti
 	// FIXME: perform actual stats propagation for these casts
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ: {
+		const bool to_timestamp = target.id() == LogicalTypeId::TIMESTAMP;
+		const bool to_timestamp_tz = target.id() == LogicalTypeId::TIMESTAMP_TZ;
 		//  Casting to timestamp[_tz] (us) from a different unit can not re-use stats
 		switch (input.GetType().id()) {
-			case LogicalTypeId::TIMESTAMP_NS:
-			case LogicalTypeId::TIMESTAMP_MS:
-			case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return nullptr;
+		case LogicalTypeId::TIMESTAMP: {
+			if (to_timestamp_tz) {
+				// Both use INT64 physical type, but should not be treated equal
 				return nullptr;
-			default:
-				break;
+			}
+			break;
 		}
-		if (target.id() == LogicalTypeId::TIMESTAMP && input.GetType().id() == LogicalTypeId::TIMESTAMP_TZ) {
-			// Both use INT64 physical type, but should not be treated equal
-			return nullptr;
+		case LogicalTypeId::TIMESTAMP_TZ: {
+			if (to_timestamp) {
+				// Both use INT64 physical type, but should not be treated equal
+				return nullptr;
+			}
+			break;
 		}
-		if (target.id() == LogicalTypeId::TIMESTAMP_TZ && input.GetType().id() == LogicalTypeId::TIMESTAMP) {
-			// Both use INT64 physical type, but should not be treated equal
-			return nullptr;
+		default:
+			break;
 		}
 		break;
 	}
 	case LogicalTypeId::TIMESTAMP_NS: {
 		// Same as above ^
 		switch (input.GetType().id()) {
-			case LogicalTypeId::TIMESTAMP:
-			case LogicalTypeId::TIMESTAMP_TZ:
-			case LogicalTypeId::TIMESTAMP_MS:
-			case LogicalTypeId::TIMESTAMP_SEC:
-				return nullptr;
-			default:
-				break;
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return nullptr;
+		default:
+			break;
 		}
 		break;
 	}
 	case LogicalTypeId::TIMESTAMP_MS: {
 		// Same as above ^
 		switch (input.GetType().id()) {
-			case LogicalTypeId::TIMESTAMP:
-			case LogicalTypeId::TIMESTAMP_TZ:
-			case LogicalTypeId::TIMESTAMP_NS:
-			case LogicalTypeId::TIMESTAMP_SEC:
-				return nullptr;
-			default:
-				break;
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return nullptr;
+		default:
+			break;
 		}
 		break;
 	}
 	case LogicalTypeId::TIMESTAMP_SEC: {
 		// Same as above ^
 		switch (input.GetType().id()) {
-			case LogicalTypeId::TIMESTAMP:
-			case LogicalTypeId::TIMESTAMP_TZ:
-			case LogicalTypeId::TIMESTAMP_NS:
-			case LogicalTypeId::TIMESTAMP_MS:
-				return nullptr;
-			default:
-				break;
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_MS:
+			return nullptr;
+		default:
+			break;
 		}
 		break;
 	}
