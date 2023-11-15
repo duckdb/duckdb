@@ -52,31 +52,38 @@ static void AssertValidFileFlags(uint8_t flags) {
 }
 
 #ifndef _WIN32
+
 bool LocalFileSystem::FileExists(const string &filename) {
 	if (!filename.empty()) {
-		if (access(filename.c_str(), 0) == 0) {
-			struct stat status;
-			stat(filename.c_str(), &status);
-			if (S_ISREG(status.st_mode)) {
-				return true;
-			}
+		if (access(filename.c_str(), 0) != 0) {
+			throw IOException("Cannot access file \"%s\": %s", filename, strerror(errno));
+		}
+		struct stat status;
+		if (stat(filename.c_str(), &status) != 0) {
+			throw IOException("Cannot stat file \"%s\": %s", filename, strerror(errno));
+		}
+		if (S_ISREG(status.st_mode)) {
+			return true;
 		}
 	}
-	// if any condition fails
+	// Return false at this point
 	return false;
 }
 
 bool LocalFileSystem::IsPipe(const string &filename) {
 	if (!filename.empty()) {
-		if (access(filename.c_str(), 0) == 0) {
-			struct stat status;
-			stat(filename.c_str(), &status);
-			if (S_ISFIFO(status.st_mode)) {
-				return true;
-			}
+		if (access(filename.c_str(), 0) != 0) {
+			throw IOException("Cannot access file \"%s\": %s", filename, strerror(errno));
+		}
+		struct stat status;
+		if (stat(filename.c_str(), &status) != 0) {
+			throw IOException("Cannot stat file \"%s\": %s", filename, strerror(errno));
+		}
+		if (S_ISFIFO(status.st_mode)) {
+			return true;
 		}
 	}
-	// if any condition fails
+	// Return false at this point
 	return false;
 }
 
