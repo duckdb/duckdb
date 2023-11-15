@@ -31,7 +31,7 @@ string BaseKeyValueSecret::ToString(bool redact) const {
 		}
 	}
 
-	return result;
+	return result.substr(1,result.size()-1);
 }
 
 void BaseKeyValueSecret::Serialize(Serializer &serializer) const {

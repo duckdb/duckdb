@@ -123,7 +123,7 @@ public:
 
 protected:
 	//! the map of key -> values that make up the secret
-	case_insensitive_map_t<string> secret_map;
+	map<string, string> secret_map;
 
 	//! (optionally) a set of keys to be redacted for this type
 	case_insensitive_set_t redact_keys;

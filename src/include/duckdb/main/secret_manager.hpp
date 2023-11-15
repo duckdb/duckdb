@@ -40,7 +40,6 @@ struct SecretType {
 struct RegisteredSecret {
 public:
 	RegisteredSecret(shared_ptr<const BaseSecret> secret) : secret(secret){};
-
 	//! Whether this secret is persistent
 	bool persistent;
 	//! A string to tell users how the secret is stored. When persistent secrets are implemented, this will communicate
@@ -103,25 +102,26 @@ public:
 
 	//! Registers a secret type
 	DUCKDB_API virtual void RegisterSecretType(SecretType &type) = 0;
-	//! Register a new Secret in the secret
-	DUCKDB_API virtual void RegisterSecret(shared_ptr<const BaseSecret> secret, OnCreateConflict on_conflict, SecretPersistMode persist_mode) = 0;
+	//! Get the registered type
+	DUCKDB_API virtual SecretType LookupType(const string &type) = 0;
+
 	//! Registers a create secret function
 	DUCKDB_API virtual void RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) = 0;
 
-	//! Lookup and call the right CreateSecretFunction function
+	//! Register a Secret directly
+	DUCKDB_API virtual void RegisterSecret(shared_ptr<const BaseSecret> secret, OnCreateConflict on_conflict, SecretPersistMode persist_mode) = 0;
+	//! Create & Register a secret by looking up the function
 	DUCKDB_API virtual void CreateSecret(ClientContext &context, const CreateSecretInfo &input) = 0;
 
 	//! Binds a create secret statement
 	DUCKDB_API virtual BoundStatement BindCreateSecret(CreateSecretStatement &stmt) = 0;
 
-	//! Get the secret that matches the scope best. ( Default behaviour is to match longest matching prefix )
+	//! Get the secret that matches the scope best.
 	DUCKDB_API virtual RegisteredSecret GetSecretByPath(const string &path, const string &type) = 0;
 	//! Get a secret by name
 	DUCKDB_API virtual RegisteredSecret GetSecretByName(const string &name) = 0;
 	//! Drop a secret by name
 	DUCKDB_API virtual void DropSecretByName(const string &name, bool missing_ok) = 0;
-	//! Get the registered type
-	DUCKDB_API virtual SecretType LookupType(const string &type) = 0;
 	//! Get a vector of all registered secrets
 	DUCKDB_API virtual vector<RegisteredSecret> AllSecrets() = 0;
 };
@@ -164,20 +164,28 @@ private:
 	//! Main lock
 	mutex lock;
 
-	//! Get the registered type
+	//! Lookup a SecretType
 	SecretType LookupTypeInternal(const string &type);
-	CreateSecretFunction* LookupFunctionInternal(const string& type,const string& provider);
+	//! Lookup a CreateSecretFunction
+	CreateSecretFunction* LookupFunctionInternal(const string& type, const string& provider);
+	//! Register a new Secret
+	void RegisterSecretInternal(shared_ptr<const BaseSecret> secret, OnCreateConflict on_conflict, SecretPersistMode persist_mode);
 
-	//! Write a secret to the secrets directory
+	//! Write a secret to the FileSystem
 	void WriteSecretToFile(const BaseSecret& secret);
-	//! Stores all permanent secret files found in the loadable_permanent_secrets map for lazy loading
+
+	//! Lazily preloads the permanent secrets found in
 	void PreloadPermanentSecrets();
-	//! Loads the lazily loaded secrets, will throw error when any of the secret functions is missing
+
+	//! Fully loads ALL lazily preloaded permanent secrets that have not yet been preloaded
 	void LoadPreloadedSecrets();
-	//! Load a specific secret by path
-	void LoadSecret(const string& path);
-	//! Load a secret from loadable_permanent_secrets by name
+	//! Fully load a lazily preloaded permanent secret by path
+	void LoadSecret(const string& path, SecretPersistMode persist_mode);
+	//! Fully load a lazily preloaded permanent secret by name
 	void LoadSecretFromPreloaded(const string& name);
+
+	//! Checks if the secret_directory changed, if so this reloads all permanent secrets (lazily)
+	void SyncPermanentSecrets(bool force = false);
 
 	//! Return secret directory
 	string GetSecretDirectory();
@@ -192,8 +200,11 @@ private:
 	//! Because secrets may require specific extensions to be deserialized, permanent secrets are lazily loaded by
 	//! the secret manager. This stores the map of secret_name -> secret_file_path which can be loaded.
 	case_insensitive_map_t<string> loadable_permanent_secrets;
+	//! The permanent secret directory is scanned once. When the secret path changes in DuckDB the secret manager will
+	//! need to reload the permanent secrets;
+	string last_secret_directory;
 
-	//! The secret manager requires access to the DatabaseInstance for the FileSystem
+	//! The secret manager requires access to the DatabaseInstance for the FileSystem and DBConfig
 	DatabaseInstance &db_instance;
 };
 

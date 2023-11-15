@@ -57,6 +57,22 @@ Value AccessModeSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Debug Force External
+//===--------------------------------------------------------------------===//
+void AllowPermanentSecrets::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.allow_permanent_secrets = input.GetValue<bool>();
+}
+
+void AllowPermanentSecrets::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.allow_permanent_secrets = DBConfig().options.allow_permanent_secrets;
+}
+
+Value AllowPermanentSecrets::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.allow_permanent_secrets);
+}
+
+//===--------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===--------------------------------------------------------------------===//
 void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -1124,6 +1140,22 @@ Value SearchPathSetting::GetSetting(ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
 	auto &set_paths = client_data.catalog_search_path->GetSetPaths();
 	return Value(CatalogSearchEntry::ListToString(set_paths));
+}
+
+//===--------------------------------------------------------------------===//
+// Secret Directory
+//===--------------------------------------------------------------------===//
+void SecretDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.secret_directory = input.ToString();
+}
+
+void SecretDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.secret_directory = DBConfig().options.secret_directory;
+}
+
+Value SecretDirectorySetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return config.options.secret_directory;
 }
 
 //===--------------------------------------------------------------------===//
