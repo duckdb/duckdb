@@ -257,7 +257,6 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::CATALOG_ENTRY: {
 		// set the commit timestamp of the catalog entry to the given id
 		auto catalog_entry = Load<CatalogEntry *>(data);
-		printf("COMMITTED ENTRY POINTER %p\n", (void *)catalog_entry);
 		D_ASSERT(catalog_entry->HasParent());
 
 		auto &catalog = catalog_entry->ParentCatalog();
