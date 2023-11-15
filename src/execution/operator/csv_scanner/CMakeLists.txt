@@ -8,7 +8,6 @@ add_library_unity(
   csv_buffer.cpp
   csv_buffer_manager.cpp
   csv_file_handle.cpp
-  csv_option.cpp
   csv_reader_options.cpp
   csv_state_machine.cpp
   csv_state_machine_cache.cpp

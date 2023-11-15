@@ -25,6 +25,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_option.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -83,6 +84,20 @@ BoundPivotInfo BoundPivotInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(101, "types", result.types);
 	deserializer.ReadPropertyWithDefault<vector<string>>(102, "pivot_values", result.pivot_values);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(103, "aggregates", result.aggregates);
+	return result;
+}
+
+template <typename T>
+void CSVOption<T>::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<bool>(100, "set_by_user", set_by_user);
+	serializer.WriteProperty<T>(101, "value", value);
+}
+
+template <typename T>
+CSVOption<T> CSVOption<T>::Deserialize(Deserializer &deserializer) {
+	CSVOption<T> result;
+	deserializer.ReadPropertyWithDefault<bool>(100, "set_by_user", result.set_by_user);
+	deserializer.ReadProperty<T>(101, "value", result.value);
 	return result;
 }
 
