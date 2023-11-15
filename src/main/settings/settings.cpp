@@ -755,6 +755,11 @@ void HomeDirectorySetting::ResetLocal(ClientContext &context) {
 
 void HomeDirectorySetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
+
+	if (!input.IsNull() && FileSystem::GetFileSystem(context).IsRemoteFile(input.ToString())) {
+		throw InvalidInputException("Cannot set the home directory to a remote path");
+	}
+
 	config.home_directory = input.IsNull() ? string() : input.ToString();
 }
 
