@@ -53,7 +53,7 @@ private:
 class CatalogSet {
 
 public:
-	DUCKDB_API explicit CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults = nullptr);
+	DUCKDB_API explicit CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults = nullptr, bool cleanup_entries = true);
 	~CatalogSet();
 
 	//! Create an entry in the catalog set. Returns whether or not it was
@@ -109,7 +109,7 @@ public:
 	mutex &GetCatalogLock() {
 		return catalog_lock;
 	}
-
+	bool ShouldEntriesBeCleaned() const;
 	void Verify(Catalog &catalog);
 
 private:
@@ -137,5 +137,7 @@ private:
 	CatalogEntryMap map;
 	//! The generator used to generate default internal entries
 	unique_ptr<DefaultGenerator> defaults;
+	//! Whether entries of this set should be added to the undobuffer
+	bool cleanup_entries;
 };
 } // namespace duckdb
