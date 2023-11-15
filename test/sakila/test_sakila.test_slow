@@ -10,11 +10,11 @@ PRAGMA force_index_join
 
 statement ok
 CREATE TABLE actor (
-    actor_id numeric NOT NULL,
+    actor_id int NOT NULL,
     first_name VARCHAR(45) NOT NULL,
     last_name VARCHAR(45) NOT NULL,
-    last_update TIMESTAMP NOT NULL --,
-    --PRIMARY KEY (actor_id)
+    last_update TIMESTAMP NOT NULL,
+    PRIMARY KEY (actor_id)
 )
 
 statement ok
@@ -31,8 +31,8 @@ CREATE TABLE city (
     city VARCHAR(50) NOT NULL,
     country_id SMALLINT NOT NULL,
     last_update TIMESTAMP NOT NULL,
-    PRIMARY KEY (city_id) --,
-    --CONSTRAINT fk_city_country FOREIGN KEY (country_id) REFERENCES country (country_id) ON DELETE NO ACTION ON UPDATE CASCADE
+    PRIMARY KEY (city_id),
+    CONSTRAINT fk_city_country FOREIGN KEY (country_id) REFERENCES country (country_id) ON DELETE NO ACTION -- ON UPDATE CASCADE
 )
 
 statement ok
@@ -45,15 +45,15 @@ CREATE TABLE address (
     postal_code VARCHAR(10) DEFAULT NULL,
     phone VARCHAR(20) NOT NULL,
     last_update TIMESTAMP NOT NULL,
-    PRIMARY KEY (address_id) --,
-    --  CONSTRAINT fk_address_city FOREIGN KEY (city_id) REFERENCES city (city_id) ON DELETE NO ACTION ON UPDATE CASCADE
+    PRIMARY KEY (address_id),
+    CONSTRAINT fk_address_city FOREIGN KEY (city_id) REFERENCES city (city_id) ON DELETE NO ACTION -- ON UPDATE CASCADE
 )
 
 statement ok
 CREATE TABLE
-LANGUAGE (
+language (
     language_id SMALLINT NOT NULL,
-    name CHAR(20) NOT NULL,
+    name VARCHAR(20) NOT NULL,
     last_update TIMESTAMP NOT NULL,
     PRIMARY KEY (language_id)
 )
@@ -67,6 +67,17 @@ CREATE TABLE category (
 )
 
 statement ok
+CREATE TABLE store (
+    store_id INT NOT NULL,
+    manager_staff_id SMALLINT NOT NULL,
+    address_id INT NOT NULL,
+    last_update TIMESTAMP NOT NULL,
+    PRIMARY KEY (store_id),
+    -- CONSTRAINT fk_store_staff FOREIGN KEY (manager_staff_id) REFERENCES staff (staff_id) , -- circular dep
+    CONSTRAINT fk_store_address FOREIGN KEY (address_id) REFERENCES address (address_id)
+)
+
+statement ok
 CREATE TABLE customer (
     customer_id INT NOT NULL,
     store_id INT NOT NULL,
@@ -77,9 +88,9 @@ CREATE TABLE customer (
     active CHAR(1) DEFAULT 'Y' NOT NULL,
     create_date TIMESTAMP NOT NULL,
     last_update TIMESTAMP NOT NULL,
-    PRIMARY KEY (customer_id) --,
-    -- CONSTRAINT fk_customer_store FOREIGN KEY (store_id) REFERENCES store (store_id) ON DELETE NO ACTION ON UPDATE CASCADE,
-    --CONSTRAINT fk_customer_address FOREIGN KEY (address_id) REFERENCES address (address_id) ON DELETE NO ACTION ON UPDATE CASCADE
+    PRIMARY KEY (customer_id),
+    CONSTRAINT fk_customer_store FOREIGN KEY (store_id) REFERENCES store (store_id) ON DELETE NO ACTION, -- ON UPDATE CASCADE,
+    CONSTRAINT fk_customer_address FOREIGN KEY (address_id) REFERENCES address (address_id) ON DELETE NO ACTION -- ON UPDATE CASCADE
 )
 
 statement ok
@@ -97,35 +108,35 @@ CREATE TABLE film (
     rating VARCHAR(10) DEFAULT 'G',
     special_features VARCHAR(100) DEFAULT NULL,
     last_update TIMESTAMP NOT NULL,
-    PRIMARY KEY (film_id) --,
-    -- CONSTRAINT CHECK_special_features CHECK(special_features is null or
-    --                                                          special_features like '%Trailers%' or
-    --                                                          special_features like '%Commentaries%' or
-    --                                                          special_features like '%Deleted Scenes%' or
-    --                                                          special_features like '%Behind the Scenes%'),
-    -- CONSTRAINT CHECK_special_rating CHECK(rating in ('G','PG','PG-13','R','NC-17')),
-    -- CONSTRAINT fk_film_language FOREIGN KEY (language_id) REFERENCES language (language_id) ,
-    -- CONSTRAINT fk_film_language_original FOREIGN KEY (original_language_id) REFERENCES language (language_id)
+    PRIMARY KEY (film_id),
+    CONSTRAINT CHECK_special_features CHECK(special_features is null or
+                                                             special_features like '%Trailers%' or
+                                                             special_features like '%Commentaries%' or
+                                                             special_features like '%Deleted Scenes%' or
+                                                             special_features like '%Behind the Scenes%'),
+    CONSTRAINT CHECK_special_rating CHECK(rating in ('G','PG','PG-13','R','NC-17')),
+    CONSTRAINT fk_film_language FOREIGN KEY (language_id) REFERENCES language (language_id) ,
+    CONSTRAINT fk_film_language_original FOREIGN KEY (original_language_id) REFERENCES language (language_id)
 )
 
 statement ok
 CREATE TABLE film_actor (
     actor_id INT NOT NULL,
     film_id INT NOT NULL,
-    last_update TIMESTAMP NOT NULL --,
-    -- PRIMARY KEY (actor_id, film_id) --,
-    -- CONSTRAINT fk_film_actor_actor FOREIGN KEY (actor_id) REFERENCES actor (actor_id) ON DELETE NO ACTION ON UPDATE CASCADE,
-    -- CONSTRAINT fk_film_actor_film FOREIGN KEY (film_id) REFERENCES film (film_id) ON DELETE NO ACTION ON UPDATE CASCADE
+    last_update TIMESTAMP NOT NULL,
+    PRIMARY KEY (actor_id, film_id),
+    --CONSTRAINT fk_film_actor_actor FOREIGN KEY (actor_id) REFERENCES actor (actor_id) ON DELETE NO ACTION, -- ON UPDATE CASCADE, -- TRIGGERS BUG!
+    CONSTRAINT fk_film_actor_film FOREIGN KEY (film_id) REFERENCES film (film_id) ON DELETE NO ACTION -- ON UPDATE CASCADE
 )
 
 statement ok
 CREATE TABLE film_category (
     film_id INT NOT NULL,
     category_id SMALLINT NOT NULL,
-    last_update TIMESTAMP NOT NULL --,
-    --PRIMARY KEY (film_id, category_id) --,
-    -- CONSTRAINT fk_film_category_film FOREIGN KEY (film_id) REFERENCES film (film_id) ON DELETE NO ACTION ON UPDATE CASCADE,
-    -- CONSTRAINT fk_film_category_category FOREIGN KEY (category_id) REFERENCES category (category_id) ON DELETE NO ACTION ON UPDATE CASCADE
+    last_update TIMESTAMP NOT NULL,
+    PRIMARY KEY (film_id, category_id),
+    CONSTRAINT fk_film_category_film FOREIGN KEY (film_id) REFERENCES film (film_id) ON DELETE NO ACTION, -- ON UPDATE CASCADE,
+    CONSTRAINT fk_film_category_category FOREIGN KEY (category_id) REFERENCES category (category_id) ON DELETE NO ACTION -- ON UPDATE CASCADE
 )
 
 statement ok
@@ -163,17 +174,6 @@ CREATE TABLE staff (
     PRIMARY KEY (staff_id) --,
     -- CONSTRAINT fk_staff_store FOREIGN KEY (store_id) REFERENCES store (store_id) ON DELETE NO ACTION ON UPDATE CASCADE,
     -- CONSTRAINT fk_staff_address FOREIGN KEY (address_id) REFERENCES address (address_id) ON DELETE NO ACTION ON UPDATE CASCADE
-)
-
-statement ok
-CREATE TABLE store (
-    store_id INT NOT NULL,
-    manager_staff_id SMALLINT NOT NULL,
-    address_id INT NOT NULL,
-    last_update TIMESTAMP NOT NULL,
-    PRIMARY KEY (store_id) --,
-    -- CONSTRAINT fk_store_staff FOREIGN KEY (manager_staff_id) REFERENCES staff (staff_id) ,
-    -- CONSTRAINT fk_store_address FOREIGN KEY (address_id) REFERENCES address (address_id)
 )
 
 statement ok
@@ -303,19 +303,25 @@ statement ok
 COPY actor FROM 'test/sakila/data/actor.csv' (HEADER, DELIMITER '|')
 
 statement ok
+COPY country FROM 'test/sakila/data/country.csv' (HEADER, DELIMITER '|')
+
+statement ok
+COPY city FROM 'test/sakila/data/city.csv' (HEADER, DELIMITER '|')
+
+statement ok
 COPY address FROM 'test/sakila/data/address.csv' (HEADER, DELIMITER '|')
 
 statement ok
 COPY category FROM 'test/sakila/data/category.csv' (HEADER, DELIMITER '|')
 
 statement ok
-COPY city FROM 'test/sakila/data/city.csv' (HEADER, DELIMITER '|')
-
-statement ok
-COPY country FROM 'test/sakila/data/country.csv' (HEADER, DELIMITER '|')
+COPY store FROM 'test/sakila/data/store.csv' (HEADER, DELIMITER '|')
 
 statement ok
 COPY customer FROM 'test/sakila/data/customer.csv' (HEADER, DELIMITER '|')
+
+statement ok
+COPY language FROM 'test/sakila/data/language.csv' (HEADER, DELIMITER '|')
 
 statement ok
 COPY film FROM 'test/sakila/data/film.csv' (HEADER, DELIMITER '|')
@@ -332,8 +338,6 @@ COPY film_text FROM 'test/sakila/data/film_text.csv' (HEADER, DELIMITER '|')
 statement ok
 COPY inventory FROM 'test/sakila/data/inventory.csv' (HEADER, DELIMITER '|')
 
-statement ok
-COPY language FROM 'test/sakila/data/language.csv' (HEADER, DELIMITER '|')
 
 statement ok
 COPY payment FROM 'test/sakila/data/payment.csv' (HEADER, DELIMITER '|')
@@ -344,8 +348,6 @@ COPY rental FROM 'test/sakila/data/rental.csv' (HEADER, DELIMITER '|')
 statement ok
 COPY staff FROM 'test/sakila/data/staff.csv' (HEADER, DELIMITER '|')
 
-statement ok
-COPY store FROM 'test/sakila/data/store.csv' (HEADER, DELIMITER '|')
 
 query TT
 SELECT first_name,last_name FROM actor ORDER BY actor_id LIMIT 10
