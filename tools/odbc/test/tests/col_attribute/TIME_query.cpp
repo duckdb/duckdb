@@ -58,16 +58,10 @@ TEST_CASE("Test SQLColAttribute TIME", "[odbc][time]") {
 	                                                      //   all the interval data types that represent a
 	                                                      //   time interval, its value is the applicable precision
 	                                                      //   of the fractional seconds component.
-	// expected_int[SQL_DESC_SCALE] = ExpectedResult(11);					// A numeric value that is the applicable scale
-	// for
-	// a
-	//   numeric data type. For DECIMAL and NUMERIC data types,
-	//   this is the defined scale. It is undefined for all
-	//   other data types (and will result in error).
 
-	expected_int[SQL_DESC_TYPE] =
-	    ExpectedResult(SQL_DATETIME); // For the datetime and interval data types, this field returns
-	                                  //   the verbose data type: SQL_DATETIME or SQL_INTERVAL.
+	expected_int[SQL_DESC_TYPE] = ExpectedResult(SQL_DATETIME); // For the datetime and interval data types,
+	                                                            //   this field returns the verbose data
+	                                                            //   type: SQL_DATETIME or SQL_INTERVAL.
 	expected_int[SQL_DESC_TYPE_NAME] = ExpectedResult("INT64");
 
 	expected_int[SQL_DESC_CONCISE_TYPE] =
