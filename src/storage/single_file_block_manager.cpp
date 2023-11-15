@@ -151,6 +151,9 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	auto &fs = FileSystem::Get(db);
 	handle = fs.OpenFile(path, flags, lock);
 
+	// Newly created files should be empty
+	D_ASSERT(handle->GetFileSize() == 0);
+
 	// if we create a new file, we fill the metadata of the file
 	// first fill in the new header
 	header_buffer.Clear();
