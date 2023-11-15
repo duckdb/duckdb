@@ -153,9 +153,9 @@ CREATE TABLE inventory (
     film_id INT NOT NULL,
     store_id INT NOT NULL,
     last_update TIMESTAMP NOT NULL,
-    PRIMARY KEY (inventory_id) --,
-    -- CONSTRAINT fk_inventory_store FOREIGN KEY (store_id) REFERENCES store (store_id) ON DELETE NO ACTION ON UPDATE CASCADE,
-    -- CONSTRAINT fk_inventory_film FOREIGN KEY (film_id) REFERENCES film (film_id) ON DELETE NO ACTION ON UPDATE CASCADE
+    PRIMARY KEY (inventory_id),
+    CONSTRAINT fk_inventory_store FOREIGN KEY (store_id) REFERENCES store (store_id) ON DELETE NO ACTION, -- ON UPDATE CASCADE,
+ --   CONSTRAINT fk_inventory_film FOREIGN KEY (film_id) REFERENCES film (film_id) ON DELETE NO ACTION -- ON UPDATE CASCADE -- ALSO TRIGGERS BUG
 )
 
 statement ok
@@ -171,9 +171,25 @@ CREATE TABLE staff (
     username VARCHAR(16) NOT NULL,
     PASSWORD VARCHAR(40) DEFAULT NULL,
     last_update TIMESTAMP NOT NULL,
-    PRIMARY KEY (staff_id) --,
-    -- CONSTRAINT fk_staff_store FOREIGN KEY (store_id) REFERENCES store (store_id) ON DELETE NO ACTION ON UPDATE CASCADE,
-    -- CONSTRAINT fk_staff_address FOREIGN KEY (address_id) REFERENCES address (address_id) ON DELETE NO ACTION ON UPDATE CASCADE
+    PRIMARY KEY (staff_id),
+    CONSTRAINT fk_staff_store FOREIGN KEY (store_id) REFERENCES store (store_id) ON DELETE NO ACTION, -- ON UPDATE CASCADE,
+    CONSTRAINT fk_staff_address FOREIGN KEY (address_id) REFERENCES address (address_id) ON DELETE NO ACTION -- ON UPDATE CASCADE
+)
+
+
+statement ok
+CREATE TABLE rental (
+    rental_id INT NOT NULL,
+    rental_date TIMESTAMP NOT NULL,
+    inventory_id INT NOT NULL,
+    customer_id INT NOT NULL,
+    return_date TIMESTAMP DEFAULT NULL,
+    staff_id SMALLINT NOT NULL,
+    last_update TIMESTAMP NOT NULL,
+    PRIMARY KEY (rental_id) ,
+    CONSTRAINT fk_rental_staff FOREIGN KEY (staff_id) REFERENCES staff (staff_id) ,
+    CONSTRAINT fk_rental_inventory FOREIGN KEY (inventory_id) REFERENCES inventory (inventory_id) ,
+    CONSTRAINT fk_rental_customer FOREIGN KEY (customer_id) REFERENCES customer (customer_id)
 )
 
 statement ok
@@ -185,25 +201,10 @@ CREATE TABLE payment (
     amount DECIMAL(5, 2) NOT NULL,
     payment_date TIMESTAMP NOT NULL,
     last_update TIMESTAMP NOT NULL,
-    PRIMARY KEY (payment_id) --,
-    -- CONSTRAINT fk_payment_rental FOREIGN KEY (rental_id) REFERENCES rental (rental_id) ON DELETE SET NULL ON UPDATE CASCADE,
-    -- CONSTRAINT fk_payment_customer FOREIGN KEY (customer_id) REFERENCES customer (customer_id) ,
-    -- CONSTRAINT fk_payment_staff FOREIGN KEY (staff_id) REFERENCES staff (staff_id)
-)
-
-statement ok
-CREATE TABLE rental (
-    rental_id INT NOT NULL,
-    rental_date TIMESTAMP NOT NULL,
-    inventory_id INT NOT NULL,
-    customer_id INT NOT NULL,
-    return_date TIMESTAMP DEFAULT NULL,
-    staff_id SMALLINT NOT NULL,
-    last_update TIMESTAMP NOT NULL,
-    PRIMARY KEY (rental_id) --,
-    -- CONSTRAINT fk_rental_staff FOREIGN KEY (staff_id) REFERENCES staff (staff_id) ,
-    -- CONSTRAINT fk_rental_inventory FOREIGN KEY (inventory_id) REFERENCES inventory (inventory_id) ,
-    -- CONSTRAINT fk_rental_customer FOREIGN KEY (customer_id) REFERENCES customer (customer_id)
+    PRIMARY KEY (payment_id),
+    CONSTRAINT fk_payment_rental FOREIGN KEY (rental_id) REFERENCES rental (rental_id), -- ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT fk_payment_customer FOREIGN KEY (customer_id) REFERENCES customer (customer_id) ,
+    CONSTRAINT fk_payment_staff FOREIGN KEY (staff_id) REFERENCES staff (staff_id)
 )
 
 statement ok
@@ -338,15 +339,15 @@ COPY film_text FROM 'test/sakila/data/film_text.csv' (HEADER, DELIMITER '|')
 statement ok
 COPY inventory FROM 'test/sakila/data/inventory.csv' (HEADER, DELIMITER '|')
 
-
 statement ok
-COPY payment FROM 'test/sakila/data/payment.csv' (HEADER, DELIMITER '|')
+COPY staff FROM 'test/sakila/data/staff.csv' (HEADER, DELIMITER '|')
 
 statement ok
 COPY rental FROM 'test/sakila/data/rental.csv' (HEADER, DELIMITER '|')
 
 statement ok
-COPY staff FROM 'test/sakila/data/staff.csv' (HEADER, DELIMITER '|')
+COPY payment FROM 'test/sakila/data/payment.csv' (HEADER, DELIMITER '|')
+
 
 
 query TT
