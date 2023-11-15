@@ -19,7 +19,6 @@ static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFun
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
-	bound_function.return_type = bound_lambda_expr.lambda_expr->return_type;
 	auto has_index = bound_lambda_expr.parameter_count == 3;
 
 	// NULL list parameter
@@ -41,15 +40,9 @@ static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFun
 	auto list_child_type = arguments[0]->return_type;
 	list_child_type = ListType::GetChildType(list_child_type).id();
 
-	auto cast_lambda_expr = BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), list_child_type, true);
-	if (!cast_lambda_expr) {
-		throw BinderException("Result type of the lambda expression must be implicitly castable to the list type");
-	}
-
-	auto lambda_expr = std::move(cast_lambda_expr->Cast<BoundCastExpression>().child);
-
-
-	return make_uniq<ListLambdaBindData>(bound_function.return_type, std::move(lambda_expr), has_index);
+	auto cast_lambda_expr = BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), list_child_type, false);
+	bound_function.return_type = cast_lambda_expr->return_type;
+	return make_uniq<ListLambdaBindData>(bound_function.return_type, std::move(cast_lambda_expr), has_index);
 }
 
 static LogicalType ListReduceBindLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {

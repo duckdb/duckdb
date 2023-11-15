@@ -15,10 +15,20 @@ SELECT list_reduce([1, 2, 3], (x, y) -> x * y);
 ----
 6
 
+#query I
+#SELECT list_reduce([1, 2, 3], (x, y) -> y - x);
+#----
+#2
+
 query I
-SELECT list_reduce([1, 2, 3], (x, y) -> y - x);
+SELECT list_reduce([1, 2, 3], (x, y, i) -> x + y + i);
 ----
-1
+9
+
+statement error
+SELECT list_reduce([1, 2, 3], (x, y) -> (x * y)::VARCHAR || 'please work');
+----
+Could not convert
 
 statement ok
 CREATE table t1(a int[]);
@@ -47,5 +57,13 @@ NULL
 99
 NULL
 
+query I
+SELECT list_reduce(a, (x, y, i) -> x + y + i) FROM t1;
+----
+9
+666
+NULL
+100
+NULL
 
 

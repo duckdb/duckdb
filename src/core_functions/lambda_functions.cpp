@@ -579,15 +579,11 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 	auto column_infos = GetColumnInfo(args, row_count);
 	auto inconstant_column_infos = GetInconstantColumnInfo(column_infos);
 
-	Vector init_slice = Vector(child_vector, left_vector, row_count);
+	Vector left_slice = Vector(child_vector, left_vector, row_count);
 	DataChunk lambda_chunk;
 	lambda_chunk.Initialize(Allocator::DefaultAllocator(), {lambda_expr->return_type});
-	ExecuteReduce(0, active_rows, list_entries, result, init_slice, child_vector, state.GetContext(), *lambda_expr, bind_info.has_index, lambda_chunk);
 
-	Vector left_slice(lambda_chunk.data[0].GetType());
-	left_slice.Reference(lambda_chunk.data[0]);
-
-	idx_t loops = 1;
+	idx_t loops = 0;
 	// Execute reduce until all rows are finished
 	while (!active_rows.empty()) {
 		ExecuteReduce(loops, active_rows, list_entries, result, left_slice, child_vector, state.GetContext(), *lambda_expr, bind_info.has_index, lambda_chunk);
