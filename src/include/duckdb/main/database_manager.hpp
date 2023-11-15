@@ -15,6 +15,7 @@
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 
 namespace duckdb {

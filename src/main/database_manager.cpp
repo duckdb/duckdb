@@ -5,6 +5,8 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/database_path_and_type.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
