@@ -228,7 +228,8 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 	ret.cardinality = MaxValue(child_1_card, child_2_card);
 	ret.stats_initialized = true;
 	ret.filter_strength = 1;
-	ret.table_name = child_stats[0].table_name + " joined with " + child_stats[1].table_name;
+	ret.table_name =
+	    "(" + child_stats[0].table_name + LogicalOperatorToString(op.type) + child_stats[1].table_name + ")";
 	for (auto &stats : child_stats) {
 		// MARK joins are nonreorderable. They won't return initialized stats
 		// continue in this case.
