@@ -75,11 +75,6 @@
         "id": 102,
         "name": "data_infos",
         "type": "vector<IndexDataInfo>"
-      },
-      {
-        "id": 103,
-        "name": "buffer_counts",
-        "type": "vector<idx_t>"
       }
     ],
     "pointer_type": "none"

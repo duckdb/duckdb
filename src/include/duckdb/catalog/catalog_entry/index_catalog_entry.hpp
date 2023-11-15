@@ -31,7 +31,7 @@ public:
 	case_insensitive_map_t<Value> options;
 
 	//! The index type (ART, B+-tree, Skip-List, ...)
-	IndexType index_type;
+	string index_type;
 	//! The index constraint type
 	IndexConstraintType index_constraint_type;
 	//! The column ids of the indexed table

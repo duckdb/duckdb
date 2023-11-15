@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-Index::Index(const string &name, const IndexType &index_type, IndexConstraintType index_constraint_type,
+Index::Index(const string &name, const string &index_type, IndexConstraintType index_constraint_type,
              const vector<column_t> &column_ids, TableIOManager &table_io_manager,
              const vector<unique_ptr<Expression>> &unbound_expressions, AttachedDatabase &db)
 
@@ -122,13 +122,6 @@ string Index::AppendRowError(DataChunk &input, idx_t index) {
 //===--------------------------------------------------------------------===//
 // Stable storage functions
 //===--------------------------------------------------------------------===//
-
-void IndexStorage::WriteDummyBlockPointers(Serializer &serializer) {
-
-	vector<BlockPointer> index_pointers;
-	index_pointers.emplace_back(INVALID_BLOCK, 42);
-	serializer.WriteProperty(103, "index_pointers", index_pointers);
-}
 
 BlockPointer IndexStorage::GetBlockPointer(const IndexStorageInfo &info) {
 

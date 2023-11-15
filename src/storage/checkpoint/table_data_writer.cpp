@@ -71,11 +71,8 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
-	IndexStorage::WriteDummyBlockPointers(serializer);
-
 	auto index_storage_infos = info->indexes.GetStorageInfos();
-	serializer.WriteList(104, "index_storage_infos", index_storage_infos.size(),
-	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(index_storage_infos[i]); });
+	serializer.WriteProperty(104, "index_storage_infos", index_storage_infos);
 }
 
 } // namespace duckdb

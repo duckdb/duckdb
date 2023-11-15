@@ -381,10 +381,6 @@ void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog_entry, Serial
 
 	// we need to keep the tag "index", even though it is slightly misleading
 	serializer.WriteProperty(100, "index", &index_catalog_entry);
-
-	// also, we write a dummy BlockPointer, because when reading the file, we don't know if we're
-	// reading an older storage version (with BlockPointers) or not
-	serializer.WriteProperty(101, "root_block_pointer", BlockPointer());
 }
 
 void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deserializer) {
@@ -395,7 +391,8 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 
 	// also, we have to read the root_block_pointer, which will not be valid for newer storage versions.
 	// This leads to different code paths in this function.
-	auto root_block_pointer = deserializer.ReadProperty<BlockPointer>(101, "root_block_pointer");
+	auto root_block_pointer =
+	    deserializer.ReadPropertyWithDefault<BlockPointer>(101, "root_block_pointer", BlockPointer());
 
 	// create the index in the catalog
 	auto &table =
@@ -440,13 +437,13 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	IndexStorageInfo index_storage_info;
 	if (root_block_pointer.IsValid()) {
 		// this code path is necessary to read older duckdb files
-		index_storage_info.name = info.index_name;
+		index_storage_info.name = info.name;
 		IndexStorage::SetBlockPointerInfo(root_block_pointer, index_storage_info);
 
 	} else {
 		// get the matching index storage info
 		for (auto const &elem : data_table.info->index_storage_infos) {
-			if (elem.name == info.index_name) {
+			if (elem.name == info.name) {
 				index_storage_info = elem;
 				break;
 			}
@@ -454,7 +451,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	}
 
 	D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
-	auto art = make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
+	auto art = make_uniq<ART>(info.name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
 	                          std::move(unbound_expressions), data_table.db, nullptr, index_storage_info);
 	data_table.info->indexes.AddIndex(std::move(art));
 }
@@ -525,23 +522,22 @@ void CheckpointReader::ReadTable(ClientContext &context, Deserializer &deseriali
 void CheckpointReader::ReadTableData(ClientContext &context, Deserializer &deserializer,
                                      BoundCreateTableInfo &bound_info) {
 
-	// This is written in "SingleFileTableDataWriter::FinalizeTable"
+	// written in "SingleFileTableDataWriter::FinalizeTable"
 	auto table_pointer = deserializer.ReadProperty<MetaBlockPointer>(101, "table_pointer");
 	auto total_rows = deserializer.ReadProperty<idx_t>(102, "total_rows");
 
-	// for current duckdb file versions, this will read a vector with exactly one {-1, 42} index pointer
-	auto index_pointers = deserializer.ReadProperty<vector<BlockPointer>>(103, "index_pointers");
+	// old file read
+	auto index_pointers = deserializer.ReadPropertyWithDefault<vector<BlockPointer>>(103, "index_pointers", {});
+	// new file read
+	auto index_storage_infos =
+	    deserializer.ReadPropertyWithDefault<vector<IndexStorageInfo>>(104, "index_storage_infos", {});
 
-	if (!index_pointers.empty() && !index_pointers.front().IsValid() && index_pointers.front().offset == 42) {
-		deserializer.ReadList(104, "index_storage_infos", [&](Deserializer::List &list, idx_t i) {
-			auto index_storage_info = list.ReadElement<IndexStorageInfo>();
-			D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
-			bound_info.indexes.push_back(index_storage_info);
-		});
-
-	} else {
-		// old duckdb file versions contain index pointers
+	if (index_storage_infos.empty()) {
+		// old duckdb file containing index pointers
 		IndexStorage::SetBlockPointerInfos(index_pointers, bound_info.indexes);
+	} else {
+		// current duckdb file
+		bound_info.indexes = index_storage_infos;
 	}
 
 	// FIXME: icky downcast to get the underlying MetadataReader

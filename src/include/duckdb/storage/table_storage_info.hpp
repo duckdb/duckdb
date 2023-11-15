@@ -47,6 +47,16 @@ struct IndexDataInfo {
 	static IndexDataInfo Deserialize(Deserializer &deserializer);
 };
 
+//! Information to serialize an index buffer to the WAL
+struct IndexBufferInfo {
+	IndexBufferInfo(data_ptr_t buffer_ptr, const idx_t allocation_size)
+	    : buffer_ptr(buffer_ptr), allocation_size(allocation_size) {
+	}
+
+	data_ptr_t buffer_ptr;
+	idx_t allocation_size;
+};
+
 //! Information to serialize an index
 struct IndexStorageInfo {
 	IndexStorageInfo() {};
@@ -58,11 +68,10 @@ struct IndexStorageInfo {
 	unordered_map<string, Value> properties;
 	//! Information to serialize the index memory
 	vector<IndexDataInfo> data_infos;
-	//! The buffer count for deserialization of each allocator
-	vector<idx_t> buffer_counts;
 
-	//! When serializing to the WAL, this contains data_ptr_t to each pinned buffer, and their allocation size
-	vector<vector<pair<data_ptr_t, idx_t>>> buffers;
+	//! Contains all buffer pointers and their allocation size for serializing to the WAL
+	//! First dimension: all fixed-size allocators, second dimension: the buffers of each allocator
+	vector<vector<IndexBufferInfo>> buffers;
 
 	//! Returns true, if the struct contains index information
 	bool IsValid() const {

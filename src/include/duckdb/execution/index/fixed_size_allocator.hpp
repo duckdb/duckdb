@@ -78,10 +78,10 @@ public:
 	//! Serializes all in-memory buffers
 	void SerializeBuffers(PartialBlockManager &partial_block_manager);
 	//! Sets the allocation sizes and returns data to serialize each buffer
-	vector<pair<data_ptr_t, idx_t>> InitSerializationToWAL();
+	vector<IndexBufferInfo> InitSerializationToWAL();
 	//! Initialize a fixed-size allocator from allocator storage information
 	void Init(const IndexDataInfo &info);
-	//! STABLE STORAGE NOTE: This is for old storage files, to deserializes all metadata
+	//! Deserializes all metadata of older storage files
 	void Deserialize(MetadataManager &metadata_manager, const BlockPointer &block_pointer);
 
 private:

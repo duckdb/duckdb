@@ -289,12 +289,12 @@ void FixedSizeAllocator::SerializeBuffers(PartialBlockManager &partial_block_man
 	}
 }
 
-vector<pair<data_ptr_t, idx_t>> FixedSizeAllocator::InitSerializationToWAL() {
+vector<IndexBufferInfo> FixedSizeAllocator::InitSerializationToWAL() {
 
-	vector<pair<data_ptr_t, idx_t>> buffer_infos;
+	vector<IndexBufferInfo> buffer_infos;
 	for (auto &buffer : buffers) {
 		buffer.second.SetAllocationSize(available_segments_per_buffer, segment_size, bitmask_offset);
-		buffer_infos.push_back(make_pair(buffer.second.Get(), buffer.second.allocation_size));
+		buffer_infos.emplace_back(buffer.second.Get(), buffer.second.allocation_size);
 	}
 	return buffer_infos;
 }

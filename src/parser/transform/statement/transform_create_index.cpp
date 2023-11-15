@@ -44,11 +44,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 	info->on_conflict = TransformOnConflict(stmt.onconflict);
 	info->expressions = TransformIndexParameters(*stmt.indexParams, stmt.relation->relname);
 
-	if (EnumUtil::ToString(IndexType::ART) == StringUtil::Upper(string(stmt.accessMethod))) {
-		info->index_type = IndexType::ART;
-	} else {
-		info->index_type = IndexType::EXTENSION;
-	}
+	info->index_type = StringUtil::Upper(string(stmt.accessMethod));
 
 	if (stmt.relation->schemaname) {
 		info->schema = stmt.relation->schemaname;
@@ -58,9 +54,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 	}
 	info->table = stmt.relation->relname;
 	if (stmt.idxname) {
-		info->index_name = stmt.idxname;
+		info->name = stmt.idxname;
 	} else {
-		throw NotImplementedException("Index without a name not supported yet!");
+		throw NotImplementedException("Please provide an index name, e.g., CREATE INDEX my_name ...");
 	}
 
 	// Parse the options list

@@ -8,21 +8,21 @@
 
 #pragma once
 
-#include "duckdb/common/enums/index_type.hpp"
+#include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/storage/index.hpp"
-#include "duckdb/storage/table/table_statistics.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/storage/index.hpp"
 #include "duckdb/storage/statistics/column_statistics.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/storage/table/persistent_table_data.hpp"
-#include "duckdb/storage/table/row_group_collection.hpp"
-#include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
-#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/storage/table/persistent_table_data.hpp"
+#include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/storage/table/row_group_collection.hpp"
+#include "duckdb/storage/table/table_statistics.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
 class BoundForeignKeyConstraint;

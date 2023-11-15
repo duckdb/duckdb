@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/common/enums/index_type.hpp"
+#include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
@@ -24,13 +24,13 @@ struct CreateIndexInfo : public CreateInfo {
 	//! The table name of the underlying table
 	string table;
 	//! The name of the index
-	string index_name;
+	string name;
 
 	//! Options values (WITH ...)
 	case_insensitive_map_t<Value> options;
 
 	//! The index type (ART, B+-tree, Skip-List, ...)
-	IndexType index_type;
+	string index_type;
 	//! The index constraint type
 	IndexConstraintType constraint_type;
 	//! The column ids of the indexed table
@@ -43,9 +43,6 @@ struct CreateIndexInfo : public CreateInfo {
 	vector<LogicalType> scan_types;
 	//! The names of the logical columns (necessary for scanning the table during CREATE INDEX)
 	vector<string> names;
-
-	// FIXME: this is a deprecated dummy field for (de)serialization, we should remove this eventually
-	string index_type_name;
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;

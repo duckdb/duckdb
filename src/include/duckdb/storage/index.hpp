@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/enums/index_type.hpp"
+#include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -30,7 +30,7 @@ struct IndexScanState;
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
 public:
-	Index(const string &name, const IndexType &index_type, IndexConstraintType index_constraint_type,
+	Index(const string &name, const string &index_type, IndexConstraintType index_constraint_type,
 	      const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	      const vector<unique_ptr<Expression>> &unbound_expressions, AttachedDatabase &db);
 	virtual ~Index() = default;
@@ -38,7 +38,7 @@ public:
 	//! The name of the index
 	string name;
 	//! The index type (ART, B+-tree, Skip-List, ...)
-	IndexType index_type;
+	string index_type;
 	//! The index constraint type
 	IndexConstraintType index_constraint_type;
 	//! The logical column ids of the indexed table
@@ -176,11 +176,6 @@ public:
 
 //! This struct contains function that prevent breaking the storage format
 struct IndexStorage {
-
-	//! We write an index pointers vector with exactly one invalid index pointer with a valid
-	//! offset, because when reading the file, we don't know if we're reading an older storage version (with
-	//! BlockPointers) or not. The combination of invalid block ID and valid offset allows us to distinguish
-	static void WriteDummyBlockPointers(Serializer &serializer);
 
 	//! Returns the block pointer from the properties of info
 	static BlockPointer GetBlockPointer(const IndexStorageInfo &info);

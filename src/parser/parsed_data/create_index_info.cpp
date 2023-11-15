@@ -6,7 +6,7 @@ CreateIndexInfo::CreateIndexInfo() : CreateInfo(CatalogType::INDEX_ENTRY) {
 }
 
 CreateIndexInfo::CreateIndexInfo(const duckdb::CreateIndexInfo &info)
-    : CreateInfo(CatalogType::INDEX_ENTRY), table(info.table), index_name(info.index_name), options(info.options),
+    : CreateInfo(CatalogType::INDEX_ENTRY), table(info.table), name(info.name), options(info.options),
       index_type(info.index_type), constraint_type(info.constraint_type), column_ids(info.column_ids),
       scan_types(info.scan_types), names(info.names) {
 }

@@ -416,11 +416,10 @@ void ReplayState::ReplayCreateIndex(BinaryDeserializer &deserializer) {
 
 	deserializer.ReadList(103, "index_storage", [&](Deserializer::List &list, idx_t i) {
 		auto &data_info = index_info.data_infos[i];
-		D_ASSERT(data_info.buffer_block_pointers.size() == index_info.buffer_counts[i]);
 
 		// read the data into buffer handles and convert them to blocks on disk
 		// then, update the block pointer
-		for (idx_t j = 0; j < data_info.buffer_block_pointers.size(); j++) {
+		for (idx_t j = 0; j < data_info.buffer_allocation_sizes.size(); j++) {
 
 			// read the data into a buffer handle
 			shared_ptr<BlockHandle> block_handle;
@@ -481,7 +480,7 @@ void ReplayState::ReplayCreateIndex(BinaryDeserializer &deserializer) {
 	}
 
 	auto &data_table = table.GetStorage();
-	auto art = make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
+	auto art = make_uniq<ART>(info.name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
 	                          std::move(unbound_expressions), data_table.db, nullptr, index_info);
 	data_table.info->indexes.AddIndex(std::move(art));
 }

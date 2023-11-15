@@ -19,6 +19,7 @@ public:
 	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info);
 	~DuckIndexEntry() override;
 
+	//! The indexed table information
 	shared_ptr<DataTableInfo> info;
 
 	//! We need the initial size of the index after the CREATE INDEX statement,

@@ -199,15 +199,12 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 void SerializeIndexToWAL(BinarySerializer &serializer, const unique_ptr<Index> &index) {
 
 	auto index_storage_info = index->GetStorageInfo(true);
-	for (const auto &buffers : index_storage_info.buffers) {
-		index_storage_info.buffer_counts.push_back(buffers.size());
-	}
-
 	serializer.WriteProperty(102, "index_storage_info", index_storage_info);
+
 	serializer.WriteList(103, "index_storage", index_storage_info.buffers.size(), [&](Serializer::List &list, idx_t i) {
 		auto &buffers = index_storage_info.buffers[i];
 		for (auto buffer : buffers) {
-			list.WriteElement(buffer.first, buffer.second);
+			list.WriteElement(buffer.buffer_ptr, buffer.allocation_size);
 		}
 	});
 }
