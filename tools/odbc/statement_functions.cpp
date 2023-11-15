@@ -854,7 +854,8 @@ SQLRETURN duckdb::BindParameterStmt(SQLHSTMT statement_handle, SQLUSMALLINT para
 	}
 
 	// TODO figure out what parameter_type and value_type are (SQL_DESC_CONCISE_TYPE or SQL_DESC_TYPE) and
-	// if this logic (calling for both parameter_type and value_type) makes sense given SQLBindParameter reference listed above
+	// if this logic (calling for both parameter_type and value_type) makes sense given SQLBindParameter reference
+	// listed above
 	if (ipd_record->SetSqlDataType(parameter_type) == SQL_ERROR ||
 	    apd_record->SetSqlDataType(value_type) == SQL_ERROR) {
 		return SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLBindParameter", "Invalid data type.", SQLStateType::ST_HY004,

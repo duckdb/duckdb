@@ -70,12 +70,12 @@ SQLRETURN ParameterDescriptor::GetParamValues(vector<Value> &values) {
 	D_ASSERT((SQLULEN)paramset_idx < cur_apd->header.sql_desc_array_size);
 	// Fill values
 
-//std::cout << "GetParamValues " << ipd->records.size() << std::endl;
+	// std::cout << "GetParamValues " << ipd->records.size() << std::endl;
 
 	for (idx_t rec_idx = 0; rec_idx < ipd->records.size(); ++rec_idx) {
 		auto ret = SetValue(rec_idx);
 
-//std::cout << "  SetValue(" << rec_idx << ") ret = " << ret << std::endl;
+		// std::cout << "  SetValue(" << rec_idx << ") ret = " << ret << std::endl;
 
 		if (ipd->header.sql_desc_array_status_ptr) {
 			ipd->header.sql_desc_array_status_ptr[paramset_idx] = ret;
@@ -267,7 +267,8 @@ SQLRETURN ParameterDescriptor::SetValue(idx_t rec_idx) {
 	// and get the right parameter using the index (now it's working for all supported tests)
 	duckdb::const_data_ptr_t dataptr = (duckdb::const_data_ptr_t)sql_data_ptr;
 
-//std::cout << "    SetValue(" << rec_idx << ") switch(sql_desc_type) --> " << ipd->records[rec_idx].sql_desc_type << std::endl;
+	// std::cout << "    SetValue(" << rec_idx << ") switch(sql_desc_type) --> " << ipd->records[rec_idx].sql_desc_type
+	// << std::endl;
 
 	switch (ipd->records[rec_idx].sql_desc_type) {
 	case SQL_CHAR:
@@ -374,7 +375,8 @@ SQLRETURN ParameterDescriptor::SetValue(idx_t rec_idx) {
 
 void ParameterDescriptor::SetValue(Value &value, idx_t val_idx) {
 
-//std::cout << "    SetValue(Value &, idx_t) values.size() " << values.size() << " val_idx " << val_idx << std::endl;
+	// std::cout << "    SetValue(Value &, idx_t) values.size() " << values.size() << " val_idx " << val_idx <<
+	// std::endl;
 
 	if (val_idx >= values.size()) {
 		values.emplace_back(value);

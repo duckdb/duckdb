@@ -110,7 +110,8 @@ TEST_CASE("Get SQL DATE value via SQLGetData", "[odbc][time]") {
 
 	EXECUTE_AND_CHECK("SQLAllocHandle()", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &stmt);
 
-	EXECUTE_AND_CHECK("SQLExecDirect()", SQLExecDirect, stmt, ConvertToSQLCHAR("SELECT DATE '1992-09-20' as d"), SQL_NTS);
+	EXECUTE_AND_CHECK("SQLExecDirect()", SQLExecDirect, stmt, ConvertToSQLCHAR("SELECT DATE '1992-09-20' as d"),
+	                  SQL_NTS);
 
 	test_row_column_count(stmt);
 
@@ -141,7 +142,8 @@ TEST_CASE("Get SQL DATE value via SQLBindCol", "[odbc][time]") {
 
 	EXECUTE_AND_CHECK("SQLAllocHandle()", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &stmt);
 
-	EXECUTE_AND_CHECK("SQLExecDirect()", SQLExecDirect, stmt, ConvertToSQLCHAR("SELECT DATE '1992-09-20' as d"), SQL_NTS);
+	EXECUTE_AND_CHECK("SQLExecDirect()", SQLExecDirect, stmt, ConvertToSQLCHAR("SELECT DATE '1992-09-20' as d"),
+	                  SQL_NTS);
 
 	test_row_column_count(stmt);
 

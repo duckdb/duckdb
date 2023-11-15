@@ -812,7 +812,7 @@ SQLRETURN DescRecord::SetSqlDataType(SQLSMALLINT type) {
 
 	if (OdbcInterval::IsIntervalType(type)) {
 		sql_desc_type = SQL_INTERVAL;
-		//sql_desc_concise_type = type;
+		// sql_desc_concise_type = type;
 		auto interval_code = OdbcInterval::GetIntervalCode(type);
 		if (interval_code == SQL_ERROR) {
 			return SQL_ERROR; // handled

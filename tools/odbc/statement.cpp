@@ -565,7 +565,7 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 		                                string_length_ptr);
 	case SQL_DESC_CONCISE_TYPE:
 
-//std::cout << "sql_desc_concise_type " << desc_record->sql_desc_concise_type << std::endl;
+		// std::cout << "sql_desc_concise_type " << desc_record->sql_desc_concise_type << std::endl;
 
 		return SetNumericAttributePtr(hstmt, desc_record->sql_desc_concise_type, numeric_attribute_ptr);
 	case SQL_COLUMN_COUNT:
@@ -639,7 +639,7 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 		return SetNumericAttributePtr(hstmt, desc_record->sql_desc_searchable, numeric_attribute_ptr);
 	case SQL_DESC_TYPE:
 
-//std::cout << "sql_desc_type " << desc_record->sql_desc_type << std::endl;
+		// std::cout << "sql_desc_type " << desc_record->sql_desc_type << std::endl;
 
 		return SetNumericAttributePtr(hstmt, desc_record->sql_desc_type, numeric_attribute_ptr);
 	case SQL_DESC_TYPE_NAME:
