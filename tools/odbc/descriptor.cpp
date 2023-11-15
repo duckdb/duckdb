@@ -803,11 +803,16 @@ DescRecord::DescRecord(const DescRecord &other) {
 	sql_desc_updatable = other.sql_desc_updatable;
 }
 
+// type being passed in is SQL_DESC_TYPE
 SQLRETURN DescRecord::SetSqlDataType(SQLSMALLINT type) {
-	sql_desc_type = sql_desc_concise_type = type;
+
+	// sql_desc_type != sql_desc_concise_type for DATE/TIME/TIMESTAMP
+	// sql_desc_type = sql_desc_concise_type = type;
+	sql_desc_type = type;
+
 	if (OdbcInterval::IsIntervalType(type)) {
 		sql_desc_type = SQL_INTERVAL;
-		sql_desc_concise_type = type;
+		//sql_desc_concise_type = type;
 		auto interval_code = OdbcInterval::GetIntervalCode(type);
 		if (interval_code == SQL_ERROR) {
 			return SQL_ERROR; // handled
@@ -818,6 +823,7 @@ SQLRETURN DescRecord::SetSqlDataType(SQLSMALLINT type) {
 	return SQL_SUCCESS;
 }
 
+// type being passed in is SQL_DESC_CONCISE_TYPE
 SQLRETURN DescRecord::SetSqlDescType(SQLSMALLINT type) {
 	vector<duckdb::TypeInfo> vec_typeinfo;
 	ApiInfo::FindDataType(type, vec_typeinfo);
@@ -825,8 +831,14 @@ SQLRETURN DescRecord::SetSqlDescType(SQLSMALLINT type) {
 		return SQL_ERROR; // handled
 	}
 	auto type_info = vec_typeinfo.front();
+
 	// for consistency check set all other fields according to the first returned TypeInfo
-	SetSqlDataType(type_info.sql_data_type);
+	// sql_data_type == SQL_DESC_TYPE
+	// SetSqlDataType(type_info.sql_data_type);
+	sql_desc_type = type_info.sql_data_type;
+
+	// added to explicitly set sql_desc_concise_type correctly
+	sql_desc_concise_type = type_info.data_type;
 
 	sql_desc_datetime_interval_code = type_info.sql_datetime_sub;
 	sql_desc_precision = type_info.column_size;
