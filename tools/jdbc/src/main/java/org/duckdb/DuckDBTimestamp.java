@@ -51,8 +51,8 @@ public class DuckDBTimestamp {
 
     public static OffsetTime toOffsetTime(long timeBits) {
         long timeMicros = timeBits >> 24;   // High 40 bits are micros
-        long offset = timeBits & 0x0FFFFFF; // Low 24 bits are biased offset in seconds
-        offset -= 1559 * 60 * 60;
+        long offset = timeBits & 0x0FFFFFF; // Low 24 bits are inverted biased offset in seconds
+        offset = 1559 * 60 * 60 - offset;
         int sign = (offset < 0) ? -1 : 1;
         offset = Math.abs(offset);
 
