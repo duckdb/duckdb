@@ -3718,9 +3718,12 @@ public class TestDuckDBJDBC {
 
     public static void test_all_types() throws Exception {
         Logger logger = Logger.getAnonymousLogger();
-        String sql = "select * EXCLUDE(time)"
-                     + "\n    , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time"
-                     + "\nfrom test_all_types()";
+        String sql =
+            "select * EXCLUDE(time, time_tz)"
+            + "\n    , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time"
+            +
+            "\n    , CASE WHEN time_tz = '24:00:00-1559'::TIMETZ THEN '23:59:59.999999-1559'::TIMETZ ELSE time_tz END AS time_tz"
+            + "\nfrom test_all_types()";
 
         try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
              PreparedStatement stmt = conn.prepareStatement(sql)) {

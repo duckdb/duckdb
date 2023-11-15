@@ -9,8 +9,9 @@
     df = DataFrame(
         DBInterface.execute(
             con,
-            """SELECT * EXCLUDE(time)
+            """SELECT * EXCLUDE(time, time_tz)
                 , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time
+                , CASE WHEN time_tz = '24:00:00-1559'::TIMETZ THEN '23:59:59.999999-1559'::TIMETZ ELSE time_tz END AS time_tz
             FROM test_all_types()
             """
         )
