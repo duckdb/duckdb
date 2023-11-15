@@ -987,6 +987,7 @@ T Value::GetValueInternal() const {
 		return Cast::Operation<float, T>(value_.float_);
 	case LogicalTypeId::DOUBLE:
 		return Cast::Operation<double, T>(value_.double_);
+	case LogicalTypeId::CHAR:
 	case LogicalTypeId::VARCHAR:
 		return Cast::Operation<string_t, T>(StringValue::Get(*this).c_str());
 	case LogicalTypeId::INTERVAL:
@@ -1342,6 +1343,7 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::BLOB:
 		return "'" + ToString() + "'::" + type_.ToString();
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::CHAR:
 	case LogicalTypeId::ENUM:
 		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
 	case LogicalTypeId::STRUCT: {
@@ -1850,7 +1852,8 @@ bool Value::ValuesAreEqual(CastFunctionSet &set, GetCastFunctionInput &get_input
 		double rdecimal = other.value_.double_;
 		return ApproxEqual(ldecimal, rdecimal);
 	}
-	case LogicalTypeId::VARCHAR: {
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::CHAR: {
 		auto other = result_value.CastAs(set, get_input, LogicalType::VARCHAR);
 		string left = SanitizeValue(StringValue::Get(other));
 		string right = SanitizeValue(StringValue::Get(value));

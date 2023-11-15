@@ -188,6 +188,7 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		}
 		break;
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
 		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {

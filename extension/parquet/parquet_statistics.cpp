@@ -265,7 +265,8 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	case LogicalTypeId::DECIMAL:
 		row_group_stats = CreateNumericStats(type, s_ele, parquet_stats);
 		break;
-	case LogicalTypeId::VARCHAR: {
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::CHAR: {
 		auto string_stats = StringStats::CreateEmpty(type);
 		if (parquet_stats.__isset.min) {
 			StringColumnReader::VerifyString(parquet_stats.min.c_str(), parquet_stats.min.size(), true);

@@ -102,6 +102,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_HUGEINT,
 	// const char*
 	DUCKDB_TYPE_VARCHAR,
+	// const char*
+	DUCKDB_TYPE_CHAR,
 	// duckdb_blob
 	DUCKDB_TYPE_BLOB,
 	// decimal

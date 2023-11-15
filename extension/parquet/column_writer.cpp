@@ -2034,6 +2034,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::CHAR:
 		return make_uniq<StringColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
 		                                     can_have_nulls);
 	case LogicalTypeId::UUID:

@@ -127,6 +127,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::DOUBLE:
 		child.format = "g";
 		break;
+	case LogicalTypeId::CHAR:
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::VARCHAR:
 		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {

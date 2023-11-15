@@ -72,6 +72,7 @@ all_types = [
     "uuid",
     "interval",
     "varchar",
+    "char",
     "blob",
     "bit",
     "small_enum",
@@ -145,6 +146,7 @@ class TestAllTypes(object):
                 (None,),
             ],
             'varchar': [('🦆🦆🦆🦆🦆🦆',), ('goo\0se',), (None,)],
+            'char': [('🦆🦆🦆  ',), ('asdfg',), (None,)],
             'json': [('🦆🦆🦆🦆🦆🦆',), ('goose',), (None,)],
             'blob': [(b'thisisalongblob\x00withnullbytes',), (b'\x00\x00\x00a',), (None,)],
             'bit': [('0010001001011100010101011010111',), ('10101',), (None,)],
@@ -302,6 +304,11 @@ class TestAllTypes(object):
             ),
             'varchar': np.ma.array(
                 ['🦆🦆🦆🦆🦆🦆', 'goo\0se', "42"],
+                mask=[0, 0, 1],
+                dtype=object,
+            ),
+            'char': np.ma.array(
+                ['🦆🦆🦆  ', 'asdfg', "42"],
                 mask=[0, 0, 1],
                 dtype=object,
             ),

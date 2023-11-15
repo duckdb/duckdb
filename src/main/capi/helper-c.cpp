@@ -96,6 +96,8 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 		return DUCKDB_TYPE_TIME;
 	case LogicalTypeId::VARCHAR:
 		return DUCKDB_TYPE_VARCHAR;
+	case LogicalTypeId::CHAR:
+		return DUCKDB_TYPE_CHAR;
 	case LogicalTypeId::BLOB:
 		return DUCKDB_TYPE_BLOB;
 	case LogicalTypeId::BIT:

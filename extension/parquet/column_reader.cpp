@@ -1454,6 +1454,7 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 		}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::CHAR:
 		return make_uniq<StringColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::DECIMAL:
 		// we have to figure out what kind of int we need

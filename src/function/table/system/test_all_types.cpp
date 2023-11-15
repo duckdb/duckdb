@@ -61,6 +61,8 @@ vector<TestType> TestAllTypesFun::GetTestTypes(bool use_large_enum) {
 	// strings/blobs/bitstrings
 	result.emplace_back(LogicalType::VARCHAR, "varchar", Value("🦆🦆🦆🦆🦆🦆"),
 	                    Value(string("goo\x00se", 6)));
+	result.emplace_back(LogicalType::CHAR(5), "char", Value("🦆🦆🦆  "),
+	                    Value(string("asdfg")));
 	result.emplace_back(LogicalType::BLOB, "blob", Value::BLOB("thisisalongblob\\x00withnullbytes"),
 	                    Value::BLOB("\\x00\\x00\\x00a"));
 	result.emplace_back(LogicalType::BIT, "bit", Value::BIT("0010001001011100010101011010111"), Value::BIT("10101"));
