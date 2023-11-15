@@ -189,16 +189,7 @@ vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
 
 unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, const string &table_name,
                                                         ReplacementScanData *data) {
-	auto lower_name = StringUtil::Lower(table_name);
-	// remove any compression
-	if (StringUtil::EndsWith(lower_name, ".gz")) {
-		lower_name = lower_name.substr(0, lower_name.size() - 3);
-	} else if (StringUtil::EndsWith(lower_name, ".zst")) {
-		lower_name = lower_name.substr(0, lower_name.size() - 4);
-	}
-	if (!StringUtil::EndsWith(lower_name, ".json") && !StringUtil::Contains(lower_name, ".json?") &&
-	    !StringUtil::EndsWith(lower_name, ".jsonl") && !StringUtil::Contains(lower_name, ".jsonl?") &&
-	    !StringUtil::EndsWith(lower_name, ".ndjson") && !StringUtil::Contains(lower_name, ".ndjson?")) {
+	if (!ReplacementScan::CanReplace(table_name, {"json", "jsonl", "ndjson"})) {
 		return nullptr;
 	}
 	auto table_function = make_uniq<TableFunctionRef>();

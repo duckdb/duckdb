@@ -243,6 +243,7 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChun
 void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 	dict_decoder.reset();
 	defined_decoder.reset();
+	bss_decoder.reset();
 	block.reset();
 	PageHeader page_hdr;
 	page_hdr.read(protocol);
@@ -443,6 +444,13 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		PrepareDeltaByteArray(*block);
 		break;
 	}
+	case Encoding::BYTE_STREAM_SPLIT: {
+		// Subtract 1 from length as the block is allocated with 1 extra byte,
+		// but the byte stream split encoder needs to know the correct data size.
+		bss_decoder = make_uniq<BssDecoder>(block->ptr, block->len - 1);
+		block->inc(block->len);
+		break;
+	}
 	case Encoding::PLAIN:
 		// nothing to do here, will be read directly below
 		break;
@@ -488,7 +496,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 
 		idx_t null_count = 0;
 
-		if ((dict_decoder || dbp_decoder || rle_decoder) && HasDefines()) {
+		if ((dict_decoder || dbp_decoder || rle_decoder || bss_decoder) && HasDefines()) {
 			// we need the null count because the dictionary offsets have no entries for nulls
 			for (idx_t i = 0; i < read_now; i++) {
 				if (define_out[i + result_offset] != max_define) {
@@ -534,6 +542,23 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 		} else if (byte_array_data) {
 			// DELTA_BYTE_ARRAY or DELTA_LENGTH_BYTE_ARRAY
 			DeltaByteArray(define_out, read_now, filter, result_offset, result);
+		} else if (bss_decoder) {
+			auto read_buf = make_shared<ResizeableBuffer>();
+
+			switch (schema.type) {
+			case duckdb_parquet::format::Type::FLOAT:
+				read_buf->resize(reader.allocator, sizeof(float) * (read_now - null_count));
+				bss_decoder->GetBatch<float>(read_buf->ptr, read_now - null_count);
+				break;
+			case duckdb_parquet::format::Type::DOUBLE:
+				read_buf->resize(reader.allocator, sizeof(double) * (read_now - null_count));
+				bss_decoder->GetBatch<double>(read_buf->ptr, read_now - null_count);
+				break;
+			default:
+				throw std::runtime_error("BYTE_STREAM_SPLIT encoding is only supported for FLOAT or DOUBLE data");
+			}
+
+			Plain(read_buf, define_out, read_now, filter, result_offset, result);
 		} else {
 			PlainReference(block, result);
 			Plain(block, define_out, read_now, filter, result_offset, result);

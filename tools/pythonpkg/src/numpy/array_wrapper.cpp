@@ -83,7 +83,7 @@ struct TimestampConvertNano {
 struct DateConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static int64_t ConvertValue(date_t val) {
-		return Date::EpochNanoseconds(val);
+		return Date::EpochMicroseconds(val);
 	}
 
 	template <class NUMPY_T, bool PANDAS>

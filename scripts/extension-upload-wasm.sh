@@ -12,7 +12,7 @@ shopt -s nullglob
 
 echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
 
-FILES="loadable_extensions/*.duckdb_extension.wasm"
+FILES="build/$1/built_extensions/*.duckdb_extension.wasm"
 for f in $FILES
 do
         ext=`basename $f .duckdb_extension.wasm`

@@ -90,8 +90,8 @@ public:
 	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr);
 	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr);
 
-	static unique_ptr<Expression> PushCollation(ClientContext &context, unique_ptr<Expression> source,
-	                                            const string &collation, bool equality_only = false);
+	static bool PushCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type,
+	                          bool equality_only = false);
 	static void TestCollation(ClientContext &context, const string &collation);
 
 	bool BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);

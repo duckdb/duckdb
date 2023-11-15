@@ -149,9 +149,11 @@ void OdbcHandleStmt::FillIRD() {
 		duckdb::DescRecord new_record;
 		auto col_type = stmt->GetTypes()[col_idx];
 
-		new_record.sql_desc_base_column_name = stmt->GetNames()[col_idx];
-		new_record.sql_desc_name = new_record.sql_desc_base_column_name;
-		new_record.sql_desc_label = stmt->GetNames()[col_idx];
+		// TODO: Make more specific?
+		auto name = stmt->GetNames()[col_idx];
+		new_record.sql_desc_base_column_name = name;
+		new_record.sql_desc_name = name;
+		new_record.sql_desc_label = name;
 		new_record.sql_desc_length = new_record.sql_desc_label.size();
 
 		new_record.sql_desc_unnamed = new_record.sql_desc_name.empty() ? SQL_UNNAMED : SQL_NAMED;
@@ -164,8 +166,8 @@ void OdbcHandleStmt::FillIRD() {
 			new_record.SetSqlDescType(sql_type);
 		}
 
-		new_record.sql_desc_type_name = col_type.ToString();
-		duckdb::ApiInfo::GetColumnSize<SQLINTEGER>(col_type, &new_record.sql_desc_display_size);
+		new_record.sql_desc_type_name = duckdb::TypeIdToString(col_type.InternalType());
+		new_record.sql_desc_display_size = duckdb::ApiInfo::GetColumnSize(col_type);
 		new_record.SetDescUnsignedField(col_type);
 
 		auto &db_manager = dbc->env->db->instance->GetDatabaseManager();

@@ -3,6 +3,7 @@ import duckdb
 import os
 import pytest
 import tempfile
+from conftest import pandas_supports_arrow_backend
 
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
@@ -12,6 +13,8 @@ re = pytest.importorskip("re")
 
 
 def create_pyarrow_pandas(rel):
+    if not pandas_supports_arrow_backend():
+        pytest.skip(reason="Pandas version doesn't support 'pyarrow' backend")
     return rel.df().convert_dtypes(dtype_backend='pyarrow')
 
 
@@ -501,6 +504,32 @@ class TestArrowFilterPushdown(object):
         actual = duckdb_cursor.execute("select * from arrow_table where i = ?", (value,)).fetchall()
         assert expected == actual
 
+    def test_9371(self, duckdb_cursor, tmp_path):
+        import datetime
+        import pathlib
+
+        # connect to an in-memory database
+        duckdb_cursor.execute("SET TimeZone='UTC';")
+        base_path = tmp_path / "parquet_folder"
+        base_path.mkdir(exist_ok=True)
+        file_path = base_path / "test.parquet"
+
+        duckdb_cursor.execute("SET TimeZone='UTC';")
+
+        # Example data
+        dt = datetime.datetime(2023, 8, 29, 1, tzinfo=datetime.timezone.utc)
+
+        my_arrow_table = pa.Table.from_pydict({'ts': [dt, dt, dt], 'value': [1, 2, 3]})
+        df = my_arrow_table.to_pandas()
+        df = df.set_index("ts")  # SET INDEX! (It all works correctly when the index is not set)
+        df.to_parquet(str(file_path))
+
+        my_arrow_dataset = ds.dataset(str(file_path))
+        res = duckdb_cursor.execute("SELECT * FROM my_arrow_dataset WHERE ts = ?", parameters=[dt]).arrow()
+        output = duckdb_cursor.sql("select * from res").fetchall()
+        expected = [(1, dt), (2, dt), (3, dt)]
+        assert output == expected
+
     @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
     def test_filter_pushdown_date(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
@@ -655,25 +684,28 @@ class TestArrowFilterPushdown(object):
 
     # https://github.com/duckdb/duckdb/pull/4817/files#r1339973721
     @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
-    @pytest.mark.skip(reason="This test is likely not testing what it's supposed to")
     def test_filter_column_removal(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
             """
             CREATE TABLE test AS SELECT
-                range i,
-                range j
-            FROM range(5)
+                range a,
+                100 - range b
+            FROM range(100)
         """
         )
         duck_test_table = duckdb_cursor.table("test")
-        arrow_test_table = create_table(duck_test_table)
+        arrow_table = create_table(duck_test_table)
 
         # PR 4817 - remove filter columns that are unused in the remainder of the query plan from the table function
         query_res = duckdb_cursor.execute(
             """
-            EXPLAIN SELECT count(*) from testarrow where
-                a = 100 or b = 1
+            EXPLAIN SELECT count(*) FROM arrow_table WHERE
+                a > 25 AND b > 25
         """
         ).fetchall()
-        match = re.search("│ +j +│", query_res[0][1])
+
+        # scanned columns that come out of the scan are displayed like this, so we shouldn't see them
+        match = re.search("│ +a +│", query_res[0][1])
+        assert not match
+        match = re.search("│ +b +│", query_res[0][1])
         assert not match

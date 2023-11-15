@@ -796,6 +796,13 @@ struct ParquetTimestampSOperator : public BaseParquetOperator {
 	}
 };
 
+struct ParquetTimeTZOperator : public BaseParquetOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		return input.time().micros;
+	}
+};
+
 struct ParquetHugeintOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
@@ -1975,12 +1982,14 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		                                                         max_define, can_have_nulls);
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP_MS:
 		return make_uniq<StandardColumnWriter<int64_t, int64_t>>(writer, schema_idx, std::move(schema_path), max_repeat,
 		                                                         max_define, can_have_nulls);
+	case LogicalTypeId::TIME_TZ:
+		return make_uniq<StandardColumnWriter<dtime_tz_t, int64_t, ParquetTimeTZOperator>>(
+		    writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::HUGEINT:
 		return make_uniq<StandardColumnWriter<hugeint_t, double, ParquetHugeintOperator>>(
 		    writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls);

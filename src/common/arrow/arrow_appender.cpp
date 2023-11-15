@@ -39,18 +39,31 @@ void ArrowAppender::ReleaseArray(ArrowArray *array) {
 	if (!array || !array->release) {
 		return;
 	}
-	array->release = nullptr;
 	auto holder = static_cast<ArrowAppendData *>(array->private_data);
+	for (int64_t i = 0; i < array->n_children; i++) {
+		auto child = array->children[i];
+		if (!child->release) {
+			// Child was moved out of the array
+			continue;
+		}
+		child->release(child);
+		D_ASSERT(!child->release);
+	}
+	if (array->dictionary && array->dictionary->release) {
+		array->dictionary->release(array->dictionary);
+	}
+	array->release = nullptr;
 	delete holder;
 }
 
 //===--------------------------------------------------------------------===//
 // Finalize Arrow Child
 //===--------------------------------------------------------------------===//
-ArrowArray *ArrowAppender::FinalizeChild(const LogicalType &type, ArrowAppendData &append_data) {
+ArrowArray *ArrowAppender::FinalizeChild(const LogicalType &type, unique_ptr<ArrowAppendData> append_data_p) {
 	auto result = make_uniq<ArrowArray>();
 
-	result->private_data = nullptr;
+	auto &append_data = *append_data_p;
+	result->private_data = append_data_p.release();
 	result->release = ArrowAppender::ReleaseArray;
 	result->n_children = 0;
 	result->null_count = 0;
@@ -75,7 +88,7 @@ ArrowArray ArrowAppender::Finalize() {
 	auto root_holder = make_uniq<ArrowAppendData>(options);
 
 	ArrowArray result;
-	root_holder->child_pointers.resize(types.size());
+	AddChildren(*root_holder, types.size());
 	result.children = root_holder->child_pointers.data();
 	result.n_children = types.size();
 
@@ -88,10 +101,8 @@ ArrowArray ArrowAppender::Finalize() {
 	result.dictionary = nullptr;
 	root_holder->child_data = std::move(root_data);
 
-	// FIXME: this violates a property of the arrow format, if root owns all the child memory then consumers can't move
-	// child arrays https://arrow.apache.org/docs/format/CDataInterface.html#moving-child-arrays
 	for (idx_t i = 0; i < root_holder->child_data.size(); i++) {
-		root_holder->child_pointers[i] = ArrowAppender::FinalizeChild(types[i], *root_holder->child_data[i]);
+		root_holder->child_arrays[i] = *ArrowAppender::FinalizeChild(types[i], std::move(root_holder->child_data[i]));
 	}
 
 	// Release ownership to caller
@@ -182,26 +193,26 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			InitializeAppenderForType<ArrowVarcharData<string_t>>(append_data);
 		} else {
-			InitializeAppenderForType<ArrowVarcharData<string_t, ArrowVarcharConverter, uint32_t>>(append_data);
+			InitializeAppenderForType<ArrowVarcharData<string_t, ArrowVarcharConverter, int32_t>>(append_data);
 		}
 		break;
 	case LogicalTypeId::UUID:
 		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			InitializeAppenderForType<ArrowVarcharData<hugeint_t, ArrowUUIDConverter>>(append_data);
 		} else {
-			InitializeAppenderForType<ArrowVarcharData<hugeint_t, ArrowUUIDConverter, uint32_t>>(append_data);
+			InitializeAppenderForType<ArrowVarcharData<hugeint_t, ArrowUUIDConverter, int32_t>>(append_data);
 		}
 		break;
 	case LogicalTypeId::ENUM:
 		switch (type.InternalType()) {
 		case PhysicalType::UINT8:
-			InitializeAppenderForType<ArrowEnumData<uint8_t>>(append_data);
+			InitializeAppenderForType<ArrowEnumData<int8_t>>(append_data);
 			break;
 		case PhysicalType::UINT16:
-			InitializeAppenderForType<ArrowEnumData<uint16_t>>(append_data);
+			InitializeAppenderForType<ArrowEnumData<int16_t>>(append_data);
 			break;
 		case PhysicalType::UINT32:
-			InitializeAppenderForType<ArrowEnumData<uint32_t>>(append_data);
+			InitializeAppenderForType<ArrowEnumData<int32_t>>(append_data);
 			break;
 		default:
 			throw InternalException("Unsupported internal enum type");
@@ -216,11 +227,20 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::STRUCT:
 		InitializeAppenderForType<ArrowStructData>(append_data);
 		break;
-	case LogicalTypeId::LIST:
-		InitializeAppenderForType<ArrowListData>(append_data);
+	case LogicalTypeId::LIST: {
+		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			InitializeAppenderForType<ArrowListData<int64_t>>(append_data);
+		} else {
+			InitializeAppenderForType<ArrowListData<int32_t>>(append_data);
+		}
 		break;
+	}
 	case LogicalTypeId::MAP:
-		InitializeAppenderForType<ArrowMapData>(append_data);
+		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			InitializeAppenderForType<ArrowMapData<int64_t>>(append_data);
+		} else {
+			InitializeAppenderForType<ArrowMapData<int32_t>>(append_data);
+		}
 		break;
 	default:
 		throw NotImplementedException("Unsupported type in DuckDB -> Arrow Conversion: %s\n", type.ToString());
@@ -236,6 +256,14 @@ unique_ptr<ArrowAppendData> ArrowAppender::InitializeChild(const LogicalType &ty
 	result->validity.reserve(byte_count);
 	result->initialize(*result, type, capacity);
 	return result;
+}
+
+void ArrowAppender::AddChildren(ArrowAppendData &data, idx_t count) {
+	data.child_pointers.resize(count);
+	data.child_arrays.resize(count);
+	for (idx_t i = 0; i < count; i++) {
+		data.child_pointers[i] = &data.child_arrays[i];
+	}
 }
 
 } // namespace duckdb

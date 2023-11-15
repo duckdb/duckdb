@@ -30,7 +30,7 @@ class TestReplaceEmpty(object):
         df2 = df.select([when(col(c) == "", None).otherwise(col(c)).alias(c) for c in df.columns])
         assert df2.columns == ['name', 'state']
         res = df2.collect()
-        [
+        assert res == [
             Row(name=None, state='CA'),
             Row(name='Julia', state=None),
             Row(name='Robert', state=None),
@@ -42,12 +42,12 @@ class TestReplaceEmpty(object):
         from duckdb.experimental.spark.sql.functions import col, when
 
         replaceCols = ["state"]
-        df2 = df.select([when(col(c) == "", None).otherwise(col(c)).alias(c) for c in replaceCols])
+        df2 = df.select([when(col(c) == "", None).otherwise(col(c)).alias(c) for c in replaceCols]).sort(col('state'))
         assert df2.columns == ['state']
         res = df2.collect()
-        [
-            Row(name='', state='CA'),
-            Row(name='Julia', state=None),
-            Row(name='Robert', state=None),
-            Row(name='', state='NJ'),
+        assert res == [
+            Row(state='CA'),
+            Row(state='NJ'),
+            Row(state=None),
+            Row(state=None),
         ]

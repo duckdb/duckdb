@@ -1,5 +1,7 @@
 #include "capi_tester.hpp"
 
+#include <regex>
+
 using namespace duckdb;
 using namespace std;
 
@@ -572,4 +574,64 @@ TEST_CASE("Decimal -> Double casting issue", "[capi]") {
 
 	auto string_from_decimal = result->Fetch<string>(0, 0);
 	REQUIRE(string_from_decimal == "-0.5");
+}
+
+TEST_CASE("Test custom_user_agent config", "[capi]") {
+
+	{
+		duckdb_database db;
+		duckdb_connection con;
+		duckdb_result result;
+
+		// Default custom_user_agent value
+		REQUIRE(duckdb_open_ext(NULL, &db, nullptr, NULL) != DuckDBError);
+		REQUIRE(duckdb_connect(db, &con) != DuckDBError);
+
+		duckdb_query(con, "PRAGMA user_agent", &result);
+
+		REQUIRE(duckdb_row_count(&result) == 1);
+		char *user_agent_value = duckdb_value_varchar(&result, 0, 0);
+		REQUIRE_THAT(user_agent_value, Catch::Matchers::Matches("duckdb/.*(.*) capi"));
+
+		duckdb_free(user_agent_value);
+		duckdb_destroy_result(&result);
+		duckdb_disconnect(&con);
+		duckdb_close(&db);
+	}
+
+	{
+		// Custom custom_user_agent value
+
+		duckdb_database db;
+		duckdb_connection con;
+		duckdb_result result_custom_user_agent;
+		duckdb_result result_full_user_agent;
+
+		duckdb_config config;
+		REQUIRE(duckdb_create_config(&config) != DuckDBError);
+		REQUIRE(duckdb_set_config(config, "custom_user_agent", "CUSTOM_STRING") != DuckDBError);
+
+		REQUIRE(duckdb_open_ext(NULL, &db, config, NULL) != DuckDBError);
+		REQUIRE(duckdb_connect(db, &con) != DuckDBError);
+
+		duckdb_query(con, "SELECT current_setting('custom_user_agent')", &result_custom_user_agent);
+		duckdb_query(con, "PRAGMA user_agent", &result_full_user_agent);
+
+		REQUIRE(duckdb_row_count(&result_custom_user_agent) == 1);
+		REQUIRE(duckdb_row_count(&result_full_user_agent) == 1);
+
+		char *custom_user_agent_value = duckdb_value_varchar(&result_custom_user_agent, 0, 0);
+		REQUIRE(string(custom_user_agent_value) == "CUSTOM_STRING");
+
+		char *full_user_agent_value = duckdb_value_varchar(&result_full_user_agent, 0, 0);
+		REQUIRE_THAT(full_user_agent_value, Catch::Matchers::Matches("duckdb/.*(.*) capi CUSTOM_STRING"));
+
+		duckdb_destroy_config(&config);
+		duckdb_free(custom_user_agent_value);
+		duckdb_free(full_user_agent_value);
+		duckdb_destroy_result(&result_custom_user_agent);
+		duckdb_destroy_result(&result_full_user_agent);
+		duckdb_disconnect(&con);
+		duckdb_close(&db);
+	}
 }
