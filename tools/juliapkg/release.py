@@ -49,8 +49,8 @@ print(f'Creating a Julia release from the latest tag {tag} with commit hash {has
 print('> Creating a PR to the Yggdrassil repository (https://github.com/JuliaPackaging/Yggdrasil)')
 
 os.chdir(args.yggdrassil)
-run_syscall('git checkout main')
-run_syscall('git pull upstream main')
+run_syscall('git checkout master')
+run_syscall('git pull upstream master')
 run_syscall(f'git branch -D {tag}', True)
 run_syscall(f'git checkout -b {tag}')
 tarball_build = os.path.join('D', 'DuckDB', 'build_tarballs.jl')
