@@ -307,8 +307,8 @@ void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex en
 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
-		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-		dtransaction.PushCatalogEntry(*value_ptr->child);
+		auto &duck_transaction = transaction.transaction->Cast<DuckTransaction>();
+		duck_transaction.PushCatalogEntry(*value_ptr->child);
 	}
 }
 

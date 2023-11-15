@@ -84,26 +84,8 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		}
 	}
 
-	if (db_type.empty()) {
-		// try to extract database type from path
-		auto path_and_type = DBPathAndType::Parse(info->path, config);
-		db_type = path_and_type.type;
-		info->path = path_and_type.path;
-	}
-
-	if (db_type.empty() && !unrecognized_option.empty()) {
-		throw BinderException("Unrecognized option for attach \"%s\"", unrecognized_option);
-	}
-
-	// if we are loading a database type from an extension - check if that extension is loaded
-	if (!db_type.empty()) {
-		if (!Catalog::TryAutoLoad(context.client, db_type)) {
-			// FIXME: Here it might be preferable to use an AutoLoadOrThrow kind of function
-			// so that either there will be success or a message to throw, and load will be
-			// attempted only once respecting the auto-loading options
-			ExtensionHelper::LoadExternalExtension(context.client, db_type);
-		}
-	}
+	// get the database type
+	db_manager.GetDbType(context.client, db_type, *info, config, unrecognized_option);
 
 	auto attached_db = db_manager.AttachDatabase(context.client, *info, db_type, access_mode);
 	attached_db->Initialize();

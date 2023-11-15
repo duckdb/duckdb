@@ -62,10 +62,6 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 		                      name);
 	}
 
-	// get the database to erase the file path
-	auto db = GetDatabase(context, name);
-	auto path = db->GetStorageManager().GetDBPath();
-
 	if (!databases->DropEntry(context, name, false, true)) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
@@ -96,6 +92,42 @@ void DatabaseManager::EraseDbPath(const string &path) {
 	auto path_it = db_paths.find(path);
 	if (path_it != db_paths.end()) {
 		db_paths.erase(path_it);
+	}
+}
+
+void DatabaseManager::GetDbType(ClientContext &context, string &db_type, AttachInfo &info, const DBConfig &config,
+                                const string &unrecognized_option) {
+
+	lock_guard<mutex> write_lock(db_paths_lock);
+
+	// we cannot infer the database type if we already hold the file handle somewhere else
+	if (db_paths.find(info.path) != db_paths.end()) {
+		throw BinderException(
+		    "Unique file handle conflict: Database \"%s\" is already attached with path \"%s\", "
+		    "possibly by another transaction. Commit that transaction, if it already detached the file. Otherwise, "
+		    "inferring the database type from the file header is not possible, as it requires holding the file handle.",
+		    info.name, info.path);
+	}
+
+	// try to extract database type from path
+	if (db_type.empty()) {
+		auto path_and_type = DBPathAndType::Parse(info.path, config);
+		db_type = path_and_type.type;
+		info.path = path_and_type.path;
+	}
+
+	if (db_type.empty() && !unrecognized_option.empty()) {
+		throw BinderException("Unrecognized option for attach \"%s\"", unrecognized_option);
+	}
+
+	// if we are loading a database type from an extension - check if that extension is loaded
+	if (!db_type.empty()) {
+		if (!Catalog::TryAutoLoad(context, db_type)) {
+			// FIXME: Here it might be preferable to use an AutoLoadOrThrow kind of function
+			// so that either there will be success or a message to throw, and load will be
+			// attempted only once respecting the auto-loading options
+			ExtensionHelper::LoadExternalExtension(context, db_type);
+		}
 	}
 }
 

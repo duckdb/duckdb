@@ -47,7 +47,7 @@ DETACH con2_rollback_detach;
 statement error con1
 ATTACH '__TEST_DIR__/con2_rollback_detach.db';
 ----
-already attached
+inferring the database type from the file header is not possible
 
 # can't attach con1.db file in con2
 

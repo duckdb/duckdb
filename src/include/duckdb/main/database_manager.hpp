@@ -55,6 +55,11 @@ public:
 	void InsertDbPath(const string &path, const string &name);
 	//! Erases a path from the database paths map
 	void EraseDbPath(const string &path);
+	//! Returns the database type. This might require checking the header of the file, in which case the file handle is
+	//! necessary. We can only grab the file handle, if it is not yet held, even for uncommitted changes. Thus, we have
+	//! to lock for this operation.
+	void GetDbType(ClientContext &context, string &db_type, AttachInfo &info, const DBConfig &config,
+	               const string &unrecognized_option);
 	//! Returns a pointer to an attached database matching the path. If none exists, it returns nullptr
 	optional_ptr<AttachedDatabase> GetDatabaseFromPath(ClientContext &context, const string &path);
 	//! Scans the catalog set and adds each committed database entry, and each database entry of the current
