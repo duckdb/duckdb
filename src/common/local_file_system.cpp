@@ -54,37 +54,43 @@ static void AssertValidFileFlags(uint8_t flags) {
 #ifndef _WIN32
 
 bool LocalFileSystem::FileExists(const string &filename) {
-	if (!filename.empty()) {
-		if (access(filename.c_str(), 0) != 0) {
-			throw IOException("Cannot access file \"%s\": %s", filename, strerror(errno));
-		}
-		struct stat status;
-		if (stat(filename.c_str(), &status) != 0) {
-			throw IOException("Cannot stat file \"%s\": %s", filename, strerror(errno));
-		}
-		if (S_ISREG(status.st_mode)) {
-			return true;
-		}
+	if (filename.empty()) {
+		return false;
 	}
-	// Return false at this point
-	return false;
+	if (access(filename.c_str(), 0) != 0) {
+		if (errno == ENOENT) {
+			return false;
+		}
+		throw IOException("Cannot access file \"%s\": %s", filename, strerror(errno));
+	}
+	struct stat status;
+	if (stat(filename.c_str(), &status) != 0) {
+		if (errno == ENOENT) {
+			return false;
+		}
+		throw IOException("Cannot stat file \"%s\": %s", filename, strerror(errno));
+	}
+	return S_ISREG(status.st_mode);
 }
 
 bool LocalFileSystem::IsPipe(const string &filename) {
-	if (!filename.empty()) {
-		if (access(filename.c_str(), 0) != 0) {
-			throw IOException("Cannot access file \"%s\": %s", filename, strerror(errno));
-		}
-		struct stat status;
-		if (stat(filename.c_str(), &status) != 0) {
-			throw IOException("Cannot stat file \"%s\": %s", filename, strerror(errno));
-		}
-		if (S_ISFIFO(status.st_mode)) {
-			return true;
-		}
+	if (filename.empty()) {
+		return false;
 	}
-	// Return false at this point
-	return false;
+	if (access(filename.c_str(), 0) != 0) {
+		if (errno == ENOENT) {
+			return false;
+		}
+		throw IOException("Cannot access file \"%s\": %s", filename, strerror(errno));
+	}
+	struct stat status;
+	if (stat(filename.c_str(), &status) != 0) {
+		if (errno == ENOENT) {
+			return false;
+		}
+		throw IOException("Cannot stat file \"%s\": %s", filename, strerror(errno));
+	}
+	return S_ISFIFO(status.st_mode);
 }
 
 #else
