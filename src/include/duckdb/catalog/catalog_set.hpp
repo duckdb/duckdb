@@ -51,6 +51,12 @@ private:
 
 //! The Catalog Set stores (key, value) map of a set of CatalogEntries
 class CatalogSet {
+public:
+	struct EntryLookup {
+		enum class FailureReason { SUCCESS, DELETED, NOT_PRESENT };
+		optional_ptr<CatalogEntry> result;
+		FailureReason reason;
+	};
 
 public:
 	DUCKDB_API explicit CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults = nullptr);
@@ -77,6 +83,7 @@ public:
 	void CleanupEntry(CatalogEntry &catalog_entry);
 
 	//! Returns the entry with the specified name
+	DUCKDB_API EntryLookup GetEntryDetailed(CatalogTransaction transaction, const string &name);
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, const string &name);
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const string &name);
 
@@ -101,6 +108,8 @@ public:
 		return result;
 	}
 
+	DUCKDB_API bool CreatedByOtherActiveTransaction(CatalogTransaction transaction, transaction_t timestamp);
+	DUCKDB_API bool CommittedAfterStarting(CatalogTransaction transaction, transaction_t timestamp);
 	DUCKDB_API bool HasConflict(CatalogTransaction transaction, transaction_t timestamp);
 	DUCKDB_API bool UseTimestamp(CatalogTransaction transaction, transaction_t timestamp);
 

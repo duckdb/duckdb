@@ -8,9 +8,9 @@
 
 namespace duckdb {
 
-static string GetProxyPrefix(const string &name, const string &prefix) {
+static string GetProxyPrefix(const string &name) {
 	auto null_byte = string(1, '\0');
-	return name + null_byte + prefix + null_byte;
+	return name + null_byte;
 }
 
 DependencySetCatalogEntry::DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager,
@@ -19,9 +19,8 @@ DependencySetCatalogEntry::DependencySetCatalogEntry(Catalog &catalog, Dependenc
     : InCatalogEntry(CatalogType::DEPENDENCY_SET, catalog,
                      DependencyManager::MangleName(entry_type, entry_schema, entry_name)),
       entry_name(entry_name), schema(entry_schema), entry_type(entry_type),
-      dependencies(dependency_manager.dependency_sets, GetProxyPrefix(name, "dependencies")),
-      dependents(dependency_manager.dependency_sets, GetProxyPrefix(name, "dependents")),
-      dependency_manager(dependency_manager) {
+      dependencies(dependency_manager.dependencies, GetProxyPrefix(name)),
+      dependents(dependency_manager.dependents, GetProxyPrefix(name)), dependency_manager(dependency_manager) {
 }
 
 ProxyCatalogSet &DependencySetCatalogEntry::Dependencies() {
@@ -144,6 +143,7 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransact
 		dependency_p->temporary = true;
 	}
 	auto &dependency = *dependency_p;
+
 	dependencies.CreateEntry(transaction, dependency_name, std::move(dependency_p), EMPTY_DEPENDENCIES);
 	return dependency;
 }
@@ -224,15 +224,17 @@ DependencyCatalogEntry &DependencySetCatalogEntry::GetDependent(CatalogTransacti
 
 bool DependencySetCatalogEntry::IsDependencyOf(CatalogTransaction transaction, CatalogEntry &entry) {
 	auto mangled_name = DependencyManager::MangleName(entry);
-	auto dependent = dependents.GetEntry(transaction, mangled_name);
-	return dependent != nullptr;
+	auto dependent = dependents.GetEntryDetailed(transaction, mangled_name);
+
+	// It's fine if the entry is already deleted
+	return dependent.reason != CatalogSet::EntryLookup::FailureReason::NOT_PRESENT;
 }
 
 bool DependencySetCatalogEntry::HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry,
                                                 DependencyType dependent_type) {
 	auto mangled_name = DependencyManager::MangleName(entry);
-	auto dependency = dependencies.GetEntry(transaction, mangled_name);
-	return dependency != nullptr;
+	auto dependency = dependencies.GetEntryDetailed(transaction, mangled_name);
+	return dependency.reason != CatalogSet::EntryLookup::FailureReason::NOT_PRESENT;
 }
 
 static string FormatString(string input) {

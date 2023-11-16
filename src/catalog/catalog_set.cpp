@@ -378,14 +378,19 @@ void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
 	}
 }
 
+bool CatalogSet::CreatedByOtherActiveTransaction(CatalogTransaction transaction, transaction_t timestamp) {
+	// True if this transaction is not committed yet and the entry was made by another active (not committed)
+	// transaction
+	return (timestamp >= TRANSACTION_ID_START && timestamp != transaction.transaction_id);
+}
+
+bool CatalogSet::CommittedAfterStarting(CatalogTransaction transaction, transaction_t timestamp) {
+	// The entry has been committed after this transaction started, this is not our source of truth.
+	return (timestamp < TRANSACTION_ID_START && timestamp > transaction.start_time);
+}
+
 bool CatalogSet::HasConflict(CatalogTransaction transaction, transaction_t timestamp) {
-	if (timestamp >= TRANSACTION_ID_START && timestamp != transaction.transaction_id) {
-		return true;
-	}
-	if (timestamp < TRANSACTION_ID_START && timestamp > transaction.start_time) {
-		return true;
-	}
-	return false;
+	return CreatedByOtherActiveTransaction(transaction, timestamp) || CommittedAfterStarting(transaction, timestamp);
 }
 
 bool CatalogSet::UseTimestamp(CatalogTransaction transaction, transaction_t timestamp) {
@@ -486,7 +491,7 @@ optional_ptr<CatalogEntry> CatalogSet::CreateDefaultEntry(CatalogTransaction tra
 	return GetEntry(transaction, name);
 }
 
-optional_ptr<CatalogEntry> CatalogSet::GetEntry(CatalogTransaction transaction, const string &name) {
+CatalogSet::EntryLookup CatalogSet::GetEntryDetailed(CatalogTransaction transaction, const string &name) {
 	unique_lock<mutex> lock(catalog_lock);
 	auto entry_value = map.GetEntry(name);
 	if (entry_value) {
@@ -496,15 +501,21 @@ optional_ptr<CatalogEntry> CatalogSet::GetEntry(CatalogTransaction transaction, 
 		auto &catalog_entry = *entry_value;
 		auto &current = GetEntryForTransaction(transaction, catalog_entry);
 		if (current.deleted) {
-			return nullptr;
+			return EntryLookup {nullptr, EntryLookup::FailureReason::DELETED};
 		}
-		// if (!UseTimestamp(transaction, entry_value->GetTimestamp())) {
-		//	return nullptr;
-		//}
 		D_ASSERT(StringUtil::CIEquals(name, current.name));
-		return &current;
+		return EntryLookup {&current, EntryLookup::FailureReason::SUCCESS};
 	}
-	return CreateDefaultEntry(transaction, name, lock);
+	auto default_entry = CreateDefaultEntry(transaction, name, lock);
+	if (!default_entry) {
+		return EntryLookup {default_entry, EntryLookup::FailureReason::NOT_PRESENT};
+	}
+	return EntryLookup {default_entry, EntryLookup::FailureReason::SUCCESS};
+}
+
+optional_ptr<CatalogEntry> CatalogSet::GetEntry(CatalogTransaction transaction, const string &name) {
+	auto lookup = GetEntryDetailed(transaction, name);
+	return lookup.result;
 }
 
 optional_ptr<CatalogEntry> CatalogSet::GetEntry(ClientContext &context, const string &name) {

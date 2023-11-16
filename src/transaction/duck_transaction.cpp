@@ -57,11 +57,6 @@ void DuckTransaction::PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_dat
 		alloc_size += extra_data_size + sizeof(idx_t);
 	}
 
-	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
-		// We don't clean these up, only when the regular entry gets deleted do we clean up the set - which deletes all
-		// the dependency entries associated with it.
-		return;
-	}
 	auto baseptr = undo_buffer.CreateEntry(UndoFlags::CATALOG_ENTRY, alloc_size);
 	// store the pointer to the catalog entry
 	Store<CatalogEntry *>(&entry, baseptr);

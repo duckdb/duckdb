@@ -68,7 +68,6 @@ public:
 	bool IsDependencyOf(CatalogTransaction transaction, CatalogEntry &entry);
 
 private:
-	//! Skips the exemption for DEPENDENCY_OWNS, use 'HasDependencyOn' instead for that
 	void ScanSetInternal(CatalogTransaction transaction, bool dependencies, dependency_callback_t &callback);
 
 public:
@@ -86,6 +85,8 @@ private:
 	const string schema;
 	const CatalogType entry_type;
 
+	// These are proxies so we don't have a nested CatalogSet
+	// Because the Catalog is not built to support this
 	ProxyCatalogSet dependencies;
 	ProxyCatalogSet dependents;
 	DependencyManager &dependency_manager;

@@ -14,7 +14,8 @@
 
 namespace duckdb {
 
-DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog), dependency_sets(catalog) {
+DependencyManager::DependencyManager(DuckCatalog &catalog)
+    : catalog(catalog), dependency_sets(catalog), dependencies(catalog), dependents(catalog) {
 }
 
 string DependencyManager::GetSchema(CatalogEntry &entry) {
@@ -51,9 +52,7 @@ string DependencyManager::MangleName(CatalogEntry &entry) {
 
 void DependencyManager::DropDependencySet(CatalogTransaction transaction, CatalogEntry &object) {
 	auto name = MangleName(object);
-	auto &set = *GetDependencySet(transaction, name);
-	set.ScanDependents(transaction, [&](DependencyCatalogEntry &dep) { D_ASSERT(dep.deleted); });
-	set.ScanDependencies(transaction, [&](DependencyCatalogEntry &dep) { D_ASSERT(dep.deleted); });
+
 	dependency_sets.DropEntry(transaction, name, false);
 }
 

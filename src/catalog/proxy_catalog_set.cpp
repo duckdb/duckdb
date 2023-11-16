@@ -13,6 +13,11 @@ bool ProxyCatalogSet::CreateEntry(CatalogTransaction transaction, const string &
 	return set.CreateEntry(transaction, new_name, std::move(value), dependencies);
 }
 
+CatalogSet::EntryLookup ProxyCatalogSet::GetEntryDetailed(CatalogTransaction transaction, const string &name) {
+	auto new_name = ApplyPrefix(prefix, name);
+	return set.GetEntryDetailed(transaction, new_name);
+}
+
 optional_ptr<CatalogEntry> ProxyCatalogSet::GetEntry(CatalogTransaction transaction, const string &name) {
 	auto new_name = ApplyPrefix(prefix, name);
 	return set.GetEntry(transaction, new_name);
