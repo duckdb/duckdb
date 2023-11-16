@@ -4,20 +4,17 @@ static duckdb_value WrapValue(Value *list_value) {
 	return reinterpret_cast<duckdb_value>(list_value);
 }
 
-static LogicalType UnwrapType(duckdb_logical_type type) {
+static LogicalType &UnwrapType(duckdb_logical_type type) {
 	return *(reinterpret_cast<duckdb::LogicalType *>(type));
 }
 
-static Value *UnwrapValue(duckdb_value *value) {
-	if (value && *value) {
-		return reinterpret_cast<duckdb::Value *>(*value);
-	}
-	return nullptr;
+static Value &UnwrapValue(duckdb_value value) {
+	return *(reinterpret_cast<duckdb::Value *>(value));
 }
 void duckdb_destroy_value(duckdb_value *value) {
-	auto val = UnwrapValue(value);
-	if (val) {
-		delete val;
+	if (value && *value) {
+		Value &unwrap_value = UnwrapValue(*value);
+		delete &unwrap_value;
 		*value = nullptr;
 	}
 }
@@ -58,7 +55,7 @@ duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *
 	if (!type || !values) {
 		return nullptr;
 	}
-	auto ltype = UnwrapType(type);
+	auto &ltype = UnwrapType(type);
 	if (ltype.id() != duckdb::LogicalTypeId::STRUCT) {
 		return nullptr;
 	}
@@ -67,11 +64,11 @@ duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *
 
 	duckdb::child_list_t<Value> unwrapped_values;
 	for (idx_t i = 0; i < count; i++) {
-		auto val = UnwrapValue(&values[i]);
-		if (!val) {
+		auto value = values[i];
+		if (!value) {
 			return nullptr;
 		}
-		unwrapped_values.emplace_back(struct_type.get(i).first, *val);
+		unwrapped_values.emplace_back(struct_type.get(i).first, UnwrapValue(value));
 	}
 	duckdb::Value *struct_value = new duckdb::Value;
 	*struct_value = duckdb::Value::STRUCT(unwrapped_values);
@@ -81,15 +78,15 @@ duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *va
 	if (!type) {
 		return nullptr;
 	}
-	auto ltype = UnwrapType(type);
+	auto &ltype = UnwrapType(type);
 	duckdb::vector<Value> unwrapped_values = duckdb::vector<Value>();
 
 	for (idx_t i = 0; i < value_count; i++) {
-		auto val = UnwrapValue(&values[i]);
-		if (!val) {
+		auto value = values[i];
+		if (!value) {
 			return nullptr;
 		}
-		unwrapped_values.push_back(*val);
+		unwrapped_values.push_back(UnwrapValue(value));
 	}
 	duckdb::Value *list_value = new duckdb::Value;
 	*list_value = duckdb::Value::LIST(ltype, unwrapped_values);
