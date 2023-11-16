@@ -58,7 +58,7 @@ duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *
 	if (!type || !values) {
 		return nullptr;
 	}
-	auto &ltype = *(reinterpret_cast<duckdb::LogicalType *>(type));
+	auto ltype = UnwrapType(type);
 	if (ltype.id() != duckdb::LogicalTypeId::STRUCT) {
 		return nullptr;
 	}
