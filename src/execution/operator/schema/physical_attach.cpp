@@ -64,7 +64,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	auto &db_manager = DatabaseManager::Get(context.client);
 	if (info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 
-		// O(1) lookup in the catalog for the db name
+		// constant-time lookup in the catalog for the db name
 		auto existing_db = db_manager.GetDatabase(context.client, name);
 		if (existing_db) {
 
