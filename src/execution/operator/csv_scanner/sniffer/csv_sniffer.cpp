@@ -118,6 +118,16 @@ SnifferResult CSVSniffer::SniffCSV() {
 		auto &set_types = *set_columns.types;
 		for (idx_t i = 0; i < set_columns.Size(); i++) {
 			if (set_types[i] != detected_types[i] && !(set_types[i].IsNumeric() && detected_types[i].IsNumeric())) {
+				if (set_types[i].ToString() == "JSON" && detected_types[i] == LogicalType::VARCHAR) {
+					// Skip check if it's json
+					continue;
+				}
+				if ((set_types[i].id() == LogicalTypeId::ENUM || set_types[i].id() == LogicalTypeId::LIST ||
+				     set_types[i].id() == LogicalTypeId::STRUCT) &&
+				    detected_types[i] == LogicalType::VARCHAR) {
+					// Skip check if it's an ENUM
+					continue;
+				}
 				error += "Column at position: " + to_string(i) + " Set type: " + set_types[i].ToString() +
 				         " Sniffed type: " + detected_types[i].ToString() + "\n";
 				match = false;

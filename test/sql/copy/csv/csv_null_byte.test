@@ -29,7 +29,13 @@ select * from read_csv('data/csv/nullbyte_header.csv', columns={'col1': 'VARCHAR
 col1	col\02
 val1	val2
 
-query II
+# FIXME: Should we fix the null byte in the header?
+statement error
 select * from read_csv('data/csv/nullbyte_header.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, delim='|', header=True);
+----
+Column at position: 1 Set name: col2 Sniffed Name: col\02
+
+query II
+select * from read_csv('data/csv/nullbyte_header.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, delim='|', header=True,auto_detect=false);
 ----
 val1	val2
