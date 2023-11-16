@@ -2,6 +2,29 @@
 
 namespace duckdb {
 
+// Not allow nested brace expansion and non-matching brace
+bool BraceExpansion::has_brace_expansion(const string &pattern){
+   idx_t braceCount = 0;
+    for (char ch : pattern) {
+        // Detects nested braces
+        if (ch == '{') {
+            if (braceCount > 0) { 
+                return false;
+            }
+            braceCount++;
+        // Detects non-matching closing brace
+        } else if (ch == '}') {
+            if (braceCount <= 0) { 
+                return false;
+            }
+            braceCount--;
+        }
+    }
+    // Checks if all braces are matched
+    return braceCount == 0; 
+}
+
+
 vector<string> BraceExpansion::brace_expansion(const string &pattern){
     vector<std::string> result;
     idx_t braceOpen = pattern.find('{');

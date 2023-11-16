@@ -16,7 +16,7 @@ namespace duckdb {
 class BraceExpansion {
 public:
     static vector<string> brace_expansion(const string &pattern);
-    
+    static bool has_brace_expansion(const string &pattern);
 };
 
 }   // namespace duckdb
