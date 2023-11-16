@@ -37,7 +37,7 @@ struct ARTIndexScanState : public IndexScanState {
 ART::ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
          AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
-         const IndexStorageInfo &index_storage_info)
+         const IndexStorageInfo &info)
     : Index(name, "ART", index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
       allocators(allocators_ptr), owns_data(false) {
 
@@ -56,16 +56,15 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 		allocators = make_shared<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
 	}
 
-	if (index_storage_info.IsValid()) {
+	// deserialize lazily
+	if (info.IsValid()) {
 
-		if (index_storage_info.properties.size() == 1) {
-			InitAllocators(index_storage_info);
+		if (!info.root_block_ptr.IsValid()) {
+			InitAllocators(info);
 
 		} else {
-			auto block_pointer = IndexStorage::GetBlockPointer(index_storage_info);
-			if (block_pointer.IsValid()) {
-				Deserialize(block_pointer);
-			}
+			// old storage file
+			Deserialize(info.root_block_ptr);
 		}
 	}
 
@@ -986,8 +985,7 @@ IndexStorageInfo ART::GetStorageInfo(const bool get_buffers) {
 	// set the name and root node
 	IndexStorageInfo info;
 	info.name = name;
-	auto property = make_pair<string, Value>("tree", Value::UBIGINT(tree.Get()));
-	info.properties.insert(property);
+	info.root = tree.Get();
 
 	if (!get_buffers) {
 		// store the data on disk as partial blocks and set the block ids
@@ -1001,7 +999,7 @@ IndexStorageInfo ART::GetStorageInfo(const bool get_buffers) {
 	}
 
 	for (const auto &allocator : *allocators) {
-		info.data_infos.push_back(allocator->GetInfo());
+		info.allocator_infos.push_back(allocator->GetInfo());
 	}
 
 	return info;
@@ -1022,15 +1020,12 @@ void ART::WritePartialBlocks() {
 void ART::InitAllocators(const IndexStorageInfo &info) {
 
 	// set the root node
-	D_ASSERT(info.properties.find("tree") != info.properties.end());
-	auto tree_value = info.properties.find("tree");
-	tree.Set(tree_value->second.GetValue<uint64_t>());
+	tree.Set(info.root);
 
 	// initialize the allocators
-	D_ASSERT(info.data_infos.size() == ALLOCATOR_COUNT);
-
-	for (idx_t i = 0; i < info.data_infos.size(); i++) {
-		(*allocators)[i]->Init(info.data_infos[i]);
+	D_ASSERT(info.allocator_infos.size() == ALLOCATOR_COUNT);
+	for (idx_t i = 0; i < info.allocator_infos.size(); i++) {
+		(*allocators)[i]->Init(info.allocator_infos[i]);
 	}
 }
 

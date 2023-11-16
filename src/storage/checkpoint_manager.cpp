@@ -438,7 +438,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	if (root_block_pointer.IsValid()) {
 		// this code path is necessary to read older duckdb files
 		index_storage_info.name = info.name;
-		IndexStorage::SetBlockPointerInfo(root_block_pointer, index_storage_info);
+		index_storage_info.root_block_ptr = root_block_pointer;
 
 	} else {
 		// get the matching index storage info
@@ -532,12 +532,16 @@ void CheckpointReader::ReadTableData(ClientContext &context, Deserializer &deser
 	auto index_storage_infos =
 	    deserializer.ReadPropertyWithDefault<vector<IndexStorageInfo>>(104, "index_storage_infos", {});
 
-	if (index_storage_infos.empty()) {
-		// old duckdb file containing index pointers
-		IndexStorage::SetBlockPointerInfos(index_pointers, bound_info.indexes);
-	} else {
-		// current duckdb file
+	if (!index_storage_infos.empty()) {
 		bound_info.indexes = index_storage_infos;
+
+	} else {
+		// old duckdb file containing index pointers
+		for (idx_t i = 0; i < index_pointers.size(); i++) {
+			IndexStorageInfo index_storage_info;
+			index_storage_info.root_block_ptr = index_pointers[i];
+			bound_info.indexes.push_back(index_storage_info);
+		}
 	}
 
 	// FIXME: icky downcast to get the underlying MetadataReader

@@ -415,11 +415,11 @@ void ReplayState::ReplayCreateIndex(BinaryDeserializer &deserializer) {
 	auto &buffer_manager = block_manager->buffer_manager;
 
 	deserializer.ReadList(103, "index_storage", [&](Deserializer::List &list, idx_t i) {
-		auto &data_info = index_info.data_infos[i];
+		auto &data_info = index_info.allocator_infos[i];
 
 		// read the data into buffer handles and convert them to blocks on disk
 		// then, update the block pointer
-		for (idx_t j = 0; j < data_info.buffer_allocation_sizes.size(); j++) {
+		for (idx_t j = 0; j < data_info.allocation_sizes.size(); j++) {
 
 			// read the data into a buffer handle
 			shared_ptr<BlockHandle> block_handle;
@@ -427,12 +427,12 @@ void ReplayState::ReplayCreateIndex(BinaryDeserializer &deserializer) {
 			auto buffer_handle = buffer_manager.Pin(block_handle);
 			auto data_ptr = buffer_handle.Ptr();
 
-			list.ReadElement<bool>(data_ptr, data_info.buffer_allocation_sizes[j]);
+			list.ReadElement<bool>(data_ptr, data_info.allocation_sizes[j]);
 
 			// now convert the buffer handle to a persistent block and remember the block id
 			auto block_id = block_manager->GetFreeBlockId();
 			block_manager->ConvertToPersistent(block_id, std::move(block_handle));
-			data_info.buffer_block_pointers[j].block_id = block_id;
+			data_info.block_pointers[j].block_id = block_id;
 		}
 	});
 

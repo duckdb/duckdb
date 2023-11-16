@@ -264,20 +264,20 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
 	return new_ptr;
 }
 
-IndexDataInfo FixedSizeAllocator::GetInfo() const {
+FixedSizeAllocatorInfo FixedSizeAllocator::GetInfo() const {
 
-	IndexDataInfo info;
+	FixedSizeAllocatorInfo info;
 	info.segment_size = segment_size;
 
 	for (const auto &buffer : buffers) {
 		info.buffer_ids.push_back(buffer.first);
-		info.buffer_block_pointers.push_back(buffer.second.block_pointer);
-		info.buffer_segment_counts.push_back(buffer.second.segment_count);
-		info.buffer_allocation_sizes.push_back(buffer.second.allocation_size);
+		info.block_pointers.push_back(buffer.second.block_pointer);
+		info.segment_counts.push_back(buffer.second.segment_count);
+		info.allocation_sizes.push_back(buffer.second.allocation_size);
 	}
 
 	for (auto &buffer_id : buffers_with_free_space) {
-		info.buffers_with_free_space_vec.push_back(buffer_id);
+		info.buffers_with_free_space.push_back(buffer_id);
 	}
 
 	return info;
@@ -299,7 +299,7 @@ vector<IndexBufferInfo> FixedSizeAllocator::InitSerializationToWAL() {
 	return buffer_infos;
 }
 
-void FixedSizeAllocator::Init(const IndexDataInfo &info) {
+void FixedSizeAllocator::Init(const FixedSizeAllocatorInfo &info) {
 
 	segment_size = info.segment_size;
 	total_segment_count = 0;
@@ -308,9 +308,9 @@ void FixedSizeAllocator::Init(const IndexDataInfo &info) {
 
 		// read all FixedSizeBuffer data
 		auto buffer_id = info.buffer_ids[i];
-		auto buffer_block_pointer = info.buffer_block_pointers[i];
-		auto segment_count = info.buffer_segment_counts[i];
-		auto allocation_size = info.buffer_allocation_sizes[i];
+		auto buffer_block_pointer = info.block_pointers[i];
+		auto segment_count = info.segment_counts[i];
+		auto allocation_size = info.allocation_sizes[i];
 
 		// create the FixedSizeBuffer
 		FixedSizeBuffer new_buffer(block_manager, segment_count, allocation_size, buffer_block_pointer);
@@ -318,7 +318,7 @@ void FixedSizeAllocator::Init(const IndexDataInfo &info) {
 		total_segment_count += segment_count;
 	}
 
-	for (const auto &buffer_id : info.buffers_with_free_space_vec) {
+	for (const auto &buffer_id : info.buffers_with_free_space) {
 		buffers_with_free_space.insert(buffer_id);
 	}
 }

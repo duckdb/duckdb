@@ -119,40 +119,4 @@ string Index::AppendRowError(DataChunk &input, idx_t index) {
 	return error;
 }
 
-//===--------------------------------------------------------------------===//
-// Stable storage functions
-//===--------------------------------------------------------------------===//
-
-BlockPointer IndexStorage::GetBlockPointer(const IndexStorageInfo &info) {
-
-	D_ASSERT(info.properties.find("block_id") != info.properties.end());
-	D_ASSERT(info.properties.find("offset") != info.properties.end());
-
-	auto block_id = info.properties.find("block_id")->second;
-	auto offset = info.properties.find("offset")->second;
-
-	BlockPointer block_pointer(block_id.GetValue<block_id_t>(), offset.GetValue<uint32_t>());
-	return block_pointer;
-}
-
-void IndexStorage::SetBlockPointerInfos(vector<BlockPointer> &pointers, vector<IndexStorageInfo> &infos) {
-
-	for (idx_t i = 0; i < pointers.size(); i++) {
-		IndexStorageInfo index_storage_info;
-		auto block_id = make_pair<string, Value>("block_id", Value::BIGINT(pointers[i].block_id));
-		auto offset = make_pair<string, Value>("offset", Value::UINTEGER(pointers[i].offset));
-		index_storage_info.properties.insert(block_id);
-		index_storage_info.properties.insert(offset);
-		infos.push_back(index_storage_info);
-	}
-}
-
-void IndexStorage::SetBlockPointerInfo(BlockPointer &pointer, IndexStorageInfo &info) {
-
-	auto block_id = make_pair<string, Value>("block_id", Value::BIGINT(pointer.block_id));
-	auto offset = make_pair<string, Value>("offset", Value::UINTEGER(pointer.offset));
-	info.properties.insert(block_id);
-	info.properties.insert(offset);
-}
-
 } // namespace duckdb

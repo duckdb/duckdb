@@ -74,13 +74,13 @@ public:
 	IndexPointer VacuumPointer(const IndexPointer ptr);
 
 	//! Returns all FixedSizeAllocator information for serialization
-	IndexDataInfo GetInfo() const;
+	FixedSizeAllocatorInfo GetInfo() const;
 	//! Serializes all in-memory buffers
 	void SerializeBuffers(PartialBlockManager &partial_block_manager);
 	//! Sets the allocation sizes and returns data to serialize each buffer
 	vector<IndexBufferInfo> InitSerializationToWAL();
 	//! Initialize a fixed-size allocator from allocator storage information
-	void Init(const IndexDataInfo &info);
+	void Init(const FixedSizeAllocatorInfo &info);
 	//! Deserializes all metadata of older storage files
 	void Deserialize(MetadataManager &metadata_manager, const BlockPointer &block_pointer);
 

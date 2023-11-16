@@ -20,7 +20,7 @@
     "constructor": ["block_pointer", "offset"]
   },
   {
-    "class": "IndexDataInfo",
+    "class": "FixedSizeAllocatorInfo",
     "members": [
       {
         "id": 100,
@@ -34,22 +34,22 @@
       },
       {
         "id": 102,
-        "name": "buffer_block_pointers",
+        "name": "block_pointers",
         "type": "vector<BlockPointer>"
       },
       {
         "id": 103,
-        "name": "buffer_segment_counts",
+        "name": "segment_counts",
         "type": "vector<idx_t>"
       },
       {
         "id": 104,
-        "name": "buffer_allocation_sizes",
+        "name": "allocation_sizes",
         "type": "vector<idx_t>"
       },
       {
         "id": 105,
-        "name": "buffers_with_free_space_vec",
+        "name": "buffers_with_free_space",
         "type": "vector<idx_t>"
       }
     ],
@@ -68,13 +68,13 @@
       },
       {
         "id": 101,
-        "name": "properties",
-        "type": "unordered_map<string, Value>"
+        "name": "root",
+        "type": "idx_t"
       },
       {
         "id": 102,
-        "name": "data_infos",
-        "type": "vector<IndexDataInfo>"
+        "name": "allocator_infos",
+        "type": "vector<FixedSizeAllocatorInfo>"
       }
     ],
     "pointer_type": "none"
