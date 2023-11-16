@@ -53,44 +53,49 @@ static void AssertValidFileFlags(uint8_t flags) {
 
 #ifndef _WIN32
 
-bool LocalFileSystem::FileExists(const string &filename) {
+static FileType GetFileTypeWithAccessCheck(const std::string &filename) {
 	if (filename.empty()) {
-		return false;
+		return FileType::FILE_TYPE_INVALID;
 	}
 	if (access(filename.c_str(), 0) != 0) {
 		if (errno == ENOENT) {
-			return false;
+			return FileType::FILE_TYPE_INVALID;
 		}
 		throw IOException("Cannot access file \"%s\": %s", filename, strerror(errno));
 	}
-	struct stat status;
-	if (stat(filename.c_str(), &status) != 0) {
+	struct stat s;
+	if (stat(filename.c_str(), &s) != 0) {
 		if (errno == ENOENT) {
-			return false;
+			return FileType::FILE_TYPE_INVALID;
 		}
 		throw IOException("Cannot stat file \"%s\": %s", filename, strerror(errno));
 	}
-	return S_ISREG(status.st_mode);
+	switch (s.st_mode & S_IFMT) {
+	case S_IFBLK:
+		return FileType::FILE_TYPE_BLOCKDEV;
+	case S_IFCHR:
+		return FileType::FILE_TYPE_CHARDEV;
+	case S_IFIFO:
+		return FileType::FILE_TYPE_FIFO;
+	case S_IFDIR:
+		return FileType::FILE_TYPE_DIR;
+	case S_IFLNK:
+		return FileType::FILE_TYPE_LINK;
+	case S_IFREG:
+		return FileType::FILE_TYPE_REGULAR;
+	case S_IFSOCK:
+		return FileType::FILE_TYPE_SOCKET;
+	default:
+		return FileType::FILE_TYPE_INVALID;
+	}
+}
+
+bool LocalFileSystem::FileExists(const string &filename) {
+	return GetFileTypeWithAccessCheck(filename) == FileType::FILE_TYPE_REGULAR;
 }
 
 bool LocalFileSystem::IsPipe(const string &filename) {
-	if (filename.empty()) {
-		return false;
-	}
-	if (access(filename.c_str(), 0) != 0) {
-		if (errno == ENOENT) {
-			return false;
-		}
-		throw IOException("Cannot access file \"%s\": %s", filename, strerror(errno));
-	}
-	struct stat status;
-	if (stat(filename.c_str(), &status) != 0) {
-		if (errno == ENOENT) {
-			return false;
-		}
-		throw IOException("Cannot stat file \"%s\": %s", filename, strerror(errno));
-	}
-	return S_ISFIFO(status.st_mode);
+	return GetFileTypeWithAccessCheck(filename) == FileType::FILE_TYPE_FIFO;
 }
 
 #else
@@ -353,17 +358,7 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 }
 
 bool LocalFileSystem::DirectoryExists(const string &directory) {
-	if (!directory.empty()) {
-		if (access(directory.c_str(), 0) == 0) {
-			struct stat status;
-			stat(directory.c_str(), &status);
-			if (status.st_mode & S_IFDIR) {
-				return true;
-			}
-		}
-	}
-	// if any condition fails
-	return false;
+	return GetFileTypeWithAccessCheck(directory) == FileType::FILE_TYPE_DIR;
 }
 
 void LocalFileSystem::CreateDirectory(const string &directory) {
