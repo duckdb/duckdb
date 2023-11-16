@@ -289,8 +289,6 @@ else()
   set(DUCKDB_DISTRIBUTION "tar" CACHE STRING "Build mechanism")
 endif()
 
-add_definitions(-DDUCKDB_DISTRIBUTION=\"$CACHE{DUCKDB_DISTRIBUTION}\")
-
 message(STATUS "git hash ${GIT_COMMIT_HASH}, version ${DUCKDB_VERSION}")
 
 option(AMALGAMATION_BUILD
