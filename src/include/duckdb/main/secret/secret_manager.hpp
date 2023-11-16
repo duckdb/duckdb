@@ -19,7 +19,7 @@ class CreateSecretStatement;
 //! Registered secret is a wrapper around a secret containing metadata from the secret manager
 struct RegisteredSecret {
 public:
-	RegisteredSecret(shared_ptr<const BaseSecret> secret) : secret(secret){};
+	RegisteredSecret(shared_ptr<const BaseSecret> secret) : secret(secret) {};
 	//! Whether this secret is persistent
 	bool persistent;
 	//! Metadata for user on how the secret is stored. (DuckSecretManager will set this to the path)
@@ -44,7 +44,8 @@ public:
 	//! Registers a create secret function
 	DUCKDB_API virtual void RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) = 0;
 	//! Register a Secret directly
-	DUCKDB_API virtual void RegisterSecret(shared_ptr<const BaseSecret> secret, OnCreateConflict on_conflict, SecretPersistMode persist_mode) = 0;
+	DUCKDB_API virtual void RegisterSecret(shared_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
+	                                       SecretPersistMode persist_mode) = 0;
 	//! Create & Register a secret by looking up the function
 	DUCKDB_API virtual void CreateSecret(ClientContext &context, const CreateSecretInfo &input) = 0;
 	//! Binds a create secret statement
@@ -63,12 +64,14 @@ public:
 class DebugSecretManager : public SecretManager {
 public:
 	virtual ~DebugSecretManager() override = default;
-	DebugSecretManager(unique_ptr<SecretManager> secret_manager) : base_secret_manager(std::move(secret_manager)){};
+	DebugSecretManager(unique_ptr<SecretManager> secret_manager) : base_secret_manager(std::move(secret_manager)) {};
 
 	DUCKDB_API virtual unique_ptr<BaseSecret> DeserializeSecret(Deserializer &deserializer) override;
 	DUCKDB_API virtual void RegisterSecretType(SecretType &type) override;
-	DUCKDB_API virtual void RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) override;
-	DUCKDB_API virtual void RegisterSecret(shared_ptr<const BaseSecret> secret, OnCreateConflict on_conflict, SecretPersistMode persist_mode) override;
+	DUCKDB_API virtual void RegisterSecretFunction(CreateSecretFunction function,
+	                                               OnCreateConflict on_conflict) override;
+	DUCKDB_API virtual void RegisterSecret(shared_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
+	                                       SecretPersistMode persist_mode) override;
 	DUCKDB_API virtual void CreateSecret(ClientContext &context, const CreateSecretInfo &info) override;
 	DUCKDB_API virtual BoundStatement BindCreateSecret(CreateSecretStatement &stmt) override;
 	DUCKDB_API virtual RegisteredSecret GetSecretByPath(const string &path, const string &type) override;

@@ -101,6 +101,7 @@ public:
 
 	//! For tagged releases we use the tag, else we use the git commit hash
 	static const string GetVersionDirectoryName();
+
 private:
 	static void InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
 	                                     const string &local_path, const string &extension, bool force_install,

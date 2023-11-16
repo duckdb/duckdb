@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-int BaseSecret::MatchScore(const string &path) const{
+int BaseSecret::MatchScore(const string &path) const {
 	int longest_match = -1;
 	for (const auto &prefix : prefix_paths) {
 		if (prefix == "*") {
@@ -43,10 +43,10 @@ string BaseKeyValueSecret::ToString(bool redact) const {
 	result += "provider=" + provider + ";";
 	result += string("serializable=") + (serializable ? "true" : "false") + ";";
 	result += "scope=";
-	for (const auto& scope_it: prefix_paths) {
+	for (const auto &scope_it : prefix_paths) {
 		result += scope_it + ",";
 	}
-	result = result.substr(0, result.size()-1);
+	result = result.substr(0, result.size() - 1);
 	result += ";";
 	for (auto it = secret_map.begin(); it != secret_map.end(); it++) {
 		result.append(it->first);

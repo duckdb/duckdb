@@ -27,7 +27,8 @@ struct AccessModeSetting {
 
 struct AllowPermanentSecrets {
 	static constexpr const char *Name = "allow_permanent_secrets";
-	static constexpr const char *Description = "Allow the creation of permanent secrets, that are stored and loaded on restarts";
+	static constexpr const char *Description =
+	    "Allow the creation of permanent secrets, that are stored and loaded on restarts";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);

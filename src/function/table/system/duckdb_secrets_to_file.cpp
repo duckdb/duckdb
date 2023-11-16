@@ -67,7 +67,8 @@ static void DuckDBSecretsFromFileFunction(ClientContext &context, TableFunctionI
 		BinaryDeserializer deserializer(file_reader);
 		deserializer.Begin();
 		shared_ptr<BaseSecret> deserialized_secret = secret_manager->DeserializeSecret(deserializer);
-		secret_manager->RegisterSecret(deserialized_secret, OnCreateConflict::ERROR_ON_CONFLICT, SecretPersistMode::DEFAULT);
+		secret_manager->RegisterSecret(deserialized_secret, OnCreateConflict::ERROR_ON_CONFLICT,
+		                               SecretPersistMode::DEFAULT);
 
 		deserializer.End();
 	}

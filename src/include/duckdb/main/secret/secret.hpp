@@ -50,10 +50,10 @@ public:
 //! should be seen as the method of secret creation. (e.g. user-provided config, env variables, auto-detect)
 class CreateSecretFunctionSet {
 public:
-	CreateSecretFunctionSet(string& name) : name(name){};
-	bool ProviderExists(const string& provider_name);
+	CreateSecretFunctionSet(string &name) : name(name) {};
+	bool ProviderExists(const string &provider_name);
 	void AddFunction(CreateSecretFunction function, OnCreateConflict on_conflict);
-	CreateSecretFunction& GetFunction(const string& provider);
+	CreateSecretFunction &GetFunction(const string &provider);
 
 protected:
 	//! Create Secret Function type name
@@ -62,11 +62,7 @@ protected:
 	case_insensitive_map_t<CreateSecretFunction> functions;
 };
 
-enum class SecretPersistMode : uint8_t {
-	DEFAULT,
-	TEMPORARY,
-	PERMANENT
-};
+enum class SecretPersistMode : uint8_t { DEFAULT, TEMPORARY, PERMANENT };
 
 //! Secret types contain the base settings of a secret
 struct SecretType {
@@ -142,14 +138,14 @@ protected:
 class BaseKeyValueSecret : public BaseSecret {
 public:
 	BaseKeyValueSecret(vector<string> &prefix_paths, const string &type, const string &provider, const string &name)
-	    :  BaseSecret(prefix_paths, type, provider, name) {
+	    : BaseSecret(prefix_paths, type, provider, name) {
 		D_ASSERT(!type.empty());
 		serializable = true;
 	}
 	BaseKeyValueSecret(BaseSecret &secret)
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		serializable = true;
-  	};
+	};
 	BaseKeyValueSecret(BaseKeyValueSecret &secret)
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		secret_map = secret.secret_map;

@@ -382,7 +382,7 @@ void DuckSecretManager::LoadPreloadedSecrets() {
 	for (auto &it : permanent_secret_files) {
 		bool found = false;
 
-		for (const auto& secret : registered_secrets) {
+		for (const auto &secret : registered_secrets) {
 			if (secret.secret->GetName() == it.first) {
 				found = true;
 			}
@@ -394,7 +394,7 @@ void DuckSecretManager::LoadPreloadedSecrets() {
 	}
 	permanent_secret_files.clear();
 
-	for (const auto& path : to_load) {
+	for (const auto &path : to_load) {
 		LoadSecret(path, SecretPersistMode::PERMANENT);
 	}
 }
@@ -470,7 +470,6 @@ string DuckSecretManager::GetSecretDirectory() {
 		// This is mostly for our unittest to easily allow making unique directories for test secret storage
 		fs.CreateDirectory(directory);
 	}
-
 
 	if (fs.IsRemoteFile(directory)) {
 		throw InternalException("Cannot set the secret_directory to a remote filesystem: '%s'", directory);

@@ -11,7 +11,7 @@
 namespace duckdb {
 
 BoundStatement Binder::Bind(CreateSecretStatement &stmt) {
-	auto& secret_manager = context.db->config.secret_manager;
+	auto &secret_manager = context.db->config.secret_manager;
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return secret_manager->BindCreateSecret(stmt);
 }

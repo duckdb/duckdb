@@ -67,7 +67,7 @@ vector<RegisteredSecret> DebugSecretManager::AllSecrets() {
 	auto result = base_secret_manager->AllSecrets();
 
 	printf("AllSecrets:\n");
-	for (const auto& res: result) {
+	for (const auto &res : result) {
 		printf(" - %s\n", res.secret->ToString(false).c_str());
 	}
 

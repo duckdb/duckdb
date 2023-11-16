@@ -35,7 +35,8 @@ unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(Cli
 		} else if (named_param.first == "use_ssl") {
 			params.use_ssl = BooleanValue::Get(named_param.second.DefaultCastAs(LogicalType::BOOLEAN));
 		} else if (named_param.first == "url_compatibility_mode") {
-			params.s3_url_compatibility_mode = BooleanValue::Get(named_param.second.DefaultCastAs(LogicalType::BOOLEAN));
+			params.s3_url_compatibility_mode =
+			    BooleanValue::Get(named_param.second.DefaultCastAs(LogicalType::BOOLEAN));
 		} else if (named_param.first == "account_id") {
 			continue; // handled already
 		} else {

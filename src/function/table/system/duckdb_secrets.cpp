@@ -83,7 +83,7 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 		auto &secret_entry = secrets[data.offset];
 
 		vector<Value> scope_value;
-		for (const auto& scope_entry : secret_entry.secret->GetScope()) {
+		for (const auto &scope_entry : secret_entry.secret->GetScope()) {
 			scope_value.push_back(scope_entry);
 		}
 
