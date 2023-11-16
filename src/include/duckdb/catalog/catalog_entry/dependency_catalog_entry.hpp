@@ -47,6 +47,7 @@ public:
 	void CompleteLink(CatalogTransaction transaction, DependencyType type = DependencyType::DEPENDENCY_REGULAR);
 
 private:
+	const string mangled_name;
 	const string entry_name;
 	const string schema;
 	const CatalogType entry_type;

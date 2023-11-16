@@ -57,13 +57,15 @@ void DependencyManager::DropDependencySet(CatalogTransaction transaction, Catalo
 	dependency_sets.DropEntry(transaction, name, false);
 }
 
-static void AssertMangledName(const string &mangled_name) {
+void DependencyManager::AssertMangledName(const string &mangled_name) {
+#ifdef DEBUG
 	idx_t nullbyte_count = 0;
 	for (auto &ch : mangled_name) {
 		nullbyte_count += ch == '\0';
 	}
 	(void)nullbyte_count;
 	D_ASSERT(nullbyte_count == 2);
+#endif
 }
 
 optional_ptr<DependencySetCatalogEntry> DependencyManager::GetDependencySet(CatalogTransaction transaction,

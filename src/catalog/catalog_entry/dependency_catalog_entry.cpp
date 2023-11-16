@@ -11,14 +11,15 @@ DependencyCatalogEntry::DependencyCatalogEntry(DependencyLinkSide side, Catalog 
                                                DependencyType dependency_type)
     : InCatalogEntry(CatalogType::DEPENDENCY_ENTRY, catalog,
                      DependencyManager::MangleName(entry_type, entry_schema, entry_name)),
-      entry_name(entry_name), schema(entry_schema), entry_type(entry_type), dependency_type(dependency_type),
-      side(side), set(set) {
+      mangled_name(name), entry_name(entry_name), schema(entry_schema), entry_type(entry_type),
+      dependency_type(dependency_type), side(side), set(set) {
 	D_ASSERT(entry_type != CatalogType::DEPENDENCY_ENTRY);
 	D_ASSERT(entry_type != CatalogType::DEPENDENCY_SET);
 }
 
 const string &DependencyCatalogEntry::MangledName() const {
-	return name;
+	DependencyManager::AssertMangledName(mangled_name);
+	return mangled_name;
 }
 
 CatalogType DependencyCatalogEntry::EntryType() const {

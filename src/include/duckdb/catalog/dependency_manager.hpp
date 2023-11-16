@@ -60,6 +60,7 @@ public:
 	static string MangleName(CatalogType type, const string &schema, const string &name);
 	static string MangleName(CatalogEntry &entry);
 	static void GetLookupProperties(CatalogEntry &entry, string &schema, string &name, CatalogType &type);
+	static void AssertMangledName(const string &mangled_name);
 
 private:
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, const DependencyList &dependencies);

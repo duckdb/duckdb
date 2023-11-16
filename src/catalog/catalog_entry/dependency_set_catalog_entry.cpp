@@ -8,20 +8,27 @@
 
 namespace duckdb {
 
+static string GetProxyPrefix(const string &name, const string &prefix) {
+	auto null_byte = string(1, '\0');
+	return name + null_byte + prefix + null_byte;
+}
+
 DependencySetCatalogEntry::DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager,
                                                      CatalogType entry_type, const string &entry_schema,
                                                      const string &entry_name)
     : InCatalogEntry(CatalogType::DEPENDENCY_SET, catalog,
                      DependencyManager::MangleName(entry_type, entry_schema, entry_name)),
-      entry_name(entry_name), schema(entry_schema), entry_type(entry_type), dependencies(catalog), dependents(catalog),
+      entry_name(entry_name), schema(entry_schema), entry_type(entry_type),
+      dependencies(dependency_manager.dependency_sets, GetProxyPrefix(name, "dependencies")),
+      dependents(dependency_manager.dependency_sets, GetProxyPrefix(name, "dependents")),
       dependency_manager(dependency_manager) {
 }
 
-CatalogSet &DependencySetCatalogEntry::Dependencies() {
+ProxyCatalogSet &DependencySetCatalogEntry::Dependencies() {
 	return dependencies;
 }
 
-CatalogSet &DependencySetCatalogEntry::Dependents() {
+ProxyCatalogSet &DependencySetCatalogEntry::Dependents() {
 	return dependents;
 }
 

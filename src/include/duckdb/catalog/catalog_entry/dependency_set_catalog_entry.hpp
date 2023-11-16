@@ -15,6 +15,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/catalog/proxy_catalog_set.hpp"
 #include "duckdb/catalog/dependency.hpp"
 #include <memory>
 
@@ -30,8 +31,8 @@ public:
 	virtual ~DependencySetCatalogEntry() override;
 
 public:
-	CatalogSet &Dependencies();
-	CatalogSet &Dependents();
+	ProxyCatalogSet &Dependencies();
+	ProxyCatalogSet &Dependents();
 	DependencyManager &Manager();
 
 public:
@@ -85,8 +86,8 @@ private:
 	const string schema;
 	const CatalogType entry_type;
 
-	CatalogSet dependencies;
-	CatalogSet dependents;
+	ProxyCatalogSet dependencies;
+	ProxyCatalogSet dependents;
 	DependencyManager &dependency_manager;
 };
 
