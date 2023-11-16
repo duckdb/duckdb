@@ -67,7 +67,6 @@ bool CSVReaderOptions::GetHeader() const {
 }
 
 void CSVReaderOptions::SetHeader(bool input) {
-	D_ASSERT(0);
 	this->dialect_options.header.Set(input);
 }
 
