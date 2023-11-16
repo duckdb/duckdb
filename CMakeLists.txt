@@ -263,10 +263,6 @@ else()
   message("Git NOT FOUND")
 endif()
 
-if (DUCKDB_DISTRIBUTION)
-  add_definitions(-DDUCKDB_DISTRIBUTION=\"${DUCKDB_DISTRIBUTION}\")
-endif()
-
 if(GIT_RESULT EQUAL "0")
   string(REGEX REPLACE "v([0-9]+).[0-9]+.[0-9]+" "\\1" DUCKDB_MAJOR_VERSION "${GIT_LAST_TAG}")
   string(REGEX REPLACE "v[0-9]+.([0-9]+).[0-9]+" "\\1" DUCKDB_MINOR_VERSION "${GIT_LAST_TAG}")
@@ -276,18 +272,12 @@ if(GIT_RESULT EQUAL "0")
   if(DUCKDB_DEV_ITERATION EQUAL 0)
     # on a tag; directly use the version
     set(DUCKDB_VERSION "${GIT_LAST_TAG}")
-    if (NOT DUCKDB_DISTRIBUTION)
-      # fall back in case any CI forgets to set its own DUCKDB_DISTRIBUTION
-      add_definitions(-DDUCKDB_DISTRIBUTION=\"tag\")
-    endif()
+    set(DUCKDB_DISTRIBUTION "tag" CACHE STRING "Build mechanism")
   else()
     # not on a tag, increment the patch version by one and add a -devX suffix
     math(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
     set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
-
-    if (NOT DUCKDB_DISTRIBUTION)
-      add_definitions(-DDUCKDB_DISTRIBUTION=\"dev\")
-    endif()
+    set(DUCKDB_DISTRIBUTION "dev" CACHE STRING "Build mechanism")
   endif()
 else()
   # fallback for when building from tarball
@@ -296,10 +286,10 @@ else()
   set(DUCKDB_PATCH_VERSION 1)
   set(DUCKDB_DEV_ITERATION 0)
   set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
-  if (NOT DUCKDB_DISTRIBUTION)
-    add_definitions(-DDUCKDB_DISTRIBUTION=\"tar\")
-  endif()
+  set(DUCKDB_DISTRIBUTION "tar" CACHE STRING "Build mechanism")
 endif()
+
+add_definitions(-DDUCKDB_DISTRIBUTION=\"$CACHE{DUCKDB_DISTRIBUTION}\")
 
 message(STATUS "git hash ${GIT_COMMIT_HASH}, version ${DUCKDB_VERSION}")
 
