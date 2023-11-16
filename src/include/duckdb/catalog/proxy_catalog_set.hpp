@@ -29,7 +29,6 @@ public:
 	CatalogType type;
 	string schema;
 	string name;
-	string prefix;
 };
 
 } // namespace duckdb

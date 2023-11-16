@@ -101,6 +101,9 @@ public:
 	const string &EntryName() const;
 
 private:
+	void VerifyDependencyName(const string &name);
+
+private:
 	DuckCatalog &catalog;
 	string name;
 	const string entry_name;

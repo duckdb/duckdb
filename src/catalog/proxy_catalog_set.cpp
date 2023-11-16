@@ -11,7 +11,7 @@ bool ProxyCatalogSet::CreateEntry(CatalogTransaction transaction, const string &
                                   const DependencyList &dependencies) {
 	auto new_name = ApplyPrefix(name);
 	auto &dependency = value->Cast<DependencyCatalogEntry>();
-	dependency.SetFrom(mangled_name, type, schema, name, new_name);
+	dependency.SetFrom(mangled_name, this->type, this->schema, this->name, new_name);
 	return set.CreateEntry(transaction, new_name, std::move(value), dependencies);
 }
 
@@ -27,7 +27,9 @@ optional_ptr<CatalogEntry> ProxyCatalogSet::GetEntry(CatalogTransaction transact
 
 void ProxyCatalogSet::Scan(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback) {
 	set.Scan(transaction, [&](CatalogEntry &entry) {
-		if (!StringUtil::StartsWith(entry.name, prefix)) {
+		auto &dep = entry.Cast<DependencyCatalogEntry>();
+		auto &name = dep.FromMangledName();
+		if (!StringUtil::CIEquals(name, mangled_name)) {
 			return;
 		}
 		callback(entry);

@@ -96,6 +96,25 @@ const string &DependencySetCatalogEntry::EntryName() const {
 //	}
 //}
 
+void DependencySetCatalogEntry::VerifyDependencyName(const string &name) {
+#ifdef DEBUG
+	idx_t pos = 0;
+	vector<string> parts;
+	while (pos != std::string::npos) {
+		auto new_pos = name.find('\0', pos);
+		auto part = name.substr(pos, new_pos == std::string::npos ? new_pos : new_pos - pos);
+		pos = new_pos == std::string::npos ? new_pos : new_pos + 1;
+		parts.push_back(part);
+	}
+	D_ASSERT(parts.size() == 3);
+
+	// D_ASSERT(!StringUtil::CIEquals(parts[0], CatalogTypeToString(entry_type)));
+	// D_ASSERT(!StringUtil::CIEquals(parts[1], schema));
+	// D_ASSERT(!StringUtil::CIEquals(parts[2], entry_name));
+	D_ASSERT(!StringUtil::CIEquals(name, this->name));
+#endif
+}
+
 // Add from a single CatalogEntry
 DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction,
                                                                  const string &mangled_name, CatalogType entry_type,
@@ -103,6 +122,7 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransact
                                                                  DependencyType type) {
 	static const DependencyList EMPTY_DEPENDENCIES;
 
+	VerifyDependencyName(mangled_name);
 	{
 		auto dep = dependencies.GetEntry(transaction, mangled_name);
 		if (dep) {
@@ -150,6 +170,7 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransacti
                                                                 DependencyType type) {
 	static const DependencyList EMPTY_DEPENDENCIES;
 
+	VerifyDependencyName(mangled_name);
 	{
 		auto dep = dependents.GetEntry(transaction, mangled_name);
 		if (dep) {
