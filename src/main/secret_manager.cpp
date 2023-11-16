@@ -47,11 +47,15 @@ CreateSecretFunction &CreateSecretFunctionSet::GetFunction(const string &provide
 }
 
 DuckSecretManager::DuckSecretManager(DatabaseInstance &instance) : db_instance(instance) {
-	// TODO: do we even need this?
 	SyncPermanentSecrets(true);
 }
 
 unique_ptr<BaseSecret> DuckSecretManager::DeserializeSecret(Deserializer &deserializer) {
+	lock_guard<mutex> lck(lock);
+	return DeserializeSecretInternal(deserializer);
+}
+
+unique_ptr<BaseSecret> DuckSecretManager::DeserializeSecretInternal(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<string>(100, "type");
 	auto provider = deserializer.ReadProperty<string>(101, "provider");
 	auto name = deserializer.ReadProperty<string>(102, "name");
@@ -82,15 +86,15 @@ void DuckSecretManager::RegisterSecretType(SecretType &type) {
 void DuckSecretManager::RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) {
 	lock_guard<mutex> lck(lock);
 
-	const auto &lu = registered_functions.find(function.secret_type);
-	if (lu != registered_functions.end()) {
+	const auto &lu = create_secret_functions.find(function.secret_type);
+	if (lu != create_secret_functions.end()) {
 		auto &functions_for_type = lu->second;
 		functions_for_type.AddFunction(function, on_conflict);
 	}
 
 	CreateSecretFunctionSet new_set(function.secret_type);
 	new_set.AddFunction(function, OnCreateConflict::ERROR_ON_CONFLICT);
-	registered_functions.insert(std::make_pair(function.secret_type, std::move(new_set)));
+	create_secret_functions.insert(std::make_pair(function.secret_type, std::move(new_set)));
 }
 
 void DuckSecretManager::RegisterSecret(shared_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
@@ -118,7 +122,7 @@ void DuckSecretManager::RegisterSecretInternal(shared_ptr<const BaseSecret> secr
 	}
 
 	// Assert the secret does not exist as a persistent secret either
-	if (loadable_permanent_secrets.find(secret->GetName()) != loadable_permanent_secrets.end()) {
+	if (permanent_secret_files.find(secret->GetName()) != permanent_secret_files.end()) {
 		conflict = true;
 	}
 
@@ -157,8 +161,8 @@ void DuckSecretManager::RegisterSecretInternal(shared_ptr<const BaseSecret> secr
 }
 
 CreateSecretFunction *DuckSecretManager::LookupFunctionInternal(const string &type, const string &provider) {
-	const auto &lookup = registered_functions.find(type);
-	if (lookup == registered_functions.end()) {
+	const auto &lookup = create_secret_functions.find(type);
+	if (lookup == create_secret_functions.end()) {
 		return nullptr;
 	}
 
@@ -193,9 +197,9 @@ void DuckSecretManager::CreateSecret(ClientContext &context, const CreateSecretI
 
 	// Ensure the secret doesn't collide with any of the lazy loaded persistent secrets by first lazy loading the
 	// requested secret
-	if (!loadable_permanent_secrets.empty()) {
-		const auto &lu = loadable_permanent_secrets.find(info.name);
-		if (lu != loadable_permanent_secrets.end()) {
+	if (!permanent_secret_files.empty()) {
+		const auto &lu = permanent_secret_files.find(info.name);
+		if (lu != permanent_secret_files.end()) {
 			LoadSecretFromPreloaded(lu->first);
 		}
 	}
@@ -287,7 +291,7 @@ RegisteredSecret DuckSecretManager::GetSecretByName(const string &name) {
 	SyncPermanentSecrets();
 
 	//! If the secret in in our lazy preload map, this is the time we must read and deserialize it.
-	if (loadable_permanent_secrets.find(name) != loadable_permanent_secrets.end()) {
+	if (permanent_secret_files.find(name) != permanent_secret_files.end()) {
 		LoadSecretFromPreloaded(name);
 	}
 
@@ -376,7 +380,7 @@ void DuckSecretManager::PreloadPermanentSecrets() {
 				}
 			}
 
-			loadable_permanent_secrets[secret_name] = full_path;
+			permanent_secret_files[secret_name] = full_path;
 		}
 	});
 }
@@ -385,7 +389,7 @@ void DuckSecretManager::LoadPreloadedSecrets() {
 	vector<string> to_load;
 
 	// Find the permanent secrets that need to be loaded
-	for (auto &it : loadable_permanent_secrets) {
+	for (auto &it : permanent_secret_files) {
 		bool found = false;
 
 		for (const auto& secret : registered_secrets) {
@@ -398,7 +402,7 @@ void DuckSecretManager::LoadPreloadedSecrets() {
 			to_load.push_back(it.second);
 		}
 	}
-	loadable_permanent_secrets.clear();
+	permanent_secret_files.clear();
 
 	for (const auto& path : to_load) {
 		LoadSecret(path, SecretPersistMode::PERMANENT);
@@ -411,15 +415,15 @@ void DuckSecretManager::LoadSecret(const string &path, SecretPersistMode persist
 	while (!file_reader.Finished()) {
 		BinaryDeserializer deserializer(file_reader);
 		deserializer.Begin();
-		shared_ptr<BaseSecret> deserialized_secret = DeserializeSecret(deserializer);
+		shared_ptr<BaseSecret> deserialized_secret = DeserializeSecretInternal(deserializer);
 		RegisterSecretInternal(deserialized_secret, OnCreateConflict::ERROR_ON_CONFLICT, persist_mode);
 		deserializer.End();
 	}
 }
 
 void DuckSecretManager::LoadSecretFromPreloaded(const string &name) {
-	auto path = loadable_permanent_secrets[name];
-	loadable_permanent_secrets.erase(name);
+	auto path = permanent_secret_files[name];
+	permanent_secret_files.erase(name);
 	LoadSecret(path, SecretPersistMode::PERMANENT);
 }
 
@@ -440,7 +444,7 @@ void DuckSecretManager::SyncPermanentSecrets(bool force) {
 			}
 		}
 
-		loadable_permanent_secrets.clear();
+		permanent_secret_files.clear();
 
 		if (permanent_secrets_enabled) {
 			DuckSecretManager::PreloadPermanentSecrets();

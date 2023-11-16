@@ -42,8 +42,7 @@ public:
 	RegisteredSecret(shared_ptr<const BaseSecret> secret) : secret(secret){};
 	//! Whether this secret is persistent
 	bool persistent;
-	//! A string to tell users how the secret is stored. When persistent secrets are implemented, this will communicate
-	//! how the secrets are to be stored.
+	//! Metadata for user on how the secret is stored. (DuckSecretManager will set this to the path)
 	string storage_mode;
 	//! The secret pointer
 	shared_ptr<const BaseSecret> secret;
@@ -99,24 +98,19 @@ public:
 
 	//! Deserialize the secret. Will look up the deserialized type, then call the deserialize for the registered type.
 	DUCKDB_API virtual unique_ptr<BaseSecret> DeserializeSecret(Deserializer &deserializer) = 0;
-
 	//! Registers a secret type
 	DUCKDB_API virtual void RegisterSecretType(SecretType &type) = 0;
 	//! Get the registered type
 	DUCKDB_API virtual SecretType LookupType(const string &type) = 0;
-
 	//! Registers a create secret function
 	DUCKDB_API virtual void RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) = 0;
-
 	//! Register a Secret directly
 	DUCKDB_API virtual void RegisterSecret(shared_ptr<const BaseSecret> secret, OnCreateConflict on_conflict, SecretPersistMode persist_mode) = 0;
 	//! Create & Register a secret by looking up the function
 	DUCKDB_API virtual void CreateSecret(ClientContext &context, const CreateSecretInfo &input) = 0;
-
 	//! Binds a create secret statement
 	DUCKDB_API virtual BoundStatement BindCreateSecret(CreateSecretStatement &stmt) = 0;
-
-	//! Get the secret that matches the scope best.
+	//! Get the secret whose scope best matches the path.
 	DUCKDB_API virtual RegisteredSecret GetSecretByPath(const string &path, const string &type) = 0;
 	//! Get a secret by name
 	DUCKDB_API virtual RegisteredSecret GetSecretByName(const string &name) = 0;
@@ -126,7 +120,7 @@ public:
 	DUCKDB_API virtual vector<RegisteredSecret> AllSecrets() = 0;
 };
 
-//! The main DuckDB secret manager
+//! The Main secret manager implementation for DuckDB. The secret manager can handle both temporary and permanent secrets
 class DuckSecretManager : public SecretManager {
 	friend struct RegisteredSecret;
 
@@ -134,36 +128,24 @@ public:
 	explicit DuckSecretManager(DatabaseInstance& instance);
 	virtual ~DuckSecretManager() override = default;
 
-	//! Deserialize the secret. Will look up the deserialized type, then call the deserialize for the registered type.
+	//! SecretManager API
 	DUCKDB_API virtual unique_ptr<BaseSecret> DeserializeSecret(Deserializer &deserializer) override;
-	//! Registers a secret type
 	DUCKDB_API virtual void RegisterSecretType(SecretType &type) override;
-	//! Register a new Secret in the secret
-	DUCKDB_API virtual void RegisterSecret(shared_ptr<const BaseSecret> secret, OnCreateConflict on_conflict, SecretPersistMode persist_mode) override;
-	//! Registers a create secret function
-	DUCKDB_API virtual void RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) override;
-
-	//! Creates the secret by calling the appropriate secret function
-	DUCKDB_API virtual void CreateSecret(ClientContext &context, const CreateSecretInfo &info) override;
-
-	//! Binds a create secret statement
-	DUCKDB_API virtual BoundStatement BindCreateSecret(CreateSecretStatement &stmt) override;
-
-	//! Get the secret that matches the scope best. ( Default behaviour is to match longest matching prefix )
-	DUCKDB_API virtual RegisteredSecret GetSecretByPath(const string &path, const string &type) override;
-	//! Get a secret by name
-	DUCKDB_API virtual RegisteredSecret GetSecretByName(const string &name) override;
-	//! Drop a secret by name
-	DUCKDB_API virtual void DropSecretByName(const string &name, bool missing_ok) override;
-	//! Get the registered type
 	DUCKDB_API virtual SecretType LookupType(const string &type) override;
+	DUCKDB_API virtual void RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) override;
+	DUCKDB_API virtual void RegisterSecret(shared_ptr<const BaseSecret> secret, OnCreateConflict on_conflict, SecretPersistMode persist_mode) override;
+	DUCKDB_API virtual void CreateSecret(ClientContext &context, const CreateSecretInfo &info) override;
+	DUCKDB_API virtual BoundStatement BindCreateSecret(CreateSecretStatement &stmt) override;
+	DUCKDB_API virtual RegisteredSecret GetSecretByPath(const string &path, const string &type) override;
+	DUCKDB_API virtual RegisteredSecret GetSecretByName(const string &name) override;
+	DUCKDB_API virtual void DropSecretByName(const string &name, bool missing_ok) override;
+
 	//! Get a vector of all registered secrets
 	DUCKDB_API virtual vector<RegisteredSecret> AllSecrets() override;
 
 private:
-	//! Main lock
-	mutex lock;
-
+	//! Deserialize a secret
+	unique_ptr<BaseSecret> DeserializeSecretInternal(Deserializer &deserializer);
 	//! Lookup a SecretType
 	SecretType LookupTypeInternal(const string &type);
 	//! Lookup a CreateSecretFunction
@@ -174,7 +156,7 @@ private:
 	//! Write a secret to the FileSystem
 	void WriteSecretToFile(const BaseSecret& secret);
 
-	//! Lazily preloads the permanent secrets found in
+	//! Lazily preloads the permanent secrets f
 	void PreloadPermanentSecrets();
 
 	//! Fully loads ALL lazily preloaded permanent secrets that have not yet been preloaded
@@ -190,22 +172,22 @@ private:
 	//! Return secret directory
 	string GetSecretDirectory();
 
-	//! The currently registered secrets
-	vector<RegisteredSecret> registered_secrets;
-	//! The currently registered create secret functions
-	case_insensitive_map_t<CreateSecretFunctionSet> registered_functions;
-	//! The currently registered secret types
+	//! Current SecretTypes and CreatSecretFunctions
 	case_insensitive_map_t<SecretType> registered_types;
+	case_insensitive_map_t<CreateSecretFunctionSet> create_secret_functions;
 
-	//! Because secrets may require specific extensions to be deserialized, permanent secrets are lazily loaded by
-	//! the secret manager. This stores the map of secret_name -> secret_file_path which can be loaded.
-	case_insensitive_map_t<string> loadable_permanent_secrets;
+	//! The currently loaded secrets: can contain both temporary and permanent secrets.
+	vector<RegisteredSecret> registered_secrets;
+	//! Maps secret name -> permanent secret file path. Permanent secrets are loaded lazily into this map. Then loaded into
+	//! registered_secrets when they are needed
+	case_insensitive_map_t<string> permanent_secret_files;
 	//! The permanent secret directory is scanned once. When the secret path changes in DuckDB the secret manager will
 	//! need to reload the permanent secrets;
 	string last_secret_directory;
-
 	//! The secret manager requires access to the DatabaseInstance for the FileSystem and DBConfig
 	DatabaseInstance &db_instance;
+	//! Secret manager needs to be thread-safe
+	mutex lock;
 };
 
 //! The debug secret manager demonstrates how the Base Secret Manager can be extended
