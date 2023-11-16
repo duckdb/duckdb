@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/function/create_secret_function.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 

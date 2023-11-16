@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/main/secret/secret.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
@@ -16,12 +17,6 @@
 #include "duckdb/common/named_parameter_map.hpp"
 
 namespace duckdb {
-
-enum class SecretPersistMode : uint8_t {
-	DEFAULT,
-	TEMPORARY,
-	PERMANENT
-};
 
 struct CreateSecretInfo : public ParseInfo {
 public:

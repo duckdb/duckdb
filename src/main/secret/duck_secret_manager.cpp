@@ -1,5 +1,6 @@
-#include "duckdb/main/secret_manager.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 
+#include "duckdb/common/common.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
@@ -15,36 +16,6 @@
 #include "duckdb/planner/operator/logical_create_secret.hpp"
 
 namespace duckdb {
-
-bool CreateSecretFunctionSet::ProviderExists(const string &provider_name) {
-	return functions.find(provider_name) != functions.end();
-}
-
-void CreateSecretFunctionSet::AddFunction(CreateSecretFunction function, OnCreateConflict on_conflict) {
-	if (ProviderExists(function.provider)) {
-		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
-			throw InternalException(
-			    "Attempted to override a Create Secret Function with OnCreateConflict::ERROR_ON_CONFLICT for: '%s'",
-			    function.provider);
-		} else if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
-			functions[function.provider] = function;
-		} else if (on_conflict == OnCreateConflict::ALTER_ON_CONFLICT) {
-			throw NotImplementedException("ALTER_ON_CONFLICT not implemented for CreateSecretFunctionSet");
-		}
-	} else {
-		functions[function.provider] = function;
-	}
-}
-
-CreateSecretFunction &CreateSecretFunctionSet::GetFunction(const string &provider) {
-	const auto &lookup = functions.find(provider);
-
-	if (lookup == functions.end()) {
-		throw InternalException("Could not find Create Secret Function with provider %s");
-	}
-
-	return lookup->second;
-}
 
 DuckSecretManager::DuckSecretManager(DatabaseInstance &instance) : db_instance(instance) {
 	SyncPermanentSecrets(true);
@@ -306,16 +277,35 @@ RegisteredSecret DuckSecretManager::GetSecretByName(const string &name) {
 
 void DuckSecretManager::DropSecretByName(const string &name, bool missing_ok) {
 	lock_guard<mutex> lck(lock);
+
 	bool deleted = false;
+	bool was_persistent = false;
 
 	std::vector<RegisteredSecret>::iterator iter;
 	for (iter = registered_secrets.begin(); iter != registered_secrets.end();) {
 		if (iter->secret->GetName() == name) {
+			was_persistent = iter->persistent;
 			registered_secrets.erase(iter);
 			deleted = true;
 			break;
 		}
 		++iter;
+	}
+
+	// For deleting persistent secrets, we need to do a sync to ensure we have the path in permanent_secret_files
+	if (was_persistent) {
+		SyncPermanentSecrets(true);
+	}
+
+	if (!deleted || was_persistent) {
+		auto &fs = FileSystem::GetFileSystem(db_instance);
+		auto file_lu = permanent_secret_files.find(name);
+
+		if (file_lu != permanent_secret_files.end()) {
+			deleted = true;
+			fs.RemoveFile(file_lu->second);
+			permanent_secret_files.erase(file_lu);
+		}
 	}
 
 	if (!deleted && !missing_ok) {
@@ -430,7 +420,7 @@ void DuckSecretManager::LoadSecretFromPreloaded(const string &name) {
 void DuckSecretManager::SyncPermanentSecrets(bool force) {
 	auto &current_directory = db_instance.config.options.secret_directory;
 	auto permanent_secrets_enabled = db_instance.config.options.allow_permanent_secrets;
-	bool require_flush = !current_directory.empty() && current_directory != last_secret_directory;
+	bool require_flush = current_directory != last_secret_directory;
 
 	if (force || !permanent_secrets_enabled || require_flush) {
 
@@ -451,7 +441,7 @@ void DuckSecretManager::SyncPermanentSecrets(bool force) {
 		}
 	}
 
-//	current_directory = last_secret_directory;
+	last_secret_directory = current_directory;
 }
 
 string DuckSecretManager::GetSecretDirectory() {
@@ -487,51 +477,6 @@ string DuckSecretManager::GetSecretDirectory() {
 	}
 
 	return directory;
-}
-
-unique_ptr<BaseSecret> DebugSecretManager::DeserializeSecret(Deserializer &deserializer) {
-	return base_secret_manager->DeserializeSecret(deserializer);
-}
-
-void DebugSecretManager::RegisterSecretType(SecretType &type) {
-	base_secret_manager->RegisterSecretType(type);
-}
-
-void DebugSecretManager::RegisterSecret(shared_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
-                                        SecretPersistMode persist_mode) {
-	return base_secret_manager->RegisterSecret(secret, on_conflict, persist_mode);
-}
-
-void DebugSecretManager::RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) {
-	base_secret_manager->RegisterSecretFunction(function, on_conflict);
-}
-
-void DebugSecretManager::CreateSecret(ClientContext &context, const CreateSecretInfo &info) {
-	base_secret_manager->CreateSecret(context, info);
-}
-
-BoundStatement DebugSecretManager::BindCreateSecret(CreateSecretStatement &stmt) {
-	return base_secret_manager->BindCreateSecret(stmt);
-}
-
-RegisteredSecret DebugSecretManager::GetSecretByPath(const string &path, const string &type) {
-	return base_secret_manager->GetSecretByPath(path, type);
-}
-
-RegisteredSecret DebugSecretManager::GetSecretByName(const string &name) {
-	return base_secret_manager->GetSecretByName(name);
-}
-
-void DebugSecretManager::DropSecretByName(const string &name, bool missing_ok) {
-	return base_secret_manager->DropSecretByName(name, missing_ok);
-}
-
-SecretType DebugSecretManager::LookupType(const string &type) {
-	return base_secret_manager->LookupType(type);
-}
-
-vector<RegisteredSecret> DebugSecretManager::AllSecrets() {
-	return base_secret_manager->AllSecrets();
 }
 
 } // namespace duckdb

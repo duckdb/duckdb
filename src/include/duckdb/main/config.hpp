@@ -30,7 +30,7 @@
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/main/client_properties.hpp"
-#include "duckdb/main/secret_manager.hpp"
+#include "duckdb/main/secret/duck_secret_manager.hpp"
 
 namespace duckdb {
 class BufferPool;
@@ -206,7 +206,7 @@ public:
 	//! RamFS or something similar)
 	unique_ptr<FileSystem> file_system;
 	//! Secret manager, can be overwritten to for allow injection of custom secret management system.
-	shared_ptr<DebugSecretManager> secret_manager;
+	shared_ptr<SecretManager> secret_manager;
 	//! The allocator used by the system
 	unique_ptr<Allocator> allocator;
 	//! Database configuration options

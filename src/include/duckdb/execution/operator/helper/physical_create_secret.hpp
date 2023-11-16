@@ -10,7 +10,6 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
-#include "duckdb/function/create_secret_function.hpp"
 
 namespace duckdb {
 

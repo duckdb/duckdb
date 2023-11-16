@@ -13,7 +13,6 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/function/create_secret_function.hpp"
 
 namespace duckdb {
 

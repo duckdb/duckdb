@@ -11,7 +11,7 @@
 
 #include <duckdb/function/scalar/string_functions.hpp>
 #include <duckdb/storage/buffer_manager.hpp>
-#include <duckdb/main/secret_manager.hpp>
+#include <duckdb/main/secret/secret_manager.hpp>
 #include <iostream>
 #include <thread>
 
@@ -187,7 +187,6 @@ unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(FileOpener *ope
 		return nullptr;
 	}
 	auto &secret_manager = context->db->GetSecretManager();
-	auto &fs = FileSystem::GetFileSystem(*context);
 
 	auto secret_lookup = secret_manager.GetSecretByPath(path, "s3");
 	if (!secret_lookup.secret) {

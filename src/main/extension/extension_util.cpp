@@ -12,7 +12,7 @@
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/main/secret_manager.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 
 namespace duckdb {
 

@@ -11,6 +11,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/main/secret/secret.hpp"
 
 namespace duckdb {
 struct CreateMacroInfo;

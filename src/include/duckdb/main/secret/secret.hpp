@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/secret.hpp
+// duckdb/main/secret/secret.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -11,10 +11,72 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/main/secret_manager.hpp"
+#include "duckdb/common/named_parameter_map.hpp"
 
 namespace duckdb {
+class BaseSecret;
+
+//! Input passed to a CreateSecretFunction
+struct CreateSecretInput {
+	//! type
+	string type;
+	//! mode
+	string provider;
+	//! should the secret be persisted?
+	SecretPersistMode persist;
+	//! (optional) alias provided by user
+	string name;
+	//! (optional) scope provided by user
+	vector<string> scope;
+	//! (optional) named parameter map, each create secret function has defined it's own set of these
+	named_parameter_map_t named_parameters;
+};
+
+//! Deserialize Function
+typedef unique_ptr<BaseSecret> (*secret_deserializer_t)(Deserializer &deserializer, BaseSecret base_secret);
+//! Create Secret Function
+typedef unique_ptr<BaseSecret> (*create_secret_function_t)(ClientContext &context, CreateSecretInput &input);
+
+//! A CreateSecretFunction is a function that can produce secrets of a specific type using a provider.
+class CreateSecretFunction {
+public:
+	string secret_type;
+	string provider;
+	create_secret_function_t function;
+	named_parameter_type_map_t named_parameters;
+};
+
+//! CreateSecretFunctionsSet contains multiple functions of a specific type, identified by the provider. The provider
+//! should be seen as the method of secret creation. (e.g. user-provided config, env variables, auto-detect)
+class CreateSecretFunctionSet {
+public:
+	CreateSecretFunctionSet(string& name) : name(name){};
+	bool ProviderExists(const string& provider_name);
+	void AddFunction(CreateSecretFunction function, OnCreateConflict on_conflict);
+	CreateSecretFunction& GetFunction(const string& provider);
+
+protected:
+	//! Create Secret Function type name
+	string name;
+	//! Maps of provider -> function
+	case_insensitive_map_t<CreateSecretFunction> functions;
+};
+
+enum class SecretPersistMode : uint8_t {
+	DEFAULT,
+	TEMPORARY,
+	PERMANENT
+};
+
+//! Secret types contain the base settings of a secret
+struct SecretType {
+	//! Unique name identifying the secret type
+	string name;
+	//! The deserialization function for the type
+	secret_deserializer_t deserializer;
+	//! Provider to use when non is specified
+	string default_provider;
+};
 
 //! Base class from which BaseSecret classes can be made.
 class BaseSecret {
@@ -35,17 +97,11 @@ public:
 	//! The score of how well this secret's scope matches the path (by default: the length of the longest matching
 	//! prefix)
 	virtual int MatchScore(const string &path) const;
-
 	//! The ToString method prints the secret, the redact option determines whether secret data is allowed to be printed
 	//! in clear text. This is to be decided by the secret implementation
-	virtual string ToString(bool redact) const {
-		return "";
-	}
-
+	virtual string ToString(bool redact) const;
 	//! Serialize this secret
-	virtual void Serialize(Serializer &serializer) const {
-		throw InternalException("Attempted to serialize secret without serialize");
-	};
+	virtual void Serialize(Serializer &serializer) const;
 
 	//! Getters
 	const vector<string> &GetScope() const {
@@ -66,13 +122,7 @@ public:
 
 protected:
 	//! Helper function to serialize the base BaseSecret class variables
-	virtual void SerializeBaseSecret(Serializer &serializer) const final {
-		serializer.WriteProperty(100, "type", type);
-		serializer.WriteProperty(101, "provider", provider);
-		serializer.WriteProperty(102, "name", name);
-		serializer.WriteList(103, "scope", prefix_paths.size(),
-		                     [&](Serializer::List &list, idx_t i) { list.WriteElement(prefix_paths[i]); });
-	};
+	virtual void SerializeBaseSecret(Serializer &serializer) const final;
 
 	//! prefixes to which the secret applies
 	vector<string> prefix_paths;
@@ -92,17 +142,21 @@ protected:
 class BaseKeyValueSecret : public BaseSecret {
 public:
 	BaseKeyValueSecret(vector<string> &prefix_paths, const string &type, const string &provider, const string &name)
-	    : BaseSecret(prefix_paths, type, provider, name) {
+	    :  BaseSecret(prefix_paths, type, provider, name) {
 		D_ASSERT(!type.empty());
 		serializable = true;
 	}
 	BaseKeyValueSecret(BaseSecret &secret)
-	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {};
+	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
+		serializable = true;
+  	};
 	BaseKeyValueSecret(BaseKeyValueSecret &secret)
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		secret_map = secret.secret_map;
+		serializable = true;
 	};
 
+	//! Print the secret as a key value map in the format 'key1=value;key2=value2'
 	virtual string ToString(bool redact) const override;
 	void Serialize(Serializer &serializer) const override;
 

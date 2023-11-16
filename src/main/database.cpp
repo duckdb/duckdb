@@ -11,6 +11,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/secret/duck_secret_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/storage/object_cache.hpp"
@@ -332,7 +333,8 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (new_config.secret_manager) {
 		config.secret_manager = std::move(new_config.secret_manager);
 	} else {
-		config.secret_manager = make_uniq<DebugSecretManager>(make_uniq<DuckSecretManager>(*this));
+//		config.secret_manager = make_uniq<DebugSecretManager>(make_uniq<DuckSecretManager>(*this));
+		config.secret_manager = make_uniq<DuckSecretManager>(*this);
 	}
 	if (config.options.maximum_memory == (idx_t)-1) {
 		config.SetDefaultMaxMemory();

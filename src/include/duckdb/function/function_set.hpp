@@ -12,7 +12,6 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/pragma_function.hpp"
-#include "duckdb/function/create_secret_function.hpp"
 
 namespace duckdb {
 

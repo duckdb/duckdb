@@ -1,8 +1,6 @@
 #include "create_secret_functions.hpp"
 #include "s3fs.hpp"
-#include "duckdb/function/create_secret_function.hpp"
 #include "duckdb/main/extension_util.hpp"
-#include "duckdb/main/secret_manager.hpp"
 
 namespace duckdb {
 
@@ -35,9 +33,9 @@ unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(Cli
 		} else if (named_param.first == "url_style") {
 			params.url_style = named_param.second.ToString();
 		} else if (named_param.first == "use_ssl") {
-			params.use_ssl = named_param.second.GetValue<bool>();
+			params.use_ssl = BooleanValue::Get(named_param.second.DefaultCastAs(LogicalType::BOOLEAN));
 		} else if (named_param.first == "url_compatibility_mode") {
-			params.s3_url_compatibility_mode = named_param.second.GetValue<bool>();
+			params.s3_url_compatibility_mode = BooleanValue::Get(named_param.second.DefaultCastAs(LogicalType::BOOLEAN));
 		} else if (named_param.first == "account_id") {
 			continue; // handled already
 		} else {
