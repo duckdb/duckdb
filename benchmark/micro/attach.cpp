@@ -1,6 +1,5 @@
 #include "benchmark_runner.hpp"
 #include "duckdb_benchmark_macro.hpp"
-#include "duckdb/main/appender.hpp"
 
 #include <thread>
 #include <iostream>
@@ -8,15 +7,12 @@
 
 using namespace duckdb;
 
-// NOTE: the thread_counts and file_counts number is intentionally low. However, this test is intended to run with
+DUCKDB_BENCHMARK(ParallelAttach, "[attach]")
+
+// NOTE: the FILE_COUNT number is intentionally low. However, this test is intended to run with
 // higher numbers after increasing the OS open file limit
-vector<idx_t> thread_counts = {16};
-vector<idx_t> file_counts = {100};
 
-const string DB_DIR = TestDirectoryPath() + "/attach";
-const string DB_FILE_DIR = DB_DIR + "/db_files";
-
-void FileWorker(const string &dir, const string &template_path, const idx_t start, const idx_t end) {
+static void FileWorker(const string &dir, const string &template_path, const idx_t start, const idx_t end) {
 
 	for (idx_t i = start; i < end; i++) {
 
@@ -59,7 +55,7 @@ void CreateFiles(const idx_t file_count, string db_file_dir) {
 	idx_t remaining_files = file_count % thread_count;
 	idx_t end = 0;
 
-	// spawn and run attach workers
+	// spawn and run file creation workers
 	for (idx_t i = 0; i < thread_count; i++) {
 
 		idx_t thread_file_count = files_per_thread;
@@ -77,7 +73,7 @@ void CreateFiles(const idx_t file_count, string db_file_dir) {
 	}
 }
 
-void AttachWorker(const string &dir, const idx_t start, const idx_t end, DuckDB &db) {
+static void AttachWorker(const string &dir, const idx_t start, const idx_t end, DuckDB &db) {
 
 	Connection con(db);
 
@@ -125,8 +121,10 @@ void Attach(const idx_t file_count, const idx_t thread_count, string db_file_dir
 	D_ASSERT(result_str.find("true") != string::npos);
 }
 
-DUCKDB_BENCHMARK(ParallelAttach, "[attach]")
 void Load(DuckDBBenchmarkState *state) override {
+
+	const string DB_DIR = TestDirectoryPath() + "/attach";
+	const string DB_FILE_DIR = DB_DIR + "/db_files";
 
 	// set up the directories
 	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
@@ -138,21 +136,25 @@ void Load(DuckDBBenchmarkState *state) override {
 	}
 
 	// create the files
-	for (const auto file_count : file_counts) {
-		CreateFiles(file_count, DB_FILE_DIR);
-	}
+	const idx_t FILE_COUNT = 100;
+	CreateFiles(FILE_COUNT, DB_FILE_DIR);
 }
 
 void RunBenchmark(DuckDBBenchmarkState *state) override {
 
-	for (const auto file_count : file_counts) {
-		for (const auto thread_count : thread_counts) {
-			Attach(file_count, thread_count, DB_FILE_DIR);
-		}
-	}
+	const string DB_DIR = TestDirectoryPath() + "/attach";
+	const string DB_FILE_DIR = DB_DIR + "/db_files";
+
+	const idx_t FILE_COUNT = 100;
+	const idx_t THREAD_COUNT = 64;
+	Attach(FILE_COUNT, THREAD_COUNT, DB_FILE_DIR);
 }
 
 string VerifyResult(QueryResult *result) override {
+
+	const string DB_DIR = TestDirectoryPath() + "/attach";
+	const string DB_FILE_DIR = DB_DIR + "/db_files";
+
 	// we use this function to clean up the directories
 	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	fs->RemoveDirectory(DB_FILE_DIR);
