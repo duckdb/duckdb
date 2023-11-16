@@ -299,18 +299,17 @@ TEST_CASE("Binding values", "[capi]") {
 
 				REQUIRE(member_names[c_idx] == str_val);
 				auto child_type = duckdb_struct_type_child_type(logical_type, c_idx);
-				REQUIRE(duckdb_get_type_id(child_type) == DUCKDB_TYPE_BIGINT);
+				REQUIRE(duckdb_get_type_id(child_type) == DUCKDB_TYPE_INTEGER);
 				duckdb_destroy_logical_type(&child_type);
 
-				auto int64_vector = duckdb_struct_vector_get_child(current_vector, i);
+				auto int32_vector = duckdb_struct_vector_get_child(current_vector, i);
 
-				auto int64_data = (int64_t *)duckdb_vector_get_data(int64_vector);
+				auto int32_data = (int32_t *)duckdb_vector_get_data(int32_vector);
 
-				REQUIRE(int64_data[0] == 42);
+				REQUIRE(int32_data[0] == 42);
 
 			} else if (type_id == DUCKDB_TYPE_LIST) {
 				auto child_type = duckdb_list_type_child_type(logical_type);
-				// TODO: why is this one an integer, the other a bigint?
 				REQUIRE(duckdb_get_type_id(child_type) == DUCKDB_TYPE_INTEGER);
 				duckdb_destroy_logical_type(&child_type);
 

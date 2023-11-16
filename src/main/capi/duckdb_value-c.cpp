@@ -59,8 +59,7 @@ duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *
 	if (ltype.id() != duckdb::LogicalTypeId::STRUCT) {
 		return nullptr;
 	}
-	auto &struct_type = duckdb::StructType::GetChildTypes(ltype);
-	auto count = struct_type.size();
+	auto count = duckdb::StructType::GetChildCount(ltype);
 
 	duckdb::vector<Value> unwrapped_values;
 	for (idx_t i = 0; i < count; i++) {
