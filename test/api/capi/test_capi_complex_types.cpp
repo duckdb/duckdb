@@ -224,7 +224,7 @@ TEST_CASE("Binding values", "[capi]") {
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	duckdb_prepared_statement prepared;
-	REQUIRE_SUCCESS(duckdb_prepare(tester.connection, "SELECT ?, ?", &prepared));
+	REQUIRE(duckdb_prepare(tester.connection, "SELECT ?, ?", &prepared) == DuckDBSuccess);
 
 	std::vector<const char *> member_names {"hello"};
 	duckdb::vector<duckdb_type> child_types = {DUCKDB_TYPE_INTEGER};
