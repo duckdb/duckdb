@@ -211,6 +211,12 @@ public:
 	DUCKDB_API virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr);
 	DUCKDB_API vector<string> GlobFiles(const string &path, ClientContext &context,
 	                                    FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
+										
+	//! Whether there is a brace expansion in the string
+	DUCKDB_API static bool HasBraceExpansion(const string &pattern);
+	//! Runs a brace expansion on the file system, returning a list of matching files
+	DUCKDB_API virtual vector<string> BraceExpansion(const string &pattern, FileOpener *opener = nullptr);
+	
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);

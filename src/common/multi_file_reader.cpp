@@ -34,7 +34,11 @@ vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value 
 	vector<string> files;
 	if (input.type().id() == LogicalTypeId::VARCHAR) {
 		auto file_name = StringValue::Get(input);
-		files = fs.GlobFiles(file_name, context, options);
+		if(fs.HasBraceExpansion(file_name)){
+			files = fs.BraceExpansion(file_name);
+		} else {
+			files = fs.GlobFiles(file_name, context, options);
+		}
 
 		// Sort the files to ensure that the order is deterministic
 		std::sort(files.begin(), files.end());
@@ -47,7 +51,14 @@ vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value 
 			if (val.type().id() != LogicalTypeId::VARCHAR) {
 				throw ParserException("%s reader can only take a list of strings as a parameter", name);
 			}
-			auto glob_files = fs.GlobFiles(StringValue::Get(val), context, options);
+			
+			vector<string> glob_files;
+			string children_file_name = StringValue::Get(val);
+			if(fs.HasBraceExpansion(children_file_name)){
+				glob_files = fs.BraceExpansion(children_file_name);
+			} else {
+				glob_files = fs.GlobFiles(children_file_name, context, options);
+			}
 			std::sort(glob_files.begin(), glob_files.end());
 			files.insert(files.end(), glob_files.begin(), glob_files.end());
 		}

@@ -4,24 +4,36 @@ namespace duckdb {
 
 // Not allow nested brace expansion and non-matching brace
 bool BraceExpansion::has_brace_expansion(const string &pattern){
-   idx_t braceCount = 0;
+    bool hasBrace = false;
+    idx_t braceCount = 0;
+
     for (char ch : pattern) {
         // Detects nested braces
         if (ch == '{') {
+            hasBrace = true;
             if (braceCount > 0) { 
-                return false;
+                break;
             }
             braceCount++;
         // Detects non-matching closing brace
         } else if (ch == '}') {
             if (braceCount <= 0) { 
-                return false;
+                break;
             }
             braceCount--;
         }
     }
-    // Checks if all braces are matched
-    return braceCount == 0; 
+    // Checks if all braces are matched and there is at least one brace
+    if(braceCount == 0 && hasBrace){
+        return true;
+    }else {
+        if (braceCount > 0) {
+          throw InvalidInputException("Not a vaild brace expansion file name");
+        }
+        // Without any brace
+        return false;
+    }
+    
 }
 
 
@@ -31,9 +43,7 @@ vector<string> BraceExpansion::brace_expansion(const string &pattern){
     idx_t braceClose = pattern.find('}');
 
     if (braceOpen == string::npos || braceClose == string::npos) {
-        //FIXME throw exception
-        result.push_back(pattern);
-        return result;
+       throw InvalidInputException("Cannot find brace during brace expansion");
     }
 
     string prefix =  pattern.substr(0, braceOpen);

@@ -6,6 +6,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
+#include "duckdb/common/brace_expansion.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -376,6 +377,15 @@ bool FileSystem::HasGlob(const string &str) {
 
 vector<string> FileSystem::Glob(const string &path, FileOpener *opener) {
 	throw NotImplementedException("%s: Glob is not implemented!", GetName());
+}
+
+
+bool FileSystem::HasBraceExpansion(const string &pattern){
+	return BraceExpansion::has_brace_expansion(pattern);
+}
+
+vector<string> FileSystem::BraceExpansion(const string &pattern, FileOpener *opener){
+	return BraceExpansion::brace_expansion(pattern);
 }
 
 void FileSystem::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
