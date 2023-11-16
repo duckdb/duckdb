@@ -11,15 +11,14 @@ DependencyCatalogEntry::DependencyCatalogEntry(DependencyLinkSide side, Catalog 
                                                DependencyType dependency_type)
     : InCatalogEntry(CatalogType::DEPENDENCY_ENTRY, catalog,
                      DependencyManager::MangleName(entry_type, entry_schema, entry_name)),
-      mangled_name(name), entry_name(entry_name), schema(entry_schema), entry_type(entry_type),
-      dependency_type(dependency_type), side(side), set(set) {
+      entry_name(entry_name), schema(entry_schema), entry_type(entry_type), dependency_type(dependency_type),
+      side(side), set(set) {
 	D_ASSERT(entry_type != CatalogType::DEPENDENCY_ENTRY);
 	D_ASSERT(entry_type != CatalogType::DEPENDENCY_SET);
 }
 
 const string &DependencyCatalogEntry::MangledName() const {
-	DependencyManager::AssertMangledName(mangled_name);
-	return mangled_name;
+	return name;
 }
 
 CatalogType DependencyCatalogEntry::EntryType() const {
@@ -45,12 +44,12 @@ void DependencyCatalogEntry::CompleteLink(CatalogTransaction transaction, Depend
 	auto &manager = set.Manager();
 	switch (side) {
 	case DependencyLinkSide::DEPENDENCY: {
-		auto &other_set = manager.GetOrCreateDependencySet(transaction, EntryType(), EntrySchema(), EntryName());
+		auto other_set = manager.GetDependencySet(transaction, EntryType(), EntrySchema(), EntryName());
 		other_set.AddDependent(transaction, set, type);
 		break;
 	}
 	case DependencyLinkSide::DEPENDENT: {
-		auto &other_set = manager.GetOrCreateDependencySet(transaction, EntryType(), EntrySchema(), EntryName());
+		auto other_set = manager.GetDependencySet(transaction, EntryType(), EntrySchema(), EntryName());
 		other_set.AddDependency(transaction, set, type);
 		break;
 	}

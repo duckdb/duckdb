@@ -16,8 +16,7 @@ static string GetProxyPrefix(const string &name) {
 DependencySetCatalogEntry::DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager,
                                                      CatalogType entry_type, const string &entry_schema,
                                                      const string &entry_name)
-    : InCatalogEntry(CatalogType::DEPENDENCY_SET, catalog,
-                     DependencyManager::MangleName(entry_type, entry_schema, entry_name)),
+    : catalog(catalog), name(DependencyManager::MangleName(entry_type, entry_schema, entry_name)),
       entry_name(entry_name), schema(entry_schema), entry_type(entry_type),
       dependencies(dependency_manager.dependencies, GetProxyPrefix(name)),
       dependents(dependency_manager.dependents, GetProxyPrefix(name)), dependency_manager(dependency_manager) {
@@ -40,19 +39,14 @@ void DependencySetCatalogEntry::ScanSetInternal(CatalogTransaction transaction, 
 	auto cb = [&](CatalogEntry &other) {
 		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
 		auto &other_entry = other.Cast<DependencyCatalogEntry>();
-		auto other_dependency_set_p = dependency_manager.GetDependencySet(transaction, other);
-		if (!other_dependency_set_p) {
-			// Already deleted
-			return;
-		}
-		auto &other_dependency_set = *other_dependency_set_p;
+		auto other_dependency_set = dependency_manager.GetDependencySet(transaction, other);
 		(void)other_dependency_set;
 
 		// Assert some invariants of the dependency_set
 		if (dependencies) {
 			D_ASSERT(other_dependency_set.IsDependencyOf(transaction, *this));
 		} else {
-			D_ASSERT(other_dependency_set.HasDependencyOn(transaction, *this, other_entry.Type()));
+			D_ASSERT(other_dependency_set.HasDependencyOn(transaction, *this));
 		}
 		callback(other_entry);
 	};
@@ -72,9 +66,6 @@ void DependencySetCatalogEntry::ScanDependencies(CatalogTransaction transaction,
 	ScanSetInternal(transaction, true, callback);
 }
 
-DependencySetCatalogEntry::~DependencySetCatalogEntry() {
-}
-
 const string &DependencySetCatalogEntry::MangledName() const {
 	return name;
 }
@@ -91,50 +82,46 @@ const string &DependencySetCatalogEntry::EntryName() const {
 	return entry_name;
 }
 
-// Add from a Dependency Set
-void DependencySetCatalogEntry::AddDependencies(CatalogTransaction transaction, const dependency_set_t &to_add) {
-	for (auto &dep : to_add) {
-		auto &entry = dep.entry;
-		AddDependency(transaction, entry, dep.dependency_type);
-	}
-}
-void DependencySetCatalogEntry::AddDependents(CatalogTransaction transaction, const dependency_set_t &to_add) {
-	for (auto &dep : to_add) {
-		auto &entry = dep.entry;
-		AddDependent(transaction, entry, dep.dependency_type);
-	}
-}
+//// Add from a Dependency Set
+// void DependencySetCatalogEntry::AddDependencies(CatalogTransaction transaction, const dependency_set_t &to_add) {
+//	for (auto &dep : to_add) {
+//		auto &entry = dep.entry;
+//		AddDependency(transaction, entry, dep.dependency_type);
+//	}
+//}
+// void DependencySetCatalogEntry::AddDependents(CatalogTransaction transaction, const dependency_set_t &to_add) {
+//	for (auto &dep : to_add) {
+//		auto &entry = dep.entry;
+//		AddDependent(transaction, entry, dep.dependency_type);
+//	}
+//}
 
-// Add from a DependencyList
-void DependencySetCatalogEntry::AddDependencies(CatalogTransaction transaction, const DependencyList &to_add) {
-	for (auto &entry : to_add.set) {
-		AddDependency(transaction, entry);
-	}
-}
-void DependencySetCatalogEntry::AddDependents(CatalogTransaction transaction, const DependencyList &to_add) {
-	for (auto &entry : to_add.set) {
-		AddDependent(transaction, entry);
-	}
-}
+//// Add from a DependencyList
+// void DependencySetCatalogEntry::AddDependencies(CatalogTransaction transaction, const DependencyList &to_add) {
+//	for (auto &entry : to_add.set) {
+//		AddDependency(transaction, entry);
+//	}
+//}
+// void DependencySetCatalogEntry::AddDependents(CatalogTransaction transaction, const DependencyList &to_add) {
+//	for (auto &entry : to_add.set) {
+//		AddDependent(transaction, entry);
+//	}
+//}
 
 // Add from a single CatalogEntry
-DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction, CatalogEntry &to_add,
+DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction,
+                                                                 const string &mangled_name, CatalogType entry_type,
+                                                                 const string &entry_schema, const string &entry_name,
                                                                  DependencyType type) {
 	static const DependencyList EMPTY_DEPENDENCIES;
 
 	{
-		auto mangled_name = DependencyManager::MangleName(to_add);
 		auto dep = dependencies.GetEntry(transaction, mangled_name);
 		if (dep) {
 			return dep->Cast<DependencyCatalogEntry>();
 		}
 	}
 
-	string entry_schema;
-	string entry_name;
-	CatalogType entry_type;
-
-	DependencyManager::GetLookupProperties(to_add, entry_schema, entry_name, entry_type);
 	auto dependency_p = make_uniq<DependencyCatalogEntry>(DependencyLinkSide::DEPENDENCY, catalog, *this, entry_type,
 	                                                      entry_schema, entry_name, type);
 	auto dependency_name = dependency_p->name;
@@ -148,23 +135,39 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransact
 	return dependency;
 }
 
-DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction, CatalogEntry &to_add,
-                                                                DependencyType type) {
-	static const DependencyList EMPTY_DEPENDENCIES;
+DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction,
+                                                                 DependencySetCatalogEntry &to_add,
+                                                                 DependencyType type) {
+	auto &mangled_name = to_add.MangledName();
+	auto entry_type = to_add.EntryType();
+	auto &entry_schema = to_add.EntrySchema();
+	auto &entry_name = to_add.EntryName();
+	return AddDependency(transaction, mangled_name, entry_type, entry_schema, entry_name, type);
+}
 
-	{
-		auto mangled_name = DependencyManager::MangleName(to_add);
-		auto dep = dependents.GetEntry(transaction, mangled_name);
-		if (dep) {
-			return dep->Cast<DependencyCatalogEntry>();
-		}
-	}
-
+DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction, CatalogEntry &to_add,
+                                                                 DependencyType type) {
+	auto mangled_name = DependencyManager::MangleName(to_add);
 	string entry_schema;
 	string entry_name;
 	CatalogType entry_type;
 
 	DependencyManager::GetLookupProperties(to_add, entry_schema, entry_name, entry_type);
+	return AddDependency(transaction, mangled_name, entry_type, entry_schema, entry_name, type);
+}
+
+DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction,
+                                                                const string &mangled_name, CatalogType entry_type,
+                                                                const string &entry_schema, const string &entry_name,
+                                                                DependencyType type) {
+	static const DependencyList EMPTY_DEPENDENCIES;
+
+	{
+		auto dep = dependents.GetEntry(transaction, mangled_name);
+		if (dep) {
+			return dep->Cast<DependencyCatalogEntry>();
+		}
+	}
 	auto dependent_p = make_uniq<DependencyCatalogEntry>(DependencyLinkSide::DEPENDENT, catalog, *this, entry_type,
 	                                                     entry_schema, entry_name, type);
 	auto dependent_name = dependent_p->name;
@@ -177,6 +180,27 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransacti
 	return dependent;
 }
 
+DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction,
+                                                                DependencySetCatalogEntry &to_add,
+                                                                DependencyType type) {
+	auto &mangled_name = to_add.MangledName();
+	auto entry_type = to_add.EntryType();
+	auto &entry_schema = to_add.EntrySchema();
+	auto &entry_name = to_add.EntryName();
+	return AddDependency(transaction, mangled_name, entry_type, entry_schema, entry_name, type);
+}
+
+DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction, CatalogEntry &to_add,
+                                                                DependencyType type) {
+	auto mangled_name = DependencyManager::MangleName(to_add);
+	string entry_schema;
+	string entry_name;
+	CatalogType entry_type;
+
+	DependencyManager::GetLookupProperties(to_add, entry_schema, entry_name, entry_type);
+	return AddDependent(transaction, mangled_name, entry_type, entry_schema, entry_name, type);
+}
+
 // Add from a Dependency
 DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction, Dependency to_add) {
 	return AddDependency(transaction, to_add.entry, to_add.dependency_type);
@@ -186,27 +210,50 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransacti
 }
 
 // Remove dependency from a DependencyEntry
-void DependencySetCatalogEntry::RemoveDependency(CatalogTransaction transaction, CatalogEntry &dependency) {
-	D_ASSERT(dependency.type == CatalogType::DEPENDENCY_ENTRY || dependency.type == CatalogType::DEPENDENCY_SET);
-	auto &name = dependency.name;
-	auto entry = dependencies.GetEntry(transaction, name);
+void DependencySetCatalogEntry::RemoveDependency(CatalogTransaction transaction, const string &mangled_name) {
+	auto entry = dependencies.GetEntry(transaction, mangled_name);
 	if (!entry) {
 		// Already deleted
 		return;
 	}
-	dependencies.DropEntry(transaction, name, false);
+	dependencies.DropEntry(transaction, mangled_name, false);
+}
+
+// Remove dependent from a DependencyEntry
+void DependencySetCatalogEntry::RemoveDependent(CatalogTransaction transaction, const string &mangled_name) {
+	auto entry = dependents.GetEntry(transaction, mangled_name);
+	if (!entry) {
+		// Already deleted
+		return;
+	}
+	dependents.DropEntry(transaction, mangled_name, false);
+}
+
+// Remove dependency from a DependencyEntry
+void DependencySetCatalogEntry::RemoveDependency(CatalogTransaction transaction,
+                                                 DependencySetCatalogEntry &dependency) {
+	auto mangled_name = dependency.MangledName();
+	RemoveDependency(transaction, mangled_name);
+}
+
+// Remove dependent from a DependencyEntry
+void DependencySetCatalogEntry::RemoveDependent(CatalogTransaction transaction, DependencySetCatalogEntry &dependent) {
+	auto mangled_name = dependent.MangledName();
+	RemoveDependent(transaction, mangled_name);
+}
+
+// Remove dependency from a DependencyEntry
+void DependencySetCatalogEntry::RemoveDependency(CatalogTransaction transaction, CatalogEntry &dependency) {
+	D_ASSERT(dependency.type == CatalogType::DEPENDENCY_ENTRY || dependency.type == CatalogType::DEPENDENCY_SET);
+	auto mangled_name = DependencyManager::MangleName(dependency);
+	RemoveDependency(transaction, mangled_name);
 }
 
 // Remove dependent from a DependencyEntry
 void DependencySetCatalogEntry::RemoveDependent(CatalogTransaction transaction, CatalogEntry &dependent) {
 	D_ASSERT(dependent.type == CatalogType::DEPENDENCY_ENTRY || dependent.type == CatalogType::DEPENDENCY_SET);
-	auto &name = dependent.name;
-	auto entry = dependents.GetEntry(transaction, name);
-	if (!entry) {
-		// Already deleted
-		return;
-	}
-	dependents.DropEntry(transaction, name, false);
+	auto mangled_name = DependencyManager::MangleName(dependent);
+	RemoveDependent(transaction, mangled_name);
 }
 
 DependencyCatalogEntry &DependencySetCatalogEntry::GetDependency(CatalogTransaction &transaction,
@@ -222,19 +269,36 @@ DependencyCatalogEntry &DependencySetCatalogEntry::GetDependent(CatalogTransacti
 	return dependent->Cast<DependencyCatalogEntry>();
 }
 
-bool DependencySetCatalogEntry::IsDependencyOf(CatalogTransaction transaction, CatalogEntry &entry) {
-	auto mangled_name = DependencyManager::MangleName(entry);
+bool DependencySetCatalogEntry::IsDependencyOf(CatalogTransaction transaction, const string &mangled_name) {
 	auto dependent = dependents.GetEntryDetailed(transaction, mangled_name);
 
 	// It's fine if the entry is already deleted
 	return dependent.reason != CatalogSet::EntryLookup::FailureReason::NOT_PRESENT;
 }
 
-bool DependencySetCatalogEntry::HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry,
-                                                DependencyType dependent_type) {
+bool DependencySetCatalogEntry::IsDependencyOf(CatalogTransaction transaction, CatalogEntry &entry) {
 	auto mangled_name = DependencyManager::MangleName(entry);
+	return IsDependencyOf(transaction, mangled_name);
+}
+
+bool DependencySetCatalogEntry::IsDependencyOf(CatalogTransaction transaction, DependencySetCatalogEntry &other) {
+	auto mangled_name = other.MangledName();
+	return IsDependencyOf(transaction, mangled_name);
+}
+
+bool DependencySetCatalogEntry::HasDependencyOn(CatalogTransaction transaction, const string &mangled_name) {
 	auto dependency = dependencies.GetEntryDetailed(transaction, mangled_name);
 	return dependency.reason != CatalogSet::EntryLookup::FailureReason::NOT_PRESENT;
+}
+
+bool DependencySetCatalogEntry::HasDependencyOn(CatalogTransaction transaction, DependencySetCatalogEntry &other) {
+	auto mangled_name = other.MangledName();
+	return HasDependencyOn(transaction, mangled_name);
+}
+
+bool DependencySetCatalogEntry::HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry) {
+	auto mangled_name = DependencyManager::MangleName(entry);
+	return HasDependencyOn(transaction, mangled_name);
 }
 
 static string FormatString(string input) {

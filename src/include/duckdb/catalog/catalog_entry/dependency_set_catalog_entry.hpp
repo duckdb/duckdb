@@ -24,11 +24,10 @@ namespace duckdb {
 class DependencyManager;
 class DependencyCatalogEntry;
 
-class DependencySetCatalogEntry : public InCatalogEntry {
+class DependencySetCatalogEntry {
 public:
 	DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager, CatalogType entry_type,
 	                          const string &entry_schema, const string &entry_name);
-	virtual ~DependencySetCatalogEntry() override;
 
 public:
 	ProxyCatalogSet &Dependencies();
@@ -42,33 +41,53 @@ public:
 
 public:
 	// Add Dependencies
+	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, DependencySetCatalogEntry &dependent,
+	                                      DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, CatalogEntry &dependent,
 	                                      DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, Dependency dependent);
-	void AddDependencies(CatalogTransaction transaction, const DependencyList &dependencies);
-	void AddDependencies(CatalogTransaction transaction, const dependency_set_t &dependencies);
+	// void AddDependencies(CatalogTransaction transaction, const DependencyList &dependencies);
+	// void AddDependencies(CatalogTransaction transaction, const dependency_set_t &dependencies);
 
 	// Add Dependents
+	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, DependencySetCatalogEntry &dependent,
+	                                     DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, CatalogEntry &dependent,
 	                                     DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, const Dependency dependent);
-	void AddDependents(CatalogTransaction transaction, const DependencyList &dependents);
-	void AddDependents(CatalogTransaction transaction, const dependency_set_t &dependents);
+	// void AddDependents(CatalogTransaction transaction, const DependencyList &dependents);
+	// void AddDependents(CatalogTransaction transaction, const dependency_set_t &dependents);
 
 	// Get dependent/dependency
 	DependencyCatalogEntry &GetDependency(CatalogTransaction &transaction, CatalogEntry &object);
 	DependencyCatalogEntry &GetDependent(CatalogTransaction &transaction, CatalogEntry &object);
 
 public:
+	void RemoveDependency(CatalogTransaction transaction, DependencySetCatalogEntry &dependency);
+	void RemoveDependent(CatalogTransaction transaction, DependencySetCatalogEntry &dependent);
 	void RemoveDependency(CatalogTransaction transaction, CatalogEntry &dependency);
 	void RemoveDependent(CatalogTransaction transaction, CatalogEntry &dependent);
 
 public:
-	bool HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry, DependencyType type);
+	bool HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry);
+	bool HasDependencyOn(CatalogTransaction transaction, DependencySetCatalogEntry &other);
 	bool IsDependencyOf(CatalogTransaction transaction, CatalogEntry &entry);
+	bool IsDependencyOf(CatalogTransaction transaction, DependencySetCatalogEntry &other);
 
 private:
 	void ScanSetInternal(CatalogTransaction transaction, bool dependencies, dependency_callback_t &callback);
+	bool HasDependencyOn(CatalogTransaction transaction, const string &mangled_name);
+	bool IsDependencyOf(CatalogTransaction transaction, const string &mangled_name);
+
+	void RemoveDependency(CatalogTransaction transaction, const string &mangled_name);
+	void RemoveDependent(CatalogTransaction transaction, const string &mangled_name);
+
+	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, const string &mangled_name,
+	                                      CatalogType entry_type, const string &schema, const string &name,
+	                                      DependencyType type = DependencyType::DEPENDENCY_REGULAR);
+	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, const string &mangled_name,
+	                                     CatalogType entry_type, const string &schema, const string &name,
+	                                     DependencyType type = DependencyType::DEPENDENCY_REGULAR);
 
 public:
 	void PrintDependencies(CatalogTransaction transaction);
@@ -81,6 +100,8 @@ public:
 	const string &EntryName() const;
 
 private:
+	Catalog &catalog;
+	const string name;
 	const string entry_name;
 	const string schema;
 	const CatalogType entry_type;
