@@ -437,13 +437,13 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	IndexStorageInfo index_storage_info;
 	if (root_block_pointer.IsValid()) {
 		// this code path is necessary to read older duckdb files
-		index_storage_info.name = info.name;
+		index_storage_info.name = info.index_name;
 		index_storage_info.root_block_ptr = root_block_pointer;
 
 	} else {
 		// get the matching index storage info
 		for (auto const &elem : data_table.info->index_storage_infos) {
-			if (elem.name == info.name) {
+			if (elem.name == info.index_name) {
 				index_storage_info = elem;
 				break;
 			}
@@ -451,7 +451,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	}
 
 	D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
-	auto art = make_uniq<ART>(info.name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
+	auto art = make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
 	                          std::move(unbound_expressions), data_table.db, nullptr, index_storage_info);
 	data_table.info->indexes.AddIndex(std::move(art));
 }

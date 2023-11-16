@@ -24,7 +24,7 @@ struct CreateIndexInfo : public CreateInfo {
 	//! The table name of the underlying table
 	string table;
 	//! The name of the index
-	string name;
+	string index_name;
 
 	//! Options values (WITH ...)
 	case_insensitive_map_t<Value> options;

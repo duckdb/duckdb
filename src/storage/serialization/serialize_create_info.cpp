@@ -76,7 +76,7 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 
 void CreateIndexInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "name", name);
+	serializer.WritePropertyWithDefault<string>(200, "name", index_name);
 	serializer.WritePropertyWithDefault<string>(201, "table", table);
 	/* [Deleted] (IndexType) "index_type" */
 	serializer.WriteProperty<IndexConstraintType>(203, "constraint_type", constraint_type);
@@ -90,7 +90,7 @@ void CreateIndexInfo::Serialize(Serializer &serializer) const {
 
 unique_ptr<CreateInfo> CreateIndexInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateIndexInfo>(new CreateIndexInfo());
-	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
+	deserializer.ReadPropertyWithDefault<string>(200, "name", result->index_name);
 	deserializer.ReadPropertyWithDefault<string>(201, "table", result->table);
 	deserializer.ReadDeletedProperty<IndexType>(202, "index_type");
 	deserializer.ReadProperty<IndexConstraintType>(203, "constraint_type", result->constraint_type);

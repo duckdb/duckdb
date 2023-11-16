@@ -54,7 +54,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 	}
 	info->table = stmt.relation->relname;
 	if (stmt.idxname) {
-		info->name = stmt.idxname;
+		info->index_name = stmt.idxname;
 	} else {
 		throw NotImplementedException("Please provide an index name, e.g., CREATE INDEX my_name ...");
 	}

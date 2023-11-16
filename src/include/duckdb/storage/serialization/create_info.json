@@ -57,7 +57,8 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "string",
+        "property": "index_name"
       },
       {
         "id": 201,

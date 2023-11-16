@@ -480,7 +480,7 @@ void ReplayState::ReplayCreateIndex(BinaryDeserializer &deserializer) {
 	}
 
 	auto &data_table = table.GetStorage();
-	auto art = make_uniq<ART>(info.name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
+	auto art = make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
 	                          std::move(unbound_expressions), data_table.db, nullptr, index_info);
 	data_table.info->indexes.AddIndex(std::move(art));
 }
