@@ -20,13 +20,9 @@ public:
 
 public:
 	LogicalCreateSecret(CreateSecretFunction function_p, CreateSecretInfo info_p)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_CREATE_SECRET), function(std::move(function_p)),
-	      info(std::move(info_p)) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_CREATE_SECRET), info(std::move(info_p)) {
 	}
 
-	//! The pragma function to call
-	CreateSecretFunction function;
-	//! The context of the call
 	CreateSecretInfo info;
 
 public:

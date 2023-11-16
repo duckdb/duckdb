@@ -9,8 +9,6 @@ SourceResultType PhysicalCreateSecret::GetData(ExecutionContext &context, DataCh
                                                OperatorSourceInput &input) const {
 	auto &client = context.client;
 
-	// TODO: we should probably not have to do the lookup again here: either not pass it through at all or use the fun
-	// from input. We could also not pass through the function during bind at all, just check its existence.
 	context.client.db->config.secret_manager->CreateSecret(client, info);
 
 	chunk.SetValue(0, 0, true);

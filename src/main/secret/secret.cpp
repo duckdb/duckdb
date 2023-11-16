@@ -1,5 +1,6 @@
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/pair.hpp"
 

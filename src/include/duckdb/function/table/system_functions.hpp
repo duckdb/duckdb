@@ -65,10 +65,6 @@ struct DuckDBSecretsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct DuckDBSecretsToFileFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct DuckDBDatabasesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

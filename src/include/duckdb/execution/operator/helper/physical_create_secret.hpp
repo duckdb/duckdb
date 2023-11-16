@@ -19,14 +19,11 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_SECRET;
 
 public:
-	PhysicalCreateSecret(CreateSecretFunction function_p, CreateSecretInfo info_p, idx_t estimated_cardinality)
+	PhysicalCreateSecret(CreateSecretInfo info_p, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::CREATE_SECRET, {LogicalType::BOOLEAN}, estimated_cardinality),
-	      function(std::move(function_p)), info(std::move(info_p)) {
+	      info(std::move(info_p)) {
 	}
 
-	//! The pragma function to call
-	CreateSecretFunction function;
-	//! The context of the call
 	CreateSecretInfo info;
 
 public:

@@ -28,7 +28,6 @@ struct CreateCopyFunctionInfo;
 struct CreatePragmaFunctionInfo;
 struct CreateFunctionInfo;
 struct CreateViewInfo;
-struct CreateSecretInfo;
 struct CreateSequenceInfo;
 struct CreateCollationInfo;
 struct CreateIndexInfo;

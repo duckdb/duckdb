@@ -57,7 +57,7 @@ static unique_ptr<FunctionData> DuckDBSecretsBind(ClientContext &context, TableF
 	names.emplace_back("secret_string");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBSecretsInit(ClientContext &context, TableFunctionInitInput &input) {

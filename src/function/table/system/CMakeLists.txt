@@ -11,7 +11,6 @@ add_library_unity(
   duckdb_indexes.cpp
   duckdb_schemas.cpp
   duckdb_secrets.cpp
-  duckdb_secrets_to_file.cpp
   duckdb_sequences.cpp
   duckdb_settings.cpp
   duckdb_tables.cpp
