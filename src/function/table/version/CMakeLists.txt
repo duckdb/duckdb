@@ -1,3 +1,5 @@
+set(DUCKDB_DISTRIBUTION "unknown" CACHE STRING "Build mechanism")
+
 add_definitions(-DDUCKDB_SOURCE_ID="\""${GIT_COMMIT_HASH}"\"")
 add_definitions(-DDUCKDB_VERSION="\""${DUCKDB_VERSION}"\"")
 add_definitions(-DUCKDB_MAJOR_VERSION=${DUCKDB_MAJOR_VERSION})
