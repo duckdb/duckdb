@@ -77,15 +77,11 @@ optional_ptr<CatalogEntry> CatalogEntryMap::GetEntry(const string &name) {
 	return entry->second.get();
 }
 
-CatalogSet::CatalogSet(Catalog &catalog_p, unique_ptr<DefaultGenerator> defaults, bool cleanup_entries)
-    : catalog(catalog_p.Cast<DuckCatalog>()), defaults(std::move(defaults)), cleanup_entries(cleanup_entries) {
+CatalogSet::CatalogSet(Catalog &catalog_p, unique_ptr<DefaultGenerator> defaults)
+    : catalog(catalog_p.Cast<DuckCatalog>()), defaults(std::move(defaults)) {
 	D_ASSERT(catalog_p.IsDuckCatalog());
 }
 CatalogSet::~CatalogSet() {
-}
-
-bool CatalogSet::ShouldEntriesBeCleaned() const {
-	return cleanup_entries;
 }
 
 bool IsDependencyEntry(CatalogEntry &entry) {

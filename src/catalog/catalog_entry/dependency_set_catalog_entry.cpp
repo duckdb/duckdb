@@ -13,7 +13,7 @@ DependencySetCatalogEntry::DependencySetCatalogEntry(Catalog &catalog, Dependenc
                                                      const string &entry_name)
     : InCatalogEntry(CatalogType::DEPENDENCY_SET, catalog,
                      DependencyManager::MangleName(entry_type, entry_schema, entry_name)),
-      entry_name(entry_name), schema(entry_schema), entry_type(entry_type), dependencies(catalog, nullptr, false), dependents(catalog, nullptr, false),
+      entry_name(entry_name), schema(entry_schema), entry_type(entry_type), dependencies(catalog), dependents(catalog),
       dependency_manager(dependency_manager) {
 }
 
