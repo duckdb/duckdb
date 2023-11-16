@@ -1127,7 +1127,7 @@ StrpTimeFormat::ParseResult StrpTimeFormat::Parse(const string &format_string, c
 	return result;
 }
 
-bool StrpTimeFormat::Empty() const {
+bool StrTimeFormat::Empty() const {
 	return format_specifier.empty();
 }
 

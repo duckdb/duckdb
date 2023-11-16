@@ -353,12 +353,12 @@ static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_dat
 		if (csv_data.sql_types[col_idx].id() == LogicalTypeId::VARCHAR) {
 			// VARCHAR, just reinterpret (cannot reference, because LogicalTypeId::VARCHAR is used by the JSON type too)
 			cast_chunk.data[col_idx].Reinterpret(input.data[col_idx]);
-		} else if (!options.dialect_options.date_format[LogicalTypeId::DATE].GetValue().Empty() &&
+		} else if (!csv_data.options.write_date_format[LogicalTypeId::DATE].Empty() &&
 		           csv_data.sql_types[col_idx].id() == LogicalTypeId::DATE) {
 			// use the date format to cast the chunk
 			csv_data.options.write_date_format[LogicalTypeId::DATE].ConvertDateVector(
 			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
-		} else if (!options.dialect_options.date_format[LogicalTypeId::TIMESTAMP].GetValue().Empty() &&
+		} else if (!csv_data.options.write_date_format[LogicalTypeId::TIMESTAMP].Empty() &&
 		           (csv_data.sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP ||
 		            csv_data.sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP_TZ)) {
 			// use the timestamp format to cast the chunk

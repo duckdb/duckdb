@@ -66,6 +66,8 @@ public:
 	inline bool HasFormatSpecifier(StrTimeSpecifier s) const {
 		return std::find(specifiers.begin(), specifiers.end(), s) != specifiers.end();
 	}
+	//! If the string format is empty
+	DUCKDB_API bool Empty() const;
 
 	//! The full format specifier, for error messages
 	string format_specifier;
@@ -156,8 +158,6 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 	static StrpTimeFormat Deserialize(Deserializer &deserializer);
-	//! If the string format is empty
-	DUCKDB_API bool Empty() const;
 
 protected:
 	static string FormatStrpTimeError(const string &input, idx_t position);
