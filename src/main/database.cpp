@@ -31,7 +31,8 @@ DBConfig::DBConfig() {
 	compression_functions = make_uniq<CompressionFunctionSet>();
 	cast_functions = make_uniq<CastFunctionSet>();
 	error_manager = make_uniq<ErrorManager>();
-	options.duckdb_api = StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
+	options.duckdb_api =
+	    StringUtil::Format("duckdb/%s(%s;%s)", DuckDB::LibraryVersion(), DuckDB::Platform(), DuckDB::Distribution());
 }
 
 DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) : DBConfig::DBConfig() {

@@ -247,6 +247,10 @@ ifneq ("${CMAKE_LLVM_PATH}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_RANLIB='${CMAKE_LLVM_PATH}/bin/llvm-ranlib' -DCMAKE_AR='${CMAKE_LLVM_PATH}/bin/llvm-ar' -DCMAKE_CXX_COMPILER='${CMAKE_LLVM_PATH}/bin/clang++' -DCMAKE_C_COMPILER='${CMAKE_LLVM_PATH}/bin/clang'
 endif
 
+ifneq ("${DUCKDB_DISTRIBUTION}", "")
+	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_DISTRIBUTION=${DUCKDB_DISTRIBUTION}
+endif
+
 clean:
 	rm -rf build
 
