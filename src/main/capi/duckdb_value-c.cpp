@@ -76,7 +76,7 @@ duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *
 		delete struct_value;
 		return nullptr;
 	}
-	return reinterpret_cast<duckdb_value>(struct_value);
+	return WrapValue(struct_value);
 }
 duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count) {
 	if (!type || !values) {
