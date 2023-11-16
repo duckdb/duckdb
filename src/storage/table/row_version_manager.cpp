@@ -110,6 +110,9 @@ void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t cou
 }
 
 void RowVersionManager::CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_t count) {
+	if (count == 0) {
+		return;
+	}
 	idx_t row_group_end = row_group_start + count;
 
 	lock_guard<mutex> lock(version_lock);
@@ -119,9 +122,8 @@ void RowVersionManager::CommitAppend(transaction_t commit_id, idx_t row_group_st
 		idx_t vstart = vector_idx == start_vector_idx ? row_group_start - start_vector_idx * STANDARD_VECTOR_SIZE : 0;
 		idx_t vend =
 		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
-
-		auto info = vector_info[vector_idx].get();
-		info->CommitAppend(commit_id, vstart, vend);
+		auto &info = *vector_info[vector_idx];
+		info.CommitAppend(commit_id, vstart, vend);
 	}
 }
 

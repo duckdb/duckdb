@@ -11,20 +11,10 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/enums/on_create_conflict.hpp"
 
 namespace duckdb {
 struct AlterInfo;
-
-enum class OnCreateConflict : uint8_t {
-	// Standard: throw error
-	ERROR_ON_CONFLICT,
-	// CREATE IF NOT EXISTS, silently do nothing on conflict
-	IGNORE_ON_CONFLICT,
-	// CREATE OR REPLACE
-	REPLACE_ON_CONFLICT,
-	// Update on conflict - only support for functions. Add a function overload if the function already exists.
-	ALTER_ON_CONFLICT
-};
 
 struct CreateInfo : public ParseInfo {
 public:

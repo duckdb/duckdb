@@ -1,0 +1,65 @@
+# name: test/sql/attach/attach_if_not_exists.test
+# description: Test ATTACH IF NOT EXISTS
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/attach_if_not_exists.db' AS db1
+
+# ATTACH IF NOT EXISTS
+statement ok
+ATTACH IF NOT EXISTS '__TEST_DIR__/attach_if_not_exists.db' AS db1
+
+# skip is based on database name, not database path
+statement ok
+ATTACH IF NOT EXISTS ':memory:' AS db1
+
+statement ok
+CREATE TABLE db1.integers(i INTEGER);
+
+# attaching the same database with a different alias throws an exception
+statement error
+ATTACH IF NOT EXISTS '__TEST_DIR__/attach_if_not_exists.db' AS db2
+----
+already attached
+
+# as does attaching to the same alias
+statement error
+ATTACH ':memory:' AS db1
+----
+already exists
+
+# detach and re-attach in read-only mode
+statement ok
+DETACH db1
+
+statement ok
+ATTACH '__TEST_DIR__/attach_if_not_exists.db' AS db1 (READ_WRITE);
+
+statement error
+ATTACH IF NOT EXISTS '__TEST_DIR__/attach_if_not_exists.db' AS db1 (READ_ONLY);
+----
+already attached in READ_WRITE mode, cannot re-attach in READ_ONLY mode
+
+# automatic always works
+statement ok
+ATTACH IF NOT EXISTS '__TEST_DIR__/attach_if_not_exists.db' AS db1
+
+statement ok
+DETACH db1
+
+statement ok
+ATTACH '__TEST_DIR__/attach_if_not_exists.db' AS db1 (READ_ONLY)
+
+statement error
+ATTACH IF NOT EXISTS '__TEST_DIR__/attach_if_not_exists.db' AS db1 (READ_WRITE);
+----
+already attached in READ_ONLY mode, cannot re-attach in READ_WRITE mode
+
+# automatic always works
+statement ok
+ATTACH IF NOT EXISTS '__TEST_DIR__/attach_if_not_exists.db' AS db1
