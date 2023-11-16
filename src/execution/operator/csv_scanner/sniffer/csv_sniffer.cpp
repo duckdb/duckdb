@@ -56,7 +56,7 @@ void MatchAndReplace(CSVOption<T> &original, CSVOption<T> &sniffed, string name)
 }
 void MatchAndRepaceUserSetVariables(DialectOptions &original, DialectOptions &sniffed) {
 	MatchAndReplace(original.header, sniffed.header, "Header");
-	if (sniffed.new_line.GetValue() != NewLineIdentifier::NOT_SET){
+	if (sniffed.new_line.GetValue() != NewLineIdentifier::NOT_SET) {
 		// Is sniffed line is not set (e.g., single-line file) , we don't try to replace and match.
 		MatchAndReplace(original.new_line, sniffed.new_line, "New Line");
 	}
@@ -87,16 +87,50 @@ SnifferResult CSVSniffer::SniffCSV() {
 	RefineTypes();
 	// 4. Header Detection
 	DetectHeader();
-	if (set_columns.IsSet()) {
-		SetResultOptions();
-		// We do not need to run type refinement, since the types have been given by the user
-		return SnifferResult({}, {});
-	}
 	// 5. Type Replacement
 	ReplaceTypes();
 	D_ASSERT(best_sql_types_candidates_per_column_idx.size() == names.size());
 	// We are done, Set the CSV Options in the reference. Construct and return the result.
 	SetResultOptions();
+	if (set_columns.IsSet()) {
+		// Columns and their types were set, let's validate they match
+		if (options.dialect_options.header.GetValue()) {
+			// If the header exists it should match
+			bool match = true;
+			string error = "The Column names set by the user do not match the ones found by the sniffer. \n";
+			auto &set_names = *set_columns.names;
+			for (idx_t i = 0; i < set_columns.Size(); i++) {
+				if (set_names[i] != names[i]) {
+					error += "Column at position: " + to_string(i) + " Set name: " + set_names[i] +
+					         " Sniffed Name: " + names[i] + "\n";
+					match = false;
+				}
+			}
+			error += "If you are sure about the column names, disable the sniffer with auto_detect = false.";
+			if (!match) {
+				throw InvalidInputException(error);
+			}
+		}
+
+		// Check if types match
+		bool match = true;
+		string error = "The Column types set by the user do not match the ones found by the sniffer. \n";
+		auto &set_types = *set_columns.types;
+		for (idx_t i = 0; i < set_columns.Size(); i++) {
+			if (set_types[i] != detected_types[i] && !(set_types[i].IsNumeric() && detected_types[i].IsNumeric())) {
+				error += "Column at position: " + to_string(i) + " Set type: " + set_types[i].ToString() +
+				         " Sniffed type: " + detected_types[i].ToString() + "\n";
+				match = false;
+			}
+		}
+		error += "If you are sure about the column types, disable the sniffer with auto_detect = false.";
+		if (!match) {
+			throw InvalidInputException(error);
+		}
+
+		// We do not need to run type refinement, since the types have been given by the user
+		return SnifferResult({}, {});
+	}
 	return SnifferResult(detected_types, names);
 }
 

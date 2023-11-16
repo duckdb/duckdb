@@ -65,7 +65,6 @@ public:
 
 	//! Dialect options resulting from sniffing
 	DialectOptions dialect_options;
-
 };
 
 } // namespace duckdb
