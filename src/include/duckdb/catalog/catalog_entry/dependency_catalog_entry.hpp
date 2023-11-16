@@ -31,7 +31,7 @@ enum class DependencyLinkSide { DEPENDENCY, DEPENDENT };
 
 class DependencyCatalogEntry : public InCatalogEntry {
 public:
-	DependencyCatalogEntry(DependencyLinkSide side, Catalog &catalog, DependencySetCatalogEntry &set,
+	DependencyCatalogEntry(DependencyLinkSide side, Catalog &catalog, DependencyManager &manager,
 	                       CatalogType entry_type, const string &entry_schema, const string &entry_name,
 	                       DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	~DependencyCatalogEntry() override;
@@ -41,20 +41,34 @@ public:
 	CatalogType EntryType() const;
 	const string &EntrySchema() const;
 	const string &EntryName() const;
+
+	const string &FromMangledName() const;
+	CatalogType FromType() const;
+	const string &FromSchema() const;
+	const string &FromName() const;
+
 	DependencyType Type() const;
 
 	// Create the corresponding dependency/dependent in the other set
 	void CompleteLink(CatalogTransaction transaction, DependencyType type = DependencyType::DEPENDENCY_REGULAR);
+	void SetFrom(const string &from_mangled_name, CatalogType from_type, const string &from_schema,
+	             const string &from_name, const string &new_name);
 
 private:
 	const string mangled_name;
 	const string entry_name;
-	const string schema;
+	const string entry_schema;
 	const CatalogType entry_type;
+
+	string from_mangled_name;
+	string from_name;
+	string from_schema;
+	CatalogType from_type;
+
 	DependencyType dependency_type;
 
 	DependencyLinkSide side;
-	DependencySetCatalogEntry &set;
+	DependencyManager &manager;
 };
 
 } // namespace duckdb

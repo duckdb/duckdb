@@ -22,11 +22,12 @@
 namespace duckdb {
 
 class DependencyManager;
+class DuckCatalog;
 class DependencyCatalogEntry;
 
 class DependencySetCatalogEntry {
 public:
-	DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager, CatalogType entry_type,
+	DependencySetCatalogEntry(DuckCatalog &catalog, DependencyManager &dependency_manager, CatalogType entry_type,
 	                          const string &entry_schema, const string &entry_name);
 
 public:
@@ -100,8 +101,8 @@ public:
 	const string &EntryName() const;
 
 private:
-	Catalog &catalog;
-	const string name;
+	DuckCatalog &catalog;
+	string name;
 	const string entry_name;
 	const string schema;
 	const CatalogType entry_type;

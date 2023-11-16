@@ -7,7 +7,9 @@ namespace duckdb {
 //! This class mocks the CatalogSet interface, but does not actually store CatalogEntries
 class ProxyCatalogSet {
 public:
-	ProxyCatalogSet(CatalogSet &set, const string &entry_prefix) : set(set), prefix(entry_prefix) {
+	ProxyCatalogSet(CatalogSet &set, const string &mangled_name, CatalogType type, const string &schema,
+	                const string &name)
+	    : set(set), mangled_name(mangled_name), type(type), schema(schema), name(name) {
 	}
 
 public:
@@ -18,8 +20,15 @@ public:
 	void Scan(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback);
 	bool DropEntry(CatalogTransaction transaction, const string &name, bool cascade, bool allow_drop_internal = false);
 
+private:
+	string ApplyPrefix(const string &name) const;
+
 public:
 	CatalogSet &set;
+	string mangled_name;
+	CatalogType type;
+	string schema;
+	string name;
 	string prefix;
 };
 

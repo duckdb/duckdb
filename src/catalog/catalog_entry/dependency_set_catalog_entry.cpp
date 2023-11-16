@@ -5,21 +5,18 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 
 namespace duckdb {
 
-static string GetProxyPrefix(const string &name) {
-	auto null_byte = string(1, '\0');
-	return name + null_byte;
-}
-
-DependencySetCatalogEntry::DependencySetCatalogEntry(Catalog &catalog, DependencyManager &dependency_manager,
+DependencySetCatalogEntry::DependencySetCatalogEntry(DuckCatalog &catalog, DependencyManager &dependency_manager,
                                                      CatalogType entry_type, const string &entry_schema,
                                                      const string &entry_name)
     : catalog(catalog), name(DependencyManager::MangleName(entry_type, entry_schema, entry_name)),
       entry_name(entry_name), schema(entry_schema), entry_type(entry_type),
-      dependencies(dependency_manager.dependencies, GetProxyPrefix(name)),
-      dependents(dependency_manager.dependents, GetProxyPrefix(name)), dependency_manager(dependency_manager) {
+      dependencies(dependency_manager.dependencies, name, entry_type, schema, entry_name),
+      dependents(dependency_manager.dependents, name, entry_type, schema, entry_name),
+      dependency_manager(dependency_manager) {
 }
 
 ProxyCatalogSet &DependencySetCatalogEntry::Dependencies() {
@@ -39,15 +36,6 @@ void DependencySetCatalogEntry::ScanSetInternal(CatalogTransaction transaction, 
 	auto cb = [&](CatalogEntry &other) {
 		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
 		auto &other_entry = other.Cast<DependencyCatalogEntry>();
-		auto other_dependency_set = dependency_manager.GetDependencySet(transaction, other);
-		(void)other_dependency_set;
-
-		// Assert some invariants of the dependency_set
-		if (dependencies) {
-			D_ASSERT(other_dependency_set.IsDependencyOf(transaction, *this));
-		} else {
-			D_ASSERT(other_dependency_set.HasDependencyOn(transaction, *this));
-		}
 		callback(other_entry);
 	};
 
@@ -122,8 +110,8 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransact
 		}
 	}
 
-	auto dependency_p = make_uniq<DependencyCatalogEntry>(DependencyLinkSide::DEPENDENCY, catalog, *this, entry_type,
-	                                                      entry_schema, entry_name, type);
+	auto dependency_p = make_uniq<DependencyCatalogEntry>(DependencyLinkSide::DEPENDENCY, catalog, dependency_manager,
+	                                                      entry_type, entry_schema, entry_name, type);
 	auto dependency_name = dependency_p->name;
 	D_ASSERT(dependency_name != name);
 	if (catalog.IsTemporaryCatalog()) {
@@ -168,8 +156,8 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransacti
 			return dep->Cast<DependencyCatalogEntry>();
 		}
 	}
-	auto dependent_p = make_uniq<DependencyCatalogEntry>(DependencyLinkSide::DEPENDENT, catalog, *this, entry_type,
-	                                                     entry_schema, entry_name, type);
+	auto dependent_p = make_uniq<DependencyCatalogEntry>(DependencyLinkSide::DEPENDENT, catalog, dependency_manager,
+	                                                     entry_type, entry_schema, entry_name, type);
 	auto dependent_name = dependent_p->name;
 	D_ASSERT(dependent_name != name);
 	if (catalog.IsTemporaryCatalog()) {
