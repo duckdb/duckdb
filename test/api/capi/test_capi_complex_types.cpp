@@ -219,6 +219,32 @@ TEST_CASE("Test enum types creation C API", "[capi]") {
 	REQUIRE(duckdb_create_enum_type(nullptr, 0) == nullptr);
 }
 
+TEST_CASE("Constructing values", "[capi]") {
+	std::vector<const char *> member_names {"hello", "world"};
+	duckdb::vector<duckdb_type> child_types = {DUCKDB_TYPE_INTEGER};
+	auto first_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	auto second_type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	duckdb::vector<duckdb_logical_type> member_types = {first_type, second_type};
+	auto struct_type = duckdb_create_struct_type(member_types.data(), member_names.data(), member_names.size());
+
+	auto value = duckdb_create_int64(42);
+	auto other_value = duckdb_create_varchar("other value");
+	duckdb::vector<duckdb_value> struct_values {other_value, value};
+	auto struct_value = duckdb_create_struct_value(struct_type, struct_values.data());
+	REQUIRE(struct_value == nullptr);
+	duckdb_destroy_logical_type(&struct_type);
+
+	duckdb::vector<duckdb_value> list_values {value, other_value};
+	auto list_value = duckdb_create_list_value(first_type, list_values.data(), list_values.size());
+	REQUIRE(list_value == nullptr);
+
+	duckdb_destroy_value(&value);
+	duckdb_destroy_value(&other_value);
+	duckdb_destroy_logical_type(&first_type);
+	duckdb_destroy_logical_type(&second_type);
+	duckdb_destroy_value(&list_value);
+}
+
 TEST_CASE("Binding values", "[capi]") {
 	CAPITester tester;
 	REQUIRE(tester.OpenDatabase(nullptr));

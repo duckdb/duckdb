@@ -55,23 +55,28 @@ duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *
 	if (!type || !values) {
 		return nullptr;
 	}
-	auto &ltype = UnwrapType(type);
+	const auto &ltype = UnwrapType(type);
 	if (ltype.id() != duckdb::LogicalTypeId::STRUCT) {
 		return nullptr;
 	}
 	auto &struct_type = duckdb::StructType::GetChildTypes(ltype);
 	auto count = struct_type.size();
 
-	duckdb::child_list_t<Value> unwrapped_values;
+	duckdb::vector<Value> unwrapped_values;
 	for (idx_t i = 0; i < count; i++) {
 		auto value = values[i];
 		if (!value) {
 			return nullptr;
 		}
-		unwrapped_values.emplace_back(struct_type.get(i).first, UnwrapValue(value));
+		unwrapped_values.emplace_back(UnwrapValue(value));
 	}
 	duckdb::Value *struct_value = new duckdb::Value;
-	*struct_value = duckdb::Value::STRUCT(unwrapped_values);
+	try {
+		*struct_value = duckdb::Value::STRUCT(ltype, unwrapped_values);
+	} catch (...) {
+		delete struct_value;
+		return nullptr;
+	}
 	return reinterpret_cast<duckdb_value>(struct_value);
 }
 duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count) {
@@ -79,7 +84,7 @@ duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *va
 		return nullptr;
 	}
 	auto &ltype = UnwrapType(type);
-	duckdb::vector<Value> unwrapped_values = duckdb::vector<Value>();
+	duckdb::vector<Value> unwrapped_values;
 
 	for (idx_t i = 0; i < value_count; i++) {
 		auto value = values[i];
@@ -89,6 +94,11 @@ duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *va
 		unwrapped_values.push_back(UnwrapValue(value));
 	}
 	duckdb::Value *list_value = new duckdb::Value;
-	*list_value = duckdb::Value::LIST(ltype, unwrapped_values);
+	try {
+		*list_value = duckdb::Value::LIST(ltype, unwrapped_values);
+	} catch (...) {
+		delete list_value;
+		return nullptr;
+	}
 	return WrapValue(list_value);
 }
