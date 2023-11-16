@@ -13,6 +13,10 @@
 #include "duckdb/execution/operator/scan/csv/quote_rules.hpp"
 
 namespace duckdb {
+struct DateTimestampSniffing {
+	bool initialized = false;
+	vector<string> format;
+};
 //! Struct to store the result of the Sniffer
 struct SnifferResult {
 	SnifferResult(vector<LogicalType> return_types_p, vector<string> names_p)
@@ -154,6 +158,8 @@ private:
 	idx_t best_start_with_header = 0;
 	idx_t best_start_without_header = 0;
 	vector<Value> best_header_row;
+	//! Variable used for sniffing date and timestamp
+	map<LogicalTypeId, DateTimestampSniffing> format_candidates;
 
 	//! ------------------------------------------------------//
 	//! ------------------ Type Refinement ------------------ //

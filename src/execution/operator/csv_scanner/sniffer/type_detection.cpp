@@ -204,7 +204,7 @@ struct SniffValue {
 
 void CSVSniffer::InitializeDateAndTimeStampDetection(CSVStateMachine &candidate, const string &separator,
                                                      const LogicalType &sql_type) {
-	auto &format_candidate = candidate.format_candidates[sql_type.id()];
+	auto &format_candidate = format_candidates[sql_type.id()];
 	if (!format_candidate.initialized) {
 		format_candidate.initialized = true;
 		// order by preference
@@ -214,9 +214,9 @@ void CSVSniffer::InitializeDateAndTimeStampDetection(CSVStateMachine &candidate,
 			for (const auto &t : format_template_list) {
 				const auto format_string = GenerateDateFormat(separator, t);
 				// don't parse ISO 8601
-				if (format_string.find("%Y-%m-%d") == string::npos) {
+//				if (format_string.find("%Y-%m-%d") == string::npos) {
 					format_candidate.format.emplace_back(format_string);
-				}
+//				}
 			}
 		}
 	}
@@ -230,7 +230,7 @@ void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const
 	// If it is the first time running date/timestamp detection we must initilize the format variables
 	InitializeDateAndTimeStampDetection(candidate, separator, sql_type);
 	// generate date format candidates the first time through
-	auto &type_format_candidates = candidate.format_candidates[sql_type.id()].format;
+	auto &type_format_candidates = format_candidates[sql_type.id()].format;
 	// check all formats and keep the first one that works
 	StrpTimeFormat::ParseResult result;
 	auto save_format_candidates = type_format_candidates;
@@ -349,7 +349,7 @@ void CSVSniffer::DetectTypes() {
 					// If Value is not Null, Has a numeric date format, and the current investigated candidate is either
 					// a timestamp or a date
 					if (!dummy_val.IsNull() && StartsWithNumericDate(separator, StringValue::Get(dummy_val)) &&
-					    (cur_top_candidate == LogicalType::TIMESTAMP || cur_top_candidate == LogicalType::DATE)) {
+					    (cur_top_candidate.id() == LogicalTypeId::TIMESTAMP || cur_top_candidate.id() == LogicalTypeId::DATE)) {
 						DetectDateAndTimeStampFormats(*candidate, sql_type, separator, dummy_val);
 					}
 					// try cast from string to sql_type
@@ -392,7 +392,7 @@ void CSVSniffer::DetectTypes() {
 			best_candidate = std::move(candidate);
 			min_varchar_cols = varchar_cols;
 			best_sql_types_candidates_per_column_idx = info_sql_types_candidates;
-			for (auto &format_candidate : best_candidate->format_candidates) {
+			for (auto &format_candidate : format_candidates) {
 				best_format_candidates[format_candidate.first] = format_candidate.second.format;
 			}
 			best_header_row = tuples[0].values;

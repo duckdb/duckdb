@@ -14,11 +14,6 @@
 
 namespace duckdb {
 
-struct DateTimestampSniffing {
-	bool initialized = false;
-	vector<string> format;
-};
-
 //! The CSV State Machine comprises a state transition array (STA).
 //! The STA indicates the current state of parsing based on both the current and preceding characters.
 //! This reveals whether we are dealing with a Field, a New Line, a Delimiter, and so forth.
@@ -71,8 +66,6 @@ public:
 	//! Dialect options resulting from sniffing
 	DialectOptions dialect_options;
 
-	//! Variable used for sniffing date and timestamp
-	map<LogicalTypeId, DateTimestampSniffing> format_candidates;
 };
 
 } // namespace duckdb

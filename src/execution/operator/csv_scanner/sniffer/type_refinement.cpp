@@ -92,7 +92,7 @@ struct Parse {
 bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) {
 	// try vector-cast from string to sql_type
 	Vector dummy_result(sql_type);
-	if (!options.dialect_options.date_format[LogicalTypeId::DATE].GetValue().Empty() &&
+	if (!best_candidate->dialect_options.date_format[LogicalTypeId::DATE].GetValue().Empty() &&
 	    sql_type == LogicalTypeId::DATE) {
 		// use the date format to cast the chunk
 		string error_message;
@@ -100,7 +100,7 @@ bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const Logica
 		return BaseCSVReader::TryCastDateVector(best_candidate->dialect_options.date_format, parse_chunk_col,
 		                                        dummy_result, size, error_message, line_error);
 	}
-	if (!options.dialect_options.date_format[LogicalTypeId::TIMESTAMP].GetValue().Empty() &&
+	if (!best_candidate->dialect_options.date_format[LogicalTypeId::TIMESTAMP].GetValue().Empty() &&
 	    sql_type == LogicalTypeId::TIMESTAMP) {
 		// use the timestamp format to cast the chunk
 		string error_message;
