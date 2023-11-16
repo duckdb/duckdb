@@ -14,7 +14,6 @@ DependencyCatalogEntry::DependencyCatalogEntry(DependencyLinkSide side, Catalog 
       entry_name(entry_name), schema(entry_schema), entry_type(entry_type), dependency_type(dependency_type),
       side(side), set(set) {
 	D_ASSERT(entry_type != CatalogType::DEPENDENCY_ENTRY);
-	D_ASSERT(entry_type != CatalogType::DEPENDENCY_SET);
 }
 
 const string &DependencyCatalogEntry::MangledName() const {

@@ -777,8 +777,6 @@ const char* EnumUtil::ToChars<CatalogType>(CatalogType value) {
 		return "DELETED_ENTRY";
 	case CatalogType::RENAMED_ENTRY:
 		return "RENAMED_ENTRY";
-	case CatalogType::DEPENDENCY_SET:
-		return "DEPENDENCY_SET";
 	case CatalogType::DEPENDENCY_ENTRY:
 		return "DEPENDENCY_ENTRY";
 	default:
@@ -844,9 +842,6 @@ CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "RENAMED_ENTRY")) {
 		return CatalogType::RENAMED_ENTRY;
-	}
-	if (StringUtil::Equals(value, "DEPENDENCY_SET")) {
-		return CatalogType::DEPENDENCY_SET;
 	}
 	if (StringUtil::Equals(value, "DEPENDENCY_ENTRY")) {
 		return CatalogType::DEPENDENCY_ENTRY;

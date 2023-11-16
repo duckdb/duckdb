@@ -85,7 +85,7 @@ CatalogSet::~CatalogSet() {
 }
 
 bool IsDependencyEntry(CatalogEntry &entry) {
-	return entry.type == CatalogType::DEPENDENCY_ENTRY || entry.type == CatalogType::DEPENDENCY_SET;
+	return entry.type == CatalogType::DEPENDENCY_ENTRY;
 }
 
 bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,

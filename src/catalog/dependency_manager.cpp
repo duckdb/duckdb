@@ -38,9 +38,6 @@ string DependencyManager::MangleName(CatalogEntry &entry) {
 	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
 		auto &dependency_entry = entry.Cast<DependencyCatalogEntry>();
 		return dependency_entry.MangledName();
-	} else if (entry.type == CatalogType::DEPENDENCY_SET) {
-		auto &dependency_set = entry.Cast<DependencySetCatalogEntry>();
-		return dependency_set.MangledName();
 	} else {
 		type = entry.type;
 		schema = GetSchema(entry);
@@ -83,7 +80,6 @@ bool DependencyManager::IsSystemEntry(CatalogEntry &entry) const {
 
 	switch (entry.type) {
 	case CatalogType::DEPENDENCY_ENTRY:
-	case CatalogType::DEPENDENCY_SET:
 	case CatalogType::DATABASE_ENTRY:
 	case CatalogType::RENAMED_ENTRY:
 		return true;
@@ -150,12 +146,6 @@ void DependencyManager::GetLookupProperties(CatalogEntry &entry, string &schema,
 		schema = dependency_entry.EntrySchema();
 		name = dependency_entry.EntryName();
 		type = dependency_entry.EntryType();
-	} else if (entry.type == CatalogType::DEPENDENCY_SET) {
-		auto &dependency_set = entry.Cast<DependencySetCatalogEntry>();
-
-		schema = dependency_set.EntrySchema();
-		name = dependency_set.EntryName();
-		type = dependency_set.EntryType();
 	} else {
 		schema = DependencyManager::GetSchema(entry);
 		name = entry.name;

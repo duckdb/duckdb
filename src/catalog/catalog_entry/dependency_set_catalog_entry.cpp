@@ -244,14 +244,14 @@ void DependencySetCatalogEntry::RemoveDependent(CatalogTransaction transaction, 
 
 // Remove dependency from a DependencyEntry
 void DependencySetCatalogEntry::RemoveDependency(CatalogTransaction transaction, CatalogEntry &dependency) {
-	D_ASSERT(dependency.type == CatalogType::DEPENDENCY_ENTRY || dependency.type == CatalogType::DEPENDENCY_SET);
+	D_ASSERT(dependency.type == CatalogType::DEPENDENCY_ENTRY);
 	auto mangled_name = DependencyManager::MangleName(dependency);
 	RemoveDependency(transaction, mangled_name);
 }
 
 // Remove dependent from a DependencyEntry
 void DependencySetCatalogEntry::RemoveDependent(CatalogTransaction transaction, CatalogEntry &dependent) {
-	D_ASSERT(dependent.type == CatalogType::DEPENDENCY_ENTRY || dependent.type == CatalogType::DEPENDENCY_SET);
+	D_ASSERT(dependent.type == CatalogType::DEPENDENCY_ENTRY);
 	auto mangled_name = DependencyManager::MangleName(dependent);
 	RemoveDependent(transaction, mangled_name);
 }
