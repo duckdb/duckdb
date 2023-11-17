@@ -62,8 +62,9 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 
 AttachedDatabase::~AttachedDatabase() {
 
+	D_ASSERT(catalog);
 	if (!IsSystem() && !catalog->InMemory()) {
-		db.GetDatabaseManager().EraseDbPath(storage->GetDBPath());
+		db.GetDatabaseManager().EraseDbPath(catalog->GetDBPath());
 	}
 
 	if (Exception::UncaughtException()) {
