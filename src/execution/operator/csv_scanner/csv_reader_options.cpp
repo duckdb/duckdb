@@ -371,7 +371,10 @@ void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientCont
 			continue;
 		}
 		auto loption = StringUtil::Lower(kv.first);
-		user_defined_parameters += loption + "=" + kv.second.ToSQLString() + ", ";
+		// skip variables that are specific to auto detection
+		if (loption != "auto_detect" && loption != "auto_type_candidates") {
+			user_defined_parameters += loption + "=" + kv.second.ToSQLString() + ", ";
+		}
 		if (loption == "columns") {
 			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::STRUCT) {

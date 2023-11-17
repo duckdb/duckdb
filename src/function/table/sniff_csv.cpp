@@ -37,6 +37,14 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
                                              vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<CSVSniffFunctionData>();
 	result->path = input.inputs[0].ToString();
+	auto it = input.named_parameters.find("auto_detect");
+	if (it != input.named_parameters.end()) {
+		if (!it->second.GetValue<bool>()) {
+			throw InvalidInputException("sniff_csv function does not accept auto_detect variable set to false");
+		}
+		// otherwise remove it
+		input.named_parameters.erase("auto_detect");
+	}
 	result->options.FromNamedParameters(input.named_parameters, context, result->return_types_csv, result->names_csv);
 	// We want to return the whole CSV Configuration
 	// 1. Delimiter
@@ -50,25 +58,25 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 	names.emplace_back("Escape");
 	// 4. NewLine Delimiter
 	return_types.emplace_back(LogicalType::VARCHAR);
-	names.emplace_back("NewLine Delimiter");
+	names.emplace_back("NewLineDelimiter");
 	// 5. Skip Rows
 	return_types.emplace_back(LogicalType::UINTEGER);
-	names.emplace_back("Skip Rows");
+	names.emplace_back("SkipRows");
 	// 6. Has Header
 	return_types.emplace_back(LogicalType::BOOLEAN);
-	names.emplace_back("Has Header");
+	names.emplace_back("HasHeader");
 	// 7. List<Struct<Column-Name:Types>>
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("Columns");
 	// 8. Date Format
 	return_types.emplace_back(LogicalType::VARCHAR);
-	names.emplace_back("Date Format");
+	names.emplace_back("DateFormat");
 	// 9. Timestamp Format
 	return_types.emplace_back(LogicalType::VARCHAR);
-	names.emplace_back("Timestamp Format");
+	names.emplace_back("TimestampFormat");
 	// 10. CSV read function with all the options used
 	return_types.emplace_back(LogicalType::VARCHAR);
-	names.emplace_back("User Arguments");
+	names.emplace_back("UserArguments");
 	// 11. CSV read function with all the options used
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("Prompt");
@@ -102,6 +110,12 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 		return;
 	}
 	const CSVSniffFunctionData &data = data_p.bind_data->Cast<CSVSniffFunctionData>();
+	auto &fs = duckdb::FileSystem::GetFileSystem(context);
+
+	if (fs.HasGlob(data.path)) {
+		throw NotImplementedException("sniff_csv does not operate on globs yet");
+	}
+
 	// We must run the sniffer.
 	auto sniffer_options = data.options;
 	sniffer_options.file_path = data.path;
@@ -224,11 +238,10 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 			         << sniffer_options.dialect_options.date_format[LogicalType::TIMESTAMP].GetValue().format_specifier
 			         << "'";
 		}
-
-		// 11.10 User Arguments
-		if (!data.options.user_defined_parameters.empty()) {
-			csv_read << separator << data.options.user_defined_parameters;
-		}
+	}
+	// 11.10 User Arguments
+	if (!data.options.user_defined_parameters.empty()) {
+		csv_read << separator << data.options.user_defined_parameters;
 	}
 	csv_read << ");";
 	output.SetValue(10, 0, csv_read.str());
