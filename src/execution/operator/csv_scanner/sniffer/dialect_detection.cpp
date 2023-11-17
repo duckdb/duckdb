@@ -95,16 +95,29 @@ void CSVSniffer::GenerateCandidateDetectionSearchSpace(vector<char> &delim_candi
 	delim_candidates = {',', '|', ';', '\t'};
 	if (options.dialect_options.state_machine_options.delimiter.IsSetByUser()) {
 		// user provided a delimiter: add that delimiter to the search space
-		delim_candidates.push_back(options.dialect_options.state_machine_options.delimiter.GetValue());
+		auto user_delim = options.dialect_options.state_machine_options.delimiter.GetValue();
+    	auto it = std::find(delim_candidates.begin(), delim_candidates.end(), user_delim);
+		if (it == delim_candidates.end()){
+			delim_candidates.push_back(options.dialect_options.state_machine_options.delimiter.GetValue());
+		}
 	}
 	quote_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {'\"'};
 	quote_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER] = {'\"', '\''};
 	quote_candidates_map[(uint8_t)QuoteRule::NO_QUOTES] = {'\0'};
 	if (options.dialect_options.state_machine_options.quote.IsSetByUser()) {
 		// user provided quote: add them to the quote rule search space
-		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC].emplace_back(options.dialect_options.state_machine_options.quote.GetValue());
-		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER].emplace_back(options.dialect_options.state_machine_options.quote.GetValue());
-		quote_candidates_map[(uint8_t)QuoteRule::NO_QUOTES].emplace_back(options.dialect_options.state_machine_options.quote.GetValue());
+		auto user_quote = options.dialect_options.state_machine_options.quote.GetValue();
+		if (user_quote != '\"'){
+			quote_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC].emplace_back(user_quote);
+		}
+		if (user_quote != '\"' && user_quote != '\''){
+			quote_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER].emplace_back(user_quote);
+		}
+		if (user_quote != '\0'){
+			quote_candidates_map[(uint8_t)QuoteRule::NO_QUOTES].emplace_back(user_quote);
+
+		}
+
 		// also add it as a escape rule
 		if (!IsQuoteDefault(options.dialect_options.state_machine_options.quote.GetValue())) {
 			escape_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC].emplace_back(
@@ -115,8 +128,12 @@ void CSVSniffer::GenerateCandidateDetectionSearchSpace(vector<char> &delim_candi
 
 	if (options.dialect_options.state_machine_options.escape.IsSetByUser()) {
 		// user provided escape: : add that escape to the search space
-		escape_candidates_map[(uint8_t)quoterule_candidates[0]] = {
+		auto user_escape = options.dialect_options.state_machine_options.escape.GetValue();
+    	auto it = std::find(escape_candidates_map[(uint8_t)quoterule_candidates[0]].begin(), escape_candidates_map[(uint8_t)quoterule_candidates[0]].end(), user_escape);
+		if (it == escape_candidates_map[(uint8_t)quoterule_candidates[0]].end()){
+			escape_candidates_map[(uint8_t)quoterule_candidates[0]] = {
 		    options.dialect_options.state_machine_options.escape.GetValue()};
+		}
 	}
 }
 

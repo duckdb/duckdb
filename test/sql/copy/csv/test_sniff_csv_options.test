@@ -9,8 +9,7 @@ PRAGMA enable_verification
 require notwindows
 
 # Test user giving wrong option
-query I
+statement error
 FROM sniff_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', delim = ',');
 ----
-CSV Sniffer: Sniffer detected value different than the user input for the Delimiter options
- Set: , Sniffed: |
+Set: , Sniffed: |
