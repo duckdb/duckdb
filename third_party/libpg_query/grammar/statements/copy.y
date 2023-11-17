@@ -46,15 +46,22 @@ CopyStmt:	COPY opt_binary qualified_name opt_column_list opt_oids
 
 					$$ = (PGNode *)n;
 				}
-			|  COPY FROM DATABASE ColId TO ColId
+			|  COPY FROM DATABASE ColId TO ColId copy_database_flag
     		{
 				PGCopyDatabaseStmt *n = makeNode(PGCopyDatabaseStmt);
 				n->from_database = $4;
 				n->to_database = $6;
+				n->copy_database_flag = $7;
 				$$ = (PGNode *)n;
 			}
 		;
 
+
+copy_database_flag:
+			/* empty */									{ $$ = NULL; }
+			| '(' SCHEMA ')'							{ $$ = "schema"; }
+			| '(' DATA_P ')'							{ $$ = "data"; }
+		;
 
 copy_from:
 			FROM									{ $$ = true; }

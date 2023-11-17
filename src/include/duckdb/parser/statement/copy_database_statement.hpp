@@ -14,15 +14,21 @@
 
 namespace duckdb {
 
+enum class CopyDatabaseType {
+	COPY_SCHEMA,
+	COPY_DATA
+};
+
 class CopyDatabaseStatement : public SQLStatement {
 public:
 	static constexpr const StatementType TYPE = StatementType::COPY_DATABASE_STATEMENT;
 
 public:
-	CopyDatabaseStatement(string from_database, string to_database);
+	CopyDatabaseStatement(string from_database, string to_database, CopyDatabaseType copy_type);
 
 	string from_database;
 	string to_database;
+	CopyDatabaseType copy_type;
 
 	string ToString() const override;
 

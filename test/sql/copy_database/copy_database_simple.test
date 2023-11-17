@@ -21,11 +21,6 @@ SELECT * FROM memory.test;
 ----
 42	88	hello
 
-statement error
-COPY FROM DATABASE db1 TO memory
-----
-table already exists
-
 # unrecognized database
 statement error
 COPY FROM DATABASE dbxx TO memory

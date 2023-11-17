@@ -2042,6 +2042,7 @@ typedef struct PGCopyDatabaseStmt {
 	PGNodeTag type;
 	const char *from_database;
 	const char *to_database;
+	const char *copy_database_flag;
 } PGCopyDatabaseStmt;
 
 /* ----------------------
