@@ -1545,6 +1545,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	}
 
 	DBConfig config(config_dict, read_only);
+	config.SetOptionByName("duckdb_api", "python");
 	auto res = FetchOrCreateInstance(database, config);
 	auto &client_context = *res->connection->context;
 	SetDefaultConfigArguments(client_context);

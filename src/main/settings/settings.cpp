@@ -1203,4 +1203,53 @@ Value FlushAllocatorSetting::GetSetting(ClientContext &context) {
 	return Value(StringUtil::BytesToHumanReadableString(config.options.allocator_flush_threshold));
 }
 
+//===--------------------------------------------------------------------===//
+// DuckDBApi Setting
+//===--------------------------------------------------------------------===//
+
+void DuckDBApiSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_value = input.GetValue<string>();
+	if (db) {
+		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
+	}
+	config.options.duckdb_api += " " + new_value;
+}
+
+void DuckDBApiSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (db) {
+		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
+	}
+	config.options.duckdb_api = DBConfig().options.duckdb_api;
+}
+
+Value DuckDBApiSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.duckdb_api);
+}
+
+//===--------------------------------------------------------------------===//
+// CustomUserAgent Setting
+//===--------------------------------------------------------------------===//
+
+void CustomUserAgentSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_value = input.GetValue<string>();
+	if (db) {
+		throw InvalidInputException("Cannot change custom_user_agent setting while database is running");
+	}
+	config.options.custom_user_agent =
+	    config.options.custom_user_agent.empty() ? new_value : config.options.custom_user_agent + " " + new_value;
+}
+
+void CustomUserAgentSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (db) {
+		throw InvalidInputException("Cannot change custom_user_agent setting while database is running");
+	}
+	config.options.custom_user_agent = DBConfig().options.custom_user_agent;
+}
+
+Value CustomUserAgentSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.custom_user_agent);
+}
+
 } // namespace duckdb

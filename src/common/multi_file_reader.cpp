@@ -102,7 +102,9 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<strin
 
 	unordered_map<string, column_t> column_map;
 	for (idx_t i = 0; i < get.column_ids.size(); i++) {
-		column_map.insert({get.names[get.column_ids[i]], i});
+		if (!IsRowIdColumnId(get.column_ids[i])) {
+			column_map.insert({get.names[get.column_ids[i]], i});
+		}
 	}
 
 	auto start_files = files.size();
@@ -432,7 +434,7 @@ void MultiFileReaderOptions::AutoDetectHiveTypesInternal(const string &file, Cli
 		}
 		Value value(part.second);
 		for (auto &candidate : candidates) {
-			const bool success = value.TryCastAs(context, candidate);
+			const bool success = value.TryCastAs(context, candidate, true);
 			if (success) {
 				hive_types_schema[name] = candidate;
 				break;
