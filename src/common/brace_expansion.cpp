@@ -39,20 +39,20 @@ bool BraceExpansion::has_brace_expansion(const string &pattern){
 
 vector<string> BraceExpansion::brace_expansion(const string &pattern){
     vector<std::string> result;
-    idx_t braceOpen = pattern.find('{');
-    idx_t braceClose = pattern.find('}');
+    idx_t firstBraceOpen  = pattern.find('{');
+    idx_t firstbraceClose = pattern.find('}');
 
-    if (braceOpen == string::npos || braceClose == string::npos) {
+    if (firstBraceOpen  == string::npos || firstbraceClose == string::npos) {
        throw InvalidInputException("Cannot find brace during brace expansion");
     }
 
-    string prefix =  pattern.substr(0, braceOpen);
-    string suffix =  pattern.substr(braceClose + 1);
-    string content = pattern.substr(braceOpen + 1, braceClose - braceOpen - 1);
+    string prefix =  pattern.substr(0, firstBraceOpen );
+    string suffix =  pattern.substr(firstbraceClose + 1);
+    string content = pattern.substr(firstBraceOpen  + 1, firstbraceClose - firstBraceOpen  - 1);
     std::stringstream contentStream(content);
 
     // FIXME happy path 
-    if (content.find("..") != string::npos) {
+    if(content.find("..") != string::npos){
         idx_t start, end;
         char dot;
         contentStream >> start >> dot >> dot >> end;
@@ -67,7 +67,15 @@ vector<string> BraceExpansion::brace_expansion(const string &pattern){
         }
     }
 
-     return result;
+    // Handle muilple brace expansion recursively
+    while(!result.empty() && has_brace_expansion(result.front())){
+        string pattern = result.front();
+        result.erase(result.begin());
+        vector<string> cartesian_product = brace_expansion(pattern);
+        result.insert(result.end(), cartesian_product.begin(), cartesian_product.end());
+    }
+
+    return result;
 }
 
 } // namespace duckdb
