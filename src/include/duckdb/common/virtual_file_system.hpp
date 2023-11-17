@@ -47,8 +47,8 @@ public:
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	               FileOpener *opener = nullptr) override;
 
+	FileType TryGetFileType(const std::string &path, optional_ptr<std::string> error) override;
 	void MoveFile(const string &source, const string &target) override;
-
 	bool FileExists(const string &filename) override;
 
 	bool IsPipe(const string &filename) override;

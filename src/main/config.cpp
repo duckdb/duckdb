@@ -256,14 +256,6 @@ void DBConfig::CheckLock(const string &name) {
 	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
 }
 
-bool FileExistsSafe(FileSystem &fs, const char *path) noexcept {
-	try {
-		return fs.FileExists(path);
-	} catch (const IOException &e) {
-		return false;
-	}
-}
-
 idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 	static constexpr const char *CPU_MAX = "/sys/fs/cgroup/cpu.max";
 	static constexpr const char *CFS_QUOTA = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us";
@@ -274,7 +266,7 @@ idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 	unique_ptr<FileHandle> handle;
 	int64_t read_bytes;
 
-	if (FileExistsSafe(fs, CPU_MAX)) {
+	if (fs.TryGetFileType(CPU_MAX) == FileType::FILE_TYPE_REGULAR) {
 		// cgroup v2
 		// https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html
 		handle =
@@ -284,7 +276,8 @@ idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 		if (std::sscanf(byte_buffer, "%" SCNd64 " %" SCNd64 "", &quota, &period) != 2) {
 			return physical_cores;
 		}
-	} else if (FileExistsSafe(fs, CFS_QUOTA) && FileExistsSafe(fs, CFS_PERIOD)) {
+	} else if (fs.TryGetFileType(CFS_QUOTA) == FileType::FILE_TYPE_REGULAR &&
+	           fs.TryGetFileType(CFS_PERIOD) == FileType::FILE_TYPE_REGULAR) {
 		// cgroup v1
 		// https://www.kernel.org/doc/html/latest/scheduler/sched-bwc.html#management
 

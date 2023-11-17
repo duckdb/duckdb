@@ -53,23 +53,7 @@ static void AssertValidFileFlags(uint8_t flags) {
 
 #ifndef _WIN32
 
-static FileType GetFileTypeWithAccessCheck(const std::string &filename) {
-	if (filename.empty()) {
-		return FileType::FILE_TYPE_INVALID;
-	}
-	if (access(filename.c_str(), 0) != 0) {
-		if (errno == ENOENT) {
-			return FileType::FILE_TYPE_INVALID;
-		}
-		throw IOException("Cannot access file \"%s\": %s", filename, strerror(errno));
-	}
-	struct stat s;
-	if (stat(filename.c_str(), &s) != 0) {
-		if (errno == ENOENT) {
-			return FileType::FILE_TYPE_INVALID;
-		}
-		throw IOException("Cannot stat file \"%s\": %s", filename, strerror(errno));
-	}
+static FileType GetFileTypeInternal(const struct stat &s) {
 	switch (s.st_mode & S_IFMT) {
 	case S_IFBLK:
 		return FileType::FILE_TYPE_BLOCKDEV;
@@ -90,12 +74,43 @@ static FileType GetFileTypeWithAccessCheck(const std::string &filename) {
 	}
 }
 
+FileType LocalFileSystem::GetFileTypeImpl(const std::string &path) {
+	optional_ptr<string> error;
+	auto type = TryGetFileType(path, error);
+	if (error) {
+		throw IOException(*error);
+	}
+	return type;
+}
+
+FileType LocalFileSystem::TryGetFileType(const std::string &path, optional_ptr<string> error) {
+	if (path.empty()) {
+		return FileType::FILE_TYPE_NOT_EXIST;
+	}
+	if (access(path.c_str(), 0) != 0) {
+		if (errno == ENOENT) {
+			return FileType::FILE_TYPE_NOT_EXIST;
+		}
+		error = make_uniq<string>(Exception::ConstructMessage("Cannot access path \"%s\": %s", path, strerror(errno)));
+		return FileType::FILE_TYPE_INVALID;
+	}
+	struct stat s;
+	if (stat(path.c_str(), &s) != 0) {
+		if (errno == ENOENT) {
+			return FileType::FILE_TYPE_NOT_EXIST;
+		}
+		error = make_uniq<string>(Exception::ConstructMessage("Cannot stat path \"%s\": %s", path, strerror(errno)));
+		return FileType::FILE_TYPE_INVALID;
+	}
+	return GetFileTypeInternal(s);
+}
+
 bool LocalFileSystem::FileExists(const string &filename) {
-	return GetFileTypeWithAccessCheck(filename) == FileType::FILE_TYPE_REGULAR;
+	return GetFileTypeImpl(filename) == FileType::FILE_TYPE_REGULAR;
 }
 
 bool LocalFileSystem::IsPipe(const string &filename) {
-	return GetFileTypeWithAccessCheck(filename) == FileType::FILE_TYPE_FIFO;
+	return GetFileTypeImpl(filename) == FileType::FILE_TYPE_FIFO;
 }
 
 #else
@@ -158,26 +173,12 @@ public:
 static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
+		if (errno == ENOENT) {
+			return FileType::FILE_TYPE_NOT_EXIST;
+		}
 		return FileType::FILE_TYPE_INVALID;
 	}
-	switch (s.st_mode & S_IFMT) {
-	case S_IFBLK:
-		return FileType::FILE_TYPE_BLOCKDEV;
-	case S_IFCHR:
-		return FileType::FILE_TYPE_CHARDEV;
-	case S_IFIFO:
-		return FileType::FILE_TYPE_FIFO;
-	case S_IFDIR:
-		return FileType::FILE_TYPE_DIR;
-	case S_IFLNK:
-		return FileType::FILE_TYPE_LINK;
-	case S_IFREG:
-		return FileType::FILE_TYPE_REGULAR;
-	case S_IFSOCK:
-		return FileType::FILE_TYPE_SOCKET;
-	default:
-		return FileType::FILE_TYPE_INVALID;
-	}
+	return GetFileTypeInternal(s);
 } // LCOV_EXCL_STOP
 
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
@@ -358,7 +359,7 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 }
 
 bool LocalFileSystem::DirectoryExists(const string &directory) {
-	return GetFileTypeWithAccessCheck(directory) == FileType::FILE_TYPE_DIR;
+	return GetFileTypeImpl(directory) == FileType::FILE_TYPE_DIR;
 }
 
 void LocalFileSystem::CreateDirectory(const string &directory) {

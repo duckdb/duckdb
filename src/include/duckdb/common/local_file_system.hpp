@@ -50,6 +50,8 @@ public:
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	               FileOpener *opener = nullptr) override;
+	//! Attempts to fetch the file type of the provided path. Will set error on unexpected errors
+	FileType TryGetFileType(const std::string &path, optional_ptr<string> error = nullptr) override;
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	void MoveFile(const string &source, const string &target) override;
@@ -94,6 +96,7 @@ private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);
 	idx_t GetFilePointer(FileHandle &handle);
+	FileType GetFileTypeImpl(const std::string &path);
 
 	vector<string> FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path);
 };

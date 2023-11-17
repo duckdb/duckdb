@@ -46,6 +46,8 @@ enum class FileType {
 	FILE_TYPE_CHARDEV,
 	//! Unknown or invalid file handle
 	FILE_TYPE_INVALID,
+	//! File does not exist
+	FILE_TYPE_NOT_EXIST,
 };
 
 struct FileHandle {
@@ -160,7 +162,8 @@ public:
 	DUCKDB_API virtual bool ListFiles(const string &directory,
 	                                  const std::function<void(const string &, bool)> &callback,
 	                                  FileOpener *opener = nullptr);
-
+	//! Attempts to fetch the file type of the provided path. Will set error on unexpected errors
+	DUCKDB_API virtual FileType TryGetFileType(const std::string &path, optional_ptr<string> error = nullptr);
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	DUCKDB_API virtual void MoveFile(const string &source, const string &target);

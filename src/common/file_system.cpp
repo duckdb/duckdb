@@ -319,6 +319,10 @@ FileType FileSystem::GetFileType(FileHandle &handle) {
 	return FileType::FILE_TYPE_INVALID;
 }
 
+FileType FileSystem::TryGetFileType(const std::string &path, optional_ptr<string> error) {
+	return FileType::FILE_TYPE_INVALID;
+}
+
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	throw NotImplementedException("%s: Truncate is not implemented!", GetName());
 }
