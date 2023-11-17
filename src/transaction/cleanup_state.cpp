@@ -5,7 +5,7 @@
 #include "duckdb/storage/data_table.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/catalog/dependency/dependency_manager.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"

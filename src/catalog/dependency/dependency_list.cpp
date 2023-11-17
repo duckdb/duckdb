@@ -1,4 +1,4 @@
-#include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/catalog/dependency/dependency_list.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
 

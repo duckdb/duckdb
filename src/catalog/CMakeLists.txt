@@ -1,5 +1,6 @@
 add_subdirectory(catalog_entry)
 add_subdirectory(default)
+add_subdirectory(dependency)
 
 if(${BUILD_CORE_FUNCTIONS_EXTENSION})
 
@@ -15,8 +16,6 @@ add_library_unity(
   catalog_set.cpp
   catalog_transaction.cpp
   duck_catalog.cpp
-  dependency_list.cpp
-  dependency_manager.cpp
   proxy_catalog_set.cpp
   similar_catalog_entry.cpp)
 set(ALL_OBJECT_FILES

@@ -3,7 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/catalog/dependency/dependency_list.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 
 #include <sstream>

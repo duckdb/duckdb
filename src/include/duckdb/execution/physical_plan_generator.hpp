@@ -13,7 +13,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
 #include "duckdb/planner/operator/logical_limit_percent.hpp"
-#include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/catalog/dependency/dependency_list.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 

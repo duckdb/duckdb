@@ -1,9 +1,9 @@
 #include "duckdb/catalog/catalog_entry/dependency_set_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/dependency_catalog_entry.hpp"
-#include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/catalog/dependency/dependency_list.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/catalog/dependency/dependency_manager.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 

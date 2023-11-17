@@ -1,7 +1,7 @@
 #include "duckdb/catalog/catalog_entry/dependency_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/dependency_set_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/catalog/dependency/dependency_manager.hpp"
 
 namespace duckdb {
 
