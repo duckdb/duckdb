@@ -2,7 +2,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types.hpp"
 
-static duckdb_value WrapValue(Value *list_value) {
+static duckdb_value WrapValue(duckdb::Value *list_value) {
 	return reinterpret_cast<duckdb_value>(list_value);
 }
 
