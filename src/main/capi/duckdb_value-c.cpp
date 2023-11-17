@@ -6,16 +6,16 @@ static duckdb_value WrapValue(duckdb::Value *list_value) {
 	return reinterpret_cast<duckdb_value>(list_value);
 }
 
-static LogicalType &UnwrapType(duckdb_logical_type type) {
+static duckdb::LogicalType &UnwrapType(duckdb_logical_type type) {
 	return *(reinterpret_cast<duckdb::LogicalType *>(type));
 }
 
-static Value &UnwrapValue(duckdb_value value) {
+static duckdb::Value &UnwrapValue(duckdb_value value) {
 	return *(reinterpret_cast<duckdb::Value *>(value));
 }
 void duckdb_destroy_value(duckdb_value *value) {
 	if (value && *value) {
-		Value &unwrap_value = UnwrapValue(*value);
+		auto &unwrap_value = UnwrapValue(*value);
 		delete &unwrap_value;
 		*value = nullptr;
 	}
@@ -63,7 +63,7 @@ duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *
 	}
 	auto count = duckdb::StructType::GetChildCount(ltype);
 
-	duckdb::vector<Value> unwrapped_values;
+	duckdb::vector<duckdb::Value> unwrapped_values;
 	for (idx_t i = 0; i < count; i++) {
 		auto value = values[i];
 		if (!value) {
@@ -85,7 +85,7 @@ duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *va
 		return nullptr;
 	}
 	auto &ltype = UnwrapType(type);
-	duckdb::vector<Value> unwrapped_values;
+	duckdb::vector<duckdb::Value> unwrapped_values;
 
 	for (idx_t i = 0; i < value_count; i++) {
 		auto value = values[i];
