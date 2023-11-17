@@ -15,7 +15,6 @@ struct CSVSniffFunctionData : public TableFunctionData {
 	CSVSniffFunctionData() {
 	}
 	string path;
-	int64_t sample_size = 20480;
 	// The CSV reader options
 	CSVReaderOptions options;
 	// Return Types of CSV (If given by the user)
@@ -77,7 +76,14 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 }
 
 string NewLineIdentifierToString(NewLineIdentifier identifier) {
-	return "";
+	switch (identifier) {
+	case NewLineIdentifier::SINGLE:
+		return "\\n";
+	case NewLineIdentifier::CARRY_ON:
+		return "\\r\\n";
+	default:
+		return "";
+	}
 }
 
 string FormatOptions(char opt) {
@@ -125,7 +131,8 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	// 5. Skip Rows
 	output.SetValue(4, 0, Value::UINTEGER(sniffer_options.dialect_options.skip_rows.GetValue()));
 	// 6. Has Header
-	output.SetValue(5, 0, Value::BOOLEAN(sniffer_options.dialect_options.header.GetValue()));
+	auto has_header = Value::BOOLEAN(sniffer_options.dialect_options.header.GetValue()).ToString();
+	output.SetValue(5, 0, has_header);
 	// 7. List<Struct<Column-Name:Types>> {'col1': 'INTEGER', 'col2': 'VARCHAR'}
 	std::ostringstream columns;
 	columns << "{";
@@ -138,11 +145,20 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	columns << "}";
 	output.SetValue(6, 0, columns.str());
 	// 8. Date Format
-	output.SetValue(7, 0, sniffer_options.dialect_options.date_format[LogicalType::DATE].GetValue().format_specifier);
+	auto date_format = sniffer_options.dialect_options.date_format[LogicalType::DATE].GetValue();
+	if (!date_format.Empty()) {
+		output.SetValue(7, 0, date_format.format_specifier);
+	} else {
+		output.SetValue(7, 0, Value(nullptr));
+	}
 
 	// 9. Timestamp Format
-	output.SetValue(8, 0,
-	                sniffer_options.dialect_options.date_format[LogicalType::TIMESTAMP].GetValue().format_specifier);
+	auto timestamp_format = sniffer_options.dialect_options.date_format[LogicalType::TIMESTAMP].GetValue();
+	if (!timestamp_format.Empty()) {
+		output.SetValue(8, 0, timestamp_format.format_specifier);
+	} else {
+		output.SetValue(8, 0, Value(nullptr));
+	}
 
 	// 10. The Extra User Arguments
 	if (data.options.user_defined_parameters.empty()) {
@@ -187,7 +203,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 	// 11.6. Has Header
 	if (!sniffer_options.dialect_options.header.IsSetByUser()) {
-		csv_read << "header=" << sniffer_options.dialect_options.header.GetValue() << separator;
+		csv_read << "header=" << has_header << separator;
 	}
 	// 11.7. column={'col1': 'INTEGER', 'col2': 'VARCHAR'}
 	csv_read << "columns=" << columns.str();
@@ -207,6 +223,11 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 			         << "'"
 			         << sniffer_options.dialect_options.date_format[LogicalType::TIMESTAMP].GetValue().format_specifier
 			         << "'";
+		}
+
+		// 11.10 User Arguments
+		if (!data.options.user_defined_parameters.empty()) {
+			csv_read << separator << data.options.user_defined_parameters;
 		}
 	}
 	csv_read << ");";
