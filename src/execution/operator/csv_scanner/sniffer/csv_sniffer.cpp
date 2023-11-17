@@ -46,8 +46,8 @@ void MatchAndReplace(CSVOption<T> &original, CSVOption<T> &sniffed, string name)
 		// We verify that the user input matches the sniffed value
 		if (original != sniffed) {
 			throw InvalidInputException(
-			    "CSV Sniffer: Sniffer detected value different than the user input for the %s options",
-			    std::move(name));
+			    "CSV Sniffer: Sniffer detected value different than the user input for the %s options \n Set: %s Sniffed: %s",
+			    std::move(name),original.FormatValue(), sniffed.FormatValue());
 		}
 	} else {
 		// We replace the value of original with the sniffed value

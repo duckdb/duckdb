@@ -1,0 +1,16 @@
+# name: test/sql/copy/csv/test_sniff_csv_options.test
+# description: Test sniff_csv function with user set options
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# requires notwindows because tests will return \r\n to be used in the parameters
+require notwindows
+
+# Test user giving wrong option
+query I
+FROM sniff_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', delim = ',');
+----
+CSV Sniffer: Sniffer detected value different than the user input for the Delimiter options
+ Set: , Sniffed: |

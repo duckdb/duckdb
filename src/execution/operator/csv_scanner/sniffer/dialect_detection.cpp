@@ -92,44 +92,31 @@ void CSVSniffer::GenerateCandidateDetectionSearchSpace(vector<char> &delim_candi
                                                        vector<QuoteRule> &quoterule_candidates,
                                                        unordered_map<uint8_t, vector<char>> &quote_candidates_map,
                                                        unordered_map<uint8_t, vector<char>> &escape_candidates_map) {
+	delim_candidates = {',', '|', ';', '\t'};
 	if (options.dialect_options.state_machine_options.delimiter.IsSetByUser()) {
-		// user provided a delimiter: use that delimiter
-		delim_candidates = {options.dialect_options.state_machine_options.delimiter.GetValue()};
-	} else {
-		// no delimiter provided: try standard/common delimiters
-		delim_candidates = {',', '|', ';', '\t'};
+		// user provided a delimiter: add that delimiter to the search space
+		delim_candidates.push_back(options.dialect_options.state_machine_options.delimiter.GetValue());
 	}
+	quote_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {'\"'};
+	quote_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER] = {'\"', '\''};
+	quote_candidates_map[(uint8_t)QuoteRule::NO_QUOTES] = {'\0'};
 	if (options.dialect_options.state_machine_options.quote.IsSetByUser()) {
-		// user provided quote: use that quote rule
-		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {
-		    options.dialect_options.state_machine_options.quote.GetValue()};
-		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER] = {
-		    options.dialect_options.state_machine_options.quote.GetValue()};
-		quote_candidates_map[(uint8_t)QuoteRule::NO_QUOTES] = {
-		    options.dialect_options.state_machine_options.quote.GetValue()};
+		// user provided quote: add them to the quote rule search space
+		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC].emplace_back(options.dialect_options.state_machine_options.quote.GetValue());
+		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER].emplace_back(options.dialect_options.state_machine_options.quote.GetValue());
+		quote_candidates_map[(uint8_t)QuoteRule::NO_QUOTES].emplace_back(options.dialect_options.state_machine_options.quote.GetValue());
 		// also add it as a escape rule
 		if (!IsQuoteDefault(options.dialect_options.state_machine_options.quote.GetValue())) {
 			escape_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC].emplace_back(
 			    options.dialect_options.state_machine_options.quote.GetValue());
 		}
-	} else {
-		// no quote rule provided: use standard/common quotes
-		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {'\"'};
-		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER] = {'\"', '\''};
-		quote_candidates_map[(uint8_t)QuoteRule::NO_QUOTES] = {'\0'};
 	}
+	quoterule_candidates = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
+
 	if (options.dialect_options.state_machine_options.escape.IsSetByUser()) {
-		// user provided escape: use that escape rule
-		if (options.dialect_options.state_machine_options.escape == '\0') {
-			quoterule_candidates = {QuoteRule::QUOTES_RFC};
-		} else {
-			quoterule_candidates = {QuoteRule::QUOTES_OTHER};
-		}
+		// user provided escape: : add that escape to the search space
 		escape_candidates_map[(uint8_t)quoterule_candidates[0]] = {
 		    options.dialect_options.state_machine_options.escape.GetValue()};
-	} else {
-		// no escape provided: try standard/common escapes
-		quoterule_candidates = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
 	}
 }
 

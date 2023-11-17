@@ -62,6 +62,19 @@ FROM read_csv('test/sql/copy/csv/data/test/dateformat.csv', auto_detect=false, d
 ----
 2019-06-05
 
+
+query IIIIIIIIIII
+FROM sniff_csv('test/sql/copy/csv/data/auto/time_date_timestamp_yyyy.mm.dd.csv')
+----
+,	"	"	\n	0	1	{'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}	%Y.%m.%d	%Y.%m.%d %H:%M:%S	NULL	FROM read_csv('test/sql/copy/csv/data/auto/time_date_timestamp_yyyy.mm.dd.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}, dateformat='%Y.%m.%d', timestampformat='%Y.%m.%d %H:%M:%S');
+
+query IIIII
+FROM read_csv('test/sql/copy/csv/data/auto/time_date_timestamp_yyyy.mm.dd.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}, dateformat='%Y.%m.%d', timestampformat='%Y.%m.%d %H:%M:%S');
+----
+123	TEST2	12:12:12	2000-01-01	2000-01-01 12:12:00
+345	TEST2	14:15:30	2002-02-02	2002-02-02 14:15:00
+346	TEST2	15:16:17	2004-12-13	2004-12-13 15:16:00
+
 # Test with dirty rows
 query IIIIIIIIIII
 FROM sniff_csv('data/csv/inconsistent_cells.csv')
