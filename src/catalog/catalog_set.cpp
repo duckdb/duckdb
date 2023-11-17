@@ -256,10 +256,21 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 				throw CatalogException(rename_err_msg, original_name, value->name);
 			}
 		}
-		DropEntryInternal(transaction, original_name, false, CatalogType::RENAMED_ENTRY);
 		static const DependencyList EMPTY_DEPENDENCIES;
+
 		read_lock.unlock();
 		write_lock.unlock();
+
+		// Add a RENAMED_ENTRY before adding a DELETED_ENTRY, this makes it so that when this is committed
+		// we know that this was not a DROP statement.
+		auto renamed_tombstone =
+		    make_uniq<InCatalogEntry>(CatalogType::RENAMED_ENTRY, value->ParentCatalog(), original_name);
+		renamed_tombstone->timestamp = transaction.transaction_id;
+		renamed_tombstone->deleted = false;
+		renamed_tombstone->set = this;
+
+		// The 'renamed node' + 'value' get put into a different catalog entry chain
+		CreateEntry(transaction, original_name, std::move(renamed_tombstone), EMPTY_DEPENDENCIES);
 
 		// Create a dummy renamed entry for this entry
 		// so in the cleanup/commit/rollback state we can identify that this was a rename
@@ -272,6 +283,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 		CreateEntry(transaction, value->name, std::move(renamed_node), EMPTY_DEPENDENCIES);
 		write_lock.lock();
 		read_lock.lock();
+		DropEntryInternal(transaction, original_name, false);
 	}
 	map.UpdateEntry(std::move(value));
 
@@ -316,8 +328,7 @@ bool CatalogSet::DropDependencies(CatalogTransaction transaction, const string &
 	return true;
 }
 
-bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const string &name, bool allow_drop_internal,
-                                   CatalogType tombstone_type) {
+bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const string &name, bool allow_drop_internal) {
 	// lock the catalog for writing
 	// we can only delete an entry that exists
 	auto entry = GetEntryInternal(transaction, name);
@@ -331,7 +342,7 @@ bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const string 
 	// create a new tombstone entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
 	// and point it at the tombstone node
-	auto value = make_uniq<InCatalogEntry>(tombstone_type, entry->ParentCatalog(), entry->name);
+	auto value = make_uniq<InCatalogEntry>(CatalogType::DELETED_ENTRY, entry->ParentCatalog(), entry->name);
 	value->timestamp = transaction.transaction_id;
 	value->set = this;
 	value->deleted = true;

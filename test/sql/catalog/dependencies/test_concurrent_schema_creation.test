@@ -1,0 +1,24 @@
+# name: test/sql/catalog/dependencies/test_concurrent_schema_creation.test
+# description: Test concurrent alter and rename of tables
+# group: [dependencies]
+
+require skip_reload
+
+concurrentloop i 0 100
+
+statement ok
+create schema schema${i};
+
+statement ok
+create table schema${i}.tbl${i} (a integer);
+
+statement error
+drop schema schema${i};
+
+statement ok
+insert into schema${i}.tbl${i} VALUES(1);
+
+statement ok
+drop table schema${i}.tbl${i};
+
+endloop

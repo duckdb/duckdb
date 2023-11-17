@@ -136,8 +136,7 @@ private:
 	optional_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const string &name,
 	                                              unique_lock<mutex> &lock);
 
-	bool DropEntryInternal(CatalogTransaction transaction, const string &name, bool allow_drop_internal = false,
-	                       CatalogType tombstone_type = CatalogType::DELETED_ENTRY);
+	bool DropEntryInternal(CatalogTransaction transaction, const string &name, bool allow_drop_internal = false);
 
 private:
 	DuckCatalog &catalog;
