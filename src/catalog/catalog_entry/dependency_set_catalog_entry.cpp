@@ -70,32 +70,6 @@ const string &DependencySetCatalogEntry::EntryName() const {
 	return entry_name;
 }
 
-//// Add from a Dependency Set
-// void DependencySetCatalogEntry::AddDependencies(CatalogTransaction transaction, const dependency_set_t &to_add) {
-//	for (auto &dep : to_add) {
-//		auto &entry = dep.entry;
-//		AddDependency(transaction, entry, dep.dependency_type);
-//	}
-//}
-// void DependencySetCatalogEntry::AddDependents(CatalogTransaction transaction, const dependency_set_t &to_add) {
-//	for (auto &dep : to_add) {
-//		auto &entry = dep.entry;
-//		AddDependent(transaction, entry, dep.dependency_type);
-//	}
-//}
-
-//// Add from a DependencyList
-// void DependencySetCatalogEntry::AddDependencies(CatalogTransaction transaction, const DependencyList &to_add) {
-//	for (auto &entry : to_add.set) {
-//		AddDependency(transaction, entry);
-//	}
-//}
-// void DependencySetCatalogEntry::AddDependents(CatalogTransaction transaction, const DependencyList &to_add) {
-//	for (auto &entry : to_add.set) {
-//		AddDependent(transaction, entry);
-//	}
-//}
-
 void DependencySetCatalogEntry::VerifyDependencyName(const string &name) {
 #ifdef DEBUG
 	idx_t pos = 0;
@@ -107,10 +81,6 @@ void DependencySetCatalogEntry::VerifyDependencyName(const string &name) {
 		parts.push_back(part);
 	}
 	D_ASSERT(parts.size() == 3);
-
-	// D_ASSERT(!StringUtil::CIEquals(parts[0], CatalogTypeToString(entry_type)));
-	// D_ASSERT(!StringUtil::CIEquals(parts[1], schema));
-	// D_ASSERT(!StringUtil::CIEquals(parts[2], entry_name));
 	D_ASSERT(!StringUtil::CIEquals(name, this->name));
 #endif
 }
