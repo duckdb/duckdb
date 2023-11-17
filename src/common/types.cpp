@@ -647,6 +647,13 @@ static LogicalType CombineNumericTypes(const LogicalType &left, const LogicalTyp
 }
 
 LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
+	// We prefer not using the NULL type
+	if (left.id() == LogicalTypeId::SQLNULL) {
+		return right;
+	} else if (right.id() == LogicalTypeId::SQLNULL) {
+		return left;
+	}
+
 	// If either side is JSON, pick the other side, since each more specific type is
 	// more performant than JSON.
 	if (left.IsJSONType()) {
