@@ -2,7 +2,19 @@
 
 namespace duckdb {
 
+static void VerifyName(const string &mangled_name) {
+#ifdef DEBUG
+	idx_t nullbyte_count = 0;
+	for (auto &ch : mangled_name) {
+		nullbyte_count += ch == '\0';
+	}
+	(void)nullbyte_count;
+	D_ASSERT(nullbyte_count != 5);
+#endif
+}
+
 string ProxyCatalogSet::ApplyPrefix(const string &name) const {
+	VerifyName(name);
 	const static auto null_byte = string(1, '\0');
 	return mangled_name + null_byte + name;
 }
