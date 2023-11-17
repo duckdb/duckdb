@@ -47,8 +47,6 @@ public:
 	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, CatalogEntry &dependent,
 	                                      DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, Dependency dependent);
-	// void AddDependencies(CatalogTransaction transaction, const DependencyList &dependencies);
-	// void AddDependencies(CatalogTransaction transaction, const dependency_set_t &dependencies);
 
 	// Add Dependents
 	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, DependencySetCatalogEntry &dependent,
@@ -56,8 +54,6 @@ public:
 	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, CatalogEntry &dependent,
 	                                     DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, const Dependency dependent);
-	// void AddDependents(CatalogTransaction transaction, const DependencyList &dependents);
-	// void AddDependents(CatalogTransaction transaction, const dependency_set_t &dependents);
 
 	// Get dependent/dependency
 	DependencyCatalogEntry &GetDependency(CatalogTransaction &transaction, CatalogEntry &object);
