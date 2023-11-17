@@ -304,7 +304,8 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		auto &entry = object.entry.get();
 		auto other_dependency_set = GetDependencySet(transaction, entry);
 
-		other_dependency_set.AddDependent(transaction, new_obj, DependencyType::DEPENDENCY_OWNED_BY).CompleteLink(transaction);
+		other_dependency_set.AddDependent(transaction, new_obj, DependencyType::DEPENDENCY_OWNED_BY)
+		    .CompleteLink(transaction);
 		dependency_set.AddDependent(transaction, entry, DependencyType::DEPENDENCY_OWNS).CompleteLink(transaction);
 	}
 }
@@ -373,7 +374,8 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 			                          ". Cannot have circular dependencies");
 		}
 	});
-	entry_dependency_set.AddDependent(transaction, owner, DependencyType::DEPENDENCY_OWNED_BY).CompleteLink(transaction);
+	entry_dependency_set.AddDependent(transaction, owner, DependencyType::DEPENDENCY_OWNED_BY)
+	    .CompleteLink(transaction);
 	owner_dependency_set.AddDependent(transaction, entry, DependencyType::DEPENDENCY_OWNS).CompleteLink(transaction);
 }
 

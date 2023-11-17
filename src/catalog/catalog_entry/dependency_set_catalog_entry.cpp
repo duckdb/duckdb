@@ -33,9 +33,12 @@ DependencyManager &DependencySetCatalogEntry::Manager() {
 
 void DependencySetCatalogEntry::ScanSetInternal(CatalogTransaction transaction, bool dependencies,
                                                 dependency_callback_t &callback) {
+	catalog_entry_set_t other_entries;
 	auto cb = [&](CatalogEntry &other) {
 		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
 		auto &other_entry = other.Cast<DependencyCatalogEntry>();
+
+		other_entries.insert(other_entry);
 		callback(other_entry);
 	};
 
@@ -44,6 +47,23 @@ void DependencySetCatalogEntry::ScanSetInternal(CatalogTransaction transaction, 
 	} else {
 		this->dependents.Scan(transaction, cb);
 	}
+
+#ifdef DEBUG
+	// Verify some invariants
+	// Every dependency should have a matching dependent in the other set
+	// And vice versa
+	if (dependencies) {
+		for (auto &entry : other_entries) {
+			auto dependency_set = dependency_manager.GetDependencySet(transaction, entry);
+			D_ASSERT(dependency_set.IsDependencyOf(transaction, *this));
+		}
+	} else {
+		for (auto &entry : other_entries) {
+			auto dependency_set = dependency_manager.GetDependencySet(transaction, entry);
+			D_ASSERT(dependency_set.HasDependencyOn(transaction, *this));
+		}
+	}
+#endif
 }
 
 void DependencySetCatalogEntry::ScanDependents(CatalogTransaction transaction, dependency_callback_t &callback) {
