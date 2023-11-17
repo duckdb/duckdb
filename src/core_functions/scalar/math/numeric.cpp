@@ -817,6 +817,29 @@ ScalarFunction Log10Fun::GetFunction() {
 }
 
 //===--------------------------------------------------------------------===//
+// log with base
+//===--------------------------------------------------------------------===//
+struct LogBaseOperator {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA b, TB x) {
+		auto divisor = Log10Operator::Operation<TA, TR>(b);
+		if (divisor == 0) {
+			throw OutOfRangeException("divison by zero in based logarithm");
+		}
+		return Log10Operator::Operation<TB, TR>(x) / divisor;
+	}
+};
+
+ScalarFunctionSet LogFun::GetFunctions() {
+	ScalarFunctionSet funcs;
+	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                                 ScalarFunction::UnaryFunction<double, double, Log10Operator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                                 ScalarFunction::BinaryFunction<double, double, double, LogBaseOperator>));
+	return funcs;
+}
+
+//===--------------------------------------------------------------------===//
 // log2
 //===--------------------------------------------------------------------===//
 struct Log2Operator {

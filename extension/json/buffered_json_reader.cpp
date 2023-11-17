@@ -23,7 +23,7 @@ bool JSONFileHandle::IsOpen() const {
 }
 
 void JSONFileHandle::Close() {
-	if (IsOpen() && file_handle->OnDiskFile()) {
+	if (IsOpen() && !file_handle->IsPipe()) {
 		file_handle->Close();
 		file_handle = nullptr;
 	}
@@ -72,30 +72,23 @@ void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position, b
 	D_ASSERT(size != 0);
 	if (plain_file_source) {
 		file_handle->Read(pointer, size, position);
-		actual_reads++;
-
-		return;
-	}
-
-	if (sample_run) { // Cache the buffer
+	} else if (sample_run) { // Cache the buffer
 		file_handle->Read(pointer, size, position);
-		actual_reads++;
 
 		cached_buffers.emplace_back(allocator.Allocate(size));
 		memcpy(cached_buffers.back().get(), pointer, size);
 		cached_size += size;
+	} else {
+		if (!cached_buffers.empty() || position < cached_size) {
+			ReadFromCache(pointer, size, position);
+		}
 
-		return;
+		if (size != 0) {
+			file_handle->Read(pointer, size, position);
+		}
 	}
-
-	if (!cached_buffers.empty() || position < cached_size) {
-		ReadFromCache(pointer, size, position);
-		actual_reads++;
-	}
-
-	if (size != 0) {
-		file_handle->Read(pointer, size, position);
-		actual_reads++;
+	if (++actual_reads > requested_reads) {
+		throw InternalException("JSONFileHandle performed more actual reads than requested reads");
 	}
 }
 

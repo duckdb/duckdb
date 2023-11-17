@@ -192,9 +192,15 @@
         "parameters": "x",
         "description": "Computes the 10-log of x",
         "example": "log10(1000)",
-        "type": "scalar_function",
-        "aliases": ["log"]
+        "type": "scalar_function"
     },
+    {
+        "name": "log",
+        "parameters": "b, x",
+        "description": "Computes the logarithm of x to base b. b may be omitted, in which case the default 10",
+        "example": "log(2, 64)",
+        "type": "scalar_function_set"
+     },
     {
         "name": "nextafter",
         "parameters": "x, y",
