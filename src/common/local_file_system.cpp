@@ -74,15 +74,6 @@ static FileType GetFileTypeInternal(const struct stat &s) {
 	}
 }
 
-FileType LocalFileSystem::GetFileTypeImpl(const std::string &path) {
-	optional_ptr<string> error;
-	auto type = TryGetFileType(path, error);
-	if (error) {
-		throw IOException(*error);
-	}
-	return type;
-}
-
 FileType LocalFileSystem::TryGetFileType(const std::string &path, optional_ptr<string> error) {
 	if (path.empty()) {
 		return FileType::FILE_TYPE_NOT_EXIST;
@@ -105,38 +96,37 @@ FileType LocalFileSystem::TryGetFileType(const std::string &path, optional_ptr<s
 	return GetFileTypeInternal(s);
 }
 
-bool LocalFileSystem::FileExists(const string &filename) {
-	return GetFileTypeImpl(filename) == FileType::FILE_TYPE_REGULAR;
-}
-
-bool LocalFileSystem::IsPipe(const string &filename) {
-	return GetFileTypeImpl(filename) == FileType::FILE_TYPE_FIFO;
-}
-
 #else
-bool LocalFileSystem::FileExists(const string &filename) {
-	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
-	const wchar_t *wpath = unicode_path.c_str();
-	if (_waccess(wpath, 0) == 0) {
-		struct _stati64 status;
-		_wstati64(wpath, &status);
-		if (status.st_mode & S_IFREG) {
-			return true;
-		}
+static FileType GetFileTypeInternal(const struct _stati64 &s) {
+	switch (s.st_mode & S_IFMT) {
+	case S_IFBLK:
+		return FileType::FILE_TYPE_BLOCKDEV;
+	case S_IFCHR:
+		return FileType::FILE_TYPE_CHARDEV;
+	case S_IFIFO:
+		return FileType::FILE_TYPE_FIFO;
+	case S_IFDIR:
+		return FileType::FILE_TYPE_DIR;
+	case S_IFLNK:
+		return FileType::FILE_TYPE_LINK;
+	case S_IFREG:
+		return FileType::FILE_TYPE_REGULAR;
+	case S_IFSOCK:
+		return FileType::FILE_TYPE_SOCKET;
+	default:
+		return FileType::FILE_TYPE_INVALID;
 	}
-	return false;
 }
-bool LocalFileSystem::IsPipe(const string &filename) {
+FileType LocalFileSystem::TryGetFileType(const std::string &path, optional_ptr<string> error) {
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
 	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
 		struct _stati64 status;
 		_wstati64(wpath, &status);
-		if (status.st_mode & _S_IFCHR) {
-			return true;
-		}
+		return GetFileTypeInternal(status);
 	}
-	return false;
+	// TODO: Better error handling here
+	return FileType::FILE_TYPE_INVALID;
 }
 #endif
 
@@ -150,6 +140,27 @@ bool LocalFileSystem::IsPipe(const string &filename) {
 #ifndef O_DIRECT
 #define O_DIRECT 0
 #endif
+
+FileType LocalFileSystem::GetFileTypeImpl(const std::string &path) {
+	optional_ptr<string> error;
+	auto type = TryGetFileType(path, error);
+	if (error) {
+		throw IOException(*error);
+	}
+	return type;
+}
+
+bool LocalFileSystem::FileExists(const string &filename) {
+	return GetFileTypeImpl(filename) == FileType::FILE_TYPE_REGULAR;
+}
+
+bool LocalFileSystem::IsPipe(const string &filename) {
+	return GetFileTypeImpl(filename) == FileType::FILE_TYPE_FIFO;
+}
+
+bool LocalFileSystem::DirectoryExists(const string &directory) {
+	return GetFileTypeImpl(directory) == FileType::FILE_TYPE_DIR;
+}
 
 struct UnixFileHandle : public FileHandle {
 public:
@@ -356,10 +367,6 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	if (ftruncate(fd, new_size) != 0) {
 		throw IOException("Could not truncate file \"%s\": %s", handle.path, strerror(errno));
 	}
-}
-
-bool LocalFileSystem::DirectoryExists(const string &directory) {
-	return GetFileTypeImpl(directory) == FileType::FILE_TYPE_DIR;
 }
 
 void LocalFileSystem::CreateDirectory(const string &directory) {
@@ -704,11 +711,6 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 static DWORD WindowsGetFileAttributes(const string &filename) {
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
 	return GetFileAttributesW(unicode_path.c_str());
-}
-
-bool LocalFileSystem::DirectoryExists(const string &directory) {
-	DWORD attrs = WindowsGetFileAttributes(directory);
-	return (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
 }
 
 void LocalFileSystem::CreateDirectory(const string &directory) {
