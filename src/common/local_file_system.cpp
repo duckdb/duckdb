@@ -74,7 +74,7 @@ static FileType GetFileTypeInternal(const struct stat &s) {
 	}
 }
 
-FileType LocalFileSystem::TryGetFileType(const std::string &path, optional_ptr<string> error) {
+FileType LocalFileSystem::TryGetFileType(const string &path, string *error) {
 	if (path.empty()) {
 		return FileType::FILE_TYPE_NOT_EXIST;
 	}
@@ -82,7 +82,9 @@ FileType LocalFileSystem::TryGetFileType(const std::string &path, optional_ptr<s
 		if (errno == ENOENT) {
 			return FileType::FILE_TYPE_NOT_EXIST;
 		}
-		error = make_uniq<string>(Exception::ConstructMessage("Cannot access path \"%s\": %s", path, strerror(errno)));
+		if (error) {
+			*error = Exception::ConstructMessage("Cannot access path \"%s\": %s", path, strerror(errno));
+		}
 		return FileType::FILE_TYPE_INVALID;
 	}
 	struct stat s;
@@ -90,7 +92,9 @@ FileType LocalFileSystem::TryGetFileType(const std::string &path, optional_ptr<s
 		if (errno == ENOENT) {
 			return FileType::FILE_TYPE_NOT_EXIST;
 		}
-		error = make_uniq<string>(Exception::ConstructMessage("Cannot stat path \"%s\": %s", path, strerror(errno)));
+		if (error) {
+			*error = Exception::ConstructMessage("Cannot stat path \"%s\": %s", path, strerror(errno));
+		}
 		return FileType::FILE_TYPE_INVALID;
 	}
 	return GetFileTypeInternal(s);
@@ -431,6 +435,11 @@ std::string LocalFileSystem::GetLastErrorAsString() {
 	return string();
 }
 
+// Linux pipes are of type FIFO
+bool LocalFileSystem::IsPipe(const string &filename) {
+	return GetFileTypeImpl(filename) == FileType::FILE_TYPE_FIFO;
+}
+
 #else
 
 constexpr char PIPE_PREFIX[] = "\\\\.\\pipe\\";
@@ -659,18 +668,32 @@ static DWORD WindowsGetFileAttributes(const string &filename) {
 	return GetFileAttributesW(unicode_path.c_str());
 }
 
-FileType LocalFileSystem::TryGetFileType(const std::string &path, optional_ptr<string> error) {
+FileType LocalFileSystem::TryGetFileType(const std::string &path, string * /*error*/) {
 	// pipes in windows are just files in '\\.\pipe\' folder
 	if (strncmp(path.c_str(), PIPE_PREFIX, strlen(PIPE_PREFIX)) == 0) {
 		return FileType::FILE_TYPE_FIFO;
 	}
-	DWORD attrs = WindowsGetFileAttributes(path.c_str());
-	if (attrs != INVALID_FILE_ATTRIBUTES) {
-		if (attrs & FILE_ATTRIBUTE_DIRECTORY) {
-			return FileType::FILE_TYPE_DIR;
-		} else {
-			return FileType::FILE_TYPE_REGULAR;
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(path.c_str());
+	const wchar_t *wpath = unicode_path.c_str();
+	if (_waccess(wpath, 0) == 0) {
+		struct _stati64 status;
+		if (_wstati64(wpath, &status) == 0) {
+			switch (status.st_mode & S_IFMT) {
+			case S_IFCHR:
+				return FileType::FILE_TYPE_CHARDEV;
+			case S_IFDIR:
+				return FileType::FILE_TYPE_DIR;
+			case S_IFREG:
+				return FileType::FILE_TYPE_REGULAR;
+			default:
+				return FileType::FILE_TYPE_INVALID;
+			}
 		}
+	}
+	// _waccess or _wstati64 returned an error if we hit this point.
+	// Check if the error is due to the file not existing
+	if (errno == ENOENT) {
+		return FileType::FILE_TYPE_NOT_EXIST;
 	}
 	return FileType::FILE_TYPE_INVALID;
 }
@@ -765,23 +788,24 @@ void LocalFileSystem::MoveFile(const string &source, const string &target) {
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 	return TryGetFileType(handle.Cast<WindowsFileHandle>().path);
 }
+
+// Window pipes are of type CHARDEV
+bool LocalFileSystem::IsPipe(const string &filename) {
+	return GetFileTypeImpl(filename) == FileType::FILE_TYPE_CHARDEV;
+}
 #endif
 
 FileType LocalFileSystem::GetFileTypeImpl(const std::string &path) {
-	optional_ptr<string> error;
-	auto type = TryGetFileType(path, error);
-	if (error) {
-		throw IOException(*error);
+	std::string error;
+	auto type = TryGetFileType(path, &error);
+	if (!error.empty()) {
+		throw IOException(error);
 	}
 	return type;
 }
 
 bool LocalFileSystem::FileExists(const string &filename) {
 	return GetFileTypeImpl(filename) == FileType::FILE_TYPE_REGULAR;
-}
-
-bool LocalFileSystem::IsPipe(const string &filename) {
-	return GetFileTypeImpl(filename) == FileType::FILE_TYPE_FIFO;
 }
 
 bool LocalFileSystem::DirectoryExists(const string &directory) {

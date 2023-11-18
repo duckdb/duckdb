@@ -163,7 +163,7 @@ public:
 	                                  const std::function<void(const string &, bool)> &callback,
 	                                  FileOpener *opener = nullptr);
 	//! Attempts to fetch the file type of the provided path. Will set error on unexpected errors
-	DUCKDB_API virtual FileType TryGetFileType(const std::string &path, optional_ptr<string> error = nullptr);
+	DUCKDB_API virtual FileType TryGetFileType(const std::string &path, string *error = nullptr);
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	DUCKDB_API virtual void MoveFile(const string &source, const string &target);

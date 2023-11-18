@@ -93,7 +93,7 @@ bool VirtualFileSystem::ListFiles(const string &directory, const std::function<v
 	return FindFileSystem(directory).ListFiles(directory, callback, opener);
 }
 
-FileType VirtualFileSystem::TryGetFileType(const std::string &path, optional_ptr<std::string> error) {
+FileType VirtualFileSystem::TryGetFileType(const std::string &path, string *error) {
 	return FindFileSystem(path).TryGetFileType(path, error);
 }
 
