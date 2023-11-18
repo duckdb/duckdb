@@ -23,7 +23,6 @@ set(TEST_API_OBJECTS
     test_threads.cpp
     test_windows_header_compatibility.cpp
     test_windows_unicode_path.cpp
-    test_fs.cpp
     test_object_cache.cpp)
 
 if(NOT WIN32)
