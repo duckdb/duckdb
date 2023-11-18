@@ -95,39 +95,6 @@ FileType LocalFileSystem::TryGetFileType(const std::string &path, optional_ptr<s
 	}
 	return GetFileTypeInternal(s);
 }
-
-#else
-static FileType GetFileTypeInternal(const struct _stati64 &s) {
-	switch (s.st_mode & S_IFMT) {
-	case S_IFBLK:
-		return FileType::FILE_TYPE_BLOCKDEV;
-	case S_IFCHR:
-		return FileType::FILE_TYPE_CHARDEV;
-	case S_IFIFO:
-		return FileType::FILE_TYPE_FIFO;
-	case S_IFDIR:
-		return FileType::FILE_TYPE_DIR;
-	case S_IFLNK:
-		return FileType::FILE_TYPE_LINK;
-	case S_IFREG:
-		return FileType::FILE_TYPE_REGULAR;
-	case S_IFSOCK:
-		return FileType::FILE_TYPE_SOCKET;
-	default:
-		return FileType::FILE_TYPE_INVALID;
-	}
-}
-FileType LocalFileSystem::TryGetFileType(const std::string &path, optional_ptr<string> error) {
-	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
-	const wchar_t *wpath = unicode_path.c_str();
-	if (_waccess(wpath, 0) == 0) {
-		struct _stati64 status;
-		_wstati64(wpath, &status);
-		return GetFileTypeInternal(status);
-	}
-	// TODO: Better error handling here
-	return FileType::FILE_TYPE_INVALID;
-}
 #endif
 
 #ifndef _WIN32
@@ -140,27 +107,6 @@ FileType LocalFileSystem::TryGetFileType(const std::string &path, optional_ptr<s
 #ifndef O_DIRECT
 #define O_DIRECT 0
 #endif
-
-FileType LocalFileSystem::GetFileTypeImpl(const std::string &path) {
-	optional_ptr<string> error;
-	auto type = TryGetFileType(path, error);
-	if (error) {
-		throw IOException(*error);
-	}
-	return type;
-}
-
-bool LocalFileSystem::FileExists(const string &filename) {
-	return GetFileTypeImpl(filename) == FileType::FILE_TYPE_REGULAR;
-}
-
-bool LocalFileSystem::IsPipe(const string &filename) {
-	return GetFileTypeImpl(filename) == FileType::FILE_TYPE_FIFO;
-}
-
-bool LocalFileSystem::DirectoryExists(const string &directory) {
-	return GetFileTypeImpl(directory) == FileType::FILE_TYPE_DIR;
-}
 
 struct UnixFileHandle : public FileHandle {
 public:
@@ -713,6 +659,22 @@ static DWORD WindowsGetFileAttributes(const string &filename) {
 	return GetFileAttributesW(unicode_path.c_str());
 }
 
+FileType LocalFileSystem::TryGetFileType(const std::string &path, optional_ptr<string> error) {
+	// pipes in windows are just files in '\\.\pipe\' folder
+	if (strncmp(path.c_str(), PIPE_PREFIX, strlen(PIPE_PREFIX)) == 0) {
+		return FileType::FILE_TYPE_FIFO;
+	}
+	DWORD attrs = WindowsGetFileAttributes(path.c_str());
+	if (attrs != INVALID_FILE_ATTRIBUTES) {
+		if (attrs & FILE_ATTRIBUTE_DIRECTORY) {
+			return FileType::FILE_TYPE_DIR;
+		} else {
+			return FileType::FILE_TYPE_REGULAR;
+		}
+	}
+	return FileType::FILE_TYPE_INVALID;
+}
+
 void LocalFileSystem::CreateDirectory(const string &directory) {
 	if (DirectoryExists(directory)) {
 		return;
@@ -801,22 +763,30 @@ void LocalFileSystem::MoveFile(const string &source, const string &target) {
 }
 
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
-	auto path = handle.Cast<WindowsFileHandle>().path;
-	// pipes in windows are just files in '\\.\pipe\' folder
-	if (strncmp(path.c_str(), PIPE_PREFIX, strlen(PIPE_PREFIX)) == 0) {
-		return FileType::FILE_TYPE_FIFO;
-	}
-	DWORD attrs = WindowsGetFileAttributes(path.c_str());
-	if (attrs != INVALID_FILE_ATTRIBUTES) {
-		if (attrs & FILE_ATTRIBUTE_DIRECTORY) {
-			return FileType::FILE_TYPE_DIR;
-		} else {
-			return FileType::FILE_TYPE_REGULAR;
-		}
-	}
-	return FileType::FILE_TYPE_INVALID;
+	return TryGetFileType(handle.Cast<WindowsFileHandle>().path);
 }
 #endif
+
+FileType LocalFileSystem::GetFileTypeImpl(const std::string &path) {
+	optional_ptr<string> error;
+	auto type = TryGetFileType(path, error);
+	if (error) {
+		throw IOException(*error);
+	}
+	return type;
+}
+
+bool LocalFileSystem::FileExists(const string &filename) {
+	return GetFileTypeImpl(filename) == FileType::FILE_TYPE_REGULAR;
+}
+
+bool LocalFileSystem::IsPipe(const string &filename) {
+	return GetFileTypeImpl(filename) == FileType::FILE_TYPE_FIFO;
+}
+
+bool LocalFileSystem::DirectoryExists(const string &directory) {
+	return GetFileTypeImpl(directory) == FileType::FILE_TYPE_DIR;
+}
 
 bool LocalFileSystem::CanSeek() {
 	return true;
