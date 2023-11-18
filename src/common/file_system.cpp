@@ -319,7 +319,7 @@ FileType FileSystem::GetFileType(FileHandle &handle) {
 	return FileType::FILE_TYPE_INVALID;
 }
 
-FileType FileSystem::TryGetFileType(const std::string &path, string *error) {
+FileType FileSystem::TryGetFileType(const std::string &path, optional_ptr<string> error) {
 	return FileType::FILE_TYPE_INVALID;
 }
 

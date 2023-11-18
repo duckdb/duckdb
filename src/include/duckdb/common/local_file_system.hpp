@@ -51,7 +51,7 @@ public:
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	               FileOpener *opener = nullptr) override;
 	//! Attempts to fetch the file type of the provided path. Will set error on unexpected errors
-	FileType TryGetFileType(const std::string &path, string *error = nullptr) override;
+	FileType TryGetFileType(const std::string &path, optional_ptr<string> error = nullptr) override;
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	void MoveFile(const string &source, const string &target) override;

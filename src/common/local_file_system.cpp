@@ -74,7 +74,7 @@ static FileType GetFileTypeInternal(const struct stat &s) {
 	}
 }
 
-FileType LocalFileSystem::TryGetFileType(const string &path, string *error) {
+FileType LocalFileSystem::TryGetFileType(const string &path, optional_ptr<string> error) {
 	if (path.empty()) {
 		return FileType::FILE_TYPE_NOT_EXIST;
 	}
@@ -668,7 +668,7 @@ static DWORD WindowsGetFileAttributes(const string &filename) {
 	return GetFileAttributesW(unicode_path.c_str());
 }
 
-FileType LocalFileSystem::TryGetFileType(const std::string &path, string * /*error*/) {
+FileType LocalFileSystem::TryGetFileType(const std::string &path, optional_ptr<string> /*error*/) {
 	// pipes in windows are just files in '\\.\pipe\' folder
 	if (strncmp(path.c_str(), PIPE_PREFIX, strlen(PIPE_PREFIX)) == 0) {
 		return FileType::FILE_TYPE_FIFO;
@@ -796,7 +796,7 @@ bool LocalFileSystem::IsPipe(const string &filename) {
 #endif
 
 FileType LocalFileSystem::GetFileTypeImpl(const std::string &path) {
-	std::string error;
+	string error;
 	auto type = TryGetFileType(path, &error);
 	if (!error.empty()) {
 		throw IOException(error);
