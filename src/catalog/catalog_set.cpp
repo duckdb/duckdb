@@ -251,24 +251,25 @@ bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipI
 	return true;
 }
 
-bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, const string &original_name, CatalogEntry &entry,
+bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, CatalogEntry &old, const string &new_name,
                                      AlterInfo &alter_info, unique_lock<mutex> &read_lock) {
+	auto &original_name = old.name;
+
 	auto &context = *transaction.context;
-	auto entry_value = map.GetEntry(entry.name);
+	auto entry_value = map.GetEntry(new_name);
 	if (entry_value) {
 		auto &existing_entry = GetEntryForTransaction(transaction, *entry_value);
 		if (!existing_entry.deleted) {
 			// There exists an entry by this name that is not deleted
-			entry.UndoAlter(context, alter_info);
+			old.UndoAlter(context, alter_info);
 			throw CatalogException("Could not rename \"%s\" to \"%s\": another entry with this name already exists!",
-			                       original_name, entry.name);
+			                       original_name, new_name);
 		}
 	}
 
 	// Add a RENAMED_ENTRY before adding a DELETED_ENTRY, this makes it so that when this is committed
 	// we know that this was not a DROP statement.
-	auto renamed_tombstone =
-	    make_uniq<InCatalogEntry>(CatalogType::RENAMED_ENTRY, entry.ParentCatalog(), original_name);
+	auto renamed_tombstone = make_uniq<InCatalogEntry>(CatalogType::RENAMED_ENTRY, old.ParentCatalog(), original_name);
 	renamed_tombstone->timestamp = transaction.transaction_id;
 	renamed_tombstone->deleted = false;
 	renamed_tombstone->set = this;
@@ -282,11 +283,11 @@ bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, const strin
 
 	// Add the renamed entry
 	// Start this off with a RENAMED_ENTRY node, for commit/cleanup/rollback purposes
-	auto renamed_node = make_uniq<InCatalogEntry>(CatalogType::RENAMED_ENTRY, entry.ParentCatalog(), entry.name);
+	auto renamed_node = make_uniq<InCatalogEntry>(CatalogType::RENAMED_ENTRY, catalog, new_name);
 	renamed_node->timestamp = transaction.transaction_id;
 	renamed_node->deleted = false;
 	renamed_node->set = this;
-	return CreateEntryInternal(transaction, entry.name, std::move(renamed_node), read_lock);
+	return CreateEntryInternal(transaction, new_name, std::move(renamed_node), read_lock);
 }
 
 bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, AlterInfo &alter_info) {
@@ -319,10 +320,8 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	value->timestamp = transaction.transaction_id;
 	value->set = this;
 
-	string original_name = entry->name;
-	const bool name_changed = !StringUtil::CIEquals(value->name, original_name);
-	if (name_changed) {
-		if (!RenameEntryInternal(transaction, original_name, *value, alter_info, read_lock)) {
+	if (!StringUtil::CIEquals(value->name, entry->name)) {
+		if (!RenameEntryInternal(transaction, *entry, value->name, alter_info, read_lock)) {
 			return false;
 		}
 	}

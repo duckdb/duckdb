@@ -145,7 +145,7 @@ private:
 	bool VerifyVacancy(CatalogTransaction transaction, CatalogEntry &entry);
 	//! Start the catalog entry chain with a dummy node
 	bool StartChain(CatalogTransaction transaction, const string &name, unique_lock<mutex> &read_lock);
-	bool RenameEntryInternal(CatalogTransaction transaction, const string &original_name, CatalogEntry &entry,
+	bool RenameEntryInternal(CatalogTransaction transaction, CatalogEntry &old, const string &new_name,
 	                         AlterInfo &alter_info, unique_lock<mutex> &read_lock);
 
 private:
