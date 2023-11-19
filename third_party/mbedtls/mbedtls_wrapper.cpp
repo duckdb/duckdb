@@ -6,6 +6,8 @@
 #include "duckdb/common/helper.hpp"
 #include "mbedtls/entropy.h"
 #include "mbedtls/gcm.h"
+#include "mbedtls/sha256.h"
+#include "mbedtls/sha512.h"
 #include "mbedtls/pk.h"
 #include "mbedtls/sha256.h"
 
@@ -181,6 +183,48 @@ void MbedTlsWrapper::SHA256State::FinishHex(char *out) {
 	}
 
 	MbedTlsWrapper::ToBase16(const_cast<char *>(hash.c_str()), out, MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES);
+}
+
+
+MbedTlsWrapper::SHA512State::SHA512State() : sha_context(new mbedtls_sha512_context()) {
+	mbedtls_sha512_init((mbedtls_sha512_context*)sha_context);
+
+	if (mbedtls_sha512_starts((mbedtls_sha512_context*)sha_context, false)) {
+		throw std::runtime_error("SHA512 Error");
+	}
+}
+
+MbedTlsWrapper::SHA512State::~SHA512State() {
+	mbedtls_sha512_free((mbedtls_sha512_context*)sha_context);
+	delete (mbedtls_sha512_context*)sha_context;
+}
+
+void MbedTlsWrapper::SHA512State::AddString(const std::string & str) {
+	if (mbedtls_sha512_update((mbedtls_sha512_context*)sha_context, (unsigned char*)str.data(), str.size())) {
+		throw std::runtime_error("SHA512 Error");
+	}
+}
+
+std::string MbedTlsWrapper::SHA512State::Finalize() {
+	string hash;
+	hash.resize(MbedTlsWrapper::SHA512_HASH_LENGTH_BYTES);
+
+	if (mbedtls_sha512_finish((mbedtls_sha512_context*)sha_context, (unsigned char*)hash.data())) {
+		throw std::runtime_error("SHA512 Error");
+	}
+
+	return hash;
+}
+
+void MbedTlsWrapper::SHA512State::FinishHex(char *out) {
+	string hash;
+	hash.resize(MbedTlsWrapper::SHA512_HASH_LENGTH_BYTES);
+
+	if (mbedtls_sha512_finish((mbedtls_sha512_context *)sha_context, (unsigned char *)hash.data())) {
+		throw std::runtime_error("SHA512 Error");
+	}
+
+	MbedTlsWrapper::ToBase16(const_cast<char *>(hash.c_str()), out, MbedTlsWrapper::SHA512_HASH_LENGTH_BYTES);
 }
 
 MbedTlsWrapper::AESGCMState::AESGCMState(const std::string &key) : gcm_context(new mbedtls_gcm_context()) {

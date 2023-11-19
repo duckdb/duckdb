@@ -41,6 +41,21 @@ public:
 		void *sha_context;
 	};
 
+	static constexpr size_t SHA512_HASH_LENGTH_BYTES = 64;
+	static constexpr size_t SHA512_HASH_LENGTH_TEXT = 128;
+
+	class SHA512State {
+	public:
+		SHA512State();
+		~SHA512State();
+		void AddString(const std::string & str);
+		std::string Finalize();
+		void FinishHex(char *out);
+	private:
+		void *sha_context;
+	};
+
+
 	class AESGCMState {
 	public:
 		DUCKDB_API AESGCMState(const std::string &key);
