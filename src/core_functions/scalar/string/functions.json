@@ -245,6 +245,14 @@
         "struct": "SHA256Fun"
     },
     {
+        "name": "sha512",
+        "parameters": "value",
+        "description": "Returns the SHA512 hash of the value",
+        "example": "sha512('hello')",
+        "type": "scalar_function",
+        "struct": "SHA512Fun"
+    },
+    {
         "name": "string_split",
         "parameters": "string,separator",
         "description": "Splits the string along the separator",

@@ -360,6 +360,15 @@ struct SHA256Fun {
 	static ScalarFunction GetFunction();
 };
 
+struct SHA512Fun {
+	static constexpr const char *Name = "sha512";
+	static constexpr const char *Parameters = "value";
+	static constexpr const char *Description = "Returns the SHA512 hash of the value";
+	static constexpr const char *Example = "sha512('hello')";
+
+	static ScalarFunction GetFunction();
+};
+
 struct StringSplitFun {
 	static constexpr const char *Name = "string_split";
 	static constexpr const char *Parameters = "string,separator";
