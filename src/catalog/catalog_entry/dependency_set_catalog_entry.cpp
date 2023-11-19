@@ -1,9 +1,9 @@
 #include "duckdb/catalog/catalog_entry/dependency_set_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/dependency_catalog_entry.hpp"
-#include "duckdb/catalog/dependency/dependency_list.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/catalog/dependency/dependency_manager.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 
@@ -231,13 +231,13 @@ void DependencySetCatalogEntry::RemoveDependent(CatalogTransaction transaction, 
 // Remove dependency from a DependencyEntry
 void DependencySetCatalogEntry::RemoveDependency(CatalogTransaction transaction,
                                                  DependencySetCatalogEntry &dependency) {
-	auto mangled_name = dependency.MangledName();
+	auto &mangled_name = dependency.MangledName();
 	RemoveDependency(transaction, mangled_name);
 }
 
 // Remove dependent from a DependencyEntry
 void DependencySetCatalogEntry::RemoveDependent(CatalogTransaction transaction, DependencySetCatalogEntry &dependent) {
-	auto mangled_name = dependent.MangledName();
+	auto &mangled_name = dependent.MangledName();
 	RemoveDependent(transaction, mangled_name);
 }
 
@@ -281,7 +281,7 @@ bool DependencySetCatalogEntry::IsDependencyOf(CatalogTransaction transaction, C
 }
 
 bool DependencySetCatalogEntry::IsDependencyOf(CatalogTransaction transaction, DependencySetCatalogEntry &other) {
-	auto mangled_name = other.MangledName();
+	auto &mangled_name = other.MangledName();
 	return IsDependencyOf(transaction, mangled_name);
 }
 
@@ -291,7 +291,7 @@ bool DependencySetCatalogEntry::HasDependencyOn(CatalogTransaction transaction, 
 }
 
 bool DependencySetCatalogEntry::HasDependencyOn(CatalogTransaction transaction, DependencySetCatalogEntry &other) {
-	auto mangled_name = other.MangledName();
+	auto &mangled_name = other.MangledName();
 	return HasDependencyOn(transaction, mangled_name);
 }
 

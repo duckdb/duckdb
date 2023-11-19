@@ -2,7 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
-#include "duckdb/catalog/dependency/dependency_manager.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
@@ -422,8 +422,7 @@ void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
 	if (parent.deleted && !parent.HasChild() && !parent.HasParent()) {
 		// The entry's parent is a tombstone and the entry had no child
 		// clean up the mapping and the tombstone entry as well
-		auto entry = map.GetEntry(parent.name);
-		D_ASSERT(entry.get() == &parent);
+		D_ASSERT(map.GetEntry(parent.name).get() == &parent);
 		map.DropEntry(parent);
 	}
 }

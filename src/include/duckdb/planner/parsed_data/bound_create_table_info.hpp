@@ -17,7 +17,7 @@
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/catalog/catalog_entry/column_dependency_manager.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
-#include "duckdb/catalog/dependency/dependency_list.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 class CatalogEntry;

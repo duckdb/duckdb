@@ -11,7 +11,7 @@
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/main/attached_database.hpp"
-#include "duckdb/catalog/dependency/dependency_list.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/common/serializer/serializer.hpp"

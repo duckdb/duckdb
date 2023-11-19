@@ -15,7 +15,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
-#include "duckdb/catalog/dependency/dependency.hpp"
+#include "duckdb/catalog/dependency.hpp"
 #include <memory>
 
 namespace duckdb {

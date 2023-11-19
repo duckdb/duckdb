@@ -16,8 +16,8 @@ static void VerifyName(const string &mangled_name) {
 
 string ProxyCatalogSet::ApplyPrefix(const string &name) const {
 	VerifyName(name);
-	const static auto null_byte = string(1, '\0');
-	return mangled_name + null_byte + name;
+	const static auto NULL_BYTE = string(1, '\0');
+	return mangled_name + NULL_BYTE + name;
 }
 
 bool ProxyCatalogSet::CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,

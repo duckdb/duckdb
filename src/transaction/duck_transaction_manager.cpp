@@ -5,7 +5,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/dependency/dependency_manager.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/main/client_context.hpp"

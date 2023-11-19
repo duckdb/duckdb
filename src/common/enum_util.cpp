@@ -11,7 +11,7 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
-#include "duckdb/catalog/dependency/dependency.hpp"
+#include "duckdb/catalog/dependency.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/aggregate_handling.hpp"
