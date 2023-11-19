@@ -128,7 +128,7 @@ private:
 	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current);
 	CatalogEntry &GetCommittedEntry(CatalogEntry &current);
 	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, const string &name);
-	optional_ptr<CatalogEntry> CreateEntryInternal(CatalogTransaction transaction, unique_ptr<CatalogEntry> entry);
+	optional_ptr<CatalogEntry> CreateCommittedEntry(CatalogTransaction transaction, unique_ptr<CatalogEntry> entry);
 
 	//! Create all default entries
 	void CreateDefaultEntries(CatalogTransaction transaction, unique_lock<mutex> &lock);
@@ -137,6 +137,16 @@ private:
 	                                              unique_lock<mutex> &lock);
 
 	bool DropEntryInternal(CatalogTransaction transaction, const string &name, bool allow_drop_internal = false);
+
+	bool CreateEntryInternal(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
+	                         unique_lock<mutex> &read_lock, bool should_be_empty = true);
+	void CheckCatalogEntryInvariants(CatalogEntry &value, const string &name);
+	//! Verify that the previous entry in the chain is dropped.
+	bool VerifyVacancy(CatalogTransaction transaction, CatalogEntry &entry);
+	//! Start the catalog entry chain with a dummy node
+	bool StartChain(CatalogTransaction transaction, const string &name, unique_lock<mutex> &read_lock);
+	bool RenameEntryInternal(CatalogTransaction transaction, const string &original_name, CatalogEntry &entry,
+	                         AlterInfo &alter_info, unique_lock<mutex> &read_lock);
 
 private:
 	DuckCatalog &catalog;

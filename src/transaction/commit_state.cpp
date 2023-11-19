@@ -153,6 +153,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			log->WriteDropIndex(entry.Cast<IndexCatalogEntry>());
 			break;
 		}
+		case CatalogType::RENAMED_ENTRY:
 		case CatalogType::PREPARED_STATEMENT:
 		case CatalogType::SCALAR_FUNCTION_ENTRY:
 		case CatalogType::DEPENDENCY_ENTRY:
