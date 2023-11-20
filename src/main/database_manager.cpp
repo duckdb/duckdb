@@ -71,25 +71,26 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 	}
 }
 
-void DatabaseManager::InsertDbPath(const string &path, const string &name) {
+void DatabaseManager::InsertDatabasePath(const string &path, const string &name) {
 
-	if (!path.empty() && path != IN_MEMORY_PATH) {
-
-		lock_guard<mutex> write_lock(db_paths_lock);
-
-		// ensure that we did not already attach a database with the same path
-		if (db_paths.find(path) != db_paths.end()) {
-			throw BinderException(
-			    "Unique file handle conflict: Database \"%s\" is already attached with path \"%s\", "
-			    "possibly by another transaction. Commit that transaction, if it already detached the file.",
-			    name, path);
-		}
-
-		db_paths.insert(make_pair(path, name));
+	if (path.empty() || path == IN_MEMORY_PATH) {
+		return;
 	}
+
+	lock_guard<mutex> write_lock(db_paths_lock);
+
+	// ensure that we did not already attach a database with the same path
+	if (db_paths.find(path) != db_paths.end()) {
+		throw BinderException(
+		    "Unique file handle conflict: Database \"%s\" is already attached with path \"%s\", "
+		    "possibly by another transaction. Commit that transaction, if it already detached the file.",
+		    name, path);
+	}
+
+	db_paths.insert(make_pair(path, name));
 }
 
-void DatabaseManager::EraseDbPath(const string &path) {
+void DatabaseManager::EraseDatabasePath(const string &path) {
 	lock_guard<mutex> write_lock(db_paths_lock);
 	auto path_it = db_paths.find(path);
 	if (path_it != db_paths.end()) {
