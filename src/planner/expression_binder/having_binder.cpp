@@ -24,6 +24,7 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 		}
 		return alias_result;
 	}
+
 	if (aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
 		if (depth > 0) {
 			throw BinderException("Having clause cannot reference column in correlated subquery and group by all");

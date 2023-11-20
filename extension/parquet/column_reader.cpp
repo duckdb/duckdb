@@ -182,7 +182,7 @@ idx_t ColumnReader::GroupRowsAvailable() {
 
 unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
 	if (Type().id() == LogicalTypeId::LIST || Type().id() == LogicalTypeId::STRUCT ||
-	    Type().id() == LogicalTypeId::MAP) {
+	    Type().id() == LogicalTypeId::MAP || Type().id() == LogicalTypeId::ARRAY) {
 		return nullptr;
 	}
 	return ParquetStatisticsUtils::TransformColumnStatistics(Schema(), Type(), columns[file_idx]);
@@ -246,7 +246,7 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 	bss_decoder.reset();
 	block.reset();
 	PageHeader page_hdr;
-	page_hdr.read(protocol);
+	reader.Read(page_hdr, *protocol);
 
 	switch (page_hdr.type) {
 	case PageType::DATA_PAGE_V2:
@@ -287,7 +287,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		uncompressed = true;
 	}
 	if (uncompressed) {
-		trans.read(block->ptr, page_hdr.compressed_page_size);
+		reader.ReadData(*protocol, block->ptr, page_hdr.compressed_page_size);
 		return;
 	}
 
@@ -299,7 +299,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 
 	AllocateCompressed(compressed_bytes);
-	trans.read(compressed_buffer.ptr, compressed_bytes);
+	reader.ReadData(*protocol, compressed_buffer.ptr, compressed_bytes);
 
 	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_bytes, block->ptr + uncompressed_bytes,
 	                   page_hdr.uncompressed_page_size - uncompressed_bytes);
@@ -318,19 +318,17 @@ void ColumnReader::AllocateCompressed(idx_t size) {
 }
 
 void ColumnReader::PreparePage(PageHeader &page_hdr) {
-	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
-
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
 			throw std::runtime_error("Page size mismatch");
 		}
-		trans.read((uint8_t *)block->ptr, page_hdr.compressed_page_size);
+		reader.ReadData(*protocol, block->ptr, page_hdr.compressed_page_size);
 		return;
 	}
 
 	AllocateCompressed(page_hdr.compressed_page_size + 1);
-	trans.read((uint8_t *)compressed_buffer.ptr, page_hdr.compressed_page_size);
+	reader.ReadData(*protocol, compressed_buffer.ptr, page_hdr.compressed_page_size);
 
 	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, page_hdr.compressed_page_size, block->ptr,
 	                   page_hdr.uncompressed_page_size);

@@ -163,9 +163,10 @@ idx_t FunctionBinder::BindFunction(const string &name, TableFunctionSet &functio
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
-idx_t FunctionBinder::BindFunction(const string &name, PragmaFunctionSet &functions, PragmaInfo &info, string &error) {
+idx_t FunctionBinder::BindFunction(const string &name, PragmaFunctionSet &functions, vector<Value> &parameters,
+                                   string &error) {
 	vector<LogicalType> types;
-	for (auto &value : info.parameters) {
+	for (auto &value : parameters) {
 		types.push_back(value.type());
 	}
 	idx_t entry = BindFunctionFromArguments(name, functions, types, error);
@@ -174,10 +175,10 @@ idx_t FunctionBinder::BindFunction(const string &name, PragmaFunctionSet &functi
 	}
 	auto candidate_function = functions.GetFunctionByOffset(entry);
 	// cast the input parameters
-	for (idx_t i = 0; i < info.parameters.size(); i++) {
+	for (idx_t i = 0; i < parameters.size(); i++) {
 		auto target_type =
 		    i < candidate_function.arguments.size() ? candidate_function.arguments[i] : candidate_function.varargs;
-		info.parameters[i] = info.parameters[i].CastAs(context, target_type);
+		parameters[i] = parameters[i].CastAs(context, target_type);
 	}
 	return entry;
 }
@@ -220,6 +221,9 @@ LogicalTypeComparisonResult RequiresCast(const LogicalType &source_type, const L
 	}
 	if (source_type.id() == LogicalTypeId::LIST && target_type.id() == LogicalTypeId::LIST) {
 		return RequiresCast(ListType::GetChildType(source_type), ListType::GetChildType(target_type));
+	}
+	if (source_type.id() == LogicalTypeId::ARRAY && target_type.id() == LogicalTypeId::ARRAY) {
+		return RequiresCast(ArrayType::GetChildType(source_type), ArrayType::GetChildType(target_type));
 	}
 	return LogicalTypeComparisonResult::DIFFERENT_TYPES;
 }

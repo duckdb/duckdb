@@ -195,6 +195,7 @@ void AttachInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(200, "name", name);
 	serializer.WritePropertyWithDefault<string>(201, "path", path);
 	serializer.WritePropertyWithDefault<unordered_map<string, Value>>(202, "options", options);
+	serializer.WritePropertyWithDefault<OnCreateConflict>(203, "on_conflict", on_conflict, OnCreateConflict::ERROR_ON_CONFLICT);
 }
 
 unique_ptr<ParseInfo> AttachInfo::Deserialize(Deserializer &deserializer) {
@@ -202,6 +203,7 @@ unique_ptr<ParseInfo> AttachInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
 	deserializer.ReadPropertyWithDefault<string>(201, "path", result->path);
 	deserializer.ReadPropertyWithDefault<unordered_map<string, Value>>(202, "options", result->options);
+	deserializer.ReadPropertyWithDefault<OnCreateConflict>(203, "on_conflict", result->on_conflict, OnCreateConflict::ERROR_ON_CONFLICT);
 	return std::move(result);
 }
 
@@ -310,15 +312,15 @@ unique_ptr<ParseInfo> LoadInfo::Deserialize(Deserializer &deserializer) {
 void PragmaInfo::Serialize(Serializer &serializer) const {
 	ParseInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "name", name);
-	serializer.WritePropertyWithDefault<vector<Value>>(201, "parameters", parameters);
-	serializer.WriteProperty<named_parameter_map_t>(202, "named_parameters", named_parameters);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(201, "parameters", parameters);
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "named_parameters", named_parameters);
 }
 
 unique_ptr<ParseInfo> PragmaInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<PragmaInfo>(new PragmaInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
-	deserializer.ReadPropertyWithDefault<vector<Value>>(201, "parameters", result->parameters);
-	deserializer.ReadProperty<named_parameter_map_t>(202, "named_parameters", result->named_parameters);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(201, "parameters", result->parameters);
+	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "named_parameters", result->named_parameters);
 	return std::move(result);
 }
 
