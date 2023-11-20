@@ -1,0 +1,70 @@
+# name: test/sql/upsert/insert_or_replace_ambiguity.test
+# group: [upsert]
+
+# Single primary key on multiple columns
+statement ok
+create table foo(
+	a int,
+	b int,
+	c int,
+	primary key(a,b,c)
+);
+
+statement ok
+insert or replace into foo values (1,2,3);
+
+# Single INDEX
+statement ok
+create table foo2(
+	a int,
+	b int,
+	c int
+);
+
+statement ok
+create unique index idx2 on foo2(a, b);
+
+statement ok
+insert or replace into foo2 values (1,2,3);
+
+# Multiple unique INDEXes
+statement ok
+create unique index idx3 on foo2(b, c);
+
+statement error
+insert or replace into foo2 values (1,2,3);
+----
+Binder Error: Conflict target has to be provided for a DO UPDATE operation when the table has multiple UNIQUE/PRIMARY KEY constraints
+
+# Single unique index
+statement ok
+create table foo3(
+	a int unique,
+	b int
+);
+
+statement ok
+insert or replace into foo3 values(1, 2);
+
+# Single UNIQUE CONSTRAINT
+statement ok
+create table foo4(
+	a int unique,
+	b int
+);
+
+statement ok
+insert or replace into foo4 values(1, 2);
+
+# Multiple UNIQUE CONSTRAINTs
+statement ok
+create table foo5(
+	a int unique,
+	b int unique,
+	c int
+);
+
+statement error
+insert or replace into foo5 values(1, 2, 3);
+----
+Binder Error: Conflict target has to be provided for a DO UPDATE operation when the table has multiple UNIQUE/PRIMARY KEY constraints
