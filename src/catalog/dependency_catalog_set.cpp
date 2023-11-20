@@ -1,4 +1,4 @@
-#include "duckdb/catalog/proxy_catalog_set.hpp"
+#include "duckdb/catalog/dependency_catalog_set.hpp"
 #include "duckdb/catalog/catalog_entry/dependency_catalog_entry.hpp"
 
 namespace duckdb {
