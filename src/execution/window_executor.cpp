@@ -886,7 +886,11 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
                                                  const ValidityMask &order_mask, WindowAggregationMode mode)
     : WindowExecutor(wexpr, context, count, partition_mask, order_mask), mode(mode), filter_executor(context) {
 
-	if (IsDistinctAggregate()) {
+	// Force naive for SEPARATE mode
+	if (mode == WindowAggregationMode::SEPARATE) {
+		aggregator =
+		    make_uniq<WindowNaiveAggregator>(AggregateObject(wexpr), wexpr.return_type, wexpr.exclude_clause, count);
+	} else if (IsDistinctAggregate()) {
 		aggregator = make_uniq<WindowDistinctAggregator>(AggregateObject(wexpr), wexpr.return_type,
 		                                                 wexpr.exclude_clause, count, context);
 	} else if (IsConstantAggregate()) {

@@ -49,6 +49,9 @@ public:
 	const DataChunk &GetInputs() const {
 		return inputs;
 	}
+	const ValidityMask &GetFilterMask() const {
+		return filter_mask;
+	}
 
 	//	Build
 	virtual void Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered);
@@ -59,15 +62,16 @@ public:
 	virtual void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
 	                      idx_t row_idx) const = 0;
 
-protected:
-	AggregateObject aggr;
+	//! A description of the aggregator
+	const AggregateObject aggr;
 	//! The result type of the window function
-	LogicalType result_type;
-
+	const LogicalType result_type;
 	//! The cardinality of the partition
 	const idx_t partition_count;
 	//! The size of a single aggregate state
 	const idx_t state_size;
+
+protected:
 	//! Partition data chunk
 	DataChunk inputs;
 
@@ -81,6 +85,18 @@ protected:
 public:
 	//! The window exclusion clause
 	const WindowExcludeMode exclude_mode;
+};
+
+// Used for validation
+class WindowNaiveAggregator : public WindowAggregator {
+public:
+	WindowNaiveAggregator(AggregateObject aggr, const LogicalType &result_type_p,
+	                      const WindowExcludeMode exclude_mode_p, idx_t partition_count);
+	~WindowNaiveAggregator() override;
+
+	unique_ptr<WindowAggregatorState> GetLocalState() const override;
+	void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
+	              idx_t row_idx) const override;
 };
 
 class WindowConstantAggregator : public WindowAggregator {

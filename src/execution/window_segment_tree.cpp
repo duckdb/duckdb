@@ -404,6 +404,139 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 }
 
 //===--------------------------------------------------------------------===//
+// WindowNaiveAggregator
+//===--------------------------------------------------------------------===//
+WindowNaiveAggregator::WindowNaiveAggregator(AggregateObject aggr, const LogicalType &result_type,
+                                             const WindowExcludeMode exclude_mode_p, idx_t partition_count)
+    : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, partition_count) {
+}
+
+WindowNaiveAggregator::~WindowNaiveAggregator() {
+}
+
+class WindowNaiveState : public WindowAggregatorState {
+public:
+	explicit WindowNaiveState(const WindowNaiveAggregator &gstate);
+
+	void Evaluate(const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx);
+
+protected:
+	//! Flush the accumulated intermediate states into the result states
+	void FlushStates();
+
+	//! The global state
+	const WindowNaiveAggregator &gstate;
+	//! Data pointer that contains a vector of states, used for row aggregation
+	vector<data_t> state;
+	//! Reused result state container for the aggregate
+	Vector statef;
+	//! A vector of pointers to "state", used for buffering intermediate aggregates
+	Vector statep;
+	//! Input data chunk, used for leaf segment aggregation
+	DataChunk leaves;
+	//! The rows beging updated.
+	SelectionVector update_sel;
+	//! Count of buffered values
+	idx_t flush_count;
+	//! The frame boundaries, used for EXCLUDE
+	SubFrames frames;
+};
+
+WindowNaiveState::WindowNaiveState(const WindowNaiveAggregator &gstate)
+    : gstate(gstate), state(gstate.state_size * STANDARD_VECTOR_SIZE), statef(LogicalType::POINTER),
+      statep((LogicalType::POINTER)), flush_count(0) {
+	InitSubFrames(frames, gstate.exclude_mode);
+
+	auto &inputs = const_cast<DataChunk &>(gstate.GetInputs());
+	if (inputs.ColumnCount() > 0) {
+		leaves.Initialize(Allocator::DefaultAllocator(), inputs.GetTypes());
+	}
+
+	update_sel.Initialize();
+
+	//	Build the finalise vector that just points to the result states
+	data_ptr_t state_ptr = state.data();
+	D_ASSERT(statef.GetVectorType() == VectorType::FLAT_VECTOR);
+	statef.SetVectorType(VectorType::CONSTANT_VECTOR);
+	statef.Flatten(STANDARD_VECTOR_SIZE);
+	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
+	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; ++i) {
+		fdata[i] = state_ptr;
+		state_ptr += gstate.state_size;
+	}
+}
+
+void WindowNaiveState::FlushStates() {
+	if (!flush_count) {
+		return;
+	}
+
+	auto &inputs = const_cast<DataChunk &>(gstate.GetInputs());
+	leaves.Reference(inputs);
+	leaves.Slice(update_sel, flush_count);
+
+	auto &aggr = gstate.aggr;
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	aggr.function.update(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), statep, flush_count);
+
+	flush_count = 0;
+}
+
+void WindowNaiveState::Evaluate(const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) {
+	auto &aggr = gstate.aggr;
+	auto &filter_mask = gstate.GetFilterMask();
+
+	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
+	auto pdata = FlatVector::GetData<data_ptr_t>(statep);
+
+	EvaluateSubFrames(bounds, gstate.exclude_mode, count, row_idx, frames, [&](idx_t rid, bool non_empty) {
+		auto agg_state = fdata[rid];
+		aggr.function.initialize(agg_state);
+		if (!non_empty) {
+			return;
+		}
+
+		//	Just update the aggregate with the unfiltered input rows
+		for (const auto &frame : frames) {
+			for (auto f = frame.start; f < frame.end; ++f) {
+				if (!filter_mask.RowIsValid(f)) {
+					continue;
+				}
+
+				//	TODO: Distinct filtering
+				pdata[flush_count] = agg_state;
+				update_sel[flush_count++] = f;
+				if (flush_count >= STANDARD_VECTOR_SIZE) {
+					FlushStates();
+				}
+			}
+		}
+	});
+
+	//	Flush the final states
+	FlushStates();
+
+	//	Finalise the result aggregates and write to the result
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	aggr.function.finalize(statef, aggr_input_data, result, count, 0);
+
+	//	Destruct the result aggregates
+	if (aggr.function.destructor) {
+		aggr.function.destructor(statef, aggr_input_data, count);
+	}
+}
+
+unique_ptr<WindowAggregatorState> WindowNaiveAggregator::GetLocalState() const {
+	return make_uniq<WindowNaiveState>(*this);
+}
+
+void WindowNaiveAggregator::Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result,
+                                     idx_t count, idx_t row_idx) const {
+	auto &ldstate = lstate.Cast<WindowNaiveState>();
+	ldstate.Evaluate(bounds, result, count, row_idx);
+}
+
+//===--------------------------------------------------------------------===//
 // WindowSegmentTree
 //===--------------------------------------------------------------------===//
 WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, WindowAggregationMode mode_p,
