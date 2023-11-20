@@ -1,0 +1,14 @@
+# name: test/sql/attach/attach_duckdb_type.test
+# description: Test attaching a file with type DUCKDB
+# group: [attach]
+
+statement ok
+ATTACH 'first.db' (TYPE DUCKDB);
+
+query I
+SELECT database_name FROM duckdb_databases() ORDER BY 1;
+----
+first
+memory
+system
+temp

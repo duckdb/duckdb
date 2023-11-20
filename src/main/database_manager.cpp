@@ -98,8 +98,14 @@ void DatabaseManager::EraseDatabasePath(const string &path) {
 	}
 }
 
-void DatabaseManager::GetDbType(ClientContext &context, string &db_type, AttachInfo &info, const DBConfig &config,
-                                const string &unrecognized_option) {
+void DatabaseManager::GetDatabaseType(ClientContext &context, string &db_type, AttachInfo &info,
+                                      const DBConfig &config) {
+
+	// duckdb database file
+	if (StringUtil::CIEquals(db_type, "DUCKDB")) {
+		db_type = "";
+		return;
+	}
 
 	lock_guard<mutex> write_lock(db_paths_lock);
 
@@ -119,10 +125,6 @@ void DatabaseManager::GetDbType(ClientContext &context, string &db_type, AttachI
 		info.path = path_and_type.path;
 	}
 
-	if (db_type.empty() && !unrecognized_option.empty()) {
-		throw BinderException("Unrecognized option for attach \"%s\"", unrecognized_option);
-	}
-
 	// if we are loading a database type from an extension - check if that extension is loaded
 	if (!db_type.empty()) {
 		if (!Catalog::TryAutoLoad(context, db_type)) {
@@ -132,21 +134,6 @@ void DatabaseManager::GetDbType(ClientContext &context, string &db_type, AttachI
 			ExtensionHelper::LoadExternalExtension(context, db_type);
 		}
 	}
-}
-
-optional_ptr<AttachedDatabase> DatabaseManager::GetDatabaseFromPath(ClientContext &context, const string &path) {
-
-	if (path.empty() || path == IN_MEMORY_PATH) {
-		return nullptr;
-	}
-
-	lock_guard<mutex> write_lock(db_paths_lock);
-	auto db_it = db_paths.find(path);
-	if (db_it != db_paths.end()) {
-		return GetDatabase(context, db_it->second);
-	}
-
-	return nullptr;
 }
 
 const string &DatabaseManager::GetDefaultDatabase(ClientContext &context) {
