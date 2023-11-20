@@ -85,17 +85,6 @@ DependencyInfo DependencyInfo::FromDependent(DependencyCatalogEntry &dep) {
 
 // ----------- DEPENDENCY_MANAGER -----------
 
-DependencySetCatalogEntry DependencyManager::GetDependencySet(CatalogTransaction transaction,
-                                                              const CatalogEntryInfo &info) {
-	DependencySetCatalogEntry set(catalog, *this, info);
-	return set;
-}
-
-DependencySetCatalogEntry DependencyManager::GetDependencySet(CatalogTransaction transaction, CatalogEntry &object) {
-	auto info = GetLookupProperties(object);
-	return GetDependencySet(transaction, info);
-}
-
 bool DependencyManager::IsSystemEntry(CatalogEntry &entry) const {
 	if (entry.internal) {
 		return true;
@@ -117,6 +106,64 @@ CatalogSet &DependencyManager::Dependents() {
 
 CatalogSet &DependencyManager::Dependencies() {
 	return dependencies;
+}
+
+void DependencyManager::ScanSetInternal(CatalogTransaction transaction, const CatalogEntryInfo &info,
+                                        bool scan_dependency, dependency_callback_t &callback) {
+	catalog_entry_set_t other_entries;
+	DependencyCatalogSet dependents(Dependents(), info);
+	DependencyCatalogSet dependencies(Dependencies(), info);
+
+	auto cb = [&](CatalogEntry &other) {
+		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
+		auto &other_entry = other.Cast<DependencyCatalogEntry>();
+
+		other_entries.insert(other_entry);
+		callback(other_entry);
+	};
+
+	if (scan_dependency) {
+		dependencies.Scan(transaction, cb);
+	} else {
+		dependents.Scan(transaction, cb);
+	}
+
+#ifdef DEBUG
+	// Verify some invariants
+	// Every dependency should have a matching dependent in the other set
+	// And vice versa
+	auto mangled_name = MangleName(info);
+
+	if (scan_dependency) {
+		for (auto &entry : other_entries) {
+			auto other_info = GetLookupProperties(entry);
+			DependencyCatalogSet other_dependents(Dependents(), other_info);
+
+			// Verify that the other half of the dependency also exists
+			auto dependent = other_dependents.GetEntryDetailed(transaction, mangled_name);
+			D_ASSERT(dependent.reason != CatalogSet::EntryLookup::FailureReason::NOT_PRESENT);
+		}
+	} else {
+		for (auto &entry : other_entries) {
+			auto other_info = GetLookupProperties(entry);
+			DependencyCatalogSet other_dependencies(Dependencies(), other_info);
+
+			// Verify that the other half of the dependent also exists
+			auto dependency = other_dependencies.GetEntryDetailed(transaction, mangled_name);
+			D_ASSERT(dependency.reason != CatalogSet::EntryLookup::FailureReason::NOT_PRESENT);
+		}
+	}
+#endif
+}
+
+void DependencyManager::ScanDependents(CatalogTransaction transaction, const CatalogEntryInfo &info,
+                                       dependency_callback_t &callback) {
+	ScanSetInternal(transaction, info, false, callback);
+}
+
+void DependencyManager::ScanDependencies(CatalogTransaction transaction, const CatalogEntryInfo &info,
+                                         dependency_callback_t &callback) {
+	ScanSetInternal(transaction, info, true, callback);
 }
 
 void DependencyManager::RemoveDependency(CatalogTransaction transaction, const DependencyInfo &info) {
@@ -270,14 +317,14 @@ optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction tra
 }
 
 void DependencyManager::CleanupDependencies(CatalogTransaction transaction, CatalogEntry &object) {
-	auto dependency_set = GetDependencySet(transaction, object);
-
 	// Collect the dependencies
 	vector<DependencyInfo> to_remove;
-	dependency_set.ScanDependencies(
-	    transaction, [&](DependencyCatalogEntry &dep) { to_remove.push_back(DependencyInfo::FromDependency(dep)); });
-	dependency_set.ScanDependents(
-	    transaction, [&](DependencyCatalogEntry &dep) { to_remove.push_back(DependencyInfo::FromDependent(dep)); });
+
+	auto info = GetLookupProperties(object);
+	ScanDependencies(transaction, info,
+	                 [&](DependencyCatalogEntry &dep) { to_remove.push_back(DependencyInfo::FromDependency(dep)); });
+	ScanDependents(transaction, info,
+	               [&](DependencyCatalogEntry &dep) { to_remove.push_back(DependencyInfo::FromDependent(dep)); });
 
 	// Remove the dependency entries
 	for (auto &dep : to_remove) {
@@ -291,12 +338,10 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 		return;
 	}
 
-	// Check if there are any dependencies registered on this object
-	auto object_dependency_set = GetDependencySet(transaction, object);
-
+	auto info = GetLookupProperties(object);
 	// Check if there are any entries that block the DROP because they still depend on the object
 	catalog_entry_set_t to_drop;
-	object_dependency_set.ScanDependents(transaction, [&](DependencyCatalogEntry &dep) {
+	ScanDependents(transaction, info, [&](DependencyCatalogEntry &dep) {
 		// It makes no sense to have a schema depend on anything
 		D_ASSERT(dep.EntryType() != CatalogType::SCHEMA_ENTRY);
 		auto entry = LookupEntry(transaction, dep);
@@ -329,10 +374,9 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		return;
 	}
 
-	auto old_dependency_set = GetDependencySet(transaction, old_obj);
-
+	auto info = GetLookupProperties(old_obj);
 	dependency_set_t owned_objects;
-	old_dependency_set.ScanDependents(transaction, [&](DependencyCatalogEntry &dep) {
+	ScanDependents(transaction, info, [&](DependencyCatalogEntry &dep) {
 		// It makes no sense to have a schema depend on anything
 		D_ASSERT(dep.EntryType() != CatalogType::SCHEMA_ENTRY);
 
@@ -353,7 +397,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 
 	// Keep old dependencies
 	dependency_set_t dependents;
-	old_dependency_set.ScanDependencies(transaction, [&](DependencyCatalogEntry &dep) {
+	ScanDependencies(transaction, info, [&](DependencyCatalogEntry &dep) {
 		auto entry = LookupEntry(transaction, dep);
 		if (!entry) {
 			return;
@@ -419,9 +463,9 @@ void DependencyManager::Scan(ClientContext &context,
 
 	// For every registered entry, get the dependents
 	for (auto &entry : entries) {
-		auto set = GetDependencySet(transaction, entry);
+		auto entry_info = GetLookupProperties(entry);
 		// Scan all the dependents of the entry
-		set.ScanDependents(transaction, [&](DependencyCatalogEntry &dependent) {
+		ScanDependents(transaction, entry_info, [&](DependencyCatalogEntry &dependent) {
 			auto dep = LookupEntry(transaction, dependent);
 			if (!dep) {
 				return;
@@ -438,16 +482,16 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 	}
 
 	// If the owner is already owned by something else, throw an error
-	auto owner_dependency_set = GetDependencySet(transaction, owner);
-	owner_dependency_set.ScanDependents(transaction, [&](DependencyCatalogEntry &dep) {
+	auto owner_info = GetLookupProperties(owner);
+	ScanDependents(transaction, owner_info, [&](DependencyCatalogEntry &dep) {
 		if (dep.Type() == DependencyType::DEPENDENCY_OWNED_BY) {
 			throw DependencyException(owner.name + " already owned by " + dep.EntryName());
 		}
 	});
 
 	// If the entry is already owned, throw an error
-	auto entry_dependency_set = GetDependencySet(transaction, entry);
-	entry_dependency_set.ScanDependents(transaction, [&](DependencyCatalogEntry &other) {
+	auto entry_info = GetLookupProperties(entry);
+	ScanDependents(transaction, entry_info, [&](DependencyCatalogEntry &other) {
 		auto dependency_type = other.Type();
 
 		auto dependent_entry = LookupEntry(transaction, other);

@@ -35,18 +35,12 @@ public:
 	DependencyManager &Manager();
 
 public:
-	using dependency_callback_t = const std::function<void(DependencyCatalogEntry &)>;
-	void ScanDependents(CatalogTransaction transaction, dependency_callback_t &callback);
-	void ScanDependencies(CatalogTransaction transaction, dependency_callback_t &callback);
-
-public:
 	bool HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry);
 	bool HasDependencyOn(CatalogTransaction transaction, DependencySetCatalogEntry &other);
 	bool IsDependencyOf(CatalogTransaction transaction, CatalogEntry &entry);
 	bool IsDependencyOf(CatalogTransaction transaction, DependencySetCatalogEntry &other);
 
 private:
-	void ScanSetInternal(CatalogTransaction transaction, bool dependencies, dependency_callback_t &callback);
 	bool HasDependencyOn(CatalogTransaction transaction, const MangledEntryName &mangled_name);
 	bool IsDependencyOf(CatalogTransaction transaction, const MangledEntryName &mangled_name);
 

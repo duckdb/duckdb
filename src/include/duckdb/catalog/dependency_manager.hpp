@@ -75,7 +75,6 @@ public:
 	          const std::function<void(CatalogEntry &, CatalogEntry &, DependencyType)> &callback);
 
 	void AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry);
-	DependencySetCatalogEntry GetDependencySet(CatalogTransaction transaction, const CatalogEntryInfo &info);
 
 private:
 	DuckCatalog &catalog;
@@ -84,8 +83,6 @@ private:
 
 private:
 	bool IsSystemEntry(CatalogEntry &entry) const;
-	DependencySetCatalogEntry GetDependencySet(CatalogTransaction transaction, CatalogEntry &entry);
-
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency);
 
 	void CleanupDependencies(CatalogTransaction transaction, CatalogEntry &entry);
@@ -104,6 +101,14 @@ private:
 private:
 	void RemoveDependency(CatalogTransaction transaction, const DependencyInfo &info);
 	void CreateDependency(CatalogTransaction transaction, const DependencyInfo &info);
+
+	using dependency_callback_t = const std::function<void(DependencyCatalogEntry &)>;
+	void ScanDependents(CatalogTransaction transaction, const CatalogEntryInfo &info, dependency_callback_t &callback);
+	void ScanDependencies(CatalogTransaction transaction, const CatalogEntryInfo &info,
+	                      dependency_callback_t &callback);
+	void ScanSetInternal(CatalogTransaction transaction, const CatalogEntryInfo &info, bool dependencies,
+	                     dependency_callback_t &callback);
+
 	CatalogSet &Dependents();
 	CatalogSet &Dependencies();
 };
