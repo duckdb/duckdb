@@ -32,7 +32,7 @@ enum class DependencyLinkSide { DEPENDENCY, DEPENDENT };
 class DependencyCatalogEntry : public InCatalogEntry {
 public:
 	DependencyCatalogEntry(DependencyLinkSide side, Catalog &catalog, DependencyManager &manager,
-	                       CatalogType entry_type, const string &entry_schema, const string &entry_name,
+	                       const CatalogEntryInfo &info,
 	                       DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	~DependencyCatalogEntry() override;
 
@@ -41,11 +41,13 @@ public:
 	CatalogType EntryType() const;
 	const string &EntrySchema() const;
 	const string &EntryName() const;
+	const CatalogEntryInfo &EntryInfo() const;
 
 	const MangledEntryName &FromMangledName() const;
 	CatalogType FromType() const;
 	const string &FromSchema() const;
 	const string &FromName() const;
+	const CatalogEntryInfo &FromInfo() const;
 
 	DependencyType Type() const;
 
@@ -55,9 +57,7 @@ public:
 
 private:
 	const MangledEntryName mangled_name;
-	const string entry_name;
-	const string entry_schema;
-	const CatalogType entry_type;
+	CatalogEntryInfo entry;
 
 	MangledEntryName from_mangled_name;
 	CatalogEntryInfo from;

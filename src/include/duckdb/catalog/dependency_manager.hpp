@@ -68,8 +68,7 @@ public:
 	          const std::function<void(CatalogEntry &, CatalogEntry &, DependencyType)> &callback);
 
 	void AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry);
-	DependencySetCatalogEntry GetDependencySet(CatalogTransaction transaction, CatalogType type, const string &schema,
-	                                           const string &name);
+	DependencySetCatalogEntry GetDependencySet(CatalogTransaction transaction, const CatalogEntryInfo &info);
 
 private:
 	DuckCatalog &catalog;
@@ -88,7 +87,7 @@ public:
 	static string GetSchema(CatalogEntry &entry);
 	static MangledEntryName MangleName(CatalogType type, const string &schema, const string &name);
 	static MangledEntryName MangleName(CatalogEntry &entry);
-	static void GetLookupProperties(CatalogEntry &entry, string &schema, string &name, CatalogType &type);
+	static CatalogEntryInfo GetLookupProperties(CatalogEntry &entry);
 
 private:
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, const DependencyList &dependencies);

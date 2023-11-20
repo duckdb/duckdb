@@ -6,14 +6,12 @@
 namespace duckdb {
 
 DependencyCatalogEntry::DependencyCatalogEntry(DependencyLinkSide side, Catalog &catalog, DependencyManager &manager,
-                                               CatalogType entry_type, const string &entry_schema,
-                                               const string &entry_name, DependencyType dependency_type)
+                                               const CatalogEntryInfo &info, DependencyType dependency_type)
     : InCatalogEntry(CatalogType::DEPENDENCY_ENTRY, catalog,
-                     DependencyManager::MangleName(entry_type, entry_schema, entry_name).name),
-      mangled_name(DependencyManager::MangleName(entry_type, entry_schema, entry_name)), entry_name(entry_name),
-      entry_schema(entry_schema), entry_type(entry_type), dependency_type(dependency_type), side(side),
-      manager(manager) {
-	D_ASSERT(entry_type != CatalogType::DEPENDENCY_ENTRY);
+                     DependencyManager::MangleName(info.type, info.schema, info.name).name),
+      mangled_name(DependencyManager::MangleName(info.type, info.schema, info.name)), entry(info),
+      dependency_type(dependency_type), side(side), manager(manager) {
+	D_ASSERT(info.type != CatalogType::DEPENDENCY_ENTRY);
 }
 
 const MangledEntryName &DependencyCatalogEntry::MangledName() const {
@@ -21,15 +19,19 @@ const MangledEntryName &DependencyCatalogEntry::MangledName() const {
 }
 
 CatalogType DependencyCatalogEntry::EntryType() const {
-	return entry_type;
+	return entry.type;
 }
 
 const string &DependencyCatalogEntry::EntrySchema() const {
-	return entry_schema;
+	return entry.schema;
 }
 
 const string &DependencyCatalogEntry::EntryName() const {
-	return entry_name;
+	return entry.name;
+}
+
+const CatalogEntryInfo &DependencyCatalogEntry::EntryInfo() const {
+	return entry;
 }
 
 const MangledEntryName &DependencyCatalogEntry::FromMangledName() const {
@@ -48,6 +50,10 @@ const string &DependencyCatalogEntry::FromName() const {
 	return from.name;
 }
 
+const CatalogEntryInfo &DependencyCatalogEntry::FromInfo() const {
+	return from;
+}
+
 DependencyType DependencyCatalogEntry::Type() const {
 	return dependency_type;
 }
@@ -63,15 +69,15 @@ DependencyCatalogEntry::~DependencyCatalogEntry() {
 }
 
 void DependencyCatalogEntry::CompleteLink(CatalogTransaction transaction, DependencyType type) {
-	auto set = manager.GetDependencySet(transaction, FromType(), FromSchema(), FromName());
+	auto set = manager.GetDependencySet(transaction, FromInfo());
 	switch (side) {
 	case DependencyLinkSide::DEPENDENCY: {
-		auto other_set = manager.GetDependencySet(transaction, EntryType(), EntrySchema(), EntryName());
+		auto other_set = manager.GetDependencySet(transaction, EntryInfo());
 		other_set.AddDependent(transaction, set, type);
 		break;
 	}
 	case DependencyLinkSide::DEPENDENT: {
-		auto other_set = manager.GetDependencySet(transaction, EntryType(), EntrySchema(), EntryName());
+		auto other_set = manager.GetDependencySet(transaction, EntryInfo());
 		other_set.AddDependency(transaction, set, type);
 		break;
 	}

@@ -68,20 +68,15 @@ MangledEntryName DependencyManager::MangleName(CatalogEntry &entry) {
 	return MangleName(type, schema, name);
 }
 
-DependencySetCatalogEntry DependencyManager::GetDependencySet(CatalogTransaction transaction, CatalogType type,
-                                                              const string &schema, const string &name) {
-	CatalogEntryInfo info {type, schema, name};
+DependencySetCatalogEntry DependencyManager::GetDependencySet(CatalogTransaction transaction,
+                                                              const CatalogEntryInfo &info) {
 	DependencySetCatalogEntry set(catalog, *this, info);
 	return set;
 }
 
 DependencySetCatalogEntry DependencyManager::GetDependencySet(CatalogTransaction transaction, CatalogEntry &object) {
-	CatalogType entry_type;
-	string entry_schema;
-	string entry_name;
-
-	GetLookupProperties(object, entry_schema, entry_name, entry_type);
-	return GetDependencySet(transaction, entry_type, entry_schema, entry_name);
+	auto info = GetLookupProperties(object);
+	return GetDependencySet(transaction, info);
 }
 
 bool DependencyManager::IsSystemEntry(CatalogEntry &entry) const {
@@ -150,25 +145,28 @@ static bool CascadeDrop(bool cascade, DependencyType dependency_type) {
 	return false;
 }
 
-void DependencyManager::GetLookupProperties(CatalogEntry &entry, string &schema, string &name, CatalogType &type) {
+CatalogEntryInfo DependencyManager::GetLookupProperties(CatalogEntry &entry) {
 	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
 		auto &dependency_entry = entry.Cast<DependencyCatalogEntry>();
 
-		schema = dependency_entry.EntrySchema();
-		name = dependency_entry.EntryName();
-		type = dependency_entry.EntryType();
+		auto schema = dependency_entry.EntrySchema();
+		auto name = dependency_entry.EntryName();
+		auto type = dependency_entry.EntryType();
+		return CatalogEntryInfo {type, schema, name};
 	} else {
-		schema = DependencyManager::GetSchema(entry);
-		name = entry.name;
-		type = entry.type;
+		auto schema = DependencyManager::GetSchema(entry);
+		auto name = entry.name;
+		auto type = entry.type;
+		return CatalogEntryInfo {type, schema, name};
 	}
 }
 
 optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency) {
-	string schema;
-	string name;
-	CatalogType type;
-	GetLookupProperties(dependency, schema, name, type);
+	auto info = GetLookupProperties(dependency);
+
+	auto &type = info.type;
+	auto &schema = info.schema;
+	auto &name = info.name;
 
 	// Lookup the schema
 	auto schema_entry = catalog.GetSchema(transaction, schema, OnEntryNotFound::RETURN_NULL);

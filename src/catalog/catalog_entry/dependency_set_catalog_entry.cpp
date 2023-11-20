@@ -90,8 +90,7 @@ const string &DependencySetCatalogEntry::EntryName() const {
 // Add from a single CatalogEntry
 DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction,
                                                                  const MangledEntryName &mangled_name,
-                                                                 CatalogType entry_type, const string &entry_schema,
-                                                                 const string &entry_name, DependencyType type) {
+                                                                 CatalogEntryInfo info, DependencyType type) {
 	{
 		auto dep = dependencies.GetEntry(transaction, mangled_name);
 		if (dep) {
@@ -99,8 +98,8 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransact
 		}
 	}
 
-	auto dependency_p = make_uniq<DependencyCatalogEntry>(DependencyLinkSide::DEPENDENCY, catalog, dependency_manager,
-	                                                      entry_type, entry_schema, entry_name, type);
+	auto dependency_p =
+	    make_uniq<DependencyCatalogEntry>(DependencyLinkSide::DEPENDENCY, catalog, dependency_manager, info, type);
 	auto &dependency_name = dependency_p->MangledName();
 	D_ASSERT(!StringUtil::CIEquals(dependency_name.name, MangledName().name));
 	if (catalog.IsTemporaryCatalog()) {
@@ -119,32 +118,29 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransact
 	auto entry_type = to_add.EntryType();
 	auto &entry_schema = to_add.EntrySchema();
 	auto &entry_name = to_add.EntryName();
-	return AddDependency(transaction, mangled_name, entry_type, entry_schema, entry_name, type);
+	CatalogEntryInfo info {entry_type, entry_schema, entry_name};
+	return AddDependency(transaction, mangled_name, info, type);
 }
 
 DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction, CatalogEntry &to_add,
                                                                  DependencyType type) {
 	auto mangled_name = DependencyManager::MangleName(to_add);
-	string entry_schema;
-	string entry_name;
-	CatalogType entry_type;
 
-	DependencyManager::GetLookupProperties(to_add, entry_schema, entry_name, entry_type);
-	return AddDependency(transaction, mangled_name, entry_type, entry_schema, entry_name, type);
+	auto info = DependencyManager::GetLookupProperties(to_add);
+	return AddDependency(transaction, mangled_name, info, type);
 }
 
 DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction,
                                                                 const MangledEntryName &mangled_name,
-                                                                CatalogType entry_type, const string &entry_schema,
-                                                                const string &entry_name, DependencyType type) {
+                                                                CatalogEntryInfo info, DependencyType type) {
 	{
 		auto dep = dependents.GetEntry(transaction, mangled_name);
 		if (dep) {
 			return dep->Cast<DependencyCatalogEntry>();
 		}
 	}
-	auto dependent_p = make_uniq<DependencyCatalogEntry>(DependencyLinkSide::DEPENDENT, catalog, dependency_manager,
-	                                                     entry_type, entry_schema, entry_name, type);
+	auto dependent_p =
+	    make_uniq<DependencyCatalogEntry>(DependencyLinkSide::DEPENDENT, catalog, dependency_manager, info, type);
 	auto &dependent_name = dependent_p->MangledName();
 	D_ASSERT(!StringUtil::CIEquals(dependent_name.name, MangledName().name));
 	if (catalog.IsTemporaryCatalog()) {
@@ -162,18 +158,17 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransacti
 	auto entry_type = to_add.EntryType();
 	auto &entry_schema = to_add.EntrySchema();
 	auto &entry_name = to_add.EntryName();
-	return AddDependency(transaction, mangled_name, entry_type, entry_schema, entry_name, type);
+
+	CatalogEntryInfo info {entry_type, entry_schema, entry_name};
+	return AddDependency(transaction, mangled_name, info, type);
 }
 
 DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction, CatalogEntry &to_add,
                                                                 DependencyType type) {
 	auto mangled_name = DependencyManager::MangleName(to_add);
-	string entry_schema;
-	string entry_name;
-	CatalogType entry_type;
 
-	DependencyManager::GetLookupProperties(to_add, entry_schema, entry_name, entry_type);
-	return AddDependent(transaction, mangled_name, entry_type, entry_schema, entry_name, type);
+	auto info = DependencyManager::GetLookupProperties(to_add);
+	return AddDependent(transaction, mangled_name, info, type);
 }
 
 // Add from a Dependency
