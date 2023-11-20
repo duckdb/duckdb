@@ -51,17 +51,7 @@ static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &a
 
 			idx_t index = reorder_idx[i];
 
-			if (entry != aliases.end()) {
-				// the alias already exists
-				// check if there is a conflict
-
-				if (entry->second != index) {
-					// there is a conflict
-					// we place "-1" in the aliases map at this location
-					// "-1" signifies that there is an ambiguous reference
-					aliases[name] = DConstants::INVALID_INDEX;
-				}
-			} else {
+			if (entry == aliases.end()) {
 				// the alias is not in there yet, just assign it
 				aliases[name] = index;
 			}
