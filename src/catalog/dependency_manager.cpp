@@ -183,7 +183,7 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 		DependencyInfo info {/*from = */ GetLookupProperties(object),
 		                     /*to = */ GetLookupProperties(dependency),
 		                     /*from_type = */ dependency_type,
-		                     /*to_type =*/DependencyType::DEPENDENCY_AUTOMATIC};
+		                     /*to_type =*/DependencyType::DEPENDENCY_REGULAR};
 		CreateDependency(transaction, info);
 		// dependency_set.AddDependent(transaction, object, dependency_type).CompleteLink(transaction);
 	}
@@ -355,7 +355,13 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	for (auto &dep : dependents) {
 		auto &other = dep.entry.get();
 		auto other_dependency_set = GetDependencySet(transaction, other);
-		other_dependency_set.AddDependent(transaction, new_obj).CompleteLink(transaction);
+
+		DependencyInfo info {/*from = */ GetLookupProperties(new_obj),
+		                     /*to = */ GetLookupProperties(other),
+		                     // FIXME: should this be REGULAR ??
+		                     /*from_type = */ DependencyType::DEPENDENCY_REGULAR,
+		                     /*to_type =*/DependencyType::DEPENDENCY_REGULAR};
+		CreateDependency(transaction, info);
 	}
 
 	auto dependency_set = GetDependencySet(transaction, new_obj);
@@ -365,9 +371,20 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		auto &entry = object.entry.get();
 		auto other_dependency_set = GetDependencySet(transaction, entry);
 
-		other_dependency_set.AddDependent(transaction, new_obj, DependencyType::DEPENDENCY_OWNED_BY)
-		    .CompleteLink(transaction);
-		dependency_set.AddDependent(transaction, entry, DependencyType::DEPENDENCY_OWNS).CompleteLink(transaction);
+		{
+			DependencyInfo info {/*from = */ GetLookupProperties(new_obj),
+			                     /*to = */ GetLookupProperties(entry),
+			                     /*from_type = */ DependencyType::DEPENDENCY_OWNED_BY,
+			                     /*to_type =*/DependencyType::DEPENDENCY_REGULAR};
+			CreateDependency(transaction, info);
+		}
+		{
+			DependencyInfo info {/*from = */ GetLookupProperties(entry),
+			                     /*to = */ GetLookupProperties(new_obj),
+			                     /*from_type = */ DependencyType::DEPENDENCY_OWNS,
+			                     /*to_type =*/DependencyType::DEPENDENCY_REGULAR};
+			CreateDependency(transaction, info);
+		}
 	}
 }
 
@@ -435,9 +452,20 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 			                          ". Cannot have circular dependencies");
 		}
 	});
-	entry_dependency_set.AddDependent(transaction, owner, DependencyType::DEPENDENCY_OWNED_BY)
-	    .CompleteLink(transaction);
-	owner_dependency_set.AddDependent(transaction, entry, DependencyType::DEPENDENCY_OWNS).CompleteLink(transaction);
+	{
+		DependencyInfo info {/*from = */ GetLookupProperties(owner),
+		                     /*to = */ GetLookupProperties(entry),
+		                     /*from_type = */ DependencyType::DEPENDENCY_OWNED_BY,
+		                     /*to_type =*/DependencyType::DEPENDENCY_REGULAR};
+		CreateDependency(transaction, info);
+	}
+	{
+		DependencyInfo info {/*from = */ GetLookupProperties(entry),
+		                     /*to = */ GetLookupProperties(owner),
+		                     /*from_type = */ DependencyType::DEPENDENCY_OWNS,
+		                     /*to_type =*/DependencyType::DEPENDENCY_REGULAR};
+		CreateDependency(transaction, info);
+	}
 }
 
 } // namespace duckdb
