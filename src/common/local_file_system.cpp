@@ -673,6 +673,13 @@ FileType LocalFileSystem::TryGetFileType(const std::string &path, optional_ptr<s
 	if (strncmp(path.c_str(), PIPE_PREFIX, strlen(PIPE_PREFIX)) == 0) {
 		return FileType::FILE_TYPE_FIFO;
 	}
+
+	// It seems that mingw may have some issues with using _wstat to determine if a path points at a directory
+	DWORD attrs = WindowsGetFileAttributes(path);
+	if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY)) {
+		return FileType::FILE_TYPE_DIR;
+	}
+
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(path.c_str());
 	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
@@ -681,8 +688,6 @@ FileType LocalFileSystem::TryGetFileType(const std::string &path, optional_ptr<s
 			switch (status.st_mode & S_IFMT) {
 			case S_IFCHR:
 				return FileType::FILE_TYPE_CHARDEV;
-			case S_IFDIR:
-				return FileType::FILE_TYPE_DIR;
 			case S_IFREG:
 				return FileType::FILE_TYPE_REGULAR;
 			default:
