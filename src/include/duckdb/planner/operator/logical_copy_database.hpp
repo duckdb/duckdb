@@ -21,8 +21,7 @@ struct CopyDatabaseInfo {
 
 	Catalog &from_database;
 	Catalog &to_database;
-	vector<unique_ptr<CreateInfo>> schemas;
-	vector<unique_ptr<CreateInfo>> tables;
+	vector<unique_ptr<CreateInfo>> entries;
 };
 
 class LogicalCopyDatabase : public LogicalOperator {
@@ -34,6 +33,7 @@ public:
 	~LogicalCopyDatabase() override;
 
 	unique_ptr<CopyDatabaseInfo> info;
+
 public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);

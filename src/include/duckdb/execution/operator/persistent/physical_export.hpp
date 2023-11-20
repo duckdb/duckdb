@@ -55,7 +55,8 @@ public:
 		return true;
 	}
 
-	static void ExtractEntries(ClientContext &context, vector<reference<SchemaCatalogEntry>> &schemas, ExportEntries &result);
+	static void ExtractEntries(ClientContext &context, vector<reference<SchemaCatalogEntry>> &schemas,
+	                           ExportEntries &result);
 
 public:
 	// Sink interface

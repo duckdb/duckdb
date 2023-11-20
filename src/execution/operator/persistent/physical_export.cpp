@@ -95,7 +95,8 @@ unique_ptr<GlobalSourceState> PhysicalExport::GetGlobalSourceState(ClientContext
 	return make_uniq<ExportSourceState>();
 }
 
-void PhysicalExport::ExtractEntries(ClientContext &context, vector<reference<SchemaCatalogEntry>> &schema_list, ExportEntries &result) {
+void PhysicalExport::ExtractEntries(ClientContext &context, vector<reference<SchemaCatalogEntry>> &schema_list,
+                                    ExportEntries &result) {
 	for (auto &schema_p : schema_list) {
 		auto &schema = schema_p.get();
 		if (!schema.internal) {
@@ -153,9 +154,10 @@ SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &c
 	}
 
 	// order macro's by timestamp so nested macro's are imported nicely
-	sort(entries.macros.begin(), entries.macros.end(), [](const reference<CatalogEntry> &lhs, const reference<CatalogEntry> &rhs) {
-		return lhs.get().oid < rhs.get().oid;
-	});
+	sort(entries.macros.begin(), entries.macros.end(),
+	     [](const reference<CatalogEntry> &lhs, const reference<CatalogEntry> &rhs) {
+		     return lhs.get().oid < rhs.get().oid;
+	     });
 
 	// write the schema.sql file
 	// export order is SCHEMA -> SEQUENCE -> TABLE -> VIEW -> INDEX

@@ -23,7 +23,8 @@ public:
 public:
 	LogicalSetOperation(idx_t table_index, idx_t column_count, unique_ptr<LogicalOperator> top,
 	                    unique_ptr<LogicalOperator> bottom, LogicalOperatorType type, bool allow_out_of_order = true)
-	    : LogicalOperator(type), table_index(table_index), column_count(column_count), allow_out_of_order(allow_out_of_order) {
+	    : LogicalOperator(type), table_index(table_index), column_count(column_count),
+	      allow_out_of_order(allow_out_of_order) {
 		D_ASSERT(type == LogicalOperatorType::LOGICAL_UNION || type == LogicalOperatorType::LOGICAL_EXCEPT ||
 		         type == LogicalOperatorType::LOGICAL_INTERSECT);
 		children.push_back(std::move(top));

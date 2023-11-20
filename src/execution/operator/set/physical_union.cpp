@@ -8,7 +8,8 @@ namespace duckdb {
 
 PhysicalUnion::PhysicalUnion(vector<LogicalType> types, unique_ptr<PhysicalOperator> top,
                              unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality, bool allow_out_of_order)
-    : PhysicalOperator(PhysicalOperatorType::UNION, std::move(types), estimated_cardinality), allow_out_of_order(allow_out_of_order) {
+    : PhysicalOperator(PhysicalOperatorType::UNION, std::move(types), estimated_cardinality),
+      allow_out_of_order(allow_out_of_order) {
 	children.push_back(std::move(top));
 	children.push_back(std::move(bottom));
 }

@@ -14,10 +14,7 @@
 
 namespace duckdb {
 
-enum class CopyDatabaseType {
-	COPY_SCHEMA,
-	COPY_DATA
-};
+enum class CopyDatabaseType { COPY_SCHEMA, COPY_DATA };
 
 class CopyDatabaseStatement : public SQLStatement {
 public:

@@ -268,7 +268,6 @@ private:
 	BoundStatement Bind(DetachStatement &stmt);
 	BoundStatement Bind(CopyDatabaseStatement &stmt);
 
-
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
 	                             const string &alias, idx_t update_table_index,
 	                             unique_ptr<LogicalOperator> child_operator, BoundStatement result);
@@ -373,7 +372,6 @@ private:
 
 	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(CopyDatabaseStatement &stmt);
 	unique_ptr<LogicalOperator> BindCopyDatabaseData(CopyDatabaseStatement &stmt);
-
 
 public:
 	// This should really be a private constructor, but make_shared does not allow it...
