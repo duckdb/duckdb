@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 
 namespace duckdb {
 

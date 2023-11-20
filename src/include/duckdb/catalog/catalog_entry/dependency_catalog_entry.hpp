@@ -16,6 +16,7 @@
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/catalog/dependency.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 #include <memory>
 
 namespace duckdb {
