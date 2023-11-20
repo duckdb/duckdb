@@ -26,6 +26,8 @@ body:
 
         If none of the above repositories are applicable, feel free to raise it in this one
 
+        Please report security vulnerabilities using GitHub's [report vulnerability form](https://github.com/duckdb/duckdb/security/advisories/new).
+
   - type: textarea
     attributes:
       label: What happens?
