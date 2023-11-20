@@ -87,8 +87,9 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	if (!error.empty()) {
 		// failed to bind
 		// try to bind correlated columns manually
-		if (!BindCorrelatedColumns(function.children[0])) {
-			return BindResult(error);
+		auto result = BindCorrelatedColumns(function.children[0], error);
+		if (result.HasError()) {
+			return BindResult(result.error);
 		}
 		auto &bound_expr = BoundExpression::GetExpression(*function.children[0]);
 		ExtractCorrelatedExpressions(binder, *bound_expr);

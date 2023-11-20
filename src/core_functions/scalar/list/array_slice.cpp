@@ -6,6 +6,7 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
@@ -379,6 +380,13 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 	D_ASSERT(bound_function.arguments.size() == 3 || bound_function.arguments.size() == 4);
 
 	switch (arguments[0]->return_type.id()) {
+	case LogicalTypeId::ARRAY: {
+		// Cast to list
+		auto child_type = ArrayType::GetChildType(arguments[0]->return_type);
+		auto target_type = LogicalType::LIST(child_type);
+		arguments[0] = BoundCastExpression::AddCastToType(context, std::move(arguments[0]), target_type);
+		bound_function.return_type = arguments[0]->return_type;
+	} break;
 	case LogicalTypeId::LIST:
 		// The result is the same type
 		bound_function.return_type = arguments[0]->return_type;

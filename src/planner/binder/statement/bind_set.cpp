@@ -2,7 +2,8 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_set.hpp"
 #include "duckdb/planner/operator/logical_reset.hpp"
-#include <algorithm>
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
 
 namespace duckdb {
 
@@ -11,7 +12,12 @@ BoundStatement Binder::Bind(SetVariableStatement &stmt) {
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
 
-	result.plan = make_uniq<LogicalSet>(stmt.name, stmt.value, stmt.scope);
+	// evaluate the scalar value
+	ConstantBinder default_binder(*this, context, "SET value");
+	auto bound_value = default_binder.Bind(stmt.value);
+	auto value = ExpressionExecutor::EvaluateScalar(context, *bound_value, true);
+
+	result.plan = make_uniq<LogicalSet>(stmt.name, std::move(value), stmt.scope);
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }
