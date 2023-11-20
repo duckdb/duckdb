@@ -37,7 +37,7 @@ void CatalogEntryMap::UpdateEntry(unique_ptr<CatalogEntry> catalog_entry) {
 	entry->second->SetChild(std::move(existing));
 }
 
-case_insensitive_map_t<unique_ptr<CatalogEntry>> &CatalogEntryMap::Entries() {
+case_insensitive_rbtree_t<unique_ptr<CatalogEntry>> &CatalogEntryMap::Entries() {
 	return entries;
 }
 
@@ -624,6 +624,24 @@ void CatalogSet::Scan(CatalogTransaction transaction, const std::function<void(C
 
 void CatalogSet::Scan(ClientContext &context, const std::function<void(CatalogEntry &)> &callback) {
 	Scan(catalog.GetCatalogTransaction(context), callback);
+}
+
+void CatalogSet::ScanWithPrefix(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback,
+                                const string &prefix) {
+	// lock the catalog set
+	unique_lock<mutex> lock(catalog_lock);
+	CreateDefaultEntries(transaction, lock);
+
+	auto &entries = map.Entries();
+	auto it = entries.lower_bound(prefix);
+	auto end = entries.upper_bound(prefix + char(255));
+	for (; it != end; it++) {
+		auto &entry = *it->second;
+		auto &entry_for_transaction = GetEntryForTransaction(transaction, entry);
+		if (!entry_for_transaction.deleted) {
+			callback(entry_for_transaction);
+		}
+	}
 }
 
 void CatalogSet::Scan(const std::function<void(CatalogEntry &)> &callback) {

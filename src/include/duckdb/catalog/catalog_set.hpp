@@ -41,12 +41,12 @@ public:
 	void AddEntry(unique_ptr<CatalogEntry> entry);
 	void UpdateEntry(unique_ptr<CatalogEntry> entry);
 	void DropEntry(CatalogEntry &entry);
-	case_insensitive_map_t<unique_ptr<CatalogEntry>> &Entries();
+	case_insensitive_rbtree_t<unique_ptr<CatalogEntry>> &Entries();
 	optional_ptr<CatalogEntry> GetEntry(const string &name);
 
 private:
 	//! Mapping of string to catalog entry
-	case_insensitive_map_t<unique_ptr<CatalogEntry>> entries;
+	case_insensitive_rbtree_t<unique_ptr<CatalogEntry>> entries;
 };
 
 //! The Catalog Set stores (key, value) map of a set of CatalogEntries
@@ -98,6 +98,8 @@ public:
 	//! Scan the catalog set, invoking the callback method for every committed entry
 	DUCKDB_API void Scan(const std::function<void(CatalogEntry &)> &callback);
 	//! Scan the catalog set, invoking the callback method for every entry
+	DUCKDB_API void ScanWithPrefix(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback,
+	                               const string &prefix);
 	DUCKDB_API void Scan(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback);
 	DUCKDB_API void Scan(ClientContext &context, const std::function<void(CatalogEntry &)> &callback);
 

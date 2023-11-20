@@ -39,14 +39,17 @@ optional_ptr<CatalogEntry> ProxyCatalogSet::GetEntry(CatalogTransaction transact
 }
 
 void ProxyCatalogSet::Scan(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback) {
-	set.Scan(transaction, [&](CatalogEntry &entry) {
-		auto &dep = entry.Cast<DependencyCatalogEntry>();
-		auto &name = dep.FromMangledName();
-		if (!StringUtil::CIEquals(name, mangled_name)) {
-			return;
-		}
-		callback(entry);
-	});
+	set.ScanWithPrefix(
+	    transaction,
+	    [&](CatalogEntry &entry) {
+		    auto &dep = entry.Cast<DependencyCatalogEntry>();
+		    auto &name = dep.FromMangledName();
+		    if (!StringUtil::CIEquals(name, mangled_name)) {
+			    return;
+		    }
+		    callback(entry);
+	    },
+	    mangled_name);
 }
 
 bool ProxyCatalogSet::DropEntry(CatalogTransaction transaction, const string &name, bool cascade,
