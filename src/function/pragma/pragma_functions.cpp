@@ -116,7 +116,8 @@ static void PragmaDropSecret(ClientContext &context, const FunctionParameters &p
 	auto name = parameters.values[0].ToString();
 	bool missing_ok = parameters.values[1].DefaultCastAs(LogicalType::BOOLEAN).GetValue<bool>();
 
-	DBConfig::GetConfig(context).secret_manager->DropSecretByName(name, missing_ok);
+	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
+	DBConfig::GetConfig(context).secret_manager->DropSecretByName(transaction, name, missing_ok);
 }
 
 static void PragmaEnableOptimizer(ClientContext &context, const FunctionParameters &parameters) {

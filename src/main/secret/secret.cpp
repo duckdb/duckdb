@@ -26,7 +26,7 @@ void BaseSecret::SerializeBaseSecret(Serializer &serializer) const {
 	serializer.WriteProperty(102, "name", name);
 	serializer.WriteList(103, "scope", prefix_paths.size(),
 	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(prefix_paths[i]); });
-};
+}
 
 string BaseSecret::ToString(bool redact) const {
 	return "";
@@ -34,7 +34,7 @@ string BaseSecret::ToString(bool redact) const {
 
 void BaseSecret::Serialize(Serializer &serializer) const {
 	throw InternalException("Attempted to serialize secret without serialize");
-};
+}
 
 string BaseKeyValueSecret::ToString(bool redact) const {
 	string result;
@@ -81,7 +81,7 @@ void BaseKeyValueSecret::Serialize(Serializer &serializer) const {
 	auto map_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 	auto map = Value::MAP(ListType::GetChildType(map_type), map_values);
 	serializer.WriteProperty(201, "secret_map", map);
-};
+}
 
 bool CreateSecretFunctionSet::ProviderExists(const string &provider_name) {
 	return functions.find(provider_name) != functions.end();

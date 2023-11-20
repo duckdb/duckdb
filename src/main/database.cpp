@@ -209,6 +209,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	} else {
 		config_ptr->options.database_path.clear();
 	}
+
 	Configure(*config_ptr);
 
 	if (user_config && !user_config->options.use_temporary_directory) {
@@ -228,6 +229,9 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config.options.database_type = path_and_type.type;
 		config.options.database_path = path_and_type.path;
 	}
+
+	// initialize the secret manager
+	config.secret_manager->Initialize(*this);
 
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
@@ -333,8 +337,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (new_config.secret_manager) {
 		config.secret_manager = std::move(new_config.secret_manager);
 	} else {
-		//		config.secret_manager = make_uniq<DebugSecretManager>(make_uniq<DuckSecretManager>(*this));
-		config.secret_manager = make_uniq<DuckSecretManager>(*this);
+		config.secret_manager = make_uniq<DuckSecretManager>();
 	}
 	if (config.options.maximum_memory == (idx_t)-1) {
 		config.SetDefaultMaxMemory();

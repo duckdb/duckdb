@@ -320,8 +320,6 @@ CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {
 		return collations;
 	case CatalogType::TYPE_ENTRY:
 		return types;
-	case CatalogType::CREATE_SECRET_FUNCTION_ENTRY:
-		return create_secret_functions;
 	default:
 		throw InternalException("Unsupported catalog type in schema");
 	}

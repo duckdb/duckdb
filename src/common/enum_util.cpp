@@ -773,8 +773,6 @@ const char* EnumUtil::ToChars<CatalogType>(CatalogType value) {
 		return "MACRO_ENTRY";
 	case CatalogType::TABLE_MACRO_ENTRY:
 		return "TABLE_MACRO_ENTRY";
-	case CatalogType::CREATE_SECRET_FUNCTION_ENTRY:
-		return "CREATE_SECRET_FUNCTION_ENTRY";
 	case CatalogType::UPDATED_ENTRY:
 		return "UPDATED_ENTRY";
 	case CatalogType::DELETED_ENTRY:
@@ -836,9 +834,6 @@ CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "TABLE_MACRO_ENTRY")) {
 		return CatalogType::TABLE_MACRO_ENTRY;
-	}
-	if (StringUtil::Equals(value, "CREATE_SECRET_FUNCTION_ENTRY")) {
-		return CatalogType::CREATE_SECRET_FUNCTION_ENTRY;
 	}
 	if (StringUtil::Equals(value, "UPDATED_ENTRY")) {
 		return CatalogType::UPDATED_ENTRY;

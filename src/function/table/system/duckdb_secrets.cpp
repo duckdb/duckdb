@@ -70,7 +70,9 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 	auto &bind_data = data_p.bind_data->Cast<DuckDBSecretsBindData>();
 
 	auto &secret_manager = context.db->config.secret_manager;
-	auto secrets = secret_manager->AllSecrets();
+
+	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
+	auto secrets = secret_manager->AllSecrets(transaction);
 
 	if (data.offset >= secrets.size()) {
 		// finished returning values
@@ -83,16 +85,16 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 		auto &secret_entry = secrets[data.offset];
 
 		vector<Value> scope_value;
-		for (const auto &scope_entry : secret_entry.secret->GetScope()) {
+		for (const auto &scope_entry : secret_entry->secret->GetScope()) {
 			scope_value.push_back(scope_entry);
 		}
 
-		const auto secret_ptr = secret_entry.secret;
+		const auto secret_ptr = secret_entry->secret;
 
 		output.SetValue(0, count, secret_ptr->GetName());
 		output.SetValue(1, count, Value(secret_ptr->GetType()));
 		output.SetValue(2, count, Value(secret_ptr->GetProvider()));
-		output.SetValue(3, count, Value(secret_entry.storage_mode));
+		output.SetValue(3, count, Value(secret_entry->storage_mode));
 		output.SetValue(4, count, Value::LIST(LogicalType::VARCHAR, scope_value));
 		output.SetValue(5, count, secret_ptr->ToString(bind_data.redact));
 

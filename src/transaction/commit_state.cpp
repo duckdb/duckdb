@@ -161,6 +161,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 	case CatalogType::COPY_FUNCTION_ENTRY:
 	case CatalogType::PRAGMA_FUNCTION_ENTRY:
 	case CatalogType::COLLATION_ENTRY:
+	case CatalogType::SECRET:
 		// do nothing, these entries are not persisted to disk
 		break;
 	default:
