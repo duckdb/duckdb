@@ -32,8 +32,9 @@ struct CatalogEntryInfo {
 struct DependencyInfo {
 	CatalogEntryInfo from;
 	CatalogEntryInfo to;
+	DependencyType from_type;
+	DependencyType to_type;
 };
-
 
 struct MangledEntryName {
 public:

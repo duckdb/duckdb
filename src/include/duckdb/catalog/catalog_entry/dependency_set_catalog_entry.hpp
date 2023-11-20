@@ -40,13 +40,9 @@ public:
 	void ScanDependencies(CatalogTransaction transaction, dependency_callback_t &callback);
 
 public:
-	// Add Dependencies
+	//// Add Dependencies
 	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, DependencySetCatalogEntry &dependent,
 	                                      DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
-	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, CatalogEntry &dependent,
-	                                      DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
-	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, Dependency dependent);
-
 	// Add Dependents
 	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, DependencySetCatalogEntry &dependent,
 	                                     DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
@@ -94,6 +90,7 @@ public:
 	CatalogType EntryType() const;
 	const string &EntrySchema() const;
 	const string &EntryName() const;
+	const CatalogEntryInfo &EntryInfo() const;
 
 private:
 	void VerifyDependencyName(const string &name);

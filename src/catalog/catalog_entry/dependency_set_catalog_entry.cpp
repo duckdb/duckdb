@@ -87,10 +87,12 @@ const string &DependencySetCatalogEntry::EntryName() const {
 	return info.name;
 }
 
+const CatalogEntryInfo &DependencySetCatalogEntry::EntryInfo() const {
+	return info;
+}
+
 // Add from a single CatalogEntry
-DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction,
-                                                                 const MangledEntryName &mangled_name,
-                                                                 CatalogEntryInfo info, DependencyType type) {
+DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction, const MangledEntryName &mangled_name, CatalogEntryInfo info, DependencyType type) {
 	{
 		auto dep = dependencies.GetEntry(transaction, mangled_name);
 		if (dep) {
@@ -115,18 +117,7 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransact
                                                                  DependencySetCatalogEntry &to_add,
                                                                  DependencyType type) {
 	auto &mangled_name = to_add.MangledName();
-	auto entry_type = to_add.EntryType();
-	auto &entry_schema = to_add.EntrySchema();
-	auto &entry_name = to_add.EntryName();
-	CatalogEntryInfo info {entry_type, entry_schema, entry_name};
-	return AddDependency(transaction, mangled_name, info, type);
-}
-
-DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction, CatalogEntry &to_add,
-                                                                 DependencyType type) {
-	auto mangled_name = DependencyManager::MangleName(to_add);
-
-	auto info = DependencyManager::GetLookupProperties(to_add);
+	auto &info = to_add.EntryInfo();
 	return AddDependency(transaction, mangled_name, info, type);
 }
 
@@ -160,7 +151,7 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransacti
 	auto &entry_name = to_add.EntryName();
 
 	CatalogEntryInfo info {entry_type, entry_schema, entry_name};
-	return AddDependency(transaction, mangled_name, info, type);
+	return AddDependent(transaction, mangled_name, info, type);
 }
 
 DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction, CatalogEntry &to_add,
@@ -171,10 +162,6 @@ DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransacti
 	return AddDependent(transaction, mangled_name, info, type);
 }
 
-// Add from a Dependency
-DependencyCatalogEntry &DependencySetCatalogEntry::AddDependency(CatalogTransaction transaction, Dependency to_add) {
-	return AddDependency(transaction, to_add.entry, to_add.dependency_type);
-}
 DependencyCatalogEntry &DependencySetCatalogEntry::AddDependent(CatalogTransaction transaction, Dependency to_add) {
 	return AddDependent(transaction, to_add.entry, to_add.dependency_type);
 }
