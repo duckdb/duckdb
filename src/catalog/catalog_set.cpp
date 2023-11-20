@@ -37,7 +37,7 @@ void CatalogEntryMap::UpdateEntry(unique_ptr<CatalogEntry> catalog_entry) {
 	entry->second->SetChild(std::move(existing));
 }
 
-case_insensitive_rbtree_t<unique_ptr<CatalogEntry>> &CatalogEntryMap::Entries() {
+case_insensitive_tree_t<unique_ptr<CatalogEntry>> &CatalogEntryMap::Entries() {
 	return entries;
 }
 

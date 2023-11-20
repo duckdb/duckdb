@@ -41,12 +41,12 @@ public:
 	void AddEntry(unique_ptr<CatalogEntry> entry);
 	void UpdateEntry(unique_ptr<CatalogEntry> entry);
 	void DropEntry(CatalogEntry &entry);
-	case_insensitive_rbtree_t<unique_ptr<CatalogEntry>> &Entries();
+	case_insensitive_tree_t<unique_ptr<CatalogEntry>> &Entries();
 	optional_ptr<CatalogEntry> GetEntry(const string &name);
 
 private:
 	//! Mapping of string to catalog entry
-	case_insensitive_rbtree_t<unique_ptr<CatalogEntry>> entries;
+	case_insensitive_tree_t<unique_ptr<CatalogEntry>> entries;
 };
 
 //! The Catalog Set stores (key, value) map of a set of CatalogEntries

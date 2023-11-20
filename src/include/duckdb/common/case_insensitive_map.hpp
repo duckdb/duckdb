@@ -42,6 +42,6 @@ struct CaseInsensitiveStringCompare {
 };
 
 template <typename T>
-using case_insensitive_rbtree_t = map<string, T, CaseInsensitiveStringCompare>;
+using case_insensitive_tree_t = map<string, T, CaseInsensitiveStringCompare>;
 
 } // namespace duckdb
