@@ -167,12 +167,7 @@ optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction tra
 		return schema_entry;
 	}
 	auto &duck_schema_entry = schema_entry->Cast<DuckSchemaEntry>();
-
-	// Lookup the catalog set
-	auto &catalog_set = duck_schema_entry.GetCatalogSet(type);
-
-	// Use the index to find the actual entry
-	auto entry = catalog_set.GetEntry(transaction, name);
+	auto entry = duck_schema_entry.GetEntry(transaction, type, name);
 	return entry;
 }
 
