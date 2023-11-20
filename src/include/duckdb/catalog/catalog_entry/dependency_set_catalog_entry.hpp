@@ -41,7 +41,6 @@ public:
 
 public:
 	// Get dependent/dependency
-	DependencyCatalogEntry &GetDependency(CatalogTransaction &transaction, CatalogEntry &object);
 	DependencyCatalogEntry &GetDependent(CatalogTransaction &transaction, CatalogEntry &object);
 
 public:
