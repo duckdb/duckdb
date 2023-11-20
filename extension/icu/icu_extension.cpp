@@ -32,6 +32,7 @@
 #include "unicode/ucol.h"
 
 #include <cassert>
+#include "iostream"
 
 namespace duckdb {
 
@@ -101,7 +102,7 @@ static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &
 			str_data[i * 2 + 1] = HEX_TABLE[byte % 16];
 		}
 		str_result.Finalize();
-		// printf("%s: %s\n", input.GetString().c_str(), str_result.GetString().c_str());
+//		printf("%s: %s\n", input.GetString().c_str(), str_result.GetString().c_str());
 		return str_result;
 	});
 }
@@ -227,6 +228,7 @@ void IcuExtension::Load(DuckDB &ddb) {
 	// iterate over all the collations
 	int32_t count;
 	auto locales = icu::Collator::getAvailableLocales(count);
+	auto not_required_for_equality = true;
 	for (int32_t i = 0; i < count; i++) {
 		string collation;
 		if (string(locales[i].getCountry()).empty()) {
@@ -238,7 +240,11 @@ void IcuExtension::Load(DuckDB &ddb) {
 		}
 		collation = StringUtil::Lower(collation);
 
-		CreateCollationInfo info(collation, GetICUFunction(collation), false, true);
+		if (collation == "da") {
+			not_required_for_equality = false;
+		}
+		CreateCollationInfo info(collation, GetICUFunction(collation), false, not_required_for_equality);
+		not_required_for_equality = true;
 		ExtensionUtil::RegisterCollation(db, info);
 	}
 	ScalarFunction sort_key("icu_sort_key", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
