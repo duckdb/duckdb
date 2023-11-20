@@ -28,21 +28,21 @@ public:
 
 	//! SecretManager API
 	DUCKDB_API void Initialize(DatabaseInstance &db) override;
-	DUCKDB_API unique_ptr<BaseSecret> DeserializeSecret(CatalogTransaction transaction, Deserializer &deserializer) override;
+	DUCKDB_API unique_ptr<BaseSecret> DeserializeSecret(CatalogTransaction transaction,
+	                                                    Deserializer &deserializer) override;
 	DUCKDB_API void RegisterSecretType(SecretType &type) override;
 	DUCKDB_API SecretType LookupType(const string &type) override;
-	DUCKDB_API void RegisterSecretFunction(CreateSecretFunction function,
-	                                               OnCreateConflict on_conflict) override;
-	DUCKDB_API optional_ptr<SecretEntry> RegisterSecret(CatalogTransaction transaction, unique_ptr<const BaseSecret> secret,
-	                                       OnCreateConflict on_conflict, SecretPersistMode persist_mode) override;
-	DUCKDB_API optional_ptr<SecretEntry> CreateSecret(ClientContext &context,
-	                                     const CreateSecretInfo &info) override;
+	DUCKDB_API void RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) override;
+	DUCKDB_API optional_ptr<SecretEntry> RegisterSecret(CatalogTransaction transaction,
+	                                                    unique_ptr<const BaseSecret> secret,
+	                                                    OnCreateConflict on_conflict,
+	                                                    SecretPersistMode persist_mode) override;
+	DUCKDB_API optional_ptr<SecretEntry> CreateSecret(ClientContext &context, const CreateSecretInfo &info) override;
 	DUCKDB_API BoundStatement BindCreateSecret(CreateSecretStatement &stmt) override;
 	DUCKDB_API optional_ptr<SecretEntry> GetSecretByPath(CatalogTransaction transaction, const string &path,
-	                                                    const string &type) override;
+	                                                     const string &type) override;
 	DUCKDB_API optional_ptr<SecretEntry> GetSecretByName(CatalogTransaction transaction, const string &name) override;
-	DUCKDB_API void DropSecretByName(CatalogTransaction transaction, const string &name,
-	                                         bool missing_ok) override;
+	DUCKDB_API void DropSecretByName(CatalogTransaction transaction, const string &name, bool missing_ok) override;
 	DUCKDB_API vector<SecretEntry *> AllSecrets(CatalogTransaction transaction) override;
 	DUCKDB_API bool AllowConfigChanges() override;
 
@@ -54,8 +54,9 @@ private:
 	//! Lookup a CreateSecretFunction
 	CreateSecretFunction *LookupFunctionInternal(const string &type, const string &provider);
 	//! Register a new Secret
-	optional_ptr<SecretEntry> RegisterSecretInternal(CatalogTransaction transaction, unique_ptr<const BaseSecret> secret,
-	                            OnCreateConflict on_conflict, SecretPersistMode persist_mode);
+	optional_ptr<SecretEntry> RegisterSecretInternal(CatalogTransaction transaction,
+	                                                 unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
+	                                                 SecretPersistMode persist_mode);
 
 	//! Write a secret to the FileSystem
 	void WriteSecretToFile(CatalogTransaction transaction, const BaseSecret &secret);
@@ -73,7 +74,7 @@ private:
 	//! Checks if the secret_directory changed, if so this reloads all permanent secrets (lazily)
 	void SyncPermanentSecrets(CatalogTransaction transaction, bool force = false);
 	//! Return secret directory
-	string GetSecretDirectory(DBConfig& config);
+	string GetSecretDirectory(DBConfig &config);
 
 	//! Secrets
 	unique_ptr<CatalogSet> registered_secrets;

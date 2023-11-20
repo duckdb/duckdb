@@ -24,7 +24,8 @@ void DuckSecretManager::Initialize(DatabaseInstance &db) {
 	registered_secrets = make_uniq<CatalogSet>(Catalog::GetSystemCatalog(db));
 }
 
-unique_ptr<BaseSecret> DuckSecretManager::DeserializeSecret(CatalogTransaction transaction, Deserializer &deserializer) {
+unique_ptr<BaseSecret> DuckSecretManager::DeserializeSecret(CatalogTransaction transaction,
+                                                            Deserializer &deserializer) {
 	lock_guard<mutex> lck(lock);
 	return DeserializeSecretInternal(deserializer);
 }
@@ -71,14 +72,18 @@ void DuckSecretManager::RegisterSecretFunction(CreateSecretFunction function, On
 	create_secret_functions.insert(std::make_pair(function.secret_type, std::move(new_set)));
 }
 
-optional_ptr<SecretEntry> DuckSecretManager::RegisterSecret(CatalogTransaction transaction, unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
-                                       SecretPersistMode persist_mode) {
+optional_ptr<SecretEntry> DuckSecretManager::RegisterSecret(CatalogTransaction transaction,
+                                                            unique_ptr<const BaseSecret> secret,
+                                                            OnCreateConflict on_conflict,
+                                                            SecretPersistMode persist_mode) {
 	lock_guard<mutex> lck(lock);
 	return RegisterSecretInternal(transaction, std::move(secret), on_conflict, persist_mode);
 }
 
-optional_ptr<SecretEntry> DuckSecretManager::RegisterSecretInternal(CatalogTransaction transaction, unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
-                                               SecretPersistMode persist_mode) {
+optional_ptr<SecretEntry> DuckSecretManager::RegisterSecretInternal(CatalogTransaction transaction,
+                                                                    unique_ptr<const BaseSecret> secret,
+                                                                    OnCreateConflict on_conflict,
+                                                                    SecretPersistMode persist_mode) {
 	bool conflict = false;
 	idx_t conflict_idx = DConstants::INVALID_INDEX;
 
@@ -121,7 +126,8 @@ optional_ptr<SecretEntry> DuckSecretManager::RegisterSecretInternal(CatalogTrans
 
 	// Creating entry
 	auto secret_name = secret->GetName();
-	auto secret_entry = make_uniq<SecretEntry>(std::move(secret), Catalog::GetSystemCatalog(*transaction.db), secret->GetName());
+	auto secret_entry =
+	    make_uniq<SecretEntry>(std::move(secret), Catalog::GetSystemCatalog(*transaction.db), secret->GetName());
 	secret_entry->temporary = !persist;
 	secret_entry->storage_mode = storage_str;
 	DependencyList l;
@@ -224,7 +230,8 @@ BoundStatement DuckSecretManager::BindCreateSecret(CreateSecretStatement &stmt) 
 	return result;
 }
 
-optional_ptr<SecretEntry> DuckSecretManager::GetSecretByPath(CatalogTransaction transaction, const string &path, const string &type) {
+optional_ptr<SecretEntry> DuckSecretManager::GetSecretByPath(CatalogTransaction transaction, const string &path,
+                                                             const string &type) {
 	lock_guard<mutex> lck(lock);
 
 	// Synchronize the permanent secrets
@@ -236,8 +243,8 @@ optional_ptr<SecretEntry> DuckSecretManager::GetSecretByPath(CatalogTransaction 
 	int best_match_score = -1;
 	SecretEntry *best_match = nullptr;
 
-	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry& entry){
-		auto& cast_entry = entry.Cast<SecretEntry>();
+	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
+		auto &cast_entry = entry.Cast<SecretEntry>();
 
 		if (cast_entry.secret->GetType() == type) {
 			auto match = cast_entry.secret->MatchScore(path);
@@ -271,7 +278,7 @@ optional_ptr<SecretEntry> DuckSecretManager::GetSecretByName(CatalogTransaction 
 	auto res = registered_secrets->GetEntry(transaction, name);
 
 	if (res) {
-		auto& cast_entry = res->Cast<SecretEntry>();
+		auto &cast_entry = res->Cast<SecretEntry>();
 		return &cast_entry;
 	}
 
@@ -289,7 +296,7 @@ void DuckSecretManager::DropSecretByName(CatalogTransaction transaction, const s
 		throw InvalidInputException("Failed to remove non-existent secret with name '%s'", name);
 	}
 
-	const auto& cast_entry = entry->Cast<SecretEntry>();
+	const auto &cast_entry = entry->Cast<SecretEntry>();
 	was_persistent = !cast_entry.temporary;
 	deleted = registered_secrets->DropEntry(transaction, name, true, true);
 
@@ -335,8 +342,8 @@ vector<SecretEntry *> DuckSecretManager::AllSecrets(CatalogTransaction transacti
 
 	vector<SecretEntry *> ret_value;
 
-	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry& entry){
-		auto& cast_entry = entry.Cast<SecretEntry>();
+	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
+		auto &cast_entry = entry.Cast<SecretEntry>();
 		ret_value.push_back(&cast_entry);
 	};
 	registered_secrets->Scan(transaction, callback);
@@ -345,12 +352,12 @@ vector<SecretEntry *> DuckSecretManager::AllSecrets(CatalogTransaction transacti
 }
 
 DUCKDB_API bool DuckSecretManager::AllowConfigChanges() {
-    return initialized_fs;
+	return initialized_fs;
 };
 
 // TODO: switch to single file for secrets
 void DuckSecretManager::WriteSecretToFile(CatalogTransaction transaction, const BaseSecret &secret) {
-	auto& fs = *transaction.db->config.file_system;
+	auto &fs = *transaction.db->config.file_system;
 	auto secret_dir = GetSecretDirectory(transaction.db->config);
 	auto file_path = fs.JoinPath(secret_dir, secret.GetName() + ".duckdb_secret");
 
@@ -416,7 +423,8 @@ void DuckSecretManager::LoadSecret(CatalogTransaction transaction, const string 
 		BinaryDeserializer deserializer(file_reader);
 		deserializer.Begin();
 		auto deserialized_secret = DeserializeSecretInternal(deserializer);
-		RegisterSecretInternal(transaction, std::move(deserialized_secret), OnCreateConflict::ERROR_ON_CONFLICT, persist_mode);
+		RegisterSecretInternal(transaction, std::move(deserialized_secret), OnCreateConflict::ERROR_ON_CONFLICT,
+		                       persist_mode);
 		deserializer.End();
 	}
 }
@@ -434,15 +442,15 @@ void DuckSecretManager::SyncPermanentSecrets(CatalogTransaction transaction, boo
 	if (force || !permanent_secrets_enabled || !initialized_fs) {
 
 		vector<string> delete_list;
-		const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry& entry){
-			const auto& cast_entry = entry.Cast<SecretEntry>();
+		const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
+			const auto &cast_entry = entry.Cast<SecretEntry>();
 			if (!cast_entry.temporary) {
 				delete_list.push_back(cast_entry.secret->GetName());
 			}
 		};
 		registered_secrets->Scan(transaction, callback);
 
-		for (const auto& name: delete_list) {
+		for (const auto &name : delete_list) {
 			registered_secrets->DropEntry(transaction, name, true, true);
 		}
 
@@ -456,9 +464,9 @@ void DuckSecretManager::SyncPermanentSecrets(CatalogTransaction transaction, boo
 	initialized_fs = true;
 }
 
-string DuckSecretManager::GetSecretDirectory(DBConfig& config) {
+string DuckSecretManager::GetSecretDirectory(DBConfig &config) {
 	string directory = config.options.secret_directory;
-	auto& fs = *config.file_system;
+	auto &fs = *config.file_system;
 
 	if (directory.empty()) {
 		directory = fs.GetHomeDirectory();
@@ -490,7 +498,7 @@ string DuckSecretManager::GetSecretDirectory(DBConfig& config) {
 	return directory;
 }
 
-unique_ptr<CatalogSet>& DuckSecretManager::GetRegisteredSecrets(CatalogTransaction transaction) {
+unique_ptr<CatalogSet> &DuckSecretManager::GetRegisteredSecrets(CatalogTransaction transaction) {
 	if (!registered_secrets) {
 		registered_secrets = make_uniq<CatalogSet>(Catalog::GetSystemCatalog(*transaction.db));
 	}

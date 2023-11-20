@@ -11,7 +11,8 @@ void DebugSecretManager::Initialize(DatabaseInstance &db) {
 	return base_secret_manager->Initialize(db);
 }
 
-unique_ptr<BaseSecret> DebugSecretManager::DeserializeSecret(CatalogTransaction transaction, Deserializer &deserializer) {
+unique_ptr<BaseSecret> DebugSecretManager::DeserializeSecret(CatalogTransaction transaction,
+                                                             Deserializer &deserializer) {
 	auto secret = base_secret_manager->DeserializeSecret(transaction, deserializer);
 	printf("DeserializeSecret %s\n", secret->ToString(false).c_str());
 	return secret;
@@ -22,8 +23,10 @@ void DebugSecretManager::RegisterSecretType(SecretType &type) {
 	base_secret_manager->RegisterSecretType(type);
 }
 
-optional_ptr<SecretEntry> DebugSecretManager::RegisterSecret(CatalogTransaction transaction, unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
-                                        SecretPersistMode persist_mode) {
+optional_ptr<SecretEntry> DebugSecretManager::RegisterSecret(CatalogTransaction transaction,
+                                                             unique_ptr<const BaseSecret> secret,
+                                                             OnCreateConflict on_conflict,
+                                                             SecretPersistMode persist_mode) {
 	printf("RegisterSecret %s\n", secret->ToString(false).c_str());
 	return base_secret_manager->RegisterSecret(transaction, std::move(secret), on_conflict, persist_mode);
 }
@@ -43,7 +46,8 @@ BoundStatement DebugSecretManager::BindCreateSecret(CreateSecretStatement &stmt)
 	return base_secret_manager->BindCreateSecret(stmt);
 }
 
-optional_ptr<SecretEntry> DebugSecretManager::GetSecretByPath(CatalogTransaction transaction, const string &path, const string &type) {
+optional_ptr<SecretEntry> DebugSecretManager::GetSecretByPath(CatalogTransaction transaction, const string &path,
+                                                              const string &type) {
 	auto reg_secret = base_secret_manager->GetSecretByPath(transaction, path, type);
 	if (reg_secret->secret) {
 		printf("GetSecretByPath %s\n", reg_secret->secret->ToString(false).c_str());
