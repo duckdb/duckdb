@@ -12,8 +12,6 @@
 
 namespace duckdb {
 
-class DependencyManager;
-
 //! The Catalog object represents the catalog of the database.
 class DuckCatalog : public Catalog {
 public:
