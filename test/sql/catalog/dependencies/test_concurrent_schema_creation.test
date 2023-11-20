@@ -1,5 +1,5 @@
 # name: test/sql/catalog/dependencies/test_concurrent_schema_creation.test
-# description: Test concurrent alter and rename of tables
+# description: Test concurrent schema creation + table creation
 # group: [dependencies]
 
 require skip_reload
