@@ -8,9 +8,9 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
-#include "duckdb/catalog/catalog_entry/dependency_set_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/dependency_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
+#include "duckdb/catalog/dependency_catalog_set.hpp"
 
 namespace duckdb {
 
