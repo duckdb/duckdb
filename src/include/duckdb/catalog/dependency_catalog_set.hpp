@@ -7,8 +7,8 @@ namespace duckdb {
 //! This class mocks the CatalogSet interface, but does not actually store CatalogEntries
 class DependencyCatalogSet {
 public:
-	DependencyCatalogSet(CatalogSet &set, const MangledEntryName &mangled_name, CatalogEntryInfo info)
-	    : set(set), mangled_name(mangled_name), info(info) {
+	DependencyCatalogSet(CatalogSet &set, const CatalogEntryInfo &info)
+	    : set(set), info(info), mangled_name(DependencyManager::MangleName(info)) {
 	}
 
 public:
@@ -24,10 +24,8 @@ private:
 
 public:
 	CatalogSet &set;
-	MangledEntryName mangled_name;
-
-	// TODO: remove these later
 	CatalogEntryInfo info;
+	MangledEntryName mangled_name;
 };
 
 } // namespace duckdb

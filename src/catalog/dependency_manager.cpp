@@ -97,13 +97,55 @@ bool DependencyManager::IsSystemEntry(CatalogEntry &entry) const {
 	}
 }
 
+CatalogSet &DependencyManager::Dependents() {
+	return dependents;
+}
+
+CatalogSet &DependencyManager::Dependencies() {
+	return dependencies;
+}
+
 void DependencyManager::CreateDependency(CatalogTransaction transaction, const DependencyInfo &info) {
 	auto &from = info.from;
 	auto &to = info.to;
 
-	// Create a dependent entry [ from -> to ]
+	// Create an entry in the dependents map of the object that is the target of the dependency
+	{
+		auto &type = info.from_type;
+		DependencyCatalogSet dependents(Dependents(), to);
 
-	// Create a dependency entry [ to <- from ]
+		auto dependent_p = make_uniq<DependencyCatalogEntry>(DependencyLinkSide::DEPENDENT, catalog, *this, from, type);
+		auto &dependent_name = dependent_p->MangledName();
+		auto existing = dependents.GetEntry(transaction, dependent_name);
+		if (existing) {
+			return;
+		}
+
+		D_ASSERT(!StringUtil::CIEquals(dependent_name.name, MangleName(to).name));
+		if (catalog.IsTemporaryCatalog()) {
+			dependent_p->temporary = true;
+		}
+		dependents.CreateEntry(transaction, dependent_name, std::move(dependent_p));
+	}
+
+	// Create an entry in the dependencies map of the object that is targeting another entry
+	{
+		auto &type = info.to_type;
+		DependencyCatalogSet dependencies(Dependencies(), from);
+
+		auto dependency_p = make_uniq<DependencyCatalogEntry>(DependencyLinkSide::DEPENDENCY, catalog, *this, to, type);
+		auto &dependency_name = dependency_p->MangledName();
+		auto existing = dependencies.GetEntry(transaction, dependency_name);
+		if (existing) {
+			return;
+		}
+
+		D_ASSERT(!StringUtil::CIEquals(dependency_name.name, MangleName(from).name));
+		if (catalog.IsTemporaryCatalog()) {
+			dependency_p->temporary = true;
+		}
+		dependencies.CreateEntry(transaction, dependency_name, std::move(dependency_p));
+	}
 }
 
 void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &object,
@@ -143,7 +185,7 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 		                     /*from_type = */ dependency_type,
 		                     /*to_type =*/DependencyType::DEPENDENCY_AUTOMATIC};
 		CreateDependency(transaction, info);
-		dependency_set.AddDependent(transaction, object, dependency_type).CompleteLink(transaction);
+		// dependency_set.AddDependent(transaction, object, dependency_type).CompleteLink(transaction);
 	}
 }
 

@@ -98,6 +98,8 @@ private:
 
 private:
 	void CreateDependency(CatalogTransaction transaction, const DependencyInfo &info);
+	CatalogSet &Dependents();
+	CatalogSet &Dependencies();
 };
 
 } // namespace duckdb
