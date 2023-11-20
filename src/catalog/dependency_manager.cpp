@@ -70,7 +70,8 @@ MangledEntryName DependencyManager::MangleName(CatalogEntry &entry) {
 
 DependencySetCatalogEntry DependencyManager::GetDependencySet(CatalogTransaction transaction, CatalogType type,
                                                               const string &schema, const string &name) {
-	DependencySetCatalogEntry set(catalog, *this, type, schema, name);
+	CatalogEntryInfo info {type, schema, name};
+	DependencySetCatalogEntry set(catalog, *this, info);
 	return set;
 }
 

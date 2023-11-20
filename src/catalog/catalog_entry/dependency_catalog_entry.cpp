@@ -37,28 +37,26 @@ const MangledEntryName &DependencyCatalogEntry::FromMangledName() const {
 }
 
 CatalogType DependencyCatalogEntry::FromType() const {
-	return from_type;
+	return from.type;
 }
 
 const string &DependencyCatalogEntry::FromSchema() const {
-	return from_schema;
+	return from.schema;
 }
 
 const string &DependencyCatalogEntry::FromName() const {
-	return from_name;
+	return from.name;
 }
 
 DependencyType DependencyCatalogEntry::Type() const {
 	return dependency_type;
 }
 
-void DependencyCatalogEntry::SetFrom(const MangledEntryName &from_mangled_name, CatalogType from_type,
-                                     const string &from_schema, const string &from_name, const string &new_name) {
+void DependencyCatalogEntry::SetFrom(const MangledEntryName &from_mangled_name, const CatalogEntryInfo &info,
+                                     const string &new_name) {
 	name = new_name;
 	this->from_mangled_name = from_mangled_name;
-	this->from_type = from_type;
-	this->from_schema = from_schema;
-	this->from_name = from_name;
+	this->from = info;
 }
 
 DependencyCatalogEntry::~DependencyCatalogEntry() {

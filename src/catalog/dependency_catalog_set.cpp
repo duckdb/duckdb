@@ -11,7 +11,7 @@ bool DependencyCatalogSet::CreateEntry(CatalogTransaction transaction, const Man
                                        unique_ptr<CatalogEntry> value) {
 	auto new_name = ApplyPrefix(name);
 	auto &dependency = value->Cast<DependencyCatalogEntry>();
-	dependency.SetFrom(mangled_name, this->type, this->schema, this->name, new_name.name);
+	dependency.SetFrom(mangled_name, info, new_name.name);
 
 	static const DependencyList EMPTY_DEPENDENCIES;
 	return set.CreateEntry(transaction, new_name.name, std::move(value), EMPTY_DEPENDENCIES);

@@ -27,8 +27,7 @@ class DependencyCatalogEntry;
 
 class DependencySetCatalogEntry {
 public:
-	DependencySetCatalogEntry(DuckCatalog &catalog, DependencyManager &dependency_manager, CatalogType entry_type,
-	                          const string &entry_schema, const string &entry_name);
+	DependencySetCatalogEntry(DuckCatalog &catalog, DependencyManager &dependency_manager, CatalogEntryInfo info);
 
 public:
 	DependencyCatalogSet &Dependencies();
@@ -102,9 +101,7 @@ private:
 private:
 	DuckCatalog &catalog;
 	MangledEntryName mangled_name;
-	const string entry_name;
-	const string schema;
-	const CatalogType entry_type;
+	CatalogEntryInfo info;
 
 	// These are proxies so we don't have a nested CatalogSet
 	// Because the Catalog is not built to support this

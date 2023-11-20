@@ -44,6 +44,17 @@ public:
 	string name;
 };
 
+struct CatalogEntryInfo {
+	CatalogType type;
+	string schema;
+	string name;
+};
+
+struct DependencyInfo {
+	CatalogEntryInfo from;
+	CatalogEntryInfo to;
+};
+
 //! The DependencyManager is in charge of managing dependencies between catalog entries
 class DependencyManager {
 	friend class CatalogSet;

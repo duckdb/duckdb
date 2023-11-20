@@ -10,13 +10,10 @@
 namespace duckdb {
 
 DependencySetCatalogEntry::DependencySetCatalogEntry(DuckCatalog &catalog, DependencyManager &dependency_manager,
-                                                     CatalogType entry_type, const string &entry_schema,
-                                                     const string &entry_name)
-    : catalog(catalog), mangled_name(DependencyManager::MangleName(entry_type, entry_schema, entry_name)),
-      entry_name(entry_name), schema(entry_schema), entry_type(entry_type),
-      dependencies(dependency_manager.dependencies, mangled_name, entry_type, schema, entry_name),
-      dependents(dependency_manager.dependents, mangled_name, entry_type, schema, entry_name),
-      dependency_manager(dependency_manager) {
+                                                     CatalogEntryInfo info)
+    : catalog(catalog), mangled_name(DependencyManager::MangleName(info.type, info.schema, info.name)), info(info),
+      dependencies(dependency_manager.dependencies, mangled_name, info),
+      dependents(dependency_manager.dependents, mangled_name, info), dependency_manager(dependency_manager) {
 }
 
 DependencyCatalogSet &DependencySetCatalogEntry::Dependencies() {
@@ -79,15 +76,15 @@ const MangledEntryName &DependencySetCatalogEntry::MangledName() const {
 }
 
 CatalogType DependencySetCatalogEntry::EntryType() const {
-	return entry_type;
+	return info.type;
 }
 
 const string &DependencySetCatalogEntry::EntrySchema() const {
-	return schema;
+	return info.schema;
 }
 
 const string &DependencySetCatalogEntry::EntryName() const {
-	return entry_name;
+	return info.name;
 }
 
 // Add from a single CatalogEntry

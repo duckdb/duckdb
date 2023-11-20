@@ -7,9 +7,8 @@ namespace duckdb {
 //! This class mocks the CatalogSet interface, but does not actually store CatalogEntries
 class DependencyCatalogSet {
 public:
-	DependencyCatalogSet(CatalogSet &set, const MangledEntryName &mangled_name, CatalogType type, const string &schema,
-	                     const string &name)
-	    : set(set), mangled_name(mangled_name), type(type), schema(schema), name(name) {
+	DependencyCatalogSet(CatalogSet &set, const MangledEntryName &mangled_name, CatalogEntryInfo info)
+	    : set(set), mangled_name(mangled_name), info(info) {
 	}
 
 public:
@@ -28,9 +27,7 @@ public:
 	MangledEntryName mangled_name;
 
 	// TODO: remove these later
-	CatalogType type;
-	string schema;
-	string name;
+	CatalogEntryInfo info;
 };
 
 } // namespace duckdb

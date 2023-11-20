@@ -51,8 +51,7 @@ public:
 
 	// Create the corresponding dependency/dependent in the other set
 	void CompleteLink(CatalogTransaction transaction, DependencyType type = DependencyType::DEPENDENCY_REGULAR);
-	void SetFrom(const MangledEntryName &from_mangled_name, CatalogType from_type, const string &from_schema,
-	             const string &from_name, const string &new_name);
+	void SetFrom(const MangledEntryName &from_mangled_name, const CatalogEntryInfo &info, const string &new_name);
 
 private:
 	const MangledEntryName mangled_name;
@@ -61,9 +60,7 @@ private:
 	const CatalogType entry_type;
 
 	MangledEntryName from_mangled_name;
-	string from_name;
-	string from_schema;
-	CatalogType from_type;
+	CatalogEntryInfo from;
 
 	DependencyType dependency_type;
 
