@@ -32,7 +32,6 @@
 #include "unicode/ucol.h"
 
 #include <cassert>
-#include "iostream"
 
 namespace duckdb {
 
@@ -102,7 +101,7 @@ static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &
 			str_data[i * 2 + 1] = HEX_TABLE[byte % 16];
 		}
 		str_result.Finalize();
-//		printf("%s: %s\n", input.GetString().c_str(), str_result.GetString().c_str());
+		// printf("%s: %s\n", input.GetString().c_str(), str_result.GetString().c_str());
 		return str_result;
 	});
 }
