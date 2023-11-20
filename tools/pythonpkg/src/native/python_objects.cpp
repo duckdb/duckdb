@@ -7,6 +7,8 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/core_functions/to_interval.hpp"
 
 #include "datetime.h" // Python datetime initialize #1
 
@@ -26,19 +28,17 @@ PyTimeDelta::PyTimeDelta(py::handle &obj) {
 }
 
 interval_t PyTimeDelta::ToInterval() {
-	interval_t interval;
+	interval_t result;
 
-	// Timedelta stores any amount of seconds lower than a day only
-	D_ASSERT(seconds < Interval::SECS_PER_DAY);
+	auto micros_interval = Interval::FromMicro(microseconds);
+	auto days_interval = interval_t {/*months = */ 0,
+	                                 /*days = */ days,
+	                                 /*micros = */ 0};
+	auto seconds_interval = ToSecondsOperator::Operation<int64_t, interval_t>(seconds);
 
-	// Convert overflow of days to months
-	interval.months = days / Interval::DAYS_PER_MONTH;
-	days -= interval.months * Interval::DAYS_PER_MONTH;
-
-	microseconds += seconds * Interval::MICROS_PER_SEC;
-	interval.days = days;
-	interval.micros = microseconds;
-	return interval;
+	result = AddOperator::Operation<interval_t, interval_t, interval_t>(micros_interval, days_interval);
+	result = AddOperator::Operation<interval_t, interval_t, interval_t>(result, seconds_interval);
+	return result;
 }
 
 int64_t PyTimeDelta::GetDays(py::handle &obj) {

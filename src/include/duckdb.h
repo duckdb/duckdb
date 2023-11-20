@@ -312,6 +312,45 @@ typedef enum {
 	DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3
 } duckdb_pending_state;
 
+typedef enum {
+	DUCKDB_RESULT_TYPE_INVALID,
+	DUCKDB_RESULT_TYPE_CHANGED_ROWS,
+	DUCKDB_RESULT_TYPE_NOTHING,
+	DUCKDB_RESULT_TYPE_QUERY_RESULT,
+} duckdb_result_type;
+
+typedef enum {
+	DUCKDB_STATEMENT_TYPE_INVALID,
+	DUCKDB_STATEMENT_TYPE_SELECT,
+	DUCKDB_STATEMENT_TYPE_INSERT,
+	DUCKDB_STATEMENT_TYPE_UPDATE,
+	DUCKDB_STATEMENT_TYPE_EXPLAIN,
+	DUCKDB_STATEMENT_TYPE_DELETE,
+	DUCKDB_STATEMENT_TYPE_PREPARE,
+	DUCKDB_STATEMENT_TYPE_CREATE,
+	DUCKDB_STATEMENT_TYPE_EXECUTE,
+	DUCKDB_STATEMENT_TYPE_ALTER,
+	DUCKDB_STATEMENT_TYPE_TRANSACTION,
+	DUCKDB_STATEMENT_TYPE_COPY,
+	DUCKDB_STATEMENT_TYPE_ANALYZE,
+	DUCKDB_STATEMENT_TYPE_VARIABLE_SET,
+	DUCKDB_STATEMENT_TYPE_CREATE_FUNC,
+	DUCKDB_STATEMENT_TYPE_DROP,
+	DUCKDB_STATEMENT_TYPE_EXPORT,
+	DUCKDB_STATEMENT_TYPE_PRAGMA,
+	DUCKDB_STATEMENT_TYPE_SHOW,
+	DUCKDB_STATEMENT_TYPE_VACUUM,
+	DUCKDB_STATEMENT_TYPE_CALL,
+	DUCKDB_STATEMENT_TYPE_SET,
+	DUCKDB_STATEMENT_TYPE_LOAD,
+	DUCKDB_STATEMENT_TYPE_RELATION,
+	DUCKDB_STATEMENT_TYPE_EXTENSION,
+	DUCKDB_STATEMENT_TYPE_LOGICAL_PLAN,
+	DUCKDB_STATEMENT_TYPE_ATTACH,
+	DUCKDB_STATEMENT_TYPE_DETACH,
+	DUCKDB_STATEMENT_TYPE_MULTI,
+} duckdb_statement_type;
+
 //===--------------------------------------------------------------------===//
 // Open/Connect
 //===--------------------------------------------------------------------===//
@@ -497,6 +536,14 @@ Returns `DUCKDB_TYPE_INVALID` if the column is out of range.
 DUCKDB_API duckdb_type duckdb_column_type(duckdb_result *result, idx_t col);
 
 /*!
+Returns the statement type of the statement that was executed
+
+* result: The result object to fetch the statement type from.
+ * returns: duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID
+ */
+DUCKDB_API duckdb_statement_type duckdb_result_statement_type(duckdb_result result);
+
+/*!
 Returns the logical column type of the specified column.
 
 The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
@@ -626,6 +673,14 @@ Returns the number of data chunks present in the result.
 * returns: Number of data chunks present in the result.
 */
 DUCKDB_API idx_t duckdb_result_chunk_count(duckdb_result result);
+
+/*!
+Returns the return_type of the given result, or DUCKDB_RETURN_TYPE_INVALID on error
+
+* result: The result object
+* returns: The return_type
+ */
+DUCKDB_API duckdb_result_type duckdb_result_return_type(duckdb_result result);
 
 // Safe fetch functions
 // These functions will perform conversions if necessary.
@@ -970,6 +1025,14 @@ DUCKDB_API duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_stat
 Clear the params bind to the prepared statement.
 */
 DUCKDB_API duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement);
+
+/*!
+Returns the statement type of the statement to be executed
+
+ * statement: The prepared statement.
+ * returns: duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID
+ */
+DUCKDB_API duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement statement);
 
 /*!
 Binds a value to the prepared statement at the specified index.
@@ -1342,6 +1405,15 @@ This should not be used with `DUCKDB_TYPE_DECIMAL`.
 * returns: The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_logical_type(duckdb_type type);
+
+/*!
+Returns the alias of a duckdb_logical_type, if one is set, else `NULL`
+You must free the result.
+
+* type: The logical type to return the alias of
+* returns: The alias or `NULL`
+ */
+DUCKDB_API char *duckdb_logical_type_get_alias(duckdb_logical_type type);
 
 /*!
 Creates a list type from its child type.
