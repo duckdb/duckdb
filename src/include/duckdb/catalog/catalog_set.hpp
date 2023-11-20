@@ -130,7 +130,7 @@ private:
 	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current);
 	CatalogEntry &GetCommittedEntry(CatalogEntry &current);
 	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, const string &name);
-	optional_ptr<CatalogEntry> CreateCommittedEntry(CatalogTransaction transaction, unique_ptr<CatalogEntry> entry);
+	optional_ptr<CatalogEntry> CreateCommittedEntry(unique_ptr<CatalogEntry> entry);
 
 	//! Create all default entries
 	void CreateDefaultEntries(CatalogTransaction transaction, unique_lock<mutex> &lock);

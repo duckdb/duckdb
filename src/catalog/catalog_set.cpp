@@ -146,8 +146,7 @@ void CatalogSet::CheckCatalogEntryInvariants(CatalogEntry &value, const string &
 	}
 }
 
-optional_ptr<CatalogEntry> CatalogSet::CreateCommittedEntry(CatalogTransaction transaction,
-                                                            unique_ptr<CatalogEntry> entry) {
+optional_ptr<CatalogEntry> CatalogSet::CreateCommittedEntry(unique_ptr<CatalogEntry> entry) {
 	auto existing_entry = map.GetEntry(entry->name);
 	if (existing_entry) {
 		// Return null if an entry by that name already exists
@@ -493,7 +492,7 @@ SimilarCatalogEntry CatalogSet::SimilarEntry(CatalogTransaction transaction, con
 }
 
 optional_ptr<CatalogEntry> CatalogSet::CreateDefaultEntry(CatalogTransaction transaction, const string &name,
-                                                          unique_lock<mutex> &lock) {
+                                                          unique_lock<mutex> &read_lock) {
 	// no entry found with this name, check for defaults
 	if (!defaults || defaults->created_all_entries) {
 		// no defaults either: return null
@@ -505,28 +504,28 @@ optional_ptr<CatalogEntry> CatalogSet::CreateDefaultEntry(CatalogTransaction tra
 		// no context - cannot create default entry
 		return nullptr;
 	}
-	lock.unlock();
+	read_lock.unlock();
 	auto entry = defaults->CreateDefaultEntry(*transaction.context, name);
 
-	lock.lock();
+	read_lock.lock();
 	if (!entry) {
 		// no default entry
 		return nullptr;
 	}
 	// there is a default entry! create it
-	auto result = CreateCommittedEntry(transaction, std::move(entry));
+	auto result = CreateCommittedEntry(std::move(entry));
 	if (result) {
 		return result;
 	}
 	// we found a default entry, but failed
 	// this means somebody else created the entry first
 	// just retry?
-	lock.unlock();
+	read_lock.unlock();
 	return GetEntry(transaction, name);
 }
 
 CatalogSet::EntryLookup CatalogSet::GetEntryDetailed(CatalogTransaction transaction, const string &name) {
-	unique_lock<mutex> lock(catalog_lock);
+	unique_lock<mutex> read_lock(catalog_lock);
 	auto entry_value = map.GetEntry(name);
 	if (entry_value) {
 		// we found an entry for this name
@@ -540,7 +539,7 @@ CatalogSet::EntryLookup CatalogSet::GetEntryDetailed(CatalogTransaction transact
 		D_ASSERT(StringUtil::CIEquals(name, current.name));
 		return EntryLookup {&current, EntryLookup::FailureReason::SUCCESS};
 	}
-	auto default_entry = CreateDefaultEntry(transaction, name, lock);
+	auto default_entry = CreateDefaultEntry(transaction, name, read_lock);
 	if (!default_entry) {
 		return EntryLookup {default_entry, EntryLookup::FailureReason::NOT_PRESENT};
 	}
@@ -584,7 +583,7 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 	catalog.ModifyCatalog();
 }
 
-void CatalogSet::CreateDefaultEntries(CatalogTransaction transaction, unique_lock<mutex> &lock) {
+void CatalogSet::CreateDefaultEntries(CatalogTransaction transaction, unique_lock<mutex> &read_lock) {
 	if (!defaults || defaults->created_all_entries || !transaction.context) {
 		return;
 	}
@@ -595,14 +594,14 @@ void CatalogSet::CreateDefaultEntries(CatalogTransaction transaction, unique_loc
 		if (!entry_value) {
 			// we unlock during the CreateEntry, since it might reference other catalog sets...
 			// specifically for views this can happen since the view will be bound
-			lock.unlock();
+			read_lock.unlock();
 			auto entry = defaults->CreateDefaultEntry(*transaction.context, default_entry);
 			if (!entry) {
 				throw InternalException("Failed to create default entry for %s", default_entry);
 			}
 
-			lock.lock();
-			CreateCommittedEntry(transaction, std::move(entry));
+			read_lock.lock();
+			CreateCommittedEntry(std::move(entry));
 		}
 	}
 	defaults->created_all_entries = true;

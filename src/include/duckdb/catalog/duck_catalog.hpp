@@ -16,9 +16,6 @@ class DependencyManager;
 
 //! The Catalog object represents the catalog of the database.
 class DuckCatalog : public Catalog {
-private:
-	friend class DependencyManager;
-
 public:
 	explicit DuckCatalog(AttachedDatabase &db);
 	~DuckCatalog();

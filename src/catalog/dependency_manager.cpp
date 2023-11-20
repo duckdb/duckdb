@@ -163,7 +163,6 @@ void DependencyManager::GetLookupProperties(CatalogEntry &entry, string &schema,
 	}
 }
 
-// Always performs the callback, it's up to the callback to determine what to do based on the lookup result
 optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency) {
 	string schema;
 	string name;
@@ -171,13 +170,12 @@ optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction tra
 	GetLookupProperties(dependency, schema, name, type);
 
 	// Lookup the schema
-	auto schema_entry = catalog.schemas->GetEntry(transaction, schema);
+	auto schema_entry = catalog.GetSchema(transaction, schema, OnEntryNotFound::RETURN_NULL);
 	if (type == CatalogType::SCHEMA_ENTRY || !schema_entry) {
 		// This is a schema entry, perform the callback only providing the schema
-		return schema_entry;
+		return reinterpret_cast<CatalogEntry *>(schema_entry.get());
 	}
-	auto &duck_schema_entry = schema_entry->Cast<DuckSchemaEntry>();
-	auto entry = duck_schema_entry.GetEntry(transaction, type, name);
+	auto entry = schema_entry->GetEntry(transaction, type, name);
 	return entry;
 }
 
