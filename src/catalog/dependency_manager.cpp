@@ -69,6 +69,20 @@ MangledEntryName DependencyManager::MangleName(CatalogEntry &entry) {
 	return MangleName(info);
 }
 
+DependencyInfo DependencyInfo::FromDependency(DependencyCatalogEntry &dep) {
+	return DependencyInfo {/*from = */ dep.EntryInfo(),
+	                       /*to = */ dep.FromInfo(),
+	                       /*from_type = */ DependencyType::DEPENDENCY_REGULAR,
+	                       /*to_type =*/DependencyType::DEPENDENCY_REGULAR};
+}
+
+DependencyInfo DependencyInfo::FromDependent(DependencyCatalogEntry &dep) {
+	return DependencyInfo {/*from = */ dep.FromInfo(),
+	                       /*to = */ dep.EntryInfo(),
+	                       /*from_type = */ DependencyType::DEPENDENCY_REGULAR,
+	                       /*to_type =*/DependencyType::DEPENDENCY_REGULAR};
+}
+
 // ----------- DEPENDENCY_MANAGER -----------
 
 DependencySetCatalogEntry DependencyManager::GetDependencySet(CatalogTransaction transaction,
@@ -103,6 +117,26 @@ CatalogSet &DependencyManager::Dependents() {
 
 CatalogSet &DependencyManager::Dependencies() {
 	return dependencies;
+}
+
+void DependencyManager::RemoveDependency(CatalogTransaction transaction, const DependencyInfo &info) {
+	auto &from = info.from;
+	auto &to = info.to;
+
+	DependencyCatalogSet dependents(Dependents(), to);
+	DependencyCatalogSet dependencies(Dependencies(), from);
+
+	auto from_mangled = MangledEntryName(from);
+	auto to_mangled = MangledEntryName(to);
+
+	auto dependent = dependents.GetEntry(transaction, from_mangled);
+	if (dependent) {
+		dependents.DropEntry(transaction, from_mangled, false);
+	}
+	auto dependency = dependencies.GetEntry(transaction, to_mangled);
+	if (dependency) {
+		dependencies.DropEntry(transaction, to_mangled, false);
+	}
 }
 
 void DependencyManager::CreateDependency(CatalogTransaction transaction, const DependencyInfo &info) {
@@ -178,14 +212,12 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 	                                                               : DependencyType::DEPENDENCY_REGULAR;
 	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies.set) {
-		auto dependency_set = GetDependencySet(transaction, dependency);
 		// Create the dependent and complete the link by creating the dependency as well
 		DependencyInfo info {/*from = */ GetLookupProperties(object),
 		                     /*to = */ GetLookupProperties(dependency),
 		                     /*from_type = */ dependency_type,
 		                     /*to_type =*/DependencyType::DEPENDENCY_REGULAR};
 		CreateDependency(transaction, info);
-		// dependency_set.AddDependent(transaction, object, dependency_type).CompleteLink(transaction);
 	}
 }
 
@@ -241,26 +273,15 @@ void DependencyManager::CleanupDependencies(CatalogTransaction transaction, Cata
 	auto dependency_set = GetDependencySet(transaction, object);
 
 	// Collect the dependencies
-	catalog_entry_set_t dependencies_to_remove;
-	dependency_set.ScanDependencies(transaction,
-	                                [&](DependencyCatalogEntry &dep) { dependencies_to_remove.insert(dep); });
-	// Also collect the dependents
-	catalog_entry_set_t dependents_to_remove;
-	dependency_set.ScanDependents(transaction, [&](DependencyCatalogEntry &dep) { dependents_to_remove.insert(dep); });
+	vector<DependencyInfo> to_remove;
+	dependency_set.ScanDependencies(
+	    transaction, [&](DependencyCatalogEntry &dep) { to_remove.push_back(DependencyInfo::FromDependency(dep)); });
+	dependency_set.ScanDependents(
+	    transaction, [&](DependencyCatalogEntry &dep) { to_remove.push_back(DependencyInfo::FromDependent(dep)); });
 
 	// Remove the dependency entries
-	for (auto &dependency : dependencies_to_remove) {
-		auto other_dependency_set = GetDependencySet(transaction, dependency);
-
-		other_dependency_set.RemoveDependent(transaction, dependency_set);
-		dependency_set.RemoveDependency(transaction, dependency);
-	}
-	// Remove the dependent entries
-	for (auto &dependent : dependents_to_remove) {
-		auto other_dependency_set = GetDependencySet(transaction, dependent);
-
-		other_dependency_set.RemoveDependency(transaction, dependency_set);
-		dependency_set.RemoveDependent(transaction, dependent);
+	for (auto &dep : to_remove) {
+		RemoveDependency(transaction, dep);
 	}
 }
 
@@ -354,8 +375,6 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 
 	for (auto &dep : dependents) {
 		auto &other = dep.entry.get();
-		auto other_dependency_set = GetDependencySet(transaction, other);
-
 		DependencyInfo info {/*from = */ GetLookupProperties(new_obj),
 		                     /*to = */ GetLookupProperties(other),
 		                     // FIXME: should this be REGULAR ??
@@ -364,13 +383,9 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		CreateDependency(transaction, info);
 	}
 
-	auto dependency_set = GetDependencySet(transaction, new_obj);
-
 	// For all the objects we own, re establish the dependency of the owner on the object
 	for (auto &object : owned_objects) {
 		auto &entry = object.entry.get();
-		auto other_dependency_set = GetDependencySet(transaction, entry);
-
 		{
 			DependencyInfo info {/*from = */ GetLookupProperties(new_obj),
 			                     /*to = */ GetLookupProperties(entry),

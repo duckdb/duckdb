@@ -45,12 +45,6 @@ public:
 	DependencyCatalogEntry &GetDependent(CatalogTransaction &transaction, CatalogEntry &object);
 
 public:
-	void RemoveDependency(CatalogTransaction transaction, DependencySetCatalogEntry &dependency);
-	void RemoveDependent(CatalogTransaction transaction, DependencySetCatalogEntry &dependent);
-	void RemoveDependency(CatalogTransaction transaction, CatalogEntry &dependency);
-	void RemoveDependent(CatalogTransaction transaction, CatalogEntry &dependent);
-
-public:
 	bool HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry);
 	bool HasDependencyOn(CatalogTransaction transaction, DependencySetCatalogEntry &other);
 	bool IsDependencyOf(CatalogTransaction transaction, CatalogEntry &entry);
@@ -60,9 +54,6 @@ private:
 	void ScanSetInternal(CatalogTransaction transaction, bool dependencies, dependency_callback_t &callback);
 	bool HasDependencyOn(CatalogTransaction transaction, const MangledEntryName &mangled_name);
 	bool IsDependencyOf(CatalogTransaction transaction, const MangledEntryName &mangled_name);
-
-	void RemoveDependency(CatalogTransaction transaction, const MangledEntryName &mangled_name);
-	void RemoveDependent(CatalogTransaction transaction, const MangledEntryName &mangled_name);
 
 public:
 	void PrintDependencies(CatalogTransaction transaction);

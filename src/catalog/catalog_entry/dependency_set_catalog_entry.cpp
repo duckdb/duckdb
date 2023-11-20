@@ -91,53 +91,6 @@ const CatalogEntryInfo &DependencySetCatalogEntry::EntryInfo() const {
 	return info;
 }
 
-// Remove dependency from a DependencyEntry
-void DependencySetCatalogEntry::RemoveDependency(CatalogTransaction transaction, const MangledEntryName &mangled_name) {
-	auto entry = dependencies.GetEntry(transaction, mangled_name);
-	if (!entry) {
-		// Already deleted
-		return;
-	}
-	dependencies.DropEntry(transaction, mangled_name, false);
-}
-
-// Remove dependent from a DependencyEntry
-void DependencySetCatalogEntry::RemoveDependent(CatalogTransaction transaction, const MangledEntryName &mangled_name) {
-	auto entry = dependents.GetEntry(transaction, mangled_name);
-	if (!entry) {
-		// Already deleted
-		return;
-	}
-	dependents.DropEntry(transaction, mangled_name, false);
-}
-
-// Remove dependency from a DependencyEntry
-void DependencySetCatalogEntry::RemoveDependency(CatalogTransaction transaction,
-                                                 DependencySetCatalogEntry &dependency) {
-	auto &mangled_name = dependency.MangledName();
-	RemoveDependency(transaction, mangled_name);
-}
-
-// Remove dependent from a DependencyEntry
-void DependencySetCatalogEntry::RemoveDependent(CatalogTransaction transaction, DependencySetCatalogEntry &dependent) {
-	auto &mangled_name = dependent.MangledName();
-	RemoveDependent(transaction, mangled_name);
-}
-
-// Remove dependency from a DependencyEntry
-void DependencySetCatalogEntry::RemoveDependency(CatalogTransaction transaction, CatalogEntry &dependency) {
-	D_ASSERT(dependency.type == CatalogType::DEPENDENCY_ENTRY);
-	auto mangled_name = DependencyManager::MangleName(dependency);
-	RemoveDependency(transaction, mangled_name);
-}
-
-// Remove dependent from a DependencyEntry
-void DependencySetCatalogEntry::RemoveDependent(CatalogTransaction transaction, CatalogEntry &dependent) {
-	D_ASSERT(dependent.type == CatalogType::DEPENDENCY_ENTRY);
-	auto mangled_name = DependencyManager::MangleName(dependent);
-	RemoveDependent(transaction, mangled_name);
-}
-
 DependencyCatalogEntry &DependencySetCatalogEntry::GetDependency(CatalogTransaction &transaction,
                                                                  CatalogEntry &object) {
 	auto mangled_name = DependencyManager::MangleName(object);

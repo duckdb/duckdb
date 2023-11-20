@@ -30,6 +30,11 @@ struct CatalogEntryInfo {
 };
 
 struct DependencyInfo {
+public:
+	static DependencyInfo FromDependency(DependencyCatalogEntry &dep);
+	static DependencyInfo FromDependent(DependencyCatalogEntry &dep);
+
+public:
 	CatalogEntryInfo from;
 	CatalogEntryInfo to;
 	DependencyType from_type;
@@ -97,6 +102,7 @@ private:
 	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
 
 private:
+	void RemoveDependency(CatalogTransaction transaction, const DependencyInfo &info);
 	void CreateDependency(CatalogTransaction transaction, const DependencyInfo &info);
 	CatalogSet &Dependents();
 	CatalogSet &Dependencies();
