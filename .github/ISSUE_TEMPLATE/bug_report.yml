@@ -7,13 +7,26 @@ body:
     attributes:
       value: >
         DuckDB has several repositories for different components, please make sure you're raising your issue in the correct one:
-         * [Our docs/website](https://github.com/duckdb/duckdb-web/issues/new)
-         * [DuckDB-Wasm](https://github.com/duckdb/duckdb-wasm/issues/new)
-         * [DuckDB-R](https://github.com/duckdb/duckdb-r/issues/new)
-         * [SQLite scanner](https://github.com/duckdblabs/sqlite_scanner/issues/new)
-         * [Postgres scanner](https://github.com/duckdblabs/postgres_scanner/issues/new)
+
+          * [Documentation/website](https://github.com/duckdb/duckdb-web/issues/new)
+          * APIs:
+            * [duckdb-node](https://github.com/duckdb/duckdb-node/issues/new)
+            * [duckdb-r](https://github.com/duckdb/duckdb-r/issues/new)
+            * [duckdb-rs](https://github.com/duckdb/duckdb-rs/issues/new)
+            * [duckdb-wasm](https://github.com/duckdb/duckdb-wasm/issues/new)
+            * [go-duckdb](https://github.com/marcboeker/go-duckdb/issues/new)
+          * Extensions:
+            * [AWS extension](https://github.com/duckdb/duckdb_aws/issues/new)
+            * [Azure extension](https://github.com/duckdb/duckdb_azure/issues/new)
+            * [Iceberg extension](https://github.com/duckdb/duckdb_iceberg/issues/new)
+            * [MySQL extension](https://github.com/duckdb/duckdb_mysql/issues/new)
+            * [Postgres scanner](https://github.com/duckdb/postgres_scanner/issues/new)
+            * [Spatial extension](https://github.com/duckdb/duckdb_spatial/issues/new)
+            * [SQLite scanner](https://github.com/duckdb/sqlite_scanner/issues/new)
 
         If none of the above repositories are applicable, feel free to raise it in this one
+
+        Please report security vulnerabilities using GitHub's [report vulnerability form](https://github.com/duckdb/duckdb/security/advisories/new).
 
   - type: textarea
     attributes:
