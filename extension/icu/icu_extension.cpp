@@ -228,7 +228,6 @@ void IcuExtension::Load(DuckDB &ddb) {
 	// iterate over all the collations
 	int32_t count;
 	auto locales = icu::Collator::getAvailableLocales(count);
-	auto not_required_for_equality = true;
 	for (int32_t i = 0; i < count; i++) {
 		string collation;
 		if (string(locales[i].getCountry()).empty()) {
@@ -240,11 +239,7 @@ void IcuExtension::Load(DuckDB &ddb) {
 		}
 		collation = StringUtil::Lower(collation);
 
-		if (collation == "da") {
-			not_required_for_equality = false;
-		}
-		CreateCollationInfo info(collation, GetICUFunction(collation), false, not_required_for_equality);
-		not_required_for_equality = true;
+		CreateCollationInfo info(collation, GetICUFunction(collation), false, true);
 		ExtensionUtil::RegisterCollation(db, info);
 	}
 	ScalarFunction sort_key("icu_sort_key", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
