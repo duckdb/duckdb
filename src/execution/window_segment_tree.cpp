@@ -479,7 +479,7 @@ public:
 	const ValidityMask &filter_mask;
 	//! The size of a single aggregate state
 	const idx_t state_size;
-	//! Data pointer that contains a single state, used for intermediate window segment aggregation
+	//! Data pointer that contains a vector of states, used for intermediate window segment aggregation
 	vector<data_t> state;
 	//! Input data chunk, used for leaf segment aggregation
 	DataChunk leaves;
@@ -912,8 +912,11 @@ void WindowDistinctAggregator::Sink(DataChunk &arg_chunk, SelectionVector *filte
 
 class WindowDistinctAggregator::DistinctSortTree : public MergeSortTree<idx_t, idx_t> {
 public:
-	using BaseTree = MergeSortTree<idx_t, idx_t>;
-	DistinctSortTree(Elements &&lowest_level, WindowDistinctAggregator &wda);
+	// prev_idx, input_idx
+	using ZippedTuple = std::tuple<idx_t, idx_t>;
+	using ZippedElements = vector<ZippedTuple>;
+
+	DistinctSortTree(ZippedElements &&prev_idcs, WindowDistinctAggregator &wda);
 };
 
 void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
@@ -927,20 +930,22 @@ void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
 		global_sort->CompleteMergeRound(false);
 	}
 
-	//	6:	prevIdcs ← []
-	//	7:	prevIdcs[0] ← “-”
-	const auto count = inputs.size();
-	vector<idx_t> prev_idcs;
-	prev_idcs.reserve(count);
-	prev_idcs.emplace_back(0);
-
 	DataChunk scan_chunk;
 	scan_chunk.Initialize(Allocator::DefaultAllocator(), payload_types);
 
 	auto scanner = make_uniq<PayloadScanner>(*global_sort);
 	scanner->Scan(scan_chunk);
 	idx_t scan_idx = 0;
-	auto *second = FlatVector::GetData<idx_t>(scan_chunk.data[0]);
+
+	//	6:	prevIdcs ← []
+	//	7:	prevIdcs[0] ← “-”
+	const auto count = inputs.size();
+	DistinctSortTree::ZippedElements prev_idcs;
+	prev_idcs.resize(count);
+
+	auto *input_idx = FlatVector::GetData<idx_t>(scan_chunk.data[0]);
+	auto i = input_idx[scan_idx++];
+	prev_idcs[i] = {0, i};
 
 	SBIterator curr(*global_sort, ExpressionType::COMPARE_LESSTHAN);
 	SBIterator prev(*global_sort, ExpressionType::COMPARE_LESSTHAN);
@@ -954,8 +959,10 @@ void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
 			scan_chunk.Reset();
 			scanner->Scan(scan_chunk);
 			scan_idx = 0;
-			second = FlatVector::GetData<idx_t>(scan_chunk.data[0]);
+			input_idx = FlatVector::GetData<idx_t>(scan_chunk.data[0]);
 		}
+		auto second = i;
+		i = input_idx[scan_idx++];
 
 		int lt = 0;
 		if (prefix_layout.all_constant) {
@@ -970,20 +977,18 @@ void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
 		//	11:	else
 		//	12:		prevIdcs[i] ← “-”
 		if (!lt) {
-			prev_idcs.emplace_back(second[scan_idx] + 1);
+			prev_idcs[i] = {second + 1, i};
 		} else {
-			prev_idcs.emplace_back(0);
+			prev_idcs[i] = {0, i};
 		}
-		++scan_idx;
 	}
 	//	13:	return prevIdcs
 
 	merge_sort_tree = make_uniq<DistinctSortTree>(std::move(prev_idcs), *this);
 }
 
-WindowDistinctAggregator::DistinctSortTree::DistinctSortTree(Elements &&lowest_level, WindowDistinctAggregator &wda)
-    : BaseTree(std::move(lowest_level)) {
-
+WindowDistinctAggregator::DistinctSortTree::DistinctSortTree(ZippedElements &&prev_idcs,
+                                                             WindowDistinctAggregator &wda) {
 	auto &inputs = wda.inputs;
 	auto &aggr = wda.aggr;
 	auto &allocator = wda.allocator;
@@ -1013,32 +1018,39 @@ WindowDistinctAggregator::DistinctSortTree::DistinctSortTree(Elements &&lowest_l
 
 	// compute space required to store aggregation states of merge sort tree
 	// this is one aggregate state per entry per level
+	MergeSortTree<ZippedTuple> zipped_tree(std::move(prev_idcs));
 	internal_nodes = 0;
-	for (idx_t level_nr = 0; level_nr < tree.size(); ++level_nr) {
-		internal_nodes += tree[level_nr].first.size();
+	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
+		internal_nodes += zipped_tree.tree[level_nr].first.size();
 	}
 	levels_flat_native = make_unsafe_uniq_array<data_t>(internal_nodes * state_size);
 	levels_flat_start.push_back(0);
 	idx_t levels_flat_offset = 0;
 
 	//	Walk the distinct value tree building the intermediate aggregates
+	tree.reserve(zipped_tree.tree.size());
 	idx_t level_width = 1;
-	for (idx_t level_nr = 0; level_nr < tree.size(); ++level_nr) {
-		auto &level = tree[level_nr].first;
+	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
+		auto &zipped_level = zipped_tree.tree[level_nr].first;
+		vector<ElementType> level;
+		level.reserve(zipped_level.size());
 
-		for (idx_t i = 0; i < level.size(); i += level_width) {
+		for (idx_t i = 0; i < zipped_level.size(); i += level_width) {
 			//	Reset the combine state
 			data_ptr_t prev_state = nullptr;
-			auto next_limit = MinValue<idx_t>(level.size(), i + level_width);
+			auto next_limit = MinValue<idx_t>(zipped_level.size(), i + level_width);
 			for (auto j = i; j < next_limit; ++j) {
 				//	Initialise the next aggregate
 				auto curr_state = levels_flat_native.get() + (levels_flat_offset++ * state_size);
 				aggr.function.initialize(curr_state);
 
 				//	Update this state (if it matches)
-				if (level[j] < i + 1) {
+				const auto prev_idx = std::get<0>(zipped_level[j]);
+				level.emplace_back(prev_idx);
+				if (prev_idx < i + 1) {
 					updates[nupdate] = curr_state;
-					sel[nupdate] = level[j];
+					//	input_idx
+					sel[nupdate] = std::get<1>(zipped_level[j]);
 					++nupdate;
 				}
 
@@ -1051,7 +1063,7 @@ WindowDistinctAggregator::DistinctSortTree::DistinctSortTree(Elements &&lowest_l
 				prev_state = curr_state;
 
 				//	Flush the states if one is maxed out.
-				if (MaxValue<idx_t>(ncombine, nupdate) >= STANDARD_VECTOR_SIZE) {
+				if (MinValue<idx_t>(ncombine, nupdate) >= STANDARD_VECTOR_SIZE) {
 					//	Push the updates first so they propagate
 					leaves.Reference(inputs);
 					leaves.Slice(sel, nupdate);
@@ -1064,6 +1076,8 @@ WindowDistinctAggregator::DistinctSortTree::DistinctSortTree(Elements &&lowest_l
 				}
 			}
 		}
+
+		tree.emplace_back(std::move(level), std::move(zipped_tree.tree[level_nr].second));
 
 		levels_flat_start.push_back(levels_flat_offset);
 		level_width *= FANOUT;
@@ -1085,11 +1099,7 @@ WindowDistinctAggregator::DistinctSortTree::DistinctSortTree(Elements &&lowest_l
 
 class WindowDistinctState : public WindowAggregatorState {
 public:
-	WindowDistinctState(const AggregateObject &aggr, DataChunk &inputs, const WindowDistinctAggregator &tree)
-	    : aggr(aggr), inputs(inputs), tree(tree), state_size(aggr.function.state_size()), statef(LogicalType::POINTER),
-	      statep(LogicalType::POINTER), statel(LogicalType::POINTER), flush_count(0) {
-		InitSubFrames(frames, tree.exclude_mode);
-	}
+	WindowDistinctState(const AggregateObject &aggr, DataChunk &inputs, const WindowDistinctAggregator &tree);
 
 	void Evaluate(const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx);
 
@@ -1105,6 +1115,8 @@ protected:
 	const WindowDistinctAggregator &tree;
 	//! The size of a single aggregate state
 	const idx_t state_size;
+	//! Data pointer that contains a vector of states, used for row aggregation
+	vector<data_t> state;
 	//! Reused result state container for the window functions
 	Vector statef;
 	//! A vector of pointers to "state", used for buffering intermediate aggregates
@@ -1116,6 +1128,25 @@ protected:
 	//! The frame boundaries, used for the window functions
 	SubFrames frames;
 };
+
+WindowDistinctState::WindowDistinctState(const AggregateObject &aggr, DataChunk &inputs,
+                                         const WindowDistinctAggregator &tree)
+    : aggr(aggr), inputs(inputs), tree(tree), state_size(aggr.function.state_size()),
+      state((state_size * STANDARD_VECTOR_SIZE)), statef(LogicalType::POINTER), statep(LogicalType::POINTER),
+      statel(LogicalType::POINTER), flush_count(0) {
+	InitSubFrames(frames, tree.exclude_mode);
+
+	//	Build the finalise vector that just points to the result states
+	data_ptr_t state_ptr = state.data();
+	D_ASSERT(statef.GetVectorType() == VectorType::FLAT_VECTOR);
+	statef.SetVectorType(VectorType::CONSTANT_VECTOR);
+	statef.Flatten(STANDARD_VECTOR_SIZE);
+	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
+	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; ++i) {
+		fdata[i] = state_ptr;
+		state_ptr += state_size;
+	}
+}
 
 void WindowDistinctState::FlushStates() {
 	if (!flush_count) {

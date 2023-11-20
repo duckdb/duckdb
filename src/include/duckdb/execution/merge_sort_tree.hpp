@@ -11,9 +11,11 @@
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/printer.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
+#include <iomanip>
 
 namespace duckdb {
 
@@ -44,6 +46,30 @@ namespace duckdb {
 // Implementation of a generic merge-sort-tree
 // Rewrite of the original, which was in C++17 and targeted for research,
 // instead of deployment.
+template <typename T>
+struct MergeSortTraits {
+	using return_type = T;
+	static const return_type SENTINEL() {
+		return std::numeric_limits<T>::max();
+	};
+};
+
+template <typename... T>
+struct MergeSortTraits<std::tuple<T...>> {
+	using return_type = std::tuple<T...>;
+	static return_type SENTINEL() {
+		return std::tuple<T...> {MergeSortTraits<T>::SENTINEL()...};
+	};
+};
+
+template <typename... T>
+struct MergeSortTraits<std::pair<T...>> {
+	using return_type = std::pair<T...>;
+	static return_type SENTINEL() {
+		return std::pair<T...> {MergeSortTraits<T>::SENTINEL()...};
+	};
+};
+
 template <typename E = idx_t, typename O = idx_t, typename CMP = std::less<E>, uint64_t F = 32, uint64_t C = 32>
 struct MergeSortTree {
 	using ElementType = E;
@@ -74,7 +100,7 @@ struct MergeSortTree {
 		CMP cmp;
 	};
 
-	MergeSortTree() {
+	explicit MergeSortTree(const CMP &cmp = CMP()) : cmp(cmp) {
 	}
 	explicit MergeSortTree(Elements &&lowest_level, const CMP &cmp = CMP());
 
@@ -175,6 +201,52 @@ protected:
 		}
 		return level;
 	}
+
+	void Print() const {
+		std::ostringstream out;
+		const char *separator = "    ";
+		const char *group_separator = " || ";
+		idx_t level_width = 1;
+		idx_t number_width = 0;
+		for (auto &level : tree) {
+			for (auto &e : level.first) {
+				if (e) {
+					idx_t digits = ceil(log10(fabs(e))) + (e < 0);
+					if (digits > number_width) {
+						number_width = digits;
+					}
+				}
+			}
+		}
+		for (auto &level : tree) {
+			// Print the elements themself
+			{
+				out << 'd';
+				for (size_t i = 0; i < level.first.size(); ++i) {
+					out << ((i && i % level_width == 0) ? group_separator : separator);
+					out << std::setw(number_width) << level.first[i];
+				}
+				out << std::endl;
+			}
+			// Print the pointers
+			if (!level.second.empty()) {
+				idx_t run_cnt = (level.first.size() + level_width - 1) / level_width;
+				idx_t cascading_idcs_cnt = run_cnt * (2 + level_width / CASCADING) * FANOUT;
+				for (idx_t child_nr = 0; child_nr < FANOUT; ++child_nr) {
+					out << " ";
+					for (idx_t idx = 0; idx < cascading_idcs_cnt; idx += FANOUT) {
+						out << ((idx && ((idx / FANOUT) % (level_width / CASCADING + 2) == 0)) ? group_separator
+						                                                                       : separator);
+						out << std::setw(number_width) << level.second[idx + child_nr];
+					}
+					out << std::endl;
+				}
+			}
+			level_width *= FANOUT;
+		}
+
+		Printer::Print(out.str());
+	}
 };
 
 template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
@@ -184,7 +256,7 @@ MergeSortTree<E, O, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP
 	const auto count = lowest_level.size();
 	tree.emplace_back(Level(lowest_level, Offsets()));
 
-	const RunElement SENTINEL(std::numeric_limits<ElementType>::max(), std::numeric_limits<idx_t>::max());
+	const RunElement SENTINEL(MergeSortTraits<ElementType>::SENTINEL(), MergeSortTraits<idx_t>::SENTINEL());
 
 	//	Fan in parent levels until we are at the top
 	//	Note that we don't build the top layer as that would just be all the data.
