@@ -91,12 +91,6 @@ const CatalogEntryInfo &DependencySetCatalogEntry::EntryInfo() const {
 	return info;
 }
 
-DependencyCatalogEntry &DependencySetCatalogEntry::GetDependent(CatalogTransaction &transaction, CatalogEntry &object) {
-	auto mangled_name = DependencyManager::MangleName(object);
-	auto dependent = dependents.GetEntry(transaction, mangled_name);
-	return dependent->Cast<DependencyCatalogEntry>();
-}
-
 bool DependencySetCatalogEntry::IsDependencyOf(CatalogTransaction transaction, const MangledEntryName &mangled_name) {
 	auto dependent = dependents.GetEntryDetailed(transaction, mangled_name);
 

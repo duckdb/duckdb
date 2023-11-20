@@ -40,10 +40,6 @@ public:
 	void ScanDependencies(CatalogTransaction transaction, dependency_callback_t &callback);
 
 public:
-	// Get dependent/dependency
-	DependencyCatalogEntry &GetDependent(CatalogTransaction &transaction, CatalogEntry &object);
-
-public:
 	bool HasDependencyOn(CatalogTransaction transaction, CatalogEntry &entry);
 	bool HasDependencyOn(CatalogTransaction transaction, DependencySetCatalogEntry &other);
 	bool IsDependencyOf(CatalogTransaction transaction, CatalogEntry &entry);
