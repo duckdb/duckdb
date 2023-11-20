@@ -11,7 +11,7 @@ namespace duckdb {
 
 DependencySetCatalogEntry::DependencySetCatalogEntry(DuckCatalog &catalog, DependencyManager &dependency_manager,
                                                      CatalogEntryInfo info)
-    : catalog(catalog), mangled_name(DependencyManager::MangleName(info.type, info.schema, info.name)), info(info),
+    : catalog(catalog), mangled_name(DependencyManager::MangleName(info)), info(info),
       dependencies(dependency_manager.dependencies, mangled_name, info),
       dependents(dependency_manager.dependents, mangled_name, info), dependency_manager(dependency_manager) {
 }

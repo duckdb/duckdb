@@ -24,8 +24,13 @@ static void AssertMangledName(const string &mangled_name, idx_t expected_null_by
 #endif
 }
 
-MangledEntryName::MangledEntryName(CatalogType type, const string &schema, const string &name) {
+MangledEntryName::MangledEntryName(const CatalogEntryInfo &info) {
 	static const auto NULL_BYTE = string(1, '\0');
+
+	auto &type = info.type;
+	auto &schema = info.schema;
+	auto &name = info.name;
+
 	this->name = CatalogTypeToString(type) + NULL_BYTE + schema + NULL_BYTE + name;
 	AssertMangledName(this->name, 2);
 }
@@ -47,29 +52,24 @@ string DependencyManager::GetSchema(CatalogEntry &entry) {
 	return entry.ParentSchema().name;
 }
 
-MangledEntryName DependencyManager::MangleName(CatalogType type, const string &schema, const string &name) {
-	return MangledEntryName(type, schema, name);
+MangledEntryName DependencyManager::MangleName(const CatalogEntryInfo &info) {
+	return MangledEntryName(info);
 }
 
 MangledEntryName DependencyManager::MangleName(CatalogEntry &entry) {
-	CatalogType type = CatalogType::INVALID;
-	string schema;
-	string name;
-
 	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
 		auto &dependency_entry = entry.Cast<DependencyCatalogEntry>();
 		return dependency_entry.MangledName();
-	} else {
-		type = entry.type;
-		schema = GetSchema(entry);
-		name = entry.name;
 	}
-	D_ASSERT(type != CatalogType::INVALID);
-	return MangleName(type, schema, name);
+	auto type = entry.type;
+	auto schema = GetSchema(entry);
+	auto name = entry.name;
+	CatalogEntryInfo info{type, schema, name};
+
+	return MangleName(info);
 }
 
-DependencySetCatalogEntry DependencyManager::GetDependencySet(CatalogTransaction transaction,
-                                                              const CatalogEntryInfo &info) {
+DependencySetCatalogEntry DependencyManager::GetDependencySet(CatalogTransaction transaction, const CatalogEntryInfo &info) {
 	DependencySetCatalogEntry set(catalog, *this, info);
 	return set;
 }

@@ -8,8 +8,8 @@ namespace duckdb {
 DependencyCatalogEntry::DependencyCatalogEntry(DependencyLinkSide side, Catalog &catalog, DependencyManager &manager,
                                                const CatalogEntryInfo &info, DependencyType dependency_type)
     : InCatalogEntry(CatalogType::DEPENDENCY_ENTRY, catalog,
-                     DependencyManager::MangleName(info.type, info.schema, info.name).name),
-      mangled_name(DependencyManager::MangleName(info.type, info.schema, info.name)), entry(info),
+                     DependencyManager::MangleName(info).name),
+      mangled_name(DependencyManager::MangleName(info)), entry(info),
       dependency_type(dependency_type), side(side), manager(manager) {
 	D_ASSERT(info.type != CatalogType::DEPENDENCY_ENTRY);
 }
