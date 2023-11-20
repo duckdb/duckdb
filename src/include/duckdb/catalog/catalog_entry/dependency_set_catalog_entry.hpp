@@ -40,16 +40,6 @@ public:
 	void ScanDependencies(CatalogTransaction transaction, dependency_callback_t &callback);
 
 public:
-	//// Add Dependencies
-	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, DependencySetCatalogEntry &dependent,
-	                                      DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
-	// Add Dependents
-	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, DependencySetCatalogEntry &dependent,
-	                                     DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
-	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, CatalogEntry &dependent,
-	                                     DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
-	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, const Dependency dependent);
-
 	// Get dependent/dependency
 	DependencyCatalogEntry &GetDependency(CatalogTransaction &transaction, CatalogEntry &object);
 	DependencyCatalogEntry &GetDependent(CatalogTransaction &transaction, CatalogEntry &object);
@@ -73,11 +63,6 @@ private:
 
 	void RemoveDependency(CatalogTransaction transaction, const MangledEntryName &mangled_name);
 	void RemoveDependent(CatalogTransaction transaction, const MangledEntryName &mangled_name);
-
-	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, CatalogEntryInfo info,
-	                                      DependencyType type = DependencyType::DEPENDENCY_REGULAR);
-	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, CatalogEntryInfo info,
-	                                     DependencyType type = DependencyType::DEPENDENCY_REGULAR);
 
 public:
 	void PrintDependencies(CatalogTransaction transaction);

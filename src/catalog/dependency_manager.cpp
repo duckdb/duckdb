@@ -114,7 +114,7 @@ void DependencyManager::CreateDependency(CatalogTransaction transaction, const D
 		auto &type = info.from_type;
 		DependencyCatalogSet dependents(Dependents(), to);
 
-		auto dependent_p = make_uniq<DependencyCatalogEntry>(DependencyLinkSide::DEPENDENT, catalog, *this, from, type);
+		auto dependent_p = make_uniq<DependencyCatalogEntry>(catalog, from, to, type);
 		auto &dependent_name = dependent_p->MangledName();
 		auto existing = dependents.GetEntry(transaction, dependent_name);
 		if (existing) {
@@ -133,7 +133,7 @@ void DependencyManager::CreateDependency(CatalogTransaction transaction, const D
 		auto &type = info.to_type;
 		DependencyCatalogSet dependencies(Dependencies(), from);
 
-		auto dependency_p = make_uniq<DependencyCatalogEntry>(DependencyLinkSide::DEPENDENCY, catalog, *this, to, type);
+		auto dependency_p = make_uniq<DependencyCatalogEntry>(catalog, to, from, type);
 		auto &dependency_name = dependency_p->MangledName();
 		auto existing = dependencies.GetEntry(transaction, dependency_name);
 		if (existing) {

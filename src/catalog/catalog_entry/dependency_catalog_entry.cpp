@@ -5,11 +5,13 @@
 
 namespace duckdb {
 
-DependencyCatalogEntry::DependencyCatalogEntry(DependencyLinkSide side, Catalog &catalog, DependencyManager &manager,
-                                               const CatalogEntryInfo &info, DependencyType dependency_type)
-    : InCatalogEntry(CatalogType::DEPENDENCY_ENTRY, catalog, DependencyManager::MangleName(info).name),
-      mangled_name(DependencyManager::MangleName(info)), entry(info), dependency_type(dependency_type), side(side),
-      manager(manager) {
+DependencyCatalogEntry::DependencyCatalogEntry(Catalog &catalog, const CatalogEntryInfo &info,
+                                               const CatalogEntryInfo &from, DependencyType dependency_type)
+    : InCatalogEntry(
+          CatalogType::DEPENDENCY_ENTRY, catalog,
+          MangledDependencyName(DependencyManager::MangleName(from), DependencyManager::MangleName(info)).name),
+      mangled_name(DependencyManager::MangleName(info)), entry(info),
+      from_mangled_name(DependencyManager::MangleName(from)), from(from), dependency_type(dependency_type) {
 	D_ASSERT(info.type != CatalogType::DEPENDENCY_ENTRY);
 }
 
@@ -57,30 +59,7 @@ DependencyType DependencyCatalogEntry::Type() const {
 	return dependency_type;
 }
 
-void DependencyCatalogEntry::SetFrom(const MangledEntryName &from_mangled_name, const CatalogEntryInfo &info,
-                                     const string &new_name) {
-	name = new_name;
-	this->from_mangled_name = from_mangled_name;
-	this->from = info;
-}
-
 DependencyCatalogEntry::~DependencyCatalogEntry() {
-}
-
-void DependencyCatalogEntry::CompleteLink(CatalogTransaction transaction, DependencyType type) {
-	auto set = manager.GetDependencySet(transaction, FromInfo());
-	switch (side) {
-	case DependencyLinkSide::DEPENDENCY: {
-		auto other_set = manager.GetDependencySet(transaction, EntryInfo());
-		other_set.AddDependent(transaction, set, type);
-		break;
-	}
-	case DependencyLinkSide::DEPENDENT: {
-		auto other_set = manager.GetDependencySet(transaction, EntryInfo());
-		other_set.AddDependency(transaction, set, type);
-		break;
-	}
-	}
 }
 
 } // namespace duckdb

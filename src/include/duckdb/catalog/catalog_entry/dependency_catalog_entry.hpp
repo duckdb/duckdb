@@ -27,12 +27,9 @@ class DependencySetCatalogEntry;
 //! Resembles a connection between an object and the CatalogEntry that can be retrieved from the Catalog using the
 //! identifiers listed here
 
-enum class DependencyLinkSide { DEPENDENCY, DEPENDENT };
-
 class DependencyCatalogEntry : public InCatalogEntry {
 public:
-	DependencyCatalogEntry(DependencyLinkSide side, Catalog &catalog, DependencyManager &manager,
-	                       const CatalogEntryInfo &info,
+	DependencyCatalogEntry(Catalog &catalog, const CatalogEntryInfo &entry, const CatalogEntryInfo &from,
 	                       DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 	~DependencyCatalogEntry() override;
 
@@ -53,19 +50,15 @@ public:
 
 	// Create the corresponding dependency/dependent in the other set
 	void CompleteLink(CatalogTransaction transaction, DependencyType type = DependencyType::DEPENDENCY_REGULAR);
-	void SetFrom(const MangledEntryName &from_mangled_name, const CatalogEntryInfo &info, const string &new_name);
 
 private:
 	const MangledEntryName mangled_name;
-	CatalogEntryInfo entry;
+	const CatalogEntryInfo entry;
 
-	MangledEntryName from_mangled_name;
-	CatalogEntryInfo from;
+	const MangledEntryName from_mangled_name;
+	const CatalogEntryInfo from;
 
 	DependencyType dependency_type;
-
-	DependencyLinkSide side;
-	DependencyManager &manager;
 };
 
 } // namespace duckdb
