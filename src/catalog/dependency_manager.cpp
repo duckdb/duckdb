@@ -64,12 +64,15 @@ MangledEntryName DependencyManager::MangleName(CatalogEntry &entry) {
 	auto type = entry.type;
 	auto schema = GetSchema(entry);
 	auto name = entry.name;
-	CatalogEntryInfo info{type, schema, name};
+	CatalogEntryInfo info {type, schema, name};
 
 	return MangleName(info);
 }
 
-DependencySetCatalogEntry DependencyManager::GetDependencySet(CatalogTransaction transaction, const CatalogEntryInfo &info) {
+// ----------- DEPENDENCY_MANAGER -----------
+
+DependencySetCatalogEntry DependencyManager::GetDependencySet(CatalogTransaction transaction,
+                                                              const CatalogEntryInfo &info) {
 	DependencySetCatalogEntry set(catalog, *this, info);
 	return set;
 }
@@ -92,6 +95,15 @@ bool DependencyManager::IsSystemEntry(CatalogEntry &entry) const {
 	default:
 		return false;
 	}
+}
+
+void DependencyManager::CreateDependency(CatalogTransaction transaction, const DependencyInfo &info) {
+	auto &from = info.from;
+	auto &to = info.to;
+
+	// Create a dependent entry [ from -> to ]
+
+	// Create a dependency entry [ to <- from ]
 }
 
 void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &object,
@@ -126,6 +138,11 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 	for (auto &dependency : dependencies.set) {
 		auto dependency_set = GetDependencySet(transaction, dependency);
 		// Create the dependent and complete the link by creating the dependency as well
+		DependencyInfo info {/*from = */ GetLookupProperties(object),
+		                     /*to = */ GetLookupProperties(dependency),
+		                     /*from_type = */ dependency_type,
+		                     /*to_type =*/DependencyType::DEPENDENCY_AUTOMATIC};
+		CreateDependency(transaction, info);
 		dependency_set.AddDependent(transaction, object, dependency_type).CompleteLink(transaction);
 	}
 }

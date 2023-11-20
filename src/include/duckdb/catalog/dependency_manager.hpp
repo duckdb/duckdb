@@ -38,7 +38,7 @@ struct DependencyInfo {
 
 struct MangledEntryName {
 public:
-	MangledEntryName(const CatalogEntryInfo& info);
+	MangledEntryName(const CatalogEntryInfo &info);
 	// TODO: delete me later
 	MangledEntryName() {
 	}
@@ -95,6 +95,9 @@ private:
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, const DependencyList &dependencies);
 	void DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
 	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
+
+private:
+	void CreateDependency(CatalogTransaction transaction, const DependencyInfo &info);
 };
 
 } // namespace duckdb

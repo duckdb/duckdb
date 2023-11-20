@@ -74,11 +74,9 @@ private:
 	void RemoveDependency(CatalogTransaction transaction, const MangledEntryName &mangled_name);
 	void RemoveDependent(CatalogTransaction transaction, const MangledEntryName &mangled_name);
 
-	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, const MangledEntryName &mangled_name,
-	                                      CatalogEntryInfo info,
+	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, CatalogEntryInfo info,
 	                                      DependencyType type = DependencyType::DEPENDENCY_REGULAR);
-	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, const MangledEntryName &mangled_name,
-	                                     CatalogEntryInfo info,
+	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, CatalogEntryInfo info,
 	                                     DependencyType type = DependencyType::DEPENDENCY_REGULAR);
 
 public:
