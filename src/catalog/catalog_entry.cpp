@@ -66,8 +66,8 @@ CatalogEntry &CatalogEntry::Child() {
 	return *child;
 }
 
-optional_ptr<CatalogEntry> CatalogEntry::Parent() {
-	return parent;
+CatalogEntry &CatalogEntry::Parent() {
+	return *parent;
 }
 
 Catalog &CatalogEntry::ParentCatalog() {

@@ -35,13 +35,13 @@ void CommitState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {
 }
 
 void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
-	if (entry.temporary || entry.Parent()->temporary) {
+	if (entry.temporary || entry.Parent().temporary) {
 		return;
 	}
 	D_ASSERT(log);
 
 	// look at the type of the parent entry
-	auto &parent = *entry.Parent();
+	auto &parent = entry.Parent();
 
 	switch (parent.type) {
 	case CatalogType::TABLE_ENTRY:
@@ -265,8 +265,8 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		lock_guard<mutex> write_lock(duck_catalog.GetWriteLock());
 		lock_guard<mutex> read_lock(catalog_entry->set->GetCatalogLock());
-		catalog_entry->set->UpdateTimestamp(*catalog_entry->Parent(), commit_id);
-		if (!StringUtil::CIEquals(catalog_entry->name, catalog_entry->Parent()->name)) {
+		catalog_entry->set->UpdateTimestamp(catalog_entry->Parent(), commit_id);
+		if (!StringUtil::CIEquals(catalog_entry->name, catalog_entry->Parent().name)) {
 			catalog_entry->set->UpdateTimestamp(*catalog_entry, commit_id);
 		}
 		if (HAS_LOG) {
@@ -316,8 +316,8 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		// set the commit timestamp of the catalog entry to the given id
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		D_ASSERT(catalog_entry->HasParent());
-		catalog_entry->set->UpdateTimestamp(*catalog_entry->Parent(), transaction_id);
-		if (catalog_entry->name != catalog_entry->Parent()->name) {
+		catalog_entry->set->UpdateTimestamp(catalog_entry->Parent(), transaction_id);
+		if (catalog_entry->name != catalog_entry->Parent().name) {
 			catalog_entry->set->UpdateTimestamp(*catalog_entry, transaction_id);
 		}
 		break;

@@ -85,7 +85,7 @@ public:
 	bool HasChild() const;
 	bool HasParent() const;
 	CatalogEntry &Child();
-	optional_ptr<CatalogEntry> Parent();
+	CatalogEntry &Parent();
 
 public:
 	template <class TARGET>

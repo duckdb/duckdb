@@ -48,7 +48,7 @@ void CatalogEntryMap::DropEntry(CatalogEntry &entry) {
 		throw InternalException("Attempting to drop entry with name \"%s\" but no chain with that name exists", name);
 	}
 	auto child = entry.TakeChild();
-	if (!entry.Parent()) {
+	if (!entry.HasParent()) {
 		// This is the top of the chain
 		D_ASSERT(chain.get() == &entry);
 		auto it = entries.find(name);
@@ -64,8 +64,8 @@ void CatalogEntryMap::DropEntry(CatalogEntry &entry) {
 		}
 	} else {
 		// Just replace the entry with its child
-		auto parent = entry.Parent();
-		parent->SetChild(std::move(child));
+		auto &parent = entry.Parent();
+		parent.SetChild(std::move(child));
 	}
 }
 
@@ -417,7 +417,7 @@ void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
 	// destroy the backed up entry: it is no longer required
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	lock_guard<mutex> lock(catalog_lock);
-	auto &parent = *catalog_entry.Parent();
+	auto &parent = catalog_entry.Parent();
 	map.DropEntry(catalog_entry);
 	if (parent.deleted && !parent.HasChild() && !parent.HasParent()) {
 		// The entry's parent is a tombstone and the entry had no child
@@ -568,7 +568,7 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 	// and entry->parent has to be removed ("rolled back")
 
 	// i.e. we have to place (entry) as (entry->parent) again
-	auto &to_be_removed_node = *entry.Parent();
+	auto &to_be_removed_node = entry.Parent();
 
 	D_ASSERT(StringUtil::CIEquals(entry.name, to_be_removed_node.name));
 	if (!to_be_removed_node.HasParent()) {
