@@ -9,13 +9,14 @@ DependencyCatalogEntry::DependencyCatalogEntry(DependencyLinkSide side, Catalog 
                                                CatalogType entry_type, const string &entry_schema,
                                                const string &entry_name, DependencyType dependency_type)
     : InCatalogEntry(CatalogType::DEPENDENCY_ENTRY, catalog,
-                     DependencyManager::MangleName(entry_type, entry_schema, entry_name)),
-      mangled_name(name), entry_name(entry_name), entry_schema(entry_schema), entry_type(entry_type),
-      dependency_type(dependency_type), side(side), manager(manager) {
+                     DependencyManager::MangleName(entry_type, entry_schema, entry_name).name),
+      mangled_name(DependencyManager::MangleName(entry_type, entry_schema, entry_name)), entry_name(entry_name),
+      entry_schema(entry_schema), entry_type(entry_type), dependency_type(dependency_type), side(side),
+      manager(manager) {
 	D_ASSERT(entry_type != CatalogType::DEPENDENCY_ENTRY);
 }
 
-const string &DependencyCatalogEntry::MangledName() const {
+const MangledEntryName &DependencyCatalogEntry::MangledName() const {
 	return mangled_name;
 }
 
@@ -31,7 +32,7 @@ const string &DependencyCatalogEntry::EntryName() const {
 	return entry_name;
 }
 
-const string &DependencyCatalogEntry::FromMangledName() const {
+const MangledEntryName &DependencyCatalogEntry::FromMangledName() const {
 	return from_mangled_name;
 }
 
@@ -51,8 +52,8 @@ DependencyType DependencyCatalogEntry::Type() const {
 	return dependency_type;
 }
 
-void DependencyCatalogEntry::SetFrom(const string &from_mangled_name, CatalogType from_type, const string &from_schema,
-                                     const string &from_name, const string &new_name) {
+void DependencyCatalogEntry::SetFrom(const MangledEntryName &from_mangled_name, CatalogType from_type,
+                                     const string &from_schema, const string &from_name, const string &new_name) {
 	name = new_name;
 	this->from_mangled_name = from_mangled_name;
 	this->from_type = from_type;

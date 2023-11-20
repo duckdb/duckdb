@@ -5,27 +5,29 @@
 namespace duckdb {
 
 //! This class mocks the CatalogSet interface, but does not actually store CatalogEntries
-class ProxyCatalogSet {
+class DependencyCatalogSet {
 public:
-	ProxyCatalogSet(CatalogSet &set, const string &mangled_name, CatalogType type, const string &schema,
-	                const string &name)
+	DependencyCatalogSet(CatalogSet &set, const MangledEntryName &mangled_name, CatalogType type, const string &schema,
+	                     const string &name)
 	    : set(set), mangled_name(mangled_name), type(type), schema(schema), name(name) {
 	}
 
 public:
-	bool CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
-	                 const DependencyList &dependencies);
-	CatalogSet::EntryLookup GetEntryDetailed(CatalogTransaction transaction, const string &name);
-	optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, const string &name);
+	bool CreateEntry(CatalogTransaction transaction, const MangledEntryName &name, unique_ptr<CatalogEntry> value);
+	CatalogSet::EntryLookup GetEntryDetailed(CatalogTransaction transaction, const MangledEntryName &name);
+	optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, const MangledEntryName &name);
 	void Scan(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback);
-	bool DropEntry(CatalogTransaction transaction, const string &name, bool cascade, bool allow_drop_internal = false);
+	bool DropEntry(CatalogTransaction transaction, const MangledEntryName &name, bool cascade,
+	               bool allow_drop_internal = false);
 
 private:
-	string ApplyPrefix(const string &name) const;
+	MangledDependencyName ApplyPrefix(const MangledEntryName &name) const;
 
 public:
 	CatalogSet &set;
-	string mangled_name;
+	MangledEntryName mangled_name;
+
+	// TODO: remove these later
 	CatalogType type;
 	string schema;
 	string name;

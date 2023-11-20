@@ -31,8 +31,8 @@ public:
 	                          const string &entry_schema, const string &entry_name);
 
 public:
-	ProxyCatalogSet &Dependencies();
-	ProxyCatalogSet &Dependents();
+	DependencyCatalogSet &Dependencies();
+	DependencyCatalogSet &Dependents();
 	DependencyManager &Manager();
 
 public:
@@ -73,16 +73,16 @@ public:
 
 private:
 	void ScanSetInternal(CatalogTransaction transaction, bool dependencies, dependency_callback_t &callback);
-	bool HasDependencyOn(CatalogTransaction transaction, const string &mangled_name);
-	bool IsDependencyOf(CatalogTransaction transaction, const string &mangled_name);
+	bool HasDependencyOn(CatalogTransaction transaction, const MangledEntryName &mangled_name);
+	bool IsDependencyOf(CatalogTransaction transaction, const MangledEntryName &mangled_name);
 
-	void RemoveDependency(CatalogTransaction transaction, const string &mangled_name);
-	void RemoveDependent(CatalogTransaction transaction, const string &mangled_name);
+	void RemoveDependency(CatalogTransaction transaction, const MangledEntryName &mangled_name);
+	void RemoveDependent(CatalogTransaction transaction, const MangledEntryName &mangled_name);
 
-	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, const string &mangled_name,
+	DependencyCatalogEntry &AddDependency(CatalogTransaction transaction, const MangledEntryName &mangled_name,
 	                                      CatalogType entry_type, const string &schema, const string &name,
 	                                      DependencyType type = DependencyType::DEPENDENCY_REGULAR);
-	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, const string &mangled_name,
+	DependencyCatalogEntry &AddDependent(CatalogTransaction transaction, const MangledEntryName &mangled_name,
 	                                     CatalogType entry_type, const string &schema, const string &name,
 	                                     DependencyType type = DependencyType::DEPENDENCY_REGULAR);
 
@@ -91,7 +91,7 @@ public:
 	void PrintDependents(CatalogTransaction transaction);
 
 public:
-	const string &MangledName() const;
+	const MangledEntryName &MangledName() const;
 	CatalogType EntryType() const;
 	const string &EntrySchema() const;
 	const string &EntryName() const;
@@ -101,15 +101,15 @@ private:
 
 private:
 	DuckCatalog &catalog;
-	string name;
+	MangledEntryName mangled_name;
 	const string entry_name;
 	const string schema;
 	const CatalogType entry_type;
 
 	// These are proxies so we don't have a nested CatalogSet
 	// Because the Catalog is not built to support this
-	ProxyCatalogSet dependencies;
-	ProxyCatalogSet dependents;
+	DependencyCatalogSet dependencies;
+	DependencyCatalogSet dependents;
 	DependencyManager &dependency_manager;
 };
 

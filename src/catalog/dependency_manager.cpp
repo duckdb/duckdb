@@ -14,6 +14,28 @@
 
 namespace duckdb {
 
+static void AssertMangledName(const string &mangled_name, idx_t expected_null_bytes) {
+#ifdef DEBUG
+	idx_t nullbyte_count = 0;
+	for (auto &ch : mangled_name) {
+		nullbyte_count += ch == '\0';
+	}
+	D_ASSERT(nullbyte_count == expected_null_bytes);
+#endif
+}
+
+MangledEntryName::MangledEntryName(CatalogType type, const string &schema, const string &name) {
+	static const auto NULL_BYTE = string(1, '\0');
+	this->name = CatalogTypeToString(type) + NULL_BYTE + schema + NULL_BYTE + name;
+	AssertMangledName(this->name, 2);
+}
+
+MangledDependencyName::MangledDependencyName(const MangledEntryName &from, const MangledEntryName &to) {
+	static const auto NULL_BYTE = string(1, '\0');
+	this->name = from.name + NULL_BYTE + to.name;
+	AssertMangledName(this->name, 5);
+}
+
 DependencyManager::DependencyManager(DuckCatalog &catalog)
     : catalog(catalog), dependencies(catalog), dependents(catalog) {
 }
@@ -25,12 +47,11 @@ string DependencyManager::GetSchema(CatalogEntry &entry) {
 	return entry.ParentSchema().name;
 }
 
-string DependencyManager::MangleName(CatalogType type, const string &schema, const string &name) {
-	auto null_byte = string(1, '\0');
-	return CatalogTypeToString(type) + null_byte + schema + null_byte + name;
+MangledEntryName DependencyManager::MangleName(CatalogType type, const string &schema, const string &name) {
+	return MangledEntryName(type, schema, name);
 }
 
-string DependencyManager::MangleName(CatalogEntry &entry) {
+MangledEntryName DependencyManager::MangleName(CatalogEntry &entry) {
 	CatalogType type = CatalogType::INVALID;
 	string schema;
 	string name;
@@ -45,17 +66,6 @@ string DependencyManager::MangleName(CatalogEntry &entry) {
 	}
 	D_ASSERT(type != CatalogType::INVALID);
 	return MangleName(type, schema, name);
-}
-
-void DependencyManager::AssertMangledName(const string &mangled_name) {
-#ifdef DEBUG
-	idx_t nullbyte_count = 0;
-	for (auto &ch : mangled_name) {
-		nullbyte_count += ch == '\0';
-	}
-	(void)nullbyte_count;
-	D_ASSERT(nullbyte_count == 2);
-#endif
 }
 
 DependencySetCatalogEntry DependencyManager::GetDependencySet(CatalogTransaction transaction, CatalogType type,

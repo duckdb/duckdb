@@ -23,6 +23,27 @@ class DependencyList;
 class DependencyCatalogEntry;
 class DependencySetCatalogEntry;
 
+struct MangledEntryName {
+public:
+	MangledEntryName(CatalogType type, const string &schema, const string &name);
+	// TODO: delete me later
+	MangledEntryName() {
+	}
+
+public:
+	//! Format: Type\0Schema\0Name
+	string name;
+};
+
+struct MangledDependencyName {
+public:
+	MangledDependencyName(const MangledEntryName &from, const MangledEntryName &to);
+
+public:
+	//! Format: MangledEntryName\0MangledEntryName
+	string name;
+};
+
 //! The DependencyManager is in charge of managing dependencies between catalog entries
 class DependencyManager {
 	friend class CatalogSet;
@@ -54,10 +75,9 @@ private:
 
 public:
 	static string GetSchema(CatalogEntry &entry);
-	static string MangleName(CatalogType type, const string &schema, const string &name);
-	static string MangleName(CatalogEntry &entry);
+	static MangledEntryName MangleName(CatalogType type, const string &schema, const string &name);
+	static MangledEntryName MangleName(CatalogEntry &entry);
 	static void GetLookupProperties(CatalogEntry &entry, string &schema, string &name, CatalogType &type);
-	static void AssertMangledName(const string &mangled_name);
 
 private:
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, const DependencyList &dependencies);
