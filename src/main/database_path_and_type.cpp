@@ -24,4 +24,19 @@ void DBPathAndType::CheckMagicBytes(string &path, string &db_type, const DBConfi
 	}
 }
 
+void DBPathAndType::ResolveDatabaseType(string &path, string &db_type, const DBConfig &config) {
+	if (!db_type.empty()) {
+		// database type specified explicitly - no need to check
+		return;
+	}
+	// check for an extension prefix
+	ExtractExtensionPrefix(path, db_type);
+	if (!db_type.empty()) {
+		// extension prefix was provided (e.g. sqlite:/path/to/file.db) - we are done
+		return;
+	}
+	// check database type by reading the magic bytes of a file
+	DBPathAndType::CheckMagicBytes(path, db_type, config);
+}
+
 } // namespace duckdb

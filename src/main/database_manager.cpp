@@ -125,9 +125,7 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, string &db_type, A
 
 	// try to extract database type from path
 	if (db_type.empty()) {
-		auto path_and_type = DBPathAndType::CheckMagicBytes(info.path, config);
-		db_type = path_and_type.type;
-		info.path = path_and_type.path;
+		DBPathAndType::CheckMagicBytes(info.path, db_type, config);
 	}
 
 	// if we are loading a database type from an extension - check if that extension is loaded
