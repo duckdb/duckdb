@@ -12,4 +12,8 @@ void Serializer::WriteValue(const vector<bool> &vec) {
 	OnListEnd();
 }
 
+void Serializer::List::WriteElement(data_ptr_t ptr, idx_t size) {
+	serializer.WriteDataPtr(ptr, size);
+}
+
 } // namespace duckdb
