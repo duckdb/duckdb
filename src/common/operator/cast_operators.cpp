@@ -1340,63 +1340,90 @@ bool TryCast::Operation(interval_t input, interval_t &result, bool strict) {
 //===--------------------------------------------------------------------===//
 template <>
 duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_t input, Vector &result) {
-	return StringCast::Operation<timestamp_t>(Timestamp::FromEpochNanoSeconds(input.value), result);
+	return StringCast::Operation<timestamp_t>(CastTimestampNsToUs::Operation<timestamp_t, timestamp_t>(input), result);
 }
 template <>
 duckdb::string_t CastFromTimestampMS::Operation(duckdb::timestamp_t input, Vector &result) {
-	return StringCast::Operation<timestamp_t>(Timestamp::FromEpochMs(input.value), result);
+	return StringCast::Operation<timestamp_t>(CastTimestampMsToUs::Operation<timestamp_t, timestamp_t>(input), result);
 }
 template <>
 duckdb::string_t CastFromTimestampSec::Operation(duckdb::timestamp_t input, Vector &result) {
-	return StringCast::Operation<timestamp_t>(Timestamp::FromEpochSeconds(input.value), result);
+	return StringCast::Operation<timestamp_t>(CastTimestampSecToUs::Operation<timestamp_t, timestamp_t>(input), result);
 }
 
 template <>
 timestamp_t CastTimestampUsToMs::Operation(timestamp_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	timestamp_t cast_timestamp(Timestamp::GetEpochMs(input));
 	return cast_timestamp;
 }
 
 template <>
 timestamp_t CastTimestampUsToNs::Operation(timestamp_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	timestamp_t cast_timestamp(Timestamp::GetEpochNanoSeconds(input));
 	return cast_timestamp;
 }
 
 template <>
 timestamp_t CastTimestampUsToSec::Operation(timestamp_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	timestamp_t cast_timestamp(Timestamp::GetEpochSeconds(input));
 	return cast_timestamp;
 }
 template <>
 timestamp_t CastTimestampMsToUs::Operation(timestamp_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	return Timestamp::FromEpochMs(input.value);
 }
 
 template <>
 timestamp_t CastTimestampMsToNs::Operation(timestamp_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	auto us = CastTimestampMsToUs::Operation<timestamp_t, timestamp_t>(input);
 	return CastTimestampUsToNs::Operation<timestamp_t, timestamp_t>(us);
 }
 
 template <>
 timestamp_t CastTimestampNsToUs::Operation(timestamp_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	return Timestamp::FromEpochNanoSeconds(input.value);
 }
 
 template <>
 timestamp_t CastTimestampSecToUs::Operation(timestamp_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	return Timestamp::FromEpochSeconds(input.value);
 }
 
 template <>
 timestamp_t CastTimestampSecToMs::Operation(timestamp_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	auto us = CastTimestampSecToUs::Operation<timestamp_t, timestamp_t>(input);
 	return CastTimestampUsToMs::Operation<timestamp_t, timestamp_t>(us);
 }
 
 template <>
 timestamp_t CastTimestampSecToNs::Operation(timestamp_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	auto us = CastTimestampSecToUs::Operation<timestamp_t, timestamp_t>(input);
 	return CastTimestampUsToNs::Operation<timestamp_t, timestamp_t>(us);
 }

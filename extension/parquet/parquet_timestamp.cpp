@@ -43,10 +43,20 @@ Int96 TimestampToImpalaTimestamp(timestamp_t &ts) {
 timestamp_t ParquetTimestampMicrosToTimestamp(const int64_t &raw_ts) {
 	return Timestamp::FromEpochMicroSeconds(raw_ts);
 }
+
 timestamp_t ParquetTimestampMsToTimestamp(const int64_t &raw_ts) {
+	timestamp_t input(raw_ts);
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	return Timestamp::FromEpochMs(raw_ts);
 }
+
 timestamp_t ParquetTimestampNsToTimestamp(const int64_t &raw_ts) {
+	timestamp_t input(raw_ts);
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	return Timestamp::FromEpochNanoSeconds(raw_ts);
 }
 

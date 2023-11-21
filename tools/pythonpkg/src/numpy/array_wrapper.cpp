@@ -31,6 +31,9 @@ struct RegularConvert {
 struct TimestampConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static int64_t ConvertValue(timestamp_t val) {
+		if (!Timestamp::IsFinite(val)) {
+			return val.value;
+		}
 		return Timestamp::GetEpochNanoSeconds(val);
 	}
 
@@ -44,6 +47,9 @@ struct TimestampConvert {
 struct TimestampConvertSec {
 	template <class DUCKDB_T, class NUMPY_T>
 	static int64_t ConvertValue(timestamp_t val) {
+		if (!Timestamp::IsFinite(val)) {
+			return val.value;
+		}
 		return Timestamp::GetEpochNanoSeconds(Timestamp::FromEpochSeconds(val.value));
 	}
 
@@ -57,6 +63,9 @@ struct TimestampConvertSec {
 struct TimestampConvertMilli {
 	template <class DUCKDB_T, class NUMPY_T>
 	static int64_t ConvertValue(timestamp_t val) {
+		if (!Timestamp::IsFinite(val)) {
+			return val.value;
+		}
 		return Timestamp::GetEpochNanoSeconds(Timestamp::FromEpochMs(val.value));
 	}
 
