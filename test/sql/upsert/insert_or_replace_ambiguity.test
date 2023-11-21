@@ -3,7 +3,7 @@
 
 # Single primary key on multiple columns
 statement ok
-create table foo(
+create table single_pk(
 	a int,
 	b int,
 	c int,
@@ -11,60 +11,74 @@ create table foo(
 );
 
 statement ok
-insert or replace into foo values (1,2,3);
+insert or replace into single_pk values (1,2,3);
 
-# Single INDEX
 statement ok
-create table foo2(
+insert or replace into single_pk values (1,2,3);
+
+query III
+select * from single_pk;
+----
+1	2	3
+
+# Single UNIQUE INDEX
+statement ok
+create table using_index(
 	a int,
 	b int,
 	c int
 );
 
 statement ok
-create unique index idx2 on foo2(a, b);
+create UNIQUE index idx2 on using_index(a, b);
 
 statement ok
-insert or replace into foo2 values (1,2,3);
+insert or replace into using_index values (1,2,3);
 
-# Multiple unique INDEXes
 statement ok
-create unique index idx3 on foo2(b, c);
+insert or replace into using_index values (1,2,3);
+
+query III
+select * from using_index;
+----
+1	2	3
+
+# Multiple UNIQUE INDEXes
+statement ok
+create unique index idx3 on using_index(b, c);
 
 statement error
-insert or replace into foo2 values (1,2,3);
+insert or replace into using_index values (1,2,3);
 ----
 Binder Error: Conflict target has to be provided for a DO UPDATE operation when the table has multiple UNIQUE/PRIMARY KEY constraints
 
-# Single unique index
-statement ok
-create table foo3(
-	a int unique,
-	b int
-);
-
-statement ok
-insert or replace into foo3 values(1, 2);
-
 # Single UNIQUE CONSTRAINT
 statement ok
-create table foo4(
+create table single_unique(
 	a int unique,
 	b int
 );
 
 statement ok
-insert or replace into foo4 values(1, 2);
+insert or replace into single_unique values(1, 2);
+
+statement ok
+insert or replace into single_unique values(1, 2);
+
+query II
+select * from single_unique;
+----
+1	2
 
 # Multiple UNIQUE CONSTRAINTs
 statement ok
-create table foo5(
+create table multiple_unique(
 	a int unique,
 	b int unique,
 	c int
 );
 
 statement error
-insert or replace into foo5 values(1, 2, 3);
+insert or replace into multiple_unique values(1, 2, 3);
 ----
 Binder Error: Conflict target has to be provided for a DO UPDATE operation when the table has multiple UNIQUE/PRIMARY KEY constraints
