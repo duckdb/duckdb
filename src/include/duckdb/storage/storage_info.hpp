@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/string.hpp"
 #include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
@@ -57,6 +58,7 @@ using block_id_t = int64_t;
 //! The MainHeader is the first header in the storage file. The MainHeader is typically written only once for a database
 //! file.
 struct MainHeader {
+	static constexpr idx_t MAX_VERSION_SIZE = 32;
 	static constexpr idx_t MAGIC_BYTE_SIZE = 4;
 	static constexpr idx_t MAGIC_BYTE_OFFSET = Storage::BLOCK_HEADER_SIZE;
 	static constexpr idx_t FLAG_COUNT = 4;
@@ -67,11 +69,21 @@ struct MainHeader {
 	uint64_t version_number;
 	//! The set of flags used by the database
 	uint64_t flags[FLAG_COUNT];
-
 	static void CheckMagicBytes(FileHandle &handle);
+
+	string LibraryGitDesc() {
+		return string((char *)library_git_desc, 0, MAX_VERSION_SIZE);
+	}
+	string LibraryGitHash() {
+		return string((char *)library_git_hash, 0, MAX_VERSION_SIZE);
+	}
 
 	void Write(WriteStream &ser);
 	static MainHeader Read(ReadStream &source);
+
+private:
+	data_t library_git_desc[MAX_VERSION_SIZE];
+	data_t library_git_hash[MAX_VERSION_SIZE];
 };
 
 //! The DatabaseHeader contains information about the current state of the database. Every storage file has two
