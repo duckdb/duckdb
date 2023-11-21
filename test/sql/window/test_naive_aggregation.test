@@ -219,3 +219,20 @@ ORDER BY i
 6	b	3
 7	c	3
 8	a	3
+
+# Test distinct and exclude
+query III
+SELECT i
+	, s
+	, COUNT(DISTINCT s) OVER( ORDER BY i ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING EXCLUDE TIES) AS c
+FROM figure1
+ORDER BY i
+----
+1	a	2
+2	b	3
+3	b	3
+4	c	2
+5	c	2
+6	b	3
+7	c	3
+8	a	3
