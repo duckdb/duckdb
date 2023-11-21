@@ -289,6 +289,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	result->default_expr = CastWindowExpression(window.default_expr, result->return_type);
 	result->start = window.start;
 	result->end = window.end;
+	result->exclude_clause = window.exclude_clause;
 
 	// create a BoundColumnRef that references this entry
 	auto colref = make_uniq<BoundColumnRefExpression>(std::move(name), result->return_type,

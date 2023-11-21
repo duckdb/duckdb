@@ -420,6 +420,7 @@ const LogicalType LineitemInfo::Types[] = {
 template <class T>
 static void CreateTPCHTable(ClientContext &context, string catalog_name, string schema, string suffix) {
 	auto info = make_uniq<CreateTableInfo>();
+	info->catalog = catalog_name;
 	info->schema = schema;
 	info->table = T::Name + suffix;
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;

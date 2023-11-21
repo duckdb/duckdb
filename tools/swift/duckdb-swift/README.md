@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="https://duckdb.org/images/DuckDB_Logo_dl.png" height="50">
+  <img src="https://duckdb.org/images/logo-dl/DuckDB_Logo-stacked.svg" height="120">
 </div>
-<p>&nbsp;</p>
+<br>
 
 <p align="center">
   <a href="https://github.com/duckdb/duckdb/actions">

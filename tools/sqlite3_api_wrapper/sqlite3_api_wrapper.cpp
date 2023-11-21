@@ -18,6 +18,7 @@
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 #include "autocomplete_extension.hpp"
 #endif
+#include "shell_extension.hpp"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -119,6 +120,7 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 		pDb->db->LoadExtension<AutocompleteExtension>();
 #endif
+		pDb->db->LoadExtension<ShellExtension>();
 		pDb->con = make_uniq<Connection>(*pDb->db);
 	} catch (const Exception &ex) {
 		if (pDb) {

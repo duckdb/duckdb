@@ -219,6 +219,7 @@ bool CachingPhysicalOperator::CanCacheType(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
+	case LogicalTypeId::ARRAY:
 		return false;
 	case LogicalTypeId::STRUCT: {
 		auto &entries = StructType::GetChildTypes(type);
