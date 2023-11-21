@@ -18,21 +18,6 @@
 
 namespace duckdb {
 
-static bool CanPlanIndexJoin(ClientContext &context, TableScanBindData &bind_data, PhysicalTableScan &scan) {
-	auto &table = bind_data.table;
-	auto &transaction = DuckTransaction::Get(context, table.catalog);
-	auto &local_storage = LocalStorage::Get(transaction);
-	if (local_storage.Find(table.GetStorage())) {
-		// transaction local appends: skip index join
-		return false;
-	}
-	if (scan.table_filters && !scan.table_filters->filters.empty()) {
-		// table scan filters
-		return false;
-	}
-	return true;
-}
-
 bool ExtractNumericValue(Value val, int64_t &result) {
 	if (!val.type().IsIntegral()) {
 		switch (val.type().InternalType()) {
@@ -133,49 +118,6 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	}
 	join_state.is_build_small = true;
 	return;
-}
-
-static optional_ptr<Index> CanUseIndexJoin(TableScanBindData &tbl, Expression &expr) {
-	optional_ptr<Index> result;
-	tbl.table.GetStorage().info->indexes.Scan([&](Index &index) {
-		if (index.unbound_expressions.size() != 1) {
-			return false;
-		}
-		if (expr.alias == index.unbound_expressions[0]->alias) {
-			result = &index;
-			return true;
-		}
-		return false;
-	});
-	return result;
-}
-
-optional_ptr<Index> CheckIndexJoin(ClientContext &context, LogicalComparisonJoin &op, PhysicalOperator &plan,
-                                   Expression &condition) {
-	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		return nullptr;
-	}
-	// check if one of the tables has an index on column
-	if (op.join_type != JoinType::INNER) {
-		return nullptr;
-	}
-	if (op.conditions.size() != 1) {
-		return nullptr;
-	}
-	// check if the child is (1) a table scan, and (2) has an index on the join condition
-	if (plan.type != PhysicalOperatorType::TABLE_SCAN) {
-		return nullptr;
-	}
-	auto &tbl_scan = plan.Cast<PhysicalTableScan>();
-	auto tbl_data = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
-	if (!tbl_data) {
-		return nullptr;
-	}
-	optional_ptr<Index> result;
-	if (CanPlanIndexJoin(context, *tbl_data, tbl_scan)) {
-		result = CanUseIndexJoin(*tbl_data, condition);
-	}
-	return result;
 }
 
 static void RewriteJoinCondition(Expression &expr, idx_t offset) {
