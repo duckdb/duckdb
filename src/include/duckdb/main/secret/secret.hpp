@@ -133,7 +133,8 @@ protected:
 
 //! The BaseKeyValueSecret is a base class that implements a Secret as a set of key -> value strings. This class
 //! implements some features that all secret implementations that consist of only a key->value map of strings need.
-//! Deriving from this class instead of the BaseSecret class removes the need to re-implement serialization for each secret
+//! Deriving from this class instead of the BaseSecret class removes the need to re-implement serialization for each
+//! secret
 class BaseKeyValueSecret : public BaseSecret {
 public:
 	BaseKeyValueSecret(vector<string> &prefix_paths, const string &type, const string &provider, const string &name)

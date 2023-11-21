@@ -350,7 +350,7 @@ vector<SecretEntry *> DuckSecretManager::AllSecrets(CatalogTransaction transacti
 	return ret_value;
 }
 
-DUCKDB_API bool DuckSecretManager::AllowConfigChanges() {
+bool DuckSecretManager::AllowConfigChanges() {
 	return initialized_fs;
 };
 
