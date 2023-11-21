@@ -352,7 +352,7 @@ vector<SecretEntry *> DuckSecretManager::AllSecrets(CatalogTransaction transacti
 
 bool DuckSecretManager::AllowConfigChanges() {
 	return initialized_fs;
-};
+}
 
 // TODO: switch to single file for secrets
 void DuckSecretManager::WriteSecretToFile(CatalogTransaction transaction, const BaseSecret &secret) {
