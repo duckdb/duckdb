@@ -98,12 +98,17 @@ void DatabaseManager::EraseDatabasePath(const string &path) {
 	}
 }
 
-void DatabaseManager::GetDatabaseType(ClientContext &context, string &db_type, AttachInfo &info,
-                                      const DBConfig &config) {
+void DatabaseManager::GetDatabaseType(ClientContext &context, string &db_type, AttachInfo &info, const DBConfig &config,
+                                      const string &unrecognized_option) {
 
 	// duckdb database file
 	if (StringUtil::CIEquals(db_type, "DUCKDB")) {
 		db_type = "";
+
+		// DUCKDB format does not allow unrecognized options
+		if (!unrecognized_option.empty()) {
+			throw BinderException("Unrecognized option for attach \"%s\"", unrecognized_option);
+		}
 		return;
 	}
 
@@ -133,6 +138,12 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, string &db_type, A
 			// attempted only once respecting the auto-loading options
 			ExtensionHelper::LoadExternalExtension(context, db_type);
 		}
+		return;
+	}
+
+	// DUCKDB format does not allow unrecognized options
+	if (!unrecognized_option.empty()) {
+		throw BinderException("Unrecognized option for attach \"%s\"", unrecognized_option);
 	}
 }
 

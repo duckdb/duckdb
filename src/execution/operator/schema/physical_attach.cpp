@@ -13,7 +13,8 @@ namespace duckdb {
 // Helper
 //===--------------------------------------------------------------------===//
 
-void ParseOptions(const unique_ptr<AttachInfo> &info, AccessMode &access_mode, string &db_type) {
+void ParseOptions(const unique_ptr<AttachInfo> &info, AccessMode &access_mode, string &db_type,
+                  string &unrecognized_option) {
 
 	for (auto &entry : info->options) {
 
@@ -43,7 +44,10 @@ void ParseOptions(const unique_ptr<AttachInfo> &info, AccessMode &access_mode, s
 			continue;
 		}
 
-		throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
+		// we allow unrecognized options
+		if (unrecognized_option.empty()) {
+			unrecognized_option = entry.first;
+		}
 	}
 }
 
@@ -65,7 +69,8 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	auto &config = DBConfig::GetConfig(context.client);
 	AccessMode access_mode = config.options.access_mode;
 	string db_type;
-	ParseOptions(info, access_mode, db_type);
+	string unrecognized_option;
+	ParseOptions(info, access_mode, db_type, unrecognized_option);
 
 	// check ATTACH IF NOT EXISTS
 	auto &db_manager = DatabaseManager::Get(context.client);
@@ -90,7 +95,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	}
 
 	// get the database type and attach the database
-	db_manager.GetDatabaseType(context.client, db_type, *info, config);
+	db_manager.GetDatabaseType(context.client, db_type, *info, config, unrecognized_option);
 	auto attached_db = db_manager.AttachDatabase(context.client, *info, db_type, access_mode);
 	attached_db->Initialize();
 	return SourceResultType::FINISHED;
