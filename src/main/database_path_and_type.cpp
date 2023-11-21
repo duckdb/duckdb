@@ -5,19 +5,23 @@
 
 namespace duckdb {
 
-DBPathAndType DBPathAndType::Parse(const string &combined_path, const DBConfig &config) {
-	auto extension = ExtensionHelper::ExtractExtensionPrefixFromPath(combined_path);
+void DBPathAndType::ExtractExtensionPrefix(string &path, string &db_type) {
+	auto extension = ExtensionHelper::ExtractExtensionPrefixFromPath(path);
 	if (!extension.empty()) {
 		// path is prefixed with an extension - remove it
-		auto path = StringUtil::Replace(combined_path, extension + ":", "");
-		auto type = ExtensionHelper::ApplyExtensionAlias(extension);
-		return {path, type};
+		path = StringUtil::Replace(path, extension + ":", "");
+		db_type = ExtensionHelper::ApplyExtensionAlias(extension);
 	}
-	// if there isn't - check the magic bytes of the file (if any)
-	auto file_type = MagicBytes::CheckMagicBytes(config.file_system.get(), combined_path);
-	if (file_type == DataFileType::SQLITE_FILE) {
-		return {combined_path, "sqlite"};
-	}
-	return {combined_path, string()};
 }
+
+void DBPathAndType::CheckMagicBytes(string &path, string &db_type, const DBConfig &config) {
+	// if there isn't - check the magic bytes of the file (if any)
+	auto file_type = MagicBytes::CheckMagicBytes(config.file_system.get(), path);
+	if (file_type == DataFileType::SQLITE_FILE) {
+		db_type = "sqlite";
+	} else {
+		db_type = "";
+	}
+}
+
 } // namespace duckdb

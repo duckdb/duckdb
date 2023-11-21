@@ -14,11 +14,9 @@
 namespace duckdb {
 
 struct DBPathAndType {
-
 	//! Parse database extension type and rest of path from combined form (type:path)
-	static DBPathAndType Parse(const string &combined_path, const DBConfig &config);
+	static void ExtractExtensionPrefix(string &path, string &db_type);
 
-	const string path;
-	const string type;
+	static void CheckMagicBytes(string &path, string &db_type, const DBConfig &config);
 };
 } // namespace duckdb

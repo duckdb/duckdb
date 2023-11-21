@@ -114,7 +114,7 @@ void DatabaseManager::GetDbType(ClientContext &context, string &db_type, AttachI
 
 	// try to extract database type from path
 	if (db_type.empty()) {
-		auto path_and_type = DBPathAndType::Parse(info.path, config);
+		auto path_and_type = DBPathAndType::CheckMagicBytes(info.path, config);
 		db_type = path_and_type.type;
 		info.path = path_and_type.path;
 	}
