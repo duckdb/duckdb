@@ -43,3 +43,47 @@ ORDER BY i
 6	b	3
 7	c	3
 8	a	3
+
+query III
+WITH uncascaded AS (
+	SELECT i, i % 29 AS v 
+	FROM range(1000) tbl(i)
+)
+SELECT i
+	, v
+	, COUNT(DISTINCT v) OVER (ORDER BY i ROWS BETWEEN 25 PRECEDING AND 25 FOLLOWING) AS w
+FROM uncascaded
+ORDER BY i
+----
+3000 values hashing to cb9c296986f7b9eaeee380bbc049ab39
+
+query III
+WITH cascaded AS (
+	SELECT i, i % 29 AS v 
+	FROM range(10000) tbl(i)
+)
+SELECT i
+	, v
+	, COUNT(DISTINCT v) OVER (ORDER BY i ROWS BETWEEN 25 PRECEDING AND 25 FOLLOWING) AS w
+FROM cascaded
+ORDER BY i
+----
+30000 values hashing to 673869e81fecab82f0bcec032236115a
+
+
+# Exclude falls back to naïve
+query III
+SELECT i
+	, s
+	, COUNT(DISTINCT s) OVER( ORDER BY i ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING EXCLUDE TIES) AS c
+FROM figure1
+ORDER BY i
+----
+1	a	2
+2	b	3
+3	b	3
+4	c	2
+5	c	2
+6	b	3
+7	c	3
+8	a	3

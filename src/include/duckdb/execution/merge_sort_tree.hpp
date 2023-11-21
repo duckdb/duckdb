@@ -474,8 +474,11 @@ template <typename L>
 void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, const idx_t upper, const idx_t needle,
                                                          L aggregate) const {
 
+	if (lower >= upper) {
+		return;
+	}
+
 	D_ASSERT(upper <= tree[0].first.size());
-	D_ASSERT(lower < upper);
 
 	using IdxRange = std::pair<idx_t, idx_t>;
 

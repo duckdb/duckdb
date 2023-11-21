@@ -1271,7 +1271,7 @@ WindowDistinctAggregator::DistinctSortTree::DistinctSortTree(ZippedElements &&pr
 				prev_state = curr_state;
 
 				//	Flush the states if one is maxed out.
-				if (MinValue<idx_t>(ncombine, nupdate) >= STANDARD_VECTOR_SIZE) {
+				if (MaxValue<idx_t>(ncombine, nupdate) >= STANDARD_VECTOR_SIZE) {
 					//	Push the updates first so they propagate
 					leaves.Reference(inputs);
 					leaves.Slice(sel, nupdate);
