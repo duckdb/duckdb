@@ -73,6 +73,25 @@ duckdb_logical_type duckdb_create_struct_type(duckdb_logical_type *member_types_
 	return reinterpret_cast<duckdb_logical_type>(mtype);
 }
 
+duckdb_logical_type duckdb_create_enum_type(const char **member_names, idx_t member_count) {
+	if (!member_names) {
+		return nullptr;
+	}
+	duckdb::Vector enum_vector(duckdb::LogicalType::VARCHAR, member_count);
+	auto enum_vector_ptr = duckdb::FlatVector::GetData<duckdb::string_t>(enum_vector);
+
+	for (idx_t i = 0; i < member_count; i++) {
+		if (!member_names[i]) {
+			return nullptr;
+		}
+		enum_vector_ptr[i] = duckdb::StringVector::AddStringOrBlob(enum_vector, member_names[i]);
+	}
+
+	duckdb::LogicalType *mtype = new duckdb::LogicalType;
+	*mtype = duckdb::LogicalType::ENUM(enum_vector, member_count);
+	return reinterpret_cast<duckdb_logical_type>(mtype);
+}
+
 duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_type, duckdb_logical_type value_type) {
 	if (!key_type || !value_type) {
 		return nullptr;
@@ -255,6 +274,11 @@ char *duckdb_struct_type_child_name(duckdb_logical_type type, idx_t index) {
 	}
 	auto &ltype = *(reinterpret_cast<duckdb::LogicalType *>(type));
 	return strdup(duckdb::StructType::GetChildName(ltype, index).c_str());
+}
+
+char *duckdb_logical_type_get_alias(duckdb_logical_type type) {
+	auto &ltype = *(reinterpret_cast<duckdb::LogicalType *>(type));
+	return ltype.HasAlias() ? strdup(ltype.GetAlias().c_str()) : nullptr;
 }
 
 duckdb_logical_type duckdb_struct_type_child_type(duckdb_logical_type type, idx_t index) {

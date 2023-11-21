@@ -1,6 +1,7 @@
 #include "duckdb/core_functions/scalar/date_functions.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/core_functions/to_interval.hpp"
 
 namespace duckdb {
 
@@ -63,20 +64,6 @@ struct ToMinutesOperator {
 		if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, Interval::MICROS_PER_MINUTE,
 		                                                               result.micros)) {
 			throw OutOfRangeException("Interval value %d minutes out of range", input);
-		}
-		return result;
-	}
-};
-
-struct ToSecondsOperator {
-	template <class TA, class TR>
-	static inline TR Operation(TA input) {
-		interval_t result;
-		result.months = 0;
-		result.days = 0;
-		if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, Interval::MICROS_PER_SEC,
-		                                                               result.micros)) {
-			throw OutOfRangeException("Interval value %d seconds out of range", input);
 		}
 		return result;
 	}
