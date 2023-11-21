@@ -73,13 +73,13 @@ DependencyInfo DependencyInfo::FromDependency(DependencyCatalogEntry &dep) {
 	return DependencyInfo {/*from = */ dep.EntryInfo(),
 	                       /*to = */ dep.FromInfo(),
 	                       /*from_type = */ DependencyType::DEPENDENCY_REGULAR,
-	                       /*to_type =*/DependencyType::DEPENDENCY_REGULAR};
+	                       /*to_type =*/dep.Type()};
 }
 
 DependencyInfo DependencyInfo::FromDependent(DependencyCatalogEntry &dep) {
 	return DependencyInfo {/*from = */ dep.FromInfo(),
 	                       /*to = */ dep.EntryInfo(),
-	                       /*from_type = */ DependencyType::DEPENDENCY_REGULAR,
+	                       /*from_type = */ dep.Type(),
 	                       /*to_type =*/DependencyType::DEPENDENCY_REGULAR};
 }
 
