@@ -85,7 +85,6 @@ optional_ptr<SecretEntry> DuckSecretManager::RegisterSecretInternal(CatalogTrans
                                                                     OnCreateConflict on_conflict,
                                                                     SecretPersistMode persist_mode) {
 	bool conflict = false;
-	idx_t conflict_idx = DConstants::INVALID_INDEX;
 
 	//! Ensure we only create secrets for known types;
 	LookupTypeInternal(secret->GetType());
@@ -436,7 +435,6 @@ void DuckSecretManager::LoadSecretFromPreloaded(CatalogTransaction transaction, 
 }
 
 void DuckSecretManager::SyncPermanentSecrets(CatalogTransaction transaction, bool force) {
-	auto &current_directory = transaction.db->config.options.secret_directory;
 	auto permanent_secrets_enabled = transaction.db->config.options.allow_permanent_secrets;
 
 	if (force || !permanent_secrets_enabled || !initialized_fs) {
@@ -496,13 +494,6 @@ string DuckSecretManager::GetSecretDirectory(DBConfig &config) {
 	}
 
 	return directory;
-}
-
-unique_ptr<CatalogSet> &DuckSecretManager::GetRegisteredSecrets(CatalogTransaction transaction) {
-	if (!registered_secrets) {
-		registered_secrets = make_uniq<CatalogSet>(Catalog::GetSystemCatalog(*transaction.db));
-	}
-	return registered_secrets;
 }
 
 } // namespace duckdb

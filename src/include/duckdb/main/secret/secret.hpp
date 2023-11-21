@@ -32,12 +32,10 @@ struct CreateSecretInput {
 	named_parameter_map_t named_parameters;
 };
 
-//! Deserialize Function
 typedef unique_ptr<BaseSecret> (*secret_deserializer_t)(Deserializer &deserializer, BaseSecret base_secret);
-//! Create Secret Function
 typedef unique_ptr<BaseSecret> (*create_secret_function_t)(ClientContext &context, CreateSecretInput &input);
 
-//! A CreateSecretFunction is a function that can produce secrets of a specific type using a provider.
+//! A CreateSecretFunction is a function that can produce secrets of a specific type.
 class CreateSecretFunction {
 public:
 	string secret_type;
@@ -46,7 +44,7 @@ public:
 	named_parameter_type_map_t named_parameters;
 };
 
-//! CreateSecretFunctionsSet contains multiple functions of a specific type, identified by the provider. The provider
+//! CreateSecretFunctionsSet contains multiple functions of a single type, identified by the provider. The provider
 //! should be seen as the method of secret creation. (e.g. user-provided config, env variables, auto-detect)
 class CreateSecretFunctionSet {
 public:
@@ -135,6 +133,7 @@ protected:
 
 //! The BaseKeyValueSecret is a base class that implements a Secret as a set of key -> value strings. This class
 //! implements some features that all secret implementations that consist of only a key->value map of strings need.
+//! Deriving from this class instead of the BaseSecret class removes the need to re-implement serialization for each secret
 class BaseKeyValueSecret : public BaseSecret {
 public:
 	BaseKeyValueSecret(vector<string> &prefix_paths, const string &type, const string &provider, const string &name)
@@ -176,6 +175,7 @@ protected:
 	map<string, string> secret_map;
 
 	//! (optionally) a set of keys to be redacted for this type
+	//! TODO: these are currently lost in serialization
 	case_insensitive_set_t redact_keys;
 };
 

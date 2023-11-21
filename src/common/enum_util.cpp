@@ -83,6 +83,7 @@
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/secret/secret.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
@@ -93,7 +94,6 @@
 #include "duckdb/parser/parsed_data/alter_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
-#include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/load_info.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
@@ -777,6 +777,8 @@ const char* EnumUtil::ToChars<CatalogType>(CatalogType value) {
 		return "UPDATED_ENTRY";
 	case CatalogType::DELETED_ENTRY:
 		return "DELETED_ENTRY";
+	case CatalogType::SECRET:
+		return "SECRET";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -840,6 +842,9 @@ CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "DELETED_ENTRY")) {
 		return CatalogType::DELETED_ENTRY;
+	}
+	if (StringUtil::Equals(value, "SECRET")) {
+		return CatalogType::SECRET;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

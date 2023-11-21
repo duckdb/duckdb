@@ -16,7 +16,7 @@ struct CreateSecretInfo;
 struct BoundStatement;
 class CreateSecretStatement;
 
-//! SecretEntry is a wrapper around a secret containing metadata from the secret manager
+//! SecretEntry is a wrapper around a secret containing metadata from the secret manager and allowing storage in a CatalogSet
 struct SecretEntry : public CatalogEntry {
 public:
 	SecretEntry(unique_ptr<const BaseSecret> secret, Catalog &catalog, string name)
