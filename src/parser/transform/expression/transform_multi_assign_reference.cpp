@@ -15,13 +15,13 @@ unique_ptr<ParsedExpression> Transformer::TransformMultiAssignRef(duckdb_libpgqu
 			return TransformExpression(root.source);
 		}
 
+		int provided_values = func.args ? func.args->length : 0;
 		// Too many columns (ie. (x, y) = (1, 2, 3) )
-		if (root.ncolumns < func.args->length) {
+		if (root.ncolumns < provided_values || !func.args) {
 			throw ParserException(
 			    "Could not perform multiple assignment, target only expects %d values, %d were provided", root.ncolumns,
-			    func.args->length);
+			    provided_values);
 		}
-
 		// Get the expression corresponding with the current column
 		idx_t idx = 1;
 		auto list = func.args->head;

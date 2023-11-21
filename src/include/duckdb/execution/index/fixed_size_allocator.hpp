@@ -8,16 +8,15 @@
 
 #pragma once
 
-#include "duckdb/common/types/validity_mask.hpp"
-#include "duckdb/common/unordered_set.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/metadata/metadata_manager.hpp"
-#include "duckdb/storage/metadata/metadata_writer.hpp"
-#include "duckdb/execution/index/fixed_size_buffer.hpp"
-#include "duckdb/execution/index/index_pointer.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/execution/index/fixed_size_buffer.hpp"
+#include "duckdb/execution/index/index_pointer.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/partial_block_manager.hpp"
 
 namespace duckdb {
 
@@ -30,14 +29,13 @@ public:
 	static constexpr uint8_t VACUUM_THRESHOLD = 10;
 
 public:
+	//! Construct a new fixed-size allocator
 	FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager);
 
 	//! Block manager of the database instance
 	BlockManager &block_manager;
 	//! Buffer manager of the database instance
 	BufferManager &buffer_manager;
-	//! Metadata manager for (de)serialization
-	MetadataManager &metadata_manager;
 
 public:
 	//! Get a new IndexPointer to a segment, might cause a new buffer allocation
@@ -53,8 +51,8 @@ public:
 	//! Resets the allocator, e.g., during 'DELETE FROM table'
 	void Reset();
 
-	//! Returns the in-memory usage in bytes
-	inline idx_t GetMemoryUsage() const;
+	//! Returns the in-memory size in bytes
+	idx_t GetInMemorySize() const;
 
 	//! Returns the upper bound of the available buffer IDs, i.e., upper_bound > max_buffer_id
 	idx_t GetUpperBoundBufferId() const;
@@ -75,10 +73,16 @@ public:
 	//! Vacuums an IndexPointer
 	IndexPointer VacuumPointer(const IndexPointer ptr);
 
-	//! Serializes all in-memory buffers and the metadata
-	BlockPointer Serialize(PartialBlockManager &partial_block_manager, MetadataWriter &writer);
-	//! Deserializes all metadata
-	void Deserialize(const BlockPointer &block_pointer);
+	//! Returns all FixedSizeAllocator information for serialization
+	FixedSizeAllocatorInfo GetInfo() const;
+	//! Serializes all in-memory buffers
+	void SerializeBuffers(PartialBlockManager &partial_block_manager);
+	//! Sets the allocation sizes and returns data to serialize each buffer
+	vector<IndexBufferInfo> InitSerializationToWAL();
+	//! Initialize a fixed-size allocator from allocator storage information
+	void Init(const FixedSizeAllocatorInfo &info);
+	//! Deserializes all metadata of older storage files
+	void Deserialize(MetadataManager &metadata_manager, const BlockPointer &block_pointer);
 
 private:
 	//! Allocation size of one segment in a buffer
