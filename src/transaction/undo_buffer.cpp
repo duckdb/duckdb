@@ -116,8 +116,8 @@ idx_t UndoBuffer::EstimatedSize() {
 	IterateEntries(iterator_state, [&](UndoFlags entry_type, data_ptr_t data) {
 		if (entry_type == UndoFlags::CATALOG_ENTRY) {
 			auto catalog_entry = Load<CatalogEntry *>(data);
-			if (catalog_entry->parent->type == CatalogType::INDEX_ENTRY) {
-				auto &index = catalog_entry->parent->Cast<DuckIndexEntry>();
+			if (catalog_entry->Parent().type == CatalogType::INDEX_ENTRY) {
+				auto &index = catalog_entry->Parent().Cast<DuckIndexEntry>();
 				estimated_size += index.initial_index_size;
 			}
 		}
