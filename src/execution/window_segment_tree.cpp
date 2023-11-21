@@ -416,6 +416,30 @@ WindowNaiveAggregator::~WindowNaiveAggregator() {
 
 class WindowNaiveState : public WindowAggregatorState {
 public:
+	struct HashRow {
+		explicit HashRow(WindowNaiveState &state) : state(state) {
+		}
+
+		size_t operator()(const idx_t &i) const {
+			return state.Hash(i);
+		}
+
+		WindowNaiveState &state;
+	};
+
+	struct EqualRow {
+		explicit EqualRow(WindowNaiveState &state) : state(state) {
+		}
+
+		bool operator()(const idx_t &lhs, const idx_t &rhs) const {
+			return state.KeyEqual(lhs, rhs);
+		}
+
+		WindowNaiveState &state;
+	};
+
+	using RowSet = std::unordered_set<idx_t, HashRow, EqualRow>;
+
 	explicit WindowNaiveState(const WindowNaiveAggregator &gstate);
 
 	void Evaluate(const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx);
@@ -423,6 +447,11 @@ public:
 protected:
 	//! Flush the accumulated intermediate states into the result states
 	void FlushStates();
+
+	//! Hashes a value for the hash table
+	size_t Hash(idx_t rid);
+	//! Compares two values for the hash table
+	bool KeyEqual(const idx_t &lhs, const idx_t &rhs);
 
 	//! The global state
 	const WindowNaiveAggregator &gstate;
@@ -440,11 +469,17 @@ protected:
 	idx_t flush_count;
 	//! The frame boundaries, used for EXCLUDE
 	SubFrames frames;
+	//! The optional hash table used for DISTINCT
+	Vector hashes;
+	HashRow hash_row;
+	EqualRow equal_row;
+	RowSet row_set;
 };
 
 WindowNaiveState::WindowNaiveState(const WindowNaiveAggregator &gstate)
     : gstate(gstate), state(gstate.state_size * STANDARD_VECTOR_SIZE), statef(LogicalType::POINTER),
-      statep((LogicalType::POINTER)), flush_count(0) {
+      statep((LogicalType::POINTER)), flush_count(0), hashes(LogicalType::HASH), hash_row(*this), equal_row(*this),
+      row_set(STANDARD_VECTOR_SIZE, hash_row, equal_row) {
 	InitSubFrames(frames, gstate.exclude_mode);
 
 	auto &inputs = const_cast<DataChunk &>(gstate.GetInputs());
@@ -482,6 +517,41 @@ void WindowNaiveState::FlushStates() {
 	flush_count = 0;
 }
 
+size_t WindowNaiveState::Hash(idx_t rid) {
+	auto &inputs = const_cast<DataChunk &>(gstate.GetInputs());
+	leaves.Reference(inputs);
+
+	sel_t s = rid;
+	SelectionVector sel(&s);
+	leaves.Slice(sel, 1);
+	leaves.Hash(hashes);
+
+	return *FlatVector::GetData<hash_t>(hashes);
+}
+
+bool WindowNaiveState::KeyEqual(const idx_t &lhs, const idx_t &rhs) {
+	auto &inputs = const_cast<DataChunk &>(gstate.GetInputs());
+
+	sel_t l = lhs;
+	SelectionVector lsel(&l);
+
+	sel_t r = rhs;
+	SelectionVector rsel(&r);
+
+	sel_t f = 0;
+	SelectionVector fsel(&f);
+
+	for (auto &input : inputs.data) {
+		Vector left(input, lsel, 1);
+		Vector right(input, rsel, 1);
+		if (!VectorOperations::NotDistinctFrom(left, right, nullptr, 1, nullptr, &fsel)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 void WindowNaiveState::Evaluate(const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) {
 	auto &aggr = gstate.aggr;
 	auto &filter_mask = gstate.GetFilterMask();
@@ -497,13 +567,18 @@ void WindowNaiveState::Evaluate(const DataChunk &bounds, Vector &result, idx_t c
 		}
 
 		//	Just update the aggregate with the unfiltered input rows
+		row_set.clear();
 		for (const auto &frame : frames) {
 			for (auto f = frame.start; f < frame.end; ++f) {
 				if (!filter_mask.RowIsValid(f)) {
 					continue;
 				}
 
-				//	TODO: Distinct filtering
+				//	Filter out duplicates
+				if (aggr.IsDistinct() && !row_set.insert(f).second) {
+					continue;
+				}
+
 				pdata[flush_count] = agg_state;
 				update_sel[flush_count++] = f;
 				if (flush_count >= STANDARD_VECTOR_SIZE) {
