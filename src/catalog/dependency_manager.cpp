@@ -287,14 +287,14 @@ CatalogEntryInfo DependencyManager::GetLookupProperties(CatalogEntry &entry) {
 	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
 		auto &dependency_entry = entry.Cast<DependencyCatalogEntry>();
 
-		auto schema = dependency_entry.EntrySchema();
-		auto name = dependency_entry.EntryName();
+		auto &schema = dependency_entry.EntrySchema();
+		auto &name = dependency_entry.EntryName();
 		auto type = dependency_entry.EntryType();
 		return CatalogEntryInfo {type, schema, name};
 	} else {
 		auto schema = DependencyManager::GetSchema(entry);
-		auto name = entry.name;
-		auto type = entry.type;
+		auto &name = entry.name;
+		auto &type = entry.type;
 		return CatalogEntryInfo {type, schema, name};
 	}
 }
