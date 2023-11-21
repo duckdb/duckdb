@@ -56,15 +56,6 @@ void ParseOptions(const unique_ptr<AttachInfo> &info, AccessMode &access_mode, s
 //===--------------------------------------------------------------------===//
 SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk,
                                          OperatorSourceInput &input) const {
-
-	// get the name and path of the database
-	auto &name = info->name;
-	const auto &path = info->path;
-	if (name.empty()) {
-		auto &fs = FileSystem::GetFileSystem(context.client);
-		name = AttachedDatabase::ExtractDatabaseName(path, fs);
-	}
-
 	// parse the options
 	auto &config = DBConfig::GetConfig(context.client);
 	AccessMode access_mode = config.options.access_mode;
@@ -72,10 +63,17 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	string unrecognized_option;
 	ParseOptions(info, access_mode, db_type, unrecognized_option);
 
+	// get the name and path of the database
+	auto &name = info->name;
+	auto &path = info->path;
+	if (name.empty()) {
+		auto &fs = FileSystem::GetFileSystem(context.client);
+		name = AttachedDatabase::ExtractDatabaseNameAndType(path, db_type, fs);
+	}
+
 	// check ATTACH IF NOT EXISTS
 	auto &db_manager = DatabaseManager::Get(context.client);
 	if (info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
-
 		// constant-time lookup in the catalog for the db name
 		auto existing_db = db_manager.GetDatabase(context.client, name);
 		if (existing_db) {
