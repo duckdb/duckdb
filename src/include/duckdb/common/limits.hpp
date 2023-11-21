@@ -37,7 +37,7 @@ struct NumericLimits {
 template <>
 struct NumericLimits<hugeint_t> {
 	static constexpr hugeint_t Minimum() {
-		return {std::numeric_limits<int64_t>::lowest(), 1};
+		return {std::numeric_limits<int64_t>::lowest(), 0};
 	};
 	static constexpr hugeint_t Maximum() {
 		return {std::numeric_limits<int64_t>::max(), std::numeric_limits<uint64_t>::max()};

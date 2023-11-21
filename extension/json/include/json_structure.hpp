@@ -50,6 +50,7 @@ public:
 	duckdb::unique_ptr<string> key;
 	bool initialized = false;
 	vector<JSONStructureDescription> descriptions;
+	idx_t count;
 };
 
 struct JSONStructureDescription {
@@ -81,7 +82,8 @@ struct JSONStructure {
 public:
 	static void ExtractStructure(yyjson_val *val, JSONStructureNode &node);
 	static LogicalType StructureToType(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-	                                   idx_t depth = 0);
+	                                   const double field_appearance_threshold, idx_t depth = 0,
+	                                   idx_t sample_count = DConstants::INVALID_INDEX);
 };
 
 } // namespace duckdb

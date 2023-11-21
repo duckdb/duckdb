@@ -25,6 +25,7 @@
 				target_list			 			 opt_indirection target_list_opt_comma opt_target_list_opt_comma
 			 group_clause select_limit
 				opt_select_limit 			 			 TableFuncElementList opt_type_modifiers opt_select extended_indirection opt_extended_indirection
+				qualified_typename
 %type <list>	group_by_list group_by_list_opt_comma opt_func_arguments unpivot_header
 %type <node>	group_by_item empty_grouping_set rollup_clause cube_clause grouping_sets_clause grouping_or_grouping_id
 %type <range>	OptTempTableName
@@ -123,6 +124,7 @@
 %type <list>	window_clause window_definition_list opt_partition_clause
 %type <windef>	window_definition over_clause window_specification
 				opt_frame_clause frame_extent frame_bound
+%type <ival>     opt_window_exclusion_clause
 %type <str>		opt_existing_window_name
 
 %type <node> pivot_value pivot_column_entry single_pivot_value unpivot_value

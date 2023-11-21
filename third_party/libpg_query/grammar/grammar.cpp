@@ -446,8 +446,7 @@ SystemFuncName(const char *name)
 PGTypeName *
 SystemTypeName(const char *name)
 {
-	return makeTypeNameFromNameList(list_make2(makeString(DEFAULT_SCHEMA),
-											   makeString(name)));
+	return makeTypeNameFromNameList(list_make1(makeString(name)));
 }
 
 /* doNegate()

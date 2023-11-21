@@ -10,6 +10,8 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -17,8 +19,6 @@
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/serializer/write_stream.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
 #endif
 
 #include "miniz_wrapper.hpp"
@@ -678,11 +678,11 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	for (auto &write_info : state.write_info) {
 		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		auto header_start_offset = column_writer.GetTotalWritten();
-		write_info.page_header.write(writer.GetProtocol());
+		writer.Write(write_info.page_header);
 		// total uncompressed size in the column chunk includes the header size (!)
 		total_uncompressed_size += column_writer.GetTotalWritten() - header_start_offset;
 		total_uncompressed_size += write_info.page_header.uncompressed_page_size;
-		column_writer.WriteData(write_info.compressed_data, write_info.compressed_size);
+		writer.WriteData(write_info.compressed_data, write_info.compressed_size);
 	}
 	column_chunk.meta_data.total_compressed_size = column_writer.GetTotalWritten() - start_offset;
 	column_chunk.meta_data.total_uncompressed_size = total_uncompressed_size;

@@ -134,6 +134,11 @@ UserTypeInfo::UserTypeInfo(string name_p)
     : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(std::move(name_p)) {
 }
 
+UserTypeInfo::UserTypeInfo(string catalog_p, string schema_p, string name_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), catalog(std::move(catalog_p)), schema(std::move(schema_p)),
+      user_type_name(std::move(name_p)) {
+}
+
 bool UserTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	auto &other = other_p->Cast<UserTypeInfo>();
 	return other.user_type_name == user_type_name;
@@ -310,6 +315,19 @@ void EnumTypeInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(200, "values_count", dict_size);
 	serializer.WriteList(201, "values", dict_size,
 	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(strings[i]); });
+}
+
+//===--------------------------------------------------------------------===//
+// ArrayTypeInfo
+//===--------------------------------------------------------------------===//
+
+ArrayTypeInfo::ArrayTypeInfo(LogicalType child_type_p, idx_t size_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::ARRAY_TYPE_INFO), child_type(std::move(child_type_p)), size(size_p) {
+}
+
+bool ArrayTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
+	auto &other = other_p->Cast<ArrayTypeInfo>();
+	return child_type == other.child_type && size == other.size;
 }
 
 } // namespace duckdb

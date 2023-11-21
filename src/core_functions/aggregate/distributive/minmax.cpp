@@ -235,6 +235,9 @@ template <class OP>
 static bool TemplatedOptimumStruct(Vector &left, idx_t lidx, idx_t lcount, Vector &right, idx_t ridx, idx_t rcount);
 
 template <class OP>
+static bool TemplatedOptimumArray(Vector &left, idx_t lidx, idx_t lcount, Vector &right, idx_t ridx, idx_t rcount);
+
+template <class OP>
 static bool TemplatedOptimumValue(Vector &left, idx_t lidx, idx_t lcount, Vector &right, idx_t ridx, idx_t rcount) {
 	D_ASSERT(left.GetType() == right.GetType());
 	switch (left.GetType().InternalType()) {
@@ -269,6 +272,8 @@ static bool TemplatedOptimumValue(Vector &left, idx_t lidx, idx_t lcount, Vector
 		return TemplatedOptimumList<OP>(left, lidx, lcount, right, ridx, rcount);
 	case PhysicalType::STRUCT:
 		return TemplatedOptimumStruct<OP>(left, lidx, lcount, right, ridx, rcount);
+	case PhysicalType::ARRAY:
+		return TemplatedOptimumArray<OP>(left, lidx, lcount, right, ridx, rcount);
 	default:
 		throw InternalException("Invalid type for distinct comparison");
 	}
@@ -367,6 +372,52 @@ static bool TemplatedOptimumList(Vector &left, idx_t lidx, idx_t lcount, Vector 
 		}
 	}
 
+	return false;
+}
+
+// FIXME: We should try to unify this with TemplatedOptimumList
+template <class OP>
+static bool TemplatedOptimumArray(Vector &left, idx_t lidx_p, idx_t lcount, Vector &right, idx_t ridx_p, idx_t rcount) {
+	// so map the indexes first
+	UnifiedVectorFormat lvdata, rvdata;
+	left.ToUnifiedFormat(lcount, lvdata);
+	right.ToUnifiedFormat(rcount, rvdata);
+
+	idx_t lidx = lvdata.sel->get_index(lidx_p);
+	idx_t ridx = rvdata.sel->get_index(ridx_p);
+
+	// DISTINCT semantics are in effect for nested types
+	auto lnull = !lvdata.validity.RowIsValid(lidx);
+	auto rnull = !rvdata.validity.RowIsValid(ridx);
+	if (lnull || rnull) {
+		return OP::Operation(0, 0, lnull, rnull);
+	}
+
+	auto &lchild = ArrayVector::GetEntry(left);
+	auto &rchild = ArrayVector::GetEntry(right);
+	auto left_array_size = ArrayType::GetSize(left.GetType());
+	auto right_array_size = ArrayType::GetSize(right.GetType());
+
+	D_ASSERT(left_array_size == right_array_size);
+
+	auto lchild_count = lcount * left_array_size;
+	auto rchild_count = rcount * right_array_size;
+
+	for (idx_t elem_idx = 0; elem_idx < left_array_size; elem_idx++) {
+		auto left_elem_idx = lidx * left_array_size + elem_idx;
+		auto right_elem_idx = ridx * right_array_size + elem_idx;
+
+		// Strict comparisons use the OP for definite
+		if (TemplatedOptimumValue<OP>(lchild, left_elem_idx, lchild_count, rchild, right_elem_idx, rchild_count)) {
+			return true;
+		}
+
+		// Strict comparisons use IS NOT DISTINCT for possible
+		if (!TemplatedOptimumValue<NotDistinctFrom>(lchild, left_elem_idx, lchild_count, rchild, right_elem_idx,
+		                                            rchild_count)) {
+			return false;
+		}
+	}
 	return false;
 }
 
@@ -515,12 +566,16 @@ static AggregateFunction GetMinMaxFunction(const LogicalType &type) {
 
 template <class OP, class OP_STRING, class OP_VECTOR>
 static AggregateFunction GetMinMaxOperator(const LogicalType &type) {
-	if (type.InternalType() == PhysicalType::VARCHAR) {
+	auto internal_type = type.InternalType();
+	switch (internal_type) {
+	case PhysicalType::VARCHAR:
 		return AggregateFunction::UnaryAggregateDestructor<MinMaxState<string_t>, string_t, string_t, OP_STRING>(
 		    type.id(), type.id());
-	} else if (type.InternalType() == PhysicalType::LIST || type.InternalType() == PhysicalType::STRUCT) {
+	case PhysicalType::LIST:
+	case PhysicalType::STRUCT:
+	case PhysicalType::ARRAY:
 		return GetMinMaxFunction<OP_VECTOR, VectorMinMaxState>(type);
-	} else {
+	default:
 		return GetUnaryAggregate<OP>(type);
 	}
 }
