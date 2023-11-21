@@ -17,6 +17,7 @@ void ParseOptions(const unique_ptr<AttachInfo> &info, AccessMode &access_mode, s
                   string &unrecognized_option) {
 
 	for (auto &entry : info->options) {
+
 		if (entry.first == "readonly" || entry.first == "read_only") {
 			auto read_only = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
 			if (read_only) {
@@ -24,16 +25,27 @@ void ParseOptions(const unique_ptr<AttachInfo> &info, AccessMode &access_mode, s
 			} else {
 				access_mode = AccessMode::READ_WRITE;
 			}
-		} else if (entry.first == "readwrite" || entry.first == "read_write") {
+			continue;
+		}
+
+		if (entry.first == "readwrite" || entry.first == "read_write") {
 			auto read_only = !BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
 			if (read_only) {
 				access_mode = AccessMode::READ_ONLY;
 			} else {
 				access_mode = AccessMode::READ_WRITE;
 			}
-		} else if (entry.first == "type") {
+			continue;
+		}
+
+		if (entry.first == "type") {
+			// extract the database type
 			db_type = StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR));
-		} else if (unrecognized_option.empty()) {
+			continue;
+		}
+
+		// we allow unrecognized options
+		if (unrecognized_option.empty()) {
 			unrecognized_option = entry.first;
 		}
 	}
@@ -80,9 +92,8 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		}
 	}
 
-	// get the database type
-	db_manager.GetDbType(context.client, db_type, *info, config, unrecognized_option);
-
+	// get the database type and attach the database
+	db_manager.GetDatabaseType(context.client, db_type, *info, config, unrecognized_option);
 	auto attached_db = db_manager.AttachDatabase(context.client, *info, db_type, access_mode);
 	attached_db->Initialize();
 	return SourceResultType::FINISHED;
