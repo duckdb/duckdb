@@ -35,10 +35,13 @@ public:
 	static DependencyInfo FromDependent(DependencyCatalogEntry &dep);
 
 public:
-	CatalogEntryInfo from;
-	CatalogEntryInfo to;
-	DependencyType from_type;
-	DependencyType to_type;
+	//! The entry establishing the dependency
+	CatalogEntryInfo dependent;
+	//! The entry being targeted
+	CatalogEntryInfo dependency;
+
+	DependencyType dependent_type;
+	DependencyType dependency_type;
 };
 
 struct MangledEntryName {
