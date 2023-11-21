@@ -77,12 +77,20 @@ public:
 	void Set(StatsInfo info);
 	void CombineValidity(BaseStatistics &left, BaseStatistics &right);
 	void CopyValidity(BaseStatistics &stats);
-	inline void SetHasNull() {
+	//! Set that the CURRENT level can have null values
+	//! Note that this is not correct for nested types unless this information is propagated in a different manner
+	//! Use Set(StatsInfo::CAN_HAVE_NULL_VALUES) in the general case
+	inline void SetHasNullFast() {
 		has_null = true;
 	}
-	inline void SetHasNoNull() {
+	//! Set that the CURRENT level can have valiod values
+	//! Note that this is not correct for nested types unless this information is propagated in a different manner
+	//! Use Set(StatsInfo::CAN_HAVE_VALID_VALUES) in the general case
+	inline void SetHasNoNullFast() {
 		has_no_null = true;
 	}
+	void SetHasNull();
+	void SetHasNoNull();
 
 	void Merge(const BaseStatistics &other);
 

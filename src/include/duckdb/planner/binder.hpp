@@ -326,7 +326,8 @@ private:
 	BoundStatement BindCopyFrom(CopyStatement &stmt);
 
 	void BindModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
-	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index);
+	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index,
+	                       const vector<idx_t> &expansion_count = {});
 
 	BoundStatement BindSummarize(ShowStatement &stmt);
 	unique_ptr<BoundResultModifier> BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod);
