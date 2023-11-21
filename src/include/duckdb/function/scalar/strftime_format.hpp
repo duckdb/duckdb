@@ -131,6 +131,9 @@ public:
 		string error_message;
 		idx_t error_position = DConstants::INVALID_INDEX;
 
+		bool is_special;
+		date_t special;
+
 		date_t ToDate();
 		timestamp_t ToTimestamp();
 

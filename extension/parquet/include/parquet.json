@@ -1,5 +1,54 @@
 [
   {
+    "class": "ParquetColumnDefinition",
+    "includes": [
+      "parquet_reader.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "field_id",
+        "type": "int32_t"
+      },
+      {
+        "id": 101,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 103,
+        "name": "type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 104,
+        "name": "default_value",
+        "type": "Value"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ParquetEncryptionConfig",
+    "includes": [
+      "parquet_crypto.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "footer_key",
+        "type": "string"
+      },
+      {
+        "id": 101,
+        "name": "column_keys",
+        "type": "unordered_map<string, string>"
+      }
+    ],
+    "pointer_type": "shared_ptr",
+    "constructor": ["$ClientContext"]
+  },
+  {
     "class": "ParquetOptions",
     "includes": [
       "parquet_reader.hpp"
@@ -19,6 +68,55 @@
         "id": 102,
         "name": "file_options",
         "type": "MultiFileReaderOptions"
+      },
+      {
+        "id": 103,
+        "name": "schema",
+        "type": "vector<ParquetColumnDefinition>"
+      },
+      {
+        "id": 104,
+        "name": "encryption_config",
+        "type": "shared_ptr<ParquetEncryptionConfig>",
+        "default": "nullptr"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "FieldID",
+    "includes": [
+      "parquet_writer.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "set",
+        "type": "bool"
+      },
+      {
+        "id": 101,
+        "name": "field_id",
+        "type": "int32_t"
+      },
+      {
+        "id": 102,
+        "name": "child_field_ids",
+        "type": "ChildFieldIDs"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ChildFieldIDs",
+    "includes": [
+      "parquet_writer.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "ids",
+        "type": "unique_ptr<case_insensitive_map_t<FieldID>>"
       }
     ],
     "pointer_type": "none"

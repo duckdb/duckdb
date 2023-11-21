@@ -18,11 +18,15 @@ namespace duckdb {
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
 
 void SerializeVersionNumber(WriteStream &ser, const string &version_str) {
-	constexpr const idx_t MAX_VERSION_SIZE = 32;
-	data_t version[MAX_VERSION_SIZE];
-	memset(version, 0, MAX_VERSION_SIZE);
-	memcpy(version, version_str.c_str(), MinValue<idx_t>(version_str.size(), MAX_VERSION_SIZE));
-	ser.WriteData(version, MAX_VERSION_SIZE);
+	data_t version[MainHeader::MAX_VERSION_SIZE];
+	memset(version, 0, MainHeader::MAX_VERSION_SIZE);
+	memcpy(version, version_str.c_str(), MinValue<idx_t>(version_str.size(), MainHeader::MAX_VERSION_SIZE));
+	ser.WriteData(version, MainHeader::MAX_VERSION_SIZE);
+}
+
+void DeserializeVersionNumber(ReadStream &stream, data_t *dest) {
+	memset(dest, 0, MainHeader::MAX_VERSION_SIZE);
+	stream.ReadData(dest, MainHeader::MAX_VERSION_SIZE);
 }
 
 void MainHeader::Write(WriteStream &ser) {
@@ -81,6 +85,8 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		header.flags[i] = source.Read<uint64_t>();
 	}
+	DeserializeVersionNumber(source, header.library_git_desc);
+	DeserializeVersionNumber(source, header.library_git_hash);
 	return header;
 }
 

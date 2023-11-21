@@ -17,12 +17,17 @@ namespace duckdb {
 
 // structs
 struct AggregateInputData;
+
+// The bounds of a window frame
 struct FrameBounds {
 	FrameBounds() : start(0), end(0) {};
 	FrameBounds(idx_t start, idx_t end) : start(start), end(end) {};
 	idx_t start = 0;
 	idx_t end = 0;
 };
+
+// A set of window subframes for windowed EXCLUDE
+using SubFrames = vector<FrameBounds>;
 
 class AggregateExecutor {
 private:
@@ -383,14 +388,73 @@ public:
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void UnaryWindow(Vector &input, const ValidityMask &ifilter, AggregateInputData &aggr_input_data,
-	                        data_ptr_t state, const FrameBounds &frame, const FrameBounds &prev, Vector &result,
-	                        idx_t rid, idx_t bias) {
+	static void UnaryWindow(const Vector &input, const ValidityMask &ifilter, AggregateInputData &aggr_input_data,
+	                        data_ptr_t state_p, const SubFrames &frames, Vector &result, idx_t ridx,
+	                        const_data_ptr_t gstate_p) {
 
-		auto idata = FlatVector::GetData<const INPUT_TYPE>(input) - bias;
+		auto idata = FlatVector::GetData<const INPUT_TYPE>(input);
 		const auto &ivalid = FlatVector::Validity(input);
-		OP::template Window<STATE, INPUT_TYPE, RESULT_TYPE>(
-		    idata, ifilter, ivalid, aggr_input_data, *reinterpret_cast<STATE *>(state), frame, prev, result, rid, bias);
+		auto &state = *reinterpret_cast<STATE *>(state_p);
+		auto gstate = reinterpret_cast<const STATE *>(gstate_p);
+		OP::template Window<STATE, INPUT_TYPE, RESULT_TYPE>(idata, ifilter, ivalid, aggr_input_data, state, frames,
+		                                                    result, ridx, gstate);
+	}
+
+	template <typename OP>
+	static void IntersectFrames(const SubFrames &lefts, const SubFrames &rights, OP &op) {
+		const auto cover_start = MinValue(rights[0].start, lefts[0].start);
+		const auto cover_end = MaxValue(rights.back().end, lefts.back().end);
+		const FrameBounds last(cover_end, cover_end);
+
+		//	Subframe indices
+		idx_t l = 0;
+		idx_t r = 0;
+		for (auto i = cover_start; i < cover_end;) {
+			uint8_t overlap = 0;
+
+			// Are we in the previous frame?
+			auto left = &last;
+			if (l < lefts.size()) {
+				left = &lefts[l];
+				overlap |= uint8_t(left->start <= i && i < left->end) << 0;
+			}
+
+			// Are we in the current frame?
+			auto right = &last;
+			if (r < rights.size()) {
+				right = &rights[r];
+				overlap |= uint8_t(right->start <= i && i < right->end) << 1;
+			}
+
+			auto limit = i;
+			switch (overlap) {
+			case 0x00:
+				// i ∉ F U P
+				limit = MinValue(right->start, left->start);
+				op.Neither(i, limit);
+				break;
+			case 0x01:
+				// i ∈ P \ F
+				limit = MinValue(left->end, right->start);
+				op.Left(i, limit);
+				break;
+			case 0x02:
+				// i ∈ F \ P
+				limit = MinValue(right->end, left->start);
+				op.Right(i, limit);
+				break;
+			case 0x03:
+				// i ∈ F ∩ P
+				limit = MinValue(right->end, left->end);
+				op.Both(i, limit);
+				break;
+			}
+
+			// Advance  the subframe indices
+			i = limit;
+			l += (i == left->end);
+			r += (i == right->end);
+		}
 	}
 
 	template <class STATE_TYPE, class OP>

@@ -52,6 +52,11 @@ static string_t BarScalarFunction(double x, double min, double max, double max_w
 		result += PARTIAL_BLOCKS[remaining];
 	}
 
+	const idx_t integer_max_width = (idx_t)max_width;
+	if (result.size() < integer_max_width) {
+		result += std::string(integer_max_width - result.size(), ' ');
+	}
+
 	return string_t(result);
 }
 

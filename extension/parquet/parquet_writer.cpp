@@ -1,15 +1,18 @@
 #include "parquet_writer.hpp"
 
 #include "duckdb.hpp"
+#include "mbedtls_wrapper.hpp"
+#include "parquet_crypto.hpp"
 #include "parquet_timestamp.hpp"
+
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
-#include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #endif
@@ -24,14 +27,14 @@ using duckdb_parquet::format::CompressionCodec;
 using duckdb_parquet::format::ConvertedType;
 using duckdb_parquet::format::Encoding;
 using duckdb_parquet::format::FieldRepetitionType;
+using duckdb_parquet::format::FileCryptoMetaData;
 using duckdb_parquet::format::FileMetaData;
 using duckdb_parquet::format::PageHeader;
 using duckdb_parquet::format::PageType;
 using ParquetRowGroup = duckdb_parquet::format::RowGroup;
 using duckdb_parquet::format::Type;
 
-ChildFieldIDs::ChildFieldIDs() {
-	ids = make_uniq<case_insensitive_map_t<FieldID>>();
+ChildFieldIDs::ChildFieldIDs() : ids(make_uniq<case_insensitive_map_t<FieldID>>()) {
 }
 
 ChildFieldIDs ChildFieldIDs::Copy() const {
@@ -309,6 +312,23 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 	}
 }
 
+uint32_t ParquetWriter::Write(const duckdb_apache::thrift::TBase &object) {
+	if (encryption_config) {
+		return ParquetCrypto::Write(object, *protocol, encryption_config->GetFooterKey());
+	} else {
+		return object.write(protocol.get());
+	}
+}
+
+uint32_t ParquetWriter::WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size) {
+	if (encryption_config) {
+		return ParquetCrypto::WriteData(*protocol, buffer, buffer_size, encryption_config->GetFooterKey());
+	} else {
+		protocol->getTransport()->write(buffer, buffer_size);
+		return buffer_size;
+	}
+}
+
 void VerifyUniqueNames(const vector<string> &names) {
 #ifdef DEBUG
 	unordered_set<string> name_set;
@@ -323,14 +343,23 @@ void VerifyUniqueNames(const vector<string> &names) {
 }
 
 ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalType> types_p, vector<string> names_p,
-                             CompressionCodec::type codec, ChildFieldIDs field_ids_p)
+                             CompressionCodec::type codec, ChildFieldIDs field_ids_p,
+                             const vector<pair<string, string>> &kv_metadata,
+                             shared_ptr<ParquetEncryptionConfig> encryption_config_p)
     : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec),
-      field_ids(std::move(field_ids_p)) {
+      field_ids(std::move(field_ids_p)), encryption_config(std::move(encryption_config_p)) {
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
-	// parquet files start with the string "PAR1"
-	writer->WriteData(const_data_ptr_cast("PAR1"), 4);
+	if (encryption_config) {
+		// encrypted parquet files start with the string "PARE"
+		writer->WriteData(const_data_ptr_cast("PARE"), 4);
+		// we only support this one for now, not "AES_GCM_CTR_V1"
+		file_meta_data.encryption_algorithm.__isset.AES_GCM_V1 = true;
+	} else {
+		// parquet files start with the string "PAR1"
+		writer->WriteData(const_data_ptr_cast("PAR1"), 4);
+	}
 	TCompactProtocolFactoryT<MyTransport> tproto_factory;
 	protocol = tproto_factory.getProtocol(make_shared<MyTransport>(*writer));
 
@@ -341,6 +370,14 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalT
 	file_meta_data.created_by = "DuckDB";
 
 	file_meta_data.schema.resize(1);
+
+	for (auto &kv_pair : kv_metadata) {
+		duckdb_parquet::format::KeyValue kv;
+		kv.__set_key(kv_pair.first);
+		kv.__set_value(kv_pair.second);
+		file_meta_data.key_value_metadata.push_back(kv);
+		file_meta_data.__isset.key_value_metadata = true;
+	}
 
 	// populate root schema object
 	file_meta_data.schema[0].name = "duckdb_schema";
@@ -459,12 +496,26 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 
 void ParquetWriter::Finalize() {
 	auto start_offset = writer->GetTotalWritten();
-	file_meta_data.write(protocol.get());
+	if (encryption_config) {
+		// Crypto metadata is written unencrypted
+		FileCryptoMetaData crypto_metadata;
+		duckdb_parquet::format::AesGcmV1 aes_gcm_v1;
+		duckdb_parquet::format::EncryptionAlgorithm alg;
+		alg.__set_AES_GCM_V1(aes_gcm_v1);
+		crypto_metadata.__set_encryption_algorithm(alg);
+		crypto_metadata.write(protocol.get());
+	}
+	Write(file_meta_data);
 
 	writer->Write<uint32_t>(writer->GetTotalWritten() - start_offset);
 
-	// parquet files also end with the string "PAR1"
-	writer->WriteData(const_data_ptr_cast("PAR1"), 4);
+	if (encryption_config) {
+		// encrypted parquet files also end with the string "PARE"
+		writer->WriteData(const_data_ptr_cast("PARE"), 4);
+	} else {
+		// parquet files also end with the string "PAR1"
+		writer->WriteData(const_data_ptr_cast("PAR1"), 4);
+	}
 
 	// flush to disk
 	writer->Sync();
