@@ -81,7 +81,7 @@ class DataFrameWriter:
             escapechar=escape,
             header=header if isinstance(header, bool) else header == "True",
             encoding=encoding,
-            quoting=quoteAll,  # ~ check this
+            quoting=quoteAll,
             date_format=dateFormat,
             timestamp_format=timestampFormat,
         )
