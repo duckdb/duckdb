@@ -70,15 +70,15 @@ MangledEntryName DependencyManager::MangleName(CatalogEntry &entry) {
 }
 
 DependencyInfo DependencyInfo::FromDependency(DependencyCatalogEntry &dep) {
-	return DependencyInfo {/*dependent = */ dep.EntryInfo(),
-	                       /*dependency = */ dep.FromInfo(),
+	return DependencyInfo {/*dependent = */ dep.FromInfo(),
+	                       /*dependency = */ dep.EntryInfo(),
 	                       /*dependent_type = */ DependencyType::DEPENDENCY_REGULAR,
 	                       /*dependency_type = */ dep.Type()};
 }
 
 DependencyInfo DependencyInfo::FromDependent(DependencyCatalogEntry &dep) {
-	return DependencyInfo {/*dependent = */ dep.FromInfo(),
-	                       /*dependency = */ dep.EntryInfo(),
+	return DependencyInfo {/*dependent = */ dep.EntryInfo(),
+	                       /*dependency = */ dep.FromInfo(),
 	                       /*dependent_type = */ dep.Type(),
 	                       /*dependency_type = */ DependencyType::DEPENDENCY_REGULAR};
 }
