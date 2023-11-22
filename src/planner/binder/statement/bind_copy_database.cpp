@@ -132,8 +132,9 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(CopyDatabaseStatement &
 		auto insert_plan = std::move(bound_insert.plan);
 		if (result) {
 			// use UNION ALL to combine the individual copy statements into a single node
-			auto copy_union = make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1, std::move(insert_plan),
-			                                                 std::move(result), LogicalOperatorType::LOGICAL_UNION, true, false);
+			auto copy_union =
+			    make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1, std::move(insert_plan), std::move(result),
+			                                   LogicalOperatorType::LOGICAL_UNION, true, false);
 			result = std::move(copy_union);
 		} else {
 			result = std::move(insert_plan);
