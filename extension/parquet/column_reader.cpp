@@ -1205,11 +1205,11 @@ double ParquetDecimalUtils::ReadDecimalValue(const_data_ptr_t pointer, idx_t siz
                                              const duckdb_parquet::format::SchemaElement &schema_ele) {
 	double res = 0;
 	bool positive = (*pointer & 0x80) == 0;
-	for(idx_t i = 0; i < size; i += 8) {
+	for (idx_t i = 0; i < size; i += 8) {
 		auto byte_size = MinValue<idx_t>(sizeof(uint64_t), size - i);
 		uint64_t input = 0;
 		auto res_ptr = reinterpret_cast<uint8_t *>(&input);
-		for(idx_t k = 0; k < byte_size; k++) {
+		for (idx_t k = 0; k < byte_size; k++) {
 			auto byte = pointer[i + k];
 			res_ptr[sizeof(uint64_t) - k - 1] = positive ? byte : byte ^ 0xFF;
 		}
