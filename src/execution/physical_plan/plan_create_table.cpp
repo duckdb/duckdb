@@ -11,6 +11,7 @@
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
 namespace duckdb {
 

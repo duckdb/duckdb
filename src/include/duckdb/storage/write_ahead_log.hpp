@@ -8,15 +8,16 @@
 
 #pragma once
 
-#include "duckdb/common/helper.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/enums/wal_type.hpp"
-#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
+#include "duckdb/common/enums/wal_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/storage/block.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {

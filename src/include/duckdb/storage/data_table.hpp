@@ -8,21 +8,21 @@
 
 #pragma once
 
-#include "duckdb/common/enums/index_type.hpp"
+#include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/storage/index.hpp"
-#include "duckdb/storage/table/table_statistics.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/storage/index.hpp"
 #include "duckdb/storage/statistics/column_statistics.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/storage/table/persistent_table_data.hpp"
-#include "duckdb/storage/table/row_group_collection.hpp"
-#include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
-#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/storage/table/persistent_table_data.hpp"
+#include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/storage/table/row_group_collection.hpp"
+#include "duckdb/storage/table/table_statistics.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
 class BoundForeignKeyConstraint;
@@ -125,12 +125,6 @@ public:
 	void UpdateColumn(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
 	                  const vector<column_t> &column_path, DataChunk &updates);
 
-	//! Add an index to the DataTable. NOTE: for CREATE (UNIQUE) INDEX statements, we use the PhysicalCreateARTIndex
-	//! operator. This function is only used during the WAL replay, and is a much less performant index creation
-	//! approach.
-	void WALAddIndex(ClientContext &context, unique_ptr<Index> index,
-	                 const vector<unique_ptr<Expression>> &expressions);
-
 	//! Fetches an append lock
 	void AppendLock(TableAppendState &state);
 	//! Begin appending structs to this table, obtaining necessary locks, etc
@@ -175,7 +169,7 @@ public:
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
 	//! Checkpoint the table to the specified table data writer
-	void Checkpoint(TableDataWriter &writer, Serializer &metadata_serializer);
+	void Checkpoint(TableDataWriter &writer, Serializer &serializer);
 	void CommitDropTable();
 	void CommitDropColumn(idx_t index);
 
@@ -184,10 +178,11 @@ public:
 	vector<ColumnSegmentInfo> GetColumnSegmentInfo();
 	static bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &index, ForeignKeyType fk_type);
 
-	//! Initializes a special scan that is used to create an index on the table, it keeps locks on the table
-	void InitializeWALCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids);
 	//! Scans the next chunk for the CREATE INDEX operator
 	bool CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type);
+	//! Returns true, if the index name is unique (i.e., no PK, UNIQUE, FK constraint has the same name)
+	//! FIXME: This is only necessary until we treat all indexes as catalog entries, allowing to alter constraints
+	bool IndexNameIsUnique(const string &name);
 
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,

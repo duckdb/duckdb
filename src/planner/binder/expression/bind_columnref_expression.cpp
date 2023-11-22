@@ -238,7 +238,6 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 			return binder.bind_context.CreateColumnReference(colref.column_names[0], colref.column_names[1]);
 		} else {
 			// otherwise check if we can turn this into a struct extract
-			auto new_colref = make_uniq<ColumnRefExpression>(colref.column_names[0]);
 			string other_error;
 			auto qualified_colref = QualifyColumnName(colref.column_names[0], other_error);
 			if (qualified_colref) {

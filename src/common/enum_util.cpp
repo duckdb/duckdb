@@ -23,7 +23,7 @@
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
-#include "duckdb/common/enums/index_type.hpp"
+#include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
@@ -66,6 +66,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
+#include "duckdb/core_functions/aggregate/quantile_enum.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/operator/scan/csv/base_csv_reader.hpp"
@@ -4092,8 +4093,6 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "IE_JOIN";
 	case PhysicalOperatorType::DELIM_JOIN:
 		return "DELIM_JOIN";
-	case PhysicalOperatorType::INDEX_JOIN:
-		return "INDEX_JOIN";
 	case PhysicalOperatorType::POSITIONAL_JOIN:
 		return "POSITIONAL_JOIN";
 	case PhysicalOperatorType::ASOF_JOIN:
@@ -4282,9 +4281,6 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "DELIM_JOIN")) {
 		return PhysicalOperatorType::DELIM_JOIN;
-	}
-	if (StringUtil::Equals(value, "INDEX_JOIN")) {
-		return PhysicalOperatorType::INDEX_JOIN;
 	}
 	if (StringUtil::Equals(value, "POSITIONAL_JOIN")) {
 		return PhysicalOperatorType::POSITIONAL_JOIN;
@@ -4593,6 +4589,44 @@ ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value)
 	}
 	if (StringUtil::Equals(value, "QUERY_TREE_OPTIMIZER")) {
 		return ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<QuantileSerializationType>(QuantileSerializationType value) {
+	switch(value) {
+	case QuantileSerializationType::NON_DECIMAL:
+		return "NON_DECIMAL";
+	case QuantileSerializationType::DECIMAL_DISCRETE:
+		return "DECIMAL_DISCRETE";
+	case QuantileSerializationType::DECIMAL_DISCRETE_LIST:
+		return "DECIMAL_DISCRETE_LIST";
+	case QuantileSerializationType::DECIMAL_CONTINUOUS:
+		return "DECIMAL_CONTINUOUS";
+	case QuantileSerializationType::DECIMAL_CONTINUOUS_LIST:
+		return "DECIMAL_CONTINUOUS_LIST";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const char *value) {
+	if (StringUtil::Equals(value, "NON_DECIMAL")) {
+		return QuantileSerializationType::NON_DECIMAL;
+	}
+	if (StringUtil::Equals(value, "DECIMAL_DISCRETE")) {
+		return QuantileSerializationType::DECIMAL_DISCRETE;
+	}
+	if (StringUtil::Equals(value, "DECIMAL_DISCRETE_LIST")) {
+		return QuantileSerializationType::DECIMAL_DISCRETE_LIST;
+	}
+	if (StringUtil::Equals(value, "DECIMAL_CONTINUOUS")) {
+		return QuantileSerializationType::DECIMAL_CONTINUOUS;
+	}
+	if (StringUtil::Equals(value, "DECIMAL_CONTINUOUS_LIST")) {
+		return QuantileSerializationType::DECIMAL_CONTINUOUS_LIST;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
