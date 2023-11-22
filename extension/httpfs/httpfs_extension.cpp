@@ -28,6 +28,10 @@ static void LoadInternal(DatabaseInstance &instance) {
 	config.AddExtensionOption("http_retry_backoff",
 	                          "Backoff factor for exponentially increasing retry wait time (default 4)",
 	                          LogicalType::FLOAT, Value(4));
+	config.AddExtensionOption(
+	    "http_keep_alive",
+	    "Keep alive connections. Setting this to false can help when running into connection failures",
+	    LogicalType::BOOLEAN, Value(true));
 	// Global S3 config
 	config.AddExtensionOption("s3_region", "S3 Region (default us-east-1)", LogicalType::VARCHAR, Value("us-east-1"));
 	config.AddExtensionOption("s3_access_key_id", "S3 Access Key ID", LogicalType::VARCHAR);

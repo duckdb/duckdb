@@ -33,6 +33,7 @@ using std::move;
 #define INVALID_CATALOG ""
 #define SYSTEM_CATALOG  "system"
 #define TEMP_CATALOG    "temp"
+#define IN_MEMORY_PATH  ":memory:"
 
 DUCKDB_API bool IsInvalidSchema(const string &str);
 DUCKDB_API bool IsInvalidCatalog(const string &str);

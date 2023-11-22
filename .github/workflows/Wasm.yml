@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        duckdb_wasm_arch: [ 'mvp', 'eh' ]
+        duckdb_wasm_arch: [ 'mvp', 'eh', 'threads' ]
     env:
       GEN: Ninja
       VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake

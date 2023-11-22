@@ -2126,6 +2126,7 @@ typedef struct PGAttachStmt
 	char *name;			/* The name of the attached database */
 	PGList *options;      /* PGList of PGDefElem nodes */
     PGNode *query;
+	PGOnCreateConflict onconflict;        /* what to do on attach conflict */
 } PGAttachStmt;
 
 /* ----------------------
