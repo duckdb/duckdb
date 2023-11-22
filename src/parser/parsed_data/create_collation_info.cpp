@@ -2,8 +2,6 @@
 
 namespace duckdb {
 
-static unordered_set<string> const equality_requires_collation = {"da"};
-
 CreateCollationInfo::CreateCollationInfo(string name_p, ScalarFunction function_p, bool combinable_p,
                                          bool not_required_for_equality_p)
     : CreateInfo(CatalogType::COLLATION_ENTRY), function(std::move(function_p)), combinable(combinable_p),
