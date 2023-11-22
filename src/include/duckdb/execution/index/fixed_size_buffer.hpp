@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/storage/partial_block_manager.hpp"
-#include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/block_manager.hpp"
@@ -91,6 +90,8 @@ public:
 	void Pin();
 	//! Returns the first free offset in a bitmask
 	uint32_t GetOffset(const idx_t bitmask_count);
+	//! Sets the allocation size, if dirty
+	void SetAllocationSize(const idx_t available_segments, const idx_t segment_size, const idx_t bitmask_offset);
 
 private:
 	//! The buffer handle of the in-memory buffer

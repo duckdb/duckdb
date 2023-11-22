@@ -108,10 +108,6 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 						*node_ptr = std::move(cross_product);
 						return;
 					}
-					case JoinType::ANTI:
-						// anti join on true: empty result
-						ReplaceWithEmptyResult(*node_ptr);
-						return;
 					default:
 						// we don't handle mark/single join here yet
 						break;
@@ -146,8 +142,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 			auto updated_stats_right = PropagateExpression(condition.right);
 
 			// Try to push lhs stats down rhs and vice versa
-			if (!context.config.force_index_join && stats_left && stats_right && updated_stats_left &&
-			    updated_stats_right && condition.left->type == ExpressionType::BOUND_COLUMN_REF &&
+			if (stats_left && stats_right && updated_stats_left && updated_stats_right &&
+			    condition.left->type == ExpressionType::BOUND_COLUMN_REF &&
 			    condition.right->type == ExpressionType::BOUND_COLUMN_REF) {
 				CreateFilterFromJoinStats(join.children[0], condition.left, *stats_left, *updated_stats_left);
 				CreateFilterFromJoinStats(join.children[1], condition.right, *stats_right, *updated_stats_right);

@@ -54,10 +54,7 @@ FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 }
 
 bool PathMatched(const string &path, const string &sub_path) {
-	if (path.rfind(sub_path, 0) == 0) {
-		return true;
-	}
-	return false;
+	return path.rfind(sub_path, 0) == 0;
 }
 
 #ifndef _WIN32
@@ -147,7 +144,15 @@ bool FileSystem::IsPathAbsolute(const string &path) {
 	if (StartsWithSingleBackslash(path)) {
 		return true;
 	}
-	// 2) A disk designator with a backslash (e.g., C:\ or C:/)
+	// 2) special "long paths" on windows
+	if (PathMatched(path, "\\\\?\\")) {
+		return true;
+	}
+	// 3) a network path
+	if (PathMatched(path, "\\\\")) {
+		return true;
+	}
+	// 4) A disk designator with a backslash (e.g., C:\ or C:/)
 	auto path_aux = path;
 	path_aux.erase(0, 1);
 	if (PathMatched(path_aux, ":\\") || PathMatched(path_aux, ":/")) {
@@ -344,7 +349,7 @@ bool FileSystem::FileExists(const string &filename) {
 }
 
 bool FileSystem::IsPipe(const string &filename) {
-	throw NotImplementedException("%s: IsPipe is not implemented!", GetName());
+	return false;
 }
 
 void FileSystem::RemoveFile(const string &filename) {
@@ -498,6 +503,10 @@ idx_t FileHandle::SeekPosition() {
 
 bool FileHandle::CanSeek() {
 	return file_system.CanSeek();
+}
+
+bool FileHandle::IsPipe() {
+	return file_system.IsPipe(path);
 }
 
 string FileHandle::ReadLine() {

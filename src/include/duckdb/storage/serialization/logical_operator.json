@@ -498,9 +498,15 @@
         "id": 201,
         "name": "column_count",
         "type": "idx_t"
+      },
+      {
+        "id": 202,
+        "name": "setop_all",
+        "type": "bool",
+        "default": "true"
       }
     ],
-    "constructor": ["table_index", "column_count", "type"]
+    "constructor": ["table_index", "column_count", "type", "setop_all"]
   },
   {
     "class": "LogicalRecursiveCTE",

@@ -109,13 +109,19 @@ bool PipelineExecutor::TryFlushCachingOperators() {
 SinkNextBatchType PipelineExecutor::NextBatch(duckdb::DataChunk &source_chunk) {
 	D_ASSERT(requires_batch_index);
 	idx_t next_batch_index;
+	auto max_batch_index = pipeline.base_batch_index + PipelineBuildState::BATCH_INCREMENT - 1;
 	if (source_chunk.size() == 0) {
-		next_batch_index = NumericLimits<int64_t>::Maximum();
+		// set it to the maximum valid batch index value for the current pipeline
+		next_batch_index = max_batch_index;
 	} else {
-		next_batch_index =
+		auto batch_index =
 		    pipeline.source->GetBatchIndex(context, source_chunk, *pipeline.source_state, *local_source_state);
 		// we start with the base_batch_index as a valid starting value. Make sure that next batch is called below
-		next_batch_index += pipeline.base_batch_index + 1;
+		next_batch_index = pipeline.base_batch_index + batch_index + 1;
+		if (next_batch_index >= max_batch_index) {
+			throw InternalException("Pipeline batch index - invalid batch index %llu returned by source operator",
+			                        batch_index);
+		}
 	}
 	auto &partition_info = local_sink_state->partition_info;
 	if (next_batch_index == partition_info.batch_index.GetIndex()) {
