@@ -18,7 +18,7 @@ class SchemaCatalogEntry;
 class StandardEntry : public InCatalogEntry {
 public:
 	StandardEntry(CatalogType type, SchemaCatalogEntry &schema, Catalog &catalog, string name)
-	    : InCatalogEntry(type, catalog, name), schema(schema) {
+	    : InCatalogEntry(type, catalog, std::move(name)), schema(schema) {
 	}
 	~StandardEntry() override {
 	}
@@ -30,6 +30,9 @@ public:
 
 public:
 	SchemaCatalogEntry &ParentSchema() override {
+		return schema;
+	}
+	const SchemaCatalogEntry &ParentSchema() const override {
 		return schema;
 	}
 };

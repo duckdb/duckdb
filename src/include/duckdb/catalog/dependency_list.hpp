@@ -11,6 +11,7 @@
 #include "duckdb/catalog/catalog_entry_map.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/catalog/dependency.hpp"
 
 namespace duckdb {
 class Catalog;
@@ -42,10 +43,8 @@ private:
 //! enough to look up the entry inside SchemaCatalogEntry::GetEntry
 struct LogicalDependency {
 public:
-	string name;
-	string schema;
+	CatalogEntryInfo entry;
 	string catalog;
-	CatalogType type;
 
 public:
 	LogicalDependency(CatalogEntry &entry);

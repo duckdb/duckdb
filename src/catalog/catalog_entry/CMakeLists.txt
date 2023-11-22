@@ -15,7 +15,6 @@ add_library_unity(
   column_dependency_manager.cpp
   scalar_function_catalog_entry.cpp
   table_function_catalog_entry.cpp
-  dependency_set_catalog_entry.cpp
   dependency_catalog_entry.cpp
   view_catalog_entry.cpp)
 set(ALL_OBJECT_FILES

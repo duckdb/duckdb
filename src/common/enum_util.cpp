@@ -23,10 +23,11 @@
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
-#include "duckdb/common/enums/index_type.hpp"
+#include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
@@ -65,6 +66,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
+#include "duckdb/core_functions/aggregate/quantile_enum.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/operator/scan/csv/base_csv_reader.hpp"
@@ -92,7 +94,6 @@
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/load_info.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
@@ -774,8 +775,8 @@ const char* EnumUtil::ToChars<CatalogType>(CatalogType value) {
 		return "TABLE_MACRO_ENTRY";
 	case CatalogType::DELETED_ENTRY:
 		return "DELETED_ENTRY";
-	case CatalogType::DEPENDENCY_SET:
-		return "DEPENDENCY_SET";
+	case CatalogType::RENAMED_ENTRY:
+		return "RENAMED_ENTRY";
 	case CatalogType::DEPENDENCY_ENTRY:
 		return "DEPENDENCY_ENTRY";
 	default:
@@ -839,8 +840,8 @@ CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
 	if (StringUtil::Equals(value, "DELETED_ENTRY")) {
 		return CatalogType::DELETED_ENTRY;
 	}
-	if (StringUtil::Equals(value, "DEPENDENCY_SET")) {
-		return CatalogType::DEPENDENCY_SET;
+	if (StringUtil::Equals(value, "RENAMED_ENTRY")) {
+		return CatalogType::RENAMED_ENTRY;
 	}
 	if (StringUtil::Equals(value, "DEPENDENCY_ENTRY")) {
 		return CatalogType::DEPENDENCY_ENTRY;
@@ -4603,6 +4604,44 @@ ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value)
 }
 
 template<>
+const char* EnumUtil::ToChars<QuantileSerializationType>(QuantileSerializationType value) {
+	switch(value) {
+	case QuantileSerializationType::NON_DECIMAL:
+		return "NON_DECIMAL";
+	case QuantileSerializationType::DECIMAL_DISCRETE:
+		return "DECIMAL_DISCRETE";
+	case QuantileSerializationType::DECIMAL_DISCRETE_LIST:
+		return "DECIMAL_DISCRETE_LIST";
+	case QuantileSerializationType::DECIMAL_CONTINUOUS:
+		return "DECIMAL_CONTINUOUS";
+	case QuantileSerializationType::DECIMAL_CONTINUOUS_LIST:
+		return "DECIMAL_CONTINUOUS_LIST";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const char *value) {
+	if (StringUtil::Equals(value, "NON_DECIMAL")) {
+		return QuantileSerializationType::NON_DECIMAL;
+	}
+	if (StringUtil::Equals(value, "DECIMAL_DISCRETE")) {
+		return QuantileSerializationType::DECIMAL_DISCRETE;
+	}
+	if (StringUtil::Equals(value, "DECIMAL_DISCRETE_LIST")) {
+		return QuantileSerializationType::DECIMAL_DISCRETE_LIST;
+	}
+	if (StringUtil::Equals(value, "DECIMAL_CONTINUOUS")) {
+		return QuantileSerializationType::DECIMAL_CONTINUOUS;
+	}
+	if (StringUtil::Equals(value, "DECIMAL_CONTINUOUS_LIST")) {
+		return QuantileSerializationType::DECIMAL_CONTINUOUS_LIST;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<QueryNodeType>(QueryNodeType value) {
 	switch(value) {
 	case QueryNodeType::SELECT_NODE:
@@ -5145,6 +5184,29 @@ SinkFinalizeType EnumUtil::FromString<SinkFinalizeType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "BLOCKED")) {
 		return SinkFinalizeType::BLOCKED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<SinkNextBatchType>(SinkNextBatchType value) {
+	switch(value) {
+	case SinkNextBatchType::READY:
+		return "READY";
+	case SinkNextBatchType::BLOCKED:
+		return "BLOCKED";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+SinkNextBatchType EnumUtil::FromString<SinkNextBatchType>(const char *value) {
+	if (StringUtil::Equals(value, "READY")) {
+		return SinkNextBatchType::READY;
+	}
+	if (StringUtil::Equals(value, "BLOCKED")) {
+		return SinkNextBatchType::BLOCKED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

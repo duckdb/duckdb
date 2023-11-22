@@ -1,77 +1,64 @@
 #include "duckdb/catalog/catalog_entry/dependency_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/dependency_set_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 
 namespace duckdb {
 
-DependencyCatalogEntry::DependencyCatalogEntry(DependencyLinkSide side, Catalog &catalog,
-                                               DependencySetCatalogEntry &set, const LogicalDependency &internal,
-                                               DependencyFlags flags)
-    : InCatalogEntry(CatalogType::DEPENDENCY_ENTRY, catalog, DependencyManager::MangleName(internal)),
-      internal(internal), flags(flags), side(side), set(set) {
-	D_ASSERT(EntryType() != CatalogType::DEPENDENCY_ENTRY);
-	D_ASSERT(EntryType() != CatalogType::DEPENDENCY_SET);
+DependencyCatalogEntry::DependencyCatalogEntry(Catalog &catalog, const CatalogEntryInfo &info,
+                                               const CatalogEntryInfo &from, DependencyFlags flags)
+    : InCatalogEntry(
+          CatalogType::DEPENDENCY_ENTRY, catalog,
+          MangledDependencyName(DependencyManager::MangleName(from), DependencyManager::MangleName(info)).name),
+      mangled_name(DependencyManager::MangleName(info)), entry(info),
+      from_mangled_name(DependencyManager::MangleName(from)), from(from), flags(flags) {
+	D_ASSERT(info.type != CatalogType::DEPENDENCY_ENTRY);
 }
 
-const string &DependencyCatalogEntry::MangledName() const {
-	return name;
+const MangledEntryName &DependencyCatalogEntry::MangledName() const {
+	return mangled_name;
 }
 
 CatalogType DependencyCatalogEntry::EntryType() const {
-	return internal.type;
+	return entry.type;
 }
 
 const string &DependencyCatalogEntry::EntrySchema() const {
-	return internal.schema;
+	return entry.schema;
 }
 
 const string &DependencyCatalogEntry::EntryName() const {
-	return internal.name;
+	return entry.name;
+}
+
+const CatalogEntryInfo &DependencyCatalogEntry::EntryInfo() const {
+	return entry;
+}
+
+const MangledEntryName &DependencyCatalogEntry::FromMangledName() const {
+	return from_mangled_name;
+}
+
+CatalogType DependencyCatalogEntry::FromType() const {
+	return from.type;
+}
+
+const string &DependencyCatalogEntry::FromSchema() const {
+	return from.schema;
+}
+
+const string &DependencyCatalogEntry::FromName() const {
+	return from.name;
+}
+
+const CatalogEntryInfo &DependencyCatalogEntry::FromInfo() const {
+	return from;
 }
 
 const DependencyFlags &DependencyCatalogEntry::Flags() const {
 	return flags;
 }
 
-const LogicalDependency &DependencyCatalogEntry::Internal() const {
-	return internal;
-}
-
 DependencyCatalogEntry::~DependencyCatalogEntry() {
-}
-
-void DependencyCatalogEntry::CompleteLink(CatalogTransaction transaction, DependencyFlags other_flags) {
-	auto &manager = set.Manager();
-	switch (side) {
-	case DependencyLinkSide::DEPENDENCY: {
-		auto &other_set = manager.GetOrCreateDependencySet(transaction, internal);
-		other_set.AddDependent(transaction, set, other_flags);
-		break;
-	}
-	case DependencyLinkSide::DEPENDENT: {
-		auto &other_set = manager.GetOrCreateDependencySet(transaction, internal);
-		other_set.AddDependency(transaction, set, other_flags);
-		break;
-	}
-	}
-}
-
-DependencyCatalogEntry &DependencyCatalogEntry::GetLink(optional_ptr<CatalogTransaction> transaction) {
-	auto &manager = set.Manager();
-	switch (side) {
-	case DependencyLinkSide::DEPENDENCY: {
-		auto &other_set = *manager.GetDependencySet(transaction, internal);
-		return other_set.GetDependent(transaction, set);
-	}
-	case DependencyLinkSide::DEPENDENT: {
-		auto &other_set = *manager.GetDependencySet(transaction, internal);
-		return other_set.GetDependency(transaction, set);
-	}
-	default:
-		throw InternalException(
-		    "This really shouldnt happen, there are only two parts to a link, DEPENDENCY and DEPENDENT");
-	}
 }
 
 } // namespace duckdb

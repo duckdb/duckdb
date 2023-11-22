@@ -1,18 +1,24 @@
 #include "duckdb/storage/index.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
+
+#include "duckdb/common/radix.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 
 namespace duckdb {
 
-Index::Index(AttachedDatabase &db, IndexType type, TableIOManager &table_io_manager,
-             const vector<column_t> &column_ids_p, const vector<unique_ptr<Expression>> &unbound_expressions,
-             IndexConstraintType constraint_type_p)
+Index::Index(const string &name, const string &index_type, IndexConstraintType index_constraint_type,
+             const vector<column_t> &column_ids, TableIOManager &table_io_manager,
+             const vector<unique_ptr<Expression>> &unbound_expressions, AttachedDatabase &db)
 
-    : type(type), table_io_manager(table_io_manager), column_ids(column_ids_p), constraint_type(constraint_type_p),
-      db(db) {
+    : name(name), index_type(index_type), index_constraint_type(index_constraint_type), column_ids(column_ids),
+      table_io_manager(table_io_manager), db(db) {
+
+	if (!Radix::IsLittleEndian()) {
+		throw NotImplementedException("indexes are not supported on big endian architectures");
+	}
 
 	for (auto &expr : unbound_expressions) {
 		types.push_back(expr->return_type.InternalType());
@@ -69,6 +75,12 @@ void Index::Vacuum() {
 	Vacuum(state);
 }
 
+idx_t Index::GetInMemorySize() {
+	IndexLock state;
+	InitializeLock(state);
+	return GetInMemorySize(state);
+}
+
 void Index::ExecuteExpressions(DataChunk &input, DataChunk &result) {
 	executor.Execute(input, result);
 }
@@ -83,8 +95,8 @@ unique_ptr<Expression> Index::BindExpression(unique_ptr<Expression> expr) {
 	return expr;
 }
 
-bool Index::IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const {
-	for (auto &column : column_ids) {
+bool Index::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const {
+	for (auto &column : column_ids_p) {
 		if (column_id_set.find(column.index) != column_id_set.end()) {
 			return true;
 		}
@@ -92,7 +104,7 @@ bool Index::IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const {
 	return false;
 }
 
-BlockPointer Index::Serialize(MetadataWriter &writer) {
+IndexStorageInfo Index::GetStorageInfo(const bool get_buffers) {
 	throw NotImplementedException("The implementation of this index serialization does not exist.");
 }
 

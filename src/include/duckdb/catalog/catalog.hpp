@@ -100,6 +100,7 @@ public:
 	DUCKDB_API static Catalog &GetCatalog(AttachedDatabase &db);
 
 	DUCKDB_API AttachedDatabase &GetAttached();
+	DUCKDB_API const AttachedDatabase &GetAttached() const;
 	DUCKDB_API DatabaseInstance &GetDatabase();
 
 	virtual bool IsDuckCatalog() {
@@ -116,7 +117,7 @@ public:
 	DUCKDB_API idx_t ModifyCatalog();
 
 	//! Returns the catalog name - based on how the catalog was attached
-	DUCKDB_API const string &GetName();
+	DUCKDB_API const string &GetName() const;
 	DUCKDB_API idx_t GetOid();
 	DUCKDB_API virtual string GetCatalogType() = 0;
 

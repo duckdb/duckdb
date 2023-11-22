@@ -4,7 +4,6 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/dependency_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/dependency_set_catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
@@ -41,21 +40,26 @@ bool PhysicalDependencyList::Contains(CatalogEntry &entry) {
 }
 
 uint64_t LogicalDependencyHashFunction::operator()(const LogicalDependency &a) const {
-	hash_t hash = duckdb::Hash(a.name.c_str());
-	hash = CombineHash(hash, duckdb::Hash(a.schema.c_str()));
-	hash = CombineHash(hash, duckdb::Hash(a.catalog.c_str()));
-	hash = CombineHash(hash, duckdb::Hash<uint8_t>(static_cast<uint8_t>(a.type)));
+	auto &name = a.entry.name;
+	auto &schema = a.entry.schema;
+	auto &type = a.entry.type;
+	auto &catalog = a.catalog;
+
+	hash_t hash = duckdb::Hash(name.c_str());
+	hash = CombineHash(hash, duckdb::Hash(schema.c_str()));
+	hash = CombineHash(hash, duckdb::Hash(catalog.c_str()));
+	hash = CombineHash(hash, duckdb::Hash<uint8_t>(static_cast<uint8_t>(type)));
 	return hash;
 }
 
 bool LogicalDependencyEquality::operator()(const LogicalDependency &a, const LogicalDependency &b) const {
-	if (a.type != b.type) {
+	if (a.entry.type != b.entry.type) {
 		return false;
 	}
-	if (a.name != b.name) {
+	if (a.entry.name != b.entry.name) {
 		return false;
 	}
-	if (a.schema != b.schema) {
+	if (a.entry.schema != b.entry.schema) {
 		return false;
 	}
 	if (a.catalog != b.catalog) {
@@ -64,7 +68,7 @@ bool LogicalDependencyEquality::operator()(const LogicalDependency &a, const Log
 	return true;
 }
 
-LogicalDependency::LogicalDependency() : name(), schema(), catalog(), type(CatalogType::INVALID) {
+LogicalDependency::LogicalDependency() : entry(), catalog() {
 }
 
 static string GetSchema(CatalogEntry &entry) {
@@ -79,43 +83,36 @@ LogicalDependency::LogicalDependency(CatalogEntry &entry) {
 	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
 		auto &dependency_entry = entry.Cast<DependencyCatalogEntry>();
 
-		schema = dependency_entry.EntrySchema();
-		name = dependency_entry.EntryName();
-		type = dependency_entry.EntryType();
-		// FIXME: do we also want to set 'catalog' here?
-	} else if (entry.type == CatalogType::DEPENDENCY_SET) {
-		auto &dependency_set = entry.Cast<DependencySetCatalogEntry>();
-
-		schema = dependency_set.EntrySchema();
-		name = dependency_set.EntryName();
-		type = dependency_set.EntryType();
+		this->entry.schema = dependency_entry.EntrySchema();
+		this->entry.name = dependency_entry.EntryName();
+		this->entry.type = dependency_entry.EntryType();
 		// FIXME: do we also want to set 'catalog' here?
 	} else {
-		schema = GetSchema(entry);
-		name = entry.name;
-		type = entry.type;
+		this->entry.schema = GetSchema(entry);
+		this->entry.name = entry.name;
+		this->entry.type = entry.type;
 		catalog = entry.ParentCatalog().GetName();
 	}
 }
 
 void LogicalDependency::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty(0, "name", name);
-	serializer.WriteProperty(1, "schema", schema);
+	serializer.WriteProperty(0, "name", entry.name);
+	serializer.WriteProperty(1, "schema", entry.schema);
 	serializer.WriteProperty(2, "catalog", catalog);
-	serializer.WriteProperty(3, "type", type);
+	serializer.WriteProperty(3, "type", entry.type);
 }
 
 LogicalDependency LogicalDependency::Deserialize(Deserializer &deserializer) {
 	LogicalDependency dependency;
-	dependency.name = deserializer.ReadProperty<string>(0, "name");
-	dependency.schema = deserializer.ReadProperty<string>(1, "schema");
+	dependency.entry.name = deserializer.ReadProperty<string>(0, "name");
+	dependency.entry.schema = deserializer.ReadProperty<string>(1, "schema");
 	dependency.catalog = deserializer.ReadProperty<string>(2, "catalog");
-	dependency.type = deserializer.ReadProperty<CatalogType>(3, "type");
+	dependency.entry.type = deserializer.ReadProperty<CatalogType>(3, "type");
 	return dependency;
 }
 
 bool LogicalDependency::operator==(const LogicalDependency &other) const {
-	return other.name == name && other.schema == schema && other.type == type;
+	return other.entry.name == entry.name && other.entry.schema == entry.schema && other.entry.type == entry.type;
 }
 
 void LogicalDependencyList::AddDependency(CatalogEntry &entry) {
@@ -136,10 +133,10 @@ PhysicalDependencyList LogicalDependencyList::GetPhysical(ClientContext &context
 	PhysicalDependencyList dependencies;
 
 	for (auto &entry : set) {
-		auto &name = entry.name;
+		auto &name = entry.entry.name;
 		// Don't use the serialized catalog name, could be attached with a different name
-		auto &schema = entry.schema;
-		auto &type = entry.type;
+		auto &schema = entry.entry.schema;
+		auto &type = entry.entry.type;
 
 		CatalogEntryLookup lookup;
 		if (type == CatalogType::SCHEMA_ENTRY) {
@@ -162,7 +159,7 @@ void LogicalDependencyList::VerifyDependencies(Catalog &catalog, const string &n
 			throw DependencyException(
 			    "Error adding dependency for object \"%s\" - dependency \"%s\" is in catalog "
 			    "\"%s\", which does not match the catalog \"%s\".\nCross catalog dependencies are not supported.",
-			    name, dep.name, dep.catalog, catalog.GetName());
+			    name, dep.entry.name, dep.catalog, catalog.GetName());
 		}
 	}
 }

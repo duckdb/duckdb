@@ -342,9 +342,11 @@ bool TypeIsInteger(PhysicalType type) {
 }
 
 string LogicalType::ToString() const {
-	auto alias = GetAlias();
-	if (!alias.empty()) {
-		return alias;
+	if (id_ != LogicalTypeId::USER) {
+		auto alias = GetAlias();
+		if (!alias.empty()) {
+			return alias;
+		}
 	}
 	switch (id_) {
 	case LogicalTypeId::STRUCT: {
@@ -427,7 +429,25 @@ string LogicalType::ToString() const {
 		return ret;
 	}
 	case LogicalTypeId::USER: {
-		return KeywordHelper::WriteOptionallyQuoted(UserType::GetTypeName(*this));
+		string result;
+		auto &catalog = UserType::GetCatalog(*this);
+		auto &schema = UserType::GetSchema(*this);
+		auto &type = UserType::GetTypeName(*this);
+
+		if (!catalog.empty()) {
+			result = KeywordHelper::WriteOptionallyQuoted(catalog);
+		}
+		if (!schema.empty()) {
+			if (!result.empty()) {
+				result += ".";
+			}
+			result += KeywordHelper::WriteOptionallyQuoted(schema);
+		}
+		if (!result.empty()) {
+			result += ".";
+		}
+		result += KeywordHelper::WriteOptionallyQuoted(type);
+		return result;
 	}
 	case LogicalTypeId::AGGREGATE_STATE: {
 		return AggregateStateType::GetTypeName(*this);
@@ -1040,6 +1060,20 @@ const child_list_t<LogicalType> UnionType::CopyMemberTypes(const LogicalType &ty
 //===--------------------------------------------------------------------===//
 // User Type
 //===--------------------------------------------------------------------===//
+const string &UserType::GetCatalog(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::USER);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return info->Cast<UserTypeInfo>().catalog;
+}
+
+const string &UserType::GetSchema(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::USER);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return info->Cast<UserTypeInfo>().schema;
+}
+
 const string &UserType::GetTypeName(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::USER);
 	auto info = type.AuxInfo();
@@ -1049,6 +1083,11 @@ const string &UserType::GetTypeName(const LogicalType &type) {
 
 LogicalType LogicalType::USER(const string &user_type_name) {
 	auto info = make_shared<UserTypeInfo>(user_type_name);
+	return LogicalType(LogicalTypeId::USER, std::move(info));
+}
+
+LogicalType LogicalType::USER(string catalog, string schema, string name) {
+	auto info = make_shared<UserTypeInfo>(std::move(catalog), std::move(schema), std::move(name));
 	return LogicalType(LogicalTypeId::USER, std::move(info));
 }
 

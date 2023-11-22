@@ -41,8 +41,8 @@ string CatalogTypeToString(CatalogType type) {
 		return "Sequence";
 	case CatalogType::INVALID:
 	case CatalogType::DELETED_ENTRY:
+	case CatalogType::RENAMED_ENTRY:
 	case CatalogType::DEPENDENCY_ENTRY:
-	case CatalogType::DEPENDENCY_SET:
 		break;
 	}
 	return "INVALID";

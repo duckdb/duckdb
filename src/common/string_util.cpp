@@ -4,6 +4,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -237,6 +238,23 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 		}
 	}
 	return true;
+}
+
+bool StringUtil::CICompare(const string &s1, const string &s2) {
+	const auto charmap = UpperFun::ascii_to_upper_map;
+
+	unsigned char u1, u2;
+
+	idx_t length = MinValue<idx_t>(s1.length(), s2.length());
+	length += s1.length() != s2.length();
+	for (idx_t i = 0; i < length; i++) {
+		u1 = (unsigned char)s1[i];
+		u2 = (unsigned char)s2[i];
+		if (charmap[u1] != charmap[u2]) {
+			break;
+		}
+	}
+	return (charmap[u1] - charmap[u2]) < 0;
 }
 
 vector<string> StringUtil::Split(const string &input, const string &split) {

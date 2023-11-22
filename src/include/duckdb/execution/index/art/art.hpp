@@ -38,11 +38,11 @@ public:
 
 public:
 	//! Constructs an ART
-	ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
-	    const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
+	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
+	    TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
 	    AttachedDatabase &db,
 	    const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr = nullptr,
-	    const BlockPointer &block = BlockPointer());
+	    const IndexStorageInfo &info = IndexStorageInfo());
 
 	//! Root of the tree
 	Node tree = Node();
@@ -86,8 +86,8 @@ public:
 	//! Search equal values used for joins that do not need to fetch data
 	void SearchEqualJoinNoFetch(ARTKey &key, idx_t &result_size);
 
-	//! Serializes the index and returns the pair of block_id offset positions
-	BlockPointer Serialize(MetadataWriter &writer) override;
+	//! Returns all ART storage information for serialization
+	IndexStorageInfo GetStorageInfo(const bool get_buffers) override;
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
@@ -95,6 +95,9 @@ public:
 
 	//! Traverses an ART and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
 	void Vacuum(IndexLock &state) override;
+
+	//! Returns the in-memory usage of the index. The lock obtained from InitializeLock must be held
+	idx_t GetInMemorySize(IndexLock &index_lock) override;
 
 	//! Generate ART keys for an input chunk
 	static void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<ARTKey> &keys);
@@ -144,8 +147,12 @@ private:
 	//! or only traverses and verifies the index
 	string VerifyAndToStringInternal(const bool only_verify);
 
-	//! Deserialize the allocators of the ART
+	//! Initialize the allocators of the ART
+	void InitAllocators(const IndexStorageInfo &info);
+	//! STABLE STORAGE NOTE: This is for old storage files, to deserialize the allocators of the ART
 	void Deserialize(const BlockPointer &pointer);
+	//! Initializes the serialization of the index by combining the allocator data onto partial blocks
+	void WritePartialBlocks();
 };
 
 } // namespace duckdb

@@ -1359,7 +1359,7 @@ DUCKDB_PENDING_RESULT_READY, this function will return true.
 * returns: Boolean indicating pending execution should be considered finished.
 """
 function duckdb_pending_execution_is_finished(pending_state)
-    return ccall((:duckdb_execute_pending, libduckdb), Bool, (duckdb_pending_state,), pending_state)
+    return ccall((:duckdb_pending_execution_is_finished, libduckdb), Bool, (duckdb_pending_state,), pending_state)
 end
 
 #=

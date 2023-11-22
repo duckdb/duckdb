@@ -54,7 +54,8 @@ public:
 
 	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
 
-	unique_ptr<AttachedDatabase> CreateAttachedDatabase(AttachInfo &info, const string &type, AccessMode access_mode);
+	unique_ptr<AttachedDatabase> CreateAttachedDatabase(const AttachInfo &info, const string &type,
+	                                                    AccessMode access_mode);
 
 private:
 	void Initialize(const char *path, DBConfig *config);

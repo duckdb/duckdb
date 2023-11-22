@@ -19,6 +19,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
 #include <algorithm>
 

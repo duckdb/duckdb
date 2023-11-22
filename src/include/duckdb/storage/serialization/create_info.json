@@ -74,7 +74,8 @@
       {
         "id": 202,
         "name": "index_type",
-        "type": "IndexType"
+        "type": "IndexType",
+        "deleted": "True"
       },
       {
         "id": 203,
@@ -109,7 +110,8 @@
       {
         "id": 209,
         "name": "index_type_name",
-        "type": "string"
+        "type": "string",
+        "property": "index_type"
       }
     ]
   },

@@ -65,15 +65,24 @@ bool CatalogEntry::HasParent() const {
 CatalogEntry &CatalogEntry::Child() {
 	return *child;
 }
-optional_ptr<CatalogEntry> CatalogEntry::Parent() {
-	return parent;
+
+CatalogEntry &CatalogEntry::Parent() {
+	return *parent;
 }
 
 Catalog &CatalogEntry::ParentCatalog() {
 	throw InternalException("CatalogEntry::ParentCatalog called on catalog entry without catalog");
 }
 
+const Catalog &CatalogEntry::ParentCatalog() const {
+	throw InternalException("CatalogEntry::ParentCatalog called on catalog entry without catalog");
+}
+
 SchemaCatalogEntry &CatalogEntry::ParentSchema() {
+	throw InternalException("CatalogEntry::ParentSchema called on catalog entry without schema");
+}
+
+const SchemaCatalogEntry &CatalogEntry::ParentSchema() const {
 	throw InternalException("CatalogEntry::ParentSchema called on catalog entry without schema");
 }
 // LCOV_EXCL_STOP
