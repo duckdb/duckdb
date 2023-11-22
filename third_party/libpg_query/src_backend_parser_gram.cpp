@@ -22218,24 +22218,24 @@ yyreduce:
 				PGCopyDatabaseStmt *n = makeNode(PGCopyDatabaseStmt);
 				n->from_database = (yyvsp[(4) - (7)].str);
 				n->to_database = (yyvsp[(6) - (7)].str);
-				n->copy_database_flag = (yyvsp[(7) - (7)].str);
+				n->copy_database_flag = (yyvsp[(7) - (7)].conststr);
 				(yyval.node) = (PGNode *)n;
 			;}
     break;
 
   case 439:
 #line 61 "third_party/libpg_query/grammar/statements/copy.y"
-    { (yyval.str) = NULL; ;}
+    { (yyval.conststr) = NULL; ;}
     break;
 
   case 440:
 #line 62 "third_party/libpg_query/grammar/statements/copy.y"
-    { (yyval.str) = "schema"; ;}
+    { (yyval.conststr) = "schema"; ;}
     break;
 
   case 441:
 #line 63 "third_party/libpg_query/grammar/statements/copy.y"
-    { (yyval.str) = "data"; ;}
+    { (yyval.conststr) = "data"; ;}
     break;
 
   case 442:
