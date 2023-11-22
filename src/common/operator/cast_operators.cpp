@@ -938,6 +938,7 @@ struct IntegerCastOperation {
 			if (state.decimal < 0) {
 				state.decimal = -state.decimal;
 			}
+			state.decimal_digits = 1;
 			return Finalize<T, NEGATIVE>(state);
 		}
 
@@ -969,6 +970,8 @@ struct IntegerCastOperation {
 				}
 			}
 		}
+
+		state.decimal_digits -= exponent;
 
 		if (NEGATIVE) {
 			if (!TrySubtractOperator::Operation(state.result, state.decimal, state.result)) {
@@ -1005,10 +1008,11 @@ struct IntegerCastOperation {
 
 		while (state.decimal > 10) {
 			state.decimal /= 10;
+			state.decimal_digits--;
 		}
 
 		bool success = true;
-		if (state.decimal >= 5) {
+		if (state.decimal_digits == 1 && state.decimal >= 5) {
 			if (NEGATIVE) {
 				success = TrySubtractOperator::Operation(tmp, (result_t)1, tmp);
 			} else {
