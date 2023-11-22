@@ -73,6 +73,11 @@ jobs:
           python3 ${{ inputs.matrix_parse_script }} --input ./duckdb/.github/config/distribution_matrix.json --select_os windows --output windows_matrix.json --exclude "${{ inputs.exclude_archs }}" --pretty
           python3 ${{ inputs.matrix_parse_script }} --input ./duckdb/.github/config/distribution_matrix.json --select_os wasm --output wasm_matrix.json --exclude "${{ inputs.exclude_archs }}" --pretty
 
+      - id: hack-to-backport-duckdb-wasm
+        # Default parse script currently returns the input file whenever it doesn't encounter the right field. Patch that with the correct values. To be eventually removed
+        run: |
+          diff wasm_matrix.json ./duckdb/.github/config/distribution_matrix.json --ignore-space-change && echo '{"include":[{"duckdb_arch":"wasm_mvp","vcpkg_triplet":"wasm32-emscripten"},{"duckdb_arch":"wasm_eh","vcpkg_triplet":"wasm32-emscripten"}]}' > wasm_matrix.json
+
       - id: set-matrix-linux
         run: |
           linux_matrix="`cat linux_matrix.json`"
