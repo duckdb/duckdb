@@ -49,10 +49,6 @@ public:
 
 	const DependencyFlags &Flags() const;
 
-	// Create the corresponding dependency/dependent in the other set
-	void CompleteLink(CatalogTransaction transaction, DependencyFlags flags = DependencyFlags());
-	DependencyCatalogEntry &GetLink(optional_ptr<CatalogTransaction> transaction);
-
 private:
 	const MangledEntryName mangled_name;
 	const CatalogEntryInfo entry;

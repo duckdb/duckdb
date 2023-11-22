@@ -32,9 +32,11 @@ public:
 	static DependencyInfo FromDependent(DependencyCatalogEntry &dep);
 
 public:
-	//! The entry establishing the dependency
+	//! The entry that is depending on ..
+	//! originator of the dependency
 	CatalogEntryInfo dependent;
-	//! The entry being targeted
+	//! The entry that is being depended on ..
+	//! subject of the dependency
 	CatalogEntryInfo dependency;
 
 	DependencyFlags dependent_flags;
@@ -118,6 +120,9 @@ private:
 	void CreateDependency(CatalogTransaction transaction, const DependencyInfo &info);
 	void CreateDependencies(CatalogTransaction transaction, const CatalogEntry &object,
 	                        const LogicalDependencyList dependencies);
+	void CreateDependencyInternal(CatalogTransaction transaction, CatalogSet &catalog_set, const CatalogEntryInfo &to,
+	                              const CatalogEntryInfo &from,
+	                              DependencyFlags dependency_type = DependencyFlags::DependencyRegular());
 
 	using dependency_callback_t = const std::function<void(DependencyCatalogEntry &)>;
 	void ScanDependents(CatalogTransaction transaction, const CatalogEntryInfo &info, dependency_callback_t &callback);

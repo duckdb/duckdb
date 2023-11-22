@@ -72,15 +72,15 @@ MangledEntryName DependencyManager::MangleName(const CatalogEntry &entry) {
 }
 
 DependencyInfo DependencyInfo::FromDependency(DependencyCatalogEntry &dep) {
-	return DependencyInfo {/*dependent = */ dep.EntryInfo(),
-	                       /*dependency = */ dep.FromInfo(),
+	return DependencyInfo {/*dependent = */ dep.FromInfo(),
+	                       /*dependency = */ dep.EntryInfo(),
 	                       /*dependent_flags = */ DependencyFlags().SetBlocking(),
 	                       /*dependency_flags = */ dep.Flags()};
 }
 
 DependencyInfo DependencyInfo::FromDependent(DependencyCatalogEntry &dep) {
-	return DependencyInfo {/*dependent = */ dep.FromInfo(),
-	                       /*dependency = */ dep.EntryInfo(),
+	return DependencyInfo {/*dependent = */ dep.EntryInfo(),
+	                       /*dependency = */ dep.FromInfo(),
 	                       /*dependent_flags = */ dep.Flags(),
 	                       /*dependency_flags = */ DependencyFlags().SetBlocking()};
 }
@@ -194,47 +194,38 @@ void DependencyManager::RemoveDependency(CatalogTransaction transaction, const D
 	}
 }
 
+void DependencyManager::CreateDependencyInternal(CatalogTransaction transaction, CatalogSet &catalog_set,
+                                                 const CatalogEntryInfo &to, const CatalogEntryInfo &from,
+                                                 DependencyFlags flags) {
+	DependencyCatalogSet dependents(catalog_set, from);
+
+	auto dependent_name = MangleName(to);
+	auto existing = dependents.GetEntry(transaction, dependent_name);
+	if (existing) {
+		auto &existing_flags = existing->Cast<DependencyCatalogEntry>().Flags();
+		if (flags == existing_flags) {
+			return;
+		}
+		flags.Apply(existing_flags);
+		dependents.DropEntry(transaction, dependent_name, false, false);
+	}
+	auto dependent_p = make_uniq<DependencyCatalogEntry>(catalog, to, from, flags);
+
+	D_ASSERT(!StringUtil::CIEquals(dependent_name.name, MangleName(from).name));
+	if (catalog.IsTemporaryCatalog()) {
+		dependent_p->temporary = true;
+	}
+	dependents.CreateEntry(transaction, dependent_name, std::move(dependent_p));
+}
+
 void DependencyManager::CreateDependency(CatalogTransaction transaction, const DependencyInfo &info) {
 	auto &dependent = info.dependent;
 	auto &dependency = info.dependency;
 
 	// Create an entry in the dependents map of the object that is the target of the dependency
-	{
-		auto &flags = info.dependent_flags;
-		DependencyCatalogSet dependents(Dependents(), dependency);
-
-		auto dependent_p = make_uniq<DependencyCatalogEntry>(catalog, dependent, dependency, flags);
-		auto &dependent_name = dependent_p->MangledName();
-		auto existing = dependents.GetEntry(transaction, dependent_name);
-		if (existing) {
-			return;
-		}
-
-		D_ASSERT(!StringUtil::CIEquals(dependent_name.name, MangleName(dependency).name));
-		if (catalog.IsTemporaryCatalog()) {
-			dependent_p->temporary = true;
-		}
-		dependents.CreateEntry(transaction, dependent_name, std::move(dependent_p));
-	}
-
+	CreateDependencyInternal(transaction, Dependents(), dependent, dependency, info.dependent_flags);
 	// Create an entry in the dependencies map of the object that is targeting another entry
-	{
-		auto &flags = info.dependency_flags;
-		DependencyCatalogSet dependencies(Dependencies(), dependent);
-
-		auto dependency_p = make_uniq<DependencyCatalogEntry>(catalog, dependency, dependent, flags);
-		auto &dependency_name = dependency_p->MangledName();
-		auto existing = dependencies.GetEntry(transaction, dependency_name);
-		if (existing) {
-			return;
-		}
-
-		D_ASSERT(!StringUtil::CIEquals(dependency_name.name, MangleName(dependent).name));
-		if (catalog.IsTemporaryCatalog()) {
-			dependency_p->temporary = true;
-		}
-		dependencies.CreateEntry(transaction, dependency_name, std::move(dependency_p));
-	}
+	CreateDependencyInternal(transaction, Dependencies(), dependency, dependent, info.dependency_flags);
 }
 
 void DependencyManager::CreateDependencies(CatalogTransaction transaction, const CatalogEntry &object,
@@ -441,8 +432,8 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		dependencies.emplace_back(dep_info);
 	});
 
-	// Add the additional dependencies introduced by the ALTER statement
-	CreateDependencies(transaction, new_obj, added_dependencies);
+	//// Add the additional dependencies introduced by the ALTER statement
+	// CreateDependencies(transaction, new_obj, added_dependencies);
 
 	// FIXME: we should update dependencies in the future
 	// some alters could cause dependencies to change (imagine types of table columns)
