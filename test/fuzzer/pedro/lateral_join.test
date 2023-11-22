@@ -1,4 +1,4 @@
-# name: test/fuzzer/pedro/lateral_index_join.test
+# name: test/fuzzer/pedro/lateral_join.test
 # description: Lateral index join
 # group: [pedro]
 
@@ -10,9 +10,6 @@ CREATE TABLE t1 (c1 INT);
 
 statement ok
 CREATE INDEX i0 ON t1 (c1);
-
-statement ok
-PRAGMA FORCE_INDEX_JOIN;
 
 statement ok
 SELECT 1 FROM t1 JOIN (SELECT t1.c1) t0(c0) ON 1 = CAST(72837647112 AS UINTEGER);
