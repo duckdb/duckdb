@@ -49,8 +49,8 @@ if select_os:
             found = True
             break
     if found == False:
-         logging.warning('A selection OS was provided but not found')
-         filtered_data = []
+        logging.warning('A selection OS was provided but not found')
+        filtered_data = []
 
 # When deploy_matrix is specified, we only output a single merged include list with all the duckdb_archs
 elif args.deploy_matrix:
