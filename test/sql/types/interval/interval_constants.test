@@ -146,3 +146,38 @@ query I
 select timestamp '1992-01-01 12:00:00' + (interval 3 microseconds + interval 3 milliseconds)
 ----
 1992-01-01 12:00:00.003003
+
+# Fractional seconds
+query I
+select interval '10.123' second;
+----
+00:00:10.123
+
+query I
+select '47.210'::interval;
+----
+00:00:47.21
+
+# Negative values
+query I
+select '-47.210'::interval;
+----
+-00:00:47.21
+
+# Trailing spaces
+query I
+select '47.210  '::interval;
+----
+00:00:47.21
+
+# Nanoseconds are OK
+query I
+select '31.123456789'::interval;
+----
+00:00:31.123456
+
+# Non-alpha specifiers are still not OK
+statement error
+select '47.210 5'::interval;
+----
+Could not convert string '47.210 5' to INTERVAL
