@@ -48,10 +48,6 @@ public:
 	const CatalogEntryInfo &FromInfo() const;
 
 	DependencyType Type() const;
-
-	// Create the corresponding dependency/dependent in the other set
-	void CompleteLink(CatalogTransaction transaction, DependencyType type = DependencyType::DEPENDENCY_REGULAR);
-
 private:
 	const MangledEntryName mangled_name;
 	const CatalogEntryInfo entry;
