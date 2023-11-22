@@ -247,6 +247,12 @@ jobs:
       BUILD_SHELL: ${{ inputs.build_duckdb_shell && '1' || '0' }}
 
     steps:
+      - name: Keep \n line endings
+        shell: bash
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
