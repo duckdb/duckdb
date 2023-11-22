@@ -48,6 +48,7 @@ public:
 	const CatalogEntryInfo &FromInfo() const;
 
 	DependencyType Type() const;
+
 private:
 	const MangledEntryName mangled_name;
 	const CatalogEntryInfo entry;

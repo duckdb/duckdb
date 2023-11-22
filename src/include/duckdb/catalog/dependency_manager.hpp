@@ -104,6 +104,9 @@ private:
 private:
 	void RemoveDependency(CatalogTransaction transaction, const DependencyInfo &info);
 	void CreateDependency(CatalogTransaction transaction, const DependencyInfo &info);
+	void CreateDependencyInternal(CatalogTransaction transaction, CatalogSet &catalog_set, const CatalogEntryInfo &to,
+	                              const CatalogEntryInfo &from,
+	                              DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
 
 	using dependency_callback_t = const std::function<void(DependencyCatalogEntry &)>;
 	void ScanDependents(CatalogTransaction transaction, const CatalogEntryInfo &info, dependency_callback_t &callback);

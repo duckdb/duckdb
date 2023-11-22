@@ -190,47 +190,33 @@ void DependencyManager::RemoveDependency(CatalogTransaction transaction, const D
 	}
 }
 
+void DependencyManager::CreateDependencyInternal(CatalogTransaction transaction, CatalogSet &catalog_set,
+                                                 const CatalogEntryInfo &to, const CatalogEntryInfo &from,
+                                                 DependencyType type) {
+	DependencyCatalogSet dependents(catalog_set, from);
+
+	auto dependent_p = make_uniq<DependencyCatalogEntry>(catalog, to, from, type);
+	auto &dependent_name = dependent_p->MangledName();
+	auto existing = dependents.GetEntry(transaction, dependent_name);
+	if (existing) {
+		return;
+	}
+
+	D_ASSERT(!StringUtil::CIEquals(dependent_name.name, MangleName(from).name));
+	if (catalog.IsTemporaryCatalog()) {
+		dependent_p->temporary = true;
+	}
+	dependents.CreateEntry(transaction, dependent_name, std::move(dependent_p));
+}
+
 void DependencyManager::CreateDependency(CatalogTransaction transaction, const DependencyInfo &info) {
 	auto &dependent = info.dependent;
 	auto &dependency = info.dependency;
 
 	// Create an entry in the dependents map of the object that is the target of the dependency
-	{
-		auto &type = info.dependent_type;
-		DependencyCatalogSet dependents(Dependents(), dependency);
-
-		auto dependent_p = make_uniq<DependencyCatalogEntry>(catalog, dependent, dependency, type);
-		auto &dependent_name = dependent_p->MangledName();
-		auto existing = dependents.GetEntry(transaction, dependent_name);
-		if (existing) {
-			return;
-		}
-
-		D_ASSERT(!StringUtil::CIEquals(dependent_name.name, MangleName(dependency).name));
-		if (catalog.IsTemporaryCatalog()) {
-			dependent_p->temporary = true;
-		}
-		dependents.CreateEntry(transaction, dependent_name, std::move(dependent_p));
-	}
-
+	CreateDependencyInternal(transaction, Dependents(), dependent, dependency, info.dependent_type);
 	// Create an entry in the dependencies map of the object that is targeting another entry
-	{
-		auto &type = info.dependency_type;
-		DependencyCatalogSet dependencies(Dependencies(), dependent);
-
-		auto dependency_p = make_uniq<DependencyCatalogEntry>(catalog, dependency, dependent, type);
-		auto &dependency_name = dependency_p->MangledName();
-		auto existing = dependencies.GetEntry(transaction, dependency_name);
-		if (existing) {
-			return;
-		}
-
-		D_ASSERT(!StringUtil::CIEquals(dependency_name.name, MangleName(dependent).name));
-		if (catalog.IsTemporaryCatalog()) {
-			dependency_p->temporary = true;
-		}
-		dependencies.CreateEntry(transaction, dependency_name, std::move(dependency_p));
-	}
+	CreateDependencyInternal(transaction, Dependencies(), dependency, dependent, info.dependency_type);
 }
 
 void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &object,
