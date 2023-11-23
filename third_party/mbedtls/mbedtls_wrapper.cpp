@@ -9,7 +9,6 @@
 #include "mbedtls/sha256.h"
 #include "mbedtls/sha512.h"
 #include "mbedtls/pk.h"
-#include "mbedtls/sha256.h"
 
 #ifdef MBEDTLS_NO_ENTROPY_SOURCE
 #include "duckdb/common/random_engine.hpp"
