@@ -321,9 +321,9 @@
     },
     {
         "name": "to_hours",
-        "parameters": "integer",
+        "parameters": "double",
         "description": "Construct a hour interval",
-        "example": "to_hours(5)",
+        "example": "to_hours(5.5)",
         "type": "scalar_function"
     },
     {
@@ -335,16 +335,16 @@
     },
     {
         "name": "to_milliseconds",
-        "parameters": "integer",
+        "parameters": "double",
         "description": "Construct a millisecond interval",
-        "example": "to_milliseconds(5)",
+        "example": "to_milliseconds(5.5)",
         "type": "scalar_function"
     },
     {
         "name": "to_minutes",
-        "parameters": "integer",
+        "parameters": "double",
         "description": "Construct a minute interval",
-        "example": "to_minutes(5)",
+        "example": "to_minutes(5.5)",
         "type": "scalar_function"
     },
     {
@@ -356,9 +356,9 @@
     },
     {
         "name": "to_seconds",
-        "parameters": "integer",
+        "parameters": "double",
         "description": "Construct a second interval",
-        "example": "to_seconds(5)",
+        "example": "to_seconds(5.5)",
         "type": "scalar_function"
     },
     {
