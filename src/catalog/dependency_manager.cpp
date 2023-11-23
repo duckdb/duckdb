@@ -109,8 +109,6 @@ CatalogSet &DependencyManager::Dependencies() {
 void DependencyManager::ScanSetInternal(CatalogTransaction transaction, const CatalogEntryInfo &info,
                                         bool scan_dependency, dependency_callback_t &callback) {
 	catalog_entry_set_t other_entries;
-	DependencyCatalogSet dependents(Dependents(), info);
-	DependencyCatalogSet dependencies(Dependencies(), info);
 
 	auto cb = [&](CatalogEntry &other) {
 		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
@@ -121,8 +119,10 @@ void DependencyManager::ScanSetInternal(CatalogTransaction transaction, const Ca
 	};
 
 	if (scan_dependency) {
+		DependencyCatalogSet dependencies(Dependencies(), info);
 		dependencies.Scan(transaction, cb);
 	} else {
+		DependencyCatalogSet dependents(Dependents(), info);
 		dependents.Scan(transaction, cb);
 	}
 
