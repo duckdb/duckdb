@@ -43,7 +43,7 @@
 
 namespace duckdb {
 
-void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema) {
+void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
 	if (catalog.empty() && !schema.empty()) {
 		// schema is specified - but catalog is not
 		// try searching for the catalog instead
@@ -52,7 +52,7 @@ void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string
 		if (database) {
 			// we have a database with this name
 			// check if there is a schema
-			auto schema_obj = Catalog::GetSchema(context, INVALID_CATALOG, schema, OnEntryNotFound::RETURN_NULL);
+			auto schema_obj = entry_retriever.GetSchema(INVALID_CATALOG, schema, OnEntryNotFound::RETURN_NULL);
 			if (schema_obj) {
 				auto &attached = schema_obj->catalog.GetAttached();
 				throw BinderException(
@@ -63,10 +63,6 @@ void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string
 			schema = string();
 		}
 	}
-}
-
-void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
-	BindSchemaOrCatalog(context, catalog, schema);
 }
 
 const string Binder::BindCatalog(string &catalog) {
@@ -286,7 +282,10 @@ void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, c
 				type = type_entry.user_type;
 			}
 		} else {
-			auto entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, INVALID_CATALOG, schema, user_type_name);
+			string type_catalog = UserType::GetCatalog(type);
+			string type_schema = UserType::GetSchema(type);
+			BindSchemaOrCatalog(type_catalog, type_schema);
+			auto entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, type_catalog, type_schema, user_type_name);
 			auto &type_entry = entry->Cast<TypeCatalogEntry>();
 			type = type_entry.user_type;
 		}

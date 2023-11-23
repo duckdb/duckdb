@@ -5,6 +5,7 @@
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/parser/query_error_context.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -36,6 +37,10 @@ public:
 	                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::RETURN_NULL);
 	LogicalType GetType(Catalog &catalog, const string &schema, const string &name,
 	                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::RETURN_NULL);
+
+	optional_ptr<SchemaCatalogEntry> GetSchema(const string &catalog, const string &name,
+	                                           OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION,
+	                                           QueryErrorContext error_context = QueryErrorContext());
 
 	void SetCallback(catalog_entry_callback_t callback) {
 		this->callback = callback;

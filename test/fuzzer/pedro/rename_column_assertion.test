@@ -14,8 +14,16 @@ CREATE INDEX i0 ON t1 (c2);
 statement ok
 START TRANSACTION;
 
-statement ok
+statement error
 ALTER TABLE t1 ALTER c2 DROP NOT NULL;
+----
+Cannot alter entry
+
+statement error
+ALTER TABLE t1 RENAME c1 TO c3;
+----
+transaction is aborted
 
 statement ok
-COMMIT;
+ROLLBACK;
+

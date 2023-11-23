@@ -180,7 +180,6 @@ public:
 	                                TableCatalogEntry &table, TableStorageInfo &storage_info);
 	void BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &table, InsertStatement &stmt);
 
-	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
 	void BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
 	                     const string &schema = INVALID_SCHEMA);
 
@@ -370,14 +369,14 @@ private:
 	void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
 	void BindWhereStarExpression(unique_ptr<ParsedExpression> &expr);
 
-	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
-	void BindSchemaOrCatalog(string &catalog_name, string &schema_name);
 	const string BindCatalog(string &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 
 	unique_ptr<BoundQueryNode> BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table);
 
 public:
+	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
+	void BindSchemaOrCatalog(string &catalog_name, string &schema_name);
 	// This should really be a private constructor, but make_shared does not allow it...
 	// If you are thinking about calling this, you should probably call Binder::CreateBinder
 	Binder(bool i_know_what_i_am_doing, ClientContext &context, shared_ptr<Binder> parent, bool inherit_ctes);
