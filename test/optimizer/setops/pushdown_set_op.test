@@ -6,61 +6,61 @@ statement ok
 PRAGMA explain_output = 'OPTIMIZED_ONLY'
 
 query II
-explain select 42 intersect select 42;
+explain select 42 intersect ALL select 42;
 ----
 logical_opt	<REGEX>:.*SEMI.*
 
 # intersect is empty if either side is empty
 query II
-explain select 42 intersect select 42 where 1=0;
+explain select 42 intersect ALL select 42 where 1=0;
 ----
 logical_opt	<!REGEX>:.*SEMI.*
 
 query II
-explain select 42 where 1=0 intersect select 42;
+explain select 42 where 1=0 intersect ALL select 42;
 ----
 logical_opt	<!REGEX>:.*SEMI.*
 
 # except is empty if LHS is empty
 query II
-explain select 42 where 1=0 except select 42;
+explain select 42 where 1=0 except ALL select 42;
 ----
 logical_opt	<!REGEX>:.*ANTI.*
 
 # if RHS is empty we can optimize away the except
 query II
-explain select 42 except select 42 where 1=0;
+explain select 42 except ALL select 42 where 1=0;
 ----
 logical_opt	<!REGEX>:.*ANTI.*
 
 # now pushdown subquery with set ops
 query II
-explain select * from (select 42 intersect select 42) tbl(i) where i=42;
+explain select * from (select 42 intersect ALL select 42) tbl(i) where i=42;
 ----
 logical_opt	<REGEX>:.*SEMI.*
 
 query II
-explain select * from (select 42 intersect select 43) tbl(i) where i=42;
+explain select * from (select 42 intersect ALL select 43) tbl(i) where i=42;
 ----
 logical_opt	<!REGEX>:.*SEMI.*
 
 query II
-explain select * from (select 43 intersect select 42) tbl(i) where i=42;
+explain select * from (select 43 intersect ALL select 42) tbl(i) where i=42;
 ----
 logical_opt	<!REGEX>:.*SEMI.*
 
 query II
-explain select * from (select 42 except select 42) tbl(i) where i=42;
+explain select * from (select 42 except ALL select 42) tbl(i) where i=42;
 ----
 logical_opt	<REGEX>:.*ANTI.*
 
 query II
-explain select * from (select 42 except select 43) tbl(i) where i=42;
+explain select * from (select 42 except ALL select 43) tbl(i) where i=42;
 ----
 logical_opt	<!REGEX>:.*ANTI.*
 
 query II
-explain select * from (select 43 except select 42) tbl(i) where i=42;
+explain select * from (select 43 except ALL select 42) tbl(i) where i=42;
 ----
 logical_opt	<!REGEX>:.*ANTI.*
 

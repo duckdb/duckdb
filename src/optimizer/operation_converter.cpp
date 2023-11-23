@@ -6,20 +6,32 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_set_operation.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
 
 namespace duckdb {
 
-OperationConverter::OperationConverter(LogicalOperator &root) : root(root) {
+OperationConverter::OperationConverter(LogicalOperator &root, Binder &binder) : root(root), binder(binder) {
 	root.ResolveOperatorTypes();
 }
 
-void OperationConverter::Optimize(unique_ptr<LogicalOperator> &op) {
+void OperationConverter::Optimize(unique_ptr<LogicalOperator> &op, bool is_root) {
 	for (auto &child : op->children) {
 		Optimize(child);
 	}
 	switch (op->type) {
+		// if it is setop all, we don't replace (even though we technically still could)
+		// if it is not setop all, duplicate elimination should happen
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_EXCEPT: {
+		auto &set_op = op->Cast<LogicalSetOperation>();
+		if (set_op.setop_all || is_root) {
+			// If set_op all is not defined, then results need to be deduplicated.
+			// if the operator is the root, then break. We don't want to update the root
+			// and the join order optimizer can still have an effect.
+			break;
+		}
 		auto &left = op->children[0];
 		auto &right = op->children[1];
 		auto left_bindings = left->GetColumnBindings();
@@ -45,11 +57,11 @@ void OperationConverter::Optimize(unique_ptr<LogicalOperator> &op) {
 		join_op->children.push_back(std::move(left));
 		join_op->children.push_back(std::move(right));
 		join_op->conditions = std::move(conditions);
+		join_op->ResolveOperatorTypes();
 
-		// update the op so that it is the join op.
 		op = std::move(join_op);
 
-		// now perform column binding replacement
+		// perform column binding replacement
 		auto new_bindings = op->GetColumnBindings();
 		D_ASSERT(old_bindings.size() == new_bindings.size());
 		vector<ReplacementBinding> replacement_bindings;
@@ -60,6 +72,26 @@ void OperationConverter::Optimize(unique_ptr<LogicalOperator> &op) {
 		auto binding_replacer = ColumnBindingReplacer();
 		binding_replacer.replacement_bindings = replacement_bindings;
 		binding_replacer.VisitOperator(root);
+
+		// push a group by all on top of the join
+
+		auto &types = op->types;
+		auto join_bindings = op->GetColumnBindings();
+		vector<unique_ptr<Expression>> select_list, groups, aggregates /* left empty */;
+		D_ASSERT(join_bindings.size() == types.size());
+		auto table_index = binder.GenerateTableIndex();
+		auto aggregate_index = binder.GenerateTableIndex();
+		for (idx_t i = 0; i < join_bindings.size(); i++) {
+			select_list.push_back(make_uniq<BoundColumnRefExpression>(types[i], ColumnBinding(table_index, i)));
+//			groups.push_back(make_uniq<BoundColumnRefExpression>(types[i], join_bindings.at(i)));
+//			groups.push_back(make_uniq<BoundColumnRefExpression>(types[i], ColumnBinding(table_index, i)));
+		}
+		auto group_by = make_uniq<LogicalAggregate>(table_index, aggregate_index,  std::move(select_list));
+		group_by->groups = std::move(groups);
+		group_by->children.push_back(std::move(op));
+
+		op = std::move(group_by);
+
 	}
 	default:
 		break;
