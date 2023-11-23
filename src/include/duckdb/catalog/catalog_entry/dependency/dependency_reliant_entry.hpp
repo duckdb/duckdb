@@ -20,6 +20,8 @@ public:
 public:
 	const CatalogEntryInfo &EntryInfo() const override;
 	const MangledEntryName &EntryMangledName() const override;
+	const CatalogEntryInfo &SourceInfo() const override;
+	const MangledEntryName &SourceMangledName() const override;
 };
 
 } // namespace duckdb

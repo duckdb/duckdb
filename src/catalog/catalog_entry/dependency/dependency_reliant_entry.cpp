@@ -17,6 +17,14 @@ const CatalogEntryInfo &DependencyReliantEntry::EntryInfo() const {
 	return dependent.entry;
 }
 
+const MangledEntryName &DependencyReliantEntry::SourceMangledName() const {
+	return dependency_name;
+}
+
+const CatalogEntryInfo &DependencyReliantEntry::SourceInfo() const {
+	return dependency.entry;
+}
+
 DependencyReliantEntry::~DependencyReliantEntry() {
 }
 
