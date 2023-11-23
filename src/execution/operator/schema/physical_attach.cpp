@@ -6,6 +6,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/main/database_path_and_type.hpp"
 
 namespace duckdb {
 
@@ -66,9 +67,12 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	// get the name and path of the database
 	auto &name = info->name;
 	auto &path = info->path;
+	if (db_type.empty()) {
+		DBPathAndType::ExtractExtensionPrefix(path, db_type);
+	}
 	if (name.empty()) {
 		auto &fs = FileSystem::GetFileSystem(context.client);
-		name = AttachedDatabase::ExtractDatabaseNameAndType(path, db_type, fs);
+		name = AttachedDatabase::ExtractDatabaseName(path, fs);
 	}
 
 	// check ATTACH IF NOT EXISTS
