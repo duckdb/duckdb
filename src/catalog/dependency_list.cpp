@@ -3,7 +3,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/dependency_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
@@ -81,11 +81,9 @@ static string GetSchema(CatalogEntry &entry) {
 LogicalDependency::LogicalDependency(CatalogEntry &entry) {
 	catalog = INVALID_CATALOG;
 	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
-		auto &dependency_entry = entry.Cast<DependencyCatalogEntry>();
+		auto &dependency_entry = entry.Cast<DependencyEntry>();
 
-		this->entry.schema = dependency_entry.EntrySchema();
-		this->entry.name = dependency_entry.EntryName();
-		this->entry.type = dependency_entry.EntryType();
+		this->entry = dependency_entry.EntryInfo();
 		// FIXME: do we also want to set 'catalog' here?
 	} else {
 		this->entry.schema = GetSchema(entry);

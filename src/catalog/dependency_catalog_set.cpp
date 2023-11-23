@@ -1,5 +1,5 @@
 #include "duckdb/catalog/dependency_catalog_set.hpp"
-#include "duckdb/catalog/catalog_entry/dependency_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
@@ -32,8 +32,9 @@ void DependencyCatalogSet::Scan(CatalogTransaction transaction, const std::funct
 	set.ScanWithPrefix(
 	    transaction,
 	    [&](CatalogEntry &entry) {
-		    auto &dep = entry.Cast<DependencyCatalogEntry>();
-		    auto &from = dep.FromMangledName();
+		    auto &dep = entry.Cast<DependencyEntry>();
+		    auto &from =
+		        dep.Side() == DependencyEntryType::SUBJECT ? dep.DependentMangledName() : dep.DependencyMangledName();
 		    if (!StringUtil::CIEquals(from.name, mangled_name.name)) {
 			    return;
 		    }

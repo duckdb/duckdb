@@ -24,7 +24,6 @@ class LogicalDependencyList;
 //! The DependencyList containing CatalogEntry references, looked up in the catalog
 class PhysicalDependencyList {
 	friend class DependencyManager;
-	friend class DependencySetCatalogEntry;
 
 public:
 	DUCKDB_API void AddDependency(CatalogEntry &entry);

@@ -22,25 +22,29 @@ namespace duckdb {
 class DuckCatalog;
 class ClientContext;
 class DependencyList;
-class DependencyCatalogEntry;
-class DependencySetCatalogEntry;
+class DependencyEntry;
 class LogicalDependencyList;
+
+// The subject of this dependency
+struct DependencySubject {
+	CatalogEntryInfo entry;
+	DependencyFlags flags;
+};
+
+// The entry that relies on the other entry
+struct DependencyReliant {
+	CatalogEntryInfo entry;
+	DependencyFlags flags;
+};
 
 struct DependencyInfo {
 public:
-	static DependencyInfo FromDependency(DependencyCatalogEntry &dep);
-	static DependencyInfo FromDependent(DependencyCatalogEntry &dep);
+	static DependencyInfo FromDependency(DependencyEntry &dep);
+	static DependencyInfo FromDependent(DependencyEntry &dep);
 
 public:
-	//! The entry that is depending on ..
-	//! originator of the dependency
-	CatalogEntryInfo dependent;
-	//! The entry that is being depended on ..
-	//! subject of the dependency
-	CatalogEntryInfo dependency;
-
-	DependencyFlags dependent_flags;
-	DependencyFlags dependency_flags;
+	DependencyReliant dependent;
+	DependencySubject dependency;
 };
 
 struct MangledEntryName {
@@ -75,7 +79,6 @@ public:
 //! The DependencyManager is in charge of managing dependencies between catalog entries
 class DependencyManager {
 	friend class CatalogSet;
-	friend class DependencySetCatalogEntry;
 
 public:
 	explicit DependencyManager(DuckCatalog &catalog);
@@ -120,11 +123,12 @@ private:
 	void CreateDependency(CatalogTransaction transaction, const DependencyInfo &info);
 	void CreateDependencies(CatalogTransaction transaction, const CatalogEntry &object,
 	                        const LogicalDependencyList dependencies);
-	void CreateDependencyInternal(CatalogTransaction transaction, CatalogSet &catalog_set, const CatalogEntryInfo &to,
-	                              const CatalogEntryInfo &from,
-	                              DependencyFlags dependency_type = DependencyFlags::DependencyRegular());
+	using dependency_entry_func_t = const std::function<unique_ptr<DependencyEntry>(
+	    Catalog &catalog, const DependencyReliant &dependent, const DependencySubject &dependency)>;
 
-	using dependency_callback_t = const std::function<void(DependencyCatalogEntry &)>;
+	void CreateDependencyInternal(CatalogTransaction transaction, const DependencyInfo &info, bool dependency);
+
+	using dependency_callback_t = const std::function<void(DependencyEntry &)>;
 	void ScanDependents(CatalogTransaction transaction, const CatalogEntryInfo &info, dependency_callback_t &callback);
 	void ScanDependencies(CatalogTransaction transaction, const CatalogEntryInfo &info,
 	                      dependency_callback_t &callback);
