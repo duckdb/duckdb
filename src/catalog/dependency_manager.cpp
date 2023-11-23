@@ -449,92 +449,92 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	}
 }
 
-// bool AllExportDependenciesWritten(optional_ptr<CatalogTransaction> transaction, CatalogEntry &object,
-//                                  const catalog_entry_vector_t &dependencies, catalog_entry_set_t &exported) {
-//	for (auto &entry : dependencies) {
-//		// This is an entry that needs to be written before 'object' can be written
-//		bool contains = false;
-//		for (auto &to_check : exported) {
-//			LogicalDependency a(entry);
-//			LogicalDependency b(to_check);
+bool AllExportDependenciesWritten(optional_ptr<CatalogTransaction> transaction,
+                                  const catalog_entry_vector_t &dependencies, catalog_entry_set_t &exported) {
+	for (auto &entry : dependencies) {
+		// This is an entry that needs to be written before 'object' can be written
+		bool contains = false;
+		for (auto &to_check : exported) {
+			LogicalDependency a(entry);
+			LogicalDependency b(to_check);
 
-//			if (a == b) {
-//				contains = true;
-//				break;
-//			}
-//			// 'a' not found in exported, check outliers
-//			if (entry.get().type != CatalogType::DEPENDENCY_ENTRY) {
-//				continue;
-//			}
-//			auto &dep = entry.get().Cast<DependencyCatalogEntry>();
-//			auto &dependent = dep.GetLink(transaction);
-//			auto &flags = dependent.Flags();
-//			if (flags.IsOwnership() && !flags.IsBlocking()) {
-//				// 'object' is owned by this entry
-//				// it needs to be written first
-//				contains = true;
-//				break;
-//			}
-//			continue;
-//		}
-//		if (!contains) {
-//			return false;
-//		}
-//		// We do not need to check recursively, if the object is written
-//		// that means that the objects it depends on have also been written
-//	}
-//	return true;
-//}
+			if (a == b) {
+				contains = true;
+				break;
+			}
+			// 'a' not found in exported, check outliers
+			if (entry.get().type != CatalogType::DEPENDENCY_ENTRY) {
+				continue;
+			}
+			auto &dep = entry.get().Cast<DependencyCatalogEntry>();
+			auto &dependent = dep.GetLink(transaction);
+			auto &flags = dependent.Flags();
+			if (flags.IsOwnership() && !flags.IsBlocking()) {
+				// 'object' is owned by this entry
+				// it needs to be written first
+				contains = true;
+				break;
+			}
+			continue;
+		}
+		if (!contains) {
+			return false;
+		}
+		// We do not need to check recursively, if the object is written
+		// that means that the objects it depends on have also been written
+	}
+	return true;
+}
 
-// void AddDependentsToBacklog(stack<reference<CatalogEntry>> &backlog, const catalog_entry_vector_t &dependents) {
-//	catalog_entry_vector_t tables;
-//	for (auto &dependent : dependents) {
-//		backlog.push(dependent);
-//	}
-//}
+void AddDependentsToBacklog(stack<reference<CatalogEntry>> &backlog, const catalog_entry_vector_t &dependents) {
+	catalog_entry_vector_t tables;
+	for (auto &dependent : dependents) {
+		backlog.push(dependent);
+	}
+}
 
-catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTransaction> transaction) {
+catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTransaction> transaction_p) {
 	CatalogEntryOrdering ordering;
-	// auto &entries = ordering.ordered_set;
-	// auto &export_order = ordering.ordered_vector;
+	auto &entries = ordering.ordered_set;
+	auto &export_order = ordering.ordered_vector;
 
-	// stack<reference<CatalogEntry>> backlog;
+	auto &transaction = *transaction_p;
 
-	// auto sets = GetDependencySets(transaction);
-	// for (auto &set_p : sets) {
-	//	auto &set = set_p.get().Cast<DependencySetCatalogEntry>();
-	//	backlog.push(set);
-	//}
+	stack<reference<CatalogEntry>> backlog;
+	dependents.Scan(transaction, [](CatalogEntry &entry) { backlog.push(entry); });
 
-	// while (!backlog.empty()) {
-	//	// As long as we still have unordered entries
-	//	auto &object = backlog.top();
-	//	backlog.pop();
-	//	auto it = std::find_if(entries.begin(), entries.end(), [&](CatalogEntry &to_check_p) {
-	//		return MangledName(to_check_p) == MangledName(object);
-	//	});
-	//	if (it != entries.end()) {
-	//		// This entry has already been written
-	//		continue;
-	//	}
-	//	auto &set = LookupSet(transaction, object);
-	//	auto dependencies = set.GetEntriesThatWeDependOn(transaction);
-	//	auto is_ordered = AllExportDependenciesWritten(transaction, object, dependencies, entries);
-	//	if (!is_ordered) {
-	//		for (auto &dependency : dependencies) {
-	//			backlog.emplace(dependency);
-	//		}
-	//		continue;
-	//	}
-	//	// All dependencies written, we can write this now
-	//	auto insert_result = entries.insert(object);
-	//	(void)insert_result;
-	//	D_ASSERT(insert_result.second);
-	//	auto entry = LookupEntry(transaction, object);
-	//	export_order.push_back(*entry);
-	//	auto dependents = set.GetEntriesThatDependOnUs(transaction);
-	//	AddDependentsToBacklog(backlog, dependents);
-	//}
+	while (!backlog.empty()) {
+		// As long as we still have unordered entries
+		auto &object = backlog.top().Cast<DependencyCatalogEntry>();
+		backlog.pop();
+		auto it = std::find_if(entries.begin(), entries.end(), [&](CatalogEntry &to_check_p) {
+			return MangledName(to_check_p) == MangledName(object);
+		});
+		if (it != entries.end()) {
+			// This entry has already been written
+			continue;
+		}
+
+		auto &info = object.FromInfo();
+		catalog_entry_vector_t dependencies;
+		DependencyCatalogSet dependencies_map(Dependencies(), info);
+		dependencies_map.Scan(transaction, [](CatalogEntry &entry) { dependencies.push_back(entry); }) auto is_ordered =
+		    AllExportDependenciesWritten(transaction, dependencies, entries);
+		if (!is_ordered) {
+			for (auto &dependency : dependencies) {
+				backlog.emplace(dependency);
+			}
+			continue;
+		}
+		// All dependencies written, we can write this now
+		auto insert_result = entries.insert(object);
+		(void)insert_result;
+		D_ASSERT(insert_result.second);
+		auto entry = LookupEntry(transaction, object);
+		export_order.push_back(*entry);
+		auto dependents = set.GetEntriesThatDependOnUs(transaction);
+		AddDependentsToBacklog(backlog, dependents);
+	}
 
 	return std::move(ordering.ordered_vector);
 }
