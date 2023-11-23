@@ -76,7 +76,8 @@ jobs:
       - id: hack-to-backport-duckdb-wasm
         # Default parse script currently returns the input file whenever it doesn't encounter the right field. Patch that with the correct values. To be eventually removed
         run: |
-          diff wasm_matrix.json ./duckdb/.github/config/distribution_matrix.json --ignore-space-change && echo '{"include":[{"duckdb_arch":"wasm_mvp","vcpkg_triplet":"wasm32-emscripten"},{"duckdb_arch":"wasm_eh","vcpkg_triplet":"wasm32-emscripten"},{"duckdb_arch":"wasm_threads","vcpkg_triplet":"wasm32-emscripten"}]}' > wasm_matrix.json
+          diff wasm_matrix.json ./duckdb/.github/config/distribution_matrix.json --ignore-space-change && echo '{"wasm":{"include":[{"duckdb_arch":"wasm_mvp","vcpkg_triplet":"wasm32-emscripten"},{"duckdb_arch":"wasm_eh","vcpkg_triplet":"wasm32-emscripten"},{"duckdb_arch":"wasm_threads","vcpkg_triplet":"wasm32-emscripten"}]}}' > wasm_matrix_input.json
+          python3 ${{ inputs.matrix_parse_script }} --input wasm_matrix_input.json --select_os wasm --output wasm_matrix.json --exclude "${{ inputs.exclude_archs }}" --pretty
 
       - id: set-matrix-linux
         run: |
@@ -309,6 +310,7 @@ jobs:
     name: DuckDB-Wasm
     runs-on: ubuntu-latest
     needs: generate_matrix
+    if: ${{ needs.generate_matrix.outputs.wasm_matrix != '{}' && needs.generate_matrix.outputs.wasm_matrix != '' }}
     strategy:
       matrix: ${{fromJson(needs.generate_matrix.outputs.wasm_matrix)}}
     env:
