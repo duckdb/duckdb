@@ -8,7 +8,9 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
-#include "duckdb/catalog/catalog_entry/dependency_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
+#include "duckdb/catalog/catalog_entry/dependency/dependency_subject_entry.hpp"
+#include "duckdb/catalog/catalog_entry/dependency/dependency_reliant_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/catalog/dependency_catalog_set.hpp"
 
@@ -58,8 +60,8 @@ MangledEntryName DependencyManager::MangleName(const CatalogEntryInfo &info) {
 
 MangledEntryName DependencyManager::MangleName(CatalogEntry &entry) {
 	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
-		auto &dependency_entry = entry.Cast<DependencyCatalogEntry>();
-		return dependency_entry.MangledName();
+		auto &dependency_entry = entry.Cast<DependencyEntry>();
+		return dependency_entry.EntryMangledName();
 	}
 	auto type = entry.type;
 	auto schema = GetSchema(entry);
@@ -69,18 +71,14 @@ MangledEntryName DependencyManager::MangleName(CatalogEntry &entry) {
 	return MangleName(info);
 }
 
-DependencyInfo DependencyInfo::FromDependency(DependencyCatalogEntry &dep) {
-	return DependencyInfo {/*dependent = */ dep.FromInfo(),
-	                       /*dependency = */ dep.EntryInfo(),
-	                       /*dependent_type = */ DependencyType::DEPENDENCY_REGULAR,
-	                       /*dependency_type = */ dep.Type()};
+DependencyInfo DependencyInfo::FromDependency(DependencyEntry &dep) {
+	return DependencyInfo {/*dependent = */ dep.Reliant(),
+	                       /*dependency = */ dep.Subject()};
 }
 
-DependencyInfo DependencyInfo::FromDependent(DependencyCatalogEntry &dep) {
-	return DependencyInfo {/*dependent = */ dep.EntryInfo(),
-	                       /*dependency = */ dep.FromInfo(),
-	                       /*dependent_type = */ dep.Type(),
-	                       /*dependency_type = */ DependencyType::DEPENDENCY_REGULAR};
+DependencyInfo DependencyInfo::FromDependent(DependencyEntry &dep) {
+	return DependencyInfo {/*dependent = */ dep.Reliant(),
+	                       /*dependency = */ dep.Subject()};
 }
 
 // ----------- DEPENDENCY_MANAGER -----------
@@ -116,7 +114,7 @@ void DependencyManager::ScanSetInternal(CatalogTransaction transaction, const Ca
 
 	auto cb = [&](CatalogEntry &other) {
 		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
-		auto &other_entry = other.Cast<DependencyCatalogEntry>();
+		auto &other_entry = other.Cast<DependencyEntry>();
 
 		other_entries.insert(other_entry);
 		callback(other_entry);
@@ -171,12 +169,12 @@ void DependencyManager::RemoveDependency(CatalogTransaction transaction, const D
 	auto &dependency = info.dependency;
 
 	// The dependents of the dependency (target)
-	DependencyCatalogSet dependents(Dependents(), dependency);
+	DependencyCatalogSet dependents(Dependents(), dependency.entry);
 	// The dependencies of the dependent (initiator)
-	DependencyCatalogSet dependencies(Dependencies(), dependent);
+	DependencyCatalogSet dependencies(Dependencies(), dependent.entry);
 
-	auto dependent_mangled = MangledEntryName(dependent);
-	auto dependency_mangled = MangledEntryName(dependency);
+	auto dependent_mangled = MangledEntryName(dependent.entry);
+	auto dependency_mangled = MangledEntryName(dependency.entry);
 
 	auto dependent_p = dependents.GetEntry(transaction, dependent_mangled);
 	if (dependent_p) {
@@ -190,33 +188,33 @@ void DependencyManager::RemoveDependency(CatalogTransaction transaction, const D
 	}
 }
 
-void DependencyManager::CreateDependencyInternal(CatalogTransaction transaction, CatalogSet &catalog_set,
-                                                 const CatalogEntryInfo &to, const CatalogEntryInfo &from,
-                                                 DependencyType type) {
-	DependencyCatalogSet dependents(catalog_set, from);
+void DependencyManager::CreateDependencyInternal(CatalogTransaction transaction, const DependencyInfo &info,
+                                                 bool dependency) {
+	auto &catalog_set = dependency ? Dependencies() : Dependents();
+	auto &from = dependency ? info.dependent.entry : info.dependency.entry;
 
-	auto dependent_p = make_uniq<DependencyCatalogEntry>(catalog, to, from, type);
-	auto &dependent_name = dependent_p->MangledName();
-	auto existing = dependents.GetEntry(transaction, dependent_name);
+	DependencyCatalogSet set(catalog_set, from);
+
+	auto dep = dependency ? make_uniq_base<DependencyEntry, DependencySubjectEntry>(catalog, info)
+	                      : make_uniq_base<DependencyEntry, DependencyReliantEntry>(catalog, info);
+	auto &dep_name = dep->EntryMangledName();
+	auto existing = set.GetEntry(transaction, dep_name);
 	if (existing) {
 		return;
 	}
 
-	D_ASSERT(!StringUtil::CIEquals(dependent_name.name, MangleName(from).name));
+	D_ASSERT(!StringUtil::CIEquals(dep_name.name, MangleName(from).name));
 	if (catalog.IsTemporaryCatalog()) {
-		dependent_p->temporary = true;
+		dep->temporary = true;
 	}
-	dependents.CreateEntry(transaction, dependent_name, std::move(dependent_p));
+	set.CreateEntry(transaction, dep_name, std::move(dep));
 }
 
 void DependencyManager::CreateDependency(CatalogTransaction transaction, const DependencyInfo &info) {
-	auto &dependent = info.dependent;
-	auto &dependency = info.dependency;
-
 	// Create an entry in the dependents map of the object that is the target of the dependency
-	CreateDependencyInternal(transaction, Dependents(), dependent, dependency, info.dependent_type);
+	CreateDependencyInternal(transaction, info, false);
 	// Create an entry in the dependencies map of the object that is targeting another entry
-	CreateDependencyInternal(transaction, Dependencies(), dependency, dependent, info.dependency_type);
+	CreateDependencyInternal(transaction, info, true);
 }
 
 void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &object,
@@ -250,10 +248,9 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies.set) {
 		// Create the dependent and complete the link by creating the dependency as well
-		DependencyInfo info {/*dependent = */ GetLookupProperties(object),
-		                     /*dependency = */ GetLookupProperties(dependency),
-		                     /*dependent_type = */ dependency_type,
-		                     /*dependency_type = */ DependencyType::DEPENDENCY_REGULAR};
+		DependencyInfo info {
+		    /*dependent = */ DependencyReliant {GetLookupProperties(object), dependency_type},
+		    /*dependency = */ DependencySubject {GetLookupProperties(dependency), DependencyType::DEPENDENCY_REGULAR}};
 		CreateDependency(transaction, info);
 	}
 }
@@ -275,12 +272,8 @@ static bool CascadeDrop(bool cascade, DependencyType dependency_type) {
 
 CatalogEntryInfo DependencyManager::GetLookupProperties(CatalogEntry &entry) {
 	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
-		auto &dependency_entry = entry.Cast<DependencyCatalogEntry>();
-
-		auto &schema = dependency_entry.EntrySchema();
-		auto &name = dependency_entry.EntryName();
-		auto type = dependency_entry.EntryType();
-		return CatalogEntryInfo {type, schema, name};
+		auto &dependency_entry = entry.Cast<DependencyEntry>();
+		return dependency_entry.EntryInfo();
 	} else {
 		auto schema = DependencyManager::GetSchema(entry);
 		auto &name = entry.name;
@@ -312,9 +305,9 @@ void DependencyManager::CleanupDependencies(CatalogTransaction transaction, Cata
 
 	auto info = GetLookupProperties(object);
 	ScanDependencies(transaction, info,
-	                 [&](DependencyCatalogEntry &dep) { to_remove.push_back(DependencyInfo::FromDependency(dep)); });
+	                 [&](DependencyEntry &dep) { to_remove.push_back(DependencyInfo::FromDependency(dep)); });
 	ScanDependents(transaction, info,
-	               [&](DependencyCatalogEntry &dep) { to_remove.push_back(DependencyInfo::FromDependent(dep)); });
+	               [&](DependencyEntry &dep) { to_remove.push_back(DependencyInfo::FromDependent(dep)); });
 
 	// Remove the dependency entries
 	for (auto &dep : to_remove) {
@@ -331,15 +324,15 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 	auto info = GetLookupProperties(object);
 	// Check if there are any entries that block the DROP because they still depend on the object
 	catalog_entry_set_t to_drop;
-	ScanDependents(transaction, info, [&](DependencyCatalogEntry &dep) {
+	ScanDependents(transaction, info, [&](DependencyEntry &dep) {
 		// It makes no sense to have a schema depend on anything
-		D_ASSERT(dep.EntryType() != CatalogType::SCHEMA_ENTRY);
+		D_ASSERT(dep.EntryInfo().type != CatalogType::SCHEMA_ENTRY);
 		auto entry = LookupEntry(transaction, dep);
 		if (!entry) {
 			return;
 		}
 
-		if (!CascadeDrop(cascade, dep.Type())) {
+		if (!CascadeDrop(cascade, dep.Reliant().type)) {
 			// no cascade and there are objects that depend on this object: throw error
 			throw DependencyException("Cannot drop entry \"%s\" because there are entries that "
 			                          "depend on it. Use DROP...CASCADE to drop all dependents.",
@@ -366,16 +359,16 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 
 	auto info = GetLookupProperties(old_obj);
 	dependency_set_t owned_objects;
-	ScanDependents(transaction, info, [&](DependencyCatalogEntry &dep) {
+	ScanDependents(transaction, info, [&](DependencyEntry &dep) {
 		// It makes no sense to have a schema depend on anything
-		D_ASSERT(dep.EntryType() != CatalogType::SCHEMA_ENTRY);
+		D_ASSERT(dep.EntryInfo().type != CatalogType::SCHEMA_ENTRY);
 
 		auto entry = LookupEntry(transaction, dep);
 		if (!entry) {
 			return;
 		}
-		if (dep.Type() == DependencyType::DEPENDENCY_OWNS) {
-			owned_objects.insert(Dependency(*entry, dep.Type()));
+		if (dep.Reliant().type == DependencyType::DEPENDENCY_OWNS) {
+			owned_objects.insert(Dependency(*entry, dep.Reliant().type));
 			return;
 		}
 		// conflict: attempting to alter this object but the dependent object still exists
@@ -387,7 +380,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 
 	// Keep old dependencies
 	dependency_set_t dependents;
-	ScanDependencies(transaction, info, [&](DependencyCatalogEntry &dep) {
+	ScanDependencies(transaction, info, [&](DependencyEntry &dep) {
 		auto entry = LookupEntry(transaction, dep);
 		if (!entry) {
 			return;
@@ -396,8 +389,8 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 
 		// Find the dependent entry so we can properly restore the type it has
 		auto old_mangled = MangleName(old_obj);
-		auto &dependent = other_dependents.GetEntry(transaction, old_mangled)->Cast<DependencyCatalogEntry>();
-		dependents.insert(Dependency(*entry, dependent.Type()));
+		auto &dependent = other_dependents.GetEntry(transaction, old_mangled)->Cast<DependencyEntry>();
+		dependents.insert(Dependency(*entry, dependent.Reliant().type));
 	});
 
 	// FIXME: we should update dependencies in the future
@@ -411,10 +404,9 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 
 	for (auto &dep : dependents) {
 		auto &other = dep.entry.get();
-		DependencyInfo info {/*dependent = */ GetLookupProperties(new_obj),
-		                     /*dependency = */ GetLookupProperties(other),
-		                     /*dependent_type = */ dep.dependency_type,
-		                     /*dependency_type = */ DependencyType::DEPENDENCY_REGULAR};
+		DependencyInfo info {
+		    /*dependent = */ DependencyReliant {GetLookupProperties(new_obj), dep.dependency_type},
+		    /*dependency = */ DependencySubject {GetLookupProperties(other), DependencyType::DEPENDENCY_REGULAR}};
 		CreateDependency(transaction, info);
 	}
 
@@ -422,17 +414,15 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	for (auto &object : owned_objects) {
 		auto &entry = object.entry.get();
 		{
-			DependencyInfo info {/*dependent = */ GetLookupProperties(new_obj),
-			                     /*dependency = */ GetLookupProperties(entry),
-			                     /*dependent_type = */ DependencyType::DEPENDENCY_OWNED_BY,
-			                     /*dependency_type = */ DependencyType::DEPENDENCY_REGULAR};
+			DependencyInfo info {
+			    /*dependent = */ DependencyReliant {GetLookupProperties(new_obj), DependencyType::DEPENDENCY_OWNED_BY},
+			    /*dependency = */ DependencySubject {GetLookupProperties(entry), DependencyType::DEPENDENCY_REGULAR}};
 			CreateDependency(transaction, info);
 		}
 		{
-			DependencyInfo info {/*dependent = */ GetLookupProperties(entry),
-			                     /*dependency = */ GetLookupProperties(new_obj),
-			                     /*dependent_type = */ DependencyType::DEPENDENCY_OWNS,
-			                     /*dependency_type = */ DependencyType::DEPENDENCY_REGULAR};
+			DependencyInfo info {
+			    /*dependent = */ DependencyReliant {GetLookupProperties(entry), DependencyType::DEPENDENCY_OWNS},
+			    /*dependency = */ DependencySubject {GetLookupProperties(new_obj), DependencyType::DEPENDENCY_REGULAR}};
 			CreateDependency(transaction, info);
 		}
 	}
@@ -454,13 +444,13 @@ void DependencyManager::Scan(ClientContext &context,
 	for (auto &entry : entries) {
 		auto entry_info = GetLookupProperties(entry);
 		// Scan all the dependents of the entry
-		ScanDependents(transaction, entry_info, [&](DependencyCatalogEntry &dependent) {
+		ScanDependents(transaction, entry_info, [&](DependencyEntry &dependent) {
 			auto dep = LookupEntry(transaction, dependent);
 			if (!dep) {
 				return;
 			}
 			auto &dependent_entry = *dep;
-			callback(entry, dependent_entry, dependent.Type());
+			callback(entry, dependent_entry, dependent.Reliant().type);
 		});
 	}
 }
@@ -472,16 +462,16 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 
 	// If the owner is already owned by something else, throw an error
 	auto owner_info = GetLookupProperties(owner);
-	ScanDependents(transaction, owner_info, [&](DependencyCatalogEntry &dep) {
-		if (dep.Type() == DependencyType::DEPENDENCY_OWNED_BY) {
-			throw DependencyException(owner.name + " already owned by " + dep.EntryName());
+	ScanDependents(transaction, owner_info, [&](DependencyEntry &dep) {
+		if (dep.Reliant().type == DependencyType::DEPENDENCY_OWNED_BY) {
+			throw DependencyException(owner.name + " already owned by " + dep.EntryInfo().name);
 		}
 	});
 
 	// If the entry is already owned, throw an error
 	auto entry_info = GetLookupProperties(entry);
-	ScanDependents(transaction, entry_info, [&](DependencyCatalogEntry &other) {
-		auto dependency_type = other.Type();
+	ScanDependents(transaction, entry_info, [&](DependencyEntry &other) {
+		auto dependency_type = other.Reliant().type;
 
 		auto dependent_entry = LookupEntry(transaction, other);
 		if (!dependent_entry) {
@@ -503,17 +493,15 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 		}
 	});
 	{
-		DependencyInfo info {/*dependent = */ GetLookupProperties(owner),
-		                     /*dependency = */ GetLookupProperties(entry),
-		                     /*dependent_type = */ DependencyType::DEPENDENCY_OWNED_BY,
-		                     /*dependency_type = */ DependencyType::DEPENDENCY_REGULAR};
+		DependencyInfo info {
+		    /*dependent = */ DependencyReliant {GetLookupProperties(owner), DependencyType::DEPENDENCY_OWNED_BY},
+		    /*dependency = */ DependencySubject {GetLookupProperties(entry), DependencyType::DEPENDENCY_REGULAR}};
 		CreateDependency(transaction, info);
 	}
 	{
-		DependencyInfo info {/*dependent = */ GetLookupProperties(entry),
-		                     /*dependency = */ GetLookupProperties(owner),
-		                     /*dependent_type = */ DependencyType::DEPENDENCY_OWNS,
-		                     /*dependency_type = */ DependencyType::DEPENDENCY_REGULAR};
+		DependencyInfo info {
+		    /*dependent = */ DependencyReliant {GetLookupProperties(entry), DependencyType::DEPENDENCY_OWNS},
+		    /*dependency = */ DependencySubject {GetLookupProperties(owner), DependencyType::DEPENDENCY_REGULAR}};
 		CreateDependency(transaction, info);
 	}
 }

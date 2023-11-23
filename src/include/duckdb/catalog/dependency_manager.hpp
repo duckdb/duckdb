@@ -20,7 +20,7 @@ namespace duckdb {
 class DuckCatalog;
 class ClientContext;
 class DependencyList;
-class DependencyCatalogEntry;
+class DependencyEntry;
 class DependencySetCatalogEntry;
 
 struct CatalogEntryInfo {
@@ -29,19 +29,28 @@ struct CatalogEntryInfo {
 	string name;
 };
 
+// The subject of this dependency
+struct DependencySubject {
+	CatalogEntryInfo entry;
+	//! The type of dependency this is (e.g, ownership)
+	DependencyType type;
+};
+
+// The entry that relies on the other entry
+struct DependencyReliant {
+	CatalogEntryInfo entry;
+	//! The type of dependency this is (e.g, blocking, non-blocking, ownership)
+	DependencyType type;
+};
+
 struct DependencyInfo {
 public:
-	static DependencyInfo FromDependency(DependencyCatalogEntry &dep);
-	static DependencyInfo FromDependent(DependencyCatalogEntry &dep);
+	static DependencyInfo FromDependency(DependencyEntry &dep);
+	static DependencyInfo FromDependent(DependencyEntry &dep);
 
 public:
-	//! The entry establishing the dependency
-	CatalogEntryInfo dependent;
-	//! The entry being targeted
-	CatalogEntryInfo dependency;
-
-	DependencyType dependent_type;
-	DependencyType dependency_type;
+	DependencyReliant dependent;
+	DependencySubject dependency;
 };
 
 struct MangledEntryName {
@@ -104,11 +113,12 @@ private:
 private:
 	void RemoveDependency(CatalogTransaction transaction, const DependencyInfo &info);
 	void CreateDependency(CatalogTransaction transaction, const DependencyInfo &info);
-	void CreateDependencyInternal(CatalogTransaction transaction, CatalogSet &catalog_set, const CatalogEntryInfo &to,
-	                              const CatalogEntryInfo &from,
-	                              DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
+	using dependency_entry_func_t = const std::function<unique_ptr<DependencyEntry>(
+	    Catalog &catalog, const DependencyReliant &dependent, const DependencySubject &dependency)>;
 
-	using dependency_callback_t = const std::function<void(DependencyCatalogEntry &)>;
+	void CreateDependencyInternal(CatalogTransaction transaction, const DependencyInfo &info, bool dependency);
+
+	using dependency_callback_t = const std::function<void(DependencyEntry &)>;
 	void ScanDependents(CatalogTransaction transaction, const CatalogEntryInfo &info, dependency_callback_t &callback);
 	void ScanDependencies(CatalogTransaction transaction, const CatalogEntryInfo &info,
 	                      dependency_callback_t &callback);

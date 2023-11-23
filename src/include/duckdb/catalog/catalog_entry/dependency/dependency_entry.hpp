@@ -28,35 +28,37 @@ class DependencySetCatalogEntry;
 //! Resembles a connection between an object and the CatalogEntry that can be retrieved from the Catalog using the
 //! identifiers listed here
 
-class DependencyCatalogEntry : public InCatalogEntry {
+enum class DependencyEntryType : uint8_t { SUBJECT, RELIANT };
+
+class DependencyEntry : public InCatalogEntry {
 public:
-	DependencyCatalogEntry(Catalog &catalog, const CatalogEntryInfo &entry, const CatalogEntryInfo &from,
-	                       DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR);
-	~DependencyCatalogEntry() override;
+	~DependencyEntry() override;
+
+protected:
+	DependencyEntry(Catalog &catalog, DependencyEntryType type, const MangledDependencyName &name,
+	                const DependencyInfo &info);
 
 public:
-	const MangledEntryName &MangledName() const;
-	CatalogType EntryType() const;
-	const string &EntrySchema() const;
-	const string &EntryName() const;
-	const CatalogEntryInfo &EntryInfo() const;
+	const MangledEntryName &DependencyMangledName() const;
+	const DependencySubject &Subject() const;
 
-	const MangledEntryName &FromMangledName() const;
-	CatalogType FromType() const;
-	const string &FromSchema() const;
-	const string &FromName() const;
-	const CatalogEntryInfo &FromInfo() const;
+	const MangledEntryName &DependentMangledName() const;
+	const DependencyReliant &Reliant() const;
 
-	DependencyType Type() const;
+	virtual const CatalogEntryInfo &EntryInfo() const = 0;
+	virtual const MangledEntryName &EntryMangledName() const = 0;
+
+public:
+	DependencyEntryType Side() const;
+
+protected:
+	const MangledEntryName dependent_name;
+	const MangledEntryName dependency_name;
+	const DependencyReliant dependent;
+	const DependencySubject dependency;
 
 private:
-	const MangledEntryName mangled_name;
-	const CatalogEntryInfo entry;
-
-	const MangledEntryName from_mangled_name;
-	const CatalogEntryInfo from;
-
-	DependencyType dependency_type;
+	DependencyEntryType side;
 };
 
 } // namespace duckdb
