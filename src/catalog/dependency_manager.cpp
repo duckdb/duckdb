@@ -385,12 +385,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		if (!entry) {
 			return;
 		}
-		DependencyCatalogSet other_dependents(Dependents(), dep.EntryInfo());
-
-		// Find the dependent entry so we can properly restore the type it has
-		auto old_mangled = MangleName(old_obj);
-		auto &dependent = other_dependents.GetEntry(transaction, old_mangled)->Cast<DependencyEntry>();
-		dependents.insert(Dependency(*entry, dependent.Reliant().type));
+		dependents.insert(Dependency(*entry, dep.Reliant().type));
 	});
 
 	// FIXME: we should update dependencies in the future
