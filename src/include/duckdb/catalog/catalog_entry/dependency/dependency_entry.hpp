@@ -47,6 +47,8 @@ public:
 
 	virtual const CatalogEntryInfo &EntryInfo() const = 0;
 	virtual const MangledEntryName &EntryMangledName() const = 0;
+	virtual const CatalogEntryInfo &SourceInfo() const = 0;
+	virtual const MangledEntryName &SourceMangledName() const = 0;
 
 public:
 	DependencyEntryType Side() const;

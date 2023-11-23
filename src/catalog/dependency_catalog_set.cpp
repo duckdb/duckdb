@@ -33,8 +33,7 @@ void DependencyCatalogSet::Scan(CatalogTransaction transaction, const std::funct
 	    transaction,
 	    [&](CatalogEntry &entry) {
 		    auto &dep = entry.Cast<DependencyEntry>();
-		    auto &from =
-		        dep.Side() == DependencyEntryType::SUBJECT ? dep.DependentMangledName() : dep.DependencyMangledName();
+		    auto &from = dep.SourceMangledName();
 		    if (!StringUtil::CIEquals(from.name, mangled_name.name)) {
 			    return;
 		    }
