@@ -63,6 +63,7 @@ public:
 	void DropEntry(ClientContext &context, DropInfo &info) override;
 	optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
 	SimilarCatalogEntry GetSimilarEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
+	void ScanAll(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback);
 
 	void Verify(Catalog &catalog) override;
 

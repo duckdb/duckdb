@@ -296,6 +296,9 @@ CatalogEntryInfo DependencyManager::GetLookupProperties(const CatalogEntry &entr
 }
 
 optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency) {
+	if (dependency.type != CatalogType::DEPENDENCY_ENTRY) {
+		return &dependency;
+	}
 	auto info = GetLookupProperties(dependency);
 
 	auto &type = info.type;
@@ -427,6 +430,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 
 bool AllExportDependenciesWritten(const catalog_entry_vector_t &dependencies, catalog_entry_set_t &exported) {
 	for (auto &entry : dependencies) {
+		auto &dep = entry.get().Cast<DependencyEntry>();
 		// This is an entry that needs to be written before 'object' can be written
 		bool contains = false;
 		for (auto &to_check : exported) {
@@ -437,7 +441,6 @@ bool AllExportDependenciesWritten(const catalog_entry_vector_t &dependencies, ca
 				contains = true;
 				break;
 			}
-			auto &dep = entry.get().Cast<DependencyEntry>();
 			auto &flags = dep.Reliant().flags;
 			if (flags.IsOwnership() && !flags.IsBlocking()) {
 				// 'object' is owned by this entry
@@ -464,6 +467,7 @@ void AddDependentsToBacklog(stack<reference<CatalogEntry>> &backlog, const catal
 }
 
 catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTransaction> transaction_p) {
+	auto all_entries = catalog.GetNonSystemEntries(*transaction_p);
 	CatalogEntryOrdering ordering;
 	auto &entries = ordering.ordered_set;
 	auto &export_order = ordering.ordered_vector;
@@ -471,39 +475,50 @@ catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTra
 	auto &transaction = *transaction_p;
 
 	stack<reference<CatalogEntry>> backlog;
-	dependents.Scan(transaction, [&backlog](CatalogEntry &entry) { backlog.push(entry); });
+	for (auto &obj : all_entries) {
+		if (obj.get().type == CatalogType::SCHEMA_ENTRY) {
+			export_order.push_back(obj);
+			entries.insert(obj);
+			continue;
+		}
+		backlog.push(obj);
+	}
 
 	while (!backlog.empty()) {
 		// As long as we still have unordered entries
-		auto &object = backlog.top().get().Cast<DependencyEntry>();
+		auto &object = backlog.top();
 		backlog.pop();
-		auto it = std::find_if(entries.begin(), entries.end(), [&](CatalogEntry &to_check_p) {
-			auto &to_check = to_check_p.Cast<DependencyEntry>();
-			return to_check_p->EntryInfo() == object.EntryInfo();
+		const auto info = GetLookupProperties(object);
+		auto it = std::find_if(entries.begin(), entries.end(), [&](CatalogEntry &to_check) {
+			const auto other_info = GetLookupProperties(to_check);
+			return info == other_info;
 		});
 		if (it != entries.end()) {
 			// This entry has already been written
 			continue;
 		}
 
-		auto &info = object.FromInfo();
 		catalog_entry_vector_t dependencies;
 		DependencyCatalogSet dependencies_map(Dependencies(), info);
-		dependencies_map.Scan(transaction, [](CatalogEntry &entry) { dependencies.push_back(entry); });
-		AllExportDependenciesWritten(dependencies, entries);
+		dependencies_map.Scan(transaction, [&dependencies](CatalogEntry &entry) { dependencies.push_back(entry); });
+
+		bool is_ordered = AllExportDependenciesWritten(dependencies, entries);
 		if (!is_ordered) {
 			for (auto &dependency : dependencies) {
 				backlog.emplace(dependency);
 			}
 			continue;
 		}
+
 		// All dependencies written, we can write this now
 		auto insert_result = entries.insert(object);
 		(void)insert_result;
 		D_ASSERT(insert_result.second);
 		auto entry = LookupEntry(transaction, object);
 		export_order.push_back(*entry);
-		auto dependents = set.GetEntriesThatDependOnUs(transaction);
+		catalog_entry_vector_t dependents;
+		DependencyCatalogSet dependents_map(Dependents(), info);
+		dependents_map.Scan(transaction, [&dependents](CatalogEntry &entry) { dependents.push_back(entry); });
 		AddDependentsToBacklog(backlog, dependents);
 	}
 
@@ -548,7 +563,7 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 	const auto mangled_owner_name = MangleName(owner_info);
 	ScanDependents(transaction, owner_info, [&](DependencyEntry &dep) {
 		if (dep.Reliant().flags.IsOwned()) {
-			throw DependencyException(owner.name + " already owned by " + dep.EntryName());
+			throw DependencyException(owner.name + " already owned by " + dep.EntryInfo().name);
 		}
 	});
 
@@ -557,19 +572,19 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 	ScanDependents(transaction, entry_info, [&](DependencyEntry &other) {
 		auto flags = other.Reliant().flags;
 
-		if (other.MangledName() != mangled_owner_name) {
+		if (other.EntryMangledName() != mangled_owner_name) {
 			// FIXME: this is much too broad, we should create a function to check for recursive dependencies instead.
-			throw DependencyException(entry.name + " already depends on " + other.EntryName());
+			throw DependencyException(entry.name + " already depends on " + other.EntryInfo().name);
 		}
 
 		if (flags.IsOwned()) {
-			if (other.MangledName() == mangled_owner_name) {
+			if (other.EntryMangledName() == mangled_owner_name) {
 				return;
 			}
-			throw DependencyException(entry.name + " already depends on " + other.EntryName());
+			throw DependencyException(entry.name + " already depends on " + other.EntryInfo().name);
 		} else if (flags.IsOwnership()) {
 			// This entry is the owner of another entry
-			if (other.MangledName() != mangled_owner_name) {
+			if (other.EntryMangledName() != mangled_owner_name) {
 				return;
 			}
 			throw DependencyException("%s already owns %s. Can not have circular dependencies.", entry.name,

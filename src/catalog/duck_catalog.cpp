@@ -106,9 +106,39 @@ void DuckCatalog::DropSchema(ClientContext &context, DropInfo &info) {
 	DropSchema(GetCatalogTransaction(context), info);
 }
 
+catalog_entry_vector_t DuckCatalog::GetNonSystemEntries(CatalogTransaction transaction) {
+	catalog_entry_vector_t all_entries;
+	catalog_entry_vector_t schema_entries;
+	ScanSchemas(transaction, [&schema_entries, &all_entries](SchemaCatalogEntry &schema) {
+		if (schema.internal && schema.name != DEFAULT_SCHEMA) {
+			return;
+		}
+		all_entries.push_back(schema);
+		schema_entries.push_back(schema);
+	});
+
+	for (auto &schema_p : schema_entries) {
+		auto &schema = schema_p.get().Cast<DuckSchemaEntry>();
+		schema.ScanAll(transaction, [&all_entries](CatalogEntry &entry) {
+			if (entry.internal || entry.temporary) {
+				return;
+			}
+			all_entries.push_back(entry);
+		});
+	}
+	return all_entries;
+}
+
+void DuckCatalog::ScanSchemas(CatalogTransaction transaction, std::function<void(SchemaCatalogEntry &)> callback) {
+	schemas->Scan(transaction, [&](CatalogEntry &entry) { callback(entry.Cast<SchemaCatalogEntry>()); });
+}
+
 void DuckCatalog::ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) {
-	schemas->Scan(GetCatalogTransaction(context),
-	              [&](CatalogEntry &entry) { callback(entry.Cast<SchemaCatalogEntry>()); });
+	ScanSchemas(GetCatalogTransaction(context), callback);
+}
+
+void DuckCatalog::ScanSchemas(std::function<void(SchemaCatalogEntry &)> callback) {
+	schemas->Scan([&](CatalogEntry &entry) { callback(entry.Cast<SchemaCatalogEntry>()); });
 }
 
 optional_ptr<SchemaCatalogEntry> DuckCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name,

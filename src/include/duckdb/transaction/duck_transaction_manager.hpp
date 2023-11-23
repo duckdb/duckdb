@@ -41,6 +41,14 @@ public:
 		return lowest_active_start;
 	}
 
+	transaction_t CurrentStartTimestamp() {
+		return current_start_timestamp;
+	}
+
+	transaction_t CurrentTransactionId() {
+		return current_transaction_id;
+	}
+
 	bool IsDuckTransactionManager() override {
 		return true;
 	}

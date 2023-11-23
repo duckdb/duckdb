@@ -268,6 +268,16 @@ void DuckSchemaEntry::Scan(CatalogType type, const std::function<void(CatalogEnt
 	set.Scan(callback);
 }
 
+void DuckSchemaEntry::ScanAll(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback) {
+	static const CatalogType sets[] = {
+	    CatalogType::TABLE_ENTRY,         CatalogType::INDEX_ENTRY,           CatalogType::TABLE_MACRO_ENTRY,
+	    CatalogType::COPY_FUNCTION_ENTRY, CatalogType::PRAGMA_FUNCTION_ENTRY, CatalogType::MACRO_ENTRY,
+	    CatalogType::SEQUENCE_ENTRY,      CatalogType::COLLATION_ENTRY,       CatalogType::TYPE_ENTRY};
+	for (auto &set : sets) {
+		GetCatalogSet(set).Scan(transaction, callback);
+	}
+}
+
 void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 	auto &set = GetCatalogSet(info.type);
 
