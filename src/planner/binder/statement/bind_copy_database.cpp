@@ -16,13 +16,14 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/operator/logical_dummy_scan.hpp"
+#include "duckdb/planner/operator/logical_expression_get.hpp"
 
 namespace duckdb {
 
-unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(CopyDatabaseStatement &stmt) {
-	auto &from_database = Catalog::GetCatalog(context, stmt.from_database);
-	auto &to_database = Catalog::GetCatalog(context, stmt.to_database);
-
+unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(CopyDatabaseStatement &stmt, Catalog &from_database,
+                                                           Catalog &to_database) {
 	auto from_schemas = from_database.GetSchemas(context);
 
 	ExportEntries entries;
@@ -100,9 +101,8 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(CopyDatabaseStatement
 	return make_uniq<LogicalCopyDatabase>(std::move(info));
 }
 
-unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(CopyDatabaseStatement &stmt) {
-	auto &from_database = Catalog::GetCatalog(context, stmt.from_database);
-
+unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(CopyDatabaseStatement &stmt, Catalog &from_database,
+                                                         Catalog &to_database) {
 	auto from_schemas = from_database.GetSchemas(context);
 
 	ExportEntries entries;
@@ -142,6 +142,16 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(CopyDatabaseStatement &
 			result = std::move(insert_plan);
 		}
 	}
+	if (!result) {
+		vector<LogicalType> result_types;
+		result_types.push_back(LogicalType::BIGINT);
+		vector<unique_ptr<Expression>> expression_list;
+		expression_list.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(0)));
+		vector<vector<unique_ptr<Expression>>> expressions;
+		expressions.push_back(std::move(expression_list));
+		result = make_uniq<LogicalExpressionGet>(GenerateTableIndex(), std::move(result_types), std::move(expressions));
+		result->children.push_back(make_uniq<LogicalDummyScan>(GenerateTableIndex()));
+	}
 	return result;
 }
 
@@ -149,21 +159,28 @@ BoundStatement Binder::Bind(CopyDatabaseStatement &stmt) {
 	BoundStatement result;
 
 	unique_ptr<LogicalOperator> plan;
+	auto &from_database = Catalog::GetCatalog(context, stmt.from_database);
+	auto &to_database = Catalog::GetCatalog(context, stmt.to_database);
+	if (&from_database == &to_database) {
+		throw BinderException("Cannot copy from \"%s\" to \"%s\" - FROM and TO databases are the same",
+		                      stmt.from_database, stmt.to_database);
+	}
 	if (stmt.copy_type == CopyDatabaseType::COPY_SCHEMA) {
 		result.types = {LogicalType::BOOLEAN};
 		result.names = {"Success"};
 
-		plan = BindCopyDatabaseSchema(stmt);
+		plan = BindCopyDatabaseSchema(stmt, from_database, to_database);
 	} else {
 		result.types = {LogicalType::BIGINT};
 		result.names = {"Count"};
 
-		plan = BindCopyDatabaseData(stmt);
+		plan = BindCopyDatabaseData(stmt, from_database, to_database);
 	}
 
 	result.plan = std::move(plan);
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::NOTHING;
+	properties.modified_databases.insert(stmt.to_database);
 	return result;
 }
 
