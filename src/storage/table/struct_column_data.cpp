@@ -239,11 +239,11 @@ struct StructColumnCheckpointState : public ColumnCheckpointState {
 
 public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
-		auto stats = StructStats::CreateEmpty(column_data.type);
+		D_ASSERT(global_stats);
 		for (idx_t i = 0; i < child_states.size(); i++) {
-			StructStats::SetChildStats(stats, i, child_states[i]->GetStatistics());
+			StructStats::SetChildStats(*global_stats, i, child_states[i]->GetStatistics());
 		}
-		return stats.ToUnique();
+		return std::move(global_stats);
 	}
 
 	void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) override {

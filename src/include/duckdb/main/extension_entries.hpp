@@ -213,6 +213,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"http_retry_backoff", "httpfs"},
     {"http_retry_wait_ms", "httpfs"},
     {"http_timeout", "httpfs"},
+    {"http_keep_alive", "httpfs"},
     {"pg_debug_show_queries", "postgres_scanner"},
     {"pg_use_binary_copy", "postgres_scanner"},
     {"pg_experimental_filter_pushdown", "postgres_scanner"},

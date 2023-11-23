@@ -23,7 +23,7 @@ bool JSONFileHandle::IsOpen() const {
 }
 
 void JSONFileHandle::Close() {
-	if (IsOpen() && file_handle->OnDiskFile()) {
+	if (IsOpen() && !file_handle->IsPipe()) {
 		file_handle->Close();
 		file_handle = nullptr;
 	}
