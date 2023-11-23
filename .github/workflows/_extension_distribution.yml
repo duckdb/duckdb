@@ -76,7 +76,7 @@ jobs:
       - id: hack-to-backport-duckdb-wasm
         # Default parse script currently returns the input file whenever it doesn't encounter the right field. Patch that with the correct values. To be eventually removed
         run: |
-          diff wasm_matrix.json ./duckdb/.github/config/distribution_matrix.json --ignore-space-change && echo '{"include":[{"duckdb_arch":"wasm_mvp","vcpkg_triplet":"wasm32-emscripten"},{"duckdb_arch":"wasm_eh","vcpkg_triplet":"wasm32-emscripten"}]}' > wasm_matrix.json
+          diff wasm_matrix.json ./duckdb/.github/config/distribution_matrix.json --ignore-space-change && echo '{"include":[{"duckdb_arch":"wasm_mvp","vcpkg_triplet":"wasm32-emscripten"},{"duckdb_arch":"wasm_eh","vcpkg_triplet":"wasm32-emscripten"},{"duckdb_arch":"wasm_threads","vcpkg_triplet":"wasm32-emscripten"}]}' > wasm_matrix.json
 
       - id: set-matrix-linux
         run: |
