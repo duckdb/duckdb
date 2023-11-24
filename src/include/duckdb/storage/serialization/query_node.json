@@ -96,6 +96,12 @@
         "id": 202,
         "name": "right",
         "type": "QueryNode*"
+      },
+      {
+        "id": 203,
+        "name": "setop_all",
+        "type": "bool",
+        "default": "true"
       }
     ]
   },

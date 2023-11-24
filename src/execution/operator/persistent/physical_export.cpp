@@ -99,6 +99,42 @@ unique_ptr<GlobalSourceState> PhysicalExport::GetGlobalSourceState(ClientContext
 	return make_uniq<ExportSourceState>();
 }
 
+void PhysicalExport::ExtractEntries(ClientContext &context, vector<reference<SchemaCatalogEntry>> &schema_list,
+                                    ExportEntries &result) {
+	for (auto &schema_p : schema_list) {
+		auto &schema = schema_p.get();
+		if (!schema.internal) {
+			result.schemas.push_back(schema);
+		}
+		schema.Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			if (entry.type != CatalogType::TABLE_ENTRY) {
+				result.views.push_back(entry);
+			}
+			if (entry.type == CatalogType::TABLE_ENTRY) {
+				result.tables.push_back(entry);
+			}
+		});
+		schema.Scan(context, CatalogType::SEQUENCE_ENTRY,
+		            [&](CatalogEntry &entry) { result.sequences.push_back(entry); });
+		schema.Scan(context, CatalogType::TYPE_ENTRY,
+		            [&](CatalogEntry &entry) { result.custom_types.push_back(entry); });
+		schema.Scan(context, CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) { result.indexes.push_back(entry); });
+		schema.Scan(context, CatalogType::MACRO_ENTRY, [&](CatalogEntry &entry) {
+			if (!entry.internal && entry.type == CatalogType::MACRO_ENTRY) {
+				result.macros.push_back(entry);
+			}
+		});
+		schema.Scan(context, CatalogType::TABLE_MACRO_ENTRY, [&](CatalogEntry &entry) {
+			if (!entry.internal && entry.type == CatalogType::TABLE_MACRO_ENTRY) {
+				result.macros.push_back(entry);
+			}
+		});
+	}
+}
+
 static void AddEntries(catalog_entry_vector_t &all_entries, catalog_entry_vector_t &to_add) {
 	all_entries.reserve(all_entries.size() + to_add.size());
 	for (auto &entry : to_add) {
@@ -117,39 +153,9 @@ catalog_entry_vector_t GetNaiveExportOrder(ClientContext &context, const string 
 	catalog_entry_vector_t macros;
 
 	// gather all catalog types to export
+	ExportEntries entries;
 	auto schema_list = Catalog::GetSchemas(context, catalog);
-	for (auto &schema_p : schema_list) {
-		auto &schema = schema_p.get();
-		if (!schema.internal) {
-			schemas.push_back(schema);
-		}
-		schema.Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
-			if (entry.internal) {
-				return;
-			}
-			if (entry.type == CatalogType::TABLE_ENTRY) {
-				auto &table_entry = entry.Cast<TableCatalogEntry>();
-				tables.push_back(table_entry);
-			} else if (entry.type == CatalogType::VIEW_ENTRY) {
-				views.push_back(entry);
-			} else {
-				throw InternalException("Encountered an unrecognized entry type in GetNaiveExportOrder");
-			}
-		});
-		schema.Scan(context, CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry &entry) { sequences.push_back(entry); });
-		schema.Scan(context, CatalogType::TYPE_ENTRY, [&](CatalogEntry &entry) { custom_types.push_back(entry); });
-		schema.Scan(context, CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) { indexes.push_back(entry); });
-		schema.Scan(context, CatalogType::MACRO_ENTRY, [&](CatalogEntry &entry) {
-			if (!entry.internal && entry.type == CatalogType::MACRO_ENTRY) {
-				macros.push_back(entry);
-			}
-		});
-		schema.Scan(context, CatalogType::TABLE_MACRO_ENTRY, [&](CatalogEntry &entry) {
-			if (!entry.internal && entry.type == CatalogType::TABLE_MACRO_ENTRY) {
-				macros.push_back(entry);
-			}
-		});
-	}
+	PhysicalExport::ExtractEntries(context, schema_list, entries);
 
 	ReorderTableEntries(tables);
 
@@ -159,13 +165,13 @@ catalog_entry_vector_t GetNaiveExportOrder(ClientContext &context, const string 
 	});
 
 	catalog_entry_vector_t catalog_entries;
-	AddEntries(catalog_entries, schemas);
-	AddEntries(catalog_entries, custom_types);
-	AddEntries(catalog_entries, sequences);
-	AddEntries(catalog_entries, tables);
-	AddEntries(catalog_entries, views);
-	AddEntries(catalog_entries, indexes);
-	AddEntries(catalog_entries, macros);
+	AddEntries(catalog_entries, entries.schemas);
+	AddEntries(catalog_entries, entries.custom_types);
+	AddEntries(catalog_entries, entries.sequences);
+	AddEntries(catalog_entries, entries.tables);
+	AddEntries(catalog_entries, entries.views);
+	AddEntries(catalog_entries, entries.indexes);
+	AddEntries(catalog_entries, entries.macros);
 	return catalog_entries;
 }
 

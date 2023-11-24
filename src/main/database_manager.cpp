@@ -98,8 +98,19 @@ void DatabaseManager::EraseDatabasePath(const string &path) {
 	}
 }
 
-void DatabaseManager::GetDbType(ClientContext &context, string &db_type, AttachInfo &info, const DBConfig &config,
-                                const string &unrecognized_option) {
+void DatabaseManager::GetDatabaseType(ClientContext &context, string &db_type, AttachInfo &info, const DBConfig &config,
+                                      const string &unrecognized_option) {
+
+	// duckdb database file
+	if (StringUtil::CIEquals(db_type, "DUCKDB")) {
+		db_type = "";
+
+		// DUCKDB format does not allow unrecognized options
+		if (!unrecognized_option.empty()) {
+			throw BinderException("Unrecognized option for attach \"%s\"", unrecognized_option);
+		}
+		return;
+	}
 
 	lock_guard<mutex> write_lock(db_paths_lock);
 
@@ -114,13 +125,7 @@ void DatabaseManager::GetDbType(ClientContext &context, string &db_type, AttachI
 
 	// try to extract database type from path
 	if (db_type.empty()) {
-		auto path_and_type = DBPathAndType::Parse(info.path, config);
-		db_type = path_and_type.type;
-		info.path = path_and_type.path;
-	}
-
-	if (db_type.empty() && !unrecognized_option.empty()) {
-		throw BinderException("Unrecognized option for attach \"%s\"", unrecognized_option);
+		DBPathAndType::CheckMagicBytes(info.path, db_type, config);
 	}
 
 	// if we are loading a database type from an extension - check if that extension is loaded
@@ -131,22 +136,13 @@ void DatabaseManager::GetDbType(ClientContext &context, string &db_type, AttachI
 			// attempted only once respecting the auto-loading options
 			ExtensionHelper::LoadExternalExtension(context, db_type);
 		}
-	}
-}
-
-optional_ptr<AttachedDatabase> DatabaseManager::GetDatabaseFromPath(ClientContext &context, const string &path) {
-
-	if (path.empty() || path == IN_MEMORY_PATH) {
-		return nullptr;
+		return;
 	}
 
-	lock_guard<mutex> write_lock(db_paths_lock);
-	auto db_it = db_paths.find(path);
-	if (db_it != db_paths.end()) {
-		return GetDatabase(context, db_it->second);
+	// DUCKDB format does not allow unrecognized options
+	if (!unrecognized_option.empty()) {
+		throw BinderException("Unrecognized option for attach \"%s\"", unrecognized_option);
 	}
-
-	return nullptr;
 }
 
 const string &DatabaseManager::GetDefaultDatabase(ClientContext &context) {

@@ -10,6 +10,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/database_path_and_type.hpp"
 
 namespace duckdb {
 
