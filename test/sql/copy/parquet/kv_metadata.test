@@ -21,7 +21,7 @@ SELECT * FROM '__TEST_DIR__/kv_metadata_test.parquet'
 
 # Test decoding blobs
 query II
-SELECT key::VARCHAR, decode(value) FROM parquet_kv_metadata('__TEST_DIR__/kv_metadata_test.parquet') WHERE key = 'quz';
+SELECT key::VARCHAR, decode(value) FROM parquet_file_metadata('__TEST_DIR__/kv_metadata_test.parquet') WHERE key = 'quz';
 ----
 quz	öäå
 
@@ -36,19 +36,18 @@ statement ok
 COPY (SELECT 3, 'baz') TO '__TEST_DIR__/kv_metadata_test3.parquet' (FORMAT PARQUET);
 
 query II
-SELECT key::VARCHAR, value::VARCHAR FROM parquet_kv_metadata('__TEST_DIR__/kv_metadata_test3.parquet');
+SELECT key::VARCHAR, value::VARCHAR FROM parquet_file_metadata('__TEST_DIR__/kv_metadata_test3.parquet');
 ----
 
 # Test globbing
 statement ok
 COPY (SELECT 2, 'bar') TO  '__TEST_DIR__/kv_metadata_test2.parquet' (FORMAT PARQUET, KV_METADATA {a: 'b', c: 'd'});
 
-query II rowsort
-SELECT key::VARCHAR, value::VARCHAR FROM parquet_kv_metadata('__TEST_DIR__/kv_metadata_tes*');
+query III
+SELECT replace(file_name, '__TEST_DIR__/', '') AS file_name, key::VARCHAR, value::VARCHAR FROM parquet_file_metadata('__TEST_DIR__/kv_metadata_tes*') ORDER BY 1, 2;
 ----
-a	b
-baz	42
-c	d
-foo	bar
-quz	\xC3\xB6\xC3\xA4\xC3\xA5
-
+kv_metadata_test.parquet	baz	42
+kv_metadata_test.parquet	foo	bar
+kv_metadata_test.parquet	quz	\xC3\xB6\xC3\xA4\xC3\xA5
+kv_metadata_test2.parquet	a	b
+kv_metadata_test2.parquet	c	d
