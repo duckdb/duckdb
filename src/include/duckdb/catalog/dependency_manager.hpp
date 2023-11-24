@@ -56,9 +56,7 @@ public:
 struct MangledEntryName {
 public:
 	MangledEntryName(const CatalogEntryInfo &info);
-	// TODO: delete me later
-	MangledEntryName() {
-	}
+	MangledEntryName() = delete;
 
 public:
 	//! Format: Type\0Schema\0Name
@@ -68,6 +66,7 @@ public:
 struct MangledDependencyName {
 public:
 	MangledDependencyName(const MangledEntryName &from, const MangledEntryName &to);
+	MangledDependencyName() = delete;
 
 public:
 	//! Format: MangledEntryName\0MangledEntryName
