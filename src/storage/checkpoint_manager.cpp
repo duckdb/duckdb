@@ -28,10 +28,7 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/main/attached_database.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 
 namespace duckdb {
