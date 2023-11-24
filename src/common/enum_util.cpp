@@ -10,6 +10,7 @@
 
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/catalog/dependency.hpp"
 #include "duckdb/common/box_renderer.hpp"
@@ -1380,6 +1381,29 @@ DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *
 	}
 	if (StringUtil::Equals(value, "NULLS_LAST_ON_ASC_FIRST_ON_DESC")) {
 		return DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value) {
+	switch(value) {
+	case DependencyEntryType::SUBJECT:
+		return "SUBJECT";
+	case DependencyEntryType::RELIANT:
+		return "RELIANT";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value) {
+	if (StringUtil::Equals(value, "SUBJECT")) {
+		return DependencyEntryType::SUBJECT;
+	}
+	if (StringUtil::Equals(value, "RELIANT")) {
+		return DependencyEntryType::RELIANT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
