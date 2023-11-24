@@ -17,7 +17,9 @@ INSERT INTO timestamps VALUES
     (TIMESTAMP '1992-01-01 12:03:27'),
     (TIMESTAMP '1900-01-01 03:08:47'),
     (NULL),
-    (TIMESTAMP '2020-09-27 13:12:01')
+    (TIMESTAMP '2020-09-27 13:12:01'),
+	('infinity'::TIMESTAMP),
+	('-infinity'::TIMESTAMP),
 
 query I nosort ts_scan
 SELECT * FROM timestamps
