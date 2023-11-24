@@ -2092,28 +2092,12 @@ struct HugeIntegerCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool HandleHexDigit(T &state, uint8_t digit) {
-		if (state.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 16) {
-			// intermediate is full: need to flush it
-			if (!state.Flush()) {
-				return false;
-			}
-		}
-		state.intermediate = state.intermediate * 16 + digit;
-		state.digits++;
-		return true;
+		return false;
 	}
 
 	template <class T, bool NEGATIVE>
 	static bool HandleBinaryDigit(T &state, uint8_t digit) {
-		if (state.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 2) {
-			// intermediate is full: need to flush it
-			if (!state.Flush()) {
-				return false;
-			}
-		}
-		state.intermediate = state.intermediate * 2 + digit;
-		state.digits++;
-		return true;
+		return false;
 	}
 
 	template <class T, bool NEGATIVE>
