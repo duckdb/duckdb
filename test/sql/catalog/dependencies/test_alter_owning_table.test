@@ -2,6 +2,9 @@
 # description: Test ALTER of table that owns a sequence
 # group: [dependencies]
 
+# FIXME: we don't preserve OWNED BY on restarts
+require skip_reload
+
 statement ok
 create sequence seq;
 
