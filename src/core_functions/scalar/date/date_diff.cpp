@@ -424,7 +424,6 @@ static void DateDiffFunction(DataChunk &args, ExpressionState &state, Vector &re
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result, true);
 		} else {
-			// FIXME: should this not check if the Value is Finite?
 			const auto type = GetDatePartSpecifier(ConstantVector::GetData<string_t>(part_arg)->GetString());
 			DateDiffBinaryExecutor<T, T, int64_t>(type, start_arg, end_arg, result, args.size());
 		}
