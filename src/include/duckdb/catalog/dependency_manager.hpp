@@ -124,7 +124,8 @@ private:
 	                      dependency_callback_t &callback);
 	void ScanSetInternal(CatalogTransaction transaction, const CatalogEntryInfo &info, bool dependencies,
 	                     dependency_callback_t &callback);
-
+	void PrintDependencies(CatalogTransaction transaction, const CatalogEntryInfo &info);
+	void PrintDependents(CatalogTransaction transaction, const CatalogEntryInfo &info);
 	CatalogSet &Dependents();
 	CatalogSet &Dependencies();
 };

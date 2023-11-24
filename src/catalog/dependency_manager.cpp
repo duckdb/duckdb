@@ -501,4 +501,45 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 	}
 }
 
+static string FormatString(const MangledEntryName &mangled) {
+	auto input = mangled.name;
+	for (size_t i = 0; i < input.size(); i++) {
+		if (input[i] == '\0') {
+			input[i] = '_';
+		}
+	}
+	return input;
+}
+
+void DependencyManager::PrintDependencies(CatalogTransaction transaction, const CatalogEntryInfo &info) {
+	auto name = MangleName(info);
+	Printer::Print(StringUtil::Format("Dependencies of %s", FormatString(name)));
+	auto dependencies = DependencyCatalogSet(Dependencies(), info);
+	dependencies.Scan(transaction, [&](CatalogEntry &dependency) {
+		auto &dep = dependency.Cast<DependencyEntry>();
+		auto &entry_info = dep.EntryInfo();
+		auto type = entry_info.type;
+		auto schema = entry_info.schema;
+		auto name = entry_info.name;
+		Printer::Print(StringUtil::Format(
+		    "Schema: %s | Name: %s | Type: %s | Reliant type: %s | Subject type: %s", schema, name,
+		    CatalogTypeToString(type), EnumUtil::ToString(dep.Reliant().type), EnumUtil::ToString(dep.Subject().type)));
+	});
+}
+void DependencyManager::PrintDependents(CatalogTransaction transaction, const CatalogEntryInfo &info) {
+	auto name = MangleName(info);
+	Printer::Print(StringUtil::Format("Dependents of %s", FormatString(name)));
+	auto dependents = DependencyCatalogSet(Dependents(), info);
+	dependents.Scan(transaction, [&](CatalogEntry &dependent) {
+		auto &dep = dependent.Cast<DependencyEntry>();
+		auto &entry_info = dep.EntryInfo();
+		auto type = entry_info.type;
+		auto schema = entry_info.schema;
+		auto name = entry_info.name;
+		Printer::Print(StringUtil::Format(
+		    "Schema: %s | Name: %s | Type: %s | Reliant type: %s | Subject type: %s", schema, name,
+		    CatalogTypeToString(type), EnumUtil::ToString(dep.Reliant().type), EnumUtil::ToString(dep.Subject().type)));
+	});
+}
+
 } // namespace duckdb
