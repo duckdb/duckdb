@@ -328,7 +328,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	// Compute the entry in the table based on the hash using a modulo,
 	// and precompute the hash salts for faster comparison below
 	auto ht_offsets = FlatVector::GetData<uint64_t>(state.ht_offsets);
-	auto hash_salts = FlatVector::GetData<hash_t>(state.hash_salts);
+	const auto hash_salts = FlatVector::GetData<hash_t>(state.hash_salts);
 	for (idx_t r = 0; r < groups.size(); r++) {
 		const auto &hash = hashes[r];
 		ht_offsets[r] = ApplyBitMask(hash);
@@ -369,20 +369,29 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		for (idx_t i = 0; i < remaining_entries; i++) {
 			const auto index = sel_vector->get_index(i);
 			const auto &salt = hash_salts[index];
-			auto &entry = entries[ht_offsets[index]];
-			if (entry.IsOccupied()) { // Cell is occupied: Compare salts
-				if (entry.GetSalt() == salt) {
-					state.group_compare_vector.set_index(need_compare_count++, index);
-				} else {
-					state.no_match_vector.set_index(no_match_count++, index);
+			auto &ht_offset = ht_offsets[index];
+			while (true) {
+				auto &entry = entries[ht_offset];
+				if (entry.IsOccupied()) { // Cell is occupied: Compare salts
+					if (entry.GetSalt() == salt) {
+						// Same salt, compare group keys
+						state.group_compare_vector.set_index(need_compare_count++, index);
+						break;
+					} else {
+						// Different salts, move to next entry (linear probing)
+						if (++ht_offset >= capacity) {
+							ht_offset = 0;
+						}
+						continue;
+					}
+				} else { // Cell is unoccupied, let's claim it
+					// Set salt (also marks as occupied)
+					entry.SetSalt(salt);
+					// Update selection lists for outer loops
+					state.empty_vector.set_index(new_entry_count++, index);
+					new_groups_out.set_index(new_group_count++, index);
+					break;
 				}
-			} else { // Cell is unoccupied
-				// Set salt (also marks as occupied)
-				entry.SetSalt(salt);
-
-				// Update selection lists for outer loops
-				state.empty_vector.set_index(new_entry_count++, index);
-				new_groups_out.set_index(new_group_count++, index);
 			}
 		}
 
@@ -422,10 +431,10 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 		// Linear probing: each of the entries that do not match move to the next entry in the HT
 		for (idx_t i = 0; i < no_match_count; i++) {
-			idx_t index = state.no_match_vector.get_index(i);
-			ht_offsets[index]++;
-			if (ht_offsets[index] >= capacity) {
-				ht_offsets[index] = 0;
+			const auto index = state.no_match_vector.get_index(i);
+			auto &ht_offset = ht_offsets[index];
+			if (++ht_offset >= capacity) {
+				ht_offset = 0;
 			}
 		}
 		sel_vector = &state.no_match_vector;

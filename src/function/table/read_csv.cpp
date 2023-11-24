@@ -47,21 +47,7 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 		single_threaded = true;
 	}
 
-	// Validate rejects_table options
-	if (!options.rejects_table_name.empty()) {
-		if (!options.ignore_errors) {
-			throw BinderException("REJECTS_TABLE option is only supported when IGNORE_ERRORS is set to true");
-		}
-		if (options.file_options.union_by_name) {
-			throw BinderException("REJECTS_TABLE option is not supported when UNION_BY_NAME is set to true");
-		}
-	}
-
 	if (!options.rejects_recovery_columns.empty()) {
-		if (options.rejects_table_name.empty()) {
-			throw BinderException(
-			    "REJECTS_RECOVERY_COLUMNS option is only supported when REJECTS_TABLE is set to a table name");
-		}
 		for (auto &recovery_col : options.rejects_recovery_columns) {
 			bool found = false;
 			for (idx_t col_idx = 0; col_idx < return_names.size(); col_idx++) {
@@ -77,12 +63,6 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 			}
 		}
 	}
-
-	if (options.rejects_limit != 0) {
-		if (options.rejects_table_name.empty()) {
-			throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
-		}
-	}
 }
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
@@ -93,7 +73,27 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "CSV");
 
 	options.FromNamedParameters(input.named_parameters, context, return_types, names);
-	bool explicitly_set_columns = options.explicitly_set_columns;
+
+	// Validate rejects_table options
+	if (!options.rejects_table_name.empty()) {
+		if (!options.ignore_errors) {
+			throw BinderException("REJECTS_TABLE option is only supported when IGNORE_ERRORS is set to true");
+		}
+		if (options.file_options.union_by_name) {
+			throw BinderException("REJECTS_TABLE option is not supported when UNION_BY_NAME is set to true");
+		}
+	}
+
+	if (options.rejects_limit != 0) {
+		if (options.rejects_table_name.empty()) {
+			throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
+		}
+	}
+
+	if (!options.rejects_recovery_columns.empty() && options.rejects_table_name.empty()) {
+		throw BinderException(
+		    "REJECTS_RECOVERY_COLUMNS option is only supported when REJECTS_TABLE is set to a table name");
+	}
 
 	options.file_options.AutoDetectHivePartitioning(result->files, context);
 
@@ -107,27 +107,15 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		// Initialize Buffer Manager and Sniffer
 		auto file_handle = BaseCSVReader::OpenCSV(context, options);
 		result->buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), options);
-		CSVSniffer sniffer(options, result->buffer_manager, result->state_machine_cache, explicitly_set_columns);
+		CSVSniffer sniffer(options, result->buffer_manager, result->state_machine_cache, {&return_types, &names});
 		auto sniffer_result = sniffer.SniffCSV();
 		if (names.empty()) {
 			names = sniffer_result.names;
 			return_types = sniffer_result.return_types;
-		} else {
-			if (explicitly_set_columns) {
-				// The user has influenced the names, can't assume they are valid anymore
-				if (return_types.size() != names.size()) {
-					throw BinderException("The amount of names specified (%d) and the observed amount of types (%d) in "
-					                      "the file don't match",
-					                      names.size(), return_types.size());
-				}
-			} else {
-				D_ASSERT(return_types.size() == names.size());
-			}
 		}
-
-	} else {
-		D_ASSERT(return_types.size() == names.size());
 	}
+	D_ASSERT(return_types.size() == names.size());
+
 	result->csv_types = return_types;
 	result->csv_names = names;
 
@@ -155,12 +143,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	result->FinalizeRead(context);
 
 	return std::move(result);
-}
-
-static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, TableFunctionBindInput &input,
-                                                vector<LogicalType> &return_types, vector<string> &names) {
-	input.named_parameters["auto_detect"] = Value::BOOLEAN(true);
-	return ReadCSVBind(context, input, return_types, names);
 }
 
 //===--------------------------------------------------------------------===//
@@ -418,7 +400,8 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 			first_position = 0;
 			local_batch_index = 0;
 
-			line_info.lines_read[file_index++][local_batch_index] = (bind_data.options.has_header ? 1 : 0);
+			line_info.lines_read[file_index++][local_batch_index] =
+			    (bind_data.options.has_header && bind_data.options.dialect_options.header ? 1 : 0);
 
 			current_buffer = buffer_manager->GetBuffer(cur_buffer_idx);
 			next_buffer = buffer_manager->GetBuffer(cur_buffer_idx + 1);
@@ -981,7 +964,7 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 TableFunction ReadCSVTableFunction::GetAutoFunction() {
 	auto read_csv_auto = ReadCSVTableFunction::GetFunction();
 	read_csv_auto.name = "read_csv_auto";
-	read_csv_auto.bind = ReadCSVAutoBind;
+	read_csv_auto.bind = ReadCSVBind;
 	return read_csv_auto;
 }
 

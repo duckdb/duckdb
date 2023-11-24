@@ -34,7 +34,7 @@ on:
       vcpkg_commit:
         required: false
         type: string
-        default: "501db0f17ef6df184fcdbfbe0f87cde2313b6ab1"
+        default: "a42af01b72c28a8e1d7b48107b33e4f286a55ef6"
       # Override the default script producing the matrices. Allows specifying custom matrices.
       matrix_parse_script:
         required: false
@@ -150,7 +150,7 @@ jobs:
           aarch64_cross_compile: ${{ matrix.duckdb_arch == 'linux_arm64' && 1 }}
 
       - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
+        uses: lukka/run-vcpkg@v11.1
         with:
           vcpkgGitCommitId: ${{ inputs.vcpkg_commit }}
 
@@ -212,7 +212,7 @@ jobs:
           git checkout ${{ inputs.duckdb_version }}
 
       - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
+        uses: lukka/run-vcpkg@v11.1
         with:
           vcpkgGitCommitId: ${{ inputs.vcpkg_commit }}
 
@@ -247,6 +247,12 @@ jobs:
       BUILD_SHELL: ${{ inputs.build_duckdb_shell && '1' || '0' }}
 
     steps:
+      - name: Keep \n line endings
+        shell: bash
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
@@ -267,7 +273,7 @@ jobs:
           key: ${{ github.job }}-${{ matrix.duckdb_arch }}
 
       - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
+        uses: lukka/run-vcpkg@v11.1
         with:
           vcpkgGitCommitId: ${{ inputs.vcpkg_commit }}
 

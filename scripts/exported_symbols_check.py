@@ -36,6 +36,7 @@ whitelist = [
     '_edata',
     '__bss_start',
     '__udivti3',
+    '__popcount',
     'Adbc',
 ]
 

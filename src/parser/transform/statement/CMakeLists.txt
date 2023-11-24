@@ -8,6 +8,7 @@ add_library_unity(
   transform_checkpoint.cpp
   transform_create_function.cpp
   transform_copy.cpp
+  transform_copy_database.cpp
   transform_create_table_as.cpp
   transform_create_index.cpp
   transform_create_schema.cpp

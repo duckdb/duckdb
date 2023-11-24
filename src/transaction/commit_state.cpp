@@ -2,23 +2,23 @@
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/storage/table/row_version_manager.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/append_info.hpp"
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
-#include "duckdb/storage/table/row_version_manager.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
 
 namespace duckdb {
 
@@ -148,7 +148,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 		}
 		case CatalogType::PREPARED_STATEMENT:
 		case CatalogType::SCALAR_FUNCTION_ENTRY:
-			// do nothing, indexes/prepared statements/functions aren't persisted to disk
+			// do nothing, prepared statements and scalar functions aren't persisted to disk
 			break;
 		default:
 			throw InternalException("Don't know how to drop this type!");
@@ -254,6 +254,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		// Grab a write lock on the catalog
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		lock_guard<mutex> write_lock(duck_catalog.GetWriteLock());
+		lock_guard<mutex> read_lock(catalog_entry->set->GetCatalogLock());
 		catalog_entry->set->UpdateTimestamp(*catalog_entry->parent, commit_id);
 		if (catalog_entry->name != catalog_entry->parent->name) {
 			catalog_entry->set->UpdateTimestamp(*catalog_entry, commit_id);

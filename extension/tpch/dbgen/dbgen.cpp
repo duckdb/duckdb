@@ -246,7 +246,7 @@ static void append_region(code_t *c, tpch_append_information *info) {
 	append_info.appender->EndRow();
 }
 
-static void gen_tbl(int tnum, DSS_HUGE count, tpch_append_information *info, DBGenContext *dbgen_ctx,
+static void gen_tbl(ClientContext &context, int tnum, DSS_HUGE count, tpch_append_information *info, DBGenContext *dbgen_ctx,
                     idx_t offset = 0) {
 	order_t o;
 	supplier_t supp;
@@ -255,6 +255,9 @@ static void gen_tbl(int tnum, DSS_HUGE count, tpch_append_information *info, DBG
 	code_t code;
 
 	for (DSS_HUGE i = offset + 1; count; count--, i++) {
+		if (count % 1000 == 0 && context.interrupted) {
+			throw InterruptException();
+		}
 		row_start(tnum, dbgen_ctx);
 		switch (tnum) {
 		case LINE:
@@ -417,6 +420,7 @@ const LogicalType LineitemInfo::Types[] = {
 template <class T>
 static void CreateTPCHTable(ClientContext &context, string catalog_name, string schema, string suffix) {
 	auto info = make_uniq<CreateTableInfo>();
+	info->catalog = catalog_name;
 	info->schema = schema;
 	info->table = T::Name + suffix;
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
@@ -557,11 +561,11 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 				skip(i, children, part_offset, dbgen_ctx);
 				if (rowcnt > 0) {
 					// generate part of the table
-					gen_tbl((int)i, rowcnt, append_info.get(), &dbgen_ctx, part_offset);
+					gen_tbl(context, (int)i, rowcnt, append_info.get(), &dbgen_ctx, part_offset);
 				}
 			} else {
 				// generate full table
-				gen_tbl((int)i, rowcnt, append_info.get(), &dbgen_ctx);
+				gen_tbl(context, (int)i, rowcnt, append_info.get(), &dbgen_ctx);
 			}
 		}
 	}
