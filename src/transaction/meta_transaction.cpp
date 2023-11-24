@@ -38,7 +38,7 @@ Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
 }
 
 void MetaTransaction::RemoveTransaction(AttachedDatabase &db) {
-	auto entry = transactions.find(&db);
+	auto entry = transactions.find(db);
 	if (entry == transactions.end()) {
 		throw InternalException("MetaTransaction::RemoveTransaction called but meta transaction did not have a "
 		                        "transaction for this database");
@@ -46,7 +46,7 @@ void MetaTransaction::RemoveTransaction(AttachedDatabase &db) {
 	transactions.erase(entry);
 	for (idx_t i = 0; i < all_transactions.size(); i++) {
 		auto &db_entry = all_transactions[i];
-		if (db_entry.get() == &db) {
+		if (RefersToSameObject(db_entry.get(), db)) {
 			all_transactions.erase(all_transactions.begin() + i);
 			break;
 		}
@@ -70,10 +70,10 @@ string MetaTransaction::Commit() {
 		auto &transaction = entry->second.get();
 		if (error.empty()) {
 			// commit
-			error = transaction_manager.CommitTransaction(context, transaction.get());
+			error = transaction_manager.CommitTransaction(context, transaction);
 		} else {
 			// we have encountered an error previously - roll back subsequent entries
-			transaction_manager.RollbackTransaction(transaction.get());
+			transaction_manager.RollbackTransaction(transaction);
 		}
 	}
 	return error;
