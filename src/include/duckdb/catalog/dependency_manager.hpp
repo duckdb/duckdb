@@ -111,7 +111,7 @@ private:
 
 private:
 	void RemoveDependency(CatalogTransaction transaction, const DependencyInfo &info);
-	void CreateDependency(CatalogTransaction transaction, const DependencyInfo &info);
+	void CreateDependency(CatalogTransaction transaction, DependencyInfo &info);
 	using dependency_entry_func_t = const std::function<unique_ptr<DependencyEntry>(
 	    Catalog &catalog, const DependencyReliant &dependent, const DependencySubject &dependency)>;
 
