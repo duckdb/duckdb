@@ -62,8 +62,8 @@ scope_list_val:
 
 /*------------------- Scope -------------------*/
 opt_persist:
-        /* empty */                                 { $$ = "default"; }
-        | TEMPORARY                                 { $$ = "temporary"; }
-        | PERMANENT                                 { $$ = "permanent"; }
+        /* empty */                                 { $$ = pstrdup("default"); }
+        | TEMPORARY                                 { $$ = pstrdup("temporary"); }
+        | PERMANENT                                 { $$ = pstrdup("permanent"); }
     ;
 

@@ -20175,19 +20175,19 @@ yyreduce:
 
   case 214: /* opt_persist: %empty  */
 #line 65 "third_party/libpg_query/grammar/statements/create_secret.y"
-                                                    { (yyval.str) = "default"; }
+                                                    { (yyval.str) = pstrdup("default"); }
 #line 20180 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 
   case 215: /* opt_persist: TEMPORARY  */
 #line 66 "third_party/libpg_query/grammar/statements/create_secret.y"
-                                                    { (yyval.str) = "temporary"; }
+                                                    { (yyval.str) = pstrdup("temporary"); }
 #line 20186 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 
   case 216: /* opt_persist: PERMANENT  */
 #line 67 "third_party/libpg_query/grammar/statements/create_secret.y"
-                                                    { (yyval.str) = "permanent"; }
+                                                    { (yyval.str) = strdup("permanent"); }
 #line 20192 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 
