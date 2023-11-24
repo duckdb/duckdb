@@ -112,8 +112,9 @@ static DefaultExtension internal_extensions[] = {
     {"jemalloc", "Overwrites system allocator with JEMalloc", DUCKDB_EXTENSION_JEMALLOC_LINKED},
     {"autocomplete", "Adds support for autocomplete in the shell", DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED},
     {"motherduck", "Enables motherduck integration with the system", false},
-    {"sqlite_scanner", "Adds support for reading SQLite database files", false},
-    {"postgres_scanner", "Adds support for reading from a Postgres database", false},
+    {"mysql_scanner", "Adds support for connecting to a MySQL database", false},
+    {"sqlite_scanner", "Adds support for reading and writing SQLite database files", false},
+    {"postgres_scanner", "Adds support for connecting to a Postgres database", false},
     {"inet", "Adds support for IP-related data types and functions", false},
     {"spatial", "Geospatial extension that adds support for working with spatial data and functions", false},
     {"substrait", "Adds support for the Substrait integration", false},
@@ -139,7 +140,7 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 //===--------------------------------------------------------------------===//
 // Allow Auto-Install Extensions
 //===--------------------------------------------------------------------===//
-static const char *auto_install[] = {"motherduck", "postgres_scanner", "sqlite_scanner", nullptr};
+static const char *auto_install[] = {"motherduck", "postgres_scanner", "mysql_scanner", "sqlite_scanner", nullptr};
 
 // TODO: unify with new autoload mechanism
 bool ExtensionHelper::AllowAutoInstall(const string &extension) {
@@ -196,6 +197,9 @@ string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context
 }
 
 bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept {
+	if (context.db->ExtensionIsLoaded(extension_name)) {
+		return true;
+	}
 	auto &dbconfig = DBConfig::GetConfig(context);
 	try {
 		if (dbconfig.options.autoinstall_known_extensions) {
@@ -211,6 +215,10 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 }
 
 void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {
+	if (context.db->ExtensionIsLoaded(extension_name)) {
+		// Avoid downloading again
+		return;
+	}
 	auto &dbconfig = DBConfig::GetConfig(context);
 	try {
 #ifndef DUCKDB_WASM
@@ -239,7 +247,7 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	}
 
 #if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
-	for (auto &ext : linked_extensions) {
+	for (const auto &ext : LinkedExtensions()) {
 		LoadExtensionInternal(db, ext, true);
 	}
 #endif

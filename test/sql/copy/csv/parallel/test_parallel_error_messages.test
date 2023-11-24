@@ -13,7 +13,7 @@ SET threads=4
 
 
 statement error
-SELECT * FROM read_csv('data/csv/missing_column.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
+SELECT * FROM read_csv('data/csv/missing_column.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True, auto_detect = false)
 ----
 line 7
 

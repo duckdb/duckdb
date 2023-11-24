@@ -48,6 +48,9 @@ SET http_retry_backoff=1;
 statement ok
 SET http_timeout=50000;
 
+statement ok
+SET http_keep_alive=false;
+
 # Test the vhost style urls (this is the default)
 statement ok
 SET s3_url_style='${url_style}';
@@ -109,7 +112,7 @@ COPY test TO 's3://test-bucket-public/root-dir/test2.parquet';
 statement error
 SELECT i FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/root-dir/non-existent-file-ljaslkjdas.parquet" LIMIT 3
 ----
-HTTP Error: Unable to connect to URL "http://test-bucket-public.
+IO Error: Unable to connect to URL "http://test-bucket-public.
 
 # Connection error
 statement error
@@ -121,4 +124,4 @@ IO Error: Connection error for HTTP HEAD to 'http://test-bucket-public.
 statement error
 SELECT * FROM parquet_scan('s3://this-aint-no-bucket/no-path/no-file');
 ----
-HTTP Error: Unable to connect to URL "http://
+IO Error: Unable to connect to URL "http://

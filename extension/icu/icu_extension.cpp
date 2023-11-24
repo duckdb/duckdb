@@ -223,7 +223,6 @@ static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parame
 
 void IcuExtension::Load(DuckDB &ddb) {
 	auto &db = *ddb.instance;
-	auto &catalog = Catalog::GetSystemCatalog(db);
 
 	// iterate over all the collations
 	int32_t count;
@@ -239,7 +238,7 @@ void IcuExtension::Load(DuckDB &ddb) {
 		}
 		collation = StringUtil::Lower(collation);
 
-		CreateCollationInfo info(collation, GetICUFunction(collation), false, true);
+		CreateCollationInfo info(collation, GetICUFunction(collation), false, false);
 		ExtensionUtil::RegisterCollation(db, info);
 	}
 	ScalarFunction sort_key("icu_sort_key", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,

@@ -81,6 +81,9 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 			break;
 		}
 
+		//	What PG reports is the total offset for today,
+		//	which is the ICU total offset (i.e., "raw") plus the DST offset.
+		raw_offset_ms += dst_offset_ms;
 		output.SetValue(2, index, Value::INTERVAL(Interval::FromMicro(raw_offset_ms * Interval::MICROS_PER_MSEC)));
 		output.SetValue(3, index, Value(dst_offset_ms != 0));
 		++index;

@@ -189,6 +189,20 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	return result;
 }
 
+void FilenamePattern::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(200, "base", _base);
+	serializer.WritePropertyWithDefault<idx_t>(201, "pos", _pos);
+	serializer.WritePropertyWithDefault<bool>(202, "uuid", _uuid);
+}
+
+FilenamePattern FilenamePattern::Deserialize(Deserializer &deserializer) {
+	FilenamePattern result;
+	deserializer.ReadPropertyWithDefault<string>(200, "base", result._base);
+	deserializer.ReadPropertyWithDefault<idx_t>(201, "pos", result._pos);
+	deserializer.ReadPropertyWithDefault<bool>(202, "uuid", result._uuid);
+	return result;
+}
+
 void LogicalAggregate::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(200, "expressions", expressions);
@@ -648,12 +662,16 @@ void LogicalSetOperation::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
 	serializer.WritePropertyWithDefault<idx_t>(201, "column_count", column_count);
+	serializer.WritePropertyWithDefault<bool>(202, "setop_all", setop_all, true);
+	serializer.WritePropertyWithDefault<bool>(203, "allow_out_of_order", allow_out_of_order, true);
 }
 
 unique_ptr<LogicalOperator> LogicalSetOperation::Deserialize(Deserializer &deserializer) {
 	auto table_index = deserializer.ReadPropertyWithDefault<idx_t>(200, "table_index");
 	auto column_count = deserializer.ReadPropertyWithDefault<idx_t>(201, "column_count");
-	auto result = duckdb::unique_ptr<LogicalSetOperation>(new LogicalSetOperation(table_index, column_count, deserializer.Get<LogicalOperatorType>()));
+	auto setop_all = deserializer.ReadPropertyWithDefault<bool>(202, "setop_all", true);
+	auto allow_out_of_order = deserializer.ReadPropertyWithDefault<bool>(203, "allow_out_of_order", true);
+	auto result = duckdb::unique_ptr<LogicalSetOperation>(new LogicalSetOperation(table_index, column_count, deserializer.Get<LogicalOperatorType>(), setop_all, allow_out_of_order));
 	return std::move(result);
 }
 

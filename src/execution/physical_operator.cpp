@@ -106,7 +106,8 @@ SinkFinalizeType PhysicalOperator::Finalize(Pipeline &pipeline, Event &event, Cl
 	return SinkFinalizeType::READY;
 }
 
-void PhysicalOperator::NextBatch(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const {
+SinkNextBatchType PhysicalOperator::NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const {
+	return SinkNextBatchType::READY;
 }
 
 unique_ptr<LocalSinkState> PhysicalOperator::GetLocalSinkState(ExecutionContext &context) const {
@@ -218,6 +219,7 @@ bool CachingPhysicalOperator::CanCacheType(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
+	case LogicalTypeId::ARRAY:
 		return false;
 	case LogicalTypeId::STRUCT: {
 		auto &entries = StructType::GetChildTypes(type);

@@ -39,6 +39,9 @@ public:
 		template <class T>
 		void WriteElement(const T &value);
 
+		//! Serialize bytes
+		void WriteElement(data_ptr_t ptr, idx_t size);
+
 		// Serialize an object
 		template <class FUNC>
 		void WriteObject(FUNC f);

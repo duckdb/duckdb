@@ -135,6 +135,9 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 	bool need_to_consider_arbitrary_expressions = true;
 	switch (reftype) {
 	case JoinRefType::ASOF: {
+		if (!arbitrary_expressions.empty()) {
+			throw BinderException("Invalid ASOF JOIN condition");
+		}
 		need_to_consider_arbitrary_expressions = false;
 		auto asof_idx = conditions.size();
 		for (size_t c = 0; c < conditions.size(); ++c) {
