@@ -2265,7 +2265,7 @@ struct UhugeintCastData {
 struct UhugeintCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleDigit(T &state, uint8_t digit) {
-		if (NEGATIVE) {
+		if (NEGATIVE && digit != 0) {
 			return false;
 		} else {
 			if (state.intermediate > (NumericLimits<uint64_t>::Maximum() - digit) / 10) {
@@ -2359,7 +2359,7 @@ struct UhugeintCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool Finalize(T &state) {
-		if (NEGATIVE || !state.Flush() || !state.FlushDecimal()) {
+		if (!state.Flush() || !state.FlushDecimal()) {
 			return false;
 		}
 
