@@ -504,9 +504,15 @@
         "name": "setop_all",
         "type": "bool",
         "default": "true"
+      },
+      {
+        "id": 203,
+        "name": "allow_out_of_order",
+        "type": "bool",
+        "default": "true"
       }
     ],
-    "constructor": ["table_index", "column_count", "type", "setop_all"]
+    "constructor": ["table_index", "column_count", "type", "setop_all", "allow_out_of_order"]
   },
   {
     "class": "LogicalRecursiveCTE",

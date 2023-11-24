@@ -45,9 +45,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_UNION:
-		result = make_uniq<PhysicalUnion>(op.types, std::move(left), std::move(right), op.estimated_cardinality);
+		// UNION
+		result = make_uniq<PhysicalUnion>(op.types, std::move(left), std::move(right), op.estimated_cardinality,
+		                                  op.allow_out_of_order);
 		break;
-
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT: {
 		auto &types = left->GetTypes();

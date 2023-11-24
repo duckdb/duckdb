@@ -1,9 +1,15 @@
 #include "duckdb/core_functions/scalar/date_functions.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/core_functions/to_interval.hpp"
 
 namespace duckdb {
+
+template <>
+bool TryMultiplyOperator::Operation(double left, int64_t right, int64_t &result) {
+	return TryCast::Operation<double, int64_t>(left * right, result);
+}
 
 struct ToYearsOperator {
 	template <class TA, class TR>
@@ -47,9 +53,8 @@ struct ToHoursOperator {
 		interval_t result;
 		result.months = 0;
 		result.days = 0;
-		if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, Interval::MICROS_PER_HOUR,
-		                                                               result.micros)) {
-			throw OutOfRangeException("Interval value %d hours out of range", input);
+		if (!TryMultiplyOperator::Operation<TA, int64_t, int64_t>(input, Interval::MICROS_PER_HOUR, result.micros)) {
+			throw OutOfRangeException("Interval value %s hours out of range", NumericHelper::ToString(input));
 		}
 		return result;
 	}
@@ -61,9 +66,8 @@ struct ToMinutesOperator {
 		interval_t result;
 		result.months = 0;
 		result.days = 0;
-		if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, Interval::MICROS_PER_MINUTE,
-		                                                               result.micros)) {
-			throw OutOfRangeException("Interval value %d minutes out of range", input);
+		if (!TryMultiplyOperator::Operation<TA, int64_t, int64_t>(input, Interval::MICROS_PER_MINUTE, result.micros)) {
+			throw OutOfRangeException("Interval value %s minutes out of range", NumericHelper::ToString(input));
 		}
 		return result;
 	}
@@ -75,9 +79,8 @@ struct ToMilliSecondsOperator {
 		interval_t result;
 		result.months = 0;
 		result.days = 0;
-		if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, Interval::MICROS_PER_MSEC,
-		                                                               result.micros)) {
-			throw OutOfRangeException("Interval value %d milliseconds out of range", input);
+		if (!TryMultiplyOperator::Operation<TA, int64_t, int64_t>(input, Interval::MICROS_PER_MSEC, result.micros)) {
+			throw OutOfRangeException("Interval value %s milliseconds out of range", NumericHelper::ToString(input));
 		}
 		return result;
 	}
@@ -110,23 +113,23 @@ ScalarFunction ToDaysFun::GetFunction() {
 }
 
 ScalarFunction ToHoursFun::GetFunction() {
-	return ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                      ScalarFunction::UnaryFunction<int64_t, interval_t, ToHoursOperator>);
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<double, interval_t, ToHoursOperator>);
 }
 
 ScalarFunction ToMinutesFun::GetFunction() {
-	return ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                      ScalarFunction::UnaryFunction<int64_t, interval_t, ToMinutesOperator>);
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<double, interval_t, ToMinutesOperator>);
 }
 
 ScalarFunction ToSecondsFun::GetFunction() {
-	return ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                      ScalarFunction::UnaryFunction<int64_t, interval_t, ToSecondsOperator>);
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<double, interval_t, ToSecondsOperator>);
 }
 
 ScalarFunction ToMillisecondsFun::GetFunction() {
-	return ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                      ScalarFunction::UnaryFunction<int64_t, interval_t, ToMilliSecondsOperator>);
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<double, interval_t, ToMilliSecondsOperator>);
 }
 
 ScalarFunction ToMicrosecondsFun::GetFunction() {

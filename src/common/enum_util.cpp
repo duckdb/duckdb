@@ -2717,6 +2717,8 @@ const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value) {
 		return "LOGICAL_LIMIT_PERCENT";
 	case LogicalOperatorType::LOGICAL_PIVOT:
 		return "LOGICAL_PIVOT";
+	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
+		return "LOGICAL_COPY_DATABASE";
 	case LogicalOperatorType::LOGICAL_GET:
 		return "LOGICAL_GET";
 	case LogicalOperatorType::LOGICAL_CHUNK_GET:
@@ -2857,6 +2859,9 @@ LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value)
 	}
 	if (StringUtil::Equals(value, "LOGICAL_PIVOT")) {
 		return LogicalOperatorType::LOGICAL_PIVOT;
+	}
+	if (StringUtil::Equals(value, "LOGICAL_COPY_DATABASE")) {
+		return LogicalOperatorType::LOGICAL_COPY_DATABASE;
 	}
 	if (StringUtil::Equals(value, "LOGICAL_GET")) {
 		return LogicalOperatorType::LOGICAL_GET;
@@ -4061,6 +4066,8 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "STREAMING_WINDOW";
 	case PhysicalOperatorType::PIVOT:
 		return "PIVOT";
+	case PhysicalOperatorType::COPY_DATABASE:
+		return "COPY_DATABASE";
 	case PhysicalOperatorType::TABLE_SCAN:
 		return "TABLE_SCAN";
 	case PhysicalOperatorType::DUMMY_SCAN:
@@ -4233,6 +4240,9 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "PIVOT")) {
 		return PhysicalOperatorType::PIVOT;
+	}
+	if (StringUtil::Equals(value, "COPY_DATABASE")) {
+		return PhysicalOperatorType::COPY_DATABASE;
 	}
 	if (StringUtil::Equals(value, "TABLE_SCAN")) {
 		return PhysicalOperatorType::TABLE_SCAN;
@@ -5346,6 +5356,8 @@ const char* EnumUtil::ToChars<StatementType>(StatementType value) {
 		return "DETACH_STATEMENT";
 	case StatementType::MULTI_STATEMENT:
 		return "MULTI_STATEMENT";
+	case StatementType::COPY_DATABASE_STATEMENT:
+		return "COPY_DATABASE_STATEMENT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5439,6 +5451,9 @@ StatementType EnumUtil::FromString<StatementType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "MULTI_STATEMENT")) {
 		return StatementType::MULTI_STATEMENT;
+	}
+	if (StringUtil::Equals(value, "COPY_DATABASE_STATEMENT")) {
+		return StatementType::COPY_DATABASE_STATEMENT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

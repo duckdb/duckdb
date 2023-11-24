@@ -95,6 +95,42 @@ unique_ptr<GlobalSourceState> PhysicalExport::GetGlobalSourceState(ClientContext
 	return make_uniq<ExportSourceState>();
 }
 
+void PhysicalExport::ExtractEntries(ClientContext &context, vector<reference<SchemaCatalogEntry>> &schema_list,
+                                    ExportEntries &result) {
+	for (auto &schema_p : schema_list) {
+		auto &schema = schema_p.get();
+		if (!schema.internal) {
+			result.schemas.push_back(schema);
+		}
+		schema.Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			if (entry.type != CatalogType::TABLE_ENTRY) {
+				result.views.push_back(entry);
+			}
+			if (entry.type == CatalogType::TABLE_ENTRY) {
+				result.tables.push_back(entry);
+			}
+		});
+		schema.Scan(context, CatalogType::SEQUENCE_ENTRY,
+		            [&](CatalogEntry &entry) { result.sequences.push_back(entry); });
+		schema.Scan(context, CatalogType::TYPE_ENTRY,
+		            [&](CatalogEntry &entry) { result.custom_types.push_back(entry); });
+		schema.Scan(context, CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) { result.indexes.push_back(entry); });
+		schema.Scan(context, CatalogType::MACRO_ENTRY, [&](CatalogEntry &entry) {
+			if (!entry.internal && entry.type == CatalogType::MACRO_ENTRY) {
+				result.macros.push_back(entry);
+			}
+		});
+		schema.Scan(context, CatalogType::TABLE_MACRO_ENTRY, [&](CatalogEntry &entry) {
+			if (!entry.internal && entry.type == CatalogType::TABLE_MACRO_ENTRY) {
+				result.macros.push_back(entry);
+			}
+		});
+	}
+}
+
 SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk,
                                          OperatorSourceInput &input) const {
 	auto &state = input.global_state.Cast<ExportSourceState>();
@@ -106,66 +142,34 @@ SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &c
 	auto &fs = FileSystem::GetFileSystem(ccontext);
 
 	// gather all catalog types to export
-	vector<reference<CatalogEntry>> schemas;
-	vector<reference<CatalogEntry>> custom_types;
-	vector<reference<CatalogEntry>> sequences;
-	vector<reference<CatalogEntry>> tables;
-	vector<reference<CatalogEntry>> views;
-	vector<reference<CatalogEntry>> indexes;
-	vector<reference<CatalogEntry>> macros;
+	ExportEntries entries;
 
 	auto schema_list = Catalog::GetSchemas(ccontext, info->catalog);
-	for (auto &schema_p : schema_list) {
-		auto &schema = schema_p.get();
-		if (!schema.internal) {
-			schemas.push_back(schema);
-		}
-		schema.Scan(context.client, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
-			if (entry.internal) {
-				return;
-			}
-			if (entry.type != CatalogType::TABLE_ENTRY) {
-				views.push_back(entry);
-			}
-		});
-		schema.Scan(context.client, CatalogType::SEQUENCE_ENTRY,
-		            [&](CatalogEntry &entry) { sequences.push_back(entry); });
-		schema.Scan(context.client, CatalogType::TYPE_ENTRY,
-		            [&](CatalogEntry &entry) { custom_types.push_back(entry); });
-		schema.Scan(context.client, CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) { indexes.push_back(entry); });
-		schema.Scan(context.client, CatalogType::MACRO_ENTRY, [&](CatalogEntry &entry) {
-			if (!entry.internal && entry.type == CatalogType::MACRO_ENTRY) {
-				macros.push_back(entry);
-			}
-		});
-		schema.Scan(context.client, CatalogType::TABLE_MACRO_ENTRY, [&](CatalogEntry &entry) {
-			if (!entry.internal && entry.type == CatalogType::TABLE_MACRO_ENTRY) {
-				macros.push_back(entry);
-			}
-		});
-	}
+	ExtractEntries(context.client, schema_list, entries);
 
 	// consider the order of tables because of foreign key constraint
+	entries.tables.clear();
 	for (idx_t i = 0; i < exported_tables.data.size(); i++) {
-		tables.push_back(exported_tables.data[i].entry);
+		entries.tables.push_back(exported_tables.data[i].entry);
 	}
 
 	// order macro's by timestamp so nested macro's are imported nicely
-	sort(macros.begin(), macros.end(), [](const reference<CatalogEntry> &lhs, const reference<CatalogEntry> &rhs) {
-		return lhs.get().oid < rhs.get().oid;
-	});
+	sort(entries.macros.begin(), entries.macros.end(),
+	     [](const reference<CatalogEntry> &lhs, const reference<CatalogEntry> &rhs) {
+		     return lhs.get().oid < rhs.get().oid;
+	     });
 
 	// write the schema.sql file
 	// export order is SCHEMA -> SEQUENCE -> TABLE -> VIEW -> INDEX
 
 	stringstream ss;
-	WriteCatalogEntries(ss, schemas);
-	WriteCatalogEntries(ss, custom_types);
-	WriteCatalogEntries(ss, sequences);
-	WriteCatalogEntries(ss, tables);
-	WriteCatalogEntries(ss, views);
-	WriteCatalogEntries(ss, indexes);
-	WriteCatalogEntries(ss, macros);
+	WriteCatalogEntries(ss, entries.schemas);
+	WriteCatalogEntries(ss, entries.custom_types);
+	WriteCatalogEntries(ss, entries.sequences);
+	WriteCatalogEntries(ss, entries.tables);
+	WriteCatalogEntries(ss, entries.views);
+	WriteCatalogEntries(ss, entries.indexes);
+	WriteCatalogEntries(ss, entries.macros);
 
 	WriteStringStreamToFile(fs, ss, fs.JoinPath(info->file_path, "schema.sql"));
 

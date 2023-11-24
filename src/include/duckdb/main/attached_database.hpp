@@ -62,7 +62,6 @@ public:
 	void SetInitialDatabase();
 
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
-	static string ExtractDatabaseNameAndType(string &dbpath, string &db_type, FileSystem &fs);
 
 private:
 	DatabaseInstance &db;
