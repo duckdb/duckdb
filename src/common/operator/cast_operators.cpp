@@ -2226,107 +2226,197 @@ bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
 //===--------------------------------------------------------------------===//
 // Cast To Uhugeint
 //===--------------------------------------------------------------------===//
-struct UhugeIntCastData {
-	uhugeint_t uhugeint;
+struct UhugeintCastData {
+	uhugeint_t result;
 	uint64_t intermediate;
 	uint8_t digits;
-	bool decimal;
+
+	uhugeint_t decimal;
+	uint16_t decimal_total_digits;
+	uint64_t decimal_intermediate;
+	uint16_t decimal_intermediate_digits;
 
 	bool Flush() {
 		if (digits == 0 && intermediate == 0) {
 			return true;
 		}
-		if (uhugeint.lower != 0 || uhugeint.upper != 0) {
+		if (result.lower != 0 || result.upper != 0) {
 			if (digits > 38) {
 				return false;
 			}
-			if (!Uhugeint::TryMultiply(uhugeint, Uhugeint::POWERS_OF_TEN[digits], uhugeint)) {
+			if (!Uhugeint::TryMultiply(result, Uhugeint::POWERS_OF_TEN[digits], result)) {
 				return false;
 			}
 		}
-		if (!Uhugeint::AddInPlace(uhugeint, uhugeint_t(intermediate))) {
+		if (!Uhugeint::AddInPlace(result, uhugeint_t(intermediate))) {
 			return false;
 		}
 		digits = 0;
 		intermediate = 0;
 		return true;
 	}
-};
 
-struct UhugeIntegerCastOperation {
-	template <class T, bool NEGATIVE>
-	static bool HandleDigit(T &result, uint8_t digit) {
-		if (result.intermediate > (NumericLimits<uint64_t>::Maximum() - digit) / 10) {
-			if (!result.Flush()) {
-				return false;
-			}
-		}
-		result.intermediate = result.intermediate * 10 + digit;
-		result.digits++;
-		return true;
-	}
-
-	template <class T, bool NEGATIVE>
-	static bool HandleHexDigit(T &result, uint8_t digit) {
-		return false;
-	}
-
-	template <class T, bool NEGATIVE>
-	static bool HandleBinaryDigit(T &result, uint8_t digit) {
-		if (result.uhugeint & (uhugeint_t(1) << 127)) {
-			return false;
-		}
-		result.uhugeint <<= 1;
-		result.uhugeint += digit;
-		return true;
-	}
-
-	template <class T, bool NEGATIVE>
-	static bool HandleExponent(T &result, int32_t exponent) {
-		if (!result.Flush()) {
-			return false;
-		}
-		if (exponent > 38) {
-			// out of range for exact exponent: use double and convert
-			double dbl_res = Uhugeint::Cast<double>(result.uhugeint) * std::pow(10.0L, exponent);
-			if (dbl_res > Uhugeint::Cast<double>(NumericLimits<uhugeint_t>::Maximum())) {
-				return false;
-			}
-			result.uhugeint = Uhugeint::Convert(dbl_res);
+	bool FlushDecimal() {
+		if (decimal_intermediate_digits == 0 && decimal_intermediate == 0) {
 			return true;
 		}
-		// positive exponent: multiply by power of 10
-		return Uhugeint::TryMultiply(result.uhugeint, Uhugeint::POWERS_OF_TEN[exponent], result.uhugeint);
+		if (decimal.lower != 0 || decimal.upper != 0) {
+			if (decimal_intermediate_digits > 38) {
+				return false;
+			}
+			if (!Uhugeint::TryMultiply(decimal, Uhugeint::POWERS_OF_TEN[decimal_intermediate_digits], decimal)) {
+				return false;
+			}
+		}
+		if (!Uhugeint::AddInPlace(decimal, uhugeint_t(decimal_intermediate))) {
+			return false;
+		}
+		decimal_total_digits += decimal_intermediate_digits;
+		decimal_intermediate_digits = 0;
+		decimal_intermediate = 0;
+		return true;
+	}
+};
+
+struct UhugeintCastOperation {
+	template <class T, bool NEGATIVE>
+	static bool HandleDigit(T &state, uint8_t digit) {
+		if (NEGATIVE) {
+			return false;
+		} else {
+			if (state.intermediate > (NumericLimits<uint64_t>::Maximum() - digit) / 10) {
+				if (!state.Flush()) {
+					return false;
+				}
+			}
+			state.intermediate = state.intermediate * 10 + digit;
+		}
+		state.digits++;
+		return true;
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool HandleHexDigit(T &state, uint8_t digit) {
+		if (state.intermediate > (NumericLimits<uint64_t>::Maximum() - digit) / 16) {
+			// intermediate is full: need to flush it
+			if (!state.Flush()) {
+				return false;
+			}
+		}
+		state.intermediate = state.intermediate * 16 + digit;
+		state.digits++;
+		return true;
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool HandleBinaryDigit(T &state, uint8_t digit) {
+		if (state.intermediate > (NumericLimits<uint64_t>::Maximum() - digit) / 2) {
+			// intermediate is full: need to flush it
+			if (!state.Flush()) {
+				return false;
+			}
+		}
+		state.intermediate = state.intermediate * 2 + digit;
+		state.digits++;
+		return true;
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool HandleExponent(T &state, int32_t exponent) {
+		if (!state.Flush()) {
+			return false;
+		}
+
+		int32_t e = exponent;
+		if (e < -38) {
+			state.result = 0;
+			return true;
+		}
+
+		// Negative Exponent
+		uhugeint_t remainder = 0;
+		if (e < 0) {
+			state.result = Uhugeint::DivMod(state.result, Uhugeint::POWERS_OF_TEN[-e], remainder);
+			state.decimal = remainder;
+			state.decimal_total_digits = -e;
+			state.decimal_intermediate = 0;
+			state.decimal_intermediate_digits = 0;
+			return Finalize<T, NEGATIVE>(state);
+		}
+
+		// Positive Exponent
+		if (state.result != 0) {
+			if (e > 38 || !TryMultiplyOperator::Operation(state.result, Uhugeint::POWERS_OF_TEN[e], state.result)) {
+				return false;
+			}
+		}
+		if (!state.FlushDecimal()) {
+			return false;
+		}
+		if (state.decimal == 0) {
+			return Finalize<T, NEGATIVE>(state);
+		}
+
+		e = exponent - state.decimal_total_digits;
+		if (e < 0) {
+			state.decimal = Uhugeint::DivMod(state.decimal, Uhugeint::POWERS_OF_TEN[-e], remainder);
+			state.decimal_total_digits -= (exponent);
+		} else {
+			if (e > 38 || !TryMultiplyOperator::Operation(state.decimal, Uhugeint::POWERS_OF_TEN[e], state.decimal)) {
+				return false;
+			}
+		}
+
+		if (!TryAddOperator::Operation(state.result, state.decimal, state.result)) {
+			return false;
+		}
+		state.decimal = remainder;
+		return Finalize<T, NEGATIVE>(state);
 	}
 
 	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
-	static bool HandleDecimal(T &result, uint8_t digit) {
-		// Integer casts round
-		if (!result.decimal) {
-			if (!result.Flush()) {
+	static bool HandleDecimal(T &state, uint8_t digit) {
+		if (!state.Flush()) {
+			return false;
+		}
+		if (state.decimal_intermediate > (NumericLimits<uint64_t>::Maximum() - digit) / 10) {
+			if (!state.FlushDecimal()) {
 				return false;
 			}
-			result.intermediate = (digit >= 5);
 		}
-		result.decimal = true;
-
+		state.decimal_intermediate = state.decimal_intermediate * 10 + digit;
+		state.decimal_intermediate_digits++;
 		return true;
 	}
 
 	template <class T, bool NEGATIVE>
-	static bool Finalize(T &result) {
-		return result.Flush();
+	static bool Finalize(T &state) {
+		if (NEGATIVE || !state.Flush() || !state.FlushDecimal()) {
+			return false;
+		}
+
+		if (state.decimal_total_digits == 0) {
+			return true;
+		}
+
+		// Get the first (left-most) digit of the decimals
+		state.decimal /= Uhugeint::POWERS_OF_TEN[state.decimal_total_digits - 1];
+
+		if (state.decimal >= 5) {
+			return TryAddOperator::Operation(state.result, uhugeint_t(1), state.result);
+		}
+		return true;
 	}
 };
 
 template <>
 bool TryCast::Operation(string_t input, uhugeint_t &result, bool strict) {
-	UhugeIntCastData data;
-	if (!TryIntegerCast<UhugeIntCastData, false, true, UhugeIntegerCastOperation>(input.GetData(), input.GetSize(),
-	                                                                              data, strict)) {
+	UhugeintCastData state {};
+	if (!TryIntegerCast<UhugeintCastData, true, true, UhugeintCastOperation>(input.GetData(), input.GetSize(), state,
+	                                                                         strict)) {
 		return false;
 	}
-	result = data.uhugeint;
+	result = state.result;
 	return true;
 }
 
