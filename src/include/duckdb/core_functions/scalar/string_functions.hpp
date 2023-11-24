@@ -93,16 +93,25 @@ struct FormatFun {
 struct FormatBytesFun {
 	static constexpr const char *Name = "format_bytes";
 	static constexpr const char *Parameters = "bytes";
-	static constexpr const char *Description = "Converts bytes to a human-readable presentation (e.g. 16000 -> 16KB)";
+	static constexpr const char *Description = "Converts bytes to a human-readable presentation (e.g. 16000 -> 15.6 KiB)";
 	static constexpr const char *Example = "format_bytes(1000 * 16)";
 
 	static ScalarFunction GetFunction();
 };
 
-struct FormatreadabledecimalsizeFun {
+struct FormatreadablesizeFun {
 	using ALIAS = FormatBytesFun;
 
+	static constexpr const char *Name = "formatReadableSize";
+};
+
+struct FormatreadabledecimalsizeFun {
 	static constexpr const char *Name = "formatReadableDecimalSize";
+	static constexpr const char *Parameters = "bytes";
+	static constexpr const char *Description = "Converts bytes to a human-readable presentation (e.g. 16000 -> 16.0 KB)";
+	static constexpr const char *Example = "format_bytes(1000 * 16)";
+
+	static ScalarFunction GetFunction();
 };
 
 struct HammingFun {

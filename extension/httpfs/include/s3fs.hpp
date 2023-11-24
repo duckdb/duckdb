@@ -159,6 +159,8 @@ public:
 			throw NotImplementedException("Cannot open an HTTP file for appending");
 		}
 	}
+	~S3FileHandle() override;
+
 	S3AuthParams auth_params;
 	const S3ConfigParams config_params;
 
@@ -187,7 +189,7 @@ protected:
 
 	//! Info for upload
 	atomic<uint16_t> parts_uploaded;
-	bool upload_finalized;
+	bool upload_finalized = true;
 
 	//! Error handling in upload threads
 	atomic<bool> uploader_has_error {false};

@@ -275,6 +275,10 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener, FileOpenerInfo &info) {
 	        endpoint, url_style,     use_ssl,           s3_url_compatibility_mode};
 }
 
+S3FileHandle::~S3FileHandle() {
+	Close();
+}
+
 S3ConfigParams S3ConfigParams::ReadFrom(FileOpener *opener) {
 	uint64_t uploader_max_filesize;
 	uint64_t max_parts_per_file;

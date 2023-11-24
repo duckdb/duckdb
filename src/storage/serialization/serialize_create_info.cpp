@@ -78,28 +78,28 @@ void CreateIndexInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "name", index_name);
 	serializer.WritePropertyWithDefault<string>(201, "table", table);
-	serializer.WriteProperty<IndexType>(202, "index_type", index_type);
+	/* [Deleted] (IndexType) "index_type" */
 	serializer.WriteProperty<IndexConstraintType>(203, "constraint_type", constraint_type);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "parsed_expressions", parsed_expressions);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(205, "scan_types", scan_types);
 	serializer.WritePropertyWithDefault<vector<string>>(206, "names", names);
 	serializer.WritePropertyWithDefault<vector<column_t>>(207, "column_ids", column_ids);
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<Value>>(208, "options", options);
-	serializer.WritePropertyWithDefault<string>(209, "index_type_name", index_type_name);
+	serializer.WritePropertyWithDefault<string>(209, "index_type_name", index_type);
 }
 
 unique_ptr<CreateInfo> CreateIndexInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateIndexInfo>(new CreateIndexInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "name", result->index_name);
 	deserializer.ReadPropertyWithDefault<string>(201, "table", result->table);
-	deserializer.ReadProperty<IndexType>(202, "index_type", result->index_type);
+	deserializer.ReadDeletedProperty<IndexType>(202, "index_type");
 	deserializer.ReadProperty<IndexConstraintType>(203, "constraint_type", result->constraint_type);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "parsed_expressions", result->parsed_expressions);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(205, "scan_types", result->scan_types);
 	deserializer.ReadPropertyWithDefault<vector<string>>(206, "names", result->names);
 	deserializer.ReadPropertyWithDefault<vector<column_t>>(207, "column_ids", result->column_ids);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<Value>>(208, "options", result->options);
-	deserializer.ReadPropertyWithDefault<string>(209, "index_type_name", result->index_type_name);
+	deserializer.ReadPropertyWithDefault<string>(209, "index_type_name", result->index_type);
 	return std::move(result);
 }
 

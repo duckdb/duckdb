@@ -238,7 +238,7 @@ void IcuExtension::Load(DuckDB &ddb) {
 		}
 		collation = StringUtil::Lower(collation);
 
-		CreateCollationInfo info(collation, GetICUFunction(collation), false, true);
+		CreateCollationInfo info(collation, GetICUFunction(collation), false, false);
 		ExtensionUtil::RegisterCollation(db, info);
 	}
 	ScalarFunction sort_key("icu_sort_key", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,

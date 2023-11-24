@@ -36,6 +36,7 @@ enum class PhysicalOperatorType : uint8_t {
 	STREAMING_SAMPLE,
 	STREAMING_WINDOW,
 	PIVOT,
+	COPY_DATABASE,
 
 	// -----------------------------
 	// Scans
@@ -59,7 +60,6 @@ enum class PhysicalOperatorType : uint8_t {
 	PIECEWISE_MERGE_JOIN,
 	IE_JOIN,
 	DELIM_JOIN,
-	INDEX_JOIN,
 	POSITIONAL_JOIN,
 	ASOF_JOIN,
 	// -----------------------------

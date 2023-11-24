@@ -20,6 +20,7 @@ class DatabaseInstance;
 class StorageManager;
 class TransactionManager;
 class StorageExtension;
+class DatabaseManager;
 
 struct AttachInfo;
 
@@ -38,7 +39,7 @@ public:
 	//! Create an attached database instance with the specified name and storage
 	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, string name, string file_path, AccessMode access_mode);
 	//! Create an attached database instance with the specified storage extension
-	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, StorageExtension &ext, string name, AttachInfo &info,
+	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, StorageExtension &ext, string name, const AttachInfo &info,
 	                 AccessMode access_mode);
 	~AttachedDatabase() override;
 
