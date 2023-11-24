@@ -234,5 +234,15 @@ SELECT ('-infinity'::${ts})::VARCHAR
 ----
 -infinity
 
+query I
+SELECT TRY_CAST('infinity' AS ${ts})
+----
+infinity
+
+query I
+SELECT TRY_CAST('-infinity' AS ${ts})
+----
+-infinity
+
 #ts
 endloop
