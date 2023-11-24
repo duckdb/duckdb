@@ -241,7 +241,7 @@ CREATE TABLE tablename (
 statement error
 ALTER SEQUENCE sequence1 OWNED BY tablename;
 ----
-Dependency Error: sequence1 already depends on new_tablename
+Dependency Error: sequence1 is already owned by tablename
 
 statement error
 DROP SEQUENCE sequence1;
