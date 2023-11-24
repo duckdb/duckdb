@@ -118,7 +118,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 		if (!state.is_set || state.is_null) {
 			finalize_data.ReturnNull();
 		} else {
-			target = state.value;
+			target = StringVector::AddStringOrBlob(finalize_data.result, state.value);
 		}
 	}
 

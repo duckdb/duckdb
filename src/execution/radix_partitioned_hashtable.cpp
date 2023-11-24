@@ -690,14 +690,9 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 		return;
 	}
 
-	RowOperationsState row_state(aggregate_allocator);
-
 	if (scan_status == RadixHTScanStatus::INIT) {
 		data_collection.InitializeScan(scan_state, gstate.column_ids, sink.scan_pin_properties);
 		scan_status = RadixHTScanStatus::IN_PROGRESS;
-	} else if (sink.scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE && layout.HasDestructor()) {
-		// Destroy states from last scan
-		RowOperations::DestroyStates(row_state, layout, scan_state.chunk_state.row_locations, scan_chunk.size());
 	}
 
 	if (!data_collection.Scan(scan_state, scan_chunk)) {
@@ -714,8 +709,13 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 		}
 	}
 
+	RowOperationsState row_state(aggregate_allocator);
 	const auto group_cols = layout.ColumnCount() - 1;
 	RowOperations::FinalizeStates(row_state, layout, scan_state.chunk_state.row_locations, scan_chunk, group_cols);
+
+	if (sink.scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE && layout.HasDestructor()) {
+		RowOperations::DestroyStates(row_state, layout, scan_state.chunk_state.row_locations, scan_chunk.size());
+	}
 
 	auto &radix_ht = sink.radix_ht;
 	idx_t chunk_index = 0;
