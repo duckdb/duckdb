@@ -165,6 +165,7 @@ void RowOperations::Gather(Vector &rows, const SelectionVector &row_sel, Vector 
 		break;
 	case PhysicalType::LIST:
 	case PhysicalType::STRUCT:
+	case PhysicalType::ARRAY:
 		GatherNestedVector(rows, row_sel, col, col_sel, count, layout, col_no, heap_ptr);
 		break;
 	default:

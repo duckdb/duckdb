@@ -8,14 +8,19 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Enums
 //===--------------------------------------------------------------------===//
+
+// FIXME: support Large offsets (int64_t), this does not currently respect the 'arrow_large_buffer_size' setting
+
 template <class TGT>
 struct ArrowEnumData : public ArrowScalarBaseData<TGT> {
 	static idx_t GetLength(string_t input) {
 		return input.GetSize();
 	}
+
 	static void WriteData(data_ptr_t target, string_t input) {
 		memcpy(target, input.GetData(), input.GetSize());
 	}
+
 	static void EnumAppendVector(ArrowAppendData &append_data, const Vector &input, idx_t size) {
 		D_ASSERT(input.GetVectorType() == VectorType::FLAT_VECTOR);
 
@@ -23,9 +28,9 @@ struct ArrowEnumData : public ArrowScalarBaseData<TGT> {
 		ResizeValidity(append_data.validity, append_data.row_count + size);
 
 		// resize the offset buffer - the offset buffer holds the offsets into the child array
-		append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(uint32_t) * (size + 1));
+		append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(int32_t) * (size + 1));
 		auto data = FlatVector::GetData<string_t>(input);
-		auto offset_data = append_data.main_buffer.GetData<uint32_t>();
+		auto offset_data = append_data.main_buffer.GetData<int32_t>();
 		if (append_data.row_count == 0) {
 			// first entry
 			offset_data[0] = 0;
@@ -50,6 +55,7 @@ struct ArrowEnumData : public ArrowScalarBaseData<TGT> {
 		}
 		append_data.row_count += size;
 	}
+
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
 		result.main_buffer.reserve(capacity * sizeof(TGT));
 		// construct the enum child data

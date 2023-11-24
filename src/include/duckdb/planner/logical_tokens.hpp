@@ -16,6 +16,7 @@ class LogicalAggregate;
 class LogicalAnyJoin;
 class LogicalColumnDataGet;
 class LogicalComparisonJoin;
+class LogicalCopyDatabase;
 class LogicalCopyToFile;
 class LogicalCreate;
 class LogicalCreateTable;

@@ -49,6 +49,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.ResolverStyle;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -82,6 +83,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toMap;
+import static org.duckdb.DuckDBDriver.DUCKDB_USER_AGENT_PROPERTY;
 import static org.duckdb.DuckDBDriver.JDBC_STREAM_RESULTS;
 
 public class TestDuckDBJDBC {
@@ -2264,6 +2266,59 @@ public class TestDuckDBJDBC {
         conn.close();
     }
 
+    public static void test_appender_date_and_time() throws Exception {
+        DuckDBConnection conn = DriverManager.getConnection("jdbc:duckdb:").unwrap(DuckDBConnection.class);
+        Statement stmt = conn.createStatement();
+
+        stmt.execute("CREATE TABLE date_and_time (id INT4, a TIMESTAMP)");
+        DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "date_and_time");
+
+        LocalDateTime ldt1 = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
+        LocalDateTime ldt2 = LocalDateTime.of(-23434, 3, 5, 23, 2);
+        LocalDateTime ldt3 = LocalDateTime.of(1970, 1, 1, 0, 0);
+        LocalDateTime ldt4 = LocalDateTime.of(11111, 12, 31, 23, 59, 59, 999999000);
+
+        appender.beginRow();
+        appender.append(1);
+        appender.appendLocalDateTime(ldt1);
+        appender.endRow();
+        appender.beginRow();
+        appender.append(2);
+        appender.appendLocalDateTime(ldt2);
+        appender.endRow();
+        appender.beginRow();
+        appender.append(3);
+        appender.appendLocalDateTime(ldt3);
+        appender.endRow();
+        appender.beginRow();
+        appender.append(4);
+        appender.appendLocalDateTime(ldt4);
+        appender.endRow();
+        appender.close();
+
+        ResultSet rs = stmt.executeQuery("SELECT a FROM date_and_time ORDER BY id");
+        assertFalse(rs.isClosed());
+        assertTrue(rs.next());
+
+        LocalDateTime res1 = (LocalDateTime) rs.getObject(1, LocalDateTime.class);
+        assertEquals(res1, ldt1);
+        assertTrue(rs.next());
+
+        LocalDateTime res2 = (LocalDateTime) rs.getObject(1, LocalDateTime.class);
+        assertEquals(res2, ldt2);
+        assertTrue(rs.next());
+
+        LocalDateTime res3 = (LocalDateTime) rs.getObject(1, LocalDateTime.class);
+        assertEquals(res3, ldt3);
+        assertTrue(rs.next());
+
+        LocalDateTime res4 = (LocalDateTime) rs.getObject(1, LocalDateTime.class);
+        assertEquals(res4, ldt4);
+
+        rs.close();
+        stmt.close();
+        conn.close();
+    }
     public static void test_appender_int_string() throws Exception {
         DuckDBConnection conn = DriverManager.getConnection("jdbc:duckdb:").unwrap(DuckDBConnection.class);
         Statement stmt = conn.createStatement();
@@ -3295,6 +3350,114 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_array_resultset() throws Exception {
+        try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+             Statement statement = connection.createStatement()) {
+            try (ResultSet rs = statement.executeQuery("select [42, 69]")) {
+                assertTrue(rs.next());
+                ResultSet arrayResultSet = rs.getArray(1).getResultSet();
+                assertTrue(arrayResultSet.next());
+                assertEquals(arrayResultSet.getInt(1), 1);
+                assertEquals(arrayResultSet.getInt(2), 42);
+                assertTrue(arrayResultSet.next());
+                assertEquals(arrayResultSet.getInt(1), 2);
+                assertEquals(arrayResultSet.getInt(2), 69);
+                assertFalse(arrayResultSet.next());
+            }
+
+            try (ResultSet rs = statement.executeQuery("select unnest([[[], [69]]])")) {
+                assertTrue(rs.next());
+                ResultSet arrayResultSet = rs.getArray(1).getResultSet();
+                assertTrue(arrayResultSet.next());
+                assertEquals(arrayResultSet.getInt(1), 1);
+                Array subArray = arrayResultSet.getArray(2);
+                assertNotNull(subArray);
+                ResultSet subArrayResultSet = subArray.getResultSet();
+                assertFalse(subArrayResultSet.next()); // empty array
+
+                assertTrue(arrayResultSet.next());
+                assertEquals(arrayResultSet.getInt(1), 2);
+                Array subArray2 = arrayResultSet.getArray(2);
+                assertNotNull(subArray2);
+                ResultSet subArrayResultSet2 = subArray2.getResultSet();
+                assertTrue(subArrayResultSet2.next());
+
+                assertEquals(subArrayResultSet2.getInt(1), 1);
+                assertEquals(subArrayResultSet2.getInt(2), 69);
+                assertFalse(arrayResultSet.next());
+            }
+
+            try (ResultSet rs = statement.executeQuery("select [42, 69]")) {
+                assertFalse(rs.isClosed());
+                rs.close();
+                assertTrue(rs.isClosed());
+            }
+
+            try (ResultSet rs = statement.executeQuery("select ['life', null, 'universe']")) {
+                assertTrue(rs.next());
+
+                ResultSet arrayResultSet = rs.getArray(1).getResultSet();
+                assertTrue(arrayResultSet.isBeforeFirst());
+                assertTrue(arrayResultSet.next());
+                assertFalse(arrayResultSet.isBeforeFirst());
+                assertEquals(arrayResultSet.getInt(1), 1);
+                assertEquals(arrayResultSet.getString(2), "life");
+                assertFalse(arrayResultSet.wasNull());
+
+                assertTrue(arrayResultSet.next());
+                assertEquals(arrayResultSet.getInt(1), 2);
+                assertFalse(arrayResultSet.wasNull());
+                assertEquals(arrayResultSet.getObject(2), null);
+                assertTrue(arrayResultSet.wasNull());
+
+                assertTrue(arrayResultSet.next());
+                assertEquals(arrayResultSet.getInt(1), 3);
+                assertFalse(arrayResultSet.wasNull());
+                assertEquals(arrayResultSet.getString(2), "universe");
+                assertFalse(arrayResultSet.wasNull());
+
+                assertFalse(arrayResultSet.isBeforeFirst());
+                assertFalse(arrayResultSet.isAfterLast());
+                assertFalse(arrayResultSet.next());
+                assertTrue(arrayResultSet.isAfterLast());
+
+                arrayResultSet.first();
+                assertEquals(arrayResultSet.getString(2), "life");
+                assertTrue(arrayResultSet.isFirst());
+
+                arrayResultSet.last();
+                assertEquals(arrayResultSet.getString(2), "universe");
+                assertTrue(arrayResultSet.isLast());
+
+                assertFalse(arrayResultSet.next());
+                assertTrue(arrayResultSet.isAfterLast());
+
+                arrayResultSet.next(); // try to move past the end
+                assertTrue(arrayResultSet.isAfterLast());
+
+                arrayResultSet.relative(-1);
+                assertEquals(arrayResultSet.getString(2), "universe");
+            }
+
+            try (ResultSet rs = statement.executeQuery("select UNNEST([[42], [69]])")) {
+                assertTrue(rs.next());
+                ResultSet arrayResultSet = rs.getArray(1).getResultSet();
+                assertTrue(arrayResultSet.next());
+
+                assertEquals(arrayResultSet.getInt(1), 1);
+                assertEquals(arrayResultSet.getInt(2), 42);
+                assertFalse(arrayResultSet.next());
+
+                assertTrue(rs.next());
+                ResultSet arrayResultSet2 = rs.getArray(1).getResultSet();
+                assertTrue(arrayResultSet2.next());
+                assertEquals(arrayResultSet2.getInt(1), 1);
+                assertEquals(arrayResultSet2.getInt(2), 69);
+                assertFalse(arrayResultSet2.next());
+            }
+        }
+    }
+
     private static <T> List<T> arrayToList(Array array) throws SQLException {
         return arrayToList((T[]) array.getArray());
     }
@@ -3502,7 +3665,7 @@ public class TestDuckDBJDBC {
         correct_answer_map.put("smallint", asList((short) -32768, (short) 32767, null));
         correct_answer_map.put("int", asList(-2147483648, 2147483647, null));
         correct_answer_map.put("bigint", asList(-9223372036854775808L, 9223372036854775807L, null));
-        correct_answer_map.put("hugeint", asList(new BigInteger("-170141183460469231731687303715884105727"),
+        correct_answer_map.put("hugeint", asList(new BigInteger("-170141183460469231731687303715884105728"),
                                                  new BigInteger("170141183460469231731687303715884105727"), null));
         correct_answer_map.put("utinyint", asList((short) 0, (short) 255, null));
         correct_answer_map.put("usmallint", asList(0, 65535, null));
@@ -3517,7 +3680,7 @@ public class TestDuckDBJDBC {
             "dec_18_6", asList(new BigDecimal("-999999999999.999999"), (new BigDecimal("999999999999.999999")), null));
         correct_answer_map.put("dec38_10", asList(new BigDecimal("-9999999999999999999999999999.9999999999"),
                                                   (new BigDecimal("9999999999999999999999999999.9999999999")), null));
-        correct_answer_map.put("uuid", asList(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+        correct_answer_map.put("uuid", asList(UUID.fromString("00000000-0000-0000-0000-000000000000"),
                                               (UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff")), null));
         correct_answer_map.put("varchar", asList("🦆🦆🦆🦆🦆🦆", "goo\u0000se", null));
         correct_answer_map.put("json", asList("🦆🦆🦆🦆🦆", "goose", null));
@@ -3771,6 +3934,15 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_UUID_binding() throws Exception {
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+             PreparedStatement statement = conn.prepareStatement("select '0b17ce61-375c-4ad8-97b3-349d96d35ab1'::UUID");
+             ResultSet resultSet = statement.executeQuery()) {
+            resultSet.next();
+            assertEquals(UUID.fromString("0b17ce61-375c-4ad8-97b3-349d96d35ab1"), resultSet.getObject(1));
+        }
+    }
+
     public static void test_result_streaming() throws Exception {
         Properties props = new Properties();
         props.setProperty(JDBC_STREAM_RESULTS, String.valueOf(true));
@@ -3782,6 +3954,46 @@ public class TestDuckDBJDBC {
                 rs.getInt(1);
             }
             assertFalse(rs.next()); // is exhausted
+        }
+    }
+
+    public static void test_struct_use_after_free() throws Exception {
+        Object struct, array;
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+             PreparedStatement stmt = conn.prepareStatement("SELECT struct_pack(hello := 2), [42]");
+             ResultSet rs = stmt.executeQuery()) {
+            rs.next();
+            struct = rs.getObject(1);
+            array = rs.getObject(2);
+        }
+        assertEquals(struct.toString(), "{hello=2}");
+        assertEquals(array.toString(), "[42]");
+    }
+
+    public static void test_user_agent_default() throws Exception {
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+            assertEquals(getSetting(conn, "custom_user_agent"), "");
+
+            try (PreparedStatement stmt1 = conn.prepareStatement("PRAGMA user_agent");
+                 ResultSet rs = stmt1.executeQuery()) {
+                assertTrue(rs.next());
+                assertTrue(rs.getString(1).matches("duckdb/.*(.*) jdbc"));
+            }
+        }
+    }
+
+    public static void test_user_agent_custom() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(DUCKDB_USER_AGENT_PROPERTY, "CUSTOM_STRING");
+
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:", props)) {
+            assertEquals(getSetting(conn, "custom_user_agent"), "CUSTOM_STRING");
+
+            try (PreparedStatement stmt1 = conn.prepareStatement("PRAGMA user_agent");
+                 ResultSet rs = stmt1.executeQuery()) {
+                assertTrue(rs.next());
+                assertTrue(rs.getString(1).matches("duckdb/.*(.*) jdbc CUSTOM_STRING"));
+            }
         }
     }
 

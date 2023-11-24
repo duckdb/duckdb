@@ -24,11 +24,13 @@ SELECT a FROM test ORDER BY 'hello', a
 12
 13
 
-# ambiguous reference in union alias
-statement error
+query II
 SELECT a AS k, b FROM test UNION SELECT a, b AS k FROM test ORDER BY k
+----
+11	22
+12	21
+13	22
 
-# but works if not ambiguous
 query II
 SELECT a AS k, b FROM test UNION SELECT a AS k, b FROM test ORDER BY k
 ----
