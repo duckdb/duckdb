@@ -45,6 +45,7 @@ public:
 	}
 
 	Transaction &GetTransaction(AttachedDatabase &db);
+	void RemoveTransaction(AttachedDatabase &db);
 
 	string Commit();
 	void Rollback();
