@@ -14,23 +14,120 @@
 namespace duckdb {
 class CatalogEntry;
 
-enum class DependencyType : uint8_t {
-	DEPENDENCY_REGULAR = 0,
-	DEPENDENCY_AUTOMATIC = 1,
-	DEPENDENCY_OWNS = 2,
-	DEPENDENCY_OWNED_BY = 3
+struct DependencyFlags {
+private:
+	static constexpr uint8_t NON_BLOCKING = 0;
+	static constexpr uint8_t BLOCKING = 1 << 0;
+	static constexpr uint8_t OWNED = 1 << 1;
+	static constexpr uint8_t OWNERSHIP = 1 << 2;
+
+public:
+	DependencyFlags() : value(0) {
+	}
+	DependencyFlags(const DependencyFlags &other) : value(other.value) {
+	}
+	DependencyFlags &operator=(const DependencyFlags &other) {
+		value = other.value;
+		return *this;
+	}
+	bool operator==(const DependencyFlags &other) const {
+		return other.value == value;
+	}
+	bool operator!=(const DependencyFlags &other) const {
+		return !(*this == other);
+	}
+
+public:
+	bool IsBlocking() const {
+		return (value & BLOCKING) == BLOCKING;
+	}
+
+	bool IsOwned() const {
+		return (value & OWNED) == OWNED;
+	}
+
+	bool IsOwnership() const {
+		return (value & OWNERSHIP) == OWNERSHIP;
+	}
+
+public:
+	DependencyFlags &SetOwnership() {
+		value |= OWNERSHIP;
+		return *this;
+	}
+	DependencyFlags &SetOwned() {
+		value |= OWNED;
+		return *this;
+	}
+	DependencyFlags &SetBlocking() {
+		value |= BLOCKING;
+		return *this;
+	}
+
+public:
+	static DependencyFlags DependencyOwns() {
+		return DependencyFlags().SetOwnership();
+	}
+	static DependencyFlags DependencyOwned() {
+		return DependencyFlags().SetOwned();
+	}
+	static DependencyFlags DependencyAutomatic() {
+		return DependencyFlags();
+	}
+	static DependencyFlags DependencyRegular() {
+		return DependencyFlags().SetBlocking();
+	}
+
+public:
+	DependencyFlags &Apply(DependencyFlags other) {
+		if (other.IsBlocking()) {
+			SetBlocking();
+		}
+		if (other.IsOwned()) {
+			D_ASSERT(!IsOwnership());
+			SetOwned();
+		}
+		if (other.IsOwnership()) {
+			D_ASSERT(!IsOwned());
+			SetOwnership();
+		}
+		return *this;
+	}
+
+public:
+	string ToString() const {
+		string result;
+		if (IsBlocking()) {
+			result += "REGULAR";
+		} else {
+			result += "AUTOMATIC";
+		}
+		result += " | ";
+		if (IsOwned()) {
+			D_ASSERT(!IsOwnership());
+			result += "OWNED BY";
+		}
+		if (IsOwnership()) {
+			D_ASSERT(!IsOwned());
+			result += "OWNS";
+		}
+		return result;
+	}
+
+public:
+	uint8_t value;
 };
 
 struct Dependency {
-	Dependency(CatalogEntry &entry, DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR)
+	Dependency(CatalogEntry &entry, DependencyFlags flags = DependencyFlags().SetBlocking())
 	    : // NOLINT: Allow implicit conversion from `CatalogEntry`
-	      entry(entry), dependency_type(dependency_type) {
+	      entry(entry), flags(flags) {
 	}
 
 	//! The catalog entry this depends on
 	reference<CatalogEntry> entry;
 	//! The type of dependency
-	DependencyType dependency_type;
+	DependencyFlags flags;
 };
 
 struct DependencyHashFunction {

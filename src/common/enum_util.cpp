@@ -12,7 +12,6 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
-#include "duckdb/catalog/dependency.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/aggregate_handling.hpp"
@@ -1404,39 +1403,6 @@ DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value)
 	}
 	if (StringUtil::Equals(value, "RELIANT")) {
 		return DependencyEntryType::RELIANT;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
-}
-
-template<>
-const char* EnumUtil::ToChars<DependencyType>(DependencyType value) {
-	switch(value) {
-	case DependencyType::DEPENDENCY_REGULAR:
-		return "DEPENDENCY_REGULAR";
-	case DependencyType::DEPENDENCY_AUTOMATIC:
-		return "DEPENDENCY_AUTOMATIC";
-	case DependencyType::DEPENDENCY_OWNS:
-		return "DEPENDENCY_OWNS";
-	case DependencyType::DEPENDENCY_OWNED_BY:
-		return "DEPENDENCY_OWNED_BY";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
-	}
-}
-
-template<>
-DependencyType EnumUtil::FromString<DependencyType>(const char *value) {
-	if (StringUtil::Equals(value, "DEPENDENCY_REGULAR")) {
-		return DependencyType::DEPENDENCY_REGULAR;
-	}
-	if (StringUtil::Equals(value, "DEPENDENCY_AUTOMATIC")) {
-		return DependencyType::DEPENDENCY_AUTOMATIC;
-	}
-	if (StringUtil::Equals(value, "DEPENDENCY_OWNS")) {
-		return DependencyType::DEPENDENCY_OWNS;
-	}
-	if (StringUtil::Equals(value, "DEPENDENCY_OWNED_BY")) {
-		return DependencyType::DEPENDENCY_OWNED_BY;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

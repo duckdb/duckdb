@@ -9,13 +9,13 @@
 namespace duckdb {
 
 struct DependencyInformation {
-	DependencyInformation(CatalogEntry &object, CatalogEntry &dependent, DependencyType type)
-	    : object(object), dependent(dependent), type(type) {
+	DependencyInformation(CatalogEntry &object, CatalogEntry &dependent, DependencyFlags flags)
+	    : object(object), dependent(dependent), flags(flags) {
 	}
 
 	CatalogEntry &object;
 	CatalogEntry &dependent;
-	DependencyType type;
+	DependencyFlags flags;
 };
 
 struct DuckDBDependenciesData : public GlobalTableFunctionState {
@@ -60,8 +60,8 @@ unique_ptr<GlobalTableFunctionState> DuckDBDependenciesInit(ClientContext &conte
 	if (catalog.IsDuckCatalog()) {
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		auto &dependency_manager = duck_catalog.GetDependencyManager();
-		dependency_manager.Scan(context, [&](CatalogEntry &obj, CatalogEntry &dependent, DependencyType type) {
-			result->entries.emplace_back(obj, dependent, type);
+		dependency_manager.Scan(context, [&](CatalogEntry &obj, CatalogEntry &dependent, DependencyFlags flags) {
+			result->entries.emplace_back(obj, dependent, flags);
 		});
 	}
 
@@ -95,15 +95,10 @@ void DuckDBDependenciesFunction(ClientContext &context, TableFunctionInput &data
 		output.SetValue(5, count, Value::INTEGER(0));
 		// deptype, LogicalType::VARCHAR
 		string dependency_type_str;
-		switch (entry.type) {
-		case DependencyType::DEPENDENCY_REGULAR:
+		if (entry.flags.IsBlocking()) {
 			dependency_type_str = "n";
-			break;
-		case DependencyType::DEPENDENCY_AUTOMATIC:
+		} else {
 			dependency_type_str = "a";
-			break;
-		default:
-			throw NotImplementedException("Unimplemented dependency type");
 		}
 		output.SetValue(6, count, Value(dependency_type_str));
 

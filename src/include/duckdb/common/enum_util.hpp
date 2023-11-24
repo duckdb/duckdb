@@ -100,8 +100,6 @@ enum class DefaultOrderByNullType : uint8_t;
 
 enum class DependencyEntryType : uint8_t;
 
-enum class DependencyType : uint8_t;
-
 enum class DistinctType : uint8_t;
 
 enum class ErrorType : uint16_t;
@@ -404,9 +402,6 @@ const char* EnumUtil::ToChars<DefaultOrderByNullType>(DefaultOrderByNullType val
 
 template<>
 const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value);
-
-template<>
-const char* EnumUtil::ToChars<DependencyType>(DependencyType value);
 
 template<>
 const char* EnumUtil::ToChars<DistinctType>(DistinctType value);
@@ -810,9 +805,6 @@ DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *
 
 template<>
 DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value);
-
-template<>
-DependencyType EnumUtil::FromString<DependencyType>(const char *value);
 
 template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value);
