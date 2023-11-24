@@ -101,14 +101,6 @@ bool AttachedDatabase::IsReadOnly() const {
 	return type == AttachedDatabaseType::READ_ONLY_DATABASE;
 }
 
-string AttachedDatabase::ExtractDatabaseNameAndType(string &dbpath, string &db_type, FileSystem &fs) {
-	// try to extract database type from path
-	if (db_type.empty()) {
-		DBPathAndType::ExtractExtensionPrefix(dbpath, db_type);
-	}
-	return AttachedDatabase::ExtractDatabaseName(dbpath, fs);
-}
-
 string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &fs) {
 	if (dbpath.empty() || dbpath == IN_MEMORY_PATH) {
 		return "memory";

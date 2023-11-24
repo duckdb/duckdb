@@ -4,6 +4,8 @@
 #include "duckdb/common/operator/numeric_cast.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
@@ -916,17 +918,31 @@ bool TryCast::Operation(double input, double &result, bool strict) {
 //===--------------------------------------------------------------------===//
 // Cast String -> Numeric
 //===--------------------------------------------------------------------===//
+
 template <typename T>
-struct IntegerCastData {
-	using Result = T;
-	Result result;
-	bool seen_decimal;
+struct SimpleIntegerCastData {
+	using ResultType = T;
+	ResultType result;
 };
 
-struct IntegerCastOperation {
+struct SimpleIntegerCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleDigit(T &state, uint8_t digit) {
-		using result_t = typename T::Result;
+		using result_t = typename T::ResultType;
+#if ((__GNUC__ >= 5) || defined(__clang__)) && DISABLE
+		if (__builtin_mul_overflow(state.result, result_t(10), &state.result)) {
+			return false;
+		}
+		if (NEGATIVE) {
+			if (__builtin_sub_overflow(state.result, result_t(digit), &state.result)) {
+				return false;
+			}
+		} else {
+			if (__builtin_add_overflow(state.result, result_t(digit), &state.result)) {
+				return false;
+			}
+		}
+#else
 		if (NEGATIVE) {
 			if (state.result < (NumericLimits<result_t>::Minimum() + digit) / 10) {
 				return false;
@@ -938,12 +954,13 @@ struct IntegerCastOperation {
 			}
 			state.result = state.result * 10 + digit;
 		}
+#endif
 		return true;
 	}
 
 	template <class T, bool NEGATIVE>
 	static bool HandleHexDigit(T &state, uint8_t digit) {
-		using result_t = typename T::Result;
+		using result_t = typename T::ResultType;
 		if (state.result > (NumericLimits<result_t>::Maximum() - digit) / 16) {
 			return false;
 		}
@@ -953,7 +970,7 @@ struct IntegerCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool HandleBinaryDigit(T &state, uint8_t digit) {
-		using result_t = typename T::Result;
+		using result_t = typename T::ResultType;
 		if (state.result > (NumericLimits<result_t>::Maximum() - digit) / 2) {
 			return false;
 		}
@@ -963,40 +980,14 @@ struct IntegerCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int32_t exponent) {
-		using result_t = typename T::Result;
-		double dbl_res = state.result * std::pow(10.0L, exponent);
-		if (dbl_res < (double)NumericLimits<result_t>::Minimum() ||
-		    dbl_res > (double)NumericLimits<result_t>::Maximum()) {
-			return false;
-		}
-		state.result = (result_t)std::nearbyint(dbl_res);
-		return true;
+		// SimpleIntegerCast doesn't deal with Exponents
+		return false;
 	}
 
 	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
 	static bool HandleDecimal(T &state, uint8_t digit) {
-		if (state.seen_decimal) {
-			return true;
-		}
-		state.seen_decimal = true;
-		// round the integer based on what is after the decimal point
-		// if digit >= 5, then we round up (or down in case of negative numbers)
-		auto increment = digit >= 5;
-		if (!increment) {
-			return true;
-		}
-		if (NEGATIVE) {
-			if (state.result == NumericLimits<typename T::Result>::Minimum()) {
-				return false;
-			}
-			state.result--;
-		} else {
-			if (state.result == NumericLimits<typename T::Result>::Maximum()) {
-				return false;
-			}
-			state.result++;
-		}
-		return true;
+		// SimpleIntegerCast doesn't deal with Decimals
+		return false;
 	}
 
 	template <class T, bool NEGATIVE>
@@ -1005,7 +996,164 @@ struct IntegerCastOperation {
 	}
 };
 
-template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = IntegerCastOperation, char decimal_separator = '.'>
+template <typename T>
+struct IntegerCastData {
+	using ResultType = T;
+	using StoreType = int64_t;
+	StoreType result;
+	StoreType decimal;
+	uint16_t decimal_digits;
+};
+
+template <>
+struct IntegerCastData<uint64_t> {
+	using ResultType = uint64_t;
+	using StoreType = uint64_t;
+	StoreType result;
+	StoreType decimal;
+	uint16_t decimal_digits;
+};
+
+struct IntegerCastOperation {
+	template <class T, bool NEGATIVE>
+	static bool HandleDigit(T &state, uint8_t digit) {
+		using store_t = typename T::StoreType;
+		if (NEGATIVE) {
+			if (state.result < (NumericLimits<store_t>::Minimum() + digit) / 10) {
+				return false;
+			}
+			state.result = state.result * 10 - digit;
+		} else {
+			if (state.result > (NumericLimits<store_t>::Maximum() - digit) / 10) {
+				return false;
+			}
+			state.result = state.result * 10 + digit;
+		}
+		return true;
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool HandleHexDigit(T &state, uint8_t digit) {
+		using result_t = typename T::ResultType;
+		if (state.result > (NumericLimits<result_t>::Maximum() - digit) / 16) {
+			return false;
+		}
+		state.result = state.result * 16 + digit;
+		return true;
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool HandleBinaryDigit(T &state, uint8_t digit) {
+		using result_t = typename T::ResultType;
+		if (state.result > (NumericLimits<result_t>::Maximum() - digit) / 2) {
+			return false;
+		}
+		state.result = state.result * 2 + digit;
+		return true;
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool HandleExponent(T &state, int32_t exponent) {
+		using store_t = typename T::StoreType;
+
+		int32_t e = exponent;
+		// Negative Exponent
+		if (e < 0) {
+			while (e++ < 0) {
+				state.decimal = state.result % 10;
+				state.result /= 10;
+			}
+			if (state.decimal < 0) {
+				state.decimal = -state.decimal;
+			}
+			state.decimal_digits = 1;
+			return Finalize<T, NEGATIVE>(state);
+		}
+
+		// Positive Exponent
+		while (e-- > 0) {
+			if (!TryMultiplyOperator::Operation(state.result, (store_t)10, state.result)) {
+				return false;
+			}
+		}
+
+		if (state.decimal == 0) {
+			return Finalize<T, NEGATIVE>(state);
+		}
+
+		// Handle decimals
+		e = exponent - state.decimal_digits;
+		store_t remainder = 0;
+		if (e < 0) {
+			store_t power = 1;
+			while (e++ < 0) {
+				power *= 10;
+			}
+			remainder = state.decimal % power;
+			state.decimal /= power;
+		} else {
+			while (e-- > 0) {
+				if (!TryMultiplyOperator::Operation(state.decimal, (store_t)10, state.decimal)) {
+					return false;
+				}
+			}
+		}
+
+		state.decimal_digits -= exponent;
+
+		if (NEGATIVE) {
+			if (!TrySubtractOperator::Operation(state.result, state.decimal, state.result)) {
+				return false;
+			}
+		} else if (!TryAddOperator::Operation(state.result, state.decimal, state.result)) {
+			return false;
+		}
+		state.decimal = remainder;
+		return Finalize<T, NEGATIVE>(state);
+	}
+
+	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
+	static bool HandleDecimal(T &state, uint8_t digit) {
+		using store_t = typename T::StoreType;
+		if (state.decimal > (NumericLimits<store_t>::Maximum() - digit) / 10) {
+			// Simply ignore any more decimals
+			return true;
+		}
+		state.decimal_digits++;
+		state.decimal = state.decimal * 10 + digit;
+		return true;
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool Finalize(T &state) {
+		using result_t = typename T::ResultType;
+		using store_t = typename T::StoreType;
+
+		result_t tmp;
+		if (!TryCast::Operation<store_t, result_t>(state.result, tmp)) {
+			return false;
+		}
+
+		while (state.decimal > 10) {
+			state.decimal /= 10;
+			state.decimal_digits--;
+		}
+
+		bool success = true;
+		if (state.decimal_digits == 1 && state.decimal >= 5) {
+			if (NEGATIVE) {
+				success = TrySubtractOperator::Operation(tmp, (result_t)1, tmp);
+			} else {
+				success = TryAddOperator::Operation(tmp, (result_t)1, tmp);
+			}
+		}
+		state.result = tmp;
+		return success;
+	}
+};
+
+template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = SimpleIntegerCastOperation,
+          char decimal_separator = '.'>
 static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) {
 	idx_t start_pos;
 	if (NEGATIVE) {
@@ -1072,15 +1220,15 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 						return false;
 					}
 					using ExponentData = IntegerCastData<int32_t>;
-					ExponentData exponent {0, false};
+					ExponentData exponent {};
 					int negative = buf[pos] == '-';
 					if (negative) {
-						if (!IntegerCastLoop<ExponentData, true, false, IntegerCastOperation, decimal_separator>(
+						if (!IntegerCastLoop<ExponentData, true, false, SimpleIntegerCastOperation, decimal_separator>(
 						        buf + pos, len - pos, exponent, strict)) {
 							return false;
 						}
 					} else {
-						if (!IntegerCastLoop<ExponentData, false, false, IntegerCastOperation, decimal_separator>(
+						if (!IntegerCastLoop<ExponentData, false, false, SimpleIntegerCastOperation, decimal_separator>(
 						        buf + pos, len - pos, exponent, strict)) {
 							return false;
 						}
@@ -1168,7 +1316,7 @@ static bool IntegerBinaryCastLoop(const char *buf, idx_t len, T &result, bool st
 	return pos > start_pos;
 }
 
-template <class T, bool IS_SIGNED = true, bool ALLOW_EXPONENT = true, class OP = IntegerCastOperation,
+template <class T, bool IS_SIGNED = true, bool ALLOW_EXPONENT = true, class OP = SimpleIntegerCastOperation,
           bool ZERO_INITIALIZE = true, char decimal_separator = '.'>
 static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	// skip any spaces at the start
@@ -1216,9 +1364,19 @@ static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 
 template <typename T, bool IS_SIGNED = true>
 static inline bool TrySimpleIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
-	IntegerCastData<T> data;
-	if (TryIntegerCast<IntegerCastData<T>, IS_SIGNED>(buf, len, data, strict)) {
-		result = data.result;
+	SimpleIntegerCastData<T> simple_data;
+	if (TryIntegerCast<SimpleIntegerCastData<T>, IS_SIGNED, false, SimpleIntegerCastOperation>(buf, len, simple_data,
+	                                                                                           strict)) {
+		result = (T)simple_data.result;
+		return true;
+	}
+
+	// Simple integer cast failed, try again with decimals/exponents included
+	// FIXME: This could definitely be improved as some extra work is being done here. It is more important that
+	//  "normal" integers (without exponent/decimals) are still being parsed quickly.
+	IntegerCastData<T> cast_data;
+	if (TryIntegerCast<IntegerCastData<T>, IS_SIGNED, true, IntegerCastOperation>(buf, len, cast_data, strict)) {
+		result = (T)cast_data.result;
 		return true;
 	}
 	return false;
@@ -1858,127 +2016,210 @@ bool TryCastErrorMessage::Operation(string_t input, interval_t &result, string *
 // when that value is full, we perform a HUGEINT multiplication to flush it into the hugeint
 // this takes the number of HUGEINT multiplications down from [0-38] to [0-2]
 struct HugeIntCastData {
-	hugeint_t hugeint;
+	hugeint_t result;
 	int64_t intermediate;
 	uint8_t digits;
-	bool decimal;
+
+	hugeint_t decimal;
+	uint16_t decimal_total_digits;
+	int64_t decimal_intermediate;
+	uint16_t decimal_intermediate_digits;
 
 	bool Flush() {
 		if (digits == 0 && intermediate == 0) {
 			return true;
 		}
-		if (hugeint.lower != 0 || hugeint.upper != 0) {
+		if (result.lower != 0 || result.upper != 0) {
 			if (digits > 38) {
 				return false;
 			}
-			if (!Hugeint::TryMultiply(hugeint, Hugeint::POWERS_OF_TEN[digits], hugeint)) {
+			if (!Hugeint::TryMultiply(result, Hugeint::POWERS_OF_TEN[digits], result)) {
 				return false;
 			}
 		}
-		if (!Hugeint::AddInPlace(hugeint, hugeint_t(intermediate))) {
+		if (!Hugeint::AddInPlace(result, hugeint_t(intermediate))) {
 			return false;
 		}
 		digits = 0;
 		intermediate = 0;
 		return true;
 	}
+
+	bool FlushDecimal() {
+		if (decimal_intermediate_digits == 0 && decimal_intermediate == 0) {
+			return true;
+		}
+		if (decimal.lower != 0 || decimal.upper != 0) {
+			if (decimal_intermediate_digits > 38) {
+				return false;
+			}
+			if (!Hugeint::TryMultiply(decimal, Hugeint::POWERS_OF_TEN[decimal_intermediate_digits], decimal)) {
+				return false;
+			}
+		}
+		if (!Hugeint::AddInPlace(decimal, hugeint_t(decimal_intermediate))) {
+			return false;
+		}
+		decimal_total_digits += decimal_intermediate_digits;
+		decimal_intermediate_digits = 0;
+		decimal_intermediate = 0;
+		return true;
+	}
 };
 
 struct HugeIntegerCastOperation {
 	template <class T, bool NEGATIVE>
-	static bool HandleDigit(T &result, uint8_t digit) {
+	static bool HandleDigit(T &state, uint8_t digit) {
 		if (NEGATIVE) {
-			if (result.intermediate < (NumericLimits<int64_t>::Minimum() + digit) / 10) {
+			if (state.intermediate < (NumericLimits<int64_t>::Minimum() + digit) / 10) {
 				// intermediate is full: need to flush it
-				if (!result.Flush()) {
+				if (!state.Flush()) {
 					return false;
 				}
 			}
-			result.intermediate = result.intermediate * 10 - digit;
+			state.intermediate = state.intermediate * 10 - digit;
 		} else {
-			if (result.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 10) {
-				if (!result.Flush()) {
+			if (state.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 10) {
+				if (!state.Flush()) {
 					return false;
 				}
 			}
-			result.intermediate = result.intermediate * 10 + digit;
+			state.intermediate = state.intermediate * 10 + digit;
 		}
-		result.digits++;
+		state.digits++;
 		return true;
 	}
 
 	template <class T, bool NEGATIVE>
-	static bool HandleHexDigit(T &result, uint8_t digit) {
-		return false;
-	}
-
-	template <class T, bool NEGATIVE>
-	static bool HandleBinaryDigit(T &result, uint8_t digit) {
-		if (result.hugeint & (hugeint_t(1) << 127)) {
-			return false;
-		}
-		result.hugeint <<= 1;
-		result.hugeint += digit;
-		return true;
-	}
-
-	template <class T, bool NEGATIVE>
-	static bool HandleExponent(T &result, int32_t exponent) {
-		if (!result.Flush()) {
-			return false;
-		}
-		if (exponent < -38 || exponent > 38) {
-			// out of range for exact exponent: use double and convert
-			double dbl_res = Hugeint::Cast<double>(result.hugeint) * std::pow(10.0L, exponent);
-			if (dbl_res < Hugeint::Cast<double>(NumericLimits<hugeint_t>::Minimum()) ||
-			    dbl_res > Hugeint::Cast<double>(NumericLimits<hugeint_t>::Maximum())) {
+	static bool HandleHexDigit(T &state, uint8_t digit) {
+		if (state.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 16) {
+			// intermediate is full: need to flush it
+			if (!state.Flush()) {
 				return false;
 			}
-			result.hugeint = Hugeint::Convert(dbl_res);
+		}
+		state.intermediate = state.intermediate * 16 + digit;
+		state.digits++;
+		return true;
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool HandleBinaryDigit(T &state, uint8_t digit) {
+		if (state.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 2) {
+			// intermediate is full: need to flush it
+			if (!state.Flush()) {
+				return false;
+			}
+		}
+		state.intermediate = state.intermediate * 2 + digit;
+		state.digits++;
+		return true;
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool HandleExponent(T &state, int32_t exponent) {
+		if (!state.Flush()) {
+			return false;
+		}
+
+		int32_t e = exponent;
+		if (e < -38) {
+			state.result = 0;
 			return true;
 		}
-		if (exponent < 0) {
-			// negative exponent: divide by power of 10
-			result.hugeint = Hugeint::Divide(result.hugeint, Hugeint::POWERS_OF_TEN[-exponent]);
-			return true;
+
+		// Negative Exponent
+		hugeint_t remainder = 0;
+		if (e < 0) {
+			state.result = Hugeint::DivMod(state.result, Hugeint::POWERS_OF_TEN[-e], remainder);
+			state.decimal = remainder;
+			state.decimal_total_digits = -e;
+			state.decimal_intermediate = 0;
+			state.decimal_intermediate_digits = 0;
+			return Finalize<T, NEGATIVE>(state);
+		}
+
+		// Positive Exponent
+		if (state.result != 0) {
+			if (e > 38 || !TryMultiplyOperator::Operation(state.result, Hugeint::POWERS_OF_TEN[e], state.result)) {
+				return false;
+			}
+		}
+		if (!state.FlushDecimal()) {
+			return false;
+		}
+		if (state.decimal == 0) {
+			return Finalize<T, NEGATIVE>(state);
+		}
+
+		e = exponent - state.decimal_total_digits;
+		if (e < 0) {
+			state.decimal = Hugeint::DivMod(state.decimal, Hugeint::POWERS_OF_TEN[-e], remainder);
+			state.decimal_total_digits -= (exponent);
 		} else {
-			// positive exponent: multiply by power of 10
-			return Hugeint::TryMultiply(result.hugeint, Hugeint::POWERS_OF_TEN[exponent], result.hugeint);
+			if (e > 38 || !TryMultiplyOperator::Operation(state.decimal, Hugeint::POWERS_OF_TEN[e], state.decimal)) {
+				return false;
+			}
 		}
+
+		if (NEGATIVE) {
+			if (!TrySubtractOperator::Operation(state.result, state.decimal, state.result)) {
+				return false;
+			}
+		} else if (!TryAddOperator::Operation(state.result, state.decimal, state.result)) {
+			return false;
+		}
+		state.decimal = remainder;
+		return Finalize<T, NEGATIVE>(state);
 	}
 
 	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
-	static bool HandleDecimal(T &result, uint8_t digit) {
-		// Integer casts round
-		if (!result.decimal) {
-			if (!result.Flush()) {
+	static bool HandleDecimal(T &state, uint8_t digit) {
+		if (!state.Flush()) {
+			return false;
+		}
+		if (state.decimal_intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 10) {
+			if (!state.FlushDecimal()) {
 				return false;
 			}
-			if (NEGATIVE) {
-				result.intermediate = -(digit >= 5);
-			} else {
-				result.intermediate = (digit >= 5);
-			}
 		}
-		result.decimal = true;
-
+		state.decimal_intermediate = state.decimal_intermediate * 10 + digit;
+		state.decimal_intermediate_digits++;
 		return true;
 	}
 
 	template <class T, bool NEGATIVE>
-	static bool Finalize(T &result) {
-		return result.Flush();
+	static bool Finalize(T &state) {
+		if (!state.Flush() || !state.FlushDecimal()) {
+			return false;
+		}
+
+		if (state.decimal_total_digits == 0) {
+			return true;
+		}
+
+		// Get the first (left-most) digit of the decimals
+		state.decimal /= Hugeint::POWERS_OF_TEN[state.decimal_total_digits - 1];
+
+		if (state.decimal >= 5 || state.decimal <= -5) {
+			if (NEGATIVE) {
+				return TrySubtractOperator::Operation(state.result, hugeint_t(1), state.result);
+			} else {
+				return TryAddOperator::Operation(state.result, hugeint_t(1), state.result);
+			}
+		}
+		return true;
 	}
 };
 
 template <>
 bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
-	HugeIntCastData data;
-	if (!TryIntegerCast<HugeIntCastData, true, true, HugeIntegerCastOperation>(input.GetData(), input.GetSize(), data,
+	HugeIntCastData state {};
+	if (!TryIntegerCast<HugeIntCastData, true, true, HugeIntegerCastOperation>(input.GetData(), input.GetSize(), state,
 	                                                                           strict)) {
 		return false;
 	}
-	result = data.hugeint;
+	result = state.result;
 	return true;
 }
 
@@ -2093,10 +2334,10 @@ bool TryCast::Operation(string_t input, uhugeint_t &result, bool strict) {
 // Decimal String Cast
 //===--------------------------------------------------------------------===//
 
-template <class TYPE>
+template <class T>
 struct DecimalCastData {
-	typedef TYPE type_t;
-	TYPE result;
+	using StoreType = T;
+	StoreType result;
 	uint8_t width;
 	uint8_t scale;
 	uint8_t digit_count;
@@ -2124,12 +2365,12 @@ struct DecimalCastOperation {
 		}
 		state.digit_count++;
 		if (NEGATIVE) {
-			if (state.result < (NumericLimits<typename T::type_t>::Minimum() / 10)) {
+			if (state.result < (NumericLimits<typename T::StoreType>::Minimum() / 10)) {
 				return false;
 			}
 			state.result = state.result * 10 - digit;
 		} else {
-			if (state.result > (NumericLimits<typename T::type_t>::Maximum() / 10)) {
+			if (state.result > (NumericLimits<typename T::StoreType>::Maximum() / 10)) {
 				return false;
 			}
 			state.result = state.result * 10 + digit;

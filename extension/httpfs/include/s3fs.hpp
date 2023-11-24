@@ -112,6 +112,8 @@ public:
 			throw NotImplementedException("Cannot open an HTTP file for appending");
 		}
 	}
+	~S3FileHandle() override;
+
 	S3AuthParams auth_params;
 	const S3ConfigParams config_params;
 
