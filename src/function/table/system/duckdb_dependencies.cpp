@@ -60,8 +60,8 @@ unique_ptr<GlobalTableFunctionState> DuckDBDependenciesInit(ClientContext &conte
 	if (catalog.IsDuckCatalog()) {
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		auto &dependency_manager = duck_catalog.GetDependencyManager();
-		dependency_manager.Scan(context, [&](CatalogEntry &obj, CatalogEntry &dependent, DependencyFlags type) {
-			result->entries.emplace_back(obj, dependent, type);
+		dependency_manager.Scan(context, [&](CatalogEntry &obj, CatalogEntry &dependent, DependencyFlags flags) {
+			result->entries.emplace_back(obj, dependent, flags);
 		});
 	}
 

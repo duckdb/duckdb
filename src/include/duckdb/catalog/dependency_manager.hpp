@@ -50,9 +50,7 @@ public:
 struct MangledEntryName {
 public:
 	MangledEntryName(const CatalogEntryInfo &info);
-	// TODO: delete me later
-	MangledEntryName() {
-	}
+	MangledEntryName() = delete;
 
 public:
 	//! Format: Type\0Schema\0Name
@@ -70,6 +68,7 @@ public:
 struct MangledDependencyName {
 public:
 	MangledDependencyName(const MangledEntryName &from, const MangledEntryName &to);
+	MangledDependencyName() = delete;
 
 public:
 	//! Format: MangledEntryName\0MangledEntryName
@@ -120,7 +119,7 @@ private:
 
 private:
 	void RemoveDependency(CatalogTransaction transaction, const DependencyInfo &info);
-	void CreateDependency(CatalogTransaction transaction, const DependencyInfo &info);
+	void CreateDependency(CatalogTransaction transaction, DependencyInfo &info);
 	void CreateDependencies(CatalogTransaction transaction, const CatalogEntry &object,
 	                        const LogicalDependencyList dependencies);
 	using dependency_entry_func_t = const std::function<unique_ptr<DependencyEntry>(

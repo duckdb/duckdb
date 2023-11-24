@@ -111,7 +111,7 @@ ALTER SEQUENCE sequence1 OWNED BY tablename;
 statement error
 ALTER SEQUENCE sequence1 OWNED BY tablename2;
 ----
-Dependency Error: sequence1 already depends on tablename
+Dependency Error: sequence1 is already owned by tablename2
 
 statement ok
 DROP TABLE tablename;

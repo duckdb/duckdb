@@ -196,23 +196,12 @@ void DependencyManager::CreateDependencyInternal(CatalogTransaction transaction,
                                                  bool dependency) {
 	auto &catalog_set = dependency ? Dependencies() : Dependents();
 	auto &from = dependency ? info.dependent.entry : info.dependency.entry;
-	auto flags = info.dependent.flags;
 	auto &to = dependency ? info.dependency.entry : info.dependent.entry;
 
 	DependencyCatalogSet set(catalog_set, from);
-
-	auto dep_name = MangleName(to);
-	auto existing = set.GetEntry(transaction, dep_name);
-	if (existing) {
-		auto &existing_flags = existing->Cast<DependencyEntry>().Reliant().flags;
-		if (flags == existing_flags) {
-			return;
-		}
-		flags.Apply(existing_flags);
-		set.DropEntry(transaction, dep_name, false, false);
-	}
 	auto dep = dependency ? make_uniq_base<DependencyEntry, DependencySubjectEntry>(catalog, info)
 	                      : make_uniq_base<DependencyEntry, DependencyReliantEntry>(catalog, info);
+	auto dep_name = MangleName(to);
 
 	D_ASSERT(!StringUtil::CIEquals(dep_name.name, MangleName(from).name));
 	if (catalog.IsTemporaryCatalog()) {
@@ -221,7 +210,37 @@ void DependencyManager::CreateDependencyInternal(CatalogTransaction transaction,
 	set.CreateEntry(transaction, dep_name, std::move(dep));
 }
 
-void DependencyManager::CreateDependency(CatalogTransaction transaction, const DependencyInfo &info) {
+void DependencyManager::CreateDependency(CatalogTransaction transaction, DependencyInfo &info) {
+	DependencyCatalogSet dependencies(Dependencies(), info.dependent.entry);
+	DependencyCatalogSet dependents(Dependents(), info.dependency.entry);
+
+	auto dependency_mangled = MangleName(info.dependency.entry);
+	auto dependent_mangled = MangleName(info.dependent.entry);
+
+	auto &reliant_flags = info.dependent.flags;
+	auto &subject_flags = info.dependency.flags;
+
+	auto existing_dependency = dependencies.GetEntry(transaction, dependency_mangled);
+	auto existing_dependent = dependents.GetEntry(transaction, dependent_mangled);
+
+	// Inherit the existing flags and drop the existing entry if present
+	if (existing_dependency) {
+		auto &existing = existing_dependency->Cast<DependencyEntry>();
+		auto existing_flags = existing.Subject().flags;
+		if (existing_flags != subject_flags) {
+			subject_flags.Apply(existing_flags);
+		}
+		dependencies.DropEntry(transaction, dependency_mangled, false, false);
+	}
+	if (existing_dependent) {
+		auto &existing = existing_dependent->Cast<DependencyEntry>();
+		auto existing_flags = existing.Reliant().flags;
+		if (existing_flags != reliant_flags) {
+			reliant_flags.Apply(existing_flags);
+		}
+		dependents.DropEntry(transaction, dependent_mangled, false, false);
+	}
+
 	// Create an entry in the dependents map of the object that is the target of the dependency
 	CreateDependencyInternal(transaction, info, false);
 	// Create an entry in the dependencies map of the object that is targeting another entry
@@ -355,6 +374,14 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 			                          object.name);
 		}
 		to_drop.insert(*entry);
+	});
+	ScanDependencies(transaction, info, [&](DependencyEntry &dep) {
+		auto flags = dep.Subject().flags;
+		if (flags.IsOwnership()) {
+			// We own this object, it should be dropped along with the table
+			auto entry = LookupEntry(transaction, dep);
+			to_drop.insert(*entry);
+		}
 	});
 
 	CleanupDependencies(transaction, object);
@@ -566,43 +593,51 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 			throw DependencyException(owner.name + " already owned by " + dep.EntryInfo().name);
 		}
 	});
-
-	// If the entry is already owned, throw an error
-	const auto entry_info = GetLookupProperties(entry);
-	ScanDependents(transaction, entry_info, [&](DependencyEntry &other) {
-		auto flags = other.Reliant().flags;
-
-		if (other.EntryMangledName() != mangled_owner_name) {
-			// FIXME: this is much too broad, we should create a function to check for recursive dependencies instead.
-			throw DependencyException(entry.name + " already depends on " + other.EntryInfo().name);
-		}
-
-		if (flags.IsOwned()) {
-			if (other.EntryMangledName() == mangled_owner_name) {
-				return;
-			}
-			throw DependencyException(entry.name + " already depends on " + other.EntryInfo().name);
-		} else if (flags.IsOwnership()) {
-			// This entry is the owner of another entry
-			if (other.EntryMangledName() != mangled_owner_name) {
-				return;
-			}
-			throw DependencyException("%s already owns %s. Can not have circular dependencies.", entry.name,
-			                          owner.name);
+	ScanDependencies(transaction, owner_info, [&](DependencyEntry &dep) {
+		auto flags = dep.Subject().flags;
+		// if the entry owns the owner, throw error
+		if (&dep == &owner && flags.IsOwnership()) {
+			throw DependencyException(entry.name + " already owns " + owner.name +
+			                          ". Cannot have circular dependencies");
 		}
 	});
-	{
-		DependencyInfo info {
-		    /*dependent = */ DependencyReliant {GetLookupProperties(owner), DependencyFlags().SetOwned()},
-		    /*dependency = */ DependencySubject {GetLookupProperties(entry), DependencyFlags().SetBlocking()}};
-		CreateDependency(transaction, info);
-	}
-	{
-		DependencyInfo info {
-		    /*dependent = */ DependencyReliant {GetLookupProperties(entry), DependencyFlags().SetOwnership()},
-		    /*dependency = */ DependencySubject {GetLookupProperties(owner), DependencyFlags().SetBlocking()}};
-		CreateDependency(transaction, info);
-	}
+
+	// If the entry is already owned, throw an error
+	auto entry_info = GetLookupProperties(entry);
+	ScanDependencies(transaction, entry_info, [&](DependencyEntry &other) {
+		auto dependent_entry = LookupEntry(transaction, other);
+		if (!dependent_entry) {
+			return;
+		}
+		auto &dep = *dependent_entry;
+
+		auto flags = other.Reliant().flags;
+		// FIXME: should this not check for DEPENDENCY_OWNS first??
+		if (!flags.IsOwned()) {
+			return;
+		}
+		// if the entry is already owned, throw error
+		if (&dep != &owner) {
+			throw DependencyException(entry.name + " already depends on " + dep.name);
+		}
+	});
+	ScanDependents(transaction, entry_info, [&](DependencyEntry &other) {
+		auto dependent_entry = LookupEntry(transaction, other);
+		if (!dependent_entry) {
+			return;
+		}
+
+		auto &dep = *dependent_entry;
+		auto flags = other.Subject().flags;
+		if (flags.IsOwnership() && &dep != &owner) {
+			throw DependencyException("%s is already owned by %s", entry.name, owner.name);
+		}
+	});
+
+	DependencyInfo info {
+	    /*dependent = */ DependencyReliant {GetLookupProperties(owner), DependencyFlags().SetOwned()},
+	    /*dependency = */ DependencySubject {GetLookupProperties(entry), DependencyFlags().SetOwnership()}};
+	CreateDependency(transaction, info);
 }
 
 static string FormatString(const MangledEntryName &mangled) {

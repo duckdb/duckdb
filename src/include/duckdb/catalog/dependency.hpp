@@ -142,7 +142,7 @@ public:
 };
 
 struct Dependency {
-	Dependency(CatalogEntry &entry, DependencyFlags flags = DependencyFlags())
+	Dependency(CatalogEntry &entry, DependencyFlags flags = DependencyFlags().SetBlocking())
 	    : // NOLINT: Allow implicit conversion from `CatalogEntry`
 	      entry(entry), flags(flags) {
 	}
