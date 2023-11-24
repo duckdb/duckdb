@@ -44,6 +44,7 @@ public:
 	}
 
 	Transaction &GetTransaction(AttachedDatabase &db);
+	void RemoveTransaction(AttachedDatabase &db);
 
 	string Commit();
 	void Rollback();
@@ -58,7 +59,7 @@ public:
 
 private:
 	//! The set of active transactions for each database
-	unordered_map<AttachedDatabase *, Transaction *> transactions;
+	unordered_map<AttachedDatabase *, optional_ptr<Transaction>> transactions;
 	//! The set of transactions in order of when they were started
 	vector<optional_ptr<AttachedDatabase>> all_transactions;
 	//! The database we are modifying - we can only modify one database per transaction
