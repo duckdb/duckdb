@@ -5,8 +5,10 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 from duckdb.experimental.spark.sql.column import Column
 from duckdb.experimental.spark.sql.functions import struct
 from duckdb.experimental.spark.sql.types import Row
+from duckdb.experimental.spark.errors import PySparkTypeError
 
 import duckdb
+import re
 
 
 class TestSparkColumn(object):
@@ -19,5 +21,7 @@ class TestSparkColumn(object):
         assert 'col0' in new_col.dataType
         assert 'col1' in new_col.dataType
 
-        with pytest.raises(TypeError, match="argument 'col' should be of type Column"):
+        with pytest.raises(
+            PySparkTypeError, match=re.escape("[NOT_COLUMN] Argument `col` should be a Column, got str.")
+        ):
             df = df.withColumn('struct', 'yes')

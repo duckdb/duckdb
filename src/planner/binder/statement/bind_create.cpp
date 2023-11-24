@@ -39,6 +39,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 
 namespace duckdb {
 
@@ -66,6 +67,16 @@ void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string
 
 void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
 	BindSchemaOrCatalog(context, catalog, schema);
+}
+
+const string Binder::BindCatalog(string &catalog) {
+	auto &db_manager = DatabaseManager::Get(context);
+	optional_ptr<AttachedDatabase> database = db_manager.GetDatabase(context, catalog);
+	if (database) {
+		return db_manager.GetDatabase(context, catalog).get()->GetName();
+	} else {
+		return db_manager.GetDefaultDatabase(context);
+	}
 }
 
 SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
@@ -204,6 +215,13 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		auto alias = type.GetAlias();
 		type = LogicalType::STRUCT(child_types);
 		type.SetAlias(alias);
+	} else if (type.id() == LogicalTypeId::ARRAY) {
+		auto child_type = ArrayType::GetChildType(type);
+		auto array_size = ArrayType::GetSize(type);
+		BindLogicalType(context, child_type, catalog, schema);
+		auto alias = type.GetAlias();
+		type = LogicalType::ARRAY(child_type, array_size);
+		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::UNION) {
 		auto member_types = UnionType::CopyMemberTypes(type);
 		for (auto &member_type : member_types) {
@@ -230,7 +248,10 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 				type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
 			}
 		} else {
-			type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
+			string type_catalog = UserType::GetCatalog(type);
+			string type_schema = UserType::GetSchema(type);
+			BindSchemaOrCatalog(context, type_catalog, type_schema);
+			type = Catalog::GetType(context, type_catalog, type_schema, user_type_name);
 		}
 		BindLogicalType(context, type, catalog, schema);
 	}
@@ -456,9 +477,13 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 	auto catalog_type = stmt.info->type;
 	switch (catalog_type) {
-	case CatalogType::SCHEMA_ENTRY:
+	case CatalogType::SCHEMA_ENTRY: {
+		auto &base = stmt.info->Cast<CreateInfo>();
+		auto catalog = BindCatalog(base.catalog);
+		properties.modified_databases.insert(catalog);
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
 		break;
+	}
 	case CatalogType::VIEW_ENTRY: {
 		auto &base = stmt.info->Cast<CreateViewInfo>();
 		// bind the schema
@@ -487,6 +512,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::INDEX_ENTRY: {
 		auto &base = stmt.info->Cast<CreateIndexInfo>();
+
+		auto catalog = BindCatalog(base.catalog);
+		properties.modified_databases.insert(catalog);
 
 		// visit the table reference
 		auto table_ref = make_uniq<BaseTableRef>();

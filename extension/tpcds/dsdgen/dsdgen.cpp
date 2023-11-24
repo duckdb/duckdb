@@ -21,6 +21,7 @@ template <class T>
 static void CreateTPCDSTable(ClientContext &context, string catalog_name, string schema, string suffix, bool keys,
                              bool overwrite) {
 	auto info = make_uniq<CreateTableInfo>();
+	info->catalog = catalog_name;
 	info->schema = schema;
 	info->table = T::Name + suffix;
 	info->on_conflict = overwrite ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;

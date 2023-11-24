@@ -409,7 +409,7 @@ static void endTimer(void){
 static int bail_on_error = 0;
 
 /*
-** Threat stdin as an interactive input if the following variable
+** Treat stdin as an interactive input if the following variable
 ** is true.  Otherwise, assume stdin is connected to a file or pipe.
 */
 static int stdin_is_interactive = 1;
@@ -17996,6 +17996,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     session_close_all(p);
     close_db(p->db);
     p->db = 0;
+    globalDb = 0;
     p->zDbFilename = 0;
     sqlite3_free(p->zFreeOnClose);
     p->zFreeOnClose = 0;

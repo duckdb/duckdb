@@ -51,13 +51,9 @@ public:
 	bool linenr_estimated = false;
 
 	bool row_empty = false;
-	idx_t sample_chunk_idx = 0;
-	bool jumping_samples = false;
-	bool end_of_file_reached = false;
 	bool bom_checked = false;
 
 	idx_t bytes_in_chunk = 0;
-	double bytes_per_line_avg = 0;
 
 	DataChunk parse_chunk;
 

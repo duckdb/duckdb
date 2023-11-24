@@ -2,7 +2,8 @@ import duckdb
 import os
 import pandas as pd
 import pytest
-from typing import Union
+from typing import Union, Optional
+import sys
 
 from duckdb.typing import (
     SQLNULL,
@@ -32,6 +33,7 @@ from duckdb.typing import (
     BIT,
     INTERVAL,
 )
+import duckdb.typing
 
 
 class TestType(object):
@@ -187,3 +189,26 @@ class TestType(object):
 
         child_type = type.v2.child
         assert str(child_type) == 'MAP(BLOB, BIT)'
+
+    def test_optional(self):
+        type = duckdb.typing.DuckDBPyType(Optional[str])
+        assert type == 'VARCHAR'
+        type = duckdb.typing.DuckDBPyType(Optional[Union[int, bool]])
+        assert type == 'UNION(u1 BIGINT, u2 BOOLEAN)'
+        type = duckdb.typing.DuckDBPyType(Optional[list[int]])
+        assert type == 'BIGINT[]'
+        type = duckdb.typing.DuckDBPyType(Optional[dict[int, str]])
+        assert type == 'MAP(BIGINT, VARCHAR)'
+        type = duckdb.typing.DuckDBPyType(Optional[dict[Optional[int], Optional[str]]])
+        assert type == 'MAP(BIGINT, VARCHAR)'
+        type = duckdb.typing.DuckDBPyType(Optional[dict[Optional[int], Optional[str]]])
+        assert type == 'MAP(BIGINT, VARCHAR)'
+        type = duckdb.typing.DuckDBPyType(Optional[Union[Optional[str], Optional[bool]]])
+        assert type == 'UNION(u1 VARCHAR, u2 BOOLEAN)'
+        type = duckdb.typing.DuckDBPyType(Union[str, None])
+        assert type == 'VARCHAR'
+
+    @pytest.mark.skipif(sys.version_info < (3, 10), reason="'str | None' syntax requires Python 3.10 or higher")
+    def test_optional_310(self):
+        type = duckdb.typing.DuckDBPyType(str | None)
+        assert type == 'VARCHAR'

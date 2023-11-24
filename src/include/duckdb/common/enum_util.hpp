@@ -208,6 +208,8 @@ enum class PreparedParamType : uint8_t;
 
 enum class ProfilerPrintFormat : uint8_t;
 
+enum class QuantileSerializationType : uint8_t;
+
 enum class QueryNodeType : uint8_t;
 
 enum class QueryResultType : uint8_t;
@@ -235,6 +237,8 @@ enum class SimplifiedTokenType : uint8_t;
 enum class SinkCombineResultType : uint8_t;
 
 enum class SinkFinalizeType : uint8_t;
+
+enum class SinkNextBatchType : uint8_t;
 
 enum class SinkResultType : uint8_t;
 
@@ -289,6 +293,10 @@ enum class WALType : uint8_t;
 enum class WindowAggregationMode : uint32_t;
 
 enum class WindowBoundary : uint8_t;
+
+enum class WindowExcludeMode : uint8_t;
+
+enum class WithinCollection : uint8_t;
 
 
 template<>
@@ -556,6 +564,9 @@ template<>
 const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
 
 template<>
+const char* EnumUtil::ToChars<QuantileSerializationType>(QuantileSerializationType value);
+
+template<>
 const char* EnumUtil::ToChars<QueryNodeType>(QueryNodeType value);
 
 template<>
@@ -596,6 +607,9 @@ const char* EnumUtil::ToChars<SinkCombineResultType>(SinkCombineResultType value
 
 template<>
 const char* EnumUtil::ToChars<SinkFinalizeType>(SinkFinalizeType value);
+
+template<>
+const char* EnumUtil::ToChars<SinkNextBatchType>(SinkNextBatchType value);
 
 template<>
 const char* EnumUtil::ToChars<SinkResultType>(SinkResultType value);
@@ -677,6 +691,12 @@ const char* EnumUtil::ToChars<WindowAggregationMode>(WindowAggregationMode value
 
 template<>
 const char* EnumUtil::ToChars<WindowBoundary>(WindowBoundary value);
+
+template<>
+const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value);
+
+template<>
+const char* EnumUtil::ToChars<WithinCollection>(WithinCollection value);
 
 
 template<>
@@ -944,6 +964,9 @@ template<>
 ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value);
 
 template<>
+QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const char *value);
+
+template<>
 QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value);
 
 template<>
@@ -984,6 +1007,9 @@ SinkCombineResultType EnumUtil::FromString<SinkCombineResultType>(const char *va
 
 template<>
 SinkFinalizeType EnumUtil::FromString<SinkFinalizeType>(const char *value);
+
+template<>
+SinkNextBatchType EnumUtil::FromString<SinkNextBatchType>(const char *value);
 
 template<>
 SinkResultType EnumUtil::FromString<SinkResultType>(const char *value);
@@ -1065,6 +1091,12 @@ WindowAggregationMode EnumUtil::FromString<WindowAggregationMode>(const char *va
 
 template<>
 WindowBoundary EnumUtil::FromString<WindowBoundary>(const char *value);
+
+template<>
+WindowExcludeMode EnumUtil::FromString<WindowExcludeMode>(const char *value);
+
+template<>
+WithinCollection EnumUtil::FromString<WithinCollection>(const char *value);
 
 
 }

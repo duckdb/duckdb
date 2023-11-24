@@ -12,7 +12,7 @@ end
 =#
 """
 	duckdb_open(path, out_database)
-Creates a new database or opens an existing database file stored at the the given path.
+Creates a new database or opens an existing database file stored at the given path.
 If no path is given a new in-memory database is created instead.
 * `path`: Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.
 * `out_database`: The result database object.
@@ -22,7 +22,7 @@ function duckdb_open(path, out_database)
     return ccall((:duckdb_open, libduckdb), duckdb_state, (Ptr{UInt8}, Ref{duckdb_database}), path, out_database)
 end
 """
-	Extended version of duckdb_open. Creates a new database or opens an existing database file stored at the the given path.
+	Extended version of duckdb_open. Creates a new database or opens an existing database file stored at the given path.
 
     * path: Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.
     * out_database: The result database object.
@@ -968,7 +968,7 @@ function duckdb_bind_int64(prepared_statement, param_idx, val)
 end
 
 """
-Binds an duckdb_hugeint value to the prepared statement at the specified index.
+Binds a duckdb_hugeint value to the prepared statement at the specified index.
 */
 DUCKDB_API duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                             duckdb_hugeint val);
@@ -1045,7 +1045,7 @@ function duckdb_bind_uint64(prepared_statement, param_idx, val)
 end
 
 """
-Binds an float value to the prepared statement at the specified index.
+Binds a float value to the prepared statement at the specified index.
 DUCKDB_API duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_statement, idx_t param_idx, float val);
 """
 function duckdb_bind_float(prepared_statement, param_idx, val)
@@ -1060,7 +1060,7 @@ function duckdb_bind_float(prepared_statement, param_idx, val)
 end
 
 """
-Binds an double value to the prepared statement at the specified index.
+Binds a double value to the prepared statement at the specified index.
 DUCKDB_API duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_statement, idx_t param_idx, double val);
 """
 function duckdb_bind_double(prepared_statement, param_idx, val)
@@ -1359,7 +1359,7 @@ DUCKDB_PENDING_RESULT_READY, this function will return true.
 * returns: Boolean indicating pending execution should be considered finished.
 """
 function duckdb_pending_execution_is_finished(pending_state)
-    return ccall((:duckdb_execute_pending, libduckdb), Bool, (duckdb_pending_state,), pending_state)
+    return ccall((:duckdb_pending_execution_is_finished, libduckdb), Bool, (duckdb_pending_state,), pending_state)
 end
 
 #=

@@ -242,7 +242,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 	for (idx_t i = 0; i < scan_count; i++) {
 		if (!source_mask.RowIsValid(start + i)) {
 			if (result_mask.AllValid()) {
-				result_mask.Initialize(MaxValue<idx_t>(STANDARD_VECTOR_SIZE, result_offset + scan_count));
+				result_mask.Initialize();
 			}
 			result_mask.SetInvalid(result_offset + i);
 		}
@@ -323,7 +323,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 		// now finally we can merge the input mask with the result mask
 		if (input_mask != ValidityMask::ValidityBuffer::MAX_ENTRY) {
 			if (!result_data) {
-				result_mask.Initialize(MaxValue<idx_t>(STANDARD_VECTOR_SIZE, result_offset + scan_count));
+				result_mask.Initialize();
 				result_data = (validity_t *)result_mask.GetData();
 			}
 			result_data[current_result_idx] &= input_mask;
@@ -363,7 +363,7 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 				continue;
 			}
 			if (!result_data) {
-				result_mask.Initialize(MaxValue<idx_t>(STANDARD_VECTOR_SIZE, scan_count));
+				result_mask.Initialize();
 				result_data = result_mask.GetData();
 			}
 			result_data[i] = input_entry;
@@ -418,7 +418,7 @@ idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segmen
 	if (data.validity.AllValid()) {
 		// no null values: skip append
 		segment.count += append_count;
-		validity_stats.SetHasNoNull();
+		validity_stats.SetHasNoNullFast();
 		return append_count;
 	}
 
@@ -427,9 +427,9 @@ idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segmen
 		auto idx = data.sel->get_index(offset + i);
 		if (!data.validity.RowIsValidUnsafe(idx)) {
 			mask.SetInvalidUnsafe(segment.count + i);
-			validity_stats.SetHasNull();
+			validity_stats.SetHasNullFast();
 		} else {
-			validity_stats.SetHasNoNull();
+			validity_stats.SetHasNoNullFast();
 		}
 	}
 	segment.count += append_count;

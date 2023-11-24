@@ -49,7 +49,6 @@ struct PendingStatementWrapper {
 struct ArrowResultWrapper {
 	unique_ptr<MaterializedQueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
-	ClientProperties options;
 };
 
 struct AppenderWrapper {
@@ -77,5 +76,6 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type);
 idx_t GetCTypeSize(duckdb_type type);
 duckdb_state duckdb_translate_result(unique_ptr<QueryResult> result, duckdb_result *out);
 bool deprecated_materialize_result(duckdb_result *result);
+duckdb_statement_type StatementTypeToC(duckdb::StatementType statement_type);
 
 } // namespace duckdb

@@ -10,8 +10,9 @@ select * from read_csv_auto('data/csv/invalid_utf8.csv')
 ----
 Invalid unicode (byte sequence mismatch) detected in CSV file.
 
-statement ok
+query I
 select * from read_csv_auto('data/csv/empty.csv')
+----
 
 query II
 select * from read_csv_auto('data/csv/small_file.csv', sample_size=1)

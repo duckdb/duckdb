@@ -57,34 +57,34 @@ runs:
         ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
         cmake --version
 
-    - name: Install Python 3.7
+    - name: Install Python 3.8
       if: ${{ inputs.python }} == 1
       shell: bash
       run: |
-        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
-        tar xvf Python-3.7.12.tgz
-        cd Python-3.7.12
+        wget https://www.python.org/ftp/python/3.8.17/Python-3.8.17.tgz
+        tar xvf Python-3.8.17.tgz
+        cd Python-3.8.17
         mkdir -p pythonbin
         ./configure --with-ensurepip=install
         make -j
         make install
-        python3.7 --version
-        python3.7 -m pip install pip
-        python3.7 -m pip install requests awscli
+        python3.8 --version
+        python3.8 -m pip install pip
+        python3.8 -m pip install requests awscli
 
     - name: Version Check
       shell: bash
       run: |
         ldd --version ldd
-        python3.7 --version
+        python3 --version
         git --version
         git log -1 --format=%h
 
     - name: Setup vcpkg
       if: ${{ inputs.vcpkg == 1 }}
-      uses: lukka/run-vcpkg@v11
+      uses: lukka/run-vcpkg@v11.1
       with:
-        vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
+        vcpkgGitCommitId: a42af01b72c28a8e1d7b48107b33e4f286a55ef6
 
     - name: Setup Ccache
       if: ${{ inputs.ccache == 1 }}

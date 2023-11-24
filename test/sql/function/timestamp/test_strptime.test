@@ -261,6 +261,24 @@ select strptime('2020-12-30 23:25:58.745232-04', '%Y-%m-%d %H:%M:%S.%f%z');
 ----
 2020-12-31 03:25:58.745232+00
 
+# infinities should always parse
+
+query I
+select strptime('infinity', '%m/%d/%Y');
+----
+infinity
+
+query I
+select strptime('-infinity', '%m/%d/%Y');
+----
+-infinity
+
+query I
+select strptime('epoch', '%m/%d/%Y');
+----
+1970-01-01 00:00:00
+
+
 # Don't swallow non-spaces
 query I
 SELECT strptime('Mon Oct 17 2022 22:00:00 GMT+0000 (GMT)', '%a %b %d %Y %X GMT%z (%Z)') as fixed;

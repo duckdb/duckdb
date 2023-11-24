@@ -2,6 +2,7 @@
 #include "duckdb/parser/statement/attach_statement.hpp"
 #include "duckdb/parser/statement/call_statement.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
+#include "duckdb/parser/statement/copy_database_statement.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
 #include "duckdb/parser/statement/detach_statement.hpp"

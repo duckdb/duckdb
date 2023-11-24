@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: Get mirror issue number
         run: |
-          gh issue list --repo duckdblabs/duckdb-internal --json title,number --jq ".[] | select(.title | startswith(\"$TITLE_PREFIX\")).number" > mirror_issue_number.txt
+          gh issue list --repo duckdblabs/duckdb-internal --search "${TITLE_PREFIX}" --json title,number --jq ".[] | select(.title | startswith(\"$TITLE_PREFIX\")).number" > mirror_issue_number.txt
           echo "MIRROR_ISSUE_NUMBER=$(cat mirror_issue_number.txt)" >> $GITHUB_ENV
 
       - name: Print whether mirror issue exists

@@ -51,17 +51,7 @@ static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &a
 
 			idx_t index = reorder_idx[i];
 
-			if (entry != aliases.end()) {
-				// the alias already exists
-				// check if there is a conflict
-
-				if (entry->second != index) {
-					// there is a conflict
-					// we place "-1" in the aliases map at this location
-					// "-1" signifies that there is an ambiguous reference
-					aliases[name] = DConstants::INVALID_INDEX;
-				}
-			} else {
+			if (entry == aliases.end()) {
 				// the alias is not in there yet, just assign it
 				aliases[name] = index;
 			}
@@ -190,6 +180,7 @@ static void BuildUnionByNameInfo(BoundSetOperationNode &result, bool can_contain
 unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	auto result = make_uniq<BoundSetOperationNode>();
 	result->setop_type = statement.setop_type;
+	result->setop_all = statement.setop_all;
 
 	// first recursively visit the set operations
 	// both the left and right sides have an independent BindContext and Binder

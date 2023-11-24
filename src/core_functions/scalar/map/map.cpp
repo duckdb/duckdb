@@ -87,11 +87,24 @@ static bool ListEntriesEqual(Vector &keys, Vector &values, idx_t count) {
 	return true;
 }
 
+static list_entry_t *GetBiggestList(Vector &key, Vector &value, idx_t &size) {
+	auto key_size = ListVector::GetListSize(key);
+	auto value_size = ListVector::GetListSize(value);
+	if (key_size > value_size) {
+		size = key_size;
+		return ListVector::GetData(key);
+	}
+	size = value_size;
+	return ListVector::GetData(value);
+}
+
 static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
 
-	auto &key_vector = MapVector::GetKeys(result);
-	auto &value_vector = MapVector::GetValues(result);
+	auto count = args.size();
+
+	auto &map_key_vector = MapVector::GetKeys(result);
+	auto &map_value_vector = MapVector::GetValues(result);
 	auto result_data = ListVector::GetData(result);
 
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -99,52 +112,73 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		ListVector::SetListSize(result, 0);
 		result_data->offset = 0;
 		result_data->length = 0;
-		result.Verify(args.size());
+		result.Verify(count);
 		return;
 	}
 
-	bool keys_are_const = args.data[0].GetVectorType() == VectorType::CONSTANT_VECTOR;
-	bool values_are_const = args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR;
-	if (!keys_are_const || !values_are_const) {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
+	D_ASSERT(args.ColumnCount() == 2);
+	auto &key_vector = args.data[0];
+	auto &value_vector = args.data[1];
+
+	if (args.AllConstant()) {
+		auto key_data = ListVector::GetData(key_vector);
+		auto value_data = ListVector::GetData(value_vector);
+		auto key_entry = key_data[0];
+		auto value_entry = value_data[0];
+		if (key_entry != value_entry) {
+			throw BinderException("Key and value list sizes don't match");
+		}
+		result_data[0] = key_entry;
+		ListVector::SetListSize(result, ListVector::GetListSize(key_vector));
+		map_key_vector.Reference(ListVector::GetEntry(key_vector));
+		map_value_vector.Reference(ListVector::GetEntry(value_vector));
+		MapVector::MapConversionVerify(result, count);
+		result.Verify(count);
+		return;
 	}
 
-	auto key_count = ListVector::GetListSize(args.data[0]);
-	auto value_count = ListVector::GetListSize(args.data[1]);
-	auto key_data = ListVector::GetData(args.data[0]);
-	auto value_data = ListVector::GetData(args.data[1]);
-	auto src_data = key_data;
+	result.SetVectorType(VectorType::FLAT_VECTOR);
 
-	if (keys_are_const && !values_are_const) {
-		AlignVectorToReference(args.data[0], args.data[1], args.size(), key_vector);
-		src_data = value_data;
-	} else if (values_are_const && !keys_are_const) {
-		AlignVectorToReference(args.data[1], args.data[0], args.size(), value_vector);
+	if (key_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		D_ASSERT(value_vector.GetVectorType() != VectorType::CONSTANT_VECTOR);
+		Vector expanded_const(ListType::GetChildType(key_vector.GetType()), count);
+		AlignVectorToReference(key_vector, value_vector, count, expanded_const);
+		map_key_vector.Reference(expanded_const);
+
+		value_vector.Flatten(count);
+		map_value_vector.Reference(ListVector::GetEntry(value_vector));
+	} else if (value_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		D_ASSERT(key_vector.GetVectorType() != VectorType::CONSTANT_VECTOR);
+		Vector expanded_const(ListType::GetChildType(value_vector.GetType()), count);
+		AlignVectorToReference(value_vector, key_vector, count, expanded_const);
+		map_value_vector.Reference(expanded_const);
+
+		key_vector.Flatten(count);
+		map_key_vector.Reference(ListVector::GetEntry(key_vector));
 	} else {
-		if (!ListEntriesEqual(args.data[0], args.data[1], args.size())) {
+		key_vector.Flatten(count);
+		value_vector.Flatten(count);
+
+		if (!ListEntriesEqual(key_vector, value_vector, count)) {
 			throw InvalidInputException("Error in MAP creation: key list and value list do not align. i.e. different "
 			                            "size or incompatible structure");
 		}
+
+		map_value_vector.Reference(ListVector::GetEntry(value_vector));
+		map_key_vector.Reference(ListVector::GetEntry(key_vector));
 	}
 
-	ListVector::SetListSize(result, MaxValue(key_count, value_count));
+	idx_t list_size;
+	auto src_data = GetBiggestList(key_vector, value_vector, list_size);
+	ListVector::SetListSize(result, list_size);
 
 	result_data = ListVector::GetData(result);
-	for (idx_t i = 0; i < args.size(); i++) {
+	for (idx_t i = 0; i < count; i++) {
 		result_data[i] = src_data[i];
 	}
 
-	// check whether one of the vectors has already been referenced to an expanded vector in the case of const/non-const
-	// combination. If not, then referencing is still necessary
-	if (!(keys_are_const && !values_are_const)) {
-		key_vector.Reference(ListVector::GetEntry(args.data[0]));
-	}
-	if (!(values_are_const && !keys_are_const)) {
-		value_vector.Reference(ListVector::GetEntry(args.data[1]));
-	}
-
-	MapVector::MapConversionVerify(result, args.size());
-	result.Verify(args.size());
+	MapVector::MapConversionVerify(result, count);
+	result.Verify(count);
 }
 
 static unique_ptr<FunctionData> MapBind(ClientContext &context, ScalarFunction &bound_function,

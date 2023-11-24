@@ -1,14 +1,17 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
-#include <cstring>
+#include "duckdb/storage/index.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table_io_manager.hpp"
 
 namespace duckdb {
 
@@ -192,14 +195,42 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 //===--------------------------------------------------------------------===//
 // Indexes
 //===--------------------------------------------------------------------===//
+
+void SerializeIndexToWAL(BinarySerializer &serializer, const unique_ptr<Index> &index) {
+
+	auto index_storage_info = index->GetStorageInfo(true);
+	serializer.WriteProperty(102, "index_storage_info", index_storage_info);
+
+	serializer.WriteList(103, "index_storage", index_storage_info.buffers.size(), [&](Serializer::List &list, idx_t i) {
+		auto &buffers = index_storage_info.buffers[i];
+		for (auto buffer : buffers) {
+			list.WriteElement(buffer.buffer_ptr, buffer.allocation_size);
+		}
+	});
+}
+
 void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 	if (skip_writing) {
 		return;
 	}
+
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::CREATE_INDEX);
-	serializer.WriteProperty(101, "index", &entry);
+	serializer.WriteProperty(101, "index_catalog_entry", &entry);
+
+	// now serialize the index data to the persistent storage and write the index metadata
+	auto &duck_index_entry = entry.Cast<DuckIndexEntry>();
+	auto &indexes = duck_index_entry.info->indexes.Indexes();
+
+	// get the matching index and serialize its storage info
+	for (auto const &index : indexes) {
+		if (duck_index_entry.name == index->name) {
+			SerializeIndexToWAL(serializer, index);
+			break;
+		}
+	}
+
 	serializer.End();
 }
 

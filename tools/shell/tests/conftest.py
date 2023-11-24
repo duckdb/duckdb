@@ -1,4 +1,8 @@
 import pytest
+import os
+import subprocess
+import sys
+from typing import List, NamedTuple, Union
 
 
 def pytest_addoption(parser):
@@ -18,11 +22,6 @@ def pytest_collection_modifyitems(config, items):
     skipped_items = items[:start_offset]
     for item in skipped_items:
         item.add_marker(skipped)
-
-
-import subprocess
-import sys
-from typing import List, NamedTuple, Union
 
 
 class TestResult:
@@ -50,6 +49,7 @@ class ShellTest:
         self.statements: List[str] = []
         self.input = None
         self.output = None
+        self.environment = {}
 
     def add_argument(self, *args):
         self.arguments.extend(args)
@@ -116,7 +116,11 @@ class ShellTest:
         input_data = self.get_input_data(statements)
         output_pipe = self.get_output_pipe()
 
-        res = subprocess.run(command, input=input_data, stdout=output_pipe, stderr=subprocess.PIPE)
+        my_env = os.environ.copy()
+        for key, val in self.environment.items():
+            my_env[key] = val
+
+        res = subprocess.run(command, input=input_data, stdout=output_pipe, stderr=subprocess.PIPE, env=my_env)
 
         stdout, stderr = self.get_output_data(res)
         return TestResult(stdout, stderr, res.returncode)
