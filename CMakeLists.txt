@@ -725,6 +725,83 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
       COMMAND emcc $<TARGET_FILE:${TARGET_NAME}>.lib -o $<TARGET_FILE:${TARGET_NAME}> -sSIDE_MODULE=1 -O3
       )
   endif()
+
+  # Postprocessing metadata steps ----
+  # 1. Copy the target from build/release/extension/parquet/parquet.duckdb_extension to build/release/extension/parquet.duckdb_extension
+  #    in case of wasm, they will be an additional ".wasm" and instead of release it will be 'wasm_eh' and the like
+  add_custom_command(
+    TARGET ${TARGET_NAME}
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${TARGET_NAME}> ../../extension/
+    )
+  # 2. Add magic bytes, brough over from uniformity from the Wasm standard for custom sections
+  #    Meaning is:
+  #    \\x00              -> Start of a custom section
+  #    \\x93\\x04         -> Total lenght of the custom section (ULEB-encoded)
+  #                          total lenght of what follows (1 + 16 + 2 + 512) = 531 bytes
+  #                          1(continuation) + 0010011(payload) = \x93, 0(continuation) + 100(payload) = \x04
+  #    \\x10              -> Lenght of the name of this section (16 bytes -> 10 in hex)
+  #    duckdb_extension   -> The actual name of the custom section
+  #    \\x80\\x04         -> Lenght of the next segment (512 bytes -> 1000000000 in hex)
+  add_custom_command(
+    TARGET ${TARGET_NAME}
+    POST_BUILD
+    COMMAND echo '\\x00\\x93\\x02\\x10duckdb_extension\\x80\\x04' >> ../../extension/$<TARGET_FILE_NAME:${TARGET_NAME}>
+    )
+  # 3. Add empty slot of 512 bytes (there are likely more expressive ways to do this via file (APPEND ...) combined with concatenating the files, to be reworked)
+  #    Of those, tentative attribution is (going in reverse order):
+  #    Last 256 bytes are to be overridden by the signature
+  #    a 32 bytes field (just before the signature) for encoding the metadata format, whether signature has been written or not, AND how many other 32-byte fields there come before that
+  #    a 32 bytes field for the extension name
+  #    a 32 bytes field for the platform name
+  #    a 32 bytes field for the DuckDB version
+  #    a 32 bytes field for the distribution
+  #    three 32 bytes field left empty for yet to be decided properties, future proof
+  #
+  #    Currently all those fields, ammounting to 512 bytes are set to zero, but some information can be already overridden
+  add_custom_command(
+    TARGET ${TARGET_NAME}
+    POST_BUILD
+    COMMAND echo '\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00' >> ../../extension/$<TARGET_FILE_NAME:${TARGET_NAME}>
+    )
+  add_custom_command(
+    TARGET ${TARGET_NAME}
+    POST_BUILD
+    COMMAND echo '\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00' >> ../../extension/$<TARGET_FILE_NAME:${TARGET_NAME}>
+    )
+  add_custom_command(
+    TARGET ${TARGET_NAME}
+    POST_BUILD
+    COMMAND echo '\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00' >> ../../extension/$<TARGET_FILE_NAME:${TARGET_NAME}>
+    )
+  add_custom_command(
+    TARGET ${TARGET_NAME}
+    POST_BUILD
+    COMMAND echo '\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00' >> ../../extension/$<TARGET_FILE_NAME:${TARGET_NAME}>
+    )
+  add_custom_command(
+    TARGET ${TARGET_NAME}
+    POST_BUILD
+    COMMAND echo '\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00' >> ../../extension/$<TARGET_FILE_NAME:${TARGET_NAME}>
+    )
+  add_custom_command(
+    TARGET ${TARGET_NAME}
+    POST_BUILD
+    COMMAND echo '\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00' >> ../../extension/$<TARGET_FILE_NAME:${TARGET_NAME}>
+    )
+  add_custom_command(
+    TARGET ${TARGET_NAME}
+    POST_BUILD
+    COMMAND echo '\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00' >> ../../extension/$<TARGET_FILE_NAME:${TARGET_NAME}>
+    )
+  add_custom_command(
+    TARGET ${TARGET_NAME}
+    POST_BUILD
+    COMMAND echo '\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00' >> ../../extension/$<TARGET_FILE_NAME:${TARGET_NAME}>
+    )
+  # 4. After build is completed, signature to be overridden in the last 256 bytes.
+  #    This makes so that every extension binary will have a signature (potentially invalid since it defaults to 256-zeros), that makes possible to locate at predefined distance from
+  #    the end of the binary the metadata information to be checked on load
 endfunction()
 
 function(build_loadable_extension NAME PARAMETERS)
