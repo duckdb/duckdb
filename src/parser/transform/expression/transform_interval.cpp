@@ -88,19 +88,19 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 	} else if (mask & HOUR_MASK) {
 		// HOUR
 		fname = "to_hours";
-		target_type = LogicalType::BIGINT;
+		target_type = LogicalType::DOUBLE;
 	} else if (mask & MINUTE_MASK) {
 		// MINUTE
 		fname = "to_minutes";
-		target_type = LogicalType::BIGINT;
+		target_type = LogicalType::DOUBLE;
 	} else if (mask & SECOND_MASK) {
 		// SECOND
 		fname = "to_seconds";
-		target_type = LogicalType::BIGINT;
+		target_type = LogicalType::DOUBLE;
 	} else if (mask & MILLISECOND_MASK) {
 		// MILLISECOND
 		fname = "to_milliseconds";
-		target_type = LogicalType::BIGINT;
+		target_type = LogicalType::DOUBLE;
 	} else if (mask & MICROSECOND_MASK) {
 		// SECOND
 		fname = "to_microseconds";

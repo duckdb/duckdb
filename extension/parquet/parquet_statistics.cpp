@@ -92,6 +92,14 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 		return Value::FLOAT(val);
 	}
 	case LogicalTypeId::DOUBLE: {
+		switch (schema_ele.type) {
+		case Type::FIXED_LEN_BYTE_ARRAY:
+		case Type::BYTE_ARRAY:
+			// decimals cast to double
+			return Value::DOUBLE(ParquetDecimalUtils::ReadDecimalValue<double>(stats_data, stats.size(), schema_ele));
+		default:
+			break;
+		}
 		if (stats.size() != sizeof(double)) {
 			throw InternalException("Incorrect stats size for type DOUBLE");
 		}
@@ -124,17 +132,18 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 			}
 			switch (type.InternalType()) {
 			case PhysicalType::INT16:
-				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<int16_t>(stats_data, stats.size()), width,
-				                      scale);
+				return Value::DECIMAL(
+				    ParquetDecimalUtils::ReadDecimalValue<int16_t>(stats_data, stats.size(), schema_ele), width, scale);
 			case PhysicalType::INT32:
-				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<int32_t>(stats_data, stats.size()), width,
-				                      scale);
+				return Value::DECIMAL(
+				    ParquetDecimalUtils::ReadDecimalValue<int32_t>(stats_data, stats.size(), schema_ele), width, scale);
 			case PhysicalType::INT64:
-				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<int64_t>(stats_data, stats.size()), width,
-				                      scale);
+				return Value::DECIMAL(
+				    ParquetDecimalUtils::ReadDecimalValue<int64_t>(stats_data, stats.size(), schema_ele), width, scale);
 			case PhysicalType::INT128:
-				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size()), width,
-				                      scale);
+				return Value::DECIMAL(
+				    ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), schema_ele), width,
+				    scale);
 			default:
 				throw InternalException("Unsupported internal type for decimal");
 			}
