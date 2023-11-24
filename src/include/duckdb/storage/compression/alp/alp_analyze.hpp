@@ -9,7 +9,8 @@
 #pragma once
 
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/storage/compression/alp/alp.hpp"
+#include "duckdb/storage/compression/alp/algorithm/alp.hpp"
+#include "duckdb/storage/compression/alp/alp_utils.hpp"
 #include "duckdb/storage/compression/alp/alp_constants.hpp"
 #include "duckdb/storage/compression/patas/patas.hpp"
 
@@ -22,7 +23,7 @@ struct AlpAnalyzeState : public AnalyzeState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::type;
 
-	AlpAnalyzeState() : state((void *)this) {
+	AlpAnalyzeState() : state() {
 	}
 
 	idx_t total_bytes_used = 0;
@@ -32,7 +33,7 @@ public:
 	idx_t vectors_count = 0;
 	vector<vector<T>> rowgroup_sample;
 	vector<vector<T>> complete_vectors_sampled;
-	AlpState<T, true> state;
+	alp::AlpCompressionState<T, true> state;
 
 public:
 	// Returns the required space to hyphotetically store the compressed segment
@@ -45,16 +46,16 @@ public:
 	// Returns the required space to hyphotetically store the compressed vector
 	idx_t RequiredSpace() const {
 		idx_t required_space =
-		    state.alp_state.bp_size +
-		    state.alp_state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE) +
+		    state.bp_size +
+		    state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE) +
 		    AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE +
-		    AlpConstants::FOR_SIZE + AlpConstants::BW_SIZE + AlpConstants::METADATA_POINTER_SIZE;
+		    AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE + AlpConstants::METADATA_POINTER_SIZE;
 		return required_space;
 	}
 
 	void FlushVector() {
 		current_bytes_used_in_segment += RequiredSpace();
-		state.alp_state.Reset();
+		state.Reset();
 	}
 
 	// Check if we have enough space in the segment to hyphotetically store the compressed vector
@@ -106,6 +107,7 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	uint32_t n_sampled_increments =
 	    MaxValue(1, (int32_t)std::ceil((double)n_lookup_values / AlpConstants::SAMPLES_PER_VECTOR));
 	uint32_t n_sampled_values = std::ceil((double)n_lookup_values / n_sampled_increments);
+	D_ASSERT(n_sampled_values < AlpConstants::ALP_VECTOR_SIZE);
 
 	T a_non_null_value = 0;
 	idx_t nulls_idx = 0;
@@ -135,7 +137,6 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 		}
 		tmp_null_idx += 1;
 	}
-
 	// Replacing that first non-null value on the vector
 	for (idx_t i = 0; i < nulls_idx; i++) {
 		uint16_t null_value_pos = current_vector_null_positions[i];
@@ -150,8 +151,9 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	}
 	D_ASSERT(sample_idx == n_sampled_values);
 
-	analyze_state.complete_vectors_sampled.push_back(current_vector_values);
-	analyze_state.rowgroup_sample.push_back(current_vector_sample);
+	//! A std::move is needed to avoid a copy of the pushed vector
+	analyze_state.complete_vectors_sampled.push_back(std::move(current_vector_values));
+	analyze_state.rowgroup_sample.push_back(std::move(current_vector_sample));
 	analyze_state.vectors_sampled_count++;
 	return true;
 }
@@ -164,13 +166,13 @@ idx_t AlpFinalAnalyze(AnalyzeState &state) {
 	auto &analyze_state = (AlpAnalyzeState<T> &)state;
 
 	// Finding the Top K combinations of Exponent and Factor
-	alp::AlpCompression<T, true>::FindTopKCombinations(analyze_state.rowgroup_sample, analyze_state.state.alp_state);
+	alp::AlpCompression<T, true>::FindTopKCombinations(analyze_state.rowgroup_sample, analyze_state.state);
 
 	// Encode the entire sampled vectors to estimate a compression size
 	idx_t compressed_values = 0;
 	for (auto &vector_to_compress : analyze_state.complete_vectors_sampled) {
 		alp::AlpCompression<T, true>::Compress(vector_to_compress, vector_to_compress.size(),
-		                                       analyze_state.state.alp_state);
+		                                       analyze_state.state);
 		if (!analyze_state.HasEnoughSpace()) {
 			analyze_state.FlushSegment();
 		}

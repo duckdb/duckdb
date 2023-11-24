@@ -21,31 +21,39 @@ namespace duckdb {
 
 namespace alp {
 
+struct AlpRDLeftPartInfo {
+	uint32_t count;
+	uint64_t hash;
+
+	AlpRDLeftPartInfo(uint32_t count, uint64_t hash) : count(count), hash(hash) {
+	}
+};
+
 template <class T, bool EMPTY>
 class AlpRDCompressionState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::type;
 
-	AlpRDCompressionState() : right_bw(0), left_bw(0), exceptions_count(0) {
+	AlpRDCompressionState() : right_bit_width(0), left_bit_width(0), exceptions_count(0) {
 	}
 
 	void Reset() {
-		left_bp_size = 0;
-		right_bp_size = 0;
+		left_bit_packed_size = 0;
+		right_bit_packed_size = 0;
 		exceptions_count = 0;
 	}
 
 public:
-	uint8_t right_bw;
-	uint8_t left_bw;
+	uint8_t right_bit_width; // 'right' & 'left' refer to the respective parts of the floating numbers after splitting
+	uint8_t left_bit_width;
 	uint16_t exceptions_count;
 	uint8_t right_parts_encoded[AlpRDConstants::ALP_VECTOR_SIZE * 8];
 	uint8_t left_parts_encoded[AlpRDConstants::ALP_VECTOR_SIZE * 8];
 	uint16_t left_parts_dict[AlpRDConstants::DICTIONARY_SIZE];
 	uint16_t exceptions[AlpRDConstants::ALP_VECTOR_SIZE];
 	uint16_t exceptions_positions[AlpRDConstants::ALP_VECTOR_SIZE];
-	idx_t left_bp_size;
-	idx_t right_bp_size;
+	idx_t left_bit_packed_size;
+	idx_t right_bit_packed_size;
 	unordered_map<uint16_t, uint16_t> left_parts_dict_map;
 };
 
@@ -58,22 +66,23 @@ struct AlpRDCompression {
 	/*
 	 * Estimate the bits per value of ALPRD within a sample
 	 */
-	static double EstimateCompressionSize(uint8_t right_bw, uint8_t left_bw, uint16_t exceptions_count,
+	static double EstimateCompressionSize(uint8_t right_bit_width, uint8_t left_bit_width, uint16_t exceptions_count,
 	                                      uint64_t sample_count) {
 		double exceptions_size =
 		    exceptions_count * ((AlpRDConstants::EXCEPTION_POSITION_SIZE + AlpRDConstants::EXCEPTION_SIZE) * 8);
-		double estimated_size = right_bw + left_bw + (exceptions_size / sample_count);
+		double estimated_size = right_bit_width + left_bit_width + (exceptions_size / sample_count);
 		return estimated_size;
 	}
 
-	static double BuildLeftPartsDictionary(vector<EXACT_TYPE> values, uint8_t right_bw, uint8_t left_bw,
-	                                       bool persist_dict, State &state) {
+	template <bool PERSIST_DICT>
+	static double BuildLeftPartsDictionary(const vector<EXACT_TYPE> &values, uint8_t right_bit_width, uint8_t left_bw,
+	                                       State &state) {
 		unordered_map<EXACT_TYPE, int32_t> left_parts_hash;
-		vector<pair<int32_t, uint64_t>> left_parts_sorted_repetitions;
+		vector<AlpRDLeftPartInfo> left_parts_sorted_repetitions;
 
 		// Building a hash for all the left parts and how many times they appear
-		for (idx_t i = 0; i < values.size(); i++) {
-			auto left_tmp = values[i] >> right_bw;
+		for (auto &value : values) {
+			auto left_tmp = value >> right_bit_width;
 			left_parts_hash[left_tmp]++;
 		}
 
@@ -83,57 +92,58 @@ struct AlpRDCompression {
 			left_parts_sorted_repetitions.emplace_back(hash_pair.second, hash_pair.first);
 		}
 		sort(left_parts_sorted_repetitions.begin(), left_parts_sorted_repetitions.end(),
-		     [](const pair<uint16_t, uint64_t> &a, const pair<uint16_t, uint64_t> &b) { return a.first > b.first; });
+		     [](const AlpRDLeftPartInfo &a, const AlpRDLeftPartInfo &b) { return a.count > b.count; });
 
 		// Exceptions are left parts which do not fit in the fixed dictionary size
 		uint32_t exceptions_count = 0;
 		for (idx_t i = AlpRDConstants::DICTIONARY_SIZE; i < left_parts_sorted_repetitions.size(); i++) {
-			exceptions_count += left_parts_sorted_repetitions[i].first;
+			exceptions_count += left_parts_sorted_repetitions[i].count;
 		}
 
-		if (persist_dict) {
+		if (PERSIST_DICT) {
 			idx_t dict_idx = 0;
 			for (; dict_idx < MinValue<uint64_t>(AlpRDConstants::DICTIONARY_SIZE, left_parts_sorted_repetitions.size());
 			     dict_idx++) {
 				//! The dict keys are mapped to the left part themselves
-				state.left_parts_dict[dict_idx] = left_parts_sorted_repetitions[dict_idx].second;
+				state.left_parts_dict[dict_idx] = left_parts_sorted_repetitions[dict_idx].hash;
 				state.left_parts_dict_map.insert({state.left_parts_dict[dict_idx], dict_idx});
 			}
 			//! Pararelly we store a map of the dictionary to quickly resolve exceptions during encoding
 			for (idx_t i = dict_idx + 1; i < left_parts_sorted_repetitions.size(); i++) {
-				state.left_parts_dict_map.insert({left_parts_sorted_repetitions[i].second, i});
+				state.left_parts_dict_map.insert({left_parts_sorted_repetitions[i].hash, i});
 			}
-			state.left_bw = AlpRDConstants::DICTIONARY_BW; //! No matter what, dictionary is of constant size
-			state.right_bw = right_bw;
+			state.left_bit_width = AlpRDConstants::DICTIONARY_BIT_WIDTH; //! No matter what, dictionary is of constant size
+			state.right_bit_width = right_bit_width;
 
-			D_ASSERT(state.left_bw > 0 && state.left_bw <= AlpRDConstants::CUTTING_LIMIT && state.right_bw > 0);
+			D_ASSERT(state.left_bit_width > 0 && state.left_bit_width <= AlpRDConstants::CUTTING_LIMIT && state.right_bit_width > 0);
 		}
 
 		double estimated_size =
-		    EstimateCompressionSize(right_bw, AlpRDConstants::DICTIONARY_BW, exceptions_count, values.size());
+		    EstimateCompressionSize(right_bit_width, AlpRDConstants::DICTIONARY_BIT_WIDTH, exceptions_count, values.size());
 		return estimated_size;
 	}
 
-	static double FindBestDictionary(vector<EXACT_TYPE> values, State &state) {
-		uint8_t l_bw = AlpRDConstants::DICTIONARY_BW;
-		uint8_t r_bw = EXACT_TYPE_BITSIZE;
+	static double FindBestDictionary(const vector<EXACT_TYPE> &values, State &state) {
+		uint8_t left_bit_width = AlpRDConstants::DICTIONARY_BIT_WIDTH;
+		uint8_t right_bit_width = EXACT_TYPE_BITSIZE;
 		double best_dict_size = NumericLimits<int32_t>::Maximum();
 		//! Finding the best position to CUT the values
 		for (idx_t i = 1; i <= AlpRDConstants::CUTTING_LIMIT; i++) {
-			uint8_t candidate_l_bw = i;
-			uint8_t candidate_r_bw = EXACT_TYPE_BITSIZE - i;
-			double estimated_size = BuildLeftPartsDictionary(values, candidate_r_bw, candidate_l_bw, false, state);
+			uint8_t candidate_left_bit_width = i;
+			uint8_t candidate_right_bit_width = EXACT_TYPE_BITSIZE - i;
+			double estimated_size = BuildLeftPartsDictionary<false>(values, candidate_right_bit_width, candidate_left_bit_width, state);
 			if (estimated_size <= best_dict_size) {
-				l_bw = candidate_l_bw;
-				r_bw = candidate_r_bw;
+				left_bit_width = candidate_left_bit_width;
+				right_bit_width = candidate_right_bit_width;
 				best_dict_size = estimated_size;
 			}
+			// TODO: We could implement an early exit mechanism similar to normal ALP
 		}
-		double best_estimated_size = BuildLeftPartsDictionary(values, r_bw, l_bw, true, state);
+		double best_estimated_size = BuildLeftPartsDictionary<true>(values, right_bit_width, left_bit_width, state);
 		return best_estimated_size;
 	}
 
-	static void Compress(vector<EXACT_TYPE> in, idx_t n_values, State &state) {
+	static void Compress(const vector<EXACT_TYPE> &in, idx_t n_values, State &state) {
 
 		uint64_t right_parts[AlpRDConstants::ALP_VECTOR_SIZE];
 		uint16_t left_parts[AlpRDConstants::ALP_VECTOR_SIZE];
@@ -141,8 +151,8 @@ struct AlpRDCompression {
 		// Cutting the floating point values
 		for (idx_t i = 0; i < n_values; i++) {
 			EXACT_TYPE tmp = in[i];
-			right_parts[i] = tmp & ((1ULL << state.right_bw) - 1);
-			left_parts[i] = (tmp >> state.right_bw);
+			right_parts[i] = tmp & ((1ULL << state.right_bit_width) - 1);
+			left_parts[i] = (tmp >> state.right_bit_width);
 		}
 
 		// Dictionary encoding for left parts
@@ -165,19 +175,23 @@ struct AlpRDCompression {
 			}
 		}
 
-		auto right_bp_size = BitpackingPrimitives::GetRequiredSize(n_values, state.right_bw);
-		auto left_bp_size = BitpackingPrimitives::GetRequiredSize(n_values, state.left_bw);
+		auto right_bit_packed_size = BitpackingPrimitives::GetRequiredSize(n_values, state.right_bit_width);
+		auto left_bit_packed_size = BitpackingPrimitives::GetRequiredSize(n_values, state.left_bit_width);
 
 		if (!EMPTY) {
 			// Bitpacking Left and Right parts
 			BitpackingPrimitives::PackBuffer<uint16_t, false>(state.left_parts_encoded, left_parts, n_values,
-			                                                  state.left_bw);
+			                                                  state.left_bit_width);
 			BitpackingPrimitives::PackBuffer<uint64_t, false>(state.right_parts_encoded, right_parts, n_values,
-			                                                  state.right_bw);
+			                                                  state.right_bit_width);
 		}
 
-		state.left_bp_size = left_bp_size;
-		state.right_bp_size = right_bp_size;
+		printf("right_bit_width %d\n", state.right_bit_width);
+		printf("left_bit_width %d\n", state.left_bit_width);
+		printf("Exceptions count %d\n", state.exceptions_count);
+
+		state.left_bit_packed_size = left_bit_packed_size;
+		state.right_bit_packed_size = right_bit_packed_size;
 	}
 };
 
@@ -191,7 +205,7 @@ struct AlpRDDecompression {
 
 		uint8_t left_decoded[AlpRDConstants::ALP_VECTOR_SIZE * 8] = {0};
 		uint8_t right_decoded[AlpRDConstants::ALP_VECTOR_SIZE * 8] = {0};
-		uint8_t left_bit_width = AlpRDConstants::DICTIONARY_BW;
+		uint8_t left_bit_width = AlpRDConstants::DICTIONARY_BIT_WIDTH;
 
 		// Bitunpacking left and right parts
 		BitpackingPrimitives::UnPackBuffer<uint16_t>(left_decoded, left_encoded, values_count, left_bit_width);

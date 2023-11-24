@@ -10,8 +10,9 @@
 
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/compression/patas/patas.hpp"
-#include "duckdb/storage/compression/alprd/alprd.hpp"
+#include "duckdb/storage/compression/alprd/algorithm/alprd.hpp"
 #include "duckdb/storage/compression/alprd/alprd_constants.hpp"
+#include "duckdb/storage/compression/alp/alp_utils.hpp"
 #include "duckdb/storage/compression/alp/alp_constants.hpp"
 
 #include <cmath>
@@ -23,14 +24,14 @@ struct AlpRDAnalyzeState : public AnalyzeState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::type;
 
-	AlpRDAnalyzeState() : state((void *)this) {
+	AlpRDAnalyzeState() : state() {
 	}
 
 	idx_t vectors_count = 0;
 	idx_t total_values_count = 0;
 	idx_t vectors_sampled_count = 0;
 	vector<EXACT_TYPE> rowgroup_sample;
-	AlpRDState<T, true> state;
+	alp::AlpRDCompressionState<T, true> state;
 };
 
 template <class T>
@@ -125,7 +126,7 @@ idx_t AlpRDFinalAnalyze(AnalyzeState &state) {
 
 	// Finding which is the best dictionary for the sample
 	double estimated_bits_per_value = alp::AlpRDCompression<T, true>::FindBestDictionary(analyze_state.rowgroup_sample,
-	                                                                                     analyze_state.state.alp_state);
+	                                                                                     analyze_state.state);
 	double estimated_compressed_bits = estimated_bits_per_value * analyze_state.rowgroup_sample.size();
 	double estimed_compressed_bytes = estimated_compressed_bits / 8;
 

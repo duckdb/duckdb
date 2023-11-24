@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/storage/compression/alp/alp.hpp"
 #include "duckdb/storage/compression/alp/alp_scan.hpp"
 
 #include "duckdb/common/limits.hpp"

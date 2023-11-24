@@ -27,7 +27,7 @@ public:
 	static constexpr uint8_t EXCEPTIONS_COUNT_SIZE = sizeof(uint16_t);
 	static constexpr uint8_t EXCEPTION_POSITION_SIZE = sizeof(uint16_t);
 	static constexpr uint8_t FOR_SIZE = sizeof(uint64_t);
-	static constexpr uint8_t BW_SIZE = sizeof(uint8_t);
+	static constexpr uint8_t BIT_WIDTH_SIZE = sizeof(uint8_t);
 	static constexpr uint8_t METADATA_POINTER_SIZE = sizeof(uint32_t);
 
 	static constexpr uint8_t SAMPLING_EARLY_EXIT_THRESHOLD = 2;

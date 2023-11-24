@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/storage/compression/alp/alp.hpp"
 #include "duckdb/storage/compression/alp/algorithm/alp.hpp"
 
 #include "duckdb/common/limits.hpp"
@@ -151,7 +150,7 @@ public:
 		vector_ptr += AlpConstants::FOR_SIZE;
 
 		vector_state.bit_width = Load<uint8_t>(vector_ptr);
-		vector_ptr += AlpConstants::BW_SIZE;
+		vector_ptr += AlpConstants::BIT_WIDTH_SIZE;
 
 		D_ASSERT(vector_state.exceptions_count <= vector_size);
 		D_ASSERT(vector_state.v_exponent <= AlpTypedConstants<T>::MAX_EXPONENT);

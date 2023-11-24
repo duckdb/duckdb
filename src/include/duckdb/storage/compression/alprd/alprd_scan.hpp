@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/storage/compression/alprd/alprd.hpp"
 #include "duckdb/storage/compression/alprd/algorithm/alprd.hpp"
 #include "duckdb/storage/compression/alprd/alprd_constants.hpp"
 
@@ -152,7 +151,7 @@ public:
 		vector_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 		D_ASSERT(vector_state.exceptions_count <= vector_size);
 
-		auto left_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, AlpRDConstants::DICTIONARY_BW);
+		auto left_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, AlpRDConstants::DICTIONARY_BIT_WIDTH);
 		auto right_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.right_bit_width);
 
 		memcpy(vector_state.left_encoded, (void *)vector_ptr, left_bp_size);

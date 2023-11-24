@@ -9,8 +9,8 @@
 #pragma once
 
 #include "duckdb/storage/compression/patas/patas.hpp"
-#include "duckdb/storage/compression/alp/alp.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/compression/alp/algorithm/alp.hpp"
 #include "duckdb/storage/compression/alp/alp_analyze.hpp"
 
 #include "duckdb/common/helper.hpp"
@@ -37,12 +37,11 @@ public:
 	    : checkpointer(checkpointer), function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
-		state.data_ptr = (void *)this;
 		input_vector = vector<T>(AlpConstants::ALP_VECTOR_SIZE, 0);
 		vector_null_positions = vector<uint16_t>(AlpConstants::ALP_VECTOR_SIZE, 0);
 
 		//! Combinations found on the analyze step are needed for compression
-		state.alp_state.best_k_combinations = analyze_state->state.alp_state.best_k_combinations;
+		state.best_k_combinations = analyze_state->state.best_k_combinations;
 	}
 
 	ColumnDataCheckpointer &checkpointer;
@@ -62,7 +61,7 @@ public:
 	vector<T> input_vector;
 	vector<uint16_t> vector_null_positions;
 
-	AlpState<T, false> state;
+	alp::AlpCompressionState<T, false> state;
 
 public:
 	// Returns the space currently used in the segment (in bytes)
@@ -73,10 +72,10 @@ public:
 	// Returns the required space to store the newly compressed vector
 	idx_t RequiredSpace() {
 		idx_t required_space =
-		    state.alp_state.bp_size +
-		    (state.alp_state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
+		    state.bp_size +
+		    (state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
 		    AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE +
-		    AlpConstants::FOR_SIZE + AlpConstants::BW_SIZE;
+		    AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
 		return required_space;
 	}
 
@@ -91,7 +90,7 @@ public:
 	}
 
 	void ResetVector() {
-		state.alp_state.Reset();
+		state.Reset();
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
@@ -132,7 +131,7 @@ public:
 
 	void CompressVector() {
 		ReplaceNullsInVector();
-		alp::AlpCompression<T, false>::Compress(input_vector, vector_idx, state.alp_state);
+		alp::AlpCompression<T, false>::Compress(input_vector, vector_idx, state);
 		//! Check if the compressed vector fits on current segment
 		if (!HasEnoughSpace()) {
 			auto row_start = current_segment->start + current_segment->count;
@@ -151,38 +150,41 @@ public:
 
 	// Stores the vector and its metadata
 	void FlushVector() {
-		Store<uint8_t>(state.alp_state.vector_exponent, data_ptr);
+		Store<uint8_t>(state.vector_exponent, data_ptr);
 		data_ptr += AlpConstants::EXPONENT_SIZE;
 
-		Store<uint8_t>(state.alp_state.vector_factor, data_ptr);
+		Store<uint8_t>(state.vector_factor, data_ptr);
 		data_ptr += AlpConstants::FACTOR_SIZE;
 
-		Store<uint16_t>(state.alp_state.exceptions_count, data_ptr);
+		Store<uint16_t>(state.exceptions_count, data_ptr);
 		data_ptr += AlpConstants::EXCEPTIONS_COUNT_SIZE;
 
-		Store<uint64_t>(state.alp_state.frame_of_reference, data_ptr);
+		Store<uint64_t>(state.frame_of_reference, data_ptr);
 		data_ptr += AlpConstants::FOR_SIZE;
 
-		Store<uint8_t>(state.alp_state.bit_width, data_ptr);
-		data_ptr += AlpConstants::BW_SIZE;
+		Store<uint8_t>(state.bit_width, data_ptr);
+		data_ptr += AlpConstants::BIT_WIDTH_SIZE;
 
-		memcpy((void *)data_ptr, (void *)state.alp_state.values_encoded, state.alp_state.bp_size);
-		data_ptr += state.alp_state.bp_size;
+		memcpy((void *)data_ptr, (void *)state.values_encoded, state.bp_size);
+		// We should never go out of bounds in the values_encoded array
+		D_ASSERT((AlpConstants::ALP_VECTOR_SIZE * 8) >= state.bp_size);
 
-		if (state.alp_state.exceptions_count > 0) {
-			memcpy((void *)data_ptr, (void *)state.alp_state.exceptions,
-			       sizeof(EXACT_TYPE) * state.alp_state.exceptions_count);
-			data_ptr += sizeof(EXACT_TYPE) * state.alp_state.exceptions_count;
-			memcpy((void *)data_ptr, (void *)state.alp_state.exceptions_positions,
-			       AlpConstants::EXCEPTION_POSITION_SIZE * state.alp_state.exceptions_count);
-			data_ptr += AlpConstants::EXCEPTION_POSITION_SIZE * state.alp_state.exceptions_count;
+		data_ptr += state.bp_size;
+
+		if (state.exceptions_count > 0) {
+			memcpy((void *)data_ptr, (void *)state.exceptions,
+			       sizeof(EXACT_TYPE) * state.exceptions_count);
+			data_ptr += sizeof(EXACT_TYPE) * state.exceptions_count;
+			memcpy((void *)data_ptr, (void *)state.exceptions_positions,
+			       AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count);
+			data_ptr += AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count;
 		}
 
 		data_bytes_used +=
-		    state.alp_state.bp_size +
-		    (state.alp_state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
+		    state.bp_size +
+		    (state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
 		    AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE +
-		    AlpConstants::FOR_SIZE + AlpConstants::BW_SIZE;
+		    AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= sizeof(uint32_t);
@@ -238,6 +240,7 @@ public:
 	void Finalize() {
 		if (vector_idx != 0) {
 			CompressVector();
+			D_ASSERT(vector_idx == 0);
 		}
 		FlushSegment();
 		current_segment.reset();
@@ -256,6 +259,7 @@ public:
 			vector_idx++;
 			if (vector_idx == AlpConstants::ALP_VECTOR_SIZE) {
 				CompressVector();
+				D_ASSERT(vector_idx == 0);
 			}
 		}
 	}
