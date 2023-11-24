@@ -14,7 +14,7 @@ concurrentloop i 1 100
 statement maybe
 ATTACH '__TEST_DIR__/concurrent.db';
 ----
-already attached
+already
 
 endloop
 
