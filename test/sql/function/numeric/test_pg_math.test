@@ -104,18 +104,28 @@ select log(2, 64)
 
 statement error
 select log(0, 64)
+----
+Out of Range Error: cannot take logarithm of zero
 
 statement error
 select log(2, 0)
+----
+Out of Range Error: cannot take logarithm of zero
 
 statement error
 select log(-1, 64)
+----
+Out of Range Error: cannot take logarithm of a negative number
 
 statement error
 select log(2, -1)
+----
+Out of Range Error: cannot take logarithm of a negative number
 
 statement error
 select log(1, 64)
+----
+Out of Range Error: divison by zero in based logarithm
 
 query I
 select log(2, 1)
@@ -155,9 +165,15 @@ NaN
 
 statement error
 select log('-Inf'::DOUBLE, 64)
+----
+Out of Range Error: cannot take logarithm of a negative number
 
 statement error
 select log(64, '-Inf'::DOUBLE)
+----
+Out of Range Error: cannot take logarithm of a negative number
 
 statement error
 select log(2, -1)
+----
+Out of Range Error: cannot take logarithm of a negative number

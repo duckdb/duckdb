@@ -30,6 +30,8 @@ Parser Error: frame end cannot be UNBOUNDED PRECEDING
 # ORDER BY is not implemented for window functions
 statement error
 select LIST(salary ORDER BY enroll_date) OVER (PARTITION BY depname) FROM empsalary
+----
+Parser Error: ORDER BY is not implemented for window functions!
 
 # GROUPS frame spec is not implemented yet for window functions
 statement error

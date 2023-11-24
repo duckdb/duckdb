@@ -340,6 +340,8 @@ SELECT q1 FROM int8_tbl EXCEPT ALL SELECT DISTINCT q2 FROM int8_tbl ORDER BY 1;
 
 statement error
 SELECT q1 FROM int8_tbl EXCEPT ALL SELECT q1 FROM int8_tbl FOR NO KEY UPDATE;
+----
+Parser Error: SELECT locking clause is not supported!
 
 #-- nested cases
 query III

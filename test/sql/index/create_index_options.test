@@ -7,4 +7,4 @@ CREATE TABlE t1 (foo INT)
 statement error
 CREATE INDEX i3 ON t1 USING random_index_method (foo) WITH (my_option = 2, is_cool);
 ----
-Binder Error: Index type not supported
+Binder Error: Unknown index type: RANDOM_INDEX_METHOD

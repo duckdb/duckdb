@@ -11,16 +11,7 @@ COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little.csv' (HEADER, I
 statement error
 COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little.csv' (HEADER, NULL_PADDING FALSE)
 ----
-Invalid Input Error: Error in file "test/sql/copy/csv/data/test/error_too_little.csv" on line 8: expected 2 values per row, but got 1.
-Parser options:
-  file=test/sql/copy/csv/data/test/error_too_little.csv
-  delimiter=',' (default)
-  quote='"' (default)
-  escape='"' (default)
-  header=1
-  sample_size=20480
-  ignore_errors=0
-  all_varchar=0
+CSV options could not be auto-detected
 
 # not enough columns provided
 query II
@@ -62,16 +53,7 @@ COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_single.csv' (HE
 statement error
 COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_single.csv' (HEADER, NULL_PADDING 0)
 ----
-Invalid Input Error: Error in file "test/sql/copy/csv/data/test/error_too_little_single.csv" on line 3: expected 2 values per row, but got 1.
-Parser options:
-  file=test/sql/copy/csv/data/test/error_too_little_single.csv
-  delimiter=',' (default)
-  quote='"' (default)
-  escape='"' (default)
-  header=1
-  sample_size=20480
-  ignore_errors=0
-  all_varchar=0
+CSV options could not be auto-detected
 
 # not enough columns provided, single value
 query II
@@ -88,14 +70,7 @@ COPY integers FROM 'test/sql/copy/csv/data/test/error_too_many.csv' (HEADER, IGN
 statement error
 COPY integers FROM 'test/sql/copy/csv/data/test/error_too_many.csv' (HEADER)
 ----
-Invalid Input Error: Error in file "test/sql/copy/csv/data/test/error_too_many.csv", on line 6: expected 2 values per row, but got more. (  file=test/sql/copy/csv/data/test/error_too_many.csv
-  delimiter=',' (default)
-  quote='"' (default)
-  escape='"' (default)
-  header=1
-  sample_size=20480
-  ignore_errors=0
-  all_varchar=0)
+CSV options could not be auto-detected
 
 # too many columns provided
 query II
@@ -133,8 +108,6 @@ CREATE TABLE nullable_type (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10),
 
 statement ok
 COPY nullable_type FROM 'test/sql/copy/csv/data/test/test_incompatible_type_with_nullable.csv'
-----
-Invalid Input Error: Could not convert string 'a' to INT32 in column "col_a", at line 1
 
 query IIII
 SELECT * FROM nullable_type

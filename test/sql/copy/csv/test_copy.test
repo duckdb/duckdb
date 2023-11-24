@@ -53,7 +53,7 @@ CREATE TABLE test_too_few_rows (a INTEGER, b INTEGER, c VARCHAR, d INTEGER);
 statement error
 COPY test_too_few_rows FROM '__TEST_DIR__/test2.csv' (NULL_PADDING 0, HEADER 1);
 ----
-test2.csv" on line 3: expected 4 values per row, but got 3.
+CSV options could not be auto-detected
 
 # create CSV file from query
 query I
@@ -192,14 +192,7 @@ COPY test FROM 'test/sql/copy/csv/data/test/test_pipe.csv' (SEPARATOR '|');
 statement error
 COPY test FROM 'test/sql/copy/csv/data/test/too_many_values.csv';
 ----
-Invalid Input Error: Error in file "test/sql/copy/csv/data/test/too_many_values.csv", on line 1: expected 3 values per row, but got more. (  file=test/sql/copy/csv/data/test/too_many_values.csv
-  delimiter=',' (default)
-  quote='"' (default)
-  escape='"' (default)
-  header=0' (default)
-  sample_size=20480
-  ignore_errors=0
-  all_varchar=0)
+on line 1: expected 3 values per row, but got more.
 
 # test default null string
 query I
@@ -211,15 +204,7 @@ COPY test FROM 'test/sql/copy/csv/data/test/test_null_csv.csv' DELIMITER '|';
 statement error
 COPY test FROM 'test/sql/copy/csv/data/test/invalid_utf.csv' DELIMITER '|';
 ----
-Invalid Input Error: Error in file "test/sql/copy/csv/data/test/invalid_utf.csv" at line 1 in column ""c"": Invalid unicode (byte sequence mismatch) detected in CSV file. Parser options:
-  file=test/sql/copy/csv/data/test/invalid_utf.csv
-  delimiter='|'
-  quote='"' (default)
-  escape='"' (default)
-  header=0' (default)
-  sample_size=20480
-  ignore_errors=0
-  all_varchar=0
+at line 0: Invalid unicode (byte sequence mismatch) detected in CSV file
 
 # empty file
 statement ok

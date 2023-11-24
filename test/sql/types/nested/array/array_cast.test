@@ -28,6 +28,8 @@ SELECT list_extract(array_value(1, 2, 3), 2)
 # Should not be able to implicitly cast to list with unnest
 statement error
 SELECT * FROM UNNEST(array_value(1, 2, 3))
+----
+Binder Error: UNNEST requires a single list as input
 
 # Should be able to cast to list with unnest
 query I
@@ -70,6 +72,8 @@ SELECT ['1.0', '2.0', '3.0']::DOUBLE[3]
 # Should not be able to cast from list to array if child types are not castable
 statement error
 SELECT [1, 2, 3]::BLOB[3]
+----
+Conversion Error: Unimplemented type for cast (INTEGER -> BLOB)
 
 # Should be able to cast from NULL
 query I
@@ -135,10 +139,14 @@ NULL
 # Should not be able to cast if the elements are not castable
 statement error
 SELECT (['2', 'abc', '3']::VARCHAR[3])::INT[]
+----
+Conversion Error: Could not convert string 'abc' to INT32
 
 # Should not be able to cast to unrelated type
 statement error
 SELECT ([1,2,3]::INT[3])::INT;
+----
+Conversion Error: Unimplemented type for cast (INTEGER[3] -> INTEGER)
 
 # Should not be able to cast to list if child types fail
 query I

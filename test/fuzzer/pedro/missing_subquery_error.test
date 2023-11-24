@@ -13,9 +13,9 @@ Binder Error: WHERE clause cannot contain aggregates!
 statement error
 SELECT (WITH t2 AS (SELECT 3 WHERE count(*)) SELECT 0 FROM t2);
 ----
-Binder Error: WHERE clause cannot contain aggregates!
+Binder Error: Aggregate with only constant parameters has to be bound in the root subquery
 
 statement error
 SELECT (WITH t2 AS (SELECT 3 WHERE count(*) FILTER (1)) SELECT 0 FROM t2);
 ----
-Binder Error: WHERE clause cannot contain aggregates!
+Binder Error: Aggregate with only constant parameters has to be bound in the root subquery

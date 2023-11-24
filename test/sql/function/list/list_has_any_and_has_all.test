@@ -172,7 +172,7 @@ Binder Error: Macro function 'list_has_all(l1, l2)' requires 2 positional argume
 statement error
 select list_has_all([1, 2], 1);
 ----
-Binder Error: Referenced column "x" not found in FROM clause!
+Binder Error: failed to bind function, either: Invalid LIST argument during lambda function binding!
 
 statement error
 select list_has_any([[1,2], [2,4]], ['abc', 'def']);
@@ -238,7 +238,7 @@ select l1 && l2 from tbl;
 statement error
 select 'hello' && l1 from tbl;
 ----
-Binder Error: Referenced column "x" not found in FROM clause!
+Binder Error: failed to bind function, either: Invalid LIST argument during lambda function binding!
 
 query I
 select NULL && [NULL];
@@ -273,7 +273,7 @@ Binder Error: No function matches the given name and argument types 'list_contai
 statement error
 select 'hello' <@ l1 from tbl;
 ----
-Binder Error: Referenced column "x" not found in FROM clause!
+Binder Error: failed to bind function, either: Invalid LIST argument during lambda function binding!
 
 query I
 select l1 @> NULL from tbl;

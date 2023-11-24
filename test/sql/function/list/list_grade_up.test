@@ -33,18 +33,28 @@ SELECT list_grade_up([]) WHERE 1 = 0
 
 statement error
 SELECT list_grade_up()
+----
+No function matches the given name and argument types 'list_grade_up()
 
 statement error
 SELECT list_grade_up(*)
+----
+No function matches the given name and argument types 'list_grade_up()
 
 statement error
 SELECT list_grade_up([1, 2], 2)
+----
+Not implemented Error: Enum value: '2' not implemented
 
 statement error
 SELECT list_grade_up([1, 2], 'DESC', 2)
+----
+Not implemented Error: Enum value: '2' not implemented
 
 statement error
 SELECT list_grade_up([1, 2], 2, 2)
+----
+Not implemented Error: Enum value: '2' not implemented
 
 
 query I
