@@ -524,7 +524,6 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 	collection.Reset();
 	ParquetOptions parquet_options(context);
 	auto reader = make_uniq<ParquetReader>(context, file_path, parquet_options);
-	idx_t count = 0;
 	DataChunk current_chunk;
 	current_chunk.Initialize(context, return_types);
 	auto meta_data = reader->GetFileMetadata();
