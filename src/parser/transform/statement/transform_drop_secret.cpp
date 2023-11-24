@@ -11,7 +11,8 @@ unique_ptr<PragmaStatement> Transformer::TransformDropSecret(duckdb_libpgquery::
 		result->info->name = "duckdb_drop_secret";
 	}
 	result->info->parameters.push_back(make_uniq<ConstantExpression>(Value(stmt.secret_name)));
-	result->info->parameters.push_back(make_uniq<ConstantExpression>(Value(stmt.missing_ok).DefaultCastAs(LogicalType::BOOLEAN)));
+	result->info->parameters.push_back(
+	    make_uniq<ConstantExpression>(Value(stmt.missing_ok).DefaultCastAs(LogicalType::BOOLEAN)));
 
 	return result;
 }
