@@ -7,7 +7,7 @@ on:
         required: true
         type: string
       extension_repo:
-        description: 'Extension git repo (e.g. https://github.com/duckdblabs/postgres_scanner)'
+        description: 'Extension git repo (e.g. https://github.com/duckdb/postgres_scanner)'
         required: true
         type: string
       extension_ref:

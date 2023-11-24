@@ -49,6 +49,7 @@ struct S3AuthParams {
 
 struct ParsedS3Url {
 	const string http_proto;
+	const string prefix;
 	const string host;
 	const string bucket;
 	const string path;
@@ -111,6 +112,8 @@ public:
 			throw NotImplementedException("Cannot open an HTTP file for appending");
 		}
 	}
+	~S3FileHandle() override;
+
 	S3AuthParams auth_params;
 	const S3ConfigParams config_params;
 

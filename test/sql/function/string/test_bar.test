@@ -8,12 +8,12 @@ pragma enable_verification
 query I
 select bar(x * x, 0, 100) from range(0, 11) t(x)
 ----
-(empty)
-▊
-███▏
-███████▏
-████████████▊
-████████████████████
+                                                                                
+▊                                                                             
+███▏                                                                    
+███████▏                                                        
+████████████▊                                         
+████████████████████                    
 ████████████████████████████▊
 ███████████████████████████████████████▏
 ███████████████████████████████████████████████████▏
@@ -23,7 +23,7 @@ select bar(x * x, 0, 100) from range(0, 11) t(x)
 query I
 select bar(9, 10, 20)
 ----
-(empty)
+                                                                                
 
 query I
 select bar(120, -10, 100, 10)
@@ -38,17 +38,17 @@ select bar(40, 20, 0)
 query I
 select bar(100, 200, 0)
 ----
-(empty)
+                                                                                
 
 query I
 select bar(-10, 20, 0)
 ----
-(empty)
+                                                                                
 
 query I
 select bar('nan'::double, 0, 10)
 ----
-(empty)
+                                                                                
 
 query I
 select bar('infinity'::double, 0, 10)
@@ -58,7 +58,7 @@ select bar('infinity'::double, 0, 10)
 query I
 select bar('-infinity'::double, 0, 10)
 ----
-(empty)
+                                                                                
 
 query I
 select bar(null, 0, 10)
@@ -68,7 +68,7 @@ NULL
 query I
 select bar(1, 'nan'::double, 10)
 ----
-(empty)
+                                                                                
 
 statement error
 select bar(1, '-infinity'::double, 10)
@@ -78,7 +78,7 @@ Out of Range Error: Bar width must not be NaN or infinity
 query I
 select bar(1, 'infinity'::double, 10)
 ----
-(empty)
+                                                                                
 
 query I
 select bar(1, null, 10)
@@ -88,7 +88,7 @@ NULL
 query I
 select bar(1, 0, 'nan'::double)
 ----
-(empty)
+                                                                                
 
 query I
 select bar(1, 0, '-infinity'::double)
@@ -98,7 +98,7 @@ select bar(1, 0, '-infinity'::double)
 query I
 select bar(1, 0, 'infinity'::double)
 ----
-(empty)
+                                                                                
 
 statement error
 select bar(1, 0, 10, 'nan'::double)
@@ -118,7 +118,8 @@ Out of Range Error: Max bar width must not be NaN or infinity
 query I
 select bar(1, 0, 10, 1000)
 ----
-████████████████████████████████████████████████████████████████████████████████████████████████████
+████████████████████████████████████████████████████████████████████████████████████████████████████                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+
 
 statement error
 select bar(1, 0, 10, 1001)
@@ -128,12 +129,12 @@ Out of Range Error: Max bar width must be <= 1000
 query I
 select bar(1, 0, 10, 1)
 ----
-(empty)
+ 
 
 query I
 select bar(10, 10, 10, 10)
 ----
-(empty)
+          
 
 statement error
 select bar(1, 0, 10, 0.99)

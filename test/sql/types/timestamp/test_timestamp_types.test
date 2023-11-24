@@ -48,22 +48,7 @@ select '90000-01-19 03:14:07.999999'::TIMESTAMP_US::TIMESTAMP_NS
 ----
 Conversion Error: Could not convert Timestamp(US) to Timestamp(NS)
 
-#DATE/TIME conversions are not directly supported yet
-statement error
-select sec::DATE from timestamp;
-----
-Conversion Error: Unimplemented type for cast (TIMESTAMP_S -> DATE)
-
-statement error
-select milli::DATE from timestamp;
-----
-Conversion Error: Unimplemented type for cast (TIMESTAMP_MS -> DATE)
-
-statement error
-select nano::DATE from timestamp;
-----
-Conversion Error: Unimplemented type for cast (TIMESTAMP_NS -> DATE)
-
+# TIME conversions are not directly supported yet
 statement error
 select sec::TIME from timestamp;
 ----
@@ -90,6 +75,18 @@ FROM timestamp
 WHERE ${src} = ${dst} ;
 
 endloop
+
+endloop
+
+# Cast to DATE
+foreach src sec milli micro nano
+
+query I
+SELECT ${src}::DATE from timestamp
+----
+2008-01-01
+2008-01-01
+2008-01-01
 
 endloop
 

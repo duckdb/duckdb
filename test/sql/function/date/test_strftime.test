@@ -114,15 +114,17 @@ SELECT strftime('2019-01-23'::DATE, 42);
 
 foreach datatype DATE TIMESTAMP
 
-foreach special infinity -infinity
-
 # PG to_char returns NULL here
+# but we can do better.
 query I
-SELECT strftime('${special}'::${datatype}, '%Y-%m-%d');
+SELECT strftime('infinity'::${datatype}, '%Y-%m-%d');
 ----
-NULL
+infinity
 
-endloop
+query I
+SELECT strftime('-infinity'::${datatype}, '%Y-%m-%d');
+----
+-infinity
 
 endloop
 

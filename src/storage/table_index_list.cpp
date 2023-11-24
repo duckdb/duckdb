@@ -1,7 +1,7 @@
 #include "duckdb/storage/table/table_index_list.hpp"
+
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
-#include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
 void TableIndexList::AddIndex(unique_ptr<Index> index) {
@@ -10,16 +10,44 @@ void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	indexes.push_back(std::move(index));
 }
 
-void TableIndexList::RemoveIndex(Index &index) {
+void TableIndexList::RemoveIndex(const string &name) {
 	lock_guard<mutex> lock(indexes_lock);
 
 	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
 		auto &index_entry = indexes[index_idx];
-		if (index_entry.get() == &index) {
+		if (index_entry->name == name) {
 			indexes.erase(indexes.begin() + index_idx);
 			break;
 		}
 	}
+}
+
+void TableIndexList::CommitDrop(const string &name) {
+	lock_guard<mutex> lock(indexes_lock);
+
+	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
+		auto &index_entry = indexes[index_idx];
+		if (index_entry->name == name) {
+			index_entry->CommitDrop();
+			break;
+		}
+	}
+}
+
+bool TableIndexList::NameIsUnique(const string &name) {
+	lock_guard<mutex> lock(indexes_lock);
+
+	// only cover PK, FK, and UNIQUE, which are not (yet) catalog entries
+	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
+		auto &index_entry = indexes[index_idx];
+		if (index_entry->IsPrimary() || index_entry->IsForeign() || index_entry->IsUnique()) {
+			if (index_entry->name == name) {
+				return false;
+			}
+		}
+	}
+
+	return true;
 }
 
 bool TableIndexList::Empty() {
@@ -79,12 +107,15 @@ vector<column_t> TableIndexList::GetRequiredColumns() {
 	return result;
 }
 
-vector<BlockPointer> TableIndexList::SerializeIndexes(duckdb::MetadataWriter &writer) {
-	vector<BlockPointer> blocks_info;
+vector<IndexStorageInfo> TableIndexList::GetStorageInfos() {
+
+	vector<IndexStorageInfo> index_storage_infos;
 	for (auto &index : indexes) {
-		blocks_info.emplace_back(index->Serialize(writer));
+		auto index_storage_info = index->GetStorageInfo(false);
+		D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
+		index_storage_infos.push_back(index_storage_info);
 	}
-	return blocks_info;
+	return index_storage_infos;
 }
 
 } // namespace duckdb

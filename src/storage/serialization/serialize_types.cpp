@@ -22,6 +22,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
 		result = AggregateStateTypeInfo::Deserialize(deserializer);
 		break;
+	case ExtraTypeInfoType::ARRAY_TYPE_INFO:
+		result = ArrayTypeInfo::Deserialize(deserializer);
+		break;
 	case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
 		result = DecimalTypeInfo::Deserialize(deserializer);
 		break;
@@ -64,6 +67,19 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &dese
 	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->state_type.function_name);
 	deserializer.ReadProperty<LogicalType>(201, "return_type", result->state_type.return_type);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", result->state_type.bound_argument_types);
+	return std::move(result);
+}
+
+void ArrayTypeInfo::Serialize(Serializer &serializer) const {
+	ExtraTypeInfo::Serialize(serializer);
+	serializer.WriteProperty<LogicalType>(200, "child_type", child_type);
+	serializer.WritePropertyWithDefault<uint32_t>(201, "size", size);
+}
+
+shared_ptr<ExtraTypeInfo> ArrayTypeInfo::Deserialize(Deserializer &deserializer) {
+	auto child_type = deserializer.ReadProperty<LogicalType>(200, "child_type");
+	auto size = deserializer.ReadPropertyWithDefault<uint32_t>(201, "size");
+	auto result = duckdb::shared_ptr<ArrayTypeInfo>(new ArrayTypeInfo(std::move(child_type), size));
 	return std::move(result);
 }
 
@@ -116,11 +132,15 @@ shared_ptr<ExtraTypeInfo> StructTypeInfo::Deserialize(Deserializer &deserializer
 void UserTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "user_type_name", user_type_name);
+	serializer.WritePropertyWithDefault<string>(201, "catalog", catalog, string());
+	serializer.WritePropertyWithDefault<string>(202, "schema", schema, string());
 }
 
 shared_ptr<ExtraTypeInfo> UserTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<UserTypeInfo>(new UserTypeInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "user_type_name", result->user_type_name);
+	deserializer.ReadPropertyWithDefault<string>(201, "catalog", result->catalog, string());
+	deserializer.ReadPropertyWithDefault<string>(202, "schema", result->schema, string());
 	return std::move(result);
 }
 

@@ -69,7 +69,9 @@ idx_t DistinctStatistics::GetCount() const {
 }
 
 bool DistinctStatistics::TypeIsSupported(const LogicalType &type) {
-	return type.InternalType() != PhysicalType::LIST && type.InternalType() != PhysicalType::STRUCT;
+	auto physical_type = type.InternalType();
+	return physical_type != PhysicalType::LIST && physical_type != PhysicalType::STRUCT &&
+	       physical_type != PhysicalType::ARRAY;
 }
 
 } // namespace duckdb

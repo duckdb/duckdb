@@ -1,9 +1,18 @@
 #include "mbedtls_wrapper.hpp"
+
 // otherwise we have different definitions for mbedtls_pk_context / mbedtls_sha256_context
 #define MBEDTLS_ALLOW_PRIVATE_ACCESS
 
-#include "mbedtls/sha256.h"
+#include "duckdb/common/helper.hpp"
+#include "mbedtls/entropy.h"
+#include "mbedtls/gcm.h"
 #include "mbedtls/pk.h"
+#include "mbedtls/sha256.h"
+
+#ifdef MBEDTLS_NO_ENTROPY_SOURCE
+#include "duckdb/common/random_engine.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#endif
 
 #include <stdexcept>
 
@@ -25,49 +34,53 @@ openssl dgst -binary -sha256 dummy > hash
 openssl pkeyutl -sign -in hash -inkey private.pem -pkeyopt digest:sha256 -out dummy.sign
 */
 
-
-void MbedTlsWrapper::ComputeSha256Hash(const char* in, size_t in_len, char* out) {
+void MbedTlsWrapper::ComputeSha256Hash(const char *in, size_t in_len, char *out) {
 
 	mbedtls_sha256_context sha_context;
 	mbedtls_sha256_init(&sha_context);
-	if(mbedtls_sha256_starts(&sha_context, false) || mbedtls_sha256_update(&sha_context, (const unsigned char*) in, in_len) || mbedtls_sha256_finish(&sha_context, (unsigned char*)out)) {
+	if (mbedtls_sha256_starts(&sha_context, false) ||
+	    mbedtls_sha256_update(&sha_context, reinterpret_cast<const unsigned char *>(in), in_len) ||
+	    mbedtls_sha256_finish(&sha_context, reinterpret_cast<unsigned char *>(out))) {
 		throw runtime_error("SHA256 Error");
 	}
 	mbedtls_sha256_free(&sha_context);
 }
 
-string MbedTlsWrapper::ComputeSha256Hash(const string& file_content) {
+string MbedTlsWrapper::ComputeSha256Hash(const string &file_content) {
 	string hash;
 	hash.resize(MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES);
-	ComputeSha256Hash(file_content.data(), file_content.size(), (char*)hash.data());
+	ComputeSha256Hash(file_content.data(), file_content.size(), (char *)hash.data());
 	return hash;
 }
 
-bool MbedTlsWrapper::IsValidSha256Signature(const std::string &pubkey, const std::string &signature, const std::string &sha256_hash) {
+bool MbedTlsWrapper::IsValidSha256Signature(const std::string &pubkey, const std::string &signature,
+                                            const std::string &sha256_hash) {
 
 	if (signature.size() != 256 || sha256_hash.size() != 32) {
-		throw std::runtime_error("Invalid input lengths, expected signature length 256, got " + to_string(signature.size()) + ", hash length 32, got " + to_string(sha256_hash.size()));
+		throw std::runtime_error("Invalid input lengths, expected signature length 256, got " +
+		                         to_string(signature.size()) + ", hash length 32, got " +
+		                         to_string(sha256_hash.size()));
 	}
 
 	mbedtls_pk_context pk_context;
 	mbedtls_pk_init(&pk_context);
 
-	if (mbedtls_pk_parse_public_key( &pk_context,
-	                                    (const unsigned char*) pubkey.c_str(),pubkey.size() + 1 )) {
+	if (mbedtls_pk_parse_public_key(&pk_context, reinterpret_cast<const unsigned char *>(pubkey.c_str()),
+	                                pubkey.size() + 1)) {
 		throw runtime_error("RSA public key import error");
 	}
 
 	// actually verify
 	bool valid = mbedtls_pk_verify(&pk_context, MBEDTLS_MD_SHA256,
-	                               (const unsigned char*) sha256_hash.data(), sha256_hash.size(),
-	                          (const unsigned char*)signature.data(), signature.length()) == 0;
+	                               reinterpret_cast<const unsigned char *>(sha256_hash.data()), sha256_hash.size(),
+	                               reinterpret_cast<const unsigned char *>(signature.data()), signature.length()) == 0;
 
 	mbedtls_pk_free(&pk_context);
 	return valid;
 }
 
 // used in s3fs
-void MbedTlsWrapper::Hmac256(const char* key, size_t key_len, const char* message, size_t message_len, char* out) {
+void MbedTlsWrapper::Hmac256(const char *key, size_t key_len, const char *message, size_t message_len, char *out) {
 	mbedtls_md_context_t hmac_ctx;
 	const mbedtls_md_info_t *md_type = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
 	if (!md_type) {
@@ -75,9 +88,9 @@ void MbedTlsWrapper::Hmac256(const char* key, size_t key_len, const char* messag
 	}
 
 	if (mbedtls_md_setup(&hmac_ctx, md_type, 1) ||
-	    mbedtls_md_hmac_starts(&hmac_ctx, (const unsigned char *) key, key_len) ||
-	    mbedtls_md_hmac_update(&hmac_ctx, (const unsigned char *)message, message_len) ||
-	    mbedtls_md_hmac_finish(&hmac_ctx, (unsigned char *) out)) {
+	    mbedtls_md_hmac_starts(&hmac_ctx, reinterpret_cast<const unsigned char *>(key), key_len) ||
+	    mbedtls_md_hmac_update(&hmac_ctx, reinterpret_cast<const unsigned char *>(message), message_len) ||
+	    mbedtls_md_hmac_finish(&hmac_ctx, reinterpret_cast<unsigned char *>(out))) {
 		throw runtime_error("HMAC256 Error");
 	}
 	mbedtls_md_free(&hmac_ctx);
@@ -94,30 +107,63 @@ void MbedTlsWrapper::ToBase16(char *in, char *out, size_t len) {
 	}
 }
 
-MbedTlsWrapper::SHA256State::SHA256State() : sha_context(new mbedtls_sha256_context()) {
-	mbedtls_sha256_init((mbedtls_sha256_context*)sha_context);
+void MbedTlsWrapper::GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) {
+#ifdef MBEDTLS_NO_ENTROPY_SOURCE
+	duckdb::RandomEngine random_engine(duckdb::Timestamp::GetCurrentTimestamp().value);
+	while (len != 0) {
+		const auto random_integer = random_engine.NextRandomInteger();
+		const auto next = duckdb::MinValue<duckdb::idx_t>(len, sizeof(random_integer));
+		memcpy(data, duckdb::const_data_ptr_cast(&random_integer), next);
+		data += next;
+		len -= next;
+	}
+#else
+	duckdb::data_t buf[MBEDTLS_ENTROPY_BLOCK_SIZE];
+	mbedtls_entropy_context entropy;
+	mbedtls_entropy_init(&entropy);
 
-	if (mbedtls_sha256_starts((mbedtls_sha256_context*)sha_context, false)) {
+	while (len != 0) {
+		if (mbedtls_entropy_func(&entropy, buf, MBEDTLS_ENTROPY_BLOCK_SIZE) != 0) {
+			throw runtime_error("Unable to generate random data");
+		}
+		const auto next = duckdb::MinValue<duckdb::idx_t>(len, MBEDTLS_ENTROPY_BLOCK_SIZE);
+		memcpy(data, buf, next);
+		data += next;
+		len -= next;
+	}
+#endif
+}
+
+MbedTlsWrapper::SHA256State::SHA256State() : sha_context(new mbedtls_sha256_context()) {
+	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
+
+	mbedtls_sha256_init(context);
+
+	if (mbedtls_sha256_starts(context, false)) {
 		throw std::runtime_error("SHA256 Error");
 	}
 }
 
 MbedTlsWrapper::SHA256State::~SHA256State() {
-	mbedtls_sha256_free((mbedtls_sha256_context*)sha_context);
-	delete (mbedtls_sha256_context*)sha_context;
+	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
+	mbedtls_sha256_free(context);
+	delete context;
 }
 
-void MbedTlsWrapper::SHA256State::AddString(const std::string & str) {
-	if (mbedtls_sha256_update((mbedtls_sha256_context*)sha_context, (unsigned char*)str.data(), str.size())) {
+void MbedTlsWrapper::SHA256State::AddString(const std::string &str) {
+	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
+	if (mbedtls_sha256_update(context, (unsigned char *)str.data(), str.size())) {
 		throw std::runtime_error("SHA256 Error");
 	}
 }
 
 std::string MbedTlsWrapper::SHA256State::Finalize() {
+	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
+
 	string hash;
 	hash.resize(MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES);
 
-	if (mbedtls_sha256_finish((mbedtls_sha256_context*)sha_context, (unsigned char*)hash.data())) {
+	if (mbedtls_sha256_finish(context, (unsigned char *)hash.data())) {
 		throw std::runtime_error("SHA256 Error");
 	}
 
@@ -125,12 +171,74 @@ std::string MbedTlsWrapper::SHA256State::Finalize() {
 }
 
 void MbedTlsWrapper::SHA256State::FinishHex(char *out) {
+	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
+
 	string hash;
 	hash.resize(MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES);
 
-	if (mbedtls_sha256_finish((mbedtls_sha256_context *)sha_context, (unsigned char *)hash.data())) {
+	if (mbedtls_sha256_finish(context, (unsigned char *)hash.data())) {
 		throw std::runtime_error("SHA256 Error");
 	}
 
 	MbedTlsWrapper::ToBase16(const_cast<char *>(hash.c_str()), out, MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES);
+}
+
+MbedTlsWrapper::AESGCMState::AESGCMState(const std::string &key) : gcm_context(new mbedtls_gcm_context()) {
+	auto context = reinterpret_cast<mbedtls_gcm_context *>(gcm_context);
+	mbedtls_gcm_init(context);
+	if (mbedtls_gcm_setkey(context, MBEDTLS_CIPHER_ID_AES, reinterpret_cast<const unsigned char *>(key.c_str()),
+	                       key.length() * 8) != 0) {
+		throw runtime_error("Invalid AES key length");
+	}
+}
+
+MbedTlsWrapper::AESGCMState::~AESGCMState() {
+	auto context = reinterpret_cast<mbedtls_gcm_context *>(gcm_context);
+	mbedtls_gcm_free(context);
+	delete context;
+}
+
+bool MbedTlsWrapper::AESGCMState::ValidKey(const std::string &key) {
+	switch (key.size()) {
+	case 16:
+	case 24:
+	case 32:
+		return true;
+	default:
+		return false;
+	}
+}
+
+void MbedTlsWrapper::AESGCMState::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len) {
+	auto context = reinterpret_cast<mbedtls_gcm_context *>(gcm_context);
+	if (mbedtls_gcm_starts(context, MBEDTLS_GCM_ENCRYPT, iv, iv_len) != 0) {
+		throw runtime_error("Unable to initialize AES encryption");
+	}
+}
+
+void MbedTlsWrapper::AESGCMState::InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len) {
+	auto context = reinterpret_cast<mbedtls_gcm_context *>(gcm_context);
+	if (mbedtls_gcm_starts(context, MBEDTLS_GCM_DECRYPT, iv, iv_len) != 0) {
+		throw runtime_error("Unable to initialize AES decryption");
+	}
+}
+
+size_t MbedTlsWrapper::AESGCMState::Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
+                                            duckdb::idx_t out_len) {
+	auto context = reinterpret_cast<mbedtls_gcm_context *>(gcm_context);
+	size_t result;
+	if (mbedtls_gcm_update(context, in, in_len, out, out_len, &result) != 0) {
+		throw runtime_error("Unable to process using AES");
+	}
+	return result;
+}
+
+size_t MbedTlsWrapper::AESGCMState::Finalize(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag,
+                                             duckdb::idx_t tag_len) {
+	auto context = reinterpret_cast<mbedtls_gcm_context *>(gcm_context);
+	size_t result;
+	if (mbedtls_gcm_finish(context, out, out_len, &result, tag, tag_len) != 0) {
+		throw runtime_error("Unable to finalize AES");
+	}
+	return result;
 }
