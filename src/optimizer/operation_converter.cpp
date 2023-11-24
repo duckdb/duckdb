@@ -9,6 +9,7 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
 
 namespace duckdb {
 
@@ -32,6 +33,7 @@ void OperationConverter::Optimize(unique_ptr<LogicalOperator> &op, bool is_root)
 			// and the join order optimizer can still have an effect.
 			break;
 		}
+		auto table_index = set_op.table_index;
 		auto &left = op->children[0];
 		auto &right = op->children[1];
 		auto left_bindings = left->GetColumnBindings();
@@ -61,7 +63,24 @@ void OperationConverter::Optimize(unique_ptr<LogicalOperator> &op, bool is_root)
 
 		op = std::move(join_op);
 
-		// perform column binding replacement
+		// push a distinct operator on the join
+		auto &types = op->types;
+		auto join_bindings = op->GetColumnBindings();
+		vector<unique_ptr<Expression>> distinct_targets;
+		vector<unique_ptr<Expression>> select_list;
+		for (idx_t i = 0; i < join_bindings.size(); i++) {
+			distinct_targets.push_back(make_uniq<BoundColumnRefExpression>(types[i], join_bindings[i]));
+			select_list.push_back(make_uniq<BoundColumnRefExpression>(types[i], join_bindings[i]));
+		}
+		auto distinct = make_uniq<LogicalDistinct>(std::move(distinct_targets), DistinctType::DISTINCT);
+		distinct->children.push_back(std::move(op));
+		op = std::move(distinct);
+
+		auto projection = make_uniq<LogicalProjection>(table_index, std::move(select_list));
+		projection->children.push_back(std::move(op));
+		op = std::move(projection);
+
+		// now perform column binding replacement
 		auto new_bindings = op->GetColumnBindings();
 		D_ASSERT(old_bindings.size() == new_bindings.size());
 		vector<ReplacementBinding> replacement_bindings;
@@ -72,26 +91,6 @@ void OperationConverter::Optimize(unique_ptr<LogicalOperator> &op, bool is_root)
 		auto binding_replacer = ColumnBindingReplacer();
 		binding_replacer.replacement_bindings = replacement_bindings;
 		binding_replacer.VisitOperator(root);
-
-		// push a group by all on top of the join
-
-		auto &types = op->types;
-		auto join_bindings = op->GetColumnBindings();
-		vector<unique_ptr<Expression>> select_list, groups, aggregates /* left empty */;
-		D_ASSERT(join_bindings.size() == types.size());
-		auto table_index = binder.GenerateTableIndex();
-		auto aggregate_index = binder.GenerateTableIndex();
-		for (idx_t i = 0; i < join_bindings.size(); i++) {
-			select_list.push_back(make_uniq<BoundColumnRefExpression>(types[i], ColumnBinding(table_index, i)));
-//			groups.push_back(make_uniq<BoundColumnRefExpression>(types[i], join_bindings.at(i)));
-//			groups.push_back(make_uniq<BoundColumnRefExpression>(types[i], ColumnBinding(table_index, i)));
-		}
-		auto group_by = make_uniq<LogicalAggregate>(table_index, aggregate_index,  std::move(select_list));
-		group_by->groups = std::move(groups);
-		group_by->children.push_back(std::move(op));
-
-		op = std::move(group_by);
-
 	}
 	default:
 		break;
