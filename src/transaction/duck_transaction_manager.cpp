@@ -12,6 +12,7 @@
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -154,7 +155,10 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 				// potentially resulting in garbage collection
 				RemoveTransaction(*transaction);
 				if (transaction_context) {
-					transaction_context->transaction.ClearTransaction();
+					// invalidate the active transaction for this connection
+					auto &meta_transaction = MetaTransaction::Get(*transaction_context);
+					meta_transaction.RemoveTransaction(db);
+					ValidChecker::Get(meta_transaction).Invalidate("Invalidated due to FORCE CHECKPOINT");
 				}
 				i--;
 			}

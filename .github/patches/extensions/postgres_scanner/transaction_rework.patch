@@ -1,0 +1,72 @@
+diff --git a/src/include/storage/postgres_transaction_manager.hpp b/src/include/storage/postgres_transaction_manager.hpp
+index 94427d5..b4ac2da 100644
+--- a/src/include/storage/postgres_transaction_manager.hpp
++++ b/src/include/storage/postgres_transaction_manager.hpp
+@@ -11,6 +11,7 @@
+ #include "duckdb/transaction/transaction_manager.hpp"
+ #include "storage/postgres_catalog.hpp"
+ #include "storage/postgres_transaction.hpp"
++#include "duckdb/common/reference_map.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -18,16 +19,16 @@ class PostgresTransactionManager : public TransactionManager {
+ public:
+ 	PostgresTransactionManager(AttachedDatabase &db_p, PostgresCatalog &postgres_catalog);
+ 
+-	Transaction *StartTransaction(ClientContext &context) override;
+-	string CommitTransaction(ClientContext &context, Transaction *transaction) override;
+-	void RollbackTransaction(Transaction *transaction) override;
++	Transaction &StartTransaction(ClientContext &context) override;
++	string CommitTransaction(ClientContext &context, Transaction &transaction) override;
++	void RollbackTransaction(Transaction &transaction) override;
+ 
+ 	void Checkpoint(ClientContext &context, bool force = false) override;
+ 
+ private:
+ 	PostgresCatalog &postgres_catalog;
+ 	mutex transaction_lock;
+-	unordered_map<Transaction *, unique_ptr<PostgresTransaction>> transactions;
++	reference_map_t<Transaction, unique_ptr<PostgresTransaction>> transactions;
+ };
+ 
+ } // namespace duckdb
+diff --git a/src/storage/postgres_transaction_manager.cpp b/src/storage/postgres_transaction_manager.cpp
+index 6de4b5c..e1b89e6 100644
+--- a/src/storage/postgres_transaction_manager.cpp
++++ b/src/storage/postgres_transaction_manager.cpp
+@@ -7,26 +7,26 @@ PostgresTransactionManager::PostgresTransactionManager(AttachedDatabase &db_p, P
+     : TransactionManager(db_p), postgres_catalog(postgres_catalog) {
+ }
+ 
+-Transaction *PostgresTransactionManager::StartTransaction(ClientContext &context) {
++Transaction &PostgresTransactionManager::StartTransaction(ClientContext &context) {
+ 	auto transaction = make_uniq<PostgresTransaction>(postgres_catalog, *this, context);
+ 	transaction->Start();
+-	auto result = transaction.get();
++	auto &result = *transaction;
+ 	lock_guard<mutex> l(transaction_lock);
+ 	transactions[result] = std::move(transaction);
+ 	return result;
+ }
+ 
+-string PostgresTransactionManager::CommitTransaction(ClientContext &context, Transaction *transaction) {
+-	auto postgres_transaction = (PostgresTransaction *)transaction;
+-	postgres_transaction->Commit();
++string PostgresTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction) {
++	auto &postgres_transaction = transaction.Cast<PostgresTransaction>();
++	postgres_transaction.Commit();
+ 	lock_guard<mutex> l(transaction_lock);
+ 	transactions.erase(transaction);
+ 	return string();
+ }
+ 
+-void PostgresTransactionManager::RollbackTransaction(Transaction *transaction) {
+-	auto postgres_transaction = (PostgresTransaction *)transaction;
+-	postgres_transaction->Rollback();
++void PostgresTransactionManager::RollbackTransaction(Transaction &transaction) {
++	auto &postgres_transaction = transaction.Cast<PostgresTransaction>();
++	postgres_transaction.Rollback();
+ 	lock_guard<mutex> l(transaction_lock);
+ 	transactions.erase(transaction);
+ }
