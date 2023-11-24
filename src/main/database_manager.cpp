@@ -112,19 +112,20 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, string &db_type, A
 		return;
 	}
 
-	lock_guard<mutex> write_lock(db_paths_lock);
-
-	// we cannot infer the database type if we already hold the file handle somewhere else
-	if (db_paths.find(info.path) != db_paths.end()) {
-		throw BinderException(
-		    "Unique file handle conflict: Database \"%s\" is already attached with path \"%s\", "
-		    "possibly by another transaction. Commit that transaction, if it already detached the file. Otherwise, "
-		    "inferring the database type from the file header is not possible, as it requires holding the file handle.",
-		    info.name, info.path);
-	}
-
 	// try to extract database type from path
 	if (db_type.empty()) {
+		lock_guard<mutex> write_lock(db_paths_lock);
+
+		// we cannot infer the database type if we already hold the file handle somewhere else
+		if (db_paths.find(info.path) != db_paths.end()) {
+			throw BinderException(
+			    "Unique file handle conflict: Database \"%s\" is already attached with path \"%s\", "
+			    "possibly by another transaction. Commit that transaction, if it already detached the file. Otherwise, "
+			    "inferring the database type from the file header is not possible, as it requires holding the file "
+			    "handle.",
+			    info.name, info.path);
+		}
+
 		DBPathAndType::CheckMagicBytes(info.path, db_type, config);
 	}
 
