@@ -739,6 +739,16 @@ NULL	NULL
 2022-01-01 00:00:41+00	1640995241000
 infinity	NULL
 
+query I
+select epoch_ms(9223372036854775807)
+----
+infinity
+
+query I
+select epoch_ms(-9223372036854775808)
+----
+-infinity
+
 query II
 SELECT ts, epoch_ns(ts) FROM timestamps ORDER BY ALL;
 ----
