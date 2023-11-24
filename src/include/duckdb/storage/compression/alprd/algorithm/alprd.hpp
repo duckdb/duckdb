@@ -81,9 +81,12 @@ struct AlpRDCompression {
 		vector<AlpRDLeftPartInfo> left_parts_sorted_repetitions;
 
 		// Building a hash for all the left parts and how many times they appear
+		printf("right_bit_width %d ||| \n", right_bit_width);
 		for (auto &value : values) {
+			printf("LPH %llu ---- ", value);
 			auto left_tmp = value >> right_bit_width;
 			left_parts_hash[left_tmp]++;
+			printf("LPH %llu - %d ", left_tmp, left_parts_hash[left_tmp]);
 		}
 
 		// We build a vector from the hash to be able to sort it by repetition count

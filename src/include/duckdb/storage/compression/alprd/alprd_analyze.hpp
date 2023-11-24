@@ -50,36 +50,26 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	input.ToUnifiedFormat(count, vdata);
 	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 
-	//! We sample equidistant vectors; to do this we skip a fixed values of vectors
-	bool must_select_rowgroup_samples = (analyze_state.vectors_count % AlpConstants::RG_SAMPLES_DUCKDB_JUMP) == 0;
+
+	bool must_skip_current_vector = alp::AlpUtils::MustSkipSamplingFromCurrentVector(analyze_state.vectors_count, analyze_state.vectors_sampled_count, count);
 	analyze_state.vectors_count += 1;
 	analyze_state.total_values_count += count;
-
-	//! If we are not in the correct jump, we do not take sample from this vector
-	if (!must_select_rowgroup_samples) {
+	if (must_skip_current_vector){
 		return true;
 	}
 
-	//! We do not take samples of non-complete duckdb vectors (usually the last one)
-	//! Except in the case of too little data
-	if (count < AlpConstants::SAMPLES_PER_VECTOR && analyze_state.vectors_sampled_count != 0) {
-		return true;
-	}
+	analyze_state.vectors_count++;
+	analyze_state.total_values_count += count;
 
-	uint32_t n_lookup_values = MinValue(count, (idx_t)AlpConstants::ALP_VECTOR_SIZE);
-	//! We sample equidistant values within a vector; to do this we jump a fixed number of values
-	uint32_t n_sampled_increments =
-	    MaxValue(1, (int)std::ceil((double)n_lookup_values / AlpConstants::SAMPLES_PER_VECTOR));
-	uint32_t n_sampled_values = std::ceil((double)n_lookup_values / n_sampled_increments);
+	alp::AlpSamplingParameters sampling_params = alp::AlpUtils::GetSamplingParameters(count);
 
-	vector<EXACT_TYPE> current_vector_sample(n_sampled_values, 0);
-	vector<uint16_t> current_vector_null_positions(n_lookup_values, 0);
-	EXACT_TYPE a_non_null_value = 0;
-	idx_t nulls_idx = 0;
+	vector<uint16_t> current_vector_null_positions(sampling_params.n_lookup_values, 0);
+	vector<EXACT_TYPE> current_vector_sample(sampling_params.n_sampled_values, 0);
 
 	// Storing the sample of that vector
 	idx_t sample_idx = 0;
-	for (idx_t i = 0; i < n_lookup_values; i += n_sampled_increments) {
+	idx_t nulls_idx = 0;
+	for (idx_t i = 0; i < sampling_params.n_lookup_values; i += sampling_params.n_sampled_increments) {
 		auto idx = vdata.sel->get_index(i);
 		EXACT_TYPE value = Load<EXACT_TYPE>(const_data_ptr_cast(&data[idx]));
 		current_vector_sample[sample_idx] = value;
@@ -89,23 +79,11 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 		nulls_idx += is_null;
 		sample_idx++;
 	}
-	D_ASSERT(sample_idx == n_sampled_values);
+	D_ASSERT(sample_idx == sampling_params.n_sampled_values);
 
-	// Finding the first non-null value
-	idx_t tmp_null_idx = 0;
-	for (idx_t i = 0; i < n_sampled_values; i++) {
-		if (i != current_vector_null_positions[tmp_null_idx]) {
-			a_non_null_value = current_vector_sample[i];
-			break;
-		}
-		tmp_null_idx += 1;
-	}
-
-	// Replacing that first non-null value on the vector
-	for (idx_t i = 0; i < nulls_idx; i++) {
-		uint16_t null_value_pos = current_vector_null_positions[i];
-		current_vector_sample[null_value_pos] = a_non_null_value;
-	}
+	printf("nulls_idx %d \n \n", nulls_idx);
+	alp::AlpUtils::ReplaceNullsInVector<EXACT_TYPE>(current_vector_sample, current_vector_null_positions,
+	                                                sampling_params.n_sampled_values, nulls_idx);
 
 	// Pushing the sampled vector samples into the rowgroup samples
 	for (auto &value : current_vector_sample) {
@@ -123,6 +101,10 @@ template <class T>
 idx_t AlpRDFinalAnalyze(AnalyzeState &state) {
 	auto &analyze_state = (AlpRDAnalyzeState<T> &)state;
 	double factor_of_sampling = 1 / ((double)analyze_state.rowgroup_sample.size() / analyze_state.total_values_count);
+
+	printf("Taken vectors: %d\n", analyze_state.vectors_sampled_count);
+	printf("Taken rg samples total: %d\n", analyze_state.rowgroup_sample.size());
+	printf("Sampling factor: %f\n", factor_of_sampling);
 
 	// Finding which is the best dictionary for the sample
 	double estimated_bits_per_value = alp::AlpRDCompression<T, true>::FindBestDictionary(analyze_state.rowgroup_sample,

@@ -110,27 +110,10 @@ public:
 		next_vector_byte_index_start = AlpConstants::HEADER_SIZE;
 	}
 
-	// Replace NULL values with the first Non-NULL value on the vector
-	void ReplaceNullsInVector() {
-		// Finding the first non-null value
-		idx_t tmp_null_idx = 0;
-		T a_non_null_value = 0;
-		for (idx_t i = 0; i < vector_idx; i++) {
-			if (i != vector_null_positions[tmp_null_idx]) {
-				a_non_null_value = input_vector[i];
-				break;
-			}
-			tmp_null_idx += 1;
-		}
-		// Replacing that first non-null value on the vector
-		for (idx_t j = 0; j < nulls_idx; j++) {
-			uint16_t null_value_pos = vector_null_positions[j];
-			input_vector[null_value_pos] = a_non_null_value;
-		}
-	}
-
 	void CompressVector() {
-		ReplaceNullsInVector();
+		if (nulls_idx){
+			alp::AlpUtils::ReplaceNullsInVector<T>(input_vector, vector_null_positions, vector_idx, nulls_idx);
+		}
 		alp::AlpCompression<T, false>::Compress(input_vector, vector_idx, state);
 		//! Check if the compressed vector fits on current segment
 		if (!HasEnoughSpace()) {

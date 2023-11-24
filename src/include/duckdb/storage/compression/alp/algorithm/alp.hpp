@@ -97,8 +97,6 @@ struct AlpCompression {
 		return decoded_value;
 	}
 
-	//static bool
-
 	/*
 	 * Return TRUE if c1 is a better combination than c2
 	 * First criteria is number of times it appears as best combination
@@ -116,7 +114,7 @@ struct AlpCompression {
 	/*
 	 * Dry compress a vector (ideally a sample) to estimate ALP compression size given a exponent and factor
 	 */
-	static uint64_t DryCompressToEstimateSize(const vector<T> in, int8_t exp_idx, int8_t factor_idx){
+	static uint64_t DryCompressToEstimateSize(const vector<T> &in, int8_t exp_idx, int8_t factor_idx){
 		idx_t n_values = in.size();
 		idx_t exceptions_count = 0;
 		idx_t non_exceptions_count = 0;
@@ -159,7 +157,7 @@ struct AlpCompression {
 	 * This function is called once per segment
 	 * This operates over ALP first level samples
 	 */
-	static void FindTopKCombinations(vector<vector<T>> vectors_sampled, State &state) {
+	static void FindTopKCombinations(const vector<vector<T>> &vectors_sampled, State &state) {
 
 		state.best_k_combinations.clear();
 		// We use a 'pair' to hash it easily
@@ -168,6 +166,7 @@ struct AlpCompression {
 		// For each vector sampled
 		for (auto &sampled_vector : vectors_sampled) {
 			idx_t n_samples = sampled_vector.size();
+			printf("N samples in vector: %d - ", n_samples);
 			int8_t best_factor = AlpTypedConstants<T>::MAX_EXPONENT;
 			int8_t best_exponent = AlpTypedConstants<T>::MAX_EXPONENT;
 
@@ -218,7 +217,7 @@ struct AlpCompression {
 	 * Find the best combination of factor-exponent for a vector from within the best k combinations
 	 * This is ALP second level sampling
 	 */
-	static void FindBestFactorAndExponent(vector<T> input_vector, idx_t n_values, State &state) {
+	static void FindBestFactorAndExponent(const vector<T> &input_vector, idx_t n_values, State &state) {
 		//! We sample equidistant values within a vector; to do this we skip a fixed number of values
 		vector<T> vector_sample;
 		uint32_t idx_increments = MaxValue(1, (int32_t)std::ceil((double)n_values / AlpConstants::SAMPLES_PER_VECTOR));
@@ -258,7 +257,7 @@ struct AlpCompression {
 		state.vector_factor = best_factor;
 	}
 
-	static void Compress(vector<T> input_vector, idx_t n_values, State &state) {
+	static void Compress(const vector<T> &input_vector, idx_t n_values, State &state) {
 		if (state.best_k_combinations.size() > 1) {
 			FindBestFactorAndExponent(input_vector, n_values, state);
 		} else {
@@ -322,6 +321,9 @@ struct AlpCompression {
 
 		auto *u_encoded_integers = reinterpret_cast<uint64_t *>(state.encoded_integers);
 		auto const u_min_value = static_cast<uint64_t>(min_value);
+
+		printf("FOR llu\n", u_min_value);
+		printf("MIN MAX DIFF %llu\n", min_max_diff);
 
 		// Subtract FOR
 		if (!EMPTY) { //! We only execute the FOR if we are writing the data

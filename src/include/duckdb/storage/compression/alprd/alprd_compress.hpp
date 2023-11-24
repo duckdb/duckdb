@@ -121,29 +121,11 @@ public:
 		next_vector_byte_index_start = AlpRDConstants::HEADER_SIZE + AlpRDConstants::DICTIONARY_SIZE_BYTES;
 	}
 
-	void ReplaceNullsInVector() {
-		// Finding the first non-null value
-		idx_t tmp_null_idx = 0;
-		T a_non_null_raw_value = 0;
-		EXACT_TYPE a_non_null_value = 0;
-		for (idx_t i = 0; i < vector_idx; i++) {
-			if (i != vector_null_positions[tmp_null_idx]) {
-				a_non_null_value = input_vector[i];
-				a_non_null_raw_value = raw_input_vector[i];
-				break;
-			}
-			tmp_null_idx += 1;
-		}
-		// Replacing that first non-null value on the vector
-		for (idx_t i = 0; i < nulls_idx; i++) {
-			uint16_t null_value_pos = vector_null_positions[i];
-			input_vector[null_value_pos] = a_non_null_value;
-			raw_input_vector[null_value_pos] = a_non_null_raw_value;
-		}
-	}
-
 	void CompressVector() {
-		ReplaceNullsInVector();
+		if (nulls_idx){
+			alp::AlpUtils::ReplaceNullsInVector<EXACT_TYPE>(input_vector, vector_null_positions, vector_idx, nulls_idx);
+			alp::AlpUtils::ReplaceNullsInVector<T>(raw_input_vector, vector_null_positions, vector_idx, nulls_idx);
+		}
 		alp::AlpRDCompression<T, false>::Compress(input_vector, vector_idx, state);
 		//! Check if the compressed vector fits on current segment
 		if (!HasEnoughSpace()) {
