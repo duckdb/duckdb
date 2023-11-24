@@ -83,7 +83,7 @@ public:
 
 	//! Scans all dependencies, returning pairs of (object, dependent)
 	void Scan(ClientContext &context,
-	          const std::function<void(CatalogEntry &, CatalogEntry &, DependencyFlags)> &callback);
+	          const std::function<void(CatalogEntry &, CatalogEntry &, const DependencyFlags &)> &callback);
 
 	void AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry);
 
