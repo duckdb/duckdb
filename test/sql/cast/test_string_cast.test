@@ -219,3 +219,20 @@ SELECT '0'::${inttype};
 0
 
 endloop
+
+# Casting infinities of various timestamp units
+
+foreach ts timestamp timestamp_ms timestamp_ns timestamp_s timestamptz
+
+query I
+SELECT ('infinity'::${ts})::VARCHAR
+----
+infinity
+
+query I
+SELECT ('-infinity'::${ts})::VARCHAR
+----
+-infinity
+
+#ts
+endloop
