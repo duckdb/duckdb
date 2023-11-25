@@ -666,7 +666,7 @@ Value Value::MAP(const LogicalType &child_type, vector<Value> values) {
 		auto &children = StructValue::GetChildren(val);
 		D_ASSERT(children.size() == 2);
 		map_keys.push_back(children[0]);
-		map_values.push_back(children[0]);
+		map_values.push_back(children[1]);
 	}
 	auto &key_type = StructType::GetChildType(child_type, 0);
 	auto &value_type = StructType::GetChildType(child_type, 1);
