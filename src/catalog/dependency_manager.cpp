@@ -289,10 +289,7 @@ static bool CascadeDrop(bool cascade, const DependencyFlags &flags) {
 	if (cascade) {
 		return true;
 	}
-	if (flags.IsOwnership()) {
-		// We own this object, it's automatically dropped
-		return true;
-	}
+	D_ASSERT(!flags.IsOwnership());
 	if (flags.IsOwned()) {
 		// We are owned by this object, while it exists we can not be dropped without cascade.
 		return false;
