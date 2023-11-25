@@ -1173,6 +1173,19 @@ DUCKDB_API duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepar
                                                 duckdb_result *out_result);
 
 /*!
+Executes the prepared statement with the given bound parameters, and returns a streaming query result.
+
+This method can be called multiple times for each prepared statement, and the parameters can be modified
+between calls to this function.
+
+* prepared_statement: The prepared statement to execute.
+* out_result: The query result.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_statement prepared_statement,
+                                                          duckdb_result *out_result);
+
+/*!
 Executes the prepared statement with the given bound parameters, and returns an arrow query result.
 
 * prepared_statement: The prepared statement to execute.
