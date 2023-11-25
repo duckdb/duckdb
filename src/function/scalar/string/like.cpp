@@ -19,7 +19,7 @@ struct ASCIILCaseReader {
 	}
 };
 
-template <char PERCENTAGE, char UNDERSCORE, bool HAS_ESCAPE, class READER = StandardCharacterReader>
+template <char PERCENTAGE, char UNDERSCORE, bool HAS_ESCAPE, class READER>
 bool TemplatedLikeOperator(const char *sdata, idx_t slen, const char *pdata, idx_t plen, char escape) {
 	idx_t pidx = 0;
 	idx_t sidx = 0;
@@ -516,6 +516,18 @@ void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("!~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator>, nullptr,
 	                               nullptr, ILikePropagateStats<NotILikeOperatorASCII>));
+
+	// nocase like
+	set.AddFunction(LowerFun::GetLikeFunction<true, false>());
+	set.AddFunction(LowerFun::GetLikeFunction<false, false>());
+
+	// noaccent like
+	set.AddFunction(StripAccentsFun::GetLikeFunction<true, false>());
+	set.AddFunction(StripAccentsFun::GetLikeFunction<false, false>());
+
+	// nfc like
+	set.AddFunction(NFCNormalizeFun::GetLikeFunction<true, false>());
+	set.AddFunction(NFCNormalizeFun::GetLikeFunction<false, false>());
 }
 
 ScalarFunction LikeFun::GetLikeFunction() {
@@ -534,10 +546,162 @@ void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"not_ilike_escape"},
 	                ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                               LogicalType::BOOLEAN, LikeEscapeFunction<NotILikeEscapeOperator>));
+
+	// nocase like escape
+	set.AddFunction(LowerFun::GetLikeFunction<true, true>());
+	set.AddFunction(LowerFun::GetLikeFunction<false, true>());
+
+	// noaccent like escape
+	set.AddFunction(StripAccentsFun::GetLikeFunction<true, true>());
+	set.AddFunction(StripAccentsFun::GetLikeFunction<false, true>());
+
+	// nfc like escape
+	set.AddFunction(NFCNormalizeFun::GetLikeFunction<true, true>());
+	set.AddFunction(NFCNormalizeFun::GetLikeFunction<false, true>());
 }
 
 ScalarFunction LikeEscapeFun::GetLikeEscapeFun() {
 	return ScalarFunction("like_escape", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                      LogicalType::BOOLEAN, LikeEscapeFunction<LikeEscapeOperator>);
 }
+
+template <char PERCENTAGE, char UNDERSCORE, class TRANSFORM>
+bool LikeFun::LikeWithCollation(string_t &input, string_t &pattern, string_t &escape) {
+	// Transform input and pattern string with collation algorithm, then
+	// invoke TemplatedLikeOperator() to do the wildcard compare.
+	// class TRANSFORM will provide the transforming function. And nocase
+	// TRANSFORM will convert every upper case characters to lower case.
+	// Make sure wildcards and escape character remain unchanged during
+	// transformation.
+	// For example:
+	//   select 'aBcD_E' like 'A%Cd$_e' collate nocase collate '$';
+	//     input 'aBcD_E' will be transformed to 'abcd_e'
+	//     pattern 'A%Cd$_e' will be transformed to 'a%cd$_e'
+	// The above query is equivalent to:
+	//   select 'abcd_e' like 'a%cd$_e' collate '$';
+
+	char escape_ch = GetEscapeChar(escape);
+
+	// Transform pattern. Need to consider wildcards and escape character.
+	auto is_special_char = [&](const char ch) -> bool {
+		return ch == PERCENTAGE || ch == UNDERSCORE || ch == escape_ch;
+	};
+
+	const char *pattern_str = pattern.GetData();
+	const size_t pattern_len = pattern.GetSize();
+	std::stringstream pattern_ss;
+	size_t start_pos = 0, pos = 0;
+	bool last_escape = false;
+
+	do {
+		char current_ch = pattern_str[pos];
+		if (is_special_char(current_ch) || pattern_len == pos) {
+			auto seg_len = pos - start_pos;
+			if (seg_len > 0) {
+				auto seg_str = pattern_str + start_pos;
+				// TRANSFORM::Operator returns the transformed string. If no need to
+				// transform the string, the seg_str will return nullptr directly,
+				// otherwise, the function will return a string end with '\0'.
+				auto returned_trans_seg = TRANSFORM::Operator(seg_str, seg_len);
+				auto trans_seg = returned_trans_seg ? returned_trans_seg : seg_str;
+				auto pattern_end = pattern_str + pos - 1;
+
+				// If trans_seg is the transformed string, it will end with '\0'
+				// and the for loop will end if meets the end character.
+				for (auto seg_iter = trans_seg; *seg_iter; seg_iter++) {
+					if (is_special_char(*seg_iter) && !(seg_iter == trans_seg && last_escape)) {
+						// After transformation, the character becomes a special
+						// character. Regard it as a normal character and add an
+						// escape character before it.
+						pattern_ss << escape_ch;
+					}
+					pattern_ss << *seg_iter;
+					if (seg_iter == pattern_end) {
+						// If TRANSFORM::Operator returns the seg_str directly, there
+						// won't be an end character. End the loop if all characters
+						// are consumed.
+						break;
+					}
+				}
+
+				if (returned_trans_seg) {
+					free(returned_trans_seg);
+				}
+			}
+
+			if (pattern_len > pos) {
+				pattern_ss << current_ch;
+			} else {
+				// End the loop if whole pattern is transformed.
+				break;
+			}
+			start_pos = pos + 1;
+
+			// Wildcard has no effect on the next character. For escape character
+			// the next character should be regarded as normal character. So next
+			// character of escape character should always be transformed even if
+			// it's a special character.
+			// --- One example ---
+			//   select 'a' like 'AA' collate nocase escape 'A';
+			//     The first 'A' in pattern is escape character but the second one
+			//     should be a normal character and need to be transformed.
+			// Skip check next character if current is an escape. Make sure there's
+			// a character after current character.
+			// --- Another example ---
+			//   select 'aba' like 'aabA' collate nocase escape 'a';
+			//     The first 'a' in pattern is escape character, so the second one
+			//     should be regarded as normal 'a' instead of escape. But the last
+			//     'A' will be transformed into 'a', which is a normal character so
+			//     we need to add an escape character before it. So the transformed
+			//     pattern should be 'aabaa'.
+			// last_escape flag is to show if the last special character is an escape
+			// character. Use this flag to prevent add duplicate escape character.
+			last_escape = false;
+			if (escape_ch == current_ch && pattern_len > pos + 1) {
+				last_escape = true;
+				pos++;
+			}
+		}
+		pos++;
+	} while (true);
+
+	auto transfered_pattern = pattern_ss.str();
+
+	// Transform input string.
+	auto returned_transfered_input = TRANSFORM::Operator(input.GetData(), input.GetSize());
+	auto transfered_input_str = returned_transfered_input ? returned_transfered_input : input.GetData();
+	auto transfered_input_len = strlen(transfered_input_str);
+
+	// TemplatedLikeOperator may raise an exception. Use RAII to make sure the memory resource
+	// is always released.
+	class MemoryGuard {
+	public:
+		explicit MemoryGuard(char *ptr) : ptr(ptr) {
+		}
+		~MemoryGuard() {
+			if (ptr) {
+				free(ptr);
+			}
+		}
+
+	private:
+		char *ptr;
+	};
+	MemoryGuard guard(returned_transfered_input);
+
+	// Do wild comparison with transformed input and pattern.
+	bool result = TemplatedLikeOperator<PERCENTAGE, UNDERSCORE, true>(
+	    transfered_input_str, transfered_input_len, transfered_pattern.c_str(), transfered_pattern.size(), escape_ch);
+
+	return result;
+}
+
+string LikeFun::GetLikeFunctionName(bool is_inverted, bool has_escape) {
+	if (has_escape) {
+		return is_inverted ? "not_like_escape" : "like_escape";
+	} else {
+		return is_inverted ? "!~~" : "~~";
+	}
+}
+
 } // namespace duckdb

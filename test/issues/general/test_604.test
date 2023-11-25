@@ -1,0 +1,107 @@
+# name: test/issues/general/test_604.test
+# description: Issue 1091: Extended Collation Support
+# group: [general]
+
+# Like with Collation nocase
+query I
+select 'ABCDEFG' like 'abcdefg';
+----
+false
+
+query I
+select 'ABCDEFG' like 'abcdefg' collate nocase;
+----
+true
+
+query I
+select 'ABCDEFG' not like 'abcdefg' collate nocase;
+----
+false
+
+query I
+select 'ABCDEFG' like 'a%d_fg' collate nocase;
+----
+true
+
+query I
+select 'abcdefg' like 'A%D_FG' collate nocase;
+----
+true
+
+query I
+select 'ABCDEFG' not like 'a%d_fg' collate nocase;
+----
+false
+
+query I
+select 'ABC%DE_FG' like 'abc\%de\_fg' collate nocase escape '\';
+----
+true
+
+query I
+select 'ABC%DE_FG' not like 'abc\%de\_fg' collate nocase escape '\';
+----
+false
+
+# Like with Collation noaccent
+query I
+select 'Öë' like 'Oe';
+----
+false
+
+query I
+select 'Öë' like 'Oe' collate noaccent;
+----
+true
+
+query I
+select 'Oe' like 'Öë' collate noaccent;
+----
+true
+
+query I
+select 'Öë' like 'O%' collate noaccent;
+----
+true
+
+query I
+select 'Öe' like '_ë' collate noaccent;
+----
+true
+
+statement error
+select 'Oe' like 'Öë' collate noaccent escape 'Ö';
+
+
+# More test for escape character
+# Two consecutive escape characters
+query I
+select 'abcdefg' like 'AABCDEFG' collate nocase escape 'A';
+----
+true
+
+# Three consecutive escape characters
+query I
+select 'abcdefg' like 'AAABCDEFG' collate nocase escape 'A';
+----
+true
+
+query I
+select 'abcdefg' like 'ABCDEFG' collate nocase escape 'A';
+----
+false
+
+# End with escape character
+query I
+select 'abcdefg' like 'ABCDEFG\' collate nocase escape '\';
+----
+false
+
+statement error
+select 'abcdefgh' like 'ABCDEFG\' collate nocase escape '\';
+
+# Escape before normal character
+query I
+select 'abcdefg' like '\A\B\C\D\E\F\G' collate nocase escape '\';
+----
+true

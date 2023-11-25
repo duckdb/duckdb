@@ -35,4 +35,52 @@ void NFCNormalizeFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(NFCNormalizeFun::GetFunction());
 }
 
+class NFCNormalizeFun::NFCNormalizeTransform {
+public:
+	static char *Operator(const char *data, size_t len) {
+		if (StripAccentsFun::IsAscii(data, len)) {
+			return nullptr;
+		}
+		// Normalize() will return nfc transformed string with '\0' as
+		// end character.
+		return reinterpret_cast<char *>(Utf8Proc::Normalize(data, len));
+	}
+};
+
+template <bool INVERT>
+static void NFCNormalizeLikeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.ColumnCount() == 2);
+	BinaryExecutor::Execute<string_t, string_t, bool>(
+	    args.data[0], args.data[1], result, args.size(), [](string_t input, string_t pattern) {
+		    string_t escape("");
+		    return LikeFun::LikeWithCollation<'%', '_', NFCNormalizeFun::NFCNormalizeTransform>(input, pattern,
+		                                                                                        escape) ^
+		           INVERT;
+	    });
+}
+
+template <bool INVERT>
+static void NFCNormalizeLikeEscapeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.ColumnCount() == 3);
+	TernaryExecutor::Execute<string_t, string_t, string_t, bool>(
+	    args.data[0], args.data[1], args.data[2], result, args.size(),
+	    [](string_t input, string_t pattern, string_t escape) {
+		    return LikeFun::LikeWithCollation<'%', '_', NFCNormalizeFun::NFCNormalizeTransform>(input, pattern,
+		                                                                                        escape) ^
+		           INVERT;
+	    });
+}
+
+template <bool INVERT, bool ESCAPE>
+ScalarFunction NFCNormalizeFun::GetLikeFunction() {
+	string name = "nfc~" + LikeFun::GetLikeFunctionName(INVERT, ESCAPE);
+	if (ESCAPE) {
+		return ScalarFunction(name.c_str(), {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+		                      LogicalType::BOOLEAN, NFCNormalizeLikeEscapeFunction<INVERT>);
+	} else {
+		return ScalarFunction(name.c_str(), {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+		                      NFCNormalizeLikeFunction<INVERT>);
+	}
+}
+
 } // namespace duckdb

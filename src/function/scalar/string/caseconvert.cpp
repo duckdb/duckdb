@@ -174,4 +174,48 @@ void UpperFun::RegisterFunction(BuiltinFunctions &set) {
 	                               nullptr, CaseConvertPropagateStats<true>));
 }
 
+class LowerFun::LowerTransform {
+public:
+	static char *Operator(const char *data, size_t len) {
+		char *result = static_cast<char *>(malloc(len + 1));
+		for (size_t i = 0; i < len; ++i) {
+			result[i] = LowerFun::ascii_to_lower_map[uint8_t(data[i])];
+		}
+		result[len] = '\0';
+		return result;
+	}
+};
+
+template <bool INVERT>
+static void LowerLikeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.ColumnCount() == 2);
+	BinaryExecutor::Execute<string_t, string_t, bool>(
+	    args.data[0], args.data[1], result, args.size(), [](string_t input, string_t pattern) {
+		    string_t escape("");
+		    return LikeFun::LikeWithCollation<'%', '_', LowerFun::LowerTransform>(input, pattern, escape) ^ INVERT;
+	    });
+}
+
+template <bool INVERT>
+static void LowerLikeEscapeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.ColumnCount() == 3);
+	TernaryExecutor::Execute<string_t, string_t, string_t, bool>(
+	    args.data[0], args.data[1], args.data[2], result, args.size(),
+	    [](string_t input, string_t pattern, string_t escape) {
+		    return LikeFun::LikeWithCollation<'%', '_', LowerFun::LowerTransform>(input, pattern, escape) ^ INVERT;
+	    });
+}
+
+template <bool INVERT, bool ESCAPE>
+ScalarFunction LowerFun::GetLikeFunction() {
+	string name = "nocase~" + LikeFun::GetLikeFunctionName(INVERT, ESCAPE);
+	if (ESCAPE) {
+		return ScalarFunction(name.c_str(), {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+		                      LogicalType::BOOLEAN, LowerLikeEscapeFunction<INVERT>);
+	} else {
+		return ScalarFunction(name.c_str(), {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+		                      LowerLikeFunction<INVERT>);
+	}
+}
+
 } // namespace duckdb

@@ -9,6 +9,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -136,9 +137,44 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		children.push_back(std::move(child));
 	}
 
+	// If like, not_like, like_escape or not_like_escape function's children are using collations, try
+	// to replace the orignal function with collation_like function.
+	string like_func_name = "";
+	if (function.function_name == "~~" || function.function_name == "!~~" || function.function_name == "like_escape" ||
+	    function.function_name == "not_like_escape") {
+		auto collation_type = children[0]->return_type;
+		for (idx_t i = 1; i < children.size(); ++i) {
+			collation_type = BoundComparisonExpression::BindComparison(collation_type, children[i]->return_type);
+		}
+		if (collation_type.id() == LogicalTypeId::VARCHAR) {
+			auto collation = StringType::GetCollation(collation_type);
+			if (!collation.empty()) {
+				like_func_name = collation + "~" + function.function_name;
+			}
+		}
+	}
+
 	FunctionBinder function_binder(context);
-	unique_ptr<Expression> result =
-	    function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
+	unique_ptr<Expression> result;
+	if (!like_func_name.empty()) {
+		QueryErrorContext error_context(binder.root_statement, function.query_location);
+		auto replaced_func =
+		    Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
+		                      like_func_name, OnEntryNotFound::RETURN_NULL, error_context);
+		// If like_func_name exists, replace the orignal one with the new one. Otherwise, use
+		// the original function.
+		if (replaced_func) {
+			auto &entry = replaced_func->Cast<ScalarFunctionCatalogEntry>();
+			func.functions = entry.functions;
+			func.description = entry.description;
+			func.parameter_names = entry.parameter_names;
+			func.example = entry.example;
+			function.function_name = like_func_name;
+		}
+	}
+
+	result = function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
+
 	if (!result) {
 		throw BinderException(binder.FormatError(function, error));
 	}

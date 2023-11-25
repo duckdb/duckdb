@@ -28,6 +28,10 @@ struct LowerFun {
 
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
+
+	template <bool INVERT, bool ESCAPE>
+	static ScalarFunction GetLikeFunction();
+	class LowerTransform;
 };
 
 struct UpperFun {
@@ -40,6 +44,10 @@ struct StripAccentsFun {
 	static bool IsAscii(const char *input, idx_t n);
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
+
+	template <bool INVERT, bool ESCAPE>
+	static ScalarFunction GetLikeFunction();
+	class StripAccentsTransform;
 };
 
 struct ConcatFun {
@@ -82,11 +90,19 @@ struct LengthFun {
 	}
 };
 
+struct StandardCharacterReader;
+struct ASCIILCaseReader;
+template <char PERCENTAGE, char UNDERSCORE, bool HAS_ESCAPE, class READER = StandardCharacterReader>
+bool TemplatedLikeOperator(const char *sdata, idx_t slen, const char *pdata, idx_t plen, char escape);
+
 struct LikeFun {
 	static ScalarFunction GetLikeFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 	DUCKDB_API static bool Glob(const char *s, idx_t slen, const char *pattern, idx_t plen,
 	                            bool allow_question_mark = true);
+	template <char PERCENTAGE, char UNDERSCORE, class TRANSFORM>
+	static bool LikeWithCollation(string_t &input, string_t &pattern, string_t &escape);
+	static string GetLikeFunctionName(bool is_inverted, bool has_escape);
 };
 
 struct LikeEscapeFun {
@@ -97,6 +113,10 @@ struct LikeEscapeFun {
 struct NFCNormalizeFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
+
+	template <bool INVERT, bool ESCAPE>
+	static ScalarFunction GetLikeFunction();
+	class NFCNormalizeTransform;
 };
 
 struct SubstringFun {
