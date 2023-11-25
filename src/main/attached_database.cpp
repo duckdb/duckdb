@@ -37,7 +37,6 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	catalog = make_uniq<DuckCatalog>(*this);
 	transaction_manager = make_uniq<DuckTransactionManager>(*this);
 	internal = true;
-	db.GetDatabaseManager().InsertDatabasePath(file_path_p, name);
 }
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension,
@@ -56,12 +55,11 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 		    "AttachedDatabase - create_transaction_manager function did not return a transaction manager");
 	}
 	internal = true;
-	db.GetDatabaseManager().InsertDatabasePath(info.path, name);
 }
 
 AttachedDatabase::~AttachedDatabase() {
-
 	D_ASSERT(catalog);
+
 	if (!IsSystem() && !catalog->InMemory()) {
 		db.GetDatabaseManager().EraseDatabasePath(catalog->GetDBPath());
 	}
