@@ -291,10 +291,7 @@ static bool CascadeDrop(bool cascade, const DependencyFlags &flags) {
 	if (cascade) {
 		return true;
 	}
-	if (flags.IsOwnership()) {
-		// We own this object, it's automatically dropped
-		return true;
-	}
+	D_ASSERT(!flags.IsOwnership());
 	if (flags.IsOwned()) {
 		// We are owned by this object, while it exists we can not be dropped without cascade.
 		return false;
@@ -552,8 +549,9 @@ catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTra
 	return std::move(ordering.ordered_vector);
 }
 
-void DependencyManager::Scan(ClientContext &context,
-                             const std::function<void(CatalogEntry &, CatalogEntry &, DependencyFlags)> &callback) {
+void DependencyManager::Scan(
+    ClientContext &context,
+    const std::function<void(CatalogEntry &, CatalogEntry &, const DependencyFlags &)> &callback) {
 	// FIXME: why do we take the write_lock here??
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	auto transaction = catalog.GetCatalogTransaction(context);

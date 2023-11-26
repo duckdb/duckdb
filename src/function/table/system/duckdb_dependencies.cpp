@@ -9,7 +9,7 @@
 namespace duckdb {
 
 struct DependencyInformation {
-	DependencyInformation(CatalogEntry &object, CatalogEntry &dependent, DependencyFlags flags)
+	DependencyInformation(CatalogEntry &object, CatalogEntry &dependent, const DependencyFlags &flags)
 	    : object(object), dependent(dependent), flags(flags) {
 	}
 
@@ -60,7 +60,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBDependenciesInit(ClientContext &conte
 	if (catalog.IsDuckCatalog()) {
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		auto &dependency_manager = duck_catalog.GetDependencyManager();
-		dependency_manager.Scan(context, [&](CatalogEntry &obj, CatalogEntry &dependent, DependencyFlags flags) {
+		dependency_manager.Scan(context, [&](CatalogEntry &obj, CatalogEntry &dependent, const DependencyFlags &flags) {
 			result->entries.emplace_back(obj, dependent, flags);
 		});
 	}
