@@ -110,9 +110,6 @@ catalog_entry_vector_t DuckCatalog::GetNonSystemEntries(CatalogTransaction trans
 	catalog_entry_vector_t all_entries;
 	catalog_entry_vector_t schema_entries;
 	ScanSchemas(transaction, [&schema_entries, &all_entries](SchemaCatalogEntry &schema) {
-		if (schema.internal && schema.name != DEFAULT_SCHEMA) {
-			return;
-		}
 		all_entries.push_back(schema);
 		schema_entries.push_back(schema);
 	});
