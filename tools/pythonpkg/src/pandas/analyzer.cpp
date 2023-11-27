@@ -363,6 +363,16 @@ uint64_t PandasAnalyzer::GetSampleIncrement(idx_t rows) {
 	return rows / sample;
 }
 
+static py::object FindFirstNonNull(const py::handle &row, idx_t offset, idx_t range) {
+	for (idx_t i = 0; i < range; i++) {
+		auto obj = row(offset + i);
+		if (!obj.is_none()) {
+			return obj;
+		}
+	}
+	return py::none();
+}
+
 LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, bool sample, idx_t increment) {
 	idx_t rows = py::len(column);
 
@@ -391,7 +401,8 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, b
 		increment = GetSampleIncrement(rows);
 	}
 	for (idx_t i = increment; i < rows; i += increment) {
-		auto next_item_type = GetItemType(row(i), can_convert);
+		auto obj = FindFirstNonNull(row, i, increment);
+		auto next_item_type = GetItemType(obj, can_convert);
 		types.push_back(next_item_type);
 
 		if (!can_convert || !UpgradeType(item_type, next_item_type)) {

@@ -207,6 +207,19 @@ class TestResolveObjectColumns(object):
         pandas.testing.assert_frame_equal(converted_col, duckdb_col)
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize('size', [1000, 10000, 100000])
+    def test_analyzing_nulls(self, pandas, duckdb_cursor, size):
+        data = [None, "a"]
+        n = size
+
+        data = data * n
+        df1 = pandas.DataFrame(data={"col1": data})
+        duckdb_cursor.execute(f"SET GLOBAL pandas_analyze_sample=100")
+        df = duckdb_cursor.execute("select * from df1").df()
+
+        pandas.testing.assert_frame_equal(df1, df)
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_map_value_upgrade(self, pandas):
         con = duckdb.connect()
         x = pandas.DataFrame(
