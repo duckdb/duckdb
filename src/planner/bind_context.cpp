@@ -20,6 +20,9 @@
 
 namespace duckdb {
 
+BindContext::BindContext(Binder &binder) : binder(binder) {
+}
+
 string BindContext::GetMatchingBinding(const string &column_name) {
 	string result;
 	for (auto &kv : bindings) {
@@ -402,6 +405,10 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				new_select_list.push_back(make_uniq<ColumnRefExpression>(column_name, binding->alias));
 			}
 		}
+	}
+	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
+		expr.exclude_list.clear();
+		expr.replace_list.clear();
 	}
 	for (auto &excluded : expr.exclude_list) {
 		if (excluded_columns.find(excluded) == excluded_columns.end()) {
