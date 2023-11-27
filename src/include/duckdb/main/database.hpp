@@ -51,6 +51,7 @@ public:
 
 	DUCKDB_API const unordered_set<std::string> &LoadedExtensions();
 	DUCKDB_API bool ExtensionIsLoaded(const std::string &name);
+	DUCKDB_API bool ExtensionIsLocallyInstalled(ClientContext &context, const std::string &name);
 
 	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
 
@@ -105,6 +106,7 @@ public:
 	DUCKDB_API static idx_t StandardVectorSize();
 	DUCKDB_API static string Platform();
 	DUCKDB_API bool ExtensionIsLoaded(const std::string &name);
+	DUCKDB_API bool ExtensionIsLocallyInstalled(ClientContext &context, const std::string &name);
 };
 
 } // namespace duckdb

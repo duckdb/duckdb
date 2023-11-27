@@ -376,6 +376,19 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 	return instance->ExtensionIsLoaded(name);
 }
 
+bool DatabaseInstance::ExtensionIsLocallyInstalled(ClientContext &context, const std::string &name) {
+	// Note that Built-In extensions will not be checked for ExtensionIsLocallyInstalled
+	auto extension_name = ExtensionHelper::GetExtensionName(name);
+	auto &fs = FileSystem::GetFileSystem(context);
+	string local_path = ExtensionHelper::ExtensionDirectory(config, fs);
+	string local_extension_path = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
+	return fs.FileExists(local_extension_path);
+}
+
+bool DuckDB::ExtensionIsLocallyInstalled(ClientContext &context, const std::string &name) {
+	return instance->ExtensionIsLocallyInstalled(context, name);
+}
+
 void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
 	loaded_extensions.insert(extension_name);
