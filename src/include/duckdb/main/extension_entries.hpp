@@ -71,6 +71,7 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"json_valid", "json"},
     {"load_aws_credentials", "aws"},
     {"make_timestamptz", "icu"},
+    {"parquet_file_metadata", "parquet"},
     {"parquet_kv_metadata", "parquet"},
     {"parquet_metadata", "parquet"},
     {"parquet_scan", "parquet"},
