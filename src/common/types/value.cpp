@@ -658,7 +658,7 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	return result;
 }
 
-Value Value::MAP(const LogicalType &child_type, vector<Value> values) {
+Value Value::MAP(const LogicalType &child_type, const vector<Value> &values) {
 	vector<Value> map_keys;
 	vector<Value> map_values;
 	for (auto &val : values) {
