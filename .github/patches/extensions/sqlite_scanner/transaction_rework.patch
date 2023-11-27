@@ -1,0 +1,72 @@
+diff --git a/src/include/storage/sqlite_transaction_manager.hpp b/src/include/storage/sqlite_transaction_manager.hpp
+index 86b7d3c..4982eef 100644
+--- a/src/include/storage/sqlite_transaction_manager.hpp
++++ b/src/include/storage/sqlite_transaction_manager.hpp
+@@ -11,6 +11,7 @@
+ #include "duckdb/transaction/transaction_manager.hpp"
+ #include "storage/sqlite_catalog.hpp"
+ #include "storage/sqlite_transaction.hpp"
++#include "duckdb/common/reference_map.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -18,16 +19,16 @@ class SQLiteTransactionManager : public TransactionManager {
+ public:
+ 	SQLiteTransactionManager(AttachedDatabase &db_p, SQLiteCatalog &sqlite_catalog);
+ 
+-	Transaction *StartTransaction(ClientContext &context) override;
+-	string CommitTransaction(ClientContext &context, Transaction *transaction) override;
+-	void RollbackTransaction(Transaction *transaction) override;
++	Transaction &StartTransaction(ClientContext &context) override;
++	string CommitTransaction(ClientContext &context, Transaction &transaction) override;
++	void RollbackTransaction(Transaction &transaction) override;
+ 
+ 	void Checkpoint(ClientContext &context, bool force = false) override;
+ 
+ private:
+ 	SQLiteCatalog &sqlite_catalog;
+ 	mutex transaction_lock;
+-	unordered_map<Transaction *, unique_ptr<SQLiteTransaction>> transactions;
++	reference_map_t<Transaction, unique_ptr<SQLiteTransaction>> transactions;
+ };
+ 
+ } // namespace duckdb
+diff --git a/src/storage/sqlite_transaction_manager.cpp b/src/storage/sqlite_transaction_manager.cpp
+index 2b543ea..7b6e132 100644
+--- a/src/storage/sqlite_transaction_manager.cpp
++++ b/src/storage/sqlite_transaction_manager.cpp
+@@ -7,26 +7,26 @@ SQLiteTransactionManager::SQLiteTransactionManager(AttachedDatabase &db_p, SQLit
+     : TransactionManager(db_p), sqlite_catalog(sqlite_catalog) {
+ }
+ 
+-Transaction *SQLiteTransactionManager::StartTransaction(ClientContext &context) {
++Transaction &SQLiteTransactionManager::StartTransaction(ClientContext &context) {
+ 	auto transaction = make_uniq<SQLiteTransaction>(sqlite_catalog, *this, context);
+ 	transaction->Start();
+-	auto result = transaction.get();
++	auto &result = *transaction;
+ 	lock_guard<mutex> l(transaction_lock);
+ 	transactions[result] = std::move(transaction);
+ 	return result;
+ }
+ 
+-string SQLiteTransactionManager::CommitTransaction(ClientContext &context, Transaction *transaction) {
+-	auto sqlite_transaction = (SQLiteTransaction *)transaction;
+-	sqlite_transaction->Commit();
++string SQLiteTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction) {
++	auto &sqlite_transaction = transaction.Cast<SQLiteTransaction>();
++	sqlite_transaction.Commit();
+ 	lock_guard<mutex> l(transaction_lock);
+ 	transactions.erase(transaction);
+ 	return string();
+ }
+ 
+-void SQLiteTransactionManager::RollbackTransaction(Transaction *transaction) {
+-	auto sqlite_transaction = (SQLiteTransaction *)transaction;
+-	sqlite_transaction->Rollback();
++void SQLiteTransactionManager::RollbackTransaction(Transaction &transaction) {
++	auto &sqlite_transaction = transaction.Cast<SQLiteTransaction>();
++	sqlite_transaction.Rollback();
+ 	lock_guard<mutex> l(transaction_lock);
+ 	transactions.erase(transaction);
+ }
