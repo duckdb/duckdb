@@ -15,6 +15,7 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
+#include "duckdb/planner/binder.hpp"
 
 #include <algorithm>
 
