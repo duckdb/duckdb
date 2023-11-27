@@ -36,10 +36,11 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 
 optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, const AttachInfo &info,
                                                                const string &db_type, AccessMode access_mode) {
-
 	// now create the attached database
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto attached_db = db.CreateAttachedDatabase(info, db_type, access_mode);
+
+	InsertDatabasePath(info.path, attached_db->name);
 
 	const auto name = attached_db->GetName();
 	attached_db->oid = ModifyCatalog();
@@ -57,7 +58,6 @@ optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &co
 }
 
 void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
-
 	if (GetDefaultDatabase(context) == name) {
 		throw BinderException("Cannot detach database \"%s\" because it is the default database. Select a different "
 		                      "database using `USE` to allow detaching this database",
@@ -72,7 +72,6 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 }
 
 void DatabaseManager::InsertDatabasePath(const string &path, const string &name) {
-
 	if (path.empty() || path == IN_MEMORY_PATH) {
 		return;
 	}
@@ -91,6 +90,9 @@ void DatabaseManager::InsertDatabasePath(const string &path, const string &name)
 }
 
 void DatabaseManager::EraseDatabasePath(const string &path) {
+	if (path.empty() || path == IN_MEMORY_PATH) {
+		return;
+	}
 	lock_guard<mutex> write_lock(db_paths_lock);
 	auto path_it = db_paths.find(path);
 	if (path_it != db_paths.end()) {
@@ -112,19 +114,20 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, string &db_type, A
 		return;
 	}
 
-	lock_guard<mutex> write_lock(db_paths_lock);
-
-	// we cannot infer the database type if we already hold the file handle somewhere else
-	if (db_paths.find(info.path) != db_paths.end()) {
-		throw BinderException(
-		    "Unique file handle conflict: Database \"%s\" is already attached with path \"%s\", "
-		    "possibly by another transaction. Commit that transaction, if it already detached the file. Otherwise, "
-		    "inferring the database type from the file header is not possible, as it requires holding the file handle.",
-		    info.name, info.path);
-	}
-
 	// try to extract database type from path
 	if (db_type.empty()) {
+		lock_guard<mutex> write_lock(db_paths_lock);
+
+		// we cannot infer the database type if we already hold the file handle somewhere else
+		if (db_paths.find(info.path) != db_paths.end()) {
+			throw BinderException(
+			    "Unique file handle conflict: Database \"%s\" is already attached with path \"%s\", "
+			    "possibly by another transaction. Commit that transaction, if it already detached the file. Otherwise, "
+			    "inferring the database type from the file header is not possible, as it requires holding the file "
+			    "handle.",
+			    info.name, info.path);
+		}
+
 		DBPathAndType::CheckMagicBytes(info.path, db_type, config);
 	}
 
