@@ -162,6 +162,132 @@ static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 	}
 } // LCOV_EXCL_STOP
 
+#ifdef __APPLE__
+// OSX / IOS has a special api to query open files inherited from BSD, `libproc`
+#include <libproc.h>
+
+struct ConflictingProcess {
+	string name = "";
+	int pid = 0;
+	bool read = false;
+	bool write = false;
+};
+
+static string AdditionalLockInfo(const string &path) {
+	char real_path[MAXPATHLEN];
+	// get real path, we might be getting something behind a symlink
+	{
+		auto fd = open(path.c_str(), O_RDONLY);
+		if (fd < 0) { // not a file, hence cannot be locked
+			return "";
+		}
+		auto fncnl_res = fcntl(fd, F_GETPATH, real_path);
+		if (fncnl_res == -1) {
+			close(fd);
+			return "";
+		}
+		close(fd);
+		if (strlen(real_path) < 1) {
+			return "";
+		}
+	}
+
+	// now we find out which PIDs have the real path (TM) open:
+
+	// we call proc_listpidspath() first with NULL to determine the amount of memory to allocate
+	auto pid_buffer_size = proc_listpidspath(PROC_ALL_PIDS, 0, real_path, 0, NULL, 0);
+	if (pid_buffer_size <= 0) {
+		return "";
+	}
+	auto pids_buffer = unique_ptr<data_t[]>(new data_t[pid_buffer_size]);
+	D_ASSERT(pids_buffer.get());
+	auto pids = reinterpret_cast<int *>(pids_buffer.get());
+	// now we call again with actual buffer
+	auto pid_size = proc_listpidspath(PROC_ALL_PIDS, 0, real_path, 0, pids, pid_buffer_size);
+	if (pid_size < static_cast<int64_t>(sizeof(int))) {
+		// no processes listed, nothing we can do
+		return "";
+	}
+
+	vector<ConflictingProcess> conflicts;
+
+	for (idx_t pid_idx = 0; pid_idx < pid_size / sizeof(int); pid_idx++) {
+		int pid = pids[pid_idx];
+		if (pid == getpid()) {
+			continue;
+		}
+
+		conflicts.push_back(ConflictingProcess());
+		auto &conflict = conflicts.back();
+
+		conflict.pid = pid;
+
+		char full_exec_path[PROC_PIDPATHINFO_MAXSIZE];
+		auto pid_path_ret = proc_pidpath(pid, full_exec_path, PROC_PIDPATHINFO_MAXSIZE);
+		if (pid_path_ret < 0) {
+			// somehow could not get the path, lets use some sensible fallback
+			snprintf(full_exec_path, PROC_PIDPATHINFO_MAXSIZE, "unknown_pid_%d", pid);
+		}
+
+		conflict.name = full_exec_path;
+
+		// same dance for file descriptors like we did above with pids
+		auto fds_buffer_size = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, NULL, 0);
+		if (fds_buffer_size <= 0) {
+			// possibly no rights or nothing found here, limited info
+			continue;
+		}
+		auto fds_buffer = unique_ptr<data_t[]>(new data_t[fds_buffer_size]);
+		D_ASSERT(fds_buffer.get());
+		auto fds = reinterpret_cast<struct proc_fdinfo *>(fds_buffer.get());
+		auto fds_size = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, fds, fds_buffer_size);
+		if (fds_size < static_cast<int64_t>(sizeof(struct proc_fdinfo))) {
+			// possibly no rights or nothing found here, so don't care
+			continue;
+		}
+
+		// go through all file descriptors. There can be multiple to our file. What's the maximum access?
+		for (idx_t fd_idx = 0; fd_idx < fds_size / sizeof(struct proc_fdinfo); fd_idx++) {
+			auto fdinfo = fds[fd_idx];
+			if (fdinfo.proc_fdtype == PROX_FDTYPE_VNODE) {
+				struct vnode_fdinfowithpath vnode_info;
+				auto node_info_bytes = proc_pidfdinfo(pid, fdinfo.proc_fd, PROC_PIDFDVNODEPATHINFO, &vnode_info,
+				                                      PROC_PIDFDVNODEPATHINFO_SIZE);
+				if (node_info_bytes != PROC_PIDFDVNODEPATHINFO_SIZE) {
+					continue;
+				}
+				if (strcmp(real_path, vnode_info.pvip.vip_path) != 0) {
+					continue;
+				}
+				// those flags are weird, they do not seem to directly correspond to O_RDONLY and friends
+				conflict.write |= vnode_info.pfi.fi_openflags == 3;
+				conflict.read |= vnode_info.pfi.fi_openflags == 1;
+			}
+		}
+	}
+
+	if (conflicts.empty()) {
+		return "";
+	}
+
+	// from here on we know someone's having this file open
+	string ret = StringUtil::Format("\nFile '%s' is currently open in the following process(es):\n", path);
+
+	for (auto &conflict : conflicts) {
+		ret += StringUtil::Format("    %s (PID %d): %s Access\n", conflict.name, conflict.pid,
+		                          conflict.write  ? "Write"
+		                          : conflict.read ? "Read"
+		                                          : "Unknown");
+	}
+
+	return ret;
+}
+#else
+static string AdditionalLockInfo(const string &path) {
+	return strerror(errno);
+}
+#endif
+
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
@@ -234,7 +360,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 			fl.l_len = 0;
 			rc = fcntl(fd, F_SETLK, &fl);
 			if (rc == -1) {
-				throw IOException("Could not set lock on file \"%s\": %s", path, strerror(errno));
+				throw IOException("Could not set lock on file \"%s\": %s", path, AdditionalLockInfo(path));
 			}
 		}
 	}
