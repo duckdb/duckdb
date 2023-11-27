@@ -36,5 +36,6 @@ enum class OptimizerType : uint32_t {
 
 string OptimizerTypeToString(OptimizerType type);
 OptimizerType OptimizerTypeFromString(const string &str);
+vector<string> ListAllOptimizers();
 
 } // namespace duckdb
