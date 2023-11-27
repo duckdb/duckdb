@@ -162,16 +162,18 @@ static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 	}
 } // LCOV_EXCL_STOP
 
-#ifdef __APPLE__
-// OSX / IOS has a special api to query open files inherited from BSD, `libproc`
-#include <libproc.h>
-
+#if defined(__APPLE__) || defined(__linux__)
 struct ConflictingProcess {
 	string name = "";
 	int pid = 0;
 	bool read = false;
 	bool write = false;
 };
+#endif
+
+#ifdef __APPLE__
+// OSX / IOS has a special api to query open files inherited from BSD, `libproc`
+#include <libproc.h>
 
 static string AdditionalLockInfo(const string &path) {
 	char real_path[MAXPATHLEN];
@@ -274,6 +276,117 @@ static string AdditionalLockInfo(const string &path) {
 	string ret = StringUtil::Format("\nFile '%s' is currently open in the following process(es):\n", path);
 
 	for (auto &conflict : conflicts) {
+		ret += StringUtil::Format("    %s (PID %d): %s Access\n", conflict.name, conflict.pid,
+		                          conflict.write  ? "Write"
+		                          : conflict.read ? "Read"
+		                                          : "Unknown");
+	}
+
+	return ret;
+}
+#elif __linux__
+#include <dirent.h>
+#include <fcntl.h>
+
+static string AdditionalLockInfo(const string &path) {
+	char real_path[PATH_MAX];
+	{
+		memset(real_path, '\0', PATH_MAX);
+		auto fd = open(path.c_str(), O_RDONLY);
+		if (fd < 0) {
+			return "";
+		}
+		auto fd_proc = StringUtil::Format("/proc/%d/fd/%d", getpid(), fd);
+		auto readlink_n = readlink(fd_proc.c_str(), real_path, PATH_MAX);
+		if (readlink_n < 1) {
+			close(fd);
+			return "";
+		}
+		close(fd);
+	}
+
+	unordered_map<int, ConflictingProcess> conflicts;
+
+	auto proc_root_dp = opendir("/proc");
+	if (!proc_root_dp) {
+		return "";
+	}
+	struct dirent *proc_root_ep;
+	while ((proc_root_ep = readdir(proc_root_dp)) != NULL) {
+		// is this a PID?
+		if (!isdigit(proc_root_ep->d_name[0])) {
+			continue;
+		}
+		auto pid = atoi(proc_root_ep->d_name);
+		// ignore our own access
+		if (pid == getpid()) {
+			continue;
+		}
+
+		// find out what the binary is called
+		char exe_target[PATH_MAX];
+		{
+			memset(exe_target, '\0', PATH_MAX);
+			auto exe_link = StringUtil::Format("/proc/%s/exe", proc_root_ep->d_name);
+			auto readlink_n = readlink(exe_link.c_str(), exe_target, PATH_MAX);
+			if (readlink_n < 1) {
+				snprintf(exe_target, PATH_MAX, "unknown_pid_%s", proc_root_ep->d_name);
+			}
+		}
+
+		auto fd_dir = StringUtil::Format("/proc/%s/fd", proc_root_ep->d_name);
+		auto fd_dir_dp = opendir(fd_dir.c_str());
+		if (!fd_dir_dp) {
+			continue; // we may have no rights
+		}
+		struct dirent *fd_dir_ep;
+		while ((fd_dir_ep = readdir(fd_dir_dp)) != NULL) {
+			char fd_link_target[PATH_MAX];
+			{
+				memset(fd_link_target, '\0', PATH_MAX);
+				auto fd_file = StringUtil::Format("/proc/%s/fd/%s", proc_root_ep->d_name, fd_dir_ep->d_name);
+				auto readlink_n = readlink(fd_file.c_str(), fd_link_target, PATH_MAX);
+				if (readlink_n < 1) {
+					continue;
+				}
+			}
+
+			if (strcmp(real_path, fd_link_target) != 0) {
+				continue;
+			}
+
+			if (conflicts.find(pid) == conflicts.end()) {
+				conflicts[pid] = ConflictingProcess();
+				auto &conflict = conflicts[pid];
+				conflict.pid = pid;
+				conflict.name = exe_target;
+			}
+
+			auto &conflict = conflicts[pid];
+
+			struct stat stat_res;
+			auto stat_ret = stat(fd_link_target, &stat_res);
+			if (stat_ret < 0) {
+				continue;
+			}
+
+			conflict.read = (stat_res.st_mode & S_IRUSR) != 0;
+			conflict.write = (stat_res.st_mode & S_IWUSR) != 0;
+		}
+		closedir(fd_dir_dp);
+	}
+
+	closedir(proc_root_dp);
+
+	if (conflicts.empty()) {
+		return "";
+	}
+
+	// from here on we know someone's having this file open
+	string ret = StringUtil::Format("\nFile '%s' is currently open in the following process(es):\n", path);
+
+	for (auto &conflict_entry : conflicts) {
+		auto &conflict = conflict_entry.second;
 		ret += StringUtil::Format("    %s (PID %d): %s Access\n", conflict.name, conflict.pid,
 		                          conflict.write  ? "Write"
 		                          : conflict.read ? "Read"
