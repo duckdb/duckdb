@@ -247,6 +247,7 @@ public:
 	using HashGroupPtr = unique_ptr<PartitionGlobalHashGroup>;
 	using ExecutorPtr = unique_ptr<WindowExecutor>;
 	using Executors = vector<ExecutorPtr>;
+	using OrderMasks = PartitionGlobalHashGroup::OrderMasks;
 
 	WindowPartitionSourceState(ClientContext &context, WindowGlobalSourceState &gsource)
 	    : context(context), op(gsource.gsink.op), gsource(gsource), read_block_idx(0), unscanned(0) {
@@ -267,11 +268,9 @@ public:
 	unique_ptr<RowDataCollection> heap;
 	RowLayout layout;
 	//! The partition boundary mask
-	vector<validity_t> partition_bits;
 	ValidityMask partition_mask;
 	//! The order boundary mask
-	vector<validity_t> order_bits;
-	ValidityMask order_mask;
+	OrderMasks order_masks;
 	//! External paging
 	bool external;
 	//! The current execution functions
@@ -360,21 +359,28 @@ void WindowPartitionSourceState::BuildPartition(WindowGlobalSinkState &gstate, c
 	}
 
 	//	Initialise masks to false
-	const auto bit_count = ValidityMask::ValidityMaskSize(count);
-	partition_bits.clear();
-	partition_bits.resize(bit_count, 0);
-	partition_mask.Initialize(partition_bits.data());
+	partition_mask.Initialize(count);
+	partition_mask.SetAllInvalid(count);
 
-	order_bits.clear();
-	order_bits.resize(bit_count, 0);
-	order_mask.Initialize(order_bits.data());
+	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
+		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
+		auto &order_mask = order_masks[wexpr.partitions.size() + wexpr.orders.size()];
+		if (order_mask.IsMaskSet()) {
+			continue;
+		}
+		order_mask.Initialize(count);
+		order_mask.SetAllInvalid(count);
+	}
 
 	// Scan the sorted data into new Collections
 	external = gpart.external;
 	if (gpart.rows && !hash_bin) {
 		// Simple mask
 		partition_mask.SetValidUnsafe(0);
-		order_mask.SetValidUnsafe(0);
+		for (auto &order_mask : order_masks) {
+			order_mask.second.SetValidUnsafe(0);
+		}
 		//	No partition - align the heap blocks with the row blocks
 		rows = gpart.rows->CloneEmpty(gpart.rows->keep_pinned);
 		heap = gpart.strings->CloneEmpty(gpart.strings->keep_pinned);
@@ -384,7 +390,7 @@ void WindowPartitionSourceState::BuildPartition(WindowGlobalSinkState &gstate, c
 		// Overwrite the collections with the sorted data
 		D_ASSERT(gpart.hash_groups[hash_bin].get());
 		hash_group = std::move(gpart.hash_groups[hash_bin]);
-		hash_group->ComputeMasks(partition_mask, order_mask);
+		hash_group->ComputeMasks(partition_mask, order_masks);
 		external = hash_group->global_sort->external;
 		MaterializeSortedData();
 	} else {
@@ -396,6 +402,7 @@ void WindowPartitionSourceState::BuildPartition(WindowGlobalSinkState &gstate, c
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
+		auto &order_mask = order_masks[wexpr.partitions.size() + wexpr.orders.size()];
 		auto wexec = WindowExecutorFactory(wexpr, context, partition_mask, order_mask, count, gstate.mode);
 		executors.emplace_back(std::move(wexec));
 	}

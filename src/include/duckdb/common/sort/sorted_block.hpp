@@ -212,15 +212,19 @@ struct SBIterator {
 		return *this;
 	}
 
-	inline bool Compare(const SBIterator &other) const {
+	inline bool Compare(const SBIterator &other, const SortLayout &prefix) const {
 		int comp_res;
 		if (all_constant) {
 			comp_res = FastMemcmp(entry_ptr, other.entry_ptr, cmp_size);
 		} else {
-			comp_res = Comparators::CompareTuple(scan, other.scan, entry_ptr, other.entry_ptr, sort_layout, external);
+			comp_res = Comparators::CompareTuple(scan, other.scan, entry_ptr, other.entry_ptr, prefix, external);
 		}
 
 		return comp_res <= cmp;
+	}
+
+	inline bool Compare(const SBIterator &other) const {
+		return Compare(other, sort_layout);
 	}
 
 	// Fixed comparison parameters
