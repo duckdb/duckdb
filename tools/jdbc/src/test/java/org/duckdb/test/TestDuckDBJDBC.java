@@ -2935,7 +2935,7 @@ public class TestDuckDBJDBC {
         info.put(threads, "5");
         Connection conn = DriverManager.getConnection(JDBC_URL, info);
 
-        assertEquals("500.0MB", getSetting(conn, memory_limit));
+        assertEquals("476.8 MiB", getSetting(conn, memory_limit));
         assertEquals("5", getSetting(conn, threads));
     }
 

@@ -49,8 +49,7 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM test;
 ----
 1	1000000	1000000
 
-# force checkpoint has cleared our current transaction, so we can't rollback
-statement error con2
+statement ok con2
 ROLLBACK
 
 statement ok con2
