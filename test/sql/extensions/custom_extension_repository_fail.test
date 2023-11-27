@@ -1,0 +1,11 @@
+# name: test/sql/extensions/custom_extension_repository.test
+# description: Test restrictions on setting custom_extension_repository
+# group: [extension]
+
+statement ok
+set extension_directory = '__TEST_DIR__/extensions';
+
+statement error
+set custom_extension_repository = 'https://extensions.duckdb.org'
+----
+Invalid Input Error: httpfs must be already locally installed before changing to a custom_extension_repo that requires httpfs to be accessed

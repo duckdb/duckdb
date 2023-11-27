@@ -1,0 +1,11 @@
+# name: test/sql/extensions/custom_extension_repository.test
+# description: Test restrictions on setting custom_extension_repository
+# group: [extension]
+
+require httpfs
+
+statement ok
+set extension_directory = '__TEST_DIR__/extensions';
+
+statement ok
+set custom_extension_repository = 'https://extensions.duckdb.org'

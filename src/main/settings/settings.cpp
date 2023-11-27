@@ -523,7 +523,29 @@ void CustomExtensionRepository::ResetLocal(ClientContext &context) {
 }
 
 void CustomExtensionRepository::SetLocal(ClientContext &context, const Value &input) {
-	ClientConfig::GetConfig(context).custom_extension_repo = StringUtil::Lower(input.ToString());
+	// To be allowed to set CustomExtensionRepository to a remote extension repository requiring https or s3 protocol
+	// httpfs to be available, so for this to succeed httpfs needs to be:
+	//	1. already loaded (potentially built-in)
+	//	2. available to be installed at the local_extension_path
+	//
+	// THe problem is that allowing to change the custom_extension_repository to something needing httpfs allows users
+	//   to corner themselves out.
+	// Potentially this can be relaxed, but given until serving extensions over https:// was not really working, we can as
+	//   well be strict and relax this later.
+	if (!context.db->ExtensionIsLoaded("httpfs")) {
+		// Either extension is already loaded (potentially built-in)
+		if (FileSystem::IsRemoteFile(input.ToString()) && !StringUtil::StartsWith(input.ToString(), "http://")) {
+			// Or extension is local or loadable via http (so no httpfs extension needed)
+			if (!context.db->ExtensionIsLocallyInstalled(context, "httpfs")) {
+				// Or extension httpfs is available
+				// FIXME: Add lock on extension_folder AND add custom_extension_folder & local_extension_folder to the
+				// error message
+				throw InvalidInputException("httpfs must be already locally installed before changing to a "
+				                            "custom_extension_repo that requires httpfs to be accessed");
+			}
+		}
+	}
+	ClientConfig::GetConfig(context).custom_extension_repo = input.ToString();
 }
 
 Value CustomExtensionRepository::GetSetting(ClientContext &context) {
