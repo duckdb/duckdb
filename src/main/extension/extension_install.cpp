@@ -247,9 +247,9 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 	// Special case to install extension from a local file or NOT plain http
 	// Note that before making this the default path, the following are needed for feature-parity:
 	//	* On success (name.duckdb_extension.gz present): Performing a single GET (instead of HEAD + potentially multiple
-	//GETs)
+	// GETs)
 	//	* On failure (name.duckdb_extension[.gz] not presents): Have a way to fail with a single GET (instead of
-	//currently 2 HEADs)
+	// currently 2 HEADs)
 	//	* Setting the User-Agent headers
 	if (!StringUtil::Contains(url_template, "http://")) {
 		string file = fs.ConvertSeparators(url);
@@ -267,8 +267,8 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 				}
 				endsInGz = false;
 			} else {
-				throw IOException("Failed to % extension \"%s\" at:\n     \"%s\" (no encoding)\n%s",
-				                  message_verb, extension_name, file, addendum);
+				throw IOException("Failed to % extension \"%s\" at:\n     \"%s\" (no encoding)\n%s", message_verb,
+				                  extension_name, file, addendum);
 			}
 		}
 		auto read_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ);
