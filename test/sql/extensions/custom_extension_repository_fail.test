@@ -1,6 +1,6 @@
-# name: test/sql/extensions/custom_extension_repository.test
+# name: test/sql/extensions/custom_extension_repository_fail.test
 # description: Test restrictions on setting custom_extension_repository
-# group: [extension]
+# group: [extensions]
 
 statement ok
 set extension_directory = '__TEST_DIR__/extensions';

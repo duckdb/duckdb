@@ -530,7 +530,8 @@ void CustomExtensionRepository::SetLocal(ClientContext &context, const Value &in
 	//
 	// THe problem is that allowing to change the custom_extension_repository to something needing httpfs allows users
 	//   to corner themselves out.
-	// Potentially this can be relaxed, but given until serving extensions over https:// was not really working, we can as
+	// Potentially this can be relaxed, but given until serving extensions over https:// was not really working, we can
+	// as
 	//   well be strict and relax this later.
 	if (!context.db->ExtensionIsLoaded("httpfs")) {
 		// Either extension is already loaded (potentially built-in)
