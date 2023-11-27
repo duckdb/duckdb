@@ -253,7 +253,6 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 	//	* Setting the User-Agent headers
 	if (!StringUtil::Contains(url_template, "http://")) {
 		string file = fs.ConvertSeparators(url);
-		bool endsInGz = true;
 		if (!fs.FileExists(file)) {
 			string message_verb = FileSystem::IsRemoteFile(file) ? "download" : "copy local";
 			string addendum = FileSystem::IsRemoteFile(file) ? "\n'LOAD httpfs' might be required." : "";
@@ -265,7 +264,6 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 					                  "compressed version) or\n     \"%s\" (no encoding)\n%s",
 					                  message_verb, extension_name, file, file, addendum);
 				}
-				endsInGz = false;
 			} else {
 				throw IOException("Failed to % extension \"%s\" at:\n     \"%s\" (no encoding)\n%s", message_verb,
 				                  extension_name, file, addendum);
@@ -275,7 +273,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		auto test_data = std::unique_ptr<unsigned char[]> {new unsigned char[read_handle->GetFileSize()]};
 		read_handle->Read(test_data.get(), read_handle->GetFileSize());
 
-		if (endsInGz) {
+		if (StringUtil::EndsWith(file, ".gz")) {
 			// if file is compressed, decompression has to be performed explicitly
 			std::string in((const char *)test_data.get(), read_handle->GetFileSize());
 			auto decompressed_body = GZipFileSystem::UncompressGZIPString(in);
