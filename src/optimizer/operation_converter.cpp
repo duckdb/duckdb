@@ -79,6 +79,7 @@ void OperationConverter::Optimize(unique_ptr<LogicalOperator> &op, bool is_root)
 		auto projection = make_uniq<LogicalProjection>(table_index, std::move(select_list));
 		projection->children.push_back(std::move(op));
 		op = std::move(projection);
+		op->ResolveOperatorTypes();
 
 		// now perform column binding replacement
 		auto new_bindings = op->GetColumnBindings();
