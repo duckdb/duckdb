@@ -2035,6 +2035,17 @@ typedef struct PGImportStmt {
 } PGImportStmt;
 
 /* ----------------------
+ *		Copy Database Statement
+ * ----------------------
+ */
+typedef struct PGCopyDatabaseStmt {
+	PGNodeTag type;
+	const char *from_database;
+	const char *to_database;
+	const char *copy_database_flag;
+} PGCopyDatabaseStmt;
+
+/* ----------------------
  *		Interval Constant
  * ----------------------
  */
@@ -2126,6 +2137,7 @@ typedef struct PGAttachStmt
 	char *name;			/* The name of the attached database */
 	PGList *options;      /* PGList of PGDefElem nodes */
     PGNode *query;
+	PGOnCreateConflict onconflict;        /* what to do on attach conflict */
 } PGAttachStmt;
 
 /* ----------------------

@@ -110,8 +110,8 @@ private:
 struct PyTimeDelta {
 public:
 	PyTimeDelta(py::handle &obj);
-	int64_t days;
-	int64_t seconds;
+	int32_t days;
+	int32_t seconds;
 	int64_t microseconds;
 
 public:

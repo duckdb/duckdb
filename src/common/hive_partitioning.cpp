@@ -65,7 +65,7 @@ static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr,
 //  - http(s)://domain(:port)/lala/kasdl/var1=value1/?not-a-var=not-a-value
 //  - folder/folder/folder/../var1=value1/etc/.//var2=value2
 const string &HivePartitioning::RegexString() {
-	static string REGEX = "[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]+)";
+	static string REGEX = "[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]*)";
 	return REGEX;
 }
 

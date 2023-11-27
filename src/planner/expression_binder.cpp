@@ -96,30 +96,27 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 	}
 }
 
-bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr) {
+BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, string error_message) {
 	// try to bind in one of the outer queries, if the binding error occurred in a subquery
 	auto &active_binders = binder.GetActiveBinders();
 	// make a copy of the set of binders, so we can restore it later
 	auto binders = active_binders;
-
+	auto bind_error = std::move(error_message);
 	// we already failed with the current binder
 	active_binders.pop_back();
 	idx_t depth = 1;
-	bool success = false;
-
 	while (!active_binders.empty()) {
 		auto &next_binder = active_binders.back().get();
 		ExpressionBinder::QualifyColumnNames(next_binder.binder, expr);
-		auto bind_result = next_binder.Bind(expr, depth);
-		if (bind_result.empty()) {
-			success = true;
+		bind_error = next_binder.Bind(expr, depth);
+		if (bind_error.empty()) {
 			break;
 		}
 		depth++;
 		active_binders.pop_back();
 	}
 	active_binders = binders;
-	return success;
+	return BindResult(bind_error);
 }
 
 void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error) {
@@ -220,10 +217,13 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	// bind the main expression
 	auto error_msg = Bind(expr, 0, root_expression);
 	if (!error_msg.empty()) {
-		// failed to bind: try to bind correlated columns in the expression (if any)
-		bool success = BindCorrelatedColumns(expr);
-		if (!success) {
-			throw BinderException(error_msg);
+		// Try binding the correlated column. If binding the correlated column
+		// has error messages, those should be propagated up. So for the test case
+		// having subquery failed to bind:14 the real error message should be something like
+		// aggregate with constant input must be bound to a root node.
+		auto result = BindCorrelatedColumns(expr, error_msg);
+		if (result.HasError()) {
+			throw BinderException(result.error);
 		}
 		auto &bound_expr = expr->Cast<BoundExpression>();
 		ExtractCorrelatedExpressions(binder, *bound_expr.expr);

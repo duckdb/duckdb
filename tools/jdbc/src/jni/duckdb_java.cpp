@@ -320,6 +320,7 @@ static const char *const JDBC_STREAM_RESULTS = "jdbc_stream_results";
 jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolean read_only, jobject props) {
 	auto database = byte_array_to_string(env, database_j);
 	DBConfig config;
+	config.SetOptionByName("duckdb_api", "java");
 	config.AddExtensionOption(
 	    JDBC_STREAM_RESULTS,
 	    "Whether to stream results. Only one ResultSet on a connection can be open at once when true",
@@ -993,6 +994,9 @@ void _duckdb_jdbc_appender_append_null(JNIEnv *env, jclass, jobject appender_ref
 }
 
 jlong _duckdb_jdbc_arrow_stream(JNIEnv *env, jclass, jobject res_ref_buf, jlong batch_size) {
+	if (!res_ref_buf) {
+		throw InvalidInputException("Invalid result set");
+	}
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
 	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
 		throw InvalidInputException("Invalid result set");
