@@ -219,7 +219,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 			}
 			fs.MoveFile(temp_path, local_extension_path);
 			return;
-		} else if (!is_http_url) {
+		} else if (!FileSystem::IsRemoteFile(extension)) {
 			throw IOException("Failed to read extension from \"%s\": no such file", extension);
 		}
 	}
@@ -244,20 +244,46 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		throw IOException("No slash in URL template");
 	}
 
-	// Special case to install extension from a local file, useful for testing
+	// Special case to install extension from a local file or NOT plain http
+	// Note that before making this the default path, the following are needed for feature-parity:
+	//	* On success (name.duckdb_extension.gz present): Performing a single GET (instead of HEAD + potentially multiple
+	//GETs)
+	//	* On failure (name.duckdb_extension[.gz] not presents): Have a way to fail with a single GET (instead of
+	//currently 2 HEADs)
+	//	* Setting the User-Agent headers
 	if (!StringUtil::Contains(url_template, "http://")) {
 		string file = fs.ConvertSeparators(url);
+		bool endsInGz = true;
 		if (!fs.FileExists(file)) {
-			// check for non-gzipped variant
-			file = file.substr(0, file.size() - 3);
-			if (!fs.FileExists(file)) {
-				throw IOException("Failed to copy local extension \"%s\" at PATH \"%s\"\n", extension_name, file);
+			string message_verb = FileSystem::IsRemoteFile(file) ? "download" : "copy local";
+			string addendum = FileSystem::IsRemoteFile(file) ? "\n'LOAD httpfs' might be required." : "";
+			if (StringUtil::EndsWith(file, ".gz")) {
+				// check also for non-gzipped variant
+				file = file.substr(0, file.size() - 3);
+				if (!fs.FileExists(file)) {
+					throw IOException("Failed to %s extension \"%s\" at either of:\n     \"%s.gz\" (gzip "
+					                  "compressed version) or\n     \"%s\" (no encoding)\n%s",
+					                  message_verb, extension_name, file, file, addendum);
+				}
+				endsInGz = false;
+			} else {
+				throw IOException("Failed to % extension \"%s\" at:\n     \"%s\" (no encoding)\n%s",
+				                  message_verb, extension_name, file, addendum);
 			}
 		}
 		auto read_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ);
 		auto test_data = std::unique_ptr<unsigned char[]> {new unsigned char[read_handle->GetFileSize()]};
 		read_handle->Read(test_data.get(), read_handle->GetFileSize());
-		WriteExtensionFileToDisk(fs, temp_path, (void *)test_data.get(), read_handle->GetFileSize());
+
+		if (endsInGz) {
+			// if file is compressed, decompression has to be performed explicitly
+			std::string in((const char *)test_data.get(), read_handle->GetFileSize());
+			auto decompressed_body = GZipFileSystem::UncompressGZIPString(in);
+			WriteExtensionFileToDisk(fs, temp_path, (void *)decompressed_body.data(), decompressed_body.size());
+		} else {
+			// if file is uncompressed
+			WriteExtensionFileToDisk(fs, temp_path, (void *)test_data.get(), read_handle->GetFileSize());
+		}
 
 		if (fs.FileExists(local_extension_path) && force_install) {
 			fs.RemoveFile(local_extension_path);
