@@ -65,7 +65,7 @@ DuckTransactionManager &DuckTransactionManager::Get(AttachedDatabase &db) {
 	return reinterpret_cast<DuckTransactionManager &>(transaction_manager);
 }
 
-Transaction *DuckTransactionManager::StartTransaction(ClientContext &context) {
+Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
 	if (current_start_timestamp >= TRANSACTION_ID_START) { // LCOV_EXCL_START
@@ -83,11 +83,11 @@ Transaction *DuckTransactionManager::StartTransaction(ClientContext &context) {
 
 	// create the actual transaction
 	auto transaction = make_uniq<DuckTransaction>(*this, context, start_time, transaction_id);
-	auto transaction_ptr = transaction.get();
+	auto &transaction_ref = *transaction;
 
 	// store it in the set of active transactions
 	active_transactions.push_back(std::move(transaction));
-	return transaction_ptr;
+	return transaction_ref;
 }
 
 struct ClientLockWrapper {
@@ -187,8 +187,8 @@ bool DuckTransactionManager::CanCheckpoint(optional_ptr<DuckTransaction> current
 	return true;
 }
 
-string DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction *transaction_p) {
-	auto &transaction = transaction_p->Cast<DuckTransaction>();
+string DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
+	auto &transaction = transaction_p.Cast<DuckTransaction>();
 	vector<ClientLockWrapper> client_locks;
 	auto lock = make_uniq<lock_guard<mutex>>(transaction_lock);
 	CheckpointLock checkpoint_lock(*this);
@@ -242,8 +242,8 @@ string DuckTransactionManager::CommitTransaction(ClientContext &context, Transac
 	return error;
 }
 
-void DuckTransactionManager::RollbackTransaction(Transaction *transaction_p) {
-	auto &transaction = transaction_p->Cast<DuckTransaction>();
+void DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
+	auto &transaction = transaction_p.Cast<DuckTransaction>();
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
 
