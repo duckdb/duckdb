@@ -24,7 +24,6 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_scan.hpp"
-#include "duckdb/main/client_properties.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"

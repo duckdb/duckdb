@@ -8,13 +8,17 @@
 
 #pragma once
 
+#include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/main/secret/secret.hpp"
+
 
 namespace duckdb {
 struct CreateSecretInfo;
 struct BoundStatement;
 class CreateSecretStatement;
+struct CatalogTransaction;
 
 //! SecretEntry is a wrapper around a secret containing metadata from the secret manager and allowing storage in a
 //! CatalogSet

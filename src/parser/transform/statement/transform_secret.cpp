@@ -16,7 +16,7 @@ unique_ptr<CreateSecretStatement> Transformer::TransformSecret(duckdb_libpgquery
 		for (auto cell = stmt.options->head; cell; cell = cell->next) {
 			auto option_list = PGPointerCast<duckdb_libpgquery::PGList>(cell->data.ptr_value);
 			D_ASSERT(option_list->length == 2);
-			string key = StringUtil::Lower((char *)option_list->head->data.ptr_value);
+			string key = StringUtil::Lower(reinterpret_cast<char*>(option_list->head->data.ptr_value));
 			auto value_node = PGPointerCast<duckdb_libpgquery::PGNode>(option_list->tail->data.ptr_value);
 			if (key == "scope") {
 				if (value_node->type == duckdb_libpgquery::T_PGString) {
