@@ -997,6 +997,9 @@ void _duckdb_jdbc_appender_append_null(JNIEnv *env, jclass, jobject appender_ref
 }
 
 jlong _duckdb_jdbc_arrow_stream(JNIEnv *env, jclass, jobject res_ref_buf, jlong batch_size) {
+	if (!res_ref_buf) {
+		throw InvalidInputException("Invalid result set");
+	}
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
 	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
 		throw InvalidInputException("Invalid result set");
