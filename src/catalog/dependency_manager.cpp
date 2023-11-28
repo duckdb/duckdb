@@ -281,7 +281,7 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 	}
 
 	// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
-	DependencyFlags dependency_flags;
+	DependencyDependentFlags dependency_flags;
 	if (object.type != CatalogType::INDEX_ENTRY) {
 		// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
 		dependency_flags.SetBlocking();
@@ -291,17 +291,16 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 	for (auto &dependency : dependencies.set) {
 		DependencyInfo info {
 		    /*dependent = */ DependencyDependent {GetLookupProperties(object), dependency_flags},
-		    /*subject = */ DependencySubject {GetLookupProperties(dependency), DependencyFlags().SetBlocking()}};
+		    /*subject = */ DependencySubject {GetLookupProperties(dependency), DependencySubjectFlags()}};
 		CreateDependency(transaction, info);
 	}
 }
 
-static bool CascadeDrop(bool cascade, const DependencyFlags &flags) {
+static bool CascadeDrop(bool cascade, const DependencyDependentFlags &flags) {
 	if (cascade) {
 		return true;
 	}
-	D_ASSERT(!flags.IsOwnership());
-	if (flags.IsOwned()) {
+	if (flags.IsOwnedBy()) {
 		// We are owned by this object, while it exists we can not be dropped without cascade.
 		return false;
 	}
@@ -445,9 +444,8 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 
 	for (auto &dep : dependents) {
 		auto &other = dep.entry.get();
-		DependencyInfo info {
-		    /*dependent = */ DependencyDependent {GetLookupProperties(new_obj), dep.flags},
-		    /*subject = */ DependencySubject {GetLookupProperties(other), DependencyFlags().SetBlocking()}};
+		DependencyInfo info {/*dependent = */ DependencyDependent {GetLookupProperties(new_obj), dep.flags},
+		                     /*subject = */ DependencySubject {GetLookupProperties(other), DependencySubjectFlags()}};
 		CreateDependency(transaction, info);
 	}
 
@@ -456,8 +454,9 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		auto &entry = object.entry.get();
 		{
 			DependencyInfo info {
-			    /*dependent = */ DependencyDependent {GetLookupProperties(new_obj), DependencyFlags().SetOwned()},
-			    /*subject = */ DependencySubject {GetLookupProperties(entry), DependencyFlags().SetOwnership()}};
+			    /*dependent = */ DependencyDependent {GetLookupProperties(new_obj),
+			                                          DependencyDependentFlags().SetOwnedBy()},
+			    /*subject = */ DependencySubject {GetLookupProperties(entry), DependencySubjectFlags().SetOwnership()}};
 			CreateDependency(transaction, info);
 		}
 	}
@@ -465,7 +464,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 
 void DependencyManager::Scan(
     ClientContext &context,
-    const std::function<void(CatalogEntry &, CatalogEntry &, const DependencyFlags &)> &callback) {
+    const std::function<void(CatalogEntry &, CatalogEntry &, const DependencyDependentFlags &)> &callback) {
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	auto transaction = catalog.GetCatalogTransaction(context);
 
@@ -499,20 +498,13 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 	// If the owner is already owned by something else, throw an error
 	auto owner_info = GetLookupProperties(owner);
 	ScanDependents(transaction, owner_info, [&](DependencyEntry &dep) {
-		if (dep.Dependent().flags.IsOwned()) {
-			throw DependencyException(owner.name + " already owned by " + dep.EntryInfo().name);
-		}
-	});
-	ScanSubjects(transaction, owner_info, [&](DependencyEntry &dep) {
-		auto flags = dep.Subject().flags;
-		// if the entry owns the owner, throw error
-		if (&dep == &owner && flags.IsOwnership()) {
-			throw DependencyException(entry.name + " already owns " + owner.name +
-			                          ". Cannot have circular dependencies");
+		if (dep.Dependent().flags.IsOwnedBy()) {
+			throw DependencyException("%s can not become the owner, it is already owned by %s", owner.name,
+			                          dep.EntryInfo().name);
 		}
 	});
 
-	// If the entry is already owned, throw an error
+	// If the entry is the owner of another entry, throw an error
 	auto entry_info = GetLookupProperties(entry);
 	ScanSubjects(transaction, entry_info, [&](DependencyEntry &other) {
 		auto dependent_entry = LookupEntry(transaction, other);
@@ -522,14 +514,13 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 		auto &dep = *dependent_entry;
 
 		auto flags = other.Dependent().flags;
-		if (!flags.IsOwned()) {
+		if (!flags.IsOwnedBy()) {
 			return;
 		}
-		// if the entry is already owned, throw error
-		if (&dep != &owner) {
-			throw DependencyException(entry.name + " already depends on " + dep.name);
-		}
+		throw DependencyException("%s already owns %s. Cannot have circular dependencies", entry.name, dep.name);
 	});
+
+	// If the entry is already owned, throw an error
 	ScanDependents(transaction, entry_info, [&](DependencyEntry &other) {
 		auto dependent_entry = LookupEntry(transaction, other);
 		if (!dependent_entry) {
@@ -538,14 +529,17 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 
 		auto &dep = *dependent_entry;
 		auto flags = other.Subject().flags;
-		if (flags.IsOwnership() && &dep != &owner) {
-			throw DependencyException("%s is already owned by %s", entry.name, owner.name);
+		if (!flags.IsOwnership()) {
+			return;
+		}
+		if (&dep != &owner) {
+			throw DependencyException("%s is already owned by %s", entry.name, dep.name);
 		}
 	});
 
 	DependencyInfo info {
-	    /*dependent = */ DependencyDependent {GetLookupProperties(owner), DependencyFlags().SetOwned()},
-	    /*subject = */ DependencySubject {GetLookupProperties(entry), DependencyFlags().SetOwnership()}};
+	    /*dependent = */ DependencyDependent {GetLookupProperties(owner), DependencyDependentFlags().SetOwnedBy()},
+	    /*subject = */ DependencySubject {GetLookupProperties(entry), DependencySubjectFlags().SetOwnership()}};
 	CreateDependency(transaction, info);
 }
 

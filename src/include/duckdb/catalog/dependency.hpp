@@ -16,11 +16,6 @@ class CatalogEntry;
 
 struct DependencyFlags {
 private:
-	static constexpr uint8_t NON_BLOCKING = 0;
-	static constexpr uint8_t BLOCKING = 1 << 0;
-	static constexpr uint8_t OWNED = 1 << 1;
-	static constexpr uint8_t OWNERSHIP = 1 << 2;
-
 public:
 	DependencyFlags() : value(0) {
 	}
@@ -38,66 +33,92 @@ public:
 	}
 
 public:
-	bool IsBlocking() const {
-		return (value & BLOCKING) == BLOCKING;
+	virtual string ToString() const = 0;
+
+protected:
+	template <uint8_t BIT>
+	bool IsSet() const {
+		static const uint8_t FLAG = (1 << BIT);
+		return (value & FLAG) == FLAG;
+	}
+	template <uint8_t BIT>
+	void Set() {
+		static const uint8_t FLAG = (1 << BIT);
+		value |= FLAG;
+	}
+	void Merge(uint8_t other) {
+		value |= other;
+	}
+	uint8_t Value() {
+		return value;
 	}
 
-	bool IsOwned() const {
-		return (value & OWNED) == OWNED;
+private:
+	uint8_t value;
+};
+
+struct DependencySubjectFlags : public DependencyFlags {
+private:
+	static constexpr uint8_t OWNERSHIP = 0;
+
+public:
+	DependencySubjectFlags &Apply(DependencySubjectFlags other) {
+		Merge(other.Value());
+		return *this;
 	}
 
+public:
 	bool IsOwnership() const {
-		return (value & OWNERSHIP) == OWNERSHIP;
+		return IsSet<OWNERSHIP>();
 	}
 
 public:
-	DependencyFlags &SetOwnership() {
-		value |= OWNERSHIP;
-		D_ASSERT(!IsOwned());
-		return *this;
-	}
-	DependencyFlags &SetOwned() {
-		value |= OWNED;
-		D_ASSERT(!IsOwnership());
-		return *this;
-	}
-	DependencyFlags &SetBlocking() {
-		value |= BLOCKING;
+	DependencySubjectFlags &SetOwnership() {
+		Set<OWNERSHIP>();
 		return *this;
 	}
 
 public:
-	static DependencyFlags DependencyOwns() {
-		return DependencyFlags().SetOwnership();
-	}
-	static DependencyFlags DependencyOwned() {
-		return DependencyFlags().SetOwned();
-	}
-	static DependencyFlags DependencyAutomatic() {
-		return DependencyFlags();
-	}
-	static DependencyFlags DependencyRegular() {
-		return DependencyFlags().SetBlocking();
-	}
-
-public:
-	DependencyFlags &Apply(DependencyFlags other) {
-		if (other.IsBlocking()) {
-			SetBlocking();
+	string ToString() const override {
+		string result;
+		if (IsOwnership()) {
+			result += "OWNS";
 		}
-		if (other.IsOwned()) {
-			D_ASSERT(!IsOwnership());
-			SetOwned();
-		}
-		if (other.IsOwnership()) {
-			D_ASSERT(!IsOwned());
-			SetOwnership();
-		}
+		return result;
+	}
+};
+
+struct DependencyDependentFlags : public DependencyFlags {
+private:
+	static constexpr uint8_t BLOCKING = 0;
+	static constexpr uint8_t OWNED_BY = 0;
+
+public:
+	DependencyDependentFlags &Apply(DependencyDependentFlags other) {
+		Merge(other.Value());
 		return *this;
 	}
 
 public:
-	string ToString() const {
+	bool IsBlocking() const {
+		return IsSet<BLOCKING>();
+	}
+	bool IsOwnedBy() const {
+		return IsSet<OWNED_BY>();
+	}
+
+public:
+	DependencyDependentFlags &SetBlocking() {
+		Set<BLOCKING>();
+		return *this;
+	}
+	DependencyDependentFlags &SetOwnedBy() {
+		Set<OWNED_BY>();
+		return *this;
+	}
+
+public:
+	string ToString() const override {
 		string result;
 		if (IsBlocking()) {
 			result += "REGULAR";
@@ -105,23 +126,15 @@ public:
 			result += "AUTOMATIC";
 		}
 		result += " | ";
-		if (IsOwned()) {
-			D_ASSERT(!IsOwnership());
+		if (IsOwnedBy()) {
 			result += "OWNED BY";
-		}
-		if (IsOwnership()) {
-			D_ASSERT(!IsOwned());
-			result += "OWNS";
 		}
 		return result;
 	}
-
-public:
-	uint8_t value;
 };
 
 struct Dependency {
-	Dependency(CatalogEntry &entry, DependencyFlags flags = DependencyFlags().SetBlocking())
+	Dependency(CatalogEntry &entry, DependencyDependentFlags flags = DependencyDependentFlags().SetBlocking())
 	    : // NOLINT: Allow implicit conversion from `CatalogEntry`
 	      entry(entry), flags(flags) {
 	}
@@ -129,7 +142,7 @@ struct Dependency {
 	//! The catalog entry this depends on
 	reference<CatalogEntry> entry;
 	//! The type of dependency
-	DependencyFlags flags;
+	DependencyDependentFlags flags;
 };
 
 struct DependencyHashFunction {

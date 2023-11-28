@@ -9,13 +9,13 @@
 namespace duckdb {
 
 struct DependencyInformation {
-	DependencyInformation(CatalogEntry &object, CatalogEntry &dependent, const DependencyFlags &flags)
+	DependencyInformation(CatalogEntry &object, CatalogEntry &dependent, const DependencyDependentFlags &flags)
 	    : object(object), dependent(dependent), flags(flags) {
 	}
 
 	CatalogEntry &object;
 	CatalogEntry &dependent;
-	DependencyFlags flags;
+	DependencyDependentFlags flags;
 };
 
 struct DuckDBDependenciesData : public GlobalTableFunctionState {
@@ -60,9 +60,10 @@ unique_ptr<GlobalTableFunctionState> DuckDBDependenciesInit(ClientContext &conte
 	if (catalog.IsDuckCatalog()) {
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		auto &dependency_manager = duck_catalog.GetDependencyManager();
-		dependency_manager.Scan(context, [&](CatalogEntry &obj, CatalogEntry &dependent, const DependencyFlags &flags) {
-			result->entries.emplace_back(obj, dependent, flags);
-		});
+		dependency_manager.Scan(context,
+		                        [&](CatalogEntry &obj, CatalogEntry &dependent, const DependencyDependentFlags &flags) {
+			                        result->entries.emplace_back(obj, dependent, flags);
+		                        });
 	}
 
 	return std::move(result);

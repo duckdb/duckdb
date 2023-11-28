@@ -33,14 +33,14 @@ struct CatalogEntryInfo {
 struct DependencySubject {
 	CatalogEntryInfo entry;
 	//! The type of dependency this is (e.g, ownership)
-	DependencyFlags flags;
+	DependencySubjectFlags flags;
 };
 
 // The entry that relies on the other entry
 struct DependencyDependent {
 	CatalogEntryInfo entry;
 	//! The type of dependency this is (e.g, blocking, non-blocking, ownership)
-	DependencyFlags flags;
+	DependencyDependentFlags flags;
 };
 
 //! Every dependency consists of a subject (the entry being depended on) and a dependent (the entry that has the
@@ -85,7 +85,7 @@ public:
 
 	//! Scans all dependencies, returning pairs of (object, dependent)
 	void Scan(ClientContext &context,
-	          const std::function<void(CatalogEntry &, CatalogEntry &, const DependencyFlags &)> &callback);
+	          const std::function<void(CatalogEntry &, CatalogEntry &, const DependencyDependentFlags &)> &callback);
 
 	void AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry);
 
