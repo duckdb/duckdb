@@ -240,7 +240,7 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 	return true;
 }
 
-bool StringUtil::CICompare(const string &s1, const string &s2) {
+bool StringUtil::CILessThan(const string &s1, const string &s2) {
 	const auto charmap = UpperFun::ascii_to_upper_map;
 
 	unsigned char u1, u2;
