@@ -4,6 +4,8 @@
 
 require skip_reload
 
+require notwindows
+
 statement ok
 PRAGMA enable_verification
 
