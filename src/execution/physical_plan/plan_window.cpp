@@ -47,8 +47,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 
 	// Slice types
 	auto types = op.types;
-	const auto output_idx = types.size() - op.expressions.size();
-	types.resize(output_idx);
+	const auto input_width = types.size() - op.expressions.size();
+	types.resize(input_width);
 
 	// Identify streaming windows
 	vector<idx_t> blocking_windows;
@@ -62,7 +62,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 	}
 
 	// Process the window functions by sharing the partition/order definitions
-	vector<idx_t> evaluation_order;
+	unordered_map<idx_t, idx_t> projection_map;
+	auto output_pos = input_width;
 	while (!blocking_windows.empty() || !streaming_windows.empty()) {
 		const bool process_streaming = blocking_windows.empty();
 		auto &remaining = process_streaming ? streaming_windows : blocking_windows;
@@ -76,7 +77,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 		for (const auto &expr_idx : remaining) {
 			D_ASSERT(op.expressions[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 			auto &wexpr = op.expressions[expr_idx]->Cast<BoundWindowExpression>();
-			if (over_expr.KeysAreCompatible(wexpr)) {
+			if (expr_idx != over_idx && over_expr.Equals(wexpr)) {
+				// CSE Elimination
+				projection_map[input_width + expr_idx] = output_pos;
+			} else if (over_expr.KeysAreCompatible(wexpr)) {
 				matching.emplace_back(expr_idx);
 			} else {
 				unprocessed.emplace_back(expr_idx);
@@ -88,7 +92,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 		vector<unique_ptr<Expression>> select_list;
 		for (const auto &expr_idx : matching) {
 			select_list.emplace_back(std::move(op.expressions[expr_idx]));
-			types.emplace_back(op.types[output_idx + expr_idx]);
+			types.emplace_back(op.types[input_width + expr_idx]);
 		}
 
 		// Chain the new window operator on top of the plan
@@ -102,22 +106,26 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 		plan = std::move(window);
 
 		// Remember the projection order if we changed it
-		if (!streaming_windows.empty() || !blocking_windows.empty() || !evaluation_order.empty()) {
-			evaluation_order.insert(evaluation_order.end(), matching.begin(), matching.end());
+		if (!streaming_windows.empty() || !blocking_windows.empty() || !projection_map.empty()) {
+			auto output_expr = output_pos;
+			for (const auto &expr_idx : matching) {
+				projection_map[input_width + expr_idx] = output_expr++;
+			}
 		}
+
+		output_pos += matching.size();
 	}
 
 	// Put everything back into place if it moved
-	if (!evaluation_order.empty()) {
+	if (!projection_map.empty()) {
 		vector<unique_ptr<Expression>> select_list(op.types.size());
 		// The inputs don't move
-		for (idx_t i = 0; i < output_idx; ++i) {
+		for (idx_t i = 0; i < input_width; ++i) {
 			select_list[i] = make_uniq<BoundReferenceExpression>(op.types[i], i);
 		}
 		// The outputs have been rearranged
-		for (idx_t i = 0; i < evaluation_order.size(); ++i) {
-			const auto expr_idx = evaluation_order[i] + output_idx;
-			select_list[expr_idx] = make_uniq<BoundReferenceExpression>(op.types[expr_idx], i + output_idx);
+		for (const auto &p : projection_map) {
+			select_list[p.first] = make_uniq<BoundReferenceExpression>(op.types[p.first], p.second);
 		}
 		auto proj = make_uniq<PhysicalProjection>(op.types, std::move(select_list), op.estimated_cardinality);
 		proj->children.push_back(std::move(plan));

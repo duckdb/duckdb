@@ -36,6 +36,13 @@ bool BoundWindowExpression::Equals(const BaseExpression &other_p) const {
 	if (exclude_clause != other.exclude_clause) {
 		return false;
 	}
+
+	// If there are aggregates, check they are equal
+	if (aggregate.get() != other.aggregate.get()) {
+		if (!aggregate || !other.aggregate || *aggregate != *other.aggregate) {
+			return false;
+		}
+	}
 	// check if the child expressions are equivalent
 	if (!Expression::ListEquals(children, other.children)) {
 		return false;
