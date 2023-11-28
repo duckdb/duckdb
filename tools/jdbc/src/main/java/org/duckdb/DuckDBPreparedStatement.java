@@ -291,6 +291,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     public void close() throws SQLException {
         if (select_result != null) {
             select_result.close();
+            select_result = null;
         }
         if (stmt_ref != null) {
             DuckDBNative.duckdb_jdbc_release(stmt_ref);

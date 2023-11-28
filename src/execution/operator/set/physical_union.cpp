@@ -7,8 +7,9 @@
 namespace duckdb {
 
 PhysicalUnion::PhysicalUnion(vector<LogicalType> types, unique_ptr<PhysicalOperator> top,
-                             unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::UNION, std::move(types), estimated_cardinality) {
+                             unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality, bool allow_out_of_order)
+    : PhysicalOperator(PhysicalOperatorType::UNION, std::move(types), estimated_cardinality),
+      allow_out_of_order(allow_out_of_order) {
 	children.push_back(std::move(top));
 	children.push_back(std::move(bottom));
 }
@@ -24,6 +25,9 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 	// or if the sink preserves order, but does not support batch indices to do so
 	auto sink = meta_pipeline.GetSink();
 	bool order_matters = false;
+	if (!allow_out_of_order) {
+		order_matters = true;
+	}
 	if (current.IsOrderDependent()) {
 		order_matters = true;
 	}

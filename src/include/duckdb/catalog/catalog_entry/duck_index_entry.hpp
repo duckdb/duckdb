@@ -12,19 +12,25 @@
 
 namespace duckdb {
 
-//! An index catalog entry
+//! A duck index entry
 class DuckIndexEntry : public IndexCatalogEntry {
 public:
-	//! Create an IndexCatalogEntry and initialize storage for it
+	//! Create a DuckIndexEntry
 	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info);
-	~DuckIndexEntry();
+	~DuckIndexEntry() override;
 
+	//! The indexed table information
 	shared_ptr<DataTableInfo> info;
+
+	//! We need the initial size of the index after the CREATE INDEX statement,
+	//! as it is necessary to determine the auto checkpoint threshold
+	idx_t initial_index_size;
 
 public:
 	string GetSchemaName() const override;
 	string GetTableName() const override;
-	//! This drops in-memory index data and marks all blocks on disk as free blocks, allowing to reclaim them
+
+	//! Drops in-memory index data and marks all blocks on disk as free blocks, allowing to reclaim them
 	void CommitDrop();
 };
 

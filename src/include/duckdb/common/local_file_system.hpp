@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/windows_undefs.hpp"
 
 namespace duckdb {
 

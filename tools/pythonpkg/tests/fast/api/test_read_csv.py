@@ -142,7 +142,7 @@ class TestReadCSV(object):
         print(res)
         assert res == (1, 'Action', datetime.datetime(2006, 2, 15, 4, 46, 27))
 
-    def test_parallel_true(self, duckdb_cursor):
+    def test_parallel_false(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile('category.csv'), parallel=False)
         res = rel.fetchone()
         print(res)
@@ -525,7 +525,7 @@ class TestReadCSV(object):
         # dtypes and names dont match
         # FIXME: seems the order columns are named in this error is non-deterministic
         # so for now I'm excluding the list of columns from the expected error
-        expected_error = """do not exist in the CSV File"""
+        expected_error = """Columns with names: "d","e","f" do not exist in the CSV File"""
         with pytest.raises(duckdb.BinderException, match=expected_error):
             rel = con.read_csv(
                 file,
@@ -536,3 +536,43 @@ class TestReadCSV(object):
                     'f': str,
                 },
             )
+
+    def test_read_csv_multi_file(self):
+        con = duckdb.connect()
+        file1 = StringIO('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
+        file2 = StringIO('one,two,three,four\n5,6,7,8\n5,6,7,8\n5,6,7,8')
+        file3 = StringIO('one,two,three,four\n9,10,11,12\n9,10,11,12\n9,10,11,12')
+        files = [file1, file2, file3]
+        rel = con.read_csv(files)
+        res = rel.fetchall()
+        assert res == [
+            (1, 2, 3, 4),
+            (1, 2, 3, 4),
+            (1, 2, 3, 4),
+            (5, 6, 7, 8),
+            (5, 6, 7, 8),
+            (5, 6, 7, 8),
+            (9, 10, 11, 12),
+            (9, 10, 11, 12),
+            (9, 10, 11, 12),
+        ]
+
+    def test_read_csv_empty_list(self):
+        con = duckdb.connect()
+        files = []
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Please provide a non-empty list of paths or file-like objects'
+        ):
+            rel = con.read_csv(files)
+            res = rel.fetchall()
+
+    def test_read_csv_list_invalid_path(self):
+        con = duckdb.connect()
+        files = [
+            StringIO('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4'),
+            'not_valid_path',
+            StringIO('one,two,three,four\n9,10,11,12\n9,10,11,12\n9,10,11,12'),
+        ]
+        with pytest.raises(duckdb.IOException, match='No files found that match the pattern "not_valid_path"'):
+            rel = con.read_csv(files)
+            res = rel.fetchall()

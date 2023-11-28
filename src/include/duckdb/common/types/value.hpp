@@ -30,6 +30,7 @@ class Value {
 	friend struct StructValue;
 	friend struct ListValue;
 	friend struct UnionValue;
+	friend struct ArrayValue;
 
 public:
 	//! Create an empty NULL value of the specified type
@@ -156,8 +157,18 @@ public:
 	DUCKDB_API static Value LIST(const LogicalType &child_type, vector<Value> values);
 	//! Create an empty list with the specified child-type
 	DUCKDB_API static Value EMPTYLIST(const LogicalType &child_type);
+	//! Create an array value with the given entries. Array type is inferred from children
+	//! Cannot be called with an empty list, use either EMPTYARRAY or ARRAY with a type instead
+	DUCKDB_API static Value ARRAY(vector<Value> values);
+	// Create an array value with the given entries
+	DUCKDB_API static Value ARRAY(const LogicalType &type, vector<Value> values);
+	//! Create an empty array of the given type and size
+	DUCKDB_API static Value EMPTYARRAY(const LogicalType &type, uint32_t size);
 	//! Create a map value with the given entries
 	DUCKDB_API static Value MAP(const LogicalType &child_type, vector<Value> values);
+	//! Create a map value with the given entries
+	DUCKDB_API static Value MAP(const LogicalType &key_type, const LogicalType &value_type, vector<Value> keys,
+	                            vector<Value> values);
 	//! Create a union value from a selected value and a tag from a set of alternatives.
 	DUCKDB_API static Value UNION(child_list_t<LogicalType> members, uint8_t tag, Value value);
 
@@ -388,6 +399,10 @@ struct StructValue {
 };
 
 struct ListValue {
+	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
+};
+
+struct ArrayValue {
 	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
 };
 

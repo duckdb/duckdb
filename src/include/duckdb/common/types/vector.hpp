@@ -38,6 +38,7 @@ struct UnifiedVectorFormat {
 struct RecursiveUnifiedVectorFormat {
 	UnifiedVectorFormat unified;
 	vector<RecursiveUnifiedVectorFormat> children;
+	LogicalType logical_type;
 };
 
 class VectorCache;
@@ -65,6 +66,7 @@ class Vector {
 	friend struct StructVector;
 	friend struct UnionVector;
 	friend struct SequenceVector;
+	friend struct ArrayVector;
 
 	friend class DataChunk;
 	friend class VectorCacheBuffer;
@@ -445,6 +447,20 @@ struct MapVector {
 struct StructVector {
 	DUCKDB_API static const vector<unique_ptr<Vector>> &GetEntries(const Vector &vector);
 	DUCKDB_API static vector<unique_ptr<Vector>> &GetEntries(Vector &vector);
+};
+
+struct ArrayVector {
+	//! Gets a reference to the underlying child-vector of an array
+	DUCKDB_API static const Vector &GetEntry(const Vector &vector);
+	//! Gets a reference to the underlying child-vector of an array
+	DUCKDB_API static Vector &GetEntry(Vector &vector);
+	//! Gets the total size of the underlying child-vector of an array
+	DUCKDB_API static idx_t GetTotalSize(const Vector &vector);
+	//! Allocate dummy list entries for a vector
+	//! Note that there is nothing ensuring that the allocated data
+	//! remains valid (e.g. if this vector is resized)
+	//! This is only used during row serialization
+	DUCKDB_API static void AllocateDummyListEntries(Vector &vector);
 };
 
 enum class UnionInvalidReason : uint8_t {

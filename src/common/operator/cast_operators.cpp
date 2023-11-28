@@ -1368,9 +1368,15 @@ timestamp_t CastTimestampUsToSec::Operation(timestamp_t input) {
 	timestamp_t cast_timestamp(Timestamp::GetEpochSeconds(input));
 	return cast_timestamp;
 }
+
 template <>
 timestamp_t CastTimestampMsToUs::Operation(timestamp_t input) {
 	return Timestamp::FromEpochMs(input.value);
+}
+
+template <>
+date_t CastTimestampMsToDate::Operation(timestamp_t input) {
+	return Timestamp::GetDate(Timestamp::FromEpochMs(input.value));
 }
 
 template <>
@@ -1385,8 +1391,9 @@ timestamp_t CastTimestampNsToUs::Operation(timestamp_t input) {
 }
 
 template <>
-timestamp_t CastTimestampSecToUs::Operation(timestamp_t input) {
-	return Timestamp::FromEpochSeconds(input.value);
+date_t CastTimestampNsToDate::Operation(timestamp_t input) {
+	const auto us = CastTimestampNsToUs::Operation<timestamp_t, timestamp_t>(input);
+	return Timestamp::GetDate(us);
 }
 
 template <>
@@ -1396,9 +1403,20 @@ timestamp_t CastTimestampSecToMs::Operation(timestamp_t input) {
 }
 
 template <>
+timestamp_t CastTimestampSecToUs::Operation(timestamp_t input) {
+	return Timestamp::FromEpochSeconds(input.value);
+}
+
+template <>
 timestamp_t CastTimestampSecToNs::Operation(timestamp_t input) {
 	auto us = CastTimestampSecToUs::Operation<timestamp_t, timestamp_t>(input);
 	return CastTimestampUsToNs::Operation<timestamp_t, timestamp_t>(us);
+}
+
+template <>
+date_t CastTimestampSecToDate::Operation(timestamp_t input) {
+	const auto us = CastTimestampSecToUs::Operation<timestamp_t, timestamp_t>(input);
+	return Timestamp::GetDate(us);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1558,9 +1576,6 @@ bool CastFromBitToNumeric::Operation(string_t input, hugeint_t &result, bool str
 		throw ConversionException("Bitstring doesn't fit inside of %s", GetTypeId<hugeint_t>());
 	}
 	Bit::BitToNumeric(input, result);
-	if (result < NumericLimits<hugeint_t>::Minimum()) {
-		throw ConversionException("Minimum limit for HUGEINT is %s", NumericLimits<hugeint_t>::Minimum().ToString());
-	}
 	return (true);
 }
 

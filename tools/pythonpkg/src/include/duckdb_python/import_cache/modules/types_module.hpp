@@ -1,3 +1,4 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -13,18 +14,17 @@
 namespace duckdb {
 
 struct TypesCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "types";
 
 public:
+	TypesCacheItem()
+	    : PythonImportCacheItem("types"), UnionType("UnionType", this), GenericAlias("GenericAlias", this) {
+	}
 	~TypesCacheItem() override {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		UnionType.LoadAttribute("UnionType", cache, *this);
-		GenericAlias.LoadAttribute("GenericAlias", cache, *this);
-	}
 
-public:
 	PythonImportCacheItem UnionType;
 	PythonImportCacheItem GenericAlias;
 };

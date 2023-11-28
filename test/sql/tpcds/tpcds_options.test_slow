@@ -39,3 +39,12 @@ CALL dsdgen(sf=0.01, catalog='db1');
 
 statement ok
 SELECT COUNT(*) FROM db1.call_center
+
+statement ok
+CREATE SCHEMA db1.test_schema
+
+statement ok
+CALL dsdgen(sf=0.01, catalog='db1', schema='test_schema');
+
+statement ok
+SELECT COUNT(*) FROM db1.test_schema.call_center

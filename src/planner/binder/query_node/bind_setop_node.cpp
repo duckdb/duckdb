@@ -180,6 +180,7 @@ static void BuildUnionByNameInfo(BoundSetOperationNode &result, bool can_contain
 unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	auto result = make_uniq<BoundSetOperationNode>();
 	result->setop_type = statement.setop_type;
+	result->setop_all = statement.setop_all;
 
 	// first recursively visit the set operations
 	// both the left and right sides have an independent BindContext and Binder

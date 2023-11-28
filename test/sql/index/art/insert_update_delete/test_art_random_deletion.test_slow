@@ -3,9 +3,6 @@
 # group: [insert_update_delete]
 
 statement ok
-PRAGMA force_index_join
-
-statement ok
 CREATE TABLE integers(i INTEGER);
 
 statement ok

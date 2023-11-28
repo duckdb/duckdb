@@ -37,6 +37,7 @@ class OnConflictInfo;
 class UpdateSetInfo;
 struct ParserOptions;
 struct PivotColumn;
+struct PivotColumnEntry;
 
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
@@ -166,6 +167,7 @@ private:
 	unique_ptr<AttachStatement> TransformAttach(duckdb_libpgquery::PGAttachStmt &stmt);
 	unique_ptr<DetachStatement> TransformDetach(duckdb_libpgquery::PGDetachStmt &stmt);
 	unique_ptr<SetStatement> TransformUse(duckdb_libpgquery::PGUseStmt &stmt);
+	unique_ptr<SQLStatement> TransformCopyDatabase(duckdb_libpgquery::PGCopyDatabaseStmt &stmt);
 
 	unique_ptr<PrepareStatement> TransformPrepare(duckdb_libpgquery::PGPrepareStmt &stmt);
 	unique_ptr<ExecuteStatement> TransformExecute(duckdb_libpgquery::PGExecuteStmt &stmt);
@@ -175,6 +177,8 @@ private:
 	unique_ptr<SQLStatement> CreatePivotStatement(unique_ptr<SQLStatement> statement);
 	PivotColumn TransformPivotColumn(duckdb_libpgquery::PGPivot &pivot);
 	vector<PivotColumn> TransformPivotList(duckdb_libpgquery::PGList &list);
+	static void TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry,
+	                                 bool root_entry = true);
 
 	//===--------------------------------------------------------------------===//
 	// SetStatement Transform

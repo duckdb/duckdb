@@ -658,24 +658,33 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	return result;
 }
 
-Value Value::MAP(const LogicalType &child_type, vector<Value> values) {
-	Value result;
-
-	result.type_ = LogicalType::MAP(child_type);
-	result.is_null = false;
+Value Value::MAP(const LogicalType &child_type, vector<Value> values) { // NOLINT
+	vector<Value> map_keys;
+	vector<Value> map_values;
 	for (auto &val : values) {
 		D_ASSERT(val.type().InternalType() == PhysicalType::STRUCT);
 		auto &children = StructValue::GetChildren(val);
-
-		// Ensure that the field containing the keys is called 'key'
-		// and that the field containing the values is called 'value'
-		// this is required to make equality checks work
 		D_ASSERT(children.size() == 2);
+		map_keys.push_back(children[0]);
+		map_values.push_back(children[1]);
+	}
+	auto &key_type = StructType::GetChildType(child_type, 0);
+	auto &value_type = StructType::GetChildType(child_type, 1);
+	return Value::MAP(key_type, value_type, std::move(map_keys), std::move(map_values));
+}
+
+Value Value::MAP(const LogicalType &key_type, const LogicalType &value_type, vector<Value> keys, vector<Value> values) {
+	D_ASSERT(keys.size() == values.size());
+	Value result;
+
+	result.type_ = LogicalType::MAP(key_type, value_type);
+	result.is_null = false;
+	for (idx_t i = 0; i < keys.size(); i++) {
 		child_list_t<Value> new_children;
 		new_children.reserve(2);
-		new_children.push_back(std::make_pair("key", children[0]));
-		new_children.push_back(std::make_pair("value", children[1]));
-		val = Value::STRUCT(std::move(new_children));
+		new_children.push_back(std::make_pair("key", std::move(keys[i])));
+		new_children.push_back(std::make_pair("value", std::move(values[i])));
+		values[i] = Value::STRUCT(std::move(new_children));
 	}
 	result.value_info_ = make_shared<NestedValueInfo>(std::move(values));
 	return result;
@@ -736,6 +745,41 @@ Value Value::LIST(const LogicalType &child_type, vector<Value> values) {
 Value Value::EMPTYLIST(const LogicalType &child_type) {
 	Value result;
 	result.type_ = LogicalType::LIST(child_type);
+	result.value_info_ = make_shared<NestedValueInfo>();
+	result.is_null = false;
+	return result;
+}
+
+Value Value::ARRAY(vector<Value> values) {
+	if (values.empty()) {
+		throw InternalException("Value::ARRAY without providing a child-type requires a non-empty list of values. Use "
+		                        "Value::ARRAY(child_type, list) instead.");
+	}
+#ifdef DEBUG
+	for (idx_t i = 1; i < values.size(); i++) {
+		D_ASSERT(values[i].type() == values[0].type());
+	}
+#endif
+	Value result;
+	result.type_ = LogicalType::ARRAY(values[0].type(), values.size());
+	result.value_info_ = make_shared<NestedValueInfo>(std::move(values));
+	result.is_null = false;
+	return result;
+}
+
+Value Value::ARRAY(const LogicalType &child_type, vector<Value> values) {
+	if (values.empty()) {
+		return Value::EMPTYARRAY(child_type, 0);
+	}
+	for (auto &val : values) {
+		val = val.DefaultCastAs(child_type);
+	}
+	return Value::ARRAY(std::move(values));
+}
+
+Value Value::EMPTYARRAY(const LogicalType &child_type, uint32_t size) {
+	Value result;
+	result.type_ = LogicalType::ARRAY(child_type, size);
 	result.value_info_ = make_shared<NestedValueInfo>();
 	result.is_null = false;
 	return result;
@@ -1337,7 +1381,7 @@ string Value::ToSQLString() const {
 		string ret = "{";
 		auto &child_types = StructType::GetChildTypes(type_);
 		auto &struct_values = StructValue::GetChildren(*this);
-		for (size_t i = 0; i < struct_values.size(); i++) {
+		for (idx_t i = 0; i < struct_values.size(); i++) {
 			auto &name = child_types[i].first;
 			auto &child = struct_values[i];
 			ret += "'" + name + "': " + child.ToSQLString();
@@ -1367,10 +1411,23 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::LIST: {
 		string ret = "[";
 		auto &list_values = ListValue::GetChildren(*this);
-		for (size_t i = 0; i < list_values.size(); i++) {
+		for (idx_t i = 0; i < list_values.size(); i++) {
 			auto &child = list_values[i];
 			ret += child.ToSQLString();
 			if (i < list_values.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += "]";
+		return ret;
+	}
+	case LogicalTypeId::ARRAY: {
+		string ret = "[";
+		auto &array_values = ArrayValue::GetChildren(*this);
+		for (idx_t i = 0; i < array_values.size(); i++) {
+			auto &child = array_values[i];
+			ret += child.ToSQLString();
+			if (i < array_values.size() - 1) {
 				ret += ", ";
 			}
 		}
@@ -1472,6 +1529,15 @@ const vector<Value> &ListValue::GetChildren(const Value &value) {
 		throw InternalException("Calling ListValue::GetChildren on a NULL value");
 	}
 	D_ASSERT(value.type().InternalType() == PhysicalType::LIST);
+	D_ASSERT(value.value_info_);
+	return value.value_info_->Get<NestedValueInfo>().GetValues();
+}
+
+const vector<Value> &ArrayValue::GetChildren(const Value &value) {
+	if (value.is_null) {
+		throw InternalException("Calling ArrayValue::GetChildren on a NULL value");
+	}
+	D_ASSERT(value.type().InternalType() == PhysicalType::ARRAY);
 	D_ASSERT(value.value_info_);
 	return value.value_info_->Get<NestedValueInfo>().GetValues();
 }
@@ -1716,6 +1782,12 @@ void Value::Serialize(Serializer &serializer) const {
 				serializer.WriteProperty(100, "children", children);
 			});
 		} break;
+		case PhysicalType::ARRAY: {
+			serializer.WriteObject(102, "value", [&](Serializer &serializer) {
+				auto &children = ArrayValue::GetChildren(*this);
+				serializer.WriteProperty(100, "children", children);
+			});
+		} break;
 		default:
 			throw NotImplementedException("Unimplemented type for Serialize");
 		}
@@ -1787,6 +1859,12 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		});
 	} break;
 	case PhysicalType::STRUCT: {
+		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
+			auto children = obj.ReadProperty<vector<Value>>(100, "children");
+			new_value.value_info_ = make_shared<NestedValueInfo>(children);
+		});
+	} break;
+	case PhysicalType::ARRAY: {
 		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
 			auto children = obj.ReadProperty<vector<Value>>(100, "children");
 			new_value.value_info_ = make_shared<NestedValueInfo>(children);

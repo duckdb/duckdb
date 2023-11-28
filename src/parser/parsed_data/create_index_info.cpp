@@ -2,14 +2,20 @@
 
 namespace duckdb {
 
+CreateIndexInfo::CreateIndexInfo() : CreateInfo(CatalogType::INDEX_ENTRY) {
+}
+
+CreateIndexInfo::CreateIndexInfo(const duckdb::CreateIndexInfo &info)
+    : CreateInfo(CatalogType::INDEX_ENTRY), table(info.table), index_name(info.index_name), options(info.options),
+      index_type(info.index_type), constraint_type(info.constraint_type), column_ids(info.column_ids),
+      scan_types(info.scan_types), names(info.names) {
+}
+
 unique_ptr<CreateInfo> CreateIndexInfo::Copy() const {
-	auto result = make_uniq<CreateIndexInfo>();
+
+	auto result = make_uniq<CreateIndexInfo>(*this);
 	CopyProperties(*result);
 
-	result->index_type = index_type;
-	result->index_name = index_name;
-	result->constraint_type = constraint_type;
-	result->table = table;
 	for (auto &expr : expressions) {
 		result->expressions.push_back(expr->Copy());
 	}
@@ -17,10 +23,6 @@ unique_ptr<CreateInfo> CreateIndexInfo::Copy() const {
 		result->parsed_expressions.push_back(expr->Copy());
 	}
 
-	result->scan_types = scan_types;
-	result->names = names;
-	result->column_ids = column_ids;
-	result->options = options;
 	return std::move(result);
 }
 

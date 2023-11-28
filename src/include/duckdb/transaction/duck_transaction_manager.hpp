@@ -20,17 +20,17 @@ class DuckTransactionManager : public TransactionManager {
 
 public:
 	explicit DuckTransactionManager(AttachedDatabase &db);
-	~DuckTransactionManager();
+	~DuckTransactionManager() override;
 
 public:
 	static DuckTransactionManager &Get(AttachedDatabase &db);
 
 	//! Start a new transaction
-	Transaction *StartTransaction(ClientContext &context) override;
+	Transaction &StartTransaction(ClientContext &context) override;
 	//! Commit the given transaction
-	string CommitTransaction(ClientContext &context, Transaction *transaction) override;
+	string CommitTransaction(ClientContext &context, Transaction &transaction) override;
 	//! Rollback the given transaction
-	void RollbackTransaction(Transaction *transaction) override;
+	void RollbackTransaction(Transaction &transaction) override;
 
 	void Checkpoint(ClientContext &context, bool force = false) override;
 

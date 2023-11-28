@@ -22,6 +22,7 @@ struct ExtensionEntry {
 
 static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"->>", "json"},
+    {"add_parquet_key", "parquet"},
     {"array_to_json", "json"},
     {"create_fts_index", "fts"},
     {"current_localtime", "icu"},
@@ -61,6 +62,7 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"json_merge_patch", "json"},
     {"json_object", "json"},
     {"json_quote", "json"},
+    {"json_serialize_plan", "json"},
     {"json_serialize_sql", "json"},
     {"json_structure", "json"},
     {"json_transform", "json"},
@@ -69,6 +71,8 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"json_valid", "json"},
     {"load_aws_credentials", "aws"},
     {"make_timestamptz", "icu"},
+    {"parquet_file_metadata", "parquet"},
+    {"parquet_kv_metadata", "parquet"},
     {"parquet_metadata", "parquet"},
     {"parquet_scan", "parquet"},
     {"parquet_schema", "parquet"},
@@ -210,6 +214,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"http_retry_backoff", "httpfs"},
     {"http_retry_wait_ms", "httpfs"},
     {"http_timeout", "httpfs"},
+    {"http_keep_alive", "httpfs"},
     {"pg_debug_show_queries", "postgres_scanner"},
     {"pg_use_binary_copy", "postgres_scanner"},
     {"pg_experimental_filter_pushdown", "postgres_scanner"},
@@ -270,9 +275,9 @@ static constexpr ExtensionEntry EXTENSION_COLLATIONS[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
-    {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"},
-    //    {"azure://", "azure"}
-}; // END_OF_EXTENSION_FILE_PREFIXES
+    {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"}, {"s3a://", "httpfs"},
+    {"s3n://", "httpfs"},  {"gcs://", "httpfs"},   {"r2://", "httpfs"} // , {"azure://", "azure"}
+};                                                                     // END_OF_EXTENSION_FILE_PREFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
