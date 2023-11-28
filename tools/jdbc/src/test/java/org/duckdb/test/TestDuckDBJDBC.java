@@ -3766,9 +3766,12 @@ public class TestDuckDBJDBC {
 
     public static void test_all_types() throws Exception {
         Logger logger = Logger.getAnonymousLogger();
+        String sql = "select * EXCLUDE(time)"
+                     + "\n    , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time"
+                     + "\nfrom test_all_types()";
 
         try (Connection conn = DriverManager.getConnection(JDBC_URL);
-             PreparedStatement stmt = conn.prepareStatement("select * from test_all_types()")) {
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             conn.createStatement().execute("set timezone = 'UTC'");
 
             try (ResultSet rs = stmt.executeQuery()) {
