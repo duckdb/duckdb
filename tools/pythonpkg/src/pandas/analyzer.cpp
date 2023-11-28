@@ -390,17 +390,12 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, b
 	}
 	auto row = column.attr("__getitem__");
 
-	vector<LogicalType> types;
-	auto item_type = GetItemType(row(0), can_convert);
-	if (!can_convert) {
-		return item_type;
-	}
-	types.push_back(item_type);
-
 	if (sample) {
 		increment = GetSampleIncrement(rows);
 	}
-	for (idx_t i = increment; i < rows; i += increment) {
+	LogicalType item_type = LogicalType::SQLNULL;
+	vector<LogicalType> types;
+	for (idx_t i = 0; i < rows; i += increment) {
 		auto obj = FindFirstNonNull(row, i, increment);
 		auto next_item_type = GetItemType(obj, can_convert);
 		types.push_back(next_item_type);
