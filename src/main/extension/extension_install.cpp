@@ -275,7 +275,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 
 		if (StringUtil::EndsWith(file, ".gz")) {
 			// if file is compressed, decompression has to be performed explicitly
-			std::string in((const char *)test_data.get(), read_handle->GetFileSize());
+			std::string in(reinterpret_cast<const char *>(test_data.get()), read_handle->GetFileSize());
 			auto decompressed_body = GZipFileSystem::UncompressGZIPString(in);
 			WriteExtensionFileToDisk(fs, temp_path, (void *)decompressed_body.data(), decompressed_body.size());
 		} else {
