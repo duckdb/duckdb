@@ -34,8 +34,8 @@ public:
 	WindowGlobalSinkState(const PhysicalWindow &op, ClientContext &context)
 	    : op(op), mode(DBConfig::GetConfig(context).options.window_mode) {
 
-		D_ASSERT(op.select_list[0]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-		auto &wexpr = op.select_list[0]->Cast<BoundWindowExpression>();
+		D_ASSERT(op.select_list[op.order_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+		auto &wexpr = op.select_list[op.order_idx]->Cast<BoundWindowExpression>();
 
 		global_partition =
 		    make_uniq<PartitionGlobalSinkState>(context, wexpr.partitions, wexpr.orders, op.children[0]->types,
@@ -68,13 +68,21 @@ public:
 // this implements a sorted window functions variant
 PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list_p,
                                idx_t estimated_cardinality, PhysicalOperatorType type)
-    : PhysicalOperator(type, std::move(types), estimated_cardinality), select_list(std::move(select_list_p)) {
-	is_order_dependent = false;
-	for (auto &expr : select_list) {
+    : PhysicalOperator(type, std::move(types), estimated_cardinality), select_list(std::move(select_list_p)),
+      order_idx(0), is_order_dependent(false) {
+
+	idx_t max_orders = 0;
+	for (idx_t i = 0; i < select_list.size(); ++i) {
+		auto &expr = select_list[i];
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_WINDOW);
 		auto &bound_window = expr->Cast<BoundWindowExpression>();
 		if (bound_window.partitions.empty() && bound_window.orders.empty()) {
 			is_order_dependent = true;
+		}
+
+		if (bound_window.orders.size() > max_orders) {
+			order_idx = i;
+			max_orders = bound_window.orders.size();
 		}
 	}
 }
@@ -664,7 +672,7 @@ unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext
 bool PhysicalWindow::SupportsBatchIndex() const {
 	//	We can only preserve order for single partitioning
 	//	or work stealing causes out of order batch numbers
-	auto &wexpr = select_list[0]->Cast<BoundWindowExpression>();
+	auto &wexpr = select_list[order_idx]->Cast<BoundWindowExpression>();
 	return wexpr.partitions.empty() && !wexpr.orders.empty();
 }
 

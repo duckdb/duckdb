@@ -63,32 +63,78 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 
 	// Process the window functions by sharing the partition/order definitions
 	unordered_map<idx_t, idx_t> projection_map;
+	vector<vector<idx_t>> window_expressions;
+	idx_t blocking_count = 0;
 	auto output_pos = input_width;
 	while (!blocking_windows.empty() || !streaming_windows.empty()) {
 		const bool process_streaming = blocking_windows.empty();
 		auto &remaining = process_streaming ? streaming_windows : blocking_windows;
+		blocking_count += process_streaming ? 0 : 1;
 
 		// Find all functions that share the partitioning of the first remaining expression
-		const auto over_idx = remaining[0];
-		auto &over_expr = op.expressions[over_idx]->Cast<BoundWindowExpression>();
+		auto over_idx = remaining[0];
 
 		vector<idx_t> matching;
 		vector<idx_t> unprocessed;
 		for (const auto &expr_idx : remaining) {
 			D_ASSERT(op.expressions[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 			auto &wexpr = op.expressions[expr_idx]->Cast<BoundWindowExpression>();
-			if (expr_idx != over_idx && over_expr.Equals(wexpr)) {
-				// CSE Elimination
-				projection_map[input_width + expr_idx] = output_pos;
-			} else if (over_expr.KeysAreCompatible(wexpr)) {
+
+			// Just record the first one (it defines the partition)
+			if (over_idx == expr_idx) {
 				matching.emplace_back(expr_idx);
-			} else {
+				continue;
+			}
+
+			// If it is in a different partition, skip it
+			const auto &over_expr = op.expressions[over_idx]->Cast<BoundWindowExpression>();
+			if (!over_expr.PartitionsAreEquivalent(wexpr)) {
 				unprocessed.emplace_back(expr_idx);
+				continue;
+			}
+
+			// CSE Elimination: Search for a previous match
+			bool cse = false;
+			for (idx_t i = 0; i < matching.size(); ++i) {
+				const auto match_idx = matching[i];
+				auto &match_expr = op.expressions[match_idx]->Cast<BoundWindowExpression>();
+				if (wexpr.Equals(match_expr)) {
+					projection_map[input_width + expr_idx] = output_pos + i;
+					cse = true;
+					break;
+				}
+			}
+			if (cse) {
+				continue;
+			}
+
+			// Is there a common sort prefix?
+			const auto prefix = over_expr.GetSharedOrders(wexpr);
+			if (prefix != MinValue<idx_t>(over_expr.orders.size(), wexpr.orders.size())) {
+				unprocessed.emplace_back(expr_idx);
+				continue;
+			}
+			matching.emplace_back(expr_idx);
+
+			// Switch to the longer prefix
+			if (prefix < wexpr.orders.size()) {
+				over_idx = expr_idx;
 			}
 		}
 		remaining.swap(unprocessed);
 
+		// Remember the projection order
+		for (const auto &expr_idx : matching) {
+			projection_map[input_width + expr_idx] = output_pos++;
+		}
+
+		window_expressions.emplace_back(std::move(matching));
+	}
+
+	// Build the window operators
+	for (idx_t i = 0; i < window_expressions.size(); ++i) {
 		// Extract the matching expressions
+		const auto &matching = window_expressions[i];
 		vector<unique_ptr<Expression>> select_list;
 		for (const auto &expr_idx : matching) {
 			select_list.emplace_back(std::move(op.expressions[expr_idx]));
@@ -97,23 +143,13 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 
 		// Chain the new window operator on top of the plan
 		unique_ptr<PhysicalOperator> window;
-		if (process_streaming) {
-			window = make_uniq<PhysicalStreamingWindow>(types, std::move(select_list), op.estimated_cardinality);
-		} else {
+		if (i < blocking_count) {
 			window = make_uniq<PhysicalWindow>(types, std::move(select_list), op.estimated_cardinality);
+		} else {
+			window = make_uniq<PhysicalStreamingWindow>(types, std::move(select_list), op.estimated_cardinality);
 		}
 		window->children.push_back(std::move(plan));
 		plan = std::move(window);
-
-		// Remember the projection order if we changed it
-		if (!streaming_windows.empty() || !blocking_windows.empty() || !projection_map.empty()) {
-			auto output_expr = output_pos;
-			for (const auto &expr_idx : matching) {
-				projection_map[input_width + expr_idx] = output_expr++;
-			}
-		}
-
-		output_pos += matching.size();
 	}
 
 	// Put everything back into place if it moved
