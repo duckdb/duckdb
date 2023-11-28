@@ -627,9 +627,6 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		// comparison between two non-scalars
 		// only handle comparisons for now
 		if (expr.type != ExpressionType::COMPARE_EQUAL) {
-			if (IsGreaterThan(expr.type) || IsLessThan(expr.type)) {
-				return AddTransitiveFilters(comparison);
-			}
 			return FilterResult::UNSUPPORTED;
 		}
 		// get the LHS and RHS nodes
