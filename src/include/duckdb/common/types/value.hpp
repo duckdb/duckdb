@@ -166,6 +166,9 @@ public:
 	DUCKDB_API static Value EMPTYARRAY(const LogicalType &type, uint32_t size);
 	//! Create a map value with the given entries
 	DUCKDB_API static Value MAP(const LogicalType &child_type, vector<Value> values);
+	//! Create a map value with the given entries
+	DUCKDB_API static Value MAP(const LogicalType &key_type, const LogicalType &value_type, vector<Value> keys,
+	                            vector<Value> values);
 	//! Create a union value from a selected value and a tag from a set of alternatives.
 	DUCKDB_API static Value UNION(child_list_t<LogicalType> members, uint8_t tag, Value value);
 
