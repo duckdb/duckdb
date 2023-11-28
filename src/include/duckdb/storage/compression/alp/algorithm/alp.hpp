@@ -233,7 +233,6 @@ struct AlpCompression {
 		uint8_t best_factor = 0;
 		uint64_t best_total_bits = NumericLimits<uint64_t>::Maximum();
 		idx_t worse_total_bits_counter = 0;
-		idx_t n_samples = vector_sample.size();
 
 		//! We try each K combination in search for the one which minimize the compression size in the vector
 		for (auto &combination : state.best_k_combinations) {
