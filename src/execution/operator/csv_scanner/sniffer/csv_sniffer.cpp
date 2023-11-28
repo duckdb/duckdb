@@ -32,36 +32,38 @@ idx_t SetColumns::Size() {
 }
 
 template <class T>
-void MatchAndReplace(CSVOption<T> &original, CSVOption<T> &sniffed, string name) {
+void MatchAndReplace(CSVOption<T> &original, CSVOption<T> &sniffed, string name, string &error) {
 	if (original.IsSetByUser()) {
 		// We verify that the user input matches the sniffed value
 		if (original != sniffed) {
-			throw InvalidInputException("CSV Sniffer: Sniffer detected value different than the user input for the %s "
-			                            "options \n Set: %s Sniffed: %s",
-			                            std::move(name), original.FormatValue(), sniffed.FormatValue());
+			error += "CSV Sniffer: Sniffer detected value different than the user input for the " + name;
+			error += " options \n Set: " + original.FormatValue() + " Sniffed: " + sniffed.FormatValue() + "\n";
 		}
 	} else {
 		// We replace the value of original with the sniffed value
 		original.Set(sniffed.GetValue(), false);
 	}
 }
-void MatchAndRepaceUserSetVariables(DialectOptions &original, DialectOptions &sniffed) {
-	MatchAndReplace(original.header, sniffed.header, "Header");
+void MatchAndRepaceUserSetVariables(DialectOptions &original, DialectOptions &sniffed, string &error) {
+	MatchAndReplace(original.header, sniffed.header, "Header", error);
 	if (sniffed.new_line.GetValue() != NewLineIdentifier::NOT_SET) {
 		// Is sniffed line is not set (e.g., single-line file) , we don't try to replace and match.
-		MatchAndReplace(original.new_line, sniffed.new_line, "New Line");
+		MatchAndReplace(original.new_line, sniffed.new_line, "New Line", error);
 	}
-	MatchAndReplace(original.skip_rows, sniffed.skip_rows, "Skip Rows");
-	MatchAndReplace(original.state_machine_options.delimiter, sniffed.state_machine_options.delimiter, "Delimiter");
-	MatchAndReplace(original.state_machine_options.quote, sniffed.state_machine_options.quote, "Quote");
-	MatchAndReplace(original.state_machine_options.escape, sniffed.state_machine_options.escape, "Escape");
-	MatchAndReplace(original.date_format[LogicalTypeId::DATE], sniffed.date_format[LogicalTypeId::DATE], "Date Format");
+	MatchAndReplace(original.skip_rows, sniffed.skip_rows, "Skip Rows", error);
+	MatchAndReplace(original.state_machine_options.delimiter, sniffed.state_machine_options.delimiter, "Delimiter",
+	                error);
+	MatchAndReplace(original.state_machine_options.quote, sniffed.state_machine_options.quote, "Quote", error);
+	MatchAndReplace(original.state_machine_options.escape, sniffed.state_machine_options.escape, "Escape", error);
+	MatchAndReplace(original.date_format[LogicalTypeId::DATE], sniffed.date_format[LogicalTypeId::DATE], "Date Format",
+	                error);
 	MatchAndReplace(original.date_format[LogicalTypeId::TIMESTAMP], sniffed.date_format[LogicalTypeId::TIMESTAMP],
-	                "Timestamp Format");
+	                "Timestamp Format", error);
 }
 // Set the CSV Options in the reference
 void CSVSniffer::SetResultOptions() {
-	MatchAndRepaceUserSetVariables(options.dialect_options, best_candidate->dialect_options);
+	MatchAndRepaceUserSetVariables(options.dialect_options, best_candidate->dialect_options,
+	                               options.sniffer_user_mismatch_error);
 	if (options.dialect_options.header.GetValue()) {
 		options.dialect_options.true_start = best_start_with_header;
 	} else {
@@ -69,7 +71,7 @@ void CSVSniffer::SetResultOptions() {
 	}
 }
 
-SnifferResult CSVSniffer::SniffCSV() {
+SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	// 1. Dialect Detection
 	DetectDialect();
 	// 2. Type Detection
@@ -83,53 +85,49 @@ SnifferResult CSVSniffer::SniffCSV() {
 	D_ASSERT(best_sql_types_candidates_per_column_idx.size() == names.size());
 	// We are done, Set the CSV Options in the reference. Construct and return the result.
 	SetResultOptions();
+	// Check if everything matches
+	auto &error = options.sniffer_user_mismatch_error;
 	if (set_columns.IsSet()) {
+		bool match = true;
 		// Columns and their types were set, let's validate they match
 		if (options.dialect_options.header.GetValue()) {
 			// If the header exists it should match
-			bool match = true;
-			string error = "The Column names set by the user do not match the ones found by the sniffer. \n";
+			string header_error = "The Column names set by the user do not match the ones found by the sniffer. \n";
 			auto &set_names = *set_columns.names;
 			for (idx_t i = 0; i < set_columns.Size(); i++) {
 				if (set_names[i] != names[i]) {
-					error += "Column at position: " + to_string(i) + " Set name: " + set_names[i] +
-					         " Sniffed Name: " + names[i] + "\n";
+					header_error += "Column at position: " + to_string(i) + " Set name: " + set_names[i] +
+					                " Sniffed Name: " + names[i] + "\n";
 					match = false;
 				}
 			}
-			error += "If you are sure about the column names, disable the sniffer with auto_detect = false.";
 			if (!match) {
-				throw InvalidInputException(error);
+				error += header_error;
 			}
 		}
-
-		// Check if types match
-		bool match = true;
-		string error = "The Column types set by the user do not match the ones found by the sniffer. \n";
+		match = true;
+		string type_error = "The Column types set by the user do not match the ones found by the sniffer. \n";
 		auto &set_types = *set_columns.types;
 		for (idx_t i = 0; i < set_columns.Size(); i++) {
 			if (set_types[i] != detected_types[i] && !(set_types[i].IsNumeric() && detected_types[i].IsNumeric())) {
-				if (set_types[i].ToString() == "JSON" && detected_types[i] == LogicalType::VARCHAR) {
-					// Skip check if it's json
-					continue;
-				}
-				if ((set_types[i].id() == LogicalTypeId::ENUM || set_types[i].id() == LogicalTypeId::LIST ||
-				     set_types[i].id() == LogicalTypeId::STRUCT) &&
-				    detected_types[i] == LogicalType::VARCHAR) {
-					// Skip check if it's an ENUM
-					continue;
-				}
-				error += "Column at position: " + to_string(i) + " Set type: " + set_types[i].ToString() +
-				         " Sniffed type: " + detected_types[i].ToString() + "\n";
+				type_error += "Column at position: " + to_string(i) + " Set type: " + set_types[i].ToString() +
+				              " Sniffed type: " + detected_types[i].ToString() + "\n";
 				match = false;
 			}
 		}
-		error += "If you are sure about the column types, disable the sniffer with auto_detect = false.";
 		if (!match) {
-			options.sniffer_user_mismatch_error = error;
+			error += type_error;
 		}
+
+		if (!error.empty() && force_match) {
+			throw InvalidInputException(error);
+		}
+
 		// We do not need to run type refinement, since the types have been given by the user
 		return SnifferResult({}, {});
+	}
+	if (!error.empty() && force_match) {
+		throw InvalidInputException(error);
 	}
 	return SnifferResult(detected_types, names);
 }

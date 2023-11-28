@@ -124,7 +124,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	auto file_handle = BaseCSVReader::OpenCSV(context, sniffer_options);
 	auto buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), sniffer_options);
 	CSVSniffer sniffer(sniffer_options, buffer_manager, state_machine_cache);
-	auto sniffer_result = sniffer.SniffCSV();
+	auto sniffer_result = sniffer.SniffCSV(true);
 	string str_opt;
 	string separator = ", ";
 	// Set output
@@ -163,7 +163,17 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	if (!date_format.Empty()) {
 		output.SetValue(7, 0, date_format.format_specifier);
 	} else {
-		output.SetValue(7, 0, Value(nullptr));
+		bool has_date = false;
+		for (auto &c_type : sniffer_result.return_types) {
+			// Must be ISO 8601
+			if (c_type.id() == LogicalTypeId::DATE) {
+				output.SetValue(7, 0, Value("%Y-%m-%d"));
+				has_date = true;
+			}
+		}
+		if (!has_date) {
+			output.SetValue(7, 0, Value(nullptr));
+		}
 	}
 
 	// 9. Timestamp Format
@@ -228,6 +238,15 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 			         << "'"
 			         << sniffer_options.dialect_options.date_format[LogicalType::DATE].GetValue().format_specifier
 			         << "'";
+		} else {
+			for (auto &c_type : sniffer_result.return_types) {
+				// Must be ISO 8601
+				if (c_type.id() == LogicalTypeId::DATE) {
+					csv_read << separator << "dateformat="
+					         << "'%Y-%m-%d'";
+					break;
+				}
+			}
 		}
 	}
 	// 11.9. Timestamp Format

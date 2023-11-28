@@ -85,7 +85,7 @@ public:
 	//! 3. Type Refinement: Refines the types of the columns for the remaining chunks
 	//! 4. Header Detection: Figures out if  the CSV file has a header and produces the names of the columns
 	//! 5. Type Replacement: Replaces the types of the columns if the user specified them
-	SnifferResult SniffCSV();
+	SnifferResult SniffCSV(bool force_match = false);
 
 private:
 	//! CSV State Machine Cache
