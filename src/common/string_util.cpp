@@ -234,7 +234,7 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 	}
 	const auto charmap = LowerFun::ascii_to_lower_map;
 	for (idx_t c = 0; c < l1.size(); c++) {
-		if (charmap[(int)l1[c]] != charmap[(int)l2[c]]) {
+		if (charmap[(uint8_t)l1[c]] != charmap[(uint8_t)l2[c]]) {
 			return false;
 		}
 	}
