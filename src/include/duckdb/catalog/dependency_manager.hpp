@@ -47,7 +47,7 @@ struct DependencyDependent {
 //! dependency)
 struct DependencyInfo {
 public:
-	static DependencyInfo FromDependency(DependencyEntry &dep);
+	static DependencyInfo FromSubject(DependencyEntry &dep);
 	static DependencyInfo FromDependent(DependencyEntry &dep);
 
 public:

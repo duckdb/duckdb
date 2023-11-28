@@ -70,7 +70,7 @@ MangledEntryName DependencyManager::MangleName(CatalogEntry &entry) {
 	return MangleName(info);
 }
 
-DependencyInfo DependencyInfo::FromDependency(DependencyEntry &dep) {
+DependencyInfo DependencyInfo::FromSubject(DependencyEntry &dep) {
 	return DependencyInfo {/*dependent = */ dep.Dependent(),
 	                       /*subject = */ dep.Subject()};
 }
@@ -335,7 +335,7 @@ void DependencyManager::CleanupDependencies(CatalogTransaction transaction, Cata
 
 	auto info = GetLookupProperties(object);
 	ScanSubjects(transaction, info,
-	             [&](DependencyEntry &dep) { to_remove.push_back(DependencyInfo::FromDependency(dep)); });
+	             [&](DependencyEntry &dep) { to_remove.push_back(DependencyInfo::FromSubject(dep)); });
 	ScanDependents(transaction, info,
 	               [&](DependencyEntry &dep) { to_remove.push_back(DependencyInfo::FromDependent(dep)); });
 
