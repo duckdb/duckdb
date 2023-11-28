@@ -32,7 +32,7 @@ idx_t SetColumns::Size() {
 }
 
 template <class T>
-void MatchAndReplace(CSVOption<T> &original, CSVOption<T> &sniffed, string name, string &error) {
+void MatchAndReplace(CSVOption<T> &original, CSVOption<T> &sniffed, const string &name, string &error) {
 	if (original.IsSetByUser()) {
 		// We verify that the user input matches the sniffed value
 		if (original != sniffed) {

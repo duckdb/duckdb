@@ -294,7 +294,7 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value) 
 }
 
 template <class T>
-string FormatOptionLine(string name, const CSVOption<T> option) {
+string FormatOptionLine(const string &name, const CSVOption<T> option) {
 	return name + " = " + option.FormatValue() + " " + option.FormatSet() + "\n  ";
 }
 string CSVReaderOptions::ToString() const {
