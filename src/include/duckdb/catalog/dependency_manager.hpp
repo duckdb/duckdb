@@ -115,7 +115,8 @@ private:
 	using dependency_entry_func_t = const std::function<unique_ptr<DependencyEntry>(
 	    Catalog &catalog, const DependencyReliant &dependent, const DependencySubject &dependency)>;
 
-	void CreateDependencyInternal(CatalogTransaction transaction, const DependencyInfo &info, bool dependency);
+	void CreateSubject(CatalogTransaction transaction, const DependencyInfo &info);
+	void CreateReliant(CatalogTransaction transaction, const DependencyInfo &info);
 
 	using dependency_callback_t = const std::function<void(DependencyEntry &)>;
 	void ScanDependents(CatalogTransaction transaction, const CatalogEntryInfo &info, dependency_callback_t &callback);

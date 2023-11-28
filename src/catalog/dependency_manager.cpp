@@ -188,22 +188,26 @@ void DependencyManager::RemoveDependency(CatalogTransaction transaction, const D
 	}
 }
 
-void DependencyManager::CreateDependencyInternal(CatalogTransaction transaction, const DependencyInfo &info,
-                                                 bool dependency) {
-	auto &catalog_set = dependency ? Dependencies() : Dependents();
-	auto &from = dependency ? info.dependent.entry : info.dependency.entry;
-	auto &to = dependency ? info.dependency.entry : info.dependent.entry;
+void DependencyManager::CreateSubject(CatalogTransaction transaction, const DependencyInfo &info) {
+	auto &from = info.dependent.entry;
+	auto &to = info.dependency.entry;
 
-	DependencyCatalogSet set(catalog_set, from);
-	auto dep = dependency ? make_uniq_base<DependencyEntry, DependencySubjectEntry>(catalog, info)
-	                      : make_uniq_base<DependencyEntry, DependencyReliantEntry>(catalog, info);
-	auto dep_name = MangleName(to);
+	DependencyCatalogSet set(Dependencies(), from);
+	auto dep = make_uniq_base<DependencyEntry, DependencySubjectEntry>(catalog, info);
+	auto entry_name = dep->EntryMangledName();
 
-	D_ASSERT(!StringUtil::CIEquals(dep_name.name, MangleName(from).name));
-	if (catalog.IsTemporaryCatalog()) {
-		dep->temporary = true;
-	}
-	set.CreateEntry(transaction, dep_name, std::move(dep));
+	set.CreateEntry(transaction, entry_name, std::move(dep));
+}
+
+void DependencyManager::CreateReliant(CatalogTransaction transaction, const DependencyInfo &info) {
+	auto &from = info.dependency.entry;
+	auto &to = info.dependent.entry;
+
+	DependencyCatalogSet set(Dependents(), from);
+	auto dep = make_uniq_base<DependencyEntry, DependencyReliantEntry>(catalog, info);
+	auto entry_name = dep->EntryMangledName();
+
+	set.CreateEntry(transaction, entry_name, std::move(dep));
 }
 
 void DependencyManager::CreateDependency(CatalogTransaction transaction, DependencyInfo &info) {
@@ -238,9 +242,9 @@ void DependencyManager::CreateDependency(CatalogTransaction transaction, Depende
 	}
 
 	// Create an entry in the dependents map of the object that is the target of the dependency
-	CreateDependencyInternal(transaction, info, false);
+	CreateReliant(transaction, info);
 	// Create an entry in the dependencies map of the object that is targeting another entry
-	CreateDependencyInternal(transaction, info, true);
+	CreateSubject(transaction, info);
 }
 
 void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &object,

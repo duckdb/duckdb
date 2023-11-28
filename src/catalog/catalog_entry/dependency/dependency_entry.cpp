@@ -1,6 +1,7 @@
 #include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
 
@@ -12,6 +13,9 @@ DependencyEntry::DependencyEntry(Catalog &catalog, DependencyEntryType side, con
       dependency(info.dependency), side(side) {
 	D_ASSERT(info.dependent.entry.type != CatalogType::DEPENDENCY_ENTRY);
 	D_ASSERT(info.dependency.entry.type != CatalogType::DEPENDENCY_ENTRY);
+	if (catalog.IsTemporaryCatalog()) {
+		temporary = true;
+	}
 }
 
 const MangledEntryName &DependencyEntry::DependencyMangledName() const {
