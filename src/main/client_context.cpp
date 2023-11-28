@@ -59,6 +59,7 @@ struct ActiveQueryContext {
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
     : db(std::move(database)), interrupted(false), client_data(make_uniq<ClientData>(*this)), transaction(*this) {
+    query_progress.store(new QueryProgress());
 }
 
 ClientContext::~ClientContext() {
@@ -68,6 +69,9 @@ ClientContext::~ClientContext() {
 	// destroy the client context and rollback if there is an active transaction
 	// but only if we are not destroying this client context as part of an exception stack unwind
 	Destroy();
+
+	auto qp = query_progress.load();
+	delete qp;
 }
 
 unique_ptr<ClientContextLock> ClientContext::LockContext() {
@@ -144,8 +148,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	LogQueryInternal(lock, query);
 	active_query->query = query;
 	auto qp = query_progress.load();
-	qp.Initialize();
-	query_progress = qp;
+	qp->Initialize();
 	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
 }
 
@@ -164,8 +167,7 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 	D_ASSERT(active_query.get());
 	active_query.reset();
 	auto qp = query_progress.load();
-	qp.Initialize();
-	query_progress = qp;
+	qp->Initialize();
 	PreservedError error;
 	try {
 		if (transaction.HasActiveTransaction()) {
@@ -247,9 +249,7 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 		D_ASSERT(!executor.HasResultCollector());
 		active_query->progress_bar.reset();
 		auto qp = query_progress.load();
-		qp.Initialize();
-		query_progress = qp;
-
+		qp->Initialize();
 		// successfully compiled SELECT clause, and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
 		auto stream_result = make_uniq<StreamQueryResult>(pending.statement_type, pending.properties,
@@ -366,7 +366,7 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 }
 
 QueryProgress ClientContext::GetQueryProgress() {
-	return query_progress.load();
+	return *query_progress.load();
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientContextLock &lock,
@@ -414,8 +414,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		active_query->progress_bar = make_uniq<ProgressBar>(executor, config.wait_time, display_create_func);
 		active_query->progress_bar->Start();
 		auto qp = query_progress.load();
-		qp.Restart();
-		query_progress = qp;
+		qp->Restart();
 	}
 	auto stream_result = parameters.allow_stream_result && statement.properties.allow_stream_result;
 	if (!stream_result && statement.properties.return_type == StatementReturnType::QUERY_RESULT) {
@@ -447,7 +446,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 		auto query_result = active_query->executor->ExecuteTask();
 		if (active_query->progress_bar) {
 			active_query->progress_bar->Update(query_result == PendingExecutionResult::RESULT_READY);
-			query_progress = active_query->progress_bar->GetDetailedQueryProgress();
+			*query_progress = active_query->progress_bar->GetDetailedQueryProgress();
 		}
 		return query_result;
 	} catch (FatalException &ex) {

@@ -42,7 +42,6 @@ public:
 			}
 		}
 		if (cur_rows_read != total_cardinality) {
-
 			correct = false;
 		}
 	}
