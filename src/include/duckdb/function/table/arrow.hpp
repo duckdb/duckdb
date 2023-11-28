@@ -77,21 +77,6 @@ public:
 	}
 };
 
-// struct ArrowColumnScanLocalState {
-// public:
-//	//! Optional dictionary vector when column is a dictionary
-//	unique_ptr<Vector> dictionary;
-//	//! Run-end-encoding state
-//	ArrowRunEndEncodingState run_end_encoding;
-
-// public:
-//	void Reset() {
-//		// Note: dictionary is not reset
-//		// the dictionary should be the same for every array scanned of this column
-//		run_end_encoding.Reset();
-//	}
-//};
-
 struct ArrowScanLocalState;
 struct ArrowArrayScanState {
 public:
