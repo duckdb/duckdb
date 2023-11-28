@@ -155,8 +155,8 @@ void DependencyManager::ScanSetInternal(CatalogTransaction transaction, const Ca
 			DependencyCatalogSet other_subjects(Subjects(), other_info);
 
 			// Verify that the other half of the dependent also exists
-			auto dependency = other_subjects.GetEntryDetailed(transaction, mangled_name);
-			D_ASSERT(dependency.reason != CatalogSet::EntryLookup::FailureReason::NOT_PRESENT);
+			auto subject = other_subjects.GetEntryDetailed(transaction, mangled_name);
+			D_ASSERT(subject.reason != CatalogSet::EntryLookup::FailureReason::NOT_PRESENT);
 		}
 	}
 #endif
@@ -289,7 +289,6 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 
 	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies.set) {
-		// Create the dependent and complete the link by creating the dependency as well
 		DependencyInfo info {
 		    /*dependent = */ DependencyDependent {GetLookupProperties(object), dependency_flags},
 		    /*subject = */ DependencySubject {GetLookupProperties(dependency), DependencyFlags().SetBlocking()}};
