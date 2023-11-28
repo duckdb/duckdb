@@ -13,7 +13,6 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/main/secret/secret.hpp"
 
-
 namespace duckdb {
 struct CreateSecretInfo;
 struct BoundStatement;
