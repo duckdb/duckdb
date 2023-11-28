@@ -485,7 +485,9 @@ static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, ArrowArray &array, 
 		run_end_encoding.run_ends = make_uniq<Vector>(run_ends_type.GetDuckType(), compressed_size);
 		run_end_encoding.values = make_uniq<Vector>(values_type.GetDuckType(), compressed_size);
 		ColumnArrowToDuckDB(*run_end_encoding.run_ends, run_ends_array, array_state, compressed_size, run_ends_type);
-		ColumnArrowToDuckDB(*run_end_encoding.values, values_array, array_state, compressed_size, values_type);
+		auto &values = *run_end_encoding.values;
+		SetValidityMask(values, values_array, scan_state, compressed_size, parent_offset, nested_offset);
+		ColumnArrowToDuckDB(values, values_array, array_state, compressed_size, values_type);
 	}
 
 	idx_t scan_offset = scan_state.chunk_offset;
