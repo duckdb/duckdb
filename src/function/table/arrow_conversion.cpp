@@ -484,6 +484,9 @@ static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, ArrowArray &array, 
 		D_ASSERT(!run_end_encoding.values);
 		run_end_encoding.run_ends = make_uniq<Vector>(run_ends_type.GetDuckType(), compressed_size);
 		run_end_encoding.values = make_uniq<Vector>(values_type.GetDuckType(), compressed_size);
+		if (parent_offset != 0 || nested_offset != -1 || run_ends_array.offset != 0 || values_array.offset != 0) {
+			throw NotImplementedException("Scanning run-end-encoded arrays with offsets is not supported yet");
+		}
 		ColumnArrowToDuckDB(*run_end_encoding.run_ends, run_ends_array, array_state, compressed_size, run_ends_type);
 		auto &values = *run_end_encoding.values;
 		SetValidityMask(values, values_array, scan_state, compressed_size, parent_offset, nested_offset);
