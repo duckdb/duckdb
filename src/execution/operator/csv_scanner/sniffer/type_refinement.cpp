@@ -25,6 +25,11 @@ struct Parse {
 			if (machine.column_count >= parse_chunk.ColumnCount() && machine.options.ignore_errors) {
 				return false;
 			}
+			if (machine.column_count >= parse_chunk.ColumnCount()) {
+				throw InvalidInputException("Error in file \"%s\": CSV options could not be auto-detected. Consider "
+				                            "setting parser options manually.",
+				                            machine.options.file_path);
+			}
 			auto &v = parse_chunk.data[machine.column_count++];
 			auto parse_data = FlatVector::GetData<string_t>(v);
 			if (machine.value.empty()) {

@@ -8,6 +8,7 @@
 #include "duckdb/function/table/range.hpp"
 #include "duckdb/execution/operator/scan/csv/base_csv_reader.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_file_handle.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 
 namespace duckdb {
 

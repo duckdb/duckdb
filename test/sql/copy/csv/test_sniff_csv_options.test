@@ -9,7 +9,7 @@ require notwindows
 statement error
 FROM sniff_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', delim = ',');
 ----
-Set: , Sniffed: |
+CSV options could not be auto-detected. Consider setting parser options manually.
 
 # Test user giving options that are also sniffed
 

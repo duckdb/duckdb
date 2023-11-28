@@ -285,41 +285,47 @@ void CSVSniffer::DetectTypes() {
 		candidate->Reset();
 
 		// Parse chunk and read csv with info candidate
-		vector<TupleSniffing> tuples(STANDARD_VECTOR_SIZE);
-		candidate->csv_buffer_iterator.Process<SniffValue>(*candidate, tuples);
-		// Potentially Skip empty rows (I find this dirty, but it is what the original code does)
-		// The true line where parsing starts in reference to the csv file
+		vector<TupleSniffing> tuples;
 		idx_t true_line_start = 0;
 		idx_t true_pos = 0;
-		// The start point of the tuples
-		idx_t tuple_true_start = 0;
-		while (tuple_true_start < tuples.size()) {
-			if (tuples[tuple_true_start].values.empty() ||
-			    (tuples[tuple_true_start].values.size() == 1 && tuples[tuple_true_start].values[0].IsNull())) {
-				true_line_start = tuples[tuple_true_start].line_number;
-				true_pos = tuples[tuple_true_start].position;
-				tuple_true_start++;
-			} else {
-				break;
-			}
-		}
+		do {
+			tuples.resize(STANDARD_VECTOR_SIZE);
+			true_line_start = 0;
+			true_pos = 0;
+			candidate->csv_buffer_iterator.Process<SniffValue>(*candidate, tuples);
+			// Potentially Skip empty rows (I find this dirty, but it is what the original code does)
+			// The true line where parsing starts in reference to the csv file
 
-		// Potentially Skip Notes (I also find this dirty, but it is what the original code does)
-		while (tuple_true_start < tuples.size()) {
-			if (tuples[tuple_true_start].values.size() < max_columns_found && !options.null_padding) {
-				true_line_start = tuples[tuple_true_start].line_number;
-				true_pos = tuples[tuple_true_start].position;
-				tuple_true_start++;
-			} else {
-				break;
+			// The start point of the tuples
+			idx_t tuple_true_start = 0;
+			while (tuple_true_start < tuples.size()) {
+				if (tuples[tuple_true_start].values.empty() ||
+				    (tuples[tuple_true_start].values.size() == 1 && tuples[tuple_true_start].values[0].IsNull())) {
+					true_line_start = tuples[tuple_true_start].line_number;
+					true_pos = tuples[tuple_true_start].position;
+					tuple_true_start++;
+				} else {
+					break;
+				}
 			}
-		}
-		if (tuple_true_start < tuples.size()) {
-			true_pos = tuples[tuple_true_start].position;
-		}
-		if (tuple_true_start > 0) {
-			tuples.erase(tuples.begin(), tuples.begin() + tuple_true_start);
-		}
+
+			// Potentially Skip Notes (I also find this dirty, but it is what the original code does)
+			while (tuple_true_start < tuples.size()) {
+				if (tuples[tuple_true_start].values.size() < max_columns_found && !options.null_padding) {
+					true_line_start = tuples[tuple_true_start].line_number;
+					true_pos = tuples[tuple_true_start].position;
+					tuple_true_start++;
+				} else {
+					break;
+				}
+			}
+			if (tuple_true_start < tuples.size()) {
+				true_pos = tuples[tuple_true_start].position;
+			}
+			if (tuple_true_start > 0) {
+				tuples.erase(tuples.begin(), tuples.begin() + tuple_true_start);
+			}
+		} while (tuples.empty() && !candidate->csv_buffer_iterator.Finished());
 
 		idx_t row_idx = 0;
 		if (tuples.size() > 1 &&
