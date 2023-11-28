@@ -44,7 +44,7 @@ struct ModeState {
 	ModeState() {
 	}
 
-	vector<FrameBounds> prevs;
+	SubFrames prevs;
 	Counts *frequency_map = nullptr;
 	KEY_TYPE *mode = nullptr;
 	size_t nonzero = 0;
@@ -237,13 +237,11 @@ struct ModeFunction {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const vector<FrameBounds> &frames,
-	                   Vector &result, idx_t rid) {
-
+	                   AggregateInputData &aggr_input_data, STATE &state, const SubFrames &frames, Vector &result,
+	                   idx_t rid, const STATE *gstate) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 		auto &prevs = state.prevs;
-		//	TODO: Hack around PerfectAggregateHashTable memory leak
 		if (prevs.empty()) {
 			prevs.resize(1);
 		}
@@ -254,7 +252,8 @@ struct ModeFunction {
 			state.frequency_map = new typename STATE::Counts;
 		}
 		const double tau = .25;
-		if (state.nonzero <= tau * state.frequency_map->size()) {
+		if (state.nonzero <= tau * state.frequency_map->size() || prevs.back().end <= frames.front().start ||
+		    frames.back().end <= prevs.front().start) {
 			state.Reset();
 			// for f ∈ F do
 			for (const auto &frame : frames) {

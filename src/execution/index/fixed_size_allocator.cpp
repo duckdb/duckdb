@@ -5,8 +5,8 @@
 namespace duckdb {
 
 FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager)
-    : block_manager(block_manager), buffer_manager(block_manager.buffer_manager),
-      metadata_manager(block_manager.GetMetadataManager()), segment_size(segment_size), total_segment_count(0) {
+    : block_manager(block_manager), buffer_manager(block_manager.buffer_manager), segment_size(segment_size),
+      total_segment_count(0) {
 
 	if (segment_size > Storage::BLOCK_SIZE - sizeof(validity_t)) {
 		throw InternalException("The maximum segment size of fixed-size allocators is " +
@@ -122,7 +122,7 @@ void FixedSizeAllocator::Reset() {
 	total_segment_count = 0;
 }
 
-idx_t FixedSizeAllocator::GetMemoryUsage() const {
+idx_t FixedSizeAllocator::GetInMemorySize() const {
 	idx_t memory_usage = 0;
 	for (auto &buffer : buffers) {
 		if (buffer.second.InMemory()) {
@@ -208,7 +208,7 @@ bool FixedSizeAllocator::InitializeVacuum() {
 
 	// calculate the vacuum threshold adaptively
 	D_ASSERT(excess_buffer_count < temporary_vacuum_buffers.size());
-	idx_t memory_usage = GetMemoryUsage();
+	idx_t memory_usage = GetInMemorySize();
 	idx_t excess_memory_usage = excess_buffer_count * Storage::BLOCK_SIZE;
 	auto excess_percentage = double(excess_memory_usage) / double(memory_usage);
 	auto threshold = double(VACUUM_THRESHOLD) / 100.0;
@@ -264,31 +264,66 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
 	return new_ptr;
 }
 
-BlockPointer FixedSizeAllocator::Serialize(PartialBlockManager &partial_block_manager, MetadataWriter &writer) {
+FixedSizeAllocatorInfo FixedSizeAllocator::GetInfo() const {
 
+	FixedSizeAllocatorInfo info;
+	info.segment_size = segment_size;
+
+	for (const auto &buffer : buffers) {
+		info.buffer_ids.push_back(buffer.first);
+		info.block_pointers.push_back(buffer.second.block_pointer);
+		info.segment_counts.push_back(buffer.second.segment_count);
+		info.allocation_sizes.push_back(buffer.second.allocation_size);
+	}
+
+	for (auto &buffer_id : buffers_with_free_space) {
+		info.buffers_with_free_space.push_back(buffer_id);
+	}
+
+	return info;
+}
+
+void FixedSizeAllocator::SerializeBuffers(PartialBlockManager &partial_block_manager) {
 	for (auto &buffer : buffers) {
 		buffer.second.Serialize(partial_block_manager, available_segments_per_buffer, segment_size, bitmask_offset);
 	}
-
-	auto block_pointer = writer.GetBlockPointer();
-	writer.Write(segment_size);
-	writer.Write(static_cast<idx_t>(buffers.size()));
-	writer.Write(static_cast<idx_t>(buffers_with_free_space.size()));
-
-	for (auto &buffer : buffers) {
-		writer.Write(buffer.first);
-		writer.Write(buffer.second.block_pointer);
-		writer.Write(buffer.second.segment_count);
-		writer.Write(buffer.second.allocation_size);
-	}
-	for (auto &buffer_id : buffers_with_free_space) {
-		writer.Write(buffer_id);
-	}
-
-	return block_pointer;
 }
 
-void FixedSizeAllocator::Deserialize(const BlockPointer &block_pointer) {
+vector<IndexBufferInfo> FixedSizeAllocator::InitSerializationToWAL() {
+
+	vector<IndexBufferInfo> buffer_infos;
+	for (auto &buffer : buffers) {
+		buffer.second.SetAllocationSize(available_segments_per_buffer, segment_size, bitmask_offset);
+		buffer_infos.emplace_back(buffer.second.Get(), buffer.second.allocation_size);
+	}
+	return buffer_infos;
+}
+
+void FixedSizeAllocator::Init(const FixedSizeAllocatorInfo &info) {
+
+	segment_size = info.segment_size;
+	total_segment_count = 0;
+
+	for (idx_t i = 0; i < info.buffer_ids.size(); i++) {
+
+		// read all FixedSizeBuffer data
+		auto buffer_id = info.buffer_ids[i];
+		auto buffer_block_pointer = info.block_pointers[i];
+		auto segment_count = info.segment_counts[i];
+		auto allocation_size = info.allocation_sizes[i];
+
+		// create the FixedSizeBuffer
+		FixedSizeBuffer new_buffer(block_manager, segment_count, allocation_size, buffer_block_pointer);
+		buffers.insert(make_pair(buffer_id, std::move(new_buffer)));
+		total_segment_count += segment_count;
+	}
+
+	for (const auto &buffer_id : info.buffers_with_free_space) {
+		buffers_with_free_space.insert(buffer_id);
+	}
+}
+
+void FixedSizeAllocator::Deserialize(MetadataManager &metadata_manager, const BlockPointer &block_pointer) {
 
 	MetadataReader reader(metadata_manager, block_pointer);
 	segment_size = reader.Read<idx_t>();

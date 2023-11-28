@@ -108,14 +108,16 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	case SetOperationType::EXCEPT:
 		logical_type = LogicalOperatorType::LOGICAL_EXCEPT;
 		break;
-	default:
-		D_ASSERT(node.setop_type == SetOperationType::INTERSECT);
+	case SetOperationType::INTERSECT:
 		logical_type = LogicalOperatorType::LOGICAL_INTERSECT;
+		break;
+	default:
+		D_ASSERT(false);
 		break;
 	}
 
 	auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(left_node),
-	                                           std::move(right_node), logical_type);
+	                                           std::move(right_node), logical_type, node.setop_all);
 
 	return VisitQueryNode(node, std::move(root));
 }

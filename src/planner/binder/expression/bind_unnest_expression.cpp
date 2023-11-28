@@ -87,8 +87,9 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	if (!error.empty()) {
 		// failed to bind
 		// try to bind correlated columns manually
-		if (!BindCorrelatedColumns(function.children[0])) {
-			return BindResult(error);
+		auto result = BindCorrelatedColumns(function.children[0], error);
+		if (result.HasError()) {
+			return BindResult(result.error);
 		}
 		auto &bound_expr = BoundExpression::GetExpression(*function.children[0]);
 		ExtractCorrelatedExpressions(binder, *bound_expr);
@@ -120,7 +121,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	if (child_type.id() == LogicalTypeId::SQLNULL) {
 		list_unnests = 1;
 	} else {
-		// first do all of the list unnests
+		// perform all LIST unnests
 		auto type = child_type;
 		list_unnests = 0;
 		while (type.id() == LogicalTypeId::LIST) {
@@ -130,7 +131,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 				break;
 			}
 		}
-		// unnest structs all the way afterwards, if there are any
+		// unnest structs
 		if (type.id() == LogicalTypeId::STRUCT) {
 			struct_unnests = max_depth - list_unnests;
 		}
@@ -139,7 +140,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		return BindResult(binder.FormatError(
 		    function, "UNNEST() on a struct column can only be applied as the root element of a SELECT expression"));
 	}
-	// perform all of the list unnests first
+	// perform all LIST unnests
 	auto return_type = child_type;
 	for (idx_t current_depth = 0; current_depth < list_unnests; current_depth++) {
 		if (return_type.id() == LogicalTypeId::LIST) {

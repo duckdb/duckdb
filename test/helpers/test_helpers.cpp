@@ -254,6 +254,14 @@ string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
 	return "";
 }
 
+string compare_csv_collection(duckdb::ColumnDataCollection &collection, string csv, bool header) {
+	string error;
+	if (!compare_result(csv, collection, collection.Types(), header, error)) {
+		return error;
+	}
+	return "";
+}
+
 string show_diff(DataChunk &left, DataChunk &right) {
 	if (left.ColumnCount() != right.ColumnCount()) {
 		return StringUtil::Format("Different column counts: %d vs %d", (int)left.ColumnCount(),

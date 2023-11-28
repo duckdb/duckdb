@@ -95,7 +95,8 @@ BoundStatement Binder::BindSummarize(ShowStatement &stmt) {
 		type_children.push_back(make_uniq<ConstantExpression>(Value(plan.types[i].ToString())));
 		min_children.push_back(SummarizeCreateAggregate("min", plan.names[i]));
 		max_children.push_back(SummarizeCreateAggregate("max", plan.names[i]));
-		unique_children.push_back(SummarizeCreateAggregate("approx_count_distinct", plan.names[i]));
+		unique_children.push_back(make_uniq<CastExpression>(
+		    LogicalType::BIGINT, SummarizeCreateAggregate("approx_count_distinct", plan.names[i])));
 		if (plan.types[i].IsNumeric()) {
 			avg_children.push_back(SummarizeCreateAggregate("avg", plan.names[i]));
 			std_children.push_back(SummarizeCreateAggregate("stddev", plan.names[i]));
