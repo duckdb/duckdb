@@ -112,14 +112,20 @@ struct AlpCompression {
 	 */
 	static bool CompareALPCombinations(const AlpCombination &c1, const AlpCombination &c2) {
 		return (c1.n_appearances > c2.n_appearances) ||
-		       (c1.estimated_compression_size < c2.estimated_compression_size) ||
-		       (c1.n_appearances == c2.n_appearances && (c2.exponent < c1.exponent)) ||
-		       ((c1.n_appearances == c2.n_appearances && c2.exponent == c1.exponent) && (c2.factor < c1.factor));
+		       (c1.n_appearances == c2.n_appearances &&
+		        (c1.estimated_compression_size < c2.estimated_compression_size)) ||
+		       ((c1.n_appearances == c2.n_appearances &&
+		         c1.estimated_compression_size == c2.estimated_compression_size) &&
+		        (c2.exponent < c1.exponent)) ||
+		       ((c1.n_appearances == c2.n_appearances &&
+		         c1.estimated_compression_size == c2.estimated_compression_size && c2.exponent == c1.exponent) &&
+		        (c2.factor < c1.factor));
 	}
 
 	/*
 	 * Dry compress a vector (ideally a sample) to estimate ALP compression size given a exponent and factor
 	 */
+	template <bool PENALIZE_EXCEPTIONS>
 	static uint64_t DryCompressToEstimateSize(const vector<T> &in, int8_t exp_idx, int8_t factor_idx) {
 		idx_t n_values = in.size();
 		idx_t exceptions_count = 0;
@@ -142,8 +148,8 @@ struct AlpCompression {
 		}
 
 		// We penalize combinations which yields to almost all exceptions
-		if (non_exceptions_count < 2) {
-			return NumericLimits<uint64_t>::Maximum(); // By setting the estimated size to max we effectively skip it
+		if (PENALIZE_EXCEPTIONS && non_exceptions_count < 2) {
+			return NumericLimits<uint64_t>::Maximum();
 		}
 
 		// Evaluate factor/exponent compression size (we optimize for FOR)
@@ -181,7 +187,7 @@ struct AlpCompression {
 			for (int8_t exp_idx = AlpTypedConstants<T>::MAX_EXPONENT; exp_idx >= 0; exp_idx--) {
 				for (int8_t factor_idx = exp_idx; factor_idx >= 0; factor_idx--) {
 					uint64_t estimated_compression_size =
-					    DryCompressToEstimateSize(sampled_vector, exp_idx, factor_idx);
+					    DryCompressToEstimateSize<true>(sampled_vector, exp_idx, factor_idx);
 					AlpCombination current_combination = {exp_idx, factor_idx, 0, estimated_compression_size};
 					if (CompareALPCombinations(current_combination, best_combination)) {
 						best_combination = current_combination;
@@ -233,7 +239,7 @@ struct AlpCompression {
 		for (auto &combination : state.best_k_combinations) {
 			int32_t exp_idx = combination.exponent;
 			int32_t factor_idx = combination.factor;
-			uint64_t estimated_compression_size = DryCompressToEstimateSize(vector_sample, exp_idx, factor_idx);
+			uint64_t estimated_compression_size = DryCompressToEstimateSize<false>(vector_sample, exp_idx, factor_idx);
 
 			// If current compression size is worse (higher) or equal than the current best combination
 			if (estimated_compression_size >= best_total_bits) {
