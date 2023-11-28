@@ -39,7 +39,7 @@ protected:
 	                const DependencyInfo &info);
 
 public:
-	const MangledEntryName &DependencyMangledName() const;
+	const MangledEntryName &SubjectMangledName() const;
 	const DependencySubject &Subject() const;
 
 	const MangledEntryName &DependentMangledName() const;
@@ -55,9 +55,9 @@ public:
 
 protected:
 	const MangledEntryName dependent_name;
-	const MangledEntryName dependency_name;
+	const MangledEntryName subject_name;
 	const DependencyDependent dependent;
-	const DependencySubject dependency;
+	const DependencySubject subject;
 
 private:
 	DependencyEntryType side;

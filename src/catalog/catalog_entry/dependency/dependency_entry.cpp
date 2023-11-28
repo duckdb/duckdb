@@ -9,21 +9,21 @@ DependencyEntry::DependencyEntry(Catalog &catalog, DependencyEntryType side, con
                                  const DependencyInfo &info)
     : InCatalogEntry(CatalogType::DEPENDENCY_ENTRY, catalog, name.name),
       dependent_name(DependencyManager::MangleName(info.dependent.entry)),
-      dependency_name(DependencyManager::MangleName(info.dependency.entry)), dependent(info.dependent),
-      dependency(info.dependency), side(side) {
+      subject_name(DependencyManager::MangleName(info.subject.entry)), dependent(info.dependent), subject(info.subject),
+      side(side) {
 	D_ASSERT(info.dependent.entry.type != CatalogType::DEPENDENCY_ENTRY);
-	D_ASSERT(info.dependency.entry.type != CatalogType::DEPENDENCY_ENTRY);
+	D_ASSERT(info.subject.entry.type != CatalogType::DEPENDENCY_ENTRY);
 	if (catalog.IsTemporaryCatalog()) {
 		temporary = true;
 	}
 }
 
-const MangledEntryName &DependencyEntry::DependencyMangledName() const {
-	return dependency_name;
+const MangledEntryName &DependencyEntry::SubjectMangledName() const {
+	return subject_name;
 }
 
 const DependencySubject &DependencyEntry::Subject() const {
-	return dependency;
+	return subject;
 }
 
 const MangledEntryName &DependencyEntry::DependentMangledName() const {

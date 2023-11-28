@@ -43,6 +43,8 @@ struct DependencyDependent {
 	DependencyFlags flags;
 };
 
+//! Every dependency consists of a subject (the entry being depended on) and a dependent (the entry that has the
+//! dependency)
 struct DependencyInfo {
 public:
 	static DependencyInfo FromDependency(DependencyEntry &dep);
@@ -50,7 +52,7 @@ public:
 
 public:
 	DependencyDependent dependent;
-	DependencySubject dependency;
+	DependencySubject subject;
 };
 
 struct MangledEntryName {
@@ -89,7 +91,7 @@ public:
 
 private:
 	DuckCatalog &catalog;
-	CatalogSet dependencies;
+	CatalogSet subjects;
 	CatalogSet dependents;
 
 private:
@@ -120,14 +122,13 @@ private:
 
 	using dependency_callback_t = const std::function<void(DependencyEntry &)>;
 	void ScanDependents(CatalogTransaction transaction, const CatalogEntryInfo &info, dependency_callback_t &callback);
-	void ScanDependencies(CatalogTransaction transaction, const CatalogEntryInfo &info,
-	                      dependency_callback_t &callback);
-	void ScanSetInternal(CatalogTransaction transaction, const CatalogEntryInfo &info, bool dependencies,
+	void ScanSubjects(CatalogTransaction transaction, const CatalogEntryInfo &info, dependency_callback_t &callback);
+	void ScanSetInternal(CatalogTransaction transaction, const CatalogEntryInfo &info, bool subjects,
 	                     dependency_callback_t &callback);
-	void PrintDependencies(CatalogTransaction transaction, const CatalogEntryInfo &info);
+	void PrintSubjects(CatalogTransaction transaction, const CatalogEntryInfo &info);
 	void PrintDependents(CatalogTransaction transaction, const CatalogEntryInfo &info);
 	CatalogSet &Dependents();
-	CatalogSet &Dependencies();
+	CatalogSet &Subjects();
 };
 
 } // namespace duckdb
