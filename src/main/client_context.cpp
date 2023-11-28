@@ -59,7 +59,7 @@ struct ActiveQueryContext {
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
     : db(std::move(database)), interrupted(false), client_data(make_uniq<ClientData>(*this)), transaction(*this) {
-    query_progress.store(new QueryProgress());
+	query_progress.store(new QueryProgress());
 }
 
 ClientContext::~ClientContext() {

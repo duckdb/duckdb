@@ -261,7 +261,7 @@ private:
 	//! The currently active query context
 	unique_ptr<ActiveQueryContext> active_query;
 	//! The current query progress
-	atomic<QueryProgress*> query_progress;
+	atomic<QueryProgress *> query_progress;
 };
 
 class ClientContextLock {
