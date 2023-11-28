@@ -616,6 +616,10 @@
       {"id": 128,
         "name": "dialect_options.date_format",
         "type": "map<LogicalTypeId, CSVOption<StrpTimeFormat>>"
+      },
+      {"id": 129,
+        "name": "sniffer_user_mismatch_error",
+        "type": "string"
       }
     ],
     "pointer_type": "none"

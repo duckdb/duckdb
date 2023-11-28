@@ -93,14 +93,8 @@ statement error
 SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv', auto_detect=1) ORDER BY 1
 
 # forcing string parsing works
-statement error
-SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING'), header=1) ORDER BY 1
-----
-Column at position: 0 Set type: VARCHAR Sniffed type: DATE
-
-
 query I
-SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING'), header=1, auto_detect=false) ORDER BY 1
+SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING'), header=1) ORDER BY 1
 ----
 1
 2
@@ -116,7 +110,7 @@ SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv', columns=STRUCT_PAC
 3
 
 query II
-SELECT a, b LIKE '%a_.csv' FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING'), header=1, filename=1, auto_detect=false) t(a,b) ORDER BY 1
+SELECT a, b LIKE '%a_.csv' FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING'), header=1, filename=1) t(a,b) ORDER BY 1
 ----
 1	0
 2	0

@@ -156,7 +156,8 @@ public:
 	                       bool force_parallelism_p, vector<column_t> column_ids_p)
 	    : buffer_manager(std::move(buffer_manager_p)), system_threads(system_threads_p),
 	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)),
-	      line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
+	      line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end, options.sniffer_user_mismatch_error),
+	      sniffer_mismatch_error(options.sniffer_user_mismatch_error) {
 		current_file_path = files_path_p[0];
 		CSVFileHandle *file_handle_ptr;
 
@@ -196,7 +197,7 @@ public:
 		next_byte = options.dialect_options.true_start;
 	}
 	explicit ParallelCSVGlobalState(idx_t system_threads_p)
-	    : system_threads(system_threads_p), line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
+	    : system_threads(system_threads_p), line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end, "") {
 		running_threads = MaxThreads();
 	}
 
@@ -284,6 +285,8 @@ private:
 	idx_t cur_buffer_idx = 0;
 	//! Only used if we don't run auto_detection first
 	unique_ptr<CSVFileHandle> file_handle;
+
+	string sniffer_mismatch_error;
 };
 
 idx_t ParallelCSVGlobalState::MaxThreads() const {
@@ -336,8 +339,8 @@ void ParallelCSVGlobalState::Verify() {
 					throw InvalidInputException(
 					    "CSV File not supported for multithreading. This can be a problematic line in your CSV File or "
 					    "that this CSV can't be read in Parallel. Please, inspect if the line %llu is correct. If so, "
-					    "please run single-threaded CSV Reading by setting parallel=false in the read_csv call.",
-					    problematic_line);
+					    "please run single-threaded CSV Reading by setting parallel=false in the read_csv call. %s",
+					    problematic_line, sniffer_mismatch_error);
 				}
 			}
 		}
@@ -373,8 +376,8 @@ void LineInfo::Verify(idx_t file_idx, idx_t batch_idx, idx_t cur_first_pos) {
 		throw InvalidInputException(
 		    "CSV File not supported for multithreading. This can be a problematic line in your CSV File or "
 		    "that this CSV can't be read in Parallel. Please, inspect if the line %llu is correct. If so, "
-		    "please run single-threaded CSV Reading by setting parallel=false in the read_csv call.",
-		    problematic_line);
+		    "please run single-threaded CSV Reading by setting parallel=false in the read_csv call.\n %s",
+		    problematic_line, sniffer_mismatch_error);
 	}
 }
 bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bind_data,

@@ -332,7 +332,10 @@ string CSVReaderOptions::ToString() const {
 	// ignore_errors
 	error += "ignore_errors=" + std::to_string(ignore_errors) + "\n  ";
 	// all_varchar
-	error += "all_varchar=" + std::to_string(all_varchar);
+	error += "all_varchar=" + std::to_string(all_varchar) + "\n";
+
+	// Add information regarding sniffer mismatches (if any)
+	error += sniffer_user_mismatch_error;
 	return error;
 }
 

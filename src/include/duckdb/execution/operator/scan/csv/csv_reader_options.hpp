@@ -96,6 +96,8 @@ struct CSVReaderOptions {
 	vector<LogicalType> auto_type_candidates = {LogicalType::VARCHAR, LogicalType::TIMESTAMP, LogicalType::DATE,
 	                                            LogicalType::TIME,    LogicalType::DOUBLE,    LogicalType::BIGINT,
 	                                            LogicalType::BOOLEAN, LogicalType::SQLNULL};
+	//! In case the sniffer found a mismatch error from user define types or dialect
+	string sniffer_user_mismatch_error;
 
 	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
