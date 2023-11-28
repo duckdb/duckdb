@@ -8,15 +8,6 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager>
                        CSVStateMachineCache &state_machine_cache_p, SetColumns set_columns_p)
     : state_machine_cache(state_machine_cache_p), options(options_p), buffer_manager(std::move(buffer_manager_p)),
       set_columns(set_columns_p) {
-
-	// Check if any type is BLOB
-	for (auto &type : options.sql_type_list) {
-		if (type.id() == LogicalTypeId::BLOB) {
-			throw InvalidInputException(
-			    "CSV auto-detect for blobs not supported: there may be invalid UTF-8 in the file");
-		}
-	}
-
 	// Initialize Format Candidates
 	for (const auto &format_template : format_template_candidates) {
 		auto &logical_type = format_template.first;
@@ -135,9 +126,8 @@ SnifferResult CSVSniffer::SniffCSV() {
 		}
 		error += "If you are sure about the column types, disable the sniffer with auto_detect = false.";
 		if (!match) {
-			throw InvalidInputException(error);
+			options.sniffer_user_mismatch_error = error;
 		}
-
 		// We do not need to run type refinement, since the types have been given by the user
 		return SnifferResult({}, {});
 	}
