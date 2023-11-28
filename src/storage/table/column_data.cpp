@@ -441,6 +441,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 
 	// replace the old tree with the new one
 	data.Replace(l, checkpoint_state->new_tree);
+	updates.reset();
 	version++;
 
 	return checkpoint_state;

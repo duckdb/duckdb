@@ -164,6 +164,9 @@ void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types
 
 	names.emplace_back("total_uncompressed_size");
 	return_types.emplace_back(LogicalType::BIGINT);
+
+	names.emplace_back("key_value_metadata");
+	return_types.emplace_back(LogicalType::MAP(LogicalType::BLOB, LogicalType::BLOB));
 }
 
 Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::format::SchemaElement &schema_ele,
@@ -287,6 +290,16 @@ void ParquetMetaDataOperatorData::LoadRowGroupMetadata(ClientContext &context, c
 
 			// total_uncompressed_size, LogicalType::BIGINT
 			current_chunk.SetValue(22, count, Value::BIGINT(col_meta.total_uncompressed_size));
+
+			// key_value_metadata, LogicalType::MAP(LogicalType::BLOB, LogicalType::BLOB)
+			vector<Value> map_keys, map_values;
+			for (auto &entry : col_meta.key_value_metadata) {
+				map_keys.push_back(Value::BLOB_RAW(entry.key));
+				map_values.push_back(Value::BLOB_RAW(entry.value));
+			}
+			current_chunk.SetValue(
+			    23, count,
+			    Value::MAP(LogicalType::BLOB, LogicalType::BLOB, std::move(map_keys), std::move(map_values)));
 
 			count++;
 			if (count >= STANDARD_VECTOR_SIZE) {
