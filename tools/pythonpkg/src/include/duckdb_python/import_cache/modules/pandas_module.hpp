@@ -21,7 +21,7 @@ public:
 public:
 	PandasCacheItem()
 	    : PythonImportCacheItem("pandas"), DataFrame("DataFrame", this), isnull("isnull", this),
-	      ArrowDtype("ArrowDtype", this), NaT("NaT", this) {
+	      ArrowDtype("ArrowDtype", this), NaT("NaT", this), NA("NA", this) {
 	}
 	~PandasCacheItem() override {
 	}
@@ -30,6 +30,7 @@ public:
 	PythonImportCacheItem isnull;
 	PythonImportCacheItem ArrowDtype;
 	PythonImportCacheItem NaT;
+	PythonImportCacheItem NA;
 
 protected:
 	bool IsRequired() const override final {

@@ -50,7 +50,8 @@
             "pandas.DataFrame",
             "pandas.isnull",
             "pandas.ArrowDtype",
-            "pandas.NaT"
+            "pandas.NaT",
+            "pandas.NA"
         ],
         "required": false
     },
@@ -64,6 +65,12 @@
         "type": "attribute",
         "full_path": "pandas.NaT",
         "name": "NaT",
+        "children": []
+    },
+    "pandas.NA": {
+        "type": "attribute",
+        "full_path": "pandas.NA",
+        "name": "NA",
         "children": []
     },
     "pandas.isnull": {

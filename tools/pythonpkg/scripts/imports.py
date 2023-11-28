@@ -10,6 +10,7 @@ import pandas
 
 pandas.DataFrame
 pandas.NaT
+pandas.NA
 pandas.isnull
 pandas.ArrowDtype
 
