@@ -58,9 +58,6 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 		return true;
 	}
 
-	analyze_state.vectors_count++;
-	analyze_state.total_values_count += count;
-
 	alp::AlpSamplingParameters sampling_params = alp::AlpUtils::GetSamplingParameters(count);
 
 	vector<uint16_t> current_vector_null_positions(sampling_params.n_lookup_values, 0);
@@ -107,7 +104,7 @@ idx_t AlpRDFinalAnalyze(AnalyzeState &state) {
 	double estimated_compressed_bits = estimated_bits_per_value * analyze_state.rowgroup_sample.size();
 	double estimed_compressed_bytes = estimated_compressed_bits / 8;
 
-	//! Overhead per segment: [Pointer to metadata + right bitwidth + left bitwidth] + Dictionary Size
+	//! Overhead per segment: [Pointer to metadata + right bitwidth + left bitwidth + n dict elems] + Dictionary Size
 	double per_segment_overhead = AlpRDConstants::HEADER_SIZE + AlpRDConstants::MAX_DICTIONARY_SIZE_BYTES;
 
 	//! Overhead per vector: Pointer to data + Exceptions count
