@@ -137,6 +137,7 @@ public:
 	//! Convert the epoch (in sec) to a timestamp
 	DUCKDB_API static timestamp_t FromEpochSeconds(int64_t ms);
 	//! Convert the epoch (in ms) to a timestamp
+	DUCKDB_API static timestamp_t FromEpochMsPossiblyInfinite(int64_t ms);
 	DUCKDB_API static timestamp_t FromEpochMs(int64_t ms);
 	//! Convert the epoch (in microseconds) to a timestamp
 	DUCKDB_API static timestamp_t FromEpochMicroSeconds(int64_t micros);

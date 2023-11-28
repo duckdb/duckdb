@@ -305,13 +305,17 @@ timestamp_t Timestamp::FromEpochSeconds(int64_t sec) {
 	return timestamp_t(result);
 }
 
-timestamp_t Timestamp::FromEpochMs(int64_t ms) {
+timestamp_t Timestamp::FromEpochMsPossiblyInfinite(int64_t ms) {
 	int64_t result;
-	D_ASSERT(Timestamp::IsFinite(timestamp_t(ms)));
 	if (!TryMultiplyOperator::Operation(ms, Interval::MICROS_PER_MSEC, result)) {
 		throw ConversionException("Could not convert Timestamp(MS) to Timestamp(US)");
 	}
 	return timestamp_t(result);
+}
+
+timestamp_t Timestamp::FromEpochMs(int64_t ms) {
+	D_ASSERT(Timestamp::IsFinite(timestamp_t(ms)));
+	return FromEpochMsPossiblyInfinite(ms);
 }
 
 timestamp_t Timestamp::FromEpochMicroSeconds(int64_t micros) {

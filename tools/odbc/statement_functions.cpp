@@ -190,7 +190,8 @@ static bool CastTimestampValue(duckdb::OdbcHandleStmt *hstmt, const duckdb::Valu
                                CAST_FUNC cast_timestamp_fun) {
 	try {
 		auto timestamp = timestamp_t(val.GetValue<int64_t>());
-		if (Timestamp::IsFinite(input)) {
+		// FIXME: add test for casting infinity/-infinity timestamp values
+		if (Timestamp::IsFinite(timestamp)) {
 			timestamp = cast_timestamp_fun(input);
 		}
 		target = CAST_OP::template Operation<timestamp_t, TARGET_TYPE>(timestamp);
@@ -530,6 +531,7 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 		switch (val.type().id()) {
 		case LogicalTypeId::TIMESTAMP_SEC: {
 			timestamp = timestamp_t(val.GetValue<int64_t>());
+			// FIXME: add test for casting infinity/-infinity timestamp values
 			if (!Timestamp::IsFinite(timestamp)) {
 				break;
 			}
@@ -538,6 +540,7 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 		}
 		case LogicalTypeId::TIMESTAMP_MS: {
 			timestamp = timestamp_t(val.GetValue<int64_t>());
+			// FIXME: add test for casting infinity/-infinity timestamp values
 			if (!Timestamp::IsFinite(timestamp)) {
 				break;
 			}
@@ -546,14 +549,12 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 		}
 		case LogicalTypeId::TIMESTAMP: {
 			timestamp = timestamp_t(val.GetValue<int64_t>());
-			if (!Timestamp::IsFinite(timestamp)) {
-				break;
-			}
 			timestamp = duckdb::Timestamp::FromEpochMicroSeconds(timestamp.value);
 			break;
 		}
 		case LogicalTypeId::TIMESTAMP_NS: {
 			timestamp = timestamp_t(val.GetValue<int64_t>());
+			// FIXME: add test for casting infinity/-infinity timestamp values
 			if (!Timestamp::IsFinite(timestamp)) {
 				break;
 			}

@@ -739,15 +739,15 @@ NULL	NULL
 2022-01-01 00:00:41+00	1640995241000
 infinity	NULL
 
-query I
+statement error
 select epoch_ms(9223372036854775807)
 ----
-infinity
+Conversion Error: Could not convert Timestamp(MS) to Timestamp(US)
 
-query I
+statement error
 select epoch_ms(-9223372036854775808)
 ----
--infinity
+Conversion Error: Could not convert Timestamp(MS) to Timestamp(US)
 
 query II
 SELECT ts, epoch_ns(ts) FROM timestamps ORDER BY ALL;

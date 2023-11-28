@@ -287,7 +287,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 			// Direct conversion, we've already matched the numpy type with the equivalent duckdb type
 			auto input = timestamp_t(src_ptr[source_idx]);
 			if (Timestamp::IsFinite(input)) {
-				tgt_ptr[row] = convert_func(input);
+				tgt_ptr[row] = convert_func(src_ptr[source_idx]);
 			} else {
 				tgt_ptr[row] = input;
 			}
