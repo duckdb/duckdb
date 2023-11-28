@@ -1389,8 +1389,8 @@ const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value) {
 	switch(value) {
 	case DependencyEntryType::SUBJECT:
 		return "SUBJECT";
-	case DependencyEntryType::RELIANT:
-		return "RELIANT";
+	case DependencyEntryType::DEPENDENT:
+		return "DEPENDENT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -1401,8 +1401,8 @@ DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value)
 	if (StringUtil::Equals(value, "SUBJECT")) {
 		return DependencyEntryType::SUBJECT;
 	}
-	if (StringUtil::Equals(value, "RELIANT")) {
-		return DependencyEntryType::RELIANT;
+	if (StringUtil::Equals(value, "DEPENDENT")) {
+		return DependencyEntryType::DEPENDENT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

@@ -37,7 +37,7 @@ struct DependencySubject {
 };
 
 // The entry that relies on the other entry
-struct DependencyReliant {
+struct DependencyDependent {
 	CatalogEntryInfo entry;
 	//! The type of dependency this is (e.g, blocking, non-blocking, ownership)
 	DependencyFlags flags;
@@ -49,7 +49,7 @@ public:
 	static DependencyInfo FromDependent(DependencyEntry &dep);
 
 public:
-	DependencyReliant dependent;
+	DependencyDependent dependent;
 	DependencySubject dependency;
 };
 
@@ -113,10 +113,10 @@ private:
 	void RemoveDependency(CatalogTransaction transaction, const DependencyInfo &info);
 	void CreateDependency(CatalogTransaction transaction, DependencyInfo &info);
 	using dependency_entry_func_t = const std::function<unique_ptr<DependencyEntry>(
-	    Catalog &catalog, const DependencyReliant &dependent, const DependencySubject &dependency)>;
+	    Catalog &catalog, const DependencyDependent &dependent, const DependencySubject &dependency)>;
 
 	void CreateSubject(CatalogTransaction transaction, const DependencyInfo &info);
-	void CreateReliant(CatalogTransaction transaction, const DependencyInfo &info);
+	void CreateDependent(CatalogTransaction transaction, const DependencyInfo &info);
 
 	using dependency_callback_t = const std::function<void(DependencyEntry &)>;
 	void ScanDependents(CatalogTransaction transaction, const CatalogEntryInfo &info, dependency_callback_t &callback);

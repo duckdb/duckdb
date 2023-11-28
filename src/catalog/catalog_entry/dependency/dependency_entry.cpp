@@ -30,7 +30,7 @@ const MangledEntryName &DependencyEntry::DependentMangledName() const {
 	return dependent_name;
 }
 
-const DependencyReliant &DependencyEntry::Reliant() const {
+const DependencyDependent &DependencyEntry::Dependent() const {
 	return dependent;
 }
 

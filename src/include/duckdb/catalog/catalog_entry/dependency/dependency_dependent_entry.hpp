@@ -12,10 +12,10 @@
 
 namespace duckdb {
 
-class DependencyReliantEntry : public DependencyEntry {
+class DependencyDependentEntry : public DependencyEntry {
 public:
-	~DependencyReliantEntry() override;
-	DependencyReliantEntry(Catalog &catalog, const DependencyInfo &info);
+	~DependencyDependentEntry() override;
+	DependencyDependentEntry(Catalog &catalog, const DependencyInfo &info);
 
 public:
 	const CatalogEntryInfo &EntryInfo() const override;
