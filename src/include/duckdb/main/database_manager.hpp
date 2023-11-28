@@ -53,9 +53,12 @@ public:
 	void SetDefaultDatabase(ClientContext &context, const string &new_value);
 
 	//! Inserts a path to name mapping to the database paths map
-	void InsertDatabasePath(const string &path, const string &name);
+	void InsertDatabasePath(ClientContext &context, const string &path, const string &name);
 	//! Erases a path from the database paths map
 	void EraseDatabasePath(const string &path);
+	//! Returns a database with a specified path
+	optional_ptr<AttachedDatabase> GetDatabaseFromPath(ClientContext &context, const string &path);
+
 	//! Returns the database type. This might require checking the header of the file, in which case the file handle is
 	//! necessary. We can only grab the file handle, if it is not yet held, even for uncommitted changes. Thus, we have
 	//! to lock for this operation.
@@ -98,7 +101,7 @@ private:
 	//! A map containing all attached database path to name mappings
 	//! This allows to attach many databases efficiently, and to avoid attaching the
 	//! same file path twice
-	case_insensitive_map_t<string> db_paths;
+	case_insensitive_set_t db_paths;
 };
 
 } // namespace duckdb
