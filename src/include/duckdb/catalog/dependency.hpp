@@ -53,10 +53,12 @@ public:
 public:
 	DependencyFlags &SetOwnership() {
 		value |= OWNERSHIP;
+		D_ASSERT(!IsOwned());
 		return *this;
 	}
 	DependencyFlags &SetOwned() {
 		value |= OWNED;
+		D_ASSERT(!IsOwnership());
 		return *this;
 	}
 	DependencyFlags &SetBlocking() {

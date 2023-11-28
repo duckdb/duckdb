@@ -232,8 +232,9 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 	if (l1.size() != l2.size()) {
 		return false;
 	}
+	const auto charmap = LowerFun::ascii_to_lower_map;
 	for (idx_t c = 0; c < l1.size(); c++) {
-		if (StringUtil::CharacterToLower(l1[c]) != StringUtil::CharacterToLower(l2[c])) {
+		if (charmap[(int)l1[c]] != charmap[(int)l2[c]]) {
 			return false;
 		}
 	}
