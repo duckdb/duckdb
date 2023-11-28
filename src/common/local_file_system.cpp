@@ -165,10 +165,34 @@ static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 #if defined(__APPLE__) || defined(__linux__)
 struct ConflictingProcess {
 	string name = "";
-	int pid = 0;
 	bool read = false;
 	bool write = false;
 };
+
+static string RenderConflictMessage(unordered_map<int, ConflictingProcess>& conflicts) {
+	if (conflicts.empty()) {
+		return "";
+	}
+
+	// from here on we know someone's having this file open
+	string ret = "\nDatabase file is currently open in the following process(es):\n";
+
+	bool only_read = true;
+	for (auto &conflict_entry : conflicts) {
+		auto& conflict = conflict_entry.second;
+		ret += StringUtil::Format("    %s (PID %d): %s Access\n", conflict.name, conflict_entry.first,
+		                          conflict.write  ? "Write"
+		                          : conflict.read ? "Read"
+		                                          : "Unknown");
+		only_read &= !conflict.write;
+	}
+	if (only_read) {
+		ret += "You likely will be able to open this database in read-only mode, e.g. by using `-readonly` in the CLI\n";
+	}
+	ret += "See also https://duckdb.org/faq#how-does-duckdb-handle-concurrency";
+	return ret;
+}
+
 #endif
 
 #ifdef __APPLE__
@@ -211,7 +235,7 @@ static string AdditionalLockInfo(const string &path) {
 		return "";
 	}
 
-	vector<ConflictingProcess> conflicts;
+	unordered_map<int, ConflictingProcess> conflicts;
 
 	for (idx_t pid_idx = 0; pid_idx < pid_size / sizeof(int); pid_idx++) {
 		int pid = pids[pid_idx];
@@ -219,10 +243,8 @@ static string AdditionalLockInfo(const string &path) {
 			continue;
 		}
 
-		conflicts.push_back(ConflictingProcess());
-		auto &conflict = conflicts.back();
-
-		conflict.pid = pid;
+		conflicts[pid] = ConflictingProcess();
+		auto &conflict = conflicts[pid];
 
 		char full_exec_path[PROC_PIDPATHINFO_MAXSIZE];
 		auto pid_path_ret = proc_pidpath(pid, full_exec_path, PROC_PIDPATHINFO_MAXSIZE);
@@ -268,21 +290,8 @@ static string AdditionalLockInfo(const string &path) {
 		}
 	}
 
-	if (conflicts.empty()) {
-		return "";
-	}
+	return RenderConflictMessage(conflicts);
 
-	// from here on we know someone's having this file open
-	string ret = StringUtil::Format("\nFile '%s' is currently open in the following process(es):\n", path);
-
-	for (auto &conflict : conflicts) {
-		ret += StringUtil::Format("    %s (PID %d): %s Access\n", conflict.name, conflict.pid,
-		                          conflict.write  ? "Write"
-		                          : conflict.read ? "Read"
-		                                          : "Unknown");
-	}
-
-	return ret;
 }
 #elif __linux__
 #include <dirent.h>
@@ -342,9 +351,10 @@ static string AdditionalLockInfo(const string &path) {
 		struct dirent *fd_dir_ep;
 		while ((fd_dir_ep = readdir(fd_dir_dp)) != NULL) {
 			char fd_link_target[PATH_MAX];
+			auto fd_file = StringUtil::Format("/proc/%s/fd/%s", proc_root_ep->d_name, fd_dir_ep->d_name);
+
 			{
 				memset(fd_link_target, '\0', PATH_MAX);
-				auto fd_file = StringUtil::Format("/proc/%s/fd/%s", proc_root_ep->d_name, fd_dir_ep->d_name);
 				auto readlink_n = readlink(fd_file.c_str(), fd_link_target, PATH_MAX);
 				if (readlink_n < 1) {
 					continue;
@@ -358,42 +368,25 @@ static string AdditionalLockInfo(const string &path) {
 			if (conflicts.find(pid) == conflicts.end()) {
 				conflicts[pid] = ConflictingProcess();
 				auto &conflict = conflicts[pid];
-				conflict.pid = pid;
 				conflict.name = exe_target;
 			}
 
 			auto &conflict = conflicts[pid];
 
 			struct stat stat_res;
-			auto stat_ret = stat(fd_link_target, &stat_res);
+			auto stat_ret = lstat(fd_file.c_str(), &stat_res);
 			if (stat_ret < 0) {
 				continue;
 			}
 
-			conflict.read = (stat_res.st_mode & S_IRUSR) != 0;
-			conflict.write = (stat_res.st_mode & S_IWUSR) != 0;
+			conflict.read |= (stat_res.st_mode & S_IRUSR) != 0;
+			conflict.write |= (stat_res.st_mode & S_IWUSR) != 0;
 		}
 		closedir(fd_dir_dp);
 	}
 
 	closedir(proc_root_dp);
-
-	if (conflicts.empty()) {
-		return "";
-	}
-
-	// from here on we know someone's having this file open
-	string ret = StringUtil::Format("\nFile '%s' is currently open in the following process(es):\n", path);
-
-	for (auto &conflict_entry : conflicts) {
-		auto &conflict = conflict_entry.second;
-		ret += StringUtil::Format("    %s (PID %d): %s Access\n", conflict.name, conflict.pid,
-		                          conflict.write  ? "Write"
-		                          : conflict.read ? "Read"
-		                                          : "Unknown");
-	}
-
-	return ret;
+	return RenderConflictMessage(conflicts);
 }
 #else
 static string AdditionalLockInfo(const string &path) {
