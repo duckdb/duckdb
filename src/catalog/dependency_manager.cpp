@@ -112,6 +112,15 @@ void DependencyManager::ScanSetInternal(CatalogTransaction transaction, const Ca
 	auto cb = [&](CatalogEntry &other) {
 		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
 		auto &other_entry = other.Cast<DependencyEntry>();
+#ifdef DEBUG
+		auto side = other_entry.Side();
+		if (scan_subjects) {
+			D_ASSERT(side == DependencyEntryType::SUBJECT);
+		} else {
+			D_ASSERT(side == DependencyEntryType::DEPENDENT);
+		}
+
+#endif
 
 		other_entries.insert(other_entry);
 		callback(other_entry);
