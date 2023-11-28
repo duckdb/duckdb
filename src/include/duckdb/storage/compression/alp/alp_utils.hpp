@@ -53,13 +53,10 @@ public:
 		//! We sample equidistant vectors; to do this we skip a fixed values of vectors
 		bool must_select_rowgroup_samples = (vectors_count % AlpConstants::RG_SAMPLES_DUCKDB_JUMP) == 0;
 
-		printf("hmmmmmm2!!! %d -", vectors_count);
 		//! If we are not in the correct jump, we do not take sample from this vector
 		if (!must_select_rowgroup_samples) {
 			return true;
 		}
-
-		printf("hmmmmmm!!!");
 
 		//! We do not take samples of non-complete duckdb vectors (usually the last one)
 		//! Except in the case of too little data
@@ -70,27 +67,37 @@ public:
 	}
 
 	template <class T>
-	static void ReplaceNullsInVector(vector<T> &input_vector, const vector<uint16_t> &vector_null_positions,
-	                                 idx_t values_count, idx_t nulls_count) {
-		// Finding the first non-null value
-		idx_t tmp_null_idx = 0;
-		// T a_non_null_raw_value = 0;
-		// EXACT_TYPE a_non_null_value = 0;
-		T a_non_null_value = 0;
+	static T FindFirstValueNotInPositionsArray(const vector<T> &input_vector, const vector<uint16_t> &positions,
+	                               idx_t values_count){
+		idx_t tmp_position_idx = 0;
+		T a_non_special_value = 0;
 		for (idx_t i = 0; i < values_count; i++) {
-			if (i != vector_null_positions[tmp_null_idx]) {
-				a_non_null_value = input_vector[i];
-				// a_non_null_raw_value = raw_input_vector[i];
+			if (i != positions[tmp_position_idx]) {
+				a_non_special_value = input_vector[i];
 				break;
 			}
-			tmp_null_idx += 1;
+			tmp_position_idx += 1;
 		}
-		// Replacing that first non-null value on the vector
-		for (idx_t i = 0; i < nulls_count; i++) {
-			uint16_t null_value_pos = vector_null_positions[i];
-			input_vector[null_value_pos] = a_non_null_value;
-			// raw_input_vector[null_value_pos] = a_non_null_raw_value;
+		return a_non_special_value;
+	}
+
+	template <class T>
+	static void ReplaceValueInVectorPositions(vector<T> &input_vector, const vector<uint16_t> &positions_to_replace,
+	                                       idx_t special_values_count, T value_to_replace){
+		for (idx_t i = 0; i < special_values_count; i++) {
+			uint16_t null_value_pos = positions_to_replace[i];
+			input_vector[null_value_pos] = value_to_replace;
 		}
+	}
+
+	template <class T>
+	static void FindAndReplaceNullsInVector(vector<T> &input_vector, const vector<uint16_t> &vector_null_positions,
+	                                 idx_t values_count, idx_t nulls_count) {
+		if (nulls_count == 0){
+			return;
+		}
+		T a_non_null_value = FindFirstValueNotInPositionsArray(input_vector, vector_null_positions, values_count);
+		ReplaceValueInVectorPositions(input_vector, vector_null_positions, nulls_count, a_non_null_value);
 	}
 };
 

@@ -38,18 +38,21 @@ public:
 	explicit AlpRDCompressionState(ColumnDataCheckpointer &checkpointer, AlpRDAnalyzeState<T> *analyze_state)
 	    : checkpointer(checkpointer),
 	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ALPRD)) {
-		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
 		input_vector = vector<EXACT_TYPE>(AlpRDConstants::ALP_VECTOR_SIZE, 0);
 		raw_input_vector = vector<T>(AlpRDConstants::ALP_VECTOR_SIZE, 0);
 		vector_null_positions = vector<uint16_t>(AlpRDConstants::ALP_VECTOR_SIZE, 0);
 
 		//! State variables from the analyze step that are needed for compression
-		memcpy((void *)state.left_parts_dict, (void *)analyze_state->state.left_parts_dict,
-		       AlpRDConstants::DICTIONARY_SIZE_BYTES);
 		state.left_parts_dict_map = analyze_state->state.left_parts_dict_map;
 		state.left_bit_width = analyze_state->state.left_bit_width;
 		state.right_bit_width = analyze_state->state.right_bit_width;
+		state.actual_dictionary_size = analyze_state->state.actual_dictionary_size;
+		actual_dictionary_size_bytes = state.actual_dictionary_size * AlpRDConstants::DICTIONARY_ELEMENT_SIZE;
+		next_vector_byte_index_start = AlpRDConstants::HEADER_SIZE + actual_dictionary_size_bytes;
+		memcpy((void *)state.left_parts_dict, (void *)analyze_state->state.left_parts_dict,
+		       actual_dictionary_size_bytes);
+		CreateEmptySegment(checkpointer.GetRowGroup().start);
 	}
 
 	ColumnDataCheckpointer &checkpointer;
@@ -64,7 +67,8 @@ public:
 
 	data_ptr_t data_ptr;     // Pointer to next free spot in segment;
 	data_ptr_t metadata_ptr; // Reverse pointer to the next free spot for the metadata; used in decoding to SKIP vectors
-	uint32_t next_vector_byte_index_start = AlpRDConstants::HEADER_SIZE + AlpRDConstants::DICTIONARY_SIZE_BYTES;
+	uint32_t actual_dictionary_size_bytes;
+	uint32_t next_vector_byte_index_start;
 
 	vector<EXACT_TYPE> input_vector;
 	vector<T> raw_input_vector;
@@ -76,7 +80,7 @@ public:
 	// Returns the space currently used in the segment (in bytes)
 	idx_t UsedSpace() const {
 		//! [Pointer to metadata + right bitwidth] + Dictionary Size + Bytes already used in the segment
-		return AlpRDConstants::HEADER_SIZE + AlpRDConstants::DICTIONARY_SIZE_BYTES + data_bytes_used;
+		return AlpRDConstants::HEADER_SIZE + actual_dictionary_size_bytes + data_bytes_used;
 	}
 
 	// Returns the required space to store the newly compressed vector
@@ -114,17 +118,19 @@ public:
 
 		// Pointer to the start of the compressed data
 		data_ptr = handle.Ptr() + current_segment->GetBlockOffset() + AlpRDConstants::HEADER_SIZE +
-		           AlpRDConstants::DICTIONARY_SIZE_BYTES;
+		           actual_dictionary_size_bytes;
 		// Pointer to the start of the Metadata
 		metadata_ptr = handle.Ptr() + current_segment->GetBlockOffset() + Storage::BLOCK_SIZE;
 
-		next_vector_byte_index_start = AlpRDConstants::HEADER_SIZE + AlpRDConstants::DICTIONARY_SIZE_BYTES;
+		next_vector_byte_index_start = AlpRDConstants::HEADER_SIZE + actual_dictionary_size_bytes;
 	}
 
 	void CompressVector() {
 		if (nulls_idx){
-			alp::AlpUtils::ReplaceNullsInVector<EXACT_TYPE>(input_vector, vector_null_positions, vector_idx, nulls_idx);
-			alp::AlpUtils::ReplaceNullsInVector<T>(raw_input_vector, vector_null_positions, vector_idx, nulls_idx);
+			alp::AlpUtils::FindAndReplaceNullsInVector<EXACT_TYPE>(input_vector, vector_null_positions, vector_idx,
+			                                                       nulls_idx);
+			alp::AlpUtils::FindAndReplaceNullsInVector<T>(raw_input_vector, vector_null_positions, vector_idx,
+			                                              nulls_idx);
 		}
 		alp::AlpRDCompression<T, false>::Compress(input_vector, vector_idx, state);
 		//! Check if the compressed vector fits on current segment
@@ -217,8 +223,16 @@ public:
 		Store<uint8_t>(state.right_bit_width, dataptr);
 		dataptr += AlpRDConstants::RIGHT_BIT_WIDTH_SIZE;
 
+		// Store the left bw for the segment
+		Store<uint8_t>(state.left_bit_width, dataptr);
+		dataptr += AlpRDConstants::LEFT_BIT_WIDTH_SIZE;
+
+		// Store the actual number of elements on the dictionary of the segment
+		Store<uint8_t>(state.actual_dictionary_size, dataptr);
+		dataptr += AlpRDConstants::N_DICTIONARY_ELEMENTS_SIZE;
+
 		// Store the Dictionary
-		memcpy((void *)dataptr, (void *)state.left_parts_dict, AlpRDConstants::DICTIONARY_SIZE_BYTES);
+		memcpy((void *)dataptr, (void *)state.left_parts_dict, actual_dictionary_size_bytes);
 
 		handle.Destroy();
 		checkpoint_state.FlushSegment(std::move(current_segment), total_segment_size);

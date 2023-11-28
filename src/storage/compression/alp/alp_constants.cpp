@@ -2,7 +2,6 @@
 
 namespace duckdb {
 
-constexpr int64_t AlpConstants::U_FACT_ARR[];
 constexpr int64_t AlpConstants::FACT_ARR[];
 
 constexpr float AlpTypedConstants<float>::EXP_ARR[];

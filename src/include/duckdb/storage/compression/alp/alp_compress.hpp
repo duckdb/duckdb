@@ -112,9 +112,9 @@ public:
 
 	void CompressVector() {
 		if (nulls_idx){
-			alp::AlpUtils::ReplaceNullsInVector<T>(input_vector, vector_null_positions, vector_idx, nulls_idx);
+			alp::AlpUtils::FindAndReplaceNullsInVector<T>(input_vector, vector_null_positions, vector_idx, nulls_idx);
 		}
-		alp::AlpCompression<T, false>::Compress(input_vector, vector_idx, state);
+		alp::AlpCompression<T, false>::Compress(input_vector, vector_idx, vector_null_positions, nulls_idx, state);
 		//! Check if the compressed vector fits on current segment
 		if (!HasEnoughSpace()) {
 			auto row_start = current_segment->start + current_segment->count;

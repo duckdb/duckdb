@@ -14,6 +14,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/storage/compression/alp/alp_constants.hpp"
+#include "duckdb/storage/compression/alp/alp_utils.hpp"
 
 #include <cmath>
 
@@ -43,6 +44,10 @@ public:
 		vector_factor = 0;
 		exceptions_count = 0;
 		bit_width = 0;
+	}
+
+	void ResetCombinations(){
+		best_k_combinations.clear();
 	}
 
 public:
@@ -147,8 +152,6 @@ struct AlpCompression {
 		estimated_compression_size += n_values * estimated_bits_per_value;
 		estimated_compression_size +=
 		    exceptions_count * (EXACT_TYPE_BITSIZE + (AlpConstants::EXCEPTION_POSITION_SIZE * 8));
-		printf("v %d - f  %d\n", exp_idx, factor_idx);
-		printf("estimated_compression_size %d\n", estimated_compression_size);
 		return estimated_compression_size;
 	}
 
@@ -158,15 +161,13 @@ struct AlpCompression {
 	 * This operates over ALP first level samples
 	 */
 	static void FindTopKCombinations(const vector<vector<T>> &vectors_sampled, State &state) {
-
-		state.best_k_combinations.clear();
+		state.ResetCombinations();
 		// We use a 'pair' to hash it easily
 		map<pair<int8_t, int8_t>, uint64_t> best_k_combinations_hash;
 
 		// For each vector sampled
 		for (auto &sampled_vector : vectors_sampled) {
 			idx_t n_samples = sampled_vector.size();
-			printf("N samples in vector: %d - ", n_samples);
 			int8_t best_factor = AlpTypedConstants<T>::MAX_EXPONENT;
 			int8_t best_exponent = AlpTypedConstants<T>::MAX_EXPONENT;
 
@@ -176,7 +177,6 @@ struct AlpCompression {
 
 			// N of appearances is irrelevant at this phase; we search for the best compression for the vector
 			AlpCombination best_combination = {best_exponent, best_factor, 0, best_total_bits};
-			printf("TRY ALL \n");
 			//! We try all combinations in search for the one which minimize the compression size
 			for (int8_t exp_idx = AlpTypedConstants<T>::MAX_EXPONENT; exp_idx >= 0; exp_idx--) {
 				for (int8_t factor_idx = exp_idx; factor_idx >= 0; factor_idx--) {
@@ -184,13 +184,9 @@ struct AlpCompression {
 					AlpCombination current_combination = {exp_idx, factor_idx, 0, estimated_compression_size};
 					if (CompareALPCombinations(current_combination, best_combination)){
 						best_combination = current_combination;
-						printf("FOUND BEST IN VECTOR  \n");
-						printf("PREBEST %d %d \n", best_combination.exponent, best_combination.factor);
-						printf("PREBEST %d %d \n", current_combination.exponent, current_combination.factor);
 					}
 				}
 			}
-			printf("BEST %d %d \n", best_combination.exponent, best_combination.factor);
 			pair<int8_t, int8_t> best_combination_pair = make_pair(best_combination.exponent, best_combination.factor);
 			best_k_combinations_hash[best_combination_pair]++;
 		}
@@ -235,7 +231,6 @@ struct AlpCompression {
 		for (auto &combination : state.best_k_combinations) {
 			int32_t exp_idx = combination.exponent;
 			int32_t factor_idx = combination.factor;
-			printf("BEST K\n");
 			uint64_t estimated_compression_size = DryCompressToEstimateSize(vector_sample, exp_idx, factor_idx);
 
 			// If current compression size is worse (higher) or equal than the current best combination
@@ -257,7 +252,10 @@ struct AlpCompression {
 		state.vector_factor = best_factor;
 	}
 
-	static void Compress(const vector<T> &input_vector, idx_t n_values, State &state) {
+	/*
+	 * ALP Compress
+	 */
+	static void Compress(const vector<T> &input_vector, idx_t n_values, const vector<uint16_t> &vector_null_positions, idx_t nulls_count, State &state) {
 		if (state.best_k_combinations.size() > 1) {
 			FindBestFactorAndExponent(input_vector, n_values, state);
 		} else {
@@ -306,9 +304,11 @@ struct AlpCompression {
 		}
 		state.exceptions_count = exceptions_idx;
 
-		printf("Vector exponent %d\n", state.vector_exponent);
-		printf("Vector factor %d\n", state.vector_factor);
-		printf("Exceptions count %d\n", state.exceptions_count);
+		// Replacing nulls with that first non exception value
+		for (idx_t i = 0; i < nulls_count; i++) {
+			uint16_t null_value_pos = vector_null_positions[i];
+			state.encoded_integers[null_value_pos] = a_non_exception_value;
+		}
 
 		// Analyze FFOR
 		auto min_value = NumericLimits<int64_t>::Maximum();
@@ -322,8 +322,6 @@ struct AlpCompression {
 		auto *u_encoded_integers = reinterpret_cast<uint64_t *>(state.encoded_integers);
 		auto const u_min_value = static_cast<uint64_t>(min_value);
 
-		printf("FOR llu\n", u_min_value);
-		printf("MIN MAX DIFF %llu\n", min_max_diff);
 
 		// Subtract FOR
 		if (!EMPTY) { //! We only execute the FOR if we are writing the data
@@ -342,6 +340,15 @@ struct AlpCompression {
 		state.bp_size = bp_size;     // in bytes
 		state.frame_of_reference = min_value;
 	}
+
+	/*
+	 * Overload without specifying nulls
+	 */
+	static void Compress(const vector<T> &input_vector, idx_t n_values, State &state) {
+		vector<uint16_t> vector_null_positions;
+		idx_t nulls_count = 0;
+	    Compress(input_vector,  n_values, vector_null_positions, nulls_count, state);
+	}
 };
 
 template <class T>
@@ -349,7 +356,7 @@ struct AlpDecompression {
 	static void Decompress(uint8_t *for_encoded, T *output, idx_t count, uint8_t vector_factor, uint8_t vector_exponent,
 	                       uint16_t exceptions_count, T *exceptions, uint16_t *exceptions_positions,
 	                       uint64_t frame_of_reference, uint8_t bit_width) {
-		uint64_t factor = AlpConstants::U_FACT_ARR[vector_factor];
+		uint64_t factor = AlpConstants::FACT_ARR[vector_factor];
 		T exponent = AlpTypedConstants<T>::FRAC_ARR[vector_exponent];
 
 		// Bit Unpacking
@@ -367,7 +374,6 @@ struct AlpDecompression {
 		// Decoding
 		for (idx_t i = 0; i < count; i++) {
 			auto encoded_integer = encoded_integers[i];
-			// TODO: Use DecodeValue() (i think we dont need FACT_ARR, only the U_ version
 			output[i] = static_cast<T>(static_cast<int64_t>(encoded_integer)) * factor * exponent;
 		}
 

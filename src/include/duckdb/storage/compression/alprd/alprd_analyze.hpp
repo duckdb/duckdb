@@ -81,9 +81,8 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	}
 	D_ASSERT(sample_idx == sampling_params.n_sampled_values);
 
-	printf("nulls_idx %d \n \n", nulls_idx);
-	alp::AlpUtils::ReplaceNullsInVector<EXACT_TYPE>(current_vector_sample, current_vector_null_positions,
-	                                                sampling_params.n_sampled_values, nulls_idx);
+	alp::AlpUtils::FindAndReplaceNullsInVector<EXACT_TYPE>(current_vector_sample, current_vector_null_positions,
+	                                                       sampling_params.n_sampled_values, nulls_idx);
 
 	// Pushing the sampled vector samples into the rowgroup samples
 	for (auto &value : current_vector_sample) {
@@ -102,18 +101,14 @@ idx_t AlpRDFinalAnalyze(AnalyzeState &state) {
 	auto &analyze_state = (AlpRDAnalyzeState<T> &)state;
 	double factor_of_sampling = 1 / ((double)analyze_state.rowgroup_sample.size() / analyze_state.total_values_count);
 
-	printf("Taken vectors: %d\n", analyze_state.vectors_sampled_count);
-	printf("Taken rg samples total: %d\n", analyze_state.rowgroup_sample.size());
-	printf("Sampling factor: %f\n", factor_of_sampling);
-
 	// Finding which is the best dictionary for the sample
 	double estimated_bits_per_value = alp::AlpRDCompression<T, true>::FindBestDictionary(analyze_state.rowgroup_sample,
 	                                                                                     analyze_state.state);
 	double estimated_compressed_bits = estimated_bits_per_value * analyze_state.rowgroup_sample.size();
 	double estimed_compressed_bytes = estimated_compressed_bits / 8;
 
-	//! Overhead per segment: [Pointer to metadata + right bitwidth] + Dictionary Size
-	double per_segment_overhead = AlpRDConstants::HEADER_SIZE + AlpRDConstants::DICTIONARY_SIZE_BYTES;
+	//! Overhead per segment: [Pointer to metadata + right bitwidth + left bitwidth] + Dictionary Size
+	double per_segment_overhead = AlpRDConstants::HEADER_SIZE + AlpRDConstants::MAX_DICTIONARY_SIZE_BYTES;
 
 	//! Overhead per vector: Pointer to data + Exceptions count
 	double per_vector_overhead = AlpRDConstants::METADATA_POINTER_SIZE + AlpRDConstants::EXCEPTIONS_COUNT_SIZE;

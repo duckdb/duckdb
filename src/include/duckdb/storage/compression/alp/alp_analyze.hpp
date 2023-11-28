@@ -113,8 +113,8 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 		current_vector_values[i] = value;
 	}
 
-	alp::AlpUtils::ReplaceNullsInVector<T>(current_vector_values, current_vector_null_positions,
-	                                       sampling_params.n_lookup_values, nulls_idx);
+	alp::AlpUtils::FindAndReplaceNullsInVector<T>(current_vector_values, current_vector_null_positions,
+	                                              sampling_params.n_lookup_values, nulls_idx);
 
 	// Storing the sample of that vector
 	idx_t sample_idx = 0;
@@ -141,12 +141,9 @@ idx_t AlpFinalAnalyze(AnalyzeState &state) {
 	// Finding the Top K combinations of Exponent and Factor
 	alp::AlpCompression<T, true>::FindTopKCombinations(analyze_state.rowgroup_sample, analyze_state.state);
 
-	printf("Taken vectors: %d\n", analyze_state.vectors_sampled_count);
-	printf("Taken rg sampled vectors (must be same): %d\n", analyze_state.rowgroup_sample.size());
 	// Encode the entire sampled vectors to estimate a compression size
 	idx_t compressed_values = 0;
 	for (auto &vector_to_compress : analyze_state.complete_vectors_sampled) {
-		printf("Complete vector size: %d - ", vector_to_compress.size());
 		alp::AlpCompression<T, true>::Compress(vector_to_compress, vector_to_compress.size(),
 		                                       analyze_state.state);
 		if (!analyze_state.HasEnoughSpace()) {
