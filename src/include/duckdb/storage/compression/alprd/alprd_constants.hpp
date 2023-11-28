@@ -27,7 +27,9 @@ public:
 	static constexpr uint8_t RIGHT_BIT_WIDTH_SIZE = sizeof(uint8_t);
 	static constexpr uint8_t LEFT_BIT_WIDTH_SIZE = sizeof(uint8_t);
 	static constexpr uint8_t N_DICTIONARY_ELEMENTS_SIZE = sizeof(uint8_t);
-	static constexpr uint8_t HEADER_SIZE = METADATA_POINTER_SIZE + RIGHT_BIT_WIDTH_SIZE + LEFT_BIT_WIDTH_SIZE + N_DICTIONARY_ELEMENTS_SIZE; // Pointer to metadata + Right BW + Left BW + Dict Elems
+	static constexpr uint8_t HEADER_SIZE =
+	    METADATA_POINTER_SIZE + RIGHT_BIT_WIDTH_SIZE + LEFT_BIT_WIDTH_SIZE +
+	    N_DICTIONARY_ELEMENTS_SIZE; // Pointer to metadata + Right BW + Left BW + Dict Elems
 };
 
 } // namespace duckdb

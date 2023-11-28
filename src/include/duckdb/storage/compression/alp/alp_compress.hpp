@@ -72,8 +72,7 @@ public:
 	// Returns the required space to store the newly compressed vector
 	idx_t RequiredSpace() {
 		idx_t required_space =
-		    state.bp_size +
-		    (state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
+		    state.bp_size + (state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
 		    AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE +
 		    AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
 		return required_space;
@@ -111,7 +110,7 @@ public:
 	}
 
 	void CompressVector() {
-		if (nulls_idx){
+		if (nulls_idx) {
 			alp::AlpUtils::FindAndReplaceNullsInVector<T>(input_vector, vector_null_positions, vector_idx, nulls_idx);
 		}
 		alp::AlpCompression<T, false>::Compress(input_vector, vector_idx, vector_null_positions, nulls_idx, state);
@@ -155,19 +154,17 @@ public:
 		data_ptr += state.bp_size;
 
 		if (state.exceptions_count > 0) {
-			memcpy((void *)data_ptr, (void *)state.exceptions,
-			       sizeof(EXACT_TYPE) * state.exceptions_count);
+			memcpy((void *)data_ptr, (void *)state.exceptions, sizeof(EXACT_TYPE) * state.exceptions_count);
 			data_ptr += sizeof(EXACT_TYPE) * state.exceptions_count;
 			memcpy((void *)data_ptr, (void *)state.exceptions_positions,
 			       AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count);
 			data_ptr += AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count;
 		}
 
-		data_bytes_used +=
-		    state.bp_size +
-		    (state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
-		    AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE +
-		    AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
+		data_bytes_used += state.bp_size +
+		                   (state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
+		                   AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE +
+		                   AlpConstants::EXCEPTIONS_COUNT_SIZE + AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= sizeof(uint32_t);

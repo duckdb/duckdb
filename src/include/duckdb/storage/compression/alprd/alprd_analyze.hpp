@@ -50,11 +50,11 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	input.ToUnifiedFormat(count, vdata);
 	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 
-
-	bool must_skip_current_vector = alp::AlpUtils::MustSkipSamplingFromCurrentVector(analyze_state.vectors_count, analyze_state.vectors_sampled_count, count);
+	bool must_skip_current_vector = alp::AlpUtils::MustSkipSamplingFromCurrentVector(
+	    analyze_state.vectors_count, analyze_state.vectors_sampled_count, count);
 	analyze_state.vectors_count += 1;
 	analyze_state.total_values_count += count;
-	if (must_skip_current_vector){
+	if (must_skip_current_vector) {
 		return true;
 	}
 
@@ -102,8 +102,8 @@ idx_t AlpRDFinalAnalyze(AnalyzeState &state) {
 	double factor_of_sampling = 1 / ((double)analyze_state.rowgroup_sample.size() / analyze_state.total_values_count);
 
 	// Finding which is the best dictionary for the sample
-	double estimated_bits_per_value = alp::AlpRDCompression<T, true>::FindBestDictionary(analyze_state.rowgroup_sample,
-	                                                                                     analyze_state.state);
+	double estimated_bits_per_value =
+	    alp::AlpRDCompression<T, true>::FindBestDictionary(analyze_state.rowgroup_sample, analyze_state.state);
 	double estimated_compressed_bits = estimated_bits_per_value * analyze_state.rowgroup_sample.size();
 	double estimed_compressed_bytes = estimated_compressed_bits / 8;
 

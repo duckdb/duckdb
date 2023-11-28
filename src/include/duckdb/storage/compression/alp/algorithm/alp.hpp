@@ -29,7 +29,8 @@ struct AlpCombination {
 	uint64_t estimated_compression_size;
 
 	AlpCombination(int8_t exponent, int8_t factor, uint64_t n_appearances, uint64_t estimated_compression_size)
-	    : exponent(exponent), factor(factor), n_appearances(n_appearances), estimated_compression_size(estimated_compression_size) {
+	    : exponent(exponent), factor(factor), n_appearances(n_appearances),
+	      estimated_compression_size(estimated_compression_size) {
 	}
 };
 
@@ -46,7 +47,7 @@ public:
 		bit_width = 0;
 	}
 
-	void ResetCombinations(){
+	void ResetCombinations() {
 		best_k_combinations.clear();
 	}
 
@@ -85,7 +86,7 @@ struct AlpCompression {
 	/*
 	 * Encoding a single value with ALP
 	 */
-	static int64_t EncodeValue(T value, int8_t exp_idx, int8_t factor_idx){
+	static int64_t EncodeValue(T value, int8_t exp_idx, int8_t factor_idx) {
 		T tmp_encoded_value =
 		    value * AlpTypedConstants<T>::EXP_ARR[exp_idx] * AlpTypedConstants<T>::FRAC_ARR[factor_idx];
 		int64_t encoded_value = NumberToInt64(tmp_encoded_value);
@@ -95,10 +96,10 @@ struct AlpCompression {
 	/*
 	 * Decoding a single value with ALP
 	 */
-	static T DecodeValue(int64_t encoded_value, int8_t exp_idx, int8_t factor_idx){
+	static T DecodeValue(int64_t encoded_value, int8_t exp_idx, int8_t factor_idx) {
 		//! The cast to T is needed to prevent a signed integer overflow
 		T decoded_value = static_cast<T>(encoded_value) * AlpConstants::FACT_ARR[factor_idx] *
-		    AlpTypedConstants<T>::FRAC_ARR[exp_idx];
+		                  AlpTypedConstants<T>::FRAC_ARR[exp_idx];
 		return decoded_value;
 	}
 
@@ -119,7 +120,7 @@ struct AlpCompression {
 	/*
 	 * Dry compress a vector (ideally a sample) to estimate ALP compression size given a exponent and factor
 	 */
-	static uint64_t DryCompressToEstimateSize(const vector<T> &in, int8_t exp_idx, int8_t factor_idx){
+	static uint64_t DryCompressToEstimateSize(const vector<T> &in, int8_t exp_idx, int8_t factor_idx) {
 		idx_t n_values = in.size();
 		idx_t exceptions_count = 0;
 		idx_t non_exceptions_count = 0;
@@ -146,8 +147,7 @@ struct AlpCompression {
 		}
 
 		// Evaluate factor/exponent compression size (we optimize for FOR)
-		uint64_t delta =
-		    (static_cast<uint64_t>(max_encoded_value) - static_cast<uint64_t>(min_encoded_value));
+		uint64_t delta = (static_cast<uint64_t>(max_encoded_value) - static_cast<uint64_t>(min_encoded_value));
 		estimated_bits_per_value = std::ceil(std::log2(delta + 1));
 		estimated_compression_size += n_values * estimated_bits_per_value;
 		estimated_compression_size +=
@@ -180,9 +180,10 @@ struct AlpCompression {
 			//! We try all combinations in search for the one which minimize the compression size
 			for (int8_t exp_idx = AlpTypedConstants<T>::MAX_EXPONENT; exp_idx >= 0; exp_idx--) {
 				for (int8_t factor_idx = exp_idx; factor_idx >= 0; factor_idx--) {
-					uint64_t estimated_compression_size = DryCompressToEstimateSize(sampled_vector, exp_idx, factor_idx);
+					uint64_t estimated_compression_size =
+					    DryCompressToEstimateSize(sampled_vector, exp_idx, factor_idx);
 					AlpCombination current_combination = {exp_idx, factor_idx, 0, estimated_compression_size};
-					if (CompareALPCombinations(current_combination, best_combination)){
+					if (CompareALPCombinations(current_combination, best_combination)) {
 						best_combination = current_combination;
 					}
 				}
@@ -195,10 +196,11 @@ struct AlpCompression {
 		// FIXME: A MaxHeap would be faster although this vector is always of constant size
 		vector<AlpCombination> best_k_combinations;
 		for (auto const &combination : best_k_combinations_hash) {
-			best_k_combinations.emplace_back(combination.first.first,  // Exponent
-			                                 combination.first.second, // Factor
-			                                 combination.second, // N of times it appeared (hash value)
-			                                 0 // Compression size is irrelevant at this phase since we compare combinations from different vectors
+			best_k_combinations.emplace_back(
+			    combination.first.first,  // Exponent
+			    combination.first.second, // Factor
+			    combination.second,       // N of times it appeared (hash value)
+			    0 // Compression size is irrelevant at this phase since we compare combinations from different vectors
 			);
 		}
 		sort(best_k_combinations.begin(), best_k_combinations.end(), CompareALPCombinations);
@@ -255,7 +257,8 @@ struct AlpCompression {
 	/*
 	 * ALP Compress
 	 */
-	static void Compress(const vector<T> &input_vector, idx_t n_values, const vector<uint16_t> &vector_null_positions, idx_t nulls_count, State &state) {
+	static void Compress(const vector<T> &input_vector, idx_t n_values, const vector<uint16_t> &vector_null_positions,
+	                     idx_t nulls_count, State &state) {
 		if (state.best_k_combinations.size() > 1) {
 			FindBestFactorAndExponent(input_vector, n_values, state);
 		} else {
@@ -322,7 +325,6 @@ struct AlpCompression {
 		auto *u_encoded_integers = reinterpret_cast<uint64_t *>(state.encoded_integers);
 		auto const u_min_value = static_cast<uint64_t>(min_value);
 
-
 		// Subtract FOR
 		if (!EMPTY) { //! We only execute the FOR if we are writing the data
 			for (idx_t i = 0; i < n_values; i++) {
@@ -347,7 +349,7 @@ struct AlpCompression {
 	static void Compress(const vector<T> &input_vector, idx_t n_values, State &state) {
 		vector<uint16_t> vector_null_positions;
 		idx_t nulls_count = 0;
-	    Compress(input_vector,  n_values, vector_null_positions, nulls_count, state);
+		Compress(input_vector, n_values, vector_null_positions, nulls_count, state);
 	}
 };
 

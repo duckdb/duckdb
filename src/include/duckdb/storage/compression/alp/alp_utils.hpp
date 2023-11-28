@@ -23,8 +23,9 @@ struct AlpSamplingParameters {
 	uint32_t n_sampled_increments;
 	uint32_t n_sampled_values;
 
-	AlpSamplingParameters(uint32_t n_lookup_values, uint32_t n_sampled_increments, uint32_t n_sampled_values):
-	      n_lookup_values(n_lookup_values), n_sampled_increments(n_sampled_increments), n_sampled_values(n_sampled_values) {
+	AlpSamplingParameters(uint32_t n_lookup_values, uint32_t n_sampled_increments, uint32_t n_sampled_values)
+	    : n_lookup_values(n_lookup_values), n_sampled_increments(n_sampled_increments),
+	      n_sampled_values(n_sampled_values) {
 	}
 };
 
@@ -34,8 +35,7 @@ public:
 	}
 
 public:
-
-	static AlpSamplingParameters GetSamplingParameters(idx_t current_vector_n_values){
+	static AlpSamplingParameters GetSamplingParameters(idx_t current_vector_n_values) {
 
 		uint32_t n_lookup_values = MinValue(current_vector_n_values, (idx_t)AlpConstants::ALP_VECTOR_SIZE);
 		//! We sample equidistant values within a vector; to do this we jump a fixed number of values
@@ -68,7 +68,7 @@ public:
 
 	template <class T>
 	static T FindFirstValueNotInPositionsArray(const vector<T> &input_vector, const vector<uint16_t> &positions,
-	                               idx_t values_count){
+	                                           idx_t values_count) {
 		idx_t tmp_position_idx = 0;
 		T a_non_special_value = 0;
 		for (idx_t i = 0; i < values_count; i++) {
@@ -83,7 +83,7 @@ public:
 
 	template <class T>
 	static void ReplaceValueInVectorPositions(vector<T> &input_vector, const vector<uint16_t> &positions_to_replace,
-	                                       idx_t special_values_count, T value_to_replace){
+	                                          idx_t special_values_count, T value_to_replace) {
 		for (idx_t i = 0; i < special_values_count; i++) {
 			uint16_t null_value_pos = positions_to_replace[i];
 			input_vector[null_value_pos] = value_to_replace;
@@ -92,8 +92,8 @@ public:
 
 	template <class T>
 	static void FindAndReplaceNullsInVector(vector<T> &input_vector, const vector<uint16_t> &vector_null_positions,
-	                                 idx_t values_count, idx_t nulls_count) {
-		if (nulls_count == 0){
+	                                        idx_t values_count, idx_t nulls_count) {
+		if (nulls_count == 0) {
 			return;
 		}
 		T a_non_null_value = FindFirstValueNotInPositionsArray(input_vector, vector_null_positions, values_count);

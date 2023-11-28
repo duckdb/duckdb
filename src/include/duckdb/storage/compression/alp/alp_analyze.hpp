@@ -46,8 +46,7 @@ public:
 	// Returns the required space to hyphotetically store the compressed vector
 	idx_t RequiredSpace() const {
 		idx_t required_space =
-		    state.bp_size +
-		    state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE) +
+		    state.bp_size + state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE) +
 		    AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE +
 		    AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE + AlpConstants::METADATA_POINTER_SIZE;
 		return required_space;
@@ -86,11 +85,11 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	input.ToUnifiedFormat(count, vdata);
 	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 
-
-	bool must_skip_current_vector = alp::AlpUtils::MustSkipSamplingFromCurrentVector(analyze_state.vectors_count, analyze_state.vectors_sampled_count, count);
+	bool must_skip_current_vector = alp::AlpUtils::MustSkipSamplingFromCurrentVector(
+	    analyze_state.vectors_count, analyze_state.vectors_sampled_count, count);
 	analyze_state.vectors_count += 1;
 	analyze_state.total_values_count += count;
-	if (must_skip_current_vector){
+	if (must_skip_current_vector) {
 		return true;
 	}
 
@@ -144,8 +143,7 @@ idx_t AlpFinalAnalyze(AnalyzeState &state) {
 	// Encode the entire sampled vectors to estimate a compression size
 	idx_t compressed_values = 0;
 	for (auto &vector_to_compress : analyze_state.complete_vectors_sampled) {
-		alp::AlpCompression<T, true>::Compress(vector_to_compress, vector_to_compress.size(),
-		                                       analyze_state.state);
+		alp::AlpCompression<T, true>::Compress(vector_to_compress, vector_to_compress.size(), analyze_state.state);
 		if (!analyze_state.HasEnoughSpace()) {
 			analyze_state.FlushSegment();
 		}

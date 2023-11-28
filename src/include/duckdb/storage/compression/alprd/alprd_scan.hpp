@@ -50,7 +50,8 @@ public:
 		}
 		values_buffer[0] = (EXACT_TYPE)0;
 		alp::AlpRDDecompression<T>::Decompress(left_encoded, right_encoded, left_parts_dict, values_buffer, count,
-		                                       exceptions_count, exceptions, exceptions_positions, left_bit_width, right_bit_width);
+		                                       exceptions_count, exceptions, exceptions_positions, left_bit_width,
+		                                       right_bit_width);
 	}
 
 public:
@@ -83,9 +84,12 @@ public:
 
 		// Load the Right Bit Width which is in the segment header after the pointer to the first metadata
 		vector_state.right_bit_width = Load<uint8_t>(segment_data + AlpRDConstants::METADATA_POINTER_SIZE);
-		vector_state.left_bit_width = Load<uint8_t>(segment_data + AlpRDConstants::METADATA_POINTER_SIZE + AlpRDConstants::RIGHT_BIT_WIDTH_SIZE);
+		vector_state.left_bit_width =
+		    Load<uint8_t>(segment_data + AlpRDConstants::METADATA_POINTER_SIZE + AlpRDConstants::RIGHT_BIT_WIDTH_SIZE);
 
-		uint8_t actual_dictionary_size = Load<uint8_t>(segment_data + AlpRDConstants::METADATA_POINTER_SIZE + AlpRDConstants::RIGHT_BIT_WIDTH_SIZE + AlpRDConstants::LEFT_BIT_WIDTH_SIZE);
+		uint8_t actual_dictionary_size =
+		    Load<uint8_t>(segment_data + AlpRDConstants::METADATA_POINTER_SIZE + AlpRDConstants::RIGHT_BIT_WIDTH_SIZE +
+		                  AlpRDConstants::LEFT_BIT_WIDTH_SIZE);
 		uint8_t actual_dictionary_size_bytes = actual_dictionary_size * AlpRDConstants::DICTIONARY_ELEMENT_SIZE;
 
 		// Load the left parts dictionary which is after the segment header and is of a fixed size

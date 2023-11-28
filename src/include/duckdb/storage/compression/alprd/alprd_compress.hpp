@@ -85,10 +85,10 @@ public:
 
 	// Returns the required space to store the newly compressed vector
 	idx_t RequiredSpace() {
-		idx_t required_space = state.left_bit_packed_size + state.right_bit_packed_size +
-		                       state.exceptions_count *
-		                           (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE) +
-		                       AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
+		idx_t required_space =
+		    state.left_bit_packed_size + state.right_bit_packed_size +
+		    state.exceptions_count * (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE) +
+		    AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 		return required_space;
 	}
 
@@ -126,7 +126,7 @@ public:
 	}
 
 	void CompressVector() {
-		if (nulls_idx){
+		if (nulls_idx) {
 			alp::AlpUtils::FindAndReplaceNullsInVector<EXACT_TYPE>(input_vector, vector_null_positions, vector_idx,
 			                                                       nulls_idx);
 			alp::AlpUtils::FindAndReplaceNullsInVector<T>(raw_input_vector, vector_null_positions, vector_idx,
@@ -160,18 +160,17 @@ public:
 		data_ptr += state.right_bit_packed_size;
 
 		if (state.exceptions_count > 0) {
-			memcpy((void *)data_ptr, (void *)state.exceptions,
-			       AlpRDConstants::EXCEPTION_SIZE * state.exceptions_count);
+			memcpy((void *)data_ptr, (void *)state.exceptions, AlpRDConstants::EXCEPTION_SIZE * state.exceptions_count);
 			data_ptr += AlpRDConstants::EXCEPTION_SIZE * state.exceptions_count;
 			memcpy((void *)data_ptr, (void *)state.exceptions_positions,
 			       AlpRDConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count);
 			data_ptr += AlpRDConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count;
 		}
 
-		data_bytes_used += state.left_bit_packed_size + state.right_bit_packed_size +
-		                   (state.exceptions_count *
-		                    (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE)) +
-		                   AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
+		data_bytes_used +=
+		    state.left_bit_packed_size + state.right_bit_packed_size +
+		    (state.exceptions_count * (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE)) +
+		    AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;

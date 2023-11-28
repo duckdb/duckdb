@@ -75,8 +75,7 @@ struct AlpRDCompression {
 	}
 
 	template <bool PERSIST_DICT>
-	static double BuildLeftPartsDictionary(const vector<EXACT_TYPE> &values, uint8_t right_bit_width,
-	                                       State &state) {
+	static double BuildLeftPartsDictionary(const vector<EXACT_TYPE> &values, uint8_t right_bit_width, State &state) {
 		unordered_map<EXACT_TYPE, int32_t> left_parts_hash;
 		vector<AlpRDLeftPartInfo> left_parts_sorted_repetitions;
 
@@ -101,7 +100,8 @@ struct AlpRDCompression {
 		}
 
 		// The left parts bit width after compression is determined by how many elements are in the dictionary
-		uint64_t actual_dictionary_size = MinValue<uint64_t>(AlpRDConstants::MAX_DICTIONARY_SIZE, left_parts_sorted_repetitions.size());
+		uint64_t actual_dictionary_size =
+		    MinValue<uint64_t>(AlpRDConstants::MAX_DICTIONARY_SIZE, left_parts_sorted_repetitions.size());
 		uint8_t left_bit_width = MaxValue<uint8_t>(1, std::ceil(std::log2(actual_dictionary_size)));
 
 		if (PERSIST_DICT) {
@@ -118,7 +118,9 @@ struct AlpRDCompression {
 			state.right_bit_width = right_bit_width;
 			state.actual_dictionary_size = actual_dictionary_size;
 
-			D_ASSERT(state.left_bit_width > 0 && state.right_bit_width > 0 && state.left_bit_width <= AlpRDConstants::MAX_DICTIONARY_BIT_WIDTH && state.actual_dictionary_size <= AlpRDConstants::MAX_DICTIONARY_SIZE);
+			D_ASSERT(state.left_bit_width > 0 && state.right_bit_width > 0 &&
+			         state.left_bit_width <= AlpRDConstants::MAX_DICTIONARY_BIT_WIDTH &&
+			         state.actual_dictionary_size <= AlpRDConstants::MAX_DICTIONARY_SIZE);
 		}
 
 		double estimated_size =
