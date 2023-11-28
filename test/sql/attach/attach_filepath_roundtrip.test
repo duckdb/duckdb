@@ -73,6 +73,8 @@ already attached
 
 statement error con2
 ATTACH '__TEST_DIR__/con1.db';
+----
+write-write
 
 statement ok con1
 DETACH con1;
@@ -81,6 +83,8 @@ DETACH con1;
 
 statement error con2
 ATTACH '__TEST_DIR__/con1.db';
+----
+transaction is aborted
 
 # commit con1 and roll back con2
 

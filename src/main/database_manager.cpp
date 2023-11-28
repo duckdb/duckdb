@@ -92,25 +92,25 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabaseFromPath(ClientContex
 	return nullptr;
 }
 
-void DatabaseManager::InsertDatabasePath(ClientContext &context, const string &path, const string &name) {
-	if (path.empty() || path == IN_MEMORY_PATH) {
-		return;
-	}
-
-	lock_guard<mutex> write_lock(db_paths_lock);
-
+void DatabaseManager::CheckPathConflict(ClientContext &context, const string &path) {
 	// ensure that we did not already attach a database with the same path
 	if (db_paths.find(path) != db_paths.end()) {
 		// check that the database is actually still attached
 		auto entry = GetDatabaseFromPath(context, path);
 		if (entry) {
-			throw BinderException(
-			    "Unique file handle conflict: Database \"%s\" is already attached with path \"%s\", "
-			    "possibly by another transaction. Commit that transaction, if it already detached the file.",
-			    name, path);
+			throw BinderException("Unique file handle conflict: Database \"%s\" is already attached with path \"%s\", ",
+			                      entry->name, path);
 		}
 	}
+}
 
+void DatabaseManager::InsertDatabasePath(ClientContext &context, const string &path, const string &name) {
+	if (path.empty() || path == IN_MEMORY_PATH) {
+		return;
+	}
+
+	lock_guard<mutex> path_lock(db_paths_lock);
+	CheckPathConflict(context, path);
 	db_paths.insert(path);
 }
 
@@ -118,7 +118,7 @@ void DatabaseManager::EraseDatabasePath(const string &path) {
 	if (path.empty() || path == IN_MEMORY_PATH) {
 		return;
 	}
-	lock_guard<mutex> write_lock(db_paths_lock);
+	lock_guard<mutex> path_lock(db_paths_lock);
 	auto path_it = db_paths.find(path);
 	if (path_it != db_paths.end()) {
 		db_paths.erase(path_it);
@@ -141,6 +141,9 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, string &db_type, A
 
 	// try to extract database type from path
 	if (db_type.empty()) {
+		lock_guard<mutex> path_lock(db_paths_lock);
+		CheckPathConflict(context, info.path);
+
 		DBPathAndType::CheckMagicBytes(info.path, db_type, config);
 	}
 
