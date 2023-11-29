@@ -25,11 +25,16 @@ ColumnDefinition ColumnDefinition::Copy() const {
 	return copy;
 }
 
-const unique_ptr<ParsedExpression> &ColumnDefinition::DefaultValue() const {
+const ParsedExpression &ColumnDefinition::DefaultValue() const {
+	D_ASSERT(HasDefaultValue());
+	return *expression;
+}
+
+bool ColumnDefinition::HasDefaultValue() const {
 	if (Generated()) {
-		throw InternalException("Calling DefaultValue() on a generated column");
+		return false;
 	}
-	return expression;
+	return expression != nullptr;
 }
 
 void ColumnDefinition::SetDefaultValue(unique_ptr<ParsedExpression> default_value) {

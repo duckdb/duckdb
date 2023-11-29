@@ -99,11 +99,11 @@ static Value DefaultValue(const ColumnDefinition &def) {
 	if (def.Generated()) {
 		return Value(def.GeneratedExpression().ToString());
 	}
-	auto &value = def.DefaultValue();
-	if (!value) {
+	if (!def.HasDefaultValue()) {
 		return Value();
 	}
-	return Value(value->ToString());
+	auto &value = def.DefaultValue();
+	return Value(value.ToString());
 }
 
 static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntry &table, DataChunk &output) {
