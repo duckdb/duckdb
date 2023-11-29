@@ -91,7 +91,7 @@ public:
 struct DependencyDependentFlags : public DependencyFlags {
 private:
 	static constexpr uint8_t BLOCKING = 0;
-	static constexpr uint8_t OWNED_BY = 0;
+	static constexpr uint8_t OWNED_BY = 1;
 
 public:
 	DependencyDependentFlags &Apply(DependencyDependentFlags other) {
