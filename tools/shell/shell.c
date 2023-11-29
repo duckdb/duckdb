@@ -11617,18 +11617,22 @@ static int shell_callback(
       if (nArg != 2) {
         break;
       }
-      utf8_printf(p->out, "\n┌─────────────────────────────┐\n");
-      utf8_printf(p->out, "│┌───────────────────────────┐│\n");
-      if (strcmp(azArg[0], "logical_plan") == 0) {
-      utf8_printf(p->out, "││ Unoptimized Logical Plan  ││\n");
-      } else if (strcmp(azArg[0], "logical_opt") == 0) {
-      utf8_printf(p->out, "││  Optimized Logical Plan   ││\n");
-      } else if (strcmp(azArg[0], "physical_plan") == 0) {
-      utf8_printf(p->out, "││       Physical Plan       ││\n");
-
+      int logical_plan = strcmp(azArg[0], "logical_plan");
+      int logical_opt = strcmp(azArg[0], "logical_opt");
+      int physical_plan = strcmp(azArg[0], "physical_plan");
+      if (logical_plan * logical_opt * physical_plan == 0) {
+        utf8_printf(p->out, "\n┌─────────────────────────────┐\n");
+        utf8_printf(p->out, "│┌───────────────────────────┐│\n");
+        if (logical_plan == 0) {
+          utf8_printf(p->out, "││ Unoptimized Logical Plan  ││\n");
+        } else if (logical_opt == 0) {
+          utf8_printf(p->out, "││  Optimized Logical Plan   ││\n");
+        } else if (physical_plan == 0) {
+          utf8_printf(p->out, "││       Physical Plan       ││\n");
+        }
+        utf8_printf(p->out, "│└───────────────────────────┘│\n");
+        utf8_printf(p->out, "└─────────────────────────────┘\n");
       }
-      utf8_printf(p->out, "│└───────────────────────────┘│\n");
-      utf8_printf(p->out, "└─────────────────────────────┘\n");
       utf8_printf(p->out, "%s", azArg[1]);
       break;
     }
