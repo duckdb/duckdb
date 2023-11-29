@@ -222,7 +222,7 @@ static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFun
 	list_child_type = ListType::GetChildType(list_child_type);
 
 	auto cast_lambda_expr =
-	    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), list_child_type, true);
+	    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), list_child_type, false);
 	if (!cast_lambda_expr) {
 		throw BinderException("Could not cast lambda expression to list child type");
 	}
