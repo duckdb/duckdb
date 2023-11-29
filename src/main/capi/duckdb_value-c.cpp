@@ -21,6 +21,10 @@ void duckdb_destroy_value(duckdb_value *value) {
 	}
 }
 
+static duckdb_value WrapValue(duckdb::Value *value) {
+	return reinterpret_cast<duckdb_value>(value);
+}
+
 duckdb_value duckdb_create_varchar_length(const char *text, idx_t length) {
 	return reinterpret_cast<duckdb_value>(new duckdb::Value(std::string(text, length)));
 }
@@ -32,6 +36,19 @@ duckdb_value duckdb_create_varchar(const char *text) {
 duckdb_value duckdb_create_int64(int64_t input) {
 	auto val = duckdb::Value::BIGINT(input);
 	return reinterpret_cast<duckdb_value>(new duckdb::Value(val));
+}
+
+duckdb_value duckdb_create_value(duckdb_type type, void *data) {
+	switch (type) {
+	case DUCKDB_TYPE_VARCHAR:
+		return duckdb_create_varchar(reinterpret_cast<const char *>(data));
+	case DUCKDB_TYPE_INT64:
+		return duckdb_create_int64(*reinterpret_cast<int64_t *>(data));
+	case DUCKDB_TYPE_INT32:
+		return WrapValue(new duckdb::Value(duckdb::Value::INT32(*reinterpret_cast<int32_t *>(data))));
+	default:
+		return nullptr;
+	}
 }
 
 char *duckdb_get_varchar(duckdb_value value) {
