@@ -10,9 +10,10 @@
 
 #include "duckdb/common/bitpacking.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/map.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/hash.hpp"
 #include "duckdb/storage/compression/alp/alp_constants.hpp"
 #include "duckdb/storage/compression/alp/alp_utils.hpp"
 
@@ -22,14 +23,38 @@ namespace duckdb {
 
 namespace alp {
 
+struct AlpEncodingIndices {
+	uint8_t exponent;
+	uint8_t factor;
+
+	AlpEncodingIndices(uint8_t exponent, uint8_t factor) : exponent(exponent), factor(factor) {
+	}
+
+	AlpEncodingIndices() : exponent(0), factor(0) {
+	}
+};
+
+struct AlpEncodingIndicesEquality {
+	bool operator()(const AlpEncodingIndices &a, const AlpEncodingIndices &b) const {
+		return a.exponent == b.exponent && a.factor == b.factor;
+	}
+};
+
+struct AlpEncodingIndicesHash {
+	hash_t operator()(const AlpEncodingIndices &encoding_indices) const {
+		hash_t h1 = Hash<uint8_t>(encoding_indices.exponent);
+		hash_t h2 = Hash<uint8_t>(encoding_indices.factor);
+		return CombineHash(h1, h2);
+	}
+};
+
 struct AlpCombination {
-	int8_t exponent;
-	int8_t factor;
+	AlpEncodingIndices encoding_indices;
 	uint64_t n_appearances;
 	uint64_t estimated_compression_size;
 
-	AlpCombination(int8_t exponent, int8_t factor, uint64_t n_appearances, uint64_t estimated_compression_size)
-	    : exponent(exponent), factor(factor), n_appearances(n_appearances),
+	AlpCombination(AlpEncodingIndices encoding_indices, uint64_t n_appearances, uint64_t estimated_compression_size)
+	    : encoding_indices(encoding_indices), n_appearances(n_appearances),
 	      estimated_compression_size(estimated_compression_size) {
 	}
 };
@@ -37,12 +62,11 @@ struct AlpCombination {
 template <class T, bool EMPTY>
 class AlpCompressionState {
 public:
-	AlpCompressionState() : vector_exponent(0), vector_factor(0), exceptions_count(0), bit_width(0) {
+	AlpCompressionState() : vector_encoding_indices(0, 0), exceptions_count(0), bit_width(0) {
 	}
 
 	void Reset() {
-		vector_exponent = 0;
-		vector_factor = 0;
+		vector_encoding_indices = {0, 0};
 		exceptions_count = 0;
 		bit_width = 0;
 	}
@@ -52,8 +76,7 @@ public:
 	}
 
 public:
-	uint8_t vector_exponent;
-	uint8_t vector_factor;
+	AlpEncodingIndices vector_encoding_indices;
 	uint16_t exceptions_count;
 	uint16_t bit_width;
 	uint64_t bp_size;
@@ -86,9 +109,9 @@ struct AlpCompression {
 	/*
 	 * Encoding a single value with ALP
 	 */
-	static int64_t EncodeValue(T value, int8_t exp_idx, int8_t factor_idx) {
-		T tmp_encoded_value =
-		    value * AlpTypedConstants<T>::EXP_ARR[exp_idx] * AlpTypedConstants<T>::FRAC_ARR[factor_idx];
+	static int64_t EncodeValue(T value, AlpEncodingIndices encoding_indices) {
+		T tmp_encoded_value = value * AlpTypedConstants<T>::EXP_ARR[encoding_indices.exponent] *
+		                      AlpTypedConstants<T>::FRAC_ARR[encoding_indices.factor];
 		int64_t encoded_value = NumberToInt64(tmp_encoded_value);
 		return encoded_value;
 	}
@@ -96,10 +119,10 @@ struct AlpCompression {
 	/*
 	 * Decoding a single value with ALP
 	 */
-	static T DecodeValue(int64_t encoded_value, int8_t exp_idx, int8_t factor_idx) {
+	static T DecodeValue(int64_t encoded_value, AlpEncodingIndices encoding_indices) {
 		//! The cast to T is needed to prevent a signed integer overflow
-		T decoded_value = static_cast<T>(encoded_value) * AlpConstants::FACT_ARR[factor_idx] *
-		                  AlpTypedConstants<T>::FRAC_ARR[exp_idx];
+		T decoded_value = static_cast<T>(encoded_value) * AlpConstants::FACT_ARR[encoding_indices.factor] *
+		                  AlpTypedConstants<T>::FRAC_ARR[encoding_indices.exponent];
 		return decoded_value;
 	}
 
@@ -116,17 +139,18 @@ struct AlpCompression {
 		        (c1.estimated_compression_size < c2.estimated_compression_size)) ||
 		       ((c1.n_appearances == c2.n_appearances &&
 		         c1.estimated_compression_size == c2.estimated_compression_size) &&
-		        (c2.exponent < c1.exponent)) ||
+		        (c2.encoding_indices.exponent < c1.encoding_indices.exponent)) ||
 		       ((c1.n_appearances == c2.n_appearances &&
-		         c1.estimated_compression_size == c2.estimated_compression_size && c2.exponent == c1.exponent) &&
-		        (c2.factor < c1.factor));
+		         c1.estimated_compression_size == c2.estimated_compression_size &&
+		         c2.encoding_indices.exponent == c1.encoding_indices.exponent) &&
+		        (c2.encoding_indices.factor < c1.encoding_indices.factor));
 	}
 
 	/*
 	 * Dry compress a vector (ideally a sample) to estimate ALP compression size given a exponent and factor
 	 */
 	template <bool PENALIZE_EXCEPTIONS>
-	static uint64_t DryCompressToEstimateSize(const vector<T> &in, int8_t exp_idx, int8_t factor_idx) {
+	static uint64_t DryCompressToEstimateSize(const vector<T> &in, AlpEncodingIndices encoding_indices) {
 		idx_t n_values = in.size();
 		idx_t exceptions_count = 0;
 		idx_t non_exceptions_count = 0;
@@ -136,8 +160,8 @@ struct AlpCompression {
 		int64_t min_encoded_value = NumericLimits<int64_t>::Maximum();
 
 		for (const T &value : in) {
-			int64_t encoded_value = EncodeValue(value, exp_idx, factor_idx);
-			T decoded_value = DecodeValue(encoded_value, exp_idx, factor_idx);
+			int64_t encoded_value = EncodeValue(value, encoding_indices);
+			T decoded_value = DecodeValue(encoded_value, encoding_indices);
 			if (decoded_value == value) {
 				non_exceptions_count++;
 				max_encoded_value = MaxValue(encoded_value, max_encoded_value);
@@ -168,44 +192,43 @@ struct AlpCompression {
 	 */
 	static void FindTopKCombinations(const vector<vector<T>> &vectors_sampled, State &state) {
 		state.ResetCombinations();
-		// We use a 'pair' to hash it easily
-		map<pair<int8_t, int8_t>, uint64_t> best_k_combinations_hash;
 
+		unordered_map<AlpEncodingIndices, uint64_t, AlpEncodingIndicesHash, AlpEncodingIndicesEquality>
+		    best_k_combinations_hash;
 		// For each vector sampled
 		for (auto &sampled_vector : vectors_sampled) {
 			idx_t n_samples = sampled_vector.size();
-			int8_t best_factor = AlpTypedConstants<T>::MAX_EXPONENT;
-			int8_t best_exponent = AlpTypedConstants<T>::MAX_EXPONENT;
+			AlpEncodingIndices best_encoding_indices = {AlpTypedConstants<T>::MAX_EXPONENT,
+			                                            AlpTypedConstants<T>::MAX_EXPONENT};
 
 			//! We start our optimization with the worst possible total bits obtained from compression
 			idx_t best_total_bits = (n_samples * (EXACT_TYPE_BITSIZE + AlpConstants::EXCEPTION_POSITION_SIZE * 8)) +
 			                        (n_samples * EXACT_TYPE_BITSIZE);
 
 			// N of appearances is irrelevant at this phase; we search for the best compression for the vector
-			AlpCombination best_combination = {best_exponent, best_factor, 0, best_total_bits};
+			AlpCombination best_combination = {best_encoding_indices, 0, best_total_bits};
 			//! We try all combinations in search for the one which minimize the compression size
 			for (int8_t exp_idx = AlpTypedConstants<T>::MAX_EXPONENT; exp_idx >= 0; exp_idx--) {
 				for (int8_t factor_idx = exp_idx; factor_idx >= 0; factor_idx--) {
+					AlpEncodingIndices current_encoding_indices = {(uint8_t)exp_idx, (uint8_t)factor_idx};
 					uint64_t estimated_compression_size =
-					    DryCompressToEstimateSize<true>(sampled_vector, exp_idx, factor_idx);
-					AlpCombination current_combination = {exp_idx, factor_idx, 0, estimated_compression_size};
+					    DryCompressToEstimateSize<true>(sampled_vector, current_encoding_indices);
+					AlpCombination current_combination = {current_encoding_indices, 0, estimated_compression_size};
 					if (CompareALPCombinations(current_combination, best_combination)) {
 						best_combination = current_combination;
 					}
 				}
 			}
-			pair<int8_t, int8_t> best_combination_pair = make_pair(best_combination.exponent, best_combination.factor);
-			best_k_combinations_hash[best_combination_pair]++;
+			best_k_combinations_hash[best_combination.encoding_indices]++;
 		}
 
-		// Convert our hash pairs to a Combination vector to be able to sort
+		// Convert our hash to a Combination vector to be able to sort
 		// Note that this vector is always small (< 10 combinations)
 		vector<AlpCombination> best_k_combinations;
 		for (auto const &combination : best_k_combinations_hash) {
 			best_k_combinations.emplace_back(
-			    combination.first.first,  // Exponent
-			    combination.first.second, // Factor
-			    combination.second,       // N of times it appeared (hash value)
+			    combination.first,  // Encoding Indices
+			    combination.second, // N of times it appeared (hash value)
 			    0 // Compression size is irrelevant at this phase since we compare combinations from different vectors
 			);
 		}
@@ -229,16 +252,14 @@ struct AlpCompression {
 			vector_sample.push_back(input_vector[i]);
 		}
 
-		uint8_t best_exponent = 0;
-		uint8_t best_factor = 0;
+		AlpEncodingIndices best_encoding_indices = {0, 0};
 		uint64_t best_total_bits = NumericLimits<uint64_t>::Maximum();
 		idx_t worse_total_bits_counter = 0;
 
 		//! We try each K combination in search for the one which minimize the compression size in the vector
 		for (auto &combination : state.best_k_combinations) {
-			int32_t exp_idx = combination.exponent;
-			int32_t factor_idx = combination.factor;
-			uint64_t estimated_compression_size = DryCompressToEstimateSize<false>(vector_sample, exp_idx, factor_idx);
+			uint64_t estimated_compression_size =
+			    DryCompressToEstimateSize<false>(vector_sample, combination.encoding_indices);
 
 			// If current compression size is worse (higher) or equal than the current best combination
 			if (estimated_compression_size >= best_total_bits) {
@@ -251,12 +272,10 @@ struct AlpCompression {
 			}
 			// Otherwise we replace the best and continue trying with the next combination
 			best_total_bits = estimated_compression_size;
-			best_factor = factor_idx;
-			best_exponent = exp_idx;
+			best_encoding_indices = combination.encoding_indices;
 			worse_total_bits_counter = 0;
 		}
-		state.vector_exponent = best_exponent;
-		state.vector_factor = best_factor;
+		state.vector_encoding_indices = best_encoding_indices;
 	}
 
 	/*
@@ -267,8 +286,7 @@ struct AlpCompression {
 		if (state.best_k_combinations.size() > 1) {
 			FindBestFactorAndExponent(input_vector, n_values, state);
 		} else {
-			state.vector_exponent = state.best_k_combinations[0].exponent;
-			state.vector_factor = state.best_k_combinations[0].factor;
+			state.vector_encoding_indices = state.best_k_combinations[0].encoding_indices;
 		}
 
 		// Encoding Floating-Point to Int64
@@ -277,8 +295,8 @@ struct AlpCompression {
 		vector<T> tmp_decoded_values(n_values, 0); // Tmp array to check wether the encoded values are exceptions
 		for (idx_t i = 0; i < n_values; i++) {
 			T value = input_vector[i];
-			int64_t encoded_value = EncodeValue(value, state.vector_exponent, state.vector_factor);
-			T decoded_value = DecodeValue(encoded_value, state.vector_exponent, state.vector_factor);
+			int64_t encoded_value = EncodeValue(value, state.vector_encoding_indices);
+			T decoded_value = DecodeValue(encoded_value, state.vector_encoding_indices);
 			state.encoded_integers[i] = encoded_value;
 			tmp_decoded_values[i] = decoded_value;
 		}
@@ -363,8 +381,7 @@ struct AlpDecompression {
 	static void Decompress(uint8_t *for_encoded, T *output, idx_t count, uint8_t vector_factor, uint8_t vector_exponent,
 	                       uint16_t exceptions_count, T *exceptions, uint16_t *exceptions_positions,
 	                       uint64_t frame_of_reference, uint8_t bit_width) {
-		uint64_t factor = AlpConstants::FACT_ARR[vector_factor];
-		T exponent = AlpTypedConstants<T>::FRAC_ARR[vector_exponent];
+		AlpEncodingIndices encoding_indices = {vector_exponent, vector_factor};
 
 		// Bit Unpacking
 		uint8_t for_decoded[AlpConstants::ALP_VECTOR_SIZE * 8] = {0};
@@ -380,8 +397,8 @@ struct AlpDecompression {
 
 		// Decoding
 		for (idx_t i = 0; i < count; i++) {
-			auto encoded_integer = encoded_integers[i];
-			output[i] = static_cast<T>(static_cast<int64_t>(encoded_integer)) * factor * exponent;
+			int64_t encoded_integer = static_cast<int64_t>(encoded_integers[i]);
+			output[i] = alp::AlpCompression<T, true>::DecodeValue(encoded_integer, encoding_indices);
 		}
 
 		// Exceptions Patching

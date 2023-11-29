@@ -44,7 +44,7 @@ public:
 		vector_null_positions = vector<uint16_t>(AlpRDConstants::ALP_VECTOR_SIZE, 0);
 
 		//! State variables from the analyze step that are needed for compression
-		state.left_parts_dict_map = analyze_state->state.left_parts_dict_map;
+		state.left_parts_dict_map = std::move(analyze_state->state.left_parts_dict_map);
 		state.left_bit_width = analyze_state->state.left_bit_width;
 		state.right_bit_width = analyze_state->state.right_bit_width;
 		state.actual_dictionary_size = analyze_state->state.actual_dictionary_size;

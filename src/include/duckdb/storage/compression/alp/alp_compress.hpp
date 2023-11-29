@@ -132,10 +132,10 @@ public:
 
 	// Stores the vector and its metadata
 	void FlushVector() {
-		Store<uint8_t>(state.vector_exponent, data_ptr);
+		Store<uint8_t>(state.vector_encoding_indices.exponent, data_ptr);
 		data_ptr += AlpConstants::EXPONENT_SIZE;
 
-		Store<uint8_t>(state.vector_factor, data_ptr);
+		Store<uint8_t>(state.vector_encoding_indices.factor, data_ptr);
 		data_ptr += AlpConstants::FACTOR_SIZE;
 
 		Store<uint16_t>(state.exceptions_count, data_ptr);
