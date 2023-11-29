@@ -134,6 +134,11 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 	return;
 #endif
 	auto &config = DBConfig::GetConfig(context);
+
+	// Either extension OR repository might require some extensions to be loaded
+	TryAutoLoadExtension(context, FileSystem::LookupExtensionForPattern(extension));
+	TryAutoLoadExtension(context, FileSystem::LookupExtensionForPattern(repository));
+
 	auto &fs = FileSystem::GetFileSystem(context);
 	string local_path = ExtensionDirectory(context);
 	auto &client_config = ClientConfig::GetConfig(context);
@@ -255,18 +260,17 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		string file = fs.ConvertSeparators(url);
 		if (!fs.FileExists(file)) {
 			string message_verb = FileSystem::IsRemoteFile(file) ? "download" : "copy local";
-			string addendum = FileSystem::IsRemoteFile(file) ? "\n'LOAD httpfs' might be required." : "";
 			if (StringUtil::EndsWith(file, ".gz")) {
 				// check also for non-gzipped variant
 				file = file.substr(0, file.size() - 3);
 				if (!fs.FileExists(file)) {
 					throw IOException("Failed to %s extension \"%s\" at either of:\n     \"%s.gz\" (gzip "
-					                  "compressed version) or\n     \"%s\" (no encoding)\n%s",
-					                  message_verb, extension_name, file, file, addendum);
+					                  "compressed version) or\n     \"%s\" (no encoding)",
+					                  message_verb, extension_name, file, file);
 				}
 			} else {
-				throw IOException("Failed to % extension \"%s\" at:\n     \"%s\" (no encoding)\n%s", message_verb,
-				                  extension_name, file, addendum);
+				throw IOException("Failed to % extension \"%s\" at:\n     \"%s\" (no encoding)", message_verb,
+				                  extension_name, file);
 			}
 		}
 		auto read_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ);
