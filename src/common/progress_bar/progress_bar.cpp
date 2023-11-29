@@ -30,6 +30,21 @@ QueryProgress::QueryProgress() {
 	Initialize();
 }
 
+QueryProgress &QueryProgress::operator=(const QueryProgress &other) {
+	if (this != &other) {
+		percentage = other.percentage.load();
+		rows_processed = other.rows_processed.load();
+		total_rows_to_process = other.total_rows_to_process.load();
+	}
+	return *this;
+}
+
+QueryProgress::QueryProgress(const QueryProgress &other) {
+	percentage = other.percentage.load();
+	rows_processed = other.rows_processed.load();
+	total_rows_to_process = other.total_rows_to_process.load();
+}
+
 void ProgressBar::SystemOverrideCheck(ClientConfig &config) {
 	if (config.system_progress_bar_disable_reason != nullptr) {
 		throw InvalidInputException("Could not change the progress bar setting because: '%s'",
@@ -89,8 +104,12 @@ void ProgressBar::Update(bool final) {
 		return;
 	}
 	double new_percentage = -1;
-	supported = executor.GetPipelinesProgress(new_percentage, query_progress.rows_processed,
-	                                          query_progress.total_rows_to_process);
+	auto rows_processed = query_progress.rows_processed.load();
+	auto total_rows_to_process = query_progress.total_rows_to_process.load();
+	supported = executor.GetPipelinesProgress(new_percentage, rows_processed, total_rows_to_process);
+	query_progress.rows_processed = rows_processed;
+	query_progress.total_rows_to_process = total_rows_to_process;
+
 	if (!final && !supported) {
 		return;
 	}
