@@ -65,6 +65,10 @@ public:
 
 struct ArrowRunEndEncodingState {
 public:
+	ArrowRunEndEncodingState() : run_index(0) {
+	}
+
+public:
 	idx_t run_index;
 	unique_ptr<Vector> run_ends;
 	unique_ptr<Vector> values;
