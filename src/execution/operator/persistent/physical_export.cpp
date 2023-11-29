@@ -43,8 +43,8 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 		ss << KeywordHelper::WriteOptionallyQuoted(exported_table.schema_name) << ".";
 	}
 
-	ss << StringUtil::Format("%s FROM %s (", SQLIdentifier(exported_table.table_name),
-	                         SQLString(exported_table.file_path));
+	auto file_path = StringUtil::Replace(exported_table.file_path, "\\", "/");
+	ss << StringUtil::Format("%s FROM %s (", SQLIdentifier(exported_table.table_name), SQLString(file_path));
 
 	// write the copy options
 	ss << "FORMAT '" << info.format << "'";
