@@ -593,7 +593,7 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		auto &scalar = left_is_scalar ? comparison.left : comparison.right;
 		Value constant_value;
 		if (!ExpressionExecutor::TryEvaluateScalar(context, *scalar, constant_value)) {
-			return FilterResult::UNSATISFIABLE;
+			return FilterResult::UNSUPPORTED;
 		}
 		if (constant_value.IsNull()) {
 			// comparisons with null are always null (i.e. will never result in rows)
@@ -627,9 +627,6 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		// comparison between two non-scalars
 		// only handle comparisons for now
 		if (expr.type != ExpressionType::COMPARE_EQUAL) {
-			if (IsGreaterThan(expr.type) || IsLessThan(expr.type)) {
-				return AddTransitiveFilters(comparison);
-			}
 			return FilterResult::UNSUPPORTED;
 		}
 		// get the LHS and RHS nodes
