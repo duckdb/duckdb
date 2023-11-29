@@ -9,8 +9,8 @@ ArrowStreamTestFactory::CreateStream(uintptr_t this_ptr, duckdb::ArrowStreamPara
 	return stream_wrapper;
 }
 
-void ArrowStreamTestFactory::GetSchema(ArrowArrayStream * arrow_array_stream, ArrowSchema *schema) {
-	arrow_array_stream->get_schema(arrow_array_stream, schema);
+void ArrowStreamTestFactory::GetSchema(ArrowArrayStream * arrow_array_stream, ArrowSchema &schema) {
+	arrow_array_stream->get_schema(arrow_array_stream, &schema);
 }
 
 namespace duckdb {
