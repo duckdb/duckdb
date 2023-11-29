@@ -402,7 +402,7 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
-static string LookupExtensionForPattern(const string &pattern) {
+string FileSystem::LookupExtensionForPattern(const string &pattern) {
 	for (const auto &entry : EXTENSION_FILE_PREFIXES) {
 		if (StringUtil::StartsWith(pattern, entry.name)) {
 			return entry.extension;

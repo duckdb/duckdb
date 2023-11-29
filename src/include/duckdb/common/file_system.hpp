@@ -249,6 +249,8 @@ public:
 	DUCKDB_API static bool IsRemoteFile(const string &path);
 
 	DUCKDB_API virtual void SetDisabledFileSystems(const vector<string> &names);
+
+	DUCKDB_API static string LookupExtensionForPattern(const string &pattern);
 };
 
 } // namespace duckdb
