@@ -37,7 +37,7 @@ using case_insensitive_set_t = unordered_set<string, CaseInsensitiveStringHashFu
 
 struct CaseInsensitiveStringCompare {
 	bool operator()(const string &s1, const string &s2) const {
-		return StringUtil::CICompare(s1, s2);
+		return StringUtil::CILessThan(s1, s2);
 	}
 };
 

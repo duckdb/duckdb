@@ -28,23 +28,27 @@ class LogicalDependencyList;
 // The subject of this dependency
 struct DependencySubject {
 	CatalogEntryInfo entry;
-	DependencyFlags flags;
+	//! The type of dependency this is (e.g, ownership)
+	DependencySubjectFlags flags;
 };
 
 // The entry that relies on the other entry
-struct DependencyReliant {
+struct DependencyDependent {
 	CatalogEntryInfo entry;
-	DependencyFlags flags;
+	//! The type of dependency this is (e.g, blocking, non-blocking, ownership)
+	DependencyDependentFlags flags;
 };
 
+//! Every dependency consists of a subject (the entry being depended on) and a dependent (the entry that has the
+//! dependency)
 struct DependencyInfo {
 public:
-	static DependencyInfo FromDependency(DependencyEntry &dep);
+	static DependencyInfo FromSubject(DependencyEntry &dep);
 	static DependencyInfo FromDependent(DependencyEntry &dep);
 
 public:
-	DependencyReliant dependent;
-	DependencySubject dependency;
+	DependencyDependent dependent;
+	DependencySubject subject;
 };
 
 struct MangledEntryName {
@@ -84,7 +88,7 @@ public:
 
 	//! Scans all dependencies, returning pairs of (object, dependent)
 	void Scan(ClientContext &context,
-	          const std::function<void(CatalogEntry &, CatalogEntry &, const DependencyFlags &)> &callback);
+	          const std::function<void(CatalogEntry &, CatalogEntry &, const DependencyDependentFlags &)> &callback);
 
 	void AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry);
 
@@ -95,7 +99,7 @@ public:
 
 private:
 	DuckCatalog &catalog;
-	CatalogSet dependencies;
+	CatalogSet subjects;
 	CatalogSet dependents;
 
 private:
@@ -123,20 +127,20 @@ private:
 	void CreateDependencies(CatalogTransaction transaction, const CatalogEntry &object,
 	                        const LogicalDependencyList &dependencies);
 	using dependency_entry_func_t = const std::function<unique_ptr<DependencyEntry>(
-	    Catalog &catalog, const DependencyReliant &dependent, const DependencySubject &dependency)>;
+	    Catalog &catalog, const DependencyDependent &dependent, const DependencySubject &dependency)>;
 
-	void CreateDependencyInternal(CatalogTransaction transaction, const DependencyInfo &info, bool dependency);
+	void CreateSubject(CatalogTransaction transaction, const DependencyInfo &info);
+	void CreateDependent(CatalogTransaction transaction, const DependencyInfo &info);
 
 	using dependency_callback_t = const std::function<void(DependencyEntry &)>;
 	void ScanDependents(CatalogTransaction transaction, const CatalogEntryInfo &info, dependency_callback_t &callback);
-	void ScanDependencies(CatalogTransaction transaction, const CatalogEntryInfo &info,
-	                      dependency_callback_t &callback);
-	void ScanSetInternal(CatalogTransaction transaction, const CatalogEntryInfo &info, bool dependencies,
+	void ScanSubjects(CatalogTransaction transaction, const CatalogEntryInfo &info, dependency_callback_t &callback);
+	void ScanSetInternal(CatalogTransaction transaction, const CatalogEntryInfo &info, bool subjects,
 	                     dependency_callback_t &callback);
-	void PrintDependencies(CatalogTransaction transaction, const CatalogEntryInfo &info);
+	void PrintSubjects(CatalogTransaction transaction, const CatalogEntryInfo &info);
 	void PrintDependents(CatalogTransaction transaction, const CatalogEntryInfo &info);
 	CatalogSet &Dependents();
-	CatalogSet &Dependencies();
+	CatalogSet &Subjects();
 };
 
 } // namespace duckdb

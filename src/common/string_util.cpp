@@ -232,15 +232,16 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 	if (l1.size() != l2.size()) {
 		return false;
 	}
+	const auto charmap = LowerFun::ascii_to_lower_map;
 	for (idx_t c = 0; c < l1.size(); c++) {
-		if (StringUtil::CharacterToLower(l1[c]) != StringUtil::CharacterToLower(l2[c])) {
+		if (charmap[(uint8_t)l1[c]] != charmap[(uint8_t)l2[c]]) {
 			return false;
 		}
 	}
 	return true;
 }
 
-bool StringUtil::CICompare(const string &s1, const string &s2) {
+bool StringUtil::CILessThan(const string &s1, const string &s2) {
 	const auto charmap = UpperFun::ascii_to_upper_map;
 
 	unsigned char u1, u2;

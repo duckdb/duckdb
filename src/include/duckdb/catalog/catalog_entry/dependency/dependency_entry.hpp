@@ -26,7 +26,7 @@ class DependencyManager;
 //! Resembles a connection between an object and the CatalogEntry that can be retrieved from the Catalog using the
 //! identifiers listed here
 
-enum class DependencyEntryType : uint8_t { SUBJECT, RELIANT };
+enum class DependencyEntryType : uint8_t { SUBJECT, DEPENDENT };
 
 class DependencyEntry : public InCatalogEntry {
 public:
@@ -37,11 +37,11 @@ protected:
 	                const DependencyInfo &info);
 
 public:
-	const MangledEntryName &DependencyMangledName() const;
+	const MangledEntryName &SubjectMangledName() const;
 	const DependencySubject &Subject() const;
 
 	const MangledEntryName &DependentMangledName() const;
-	const DependencyReliant &Reliant() const;
+	const DependencyDependent &Dependent() const;
 
 	virtual const CatalogEntryInfo &EntryInfo() const = 0;
 	virtual const MangledEntryName &EntryMangledName() const = 0;
@@ -53,9 +53,9 @@ public:
 
 protected:
 	const MangledEntryName dependent_name;
-	const MangledEntryName dependency_name;
-	const DependencyReliant dependent;
-	const DependencySubject dependency;
+	const MangledEntryName subject_name;
+	const DependencyDependent dependent;
+	const DependencySubject subject;
 
 private:
 	DependencyEntryType side;

@@ -9,7 +9,7 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/catalog_entry/dependency/dependency_subject_entry.hpp"
-#include "duckdb/catalog/catalog_entry/dependency/dependency_reliant_entry.hpp"
+#include "duckdb/catalog/catalog_entry/dependency/dependency_dependent_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -45,8 +45,7 @@ MangledDependencyName::MangledDependencyName(const MangledEntryName &from, const
 	AssertMangledName(this->name, 5);
 }
 
-DependencyManager::DependencyManager(DuckCatalog &catalog)
-    : catalog(catalog), dependencies(catalog), dependents(catalog) {
+DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog), subjects(catalog), dependents(catalog) {
 }
 
 string DependencyManager::GetSchema(const CatalogEntry &entry) {
@@ -73,14 +72,14 @@ MangledEntryName DependencyManager::MangleName(const CatalogEntry &entry) {
 	return MangleName(info);
 }
 
-DependencyInfo DependencyInfo::FromDependency(DependencyEntry &dep) {
-	return DependencyInfo {/*dependent = */ dep.Reliant(),
-	                       /*dependency = */ dep.Subject()};
+DependencyInfo DependencyInfo::FromSubject(DependencyEntry &dep) {
+	return DependencyInfo {/*dependent = */ dep.Dependent(),
+	                       /*subject = */ dep.Subject()};
 }
 
 DependencyInfo DependencyInfo::FromDependent(DependencyEntry &dep) {
-	return DependencyInfo {/*dependent = */ dep.Reliant(),
-	                       /*dependency = */ dep.Subject()};
+	return DependencyInfo {/*dependent = */ dep.Dependent(),
+	                       /*subject = */ dep.Subject()};
 }
 
 // ----------- DEPENDENCY_MANAGER -----------
@@ -106,25 +105,34 @@ CatalogSet &DependencyManager::Dependents() {
 	return dependents;
 }
 
-CatalogSet &DependencyManager::Dependencies() {
-	return dependencies;
+CatalogSet &DependencyManager::Subjects() {
+	return subjects;
 }
 
 void DependencyManager::ScanSetInternal(CatalogTransaction transaction, const CatalogEntryInfo &info,
-                                        bool scan_dependency, dependency_callback_t &callback) {
+                                        bool scan_subjects, dependency_callback_t &callback) {
 	catalog_entry_set_t other_entries;
 
 	auto cb = [&](CatalogEntry &other) {
 		D_ASSERT(other.type == CatalogType::DEPENDENCY_ENTRY);
 		auto &other_entry = other.Cast<DependencyEntry>();
+#ifdef DEBUG
+		auto side = other_entry.Side();
+		if (scan_subjects) {
+			D_ASSERT(side == DependencyEntryType::SUBJECT);
+		} else {
+			D_ASSERT(side == DependencyEntryType::DEPENDENT);
+		}
+
+#endif
 
 		other_entries.insert(other_entry);
 		callback(other_entry);
 	};
 
-	if (scan_dependency) {
-		DependencyCatalogSet dependencies(Dependencies(), info);
-		dependencies.Scan(transaction, cb);
+	if (scan_subjects) {
+		DependencyCatalogSet subjects(Subjects(), info);
+		subjects.Scan(transaction, cb);
 	} else {
 		DependencyCatalogSet dependents(Dependents(), info);
 		dependents.Scan(transaction, cb);
@@ -136,7 +144,7 @@ void DependencyManager::ScanSetInternal(CatalogTransaction transaction, const Ca
 	// And vice versa
 	auto mangled_name = MangleName(info);
 
-	if (scan_dependency) {
+	if (scan_subjects) {
 		for (auto &entry : other_entries) {
 			auto other_info = GetLookupProperties(entry);
 			DependencyCatalogSet other_dependents(Dependents(), other_info);
@@ -148,11 +156,11 @@ void DependencyManager::ScanSetInternal(CatalogTransaction transaction, const Ca
 	} else {
 		for (auto &entry : other_entries) {
 			auto other_info = GetLookupProperties(entry);
-			DependencyCatalogSet other_dependencies(Dependencies(), other_info);
+			DependencyCatalogSet other_subjects(Subjects(), other_info);
 
 			// Verify that the other half of the dependent also exists
-			auto dependency = other_dependencies.GetEntryDetailed(transaction, mangled_name);
-			D_ASSERT(dependency.reason != CatalogSet::EntryLookup::FailureReason::NOT_PRESENT);
+			auto subject = other_subjects.GetEntryDetailed(transaction, mangled_name);
+			D_ASSERT(subject.reason != CatalogSet::EntryLookup::FailureReason::NOT_PRESENT);
 		}
 	}
 #endif
@@ -163,93 +171,97 @@ void DependencyManager::ScanDependents(CatalogTransaction transaction, const Cat
 	ScanSetInternal(transaction, info, false, callback);
 }
 
-void DependencyManager::ScanDependencies(CatalogTransaction transaction, const CatalogEntryInfo &info,
-                                         dependency_callback_t &callback) {
+void DependencyManager::ScanSubjects(CatalogTransaction transaction, const CatalogEntryInfo &info,
+                                     dependency_callback_t &callback) {
 	ScanSetInternal(transaction, info, true, callback);
 }
 
 void DependencyManager::RemoveDependency(CatalogTransaction transaction, const DependencyInfo &info) {
 	auto &dependent = info.dependent;
-	auto &dependency = info.dependency;
+	auto &subject = info.subject;
 
 	// The dependents of the dependency (target)
-	DependencyCatalogSet dependents(Dependents(), dependency.entry);
-	// The dependencies of the dependent (initiator)
-	DependencyCatalogSet dependencies(Dependencies(), dependent.entry);
+	DependencyCatalogSet dependents(Dependents(), subject.entry);
+	// The subjects of the dependencies of the dependent
+	DependencyCatalogSet subjects(Subjects(), dependent.entry);
 
 	auto dependent_mangled = MangledEntryName(dependent.entry);
-	auto dependency_mangled = MangledEntryName(dependency.entry);
+	auto subject_mangled = MangledEntryName(subject.entry);
 
 	auto dependent_p = dependents.GetEntry(transaction, dependent_mangled);
 	if (dependent_p) {
 		// 'dependent' is no longer inhibiting the deletion of 'dependency'
 		dependents.DropEntry(transaction, dependent_mangled, false);
 	}
-	auto dependency_p = dependencies.GetEntry(transaction, dependency_mangled);
-	if (dependency_p) {
+	auto subject_p = subjects.GetEntry(transaction, subject_mangled);
+	if (subject_p) {
 		// 'dependency' is no longer required by 'dependent'
-		dependencies.DropEntry(transaction, dependency_mangled, false);
+		subjects.DropEntry(transaction, subject_mangled, false);
 	}
 }
 
-void DependencyManager::CreateDependencyInternal(CatalogTransaction transaction, const DependencyInfo &info,
-                                                 bool dependency) {
-	auto &catalog_set = dependency ? Dependencies() : Dependents();
-	auto &from = dependency ? info.dependent.entry : info.dependency.entry;
-	auto &to = dependency ? info.dependency.entry : info.dependent.entry;
+void DependencyManager::CreateSubject(CatalogTransaction transaction, const DependencyInfo &info) {
+	auto &from = info.dependent.entry;
 
-	DependencyCatalogSet set(catalog_set, from);
-	auto dep = dependency ? make_uniq_base<DependencyEntry, DependencySubjectEntry>(catalog, info)
-	                      : make_uniq_base<DependencyEntry, DependencyReliantEntry>(catalog, info);
-	auto dep_name = MangleName(to);
+	DependencyCatalogSet set(Subjects(), from);
+	auto dep = make_uniq_base<DependencyEntry, DependencySubjectEntry>(catalog, info);
+	auto entry_name = dep->EntryMangledName();
 
-	D_ASSERT(!StringUtil::CIEquals(dep_name.name, MangleName(from).name));
-	if (catalog.IsTemporaryCatalog()) {
-		dep->temporary = true;
-	}
-	set.CreateEntry(transaction, dep_name, std::move(dep));
+	//! Add to the list of objects that 'dependent' has a dependency on
+	set.CreateEntry(transaction, entry_name, std::move(dep));
+}
+
+void DependencyManager::CreateDependent(CatalogTransaction transaction, const DependencyInfo &info) {
+	auto &from = info.subject.entry;
+
+	DependencyCatalogSet set(Dependents(), from);
+	auto dep = make_uniq_base<DependencyEntry, DependencyDependentEntry>(catalog, info);
+	auto entry_name = dep->EntryMangledName();
+
+	//! Add to the list of object that depend on 'subject'
+	set.CreateEntry(transaction, entry_name, std::move(dep));
 }
 
 void DependencyManager::CreateDependency(CatalogTransaction transaction, DependencyInfo &info) {
-	DependencyCatalogSet dependencies(Dependencies(), info.dependent.entry);
-	DependencyCatalogSet dependents(Dependents(), info.dependency.entry);
+	DependencyCatalogSet subjects(Subjects(), info.dependent.entry);
+	DependencyCatalogSet dependents(Dependents(), info.subject.entry);
 
-	auto dependency_mangled = MangleName(info.dependency.entry);
+	auto subject_mangled = MangleName(info.subject.entry);
 	auto dependent_mangled = MangleName(info.dependent.entry);
 
-	auto &reliant_flags = info.dependent.flags;
-	auto &subject_flags = info.dependency.flags;
+	auto &dependent_flags = info.dependent.flags;
+	auto &subject_flags = info.subject.flags;
 
-	auto existing_dependency = dependencies.GetEntry(transaction, dependency_mangled);
+	auto existing_subject = subjects.GetEntry(transaction, subject_mangled);
 	auto existing_dependent = dependents.GetEntry(transaction, dependent_mangled);
 
 	// Inherit the existing flags and drop the existing entry if present
-	if (existing_dependency) {
-		auto &existing = existing_dependency->Cast<DependencyEntry>();
+	if (existing_subject) {
+		auto &existing = existing_subject->Cast<DependencyEntry>();
 		auto existing_flags = existing.Subject().flags;
 		if (existing_flags != subject_flags) {
 			subject_flags.Apply(existing_flags);
 		}
-		dependencies.DropEntry(transaction, dependency_mangled, false, false);
+		subjects.DropEntry(transaction, subject_mangled, false, false);
 	}
 	if (existing_dependent) {
 		auto &existing = existing_dependent->Cast<DependencyEntry>();
-		auto existing_flags = existing.Reliant().flags;
-		if (existing_flags != reliant_flags) {
-			reliant_flags.Apply(existing_flags);
+		auto existing_flags = existing.Dependent().flags;
+		if (existing_flags != dependent_flags) {
+			dependent_flags.Apply(existing_flags);
 		}
 		dependents.DropEntry(transaction, dependent_mangled, false, false);
 	}
 
 	// Create an entry in the dependents map of the object that is the target of the dependency
-	CreateDependencyInternal(transaction, info, false);
-	// Create an entry in the dependencies map of the object that is targeting another entry
-	CreateDependencyInternal(transaction, info, true);
+	CreateDependent(transaction, info);
+	// Create an entry in the subjects map of the object that is targeting another entry
+	CreateSubject(transaction, info);
 }
 
 void DependencyManager::CreateDependencies(CatalogTransaction transaction, const CatalogEntry &object,
                                            const LogicalDependencyList &unfiltered_dependencies) {
-	DependencyFlags dependency_flags;
+	DependencyDependentFlags dependency_flags;
 	if (object.type != CatalogType::INDEX_ENTRY) {
 		// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
 		dependency_flags.SetBlocking();
@@ -270,9 +282,8 @@ void DependencyManager::CreateDependencies(CatalogTransaction transaction, const
 
 	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies.Set()) {
-		// Create the dependent and complete the link by creating the dependency as well
-		DependencyInfo info {/*dependent = */ DependencyReliant {GetLookupProperties(object), dependency_flags},
-		                     /*dependency = */ DependencySubject {dependency.entry, DependencyFlags().SetBlocking()}};
+		DependencyInfo info {/*dependent = */ DependencyDependent {GetLookupProperties(object), dependency_flags},
+		                     /*subject = */ DependencySubject {dependency.entry, DependencySubjectFlags()}};
 		CreateDependency(transaction, info);
 	}
 }
@@ -283,16 +294,14 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 		// Don't do anything for this
 		return;
 	}
-
 	CreateDependencies(transaction, object, dependencies);
 }
 
-static bool CascadeDrop(bool cascade, const DependencyFlags &flags) {
+static bool CascadeDrop(bool cascade, const DependencyDependentFlags &flags) {
 	if (cascade) {
 		return true;
 	}
-	D_ASSERT(!flags.IsOwnership());
-	if (flags.IsOwned()) {
+	if (flags.IsOwnedBy()) {
 		// We are owned by this object, while it exists we can not be dropped without cascade.
 		return false;
 	}
@@ -336,8 +345,8 @@ void DependencyManager::CleanupDependencies(CatalogTransaction transaction, Cata
 	vector<DependencyInfo> to_remove;
 
 	auto info = GetLookupProperties(object);
-	ScanDependencies(transaction, info,
-	                 [&](DependencyEntry &dep) { to_remove.push_back(DependencyInfo::FromDependency(dep)); });
+	ScanSubjects(transaction, info,
+	             [&](DependencyEntry &dep) { to_remove.push_back(DependencyInfo::FromSubject(dep)); });
 	ScanDependents(transaction, info,
 	               [&](DependencyEntry &dep) { to_remove.push_back(DependencyInfo::FromDependent(dep)); });
 
@@ -364,7 +373,7 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 			return;
 		}
 
-		if (!CascadeDrop(cascade, dep.Reliant().flags)) {
+		if (!CascadeDrop(cascade, dep.Dependent().flags)) {
 			// no cascade and there are objects that depend on this object: throw error
 			throw DependencyException("Cannot drop entry \"%s\" because there are entries that "
 			                          "depend on it. Use DROP...CASCADE to drop all dependents.",
@@ -372,7 +381,7 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 		}
 		to_drop.insert(*entry);
 	});
-	ScanDependencies(transaction, info, [&](DependencyEntry &dep) {
+	ScanSubjects(transaction, info, [&](DependencyEntry &dep) {
 		auto flags = dep.Subject().flags;
 		if (flags.IsOwnership()) {
 			// We own this object, it should be dropped along with the table
@@ -419,18 +428,19 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		}
 
 		auto dep_info = DependencyInfo::FromDependent(dep);
-		dep_info.dependency.entry = new_info;
+		dep_info.subject.entry = new_info;
 		dependencies.emplace_back(dep_info);
 	});
 
-	// Entries that we depend on
-	ScanDependencies(transaction, old_info, [&](DependencyEntry &dep) {
+	// Keep old dependencies
+	dependency_set_t dependents;
+	ScanSubjects(transaction, old_info, [&](DependencyEntry &dep) {
 		auto entry = LookupEntry(transaction, dep);
 		if (!entry) {
 			return;
 		}
 
-		auto dep_info = DependencyInfo::FromDependency(dep);
+		auto dep_info = DependencyInfo::FromSubject(dep);
 		dep_info.dependent.entry = new_info;
 		dependencies.emplace_back(dep_info);
 	});
@@ -465,8 +475,8 @@ bool AllExportDependenciesWritten(const catalog_entry_vector_t &dependencies, ca
 				contains = true;
 				break;
 			}
-			auto &flags = dep.Reliant().flags;
-			if (flags.IsOwnership() && !flags.IsBlocking()) {
+			auto &flags = dep.Subject().flags;
+			if (flags.IsOwnership()) {
 				// 'object' is owned by this entry
 				// it needs to be written first
 				contains = true;
@@ -523,8 +533,8 @@ catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTra
 		}
 
 		catalog_entry_vector_t dependencies;
-		DependencyCatalogSet dependencies_map(Dependencies(), info);
-		dependencies_map.Scan(transaction, [&dependencies](CatalogEntry &entry) { dependencies.push_back(entry); });
+		DependencyCatalogSet subjects_map(Subjects(), info);
+		subjects_map.Scan(transaction, [&dependencies](CatalogEntry &entry) { dependencies.push_back(entry); });
 
 		bool is_ordered = AllExportDependenciesWritten(dependencies, entries);
 		if (!is_ordered) {
@@ -551,8 +561,7 @@ catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTra
 
 void DependencyManager::Scan(
     ClientContext &context,
-    const std::function<void(CatalogEntry &, CatalogEntry &, const DependencyFlags &)> &callback) {
-	// FIXME: why do we take the write_lock here??
+    const std::function<void(CatalogEntry &, CatalogEntry &, const DependencyDependentFlags &)> &callback) {
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	auto transaction = catalog.GetCatalogTransaction(context);
 
@@ -573,7 +582,7 @@ void DependencyManager::Scan(
 				return;
 			}
 			auto &dependent_entry = *dep;
-			callback(entry, dependent_entry, dependent.Reliant().flags);
+			callback(entry, dependent_entry, dependent.Dependent().flags);
 		});
 	}
 }
@@ -587,38 +596,29 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 	const auto owner_info = GetLookupProperties(owner);
 	const auto mangled_owner_name = MangleName(owner_info);
 	ScanDependents(transaction, owner_info, [&](DependencyEntry &dep) {
-		if (dep.Reliant().flags.IsOwned()) {
-			throw DependencyException(owner.name + " already owned by " + dep.EntryInfo().name);
-		}
-	});
-	ScanDependencies(transaction, owner_info, [&](DependencyEntry &dep) {
-		auto flags = dep.Subject().flags;
-		// if the entry owns the owner, throw error
-		if (&dep == &owner && flags.IsOwnership()) {
-			throw DependencyException(entry.name + " already owns " + owner.name +
-			                          ". Cannot have circular dependencies");
+		if (dep.Dependent().flags.IsOwnedBy()) {
+			throw DependencyException("%s can not become the owner, it is already owned by %s", owner.name,
+			                          dep.EntryInfo().name);
 		}
 	});
 
-	// If the entry is already owned, throw an error
+	// If the entry is the owner of another entry, throw an error
 	auto entry_info = GetLookupProperties(entry);
-	ScanDependencies(transaction, entry_info, [&](DependencyEntry &other) {
+	ScanSubjects(transaction, entry_info, [&](DependencyEntry &other) {
 		auto dependent_entry = LookupEntry(transaction, other);
 		if (!dependent_entry) {
 			return;
 		}
 		auto &dep = *dependent_entry;
 
-		auto flags = other.Reliant().flags;
-		// FIXME: should this not check for DEPENDENCY_OWNS first??
-		if (!flags.IsOwned()) {
+		auto flags = other.Dependent().flags;
+		if (!flags.IsOwnedBy()) {
 			return;
 		}
-		// if the entry is already owned, throw error
-		if (&dep != &owner) {
-			throw DependencyException(entry.name + " already depends on " + dep.name);
-		}
+		throw DependencyException("%s already owns %s. Cannot have circular dependencies", entry.name, dep.name);
 	});
+
+	// If the entry is already owned, throw an error
 	ScanDependents(transaction, entry_info, [&](DependencyEntry &other) {
 		auto dependent_entry = LookupEntry(transaction, other);
 		if (!dependent_entry) {
@@ -627,14 +627,17 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 
 		auto &dep = *dependent_entry;
 		auto flags = other.Subject().flags;
-		if (flags.IsOwnership() && &dep != &owner) {
-			throw DependencyException("%s is already owned by %s", entry.name, owner.name);
+		if (!flags.IsOwnership()) {
+			return;
+		}
+		if (&dep != &owner) {
+			throw DependencyException("%s is already owned by %s", entry.name, dep.name);
 		}
 	});
 
 	DependencyInfo info {
-	    /*dependent = */ DependencyReliant {GetLookupProperties(owner), DependencyFlags().SetOwned()},
-	    /*dependency = */ DependencySubject {GetLookupProperties(entry), DependencyFlags().SetOwnership()}};
+	    /*dependent = */ DependencyDependent {GetLookupProperties(owner), DependencyDependentFlags().SetOwnedBy()},
+	    /*subject = */ DependencySubject {GetLookupProperties(entry), DependencySubjectFlags().SetOwnership()}};
 	CreateDependency(transaction, info);
 }
 
@@ -648,21 +651,22 @@ static string FormatString(const MangledEntryName &mangled) {
 	return input;
 }
 
-void DependencyManager::PrintDependencies(CatalogTransaction transaction, const CatalogEntryInfo &info) {
+void DependencyManager::PrintSubjects(CatalogTransaction transaction, const CatalogEntryInfo &info) {
 	auto name = MangleName(info);
-	Printer::Print(StringUtil::Format("Dependencies of %s", FormatString(name)));
-	auto dependencies = DependencyCatalogSet(Dependencies(), info);
-	dependencies.Scan(transaction, [&](CatalogEntry &dependency) {
+	Printer::Print(StringUtil::Format("Subjects of %s", FormatString(name)));
+	auto subjects = DependencyCatalogSet(Subjects(), info);
+	subjects.Scan(transaction, [&](CatalogEntry &dependency) {
 		auto &dep = dependency.Cast<DependencyEntry>();
 		auto &entry_info = dep.EntryInfo();
 		auto type = entry_info.type;
 		auto schema = entry_info.schema;
 		auto name = entry_info.name;
-		Printer::Print(StringUtil::Format("Schema: %s | Name: %s | Type: %s | Reliant type: %s | Subject type: %s",
-		                                  schema, name, CatalogTypeToString(type), dep.Reliant().flags.ToString(),
+		Printer::Print(StringUtil::Format("Schema: %s | Name: %s | Type: %s | Dependent type: %s | Subject type: %s",
+		                                  schema, name, CatalogTypeToString(type), dep.Dependent().flags.ToString(),
 		                                  dep.Subject().flags.ToString()));
 	});
 }
+
 void DependencyManager::PrintDependents(CatalogTransaction transaction, const CatalogEntryInfo &info) {
 	auto name = MangleName(info);
 	Printer::Print(StringUtil::Format("Dependents of %s", FormatString(name)));
@@ -673,8 +677,8 @@ void DependencyManager::PrintDependents(CatalogTransaction transaction, const Ca
 		auto type = entry_info.type;
 		auto schema = entry_info.schema;
 		auto name = entry_info.name;
-		Printer::Print(StringUtil::Format("Schema: %s | Name: %s | Type: %s | Reliant type: %s | Subject type: %s",
-		                                  schema, name, CatalogTypeToString(type), dep.Reliant().flags.ToString(),
+		Printer::Print(StringUtil::Format("Schema: %s | Name: %s | Type: %s | Dependent type: %s | Subject type: %s",
+		                                  schema, name, CatalogTypeToString(type), dep.Dependent().flags.ToString(),
 		                                  dep.Subject().flags.ToString()));
 	});
 }

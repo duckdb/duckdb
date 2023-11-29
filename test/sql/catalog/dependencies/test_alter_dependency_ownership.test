@@ -111,7 +111,7 @@ ALTER SEQUENCE sequence1 OWNED BY tablename;
 statement error
 ALTER SEQUENCE sequence1 OWNED BY tablename2;
 ----
-Dependency Error: sequence1 is already owned by tablename2
+Dependency Error: sequence1 is already owned by tablename
 
 statement ok
 DROP TABLE tablename;
@@ -241,7 +241,7 @@ CREATE TABLE tablename (
 statement error
 ALTER SEQUENCE sequence1 OWNED BY tablename;
 ----
-Dependency Error: sequence1 is already owned by tablename
+sequence1 is already owned by new_tablename
 
 statement error
 DROP SEQUENCE sequence1;
@@ -476,7 +476,7 @@ ALTER SEQUENCE sequence1 OWNED BY sequence2;
 statement error
 ALTER SEQUENCE sequence2 OWNED BY sequence1;
 ----
-Dependency Error: sequence1 already owned by sequence2
+Dependency Error: sequence1 can not become the owner, it is already owned by sequence2
 
 statement ok
 DROP SEQUENCE sequence2;
@@ -500,14 +500,14 @@ ALTER SEQUENCE sequence2 OWNED BY sequence1;
 statement error
 ALTER SEQUENCE sequence3 OWNED BY sequence2;
 ----
-Dependency Error: sequence2 already owned by sequence1
+Dependency Error: sequence2 can not become the owner, it is already owned by sequence1
 
 # FIXME: this error makes no sense, if there is no circular dependency
 # this should be allowed
 statement error
 ALTER SEQUENCE sequence1 OWNED BY sequence3;
 ----
-Dependency Error: sequence1 already depends on sequence2
+Dependency Error: sequence1 already owns sequence2. Cannot have circular dependencies
 
 statement ok
 ALTER SEQUENCE sequence3 OWNED BY sequence4;
