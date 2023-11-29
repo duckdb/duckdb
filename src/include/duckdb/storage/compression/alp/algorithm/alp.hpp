@@ -199,7 +199,7 @@ struct AlpCompression {
 		}
 
 		// Convert our hash pairs to a Combination vector to be able to sort
-		// FIXME: A MaxHeap would be faster although this vector is always of constant size
+		// Note that this vector is always small (< 10 combinations)
 		vector<AlpCombination> best_k_combinations;
 		for (auto const &combination : best_k_combinations_hash) {
 			best_k_combinations.emplace_back(
