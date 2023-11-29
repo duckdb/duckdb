@@ -190,6 +190,11 @@ typedef struct {
 	idx_t size;
 } duckdb_string;
 
+typedef struct {
+	double percentage;
+	uint64_t rows_processed;
+	uint64_t total_rows_to_process;
+} duckdb_query_progress_type;
 /*
     The internal data representation of a VARCHAR/BLOB column
 */
@@ -413,7 +418,7 @@ Get progress of the running query
 * connection: The working connection
 * returns: -1 if no progress or a percentage of the progress
 */
-DUCKDB_API double duckdb_query_progress(duckdb_connection connection);
+DUCKDB_API duckdb_query_progress_type duckdb_query_progress(duckdb_connection connection);
 
 /*!
 Closes the specified connection and de-allocates all memory allocated for that connection.

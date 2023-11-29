@@ -77,7 +77,7 @@ public:
 	void AddToBeRescheduled(shared_ptr<Task> &task);
 
 	//! Returns the progress of the pipelines
-	bool GetPipelinesProgress(double &current_progress);
+	bool GetPipelinesProgress(double &current_progress, uint64_t &current_cardinality, uint64_t &total_cardinality);
 
 	void CompletePipeline() {
 		completed_pipelines++;
