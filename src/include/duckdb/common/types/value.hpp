@@ -150,6 +150,7 @@ public:
 	DUCKDB_API static Value DOUBLE(double value);
 	//! Create a struct value with given list of entries
 	DUCKDB_API static Value STRUCT(child_list_t<Value> values);
+	DUCKDB_API static Value STRUCT(const LogicalType &type, vector<Value> struct_values);
 	//! Create a list value with the given entries, list type is inferred from children
 	//! Cannot be called with an empty list, use either EMPTYLIST or LIST with a type instead
 	DUCKDB_API static Value LIST(vector<Value> values);
@@ -166,6 +167,9 @@ public:
 	DUCKDB_API static Value EMPTYARRAY(const LogicalType &type, uint32_t size);
 	//! Create a map value with the given entries
 	DUCKDB_API static Value MAP(const LogicalType &child_type, vector<Value> values);
+	//! Create a map value with the given entries
+	DUCKDB_API static Value MAP(const LogicalType &key_type, const LogicalType &value_type, vector<Value> keys,
+	                            vector<Value> values);
 	//! Create a union value from a selected value and a tag from a set of alternatives.
 	DUCKDB_API static Value UNION(child_list_t<LogicalType> members, uint8_t tag, Value value);
 
