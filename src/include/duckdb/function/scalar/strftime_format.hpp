@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/function/scalar/strftime.hpp
+// duckdb/function/scalar/strftime_format.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -66,6 +66,8 @@ public:
 	inline bool HasFormatSpecifier(StrTimeSpecifier s) const {
 		return std::find(specifiers.begin(), specifiers.end(), s) != specifiers.end();
 	}
+	//! If the string format is empty
+	DUCKDB_API bool Empty() const;
 
 	//! The full format specifier, for error messages
 	string format_specifier;
@@ -144,6 +146,9 @@ public:
 	};
 
 public:
+	bool operator!=(const StrpTimeFormat &other) const {
+		return format_specifier != other.format_specifier;
+	}
 	DUCKDB_API static ParseResult Parse(const string &format, const string &text);
 
 	DUCKDB_API bool Parse(string_t str, ParseResult &result) const;

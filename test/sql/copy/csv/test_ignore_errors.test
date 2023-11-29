@@ -63,6 +63,8 @@ COPY integers FROM 'test/sql/copy/csv/data/test/error_too_many.csv' (HEADER, IGN
 
 statement error
 COPY integers FROM 'test/sql/copy/csv/data/test/error_too_many.csv' (HEADER)
+----
+CSV options could not be auto-detected. Consider setting parser options manually.
 
 # too many columns provided
 query II
