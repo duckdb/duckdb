@@ -187,6 +187,7 @@ struct DBConfig {
 
 public:
 	DUCKDB_API DBConfig();
+	DUCKDB_API DBConfig(bool read_only);
 	DUCKDB_API DBConfig(std::unordered_map<string, string> &config_dict, bool read_only);
 	DUCKDB_API ~DBConfig();
 

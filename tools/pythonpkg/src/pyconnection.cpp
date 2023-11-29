@@ -1466,6 +1466,9 @@ unordered_map<string, string> TransformPyConfigDict(const py::dict &py_config_di
 void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig &config) {
 	// We don't cache unnamed memory instances (i.e., :memory:)
 	bool cache_instance = database != ":memory:" && !database.empty();
+	if (config.options.enable_external_access) {
+		config.replacement_scans.emplace_back(ScanReplacement);
+	}
 	res.database = instance_cache.CreateInstance(database, config, cache_instance);
 	res.connection = make_uniq<Connection>(*res.database);
 	auto &context = *res.connection->context;
@@ -1478,13 +1481,6 @@ void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig
 	catalog.CreateTableFunction(context, &scan_info);
 	catalog.CreateTableFunction(context, &map_info);
 	context.transaction.Commit();
-	auto &db_config = res.database->instance->config;
-	db_config.AddExtensionOption("pandas_analyze_sample",
-	                             "The maximum number of rows to sample when analyzing a pandas object column.",
-	                             LogicalType::UBIGINT, Value::UBIGINT(1000));
-	if (db_config.options.enable_external_access) {
-		db_config.replacement_scans.emplace_back(ScanReplacement);
-	}
 }
 
 static bool HasJupyterProgressBarDependencies() {
@@ -1551,7 +1547,14 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 		return DuckDBPyConnection::DefaultConnection();
 	}
 
-	DBConfig config(config_dict, read_only);
+	DBConfig config(read_only);
+	config.AddExtensionOption("pandas_analyze_sample", "The maximum number of rows to sample when analyzing a pandas object column.", LogicalType::UBIGINT, Value::UBIGINT(1000));
+	for (auto &kv : config_dict) {
+		auto &key = kv.first;
+		auto &value = kv.second;
+		auto opt_val = Value(value);
+		config.SetOptionByName(key, opt_val);
+	}
 	config.SetOptionByName("duckdb_api", "python");
 	auto res = FetchOrCreateInstance(database, config);
 	auto &client_context = *res->connection->context;

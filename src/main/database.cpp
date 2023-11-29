@@ -34,10 +34,13 @@ DBConfig::DBConfig() {
 	options.duckdb_api = StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
 }
 
-DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) : DBConfig::DBConfig() {
+DBConfig::DBConfig(bool read_only) : DBConfig::DBConfig() {
 	if (read_only) {
 		options.access_mode = AccessMode::READ_ONLY;
 	}
+}
+
+DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) : DBConfig::DBConfig(read_only) {
 	for (auto &kv : config_dict) {
 		string key = kv.first;
 		string val = kv.second;
