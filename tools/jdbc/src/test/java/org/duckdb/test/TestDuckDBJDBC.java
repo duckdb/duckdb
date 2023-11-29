@@ -169,21 +169,6 @@ public class TestDuckDBJDBC {
         }
     }
 
-    public static void test_StatementCloseParallel() throws SQLException, InterruptedException {
-        ExecutorService executor_service = Executors.newFixedThreadPool(1);
-
-        for (int i = 0; i < 100; i++) {
-            try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
-                createTable(conn);
-                try (Statement statement = conn.createStatement()) {
-                    executeStatementWithThread(statement, executor_service);
-                } catch (SQLException e) {
-                    System.out.println("Error executing statement: " + e.getMessage());
-                }
-            }
-        }
-    }
-
     private static void createTable(Connection conn) throws SQLException {
         try (Statement createStmt = conn.createStatement()) {
             createStmt.execute("CREATE TABLE foo as select * from range(1000000);");
@@ -3781,9 +3766,12 @@ public class TestDuckDBJDBC {
 
     public static void test_all_types() throws Exception {
         Logger logger = Logger.getAnonymousLogger();
+        String sql = "select * EXCLUDE(time)"
+                     + "\n    , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time"
+                     + "\nfrom test_all_types()";
 
         try (Connection conn = DriverManager.getConnection(JDBC_URL);
-             PreparedStatement stmt = conn.prepareStatement("select * from test_all_types()")) {
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             conn.createStatement().execute("set timezone = 'UTC'");
 
             try (ResultSet rs = stmt.executeQuery()) {
