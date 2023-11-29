@@ -25,7 +25,7 @@ public:
 			auto &child_type = ArrayType::GetChildType(type);
 			auto array_size = ArrayType::GetSize(type);
 			child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type, array_size * capacity));
-			auto child_vector = make_uniq<Vector>(child_type, false, false, array_size * capacity);
+			auto child_vector = make_uniq<Vector>(child_type, true, false, array_size * capacity);
 			auxiliary = make_shared<VectorArrayBuffer>(std::move(child_vector), array_size, capacity);
 			break;
 		}
@@ -77,6 +77,10 @@ public:
 			auto &child_cache = child_caches[0]->Cast<VectorCacheBuffer>();
 			auto &array_child = result.auxiliary->Cast<VectorArrayBuffer>().GetChild();
 			child_cache.ResetFromCache(array_child, child_caches[0]);
+
+			// Ensure the child validity is (will be) large enough, even if its not initialized.
+			auto validity_target_size = array_child.validity.TargetCount();
+			array_child.validity.Resize(validity_target_size, std::max(validity_target_size, child_cache.capacity));
 			break;
 		}
 		case PhysicalType::STRUCT: {

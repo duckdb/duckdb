@@ -16,8 +16,8 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/catalog/catalog_entry/column_dependency_manager.hpp"
-#include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
 
 namespace duckdb {
 class CatalogEntry;
@@ -46,8 +46,8 @@ struct BoundCreateTableInfo {
 	unique_ptr<PersistentTableData> data;
 	//! CREATE TABLE from QUERY
 	unique_ptr<LogicalOperator> query;
-	//! Indexes created by this table <Block_ID, Offset>
-	vector<BlockPointer> indexes;
+	//! Indexes created by this table
+	vector<IndexStorageInfo> indexes;
 
 	CreateTableInfo &Base() {
 		D_ASSERT(base);

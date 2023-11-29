@@ -25,6 +25,8 @@ public:
 
 	//! The type of set operation
 	SetOperationType setop_type = SetOperationType::NONE;
+	//! whether the ALL modifier was used or not
+	bool setop_all = false;
 	//! The left side of the set operation
 	unique_ptr<QueryNode> left;
 	//! The right side of the set operation

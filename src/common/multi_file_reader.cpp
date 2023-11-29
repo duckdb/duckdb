@@ -9,6 +9,8 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
 
 void MultiFileReader::AddParameters(TableFunction &table_function) {
@@ -33,6 +35,10 @@ vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value 
 	if (input.type().id() == LogicalTypeId::VARCHAR) {
 		auto file_name = StringValue::Get(input);
 		files = fs.GlobFiles(file_name, context, options);
+
+		// Sort the files to ensure that the order is deterministic
+		std::sort(files.begin(), files.end());
+
 	} else if (input.type().id() == LogicalTypeId::LIST) {
 		for (auto &val : ListValue::GetChildren(input)) {
 			if (val.IsNull()) {
@@ -42,6 +48,7 @@ vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value 
 				throw ParserException("%s reader can only take a list of strings as a parameter", name);
 			}
 			auto glob_files = fs.GlobFiles(StringValue::Get(val), context, options);
+			std::sort(glob_files.begin(), glob_files.end());
 			files.insert(files.end(), glob_files.begin(), glob_files.end());
 		}
 	} else {
@@ -50,6 +57,7 @@ vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value 
 	if (files.empty() && options == FileGlobOptions::DISALLOW_EMPTY) {
 		throw IOException("%s reader needs at least one file to read", name);
 	}
+
 	return files;
 }
 
@@ -103,7 +111,9 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<strin
 
 	unordered_map<string, column_t> column_map;
 	for (idx_t i = 0; i < get.column_ids.size(); i++) {
-		column_map.insert({get.names[get.column_ids[i]], i});
+		if (!IsRowIdColumnId(get.column_ids[i])) {
+			column_map.insert({get.names[get.column_ids[i]], i});
+		}
 	}
 
 	auto start_files = files.size();
@@ -438,7 +448,7 @@ void MultiFileReaderOptions::AutoDetectHiveTypesInternal(const string &file, Cli
 		}
 		Value value(part.second);
 		for (auto &candidate : candidates) {
-			const bool success = value.TryCastAs(context, candidate);
+			const bool success = value.TryCastAs(context, candidate, true);
 			if (success) {
 				hive_types_schema[name] = candidate;
 				break;

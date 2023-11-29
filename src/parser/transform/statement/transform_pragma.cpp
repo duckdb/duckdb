@@ -27,25 +27,16 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGPragm
 					throw ParserException("Named parameter requires a column reference on the LHS");
 				}
 				auto &columnref = comp.left->Cast<ColumnRefExpression>();
-
-				Value rhs_value;
-				if (!Transformer::ConstructConstantFromExpression(*comp.right, rhs_value)) {
-					throw ParserException("Named parameter requires a constant on the RHS");
-				}
-
-				info.named_parameters[columnref.GetName()] = rhs_value;
-			} else if (node->type == duckdb_libpgquery::T_PGAConst) {
-				auto constant = TransformConstant(*PGPointerCast<duckdb_libpgquery::PGAConst>(node.get()));
-				info.parameters.push_back((constant->Cast<ConstantExpression>()).value);
+				info.named_parameters.insert(make_pair(columnref.GetName(), std::move(comp.right)));
 			} else if (expr->type == ExpressionType::COLUMN_REF) {
 				auto &colref = expr->Cast<ColumnRefExpression>();
 				if (!colref.IsQualified()) {
-					info.parameters.emplace_back(colref.GetColumnName());
+					info.parameters.emplace_back(make_uniq<ConstantExpression>(Value(colref.GetColumnName())));
 				} else {
-					info.parameters.emplace_back(expr->ToString());
+					info.parameters.emplace_back(make_uniq<ConstantExpression>(Value(expr->ToString())));
 				}
 			} else {
-				info.parameters.emplace_back(expr->ToString());
+				info.parameters.emplace_back(std::move(expr));
 			}
 		}
 	}
@@ -71,7 +62,8 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGPragm
 		if (sqlite_compat_pragmas.find(info.name) != sqlite_compat_pragmas.end()) {
 			break;
 		}
-		auto set_statement = make_uniq<SetVariableStatement>(info.name, info.parameters[0], SetScope::AUTOMATIC);
+		auto set_statement =
+		    make_uniq<SetVariableStatement>(info.name, std::move(info.parameters[0]), SetScope::AUTOMATIC);
 		return std::move(set_statement);
 	}
 	case duckdb_libpgquery::PG_PRAGMA_TYPE_CALL:

@@ -498,9 +498,21 @@
         "id": 201,
         "name": "column_count",
         "type": "idx_t"
+      },
+      {
+        "id": 202,
+        "name": "setop_all",
+        "type": "bool",
+        "default": "true"
+      },
+      {
+        "id": 203,
+        "name": "allow_out_of_order",
+        "type": "bool",
+        "default": "true"
       }
     ],
-    "constructor": ["table_index", "column_count", "type"]
+    "constructor": ["table_index", "column_count", "type", "setop_all", "allow_out_of_order"]
   },
   {
     "class": "LogicalRecursiveCTE",
@@ -906,5 +918,32 @@
     "base": "LogicalOperator",
     "enum": "LOGICAL_EXTENSION_OPERATOR",
     "custom_implementation": true
+  },
+  {
+    "class": "FilenamePattern",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 200,
+        "name": "base",
+        "type": "string",
+        "serialize_property": "_base",
+        "deserialize_property": "_base"
+      },
+      {
+        "id": 201,
+        "name": "pos",
+        "type": "idx_t",
+        "serialize_property": "_pos",
+        "deserialize_property": "_pos"
+      },
+      {
+        "id": 202,
+        "name": "uuid",
+        "type": "bool",
+        "serialize_property": "_uuid",
+        "deserialize_property": "_uuid"
+      }
+    ]
   }
 ]

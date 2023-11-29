@@ -43,7 +43,8 @@ public:
 	DUCKDB_API idx_t BindFunction(const string &name, TableFunctionSet &functions,
 	                              vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind a pragma function from the set of functions and input arguments
-	DUCKDB_API idx_t BindFunction(const string &name, PragmaFunctionSet &functions, PragmaInfo &info, string &error);
+	DUCKDB_API idx_t BindFunction(const string &name, PragmaFunctionSet &functions, vector<Value> &parameters,
+	                              string &error);
 
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const string &schema, const string &name,
 	                                                     vector<unique_ptr<Expression>> children, string &error,

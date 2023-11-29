@@ -15,6 +15,19 @@ def create_generic_dataframe(data, pandas):
     return pandas.DataFrame({'0': pandas.Series(data=data, dtype='object')})
 
 
+def create_repeated_nulls(size):
+    data = [None, "a"]
+    n = size
+    data = data * n
+    return data
+
+
+def create_trailing_non_null(size):
+    data = [None for _ in range(size - 1)]
+    data.append('this is a long string')
+    return data
+
+
 class IntString:
     def __init__(self, value: int):
         self.value = value
@@ -205,6 +218,18 @@ class TestResolveObjectColumns(object):
         print(duckdb_col.columns)
         print(converted_col.columns)
         pandas.testing.assert_frame_equal(converted_col, duckdb_col)
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize('sample_size', [1, 10])
+    @pytest.mark.parametrize('fill', [1000, 10000])
+    @pytest.mark.parametrize('get_data', [create_repeated_nulls, create_trailing_non_null])
+    def test_analyzing_nulls(self, pandas, duckdb_cursor, fill, sample_size, get_data):
+        data = get_data(fill)
+        df1 = pandas.DataFrame(data={"col1": data})
+        duckdb_cursor.execute(f"SET GLOBAL pandas_analyze_sample={sample_size}")
+        df = duckdb_cursor.execute("select * from df1").df()
+
+        pandas.testing.assert_frame_equal(df1, df)
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_map_value_upgrade(self, pandas):

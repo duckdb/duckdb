@@ -15,6 +15,9 @@ COPY t1 TO '__TEST_DIR__/t1.csv' (FORMAT CSV, DELIMITER '|', HEADER);
 statement ok
 PRAGMA memory_limit='2M'
 
+statement ok
+PRAGMA threads=2
+
 query I
 select count(*) from read_csv_auto('__TEST_DIR__/t1.csv',buffer_size = 262144, sample_size=-1)
 ----
