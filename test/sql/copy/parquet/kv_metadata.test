@@ -43,13 +43,8 @@ SELECT key::VARCHAR, value::VARCHAR FROM parquet_kv_metadata('__TEST_DIR__/kv_me
 statement ok
 COPY (SELECT 2, 'bar') TO  '__TEST_DIR__/kv_metadata_test2.parquet' (FORMAT PARQUET, KV_METADATA {a: 'b', c: 'd'});
 
-query I
-select '__TEST_DIR__/'
-----
-duckdb_unittest_tempdir/28583/
-
 query III
-SELECT replace(file_name, '__TEST_DIR__/', '') AS file_name, key::VARCHAR, value::VARCHAR FROM parquet_kv_metadata('__TEST_DIR__/kv_metadata_tes*') ORDER BY 1, 2;
+SELECT replace(replace(file_name, '\', '/'),replace('__TEST_DIR__/', '\', '/'), '') AS file_name, key::VARCHAR, value::VARCHAR FROM parquet_kv_metadata('__TEST_DIR__/kv_metadata_tes*') ORDER BY 1, 2;
 ----
 kv_metadata_test.parquet	baz	42
 kv_metadata_test.parquet	foo	bar
