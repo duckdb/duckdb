@@ -1223,6 +1223,10 @@ void ParquetExtension::Load(DuckDB &db) {
 	ParquetKeyValueMetadataFunction kv_meta_fun;
 	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(kv_meta_fun));
 
+	// parquet_file_metadata
+	ParquetFileMetadataFunction file_meta_fun;
+	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(file_meta_fun));
+
 	CopyFunction function("parquet");
 	function.copy_to_bind = ParquetWriteBind;
 	function.copy_to_initialize_global = ParquetWriteInitializeGlobal;

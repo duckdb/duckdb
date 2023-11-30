@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE t1 AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/issue2518.csv', header=False, columns={'rsID':'INT', 'CHR': 'VARCHAR', 'POS': 'INT','REFB': 'VARCHAR','ALTB':'VARCHAR'})
+CREATE TABLE t1 AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/issue2518.csv', header=False, columns={'rsID':'INT', 'CHR': 'VARCHAR', 'POS': 'INT','REFB': 'VARCHAR','ALTB':'VARCHAR'}, auto_detect = false)
 
 query IIIII
 SELECT rsID, chr, pos, refb, altb FROM t1
@@ -41,7 +41,7 @@ SELECT rsID, chr, pos, refb, altb FROM t2
 
 
 statement ok
-CREATE TABLE t3 AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/issue2518.csv', columns={'rsID':'INT', 'CHR': 'VARCHAR', 'POS': 'INT','REFB': 'VARCHAR','ALTB':'VARCHAR'})
+CREATE TABLE t3 AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/issue2518.csv', columns={'rsID':'INT', 'CHR': 'VARCHAR', 'POS': 'INT','REFB': 'VARCHAR','ALTB':'VARCHAR'}, auto_detect = false)
 
 query IIIII
 SELECT rsID, chr, pos, refb, altb FROM t3

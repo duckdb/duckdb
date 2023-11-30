@@ -47,15 +47,12 @@ jobs:
         destination:
           - 'macOS'
           - 'iOS Simulator,name=iPhone 14'
-          - 'watchOS Simulator,name=Apple Watch Ultra (49mm)'
           - 'tvOS Simulator,name=Apple TV 4K (at 1080p) (2nd generation)'
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
         exclude:
           - isRelease: false
             destination: 'iOS Simulator,name=iPhone 14'
-          - isRelease: false
-            destination: 'watchOS Simulator,name=Apple Watch Ultra (49mm)'
           - isRelease: false
             destination: 'tvOS Simulator,name=Apple TV 4K (at 1080p) (2nd generation)'
     runs-on: macos-12

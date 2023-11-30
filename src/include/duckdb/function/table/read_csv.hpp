@@ -114,6 +114,7 @@ struct CSVCopyFunction {
 struct ReadCSVTableFunction {
 	static TableFunction GetFunction();
 	static TableFunction GetAutoFunction();
+	static void ReadCSVAddNamedParameters(TableFunction &table_function);
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

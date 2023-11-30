@@ -376,8 +376,17 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 		multiplier = 1000LL * 1000LL * 1000LL;
 	} else if (unit == "terabyte" || unit == "terabytes" || unit == "tb" || unit == "t") {
 		multiplier = 1000LL * 1000LL * 1000LL * 1000LL;
+	} else if (unit == "kib") {
+		multiplier = 1024LL;
+	} else if (unit == "mib") {
+		multiplier = 1024LL * 1024LL;
+	} else if (unit == "gib") {
+		multiplier = 1024LL * 1024LL * 1024LL;
+	} else if (unit == "tib") {
+		multiplier = 1024LL * 1024LL * 1024LL * 1024LL;
 	} else {
-		throw ParserException("Unknown unit for memory_limit: %s (expected: b, mb, gb or tb)", unit);
+		throw ParserException("Unknown unit for memory_limit: %s (expected: KB, MB, GB, TB for 1000^i units or KiB, "
+		                      "MiB, GiB, TiB for 1024^i unites)");
 	}
 	return (idx_t)multiplier * limit;
 }
