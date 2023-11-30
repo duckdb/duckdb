@@ -87,10 +87,10 @@ duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> ArrowTestFactory::CreateStre
 	return stream_wrapper;
 }
 
-void ArrowTestFactory::GetSchema(ArrowArrayStream *factory_ptr, duckdb::ArrowSchemaWrapper &schema) {
+void ArrowTestFactory::GetSchema(ArrowArrayStream *factory_ptr, ArrowSchema &schema) {
 	//! Create a new batch reader
 	auto &factory = *reinterpret_cast<ArrowTestFactory *>(factory_ptr); //! NOLINT
-	factory.ToArrowSchema(&schema.arrow_schema);
+	factory.ToArrowSchema(&schema);
 }
 
 void ArrowTestFactory::ToArrowSchema(struct ArrowSchema *out) {
