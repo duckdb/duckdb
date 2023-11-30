@@ -10,6 +10,7 @@
 
 #include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
@@ -33,6 +34,7 @@ public:
 	FilenamePattern filename_pattern;
 	bool overwrite_or_ignore;
 	bool per_thread_output;
+	optional_idx file_size_bytes;
 
 	bool partition_output;
 	vector<idx_t> partition_columns;

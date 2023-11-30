@@ -1,10 +1,11 @@
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/hive_partitioning.hpp"
-#include "duckdb/common/file_system.hpp"
+
 #include "duckdb/common/file_opener.hpp"
-#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <algorithm>
 
@@ -13,7 +14,8 @@ namespace duckdb {
 class CopyToFunctionGlobalState : public GlobalSinkState {
 public:
 	explicit CopyToFunctionGlobalState(unique_ptr<GlobalFunctionData> global_state)
-	    : rows_copied(0), last_file_offset(0), global_state(std::move(global_state)) {
+	    : rows_copied(0), last_file_offset(0), global_state(std::move(global_state)), sinks_started(0),
+	      sinks_finished(0), file_done(false) {
 	}
 	mutex lock;
 	idx_t rows_copied;
@@ -23,6 +25,11 @@ public:
 
 	//! shared state for HivePartitionedColumnData
 	shared_ptr<GlobalHivePartitionState> partition_state;
+
+	//! For synchronizing creating/finalizing files when FILE_SIZE_BYTES is set (hold lock for these)
+	idx_t sinks_started;
+	idx_t sinks_finished;
+	bool file_done;
 };
 
 class CopyToFunctionLocalState : public LocalSinkState {
@@ -39,6 +46,78 @@ public:
 
 	idx_t writer_offset;
 };
+
+unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext &context,
+                                                                   GlobalSinkState &sink) const {
+	idx_t this_file_offset;
+	{
+		auto &g = sink.Cast<CopyToFunctionGlobalState>();
+		lock_guard<mutex> glock(g.lock);
+		this_file_offset = g.last_file_offset++;
+	}
+	auto &fs = FileSystem::GetFileSystem(context);
+	string output_path(filename_pattern.CreateFilename(fs, file_path, function.extension, this_file_offset));
+	if (fs.FileExists(output_path) && !overwrite_or_ignore) {
+		throw IOException("%s exists! Enable OVERWRITE_OR_IGNORE option to force writing", output_path);
+	}
+	return function.copy_to_initialize_global(context, *bind_data, output_path);
+}
+
+unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContext &context) const {
+	if (partition_output) {
+		auto state = make_uniq<CopyToFunctionLocalState>(nullptr);
+		{
+			auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
+			lock_guard<mutex> glock(g.lock);
+			state->writer_offset = g.last_file_offset++;
+
+			state->part_buffer = make_uniq<HivePartitionedColumnData>(context.client, expected_types, partition_columns,
+			                                                          g.partition_state);
+			state->part_buffer_append_state = make_uniq<PartitionedColumnDataAppendState>();
+			state->part_buffer->InitializeAppendState(*state->part_buffer_append_state);
+		}
+		return std::move(state);
+	}
+	auto res = make_uniq<CopyToFunctionLocalState>(function.copy_to_initialize_local(context, *bind_data));
+	if (per_thread_output) {
+		res->global_state = CreateFileState(context.client, *sink_state);
+	}
+	return std::move(res);
+}
+
+unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {
+
+	if (partition_output || per_thread_output || file_size_bytes.IsValid()) {
+		auto &fs = FileSystem::GetFileSystem(context);
+
+		if (fs.FileExists(file_path) && !overwrite_or_ignore) {
+			throw IOException("%s exists! Enable OVERWRITE_OR_IGNORE option to force writing", file_path);
+		}
+		if (!fs.DirectoryExists(file_path)) {
+			fs.CreateDirectory(file_path);
+		} else if (!overwrite_or_ignore) {
+			idx_t n_files = 0;
+			fs.ListFiles(file_path, [&n_files](const string &path, bool) { n_files++; });
+			if (n_files > 0) {
+				throw IOException("Directory %s is not empty! Enable OVERWRITE_OR_IGNORE option to force writing",
+				                  file_path);
+			}
+		}
+
+		auto state = make_uniq<CopyToFunctionGlobalState>(nullptr);
+		if (!per_thread_output && file_size_bytes.IsValid()) {
+			state->global_state = CreateFileState(context, *state);
+		}
+
+		if (partition_output) {
+			state->partition_state = make_shared<GlobalHivePartitionState>();
+		}
+
+		return std::move(state);
+	}
+
+	return make_uniq<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
+}
 
 //===--------------------------------------------------------------------===//
 // Sink
@@ -72,8 +151,72 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 		lock_guard<mutex> glock(g.lock);
 		g.rows_copied += chunk.size();
 	}
-	function.copy_to_sink(context, *bind_data, per_thread_output ? *l.global_state : *g.global_state, *l.local_state,
-	                      chunk);
+
+	if (per_thread_output) {
+		auto &gstate = l.global_state;
+		function.copy_to_sink(context, *bind_data, *gstate, *l.local_state, chunk);
+
+		if (file_size_bytes.IsValid() && function.file_size_bytes(*gstate) > file_size_bytes.GetIndex()) {
+			function.copy_to_finalize(context.client, *bind_data, *gstate);
+			gstate = CreateFileState(context.client, *sink_state);
+		}
+		return SinkResultType::NEED_MORE_INPUT;
+	}
+
+	if (!file_size_bytes.IsValid()) {
+		function.copy_to_sink(context, *bind_data, *g.global_state, *l.local_state, chunk);
+		return SinkResultType::NEED_MORE_INPUT;
+	}
+
+	// FILE_SIZE_BYTES is set, but threads write to the same file, need to synchronize finalizing somehow
+	auto &gstate = g.global_state;
+
+	bool take_ownership = false;
+	unique_ptr<GlobalFunctionData> owned_gstate;
+	while (true) {
+		if (owned_gstate) {
+			// This thread took ownership of the previous gstate, finalize lock-free
+			function.copy_to_finalize(context.client, *bind_data, *owned_gstate);
+			owned_gstate.reset();
+		}
+
+		lock_guard<mutex> glock(g.lock);
+		if (take_ownership) {
+			// This thread has been assigned to take ownership of the current gstate
+			if (g.sinks_finished != g.sinks_started) {
+				continue; // Spinlock until all threads that started writing to this gstate are done
+			}
+
+			// Threads are done, take ownership of current gstate and create a new gstate
+			owned_gstate = std::move(gstate);
+			gstate = CreateFileState(context.client, *sink_state);
+			g.sinks_started = 0;
+			g.sinks_finished = 0;
+			take_ownership = false;
+		}
+
+		if (g.file_done) {
+			continue; // Spinlock until current file is no longer marked as "done"
+		}
+
+		if (function.file_size_bytes(*gstate) > file_size_bytes.GetIndex()) {
+			// File exceeds limit, assign this thread to take ownership, and mark as done
+			take_ownership = true;
+			g.file_done = true;
+			continue; // Re-enter loop to try to finalize
+		}
+
+		// We can append to the current file
+		g.sinks_started++;
+		break;
+	}
+
+	function.copy_to_sink(context, *bind_data, *gstate, *l.local_state, chunk);
+	{
+		lock_guard<mutex> glock(g.lock);
+		g.sinks_finished++;
+	}
+
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -177,76 +320,13 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 		function.copy_to_finalize(context, *bind_data, *gstate.global_state);
 
 		if (use_tmp_file) {
-			D_ASSERT(!per_thread_output); // FIXME
-			D_ASSERT(!partition_output);  // FIXME
+			D_ASSERT(!per_thread_output);         // FIXME
+			D_ASSERT(!partition_output);          // FIXME
+			D_ASSERT(!file_size_bytes.IsValid()); // FIXME
 			MoveTmpFile(context, file_path);
 		}
 	}
 	return SinkFinalizeType::READY;
-}
-
-unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContext &context) const {
-	if (partition_output) {
-		auto state = make_uniq<CopyToFunctionLocalState>(nullptr);
-		{
-			auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
-			lock_guard<mutex> glock(g.lock);
-			state->writer_offset = g.last_file_offset++;
-
-			state->part_buffer = make_uniq<HivePartitionedColumnData>(context.client, expected_types, partition_columns,
-			                                                          g.partition_state);
-			state->part_buffer_append_state = make_uniq<PartitionedColumnDataAppendState>();
-			state->part_buffer->InitializeAppendState(*state->part_buffer_append_state);
-		}
-		return std::move(state);
-	}
-	auto res = make_uniq<CopyToFunctionLocalState>(function.copy_to_initialize_local(context, *bind_data));
-	if (per_thread_output) {
-		idx_t this_file_offset;
-		{
-			auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
-			lock_guard<mutex> glock(g.lock);
-			this_file_offset = g.last_file_offset++;
-		}
-		auto &fs = FileSystem::GetFileSystem(context.client);
-		string output_path(filename_pattern.CreateFilename(fs, file_path, function.extension, this_file_offset));
-		if (fs.FileExists(output_path) && !overwrite_or_ignore) {
-			throw IOException("%s exists! Enable OVERWRITE_OR_IGNORE option to force writing", output_path);
-		}
-		res->global_state = function.copy_to_initialize_global(context.client, *bind_data, output_path);
-	}
-	return std::move(res);
-}
-
-unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {
-
-	if (partition_output || per_thread_output) {
-		auto &fs = FileSystem::GetFileSystem(context);
-
-		if (fs.FileExists(file_path) && !overwrite_or_ignore) {
-			throw IOException("%s exists! Enable OVERWRITE_OR_IGNORE option to force writing", file_path);
-		}
-		if (!fs.DirectoryExists(file_path)) {
-			fs.CreateDirectory(file_path);
-		} else if (!overwrite_or_ignore) {
-			idx_t n_files = 0;
-			fs.ListFiles(file_path, [&n_files](const string &path, bool) { n_files++; });
-			if (n_files > 0) {
-				throw IOException("Directory %s is not empty! Enable OVERWRITE_OR_IGNORE option to force writing",
-				                  file_path);
-			}
-		}
-
-		auto state = make_uniq<CopyToFunctionGlobalState>(nullptr);
-
-		if (partition_output) {
-			state->partition_state = make_shared<GlobalHivePartitionState>();
-		}
-
-		return std::move(state);
-	}
-
-	return make_uniq<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
 }
 
 //===--------------------------------------------------------------------===//
