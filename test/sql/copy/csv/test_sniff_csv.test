@@ -39,7 +39,7 @@ FROM sniff_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', sample_size=
 statement error
 FROM read_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=0, columns={'column0': 'BIGINT', 'column1': 'VARCHAR'}, sample_size=1);
 ----
-Could not convert string 'B' to INT64 at line 2176 in column "column0"
+Could not convert string 'B' to INT64 in column "column0"
 
 query IIIIIIIIIII
 FROM sniff_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', sample_size=10000);

@@ -97,27 +97,27 @@ PRAGMA memory_limit='0.01 terabytes'
 statement error
 PRAGMA memory_limit=100
 ----
-Parser Error: Unknown unit for memory_limit:  (expected: b, mb, gb or tb)
+Parser Error: Unknown unit for memory_limit:  (expected: KB, MB, GB, TB for 1000^i units or KiB, MiB, GiB, TiB for 1024^i units)
 
 statement error
 PRAGMA memory_limit='0.01BG'
 ----
-Parser Error: Unknown unit for memory_limit: bg (expected: b, mb, gb or tb)
+Parser Error: Unknown unit for memory_limit: bg (expected: KB, MB, GB, TB for 1000^i units or KiB, MiB, GiB, TiB for 1024^i units)
 
 statement error
 PRAGMA memory_limit='0.01BLA'
 ----
-Parser Error: Unknown unit for memory_limit: bla (expected: b, mb, gb or tb)
+Parser Error: Unknown unit for memory_limit: bla (expected: KB, MB, GB, TB for 1000^i units or KiB, MiB, GiB, TiB for 1024^i units)
 
 statement error
 PRAGMA memory_limit='0.01PP'
 ----
-Parser Error: Unknown unit for memory_limit: pp (expected: b, mb, gb or tb)
+Parser Error: Unknown unit for memory_limit: pp (expected: KB, MB, GB, TB for 1000^i units or KiB, MiB, GiB, TiB for 1024^i units)
 
 statement error
 PRAGMA memory_limit='0.01TEST'
 ----
-Parser Error: Unknown unit for memory_limit: test (expected: b, mb, gb or tb)
+Parser Error: Unknown unit for memory_limit: test (expected: KB, MB, GB, TB for 1000^i units or KiB, MiB, GiB, TiB for 1024^i units)
 
 # we can't invoke it like this either
 statement error
