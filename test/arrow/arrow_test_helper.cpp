@@ -9,7 +9,7 @@ ArrowStreamTestFactory::CreateStream(uintptr_t this_ptr, duckdb::ArrowStreamPara
 	return stream_wrapper;
 }
 
-void ArrowStreamTestFactory::GetSchema(ArrowArrayStream * arrow_array_stream, ArrowSchema &schema) {
+void ArrowStreamTestFactory::GetSchema(ArrowArrayStream *arrow_array_stream, ArrowSchema &schema) {
 	arrow_array_stream->get_schema(arrow_array_stream, &schema);
 }
 
@@ -96,8 +96,6 @@ void ArrowTestFactory::GetSchema(uintptr_t factory_ptr, duckdb::ArrowSchemaWrapp
 void ArrowTestFactory::ToArrowSchema(struct ArrowSchema *out) {
 	ArrowConverter::ToArrowSchema(out, types, names, options);
 }
-
-
 
 unique_ptr<QueryResult> ArrowTestHelper::ScanArrowObject(Connection &con, vector<Value> &params) {
 	auto arrow_result = con.TableFunction("arrow_scan", params)->Execute();
