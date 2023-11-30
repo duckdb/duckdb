@@ -42,10 +42,10 @@ duckdb_value duckdb_create_value(duckdb_type type, void *data) {
 	switch (type) {
 	case DUCKDB_TYPE_VARCHAR:
 		return duckdb_create_varchar(reinterpret_cast<const char *>(data));
-	case DUCKDB_TYPE_INT64:
+	case DUCKDB_TYPE_BIGINT:
 		return duckdb_create_int64(*reinterpret_cast<int64_t *>(data));
-	case DUCKDB_TYPE_INT32:
-		return WrapValue(new duckdb::Value(duckdb::Value::INT32(*reinterpret_cast<int32_t *>(data))));
+	case DUCKDB_TYPE_INTEGER:
+		return WrapValue(new duckdb::Value(*reinterpret_cast<int32_t *>(data)));
 	default:
 		return nullptr;
 	}
