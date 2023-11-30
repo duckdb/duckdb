@@ -117,18 +117,66 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 	return false;
 }
 
+static bool SetInstallIsReentrant(int change) {
+	thread_local int reentrant_cnt = 0;
+
+	reentrant_cnt += change;
+
+	return reentrant_cnt <= 1;
+}
+
+class ReentrancyLock {
+	bool valid;
+
+public:
+	ReentrancyLock() : valid(SetInstallIsReentrant(+1)) {
+	}
+	bool LockIsValid() const {
+		return valid;
+	}
+	~ReentrancyLock() {
+		SetInstallIsReentrant(-1);
+	}
+};
+
 void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install,
                                        const string &repository) {
+	ReentrancyLock reentrant_lock;
+	if (!reentrant_lock.LockIsValid()) {
+		// Forbid going through InstallExtension again while already in the process
+		// Problematic case is say there is autoinstall and autoloading enabled, then it might be
+		// that while already performing an install another one is started
+		// This is problematic in two ways:
+		// - circular dependency detection
+		// - user intention might not be clear, say for example there is a `INSTALL x FROM azure://y`, then
+		//	it's intended to install & load azure from current repository or fail?
+		return;
+	}
+
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
 	return;
 #endif
+	// FIXME: This should also be handled the autoloading
+
 	string local_path = ExtensionDirectory(config, fs);
 	InstallExtensionInternal(config, nullptr, fs, local_path, extension, force_install, repository);
 }
 
 void ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install,
                                        const string &repository) {
+	ReentrancyLock reentrant_lock;
+	if (!reentrant_lock.LockIsValid()) {
+		// Forbid going through InstallExtension again while already in the process
+		// Problematic case is say there is autoinstall and autoloading enabled, then it might be
+		// that while already performing an install another one is started
+		// This is problematic in two ways:
+		// - circular dependency detection
+		// - user intention might not be clear, say for example there is a `INSTALL x FROM azure://y`, then
+		//	it's intended to install & load azure from current repository or fail?
+		return;
+	}
+
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
 	return;
@@ -136,8 +184,14 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 	auto &config = DBConfig::GetConfig(context);
 
 	// Either extension OR repository might require some extensions to be loaded
-	TryAutoLoadExtension(context, FileSystem::LookupExtensionForPattern(extension));
-	TryAutoLoadExtension(context, FileSystem::LookupExtensionForPattern(repository));
+	if (!StringUtil::StartsWith(extension, "http://")) {
+		// Passing false as last parameter to avoid reentrancy issues
+		TryAutoLoadExtension(context, FileSystem::LookupExtensionForPattern(extension), false);
+	}
+	if (!StringUtil::StartsWith(repository, "http://")) {
+		// Passing false as last parameter to avoid reentrancy issues
+		TryAutoLoadExtension(context, FileSystem::LookupExtensionForPattern(repository), false);
+	}
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	string local_path = ExtensionDirectory(context);
