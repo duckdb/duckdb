@@ -566,8 +566,7 @@ stream_produce(uintptr_t factory_ptr,
 	return res;
 }
 
-void stream_schema(uintptr_t factory_ptr, ArrowSchema &schema) {
-	auto stream = (ArrowArrayStream *)factory_ptr;
+void stream_schema(ArrowArrayStream *stream, ArrowSchema &schema) {
 	stream->get_schema(stream, &schema);
 }
 
