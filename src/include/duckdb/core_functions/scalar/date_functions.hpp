@@ -435,6 +435,15 @@ struct TimezoneMinuteFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct ToCenturiesFun {
+	static constexpr const char *Name = "to_centuries";
+	static constexpr const char *Parameters = "integer";
+	static constexpr const char *Description = "Construct a century interval";
+	static constexpr const char *Example = "to_centuries(5)";
+
+	static ScalarFunction GetFunction();
+};
+
 struct ToDaysFun {
 	static constexpr const char *Name = "to_days";
 	static constexpr const char *Parameters = "integer";
@@ -444,11 +453,20 @@ struct ToDaysFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ToDecadesFun {
+	static constexpr const char *Name = "to_decades";
+	static constexpr const char *Parameters = "integer";
+	static constexpr const char *Description = "Construct a decade interval";
+	static constexpr const char *Example = "to_decades(5)";
+
+	static ScalarFunction GetFunction();
+};
+
 struct ToHoursFun {
 	static constexpr const char *Name = "to_hours";
-	static constexpr const char *Parameters = "integer";
+	static constexpr const char *Parameters = "double";
 	static constexpr const char *Description = "Construct a hour interval";
-	static constexpr const char *Example = "to_hours(5)";
+	static constexpr const char *Example = "to_hours(5.5)";
 
 	static ScalarFunction GetFunction();
 };
@@ -462,20 +480,29 @@ struct ToMicrosecondsFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ToMillenniaFun {
+	static constexpr const char *Name = "to_millennia";
+	static constexpr const char *Parameters = "integer";
+	static constexpr const char *Description = "Construct a millenium interval";
+	static constexpr const char *Example = "to_millennia(1)";
+
+	static ScalarFunction GetFunction();
+};
+
 struct ToMillisecondsFun {
 	static constexpr const char *Name = "to_milliseconds";
-	static constexpr const char *Parameters = "integer";
+	static constexpr const char *Parameters = "double";
 	static constexpr const char *Description = "Construct a millisecond interval";
-	static constexpr const char *Example = "to_milliseconds(5)";
+	static constexpr const char *Example = "to_milliseconds(5.5)";
 
 	static ScalarFunction GetFunction();
 };
 
 struct ToMinutesFun {
 	static constexpr const char *Name = "to_minutes";
-	static constexpr const char *Parameters = "integer";
+	static constexpr const char *Parameters = "double";
 	static constexpr const char *Description = "Construct a minute interval";
-	static constexpr const char *Example = "to_minutes(5)";
+	static constexpr const char *Example = "to_minutes(5.5)";
 
 	static ScalarFunction GetFunction();
 };
@@ -491,9 +518,9 @@ struct ToMonthsFun {
 
 struct ToSecondsFun {
 	static constexpr const char *Name = "to_seconds";
-	static constexpr const char *Parameters = "integer";
+	static constexpr const char *Parameters = "double";
 	static constexpr const char *Description = "Construct a second interval";
-	static constexpr const char *Example = "to_seconds(5)";
+	static constexpr const char *Example = "to_seconds(5.5)";
 
 	static ScalarFunction GetFunction();
 };
@@ -503,6 +530,15 @@ struct ToTimestampFun {
 	static constexpr const char *Parameters = "sec";
 	static constexpr const char *Description = "Converts secs since epoch to a timestamp with time zone";
 	static constexpr const char *Example = "to_timestamp(1284352323.5)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ToWeeksFun {
+	static constexpr const char *Name = "to_weeks";
+	static constexpr const char *Parameters = "integer";
+	static constexpr const char *Description = "Construct a week interval";
+	static constexpr const char *Example = "to_weeks(5)";
 
 	static ScalarFunction GetFunction();
 };

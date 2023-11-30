@@ -221,12 +221,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
 
-	// check if we are opening a standard DuckDB database or an extension database
-	if (config.options.database_type.empty()) {
-		auto path_and_type = DBPathAndType::Parse(config.options.database_path, config);
-		config.options.database_type = path_and_type.type;
-		config.options.database_path = path_and_type.path;
-	}
+	// resolve the type of teh database we are opening
+	DBPathAndType::ResolveDatabaseType(config.options.database_path, config.options.database_type, config);
 
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();

@@ -79,7 +79,7 @@ static void AttachWorker(const string &dir, const idx_t start, const idx_t end, 
 
 	for (idx_t i = start; i < end; i++) {
 		auto filepath = dir + "/board_" + to_string(i) + ".db";
-		auto result = con.Query("ATTACH '" + filepath + "' (READ_ONLY);");
+		auto result = con.Query("ATTACH '" + filepath + "' (READ_ONLY, TYPE DUCKDB);");
 		D_ASSERT(!result->HasError());
 	}
 }

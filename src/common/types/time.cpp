@@ -43,15 +43,14 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 		return false;
 	}
 
-	if (!Date::ParseDoubleDigit(buf, len, pos, hour)) {
-		return false;
-	}
-	if (hour < 0 || hour >= 24) {
-		return false;
-	}
-
-	if (pos >= len) {
-		return false;
+	// Allow up to 9 digit hours to support intervals
+	hour = 0;
+	for (int32_t digits = 9; pos < len && StringUtil::CharacterIsDigit(buf[pos]); ++pos) {
+		if (digits-- > 0) {
+			hour = hour * 10 + (buf[pos] - '0');
+		} else {
+			return false;
+		}
 	}
 
 	// fetch the separator
@@ -111,6 +110,10 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 	return true;
 }
 
+bool Time::TryConvertInterval(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict) {
+	return Time::TryConvertInternal(buf, len, pos, result, strict);
+}
+
 bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict) {
 	if (!Time::TryConvertInternal(buf, len, pos, result, strict)) {
 		if (!strict) {
@@ -126,7 +129,7 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 		}
 		return false;
 	}
-	return true;
+	return result.micros <= Interval::MICROS_PER_DAY;
 }
 
 bool Time::TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int32_t &offset) {
@@ -301,7 +304,7 @@ dtime_t Time::FromTime(int32_t hour, int32_t minute, int32_t second, int32_t mic
 
 bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds) {
 	if (hour < 0 || hour >= 24) {
-		return false;
+		return (hour == 24) && (minute == 0) && (second == 0) && (microseconds == 0);
 	}
 	if (minute < 0 || minute >= 60) {
 		return false;

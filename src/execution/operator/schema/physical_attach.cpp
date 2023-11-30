@@ -6,6 +6,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/main/database_path_and_type.hpp"
 
 namespace duckdb {
 
@@ -17,6 +18,7 @@ void ParseOptions(const unique_ptr<AttachInfo> &info, AccessMode &access_mode, s
                   string &unrecognized_option) {
 
 	for (auto &entry : info->options) {
+
 		if (entry.first == "readonly" || entry.first == "read_only") {
 			auto read_only = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
 			if (read_only) {
@@ -24,16 +26,27 @@ void ParseOptions(const unique_ptr<AttachInfo> &info, AccessMode &access_mode, s
 			} else {
 				access_mode = AccessMode::READ_WRITE;
 			}
-		} else if (entry.first == "readwrite" || entry.first == "read_write") {
+			continue;
+		}
+
+		if (entry.first == "readwrite" || entry.first == "read_write") {
 			auto read_only = !BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
 			if (read_only) {
 				access_mode = AccessMode::READ_ONLY;
 			} else {
 				access_mode = AccessMode::READ_WRITE;
 			}
-		} else if (entry.first == "type") {
+			continue;
+		}
+
+		if (entry.first == "type") {
+			// extract the database type
 			db_type = StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR));
-		} else if (unrecognized_option.empty()) {
+			continue;
+		}
+
+		// we allow unrecognized options
+		if (unrecognized_option.empty()) {
 			unrecognized_option = entry.first;
 		}
 	}
@@ -44,15 +57,6 @@ void ParseOptions(const unique_ptr<AttachInfo> &info, AccessMode &access_mode, s
 //===--------------------------------------------------------------------===//
 SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk,
                                          OperatorSourceInput &input) const {
-
-	// get the name and path of the database
-	auto &name = info->name;
-	const auto &path = info->path;
-	if (name.empty()) {
-		auto &fs = FileSystem::GetFileSystem(context.client);
-		name = AttachedDatabase::ExtractDatabaseName(path, fs);
-	}
-
 	// parse the options
 	auto &config = DBConfig::GetConfig(context.client);
 	AccessMode access_mode = config.options.access_mode;
@@ -60,10 +64,20 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	string unrecognized_option;
 	ParseOptions(info, access_mode, db_type, unrecognized_option);
 
+	// get the name and path of the database
+	auto &name = info->name;
+	auto &path = info->path;
+	if (db_type.empty()) {
+		DBPathAndType::ExtractExtensionPrefix(path, db_type);
+	}
+	if (name.empty()) {
+		auto &fs = FileSystem::GetFileSystem(context.client);
+		name = AttachedDatabase::ExtractDatabaseName(path, fs);
+	}
+
 	// check ATTACH IF NOT EXISTS
 	auto &db_manager = DatabaseManager::Get(context.client);
 	if (info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
-
 		// constant-time lookup in the catalog for the db name
 		auto existing_db = db_manager.GetDatabase(context.client, name);
 		if (existing_db) {
@@ -82,9 +96,8 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		}
 	}
 
-	// get the database type
-	db_manager.GetDbType(context.client, db_type, *info, config, unrecognized_option);
-
+	// get the database type and attach the database
+	db_manager.GetDatabaseType(context.client, db_type, *info, config, unrecognized_option);
 	auto attached_db = db_manager.AttachDatabase(context.client, *info, db_type, access_mode);
 	attached_db->Initialize();
 	return SourceResultType::FINISHED;

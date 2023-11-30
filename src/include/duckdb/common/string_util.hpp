@@ -168,7 +168,7 @@ public:
 	}
 
 	//! Return a string that formats the give number of bytes
-	DUCKDB_API static string BytesToHumanReadableString(idx_t bytes);
+	DUCKDB_API static string BytesToHumanReadableString(idx_t bytes, idx_t multiplier = 1024);
 
 	//! Convert a string to uppercase
 	DUCKDB_API static string Upper(const string &str);

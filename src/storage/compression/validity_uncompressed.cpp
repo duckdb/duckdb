@@ -418,7 +418,7 @@ idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segmen
 	if (data.validity.AllValid()) {
 		// no null values: skip append
 		segment.count += append_count;
-		validity_stats.SetHasNoNull();
+		validity_stats.SetHasNoNullFast();
 		return append_count;
 	}
 
@@ -427,9 +427,9 @@ idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segmen
 		auto idx = data.sel->get_index(offset + i);
 		if (!data.validity.RowIsValidUnsafe(idx)) {
 			mask.SetInvalidUnsafe(segment.count + i);
-			validity_stats.SetHasNull();
+			validity_stats.SetHasNullFast();
 		} else {
-			validity_stats.SetHasNoNull();
+			validity_stats.SetHasNoNullFast();
 		}
 	}
 	segment.count += append_count;

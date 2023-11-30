@@ -19,7 +19,7 @@ BoundAggregateExpression::BoundAggregateExpression(AggregateFunction function, v
 
 string BoundAggregateExpression::ToString() const {
 	return FunctionExpression::ToString<BoundAggregateExpression, Expression, BoundOrderModifier>(
-	    *this, string(), function.name, false, IsDistinct(), filter.get(), order_bys.get());
+	    *this, string(), string(), function.name, false, IsDistinct(), filter.get(), order_bys.get());
 }
 
 hash_t BoundAggregateExpression::Hash() const {

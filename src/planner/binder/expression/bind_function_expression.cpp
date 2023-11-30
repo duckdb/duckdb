@@ -20,6 +20,8 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
                                             unique_ptr<ParsedExpression> &expr_ptr) {
 	// lookup the function in the catalog
 	QueryErrorContext error_context(binder.root_statement, function.query_location);
+
+	binder.BindSchemaOrCatalog(function.catalog, function.schema);
 	auto func = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
 	                              function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
 	if (!func) {

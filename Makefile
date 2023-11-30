@@ -278,6 +278,12 @@ wasm_eh: ${EXTENSION_CONFIG_STEP}
 	emmake make -j8 -Cbuild/wasm_eh && \
 	cd build/wasm_eh && bash ../../scripts/link-wasm-extensions.sh
 
+wasm_threads: ${EXTENSION_CONFIG_STEP}
+	mkdir -p ./build/wasm_threads && \
+	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_threads -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DWITH_WASM_THREADS=1 -DWITH_WASM_SIMD=1 -DWITH_WASM_BULK_MEMORY=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_threads" && \
+	emmake make -j8 -Cbuild/wasm_threads && \
+	cd build/wasm_threads && bash ../../scripts/link-wasm-extensions.sh
+
 cldebug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/cldebug && \
 	cd build/cldebug && \

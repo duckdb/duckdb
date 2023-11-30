@@ -25,4 +25,4 @@ window w as (order by timestamp asc range between interval 55 seconds preceding 
 order by 3 desc
 limit 1;
 ----
-2020-10-15 16:58:11	50.000000	3394
+2020-10-15 16:58:10.318385	50.000000	3363
