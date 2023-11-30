@@ -528,7 +528,6 @@ TEST_CASE("Test ADBC Statement Bind", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 	adbc_error.release(&adbc_error);
-
 }
 
 TEST_CASE("Test ADBC Transactions", "[adbc]") {
@@ -596,7 +595,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcConnectionSetOption(&adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
 	                                        ADBC_OPTION_VALUE_DISABLED, &adbc_error)));
 	input_data = db.QueryArrow("SELECT 42;");
-    REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
 	REQUIRE(
@@ -608,7 +607,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
 
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
-    REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement_2, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection_2, &adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement_2, query.c_str(), &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement_2, &arrow_stream, &rows_affected, &adbc_error)));
@@ -631,7 +630,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 
 	// Now if we do a commit on the first connection this should be 2 on the second connection
 	REQUIRE(SUCCESS(AdbcConnectionCommit(&adbc_connection, &adbc_error)));
-    REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement_2, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection_2, &adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement_2, query.c_str(), &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement_2, &arrow_stream, &rows_affected, &adbc_error)));
@@ -643,7 +642,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 
 	// Lets do a rollback
 	input_data = db.QueryArrow("SELECT 42;");
-    REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
 	REQUIRE(
@@ -668,7 +667,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	arrow_stream.release(&arrow_stream);
 
 	// If we check from con2 we should 2
-    REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement_2, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection_2, &adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement_2, query.c_str(), &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement_2, &arrow_stream, &rows_affected, &adbc_error)));
@@ -693,7 +692,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 
 	// Let's change the Auto commit config mid-transaction
 	input_data = db.QueryArrow("SELECT 42;");
-    REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
 	REQUIRE(
@@ -730,7 +729,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	arrow_stream.release(&arrow_stream);
 
 	input_data = db.QueryArrow("SELECT 42;");
-    REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
 	REQUIRE(
@@ -815,7 +814,6 @@ TEST_CASE("Test ADBC Transaction Errors", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcConnectionCommit(&adbc_connection, &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcConnectionRollback(&adbc_connection, &adbc_error)));
-
 
 	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
@@ -920,8 +918,8 @@ TEST_CASE("Test ADBC Substrait", "[adbc]") {
 	auto conn = (duckdb::Connection *)adbc_connection.private_data;
 	if (!conn->context->db->ExtensionIsLoaded("substrait")) {
 		// We need substrait to run this test
-	    REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
-	    REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 		return;
 	}
 	// Insert Data
@@ -953,7 +951,7 @@ TEST_CASE("Test ADBC Substrait", "[adbc]") {
 	    "\\x06DuckDB";
 	auto plan = (uint8_t *)str_plan;
 	size_t length = strlen(str_plan);
-		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementSetSubstraitPlan(&adbc_statement, plan, length, &adbc_error)));
@@ -1050,29 +1048,28 @@ void TestFilters(ADBCTestDatabase &db, AdbcError &adbc_error, idx_t depth) {
 		ArrowArrayStream arrow_stream;
 		AdbcConnectionGetObjects(&db.adbc_connection, depth, nullptr, "bla", nullptr, nullptr, nullptr, &arrow_stream,
 		                         &adbc_error);
-	    ArrowArray arrow_array;
-	    arrow_stream.get_next(&arrow_stream, &arrow_array);
-	    REQUIRE(!arrow_array.release);
-	    arrow_stream.release(&arrow_stream);
-
+		ArrowArray arrow_array;
+		arrow_stream.get_next(&arrow_stream, &arrow_array);
+		REQUIRE(!arrow_array.release);
+		arrow_stream.release(&arrow_stream);
 	}
 	{
 		ArrowArrayStream arrow_stream;
 		AdbcConnectionGetObjects(&db.adbc_connection, depth, nullptr, nullptr, "bla", nullptr, nullptr, &arrow_stream,
 		                         &adbc_error);
-        ArrowArray arrow_array;
-	    arrow_stream.get_next(&arrow_stream, &arrow_array);
-	    REQUIRE(!arrow_array.release);
-	    arrow_stream.release(&arrow_stream);
+		ArrowArray arrow_array;
+		arrow_stream.get_next(&arrow_stream, &arrow_array);
+		REQUIRE(!arrow_array.release);
+		arrow_stream.release(&arrow_stream);
 	}
 	{
 		ArrowArrayStream arrow_stream;
 		AdbcConnectionGetObjects(&db.adbc_connection, depth, nullptr, nullptr, nullptr, nullptr, "bla", &arrow_stream,
 		                         &adbc_error);
-		 ArrowArray arrow_array;
-	    arrow_stream.get_next(&arrow_stream, &arrow_array);
-	    REQUIRE(!arrow_array.release);
-	    arrow_stream.release(&arrow_stream);
+		ArrowArray arrow_array;
+		arrow_stream.get_next(&arrow_stream, &arrow_array);
+		REQUIRE(!arrow_array.release);
+		arrow_stream.release(&arrow_stream);
 	}
 }
 
@@ -1084,25 +1081,24 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	// Lets first try what works
 	// 1. Test ADBC_OBJECT_DEPTH_DB_SCHEMAS
 
-		ADBCTestDatabase db("ADBC_OBJECT_DEPTH_DB_SCHEMAS.db");
-		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
-		// Create Table 'my_table' from the Arrow Result
-		db.CreateTable("my_table", input_data);
+	ADBCTestDatabase db("ADBC_OBJECT_DEPTH_DB_SCHEMAS.db");
+	// Create Arrow Result
+	auto input_data = db.QueryArrow("SELECT 42");
+	// Create Table 'my_table' from the Arrow Result
+	db.CreateTable("my_table", input_data);
 
-		AdbcError adbc_error;
-		InitializeADBCError(&adbc_error);
-		ArrowArrayStream arrow_stream;
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+	ArrowArrayStream arrow_stream;
 
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr, nullptr, nullptr, nullptr,
-		                         nullptr, &arrow_stream, &adbc_error);
-		db.CreateTable("result", arrow_stream);
-		auto res = db.Query("Select * from result");
-		REQUIRE(res->ColumnCount() == 1);
-		REQUIRE(res->GetValue(0, 0).ToString() == "main");
-		db.QueryArrow("Drop table result;");
-		TestFilters(db, adbc_error, ADBC_OBJECT_DEPTH_DB_SCHEMAS);
-
+	AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr, nullptr, nullptr, nullptr,
+	                         nullptr, &arrow_stream, &adbc_error);
+	db.CreateTable("result", arrow_stream);
+	auto res = db.Query("Select * from result");
+	REQUIRE(res->ColumnCount() == 1);
+	REQUIRE(res->GetValue(0, 0).ToString() == "main");
+	db.QueryArrow("Drop table result;");
+	TestFilters(db, adbc_error, ADBC_OBJECT_DEPTH_DB_SCHEMAS);
 
 	// 2. Test ADBC_OBJECT_DEPTH_TABLES
 	{
