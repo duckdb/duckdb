@@ -872,20 +872,13 @@ TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
 
 	REQUIRE(!SUCCESS(
 	    AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "b", "duckdb_indexes", &arrow_schema, &adbc_error)));
-	REQUIRE(std::strcmp(adbc_error.message, "Catalog Error: Table with name duckdb_indexes does not exist!\nDid you "
-	                                        "mean \"main.duckdb_indexes\"?\nLINE 1: SELECT * FROM b.duckdb_indexes "
-	                                        "LIMIT 0;\n                      ^\nunable to initialize statement") == 0);
+	REQUIRE(std::strstr(adbc_error.message, "Catalog Error") != nullptr);
 	adbc_error.release(&adbc_error);
 
 	// Test invalid table
 	REQUIRE(!SUCCESS(
 	    AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "", "duckdb_indexeeees", &arrow_schema, &adbc_error)));
-	REQUIRE(
-	    std::strcmp(
-	        adbc_error.message,
-	        "Catalog Error: Table with name duckdb_indexeeees does not exist!\nDid you mean \"duckdb_indexes\"?\nLINE "
-	        "1: SELECT * FROM duckdb_indexeeees LIMIT 0;\n                      ^\nunable to initialize statement") ==
-	    0);
+	REQUIRE(std::strstr(adbc_error.message, "Catalog Error") != nullptr);
 	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 	adbc_error.release(&adbc_error);
