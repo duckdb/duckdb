@@ -14,11 +14,12 @@
 #include "duckdb/main/connection.hpp"
 #endif
 
-#include "duckdb/common/adbc/single_batch_array_stream.hpp"
-
 #include "duckdb/common/adbc/options.h"
-#include <string.h>
+#include "duckdb/common/adbc/single_batch_array_stream.hpp"
+#include "duckdb/function/table/arrow.hpp"
+
 #include <stdlib.h>
+#include <string.h>
 
 // We must leak the symbols of the init function
 AdbcStatusCode duckdb_adbc_init(int version, void *driver, struct AdbcError *error) {
@@ -555,10 +556,8 @@ const char *get_last_error(struct ArrowArrayStream *stream) {
 // this is an evil hack, normally we would need a stream factory here, but its probably much easier if the adbc clients
 // just hand over a stream
 
-duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper>
-stream_produce(uintptr_t factory_ptr,
-               std::pair<std::unordered_map<idx_t, std::string>, std::vector<std::string>> &project_columns,
-               duckdb::TableFilterSet *filters) {
+duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> stream_produce(uintptr_t factory_ptr,
+                                                                   duckdb::ArrowStreamParameters &parameters) {
 
 	// TODO this will ignore any projections or filters but since we don't expose the scan it should be sort of fine
 	auto res = duckdb::make_uniq<duckdb::ArrowArrayStreamWrapper>();
