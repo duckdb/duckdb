@@ -45,16 +45,30 @@
 namespace duckdb {
 
 struct ActiveQueryContext {
+public:
 	//! The query that is currently being executed
 	string query;
-	//! The currently open result
-	BaseQueryResult *open_result = nullptr;
 	//! Prepared statement data
 	shared_ptr<PreparedStatementData> prepared;
 	//! The query executor
 	unique_ptr<Executor> executor;
 	//! The progress bar
 	unique_ptr<ProgressBar> progress_bar;
+
+public:
+	void SetOpenResult(BaseQueryResult &result) {
+		open_result = &result;
+	}
+	bool IsOpenResult(BaseQueryResult &result) {
+		return open_result == &result;
+	}
+	bool HasOpenResult() const {
+		return open_result != nullptr;
+	}
+
+private:
+	//! The currently open result
+	BaseQueryResult *open_result = nullptr;
 };
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
@@ -86,7 +100,7 @@ void ClientContext::Destroy() {
 }
 
 unique_ptr<DataChunk> ClientContext::Fetch(ClientContextLock &lock, StreamQueryResult &result) {
-	D_ASSERT(IsActiveResult(lock, &result));
+	D_ASSERT(IsActiveResult(lock, result));
 	D_ASSERT(active_query->executor);
 	return FetchInternal(lock, *active_query->executor, result);
 }
@@ -235,12 +249,13 @@ const string &ClientContext::GetCurrentQuery() {
 
 unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending) {
 	D_ASSERT(active_query);
-	D_ASSERT(active_query->open_result == &pending);
+	D_ASSERT(active_query->IsOpenResult(pending));
 	D_ASSERT(active_query->prepared);
 	auto &executor = GetExecutor();
 	auto &prepared = *active_query->prepared;
 	bool create_stream_result = prepared.properties.allow_stream_result && pending.allow_stream_result;
 	if (create_stream_result) {
+#ifndef DUCKDB_DEBUG_BUFFERED_STREAMING_RESULT
 		D_ASSERT(!executor.HasResultCollector());
 		active_query->progress_bar.reset();
 		query_progress.Initialize();
@@ -248,14 +263,19 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
 		auto stream_result = make_uniq<StreamQueryResult>(pending.statement_type, pending.properties,
 		                                                  shared_from_this(), pending.types, pending.names);
-		active_query->open_result = stream_result.get();
+		active_query->SetOpenResult(*stream_result);
 		return std::move(stream_result);
+#endif
 	}
 	unique_ptr<QueryResult> result;
 	if (executor.HasResultCollector()) {
 		// we have a result collector - fetch the result directly from the result collector
 		result = executor.GetResult();
-		CleanupInternal(lock, result.get(), false);
+		if (!create_stream_result) {
+			CleanupInternal(lock, result.get(), false);
+		} else {
+			active_query->SetOpenResult(*result);
+		}
 	} else {
 		// no result collector - create a materialized result by continuously fetching
 		auto result_collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), pending.types);
@@ -419,27 +439,41 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		collector = get_method(*this, statement);
 		D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
 		executor.Initialize(std::move(collector));
+	} else if (stream_result && statement.properties.return_type == StatementReturnType::QUERY_RESULT) {
+#ifdef DUCKDB_DEBUG_BUFFERED_STREAMING_RESULT
+		unique_ptr<PhysicalResultCollector> collector;
+
+		auto &client_config = ClientConfig::GetConfig(*this);
+		auto get_method = PhysicalResultCollector::GetResultCollector;
+		statement.is_streaming = true;
+		collector = get_method(*this, statement);
+		D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
+		executor.Initialize(std::move(collector));
+#else
+		executor.Initialize(*statement.plan);
+#endif
 	} else {
 		executor.Initialize(*statement.plan);
 	}
 	auto types = executor.GetTypes();
 	D_ASSERT(types == statement.types);
-	D_ASSERT(!active_query->open_result);
+	D_ASSERT(!active_query->HasOpenResult());
 
 	auto pending_result =
 	    make_uniq<PendingQueryResult>(shared_from_this(), *statement_p, std::move(types), stream_result);
 	active_query->prepared = std::move(statement_p);
-	active_query->open_result = pending_result.get();
+	active_query->SetOpenResult(*pending_result);
 	return pending_result;
 }
 
-PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &lock, PendingQueryResult &result) {
+PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result) {
 	D_ASSERT(active_query);
-	D_ASSERT(active_query->open_result == &result);
+	D_ASSERT(active_query->IsOpenResult(result));
 	try {
 		auto query_result = active_query->executor->ExecuteTask();
 		if (active_query->progress_bar) {
-			active_query->progress_bar->Update(query_result == PendingExecutionResult::RESULT_READY);
+			auto is_finished = PendingQueryResult::IsFinishedOrBlocked(query_result);
+			active_query->progress_bar->Update(is_finished);
 			query_progress = active_query->progress_bar->GetDetailedQueryProgress();
 		}
 		return query_result;
@@ -635,11 +669,18 @@ unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &l
 	return ExecutePendingQueryInternal(lock, *pending);
 }
 
-bool ClientContext::IsActiveResult(ClientContextLock &lock, BaseQueryResult *result) {
+bool ClientContext::IsActiveResult(ClientContextLock &lock, BaseQueryResult &result) {
 	if (!active_query) {
 		return false;
 	}
-	return active_query->open_result == result;
+	return active_query->IsOpenResult(result);
+}
+
+void ClientContext::SetActiveResult(ClientContextLock &lock, BaseQueryResult &result) {
+	if (!active_query) {
+		return;
+	}
+	return active_query->SetOpenResult(result);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(
@@ -760,7 +801,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		EndQueryInternal(lock, false, invalidate_query);
 		return result;
 	}
-	D_ASSERT(active_query->open_result == result.get());
+	D_ASSERT(active_query->IsOpenResult(*result));
 	return result;
 }
 

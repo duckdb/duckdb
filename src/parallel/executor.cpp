@@ -502,7 +502,7 @@ PendingExecutionResult Executor::ExecuteTask() {
 				// The blocked tasks are processing the Sink of a BufferedResultCollector
 				// We return here so the query result can be made and fetched from
 				// which will in turn unblock the Sink tasks.
-				return PendingExecutionResult::RESULT_READY;
+				return PendingExecutionResult::BLOCKED;
 			}
 			return PendingExecutionResult::NO_TASKS_AVAILABLE;
 		}

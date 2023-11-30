@@ -43,6 +43,8 @@ struct CreateScalarFunctionInfo;
 class ScalarFunctionCatalogEntry;
 struct ActiveQueryContext;
 struct ParserOptions;
+class BufferedData;
+class BufferedQueryResult;
 struct ClientData;
 
 struct PendingQueryParameters {
@@ -63,7 +65,9 @@ public:
 //! The ClientContext holds information relevant to the current client session
 //! during execution
 class ClientContext : public std::enable_shared_from_this<ClientContext> {
-	friend class PendingQueryResult;
+	friend class PendingQueryResult;  // LockContext
+	friend class BufferedData;        // LockContext
+	friend class BufferedQueryResult; // LockContext
 	friend class StreamQueryResult;
 	friend class DuckTransactionManager;
 
@@ -177,7 +181,8 @@ public:
 	DUCKDB_API unique_ptr<DataChunk> Fetch(ClientContextLock &lock, StreamQueryResult &result);
 
 	//! Whether or not the given result object (streaming query result or pending query result) is active
-	DUCKDB_API bool IsActiveResult(ClientContextLock &lock, BaseQueryResult *result);
+	DUCKDB_API bool IsActiveResult(ClientContextLock &lock, BaseQueryResult &result);
+	DUCKDB_API void SetActiveResult(ClientContextLock &lock, BaseQueryResult &result);
 
 	//! Returns the current executor
 	Executor &GetExecutor();
@@ -242,7 +247,7 @@ private:
 	void BeginQueryInternal(ClientContextLock &lock, const string &query);
 	PreservedError EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction);
 
-	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock, PendingQueryResult &result);
+	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result);
 
 	unique_ptr<PendingQueryResult> PendingStatementOrPreparedStatementInternal(
 	    ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,

@@ -90,7 +90,7 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 bool StreamQueryResult::IsOpenInternal(ClientContextLock &lock) {
 	bool invalidated = !success || !context;
 	if (!invalidated) {
-		invalidated = !context->IsActiveResult(lock, this);
+		invalidated = !context->IsActiveResult(lock, *this);
 	}
 	return !invalidated;
 }
