@@ -785,22 +785,14 @@ struct ParquetCastOperator : public BaseParquetOperator {
 struct ParquetTimestampNSOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
-		auto ts = timestamp_t(input);
-		if (!Timestamp::IsFinite(ts)) {
-			return input;
-		}
-		return Timestamp::FromEpochNanoSeconds(input).value;
+		return Timestamp::FromEpochNanoSecondsPossiblyInfinite(input).value;
 	}
 };
 
 struct ParquetTimestampSOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
-		auto ts = timestamp_t(input);
-		if (!Timestamp::IsFinite(ts)) {
-			return input;
-		}
-		return Timestamp::FromEpochSeconds(input).value;
+		return Timestamp::FromEpochSecondsPossiblyInfinite(input).value;
 	}
 };
 

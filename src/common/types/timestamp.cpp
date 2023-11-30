@@ -296,13 +296,17 @@ timestamp_t Timestamp::GetCurrentTimestamp() {
 	return Timestamp::FromEpochMs(epoch_ms);
 }
 
-timestamp_t Timestamp::FromEpochSeconds(int64_t sec) {
+timestamp_t Timestamp::FromEpochSecondsPossiblyInfinite(int64_t sec) {
 	int64_t result;
-	D_ASSERT(Timestamp::IsFinite(timestamp_t(sec)));
 	if (!TryMultiplyOperator::Operation(sec, Interval::MICROS_PER_SEC, result)) {
 		throw ConversionException("Could not convert Timestamp(S) to Timestamp(US)");
 	}
 	return timestamp_t(result);
+}
+
+timestamp_t Timestamp::FromEpochSeconds(int64_t sec) {
+	D_ASSERT(Timestamp::IsFinite(timestamp_t(sec)));
+	return FromEpochSecondsPossiblyInfinite(sec);
 }
 
 timestamp_t Timestamp::FromEpochMsPossiblyInfinite(int64_t ms) {
@@ -322,9 +326,13 @@ timestamp_t Timestamp::FromEpochMicroSeconds(int64_t micros) {
 	return timestamp_t(micros);
 }
 
+timestamp_t Timestamp::FromEpochNanoSecondsPossiblyInfinite(int64_t ns) {
+	return timestamp_t(ns / 1000);
+}
+
 timestamp_t Timestamp::FromEpochNanoSeconds(int64_t ns) {
 	D_ASSERT(Timestamp::IsFinite(timestamp_t(ns)));
-	return timestamp_t(ns / 1000);
+	return FromEpochNanoSecondsPossiblyInfinite(ns);
 }
 
 int64_t Timestamp::GetEpochSeconds(timestamp_t timestamp) {

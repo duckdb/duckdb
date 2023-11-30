@@ -894,9 +894,7 @@ int64_t DatePart::YearWeekOperator::Operation(dtime_t input) {
 
 template <>
 int64_t DatePart::EpochNanosecondsOperator::Operation(timestamp_t input) {
-	if (!Timestamp::IsFinite(input)) {
-		return input.value;
-	}
+	D_ASSERT(Timestamp::IsFinite(input));
 	return Timestamp::GetEpochNanoSeconds(input);
 }
 
@@ -928,9 +926,7 @@ int64_t DatePart::EpochMicrosecondsOperator::Operation(interval_t input) {
 
 template <>
 int64_t DatePart::EpochMillisOperator::Operation(timestamp_t input) {
-	if (!Timestamp::IsFinite(input)) {
-		return input.value;
-	}
+	D_ASSERT(Timestamp::IsFinite(input));
 	return Timestamp::GetEpochMs(input);
 }
 
