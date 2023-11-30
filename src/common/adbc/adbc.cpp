@@ -200,11 +200,15 @@ AdbcStatusCode DatabaseInit(struct AdbcDatabase *database, struct AdbcError *err
 		SetError(error, "ADBC Database has an invalid pointer");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	char *errormsg;
+	char *errormsg = nullptr;
 	// TODO can we set the database path via option, too? Does not look like it...
 	auto wrapper = (DuckDBAdbcDatabaseWrapper *)database->private_data;
 	auto res = duckdb_open_ext(wrapper->path.c_str(), &wrapper->database, wrapper->config, &errormsg);
-	return CheckResult(res, error, errormsg);
+	auto adbc_result =  CheckResult(res, error, errormsg);
+	if (errormsg){
+		free(errormsg);
+	}
+	return adbc_result;
 }
 
 AdbcStatusCode DatabaseRelease(struct AdbcDatabase *database, struct AdbcError *error) {

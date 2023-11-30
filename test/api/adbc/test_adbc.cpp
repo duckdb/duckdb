@@ -174,6 +174,8 @@ TEST_CASE("Test Invalid Path", "[adbc]") {
 	REQUIRE(!SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
 
 	REQUIRE(std::strstr(adbc_error.message, "Cannot open file"));
+	adbc_error.release(&adbc_error);
+	InitializeADBCError(&adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 	adbc_error.release(&adbc_error);
 }
@@ -425,6 +427,8 @@ TEST_CASE("Test ADBC Statement Bind (unhappy)", "[adbc]") {
 	ArrowSchema result;
 	result.release = nullptr;
 	status = AdbcStatementGetParameterSchema(&adbc_statement, &result, nullptr);
+	result.release(&result);
+	result.release = nullptr;
 	REQUIRE(status == ADBC_STATUS_OK);
 
 	// No valid statement
@@ -434,6 +438,11 @@ TEST_CASE("Test ADBC Statement Bind (unhappy)", "[adbc]") {
 	// No result
 	status = AdbcStatementGetParameterSchema(&adbc_statement, nullptr, &adbc_error);
 	REQUIRE(status != ADBC_STATUS_OK);
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 
 	adbc_error.release(&adbc_error);
 }
@@ -503,7 +512,11 @@ TEST_CASE("Test ADBC Statement Bind", "[adbc]") {
 
 	result_array.release(&result_array);
 	arrow_stream.release(&arrow_stream);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 	adbc_error.release(&adbc_error);
+
 }
 
 TEST_CASE("Test ADBC Transactions", "[adbc]") {
@@ -571,7 +584,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcConnectionSetOption(&adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
 	                                        ADBC_OPTION_VALUE_DISABLED, &adbc_error)));
 	input_data = db.QueryArrow("SELECT 42;");
-
+    REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
 	REQUIRE(
@@ -583,7 +596,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
 
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
-
+    REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection_2, &adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement_2, query.c_str(), &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement_2, &arrow_stream, &rows_affected, &adbc_error)));
@@ -606,7 +619,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 
 	// Now if we do a commit on the first connection this should be 2 on the second connection
 	REQUIRE(SUCCESS(AdbcConnectionCommit(&adbc_connection, &adbc_error)));
-
+    REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection_2, &adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement_2, query.c_str(), &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement_2, &arrow_stream, &rows_affected, &adbc_error)));
@@ -618,7 +631,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 
 	// Lets do a rollback
 	input_data = db.QueryArrow("SELECT 42;");
-
+    REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
 	REQUIRE(
@@ -643,7 +656,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	arrow_stream.release(&arrow_stream);
 
 	// If we check from con2 we should 2
-
+    REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection_2, &adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement_2, query.c_str(), &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement_2, &arrow_stream, &rows_affected, &adbc_error)));
@@ -668,7 +681,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 
 	// Let's change the Auto commit config mid-transaction
 	input_data = db.QueryArrow("SELECT 42;");
-
+    REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
 	REQUIRE(
@@ -684,6 +697,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	                                        ADBC_OPTION_VALUE_ENABLED, &adbc_error)));
 
 	// Now Both con1 and con2 should have 3
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection_2, &adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement_2, query.c_str(), &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement_2, &arrow_stream, &rows_affected, &adbc_error)));
@@ -704,7 +718,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	arrow_stream.release(&arrow_stream);
 
 	input_data = db.QueryArrow("SELECT 42;");
-
+    REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
 	REQUIRE(
@@ -717,6 +731,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
 	// Auto-Commit is on, so this should just be commited
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection_2, &adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement_2, query.c_str(), &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement_2, &arrow_stream, &rows_affected, &adbc_error)));
@@ -735,6 +750,13 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(((int64_t *)arrow_array.children[0]->buffers[1])[0] == 4);
 	arrow_array.release(&arrow_array);
 	arrow_stream.release(&arrow_stream);
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement_2, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection_2, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 }
 
 TEST_CASE("Test ADBC Transaction Errors", "[adbc]") {
@@ -781,6 +803,10 @@ TEST_CASE("Test ADBC Transaction Errors", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcConnectionCommit(&adbc_connection, &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcConnectionRollback(&adbc_connection, &adbc_error)));
+
+
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 }
 
 TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
@@ -850,6 +876,8 @@ TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
 	        "Catalog Error: Table with name duckdb_indexeeees does not exist!\nDid you mean \"duckdb_indexes\"?\nLINE "
 	        "1: SELECT * FROM duckdb_indexeeees LIMIT 0;\n                      ^\nunable to initialize statement") ==
 	    0);
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 	adbc_error.release(&adbc_error);
 }
 
