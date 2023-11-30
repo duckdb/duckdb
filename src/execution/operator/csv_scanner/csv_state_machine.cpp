@@ -13,7 +13,6 @@ CSVStateMachine::CSVStateMachine(CSVReaderOptions &options_p, const CSVStateMach
       csv_buffer_iterator(std::move(buffer_manager_p)),
       transition_array(csv_state_machine_cache.Get(state_machine_options)) {
 	dialect_options.state_machine_options = state_machine_options;
-	dialect_options.has_format = options.dialect_options.has_format;
 	dialect_options.date_format = options.dialect_options.date_format;
 	dialect_options.skip_rows = options.dialect_options.skip_rows;
 }

@@ -37,6 +37,8 @@ struct UsingColumnSet {
 //! encountered during the binding process.
 class BindContext {
 public:
+	BindContext(Binder &binder);
+
 	//! Keep track of recursive CTE references
 	case_insensitive_map_t<std::shared_ptr<idx_t>> cte_references;
 
@@ -151,6 +153,7 @@ private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);
 
 private:
+	Binder &binder;
 	//! The set of bindings
 	case_insensitive_map_t<unique_ptr<Binding>> bindings;
 	//! The list of bindings in insertion order

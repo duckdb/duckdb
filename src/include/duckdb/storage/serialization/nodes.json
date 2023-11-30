@@ -476,152 +476,150 @@
     "pointer_type": "none",
     "constructor": ["value", "index"]
   },
+    {
+    "class": "CSVOption<T>",
+    "includes": [
+      "duckdb/execution/operator/scan/csv/csv_option.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "set_by_user",
+        "type": "bool"
+      },
+      {
+        "id": 101,
+        "name": "value",
+        "type": "T"
+      }
+    ],
+    "pointer_type": "none"
+  },
   {
     "class": "CSVReaderOptions",
     "includes": [
       "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
     ],
     "members": [
-      {
-        "id": 100,
-        "name": "has_delimiter",
-        "type": "bool"
-      },
-      {"id": 101,
-        "name": "has_quote",
-        "type": "bool"
-      },
-      {"id": 102,
-        "name": "has_escape",
-        "type": "bool"
-      },
-      {"id": 103,
-        "name": "has_header",
-        "type": "bool"
-      },
-      {"id": 104,
+      {"id": 100,
         "name": "ignore_errors",
         "type": "bool"
       },
-      {"id": 105,
+      {"id": 101,
         "name": "buffer_sample_size",
         "type": "idx_t"
       },
-      {"id": 106,
+      {"id": 102,
         "name": "null_str",
         "type": "string"
       },
-      {"id": 107,
+      {"id": 103,
         "name": "compression",
         "type": "FileCompressionType"
       },
-      {"id": 108,
+      {"id": 104,
         "name": "allow_quoted_nulls",
         "type": "bool"
       },
-      {"id": 109,
-        "name": "skip_rows_set",
-        "type": "bool"
-      },
-      {"id": 110,
+      {"id": 105,
         "name": "maximum_line_size",
         "type": "idx_t"
       },
-      {"id": 111,
+      {"id": 106,
         "name": "normalize_names",
         "type": "bool"
       },
-      {"id": 112,
+      {"id": 107,
         "name": "force_not_null",
         "type": "vector<bool>"
       },
-      {"id": 113,
+      {"id": 108,
         "name": "all_varchar",
         "type": "bool"
       },
-      {"id": 114,
+      {"id": 109,
         "name": "sample_size_chunks",
         "type": "idx_t"
       },
-      {"id": 115,
+      {"id": 110,
         "name": "auto_detect",
         "type": "bool"
       },
-      {"id": 116,
+      {"id": 111,
         "name": "file_path",
         "type": "string"
       },
-      {"id": 117,
+      {"id": 112,
         "name": "decimal_separator",
         "type": "string"
       },
-      {"id": 118,
+      {"id": 113,
         "name": "null_padding",
         "type": "bool"
       },
-      {"id": 119,
+      {"id": 114,
         "name": "buffer_size",
         "type": "idx_t"
       },
-      {"id": 120,
+      {"id": 115,
         "name": "file_options",
         "type": "MultiFileReaderOptions"
       },
-      {"id": 121,
+      {"id": 116,
         "name": "force_quote",
         "type": "vector<bool>"
       },
-      {"id": 122,
+      {"id": 117,
         "name": "rejects_table_name",
         "type": "string"
       },
-      {"id": 123,
+      {"id": 118,
         "name": "rejects_limit",
         "type": "idx_t"
       },
-      {"id": 124,
+      {"id": 119,
         "name": "rejects_recovery_columns",
         "type": "vector<string>"
       },
-      {"id": 125,
+      {"id": 120,
         "name": "rejects_recovery_column_ids",
         "type": "vector<idx_t>"
       },
-      {"id": 126,
+      {"id": 121,
         "name": "dialect_options.state_machine_options.delimiter",
-        "type": "char"
+        "type": "CSVOption<char>"
       },
-      {"id": 127,
+      {"id": 122,
         "name": "dialect_options.state_machine_options.quote",
-        "type": "char"
+        "type": "CSVOption<char>"
       },
-      {"id": 128,
+      {"id": 123,
         "name": "dialect_options.state_machine_options.escape",
-        "type": "char"
+        "type": "CSVOption<char>"
       },
-       {"id": 129,
+       {"id": 124,
         "name": "dialect_options.header",
-        "type": "bool"
+        "type": "CSVOption<bool>"
       },
-            {"id": 130,
+      {"id": 125,
         "name": "dialect_options.num_cols",
         "type": "idx_t"
       },
-            {"id": 131,
+      {"id": 126,
         "name": "dialect_options.new_line",
-        "type": "NewLineIdentifier"
+        "type": "CSVOption<NewLineIdentifier>"
       },
-            {"id": 132,
+      {"id": 127,
         "name": "dialect_options.skip_rows",
-        "type": "idx_t"
+        "type": "CSVOption<idx_t>"
       },
-      {"id": 133,
+      {"id": 128,
         "name": "dialect_options.date_format",
-        "type": "map<LogicalTypeId, StrpTimeFormat>"
+        "type": "map<LogicalTypeId, CSVOption<StrpTimeFormat>>"
       },
-      {"id": 134,
-        "name": "dialect_options.has_format",
-        "type": "map<LogicalTypeId, bool>"
+      {"id": 129,
+        "name": "sniffer_user_mismatch_error",
+        "type": "string"
       }
     ],
     "pointer_type": "none"

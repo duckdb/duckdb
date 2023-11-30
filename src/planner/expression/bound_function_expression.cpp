@@ -39,7 +39,7 @@ bool BoundFunctionExpression::IsFoldable() const {
 }
 
 string BoundFunctionExpression::ToString() const {
-	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), function.name,
+	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), string(), function.name,
 	                                                                         is_operator);
 }
 bool BoundFunctionExpression::PropagatesNullValues() const {

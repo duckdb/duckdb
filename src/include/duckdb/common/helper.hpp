@@ -210,4 +210,9 @@ bool RefersToSameObject(const reference<T> &A, const reference<T> &B) {
 	return &A.get() == &B.get();
 }
 
+template<class T>
+bool RefersToSameObject(const T &A, const T &B) {
+	return &A == &B;
+}
+
 } // namespace duckdb

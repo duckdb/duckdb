@@ -11,6 +11,46 @@ bool TryMultiplyOperator::Operation(double left, int64_t right, int64_t &result)
 	return TryCast::Operation<double, int64_t>(left * right, result);
 }
 
+struct ToMillenniaOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		interval_t result;
+		result.days = 0;
+		result.micros = 0;
+		if (!TryMultiplyOperator::Operation<TA, int32_t, int32_t>(input, Interval::MONTHS_PER_MILLENIUM,
+		                                                          result.months)) {
+			throw OutOfRangeException("Interval value %s millennia out of range", NumericHelper::ToString(input));
+		}
+		return result;
+	}
+};
+
+struct ToCenturiesOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		interval_t result;
+		result.days = 0;
+		result.micros = 0;
+		if (!TryMultiplyOperator::Operation<TA, int32_t, int32_t>(input, Interval::MONTHS_PER_CENTURY, result.months)) {
+			throw OutOfRangeException("Interval value %s centuries out of range", NumericHelper::ToString(input));
+		}
+		return result;
+	}
+};
+
+struct ToDecadesOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		interval_t result;
+		result.days = 0;
+		result.micros = 0;
+		if (!TryMultiplyOperator::Operation<TA, int32_t, int32_t>(input, Interval::MONTHS_PER_DECADE, result.months)) {
+			throw OutOfRangeException("Interval value %s decades out of range", NumericHelper::ToString(input));
+		}
+		return result;
+	}
+};
+
 struct ToYearsOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
@@ -31,6 +71,17 @@ struct ToMonthsOperator {
 		interval_t result;
 		result.months = input;
 		result.days = 0;
+		result.micros = 0;
+		return result;
+	}
+};
+
+struct ToWeeksOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		interval_t result;
+		result.months = 0;
+		result.days = input * 7;
 		result.micros = 0;
 		return result;
 	}
@@ -97,6 +148,21 @@ struct ToMicroSecondsOperator {
 	}
 };
 
+ScalarFunction ToMillenniaFun::GetFunction() {
+	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToMillenniaOperator>);
+}
+
+ScalarFunction ToCenturiesFun::GetFunction() {
+	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToCenturiesOperator>);
+}
+
+ScalarFunction ToDecadesFun::GetFunction() {
+	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToDecadesOperator>);
+}
+
 ScalarFunction ToYearsFun::GetFunction() {
 	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
 	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToYearsOperator>);
@@ -105,6 +171,11 @@ ScalarFunction ToYearsFun::GetFunction() {
 ScalarFunction ToMonthsFun::GetFunction() {
 	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
 	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToMonthsOperator>);
+}
+
+ScalarFunction ToWeeksFun::GetFunction() {
+	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToWeeksOperator>);
 }
 
 ScalarFunction ToDaysFun::GetFunction() {

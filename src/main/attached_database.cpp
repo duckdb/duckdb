@@ -31,8 +31,6 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, string name_p, string file_path_p,
                                    AccessMode access_mode)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
-
-	db.GetDatabaseManager().InsertDatabasePath(file_path_p, name);
 	type = access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
 	                                            : AttachedDatabaseType::READ_WRITE_DATABASE;
 	storage = make_uniq<SingleFileStorageManager>(*this, std::move(file_path_p), access_mode == AccessMode::READ_ONLY);
@@ -44,8 +42,6 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension,
                                    string name_p, const AttachInfo &info, AccessMode access_mode)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
-
-	db.GetDatabaseManager().InsertDatabasePath(info.path, name);
 	type = access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
 	                                            : AttachedDatabaseType::READ_WRITE_DATABASE;
 	catalog = storage_extension.attach(storage_extension.storage_info.get(), *this, name, *info.Copy(), access_mode);
@@ -62,8 +58,8 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 }
 
 AttachedDatabase::~AttachedDatabase() {
-
 	D_ASSERT(catalog);
+
 	if (!IsSystem() && !catalog->InMemory()) {
 		db.GetDatabaseManager().EraseDatabasePath(catalog->GetDBPath());
 	}
