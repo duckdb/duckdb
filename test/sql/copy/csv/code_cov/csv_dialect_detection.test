@@ -25,4 +25,4 @@ SELECT * from read_csv_auto('data/csv/escape.csv')
 statement error
 SELECT * from read_csv_auto('data/csv/no_opt.csv', delim = ';')
 ----
-CSV options could not be auto-detected.
+CSV options could not be auto-detected. Consider setting parser options manually.

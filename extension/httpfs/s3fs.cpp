@@ -494,7 +494,7 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 
 	auto open_tag_pos = result.find("<CompleteMultipartUploadResult", 0);
 	if (open_tag_pos == string::npos) {
-		throw IOException("Unexpected response during S3 multipart upload finalization: %d", res->code);
+		throw IOException("Unexpected response during S3 multipart upload finalization: %d\n\n%s", res->code, result);
 	}
 	file_handle.upload_finalized = true;
 }
@@ -613,7 +613,7 @@ void S3FileSystem::ReadQueryParams(const string &url_query_param, S3AuthParams &
 }
 
 static string GetPrefix(string url) {
-	const string prefixes[] = {"s3://", "gcs://", "r2://"};
+	const string prefixes[] = {"s3://", "s3a://", "s3n://", "gcs://", "r2://"};
 	for (auto &prefix : prefixes) {
 		if (StringUtil::StartsWith(url, prefix)) {
 			return prefix;
@@ -885,7 +885,9 @@ void S3FileHandle::Initialize(FileOpener *opener) {
 }
 
 bool S3FileSystem::CanHandleFile(const string &fpath) {
-	return fpath.rfind("s3://", 0) * fpath.rfind("gcs://", 0) * fpath.rfind("r2://", 0) == 0;
+	return fpath.rfind("s3://", 0) * fpath.rfind("s3a://", 0) * fpath.rfind("s3n://", 0) * fpath.rfind("gcs://", 0) *
+	           fpath.rfind("r2://", 0) ==
+	       0;
 }
 
 void S3FileSystem::FileSync(FileHandle &handle) {

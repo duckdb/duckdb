@@ -109,6 +109,9 @@ class TestAllTypes(object):
             'timestamp_array': "[], ['1970-01-01'::TIMESTAMP, NULL, '0001-01-01'::TIMESTAMP, '9999-12-31 23:59:59.999999'::TIMESTAMP,], [NULL::TIMESTAMP,]",
             'timestamptz_array': "[], ['1970-01-01 00:00:00Z'::TIMESTAMPTZ, NULL, '0001-01-01 00:00:00Z'::TIMESTAMPTZ, '9999-12-31 23:59:59.999999Z'::TIMESTAMPTZ,], [NULL::TIMESTAMPTZ,]",
         }
+        adjusted_values = {
+            'time': """CASE WHEN "time" = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE "time" END AS "time" """,
+        }
         min_datetime = datetime.datetime.min
         min_datetime_with_utc = min_datetime.replace(tzinfo=pytz.UTC)
         max_datetime = datetime.datetime.max
@@ -215,7 +218,8 @@ class TestAllTypes(object):
         }
         if cur_type in replacement_values:
             result = conn.execute("select " + replacement_values[cur_type]).fetchall()
-            print(cur_type, result)
+        elif cur_type in adjusted_values:
+            result = conn.execute(f'select {adjusted_values[cur_type]} from test_all_types()').fetchall()
         else:
             result = conn.execute(f'select "{cur_type}" from test_all_types()').fetchall()
         correct_result = correct_answer_map[cur_type]
@@ -421,7 +425,7 @@ class TestAllTypes(object):
                 dtype=object,
             ),
             'time': np.ma.array(
-                ['00:00:00', '23:59:59.999999', None],
+                ['00:00:00', '24:00:00', None],
                 mask=[0, 0, 1],
                 dtype=object,
             ),
@@ -509,10 +513,15 @@ class TestAllTypes(object):
             'timestamptz_array': "[], ['1970-01-01 00:00:00Z'::TIMESTAMPTZ, NULL, '0001-01-01 00:00:00Z'::TIMESTAMPTZ, '9999-12-31 23:59:59.999999Z'::TIMESTAMPTZ,], [NULL::TIMESTAMPTZ,]",
         }
 
+        adjusted_values = {
+            'time': """CASE WHEN "time" = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE "time" END AS "time" """,
+        }
         conn = duckdb.connect()
         conn.execute("SET timezone = UTC")
         if cur_type in replacement_values:
             dataframe = conn.execute("select " + replacement_values[cur_type]).df()
+        elif cur_type in adjusted_values:
+            dataframe = conn.execute(f'select {adjusted_values[cur_type]} from test_all_types()').df()
         else:
             dataframe = conn.execute(f'select "{cur_type}" from test_all_types()').df()
         print(cur_type)

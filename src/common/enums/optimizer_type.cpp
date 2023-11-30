@@ -40,6 +40,14 @@ string OptimizerTypeToString(OptimizerType type) {
 	throw InternalException("Invalid optimizer type");
 }
 
+vector<string> ListAllOptimizers() {
+	vector<string> result;
+	for (idx_t i = 0; internal_optimizer_types[i].name; i++) {
+		result.push_back(internal_optimizer_types[i].name);
+	}
+	return result;
+}
+
 OptimizerType OptimizerTypeFromString(const string &str) {
 	for (idx_t i = 0; internal_optimizer_types[i].name; i++) {
 		if (internal_optimizer_types[i].name == str) {

@@ -13,6 +13,10 @@
 #include "duckdb/execution/operator/scan/csv/quote_rules.hpp"
 
 namespace duckdb {
+struct DateTimestampSniffing {
+	bool initialized = false;
+	vector<string> format;
+};
 //! Struct to store the result of the Sniffer
 struct SnifferResult {
 	SnifferResult(vector<LogicalType> return_types_p, vector<string> names_p)
@@ -81,7 +85,7 @@ public:
 	//! 3. Type Refinement: Refines the types of the columns for the remaining chunks
 	//! 4. Header Detection: Figures out if  the CSV file has a header and produces the names of the columns
 	//! 5. Type Replacement: Replaces the types of the columns if the user specified them
-	SnifferResult SniffCSV();
+	SnifferResult SniffCSV(bool force_match = false);
 
 private:
 	//! CSV State Machine Cache
@@ -133,10 +137,12 @@ private:
 	//! Try to cast a string value to the specified sql type
 	bool TryCastValue(CSVStateMachine &candidate, const Value &value, const LogicalType &sql_type);
 	void SetDateFormat(CSVStateMachine &candidate, const string &format_specifier, const LogicalTypeId &sql_type);
+	//! Function that initialized the necessary variables used for date and timestamp detection
+	void InitializeDateAndTimeStampDetection(CSVStateMachine &candidate, const string &separator,
+	                                         const LogicalType &sql_type);
 	//! Functions that performs detection for date and timestamp formats
-	void DetectDateAndTimeStampFormats(CSVStateMachine &candidate, map<LogicalTypeId, bool> &has_format_candidates,
-	                                   map<LogicalTypeId, vector<string>> &format_candidates,
-	                                   const LogicalType &sql_type, const string &separator, Value &dummy_val);
+	void DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const LogicalType &sql_type, const string &separator,
+	                                   Value &dummy_val);
 
 	//! Variables for Type Detection
 	//! Format Candidates for Date and Timestamp Types
@@ -152,6 +158,8 @@ private:
 	idx_t best_start_with_header = 0;
 	idx_t best_start_without_header = 0;
 	vector<Value> best_header_row;
+	//! Variable used for sniffing date and timestamp
+	map<LogicalTypeId, DateTimestampSniffing> format_candidates;
 
 	//! ------------------------------------------------------//
 	//! ------------------ Type Refinement ------------------ //
