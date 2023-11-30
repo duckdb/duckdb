@@ -39,5 +39,21 @@
         "vcpkg_triplet": "x64-windows-static-md"
       }
     ]
+  },
+  "wasm": {
+    "include": [
+      {
+        "duckdb_arch": "wasm_mvp",
+        "vcpkg_triplet": "wasm32-emscripten"
+      },
+      {
+        "duckdb_arch": "wasm_eh",
+        "vcpkg_triplet": "wasm32-emscripten"
+      },
+      {
+        "duckdb_arch": "wasm_threads",
+        "vcpkg_triplet": "wasm32-emscripten"
+      }
+    ]
   }
 }

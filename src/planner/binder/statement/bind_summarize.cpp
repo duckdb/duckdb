@@ -61,12 +61,8 @@ static unique_ptr<ParsedExpression> SummarizeCreateNullPercentage(string column_
 	    SummarizeCreateBinaryFunction("-", make_uniq<ConstantExpression>(Value::DOUBLE(1)), std::move(null_percentage));
 	auto percentage_x =
 	    SummarizeCreateBinaryFunction("*", std::move(negate_x), make_uniq<ConstantExpression>(Value::DOUBLE(100)));
-	auto round_x = SummarizeCreateBinaryFunction("round", std::move(percentage_x),
-	                                             make_uniq<ConstantExpression>(Value::INTEGER(2)));
-	auto concat_x =
-	    SummarizeCreateBinaryFunction("concat", std::move(round_x), make_uniq<ConstantExpression>(Value("%")));
 
-	return concat_x;
+	return make_uniq<CastExpression>(LogicalType::DECIMAL(9, 2), std::move(percentage_x));
 }
 
 BoundStatement Binder::BindSummarize(ShowStatement &stmt) {

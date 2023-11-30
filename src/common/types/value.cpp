@@ -289,7 +289,8 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::DATE:
 		return Value::DATE(Date::FromDate(Date::DATE_MAX_YEAR, Date::DATE_MAX_MONTH, Date::DATE_MAX_DAY));
 	case LogicalTypeId::TIME:
-		return Value::TIME(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1));
+		//	24:00:00 according to PG
+		return Value::TIME(dtime_t(Interval::MICROS_PER_DAY));
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -644,38 +645,54 @@ Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, i
 	return val;
 }
 
-Value Value::STRUCT(child_list_t<Value> values) {
+Value Value::STRUCT(const LogicalType &type, vector<Value> struct_values) {
 	Value result;
+	auto child_types = StructType::GetChildTypes(type);
+	for (size_t i = 0; i < struct_values.size(); i++) {
+		struct_values[i] = struct_values[i].DefaultCastAs(child_types[i].second);
+	}
+	result.value_info_ = make_shared<NestedValueInfo>(std::move(struct_values));
+	result.type_ = type;
+	result.is_null = false;
+	return result;
+}
+Value Value::STRUCT(child_list_t<Value> values) {
 	child_list_t<LogicalType> child_types;
 	vector<Value> struct_values;
 	for (auto &child : values) {
 		child_types.push_back(make_pair(std::move(child.first), child.second.type()));
 		struct_values.push_back(std::move(child.second));
 	}
-	result.value_info_ = make_shared<NestedValueInfo>(std::move(struct_values));
-	result.type_ = LogicalType::STRUCT(child_types);
-	result.is_null = false;
-	return result;
+	return Value::STRUCT(LogicalType::STRUCT(child_types), std::move(struct_values));
 }
 
-Value Value::MAP(const LogicalType &child_type, vector<Value> values) {
-	Value result;
-
-	result.type_ = LogicalType::MAP(child_type);
-	result.is_null = false;
+Value Value::MAP(const LogicalType &child_type, vector<Value> values) { // NOLINT
+	vector<Value> map_keys;
+	vector<Value> map_values;
 	for (auto &val : values) {
 		D_ASSERT(val.type().InternalType() == PhysicalType::STRUCT);
 		auto &children = StructValue::GetChildren(val);
-
-		// Ensure that the field containing the keys is called 'key'
-		// and that the field containing the values is called 'value'
-		// this is required to make equality checks work
 		D_ASSERT(children.size() == 2);
+		map_keys.push_back(children[0]);
+		map_values.push_back(children[1]);
+	}
+	auto &key_type = StructType::GetChildType(child_type, 0);
+	auto &value_type = StructType::GetChildType(child_type, 1);
+	return Value::MAP(key_type, value_type, std::move(map_keys), std::move(map_values));
+}
+
+Value Value::MAP(const LogicalType &key_type, const LogicalType &value_type, vector<Value> keys, vector<Value> values) {
+	D_ASSERT(keys.size() == values.size());
+	Value result;
+
+	result.type_ = LogicalType::MAP(key_type, value_type);
+	result.is_null = false;
+	for (idx_t i = 0; i < keys.size(); i++) {
 		child_list_t<Value> new_children;
 		new_children.reserve(2);
-		new_children.push_back(std::make_pair("key", children[0]));
-		new_children.push_back(std::make_pair("value", children[1]));
-		val = Value::STRUCT(std::move(new_children));
+		new_children.push_back(std::make_pair("key", std::move(keys[i])));
+		new_children.push_back(std::make_pair("value", std::move(values[i])));
+		values[i] = Value::STRUCT(std::move(new_children));
 	}
 	result.value_info_ = make_shared<NestedValueInfo>(std::move(values));
 	return result;

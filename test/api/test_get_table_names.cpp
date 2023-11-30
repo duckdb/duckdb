@@ -80,6 +80,16 @@ TEST_CASE("Test GetTableNames", "[api]") {
 	REQUIRE(table_names.size() == 1);
 	REQUIRE(table_names.count("my_table"));
 
+	// * exclude
+	table_names = con.GetTableNames("select * exclude (x) from df");
+	REQUIRE(table_names.size() == 1);
+	REQUIRE(table_names.count("df"));
+
+	// * replace
+	table_names = con.GetTableNames("select * replace (42 as x) from df");
+	REQUIRE(table_names.size() == 1);
+	REQUIRE(table_names.count("df"));
+
 	if (!db.ExtensionIsLoaded("tpch")) {
 		return;
 	}

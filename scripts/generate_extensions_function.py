@@ -271,6 +271,8 @@ static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
     {"http://", "httpfs"},
     {"https://", "httpfs"},
     {"s3://", "httpfs"},
+    {"s3a://", "httpfs"},
+    {"s3n://", "httpfs"},
     {"gcs://", "httpfs"},
     {"r2://", "httpfs"}
 //    {"azure://", "azure"}
