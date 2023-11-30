@@ -98,6 +98,35 @@ select interval '-05:12:34.567890' as test_interval;
 ----
 -05:12:34.56789
 
+# Issue #9631 - Parse hms > 24:00:00
+query I
+SELECT ('35:10:00'::interval);
+----
+35:10:00
+
+# Three digits
+query II
+select '876:54:32.101234'::INTERVAL, '-876:54:32.101234'::INTERVAL;
+----
+876:54:32.101234	-876:54:32.101234
+
+# Nine digits should succeed
+query II
+select '999999999:54:32.101234'::INTERVAL, '-999999999:54:32.101234'::INTERVAL;
+----
+999999999:54:32.101234	-999999999:54:32.101234
+
+# Ten digits (hour is signed 32 bits internally)
+statement error
+select '9999999999:54:32.101234'::INTERVAL;
+----
+Conversion Error: Could not convert string '9999999999:54:32.101234' to INTERVAL
+
+statement error
+select '-9999999999:54:32.101234'::INTERVAL;
+----
+Conversion Error: Could not convert string '-9999999999:54:32.101234' to INTERVAL
+
 # FIXME: we can also use the ISO 8601 interval format
 statement error
 SELECT INTERVAL 'P2MT1H1M';

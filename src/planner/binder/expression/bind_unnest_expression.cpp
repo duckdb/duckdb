@@ -137,6 +137,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		}
 	}
 	if (struct_unnests > 0 && !root_expression) {
+		child = std::move(unnest_expr);
 		return BindResult(binder.FormatError(
 		    function, "UNNEST() on a struct column can only be applied as the root element of a SELECT expression"));
 	}

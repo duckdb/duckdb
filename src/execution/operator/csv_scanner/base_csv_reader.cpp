@@ -72,7 +72,7 @@ void BaseCSVReader::InitializeProjection() {
 }
 
 template <class OP, class T>
-static bool TemplatedTryCastDateVector(map<LogicalTypeId, StrpTimeFormat> &options, Vector &input_vector,
+static bool TemplatedTryCastDateVector(map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options, Vector &input_vector,
                                        Vector &result_vector, idx_t count, string &error_message, idx_t &line_error) {
 	D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 	bool all_converted = true;
@@ -80,6 +80,7 @@ static bool TemplatedTryCastDateVector(map<LogicalTypeId, StrpTimeFormat> &optio
 	UnaryExecutor::Execute<string_t, T>(input_vector, result_vector, count, [&](string_t input) {
 		T result;
 		if (!OP::Operation(options, input, result, error_message)) {
+			FlatVector::SetNull(result_vector, cur_line, true);
 			line_error = cur_line;
 			all_converted = false;
 		}
@@ -90,26 +91,26 @@ static bool TemplatedTryCastDateVector(map<LogicalTypeId, StrpTimeFormat> &optio
 }
 
 struct TryCastDateOperator {
-	static bool Operation(map<LogicalTypeId, StrpTimeFormat> &options, string_t input, date_t &result,
+	static bool Operation(map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options, string_t input, date_t &result,
 	                      string &error_message) {
-		return options[LogicalTypeId::DATE].TryParseDate(input, result, error_message);
+		return options[LogicalTypeId::DATE].GetValue().TryParseDate(input, result, error_message);
 	}
 };
 
 struct TryCastTimestampOperator {
-	static bool Operation(map<LogicalTypeId, StrpTimeFormat> &options, string_t input, timestamp_t &result,
+	static bool Operation(map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options, string_t input, timestamp_t &result,
 	                      string &error_message) {
-		return options[LogicalTypeId::TIMESTAMP].TryParseTimestamp(input, result, error_message);
+		return options[LogicalTypeId::TIMESTAMP].GetValue().TryParseTimestamp(input, result, error_message);
 	}
 };
 
-bool BaseCSVReader::TryCastDateVector(map<LogicalTypeId, StrpTimeFormat> &options, Vector &input_vector,
+bool BaseCSVReader::TryCastDateVector(map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options, Vector &input_vector,
                                       Vector &result_vector, idx_t count, string &error_message, idx_t &line_error) {
 	return TemplatedTryCastDateVector<TryCastDateOperator, date_t>(options, input_vector, result_vector, count,
 	                                                               error_message, line_error);
 }
 
-bool BaseCSVReader::TryCastTimestampVector(map<LogicalTypeId, StrpTimeFormat> &options, Vector &input_vector,
+bool BaseCSVReader::TryCastTimestampVector(map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options, Vector &input_vector,
                                            Vector &result_vector, idx_t count, string &error_message) {
 	idx_t line_error;
 	return TemplatedTryCastDateVector<TryCastTimestampOperator, timestamp_t>(options, input_vector, result_vector,
@@ -387,11 +388,12 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 			bool success;
 			idx_t line_error = 0;
 			bool target_type_not_varchar = false;
-			if (options.dialect_options.has_format[LogicalTypeId::DATE] && type.id() == LogicalTypeId::DATE) {
+			if (!options.dialect_options.date_format[LogicalTypeId::DATE].GetValue().Empty() &&
+			    type.id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
 				success = TryCastDateVector(options.dialect_options.date_format, parse_vector, result_vector,
 				                            parse_chunk.size(), error_message, line_error);
-			} else if (options.dialect_options.has_format[LogicalTypeId::TIMESTAMP] &&
+			} else if (!options.dialect_options.date_format[LogicalTypeId::TIMESTAMP].GetValue().Empty() &&
 			           type.id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
 				success = TryCastTimestampVector(options.dialect_options.date_format, parse_vector, result_vector,
