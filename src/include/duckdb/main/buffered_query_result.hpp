@@ -23,11 +23,14 @@ class PreparedStatementData;
 
 class BufferedData {
 public:
-	BufferedData() {}
+	BufferedData() {
+	}
+
 public:
 	void Populate();
 	unique_ptr<DataChunk> Fetch();
 	void AddToBacklog(InterruptState state);
+
 private:
 	// Our handles to reschedule the blocked sink tasks
 	// TODO: min heap? (priority queue)
@@ -48,7 +51,8 @@ public:
 	//! Create a successful BufferedQueryResult. BufferedQueryResults should always be successful initially (it makes no
 	//! sense to stream an error).
 	DUCKDB_API BufferedQueryResult(StatementType statement_type, StatementProperties properties,
-	                                   vector<LogicalType> types, vector<string> names, ClientProperties client_properties, shared_ptr<BufferedData> buffered_data);
+	                               vector<LogicalType> types, vector<string> names, ClientProperties client_properties,
+	                               shared_ptr<BufferedData> buffered_data);
 	DUCKDB_API ~BufferedQueryResult() override;
 
 public:
@@ -59,18 +63,18 @@ public:
 	//! Materializes the query result and turns it into a materialized query result
 	DUCKDB_API unique_ptr<MaterializedQueryResult> Materialize();
 
-	//DUCKDB_API bool IsOpen();
+	// DUCKDB_API bool IsOpen();
 
 	////! Closes the BufferedQueryResult
-	//DUCKDB_API void Close();
+	// DUCKDB_API void Close();
 
 	////! The client context this BufferedQueryResult belongs to
-	//shared_ptr<ClientContext> context;
+	// shared_ptr<ClientContext> context;
 
 private:
-	//unique_ptr<ClientContextLock> LockContext();
-	//void CheckExecutableInternal(ClientContextLock &lock);
-	//bool IsOpenInternal(ClientContextLock &lock);
+	// unique_ptr<ClientContextLock> LockContext();
+	// void CheckExecutableInternal(ClientContextLock &lock);
+	// bool IsOpenInternal(ClientContextLock &lock);
 private:
 	shared_ptr<BufferedData> buffered_data;
 };

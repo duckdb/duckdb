@@ -412,6 +412,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	auto stream_result = parameters.allow_stream_result && statement.properties.allow_stream_result;
 	if (!stream_result && statement.properties.return_type == StatementReturnType::QUERY_RESULT) {
 		unique_ptr<PhysicalResultCollector> collector;
+
 		auto &client_config = ClientConfig::GetConfig(*this);
 		auto get_method = client_config.result_collector ? client_config.result_collector
 		                                                 : PhysicalResultCollector::GetResultCollector;

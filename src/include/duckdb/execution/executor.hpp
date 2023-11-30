@@ -100,6 +100,7 @@ public:
 	bool ExecutionIsFinished();
 
 private:
+	bool ResultCollectorIsBlocked() const;
 	void InitializeInternal(PhysicalOperator &physical_plan);
 
 	void ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipelines);

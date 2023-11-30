@@ -26,7 +26,7 @@ public:
 };
 
 SinkResultType PhysicalBufferedCollector::Sink(ExecutionContext &context, DataChunk &chunk,
-                                                   OperatorSinkInput &input) const {
+                                               OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<BufferedCollectorGlobalState>();
 
 	lock_guard<mutex> l(gstate.glock);
@@ -36,7 +36,8 @@ SinkResultType PhysicalBufferedCollector::Sink(ExecutionContext &context, DataCh
 	return SinkResultType::BLOCKED;
 }
 
-SinkCombineResultType PhysicalBufferedCollector::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalBufferedCollector::Combine(ExecutionContext &context,
+                                                         OperatorSinkCombineInput &input) const {
 	return SinkCombineResultType::FINISHED;
 }
 
@@ -57,7 +58,8 @@ unique_ptr<LocalSinkState> PhysicalBufferedCollector::GetLocalSinkState(Executio
 unique_ptr<QueryResult> PhysicalBufferedCollector::GetResult(GlobalSinkState &state) {
 	auto &gstate = state.Cast<BufferedCollectorGlobalState>();
 	lock_guard<mutex> l(gstate.glock);
-	auto result = make_uniq<BufferedQueryResult>(statement_type, properties, types, names, gstate.context->GetClientProperties(), gstate.buffered_data);
+	auto result = make_uniq<BufferedQueryResult>(statement_type, properties, types, names,
+	                                             gstate.context->GetClientProperties(), gstate.buffered_data);
 	return std::move(result);
 }
 
