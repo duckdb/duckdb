@@ -566,9 +566,9 @@ stream_produce(uintptr_t factory_ptr,
 	return res;
 }
 
-void stream_schema(uintptr_t factory_ptr, duckdb::ArrowSchemaWrapper &schema) {
+void stream_schema(uintptr_t factory_ptr, ArrowSchema &schema) {
 	auto stream = (ArrowArrayStream *)factory_ptr;
-	get_schema(stream, &schema.arrow_schema);
+	stream->get_schema(stream, &schema);
 }
 
 AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, struct ArrowArrayStream *input,
@@ -591,7 +591,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, stru
 
 	auto arrow_scan = cconn->TableFunction("arrow_scan", {duckdb::Value::POINTER((uintptr_t)input),
 	                                                      duckdb::Value::POINTER((uintptr_t)stream_produce),
-	                                                      duckdb::Value::POINTER((uintptr_t)input->get_schema)});
+	                                                      duckdb::Value::POINTER((uintptr_t)stream_schema)});
 	try {
 		if (ingestion_mode == IngestionMode::CREATE) {
 			// We create the table based on an Arrow Scanner
@@ -706,7 +706,7 @@ AdbcStatusCode GetPreparedParameters(duckdb_connection connection, duckdb::uniqu
 	try {
 		auto arrow_scan = cconn->TableFunction("arrow_scan", {duckdb::Value::POINTER((uintptr_t)input),
 		                                                      duckdb::Value::POINTER((uintptr_t)stream_produce),
-		                                                      duckdb::Value::POINTER((uintptr_t)input->get_schema)});
+		                                                      duckdb::Value::POINTER((uintptr_t)stream_schema)});
 		result = arrow_scan->Execute();
 		// After creating a table, the arrow array stream is released. Hence we must set it as released to avoid
 		// double-releasing it
