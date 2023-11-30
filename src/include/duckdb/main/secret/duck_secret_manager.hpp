@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/main/config.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"

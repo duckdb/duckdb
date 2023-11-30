@@ -1,4 +1,4 @@
-#include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/main/secret/duck_secret_manager.hpp"
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/file_system.hpp"

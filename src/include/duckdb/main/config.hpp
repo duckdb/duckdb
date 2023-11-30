@@ -30,7 +30,6 @@
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/main/client_properties.hpp"
-#include "duckdb/main/secret/duck_secret_manager.hpp"
 
 namespace duckdb {
 class BufferPool;
@@ -42,6 +41,7 @@ class TableFunctionRef;
 class OperatorExtension;
 class StorageExtension;
 class ExtensionCallback;
+class SecretManager;
 
 struct CompressionFunctionSet;
 struct DBConfig;
