@@ -74,20 +74,23 @@ static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct Ar
 
 	auto status = StatementNew(connection, &statement, error);
 	if (status != ADBC_STATUS_OK) {
+		StatementRelease(&statement,error);
 		SetError(error, "unable to initialize statement");
 		return status;
 	}
 	status = StatementSetSqlQuery(&statement, query, error);
 	if (status != ADBC_STATUS_OK) {
+		StatementRelease(&statement,error);
 		SetError(error, "unable to initialize statement");
 		return status;
 	}
 	status = StatementExecuteQuery(&statement, out, nullptr, error);
 	if (status != ADBC_STATUS_OK) {
+		StatementRelease(&statement,error);
 		SetError(error, "unable to initialize statement");
 		return status;
 	}
-
+	StatementRelease(&statement,error);
 	return ADBC_STATUS_OK;
 }
 

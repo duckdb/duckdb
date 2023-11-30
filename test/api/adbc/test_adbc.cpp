@@ -272,6 +272,11 @@ TEST_CASE("Error Release", "[adbc]") {
 
 	REQUIRE(!SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
 	REQUIRE(std::strcmp(adbc_error.message, "Invalid database") == 0);
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 	// Release the error
 	adbc_error.release(&adbc_error);
 }
@@ -309,6 +314,9 @@ TEST_CASE("Test Not-Implemented Partition Functions", "[adbc]") {
 	REQUIRE(status == ADBC_STATUS_NOT_IMPLEMENTED);
 	REQUIRE(std::strcmp(adbc_error.message, "Execute Partitions are not supported in DuckDB") == 0);
 	adbc_error.release(&adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 }
 
 TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
@@ -363,6 +371,10 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 	REQUIRE(out_stream.release != nullptr);
 
 	out_stream.release(&out_stream);
+
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+	adbc_error.release(&adbc_error);
 }
 
 TEST_CASE("Test ADBC Statement Bind (unhappy)", "[adbc]") {
@@ -908,6 +920,8 @@ TEST_CASE("Test ADBC Substrait", "[adbc]") {
 	auto conn = (duckdb::Connection *)adbc_connection.private_data;
 	if (!conn->context->db->ExtensionIsLoaded("substrait")) {
 		// We need substrait to run this test
+	    REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+	    REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 		return;
 	}
 	// Insert Data
@@ -939,6 +953,8 @@ TEST_CASE("Test ADBC Substrait", "[adbc]") {
 	    "\\x06DuckDB";
 	auto plan = (uint8_t *)str_plan;
 	size_t length = strlen(str_plan);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementSetSubstraitPlan(&adbc_statement, plan, length, &adbc_error)));
 	int64_t rows_affected;
@@ -961,6 +977,10 @@ TEST_CASE("Test ADBC Substrait", "[adbc]") {
 	REQUIRE(!SUCCESS(AdbcStatementSetSubstraitPlan(&adbc_statement, plan, 5, &adbc_error)));
 	REQUIRE(std::strcmp(adbc_error.message, "Conversion Error: Invalid hex escape code encountered in string -> blob "
 	                                        "conversion: unterminated escape code at end of blob") == 0);
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 	adbc_error.release(&adbc_error);
 }
 
@@ -991,8 +1011,12 @@ TEST_CASE("Test ADBC Prepared Statement - Prepare nop", "[adbc]") {
 	// Statement Prepare is a nop for us, so it should just work, although it just does some error checking.
 	REQUIRE(SUCCESS(AdbcStatementPrepare(&adbc_statement, &adbc_error)));
 
-	AdbcStatementRelease(&adbc_statement, &adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+
 	REQUIRE(!SUCCESS(AdbcStatementPrepare(&adbc_statement, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 }
 
 TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
@@ -1026,28 +1050,29 @@ void TestFilters(ADBCTestDatabase &db, AdbcError &adbc_error, idx_t depth) {
 		ArrowArrayStream arrow_stream;
 		AdbcConnectionGetObjects(&db.adbc_connection, depth, nullptr, "bla", nullptr, nullptr, nullptr, &arrow_stream,
 		                         &adbc_error);
-		db.CreateTable("result", arrow_stream);
-		auto res = db.Query("Select * from result");
-		REQUIRE(res->RowCount() == 0);
-		db.QueryArrow("Drop table result;");
+	    ArrowArray arrow_array;
+	    arrow_stream.get_next(&arrow_stream, &arrow_array);
+	    REQUIRE(!arrow_array.release);
+	    arrow_stream.release(&arrow_stream);
+
 	}
 	{
 		ArrowArrayStream arrow_stream;
 		AdbcConnectionGetObjects(&db.adbc_connection, depth, nullptr, nullptr, "bla", nullptr, nullptr, &arrow_stream,
 		                         &adbc_error);
-		db.CreateTable("result", arrow_stream);
-		auto res = db.Query("Select * from result");
-		REQUIRE(res->RowCount() == 0);
-		db.QueryArrow("Drop table result;");
+        ArrowArray arrow_array;
+	    arrow_stream.get_next(&arrow_stream, &arrow_array);
+	    REQUIRE(!arrow_array.release);
+	    arrow_stream.release(&arrow_stream);
 	}
 	{
 		ArrowArrayStream arrow_stream;
 		AdbcConnectionGetObjects(&db.adbc_connection, depth, nullptr, nullptr, nullptr, nullptr, "bla", &arrow_stream,
 		                         &adbc_error);
-		db.CreateTable("result", arrow_stream);
-		auto res = db.Query("Select * from result");
-		REQUIRE(res->RowCount() == 0);
-		db.QueryArrow("Drop table result;");
+		 ArrowArray arrow_array;
+	    arrow_stream.get_next(&arrow_stream, &arrow_array);
+	    REQUIRE(!arrow_array.release);
+	    arrow_stream.release(&arrow_stream);
 	}
 }
 
@@ -1058,7 +1083,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 
 	// Lets first try what works
 	// 1. Test ADBC_OBJECT_DEPTH_DB_SCHEMAS
-	{
+
 		ADBCTestDatabase db("ADBC_OBJECT_DEPTH_DB_SCHEMAS.db");
 		// Create Arrow Result
 		auto input_data = db.QueryArrow("SELECT 42");
@@ -1077,7 +1102,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->GetValue(0, 0).ToString() == "main");
 		db.QueryArrow("Drop table result;");
 		TestFilters(db, adbc_error, ADBC_OBJECT_DEPTH_DB_SCHEMAS);
-	}
+
 
 	// 2. Test ADBC_OBJECT_DEPTH_TABLES
 	{
