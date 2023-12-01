@@ -10,18 +10,6 @@ LogicalComparisonJoin::LogicalComparisonJoin(JoinType join_type, LogicalOperator
 
 string LogicalComparisonJoin::ParamsToString() const {
 	string result = EnumUtil::ToChars(join_type);
-	switch (join_type) {
-	case JoinType::SEMI:
-	case JoinType::ANTI:
-		result = "LEFT " + result;
-		break;
-	case JoinType::RIGHT_SEMI:
-	case JoinType::RIGHT_ANTI:
-		result = "RIGHT " + result;
-		break;
-	default:
-		break;
-	}
 	for (auto &condition : conditions) {
 		result += "\n";
 		auto expr =
