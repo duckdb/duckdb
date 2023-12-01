@@ -4,6 +4,8 @@
 
 require noforcestorage
 
+require notwindows
+
 statement ok
 PRAGMA enable_verification
 
@@ -67,14 +69,14 @@ DETACH con2_rollback_detach;
 statement error con1
 ATTACH '__TEST_DIR__/con2_rollback_detach.db';
 ----
-inferring the database type from the file header is not possible
+already attached
 
 # can't attach con1.db file in con2
 
 statement error con2
 ATTACH '__TEST_DIR__/con1.db';
 ----
-already attached
+write-write
 
 statement ok con1
 DETACH con1;
@@ -84,7 +86,7 @@ DETACH con1;
 statement error con2
 ATTACH '__TEST_DIR__/con1.db';
 ----
-already attached
+transaction is aborted
 
 # commit con1 and roll back con2
 

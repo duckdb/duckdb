@@ -79,7 +79,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	auto list_data = FlatVector::GetData<list_entry_t>(varchar_list);
 	auto &validity = FlatVector::Validity(varchar_list);
 
-	child.Flatten(count);
+	child.Flatten(ListVector::GetListSize(varchar_list));
 	auto child_data = FlatVector::GetData<string_t>(child);
 	auto &child_validity = FlatVector::Validity(child);
 

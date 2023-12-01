@@ -7,16 +7,13 @@
 
 namespace duckdb {
 
-static void TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry, bool root_entry = true) {
+void Transformer::TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry, bool root_entry) {
 	if (expr->type == ExpressionType::COLUMN_REF) {
 		auto &colref = expr->Cast<ColumnRefExpression>();
 		if (colref.IsQualified()) {
 			throw ParserException("PIVOT IN list cannot contain qualified column references");
 		}
 		entry.values.emplace_back(colref.GetColumnName());
-	} else if (expr->type == ExpressionType::VALUE_CONSTANT) {
-		auto &constant_expr = expr->Cast<ConstantExpression>();
-		entry.values.push_back(std::move(constant_expr.value));
 	} else if (root_entry && expr->type == ExpressionType::FUNCTION) {
 		auto &function = expr->Cast<FunctionExpression>();
 		if (function.function_name != "row") {
@@ -28,7 +25,11 @@ static void TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumn
 	} else if (root_entry && expr->type == ExpressionType::STAR) {
 		entry.star_expr = std::move(expr);
 	} else {
-		throw ParserException("PIVOT IN list must contain columns or lists of columns");
+		Value val;
+		if (!Transformer::ConstructConstantFromExpression(*expr, val)) {
+			throw ParserException("PIVOT IN list must contain columns or lists of columns");
+		}
+		entry.values.push_back(std::move(val));
 	}
 }
 
