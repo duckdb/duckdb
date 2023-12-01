@@ -50,7 +50,7 @@ class CreateSecretFunctionSet {
 public:
 	CreateSecretFunctionSet(string &name) : name(name) {};
 	bool ProviderExists(const string &provider_name);
-	void AddFunction(CreateSecretFunction function, OnCreateConflict on_conflict);
+	void AddFunction(CreateSecretFunction &function, OnCreateConflict on_conflict);
 	CreateSecretFunction &GetFunction(const string &provider);
 
 protected:

@@ -87,7 +87,7 @@ bool CreateSecretFunctionSet::ProviderExists(const string &provider_name) {
 	return functions.find(provider_name) != functions.end();
 }
 
-void CreateSecretFunctionSet::AddFunction(CreateSecretFunction function, OnCreateConflict on_conflict) {
+void CreateSecretFunctionSet::AddFunction(CreateSecretFunction& function, OnCreateConflict on_conflict) {
 	if (ProviderExists(function.provider)) {
 		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			throw InternalException(
