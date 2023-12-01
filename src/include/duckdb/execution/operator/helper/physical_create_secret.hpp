@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-//! PhysicalPragma represents the PRAGMA operator
+//! PhysicalCreateSecret represents the CREATE SECRET operator
 class PhysicalCreateSecret : public PhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_SECRET;

@@ -172,12 +172,11 @@ public:
 	}
 
 protected:
+	//! Virtual function that returns the set of keys that are considered sensitive and should be redacted
+	virtual case_insensitive_set_t GetRedactionKeys() const;
+
 	//! the map of key -> values that make up the secret
 	map<string, string> secret_map;
-
-	//! (optionally) a set of keys to be redacted for this type
-	//! TODO: these are currently lost in serialization
-	case_insensitive_set_t redact_keys;
 };
 
 } // namespace duckdb

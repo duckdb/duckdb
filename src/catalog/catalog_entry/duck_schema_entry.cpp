@@ -66,7 +66,7 @@ void FindForeignKeyInformation(CatalogEntry &entry, AlterForeignKeyType alter_fk
 DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, string name_p, bool is_internal)
     : SchemaCatalogEntry(catalog, std::move(name_p), is_internal),
       tables(catalog, make_uniq<DefaultViewGenerator>(catalog, *this)), indexes(catalog), table_functions(catalog),
-      copy_functions(catalog), pragma_functions(catalog), create_secret_functions(catalog),
+      copy_functions(catalog), pragma_functions(catalog),
       functions(catalog, make_uniq<DefaultFunctionGenerator>(catalog, *this)), sequences(catalog), collations(catalog),
       types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)) {
 }

@@ -39,6 +39,9 @@ void BaseSecret::Serialize(Serializer &serializer) const {
 string BaseKeyValueSecret::ToString(bool redact) const {
 	string result;
 
+	// Fetch the redaction set using virtual method
+	auto redact_keys = GetRedactionKeys();
+
 	result += "name=" + name + ";";
 	result += "type=" + type + ";";
 	result += "provider=" + provider + ";";
@@ -83,11 +86,15 @@ void BaseKeyValueSecret::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(201, "secret_map", map);
 }
 
+case_insensitive_set_t BaseKeyValueSecret::GetRedactionKeys() const {
+	return {};
+}
+
 bool CreateSecretFunctionSet::ProviderExists(const string &provider_name) {
 	return functions.find(provider_name) != functions.end();
 }
 
-void CreateSecretFunctionSet::AddFunction(CreateSecretFunction& function, OnCreateConflict on_conflict) {
+void CreateSecretFunctionSet::AddFunction(CreateSecretFunction &function, OnCreateConflict on_conflict) {
 	if (ProviderExists(function.provider)) {
 		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			throw InternalException(

@@ -27,6 +27,7 @@ void DuckSecretManager::Initialize(DatabaseInstance &db) {
 unique_ptr<BaseSecret> DuckSecretManager::DeserializeSecret(CatalogTransaction transaction,
                                                             Deserializer &deserializer) {
 	lock_guard<mutex> lck(lock);
+	D_ASSERT(registered_secrets);
 	return DeserializeSecretInternal(deserializer);
 }
 
@@ -50,6 +51,7 @@ unique_ptr<BaseSecret> DuckSecretManager::DeserializeSecretInternal(Deserializer
 
 void DuckSecretManager::RegisterSecretType(SecretType &type) {
 	lock_guard<mutex> lck(lock);
+	D_ASSERT(registered_secrets);
 
 	if (registered_types.find(type.name) != registered_types.end()) {
 		throw InternalException("Attempted to register an already registered secret type: '%s'", type.name);
@@ -60,6 +62,7 @@ void DuckSecretManager::RegisterSecretType(SecretType &type) {
 
 void DuckSecretManager::RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) {
 	lock_guard<mutex> lck(lock);
+	D_ASSERT(registered_secrets);
 
 	const auto &lu = create_secret_functions.find(function.secret_type);
 	if (lu != create_secret_functions.end()) {
@@ -77,6 +80,7 @@ optional_ptr<SecretEntry> DuckSecretManager::RegisterSecret(CatalogTransaction t
                                                             OnCreateConflict on_conflict,
                                                             SecretPersistMode persist_mode) {
 	lock_guard<mutex> lck(lock);
+	D_ASSERT(registered_secrets);
 	return RegisterSecretInternal(transaction, std::move(secret), on_conflict, persist_mode);
 }
 
@@ -150,6 +154,7 @@ CreateSecretFunction *DuckSecretManager::LookupFunctionInternal(const string &ty
 
 optional_ptr<SecretEntry> DuckSecretManager::CreateSecret(ClientContext &context, const CreateSecretInfo &info) {
 	lock_guard<mutex> lck(lock);
+	D_ASSERT(registered_secrets);
 
 	// We're creating a secret: therefore we need to refresh our view on the permanent secrets to ensure there are no
 	// name collisions
@@ -195,6 +200,7 @@ optional_ptr<SecretEntry> DuckSecretManager::CreateSecret(ClientContext &context
 
 BoundStatement DuckSecretManager::BindCreateSecret(CreateSecretStatement &stmt) {
 	lock_guard<mutex> lck(lock);
+	D_ASSERT(registered_secrets);
 
 	auto type = stmt.info->type;
 	auto provider = stmt.info->provider;
@@ -232,6 +238,7 @@ BoundStatement DuckSecretManager::BindCreateSecret(CreateSecretStatement &stmt) 
 optional_ptr<SecretEntry> DuckSecretManager::GetSecretByPath(CatalogTransaction transaction, const string &path,
                                                              const string &type) {
 	lock_guard<mutex> lck(lock);
+	D_ASSERT(registered_secrets);
 
 	// Synchronize the permanent secrets
 	SyncPermanentSecrets(transaction);
@@ -265,6 +272,7 @@ optional_ptr<SecretEntry> DuckSecretManager::GetSecretByPath(CatalogTransaction 
 
 optional_ptr<SecretEntry> DuckSecretManager::GetSecretByName(CatalogTransaction transaction, const string &name) {
 	lock_guard<mutex> lck(lock);
+	D_ASSERT(registered_secrets);
 
 	//! Synchronize the permanent secrets to ensure we have an up to date view on them
 	SyncPermanentSecrets(transaction);
@@ -286,6 +294,7 @@ optional_ptr<SecretEntry> DuckSecretManager::GetSecretByName(CatalogTransaction 
 
 void DuckSecretManager::DropSecretByName(CatalogTransaction transaction, const string &name, bool missing_ok) {
 	lock_guard<mutex> lck(lock);
+	D_ASSERT(registered_secrets);
 
 	bool deleted = false;
 	bool was_persistent = false;
@@ -322,6 +331,7 @@ void DuckSecretManager::DropSecretByName(CatalogTransaction transaction, const s
 
 SecretType DuckSecretManager::LookupType(const string &type) {
 	lock_guard<mutex> lck(lock);
+	D_ASSERT(registered_secrets);
 	return LookupTypeInternal(type);
 }
 

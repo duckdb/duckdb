@@ -83,12 +83,8 @@ public:
 	static case_insensitive_set_t GetRedactionSet() {
 		return {"secret_access_key", "session_token"};
 	}
-	S3Secret(BaseKeyValueSecret &secret) : BaseKeyValueSecret(secret) {
-		redact_keys = GetRedactionSet();
-	};
-	S3Secret(BaseSecret &secret) : BaseKeyValueSecret(secret) {
-		redact_keys = GetRedactionSet();
-	};
+	S3Secret(BaseKeyValueSecret &secret) : BaseKeyValueSecret(secret) {};
+	S3Secret(BaseSecret &secret) : BaseKeyValueSecret(secret) {};
 	S3Secret(vector<string> &prefix_paths_p, string &type, string &provider, string &name, S3AuthParams &params)
 	    : BaseKeyValueSecret(prefix_paths_p, type, provider, name) {
 		secret_map["region"] = params.region;
@@ -99,7 +95,6 @@ public:
 		secret_map["url_style"] = params.url_style;
 		secret_map["use_ssl"] = params.use_ssl ? "true" : "false";
 		secret_map["s3_url_compatibility_mode"] = params.s3_url_compatibility_mode ? "true" : "false";
-		redact_keys = GetRedactionSet();
 	};
 
 	S3AuthParams GetParams() const {
@@ -115,6 +110,11 @@ public:
 		    BooleanValue::Get(Value(secret_map.at("s3_url_compatibility_mode")).DefaultCastAs(LogicalType::BOOLEAN));
 
 		return params;
+	}
+
+	//! List of keys that should be redacted
+	virtual case_insensitive_set_t GetRedactionKeys() const {
+		return {"secret_access_key", "session_token"};
 	}
 };
 

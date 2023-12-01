@@ -28,8 +28,6 @@ private:
 	CatalogSet copy_functions;
 	//! The catalog set holding the pragma functions
 	CatalogSet pragma_functions;
-	//! The catalog set holding the create secret functions
-	CatalogSet create_secret_functions;
 	//! The catalog set holding the scalar and aggregate functions
 	CatalogSet functions;
 	//! The catalog set holding the sequences

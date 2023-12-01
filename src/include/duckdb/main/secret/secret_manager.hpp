@@ -82,33 +82,4 @@ public:
 	DUCKDB_API virtual bool AllowConfigChanges() = 0;
 };
 
-//! The debug secret manager demonstrates how the Base Secret Manager can be extended
-class DebugSecretManager : public SecretManager {
-public:
-	~DebugSecretManager() override = default;
-	DebugSecretManager(unique_ptr<SecretManager> secret_manager) : base_secret_manager(std::move(secret_manager)) {};
-
-	DUCKDB_API void Initialize(DatabaseInstance &db) override;
-	DUCKDB_API unique_ptr<BaseSecret> DeserializeSecret(CatalogTransaction transaction,
-	                                                    Deserializer &deserializer) override;
-	DUCKDB_API void RegisterSecretType(SecretType &type) override;
-	DUCKDB_API void RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) override;
-	DUCKDB_API optional_ptr<SecretEntry> RegisterSecret(CatalogTransaction transaction,
-	                                                    unique_ptr<const BaseSecret> secret,
-	                                                    OnCreateConflict on_conflict,
-	                                                    SecretPersistMode persist_mode) override;
-	DUCKDB_API optional_ptr<SecretEntry> CreateSecret(ClientContext &context, const CreateSecretInfo &info) override;
-	DUCKDB_API BoundStatement BindCreateSecret(CreateSecretStatement &stmt) override;
-	DUCKDB_API optional_ptr<SecretEntry> GetSecretByPath(CatalogTransaction transaction, const string &path,
-	                                                     const string &type) override;
-	DUCKDB_API optional_ptr<SecretEntry> GetSecretByName(CatalogTransaction transaction, const string &name) override;
-	DUCKDB_API void DropSecretByName(CatalogTransaction transaction, const string &name, bool missing_ok) override;
-	DUCKDB_API SecretType LookupType(const string &type) override;
-	DUCKDB_API vector<SecretEntry *> AllSecrets(CatalogTransaction transaction) override;
-	DUCKDB_API bool AllowConfigChanges() override;
-
-protected:
-	unique_ptr<SecretManager> base_secret_manager;
-};
-
 } // namespace duckdb
