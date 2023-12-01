@@ -11,7 +11,7 @@ CREATE TABLE rhs AS SELECT range % 5 i, range j FROM range(10);
 query II
 explain analyze SELECT rhs.j FROM rhs SEMI JOIN lhs USING (i);
 ----
-analyzed_plan	<REGEX>:.*RIGHT SEMI.*
+analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
 
 query II
 explain analyze SELECT rhs.j FROM rhs SEMI JOIN lhs USING (i);
