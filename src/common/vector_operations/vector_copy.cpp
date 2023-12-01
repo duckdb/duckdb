@@ -37,6 +37,7 @@ static const ValidityMask &CopyValidityMask(const Vector &v) {
 void VectorOperations::CopyPartial(const Vector &source_p, Vector &target, const SelectionVector &sel_p,
                                    idx_t source_count, idx_t source_offset, idx_t copy_count, idx_t target_offset) {
 	D_ASSERT(source_offset <= source_count);
+	D_ASSERT(copy_count <= source_count - source_offset);
 	D_ASSERT(source_p.GetType() == target.GetType());
 
 	SelectionVector owned_sel;
