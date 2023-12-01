@@ -118,11 +118,11 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 }
 
 static bool SetInstallIsReentrant(int change) {
-	thread_local int reentrant_cnt = 0;
+	thread_local int REENTRANT_CNT = 0;
 
-	reentrant_cnt += change;
+	REENTRANT_CNT += change;
 
-	return reentrant_cnt <= 1;
+	return REENTRANT_CNT <= 1;
 }
 
 class ReentrancyLock {
