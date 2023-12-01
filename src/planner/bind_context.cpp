@@ -15,10 +15,14 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
+#include "duckdb/planner/binder.hpp"
 
 #include <algorithm>
 
 namespace duckdb {
+
+BindContext::BindContext(Binder &binder) : binder(binder) {
+}
 
 string BindContext::GetMatchingBinding(const string &column_name) {
 	string result;
@@ -402,6 +406,10 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				new_select_list.push_back(make_uniq<ColumnRefExpression>(column_name, binding->alias));
 			}
 		}
+	}
+	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
+		expr.exclude_list.clear();
+		expr.replace_list.clear();
 	}
 	for (auto &excluded : expr.exclude_list) {
 		if (excluded_columns.find(excluded) == excluded_columns.end()) {

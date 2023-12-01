@@ -275,12 +275,9 @@ static constexpr ExtensionEntry EXTENSION_COLLATIONS[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
-    {"http://", "httpfs"},
-    {"https://", "httpfs"},
-    {"s3://", "httpfs"},
-    {"gcs://", "httpfs"},
-    {"r2://", "httpfs"} // , {"azure://", "azure"}
-};                      // END_OF_EXTENSION_FILE_PREFIXES
+    {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"}, {"s3a://", "httpfs"},
+    {"s3n://", "httpfs"},  {"gcs://", "httpfs"},   {"r2://", "httpfs"} // , {"azure://", "azure"}
+};                                                                     // END_OF_EXTENSION_FILE_PREFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
