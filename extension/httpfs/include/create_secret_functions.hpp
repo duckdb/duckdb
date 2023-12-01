@@ -6,6 +6,7 @@ namespace duckdb {
 struct CreateSecretInput;
 struct S3AuthParams;
 class CreateSecretFunction;
+class BaseSecret;
 
 struct CreateS3SecretFunctions {
 public:
