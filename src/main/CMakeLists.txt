@@ -23,6 +23,7 @@ add_library_unity(
   config.cpp
   connection.cpp
   buffered_query_result.cpp
+  buffered_data.cpp
   database.cpp
   database_path_and_type.cpp
   database_manager.cpp

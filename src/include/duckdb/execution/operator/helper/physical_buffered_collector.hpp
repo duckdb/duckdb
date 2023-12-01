@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
-#include "duckdb/main/buffered_query_result.hpp"
+#include "duckdb/main/buffered_data.hpp"
 
 namespace duckdb {
 
