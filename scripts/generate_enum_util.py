@@ -20,7 +20,7 @@ overrides = {
         "TIME_TZ": "TIME WITH TIME ZONE",
         "TIMESTAMP_SEC": "TIMESTAMP_S",
     },
-    "JoinType": {"OUTER": "FULL", "LEFT_SEMI": "SEMI", "RIGHT_SEMI": "SEMI", "LEFT_ANTI": "ANTI", "RIGHT_ANTI": "ANTI"},
+    "JoinType": {"OUTER": "FULL"},
     "OrderType": {
         "ORDER_DEFAULT": ["ORDER_DEFAULT", "DEFAULT"],
         "DESCENDING": ["DESCENDING", "DESC"],
