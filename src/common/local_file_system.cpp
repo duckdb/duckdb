@@ -169,7 +169,7 @@ struct ConflictingProcess {
 	bool write = false;
 };
 
-static string RenderConflictMessage(unordered_map<int, ConflictingProcess>& conflicts) {
+static string RenderConflictMessage(unordered_map<int, ConflictingProcess> &conflicts) {
 	if (conflicts.empty()) {
 		return "";
 	}
@@ -179,7 +179,7 @@ static string RenderConflictMessage(unordered_map<int, ConflictingProcess>& conf
 
 	bool only_read = true;
 	for (auto &conflict_entry : conflicts) {
-		auto& conflict = conflict_entry.second;
+		auto &conflict = conflict_entry.second;
 		ret += StringUtil::Format("    %s (PID %d): %s Access\n", conflict.name, conflict_entry.first,
 		                          conflict.write  ? "Write"
 		                          : conflict.read ? "Read"
@@ -187,7 +187,8 @@ static string RenderConflictMessage(unordered_map<int, ConflictingProcess>& conf
 		only_read &= !conflict.write;
 	}
 	if (only_read) {
-		ret += "You likely will be able to open this database in read-only mode, e.g. by using `-readonly` in the CLI\n";
+		ret +=
+		    "You likely will be able to open this database in read-only mode, e.g. by using `-readonly` in the CLI\n";
 	}
 	ret += "See also https://duckdb.org/faq#how-does-duckdb-handle-concurrency";
 	return ret;
@@ -196,108 +197,62 @@ static string RenderConflictMessage(unordered_map<int, ConflictingProcess>& conf
 #endif
 
 #ifdef __APPLE__
-// OSX / IOS has a special api to query open files inherited from BSD, `libproc`
 #include <libproc.h>
+#include <pwd.h>
 
-static string AdditionalLockInfo(const string &path) {
-	char real_path[MAXPATHLEN];
-	// get real path, we might be getting something behind a symlink
+static string AdditionalProcessInfo(pid_t pid) {
+	if (pid == getpid()) {
+		return "Lock is already held in current process, likely another DuckDB instance";
+	}
+
+	string process_name, process_owner;
+	// try to find out more about the process holding the lock
+	struct proc_bsdshortinfo proc;
+	if (proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &proc, PROC_PIDT_SHORTBSDINFO_SIZE) ==
+	    PROC_PIDT_SHORTBSDINFO_SIZE) {
+		process_name = proc.pbsi_comm; // only a short version however, let's take it in case proc_pidpath() below fails
+		// try to get actual name of conflicting process owner
+		auto pw = getpwuid(proc.pbsi_uid);
+		if (pw) {
+			process_owner = pw->pw_name;
+		}
+	}
+	// try to get a better process name (full path)
+	char full_exec_path[PROC_PIDPATHINFO_MAXSIZE];
+	if (proc_pidpath(pid, full_exec_path, PROC_PIDPATHINFO_MAXSIZE) > 0) {
+		// somehow could not get the path, lets use some sensible fallback
+		process_name = full_exec_path;
+	}
+	return StringUtil::Format("Conflicting lock is held in %s%s",
+	                          !process_name.empty() ? StringUtil::Format("%s (PID %d)", process_name, pid)
+	                                                : StringUtil::Format("PID %d", pid),
+	                          !process_owner.empty() ? StringUtil::Format(" by user %s", process_owner) : "");
+}
+
+#elif __linux__
+#include <dirent.h>
+#include <fcntl.h>
+
+static string AdditionalLockInfo(FileLockType &lock_type, const string &path) {
+
 	{
 		auto fd = open(path.c_str(), O_RDONLY);
 		if (fd < 0) { // not a file, hence cannot be locked
 			return "";
 		}
-		auto fncnl_res = fcntl(fd, F_GETPATH, real_path);
+		struct flock lock_info;
+		memset(&lock_info, 0, sizeof(struct flock));
+		lock_info.l_type = F_WRLCK;
+		auto fncnl_res = fcntl(fd, F_GETLK, &lock_info);
 		if (fncnl_res == -1) {
 			close(fd);
-			return "";
+			return "XX";
 		}
 		close(fd);
-		if (strlen(real_path) < 1) {
-			return "";
-		}
+
+		return StringUtil::Format("PID %d %d", lock_info.l_pid, lock_info.l_type == F_UNLCK);
 	}
 
-	// now we find out which PIDs have the real path (TM) open:
-
-	// we call proc_listpidspath() first with NULL to determine the amount of memory to allocate
-	auto pid_buffer_size = proc_listpidspath(PROC_ALL_PIDS, 0, real_path, 0, NULL, 0);
-	if (pid_buffer_size <= 0) {
-		return "";
-	}
-	auto pids_buffer = unique_ptr<data_t[]>(new data_t[pid_buffer_size]);
-	D_ASSERT(pids_buffer.get());
-	auto pids = reinterpret_cast<int *>(pids_buffer.get());
-	// now we call again with actual buffer
-	auto pid_size = proc_listpidspath(PROC_ALL_PIDS, 0, real_path, 0, pids, pid_buffer_size);
-	if (pid_size < static_cast<int64_t>(sizeof(int))) {
-		// no processes listed, nothing we can do
-		return "";
-	}
-
-	unordered_map<int, ConflictingProcess> conflicts;
-
-	for (idx_t pid_idx = 0; pid_idx < pid_size / sizeof(int); pid_idx++) {
-		int pid = pids[pid_idx];
-		if (pid == getpid()) {
-			continue;
-		}
-
-		conflicts[pid] = ConflictingProcess();
-		auto &conflict = conflicts[pid];
-
-		char full_exec_path[PROC_PIDPATHINFO_MAXSIZE];
-		auto pid_path_ret = proc_pidpath(pid, full_exec_path, PROC_PIDPATHINFO_MAXSIZE);
-		if (pid_path_ret < 0) {
-			// somehow could not get the path, lets use some sensible fallback
-			snprintf(full_exec_path, PROC_PIDPATHINFO_MAXSIZE, "unknown_pid_%d", pid);
-		}
-
-		conflict.name = full_exec_path;
-
-		// same dance for file descriptors like we did above with pids
-		auto fds_buffer_size = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, NULL, 0);
-		if (fds_buffer_size <= 0) {
-			// possibly no rights or nothing found here, limited info
-			continue;
-		}
-		auto fds_buffer = unique_ptr<data_t[]>(new data_t[fds_buffer_size]);
-		D_ASSERT(fds_buffer.get());
-		auto fds = reinterpret_cast<struct proc_fdinfo *>(fds_buffer.get());
-		auto fds_size = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, fds, fds_buffer_size);
-		if (fds_size < static_cast<int64_t>(sizeof(struct proc_fdinfo))) {
-			// possibly no rights or nothing found here, so don't care
-			continue;
-		}
-
-		// go through all file descriptors. There can be multiple to our file. What's the maximum access?
-		for (idx_t fd_idx = 0; fd_idx < fds_size / sizeof(struct proc_fdinfo); fd_idx++) {
-			auto fdinfo = fds[fd_idx];
-			if (fdinfo.proc_fdtype == PROX_FDTYPE_VNODE) {
-				struct vnode_fdinfowithpath vnode_info;
-				auto node_info_bytes = proc_pidfdinfo(pid, fdinfo.proc_fd, PROC_PIDFDVNODEPATHINFO, &vnode_info,
-				                                      PROC_PIDFDVNODEPATHINFO_SIZE);
-				if (node_info_bytes != PROC_PIDFDVNODEPATHINFO_SIZE) {
-					continue;
-				}
-				if (strcmp(real_path, vnode_info.pvip.vip_path) != 0) {
-					continue;
-				}
-				// those flags are weird, they do not seem to directly correspond to O_RDONLY and friends
-				conflict.write |= vnode_info.pfi.fi_openflags == 3;
-				conflict.read |= vnode_info.pfi.fi_openflags == 1;
-			}
-		}
-	}
-
-	return RenderConflictMessage(conflicts);
-
-}
-#elif __linux__
-#include <dirent.h>
-#include <fcntl.h>
-
-static string AdditionalLockInfo(const string &path) {
 	char real_path[PATH_MAX];
 	{
 		memset(real_path, '\0', PATH_MAX);
@@ -466,7 +421,27 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 			fl.l_len = 0;
 			rc = fcntl(fd, F_SETLK, &fl);
 			if (rc == -1) {
-				throw IOException("Could not set lock on file \"%s\": %s", path, AdditionalLockInfo(path));
+				// initial error message, pretty unhelpful usually ("resource busy")
+				string message;
+				// try to find out who is holding the lock using F_GETLK
+				rc = fcntl(fd, F_GETLK, &fl);
+				if (rc == -1) { // fnctl does not want to help us
+					message = strerror(errno);
+				} else {
+					message = AdditionalProcessInfo(fl.l_pid);
+				}
+
+				if (lock_type == FileLockType::WRITE_LOCK) {
+					// maybe we can get a read lock instead and tell this to the user.
+					fl.l_type = F_RDLCK;
+					rc = fcntl(fd, F_SETLK, &fl);
+					if (rc != -1) { // success!
+						message += ". However, you would be able to open this database in read-only mode, e.g. by "
+						           "using the -readonly parameter in the CLI";
+					}
+				}
+				message += ". See also https://duckdb.org/faq#how-does-duckdb-handle-concurrency";
+				throw IOException("Could not set lock on file \"%s\": %s", path, message);
 			}
 		}
 	}
