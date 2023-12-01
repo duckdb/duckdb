@@ -3999,6 +3999,8 @@ const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult val
 		return "RESULT_NOT_READY";
 	case PendingExecutionResult::EXECUTION_ERROR:
 		return "EXECUTION_ERROR";
+	case PendingExecutionResult::BLOCKED:
+		return "BLOCKED";
 	case PendingExecutionResult::NO_TASKS_AVAILABLE:
 		return "NO_TASKS_AVAILABLE";
 	default:
@@ -4016,6 +4018,9 @@ PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *
 	}
 	if (StringUtil::Equals(value, "EXECUTION_ERROR")) {
 		return PendingExecutionResult::EXECUTION_ERROR;
+	}
+	if (StringUtil::Equals(value, "BLOCKED")) {
+		return PendingExecutionResult::BLOCKED;
 	}
 	if (StringUtil::Equals(value, "NO_TASKS_AVAILABLE")) {
 		return PendingExecutionResult::NO_TASKS_AVAILABLE;
@@ -4686,6 +4691,8 @@ const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value) {
 		return "MATERIALIZED_RESULT";
 	case QueryResultType::STREAM_RESULT:
 		return "STREAM_RESULT";
+	case QueryResultType::BUFFERED_RESULT:
+		return "BUFFERED_RESULT";
 	case QueryResultType::PENDING_RESULT:
 		return "PENDING_RESULT";
 	default:
@@ -4700,6 +4707,9 @@ QueryResultType EnumUtil::FromString<QueryResultType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "STREAM_RESULT")) {
 		return QueryResultType::STREAM_RESULT;
+	}
+	if (StringUtil::Equals(value, "BUFFERED_RESULT")) {
+		return QueryResultType::BUFFERED_RESULT;
 	}
 	if (StringUtil::Equals(value, "PENDING_RESULT")) {
 		return QueryResultType::PENDING_RESULT;
@@ -5959,6 +5969,24 @@ TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value)
 	}
 	if (StringUtil::Equals(value, "TASK_BLOCKED")) {
 		return TaskExecutionResult::TASK_BLOCKED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<TaskType>(TaskType value) {
+	switch(value) {
+	case TaskType::EXECUTOR:
+		return "EXECUTOR";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+TaskType EnumUtil::FromString<TaskType>(const char *value) {
+	if (StringUtil::Equals(value, "EXECUTOR")) {
+		return TaskType::EXECUTOR;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
