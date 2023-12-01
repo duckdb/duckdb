@@ -2006,7 +2006,7 @@ bool TryCastErrorMessage::Operation(string_t input, interval_t &result, string *
 }
 
 //===--------------------------------------------------------------------===//
-// Cast From Hugeint
+// Cast to hugeint / uhugeint
 //===--------------------------------------------------------------------===//
 // parsing hugeint from string is done a bit differently for performance reasons
 // for other integer types we keep track of a single value
@@ -2015,14 +2015,18 @@ bool TryCastErrorMessage::Operation(string_t input, interval_t &result, string *
 // for that reason, we parse numbers first into an int64 value
 // when that value is full, we perform a HUGEINT multiplication to flush it into the hugeint
 // this takes the number of HUGEINT multiplications down from [0-38] to [0-2]
+
+template <typename T, typename OP>
 struct HugeIntCastData {
-	hugeint_t result;
+	using ResultType = T;
+	using Operation = OP;
+	ResultType result;
 	int64_t intermediate;
 	uint8_t digits;
 
-	hugeint_t decimal;
+	ResultType decimal;
 	uint16_t decimal_total_digits;
-	int64_t decimal_intermediate;
+	uint64_t decimal_intermediate;
 	uint16_t decimal_intermediate_digits;
 
 	bool Flush() {
@@ -2033,11 +2037,11 @@ struct HugeIntCastData {
 			if (digits > 38) {
 				return false;
 			}
-			if (!Hugeint::TryMultiply(result, Hugeint::POWERS_OF_TEN[digits], result)) {
+			if (!OP::TryMultiply(result, OP::POWERS_OF_TEN[digits], result)) {
 				return false;
 			}
 		}
-		if (!Hugeint::AddInPlace(result, hugeint_t(intermediate))) {
+		if (!OP::AddInPlace(result, ResultType(intermediate))) {
 			return false;
 		}
 		digits = 0;
@@ -2053,11 +2057,11 @@ struct HugeIntCastData {
 			if (decimal_intermediate_digits > 38) {
 				return false;
 			}
-			if (!Hugeint::TryMultiply(decimal, Hugeint::POWERS_OF_TEN[decimal_intermediate_digits], decimal)) {
+			if (!OP::TryMultiply(decimal, OP::POWERS_OF_TEN[decimal_intermediate_digits], decimal)) {
 				return false;
 			}
 		}
-		if (!Hugeint::AddInPlace(decimal, hugeint_t(decimal_intermediate))) {
+		if (!OP::AddInPlace(decimal, ResultType(decimal_intermediate))) {
 			return false;
 		}
 		decimal_total_digits += decimal_intermediate_digits;
@@ -2102,6 +2106,7 @@ struct HugeIntegerCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int32_t exponent) {
+		using result_t = typename T::ResultType;
 		if (!state.Flush()) {
 			return false;
 		}
@@ -2113,9 +2118,12 @@ struct HugeIntegerCastOperation {
 		}
 
 		// Negative Exponent
-		hugeint_t remainder = 0;
+		result_t remainder = 0;
 		if (e < 0) {
-			state.result = Hugeint::DivMod(state.result, Hugeint::POWERS_OF_TEN[-e], remainder);
+			state.result = T::Operation::DivMod(state.result, T::Operation::POWERS_OF_TEN[-e], remainder);
+			if (remainder < 0) {
+				remainder *= -1;
+			}
 			state.decimal = remainder;
 			state.decimal_total_digits = -e;
 			state.decimal_intermediate = 0;
@@ -2125,7 +2133,7 @@ struct HugeIntegerCastOperation {
 
 		// Positive Exponent
 		if (state.result != 0) {
-			if (e > 38 || !TryMultiplyOperator::Operation(state.result, Hugeint::POWERS_OF_TEN[e], state.result)) {
+			if (e > 38 || !TryMultiplyOperator::Operation(state.result, T::Operation::POWERS_OF_TEN[e], state.result)) {
 				return false;
 			}
 		}
@@ -2138,10 +2146,11 @@ struct HugeIntegerCastOperation {
 
 		e = exponent - state.decimal_total_digits;
 		if (e < 0) {
-			state.decimal = Hugeint::DivMod(state.decimal, Hugeint::POWERS_OF_TEN[-e], remainder);
+			state.decimal = T::Operation::DivMod(state.decimal, T::Operation::POWERS_OF_TEN[-e], remainder);
 			state.decimal_total_digits -= (exponent);
 		} else {
-			if (e > 38 || !TryMultiplyOperator::Operation(state.decimal, Hugeint::POWERS_OF_TEN[e], state.decimal)) {
+			if (e > 38 ||
+			    !TryMultiplyOperator::Operation(state.decimal, T::Operation::POWERS_OF_TEN[e], state.decimal)) {
 				return false;
 			}
 		}
@@ -2174,6 +2183,7 @@ struct HugeIntegerCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool Finalize(T &state) {
+		using result_t = typename T::ResultType;
 		if (!state.Flush() || !state.FlushDecimal()) {
 			return false;
 		}
@@ -2184,17 +2194,17 @@ struct HugeIntegerCastOperation {
 
 		// Get the first (left-most) digit of the decimals
 		while (state.decimal_total_digits > 39) {
-			state.decimal /= Hugeint::POWERS_OF_TEN[39];
+			state.decimal /= T::Operation::POWERS_OF_TEN[39];
 			state.decimal_total_digits -= 39;
 		}
 		D_ASSERT((state.decimal_total_digits - 1) >= 0 && (state.decimal_total_digits - 1) <= 39);
-		state.decimal /= Hugeint::POWERS_OF_TEN[state.decimal_total_digits - 1];
+		state.decimal /= T::Operation::POWERS_OF_TEN[state.decimal_total_digits - 1];
 
-		if (state.decimal >= 5 || state.decimal <= -5) {
+		if (state.decimal >= 5) {
 			if (NEGATIVE) {
-				return TrySubtractOperator::Operation(state.result, hugeint_t(1), state.result);
+				return TrySubtractOperator::Operation(state.result, result_t(1), state.result);
 			} else {
-				return TryAddOperator::Operation(state.result, hugeint_t(1), state.result);
+				return TryAddOperator::Operation(state.result, result_t(1), state.result);
 			}
 		}
 		return true;
@@ -2203,190 +2213,20 @@ struct HugeIntegerCastOperation {
 
 template <>
 bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
-	HugeIntCastData state {};
-	if (!TryIntegerCast<HugeIntCastData, true, true, HugeIntegerCastOperation>(input.GetData(), input.GetSize(), state,
-	                                                                           strict)) {
+	HugeIntCastData<hugeint_t, Hugeint> state {};
+	if (!TryIntegerCast<HugeIntCastData<hugeint_t, Hugeint>, true, true, HugeIntegerCastOperation>(
+	        input.GetData(), input.GetSize(), state, strict)) {
 		return false;
 	}
 	result = state.result;
 	return true;
 }
 
-//===--------------------------------------------------------------------===//
-// Cast To Uhugeint
-//===--------------------------------------------------------------------===//
-struct UhugeintCastData {
-	uhugeint_t result;
-	uint64_t intermediate;
-	uint8_t digits;
-
-	uhugeint_t decimal;
-	uint16_t decimal_total_digits;
-	uint64_t decimal_intermediate;
-	uint16_t decimal_intermediate_digits;
-
-	bool Flush() {
-		if (digits == 0 && intermediate == 0) {
-			return true;
-		}
-		if (result.lower != 0 || result.upper != 0) {
-			if (digits > 38) {
-				return false;
-			}
-			if (!Uhugeint::TryMultiply(result, Uhugeint::POWERS_OF_TEN[digits], result)) {
-				return false;
-			}
-		}
-		if (!Uhugeint::AddInPlace(result, uhugeint_t(intermediate))) {
-			return false;
-		}
-		digits = 0;
-		intermediate = 0;
-		return true;
-	}
-
-	bool FlushDecimal() {
-		if (decimal_intermediate_digits == 0 && decimal_intermediate == 0) {
-			return true;
-		}
-		if (decimal.lower != 0 || decimal.upper != 0) {
-			if (decimal_intermediate_digits > 38) {
-				return false;
-			}
-			if (!Uhugeint::TryMultiply(decimal, Uhugeint::POWERS_OF_TEN[decimal_intermediate_digits], decimal)) {
-				return false;
-			}
-		}
-		if (!Uhugeint::AddInPlace(decimal, uhugeint_t(decimal_intermediate))) {
-			return false;
-		}
-		decimal_total_digits += decimal_intermediate_digits;
-		decimal_intermediate_digits = 0;
-		decimal_intermediate = 0;
-		return true;
-	}
-};
-
-struct UhugeintCastOperation {
-	template <class T, bool NEGATIVE>
-	static bool HandleDigit(T &state, uint8_t digit) {
-		if (NEGATIVE && digit != 0) {
-			return false;
-		} else {
-			if (state.intermediate > (NumericLimits<uint64_t>::Maximum() - digit) / 10) {
-				if (!state.Flush()) {
-					return false;
-				}
-			}
-			state.intermediate = state.intermediate * 10 + digit;
-		}
-		state.digits++;
-		return true;
-	}
-
-	template <class T, bool NEGATIVE>
-	static bool HandleHexDigit(T &state, uint8_t digit) {
-		return false;
-	}
-
-	template <class T, bool NEGATIVE>
-	static bool HandleBinaryDigit(T &state, uint8_t digit) {
-		return false;
-	}
-
-	template <class T, bool NEGATIVE>
-	static bool HandleExponent(T &state, int32_t exponent) {
-		if (!state.Flush()) {
-			return false;
-		}
-
-		int32_t e = exponent;
-		if (e < -38) {
-			state.result = 0;
-			return true;
-		}
-
-		// Negative Exponent
-		uhugeint_t remainder = 0;
-		if (e < 0) {
-			state.result = Uhugeint::DivMod(state.result, Uhugeint::POWERS_OF_TEN[-e], remainder);
-			state.decimal = remainder;
-			state.decimal_total_digits = -e;
-			state.decimal_intermediate = 0;
-			state.decimal_intermediate_digits = 0;
-			return Finalize<T, NEGATIVE>(state);
-		}
-
-		// Positive Exponent
-		if (state.result != 0) {
-			if (e > 38 || !TryMultiplyOperator::Operation(state.result, Uhugeint::POWERS_OF_TEN[e], state.result)) {
-				return false;
-			}
-		}
-		if (!state.FlushDecimal()) {
-			return false;
-		}
-		if (state.decimal == 0) {
-			return Finalize<T, NEGATIVE>(state);
-		}
-
-		e = exponent - state.decimal_total_digits;
-		if (e < 0) {
-			state.decimal = Uhugeint::DivMod(state.decimal, Uhugeint::POWERS_OF_TEN[-e], remainder);
-			state.decimal_total_digits -= (exponent);
-		} else {
-			if (e > 38 || !TryMultiplyOperator::Operation(state.decimal, Uhugeint::POWERS_OF_TEN[e], state.decimal)) {
-				return false;
-			}
-		}
-
-		if (!TryAddOperator::Operation(state.result, state.decimal, state.result)) {
-			return false;
-		}
-		state.decimal = remainder;
-		return Finalize<T, NEGATIVE>(state);
-	}
-
-	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
-	static bool HandleDecimal(T &state, uint8_t digit) {
-		if (!state.Flush()) {
-			return false;
-		}
-		if (state.decimal_intermediate > (NumericLimits<uint64_t>::Maximum() - digit) / 10) {
-			if (!state.FlushDecimal()) {
-				return false;
-			}
-		}
-		state.decimal_intermediate = state.decimal_intermediate * 10 + digit;
-		state.decimal_intermediate_digits++;
-		return true;
-	}
-
-	template <class T, bool NEGATIVE>
-	static bool Finalize(T &state) {
-		if (!state.Flush() || !state.FlushDecimal()) {
-			return false;
-		}
-
-		if (state.decimal_total_digits == 0) {
-			return true;
-		}
-
-		// Get the first (left-most) digit of the decimals
-		state.decimal /= Uhugeint::POWERS_OF_TEN[state.decimal_total_digits - 1];
-
-		if (state.decimal >= 5) {
-			return TryAddOperator::Operation(state.result, uhugeint_t(1), state.result);
-		}
-		return true;
-	}
-};
-
 template <>
 bool TryCast::Operation(string_t input, uhugeint_t &result, bool strict) {
-	UhugeintCastData state {};
-	if (!TryIntegerCast<UhugeintCastData, true, true, UhugeintCastOperation>(input.GetData(), input.GetSize(), state,
-	                                                                         strict)) {
+	HugeIntCastData<uhugeint_t, Uhugeint> state {};
+	if (!TryIntegerCast<HugeIntCastData<uhugeint_t, Uhugeint>, false, true, HugeIntegerCastOperation>(
+	        input.GetData(), input.GetSize(), state, strict)) {
 		return false;
 	}
 	result = state.result;
