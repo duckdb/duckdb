@@ -94,7 +94,7 @@ public:
 unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ExecutionContext &context) const {
 	auto &gstate = sink_state->Cast<BlockwiseNLJoinGlobalState>();
 	auto result = make_uniq<BlockwiseNLJoinState>(context, gstate.right_chunks, *this);
-	if (join_type == JoinType::LEFT_SEMI || join_type == JoinType::LEFT_ANTI) {
+	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
 		vector<LogicalType> intermediate_types;
 		for (auto &type : children[0]->types) {
 			intermediate_types.emplace_back(type);
@@ -128,7 +128,7 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 	}
 
 	DataChunk *intermediate_chunk = &chunk;
-	if (join_type == JoinType::LEFT_SEMI || join_type == JoinType::LEFT_ANTI) {
+	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
 		intermediate_chunk = &state.intermediate_chunk;
 		intermediate_chunk->Reset();
 	}
@@ -149,10 +149,10 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 				state.left_outer.Reset();
 			}
 
-			if (join_type == JoinType::LEFT_SEMI) {
+			if (join_type == JoinType::SEMI) {
 				PhysicalJoin::ConstructSemiJoinResult(input, chunk, found_match);
 			}
-			if (join_type == JoinType::LEFT_ANTI) {
+			if (join_type == JoinType::ANTI) {
 				PhysicalJoin::ConstructAntiJoinResult(input, chunk, found_match);
 			}
 
@@ -166,7 +166,7 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 		if (result_count > 0) {
 			// found a match!
 			// handle anti semi join conditions first
-			if (join_type == JoinType::LEFT_ANTI || join_type == JoinType::LEFT_SEMI) {
+			if (join_type == JoinType::ANTI || join_type == JoinType::SEMI) {
 				if (state.cross_product.ScanLHS()) {
 					found_match[state.cross_product.PositionInChunk()] = true;
 				} else {

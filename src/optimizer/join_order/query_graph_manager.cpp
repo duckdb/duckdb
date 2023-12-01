@@ -372,7 +372,7 @@ unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr
 					TryFlipChildren(join, JoinType::INNER);
 				} else if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
 					TryFlipChildren(join, JoinType::RIGHT, 2);
-				} else if (join.join_type == JoinType::LEFT_SEMI) {
+				} else if (join.join_type == JoinType::SEMI) {
 					idx_t has_range = 0;
 					if (!PhysicalPlanGenerator::HasEquality(join.conditions, has_range)) {
 						// if the conditions have no equality, do not flip the children.
@@ -380,7 +380,7 @@ unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr
 						break;
 					}
 					TryFlipChildren(join, JoinType::RIGHT_SEMI, 2);
-				} else if (join.join_type == JoinType::LEFT_ANTI) {
+				} else if (join.join_type == JoinType::ANTI) {
 					idx_t has_range = 0;
 					if (!PhysicalPlanGenerator::HasEquality(join.conditions, has_range)) {
 						// if the conditions have no equality, do not flip the children.

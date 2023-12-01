@@ -16,7 +16,7 @@ bool PhysicalJoin::EmptyResultIfRHSIsEmpty() const {
 	switch (join_type) {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
-	case JoinType::LEFT_SEMI:
+	case JoinType::SEMI:
 	case JoinType::RIGHT_ANTI:
 		return true;
 	default:

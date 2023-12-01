@@ -27,8 +27,8 @@ PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOper
 string PhysicalComparisonJoin::ParamsToString() const {
 	string extra_info = EnumUtil::ToString(join_type) + "\n";
 	switch (join_type) {
-	case JoinType::LEFT_SEMI:
-	case JoinType::LEFT_ANTI:
+	case JoinType::SEMI:
+	case JoinType::ANTI:
 		extra_info = "LEFT " + extra_info;
 		break;
 	case JoinType::RIGHT_SEMI:
@@ -50,7 +50,7 @@ string PhysicalComparisonJoin::ParamsToString() const {
 void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool has_null, DataChunk &input,
                                                       DataChunk &result) {
 	// empty hash table, special case
-	if (join_type == JoinType::LEFT_ANTI) {
+	if (join_type == JoinType::ANTI) {
 		// anti join with empty hash table, NOP join
 		// return the input
 		D_ASSERT(input.ColumnCount() == result.ColumnCount());

@@ -423,10 +423,10 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 		PhysicalJoin::ConstructMarkJoinResult(lhs_table.keys, payload, chunk, found_match, gstate.table->has_null);
 		break;
 	}
-	case JoinType::LEFT_SEMI:
+	case JoinType::SEMI:
 		PhysicalJoin::ConstructSemiJoinResult(payload, chunk, found_match);
 		break;
-	case JoinType::LEFT_ANTI:
+	case JoinType::ANTI:
 		PhysicalJoin::ConstructAntiJoinResult(payload, chunk, found_match);
 		break;
 	default:
@@ -658,8 +658,8 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ExecuteInternal(ExecutionContext 
 
 	input.Verify();
 	switch (join_type) {
-	case JoinType::LEFT_SEMI:
-	case JoinType::LEFT_ANTI:
+	case JoinType::SEMI:
+	case JoinType::ANTI:
 	case JoinType::MARK:
 		// simple joins can have max STANDARD_VECTOR_SIZE matches per chunk
 		ResolveSimpleJoin(context, input, chunk, state);

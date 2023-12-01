@@ -233,8 +233,8 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 		case JoinType::RIGHT_SEMI:
 			ret.cardinality = child_2_card;
 			break;
-		case JoinType::LEFT_ANTI:
-		case JoinType::LEFT_SEMI:
+		case JoinType::ANTI:
+		case JoinType::SEMI:
 		case JoinType::SINGLE:
 			ret.cardinality = child_1_card;
 			break;

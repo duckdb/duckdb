@@ -118,7 +118,7 @@ void Deliminator::FindJoinWithDelimGet(unique_ptr<LogicalOperator> &op, DelimCan
 static bool ChildJoinTypeCanBeDeliminated(JoinType &join_type) {
 	switch (join_type) {
 	case JoinType::INNER:
-	case JoinType::LEFT_SEMI:
+	case JoinType::SEMI:
 		return true;
 	default:
 		return false;
@@ -194,7 +194,7 @@ bool Deliminator::RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, cons
 }
 
 static bool InequalityDelimJoinCanBeEliminated(JoinType &join_type) {
-	return join_type == JoinType::LEFT_ANTI || join_type == JoinType::MARK || join_type == JoinType::LEFT_SEMI ||
+	return join_type == JoinType::ANTI || join_type == JoinType::MARK || join_type == JoinType::SEMI ||
 	       join_type == JoinType::SINGLE;
 }
 

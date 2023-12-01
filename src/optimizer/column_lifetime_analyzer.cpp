@@ -62,8 +62,8 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 			break;
 		}
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
-		if (comp_join.join_type == JoinType::MARK || comp_join.join_type == JoinType::LEFT_SEMI ||
-		    comp_join.join_type == JoinType::LEFT_ANTI) {
+		if (comp_join.join_type == JoinType::MARK || comp_join.join_type == JoinType::SEMI ||
+		    comp_join.join_type == JoinType::ANTI) {
 			break;
 		}
 		// FIXME for now, we only push into the projection map for equality (hash) joins

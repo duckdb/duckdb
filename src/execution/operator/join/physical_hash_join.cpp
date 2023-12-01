@@ -34,7 +34,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 	}
 
 	// for ANTI, SEMI and MARK join, we only need to store the keys, so for these the build types are empty
-	if (join_type != JoinType::LEFT_ANTI && join_type != JoinType::LEFT_SEMI && join_type != JoinType::MARK) {
+	if (join_type != JoinType::ANTI && join_type != JoinType::SEMI && join_type != JoinType::MARK) {
 		build_types = LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map);
 	}
 }
