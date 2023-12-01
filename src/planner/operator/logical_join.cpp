@@ -11,7 +11,7 @@ LogicalJoin::LogicalJoin(JoinType join_type, LogicalOperatorType logical_type)
 
 vector<ColumnBinding> LogicalJoin::GetColumnBindings() {
 	auto left_bindings = MapBindings(children[0]->GetColumnBindings(), left_projection_map);
-	if (join_type == JoinType::LEFT_SEMI || join_type == JoinType::LEFT_ANTI) {
+	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
 		// for SEMI and ANTI join we only project the left hand side
 		return left_bindings;
 	}
@@ -32,7 +32,7 @@ vector<ColumnBinding> LogicalJoin::GetColumnBindings() {
 
 void LogicalJoin::ResolveTypes() {
 	types = MapTypes(children[0]->types, left_projection_map);
-	if (join_type == JoinType::LEFT_SEMI || join_type == JoinType::LEFT_ANTI) {
+	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
 		// for SEMI and ANTI join we only project the left hand side
 		return;
 	}
