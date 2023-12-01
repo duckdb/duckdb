@@ -2178,11 +2178,16 @@ struct HugeIntegerCastOperation {
 			return false;
 		}
 
-		if (state.decimal_total_digits == 0) {
+		if (state.decimal == 0 || state.decimal_total_digits == 0) {
 			return true;
 		}
 
 		// Get the first (left-most) digit of the decimals
+		while (state.decimal_total_digits > 39) {
+			state.decimal /= Hugeint::POWERS_OF_TEN[39];
+			state.decimal_total_digits -= 39;
+		}
+		D_ASSERT((state.decimal_total_digits - 1) >= 0 && (state.decimal_total_digits - 1) <= 39);
 		state.decimal /= Hugeint::POWERS_OF_TEN[state.decimal_total_digits - 1];
 
 		if (state.decimal >= 5 || state.decimal <= -5) {
