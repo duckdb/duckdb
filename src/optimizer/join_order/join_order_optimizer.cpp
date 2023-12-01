@@ -64,10 +64,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// only perform left right optimizations when stats is null (means we have the top level optimize call)
 	// Don't check reorderability because non-reorderable joins will result in 1 relation, but we can
 	// still switch the children.
-	// TODO: put this in a different optimizer maybe?
-	// FIXME: if force index_join = true, chances are an index join will be planned.
-	//        the physical operator assumes the index is on the left, so a flip will produce the wrong answer
-	if (stats == nullptr && HasJoin(new_logical_plan.get()) && !context.config.force_index_join) {
+	if (stats == nullptr && HasJoin(new_logical_plan.get())) {
 		new_logical_plan = query_graph_manager.LeftRightOptimizations(std::move(new_logical_plan));
 	}
 
