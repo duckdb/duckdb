@@ -8,8 +8,11 @@ bool IsLeftOuterJoin(JoinType type) {
 }
 
 bool IsRightOuterJoin(JoinType type) {
-	return type == JoinType::OUTER || type == JoinType::RIGHT || type == JoinType::RIGHT_SEMI ||
-	       type == JoinType::RIGHT_ANTI;
+	return type == JoinType::OUTER || type == JoinType::RIGHT;
+}
+
+bool PropogatesBuildSide(JoinType type) {
+	return type == JoinType::OUTER || type == JoinType::RIGHT || type == JoinType::RIGHT_ANTI || type == JoinType::RIGHT_SEMI;
 }
 
 // **DEPRECATED**: Use EnumUtil directly instead.
