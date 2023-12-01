@@ -386,13 +386,13 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	case JoinType::RIGHT:
 		NextInnerJoin(keys, left, result);
 		break;
-	case JoinType::SEMI:
+	case JoinType::LEFT_SEMI:
 		NextSemiJoin(keys, left, result);
 		break;
 	case JoinType::MARK:
 		NextMarkJoin(keys, left, result);
 		break;
-	case JoinType::ANTI:
+	case JoinType::LEFT_ANTI:
 		NextAntiJoin(keys, left, result);
 		break;
 	case JoinType::OUTER:

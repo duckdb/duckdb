@@ -38,7 +38,7 @@ string PhysicalComparisonJoin::ParamsToString() const {
 void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool has_null, DataChunk &input,
                                                       DataChunk &result) {
 	// empty hash table, special case
-	if (join_type == JoinType::ANTI) {
+	if (join_type == JoinType::LEFT_ANTI) {
 		// anti join with empty hash table, NOP join
 		// return the input
 		D_ASSERT(input.ColumnCount() == result.ColumnCount());

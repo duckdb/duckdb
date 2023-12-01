@@ -25,11 +25,11 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr &r
 		break;
 	}
 	case duckdb_libpgquery::PG_JOIN_SEMI: {
-		result->type = JoinType::SEMI;
+		result->type = JoinType::LEFT_SEMI;
 		break;
 	}
 	case duckdb_libpgquery::PG_JOIN_ANTI: {
-		result->type = JoinType::ANTI;
+		result->type = JoinType::LEFT_ANTI;
 		break;
 	}
 	case duckdb_libpgquery::PG_JOIN_POSITION: {

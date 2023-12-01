@@ -40,7 +40,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 #ifdef DEBUG
 				simplified_mark_join = true;
 #endif
-				join.join_type = JoinType::SEMI;
+				join.join_type = JoinType::LEFT_SEMI;
 				filters.erase(filters.begin() + i);
 				i--;
 				continue;
@@ -66,7 +66,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 						simplified_mark_join = true;
 #endif
 						// all null values are equal, convert to ANTI join
-						join.join_type = JoinType::ANTI;
+						join.join_type = JoinType::LEFT_ANTI;
 						filters.erase(filters.begin() + i);
 						i--;
 						continue;
