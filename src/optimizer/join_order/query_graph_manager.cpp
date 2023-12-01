@@ -342,6 +342,31 @@ bool QueryGraphManager::LeftCardLessThanRight(LogicalOperator &op) {
 	return op.children[0]->EstimateCardinality(context) < op.children[1]->EstimateCardinality(context);
 }
 
+void QueryGraphManager::TryFlipChildren(LogicalOperator &op, JoinType inverse, bool flip_comparison_expression,
+                                        idx_t cardinality_ratio) {
+	auto &left_child = op.children[0];
+	auto &right_child = op.children[1];
+	auto lhs_cardinality = left_child->has_estimated_cardinality ? left_child->estimated_cardinality
+	                                                             : left_child->EstimateCardinality(context);
+	auto rhs_cardinality = right_child->has_estimated_cardinality ? right_child->estimated_cardinality
+	                                                              : right_child->EstimateCardinality(context);
+	if (rhs_cardinality < lhs_cardinality * cardinality_ratio) {
+		return;
+	}
+	std::swap(left_child, right_child);
+	if (!flip_comparison_expression) {
+		return;
+	}
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		join.join_type = inverse;
+		for (auto &cond : join.conditions) {
+			std::swap(cond.left, cond.right);
+			cond.comparison = FlipComparisonExpression(cond.comparison);
+		}
+	}
+}
+
 unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr<LogicalOperator> input_op) {
 	auto op = input_op.get();
 	// pass through single child operators
@@ -351,63 +376,39 @@ unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr
 			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 				auto &join = op->Cast<LogicalComparisonJoin>();
 				if (join.join_type == JoinType::INNER) {
-					if (LeftCardLessThanRight(*op)) {
-						std::swap(op->children[0], op->children[1]);
-						for (auto &cond : join.conditions) {
-							std::swap(cond.left, cond.right);
-							cond.comparison = FlipComparisonExpression(cond.comparison);
-						}
-					}
+					TryFlipChildren(join, JoinType::INNER, true);
 				} else if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
-					auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
-					auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
-					if (rhs_cardinality > lhs_cardinality * 2) {
-						join.join_type = JoinType::RIGHT;
-						std::swap(join.children[0], join.children[1]);
-						for (auto &cond : join.conditions) {
-							std::swap(cond.left, cond.right);
-							cond.comparison = FlipComparisonExpression(cond.comparison);
-						}
-					}
-				} else if (join.join_type == JoinType::LEFT_SEMI || join.join_type == JoinType::LEFT_ANTI) {
-					size_t has_range = 0;
+					TryFlipChildren(join, JoinType::RIGHT, true, 2);
+				} else if (join.join_type == JoinType::LEFT_SEMI) {
+					idx_t has_range = 0;
 					if (!PhysicalPlanGenerator::HasEquality(join.conditions, has_range)) {
 						// if the conditions have no equality, do not flip the children.
 						// There is no physical join operator (yet) that can do a right_semi/anti join.
 						break;
 					}
-					auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
-					auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
-					if (lhs_cardinality < rhs_cardinality * 2 ||
-					    ClientConfig::GetConfig(context).query_verification_enabled) {
-						join.join_type =
-						    join.join_type == JoinType::LEFT_SEMI ? JoinType::RIGHT_SEMI : JoinType::RIGHT_ANTI;
-						std::swap(join.children[0], join.children[1]);
-						for (auto &cond : join.conditions) {
-							std::swap(cond.left, cond.right);
-							cond.comparison = FlipComparisonExpression(cond.comparison);
-						}
+					TryFlipChildren(join, JoinType::RIGHT_SEMI, true, 2);
+				} else if (join.join_type == JoinType::LEFT_ANTI) {
+					idx_t has_range = 0;
+					if (!PhysicalPlanGenerator::HasEquality(join.conditions, has_range)) {
+						// if the conditions have no equality, do not flip the children.
+						// There is no physical join operator (yet) that can do a right_semi/anti join.
+						break;
 					}
+					TryFlipChildren(join, JoinType::RIGHT_ANTI, true, 2);
 				}
 				break;
 			}
 			case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-				if (LeftCardLessThanRight(*op)) {
-					std::swap(op->children[0], op->children[1]);
-				}
+				// cross product not a comparison join so JoinType::INNER will get ignored
+				TryFlipChildren(*op, JoinType::INNER, false, 1);
 				break;
 			}
 			case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 				auto &join = op->Cast<LogicalAnyJoin>();
 				if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
-					auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
-					auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
-					if (rhs_cardinality > lhs_cardinality * 2) {
-						join.join_type = JoinType::RIGHT;
-						std::swap(join.children[0], join.children[1]);
-					}
-				} else if (join.join_type == JoinType::INNER && LeftCardLessThanRight(*op)) {
-					std::swap(join.children[0], join.children[1]);
+					TryFlipChildren(join, JoinType::RIGHT, false, 2);
+				} else if (join.join_type == JoinType::INNER) {
+					TryFlipChildren(join, JoinType::INNER, false, 1);
 				}
 				break;
 			}
