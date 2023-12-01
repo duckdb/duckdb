@@ -564,11 +564,13 @@ void BitpackingFinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 template <class T>
 static void ApplyFrameOfReference(T *dst, T frame_of_reference, idx_t size) {
+	using T_U = typename MakeUnsigned<T>::type;
 	if (!frame_of_reference) {
 		return;
 	}
+
 	for (idx_t i = 0; i < size; i++) {
-		dst[i] += frame_of_reference;
+		reinterpret_cast<T_U *>(dst)[i] += static_cast<T_U>(frame_of_reference);
 	}
 }
 

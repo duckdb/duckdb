@@ -82,7 +82,7 @@ bool ParallelCSVReader::SetPosition() {
 		verification_positions.end_of_last_line = position_buffer;
 		// First buffer doesn't need any setting
 
-		if (options.dialect_options.header) {
+		if (options.dialect_options.header.GetValue()) {
 			for (; position_buffer < end_buffer; position_buffer++) {
 				if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
 					bool carrier_return = (*buffer)[position_buffer] == '\r';
@@ -316,7 +316,7 @@ value_start : {
 	offset = 0;
 
 	// this state parses the first character of a value
-	if ((*buffer)[position_buffer] == options.dialect_options.state_machine_options.quote) {
+	if (options.dialect_options.state_machine_options.quote == (*buffer)[position_buffer]) {
 		// quote: actual value starts in the next position
 		// move to in_quotes state
 		start_buffer = position_buffer + 1;
@@ -333,11 +333,11 @@ normal : {
 	// this state parses the remainder of a non-quoted value until we reach a delimiter or newline
 	for (; position_buffer < end_buffer; position_buffer++) {
 		auto c = (*buffer)[position_buffer];
-		if (c == options.dialect_options.state_machine_options.delimiter) {
+		if (options.dialect_options.state_machine_options.delimiter == c) {
 			// Check if previous character is a quote, if yes, this means we are in a non-initialized quoted value
 			// This only matters for when trying to figure out where csv lines start
 			if (position_buffer > 0 && try_add_line) {
-				if ((*buffer)[position_buffer - 1] == options.dialect_options.state_machine_options.quote) {
+				if (options.dialect_options.state_machine_options.quote == (*buffer)[position_buffer - 1]) {
 					return false;
 				}
 			}
@@ -347,7 +347,7 @@ normal : {
 			// Check if previous character is a quote, if yes, this means we are in a non-initialized quoted value
 			// This only matters for when trying to figure out where csv lines start
 			if (position_buffer > 0 && try_add_line) {
-				if ((*buffer)[position_buffer - 1] == options.dialect_options.state_machine_options.quote) {
+				if (options.dialect_options.state_machine_options.quote == (*buffer)[position_buffer - 1]) {
 					return false;
 				}
 			}
@@ -478,10 +478,10 @@ in_quotes:
 	position_buffer++;
 	for (; position_buffer < end_buffer; position_buffer++) {
 		auto c = (*buffer)[position_buffer];
-		if (c == options.dialect_options.state_machine_options.quote) {
+		if (options.dialect_options.state_machine_options.quote == c) {
 			// quote: move to unquoted state
 			goto unquote;
-		} else if (c == options.dialect_options.state_machine_options.escape) {
+		} else if (options.dialect_options.state_machine_options.escape == c) {
 			// escape: store the escaped position and move to handle_escape state
 			escape_positions.push_back(position_buffer - start_buffer);
 			goto handle_escape;
@@ -515,13 +515,13 @@ unquote : {
 		goto final_state;
 	}
 	auto c = (*buffer)[position_buffer];
-	if (c == options.dialect_options.state_machine_options.quote &&
+	if (options.dialect_options.state_machine_options.quote == c &&
 	    (options.dialect_options.state_machine_options.escape == '\0' ||
 	     options.dialect_options.state_machine_options.escape == options.dialect_options.state_machine_options.quote)) {
 		// escaped quote, return to quoted state and store escape position
 		escape_positions.push_back(position_buffer - start_buffer);
 		goto in_quotes;
-	} else if (c == options.dialect_options.state_machine_options.delimiter) {
+	} else if (options.dialect_options.state_machine_options.delimiter == c) {
 		// delimiter, add value
 		offset = 1;
 		goto add_value;
@@ -556,8 +556,8 @@ handle_escape : {
 		    GetLineNumberStr(linenr, linenr_estimated, buffer->local_batch_index).c_str(), options.ToString());
 		return false;
 	}
-	if ((*buffer)[position_buffer] != options.dialect_options.state_machine_options.quote &&
-	    (*buffer)[position_buffer] != options.dialect_options.state_machine_options.escape) {
+	if (options.dialect_options.state_machine_options.quote != (*buffer)[position_buffer] &&
+	    options.dialect_options.state_machine_options.escape != (*buffer)[position_buffer]) {
 		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
 		    GetLineNumberStr(linenr, linenr_estimated, buffer->local_batch_index).c_str(), options.ToString());

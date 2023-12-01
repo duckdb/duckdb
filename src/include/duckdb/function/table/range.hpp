@@ -37,4 +37,8 @@ struct UnnestTableFunction {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct CSVSnifferFunction {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb

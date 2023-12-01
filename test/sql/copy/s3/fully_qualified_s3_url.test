@@ -8,11 +8,6 @@ require httpfs
 
 require-env S3_TEST_SERVER_AVAILABLE 1
 
-# FIXME - this test randomly fails in the CI
-# # terminate called after throwing an instance of 'duckdb::IOException'
-#   what():  IO Error: Unexpected response during S3 multipart upload finalization: 403
-mode skip
-
 # Require that these environment variables are also set
 
 require-env AWS_DEFAULT_REGION

@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
 
@@ -15,7 +16,8 @@ static LogicalType ResolveNotType(OperatorExpression &op, vector<unique_ptr<Expr
 	return LogicalType(LogicalTypeId::BOOLEAN);
 }
 
-static LogicalType ResolveInType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
+static LogicalType ResolveInType(OperatorExpression &op, vector<unique_ptr<Expression>> &children,
+                                 ClientContext &context) {
 	if (children.empty()) {
 		throw InternalException("IN requires at least a single child node");
 	}
@@ -23,8 +25,15 @@ static LogicalType ResolveInType(OperatorExpression &op, vector<unique_ptr<Expre
 	LogicalType max_type = children[0]->return_type;
 	bool any_varchar = children[0]->return_type == LogicalType::VARCHAR;
 	bool any_enum = children[0]->return_type.id() == LogicalTypeId::ENUM;
+	bool is_in_operator = (op.type == ExpressionType::COMPARE_IN || op.type == ExpressionType::COMPARE_NOT_IN);
 	for (idx_t i = 1; i < children.size(); i++) {
-		max_type = LogicalType::MaxLogicalType(max_type, children[i]->return_type);
+		if (is_in_operator) {
+			// If it's IN/NOT_IN operator, adjust DECIMAL and VARCHAR returned type.
+			max_type = BoundComparisonExpression::BindComparison(max_type, children[i]->return_type);
+		} else {
+			// If it's COALESCE operator, don't do extra adjustment.
+			max_type = LogicalType::MaxLogicalType(max_type, children[i]->return_type);
+		}
 		if (children[i]->return_type == LogicalType::VARCHAR) {
 			any_varchar = true;
 		}
@@ -32,7 +41,10 @@ static LogicalType ResolveInType(OperatorExpression &op, vector<unique_ptr<Expre
 			any_enum = true;
 		}
 	}
-	if (any_varchar && any_enum) {
+
+	// If max_type is already VARCHAR, no need to adjust it incase it's IN/NOT_IN operator. Reassignment of max_type
+	// will cause collation information lost.
+	if (any_varchar && any_enum && max_type.id() != LogicalTypeId::VARCHAR) {
 		// For the coalesce function, we must be sure we always upcast the parameters to VARCHAR, if there are at least
 		// one enum and one varchar
 		max_type = LogicalType::VARCHAR;
@@ -41,12 +53,17 @@ static LogicalType ResolveInType(OperatorExpression &op, vector<unique_ptr<Expre
 	// cast all children to the same type
 	for (idx_t i = 0; i < children.size(); i++) {
 		children[i] = BoundCastExpression::AddDefaultCastToType(std::move(children[i]), max_type);
+		if (is_in_operator) {
+			// If it's IN/NOT_IN operator, push collation functions.
+			ExpressionBinder::PushCollation(context, children[i], max_type, true);
+		}
 	}
 	// (NOT) IN always returns a boolean
 	return LogicalType::BOOLEAN;
 }
 
-static LogicalType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
+static LogicalType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children,
+                                       ClientContext &context) {
 	switch (op.type) {
 	case ExpressionType::OPERATOR_IS_NULL:
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
@@ -57,9 +74,9 @@ static LogicalType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr
 		return LogicalType::BOOLEAN;
 	case ExpressionType::COMPARE_IN:
 	case ExpressionType::COMPARE_NOT_IN:
-		return ResolveInType(op, children);
+		return ResolveInType(op, children, context);
 	case ExpressionType::OPERATOR_COALESCE: {
-		ResolveInType(op, children);
+		ResolveInType(op, children, context);
 		return children[0]->return_type;
 	}
 	case ExpressionType::OPERATOR_NOT:
@@ -137,7 +154,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		children.push_back(std::move(BoundExpression::GetExpression(*op.children[i])));
 	}
 	// now resolve the types
-	LogicalType result_type = ResolveOperatorType(op, children);
+	LogicalType result_type = ResolveOperatorType(op, children, context);
 	if (op.type == ExpressionType::OPERATOR_COALESCE) {
 		if (children.empty()) {
 			throw BinderException("COALESCE needs at least one child");
