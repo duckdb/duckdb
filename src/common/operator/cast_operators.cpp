@@ -2171,7 +2171,7 @@ struct HugeIntegerCastOperation {
 		if (!state.Flush()) {
 			return false;
 		}
-		if (state.decimal_intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 10) {
+		if (state.decimal_intermediate > (NumericLimits<uint64_t>::Maximum() - digit) / 10) {
 			if (!state.FlushDecimal()) {
 				return false;
 			}
