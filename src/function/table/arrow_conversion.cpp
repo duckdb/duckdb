@@ -437,7 +437,13 @@ static void FlattenRunEndsSwitch(Vector &result, ArrowRunEndEncodingState &run_e
                                  idx_t scan_offset, idx_t size) {
 	auto &values = *run_end_encoding.values;
 	auto physical_type = values.GetType().InternalType();
+	// TODO: add more types
+	// Use Value API for complex types (list/struct/map)
+	// Use a custom version for strings as well
 	switch (physical_type) {
+	case PhysicalType::INT8:
+		FlattenRunEnds<RUN_END_TYPE, int8_t>(result, run_end_encoding, compressed_size, scan_offset, size);
+		break;
 	case PhysicalType::INT16:
 		FlattenRunEnds<RUN_END_TYPE, int16_t>(result, run_end_encoding, compressed_size, scan_offset, size);
 		break;
@@ -446,6 +452,12 @@ static void FlattenRunEndsSwitch(Vector &result, ArrowRunEndEncodingState &run_e
 		break;
 	case PhysicalType::INT64:
 		FlattenRunEnds<RUN_END_TYPE, int64_t>(result, run_end_encoding, compressed_size, scan_offset, size);
+		break;
+	case PhysicalType::INT128:
+		FlattenRunEnds<RUN_END_TYPE, hugeint_t>(result, run_end_encoding, compressed_size, scan_offset, size);
+		break;
+	case PhysicalType::UINT8:
+		FlattenRunEnds<RUN_END_TYPE, uint8_t>(result, run_end_encoding, compressed_size, scan_offset, size);
 		break;
 	case PhysicalType::UINT16:
 		FlattenRunEnds<RUN_END_TYPE, uint16_t>(result, run_end_encoding, compressed_size, scan_offset, size);
