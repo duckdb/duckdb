@@ -51,7 +51,7 @@ SinkResultType PhysicalBufferedCollector::Sink(ExecutionContext &context, DataCh
 	auto to_append = make_uniq<DataChunk>();
 	to_append->InitializeEmpty(chunk.GetTypes());
 	to_append->Reference(chunk);
-	buffered_data.Populate(std::move(to_append));
+	buffered_data.Append(std::move(to_append));
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

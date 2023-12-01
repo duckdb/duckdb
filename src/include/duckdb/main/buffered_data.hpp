@@ -17,30 +17,45 @@ namespace duckdb {
 
 class BufferedQueryResult;
 
+struct BufferedDataScanState {
+	//! The chunk we're currently scanning from
+	unique_ptr<DataChunk> chunk = nullptr;
+	//! The offset into the current chunk
+	idx_t offset = 0;
+};
+
 class BufferedData {
 private:
-	static constexpr idx_t BUFFER_SIZE = 100000 / STANDARD_VECTOR_SIZE;
+	//! (roughly) The max amount of tuples we'll keep buffered at a time
+	static constexpr idx_t BUFFER_SIZE = 100000;
 
 public:
 	BufferedData(shared_ptr<ClientContext> context) : context(context) {
 	}
 
 public:
-	void Populate(unique_ptr<DataChunk> chunk);
+	void Append(unique_ptr<DataChunk> chunk);
+
 	unique_ptr<DataChunk> Fetch(BufferedQueryResult &result);
 	void AddToBacklog(InterruptState state);
 	void ReplenishBuffer(BufferedQueryResult &result);
 	bool BufferIsFull() const;
 
 private:
+	unique_ptr<DataChunk> Scan();
+
+private:
 	shared_ptr<ClientContext> context;
-	// Our handles to reschedule the blocked sink tasks
+	//! Our handles to reschedule the blocked sink tasks
 	queue<InterruptState> blocked_sinks;
-	// Protect against populate/fetch race condition
+	//! Protect against populate/fetch race condition
 	mutex glock;
-	// Keep track of the size of the buffer to gauge when it should be repopulated
+	//! The queue of chunks
 	queue<unique_ptr<DataChunk>> buffered_chunks;
-	atomic<idx_t> buffered_chunks_count;
+	//! The current capacity of the buffer (tuples)
+	atomic<idx_t> buffered_count;
+	//! Scan state
+	BufferedDataScanState scan_state;
 };
 
 } // namespace duckdb
