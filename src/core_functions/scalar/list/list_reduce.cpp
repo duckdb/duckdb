@@ -41,7 +41,7 @@ vector<reference<ReduceColumnInfo>> ReduceGetInconstantColumnInfo(vector<ReduceC
 }
 
 static void ExecuteReduce(idx_t loops, std::vector<idx_t> &active_rows, const list_entry_t *list_entries,
-                          Vector &result, Vector &left_slice, Vector &child_vector, ClientContext &context,
+                          Vector &result, Vector &left_slice, UnifiedVectorFormat &list_column_format, Vector &child_vector, ClientContext &context,
                           const Expression &lambda_expr, const bool has_index, DataChunk &lambda_chunk,
                           const vector<ReduceColumnInfo> &column_infos) {
 	SelectionVector right_sel(active_rows.size());
@@ -52,8 +52,9 @@ static void ExecuteReduce(idx_t loops, std::vector<idx_t> &active_rows, const li
 
 	auto it = active_rows.begin();
 	while (it != active_rows.end()) {
-		if (list_entries[*it].length > loops + 1) {
-			right_sel.set_index(new_count, list_entries[*it].offset + loops + 1);
+		auto list_column_format_index = list_column_format.sel->get_index(old_count);
+		if (list_entries[list_column_format_index].length > loops + 1) {
+			right_sel.set_index(new_count, list_entries[list_column_format_index].offset + loops + 1);
 			left_sel.set_index(new_count, old_count);
 
 			new_count++;
@@ -69,7 +70,7 @@ static void ExecuteReduce(idx_t loops, std::vector<idx_t> &active_rows, const li
 		return;
 	}
 
-	// Execute the lambda function
+	// Execute the lambda function`
 	Vector index_vector(Value::BIGINT(loops + 1));
 
 	left_slice.Slice(left_slice, left_sel, new_count);
@@ -151,7 +152,7 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 	while (it != active_rows.end()) {
 		auto list_column_format_index = list_column_format.sel->get_index(old_count);
 		if (list_column_format.validity.RowIsValid(list_column_format_index)) {
-			left_vector.set_index(new_count, list_entries[old_count].offset);
+			left_vector.set_index(new_count, list_entries[list_column_format_index].offset);
 			active_rows[new_count] = old_count;
 			new_count++;
 			it++;
@@ -173,7 +174,7 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 	idx_t loops = 0;
 	// Execute reduce until all rows are finished
 	while (!active_rows.empty()) {
-		ExecuteReduce(loops, active_rows, list_entries, result, left_slice, child_vector, state.GetContext(),
+		ExecuteReduce(loops, active_rows, list_entries, result, left_slice, list_column_format, child_vector, state.GetContext(),
 		              *lambda_expr, bind_info.has_index, lambda_chunk, column_infos);
 
 		if (active_rows.empty()) {
