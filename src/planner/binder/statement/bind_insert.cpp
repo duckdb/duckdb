@@ -26,6 +26,7 @@
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 
 namespace duckdb {
 
@@ -269,12 +270,13 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		if (!found_matching_indexes) {
 			throw BinderException(
 			    "There are no UNIQUE/PRIMARY KEY Indexes that refer to this table, ON CONFLICT is a no-op");
-		}
-		if (insert.action_type != OnConflictAction::NOTHING && found_matching_indexes != 1) {
-			// When no conflict target is provided, and the action type is UPDATE,
-			// we only allow the operation when only a single Index exists
-			throw BinderException("Conflict target has to be provided for a DO UPDATE operation when the table has "
-			                      "multiple UNIQUE/PRIMARY KEY constraints");
+		} else if (storage_info.index_info.size() != 1) {
+			if (insert.action_type != OnConflictAction::NOTHING) {
+				// When no conflict target is provided, and the action type is UPDATE,
+				// we only allow the operation when only a single Index exists
+				throw BinderException("Conflict target has to be provided for a DO UPDATE operation when the table has "
+				                      "multiple UNIQUE/PRIMARY KEY constraints");
+			}
 		}
 	}
 

@@ -11617,18 +11617,21 @@ static int shell_callback(
       if (nArg != 2) {
         break;
       }
-      utf8_printf(p->out, "\n┌─────────────────────────────┐\n");
-      utf8_printf(p->out, "│┌───────────────────────────┐│\n");
-      if (strcmp(azArg[0], "logical_plan") == 0) {
-      utf8_printf(p->out, "││ Unoptimized Logical Plan  ││\n");
-      } else if (strcmp(azArg[0], "logical_opt") == 0) {
-      utf8_printf(p->out, "││  Optimized Logical Plan   ││\n");
-      } else if (strcmp(azArg[0], "physical_plan") == 0) {
-      utf8_printf(p->out, "││       Physical Plan       ││\n");
-
+      if (strcmp(azArg[0], "logical_plan") == 0
+            || strcmp(azArg[0], "logical_opt") == 0
+            || strcmp(azArg[0], "physical_plan") == 0) { 
+        utf8_printf(p->out, "\n┌─────────────────────────────┐\n");
+        utf8_printf(p->out, "│┌───────────────────────────┐│\n");
+        if (strcmp(azArg[0], "logical_plan") == 0) {
+          utf8_printf(p->out, "││ Unoptimized Logical Plan  ││\n");
+        } else if (strcmp(azArg[0], "logical_opt") == 0) {
+          utf8_printf(p->out, "││  Optimized Logical Plan   ││\n");
+        } else if (strcmp(azArg[0], "physical_plan") == 0) {
+          utf8_printf(p->out, "││       Physical Plan       ││\n");
+        }
+        utf8_printf(p->out, "│└───────────────────────────┘│\n");
+        utf8_printf(p->out, "└─────────────────────────────┘\n");
       }
-      utf8_printf(p->out, "│└───────────────────────────┘│\n");
-      utf8_printf(p->out, "└─────────────────────────────┘\n");
       utf8_printf(p->out, "%s", azArg[1]);
       break;
     }
@@ -17996,6 +17999,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     session_close_all(p);
     close_db(p->db);
     p->db = 0;
+    globalDb = 0;
     p->zDbFilename = 0;
     sqlite3_free(p->zFreeOnClose);
     p->zFreeOnClose = 0;

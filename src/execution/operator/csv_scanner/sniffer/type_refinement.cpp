@@ -22,6 +22,14 @@ struct Parse {
 			// Started a new value
 			// Check if it's UTF-8 (Or not?)
 			machine.VerifyUTF8();
+			if (machine.column_count >= parse_chunk.ColumnCount() && machine.options.ignore_errors) {
+				return false;
+			}
+			if (machine.column_count >= parse_chunk.ColumnCount()) {
+				throw InvalidInputException("Error in file \"%s\": CSV options could not be auto-detected. Consider "
+				                            "setting parser options manually.",
+				                            machine.options.file_path);
+			}
 			auto &v = parse_chunk.data[machine.column_count++];
 			auto parse_data = FlatVector::GetData<string_t>(v);
 			if (machine.value.empty()) {
@@ -34,7 +42,8 @@ struct Parse {
 		}
 		if (((machine.previous_state == CSVState::RECORD_SEPARATOR && machine.state != CSVState::EMPTY_LINE) ||
 		     (machine.state != CSVState::RECORD_SEPARATOR && carriage_return)) &&
-		    machine.options.null_padding && machine.column_count < parse_chunk.ColumnCount()) {
+		    (machine.options.null_padding || machine.options.ignore_errors) &&
+		    machine.column_count < parse_chunk.ColumnCount()) {
 			// It's a new row, check if we need to pad stuff
 			while (machine.column_count < parse_chunk.ColumnCount()) {
 				auto &v = parse_chunk.data[machine.column_count++];
@@ -63,19 +72,22 @@ struct Parse {
 	inline static void Finalize(CSVStateMachine &machine, DataChunk &parse_chunk) {
 		if (machine.cur_rows < STANDARD_VECTOR_SIZE && machine.state != CSVState::EMPTY_LINE) {
 			machine.VerifyUTF8();
-			auto &v = parse_chunk.data[machine.column_count++];
-			auto parse_data = FlatVector::GetData<string_t>(v);
-			if (machine.value.empty()) {
-				auto &validity_mask = FlatVector::Validity(v);
-				validity_mask.SetInvalid(machine.cur_rows);
-			} else {
-				parse_data[machine.cur_rows] = StringVector::AddStringOrBlob(v, string_t(machine.value));
+			if (machine.column_count < parse_chunk.ColumnCount() || !machine.options.ignore_errors) {
+				auto &v = parse_chunk.data[machine.column_count++];
+				auto parse_data = FlatVector::GetData<string_t>(v);
+				if (machine.value.empty()) {
+					auto &validity_mask = FlatVector::Validity(v);
+					validity_mask.SetInvalid(machine.cur_rows);
+				} else {
+					parse_data[machine.cur_rows] = StringVector::AddStringOrBlob(v, string_t(machine.value));
+				}
+				while (machine.column_count < parse_chunk.ColumnCount()) {
+					auto &v_pad = parse_chunk.data[machine.column_count++];
+					auto &validity_mask = FlatVector::Validity(v_pad);
+					validity_mask.SetInvalid(machine.cur_rows);
+				}
 			}
-			while (machine.column_count < parse_chunk.ColumnCount()) {
-				auto &v_pad = parse_chunk.data[machine.column_count++];
-				auto &validity_mask = FlatVector::Validity(v_pad);
-				validity_mask.SetInvalid(machine.cur_rows);
-			}
+
 			machine.cur_rows++;
 		}
 		parse_chunk.SetCardinality(machine.cur_rows);
@@ -85,14 +97,16 @@ struct Parse {
 bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) {
 	// try vector-cast from string to sql_type
 	Vector dummy_result(sql_type);
-	if (best_candidate->dialect_options.has_format[LogicalTypeId::DATE] && sql_type == LogicalTypeId::DATE) {
+	if (!best_candidate->dialect_options.date_format[LogicalTypeId::DATE].GetValue().Empty() &&
+	    sql_type == LogicalTypeId::DATE) {
 		// use the date format to cast the chunk
 		string error_message;
 		idx_t line_error;
 		return BaseCSVReader::TryCastDateVector(best_candidate->dialect_options.date_format, parse_chunk_col,
 		                                        dummy_result, size, error_message, line_error);
 	}
-	if (best_candidate->dialect_options.has_format[LogicalTypeId::TIMESTAMP] && sql_type == LogicalTypeId::TIMESTAMP) {
+	if (!best_candidate->dialect_options.date_format[LogicalTypeId::TIMESTAMP].GetValue().Empty() &&
+	    sql_type == LogicalTypeId::TIMESTAMP) {
 		// use the timestamp format to cast the chunk
 		string error_message;
 		return BaseCSVReader::TryCastTimestampVector(best_candidate->dialect_options.date_format, parse_chunk_col,
@@ -144,8 +158,6 @@ void CSVSniffer::RefineTypes() {
 						}
 						//	doesn't work - move to the next one
 						best_type_format_candidates.pop_back();
-						best_candidate->dialect_options.has_format[sql_type.id()] =
-						    (!best_type_format_candidates.empty());
 						if (!best_type_format_candidates.empty()) {
 							SetDateFormat(*best_candidate, best_type_format_candidates.back(), sql_type.id());
 						}

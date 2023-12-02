@@ -41,12 +41,15 @@ void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef &window_sp
 		    "Window frames starting with unbounded following or ending in unbounded preceding make no sense");
 	}
 
+	if (window_spec.frameOptions & FRAMEOPTION_GROUPS) {
+		throw ParserException("GROUPS mode for window functions is not implemented yet");
+	}
 	const bool rangeMode = (window_spec.frameOptions & FRAMEOPTION_RANGE) != 0;
 	if (window_spec.frameOptions & FRAMEOPTION_START_UNBOUNDED_PRECEDING) {
 		expr.start = WindowBoundary::UNBOUNDED_PRECEDING;
-	} else if (window_spec.frameOptions & FRAMEOPTION_START_VALUE_PRECEDING) {
+	} else if (window_spec.frameOptions & FRAMEOPTION_START_OFFSET_PRECEDING) {
 		expr.start = rangeMode ? WindowBoundary::EXPR_PRECEDING_RANGE : WindowBoundary::EXPR_PRECEDING_ROWS;
-	} else if (window_spec.frameOptions & FRAMEOPTION_START_VALUE_FOLLOWING) {
+	} else if (window_spec.frameOptions & FRAMEOPTION_START_OFFSET_FOLLOWING) {
 		expr.start = rangeMode ? WindowBoundary::EXPR_FOLLOWING_RANGE : WindowBoundary::EXPR_FOLLOWING_ROWS;
 	} else if (window_spec.frameOptions & FRAMEOPTION_START_CURRENT_ROW) {
 		expr.start = rangeMode ? WindowBoundary::CURRENT_ROW_RANGE : WindowBoundary::CURRENT_ROW_ROWS;
@@ -54,20 +57,30 @@ void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef &window_sp
 
 	if (window_spec.frameOptions & FRAMEOPTION_END_UNBOUNDED_FOLLOWING) {
 		expr.end = WindowBoundary::UNBOUNDED_FOLLOWING;
-	} else if (window_spec.frameOptions & FRAMEOPTION_END_VALUE_PRECEDING) {
+	} else if (window_spec.frameOptions & FRAMEOPTION_END_OFFSET_PRECEDING) {
 		expr.end = rangeMode ? WindowBoundary::EXPR_PRECEDING_RANGE : WindowBoundary::EXPR_PRECEDING_ROWS;
-	} else if (window_spec.frameOptions & FRAMEOPTION_END_VALUE_FOLLOWING) {
+	} else if (window_spec.frameOptions & FRAMEOPTION_END_OFFSET_FOLLOWING) {
 		expr.end = rangeMode ? WindowBoundary::EXPR_FOLLOWING_RANGE : WindowBoundary::EXPR_FOLLOWING_ROWS;
 	} else if (window_spec.frameOptions & FRAMEOPTION_END_CURRENT_ROW) {
 		expr.end = rangeMode ? WindowBoundary::CURRENT_ROW_RANGE : WindowBoundary::CURRENT_ROW_ROWS;
 	}
 
 	D_ASSERT(expr.start != WindowBoundary::INVALID && expr.end != WindowBoundary::INVALID);
-	if (((window_spec.frameOptions & (FRAMEOPTION_START_VALUE_PRECEDING | FRAMEOPTION_START_VALUE_FOLLOWING)) &&
+	if (((window_spec.frameOptions & (FRAMEOPTION_START_OFFSET_PRECEDING | FRAMEOPTION_START_OFFSET_FOLLOWING)) &&
 	     !expr.start_expr) ||
-	    ((window_spec.frameOptions & (FRAMEOPTION_END_VALUE_PRECEDING | FRAMEOPTION_END_VALUE_FOLLOWING)) &&
+	    ((window_spec.frameOptions & (FRAMEOPTION_END_OFFSET_PRECEDING | FRAMEOPTION_END_OFFSET_FOLLOWING)) &&
 	     !expr.end_expr)) {
 		throw InternalException("Failed to transform window boundary expression");
+	}
+
+	if (window_spec.frameOptions & FRAMEOPTION_EXCLUDE_CURRENT_ROW) {
+		expr.exclude_clause = WindowExcludeMode::CURRENT_ROW;
+	} else if (window_spec.frameOptions & FRAMEOPTION_EXCLUDE_GROUP) {
+		expr.exclude_clause = WindowExcludeMode::GROUP;
+	} else if (window_spec.frameOptions & FRAMEOPTION_EXCLUDE_TIES) {
+		expr.exclude_clause = WindowExcludeMode::TIES;
+	} else {
+		expr.exclude_clause = WindowExcludeMode::NO_OTHER;
 	}
 }
 

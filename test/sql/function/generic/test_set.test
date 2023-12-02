@@ -18,6 +18,10 @@ SELECT CURRENT_SETTING('default_null_order');
 statement ok
 SET default_null_order = 'nulls_last';
 
+# set from a function
+statement ok
+SET default_null_order = concat('nulls', '_', 'last');
+
 query I
 SELECT CURRENT_SETTING('default_null_order');
 ----
@@ -44,3 +48,13 @@ SELECT CURRENT_SETTING(NULL)
 
 statement error
 SELECT CURRENT_SETTING('')
+
+statement error
+SET default_null_order = colref || '_last';
+----
+cannot contain column names
+
+statement error
+SET default_null_order = (SELECT 'nulls_last')
+----
+cannot contain subqueries

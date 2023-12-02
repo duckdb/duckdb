@@ -251,6 +251,7 @@ public:
 			break;
 		case PhysicalType::LIST:
 		case PhysicalType::STRUCT:
+		case PhysicalType::ARRAY:
 			NestedComparisonExecutor<OP>(left, right, result, count);
 			break;
 		default:

@@ -9,7 +9,7 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
-
+#include "duckdb/storage/table/array_column_data.hpp"
 #include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
@@ -441,6 +441,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 
 	// replace the old tree with the new one
 	data.Replace(l, checkpoint_state->new_tree);
+	updates.reset();
 	version++;
 
 	return checkpoint_state;
@@ -544,8 +545,8 @@ void ColumnData::Verify(RowGroup &parent) {
 #ifdef DEBUG
 	D_ASSERT(this->start == parent.start);
 	data.Verify();
-	if (type.InternalType() == PhysicalType::STRUCT) {
-		// structs don't have segments
+	if (type.InternalType() == PhysicalType::STRUCT || type.InternalType() == PhysicalType::ARRAY) {
+		// structs and fixed size lists don't have segments
 		D_ASSERT(!data.GetRootSegment());
 		return;
 	}
@@ -570,6 +571,8 @@ static RET CreateColumnInternal(BlockManager &block_manager, DataTableInfo &info
 		return OP::template Create<StructColumnData>(block_manager, info, column_index, start_row, type, parent);
 	} else if (type.InternalType() == PhysicalType::LIST) {
 		return OP::template Create<ListColumnData>(block_manager, info, column_index, start_row, type, parent);
+	} else if (type.InternalType() == PhysicalType::ARRAY) {
+		return OP::template Create<ArrayColumnData>(block_manager, info, column_index, start_row, type, parent);
 	} else if (type.id() == LogicalTypeId::VALIDITY) {
 		return OP::template Create<ValidityColumnData>(block_manager, info, column_index, start_row, *parent);
 	}

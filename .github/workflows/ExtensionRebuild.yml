@@ -7,7 +7,7 @@ on:
         required: true
         type: string
       extension_repo:
-        description: 'Extension git repo (e.g. https://github.com/duckdblabs/postgres_scanner)'
+        description: 'Extension git repo (e.g. https://github.com/duckdb/postgres_scanner)'
         required: true
         type: string
       extension_ref:
@@ -71,7 +71,7 @@ jobs:
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-        python_name: python3.7
+        python_name: python3
         vcpkg_target_triplet: x64-linux
 
   xcode-extensions-rebuild:

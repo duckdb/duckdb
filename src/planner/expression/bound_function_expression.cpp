@@ -5,6 +5,7 @@
 #include "duckdb/function/function_serialization.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/core_functions/lambda_functions.hpp"
 
 namespace duckdb {
 
@@ -23,11 +24,22 @@ bool BoundFunctionExpression::HasSideEffects() const {
 
 bool BoundFunctionExpression::IsFoldable() const {
 	// functions with side effects cannot be folded: they have to be executed once for every row
+	if (function.bind_lambda) {
+		// This is a lambda function
+		D_ASSERT(bind_info);
+		auto &lambda_bind_data = bind_info->Cast<ListLambdaBindData>();
+		if (lambda_bind_data.lambda_expr) {
+			auto &expr = *lambda_bind_data.lambda_expr;
+			if (expr.HasSideEffects()) {
+				return false;
+			}
+		}
+	}
 	return function.side_effects == FunctionSideEffects::HAS_SIDE_EFFECTS ? false : Expression::IsFoldable();
 }
 
 string BoundFunctionExpression::ToString() const {
-	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), function.name,
+	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), string(), function.name,
 	                                                                         is_operator);
 }
 bool BoundFunctionExpression::PropagatesNullValues() const {

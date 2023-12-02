@@ -603,20 +603,19 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 void StrfTimeFormat::ConvertDateVector(Vector &input, Vector &result, idx_t count) {
 	D_ASSERT(input.GetType().id() == LogicalTypeId::DATE);
 	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
-	UnaryExecutor::ExecuteWithNulls<date_t, string_t>(input, result, count,
-	                                                  [&](date_t input, ValidityMask &mask, idx_t idx) {
-		                                                  if (Date::IsFinite(input)) {
-			                                                  dtime_t time(0);
-			                                                  idx_t len = GetLength(input, time, 0, nullptr);
-			                                                  string_t target = StringVector::EmptyString(result, len);
-			                                                  FormatString(input, time, target.GetDataWriteable());
-			                                                  target.Finalize();
-			                                                  return target;
-		                                                  } else {
-			                                                  mask.SetInvalid(idx);
-			                                                  return string_t();
-		                                                  }
-	                                                  });
+	UnaryExecutor::ExecuteWithNulls<date_t, string_t>(
+	    input, result, count, [&](date_t input, ValidityMask &mask, idx_t idx) {
+		    if (Date::IsFinite(input)) {
+			    dtime_t time(0);
+			    idx_t len = GetLength(input, time, 0, nullptr);
+			    string_t target = StringVector::EmptyString(result, len);
+			    FormatString(input, time, target.GetDataWriteable());
+			    target.Finalize();
+			    return target;
+		    } else {
+			    return StringVector::AddString(result, Date::ToString(input));
+		    }
+	    });
 }
 
 void StrfTimeFormat::ConvertTimestampVector(Vector &input, Vector &result, idx_t count) {
@@ -634,8 +633,7 @@ void StrfTimeFormat::ConvertTimestampVector(Vector &input, Vector &result, idx_t
 			    target.Finalize();
 			    return target;
 		    } else {
-			    mask.SetInvalid(idx);
-			    return string_t();
+			    return StringVector::AddString(result, Timestamp::ToString(input));
 		    }
 	    });
 }
@@ -733,7 +731,38 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 		data++;
 		size--;
 	}
+
+	//	Check for specials
+	//	Precheck for alphas for performance.
 	idx_t pos = 0;
+	result.is_special = false;
+	if (size > 4) {
+		if (StringUtil::CharacterIsAlpha(*data)) {
+			if (Date::TryConvertDateSpecial(data, size, pos, Date::PINF)) {
+				result.is_special = true;
+				result.special = date_t::infinity();
+			} else if (Date::TryConvertDateSpecial(data, size, pos, Date::EPOCH)) {
+				result.is_special = true;
+				result.special = date_t::epoch();
+			}
+		} else if (*data == '-' && Date::TryConvertDateSpecial(data, size, pos, Date::NINF)) {
+			result.is_special = true;
+			result.special = date_t::ninfinity();
+		}
+	}
+	if (result.is_special) {
+		// skip trailing spaces
+		while (pos < size && StringUtil::CharacterIsSpace(data[pos])) {
+			pos++;
+		}
+		if (pos != size) {
+			error_message = "Special timestamp did not match: trailing characters";
+			error_position = pos;
+			return false;
+		}
+		return true;
+	}
+
 	TimeSpecifierAMOrPM ampm = TimeSpecifierAMOrPM::TIME_SPECIFIER_NONE;
 
 	// Year offset state (Year+W/j)
@@ -1127,6 +1156,10 @@ StrpTimeFormat::ParseResult StrpTimeFormat::Parse(const string &format_string, c
 	return result;
 }
 
+bool StrTimeFormat::Empty() const {
+	return format_specifier.empty();
+}
+
 string StrpTimeFormat::FormatStrpTimeError(const string &input, idx_t position) {
 	if (position == DConstants::INVALID_INDEX) {
 		return string();
@@ -1135,6 +1168,9 @@ string StrpTimeFormat::FormatStrpTimeError(const string &input, idx_t position) 
 }
 
 date_t StrpTimeFormat::ParseResult::ToDate() {
+	if (is_special) {
+		return special;
+	}
 	return Date::FromDate(data[0], data[1], data[2]);
 }
 
@@ -1143,6 +1179,15 @@ bool StrpTimeFormat::ParseResult::TryToDate(date_t &result) {
 }
 
 timestamp_t StrpTimeFormat::ParseResult::ToTimestamp() {
+	if (is_special) {
+		if (special == date_t::infinity()) {
+			return timestamp_t::infinity();
+		} else if (special == date_t::ninfinity()) {
+			return timestamp_t::ninfinity();
+		}
+		return Timestamp::FromDatetime(special, dtime_t(0));
+	}
+
 	date_t date = Date::FromDate(data[0], data[1], data[2]);
 	const auto hour_offset = data[7] / Interval::MINS_PER_HOUR;
 	const auto mins_offset = data[7] % Interval::MINS_PER_HOUR;

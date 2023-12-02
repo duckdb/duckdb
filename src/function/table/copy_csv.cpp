@@ -17,7 +17,7 @@
 
 namespace duckdb {
 
-void AreOptionsEqual(char &str_1, char &str_2, const string &name_str_1, const string &name_str_2) {
+void AreOptionsEqual(char str_1, char str_2, const string &name_str_1, const string &name_str_2) {
 	if (str_1 == '\0' || str_2 == '\0') {
 		return;
 	}
@@ -26,7 +26,7 @@ void AreOptionsEqual(char &str_1, char &str_2, const string &name_str_1, const s
 	}
 }
 
-void SubstringDetection(char &str_1, string &str_2, const string &name_str_1, const string &name_str_2) {
+void SubstringDetection(char str_1, string &str_2, const string &name_str_1, const string &name_str_2) {
 	if (str_1 == '\0' || str_2.empty()) {
 		return;
 	}
@@ -50,56 +50,50 @@ void BaseCSVData::Finalize() {
 		options.dialect_options.state_machine_options.escape = options.dialect_options.state_machine_options.quote;
 	}
 	// escape and delimiter must not be substrings of each other
-	if (options.has_delimiter && options.has_escape) {
-		AreOptionsEqual(options.dialect_options.state_machine_options.delimiter,
-		                options.dialect_options.state_machine_options.escape, "DELIMITER", "ESCAPE");
-	}
+	AreOptionsEqual(options.dialect_options.state_machine_options.delimiter.GetValue(),
+	                options.dialect_options.state_machine_options.escape.GetValue(), "DELIMITER", "ESCAPE");
+
 	// delimiter and quote must not be substrings of each other
-	if (options.has_quote && options.has_delimiter) {
-		AreOptionsEqual(options.dialect_options.state_machine_options.quote,
-		                options.dialect_options.state_machine_options.delimiter, "DELIMITER", "QUOTE");
-	}
+	AreOptionsEqual(options.dialect_options.state_machine_options.quote.GetValue(),
+	                options.dialect_options.state_machine_options.delimiter.GetValue(), "DELIMITER", "QUOTE");
+
 	// escape and quote must not be substrings of each other (but can be the same)
-	if (options.dialect_options.state_machine_options.quote != options.dialect_options.state_machine_options.escape &&
-	    options.has_quote && options.has_escape) {
-		AreOptionsEqual(options.dialect_options.state_machine_options.quote,
-		                options.dialect_options.state_machine_options.escape, "QUOTE", "ESCAPE");
+	if (options.dialect_options.state_machine_options.quote != options.dialect_options.state_machine_options.escape) {
+		AreOptionsEqual(options.dialect_options.state_machine_options.quote.GetValue(),
+		                options.dialect_options.state_machine_options.escape.GetValue(), "QUOTE", "ESCAPE");
 	}
 	if (!options.null_str.empty()) {
 		// null string and delimiter must not be substrings of each other
-		if (options.has_delimiter) {
-			SubstringDetection(options.dialect_options.state_machine_options.delimiter, options.null_str, "DELIMITER",
-			                   "NULL");
-		}
+		SubstringDetection(options.dialect_options.state_machine_options.delimiter.GetValue(), options.null_str,
+		                   "DELIMITER", "NULL");
+
 		// quote/escape and nullstr must not be substrings of each other
-		if (options.has_quote) {
-			SubstringDetection(options.dialect_options.state_machine_options.quote, options.null_str, "QUOTE", "NULL");
-		}
-		if (options.has_escape) {
-			SubstringDetection(options.dialect_options.state_machine_options.escape, options.null_str, "ESCAPE",
-			                   "NULL");
-		}
+		SubstringDetection(options.dialect_options.state_machine_options.quote.GetValue(), options.null_str, "QUOTE",
+		                   "NULL");
+
+		SubstringDetection(options.dialect_options.state_machine_options.escape.GetValue(), options.null_str, "ESCAPE",
+		                   "NULL");
 	}
 
 	if (!options.prefix.empty() || !options.suffix.empty()) {
 		if (options.prefix.empty() || options.suffix.empty()) {
 			throw BinderException("COPY ... (FORMAT CSV) must have both PREFIX and SUFFIX, or none at all");
 		}
-		if (options.dialect_options.header) {
+		if (options.dialect_options.header.GetValue()) {
 			throw BinderException("COPY ... (FORMAT CSV)'s HEADER cannot be combined with PREFIX/SUFFIX");
 		}
 	}
 }
 
-static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &info, vector<string> &names,
-                                             vector<LogicalType> &sql_types) {
+static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, const CopyInfo &info, const vector<string> &names,
+                                             const vector<LogicalType> &sql_types) {
 	auto bind_data = make_uniq<WriteCSVData>(info.file_path, sql_types, names);
 
 	// check all the options in the copy info
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
-		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(std::move(set)));
+		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(set));
 	}
 	// verify the parsed options
 	if (bind_data->options.force_quote.empty()) {
@@ -112,8 +106,8 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 	memset(bind_data->requires_quotes.get(), 0, sizeof(bool) * 256);
 	bind_data->requires_quotes['\n'] = true;
 	bind_data->requires_quotes['\r'] = true;
-	bind_data->requires_quotes[bind_data->options.dialect_options.state_machine_options.delimiter] = true;
-	bind_data->requires_quotes[bind_data->options.dialect_options.state_machine_options.quote] = true;
+	bind_data->requires_quotes[bind_data->options.dialect_options.state_machine_options.delimiter.GetValue()] = true;
+	bind_data->requires_quotes[bind_data->options.dialect_options.state_machine_options.quote.GetValue()] = true;
 
 	if (!bind_data->options.write_newline.empty()) {
 		bind_data->newline = bind_data->options.write_newline;
@@ -159,15 +153,11 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	bind_data->FinalizeRead(context);
 
 	if (options.auto_detect) {
-		// We must run the sniffer.
+		// We must run the sniffer, but this is a copy csv, hence names and types have already been previsouly defined.
 		auto file_handle = BaseCSVReader::OpenCSV(context, options);
 		auto buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), options);
-		CSVSniffer sniffer(options, buffer_manager, bind_data->state_machine_cache);
-		auto sniffer_result = sniffer.SniffCSV();
-		bind_data->csv_types = sniffer_result.return_types;
-		bind_data->csv_names = sniffer_result.names;
-		bind_data->return_types = sniffer_result.return_types;
-		bind_data->return_names = sniffer_result.names;
+		CSVSniffer sniffer(options, buffer_manager, bind_data->state_machine_cache, {&expected_types, &expected_names});
+		sniffer.SniffCSV();
 	}
 	return std::move(bind_data);
 }
@@ -175,7 +165,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 //===--------------------------------------------------------------------===//
 // Helper writing functions
 //===--------------------------------------------------------------------===//
-static string AddEscapes(char &to_be_escaped, const char &escape, const string &val) {
+static string AddEscapes(char to_be_escaped, const char escape, const string &val) {
 	idx_t i = 0;
 	string new_val = "";
 	idx_t found = val.find(to_be_escaped);
@@ -228,8 +218,8 @@ static void WriteQuotedString(WriteStream &writer, WriteCSVData &csv_data, const
 		// simple CSV
 		// do a single loop to check for a quote or escape value
 		for (idx_t i = 0; i < len; i++) {
-			if (str[i] == options.dialect_options.state_machine_options.quote ||
-			    str[i] == options.dialect_options.state_machine_options.escape) {
+			if (str[i] == options.dialect_options.state_machine_options.quote.GetValue() ||
+			    str[i] == options.dialect_options.state_machine_options.escape.GetValue()) {
 				requires_escape = true;
 				break;
 			}
@@ -237,25 +227,25 @@ static void WriteQuotedString(WriteStream &writer, WriteCSVData &csv_data, const
 
 		if (!requires_escape) {
 			// fast path: no need to escape anything
-			WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.quote);
+			WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.quote.GetValue());
 			writer.WriteData(const_data_ptr_cast(str), len);
-			WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.quote);
+			WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.quote.GetValue());
 			return;
 		}
 
 		// slow path: need to add escapes
 		string new_val(str, len);
-		new_val = AddEscapes(options.dialect_options.state_machine_options.escape,
-		                     options.dialect_options.state_machine_options.escape, new_val);
+		new_val = AddEscapes(options.dialect_options.state_machine_options.escape.GetValue(),
+		                     options.dialect_options.state_machine_options.escape.GetValue(), new_val);
 		if (options.dialect_options.state_machine_options.escape !=
 		    options.dialect_options.state_machine_options.quote) {
 			// need to escape quotes separately
-			new_val = AddEscapes(options.dialect_options.state_machine_options.quote,
-			                     options.dialect_options.state_machine_options.escape, new_val);
+			new_val = AddEscapes(options.dialect_options.state_machine_options.quote.GetValue(),
+			                     options.dialect_options.state_machine_options.escape.GetValue(), new_val);
 		}
-		WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.quote);
+		WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.quote.GetValue());
 		writer.WriteData(const_data_ptr_cast(new_val.c_str()), new_val.size());
-		WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.quote);
+		WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.quote.GetValue());
 	} else {
 		writer.WriteData(const_data_ptr_cast(str), len);
 	}
@@ -333,12 +323,12 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 		global_data->WriteData(options.prefix.c_str(), options.prefix.size());
 	}
 
-	if (!(options.has_header && !options.dialect_options.header)) {
+	if (!(options.dialect_options.header.IsSetByUser() && !options.dialect_options.header.GetValue())) {
 		MemoryStream stream;
 		// write the header line to the file
 		for (idx_t i = 0; i < csv_data.options.name_list.size(); i++) {
 			if (i != 0) {
-				WriteQuoteOrEscape(stream, options.dialect_options.state_machine_options.delimiter);
+				WriteQuoteOrEscape(stream, options.dialect_options.state_machine_options.delimiter.GetValue());
 			}
 			WriteQuotedString(stream, csv_data, csv_data.options.name_list[i].c_str(),
 			                  csv_data.options.name_list[i].size(), false);
@@ -363,12 +353,12 @@ static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_dat
 		if (csv_data.sql_types[col_idx].id() == LogicalTypeId::VARCHAR) {
 			// VARCHAR, just reinterpret (cannot reference, because LogicalTypeId::VARCHAR is used by the JSON type too)
 			cast_chunk.data[col_idx].Reinterpret(input.data[col_idx]);
-		} else if (options.dialect_options.has_format[LogicalTypeId::DATE] &&
+		} else if (!csv_data.options.write_date_format[LogicalTypeId::DATE].Empty() &&
 		           csv_data.sql_types[col_idx].id() == LogicalTypeId::DATE) {
 			// use the date format to cast the chunk
 			csv_data.options.write_date_format[LogicalTypeId::DATE].ConvertDateVector(
 			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
-		} else if (options.dialect_options.has_format[LogicalTypeId::TIMESTAMP] &&
+		} else if (!csv_data.options.write_date_format[LogicalTypeId::TIMESTAMP].Empty() &&
 		           (csv_data.sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP ||
 		            csv_data.sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP_TZ)) {
 			// use the timestamp format to cast the chunk
@@ -391,7 +381,7 @@ static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_dat
 		// write values
 		for (idx_t col_idx = 0; col_idx < cast_chunk.ColumnCount(); col_idx++) {
 			if (col_idx != 0) {
-				WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.delimiter);
+				WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.delimiter.GetValue());
 			}
 			if (FlatVector::IsNull(cast_chunk.data[col_idx], row_idx)) {
 				// write null value

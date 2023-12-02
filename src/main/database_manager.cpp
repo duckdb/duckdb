@@ -1,9 +1,13 @@
 #include "duckdb/main/database_manager.hpp"
+
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/database_path_and_type.hpp"
+#include "duckdb/main/extension_helper.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -30,16 +34,29 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 	return reinterpret_cast<AttachedDatabase *>(databases->GetEntry(context, name).get());
 }
 
-void DatabaseManager::AddDatabase(ClientContext &context, unique_ptr<AttachedDatabase> db_instance) {
-	auto name = db_instance->GetName();
-	db_instance->oid = ModifyCatalog();
+optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, const AttachInfo &info,
+                                                               const string &db_type, AccessMode access_mode) {
+	// now create the attached database
+	auto &db = DatabaseInstance::GetDatabase(context);
+	auto attached_db = db.CreateAttachedDatabase(info, db_type, access_mode);
+
+	if (db_type.empty()) {
+		InsertDatabasePath(context, info.path, attached_db->name);
+	}
+
+	const auto name = attached_db->GetName();
+	attached_db->oid = ModifyCatalog();
 	DependencyList dependencies;
 	if (default_database.empty()) {
 		default_database = name;
 	}
-	if (!databases->CreateEntry(context, name, std::move(db_instance), dependencies)) {
+
+	// and add it to the databases catalog set
+	if (!databases->CreateEntry(context, name, std::move(attached_db), dependencies)) {
 		throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
 	}
+
+	return GetDatabase(context, name);
 }
 
 void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
@@ -48,6 +65,7 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 		                      "database using `USE` to allow detaching this database",
 		                      name);
 	}
+
 	if (!databases->DropEntry(context, name, false, true)) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
@@ -56,8 +74,8 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 }
 
 optional_ptr<AttachedDatabase> DatabaseManager::GetDatabaseFromPath(ClientContext &context, const string &path) {
-	auto databases = GetDatabases(context);
-	for (auto &db_ref : databases) {
+	auto database_list = GetDatabases(context);
+	for (auto &db_ref : database_list) {
 		auto &db = db_ref.get();
 		if (db.IsSystem()) {
 			continue;
@@ -72,6 +90,78 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabaseFromPath(ClientContex
 		}
 	}
 	return nullptr;
+}
+
+void DatabaseManager::CheckPathConflict(ClientContext &context, const string &path) {
+	// ensure that we did not already attach a database with the same path
+	if (db_paths.find(path) != db_paths.end()) {
+		// check that the database is actually still attached
+		auto entry = GetDatabaseFromPath(context, path);
+		if (entry) {
+			throw BinderException("Unique file handle conflict: Database \"%s\" is already attached with path \"%s\", ",
+			                      entry->name, path);
+		}
+	}
+}
+
+void DatabaseManager::InsertDatabasePath(ClientContext &context, const string &path, const string &name) {
+	if (path.empty() || path == IN_MEMORY_PATH) {
+		return;
+	}
+
+	lock_guard<mutex> path_lock(db_paths_lock);
+	CheckPathConflict(context, path);
+	db_paths.insert(path);
+}
+
+void DatabaseManager::EraseDatabasePath(const string &path) {
+	if (path.empty() || path == IN_MEMORY_PATH) {
+		return;
+	}
+	lock_guard<mutex> path_lock(db_paths_lock);
+	auto path_it = db_paths.find(path);
+	if (path_it != db_paths.end()) {
+		db_paths.erase(path_it);
+	}
+}
+
+void DatabaseManager::GetDatabaseType(ClientContext &context, string &db_type, AttachInfo &info, const DBConfig &config,
+                                      const string &unrecognized_option) {
+
+	// duckdb database file
+	if (StringUtil::CIEquals(db_type, "DUCKDB")) {
+		db_type = "";
+
+		// DUCKDB format does not allow unrecognized options
+		if (!unrecognized_option.empty()) {
+			throw BinderException("Unrecognized option for attach \"%s\"", unrecognized_option);
+		}
+		return;
+	}
+
+	// try to extract database type from path
+	if (db_type.empty()) {
+		lock_guard<mutex> path_lock(db_paths_lock);
+		CheckPathConflict(context, info.path);
+
+		DBPathAndType::CheckMagicBytes(info.path, db_type, config);
+	}
+
+	// if we are loading a database type from an extension - check if that extension is loaded
+	if (!db_type.empty()) {
+		if (!Catalog::TryAutoLoad(context, db_type)) {
+			// FIXME: Here it might be preferable to use an AutoLoadOrThrow kind of function
+			// so that either there will be success or a message to throw, and load will be
+			// attempted only once respecting the auto-loading options
+			ExtensionHelper::LoadExternalExtension(context, db_type);
+		}
+		return;
+	}
+
+	// DUCKDB format does not allow unrecognized options
+	if (!unrecognized_option.empty()) {
+		throw BinderException("Unrecognized option for attach \"%s\"", unrecognized_option);
+	}
 }
 
 const string &DatabaseManager::GetDefaultDatabase(ClientContext &context) {
@@ -109,6 +199,10 @@ vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext 
 	result.push_back(*system);
 	result.push_back(*context.client_data->temporary_objects);
 	return result;
+}
+
+void DatabaseManager::ResetDatabases() {
+	databases.reset();
 }
 
 Catalog &DatabaseManager::GetSystemCatalog() {

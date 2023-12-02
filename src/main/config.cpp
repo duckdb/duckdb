@@ -115,6 +115,8 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL_ALIAS("wal_autocheckpoint", CheckpointThresholdSetting),
                                                  DUCKDB_GLOBAL_ALIAS("worker_threads", ThreadsSetting),
                                                  DUCKDB_GLOBAL(FlushAllocatorSetting),
+                                                 DUCKDB_GLOBAL(DuckDBApiSetting),
+                                                 DUCKDB_GLOBAL(CustomUserAgentSetting),
                                                  FINAL_SETTING};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -169,6 +171,13 @@ void DBConfig::SetOptionByName(const string &name, const Value &value) {
 	auto option = DBConfig::GetOptionByName(name);
 	if (option) {
 		SetOption(*option, value);
+		return;
+	}
+
+	auto param = extension_parameters.find(name);
+	if (param != extension_parameters.end()) {
+		Value target_value = value.DefaultCastAs(param->second.type);
+		SetOption(name, std::move(target_value));
 	} else {
 		options.unrecognized_options[name] = value;
 	}
@@ -367,8 +376,17 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 		multiplier = 1000LL * 1000LL * 1000LL;
 	} else if (unit == "terabyte" || unit == "terabytes" || unit == "tb" || unit == "t") {
 		multiplier = 1000LL * 1000LL * 1000LL * 1000LL;
+	} else if (unit == "kib") {
+		multiplier = 1024LL;
+	} else if (unit == "mib") {
+		multiplier = 1024LL * 1024LL;
+	} else if (unit == "gib") {
+		multiplier = 1024LL * 1024LL * 1024LL;
+	} else if (unit == "tib") {
+		multiplier = 1024LL * 1024LL * 1024LL * 1024LL;
 	} else {
-		throw ParserException("Unknown unit for memory_limit: %s (expected: b, mb, gb or tb)", unit);
+		throw ParserException("Unknown unit for memory_limit: %s (expected: KB, MB, GB, TB for 1000^i units or KiB, "
+		                      "MiB, GiB, TiB for 1024^i unites)");
 	}
 	return (idx_t)multiplier * limit;
 }
@@ -409,6 +427,15 @@ OrderByNullType DBConfig::ResolveNullOrder(OrderType order_type, OrderByNullType
 	default:
 		throw InternalException("Unknown null order setting");
 	}
+}
+
+const std::string DBConfig::UserAgent() const {
+	auto user_agent = options.duckdb_api;
+
+	if (!options.custom_user_agent.empty()) {
+		user_agent += " " + options.custom_user_agent;
+	}
+	return user_agent;
 }
 
 } // namespace duckdb

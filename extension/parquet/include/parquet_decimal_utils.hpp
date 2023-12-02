@@ -16,7 +16,8 @@ namespace duckdb {
 class ParquetDecimalUtils {
 public:
 	template <class PHYSICAL_TYPE>
-	static PHYSICAL_TYPE ReadDecimalValue(const_data_ptr_t pointer, idx_t size) {
+	static PHYSICAL_TYPE ReadDecimalValue(const_data_ptr_t pointer, idx_t size,
+	                                      const duckdb_parquet::format::SchemaElement &schema_ele) {
 		D_ASSERT(size <= sizeof(PHYSICAL_TYPE));
 		PHYSICAL_TYPE res = 0;
 
@@ -39,5 +40,9 @@ public:
 	                                             const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define,
 	                                             idx_t max_repeat);
 };
+
+template <>
+double ParquetDecimalUtils::ReadDecimalValue(const_data_ptr_t pointer, idx_t size,
+                                             const duckdb_parquet::format::SchemaElement &schema_ele);
 
 } // namespace duckdb

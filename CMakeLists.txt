@@ -483,6 +483,7 @@ include_directories(third_party/fsst)
 include_directories(third_party/fmt/include)
 include_directories(third_party/hyperloglog)
 include_directories(third_party/fastpforlib)
+include_directories(third_party/skiplist)
 include_directories(third_party/fast_float)
 include_directories(third_party/re2)
 include_directories(third_party/miniz)
@@ -604,7 +605,10 @@ endfunction()
 
 function(add_extension_dependencies LIBRARY)
   foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
-    add_dependencies(${LIBRARY} ${EXT_NAME}_extension)
+    string(TOUPPER ${EXT_NAME} EXTENSION_NAME_UPPERCASE)
+    if (DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK)
+      add_dependencies(${LIBRARY} ${EXT_NAME}_extension)
+    endif()
   endforeach()
 endfunction()
 
@@ -661,7 +665,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   if(WASM_LOADABLE_EXTENSIONS)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sSIDE_MODULE=1 -DWASM_LOADABLE_EXTENSIONS")
   elseif (EXTENSION_STATIC_BUILD)
-    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
       if (APPLE)
         set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
         # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
@@ -694,6 +698,10 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX
           ".duckdb_extension")
 
+  if(EMSCRIPTEN)
+    set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX ".duckdb_extension.wasm")
+  endif()
+
   if(MSVC)
     set_target_properties(
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
@@ -701,6 +709,21 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
     set_target_properties(
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE
             "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
+  endif()
+
+  if(EMSCRIPTEN)
+    # Copy file.duckdb_extension.wasm to file.duckdb_extension.wasm.lib
+    add_custom_command(
+      TARGET ${TARGET_NAME}
+      POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${TARGET_NAME}> $<TARGET_FILE:${TARGET_NAME}>.lib
+      )
+    # Compile the library into the actual wasm file
+    add_custom_command(
+      TARGET ${TARGET_NAME}
+      POST_BUILD
+      COMMAND emcc $<TARGET_FILE:${TARGET_NAME}>.lib -o $<TARGET_FILE:${TARGET_NAME}> -sSIDE_MODULE=1 -O3
+      )
   endif()
 endfunction()
 

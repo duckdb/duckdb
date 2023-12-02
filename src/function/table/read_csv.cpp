@@ -47,21 +47,7 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 		single_threaded = true;
 	}
 
-	// Validate rejects_table options
-	if (!options.rejects_table_name.empty()) {
-		if (!options.ignore_errors) {
-			throw BinderException("REJECTS_TABLE option is only supported when IGNORE_ERRORS is set to true");
-		}
-		if (options.file_options.union_by_name) {
-			throw BinderException("REJECTS_TABLE option is not supported when UNION_BY_NAME is set to true");
-		}
-	}
-
 	if (!options.rejects_recovery_columns.empty()) {
-		if (options.rejects_table_name.empty()) {
-			throw BinderException(
-			    "REJECTS_RECOVERY_COLUMNS option is only supported when REJECTS_TABLE is set to a table name");
-		}
 		for (auto &recovery_col : options.rejects_recovery_columns) {
 			bool found = false;
 			for (idx_t col_idx = 0; col_idx < return_names.size(); col_idx++) {
@@ -77,12 +63,6 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 			}
 		}
 	}
-
-	if (options.rejects_limit != 0) {
-		if (options.rejects_table_name.empty()) {
-			throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
-		}
-	}
 }
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
@@ -93,7 +73,27 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "CSV");
 
 	options.FromNamedParameters(input.named_parameters, context, return_types, names);
-	bool explicitly_set_columns = options.explicitly_set_columns;
+
+	// Validate rejects_table options
+	if (!options.rejects_table_name.empty()) {
+		if (!options.ignore_errors) {
+			throw BinderException("REJECTS_TABLE option is only supported when IGNORE_ERRORS is set to true");
+		}
+		if (options.file_options.union_by_name) {
+			throw BinderException("REJECTS_TABLE option is not supported when UNION_BY_NAME is set to true");
+		}
+	}
+
+	if (options.rejects_limit != 0) {
+		if (options.rejects_table_name.empty()) {
+			throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
+		}
+	}
+
+	if (!options.rejects_recovery_columns.empty() && options.rejects_table_name.empty()) {
+		throw BinderException(
+		    "REJECTS_RECOVERY_COLUMNS option is only supported when REJECTS_TABLE is set to a table name");
+	}
 
 	options.file_options.AutoDetectHivePartitioning(result->files, context);
 
@@ -107,27 +107,15 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		// Initialize Buffer Manager and Sniffer
 		auto file_handle = BaseCSVReader::OpenCSV(context, options);
 		result->buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), options);
-		CSVSniffer sniffer(options, result->buffer_manager, result->state_machine_cache, explicitly_set_columns);
+		CSVSniffer sniffer(options, result->buffer_manager, result->state_machine_cache, {&return_types, &names});
 		auto sniffer_result = sniffer.SniffCSV();
 		if (names.empty()) {
 			names = sniffer_result.names;
 			return_types = sniffer_result.return_types;
-		} else {
-			if (explicitly_set_columns) {
-				// The user has influenced the names, can't assume they are valid anymore
-				if (return_types.size() != names.size()) {
-					throw BinderException("The amount of names specified (%d) and the observed amount of types (%d) in "
-					                      "the file don't match",
-					                      names.size(), return_types.size());
-				}
-			} else {
-				D_ASSERT(return_types.size() == names.size());
-			}
 		}
-
-	} else {
-		D_ASSERT(return_types.size() == names.size());
 	}
+	D_ASSERT(return_types.size() == names.size());
+
 	result->csv_types = return_types;
 	result->csv_names = names;
 
@@ -157,12 +145,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	return std::move(result);
 }
 
-static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, TableFunctionBindInput &input,
-                                                vector<LogicalType> &return_types, vector<string> &names) {
-	input.named_parameters["auto_detect"] = Value::BOOLEAN(true);
-	return ReadCSVBind(context, input, return_types, names);
-}
-
 //===--------------------------------------------------------------------===//
 // Parallel CSV Reader CSV Global State
 //===--------------------------------------------------------------------===//
@@ -174,11 +156,12 @@ public:
 	                       bool force_parallelism_p, vector<column_t> column_ids_p)
 	    : buffer_manager(std::move(buffer_manager_p)), system_threads(system_threads_p),
 	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)),
-	      line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
+	      line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end, options.sniffer_user_mismatch_error),
+	      sniffer_mismatch_error(options.sniffer_user_mismatch_error) {
 		current_file_path = files_path_p[0];
 		CSVFileHandle *file_handle_ptr;
 
-		if (!buffer_manager || (options.skip_rows_set && options.dialect_options.skip_rows > 0) ||
+		if (!buffer_manager || options.dialect_options.skip_rows.GetValue() > 0 ||
 		    buffer_manager->file_handle->GetFilePath() != current_file_path) {
 			// If our buffers are too small, and we skip too many rows there is a chance things will go over-buffer
 			// for now don't reuse the buffer manager
@@ -206,15 +189,15 @@ public:
 		batch_to_tuple_end.resize(file_count);
 
 		// Initialize the lines read
-		line_info.lines_read[0][0] = options.dialect_options.skip_rows;
-		if (options.has_header && options.dialect_options.header) {
+		line_info.lines_read[0][0] = options.dialect_options.skip_rows.GetValue();
+		if (options.dialect_options.header.GetValue()) {
 			line_info.lines_read[0][0]++;
 		}
 		first_position = options.dialect_options.true_start;
 		next_byte = options.dialect_options.true_start;
 	}
 	explicit ParallelCSVGlobalState(idx_t system_threads_p)
-	    : system_threads(system_threads_p), line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
+	    : system_threads(system_threads_p), line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end, "") {
 		running_threads = MaxThreads();
 	}
 
@@ -302,6 +285,8 @@ private:
 	idx_t cur_buffer_idx = 0;
 	//! Only used if we don't run auto_detection first
 	unique_ptr<CSVFileHandle> file_handle;
+
+	string sniffer_mismatch_error;
 };
 
 idx_t ParallelCSVGlobalState::MaxThreads() const {
@@ -354,8 +339,8 @@ void ParallelCSVGlobalState::Verify() {
 					throw InvalidInputException(
 					    "CSV File not supported for multithreading. This can be a problematic line in your CSV File or "
 					    "that this CSV can't be read in Parallel. Please, inspect if the line %llu is correct. If so, "
-					    "please run single-threaded CSV Reading by setting parallel=false in the read_csv call.",
-					    problematic_line);
+					    "please run single-threaded CSV Reading by setting parallel=false in the read_csv call. %s",
+					    problematic_line, sniffer_mismatch_error);
 				}
 			}
 		}
@@ -391,8 +376,8 @@ void LineInfo::Verify(idx_t file_idx, idx_t batch_idx, idx_t cur_first_pos) {
 		throw InvalidInputException(
 		    "CSV File not supported for multithreading. This can be a problematic line in your CSV File or "
 		    "that this CSV can't be read in Parallel. Please, inspect if the line %llu is correct. If so, "
-		    "please run single-threaded CSV Reading by setting parallel=false in the read_csv call.",
-		    problematic_line);
+		    "please run single-threaded CSV Reading by setting parallel=false in the read_csv call.\n %s",
+		    problematic_line, sniffer_mismatch_error);
 	}
 }
 bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bind_data,
@@ -418,7 +403,8 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 			first_position = 0;
 			local_batch_index = 0;
 
-			line_info.lines_read[file_index++][local_batch_index] = (bind_data.options.has_header ? 1 : 0);
+			line_info.lines_read[file_index++][local_batch_index] =
+			    bind_data.options.dialect_options.header.GetValue() ? 1 : 0;
 
 			current_buffer = buffer_manager->GetBuffer(cur_buffer_idx);
 			next_buffer = buffer_manager->GetBuffer(cur_buffer_idx + 1);
@@ -878,7 +864,7 @@ static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *
 	return data.csv_reader->buffer->batch_index;
 }
 
-static void ReadCSVAddNamedParameters(TableFunction &table_function) {
+void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["sep"] = LogicalType::VARCHAR;
 	table_function.named_parameters["delim"] = LogicalType::VARCHAR;
 	table_function.named_parameters["quote"] = LogicalType::VARCHAR;
@@ -981,7 +967,7 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 TableFunction ReadCSVTableFunction::GetAutoFunction() {
 	auto read_csv_auto = ReadCSVTableFunction::GetFunction();
 	read_csv_auto.name = "read_csv_auto";
-	read_csv_auto.bind = ReadCSVAutoBind;
+	read_csv_auto.bind = ReadCSVBind;
 	return read_csv_auto;
 }
 
