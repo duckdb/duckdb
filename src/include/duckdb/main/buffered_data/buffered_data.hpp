@@ -46,9 +46,10 @@ public:
 
 public:
 	virtual void Append(unique_ptr<DataChunk> chunk, optional_idx batch = optional_idx()) = 0;
-	virtual unique_ptr<DataChunk> Fetch(BufferedQueryResult &result) = 0;
 	virtual void AddToBacklog(BlockedSink blocked_sink) = 0;
 	virtual bool BufferIsFull() const = 0;
+	virtual void ReplenishBuffer(BufferedQueryResult &result) = 0;
+	virtual unique_ptr<DataChunk> Scan() = 0;
 
 protected:
 	shared_ptr<ClientContext> context;

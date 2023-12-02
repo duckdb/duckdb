@@ -58,72 +58,12 @@ void SimpleBufferedData::ReplenishBuffer(BufferedQueryResult &result) {
 	}
 }
 
-unique_ptr<DataChunk> SimpleBufferedData::Fetch(BufferedQueryResult &result) {
-	ReplenishBuffer(result);
-
-	unique_lock<mutex> lock(glock);
-	if (!context || buffered_chunks.empty()) {
+unique_ptr<DataChunk> SimpleBufferedData::Scan() {
+	lock_guard<mutex> lock(glock);
+	if (buffered_chunks.empty()) {
 		context.reset();
 		return nullptr;
 	}
-
-	unique_ptr<DataChunk> chunk;
-	idx_t remaining = STANDARD_VECTOR_SIZE;
-	while (remaining > 0) {
-		if (!scan_state.chunk) {
-			scan_state.chunk = Scan();
-			if (!scan_state.chunk || scan_state.chunk->size() == 0) {
-				// Nothing left to scan
-				scan_state.chunk.reset();
-				break;
-			}
-			scan_state.offset = 0;
-		}
-		auto chunk_size = scan_state.chunk->size();
-		D_ASSERT(chunk_size > scan_state.offset);
-		// How many tuples are still left in our scanned chunk
-		auto left_in_chunk = chunk_size - scan_state.offset;
-		// How many we can append to the chunk we're currently creating
-		auto to_append = MinValue(left_in_chunk, remaining);
-
-		// First make sure we have a result chunk
-		if (!chunk) {
-			if (!scan_state.offset) {
-				// No tuples have been scanned from this yet, just take it
-				chunk = std::move(scan_state.chunk);
-				scan_state.chunk.reset();
-			} else {
-				chunk = make_uniq<DataChunk>();
-				chunk->Initialize(Allocator::DefaultAllocator(), scan_state.chunk->GetTypes(), STANDARD_VECTOR_SIZE);
-				chunk->SetCardinality(0);
-			}
-		}
-
-		if (scan_state.chunk) {
-			// We have not moved the chunk, need to scan from it
-			for (idx_t i = 0; i < chunk->ColumnCount(); i++) {
-				D_ASSERT(scan_state.chunk->data[i].GetVectorType() == VectorType::FLAT_VECTOR);
-				VectorOperations::CopyPartial(scan_state.chunk->data[i], chunk->data[i], scan_state.chunk->size(),
-				                              scan_state.offset, to_append, chunk->size());
-			}
-			chunk->SetCardinality(chunk->size() + to_append);
-		}
-
-		// Reset the scan state if necessary
-		scan_state.offset += to_append;
-		if (scan_state.offset >= chunk_size) {
-			scan_state.offset = 0;
-			scan_state.chunk.reset();
-		}
-		remaining -= to_append;
-	}
-	if (chunk) {
-		chunk->SetCardinality(STANDARD_VECTOR_SIZE - remaining);
-	}
-	return chunk;
-}
-
-unique_ptr<DataChunk> SimpleBufferedData::Scan() {
 	auto chunk = std::move(buffered_chunks.front());
 	buffered_chunks.pop();
 

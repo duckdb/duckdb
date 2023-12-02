@@ -18,13 +18,6 @@ namespace duckdb {
 
 class BufferedQueryResult;
 
-struct SimpleBufferedDataScanState {
-	//! The chunk we're currently scanning from
-	unique_ptr<DataChunk> chunk = nullptr;
-	//! The offset into the current chunk
-	idx_t offset = 0;
-};
-
 class SimpleBufferedData : public BufferedData {
 private:
 	//! (roughly) The max amount of tuples we'll keep buffered at a time
@@ -35,25 +28,21 @@ public:
 
 public:
 	void Append(unique_ptr<DataChunk> chunk, optional_idx batch = optional_idx()) override;
-	unique_ptr<DataChunk> Fetch(BufferedQueryResult &result) override;
 	void AddToBacklog(BlockedSink blocked_sink) override;
 	bool BufferIsFull() const override;
+	void ReplenishBuffer(BufferedQueryResult &result) override;
+	unique_ptr<DataChunk> Scan() override;
 
 private:
-	unique_ptr<DataChunk> Scan();
 	void UnblockSinks(idx_t &estimated_tuples);
-	void ReplenishBuffer(BufferedQueryResult &result);
 
 private:
-	shared_ptr<ClientContext> context;
 	//! Our handles to reschedule the blocked sink tasks
 	queue<BlockedSink> blocked_sinks;
 	//! The queue of chunks
 	queue<unique_ptr<DataChunk>> buffered_chunks;
 	//! The current capacity of the buffer (tuples)
 	atomic<idx_t> buffered_count;
-	//! Scan state
-	SimpleBufferedDataScanState scan_state;
 };
 
 } // namespace duckdb
