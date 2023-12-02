@@ -26,7 +26,12 @@ ColumnDefinition ColumnDefinition::Copy() const {
 }
 
 const ParsedExpression &ColumnDefinition::DefaultValue() const {
-	D_ASSERT(HasDefaultValue());
+	if (!HasDefaultValue()) {
+		if (Generated()) {
+			throw InternalException("Calling DefaultValue() on a generated column");
+		}
+		throw InternalException("DefaultValue() called on a column without a default value");
+	}
 	return *expression;
 }
 
