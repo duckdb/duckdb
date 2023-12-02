@@ -1,5 +1,5 @@
 # name: test/sql/optimizer/expression/test_date_subtract_filter.test
-# description: Test queries involving Common SubExpressions
+# description: Issue #9863 - query involving a subtraction between dates and a comparison
 # group: [expression]
 
 statement ok
