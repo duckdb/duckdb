@@ -41,6 +41,8 @@ private:
 public:
 	BufferedData(shared_ptr<ClientContext> context) : context(context) {
 	}
+	virtual ~BufferedData() {
+	}
 
 public:
 	virtual void Append(unique_ptr<DataChunk> chunk, optional_idx batch = optional_idx()) = 0;
