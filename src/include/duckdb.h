@@ -2471,6 +2471,15 @@ Fetch the internal arrow schema from the prepared statement.
 */
 DUCKDB_API duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared,
                                                      duckdb_arrow_schema *out_schema);
+
+/*!
+Fetch the internal arrow schema from the query result.
+
+* result: The result object to fetch the schema from.
+* out_schema: The output schema.
+*/
+DUCKDB_API duckdb_state duckdb_result_arrow_schema(duckdb_result result, duckdb_arrow_schema *out_schema);
+
 /*!
 Convert a data chunk into an arrow struct array.
 
@@ -2478,7 +2487,8 @@ Convert a data chunk into an arrow struct array.
 * chunk: The data chunk to convert.
 * out_array: The output array.
 */
-DUCKDB_API void duckdb_result_arrow_array(duckdb_result result, duckdb_data_chunk chunk, duckdb_arrow_array *out_array);
+DUCKDB_API duckdb_state duckdb_result_arrow_array(duckdb_result result, duckdb_data_chunk chunk,
+                                                  duckdb_arrow_array *out_array);
 
 /*!
 Fetch an internal arrow struct array from the arrow result.
