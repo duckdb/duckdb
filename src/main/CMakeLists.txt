@@ -4,6 +4,7 @@ endif()
 add_subdirectory(extension)
 add_subdirectory(relation)
 add_subdirectory(settings)
+add_subdirectory(buffered_data)
 add_subdirectory(chunk_scan_state)
 
 if(FORCE_QUERY_LOG)
@@ -23,7 +24,6 @@ add_library_unity(
   config.cpp
   connection.cpp
   buffered_query_result.cpp
-  buffered_data.cpp
   database.cpp
   database_path_and_type.cpp
   database_manager.cpp

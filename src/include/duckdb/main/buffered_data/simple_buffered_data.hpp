@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/buffered_data.hpp
+// duckdb/main/simple_buffered_data.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -42,7 +42,6 @@ public:
 
 public:
 	void Append(unique_ptr<DataChunk> chunk);
-
 	unique_ptr<DataChunk> Fetch(BufferedQueryResult &result);
 	void AddToBacklog(BlockedSink blocked_sink);
 	void ReplenishBuffer(BufferedQueryResult &result);

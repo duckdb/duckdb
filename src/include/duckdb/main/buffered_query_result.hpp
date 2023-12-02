@@ -12,7 +12,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/common/queue.hpp"
-#include "duckdb/main/buffered_data.hpp"
+#include "duckdb/main/buffered_data/simple_buffered_data.hpp"
 
 namespace duckdb {
 

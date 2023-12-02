@@ -1,4 +1,4 @@
-#include "duckdb/main/buffered_data.hpp"
+#include "duckdb/main/buffered_data/simple_buffered_data.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/buffered_query_result.hpp"
