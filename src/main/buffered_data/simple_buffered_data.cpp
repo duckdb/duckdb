@@ -6,16 +6,19 @@
 
 namespace duckdb {
 
-void BufferedData::AddToBacklog(BlockedSink blocked_sink) {
+SimpleBufferedData::SimpleBufferedData(shared_ptr<ClientContext> context) : BufferedData(std::move(context)) {
+}
+
+void SimpleBufferedData::AddToBacklog(BlockedSink blocked_sink) {
 	lock_guard<mutex> lock(glock);
 	blocked_sinks.push(blocked_sink);
 }
 
-bool BufferedData::BufferIsFull() const {
+bool SimpleBufferedData::BufferIsFull() const {
 	return buffered_count >= BUFFER_SIZE;
 }
 
-void BufferedData::UnblockSinks(idx_t &estimated_tuples) {
+void SimpleBufferedData::UnblockSinks(idx_t &estimated_tuples) {
 	if (buffered_count + estimated_tuples >= BUFFER_SIZE) {
 		return;
 	}
@@ -33,7 +36,7 @@ void BufferedData::UnblockSinks(idx_t &estimated_tuples) {
 	}
 }
 
-void BufferedData::ReplenishBuffer(BufferedQueryResult &result) {
+void SimpleBufferedData::ReplenishBuffer(BufferedQueryResult &result) {
 	if (!context) {
 		// Result has already been closed
 		return;
@@ -55,7 +58,7 @@ void BufferedData::ReplenishBuffer(BufferedQueryResult &result) {
 	}
 }
 
-unique_ptr<DataChunk> BufferedData::Fetch(BufferedQueryResult &result) {
+unique_ptr<DataChunk> SimpleBufferedData::Fetch(BufferedQueryResult &result) {
 	ReplenishBuffer(result);
 
 	unique_lock<mutex> lock(glock);
@@ -120,7 +123,7 @@ unique_ptr<DataChunk> BufferedData::Fetch(BufferedQueryResult &result) {
 	return chunk;
 }
 
-unique_ptr<DataChunk> BufferedData::Scan() {
+unique_ptr<DataChunk> SimpleBufferedData::Scan() {
 	auto chunk = std::move(buffered_chunks.front());
 	buffered_chunks.pop();
 
@@ -133,7 +136,8 @@ unique_ptr<DataChunk> BufferedData::Scan() {
 	return chunk;
 }
 
-void BufferedData::Append(unique_ptr<DataChunk> chunk) {
+void SimpleBufferedData::Append(unique_ptr<DataChunk> chunk, optional_idx batch) {
+	D_ASSERT(!batch.IsValid());
 	unique_lock<mutex> lock(glock);
 	buffered_count += chunk->size();
 	buffered_chunks.push(std::move(chunk));
