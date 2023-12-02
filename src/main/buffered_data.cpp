@@ -6,13 +6,31 @@
 
 namespace duckdb {
 
-void BufferedData::AddToBacklog(InterruptState state) {
+void BufferedData::AddToBacklog(BlockedSink blocked_sink) {
 	lock_guard<mutex> lock(glock);
-	blocked_sinks.push(state);
+	blocked_sinks.push(blocked_sink);
 }
 
 bool BufferedData::BufferIsFull() const {
 	return buffered_count >= BUFFER_SIZE;
+}
+
+void BufferedData::UnblockSinks(idx_t &estimated_tuples) {
+	if (buffered_count + estimated_tuples >= BUFFER_SIZE) {
+		return;
+	}
+	// Reschedule enough blocked sinks to populate the buffer
+	lock_guard<mutex> lock(glock);
+	while (!blocked_sinks.empty()) {
+		auto &blocked_sink = blocked_sinks.front();
+		if (buffered_count + estimated_tuples >= BUFFER_SIZE) {
+			// We have unblocked enough sinks already
+			break;
+		}
+		estimated_tuples += blocked_sink.chunk_size;
+		blocked_sink.state.Callback();
+		blocked_sinks.pop();
+	}
 }
 
 void BufferedData::ReplenishBuffer(BufferedQueryResult &result) {
@@ -20,25 +38,20 @@ void BufferedData::ReplenishBuffer(BufferedQueryResult &result) {
 		// Result has already been closed
 		return;
 	}
-	unique_lock<mutex> lock(glock);
 	if (BufferIsFull()) {
 		// The buffer isn't empty yet, just return
 		return;
 	}
-	// Reschedule all the blocked sinks
-	while (!blocked_sinks.empty()) {
-		auto &state = blocked_sinks.front();
-		state.Callback();
-		blocked_sinks.pop();
-	}
-	// We have to release the lock so the ResultCollector can fill the buffer
-	lock.unlock();
+	idx_t estimated_tuples = 0;
+	UnblockSinks(estimated_tuples);
 	// Let the executor run until the buffer is no longer empty
 	auto context_lock = context->LockContext();
 	while (!PendingQueryResult::IsFinished(context->ExecuteTaskInternal(*context_lock, result))) {
 		if (buffered_count >= BUFFER_SIZE) {
 			break;
 		}
+		// Check if we need to unblock more sinks to reach the buffer size
+		UnblockSinks(estimated_tuples);
 	}
 }
 

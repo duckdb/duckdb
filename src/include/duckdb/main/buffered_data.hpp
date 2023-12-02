@@ -24,6 +24,13 @@ struct BufferedDataScanState {
 	idx_t offset = 0;
 };
 
+struct BlockedSink {
+	//! The handle to reschedule the blocked sink
+	InterruptState state;
+	//! The amount of tuples this sink would add
+	idx_t chunk_size;
+};
+
 class BufferedData {
 private:
 	//! (roughly) The max amount of tuples we'll keep buffered at a time
@@ -37,17 +44,18 @@ public:
 	void Append(unique_ptr<DataChunk> chunk);
 
 	unique_ptr<DataChunk> Fetch(BufferedQueryResult &result);
-	void AddToBacklog(InterruptState state);
+	void AddToBacklog(BlockedSink blocked_sink);
 	void ReplenishBuffer(BufferedQueryResult &result);
 	bool BufferIsFull() const;
 
 private:
 	unique_ptr<DataChunk> Scan();
+	void UnblockSinks(idx_t &estimated_tuples);
 
 private:
 	shared_ptr<ClientContext> context;
 	//! Our handles to reschedule the blocked sink tasks
-	queue<InterruptState> blocked_sinks;
+	queue<BlockedSink> blocked_sinks;
 	//! Protect against populate/fetch race condition
 	mutex glock;
 	//! The queue of chunks
