@@ -302,6 +302,36 @@ TEST_CASE("Logical types with aliases", "[capi]") {
 	}
 }
 
+template<class T>
+static void RoundTrip(CAPITester &tester, T expected, duckdb_type type) {
+	auto val = duckdb_create_value(type, &expected);
+
+	duckdb_prepared_statement prepped;
+	REQUIRE(duckdb_prepare(tester.connection, "SELECT ?", &prepped) == DuckDBSuccess);
+	REQUIRE(duckdb_bind_value(prepped, 1, val) == DuckDBSuccess);
+
+	auto res = tester.Execute(prepped);
+
+	REQUIRE(res->ColumnCount() == 1);
+	REQUIRE(res->ColumnName(0) == "$1");
+	REQUIRE(res->ColumnType(0) == type);
+
+	auto chunk = res->FetchChunk(0);
+	auto data = (T *)chunk->GetData(0);
+	REQUIRE(data[0] == expected);
+
+	duckdb_destroy_prepare(&prepped);
+	duckdb_destroy_value(&val);
+}
+
+TEST_CASE("duckdb_create_value", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	RoundTrip(tester, 1, DUCKDB_TYPE_UTINYINT);
+	RoundTrip<bool>(tester, true, DUCKDB_TYPE_BOOLEAN);
+}
+
 TEST_CASE("Statement types", "[capi]") {
 	CAPITester tester;
 	REQUIRE(tester.OpenDatabase(nullptr));

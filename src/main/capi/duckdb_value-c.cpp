@@ -42,6 +42,12 @@ duckdb_value duckdb_create_value(duckdb_type type, void *data) {
 		return duckdb_create_int64(*reinterpret_cast<int64_t *>(data));
 	case DUCKDB_TYPE_INTEGER:
 		return WrapValue(new duckdb::Value(*reinterpret_cast<int32_t *>(data)));
+	case DUCKDB_TYPE_BOOLEAN:
+		return WrapValue(new duckdb::Value(duckdb::Value::BOOLEAN(*reinterpret_cast<bool*>(data))));
+	case DUCKDB_TYPE_UTINYINT:
+		return WrapValue(new duckdb::Value(duckdb::Value::UTINYINT(*reinterpret_cast<uint8_t *>(data))));
+	case DUCKDB_TYPE_UINTEGER:
+		return WrapValue(new duckdb::Value(duckdb::Value::UINTEGER(*reinterpret_cast<uint32_t*>(data))));
 	default:
 		return nullptr;
 	}
