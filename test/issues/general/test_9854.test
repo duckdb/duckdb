@@ -1,0 +1,33 @@
+# name: test/issues/general/test_9854.test
+# description: Issue 9854: Collation Issue: ORDER BY CONCAT
+# group: [general]
+
+statement ok
+create table tbl (a varchar);
+
+statement ok
+insert into tbl values ('ö'), ('o'), ('p');
+
+query I
+select a from tbl order by a collate noaccent;
+----
+ö
+o
+p
+
+query I
+select a from tbl order by concat(a, a) collate noaccent;
+----
+ö
+o
+p
+
+query I
+select a from tbl order by concat(a collate noaccent, a);
+----
+ö
+o
+p
+
+statement error
+select a from tbl order by concat(a collate noaccent, a collate nocase);

@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
@@ -311,6 +312,12 @@ unique_ptr<BoundFunctionExpression> FunctionBinder::BindScalarFunction(ScalarFun
 
 	// now create the function
 	auto return_type = bound_function.return_type;
+	if (return_type.id() == LogicalType::VARCHAR && children.size() > 0) {
+		return_type = children[0]->return_type;
+		for (size_t i = 1; i < children.size(); ++i) {
+			return_type = BoundComparisonExpression::BindComparison(return_type, children[i]->return_type);
+		}
+	}
 	return make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(bound_function), std::move(children),
 	                                          std::move(bind_info), is_operator);
 }
