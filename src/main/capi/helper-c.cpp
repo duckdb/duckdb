@@ -249,6 +249,13 @@ duckdb_statement_type StatementTypeToC(duckdb::StatementType statement_type) {
 	}
 }
 
+duckdb_value WrapValue(duckdb::Value *value) {
+	return reinterpret_cast<duckdb_value>(value);
+}
+duckdb::Value &UnwrapValue(duckdb_value value) {
+	return *reinterpret_cast<duckdb::Value*>(value);
+}
+
 } // namespace duckdb
 
 void *duckdb_malloc(size_t size) {

@@ -21,12 +21,8 @@ void duckdb_destroy_value(duckdb_value *value) {
 	}
 }
 
-static duckdb_value WrapValue(duckdb::Value *value) {
-	return reinterpret_cast<duckdb_value>(value);
-}
-
 duckdb_value duckdb_create_varchar_length(const char *text, idx_t length) {
-	return reinterpret_cast<duckdb_value>(new duckdb::Value(std::string(text, length)));
+	return WrapValue(new duckdb::Value(std::string(text, length)));
 }
 
 duckdb_value duckdb_create_varchar(const char *text) {
