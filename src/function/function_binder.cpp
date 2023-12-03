@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
@@ -311,6 +312,21 @@ unique_ptr<BoundFunctionExpression> FunctionBinder::BindScalarFunction(ScalarFun
 
 	// now create the function
 	auto return_type = bound_function.return_type;
+
+	// If return type is VARCHAR and has collation, assign the collation to
+	// return_type.
+	if (return_type.id() == LogicalType::VARCHAR && !children.empty()) {
+		auto collation_type = children[0]->return_type;
+		for (size_t i = 1; i < children.size(); ++i) {
+			collation_type = BoundComparisonExpression::BindComparison(collation_type, children[i]->return_type);
+		}
+		if (collation_type.id() == LogicalType::VARCHAR) {
+			auto collation_str = StringType::GetCollation(collation_type);
+			if (!collation_str.empty()) {
+				return_type = LogicalType::VARCHAR_COLLATION(collation_str);
+			}
+		}
+	}
 	return make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(bound_function), std::move(children),
 	                                          std::move(bind_info), is_operator);
 }
