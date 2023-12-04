@@ -23,7 +23,12 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 	row_groups->InitializeEmpty();
 
 	table.info->indexes.Scan([&](Index &index) {
+		if(index.index_type != "ART") {
+			// TODO: support other index types
+			return false;
+		}
 		D_ASSERT(index.index_type == "ART");
+
 		auto &art = index.Cast<ART>();
 		if (art.index_constraint_type != IndexConstraintType::NONE) {
 			// unique index: create a local ART index that maintains the same unique constraint
