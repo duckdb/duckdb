@@ -86,6 +86,7 @@ public:
 	                  DataChunk &updates);
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
+	void VacuumDeletes(vector<SegmentNode<RowGroup>> &segments);
 
 	void CommitDropColumn(idx_t index);
 	void CommitDropTable();

@@ -599,17 +599,114 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_i
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
+void RowGroupCollection::VacuumDeletes(vector<SegmentNode<RowGroup>> &segments) {
 	bool can_vacuum_deletes = info->indexes.Empty();
-	idx_t start = this->row_start;
-	auto segments = row_groups->MoveSegments();
-	auto l = row_groups->Lock();
+	if (!can_vacuum_deletes) {
+		return;
+	}
+	// obtain the set of committed row counts for each row group
+	vector<idx_t> row_group_counts;
+	row_group_counts.reserve(segments.size());
 	for (auto &entry : segments) {
 		auto &row_group = *entry.node;
-		if (can_vacuum_deletes && row_group.AllDeleted()) {
+		auto row_group_count = row_group.GetCommittedRowCount();
+		if (row_group_count == 0) {
+			// empty row group - we can drop it entirely
 			row_group.CommitDrop();
+			entry.node.reset();
+		}
+		row_group_counts.push_back(row_group_count);
+	}
+	idx_t start = this->row_start;
+	for(idx_t r_idx = 0; r_idx < segments.size(); r_idx++) {
+		if (row_group_counts[r_idx] == 0) {
+			// already dropped
 			continue;
 		}
+		// check if we can merge adjacent row groups
+		idx_t merge_rows = row_group_counts[r_idx];
+		idx_t next_idx;
+		idx_t merge_count = 1;
+		for (next_idx = r_idx + 1; next_idx < segments.size(); next_idx++) {
+			if (row_group_counts[next_idx] == 0) {
+				continue;
+			}
+			if (merge_rows + row_group_counts[next_idx] > Storage::ROW_GROUP_SIZE) {
+				// does not fit
+				break;
+			}
+			// we can merge this row group together with the other row group
+			merge_rows += row_group_counts[next_idx];
+			merge_count++;
+		}
+		if (merge_count > 1) {
+			// create a new row group
+			auto new_row_group = make_uniq<RowGroup>(*this, start, merge_rows);
+			new_row_group->InitializeEmpty(types);
+
+			DataChunk scan_chunk;
+			scan_chunk.Initialize(Allocator::DefaultAllocator(), types);
+
+			vector<column_t> column_ids;
+			for(idx_t c = 0; c < types.size(); c++) {
+				column_ids.push_back(c);
+			}
+
+			// fill the new row group with the merged rows
+			TableAppendState append_state;
+			new_row_group->InitializeAppend(append_state.row_group_append_state);
+
+			TableScanState scan_state;
+			scan_state.Initialize(column_ids);
+			scan_state.table_state.Initialize(types);
+			scan_state.table_state.max_row = idx_t(-1);
+			idx_t append_count = 0;
+			for (idx_t c_idx = r_idx; c_idx < next_idx; c_idx++) {
+				auto &current_row_group = *segments[c_idx].node;
+
+				current_row_group.InitializeScan(scan_state.table_state);
+				while (true) {
+					scan_chunk.Reset();
+
+					current_row_group.ScanCommitted(scan_state.table_state, scan_chunk,
+														TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+					append_count += scan_chunk.size();
+					if (scan_chunk.size() == 0) {
+						break;
+					}
+					new_row_group->Append(append_state.row_group_append_state, scan_chunk, scan_chunk.size());
+				}
+				// drop the row group after merging
+				row_group_counts[c_idx] = 0;
+				current_row_group.CommitDrop();
+				segments[c_idx].node.reset();
+			}
+			if (append_count != merge_rows) {
+				throw InternalException("Mismatch in row group count vs verify count in RowGroupCollection::Checkpoint");
+			}
+			new_row_group->Verify();
+			// assign the new row group to the current segment
+			row_group_counts[r_idx] = new_row_group->count;
+			segments[r_idx].node = std::move(new_row_group);
+		}
+		start += row_group_counts[r_idx];
+	}
+}
+
+void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
+	auto segments = row_groups->MoveSegments();
+	auto l = row_groups->Lock();
+
+	VacuumDeletes(segments);
+
+	idx_t start = this->row_start;
+	for(idx_t r_idx = 0; r_idx < segments.size(); r_idx++) {
+		auto &entry = segments[r_idx];
+		if (!entry.node) {
+			continue;
+		}
+		auto &row_group = *entry.node;
+
 		row_group.MoveToCollection(*this, start);
 		auto row_group_writer = writer.GetRowGroupWriter(row_group);
 		auto pointer = row_group.Checkpoint(*row_group_writer, global_stats);
