@@ -30,14 +30,15 @@ public:
 	DUCKDB_API unique_ptr<BaseSecret> DeserializeSecret(CatalogTransaction transaction,
 	                                                    Deserializer &deserializer) override;
 	DUCKDB_API void RegisterSecretType(SecretType &type) override;
-	DUCKDB_API SecretType LookupType(const string &type) override;
+	DUCKDB_API SecretType LookupType(const string &type, optional_ptr<ClientContext> context) override;
 	DUCKDB_API void RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) override;
 	DUCKDB_API optional_ptr<SecretEntry> RegisterSecret(CatalogTransaction transaction,
 	                                                    unique_ptr<const BaseSecret> secret,
 	                                                    OnCreateConflict on_conflict,
 	                                                    SecretPersistMode persist_mode) override;
 	DUCKDB_API optional_ptr<SecretEntry> CreateSecret(ClientContext &context, const CreateSecretInfo &info) override;
-	DUCKDB_API BoundStatement BindCreateSecret(CreateSecretStatement &stmt) override;
+	DUCKDB_API BoundStatement BindCreateSecret(CreateSecretStatement &stmt,
+	                                           optional_ptr<ClientContext> context) override;
 	DUCKDB_API optional_ptr<SecretEntry> GetSecretByPath(CatalogTransaction transaction, const string &path,
 	                                                     const string &type) override;
 	DUCKDB_API optional_ptr<SecretEntry> GetSecretByName(CatalogTransaction transaction, const string &name) override;
@@ -47,33 +48,43 @@ public:
 
 private:
 	//! Deserialize a secret
-	unique_ptr<BaseSecret> DeserializeSecretInternal(Deserializer &deserializer);
+	unique_ptr<BaseSecret> DeserializeSecretInternal(Deserializer &deserializer, unique_lock<mutex> &manager_lock,
+	                                                 optional_ptr<ClientContext> context);
 	//! Lookup a SecretType
-	SecretType LookupTypeInternal(const string &type);
+	SecretType LookupTypeInternal(const string &type, unique_lock<mutex> &manager_lock,
+	                              optional_ptr<ClientContext> context);
 	//! Lookup a CreateSecretFunction
-	CreateSecretFunction *LookupFunctionInternal(const string &type, const string &provider);
+	CreateSecretFunction *LookupFunctionInternal(const string &type, const string &provider,
+	                                             unique_lock<mutex> &manager_lock, optional_ptr<ClientContext> context);
 	//! Register a new Secret
 	optional_ptr<SecretEntry> RegisterSecretInternal(CatalogTransaction transaction,
 	                                                 unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
-	                                                 SecretPersistMode persist_mode);
+	                                                 SecretPersistMode persist_mode, unique_lock<mutex> &manager_lock);
 
 	//! Write a secret to the FileSystem
 	void WriteSecretToFile(CatalogTransaction transaction, const BaseSecret &secret);
 
-	//! Lazily preloads the permanent secrets f
+	//! Lazily preloads the permanent secrets
 	void PreloadPermanentSecrets(CatalogTransaction transaction);
 
 	//! Fully loads ALL lazily preloaded permanent secrets that have not yet been preloaded
-	void LoadPreloadedSecrets(CatalogTransaction transaction);
+	void LoadPreloadedSecrets(CatalogTransaction transaction, unique_lock<mutex> &manager_lock);
 	//! Fully load a lazily preloaded permanent secret by path
-	void LoadSecret(CatalogTransaction transaction, const string &path, SecretPersistMode persist_mode);
+	void LoadSecret(CatalogTransaction transaction, const string &path, SecretPersistMode persist_mode,
+	                unique_lock<mutex> &manager_lock);
 	//! Fully load a lazily preloaded permanent secret by name
-	void LoadSecretFromPreloaded(CatalogTransaction transaction, const string &name);
+	void LoadSecretFromPreloaded(CatalogTransaction transaction, const string &name, unique_lock<mutex> &manager_lock);
 
 	//! Checks if the secret_directory changed, if so this reloads all permanent secrets (lazily)
-	void SyncPermanentSecrets(CatalogTransaction transaction, bool force = false);
+	void SyncPermanentSecrets(CatalogTransaction transaction, unique_lock<mutex> &manager_lock, bool force = false);
 	//! Return secret directory
 	string GetSecretDirectory(DBConfig &config);
+
+	//! Autoload extension for specific secret type
+	void AutoloadExtensionForType(ClientContext &context, const string &type, unique_lock<mutex> &manager_lock);
+	//! Autoload extension for specific secret function
+	void AutoloadExtensionForFunction(ClientContext &context, const string &type, const string &provider,
+	                                  unique_lock<mutex> &manager_lock);
 
 	//! Secrets
 	unique_ptr<CatalogSet> registered_secrets;

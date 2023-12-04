@@ -55,7 +55,7 @@ public:
 	//! Registers a secret type
 	DUCKDB_API virtual void RegisterSecretType(SecretType &type) = 0;
 	//! Get the registered type
-	DUCKDB_API virtual SecretType LookupType(const string &type) = 0;
+	DUCKDB_API virtual SecretType LookupType(const string &type, optional_ptr<ClientContext> context) = 0;
 	//! Registers a create secret function
 	DUCKDB_API virtual void RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) = 0;
 	//! Register a Secret directly
@@ -66,8 +66,9 @@ public:
 	//! Create & Register a secret by looking up the function
 	DUCKDB_API virtual optional_ptr<SecretEntry> CreateSecret(ClientContext &context,
 	                                                          const CreateSecretInfo &input) = 0;
-	//! Binds a create secret statement
-	DUCKDB_API virtual BoundStatement BindCreateSecret(CreateSecretStatement &stmt) = 0;
+	//! Binds a create secret statement, optionally pass a ClientContext to support auto-loading extensions
+	DUCKDB_API virtual BoundStatement BindCreateSecret(CreateSecretStatement &stmt,
+	                                                   optional_ptr<ClientContext> context) = 0;
 	//! Get the secret whose scope best matches the path.
 	DUCKDB_API virtual optional_ptr<SecretEntry> GetSecretByPath(CatalogTransaction transaction, const string &path,
 	                                                             const string &type) = 0;

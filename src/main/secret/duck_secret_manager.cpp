@@ -26,12 +26,14 @@ void DuckSecretManager::Initialize(DatabaseInstance &db) {
 
 unique_ptr<BaseSecret> DuckSecretManager::DeserializeSecret(CatalogTransaction transaction,
                                                             Deserializer &deserializer) {
-	lock_guard<mutex> lck(lock);
+	unique_lock<mutex> manager_lock(lock);
 	D_ASSERT(registered_secrets);
-	return DeserializeSecretInternal(deserializer);
+	return DeserializeSecretInternal(deserializer, manager_lock, transaction.context);
 }
 
-unique_ptr<BaseSecret> DuckSecretManager::DeserializeSecretInternal(Deserializer &deserializer) {
+unique_ptr<BaseSecret> DuckSecretManager::DeserializeSecretInternal(Deserializer &deserializer,
+                                                                    unique_lock<mutex> &manager_lock,
+                                                                    optional_ptr<ClientContext> context) {
 	auto type = deserializer.ReadProperty<string>(100, "type");
 	auto provider = deserializer.ReadProperty<string>(101, "provider");
 	auto name = deserializer.ReadProperty<string>(102, "name");
@@ -39,7 +41,7 @@ unique_ptr<BaseSecret> DuckSecretManager::DeserializeSecretInternal(Deserializer
 	deserializer.ReadList(103, "scope",
 	                      [&](Deserializer::List &list, idx_t i) { scope.push_back(list.ReadElement<string>()); });
 
-	auto secret_type = LookupTypeInternal(type);
+	auto secret_type = LookupTypeInternal(type, manager_lock, context);
 
 	if (!secret_type.deserializer) {
 		throw InternalException(
@@ -50,7 +52,7 @@ unique_ptr<BaseSecret> DuckSecretManager::DeserializeSecretInternal(Deserializer
 }
 
 void DuckSecretManager::RegisterSecretType(SecretType &type) {
-	lock_guard<mutex> lck(lock);
+	unique_lock<mutex> manager_lock(lock);
 	D_ASSERT(registered_secrets);
 
 	if (registered_types.find(type.name) != registered_types.end()) {
@@ -61,7 +63,7 @@ void DuckSecretManager::RegisterSecretType(SecretType &type) {
 }
 
 void DuckSecretManager::RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) {
-	lock_guard<mutex> lck(lock);
+	unique_lock<mutex> manager_lock(lock);
 	D_ASSERT(registered_secrets);
 
 	const auto &lu = create_secret_functions.find(function.secret_type);
@@ -79,19 +81,20 @@ optional_ptr<SecretEntry> DuckSecretManager::RegisterSecret(CatalogTransaction t
                                                             unique_ptr<const BaseSecret> secret,
                                                             OnCreateConflict on_conflict,
                                                             SecretPersistMode persist_mode) {
-	lock_guard<mutex> lck(lock);
+	unique_lock<mutex> manager_lock(lock);
 	D_ASSERT(registered_secrets);
-	return RegisterSecretInternal(transaction, std::move(secret), on_conflict, persist_mode);
+	return RegisterSecretInternal(transaction, std::move(secret), on_conflict, persist_mode, manager_lock);
 }
 
 optional_ptr<SecretEntry> DuckSecretManager::RegisterSecretInternal(CatalogTransaction transaction,
                                                                     unique_ptr<const BaseSecret> secret,
                                                                     OnCreateConflict on_conflict,
-                                                                    SecretPersistMode persist_mode) {
+                                                                    SecretPersistMode persist_mode,
+                                                                    unique_lock<mutex> &manager_lock) {
 	bool conflict = false;
 
 	//! Ensure we only create secrets for known types;
-	LookupTypeInternal(secret->GetType());
+	LookupTypeInternal(secret->GetType(), manager_lock, transaction.context);
 
 	if (registered_secrets->GetEntry(transaction, secret->GetName())) {
 		conflict = true;
@@ -139,38 +142,45 @@ optional_ptr<SecretEntry> DuckSecretManager::RegisterSecretInternal(CatalogTrans
 	return &registered_secrets->GetEntry(transaction, secret_name)->Cast<SecretEntry>();
 }
 
-CreateSecretFunction *DuckSecretManager::LookupFunctionInternal(const string &type, const string &provider) {
-	const auto &lookup = create_secret_functions.find(type);
-	if (lookup == create_secret_functions.end()) {
-		return nullptr;
-	}
+CreateSecretFunction *DuckSecretManager::LookupFunctionInternal(const string &type, const string &provider,
+                                                                unique_lock<mutex> &manager_lock,
+                                                                optional_ptr<ClientContext> context) {
+	auto lookup = create_secret_functions.find(type);
 
-	if (!lookup->second.ProviderExists(provider)) {
-		return nullptr;
+	if (lookup == create_secret_functions.end() || !lookup->second.ProviderExists(provider)) {
+		// Not found, try autoloading
+		if (context) {
+			AutoloadExtensionForFunction(*context, type, provider, manager_lock);
+			lookup = create_secret_functions.find(type);
+		}
+
+		if (lookup == create_secret_functions.end() || !lookup->second.ProviderExists(provider)) {
+			return nullptr;
+		}
 	}
 
 	return &lookup->second.GetFunction(provider);
 }
 
 optional_ptr<SecretEntry> DuckSecretManager::CreateSecret(ClientContext &context, const CreateSecretInfo &info) {
-	lock_guard<mutex> lck(lock);
+	unique_lock<mutex> manager_lock(lock);
 	D_ASSERT(registered_secrets);
 
 	// We're creating a secret: therefore we need to refresh our view on the permanent secrets to ensure there are no
 	// name collisions
 	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
-	SyncPermanentSecrets(transaction);
+	SyncPermanentSecrets(transaction, manager_lock);
 
 	// Make a copy to set the provider to default if necessary
 	CreateSecretInput function_input {info.type, info.provider, info.persist_mode,
 	                                  info.name, info.scope,    info.named_parameters};
 	if (function_input.provider.empty()) {
-		auto secret_type = LookupTypeInternal(function_input.type);
+		auto secret_type = LookupTypeInternal(function_input.type, manager_lock, &context);
 		function_input.provider = secret_type.default_provider;
 	}
 
 	// Lookup function
-	auto function_lookup = LookupFunctionInternal(function_input.type, function_input.provider);
+	auto function_lookup = LookupFunctionInternal(function_input.type, function_input.provider, manager_lock, &context);
 	if (!function_lookup) {
 		throw InvalidInputException("Could not find CreateSecretFunction for type: '%s' and provider: '%s'", info.type,
 		                            info.provider);
@@ -181,7 +191,7 @@ optional_ptr<SecretEntry> DuckSecretManager::CreateSecret(ClientContext &context
 	if (!permanent_secret_files.empty()) {
 		const auto &lu = permanent_secret_files.find(info.name);
 		if (lu != permanent_secret_files.end()) {
-			LoadSecretFromPreloaded(transaction, lu->first);
+			LoadSecretFromPreloaded(transaction, lu->first, manager_lock);
 		}
 	}
 
@@ -195,11 +205,11 @@ optional_ptr<SecretEntry> DuckSecretManager::CreateSecret(ClientContext &context
 	}
 
 	// Register the secret at the secret_manager
-	return RegisterSecretInternal(transaction, std::move(secret), info.on_conflict, info.persist_mode);
+	return RegisterSecretInternal(transaction, std::move(secret), info.on_conflict, info.persist_mode, manager_lock);
 }
 
-BoundStatement DuckSecretManager::BindCreateSecret(CreateSecretStatement &stmt) {
-	lock_guard<mutex> lck(lock);
+BoundStatement DuckSecretManager::BindCreateSecret(CreateSecretStatement &stmt, optional_ptr<ClientContext> context) {
+	unique_lock<mutex> manager_lock(lock);
 	D_ASSERT(registered_secrets);
 
 	auto type = stmt.info->type;
@@ -208,13 +218,13 @@ BoundStatement DuckSecretManager::BindCreateSecret(CreateSecretStatement &stmt) 
 
 	if (provider.empty()) {
 		default_provider = true;
-		auto secret_type = LookupTypeInternal(type);
+		auto secret_type = LookupTypeInternal(type, manager_lock, context);
 		provider = secret_type.default_provider;
 	}
 
 	string default_string = default_provider ? "default " : "";
 
-	auto function = LookupFunctionInternal(type, provider);
+	auto function = LookupFunctionInternal(type, provider, manager_lock, context);
 
 	if (!function) {
 		throw BinderException("Could not find create secret function for secret type '%s' with %sprovider '%s'", type,
@@ -237,14 +247,14 @@ BoundStatement DuckSecretManager::BindCreateSecret(CreateSecretStatement &stmt) 
 
 optional_ptr<SecretEntry> DuckSecretManager::GetSecretByPath(CatalogTransaction transaction, const string &path,
                                                              const string &type) {
-	lock_guard<mutex> lck(lock);
+	unique_lock<mutex> manager_lock(lock);
 	D_ASSERT(registered_secrets);
 
 	// Synchronize the permanent secrets
-	SyncPermanentSecrets(transaction);
+	SyncPermanentSecrets(transaction, manager_lock);
 
 	// We need to fully load all permanent secrets now: we will be searching and comparing their types and scopes
-	LoadPreloadedSecrets(transaction);
+	LoadPreloadedSecrets(transaction, manager_lock);
 
 	int best_match_score = -1;
 	SecretEntry *best_match = nullptr;
@@ -271,15 +281,15 @@ optional_ptr<SecretEntry> DuckSecretManager::GetSecretByPath(CatalogTransaction 
 }
 
 optional_ptr<SecretEntry> DuckSecretManager::GetSecretByName(CatalogTransaction transaction, const string &name) {
-	lock_guard<mutex> lck(lock);
+	unique_lock<mutex> manager_lock(lock);
 	D_ASSERT(registered_secrets);
 
 	//! Synchronize the permanent secrets to ensure we have an up to date view on them
-	SyncPermanentSecrets(transaction);
+	SyncPermanentSecrets(transaction, manager_lock);
 
 	//! If the secret in in our lazy preload map, this is the time we must read and deserialize it.
 	if (permanent_secret_files.find(name) != permanent_secret_files.end()) {
-		LoadSecretFromPreloaded(transaction, name);
+		LoadSecretFromPreloaded(transaction, name, manager_lock);
 	}
 
 	auto res = registered_secrets->GetEntry(transaction, name);
@@ -293,7 +303,7 @@ optional_ptr<SecretEntry> DuckSecretManager::GetSecretByName(CatalogTransaction 
 }
 
 void DuckSecretManager::DropSecretByName(CatalogTransaction transaction, const string &name, bool missing_ok) {
-	lock_guard<mutex> lck(lock);
+	unique_lock<mutex> manager_lock(lock);
 	D_ASSERT(registered_secrets);
 
 	bool deleted = false;
@@ -310,7 +320,7 @@ void DuckSecretManager::DropSecretByName(CatalogTransaction transaction, const s
 
 	// For deleting persistent secrets, we need to do a sync to ensure we have the path in permanent_secret_files
 	if (was_persistent) {
-		SyncPermanentSecrets(transaction, true);
+		SyncPermanentSecrets(transaction, manager_lock, true);
 	}
 
 	if (!deleted || was_persistent) {
@@ -329,28 +339,37 @@ void DuckSecretManager::DropSecretByName(CatalogTransaction transaction, const s
 	}
 }
 
-SecretType DuckSecretManager::LookupType(const string &type) {
-	lock_guard<mutex> lck(lock);
+SecretType DuckSecretManager::LookupType(const string &type, optional_ptr<ClientContext> context) {
+	unique_lock<mutex> manager_lock(lock);
 	D_ASSERT(registered_secrets);
-	return LookupTypeInternal(type);
+	return LookupTypeInternal(type, manager_lock, context);
 }
 
-SecretType DuckSecretManager::LookupTypeInternal(const string &type) {
+SecretType DuckSecretManager::LookupTypeInternal(const string &type, unique_lock<mutex> &manager_lock,
+                                                 optional_ptr<ClientContext> context) {
 	auto lu = registered_types.find(type);
 
 	if (lu == registered_types.end()) {
-		throw InvalidInputException("Secret type '%s' not found", type);
+		// Retry with autoload
+		if (context) {
+			AutoloadExtensionForType(*context, type, manager_lock);
+
+			lu = registered_types.find(type);
+			if (lu == registered_types.end()) {
+				throw InvalidInputException("Secret type '%s' not found", type);
+			}
+		}
 	}
 
 	return lu->second;
 }
 
 vector<SecretEntry *> DuckSecretManager::AllSecrets(CatalogTransaction transaction) {
-	SyncPermanentSecrets(transaction);
-	LoadPreloadedSecrets(transaction);
+	unique_lock<mutex> manager_lock(lock);
+	SyncPermanentSecrets(transaction, manager_lock);
+	LoadPreloadedSecrets(transaction, manager_lock);
 
 	vector<SecretEntry *> ret_value;
-
 	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
 		auto &cast_entry = entry.Cast<SecretEntry>();
 		ret_value.push_back(&cast_entry);
@@ -403,7 +422,7 @@ void DuckSecretManager::PreloadPermanentSecrets(CatalogTransaction transaction) 
 	});
 }
 
-void DuckSecretManager::LoadPreloadedSecrets(CatalogTransaction transaction) {
+void DuckSecretManager::LoadPreloadedSecrets(CatalogTransaction transaction, unique_lock<mutex> &manager_lock) {
 	vector<string> to_load;
 
 	// Find the permanent secrets that need to be loaded
@@ -421,30 +440,33 @@ void DuckSecretManager::LoadPreloadedSecrets(CatalogTransaction transaction) {
 	permanent_secret_files.clear();
 
 	for (const auto &path : to_load) {
-		LoadSecret(transaction, path, SecretPersistMode::PERMANENT);
+		LoadSecret(transaction, path, SecretPersistMode::PERMANENT, manager_lock);
 	}
 }
 
-void DuckSecretManager::LoadSecret(CatalogTransaction transaction, const string &path, SecretPersistMode persist_mode) {
+void DuckSecretManager::LoadSecret(CatalogTransaction transaction, const string &path, SecretPersistMode persist_mode,
+                                   unique_lock<mutex> &manager_lock) {
 	auto &fs = *transaction.db->config.file_system;
 	auto file_reader = BufferedFileReader(fs, path.c_str());
 	while (!file_reader.Finished()) {
 		BinaryDeserializer deserializer(file_reader);
 		deserializer.Begin();
-		auto deserialized_secret = DeserializeSecretInternal(deserializer);
+		auto deserialized_secret = DeserializeSecretInternal(deserializer, manager_lock, transaction.context);
 		RegisterSecretInternal(transaction, std::move(deserialized_secret), OnCreateConflict::ERROR_ON_CONFLICT,
-		                       persist_mode);
+		                       persist_mode, manager_lock);
 		deserializer.End();
 	}
 }
 
-void DuckSecretManager::LoadSecretFromPreloaded(CatalogTransaction transaction, const string &name) {
+void DuckSecretManager::LoadSecretFromPreloaded(CatalogTransaction transaction, const string &name,
+                                                unique_lock<mutex> &manager_lock) {
 	auto path = permanent_secret_files[name];
 	permanent_secret_files.erase(name);
-	LoadSecret(transaction, path, SecretPersistMode::PERMANENT);
+	LoadSecret(transaction, path, SecretPersistMode::PERMANENT, manager_lock);
 }
 
-void DuckSecretManager::SyncPermanentSecrets(CatalogTransaction transaction, bool force) {
+void DuckSecretManager::SyncPermanentSecrets(CatalogTransaction transaction, unique_lock<mutex> &manager_lock,
+                                             bool force) {
 	auto permanent_secrets_enabled = transaction.db->config.options.allow_permanent_secrets;
 
 	if (force || !permanent_secrets_enabled || !initialized_fs) {
@@ -504,6 +526,22 @@ string DuckSecretManager::GetSecretDirectory(DBConfig &config) {
 	}
 
 	return directory;
+}
+
+void DuckSecretManager::AutoloadExtensionForType(ClientContext &context, const string &type,
+                                                 unique_lock<mutex> &manager_lock) {
+	D_ASSERT(manager_lock.owns_lock());
+	manager_lock.unlock();
+	ExtensionHelper::TryAutoloadFromEntry(context, type, EXTENSION_SECRET_TYPES);
+	manager_lock.lock();
+}
+
+void DuckSecretManager::AutoloadExtensionForFunction(ClientContext &context, const string &type, const string &provider,
+                                                     unique_lock<mutex> &manager_lock) {
+	D_ASSERT(manager_lock.owns_lock());
+	manager_lock.unlock();
+	ExtensionHelper::TryAutoloadFromEntry(context, type + "/" + provider, EXTENSION_SECRET_PROVIDERS);
+	manager_lock.lock();
 }
 
 } // namespace duckdb

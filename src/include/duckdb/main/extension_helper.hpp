@@ -89,6 +89,20 @@ public:
 		return "";
 	}
 
+	//! Lookup a name in an extension entry and try to autoload it
+	template <size_t N>
+	static void TryAutoloadFromEntry(ClientContext &context, const string &entry, const ExtensionEntry (&entries)[N]) {
+		auto &dbconfig = DBConfig::GetConfig(context);
+#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
+		if (dbconfig.options.autoload_known_extensions) {
+			auto extension_name = ExtensionHelper::FindExtensionInEntries(entry, entries);
+			if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
+				ExtensionHelper::AutoLoadExtension(context, extension_name);
+			}
+		}
+#endif
+	}
+
 	//! Whether an extension can be autoloaded (i.e. it's registered as an autoloadable extension in
 	//! extension_entries.hpp)
 	static bool CanAutoloadExtension(const string &ext_name);
