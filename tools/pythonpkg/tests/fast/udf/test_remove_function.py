@@ -1,6 +1,7 @@
 import duckdb
 import os
 import pytest
+
 pd = pytest.importorskip("pandas")
 pa = pytest.importorskip("pyarrow")
 from typing import Union
@@ -12,10 +13,14 @@ import cmath
 
 from duckdb.typing import *
 
+
 class TestRemoveFunction(object):
     def test_not_created(self):
         con = duckdb.connect()
-        with pytest.raises(duckdb.InvalidInputException, match="No function by the name of 'not_a_registered_function' was found in the list of registered functions"):
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match="No function by the name of 'not_a_registered_function' was found in the list of registered functions",
+        ):
             con.remove_function('not_a_registered_function')
 
     def test_double_remove(self):
@@ -26,9 +31,12 @@ class TestRemoveFunction(object):
         con.create_function('func', func)
         con.sql('select func(42)')
         con.remove_function('func')
-        with pytest.raises(duckdb.InvalidInputException, match="No function by the name of 'func' was found in the list of registered functions"):
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match="No function by the name of 'func' was found in the list of registered functions",
+        ):
             con.remove_function('func')
-        
+
         with pytest.raises(duckdb.CatalogException, match='Scalar Function with name func does not exist!'):
             con.sql('select func(42)')
 
@@ -43,7 +51,9 @@ class TestRemoveFunction(object):
         """
             Error: Catalog Error: Scalar Function with name func does not exist!
         """
-        with pytest.raises(duckdb.InvalidInputException, match='Attempting to execute an unsuccessful or closed pending query result'):
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Attempting to execute an unsuccessful or closed pending query result'
+        ):
             res = rel.fetchall()
 
     def test_use_after_remove_and_recreation(self):
@@ -58,6 +68,7 @@ class TestRemoveFunction(object):
 
         def also_func(x: int) -> int:
             return x
+
         con.create_function('func', also_func)
         res = rel1.fetchall()
         assert res[0][0] == 42
@@ -66,12 +77,15 @@ class TestRemoveFunction(object):
                 Candidate functions:
                 func(BIGINT) -> BIGINT
         """
-        with pytest.raises(duckdb.InvalidInputException, match='Attempting to execute an unsuccessful or closed pending query result'):
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Attempting to execute an unsuccessful or closed pending query result'
+        ):
             res = rel2.fetchall()
 
     def test_overwrite_name(self):
         def func(x):
             return x
+
         con = duckdb.connect()
         # create first version of the function
         con.create_function('func', func, [BIGINT], BIGINT)
@@ -82,12 +96,17 @@ class TestRemoveFunction(object):
         def other_func(x):
             return x
 
-        with pytest.raises(duckdb.NotImplementedException, match="A function by the name of 'func' is already created, creating multiple functions with the same name is not supported yet, please remove it first"):
+        with pytest.raises(
+            duckdb.NotImplementedException,
+            match="A function by the name of 'func' is already created, creating multiple functions with the same name is not supported yet, please remove it first",
+        ):
             con.create_function('func', other_func, [VARCHAR], VARCHAR)
 
         con.remove_function('func')
 
-        with pytest.raises(duckdb.InvalidInputException, match='Catalog Error: Scalar Function with name func does not exist!'):
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Catalog Error: Scalar Function with name func does not exist!'
+        ):
             # Attempted to execute the relation using the 'func' function, but it was deleted
             rel1.fetchall()
 

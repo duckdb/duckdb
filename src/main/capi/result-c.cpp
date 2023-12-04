@@ -182,8 +182,10 @@ duckdb_state deprecated_duckdb_translate_column(MaterializedQueryResult &result,
 		WriteData<date_t>(column, collection, column_ids);
 		break;
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		WriteData<dtime_t>(column, collection, column_ids);
+		break;
+	case LogicalTypeId::TIME_TZ:
+		WriteData<dtime_tz_t>(column, collection, column_ids);
 		break;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:

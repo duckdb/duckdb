@@ -1,0 +1,38 @@
+# name: test/sql/index/art/insert_update_delete/test_art_non_linear_insertion.test_slow
+# description: Test Anon-linear insertions into an ART
+# group: [insert_update_delete]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+CREATE INDEX i_index ON integers using art(i)
+
+# non-linear insertion
+
+loop i 0 5
+
+# insert the even values between 0 and 1000
+# 0..2..4..6..998
+statement ok
+INSERT INTO integers SELECT * FROM range(0, 1000, 2)
+
+# insert the uneven values between 0 and 1000
+# 1..3..5..7..999
+statement ok
+INSERT INTO integers SELECT * FROM range(0, 1000, 2)
+
+endloop
+
+query I
+SELECT COUNT(*) FROM integers
+----
+5000
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 1000000
+----
+5000

@@ -6,6 +6,7 @@ import gc
 import pytest
 from conftest import NumpyPandas, ArrowPandas
 
+
 class TestPandasUnregister(object):
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_pandas_unregister1(self, duckdb_cursor, pandas):

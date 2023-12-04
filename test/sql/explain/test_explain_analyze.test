@@ -46,9 +46,10 @@ SELECT 42
 statement ok
 PRAGMA disable_profiling
 
-query I nosort json_output
+statement error
 SELECT * FROM read_csv('__TEST_DIR__/test.json', columns={'json': 'VARCHAR'}, sep='🦆');
 ----
+The delimiter option cannot exceed a size of 1 byte.
 
 statement ok
 PRAGMA enable_profiling='json'
@@ -61,6 +62,7 @@ analyzed_plan	<REGEX>:.*integers.*"timings":.*
 statement ok
 PRAGMA disable_profiling
 
-query I nosort json_output
+statement error
 SELECT * FROM read_csv('__TEST_DIR__/test.json', columns={'json': 'VARCHAR'}, sep='🦆');
 ----
+The delimiter option cannot exceed a size of 1 byte.

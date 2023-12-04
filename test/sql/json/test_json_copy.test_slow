@@ -4,6 +4,24 @@
 
 require json
 
+# test automatic detection even with .gz
+statement ok
+create table integers as select 42 i
+
+statement ok
+copy integers to '__TEST_DIR__/integers.json.gz' (FORMAT JSON, COMPRESSION GZIP)
+
+statement ok
+delete from integers
+
+statement ok
+copy integers from '__TEST_DIR__/integers.json.gz'
+
+query T
+select i from integers
+----
+42
+
 # test writing all types to file
 statement ok
 create type small_enum as enum ('DUCK_DUCK_ENUM', 'GOOSE');
@@ -192,13 +210,29 @@ copy (select range as i from range(10)) to '__TEST_DIR__/my.json' (COMPRESSION)
 Binder Error
 
 statement ok
-copy (select range as i from range(10)) to '__TEST_DIR__/my.json' (COMPRESSION GZIP)
+copy (select range as i from range(10)) to '__TEST_DIR__/my.json.gz' (COMPRESSION GZIP)
 
 statement ok
 create table my_range (i bigint)
 
 statement ok
-copy my_range from '__TEST_DIR__/my.json' (COMPRESSION GZIP)
+copy my_range from '__TEST_DIR__/my.json.gz' (COMPRESSION GZIP)
+
+# we can auto-detect even though we have compressed
+statement ok
+select * from '__TEST_DIR__/my.json.gz'
+
+# works with zstd too, but we skip this test for now
+# it works in CLI, but not in unittest for some reason (ZSTD is not in VirtualFileSystem::compressed_fs)
+mode skip
+
+statement ok
+copy (select range as i from range(10)) to '__TEST_DIR__/my.json.zst' (COMPRESSION ZSTD)
+
+statement ok
+select * from '__TEST_DIR__/my.json.zst'
+
+mode unskip
 
 query I
 select * from my_range

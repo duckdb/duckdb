@@ -8,8 +8,12 @@
 
 #pragma once
 
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {
 
@@ -37,7 +41,33 @@ public:
 	//! Convert a string to a bit. This function should ONLY be called after calling GetBitSize, since it does NOT
 	//! perform data validation.
 	DUCKDB_API static void ToBit(string_t str, string_t &output);
+
 	DUCKDB_API static string ToBit(string_t str);
+
+	//! output needs to have enough space allocated before calling this function (blob size + 1)
+	DUCKDB_API static void BlobToBit(string_t blob, string_t &output);
+
+	DUCKDB_API static string BlobToBit(string_t blob);
+
+	//! output_str needs to have enough space allocated before calling this function (sizeof(T) + 1)
+	template <class T>
+	static void NumericToBit(T numeric, string_t &output_str);
+
+	template <class T>
+	static string NumericToBit(T numeric);
+
+	//! bit is expected to fit inside of output num (bit size <= sizeof(T) + 1)
+	template <class T>
+	static void BitToNumeric(string_t bit, T &output_num);
+
+	template <class T>
+	static T BitToNumeric(string_t bit);
+
+	//! bit is expected to fit inside of output_blob (bit size = output_blob + 1)
+	static void BitToBlob(string_t bit, string_t &output_blob);
+
+	static string BitToBlob(string_t bit);
+
 	//! Creates a new bitstring of determined length
 	DUCKDB_API static void BitString(const string_t &input, const idx_t &len, string_t &result);
 	DUCKDB_API static void SetEmptyBitString(string_t &target, string_t &input);
@@ -58,5 +88,56 @@ private:
 	static idx_t GetBitInternal(string_t bit_string, idx_t n);
 	static void SetBitInternal(string_t &bit_string, idx_t n, idx_t new_value);
 	static idx_t GetBitIndex(idx_t n);
+	static uint8_t GetFirstByte(const string_t &str);
 };
+
+//===--------------------------------------------------------------------===//
+// Bit Template definitions
+//===--------------------------------------------------------------------===//
+template <class T>
+void Bit::NumericToBit(T numeric, string_t &output_str) {
+	D_ASSERT(output_str.GetSize() >= sizeof(T) + 1);
+
+	auto output = output_str.GetDataWriteable();
+	auto data = const_data_ptr_cast(&numeric);
+
+	*output = 0; // set padding to 0
+	++output;
+	for (idx_t idx = 0; idx < sizeof(T); ++idx) {
+		output[idx] = data[sizeof(T) - idx - 1];
+	}
+	Bit::Finalize(output_str);
+}
+
+template <class T>
+string Bit::NumericToBit(T numeric) {
+	auto bit_len = sizeof(T) + 1;
+	auto buffer = make_unsafe_uniq_array<char>(bit_len);
+	string_t output_str(buffer.get(), bit_len);
+	Bit::NumericToBit(numeric, output_str);
+	return output_str.GetString();
+}
+
+template <class T>
+T Bit::BitToNumeric(string_t bit) {
+	T output;
+	Bit::BitToNumeric(bit, output);
+	return (output);
+}
+
+template <class T>
+void Bit::BitToNumeric(string_t bit, T &output_num) {
+	D_ASSERT(bit.GetSize() <= sizeof(T) + 1);
+
+	output_num = 0;
+	auto data = const_data_ptr_cast(bit.GetData());
+	auto output = data_ptr_cast(&output_num);
+
+	idx_t padded_byte_idx = sizeof(T) - bit.GetSize() + 1;
+	output[sizeof(T) - 1 - padded_byte_idx] = GetFirstByte(bit);
+	for (idx_t idx = padded_byte_idx + 1; idx < sizeof(T); ++idx) {
+		output[sizeof(T) - 1 - idx] = data[1 + idx - padded_byte_idx];
+	}
+}
+
 } // namespace duckdb

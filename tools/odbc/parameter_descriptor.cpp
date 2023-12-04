@@ -1,6 +1,7 @@
 #include "include/parameter_descriptor.hpp"
 #include "odbc_utils.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "handle_functions.hpp"
 
 using duckdb::Decimal;
 using duckdb::OdbcHandleDesc;
@@ -75,9 +76,9 @@ SQLRETURN ParameterDescriptor::GetParamValues(vector<Value> &values) {
 			return SQL_NEED_DATA;
 		}
 		if (ret != SQL_PARAM_SUCCESS) {
-			auto msg = duckdb::StringUtil::Format(
-			    "Error setting parameter value: ParameterSet '%ld', ParameterIndex '%ld'", cur_paramset_idx, rec_idx);
-			stmt->error_messages.emplace_back(msg);
+			duckdb::SetDiagnosticRecord(this->stmt, SQL_SUCCESS_WITH_INFO, "GetParamValues",
+			                            "Failed to set parameter value", SQLStateType::ST_01000,
+			                            this->stmt->dbc->GetDataSourceName());
 			if (!ipd->header.sql_desc_array_status_ptr) {
 				return SQL_ERROR;
 			}
@@ -417,14 +418,6 @@ SQLLEN *ParameterDescriptor::GetSQLDescIndicatorPtr(DescRecord &apd_record, idx_
 	return apd_record.sql_desc_indicator_ptr + set_idx;
 }
 
-void ParameterDescriptor::SetSQLDescIndicatorPtr(DescRecord &apd_record, SQLLEN *ind_ptr) {
-	auto sql_ind_ptr = apd_record.sql_desc_indicator_ptr;
-	if (cur_apd->header.sql_desc_bind_offset_ptr) {
-		sql_ind_ptr += *cur_apd->header.sql_desc_bind_offset_ptr;
-	}
-	sql_ind_ptr = ind_ptr;
-}
-
 void ParameterDescriptor::SetSQLDescIndicatorPtr(DescRecord &apd_record, SQLLEN value) {
 	auto sql_ind_ptr = apd_record.sql_desc_indicator_ptr;
 	if (cur_apd->header.sql_desc_bind_offset_ptr) {
@@ -438,12 +431,4 @@ SQLLEN *ParameterDescriptor::GetSQLDescOctetLengthPtr(DescRecord &apd_record, id
 		return apd_record.sql_desc_octet_length_ptr + set_idx + *cur_apd->header.sql_desc_bind_offset_ptr;
 	}
 	return apd_record.sql_desc_octet_length_ptr + set_idx;
-}
-
-void ParameterDescriptor::SetSQLDescOctetLengthPtr(DescRecord &apd_record, SQLLEN *len_ptr) {
-	auto sql_len_ptr = apd_record.sql_desc_octet_length_ptr;
-	if (cur_apd->header.sql_desc_bind_offset_ptr) {
-		sql_len_ptr += *cur_apd->header.sql_desc_bind_offset_ptr;
-	}
-	sql_len_ptr = len_ptr;
 }

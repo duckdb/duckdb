@@ -1,3 +1,5 @@
+add_subdirectory(union)
+
 add_library_unity(
   duckdb_func_cast
   OBJECT

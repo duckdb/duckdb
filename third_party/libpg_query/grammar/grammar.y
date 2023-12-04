@@ -39,6 +39,7 @@
 	PGAlias				*alias;
 	PGRangeVar			*range;
 	PGIntoClause			*into;
+	PGCTEMaterialize			ctematerialize;
 	PGWithClause			*with;
 	PGInferClause			*infer;
 	PGOnConflictClause	*onconflict;

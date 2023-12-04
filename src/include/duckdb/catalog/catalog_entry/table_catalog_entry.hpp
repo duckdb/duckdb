@@ -55,6 +55,8 @@ public:
 	DUCKDB_API TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info);
 
 public:
+	DUCKDB_API unique_ptr<CreateInfo> GetInfo() const override;
+
 	DUCKDB_API bool HasGeneratedColumns() const;
 
 	//! Returns whether or not a column with the given name exists
@@ -69,8 +71,6 @@ public:
 	DUCKDB_API vector<LogicalType> GetTypes();
 	//! Returns a list of the columns of the table
 	DUCKDB_API const ColumnList &GetColumns() const;
-	//! Returns a mutable list of the columns of the table
-	DUCKDB_API ColumnList &GetColumnsMutable();
 	//! Returns the underlying storage of the table
 	virtual DataTable &GetStorage();
 	//! Returns a list of the bound constraints of the table
@@ -82,11 +82,6 @@ public:
 
 	//! Get statistics of a column (physical or virtual) within the table
 	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) = 0;
-
-	//! Serialize the meta information of the TableCatalogEntry a serializer
-	void Serialize(Serializer &serializer) const;
-	//! Deserializes to a CreateTableInfo
-	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &source, ClientContext &context);
 
 	//! Returns the column index of the specified column name.
 	//! If the column does not exist:
@@ -113,12 +108,6 @@ public:
 	                                   ClientContext &context);
 
 protected:
-	// This is used to serialize the entry by #Serialize(Serializer& ). It is virtual to allow
-	// Custom catalog implementations to override the default implementation. We can not make
-	// The Serialize method itself virtual as the logic is tightly coupled to the static
-	// Deserialize method.
-	virtual CreateTableInfo GetTableInfoForSerialization() const;
-
 	//! A list of columns that are part of this table
 	ColumnList columns;
 	//! A list of constraints that are part of this table

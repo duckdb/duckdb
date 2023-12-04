@@ -3,8 +3,8 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
-#include "duckdb/planner/operator/logical_delim_join.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/planner/operator/logical_extension_operator.hpp"
 
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -29,12 +29,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		for (auto &cond : comp_join.conditions) {
 			VisitExpression(&cond.left);
 		}
-		if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-			// visit the duplicate eliminated columns on the LHS, if any
-			auto &delim_join = op.Cast<LogicalDelimJoin>();
-			for (auto &expr : delim_join.duplicate_eliminated_columns) {
-				VisitExpression(&expr);
-			}
+		// visit the duplicate eliminated columns on the LHS, if any
+		for (auto &expr : comp_join.duplicate_eliminated_columns) {
+			VisitExpression(&expr);
 		}
 		// then get the bindings of the RHS and resolve the RHS expressions
 		VisitOperator(*comp_join.children[1]);
@@ -95,10 +92,17 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 			bindings = op.GetColumnBindings();
 			return;
 		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR: {
+		auto &ext_op = op.Cast<LogicalExtensionOperator>();
+		ext_op.ResolveColumnBindings(*this, bindings);
+		return;
 	}
 	default:
 		break;
 	}
+
 	// general case
 	// first visit the children of this operator
 	VisitOperatorChildren(op);

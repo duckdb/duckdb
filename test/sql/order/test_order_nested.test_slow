@@ -1,0 +1,1202 @@
+# name: test/sql/order/test_order_nested.test_slow
+# description: Test ORDER BY keyword (nested types)
+# group: [order]
+
+statement ok
+SET default_null_order='nulls_first';
+
+require skip_reload
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+PRAGMA enable_verification
+
+# test all integral types and varchar, internal and external
+statement ok
+PRAGMA debug_force_external=true
+
+loop i 0 2
+
+foreach type <integral> varchar
+
+# list tests
+statement ok
+CREATE TABLE test0 (i ${type}[])
+
+statement ok
+INSERT INTO test0 VALUES ([2]), ([1]), ([1, 2]), ([]), ([2, 2]), ([NULL]), ([2, 3])
+
+query T
+SELECT * FROM test0 ORDER BY i
+----
+[]
+[1]
+[1, 2]
+[2]
+[2, 2]
+[2, 3]
+[NULL]
+
+query T
+SELECT * FROM test0 ORDER BY i DESC
+----
+[NULL]
+[2, 3]
+[2, 2]
+[2]
+[1, 2]
+[1]
+[]
+
+statement ok
+INSERT INTO test0 VALUES (NULL)
+
+query T
+SELECT * FROM test0 ORDER BY i
+----
+NULL
+[]
+[1]
+[1, 2]
+[2]
+[2, 2]
+[2, 3]
+[NULL]
+
+query T
+SELECT * FROM test0 ORDER BY i NULLS LAST
+----
+[]
+[1]
+[1, 2]
+[2]
+[2, 2]
+[2, 3]
+[NULL]
+NULL
+
+query T
+SELECT * FROM test0 ORDER BY i DESC
+----
+NULL
+[NULL]
+[2, 3]
+[2, 2]
+[2]
+[1, 2]
+[1]
+[]
+
+query T
+SELECT * FROM test0 ORDER BY i DESC NULLS LAST
+----
+[NULL]
+[2, 3]
+[2, 2]
+[2]
+[1, 2]
+[1]
+[]
+NULL
+
+statement ok
+CREATE TABLE test2 (i ${type}[][])
+
+statement ok
+INSERT INTO test2 VALUES ([[2]]), ([[1]]), ([NULL, []]), ([[1], [2]]), ([]), ([[]]), ([[2], [2]]), ([NULL]), (NULL), ([[2], [3]])
+
+query T
+SELECT * FROM test2 ORDER BY i
+----
+NULL
+[]
+[[]]
+[[1]]
+[[1], [2]]
+[[2]]
+[[2], [2]]
+[[2], [3]]
+[NULL]
+[NULL, []]
+
+query T
+SELECT * FROM test2 ORDER BY i DESC
+----
+NULL
+[NULL, []]
+[NULL]
+[[2], [3]]
+[[2], [2]]
+[[2]]
+[[1], [2]]
+[[1]]
+[[]]
+[]
+
+statement ok
+CREATE TABLE test3 (i ${type}[][])
+
+statement ok
+INSERT INTO test3 VALUES ([[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5]]), ([[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5], []]), ([[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5], [5, 5, 5, 5, 1]]), ([[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5], [5, 5, 5, 5, NULL]]), ([[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5], [5, 5, 5, 5, 2]]), ([[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5], [NULL]]), ([[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5], NULL])
+
+query T
+SELECT * FROM test3 ORDER BY i
+----
+[[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5]]
+[[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5], []]
+[[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5], [5, 5, 5, 5, 1]]
+[[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5], [5, 5, 5, 5, 2]]
+[[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5], [5, 5, 5, 5, NULL]]
+[[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5], [NULL]]
+[[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5], NULL]
+
+query T
+SELECT * FROM test3 ORDER BY i DESC
+----
+[[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5], NULL]
+[[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5], [NULL]]
+[[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5], [5, 5, 5, 5, NULL]]
+[[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5], [5, 5, 5, 5, 2]]
+[[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5], [5, 5, 5, 5, 1]]
+[[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5], []]
+[[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5]]
+
+statement ok
+CREATE TABLE test4 (i ${type}[][])
+
+statement ok
+INSERT INTO test4 VALUES ([[NULL, NULL, 0], [1, NULL, 1]]), ([[NULL, NULL, 1]]), ([[NULL, NULL, 0], [1, NULL, 0]]), ([[0, NULL, NULL, 1]]), ([[0, NULL, NULL, 0]])
+
+query T
+SELECT * FROM test4 ORDER BY i
+----
+[[0, NULL, NULL, 0]]
+[[0, NULL, NULL, 1]]
+[[NULL, NULL, 0], [1, NULL, 0]]
+[[NULL, NULL, 0], [1, NULL, 1]]
+[[NULL, NULL, 1]]
+
+query T
+SELECT * FROM test4 ORDER BY i DESC
+----
+[[NULL, NULL, 1]]
+[[NULL, NULL, 0], [1, NULL, 1]]
+[[NULL, NULL, 0], [1, NULL, 0]]
+[[0, NULL, NULL, 1]]
+[[0, NULL, NULL, 0]]
+
+# struct tests
+statement ok
+CREATE TABLE test10 (s STRUCT(i ${type}, j ${type}));
+
+statement ok
+INSERT INTO test10 values
+({'i': 2, 'j': NULL}),
+({'i': 1, 'j': NULL}),
+({'i': 2, 'j': 3}),
+({'i': 1, 'j': 2}),
+({'i': 2, 'j': 2}),
+({'i': NULL, 'j': NULL}),
+(NULL),
+({'i': 2, 'j': 3})
+
+query T
+SELECT * FROM test10 ORDER BY s
+----
+NULL
+{'i': 1, 'j': 2}
+{'i': 1, 'j': NULL}
+{'i': 2, 'j': 2}
+{'i': 2, 'j': 3}
+{'i': 2, 'j': 3}
+{'i': 2, 'j': NULL}
+{'i': NULL, 'j': NULL}
+
+query T
+SELECT * FROM test10 ORDER BY s DESC
+----
+NULL
+{'i': NULL, 'j': NULL}
+{'i': 2, 'j': NULL}
+{'i': 2, 'j': 3}
+{'i': 2, 'j': 3}
+{'i': 2, 'j': 2}
+{'i': 1, 'j': NULL}
+{'i': 1, 'j': 2}
+
+statement ok
+CREATE TABLE test11 (s STRUCT(s1 STRUCT(i ${type}, j ${type})))
+
+statement ok
+INSERT INTO test11 VALUES ({'s1': NULL}), (NULL), ({'s1': {'i': NULL, 'j': 1}}), ({'s1': {'i': 0, 'j': NULL}}), ({'s1': {'i': NULL, 'j': NULL}}), ({'s1': {'i': 0, 'j': 1}})
+
+query T
+SELECT * FROM test11 ORDER BY s
+----
+NULL
+{'s1': {'i': 0, 'j': 1}}
+{'s1': {'i': 0, 'j': NULL}}
+{'s1': {'i': NULL, 'j': 1}}
+{'s1': {'i': NULL, 'j': NULL}}
+{'s1': NULL}
+
+query T
+SELECT * FROM test11 ORDER BY s DESC
+----
+NULL
+{'s1': NULL}
+{'s1': {'i': NULL, 'j': NULL}}
+{'s1': {'i': NULL, 'j': 1}}
+{'s1': {'i': 0, 'j': NULL}}
+{'s1': {'i': 0, 'j': 1}}
+
+statement ok
+CREATE TABLE test13 (s STRUCT(a ${type}, b ${type}, c ${type}, d ${type}, e ${type}, f ${type}, g ${type}, h ${type}, i ${type}, j ${type}))
+
+statement ok
+INSERT INTO test13 VALUES
+({'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': 7, 'i': 8, 'j': 8}),
+({'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': 7, 'i': 8, 'j': 9}),
+({'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': NULL, 'f': NULL, 'g': NULL, 'h': NULL, 'i': 8, 'j': 8}),
+({'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': NULL, 'f': NULL, 'g': NULL, 'h': NULL, 'i': 8, 'j': 9}),
+({'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': NULL, 'i': NULL, 'j': 8}),
+({'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': NULL, 'i': NULL, 'j': 9})
+
+query T
+SELECT * FROM test13 ORDER BY s
+----
+{'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': 7, 'i': 8, 'j': 8}
+{'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': 7, 'i': 8, 'j': 9}
+{'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': NULL, 'i': NULL, 'j': 8}
+{'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': NULL, 'i': NULL, 'j': 9}
+{'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': NULL, 'f': NULL, 'g': NULL, 'h': NULL, 'i': 8, 'j': 8}
+{'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': NULL, 'f': NULL, 'g': NULL, 'h': NULL, 'i': 8, 'j': 9}
+
+query T
+SELECT * FROM test13 ORDER BY s DESC
+----
+{'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': NULL, 'f': NULL, 'g': NULL, 'h': NULL, 'i': 8, 'j': 9}
+{'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': NULL, 'f': NULL, 'g': NULL, 'h': NULL, 'i': 8, 'j': 8}
+{'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': NULL, 'i': NULL, 'j': 9}
+{'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': NULL, 'i': NULL, 'j': 8}
+{'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': 7, 'i': 8, 'j': 9}
+{'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': 7, 'i': 8, 'j': 8}
+
+# combination of lists and structs
+statement ok
+CREATE TABLE test20 (l STRUCT(i ${type})[])
+
+statement ok
+INSERT INTO test20 VALUES
+([{'i': NULL}, {'i': NULL}, {'i': 0}, {'i': NULL}, {'i': NULL}, {'i': 0}]),
+([{'i': NULL}, {'i': NULL}, {'i': 0}, {'i': NULL}, {'i': NULL}, {'i': 1}]),
+([{'i': NULL}, {'i': NULL}, {'i': NULL}, {'i': NULL}, {'i': NULL}, {'i': 1}]),
+([{'i': NULL}, {'i': NULL}, {'i': 0}, {'i': NULL}, {'i': NULL}, {'i': NULL}]),
+([{'i': NULL}, {'i': NULL}, {'i': 1}, {'i': NULL}, {'i': NULL}, {'i': 0}]),
+([{'i': NULL}, {'i': NULL}, {'i': 1}, {'i': NULL}, {'i': NULL}, {'i': 1}]),
+([{'i': NULL}, {'i': NULL}, {'i': NULL}, {'i': NULL}, {'i': NULL}, {'i': 0}]),
+([{'i': NULL}, {'i': NULL}, {'i': 1}, {'i': NULL}, {'i': NULL}, {'i': NULL}])
+
+query T
+SELECT * FROM test20 ORDER BY l
+----
+[{'i': NULL}, {'i': NULL}, {'i': 0}, {'i': NULL}, {'i': NULL}, {'i': 0}]
+[{'i': NULL}, {'i': NULL}, {'i': 0}, {'i': NULL}, {'i': NULL}, {'i': 1}]
+[{'i': NULL}, {'i': NULL}, {'i': 0}, {'i': NULL}, {'i': NULL}, {'i': NULL}]
+[{'i': NULL}, {'i': NULL}, {'i': 1}, {'i': NULL}, {'i': NULL}, {'i': 0}]
+[{'i': NULL}, {'i': NULL}, {'i': 1}, {'i': NULL}, {'i': NULL}, {'i': 1}]
+[{'i': NULL}, {'i': NULL}, {'i': 1}, {'i': NULL}, {'i': NULL}, {'i': NULL}]
+[{'i': NULL}, {'i': NULL}, {'i': NULL}, {'i': NULL}, {'i': NULL}, {'i': 0}]
+[{'i': NULL}, {'i': NULL}, {'i': NULL}, {'i': NULL}, {'i': NULL}, {'i': 1}]
+
+query T
+SELECT * FROM test20 ORDER BY l DESC
+----
+[{'i': NULL}, {'i': NULL}, {'i': NULL}, {'i': NULL}, {'i': NULL}, {'i': 1}]
+[{'i': NULL}, {'i': NULL}, {'i': NULL}, {'i': NULL}, {'i': NULL}, {'i': 0}]
+[{'i': NULL}, {'i': NULL}, {'i': 1}, {'i': NULL}, {'i': NULL}, {'i': NULL}]
+[{'i': NULL}, {'i': NULL}, {'i': 1}, {'i': NULL}, {'i': NULL}, {'i': 1}]
+[{'i': NULL}, {'i': NULL}, {'i': 1}, {'i': NULL}, {'i': NULL}, {'i': 0}]
+[{'i': NULL}, {'i': NULL}, {'i': 0}, {'i': NULL}, {'i': NULL}, {'i': NULL}]
+[{'i': NULL}, {'i': NULL}, {'i': 0}, {'i': NULL}, {'i': NULL}, {'i': 1}]
+[{'i': NULL}, {'i': NULL}, {'i': 0}, {'i': NULL}, {'i': NULL}, {'i': 0}]
+
+statement ok
+CREATE TABLE test22 (s STRUCT(i ${type}[], j ${type}[]))
+
+statement ok
+INSERT INTO test22 VALUES
+({'i': [0, NULL], 'j': [NULL, 0]}),
+({'i': [0, NULL], 'j': [NULL, 1]}),
+({'i': [0, NULL], 'j': [1, 2]}),
+({'i': [1, NULL], 'j': [2, NULL]}),
+({'i': [0, 2], 'j': [2, NULL]}),
+({'i': NULL, 'j': [2, NULL]}),
+({'i': [0, 2], 'j': NULL}),
+({'i': NULL, 'j': [2, 3]})
+
+query T
+SELECT * FROM test22 ORDER BY s
+----
+{'i': [0, 2], 'j': [2, NULL]}
+{'i': [0, 2], 'j': NULL}
+{'i': [0, NULL], 'j': [1, 2]}
+{'i': [0, NULL], 'j': [NULL, 0]}
+{'i': [0, NULL], 'j': [NULL, 1]}
+{'i': [1, NULL], 'j': [2, NULL]}
+{'i': NULL, 'j': [2, 3]}
+{'i': NULL, 'j': [2, NULL]}
+
+query T
+SELECT * FROM test22 ORDER BY s DESC
+----
+{'i': NULL, 'j': [2, NULL]}
+{'i': NULL, 'j': [2, 3]}
+{'i': [1, NULL], 'j': [2, NULL]}
+{'i': [0, NULL], 'j': [NULL, 1]}
+{'i': [0, NULL], 'j': [NULL, 0]}
+{'i': [0, NULL], 'j': [1, 2]}
+{'i': [0, 2], 'j': NULL}
+{'i': [0, 2], 'j': [2, NULL]}
+
+statement ok
+CREATE TABLE test24 (l STRUCT(l1 STRUCT(i ${type})[])[])
+
+statement ok
+INSERT INTO test24 VALUES
+([{'l1': [{'i': 0}]}, {'l1': [{'i': 0}]}]),
+([{'l1': [{'i': 0}]}, {'l1': [{'i': 1}]}]),
+([{'l1': [{'i': 0}]}, {'l1': [{'i': 1}, {'i': 2}]}]),
+([{'l1': [{'i': 0}]}, {'l1': [{'i': 1}, {'i': 1}]}]),
+([{'l1': [{'i': 1}]}, {'l1': [{'i': 0}]}]),
+([{'l1': [{'i': 1}]}, {'l1': [{'i': 1}]}]),
+([{'l1': [{'i': NULL}]}, {'l1': [{'i': 0}]}]),
+([{'l1': [{'i': NULL}]}, {'l1': [{'i': 1}]}]),
+([{'l1': [{'i': 0}]}, {'l1': [{'i': NULL}]}, {'l1': [{'i': NULL}]}]),
+([{'l1': [{'i': 1}]}, {'l1': [{'i': NULL}]}, {'l1': [{'i': 1}]}]),
+([{'l1': [{'i': 0}]}, {'l1': [{'i': NULL}]}]),
+([{'l1': [{'i': 1}]}, {'l1': [{'i': NULL}]}]),
+([{'l1': [{'i': 1}]}, {'l1': [{'i': NULL}]}, {'l1': [{'i': NULL}]}])
+
+query T
+SELECT * FROM test24 ORDER BY l
+----
+[{'l1': [{'i': 0}]}, {'l1': [{'i': 0}]}]
+[{'l1': [{'i': 0}]}, {'l1': [{'i': 1}]}]
+[{'l1': [{'i': 0}]}, {'l1': [{'i': 1}, {'i': 1}]}]
+[{'l1': [{'i': 0}]}, {'l1': [{'i': 1}, {'i': 2}]}]
+[{'l1': [{'i': 0}]}, {'l1': [{'i': NULL}]}]
+[{'l1': [{'i': 0}]}, {'l1': [{'i': NULL}]}, {'l1': [{'i': NULL}]}]
+[{'l1': [{'i': 1}]}, {'l1': [{'i': 0}]}]
+[{'l1': [{'i': 1}]}, {'l1': [{'i': 1}]}]
+[{'l1': [{'i': 1}]}, {'l1': [{'i': NULL}]}]
+[{'l1': [{'i': 1}]}, {'l1': [{'i': NULL}]}, {'l1': [{'i': 1}]}]
+[{'l1': [{'i': 1}]}, {'l1': [{'i': NULL}]}, {'l1': [{'i': NULL}]}]
+[{'l1': [{'i': NULL}]}, {'l1': [{'i': 0}]}]
+[{'l1': [{'i': NULL}]}, {'l1': [{'i': 1}]}]
+
+query T
+SELECT * FROM test24 ORDER BY l DESC
+----
+[{'l1': [{'i': NULL}]}, {'l1': [{'i': 1}]}]
+[{'l1': [{'i': NULL}]}, {'l1': [{'i': 0}]}]
+[{'l1': [{'i': 1}]}, {'l1': [{'i': NULL}]}, {'l1': [{'i': NULL}]}]
+[{'l1': [{'i': 1}]}, {'l1': [{'i': NULL}]}, {'l1': [{'i': 1}]}]
+[{'l1': [{'i': 1}]}, {'l1': [{'i': NULL}]}]
+[{'l1': [{'i': 1}]}, {'l1': [{'i': 1}]}]
+[{'l1': [{'i': 1}]}, {'l1': [{'i': 0}]}]
+[{'l1': [{'i': 0}]}, {'l1': [{'i': NULL}]}, {'l1': [{'i': NULL}]}]
+[{'l1': [{'i': 0}]}, {'l1': [{'i': NULL}]}]
+[{'l1': [{'i': 0}]}, {'l1': [{'i': 1}, {'i': 2}]}]
+[{'l1': [{'i': 0}]}, {'l1': [{'i': 1}, {'i': 1}]}]
+[{'l1': [{'i': 0}]}, {'l1': [{'i': 1}]}]
+[{'l1': [{'i': 0}]}, {'l1': [{'i': 0}]}]
+
+statement ok
+DROP TABLE test0
+
+statement ok
+DROP TABLE test2
+
+statement ok
+DROP TABLE test3
+
+statement ok
+DROP TABLE test4
+
+statement ok
+DROP TABLE test10
+
+statement ok
+DROP TABLE test11
+
+statement ok
+DROP TABLE test13
+
+statement ok
+DROP TABLE test20
+
+statement ok
+DROP TABLE test22
+
+statement ok
+DROP TABLE test24
+
+statement ok
+PRAGMA debug_force_external=false
+
+endloop
+
+endloop
+
+# test floating point types, internal and external
+statement ok
+PRAGMA debug_force_external=true
+
+loop i 0 2
+
+foreach type float double
+
+statement ok
+CREATE TABLE test2 (i ${type}[][])
+
+statement ok
+INSERT INTO test2 VALUES ([[1.2]]), ([[1.1]]), ([NULL, []]), ([[1.1], [1.2]]), ([]), ([[]]), ([[1.2], [1.2]]), ([NULL]), (NULL), ([[1.2], [1.3]])
+
+query T
+SELECT * FROM test2 ORDER BY i
+----
+NULL
+[]
+[[]]
+[[1.1]]
+[[1.1], [1.2]]
+[[1.2]]
+[[1.2], [1.2]]
+[[1.2], [1.3]]
+[NULL]
+[NULL, []]
+
+query T
+SELECT * FROM test2 ORDER BY i DESC
+----
+NULL
+[NULL, []]
+[NULL]
+[[1.2], [1.3]]
+[[1.2], [1.2]]
+[[1.2]]
+[[1.1], [1.2]]
+[[1.1]]
+[[]]
+[]
+
+statement ok
+CREATE TABLE test10 (s STRUCT(i ${type}, j ${type}));
+
+statement ok
+INSERT INTO test10 values
+({'i': 1.2, 'j': NULL}),
+({'i': 1.1, 'j': NULL}),
+({'i': 1.2, 'j': 1.3}),
+({'i': 1.1, 'j': 1.2}),
+({'i': 1.2, 'j': 1.2}),
+({'i': NULL, 'j': NULL}),
+(NULL),
+({'i': 1.2, 'j': 1.3})
+
+query T
+SELECT * FROM test10 ORDER BY s
+----
+NULL
+{'i': 1.1, 'j': 1.2}
+{'i': 1.1, 'j': NULL}
+{'i': 1.2, 'j': 1.2}
+{'i': 1.2, 'j': 1.3}
+{'i': 1.2, 'j': 1.3}
+{'i': 1.2, 'j': NULL}
+{'i': NULL, 'j': NULL}
+
+query T
+SELECT * FROM test10 ORDER BY s DESC
+----
+NULL
+{'i': NULL, 'j': NULL}
+{'i': 1.2, 'j': NULL}
+{'i': 1.2, 'j': 1.3}
+{'i': 1.2, 'j': 1.3}
+{'i': 1.2, 'j': 1.2}
+{'i': 1.1, 'j': NULL}
+{'i': 1.1, 'j': 1.2}
+
+statement ok
+CREATE TABLE test24 (l STRUCT(l1 STRUCT(i ${type})[])[])
+
+statement ok
+INSERT INTO test24 VALUES
+([{'l1': [{'i': 1.1}]}, {'l1': [{'i': 1.1}]}]),
+([{'l1': [{'i': 1.1}]}, {'l1': [{'i': 1.2}]}]),
+([{'l1': [{'i': 1.1}]}, {'l1': [{'i': 1.2}, {'i': 1.3}]}]),
+([{'l1': [{'i': 1.1}]}, {'l1': [{'i': 1.2}, {'i': 1.2}]}]),
+([{'l1': [{'i': 1.2}]}, {'l1': [{'i': 1.1}]}]),
+([{'l1': [{'i': 1.2}]}, {'l1': [{'i': 1.2}]}]),
+([{'l1': [{'i': NULL}]}, {'l1': [{'i': 1.1}]}]),
+([{'l1': [{'i': NULL}]}, {'l1': [{'i': 1.2}]}]),
+([{'l1': [{'i': 1.1}]}, {'l1': [{'i': NULL}]}, {'l1': [{'i': NULL}]}]),
+([{'l1': [{'i': 1.2}]}, {'l1': [{'i': NULL}]}, {'l1': [{'i': 1.2}]}]),
+([{'l1': [{'i': 1.1}]}, {'l1': [{'i': NULL}]}]),
+([{'l1': [{'i': 1.2}]}, {'l1': [{'i': NULL}]}]),
+([{'l1': [{'i': 1.2}]}, {'l1': [{'i': NULL}]}, {'l1': [{'i': NULL}]}])
+
+query T
+SELECT * FROM test24 ORDER BY l
+----
+[{'l1': [{'i': 1.1}]}, {'l1': [{'i': 1.1}]}]
+[{'l1': [{'i': 1.1}]}, {'l1': [{'i': 1.2}]}]
+[{'l1': [{'i': 1.1}]}, {'l1': [{'i': 1.2}, {'i': 1.2}]}]
+[{'l1': [{'i': 1.1}]}, {'l1': [{'i': 1.2}, {'i': 1.3}]}]
+[{'l1': [{'i': 1.1}]}, {'l1': [{'i': NULL}]}]
+[{'l1': [{'i': 1.1}]}, {'l1': [{'i': NULL}]}, {'l1': [{'i': NULL}]}]
+[{'l1': [{'i': 1.2}]}, {'l1': [{'i': 1.1}]}]
+[{'l1': [{'i': 1.2}]}, {'l1': [{'i': 1.2}]}]
+[{'l1': [{'i': 1.2}]}, {'l1': [{'i': NULL}]}]
+[{'l1': [{'i': 1.2}]}, {'l1': [{'i': NULL}]}, {'l1': [{'i': 1.2}]}]
+[{'l1': [{'i': 1.2}]}, {'l1': [{'i': NULL}]}, {'l1': [{'i': NULL}]}]
+[{'l1': [{'i': NULL}]}, {'l1': [{'i': 1.1}]}]
+[{'l1': [{'i': NULL}]}, {'l1': [{'i': 1.2}]}]
+
+query T
+SELECT * FROM test24 ORDER BY l DESC
+----
+[{'l1': [{'i': NULL}]}, {'l1': [{'i': 1.2}]}]
+[{'l1': [{'i': NULL}]}, {'l1': [{'i': 1.1}]}]
+[{'l1': [{'i': 1.2}]}, {'l1': [{'i': NULL}]}, {'l1': [{'i': NULL}]}]
+[{'l1': [{'i': 1.2}]}, {'l1': [{'i': NULL}]}, {'l1': [{'i': 1.2}]}]
+[{'l1': [{'i': 1.2}]}, {'l1': [{'i': NULL}]}]
+[{'l1': [{'i': 1.2}]}, {'l1': [{'i': 1.2}]}]
+[{'l1': [{'i': 1.2}]}, {'l1': [{'i': 1.1}]}]
+[{'l1': [{'i': 1.1}]}, {'l1': [{'i': NULL}]}, {'l1': [{'i': NULL}]}]
+[{'l1': [{'i': 1.1}]}, {'l1': [{'i': NULL}]}]
+[{'l1': [{'i': 1.1}]}, {'l1': [{'i': 1.2}, {'i': 1.3}]}]
+[{'l1': [{'i': 1.1}]}, {'l1': [{'i': 1.2}, {'i': 1.2}]}]
+[{'l1': [{'i': 1.1}]}, {'l1': [{'i': 1.2}]}]
+[{'l1': [{'i': 1.1}]}, {'l1': [{'i': 1.1}]}]
+
+statement ok
+DROP TABLE test2
+
+statement ok
+DROP TABLE test10
+
+statement ok
+DROP TABLE test24
+
+statement ok
+PRAGMA debug_force_external=false
+
+endloop
+
+endloop
+
+# test bool
+statement ok
+CREATE TABLE test0 (i BOOL[])
+
+statement ok
+INSERT INTO test0 VALUES ([true]), ([false]), ([false, true]), ([]), ([true, true]), ([NULL]), (NULL), ([false, false])
+
+query T
+SELECT * FROM test0 ORDER BY i
+----
+NULL
+[]
+[false]
+[false, false]
+[false, true]
+[true]
+[true, true]
+[NULL]
+
+query T
+SELECT * FROM test0 ORDER BY i DESC
+----
+NULL
+[NULL]
+[true, true]
+[true]
+[false, true]
+[false, false]
+[false]
+[]
+
+statement ok
+CREATE TABLE test10 (s STRUCT(i BOOL, j BOOL));
+
+statement ok
+INSERT INTO test10 values
+({'i': true, 'j': NULL}),
+({'i': false, 'j': NULL}),
+({'i': true, 'j': true}),
+({'i': false, 'j': true}),
+({'i': NULL, 'j': false}),
+({'i': NULL, 'j': true}),
+({'i': NULL, 'j': NULL}),
+(NULL),
+({'i': false, 'j': false})
+
+query T
+SELECT * FROM test10 ORDER BY s
+----
+NULL
+{'i': false, 'j': false}
+{'i': false, 'j': true}
+{'i': false, 'j': NULL}
+{'i': true, 'j': true}
+{'i': true, 'j': NULL}
+{'i': NULL, 'j': false}
+{'i': NULL, 'j': true}
+{'i': NULL, 'j': NULL}
+
+query T
+SELECT * FROM test10 ORDER BY s DESC
+----
+NULL
+{'i': NULL, 'j': NULL}
+{'i': NULL, 'j': true}
+{'i': NULL, 'j': false}
+{'i': true, 'j': NULL}
+{'i': true, 'j': true}
+{'i': false, 'j': NULL}
+{'i': false, 'j': true}
+{'i': false, 'j': false}
+
+statement ok
+DROP TABLE test0
+
+statement ok
+DROP TABLE test10
+
+# test interval
+statement ok
+CREATE TABLE test0 (i INTERVAL[])
+
+statement ok
+INSERT INTO test0 VALUES (['2 years']), (['1 year']), (['1 year', '2 years']), ([]), (['2 years', '2 years']), ([NULL]), (NULL), (['1 year', '1 year'])
+
+query T
+SELECT * FROM test0 ORDER BY i
+----
+NULL
+[]
+[1 year]
+[1 year, 1 year]
+[1 year, 2 years]
+[2 years]
+[2 years, 2 years]
+[NULL]
+
+query T
+SELECT * FROM test0 ORDER BY i DESC
+----
+NULL
+[NULL]
+[2 years, 2 years]
+[2 years]
+[1 year, 2 years]
+[1 year, 1 year]
+[1 year]
+[]
+
+statement ok
+CREATE TABLE test10 (s STRUCT(i INTERVAL, j INTERVAL));
+
+statement ok
+INSERT INTO test10 values
+({'i': '2 years', 'j': NULL}),
+({'i': '1 year', 'j': NULL}),
+({'i': '2 years', 'j': '2 years'}),
+({'i': '1 year', 'j': '2 years'}),
+({'i': '2 years', 'j': '1 year'}),
+({'i': NULL, 'j': '1 year'}),
+({'i': NULL, 'j': '2 years'}),
+({'i': NULL, 'j': NULL}),
+(NULL),
+({'i': '1 year', 'j': '1 year'})
+
+query T
+SELECT * FROM test10 ORDER BY s
+----
+NULL
+{'i': 1 year, 'j': 1 year}
+{'i': 1 year, 'j': 2 years}
+{'i': 1 year, 'j': NULL}
+{'i': 2 years, 'j': 1 year}
+{'i': 2 years, 'j': 2 years}
+{'i': 2 years, 'j': NULL}
+{'i': NULL, 'j': 1 year}
+{'i': NULL, 'j': 2 years}
+{'i': NULL, 'j': NULL}
+
+
+query T
+SELECT * FROM test10 ORDER BY s DESC
+----
+NULL
+{'i': NULL, 'j': NULL}
+{'i': NULL, 'j': 2 years}
+{'i': NULL, 'j': 1 year}
+{'i': 2 years, 'j': NULL}
+{'i': 2 years, 'j': 2 years}
+{'i': 2 years, 'j': 1 year}
+{'i': 1 year, 'j': NULL}
+{'i': 1 year, 'j': 2 years}
+{'i': 1 year, 'j': 1 year}
+
+# Brutally complex test from issue #5669 where 
+# we were not advancing pointers for NULL struct entries
+# The test case involved comparing two identical structs 
+# that ended up reading bad memory but not failing until much later. 
+# It also included proprietary data and has been obfuscated.
+statement ok
+CREATE TABLE test25(hits STRUCT(znGQGrPPR BIGINT,
+    oPTw BIGINT,
+    faFP BIGINT,
+    uEdoxN BIGINT,
+    Swjmryop BOOLEAN,
+    VIXNrOiClIevZ BOOLEAN,
+    HcaUpnMJFZ BOOLEAN,
+    ykHcZY BOOLEAN,
+    DvxSpZK VARCHAR,
+    YVGP STRUCT(IgDBxUoG VARCHAR,
+    gNbYDDIw VARCHAR,
+    yzKNPwwcg VARCHAR,
+    DibXeeoeQSGYu VARCHAR,
+    hrWWrsiIiUofLy VARCHAR,
+    ASfMkqmeOqQuoB VARCHAR,
+    uVprLfTzUvDvkP VARCHAR,
+    VkUqzkNMWJgigg VARCHAR,
+    rvWZXRcwRHxyBe VARCHAR),
+    jadhjuVProR STRUCT(jPNTLUlLWDVzv VARCHAR,
+    nAvhKBDCqvoqrnOocS BIGINT,
+    xDBVUYlwAIswxy BIGINT,
+    xqQhrLZoGdTMHuHWdYa BIGINT,
+    HwCKcHtSqPK VARCHAR,
+    kpJOlzKWnOqh VARCHAR,
+    FWSJWhYpedcRQKrZhDCnVeB BIGINT,
+    CPlooJwmNBreMCdWUna BIGINT,
+    LqhwzdzEIiryXAhMTxkXdOJJ BIGINT,
+    qqMzZNLkIpokwdLUU VARCHAR),
+    QyNS STRUCT(jPNTLUlLWDVzv VARCHAR,
+    TayswObIQWI VARCHAR,
+    PbvWmZCBFaFstiI VARCHAR,
+    abOCIKAItE VARCHAR,
+    cytRvqHxcNMO BIGINT,
+    tDrBPbtKtyb BIGINT,
+    kpJOlzKWnOqh VARCHAR,
+    WQtAsJPqBUnUMEaU BIGINT),
+    mASndgwqPuJ STRUCT(gfObFmWyCOjcKeIHoT VARCHAR),
+    jKlgxqk STRUCT(loas VARCHAR,
+    eQBbpMd VARCHAR,
+    Mq VARCHAR,
+    IZOSPuHhhxj VARCHAR,
+    CXcvMVHHwromQE VARCHAR,
+    JtSEjNk VARCHAR,
+    xQfpnypFfh VARCHAR,
+    tnMGA VARCHAR,
+    AnwyxMGchr VARCHAR,
+    wPmfaFxhPPKzwfPCb VARCHAR,
+    vsoBnKzcUwrNkp VARCHAR,
+    XCMbItPFANv VARCHAR),
+    PtAAZqHJoNJFr STRUCT(XZitsWIdUVj VARCHAR,
+    YuakMMl BOOLEAN,
+    zwLMFgPAar BIGINT,
+    ZZYrqGPvyHqCxmz BIGINT),
+    PBaBpTrgf STRUCT(EgANwCBEnprKw VARCHAR,
+    wIOvbrWCLyJ VARCHAR,
+    hKOGMlSamD VARCHAR,
+    EPfWsjecqG BIGINT),
+    okorLUP STRUCT(GIsgSGBmzK VARCHAR,
+    MqnNnVixFjvXF VARCHAR,
+    pWVjrJXMpemUIfzCW VARCHAR,
+    noTGJwpPnvQiHm VARCHAR,
+    DMbdkCaXbPqs VARCHAR,
+    IycrFLnjgvRNut BIGINT,
+    bpfoIotUEOGbLunbIol BIGINT,
+    TjoylJjMJoiD BIGINT,
+    aLgLncUnnGlNBduUI BIGINT,
+    NKWyfYnlwjUnjZL BIGINT,
+    FFpmzMxIokQSSfbXdzW BIGINT,
+    vqZpxHuoxlbsNrdtuymeQgHY BIGINT,
+    emdolqTMHfXc BOOLEAN,
+    oJRmvMi BOOLEAN,
+    qLqUHjvwVEVAcnbs STRUCT(iJwqw BIGINT,
+    HUvFz VARCHAR)[],
+    sNHhdeCoAZxDL STRUCT(iJwqw BIGINT,
+    HUvFz BIGINT)[],
+    SnajIRdGepAgJgh VARCHAR,
+    koWzRJyBqvmiqivzlEM BIGINT,
+    reyVgABDLNFilPVvD VARCHAR)[],
+    SVGhSmWDI STRUCT(GtgKMpV VARCHAR,
+    yjXiRwzVE VARCHAR,
+    qgYlOUPRtAnYw VARCHAR,
+    fTgoSMpOgpNJQ VARCHAR)[],
+    FPKSWtghhQOVEnFBOkD STRUCT(uAubCghuPjB BOOLEAN,
+    pfFOVEOCperm BOOLEAN),
+    OTrWwS STRUCT(NapvwzseNIGz BIGINT,
+    LtOAwRiqDQjfDckMm BIGINT),
+    AcXbgyymirKTQZx STRUCT(yUwSxZiZSSr VARCHAR,
+    lDTC BIGINT,
+    UhjBpZ VARCHAR),
+    bBhpQAMDWl STRUCT(RfphILWpsPYd VARCHAR,
+    jEyACWwvLTaqFDfJW VARCHAR)[],
+    JmBMoMkzD STRUCT(tsFDpOynl BIGINT,
+    jBEsPfpGRXMOLE BIGINT,
+    ZbRXIhWtIKLYujVvm BIGINT,
+    NDcVjtQYYmiNKIJYVsSfKopA BIGINT,
+    uSOqEmVyjD BIGINT,
+    VPXBBGRbywnJY BIGINT,
+    AUwjuuzTSKEXh BIGINT,
+    uELKFfPuERKGwvQjPbcEti BIGINT,
+    TeXtUcBFcnqrAL BIGINT,
+    yLBcRcbcRfWivpsjmBffCfUO BIGINT,
+    otFzPBKplrWzttldrcwMcpCPAgWQv BIGINT,
+    IgEbHurDtzoXObIewuZnEHiMYIKuYnCV BIGINT,
+    CTpLqGEIvocTwMVwEeRzoONDgZovhNPoRwSvnng BIGINT,
+    TQWiiumCqxqGndAyhkVBxOcfo BIGINT,
+    rpncrVHBmLjzcfanmjDAUZUAKczw BIGINT,
+    aEzMpiQuuETAdZwEYvHIlJDxtGKW BIGINT,
+    rHUiHuoBmYbRkayocVebIIIjZLRHRWSAzuilF BIGINT,
+    uYsFSGNaxzsuXAeniZaYrhAqwcfXg BIGINT,
+    KUyXJcDqWHQZgDHqloaD BIGINT,
+    dpJiXgrlyHJIfEvXMahZJCffU BIGINT,
+    xohgzXNCOTJFMmkyeCKYdWCLiXXa BIGINT,
+    gfcZKKxRlEUJzMUXgBBSUxSzdMlldSXwtVx BIGINT,
+    UzgmNbcAmjElKBwRPuFum BIGINT,
+    TzlEnhCSQSvoImjUUHsaxsis BIGINT,
+    BUsfzMIYSSUuMDiolbXuOlTj BIGINT,
+    YfiCTxNPfBvchDaDcMEsOMeOONmxgeagA BIGINT,
+    pxcpkGReepBqRZKMRzzQQXKdT BIGINT,
+    IOtfUjWOT BIGINT,
+    dUIQVUzKnzskJs BIGINT,
+    LLPsdqyabsOKWKNFd BIGINT,
+    ClmlNfsvRoXZlhTWSCkRodqF BIGINT,
+    ipOEKzEGfG BIGINT,
+    yfelArbMCP BIGINT,
+    EKUWzPngAEAJAnOeWNIWmq BIGINT,
+    GScdZElahOtfZj BIGINT,
+    WPFdULdNS BIGINT,
+    EJcZYyMpAIUcog BIGINT,
+    eIpbtmcjgLLVFht BIGINT,
+    mcUwKVRVbXjwhbOjS BIGINT,
+    DgvkXnDHuKutxUsRfvj BIGINT,
+    dxguUbIdzjzrdS BIGINT,
+    WlXYtYZmUl BIGINT,
+    umNLTdfGzr BIGINT,
+    YdimQHsARK VARCHAR,
+    zDokzjSEen VARCHAR,
+    fsOUigHdkvGK VARCHAR),
+    ykADKYbguMZVJlm STRUCT(iJwqw BIGINT,
+    ZAvYeMTYlHUDL VARCHAR,
+    THpzyEirnnGWFB VARCHAR)[],
+    qLqUHjvwVEVAcnbs STRUCT(iJwqw BIGINT,
+    HUvFz VARCHAR)[],
+    sNHhdeCoAZxDL STRUCT(iJwqw BIGINT,
+    HUvFz BIGINT)[],
+    gfhz VARCHAR,
+    TLCZOP STRUCT(HcPewmZRqcghwBjHzRkzkfkE VARCHAR,
+    CjpMZoCThqMoBvimtzvxlrt VARCHAR,
+    lgpkLyrQluGzHkNKTx BIGINT,
+    RLKYfEkkNdlrvlJPovBKJuQ VARCHAR,
+    nqFKVVNDCaNIl VARCHAR,
+    scVtCBQcYwyNnrmgIpYpbWdQ BIGINT,
+    ZZiHFmKGKDvmRmwmfctstfV VARCHAR,
+    EDIJHetonPOYCgULGYrSkNkIwpxche VARCHAR),
+    NPNDFGbRcPrfwzX STRUCT(rtBuZDmFWFmHnY BIGINT,
+    RTibIJgjJCkQ BIGINT,
+    GQlWYsoIaMIPTEuJ BIGINT,
+    SYibbnqRnmYxaNt BIGINT,
+    NsAFWTEXcfDOLESXWv BIGINT,
+    plPdCaKdtCUzeVXj BIGINT,
+    ZZNqWUqyRyAOvoTDvaos BIGINT,
+    FNfoNoaWgwOqCYXWFS BIGINT,
+    XtuDUcHXCXVTFPovlMtXdQA BIGINT,
+    DdoFfFvEkjndgaBZoU BIGINT,
+    fUskQHoNqzLeLFFgaSHt BIGINT,
+    jntGEjUlojDyKFN BIGINT,
+    YFaVhOMmHFMZxgQF BIGINT,
+    bdogaquNxDhqVZbJeP VARCHAR,
+    HjxVQylJhDzgrvuDok VARCHAR,
+    MMOoWhxOKtbFYka VARCHAR),
+    QoPuTOMwkHrWlOQfXP STRUCT(BWuxKiTgmIKfhQchATayvQQNK VARCHAR,
+    zJHYVBvayYgYuuTKoQNBUdzU VARCHAR),
+    AMEuaLMkYkWD STRUCT(uPPvDVnmYBYzy VARCHAR,
+    jBMprvFduhOZV VARCHAR,
+    jfYSlkuRisuBn VARCHAR,
+    oVzrSeaBARUqj VARCHAR,
+    fohkQzphRKBcf VARCHAR,
+    wBGLxmqEjBKvzBJbjMTFG VARCHAR,
+    SPxYBpYweqbLnQMSICdhZ VARCHAR,
+    ZEAxzLIwQFaXXKSgbmhvK VARCHAR,
+    PJfgUIDgnaitTmCtKdMQr VARCHAR,
+    yqijinxAFkJMXODcQDKdN VARCHAR,
+    mjLsWAhqLXRDzgvRmkinTAYD BIGINT,
+    PVICapLQHaXgaKygxlflolcY BIGINT,
+    NspSTjSzPPqKlIPLZAtpEDJF BIGINT,
+    ZqqFfWfQDHysYpyVvOuObrwY BIGINT,
+    AqCRjeBJfWwVjdwEEsqsZisL BIGINT),
+    uRabSyccPe VARCHAR,
+    XvkQOurJWuaDiZK STRUCT(tsFDpOynl BIGINT,
+    jBEsPfpGRXMOLE BIGINT,
+    ZbRXIhWtIKLYujVvm BIGINT,
+    NDcVjtQYYmiNKIJYVsSfKopA BIGINT,
+    uSOqEmVyjD BIGINT,
+    VPXBBGRbywnJY BIGINT,
+    AUwjuuzTSKEXh BIGINT,
+    uELKFfPuERKGwvQjPbcEti BIGINT,
+    TeXtUcBFcnqrAL BIGINT,
+    yLBcRcbcRfWivpsjmBffCfUO BIGINT,
+    otFzPBKplrWzttldrcwMcpCPAgWQv BIGINT,
+    IgEbHurDtzoXObIewuZnEHiMYIKuYnCV BIGINT,
+    CTpLqGEIvocTwMVwEeRzoONDgZovhNPoRwSvnng BIGINT,
+    TQWiiumCqxqGndAyhkVBxOcfo BIGINT,
+    rpncrVHBmLjzcfanmjDAUZUAKczw BIGINT,
+    aEzMpiQuuETAdZwEYvHIlJDxtGKW BIGINT,
+    rHUiHuoBmYbRkayocVebIIIjZLRHRWSAzuilF BIGINT,
+    uYsFSGNaxzsuXAeniZaYrhAqwcfXg BIGINT,
+    KUyXJcDqWHQZgDHqloaD BIGINT,
+    dpJiXgrlyHJIfEvXMahZJCffU BIGINT,
+    xohgzXNCOTJFMmkyeCKYdWCLiXXa BIGINT,
+    gfcZKKxRlEUJzMUXgBBSUxSzdMlldSXwtVx BIGINT,
+    UzgmNbcAmjElKBwRPuFum BIGINT,
+    TzlEnhCSQSvoImjUUHsaxsis BIGINT,
+    BUsfzMIYSSUuMDiolbXuOlTj BIGINT,
+    YfiCTxNPfBvchDaDcMEsOMeOONmxgeagA BIGINT,
+    pxcpkGReepBqRZKMRzzQQXKdT BIGINT,
+    IOtfUjWOT BIGINT,
+    dUIQVUzKnzskJs BIGINT,
+    LLPsdqyabsOKWKNFd BIGINT,
+    ClmlNfsvRoXZlhTWSCkRodqF BIGINT,
+    ipOEKzEGfG BIGINT,
+    yfelArbMCP BIGINT,
+    EKUWzPngAEAJAnOeWNIWmq BIGINT,
+    GScdZElahOtfZj BIGINT,
+    WPFdULdNS BIGINT,
+    EJcZYyMpAIUcog BIGINT,
+    eIpbtmcjgLLVFht BIGINT,
+    mcUwKVRVbXjwhbOjS BIGINT,
+    DgvkXnDHuKutxUsRfvj BIGINT,
+    dxguUbIdzjzrdS BIGINT,
+    WlXYtYZmUl BIGINT,
+    umNLTdfGzr BIGINT,
+    YdimQHsARK VARCHAR,
+    zDokzjSEen VARCHAR,
+    fsOUigHdkvGK VARCHAR)[])[]);
+
+statement ok
+INSERT INTO test25 VALUES([{'znGQGrPPR': 1,
+    'oPTw': 0,
+    'faFP': 2,
+    'uEdoxN': 59,
+    'Swjmryop': NULL,
+    'VIXNrOiClIevZ': true,
+    'HcaUpnMJFZ': true,
+    'ykHcZY': true,
+    'DvxSpZK': 'tGfxQbvUCWehgmxGyGgBeJhdIWntfkLtonLnpveSTCqepaZwKETAAtIPIqEppznCDDpdPQonXQXKjeIbqOgTIpivdxPviZxkKMtleUUwvqEDOvqjTHuvskrdXeeoNMGpXkrSdYOhDGNkFcgCFChKavCflzRJoXrnjLgFGogROuusCbjbCaYyUZIVdBUpOFjpoeSpbpzSHofDcPuDZSbtpjDtaOmzJreITcsXPVqXnqvEzuzpGIXvefuMeQEdxKCsFWbTNl',
+    'YVGP': {'IgDBxUoG': 'XyQOqOyAnyZ',
+    'gNbYDDIw': 'cfsRwAfwmrVimfTykGVKuWypjKNHXcm',
+    'yzKNPwwcg': 'RYfl',
+    'DibXeeoeQSGYu': NULL,
+    'hrWWrsiIiUofLy': NULL,
+    'ASfMkqmeOqQuoB': 'XyQOqOyAnyZ',
+    'uVprLfTzUvDvkP': '',
+    'VkUqzkNMWJgigg': '',
+    'rvWZXRcwRHxyBe': ''},
+    'jadhjuVProR': NULL,
+    'QyNS': NULL,
+    'mASndgwqPuJ': NULL,
+    'jKlgxqk': {'loas': NULL,
+    'eQBbpMd': NULL,
+    'Mq': NULL,
+    'IZOSPuHhhxj': NULL,
+    'CXcvMVHHwromQE': NULL,
+    'JtSEjNk': NULL,
+    'xQfpnypFfh': NULL,
+    'tnMGA': NULL,
+    'AnwyxMGchr': 'afUPRYRCSQmdcdtQYydnKGvviGtorsdOovCYjwCSlY',
+    'wPmfaFxhPPKzwfPCb': 'afUPRYRCSQmdcdtQYydnKGvviGtorsdOovCYjwCSlY',
+    'vsoBnKzcUwrNkp': 'afUPRYRCSQmdcdtQYydnKGvviGtorsdOovCYjwCSlY',
+    'XCMbItPFANv': 0},
+    'PtAAZqHJoNJFr': {'XZitsWIdUVj': NULL,
+    'YuakMMl': true,
+    'zwLMFgPAar': NULL,
+    'ZZYrqGPvyHqCxmz': NULL},
+    'PBaBpTrgf': NULL,
+    'okorLUP': [],
+    'SVGhSmWDI': [{'GtgKMpV': 'MVFWmJlKBMxAB',
+    'yjXiRwzVE': 'kYhtvFo',
+    'qgYlOUPRtAnYw': 'ijQKnKaopVcYGXaXsdNtLmOIZi',
+    'fTgoSMpOgpNJQ': 'AJVzA'},
+    {'GtgKMpV': 'MBBosQekfLHmBgESESLTW',
+    'yjXiRwzVE': 'zmOeIaLIr',
+    'qgYlOUPRtAnYw': 'ccqPBhTzhudkeFfHImrrei',
+    'fTgoSMpOgpNJQ': 'bSyEAmJjsLO'},
+    {'GtgKMpV': 'gHkbLJZKCzjMtfUmfTShD',
+    'yjXiRwzVE': 'XCNrflSANYjQW',
+    'qgYlOUPRtAnYw': 'bnVwblyKiYrmBOnj',
+    'fTgoSMpOgpNJQ': 'aSfdNGF'},
+    {'GtgKMpV': 'eEgScdEsdRGrkTODjpkBAxd',
+    'yjXiRwzVE': 'aZXHENozGtPolSS',
+    'qgYlOUPRtAnYw': 'mttKSWiRQhrlAguHXh',
+    'fTgoSMpOgpNJQ': 'nLdkePN'},
+    {'GtgKMpV': 'NkpxeWPzMqyIraIlvitxdysD',
+    'yjXiRwzVE': 'euIYxc',
+    'qgYlOUPRtAnYw': 'oixhzagMYgrRGdjApvUrQNAhCMlr',
+    'fTgoSMpOgpNJQ': 'pfVmSTagxMbjAvZFh'},
+    {'GtgKMpV': 'tEuwOvdvbaxENlzBxGudMyjFRAJ',
+    'yjXiRwzVE': 'lJahfprsh',
+    'qgYlOUPRtAnYw': 'qLcMIslAgmqMfnFoAXf',
+    'fTgoSMpOgpNJQ': 'RJZSKwlsBVOMMIHyI'},
+    {'GtgKMpV': 'QvAZuwsYVFwNLZSGImMk',
+    'yjXiRwzVE': 'vBcsuLVMptMc',
+    'qgYlOUPRtAnYw': 'tniBRScobiyWeNjFDeolXCaWY',
+    'fTgoSMpOgpNJQ': 'fSKVZpAlpXiUB'},
+    {'GtgKMpV': 'wsvEVmWnzdMOZEeMRfrVu',
+    'yjXiRwzVE': 'UumrECUGNgUhW',
+    'qgYlOUPRtAnYw': 'ftMupCdtrKzxkJlLCFINQkVHaE',
+    'fTgoSMpOgpNJQ': 'KNpaXiOejRPdc'},
+    {'GtgKMpV': 'jdnWYFIRdcfrhUeCKNXhv',
+    'yjXiRwzVE': 'vNrytvSkVtNxg',
+    'qgYlOUPRtAnYw': 'gmIacFmQlTTUtMqbemzHXXylMt',
+    'fTgoSMpOgpNJQ': 'aSDjzDdZLMZvn'}],
+    'FPKSWtghhQOVEnFBOkD': {'uAubCghuPjB': true,
+    'pfFOVEOCperm': NULL},
+    'OTrWwS': NULL,
+    'AcXbgyymirKTQZx': {'yUwSxZiZSSr': 0,
+    'lDTC': 1,
+    'UhjBpZ': NULL},
+    'bBhpQAMDWl': [],
+    'JmBMoMkzD': NULL,
+    'ykADKYbguMZVJlm': [],
+    'qLqUHjvwVEVAcnbs': [],
+    'sNHhdeCoAZxDL': [],
+    'gfhz': 'waJz',
+    'TLCZOP': {'HcPewmZRqcghwBjHzRkzkfkE': NULL,
+    'CjpMZoCThqMoBvimtzvxlrt': NULL,
+    'lgpkLyrQluGzHkNKTx': NULL,
+    'RLKYfEkkNdlrvlJPovBKJuQ': NULL,
+    'nqFKVVNDCaNIl': 'dQTrPlzsz',
+    'scVtCBQcYwyNnrmgIpYpbWdQ': NULL,
+    'ZZiHFmKGKDvmRmwmfctstfV': 'GS',
+    'EDIJHetonPOYCgULGYrSkNkIwpxche': 'waA'},
+    'NPNDFGbRcPrfwzX': NULL,
+    'QoPuTOMwkHrWlOQfXP': NULL,
+    'AMEuaLMkYkWD': {'uPPvDVnmYBYzy': 'dQTrPlzsz',
+    'jBMprvFduhOZV': 'dQTrPlzsz',
+    'jfYSlkuRisuBn': 'dQTrPlzsz',
+    'oVzrSeaBARUqj': 'dQTrPlzsz',
+    'fohkQzphRKBcf': 'dQTrPlzsz',
+    'wBGLxmqEjBKvzBJbjMTFG': 'osmgoJpKYP',
+    'SPxYBpYweqbLnQMSICdhZ': 'osmgoJpKYP',
+    'ZEAxzLIwQFaXXKSgbmhvK': 'osmgoJpKYP',
+    'PJfgUIDgnaitTmCtKdMQr': 'osmgoJpKYP',
+    'yqijinxAFkJMXODcQDKdN': 'osmgoJpKYP',
+    'mjLsWAhqLXRDzgvRmkinTAYD': NULL,
+    'PVICapLQHaXgaKygxlflolcY': NULL,
+    'NspSTjSzPPqKlIPLZAtpEDJF': NULL,
+    'ZqqFfWfQDHysYpyVvOuObrwY': NULL,
+    'AqCRjeBJfWwVjdwEEsqsZisL': NULL},
+    'uRabSyccPe': 'oeL',
+    'XvkQOurJWuaDiZK': []},
+    {'znGQGrPPR': 2,
+    'oPTw': 21483,
+    'faFP': 3,
+    'uEdoxN': 0,
+    'Swjmryop': NULL,
+    'VIXNrOiClIevZ': true,
+    'HcaUpnMJFZ': NULL,
+    'ykHcZY': NULL,
+    'DvxSpZK': 'tGfxQbvUCWehgmxGyGgBeJhdIWntfkLtonLnpveSTCqepaZwKETAAtIPIqEppznCDDpdPQonXQXKjeIbqOgTIpivdxPviZxkKMtleUUwvqEDOvqjTHuvskrdXeeoNMGpXkrSdYOhDGNkFcgCFChKavCflzRJoXrnjLgFGogROuusCbjbCaYyUZIVdBUpOFjpoeSpbpzSHofDcPuDZSbtpjDtaOmzJreITcsXPVqXnqvEzuzpGIXvefuMeQEdxKCsFWbTNl',
+    'YVGP': {'IgDBxUoG': 'XyQOqOyAnyZ',
+    'gNbYDDIw': 'cfsRwAfwmrVimfTykGVKuWypjKNHXcm',
+    'yzKNPwwcg': 'RYfl',
+    'DibXeeoeQSGYu': NULL,
+    'hrWWrsiIiUofLy': NULL,
+    'ASfMkqmeOqQuoB': 'XyQOqOyAnyZ',
+    'uVprLfTzUvDvkP': '',
+    'VkUqzkNMWJgigg': '',
+    'rvWZXRcwRHxyBe': ''},
+    'jadhjuVProR': NULL,
+    'QyNS': NULL,
+    'mASndgwqPuJ': NULL,
+    'jKlgxqk': {'loas': NULL,
+    'eQBbpMd': NULL,
+    'Mq': NULL,
+    'IZOSPuHhhxj': NULL,
+    'CXcvMVHHwromQE': NULL,
+    'JtSEjNk': NULL,
+    'xQfpnypFfh': NULL,
+    'tnMGA': NULL,
+    'AnwyxMGchr': 'afUPRYRCSQmdcdtQYydnKGvviGtorsdOovCYjwCSlY',
+    'wPmfaFxhPPKzwfPCb': 'afUPRYRCSQmdcdtQYydnKGvviGtorsdOovCYjwCSlY',
+    'vsoBnKzcUwrNkp': 'afUPRYRCSQmdcdtQYydnKGvviGtorsdOovCYjwCSlY',
+    'XCMbItPFANv': 0},
+    'PtAAZqHJoNJFr': {'XZitsWIdUVj': NULL,
+    'YuakMMl': true,
+    'zwLMFgPAar': NULL,
+    'ZZYrqGPvyHqCxmz': NULL},
+    'PBaBpTrgf': {'EgANwCBEnprKw': 'TXHLvtCPAAYjJexsMT',
+    'wIOvbrWCLyJ': 'XFreEKOqocIVsnw',
+    'hKOGMlSamD': NULL,
+    'EPfWsjecqG': NULL},
+    'okorLUP': [],
+    'SVGhSmWDI': [{'GtgKMpV': 'wsvEVmWnzdMOZEeMRfrVu',
+    'yjXiRwzVE': 'UumrECUGNgUhW',
+    'qgYlOUPRtAnYw': 'ftMupCdtrKzxkJlLCFINQkVHaE',
+    'fTgoSMpOgpNJQ': 'KNpaXiOejRPdc'}],
+    'FPKSWtghhQOVEnFBOkD': {'uAubCghuPjB': NULL,
+    'pfFOVEOCperm': true},
+    'OTrWwS': NULL,
+    'AcXbgyymirKTQZx': {'yUwSxZiZSSr': 0,
+    'lDTC': 1,
+    'UhjBpZ': NULL},
+    'bBhpQAMDWl': [],
+    'JmBMoMkzD': NULL,
+    'ykADKYbguMZVJlm': [],
+    'qLqUHjvwVEVAcnbs': [],
+    'sNHhdeCoAZxDL': [],
+    'gfhz': 'XYItl',
+    'TLCZOP': {'HcPewmZRqcghwBjHzRkzkfkE': NULL,
+    'CjpMZoCThqMoBvimtzvxlrt': NULL,
+    'lgpkLyrQluGzHkNKTx': NULL,
+    'RLKYfEkkNdlrvlJPovBKJuQ': NULL,
+    'nqFKVVNDCaNIl': 'dQTrPlzsz',
+    'scVtCBQcYwyNnrmgIpYpbWdQ': NULL,
+    'ZZiHFmKGKDvmRmwmfctstfV': 'GS',
+    'EDIJHetonPOYCgULGYrSkNkIwpxche': 'waA'},
+    'NPNDFGbRcPrfwzX': NULL,
+    'QoPuTOMwkHrWlOQfXP': NULL,
+    'AMEuaLMkYkWD': {'uPPvDVnmYBYzy': 'dQTrPlzsz',
+    'jBMprvFduhOZV': 'dQTrPlzsz',
+    'jfYSlkuRisuBn': 'dQTrPlzsz',
+    'oVzrSeaBARUqj': 'dQTrPlzsz',
+    'fohkQzphRKBcf': 'dQTrPlzsz',
+    'wBGLxmqEjBKvzBJbjMTFG': 'dQTrPlzsz',
+    'SPxYBpYweqbLnQMSICdhZ': 'dQTrPlzsz',
+    'ZEAxzLIwQFaXXKSgbmhvK': 'dQTrPlzsz',
+    'PJfgUIDgnaitTmCtKdMQr': 'dQTrPlzsz',
+    'yqijinxAFkJMXODcQDKdN': 'dQTrPlzsz',
+    'mjLsWAhqLXRDzgvRmkinTAYD': NULL,
+    'PVICapLQHaXgaKygxlflolcY': NULL,
+    'NspSTjSzPPqKlIPLZAtpEDJF': NULL,
+    'ZqqFfWfQDHysYpyVvOuObrwY': NULL,
+    'AqCRjeBJfWwVjdwEEsqsZisL': NULL},
+    'uRabSyccPe': 'oeL',
+    'XvkQOurJWuaDiZK': []}]);
+
+statement ok
+SELECT * FROM test25
+UNION ALL 
+SELECT * FROM test25
+ORDER BY hits

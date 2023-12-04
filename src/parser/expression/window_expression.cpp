@@ -1,14 +1,16 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
+
+WindowExpression::WindowExpression(ExpressionType type) : ParsedExpression(type, ExpressionClass::WINDOW) {
+}
 
 WindowExpression::WindowExpression(ExpressionType type, string catalog_name, string schema, const string &function_name)
     : ParsedExpression(type, ExpressionClass::WINDOW), catalog(std::move(catalog_name)), schema(std::move(schema)),
@@ -132,95 +134,6 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	new_window->ignore_nulls = ignore_nulls;
 
 	return std::move(new_window);
-}
-
-void WindowExpression::Serialize(FieldWriter &writer) const {
-	auto &serializer = writer.GetSerializer();
-
-	writer.WriteString(function_name);
-	writer.WriteString(schema);
-	writer.WriteSerializableList(children);
-	writer.WriteSerializableList(partitions);
-	// FIXME: should not use serializer here (probably)?
-	D_ASSERT(orders.size() <= NumericLimits<uint32_t>::Maximum());
-	writer.WriteField<uint32_t>((uint32_t)orders.size());
-	for (auto &order : orders) {
-		order.Serialize(serializer);
-	}
-	writer.WriteField<WindowBoundary>(start);
-	writer.WriteField<WindowBoundary>(end);
-
-	writer.WriteOptional(start_expr);
-	writer.WriteOptional(end_expr);
-	writer.WriteOptional(offset_expr);
-	writer.WriteOptional(default_expr);
-	writer.WriteField<bool>(ignore_nulls);
-	writer.WriteOptional(filter_expr);
-	writer.WriteString(catalog);
-}
-
-void WindowExpression::FormatSerialize(FormatSerializer &serializer) const {
-	ParsedExpression::FormatSerialize(serializer);
-	serializer.WriteProperty("function_name", function_name);
-	serializer.WriteProperty("schema", schema);
-	serializer.WriteProperty("children", children);
-	serializer.WriteProperty("partitions", partitions);
-	serializer.WriteProperty("orders", orders);
-	serializer.WriteProperty("start", start);
-	serializer.WriteProperty("end", end);
-	serializer.WriteOptionalProperty("start_expr", start_expr);
-	serializer.WriteOptionalProperty("end_expr", end_expr);
-	serializer.WriteOptionalProperty("offset_expr", offset_expr);
-	serializer.WriteOptionalProperty("default_expr", default_expr);
-	serializer.WriteProperty("ignore_nulls", ignore_nulls);
-	serializer.WriteOptionalProperty("filter_expr", filter_expr);
-	serializer.WriteProperty("catalog", catalog);
-}
-
-unique_ptr<ParsedExpression> WindowExpression::FormatDeserialize(ExpressionType type,
-                                                                 FormatDeserializer &deserializer) {
-	auto function_name = deserializer.ReadProperty<string>("function_name");
-	auto schema = deserializer.ReadProperty<string>("schema");
-	auto expr = make_uniq<WindowExpression>(type, INVALID_CATALOG, std::move(schema), function_name);
-
-	deserializer.ReadProperty("children", expr->children);
-	deserializer.ReadProperty("partitions", expr->partitions);
-	deserializer.ReadProperty("orders", expr->orders);
-	deserializer.ReadProperty("start", expr->start);
-	deserializer.ReadProperty("end", expr->end);
-	deserializer.ReadOptionalProperty("start_expr", expr->start_expr);
-	deserializer.ReadOptionalProperty("end_expr", expr->end_expr);
-	deserializer.ReadOptionalProperty("offset_expr", expr->offset_expr);
-	deserializer.ReadOptionalProperty("default_expr", expr->default_expr);
-	deserializer.ReadProperty("ignore_nulls", expr->ignore_nulls);
-	deserializer.ReadOptionalProperty("filter_expr", expr->filter_expr);
-	deserializer.ReadProperty("catalog", expr->catalog);
-	return std::move(expr);
-}
-
-unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, FieldReader &reader) {
-	auto function_name = reader.ReadRequired<string>();
-	auto schema = reader.ReadRequired<string>();
-	auto expr = make_uniq<WindowExpression>(type, INVALID_CATALOG, std::move(schema), function_name);
-	expr->children = reader.ReadRequiredSerializableList<ParsedExpression>();
-	expr->partitions = reader.ReadRequiredSerializableList<ParsedExpression>();
-
-	auto order_count = reader.ReadRequired<uint32_t>();
-	auto &source = reader.GetSource();
-	for (idx_t i = 0; i < order_count; i++) {
-		expr->orders.push_back(OrderByNode::Deserialize(source));
-	}
-	expr->start = reader.ReadRequired<WindowBoundary>();
-	expr->end = reader.ReadRequired<WindowBoundary>();
-
-	expr->start_expr = reader.ReadOptional<ParsedExpression>(nullptr);
-	expr->end_expr = reader.ReadOptional<ParsedExpression>(nullptr);
-	expr->offset_expr = reader.ReadOptional<ParsedExpression>(nullptr);
-	expr->default_expr = reader.ReadOptional<ParsedExpression>(nullptr);
-	expr->ignore_nulls = reader.ReadRequired<bool>();
-	expr->filter_expr = reader.ReadOptional<ParsedExpression>(nullptr);
-	expr->catalog = reader.ReadField<string>(INVALID_CATALOG);
-	return std::move(expr);
 }
 
 } // namespace duckdb

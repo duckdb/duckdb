@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.12.0)
 find_package(ODBC)
 
 if(NOT ODBC_FOUND)
-  message(FATAL_ERROR No ODBC found)
+  message(FATAL_ERROR "No ODBC found; you need to install unixodbc-dev.")
 endif()
 
 set(LINK_LIB_LIST "")
@@ -47,12 +47,13 @@ add_library(
   row_descriptor.cpp
   cursor.cpp
   odbc_diagnostic.cpp
-  odbc_exception.cpp
-  duckdb_odbc.def)
+  duckdb_odbc.def
+  handle_functions.cpp
+  include/handle_functions.hpp)
 
 set_target_properties(duckdb_odbc PROPERTIES DEFINE_SYMBOL "DUCKDB_ODBC_API")
 target_link_libraries(duckdb_odbc ${LINK_LIB_LIST} duckdb_static)
 
-if(NOT WIN32 AND NOT CLANG_TIDY)
+if(NOT CLANG_TIDY)
   add_subdirectory(test)
 endif()

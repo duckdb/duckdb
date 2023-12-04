@@ -32,15 +32,16 @@ main_con = duckdb.connect()
 main_con.execute('CALL dbgen(sf=1)')
 
 tables = [
- "customer",
- "lineitem",
- "nation",
- "orders",
- "part",
- "partsupp",
- "region",
- "supplier",
+    "customer",
+    "lineitem",
+    "nation",
+    "orders",
+    "part",
+    "partsupp",
+    "region",
+    "supplier",
 ]
+
 
 def open_connection():
     con = duckdb.connect()
@@ -59,6 +60,7 @@ def write_result(benchmark_name, nrun, t):
         f.write('\n')
     else:
         print(bench_result)
+
 
 def benchmark_queries(benchmark_name, con, queries):
     if verbose:
@@ -95,6 +97,7 @@ def benchmark_queries(benchmark_name, con, queries):
                 print(f"T{padding}: {t}s")
         write_result(benchmark_name, nrun, t)
 
+
 def run_dataload(con, type):
     benchmark_name = type + "_load_lineitem"
     if verbose:
@@ -116,6 +119,7 @@ def run_dataload(con, type):
             padding = " " * len(str(nruns))
             print(f"T{padding}: {t}s")
         write_result(benchmark_name, nrun, t)
+
 
 def run_tpch(con, prefix):
     benchmark_name = f"{prefix}tpch"

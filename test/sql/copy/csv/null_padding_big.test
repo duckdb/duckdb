@@ -18,10 +18,10 @@ SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', null_pa
 2501
 
 # one line that requires null padding
-query I
+statement error
 SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', null_padding=False, ignore_errors=True, parallel = false)
 ----
-2500
+CSV options could not be auto-detected. Consider setting parser options manually.
 
 statement error
 SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', parallel=True)
@@ -47,9 +47,9 @@ require notwindows
 statement error
 SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', parallel=True, buffer_size=55)
 ----
-CSV File not supported for multithreading
+CSV options could not be auto-detected. Consider setting parser options manually.
 
 statement error
 SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', parallel=True, buffer_size=55, null_padding=False)
 ----
-CSV File not supported for multithreading
+CSV options could not be auto-detected. Consider setting parser options manually.

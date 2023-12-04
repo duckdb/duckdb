@@ -8,10 +8,29 @@
 
 namespace duckdb {
 
+//! Templated radix partitioning constants, can be templated to the number of radix bits
+template <idx_t radix_bits>
+struct RadixPartitioningConstants {
+public:
+	//! Bitmask of the upper bits starting at the 5th byte
+	static constexpr const idx_t NUM_PARTITIONS = RadixPartitioning::NumberOfPartitions(radix_bits);
+	static constexpr const idx_t SHIFT = RadixPartitioning::Shift(radix_bits);
+	static constexpr const hash_t MASK = RadixPartitioning::Mask(radix_bits);
+
+public:
+	//! Apply bitmask and right shift to get a number between 0 and NUM_PARTITIONS
+	static inline hash_t ApplyMask(hash_t hash) {
+		D_ASSERT((hash & MASK) >> SHIFT < NUM_PARTITIONS);
+		return (hash & MASK) >> SHIFT;
+	}
+};
+
 template <class OP, class RETURN_TYPE, typename... ARGS>
 RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&... args) {
-	D_ASSERT(radix_bits <= sizeof(hash_t) * 8);
+	D_ASSERT(radix_bits <= RadixPartitioning::MAX_RADIX_BITS);
 	switch (radix_bits) {
+	case 0:
+		return OP::template Operation<0>(std::forward<ARGS>(args)...);
 	case 1:
 		return OP::template Operation<1>(std::forward<ARGS>(args)...);
 	case 2:
@@ -20,7 +39,7 @@ RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&... args) {
 		return OP::template Operation<3>(std::forward<ARGS>(args)...);
 	case 4:
 		return OP::template Operation<4>(std::forward<ARGS>(args)...);
-	case 5:
+	case 5: // LCOV_EXCL_START
 		return OP::template Operation<5>(std::forward<ARGS>(args)...);
 	case 6:
 		return OP::template Operation<6>(std::forward<ARGS>(args)...);
@@ -32,9 +51,14 @@ RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&... args) {
 		return OP::template Operation<9>(std::forward<ARGS>(args)...);
 	case 10:
 		return OP::template Operation<10>(std::forward<ARGS>(args)...);
+	case 11:
+		return OP::template Operation<10>(std::forward<ARGS>(args)...);
+	case 12:
+		return OP::template Operation<10>(std::forward<ARGS>(args)...);
 	default:
-		throw InternalException("TODO");
-	}
+		throw InternalException(
+		    "radix_bits higher than RadixPartitioning::MAX_RADIX_BITS encountered in RadixBitsSwitch");
+	} // LCOV_EXCL_STOP
 }
 
 template <idx_t radix_bits>
@@ -60,40 +84,6 @@ idx_t RadixPartitioning::Select(Vector &hashes, const SelectionVector *sel, idx_
 	return RadixBitsSwitch<SelectFunctor, idx_t>(radix_bits, hashes, sel, count, cutoff, true_sel, false_sel);
 }
 
-struct HashsToBinsFunctor {
-	template <idx_t radix_bits>
-	static void Operation(Vector &hashes, Vector &bins, idx_t count) {
-		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
-		UnaryExecutor::Execute<hash_t, hash_t>(hashes, bins, count,
-		                                       [&](hash_t hash) { return CONSTANTS::ApplyMask(hash); });
-	}
-};
-
-void RadixPartitioning::HashesToBins(Vector &hashes, idx_t radix_bits, Vector &bins, idx_t count) {
-	return RadixBitsSwitch<HashsToBinsFunctor, void>(radix_bits, hashes, bins, count);
-}
-
-//===--------------------------------------------------------------------===//
-// Row Data Partitioning
-//===--------------------------------------------------------------------===//
-template <idx_t radix_bits>
-static void InitPartitions(BufferManager &buffer_manager, vector<unique_ptr<RowDataCollection>> &partition_collections,
-                           RowDataBlock *partition_blocks[], vector<BufferHandle> &partition_handles,
-                           data_ptr_t partition_ptrs[], idx_t block_capacity, idx_t row_width) {
-	using CONSTANTS = RadixPartitioningConstants<radix_bits>;
-
-	partition_collections.reserve(CONSTANTS::NUM_PARTITIONS);
-	partition_handles.reserve(CONSTANTS::NUM_PARTITIONS);
-	for (idx_t i = 0; i < CONSTANTS::NUM_PARTITIONS; i++) {
-		partition_collections.push_back(make_uniq<RowDataCollection>(buffer_manager, block_capacity, row_width));
-		partition_blocks[i] = &partition_collections[i]->CreateBlock();
-		partition_handles.push_back(buffer_manager.Pin(partition_blocks[i]->block));
-		if (partition_ptrs) {
-			partition_ptrs[i] = partition_handles[i].Ptr();
-		}
-	}
-}
-
 struct ComputePartitionIndicesFunctor {
 	template <idx_t radix_bits>
 	static void Operation(Vector &hashes, Vector &partition_indices, idx_t count) {
@@ -111,6 +101,7 @@ RadixPartitionedColumnData::RadixPartitionedColumnData(ClientContext &context_p,
                                                        idx_t radix_bits_p, idx_t hash_col_idx_p)
     : PartitionedColumnData(PartitionedColumnDataType::RADIX, context_p, std::move(types_p)), radix_bits(radix_bits_p),
       hash_col_idx(hash_col_idx_p) {
+	D_ASSERT(radix_bits <= RadixPartitioning::MAX_RADIX_BITS);
 	D_ASSERT(hash_col_idx < types.size());
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	allocators->allocators.reserve(num_partitions);
@@ -155,6 +146,7 @@ RadixPartitionedTupleData::RadixPartitionedTupleData(BufferManager &buffer_manag
                                                      idx_t radix_bits_p, idx_t hash_col_idx_p)
     : PartitionedTupleData(PartitionedTupleDataType::RADIX, buffer_manager, layout_p.Copy()), radix_bits(radix_bits_p),
       hash_col_idx(hash_col_idx_p) {
+	D_ASSERT(radix_bits <= RadixPartitioning::MAX_RADIX_BITS);
 	D_ASSERT(hash_col_idx < layout.GetTypes().size());
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	allocators->allocators.reserve(num_partitions);
@@ -196,7 +188,10 @@ void RadixPartitionedTupleData::InitializeAppendStateInternal(PartitionedTupleDa
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		column_ids.emplace_back(col_idx);
 	}
-	partitions[0]->InitializeAppend(state.chunk_state, std::move(column_ids));
+	partitions[0]->InitializeChunkState(state.chunk_state, std::move(column_ids));
+
+	// Initialize fixed-size map
+	state.fixed_partition_entries.resize(RadixPartitioning::NumberOfPartitions(radix_bits));
 }
 
 void RadixPartitionedTupleData::ComputePartitionIndices(PartitionedTupleDataAppendState &state, DataChunk &input) {

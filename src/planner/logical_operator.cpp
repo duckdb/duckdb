@@ -1,17 +1,15 @@
 #include "duckdb/planner/logical_operator.hpp"
 
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/operator/list.hpp"
-#include "duckdb/planner/operator/logical_extension_operator.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 
 namespace duckdb {
-
-const uint64_t PLAN_SERIALIZATION_VERSION = 1;
 
 LogicalOperator::LogicalOperator(LogicalOperatorType type)
     : type(type), estimated_cardinality(0), has_estimated_cardinality(false) {
@@ -126,21 +124,20 @@ void LogicalOperator::Verify(ClientContext &context) {
 		if (expressions[expr_idx]->HasParameter()) {
 			continue;
 		}
-		BufferedSerializer serializer;
+		MemoryStream stream;
 		// We are serializing a query plan
-		serializer.is_query_plan = true;
 		try {
-			expressions[expr_idx]->Serialize(serializer);
+			BinarySerializer::Serialize(*expressions[expr_idx], stream);
 		} catch (NotImplementedException &ex) {
 			// ignore for now (FIXME)
-			return;
+			continue;
 		}
+		// Rewind the stream
+		stream.Rewind();
 
-		auto data = serializer.GetData();
-		auto deserializer = BufferedContextDeserializer(context, data.data.get(), data.size);
+		bound_parameter_map_t parameters;
+		auto deserialized_expression = BinaryDeserializer::Deserialize<Expression>(stream, context, parameters);
 
-		PlanDeserializationState state(context);
-		auto deserialized_expression = Expression::Deserialize(deserializer, state);
 		// FIXME: expressions might not be equal yet because of statistics propagation
 		continue;
 		D_ASSERT(Expression::Equals(expressions[expr_idx], deserialized_expression));
@@ -176,210 +173,25 @@ void LogicalOperator::Print() {
 	Printer::Print(ToString());
 }
 
-void LogicalOperator::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteField<LogicalOperatorType>(type);
-	writer.WriteSerializableList(children);
-
-	Serialize(writer);
-	writer.Finalize();
-}
-
-unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deserializer, PlanDeserializationState &gstate) {
-	unique_ptr<LogicalOperator> result;
-
-	FieldReader reader(deserializer);
-	auto type = reader.ReadRequired<LogicalOperatorType>();
-	auto children = reader.ReadRequiredSerializableList<LogicalOperator>(gstate);
-
-	LogicalDeserializationState state(gstate, type, children);
-	switch (type) {
-	case LogicalOperatorType::LOGICAL_PROJECTION:
-		result = LogicalProjection::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_FILTER:
-		result = LogicalFilter::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		result = LogicalAggregate::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_WINDOW:
-		result = LogicalWindow::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_UNNEST:
-		result = LogicalUnnest::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_LIMIT:
-		result = LogicalLimit::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_ORDER_BY:
-		result = LogicalOrder::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_TOP_N:
-		result = LogicalTopN::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
-		result = LogicalCopyToFile::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_DISTINCT:
-		result = LogicalDistinct::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_SAMPLE:
-		result = LogicalSample::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT:
-		result = LogicalLimitPercent::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_GET:
-		result = LogicalGet::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_CHUNK_GET:
-		result = LogicalColumnDataGet::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_DELIM_GET:
-		result = LogicalDelimGet::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
-		result = LogicalExpressionGet::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
-		result = LogicalDummyScan::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
-		result = LogicalEmptyResult::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_CTE_REF:
-		result = LogicalCTERef::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_JOIN:
-		throw InternalException("LogicalJoin deserialize not supported");
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-		result = LogicalDelimJoin::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-		result = LogicalAsOfJoin::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-		result = LogicalComparisonJoin::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_ANY_JOIN:
-		result = LogicalAnyJoin::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
-		result = LogicalCrossProduct::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
-		result = LogicalPositionalJoin::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_UNION:
-		result = LogicalSetOperation::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_EXCEPT:
-		result = LogicalSetOperation::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_INTERSECT:
-		result = LogicalSetOperation::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
-		result = LogicalRecursiveCTE::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_INSERT:
-		result = LogicalInsert::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_DELETE:
-		result = LogicalDelete::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_UPDATE:
-		result = LogicalUpdate::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
-		result = LogicalCreateTable::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
-		result = LogicalCreateIndex::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
-		result = LogicalCreate::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
-		result = LogicalCreate::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
-		result = LogicalCreate::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
-		result = LogicalCreate::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_PRAGMA:
-		result = LogicalPragma::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
-		result = LogicalCreate::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_EXPLAIN:
-		result = LogicalExplain::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_SHOW:
-		result = LogicalShow::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_PREPARE:
-		result = LogicalPrepare::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_EXECUTE:
-		result = LogicalExecute::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_EXPORT:
-		result = LogicalExport::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_SET:
-		result = LogicalSet::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_RESET:
-		result = LogicalReset::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_ALTER:
-	case LogicalOperatorType::LOGICAL_VACUUM:
-	case LogicalOperatorType::LOGICAL_LOAD:
-	case LogicalOperatorType::LOGICAL_ATTACH:
-	case LogicalOperatorType::LOGICAL_TRANSACTION:
-	case LogicalOperatorType::LOGICAL_DROP:
-	case LogicalOperatorType::LOGICAL_DETACH:
-		result = LogicalSimple::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
-		result = LogicalExtensionOperator::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_PIVOT:
-		result = LogicalPivot::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_INVALID:
-		/* no default here to trigger a warning if we forget to implement deserialize for a new operator */
-		throw SerializationException("Invalid type for operator deserialization");
-	}
-
-	reader.Finalize();
-	result->children = std::move(children);
-
-	return result;
-}
-
 vector<idx_t> LogicalOperator::GetTableIndex() const {
 	return vector<idx_t> {};
 }
 
 unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {
-	BufferedSerializer logical_op_serializer;
+	MemoryStream stream;
+	BinarySerializer serializer(stream);
 	try {
-		this->Serialize(logical_op_serializer);
+		serializer.Begin();
+		this->Serialize(serializer);
+		serializer.End();
 	} catch (NotImplementedException &ex) {
 		throw NotImplementedException("Logical Operator Copy requires the logical operator and all of its children to "
 		                              "be serializable: " +
 		                              std::string(ex.what()));
 	}
-	auto data = logical_op_serializer.GetData();
-	auto logical_op_deserializer = BufferedContextDeserializer(context, data.data.get(), data.size);
-	PlanDeserializationState state(context);
-	auto op_copy = LogicalOperator::Deserialize(logical_op_deserializer, state);
+	stream.Rewind();
+	bound_parameter_map_t parameters;
+	auto op_copy = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
 	return op_copy;
 }
 

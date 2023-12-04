@@ -52,7 +52,8 @@ enum class StrTimeSpecifier : uint8_t {
 	LOCALE_APPROPRIATE_DATE_AND_TIME =
 	    29, // %c - Locale’s appropriate date and time representation. (Mon Sep 30 07:06:05 2013)
 	LOCALE_APPROPRIATE_DATE = 30, // %x - Locale’s appropriate date representation. (09/30/13)
-	LOCALE_APPROPRIATE_TIME = 31  // %X - Locale’s appropriate time representation. (07:06:05)
+	LOCALE_APPROPRIATE_TIME = 31, // %X - Locale’s appropriate time representation. (07:06:05)
+	NANOSECOND_PADDED = 32 // %n - Nanosecond as a decimal number, zero-padded on the left. (000000000 - 999999999)
 };
 
 struct StrTimeFormat {
@@ -121,6 +122,8 @@ protected:
 
 struct StrpTimeFormat : public StrTimeFormat {
 public:
+	StrpTimeFormat();
+
 	//! Type-safe parsing argument
 	struct ParseResult {
 		int32_t data[8]; // year, month, day, hour, min, sec, µs, offset
@@ -140,20 +143,26 @@ public:
 public:
 	DUCKDB_API static ParseResult Parse(const string &format, const string &text);
 
-	DUCKDB_API bool Parse(string_t str, ParseResult &result);
+	DUCKDB_API bool Parse(string_t str, ParseResult &result) const;
 
-	DUCKDB_API bool TryParseDate(string_t str, date_t &result, string &error_message);
-	DUCKDB_API bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message);
+	DUCKDB_API bool TryParseDate(string_t str, date_t &result, string &error_message) const;
+	DUCKDB_API bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message) const;
 
 	date_t ParseDate(string_t str);
 	timestamp_t ParseTimestamp(string_t str);
+
+	void Serialize(Serializer &serializer) const;
+	static StrpTimeFormat Deserialize(Deserializer &deserializer);
 
 protected:
 	static string FormatStrpTimeError(const string &input, idx_t position);
 	DUCKDB_API void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
 	int NumericSpecifierWidth(StrTimeSpecifier specifier);
 	int32_t TryParseCollection(const char *data, idx_t &pos, idx_t size, const string_t collection[],
-	                           idx_t collection_count);
+	                           idx_t collection_count) const;
+
+private:
+	explicit StrpTimeFormat(const string &format_string);
 };
 
 } // namespace duckdb

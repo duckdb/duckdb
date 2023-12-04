@@ -81,8 +81,6 @@ static void append_to_integers(DuckDB *db, idx_t threadnr) {
 }
 
 TEST_CASE("Concurrent writes during index creation", "[index][.]") {
-	// FIXME: this is extremely slow due to an overhead in calls to the index vacuum operation (#7406)
-	return;
 
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -356,7 +354,8 @@ static void join_integers(Connection *con, bool *index_join_success, idx_t threa
 }
 
 TEST_CASE("Concurrent appends during index join", "[interquery][.]") {
-	// FIXME: this is extremely slow due to an overhead in calls to the index vacuum operation (#7406)
+
+	// FIXME: enable again once we find/fixed the cause of the spurious failure
 	return;
 
 	duckdb::unique_ptr<QueryResult> result;

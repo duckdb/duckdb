@@ -1,8 +1,8 @@
 import pytest
 import duckdb
 
-class TestWithPropagatingExceptions(object):
 
+class TestWithPropagatingExceptions(object):
     def test_with(self):
         # Should propagate exception raised in the 'with duckdb.connect() ..'
         with pytest.raises(duckdb.ParserException, match="syntax error at or near *"):

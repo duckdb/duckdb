@@ -1,0 +1,25 @@
+# name: test/sql/join/asof/test_asof_join_tpch.test_slow
+# description: AsOf Join using floating point keys in TPC-H
+# group: [asof]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=0.1, suffix='_normal');
+
+statement ok
+CREATE TABLE lineitem_dbl AS SELECT * REPLACE (l_orderkey::DOUBLE  + 0.25 AS l_orderkey) FROM lineitem_normal;
+
+statement ok
+CREATE TABLE orders_dbl AS SELECT * REPLACE (o_orderkey::DOUBLE AS o_orderkey) FROM orders_normal;
+
+query I
+SELECT COUNT(*) from lineitem_normal join orders_normal on (l_orderkey=o_orderkey);
+----
+600572
+
+query I
+SELECT COUNT(*) 
+FROM lineitem_dbl ASOF JOIN orders_dbl ON (l_orderkey >= o_orderkey);
+----
+600572

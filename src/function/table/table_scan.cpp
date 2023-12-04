@@ -1,7 +1,6 @@
 #include "duckdb/function/table/table_scan.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
@@ -15,6 +14,8 @@
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -281,6 +282,15 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 	if (bind_data.is_index_scan) {
 		return;
 	}
+	if (!get.table_filters.filters.empty()) {
+		// if there were filters before we can't convert this to an index scan
+		return;
+	}
+	if (!get.projection_ids.empty()) {
+		// if columns were pruned by RemoveUnusedColumns we can't convert this to an index scan,
+		// because index scan does not support filter_prune (yet)
+		return;
+	}
 	if (filters.empty()) {
 		// no indexes or no filters: skip the pushdown
 		return;
@@ -406,35 +416,30 @@ string TableScanToString(const FunctionData *bind_data_p) {
 	return result;
 }
 
-static void TableScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
+static void TableScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                               const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-
-	writer.WriteString(bind_data.table.schema.name);
-	writer.WriteString(bind_data.table.name);
-	writer.WriteField<bool>(bind_data.is_index_scan);
-	writer.WriteField<bool>(bind_data.is_create_index);
-	writer.WriteList<row_t>(bind_data.result_ids);
-	writer.WriteString(bind_data.table.schema.catalog.GetName());
+	serializer.WriteProperty(100, "catalog", bind_data.table.schema.catalog.GetName());
+	serializer.WriteProperty(101, "schema", bind_data.table.schema.name);
+	serializer.WriteProperty(102, "table", bind_data.table.name);
+	serializer.WriteProperty(103, "is_index_scan", bind_data.is_index_scan);
+	serializer.WriteProperty(104, "is_create_index", bind_data.is_create_index);
+	serializer.WriteProperty(105, "result_ids", bind_data.result_ids);
 }
 
-static unique_ptr<FunctionData> TableScanDeserialize(PlanDeserializationState &state, FieldReader &reader,
-                                                     TableFunction &function) {
-	auto schema_name = reader.ReadRequired<string>();
-	auto table_name = reader.ReadRequired<string>();
-	auto is_index_scan = reader.ReadRequired<bool>();
-	auto is_create_index = reader.ReadRequired<bool>();
-	auto result_ids = reader.ReadRequiredList<row_t>();
-	auto catalog_name = reader.ReadField<string>(INVALID_CATALOG);
-
-	auto &catalog_entry = Catalog::GetEntry<TableCatalogEntry>(state.context, catalog_name, schema_name, table_name);
+static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer, TableFunction &function) {
+	auto catalog = deserializer.ReadProperty<string>(100, "catalog");
+	auto schema = deserializer.ReadProperty<string>(101, "schema");
+	auto table = deserializer.ReadProperty<string>(102, "table");
+	auto &catalog_entry =
+	    Catalog::GetEntry<TableCatalogEntry>(deserializer.Get<ClientContext &>(), catalog, schema, table);
 	if (catalog_entry.type != CatalogType::TABLE_ENTRY) {
-		throw SerializationException("Cant find table for %s.%s", schema_name, table_name);
+		throw SerializationException("Cant find table for %s.%s", schema, table);
 	}
-
 	auto result = make_uniq<TableScanBindData>(catalog_entry.Cast<DuckTableEntry>());
-	result->is_index_scan = is_index_scan;
-	result->is_create_index = is_create_index;
-	result->result_ids = std::move(result_ids);
+	deserializer.ReadProperty(103, "is_index_scan", result->is_index_scan);
+	deserializer.ReadProperty(104, "is_create_index", result->is_create_index);
+	deserializer.ReadProperty(105, "result_ids", result->result_ids);
 	return std::move(result);
 }
 

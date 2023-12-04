@@ -6,6 +6,8 @@
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -98,6 +100,14 @@ void ColumnDataCollection::CreateSegment() {
 
 Allocator &ColumnDataCollection::GetAllocator() const {
 	return allocator->GetAllocator();
+}
+
+idx_t ColumnDataCollection::SizeInBytes() const {
+	idx_t total_size = 0;
+	for (const auto &segment : segments) {
+		total_size += segment->SizeInBytes();
+	}
+	return total_size;
 }
 
 //===--------------------------------------------------------------------===//
@@ -333,7 +343,7 @@ struct StandardValueCopy : public BaseValueCopy<T> {
 
 struct StringValueCopy : public BaseValueCopy<string_t> {
 	static string_t Operation(ColumnDataMetaData &meta_data, string_t input) {
-		return input.IsInlined() ? input : meta_data.segment.heap.AddBlob(input);
+		return input.IsInlined() ? input : meta_data.segment.heap->AddBlob(input);
 	}
 };
 
@@ -423,7 +433,8 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
                               idx_t offset, idx_t copy_count) {
 
 	const auto &allocator_type = meta_data.segment.allocator->GetType();
-	if (allocator_type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+	if (allocator_type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR ||
+	    allocator_type == ColumnDataAllocatorType::HYBRID) {
 		// strings cannot be spilled to disk - use StringHeap
 		TemplatedColumnDataCopy<StringValueCopy>(meta_data, source_data, source, offset, copy_count);
 		return;
@@ -930,6 +941,7 @@ void ColumnDataCollection::Verify() {
 #endif
 }
 
+// LCOV_EXCL_START
 string ColumnDataCollection::ToString() const {
 	DataChunk chunk;
 	InitializeScanChunk(chunk);
@@ -950,6 +962,7 @@ string ColumnDataCollection::ToString() const {
 
 	return result;
 }
+// LCOV_EXCL_STOP
 
 void ColumnDataCollection::Print() const {
 	Printer::Print(ToString());
@@ -1030,8 +1043,61 @@ bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const 
 	return true;
 }
 
+vector<shared_ptr<StringHeap>> ColumnDataCollection::GetHeapReferences() {
+	vector<shared_ptr<StringHeap>> result(segments.size(), nullptr);
+	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
+		result[segment_idx] = segments[segment_idx]->heap;
+	}
+	return result;
+}
+
+ColumnDataAllocatorType ColumnDataCollection::GetAllocatorType() const {
+	return allocator->GetType();
+}
+
 const vector<unique_ptr<ColumnDataCollectionSegment>> &ColumnDataCollection::GetSegments() const {
 	return segments;
+}
+
+void ColumnDataCollection::Serialize(Serializer &serializer) const {
+	vector<vector<Value>> values;
+	values.resize(ColumnCount());
+	for (auto &chunk : Chunks()) {
+		for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
+			for (idx_t r = 0; r < chunk.size(); r++) {
+				values[c].push_back(chunk.GetValue(c, r));
+			}
+		}
+	}
+	serializer.WriteProperty(100, "types", types);
+	serializer.WriteProperty(101, "values", values);
+}
+
+unique_ptr<ColumnDataCollection> ColumnDataCollection::Deserialize(Deserializer &deserializer) {
+	auto types = deserializer.ReadProperty<vector<LogicalType>>(100, "types");
+	auto values = deserializer.ReadProperty<vector<vector<Value>>>(101, "values");
+
+	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+	if (values.empty()) {
+		return collection;
+	}
+	DataChunk chunk;
+	chunk.Initialize(Allocator::DefaultAllocator(), types);
+
+	for (idx_t r = 0; r < values[0].size(); r++) {
+		for (idx_t c = 0; c < types.size(); c++) {
+			chunk.SetValue(c, chunk.size(), values[c][r]);
+		}
+		chunk.SetCardinality(chunk.size() + 1);
+		if (chunk.size() == STANDARD_VECTOR_SIZE) {
+			collection->Append(chunk);
+			chunk.Reset();
+		}
+	}
+	if (chunk.size() > 0) {
+		collection->Append(chunk);
+	}
+	return collection;
 }
 
 } // namespace duckdb

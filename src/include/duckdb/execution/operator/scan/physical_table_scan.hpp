@@ -12,6 +12,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/extra_operator_info.hpp"
 
 namespace duckdb {
 
@@ -21,14 +22,11 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::TABLE_SCAN;
 
 public:
-	//! Regular Table Scan
-	PhysicalTableScan(vector<LogicalType> types, TableFunction function, unique_ptr<FunctionData> bind_data,
-	                  vector<column_t> column_ids, vector<string> names, unique_ptr<TableFilterSet> table_filters,
-	                  idx_t estimated_cardinality);
 	//! Table scan that immediately projects out filter columns that are unused in the remainder of the query plan
 	PhysicalTableScan(vector<LogicalType> types, TableFunction function, unique_ptr<FunctionData> bind_data,
 	                  vector<LogicalType> returned_types, vector<column_t> column_ids, vector<idx_t> projection_ids,
-	                  vector<string> names, unique_ptr<TableFilterSet> table_filters, idx_t estimated_cardinality);
+	                  vector<string> names, unique_ptr<TableFilterSet> table_filters, idx_t estimated_cardinality,
+	                  ExtraOperatorInfo extra_info);
 
 	//! The table function
 	TableFunction function;
@@ -44,6 +42,8 @@ public:
 	vector<string> names;
 	//! The table filters
 	unique_ptr<TableFilterSet> table_filters;
+	//! Currently stores any filters applied to file names (as strings)
+	ExtraOperatorInfo extra_info;
 
 public:
 	string GetName() const override;

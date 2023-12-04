@@ -173,14 +173,21 @@ void VerifyTypeConstraints(Vector &vec, idx_t count) {
 	}
 }
 
-void NumpyScan::ScanObjectColumn(PyObject **col, idx_t count, idx_t offset, Vector &out) {
+void NumpyScan::ScanObjectColumn(PyObject **col, idx_t stride, idx_t count, idx_t offset, Vector &out) {
 	// numpy_col is a sequential list of objects, that make up one "column" (Vector)
 	out.SetVectorType(VectorType::FLAT_VECTOR);
-	{
-		PythonGILWrapper gil; // We're creating python objects here, so we need the GIL
+	auto &mask = FlatVector::Validity(out);
+	PythonGILWrapper gil; // We're creating python objects here, so we need the GIL
+
+	if (stride == sizeof(PyObject *)) {
+		auto src_ptr = col + offset;
 		for (idx_t i = 0; i < count; i++) {
-			idx_t source_idx = offset + i;
-			ScanNumpyObject(col[source_idx], i, out);
+			ScanNumpyObject(src_ptr[i], i, out);
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			auto src_ptr = col[stride / sizeof(PyObject *) * (i + offset)];
+			ScanNumpyObject(src_ptr, i, out);
 		}
 	}
 	VerifyTypeConstraints(out, count);
@@ -193,7 +200,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 	auto &numpy_col = reinterpret_cast<PandasNumpyColumn &>(*bind_data.pandas_col);
 	auto &array = numpy_col.array;
 
-	switch (bind_data.numpy_type) {
+	switch (bind_data.numpy_type.type) {
 	case NumpyNullableType::BOOL:
 		ScanNumpyMasked<bool>(bind_data, count, offset, out);
 		break;
@@ -227,11 +234,48 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 	case NumpyNullableType::FLOAT_64:
 		ScanNumpyFpColumn<double>(reinterpret_cast<const double *>(array.data()), numpy_col.stride, count, offset, out);
 		break;
-	case NumpyNullableType::DATETIME:
-	case NumpyNullableType::DATETIME_TZ: {
+	case NumpyNullableType::DATETIME_NS:
+	case NumpyNullableType::DATETIME_MS:
+	case NumpyNullableType::DATETIME_US:
+	case NumpyNullableType::DATETIME_S: {
 		auto src_ptr = reinterpret_cast<const int64_t *>(array.data());
 		auto tgt_ptr = FlatVector::GetData<timestamp_t>(out);
 		auto &mask = FlatVector::Validity(out);
+
+		using timestamp_convert_func = std::function<timestamp_t(int64_t)>;
+		timestamp_convert_func convert_func;
+
+		switch (bind_data.numpy_type.type) {
+		case NumpyNullableType::DATETIME_NS:
+			if (bind_data.numpy_type.has_timezone) {
+				// Our timezone type is US, so we need to convert from NS to US
+				convert_func = Timestamp::FromEpochNanoSeconds;
+			} else {
+				convert_func = Timestamp::FromEpochMicroSeconds;
+			}
+			break;
+		case NumpyNullableType::DATETIME_MS:
+			if (bind_data.numpy_type.has_timezone) {
+				// Our timezone type is US, so we need to convert from MS to US
+				convert_func = Timestamp::FromEpochMs;
+			} else {
+				convert_func = Timestamp::FromEpochMicroSeconds;
+			}
+			break;
+		case NumpyNullableType::DATETIME_US:
+			convert_func = Timestamp::FromEpochMicroSeconds;
+			break;
+		case NumpyNullableType::DATETIME_S:
+			if (bind_data.numpy_type.has_timezone) {
+				// Our timezone type is US, so we need to convert from S to US
+				convert_func = Timestamp::FromEpochSeconds;
+			} else {
+				convert_func = Timestamp::FromEpochMicroSeconds;
+			}
+			break;
+		default:
+			throw NotImplementedException("Scan for datetime of this type is not supported yet");
+		};
 
 		for (idx_t row = 0; row < count; row++) {
 			auto source_idx = offset + row;
@@ -240,7 +284,8 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 				mask.SetInvalid(row);
 				continue;
 			}
-			tgt_ptr[row] = Timestamp::FromEpochNanoSeconds(src_ptr[source_idx]);
+			// Direct conversion, we've already matched the numpy type with the equivalent duckdb type
+			tgt_ptr[row] = convert_func(src_ptr[source_idx]);
 		}
 		break;
 	}
@@ -274,7 +319,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 		// Get the source pointer of the numpy array
 		auto src_ptr = (PyObject **)array.data(); // NOLINT
 		if (out.GetType().id() != LogicalTypeId::VARCHAR) {
-			return NumpyScan::ScanObjectColumn(src_ptr, count, offset, out);
+			return NumpyScan::ScanObjectColumn(src_ptr, numpy_col.stride, count, offset, out);
 		}
 
 		// Get the data pointer and the validity mask of the result vector
@@ -290,7 +335,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 
 			// Get the pointer to the object
 			PyObject *val = src_ptr[source_idx];
-			if (bind_data.numpy_type == NumpyNullableType::OBJECT && !py::isinstance<py::str>(val)) {
+			if (bind_data.numpy_type.type == NumpyNullableType::OBJECT && !py::isinstance<py::str>(val)) {
 				if (val == Py_None) {
 					out_mask.SetInvalid(row);
 					continue;
@@ -310,26 +355,22 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 				}
 				if (!py::isinstance<py::str>(val)) {
 					if (!gil) {
-						gil = bind_data.object_str_val.GetLock();
+						gil = make_uniq<PythonGILWrapper>();
 					}
-					bind_data.object_str_val.AssignInternal<PyObject>(
-					    [](py::str &obj, PyObject &new_val) {
-						    py::handle object_handle = &new_val;
-						    obj = py::str(object_handle);
-					    },
-					    *val, *gil);
-					val = reinterpret_cast<PyObject *>(bind_data.object_str_val.GetPointerTop()->ptr());
+					bind_data.object_str_val.Push(std::move(py::str(val)));
+					val = reinterpret_cast<PyObject *>(bind_data.object_str_val.LastAddedObject().ptr());
 				}
 			}
 			// Python 3 string representation:
 			// https://github.com/python/cpython/blob/3a8fdb28794b2f19f6c8464378fb8b46bce1f5f4/Include/cpython/unicodeobject.h#L79
-			if (!py::isinstance<py::str>(val)) {
+			py::handle val_handle(val);
+			if (!py::isinstance<py::str>(val_handle)) {
 				out_mask.SetInvalid(row);
 				continue;
 			}
-			if (PyUtil::PyUnicodeIsCompactASCII(val)) {
+			if (PyUtil::PyUnicodeIsCompactASCII(val_handle)) {
 				// ascii string: we can zero copy
-				tgt_ptr[row] = string_t(PyUtil::PyUnicodeData(val), PyUtil::PyUnicodeGetLength(val));
+				tgt_ptr[row] = string_t(PyUtil::PyUnicodeData(val_handle), PyUtil::PyUnicodeGetLength(val_handle));
 			} else {
 				// unicode gunk
 				auto ascii_obj = reinterpret_cast<PyASCIIObject *>(val);
@@ -340,19 +381,19 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 					tgt_ptr[row] = string_t(const_char_ptr_cast(unicode_obj->utf8), unicode_obj->utf8_length);
 				} else if (PyUtil::PyUnicodeIsCompact(unicode_obj) &&
 				           !PyUtil::PyUnicodeIsASCII(unicode_obj)) { // NOLINT
-					auto kind = PyUtil::PyUnicodeKind(val);
+					auto kind = PyUtil::PyUnicodeKind(val_handle);
 					switch (kind) {
 					case PyUnicode_1BYTE_KIND:
-						tgt_ptr[row] = DecodePythonUnicode<Py_UCS1>(PyUtil::PyUnicode1ByteData(val),
-						                                            PyUtil::PyUnicodeGetLength(val), out);
+						tgt_ptr[row] = DecodePythonUnicode<Py_UCS1>(PyUtil::PyUnicode1ByteData(val_handle),
+						                                            PyUtil::PyUnicodeGetLength(val_handle), out);
 						break;
 					case PyUnicode_2BYTE_KIND:
-						tgt_ptr[row] = DecodePythonUnicode<Py_UCS2>(PyUtil::PyUnicode2ByteData(val),
-						                                            PyUtil::PyUnicodeGetLength(val), out);
+						tgt_ptr[row] = DecodePythonUnicode<Py_UCS2>(PyUtil::PyUnicode2ByteData(val_handle),
+						                                            PyUtil::PyUnicodeGetLength(val_handle), out);
 						break;
 					case PyUnicode_4BYTE_KIND:
-						tgt_ptr[row] = DecodePythonUnicode<Py_UCS4>(PyUtil::PyUnicode4ByteData(val),
-						                                            PyUtil::PyUnicodeGetLength(val), out);
+						tgt_ptr[row] = DecodePythonUnicode<Py_UCS4>(PyUtil::PyUnicode4ByteData(val_handle),
+						                                            PyUtil::PyUnicodeGetLength(val_handle), out);
 						break;
 					default:
 						throw NotImplementedException(

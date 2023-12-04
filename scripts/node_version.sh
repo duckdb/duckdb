@@ -6,7 +6,7 @@ cd tools/nodejs
 ./configure
 
 export TAG=''
-# for master do prereleases
+# for main do prereleases
 if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
 	# proper release
 	npm version `echo $GITHUB_REF | sed 's|refs/tags/v||'`
@@ -25,7 +25,7 @@ fi
 npm pack --dry-run
 
 # upload to npm, maybe
-if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$1" = "upload" ]] ; then
+if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$1" = "upload" ]] ; then
 	npm config set //registry.npmjs.org/:_authToken $NODE_AUTH_TOKEN
 	npm publish --access public $TAG
 fi

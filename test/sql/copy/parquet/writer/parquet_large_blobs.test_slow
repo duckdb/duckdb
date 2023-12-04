@@ -1,0 +1,20 @@
+# name: test/sql/copy/parquet/writer/parquet_large_blobs.test_slow
+# description: Test writing of large blobs into parquet files
+# group: [writer]
+
+require parquet
+
+statement ok
+CREATE TABLE large_strings AS SELECT repeat('duckduck', 10000+i) i FROM range(4000) tbl(i);
+
+query III nosort minmaxstrlen
+SELECT MIN(strlen(i)), MAX(strlen(i)), AVG(strlen(i)) FROM large_strings;
+
+statement ok
+COPY large_strings TO '__TEST_DIR__/largestrings.parquet' (FORMAT PARQUET);
+
+statement ok
+SELECT * FROM parquet_metadata('__TEST_DIR__/largestrings.parquet');
+
+query III nosort minmaxstrlen
+SELECT MIN(strlen(i)), MAX(strlen(i)), AVG(strlen(i)) FROM large_strings;

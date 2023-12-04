@@ -1,24 +1,21 @@
 #include "duckdb/common/types/data_chunk.hpp"
 
 #include "duckdb/common/array.hpp"
-#include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/serializer.hpp"
-#include "duckdb/common/to_string.hpp"
-#include "duckdb/common/types/arrow_aux_data.hpp"
-#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
-#include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/execution_context.hpp"
+
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 
 namespace duckdb {
 
@@ -67,7 +64,7 @@ void DataChunk::InitializeEmpty(vector<LogicalType>::const_iterator begin, vecto
 }
 
 void DataChunk::Reset() {
-	if (data.empty()) {
+	if (data.empty() || vector_caches.empty()) {
 		return;
 	}
 	if (vector_caches.size() != data.size()) {
@@ -237,35 +234,52 @@ string DataChunk::ToString() const {
 	return retval;
 }
 
-void DataChunk::Serialize(Serializer &serializer) {
+void DataChunk::Serialize(Serializer &serializer) const {
+
 	// write the count
-	serializer.Write<sel_t>(size());
-	serializer.Write<idx_t>(ColumnCount());
-	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
-		// write the types
-		data[col_idx].GetType().Serialize(serializer);
-	}
+	auto row_count = size();
+	serializer.WriteProperty<sel_t>(100, "rows", row_count);
+
+	// we should never try to serialize empty data chunks
+	auto column_count = ColumnCount();
+	D_ASSERT(column_count);
+
+	// write the types
+	serializer.WriteList(101, "types", column_count,
+	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(data[i].GetType()); });
+
 	// write the data
-	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
-		data[col_idx].Serialize(size(), serializer);
-	}
+	serializer.WriteList(102, "columns", column_count, [&](Serializer::List &list, idx_t i) {
+		list.WriteObject([&](Serializer &object) {
+			// Reference the vector to avoid potentially mutating it during serialization
+			Vector serialized_vector(data[i].GetType());
+			serialized_vector.Reference(data[i]);
+			serialized_vector.Serialize(object, row_count);
+		});
+	});
 }
 
-void DataChunk::Deserialize(Deserializer &source) {
-	auto rows = source.Read<sel_t>();
-	idx_t column_count = source.Read<idx_t>();
+void DataChunk::Deserialize(Deserializer &deserializer) {
 
+	// read and set the row count
+	auto row_count = deserializer.ReadProperty<sel_t>(100, "rows");
+
+	// read the types
 	vector<LogicalType> types;
-	for (idx_t i = 0; i < column_count; i++) {
-		types.push_back(LogicalType::Deserialize(source));
-	}
+	deserializer.ReadList(101, "types", [&](Deserializer::List &list, idx_t i) {
+		auto type = list.ReadElement<LogicalType>();
+		types.push_back(type);
+	});
+
+	// initialize the data chunk
+	D_ASSERT(!types.empty());
 	Initialize(Allocator::DefaultAllocator(), types);
-	// now load the column data
-	SetCardinality(rows);
-	for (idx_t i = 0; i < column_count; i++) {
-		data[i].Deserialize(rows, source);
-	}
-	Verify();
+	SetCardinality(row_count);
+
+	// read the data
+	deserializer.ReadList(102, "columns", [&](Deserializer::List &list, idx_t i) {
+		list.ReadObject([&](Deserializer &object) { data[i].Deserialize(object, row_count); });
+	});
 }
 
 void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count_p) {
@@ -292,11 +306,11 @@ void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count_
 }
 
 unsafe_unique_array<UnifiedVectorFormat> DataChunk::ToUnifiedFormat() {
-	auto orrified_data = make_unsafe_uniq_array<UnifiedVectorFormat>(ColumnCount());
+	auto unified_data = make_unsafe_uniq_array<UnifiedVectorFormat>(ColumnCount());
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
-		data[col_idx].ToUnifiedFormat(size(), orrified_data[col_idx]);
+		data[col_idx].ToUnifiedFormat(size(), unified_data[col_idx]);
 	}
-	return orrified_data;
+	return unified_data;
 }
 
 void DataChunk::Hash(Vector &result) {
@@ -309,7 +323,7 @@ void DataChunk::Hash(Vector &result) {
 
 void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalType::HASH);
-	D_ASSERT(column_ids.size() > 0);
+	D_ASSERT(!column_ids.empty());
 
 	VectorOperations::Hash(data[column_ids[0]], result, size());
 	for (idx_t i = 1; i < column_ids.size(); i++) {
@@ -320,14 +334,41 @@ void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 void DataChunk::Verify() {
 #ifdef DEBUG
 	D_ASSERT(size() <= capacity);
+
 	// verify that all vectors in this chunk have the chunk selection vector
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		data[i].Verify(size());
 	}
+
+	if (!ColumnCount()) {
+		// don't try to round-trip dummy data chunks with no data
+		// e.g., these exist in queries like 'SELECT distinct(col0, col1) FROM tbl', where we have groups, but no
+		// payload so the payload will be such an empty data chunk
+		return;
+	}
+
+	// verify that we can round-trip chunk serialization
+	MemoryStream mem_stream;
+	BinarySerializer serializer(mem_stream);
+
+	serializer.Begin();
+	Serialize(serializer);
+	serializer.End();
+
+	mem_stream.Rewind();
+
+	BinaryDeserializer deserializer(mem_stream);
+	DataChunk new_chunk;
+
+	deserializer.Begin();
+	new_chunk.Deserialize(deserializer);
+	deserializer.End();
+
+	D_ASSERT(size() == new_chunk.size());
 #endif
 }
 
-void DataChunk::Print() {
+void DataChunk::Print() const {
 	Printer::Print(ToString());
 }
 

@@ -1,25 +1,29 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression_binder/column_alias_binder.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression_binder/group_binder.hpp"
 #include "duckdb/planner/expression_binder/having_binder.hpp"
-#include "duckdb/planner/expression_binder/qualify_binder.hpp"
 #include "duckdb/planner/expression_binder/order_binder.hpp"
+#include "duckdb/planner/expression_binder/qualify_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/parser/expression/conjunction_expression.hpp"
 
 namespace duckdb {
 
@@ -218,10 +222,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 			for (auto &target_distinct : distinct.target_distincts) {
 				auto &bound_colref = target_distinct->Cast<BoundColumnRefExpression>();
 				const auto &sql_type = sql_types[bound_colref.binding.column_index];
-				if (sql_type.id() == LogicalTypeId::VARCHAR) {
-					target_distinct = ExpressionBinder::PushCollation(context, std::move(target_distinct),
-					                                                  StringType::GetCollation(sql_type), true);
-				}
+				ExpressionBinder::PushCollation(context, target_distinct, sql_type, true);
 			}
 			break;
 		}
@@ -249,10 +250,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 				D_ASSERT(bound_colref.binding.column_index < sql_types.size());
 				const auto &sql_type = sql_types[bound_colref.binding.column_index];
 				bound_colref.return_type = sql_types[bound_colref.binding.column_index];
-				if (sql_type.id() == LogicalTypeId::VARCHAR) {
-					order_node.expression = ExpressionBinder::PushCollation(context, std::move(order_node.expression),
-					                                                        StringType::GetCollation(sql_type));
-				}
+				ExpressionBinder::PushCollation(context, order_node.expression, sql_type);
 			}
 			break;
 		}
@@ -380,9 +378,26 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			auto bound_expr = group_binder.Bind(group_expressions[i], &group_type);
 			D_ASSERT(bound_expr->return_type.id() != LogicalTypeId::INVALID);
 
+			// find out whether the expression contains a subquery, it can't be copied if so
+			auto &bound_expr_ref = *bound_expr;
+			bool contains_subquery = bound_expr_ref.HasSubquery();
+
 			// push a potential collation, if necessary
-			bound_expr = ExpressionBinder::PushCollation(context, std::move(bound_expr),
-			                                             StringType::GetCollation(group_type), true);
+			bool requires_collation = ExpressionBinder::PushCollation(context, bound_expr, group_type, true);
+			if (!contains_subquery && requires_collation) {
+				// if there is a collation on a group x, we should group by the collated expr,
+				// but also push a first(x) aggregate in case x is selected (uncollated)
+				info.collated_groups[i] = result->aggregates.size();
+
+				auto first_fun = FirstFun::GetFunction(LogicalType::VARCHAR);
+				vector<unique_ptr<Expression>> first_children;
+				// FIXME: would be better to just refer to this expression, but for now we copy
+				first_children.push_back(bound_expr_ref.Copy());
+
+				FunctionBinder function_binder(context);
+				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
+				result->aggregates.push_back(std::move(function));
+			}
 			result->groups.group_expressions.push_back(std::move(bound_expr));
 
 			// in the unbound expression we DO bind the table names of any ColumnRefs

@@ -4,6 +4,8 @@
 
 require fts
 
+require noalternativeverify
+
 statement ok
 CREATE SCHEMA test
 

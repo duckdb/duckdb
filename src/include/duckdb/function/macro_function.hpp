@@ -45,11 +45,8 @@ public:
 
 	virtual string ToSQL(const string &schema, const string &name) const;
 
-	void Serialize(Serializer &serializer) const;
+	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<MacroFunction> Deserialize(Deserializer &deserializer);
-
-protected:
-	virtual void SerializeInternal(FieldWriter &writer) const = 0;
 
 public:
 	template <class TARGET>

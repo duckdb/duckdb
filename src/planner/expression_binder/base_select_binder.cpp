@@ -1,15 +1,15 @@
 #include "duckdb/planner/expression_binder/base_select_binder.hpp"
 
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/parser/expression/operator_expression.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -98,11 +98,8 @@ BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_pt
 				                      " This is not yet supported.",
 				                      colref.column_names[0]);
 			}
-			auto result = BindResult(node.select_list[index]->Copy());
-			if (result.expression->type == ExpressionType::BOUND_COLUMN_REF) {
-				auto &result_expr = result.expression->Cast<BoundColumnRefExpression>();
-				result_expr.depth = depth;
-			}
+			auto copied_expression = node.original_expressions[index]->Copy();
+			result = BindExpression(copied_expression, depth, false);
 			return result;
 		}
 	}
@@ -138,9 +135,17 @@ BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 }
 
 BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, idx_t group_index) {
-	auto &group = node.groups.group_expressions[group_index];
-	return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), group->return_type,
-	                                                      ColumnBinding(node.group_index, group_index), depth));
+	auto it = info.collated_groups.find(group_index);
+	if (it != info.collated_groups.end()) {
+		// This is an implicitly collated group, so we need to refer to the first() aggregate
+		const auto &aggr_index = it->second;
+		return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), node.aggregates[aggr_index]->return_type,
+		                                                      ColumnBinding(node.aggregate_index, aggr_index), depth));
+	} else {
+		auto &group = node.groups.group_expressions[group_index];
+		return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), group->return_type,
+		                                                      ColumnBinding(node.group_index, group_index), depth));
+	}
 }
 
 bool BaseSelectBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {

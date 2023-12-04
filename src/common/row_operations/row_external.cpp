@@ -99,7 +99,7 @@ void RowOperations::UnswizzleHeapPointer(const RowLayout &layout, const data_ptr
 
 static inline void VerifyUnswizzledString(const RowLayout &layout, const idx_t &col_idx, const data_ptr_t &row_ptr) {
 #ifdef DEBUG
-	if (layout.GetTypes()[col_idx] == LogicalTypeId::BLOB) {
+	if (layout.GetTypes()[col_idx].id() != LogicalTypeId::VARCHAR) {
 		return;
 	}
 	idx_t entry_idx;

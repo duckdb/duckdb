@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-PREPARE boaz_bug AS from read_csv_auto('https://github.com/duckdb/duckdb/raw/master/data/csv/customer.csv')
+PREPARE boaz_bug AS from read_csv_auto('https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv')
 
 query IIIIIIIIIIIIIIIIII
 EXECUTE boaz_bug
@@ -31,6 +31,9 @@ statement error
 EXECUTE boaz_bug
 
 # Recreate prepared statement with different file
+
+#FIXME: FILE changed?
+mode skip
 
 statement ok
 PREPARE boaz_bug AS SELECT * from read_csv_auto('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c') order by all limit 5;

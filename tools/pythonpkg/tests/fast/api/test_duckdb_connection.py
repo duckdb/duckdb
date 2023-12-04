@@ -2,10 +2,12 @@ import duckdb
 import pytest
 from conftest import NumpyPandas, ArrowPandas
 
+
 def is_dunder_method(method_name: str) -> bool:
-    if (len(method_name) < 4):
+    if len(method_name) < 4:
         return False
     return method_name[:2] == '__' and method_name[:-3:-1] == '__'
+
 
 # This file contains tests for DuckDBPyConnection methods,
 # wrapped by the 'duckdb' module, to execute with the 'default_connection'
@@ -13,8 +15,12 @@ class TestDuckDBConnection(object):
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_append(self, pandas):
         duckdb.execute("Create table integers (i integer)")
-        df_in = pandas.DataFrame({'numbers': [1,2,3,4,5],})
-        duckdb.append('integers',df_in)
+        df_in = pandas.DataFrame(
+            {
+                'numbers': [1, 2, 3, 4, 5],
+            }
+        )
+        duckdb.append('integers', df_in)
         assert duckdb.execute('select count(*) from integers').fetchone()[0] == 5
         # cleanup
         duckdb.execute("drop table integers")
@@ -28,7 +34,9 @@ class TestDuckDBConnection(object):
             con.sql('select i from connect_default_connect')
 
         # not allowed with additional options
-        with pytest.raises(duckdb.InvalidInputException, match='Default connection fetching is only allowed without additional options'):
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Default connection fetching is only allowed without additional options'
+        ):
             con = duckdb.connect(':default:', read_only=True)
 
     def test_arrow(self):
@@ -62,7 +70,7 @@ class TestDuckDBConnection(object):
             duckdb.table("tbl")
 
     def test_df(self):
-        ref = [([1,2,3],)]
+        ref = [([1, 2, 3],)]
         duckdb.execute("select [1,2,3]")
         res_df = duckdb.fetch_df()
         res = duckdb.query("select * from res_df").fetchall()
@@ -77,7 +85,7 @@ class TestDuckDBConnection(object):
             dup_conn.table("tbl").fetchall()
 
     def test_execute(self):
-        assert [([4,2],)] == duckdb.execute("select [4,2]").fetchall()
+        assert [([4, 2],)] == duckdb.execute("select [4,2]").fetchall()
 
     def test_executemany(self):
         # executemany does not keep an open result set
@@ -94,9 +102,9 @@ class TestDuckDBConnection(object):
 
         duckdb.execute("Create Table test (a integer)")
 
-        for i in range (1024):
+        for i in range(1024):
             for j in range(2):
-                duckdb.execute("Insert Into test values ('"+str(i)+"')")
+                duckdb.execute("Insert Into test values ('" + str(i) + "')")
         duckdb.execute("Insert Into test values ('5000')")
         duckdb.execute("Insert Into test values ('6000')")
         sql = '''
@@ -114,7 +122,7 @@ class TestDuckDBConnection(object):
         duckdb.execute("drop table test")
 
     def test_fetch_df(self):
-        ref = [([1,2,3],)]
+        ref = [([1, 2, 3],)]
         duckdb.execute("select [1,2,3]")
         res_df = duckdb.fetch_df()
         res = duckdb.query("select * from res_df").fetchall()
@@ -124,11 +132,11 @@ class TestDuckDBConnection(object):
         duckdb.execute("CREATE table t as select range a from range(3000);")
         query = duckdb.execute("SELECT a FROM t")
         cur_chunk = query.fetch_df_chunk()
-        assert(cur_chunk['a'][0] == 0)
-        assert(len(cur_chunk) == 2048)
+        assert cur_chunk['a'][0] == 0
+        assert len(cur_chunk) == 2048
         cur_chunk = query.fetch_df_chunk()
-        assert(cur_chunk['a'][0] == 2048)
-        assert(len(cur_chunk) == 952)
+        assert cur_chunk['a'][0] == 2048
+        assert len(cur_chunk) == 952
         duckdb.execute("DROP TABLE t")
 
     def test_fetch_record_batch(self):
@@ -139,13 +147,13 @@ class TestDuckDBConnection(object):
         duckdb.execute("SELECT a FROM t")
         record_batch_reader = duckdb.fetch_record_batch(1024)
         chunk = record_batch_reader.read_all()
-        assert(len(chunk) == 3000)
+        assert len(chunk) == 3000
 
     def test_fetchall(self):
         assert [([1, 2, 3],)] == duckdb.execute("select [1,2,3]").fetchall()
 
     def test_fetchdf(self):
-        ref = [([1,2,3],)]
+        ref = [([1, 2, 3],)]
         duckdb.execute("select [1,2,3]")
         res_df = duckdb.fetchdf()
         res = duckdb.query("select * from res_df").fetchall()
@@ -207,12 +215,12 @@ class TestDuckDBConnection(object):
         assert None != duckdb.register
 
     def test_register_relation(self):
-        rel = duckdb.sql('select [5,4,3]')
-        duckdb.register("relation", rel)
+        con = duckdb.connect()
+        rel = con.sql('select [5,4,3]')
+        con.register("relation", rel)
 
-        duckdb.sql("create table tbl as select * from relation")
-        assert duckdb.table('tbl').fetchall() == [([5, 4, 3],)]
-        duckdb.execute('drop table tbl')
+        con.sql("create table tbl as select * from relation")
+        assert con.table('tbl').fetchall() == [([5, 4, 3],)]
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_relation_out_of_scope(self, pandas):
@@ -220,22 +228,22 @@ class TestDuckDBConnection(object):
             # Create a connection, we will return this
             con = duckdb.connect()
             # Create a dataframe
-            df = pandas.DataFrame({'a': [1,2,3]})
+            df = pandas.DataFrame({'a': [1, 2, 3]})
             # The dataframe has to be registered as well
             # making sure it does not go out of scope
             con.register("df", df)
             rel = con.sql('select * from df')
             con.register("relation", rel)
             return con
-        
+
         con = temporary_scope()
         res = con.sql('select * from relation').fetchall()
         print(res)
 
     def test_table(self):
-        duckdb.execute("create table tbl as select 1")
-        assert [(1,)] == duckdb.table("tbl").fetchall()
-        duckdb.execute("drop table tbl")
+        con = duckdb.connect()
+        con.execute("create table tbl as select 1")
+        assert [(1,)] == con.table("tbl").fetchall()
 
     def test_table_function(self):
         assert None != duckdb.table_function
@@ -257,9 +265,11 @@ class TestDuckDBConnection(object):
     def test_close(self):
         assert None != duckdb.close
 
+    def test_interrupt(self):
+        assert None != duckdb.interrupt
+
     def test_wrap_coverage(self):
         con = duckdb.default_connection
-        assert str(con.__class__) == "<class 'duckdb.DuckDBPyConnection'>"
 
         # Skip all of the initial __xxxx__ methods
         connection_methods = dir(con)

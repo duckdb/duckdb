@@ -51,6 +51,28 @@ duckdb_logical_type duckdb_create_union_type(duckdb_logical_type member_types_p,
 	return reinterpret_cast<duckdb_logical_type>(mtype);
 }
 
+duckdb_logical_type duckdb_create_struct_type(duckdb_logical_type *member_types_p, const char **member_names,
+                                              idx_t member_count) {
+	if (!member_types_p || !member_names) {
+		return nullptr;
+	}
+	duckdb::LogicalType **member_types = (duckdb::LogicalType **)member_types_p;
+	for (idx_t i = 0; i < member_count; i++) {
+		if (!member_names[i] || !member_types[i]) {
+			return nullptr;
+		}
+	}
+
+	duckdb::LogicalType *mtype = new duckdb::LogicalType;
+	duckdb::child_list_t<duckdb::LogicalType> members;
+
+	for (idx_t i = 0; i < member_count; i++) {
+		members.push_back(make_pair(member_names[i], *member_types[i]));
+	}
+	*mtype = duckdb::LogicalType::STRUCT(members);
+	return reinterpret_cast<duckdb_logical_type>(mtype);
+}
+
 duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_type, duckdb_logical_type value_type) {
 	if (!key_type || !value_type) {
 		return nullptr;

@@ -166,8 +166,8 @@ struct RLECompressState : public CompressionState {
 	void WriteValue(T value, rle_count_t count, bool is_null) {
 		// write the RLE entry
 		auto handle_ptr = handle.Ptr() + RLEConstants::RLE_HEADER_SIZE;
-		auto data_pointer = (T *)handle_ptr;
-		auto index_pointer = (rle_count_t *)(handle_ptr + max_rle_count * sizeof(T));
+		auto data_pointer = reinterpret_cast<T *>(handle_ptr);
+		auto index_pointer = reinterpret_cast<rle_count_t *>(handle_ptr + max_rle_count * sizeof(T));
 		data_pointer[entry_count] = value;
 		index_pointer[entry_count] = count;
 		entry_count++;
@@ -257,7 +257,7 @@ struct RLEScanState : public SegmentScanState {
 
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
 		auto data = handle.Ptr() + segment.GetBlockOffset();
-		auto index_pointer = (rle_count_t *)(data + rle_count_offset);
+		auto index_pointer = reinterpret_cast<rle_count_t *>(data + rle_count_offset);
 
 		for (idx_t i = 0; i < skip_count; i++) {
 			// assign the current value
@@ -272,7 +272,6 @@ struct RLEScanState : public SegmentScanState {
 	}
 
 	BufferHandle handle;
-	uint32_t rle_offset;
 	idx_t entry_pos;
 	idx_t position_in_entry;
 	uint32_t rle_count_offset;
@@ -293,14 +292,63 @@ void RLESkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
 	scan_state.Skip(segment, skip_count);
 }
 
+template <bool ENTIRE_VECTOR>
+static bool CanEmitConstantVector(idx_t position, idx_t run_length, idx_t scan_count) {
+	if (!ENTIRE_VECTOR) {
+		return false;
+	}
+	if (scan_count != STANDARD_VECTOR_SIZE) {
+		// Only when we can fill an entire Vector can we emit a ConstantVector, because subsequent scans require the
+		// input Vector to be flat
+		return false;
+	}
+	D_ASSERT(position < run_length);
+	auto remaining_in_run = run_length - position;
+	// The amount of values left in this run are equal or greater than the amount of values we need to scan
+	return remaining_in_run >= scan_count;
+}
+
 template <class T>
-void RLEScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
-                    idx_t result_offset) {
+inline static void ForwardToNextRun(RLEScanState<T> &scan_state) {
+	// handled all entries in this RLE value
+	// move to the next entry
+	scan_state.entry_pos++;
+	scan_state.position_in_entry = 0;
+}
+
+template <class T>
+inline static bool ExhaustedRun(RLEScanState<T> &scan_state, rle_count_t *index_pointer) {
+	return scan_state.position_in_entry >= index_pointer[scan_state.entry_pos];
+}
+
+template <class T>
+static void RLEScanConstant(RLEScanState<T> &scan_state, rle_count_t *index_pointer, T *data_pointer, idx_t scan_count,
+                            Vector &result) {
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	auto result_data = ConstantVector::GetData<T>(result);
+	result_data[0] = data_pointer[scan_state.entry_pos];
+	scan_state.position_in_entry += scan_count;
+	if (ExhaustedRun(scan_state, index_pointer)) {
+		ForwardToNextRun(scan_state);
+	}
+	return;
+}
+
+template <class T, bool ENTIRE_VECTOR>
+void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+                            idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
-	auto data_pointer = (T *)(data + RLEConstants::RLE_HEADER_SIZE);
-	auto index_pointer = (rle_count_t *)(data + scan_state.rle_count_offset);
+	auto data_pointer = reinterpret_cast<T *>(data + RLEConstants::RLE_HEADER_SIZE);
+	auto index_pointer = reinterpret_cast<rle_count_t *>(data + scan_state.rle_count_offset);
+
+	// If we are scanning an entire Vector and it contains only a single run
+	if (CanEmitConstantVector<ENTIRE_VECTOR>(scan_state.position_in_entry, index_pointer[scan_state.entry_pos],
+	                                         scan_count)) {
+		RLEScanConstant<T>(scan_state, index_pointer, data_pointer, scan_count, result);
+		return;
+	}
 
 	auto result_data = FlatVector::GetData<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -308,19 +356,21 @@ void RLEScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_c
 		// assign the current value
 		result_data[result_offset + i] = data_pointer[scan_state.entry_pos];
 		scan_state.position_in_entry++;
-		if (scan_state.position_in_entry >= index_pointer[scan_state.entry_pos]) {
-			// handled all entries in this RLE value
-			// move to the next entry
-			scan_state.entry_pos++;
-			scan_state.position_in_entry = 0;
+		if (ExhaustedRun(scan_state, index_pointer)) {
+			ForwardToNextRun(scan_state);
 		}
 	}
 }
 
 template <class T>
+void RLEScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+                    idx_t result_offset) {
+	return RLEScanPartialInternal<T, false>(segment, state, scan_count, result, result_offset);
+}
+
+template <class T>
 void RLEScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	// FIXME: emit constant vector if repetition of single value is >= scan_count
-	RLEScanPartial<T>(segment, state, scan_count, result, 0);
+	RLEScanPartialInternal<T, true>(segment, state, scan_count, result, 0);
 }
 
 //===--------------------------------------------------------------------===//
@@ -332,7 +382,7 @@ void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, 
 	scan_state.Skip(segment, row_id);
 
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
-	auto data_pointer = (T *)(data + RLEConstants::RLE_HEADER_SIZE);
+	auto data_pointer = reinterpret_cast<T *>(data + RLEConstants::RLE_HEADER_SIZE);
 	auto result_data = FlatVector::GetData<T>(result);
 	result_data[result_idx] = data_pointer[scan_state.entry_pos];
 }

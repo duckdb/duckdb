@@ -1,6 +1,7 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -761,6 +762,45 @@ hugeint_t &hugeint_t::operator^=(const hugeint_t &rhs) {
 	lower ^= rhs.lower;
 	upper ^= rhs.upper;
 	return *this;
+}
+
+bool hugeint_t::operator!() const {
+	return *this == 0;
+}
+
+hugeint_t::operator bool() const {
+	return *this != 0;
+}
+
+template <class T>
+static T NarrowCast(const hugeint_t &input) {
+	// NarrowCast is supposed to truncate (take lower)
+	return static_cast<T>(input.lower);
+}
+
+hugeint_t::operator uint8_t() const {
+	return NarrowCast<uint8_t>(*this);
+}
+hugeint_t::operator uint16_t() const {
+	return NarrowCast<uint16_t>(*this);
+}
+hugeint_t::operator uint32_t() const {
+	return NarrowCast<uint32_t>(*this);
+}
+hugeint_t::operator uint64_t() const {
+	return NarrowCast<uint64_t>(*this);
+}
+hugeint_t::operator int8_t() const {
+	return NarrowCast<int8_t>(*this);
+}
+hugeint_t::operator int16_t() const {
+	return NarrowCast<int16_t>(*this);
+}
+hugeint_t::operator int32_t() const {
+	return NarrowCast<int32_t>(*this);
+}
+hugeint_t::operator int64_t() const {
+	return NarrowCast<int64_t>(*this);
 }
 
 string hugeint_t::ToString() const {

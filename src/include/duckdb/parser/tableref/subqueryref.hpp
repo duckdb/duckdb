@@ -17,6 +17,9 @@ class SubqueryRef : public TableRef {
 public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::SUBQUERY;
 
+private:
+	SubqueryRef();
+
 public:
 	DUCKDB_API explicit SubqueryRef(unique_ptr<SelectStatement> subquery, string alias = string());
 
@@ -31,12 +34,8 @@ public:
 
 	unique_ptr<TableRef> Copy() override;
 
-	//! Serializes a blob into a SubqueryRef
-	void Serialize(FieldWriter &serializer) const override;
 	//! Deserializes a blob back into a SubqueryRef
-	static unique_ptr<TableRef> Deserialize(FieldReader &source);
-
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<TableRef> FormatDeserialize(FormatDeserializer &source);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<TableRef> Deserialize(Deserializer &source);
 };
 } // namespace duckdb

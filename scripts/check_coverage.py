@@ -5,37 +5,52 @@ import re
 
 parser = argparse.ArgumentParser(description='Check code coverage results')
 
-parser.add_argument('--uncovered_files', action='store',
-                    help='Set of files that are not 100% covered', default=os.path.join(".github", "config", "uncovered_files.csv"))
+parser.add_argument(
+    '--uncovered_files',
+    action='store',
+    help='Set of files that are not 100% covered',
+    default=os.path.join(".github", "config", "uncovered_files.csv"),
+)
 parser.add_argument('--directory', help='Directory of generated HTML files', action='store', default='coverage_html')
 parser.add_argument('--fix', help='Fill up the uncovered_files.csv with all files', action='store_true', default=False)
 
 
 args = parser.parse_args()
 if not os.path.exists(args.directory):
-	print(f"The provided directory ({args.directory}) does not exist, please create it first")
-	exit(1)
+    print(f"The provided directory ({args.directory}) does not exist, please create it first")
+    exit(1)
 
-covered_regex = '<a name="(\d+)">[ \t\n]*<span class="lineNum">[ \t\n0-9]+</span><span class="{COVERED_CLASS}">[ \t\n0-9]+:([^<]+)'
+covered_regex = (
+    r'<a name="(\d+)">[ \t\n]*<span class="lineNum">[ \t\n0-9]+</span><span class="{COVERED_CLASS}">[ \t\n0-9]+:([^<]+)'
+)
+
 
 def get_original_path(path):
-    return path.replace('.gcov.html', '').replace(os.getcwd(), '').replace('coverage_html' + os.path.sep, '').replace('home/runner/work/duckdb/duckdb/', '')
+    return (
+        path.replace('.gcov.html', '')
+        .replace(os.getcwd(), '')
+        .replace('coverage_html' + os.path.sep, '')
+        .replace('home/runner/work/duckdb/duckdb/', '')
+    )
+
 
 def cleanup_line(line):
     return line.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"')
 
+
 partial_coverage_dict = {}
+with open(args.uncovered_files, 'r') as f:
+    for line in f.readlines():
+        splits = line.split('\t')
+        partial_coverage_dict[splits[0]] = int(splits[1].strip())
+
 if args.fix:
     uncovered_file = open(args.uncovered_files, 'w+')
-else:
-    with open(args.uncovered_files, 'r') as f:
-        for line in f.readlines():
-            splits = line.split('\t')
-            partial_coverage_dict[splits[0]] = int(splits[1].strip())
 
 DASH_COUNT = 80
 total_difference = 0
-allowed_difference = 1
+allowed_difference = 0
+
 
 def check_file(path, partial_coverage_dict):
     global any_failed
@@ -60,11 +75,14 @@ def check_file(path, partial_coverage_dict):
     expected_uncovered_lines = 0
     if original_path in partial_coverage_dict:
         expected_uncovered_lines = partial_coverage_dict[original_path]
+    if args.fix:
+        if expected_uncovered_lines == 0 and len(uncovered_lines) == 0:
+            return
+        expected_uncovered = max(expected_uncovered_lines, len(uncovered_lines) + 1)
+        uncovered_file.write(f'{original_path}\t{expected_uncovered}\n')
+        return
 
     if len(uncovered_lines) > expected_uncovered_lines:
-        if args.fix:
-            uncovered_file.write(f'{original_path}\t{len(uncovered_lines) + 1}\n')
-            return
         total_difference += len(uncovered_lines) - expected_uncovered_lines
 
         print("-" * DASH_COUNT)
@@ -91,6 +109,7 @@ def scan_directory(path):
         for file in files:
             file_list += scan_directory(os.path.join(path, file))
     return file_list
+
 
 files = scan_directory(args.directory)
 files.sort()

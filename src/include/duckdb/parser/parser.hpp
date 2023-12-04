@@ -22,6 +22,8 @@ struct PGList;
 
 namespace duckdb {
 
+class GroupByNode;
+
 //! The parser is responsible for parsing the query and converting it into a set
 //! of parsed statements. The parsed statements can then be converted into a
 //! plan and executed.
@@ -50,6 +52,8 @@ public:
 	//! Parses a list of expressions (i.e. the list found in a SELECT clause)
 	DUCKDB_API static vector<unique_ptr<ParsedExpression>> ParseExpressionList(const string &select_list,
 	                                                                           ParserOptions options = ParserOptions());
+	//! Parses a list of GROUP BY expressions
+	static GroupByNode ParseGroupByList(const string &group_by, ParserOptions options = ParserOptions());
 	//! Parses a list as found in an ORDER BY expression (i.e. including optional ASCENDING/DESCENDING modifiers)
 	static vector<OrderByNode> ParseOrderList(const string &select_list, ParserOptions options = ParserOptions());
 	//! Parses an update list (i.e. the list found in the SET clause of an UPDATE statement)

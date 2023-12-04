@@ -30,7 +30,7 @@ class DatabaseInstance;
 class DuckDB;
 class LogicalOperator;
 class SelectStatement;
-struct BufferedCSVReaderOptions;
+struct CSVReaderOptions;
 
 typedef void (*warning_callback)(std::string);
 
@@ -131,7 +131,7 @@ public:
 
 	//! Reads CSV file
 	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file);
-	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file, BufferedCSVReaderOptions &options);
+	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file, named_parameter_map_t &&options);
 	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file, const vector<string> &columns);
 
 	//! Reads Parquet file
@@ -169,8 +169,7 @@ public:
 	template <typename TR, typename... Args>
 	void CreateScalarFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                          TR (*udf_func)(Args...)) {
-		scalar_function_t function =
-		    UDFWrapper::CreateScalarFunction<TR, Args...>(name, args, std::move(ret_type), udf_func);
+		scalar_function_t function = UDFWrapper::CreateScalarFunction<TR, Args...>(name, args, ret_type, udf_func);
 		UDFWrapper::RegisterFunction(name, args, ret_type, function, *context);
 	}
 

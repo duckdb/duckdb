@@ -98,6 +98,24 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "fmod", {"x", "y", nullptr}, "(x-y*floor(x/y))"},
 	{DEFAULT_SCHEMA, "count_if", {"l", nullptr}, "sum(if(l, 1, 0))"},
 	{DEFAULT_SCHEMA, "split_part", {"string", "delimiter", "position", nullptr}, "coalesce(string_split(string, delimiter)[position],'')"},
+	{DEFAULT_SCHEMA, "geomean", {"x", nullptr}, "exp(avg(ln(x)))"},
+	{DEFAULT_SCHEMA, "geometric_mean", {"x", nullptr}, "geomean(x)"},
+
+    {DEFAULT_SCHEMA, "list_reverse", {"l", nullptr}, "l[:-:-1]"},
+    {DEFAULT_SCHEMA, "array_reverse", {"l", nullptr}, "list_reverse(l)"},
+
+    // FIXME implement as actual function if we encounter a lot of performance issues. Complexity now: n * m, with hashing possibly n + m
+    {DEFAULT_SCHEMA, "list_intersect", {"l1", "l2", nullptr}, "list_filter(l1, (x) -> list_contains(l2, x))"},
+    {DEFAULT_SCHEMA, "array_intersect", {"l1", "l2", nullptr}, "list_intersect(l1, l2)"},
+
+    {DEFAULT_SCHEMA, "list_has_any", {"l1", "l2", nullptr}, "CASE WHEN l1 IS NULL THEN NULL WHEN l2 IS NULL THEN NULL WHEN len(list_intersect(l1, l2)) > 0 THEN true ELSE false END"},
+    {DEFAULT_SCHEMA, "array_has_any", {"l1", "l2", nullptr}, "list_has_any(l1, l2)" },
+    {DEFAULT_SCHEMA, "&&", {"l1", "l2", nullptr}, "list_has_any(l1, l2)" }, // "&&" is the operator for "list_has_any
+
+    {DEFAULT_SCHEMA, "list_has_all", {"l1", "l2", nullptr}, "CASE WHEN l1 IS NULL THEN NULL WHEN l2 IS NULL THEN NULL WHEN len(list_intersect(l2, l1)) = len(list_filter(l2, x -> x IS NOT NULL)) THEN true ELSE false END"},
+    {DEFAULT_SCHEMA, "array_has_all", {"l1", "l2", nullptr}, "list_has_all(l1, l2)" },
+    {DEFAULT_SCHEMA, "@>", {"l1", "l2", nullptr}, "list_has_all(l1, l2)" }, // "@>" is the operator for "list_has_all
+    {DEFAULT_SCHEMA, "<@", {"l1", "l2", nullptr}, "list_has_all(l2, l1)" }, // "<@" is the operator for "list_has_all
 
 	// algebraic list aggregates
 	{DEFAULT_SCHEMA, "list_avg", {"l", nullptr}, "list_aggr(l, 'avg')"},
@@ -147,12 +165,12 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroIn
 		    make_uniq<ColumnRefExpression>(default_macro.parameters[param_idx]));
 	}
 
-	auto bind_info = make_uniq<CreateMacroInfo>();
+	auto type = function->type == MacroType::TABLE_MACRO ? CatalogType::TABLE_MACRO_ENTRY : CatalogType::MACRO_ENTRY;
+	auto bind_info = make_uniq<CreateMacroInfo>(type);
 	bind_info->schema = default_macro.schema;
 	bind_info->name = default_macro.name;
 	bind_info->temporary = true;
 	bind_info->internal = true;
-	bind_info->type = function->type == MacroType::TABLE_MACRO ? CatalogType::TABLE_MACRO_ENTRY : CatalogType::MACRO_ENTRY;
 	bind_info->function = std::move(function);
 	return bind_info;
 
@@ -205,6 +223,9 @@ unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientCont
 vector<string> DefaultFunctionGenerator::GetDefaultEntries() {
 	vector<string> result;
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
+		if (StringUtil::Lower(internal_macros[index].name) != internal_macros[index].name) {
+			throw InternalException("Default macro name %s should be lowercase", internal_macros[index].name);
+		}
 		if (internal_macros[index].schema == schema.name) {
 			result.emplace_back(internal_macros[index].name);
 		}

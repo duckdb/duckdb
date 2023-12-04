@@ -82,6 +82,9 @@ public:
 	BlockManager &GetBlockManagerForRowData() override {
 		return block_manager;
 	}
+	MetadataManager &GetMetadataManager() override {
+		return block_manager.GetMetadataManager();
+	}
 };
 
 SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only)
@@ -94,8 +97,13 @@ void SingleFileStorageManager::LoadDatabase() {
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 		return;
 	}
-
-	string wal_path = path + ".wal";
+	std::size_t question_mark_pos = path.find('?');
+	auto wal_path = path;
+	if (question_mark_pos != std::string::npos) {
+		wal_path.insert(question_mark_pos, ".wal");
+	} else {
+		wal_path += ".wal";
+	}
 	auto &fs = FileSystem::Get(db);
 	auto &config = DBConfig::Get(db);
 	bool truncate_wal = false;
@@ -135,8 +143,6 @@ void SingleFileStorageManager::LoadDatabase() {
 		//! Load from storage
 		auto checkpointer = SingleFileCheckpointReader(*this);
 		checkpointer.LoadFromStorage();
-		// finish load checkpoint, clear the cached handles of meta blocks
-		block_manager->ClearMetaBlockHandles();
 		// check if the WAL file exists
 		if (fs.FileExists(wal_path)) {
 			// replay the WAL
@@ -218,7 +224,7 @@ unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(T
 	return make_uniq<SingleFileStorageCommitState>(*this, checkpoint);
 }
 
-bool SingleFileStorageManager::IsCheckpointClean(block_id_t checkpoint_id) {
+bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id) {
 	return block_manager->IsRootBlock(checkpoint_id);
 }
 
@@ -229,8 +235,12 @@ void SingleFileStorageManager::CreateCheckpoint(bool delete_wal, bool force_chec
 	auto &config = DBConfig::Get(db);
 	if (wal->GetWALSize() > 0 || config.options.force_checkpoint || force_checkpoint) {
 		// we only need to checkpoint if there is anything in the WAL
-		SingleFileCheckpointWriter checkpointer(db, *block_manager);
-		checkpointer.CreateCheckpoint();
+		try {
+			SingleFileCheckpointWriter checkpointer(db, *block_manager);
+			checkpointer.CreateCheckpoint();
+		} catch (std::exception &ex) {
+			throw FatalException("Failed to create checkpoint because of error: %s", ex.what());
+		}
 	}
 	if (delete_wal) {
 		wal->Delete();
@@ -252,6 +262,11 @@ DatabaseSize SingleFileStorageManager::GetDatabaseSize() {
 		}
 	}
 	return ds;
+}
+
+vector<MetadataBlockInfo> SingleFileStorageManager::GetMetadataInfo() {
+	auto &metadata_manager = block_manager->GetMetadataManager();
+	return metadata_manager.GetMetadataInfo();
 }
 
 bool SingleFileStorageManager::AutomaticCheckpoint(idx_t estimated_wal_bytes) {

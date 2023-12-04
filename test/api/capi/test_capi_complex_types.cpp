@@ -55,7 +55,8 @@ TEST_CASE("Test enum types C API", "[capi]") {
 	}
 
 	REQUIRE(tester.OpenDatabase(nullptr));
-	result = tester.Query("select small_enum, medium_enum, large_enum, int from test_all_types();");
+	result =
+	    tester.Query("select small_enum, medium_enum, large_enum, int from test_all_types(use_large_enum = true);");
 	REQUIRE(NO_FAIL(*result));
 	REQUIRE(result->ColumnCount() == 4);
 	REQUIRE(result->ErrorMessage() == nullptr);
@@ -172,4 +173,30 @@ TEST_CASE("Test struct types C API", "[capi]") {
 	REQUIRE(duckdb_struct_type_child_count(nullptr) == 0);
 	REQUIRE(duckdb_struct_type_child_name(nullptr, 0) == nullptr);
 	REQUIRE(duckdb_struct_type_child_type(nullptr, 0) == nullptr);
+}
+
+TEST_CASE("Test struct types creation C API", "[capi]") {
+	duckdb::vector<duckdb_logical_type> types = {duckdb_create_logical_type(DUCKDB_TYPE_INTEGER),
+	                                             duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR)};
+	duckdb::vector<const char *> names = {"a", "b"};
+
+	auto logical_type = duckdb_create_struct_type(types.data(), names.data(), types.size());
+	REQUIRE(duckdb_get_type_id(logical_type) == duckdb_type::DUCKDB_TYPE_STRUCT);
+	REQUIRE(duckdb_struct_type_child_count(logical_type) == 2);
+
+	for (idx_t i = 0; i < names.size(); i++) {
+		auto name = duckdb_struct_type_child_name(logical_type, i);
+		string str_name(name);
+		duckdb_free(name);
+		REQUIRE(str_name == names[i]);
+
+		auto type = duckdb_struct_type_child_type(logical_type, i);
+		REQUIRE(duckdb_get_type_id(type) == duckdb_get_type_id(types[i]));
+		duckdb_destroy_logical_type(&type);
+	}
+
+	for (idx_t i = 0; i < types.size(); i++) {
+		duckdb_destroy_logical_type(&types[i]);
+	}
+	duckdb_destroy_logical_type(&logical_type);
 }

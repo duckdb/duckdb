@@ -3,6 +3,8 @@ package org.duckdb;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
+import java.time.LocalDateTime;
+import org.duckdb.DuckDBTimestamp;
 
 public class DuckDBAppender implements AutoCloseable {
 
@@ -12,7 +14,8 @@ public class DuckDBAppender implements AutoCloseable {
         if (con == null) {
             throw new SQLException("Invalid connection");
         }
-        appender_ref = DuckDBNative.duckdb_jdbc_create_appender(con.conn_ref, schemaName.getBytes(StandardCharsets.UTF_8), tableName.getBytes(StandardCharsets.UTF_8));
+        appender_ref = DuckDBNative.duckdb_jdbc_create_appender(
+            con.conn_ref, schemaName.getBytes(StandardCharsets.UTF_8), tableName.getBytes(StandardCharsets.UTF_8));
     }
 
     public void beginRow() throws SQLException {
@@ -47,6 +50,16 @@ public class DuckDBAppender implements AutoCloseable {
         DuckDBNative.duckdb_jdbc_appender_append_long(appender_ref, value);
     }
 
+    // New naming schema for object params to keep compatibility with calling "append(null)"
+    public void appendLocalDateTime(LocalDateTime value) throws SQLException {
+        if (value == null) {
+            DuckDBNative.duckdb_jdbc_appender_append_null(appender_ref);
+        } else {
+            long timeInMicros = DuckDBTimestamp.localDateTime2Micros(value);
+            DuckDBNative.duckdb_jdbc_appender_append_timestamp(appender_ref, timeInMicros);
+        }
+    }
+
     public void append(float value) throws SQLException {
         DuckDBNative.duckdb_jdbc_appender_append_float(appender_ref, value);
     }
@@ -73,5 +86,4 @@ public class DuckDBAppender implements AutoCloseable {
             appender_ref = null;
         }
     }
-
 }

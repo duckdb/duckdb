@@ -7,6 +7,7 @@ import re
 
 excluded_objects = ['utf8proc_data.cpp']
 
+
 def third_party_includes():
     includes = []
     includes += [os.path.join('third_party', 'fmt', 'include')]
@@ -31,6 +32,7 @@ def third_party_includes():
     includes += [os.path.join('third_party', 'jaro_winkler', 'details')]
     return includes
 
+
 def third_party_sources():
     sources = []
     sources += [os.path.join('third_party', 'fmt')]
@@ -44,6 +46,7 @@ def third_party_sources():
     sources += [os.path.join('third_party', 'mbedtls')]
     return sources
 
+
 def file_is_lib(fname, libname):
     libextensions = ['.a', '.lib']
     libprefixes = ['', 'lib']
@@ -54,8 +57,10 @@ def file_is_lib(fname, libname):
                 return True
     return False
 
+
 def get_libraries(binary_dir, libraries, extensions):
     result_libs = []
+
     def find_library_recursive(search_dir, libname):
         flist = os.listdir(search_dir)
         for fname in flist:
@@ -90,6 +95,7 @@ def get_libraries(binary_dir, libraries, extensions):
 
     return result_libs
 
+
 def includes(extensions):
     scripts_dir = os.path.dirname(os.path.abspath(__file__))
     # add includes for duckdb and extensions
@@ -101,11 +107,14 @@ def includes(extensions):
         includes.append(os.path.join(scripts_dir, '..', 'extension', ext, 'include'))
     return includes
 
+
 def include_flags(extensions):
     return ' ' + ' '.join(['-I' + x for x in includes(extensions)])
 
+
 def convert_backslashes(x):
     return '/'.join(x.split(os.path.sep))
+
 
 def get_relative_path(source_dir, target_file):
     source_dir = convert_backslashes(source_dir)
@@ -116,34 +125,45 @@ def get_relative_path(source_dir, target_file):
         target_file = target_file.replace(source_dir, "").lstrip('/')
     return target_file
 
+
 def git_commit_hash():
     if 'SETUPTOOLS_SCM_PRETEND_HASH' in os.environ:
         return os.environ['SETUPTOOLS_SCM_PRETEND_HASH']
     try:
-        return subprocess.check_output(['git','log','-1','--format=%h']).strip().decode('utf8')
+        return subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
     except:
         return "deadbeeff"
 
+
+def prefix_version(version):
+    """Make sure the version is prefixed with 'v' to be of the form vX.Y.Z"""
+    if version.startswith('v'):
+        return version
+    return 'v' + version
+
+
 def git_dev_version():
     if 'SETUPTOOLS_SCM_PRETEND_VERSION' in os.environ:
-        return os.environ['SETUPTOOLS_SCM_PRETEND_VERSION']
+        return prefix_version(os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'])
     try:
-        version = subprocess.check_output(['git','describe','--tags','--abbrev=0']).strip().decode('utf8')
-        long_version = subprocess.check_output(['git','describe','--tags','--long']).strip().decode('utf8')
+        version = subprocess.check_output(['git', 'describe', '--tags', '--abbrev=0']).strip().decode('utf8')
+        long_version = subprocess.check_output(['git', 'describe', '--tags', '--long']).strip().decode('utf8')
         version_splits = version.lstrip('v').split('.')
         dev_version = long_version.split('-')[1]
         if int(dev_version) == 0:
             # directly on a tag: emit the regular version
-            return '.'.join(version_splits)
+            return "v" + '.'.join(version_splits)
         else:
             # not on a tag: increment the version by one and add a -devX suffix
             version_splits[2] = str(int(version_splits[2]) + 1)
-            return '.'.join(version_splits) + "-dev" + dev_version
+            return "v" + '.'.join(version_splits) + "-dev" + dev_version
     except:
-        return "0.0.0"
+        return "v0.0.0"
+
 
 def include_package(pkg_name, pkg_dir, include_files, include_list, source_list):
     import amalgamation
+
     original_path = sys.path
     # append the directory
     sys.path.append(pkg_dir)
@@ -158,7 +178,8 @@ def include_package(pkg_name, pkg_dir, include_files, include_list, source_list)
 
     sys.path = original_path
 
-def build_package(target_dir, extensions, linenumbers = False, unity_count = 32, folder_name = 'duckdb'):
+
+def build_package(target_dir, extensions, linenumbers=False, unity_count=32, folder_name='duckdb'):
     if not os.path.isdir(target_dir):
         os.mkdir(target_dir)
 
@@ -270,17 +291,23 @@ def build_package(target_dir, extensions, linenumbers = False, unity_count = 32,
                         for filename in filenames:
                             scores[filename] = score
                             score += 1
-                        current_files.sort(key = lambda x: scores[os.path.basename(x)] if os.path.basename(x) in scores else 99999)
+                        current_files.sort(
+                            key=lambda x: scores[os.path.basename(x)] if os.path.basename(x) in scores else 99999
+                        )
             if not unity_build:
                 new_source_files += [os.path.join(folder_name, file) for file in current_files]
             else:
-                new_source_files.append(generate_unity_build(current_files, dirname.replace(os.path.sep, '_'), linenumbers))
+                new_source_files.append(
+                    generate_unity_build(current_files, dirname.replace(os.path.sep, '_'), linenumbers)
+                )
         return new_source_files
 
     original_sources = source_list
     source_list = generate_unity_builds(source_list, unity_count, linenumbers)
 
     os.chdir(prev_wd)
-    return ([convert_backslashes(x) for x in source_list if not file_is_excluded(x)],
-            [convert_backslashes(x) for x in include_list],
-            [convert_backslashes(x) for x in original_sources])
+    return (
+        [convert_backslashes(x) for x in source_list if not file_is_excluded(x)],
+        [convert_backslashes(x) for x in include_list],
+        [convert_backslashes(x) for x in original_sources],
+    )

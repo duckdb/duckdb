@@ -1,0 +1,247 @@
+# name: test/sql/function/string/test_to_base.test
+# description: to_base tests
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT to_base(-10, 2)
+----
+number must be greater than or equal to 0
+
+statement error
+SELECT to_base(-10, 2, 64)
+number must be greater than or equal to 0
+
+statement error
+SELECT to_base(10, 1)
+----
+radix must be between 2 and 36
+
+statement error
+SELECT to_base(10, 37)
+----
+radix must be between 2 and 36
+
+statement error
+SELECT to_base(10, 0, 10)
+----
+radix must be between 2 and 36
+
+statement error
+SELECT to_base(10, 37, 10)
+----
+radix must be between 2 and 36
+
+statement error
+SELECT to_base(10, 2, -10)
+----
+min_length must be between 0 and 64
+
+
+# Basic checks
+query I
+SELECT to_base(10, 2)
+----
+1010
+
+query I
+SELECT to_base(10, 2, 64)
+----
+0000000000000000000000000000000000000000000000000000000000001010
+
+query I
+SELECT to_base(10, 3)
+----
+101
+
+query I
+SELECT to_base(10, 16)
+----
+A
+
+query I
+SELECT to_base(10, 36)
+----
+A
+
+query I
+SELECT to_base(42, 36)
+----
+16
+
+# Check some ranges
+
+query IIIIII
+SELECT 
+	to_base(range, 2),
+	to_base(range, 2, 8), 
+	to_base(range, 16),
+	to_base(range, 16, 2),
+	to_base(range, 36),
+	to_base(range, 36, 2) 
+FROM range(1, 43)
+ORDER BY range
+----
+1	00000001	1	01	1	01
+10	00000010	2	02	2	02
+11	00000011	3	03	3	03
+100	00000100	4	04	4	04
+101	00000101	5	05	5	05
+110	00000110	6	06	6	06
+111	00000111	7	07	7	07
+1000	00001000	8	08	8	08
+1001	00001001	9	09	9	09
+1010	00001010	A	0A	A	0A
+1011	00001011	B	0B	B	0B
+1100	00001100	C	0C	C	0C
+1101	00001101	D	0D	D	0D
+1110	00001110	E	0E	E	0E
+1111	00001111	F	0F	F	0F
+10000	00010000	10	10	G	0G
+10001	00010001	11	11	H	0H
+10010	00010010	12	12	I	0I
+10011	00010011	13	13	J	0J
+10100	00010100	14	14	K	0K
+10101	00010101	15	15	L	0L
+10110	00010110	16	16	M	0M
+10111	00010111	17	17	N	0N
+11000	00011000	18	18	O	0O
+11001	00011001	19	19	P	0P
+11010	00011010	1A	1A	Q	0Q
+11011	00011011	1B	1B	R	0R
+11100	00011100	1C	1C	S	0S
+11101	00011101	1D	1D	T	0T
+11110	00011110	1E	1E	U	0U
+11111	00011111	1F	1F	V	0V
+100000	00100000	20	20	W	0W
+100001	00100001	21	21	X	0X
+100010	00100010	22	22	Y	0Y
+100011	00100011	23	23	Z	0Z
+100100	00100100	24	24	10	10
+100101	00100101	25	25	11	11
+100110	00100110	26	26	12	12
+100111	00100111	27	27	13	13
+101000	00101000	28	28	14	14
+101001	00101001	29	29	15	15
+101010	00101010	2A	2A	16	16
+
+
+# Check some fib numbers
+statement ok
+CREATE TABLE fib AS SELECT * FROM (VALUES
+	(0),
+	(1),
+	(1),
+	(2),
+	(3),
+	(5),
+	(8),
+	(13),
+	(21),
+	(34),
+	(55),
+	(89),
+	(144),
+	(233),
+	(377),
+	(610),
+	(987),
+	(1597),
+	(2584),
+	(4181),
+	(6765),
+	(10946),
+	(17711),
+	(28657),
+	(46368)
+)
+
+query I
+SELECT to_base(col0, 2) FROM fib ORDER BY col0;
+----
+0
+1
+1
+10
+11
+101
+1000
+1101
+10101
+100010
+110111
+1011001
+10010000
+11101001
+101111001
+1001100010
+1111011011
+11000111101
+101000011000
+1000001010101
+1101001101101
+10101011000010
+100010100101111
+110111111110001
+1011010100100000
+
+
+query I
+SELECT to_base(col0, 16) FROM fib ORDER BY col0;
+----
+0
+1
+1
+2
+3
+5
+8
+D
+15
+22
+37
+59
+90
+E9
+179
+262
+3DB
+63D
+A18
+1055
+1A6D
+2AC2
+452F
+6FF1
+B520
+
+query I
+SELECT to_base(col0, 36) FROM fib ORDER BY col0;
+----
+0
+1
+1
+2
+3
+5
+8
+D
+L
+Y
+1J
+2H
+40
+6H
+AH
+GY
+RF
+18D
+1ZS
+385
+57X
+8G2
+DNZ
+M41
+ZS0

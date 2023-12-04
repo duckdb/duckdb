@@ -1,0 +1,29 @@
+# name: test/sql/aggregate/external/large_external_aggregate.test_slow
+# description: Test large external aggregate
+# group: [external]
+
+load __TEST_DIR__/large_external_aggregate.db
+
+statement ok
+pragma verify_external
+
+# this generates 128^3 == 1 << 21 == 2097152 rows
+# because we generate NULL, each column does not have 128 unique values, but instead:
+# my_string: 128 - 31 == 97
+# my_struct: 128 - 15 == 113
+# my_list: 128 - 7 == 121
+# so, we should get 97 * 113 * 121 == 1326281 unique rows
+statement ok
+create table test as (
+    select case when r1 % 4 == 0 then NULL else 'thisisalongstring' || r1 end my_string,
+           case when r2 % 8 == 0 then NULL else {x: 'thisisalongstring' || r2} end my_struct,
+           case when r3 % 16 == 0 then NULL else ['thisisalongstring' || r3] end my_list
+    from (select * from range(128) r1(r1) order by random())
+    cross join (select * from range(128) r2(r2) order by random())
+    cross join (select * from range(128) r3(r3) order by random())
+)
+
+query I
+select count(*) from (select distinct * from test)
+----
+1326281

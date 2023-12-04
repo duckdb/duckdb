@@ -10,7 +10,12 @@ PRAGMA enable_verification
 
 statement ok
 CREATE TABLE timestamps(d TIMESTAMP);
-INSERT INTO timestamps VALUES ('1992-01-01 01:20:30'), ('1993-03-20 23:50:01'), ('2020-08-09 12:01:55'), ('2020-08-10 10:10:10'), (NULL);
+INSERT INTO timestamps VALUES 
+	('1992-01-01 01:20:30'), 
+	('1993-03-20 23:50:01.123'), 
+	('2020-08-09 12:01:55.123456'), 
+	('2020-08-10 10:10:10.123456789'), 
+	(NULL);
 
 # %a: Abbreviated weekday name
 query I
@@ -243,9 +248,33 @@ SELECT strftime(d, '%f') FROM timestamps ORDER BY d;
 ----
 NULL
 000000
-000000
-000000
-000000
+123000
+123456
+123456
+
+# %g - Millisecond as a decimal number, zero-padded on the left.
+query I
+SELECT strftime(d, '%g') 
+FROM timestamps 
+ORDER BY d;
+----
+NULL
+000
+123
+123
+123
+
+# %n - Nanosecond as a decimal number, zero-padded on the left.
+query I
+SELECT strftime(d, '%n') 
+FROM timestamps 
+ORDER BY d;
+----
+NULL
+000000000
+123000000
+123456000
+123456000
 
 # %z - UTC offset in the form +HHMM or -HHMM.
 query I

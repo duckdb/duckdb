@@ -59,7 +59,7 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 	if (info.format == "csv") {
 		// insert default csv options, if not specified
 		if (info.options.find("header") == info.options.end()) {
-			info.options["header"].push_back(Value::INTEGER(0));
+			info.options["header"].push_back(Value::INTEGER(1));
 		}
 		if (info.options.find("delimiter") == info.options.end() && info.options.find("sep") == info.options.end() &&
 		    info.options.find("delim") == info.options.end()) {

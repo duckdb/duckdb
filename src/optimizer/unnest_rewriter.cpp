@@ -2,7 +2,7 @@
 
 #include "duckdb/common/pair.hpp"
 #include "duckdb/planner/operator/logical_delim_get.hpp"
-#include "duckdb/planner/operator/logical_delim_join.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_unnest.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
@@ -17,11 +17,9 @@ void UnnestRewriterPlanUpdater::VisitOperator(LogicalOperator &op) {
 }
 
 void UnnestRewriterPlanUpdater::VisitExpression(unique_ptr<Expression> *expression) {
-
 	auto &expr = *expression;
 
 	if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
-
 		auto &bound_column_ref = expr->Cast<BoundColumnRefExpression>();
 		for (idx_t i = 0; i < replace_bindings.size(); i++) {
 			if (bound_column_ref.binding == replace_bindings[i].old_binding) {
@@ -76,7 +74,7 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> *op_ptr,
 	}
 
 	// found a delim join
-	auto &delim_join = op->children[0]->Cast<LogicalDelimJoin>();
+	auto &delim_join = op->children[0]->Cast<LogicalComparisonJoin>();
 	// only support INNER delim joins
 	if (delim_join.join_type != JoinType::INNER) {
 		return;
@@ -295,7 +293,7 @@ void UnnestRewriter::UpdateBoundUnnestBindings(UnnestRewriterPlanUpdater &update
 void UnnestRewriter::GetDelimColumns(LogicalOperator &op) {
 
 	D_ASSERT(op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
-	auto &delim_join = op.Cast<LogicalDelimJoin>();
+	auto &delim_join = op.Cast<LogicalComparisonJoin>();
 	for (idx_t i = 0; i < delim_join.duplicate_eliminated_columns.size(); i++) {
 		auto &expr = *delim_join.duplicate_eliminated_columns[i];
 		D_ASSERT(expr.type == ExpressionType::BOUND_COLUMN_REF);

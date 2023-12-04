@@ -1,0 +1,99 @@
+# name: test/sql/copy/parquet/writer/row_group_size_bytes.test
+# description: Parquet writer ROW_GROUP_SIZE_BYTES tests
+# group: [writer]
+
+require parquet
+
+require vector_size 1024
+
+statement error
+copy (select 42) to '__TEST_DIR__/tbl.parquet' (ROW_GROUP_SIZE_BYTES)
+
+# we can use human-readable memory limits
+statement ok
+copy (
+    select range c0,
+           range c1,
+           range c2,
+           range c3,
+           range c4,
+           range c5,
+           range c6,
+           range c7,
+    from range(50000)
+) to '__TEST_DIR__/tbl.parquet' (ROW_GROUP_SIZE_BYTES '1mb')
+
+query T
+select max(row_group_num_rows) from parquet_metadata('__TEST_DIR__/tbl.parquet')
+----
+16384
+
+# also test that we set this thing
+query T
+select min(row_group_bytes) != 0 from parquet_metadata('__TEST_DIR__/tbl.parquet')
+----
+1
+
+# and also just integer values
+# we set the memory limit to be half as big, and we get a max row group size of half what we had before
+statement ok
+copy (
+    select range c0,
+           range c1,
+           range c2,
+           range c3,
+           range c4,
+           range c5,
+           range c6,
+           range c7,
+    from range(50000)
+) to '__TEST_DIR__/tbl.parquet' (ROW_GROUP_SIZE_BYTES 500000)
+
+query T
+select max(row_group_num_rows) from parquet_metadata('__TEST_DIR__/tbl.parquet')
+----
+8192
+
+# either limit is checked, so we should get row groups of 10240 even though we set a 1GB limit
+statement ok
+copy (
+    select range c0,
+           range c1,
+           range c2,
+           range c3,
+           range c4,
+           range c5,
+           range c6,
+           range c7,
+    from range(50000)
+) to '__TEST_DIR__/tbl.parquet' (ROW_GROUP_SIZE 10000, ROW_GROUP_SIZE_BYTES '1GB')
+
+query T
+select max(row_group_num_rows) from parquet_metadata('__TEST_DIR__/tbl.parquet')
+----
+10240
+
+# these strings take around 16 + 50 = 66 bytes per string, so 2048 * 66 = 135168 per chunk
+# if we set the limit to 200000, then we should get row groups of 4096
+statement ok
+copy (
+    select range || repeat('0', 50) c0
+    from range(50000)
+) to '__TEST_DIR__/tbl.parquet' (ROW_GROUP_SIZE_BYTES 200000)
+
+query T
+select max(row_group_num_rows) from parquet_metadata('__TEST_DIR__/tbl.parquet')
+----
+4096
+
+# if we set it to 650000 we should get 10240 row groups
+statement ok
+copy (
+    select range || repeat('0', 50) c0
+    from range(50000)
+) to '__TEST_DIR__/tbl.parquet' (ROW_GROUP_SIZE_BYTES 650000)
+
+query T
+select max(row_group_num_rows) from parquet_metadata('__TEST_DIR__/tbl.parquet')
+----
+10240

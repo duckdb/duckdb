@@ -1,0 +1,12 @@
+# name: benchmark/micro/window/window_list_aggr.benchmark
+# description: List aggregate window performance
+# group: [window]
+
+name List aggregate window
+group window
+
+load
+CREATE TABLE tbl AS SELECT range AS i FROM range(10000000)
+
+run
+SELECT i, list(i) OVER (PARTITION BY i % 2 ORDER BY i ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) FROM tbl;

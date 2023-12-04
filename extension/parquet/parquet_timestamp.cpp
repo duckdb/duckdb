@@ -66,4 +66,9 @@ dtime_t ParquetIntToTimeNs(const int64_t &raw_time) {
 	return Time::FromTimeNs(raw_time);
 }
 
+dtime_tz_t ParquetIntToTimeTZ(const int64_t &raw_micros) {
+	dtime_t t(raw_micros);
+	return dtime_tz_t(t, 0);
+}
+
 } // namespace duckdb

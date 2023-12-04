@@ -39,7 +39,7 @@ class TaskScheduler {
 	constexpr static int64_t TASK_TIMEOUT_USECS = 5000;
 
 public:
-	TaskScheduler(DatabaseInstance &db);
+	explicit TaskScheduler(DatabaseInstance &db);
 	~TaskScheduler();
 
 	DUCKDB_API static TaskScheduler &GetScheduler(ClientContext &context);
@@ -67,6 +67,12 @@ public:
 	//! Send signals to n threads, signalling for them to wake up and attempt to execute a task
 	void Signal(idx_t n);
 
+	//! Yield to other threads
+	static void YieldThread();
+
+	//! Set the allocator flush threshold
+	void SetAllocatorFlushTreshold(idx_t threshold);
+
 private:
 	void SetThreadsInternal(int32_t n);
 
@@ -80,6 +86,8 @@ private:
 	vector<unique_ptr<SchedulerThread>> threads;
 	//! Markers used by the various threads, if the markers are set to "false" the thread execution is stopped
 	vector<unique_ptr<atomic<bool>>> markers;
+	//! The threshold after which to flush the allocator after completing a task
+	atomic<idx_t> allocator_flush_threshold;
 };
 
 } // namespace duckdb

@@ -11,19 +11,19 @@ PRAGMA enable_verification
 
 
 query III
-select * from read_csv_auto('data/csv/dirty_line.csv', parallel = true)
+select * from read_csv_auto('data/csv/dirty_line.csv', parallel = true, skip = 1)
 ----
 1.5	a	3
 2.5	b	4
 
 query II
-explain select * from read_csv_auto('data/csv/dirty_line.csv', parallel = true)
+explain select * from read_csv_auto('data/csv/dirty_line.csv', parallel = true, skip = 1)
 ----
 physical_plan	<REGEX>:.*MULTI.*
 
 
 query III
-select * from read_csv_auto('data/csv/dirty_line.csv', parallel = false)
+select * from read_csv_auto('data/csv/dirty_line.csv', parallel = false , skip = 1)
 ----
 1.5	a	3
 2.5	b	4
@@ -34,8 +34,10 @@ select * from read_csv_auto('data/csv/null_string.csv', parallel = true, nullstr
 1	NULL
 NULL	2
 
+# We need to add header = false here. Because with vector_size=2 the sniffer will think we have a header, since the
+# row 1	null has types INTEGER;VARCHAR at that point
 query II
-select * from read_csv_auto('data/csv/null_string.csv', parallel = true)
+select * from read_csv_auto('data/csv/null_string.csv', parallel = true, header = false)
 ----
 a	b
 1	null

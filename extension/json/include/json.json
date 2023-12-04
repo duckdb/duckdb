@@ -1,0 +1,142 @@
+[
+  {
+    "class": "BufferedJSONReaderOptions",
+    "includes": [
+      "buffered_json_reader.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "format",
+        "type": "JSONFormat"
+      },
+      {
+        "id": 101,
+        "name": "record_type",
+        "type": "JSONRecordType"
+      },
+      {
+        "id": 102,
+        "name": "compression",
+        "type": "FileCompressionType"
+      },
+      {
+        "id": 103,
+        "name": "file_options",
+        "type": "MultiFileReaderOptions"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "JSONTransformOptions",
+    "includes": [
+      "json_transform.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "strict_cast",
+        "type": "bool"
+      },
+      {
+        "id": 101,
+        "name": "error_duplicate_key",
+        "type": "bool"
+      },
+      {
+        "id": 102,
+        "name": "error_missing_key",
+        "type": "bool"
+      },
+      {
+        "id": 103,
+        "name": "error_unknown_key",
+        "type": "bool"
+      },
+      {
+        "id": 104,
+        "name": "delay_error",
+        "type": "bool"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "JSONScanData",
+    "includes": [
+      "json_scan.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "json_type",
+        "type": "JSONScanType",
+        "property": "type"
+      },
+      {
+        "id": 101,
+        "name": "options",
+        "type": "BufferedJSONReaderOptions"
+      },
+      {
+        "id": 102,
+        "name": "reader_bind",
+        "type": "MultiFileReaderBindData"
+      },
+      {
+        "id": 103,
+        "name": "files",
+        "type": "vector<string>"
+      },
+      {
+        "id": 104,
+        "name": "ignore_errors",
+        "type": "bool"
+      },
+      {
+        "id": 105,
+        "name": "maximum_object_size",
+        "type": "idx_t"
+      },
+      {
+        "id": 106,
+        "name": "auto_detect",
+        "type": "bool"
+      },
+      {
+        "id": 107,
+        "name": "sample_size",
+        "type": "idx_t"
+      },
+      {
+        "id": 108,
+        "name": "max_depth",
+        "type": "idx_t"
+      },
+      {
+        "id": 109,
+        "name": "transform_options",
+        "type": "JSONTransformOptions"
+      },
+      {
+        "id": 110,
+        "name": "names",
+        "type": "vector<string>"
+      },
+      {
+        "id": 111,
+        "name": "date_format",
+        "type": "string",
+        "serialize_property": "GetDateFormat()"
+      },
+      {
+        "id": 112,
+        "name": "timestamp_format",
+        "type": "string",
+        "serialize_property": "GetTimestampFormat()"
+      }
+    ],
+    "constructor": ["$ClientContext", "files", "date_format", "timestamp_format"]
+  }
+]

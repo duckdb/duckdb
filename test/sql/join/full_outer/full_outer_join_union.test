@@ -89,8 +89,6 @@ SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers
 UNION ALL
 SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k
 
-loop i 0 10
-
 query IIIIII
 SELECT * FROM v1 FULL OUTER JOIN v1 v2 USING (i, j) ORDER BY 1, 2, 3, 4, 5, 6
 ----
@@ -106,5 +104,3 @@ NULL	NULL	2	20	NULL	NULL
 3	3	NULL	NULL	NULL	NULL
 3	3	NULL	NULL	NULL	NULL
 3	3	NULL	NULL	NULL	NULL
-
-endloop

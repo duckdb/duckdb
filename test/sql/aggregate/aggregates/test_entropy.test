@@ -2,6 +2,12 @@
 # description: Test entropy function
 # group: [aggregates]
 
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
 #Corner cases
 statement error
 select entropy()
@@ -36,10 +42,10 @@ SELECT entropy(2) FROM range(100);
 0
 
 query I
-select entropy(k) from aggr group by k%2
+select entropy(k) from aggr group by k%2 order by all
 ----
-1.584963
 1.000000
+1.584963
 
 statement ok
 create table names (name string)

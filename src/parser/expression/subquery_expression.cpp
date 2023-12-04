@@ -1,9 +1,8 @@
 #include "duckdb/parser/expression/subquery_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 
 namespace duckdb {
 
@@ -47,49 +46,6 @@ unique_ptr<ParsedExpression> SubqueryExpression::Copy() const {
 	copy->child = child ? child->Copy() : nullptr;
 	copy->comparison_type = comparison_type;
 	return std::move(copy);
-}
-
-void SubqueryExpression::Serialize(FieldWriter &writer) const {
-	auto &serializer = writer.GetSerializer();
-
-	writer.WriteField<SubqueryType>(subquery_type);
-	// FIXME: this shouldn't use a serializer (probably)?
-	subquery->Serialize(serializer);
-	writer.WriteOptional(child);
-	writer.WriteField<ExpressionType>(comparison_type);
-}
-
-unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type, FieldReader &reader) {
-	// FIXME: this shouldn't use a source
-	auto &source = reader.GetSource();
-
-	auto subquery_type = reader.ReadRequired<SubqueryType>();
-	auto subquery = SelectStatement::Deserialize(source);
-
-	auto expression = make_uniq<SubqueryExpression>();
-	expression->subquery_type = subquery_type;
-	expression->subquery = std::move(subquery);
-	expression->child = reader.ReadOptional<ParsedExpression>(nullptr);
-	expression->comparison_type = reader.ReadRequired<ExpressionType>();
-	return std::move(expression);
-}
-
-void SubqueryExpression::FormatSerialize(FormatSerializer &serializer) const {
-	ParsedExpression::FormatSerialize(serializer);
-	serializer.WriteProperty("subquery_type", subquery_type);
-	serializer.WriteProperty("subquery", *subquery);
-	serializer.WriteOptionalProperty("child", child);
-	serializer.WriteProperty("comparison_type", comparison_type);
-}
-
-unique_ptr<ParsedExpression> SubqueryExpression::FormatDeserialize(ExpressionType type,
-                                                                   FormatDeserializer &deserializer) {
-	auto expression = make_uniq<SubqueryExpression>();
-	deserializer.ReadProperty("subquery_type", expression->subquery_type);
-	deserializer.ReadProperty("subquery", expression->subquery);
-	deserializer.ReadOptionalProperty("child", expression->child);
-	deserializer.ReadProperty("comparison_type", expression->comparison_type);
-	return std::move(expression);
 }
 
 } // namespace duckdb

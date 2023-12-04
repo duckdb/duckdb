@@ -1,0 +1,19 @@
+# name: test/sql/json/issues/internal_issue391.test
+# description: Test internal issue 391 - SUMMARIZE over a JSON column will not work since min(JSON) is not well defined
+# group: [issues]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table test as select {i: range}::JSON j from range(10)
+
+query II
+select min(j), max(j) from test
+----
+{"i":0}	{"i":9}
+
+statement ok
+summarize test

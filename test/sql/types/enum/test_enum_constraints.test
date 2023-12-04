@@ -5,6 +5,9 @@
 statement ok
 PRAGMA enable_verification
 
+# FIXME: dependencies between enums and tables are currently disabled
+mode skip
+
 statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 

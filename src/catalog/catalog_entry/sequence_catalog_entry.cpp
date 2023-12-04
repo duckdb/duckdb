@@ -2,7 +2,6 @@
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 
@@ -18,34 +17,17 @@ SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry 
 	this->temporary = info.temporary;
 }
 
-void SequenceCatalogEntry::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteString(schema.name);
-	writer.WriteString(name);
-	writer.WriteField<uint64_t>(usage_count);
-	writer.WriteField<int64_t>(increment);
-	writer.WriteField<int64_t>(min_value);
-	writer.WriteField<int64_t>(max_value);
-	writer.WriteField<int64_t>(counter);
-	writer.WriteField<bool>(cycle);
-	writer.Finalize();
-}
-
-unique_ptr<CreateSequenceInfo> SequenceCatalogEntry::Deserialize(Deserializer &source) {
-	auto info = make_uniq<CreateSequenceInfo>();
-
-	FieldReader reader(source);
-	info->schema = reader.ReadRequired<string>();
-	info->name = reader.ReadRequired<string>();
-	info->usage_count = reader.ReadRequired<uint64_t>();
-	info->increment = reader.ReadRequired<int64_t>();
-	info->min_value = reader.ReadRequired<int64_t>();
-	info->max_value = reader.ReadRequired<int64_t>();
-	info->start_value = reader.ReadRequired<int64_t>();
-	info->cycle = reader.ReadRequired<bool>();
-	reader.Finalize();
-
-	return info;
+unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
+	auto result = make_uniq<CreateSequenceInfo>();
+	result->schema = schema.name;
+	result->name = name;
+	result->usage_count = usage_count;
+	result->increment = increment;
+	result->min_value = min_value;
+	result->max_value = max_value;
+	result->start_value = counter;
+	result->cycle = cycle;
+	return std::move(result);
 }
 
 string SequenceCatalogEntry::ToSQL() const {

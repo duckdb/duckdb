@@ -145,7 +145,7 @@ SELECT list_append(NULL, 3)
 [3]
 
 query II rowsort
-SELECT i, list_append(list_concat(j, k), i) FROM lists
+SELECT i, list_append(list_concat(j, k), i) FROM lists ORDER BY i;
 ----
 0	[0, 4, 8, 12, 0, 4, 8, 12, 0]
 1	[1, 5, 9, 13, 1, 5, 9, 13, 1]

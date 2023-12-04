@@ -37,16 +37,16 @@ struct RegrAvgFunction {
 };
 struct RegrAvgXFunction : RegrAvgFunction {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &idata) {
-		state.sum += y;
+	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
+		state.sum += x;
 		state.count++;
 	}
 };
 
 struct RegrAvgYFunction : RegrAvgFunction {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &idata) {
-		state.sum += x;
+	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
+		state.sum += y;
 		state.count++;
 	}
 };

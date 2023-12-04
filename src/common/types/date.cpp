@@ -441,6 +441,15 @@ int64_t Date::EpochMicroseconds(date_t date) {
 	return result;
 }
 
+int64_t Date::EpochMilliseconds(date_t date) {
+	int64_t result;
+	const auto MILLIS_PER_DAY = Interval::MICROS_PER_DAY / Interval::MICROS_PER_MSEC;
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(date.days, MILLIS_PER_DAY, result)) {
+		throw ConversionException("Could not convert DATE (%s) to milliseconds", Date::ToString(date));
+	}
+	return result;
+}
+
 int32_t Date::ExtractYear(date_t d, int32_t *last_year) {
 	auto n = d.days;
 	// cached look up: check if year of this date is the same as the last one we looked up
@@ -479,6 +488,12 @@ int32_t Date::ExtractDayOfTheYear(date_t date) {
 	int32_t year, year_offset;
 	Date::ExtractYearOffset(date.days, year, year_offset);
 	return date.days - Date::CUMULATIVE_YEAR_DAYS[year_offset] + 1;
+}
+
+int64_t Date::ExtractJulianDay(date_t date) {
+	// Julian Day 0 is (-4713, 11, 24) in the proleptic Gregorian calendar.
+	static const int64_t JULIAN_EPOCH = -2440588;
+	return date.days - JULIAN_EPOCH;
 }
 
 int32_t Date::ExtractISODayOfTheWeek(date_t date) {

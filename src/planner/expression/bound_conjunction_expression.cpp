@@ -1,7 +1,6 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression_util.hpp"
-#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -39,18 +38,6 @@ unique_ptr<Expression> BoundConjunctionExpression::Copy() {
 	}
 	copy->CopyProperties(*this);
 	return std::move(copy);
-}
-
-void BoundConjunctionExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializableList(children);
-}
-
-unique_ptr<Expression> BoundConjunctionExpression::Deserialize(ExpressionDeserializationState &state,
-                                                               FieldReader &reader) {
-	auto children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
-	auto res = make_uniq<BoundConjunctionExpression>(state.type);
-	res->children = std::move(children);
-	return std::move(res);
 }
 
 } // namespace duckdb

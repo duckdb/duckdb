@@ -69,21 +69,30 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	}
 
 	switch (func->type) {
-	case CatalogType::SCALAR_FUNCTION_ENTRY:
+	case CatalogType::SCALAR_FUNCTION_ENTRY: {
 		// scalar function
 
 		// check for lambda parameters, ignore ->> operator (JSON extension)
+		bool try_bind_lambda = false;
 		if (function.function_name != "->>") {
 			for (auto &child : function.children) {
 				if (child->expression_class == ExpressionClass::LAMBDA) {
-					return BindLambdaFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
+					try_bind_lambda = true;
 				}
+			}
+		}
+
+		if (try_bind_lambda) {
+			auto result = BindLambdaFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
+			if (!result.HasError()) {
+				// Lambda bind successful
+				return result;
 			}
 		}
 
 		// other scalar function
 		return BindFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
-
+	}
 	case CatalogType::MACRO_ENTRY:
 		// macro function
 		return BindMacro(function, func->Cast<ScalarMacroCatalogEntry>(), depth, expr_ptr);
@@ -134,7 +143,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	string error;
 
 	if (function.children.size() != 2) {
-		throw BinderException("Invalid function arguments!");
+		return BindResult("Invalid function arguments!");
 	}
 	D_ASSERT(function.children[1]->GetExpressionClass() == ExpressionClass::LAMBDA);
 
@@ -148,7 +157,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	auto &list_child = BoundExpression::GetExpression(*function.children[0]);
 	if (list_child->return_type.id() != LogicalTypeId::LIST && list_child->return_type.id() != LogicalTypeId::SQLNULL &&
 	    list_child->return_type.id() != LogicalTypeId::UNKNOWN) {
-		throw BinderException(" Invalid LIST argument to " + function.function_name + "!");
+		return BindResult(" Invalid LIST argument to " + function.function_name + "!");
 	}
 
 	LogicalType list_child_type = list_child->return_type.id();

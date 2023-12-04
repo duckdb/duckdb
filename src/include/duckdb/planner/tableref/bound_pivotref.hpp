@@ -25,6 +25,9 @@ struct BoundPivotInfo {
 	vector<string> pivot_values;
 	//! The set of aggregate functions that is being executed
 	vector<unique_ptr<Expression>> aggregates;
+
+	void Serialize(Serializer &serializer) const;
+	static BoundPivotInfo Deserialize(Deserializer &deserializer);
 };
 
 class BoundPivotRef : public BoundTableRef {

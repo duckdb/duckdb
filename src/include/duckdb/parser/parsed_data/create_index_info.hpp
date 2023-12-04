@@ -25,10 +25,12 @@ struct CreateIndexInfo : public CreateInfo {
 	IndexType index_type;
 	//! Name of the Index
 	string index_name;
+	//! Name of the Index type
+	string index_type_name;
 	//! Index Constraint Type
 	IndexConstraintType constraint_type;
 	//! The table to create the index on
-	unique_ptr<BaseTableRef> table;
+	string table;
 	//! Set of expressions to index by
 	vector<unique_ptr<ParsedExpression>> expressions;
 	vector<unique_ptr<ParsedExpression>> parsed_expressions;
@@ -40,13 +42,14 @@ struct CreateIndexInfo : public CreateInfo {
 	//! Column IDs needed for index creation
 	vector<column_t> column_ids;
 
-protected:
-	void SerializeInternal(Serializer &serializer) const override;
+	//! Options values (WITH ...)
+	case_insensitive_map_t<Value> options;
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;
 
-	static unique_ptr<CreateIndexInfo> Deserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

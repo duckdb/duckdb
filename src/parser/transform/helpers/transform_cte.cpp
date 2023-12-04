@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
+#include "duckdb/parser/query_node/cte_node.hpp"
 
 namespace duckdb {
 
@@ -10,6 +11,7 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Copy() {
 	auto result = make_uniq<CommonTableExpressionInfo>();
 	result->aliases = aliases;
 	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
+	result->materialized = materialized;
 	return result;
 }
 
@@ -29,7 +31,8 @@ void Transformer::ExtractCTEsRecursive(CommonTableExpressionMap &cte_map) {
 	}
 }
 
-void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, CommonTableExpressionMap &cte_map) {
+void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, CommonTableExpressionMap &cte_map,
+                               vector<unique_ptr<CTENode>> &materialized_ctes) {
 	// TODO: might need to update in case of future lawsuit
 	stored_cte_map.push_back(&cte_map);
 
@@ -79,6 +82,21 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 			// can't have two CTEs with same name
 			throw ParserException("Duplicate CTE name \"%s\"", cte_name);
 		}
+
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+		if (cte.ctematerialized == duckdb_libpgquery::PGCTEMaterializeDefault) {
+#else
+		if (cte.ctematerialized == duckdb_libpgquery::PGCTEMaterializeAlways) {
+#endif
+			auto materialize = make_uniq<CTENode>();
+			materialize->query = info->query->node->Copy();
+			materialize->ctename = cte_name;
+			materialize->aliases = info->aliases;
+			materialized_ctes.push_back(std::move(materialize));
+
+			info->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+		}
+
 		cte_map.map[cte_name] = std::move(info);
 	}
 }

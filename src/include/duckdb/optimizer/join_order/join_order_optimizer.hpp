@@ -10,6 +10,7 @@
 
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/optimizer/join_order/query_graph_manager.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
@@ -22,22 +23,13 @@
 
 namespace duckdb {
 
-struct GenerateJoinRelation {
-	GenerateJoinRelation(JoinRelationSet &set, unique_ptr<LogicalOperator> op_p) : set(set), op(std::move(op_p)) {
-	}
-
-	JoinRelationSet &set;
-	unique_ptr<LogicalOperator> op;
-};
-
 class JoinOrderOptimizer {
 public:
-	explicit JoinOrderOptimizer(ClientContext &context)
-	    : context(context), cardinality_estimator(context), full_plan_found(false), must_update_full_plan(false) {
+	explicit JoinOrderOptimizer(ClientContext &context) : context(context), query_graph_manager(context) {
 	}
 
 	//! Perform join reordering inside a plan
-	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
+	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan, optional_ptr<RelationStats> stats = nullptr);
 
 	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet &set,
 	                                    const vector<reference<NeighborInfo>> &possible_connections, JoinNode &left,
@@ -45,16 +37,10 @@ public:
 
 private:
 	ClientContext &context;
-	//! The total amount of join pairs that have been considered
-	idx_t pairs = 0;
-	//! Set of all relations considered in the join optimizer
-	vector<unique_ptr<SingleJoinRelation>> relations;
-	//! A mapping of base table index -> index into relations array (relation number)
-	unordered_map<idx_t, idx_t> relation_mapping;
-	//! A structure holding all the created JoinRelationSet objects
-	JoinRelationSetManager set_manager;
-	//! The set of edges used in the join optimizer
-	QueryGraph query_graph;
+
+	//! manages the query graph, relations, and edges between relations
+	QueryGraphManager query_graph_manager;
+
 	//! The optimal join plan found for the specific JoinRelationSet*
 	unordered_map<JoinRelationSet *, unique_ptr<JoinNode>> plans;
 
@@ -90,7 +76,7 @@ private:
 	//! cancelling the dynamic programming step.
 	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
 
-	bool EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right, unordered_set<idx_t> exclusion_set);
+	bool EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right, unordered_set<idx_t> &exclusion_set);
 	//! Emit a relation set node
 	bool EmitCSG(JoinRelationSet &node);
 	//! Enumerate the possible connected subgraphs that can be joined together in the join graph

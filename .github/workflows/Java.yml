@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - '**'
-      - '!master'
+      - '!main'
       - '!feature'
     tags:
       - '**'
@@ -15,22 +15,25 @@ on:
       - 'test/**'
       - 'tools/**'
       - '!tools/jdbc/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Java.yml'
-      - '.github/config/uncovered_files.csv'
+
   pull_request:
+    types: [opened, reopened, ready_for_review]
     paths-ignore:
       - '**.md'
       - 'examples/**'
       - 'test/**'
       - 'tools/**'
       - '!tools/jdbc/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Java.yml'
-      - '.github/config/uncovered_files.csv'
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{
-    github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha
+    github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha
     }}
   cancel-in-progress: true
 env:
@@ -40,42 +43,42 @@ jobs:
   java-linux-amd64:
     name: Java Linux (amd64)
     runs-on: ubuntu-latest
-    container: ubuntu:16.04
+    container:
+      image: quay.io/pypa/manylinux2014_x86_64
     env:
       GEN: ninja
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
       BUILD_JDBC: 1
       BUILD_JEMALLOC: 1
       BUILD_JSON: 1
-      TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
-      STATIC_LIBCPP: 1
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - uses: ./.github/actions/ubuntu_16_setup
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
+
+      - uses: ./.github/actions/manylinux_2014_setup
         with:
-          key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+          ninja-build: 1
+          ccache: 1
+          jdk: 1
 
       - name: Build
         shell: bash
         run: make
+
       - name: Java Tests
         shell: bash
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: >
           java -cp build/release/tools/jdbc/duckdb_jdbc.jar
           org.duckdb.test.TestDuckDBJDBC
-      - name: Java Example
-        shell: bash
-        run: |
-          (cd examples/jdbc; make; make maven)
+
       - name: Deploy
         shell: bash
         run: >
-          python3.7 scripts/asset-upload-gha.py
+          python3.8 scripts/asset-upload-gha.py
           duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
       - uses: actions/upload-artifact@v3
         with:
@@ -91,35 +94,35 @@ jobs:
     env:
       GEN: ninja
       BUILD_JDBC: 1
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
       OVERRIDE_JDBC_OS_ARCH: arm64
       JAVA_HOME: ../../jdk8u345-b01
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - uses: ./.github/actions/ubuntu_16_setup
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
+
+      - uses: ./.github/actions/ubuntu_18_setup
         with:
-          key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+          ccache: 1
+          aarch64_cross_compile: 1
 
       - name: Install Stuff
         shell: bash
         run: >
-          apt-get update -y -qq
-
-          apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-
           curl -L https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u345-b01/OpenJDK8U-jdk_x64_linux_hotspot_8u345b01.tar.gz | tar xvz
+
       - name: Build
         shell: bash
         run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make
+
       - name: Deploy
         shell: bash
         run: >
-          python3.7 scripts/asset-upload-gha.py
+          python3.8 scripts/asset-upload-gha.py
           duckdb_jdbc-linux-aarch64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+
       - uses: actions/upload-artifact@v3
         with:
           name: java-linux-aarch64
@@ -142,17 +145,18 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build
         shell: bash
         run: >
           python scripts/windows_ci.py
 
-          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_JSON_EXTENSION=1
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_EXTENSIONS=json -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1
 
           cmake --build . --config Release
       - name: Java Tests
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         shell: bash
         run: |
           java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
@@ -176,6 +180,8 @@ jobs:
       BUILD_JDBC: 1
       BUILD_JSON: 1
       OSX_BUILD_UNIVERSAL: 1
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
     steps:
       - uses: actions/checkout@v3
         with:
@@ -187,11 +193,12 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/master' }}
+          save: ${{ github.ref == 'refs/heads/main' }}
       - name: Build
         shell: bash
         run: make
       - name: Java Tests
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         shell: bash
         run: >
           java -cp build/release/tools/jdbc/duckdb_jdbc.jar
@@ -252,7 +259,7 @@ jobs:
       - name: Combine JARs
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           export XML='
             <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -278,13 +285,14 @@ jobs:
         with:
           name: java-jars
           path: |
-            jdbc-artifacts/results
+            jdbc-artifacts
 
   jdbc-compliance:
     name: JDBC Compliance
     runs-on: ubuntu-20.04
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     needs: java-linux-amd64
-    container: ubuntu:16.04
+    container: quay.io/pypa/manylinux2014_x86_64
     env:
       BUILD_JDBC: 1
       GEN: ninja
@@ -293,19 +301,23 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - uses: ./.github/actions/ubuntu_16_setup
+
+      - uses: ./.github/actions/manylinux_2014_setup
+        with:
+          ninja-build: 1
+          ccache: 1
+          jdk: 1
 
       - name: Install
         shell: bash
         run: |
-          sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build default-jre
           git clone https://github.com/cwida/jdbccts.git
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build
         shell: bash

@@ -196,7 +196,7 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 	fs.ListFiles(search_dir, [&](const string &fname, bool is_dir) {
 		string suggestion;
 		if (is_dir) {
-			suggestion = fname + fs.PathSeparator();
+			suggestion = fname + fs.PathSeparator(fname);
 		} else {
 			suggestion = fname + "'";
 		}

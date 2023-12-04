@@ -14,7 +14,7 @@
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"
 
@@ -54,8 +54,6 @@ public:
 
 	//! Attached database instance
 	AttachedDatabase &db;
-	//! Buffer manager of the database instance
-	BufferManager &buffer_manager;
 
 public:
 	//! Initialize a single predicate scan on the index with the given expression and column IDs
@@ -85,6 +83,10 @@ public:
 	//! Performs constraint checking for a chunk of input data
 	virtual void CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_manager) = 0;
 
+	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
+	virtual void CommitDrop(IndexLock &index_lock) = 0;
+	//! Deletes all data from the index
+	void CommitDrop();
 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held
 	virtual void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
 	//! Obtains a lock and calls Delete while holding that lock
@@ -125,11 +127,11 @@ public:
 		return (constraint_type == IndexConstraintType::FOREIGN);
 	}
 
-	//! Serializes the index and returns the pair of block_id offset positions
-	virtual BlockPointer Serialize(MetaBlockWriter &writer);
-	//! Returns the serialized data pointer to the block and offset of the serialized index
-	BlockPointer GetSerializedDataPointer() const {
-		return serialized_data_pointer;
+	//! Serializes the index to disk
+	virtual BlockPointer Serialize(MetadataWriter &writer);
+	//! Returns the serialized root block pointer
+	BlockPointer GetRootBlockPointer() const {
+		return root_block_pointer;
 	}
 
 	//! Execute the index expressions on an input chunk
@@ -139,8 +141,8 @@ public:
 protected:
 	//! Lock used for any changes to the index
 	mutex lock;
-	//! Pointer to serialized index data
-	BlockPointer serialized_data_pointer;
+	//! Pointer to the index on disk
+	BlockPointer root_block_pointer;
 
 private:
 	//! Bound expressions used during expression execution

@@ -1,0 +1,97 @@
+# name: test/sql/index/art/types/test_art_coverage_types.test
+# description: ART coverage tests with different key types
+# group: [types]
+
+# aborting merge due to constraint violation
+
+statement ok
+CREATE TABLE duplicate_id (id UINT32, id2 INT64);
+
+statement ok
+INSERT INTO duplicate_id SELECT range, range FROM range (0, 2048, 1);
+
+statement ok
+INSERT INTO duplicate_id VALUES (2047, 2047);
+
+statement error
+CREATE UNIQUE INDEX idx ON duplicate_id(id, id2);
+----
+Constraint Error: Data contains duplicates on indexed column(s)
+
+statement ok
+DROP TABLE duplicate_id;
+
+# test more key types
+
+statement ok
+CREATE TABLE int128_first (id INT128, id2 INT128);
+
+statement ok
+INSERT INTO int128_first SELECT range, range FROM range(5000);
+
+statement ok
+CREATE UNIQUE INDEX idx_1 ON int128_first(id, id2);
+
+statement ok
+CREATE TABLE uint8_first (id UINT8, id2 UINT8);
+
+statement ok
+INSERT INTO uint8_first SELECT range, range FROM range(128);
+
+statement ok
+CREATE INDEX idx_2 ON uint8_first(id, id2);
+
+statement ok
+CREATE TABLE uint64_first (id UINT64, id2 UINT32, id3 UINT64, id4 FLOAT);
+
+statement ok
+INSERT INTO uint64_first SELECT range, range, range, 0.456 + range FROM range(5000);
+
+statement ok
+CREATE INDEX idx_3 ON uint64_first(id, id2, id3, id4);
+
+# test more key types with point lookups
+
+statement ok
+CREATE TABLE int128_point AS SELECT range::INT128 AS id FROM range(5000);
+
+statement ok
+CREATE INDEX idx_int128_point ON int128_point(id);
+
+query I
+SELECT id FROM int128_point WHERE id = 2048;
+----
+2048
+
+statement ok
+CREATE TABLE uint64_point AS SELECT range::UINT64 AS id FROM range(5000);
+
+statement ok
+CREATE INDEX idx_uint64_point ON uint64_point(id);
+
+query I
+SELECT id FROM uint64_point WHERE id = 2048;
+----
+2048
+
+statement ok
+CREATE TABLE uint32_point AS SELECT range::UINT32 AS id FROM range(5000);
+
+statement ok
+CREATE INDEX idx_uint32_point ON uint32_point(id);
+
+query I
+SELECT id FROM uint32_point WHERE id = 2048;
+----
+2048
+
+statement ok
+CREATE TABLE uint8_point AS SELECT range::UINT8 AS id FROM range(128);
+
+statement ok
+CREATE INDEX idx_uint8_point ON uint8_point(id);
+
+query I
+SELECT id FROM uint8_point WHERE id = 100;
+----
+100

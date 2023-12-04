@@ -197,6 +197,8 @@ SELECT * FROM cte
 ----
 NULL
 
+require noalternativeverify
+
 query I
 WITH cte AS (SELECT NULL)
 SELECT * FROM cte UNION ALL SELECT CAST(1 AS BOOLEAN)

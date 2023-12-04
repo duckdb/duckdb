@@ -26,12 +26,24 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 
 ## Pull Requests
 
-* Do not commit/push directly to the master branch. Instead, create a fork and file a pull request.
-* When maintaining a branch, merge frequently with the master.
-* When maintaining a branch, submit pull requests to the master frequently.
+* Do not commit/push directly to the main branch. Instead, create a fork and file a pull request.
+* When maintaining a branch, merge frequently with the main.
+* When maintaining a branch, submit pull requests to the main frequently.
 * If you are working on a bigger issue try to split it up into several smaller issues.
-* Please do not use "Draft" pull requests, they clutter our world view. Rather, use issues or discussion topics to discuss whatever needs discussing.
+* Please do not open "Draft" pull requests. Rather, use issues or discussion topics to discuss whatever needs discussing.
 * We reserve full and final discretion over whether or not we will merge a pull request. Adhering to these guidelines is not a complete guarantee that your pull request will be merged.
+
+## CI for pull requests
+
+* Pull requests will need to pass all continuous integration checks before merging.
+* For faster iteration and more control, consider running CI on your own fork or when possible directly locally.
+* Submitting changes to an open pull request will move it to 'draft' state.
+* Pull requests will get a complete run on the main repo CI only when marked as 'ready for review' (via Web UI, button on bottom right).
+
+## Nightly CI
+
+* Packages creation and long running tests will be performed during a nightly run
+* On your fork you can trigger long running tests (NightlyTests.yml) for any branch following information from https://docs.github.com/en/actions/using-workflows/manually-running-a-workflow#running-a-workflow
 
 ## Building
 
@@ -51,15 +63,15 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 * Make sure **all** unit tests pass before sending a PR.
 * Slower tests should be added to the **all** unit tests. You can do this by naming the test file `.test_slow` in the sqllogictests, or by adding `[.]` after the test group in the C++ tests.
 * Look at the code coverage report of your branch and attempt to cover all code paths in the fast unit tests. Attempt to trigger exceptions as well. It is acceptable to have some exceptions not triggered (e.g. out of memory exceptions or type switch exceptions), but large branches of code should always be either covered or removed.
-* DuckDB uses GitHub Actions as its continuous integration (CI) tool. You have the option to run GitHub Actions on your forked repository. For detailed instructions, you can refer to the [GitHub documentation](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository). Before running GitHub Actions, please ensure that you have all the Git tags from the duckdb/duckdb repository. To accomplish this, execute the following commands `git fetch <your-duckdb/duckdb-repo-remote-name> --tags` then 
+* DuckDB uses GitHub Actions as its continuous integration (CI) tool. You also have the option to run GitHub Actions on your forked repository. For detailed instructions, you can refer to the [GitHub documentation](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository). Before running GitHub Actions, please ensure that you have all the Git tags from the duckdb/duckdb repository. To accomplish this, execute the following commands `git fetch <your-duckdb/duckdb-repo-remote-name> --tags` and then 
 `git push --tags` These commands will fetch all the git tags from the duckdb/duckdb repository and push them to your forked repository. This ensures that you have all the necessary tags available for your GitHub Actions workflow. 
 
 ## Formatting
 
 * Use tabs for indentation, spaces for alignment.
 * Lines should not exceed 120 columns.
-* To make sure the formatting is consistent, please use version 11.0.1, installable through `python3 -m pip install clang-format==11.0.1`
-* `clang_format` enforces these rules automatically, use `make format-fix` to run the formatter.
+* To make sure the formatting is consistent, please use version 10.0.1, installable through `python3 -m pip install clang-format==10.0.1.1`
+* `clang_format` and `black` enforce these rules automatically, use `make format-fix` to run the formatter.
 * The project also comes with an [`.editorconfig` file](https://editorconfig.org/) that corresponds to these rules.
 
 ## C++ Guidelines
@@ -90,7 +102,7 @@ This project and everyone participating in it is governed by a [Code of Conduct]
     	void MyPrivateFunction();
 
     private:
-    	void my_private_variable;
+    	int my_private_variable;
     };
     ```
 * Avoid [unnamed magic numbers](https://en.wikipedia.org/wiki/Magic_number_(programming)). Instead, use named variables that are stored in a `constexpr`.

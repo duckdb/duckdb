@@ -50,7 +50,10 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+
+private:
+	BoundCastExpression(ClientContext &context, unique_ptr<Expression> child, LogicalType target_type);
 };
 } // namespace duckdb

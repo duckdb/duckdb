@@ -1,0 +1,35 @@
+# name: test/sql/copy/csv/auto/test_auto_voter.test_slow
+# description: Test read_csv_auto from voter tsv
+# group: [auto]
+
+statement ok
+CREATE TABLE voters AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/real/voter.tsv');
+
+query I
+SELECT COUNT(*) FROM voters;
+----
+5300
+
+query I
+SELECT COUNT(*) FROM "test/sql/copy/csv/data/real/voter.tsv";
+----
+5300
+
+# read with parallel reader and verify that we get the same result
+
+# FIXME: This should run on windows
+
+require notwindows
+
+
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+CREATE TABLE voters2 AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/real/voter.tsv');
+
+query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+(SELECT * FROM voters EXCEPT SELECT * FROM voters2)
+UNION ALL
+(SELECT * FROM voters2 EXCEPT SELECT * FROM voters)
+----

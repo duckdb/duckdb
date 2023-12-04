@@ -74,10 +74,8 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
 	static ExpressionType WindowToExpressionType(string &fun_name);
 
@@ -210,6 +208,9 @@ public:
 
 		return result;
 	}
+
+private:
+	explicit WindowExpression(ExpressionType type);
 };
 
 } // namespace duckdb

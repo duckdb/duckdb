@@ -31,8 +31,6 @@ struct hash<duckdb::hugeint_t> {
 
 namespace duckdb {
 
-using FrameBounds = std::pair<idx_t, idx_t>;
-
 template <class KEY_TYPE>
 struct ModeState {
 	struct ModeAttr {
@@ -222,34 +220,34 @@ struct ModeFunction {
 			state.frequency_map = new typename STATE::Counts;
 		}
 		const double tau = .25;
-		if (state.nonzero <= tau * state.frequency_map->size()) {
+		if (state.nonzero <= tau * state.frequency_map->size() || prev.end <= frame.start || frame.end <= prev.start) {
 			state.Reset();
 			// for f ∈ F do
-			for (auto f = frame.first; f < frame.second; ++f) {
+			for (auto f = frame.start; f < frame.end; ++f) {
 				if (included(f)) {
 					state.ModeAdd(KEY_TYPE(data[f]), f);
 				}
 			}
 		} else {
 			// for f ∈ P \ F do
-			for (auto p = prev.first; p < frame.first; ++p) {
+			for (auto p = prev.start; p < frame.start; ++p) {
 				if (included(p)) {
 					state.ModeRm(KEY_TYPE(data[p]), p);
 				}
 			}
-			for (auto p = frame.second; p < prev.second; ++p) {
+			for (auto p = frame.end; p < prev.end; ++p) {
 				if (included(p)) {
 					state.ModeRm(KEY_TYPE(data[p]), p);
 				}
 			}
 
 			// for f ∈ F \ P do
-			for (auto f = frame.first; f < prev.first; ++f) {
+			for (auto f = frame.start; f < prev.start; ++f) {
 				if (included(f)) {
 					state.ModeAdd(KEY_TYPE(data[f]), f);
 				}
 			}
-			for (auto f = prev.second; f < frame.second; ++f) {
+			for (auto f = prev.end; f < frame.end; ++f) {
 				if (included(f)) {
 					state.ModeAdd(KEY_TYPE(data[f]), f);
 				}

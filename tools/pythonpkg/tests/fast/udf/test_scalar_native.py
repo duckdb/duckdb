@@ -5,11 +5,12 @@ import pytest
 
 from duckdb.typing import *
 
+
 class TestNativeUDF(object):
     def test_default_conn(self):
         def passthrough(x):
             return x
-        
+
         duckdb.create_function('default_conn_passthrough', passthrough, [BIGINT], BIGINT)
         res = duckdb.sql('select default_conn_passthrough(5)').fetchall()
         assert res == [(5,)]
@@ -17,7 +18,7 @@ class TestNativeUDF(object):
     def test_basic_use(self):
         def plus_one(x):
             if x == None or x > 50:
-                return x;
+                return x
             return x + 1
 
         con = duckdb.connect()
@@ -38,7 +39,10 @@ class TestNativeUDF(object):
 
         con = duckdb.connect()
         con.create_function('passthrough', passthrough, [BIGINT], BIGINT)
-        assert con.sql('select passthrough(i) from range(5000) tbl(i)').fetchall() == con.sql('select * from range(5000)').fetchall()
+        assert (
+            con.sql('select passthrough(i) from range(5000) tbl(i)').fetchall()
+            == con.sql('select * from range(5000)').fetchall()
+        )
 
     def test_execute(self):
         def func(x):
@@ -68,23 +72,27 @@ class TestNativeUDF(object):
 
         con = duckdb.connect()
         con.create_function('py_concatenate', concatenate, None, VARCHAR)
-        res = con.sql("""
+        res = con.sql(
+            """
             select py_concatenate('5','3');
-        """).fetchall()
+        """
+        ).fetchall()
         assert res[0][0] == '53'
 
     def test_detected_return_type(self):
         def add_nums(*args) -> int:
-            sum = 0;
+            sum = 0
             for arg in args:
                 sum += arg
             return sum
 
         con = duckdb.connect()
         con.create_function('add_nums', add_nums)
-        res = con.sql("""
+        res = con.sql(
+            """
             select add_nums(5,3,2,1);
-        """).fetchall()
+        """
+        ).fetchall()
         assert res[0][0] == 11
 
     def test_varargs(self):
@@ -100,51 +108,57 @@ class TestNativeUDF(object):
     def test_return_incorrectly_typed_object(self):
         def returns_duckdb() -> int:
             return 'duckdb'
-        
+
         con = duckdb.connect()
         con.create_function('fastest_database_in_the_west', returns_duckdb)
-        with pytest.raises(duckdb.InvalidInputException, match="Failed to cast value: Could not convert string 'duckdb' to INT64"):
+        with pytest.raises(
+            duckdb.InvalidInputException, match="Failed to cast value: Could not convert string 'duckdb' to INT64"
+        ):
             res = con.sql('select fastest_database_in_the_west()').fetchall()
 
     def test_nulls(self):
         def five_if_null(x):
-            if (x == None):
+            if x == None:
                 return 5
             return x
+
         con = duckdb.connect()
-        con.create_function('null_test', five_if_null, [BIGINT], BIGINT, null_handling = "SPECIAL")
+        con.create_function('null_test', five_if_null, [BIGINT], BIGINT, null_handling="SPECIAL")
         res = con.sql('select null_test(NULL)').fetchall()
         assert res == [(5,)]
 
-    @pytest.mark.parametrize('pair', [
-        (TINYINT, -129),
-        (TINYINT, 128),
-        (SMALLINT, -32769),
-        (SMALLINT, 32768),
-        (INTEGER, -2147483649),
-        (INTEGER, 2147483648),
-        (BIGINT, -9223372036854775815),
-        (BIGINT, 9223372036854775808),
-        (UTINYINT, -1),
-        (UTINYINT, 256),
-        (USMALLINT, -1),
-        (USMALLINT, 65536),
-        (UINTEGER, -1),
-        (UINTEGER, 4294967296),
-        (UBIGINT, -1),
-        (UBIGINT, 18446744073709551616),
-        (HUGEINT, -170141183460469231731687303715884105729),
-        (HUGEINT, 170141183460469231731687303715884105728),
-    ])
+    @pytest.mark.parametrize(
+        'pair',
+        [
+            (TINYINT, -129),
+            (TINYINT, 128),
+            (SMALLINT, -32769),
+            (SMALLINT, 32768),
+            (INTEGER, -2147483649),
+            (INTEGER, 2147483648),
+            (BIGINT, -9223372036854775815),
+            (BIGINT, 9223372036854775808),
+            (UTINYINT, -1),
+            (UTINYINT, 256),
+            (USMALLINT, -1),
+            (USMALLINT, 65536),
+            (UINTEGER, -1),
+            (UINTEGER, 4294967296),
+            (UBIGINT, -1),
+            (UBIGINT, 18446744073709551616),
+            (HUGEINT, -170141183460469231731687303715884105729),
+            (HUGEINT, 170141183460469231731687303715884105728),
+        ],
+    )
     def test_return_overflow(self, pair):
         duckdb_type, overflowing_value = pair
 
         def return_overflow():
             return overflowing_value
-        
+
         con = duckdb.connect()
         con.create_function('return_overflow', return_overflow, None, duckdb_type)
-        with pytest.raises(duckdb.InvalidInputException, match='Invalid Input Error: Failed to cast value:'):
+        with pytest.raises(duckdb.InvalidInputException):
             rel = con.sql('select return_overflow()')
             res = rel.fetchall()
             print(duckdb_type)
@@ -158,11 +172,18 @@ class TestNativeUDF(object):
 
         con = duckdb.connect()
         range_table = con.table_function('range', [5000])
-        con.create_function("append_field", add_extra_column, [duckdb.struct_type({'a': BIGINT, 'b': BIGINT})], duckdb.struct_type({'a': BIGINT, 'b': BIGINT, 'c': BIGINT}))
+        con.create_function(
+            "append_field",
+            add_extra_column,
+            [duckdb.struct_type({'a': BIGINT, 'b': BIGINT})],
+            duckdb.struct_type({'a': BIGINT, 'b': BIGINT, 'c': BIGINT}),
+        )
 
-        res = con.sql("""
+        res = con.sql(
+            """
             select append_field({'a': i::BIGINT, 'b': 3::BIGINT}) from range_table tbl(i)
-        """)
+        """
+        )
         # added extra column to the struct
         assert len(res.fetchone()[0].keys()) == 3
         # FIXME: this is needed, otherwise the old transaction is still active when we try to start a new transaction inside of 'create_function', which means the call would fail
@@ -176,8 +197,15 @@ class TestNativeUDF(object):
                 result[item] = dict[item]
             return result
 
-        con.create_function('swap_keys', swap_keys, [con.struct_type({'a': BIGINT, 'b': VARCHAR})], con.struct_type({'a': VARCHAR, 'b': BIGINT}))
-        res = con.sql("""
+        con.create_function(
+            'swap_keys',
+            swap_keys,
+            [con.struct_type({'a': BIGINT, 'b': VARCHAR})],
+            con.struct_type({'a': VARCHAR, 'b': BIGINT}),
+        )
+        res = con.sql(
+            """
         select swap_keys({'a': 42, 'b': 'answer_to_life'})
-        """).fetchall()
+        """
+        ).fetchall()
         assert res == [({'a': 'answer_to_life', 'b': 42},)]

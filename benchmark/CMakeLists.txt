@@ -5,7 +5,8 @@ include_directories(../test/include)
 include_directories(include)
 
 add_subdirectory(micro)
-if(${BUILD_TPCH_EXTENSION})
+list(FIND DUCKDB_EXTENSION_NAMES tpch _index)
+if(${_index} GREATER -1)
   add_subdirectory(tpch)
 endif()
 

@@ -18,9 +18,7 @@ public:
 	//! Not initialized, default constructor
 	DUCKDB_API PreservedError();
 	//! From std::exception
-	PreservedError(const std::exception &ex)
-	    : initialized(true), type(ExceptionType::INVALID), raw_message(SanitizeErrorMessage(ex.what())),
-	      exception_instance(nullptr) {
+	PreservedError(const std::exception &ex) : PreservedError(ex.what()) {
 	}
 	//! From a raw string
 	DUCKDB_API explicit PreservedError(const string &raw_message);

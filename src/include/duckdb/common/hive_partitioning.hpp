@@ -31,11 +31,11 @@ public:
 	//! evaluate to true.
 	DUCKDB_API static void ApplyFiltersToFileList(ClientContext &context, vector<string> &files,
 	                                              vector<unique_ptr<Expression>> &filters,
-	                                              unordered_map<string, column_t> &column_map, idx_t table_index,
+	                                              unordered_map<string, column_t> &column_map, LogicalGet &get,
 	                                              bool hive_enabled, bool filename_enabled);
 
 	//! Returns the compiled regex pattern to match hive partitions
-	DUCKDB_API static const string REGEX_STRING;
+	DUCKDB_API static const string &RegexString();
 };
 
 struct HivePartitionKey {

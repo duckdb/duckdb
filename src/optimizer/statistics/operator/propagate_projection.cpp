@@ -11,7 +11,6 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalProj
 		ReplaceWithEmptyResult(*node_ptr);
 		return std::move(node_stats);
 	}
-
 	// then propagate to each of the expressions
 	for (idx_t i = 0; i < proj.expressions.size(); i++) {
 		auto stats = PropagateExpression(proj.expressions[i]);

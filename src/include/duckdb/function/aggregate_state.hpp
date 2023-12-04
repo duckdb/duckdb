@@ -21,11 +21,11 @@ enum class AggregateOrderDependent : uint8_t { ORDER_DEPENDENT = 1, NOT_ORDER_DE
 class BoundAggregateExpression;
 
 struct AggregateInputData {
-	AggregateInputData(optional_ptr<FunctionData> bind_data_p, Allocator &allocator_p)
+	AggregateInputData(optional_ptr<FunctionData> bind_data_p, ArenaAllocator &allocator_p)
 	    : bind_data(bind_data_p), allocator(allocator_p) {
 	}
 	optional_ptr<FunctionData> bind_data;
-	Allocator &allocator;
+	ArenaAllocator &allocator;
 };
 
 struct AggregateUnaryInput {

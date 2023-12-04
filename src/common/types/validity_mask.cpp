@@ -1,4 +1,7 @@
 #include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
+#include "duckdb/common/serializer/read_stream.hpp"
 
 namespace duckdb {
 
@@ -96,6 +99,39 @@ void ValidityMask::SliceInPlace(const ValidityMask &other, idx_t target_offset, 
 		memcpy(target_validity + target_offset_entries, source_validity + source_offset_entries,
 		       sizeof(validity_t) * EntryCount(count));
 		return;
+	} else if (IsAligned(target_offset)) {
+		//	Simple common case where we are shifting into an aligned mask (e.g., 0 in Slice above)
+		const idx_t entire_units = count / BITS_PER_VALUE;
+		const idx_t ragged = count % BITS_PER_VALUE;
+		const idx_t tail = source_offset % BITS_PER_VALUE;
+		const idx_t head = BITS_PER_VALUE - tail;
+		auto source_validity = other.GetData() + (source_offset / BITS_PER_VALUE);
+		auto target_validity = this->GetData() + (target_offset / BITS_PER_VALUE);
+		auto src_entry = *source_validity++;
+		for (idx_t i = 0; i < entire_units; ++i) {
+			//	Start with head of previous src
+			validity_t tgt_entry = src_entry >> tail;
+			src_entry = *source_validity++;
+			// 	Add in tail of current src
+			tgt_entry |= (src_entry << head);
+			*target_validity++ = tgt_entry;
+		}
+		//	Finish last ragged entry
+		if (ragged) {
+			//	Start with head of previous src
+			validity_t tgt_entry = (src_entry >> tail);
+			//  Add in the tail of the next src, if head was too small
+			if (head < ragged) {
+				src_entry = *source_validity++;
+				tgt_entry |= (src_entry << head);
+			}
+			//  Mask off the bits that go past the ragged end
+			tgt_entry &= (ValidityBuffer::MAX_ENTRY >> (BITS_PER_VALUE - ragged));
+			//	Restore the ragged end of the target
+			tgt_entry |= *target_validity & (ValidityBuffer::MAX_ENTRY << ragged);
+			*target_validity++ = tgt_entry;
+		}
+		return;
 	}
 
 	// FIXME: use bitwise operations here
@@ -138,6 +174,59 @@ void ValidityMask::SliceInPlace(const ValidityMask &other, idx_t target_offset, 
 	Initialize(new_mask);
 #endif
 #endif
+}
+
+enum class ValiditySerialization : uint8_t { BITMASK = 0, VALID_VALUES = 1, INVALID_VALUES = 2 };
+
+void ValidityMask::Write(WriteStream &writer, idx_t count) {
+	auto valid_values = CountValid(count);
+	auto invalid_values = count - valid_values;
+	auto bitmask_bytes = ValidityMask::ValidityMaskSize(count);
+	auto need_u32 = count >= NumericLimits<uint16_t>::Maximum();
+	auto bytes_per_value = need_u32 ? sizeof(uint32_t) : sizeof(uint16_t);
+	auto valid_value_size = bytes_per_value * valid_values + sizeof(uint32_t);
+	auto invalid_value_size = bytes_per_value * invalid_values + sizeof(uint32_t);
+	if (valid_value_size < bitmask_bytes || invalid_value_size < bitmask_bytes) {
+		auto serialize_valid = valid_value_size < invalid_value_size;
+		// serialize (in)valid value indexes as [COUNT][V0][V1][...][VN]
+		auto flag = serialize_valid ? ValiditySerialization::VALID_VALUES : ValiditySerialization::INVALID_VALUES;
+		writer.Write(flag);
+		writer.Write<uint32_t>(MinValue<uint32_t>(valid_values, invalid_values));
+		for (idx_t i = 0; i < count; i++) {
+			if (RowIsValid(i) == serialize_valid) {
+				if (need_u32) {
+					writer.Write<uint32_t>(i);
+				} else {
+					writer.Write<uint16_t>(i);
+				}
+			}
+		}
+	} else {
+		// serialize the entire bitmask
+		writer.Write(ValiditySerialization::BITMASK);
+		writer.WriteData(const_data_ptr_cast(GetData()), bitmask_bytes);
+	}
+}
+
+void ValidityMask::Read(ReadStream &reader, idx_t count) {
+	Initialize(count);
+	// deserialize the storage type
+	auto flag = reader.Read<ValiditySerialization>();
+	if (flag == ValiditySerialization::BITMASK) {
+		// deserialize the bitmask
+		reader.ReadData(data_ptr_cast(GetData()), ValidityMask::ValidityMaskSize(count));
+		return;
+	}
+	auto is_u32 = count >= NumericLimits<uint16_t>::Maximum();
+	auto is_valid = flag == ValiditySerialization::VALID_VALUES;
+	auto serialize_count = reader.Read<uint32_t>();
+	if (is_valid) {
+		SetAllInvalid(count);
+	}
+	for (idx_t i = 0; i < serialize_count; i++) {
+		idx_t index = is_u32 ? reader.Read<uint32_t>() : reader.Read<uint16_t>();
+		Set(index, is_valid);
+	}
 }
 
 } // namespace duckdb

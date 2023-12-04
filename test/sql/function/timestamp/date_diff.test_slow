@@ -1,0 +1,387 @@
+# name: test/sql/function/timestamp/date_diff.test_slow
+# description: Test the DATEDIFF function
+# group: [timestamp]
+
+statement ok
+PRAGMA enable_verification
+
+#
+# DATE
+#
+statement ok
+CREATE TABLE date1 AS
+SELECT '2005-12-31'::DATE AS startdate, '2006-01-01'::DATE AS enddate;
+
+foreach datepart year quarter month day dayofyear julian
+
+query I
+SELECT DATEDIFF('${datepart}', startdate, enddate) FROM date1
+----
+1
+
+endloop
+
+foreach datepart decade century millennium week yearweek
+
+query I
+SELECT DATEDIFF('${datepart}', startdate, enddate) FROM date1
+----
+0
+
+endloop
+
+query I
+SELECT DATEDIFF('hour', startdate, enddate) FROM date1
+----
+24
+
+query I
+SELECT DATEDIFF('minute', startdate, enddate) FROM date1
+----
+1440
+
+query I
+SELECT DATEDIFF('second', startdate, enddate) FROM date1
+----
+86400
+
+query I
+SELECT DATEDIFF('millisecond', startdate, enddate) FROM date1
+----
+86400000
+
+query I
+SELECT DATEDIFF('microsecond', startdate, enddate) FROM date1
+----
+86400000000
+
+# Note this is 0 not 1!
+query I
+SELECT DATEDIFF('isoyear', startdate, enddate) FROM date1
+----
+0
+
+# Negation
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear julian
+
+query I
+SELECT DATEDIFF('${datepart}', startdate, enddate) + DATEDIFF('${datepart}', enddate, startdate) FROM date1
+----
+0
+
+endloop
+
+# Table
+foreach datepart year month day
+
+query I
+SELECT DATEDIFF('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
+FROM (SELECT '2021-07-30'::DATE + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
+----
+1
+1
+1
+1
+1
+
+endloop
+
+foreach datepart hour minute second millisecond microsecond
+
+query I
+SELECT DATEDIFF('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
+FROM (SELECT '2021-07-30'::DATE + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
+----
+0
+0
+0
+0
+0
+
+endloop
+
+statement error
+SELECT datediff('microseconds',DATE '4151706-4-6',DATE '-5559461-6-26');
+
+
+query I
+SELECT datediff('isodow',DATE '4765396-11-24',DATE '-4389735-12-13');
+----
+-3343842916
+
+#
+# TIMESTAMP
+#
+statement ok
+CREATE TABLE datetime1 AS
+SELECT '2005-12-31 23:59:59.9999999'::TIMESTAMP AS startdate, '2006-01-01 00:00:00.0000000'::TIMESTAMP AS enddate;
+
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond julian
+
+query I
+SELECT DATEDIFF('${datepart}', startdate, enddate) FROM datetime1
+----
+1
+
+endloop
+
+foreach datepart decade century millennium week yearweek isoyear
+
+query I
+SELECT DATEDIFF('${datepart}', startdate, enddate) FROM datetime1
+----
+0
+
+endloop
+
+# Negation
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear julian
+
+query I
+SELECT DATEDIFF('${datepart}', startdate, enddate) + DATEDIFF('${datepart}', enddate, startdate) FROM datetime1
+----
+0
+
+endloop
+
+# Table
+foreach datepart year month day hour minute second millisecond microsecond
+
+query I
+SELECT DATEDIFF('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
+FROM (SELECT '2021-07-30'::TIMESTAMP + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
+----
+1
+1
+1
+1
+1
+
+endloop
+
+#
+# TIME
+#
+statement ok
+CREATE TABLE time1 AS
+SELECT '23:59:59.9999999'::TIME AS enddate, '00:00:00.0000000'::TIME AS startdate;
+
+foreach datepart year quarter month day dayofyear decade century millennium week yearweek isoyear julian
+
+statement error
+SELECT DATEDIFF('${datepart}', startdate, enddate) FROM time1
+
+endloop
+
+query I
+SELECT DATEDIFF('hour' , startdate, enddate) FROM time1
+----
+23
+
+query I
+SELECT DATEDIFF('minute' , startdate, enddate) FROM time1
+----
+1439
+
+query I
+SELECT DATEDIFF('second' , startdate, enddate) FROM time1
+----
+86399
+
+query I
+SELECT DATEDIFF('millisecond' , startdate, enddate) FROM time1
+----
+86399999
+
+query I
+SELECT DATEDIFF('microsecond' , startdate, enddate) FROM time1
+----
+86399999999
+
+# Negation
+foreach datepart hour minute second millisecond microsecond
+
+query I
+SELECT DATEDIFF('${datepart}', startdate, enddate) + DATEDIFF('${datepart}', enddate, startdate) FROM time1
+----
+0
+
+endloop
+
+# Table
+foreach datepart hour minute second millisecond microsecond
+
+query I
+SELECT DATEDIFF('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
+FROM (SELECT '12:52:07.123456'::TIME + INTERVAL (d) HOUR AS startdate FROM range(0, 5) tbl(d)) times
+----
+1
+1
+1
+1
+1
+
+endloop
+
+#
+# NULLs
+#
+
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear julian
+
+foreach tbl date1 datetime1 time1
+
+query I
+SELECT DATEDIFF('${datepart}', NULL::TIMESTAMP, NULL::TIMESTAMP) FROM ${tbl}
+----
+NULL
+
+query I
+SELECT DATEDIFF('${datepart}', NULL, enddate) FROM ${tbl}
+----
+NULL
+
+query I
+SELECT DATEDIFF('${datepart}', startdate, NULL) FROM ${tbl}
+----
+NULL
+
+endloop
+
+endloop
+
+foreach tbl date1 datetime1 time1
+
+query I
+SELECT DATEDIFF(NULL, startdate, enddate) FROM ${tbl}
+----
+NULL
+
+endloop
+
+# Table
+foreach datepart year month day hour minute second millisecond microsecond isoyear julian
+
+query I
+SELECT DATEDIFF('${datepart}', startdate, NULL)
+FROM (SELECT '2021-07-30'::TIMESTAMP + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT DATEDIFF('${datepart}', NULL, startdate)
+FROM (SELECT '2021-07-30'::TIMESTAMP + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT DATEDIFF('${datepart}', NULL::TIMESTAMP, NULL)
+FROM (SELECT '2021-07-30'::TIMESTAMP + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+endloop
+
+query I
+SELECT DATEDIFF(NULL, startdate, startdate + INTERVAL 1 HOUR)
+FROM (SELECT '2021-07-30'::TIMESTAMP + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+#
+# Infinities
+#
+foreach specifier year isoyear julian month day decade century millennium quarter week microseconds milliseconds second minute hour
+
+foreach ltype DATE TIMESTAMP
+
+foreach rtype DATE TIMESTAMP
+
+foreach lspecial infinity -infinity
+
+foreach rspecial infinity -infinity
+
+query I
+SELECT DATE_SUB('${specifier}', '${lspecial}'::${ltype}, '${rspecial}'::${rtype});
+----
+NULL
+
+endloop
+
+endloop
+
+endloop
+
+endloop
+
+endloop
+
+#
+# Errors
+#
+
+# Issue #5239: Overflow
+statement error
+SELECT datediff('microseconds',TIMESTAMP '276858-10-21 9:36:33',TIMESTAMP '-222154-6-30 5:19:49');----
+
+#
+# VARCHAR
+#
+statement ok
+CREATE TABLE parts (datepart VARCHAR);
+
+statement ok
+INSERT into parts VALUES(NULL);
+
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear julian
+
+statement ok
+INSERT into parts VALUES('${datepart}');
+
+endloop
+
+query II
+SELECT datepart, DATEDIFF(datepart, '2005-12-31 23:59:59.9999999'::TIMESTAMP, '2006-01-01 00:00:00.0000000'::TIMESTAMP)
+FROM parts;
+----
+NULL	NULL
+year	1
+quarter	1
+month	1
+day	1
+dayofyear	1
+hour	1
+minute	1
+second	1
+millisecond	1
+microsecond	1
+decade	0
+century	0
+millennium	0
+week	0
+yearweek	0
+isoyear	0
+julian	1
+
+statement ok
+INSERT into parts VALUES('duck');
+
+statement error
+SELECT datepart, DATEDIFF(datepart, '2005-12-31 23:59:59.9999999'::TIMESTAMP, '2006-01-01 00:00:00.0000000'::TIMESTAMP)
+FROM parts;

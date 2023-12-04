@@ -1,9 +1,6 @@
 #include "duckdb/parser/tableref/pivotref.hpp"
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -121,42 +118,6 @@ PivotColumn PivotColumn::Copy() const {
 	return result;
 }
 
-void PivotColumn::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteSerializableList(pivot_expressions);
-	writer.WriteList<string>(unpivot_names);
-	writer.WriteRegularSerializableList(entries);
-	writer.WriteString(pivot_enum);
-	writer.Finalize();
-}
-
-void PivotColumn::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("pivot_expressions", pivot_expressions);
-	serializer.WriteProperty("unpivot_names", unpivot_names);
-	serializer.WriteProperty("entries", entries);
-	serializer.WriteProperty("pivot_enum", pivot_enum);
-}
-
-PivotColumn PivotColumn::Deserialize(Deserializer &source) {
-	PivotColumn result;
-	FieldReader reader(source);
-	result.pivot_expressions = reader.ReadRequiredSerializableList<ParsedExpression>();
-	result.unpivot_names = reader.ReadRequiredList<string>();
-	result.entries = reader.ReadRequiredSerializableList<PivotColumnEntry, PivotColumnEntry>();
-	result.pivot_enum = reader.ReadRequired<string>();
-	reader.Finalize();
-	return result;
-}
-
-PivotColumn PivotColumn::FormatDeserialize(FormatDeserializer &source) {
-	PivotColumn result;
-	source.ReadProperty("pivot_expressions", result.pivot_expressions);
-	source.ReadProperty("unpivot_names", result.unpivot_names);
-	source.ReadProperty("entries", result.entries);
-	source.ReadProperty("pivot_enum", result.pivot_enum);
-	return result;
-}
-
 //===--------------------------------------------------------------------===//
 // PivotColumnEntry
 //===--------------------------------------------------------------------===//
@@ -165,38 +126,6 @@ PivotColumnEntry PivotColumnEntry::Copy() const {
 	result.values = values;
 	result.star_expr = star_expr ? star_expr->Copy() : nullptr;
 	result.alias = alias;
-	return result;
-}
-
-void PivotColumnEntry::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteRegularSerializableList(values);
-	writer.WriteOptional(star_expr);
-	writer.WriteString(alias);
-	writer.Finalize();
-}
-
-void PivotColumnEntry::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("values", values);
-	serializer.WriteOptionalProperty("star_expr", star_expr);
-	serializer.WriteProperty("alias", alias);
-}
-
-PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &source) {
-	PivotColumnEntry result;
-	FieldReader reader(source);
-	result.values = reader.ReadRequiredSerializableList<Value, Value>();
-	result.star_expr = reader.ReadOptional<ParsedExpression>(nullptr);
-	result.alias = reader.ReadRequired<string>();
-	reader.Finalize();
-	return result;
-}
-
-PivotColumnEntry PivotColumnEntry::FormatDeserialize(FormatDeserializer &source) {
-	PivotColumnEntry result;
-	source.ReadProperty("values", result.values);
-	source.ReadOptionalProperty("star_expr", result.star_expr);
-	source.ReadProperty("alias", result.alias);
 	return result;
 }
 
@@ -318,51 +247,6 @@ unique_ptr<TableRef> PivotRef::Copy() {
 	copy->include_nulls = include_nulls;
 	copy->alias = alias;
 	return std::move(copy);
-}
-
-void PivotRef::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializable(*source);
-	writer.WriteSerializableList(aggregates);
-	writer.WriteList<string>(unpivot_names);
-	writer.WriteRegularSerializableList(pivots);
-	writer.WriteList<string>(groups);
-	writer.WriteList<string>(column_name_alias);
-	writer.WriteField<bool>(include_nulls);
-}
-
-void PivotRef::FormatSerialize(FormatSerializer &serializer) const {
-	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty("source", source);
-	serializer.WriteProperty("aggregates", aggregates);
-	serializer.WriteProperty("unpivot_names", unpivot_names);
-	serializer.WriteProperty("pivots", pivots);
-	serializer.WriteProperty("groups", groups);
-	serializer.WriteProperty("column_name_alias", column_name_alias);
-	serializer.WriteProperty("include_nulls", include_nulls);
-}
-
-unique_ptr<TableRef> PivotRef::Deserialize(FieldReader &reader) {
-	auto result = make_uniq<PivotRef>();
-	result->source = reader.ReadRequiredSerializable<TableRef>();
-	result->aggregates = reader.ReadRequiredSerializableList<ParsedExpression>();
-	result->unpivot_names = reader.ReadRequiredList<string>();
-	result->pivots = reader.ReadRequiredSerializableList<PivotColumn, PivotColumn>();
-	result->groups = reader.ReadRequiredList<string>();
-	result->column_name_alias = reader.ReadRequiredList<string>();
-	result->include_nulls = reader.ReadRequired<bool>();
-	return std::move(result);
-}
-
-unique_ptr<TableRef> PivotRef::FormatDeserialize(FormatDeserializer &source) {
-	auto result = make_uniq<PivotRef>();
-	source.ReadProperty("source", result->source);
-	source.ReadProperty("aggregates", result->aggregates);
-	source.ReadProperty("unpivot_names", result->unpivot_names);
-	source.ReadProperty("pivots", result->pivots);
-	source.ReadProperty("groups", result->groups);
-	source.ReadProperty("column_name_alias", result->column_name_alias);
-	source.ReadProperty("include_nulls", result->include_nulls);
-	return std::move(result);
 }
 
 } // namespace duckdb

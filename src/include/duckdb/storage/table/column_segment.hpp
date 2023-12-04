@@ -21,7 +21,6 @@
 namespace duckdb {
 class ColumnSegment;
 class BlockManager;
-class ColumnSegment;
 class ColumnData;
 class DatabaseInstance;
 class Transaction;
@@ -57,7 +56,8 @@ public:
 	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager,
 	                                                         block_id_t id, idx_t offset, const LogicalType &type_p,
 	                                                         idx_t start, idx_t count, CompressionType compression_type,
-	                                                         BaseStatistics statistics);
+	                                                         BaseStatistics statistics,
+	                                                         unique_ptr<ColumnSegmentState> segment_state);
 	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const LogicalType &type, idx_t start,
 	                                                        idx_t segment_size = Storage::BLOCK_SIZE);
 	static unique_ptr<ColumnSegment> CreateSegment(ColumnSegment &other, idx_t start);
@@ -118,14 +118,17 @@ public:
 		return row_index - this->start;
 	}
 
-	CompressedSegmentState *GetSegmentState() {
+	optional_ptr<CompressedSegmentState> GetSegmentState() {
 		return segment_state.get();
 	}
+
+	void CommitDropSegment();
 
 public:
 	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, LogicalType type, ColumnSegmentType segment_type,
 	              idx_t start, idx_t count, CompressionFunction &function, BaseStatistics statistics,
-	              block_id_t block_id, idx_t offset, idx_t segment_size);
+	              block_id_t block_id, idx_t offset, idx_t segment_size,
+	              unique_ptr<ColumnSegmentState> segment_state = nullptr);
 	ColumnSegment(ColumnSegment &other, idx_t start);
 
 private:

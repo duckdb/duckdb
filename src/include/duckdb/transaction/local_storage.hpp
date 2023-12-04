@@ -32,7 +32,7 @@ public:
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t drop_idx);
 	// Create a LocalTableStorage from an ADD COLUMN
 	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
-	                  optional_ptr<Expression> default_value);
+	                  Expression &default_value);
 	~LocalTableStorage();
 
 	reference<DataTable> table_ref;
@@ -88,7 +88,7 @@ private:
 class LocalStorage {
 public:
 	// Threshold to merge row groups instead of appending
-	static constexpr const idx_t MERGE_THRESHOLD = RowGroup::ROW_GROUP_SIZE;
+	static constexpr const idx_t MERGE_THRESHOLD = Storage::ROW_GROUP_SIZE;
 
 public:
 	struct CommitState {
@@ -143,8 +143,7 @@ public:
 
 	idx_t AddedRows(DataTable &table);
 
-	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column,
-	               optional_ptr<Expression> default_value);
+	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column, Expression &default_value);
 	void DropColumn(DataTable &old_dt, DataTable &new_dt, idx_t removed_column);
 	void ChangeType(DataTable &old_dt, DataTable &new_dt, idx_t changed_idx, const LogicalType &target_type,
 	                const vector<column_t> &bound_columns, Expression &cast_expr);

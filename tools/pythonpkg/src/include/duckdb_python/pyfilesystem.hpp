@@ -85,6 +85,7 @@ public:
 	bool OnDiskFile(FileHandle &handle) override {
 		return false;
 	}
+	string PathSeparator(const string &path) override;
 	int64_t GetFileSize(FileHandle &handle) override;
 	void RemoveFile(const string &filename) override;
 	void MoveFile(const string &source, const string &dest) override;

@@ -5,62 +5,47 @@
 //
 //
 //===----------------------------------------------------------------------===//
-
 #pragma once
 
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/unordered_set.hpp"
-#include "duckdb/optimizer/join_order/estimated_properties.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
-#include "duckdb/parser/expression_map.hpp"
-#include "duckdb/planner/logical_operator_visitor.hpp"
-#include "duckdb/planner/table_filter.hpp"
-#include "duckdb/storage/statistics/distinct_statistics.hpp"
 
 namespace duckdb {
 
-class JoinOrderOptimizer;
+struct NeighborInfo;
 
 class JoinNode {
 public:
 	//! Represents a node in the join plan
 	JoinRelationSet &set;
+	//! information on how left and right are connected
 	optional_ptr<NeighborInfo> info;
-	//! If the JoinNode is a base table, then base_cardinality is the cardinality before filters
-	//! estimated_props.cardinality will be the cardinality after filters. With no filters, the two are equal
-	bool has_filter;
+	//! left and right plans
 	optional_ptr<JoinNode> left;
 	optional_ptr<JoinNode> right;
 
-	unique_ptr<EstimatedProperties> estimated_props;
+	//! The cost of the join node. The cost is stored here so that the cost of
+	//! a join node stays in sync with how the join node is constructed. Storing the cost in an unordered_set
+	//! in the cost model is error prone. If the plan enumerator join node is updated and not the cost model
+	//! the whole Join Order Optimizer can start exhibiting undesired behavior.
+	double cost;
+	//! used only to populate logical operators with estimated caridnalities after the best join plan has been found.
+	idx_t cardinality;
+
+	//! Create an intermediate node in the join tree. base_cardinality = estimated_props.cardinality
+	JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinNode &left, JoinNode &right, double cost);
 
 	//! Create a leaf node in the join tree
 	//! set cost to 0 for leaf nodes
 	//! cost will be the cost to *produce* an intermediate table
-	JoinNode(JoinRelationSet &set, const double base_cardinality);
-
-	//! Create an intermediate node in the join tree. base_cardinality = estimated_props.cardinality
-	JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinNode &left, JoinNode &right,
-	         const double base_cardinality, double cost);
+	JoinNode(JoinRelationSet &set);
 
 	bool operator==(const JoinNode &other) {
 		return other.set.ToString().compare(set.ToString()) == 0;
 	}
 
 private:
-	double base_cardinality;
-
 public:
-	template <class CARDINALITY_TYPE>
-	CARDINALITY_TYPE GetCardinality() const {
-		return estimated_props->GetCardinality<CARDINALITY_TYPE>();
-	}
-	double GetCost();
-	void SetCost(double cost);
-	double GetBaseTableCardinality();
-	void SetBaseTableCardinality(double base_card);
-	void SetEstimatedCardinality(double estimated_card);
 	void PrintJoinNode();
 	string ToString();
 };

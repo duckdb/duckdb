@@ -23,6 +23,9 @@ void PreparedStatementVerifier::Extract() {
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	    *select.node, [&](unique_ptr<ParsedExpression> &child) { ConvertConstants(child); });
 	statement->n_param = values.size();
+	for (auto &kv : values) {
+		statement->named_param_map[kv.first] = 0;
+	}
 	// create the PREPARE and EXECUTE statements
 	string name = "__duckdb_verification_prepared_statement";
 	auto prepare = make_uniq<PrepareStatement>();
@@ -31,7 +34,7 @@ void PreparedStatementVerifier::Extract() {
 
 	auto execute = make_uniq<ExecuteStatement>();
 	execute->name = name;
-	execute->values = std::move(values);
+	execute->named_values = std::move(values);
 
 	auto dealloc = make_uniq<DropStatement>();
 	dealloc->info->type = CatalogType::PREPARED_STATEMENT;
@@ -49,19 +52,21 @@ void PreparedStatementVerifier::ConvertConstants(unique_ptr<ParsedExpression> &c
 		child->alias = string();
 		// check if the value already exists
 		idx_t index = values.size();
-		for (idx_t v_idx = 0; v_idx < values.size(); v_idx++) {
-			if (values[v_idx]->Equals(*child)) {
-				// duplicate value! refer to the original value
-				index = v_idx;
-				break;
-			}
+		auto identifier = std::to_string(index + 1);
+		const auto predicate = [&](const std::pair<const string, unique_ptr<ParsedExpression>> &pair) {
+			return pair.second->Equals(*child.get());
+		};
+		auto result = std::find_if(values.begin(), values.end(), predicate);
+		if (result == values.end()) {
+			// If it doesn't exist yet, add it
+			values[identifier] = std::move(child);
+		} else {
+			identifier = result->first;
 		}
-		if (index == values.size()) {
-			values.push_back(std::move(child));
-		}
+
 		// replace it with an expression
 		auto parameter = make_uniq<ParameterExpression>();
-		parameter->parameter_nr = index + 1;
+		parameter->identifier = identifier;
 		parameter->alias = alias;
 		child = std::move(parameter);
 		return;

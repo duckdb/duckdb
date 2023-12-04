@@ -35,7 +35,7 @@ statement ok
 CREATE TABLE test2 (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY test2 FROM '__TEST_DIR__/test2.csv';
+COPY test2 FROM '__TEST_DIR__/test2.csv' (HEADER 1);
 ----
 5000
 
@@ -51,7 +51,7 @@ statement ok
 CREATE TABLE test_too_few_rows (a INTEGER, b INTEGER, c VARCHAR, d INTEGER);
 
 statement error
-COPY test_too_few_rows FROM '__TEST_DIR__/test2.csv' (NULL_PADDING 0);
+COPY test_too_few_rows FROM '__TEST_DIR__/test2.csv' (NULL_PADDING 0, HEADER 1);
 
 # create CSV file from query
 query I
@@ -64,7 +64,7 @@ statement ok
 CREATE TABLE test3 (a INTEGER, b INTEGER);
 
 query I
-COPY test3 FROM '__TEST_DIR__/test3.csv';
+COPY test3 FROM '__TEST_DIR__/test3.csv' (HEADER 1);
 ----
 4000
 
@@ -86,7 +86,7 @@ statement ok
 CREATE TABLE test4 (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (DELIM ',', HEADER 0);
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (DELIM ',');
 ----
 5000
 
@@ -189,6 +189,8 @@ CREATE TABLE unterminated (a VARCHAR);
 
 statement error
 COPY unterminated FROM 'test/sql/copy/csv/data/test/unterminated.csv' (HEADER 0, AUTO_DETECT FALSE);
+----
+unterminated quotes.
 
 # 1024 rows (vector size)
 # load CSV file into a table

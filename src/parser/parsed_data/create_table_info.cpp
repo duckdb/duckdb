@@ -16,29 +16,6 @@ CreateTableInfo::CreateTableInfo(SchemaCatalogEntry &schema, string name_p)
     : CreateTableInfo(schema.catalog.GetName(), schema.name, std::move(name_p)) {
 }
 
-void CreateTableInfo::SerializeInternal(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteString(table);
-	columns.Serialize(writer);
-	writer.WriteSerializableList(constraints);
-	writer.WriteOptional(query);
-	writer.Finalize();
-}
-
-unique_ptr<CreateTableInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) {
-	auto result = make_uniq<CreateTableInfo>();
-	result->DeserializeBase(deserializer);
-
-	FieldReader reader(deserializer);
-	result->table = reader.ReadRequired<string>();
-	result->columns = ColumnList::Deserialize(reader);
-	result->constraints = reader.ReadRequiredSerializableList<Constraint>();
-	result->query = reader.ReadOptional<SelectStatement>(nullptr);
-	reader.Finalize();
-
-	return result;
-}
-
 unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	auto result = make_uniq<CreateTableInfo>(catalog, schema, table);
 	CopyProperties(*result);

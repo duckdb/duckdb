@@ -38,6 +38,13 @@ struct ExportedTableInfo {
 };
 
 struct BoundExportData : public ParseInfo {
+public:
+	static constexpr const ParseInfoType TYPE = ParseInfoType::BOUND_EXPORT_DATA;
+
+public:
+	BoundExportData() : ParseInfo(TYPE) {
+	}
+
 	vector<ExportedTableInfo> data;
 };
 

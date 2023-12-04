@@ -1,0 +1,76 @@
+# name: test/sql/cte/materialized/recursive_array_slice_materialized.test
+# description: Issue #3005: array_slice prevents row values to be used more than once
+# group: [materialized]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE p(loc int8);
+
+statement ok
+INSERT INTO p VALUES (1);
+
+query II
+WITH RECURSIVE t(y, arr) AS MATERIALIZED
+(
+  SELECT 1, array[1,2,3,4,5,6]
+    UNION ALL
+  SELECT y+1, arr[:loc]
+  FROM   t, p
+  WHERE y < 10
+) SELECT * FROM t;
+----
+1	[1, 2, 3, 4, 5, 6]
+2	[1]
+3	[1]
+4	[1]
+5	[1]
+6	[1]
+7	[1]
+8	[1]
+9	[1]
+10	[1]
+
+query II
+WITH RECURSIVE t(y, arr) AS MATERIALIZED
+(
+  SELECT 1, array[1,2,3,4,5,6]
+    UNION ALL
+  SELECT y+1, arr
+  FROM   t, p
+  WHERE y < 10
+    AND y = loc
+) SELECT * FROM t;
+----
+1	[1, 2, 3, 4, 5, 6]
+2	[1, 2, 3, 4, 5, 6]
+
+query II
+WITH RECURSIVE t(y, arr) AS MATERIALIZED
+(
+  SELECT 1, array[1,2,3,4,5,6]
+    UNION ALL
+  SELECT y+1, arr[:loc]
+  FROM   t, p
+  WHERE y < 10
+    AND y = loc
+) SELECT * FROM t;
+----
+1	[1, 2, 3, 4, 5, 6]
+2	[1]
+
+query I
+WITH RECURSIVE t(arr) AS MATERIALIZED
+(
+  SELECT array[1,2,3,4,5,6]
+    UNION ALL
+  SELECT  arr[arr[1]+1:6]
+  FROM   t
+  WHERE arr[1] < 6
+) SELECT * FROM t;
+----
+[1, 2, 3, 4, 5, 6]
+[2, 3, 4, 5, 6]
+[4, 5, 6]
+[]

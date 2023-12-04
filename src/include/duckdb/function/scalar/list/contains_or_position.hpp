@@ -130,7 +130,7 @@ void ListContainsOrPosition(DataChunk &args, Vector &result) {
 		TemplatedContainsOrPosition<int8_t, T, OP, LIST_ACCESSOR>(args, result, true);
 		break;
 	default:
-		throw NotImplementedException("This function has not been implemented for physical type %s",
+		throw NotImplementedException("This function has not been implemented for logical type %s",
 		                              TypeIdToString(physical_type));
 	}
 }

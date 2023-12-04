@@ -62,7 +62,7 @@ NULL	NULL
 query II
 SELECT day(ts), day(ts::TIMESTAMP) FROM timestamps;
 ----
-15	15
+13	13
 31	31
 31	31
 1	1
@@ -119,7 +119,6 @@ NULL	NULL
 NULL	NULL
 NULL	NULL
 
-# ICU loses accuracy far from the epoch
 query II
 SELECT microsecond(ts), microsecond(ts::TIMESTAMP) FROM timestamps;
 ----
@@ -199,7 +198,7 @@ NULL	NULL
 query II
 SELECT dayofweek(ts), dayofweek(ts::TIMESTAMP) FROM timestamps;
 ----
-3	5
+3	3
 2	2
 4	4
 1	1
@@ -214,17 +213,41 @@ NULL	NULL
 query II
 SELECT isodow(ts), isodow(ts::TIMESTAMP) FROM timestamps;
 ----
-4	5
-3	2
-5	4
-2	1
-6	5
-2	1
-2	1
-6	5
+3	3
+2	2
+4	4
+1	1
+5	5
+1	1
+1	1
+5	5
 NULL	NULL
 NULL	NULL
 NULL	NULL
+
+query II
+SELECT date_part('isodow', ts), date_part('isodow', ts::timestamp)
+FROM range('1992-01-06'::timestamptz, '1992-01-13'::timestamptz, interval 1 day) as t(ts);
+----
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+
+query II
+SELECT date_part('dow', ts), date_part('dow', ts::timestamp)
+FROM range('1992-01-05'::timestamptz, '1992-01-12'::timestamptz, interval 1 day) as t(ts);
+----
+0	0
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
 
 query II
 SELECT week(ts), week(ts::TIMESTAMP) FROM timestamps;
@@ -244,7 +267,7 @@ NULL	NULL
 query II
 SELECT dayofyear(ts), dayofyear(ts::TIMESTAMP) FROM timestamps;
 ----
-74	74
+72	72
 212	212
 366	366
 32	32
@@ -304,23 +327,24 @@ NULL	NULL
 query II
 SELECT epoch(ts), epoch(ts::TIMESTAMP) FROM timestamps;
 ----
--63517990756	-63517817956
--234211151	-234211151
-1609430400	1609430400
-1612195200	1612195200
-1637892913	1637892913
-1636943400	1636943400
-1636939800	1636939800
-1640354400	1640354400
+-63517962378.012344	-63517990756.012344
+-234185951.876544	-234211151.876544
+1609459200.0	1609430400.0
+1612224000.0	1612195200.0
+1637921713.123456	1637892913.123456
+1636972200.0	1636943400.0
+1636968600.0	1636939800.0
+1640383200.0	1640354400.0
 NULL	NULL
 NULL	NULL
 NULL	NULL
 
 query III
-SELECT date_part(part, ts), date_part(part, ts::TIMESTAMP), part FROM timestamps;
+SELECT date_part(part, ts), date_part(part, ts::TIMESTAMP), part 
+FROM timestamps
+WHERE part NOT IN ('epoch', 'julian')
 ----
 0	0	era
--234211151	-234211151	epoch
 2020	2020	year
 2	2	month
 13123456	13123456	microsecond
@@ -363,9 +387,39 @@ NULL
 
 # Beware the ides of March
 query I
-SELECT DATE_PART('era', '0044-03-15 (BC) 12:00:00'::TIMESTAMPTZ);
+SELECT DATE_PART('julian', '0044-03-15 (BC) 12:00:00'::TIMESTAMPTZ);
 ----
-0
+1705428.5
+
+query I
+SELECT JULIAN(ts) FROM timestamps;
+----
+1705426.0699535608
+2437877.2227792065
+2459215.6666666665
+2459247.6666666665
+2459545.0939018917
+2459534.1041666665
+2459534.0625
+2459573.5833333335
+NULL
+NULL
+NULL
+
+query I
+SELECT DATE_PART('julian', ts) FROM timestamps;
+----
+1705426.0699535608
+2437877.2227792065
+2459215.6666666665
+2459247.6666666665
+2459545.0939018917
+2459534.1041666665
+2459534.0625
+2459573.5833333335
+NULL
+NULL
+NULL
 
 query I
 SELECT DATE_PART('timezone', ts) FROM timestamps;
@@ -442,7 +496,7 @@ FROM timestamps
 query II
 SELECT dayofmonth(ts), dayofmonth(ts::TIMESTAMP) FROM timestamps;
 ----
-15	15
+13	13
 31	31
 31	31
 1	1
@@ -457,7 +511,7 @@ NULL	NULL
 query II
 SELECT weekday(ts), weekday(ts::TIMESTAMP) FROM timestamps;
 ----
-3	5
+3	3
 2	2
 4	4
 1	1
@@ -485,7 +539,7 @@ NULL	NULL
 NULL	NULL
 
 # Correctness: Compare date_part to named function
-foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow dayofyear yearweek isoyear epoch timezone timezone_hour timezone_minute
+foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow dayofyear yearweek isoyear julian epoch timezone timezone_hour timezone_minute
 
 query III
 SELECT *
@@ -503,7 +557,7 @@ endloop
 #
 
 # Correctness: Compare struct values with scalar values
-foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow doy yearweek epoch timezone timezone_hour timezone_minute
+foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow doy yearweek isoyear julian epoch timezone timezone_hour timezone_minute
 
 query III
 SELECT ts, DATE_PART('${partcode}', ts) AS pc, DATE_PART(['${partcode}'], ts) AS st
@@ -515,21 +569,21 @@ endloop
 
 # Date parts
 query II
-SELECT DATE_PART(['era', 'year', 'month', 'day'], ts), ts
+SELECT DATE_PART(['era', 'year', 'month', 'day', 'julian'], ts), ts
 FROM timestamps
 ORDER BY 2
 ----
 NULL	NULL
-{'era': NULL, 'year': NULL, 'month': NULL, 'day': NULL}	-infinity
-{'era': 0, 'year': 44, 'month': 3, 'day': 15}	0044-03-15 (BC) 01:40:43.987654-07:52
-{'era': 1, 'year': 1962, 'month': 7, 'day': 31}	1962-07-31 05:20:48.123456-07
-{'era': 1, 'year': 2020, 'month': 12, 'day': 31}	2020-12-31 16:00:00-08
-{'era': 1, 'year': 2021, 'month': 2, 'day': 1}	2021-02-01 16:00:00-08
-{'era': 1, 'year': 2021, 'month': 11, 'day': 15}	2021-11-15 01:30:00-08
-{'era': 1, 'year': 2021, 'month': 11, 'day': 15}	2021-11-15 02:30:00-08
-{'era': 1, 'year': 2021, 'month': 11, 'day': 26}	2021-11-26 02:15:13.123456-08
-{'era': 1, 'year': 2021, 'month': 12, 'day': 24}	2021-12-24 14:00:00-08
-{'era': NULL, 'year': NULL, 'month': NULL, 'day': NULL}	infinity
+{'era': NULL, 'year': NULL, 'month': NULL, 'day': NULL, 'julian': NULL}	-infinity
+{'era': 0, 'year': 44, 'month': 3, 'day': 13, 'julian': 1705426.0699535608}	0044-03-13 (BC) 01:40:43.987654-07:52
+{'era': 1, 'year': 1962, 'month': 7, 'day': 31, 'julian': 2437877.2227792065}	1962-07-31 05:20:48.123456-07
+{'era': 1, 'year': 2020, 'month': 12, 'day': 31, 'julian': 2459215.6666666665}	2020-12-31 16:00:00-08
+{'era': 1, 'year': 2021, 'month': 2, 'day': 1, 'julian': 2459247.6666666665}	2021-02-01 16:00:00-08
+{'era': 1, 'year': 2021, 'month': 11, 'day': 15, 'julian': 2459534.0625}	2021-11-15 01:30:00-08
+{'era': 1, 'year': 2021, 'month': 11, 'day': 15, 'julian': 2459534.1041666665}	2021-11-15 02:30:00-08
+{'era': 1, 'year': 2021, 'month': 11, 'day': 26, 'julian': 2459545.0939018917}	2021-11-26 02:15:13.123456-08
+{'era': 1, 'year': 2021, 'month': 12, 'day': 24, 'julian': 2459573.5833333335}	2021-12-24 14:00:00-08
+{'era': NULL, 'year': NULL, 'month': NULL, 'day': NULL, 'julian': NULL}	infinity
 
 # Time parts
 query II
@@ -539,7 +593,7 @@ ORDER BY 2
 ----
 NULL	NULL
 {'hour': NULL, 'minute': NULL, 'microsecond': NULL}	-infinity
-{'hour': 1, 'minute': 40, 'microsecond': 43987654}	0044-03-15 (BC) 01:40:43.987654-07:52
+{'hour': 1, 'minute': 40, 'microsecond': 43987654}	0044-03-13 (BC) 01:40:43.987654-07:52
 {'hour': 5, 'minute': 20, 'microsecond': 48123456}	1962-07-31 05:20:48.123456-07
 {'hour': 16, 'minute': 0, 'microsecond': 0}	2020-12-31 16:00:00-08
 {'hour': 16, 'minute': 0, 'microsecond': 0}	2021-02-01 16:00:00-08
@@ -557,7 +611,7 @@ ORDER BY 2
 ----
 NULL	NULL
 {'millennium': NULL, 'century': NULL, 'decade': NULL, 'quarter': NULL}	-infinity
-{'millennium': -1, 'century': -1, 'decade': 4, 'quarter': 1}	0044-03-15 (BC) 01:40:43.987654-07:52
+{'millennium': -1, 'century': -1, 'decade': 4, 'quarter': 1}	0044-03-13 (BC) 01:40:43.987654-07:52
 {'millennium': 2, 'century': 20, 'decade': 196, 'quarter': 3}	1962-07-31 05:20:48.123456-07
 {'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2020-12-31 16:00:00-08
 {'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 1}	2021-02-01 16:00:00-08
@@ -575,14 +629,14 @@ ORDER BY 2
 ----
 NULL	NULL
 {'weekday': NULL, 'isodow': NULL, 'doy': NULL}	-infinity
-{'weekday': 3, 'isodow': 4, 'doy': 74}	0044-03-15 (BC) 01:40:43.987654-07:52
-{'weekday': 2, 'isodow': 3, 'doy': 212}	1962-07-31 05:20:48.123456-07
-{'weekday': 4, 'isodow': 5, 'doy': 366}	2020-12-31 16:00:00-08
-{'weekday': 1, 'isodow': 2, 'doy': 32}	2021-02-01 16:00:00-08
-{'weekday': 1, 'isodow': 2, 'doy': 319}	2021-11-15 01:30:00-08
-{'weekday': 1, 'isodow': 2, 'doy': 319}	2021-11-15 02:30:00-08
-{'weekday': 5, 'isodow': 6, 'doy': 330}	2021-11-26 02:15:13.123456-08
-{'weekday': 5, 'isodow': 6, 'doy': 358}	2021-12-24 14:00:00-08
+{'weekday': 3, 'isodow': 3, 'doy': 72}	0044-03-13 (BC) 01:40:43.987654-07:52
+{'weekday': 2, 'isodow': 2, 'doy': 212}	1962-07-31 05:20:48.123456-07
+{'weekday': 4, 'isodow': 4, 'doy': 366}	2020-12-31 16:00:00-08
+{'weekday': 1, 'isodow': 1, 'doy': 32}	2021-02-01 16:00:00-08
+{'weekday': 1, 'isodow': 1, 'doy': 319}	2021-11-15 01:30:00-08
+{'weekday': 1, 'isodow': 1, 'doy': 319}	2021-11-15 02:30:00-08
+{'weekday': 5, 'isodow': 5, 'doy': 330}	2021-11-26 02:15:13.123456-08
+{'weekday': 5, 'isodow': 5, 'doy': 358}	2021-12-24 14:00:00-08
 {'weekday': NULL, 'isodow': NULL, 'doy': NULL}	infinity
 
 # ISO parts
@@ -593,7 +647,7 @@ ORDER BY 2
 ----
 NULL	NULL
 {'isoyear': NULL, 'week': NULL, 'yearweek': NULL}	-infinity
-{'isoyear': -43, 'week': 11, 'yearweek': -4311}	0044-03-15 (BC) 01:40:43.987654-07:52
+{'isoyear': -43, 'week': 11, 'yearweek': -4311}	0044-03-13 (BC) 01:40:43.987654-07:52
 {'isoyear': 1962, 'week': 31, 'yearweek': 196231}	1962-07-31 05:20:48.123456-07
 {'isoyear': 2020, 'week': 53, 'yearweek': 202053}	2020-12-31 16:00:00-08
 {'isoyear': 2021, 'week': 5, 'yearweek': 202105}	2021-02-01 16:00:00-08
@@ -611,18 +665,18 @@ ORDER BY 2
 ----
 NULL	NULL
 {'epoch': NULL, 'second': NULL, 'timezone': NULL, 'timezone_hour': NULL, 'timezone_minute': NULL}	-infinity
-{'epoch': -63517990756, 'second': 43, 'timezone': -28378, 'timezone_hour': -7, 'timezone_minute': -52}	0044-03-15 (BC) 01:40:43.987654-07:52
-{'epoch': -234211151, 'second': 48, 'timezone': -25200, 'timezone_hour': -7, 'timezone_minute': 0}	1962-07-31 05:20:48.123456-07
-{'epoch': 1609430400, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2020-12-31 16:00:00-08
-{'epoch': 1612195200, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-02-01 16:00:00-08
-{'epoch': 1636939800, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-15 01:30:00-08
-{'epoch': 1636943400, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-15 02:30:00-08
-{'epoch': 1637892913, 'second': 13, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-26 02:15:13.123456-08
-{'epoch': 1640354400, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-12-24 14:00:00-08
+{'epoch': -63517962378.012344, 'second': 43, 'timezone': -28378, 'timezone_hour': -7, 'timezone_minute': -52}	0044-03-13 (BC) 01:40:43.987654-07:52
+{'epoch': -234185951.876544, 'second': 48, 'timezone': -25200, 'timezone_hour': -7, 'timezone_minute': 0}	1962-07-31 05:20:48.123456-07
+{'epoch': 1609459200.0, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2020-12-31 16:00:00-08
+{'epoch': 1612224000.0, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-02-01 16:00:00-08
+{'epoch': 1636968600.0, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-15 01:30:00-08
+{'epoch': 1636972200.0, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-15 02:30:00-08
+{'epoch': 1637921713.123456, 'second': 13, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-26 02:15:13.123456-08
+{'epoch': 1640383200.0, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-12-24 14:00:00-08
 {'epoch': NULL, 'second': NULL, 'timezone': NULL, 'timezone_hour': NULL, 'timezone_minute': NULL}	infinity
 
 # Correctness: Compare struct values with scalar values
-foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow doy yearweek isoyear epoch timezone timezone_hour timezone_minute
+foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow doy yearweek isoyear julian epoch timezone timezone_hour timezone_minute
 
 query III
 SELECT ts, DATE_PART('${partcode}', ts) AS p, DATE_PART(['${partcode}'], ts) AS s
@@ -686,7 +740,7 @@ SELECT ts, LAST_DAY(ts), LAST_DAY(ts::TIMESTAMP) FROM februaries;
 query TTT
 SELECT ts, LAST_DAY(ts), LAST_DAY(ts::TIMESTAMP) FROM timestamps;
 ----
-0044-03-15 (BC) 01:40:43.987654-07:52	0044-03-29 (BC)	0044-03-31 (BC)
+0044-03-13 (BC) 01:40:43.987654-07:52	0044-03-31 (BC)	0044-03-31 (BC)
 1962-07-31 05:20:48.123456-07	1962-07-31	1962-07-31
 2020-12-31 16:00:00-08	2020-12-31	2020-12-31
 2021-02-01 16:00:00-08	2021-02-28	2021-02-28
@@ -760,4 +814,4 @@ ORDER BY ALL;
 5872	10	October
 5872	11	November
 5872	12	December
-5872	13	Undecember
+5872	13	Undecimber

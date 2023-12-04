@@ -19,8 +19,11 @@ class Optimizer;
 class FilterPushdown {
 public:
 	explicit FilterPushdown(Optimizer &optimizer);
+
 	//! Perform filter pushdown
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
+	//! Return a reference to the client context (from the optimizer)
+	ClientContext &GetContext();
 
 	struct Filter {
 		unordered_set<idx_t> bindings;
@@ -40,6 +43,8 @@ private:
 
 	//! Push down a LogicalAggregate op
 	unique_ptr<LogicalOperator> PushdownAggregate(unique_ptr<LogicalOperator> op);
+	//! Push down a distinct operator
+	unique_ptr<LogicalOperator> PushdownDistinct(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalFilter op
 	unique_ptr<LogicalOperator> PushdownFilter(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalCrossProduct op
@@ -67,6 +72,10 @@ private:
 	unique_ptr<LogicalOperator> PushdownSingleJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
 	                                               unordered_set<idx_t> &right_bindings);
 
+	// AddLogicalFilter used to add an extra LogicalFilter at this level,
+	// because in some cases, some expressions can not be pushed down.
+	unique_ptr<LogicalOperator> AddLogicalFilter(unique_ptr<LogicalOperator> op,
+	                                             vector<unique_ptr<Expression>> expressions);
 	//! Push any remaining filters into a LogicalFilter at this level
 	unique_ptr<LogicalOperator> PushFinalFilters(unique_ptr<LogicalOperator> op);
 	// Finish pushing down at this operator, creating a LogicalFilter to store any of the stored filters and recursively

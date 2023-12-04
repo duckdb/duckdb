@@ -597,6 +597,7 @@ union YYSTYPE
 	PGAlias				*alias;
 	PGRangeVar			*range;
 	PGIntoClause			*into;
+	PGCTEMaterialize			ctematerialize;
 	PGWithClause			*with;
 	PGInferClause			*infer;
 	PGOnConflictClause	*onconflict;
@@ -615,7 +616,7 @@ union YYSTYPE
 	PGViewCheckOption viewcheckoption;
 	PGInsertColumnOrder bynameorposition;
 
-#line 619 "third_party/libpg_query/grammar/grammar_out.hpp"
+#line 620 "third_party/libpg_query/grammar/grammar_out.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

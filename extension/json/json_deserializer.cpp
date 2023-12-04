@@ -3,8 +3,23 @@
 
 namespace duckdb {
 
-void JsonDeserializer::SetTag(const char *tag) {
+void JsonDeserializer::OnPropertyBegin(const field_id_t, const char *tag) {
 	current_tag = tag;
+}
+
+void JsonDeserializer::OnPropertyEnd() {
+}
+
+bool JsonDeserializer::OnOptionalPropertyBegin(const field_id_t, const char *tag) {
+	auto parent = Current();
+	auto present = yyjson_obj_get(parent.val, tag) != nullptr;
+	if (present) {
+		current_tag = tag;
+	}
+	return present;
+}
+
+void JsonDeserializer::OnOptionalPropertyEnd(bool) {
 }
 
 // If inside an object, return the value associated by the current tag (property name)
@@ -43,8 +58,10 @@ void JsonDeserializer::ThrowTypeError(yyjson_val *val, const char *expected) {
 	if (yyjson_is_obj(parent.val)) {
 		auto msg =
 		    StringUtil::Format("property '%s' expected type '%s', but got type: '%s'", current_tag, expected, actual);
+		throw ParserException(msg);
 	} else if (yyjson_is_arr(parent.val)) {
 		auto msg = StringUtil::Format("Sequence expect child of type '%s', but got type: %s", expected, actual);
+		throw ParserException(msg);
 	} else {
 		// unreachable?
 		throw InternalException("cannot get nested value from non object or array-type");
@@ -103,66 +120,27 @@ void JsonDeserializer::OnListEnd() {
 	Pop();
 }
 
-// Deserialize maps as [ { key: ..., value: ... } ]
-idx_t JsonDeserializer::OnMapBegin() {
-	auto val = GetNextValue();
-	if (!yyjson_is_arr(val)) {
-		ThrowTypeError(val, "array");
+bool JsonDeserializer::OnNullableBegin() {
+	auto &parent_val = Current();
+	yyjson_arr_iter iter;
+	if (yyjson_is_arr(parent_val.val)) {
+		iter = parent_val.arr_iter;
 	}
-	Push(val);
-	return yyjson_arr_size(val);
-}
-
-void JsonDeserializer::OnMapEntryBegin() {
 	auto val = GetNextValue();
-	if (!yyjson_is_obj(val)) {
-		ThrowTypeError(val, "object");
+
+	// Recover the iterator if we are inside an array
+	if (yyjson_is_arr(parent_val.val)) {
+		parent_val.arr_iter = iter;
 	}
-	Push(val);
-}
 
-void JsonDeserializer::OnMapKeyBegin() {
-	SetTag("key");
-}
-
-void JsonDeserializer::OnMapValueBegin() {
-	SetTag("value");
-}
-
-void JsonDeserializer::OnMapEntryEnd() {
-	stack.pop_back();
-}
-
-void JsonDeserializer::OnMapEnd() {
-	stack.pop_back();
-}
-
-void JsonDeserializer::OnPairBegin() {
-	auto val = GetNextValue();
-	if (!yyjson_is_obj(val)) {
-		ThrowTypeError(val, "object");
-	}
-	Push(val);
-}
-
-void JsonDeserializer::OnPairKeyBegin() {
-	SetTag("key");
-}
-
-void JsonDeserializer::OnPairValueBegin() {
-	SetTag("value");
-}
-
-void JsonDeserializer::OnPairEnd() {
-	stack.pop_back();
-}
-
-bool JsonDeserializer::OnOptionalBegin() {
-	auto val = GetNextValue();
 	if (yyjson_is_null(val)) {
 		return false;
 	}
+
 	return true;
+}
+
+void JsonDeserializer::OnNullableEnd() {
 }
 
 //===--------------------------------------------------------------------===//
@@ -178,7 +156,7 @@ bool JsonDeserializer::ReadBool() {
 
 int8_t JsonDeserializer::ReadSignedInt8() {
 	auto val = GetNextValue();
-	if (!yyjson_is_sint(val)) {
+	if (!yyjson_is_int(val)) {
 		ThrowTypeError(val, "int8_t");
 	}
 	return yyjson_get_sint(val);
@@ -194,7 +172,7 @@ uint8_t JsonDeserializer::ReadUnsignedInt8() {
 
 int16_t JsonDeserializer::ReadSignedInt16() {
 	auto val = GetNextValue();
-	if (!yyjson_is_sint(val)) {
+	if (!yyjson_is_int(val)) {
 		ThrowTypeError(val, "int16_t");
 	}
 	return yyjson_get_sint(val);
@@ -210,7 +188,7 @@ uint16_t JsonDeserializer::ReadUnsignedInt16() {
 
 int32_t JsonDeserializer::ReadSignedInt32() {
 	auto val = GetNextValue();
-	if (!yyjson_is_sint(val)) {
+	if (!yyjson_is_int(val)) {
 		ThrowTypeError(val, "int32_t");
 	}
 	return yyjson_get_sint(val);
@@ -226,7 +204,7 @@ uint32_t JsonDeserializer::ReadUnsignedInt32() {
 
 int64_t JsonDeserializer::ReadSignedInt64() {
 	auto val = GetNextValue();
-	if (!yyjson_is_sint(val)) {
+	if (!yyjson_is_int(val)) {
 		ThrowTypeError(val, "int64_t");
 	}
 	return yyjson_get_sint(val);
@@ -264,20 +242,6 @@ string JsonDeserializer::ReadString() {
 	return yyjson_get_str(val);
 }
 
-interval_t JsonDeserializer::ReadInterval() {
-	auto val = GetNextValue();
-	if (!yyjson_is_obj(val)) {
-		ThrowTypeError(val, "object");
-	}
-	Push(val);
-	interval_t result;
-	ReadProperty("months", result.months);
-	ReadProperty("days", result.days);
-	ReadProperty("micros", result.micros);
-	Pop();
-	return result;
-}
-
 hugeint_t JsonDeserializer::ReadHugeInt() {
 	auto val = GetNextValue();
 	if (!yyjson_is_obj(val)) {
@@ -285,8 +249,8 @@ hugeint_t JsonDeserializer::ReadHugeInt() {
 	}
 	Push(val);
 	hugeint_t result;
-	ReadProperty("upper", result.upper);
-	ReadProperty("lower", result.lower);
+	ReadProperty(100, "upper", result.upper);
+	ReadProperty(101, "lower", result.lower);
 	Pop();
 	return result;
 }
@@ -300,7 +264,7 @@ void JsonDeserializer::ReadDataPtr(data_ptr_t &ptr, idx_t count) {
 	auto len = yyjson_get_len(val);
 	D_ASSERT(len == count);
 	auto blob = string_t(str, len);
-	Blob::ToString(blob, (char *&)ptr);
+	Blob::ToString(blob, char_ptr_cast(ptr));
 }
 
 } // namespace duckdb

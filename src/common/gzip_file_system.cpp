@@ -145,6 +145,13 @@ void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 bool MiniZStreamWrapper::Read(StreamData &sd) {
 	// Handling for the concatenated files
 	if (sd.refresh) {
+		auto available = (uint32_t)(sd.in_buff_end - sd.in_buff_start);
+		if (available <= GZIP_FOOTER_SIZE) {
+			// Only footer is available so we just close and return finished
+			Close();
+			return true;
+		}
+
 		sd.refresh = false;
 		auto body_ptr = sd.in_buff_start + GZIP_FOOTER_SIZE;
 		uint8_t gzip_hdr[GZIP_HEADER_MINSIZE];
@@ -200,18 +207,6 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 
 	// if stream ended, deallocate inflator
 	if (ret == duckdb_miniz::MZ_STREAM_END) {
-		// Last read from file done and remaining bytes only for footer or less
-		if ((sd.in_buff_end < sd.in_buff.get() + sd.in_buf_size) && mz_stream_ptr->avail_in <= GZIP_FOOTER_SIZE) {
-			Close();
-			return true;
-		}
-		if (mz_stream_ptr->avail_in > GZIP_FOOTER_SIZE) {
-			// Definitely not concatenated gzip
-			if (*(sd.in_buff_start + GZIP_FOOTER_SIZE) != 0x1F) {
-				Close();
-				return true;
-			}
-		}
 		// Concatenated GZIP potentially coming up - refresh input buffer
 		sd.refresh = true;
 	}

@@ -184,8 +184,10 @@ void BaseAppender::AppendValueInternal(T input) {
 		AppendValueInternal<T, timestamp_t>(col, input);
 		break;
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		AppendValueInternal<T, dtime_t>(col, input);
+		break;
+	case LogicalTypeId::TIME_TZ:
+		AppendValueInternal<T, dtime_tz_t>(col, input);
 		break;
 	case LogicalTypeId::INTERVAL:
 		AppendValueInternal<T, interval_t>(col, input);

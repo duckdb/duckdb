@@ -1,48 +1,48 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/index/art/art_node.hpp
+// duckdb/execution/index/art/node.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/execution/index/art/fixed_size_allocator.hpp"
-#include "duckdb/execution/index/art/swizzleable_pointer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/execution/index/index_pointer.hpp"
+#include "duckdb/execution/index/fixed_size_allocator.hpp"
 
 namespace duckdb {
 
 // classes
 enum class NType : uint8_t {
-	PREFIX_SEGMENT = 1,
-	LEAF_SEGMENT = 2,
-	LEAF = 3,
-	NODE_4 = 4,
-	NODE_16 = 5,
-	NODE_48 = 6,
-	NODE_256 = 7
+	PREFIX = 1,
+	LEAF = 2,
+	NODE_4 = 3,
+	NODE_16 = 4,
+	NODE_48 = 5,
+	NODE_256 = 6,
+	LEAF_INLINED = 7,
 };
+
 class ART;
-class Node;
 class Prefix;
-class MetaBlockReader;
-class MetaBlockWriter;
+class MetadataReader;
+class MetadataWriter;
 
 // structs
 struct BlockPointer;
 struct ARTFlags;
+struct MetaBlockPointer;
 
-//! The ARTNode is the swizzleable pointer class of the ART index.
-//! If the ARTNode pointer is not swizzled, then the leftmost byte identifies the NType.
-//! The remaining bytes are the position in the respective ART buffer.
-class Node : public SwizzleablePointer {
+//! The Node is the pointer class of the ART index.
+//! It inherits from the IndexPointer, and adds ART-specific functionality
+class Node : public IndexPointer {
 public:
-	// constants (this allows testing performance with different ART node sizes)
-
-	//! Node prefixes (NOTE: this should always hold: PREFIX_SEGMENT_SIZE >= PREFIX_INLINE_BYTES)
-	static constexpr uint32_t PREFIX_INLINE_BYTES = 8;
-	static constexpr uint32_t PREFIX_SEGMENT_SIZE = 32;
 	//! Node thresholds
 	static constexpr uint8_t NODE_48_SHRINK_THRESHOLD = 12;
 	static constexpr uint8_t NODE_256_SHRINK_THRESHOLD = 36;
@@ -53,68 +53,53 @@ public:
 	static constexpr uint16_t NODE_256_CAPACITY = 256;
 	//! Other constants
 	static constexpr uint8_t EMPTY_MARKER = 48;
-	static constexpr uint32_t LEAF_SEGMENT_SIZE = 8;
+	static constexpr uint8_t LEAF_SIZE = 4;
+	static constexpr uint8_t PREFIX_SIZE = 15;
+	static constexpr idx_t AND_ROW_ID = 0x00FFFFFFFFFFFFFF;
 
 public:
-	//! Constructs an empty ARTNode
-	Node();
-	//! Constructs a swizzled pointer from a block ID and an offset
-	explicit Node(MetaBlockReader &reader);
 	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
 	static void New(ART &art, Node &node, const NType type);
 	//! Free the node (and its subtree)
 	static void Free(ART &art, Node &node);
 
-	inline bool operator==(const Node &node) const {
-		return swizzle_flag == node.swizzle_flag && type == node.type && offset == node.offset &&
-		       buffer_id == node.buffer_id;
+	//! Get references to the allocator
+	static FixedSizeAllocator &GetAllocator(const ART &art, const NType type);
+	//! Get a (immutable) reference to the node. If dirty is false, then T should be a const class
+	template <class NODE>
+	static inline const NODE &Ref(const ART &art, const Node ptr, const NType type) {
+		return *(GetAllocator(art, type).Get<const NODE>(ptr, false));
+	}
+	//! Get a (const) reference to the node. If dirty is false, then T should be a const class
+	template <class NODE>
+	static inline NODE &RefMutable(const ART &art, const Node ptr, const NType type) {
+		return *(GetAllocator(art, type).Get<NODE>(ptr));
 	}
 
-	//! Retrieve the node type from the leftmost byte
-	inline NType DecodeARTNodeType() const {
-		D_ASSERT(!IsSwizzled());
-		D_ASSERT(type >= (uint8_t)NType::PREFIX_SEGMENT);
-		D_ASSERT(type <= (uint8_t)NType::NODE_256);
-		return NType(type);
-	}
-
-	//! Set the pointer
-	inline void SetPtr(const SwizzleablePointer ptr) {
-		swizzle_flag = ptr.swizzle_flag;
-		type = ptr.type;
-		offset = ptr.offset;
-		buffer_id = ptr.buffer_id;
-	}
-
-	//! Replace the child node at the respective byte
-	void ReplaceChild(const ART &art, const uint8_t byte, const Node child);
+	//! Replace the child node at byte
+	void ReplaceChild(const ART &art, const uint8_t byte, const Node child) const;
 	//! Insert the child node at byte
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
-	//! Delete the child node at the respective byte
-	static void DeleteChild(ART &art, Node &node, const uint8_t byte);
+	//! Delete the child node at byte
+	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte);
 
+	//! Get the child (immutable) for the respective byte in the node
+	optional_ptr<const Node> GetChild(ART &art, const uint8_t byte) const;
 	//! Get the child for the respective byte in the node
-	optional_ptr<Node> GetChild(ART &art, const uint8_t byte) const;
+	optional_ptr<Node> GetChildMutable(ART &art, const uint8_t byte) const;
+	//! Get the first child (immutable) that is greater or equal to the specific byte
+	optional_ptr<const Node> GetNextChild(ART &art, uint8_t &byte) const;
 	//! Get the first child that is greater or equal to the specific byte
-	optional_ptr<Node> GetNextChild(ART &art, uint8_t &byte, const bool deserialize = true) const;
-
-	//! Serialize the node
-	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
-	//! Deserialize the node
-	void Deserialize(ART &art);
+	optional_ptr<Node> GetNextChildMutable(ART &art, uint8_t &byte) const;
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
-	string VerifyAndToString(ART &art, const bool only_verify);
+	string VerifyAndToString(ART &art, const bool only_verify) const;
 	//! Returns the capacity of the node
 	idx_t GetCapacity() const;
-	//! Returns a pointer to the prefix of the node
-	Prefix &GetPrefix(ART &art);
 	//! Returns the matching node type for a given count
 	static NType GetARTNodeTypeByCount(const idx_t count);
-	//! Get references to the different allocators
-	static FixedSizeAllocator &GetAllocator(const ART &art, NType type);
 
-	//! Initializes a merge by fully deserializing the subtree of the node and incrementing its buffer IDs
+	//! Initializes a merge by incrementing the buffer IDs of a node and its subtree
 	void InitializeMerge(ART &art, const ARTFlags &flags);
 	//! Merge another node into this node
 	bool Merge(ART &art, Node &other);
@@ -124,7 +109,25 @@ public:
 	bool MergeInternal(ART &art, Node &other);
 
 	//! Vacuum all nodes that exceed their respective vacuum thresholds
-	static void Vacuum(ART &art, Node &node, const ARTFlags &flags);
-};
+	void Vacuum(ART &art, const ARTFlags &flags);
 
+	//! Get the row ID (8th to 63rd bit)
+	inline row_t GetRowId() const {
+		return Get() & AND_ROW_ID;
+	}
+	//! Set the row ID (8th to 63rd bit)
+	inline void SetRowId(const row_t row_id) {
+		Set((Get() & AND_METADATA) | row_id);
+	}
+
+	//! Returns the type of the node, which is held in the metadata
+	inline NType GetType() const {
+		return NType(GetMetadata());
+	}
+
+	//! Assign operator
+	inline void operator=(const IndexPointer &ptr) {
+		Set(ptr.Get());
+	}
+};
 } // namespace duckdb

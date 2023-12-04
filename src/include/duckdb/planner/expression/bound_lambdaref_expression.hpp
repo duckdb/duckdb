@@ -13,9 +13,6 @@
 
 namespace duckdb {
 
-class FieldReader;
-class FieldWriter;
-
 //! A BoundLambdaRef expression represents a LambdaRef expression that was bound to an lambda parameter
 //! in the lambda bindings vector. When capturing lambdas the BoundLambdaRef becomes a
 //! BoundReferenceExpresssion, indexing the corresponding lambda parameter in the lambda bindings vector,
@@ -51,7 +48,7 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 };
 } // namespace duckdb

@@ -15,7 +15,7 @@ def test_extension_loading(require):
 
 def test_install_non_existent_extension():
     conn = duckdb.connect()
-    conn.execute("set custom_extension_repository = 'example.com'")
+    conn.execute("set custom_extension_repository = 'http://example.com'")
 
     with raises(duckdb.HTTPException) as exc:
         conn.install_extension('non-existent')

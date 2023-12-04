@@ -5,23 +5,26 @@ on:
   push:
     branches:
       - '**'
-      - '!master'
+      - '!main'
       - '!feature'
     tags:
       - '**'
     paths-ignore:
       - '**.md'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
-      - '!.github/workflows/CodeQuality.yml'
+      - '!.github/workflows/lcov_exclude'
 
   pull_request:
+    types: [opened, reopened, ready_for_review]
     paths-ignore:
       - '**.md'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
-      - '!.github/workflows/CodeQuality.yml'
+      - '!.github/workflows/lcov_exclude'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
 
 env:
@@ -44,15 +47,21 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format && sudo pip3 install cmake-format
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format-11 && sudo pip3 install cmake-format black
 
       - name: Format Check
         shell: bash
         run: |
           clang-format --version
           clang-format --dump-config
+          black --version
           make format-check-silent
 
+      - name: Generated Check
+        shell: bash
+        run: |
+          make generate-files
+          git diff --exit-code
 
   tidy-check:
     name: Tidy Check
@@ -78,7 +87,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
       - name: Download clang-tidy-cache
         shell: bash
         run: |
@@ -90,73 +99,3 @@ jobs:
       - name: Tidy Check
         shell: bash
         run: make tidy-check TIDY_BINARY=/tmp/clang-tidy-cache
-
-  codecov:
-    name: Code Coverage
-    runs-on: ubuntu-20.04
-    needs: format-check
-    strategy:
-      fail-fast: false
-    env:
-      GEN: ninja
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov curl g++ zip
-
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
-      - name: Coverage Reset
-        shell: bash
-        run: |
-          lcov --config-file .github/workflows/lcovrc --zerocounters --directory .
-          lcov --config-file .github/workflows/lcovrc --capture --initial --directory . --base-directory . --no-external --output-file coverage.info
-
-      - name: Build
-        shell: bash
-        run: |
-          mkdir -p build/coverage
-          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_PARQUET_EXTENSION=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_JEMALLOC_EXTENSION=1 -DBUILD_AUTOCOMPLETE_EXTENSION=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
-
-      - name: Run Tests
-        shell: bash
-        run: |
-          build/coverage/test/unittest
-          build/coverage/test/unittest "[intraquery]"
-          build/coverage/test/unittest "[interquery]"
-          build/coverage/test/unittest "[detailed_profiler]"
-          build/coverage/test/unittest test/sql/tpch/tpch_sf01.test_slow
-          build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
-          python tools/shell/shell-test.py build/coverage/duckdb
-
-      - name: Generate Coverage
-        shell: bash
-        run: |
-          lcov --config-file .github/workflows/lcovrc --directory . --base-directory . --no-external --capture --output-file coverage.info
-          lcov --config-file .github/workflows/lcovrc --remove coverage.info $(< .github/workflows/lcov_exclude) -o lcov.info
-          genhtml -o coverage_html lcov.info
-
-      - name: Check Coverage
-        shell: bash
-        run: |
-          python3 scripts/check_coverage.py
-
-      - name: Create Archive
-        if: always()
-        shell: bash
-        run: |
-          zip -r coverage.zip coverage_html
-
-      - uses: actions/upload-artifact@v3
-        if: always()
-        with:
-          name: coverage
-          path: coverage.zip
-          if-no-files-found: error

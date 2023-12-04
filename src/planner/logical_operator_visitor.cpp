@@ -19,6 +19,7 @@ void LogicalOperatorVisitor::VisitOperatorChildren(LogicalOperator &op) {
 
 void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
                                                   const std::function<void(unique_ptr<Expression> *child)> &callback) {
+
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		auto &get = op.Cast<LogicalExpressionGet>();
@@ -67,14 +68,12 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 	}
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-			auto &delim_join = op.Cast<LogicalDelimJoin>();
-			for (auto &expr : delim_join.duplicate_eliminated_columns) {
-				callback(&expr);
-			}
-		}
 		auto &join = op.Cast<LogicalComparisonJoin>();
+		for (auto &expr : join.duplicate_eliminated_columns) {
+			callback(&expr);
+		}
 		for (auto &cond : join.conditions) {
 			callback(&cond.left);
 			callback(&cond.right);

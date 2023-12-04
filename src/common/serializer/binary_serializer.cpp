@@ -1,116 +1,139 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 
+#ifdef DEBUG
+#include "duckdb/common/string_util.hpp"
+#endif
+
 namespace duckdb {
 
-void BinarySerializer::SetTag(const char *tag) {
-	current_tag = tag;
+void BinarySerializer::OnPropertyBegin(const field_id_t field_id, const char *tag) {
+	// Just write the field id straight up
+	Write<field_id_t>(field_id);
+#ifdef DEBUG
+	// First of check that we are inside an object
+	if (debug_stack.empty()) {
+		throw InternalException("OnPropertyBegin called outside of object");
+	}
 
-	// Increment the number of fields
-	stack.back().field_count++;
+	// Check that the tag is unique
+	auto &state = debug_stack.back();
+	auto &seen_field_ids = state.seen_field_ids;
+	auto &seen_field_tags = state.seen_field_tags;
+	auto &seen_fields = state.seen_fields;
+
+	if (seen_field_ids.find(field_id) != seen_field_ids.end() || seen_field_tags.find(tag) != seen_field_tags.end()) {
+		string all_fields;
+		for (auto &field : seen_fields) {
+			all_fields += StringUtil::Format("\"%s\":%d ", field.first, field.second);
+		}
+		throw InternalException("Duplicate field id/tag in field: \"%s\":%d, other fields: %s", tag, field_id,
+		                        all_fields);
+	}
+
+	seen_field_ids.insert(field_id);
+	seen_field_tags.insert(tag);
+	seen_fields.emplace_back(tag, field_id);
+#else
+	(void)tag;
+#endif
 }
 
-//===--------------------------------------------------------------------===//
-// Nested types
-//===--------------------------------------------------------------------===//
-void BinarySerializer::OnOptionalBegin(bool present) {
-	Write(present);
+void BinarySerializer::OnPropertyEnd() {
+	// Nothing to do here
 }
 
-void BinarySerializer::OnListBegin(idx_t count) {
-	Write(count);
+void BinarySerializer::OnOptionalPropertyBegin(const field_id_t field_id, const char *tag, bool present) {
+	// Dont write anything at all if the property is not present
+	if (present) {
+		OnPropertyBegin(field_id, tag);
+	}
 }
 
-void BinarySerializer::OnListEnd(idx_t count) {
+void BinarySerializer::OnOptionalPropertyEnd(bool present) {
+	// Nothing to do here
 }
 
-// Serialize maps as arrays of objects with "key" and "value" properties.
-void BinarySerializer::OnMapBegin(idx_t count) {
-	Write(count);
-}
-
-void BinarySerializer::OnMapEntryBegin() {
-}
-
-void BinarySerializer::OnMapKeyBegin() {
-}
-
-void BinarySerializer::OnMapValueBegin() {
-}
-
-void BinarySerializer::OnMapEntryEnd() {
-}
-
-void BinarySerializer::OnMapEnd(idx_t count) {
-}
-
+//-------------------------------------------------------------------------
+// Nested Type Hooks
+//-------------------------------------------------------------------------
 void BinarySerializer::OnObjectBegin() {
-	stack.push_back(State({0, 0, data.size()}));
-	Write<uint32_t>(0); // Placeholder for the field count
-	Write<uint64_t>(0); // Placeholder for the size
+#ifdef DEBUG
+	debug_stack.emplace_back();
+#endif
 }
 
 void BinarySerializer::OnObjectEnd() {
-	auto &frame = stack.back();
-	// Patch the field count and size
-	auto message_start = &data[frame.offset];
-	Store<uint32_t>(frame.field_count, message_start);
-	Store<uint64_t>(frame.size, message_start + sizeof(uint32_t));
-	stack.pop_back();
+#ifdef DEBUG
+	debug_stack.pop_back();
+#endif
+	// Write object terminator
+	Write<field_id_t>(MESSAGE_TERMINATOR_FIELD_ID);
 }
 
-void BinarySerializer::OnPairBegin() {
+void BinarySerializer::OnListBegin(idx_t count) {
+	VarIntEncode(count);
 }
 
-void BinarySerializer::OnPairKeyBegin() {
+void BinarySerializer::OnListEnd() {
 }
 
-void BinarySerializer::OnPairValueBegin() {
+void BinarySerializer::OnNullableBegin(bool present) {
+	WriteValue(present);
 }
 
-void BinarySerializer::OnPairEnd() {
+void BinarySerializer::OnNullableEnd() {
 }
 
-//===--------------------------------------------------------------------===//
-// Primitive types
-//===--------------------------------------------------------------------===//
+//-------------------------------------------------------------------------
+// Primitive Types
+//-------------------------------------------------------------------------
 void BinarySerializer::WriteNull() {
 	// This should never be called, optional writes should be handled by OnOptionalBegin
 }
 
+void BinarySerializer::WriteValue(bool value) {
+	Write<uint8_t>(value);
+}
+
 void BinarySerializer::WriteValue(uint8_t value) {
+	VarIntEncode(value);
+}
+
+void BinarySerializer::WriteValue(char value) {
 	Write(value);
 }
 
 void BinarySerializer::WriteValue(int8_t value) {
-	Write(value);
+	VarIntEncode(value);
 }
 
 void BinarySerializer::WriteValue(uint16_t value) {
-	Write(value);
+	VarIntEncode(value);
 }
 
 void BinarySerializer::WriteValue(int16_t value) {
-	Write(value);
+	VarIntEncode(value);
 }
 
 void BinarySerializer::WriteValue(uint32_t value) {
-	Write(value);
+	VarIntEncode(value);
 }
 
 void BinarySerializer::WriteValue(int32_t value) {
-	Write(value);
+	VarIntEncode(value);
 }
 
 void BinarySerializer::WriteValue(uint64_t value) {
-	Write(value);
+	VarIntEncode(value);
 }
 
 void BinarySerializer::WriteValue(int64_t value) {
-	Write(value);
+	VarIntEncode(value);
 }
 
 void BinarySerializer::WriteValue(hugeint_t value) {
-	Write(value);
+	VarIntEncode(value.upper);
+	VarIntEncode(value.lower);
 }
 
 void BinarySerializer::WriteValue(float value) {
@@ -121,39 +144,26 @@ void BinarySerializer::WriteValue(double value) {
 	Write(value);
 }
 
-void BinarySerializer::WriteValue(interval_t value) {
-	Write(value);
-}
-
 void BinarySerializer::WriteValue(const string &value) {
-	auto len = value.length();
-	Write<uint32_t>((uint32_t)len);
-	if (len > 0) {
-		WriteData(value.c_str(), len);
-	}
+	uint32_t len = value.length();
+	VarIntEncode(len);
+	WriteData(value.c_str(), len);
 }
 
 void BinarySerializer::WriteValue(const string_t value) {
-	auto len = value.GetSize();
-	Write<uint32_t>((uint32_t)len);
-	if (len > 0) {
-		WriteData(value.GetDataUnsafe(), len);
-	}
+	uint32_t len = value.GetSize();
+	VarIntEncode(len);
+	WriteData(value.GetDataUnsafe(), len);
 }
 
 void BinarySerializer::WriteValue(const char *value) {
-	auto len = strlen(value);
-	Write<uint32_t>((uint32_t)len);
-	if (len > 0) {
-		WriteData(value, len);
-	}
-}
-
-void BinarySerializer::WriteValue(bool value) {
-	Write(value);
+	uint32_t len = strlen(value);
+	VarIntEncode(len);
+	WriteData(value, len);
 }
 
 void BinarySerializer::WriteDataPtr(const_data_ptr_t ptr, idx_t count) {
+	VarIntEncode(static_cast<uint64_t>(count));
 	WriteData(ptr, count);
 }
 

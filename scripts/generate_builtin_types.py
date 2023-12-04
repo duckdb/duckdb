@@ -22,32 +22,37 @@ namespace duckdb {
 footer = '''} // namespace duckdb
 '''
 
+
 def normalize_path_separators(x):
     return os.path.sep.join(x.split('/'))
+
 
 def legal_struct_name(name):
     return name.isalnum()
 
+
 def get_struct_name(function_name):
     return function_name.replace('_', ' ').title().replace(' ', '') + 'Fun'
 
+
 def sanitize_string(text):
     return text.replace('"', '\\"')
+
 
 new_text = header
 
 type_entries = []
 json_path = normalize_path_separators(f'src/include/duckdb/catalog/default/builtin_types/types.json')
 with open(json_path, 'r') as f:
-	parsed_json = json.load(f)
+    parsed_json = json.load(f)
 
 # Extract all the types from the json
 for type in parsed_json:
-	names = type['names']
-	
-	type_id = type['id']
+    names = type['names']
 
-	type_entries += ['\t{' + f'''"{name}", LogicalTypeId::{type_id}''' + '}' for name in names]
+    type_id = type['id']
+
+    type_entries += ['\t{' + f'''"{name}", LogicalTypeId::{type_id}''' + '}' for name in names]
 
 TYPE_COUNT = len(type_entries)
 new_text += '''

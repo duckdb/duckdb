@@ -21,3 +21,11 @@ query T
 SELECT count(*) FROM test2
 ----
 50000
+
+statement ok
+CREATE TABLE test3 AS (SELECT * FROM test ORDER BY xx)
+
+query T
+SELECT count(*) FROM test3
+----
+10000

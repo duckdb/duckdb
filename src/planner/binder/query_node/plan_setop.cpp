@@ -60,8 +60,8 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	// Generate the logical plan for the left and right sides of the set operation
-	node.left_binder->plan_subquery = plan_subquery;
-	node.right_binder->plan_subquery = plan_subquery;
+	node.left_binder->is_outside_flattened = is_outside_flattened;
+	node.right_binder->is_outside_flattened = is_outside_flattened;
 
 	auto left_node = node.left_binder->CreatePlan(*node.left);
 	auto right_node = node.right_binder->CreatePlan(*node.right);
@@ -95,8 +95,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	}
 
 	// check if there are any unplanned subqueries left in either child
-	has_unplanned_subqueries =
-	    node.left_binder->has_unplanned_subqueries || node.right_binder->has_unplanned_subqueries;
+	has_unplanned_dependent_joins =
+	    node.left_binder->has_unplanned_dependent_joins || node.right_binder->has_unplanned_dependent_joins;
 
 	// create actual logical ops for setops
 	LogicalOperatorType logical_type;

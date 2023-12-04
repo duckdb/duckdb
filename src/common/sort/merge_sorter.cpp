@@ -273,16 +273,13 @@ void MergeSorter::ComputeMerge(const idx_t &count, bool left_smaller[]) {
 			break;
 		}
 		// Pin the radix sorting data
-		if (!l_done) {
-			left->PinRadix(l.block_idx);
-			l_radix_ptr = left->RadixPtr();
-		}
-		if (!r_done) {
-			right->PinRadix(r.block_idx);
-			r_radix_ptr = right->RadixPtr();
-		}
-		const idx_t &l_count = !l_done ? l_sorted_block.radix_sorting_data[l.block_idx]->count : 0;
-		const idx_t &r_count = !r_done ? r_sorted_block.radix_sorting_data[r.block_idx]->count : 0;
+		left->PinRadix(l.block_idx);
+		l_radix_ptr = left->RadixPtr();
+		right->PinRadix(r.block_idx);
+		r_radix_ptr = right->RadixPtr();
+
+		const idx_t l_count = l_sorted_block.radix_sorting_data[l.block_idx]->count;
+		const idx_t r_count = r_sorted_block.radix_sorting_data[r.block_idx]->count;
 		// Compute the merge
 		if (sort_layout.all_constant) {
 			// All sorting columns are constant size
@@ -298,12 +295,8 @@ void MergeSorter::ComputeMerge(const idx_t &count, bool left_smaller[]) {
 			}
 		} else {
 			// Pin the blob data
-			if (!l_done) {
-				left->PinData(*l_sorted_block.blob_sorting_data);
-			}
-			if (!r_done) {
-				right->PinData(*r_sorted_block.blob_sorting_data);
-			}
+			left->PinData(*l_sorted_block.blob_sorting_data);
+			right->PinData(*r_sorted_block.blob_sorting_data);
 			// Merge with variable size sorting columns
 			for (; compared < count && l.entry_idx < l_count && r.entry_idx < r_count; compared++) {
 				left_smaller[compared] =

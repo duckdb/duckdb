@@ -8,7 +8,15 @@ using duckdb::DuckDB;
 duckdb_state duckdb_open_ext(const char *path, duckdb_database *out, duckdb_config config, char **error) {
 	auto wrapper = new DatabaseData();
 	try {
-		auto db_config = (DBConfig *)config;
+		DBConfig default_config;
+		default_config.SetOptionByName("duckdb_api", "capi");
+
+		DBConfig *db_config = &default_config;
+		DBConfig *user_config = (DBConfig *)config;
+		if (user_config) {
+			db_config = user_config;
+		}
+
 		wrapper->database = duckdb::make_uniq<DuckDB>(path, db_config);
 	} catch (std::exception &ex) {
 		if (error) {
@@ -52,6 +60,22 @@ duckdb_state duckdb_connect(duckdb_database database, duckdb_connection *out) {
 	} // LCOV_EXCL_STOP
 	*out = (duckdb_connection)connection;
 	return DuckDBSuccess;
+}
+
+void duckdb_interrupt(duckdb_connection connection) {
+	if (!connection) {
+		return;
+	}
+	Connection *conn = reinterpret_cast<Connection *>(connection);
+	conn->Interrupt();
+}
+
+double duckdb_query_progress(duckdb_connection connection) {
+	if (!connection) {
+		return -1;
+	}
+	Connection *conn = reinterpret_cast<Connection *>(connection);
+	return conn->context->GetProgress();
 }
 
 void duckdb_disconnect(duckdb_connection *connection) {

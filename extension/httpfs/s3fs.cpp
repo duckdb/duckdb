@@ -102,7 +102,7 @@ string S3FileSystem::UrlDecode(string input) {
 	replace(input.begin(), input.end(), '+', ' ');
 	for (idx_t i = 0; i < input.length(); i++) {
 		if (int(input[i]) == 37) {
-			int ii;
+			unsigned int ii;
 			sscanf(input.substr(i + 1, 2).c_str(), "%x", &ii);
 			ch = static_cast<char>(ii);
 			result += ch;
@@ -163,7 +163,7 @@ void AWSEnvironmentCredentialsProvider::SetAll() {
 	this->SetExtensionOptionValue("s3_use_ssl", this->DUCKDB_USE_SSL_ENV_VAR);
 }
 
-S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
+S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener, FileOpenerInfo &info) {
 	string region;
 	string access_key_id;
 	string secret_access_key;
@@ -174,29 +174,29 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
 	bool use_ssl;
 	Value value;
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_region", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_region", value, info)) {
 		region = value.ToString();
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_access_key_id", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_access_key_id", value, info)) {
 		access_key_id = value.ToString();
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_secret_access_key", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_secret_access_key", value, info)) {
 		secret_access_key = value.ToString();
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_session_token", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_session_token", value, info)) {
 		session_token = value.ToString();
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_endpoint", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_endpoint", value, info)) {
 		endpoint = value.ToString();
 	} else {
 		endpoint = "s3.amazonaws.com";
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_style", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_style", value, info)) {
 		auto val_str = value.ToString();
 		if (!(val_str == "vhost" || val_str != "path" || val_str != "")) {
 			throw std::runtime_error(
@@ -207,13 +207,13 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
 		url_style = "vhost";
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_use_ssl", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_use_ssl", value, info)) {
 		use_ssl = value.GetValue<bool>();
 	} else {
 		use_ssl = true;
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_compatibility_mode", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_compatibility_mode", value, info)) {
 		s3_url_compatibility_mode = value.GetValue<bool>();
 	} else {
 		s3_url_compatibility_mode = true;
@@ -303,8 +303,8 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 		                      query_param);
 
 		if (res->code != 200) {
-			throw HTTPException(*res, "Unable to connect to URL %s %s (HTTP code %s)", res->http_url, res->error,
-			                    to_string(res->code));
+			throw IOException("Unable to connect to URL %s %s (HTTP code %s)", res->http_url, res->error,
+			                  to_string(res->code));
 		}
 
 		etag_lookup = res->headers.find("ETag");
@@ -438,7 +438,7 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 
 	auto open_tag_pos = result.find("<CompleteMultipartUploadResult", 0);
 	if (open_tag_pos == string::npos) {
-		throw HTTPException(*res, "Unexpected response during S3 multipart upload finalization: %d", res->code);
+		throw IOException("Unexpected response during S3 multipart upload finalization: %d", res->code);
 	}
 	file_handle.upload_finalized = true;
 }
@@ -474,7 +474,7 @@ BufferHandle S3FileSystem::Allocate(idx_t part_size, uint16_t max_threads) {
 			auto currently_in_use = buffers_in_use;
 			if (currently_in_use == 0) {
 				// There exist no upload write buffers that can release more memory. We really ran out of memory here.
-				throw e;
+				throw;
 			} else {
 				// Wait for more buffers to become available before trying again
 				buffers_available_cv.wait(lck, [&] { return buffers_in_use < currently_in_use; });
@@ -691,7 +691,8 @@ unique_ptr<ResponseWrapper> S3FileSystem::GetRangeRequest(FileHandle &handle, st
 
 unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, uint8_t flags, FileLockType lock,
                                                       FileCompressionType compression, FileOpener *opener) {
-	auto auth_params = S3AuthParams::ReadFrom(opener);
+	FileOpenerInfo info = {path};
+	auto auth_params = S3AuthParams::ReadFrom(opener, info);
 
 	// Scan the query string for any s3 authentication parameters
 	auto parsed_s3_url = S3UrlParse(path, auth_params);
@@ -887,8 +888,10 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 		throw InternalException("Cannot S3 Glob without FileOpener");
 	}
 
+	FileOpenerInfo info = {glob_pattern};
+
 	// Trim any query parameters from the string
-	auto s3_auth_params = S3AuthParams::ReadFrom(opener);
+	auto s3_auth_params = S3AuthParams::ReadFrom(opener, info);
 
 	// In url compatibility mode, we ignore globs allowing users to query files with the glob chars
 	if (s3_auth_params.s3_url_compatibility_mode) {
@@ -975,7 +978,7 @@ string S3FileSystem::GetName() const {
 bool S3FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
                              FileOpener *opener) {
 	string trimmed_dir = directory;
-	StringUtil::RTrim(trimmed_dir, PathSeparator());
+	StringUtil::RTrim(trimmed_dir, PathSeparator(trimmed_dir));
 	auto glob_res = Glob(JoinPath(trimmed_dir, "**"), opener);
 
 	if (glob_res.empty()) {
@@ -1033,7 +1036,7 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 	    listobjectv2_url.c_str(), *headers,
 	    [&](const duckdb_httplib_openssl::Response &response) {
 		    if (response.status >= 400) {
-			    throw HTTPException(response, "HTTP GET error on '%s' (HTTP %d)", listobjectv2_url, response.status);
+			    throw IOException("HTTP GET error on '%s' (HTTP %d)", listobjectv2_url, response.status);
 		    }
 		    return true;
 	    },

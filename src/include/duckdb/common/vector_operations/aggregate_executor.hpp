@@ -15,9 +15,14 @@
 
 namespace duckdb {
 
+// structs
 struct AggregateInputData;
-
-typedef std::pair<idx_t, idx_t> FrameBounds;
+struct FrameBounds {
+	FrameBounds() : start(0), end(0) {};
+	FrameBounds(idx_t start, idx_t end) : start(start), end(end) {};
+	idx_t start = 0;
+	idx_t end = 0;
+};
 
 class AggregateExecutor {
 private:

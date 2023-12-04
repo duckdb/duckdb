@@ -1,0 +1,64 @@
+# name: test/sql/aggregate/distinct/grouped/partitioned_case.test_slow
+# group: [grouped]
+
+# force parallelism of the queries
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+create table tbl as select i%100 as few, i%100000 as many, i%5 as groups from range(1000000) tbl(i);
+
+# Few amount of rows, not partitioned
+
+query I
+select count(distinct few) from tbl group by groups;
+----
+20
+20
+20
+20
+20
+
+# Large amount of rows, partitioned
+
+query I
+select count(distinct many) from tbl group by groups;
+----
+20000
+20000
+20000
+20000
+20000
+
+# Mixed few and large amount of rows
+
+query II
+select count(distinct few), count(distinct many) from tbl group by groups;
+----
+20	20000
+20	20000
+20	20000
+20	20000
+20	20000
+
+# Mixed, different order
+
+query II
+select count(distinct many), count(distinct few) from tbl group by groups;
+----
+20000	20
+20000	20
+20000	20
+20000	20
+20000	20
+
+# Mixed, with non-distinct inbetween
+
+query III
+select count(distinct many), count(few), count(distinct few) from tbl group by groups;
+----
+20000	200000	20
+20000	200000	20
+20000	200000	20
+20000	200000	20
+20000	200000	20

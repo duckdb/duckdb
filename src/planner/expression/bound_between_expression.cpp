@@ -1,8 +1,11 @@
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/parser/expression/between_expression.hpp"
-#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
+
+BoundBetweenExpression::BoundBetweenExpression()
+    : Expression(ExpressionType::COMPARE_BETWEEN, ExpressionClass::BOUND_BETWEEN, LogicalType::BOOLEAN) {
+}
 
 BoundBetweenExpression::BoundBetweenExpression(unique_ptr<Expression> input, unique_ptr<Expression> lower,
                                                unique_ptr<Expression> upper, bool lower_inclusive, bool upper_inclusive)
@@ -37,24 +40,6 @@ unique_ptr<Expression> BoundBetweenExpression::Copy() {
 	                                              upper_inclusive);
 	copy->CopyProperties(*this);
 	return std::move(copy);
-}
-
-void BoundBetweenExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteOptional(input);
-	writer.WriteOptional(lower);
-	writer.WriteOptional(upper);
-	writer.WriteField(lower_inclusive);
-	writer.WriteField(upper_inclusive);
-}
-
-unique_ptr<Expression> BoundBetweenExpression::Deserialize(ExpressionDeserializationState &state, FieldReader &reader) {
-	auto input = reader.ReadOptional<Expression>(nullptr, state.gstate);
-	auto lower = reader.ReadOptional<Expression>(nullptr, state.gstate);
-	auto upper = reader.ReadOptional<Expression>(nullptr, state.gstate);
-	auto lower_inclusive = reader.ReadRequired<bool>();
-	auto upper_inclusive = reader.ReadRequired<bool>();
-	return make_uniq<BoundBetweenExpression>(std::move(input), std::move(lower), std::move(upper), lower_inclusive,
-	                                         upper_inclusive);
 }
 
 } // namespace duckdb

@@ -26,8 +26,8 @@ function ReadArgs() {
             "-D")
                 shift
                 DRIVER_PATH=$1
-                if grep -qv "libduckdb_odbc.so" <<< $DRIVER_PATH; then
-                    printf "\n****Driver path doesn't contain 'libduckdb_odbc.so'****\n\n"
+                if grep -qv "libduckdb_odbc" <<< $DRIVER_PATH; then
+                    printf "\n****Driver path doesn't contain 'libduckdb_odbc'****\n\n"
                     Usage
                 fi
                 shift
@@ -60,13 +60,8 @@ EOF
 }
 
 function ConfigUserInstFile() {
-    INST_SETUP=$1
-    if test -f ~/.odbcinst.ini; then
-        #file already exist
-        sed -i "/DuckDB Driver/{n;s#.*libduckdb_odbc.so#Driver=${DRIVER_PATH}#}" ~/.odbcinst.ini
-    else
-        cp $INST_SETUP ~/.odbcinst.ini
-    fi
+	SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+	DRIVER_PATH="$DRIVER_PATH" python3 "${SCRIPT_DIR}/update_odbc_path.py"
 }
 
 # Exit immediately if a command exits with a non-zero status.

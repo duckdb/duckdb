@@ -84,7 +84,10 @@ AdbcStatusCode StatementExecutePartitions(struct AdbcStatement *statement, struc
                                           struct AdbcPartitions *partitions, int64_t *rows_affected,
                                           struct AdbcError *error);
 
+//! This method should only be called when the string is guaranteed to not be NULL
 void SetError(struct AdbcError *error, const std::string &message);
+void SetError(struct AdbcError *error, const char *message);
 
-void InitiliazeADBCError(AdbcError *error);
+void InitializeADBCError(AdbcError *error);
+
 } // namespace duckdb_adbc

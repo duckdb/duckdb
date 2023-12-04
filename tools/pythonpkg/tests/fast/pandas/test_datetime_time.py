@@ -4,15 +4,15 @@ import pytest
 from conftest import NumpyPandas, ArrowPandas
 from datetime import datetime, timezone, time, timedelta
 
-class TestDateTimeTime(object):
+_ = pytest.importorskip("pandas", minversion="2.0.0")
 
+
+class TestDateTimeTime(object):
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_time_high(self, duckdb_cursor, pandas):
         duckdb_time = duckdb.query("SELECT make_time(23, 1, 34.234345) AS '0'").df()
         data = [time(hour=23, minute=1, second=34, microsecond=234345)]
-        df_in = pandas.DataFrame(
-            {'0': pandas.Series(data=data, dtype='object')}
-        )
+        df_in = pandas.DataFrame({'0': pandas.Series(data=data, dtype='object')})
         df_out = duckdb.query_df(df_in, "df", "select * from df").df()
         pandas.testing.assert_frame_equal(df_out, duckdb_time)
 
@@ -20,60 +20,22 @@ class TestDateTimeTime(object):
     def test_time_low(self, duckdb_cursor, pandas):
         duckdb_time = duckdb.query("SELECT make_time(00, 01, 1.000) AS '0'").df()
         data = [time(hour=0, minute=1, second=1)]
-        df_in = pandas.DataFrame(
-            {'0': pandas.Series(data=data, dtype='object')}
-        )
+        df_in = pandas.DataFrame({'0': pandas.Series(data=data, dtype='object')})
         df_out = duckdb.query_df(df_in, "df", "select * from df").df()
         pandas.testing.assert_frame_equal(df_out, duckdb_time)
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
-    def test_time_timezone_regular(self, duckdb_cursor, pandas):
-        duckdb_time = duckdb.query("SELECT make_time(00, 01, 1.000) AS '0'").df()
-        # time is 3 hours ahead of UTC
-        offset = timedelta(hours=3)
-        tz = timezone(offset)
-        data = [time(hour=3, minute=1, second=1, tzinfo=tz)]
-        df_in = pandas.DataFrame(
-            {'0': pandas.Series(data=data, dtype='object')}
-        )
-        df_out = duckdb.query_df(df_in, "df", "select * from df").df()
-        pandas.testing.assert_frame_equal(df_out, duckdb_time)
-
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
-    def test_time_timezone_negative_extreme(self, duckdb_cursor, pandas):
-        duckdb_time = duckdb.query("SELECT make_time(12, 01, 1.000) AS '0'").df()
-        # time is 14 hours behind UTC
-        offset = timedelta(hours=-14)
-        tz = timezone(offset)
-        data = [time(hour=22, minute=1, second=1, tzinfo=tz)]
-        df_in = pandas.DataFrame(
-            {'0': pandas.Series(data=data, dtype='object')}
-        )
-        df_out = duckdb.query_df(df_in, "df", "select * from df").df()
-        pandas.testing.assert_frame_equal(df_out, duckdb_time)
-
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
-    def test_time_timezone_positive_extreme(self, duckdb_cursor, pandas):
-        duckdb_time = duckdb.query("SELECT make_time(12, 01, 1.000) AS '0'").df()
-        # time is 20 hours ahead of UTC
-        offset = timedelta(hours=20)
-        tz = timezone(offset)
-        data = [time(hour=8, minute=1, second=1, tzinfo=tz)]
-        df_in = pandas.DataFrame(
-            {'0': pandas.Series(data=data, dtype='object')}
-        )
-        df_out = duckdb.query_df(df_in, "df", "select * from df").df()
-        pandas.testing.assert_frame_equal(df_out, duckdb_time)
-
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
-    def test_pandas_datetime_overflow(self, pandas):
+    @pytest.mark.parametrize('input', ['2263-02-28', '9999-01-01'])
+    def test_pandas_datetime_big(self, pandas, input):
         duckdb_con = duckdb.connect()
 
         duckdb_con.execute("create table test (date DATE)")
-        duckdb_con.execute("INSERT INTO TEST VALUES ('2263-02-28')")
+        duckdb_con.execute(f"INSERT INTO TEST VALUES ('{input}')")
 
-        with pytest.raises(duckdb.ConversionException):
-            res = duckdb_con.execute("select * from test").df()
+        res = duckdb_con.execute("select * from test").df()
+        date_value = np.array([f'{input}'], dtype='datetime64[us]')
+        df = pandas.DataFrame({'date': date_value})
+        pandas.testing.assert_frame_equal(res, df)
 
     def test_timezone_datetime(self):
         con = duckdb.connect()

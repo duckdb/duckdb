@@ -8,6 +8,9 @@ SET default_null_order='nulls_first';
 statement ok
 PRAGMA enable_verification
 
+statement ok
+PRAGMA verify_external
+
 # Get around 1% approximately equal for R
 statement ok
 create table quantile as select range r, random() from range(0,1000000,100) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;

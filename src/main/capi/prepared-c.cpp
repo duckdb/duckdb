@@ -2,7 +2,10 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
+using duckdb::case_insensitive_map_t;
 using duckdb::Connection;
 using duckdb::date_t;
 using duckdb::dtime_t;
@@ -10,8 +13,10 @@ using duckdb::ExtractStatementsWrapper;
 using duckdb::hugeint_t;
 using duckdb::LogicalType;
 using duckdb::MaterializedQueryResult;
+using duckdb::optional_ptr;
 using duckdb::PreparedStatementWrapper;
 using duckdb::QueryResultType;
+using duckdb::StringUtil;
 using duckdb::timestamp_t;
 using duckdb::Value;
 
@@ -84,16 +89,51 @@ idx_t duckdb_nparams(duckdb_prepared_statement prepared_statement) {
 	return wrapper->statement->n_param;
 }
 
+static duckdb::string duckdb_parameter_name_internal(duckdb_prepared_statement prepared_statement, idx_t index) {
+	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
+	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
+		return duckdb::string();
+	}
+	if (index > wrapper->statement->n_param) {
+		return duckdb::string();
+	}
+	for (auto &item : wrapper->statement->named_param_map) {
+		auto &identifier = item.first;
+		auto &param_idx = item.second;
+		if (param_idx == index) {
+			// Found the matching parameter
+			return identifier;
+		}
+	}
+	// No parameter was found with this index
+	return duckdb::string();
+}
+
+const char *duckdb_parameter_name(duckdb_prepared_statement prepared_statement, idx_t index) {
+	auto identifier = duckdb_parameter_name_internal(prepared_statement, index);
+	if (identifier == duckdb::string()) {
+		return NULL;
+	}
+	return strdup(identifier.c_str());
+}
+
 duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_t param_idx) {
 	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return DUCKDB_TYPE_INVALID;
 	}
 	LogicalType param_type;
-	if (!wrapper->statement->data->TryGetType(param_idx, param_type)) {
-		return DUCKDB_TYPE_INVALID;
+	auto identifier = std::to_string(param_idx);
+	if (wrapper->statement->data->TryGetType(identifier, param_type)) {
+		return ConvertCPPTypeToC(param_type);
 	}
-	return ConvertCPPTypeToC(param_type);
+	// The value_map is gone after executing the prepared statement
+	// See if this is the case and we still have a value registered for it
+	auto it = wrapper->values.find(identifier);
+	if (it != wrapper->values.end()) {
+		return ConvertCPPTypeToC(it->second.type());
+	}
+	return DUCKDB_TYPE_INVALID;
 }
 
 duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement) {
@@ -105,39 +145,65 @@ duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement)
 	return DuckDBSuccess;
 }
 
-static duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx_t param_idx, Value val) {
+duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_value val) {
+	auto value = reinterpret_cast<Value *>(val);
 	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return DuckDBError;
 	}
 	if (param_idx <= 0 || param_idx > wrapper->statement->n_param) {
+		wrapper->statement->error =
+		    duckdb::InvalidInputException("Can not bind to parameter number %d, statement only has %d parameter(s)",
+		                                  param_idx, wrapper->statement->n_param);
 		return DuckDBError;
 	}
-	if (param_idx > wrapper->values.size()) {
-		wrapper->values.resize(param_idx);
-	}
-	wrapper->values[param_idx - 1] = val;
+	auto identifier = duckdb_parameter_name_internal(prepared_statement, param_idx);
+	wrapper->values[identifier] = *value;
 	return DuckDBSuccess;
 }
 
+duckdb_state duckdb_bind_parameter_index(duckdb_prepared_statement prepared_statement, idx_t *param_idx_out,
+                                         const char *name_p) {
+	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
+	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
+		return DuckDBError;
+	}
+	if (!name_p || !param_idx_out) {
+		return DuckDBError;
+	}
+	auto name = std::string(name_p);
+	for (auto &pair : wrapper->statement->named_param_map) {
+		if (duckdb::StringUtil::CIEquals(pair.first, name)) {
+			*param_idx_out = pair.second;
+			return DuckDBSuccess;
+		}
+	}
+	return DuckDBError;
+}
+
 duckdb_state duckdb_bind_boolean(duckdb_prepared_statement prepared_statement, idx_t param_idx, bool val) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::BOOLEAN(val));
+	auto value = Value::BOOLEAN(val);
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 duckdb_state duckdb_bind_int8(duckdb_prepared_statement prepared_statement, idx_t param_idx, int8_t val) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::TINYINT(val));
+	auto value = Value::TINYINT(val);
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 duckdb_state duckdb_bind_int16(duckdb_prepared_statement prepared_statement, idx_t param_idx, int16_t val) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::SMALLINT(val));
+	auto value = Value::SMALLINT(val);
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 duckdb_state duckdb_bind_int32(duckdb_prepared_statement prepared_statement, idx_t param_idx, int32_t val) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::INTEGER(val));
+	auto value = Value::INTEGER(val);
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 duckdb_state duckdb_bind_int64(duckdb_prepared_statement prepared_statement, idx_t param_idx, int64_t val) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::BIGINT(val));
+	auto value = Value::BIGINT(val);
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 static hugeint_t duckdb_internal_hugeint(duckdb_hugeint val) {
@@ -148,53 +214,65 @@ static hugeint_t duckdb_internal_hugeint(duckdb_hugeint val) {
 }
 
 duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_hugeint val) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::HUGEINT(duckdb_internal_hugeint(val)));
+	auto value = Value::HUGEINT(duckdb_internal_hugeint(val));
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 duckdb_state duckdb_bind_uint8(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint8_t val) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::UTINYINT(val));
+	auto value = Value::UTINYINT(val);
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 duckdb_state duckdb_bind_uint16(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint16_t val) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::USMALLINT(val));
+	auto value = Value::USMALLINT(val);
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 duckdb_state duckdb_bind_uint32(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint32_t val) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::UINTEGER(val));
+	auto value = Value::UINTEGER(val);
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 duckdb_state duckdb_bind_uint64(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint64_t val) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::UBIGINT(val));
+	auto value = Value::UBIGINT(val);
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_statement, idx_t param_idx, float val) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::FLOAT(val));
+	auto value = Value::FLOAT(val);
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_statement, idx_t param_idx, double val) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::DOUBLE(val));
+	auto value = Value::DOUBLE(val);
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 duckdb_state duckdb_bind_date(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_date val) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::DATE(date_t(val.days)));
+	auto value = Value::DATE(date_t(val.days));
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 duckdb_state duckdb_bind_time(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_time val) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::TIME(dtime_t(val.micros)));
+	auto value = Value::TIME(dtime_t(val.micros));
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 duckdb_state duckdb_bind_timestamp(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                    duckdb_timestamp val) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::TIMESTAMP(timestamp_t(val.micros)));
+	auto value = Value::TIMESTAMP(timestamp_t(val.micros));
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 duckdb_state duckdb_bind_interval(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_interval val) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::INTERVAL(val.months, val.days, val.micros));
+	auto value = Value::INTERVAL(val.months, val.days, val.micros);
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, idx_t param_idx, const char *val) {
 	try {
-		return duckdb_bind_value(prepared_statement, param_idx, Value(val));
+		auto value = Value(val);
+		return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 	} catch (...) {
 		return DuckDBError;
 	}
@@ -203,7 +281,8 @@ duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, i
 duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement prepared_statement, idx_t param_idx, const char *val,
                                         idx_t length) {
 	try {
-		return duckdb_bind_value(prepared_statement, param_idx, Value(std::string(val, length)));
+		auto value = Value(std::string(val, length));
+		return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 	} catch (...) {
 		return DuckDBError;
 	}
@@ -212,19 +291,23 @@ duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement prepared_state
 duckdb_state duckdb_bind_decimal(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_decimal val) {
 	auto hugeint_val = duckdb_internal_hugeint(val.value);
 	if (val.width > duckdb::Decimal::MAX_WIDTH_INT64) {
-		return duckdb_bind_value(prepared_statement, param_idx, Value::DECIMAL(hugeint_val, val.width, val.scale));
+		auto value = Value::DECIMAL(hugeint_val, val.width, val.scale);
+		return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 	}
 	auto value = hugeint_val.lower;
-	return duckdb_bind_value(prepared_statement, param_idx, Value::DECIMAL((int64_t)value, val.width, val.scale));
+	auto duck_val = Value::DECIMAL((int64_t)value, val.width, val.scale);
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&duck_val);
 }
 
 duckdb_state duckdb_bind_blob(duckdb_prepared_statement prepared_statement, idx_t param_idx, const void *data,
                               idx_t length) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::BLOB(duckdb::const_data_ptr_cast(data), length));
+	auto value = Value::BLOB(duckdb::const_data_ptr_cast(data), length);
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_statement, idx_t param_idx) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value());
+	auto value = Value();
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statement, duckdb_result *out_result) {
@@ -232,6 +315,7 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return DuckDBError;
 	}
+
 	auto result = wrapper->statement->Execute(wrapper->values, false);
 	return duckdb_translate_result(std::move(result), out_result);
 }

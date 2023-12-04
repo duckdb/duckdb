@@ -21,6 +21,10 @@ SELECT MIN(i), MAX(i) FROM range(1000001) tbl(i)
 ----
 0	1000000
 
+# increase memory limit 10MB because we always partition data in GROUP BY queries now (for potential out-of-core)
+statement ok
+PRAGMA memory_limit='10MB'
+
 # we can group by 9K integers (fits into one block of 256KB)
 statement ok
 SELECT i, MIN(i), MAX(i) FROM range(9000) tbl(i) GROUP BY i
@@ -36,6 +40,10 @@ statement ok
 SELECT i, MIN(i), MAX(i) FROM range(9000) tbl(i) GROUP BY i
 
 endloop
+
+# set the memory limit back to 2MB again, no more GROUP BY's in this test
+statement ok
+PRAGMA memory_limit='2MB'
 
 # we can create a single table with 10K integers
 statement ok

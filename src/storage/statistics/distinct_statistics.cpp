@@ -1,6 +1,5 @@
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 
 #include <math.h>
@@ -22,31 +21,6 @@ void DistinctStatistics::Merge(const DistinctStatistics &other) {
 	log = log->Merge(*other.log);
 	sample_count += other.sample_count;
 	total_count += other.total_count;
-}
-
-void DistinctStatistics::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	Serialize(writer);
-	writer.Finalize();
-}
-
-void DistinctStatistics::Serialize(FieldWriter &writer) const {
-	writer.WriteField<idx_t>(sample_count);
-	writer.WriteField<idx_t>(total_count);
-	log->Serialize(writer);
-}
-
-unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(Deserializer &source) {
-	FieldReader reader(source);
-	auto result = Deserialize(reader);
-	reader.Finalize();
-	return result;
-}
-
-unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(FieldReader &reader) {
-	auto sample_count = reader.ReadRequired<idx_t>();
-	auto total_count = reader.ReadRequired<idx_t>();
-	return make_uniq<DistinctStatistics>(HyperLogLog::Deserialize(reader), sample_count, total_count);
 }
 
 void DistinctStatistics::Update(Vector &v, idx_t count, bool sample) {

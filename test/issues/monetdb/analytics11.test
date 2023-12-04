@@ -259,34 +259,25 @@ ORDER BY GROUPING(Product_Category, Product_Name, ColID) DESC
 2
 8
 
-query IR rowsort
+# this query was non-deterministic before, "ORDER BY Product_Category, Product_Name" had to be added
+# now we have the same results as Postgres
+query IR
 SELECT
-    GROUPING(Product_Category), AVG(SUM(TotalSales)) OVER (ROWS UNBOUNDED PRECEDING)
+    GROUPING(Product_Category), AVG(SUM(TotalSales)) OVER (ORDER BY Product_Category, Product_Name ROWS UNBOUNDED PRECEDING)
 FROM tbl_ProductSales
 GROUP BY GROUPING SETS((Product_Category), (Product_Name), (Product_Category, Product_Name), ())
 ----
-0
-360.000
-0
-371.429
-0
-375.000
-0
-388.889
-0
-600.000
-0
-600.000
-1
-400.000
-1
-436.364
-1
-450.000
-1
-460.000
-1
-466.667
+0	500.0
+0	300.0
+0	400.0
+0	350.0
+0	360.0
+0	400.0
+1	371.42857142857144
+1	375.0
+1	388.8888888888889
+1	360.0
+1	436.3636363636364
 
 query II rowsort
 SELECT

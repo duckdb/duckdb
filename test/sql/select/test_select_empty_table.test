@@ -1,0 +1,10 @@
+# name: test/sql/select/test_select_empty_table.test
+# description: Test select empty table
+# group: [select]
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+query I
+SELECT * FROM integers
+----

@@ -236,9 +236,18 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments, OrderType &order,
                                              OrderByNullType &null_order) {
+
+	LogicalType child_type;
+	if (arguments[0]->return_type == LogicalTypeId::UNKNOWN) {
+		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
+		bound_function.return_type = LogicalType::SQLNULL;
+		child_type = bound_function.return_type;
+		return make_uniq<ListSortBindData>(order, null_order, bound_function.return_type, child_type, context);
+	}
+
 	bound_function.arguments[0] = arguments[0]->return_type;
 	bound_function.return_type = arguments[0]->return_type;
-	auto child_type = ListType::GetChildType(arguments[0]->return_type);
+	child_type = ListType::GetChildType(arguments[0]->return_type);
 
 	return make_uniq<ListSortBindData>(order, null_order, bound_function.return_type, child_type, context);
 }

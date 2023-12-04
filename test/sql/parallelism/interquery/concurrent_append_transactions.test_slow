@@ -1,0 +1,39 @@
+# name: test/sql/parallelism/interquery/concurrent_append_transactions.test_slow
+# description: Test concurrent appends and transaction isolation
+# group: [interquery]
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+concurrentloop threadid 0 10
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE count_table_${threadid} AS SELECT * FROM integers
+
+loop i 0 100
+
+statement ok
+INSERT INTO integers VALUES (${threadid} * 10000 + ${i})
+
+# verify that we inserted exactly one element in this transaction
+query I
+SELECT * FROM integers EXCEPT (SELECT * FROM count_table_${threadid} UNION SELECT ${threadid} * 10000 + ${i})
+----
+
+statement ok
+CREATE OR REPLACE TABLE count_table_${threadid} AS (SELECT * FROM count_table_${threadid} UNION SELECT ${threadid} * 10000 + ${i})
+
+endloop
+
+statement ok
+COMMIT
+
+endloop
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+1000	45049500

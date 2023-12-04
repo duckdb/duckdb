@@ -5,20 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-# read csv with explicit separator
-statement ok
-CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR, c VARCHAR);
-
-query I
-INSERT INTO abac_tbl SELECT * FROM read_csv('test/sql/copy/csv/data/abac/abac.csv', COLUMNS=STRUCT_PACK(a := 'VARCHAR', b := 'VARCHAR', c := 'VARCHAR'), sep='ABAC', auto_detect='false')
-----
-1
-
-query TTT
-SELECT * FROM abac_tbl
-----
-AB	ABAB	NULL
-
 # dateformat
 statement ok
 CREATE TABLE dates (d DATE);

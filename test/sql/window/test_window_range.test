@@ -27,7 +27,9 @@ statement ok
 CREATE VIEW c1 AS SELECT a::${type} AS a, b FROM t1;
 
 query II
-SELECT a, sum(b) OVER win FROM c1 WINDOW win AS ( ORDER BY a RANGE BETWEEN 5 PRECEDING AND 5 FOLLOWING )
+SELECT a, sum(b) OVER win 
+FROM c1 
+WINDOW win AS ( ORDER BY a RANGE BETWEEN 5::${type} PRECEDING AND 5::${type} FOLLOWING )
 ----
 5	30
 10	112
@@ -397,6 +399,17 @@ SELECT sum(b) OVER (
 6
 15
 15
+
+query I
+SELECT sum(b) OVER (
+    ORDER BY a NULLS FIRST RANGE BETWEEN CURRENT ROW AND 10 FOLLOWING
+  ) FROM t1 ORDER BY 1 NULLS FIRST;
+----
+6
+6
+6
+9
+9
 
 #==========================================================================
 

@@ -2,12 +2,17 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
+using duckdb::case_insensitive_map_t;
 using duckdb::make_uniq;
+using duckdb::optional_ptr;
 using duckdb::PendingExecutionResult;
 using duckdb::PendingQueryResult;
 using duckdb::PendingStatementWrapper;
 using duckdb::PreparedStatementWrapper;
+using duckdb::Value;
 
 duckdb_state duckdb_pending_prepared_internal(duckdb_prepared_statement prepared_statement,
                                               duckdb_pending_result *out_result, bool allow_streaming) {
@@ -17,6 +22,7 @@ duckdb_state duckdb_pending_prepared_internal(duckdb_prepared_statement prepared
 	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
 	auto result = new PendingStatementWrapper();
 	result->allow_streaming = allow_streaming;
+
 	try {
 		result->statement = wrapper->statement->PendingQuery(wrapper->values, allow_streaming);
 	} catch (const duckdb::Exception &ex) {
@@ -86,10 +92,27 @@ duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_r
 	switch (return_value) {
 	case PendingExecutionResult::RESULT_READY:
 		return DUCKDB_PENDING_RESULT_READY;
+	case PendingExecutionResult::NO_TASKS_AVAILABLE:
+		return DUCKDB_PENDING_NO_TASKS_AVAILABLE;
 	case PendingExecutionResult::RESULT_NOT_READY:
 		return DUCKDB_PENDING_RESULT_NOT_READY;
 	default:
 		return DUCKDB_PENDING_ERROR;
+	}
+}
+
+bool duckdb_pending_execution_is_finished(duckdb_pending_state pending_state) {
+	switch (pending_state) {
+	case DUCKDB_PENDING_RESULT_READY:
+		return PendingQueryResult::IsFinished(PendingExecutionResult::RESULT_READY);
+	case DUCKDB_PENDING_NO_TASKS_AVAILABLE:
+		return PendingQueryResult::IsFinished(PendingExecutionResult::NO_TASKS_AVAILABLE);
+	case DUCKDB_PENDING_RESULT_NOT_READY:
+		return PendingQueryResult::IsFinished(PendingExecutionResult::RESULT_NOT_READY);
+	case DUCKDB_PENDING_ERROR:
+		return PendingQueryResult::IsFinished(PendingExecutionResult::EXECUTION_ERROR);
+	default:
+		return PendingQueryResult::IsFinished(PendingExecutionResult::EXECUTION_ERROR);
 	}
 }
 

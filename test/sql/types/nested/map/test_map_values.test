@@ -34,15 +34,11 @@ select map_values(MAP(['a', 'b', 'c', 'd', 'e'], [NULL, 0, 1, NULL, 3]))
 ----
 [NULL, 0, 1, NULL, 3]
 
+statement ok
+CREATE TABLE t1 (list STRUCT(a INT, b VARCHAR)[]);
 
 statement ok
-CREATE TABLE t1 AS (
-	SELECT ARRAY[
-		(1, 'x'),
-		(2, 'y'),
-		(4, 's')
-	] AS list
-);
+INSERT INTO t1 VALUES (ARRAY[(1, 'x'), (2, 'y'), (4, 's')]);
 
 # Single row
 query I

@@ -14,8 +14,15 @@ idx_t EstimatedProperties::GetCardinality() const {
 	return MinValue<double>(cardinality, max_idx_t);
 }
 
+template <>
 double EstimatedProperties::GetCost() const {
 	return cost;
+}
+
+template <>
+idx_t EstimatedProperties::GetCost() const {
+	auto max_idx_t = NumericLimits<idx_t>::Maximum() - 10000;
+	return MinValue<double>(cost, max_idx_t);
 }
 
 void EstimatedProperties::SetCardinality(double new_card) {

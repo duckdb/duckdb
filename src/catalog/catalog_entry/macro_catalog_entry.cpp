@@ -1,6 +1,5 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
 
 namespace duckdb {
@@ -22,21 +21,13 @@ TableMacroCatalogEntry::TableMacroCatalogEntry(Catalog &catalog, SchemaCatalogEn
     : MacroCatalogEntry(catalog, schema, info) {
 }
 
-unique_ptr<CreateMacroInfo> MacroCatalogEntry::GetInfoForSerialization() const {
+unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {
 	auto info = make_uniq<CreateMacroInfo>(type);
 	info->catalog = catalog.GetName();
 	info->schema = schema.name;
 	info->name = name;
 	info->function = function->Copy();
-	return info;
-}
-void MacroCatalogEntry::Serialize(Serializer &serializer) const {
-	auto info = GetInfoForSerialization();
-	info->Serialize(serializer);
-}
-
-unique_ptr<CreateMacroInfo> MacroCatalogEntry::Deserialize(Deserializer &main_source, ClientContext &context) {
-	return unique_ptr_cast<CreateInfo, CreateMacroInfo>(CreateInfo::Deserialize(main_source));
+	return std::move(info);
 }
 
 } // namespace duckdb

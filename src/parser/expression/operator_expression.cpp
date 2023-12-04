@@ -1,10 +1,9 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
 
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -46,28 +45,6 @@ unique_ptr<ParsedExpression> OperatorExpression::Copy() const {
 		copy->children.push_back(it->Copy());
 	}
 	return std::move(copy);
-}
-
-void OperatorExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializableList(children);
-}
-
-unique_ptr<ParsedExpression> OperatorExpression::Deserialize(ExpressionType type, FieldReader &reader) {
-	auto expression = make_uniq<OperatorExpression>(type);
-	expression->children = reader.ReadRequiredSerializableList<ParsedExpression>();
-	return std::move(expression);
-}
-
-void OperatorExpression::FormatSerialize(FormatSerializer &serializer) const {
-	ParsedExpression::FormatSerialize(serializer);
-	serializer.WriteProperty("children", children);
-}
-
-unique_ptr<ParsedExpression> OperatorExpression::FormatDeserialize(ExpressionType type,
-                                                                   FormatDeserializer &deserializer) {
-	auto expression = make_uniq<OperatorExpression>(type);
-	expression->children = deserializer.ReadProperty<vector<unique_ptr<ParsedExpression>>>("children");
-	return std::move(expression);
 }
 
 } // namespace duckdb

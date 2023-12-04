@@ -1,10 +1,13 @@
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/senary_executor.hpp"
 #include "duckdb/common/vector_operations/septenary_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "include/icu-datefunc.hpp"
 #include "include/icu-datetrunc.hpp"
@@ -20,7 +23,7 @@ struct ICUMakeDate : public ICUDateFunc {
 		}
 
 		// Extract the time zone parts
-		auto micros = SetTime(calendar, instant);
+		SetTime(calendar, instant);
 		const auto era = ExtractField(calendar, UCAL_ERA);
 		const auto year = ExtractField(calendar, UCAL_YEAR);
 		const auto mm = ExtractField(calendar, UCAL_MONTH) + 1;
@@ -55,8 +58,8 @@ struct ICUMakeDate : public ICUDateFunc {
 		return BoundCastInfo(CastToDate, std::move(cast_data));
 	}
 
-	static void AddCasts(ClientContext &context) {
-		auto &config = DBConfig::GetConfig(context);
+	static void AddCasts(DatabaseInstance &db) {
+		auto &config = DBConfig::GetConfig(db);
 		auto &casts = config.GetCastFunctions();
 
 		casts.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::DATE, BindCastToDate);
@@ -66,7 +69,11 @@ struct ICUMakeDate : public ICUDateFunc {
 struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	template <typename T>
 	static inline timestamp_t Operation(icu::Calendar *calendar, T yyyy, T mm, T dd, T hr, T mn, double ss) {
-		const auto year = yyyy + (yyyy < 0);
+		const auto year = Cast::Operation<T, int32_t>(AddOperator::Operation<T, T, T>(yyyy, (yyyy < 0)));
+		const auto month = Cast::Operation<T, int32_t>(SubtractOperatorOverflowCheck::Operation<T, T, T>(mm, 1));
+		const auto day = Cast::Operation<T, int32_t>(dd);
+		const auto hour = Cast::Operation<T, int32_t>(hr);
+		const auto min = Cast::Operation<T, int32_t>(mn);
 
 		const auto secs = Cast::Operation<double, int32_t>(ss);
 		ss -= secs;
@@ -74,15 +81,21 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 		const auto millis = int32_t(ss);
 		int64_t micros = std::round((ss - millis) * Interval::MICROS_PER_MSEC);
 
-		calendar->set(UCAL_YEAR, int32_t(year));
-		calendar->set(UCAL_MONTH, int32_t(mm - 1));
-		calendar->set(UCAL_DATE, int32_t(dd));
-		calendar->set(UCAL_HOUR_OF_DAY, int32_t(hr));
-		calendar->set(UCAL_MINUTE, int32_t(mn));
+		calendar->set(UCAL_YEAR, year);
+		calendar->set(UCAL_MONTH, month);
+		calendar->set(UCAL_DATE, day);
+		calendar->set(UCAL_HOUR_OF_DAY, hour);
+		calendar->set(UCAL_MINUTE, min);
 		calendar->set(UCAL_SECOND, secs);
 		calendar->set(UCAL_MILLISECOND, millis);
 
 		return GetTime(calendar, micros);
+	}
+
+	template <typename T>
+	static void FromMicros(DataChunk &input, ExpressionState &state, Vector &result) {
+		UnaryExecutor::Execute<T, timestamp_t>(input.data[0], result, input.size(),
+		                                       [&](T micros) { return timestamp_t(micros); });
 	}
 
 	template <typename T>
@@ -134,20 +147,18 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 		                      LogicalType::TIMESTAMP_TZ, Execute<TA>, Bind);
 	}
 
-	static void AddFunction(const string &name, ClientContext &context) {
+	static void AddFunction(const string &name, DatabaseInstance &db) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetSenaryFunction<int64_t>(LogicalType::BIGINT));
 		set.AddFunction(GetSeptenaryFunction<int64_t>(LogicalType::BIGINT));
-
-		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, func_info);
+		set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP_TZ, FromMicros<int64_t>));
+		ExtensionUtil::RegisterFunction(db, set);
 	}
 };
 
-void RegisterICUMakeDateFunctions(ClientContext &context) {
-	ICUMakeTimestampTZFunc::AddFunction("make_timestamptz", context);
-	ICUMakeDate::AddCasts(context);
+void RegisterICUMakeDateFunctions(DatabaseInstance &db) {
+	ICUMakeTimestampTZFunc::AddFunction("make_timestamptz", db);
+	ICUMakeDate::AddCasts(db);
 }
 
 } // namespace duckdb

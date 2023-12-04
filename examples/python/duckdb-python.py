@@ -5,7 +5,7 @@ import duckdb
 # connect to an in-memory temporary database
 conn = duckdb.connect()
 
-# if you want, you can create a cursor() like described in PEP 249 but its fully redundant
+# if you want, you can create a cursor() like described in PEP 249 but it's fully redundant
 cursor = conn.cursor()
 
 # run arbitrary SQL commands
@@ -30,7 +30,8 @@ print(conn.execute("SELECT * FROM test_table").fetchnumpy())
 # we can query pandas data frames as if they were SQL views
 # create a sample pandas data frame
 import pandas as pd
-test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4], "j":["one", "two", "three", "four"]})
+
+test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
 
 # make this data frame available as a view in duckdb
 conn.register("test_df", test_df)
@@ -49,8 +50,9 @@ print(rel)
 
 # create a relation from a CSV file
 
-# first create a CSV file from our pandas example 
+# first create a CSV file from our pandas example
 import tempfile, os
+
 temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
 test_df.to_csv(temp_file_name, index=False)
 
@@ -126,7 +128,7 @@ print(rel.set_alias('a').join(rel.set_alias('b'), 'a.i=b.i'))
 
 # there are also shorthand methods to directly create a relation and apply an operator from pandas data frame objects
 print(duckdb.filter(test_df, 'i > 1'))
-print(duckdb.project(test_df, 'i +1'))
+print(duckdb.project(test_df, 'i + 1'))
 print(duckdb.order(test_df, 'j'))
 print(duckdb.limit(test_df, 2))
 
@@ -139,9 +141,7 @@ print(duckdb.filter(test_df, 'i > 1').project('i + 1').order('j').limit(2))
 # turn the relation into something else again
 
 
-
-
-# compute the query result from the relation 
+# compute the query result from the relation
 res = rel.execute()
 print(res)
 # res is a query result, you can call fetchdf() or fetchnumpy() or fetchone() on it
@@ -164,7 +164,7 @@ print(rel.insert_into("test_table3"))
 # Inserting elements into table_3
 print(conn.values([5, 'five']).insert_into("test_table3"))
 rel_3 = conn.table("test_table3")
-rel_3.insert([6,'six'])
+rel_3.insert([6, 'six'])
 
 # create a SQL-accessible view of the relation
 print(rel.create_view('test_view'))
@@ -183,6 +183,3 @@ print(res.df())
 # this also works directly on data frames
 res = duckdb.query(test_df, 'my_name_for_test_df', 'SELECT * FROM my_name_for_test_df')
 print(res.df())
-
-
-

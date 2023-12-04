@@ -21,6 +21,7 @@
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/joinside.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parser/parsed_data/create_property_graph_info.hpp"
 
@@ -76,7 +77,7 @@ struct CorrelatedColumnInfo {
 */
 class Binder : public std::enable_shared_from_this<Binder> {
 	friend class ExpressionBinder;
-	friend class RecursiveSubqueryPlanner;
+	friend class RecursiveDependentJoinPlanner;
 
 public:
 	DUCKDB_API static shared_ptr<Binder> CreateBinder(ClientContext &context, optional_ptr<Binder> parent = nullptr,
@@ -200,10 +201,10 @@ private:
 	vector<reference<ExpressionBinder>> active_binders;
 	//! The count of bound_tables
 	idx_t bound_tables;
-	//! Whether or not the binder has any unplanned subqueries that still need to be planned
-	bool has_unplanned_subqueries = false;
-	//! Whether or not subqueries should be planned already
-	bool plan_subquery = true;
+	//! Whether or not the binder has any unplanned dependent joins that still need to be planned/flattened
+	bool has_unplanned_dependent_joins = false;
+	//! Whether or not outside dependent joins have been planned and flattened
+	bool is_outside_flattened = true;
 	//! Whether CTEs should reference the parent binder (if it exists)
 	bool inherit_ctes = true;
 	//! Whether or not the binder can contain NULLs as the root of expressions
@@ -218,6 +219,10 @@ private:
 	reference_set_t<ViewCatalogEntry> bound_views;
 
 private:
+	//! Get the root binder (binder with no parent)
+	Binder *GetRootBinder();
+	//! Determine the depth of the binder
+	idx_t GetBinderDepth() const;
 	//! Bind the expressions of generated columns to check for errors
 	void BindGeneratedColumns(BoundCreateTableInfo &info);
 	//! Bind the default values of the columns of a table
@@ -229,6 +234,10 @@ private:
 
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);
+
+	//! Tries to bind the table name with replacement scans
+	unique_ptr<BoundTableRef> BindWithReplacementScan(ClientContext &context, const string &table_name,
+	                                                  BaseTableRef &ref);
 
 	BoundStatement Bind(SelectStatement &stmt);
 	BoundStatement Bind(InsertStatement &stmt);
@@ -266,10 +275,12 @@ private:
 	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
 	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);
 	unique_ptr<BoundQueryNode> BindNode(RecursiveCTENode &node);
+	unique_ptr<BoundQueryNode> BindNode(CTENode &node);
 	unique_ptr<BoundQueryNode> BindNode(QueryNode &node);
 
 	unique_ptr<LogicalOperator> VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root);
 	unique_ptr<LogicalOperator> CreatePlan(BoundRecursiveCTENode &node);
+	unique_ptr<LogicalOperator> CreatePlan(BoundCTENode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
@@ -352,6 +363,7 @@ private:
 
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
 	void BindSchemaOrCatalog(string &catalog_name, string &schema_name);
+	const string BindCatalog(string &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 
 	unique_ptr<BoundQueryNode> BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table);

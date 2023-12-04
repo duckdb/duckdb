@@ -5,6 +5,7 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/parser/query_node/cte_node.hpp"
 
 namespace duckdb {
 
@@ -45,13 +46,15 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 	auto stack_checker = StackCheck();
 
 	unique_ptr<QueryNode> node;
+	vector<unique_ptr<CTENode>> materialized_ctes;
 
 	switch (stmt.op) {
 	case duckdb_libpgquery::PG_SETOP_NONE: {
 		node = make_uniq<SelectNode>();
 		auto &result = node->Cast<SelectNode>();
 		if (stmt.withClause) {
-			TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), node->cte_map);
+			TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), node->cte_map,
+			             materialized_ctes);
 		}
 		if (stmt.windowClause) {
 			for (auto window_ele = stmt.windowClause->head; window_ele != nullptr; window_ele = window_ele->next) {
@@ -113,7 +116,8 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 		node = make_uniq<SetOperationNode>();
 		auto &result = node->Cast<SetOperationNode>();
 		if (stmt.withClause) {
-			TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), node->cte_map);
+			TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), node->cte_map,
+			             materialized_ctes);
 		}
 		result.left = TransformSelectNode(*stmt.larg);
 		result.right = TransformSelectNode(*stmt.rarg);
@@ -151,7 +155,12 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 	default:
 		throw NotImplementedException("Statement type %d not implemented!", stmt.op);
 	}
+
 	TransformModifiers(stmt, *node);
+
+	// Handle materialized CTEs
+	node = Transformer::TransformMaterializedCTE(std::move(node), materialized_ctes);
+
 	return node;
 }
 

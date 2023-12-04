@@ -30,6 +30,8 @@ public:
 public:
 	//! Duplicate eliminated join scan dependencies
 	reference_map_t<const PhysicalOperator, reference<Pipeline>> delim_join_dependencies;
+	//! Materialized CTE scan dependencies
+	reference_map_t<const PhysicalOperator, reference<Pipeline>> cte_dependencies;
 
 public:
 	void SetPipelineSource(Pipeline &pipeline, PhysicalOperator &op);
@@ -68,9 +70,6 @@ public:
 	void ResetSource(bool force);
 	void ClearSource();
 	void Schedule(shared_ptr<Event> &event);
-
-	//! Finalize this pipeline
-	void Finalize(Event &event);
 
 	string ToString() const;
 	void Print() const;

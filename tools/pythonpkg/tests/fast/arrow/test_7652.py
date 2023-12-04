@@ -3,8 +3,9 @@ import os
 import pytest
 import tempfile
 
-pa = pytest.importorskip("pyarrow")
-pq = pytest.importorskip("pyarrow.parquet")
+pa = pytest.importorskip("pyarrow", minversion="11")
+pq = pytest.importorskip("pyarrow.parquet", minversion="11")
+
 
 class Test7652(object):
     def test_7652(self):
@@ -19,10 +20,9 @@ class Test7652(object):
         fake_table = pa.Table.from_arrays([pa.array(generated_list, pa.int64())], names=['n0'])
 
         # Write that column with DELTA_BINARY_PACKED encoding
-        with pq.ParquetWriter(temp_file_name,
-            fake_table.schema,
-            column_encoding={"n0": "DELTA_BINARY_PACKED"},
-            use_dictionary=False) as writer:
+        with pq.ParquetWriter(
+            temp_file_name, fake_table.schema, column_encoding={"n0": "DELTA_BINARY_PACKED"}, use_dictionary=False
+        ) as writer:
             writer.write_table(fake_table)
 
         # Check to make sure that PyArrow can read the file and retrieve the expected values.

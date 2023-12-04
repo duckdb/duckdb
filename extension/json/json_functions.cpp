@@ -12,24 +12,20 @@
 
 namespace duckdb {
 
-static void CheckPath(const Value &path_val, string &path, size_t &len) {
-	string error;
-	Value path_str_val;
-	if (path_val.IsNull()) {
-		throw InvalidInputException("JSON path cannot be NULL");
-	}
-	if (!path_val.DefaultTryCastAs(LogicalType::VARCHAR, path_str_val, &error)) {
-		throw InvalidInputException(error);
-	}
+using JSONPathType = JSONCommon::JSONPathType;
+
+static JSONPathType CheckPath(const Value &path_val, string &path, size_t &len) {
+	const auto path_str_val = path_val.DefaultCastAs(LogicalType::VARCHAR);
 	auto path_str = path_str_val.GetValueUnsafe<string_t>();
 	len = path_str.GetSize();
 	auto ptr = path_str.GetData();
 	// Empty strings and invalid $ paths yield an error
 	if (len == 0) {
-		throw InvalidInputException("Empty JSON path");
+		throw BinderException("Empty JSON path");
 	}
+	JSONPathType path_type = JSONPathType::REGULAR;
 	if (*ptr == '$') {
-		JSONCommon::ValidatePathDollar(ptr, len);
+		path_type = JSONCommon::ValidatePath(ptr, len, true);
 	}
 	// Copy over string to the bind data
 	if (*ptr == '/' || *ptr == '$') {
@@ -38,19 +34,20 @@ static void CheckPath(const Value &path_val, string &path, size_t &len) {
 		path = "/" + string(ptr, len);
 		len++;
 	}
+	return path_type;
 }
 
-JSONReadFunctionData::JSONReadFunctionData(bool constant, string path_p, idx_t len)
-    : constant(constant), path(std::move(path_p)), ptr(path.c_str()), len(len) {
+JSONReadFunctionData::JSONReadFunctionData(bool constant, string path_p, idx_t len, JSONPathType path_type_p)
+    : constant(constant), path(std::move(path_p)), path_type(path_type_p), ptr(path.c_str()), len(len) {
 }
 
 unique_ptr<FunctionData> JSONReadFunctionData::Copy() const {
-	return make_uniq<JSONReadFunctionData>(constant, path, len);
+	return make_uniq<JSONReadFunctionData>(constant, path, len, path_type);
 }
 
 bool JSONReadFunctionData::Equals(const FunctionData &other_p) const {
-	auto &other = (const JSONReadFunctionData &)other_p;
-	return constant == other.constant && path == other.path && len == other.len;
+	auto &other = other_p.Cast<JSONReadFunctionData>();
+	return constant == other.constant && path == other.path && len == other.len && path_type == other.path_type;
 }
 
 unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,
@@ -59,12 +56,16 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 	bool constant = false;
 	string path = "";
 	size_t len = 0;
-	if (arguments[1]->return_type.id() != LogicalTypeId::SQLNULL && arguments[1]->IsFoldable()) {
+	JSONPathType path_type = JSONPathType::REGULAR;
+	if (arguments[1]->IsFoldable()) {
 		constant = true;
 		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-		CheckPath(path_val, path, len);
+		path_type = CheckPath(path_val, path, len);
 	}
-	return make_uniq<JSONReadFunctionData>(constant, std::move(path), len);
+	if (path_type == JSONCommon::JSONPathType::WILDCARD) {
+		bound_function.return_type = LogicalType::LIST(bound_function.return_type);
+	}
+	return make_uniq<JSONReadFunctionData>(constant, std::move(path), len, path_type);
 }
 
 JSONReadManyFunctionData::JSONReadManyFunctionData(vector<string> paths_p, vector<size_t> lens_p)
@@ -79,7 +80,7 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Copy() const {
 }
 
 bool JSONReadManyFunctionData::Equals(const FunctionData &other_p) const {
-	auto &other = (const JSONReadManyFunctionData &)other_p;
+	auto &other = other_p.Cast<JSONReadManyFunctionData>();
 	return paths == other.paths && lens == other.lens;
 }
 
@@ -90,19 +91,19 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 		throw ParameterNotResolvedException();
 	}
 	if (!arguments[1]->IsFoldable()) {
-		throw InvalidInputException("List of paths must be constant");
-	}
-	if (arguments[1]->return_type.id() == LogicalTypeId::SQLNULL) {
-		return make_uniq<JSONReadManyFunctionData>(vector<string>(), vector<size_t>());
+		throw BinderException("List of paths must be constant");
 	}
 
 	vector<string> paths;
 	vector<size_t> lens;
 	auto paths_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+
 	for (auto &path_val : ListValue::GetChildren(paths_val)) {
 		paths.emplace_back("");
 		lens.push_back(0);
-		CheckPath(path_val, paths.back(), lens.back());
+		if (CheckPath(path_val, paths.back(), lens.back()) == JSONPathType::WILDCARD) {
+			throw BinderException("Cannot have wildcards in JSON path when supplying multiple paths");
+		}
 	}
 
 	return make_uniq<JSONReadManyFunctionData>(std::move(paths), std::move(lens));
@@ -120,11 +121,8 @@ unique_ptr<FunctionLocalState> JSONFunctionLocalState::Init(ExpressionState &sta
 }
 
 unique_ptr<FunctionLocalState> JSONFunctionLocalState::InitCastLocalState(CastLocalStateParameters &parameters) {
-	if (parameters.context) {
-		return make_uniq<JSONFunctionLocalState>(*parameters.context);
-	} else {
-		return make_uniq<JSONFunctionLocalState>(Allocator::DefaultAllocator());
-	}
+	return parameters.context ? make_uniq<JSONFunctionLocalState>(*parameters.context)
+	                          : make_uniq<JSONFunctionLocalState>(Allocator::DefaultAllocator());
 }
 
 JSONFunctionLocalState &JSONFunctionLocalState::ResetAndGet(ExpressionState &state) {
@@ -191,16 +189,7 @@ vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
 
 unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, const string &table_name,
                                                         ReplacementScanData *data) {
-	auto lower_name = StringUtil::Lower(table_name);
-	// remove any compression
-	if (StringUtil::EndsWith(lower_name, ".gz")) {
-		lower_name = lower_name.substr(0, lower_name.size() - 3);
-	} else if (StringUtil::EndsWith(lower_name, ".zst")) {
-		lower_name = lower_name.substr(0, lower_name.size() - 4);
-	}
-	if (!StringUtil::EndsWith(lower_name, ".json") && !StringUtil::Contains(lower_name, ".json?") &&
-	    !StringUtil::EndsWith(lower_name, ".jsonl") && !StringUtil::Contains(lower_name, ".jsonl?") &&
-	    !StringUtil::EndsWith(lower_name, ".ndjson") && !StringUtil::Contains(lower_name, ".ndjson?")) {
+	if (!ReplacementScan::CanReplace(table_name, {"json", "jsonl", "ndjson"})) {
 		return nullptr;
 	}
 	auto table_function = make_uniq<TableFunctionRef>();
@@ -209,7 +198,8 @@ unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, 
 	table_function->function = make_uniq<FunctionExpression>("read_json_auto", std::move(children));
 
 	if (!FileSystem::HasGlob(table_name)) {
-		table_function->alias = FileSystem::ExtractBaseName(table_name);
+		auto &fs = FileSystem::GetFileSystem(context);
+		table_function->alias = fs.ExtractBaseName(table_name);
 	}
 
 	return std::move(table_function);

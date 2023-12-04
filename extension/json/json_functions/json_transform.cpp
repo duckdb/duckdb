@@ -1,6 +1,8 @@
 #include "json_transform.hpp"
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
@@ -20,28 +22,12 @@ JSONTransformOptions::JSONTransformOptions(bool strict_cast_p, bool error_duplic
       error_unknown_key(error_unkown_key_p) {
 }
 
-void JSONTransformOptions::Serialize(FieldWriter &writer) const {
-	writer.WriteField(strict_cast);
-	writer.WriteField(error_duplicate_key);
-	writer.WriteField(error_missing_key);
-	writer.WriteField(error_unknown_key);
-	writer.WriteField(delay_error);
-}
-
-void JSONTransformOptions::Deserialize(FieldReader &reader) {
-	strict_cast = reader.ReadRequired<bool>();
-	error_duplicate_key = reader.ReadRequired<bool>();
-	error_missing_key = reader.ReadRequired<bool>();
-	error_unknown_key = reader.ReadRequired<bool>();
-	delay_error = reader.ReadRequired<bool>();
-}
-
 //! Forward declaration for recursion
 static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context);
 
 static LogicalType StructureStringToTypeArray(yyjson_val *arr, ClientContext &context) {
 	if (yyjson_arr_size(arr) != 1) {
-		throw InvalidInputException("Too many values in array of JSON structure");
+		throw BinderException("Too many values in array of JSON structure");
 	}
 	return LogicalType::LIST(StructureStringToType(yyjson_arr_get_first(arr), context));
 }
@@ -62,7 +48,7 @@ static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context
 	}
 	D_ASSERT(yyjson_obj_size(obj) == names.size());
 	if (child_types.empty()) {
-		throw InvalidInputException("Empty object in JSON structure");
+		throw BinderException("Empty object in JSON structure");
 	}
 	return LogicalType::STRUCT(child_types);
 }
@@ -76,7 +62,7 @@ static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 		return TransformStringToLogicalType(unsafe_yyjson_get_str(val), context);
 	default:
-		throw InvalidInputException("invalid JSON structure");
+		throw BinderException("invalid JSON structure");
 	}
 }
 
@@ -86,23 +72,19 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	if (arguments[1]->return_type == LogicalTypeId::SQLNULL) {
+	if (!arguments[1]->IsFoldable()) {
+		throw BinderException("JSON structure must be a constant!");
+	}
+	auto structure_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+	if (structure_val.IsNull() || arguments[1]->return_type == LogicalTypeId::SQLNULL) {
 		bound_function.return_type = LogicalTypeId::SQLNULL;
-	} else if (!arguments[1]->IsFoldable()) {
-		throw InvalidInputException("JSON structure must be a constant!");
 	} else {
-		auto structure_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		if (!structure_val.DefaultTryCastAs(JSONCommon::JSONType())) {
-			throw InvalidInputException("Cannot cast JSON structure to string");
+			throw BinderException("Cannot cast JSON structure to string");
 		}
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
 		JSONAllocator json_allocator(Allocator::DefaultAllocator());
-		yyjson_read_err err;
-		auto doc =
-		    JSONCommon::ReadDocumentUnsafe(structure_string, JSONCommon::READ_FLAG, json_allocator.GetYYAlc(), &err);
-		if (err.code != YYJSON_READ_SUCCESS) {
-			JSONCommon::ThrowParseError(structure_string.GetData(), structure_string.GetSize(), err);
-		}
+		auto doc = JSONCommon::ReadDocument(structure_string, JSONCommon::READ_FLAG, json_allocator.GetYYAlc());
 		bound_function.return_type = StructureStringToType(doc->root, context);
 	}
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
@@ -114,10 +96,9 @@ static inline string_t GetString(yyjson_val *val) {
 
 template <class T, class OP = TryCast>
 static inline bool GetValueNumerical(yyjson_val *val, T &result, JSONTransformOptions &options) {
+	D_ASSERT(unsafe_yyjson_get_tag(val) != (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE));
 	bool success;
 	switch (unsafe_yyjson_get_tag(val)) {
-	case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
-		return false;
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 		success = OP::template Operation<string_t, T>(GetString(val), result, options.strict_cast);
 		break;
@@ -150,10 +131,9 @@ static inline bool GetValueNumerical(yyjson_val *val, T &result, JSONTransformOp
 
 template <class T, class OP = TryCastToDecimal>
 static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_t s, JSONTransformOptions &options) {
+	D_ASSERT(unsafe_yyjson_get_tag(val) != (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE));
 	bool success;
 	switch (unsafe_yyjson_get_tag(val)) {
-	case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
-		return false;
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 		success = OP::template Operation<string_t, T>(GetString(val), result, &options.error_message, w, s);
 		break;
@@ -186,9 +166,8 @@ static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_
 }
 
 static inline bool GetValueString(yyjson_val *val, yyjson_alc *alc, string_t &result, Vector &vector) {
+	D_ASSERT(unsafe_yyjson_get_tag(val) != (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE));
 	switch (unsafe_yyjson_get_tag(val)) {
-	case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
-		return true;
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 		result = string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
 		return true;
@@ -318,26 +297,14 @@ static bool TransformStringWithFormat(Vector &string_vector, StrpTimeFormat &for
 	auto &target_validity = FlatVector::Validity(result);
 
 	bool success = true;
-	if (source_validity.AllValid()) {
-		for (idx_t i = 0; i < count; i++) {
-			if (!OP::template Operation<T>(format, source_strings[i], target_vals[i], options.error_message)) {
-				target_validity.SetInvalid(i);
-				if (success && options.strict_cast) {
-					options.object_index = i;
-					success = false;
-				}
-			}
-		}
-	} else {
-		for (idx_t i = 0; i < count; i++) {
-			if (!source_validity.RowIsValid(i)) {
-				target_validity.SetInvalid(i);
-			} else if (!OP::template Operation<T>(format, source_strings[i], target_vals[i], options.error_message)) {
-				target_validity.SetInvalid(i);
-				if (success && options.strict_cast) {
-					options.object_index = i;
-					success = false;
-				}
+	for (idx_t i = 0; i < count; i++) {
+		if (!source_validity.RowIsValid(i)) {
+			target_validity.SetInvalid(i);
+		} else if (!OP::template Operation<T>(format, source_strings[i], target_vals[i], options.error_message)) {
+			target_validity.SetInvalid(i);
+			if (success && options.strict_cast) {
+				options.object_index = i;
+				success = false;
 			}
 		}
 	}
@@ -689,6 +656,77 @@ bool TransformToJSON(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const 
 	return true;
 }
 
+bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result, const idx_t count,
+                             JSONTransformOptions &options) {
+	auto type = result.GetType();
+
+	auto fields = UnionType::CopyMemberTypes(type);
+	vector<string> names;
+	for (const auto &field : fields) {
+		names.push_back(field.first);
+	}
+
+	bool success = true;
+
+	auto &validity = FlatVector::Validity(result);
+
+	auto set_error = [&](idx_t i, const string &message) {
+		validity.SetInvalid(i);
+		result.SetValue(i, Value(nullptr));
+		if (success && options.strict_cast) {
+			options.error_message = message;
+			options.object_index = i;
+			success = false;
+		}
+	};
+
+	for (idx_t i = 0; i < count; i++) {
+		const auto &obj = vals[i];
+
+		if (!obj || unsafe_yyjson_is_null(vals[i])) {
+			validity.SetInvalid(i);
+			result.SetValue(i, Value(nullptr));
+			continue;
+		}
+
+		if (!unsafe_yyjson_is_obj(obj)) {
+			set_error(i,
+			          StringUtil::Format("Expected an object representing a union, got %s", yyjson_get_type_desc(obj)));
+			continue;
+		}
+
+		auto len = unsafe_yyjson_get_len(obj);
+		if (len > 1) {
+			set_error(i, "Found object containing more than one key, instead of union");
+			continue;
+		} else if (len == 0) {
+			set_error(i, "Found empty object, instead of union");
+			continue;
+		}
+
+		auto key = unsafe_yyjson_get_first(obj);
+		auto val = yyjson_obj_iter_get_val(key);
+
+		auto tag = std::find(names.begin(), names.end(), unsafe_yyjson_get_str(key));
+		if (tag == names.end()) {
+			set_error(i, StringUtil::Format("Found object containing unknown key, instead of union: %s",
+			                                unsafe_yyjson_get_str(key)));
+			continue;
+		}
+
+		idx_t actual_tag = tag - names.begin();
+
+		Vector single(UnionType::GetMemberType(type, actual_tag), 1);
+		if (!JSONTransform::Transform(&val, alc, single, 1, options)) {
+			success = false;
+		}
+
+		result.SetValue(i, Value::UNION(fields, actual_tag, single.GetValue(0)));
+	}
+
+	return success;
+}
+
 bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
                               JSONTransformOptions &options) {
 	auto result_type = result.GetType();
@@ -704,6 +742,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 
 	switch (result_type.id()) {
 	case LogicalTypeId::SQLNULL:
+		FlatVector::Validity(result).SetAllInvalid(count);
 		return true;
 	case LogicalTypeId::BOOLEAN:
 		return TransformNumerical<bool>(vals, result, count, options);
@@ -767,8 +806,10 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 		return TransformArray(vals, alc, result, count, options);
 	case LogicalTypeId::MAP:
 		return TransformObjectToMap(vals, alc, result, count, options);
+	case LogicalTypeId::UNION:
+		return TransformValueIntoUnion(vals, alc, result, count, options);
 	default:
-		throw InternalException("Unexpected type at JSON Transform %s", result_type.ToString());
+		throw NotImplementedException("Cannot read a value of type %s from a json file", result_type.ToString());
 	}
 }
 
@@ -857,20 +898,32 @@ BoundCastInfo JSONToAnyCastBind(BindCastInput &input, const LogicalType &source,
 }
 
 void JSONFunctions::RegisterJSONTransformCastFunctions(CastFunctionSet &casts) {
-	auto json_to_any_cost = casts.ImplicitCastCost(JSONCommon::JSONType(), LogicalType::ANY);
-	casts.RegisterCastFunction(JSONCommon::JSONType(), LogicalType::ANY, JSONToAnyCastBind, json_to_any_cost);
-
-	const auto struct_type = LogicalType::STRUCT({{"any", LogicalType::ANY}});
-	auto json_to_struct_cost = casts.ImplicitCastCost(LogicalType::VARCHAR, struct_type) - 2;
-	casts.RegisterCastFunction(JSONCommon::JSONType(), struct_type, JSONToAnyCastBind, json_to_struct_cost);
-
-	const auto list_type = LogicalType::LIST(LogicalType::ANY);
-	auto json_to_list_cost = casts.ImplicitCastCost(LogicalType::VARCHAR, list_type) - 2;
-	casts.RegisterCastFunction(JSONCommon::JSONType(), list_type, JSONToAnyCastBind, json_to_list_cost);
-
-	const auto map_type = LogicalType::MAP(LogicalType::ANY, LogicalType::ANY);
-	auto json_to_map_cost = casts.ImplicitCastCost(LogicalType::VARCHAR, map_type) - 2;
-	casts.RegisterCastFunction(JSONCommon::JSONType(), map_type, JSONToAnyCastBind, json_to_map_cost);
+	// JSON can be cast to anything
+	for (const auto &type : LogicalType::AllTypes()) {
+		LogicalType target_type;
+		switch (type.id()) {
+		case LogicalTypeId::STRUCT:
+			target_type = LogicalType::STRUCT({{"any", LogicalType::ANY}});
+			break;
+		case LogicalTypeId::LIST:
+			target_type = LogicalType::LIST(LogicalType::ANY);
+			break;
+		case LogicalTypeId::MAP:
+			target_type = LogicalType::MAP(LogicalType::ANY, LogicalType::ANY);
+			break;
+		case LogicalTypeId::UNION:
+			target_type = LogicalType::UNION({{"any", LogicalType::ANY}});
+			break;
+		case LogicalTypeId::VARCHAR:
+			// We skip this one here as it's handled in json_functions.cpp
+			continue;
+		default:
+			target_type = type;
+		}
+		// Going from JSON to another type has the same cost as going from VARCHAR to that type
+		const auto json_to_target_cost = casts.ImplicitCastCost(LogicalType::VARCHAR, target_type);
+		casts.RegisterCastFunction(JSONCommon::JSONType(), target_type, JSONToAnyCastBind, json_to_target_cost);
+	}
 }
 
 } // namespace duckdb

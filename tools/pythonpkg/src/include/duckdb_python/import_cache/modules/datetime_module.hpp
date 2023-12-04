@@ -12,6 +12,40 @@
 
 namespace duckdb {
 
+struct DatetimeDatetimeCacheItem : public PythonImportCacheItem {
+public:
+	static constexpr const char *Name = "datetime.datetime";
+
+public:
+	~DatetimeDatetimeCacheItem() override {
+	}
+	virtual void LoadSubtypes(PythonImportCache &cache) override {
+		max.LoadAttribute("max", cache, *this);
+		min.LoadAttribute("min", cache, *this);
+	}
+
+public:
+	PythonImportCacheItem max;
+	PythonImportCacheItem min;
+};
+
+struct DatetimeDateCacheItem : public PythonImportCacheItem {
+public:
+	static constexpr const char *Name = "datetime.date";
+
+public:
+	~DatetimeDateCacheItem() override {
+	}
+	virtual void LoadSubtypes(PythonImportCache &cache) override {
+		max.LoadAttribute("max", cache, *this);
+		min.LoadAttribute("min", cache, *this);
+	}
+
+public:
+	PythonImportCacheItem max;
+	PythonImportCacheItem min;
+};
+
 struct DatetimeCacheItem : public PythonImportCacheItem {
 public:
 	static constexpr const char *Name = "datetime";
@@ -27,8 +61,8 @@ public:
 	}
 
 public:
-	PythonImportCacheItem datetime;
-	PythonImportCacheItem date;
+	DatetimeDatetimeCacheItem datetime;
+	DatetimeDateCacheItem date;
 	PythonImportCacheItem time;
 	PythonImportCacheItem timedelta;
 };

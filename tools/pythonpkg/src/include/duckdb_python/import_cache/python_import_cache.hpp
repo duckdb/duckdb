@@ -48,6 +48,9 @@ public:
 	DecimalCacheItem &decimal() {
 		return LazyLoadModule(decimal_module);
 	}
+	PyTzCacheItem &pytz() {
+		return LazyLoadModule(pytz_module);
+	}
 	UUIDCacheItem &uuid() {
 		return LazyLoadModule(uuid_module);
 	}
@@ -81,6 +84,7 @@ private:
 	PyDuckDBCacheItem pyduckdb_module;
 	DatetimeCacheItem datetime_module;
 	DecimalCacheItem decimal_module;
+	PyTzCacheItem pytz_module;
 	UUIDCacheItem uuid_module;
 	PandasCacheItem pandas_module;
 	PolarsCacheItem polars_module;
@@ -91,7 +95,7 @@ private:
 	IpywidgetsCacheItem ipywidgets_module;
 
 public:
-	PyObject *AddCache(py::object item);
+	py::handle AddCache(py::object item);
 
 private:
 	vector<py::object> owned_objects;

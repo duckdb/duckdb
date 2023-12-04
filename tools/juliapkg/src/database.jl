@@ -83,7 +83,7 @@ mutable struct DB <: DBInterface.Connection
         main_connection = Connection(handle)
 
         db = new(handle, main_connection)
-        _add_data_frame_scan(db)
+        _add_table_scan(db)
         return db
     end
     function DB(f::AbstractString)

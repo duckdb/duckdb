@@ -1,0 +1,269 @@
+# name: test/sql/function/list/list_has_any_and_has_all.test
+# description: Test list_has_any and list_has_all functions
+# group: [list]
+
+query I
+select list_has_any([1,2,3], [2,3,4]);
+----
+true
+
+query I
+select list_has_all([1,2,3], [2,3,4]);
+----
+false
+
+# Test NULLs
+
+statement ok
+CREATE TABLE list_data(l1 int[], l2 int[]);
+
+statement ok
+INSERT INTO list_data VALUES (NULL, NULL);
+
+statement ok
+INSERT INTO list_data VALUES (NULL, [1,2,3]);
+
+statement ok
+INSERT INTO list_data VALUES ([1,2,3], NULL);
+
+statement ok
+INSERT INTO list_data VALUES ([1,2,3], [2,3,NULL]);
+
+statement ok
+INSERT INTO list_data VALUES ([1,2,NULL], [2,3,NULL]);
+
+statement ok
+INSERT INTO list_data VALUES ([1,2,NULL], [NULL,3,4]);
+
+statement ok
+INSERT INTO list_data VALUES ([1,2,3], [1,2,3]);
+
+statement ok
+INSERT INTO list_data VALUES ([1,2,3], [1,2,NULL]);
+
+query I
+select list_has_any(l1, l2) from list_data;
+----
+NULL
+NULL
+NULL
+1
+1
+0
+1
+1
+
+query I
+select list_has_all(l1, l2) from list_data;
+----
+NULL
+NULL
+NULL
+1
+0
+0
+1
+1
+
+# Test Lists in Lists
+
+statement ok
+DROP TABLE list_data;
+
+statement ok
+create table list_of_list(l1 int[][], l2 int[][]);
+
+statement ok
+insert into list_of_list values (NULL, NULL);
+
+statement ok
+insert into list_of_list values ([[1 , 2, 3], NULL, [3, 2, 1]], [[2, 3, 4], NULL, [1, 2, 3]]);
+
+statement ok
+insert into list_of_list values ([[1 , 2, 3], NULL, [3, 2, 1]], [[8, 8, 8], NULL, [8, 8, 8]]);
+
+statement ok
+insert into list_of_list values ([[1 , 2, 3], NULL, [8, 8, 8]], [[8, 8, 8], NULL, [1, 2, 3]]);
+
+query I
+select list_has_any(l1, l2) from list_of_list;
+----
+NULL
+1
+0
+1
+
+query I
+select list_has_all(l1, l2) from list_of_list;
+----
+NULL
+0
+0
+1
+
+statement ok
+drop table list_of_list;
+
+# test string lists
+
+statement ok
+create table list_of_strings(l1 string[], l2 string[]);
+
+statement ok
+insert into list_of_strings values (NULL, NULL);
+
+statement ok
+insert into list_of_strings values ([NULL, 'a', 'b', 'c'], [NULL, 'b', 'c', 'd']);
+
+statement ok
+insert into list_of_strings values (['a', 'b', 'c'], ['a', 'b', 'c']);
+
+statement ok
+insert into list_of_strings values (['here is a very long long string that is def more than 12 bytes', 'and a shorty'], ['here is a very long long string that is def more than 12 bytes', 'here is a very long long string that is def more than 12 bytes', 'c', 'd']);
+
+statement ok
+insert into list_of_strings values (['here is a very long long string that is def more than 12 bytes', 'and a shorty'], ['here is a very long string that is def more than 12 bytes', 'here is a very long string that is def more than 12 bytes', 'c', 'd']);
+
+statement ok
+insert into list_of_strings values (['here is a very long long string that is def more than 12 bytes', 'and a shorty'], ['here is a very long long string that is def more than 12 bytes', 'and a shorty']);
+
+query I
+select list_has_any(l1, l2) from list_of_strings;
+----
+NULL
+1
+1
+1
+0
+1
+
+query I
+select list_has_all(l1, l2) from list_of_strings;
+----
+NULL
+0
+1
+0
+0
+1
+
+# test error cases
+
+statement error
+select list_has_any(l1) from list_of_strings;
+
+statement error
+select list_has_any(l1, l2, l1) from list_of_strings;
+
+statement error
+select list_has_all(l1) from list_of_strings;
+
+statement error
+select list_has_all(l1, l2, l1) from list_of_strings;
+
+statement error
+select list_has_all([1, 2], 1);
+
+statement error
+select list_has_any([[1,2], [2,4]], ['abc', 'def']);
+
+# Test Function in Function
+
+foreach f list_has_all list_has_any array_has_all array_has_any
+
+statement ok
+create table tbl(l1 int[], l2 int[]);
+
+statement ok
+insert into tbl values ([1,2,3], [2,3,4]);
+
+query I
+select ${f}(list_intersect(l1, l2), list_intersect(l2, l1)) from tbl;
+----
+1
+
+statement ok
+drop table tbl;
+
+endloop
+
+# Test Lists of Different Lengths
+
+statement ok
+create table tbl(l1 int[], l2 int[]);
+
+statement ok
+insert into tbl values ([1,2,3,4,5,6], [2,3,4]);
+
+statement ok
+insert into tbl values ([1,2,3], [1,2,3,4,7,8,9]);
+
+query I
+select list_has_any(l1, l2) from tbl;
+----
+1
+1
+
+query I
+select list_has_all(l1, l2) from tbl;
+----
+1
+0
+
+query I
+select list_has_all(l2, l1) from tbl;
+----
+0
+1
+
+# Operators
+query I
+select l1 && l2 from tbl;
+----
+1
+1
+
+statement error
+select 'hello' && l1 from tbl;
+
+query I
+select NULL && [NULL];
+----
+NULL
+
+query I
+select l1 && NULL from tbl;
+----
+NULL
+NULL
+
+query I
+select l1 @> l2 from tbl;
+----
+1
+0
+
+query I
+select l1 <@ l2 from tbl;
+----
+0
+1
+
+statement error
+select 'hello' @> l1 from tbl;
+
+statement error
+select 'hello' <@ l1 from tbl;
+
+query I
+select l1 @> NULL from tbl;
+----
+NULL
+NULL
+
+query I
+select l1 <@ NULL from tbl;
+----
+NULL
+NULL
+

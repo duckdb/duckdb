@@ -1,8 +1,10 @@
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -403,115 +405,123 @@ Value NumericStats::MaxOrNull(const BaseStatistics &stats) {
 	return NumericStats::Max(stats);
 }
 
-void SerializeNumericStatsValue(const LogicalType &type, NumericValueUnion val, bool has_value, FieldWriter &writer) {
-	writer.WriteField<bool>(!has_value);
+static void SerializeNumericStatsValue(const LogicalType &type, NumericValueUnion val, bool has_value,
+                                       Serializer &serializer) {
+	serializer.WriteProperty(100, "has_value", has_value);
 	if (!has_value) {
 		return;
 	}
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
-		writer.WriteField<bool>(val.value_.boolean);
+		serializer.WriteProperty(101, "value", val.value_.boolean);
 		break;
 	case PhysicalType::INT8:
-		writer.WriteField<int8_t>(val.value_.tinyint);
+		serializer.WriteProperty(101, "value", val.value_.tinyint);
 		break;
 	case PhysicalType::INT16:
-		writer.WriteField<int16_t>(val.value_.smallint);
+		serializer.WriteProperty(101, "value", val.value_.smallint);
 		break;
 	case PhysicalType::INT32:
-		writer.WriteField<int32_t>(val.value_.integer);
+		serializer.WriteProperty(101, "value", val.value_.integer);
 		break;
 	case PhysicalType::INT64:
-		writer.WriteField<int64_t>(val.value_.bigint);
+		serializer.WriteProperty(101, "value", val.value_.bigint);
 		break;
 	case PhysicalType::UINT8:
-		writer.WriteField<int8_t>(val.value_.utinyint);
+		serializer.WriteProperty(101, "value", val.value_.utinyint);
 		break;
 	case PhysicalType::UINT16:
-		writer.WriteField<int16_t>(val.value_.usmallint);
+		serializer.WriteProperty(101, "value", val.value_.usmallint);
 		break;
 	case PhysicalType::UINT32:
-		writer.WriteField<int32_t>(val.value_.uinteger);
+		serializer.WriteProperty(101, "value", val.value_.uinteger);
 		break;
 	case PhysicalType::UINT64:
-		writer.WriteField<int64_t>(val.value_.ubigint);
+		serializer.WriteProperty(101, "value", val.value_.ubigint);
 		break;
 	case PhysicalType::INT128:
-		writer.WriteField<hugeint_t>(val.value_.hugeint);
+		serializer.WriteProperty(101, "value", val.value_.hugeint);
 		break;
 	case PhysicalType::FLOAT:
-		writer.WriteField<float>(val.value_.float_);
+		serializer.WriteProperty(101, "value", val.value_.float_);
 		break;
 	case PhysicalType::DOUBLE:
-		writer.WriteField<double>(val.value_.double_);
+		serializer.WriteProperty(101, "value", val.value_.double_);
 		break;
 	default:
 		throw InternalException("Unsupported type for serializing numeric statistics");
 	}
 }
 
-void NumericStats::Serialize(const BaseStatistics &stats, FieldWriter &writer) {
-	auto &numeric_stats = NumericStats::GetDataUnsafe(stats);
-	SerializeNumericStatsValue(stats.GetType(), numeric_stats.min, numeric_stats.has_min, writer);
-	SerializeNumericStatsValue(stats.GetType(), numeric_stats.max, numeric_stats.has_max, writer);
-}
-
-void DeserializeNumericStatsValue(const LogicalType &type, FieldReader &reader, NumericValueUnion &result,
-                                  bool &has_stats) {
-	auto is_null = reader.ReadRequired<bool>();
-	if (is_null) {
+static void DeserializeNumericStatsValue(const LogicalType &type, NumericValueUnion &result, bool &has_stats,
+                                         Deserializer &deserializer) {
+	auto has_value = deserializer.ReadProperty<bool>(100, "has_value");
+	if (!has_value) {
 		has_stats = false;
 		return;
 	}
 	has_stats = true;
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
-		result.value_.boolean = reader.ReadRequired<bool>();
+		result.value_.boolean = deserializer.ReadProperty<bool>(101, "value");
 		break;
 	case PhysicalType::INT8:
-		result.value_.tinyint = reader.ReadRequired<int8_t>();
+		result.value_.tinyint = deserializer.ReadProperty<int8_t>(101, "value");
 		break;
 	case PhysicalType::INT16:
-		result.value_.smallint = reader.ReadRequired<int16_t>();
+		result.value_.smallint = deserializer.ReadProperty<int16_t>(101, "value");
 		break;
 	case PhysicalType::INT32:
-		result.value_.integer = reader.ReadRequired<int32_t>();
+		result.value_.integer = deserializer.ReadProperty<int32_t>(101, "value");
 		break;
 	case PhysicalType::INT64:
-		result.value_.bigint = reader.ReadRequired<int64_t>();
+		result.value_.bigint = deserializer.ReadProperty<int64_t>(101, "value");
 		break;
 	case PhysicalType::UINT8:
-		result.value_.utinyint = reader.ReadRequired<uint8_t>();
+		result.value_.utinyint = deserializer.ReadProperty<uint8_t>(101, "value");
 		break;
 	case PhysicalType::UINT16:
-		result.value_.usmallint = reader.ReadRequired<uint16_t>();
+		result.value_.usmallint = deserializer.ReadProperty<uint16_t>(101, "value");
 		break;
 	case PhysicalType::UINT32:
-		result.value_.uinteger = reader.ReadRequired<uint32_t>();
+		result.value_.uinteger = deserializer.ReadProperty<uint32_t>(101, "value");
 		break;
 	case PhysicalType::UINT64:
-		result.value_.ubigint = reader.ReadRequired<uint64_t>();
+		result.value_.ubigint = deserializer.ReadProperty<uint64_t>(101, "value");
 		break;
 	case PhysicalType::INT128:
-		result.value_.hugeint = reader.ReadRequired<hugeint_t>();
+		result.value_.hugeint = deserializer.ReadProperty<hugeint_t>(101, "value");
 		break;
 	case PhysicalType::FLOAT:
-		result.value_.float_ = reader.ReadRequired<float>();
+		result.value_.float_ = deserializer.ReadProperty<float>(101, "value");
 		break;
 	case PhysicalType::DOUBLE:
-		result.value_.double_ = reader.ReadRequired<double>();
+		result.value_.double_ = deserializer.ReadProperty<double>(101, "value");
 		break;
 	default:
-		throw InternalException("Unsupported type for deserializing numeric statistics");
+		throw InternalException("Unsupported type for serializing numeric statistics");
 	}
 }
 
-BaseStatistics NumericStats::Deserialize(FieldReader &reader, LogicalType type) {
-	BaseStatistics result(std::move(type));
+void NumericStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
+	auto &numeric_stats = NumericStats::GetDataUnsafe(stats);
+	serializer.WriteObject(200, "max", [&](Serializer &object) {
+		SerializeNumericStatsValue(stats.GetType(), numeric_stats.min, numeric_stats.has_min, object);
+	});
+	serializer.WriteObject(201, "min", [&](Serializer &object) {
+		SerializeNumericStatsValue(stats.GetType(), numeric_stats.max, numeric_stats.has_max, object);
+	});
+}
+
+void NumericStats::Deserialize(Deserializer &deserializer, BaseStatistics &result) {
 	auto &numeric_stats = NumericStats::GetDataUnsafe(result);
-	DeserializeNumericStatsValue(result.GetType(), reader, numeric_stats.min, numeric_stats.has_min);
-	DeserializeNumericStatsValue(result.GetType(), reader, numeric_stats.max, numeric_stats.has_max);
-	return result;
+
+	deserializer.ReadObject(200, "max", [&](Deserializer &object) {
+		DeserializeNumericStatsValue(result.GetType(), numeric_stats.min, numeric_stats.has_min, object);
+	});
+	deserializer.ReadObject(201, "min", [&](Deserializer &object) {
+		DeserializeNumericStatsValue(result.GetType(), numeric_stats.max, numeric_stats.has_max, object);
+	});
 }
 
 string NumericStats::ToString(const BaseStatistics &stats) {

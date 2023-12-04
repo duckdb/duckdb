@@ -2,6 +2,8 @@
 # description: Test that reading a ZSTD file with auto-detect does not crash
 # group: [csv]
 
+require no_extension_autoloading
+
 # zstd requires the parquet extension
 statement error
 CREATE TABLE test_zst AS SELECT * FROM read_csv('test/sql/copy/csv/broken/test.csv.zst', AUTO_DETECT=TRUE);
@@ -43,4 +45,4 @@ statement ok
 COPY test_zst TO '__TEST_DIR__/noext.csv' (COMPRESSION ZSTD);
 
 statement ok
-COPY test_zst FROM '__TEST_DIR__/noext.csv' (COMPRESSION ZSTD);
+COPY test_zst FROM '__TEST_DIR__/noext.csv' (COMPRESSION ZSTD, HEADER 1);

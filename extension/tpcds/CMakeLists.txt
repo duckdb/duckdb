@@ -6,7 +6,7 @@ include_directories(include)
 include_directories(dsdgen/include)
 add_subdirectory(dsdgen)
 
-add_library(tpcds_extension STATIC tpcds_extension.cpp ${DSDGEN_OBJECT_FILES})
+build_static_extension(tpcds tpcds_extension.cpp ${DSDGEN_OBJECT_FILES})
 set(PARAMETERS "-warnings")
 build_loadable_extension(tpcds ${PARAMETERS} tpcds_extension.cpp
                          ${DSDGEN_OBJECT_FILES})

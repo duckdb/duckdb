@@ -6,7 +6,8 @@ namespace duckdb {
 
 ColumnDataCollectionSegment::ColumnDataCollectionSegment(shared_ptr<ColumnDataAllocator> allocator_p,
                                                          vector<LogicalType> types_p)
-    : allocator(std::move(allocator_p)), types(std::move(types_p)), count(0), heap(allocator->GetAllocator()) {
+    : allocator(std::move(allocator_p)), types(std::move(types_p)), count(0),
+      heap(make_shared<StringHeap>(allocator->GetAllocator())) {
 }
 
 idx_t ColumnDataCollectionSegment::GetDataSize(idx_t type_size) {
@@ -26,7 +27,8 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateVectorInternal(const Logica
 	auto type_size = internal_type == PhysicalType::STRUCT ? 0 : GetTypeIdSize(internal_type);
 	allocator->AllocateData(GetDataSize(type_size) + ValidityMask::STANDARD_MASK_SIZE, meta_data.block_id,
 	                        meta_data.offset, chunk_state);
-	if (allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
+	if (allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR ||
+	    allocator->GetType() == ColumnDataAllocatorType::HYBRID) {
 		chunk_meta.block_ids.insert(meta_data.block_id);
 	}
 
@@ -203,10 +205,17 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 		}
 	} else if (internal_type == PhysicalType::VARCHAR) {
 		if (allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
-			for (auto &swizzle_segment : vdata.swizzle_data) {
-				auto &string_heap_segment = GetVectorData(swizzle_segment.child_index);
-				allocator->UnswizzlePointers(state, result, swizzle_segment.offset, swizzle_segment.count,
-				                             string_heap_segment.block_id, string_heap_segment.offset);
+			auto next_index = vector_index;
+			idx_t offset = 0;
+			while (next_index.IsValid()) {
+				auto &current_vdata = GetVectorData(next_index);
+				for (auto &swizzle_segment : current_vdata.swizzle_data) {
+					auto &string_heap_segment = GetVectorData(swizzle_segment.child_index);
+					allocator->UnswizzlePointers(state, result, offset + swizzle_segment.offset, swizzle_segment.count,
+					                             string_heap_segment.block_id, string_heap_segment.offset);
+				}
+				offset += current_vdata.count;
+				next_index = current_vdata.next_data;
 			}
 		}
 		if (state.properties == ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
@@ -232,6 +241,11 @@ void ColumnDataCollectionSegment::ReadChunk(idx_t chunk_index, ChunkManagementSt
 
 idx_t ColumnDataCollectionSegment::ChunkCount() const {
 	return chunk_data.size();
+}
+
+idx_t ColumnDataCollectionSegment::SizeInBytes() const {
+	D_ASSERT(!allocator->IsShared());
+	return allocator->SizeInBytes() + heap->SizeInBytes();
 }
 
 void ColumnDataCollectionSegment::FetchChunk(idx_t chunk_idx, DataChunk &result) {

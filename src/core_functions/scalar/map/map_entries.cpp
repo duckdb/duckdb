@@ -42,8 +42,8 @@ static unique_ptr<FunctionData> MapEntriesBind(ClientContext &context, ScalarFun
 	auto &key_type = MapType::KeyType(map);
 	auto &value_type = MapType::ValueType(map);
 
-	child_types.push_back(make_pair("k", key_type));
-	child_types.push_back(make_pair("v", value_type));
+	child_types.push_back(make_pair("key", key_type));
+	child_types.push_back(make_pair("value", value_type));
 
 	auto row_type = LogicalType::STRUCT(child_types);
 

@@ -1,0 +1,11 @@
+# name: test/sql/cte/materialized/test_bug_922_materialized.test
+# description: Test for a crash reported in issue #922
+# group: [materialized]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+WITH my_list(value) AS MATERIALIZED (VALUES (1), (2), (3))
+    SELECT * FROM my_list LIMIT 0 OFFSET 1
+----

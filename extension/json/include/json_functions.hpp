@@ -24,7 +24,7 @@ class BuiltinFunctions;
 // Scalar function stuff
 struct JSONReadFunctionData : public FunctionData {
 public:
-	JSONReadFunctionData(bool constant, string path_p, idx_t len);
+	JSONReadFunctionData(bool constant, string path_p, idx_t len, JSONCommon::JSONPathType path_type);
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
@@ -33,6 +33,7 @@ public:
 public:
 	const bool constant;
 	const string path;
+	const JSONCommon::JSONPathType path_type;
 	const char *ptr;
 	const size_t len;
 };
