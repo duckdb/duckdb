@@ -8,79 +8,79 @@
 
 #if defined(BUILD_ICU_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #define ICU_STATICALLY_LOADED true
-#include "icu-extension.hpp"
+#include "icu_extension.hpp"
 #else
 #define ICU_STATICALLY_LOADED false
 #endif
 
 #if defined(BUILD_PARQUET_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #define PARQUET_STATICALLY_LOADED true
-#include "parquet-extension.hpp"
+#include "parquet_extension.hpp"
 #else
 #define PARQUET_STATICALLY_LOADED false
 #endif
 
 #if defined(BUILD_TPCH_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #define TPCH_STATICALLY_LOADED true
-#include "tpch-extension.hpp"
+#include "tpch_extension.hpp"
 #else
 #define TPCH_STATICALLY_LOADED false
 #endif
 
 #if defined(BUILD_TPCDS_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #define TPCDS_STATICALLY_LOADED true
-#include "tpcds-extension.hpp"
+#include "tpcds_extension.hpp"
 #else
 #define TPCDS_STATICALLY_LOADED false
 #endif
 
 #if defined(BUILD_FTS_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #define FTS_STATICALLY_LOADED true
-#include "fts-extension.hpp"
+#include "fts_extension.hpp"
 #else
 #define FTS_STATICALLY_LOADED false
 #endif
 
 #if defined(BUILD_HTTPFS_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #define HTTPFS_STATICALLY_LOADED true
-#include "httpfs-extension.hpp"
+#include "httpfs_extension.hpp"
 #else
 #define HTTPFS_STATICALLY_LOADED false
 #endif
 
 #if defined(BUILD_VISUALIZER_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-#include "visualizer-extension.hpp"
+#include "visualizer_extension.hpp"
 #endif
 
 #if defined(BUILD_JSON_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #define JSON_STATICALLY_LOADED true
-#include "json-extension.hpp"
+#include "json_extension.hpp"
 #else
 #define JSON_STATICALLY_LOADED false
 #endif
 
 #if defined(BUILD_JEMALLOC_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #define JEMALLOC_STATICALLY_LOADED true
-#include "jemalloc-extension.hpp"
+#include "jemalloc_extension.hpp"
 #else
 #define JEMALLOC_STATICALLY_LOADED false
 #endif
 
 #if defined(BUILD_EXCEL_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-#include "excel-extension.hpp"
+#include "excel_extension.hpp"
 #endif
 
 #if defined(BUILD_SQLSMITH_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-#include "sqlsmith-extension.hpp"
+#include "sqlsmith_extension.hpp"
 #endif
 
 #if defined(BUILD_INET_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-#include "inet-extension.hpp"
+#include "inet_extension.hpp"
 #endif
 
 #if defined(BUILD_AUTOCOMPLETE_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #define AUTOCOMPLETE_STATICALLY_LOADED true
-#include "sql_auto_complete-extension.hpp"
+#include "autocomplete_extension.hpp"
 #else
 #define AUTOCOMPLETE_STATICALLY_LOADED false
 #endif
@@ -187,35 +187,35 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 #endif
 	} else if (extension == "icu") {
 #if ICU_STATICALLY_LOADED
-		db.LoadExtension<ICUExtension>();
+		db.LoadExtension<IcuExtension>();
 #else
 		// icu extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "tpch") {
 #if TPCH_STATICALLY_LOADED
-		db.LoadExtension<TPCHExtension>();
+		db.LoadExtension<TpchExtension>();
 #else
 		// icu extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "tpcds") {
 #if TPCDS_STATICALLY_LOADED
-		db.LoadExtension<TPCDSExtension>();
+		db.LoadExtension<TpcdsExtension>();
 #else
 		// icu extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "fts") {
 #if FTS_STATICALLY_LOADED
-		db.LoadExtension<FTSExtension>();
+		db.LoadExtension<FtsExtension>();
 #else
 		// fts extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "httpfs") {
 #if HTTPFS_STATICALLY_LOADED
-		db.LoadExtension<HTTPFsExtension>();
+		db.LoadExtension<HttpfsExtension>();
 #else
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
@@ -228,42 +228,42 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 #endif
 	} else if (extension == "json") {
 #if JSON_STATICALLY_LOADED
-		db.LoadExtension<JSONExtension>();
+		db.LoadExtension<JsonExtension>();
 #else
 		// json extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "excel") {
 #if defined(BUILD_EXCEL_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-		db.LoadExtension<EXCELExtension>();
+		db.LoadExtension<ExcelExtension>();
 #else
 		// excel extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "sqlsmith") {
 #if defined(BUILD_SQLSMITH_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-		db.LoadExtension<SQLSmithExtension>();
+		db.LoadExtension<SqlsmithExtension>();
 #else
 		// excel extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "jemalloc") {
 #if defined(BUILD_JEMALLOC_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-		db.LoadExtension<JEMallocExtension>();
+		db.LoadExtension<JemallocExtension>();
 #else
 		// jemalloc extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "autocomplete") {
 #if defined(BUILD_AUTOCOMPLETE_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-		db.LoadExtension<SQLAutoCompleteExtension>();
+		db.LoadExtension<AutocompleteExtension>();
 #else
 		// autocomplete extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "inet") {
 #if defined(BUILD_INET_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-		db.LoadExtension<INETExtension>();
+		db.LoadExtension<InetExtension>();
 #else
 		// inet extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;

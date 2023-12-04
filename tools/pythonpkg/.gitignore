@@ -6,8 +6,8 @@ build
 /duckdb_tarball/
 duckdb.cpp
 duckdb.hpp
-parquet-extension.cpp
-parquet-extension.hpp
+parquet_extension.cpp
+parquet_extension.hpp
 duckdb/
 githash.list
 includes.list

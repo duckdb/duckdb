@@ -6,7 +6,7 @@
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/parser/statement/logical_plan_statement.hpp"
 #include "test_helpers.hpp"
-#include "tpch-extension.hpp"
+#include "tpch_extension.hpp"
 
 #include <fstream>
 

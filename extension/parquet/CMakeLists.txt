@@ -9,7 +9,7 @@ include_directories(
 
 set(PARQUET_EXTENSION_FILES
     column_writer.cpp
-    parquet-extension.cpp
+    parquet_extension.cpp
     parquet_metadata.cpp
     parquet_reader.cpp
     parquet_timestamp.cpp

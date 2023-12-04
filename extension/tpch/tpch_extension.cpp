@@ -1,6 +1,6 @@
 #define DUCKDB_EXTENSION_MAIN
 
-#include "tpch-extension.hpp"
+#include "tpch_extension.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/function/table_function.hpp"
@@ -156,7 +156,7 @@ static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &
 	return tpch::DBGenWrapper::GetQuery(index);
 }
 
-void TPCHExtension::Load(DuckDB &db) {
+void TpchExtension::Load(DuckDB &db) {
 	auto &db_instance = *db.instance;
 
 	TableFunction dbgen_func("dbgen", {}, DbgenFunction, DbgenBind);
@@ -182,15 +182,15 @@ void TPCHExtension::Load(DuckDB &db) {
 	ExtensionUtil::RegisterFunction(db_instance, tpch_query_answer_func);
 }
 
-std::string TPCHExtension::GetQuery(int query) {
+std::string TpchExtension::GetQuery(int query) {
 	return tpch::DBGenWrapper::GetQuery(query);
 }
 
-std::string TPCHExtension::GetAnswer(double sf, int query) {
+std::string TpchExtension::GetAnswer(double sf, int query) {
 	return tpch::DBGenWrapper::GetAnswer(sf, query);
 }
 
-std::string TPCHExtension::Name() {
+std::string TpchExtension::Name() {
 	return "tpch";
 }
 
@@ -200,7 +200,7 @@ extern "C" {
 
 DUCKDB_EXTENSION_API void tpch_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::TPCHExtension>();
+	db_wrapper.LoadExtension<duckdb::TpchExtension>();
 }
 
 DUCKDB_EXTENSION_API const char *tpch_version() {

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// fts-extension.hpp
+// sqlsmith_extension.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-class FTSExtension : public Extension {
+class SqlsmithExtension : public Extension {
 public:
 	void Load(DuckDB &db) override;
 	std::string Name() override;

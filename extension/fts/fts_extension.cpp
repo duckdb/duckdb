@@ -1,5 +1,5 @@
 #define DUCKDB_EXTENSION_MAIN
-#include "fts-extension.hpp"
+#include "fts_extension.hpp"
 #include "fts_indexing.hpp"
 #include "libstemmer.h"
 
@@ -45,7 +45,7 @@ static void stem_function(DataChunk &args, ExpressionState &state, Vector &resul
 	    });
 }
 
-void FTSExtension::Load(DuckDB &db) {
+void FtsExtension::Load(DuckDB &db) {
 	auto &db_instance = *db.instance;
 	ScalarFunction stem_func("stem", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, stem_function);
 
@@ -66,7 +66,7 @@ void FTSExtension::Load(DuckDB &db) {
 	ExtensionUtil::RegisterFunction(db_instance, drop_fts_index_func);
 }
 
-std::string FTSExtension::Name() {
+std::string FtsExtension::Name() {
 	return "fts";
 }
 
@@ -76,7 +76,7 @@ extern "C" {
 
 DUCKDB_EXTENSION_API void fts_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::FTSExtension>();
+	db_wrapper.LoadExtension<duckdb::FtsExtension>();
 }
 
 DUCKDB_EXTENSION_API const char *fts_version() {

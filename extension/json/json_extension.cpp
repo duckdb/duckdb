@@ -1,5 +1,5 @@
 #define DUCKDB_EXTENSION_MAIN
-#include "json-extension.hpp"
+#include "json_extension.hpp"
 
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/default/default_functions.hpp"
@@ -23,7 +23,7 @@ static DefaultMacro json_macros[] = {
     {DEFAULT_SCHEMA, "json", {"x", nullptr}, "json_extract(x, '$')"},
     {nullptr, nullptr, {nullptr}, nullptr}};
 
-void JSONExtension::Load(DuckDB &db) {
+void JsonExtension::Load(DuckDB &db) {
 	auto &db_instance = *db.instance;
 	// JSON type
 	auto json_type = JSONCommon::JSONType();
@@ -64,7 +64,7 @@ void JSONExtension::Load(DuckDB &db) {
 	}
 }
 
-std::string JSONExtension::Name() {
+std::string JsonExtension::Name() {
 	return "json";
 }
 
@@ -74,7 +74,7 @@ extern "C" {
 
 DUCKDB_EXTENSION_API void json_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::JSONExtension>();
+	db_wrapper.LoadExtension<duckdb::JsonExtension>();
 }
 
 DUCKDB_EXTENSION_API const char *json_version() {

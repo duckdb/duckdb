@@ -1,5 +1,5 @@
 #define DUCKDB_EXTENSION_MAIN
-#include "tpcds-extension.hpp"
+#include "tpcds_extension.hpp"
 
 #include "dsdgen.hpp"
 
@@ -90,7 +90,7 @@ static void TPCDSQueryFunction(ClientContext &context, TableFunctionInput &data_
 	}
 	idx_t chunk_count = 0;
 	while (data.offset < tpcds_queries && chunk_count < STANDARD_VECTOR_SIZE) {
-		auto query = TPCDSExtension::GetQuery(data.offset + 1);
+		auto query = TpcdsExtension::GetQuery(data.offset + 1);
 		// "query_nr", PhysicalType::INT32
 		output.SetValue(0, chunk_count, Value::INTEGER((int32_t)data.offset + 1));
 		// "query", PhysicalType::VARCHAR
@@ -128,7 +128,7 @@ static void TPCDSQueryAnswerFunction(ClientContext &context, TableFunctionInput 
 	while (data.offset < total_answers && chunk_count < STANDARD_VECTOR_SIZE) {
 		idx_t cur_query = data.offset % tpcds_queries;
 		idx_t cur_sf = data.offset / tpcds_queries;
-		auto answer = TPCDSExtension::GetAnswer(scale_factors[cur_sf], cur_query + 1);
+		auto answer = TpcdsExtension::GetAnswer(scale_factors[cur_sf], cur_query + 1);
 		// "query_nr", PhysicalType::INT32
 		output.SetValue(0, chunk_count, Value::INTEGER((int32_t)cur_query + 1));
 		// "scale_factor", PhysicalType::DOUBLE
@@ -146,7 +146,7 @@ static string PragmaTpcdsQuery(ClientContext &context, const FunctionParameters 
 	return tpcds::DSDGenWrapper::GetQuery(index);
 }
 
-void TPCDSExtension::Load(DuckDB &db) {
+void TpcdsExtension::Load(DuckDB &db) {
 	auto &db_instance = *db.instance;
 
 	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind);
@@ -172,15 +172,15 @@ void TPCDSExtension::Load(DuckDB &db) {
 	ExtensionUtil::RegisterFunction(db_instance, tpcds_query_answer_func);
 }
 
-std::string TPCDSExtension::GetQuery(int query) {
+std::string TpcdsExtension::GetQuery(int query) {
 	return tpcds::DSDGenWrapper::GetQuery(query);
 }
 
-std::string TPCDSExtension::GetAnswer(double sf, int query) {
+std::string TpcdsExtension::GetAnswer(double sf, int query) {
 	return tpcds::DSDGenWrapper::GetAnswer(sf, query);
 }
 
-std::string TPCDSExtension::Name() {
+std::string TpcdsExtension::Name() {
 	return "tpcds";
 }
 
@@ -189,7 +189,7 @@ std::string TPCDSExtension::Name() {
 extern "C" {
 DUCKDB_EXTENSION_API void tpcds_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::TPCDSExtension>();
+	db_wrapper.LoadExtension<duckdb::TpcdsExtension>();
 }
 
 DUCKDB_EXTENSION_API const char *tpcds_version() {

@@ -5,7 +5,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/extension_util.hpp"
-#include "excel-extension.hpp"
+#include "excel_extension.hpp"
 #include "nf_calendar.h"
 #include "nf_localedata.h"
 #include "nf_zformat.h"
@@ -58,7 +58,7 @@ static void NumberFormatFunction(DataChunk &args, ExpressionState &state, Vector
 	    [&](double value, string_t format) { return NumberFormatScalarFunction(result, value, format); });
 }
 
-void EXCELExtension::Load(DuckDB &db) {
+void ExcelExtension::Load(DuckDB &db) {
 	auto &db_instance = *db.instance;
 
 	ScalarFunction text_func("text", {LogicalType::DOUBLE, LogicalType::VARCHAR}, LogicalType::VARCHAR,
@@ -70,7 +70,7 @@ void EXCELExtension::Load(DuckDB &db) {
 	ExtensionUtil::RegisterFunction(db_instance, excel_text_func);
 }
 
-std::string EXCELExtension::Name() {
+std::string ExcelExtension::Name() {
 	return "excel";
 }
 
@@ -80,7 +80,7 @@ extern "C" {
 
 DUCKDB_EXTENSION_API void excel_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::EXCELExtension>();
+	db_wrapper.LoadExtension<duckdb::ExcelExtension>();
 }
 
 DUCKDB_EXTENSION_API const char *excel_version() {

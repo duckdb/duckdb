@@ -1,37 +1,34 @@
 #define DUCKDB_EXTENSION_MAIN
 
-#include "unicode/ucol.h"
-#include "unicode/stringpiece.h"
-#include "unicode/coll.h"
-#include "unicode/sortkey.h"
-#include "unicode/timezone.h"
-#include "unicode/calendar.h"
-
-#include "include/icu-extension.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/main/connection.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/parsed_data/create_collation_info.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "include/icu-dateadd.hpp"
 #include "include/icu-datepart.hpp"
 #include "include/icu-datesub.hpp"
 #include "include/icu-datetrunc.hpp"
-#include "include/icu-makedate.hpp"
 #include "include/icu-list-range.hpp"
-#include "include/icu-table-range.hpp"
+#include "include/icu-makedate.hpp"
 #include "include/icu-strptime.hpp"
+#include "include/icu-table-range.hpp"
 #include "include/icu-timebucket.hpp"
 #include "include/icu-timezone.hpp"
-
-#include "duckdb/main/database.hpp"
-#include "duckdb/main/connection.hpp"
-#include "duckdb/main/config.hpp"
-
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/function/scalar_function.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
-#include "duckdb/parser/parsed_data/create_collation_info.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/catalog/catalog.hpp"
+#include "include/icu_extension.hpp"
+#include "unicode/calendar.h"
+#include "unicode/coll.h"
+#include "unicode/sortkey.h"
+#include "unicode/stringpiece.h"
+#include "unicode/timezone.h"
+#include "unicode/ucol.h"
 
 #include <cassert>
 
@@ -225,7 +222,7 @@ static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parame
 	}
 }
 
-void ICUExtension::Load(DuckDB &db) {
+void IcuExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
 
@@ -288,7 +285,7 @@ void ICUExtension::Load(DuckDB &db) {
 	con.Commit();
 }
 
-std::string ICUExtension::Name() {
+std::string IcuExtension::Name() {
 	return "icu";
 }
 
@@ -298,7 +295,7 @@ extern "C" {
 
 DUCKDB_EXTENSION_API void icu_init(duckdb::DatabaseInstance &db) { // NOLINT
 	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::ICUExtension>();
+	db_wrapper.LoadExtension<duckdb::IcuExtension>();
 }
 
 DUCKDB_EXTENSION_API const char *icu_version() { // NOLINT
