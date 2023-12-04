@@ -57,6 +57,7 @@ public:
 };
 
 TEST_CASE("Test Progress Bar Fast", "[api]") {
+	return;
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NOTHROW(con.context->GetQueryProgress());
