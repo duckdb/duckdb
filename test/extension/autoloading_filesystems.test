@@ -1,0 +1,49 @@
+# name: test/extension/autoloading_filesystems.test
+# description: Tests for autoloading with filesystems
+# group: [extension]
+
+# This test assumes icu and json to be available in the LOCAL_EXTENSION_REPO and NOT linked into duckdb statically
+# -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
+require-env LOCAL_EXTENSION_REPO
+
+# Ensure we have a clean extension directory without any preinstalled extensions
+statement ok
+set extension_directory='__TEST_DIR__/autoloading_filesystems'
+
+### No autoloading nor installing: throw error with installation hint
+statement ok
+set autoload_known_extensions=false
+
+statement ok
+set autoinstall_known_extensions=false
+
+statement error
+SELECT * FROM 's3://some-bucket/a-file.csv'
+----
+Missing Extension Error: File s3://some-bucket/a-file.csv requires the extension httpfs to be loaded
+
+### With autoloading, install and correct repo
+statement ok
+set autoload_known_extensions=true
+
+statement ok
+set autoinstall_known_extensions=true
+
+statement ok
+set autoinstall_extension_repository='${LOCAL_EXTENSION_REPO}';
+
+# Set an invalid endpoint to ensure we fail in the httpfs extension when trying to connect
+statement ok
+SET s3_endpoint='false_endpoint';
+
+statement error
+SELECT * FROM 's3://some-bucket/a-file.csv'
+----
+IO Error: Connection error for HTTP HEAD to 'https://some-bucket.false_endpoint/a-file.csv'
+
+# Currently Azure is not yet autoloadable, so it should throw the normal error
+# TODO: enable autoloading for azure
+statement error
+SELECT * FROM 'azure://some-bucket/a-file.csv'
+----
+IO Error: No files found that match the pattern "azure://some-bucket/a-file.csv"

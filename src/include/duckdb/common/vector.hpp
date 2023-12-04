@@ -88,14 +88,14 @@ public:
 	}
 
 	typename original::reference back() {
-		if (original::empty()) {
+		if (MemorySafety<SAFE>::enabled && original::empty()) {
 			throw InternalException("'back' called on an empty vector!");
 		}
 		return get<SAFE>(original::size() - 1);
 	}
 
 	typename original::const_reference back() const {
-		if (original::empty()) {
+		if (MemorySafety<SAFE>::enabled && original::empty()) {
 			throw InternalException("'back' called on an empty vector!");
 		}
 		return get<SAFE>(original::size() - 1);

@@ -18,34 +18,34 @@ using std::string;
 
 SQLRETURN duckdb::FreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
 	if (!handle) {
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 
 	switch (handle_type) {
 	case SQL_HANDLE_DBC: {
-		auto *hdl = (duckdb::OdbcHandleDbc *)handle;
+		auto *hdl = static_cast<duckdb::OdbcHandleDbc *>(handle);
 		delete hdl;
 		return SQL_SUCCESS;
 	}
 	case SQL_HANDLE_DESC: {
-		auto *hdl = (duckdb::OdbcHandleDesc *)handle;
+		auto *hdl = static_cast<duckdb::OdbcHandleDesc *>(handle);
 		hdl->dbc->ResetStmtDescriptors(hdl);
 		delete hdl;
-		return SQL_ERROR;
+		return SQL_SUCCESS;
 	}
 	case SQL_HANDLE_ENV: {
-		auto *hdl = (duckdb::OdbcHandleEnv *)handle;
+		auto *hdl = static_cast<duckdb::OdbcHandleEnv *>(handle);
 		delete hdl;
 		return SQL_SUCCESS;
 	}
 	case SQL_HANDLE_STMT: {
-		auto *hdl = (duckdb::OdbcHandleStmt *)handle;
+		auto *hdl = static_cast<duckdb::OdbcHandleStmt *>(handle);
 		hdl->dbc->EraseStmtRef(hdl);
 		delete hdl;
 		return SQL_SUCCESS;
 	}
 	default:
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 }
 
@@ -72,7 +72,8 @@ SQLRETURN SQL_API SQLAllocHandle(SQLSMALLINT handle_type, SQLHANDLE input_handle
 	switch (handle_type) {
 	case SQL_HANDLE_DBC: {
 		D_ASSERT(input_handle);
-		auto *env = (duckdb::OdbcHandleEnv *)input_handle;
+
+		auto *env = static_cast<duckdb::OdbcHandleEnv *>(input_handle);
 		D_ASSERT(env->type == duckdb::OdbcHandleType::ENV);
 		*output_handle_ptr = new duckdb::OdbcHandleDbc(env);
 		return SQL_SUCCESS;
@@ -82,20 +83,20 @@ SQLRETURN SQL_API SQLAllocHandle(SQLSMALLINT handle_type, SQLHANDLE input_handle
 		return SQL_SUCCESS;
 	case SQL_HANDLE_STMT: {
 		D_ASSERT(input_handle);
-		auto *dbc = (duckdb::OdbcHandleDbc *)input_handle;
+		auto *dbc = static_cast<duckdb::OdbcHandleDbc *>(input_handle);
 		D_ASSERT(dbc->type == duckdb::OdbcHandleType::DBC);
 		*output_handle_ptr = new duckdb::OdbcHandleStmt(dbc);
 		return SQL_SUCCESS;
 	}
 	case SQL_HANDLE_DESC: {
 		D_ASSERT(input_handle);
-		auto *dbc = (duckdb::OdbcHandleDbc *)input_handle;
+		auto *dbc = static_cast<duckdb::OdbcHandleDbc *>(input_handle);
 		D_ASSERT(dbc->type == duckdb::OdbcHandleType::DBC);
 		*output_handle_ptr = new duckdb::OdbcHandleDesc(dbc);
 		return SQL_SUCCESS;
 	}
 	default:
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 }
 
@@ -114,8 +115,9 @@ static SQLUINTEGER ExtractMajorVersion(SQLPOINTER value_ptr) {
 SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                 SQLINTEGER string_length) {
 	duckdb::OdbcHandleEnv *env = nullptr;
-	if (ConvertEnvironment(environment_handle, env) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertEnvironment(environment_handle, env);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	switch (attribute) {
@@ -126,65 +128,72 @@ SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 		case SQL_OV_ODBC2:
 			// TODO actually do something with this?
 			// auto version = (SQLINTEGER)(uintptr_t)value_ptr;
+			env->odbc_version = major_version;
 			return SQL_SUCCESS;
 		default:
-			env->error_messages.emplace_back("ODBC version not supported.");
-			return SQL_ERROR;
+			return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetEnvAttr",
+			                                   "ODBC version not supported: " + std::to_string(major_version),
+			                                   SQLStateType::ST_HY092, "");
 		}
 	}
-	case SQL_ATTR_CONNECTION_POOLING:
-		if (env) {
-			return SQL_ERROR;
-		}
-		switch ((SQLINTEGER)(intptr_t)value_ptr) {
+	case SQL_ATTR_CONNECTION_POOLING: {
+		auto pooling = static_cast<SQLINTEGER>(reinterpret_cast<intptr_t>(value_ptr));
+		switch (pooling) {
 		case SQL_CP_OFF:
 		case SQL_CP_ONE_PER_DRIVER:
 		case SQL_CP_ONE_PER_HENV:
+			env->connection_pooling = pooling;
 			return SQL_SUCCESS;
 		default:
 			return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetConnectAttr",
 			                                   "Connection pooling not supported: " + std::to_string(attribute),
-			                                   SQLStateType::INVALID_ATTR_OPTION_ID, "");
+			                                   SQLStateType::ST_HY092, "");
 		}
+	}
 	case SQL_ATTR_CP_MATCH:
-		env->error_messages.emplace_back("Optional feature not supported.");
-		return SQL_ERROR;
-	case SQL_ATTR_OUTPUT_NTS: /* SQLINTEGER */
-		switch (*(SQLINTEGER *)value_ptr) {
-		case SQL_TRUE:
+		return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetConnectAttr",
+		                                   "Optional feature not implemented.", SQLStateType::ST_HY092, "");
+	case SQL_ATTR_OUTPUT_NTS: /* SQLINTEGER */ {
+		auto output_nts = static_cast<SQLINTEGER>(reinterpret_cast<intptr_t>(value_ptr));
+		if (output_nts == SQL_TRUE) {
+			env->output_nts = SQL_TRUE;
 			return SQL_SUCCESS;
-		default:
-			env->error_messages.emplace_back("Optional feature not supported.");
-			return SQL_ERROR;
 		}
+		return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetConnectAttr",
+		                                   "Optional feature not implemented.  SQL_ATTR_OUTPUT_NTS must be SQL_TRUE",
+		                                   SQLStateType::ST_HY092, "");
+	}
 	default:
-		return SQL_ERROR;
+		return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetEnvAttr", "Invalid attribute value",
+		                                   SQLStateType::ST_HY024, "");
 	}
 }
 
 SQLRETURN SQL_API SQLGetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                 SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
+
 	if (value_ptr == nullptr) {
-		return SQL_ERROR;
+		return SQL_SUCCESS;
 	}
-	auto *env = (duckdb::OdbcHandleEnv *)environment_handle;
+
+	auto *env = static_cast<duckdb::OdbcHandleEnv *>(environment_handle);
 	if (env->type != duckdb::OdbcHandleType::ENV) {
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 
 	switch (attribute) {
 	case SQL_ATTR_ODBC_VERSION:
-		*(SQLUINTEGER *)value_ptr = SQL_OV_ODBC3;
+		*static_cast<SQLINTEGER *>(value_ptr) = env->odbc_version;
 		break;
 	case SQL_ATTR_CONNECTION_POOLING:
-		*(SQLINTEGER *)value_ptr = SQL_CP_OFF;
+		*static_cast<SQLUINTEGER *>(value_ptr) = env->connection_pooling;
 		break;
 	case SQL_ATTR_OUTPUT_NTS:
-		*(SQLINTEGER *)value_ptr = SQL_TRUE;
+		*static_cast<SQLINTEGER *>(value_ptr) = env->output_nts;
 		break;
 	case SQL_ATTR_CP_MATCH:
-		env->error_messages.emplace_back("Optional feature not supported.");
-		return SQL_ERROR;
+		return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLGetEnvAttr",
+		                                   "Optional feature not implemented.", SQLStateType::ST_HYC00, "");
 	}
 	return SQL_SUCCESS;
 }
@@ -242,6 +251,14 @@ static SQLRETURN SetConnection(SQLHDBC connection_handle, SQLCHAR *conn_str) {
 			config.options.access_mode = duckdb::AccessMode::READ_ONLY;
 		}
 		bool cache_instance = db_name != ":memory:" && !db_name.empty();
+
+		config.SetOptionByName("duckdb_api", "odbc");
+		std::string custom_user_agent;
+		OdbcUtils::SetValueFromConnStr(conn_str, "custom_user_agent", custom_user_agent);
+		if (!custom_user_agent.empty()) {
+			config.SetOptionByName("custom_user_agent", custom_user_agent);
+		}
+
 		dbc->env->db = instance_cache.GetOrCreateInstance(db_name, config, cache_instance);
 	}
 
@@ -291,8 +308,9 @@ SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSM
 	    };
 
 	duckdb::OdbcHandle *hdl = nullptr;
-	if (ConvertHandle(handle, hdl) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertHandle(handle, hdl);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	bool is_valid_type;
@@ -371,8 +389,9 @@ SQLRETURN SQL_API SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQL
 	case SQL_HANDLE_STMT:
 	case SQL_HANDLE_DESC: {
 		duckdb::OdbcHandle *hdl = nullptr;
-		if (ConvertHandle(handle, hdl) != SQL_SUCCESS) {
-			return SQL_ERROR;
+		SQLRETURN ret = ConvertHandle(handle, hdl);
+		if (ret != SQL_SUCCESS) {
+			return ret;
 		}
 
 		// diag header fields
@@ -503,16 +522,26 @@ SQLRETURN SQL_API SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQL
 SQLRETURN SQL_API SQLDataSources(SQLHENV environment_handle, SQLUSMALLINT direction, SQLCHAR *server_name,
                                  SQLSMALLINT buffer_length1, SQLSMALLINT *name_length1_ptr, SQLCHAR *description,
                                  SQLSMALLINT buffer_length2, SQLSMALLINT *name_length2_ptr) {
-	auto *env = (duckdb::OdbcHandleEnv *)environment_handle;
-	env->error_messages.emplace_back("Driver Manager only function");
-	return SQL_ERROR;
+	duckdb::OdbcHandleEnv *env = nullptr;
+	SQLRETURN ret = ConvertEnvironment(environment_handle, env);
+	if (ret != SQL_SUCCESS) {
+		return ret;
+	}
+
+	return duckdb::SetDiagnosticRecord(env, SQL_ERROR, "SQLDataSources", "Driver Manager only function",
+	                                   SQLStateType::ST_HY000, "");
 }
 
 SQLRETURN SQL_API SQLDrivers(SQLHENV environment_handle, SQLUSMALLINT direction, SQLCHAR *driver_description,
                              SQLSMALLINT buffer_length1, SQLSMALLINT *description_length_ptr,
                              SQLCHAR *driver_attributes, SQLSMALLINT buffer_length2,
                              SQLSMALLINT *attributes_length_ptr) {
-	auto *env = (duckdb::OdbcHandleEnv *)environment_handle;
-	env->error_messages.emplace_back("Driver Manager only function");
-	return SQL_ERROR;
+	duckdb::OdbcHandleEnv *env = nullptr;
+	SQLRETURN ret = ConvertEnvironment(environment_handle, env);
+	if (ret != SQL_SUCCESS) {
+		return ret;
+	}
+
+	return duckdb::SetDiagnosticRecord(env, SQL_ERROR, "SQLDrivers", "Driver Manager only function",
+	                                   SQLStateType::ST_HY000, "");
 }

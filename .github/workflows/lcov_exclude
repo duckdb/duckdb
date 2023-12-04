@@ -1,10 +1,7 @@
 /usr*
 */cl.hpp
 */tools/jdbc/*
-*/tools/nodejs/*
 */tools/odbc/*
-*/tools/rest/*
-*/tools/rpkg/*
 */tools/shell/*
 */tools/sqlite3_api_wrapper/*
 */benchmark/*

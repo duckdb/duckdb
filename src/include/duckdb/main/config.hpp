@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/enums/order_type.hpp"
@@ -22,13 +22,13 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_scan.hpp"
+#include "duckdb/main/client_properties.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
-#include "duckdb/main/client_properties.hpp"
+#include "duckdb/storage/compression/bitpacking.hpp"
 
 namespace duckdb {
 class BufferPool;
@@ -39,6 +39,7 @@ class CompressionFunction;
 class TableFunctionRef;
 class OperatorExtension;
 class StorageExtension;
+class ExtensionCallback;
 
 struct CompressionFunctionSet;
 struct DBConfig;
@@ -95,6 +96,18 @@ struct DBConfigOptions {
 	bool use_direct_io = false;
 	//! Whether extensions should be loaded on start-up
 	bool load_extensions = true;
+#ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
+	//! Whether known extensions are allowed to be automatically loaded when a query depends on them
+	bool autoload_known_extensions = DUCKDB_EXTENSION_AUTOLOAD_DEFAULT;
+#else
+	bool autoload_known_extensions = false;
+#endif
+#ifdef DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT
+	//! Whether known extensions are allowed to be automatically installed when a query depends on them
+	bool autoinstall_known_extensions = DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT;
+#else
+	bool autoinstall_known_extensions = false;
+#endif
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = (idx_t)-1;
 	//! The maximum amount of CPU threads used by the database system. Default: all available.
@@ -160,6 +173,10 @@ struct DBConfigOptions {
 	static bool debug_print_bindings;
 	//! The peak allocation threshold at which to flush the allocator after completing a task (1 << 27, ~128MB)
 	idx_t allocator_flush_threshold = 134217728;
+	//! DuckDB API surface
+	string duckdb_api;
+	//! Metadata from DuckDB callers
+	string custom_user_agent;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -200,6 +217,8 @@ public:
 	case_insensitive_map_t<duckdb::unique_ptr<StorageExtension>> storage_extensions;
 	//! A buffer pool can be shared across multiple databases (if desired).
 	shared_ptr<BufferPool> buffer_pool;
+	//! Set of callbacks that can be installed by extensions
+	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
@@ -225,6 +244,8 @@ public:
 	DUCKDB_API void SetOption(const string &name, Value value);
 	DUCKDB_API void ResetOption(const string &name);
 
+	DUCKDB_API void CheckLock(const string &name);
+
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 
 	//! Return the list of possible compression functions for the specific physical type
@@ -236,11 +257,13 @@ public:
 	bool operator!=(const DBConfig &other);
 
 	DUCKDB_API CastFunctionSet &GetCastFunctions();
+	static idx_t GetSystemMaxThreads(FileSystem &fs);
 	void SetDefaultMaxThreads();
 	void SetDefaultMaxMemory();
 
 	OrderType ResolveOrder(OrderType order_type) const;
 	OrderByNullType ResolveNullOrder(OrderType order_type, OrderByNullType null_type) const;
+	const std::string UserAgent() const;
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;

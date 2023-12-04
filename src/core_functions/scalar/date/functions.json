@@ -63,7 +63,7 @@
         "struct": "DayNameFun",
         "name": "dayname",
         "parameters": "ts",
-        "description": "The (English) name of the weekday.",
+        "description": "The (English) name of the weekday",
         "example": "dayname(TIMESTAMP '1992-03-22')",
         "type": "scalar_function_set"
     },
@@ -172,6 +172,14 @@
         "type": "scalar_function_set"
     },
     {
+        "struct": "JulianDayFun",
+        "name": "julian",
+        "parameters": "ts",
+        "description": "Extract the Julian Day number from a date or timestamp",
+        "example": "julian(timestamp '2006-01-01 12:00')",
+        "type": "scalar_function_set"
+    },
+    {
         "name": "last_day",
         "parameters": "ts",
         "description": "Returns the last day of the month",
@@ -241,7 +249,7 @@
         "struct": "MonthNameFun",
         "name": "monthname",
         "parameters": "ts",
-        "description": "The (English) name of the month.",
+        "description": "The (English) name of the month",
         "example": "monthname(TIMESTAMP '1992-09-20')",
         "type": "scalar_function_set"
     },
@@ -272,14 +280,14 @@
         "struct": "StrpTimeFun",
         "name": "strptime",
         "parameters": "text,format",
-        "description": "Converts string to timestamp with time zone according to the format string if %Z is specified.",
+        "description": "Converts string to timestamp with time zone according to the format string if %Z is specified",
         "example": "strptime('Wed, 1 January 1992 - 08:38:40 PST', '%a, %-d %B %Y - %H:%M:%S %Z')",
         "type": "scalar_function_set"
     },
     {
         "name": "time_bucket",
         "parameters": "bucket_width,timestamp,origin",
-        "description": "Truncate timestamptz by the specified interval bucket_width. Buckets are aligned relative to origin timestamptz. origin defaults to 2000-01-03 00:00:00+00 for buckets that don\u2019t include a month or year interval, and to 2000-01-01 00:00:00+00 for month and year buckets.",
+        "description": "Truncate TIMESTAMPTZ by the specified interval bucket_width. Buckets are aligned relative to origin TIMESTAMPTZ. The origin defaults to 2000-01-03 00:00:00+00 for buckets that do not include a month or year interval, and to 2000-01-01 00:00:00+00 for month and year buckets",
         "example": "time_bucket(INTERVAL '2 weeks', TIMESTAMP '1992-04-20 15:26:00-07', TIMESTAMP '1992-04-01 00:00:00-07')",
         "type": "scalar_function_set"
     },
@@ -305,6 +313,13 @@
         "type": "scalar_function_set"
     },
     {
+        "name": "to_centuries",
+        "parameters": "integer",
+        "description": "Construct a century interval",
+        "example": "to_centuries(5)",
+        "type": "scalar_function"
+    },
+    {
         "name": "to_days",
         "parameters": "integer",
         "description": "Construct a day interval",
@@ -312,10 +327,17 @@
         "type": "scalar_function"
     },
     {
-        "name": "to_hours",
+        "name": "to_decades",
         "parameters": "integer",
+        "description": "Construct a decade interval",
+        "example": "to_decades(5)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "to_hours",
+        "parameters": "double",
         "description": "Construct a hour interval",
-        "example": "to_hours(5)",
+        "example": "to_hours(5.5)",
         "type": "scalar_function"
     },
     {
@@ -326,17 +348,24 @@
         "type": "scalar_function"
     },
     {
-        "name": "to_milliseconds",
+        "name": "to_millennia",
         "parameters": "integer",
+        "description": "Construct a millenium interval",
+        "example": "to_millennia(1)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "to_milliseconds",
+        "parameters": "double",
         "description": "Construct a millisecond interval",
-        "example": "to_milliseconds(5)",
+        "example": "to_milliseconds(5.5)",
         "type": "scalar_function"
     },
     {
         "name": "to_minutes",
-        "parameters": "integer",
+        "parameters": "double",
         "description": "Construct a minute interval",
-        "example": "to_minutes(5)",
+        "example": "to_minutes(5.5)",
         "type": "scalar_function"
     },
     {
@@ -348,9 +377,9 @@
     },
     {
         "name": "to_seconds",
-        "parameters": "integer",
+        "parameters": "double",
         "description": "Construct a second interval",
-        "example": "to_seconds(5)",
+        "example": "to_seconds(5.5)",
         "type": "scalar_function"
     },
     {
@@ -358,6 +387,13 @@
         "parameters": "sec",
         "description": "Converts secs since epoch to a timestamp with time zone",
         "example": "to_timestamp(1284352323.5)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "to_weeks",
+        "parameters": "integer",
+        "description": "Construct a week interval",
+        "example": "to_weeks(5)",
         "type": "scalar_function"
     },
     {
@@ -371,7 +407,7 @@
         "struct": "TryStrpTimeFun",
         "name": "try_strptime",
         "parameters": "text,format",
-        "description": "Converts string to timestamp using the format string (timestamp with time zone if %Z is specified). Returns NULL on failure.",
+        "description": "Converts string to timestamp using the format string (timestamp with time zone if %Z is specified). Returns NULL on failure",
         "example": "try_strptime('Wed, 1 January 1992 - 08:38:40 PM', '%a, %-d %B %Y - %I:%M:%S %p')",
         "type": "scalar_function_set"
     },

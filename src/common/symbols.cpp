@@ -40,6 +40,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/types/row/row_data_collection.hpp"
 
 using namespace duckdb;
 

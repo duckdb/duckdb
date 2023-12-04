@@ -2,6 +2,7 @@
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/fstream.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -95,4 +96,24 @@ TEST_CASE("Test file operations", "[file_system]") {
 	}
 	handle.reset();
 	fs->RemoveFile(fname);
+}
+
+TEST_CASE("absolute paths", "[file_system]") {
+	duckdb::LocalFileSystem fs;
+
+#ifndef _WIN32
+	REQUIRE(fs.IsPathAbsolute("/home/me"));
+	REQUIRE(!fs.IsPathAbsolute("./me"));
+	REQUIRE(!fs.IsPathAbsolute("me"));
+#else
+	const std::string long_path = "\\\\?\\D:\\very long network\\";
+	REQUIRE(fs.IsPathAbsolute(long_path));
+	const std::string network = "\\\\network_drive\\filename.csv";
+	REQUIRE(fs.IsPathAbsolute(network));
+	REQUIRE(fs.IsPathAbsolute("C:\\folder\\filename.csv"));
+	REQUIRE(fs.IsPathAbsolute("C:/folder\\filename.csv"));
+	REQUIRE(fs.NormalizeAbsolutePath("C:/folder\\filename.csv") == "c:\\folder\\filename.csv");
+	REQUIRE(fs.NormalizeAbsolutePath(network) == network);
+	REQUIRE(fs.NormalizeAbsolutePath(long_path) == "\\\\?\\d:\\very long network\\");
+#endif
 }

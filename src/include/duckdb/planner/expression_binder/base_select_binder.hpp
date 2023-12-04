@@ -21,6 +21,7 @@ class BoundSelectNode;
 struct BoundGroupInformation {
 	parsed_expression_map_t<idx_t> map;
 	case_insensitive_map_t<idx_t> alias_map;
+	unordered_map<idx_t, idx_t> collated_groups;
 };
 
 //! The BaseSelectBinder is the base binder of the SELECT, HAVING and QUALIFY binders. It can bind aggregates and window

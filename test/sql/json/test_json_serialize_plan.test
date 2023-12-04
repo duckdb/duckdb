@@ -1,0 +1,40 @@
+# name: test/sql/json/test_json_serialize_plan.test
+# group: [json]
+
+require noforcestorage
+
+require json
+
+statement ok
+CREATE TABLE tbl1 (i int);
+
+# Example with simple query
+query I
+SELECT json_serialize_plan('SELECT 1 + 2 FROM tbl1');
+----
+{"error":false,"plans":[{"type":"LOGICAL_PROJECTION","children":[{"type":"LOGICAL_GET","children":[],"table_index":0,"returned_types":[{"id":"INTEGER","type_info":null}],"names":["i"],"column_ids":[18446744073709551615],"projection_ids":[],"table_filters":{"filters":[]},"name":"seq_scan","arguments":[],"original_arguments":[],"has_serialize":true,"function_data":{"catalog":"memory","schema":"main","table":"tbl1","is_index_scan":false,"is_create_index":false,"result_ids":[]},"projected_input":[]}],"table_index":1,"expressions":[{"expression_class":"BOUND_FUNCTION","type":"BOUND_FUNCTION","alias":"","return_type":{"id":"INTEGER","type_info":null},"children":[{"expression_class":"BOUND_CONSTANT","type":"VALUE_CONSTANT","alias":"","value":{"type":{"id":"INTEGER","type_info":null},"is_null":false,"value":1}},{"expression_class":"BOUND_CONSTANT","type":"VALUE_CONSTANT","alias":"","value":{"type":{"id":"INTEGER","type_info":null},"is_null":false,"value":2}}],"name":"+","arguments":[{"id":"INTEGER","type_info":null},{"id":"INTEGER","type_info":null}],"original_arguments":[],"has_serialize":false,"is_operator":true}]}]}
+
+# Example with skip_null and skip_empty
+query I
+SELECT json_serialize_plan('SELECT *, 1 + 2 FROM tbl1', skip_null := true, skip_empty := true);
+----
+{"error":false,"plans":[{"type":"LOGICAL_PROJECTION","children":[{"type":"LOGICAL_GET","table_index":0,"returned_types":[{"id":"INTEGER"}],"names":["i"],"column_ids":[0],"name":"seq_scan","has_serialize":true,"function_data":{"catalog":"memory","schema":"main","table":"tbl1","is_index_scan":false,"is_create_index":false}}],"table_index":1,"expressions":[{"expression_class":"BOUND_REF","type":"BOUND_REF","alias":"i","return_type":{"id":"INTEGER"},"index":0},{"expression_class":"BOUND_FUNCTION","type":"BOUND_FUNCTION","return_type":{"id":"INTEGER"},"children":[{"expression_class":"BOUND_CONSTANT","type":"VALUE_CONSTANT","value":{"type":{"id":"INTEGER"},"is_null":false,"value":1}},{"expression_class":"BOUND_CONSTANT","type":"VALUE_CONSTANT","value":{"type":{"id":"INTEGER"},"is_null":false,"value":2}}],"name":"+","arguments":[{"id":"INTEGER"},{"id":"INTEGER"}],"has_serialize":false,"is_operator":true}]}]}
+
+# Example with skip_null and skip_empty and optimize
+query I
+SELECT json_serialize_plan('SELECT *, 1 + 2 FROM tbl1', skip_null := true, skip_empty := true, optimize := true);
+----
+{"error":false,"plans":[{"type":"LOGICAL_PROJECTION","children":[{"type":"LOGICAL_GET","table_index":0,"returned_types":[{"id":"INTEGER"}],"names":["i"],"column_ids":[0],"projection_ids":[0],"name":"seq_scan","has_serialize":true,"function_data":{"catalog":"memory","schema":"main","table":"tbl1","is_index_scan":false,"is_create_index":false}}],"table_index":1,"expressions":[{"expression_class":"BOUND_REF","type":"BOUND_REF","alias":"i","return_type":{"id":"INTEGER"},"index":0},{"expression_class":"BOUND_CONSTANT","type":"VALUE_CONSTANT","value":{"type":{"id":"INTEGER"},"is_null":false,"value":3}}]}]}
+
+# Example with syntax error
+query I
+SELECT json_serialize_plan('SELECT AND LAUNCH ROCKETS WHERE 1 = 1');
+----
+{"error":true,"error_type":"parser","error_message":"syntax error at or near \"AND\"\nLINE 1: SELECT AND LAUNCH ROCKETS WHERE 1 = 1\n               ^"}
+
+# Example with binding error
+# The binding error message "did you mean table xyz" is not deterministic, so use a LIKE here.
+query I
+SELECT json_serialize_plan('SELECT * FROM nonexistent_table') LIKE '{"error":true,"error_type":"catalog","error_message":"Table with name nonexistent_table does not exist%';
+----
+true

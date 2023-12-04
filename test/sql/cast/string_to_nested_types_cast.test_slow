@@ -52,7 +52,7 @@ SELECT CAST(LIST(date)::VARCHAR AS DATE[]) FROM test_all_types();
 query I
 SELECT CAST(LIST(time)::VARCHAR AS TIME[]) FROM test_all_types();
 ----
-[00:00:00, 23:59:59.999999, NULL]
+[00:00:00, 24:00:00, NULL]
 
 query I
 SELECT CAST(LIST(timestamp)::VARCHAR AS TIME[]) FROM test_all_types();
@@ -92,7 +92,7 @@ statement ok
 CREATE TABLE big_list(col INT[]);
 
 statement ok    
-COPY (SELECT [i, NULL]::VARCHAR FROM range(0, 2000) tbl(i)) TO '__TEST_DIR__/big_list.csv';
+COPY (SELECT [i, NULL]::VARCHAR FROM range(0, 2000) tbl(i)) TO '__TEST_DIR__/big_list.csv' (HEADER 0);
 
 statement ok
 COPY big_list FROM '__TEST_DIR__/big_list.csv';
@@ -148,7 +148,7 @@ query I
 SELECT CAST(struct_pack(A=>time)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
 ----
 {'A': 00:00:00}
-{'A': 23:59:59.999999}
+{'A': 24:00:00}
 {'A': NULL}
 
 query I

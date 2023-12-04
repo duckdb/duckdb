@@ -21,6 +21,10 @@ namespace duckdb {
 // Access Mode
 //===--------------------------------------------------------------------===//
 void AccessModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (db) {
+		throw InvalidInputException("Cannot change access_mode setting while database is running - it must be set when "
+		                            "opening or attaching the database");
+	}
 	auto parameter = StringUtil::Lower(input.ToString());
 	if (parameter == "automatic") {
 		config.options.access_mode = AccessMode::AUTOMATIC;
@@ -527,6 +531,52 @@ Value CustomExtensionRepository::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Autoload Extension Repository
+//===--------------------------------------------------------------------===//
+void AutoloadExtensionRepository::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).autoinstall_extension_repo = ClientConfig().autoinstall_extension_repo;
+}
+
+void AutoloadExtensionRepository::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).autoinstall_extension_repo = StringUtil::Lower(input.ToString());
+}
+
+Value AutoloadExtensionRepository::GetSetting(ClientContext &context) {
+	return Value(ClientConfig::GetConfig(context).autoinstall_extension_repo);
+}
+
+//===--------------------------------------------------------------------===//
+// Autoinstall Known Extensions
+//===--------------------------------------------------------------------===//
+void AutoinstallKnownExtensions::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.autoinstall_known_extensions = input.GetValue<bool>();
+}
+
+void AutoinstallKnownExtensions::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.autoinstall_known_extensions = DBConfig().options.autoinstall_known_extensions;
+}
+
+Value AutoinstallKnownExtensions::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.autoinstall_known_extensions);
+}
+//===--------------------------------------------------------------------===//
+// Autoload Known Extensions
+//===--------------------------------------------------------------------===//
+void AutoloadKnownExtensions::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.autoload_known_extensions = input.GetValue<bool>();
+}
+
+void AutoloadKnownExtensions::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.autoload_known_extensions = DBConfig().options.autoload_known_extensions;
+}
+
+Value AutoloadKnownExtensions::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.autoload_known_extensions);
+}
+
+//===--------------------------------------------------------------------===//
 // Enable Progress Bar
 //===--------------------------------------------------------------------===//
 void EnableProgressBarSetting::ResetLocal(ClientContext &context) {
@@ -562,21 +612,6 @@ void EnableProgressBarPrintSetting::ResetLocal(ClientContext &context) {
 
 Value EnableProgressBarPrintSetting::GetSetting(ClientContext &context) {
 	return Value::BOOLEAN(ClientConfig::GetConfig(context).print_progress_bar);
-}
-
-//===--------------------------------------------------------------------===//
-// Experimental Parallel CSV
-//===--------------------------------------------------------------------===//
-void ExperimentalParallelCSVSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	Printer::Print("experimental_parallel_csv is deprecated and will be removed with the next release - the parallel "
-	               "CSV reader is now standard and does not need to be manually enabled anymore 1");
-}
-
-void ExperimentalParallelCSVSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-}
-
-Value ExperimentalParallelCSVSetting::GetSetting(ClientContext &context) {
-	return Value();
 }
 
 //===--------------------------------------------------------------------===//
@@ -695,17 +730,12 @@ Value ForceCompressionSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void ForceBitpackingModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto mode_str = StringUtil::Lower(input.ToString());
-	if (mode_str == "none") {
-		config.options.force_bitpacking_mode = BitpackingMode::AUTO;
-	} else {
-		auto mode = BitpackingModeFromString(mode_str);
-		if (mode == BitpackingMode::AUTO) {
-			throw ParserException(
-			    "Unrecognized option for force_bitpacking_mode, expected none, constant, constant_delta, "
-			    "delta_for, or for");
-		}
-		config.options.force_bitpacking_mode = mode;
+	auto mode = BitpackingModeFromString(mode_str);
+	if (mode == BitpackingMode::INVALID) {
+		throw ParserException("Unrecognized option for force_bitpacking_mode, expected none, constant, constant_delta, "
+		                      "delta_for, or for");
 	}
+	config.options.force_bitpacking_mode = mode;
 }
 
 void ForceBitpackingModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -1171,6 +1201,55 @@ void FlushAllocatorSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) 
 Value FlushAllocatorSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(StringUtil::BytesToHumanReadableString(config.options.allocator_flush_threshold));
+}
+
+//===--------------------------------------------------------------------===//
+// DuckDBApi Setting
+//===--------------------------------------------------------------------===//
+
+void DuckDBApiSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_value = input.GetValue<string>();
+	if (db) {
+		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
+	}
+	config.options.duckdb_api += " " + new_value;
+}
+
+void DuckDBApiSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (db) {
+		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
+	}
+	config.options.duckdb_api = DBConfig().options.duckdb_api;
+}
+
+Value DuckDBApiSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.duckdb_api);
+}
+
+//===--------------------------------------------------------------------===//
+// CustomUserAgent Setting
+//===--------------------------------------------------------------------===//
+
+void CustomUserAgentSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_value = input.GetValue<string>();
+	if (db) {
+		throw InvalidInputException("Cannot change custom_user_agent setting while database is running");
+	}
+	config.options.custom_user_agent =
+	    config.options.custom_user_agent.empty() ? new_value : config.options.custom_user_agent + " " + new_value;
+}
+
+void CustomUserAgentSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (db) {
+		throw InvalidInputException("Cannot change custom_user_agent setting while database is running");
+	}
+	config.options.custom_user_agent = DBConfig().options.custom_user_agent;
+}
+
+Value CustomUserAgentSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.custom_user_agent);
 }
 
 } // namespace duckdb

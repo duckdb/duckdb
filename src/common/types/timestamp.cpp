@@ -341,4 +341,11 @@ int64_t Timestamp::GetEpochNanoSeconds(timestamp_t timestamp) {
 	return result;
 }
 
+double Timestamp::GetJulianDay(timestamp_t timestamp) {
+	double result = Timestamp::GetTime(timestamp).micros;
+	result /= Interval::MICROS_PER_DAY;
+	result += Date::ExtractJulianDay(Timestamp::GetDate(timestamp));
+	return result;
+}
+
 } // namespace duckdb

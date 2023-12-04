@@ -65,6 +65,7 @@ public:
 	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory, ArrowStreamParameters &parameters);
 
 	//! Get the schema of the arrow object
+	static void GetSchemaInternal(py::handle arrow_object, ArrowSchemaWrapper &schema);
 	static void GetSchema(uintptr_t factory_ptr, ArrowSchemaWrapper &schema);
 
 	//! Arrow Object (i.e., Scanner, Record Batch Reader, Table, Dataset)
@@ -75,7 +76,8 @@ public:
 private:
 	//! We transform a TableFilterSet to an Arrow Expression Object
 	static py::object TransformFilter(TableFilterSet &filters, std::unordered_map<idx_t, string> &columns,
-	                                  const ClientProperties &client_properties);
+	                                  unordered_map<idx_t, idx_t> filter_to_col,
+	                                  const ClientProperties &client_properties, const ArrowTableType &arrow_table);
 
 	static py::object ProduceScanner(py::object &arrow_scanner, py::handle &arrow_obj_handle,
 	                                 ArrowStreamParameters &parameters, const ClientProperties &client_properties);

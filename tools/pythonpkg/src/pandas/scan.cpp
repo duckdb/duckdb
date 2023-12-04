@@ -234,7 +234,7 @@ py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &origin
 	return copy_df;
 }
 
-void PandasScanFunction::PandasSerialize(FieldWriter &writer, const FunctionData *bind_data,
+void PandasScanFunction::PandasSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                          const TableFunction &function) {
 	throw NotImplementedException("PandasScan function cannot be serialized");
 }

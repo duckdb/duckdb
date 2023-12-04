@@ -335,7 +335,7 @@ LogicalType PandasAnalyzer::GetItemType(py::object ele, bool &can_convert) {
 		auto extended_type = ConvertNumpyType(ele.attr("dtype"));
 		LogicalType ltype;
 		ltype = NumpyToLogicalType(extended_type);
-		if (extended_type == NumpyNullableType::OBJECT) {
+		if (extended_type.type == NumpyNullableType::OBJECT) {
 			LogicalType converted_type = InnerAnalyze(ele, can_convert, false, 1);
 			if (can_convert) {
 				ltype = converted_type;
@@ -363,6 +363,16 @@ uint64_t PandasAnalyzer::GetSampleIncrement(idx_t rows) {
 	return rows / sample;
 }
 
+static py::object FindFirstNonNull(const py::handle &row, idx_t offset, idx_t range) {
+	for (idx_t i = 0; i < range; i++) {
+		auto obj = row(offset + i);
+		if (!obj.is_none()) {
+			return obj;
+		}
+	}
+	return py::none();
+}
+
 LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, bool sample, idx_t increment) {
 	idx_t rows = py::len(column);
 
@@ -380,18 +390,14 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, b
 	}
 	auto row = column.attr("__getitem__");
 
-	vector<LogicalType> types;
-	auto item_type = GetItemType(row(0), can_convert);
-	if (!can_convert) {
-		return item_type;
-	}
-	types.push_back(item_type);
-
 	if (sample) {
 		increment = GetSampleIncrement(rows);
 	}
-	for (idx_t i = increment; i < rows; i += increment) {
-		auto next_item_type = GetItemType(row(i), can_convert);
+	LogicalType item_type = LogicalType::SQLNULL;
+	vector<LogicalType> types;
+	for (idx_t i = 0; i < rows; i += increment) {
+		auto obj = FindFirstNonNull(row, i, increment);
+		auto next_item_type = GetItemType(obj, can_convert);
 		types.push_back(next_item_type);
 
 		if (!can_convert || !UpgradeType(item_type, next_item_type)) {

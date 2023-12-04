@@ -49,7 +49,7 @@ if args.fix:
 
 DASH_COUNT = 80
 total_difference = 0
-allowed_difference = 1
+allowed_difference = 0
 
 
 def check_file(path, partial_coverage_dict):

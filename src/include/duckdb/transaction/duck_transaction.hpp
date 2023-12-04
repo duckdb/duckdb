@@ -11,12 +11,13 @@
 #include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
+class RowVersionManager;
 
 class DuckTransaction : public Transaction {
 public:
 	DuckTransaction(TransactionManager &manager, ClientContext &context, transaction_t start_time,
 	                transaction_t transaction_id);
-	~DuckTransaction();
+	~DuckTransaction() override;
 
 	//! The start timestamp of this transaction
 	transaction_t start_time;
@@ -49,7 +50,8 @@ public:
 
 	bool ChangesMade();
 
-	void PushDelete(DataTable &table, ChunkVectorInfo *vinfo, row_t rows[], idx_t count, idx_t base_row);
+	void PushDelete(DataTable &table, RowVersionManager &info, idx_t vector_idx, row_t rows[], idx_t count,
+	                idx_t base_row);
 	void PushAppend(DataTable &table, idx_t row_start, idx_t row_count);
 	UpdateInfo *CreateUpdateInfo(idx_t type_size, idx_t entries);
 

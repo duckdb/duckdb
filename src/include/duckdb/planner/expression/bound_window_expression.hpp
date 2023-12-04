@@ -43,12 +43,17 @@ public:
 	//! The window boundaries
 	WindowBoundary start = WindowBoundary::INVALID;
 	WindowBoundary end = WindowBoundary::INVALID;
+	//! The EXCLUDE clause
+	WindowExcludeMode exclude_clause = WindowExcludeMode::NO_OTHER;
 
 	unique_ptr<Expression> start_expr;
 	unique_ptr<Expression> end_expr;
 	//! Offset and default expressions for WINDOW_LEAD and WINDOW_LAG functions
 	unique_ptr<Expression> offset_expr;
 	unique_ptr<Expression> default_expr;
+
+	//! Statistics belonging to the other expressions (start, end, offset, default)
+	vector<unique_ptr<BaseStatistics>> expr_stats;
 
 public:
 	bool IsWindow() const override {
@@ -65,10 +70,7 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
-
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<Expression> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 };
 } // namespace duckdb

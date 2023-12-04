@@ -54,10 +54,7 @@ FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 }
 
 bool PathMatched(const string &path, const string &sub_path) {
-	if (path.rfind(sub_path, 0) == 0) {
-		return true;
-	}
-	return false;
+	return path.rfind(sub_path, 0) == 0;
 }
 
 #ifndef _WIN32
@@ -147,7 +144,15 @@ bool FileSystem::IsPathAbsolute(const string &path) {
 	if (StartsWithSingleBackslash(path)) {
 		return true;
 	}
-	// 2) A disk designator with a backslash (e.g., C:\ or C:/)
+	// 2) special "long paths" on windows
+	if (PathMatched(path, "\\\\?\\")) {
+		return true;
+	}
+	// 3) a network path
+	if (PathMatched(path, "\\\\")) {
+		return true;
+	}
+	// 4) A disk designator with a backslash (e.g., C:\ or C:/)
 	auto path_aux = path;
 	path_aux.erase(0, 1);
 	if (PathMatched(path_aux, ":\\") || PathMatched(path_aux, ":/")) {
@@ -344,7 +349,7 @@ bool FileSystem::FileExists(const string &filename) {
 }
 
 bool FileSystem::IsPipe(const string &filename) {
-	throw NotImplementedException("%s: IsPipe is not implemented!", GetName());
+	return false;
 }
 
 void FileSystem::RemoveFile(const string &filename) {
@@ -397,16 +402,31 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
+static string LookupExtensionForPattern(const string &pattern) {
+	for (const auto &entry : EXTENSION_FILE_PREFIXES) {
+		if (StringUtil::StartsWith(pattern, entry.name)) {
+			return entry.extension;
+		}
+	}
+	return "";
+}
+
 vector<string> FileSystem::GlobFiles(const string &pattern, ClientContext &context, FileGlobOptions options) {
 	auto result = Glob(pattern);
 	if (result.empty()) {
-		string required_extension;
-		if (FileSystem::IsRemoteFile(pattern)) {
-			required_extension = "httpfs";
-		}
+		string required_extension = LookupExtensionForPattern(pattern);
 		if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
-			// an extension is required to read this file but it is not loaded - try to load it
-			ExtensionHelper::LoadExternalExtension(context, required_extension);
+			auto &dbconfig = DBConfig::GetConfig(context);
+			if (!ExtensionHelper::CanAutoloadExtension(required_extension) ||
+			    !dbconfig.options.autoload_known_extensions) {
+				auto error_message =
+				    "File " + pattern + " requires the extension " + required_extension + " to be loaded";
+				error_message =
+				    ExtensionHelper::AddExtensionInstallHintToErrorMsg(context, error_message, required_extension);
+				throw MissingExtensionException(error_message);
+			}
+			// an extension is required to read this file, but it is not loaded - try to load it
+			ExtensionHelper::AutoLoadExtension(context, required_extension);
 			// success! glob again
 			// check the extension is loaded just in case to prevent an infinite loop here
 			if (!context.db->ExtensionIsLoaded(required_extension)) {
@@ -485,6 +505,10 @@ bool FileHandle::CanSeek() {
 	return file_system.CanSeek();
 }
 
+bool FileHandle::IsPipe() {
+	return file_system.IsPipe(path);
+}
+
 string FileHandle::ReadLine() {
 	string result;
 	char buffer[1];
@@ -520,7 +544,7 @@ FileType FileHandle::GetType() {
 }
 
 bool FileSystem::IsRemoteFile(const string &path) {
-	const string prefixes[] = {"http://", "https://", "s3://"};
+	const string prefixes[] = {"http://", "https://", "s3://", "s3a://", "s3n://", "gcs://", "r2://"};
 	for (auto &prefix : prefixes) {
 		if (StringUtil::StartsWith(path, prefix)) {
 			return true;

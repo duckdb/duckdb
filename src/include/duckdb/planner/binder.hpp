@@ -47,6 +47,7 @@ struct BoundCreateTableInfo;
 struct BoundCreateFunctionInfo;
 struct CommonTableExpressionInfo;
 struct BoundParameterMap;
+struct BoundPragmaInfo;
 
 enum class BindingMode : uint8_t { STANDARD_BINDING, EXTRACT_NAMES };
 
@@ -120,6 +121,7 @@ public:
 	//! Check usage, and cast named parameters to their types
 	static void BindNamedParameters(named_parameter_type_map_t &types, named_parameter_map_t &values,
 	                                QueryErrorContext &error_context, string &func_name);
+	unique_ptr<BoundPragmaInfo> BindPragma(PragmaInfo &info, QueryErrorContext error_context);
 
 	unique_ptr<BoundTableRef> Bind(TableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundTableRef &ref);
@@ -234,6 +236,10 @@ private:
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);
 
+	//! Tries to bind the table name with replacement scans
+	unique_ptr<BoundTableRef> BindWithReplacementScan(ClientContext &context, const string &table_name,
+	                                                  BaseTableRef &ref);
+
 	BoundStatement Bind(SelectStatement &stmt);
 	BoundStatement Bind(InsertStatement &stmt);
 	BoundStatement Bind(CopyStatement &stmt);
@@ -260,6 +266,7 @@ private:
 	BoundStatement Bind(LogicalPlanStatement &stmt);
 	BoundStatement Bind(AttachStatement &stmt);
 	BoundStatement Bind(DetachStatement &stmt);
+	BoundStatement Bind(CopyDatabaseStatement &stmt);
 
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
 	                             const string &alias, idx_t update_table_index,
@@ -320,7 +327,8 @@ private:
 	BoundStatement BindCopyFrom(CopyStatement &stmt);
 
 	void BindModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
-	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index);
+	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index,
+	                       const vector<idx_t> &expansion_count = {});
 
 	BoundStatement BindSummarize(ShowStatement &stmt);
 	unique_ptr<BoundResultModifier> BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod);
@@ -358,9 +366,15 @@ private:
 
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
 	void BindSchemaOrCatalog(string &catalog_name, string &schema_name);
+	const string BindCatalog(string &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 
 	unique_ptr<BoundQueryNode> BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table);
+
+	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(CopyDatabaseStatement &stmt, Catalog &from_database,
+	                                                   Catalog &to_database);
+	unique_ptr<LogicalOperator> BindCopyDatabaseData(CopyDatabaseStatement &stmt, Catalog &from_database,
+	                                                 Catalog &to_database);
 
 public:
 	// This should really be a private constructor, but make_shared does not allow it...

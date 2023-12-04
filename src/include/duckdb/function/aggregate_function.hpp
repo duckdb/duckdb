@@ -8,12 +8,38 @@
 
 #pragma once
 
+#include "duckdb/common/array.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+
+//! A half-open range of frame boundary values _relative to the current row_
+//! This is why they are signed values.
+struct FrameDelta {
+	FrameDelta() : begin(0), end(0) {};
+	FrameDelta(int64_t begin, int64_t end) : begin(begin), end(end) {};
+	int64_t begin = 0;
+	int64_t end = 0;
+};
+
+//! The half-open ranges of frame boundary values relative to the current row
+using FrameStats = array<FrameDelta, 2>;
+
+//! The partition data for custom window functions
+struct WindowPartitionInput {
+	WindowPartitionInput(const Vector inputs[], idx_t input_count, idx_t count, const ValidityMask &filter_mask,
+	                     const FrameStats &stats)
+	    : inputs(inputs), input_count(input_count), count(count), filter_mask(filter_mask), stats(stats) {
+	}
+	const Vector *inputs;
+	idx_t input_count;
+	idx_t count;
+	const ValidityMask &filter_mask;
+	const FrameStats stats;
+};
 
 //! The type used for sizing hashed aggregate function states
 typedef idx_t (*aggregate_size_t)();
@@ -40,21 +66,18 @@ typedef void (*aggregate_destructor_t)(Vector &state, AggregateInputData &aggr_i
 typedef void (*aggregate_simple_update_t)(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
                                           data_ptr_t state, idx_t count);
 
-//! The type used for updating complex windowed aggregate functions (optional)
-typedef void (*aggregate_window_t)(Vector inputs[], const ValidityMask &filter_mask,
-                                   AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
-                                   const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t rid,
-                                   idx_t bias);
+//! The type used for computing complex/custom windowed aggregate functions (optional)
+typedef void (*aggregate_window_t)(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
+                                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &subframes,
+                                   Vector &result, idx_t rid);
 
-typedef void (*aggregate_serialize_t)(FieldWriter &writer, const FunctionData *bind_data,
+//! The type used for initializing shared complex/custom windowed aggregate state (optional)
+typedef void (*aggregate_wininit_t)(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
+                                    data_ptr_t g_state);
+
+typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                       const AggregateFunction &function);
-typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(PlanDeserializationState &context, FieldReader &reader,
-                                                            AggregateFunction &function);
-
-typedef void (*aggregate_format_serialize_t)(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
-                                             const AggregateFunction &function);
-typedef unique_ptr<FunctionData> (*aggregate_format_deserialize_t)(FormatDeserializer &deserializer,
-                                                                   AggregateFunction &function);
+typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deserializer, AggregateFunction &function);
 
 class AggregateFunction : public BaseScalarFunction {
 public:
@@ -70,8 +93,7 @@ public:
 	                         LogicalType(LogicalTypeId::INVALID), null_handling),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
 	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize), format_serialize(nullptr), format_deserialize(nullptr),
-	      order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
+	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
 	}
 
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -85,8 +107,7 @@ public:
 	                         LogicalType(LogicalTypeId::INVALID)),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
 	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize), format_serialize(nullptr), format_deserialize(nullptr),
-	      order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
+	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
 	}
 
 	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
@@ -124,8 +145,10 @@ public:
 	aggregate_finalize_t finalize;
 	//! The simple aggregate update function (may be null)
 	aggregate_simple_update_t simple_update;
-	//! The windowed aggregate frame update function (may be null)
+	//! The windowed aggregate custom function (may be null)
 	aggregate_window_t window;
+	//! The windowed aggregate custom initialization function (may be null)
+	aggregate_wininit_t window_init = nullptr;
 
 	//! The bind function (may be null)
 	bind_aggregate_function_t bind;
@@ -137,8 +160,6 @@ public:
 
 	aggregate_serialize_t serialize;
 	aggregate_deserialize_t deserialize;
-	aggregate_format_serialize_t format_serialize;
-	aggregate_format_deserialize_t format_deserialize;
 	//! Whether or not the aggregate is order dependent
 	AggregateOrderDependent order_dependent;
 
@@ -228,12 +249,13 @@ public:
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void UnaryWindow(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
-	                        idx_t input_count, data_ptr_t state, const FrameBounds &frame, const FrameBounds &prev,
-	                        Vector &result, idx_t rid, idx_t bias) {
-		D_ASSERT(input_count == 1);
-		AggregateExecutor::UnaryWindow<STATE, INPUT_TYPE, RESULT_TYPE, OP>(inputs[0], filter_mask, aggr_input_data,
-		                                                                   state, frame, prev, result, rid, bias);
+	static void UnaryWindow(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
+	                        const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &subframes, Vector &result,
+	                        idx_t rid) {
+
+		D_ASSERT(partition.input_count == 1);
+		AggregateExecutor::UnaryWindow<STATE, INPUT_TYPE, RESULT_TYPE, OP>(
+		    partition.inputs[0], partition.filter_mask, aggr_input_data, l_state, subframes, result, rid, g_state);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>

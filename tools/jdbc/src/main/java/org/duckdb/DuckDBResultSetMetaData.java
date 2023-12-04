@@ -11,6 +11,7 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.OffsetTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.UUID;
 
 public class DuckDBResultSetMetaData implements ResultSetMetaData {
@@ -33,7 +34,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
         this.column_types = column_types_al.toArray(this.column_types);
 
         for (String column_type_detail : this.column_types_details) {
-            if (column_type_detail.startsWith("DECIMAL")) {
+            if (TypeNameToType(column_type_detail) == DuckDBColumnType.DECIMAL) {
                 column_types_meta.add(DuckDBColumnTypeMetaData.parseColumnTypeMetadata(column_type_detail));
             } else {
                 column_types_meta.add(null);
@@ -186,6 +187,10 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
             return UUID.class.getName();
         case LIST:
             return DuckDBArray.class.getName();
+        case MAP:
+            return HashMap.class.getName();
+        case STRUCT:
+            return DuckDBStruct.class.getName();
         default:
             return String.class.getName();
         }

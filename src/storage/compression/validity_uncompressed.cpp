@@ -242,7 +242,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 	for (idx_t i = 0; i < scan_count; i++) {
 		if (!source_mask.RowIsValid(start + i)) {
 			if (result_mask.AllValid()) {
-				result_mask.Initialize(MaxValue<idx_t>(STANDARD_VECTOR_SIZE, result_offset + scan_count));
+				result_mask.Initialize();
 			}
 			result_mask.SetInvalid(result_offset + i);
 		}
@@ -323,7 +323,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 		// now finally we can merge the input mask with the result mask
 		if (input_mask != ValidityMask::ValidityBuffer::MAX_ENTRY) {
 			if (!result_data) {
-				result_mask.Initialize(MaxValue<idx_t>(STANDARD_VECTOR_SIZE, result_offset + scan_count));
+				result_mask.Initialize();
 				result_data = (validity_t *)result_mask.GetData();
 			}
 			result_data[current_result_idx] &= input_mask;
@@ -363,7 +363,7 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 				continue;
 			}
 			if (!result_data) {
-				result_mask.Initialize(MaxValue<idx_t>(STANDARD_VECTOR_SIZE, scan_count));
+				result_mask.Initialize();
 				result_data = result_mask.GetData();
 			}
 			result_data[i] = input_entry;
@@ -398,7 +398,8 @@ static unique_ptr<CompressionAppendState> ValidityInitAppend(ColumnSegment &segm
 	return make_uniq<CompressionAppendState>(std::move(handle));
 }
 
-unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, block_id_t block_id) {
+unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, block_id_t block_id,
+                                                       optional_ptr<ColumnSegmentState> segment_state) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	if (block_id == INVALID_BLOCK) {
 		auto handle = buffer_manager.Pin(segment.block);
@@ -417,7 +418,7 @@ idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segmen
 	if (data.validity.AllValid()) {
 		// no null values: skip append
 		segment.count += append_count;
-		validity_stats.SetHasNoNull();
+		validity_stats.SetHasNoNullFast();
 		return append_count;
 	}
 
@@ -426,9 +427,9 @@ idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segmen
 		auto idx = data.sel->get_index(offset + i);
 		if (!data.validity.RowIsValidUnsafe(idx)) {
 			mask.SetInvalidUnsafe(segment.count + i);
-			validity_stats.SetHasNull();
+			validity_stats.SetHasNullFast();
 		} else {
-			validity_stats.SetHasNoNull();
+			validity_stats.SetHasNoNullFast();
 		}
 	}
 	segment.count += append_count;
@@ -448,11 +449,10 @@ void ValidityRevertAppend(ColumnSegment &segment, idx_t start_row) {
 	if (start_bit % 8 != 0) {
 		// handle sub-bit stuff (yay)
 		idx_t byte_pos = start_bit / 8;
-		idx_t bit_start = byte_pos * 8;
 		idx_t bit_end = (byte_pos + 1) * 8;
-		ValidityMask mask(reinterpret_cast<validity_t *>(handle.Ptr() + byte_pos));
+		ValidityMask mask(reinterpret_cast<validity_t *>(handle.Ptr()));
 		for (idx_t i = start_bit; i < bit_end; i++) {
-			mask.SetValid(i - bit_start);
+			mask.SetValid(i);
 		}
 		revert_start = bit_end / 8;
 	} else {

@@ -162,9 +162,14 @@ class TestADBCStatementBind(object):
 
             array = adbc_driver_manager.ArrowArrayHandle()
             schema = adbc_driver_manager.ArrowSchemaHandle()
+
             data._export_to_c(array.address, schema.address)
             statement.bind(array, schema)
-            with pytest.raises(adbc_driver_manager.ProgrammingError, match="ADBC_STATUS_INVALID_ARGUMENT"):
+
+            with pytest.raises(
+                adbc_driver_manager.ProgrammingError,
+                match="Input data has more column than prepared statement has parameters",
+            ):
                 res, _ = statement.execute_query()
 
     def test_not_enough_parameters(self):

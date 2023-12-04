@@ -88,7 +88,7 @@ private:
 class LocalStorage {
 public:
 	// Threshold to merge row groups instead of appending
-	static constexpr const idx_t MERGE_THRESHOLD = RowGroup::ROW_GROUP_SIZE;
+	static constexpr const idx_t MERGE_THRESHOLD = Storage::ROW_GROUP_SIZE;
 
 public:
 	struct CommitState {

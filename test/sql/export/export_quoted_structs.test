@@ -12,7 +12,7 @@ statement ok
 create table a (s STRUCT("end" VARCHAR));
 
 statement ok
-insert into a values ({'a':'hello'});
+insert into a values ({"end":'hello'});
 
 query I
 select * from a

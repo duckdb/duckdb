@@ -1,10 +1,9 @@
 #include "duckdb/parser/expression/case_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
 
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -44,32 +43,6 @@ unique_ptr<ParsedExpression> CaseExpression::Copy() const {
 	}
 	copy->else_expr = else_expr->Copy();
 	return std::move(copy);
-}
-
-void CaseExpression::Serialize(FieldWriter &writer) const {
-	auto &serializer = writer.GetSerializer();
-	// we write a list of multiple expressions here
-	// in order to write this as a single field we directly use the field writers' internal serializer
-	writer.WriteField<uint32_t>(case_checks.size());
-	for (auto &check : case_checks) {
-		check.when_expr->Serialize(serializer);
-		check.then_expr->Serialize(serializer);
-	}
-	writer.WriteSerializable<ParsedExpression>(*else_expr);
-}
-
-unique_ptr<ParsedExpression> CaseExpression::Deserialize(ExpressionType type, FieldReader &reader) {
-	auto result = make_uniq<CaseExpression>();
-	auto &source = reader.GetSource();
-	auto count = reader.ReadRequired<uint32_t>();
-	for (idx_t i = 0; i < count; i++) {
-		CaseCheck new_check;
-		new_check.when_expr = ParsedExpression::Deserialize(source);
-		new_check.then_expr = ParsedExpression::Deserialize(source);
-		result->case_checks.push_back(std::move(new_check));
-	}
-	result->else_expr = reader.ReadRequiredSerializable<ParsedExpression>();
-	return std::move(result);
 }
 
 } // namespace duckdb

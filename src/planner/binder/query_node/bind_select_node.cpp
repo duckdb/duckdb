@@ -1,30 +1,34 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression_binder/column_alias_binder.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression_binder/group_binder.hpp"
 #include "duckdb/planner/expression_binder/having_binder.hpp"
-#include "duckdb/planner/expression_binder/qualify_binder.hpp"
 #include "duckdb/planner/expression_binder/order_binder.hpp"
+#include "duckdb/planner/expression_binder/qualify_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/parser/expression/conjunction_expression.hpp"
 
 namespace duckdb {
 
 unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr) {
-	// we treat the Distinct list as a order by
+	// we treat the distinct list as an ORDER BY
 	auto bound_expr = order_binder.Bind(std::move(expr));
 	if (!bound_expr) {
 		// DISTINCT ON non-integer constant
@@ -199,7 +203,8 @@ static void AssignReturnType(unique_ptr<Expression> &expr, const vector<LogicalT
 	bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 }
 
-void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index) {
+void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t,
+                               const vector<idx_t> &expansion_count) {
 	for (auto &bound_mod : result.modifiers) {
 		switch (bound_mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {
@@ -212,16 +217,19 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 				if (bound_colref.binding.column_index == DConstants::INVALID_INDEX) {
 					throw BinderException("Ambiguous name in DISTINCT ON!");
 				}
-				D_ASSERT(bound_colref.binding.column_index < sql_types.size());
+
+				idx_t max_count = sql_types.size();
+				if (bound_colref.binding.column_index > max_count - 1) {
+					D_ASSERT(bound_colref.return_type == LogicalType::ANY);
+					throw BinderException("ORDER term out of range - should be between 1 and %lld", max_count);
+				}
+
 				bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 			}
 			for (auto &target_distinct : distinct.target_distincts) {
 				auto &bound_colref = target_distinct->Cast<BoundColumnRefExpression>();
 				const auto &sql_type = sql_types[bound_colref.binding.column_index];
-				if (sql_type.id() == LogicalTypeId::VARCHAR) {
-					target_distinct = ExpressionBinder::PushCollation(context, std::move(target_distinct),
-					                                                  StringType::GetCollation(sql_type), true);
-				}
+				ExpressionBinder::PushCollation(context, target_distinct, sql_type, true);
 			}
 			break;
 		}
@@ -238,21 +246,31 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
+
 			auto &order = bound_mod->Cast<BoundOrderModifier>();
 			for (auto &order_node : order.orders) {
+
 				auto &expr = order_node.expression;
 				D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);
 				auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 				if (bound_colref.binding.column_index == DConstants::INVALID_INDEX) {
 					throw BinderException("Ambiguous name in ORDER BY!");
 				}
-				D_ASSERT(bound_colref.binding.column_index < sql_types.size());
-				const auto &sql_type = sql_types[bound_colref.binding.column_index];
-				bound_colref.return_type = sql_types[bound_colref.binding.column_index];
-				if (sql_type.id() == LogicalTypeId::VARCHAR) {
-					order_node.expression = ExpressionBinder::PushCollation(context, std::move(order_node.expression),
-					                                                        StringType::GetCollation(sql_type));
+
+				if (!expansion_count.empty() && bound_colref.return_type.id() != LogicalTypeId::ANY) {
+					bound_colref.binding.column_index = expansion_count[bound_colref.binding.column_index];
 				}
+
+				idx_t max_count = sql_types.size();
+				if (bound_colref.binding.column_index > max_count - 1) {
+					D_ASSERT(bound_colref.return_type == LogicalType::ANY);
+					throw BinderException("ORDER term out of range - should be between 1 and %lld", max_count);
+				}
+
+				const auto &sql_type = sql_types[bound_colref.binding.column_index];
+				bound_colref.return_type = sql_type;
+
+				ExpressionBinder::PushCollation(context, order_node.expression, sql_type);
 			}
 			break;
 		}
@@ -380,9 +398,26 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			auto bound_expr = group_binder.Bind(group_expressions[i], &group_type);
 			D_ASSERT(bound_expr->return_type.id() != LogicalTypeId::INVALID);
 
+			// find out whether the expression contains a subquery, it can't be copied if so
+			auto &bound_expr_ref = *bound_expr;
+			bool contains_subquery = bound_expr_ref.HasSubquery();
+
 			// push a potential collation, if necessary
-			bound_expr = ExpressionBinder::PushCollation(context, std::move(bound_expr),
-			                                             StringType::GetCollation(group_type), true);
+			bool requires_collation = ExpressionBinder::PushCollation(context, bound_expr, group_type, true);
+			if (!contains_subquery && requires_collation) {
+				// if there is a collation on a group x, we should group by the collated expr,
+				// but also push a first(x) aggregate in case x is selected (uncollated)
+				info.collated_groups[i] = result->aggregates.size();
+
+				auto first_fun = FirstFun::GetFunction(LogicalType::VARCHAR);
+				vector<unique_ptr<Expression>> first_children;
+				// FIXME: would be better to just refer to this expression, but for now we copy
+				first_children.push_back(bound_expr_ref.Copy());
+
+				FunctionBinder function_binder(context);
+				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
+				result->aggregates.push_back(std::move(function));
+			}
 			result->groups.group_expressions.push_back(std::move(bound_expr));
 
 			// in the unbound expression we DO bind the table names of any ColumnRefs
@@ -419,9 +454,15 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 
 	// after that, we bind to the SELECT list
 	SelectBinder select_binder(*this, context, *result, info, alias_map);
-	vector<LogicalType> internal_sql_types;
+
+	// if we expand select-list expressions, e.g., via UNNEST, then we need to possibly
+	// adjust the column index of the already bound ORDER BY modifiers, and not only set their types
+	vector<LogicalType> modifier_sql_types;
+	vector<idx_t> modifier_expansion_count;
+
 	vector<idx_t> group_by_all_indexes;
 	vector<string> new_names;
+
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		bool is_window = statement.select_list[i]->IsWindow();
 		idx_t unnest_count = result->unnests.size();
@@ -430,6 +471,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		bool is_original_column = i < result->column_count;
 		bool can_group_by_all =
 		    statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && is_original_column;
+
 		if (select_binder.HasExpandedExpressions()) {
 			if (!is_original_column) {
 				throw InternalException("Only original columns can have expanded expressions");
@@ -437,16 +479,26 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
 				throw BinderException("UNNEST of struct cannot be combined with GROUP BY ALL");
 			}
+
 			auto &struct_expressions = select_binder.ExpandedExpressions();
 			D_ASSERT(!struct_expressions.empty());
+			modifier_expansion_count.push_back(modifier_sql_types.size());
+
 			for (auto &struct_expr : struct_expressions) {
+				modifier_sql_types.push_back(struct_expr->return_type);
 				new_names.push_back(struct_expr->GetName());
 				result->types.push_back(struct_expr->return_type);
 				result->select_list.push_back(std::move(struct_expr));
 			}
+
 			struct_expressions.clear();
 			continue;
 		}
+
+		// not an expanded expression
+		modifier_expansion_count.push_back(modifier_sql_types.size());
+		modifier_sql_types.push_back(result_type);
+
 		if (can_group_by_all && select_binder.HasBoundColumns()) {
 			if (select_binder.BoundAggregates()) {
 				throw BinderException("Cannot mix aggregates with non-aggregated columns!");
@@ -461,16 +513,18 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			// this entry becomes a group
 			group_by_all_indexes.push_back(i);
 		}
+
 		result->select_list.push_back(std::move(expr));
 		if (is_original_column) {
 			new_names.push_back(std::move(result->names[i]));
 			result->types.push_back(result_type);
 		}
-		internal_sql_types.push_back(result_type);
+
 		if (can_group_by_all) {
 			select_binder.ResetBindings();
 		}
 	}
+
 	// push the GROUP BY ALL expressions into the group set
 	for (auto &group_by_all_index : group_by_all_indexes) {
 		auto &expr = result->select_list[group_by_all_index];
@@ -526,7 +580,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	}
 
 	// now that the SELECT list is bound, we set the types of DISTINCT/ORDER BY expressions
-	BindModifierTypes(*result, internal_sql_types, result->projection_index);
+	BindModifierTypes(*result, modifier_sql_types, result->projection_index, modifier_expansion_count);
 	return std::move(result);
 }
 

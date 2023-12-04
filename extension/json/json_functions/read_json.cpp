@@ -17,6 +17,7 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 	Vector string_vector(LogicalType::VARCHAR);
 
 	// Loop through the files (if union_by_name, else just sample the first file)
+	idx_t remaining = bind_data.sample_size;
 	for (idx_t file_idx = 0; file_idx < bind_data.files.size(); file_idx++) {
 		// Create global/local state and place the reader in the right field
 		JSONScanGlobalState gstate(context, bind_data);
@@ -28,7 +29,6 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 		}
 
 		// Read and detect schema
-		idx_t remaining = bind_data.sample_size;
 		while (remaining != 0) {
 			allocator.Reset();
 			auto read_count = lstate.ReadNext(gstate);
@@ -56,7 +56,11 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 		}
 
 		// Close the file and stop detection if not union_by_name
-		if (!bind_data.options.file_options.union_by_name) {
+		if (bind_data.options.file_options.union_by_name) {
+			// When union_by_name=true we sample sample_size per file
+			remaining = bind_data.sample_size;
+		} else if (remaining == 0) {
+			// When union_by_name=false, we sample sample_size in total (across the first files)
 			break;
 		}
 	}
@@ -65,7 +69,8 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 	bind_data.type = JSONScanType::READ_JSON;
 
 	// Convert structure to logical type
-	auto type = JSONStructure::StructureToType(context, node, bind_data.max_depth);
+	auto type =
+	    JSONStructure::StructureToType(context, node, bind_data.max_depth, bind_data.field_appearance_threshold);
 
 	// Auto-detect record type
 	if (bind_data.options.record_type == JSONRecordType::AUTO_DETECT) {
@@ -151,6 +156,13 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 			} else {
 				bind_data->max_depth = arg;
 			}
+		} else if (loption == "field_appearance_threshold") {
+			auto arg = DoubleValue::Get(kv.second);
+			if (arg < 0 || arg > 1) {
+				throw BinderException(
+				    "read_json_auto \"field_appearance_threshold\" parameter must be between 0 and 1");
+			}
+			bind_data->field_appearance_threshold = arg;
 		} else if (loption == "dateformat" || loption == "date_format") {
 			auto format_string = StringValue::Get(kv.second);
 			if (StringUtil::Lower(format_string) == "iso") {
@@ -224,6 +236,21 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	transform_options.error_missing_key = false;
 	transform_options.error_unknown_key = bind_data->auto_detect && !bind_data->ignore_errors;
 	transform_options.delay_error = true;
+
+	if (bind_data->auto_detect) {
+		// JSON may contain columns such as "id" and "Id", which are duplicates for us due to case-insensitivity
+		// We rename them so we can parse the file anyway. Note that we can't change bind_data->names,
+		// because the JSON reader gets columns by exact name, not position
+		case_insensitive_map_t<idx_t> name_count_map;
+		for (auto &name : names) {
+			auto it = name_count_map.find(name);
+			if (it == name_count_map.end()) {
+				name_count_map[name] = 1;
+			} else {
+				name = StringUtil::Format("%s_%llu", name, it->second++);
+			}
+		}
+	}
 
 	return std::move(bind_data);
 }
@@ -299,6 +326,7 @@ TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> in
 	table_function.name = std::move(name);
 	if (auto_function) {
 		table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
+		table_function.named_parameters["field_appearance_threshold"] = LogicalType::DOUBLE;
 	}
 	return MultiFileReader::CreateFunctionSet(table_function);
 }

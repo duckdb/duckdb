@@ -51,7 +51,7 @@ checkpoint;
 
 # Some of them produce constant vectors, but not all
 query I
-select distinct on (types) vector_type(a) as types from test;
+select distinct on (types) vector_type(a) as types from test order by all;
 ----
 CONSTANT_VECTOR
 FLAT_VECTOR

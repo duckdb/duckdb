@@ -17,15 +17,12 @@
 
 namespace duckdb {
 
-class FormatSerializer;
-class FormatDeserializer;
 class Serializer;
 class Deserializer;
 class Value;
 class TypeCatalogEntry;
 class Vector;
 class ClientContext;
-class FieldWriter;
 
 struct string_t;
 
@@ -154,8 +151,8 @@ enum class PhysicalType : uint8_t {
 	///// Custom data type, implemented by user
 	//EXTENSION = 28,
 
-	///// Fixed size list of some logical type
-	//FIXED_SIZE_LIST = 29,
+	///// Array with fixed length of some logical type (a fixed-size list)
+	ARRAY = 29,
 
 	///// Measure of elapsed time in either seconds, milliseconds, microseconds
 	///// or nanoseconds.
@@ -229,7 +226,8 @@ enum class LogicalTypeId : uint8_t {
 	ENUM = 104,
 	AGGREGATE_STATE = 105,
 	LAMBDA = 106,
-	UNION = 107
+	UNION = 107,
+	ARRAY = 108
 };
 
 
@@ -285,14 +283,8 @@ struct LogicalType {
 		return !(*this == rhs);
 	}
 
-	//! Serializes a LogicalType to a stand-alone binary blob
 	DUCKDB_API void Serialize(Serializer &serializer) const;
-
-	//! Deserializes a blob back into an LogicalType
-	DUCKDB_API static LogicalType Deserialize(Deserializer &source);
-
-	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
-	DUCKDB_API static LogicalType FormatDeserialize(FormatDeserializer &deserializer);
+	DUCKDB_API static LogicalType Deserialize(Deserializer &deserializer);
 
 
 	static bool TypeIsTimestamp(LogicalTypeId id) {
@@ -376,14 +368,20 @@ public:
 	DUCKDB_API static LogicalType MAP(const LogicalType &child);				// NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
 	DUCKDB_API static LogicalType UNION( child_list_t<LogicalType> members);     // NOLINT
+	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, idx_t size);     // NOLINT
+	// an array of unknown size (only used for binding)
+	DUCKDB_API static LogicalType ARRAY(const LogicalType &child);     // NOLINT
 	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
 	// DEPRECATED - provided for backwards compatibility
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT
+	DUCKDB_API static LogicalType USER(string catalog, string schema, string name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> Numeric();
 	//! A list of all INTEGRAL types
 	DUCKDB_API static const vector<LogicalType> Integral();
+	//! A list of all REAL types
+	DUCKDB_API static const vector<LogicalType> Real();
 	//! A list of ALL SQL types
 	DUCKDB_API static const vector<LogicalType> AllTypes();
 };
@@ -403,6 +401,8 @@ struct ListType {
 };
 
 struct UserType {
+	DUCKDB_API static const string &GetCatalog(const LogicalType &type);
+	DUCKDB_API static const string &GetSchema(const LogicalType &type);
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
 };
 
@@ -420,6 +420,7 @@ struct StructType {
 	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type, idx_t index);
 	DUCKDB_API static const string &GetChildName(const LogicalType &type, idx_t index);
 	DUCKDB_API static idx_t GetChildCount(const LogicalType &type);
+	DUCKDB_API static bool IsUnnamed(const LogicalType &type);
 };
 
 struct MapType {
@@ -433,6 +434,13 @@ struct UnionType {
 	DUCKDB_API static const LogicalType &GetMemberType(const LogicalType &type, idx_t index);
 	DUCKDB_API static const string &GetMemberName(const LogicalType &type, idx_t index);
 	DUCKDB_API static const child_list_t<LogicalType> CopyMemberTypes(const LogicalType &type);
+};
+
+struct ArrayType {
+	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type);
+	DUCKDB_API static idx_t GetSize(const LogicalType &type);
+	DUCKDB_API static bool IsAnySize(const LogicalType &type);
+	DUCKDB_API static constexpr idx_t MAX_ARRAY_SIZE = 100000; //100k for now
 };
 
 struct AggregateStateType {

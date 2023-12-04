@@ -7,9 +7,7 @@
 #include "duckdb/common/http_state.hpp"
 #include "duckdb/common/preserved_error.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
-#include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
-#include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
@@ -27,11 +25,9 @@
 #include "duckdb/main/relation.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/drop_statement.hpp"
@@ -43,9 +39,7 @@
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/planner/pragma_handler.hpp"
-#include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 
 namespace duckdb {
@@ -114,8 +108,8 @@ unique_ptr<DataChunk> ClientContext::FetchInternal(ClientContextLock &lock, Exec
 	} catch (FatalException &ex) {
 		// fatal exceptions invalidate the entire database
 		result.SetError(PreservedError(ex));
-		auto &db = DatabaseInstance::GetDatabase(*this);
-		ValidChecker::Invalidate(db, ex.what());
+		auto &db_inst = DatabaseInstance::GetDatabase(*this);
+		ValidChecker::Invalidate(db_inst, ex.what());
 	} catch (const Exception &ex) {
 		result.SetError(PreservedError(ex));
 	} catch (std::exception &ex) {
@@ -130,10 +124,10 @@ unique_ptr<DataChunk> ClientContext::FetchInternal(ClientContextLock &lock, Exec
 void ClientContext::BeginTransactionInternal(ClientContextLock &lock, bool requires_valid_transaction) {
 	// check if we are on AutoCommit. In this case we should start a transaction
 	D_ASSERT(!active_query);
-	auto &db = DatabaseInstance::GetDatabase(*this);
-	if (ValidChecker::IsInvalidated(db)) {
+	auto &db_inst = DatabaseInstance::GetDatabase(*this);
+	if (ValidChecker::IsInvalidated(db_inst)) {
 		throw FatalException(ErrorManager::FormatException(*this, ErrorType::INVALIDATED_DATABASE,
-		                                                   ValidChecker::InvalidatedMessage(db)));
+		                                                   ValidChecker::InvalidatedMessage(db_inst)));
 	}
 	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
 	    ValidChecker::IsInvalidated(transaction.ActiveTransaction())) {
@@ -149,7 +143,8 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	BeginTransactionInternal(lock, false);
 	LogQueryInternal(lock, query);
 	active_query->query = query;
-	query_progress = -1;
+
+	query_progress.Initialize();
 	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
 }
 
@@ -167,7 +162,7 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 
 	D_ASSERT(active_query.get());
 	active_query.reset();
-	query_progress = -1;
+	query_progress.Initialize();
 	PreservedError error;
 	try {
 		if (transaction.HasActiveTransaction()) {
@@ -195,8 +190,8 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 			}
 		}
 	} catch (FatalException &ex) {
-		auto &db = DatabaseInstance::GetDatabase(*this);
-		ValidChecker::Invalidate(db, ex.what());
+		auto &db_inst = DatabaseInstance::GetDatabase(*this);
+		ValidChecker::Invalidate(db_inst, ex.what());
 		error = PreservedError(ex);
 	} catch (const Exception &ex) {
 		error = PreservedError(ex);
@@ -248,8 +243,7 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	if (create_stream_result) {
 		D_ASSERT(!executor.HasResultCollector());
 		active_query->progress_bar.reset();
-		query_progress = -1;
-
+		query_progress.Initialize();
 		// successfully compiled SELECT clause, and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
 		auto stream_result = make_uniq<StreamQueryResult>(pending.statement_type, pending.properties,
@@ -365,8 +359,8 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 	return result;
 }
 
-double ClientContext::GetProgress() {
-	return query_progress.load();
+QueryProgress ClientContext::GetQueryProgress() {
+	return query_progress;
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientContextLock &lock,
@@ -377,7 +371,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	if (ValidChecker::IsInvalidated(ActiveTransaction()) && statement.properties.requires_valid_transaction) {
 		throw Exception(ErrorManager::FormatException(*this, ErrorType::INVALIDATED_TRANSACTION));
 	}
-	auto &transaction = MetaTransaction::Get(*this);
+	auto &meta_transaction = MetaTransaction::Get(*this);
 	auto &manager = DatabaseManager::Get(*this);
 	for (auto &modified_database : statement.properties.modified_databases) {
 		auto entry = manager.GetDatabase(*this, modified_database);
@@ -389,7 +383,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 			    "Cannot execute statement of type \"%s\" on database \"%s\" which is attached in read-only mode!",
 			    StatementTypeToString(statement.statement_type), modified_database));
 		}
-		transaction.ModifyDatabase(*entry);
+		meta_transaction.ModifyDatabase(*entry);
 	}
 
 	// bind the bound values before execution
@@ -413,14 +407,14 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		}
 		active_query->progress_bar = make_uniq<ProgressBar>(executor, config.wait_time, display_create_func);
 		active_query->progress_bar->Start();
-		query_progress = 0;
+		query_progress.Restart();
 	}
 	auto stream_result = parameters.allow_stream_result && statement.properties.allow_stream_result;
 	if (!stream_result && statement.properties.return_type == StatementReturnType::QUERY_RESULT) {
 		unique_ptr<PhysicalResultCollector> collector;
-		auto &config = ClientConfig::GetConfig(*this);
-		auto get_method =
-		    config.result_collector ? config.result_collector : PhysicalResultCollector::GetResultCollector;
+		auto &client_config = ClientConfig::GetConfig(*this);
+		auto get_method = client_config.result_collector ? client_config.result_collector
+		                                                 : PhysicalResultCollector::GetResultCollector;
 		collector = get_method(*this, statement);
 		D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
 		executor.Initialize(std::move(collector));
@@ -442,17 +436,17 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->open_result == &result);
 	try {
-		auto result = active_query->executor->ExecuteTask();
+		auto query_result = active_query->executor->ExecuteTask();
 		if (active_query->progress_bar) {
-			active_query->progress_bar->Update(result == PendingExecutionResult::RESULT_READY);
-			query_progress = active_query->progress_bar->GetCurrentPercentage();
+			active_query->progress_bar->Update(query_result == PendingExecutionResult::RESULT_READY);
+			query_progress = active_query->progress_bar->GetDetailedQueryProgress();
 		}
-		return result;
+		return query_result;
 	} catch (FatalException &ex) {
 		// fatal exceptions invalidate the entire database
 		result.SetError(PreservedError(ex));
-		auto &db = DatabaseInstance::GetDatabase(*this);
-		ValidChecker::Invalidate(db, ex.what());
+		auto &db_instance = DatabaseInstance::GetDatabase(*this);
+		ValidChecker::Invalidate(db_instance, ex.what());
 	} catch (const Exception &ex) {
 		result.SetError(PreservedError(ex));
 	} catch (std::exception &ex) {
@@ -713,8 +707,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		BeginQueryInternal(lock, query);
 	} catch (FatalException &ex) {
 		// fatal exceptions invalidate the entire database
-		auto &db = DatabaseInstance::GetDatabase(*this);
-		ValidChecker::Invalidate(db, ex.what());
+		auto &db_instance = DatabaseInstance::GetDatabase(*this);
+		ValidChecker::Invalidate(db_instance, ex.what());
 		result = make_uniq<PendingQueryResult>(PreservedError(ex));
 		return result;
 	} catch (const Exception &ex) {
@@ -749,8 +743,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 	} catch (FatalException &ex) {
 		// fatal exceptions invalidate the entire database
 		if (!config.query_verification_enabled) {
-			auto &db = DatabaseInstance::GetDatabase(*this);
-			ValidChecker::Invalidate(db, ex.what());
+			auto &db_instance = DatabaseInstance::GetDatabase(*this);
+			ValidChecker::Invalidate(db_instance, ex.what());
 		}
 		result = make_uniq<PendingQueryResult>(PreservedError(ex));
 	} catch (const Exception &ex) {
@@ -914,15 +908,15 @@ void ClientContext::Interrupt() {
 
 void ClientContext::EnableProfiling() {
 	auto lock = LockContext();
-	auto &config = ClientConfig::GetConfig(*this);
-	config.enable_profiler = true;
-	config.emit_profiler_output = true;
+	auto &client_config = ClientConfig::GetConfig(*this);
+	client_config.enable_profiler = true;
+	client_config.emit_profiler_output = true;
 }
 
 void ClientContext::DisableProfiling() {
 	auto lock = LockContext();
-	auto &config = ClientConfig::GetConfig(*this);
-	config.enable_profiler = false;
+	auto &client_config = ClientConfig::GetConfig(*this);
+	client_config.enable_profiler = false;
 }
 
 void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
@@ -962,8 +956,8 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 		}
 		throw;
 	} catch (FatalException &ex) {
-		auto &db = DatabaseInstance::GetDatabase(*this);
-		ValidChecker::Invalidate(db, ex.what());
+		auto &db_instance = DatabaseInstance::GetDatabase(*this);
+		ValidChecker::Invalidate(db_instance, ex.what());
 		throw;
 	} catch (std::exception &ex) {
 		if (require_new_transaction) {

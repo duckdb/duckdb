@@ -62,12 +62,9 @@ public:
 public:
 	virtual CatalogType GetCatalogType() const = 0;
 	virtual unique_ptr<AlterInfo> Copy() const = 0;
-	void Serialize(Serializer &serializer) const;
-	virtual void Serialize(FieldWriter &writer) const = 0;
-	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ParseInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
 
 	virtual string GetColumnName() const {
 		return "";

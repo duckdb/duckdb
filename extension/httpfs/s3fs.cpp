@@ -163,7 +163,7 @@ void AWSEnvironmentCredentialsProvider::SetAll() {
 	this->SetExtensionOptionValue("s3_use_ssl", this->DUCKDB_USE_SSL_ENV_VAR);
 }
 
-S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
+S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener, FileOpenerInfo &info) {
 	string region;
 	string access_key_id;
 	string secret_access_key;
@@ -174,29 +174,37 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
 	bool use_ssl;
 	Value value;
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_region", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_region", value, info)) {
 		region = value.ToString();
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_access_key_id", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_access_key_id", value, info)) {
 		access_key_id = value.ToString();
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_secret_access_key", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_secret_access_key", value, info)) {
 		secret_access_key = value.ToString();
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_session_token", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_session_token", value, info)) {
 		session_token = value.ToString();
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_endpoint", value)) {
-		endpoint = value.ToString();
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_endpoint", value, info)) {
+		if (value.ToString().empty()) {
+			if (StringUtil::StartsWith(info.file_path, "gcs://")) {
+				endpoint = "storage.googleapis.com";
+			} else {
+				endpoint = "s3.amazonaws.com";
+			}
+		} else {
+			endpoint = value.ToString();
+		}
 	} else {
 		endpoint = "s3.amazonaws.com";
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_style", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_style", value, info)) {
 		auto val_str = value.ToString();
 		if (!(val_str == "vhost" || val_str != "path" || val_str != "")) {
 			throw std::runtime_error(
@@ -207,13 +215,13 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
 		url_style = "vhost";
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_use_ssl", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_use_ssl", value, info)) {
 		use_ssl = value.GetValue<bool>();
 	} else {
 		use_ssl = true;
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_compatibility_mode", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_compatibility_mode", value, info)) {
 		s3_url_compatibility_mode = value.GetValue<bool>();
 	} else {
 		s3_url_compatibility_mode = true;
@@ -221,6 +229,10 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
 
 	return {region,   access_key_id, secret_access_key, session_token,
 	        endpoint, url_style,     use_ssl,           s3_url_compatibility_mode};
+}
+
+S3FileHandle::~S3FileHandle() {
+	Close();
 }
 
 S3ConfigParams S3ConfigParams::ReadFrom(FileOpener *opener) {
@@ -303,8 +315,8 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 		                      query_param);
 
 		if (res->code != 200) {
-			throw HTTPException(*res, "Unable to connect to URL %s %s (HTTP code %s)", res->http_url, res->error,
-			                    to_string(res->code));
+			throw IOException("Unable to connect to URL %s %s (HTTP code %s)", res->http_url, res->error,
+			                  to_string(res->code));
 		}
 
 		etag_lookup = res->headers.find("ETag");
@@ -438,7 +450,7 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 
 	auto open_tag_pos = result.find("<CompleteMultipartUploadResult", 0);
 	if (open_tag_pos == string::npos) {
-		throw HTTPException(*res, "Unexpected response during S3 multipart upload finalization: %d", res->code);
+		throw IOException("Unexpected response during S3 multipart upload finalization: %d\n\n%s", res->code, result);
 	}
 	file_handle.upload_finalized = true;
 }
@@ -556,17 +568,27 @@ void S3FileSystem::ReadQueryParams(const string &url_query_param, S3AuthParams &
 	}
 }
 
-ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
-	string http_proto, host, bucket, path, query_param, trimmed_s3_url;
-
-	if (url.rfind("s3://", 0) != 0) {
-		throw IOException("URL needs to start with s3://");
+static string GetPrefix(string url) {
+	const string prefixes[] = {"s3://", "s3a://", "s3n://", "gcs://", "r2://"};
+	for (auto &prefix : prefixes) {
+		if (StringUtil::StartsWith(url, prefix)) {
+			return prefix;
+		}
 	}
-	auto slash_pos = url.find('/', 5);
+	throw IOException("URL needs to start with s3://, gcs:// or r2://");
+	return string();
+}
+
+ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
+	string http_proto, prefix, host, bucket, path, query_param, trimmed_s3_url;
+
+	prefix = GetPrefix(url);
+	auto prefix_end_pos = url.find("//") + 2;
+	auto slash_pos = url.find('/', prefix_end_pos);
 	if (slash_pos == string::npos) {
 		throw IOException("URL needs to contain a '/' after the host");
 	}
-	bucket = url.substr(5, slash_pos - 5);
+	bucket = url.substr(prefix_end_pos, slash_pos - prefix_end_pos);
 	if (bucket.empty()) {
 		throw IOException("URL needs to contain a bucket name");
 	}
@@ -611,7 +633,7 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 
 	http_proto = params.use_ssl ? "https://" : "http://";
 
-	return {http_proto, host, bucket, path, query_param, trimmed_s3_url};
+	return {http_proto, prefix, host, bucket, path, query_param, trimmed_s3_url};
 }
 
 string S3FileSystem::GetPayloadHash(char *buffer, idx_t buffer_len) {
@@ -691,7 +713,8 @@ unique_ptr<ResponseWrapper> S3FileSystem::GetRangeRequest(FileHandle &handle, st
 
 unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, uint8_t flags, FileLockType lock,
                                                       FileCompressionType compression, FileOpener *opener) {
-	auto auth_params = S3AuthParams::ReadFrom(opener);
+	FileOpenerInfo info = {path};
+	auto auth_params = S3AuthParams::ReadFrom(opener, info);
 
 	// Scan the query string for any s3 authentication parameters
 	auto parsed_s3_url = S3UrlParse(path, auth_params);
@@ -811,7 +834,9 @@ void S3FileHandle::Initialize(FileOpener *opener) {
 }
 
 bool S3FileSystem::CanHandleFile(const string &fpath) {
-	return fpath.rfind("s3://", 0) == 0;
+	return fpath.rfind("s3://", 0) * fpath.rfind("s3a://", 0) * fpath.rfind("s3n://", 0) * fpath.rfind("gcs://", 0) *
+	           fpath.rfind("r2://", 0) ==
+	       0;
 }
 
 void S3FileSystem::FileSync(FileHandle &handle) {
@@ -887,8 +912,10 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 		throw InternalException("Cannot S3 Glob without FileOpener");
 	}
 
+	FileOpenerInfo info = {glob_pattern};
+
 	// Trim any query parameters from the string
-	auto s3_auth_params = S3AuthParams::ReadFrom(opener);
+	auto s3_auth_params = S3AuthParams::ReadFrom(opener, info);
 
 	// In url compatibility mode, we ignore globs allowing users to query files with the glob chars
 	if (s3_auth_params.s3_url_compatibility_mode) {
@@ -924,7 +951,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 		// Repeat requests until the keys of all common prefixes are parsed.
 		auto common_prefixes = AWSListObjectV2::ParseCommonPrefix(response_str);
 		while (!common_prefixes.empty()) {
-			auto prefix_path = "s3://" + parsed_s3_url.bucket + '/' + common_prefixes.back();
+			auto prefix_path = parsed_s3_url.prefix + parsed_s3_url.bucket + '/' + common_prefixes.back();
 			common_prefixes.pop_back();
 
 			// TODO we could optimize here by doing a match on the prefix, if it doesn't match we can skip this prefix
@@ -957,7 +984,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 		bool is_match = Match(key_splits.begin(), key_splits.end(), pattern_splits.begin(), pattern_splits.end());
 
 		if (is_match) {
-			auto result_full_url = "s3://" + parsed_s3_url.bucket + "/" + s3_key;
+			auto result_full_url = parsed_s3_url.prefix + parsed_s3_url.bucket + "/" + s3_key;
 			// if a ? char was present, we re-add it here as the url parsing will have trimmed it.
 			if (!parsed_s3_url.query_param.empty()) {
 				result_full_url += '?' + parsed_s3_url.query_param;
@@ -1033,7 +1060,7 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 	    listobjectv2_url.c_str(), *headers,
 	    [&](const duckdb_httplib_openssl::Response &response) {
 		    if (response.status >= 400) {
-			    throw HTTPException(response, "HTTP GET error on '%s' (HTTP %d)", listobjectv2_url, response.status);
+			    throw IOException("HTTP GET error on '%s' (HTTP %d)", listobjectv2_url, response.status);
 		    }
 		    return true;
 	    },

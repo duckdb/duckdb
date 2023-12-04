@@ -158,19 +158,6 @@ ColumnList ColumnList::Copy() const {
 	return result;
 }
 
-void ColumnList::Serialize(FieldWriter &writer) const {
-	writer.WriteRegularSerializableList(columns);
-}
-
-ColumnList ColumnList::Deserialize(FieldReader &reader) {
-	ColumnList result;
-	auto columns = reader.ReadRequiredSerializableList<ColumnDefinition, ColumnDefinition>();
-	for (auto &col : columns) {
-		result.AddColumn(std::move(col));
-	}
-	return result;
-}
-
 ColumnList::ColumnListIterator ColumnList::Logical() const {
 	return ColumnListIterator(*this, false);
 }

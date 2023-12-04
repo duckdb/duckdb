@@ -14,6 +14,7 @@
 #include "duckdb/storage/table/table_statistics.hpp"
 
 namespace duckdb {
+
 struct ParallelTableScanState;
 struct ParallelCollectionScanState;
 class CreateIndexScanState;
@@ -73,7 +74,7 @@ public:
 	//! FinalizeAppend flushes an append with a variable number of rows.
 	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
-	void RevertAppendInternal(idx_t start_row, idx_t count);
+	void RevertAppendInternal(idx_t start_row);
 
 	void MergeStorage(RowGroupCollection &data);
 

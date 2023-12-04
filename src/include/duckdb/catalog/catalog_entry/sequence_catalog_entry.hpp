@@ -14,8 +14,6 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 
 namespace duckdb {
-class Serializer;
-class Deserializer;
 
 struct SequenceValue {
 	SequenceValue() : usage_count(0), counter(-1) {

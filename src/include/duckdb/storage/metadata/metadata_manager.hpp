@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/serializer.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/common/set.hpp"
@@ -17,14 +16,15 @@
 
 namespace duckdb {
 class DatabaseInstance;
+struct MetadataBlockInfo;
 
 struct MetadataBlock {
 	shared_ptr<BlockHandle> block;
 	block_id_t block_id;
 	vector<uint8_t> free_blocks;
 
-	void Serialize(Serializer &serializer);
-	static MetadataBlock Deserialize(Deserializer &source);
+	void Write(WriteStream &sink);
+	static MetadataBlock Read(ReadStream &source);
 
 	idx_t FreeBlocksToInteger();
 	void FreeBlocksFromInteger(idx_t blocks);
@@ -65,11 +65,13 @@ public:
 	void Flush();
 
 	void MarkBlocksAsModified();
+	void ClearModifiedBlocks(const vector<MetaBlockPointer> &pointers);
 
+	vector<MetadataBlockInfo> GetMetadataInfo() const;
 	idx_t BlockCount();
 
-	void Serialize(Serializer &serializer);
-	void Deserialize(Deserializer &source);
+	void Write(WriteStream &sink);
+	void Read(ReadStream &source);
 
 protected:
 	BlockManager &block_manager;
@@ -83,6 +85,7 @@ protected:
 
 	void AddBlock(MetadataBlock new_block, bool if_exists = false);
 	void AddAndRegisterBlock(MetadataBlock block);
+	void ConvertToTransient(MetadataBlock &block);
 };
 
 } // namespace duckdb

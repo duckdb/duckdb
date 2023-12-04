@@ -18,7 +18,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Python.yml'
-      - '.github/config/uncovered_files.csv'
+
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
@@ -30,7 +30,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Python.yml'
-      - '.github/config/uncovered_files.csv'
+
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
@@ -47,7 +47,7 @@ jobs:
 
     env:
       CIBW_BUILD: 'cp39-manylinux_x86_64'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
+      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       PYTEST_TIMEOUT: '600'
 
@@ -86,7 +86,7 @@ jobs:
 
    manylinux-extensions-x64:
     # Builds extensions for linux_md64_gcc4
-    name: Linux Extensions (ggc4)
+    name: Linux Extensions (gcc4)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
     needs: linux-python3-9
@@ -103,6 +103,7 @@ jobs:
         aws-cli: 1
         ninja-build: 1
         ccache: 1
+        nodejs: 1
         ssh: 1
         python_alias: 1
         openssl: 1
@@ -115,7 +116,10 @@ jobs:
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
+        run_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run_autoload_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         treat_warn_as_error: 0
+        ninja: 1
 
     - uses: actions/upload-artifact@v3
       with:
@@ -128,7 +132,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        arch: [i686, x86_64, aarch64]
+        arch: [x86_64, aarch64]
         python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
@@ -142,14 +146,12 @@ jobs:
           - isRelease: false
             python_build: 'cp311-*'
           - isRelease: false
-            arch: i686
-          - isRelease: false
             arch: aarch64
     needs: manylinux-extensions-x64
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_SKIP: '*-musllinux_aarch64'
-      CIBW_ARCHS: ${{ matrix.arch == 'i686' && 'auto32' || matrix.arch == 'aarch64' && 'aarch64' || 'auto64' }}
+      CIBW_ARCHS: ${{ matrix.arch == 'aarch64' && 'aarch64' || 'auto64' }}
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       PYTEST_TIMEOUT: '600'
       DUCKDB_BUILD_UNITY: 1
@@ -169,7 +171,9 @@ jobs:
 
     - name: Install
       shell: bash
-      run: pip install cibuildwheel twine
+      run: |
+        pip install cibuildwheel twine
+        python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
 
     - uses: actions/download-artifact@v3
       if: ${{ matrix.arch == 'x86_64' }}
@@ -197,13 +201,16 @@ jobs:
         ls duckdb_tarball
         export DISTUTILS_C_COMPILER_LAUNCHER=ccache
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
+        if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
+          export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
+        fi
         cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
         ls wheelhouse
 
     - name: Deploy
       env:
-        TWINE_USERNAME: 'hfmuehleisen'
-        TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+        TWINE_USERNAME: '__token__'
+        TWINE_PASSWORD: ${{ secrets.TWINE_TOKEN }}
       shell: bash
       run: |
         python scripts/asset-upload-gha.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
@@ -222,9 +229,9 @@ jobs:
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
         CIBW_ARCHS: 'x86_64 universal2 arm64'
-        CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
+        CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast  --verbose'
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-        TWINE_USERNAME: 'hfmuehleisen'
+        TWINE_USERNAME: '__token__'
         DUCKDB_BUILD_UNITY: 1
 
       steps:
@@ -254,12 +261,15 @@ jobs:
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
           # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
+          if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
+            export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
+          fi
           cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
 
       - name: Deploy
         env:
-          TWINE_USERNAME: 'hfmuehleisen'
-          TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+          TWINE_USERNAME: '__token__'
+          TWINE_PASSWORD: ${{ secrets.TWINE_TOKEN }}
         shell: bash
         run: |
           if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
@@ -289,7 +299,7 @@ jobs:
         CIBW_BUILD: ${{ matrix.python_build}}
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         SETUPTOOLS_USE_DISTUTILS: 'stdlib'
-        TWINE_USERNAME: 'hfmuehleisen'
+        TWINE_USERNAME: '__token__'
         DUCKDB_BUILD_UNITY: 1
 
       steps:
@@ -319,12 +329,15 @@ jobs:
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
           # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
+          if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
+            export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
+          fi
           cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
 
       - name: Deploy
         env:
-          TWINE_USERNAME: 'hfmuehleisen'
-          TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+          TWINE_USERNAME: '__token__'
+          TWINE_PASSWORD: ${{ secrets.TWINE_TOKEN }}
         shell: bash
         run: |
           if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
@@ -332,22 +345,28 @@ jobs:
           fi
 
    linux-release-cleanup:
-      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
-      name: PyPi Release Cleanup
-      runs-on: ubuntu-20.04
-      needs: linux-python3-9
-      env:
-        PYPI_PASSWORD: ${{secrets.PYPI_PASSWORD}}
+     if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+     name: PyPi Release Cleanup
+     runs-on: ubuntu-20.04
+     needs: linux-python3-9
+     env:
+       PYPI_CLEANUP_USERNAME: 'mytherin'
+       PYPI_CLEANUP_PASSWORD: ${{secrets.PYPI_CLEANUP_PASSWORD}}
+       PYPI_CLEANUP_OTP: ${{secrets.PYPI_CLEANUP_OTP}}
 
-      steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+     steps:
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
 
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.7'
+     - uses: actions/setup-python@v4
+       with:
+         python-version: '3.7'
 
-      - name: Cleanup Releases
-        shell: bash
-        run: python3 scripts/pypi_cleanup.py
+     - name: Install Packages
+       shell: bash
+       run: python3 -m pip install pyotp requests
+
+     - name: Cleanup Releases
+       shell: bash
+       run: python3 scripts/pypi_cleanup.py

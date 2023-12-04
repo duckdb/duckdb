@@ -94,7 +94,7 @@
       {
         "id": 206,
         "name": "grouping_functions",
-        "type": "vector<vector<idx_t>>"
+        "type": "vector<unsafe_vector<idx_t>>"
       }
     ],
     "constructor": ["group_index", "aggregate_index", "expressions"]
@@ -153,14 +153,12 @@
       {
         "id": 202,
         "name": "limit",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       },
       {
         "id": 203,
         "name": "offset",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       }
     ],
     "constructor": ["limit_val", "offset_val", "limit", "offset"]
@@ -224,8 +222,7 @@
       {
         "id": 202,
         "name": "order_by",
-        "type": "BoundOrderModifier*",
-        "optional": true
+        "type": "BoundOrderModifier*"
       }
     ],
     "constructor": ["distinct_targets", "distinct_type"]
@@ -238,7 +235,7 @@
       {
         "id": 200,
         "name": "sample_options",
-        "type": "SampleOptions"
+        "type": "SampleOptions*"
       }
     ]
   },
@@ -260,14 +257,12 @@
       {
         "id": 202,
         "name": "limit",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       },
       {
         "id": 203,
         "name": "offset",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       }
     ],
     "constructor": ["limit_percent", "offset_val", "limit", "offset"]
@@ -503,9 +498,21 @@
         "id": 201,
         "name": "column_count",
         "type": "idx_t"
+      },
+      {
+        "id": 202,
+        "name": "setop_all",
+        "type": "bool",
+        "default": "true"
+      },
+      {
+        "id": 203,
+        "name": "allow_out_of_order",
+        "type": "bool",
+        "default": "true"
       }
     ],
-    "constructor": ["table_index", "column_count", "type"]
+    "constructor": ["table_index", "column_count", "type", "setop_all", "allow_out_of_order"]
   },
   {
     "class": "LogicalRecursiveCTE",
@@ -567,106 +574,97 @@
     "members": [
       {
         "id": 200,
-        "name": "catalog",
-        "type": "string",
-        "serialize_property": "table.ParentCatalog().GetName()"
+        "name": "table_info",
+        "type": "CreateInfo*",
+        "serialize_property": "table.GetInfo()"
       },
       {
         "id": 201,
-        "name": "schema",
-        "type": "string",
-        "serialize_property": "table.ParentSchema().name"
-      },
-      {
-        "id": 202,
-        "name": "table",
-        "type": "string",
-        "serialize_property": "table.name"
-      },
-      {
-        "id": 203,
         "name": "insert_values",
         "type": "vector<vector<Expression*>>"
       },
       {
-        "id": 204,
+        "id": 202,
         "name": "column_index_map",
-        "type": "vector<idx_t>"
+        "type": "IndexVector<idx_t, PhysicalIndex>"
       },
       {
-        "id": 205,
+        "id": 203,
         "name": "expected_types",
         "type": "vector<LogicalType>"
       },
       {
-        "id": 206,
+        "id": 204,
         "name": "table_index",
         "type": "idx_t"
       },
       {
-        "id": 207,
+        "id": 205,
         "name": "return_chunk",
         "type": "bool"
       },
       {
-        "id": 208,
+        "id": 206,
         "name": "bound_defaults",
         "type": "vector<Expression*>"
       },
       {
-        "id": 209,
+        "id": 207,
         "name": "action_type",
         "type": "OnConflictAction"
       },
       {
-        "id": 210,
+        "id": 208,
         "name": "expected_set_types",
         "type": "vector<LogicalType>"
       },
       {
-        "id": 211,
+        "id": 209,
         "name": "on_conflict_filter",
         "type": "unordered_set<idx_t>"
       },
       {
-        "id": 212,
+        "id": 210,
         "name": "on_conflict_condition",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
+      },
+      {
+        "id": 211,
+        "name": "do_update_condition",
+        "type": "Expression*"
+      },
+      {
+        "id": 212,
+        "name": "set_columns",
+        "type": "vector<PhysicalIndex>"
       },
       {
         "id": 213,
-        "name": "do_update_condition",
-        "type": "Expression*",
-        "optional": true
-      },
-      {
-        "id": 214,
-        "name": "set_columns",
-        "type": "vector<idx_t>"
-      },
-      {
-        "id": 215,
         "name": "set_types",
         "type": "vector<LogicalType>"
       },
       {
-        "id": 216,
+        "id": 214,
         "name": "excluded_table_index",
         "type": "idx_t"
       },
       {
-        "id": 217,
+        "id": 215,
         "name": "columns_to_fetch",
         "type": "vector<column_t>"
       },
       {
-        "id": 218,
+        "id": 216,
         "name": "source_columns",
         "type": "vector<column_t>"
+      },
+      {
+        "id": 217,
+        "name": "expressions",
+        "type": "vector<Expression*>"
       }
     ],
-    "constructor": ["$ClientContext", "catalog&", "schema&", "table&"]
+    "constructor": ["$ClientContext", "table_info"]
   },
   {
     "class": "LogicalDelete",
@@ -675,39 +673,27 @@
     "members": [
       {
         "id": 200,
-        "name": "catalog",
-        "type": "string",
-        "serialize_property": "table.ParentCatalog().GetName()"
+        "name": "table_info",
+        "type": "CreateInfo*",
+        "serialize_property": "table.GetInfo()"
       },
       {
         "id": 201,
-        "name": "schema",
-        "type": "string",
-        "serialize_property": "table.ParentSchema().name"
-      },
-      {
-        "id": 202,
-        "name": "table",
-        "type": "string",
-        "serialize_property": "table.name"
-      },
-      {
-        "id": 203,
         "name": "table_index",
         "type": "idx_t"
       },
       {
-        "id": 204,
+        "id": 202,
         "name": "return_chunk",
         "type": "bool"
       },
       {
-        "id": 205,
+        "id": 203,
         "name": "expressions",
         "type": "vector<Expression*>"
       }
     ],
-    "constructor": ["$ClientContext", "catalog&", "schema&", "table&"]
+    "constructor": ["$ClientContext", "table_info&"]
   },
   {
     "class": "LogicalUpdate",
@@ -716,54 +702,42 @@
     "members": [
       {
         "id": 200,
-        "name": "catalog",
-        "type": "string",
-        "serialize_property": "table.ParentCatalog().GetName()"
+        "name": "table_info",
+        "type": "CreateInfo*",
+        "serialize_property": "table.GetInfo()"
       },
       {
         "id": 201,
-        "name": "schema",
-        "type": "string",
-        "serialize_property": "table.ParentSchema().name"
-      },
-      {
-        "id": 202,
-        "name": "table",
-        "type": "string",
-        "serialize_property": "table.name"
-      },
-      {
-        "id": 203,
         "name": "table_index",
         "type": "idx_t"
       },
       {
-        "id": 204,
+        "id": 202,
         "name": "return_chunk",
         "type": "bool"
       },
       {
-        "id": 205,
+        "id": 203,
         "name": "expressions",
         "type": "vector<Expression*>"
       },
       {
-        "id": 206,
+        "id": 204,
         "name": "columns",
         "type": "vector<PhysicalIndex>"
       },
       {
-        "id": 207,
+        "id": 205,
         "name": "bound_defaults",
         "type": "vector<Expression*>"
       },
       {
-        "id": 208,
+        "id": 206,
         "name": "update_is_del_and_insert",
         "type": "bool"
       }
     ],
-    "constructor": ["$ClientContext", "catalog&", "schema&", "table&"]
+    "constructor": ["$ClientContext", "table_info&"]
   },
   {
     "class": "LogicalCreateTable",
@@ -772,24 +746,12 @@
     "members": [
       {
         "id": 200,
-        "name": "catalog",
-        "type": "string",
-        "serialize_property": "schema.ParentCatalog().GetName()"
-      },
-      {
-        "id": 201,
-        "name": "schema",
-        "type": "string",
-        "serialize_property": "schema.name"
-      },
-      {
-        "id": 202,
         "name": "info",
         "type": "CreateInfo*",
         "serialize_property": "info->base"
       }
     ],
-    "constructor": ["$ClientContext", "catalog&", "schema&", "info"]
+    "constructor": ["$ClientContext", "info"]
   },
   {
     "class": "LogicalCreate",
@@ -940,7 +902,8 @@
       {
         "id": 200,
         "name": "info",
-        "type": "CreateInfo*"
+        "type": "CreateIndexInfo*",
+        "base": "CreateInfo"
       },
       {
         "id": 201,
@@ -955,5 +918,32 @@
     "base": "LogicalOperator",
     "enum": "LOGICAL_EXTENSION_OPERATOR",
     "custom_implementation": true
+  },
+  {
+    "class": "FilenamePattern",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 200,
+        "name": "base",
+        "type": "string",
+        "serialize_property": "_base",
+        "deserialize_property": "_base"
+      },
+      {
+        "id": 201,
+        "name": "pos",
+        "type": "idx_t",
+        "serialize_property": "_pos",
+        "deserialize_property": "_pos"
+      },
+      {
+        "id": 202,
+        "name": "uuid",
+        "type": "bool",
+        "serialize_property": "_uuid",
+        "deserialize_property": "_uuid"
+      }
+    ]
   }
 ]

@@ -7,7 +7,7 @@ require json
 statement ok
 PRAGMA enable_verification
 
-statement error
+query I
 SELECT json_extract('hello world', CAST(NULL AS json)) AS c1
 ----
-JSON path cannot be NULL
+NULL

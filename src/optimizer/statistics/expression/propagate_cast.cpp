@@ -22,6 +22,20 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
 }
 
 static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatistics &input, const LogicalType &target) {
+	//	Downcasting timestamps to times is not a truncation operation
+	switch (target.id()) {
+	case LogicalTypeId::TIME:
+		switch (input.GetType().id()) {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_TZ:
+			return nullptr;
+		default:
+			break;
+		}
+	default:
+		break;
+	}
+
 	switch (target.InternalType()) {
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:

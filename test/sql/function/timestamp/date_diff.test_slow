@@ -12,19 +12,19 @@ statement ok
 CREATE TABLE date1 AS
 SELECT '2005-12-31'::DATE AS startdate, '2006-01-01'::DATE AS enddate;
 
-foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear'
+foreach datepart year quarter month day dayofyear julian
 
 query I
-SELECT DATEDIFF(${datepart}, startdate, enddate) FROM date1
+SELECT DATEDIFF('${datepart}', startdate, enddate) FROM date1
 ----
 1
 
 endloop
 
-foreach datepart 'decade' 'century' 'millennium' 'week' 'yearweek'
+foreach datepart decade century millennium week yearweek
 
 query I
-SELECT DATEDIFF(${datepart}, startdate, enddate) FROM date1
+SELECT DATEDIFF('${datepart}', startdate, enddate) FROM date1
 ----
 0
 
@@ -62,10 +62,10 @@ SELECT DATEDIFF('isoyear', startdate, enddate) FROM date1
 0
 
 # Negation
-foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond' 'decade' 'century' 'millennium' 'week' 'yearweek' 'isoyear'
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear julian
 
 query I
-SELECT DATEDIFF(${datepart}, startdate, enddate) + DATEDIFF(${datepart}, enddate, startdate) FROM date1
+SELECT DATEDIFF('${datepart}', startdate, enddate) + DATEDIFF('${datepart}', enddate, startdate) FROM date1
 ----
 0
 
@@ -116,29 +116,29 @@ statement ok
 CREATE TABLE datetime1 AS
 SELECT '2005-12-31 23:59:59.9999999'::TIMESTAMP AS startdate, '2006-01-01 00:00:00.0000000'::TIMESTAMP AS enddate;
 
-foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond'
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond julian
 
 query I
-SELECT DATEDIFF(${datepart}, startdate, enddate) FROM datetime1
+SELECT DATEDIFF('${datepart}', startdate, enddate) FROM datetime1
 ----
 1
 
 endloop
 
-foreach datepart 'decade' 'century' 'millennium' 'week' 'yearweek' 'isoyear'
+foreach datepart decade century millennium week yearweek isoyear
 
 query I
-SELECT DATEDIFF(${datepart}, startdate, enddate) FROM datetime1
+SELECT DATEDIFF('${datepart}', startdate, enddate) FROM datetime1
 ----
 0
 
 endloop
 
 # Negation
-foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond' 'decade' 'century' 'millennium' 'week' 'yearweek' 'isoyear'
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear julian
 
 query I
-SELECT DATEDIFF(${datepart}, startdate, enddate) + DATEDIFF(${datepart}, enddate, startdate) FROM datetime1
+SELECT DATEDIFF('${datepart}', startdate, enddate) + DATEDIFF('${datepart}', enddate, startdate) FROM datetime1
 ----
 0
 
@@ -166,10 +166,10 @@ statement ok
 CREATE TABLE time1 AS
 SELECT '23:59:59.9999999'::TIME AS enddate, '00:00:00.0000000'::TIME AS startdate;
 
-foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'decade' 'century' 'millennium' 'week' 'yearweek' 'isoyear'
+foreach datepart year quarter month day dayofyear decade century millennium week yearweek isoyear julian
 
 statement error
-SELECT DATEDIFF(${datepart}, startdate, enddate) FROM time1
+SELECT DATEDIFF('${datepart}', startdate, enddate) FROM time1
 
 endloop
 
@@ -199,10 +199,10 @@ SELECT DATEDIFF('microsecond' , startdate, enddate) FROM time1
 86399999999
 
 # Negation
-foreach datepart 'hour' 'minute' 'second' 'millisecond' 'microsecond'
+foreach datepart hour minute second millisecond microsecond
 
 query I
-SELECT DATEDIFF(${datepart}, startdate, enddate) + DATEDIFF(${datepart}, enddate, startdate) FROM time1
+SELECT DATEDIFF('${datepart}', startdate, enddate) + DATEDIFF('${datepart}', enddate, startdate) FROM time1
 ----
 0
 
@@ -227,22 +227,22 @@ endloop
 # NULLs
 #
 
-foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond' 'decade' 'century' 'millennium' 'week' 'yearweek' 'isoyear'
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear julian
 
 foreach tbl date1 datetime1 time1
 
 query I
-SELECT DATEDIFF(${datepart}, NULL::TIMESTAMP, NULL::TIMESTAMP) FROM ${tbl}
+SELECT DATEDIFF('${datepart}', NULL::TIMESTAMP, NULL::TIMESTAMP) FROM ${tbl}
 ----
 NULL
 
 query I
-SELECT DATEDIFF(${datepart}, NULL, enddate) FROM ${tbl}
+SELECT DATEDIFF('${datepart}', NULL, enddate) FROM ${tbl}
 ----
 NULL
 
 query I
-SELECT DATEDIFF(${datepart}, startdate, NULL) FROM ${tbl}
+SELECT DATEDIFF('${datepart}', startdate, NULL) FROM ${tbl}
 ----
 NULL
 
@@ -260,7 +260,7 @@ NULL
 endloop
 
 # Table
-foreach datepart year month day hour minute second millisecond microsecond isoyear
+foreach datepart year month day hour minute second millisecond microsecond isoyear julian
 
 query I
 SELECT DATEDIFF('${datepart}', startdate, NULL)
@@ -307,7 +307,7 @@ NULL
 #
 # Infinities
 #
-foreach specifier year isoyear month day decade century millennium quarter week microseconds milliseconds second minute hour
+foreach specifier year isoyear julian month day decade century millennium quarter week microseconds milliseconds second minute hour
 
 foreach ltype DATE TIMESTAMP
 
@@ -349,10 +349,10 @@ CREATE TABLE parts (datepart VARCHAR);
 statement ok
 INSERT into parts VALUES(NULL);
 
-foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond' 'decade' 'century' 'millennium' 'week' 'yearweek' 'isoyear'
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear julian
 
 statement ok
-INSERT into parts VALUES(${datepart});
+INSERT into parts VALUES('${datepart}');
 
 endloop
 
@@ -377,6 +377,7 @@ millennium	0
 week	0
 yearweek	0
 isoyear	0
+julian	1
 
 statement ok
 INSERT into parts VALUES('duck');

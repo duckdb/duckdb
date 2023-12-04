@@ -1,6 +1,5 @@
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
-#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -56,41 +55,6 @@ unique_ptr<Expression> BoundCaseExpression::Copy() {
 
 	new_case->CopyProperties(*this);
 	return std::move(new_case);
-}
-
-void BoundCaseCheck::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteSerializable(*when_expr);
-	writer.WriteSerializable(*then_expr);
-	writer.Finalize();
-}
-
-BoundCaseCheck BoundCaseCheck::Deserialize(Deserializer &source, PlanDeserializationState &state) {
-	FieldReader reader(source);
-	auto when_expr = reader.ReadRequiredSerializable<Expression>(state);
-	auto then_expr = reader.ReadRequiredSerializable<Expression>(state);
-	reader.Finalize();
-	BoundCaseCheck result;
-	result.when_expr = std::move(when_expr);
-	result.then_expr = std::move(then_expr);
-	return result;
-}
-
-void BoundCaseExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializable(return_type);
-	writer.WriteRegularSerializableList(case_checks);
-	writer.WriteSerializable(*else_expr);
-}
-
-unique_ptr<Expression> BoundCaseExpression::Deserialize(ExpressionDeserializationState &state, FieldReader &reader) {
-	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto case_checks = reader.ReadRequiredSerializableList<BoundCaseCheck, BoundCaseCheck>(state.gstate);
-	auto else_expr = reader.ReadRequiredSerializable<Expression>(state.gstate);
-
-	auto result = make_uniq<BoundCaseExpression>(return_type);
-	result->else_expr = std::move(else_expr);
-	result->case_checks = std::move(case_checks);
-	return std::move(result);
 }
 
 } // namespace duckdb

@@ -8,6 +8,7 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/storage/table/row_version_manager.hpp"
 
 namespace duckdb {
 
@@ -69,7 +70,7 @@ void CleanupState::CleanupDelete(DeleteInfo &info) {
 
 	count = 0;
 	for (idx_t i = 0; i < info.count; i++) {
-		row_numbers[count++] = info.vinfo->start + info.rows[i];
+		row_numbers[count++] = info.base_row + info.rows[i];
 	}
 	Flush();
 }

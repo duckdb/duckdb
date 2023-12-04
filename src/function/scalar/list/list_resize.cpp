@@ -2,6 +2,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/built_in_functions.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
@@ -114,6 +115,9 @@ static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFun
                                                vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2 || arguments.size() == 3);
 	bound_function.arguments[1] = LogicalType::UBIGINT;
+
+	// If the first argument is an array, cast it to a list
+	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
 	// first argument is constant NULL
 	if (arguments[0]->return_type == LogicalType::SQLNULL) {

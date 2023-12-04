@@ -1,10 +1,11 @@
 #include "catch.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/parser/statement/logical_plan_statement.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "test_helpers.hpp"
 #include "tpch_extension.hpp"
 
@@ -47,9 +48,7 @@ TEST_CASE("Generate serialized plans file", "[.][serialization]") {
 	DuckDB db;
 	Connection con(db);
 	load_db(con);
-	BufferedFileWriter serializer(db.GetFileSystem(), file_location);
-	serializer.SetVersion(PLAN_SERIALIZATION_VERSION);
-	serializer.Write(serializer.GetVersion());
+	BufferedFileWriter target(db.GetFileSystem(), file_location);
 	std::ifstream queries(get_full_file_name("queries.sql"));
 	string query;
 	while (std::getline(queries, query)) {
@@ -61,12 +60,16 @@ TEST_CASE("Generate serialized plans file", "[.][serialization]") {
 
 		planner.CreatePlan(std::move(p.statements[0]));
 		auto plan = std::move(planner.plan);
+
+		BinarySerializer serializer(target);
+		serializer.Begin();
 		plan->Serialize(serializer);
+		serializer.End();
 
 		con.Rollback();
 	}
 
-	serializer.Sync();
+	target.Sync();
 
 	test_deserialization(file_location);
 }
@@ -79,8 +82,7 @@ void test_deserialization(const string &file_location) {
 	DuckDB db;
 	Connection con(db);
 	load_db(con);
-	BufferedFileReader deserializer(db.GetFileSystem(), file_location.c_str(), con.context.get());
-	deserializer.SetVersion(deserializer.Read<uint64_t>());
+	BufferedFileReader file_source(db.GetFileSystem(), file_location.c_str());
 
 	std::ifstream queries(get_full_file_name("queries.sql"));
 	string query;
@@ -96,8 +98,12 @@ void test_deserialization(const string &file_location) {
 		auto expected_results = con.context->Query(make_uniq<LogicalPlanStatement>(std::move(expected_plan)), false);
 		REQUIRE_NO_FAIL(*expected_results);
 
-		PlanDeserializationState state(*con.context);
-		auto deserialized_plan = LogicalOperator::Deserialize(deserializer, state);
+		BinaryDeserializer deserializer(file_source);
+		deserializer.Set<ClientContext &>(*con.context);
+		deserializer.Begin();
+		auto deserialized_plan = LogicalOperator::Deserialize(deserializer);
+		deserializer.End();
+
 		deserialized_plan->ResolveOperatorTypes();
 		auto deserialized_results =
 		    con.context->Query(make_uniq<LogicalPlanStatement>(std::move(deserialized_plan)), false);

@@ -49,9 +49,6 @@ public:
 	static bool IsCharType(SQLSMALLINT type);
 
 	static SQLRETURN SetStringValueLength(const std::string &val_str, SQLLEN *str_len_or_ind_ptr);
-	static SQLRETURN SetStringAndLength(vector<std::string> &error_messages, const std::string &val_str,
-	                                    SQLPOINTER target_value_ptr, SQLSMALLINT buffer_length,
-	                                    SQLSMALLINT *str_len_or_ind_ptr);
 
 	static std::string GetStringAsIdentifier(const std::string &str);
 	static std::string ParseStringFilter(const std::string &filter_name, const std::string &filter_value,

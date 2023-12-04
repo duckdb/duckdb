@@ -25,6 +25,9 @@ enum class WindowBoundary : uint8_t {
 	EXPR_FOLLOWING_RANGE = 8
 };
 
+//! Represents the window exclusion mode
+enum class WindowExcludeMode : uint8_t { NO_OTHER = 0, CURRENT_ROW = 1, GROUP = 2, TIES = 3 };
+
 const char *ToString(WindowBoundary value);
 
 //! The WindowExpression represents a window function in the query. They are a special case of aggregates which is why
@@ -55,6 +58,8 @@ public:
 	//! The window boundaries
 	WindowBoundary start = WindowBoundary::INVALID;
 	WindowBoundary end = WindowBoundary::INVALID;
+	//! The EXCLUDE clause
+	WindowExcludeMode exclude_clause = WindowExcludeMode::NO_OTHER;
 
 	unique_ptr<ParsedExpression> start_expr;
 	unique_ptr<ParsedExpression> end_expr;
@@ -74,10 +79,8 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ParsedExpression> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
 	static ExpressionType WindowToExpressionType(string &fun_name);
 
@@ -204,6 +207,23 @@ public:
 		} else if (!to.empty()) {
 			result += " ";
 			result += to;
+		}
+
+		if (entry.exclude_clause != WindowExcludeMode::NO_OTHER) {
+			result += " EXCLUDE ";
+		}
+		switch (entry.exclude_clause) {
+		case WindowExcludeMode::CURRENT_ROW:
+			result += "CURRENT ROW";
+			break;
+		case WindowExcludeMode::GROUP:
+			result += "GROUP";
+			break;
+		case WindowExcludeMode::TIES:
+			result += "TIES";
+			break;
+		default:
+			break;
 		}
 
 		result += ")";

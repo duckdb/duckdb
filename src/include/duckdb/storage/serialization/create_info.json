@@ -2,6 +2,9 @@
   {
     "class": "CreateInfo",
     "class_type": "type",
+    "set_parameters": [
+      "type"
+    ],
     "includes": [
       "duckdb/parser/parsed_data/create_info.hpp"
     ],
@@ -65,7 +68,8 @@
       {
         "id": 202,
         "name": "index_type",
-        "type": "IndexType"
+        "type": "IndexType",
+        "deleted": "True"
       },
       {
         "id": 203,
@@ -79,13 +83,29 @@
       },
       {
         "id": 205,
+        "name": "scan_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "id": 206,
         "name": "names",
         "type": "vector<string>"
       },
       {
-        "id": 206,
+        "id": 207,
         "name": "column_ids",
         "type": "vector<column_t>"
+      },
+      {
+        "id": 208,
+        "name": "options",
+        "type": "case_insensitive_map_t<Value>"
+      },
+      {
+        "id": 209,
+        "name": "index_type_name",
+        "type": "string",
+        "property": "index_type"
       }
     ]
   },
@@ -115,8 +135,7 @@
       {
         "id": 203,
         "name": "query",
-        "type": "SelectStatement*",
-        "optional": true
+        "type": "SelectStatement*"
       }
     ]
   },
@@ -156,8 +175,7 @@
       {
         "id": 203,
         "name": "query",
-        "type": "SelectStatement*",
-        "optional": true
+        "type": "SelectStatement*"
       }
     ]
   },
@@ -200,7 +218,8 @@
         "name": "function",
         "type": "MacroFunction*"
       }
-    ]
+    ],
+    "constructor": ["$CatalogType"]
   },
   {
     "class": "CreateSequenceInfo",

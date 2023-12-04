@@ -2,14 +2,13 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/function_serialization.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -122,103 +121,17 @@ idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 	return 1;
 }
 
-void LogicalGet::Serialize(FieldWriter &writer) const {
-	writer.WriteField(table_index);
-	writer.WriteRegularSerializableList(returned_types);
-	writer.WriteList<string>(names);
-	writer.WriteList<column_t>(column_ids);
-	writer.WriteList<column_t>(projection_ids);
-	writer.WriteSerializable(table_filters);
-
-	FunctionSerializer::SerializeBase<TableFunction>(writer, function, bind_data.get());
-	if (!function.serialize) {
-		D_ASSERT(!function.deserialize);
-		// no serialize method: serialize input values and named_parameters for rebinding purposes
-		writer.WriteRegularSerializableList(parameters);
-		writer.WriteField<idx_t>(named_parameters.size());
-		for (auto &pair : named_parameters) {
-			writer.WriteString(pair.first);
-			writer.WriteSerializable(pair.second);
-		}
-		writer.WriteRegularSerializableList(input_table_types);
-		writer.WriteList<string>(input_table_names);
-	}
-	writer.WriteList<column_t>(projected_input);
-}
-
-unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
-	auto table_index = reader.ReadRequired<idx_t>();
-	auto returned_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-	auto returned_names = reader.ReadRequiredList<string>();
-	auto column_ids = reader.ReadRequiredList<column_t>();
-	auto projection_ids = reader.ReadRequiredList<column_t>();
-	auto table_filters = reader.ReadRequiredSerializable<TableFilterSet>();
-
-	unique_ptr<FunctionData> bind_data;
-	bool has_deserialize;
-	auto function = FunctionSerializer::DeserializeBaseInternal<TableFunction, TableFunctionCatalogEntry>(
-	    reader, state.gstate, CatalogType::TABLE_FUNCTION_ENTRY, bind_data, has_deserialize);
-
-	vector<Value> parameters;
-	named_parameter_map_t named_parameters;
-	vector<LogicalType> input_table_types;
-	vector<string> input_table_names;
-	if (!has_deserialize) {
-		D_ASSERT(!bind_data);
-		parameters = reader.ReadRequiredSerializableList<Value, Value>();
-
-		auto named_parameters_size = reader.ReadRequired<idx_t>();
-		for (idx_t i = 0; i < named_parameters_size; i++) {
-			auto first = reader.ReadRequired<string>();
-			auto second = reader.ReadRequiredSerializable<Value, Value>();
-			auto pair = make_pair(first, second);
-			named_parameters.insert(pair);
-		}
-
-		input_table_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-		input_table_names = reader.ReadRequiredList<string>();
-		TableFunctionBindInput input(parameters, named_parameters, input_table_types, input_table_names,
-		                             function.function_info.get());
-
-		vector<LogicalType> bind_return_types;
-		vector<string> bind_names;
-		bind_data = function.bind(state.gstate.context, input, bind_return_types, bind_names);
-		if (returned_types != bind_return_types) {
-			throw SerializationException(
-			    "Table function deserialization failure - bind returned different return types than were serialized");
-		}
-		// names can actually be different because of aliases - only the sizes cannot be different
-		if (returned_names.size() != bind_names.size()) {
-			throw SerializationException(
-			    "Table function deserialization failure - bind returned different returned names than were serialized");
-		}
-	}
-	vector<column_t> projected_input;
-	reader.ReadList<column_t>(projected_input);
-
-	auto result = make_uniq<LogicalGet>(table_index, function, std::move(bind_data), returned_types, returned_names);
-	result->column_ids = std::move(column_ids);
-	result->projection_ids = std::move(projection_ids);
-	result->table_filters = std::move(*table_filters);
-	result->parameters = std::move(parameters);
-	result->named_parameters = std::move(named_parameters);
-	result->input_table_types = input_table_types;
-	result->input_table_names = input_table_names;
-	result->projected_input = std::move(projected_input);
-	return std::move(result);
-}
-
-void LogicalGet::FormatSerialize(FormatSerializer &serializer) const {
-	LogicalOperator::FormatSerialize(serializer);
+void LogicalGet::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
 	serializer.WriteProperty(200, "table_index", table_index);
 	serializer.WriteProperty(201, "returned_types", returned_types);
 	serializer.WriteProperty(202, "names", names);
 	serializer.WriteProperty(203, "column_ids", column_ids);
 	serializer.WriteProperty(204, "projection_ids", projection_ids);
 	serializer.WriteProperty(205, "table_filters", table_filters);
-	FunctionSerializer::FormatSerialize(serializer, function, bind_data.get());
-	if (!function.format_serialize) {
-		D_ASSERT(!function.format_deserialize);
+	FunctionSerializer::Serialize(serializer, function, bind_data.get());
+	if (!function.serialize) {
+		D_ASSERT(!function.serialize);
 		// no serialize method: serialize input values and named_parameters for rebinding purposes
 		serializer.WriteProperty(206, "parameters", parameters);
 		serializer.WriteProperty(207, "named_parameters", named_parameters);
@@ -228,7 +141,7 @@ void LogicalGet::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(210, "projected_input", projected_input);
 }
 
-unique_ptr<LogicalOperator> LogicalGet::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
 	auto result = unique_ptr<LogicalGet>(new LogicalGet());
 	deserializer.ReadProperty(200, "table_index", result->table_index);
 	deserializer.ReadProperty(201, "returned_types", result->returned_types);
@@ -236,9 +149,10 @@ unique_ptr<LogicalOperator> LogicalGet::FormatDeserialize(FormatDeserializer &de
 	deserializer.ReadProperty(203, "column_ids", result->column_ids);
 	deserializer.ReadProperty(204, "projection_ids", result->projection_ids);
 	deserializer.ReadProperty(205, "table_filters", result->table_filters);
-	auto entry = FunctionSerializer::FormatDeserializeBase<TableFunction, TableFunctionCatalogEntry>(
+	auto entry = FunctionSerializer::DeserializeBase<TableFunction, TableFunctionCatalogEntry>(
 	    deserializer, CatalogType::TABLE_FUNCTION_ENTRY);
-	auto &function = entry.first;
+	result->function = entry.first;
+	auto &function = result->function;
 	auto has_serialize = entry.second;
 
 	unique_ptr<FunctionData> bind_data;
@@ -268,6 +182,7 @@ unique_ptr<LogicalOperator> LogicalGet::FormatDeserialize(FormatDeserializer &de
 	} else {
 		bind_data = FunctionSerializer::FunctionDeserialize(deserializer, function);
 	}
+	result->bind_data = std::move(bind_data);
 	deserializer.ReadProperty(210, "projected_input", result->projected_input);
 	return std::move(result);
 }

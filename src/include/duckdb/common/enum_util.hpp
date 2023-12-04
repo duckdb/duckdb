@@ -66,6 +66,8 @@ enum class BlockState : uint8_t;
 
 enum class CAPIResultSetType : uint8_t;
 
+enum class CSVState : uint8_t;
+
 enum class CTEMaterialize : uint8_t;
 
 enum class CatalogType : uint8_t;
@@ -129,6 +131,8 @@ enum class ForeignKeyType : uint8_t;
 enum class FunctionNullHandling : uint8_t;
 
 enum class FunctionSideEffects : uint8_t;
+
+enum class HLLStorageType : uint8_t;
 
 enum class IndexConstraintType : uint8_t;
 
@@ -204,11 +208,17 @@ enum class PreparedParamType : uint8_t;
 
 enum class ProfilerPrintFormat : uint8_t;
 
+enum class QuantileSerializationType : uint8_t;
+
 enum class QueryNodeType : uint8_t;
 
 enum class QueryResultType : uint8_t;
 
+enum class QuoteRule : uint8_t;
+
 enum class RelationType : uint8_t;
+
+enum class RenderMode : uint8_t;
 
 enum class ResultModifierType : uint8_t;
 
@@ -227,6 +237,8 @@ enum class SimplifiedTokenType : uint8_t;
 enum class SinkCombineResultType : uint8_t;
 
 enum class SinkFinalizeType : uint8_t;
+
+enum class SinkNextBatchType : uint8_t;
 
 enum class SinkResultType : uint8_t;
 
@@ -282,6 +294,10 @@ enum class WindowAggregationMode : uint32_t;
 
 enum class WindowBoundary : uint8_t;
 
+enum class WindowExcludeMode : uint8_t;
+
+enum class WithinCollection : uint8_t;
+
 
 template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
@@ -333,6 +349,9 @@ const char* EnumUtil::ToChars<BlockState>(BlockState value);
 
 template<>
 const char* EnumUtil::ToChars<CAPIResultSetType>(CAPIResultSetType value);
+
+template<>
+const char* EnumUtil::ToChars<CSVState>(CSVState value);
 
 template<>
 const char* EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value);
@@ -429,6 +448,9 @@ const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionSideEffects>(FunctionSideEffects value);
+
+template<>
+const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
 
 template<>
 const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
@@ -542,13 +564,22 @@ template<>
 const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
 
 template<>
+const char* EnumUtil::ToChars<QuantileSerializationType>(QuantileSerializationType value);
+
+template<>
 const char* EnumUtil::ToChars<QueryNodeType>(QueryNodeType value);
 
 template<>
 const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
 
 template<>
+const char* EnumUtil::ToChars<QuoteRule>(QuoteRule value);
+
+template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value);
+
+template<>
+const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
 
 template<>
 const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
@@ -576,6 +607,9 @@ const char* EnumUtil::ToChars<SinkCombineResultType>(SinkCombineResultType value
 
 template<>
 const char* EnumUtil::ToChars<SinkFinalizeType>(SinkFinalizeType value);
+
+template<>
+const char* EnumUtil::ToChars<SinkNextBatchType>(SinkNextBatchType value);
 
 template<>
 const char* EnumUtil::ToChars<SinkResultType>(SinkResultType value);
@@ -658,6 +692,12 @@ const char* EnumUtil::ToChars<WindowAggregationMode>(WindowAggregationMode value
 template<>
 const char* EnumUtil::ToChars<WindowBoundary>(WindowBoundary value);
 
+template<>
+const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value);
+
+template<>
+const char* EnumUtil::ToChars<WithinCollection>(WithinCollection value);
+
 
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
@@ -709,6 +749,9 @@ BlockState EnumUtil::FromString<BlockState>(const char *value);
 
 template<>
 CAPIResultSetType EnumUtil::FromString<CAPIResultSetType>(const char *value);
+
+template<>
+CSVState EnumUtil::FromString<CSVState>(const char *value);
 
 template<>
 CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value);
@@ -805,6 +848,9 @@ FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *valu
 
 template<>
 FunctionSideEffects EnumUtil::FromString<FunctionSideEffects>(const char *value);
+
+template<>
+HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
 
 template<>
 IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);
@@ -918,13 +964,22 @@ template<>
 ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value);
 
 template<>
+QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const char *value);
+
+template<>
 QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value);
 
 template<>
 QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
 
 template<>
+QuoteRule EnumUtil::FromString<QuoteRule>(const char *value);
+
+template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value);
+
+template<>
+RenderMode EnumUtil::FromString<RenderMode>(const char *value);
 
 template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
@@ -952,6 +1007,9 @@ SinkCombineResultType EnumUtil::FromString<SinkCombineResultType>(const char *va
 
 template<>
 SinkFinalizeType EnumUtil::FromString<SinkFinalizeType>(const char *value);
+
+template<>
+SinkNextBatchType EnumUtil::FromString<SinkNextBatchType>(const char *value);
 
 template<>
 SinkResultType EnumUtil::FromString<SinkResultType>(const char *value);
@@ -1033,6 +1091,12 @@ WindowAggregationMode EnumUtil::FromString<WindowAggregationMode>(const char *va
 
 template<>
 WindowBoundary EnumUtil::FromString<WindowBoundary>(const char *value);
+
+template<>
+WindowExcludeMode EnumUtil::FromString<WindowExcludeMode>(const char *value);
+
+template<>
+WithinCollection EnumUtil::FromString<WithinCollection>(const char *value);
 
 
 }

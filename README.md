@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="https://duckdb.org/images/DuckDB_Logo_dl.png" height="50">
+  <img src="https://duckdb.org/images/logo-dl/DuckDB_Logo-stacked.svg" height="120">
 </div>
-<p>&nbsp;</p>
+<br>
 
 
 
@@ -9,9 +9,6 @@
 <p align="center">
   <a href="https://github.com/duckdb/duckdb/actions">
     <img src="https://github.com/duckdb/duckdb/actions/workflows/Main.yml/badge.svg?branch=main" alt="Github Actions Badge">
-  </a>
-  <a href="https://app.codecov.io/gh/duckdb/duckdb">
-    <img src="https://codecov.io/gh/duckdb/duckdb/branch/main/graph/badge.svg?token=FaxjcfFghN" alt="codecov"/>
   </a>
   <a href="https://discord.gg/tcvwpjfnZx">
     <img src="https://shields.io/discord/909674491309850675" alt="discord" />
@@ -22,7 +19,7 @@
 </p>
 
 ## DuckDB
-DuckDB is a high-performance analytical database system. It is designed to be fast, reliable and easy to use. DuckDB provides a rich SQL dialect, with support far beyond basic SQL. DuckDB supports arbitrary and nested correlated subqueries, window functions, collations, complex types (arrays, structs), and more. For more information on the goals of DuckDB, please refer to [the Why DuckDB page on our website](https://duckdb.org/why_duckdb).
+DuckDB is a high-performance analytical database system. It is designed to be fast, reliable, portable, and easy to use. DuckDB provides a rich SQL dialect, with support far beyond basic SQL. DuckDB supports arbitrary and nested correlated subqueries, window functions, collations, complex types (arrays, structs), and more. For more information on using DuckDB, please refer to the [DuckDB documentation](https://duckdb.org/docs/).
 
 ## Installation
 If you want to install and use DuckDB, please see [our website](https://www.duckdb.org) for installation and usage instructions.

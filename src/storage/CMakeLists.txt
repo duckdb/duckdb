@@ -13,6 +13,7 @@ add_library_unity(
   buffer_manager.cpp
   checkpoint_manager.cpp
   block.cpp
+  data_pointer.cpp
   data_table.cpp
   index.cpp
   local_storage.cpp

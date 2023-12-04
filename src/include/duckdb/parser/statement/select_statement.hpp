@@ -17,8 +17,8 @@
 namespace duckdb {
 
 class QueryNode;
-class FormatSerializer;
-class FormatDeserializer;
+class Serializer;
+class Deserializer;
 
 //! SelectStatement is a typical SELECT clause
 class SelectStatement : public SQLStatement {
@@ -40,15 +40,10 @@ public:
 	DUCKDB_API string ToString() const override;
 	//! Create a copy of this SelectStatement
 	DUCKDB_API unique_ptr<SQLStatement> Copy() const override;
-	//! Serializes a SelectStatement to a stand-alone binary blob
-	void Serialize(Serializer &serializer) const;
-	//! Deserializes a blob back into a SelectStatement, returns nullptr if
-	//! deserialization is not possible
-	static unique_ptr<SelectStatement> Deserialize(Deserializer &source);
 	//! Whether or not the statements are equivalent
 	bool Equals(const SQLStatement &other) const;
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<SelectStatement> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<SelectStatement> Deserialize(Deserializer &deserializer);
 };
 } // namespace duckdb

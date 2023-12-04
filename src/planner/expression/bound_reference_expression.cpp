@@ -1,7 +1,5 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/main/config.hpp"
@@ -41,20 +39,6 @@ hash_t BoundReferenceExpression::Hash() const {
 }
 
 unique_ptr<Expression> BoundReferenceExpression::Copy() {
-	return make_uniq<BoundReferenceExpression>(alias, return_type, index);
-}
-
-void BoundReferenceExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteString(alias);
-	writer.WriteSerializable(return_type);
-	writer.WriteField(index);
-}
-
-unique_ptr<Expression> BoundReferenceExpression::Deserialize(ExpressionDeserializationState &state,
-                                                             FieldReader &reader) {
-	auto alias = reader.ReadRequired<string>();
-	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto index = reader.ReadRequired<idx_t>();
 	return make_uniq<BoundReferenceExpression>(alias, return_type, index);
 }
 

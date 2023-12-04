@@ -11,6 +11,9 @@
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/string_util.hpp"
 
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+
 namespace duckdb {
 
 bool Interval::FromString(const string &str, interval_t &result) {
@@ -36,6 +39,7 @@ bool Interval::FromCString(const char *str, idx_t len, interval_t &result, strin
 	bool negative;
 	bool found_any = false;
 	int64_t number;
+	int64_t fraction;
 	DatePartSpecifier specifier;
 	string specifier_str;
 
@@ -100,8 +104,19 @@ interval_parse_number:
 			// finished the number, parse it from the string
 			string_t nr_string(str + start_pos, pos - start_pos);
 			number = Cast::Operation<string_t, int64_t>(nr_string);
+			fraction = 0;
+			if (c == '.') {
+				// we expect some microseconds
+				int32_t mult = 100000;
+				for (++pos; pos < len && StringUtil::CharacterIsDigit(str[pos]); ++pos, mult /= 10) {
+					if (mult > 0) {
+						fraction += (str[pos] - '0') * mult;
+					}
+				}
+			}
 			if (negative) {
 				number = -number;
+				fraction = -fraction;
 			}
 			goto interval_parse_identifier;
 		}
@@ -111,7 +126,7 @@ interval_parse_time : {
 	// parse the remainder of the time as a Time type
 	dtime_t time;
 	idx_t pos;
-	if (!Time::TryConvertTime(str + start_pos, len - start_pos, pos, time)) {
+	if (!Time::TryConvertInterval(str + start_pos, len - start_pos, pos, time)) {
 		return false;
 	}
 	result.micros += time.micros;
@@ -143,6 +158,24 @@ interval_parse_identifier:
 		}
 	}
 	specifier_str = string(str + start_pos, pos - start_pos);
+
+	// Special case SS[.FFFFFF] - implied SECONDS/MICROSECONDS
+	if (specifier_str.empty() && !found_any) {
+		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_SEC);
+		IntervalTryAddition<int64_t>(result.micros, fraction, 1);
+		found_any = true;
+		// parse any trailing whitespace
+		for (; pos < len; pos++) {
+			char c = str[pos];
+			if (c == ' ' || c == '\t' || c == '\n') {
+				continue;
+			} else {
+				return false;
+			}
+		}
+		goto end_of_string;
+	}
+
 	if (!TryGetDatePartSpecifier(specifier_str, specifier)) {
 		HandleCastError::AssignError(StringUtil::Format("extract specifier \"%s\" not recognized", specifier_str),
 		                             error_message);

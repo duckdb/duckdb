@@ -16,7 +16,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Regression.yml'
-      - '.github/config/uncovered_files.csv'
+
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
@@ -26,7 +26,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Regression.yml'
-      - '.github/config/uncovered_files.csv'
+
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
@@ -40,6 +40,7 @@ jobs:
  regression-test-benchmark-runner:
   name: Regression Tests
   runs-on: ubuntu-20.04
+  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10
@@ -119,9 +120,16 @@ jobs:
       run: |
         python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/imdb.csv --verbose --threads=2
 
+    - name: Regression Test CSV
+      if: always()
+      shell: bash
+      run: |
+        python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/csv.csv --verbose --threads=2
+
  regression-test-storage:
   name: Storage Size Regression Test
   runs-on: ubuntu-20.04
+  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10
@@ -203,6 +211,7 @@ jobs:
  regression-test-python:
   name: Regression Test (Python Client)
   runs-on: ubuntu-20.04
+  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10
@@ -215,7 +224,7 @@ jobs:
 
     - uses: actions/setup-python@v4
       with:
-        python-version: '3.7'
+        python-version: '3.11'
 
     - name: Install
       shell: bash
@@ -270,6 +279,7 @@ jobs:
  regression-test-plan-cost:
   name: Regression Test Join Order Plan Cost
   runs-on: ubuntu-20.04
+  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10

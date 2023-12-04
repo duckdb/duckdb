@@ -27,36 +27,34 @@ public:
 	virtual ~TableDataWriter();
 
 public:
-	void WriteTableData();
+	void WriteTableData(Serializer &metadata_serializer);
 
 	CompressionType GetColumnCompressionType(idx_t i);
 
-	virtual void FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info) = 0;
+	virtual void FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info, Serializer &serializer) = 0;
 	virtual unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) = 0;
 
 	virtual void AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> &&writer);
 
 protected:
 	DuckTableEntry &table;
-	// Pointers to the start of each row group.
+	//! Pointers to the start of each row group.
 	vector<RowGroupPointer> row_group_pointers;
 };
 
 class SingleFileTableDataWriter : public TableDataWriter {
 public:
 	SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager, TableCatalogEntry &table,
-	                          MetadataWriter &table_data_writer, MetadataWriter &meta_data_writer);
+	                          MetadataWriter &table_data_writer);
 
 public:
-	virtual void FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info) override;
-	virtual unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
+	void FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info, Serializer &serializer) override;
+	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
 
 private:
 	SingleFileCheckpointWriter &checkpoint_manager;
-	// Writes the actual table data
+	//! Writes the actual table data
 	MetadataWriter &table_data_writer;
-	// Writes the metadata of the table
-	MetadataWriter &meta_data_writer;
 };
 
 } // namespace duckdb

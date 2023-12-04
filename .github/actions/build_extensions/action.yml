@@ -5,6 +5,9 @@ inputs:
   run_tests:
     description: 'Run extension tests after build'
     default: 1
+  run_autoload_tests:
+    description: 'Runs the autoloading tests'
+    default: 1
 
   # Deploy config
   deploy_as:
@@ -36,6 +39,9 @@ inputs:
   build_dir:
     description: 'DuckDB source directory to run the build in'
     default: '.'
+  ninja:
+    description: 'Use ninja for building'
+    default: 0
   openssl_path:
     description: 'Directory of OpenSSL installation'
     default: ''
@@ -85,9 +91,9 @@ runs:
 
     - name: Setup vcpkg
       if: inputs.vcpkg_build == 1
-      uses: lukka/run-vcpkg@v11
+      uses: lukka/run-vcpkg@v11.1
       with:
-        vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
+        vcpkgGitCommitId: a42af01b72c28a8e1d7b48107b33e4f286a55ef6
 
     - name: Set vcpkg env variables
       if: inputs.vcpkg_build == 1
@@ -118,7 +124,6 @@ runs:
       shell: bash
       run: |
         make extension_configuration
-        echo "USE_MERGED_VCPKG_MANIFEST=1" >> $GITHUB_ENV 
 
     - name: Build
       shell: bash
@@ -132,7 +137,11 @@ runs:
         DISABLE_BUILTIN_EXTENSIONS: ${{ inputs.no_static_linking}}
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
+        LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && github.workspace || ''}}
+        GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
+        USE_MERGED_VCPKG_MANIFEST: 1
       run: |
+        ls
         mkdir -p ~/.ssh
         ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
         cd  ${{ inputs.build_dir}}
@@ -141,19 +150,56 @@ runs:
         echo "$USER"
         git config --global --add safe.directory '*'
         make
+        ls
 
+    # Tests extension using regular require mechanism:
+    # - statically linked extensions are disable on startup but a sqlogictest require will call their load function
+    # - loadable-only extensions have their loadable extension loaded with the LOAD statement on a sqlogictest require
     - name: Test statically linked extensions
       if: ${{ inputs.run_tests == 1 && inputs.no_static_linking == 0}}
       shell: bash
       run: |
-         ${{ inputs.unittest_script }}
+        ${{ inputs.unittest_script }}
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}
       shell: bash
       run: |
+        ls
         cd  ${{ inputs.build_dir}}
         ${{ inputs.post_install }}
+
+    # The reason we need to rebuild is we need to test auto-loading extensions: this is only possible without the other
+    # extensions linked
+    - name: Rebuild DuckDB without any extensions, but with all extension tests
+      if: ${{ inputs.run_autoload_tests == 1 }}
+      shell: bash
+      env:
+        EXTENSION_TESTS_ONLY: 1
+        ENABLE_EXTENSION_AUTOLOADING: 1
+        ENABLE_EXTENSION_AUTOINSTALL: 1
+        GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
+        USE_MERGED_VCPKG_MANIFEST: 1
+      run: |
+        cd  ${{ inputs.build_dir}}
+        rm -rf duckdb_unittest_tempdir/*
+        mv build/release/extension build/extension_tmp
+        rm -rf build/release
+        VCPKG_TOOLCHAIN_PATH="" make
+
+    # Run all unittests (including the out-of-tree tests) without any extensions linked, relying on the autoloader
+    - name: Run tests with auto loading
+      if: ${{ inputs.run_autoload_tests == 1 }}
+      shell: bash
+      env:
+        LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && github.workspace || ''}}
+      run: |
+        cd  ${{ inputs.build_dir}}
+        python3 scripts/get_test_list.py --file-contains 'require ' --list '"*.test"' > test.list
+        python3 scripts/get_test_list.py --file-contains 'require-env LOCAL_EXTENSION_REPO' --list '"*.test"' >> test.list
+        ${{ inputs.unittest_script }} '-f test.list'
+        rm -rf build/release/extension
+        mv build/extension_tmp build/release/extension
 
     - name: Deploy
       if: ${{ inputs.deploy_as != '' }}
@@ -175,9 +221,8 @@ runs:
           fi
         fi
 
-    # Note: the extension-upload-test script will currently not run the out-of-tree extensions tests.
-    #       it will however test that the out-of-tree extensions can actually be loaded, and the default tests still pass
-    - name: Test loadable extensions
+    # Run the unittests (excluding the out-of-tree tests) with the extensions that we deployed to S3
+    - name: Test deployed extensions
       if: ${{ inputs.run_tests == 1 }}
       shell: bash
       env:
@@ -185,9 +230,8 @@ runs:
         AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
         AWS_DEFAULT_REGION: us-east-1
       run: |
+        rm -rf ~/.duckdb
         cd  ${{ inputs.build_dir}}
         if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           ./scripts/extension-upload-test.sh
-        else
-          ./scripts/extension-upload-test.sh local
         fi

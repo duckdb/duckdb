@@ -147,24 +147,29 @@ static void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_d
 	ListVector::SetListSize(result, total_len);
 }
 
-static void ListWindow(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
-                       idx_t input_count, data_ptr_t state, const FrameBounds &frame, const FrameBounds &prev,
-                       Vector &result, idx_t rid, idx_t bias) {
+static void ListWindow(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
+                       const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &frames, Vector &result,
+                       idx_t rid) {
 
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
 	LinkedList linked_list;
 
 	// UPDATE step
 
-	D_ASSERT(input_count == 1);
-	auto &input = inputs[0];
+	D_ASSERT(partition.input_count == 1);
+	// FIXME: We are modifying the window operator's data here
+	auto &input = const_cast<Vector &>(partition.inputs[0]);
 
 	// FIXME: we unify more values than necessary (count is frame.end)
-	RecursiveUnifiedVectorFormat input_data;
-	Vector::RecursiveToUnifiedFormat(input, frame.end, input_data);
+	const auto count = frames.back().end;
 
-	for (idx_t i = frame.start; i < frame.end; i++) {
-		list_bind_data.functions.AppendRow(aggr_input_data.allocator, linked_list, input_data, i);
+	RecursiveUnifiedVectorFormat input_data;
+	Vector::RecursiveToUnifiedFormat(input, count, input_data);
+
+	for (const auto &frame : frames) {
+		for (idx_t i = frame.start; i < frame.end; i++) {
+			list_bind_data.functions.AppendRow(aggr_input_data.allocator, linked_list, input_data, i);
+		}
 	}
 
 	// FINALIZE step

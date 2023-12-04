@@ -12,9 +12,10 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/scalar/list/contains_or_position.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -58,19 +59,17 @@ struct VariableReturnBindData : public FunctionData {
 		return make_uniq<VariableReturnBindData>(stype);
 	}
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const VariableReturnBindData &)other_p;
+		auto &other = other_p.Cast<VariableReturnBindData>();
 		return stype == other.stype;
 	}
-
-	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
-		D_ASSERT(bind_data_p);
-		auto &info = bind_data_p->Cast<VariableReturnBindData>();
-		writer.WriteSerializable(info.stype);
+	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+	                      const ScalarFunction &function) {
+		auto &info = bind_data->Cast<VariableReturnBindData>();
+		serializer.WriteProperty(100, "variable_return_type", info.stype);
 	}
 
-	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &context, FieldReader &reader,
-	                                            ScalarFunction &bound_function) {
-		auto stype = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &bound_function) {
+		auto stype = deserializer.ReadProperty<LogicalType>(100, "variable_return_type");
 		return make_uniq<VariableReturnBindData>(std::move(stype));
 	}
 };
@@ -100,6 +99,21 @@ struct ListPositionFun {
 };
 
 struct ListResizeFun {
+	static ScalarFunction GetFunction();
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct ListZipFun {
+	static ScalarFunction GetFunction();
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct ListSelectFun {
+	static ScalarFunction GetFunction();
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct ListWhereFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };

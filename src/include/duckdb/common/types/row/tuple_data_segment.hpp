@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/perfect_map_set.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -21,7 +22,7 @@ class TupleDataLayout;
 
 struct TupleDataChunkPart {
 public:
-	TupleDataChunkPart();
+	TupleDataChunkPart(mutex &lock);
 
 	//! Disable copy constructors
 	TupleDataChunkPart(const TupleDataChunkPart &other) = delete;
@@ -45,8 +46,8 @@ public:
 	uint32_t total_heap_size;
 	//! Tuple count for this chunk part
 	uint32_t count;
-	//! Lock for recomputing heap pointers
-	mutex lock;
+	//! Lock for recomputing heap pointers (owned by TupleDataChunk)
+	reference<mutex> lock;
 };
 
 struct TupleDataChunk {
@@ -70,13 +71,15 @@ public:
 
 public:
 	//! The parts of this chunk
-	vector<TupleDataChunkPart> parts;
+	unsafe_vector<TupleDataChunkPart> parts;
 	//! The row block ids referenced by the chunk
-	unordered_set<uint32_t> row_block_ids;
+	perfect_set_t row_block_ids;
 	//! The heap block ids referenced by the chunk
-	unordered_set<uint32_t> heap_block_ids;
+	perfect_set_t heap_block_ids;
 	//! Tuple count for this chunk
 	idx_t count;
+	//! Lock for recomputing heap pointers
+	unsafe_unique_ptr<mutex> lock;
 };
 
 struct TupleDataSegment {
@@ -112,13 +115,15 @@ public:
 	unsafe_vector<TupleDataChunk> chunks;
 	//! The tuple count of this segment
 	idx_t count;
+	//! The data size of this segment
+	idx_t data_size;
 
 	//! Lock for modifying pinned_handles
 	mutex pinned_handles_lock;
 	//! Where handles to row blocks will be stored with TupleDataPinProperties::KEEP_EVERYTHING_PINNED
-	vector<BufferHandle> pinned_row_handles;
+	unsafe_vector<BufferHandle> pinned_row_handles;
 	//! Where handles to heap blocks will be stored with TupleDataPinProperties::KEEP_EVERYTHING_PINNED
-	vector<BufferHandle> pinned_heap_handles;
+	unsafe_vector<BufferHandle> pinned_heap_handles;
 };
 
 } // namespace duckdb

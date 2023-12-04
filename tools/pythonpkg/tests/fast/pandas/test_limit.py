@@ -21,5 +21,5 @@ class TestLimitPandas(object):
                 'numbers': [1, 2, 2, 2],
             }
         )
-        aggregate_df = duckdb.aggregate(df_in, 'count(numbers)', 'numbers')
+        aggregate_df = duckdb.aggregate(df_in, 'count(numbers)', 'numbers').order('all')
         assert aggregate_df.execute().fetchall() == [(1,), (3,)]

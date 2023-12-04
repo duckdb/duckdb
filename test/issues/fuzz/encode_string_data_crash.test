@@ -24,7 +24,8 @@ SELECT sum(a) OVER (
     PARTITION BY (
 SELECT c FROM id WHERE strings_with_null=a
     ) ORDER BY a
-  ) FROM strings;
+  ) FROM strings
+ORDER BY 1
 ----
 10
 30

@@ -174,8 +174,7 @@
       {
         "id": 401,
         "name": "expression",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       }
     ]
   },
@@ -288,6 +287,12 @@
         "id": 202,
         "name": "options",
         "type": "unordered_map<string, Value>"
+      },
+      {
+        "id": 203,
+        "name": "on_conflict",
+        "type": "OnCreateConflict",
+        "default": "OnCreateConflict::ERROR_ON_CONFLICT"
       }
     ]
   },
@@ -337,7 +342,7 @@
       {
         "id": 207,
         "name": "options",
-        "type": "unordered_map<vector<Value>>"
+        "type": "case_insensitive_map_t<vector<Value>>"
       }
     ]
   },
@@ -423,6 +428,11 @@
         "id": 201,
         "name": "load_type",
         "type": "LoadType"
+      },
+      {
+        "id": 202,
+        "name": "repository",
+        "type": "string"
       }
     ]
   },
@@ -442,12 +452,12 @@
       {
         "id": 201,
         "name": "parameters",
-        "type": "vector<Value>"
+        "type": "vector<ParsedExpression*>"
       },
       {
         "id": 202,
         "name": "named_parameters",
-        "type": "unordered_map<string, Value>"
+        "type": "case_insensitive_map_t<ParsedExpression*>"
       }
     ]
   },

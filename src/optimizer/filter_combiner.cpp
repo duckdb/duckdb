@@ -593,7 +593,7 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		auto &scalar = left_is_scalar ? comparison.left : comparison.right;
 		Value constant_value;
 		if (!ExpressionExecutor::TryEvaluateScalar(context, *scalar, constant_value)) {
-			return FilterResult::UNSATISFIABLE;
+			return FilterResult::UNSUPPORTED;
 		}
 		if (constant_value.IsNull()) {
 			// comparisons with null are always null (i.e. will never result in rows)
@@ -627,9 +627,6 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		// comparison between two non-scalars
 		// only handle comparisons for now
 		if (expr.type != ExpressionType::COMPARE_EQUAL) {
-			if (IsGreaterThan(expr.type) || IsLessThan(expr.type)) {
-				return AddTransitiveFilters(comparison);
-			}
 			return FilterResult::UNSUPPORTED;
 		}
 		// get the LHS and RHS nodes
@@ -782,29 +779,41 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
  * Create and add new transitive filters from a two non-scalar filter such as j > i, j >= i, j < i, and j <= i
  * It's missing to create another method to add transitive filters from scalar filters, e.g, i > 10
  */
-FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &comparison) {
+FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &comparison, bool is_root) {
 	D_ASSERT(IsGreaterThan(comparison.type) || IsLessThan(comparison.type));
 	// get the LHS and RHS nodes
 	auto &left_node = GetNode(*comparison.left);
 	reference<Expression> right_node = GetNode(*comparison.right);
 	// In case with filters like CAST(i) = j and i = 5 we replace the COLUMN_REF i with the constant 5
-	if (right_node.get().type == ExpressionType::OPERATOR_CAST) {
-		auto &bound_cast_expr = right_node.get().Cast<BoundCastExpression>();
-		if (bound_cast_expr.child->type == ExpressionType::BOUND_COLUMN_REF) {
-			auto &col_ref = bound_cast_expr.child->Cast<BoundColumnRefExpression>();
-			for (auto &stored_exp : stored_expressions) {
-				if (stored_exp.first.get().type == ExpressionType::BOUND_COLUMN_REF) {
-					auto &st_col_ref = stored_exp.second->Cast<BoundColumnRefExpression>();
-					if (st_col_ref.binding == col_ref.binding &&
-					    bound_cast_expr.return_type == stored_exp.second->return_type) {
-						bound_cast_expr.child = stored_exp.second->Copy();
-						right_node = GetNode(*bound_cast_expr.child);
-						break;
-					}
-				}
-			}
+	do {
+		if (right_node.get().type != ExpressionType::OPERATOR_CAST) {
+			break;
 		}
-	}
+		auto &bound_cast_expr = right_node.get().Cast<BoundCastExpression>();
+		if (bound_cast_expr.child->type != ExpressionType::BOUND_COLUMN_REF) {
+			break;
+		}
+		auto &col_ref = bound_cast_expr.child->Cast<BoundColumnRefExpression>();
+		for (auto &stored_exp : stored_expressions) {
+			reference<Expression> expr = stored_exp.first;
+			if (expr.get().type == ExpressionType::OPERATOR_CAST) {
+				expr = *(right_node.get().Cast<BoundCastExpression>().child);
+			}
+			if (expr.get().type != ExpressionType::BOUND_COLUMN_REF) {
+				continue;
+			}
+			auto &st_col_ref = expr.get().Cast<BoundColumnRefExpression>();
+			if (st_col_ref.binding != col_ref.binding) {
+				continue;
+			}
+			if (bound_cast_expr.return_type != stored_exp.second->return_type) {
+				continue;
+			}
+			bound_cast_expr.child = stored_exp.second->Copy();
+			right_node = GetNode(*bound_cast_expr.child);
+			break;
+		}
+	} while (false);
 
 	if (left_node.Equals(right_node)) {
 		return FilterResult::UNSUPPORTED;
@@ -874,14 +883,16 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 		is_successful = true;
 	}
 	if (is_successful) {
-		// now check for remaining trasitive filters from the left column
-		auto transitive_filter = FindTransitiveFilter(*comparison.left);
-		if (transitive_filter != nullptr) {
-			// try to add transitive filters
-			if (AddTransitiveFilters(transitive_filter->Cast<BoundComparisonExpression>()) ==
-			    FilterResult::UNSUPPORTED) {
-				// in case of unsuccessful re-add filter into remaining ones
-				remaining_filters.push_back(std::move(transitive_filter));
+		if (is_root) {
+			// now check for remaining transitive filters from the left column
+			auto transitive_filter = FindTransitiveFilter(*comparison.left);
+			if (transitive_filter != nullptr) {
+				// try to add transitive filters
+				auto &transitive_cast = transitive_filter->Cast<BoundComparisonExpression>();
+				if (AddTransitiveFilters(transitive_cast, false) == FilterResult::UNSUPPORTED) {
+					// in case of unsuccessful re-add filter into remaining ones
+					remaining_filters.push_back(std::move(transitive_filter));
+				}
 			}
 		}
 		return FilterResult::SUCCESS;

@@ -16,7 +16,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
-      - '.github/config/uncovered_files.csv'
+
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
@@ -26,7 +26,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
-      - '.github/config/uncovered_files.csv'
+
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
@@ -55,23 +55,29 @@ jobs:
         key: ${{ github.job }}
         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
+    - name: Install pytest
+      run: |
+        python -m pip install pytest
+
     - name: Build
       shell: bash
       run: |
         python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_EXTENSIONS="parquet;icu;tpch;tpcds;fts;json;excel;visualizer;autocomplete" -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
         cmake --build . --config Release
 
     - name: Test
       shell: bash
+      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       run: |
         echo "DUCKDB_INSTALL_LIB=D:\a\duckdb\duckdb\src\Release\duckdb.dll" >> $env:GITHUB_ENV
         test/Release/unittest.exe
 
     - name: Tools Test
       shell: bash
+      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       run: |
-        python tools/shell/shell-test.py Release/duckdb.exe
+        python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
         tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
 
     - name: Deploy
@@ -115,27 +121,25 @@ jobs:
         echo "----------------------------------------------------------------"
         Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC"
 
-    - name: Install psqlodbc
+    - name: Test Standard ODBC tests
       shell: bash
       run: |
-        git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout edd9890a5046a2006f210849abb97c6a6589a45c && make release)
-
-    - name: Test psqlodbc
-      shell: bash
-      run: |
-        cd psqlodbc
-        export PSQLODBC_TEST_DSN=DuckDB
-        build/release/Release/psql_odbc_test.exe -f ../tools/odbc/test/psql_supported_tests
+        tools/odbc/bin/Release/test_odbc.exe
 
     - name: Print ODBC trace on failure
       if: ${{ failure() }}
       shell: bash
       run: cat ODBC_TRACE.log
+      
+    - name: System.Data.ODBC tests
+      shell: bash
+      run: |
+        tools/odbc/bin/Release/SystemDataODBC_tests.exe
+
 
  win-release-32:
     name: Windows (32 Bit)
-    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb'
+    if: github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb'
     runs-on: windows-2019
     needs: win-release-64
 
@@ -154,10 +158,14 @@ jobs:
         key: ${{ github.job }}
         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
+    - name: Install pytest
+      run: |
+        python -m pip install pytest
+
     - name: Build
       shell: bash
       run: |
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_EXTENSIONS="icu;parquet;tpch;tpcds;fts;json;excel;visualizer;autocomplete"
+        cmake -DCMAKE_BUILD_TYPE=Release  -DCMAKE_GENERATOR_PLATFORM=Win32 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake"
         cmake --build . --config Release
 
     - name: Test
@@ -167,28 +175,13 @@ jobs:
     - name: Tools Test
       shell: bash
       run: |
-        python tools/shell/shell-test.py Release/duckdb.exe
+        python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
         tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
-
-    - name: Deploy
-      shell: bash
-      run: |
-        python scripts/amalgamation.py
-        choco install zip -y --force
-        zip -j duckdb_cli-windows-i386.zip Release/duckdb.exe
-        zip -j libduckdb-windows-i386.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
-        python scripts/asset-upload-gha.py libduckdb-windows-i386.zip duckdb_cli-windows-i386.zip
-
-    - uses: actions/upload-artifact@v3
-      with:
-        name: duckdb-binaries-windows-32bit
-        path: |
-          libduckdb-windows-i386.zip
-          duckdb_cli-windows-i386.zip
 
  mingw:
      name: MingW (64 Bit)
      runs-on: windows-latest
+     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
      needs: win-release-64
      steps:
        - uses: actions/checkout@v3
@@ -240,12 +233,6 @@ jobs:
        with:
          python-version: '3.7'
 
-     - name: Setup Ccache
-       uses: hendrikmuhs/ccache-action@main
-       with:
-         key: ${{ github.job }}
-         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
      - uses: ./.github/actions/build_extensions
        with:
          vcpkg_target_triplet: x64-windows-static-md
@@ -254,4 +241,6 @@ jobs:
          s3_id: ${{ secrets.S3_ID }}
          s3_key: ${{ secrets.S3_KEY }}
          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-         unittest_script: ./build/release/test/Release/unittest.exe
+         run_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+         run_autoload_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+         unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe

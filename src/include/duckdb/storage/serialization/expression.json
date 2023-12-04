@@ -230,7 +230,8 @@
       {
         "id": 202,
         "name": "lambda_index",
-        "type": "idx_t"
+        "type": "idx_t",
+        "property": "lambda_idx"
       },
       {
         "id": 203,

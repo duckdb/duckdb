@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -21,6 +22,16 @@ public:
 	DUCKDB_API static void Print(OutputStream stream, const string &str);
 	//! Print the object to stderr
 	DUCKDB_API static void Print(const string &str);
+	//! Print the formatted object to the stream
+	template <typename... Args>
+	static void PrintF(OutputStream stream, const string &str, Args... params) {
+		Printer::Print(stream, StringUtil::Format(str, params...));
+	}
+	//! Print the formatted object to stderr
+	template <typename... Args>
+	static void PrintF(const string &str, Args... params) {
+		Printer::PrintF(OutputStream::STREAM_STDERR, str, std::forward<Args>(params)...);
+	}
 	//! Directly prints the string to stdout without a newline
 	DUCKDB_API static void RawPrint(OutputStream stream, const string &str);
 	//! Flush an output stream

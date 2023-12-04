@@ -318,8 +318,9 @@ private:
 		case LogicalTypeId::DATE:
 			return std::is_same<T, date_t>();
 		case LogicalTypeId::TIME:
-		case LogicalTypeId::TIME_TZ:
 			return std::is_same<T, dtime_t>();
+		case LogicalTypeId::TIME_TZ:
+			return std::is_same<T, dtime_tz_t>();
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_MS:
 		case LogicalTypeId::TIMESTAMP_NS:
@@ -369,7 +370,7 @@ private:
 	inline static AggregateFunction CreateBinaryAggregateFunction(const string &name, LogicalType ret_type,
 	                                                              LogicalType input_typeA, LogicalType input_typeB) {
 		AggregateFunction aggr_function =
-		    AggregateFunction::BinaryAggregate<STATE, TR, TA, TB, UDF_OP>(input_typeA, input_typeB, ret_type);
+		    AggregateFunction::BinaryAggregate<STATE, TA, TB, TR, UDF_OP>(input_typeA, input_typeB, ret_type);
 		aggr_function.name = name;
 		return aggr_function;
 	}

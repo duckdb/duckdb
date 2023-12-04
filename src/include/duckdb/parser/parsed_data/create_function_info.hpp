@@ -28,11 +28,6 @@ struct CreateFunctionInfo : public CreateInfo {
 	vector<string> parameter_names;
 	//! The example (if any)
 	string example;
-
-protected:
-	void SerializeInternal(Serializer &serializer) const override {
-		serializer.WriteString(name);
-	}
 };
 
 } // namespace duckdb

@@ -23,8 +23,7 @@ static constexpr const idx_t BITPACKING_METADATA_GROUP_SIZE = STANDARD_VECTOR_SI
 
 BitpackingMode BitpackingModeFromString(const string &str) {
 	auto mode = StringUtil::Lower(str);
-
-	if (mode == "auto") {
+	if (mode == "auto" || mode == "none") {
 		return BitpackingMode::AUTO;
 	} else if (mode == "constant") {
 		return BitpackingMode::CONSTANT;
@@ -35,21 +34,21 @@ BitpackingMode BitpackingModeFromString(const string &str) {
 	} else if (mode == "for") {
 		return BitpackingMode::FOR;
 	} else {
-		return BitpackingMode::AUTO;
+		return BitpackingMode::INVALID;
 	}
 }
 
 string BitpackingModeToString(const BitpackingMode &mode) {
 	switch (mode) {
-	case (BitpackingMode::AUTO):
+	case BitpackingMode::AUTO:
 		return "auto";
-	case (BitpackingMode::CONSTANT):
+	case BitpackingMode::CONSTANT:
 		return "constant";
-	case (BitpackingMode::CONSTANT_DELTA):
+	case BitpackingMode::CONSTANT_DELTA:
 		return "constant_delta";
-	case (BitpackingMode::DELTA_FOR):
+	case BitpackingMode::DELTA_FOR:
 		return "delta_for";
-	case (BitpackingMode::FOR):
+	case BitpackingMode::FOR:
 		return "for";
 	default:
 		throw NotImplementedException("Unknown bitpacking mode: " + to_string((uint8_t)mode) + "\n");
@@ -161,7 +160,7 @@ public:
 		// Don't delta encoding 1 value makes no sense
 		if (compression_buffer_idx < 2) {
 			return;
-		};
+		}
 
 		// TODO: handle NULLS here?
 		// Currently we cannot handle nulls because we would need an additional step of patching for this.
@@ -565,11 +564,13 @@ void BitpackingFinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 template <class T>
 static void ApplyFrameOfReference(T *dst, T frame_of_reference, idx_t size) {
+	using T_U = typename MakeUnsigned<T>::type;
 	if (!frame_of_reference) {
 		return;
 	}
+
 	for (idx_t i = 0; i < size; i++) {
-		dst[i] += frame_of_reference;
+		reinterpret_cast<T_U *>(dst)[i] += static_cast<T_U>(frame_of_reference);
 	}
 }
 
@@ -686,48 +687,57 @@ public:
 	}
 
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
-		while (skip_count > 0) {
-			if (current_group_offset + skip_count < BITPACKING_METADATA_GROUP_SIZE) {
-				// Skipping Delta FOR requires a bit of decoding to figure out the new delta
-				if (current_group.mode == BitpackingMode::DELTA_FOR) {
-					// if current_group_offset points into the middle of a
-					// BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, we need to scan a few
-					// values before current_group_offset to align with the algorithm groups
-					idx_t extra_count = current_group_offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+		bool skip_sign_extend = true;
 
-					// Calculate total offset and count to bitunpack
-					idx_t base_decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(skip_count);
-					idx_t decompress_count = base_decompress_count + extra_count;
-					idx_t decompress_offset = current_group_offset - extra_count;
-					bool skip_sign_extension = true;
-
-					BitpackingPrimitives::UnPackBuffer<T>(data_ptr_cast(decompression_buffer),
-					                                      current_group_ptr + decompress_offset, decompress_count,
-					                                      current_width, skip_sign_extension);
-
-					ApplyFrameOfReference<T_S>(reinterpret_cast<T_S *>(decompression_buffer + extra_count),
-					                           current_frame_of_reference, skip_count);
-					DeltaDecode<T_S>(reinterpret_cast<T_S *>(decompression_buffer + extra_count),
-					                 static_cast<T_S>(current_delta_offset), skip_count);
-					current_delta_offset = decompression_buffer[extra_count + skip_count - 1];
-
-					current_group_offset += skip_count;
-				} else {
-					current_group_offset += skip_count;
-				}
-				break;
-			} else {
-				auto left_in_this_group = BITPACKING_METADATA_GROUP_SIZE - current_group_offset;
-				auto number_of_groups_to_skip = (skip_count - left_in_this_group) / BITPACKING_METADATA_GROUP_SIZE;
-
-				current_group_offset = 0;
-				bitpacking_metadata_ptr -= number_of_groups_to_skip * sizeof(bitpacking_metadata_encoded_t);
-
+		idx_t skipped = 0;
+		while (skipped < skip_count) {
+			// Exhausted this metadata group, move pointers to next group and load metadata for next group.
+			if (current_group_offset >= BITPACKING_METADATA_GROUP_SIZE) {
 				LoadNextGroup();
-
-				skip_count -= left_in_this_group;
-				skip_count -= number_of_groups_to_skip * BITPACKING_METADATA_GROUP_SIZE;
 			}
+
+			idx_t offset_in_compression_group =
+			    current_group_offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+
+			if (current_group.mode == BitpackingMode::CONSTANT) {
+				idx_t remaining = skip_count - skipped;
+				idx_t to_skip = MinValue(remaining, BITPACKING_METADATA_GROUP_SIZE - current_group_offset);
+				skipped += to_skip;
+				current_group_offset += to_skip;
+				continue;
+			}
+			if (current_group.mode == BitpackingMode::CONSTANT_DELTA) {
+				idx_t remaining = skip_count - skipped;
+				idx_t to_skip = MinValue(remaining, BITPACKING_METADATA_GROUP_SIZE - current_group_offset);
+				skipped += to_skip;
+				current_group_offset += to_skip;
+				continue;
+			}
+			D_ASSERT(current_group.mode == BitpackingMode::FOR || current_group.mode == BitpackingMode::DELTA_FOR);
+
+			idx_t to_skip =
+			    MinValue<idx_t>(skip_count - skipped,
+			                    BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - offset_in_compression_group);
+			// Calculate start of compression algorithm group
+			if (current_group.mode == BitpackingMode::DELTA_FOR) {
+				data_ptr_t current_position_ptr = current_group_ptr + current_group_offset * current_width / 8;
+				data_ptr_t decompression_group_start_pointer =
+				    current_position_ptr - offset_in_compression_group * current_width / 8;
+
+				BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(decompression_buffer),
+				                                     decompression_group_start_pointer, current_width,
+				                                     skip_sign_extend);
+
+				T *decompression_ptr = decompression_buffer + offset_in_compression_group;
+				ApplyFrameOfReference<T_S>(reinterpret_cast<T_S *>(decompression_ptr),
+				                           static_cast<T_S>(current_frame_of_reference), to_skip);
+				DeltaDecode<T_S>(reinterpret_cast<T_S *>(decompression_ptr), static_cast<T_S>(current_delta_offset),
+				                 to_skip);
+				current_delta_offset = decompression_ptr[to_skip - 1];
+			}
+
+			skipped += to_skip;
+			current_group_offset += to_skip;
 		}
 	}
 
@@ -757,7 +767,6 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 	bool skip_sign_extend = true;
 
 	idx_t scanned = 0;
-
 	while (scanned < scan_count) {
 		// Exhausted this metadata group, move pointers to next group and load metadata for next group.
 		if (scan_state.current_group_offset >= BITPACKING_METADATA_GROUP_SIZE) {

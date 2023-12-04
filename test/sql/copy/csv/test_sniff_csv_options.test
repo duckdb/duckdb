@@ -1,0 +1,130 @@
+# name: test/sql/copy/csv/test_sniff_csv_options.test
+# description: Test sniff_csv function with user set options
+# group: [csv]
+
+# requires notwindows because tests will return \r\n to be used in the parameters
+require notwindows
+
+# Test user giving wrong option
+statement error
+FROM sniff_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', delim = ',');
+----
+CSV options could not be auto-detected. Consider setting parser options manually.
+
+# Test user giving options that are also sniffed
+
+# delimiter
+query IIIIIIIIIII
+FROM sniff_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', delim='|');
+----
+|	"	"	\n	0	false	{'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}	%Y-%m-%d	NULL	delim='|'	FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', auto_detect=false, quote='"', escape='"', new_line='\n', skip=0, header=false, columns={'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}, dateformat='%Y-%m-%d', delim='|');
+
+# quote
+query IIIIIIIIIII
+FROM sniff_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', quote='"');
+----
+|	"	"	\n	0	0	{'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}	%Y-%m-%d	NULL	quote='"'	FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, header=false, columns={'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}, dateformat='%Y-%m-%d', quote='"');
+
+# escape
+query IIIIIIIIIII
+FROM sniff_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', escape='"');
+----
+|	"	"	\n	0	0	{'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}	%Y-%m-%d	NULL	escape='"'	FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', auto_detect=false, delim='|', quote='"', new_line='\n', skip=0, header=false, columns={'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}, dateformat='%Y-%m-%d', escape='"');
+
+# column names
+query IIIIIIIIIII
+FROM sniff_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', escape='"');
+----
+|	"	"	\n	0	0	{'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}	%Y-%m-%d	NULL	escape='"'	FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', auto_detect=false, delim='|', quote='"', new_line='\n', skip=0, header=false, columns={'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}, dateformat='%Y-%m-%d', escape='"');
+
+# column names and types
+query IIIIIIIIIII
+FROM sniff_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', names=['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10', 'c11', 'c12', 'c13', 'c14', 'c15', 'c16']);
+----
+|	"	"	\n	0	false	{'c1': 'BIGINT', 'c2': 'BIGINT', 'c3': 'BIGINT', 'c4': 'BIGINT', 'c5': 'BIGINT', 'c6': 'DOUBLE', 'c7': 'DOUBLE', 'c8': 'DOUBLE', 'c9': 'VARCHAR', 'c10': 'VARCHAR', 'c11': 'DATE', 'c12': 'DATE', 'c13': 'DATE', 'c14': 'VARCHAR', 'c15': 'VARCHAR', 'c16': 'VARCHAR'}	%Y-%m-%d	NULL	names=['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10', 'c11', 'c12', 'c13', 'c14', 'c15', 'c16']	FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, header=false, columns={'c1': 'BIGINT', 'c2': 'BIGINT', 'c3': 'BIGINT', 'c4': 'BIGINT', 'c5': 'BIGINT', 'c6': 'DOUBLE', 'c7': 'DOUBLE', 'c8': 'DOUBLE', 'c9': 'VARCHAR', 'c10': 'VARCHAR', 'c11': 'DATE', 'c12': 'DATE', 'c13': 'DATE', 'c14': 'VARCHAR', 'c15': 'VARCHAR', 'c16': 'VARCHAR'}, dateformat='%Y-%m-%d', names=['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10', 'c11', 'c12', 'c13', 'c14', 'c15', 'c16']);
+
+
+query IIIIIIIIIIIIIIII
+FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, header=false, columns={'c1': 'BIGINT', 'c2': 'BIGINT', 'c3': 'BIGINT', 'c4': 'BIGINT', 'c5': 'BIGINT', 'c6': 'DOUBLE', 'c7': 'DOUBLE', 'c8': 'DOUBLE', 'c9': 'VARCHAR', 'c10': 'VARCHAR', 'c11': 'DATE', 'c12': 'DATE', 'c13': 'DATE', 'c14': 'VARCHAR', 'c15': 'VARCHAR', 'c16': 'VARCHAR'}, dateformat='%Y-%m-%d', names=['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10', 'c11', 'c12', 'c13', 'c14', 'c15', 'c16']) limit 1
+----
+1	15519	785	1	17	24386.67	0.04	0.02	N	O	1996-03-13	1996-02-12	1996-03-22	DELIVER IN PERSON	TRUCK	egular courts above the
+
+query IIIIIIIIIII
+FROM sniff_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', columns={'c1': 'BIGINT', 'c2': 'BIGINT', 'c3': 'BIGINT', 'c4': 'BIGINT', 'c5': 'BIGINT', 'c6': 'DOUBLE', 'c7': 'DOUBLE', 'c8': 'DOUBLE', 'c9': 'VARCHAR', 'c10': 'VARCHAR', 'c11': 'DATE', 'c12': 'DATE', 'c13': 'DATE', 'c14': 'VARCHAR', 'c15': 'VARCHAR', 'c16': 'VARCHAR'});
+----
+|	"	"	\n	0	0	{'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}	%Y-%m-%d	NULL	columns={'c1': 'BIGINT', 'c2': 'BIGINT', 'c3': 'BIGINT', 'c4': 'BIGINT', 'c5': 'BIGINT', 'c6': 'DOUBLE', 'c7': 'DOUBLE', 'c8': 'DOUBLE', 'c9': 'VARCHAR', 'c10': 'VARCHAR', 'c11': 'DATE', 'c12': 'DATE', 'c13': 'DATE', 'c14': 'VARCHAR', 'c15': 'VARCHAR', 'c16': 'VARCHAR'}	FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, header=false, columns={'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}, dateformat='%Y-%m-%d', columns={'c1': 'BIGINT', 'c2': 'BIGINT', 'c3': 'BIGINT', 'c4': 'BIGINT', 'c5': 'BIGINT', 'c6': 'DOUBLE', 'c7': 'DOUBLE', 'c8': 'DOUBLE', 'c9': 'VARCHAR', 'c10': 'VARCHAR', 'c11': 'DATE', 'c12': 'DATE', 'c13': 'DATE', 'c14': 'VARCHAR', 'c15': 'VARCHAR', 'c16': 'VARCHAR'});
+
+# skip rows
+query IIIIIIIIIII
+FROM sniff_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', skip=1);
+----
+|	"	"	\n	1	false	{'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}	%Y-%m-%d	NULL	skip=1	FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', header=false, columns={'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}, dateformat='%Y-%m-%d', skip=1);
+
+# header exists
+query IIIIIIIIIII
+FROM sniff_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', header=true);
+----
+|	"	"	\n	0	true	{'1': 'BIGINT', '15519': 'BIGINT', '785': 'BIGINT', '1_1': 'BIGINT', '17': 'BIGINT', '24386.670000': 'DOUBLE', '0.040000': 'DOUBLE', '0.020000': 'DOUBLE', 'N': 'VARCHAR', 'O': 'VARCHAR', '1996-03-13': 'DATE', '1996-02-12': 'DATE', '1996-03-22': 'DATE', 'DELIVER IN PERSON': 'VARCHAR', 'TRUCK': 'VARCHAR', 'egular courts above the': 'VARCHAR'}	%Y-%m-%d	NULL	header=true	FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', auto_detect=false, delim='|', escape='"', new_line='\n', skip=0, columns={'1': 'BIGINT', '15519': 'BIGINT', '785': 'BIGINT', '1_1': 'BIGINT', '17': 'BIGINT', '24386.670000': 'DOUBLE', '0.040000': 'DOUBLE', '0.020000': 'DOUBLE', 'N': 'VARCHAR', 'O': 'VARCHAR', '1996-03-13': 'DATE', '1996-02-12': 'DATE', '1996-03-22': 'DATE', 'DELIVER IN PERSON': 'VARCHAR', 'TRUCK': 'VARCHAR', 'egular courts above the': 'VARCHAR'}, dateformat='%Y-%m-%d', header=true);
+
+# timestampformat
+query IIIIIIIIIII
+FROM sniff_csv('test/sql/copy/csv/data/auto/time_date_timestamp_yyyy.mm.dd.csv', dateformat='%Y.%m.%d')
+----
+,	"	"	\n	0	true	{'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}	%Y.%m.%d	%Y.%m.%d %H:%M:%S	dateformat='%Y.%m.%d'	FROM read_csv('test/sql/copy/csv/data/auto/time_date_timestamp_yyyy.mm.dd.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}, timestampformat='%Y.%m.%d %H:%M:%S', dateformat='%Y.%m.%d');
+
+# dateformat
+query IIIIIIIIIII
+FROM sniff_csv('test/sql/copy/csv/data/auto/time_date_timestamp_yyyy.mm.dd.csv', timestampformat='%Y.%m.%d %H:%M:%S')
+----
+,	"	"	\n	0	1	{'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}	%Y.%m.%d	%Y.%m.%d %H:%M:%S	timestampformat='%Y.%m.%d %H:%M:%S'	FROM read_csv('test/sql/copy/csv/data/auto/time_date_timestamp_yyyy.mm.dd.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}, dateformat='%Y.%m.%d', timestampformat='%Y.%m.%d %H:%M:%S');
+
+# Test a combination
+query IIIIIIIIIII
+FROM sniff_csv('test/sql/copy/csv/data/auto/time_date_timestamp_yyyy.mm.dd.csv', dateformat='%Y.%m.%d', timestampformat='%Y.%m.%d %H:%M:%S')
+----
+,	"	"	\n	0	true	{'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}	%Y.%m.%d	%Y.%m.%d %H:%M:%S	timestampformat='%Y.%m.%d %H:%M:%S', dateformat='%Y.%m.%d'	FROM read_csv('test/sql/copy/csv/data/auto/time_date_timestamp_yyyy.mm.dd.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}, timestampformat='%Y.%m.%d %H:%M:%S', dateformat='%Y.%m.%d');
+
+query IIIII
+FROM read_csv('test/sql/copy/csv/data/auto/time_date_timestamp_yyyy.mm.dd.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}, timestampformat='%Y.%m.%d %H:%M:%S', dateformat='%Y.%m.%d') order by all limit 1;
+----
+123	TEST2	12:12:12	2000-01-01	2000-01-01 12:12:00
+
+# test auto_detect=false (that's illegal sir)
+statement error
+FROM sniff_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', columns={'c1': 'BIGINT', 'c2': 'BIGINT', 'c3': 'BIGINT', 'c4': 'BIGINT', 'c5': 'BIGINT', 'c6': 'DOUBLE', 'c7': 'DOUBLE', 'c8': 'DOUBLE', 'c9': 'VARCHAR', 'c10': 'VARCHAR', 'c11': 'DATE', 'c12': 'DATE', 'c13': 'DATE', 'c14': 'VARCHAR', 'c15': 'VARCHAR', 'c16': 'VARCHAR'}, auto_detect = false);
+----
+sniff_csv function does not accept auto_detect variable set to false
+
+query IIIIIIIIIII
+FROM sniff_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', columns={'c1': 'BIGINT', 'c2': 'BIGINT', 'c3': 'BIGINT', 'c4': 'BIGINT', 'c5': 'BIGINT', 'c6': 'DOUBLE', 'c7': 'DOUBLE', 'c8': 'DOUBLE', 'c9': 'VARCHAR', 'c10': 'VARCHAR', 'c11': 'DATE', 'c12': 'DATE', 'c13': 'DATE', 'c14': 'VARCHAR', 'c15': 'VARCHAR', 'c16': 'VARCHAR'}, auto_detect = true);
+----
+|	"	"	\n	0	0	{'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}	%Y-%m-%d	NULL	columns={'c1': 'BIGINT', 'c2': 'BIGINT', 'c3': 'BIGINT', 'c4': 'BIGINT', 'c5': 'BIGINT', 'c6': 'DOUBLE', 'c7': 'DOUBLE', 'c8': 'DOUBLE', 'c9': 'VARCHAR', 'c10': 'VARCHAR', 'c11': 'DATE', 'c12': 'DATE', 'c13': 'DATE', 'c14': 'VARCHAR', 'c15': 'VARCHAR', 'c16': 'VARCHAR'}	FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, header=false, columns={'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}, dateformat='%Y-%m-%d', columns={'c1': 'BIGINT', 'c2': 'BIGINT', 'c3': 'BIGINT', 'c4': 'BIGINT', 'c5': 'BIGINT', 'c6': 'DOUBLE', 'c7': 'DOUBLE', 'c8': 'DOUBLE', 'c9': 'VARCHAR', 'c10': 'VARCHAR', 'c11': 'DATE', 'c12': 'DATE', 'c13': 'DATE', 'c14': 'VARCHAR', 'c15': 'VARCHAR', 'c16': 'VARCHAR'});
+
+# auto_type_candidates
+query IIIIIIIIIII
+FROM sniff_csv('data/csv/autotypecandidates.csv', auto_type_candidates=['SMALLINT','BIGINT', 'DOUBLE', 'FLOAT','VARCHAR']);
+----
+|	"	"	\n	0	0	{'column0': 'SMALLINT', 'column1': 'FLOAT', 'column2': 'VARCHAR'}	NULL	NULL	NULL	FROM read_csv('data/csv/autotypecandidates.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, header=false, columns={'column0': 'SMALLINT', 'column1': 'FLOAT', 'column2': 'VARCHAR'});
+
+query III
+FROM read_csv('data/csv/autotypecandidates.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, header=false, columns={'column0': 'SMALLINT', 'column1': 'FLOAT', 'column2': 'VARCHAR'});
+----
+1	1.1	bla
+
+# don't accept globs
+statement error
+FROM sniff_csv('data/csv/hive-partitioning/simple/*/*/test.csv');
+----
+sniff_csv does not operate on globs yet
+
+# don't accept madeup options
+statement error
+FROM sniff_csv('data/csv/autotypecandidates.csv', oop = True);
+----
+Invalid named parameter "oop" for function sniff_csv
+
+# Ignore multi-partitioning options (maybe even error on them?)
+query IIIIIIIIIII
+FROM sniff_csv('data/csv/autotypecandidates.csv', HIVE_PARTITIONING=1);
+----
+|	"	"	\n	0	false	{'column0': 'BIGINT', 'column1': 'DOUBLE', 'column2': 'VARCHAR'}	NULL	NULL	NULL	FROM read_csv('data/csv/autotypecandidates.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, header=false, columns={'column0': 'BIGINT', 'column1': 'DOUBLE', 'column2': 'VARCHAR'});

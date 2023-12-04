@@ -1,7 +1,7 @@
 import pytest
 
-_ = pytest.importorskip("pyduckdb.spark")
-from pyduckdb.spark.sql import SparkSession
+_ = pytest.importorskip("duckdb.experimental.spark")
+from duckdb.experimental.spark.sql import SparkSession
 
 
 class TestSparkSession(object):
@@ -13,7 +13,6 @@ class TestSparkSession(object):
 
     def test_new_session(self, spark: SparkSession):
         session = spark.newSession()
-        print(session)
 
     @pytest.mark.skip(reason='not tested yet')
     def test_retrieve_same_session(self):

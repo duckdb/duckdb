@@ -39,12 +39,6 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGDropStm
 	}
 
 	switch (stmt.removeType) {
-	case duckdb_libpgquery::PG_OBJECT_TYPE: {
-		auto view_list = PGPointerCast<duckdb_libpgquery::PGList>(stmt.objects);
-		auto target = PGPointerCast<duckdb_libpgquery::PGTypeName>(view_list->head->data.ptr_value);
-		info.name = PGPointerCast<duckdb_libpgquery::PGValue>(target->names->tail->data.ptr_value)->val.str;
-		break;
-	}
 	case duckdb_libpgquery::PG_OBJECT_SCHEMA: {
 		auto view_list = PGPointerCast<duckdb_libpgquery::PGList>(stmt.objects->head->data.ptr_value);
 		if (view_list->length == 2) {

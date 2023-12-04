@@ -8,6 +8,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -43,13 +44,13 @@ struct IcuBindData : public FunctionData {
 		UErrorCode status = U_ZERO_ERROR;
 		auto locale = icu::Locale(language.c_str(), country.c_str());
 		if (locale.isBogus()) {
-			throw InternalException("Locale is bogus!?");
+			throw InvalidInputException("Locale is bogus!?");
 		}
 		this->collator = duckdb::unique_ptr<icu::Collator>(icu::Collator::createInstance(locale, status));
 		if (U_FAILURE(status)) {
 			auto error_name = u_errorName(status);
-			throw InternalException("Failed to create ICU collator: %s (language: %s, country: %s)", error_name,
-			                        language, country);
+			throw InvalidInputException("Failed to create ICU collator: %s (language: %s, country: %s)", error_name,
+			                            language, country);
 		}
 	}
 
@@ -113,7 +114,7 @@ static duckdb::unique_ptr<FunctionData> ICUCollateBind(ClientContext &context, S
 	} else if (splits.size() == 2) {
 		return make_uniq<IcuBindData>(splits[0], splits[1]);
 	} else {
-		throw InternalException("Expected one or two splits");
+		throw InvalidInputException("Expected one or two splits");
 	}
 }
 
@@ -132,16 +133,16 @@ static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, S
 	} else if (splits.size() == 2) {
 		return make_uniq<IcuBindData>(splits[0], splits[1]);
 	} else {
-		throw InternalException("Expected one or two splits");
+		throw InvalidInputException("Expected one or two splits");
 	}
 }
 
-static void ICUCollateSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
+static void ICUCollateSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+                                const ScalarFunction &function) {
 	throw NotImplementedException("FIXME: serialize icu-collate");
 }
 
-static duckdb::unique_ptr<FunctionData> ICUCollateDeserialize(PlanDeserializationState &state, FieldReader &reader,
-                                                              ScalarFunction &bound_function) {
+static duckdb::unique_ptr<FunctionData> ICUCollateDeserialize(Deserializer &deserializer, ScalarFunction &function) {
 	throw NotImplementedException("FIXME: serialize icu-collate");
 }
 
@@ -220,11 +221,8 @@ static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parame
 	}
 }
 
-void IcuExtension::Load(DuckDB &db) {
-	Connection con(db);
-	con.BeginTransaction();
-
-	auto &catalog = Catalog::GetSystemCatalog(*con.context);
+void IcuExtension::Load(DuckDB &ddb) {
+	auto &db = *ddb.instance;
 
 	// iterate over all the collations
 	int32_t count;
@@ -240,18 +238,15 @@ void IcuExtension::Load(DuckDB &db) {
 		}
 		collation = StringUtil::Lower(collation);
 
-		CreateCollationInfo info(collation, GetICUFunction(collation), false, true);
-		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-		catalog.CreateCollation(*con.context, info);
+		CreateCollationInfo info(collation, GetICUFunction(collation), false, false);
+		ExtensionUtil::RegisterCollation(db, info);
 	}
 	ScalarFunction sort_key("icu_sort_key", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                        ICUCollateFunction, ICUSortKeyBind);
-
-	CreateScalarFunctionInfo sort_key_info(std::move(sort_key));
-	catalog.CreateFunction(*con.context, sort_key_info);
+	ExtensionUtil::RegisterFunction(db, sort_key);
 
 	// Time Zones
-	auto &config = DBConfig::GetConfig(*db.instance);
+	auto &config = DBConfig::GetConfig(db);
 	duckdb::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createDefault());
 	icu::UnicodeString tz_id;
 	std::string tz_string;
@@ -259,16 +254,16 @@ void IcuExtension::Load(DuckDB &db) {
 	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, Value(tz_string),
 	                          SetICUTimeZone);
 
-	RegisterICUDateAddFunctions(*con.context);
-	RegisterICUDatePartFunctions(*con.context);
-	RegisterICUDateSubFunctions(*con.context);
-	RegisterICUDateTruncFunctions(*con.context);
-	RegisterICUMakeDateFunctions(*con.context);
-	RegisterICUTableRangeFunctions(*con.context);
-	RegisterICUListRangeFunctions(*con.context);
-	RegisterICUStrptimeFunctions(*con.context);
-	RegisterICUTimeBucketFunctions(*con.context);
-	RegisterICUTimeZoneFunctions(*con.context);
+	RegisterICUDateAddFunctions(db);
+	RegisterICUDatePartFunctions(db);
+	RegisterICUDateSubFunctions(db);
+	RegisterICUDateTruncFunctions(db);
+	RegisterICUMakeDateFunctions(db);
+	RegisterICUTableRangeFunctions(db);
+	RegisterICUListRangeFunctions(db);
+	RegisterICUStrptimeFunctions(db);
+	RegisterICUTimeBucketFunctions(db);
+	RegisterICUTimeZoneFunctions(db);
 
 	// Calendars
 	UErrorCode status = U_ZERO_ERROR;
@@ -277,10 +272,7 @@ void IcuExtension::Load(DuckDB &db) {
 	                          SetICUCalendar);
 
 	TableFunction cal_names("icu_calendar_names", {}, ICUCalendarFunction, ICUCalendarBind, ICUCalendarInit);
-	CreateTableFunctionInfo cal_names_info(std::move(cal_names));
-	catalog.CreateTableFunction(*con.context, cal_names_info);
-
-	con.Commit();
+	ExtensionUtil::RegisterFunction(db, cal_names);
 }
 
 std::string IcuExtension::Name() {

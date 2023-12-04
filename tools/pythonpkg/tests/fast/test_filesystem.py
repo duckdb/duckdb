@@ -102,7 +102,7 @@ class TestPythonFilesystem:
     def test_write(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
 
-        duckdb_cursor.execute("copy (select 1) to 'memory://01.csv' (FORMAT CSV)")
+        duckdb_cursor.execute("copy (select 1) to 'memory://01.csv' (FORMAT CSV, HEADER 0)")
 
         assert memory.open('01.csv').read() == b'1\n'
 
@@ -191,13 +191,13 @@ class TestPythonFilesystem:
     def test_copy_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
 
-        duckdb_cursor.execute("copy (select 1 as a) to 'memory://root' (partition_by (a))")
+        duckdb_cursor.execute("copy (select 1 as a) to 'memory://root' (partition_by (a), HEADER 0)")
 
         assert memory.open('/root/a=1/data_0.csv').read() == b'1\n'
 
     def test_read_hive_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
-        duckdb_cursor.execute("copy (select 2 as a) to 'memory://partition' (partition_by (a))")
+        duckdb_cursor.execute("copy (select 2 as a) to 'memory://partition' (partition_by (a), HEADER 0)")
 
         path = 'memory:///partition/*/*.csv'
 

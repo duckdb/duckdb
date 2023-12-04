@@ -3,11 +3,11 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/set.hpp"
-#include "duckdb/storage/in_memory_block_manager.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/in_memory_block_manager.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -76,14 +76,6 @@ idx_t StandardBufferManager::GetUsedMemory() const {
 idx_t StandardBufferManager::GetMaxMemory() const {
 	return buffer_pool.GetMaxMemory();
 }
-
-// POTENTIALLY PROBLEMATIC
-// void StandardBufferManager::IncreaseUsedMemory(idx_t size, bool unsafe) {
-//	if (!unsafe && buffer_pool.GetUsedMemory() + size > buffer_pool.GetMaxMemory()) {
-//		throw OutOfMemoryException("Failed to allocate data of size %lld%s", size, InMemoryWarning());
-//	}
-//	buffer_pool.IncreaseUsedMemory(size);
-//}
 
 template <typename... ARGS>
 TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
@@ -329,12 +321,13 @@ private:
 };
 
 class TemporaryFileHandle {
-	constexpr static idx_t MAX_ALLOWED_INDEX = 4000;
+	constexpr static idx_t MAX_ALLOWED_INDEX_BASE = 4000;
 
 public:
-	TemporaryFileHandle(DatabaseInstance &db, const string &temp_directory, idx_t index)
-	    : db(db), file_index(index), path(FileSystem::GetFileSystem(db).JoinPath(
-	                                     temp_directory, "duckdb_temp_storage-" + to_string(index) + ".tmp")) {
+	TemporaryFileHandle(idx_t temp_file_count, DatabaseInstance &db, const string &temp_directory, idx_t index)
+	    : max_allowed_index((1 << temp_file_count) * MAX_ALLOWED_INDEX_BASE), db(db), file_index(index),
+	      path(FileSystem::GetFileSystem(db).JoinPath(temp_directory,
+	                                                  "duckdb_temp_storage-" + to_string(index) + ".tmp")) {
 	}
 
 public:
@@ -348,7 +341,7 @@ public:
 public:
 	TemporaryFileIndex TryGetBlockIndex() {
 		TemporaryFileLock lock(file_lock);
-		if (index_manager.GetMaxIndex() >= MAX_ALLOWED_INDEX && index_manager.HasFreeBlocks()) {
+		if (index_manager.GetMaxIndex() >= max_allowed_index && index_manager.HasFreeBlocks()) {
 			// file is at capacity
 			return TemporaryFileIndex();
 		}
@@ -426,6 +419,7 @@ private:
 	}
 
 private:
+	const idx_t max_allowed_index;
 	DatabaseInstance &db;
 	unique_ptr<FileHandle> handle;
 	idx_t file_index;
@@ -467,7 +461,7 @@ public:
 			if (!handle) {
 				// no existing handle to write to; we need to create & open a new file
 				auto new_file_index = index_manager.GetNewBlockIndex();
-				auto new_file = make_uniq<TemporaryFileHandle>(db, temp_directory, new_file_index);
+				auto new_file = make_uniq<TemporaryFileHandle>(files.size(), db, temp_directory, new_file_index);
 				handle = new_file.get();
 				files[new_file_index] = std::move(new_file);
 

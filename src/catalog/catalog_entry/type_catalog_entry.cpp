@@ -1,11 +1,9 @@
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
-
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/common/types/vector.hpp"
 #include <algorithm>
 #include <sstream>
 
@@ -27,29 +25,14 @@ unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 }
 
 string TypeCatalogEntry::ToSQL() const {
-	std::stringstream ss;
 	switch (user_type.id()) {
 	case (LogicalTypeId::ENUM): {
-		auto &values_insert_order = EnumType::GetValuesInsertOrder(user_type);
-		idx_t size = EnumType::GetSize(user_type);
-		ss << "CREATE TYPE ";
-		ss << KeywordHelper::WriteOptionallyQuoted(name);
-		ss << " AS ENUM ( ";
-
-		for (idx_t i = 0; i < size; i++) {
-			ss << "'" << values_insert_order.GetValue(i).ToString() << "'";
-			if (i != size - 1) {
-				ss << ", ";
-			}
-		}
-		ss << ");";
-		break;
+		auto create_type_info = GetInfo();
+		return create_type_info->ToString();
 	}
 	default:
 		throw InternalException("Logical Type can't be used as a User Defined Type");
 	}
-
-	return ss.str();
 }
 
 } // namespace duckdb

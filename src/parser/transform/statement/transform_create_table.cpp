@@ -4,7 +4,6 @@
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 

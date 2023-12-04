@@ -4,7 +4,6 @@ add_library(
   external_statement_verifier.cpp
   prepared_statement_verifier.cpp
   deserialized_statement_verifier.cpp
-  deserialized_statement_verifier_v2.cpp
   statement_verifier.cpp
   parsed_statement_verifier.cpp
   no_operator_caching_verifier.cpp

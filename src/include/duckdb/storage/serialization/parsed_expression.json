@@ -57,7 +57,7 @@
       {
         "id": 200,
         "name": "case_checks",
-        "type": "vector<CacheCheck>"
+        "type": "vector<CaseCheck>"
       },
       {
         "id": 201,
@@ -116,6 +116,24 @@
         "type": "vector<string>"
       }
     ]
+  },
+  {
+    "class": "LambdaRefExpression",
+    "base": "ParsedExpression",
+    "enum": "LAMBDA_REF",
+    "members": [
+      {
+        "id": 200,
+        "name": "lambda_idx",
+        "type": "idx_t"
+      },
+      {
+        "id": 201,
+        "name": "column_name",
+        "type": "string"
+      }
+    ],
+    "constructor": ["lambda_idx", "column_name"]
   },
   {
     "class": "ComparisonExpression",
@@ -190,7 +208,6 @@
       {
         "id": 203,
         "name": "filter",
-        "optional": true,
         "type": "ParsedExpression*"
       },
       {
@@ -288,12 +305,12 @@
       {
         "id": 201,
         "name": "exclude_list",
-        "type": "unordered_set<string>"
+        "type": "case_insensitive_set_t"
       },
       {
         "id": 202,
         "name": "replace_list",
-        "type": "unordered_set<ParsedExpression*>"
+        "type": "case_insensitive_map_t<ParsedExpression*>"
       },
       {
         "id": 203,
@@ -303,7 +320,6 @@
       {
         "id": 204,
         "name": "expr",
-        "optional": true,
         "type": "ParsedExpression*"
       }
     ]
@@ -321,12 +337,11 @@
       {
         "id": 201,
         "name": "subquery",
-        "type": "SelectStatement"
+        "type": "SelectStatement*"
       },
       {
         "id": 202,
         "name": "child",
-        "optional": true,
         "type": "ParsedExpression*"
       },
       {
@@ -384,25 +399,21 @@
       {
         "id": 208,
         "name": "start_expr",
-        "optional": true,
         "type": "ParsedExpression*"
       },
       {
         "id": 209,
         "name": "end_expr",
-        "optional": true,
         "type": "ParsedExpression*"
       },
       {
         "id": 210,
         "name": "offset_expr",
-        "optional": true,
         "type": "ParsedExpression*"
       },
       {
         "id": 211,
         "name": "default_expr",
-        "optional": true,
         "type": "ParsedExpression*"
       },
       {
@@ -413,8 +424,13 @@
       {
         "id": 213,
         "name": "filter_expr",
-        "optional": true,
         "type": "ParsedExpression*"
+      },
+      {
+        "id": 214,
+        "name": "exclude_clause",
+        "type": "WindowExcludeMode",
+        "default": "WindowExcludeMode::NO_OTHER"
       }
     ],
     "constructor": ["type"]

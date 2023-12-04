@@ -39,9 +39,12 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		if (!entry) {
 			break;
 		}
+		if (entry->internal) {
+			throw CatalogException("Cannot drop internal catalog entry \"%s\"!", entry->name);
+		}
 		stmt.info->catalog = entry->ParentCatalog().GetName();
 		if (!entry->temporary) {
-			// we can only drop temporary tables in read-only mode
+			// we can only drop temporary schema entries in read-only mode
 			properties.modified_databases.insert(stmt.info->catalog);
 		}
 		stmt.info->schema = entry->ParentSchema().name;

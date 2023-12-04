@@ -50,25 +50,25 @@ static unique_ptr<FunctionData> JsonSerializeBind(ClientContext &context, Scalar
 			throw ParameterNotResolvedException();
 		}
 		if (!arg->IsFoldable()) {
-			throw InvalidInputException("arguments to json_serialize_sql must be constant");
+			throw BinderException("json_serialize_sql: arguments must be constant");
 		}
 		if (arg->alias == "skip_null") {
 			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
-				throw InvalidTypeException("skip_null argument must be a boolean");
+				throw BinderException("json_serialize_sql: 'skip_null' argument must be a boolean");
 			}
 			skip_if_null = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 		} else if (arg->alias == "skip_empty") {
 			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
-				throw InvalidTypeException("skip_empty argument must be a boolean");
+				throw BinderException("json_serialize_sql: 'skip_empty' argument must be a boolean");
 			}
 			skip_if_empty = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 		} else if (arg->alias == "format") {
 			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
-				throw InvalidTypeException("indent argument must be a boolean");
+				throw BinderException("json_serialize_sql: 'format' argument must be a boolean");
 			}
 			format = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 		} else {
-			throw BinderException(StringUtil::Format("Unknown argument to json_serialize_sql: %s", arg->alias.c_str()));
+			throw BinderException(StringUtil::Format("json_serialize_sql: Unknown argument '%s'", arg->alias.c_str()));
 		}
 	}
 	return make_uniq<JsonSerializeBindData>(skip_if_null, skip_if_empty, format);
@@ -184,7 +184,7 @@ static unique_ptr<SelectStatement> DeserializeSelectStatement(string_t input, yy
 	}
 	auto stmt_json = yyjson_arr_get(statements, 0);
 	JsonDeserializer deserializer(stmt_json, doc);
-	return SelectStatement::FormatDeserialize(deserializer);
+	return SelectStatement::Deserialize(deserializer);
 }
 
 //----------------------------------------------------------------------
@@ -244,6 +244,9 @@ struct ExecuteSqlTableFunction {
 		auto result = make_uniq<BindData>();
 
 		result->con = make_uniq<Connection>(*context.db);
+		if (input.inputs[0].IsNull()) {
+			throw BinderException("json_execute_serialized_sql cannot execute NULL plan");
+		}
 		auto serialized = input.inputs[0].GetValueUnsafe<string>();
 		auto stmt = DeserializeSelectStatement(serialized, alc);
 		result->plan = result->con->RelationFromQuery(std::move(stmt));

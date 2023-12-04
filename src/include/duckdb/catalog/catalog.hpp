@@ -34,6 +34,7 @@ struct CreateIndexInfo;
 struct CreateTypeInfo;
 struct CreateTableInfo;
 struct DatabaseSize;
+struct MetadataBlockInfo;
 
 class AttachedDatabase;
 class ClientContext;
@@ -266,6 +267,7 @@ public:
 	                                                    unique_ptr<LogicalOperator> plan) = 0;
 
 	virtual DatabaseSize GetDatabaseSize(ClientContext &context) = 0;
+	virtual vector<MetadataBlockInfo> GetMetadataInfo(ClientContext &context);
 
 	virtual bool InMemory() = 0;
 	virtual string GetDBPath() = 0;
@@ -301,18 +303,34 @@ public:
 
 	static CatalogException UnrecognizedConfigurationError(ClientContext &context, const string &name);
 
+	//! Autoload the extension required for `configuration_name` or throw a CatalogException
+	static void AutoloadExtensionByConfigName(ClientContext &context, const string &configuration_name);
+	//! Autoload the extension required for `function_name` or throw a CatalogException
+	static bool AutoLoadExtensionByCatalogEntry(ClientContext &context, CatalogType type, const string &entry_name);
+	DUCKDB_API static bool TryAutoLoad(ClientContext &context, const string &extension_name) noexcept;
+
 protected:
 	//! Reference to the database
 	AttachedDatabase &db;
 
 private:
-	CatalogEntryLookup LookupEntryInternal(CatalogTransaction transaction, CatalogType type, const string &schema,
-	                                       const string &name);
+	//! Lookup an entry in the schema, returning a lookup with the entry and schema if they exist
+	CatalogEntryLookup TryLookupEntryInternal(CatalogTransaction transaction, CatalogType type, const string &schema,
+	                                          const string &name);
+	//! Calls LookupEntryInternal on the schema, trying other schemas if the schema is invalid. Sets
+	//! CatalogEntryLookup->error depending on if_not_found when no entry is found
+	CatalogEntryLookup TryLookupEntry(ClientContext &context, CatalogType type, const string &schema,
+	                                  const string &name, OnEntryNotFound if_not_found,
+	                                  QueryErrorContext error_context = QueryErrorContext());
+	//! Lookup an entry using TryLookupEntry, throws if entry not found and if_not_found == THROW_EXCEPTION
 	CatalogEntryLookup LookupEntry(ClientContext &context, CatalogType type, const string &schema, const string &name,
 	                               OnEntryNotFound if_not_found, QueryErrorContext error_context = QueryErrorContext());
-	static CatalogEntryLookup LookupEntry(ClientContext &context, vector<CatalogLookup> &lookups, CatalogType type,
-	                                      const string &name, OnEntryNotFound if_not_found,
-	                                      QueryErrorContext error_context = QueryErrorContext());
+	static CatalogEntryLookup TryLookupEntry(ClientContext &context, vector<CatalogLookup> &lookups, CatalogType type,
+	                                         const string &name, OnEntryNotFound if_not_found,
+	                                         QueryErrorContext error_context = QueryErrorContext());
+	static CatalogEntryLookup TryLookupEntry(ClientContext &context, CatalogType type, const string &catalog,
+	                                         const string &schema, const string &name, OnEntryNotFound if_not_found,
+	                                         QueryErrorContext error_context);
 
 	//! Return an exception with did-you-mean suggestion.
 	static CatalogException CreateMissingEntryException(ClientContext &context, const string &entry_name,

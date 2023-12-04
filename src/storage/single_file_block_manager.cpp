@@ -3,13 +3,12 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer/buffered_deserializer.hpp"
-#include "duckdb/common/serializer/buffered_serializer.hpp"
-#include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -18,14 +17,26 @@ namespace duckdb {
 
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
 
-void MainHeader::Serialize(Serializer &ser) {
+void SerializeVersionNumber(WriteStream &ser, const string &version_str) {
+	data_t version[MainHeader::MAX_VERSION_SIZE];
+	memset(version, 0, MainHeader::MAX_VERSION_SIZE);
+	memcpy(version, version_str.c_str(), MinValue<idx_t>(version_str.size(), MainHeader::MAX_VERSION_SIZE));
+	ser.WriteData(version, MainHeader::MAX_VERSION_SIZE);
+}
+
+void DeserializeVersionNumber(ReadStream &stream, data_t *dest) {
+	memset(dest, 0, MainHeader::MAX_VERSION_SIZE);
+	stream.ReadData(dest, MainHeader::MAX_VERSION_SIZE);
+}
+
+void MainHeader::Write(WriteStream &ser) {
 	ser.WriteData(const_data_ptr_cast(MAGIC_BYTES), MAGIC_BYTE_SIZE);
 	ser.Write<uint64_t>(version_number);
-	FieldWriter writer(ser);
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
-		writer.WriteField<uint64_t>(flags[i]);
+		ser.Write<uint64_t>(flags[i]);
 	}
-	writer.Finalize();
+	SerializeVersionNumber(ser, DuckDB::LibraryVersion());
+	SerializeVersionNumber(ser, DuckDB::SourceID());
 }
 
 void MainHeader::CheckMagicBytes(FileHandle &handle) {
@@ -39,7 +50,7 @@ void MainHeader::CheckMagicBytes(FileHandle &handle) {
 	}
 }
 
-MainHeader MainHeader::Deserialize(Deserializer &source) {
+MainHeader MainHeader::Read(ReadStream &source) {
 	data_t magic_bytes[MAGIC_BYTE_SIZE];
 	MainHeader header;
 	source.ReadData(magic_bytes, MainHeader::MAGIC_BYTE_SIZE);
@@ -71,22 +82,22 @@ MainHeader MainHeader::Deserialize(Deserializer &source) {
 		    header.version_number, VERSION_NUMBER, version_text);
 	}
 	// read the flags
-	FieldReader reader(source);
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
-		header.flags[i] = reader.ReadRequired<uint64_t>();
+		header.flags[i] = source.Read<uint64_t>();
 	}
-	reader.Finalize();
+	DeserializeVersionNumber(source, header.library_git_desc);
+	DeserializeVersionNumber(source, header.library_git_hash);
 	return header;
 }
 
-void DatabaseHeader::Serialize(Serializer &ser) {
+void DatabaseHeader::Write(WriteStream &ser) {
 	ser.Write<uint64_t>(iteration);
 	ser.Write<idx_t>(meta_block);
 	ser.Write<idx_t>(free_list);
 	ser.Write<uint64_t>(block_count);
 }
 
-DatabaseHeader DatabaseHeader::Deserialize(Deserializer &source) {
+DatabaseHeader DatabaseHeader::Read(ReadStream &source) {
 	DatabaseHeader header;
 	header.iteration = source.Read<uint64_t>();
 	header.meta_block = source.Read<idx_t>();
@@ -97,14 +108,14 @@ DatabaseHeader DatabaseHeader::Deserialize(Deserializer &source) {
 
 template <class T>
 void SerializeHeaderStructure(T header, data_ptr_t ptr) {
-	BufferedSerializer ser(ptr, Storage::FILE_HEADER_SIZE);
-	header.Serialize(ser);
+	MemoryStream ser(ptr, Storage::FILE_HEADER_SIZE);
+	header.Write(ser);
 }
 
 template <class T>
 T DeserializeHeaderStructure(data_ptr_t ptr) {
-	BufferedDeserializer source(ptr, Storage::FILE_HEADER_SIZE);
-	return T::Deserialize(source);
+	MemoryStream source(ptr, Storage::FILE_HEADER_SIZE);
+	return T::Read(source);
 }
 
 SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, string path_p, StorageManagerOptions options)
@@ -246,7 +257,7 @@ void SingleFileBlockManager::LoadFreeList() {
 		// no free list
 		return;
 	}
-	MetadataReader reader(GetMetadataManager(), free_pointer, BlockReaderType::REGISTER_BLOCKS);
+	MetadataReader reader(GetMetadataManager(), free_pointer, nullptr, BlockReaderType::REGISTER_BLOCKS);
 	auto free_list_count = reader.Read<uint64_t>();
 	free_list.clear();
 	for (idx_t i = 0; i < free_list_count; i++) {
@@ -259,7 +270,7 @@ void SingleFileBlockManager::LoadFreeList() {
 		auto usage_count = reader.Read<uint32_t>();
 		multi_use_blocks[block_id] = usage_count;
 	}
-	GetMetadataManager().Deserialize(reader);
+	GetMetadataManager().Read(reader);
 	GetMetadataManager().MarkBlocksAsModified();
 }
 
@@ -397,18 +408,23 @@ void SingleFileBlockManager::Truncate() {
 vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
 	vector<MetadataHandle> free_list_blocks;
 
-	auto free_list_size = sizeof(uint64_t) + sizeof(block_id_t) * (free_list.size() + modified_blocks.size());
-	auto multi_use_blocks_size = sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(uint32_t)) * multi_use_blocks.size();
-	auto metadata_blocks = sizeof(uint64_t) + (sizeof(idx_t) * 2) * GetMetadataManager().BlockCount();
-	auto total_size = free_list_size + multi_use_blocks_size + metadata_blocks;
-
-	// reserve the blocks that we are going to write
+	// reserve all blocks that we are going to write the free list to
 	// since these blocks are no longer free we cannot just include them in the free list!
 	auto block_size = MetadataManager::METADATA_BLOCK_SIZE - sizeof(idx_t);
-	while (total_size > 0) {
+	idx_t allocated_size = 0;
+	while (true) {
+		auto free_list_size = sizeof(uint64_t) + sizeof(block_id_t) * (free_list.size() + modified_blocks.size());
+		auto multi_use_blocks_size =
+		    sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(uint32_t)) * multi_use_blocks.size();
+		auto metadata_blocks =
+		    sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(idx_t)) * GetMetadataManager().BlockCount();
+		auto total_size = free_list_size + multi_use_blocks_size + metadata_blocks;
+		if (total_size < allocated_size) {
+			break;
+		}
 		auto free_list_handle = GetMetadataManager().AllocateHandle();
 		free_list_blocks.push_back(std::move(free_list_handle));
-		total_size -= MinValue<idx_t>(total_size, block_size);
+		allocated_size += block_size;
 	}
 
 	return free_list_blocks;
@@ -440,13 +456,14 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	auto free_list_blocks = GetFreeListBlocks();
 
 	// now handle the free list
+	auto &metadata_manager = GetMetadataManager();
 	// add all modified blocks to the free list: they can now be written to again
+	metadata_manager.MarkBlocksAsModified();
 	for (auto &block : modified_blocks) {
 		free_list.insert(block);
 	}
 	modified_blocks.clear();
 
-	auto &metadata_manager = GetMetadataManager();
 	if (!free_list_blocks.empty()) {
 		// there are blocks to write, either in the free_list or in the modified_blocks
 		// we write these blocks specifically to the free_list_blocks
@@ -466,7 +483,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 			writer.Write<block_id_t>(entry.first);
 			writer.Write<uint32_t>(entry.second);
 		}
-		GetMetadataManager().Serialize(writer);
+		GetMetadataManager().Write(writer);
 		writer.Flush();
 	} else {
 		// no blocks in the free list
@@ -487,9 +504,9 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	}
 	// set the header inside the buffer
 	header_buffer.Clear();
-	BufferedSerializer serializer;
-	header.Serialize(serializer);
-	memcpy(header_buffer.buffer, serializer.blob.data.get(), serializer.blob.size);
+	MemoryStream serializer;
+	header.Write(serializer);
+	memcpy(header_buffer.buffer, serializer.GetData(), serializer.GetPosition());
 	// now write the header to the file, active_header determines whether we write to h1 or h2
 	// note that if active_header is h1 we write to h2, and vice versa
 	ChecksumAndWrite(header_buffer, active_header == 1 ? Storage::FILE_HEADER_SIZE : Storage::FILE_HEADER_SIZE * 2);

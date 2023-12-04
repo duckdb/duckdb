@@ -70,12 +70,14 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(EnableFSSTVectors),
                                                  DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
                                                  DUCKDB_LOCAL(CustomExtensionRepository),
+                                                 DUCKDB_LOCAL(AutoloadExtensionRepository),
+                                                 DUCKDB_GLOBAL(AutoinstallKnownExtensions),
+                                                 DUCKDB_GLOBAL(AutoloadKnownExtensions),
                                                  DUCKDB_GLOBAL(EnableObjectCacheSetting),
                                                  DUCKDB_GLOBAL(EnableHTTPMetadataCacheSetting),
                                                  DUCKDB_LOCAL(EnableProfilingSetting),
                                                  DUCKDB_LOCAL(EnableProgressBarSetting),
                                                  DUCKDB_LOCAL(EnableProgressBarPrintSetting),
-                                                 DUCKDB_GLOBAL(ExperimentalParallelCSVSetting),
                                                  DUCKDB_LOCAL(ExplainOutputSetting),
                                                  DUCKDB_GLOBAL(ExtensionDirectorySetting),
                                                  DUCKDB_GLOBAL(ExternalThreadsSetting),
@@ -113,6 +115,8 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL_ALIAS("wal_autocheckpoint", CheckpointThresholdSetting),
                                                  DUCKDB_GLOBAL_ALIAS("worker_threads", ThreadsSetting),
                                                  DUCKDB_GLOBAL(FlushAllocatorSetting),
+                                                 DUCKDB_GLOBAL(DuckDBApiSetting),
+                                                 DUCKDB_GLOBAL(CustomUserAgentSetting),
                                                  FINAL_SETTING};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -167,6 +171,13 @@ void DBConfig::SetOptionByName(const string &name, const Value &value) {
 	auto option = DBConfig::GetOptionByName(name);
 	if (option) {
 		SetOption(*option, value);
+		return;
+	}
+
+	auto param = extension_parameters.find(name);
+	if (param != extension_parameters.end()) {
+		Value target_value = value.DefaultCastAs(param->second.type);
+		SetOption(name, std::move(target_value));
 	} else {
 		options.unrecognized_options[name] = value;
 	}
@@ -175,7 +186,7 @@ void DBConfig::SetOptionByName(const string &name, const Value &value) {
 void DBConfig::SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value) {
 	lock_guard<mutex> l(config_lock);
 	if (!option.set_global) {
-		throw InternalException("Could not set option \"%s\" as a global option", option.name);
+		throw InvalidInputException("Could not set option \"%s\" as a global option", option.name);
 	}
 	D_ASSERT(option.reset_global);
 	Value input = value.DefaultCastAs(option.parameter_type);
@@ -231,6 +242,20 @@ void DBConfig::SetDefaultMaxMemory() {
 	}
 }
 
+void DBConfig::CheckLock(const string &name) {
+	if (!options.lock_configuration) {
+		// not locked
+		return;
+	}
+	case_insensitive_set_t allowed_settings {"schema", "search_path"};
+	if (allowed_settings.find(name) != allowed_settings.end()) {
+		// we are always allowed to change these settings
+		return;
+	}
+	// not allowed!
+	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
+}
+
 idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 	static constexpr const char *CPU_MAX = "/sys/fs/cgroup/cpu.max";
 	static constexpr const char *CFS_QUOTA = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us";
@@ -283,7 +308,7 @@ idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 	}
 }
 
-idx_t GetSystemMaxThreadsInternal(FileSystem &fs) {
+idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 #ifndef DUCKDB_NO_THREADS
 	idx_t physical_cores = std::thread::hardware_concurrency();
 #ifdef __linux__
@@ -299,7 +324,7 @@ idx_t GetSystemMaxThreadsInternal(FileSystem &fs) {
 
 void DBConfig::SetDefaultMaxThreads() {
 #ifndef DUCKDB_NO_THREADS
-	options.maximum_threads = GetSystemMaxThreadsInternal(*file_system);
+	options.maximum_threads = GetSystemMaxThreads(*file_system);
 #else
 	options.maximum_threads = 1;
 #endif
@@ -351,8 +376,17 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 		multiplier = 1000LL * 1000LL * 1000LL;
 	} else if (unit == "terabyte" || unit == "terabytes" || unit == "tb" || unit == "t") {
 		multiplier = 1000LL * 1000LL * 1000LL * 1000LL;
+	} else if (unit == "kib") {
+		multiplier = 1024LL;
+	} else if (unit == "mib") {
+		multiplier = 1024LL * 1024LL;
+	} else if (unit == "gib") {
+		multiplier = 1024LL * 1024LL * 1024LL;
+	} else if (unit == "tib") {
+		multiplier = 1024LL * 1024LL * 1024LL * 1024LL;
 	} else {
-		throw ParserException("Unknown unit for memory_limit: %s (expected: b, mb, gb or tb)", unit);
+		throw ParserException("Unknown unit for memory_limit: %s (expected: KB, MB, GB, TB for 1000^i units or KiB, "
+		                      "MiB, GiB, TiB for 1024^i unites)");
 	}
 	return (idx_t)multiplier * limit;
 }
@@ -393,6 +427,15 @@ OrderByNullType DBConfig::ResolveNullOrder(OrderType order_type, OrderByNullType
 	default:
 		throw InternalException("Unknown null order setting");
 	}
+}
+
+const std::string DBConfig::UserAgent() const {
+	auto user_agent = options.duckdb_api;
+
+	if (!options.custom_user_agent.empty()) {
+		user_agent += " " + options.custom_user_agent;
+	}
+	return user_agent;
 }
 
 } // namespace duckdb

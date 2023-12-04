@@ -24,6 +24,7 @@ import java.sql.SQLFeatureNotSupportedException;
 import java.sql.SQLWarning;
 import java.sql.SQLXML;
 import java.sql.Statement;
+import java.sql.Struct;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -47,7 +48,7 @@ public class DuckDBResultSet implements ResultSet {
     private int chunk_idx = 0;
     private boolean finished = false;
     private boolean was_null;
-    private ByteBuffer conn_ref;
+    private final ByteBuffer conn_ref;
 
     public DuckDBResultSet(DuckDBPreparedStatement stmt, DuckDBResultSetMetaData meta, ByteBuffer result_ref,
                            ByteBuffer conn_ref) throws SQLException {
@@ -71,7 +72,7 @@ public class DuckDBResultSet implements ResultSet {
         return meta;
     }
 
-    public boolean next() throws SQLException {
+    public synchronized boolean next() throws SQLException {
         if (isClosed()) {
             throw new SQLException("ResultSet was closed");
         }
@@ -108,7 +109,7 @@ public class DuckDBResultSet implements ResultSet {
         close();
     }
 
-    public boolean isClosed() throws SQLException {
+    public synchronized boolean isClosed() throws SQLException {
         return result_ref == null;
     }
 
@@ -128,7 +129,8 @@ public class DuckDBResultSet implements ResultSet {
      * @param arrow_batch_size batch size of arrow vectors to return
      * @return an instance of {@link org.apache.arrow.vector.ipc.ArrowReader}
      */
-    public Object arrowExportStream(Object arrow_buffer_allocator, long arrow_batch_size) throws SQLException {
+    public synchronized Object arrowExportStream(Object arrow_buffer_allocator, long arrow_batch_size)
+        throws SQLException {
         if (isClosed()) {
             throw new SQLException("Result set is closed");
         }
@@ -160,6 +162,10 @@ public class DuckDBResultSet implements ResultSet {
         return current_chunk[columnIndex - 1].getObject(chunk_idx - 1);
     }
 
+    public Struct getStruct(int columnIndex) throws SQLException {
+        return check_and_null(columnIndex) ? null : current_chunk[columnIndex - 1].getStruct(chunk_idx - 1);
+    }
+
     public OffsetTime getOffsetTime(int columnIndex) throws SQLException {
         if (check_and_null(columnIndex)) {
             return null;
@@ -177,7 +183,7 @@ public class DuckDBResultSet implements ResultSet {
     private boolean check_and_null(int columnIndex) throws SQLException {
         check(columnIndex);
         try {
-            was_null = current_chunk[columnIndex - 1].nullmask[chunk_idx - 1];
+            was_null = current_chunk[columnIndex - 1].check_and_null(chunk_idx - 1);
         } catch (ArrayIndexOutOfBoundsException e) {
             throw new SQLException("No row in context", e);
         }
@@ -193,11 +199,7 @@ public class DuckDBResultSet implements ResultSet {
         if (check_and_null(columnIndex)) {
             return null;
         }
-        return (String) current_chunk[columnIndex - 1].varlen_data[chunk_idx - 1];
-    }
-
-    private boolean isType(int columnIndex, DuckDBColumnType... types) {
-        return Arrays.stream(types).anyMatch(type -> current_chunk[columnIndex - 1].duckdb_type == type);
+        return current_chunk[columnIndex - 1].getLazyString(chunk_idx - 1);
     }
 
     public String getString(int columnIndex) throws SQLException {

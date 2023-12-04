@@ -73,6 +73,9 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 	case duckdb_libpgquery::PG_CONSTR_UNIQUE:
 	case duckdb_libpgquery::PG_CONSTR_PRIMARY: {
 		bool is_primary_key = constraint->contype == duckdb_libpgquery::PG_CONSTR_PRIMARY;
+		if (!constraint->keys) {
+			throw ParserException("UNIQUE USING INDEX is not supported");
+		}
 		vector<string> columns;
 		for (auto kc = constraint->keys->head; kc; kc = kc->next) {
 			columns.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(kc->data.ptr_value)->val.str);

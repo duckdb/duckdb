@@ -192,8 +192,10 @@ duckdb_state deprecated_duckdb_translate_column(MaterializedQueryResult &result,
 		WriteData<date_t>(column, collection, column_ids);
 		break;
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		WriteData<dtime_t>(column, collection, column_ids);
+		break;
+	case LogicalTypeId::TIME_TZ:
+		WriteData<dtime_tz_t>(column, collection, column_ids);
 		break;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -526,4 +528,30 @@ bool duckdb_result_is_streaming(duckdb_result result) {
 	}
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result.internal_data));
 	return result_data.result->type == duckdb::QueryResultType::STREAM_RESULT;
+}
+
+duckdb_result_type duckdb_result_return_type(duckdb_result result) {
+	if (!result.internal_data || duckdb_result_error(&result) != nullptr) {
+		return DUCKDB_RESULT_TYPE_INVALID;
+	}
+	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result.internal_data));
+	switch (result_data.result->properties.return_type) {
+	case duckdb::StatementReturnType::CHANGED_ROWS:
+		return DUCKDB_RESULT_TYPE_CHANGED_ROWS;
+	case duckdb::StatementReturnType::NOTHING:
+		return DUCKDB_RESULT_TYPE_NOTHING;
+	case duckdb::StatementReturnType::QUERY_RESULT:
+		return DUCKDB_RESULT_TYPE_QUERY_RESULT;
+	default:
+		return DUCKDB_RESULT_TYPE_INVALID;
+	}
+}
+
+duckdb_statement_type duckdb_result_statement_type(duckdb_result result) {
+	if (!result.internal_data || duckdb_result_error(&result) != nullptr) {
+		return DUCKDB_STATEMENT_TYPE_INVALID;
+	}
+	auto &pres = *(reinterpret_cast<duckdb::DuckDBResultData *>(result.internal_data));
+
+	return StatementTypeToC(pres.result->statement_type);
 }

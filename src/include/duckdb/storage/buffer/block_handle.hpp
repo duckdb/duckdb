@@ -97,6 +97,9 @@ public:
 	inline const idx_t &GetMemoryUsage() const {
 		return memory_usage;
 	}
+	bool IsUnloaded() {
+		return state == BlockState::BLOCK_UNLOADED;
+	}
 
 private:
 	static BufferHandle Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> buffer = nullptr);

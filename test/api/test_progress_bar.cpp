@@ -24,15 +24,25 @@ public:
 
 	void CheckProgressThread() {
 		double prev_percentage = -1;
+		uint64_t total_cardinality, cur_rows_read;
 		while (!stop) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
-			double new_percentage = context->GetProgress();
+			auto query_progress = context->GetQueryProgress();
+			double new_percentage = query_progress.GetPercentage();
 			if (!(new_percentage >= prev_percentage || new_percentage == -1)) {
 				correct = false;
 			}
 			if (!(new_percentage <= 100)) {
 				correct = false;
 			}
+			total_cardinality = query_progress.GetTotalRowsToProcess();
+			cur_rows_read = query_progress.GetRowsProcesseed();
+			if (cur_rows_read > total_cardinality) {
+				correct = false;
+			}
+		}
+		if (cur_rows_read != total_cardinality) {
+			correct = false;
 		}
 	}
 	void Start() {
@@ -49,11 +59,11 @@ public:
 TEST_CASE("Test Progress Bar Fast", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	REQUIRE_NOTHROW(con.context->GetProgress());
+	REQUIRE_NOTHROW(con.context->GetQueryProgress());
 
 	TestProgressBar test_progress(con.context.get());
 
-	REQUIRE_NOTHROW(con.context->GetProgress());
+	REQUIRE_NOTHROW(con.context->GetQueryProgress());
 
 	REQUIRE_NO_FAIL(con.Query("create  table tbl as select range a, mod(range,10) b from range(10000);"));
 	REQUIRE_NO_FAIL(con.Query("create  table tbl_2 as select range a from range(10000);"));

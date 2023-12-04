@@ -4,7 +4,7 @@ add_library_unity(
   row_aggregate.cpp
   row_scatter.cpp
   row_gather.cpp
-  row_match.cpp
+  row_matcher.cpp
   row_external.cpp
   row_radix_scatter.cpp
   row_heap_scatter.cpp

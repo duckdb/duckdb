@@ -1,13 +1,10 @@
-#include "duckdb/function/table/system_functions.hpp"
-
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/index.hpp"
 
 namespace duckdb {
 
@@ -63,7 +60,7 @@ static unique_ptr<FunctionData> DuckDBIndexesBind(ClientContext &context, TableF
 unique_ptr<GlobalTableFunctionState> DuckDBIndexesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBIndexesData>();
 
-	// scan all the schemas for tables and collect them and collect them
+	// scan all the schemas for tables and collect them
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
 		schema.get().Scan(context, CatalogType::INDEX_ENTRY,
@@ -107,15 +104,10 @@ void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, D
 		output.SetValue(col++, count, Value(table_entry.name));
 		// table_oid, BIGINT
 		output.SetValue(col++, count, Value::BIGINT(table_entry.oid));
-		if (index.index) {
-			// is_unique, BOOLEAN
-			output.SetValue(col++, count, Value::BOOLEAN(index.index->IsUnique()));
-			// is_primary, BOOLEAN
-			output.SetValue(col++, count, Value::BOOLEAN(index.index->IsPrimary()));
-		} else {
-			output.SetValue(col++, count, Value());
-			output.SetValue(col++, count, Value());
-		}
+		// is_unique, BOOLEAN
+		output.SetValue(col++, count, Value::BOOLEAN(index.IsUnique()));
+		// is_primary, BOOLEAN
+		output.SetValue(col++, count, Value::BOOLEAN(index.IsPrimary()));
 		// expressions, VARCHAR
 		output.SetValue(col++, count, Value());
 		// sql, VARCHAR

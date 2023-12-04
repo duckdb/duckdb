@@ -26,13 +26,13 @@ create table bool (a bool);
 statement ok
 insert into bool select i from (values (True),(False)) tbl(i), range(5000);
 
-query I
+query I rowsort
 select regr_avgx(a, b) from t group by b%2;
 ----
 4
 5
 
-query I
+query I rowsort
 select regr_avgy(a, b) from t group by b%2;
 ----
 49999
@@ -87,7 +87,7 @@ from bool;
 ----
 1	0
 
-query II
+query II rowsort
 select approx_count_distinct(a), approx_count_distinct(b) from t group by b%2;
 ----
 49874	5
@@ -110,7 +110,7 @@ select entropy(a) from t;
 16.609640
 
 query I
-select product(b) from t where a < 2000 group by b ;
+select product(b) from t where a < 2000 group by b ORDER BY ALL;
 ----
 0.000000
 1.000000
@@ -138,10 +138,10 @@ statement ok
 insert into t values (1,1),(2,2)
 
 query II
-select mode(a), mode(b) from t group by b%2;
+select mode(a), mode(b) from t group by b%2 order by all;
 ----
-2	2
 1	1
+2	2
 
 query I
 select histogram(b) from t;

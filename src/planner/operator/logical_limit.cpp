@@ -1,4 +1,3 @@
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 
 namespace duckdb {
@@ -23,21 +22,6 @@ idx_t LogicalLimit::EstimateCardinality(ClientContext &context) {
 
 void LogicalLimit::ResolveTypes() {
 	types = children[0]->types;
-}
-
-void LogicalLimit::Serialize(FieldWriter &writer) const {
-	writer.WriteField(limit_val);
-	writer.WriteField(offset_val);
-	writer.WriteOptional(limit);
-	writer.WriteOptional(offset);
-}
-
-unique_ptr<LogicalOperator> LogicalLimit::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
-	auto limit_val = reader.ReadRequired<int64_t>();
-	auto offset_val = reader.ReadRequired<int64_t>();
-	auto limit = reader.ReadOptional<Expression>(nullptr, state.gstate);
-	auto offset = reader.ReadOptional<Expression>(nullptr, state.gstate);
-	return make_uniq<LogicalLimit>(limit_val, offset_val, std::move(limit), std::move(offset));
 }
 
 } // namespace duckdb

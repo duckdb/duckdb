@@ -38,14 +38,15 @@ public:
 	virtual unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) = 0;
 
 protected:
-	virtual void WriteSchema(SchemaCatalogEntry &schema);
-	virtual void WriteTable(TableCatalogEntry &table);
-	virtual void WriteView(ViewCatalogEntry &table);
-	virtual void WriteSequence(SequenceCatalogEntry &table);
-	virtual void WriteMacro(ScalarMacroCatalogEntry &table);
-	virtual void WriteTableMacro(TableMacroCatalogEntry &table);
-	virtual void WriteIndex(IndexCatalogEntry &index_catalog);
-	virtual void WriteType(TypeCatalogEntry &type);
+	virtual void WriteEntry(CatalogEntry &entry, Serializer &serializer);
+	virtual void WriteSchema(SchemaCatalogEntry &schema, Serializer &serializer);
+	virtual void WriteTable(TableCatalogEntry &table, Serializer &serializer);
+	virtual void WriteView(ViewCatalogEntry &table, Serializer &serializer);
+	virtual void WriteSequence(SequenceCatalogEntry &table, Serializer &serializer);
+	virtual void WriteMacro(ScalarMacroCatalogEntry &table, Serializer &serializer);
+	virtual void WriteTableMacro(TableMacroCatalogEntry &table, Serializer &serializer);
+	virtual void WriteIndex(IndexCatalogEntry &index_catalog_entry, Serializer &serializer);
+	virtual void WriteType(TypeCatalogEntry &type, Serializer &serializer);
 };
 
 class CheckpointReader {
@@ -60,16 +61,17 @@ protected:
 
 protected:
 	virtual void LoadCheckpoint(ClientContext &context, MetadataReader &reader);
-	virtual void ReadSchema(ClientContext &context, MetadataReader &reader);
-	virtual void ReadTable(ClientContext &context, MetadataReader &reader);
-	virtual void ReadView(ClientContext &context, MetadataReader &reader);
-	virtual void ReadSequence(ClientContext &context, MetadataReader &reader);
-	virtual void ReadMacro(ClientContext &context, MetadataReader &reader);
-	virtual void ReadTableMacro(ClientContext &context, MetadataReader &reader);
-	virtual void ReadIndex(ClientContext &context, MetadataReader &reader);
-	virtual void ReadType(ClientContext &context, MetadataReader &reader);
+	virtual void ReadEntry(ClientContext &context, Deserializer &deserializer);
+	virtual void ReadSchema(ClientContext &context, Deserializer &deserializer);
+	virtual void ReadTable(ClientContext &context, Deserializer &deserializer);
+	virtual void ReadView(ClientContext &context, Deserializer &deserializer);
+	virtual void ReadSequence(ClientContext &context, Deserializer &deserializer);
+	virtual void ReadMacro(ClientContext &context, Deserializer &deserializer);
+	virtual void ReadTableMacro(ClientContext &context, Deserializer &deserializer);
+	virtual void ReadIndex(ClientContext &context, Deserializer &deserializer);
+	virtual void ReadType(ClientContext &context, Deserializer &deserializer);
 
-	virtual void ReadTableData(ClientContext &context, MetadataReader &reader, BoundCreateTableInfo &bound_info);
+	virtual void ReadTableData(ClientContext &context, Deserializer &deserializer, BoundCreateTableInfo &bound_info);
 };
 
 class SingleFileCheckpointReader final : public CheckpointReader {

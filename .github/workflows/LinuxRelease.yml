@@ -16,7 +16,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
-      - '.github/config/uncovered_files.csv'
+
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
@@ -26,7 +26,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
-      - '.github/config/uncovered_files.csv'
+
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
@@ -42,19 +42,15 @@ jobs:
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
     env:
+      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
       GEN: ninja
       BUILD_BENCHMARK: 1
-      BUILD_ICU: 1
-      BUILD_INET: 1
-      BUILD_TPCH: 1
-      BUILD_FTS: 1
-      BUILD_JSON: 1
-      BUILD_EXCEL: 1
       BUILD_ODBC: 1
-      BUILD_JEMALLOC: 1
       DEBUG_STACKTRACE: 1
-      BUILD_AUTOCOMPLETE: 1
       FORCE_WARN_UNUSED: 1
+      DUCKDB_RUN_PARALLEL_CSV_TESTS: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -66,6 +62,11 @@ jobs:
         ninja-build: 1
         ccache: 1
         odbc: 1
+        python_alias: 1
+
+    - name: Install pytest
+      run: |
+        python3 -m pip install pytest
 
     - name: Build
       shell: bash
@@ -77,15 +78,20 @@ jobs:
 
     - name: Test
       shell: bash
-      run: make allunit
+      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+      run: |
+        make
+        python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*"
 
     - name: Tools Tests
       shell: bash
+      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       run: |
-        python3.7 tools/shell/shell-test.py build/release/duckdb
+        python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
     - name: Examples
       shell: bash
+      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       run: |
         (cd examples/embedded-c; make)
         (cd examples/embedded-c++; make)
@@ -95,12 +101,12 @@ jobs:
     - name: Deploy
       shell: bash
       run: |
-        python3.7 scripts/amalgamation.py
+        python3 scripts/amalgamation.py
         zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
         zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
         zip -j duckdb_odbc-linux-amd64.zip build/release/tools/odbc/libduckdb_odbc.so tools/odbc/linux_setup/unixodbc_setup.sh
-        python3.7 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_odbc-linux-amd64.zip
+        python3 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_odbc-linux-amd64.zip
 
     - uses: actions/upload-artifact@v3
       with:
@@ -108,6 +114,7 @@ jobs:
         path: |
           libduckdb-linux-amd64.zip
           duckdb_cli-linux-amd64.zip
+          duckdb_odbc-linux-amd64.zip
 
  linux-release-aarch64:
    # Builds binaries for linux_arm64
@@ -117,15 +124,11 @@ jobs:
    needs: linux-release-64
    container: ubuntu:18.04
    env:
+     EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
+     ENABLE_EXTENSION_AUTOLOADING: 1
+     ENABLE_EXTENSION_AUTOINSTALL: 1
      GEN: ninja
      BUILD_BENCHMARK: 1
-     BUILD_ICU: 1
-     BUILD_INET: 1
-     BUILD_TPCH: 1
-     BUILD_FTS: 1
-     BUILD_JSON: 1
-     BUILD_EXCEL: 1
-     BUILD_JEMALLOC: 1
      TREAT_WARNINGS_AS_ERRORS: 1
      FORCE_WARN_UNUSED: 1
      BUILD_ODBC: 1
@@ -157,11 +160,11 @@ jobs:
      - name: Deploy
        shell: bash
        run: |
-         python3.7 scripts/amalgamation.py
+         python3 scripts/amalgamation.py
          zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
          zip -j duckdb_odbc-linux-aarch64.zip build/release/tools/odbc/libduckdb_odbc.so
          zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
-         python3.7 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip
+         python3 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip
 
      - uses: actions/upload-artifact@v3
        with:
@@ -189,6 +192,7 @@ jobs:
       with:
         vcpkg: 1
         openssl: 1
+        ccache: 1
 
     - uses: ./.github/actions/build_extensions
       with:
@@ -196,9 +200,12 @@ jobs:
         post_install: rm build/release/src/libduckdb*
         deploy_as: linux_amd64
         treat_warn_as_error: 0
+        run_autoload_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
+        ninja: 1
 
     - uses: actions/upload-artifact@v3
       with:
@@ -224,6 +231,7 @@ jobs:
           vcpkg: 1
           openssl: 1
           aarch64_cross_compile: 1
+          ccache: 1
 
       - uses: ./.github/actions/build_extensions
         with:
@@ -235,6 +243,8 @@ jobs:
           signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
           aarch64_cross_compile: 1
           run_tests: 0 # Cannot run tests here due to cross-compiling
+          run_autoload_tests: 0
+          ninja: 1
 
       - uses: actions/upload-artifact@v3
         with:
@@ -243,7 +253,8 @@ jobs:
             build/release/extension/*/*.duckdb_extension
 
  check-load-install-extensions:
-    name: Checks extension functions
+    name: Checks extension entries
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     needs: linux-extensions-64
     env:
@@ -282,7 +293,7 @@ jobs:
         name: linux-extensions-64
         path: /tmp
 
-    - name: Check if extension_functions.hpp is up to date
+    - name: Check if extension_entries.hpp is up to date
       shell: bash
       env:
         EXTENSION_CONFIGS: '.github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake'
@@ -292,6 +303,7 @@ jobs:
 
  symbol-leakage:
     name: Symbol Leakage
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     needs: linux-release-64
 
@@ -316,10 +328,11 @@ jobs:
 
     - name: Symbol Leakage Test
       shell: bash
-      run: python3.7 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
+      run: python3 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
 
  linux-httpfs:
     name: Linux HTTPFS
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     needs: linux-release-64
     env:
@@ -372,11 +385,12 @@ jobs:
     - name: Test
       shell: bash
       run: |
-        python3 scripts/get_test_list.py --file-contains 'require-env S3_TEST_SERVER_AVAILABLE 1' --list '"*"' > test.list
-        build/release/test/unittest -f test.list
+        python3 scripts/get_test_list.py --file-contains 'require httpfs' --list '"*"' > test.list
+        python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '-f test.list'
 
  amalgamation-tests:
     name: Amalgamation Tests
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     needs: linux-release-64
     runs-on: ubuntu-20.04
     env:

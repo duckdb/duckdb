@@ -2,16 +2,14 @@
 
 #include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
-#include "duckdb/storage/metadata/metadata_reader.hpp"
-#include "duckdb/storage/metadata/metadata_writer.hpp"
 
 namespace duckdb {
 
 Node16 &Node16::New(ART &art, Node &node) {
 
 	node = Node::GetAllocator(art, NType::NODE_16).New();
-	node.SetType((uint8_t)NType::NODE_16);
-	auto &n16 = Node16::Get(art, node);
+	node.SetMetadata(static_cast<uint8_t>(NType::NODE_16));
+	auto &n16 = Node::RefMutable<Node16>(art, node, NType::NODE_16);
 
 	n16.count = 0;
 	return n16;
@@ -19,10 +17,8 @@ Node16 &Node16::New(ART &art, Node &node) {
 
 void Node16::Free(ART &art, Node &node) {
 
-	D_ASSERT(node.IsSet());
-	D_ASSERT(!node.IsSerialized());
-
-	auto &n16 = Node16::Get(art, node);
+	D_ASSERT(node.HasMetadata());
+	auto &n16 = Node::RefMutable<Node16>(art, node, NType::NODE_16);
 
 	// free all children
 	for (idx_t i = 0; i < n16.count; i++) {
@@ -32,8 +28,8 @@ void Node16::Free(ART &art, Node &node) {
 
 Node16 &Node16::GrowNode4(ART &art, Node &node16, Node &node4) {
 
-	auto &n4 = Node4::Get(art, node4);
-	auto &n16 = Node16::New(art, node16);
+	auto &n4 = Node::RefMutable<Node4>(art, node4, NType::NODE_4);
+	auto &n16 = New(art, node16);
 
 	n16.count = n4.count;
 	for (idx_t i = 0; i < n4.count; i++) {
@@ -48,8 +44,8 @@ Node16 &Node16::GrowNode4(ART &art, Node &node16, Node &node4) {
 
 Node16 &Node16::ShrinkNode48(ART &art, Node &node16, Node &node48) {
 
-	auto &n16 = Node16::New(art, node16);
-	auto &n48 = Node48::Get(art, node48);
+	auto &n16 = New(art, node16);
+	auto &n48 = Node::RefMutable<Node48>(art, node48, NType::NODE_48);
 
 	n16.count = 0;
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
@@ -75,9 +71,8 @@ void Node16::InitializeMerge(ART &art, const ARTFlags &flags) {
 
 void Node16::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 
-	D_ASSERT(node.IsSet());
-	D_ASSERT(!node.IsSerialized());
-	auto &n16 = Node16::Get(art, node);
+	D_ASSERT(node.HasMetadata());
+	auto &n16 = Node::RefMutable<Node16>(art, node, NType::NODE_16);
 
 	// ensure that there is no other child at the same byte
 	for (idx_t i = 0; i < n16.count; i++) {
@@ -111,9 +106,8 @@ void Node16::InsertChild(ART &art, Node &node, const uint8_t byte, const Node ch
 
 void Node16::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 
-	D_ASSERT(node.IsSet());
-	D_ASSERT(!node.IsSerialized());
-	auto &n16 = Node16::Get(art, node);
+	D_ASSERT(node.HasMetadata());
+	auto &n16 = Node::RefMutable<Node16>(art, node, NType::NODE_16);
 
 	idx_t child_pos = 0;
 	for (; child_pos < n16.count; child_pos++) {
@@ -150,72 +144,46 @@ void Node16::ReplaceChild(const uint8_t byte, const Node child) {
 	}
 }
 
-optional_ptr<Node> Node16::GetChild(const uint8_t byte) {
-
+optional_ptr<const Node> Node16::GetChild(const uint8_t byte) const {
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] == byte) {
-			D_ASSERT(children[i].IsSet());
+			D_ASSERT(children[i].HasMetadata());
 			return &children[i];
 		}
 	}
 	return nullptr;
 }
 
-optional_ptr<Node> Node16::GetNextChild(uint8_t &byte) {
+optional_ptr<Node> Node16::GetChildMutable(const uint8_t byte) {
+	for (idx_t i = 0; i < count; i++) {
+		if (key[i] == byte) {
+			D_ASSERT(children[i].HasMetadata());
+			return &children[i];
+		}
+	}
+	return nullptr;
+}
 
+optional_ptr<const Node> Node16::GetNextChild(uint8_t &byte) const {
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] >= byte) {
 			byte = key[i];
-			D_ASSERT(children[i].IsSet());
+			D_ASSERT(children[i].HasMetadata());
 			return &children[i];
 		}
 	}
 	return nullptr;
 }
 
-BlockPointer Node16::Serialize(ART &art, MetadataWriter &writer) {
-
-	// recurse into children and retrieve child block pointers
-	vector<BlockPointer> child_block_pointers;
+optional_ptr<Node> Node16::GetNextChildMutable(uint8_t &byte) {
 	for (idx_t i = 0; i < count; i++) {
-		child_block_pointers.push_back(children[i].Serialize(art, writer));
+		if (key[i] >= byte) {
+			byte = key[i];
+			D_ASSERT(children[i].HasMetadata());
+			return &children[i];
+		}
 	}
-	for (idx_t i = count; i < Node::NODE_16_CAPACITY; i++) {
-		child_block_pointers.emplace_back((block_id_t)DConstants::INVALID_INDEX, 0);
-	}
-
-	// get pointer and write fields
-	auto block_pointer = writer.GetBlockPointer();
-	writer.Write(NType::NODE_16);
-	writer.Write<uint8_t>(count);
-
-	// write key values
-	for (idx_t i = 0; i < Node::NODE_16_CAPACITY; i++) {
-		writer.Write(key[i]);
-	}
-
-	// write child block pointers
-	for (auto &child_block_pointer : child_block_pointers) {
-		writer.Write(child_block_pointer.block_id);
-		writer.Write(child_block_pointer.offset);
-	}
-
-	return block_pointer;
-}
-
-void Node16::Deserialize(MetadataReader &reader) {
-
-	count = reader.Read<uint8_t>();
-
-	// read key values
-	for (idx_t i = 0; i < Node::NODE_16_CAPACITY; i++) {
-		key[i] = reader.Read<uint8_t>();
-	}
-
-	// read child block pointers
-	for (idx_t i = 0; i < Node::NODE_16_CAPACITY; i++) {
-		children[i] = Node(reader);
-	}
+	return nullptr;
 }
 
 void Node16::Vacuum(ART &art, const ARTFlags &flags) {

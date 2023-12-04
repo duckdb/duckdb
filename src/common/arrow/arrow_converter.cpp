@@ -4,7 +4,6 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
@@ -139,6 +138,9 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::DATE:
 		child.format = "tdD";
 		break;
+#ifdef DUCKDB_WASM
+	case LogicalTypeId::TIME_TZ:
+#endif
 	case LogicalTypeId::TIME:
 		child.format = "ttu";
 		break;
@@ -185,7 +187,11 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		child.format = "+l";
+		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			child.format = "+L";
+		} else {
+			child.format = "+l";
+		}
 		child.n_children = 1;
 		root_holder.nested_children.emplace_back();
 		root_holder.nested_children.back().resize(1);

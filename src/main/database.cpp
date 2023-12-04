@@ -19,6 +19,7 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/planner/extension_callback.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -30,6 +31,7 @@ DBConfig::DBConfig() {
 	compression_functions = make_uniq<CompressionFunctionSet>();
 	cast_functions = make_uniq<CastFunctionSet>();
 	error_manager = make_uniq<ErrorManager>();
+	options.duckdb_api = StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
 }
 
 DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) : DBConfig::DBConfig() {
@@ -51,6 +53,7 @@ DatabaseInstance::DatabaseInstance() {
 }
 
 DatabaseInstance::~DatabaseInstance() {
+	GetDatabaseManager().ResetDatabases();
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
@@ -129,9 +132,9 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
 }
 
-duckdb::unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo &info, const string &type,
-                                                                              AccessMode access_mode) {
-	duckdb::unique_ptr<AttachedDatabase> attached_database;
+unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(const AttachInfo &info, const string &type,
+                                                                      AccessMode access_mode) {
+	unique_ptr<AttachedDatabase> attached_database;
 	if (!type.empty()) {
 		// find the storage extension
 		auto extension_name = ExtensionHelper::ApplyExtensionAlias(type);
@@ -161,16 +164,15 @@ void DatabaseInstance::CreateMainDatabase() {
 	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem());
 	info.path = config.options.database_path;
 
-	auto attached_database = CreateAttachedDatabase(info, config.options.database_type, config.options.access_mode);
-	auto initial_database = attached_database.get();
+	optional_ptr<AttachedDatabase> initial_database;
 	{
 		Connection con(*this);
 		con.BeginTransaction();
-		db_manager->AddDatabase(*con.context, std::move(attached_database));
+		initial_database =
+		    db_manager->AttachDatabase(*con.context, info, config.options.database_type, config.options.access_mode);
 		con.Commit();
 	}
 
-	// initialize the database
 	initial_database->SetInitialDatabase();
 	initial_database->Initialize();
 }
@@ -196,7 +198,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config_ptr->options.temporary_directory = string(database_path) + ".tmp";
 
 		// special treatment for in-memory mode
-		if (strcmp(database_path, ":memory:") == 0) {
+		if (strcmp(database_path, IN_MEMORY_PATH) == 0) {
 			config_ptr->options.temporary_directory = ".tmp";
 		}
 	}
@@ -219,12 +221,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
 
-	// check if we are opening a standard DuckDB database or an extension database
-	if (config.options.database_type.empty()) {
-		auto path_and_type = DBPathAndType::Parse(config.options.database_path, config);
-		config.options.database_type = path_and_type.type;
-		config.options.database_path = path_and_type.path;
-	}
+	// resolve the type of teh database we are opening
+	DBPathAndType::ResolveDatabaseType(config.options.database_path, config.options.database_type, config);
 
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
@@ -234,7 +232,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		if (!config.file_system) {
 			throw InternalException("No file system!?");
 		}
-		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
+		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type, nullptr);
 	}
 
 	if (!config.options.unrecognized_options.empty()) {
@@ -381,6 +379,11 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
 	loaded_extensions.insert(extension_name);
+
+	auto &callbacks = DBConfig::GetConfig(*this).extension_callbacks;
+	for (auto &callback : callbacks) {
+		callback->OnExtensionLoaded(*this, name);
+	}
 }
 
 bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {

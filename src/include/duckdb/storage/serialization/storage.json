@@ -1,0 +1,164 @@
+[
+  {
+    "class": "MetaBlockPointer",
+    "includes": [
+      "duckdb/storage/block.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "block_pointer",
+        "type": "idx_t"
+      },
+      {
+        "id": 101,
+        "name": "offset",
+        "type": "uint32_t"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["block_pointer", "offset"]
+  },
+  {
+    "class": "FixedSizeAllocatorInfo",
+    "members": [
+      {
+        "id": 100,
+        "name": "segment_size",
+        "type": "idx_t"
+      },
+      {
+        "id": 101,
+        "name": "buffer_ids",
+        "type": "vector<idx_t>"
+      },
+      {
+        "id": 102,
+        "name": "block_pointers",
+        "type": "vector<BlockPointer>"
+      },
+      {
+        "id": 103,
+        "name": "segment_counts",
+        "type": "vector<idx_t>"
+      },
+      {
+        "id": 104,
+        "name": "allocation_sizes",
+        "type": "vector<idx_t>"
+      },
+      {
+        "id": 105,
+        "name": "buffers_with_free_space",
+        "type": "vector<idx_t>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "IndexStorageInfo",
+    "includes": [
+      "duckdb/storage/table_storage_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 101,
+        "name": "root",
+        "type": "idx_t"
+      },
+      {
+        "id": 102,
+        "name": "allocator_infos",
+        "type": "vector<FixedSizeAllocatorInfo>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "BlockPointer",
+    "members": [
+      {
+        "id": 100,
+        "name": "block_id",
+        "type": "block_id_t"
+      },
+      {
+        "id": 101,
+        "name": "offset",
+        "type": "uint32_t"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["block_id", "offset"]
+  },  {
+    "class": "DataPointer",
+    "includes": [
+      "duckdb/storage/data_pointer.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "row_start",
+        "type": "uint64_t"
+      },
+      {
+        "id": 101,
+        "name": "tuple_count",
+        "type": "uint64_t"
+      },
+      {
+        "id": 102,
+        "name": "block_pointer",
+        "type": "BlockPointer"
+      },
+      {
+        "id": 103,
+        "name": "compression_type",
+        "type": "CompressionType"
+      },
+      {
+        "id": 104,
+        "name": "statistics",
+        "type": "BaseStatistics"
+      },
+      {
+        "id": 105,
+        "name": "segment_state",
+        "type": "ColumnSegmentState*"
+      }
+    ],
+    "set_parameters": ["compression_type"],
+    "pointer_type": "none",
+    "constructor": ["statistics"]
+  },
+  {
+    "class": "DistinctStatistics",
+    "includes": [
+      "duckdb/storage/statistics/distinct_statistics.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "sample_count",
+        "type": "idx_t"
+      },
+      {
+        "id": 101,
+        "name": "total_count",
+        "type": "idx_t"
+      },
+      {
+        "id": 102,
+        "name": "log",
+        "type": "unique_ptr<HyperLogLog>"
+      }
+    ],
+    "pointer_type": "unique_ptr",
+    "constructor": ["log", "sample_count", "total_count"]
+  }
+]

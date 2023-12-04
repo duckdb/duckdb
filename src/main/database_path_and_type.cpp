@@ -5,19 +5,38 @@
 
 namespace duckdb {
 
-DBPathAndType DBPathAndType::Parse(const string &combined_path, const DBConfig &config) {
-	auto extension = ExtensionHelper::ExtractExtensionPrefixFromPath(combined_path);
+void DBPathAndType::ExtractExtensionPrefix(string &path, string &db_type) {
+	auto extension = ExtensionHelper::ExtractExtensionPrefixFromPath(path);
 	if (!extension.empty()) {
 		// path is prefixed with an extension - remove it
-		auto path = StringUtil::Replace(combined_path, extension + ":", "");
-		auto type = ExtensionHelper::ApplyExtensionAlias(extension);
-		return {path, type};
+		path = StringUtil::Replace(path, extension + ":", "");
+		db_type = ExtensionHelper::ApplyExtensionAlias(extension);
 	}
-	// if there isn't - check the magic bytes of the file (if any)
-	auto file_type = MagicBytes::CheckMagicBytes(config.file_system.get(), combined_path);
-	if (file_type == DataFileType::SQLITE_FILE) {
-		return {combined_path, "sqlite"};
-	}
-	return {combined_path, string()};
 }
+
+void DBPathAndType::CheckMagicBytes(string &path, string &db_type, const DBConfig &config) {
+	// if there isn't - check the magic bytes of the file (if any)
+	auto file_type = MagicBytes::CheckMagicBytes(config.file_system.get(), path);
+	if (file_type == DataFileType::SQLITE_FILE) {
+		db_type = "sqlite";
+	} else {
+		db_type = "";
+	}
+}
+
+void DBPathAndType::ResolveDatabaseType(string &path, string &db_type, const DBConfig &config) {
+	if (!db_type.empty()) {
+		// database type specified explicitly - no need to check
+		return;
+	}
+	// check for an extension prefix
+	ExtractExtensionPrefix(path, db_type);
+	if (!db_type.empty()) {
+		// extension prefix was provided (e.g. sqlite:/path/to/file.db) - we are done
+		return;
+	}
+	// check database type by reading the magic bytes of a file
+	DBPathAndType::CheckMagicBytes(path, db_type, config);
+}
+
 } // namespace duckdb

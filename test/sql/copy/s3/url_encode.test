@@ -29,30 +29,32 @@ CREATE TABLE test_2 as (SELECT 2 FROM range(0,5));
 CREATE TABLE test_3 as (SELECT 3 FROM range(0,5));
 CREATE TABLE test_4 as (SELECT 4 FROM range(0,5));
 
-statement ok
-COPY test_1 TO 's3://test-bucket-public/url_encode/just because you can doesnt mean you should.parquet' (FORMAT 'parquet');
+foreach prefix s3:// r2:// gcs:// s3a:// s3n://
 
 statement ok
-COPY test_2 TO 's3://test-bucket-public/url_encode/just+dont+use+plus+or+spaces+please.parquet' (FORMAT 'parquet');
+COPY test_1 TO '${prefix}test-bucket-public/url_encode/just because you can doesnt mean you should.parquet' (FORMAT 'parquet');
 
 statement ok
-COPY test_3 TO 's3://test-bucket-public/url_encode/should:avoid:using:colon:in:paths.parquet' (FORMAT 'parquet');
+COPY test_2 TO '${prefix}test-bucket-public/url_encode/just+dont+use+plus+or+spaces+please.parquet' (FORMAT 'parquet');
+
+statement ok
+COPY test_3 TO '${prefix}test-bucket-public/url_encode/should:avoid:using:colon:in:paths.parquet' (FORMAT 'parquet');
 
 # For S3 urls spaces are fine
 query I
-SELECT * FROM "s3://test-bucket-public/url_encode/just because you can doesnt mean you should.parquet" LIMIT 1;
+SELECT * FROM "${prefix}test-bucket-public/url_encode/just because you can doesnt mean you should.parquet" LIMIT 1;
 ----
 1
 
 # In S3 urls, + means a plus symbol
 query I
-SELECT * FROM "s3://test-bucket-public/url_encode/just+dont+use+plus+or+spaces+please.parquet" LIMIT 1;
+SELECT * FROM "${prefix}test-bucket-public/url_encode/just+dont+use+plus+or+spaces+please.parquet" LIMIT 1;
 ----
 2
 
 # Colons in S3 urls are encoded by duckdb internaly like boto3 (issue #5502)
 query I
-SELECT * FROM "s3://test-bucket-public/url_encode/should:avoid:using:colon:in:paths.parquet" LIMIT 1;
+SELECT * FROM "${prefix}test-bucket-public/url_encode/should:avoid:using:colon:in:paths.parquet" LIMIT 1;
 ----
 3
 
@@ -83,7 +85,7 @@ SELECT * FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/url_encode/just+d
 
 # Due to our support for query parameters, this will fail
 statement error
-COPY test_4 TO 's3://test-bucket-public/url_encode/question?marks?are?even?worse.parquet' (FORMAT 'parquet');
+COPY test_4 TO '${prefix}test-bucket-public/url_encode/question?marks?are?even?worse.parquet' (FORMAT 'parquet');
 ----
 Invalid query parameters found.
 
@@ -93,10 +95,10 @@ statement ok
 SET s3_url_compatibility_mode=true;
 
 statement ok
-COPY test_4 TO 's3://test-bucket-public/url_encode/question?marks?and*stars[and]brackets.parquet' (FORMAT 'parquet');
+COPY test_4 TO '${prefix}test-bucket-public/url_encode/question?marks?and*stars[and]brackets.parquet' (FORMAT 'parquet');
 
 query I
-SELECT * FROM "s3://test-bucket-public/url_encode/question?marks?and*stars[and]brackets.parquet" LIMIT 1;
+SELECT * FROM "${prefix}test-bucket-public/url_encode/question?marks?and*stars[and]brackets.parquet" LIMIT 1;
 ----
 4
 
@@ -108,3 +110,36 @@ SELECT * FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/url_encode/questi
 
 statement ok
 SET s3_url_compatibility_mode=false;
+
+# Check that the generated urls are correct
+statement ok
+set s3_endpoint='s3.some.random.endpoint.com';
+
+statement error
+SELECT * FROM '${prefix}test-bucket/whatever.parquet';
+----
+IO Error: Connection error for HTTP HEAD to 'http://test-bucket.s3.some.random.endpoint.com/whatever.parquet'
+
+statement ok
+set s3_endpoint='${DUCKDB_S3_ENDPOINT}'
+
+endloop
+
+# Check that the generated urls are correct for an empty endpoint
+statement ok
+set s3_endpoint='';
+
+statement error
+SELECT * FROM 's3://test-bucket/whatever.parquet';
+----
+IO Error: HTTP GET error on 'http://test-bucket.s3.amazonaws.com/whatever.parquet'
+
+statement error
+SELECT * FROM 'r2://test-bucket/whatever.parquet';
+----
+IO Error: HTTP GET error on 'http://test-bucket.s3.amazonaws.com/whatever.parquet'
+
+statement error
+SELECT * FROM 'gcs://test-bucket/whatever.parquet';
+----
+IO Error: HTTP GET error on 'http://test-bucket.storage.googleapis.com/whatever.parquet'
