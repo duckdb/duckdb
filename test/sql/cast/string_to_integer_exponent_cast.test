@@ -238,6 +238,18 @@ select '1844674407370955161.6e1'::UBIGINT;
 ----
 Conversion Error
 
+# exponent limit
+
+statement error
+select '1e100000'::int;
+----
+Conversion Error
+
+statement error
+select '1e-100000'::int;
+----
+Conversion Error
+
 # some more "extreme" cases
 
 query I
@@ -259,4 +271,14 @@ query I
 select '-0.00000000000170141183460469231731687303715884105727e50'::HUGEINT;
 ----
 -170141183460469231731687303715884105727
+
+query I
+select '15123456789e-32768'::int;
+----
+0
+
+query I
+select '0e32767'::int;
+----
+0
 
