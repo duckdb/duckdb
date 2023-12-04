@@ -930,19 +930,19 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 				case StrTimeSpecifier::YEAR_DECIMAL:
 					// Just validate, don't use
 					break;
-				case StrTimeSpecifier::WEEK_NUMBER_ISO:
-					// Already parsing ISO
-					break;
 				case StrTimeSpecifier::WEEKDAY_DECIMAL:
 					// First offset specifier
 					offset_specifier = specifiers[i];
 					break;
 				case StrTimeSpecifier::YEAR_ISO:
+				case StrTimeSpecifier::WEEK_NUMBER_ISO:
+					// Already parsing ISO
 					if (iso_year <= 9999) {
 						error_message = "Multiple ISO year offsets specified";
 						error_position = start_pos;
 						return false;
 					}
+					break;
 				default:
 					error_message = "Incompatible ISO year offset specified";
 					error_position = start_pos;
@@ -1063,14 +1063,14 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 				case StrTimeSpecifier::YEAR_DECIMAL:
 					// Just validate, don't use
 					break;
-				case StrTimeSpecifier::YEAR_ISO:
-					// Already parsing ISO
 					break;
 				case StrTimeSpecifier::WEEKDAY_DECIMAL:
 					// First offset specifier
 					offset_specifier = specifiers[i];
 					break;
 				case StrTimeSpecifier::WEEK_NUMBER_ISO:
+				case StrTimeSpecifier::YEAR_ISO:
+					// Already parsing ISO
 					if (iso_week <= 53) {
 						error_message = "Multiple ISO week offsets specified";
 						error_position = start_pos;
