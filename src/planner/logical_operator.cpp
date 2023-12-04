@@ -42,8 +42,8 @@ string LogicalOperator::ParamsToString() const {
 }
 
 void LogicalOperator::ResolveOperatorTypes() {
-	types.clear();
 
+	types.clear();
 	// first resolve child types
 	for (auto &child : children) {
 		child->ResolveOperatorTypes();

@@ -7,25 +7,22 @@ require tpcds
 statement ok
 CALL dsdgen(sf=0)
 
-statement ok
-PRAGMA tpcds(14)
+loop i 1 100
 
-#
-#endloop
-#
-## out of range
-#statement error
-#PRAGMA tpcds(-1)
-#
-#statement error
-#PRAGMA tpcds(3290819023812038903)
-#
-#statement error
-#PRAGMA tpcds(32908301298)
-#
-#statement error
-#PRAGMA tpcds(1.1)
-#
-## queries
-#statement ok
-#SELECT * FROM tpcds_queries()
+statement ok
+PRAGMA tpcds(${i})
+
+endloop
+
+# out of range
+statement error
+PRAGMA tpcds(-1)
+
+statement error
+PRAGMA tpcds(3290819023812038903)
+
+statement error
+PRAGMA tpcds(32908301298)
+
+statement error
+PRAGMA tpcds(1.1)
