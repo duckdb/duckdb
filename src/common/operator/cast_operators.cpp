@@ -801,20 +801,6 @@ struct SimpleIntegerCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleDigit(T &state, uint8_t digit) {
 		using result_t = typename T::ResultType;
-#if ((__GNUC__ >= 5) || defined(__clang__)) && DISABLE
-		if (__builtin_mul_overflow(state.result, result_t(10), &state.result)) {
-			return false;
-		}
-		if (NEGATIVE) {
-			if (__builtin_sub_overflow(state.result, result_t(digit), &state.result)) {
-				return false;
-			}
-		} else {
-			if (__builtin_add_overflow(state.result, result_t(digit), &state.result)) {
-				return false;
-			}
-		}
-#else
 		if (NEGATIVE) {
 			if (state.result < (NumericLimits<result_t>::Minimum() + digit) / 10) {
 				return false;
