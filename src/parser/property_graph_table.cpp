@@ -1,4 +1,3 @@
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/parser/property_graph_table.hpp"
@@ -206,55 +205,83 @@ bool PropertyGraphTable::Equals(const PropertyGraphTable *other_p) const {
 	return true;
 }
 
-void PropertyGraphTable::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteString(table_name);
+void PropertyGraphTable::WritePropertyGraphTableEntry(Serializer &serializer) {
+	serializer.WriteProperty(100, "table_name", table_name);
+	serializer.WriteProperty(101, "column_names", column_names);
+	serializer.WriteProperty(102, "column_aliases", column_aliases);
+	serializer.WriteProperty(103, "except_columns", except_columns);
+	serializer.WriteProperty(104, "sub_labels", sub_labels);
 
-	writer.WriteList<string>(column_names);
-	writer.WriteList<string>(column_aliases);
-	writer.WriteList<string>(except_columns);
-	writer.WriteList<string>(sub_labels);
-	writer.WriteString(main_label);
+//	serializer.WriteList(101, "column_names", column_names.size(),
+//											 [&](Serializer::List &list, idx_t i) { list.WriteElement(column_names[i]); });
+//	serializer.WriteList(102, "column_aliases", column_aliases.size(),
+//											 [&](Serializer::List &list, idx_t i) { list.WriteElement(column_aliases[i]); });
+//	serializer.WriteList(103, "except_columns", except_columns.size(),
+//											 [&](Serializer::List &list, idx_t i) { list.WriteElement(except_columns[i]); });
+//	serializer.WriteList(104, "sub_labels", sub_labels.size(),
+//											 [&](Serializer::List &list, idx_t i) { list.WriteElement(sub_labels[i]); });
+	serializer.WriteProperty(105, "main_label", main_label);
+	serializer.WriteProperty(106, "is_vertex_table", is_vertex_table);
+	serializer.WriteProperty(107, "all_columns", all_columns);
+	serializer.WriteProperty(108, "no_columns", no_columns);
 
-	writer.WriteField<bool>(is_vertex_table);
-	writer.WriteField<bool>(all_columns);
-	writer.WriteField<bool>(no_columns);
 	if (!is_vertex_table) {
-		writer.WriteList<string>(source_pk);
-		writer.WriteList<string>(source_fk);
-		writer.WriteString(source_reference);
+		serializer.WriteProperty(109, "source_pk", source_pk);
+		serializer.WriteProperty(110, "source_fk", source_fk);
+		serializer.WriteProperty(111, "source_reference", source_reference);
 
-		writer.WriteList<string>(destination_pk);
-		writer.WriteList<string>(destination_fk);
-		writer.WriteString(destination_reference);
+		serializer.WriteProperty(112, "destination_pk", destination_pk);
+		serializer.WriteProperty(113, "destination_fk", destination_fk);
+		serializer.WriteProperty(114, "destination_reference", destination_reference);
 	}
-	writer.Finalize();
 }
+
 
 shared_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &deserializer) {
 	auto pg_table = make_shared<PropertyGraphTable>();
-	FieldReader reader(deserializer);
-	pg_table->table_name = reader.ReadRequired<string>();
-	reader.ReadList<string>(pg_table->column_names);
-	reader.ReadList<string>(pg_table->column_aliases);
-	reader.ReadList<string>(pg_table->except_columns);
-	reader.ReadList<string>(pg_table->sub_labels);
-	pg_table->main_label = reader.ReadRequired<string>();
+	deserializer.ReadProperty(100, "table_name", pg_table->table_name);
+	deserializer.ReadProperty(101, "column_names", pg_table->column_names);
+	deserializer.ReadProperty(102, "column_aliases", pg_table->column_aliases);
+	deserializer.ReadProperty(103, "except_columns", pg_table->except_columns);
+	deserializer.ReadProperty(104, "sub_labels", pg_table->sub_labels);
+	// read the column names
+//	deserializer.ReadList(101, "column_names", [&](Deserializer::List &list, idx_t i) {
+//			auto column_name = list.ReadElement<string>();
+//			pg_table->column_names.push_back(column_name);
+//	});
+//
+//	vector<string> column_aliases;
+//	deserializer.ReadList(102, "column_aliases", [&](Deserializer::List &list, idx_t i) {
+//			auto column_alias = list.ReadElement<string>();
+//			pg_table->column_aliases.push_back(column_alias);
+//	});
+//
+//	vector<string> except_columns;
+//	deserializer.ReadList(103, "column_aliases", [&](Deserializer::List &list, idx_t i) {
+//			auto except_column = list.ReadElement<string>();
+//			pg_table->except_columns.push_back(except_column);
+//	});
+//
+//	vector<string> sub_labels;
+//	deserializer.ReadList(104, "column_aliases", [&](Deserializer::List &list, idx_t i) {
+//			auto sub_label = list.ReadElement<string>();
+//			pg_table->sub_labels.push_back(sub_label);
+//	});
 
-	pg_table->is_vertex_table = reader.ReadRequired<bool>();
-	pg_table->all_columns = reader.ReadRequired<bool>();
-	pg_table->no_columns = reader.ReadRequired<bool>();
+	deserializer.ReadProperty(105, "main_label", pg_table->main_label);
+	deserializer.ReadProperty(106, "is_vertex_table", pg_table->is_vertex_table);
+	deserializer.ReadProperty(107, "no_columns", pg_table->no_columns);
+
 	if (!pg_table->is_vertex_table) {
-		reader.ReadList<string>(pg_table->source_pk);
-		reader.ReadList<string>(pg_table->source_fk);
-		pg_table->source_reference = reader.ReadRequired<string>();
+		deserializer.ReadProperty(108, "source_pk", pg_table->source_pk);
+		deserializer.ReadProperty(109, "source_fk", pg_table->source_fk);
+		deserializer.ReadProperty(110, "source_reference", pg_table->source_reference);
 
-		reader.ReadList<string>(pg_table->destination_pk);
-		reader.ReadList<string>(pg_table->destination_fk);
-		pg_table->destination_reference = reader.ReadRequired<string>();
+		deserializer.ReadProperty(108, "destination_pk", pg_table->destination_pk);
+		deserializer.ReadProperty(109, "destination_fk", pg_table->destination_fk);
+		deserializer.ReadProperty(110, "destination_reference", pg_table->destination_reference);
 	}
-	reader.Finalize();
-	return std::move(pg_table);
+	return pg_table;
 }
 
 shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
@@ -300,3 +327,30 @@ shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
 }
 
 } // namespace duckdb
+
+
+
+//void PropertyGraphTable::Serialize(Serializer &serializer) const {
+//	FieldWriter writer(serializer);
+//	writer.WriteString(table_name);
+//
+//	writer.WriteList<string>(column_names);
+//	writer.WriteList<string>(column_aliases);
+//	writer.WriteList<string>(except_columns);
+//	writer.WriteList<string>(sub_labels);
+//	writer.WriteString(main_label);
+//
+//	writer.WriteField<bool>(is_vertex_table);
+//	writer.WriteField<bool>(all_columns);
+//	writer.WriteField<bool>(no_columns);
+//	if (!is_vertex_table) {
+//		writer.WriteList<string>(source_pk);
+//		writer.WriteList<string>(source_fk);
+//		writer.WriteString(source_reference);
+//
+//		writer.WriteList<string>(destination_pk);
+//		writer.WriteList<string>(destination_fk);
+//		writer.WriteString(destination_reference);
+//	}
+//	writer.Finalize();
+//}

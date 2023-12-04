@@ -1,3 +1,5 @@
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/parsed_data/create_property_graph_info.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -10,16 +12,6 @@ CreatePropertyGraphInfo::CreatePropertyGraphInfo() : CreateInfo(CatalogType::VIE
 
 CreatePropertyGraphInfo::CreatePropertyGraphInfo(string property_graph_name)
     : CreateInfo(CatalogType::VIEW_ENTRY), property_graph_name(std::move(property_graph_name)) {
-}
-
-void CreatePropertyGraphInfo::SerializeInternal(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteString(property_graph_name);
-	writer.WriteSerializableList<PropertyGraphTable>(vertex_tables);
-	writer.WriteSerializableList<PropertyGraphTable>(edge_tables);
-	//    writer.WriteRegularSerializableMap<PropertyGraphTable*>(label_map);
-
-	writer.Finalize();
 }
 
 unique_ptr<CreateInfo> CreatePropertyGraphInfo::Copy() const {
@@ -44,13 +36,37 @@ unique_ptr<CreateInfo> CreatePropertyGraphInfo::Copy() const {
 	return std::move(result);
 }
 
-unique_ptr<CreateInfo> CreatePropertyGraphInfo::Deserialize(FieldReader &reader) {
+void CreatePropertyGraphInfo::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<string>(100, "property_graph_name", property_graph_name);
+	serializer.WriteList(101, "vertex_tables", vertex_tables.size(), [&](Serializer::List &list, idx_t i) {
+			auto &entry = vertex_tables[i];
+			list.WriteObject([&](Serializer &obj) { entry->WritePropertyGraphTableEntry(obj);
+			});
+	});
+	serializer.WriteList(102, "edge_tables", edge_tables.size(), [&](Serializer::List &list, idx_t i) {
+			auto &entry = edge_tables[i];
+			list.WriteObject([&](Serializer &obj) { entry->WritePropertyGraphTableEntry(obj); });
+	});
+	serializer.WriteProperty(103, "label_map", label_map);
+}
+
+unique_ptr<CreateInfo> CreatePropertyGraphInfo::Deserialize(Deserializer &deserializer) {
 	auto result = make_uniq<CreatePropertyGraphInfo>();
-	result->property_graph_name = reader.ReadRequired<string>();
-	result->vertex_tables = reader.ReadRequiredSharedSerializableList<PropertyGraphTable>();
-	result->edge_tables = reader.ReadRequiredSharedSerializableList<PropertyGraphTable>();
-	//        result->label_map = reader.ReadRequiredSerializableMap<PropertyGraphTable>();
-	reader.Finalize();
+	deserializer.ReadProperty<string>(100, "property_graph_name", result->property_graph_name);
+
+	deserializer.ReadList(101, "vertex_tables", [&](Deserializer::List &list, idx_t i) {
+			list.ReadObject([&](Deserializer &obj) {
+				result->vertex_tables[i]->Deserialize(obj);
+			});
+	});
+
+	deserializer.ReadProperty(103, "label_map", result->label_map);
+
+//	result->property_graph_name = reader.ReadRequired<string>();
+//	result->vertex_tables = reader.ReadRequiredSharedSerializableList<PropertyGraphTable>();
+//	result->edge_tables = reader.ReadRequiredSharedSerializableList<PropertyGraphTable>();
+//  result->label_map = reader.ReadRequiredSerializableMap<PropertyGraphTable>();
+//	reader.Finalize();
 	return std::move(result);
 }
 

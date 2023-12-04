@@ -38,8 +38,8 @@ public:
 	unique_ptr<CreateInfo> Copy() const override;
 
 	//! Serializes a blob into a CreatePropertyGraphInfo
-	void SerializeInternal(Serializer &serializer) const override;
+	void Serialize(Serializer &serializer) const override;
 	//! Deserializes a blob back into a CreatePropertyGraphInfo
-	static unique_ptr<CreateInfo> Deserialize(FieldReader &reader);
+	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 };
 } // namespace duckdb

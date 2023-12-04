@@ -25,7 +25,7 @@ public:
 	string table_name;
 	string table_name_alias;
 
-	//! The stack of names in order of which they appear (column_names[0].column_names[1].column_names[2]....)
+	//! The stack of names in order of which they appear (column_names[0], column_names[1], column_names[2], ...)
 	vector<string> column_names;
 	vector<string> column_aliases;
 
@@ -65,5 +65,7 @@ public:
 	void Serialize(Serializer &serializer) const;
 
 	static shared_ptr<PropertyGraphTable> Deserialize(Deserializer &deserializer);
+
+	void WritePropertyGraphTableEntry(Serializer &serializer);
 };
 } // namespace duckdb
