@@ -792,12 +792,12 @@ bool TryCast::Operation(double input, double &result, bool strict) {
 //===--------------------------------------------------------------------===//
 
 template <typename T>
-struct SimpleIntegerCastData {
+struct IntegerCastData {
 	using ResultType = T;
 	ResultType result;
 };
 
-struct SimpleIntegerCastOperation {
+struct IntegerCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleDigit(T &state, uint8_t digit) {
 		using result_t = typename T::ResultType;
@@ -812,7 +812,6 @@ struct SimpleIntegerCastOperation {
 			}
 			state.result = state.result * 10 + digit;
 		}
-#endif
 		return true;
 	}
 
@@ -838,13 +837,13 @@ struct SimpleIntegerCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int16_t exponent) {
-		// SimpleIntegerCast doesn't deal with Exponents
+		// Simple integers don't deal with Exponents
 		return false;
 	}
 
 	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
 	static bool HandleDecimal(T &state, uint8_t digit) {
-		// SimpleIntegerCast doesn't deal with Decimals
+		// Simple integers don't deal with Decimals
 		return false;
 	}
 
@@ -855,7 +854,7 @@ struct SimpleIntegerCastOperation {
 };
 
 template <typename T>
-struct IntegerCastData {
+struct IntegerDecimalCastData {
 	using ResultType = T;
 	using StoreType = int64_t;
 	StoreType result;
@@ -864,7 +863,7 @@ struct IntegerCastData {
 };
 
 template <>
-struct IntegerCastData<uint64_t> {
+struct IntegerDecimalCastData<uint64_t> {
 	using ResultType = uint64_t;
 	using StoreType = uint64_t;
 	StoreType result;
@@ -872,23 +871,10 @@ struct IntegerCastData<uint64_t> {
 	uint16_t decimal_digits;
 };
 
-struct IntegerCastOperation {
+struct IntegerDecimalCastOperation : IntegerCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int16_t exponent) {
 		using store_t = typename T::StoreType;
-		if (NEGATIVE) {
-			if (state.result < (NumericLimits<store_t>::Minimum() + digit) / 10) {
-				return false;
-			}
-			state.result = state.result * 10 - digit;
-		} else {
-			if (state.result > (NumericLimits<store_t>::Maximum() - digit) / 10) {
-				return false;
-			}
-			state.result = state.result * 10 + digit;
-		}
-		return true;
-	}
 
 		int16_t e = exponent;
 		// Negative Exponent
@@ -986,7 +972,7 @@ struct IntegerCastOperation {
 	}
 };
 
-template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = SimpleIntegerCastOperation,
+template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = IntegerCastOperation,
           char decimal_separator = '.'>
 static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) {
 	idx_t start_pos;
@@ -1057,12 +1043,12 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 					ExponentData exponent {};
 					int negative = buf[pos] == '-';
 					if (negative) {
-						if (!IntegerCastLoop<ExponentData, true, false, SimpleIntegerCastOperation, decimal_separator>(
+						if (!IntegerCastLoop<ExponentData, true, false, IntegerCastOperation, decimal_separator>(
 						        buf + pos, len - pos, exponent, strict)) {
 							return false;
 						}
 					} else {
-						if (!IntegerCastLoop<ExponentData, false, false, SimpleIntegerCastOperation, decimal_separator>(
+						if (!IntegerCastLoop<ExponentData, false, false, IntegerCastOperation, decimal_separator>(
 						        buf + pos, len - pos, exponent, strict)) {
 							return false;
 						}
