@@ -315,9 +315,9 @@ void Executor::VerifyPipelines() {
 #endif
 }
 
-void Executor::Initialize(unique_ptr<PhysicalOperator> physical_plan) {
+void Executor::Initialize(unique_ptr<PhysicalOperator> physical_plan_p) {
 	Reset();
-	owned_plan = std::move(physical_plan);
+	owned_plan = std::move(physical_plan_p);
 	InitializeInternal(*owned_plan);
 }
 
@@ -415,42 +415,42 @@ void Executor::CancelTasks() {
 void Executor::WorkOnTasks() {
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 
-	shared_ptr<Task> task;
-	while (scheduler.GetTaskFromProducer(*producer, task)) {
-		auto res = task->Execute(TaskExecutionMode::PROCESS_ALL);
+	shared_ptr<Task> task_from_producer;
+	while (scheduler.GetTaskFromProducer(*producer, task_from_producer)) {
+		auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
 		if (res == TaskExecutionResult::TASK_BLOCKED) {
-			task->Deschedule();
+			task_from_producer->Deschedule();
 		}
-		task.reset();
+		task_from_producer.reset();
 	}
 }
 
-void Executor::RescheduleTask(shared_ptr<Task> &task) {
+void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 	// This function will spin lock until the task provided is added to the to_be_rescheduled_tasks
 	while (true) {
 		lock_guard<mutex> l(executor_lock);
 		if (cancelled) {
 			return;
 		}
-		auto entry = to_be_rescheduled_tasks.find(task.get());
+		auto entry = to_be_rescheduled_tasks.find(task_p.get());
 		if (entry != to_be_rescheduled_tasks.end()) {
 			auto &scheduler = TaskScheduler::GetScheduler(context);
-			to_be_rescheduled_tasks.erase(task.get());
-			scheduler.ScheduleTask(GetToken(), task);
+			to_be_rescheduled_tasks.erase(task_p.get());
+			scheduler.ScheduleTask(GetToken(), task_p);
 			break;
 		}
 	}
 }
 
-void Executor::AddToBeRescheduled(shared_ptr<Task> &task) {
+void Executor::AddToBeRescheduled(shared_ptr<Task> &task_p) {
 	lock_guard<mutex> l(executor_lock);
 	if (cancelled) {
 		return;
 	}
-	if (to_be_rescheduled_tasks.find(task.get()) != to_be_rescheduled_tasks.end()) {
+	if (to_be_rescheduled_tasks.find(task_p.get()) != to_be_rescheduled_tasks.end()) {
 		return;
 	}
-	to_be_rescheduled_tasks[task.get()] = std::move(task);
+	to_be_rescheduled_tasks[task_p.get()] = std::move(task_p);
 }
 
 bool Executor::ExecutionIsFinished() {
@@ -577,12 +577,13 @@ void Executor::Flush(ThreadContext &tcontext) {
 	profiler->Flush(tcontext.profiler);
 }
 
-bool Executor::GetPipelinesProgress(double &current_progress) { // LCOV_EXCL_START
+bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_cardinality,
+                                    uint64_t &total_cardinality) { // LCOV_EXCL_START
 	lock_guard<mutex> elock(executor_lock);
 
 	vector<double> progress;
 	vector<idx_t> cardinality;
-	idx_t total_cardinality = 0;
+	total_cardinality = 0;
 	for (auto &pipeline : pipelines) {
 		double child_percentage;
 		idx_t child_cardinality;
@@ -594,11 +595,14 @@ bool Executor::GetPipelinesProgress(double &current_progress) { // LCOV_EXCL_STA
 		cardinality.push_back(child_cardinality);
 		total_cardinality += child_cardinality;
 	}
-	current_progress = 0;
+	current_cardinality = 0;
 	if (total_cardinality == 0) {
 		return true;
 	}
+	current_progress = 0;
+
 	for (size_t i = 0; i < progress.size(); i++) {
+		current_cardinality += double(progress[i]) * double(cardinality[i]) / double(100);
 		current_progress += progress[i] * double(cardinality[i]) / double(total_cardinality);
 	}
 	return true;

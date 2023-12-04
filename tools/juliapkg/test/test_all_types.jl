@@ -6,7 +6,15 @@
     db = DBInterface.connect(DuckDB.DB)
     con = DBInterface.connect(db)
 
-    df = DataFrame(DBInterface.execute(con, "SELECT * FROM test_all_types()"))
+    df = DataFrame(
+        DBInterface.execute(
+            con,
+            """SELECT * EXCLUDE(time)
+                , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time
+            FROM test_all_types()
+            """
+        )
+    )
     #println(names(df))
     # we can also use 'propertynames()' to get the column names as symbols, that might make for a better testing approach
     # If we add a dictionary that maps from the symbol to the expected result

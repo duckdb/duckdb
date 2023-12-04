@@ -25,6 +25,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_option.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -86,81 +87,85 @@ BoundPivotInfo BoundPivotInfo::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
+template <typename T>
+void CSVOption<T>::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<bool>(100, "set_by_user", set_by_user);
+	serializer.WriteProperty<T>(101, "value", value);
+}
+
+template <typename T>
+CSVOption<T> CSVOption<T>::Deserialize(Deserializer &deserializer) {
+	CSVOption<T> result;
+	deserializer.ReadPropertyWithDefault<bool>(100, "set_by_user", result.set_by_user);
+	deserializer.ReadProperty<T>(101, "value", result.value);
+	return result;
+}
+
 void CSVReaderOptions::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<bool>(100, "has_delimiter", has_delimiter);
-	serializer.WritePropertyWithDefault<bool>(101, "has_quote", has_quote);
-	serializer.WritePropertyWithDefault<bool>(102, "has_escape", has_escape);
-	serializer.WritePropertyWithDefault<bool>(103, "has_header", has_header);
-	serializer.WritePropertyWithDefault<bool>(104, "ignore_errors", ignore_errors);
-	serializer.WritePropertyWithDefault<idx_t>(105, "buffer_sample_size", buffer_sample_size);
-	serializer.WritePropertyWithDefault<string>(106, "null_str", null_str);
-	serializer.WriteProperty<FileCompressionType>(107, "compression", compression);
-	serializer.WritePropertyWithDefault<bool>(108, "allow_quoted_nulls", allow_quoted_nulls);
-	serializer.WritePropertyWithDefault<bool>(109, "skip_rows_set", skip_rows_set);
-	serializer.WritePropertyWithDefault<idx_t>(110, "maximum_line_size", maximum_line_size);
-	serializer.WritePropertyWithDefault<bool>(111, "normalize_names", normalize_names);
-	serializer.WritePropertyWithDefault<vector<bool>>(112, "force_not_null", force_not_null);
-	serializer.WritePropertyWithDefault<bool>(113, "all_varchar", all_varchar);
-	serializer.WritePropertyWithDefault<idx_t>(114, "sample_size_chunks", sample_size_chunks);
-	serializer.WritePropertyWithDefault<bool>(115, "auto_detect", auto_detect);
-	serializer.WritePropertyWithDefault<string>(116, "file_path", file_path);
-	serializer.WritePropertyWithDefault<string>(117, "decimal_separator", decimal_separator);
-	serializer.WritePropertyWithDefault<bool>(118, "null_padding", null_padding);
-	serializer.WritePropertyWithDefault<idx_t>(119, "buffer_size", buffer_size);
-	serializer.WriteProperty<MultiFileReaderOptions>(120, "file_options", file_options);
-	serializer.WritePropertyWithDefault<vector<bool>>(121, "force_quote", force_quote);
-	serializer.WritePropertyWithDefault<string>(122, "rejects_table_name", rejects_table_name);
-	serializer.WritePropertyWithDefault<idx_t>(123, "rejects_limit", rejects_limit);
-	serializer.WritePropertyWithDefault<vector<string>>(124, "rejects_recovery_columns", rejects_recovery_columns);
-	serializer.WritePropertyWithDefault<vector<idx_t>>(125, "rejects_recovery_column_ids", rejects_recovery_column_ids);
-	serializer.WriteProperty<char>(126, "dialect_options.state_machine_options.delimiter", dialect_options.state_machine_options.delimiter);
-	serializer.WriteProperty<char>(127, "dialect_options.state_machine_options.quote", dialect_options.state_machine_options.quote);
-	serializer.WriteProperty<char>(128, "dialect_options.state_machine_options.escape", dialect_options.state_machine_options.escape);
-	serializer.WritePropertyWithDefault<bool>(129, "dialect_options.header", dialect_options.header);
-	serializer.WritePropertyWithDefault<idx_t>(130, "dialect_options.num_cols", dialect_options.num_cols);
-	serializer.WriteProperty<NewLineIdentifier>(131, "dialect_options.new_line", dialect_options.new_line);
-	serializer.WritePropertyWithDefault<idx_t>(132, "dialect_options.skip_rows", dialect_options.skip_rows);
-	serializer.WritePropertyWithDefault<map<LogicalTypeId, StrpTimeFormat>>(133, "dialect_options.date_format", dialect_options.date_format);
-	serializer.WritePropertyWithDefault<map<LogicalTypeId, bool>>(134, "dialect_options.has_format", dialect_options.has_format);
+	serializer.WritePropertyWithDefault<bool>(100, "ignore_errors", ignore_errors);
+	serializer.WritePropertyWithDefault<idx_t>(101, "buffer_sample_size", buffer_sample_size);
+	serializer.WritePropertyWithDefault<string>(102, "null_str", null_str);
+	serializer.WriteProperty<FileCompressionType>(103, "compression", compression);
+	serializer.WritePropertyWithDefault<bool>(104, "allow_quoted_nulls", allow_quoted_nulls);
+	serializer.WritePropertyWithDefault<idx_t>(105, "maximum_line_size", maximum_line_size);
+	serializer.WritePropertyWithDefault<bool>(106, "normalize_names", normalize_names);
+	serializer.WritePropertyWithDefault<vector<bool>>(107, "force_not_null", force_not_null);
+	serializer.WritePropertyWithDefault<bool>(108, "all_varchar", all_varchar);
+	serializer.WritePropertyWithDefault<idx_t>(109, "sample_size_chunks", sample_size_chunks);
+	serializer.WritePropertyWithDefault<bool>(110, "auto_detect", auto_detect);
+	serializer.WritePropertyWithDefault<string>(111, "file_path", file_path);
+	serializer.WritePropertyWithDefault<string>(112, "decimal_separator", decimal_separator);
+	serializer.WritePropertyWithDefault<bool>(113, "null_padding", null_padding);
+	serializer.WritePropertyWithDefault<idx_t>(114, "buffer_size", buffer_size);
+	serializer.WriteProperty<MultiFileReaderOptions>(115, "file_options", file_options);
+	serializer.WritePropertyWithDefault<vector<bool>>(116, "force_quote", force_quote);
+	serializer.WritePropertyWithDefault<string>(117, "rejects_table_name", rejects_table_name);
+	serializer.WritePropertyWithDefault<idx_t>(118, "rejects_limit", rejects_limit);
+	serializer.WritePropertyWithDefault<vector<string>>(119, "rejects_recovery_columns", rejects_recovery_columns);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(120, "rejects_recovery_column_ids", rejects_recovery_column_ids);
+	serializer.WriteProperty<CSVOption<char>>(121, "dialect_options.state_machine_options.delimiter", dialect_options.state_machine_options.delimiter);
+	serializer.WriteProperty<CSVOption<char>>(122, "dialect_options.state_machine_options.quote", dialect_options.state_machine_options.quote);
+	serializer.WriteProperty<CSVOption<char>>(123, "dialect_options.state_machine_options.escape", dialect_options.state_machine_options.escape);
+	serializer.WriteProperty<CSVOption<bool>>(124, "dialect_options.header", dialect_options.header);
+	serializer.WritePropertyWithDefault<idx_t>(125, "dialect_options.num_cols", dialect_options.num_cols);
+	serializer.WriteProperty<CSVOption<NewLineIdentifier>>(126, "dialect_options.new_line", dialect_options.new_line);
+	serializer.WriteProperty<CSVOption<idx_t>>(127, "dialect_options.skip_rows", dialect_options.skip_rows);
+	serializer.WriteProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "dialect_options.date_format", dialect_options.date_format);
+	serializer.WritePropertyWithDefault<string>(129, "sniffer_user_mismatch_error", sniffer_user_mismatch_error);
 }
 
 CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	CSVReaderOptions result;
-	deserializer.ReadPropertyWithDefault<bool>(100, "has_delimiter", result.has_delimiter);
-	deserializer.ReadPropertyWithDefault<bool>(101, "has_quote", result.has_quote);
-	deserializer.ReadPropertyWithDefault<bool>(102, "has_escape", result.has_escape);
-	deserializer.ReadPropertyWithDefault<bool>(103, "has_header", result.has_header);
-	deserializer.ReadPropertyWithDefault<bool>(104, "ignore_errors", result.ignore_errors);
-	deserializer.ReadPropertyWithDefault<idx_t>(105, "buffer_sample_size", result.buffer_sample_size);
-	deserializer.ReadPropertyWithDefault<string>(106, "null_str", result.null_str);
-	deserializer.ReadProperty<FileCompressionType>(107, "compression", result.compression);
-	deserializer.ReadPropertyWithDefault<bool>(108, "allow_quoted_nulls", result.allow_quoted_nulls);
-	deserializer.ReadPropertyWithDefault<bool>(109, "skip_rows_set", result.skip_rows_set);
-	deserializer.ReadPropertyWithDefault<idx_t>(110, "maximum_line_size", result.maximum_line_size);
-	deserializer.ReadPropertyWithDefault<bool>(111, "normalize_names", result.normalize_names);
-	deserializer.ReadPropertyWithDefault<vector<bool>>(112, "force_not_null", result.force_not_null);
-	deserializer.ReadPropertyWithDefault<bool>(113, "all_varchar", result.all_varchar);
-	deserializer.ReadPropertyWithDefault<idx_t>(114, "sample_size_chunks", result.sample_size_chunks);
-	deserializer.ReadPropertyWithDefault<bool>(115, "auto_detect", result.auto_detect);
-	deserializer.ReadPropertyWithDefault<string>(116, "file_path", result.file_path);
-	deserializer.ReadPropertyWithDefault<string>(117, "decimal_separator", result.decimal_separator);
-	deserializer.ReadPropertyWithDefault<bool>(118, "null_padding", result.null_padding);
-	deserializer.ReadPropertyWithDefault<idx_t>(119, "buffer_size", result.buffer_size);
-	deserializer.ReadProperty<MultiFileReaderOptions>(120, "file_options", result.file_options);
-	deserializer.ReadPropertyWithDefault<vector<bool>>(121, "force_quote", result.force_quote);
-	deserializer.ReadPropertyWithDefault<string>(122, "rejects_table_name", result.rejects_table_name);
-	deserializer.ReadPropertyWithDefault<idx_t>(123, "rejects_limit", result.rejects_limit);
-	deserializer.ReadPropertyWithDefault<vector<string>>(124, "rejects_recovery_columns", result.rejects_recovery_columns);
-	deserializer.ReadPropertyWithDefault<vector<idx_t>>(125, "rejects_recovery_column_ids", result.rejects_recovery_column_ids);
-	deserializer.ReadProperty<char>(126, "dialect_options.state_machine_options.delimiter", result.dialect_options.state_machine_options.delimiter);
-	deserializer.ReadProperty<char>(127, "dialect_options.state_machine_options.quote", result.dialect_options.state_machine_options.quote);
-	deserializer.ReadProperty<char>(128, "dialect_options.state_machine_options.escape", result.dialect_options.state_machine_options.escape);
-	deserializer.ReadPropertyWithDefault<bool>(129, "dialect_options.header", result.dialect_options.header);
-	deserializer.ReadPropertyWithDefault<idx_t>(130, "dialect_options.num_cols", result.dialect_options.num_cols);
-	deserializer.ReadProperty<NewLineIdentifier>(131, "dialect_options.new_line", result.dialect_options.new_line);
-	deserializer.ReadPropertyWithDefault<idx_t>(132, "dialect_options.skip_rows", result.dialect_options.skip_rows);
-	deserializer.ReadPropertyWithDefault<map<LogicalTypeId, StrpTimeFormat>>(133, "dialect_options.date_format", result.dialect_options.date_format);
-	deserializer.ReadPropertyWithDefault<map<LogicalTypeId, bool>>(134, "dialect_options.has_format", result.dialect_options.has_format);
+	deserializer.ReadPropertyWithDefault<bool>(100, "ignore_errors", result.ignore_errors);
+	deserializer.ReadPropertyWithDefault<idx_t>(101, "buffer_sample_size", result.buffer_sample_size);
+	deserializer.ReadPropertyWithDefault<string>(102, "null_str", result.null_str);
+	deserializer.ReadProperty<FileCompressionType>(103, "compression", result.compression);
+	deserializer.ReadPropertyWithDefault<bool>(104, "allow_quoted_nulls", result.allow_quoted_nulls);
+	deserializer.ReadPropertyWithDefault<idx_t>(105, "maximum_line_size", result.maximum_line_size);
+	deserializer.ReadPropertyWithDefault<bool>(106, "normalize_names", result.normalize_names);
+	deserializer.ReadPropertyWithDefault<vector<bool>>(107, "force_not_null", result.force_not_null);
+	deserializer.ReadPropertyWithDefault<bool>(108, "all_varchar", result.all_varchar);
+	deserializer.ReadPropertyWithDefault<idx_t>(109, "sample_size_chunks", result.sample_size_chunks);
+	deserializer.ReadPropertyWithDefault<bool>(110, "auto_detect", result.auto_detect);
+	deserializer.ReadPropertyWithDefault<string>(111, "file_path", result.file_path);
+	deserializer.ReadPropertyWithDefault<string>(112, "decimal_separator", result.decimal_separator);
+	deserializer.ReadPropertyWithDefault<bool>(113, "null_padding", result.null_padding);
+	deserializer.ReadPropertyWithDefault<idx_t>(114, "buffer_size", result.buffer_size);
+	deserializer.ReadProperty<MultiFileReaderOptions>(115, "file_options", result.file_options);
+	deserializer.ReadPropertyWithDefault<vector<bool>>(116, "force_quote", result.force_quote);
+	deserializer.ReadPropertyWithDefault<string>(117, "rejects_table_name", result.rejects_table_name);
+	deserializer.ReadPropertyWithDefault<idx_t>(118, "rejects_limit", result.rejects_limit);
+	deserializer.ReadPropertyWithDefault<vector<string>>(119, "rejects_recovery_columns", result.rejects_recovery_columns);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(120, "rejects_recovery_column_ids", result.rejects_recovery_column_ids);
+	deserializer.ReadProperty<CSVOption<char>>(121, "dialect_options.state_machine_options.delimiter", result.dialect_options.state_machine_options.delimiter);
+	deserializer.ReadProperty<CSVOption<char>>(122, "dialect_options.state_machine_options.quote", result.dialect_options.state_machine_options.quote);
+	deserializer.ReadProperty<CSVOption<char>>(123, "dialect_options.state_machine_options.escape", result.dialect_options.state_machine_options.escape);
+	deserializer.ReadProperty<CSVOption<bool>>(124, "dialect_options.header", result.dialect_options.header);
+	deserializer.ReadPropertyWithDefault<idx_t>(125, "dialect_options.num_cols", result.dialect_options.num_cols);
+	deserializer.ReadProperty<CSVOption<NewLineIdentifier>>(126, "dialect_options.new_line", result.dialect_options.new_line);
+	deserializer.ReadProperty<CSVOption<idx_t>>(127, "dialect_options.skip_rows", result.dialect_options.skip_rows);
+	deserializer.ReadProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "dialect_options.date_format", result.dialect_options.date_format);
+	deserializer.ReadPropertyWithDefault<string>(129, "sniffer_user_mismatch_error", result.sniffer_user_mismatch_error);
 	return result;
 }
 

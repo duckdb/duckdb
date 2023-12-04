@@ -7,7 +7,7 @@ CREATE TABLE no_quote(a VARCHAR, b VARCHAR);
 
 # empty quote
 query I
-COPY no_quote FROM 'test/sql/copy/csv/data/no_quote.csv' (HEADER 1, QUOTE '', ESCAPE '', AUTO_DETECT 1);
+COPY no_quote FROM 'test/sql/copy/csv/data/no_quote.csv' (HEADER 1, QUOTE '', ESCAPE '', DELIM '|',  AUTO_DETECT 0);
 ----
 3
 

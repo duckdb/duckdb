@@ -289,7 +289,8 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::DATE:
 		return Value::DATE(Date::FromDate(Date::DATE_MAX_YEAR, Date::DATE_MAX_MONTH, Date::DATE_MAX_DAY));
 	case LogicalTypeId::TIME:
-		return Value::TIME(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1));
+		//	24:00:00 according to PG
+		return Value::TIME(dtime_t(Interval::MICROS_PER_DAY));
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -644,18 +645,25 @@ Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, i
 	return val;
 }
 
-Value Value::STRUCT(child_list_t<Value> values) {
+Value Value::STRUCT(const LogicalType &type, vector<Value> struct_values) {
 	Value result;
+	auto child_types = StructType::GetChildTypes(type);
+	for (size_t i = 0; i < struct_values.size(); i++) {
+		struct_values[i] = struct_values[i].DefaultCastAs(child_types[i].second);
+	}
+	result.value_info_ = make_shared<NestedValueInfo>(std::move(struct_values));
+	result.type_ = type;
+	result.is_null = false;
+	return result;
+}
+Value Value::STRUCT(child_list_t<Value> values) {
 	child_list_t<LogicalType> child_types;
 	vector<Value> struct_values;
 	for (auto &child : values) {
 		child_types.push_back(make_pair(std::move(child.first), child.second.type()));
 		struct_values.push_back(std::move(child.second));
 	}
-	result.value_info_ = make_shared<NestedValueInfo>(std::move(struct_values));
-	result.type_ = LogicalType::STRUCT(child_types);
-	result.is_null = false;
-	return result;
+	return Value::STRUCT(LogicalType::STRUCT(child_types), std::move(struct_values));
 }
 
 Value Value::MAP(const LogicalType &child_type, vector<Value> values) { // NOLINT
