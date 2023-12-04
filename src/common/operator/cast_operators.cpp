@@ -2026,7 +2026,7 @@ struct HugeIntCastData {
 
 	ResultType decimal;
 	uint16_t decimal_total_digits;
-	uint64_t decimal_intermediate;
+	int64_t decimal_intermediate;
 	uint16_t decimal_intermediate_digits;
 
 	bool Flush() {
@@ -2171,7 +2171,7 @@ struct HugeIntegerCastOperation {
 		if (!state.Flush()) {
 			return false;
 		}
-		if (state.decimal_intermediate > (NumericLimits<uint64_t>::Maximum() - digit) / 10) {
+		if (state.decimal_intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 10) {
 			if (!state.FlushDecimal()) {
 				return false;
 			}
