@@ -837,7 +837,7 @@ struct SimpleIntegerCastOperation {
 	}
 
 	template <class T, bool NEGATIVE>
-	static bool HandleExponent(T &state, int32_t exponent) {
+	static bool HandleExponent(T &state, int16_t exponent) {
 		// SimpleIntegerCast doesn't deal with Exponents
 		return false;
 	}
@@ -874,7 +874,7 @@ struct IntegerCastData<uint64_t> {
 
 struct IntegerCastOperation {
 	template <class T, bool NEGATIVE>
-	static bool HandleDigit(T &state, uint8_t digit) {
+	static bool HandleExponent(T &state, int16_t exponent) {
 		using store_t = typename T::StoreType;
 		if (NEGATIVE) {
 			if (state.result < (NumericLimits<store_t>::Minimum() + digit) / 10) {
@@ -890,31 +890,7 @@ struct IntegerCastOperation {
 		return true;
 	}
 
-	template <class T, bool NEGATIVE>
-	static bool HandleHexDigit(T &state, uint8_t digit) {
-		using result_t = typename T::ResultType;
-		if (state.result > (NumericLimits<result_t>::Maximum() - digit) / 16) {
-			return false;
-		}
-		state.result = state.result * 16 + digit;
-		return true;
-	}
-
-	template <class T, bool NEGATIVE>
-	static bool HandleBinaryDigit(T &state, uint8_t digit) {
-		using result_t = typename T::ResultType;
-		if (state.result > (NumericLimits<result_t>::Maximum() - digit) / 2) {
-			return false;
-		}
-		state.result = state.result * 2 + digit;
-		return true;
-	}
-
-	template <class T, bool NEGATIVE>
-	static bool HandleExponent(T &state, int32_t exponent) {
-		using store_t = typename T::StoreType;
-
-		int32_t e = exponent;
+		int16_t e = exponent;
 		// Negative Exponent
 		if (e < 0) {
 			while (e++ < 0) {
@@ -1077,7 +1053,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 					if (pos >= len) {
 						return false;
 					}
-					using ExponentData = IntegerCastData<int32_t>;
+					using ExponentData = IntegerCastData<int16_t>;
 					ExponentData exponent {};
 					int negative = buf[pos] == '-';
 					if (negative) {
