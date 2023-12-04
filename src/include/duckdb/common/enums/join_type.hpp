@@ -21,12 +21,14 @@ enum class JoinType : uint8_t {
 	RIGHT = 2,   // right
 	INNER = 3,   // inner
 	OUTER = 4,   // outer
-	SEMI = 5,    // SEMI join returns left side row ONLY if it has a join partner, no duplicates
-	ANTI = 6,    // ANTI join returns left side row ONLY if it has NO join partner, no duplicates
+	SEMI = 5,    // LEFT SEMI join returns left side row ONLY if it has a join partner, no duplicates.
+	ANTI = 6,    // LEFT ANTI join returns left side row ONLY if it has NO join partner, no duplicates
 	MARK = 7,    // MARK join returns marker indicating whether or not there is a join partner (true), there is no join
 	             // partner (false)
-	SINGLE = 8   // SINGLE join is like LEFT OUTER JOIN, BUT returns at most one join partner per entry on the LEFT side
+	SINGLE = 8,  // SINGLE join is like LEFT OUTER JOIN, BUT returns at most one join partner per entry on the LEFT side
 	             // (and NULL if no partner is found)
+	RIGHT_SEMI = 9,
+	RIGHT_ANTI = 10
 };
 
 //! True if join is left or full outer join
@@ -34,6 +36,9 @@ bool IsLeftOuterJoin(JoinType type);
 
 //! True if join is rght or full outer join
 bool IsRightOuterJoin(JoinType type);
+
+//!
+bool PropogatesBuildSide(JoinType type);
 
 // **DEPRECATED**: Use EnumUtil directly instead.
 string JoinTypeToString(JoinType type);

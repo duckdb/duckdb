@@ -11,6 +11,11 @@ bool IsRightOuterJoin(JoinType type) {
 	return type == JoinType::OUTER || type == JoinType::RIGHT;
 }
 
+bool PropogatesBuildSide(JoinType type) {
+	return type == JoinType::OUTER || type == JoinType::RIGHT || type == JoinType::RIGHT_ANTI ||
+	       type == JoinType::RIGHT_SEMI;
+}
+
 // **DEPRECATED**: Use EnumUtil directly instead.
 string JoinTypeToString(JoinType type) {
 	return EnumUtil::ToString(type);
