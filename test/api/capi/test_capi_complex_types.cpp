@@ -302,7 +302,7 @@ TEST_CASE("Logical types with aliases", "[capi]") {
 	}
 }
 
-template<class T>
+template <class T>
 static void RoundTrip(CAPITester &tester, T expected, duckdb_type type) {
 	auto val = duckdb_create_value(type, &expected);
 
