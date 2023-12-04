@@ -101,9 +101,6 @@ unique_ptr<PathPattern> Transformer::TransformPath(duckdb_libpgquery::PGPathPatt
 	result->shortest = root->shortest;
 	result->group = root->group;
 	result->topk = root->topk;
-//	if (result->all) {
-//		throw NotImplementedException("ALL has not been implemented yet.");
-//	}
 	if (result->all && result->shortest) {
 		throw NotImplementedException("ALL SHORTEST has not been implemented yet.");
 	}
