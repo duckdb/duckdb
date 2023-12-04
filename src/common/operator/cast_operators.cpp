@@ -802,12 +802,12 @@ struct IntegerCastOperation {
 	static bool HandleDigit(T &state, uint8_t digit) {
 		using result_t = typename T::ResultType;
 		if (NEGATIVE) {
-			if (state.result < (NumericLimits<result_t>::Minimum() + digit) / 10) {
+			if (DUCKDB_UNLIKELY(state.result < (NumericLimits<result_t>::Minimum() + digit) / 10)) {
 				return false;
 			}
 			state.result = state.result * 10 - digit;
 		} else {
-			if (state.result > (NumericLimits<result_t>::Maximum() - digit) / 10) {
+			if (DUCKDB_UNLIKELY(state.result > (NumericLimits<result_t>::Maximum() - digit) / 10)) {
 				return false;
 			}
 			state.result = state.result * 10 + digit;
@@ -818,7 +818,7 @@ struct IntegerCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleHexDigit(T &state, uint8_t digit) {
 		using result_t = typename T::ResultType;
-		if (state.result > (NumericLimits<result_t>::Maximum() - digit) / 16) {
+		if (DUCKDB_UNLIKELY(state.result > (NumericLimits<result_t>::Maximum() - digit) / 16)) {
 			return false;
 		}
 		state.result = state.result * 16 + digit;
@@ -828,7 +828,7 @@ struct IntegerCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleBinaryDigit(T &state, uint8_t digit) {
 		using result_t = typename T::ResultType;
-		if (state.result > (NumericLimits<result_t>::Maximum() - digit) / 2) {
+		if (DUCKDB_UNLIKELY(state.result > (NumericLimits<result_t>::Maximum() - digit) / 2)) {
 			return false;
 		}
 		state.result = state.result * 2 + digit;
@@ -935,7 +935,7 @@ struct IntegerDecimalCastOperation : IntegerCastOperation {
 	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
 	static bool HandleDecimal(T &state, uint8_t digit) {
 		using store_t = typename T::StoreType;
-		if (state.decimal > (NumericLimits<store_t>::Maximum() - digit) / 10) {
+		if (DUCKDB_UNLIKELY(state.decimal > (NumericLimits<store_t>::Maximum() - digit) / 10)) {
 			// Simply ignore any more decimals
 			return true;
 		}
@@ -1880,7 +1880,7 @@ struct HugeIntegerCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleDigit(T &state, uint8_t digit) {
 		if (NEGATIVE) {
-			if (state.intermediate < (NumericLimits<int64_t>::Minimum() + digit) / 10) {
+			if (DUCKDB_UNLIKELY(state.intermediate < (NumericLimits<int64_t>::Minimum() + digit) / 10)) {
 				// intermediate is full: need to flush it
 				if (!state.Flush()) {
 					return false;
@@ -1888,7 +1888,7 @@ struct HugeIntegerCastOperation {
 			}
 			state.intermediate = state.intermediate * 10 - digit;
 		} else {
-			if (state.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 10) {
+			if (DUCKDB_UNLIKELY(state.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 10)) {
 				if (!state.Flush()) {
 					return false;
 				}
@@ -1971,7 +1971,7 @@ struct HugeIntegerCastOperation {
 		if (!state.Flush()) {
 			return false;
 		}
-		if (state.decimal_intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 10) {
+		if (DUCKDB_UNLIKELY(state.decimal_intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 10)) {
 			if (!state.FlushDecimal()) {
 				return false;
 			}
