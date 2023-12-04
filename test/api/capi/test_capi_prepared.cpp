@@ -453,7 +453,7 @@ TEST_CASE("Prepared streaming result", "[capi]") {
 			duckdb_destroy_logical_type(&type);
 
 			auto data = (int32_t *)duckdb_vector_get_data(vec);
-			REQUIRE(data[0] == i + 1);
+			REQUIRE(data[0] == (int32_t)(i + 1));
 
 			REQUIRE(duckdb_stream_fetch_chunk(res) == nullptr);
 
