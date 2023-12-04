@@ -903,7 +903,6 @@ struct IntegerDecimalCastOperation : IntegerCastOperation {
 		}
 
 		// Handle decimals
-		
 		e = exponent - state.decimal_digits;
 		store_t remainder = 0;
 		if (e < 0) {
@@ -978,8 +977,7 @@ struct IntegerDecimalCastOperation : IntegerCastOperation {
 	}
 };
 
-template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = IntegerCastOperation,
-          char decimal_separator = '.'>
+template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = IntegerCastOperation, char decimal_separator = '.'>
 static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) {
 	idx_t start_pos;
 	if (NEGATIVE) {
@@ -1191,8 +1189,7 @@ static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 template <typename T, bool IS_SIGNED = true>
 static inline bool TrySimpleIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	IntegerCastData<T> simple_data;
-	if (TryIntegerCast<IntegerCastData<T>, IS_SIGNED, false, IntegerCastOperation>(buf, len, simple_data,
-	                                                                                           strict)) {
+	if (TryIntegerCast<IntegerCastData<T>, IS_SIGNED, false, IntegerCastOperation>(buf, len, simple_data, strict)) {
 		result = (T)simple_data.result;
 		return true;
 	}
@@ -1201,7 +1198,8 @@ static inline bool TrySimpleIntegerCast(const char *buf, idx_t len, T &result, b
 	// FIXME: This could definitely be improved as some extra work is being done here. It is more important that
 	//  "normal" integers (without exponent/decimals) are still being parsed quickly.
 	IntegerDecimalCastData<T> cast_data;
-	if (TryIntegerCast<IntegerDecimalCastData<T>, IS_SIGNED, true, IntegerDecimalCastOperation>(buf, len, cast_data, strict)) {
+	if (TryIntegerCast<IntegerDecimalCastData<T>, IS_SIGNED, true, IntegerDecimalCastOperation>(buf, len, cast_data,
+	                                                                                            strict)) {
 		result = (T)cast_data.result;
 		return true;
 	}
