@@ -29,8 +29,8 @@ public:
 
 	bool Equals(const PathReference *other_p) const override;
 
-	void Serialize(FieldWriter &writer) const override;
+	void Serialize(Serializer &serializer) const override;
 
-	static unique_ptr<PathReference> Deserialize(FieldReader &reader);
+	static unique_ptr<PathReference> Deserialize(Deserializer &deserializer);
 };
 } // namespace duckdb

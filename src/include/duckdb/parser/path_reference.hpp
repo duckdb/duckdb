@@ -24,8 +24,6 @@ public:
 
 	DUCKDB_API virtual void Serialize(Serializer &serializer) const;
 
-	DUCKDB_API virtual void Serialize(FieldWriter &writer) const = 0;
-
 	DUCKDB_API static unique_ptr<PathReference> Deserialize(Deserializer &deserializer);
 };
 

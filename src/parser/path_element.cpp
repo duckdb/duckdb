@@ -1,3 +1,5 @@
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/path_element.hpp"
 #include "duckdb/parser/path_reference.hpp"
 
@@ -21,17 +23,20 @@ bool PathElement::Equals(const PathReference *other_p) const {
 	return true;
 }
 
-void PathElement::Serialize(FieldWriter &writer) const {
-	writer.WriteField<PGQMatchType>(match_type);
-	writer.WriteString(label);
-	writer.WriteString(variable_binding);
+void PathElement::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty(100, "match_type", match_type);
+	serializer.WriteProperty(101, "label", label);
+	serializer.WriteProperty(101, "variable_binding", variable_binding);
 }
 
-unique_ptr<PathReference> PathElement::Deserialize(FieldReader &reader) {
+unique_ptr<PathReference> PathElement::Deserialize(Deserializer &deserializer) {
 	auto result = make_uniq<PathElement>(PGQPathReferenceType::PATH_ELEMENT);
-	result->match_type = reader.ReadRequired<PGQMatchType>();
-	result->label = reader.ReadRequired<string>();
-	result->variable_binding = reader.ReadRequired<string>();
+	deserializer.ReadProperty(100, "match_type", result->match_type);
+	deserializer.ReadProperty(101, "label", result->label);
+	deserializer.ReadProperty(102, "variable_binding", result->variable_binding);
+//	result->match_type = reader.ReadRequired<PGQMatchType>();
+//	result->label = reader.ReadRequired<string>();
+//	result->variable_binding = reader.ReadRequired<string>();
 	return std::move(result);
 }
 
