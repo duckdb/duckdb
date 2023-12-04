@@ -12,6 +12,7 @@ using namespace duckdb_adbc;
 bool SUCCESS(AdbcStatusCode status) {
 	return status == ADBC_STATUS_OK;
 }
+
 const char *duckdb_lib = std::getenv("DUCKDB_INSTALL_LIB");
 class ADBCTestDatabase {
 public:
@@ -1077,26 +1078,26 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 
 	// Lets first try what works
 	// 1. Test ADBC_OBJECT_DEPTH_DB_SCHEMAS
+	{
+		ADBCTestDatabase db("ADBC_OBJECT_DEPTH_DB_SCHEMAS.db");
+		// Create Arrow Result
+		auto input_data = db.QueryArrow("SELECT 42");
+		// Create Table 'my_table' from the Arrow Result
+		db.CreateTable("my_table", input_data);
 
-	ADBCTestDatabase db("ADBC_OBJECT_DEPTH_DB_SCHEMAS.db");
-	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42");
-	// Create Table 'my_table' from the Arrow Result
-	db.CreateTable("my_table", input_data);
+		AdbcError adbc_error;
+		InitializeADBCError(&adbc_error);
+		ArrowArrayStream arrow_stream;
 
-	AdbcError adbc_error;
-	InitializeADBCError(&adbc_error);
-	ArrowArrayStream arrow_stream;
-
-	AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr, nullptr, nullptr, nullptr,
-	                         nullptr, &arrow_stream, &adbc_error);
-	db.CreateTable("result", arrow_stream);
-	auto res = db.Query("Select * from result");
-	REQUIRE(res->ColumnCount() == 1);
-	REQUIRE(res->GetValue(0, 0).ToString() == "main");
-	db.QueryArrow("Drop table result;");
-	TestFilters(db, adbc_error, ADBC_OBJECT_DEPTH_DB_SCHEMAS);
-
+		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr, nullptr, nullptr, nullptr,
+		                         nullptr, &arrow_stream, &adbc_error);
+		db.CreateTable("result", arrow_stream);
+		auto res = db.Query("Select * from result");
+		REQUIRE(res->ColumnCount() == 1);
+		REQUIRE(res->GetValue(0, 0).ToString() == "main");
+		db.QueryArrow("Drop table result;");
+		TestFilters(db, adbc_error, ADBC_OBJECT_DEPTH_DB_SCHEMAS);
+	}
 	// 2. Test ADBC_OBJECT_DEPTH_TABLES
 	{
 		ADBCTestDatabase db("test_table_depth");
