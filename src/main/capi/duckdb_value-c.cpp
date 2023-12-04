@@ -44,10 +44,32 @@ duckdb_value duckdb_create_value(duckdb_type type, void *data) {
 		return WrapValue(new duckdb::Value(*reinterpret_cast<int32_t *>(data)));
 	case DUCKDB_TYPE_BOOLEAN:
 		return WrapValue(new duckdb::Value(duckdb::Value::BOOLEAN(*reinterpret_cast<bool *>(data))));
+	case DUCKDB_TYPE_TINYINT:
+		return WrapValue(new duckdb::Value(duckdb::Value::TINYINT(*reinterpret_cast<int8_t *>(data))));
 	case DUCKDB_TYPE_UTINYINT:
 		return WrapValue(new duckdb::Value(duckdb::Value::UTINYINT(*reinterpret_cast<uint8_t *>(data))));
 	case DUCKDB_TYPE_UINTEGER:
 		return WrapValue(new duckdb::Value(duckdb::Value::UINTEGER(*reinterpret_cast<uint32_t *>(data))));
+	case DUCKDB_TYPE_UBIGINT:
+		return WrapValue(new duckdb::Value(duckdb::Value::UBIGINT(*reinterpret_cast<uint64_t *>(data))));
+	case DUCKDB_TYPE_DOUBLE:
+		return WrapValue(new duckdb::Value(duckdb::Value::DOUBLE(*reinterpret_cast<double *>(data))));
+	case DUCKDB_TYPE_DATE:
+		return WrapValue(new duckdb::Value(duckdb::Value::DATE(*reinterpret_cast<duckdb::date_t *>(data))));
+	case DUCKDB_TYPE_TIME:
+		return WrapValue(new duckdb::Value(duckdb::Value::TIME(*reinterpret_cast<duckdb::dtime_t *>(data))));
+	case DUCKDB_TYPE_TIMESTAMP:
+		return WrapValue(new duckdb::Value(duckdb::Value::TIMESTAMP(*reinterpret_cast<duckdb::timestamp_t *>(data))));
+	case DUCKDB_TYPE_INTERVAL:
+		return WrapValue(new duckdb::Value(duckdb::Value::INTERVAL(*reinterpret_cast<duckdb::interval_t *>(data))));
+	case DUCKDB_TYPE_HUGEINT:
+		return WrapValue(new duckdb::Value(duckdb::Value::HUGEINT(*reinterpret_cast<duckdb::hugeint_t *>(data))));
+	case DUCKDB_TYPE_FLOAT:
+		return WrapValue(new duckdb::Value(duckdb::Value::FLOAT(*reinterpret_cast<float *>(data))));
+	case DUCKDB_TYPE_BLOB:
+		return WrapValue(new duckdb::Value(duckdb::Value::BLOB_RAW(reinterpret_cast<const char *>(data))));
+	case DUCKDB_TYPE_INVALID:
+		return nullptr;
 	default:
 		return nullptr;
 	}

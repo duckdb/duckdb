@@ -330,6 +330,26 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 
 	RoundTrip<uint8_t>(tester, 1, DUCKDB_TYPE_UTINYINT);
 	RoundTrip<bool>(tester, true, DUCKDB_TYPE_BOOLEAN);
+	RoundTrip<int8_t>(tester, 1, DUCKDB_TYPE_TINYINT);
+	RoundTrip<int16_t>(tester, 1, DUCKDB_TYPE_SMALLINT);
+	RoundTrip<int32_t>(tester, 1, DUCKDB_TYPE_INTEGER);
+	RoundTrip<int64_t>(tester, 1, DUCKDB_TYPE_BIGINT);
+	RoundTrip<uint8_t>(tester, 1, DUCKDB_TYPE_UTINYINT);
+	RoundTrip<uint16_t>(tester, 1, DUCKDB_TYPE_USMALLINT);
+	RoundTrip<uint32_t>(tester, 1, DUCKDB_TYPE_UINTEGER);
+	RoundTrip<uint64_t>(tester, 1, DUCKDB_TYPE_UBIGINT);
+	RoundTrip<float>(tester, 1.0f, DUCKDB_TYPE_FLOAT);
+	RoundTrip<double>(tester, 1.0, DUCKDB_TYPE_DOUBLE);
+	/*
+	RoundTrip<string_t>(tester, string_t("hello"), DUCKDB_TYPE_VARCHAR);
+	RoundTrip<duckdb_date>(tester, duckdb_date{2019, 1, 1}, DUCKDB_TYPE_DATE);
+	RoundTrip<duckdb_time>(tester, duckdb_time{1, 1, 1, 1}, DUCKDB_TYPE_TIME);
+	RoundTrip<duckdb_timestamp>(tester, duckdb_timestamp{2019, 1, 1, 1, 1, 1, 1}, DUCKDB_TYPE_TIMESTAMP);
+	RoundTrip<duckdb_interval>(tester, duckdb_interval{1, 1, 1, 1, 1}, DUCKDB_TYPE_INTERVAL);
+	RoundTrip<duckdb_hugeint>(tester, duckdb_hugeint{1, 1}, DUCKDB_TYPE_HUGEINT);
+	RoundTrip<duckdb_blob>(tester, duckdb_blob{1, nullptr}, DUCKDB_TYPE_BLOB);
+	RoundTrip<duckdb_interval>(tester, duckdb_interval{1, 1, 1, 1, 1}, DUCKDB_TYPE_INTERVAL);
+	*/
 }
 
 TEST_CASE("Statement types", "[capi]") {
