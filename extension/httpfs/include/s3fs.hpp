@@ -77,45 +77,13 @@ struct S3ConfigParams {
 	static S3ConfigParams ReadFrom(FileOpener *opener);
 };
 
-//! Registered Credential class for S3.
-class S3Secret : public BaseKeyValueSecret {
+class S3SecretHelper {
 public:
-	static case_insensitive_set_t GetRedactionSet() {
-		return {"secret_access_key", "session_token"};
-	}
-	S3Secret(BaseKeyValueSecret &secret) : BaseKeyValueSecret(secret) {};
-	S3Secret(BaseSecret &secret) : BaseKeyValueSecret(secret) {};
-	S3Secret(vector<string> &prefix_paths_p, string &type, string &provider, string &name, S3AuthParams &params)
-	    : BaseKeyValueSecret(prefix_paths_p, type, provider, name) {
-		secret_map["region"] = params.region;
-		secret_map["access_key_id"] = params.access_key_id;
-		secret_map["secret_access_key"] = params.secret_access_key;
-		secret_map["session_token"] = params.session_token;
-		secret_map["endpoint"] = params.endpoint;
-		secret_map["url_style"] = params.url_style;
-		secret_map["use_ssl"] = params.use_ssl ? "true" : "false";
-		secret_map["s3_url_compatibility_mode"] = params.s3_url_compatibility_mode ? "true" : "false";
-	};
-
-	S3AuthParams GetParams() const {
-		S3AuthParams params;
-		params.region = secret_map.at("region");
-		params.access_key_id = secret_map.at("access_key_id");
-		params.secret_access_key = secret_map.at("secret_access_key");
-		params.session_token = secret_map.at("session_token");
-		params.endpoint = secret_map.at("endpoint");
-		params.url_style = secret_map.at("url_style");
-		params.use_ssl = BooleanValue::Get(Value(secret_map.at("use_ssl")).DefaultCastAs(LogicalType::BOOLEAN));
-		params.s3_url_compatibility_mode =
-		    BooleanValue::Get(Value(secret_map.at("s3_url_compatibility_mode")).DefaultCastAs(LogicalType::BOOLEAN));
-
-		return params;
-	}
-
-	//! List of keys that should be redacted
-	virtual case_insensitive_set_t GetRedactionKeys() const {
-		return {"secret_access_key", "session_token"};
-	}
+	//! Create an S3 type secret
+	static unique_ptr<KeyValueSecret> CreateSecret(vector<string> &prefix_paths_p, string &type, string &provider,
+	                                               string &name, S3AuthParams &params);
+	//! Parse S3AuthParams from secret
+	static S3AuthParams GetParams(const KeyValueSecret &secret);
 };
 
 class S3FileSystem;

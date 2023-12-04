@@ -131,22 +131,20 @@ protected:
 	bool serializable;
 };
 
-//! The BaseKeyValueSecret is a base class that implements a Secret as a set of key -> value strings. This class
-//! implements some features that all secret implementations that consist of only a key->value map of strings need.
-//! Deriving from this class instead of the BaseSecret class removes the need to re-implement serialization for each
-//! secret
-class BaseKeyValueSecret : public BaseSecret {
+//! The KeyValueSecret is a class that implements a Secret as a set of key -> value strings. This class can be used
+//! for most use-cases of secrets as secrets generally tend to fit in a key value map.
+class KeyValueSecret : public BaseSecret {
 public:
-	BaseKeyValueSecret(vector<string> &prefix_paths, const string &type, const string &provider, const string &name)
+	KeyValueSecret(vector<string> &prefix_paths, const string &type, const string &provider, const string &name)
 	    : BaseSecret(prefix_paths, type, provider, name) {
 		D_ASSERT(!type.empty());
 		serializable = true;
 	}
-	BaseKeyValueSecret(BaseSecret &secret)
+	KeyValueSecret(BaseSecret &secret)
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		serializable = true;
 	};
-	BaseKeyValueSecret(BaseKeyValueSecret &secret)
+	KeyValueSecret(KeyValueSecret &secret)
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		secret_map = secret.secret_map;
 		serializable = true;
@@ -162,21 +160,24 @@ public:
 		Value secret_map_value;
 		deserializer.ReadProperty(201, "secret_map", secret_map_value);
 
-		auto list_of_map = ListValue::GetChildren(secret_map_value);
-		for (const auto &entry : list_of_map) {
+		for (const auto &entry : ListValue::GetChildren(secret_map_value)) {
 			auto kv_struct = StructValue::GetChildren(entry);
 			result->secret_map[kv_struct[0].ToString()] = kv_struct[1].ToString();
+		}
+
+		Value redact_set_value;
+		deserializer.ReadProperty(202, "redact_keys", redact_set_value);
+		for (const auto &entry : ListValue::GetChildren(redact_set_value)) {
+			result->redact_keys.insert(entry.ToString());
 		}
 
 		return result;
 	}
 
-protected:
-	//! Virtual function that returns the set of keys that are considered sensitive and should be redacted
-	virtual case_insensitive_set_t GetRedactionKeys() const;
-
 	//! the map of key -> values that make up the secret
 	map<string, string> secret_map;
+	//! keys that are sensitive and should be redacted
+	case_insensitive_set_t redact_keys;
 };
 
 } // namespace duckdb

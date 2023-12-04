@@ -59,8 +59,7 @@ unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(Cli
 		}
 	}
 
-	auto secret = make_uniq<S3Secret>(scope, input.type, input.provider, input.name, params);
-	return secret;
+	return S3SecretHelper::CreateSecret(scope, input.type, input.provider, input.name, params);
 }
 
 unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateS3SecretFromSettings(ClientContext &context,
@@ -110,7 +109,7 @@ void CreateS3SecretFunctions::RegisterCreateSecretFunction(DatabaseInstance &ins
 	// Register the new type
 	SecretType secret_type;
 	secret_type.name = type;
-	secret_type.deserializer = BaseKeyValueSecret::Deserialize<S3Secret>;
+	secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
 	secret_type.default_provider = "config";
 
 	ExtensionUtil::RegisterSecretType(instance, secret_type);

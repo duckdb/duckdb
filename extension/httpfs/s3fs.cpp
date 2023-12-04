@@ -202,9 +202,9 @@ unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(FileOpener *ope
 
 	// Return the stored credentials
 	const auto secret = secret_lookup->secret;
-	const auto &s3_credentials = dynamic_cast<const S3Secret &>(*secret);
+	const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret);
 
-	return make_uniq<S3AuthParams>(s3_credentials.GetParams());
+	return make_uniq<S3AuthParams>(S3SecretHelper::GetParams(kv_secret));
 }
 
 S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener, FileOpenerInfo &info) {
@@ -273,6 +273,42 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener, FileOpenerInfo &info) {
 
 	return {region,   access_key_id, secret_access_key, session_token,
 	        endpoint, url_style,     use_ssl,           s3_url_compatibility_mode};
+}
+
+unique_ptr<KeyValueSecret> S3SecretHelper::CreateSecret(vector<string> &prefix_paths_p, string &type, string &provider,
+                                                        string &name, S3AuthParams &params) {
+	auto return_value = make_uniq<KeyValueSecret>(prefix_paths_p, type, provider, name);
+
+	//! Set key value map
+	return_value->secret_map["region"] = params.region;
+	return_value->secret_map["access_key_id"] = params.access_key_id;
+	return_value->secret_map["secret_access_key"] = params.secret_access_key;
+	return_value->secret_map["session_token"] = params.session_token;
+	return_value->secret_map["endpoint"] = params.endpoint;
+	return_value->secret_map["url_style"] = params.url_style;
+	return_value->secret_map["use_ssl"] = params.use_ssl ? "true" : "false";
+	return_value->secret_map["s3_url_compatibility_mode"] = params.s3_url_compatibility_mode ? "true" : "false";
+
+	//! Set redact keys
+	return_value->redact_keys = {"secret_access_key", "session_token"};
+
+	return return_value;
+}
+
+S3AuthParams S3SecretHelper::GetParams(const KeyValueSecret &secret) {
+	S3AuthParams params;
+
+	params.region = secret.secret_map.at("region");
+	params.access_key_id = secret.secret_map.at("access_key_id");
+	params.secret_access_key = secret.secret_map.at("secret_access_key");
+	params.session_token = secret.secret_map.at("session_token");
+	params.endpoint = secret.secret_map.at("endpoint");
+	params.url_style = secret.secret_map.at("url_style");
+	params.use_ssl = BooleanValue::Get(Value(secret.secret_map.at("use_ssl")).DefaultCastAs(LogicalType::BOOLEAN));
+	params.s3_url_compatibility_mode =
+	    BooleanValue::Get(Value(secret.secret_map.at("s3_url_compatibility_mode")).DefaultCastAs(LogicalType::BOOLEAN));
+
+	return params;
 }
 
 S3FileHandle::~S3FileHandle() {

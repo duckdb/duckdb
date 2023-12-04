@@ -36,11 +36,8 @@ void BaseSecret::Serialize(Serializer &serializer) const {
 	throw InternalException("Attempted to serialize secret without serialize");
 }
 
-string BaseKeyValueSecret::ToString(bool redact) const {
+string KeyValueSecret::ToString(bool redact) const {
 	string result;
-
-	// Fetch the redaction set using virtual method
-	auto redact_keys = GetRedactionKeys();
 
 	result += "name=" + name + ";";
 	result += "type=" + type + ";";
@@ -69,11 +66,10 @@ string BaseKeyValueSecret::ToString(bool redact) const {
 	return result;
 }
 
-void BaseKeyValueSecret::Serialize(Serializer &serializer) const {
+void KeyValueSecret::Serialize(Serializer &serializer) const {
 	BaseSecret::SerializeBaseSecret(serializer);
 
 	vector<Value> map_values;
-
 	for (auto it = secret_map.begin(); it != secret_map.end(); it++) {
 		child_list_t<Value> map_struct;
 		map_struct.push_back(make_pair("key", Value(it->first)));
@@ -84,10 +80,13 @@ void BaseKeyValueSecret::Serialize(Serializer &serializer) const {
 	auto map_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 	auto map = Value::MAP(ListType::GetChildType(map_type), map_values);
 	serializer.WriteProperty(201, "secret_map", map);
-}
 
-case_insensitive_set_t BaseKeyValueSecret::GetRedactionKeys() const {
-	return {};
+	vector<Value> redact_key_values;
+	for (auto it = redact_keys.begin(); it != redact_keys.end(); it++) {
+		redact_key_values.push_back(*it);
+	}
+	auto list = Value::LIST(LogicalType::VARCHAR, redact_key_values);
+	serializer.WriteProperty(202, "redact_keys", list);
 }
 
 bool CreateSecretFunctionSet::ProviderExists(const string &provider_name) {
