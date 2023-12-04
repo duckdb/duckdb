@@ -879,7 +879,7 @@ struct IntegerDecimalCastOperation : IntegerCastOperation {
 		int16_t e = exponent;
 		// Negative Exponent
 		if (e < 0) {
-			while (e++ < 0) {
+			while (state.result != 0 && e++ < 0) {
 				state.decimal = state.result % 10;
 				state.result /= 10;
 			}
@@ -891,7 +891,7 @@ struct IntegerDecimalCastOperation : IntegerCastOperation {
 		}
 
 		// Positive Exponent
-		while (e-- > 0) {
+		while (state.result != 0 && e-- > 0) {
 			if (!TryMultiplyOperator::Operation(state.result, (store_t)10, state.result)) {
 				return false;
 			}
@@ -902,15 +902,20 @@ struct IntegerDecimalCastOperation : IntegerCastOperation {
 		}
 
 		// Handle decimals
+		
 		e = exponent - state.decimal_digits;
 		store_t remainder = 0;
 		if (e < 0) {
-			store_t power = 1;
-			while (e++ < 0) {
-				power *= 10;
+			if (static_cast<uint16_t>(-e) <= NumericLimits<store_t>::Digits()) {
+				store_t power = 1;
+				while (e++ < 0) {
+					power *= 10;
+				}
+				remainder = state.decimal % power;
+				state.decimal /= power;
+			} else {
+				state.decimal = 0;
 			}
-			remainder = state.decimal % power;
-			state.decimal /= power;
 		} else {
 			while (e-- > 0) {
 				if (!TryMultiplyOperator::Operation(state.decimal, (store_t)10, state.decimal)) {
