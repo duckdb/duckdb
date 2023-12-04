@@ -794,20 +794,21 @@ bool TryCast::Operation(double input, double &result, bool strict) {
 template <typename T>
 struct IntegerCastData {
 	using ResultType = T;
+	using StoreType = T;
 	ResultType result;
 };
 
 struct IntegerCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleDigit(T &state, uint8_t digit) {
-		using result_t = typename T::ResultType;
+		using store_t = typename T::StoreType;
 		if (NEGATIVE) {
-			if (DUCKDB_UNLIKELY(state.result < (NumericLimits<result_t>::Minimum() + digit) / 10)) {
+			if (DUCKDB_UNLIKELY(state.result < (NumericLimits<store_t>::Minimum() + digit) / 10)) {
 				return false;
 			}
 			state.result = state.result * 10 - digit;
 		} else {
-			if (DUCKDB_UNLIKELY(state.result > (NumericLimits<result_t>::Maximum() - digit) / 10)) {
+			if (DUCKDB_UNLIKELY(state.result > (NumericLimits<store_t>::Maximum() - digit) / 10)) {
 				return false;
 			}
 			state.result = state.result * 10 + digit;
@@ -817,8 +818,8 @@ struct IntegerCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool HandleHexDigit(T &state, uint8_t digit) {
-		using result_t = typename T::ResultType;
-		if (DUCKDB_UNLIKELY(state.result > (NumericLimits<result_t>::Maximum() - digit) / 16)) {
+		using store_t = typename T::StoreType;
+		if (DUCKDB_UNLIKELY(state.result > (NumericLimits<store_t>::Maximum() - digit) / 16)) {
 			return false;
 		}
 		state.result = state.result * 16 + digit;
@@ -827,8 +828,8 @@ struct IntegerCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool HandleBinaryDigit(T &state, uint8_t digit) {
-		using result_t = typename T::ResultType;
-		if (DUCKDB_UNLIKELY(state.result > (NumericLimits<result_t>::Maximum() - digit) / 2)) {
+		using store_t = typename T::StoreType;
+		if (DUCKDB_UNLIKELY(state.result > (NumericLimits<store_t>::Maximum() - digit) / 2)) {
 			return false;
 		}
 		state.result = state.result * 2 + digit;
