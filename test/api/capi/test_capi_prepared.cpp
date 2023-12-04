@@ -427,4 +427,41 @@ TEST_CASE("Prepared streaming result", "[capi]") {
 		duckdb_destroy_result(&res);
 		duckdb_destroy_prepare(&stmt);
 	}
+
+	SECTION("streaming extracted statements") {
+		duckdb_extracted_statements stmts;
+		auto n_statements = duckdb_extract_statements(tester.connection, "Select 1; Select 2;", &stmts);
+		REQUIRE(n_statements == 2);
+
+		for (idx_t i = 0; i < n_statements; i++) {
+			duckdb_prepared_statement stmt;
+			REQUIRE(duckdb_prepare_extracted_statement(tester.connection, stmts, i, &stmt) == DuckDBSuccess);
+
+			duckdb_result res;
+			REQUIRE(duckdb_execute_prepared_streaming(stmt, &res) == DuckDBSuccess);
+			REQUIRE(duckdb_result_is_streaming(res));
+
+			duckdb_data_chunk chunk;
+			chunk = duckdb_stream_fetch_chunk(res);
+			REQUIRE(chunk != nullptr);
+			REQUIRE(duckdb_data_chunk_get_size(chunk) == 1);
+
+			auto vec = duckdb_data_chunk_get_vector(chunk, 0);
+
+			auto type = duckdb_vector_get_column_type(vec);
+			REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_INTEGER);
+			duckdb_destroy_logical_type(&type);
+
+			auto data = (int32_t *)duckdb_vector_get_data(vec);
+			REQUIRE(data[0] == i + 1);
+
+			REQUIRE(duckdb_stream_fetch_chunk(res) == nullptr);
+
+			duckdb_destroy_data_chunk(&chunk);
+			duckdb_destroy_result(&res);
+			duckdb_destroy_prepare(&stmt);
+		}
+
+		duckdb_destroy_extracted(&stmts);
+	}
 }
