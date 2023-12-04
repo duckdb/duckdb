@@ -173,7 +173,11 @@ TEST_CASE("Test Invalid Path", "[adbc]") {
 
 	REQUIRE(!SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
 
-	REQUIRE(std::strstr(adbc_error.message, "Cannot open file"));
+	if (!adbc_error.message) {
+		REQUIRE(false);
+	} else {
+		REQUIRE(std::strstr(adbc_error.message, "Cannot open file"));
+	}
 	adbc_error.release(&adbc_error);
 	InitializeADBCError(&adbc_error);
 	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));

@@ -82,7 +82,7 @@ static vector<string> InitialKeywords() {
 	return vector<string> {"SELECT",     "INSERT",   "DELETE",  "UPDATE",  "CREATE",   "DROP",      "COPY",
 	                       "ALTER",      "WITH",     "EXPORT",  "BEGIN",   "VACUUM",   "PREPARE",   "EXECUTE",
 	                       "DEALLOCATE", "CALL",     "ANALYZE", "EXPLAIN", "DESCRIBE", "SUMMARIZE", "LOAD",
-	                       "CHECKPOINT", "ROLLBACK", "COMMIT",  "CALL"};
+	                       "CHECKPOINT", "ROLLBACK", "COMMIT",  "CALL",    "FROM"};
 }
 
 static vector<AutoCompleteCandidate> SuggestKeyword(ClientContext &context) {
@@ -90,7 +90,7 @@ static vector<AutoCompleteCandidate> SuggestKeyword(ClientContext &context) {
 	vector<AutoCompleteCandidate> result;
 	for (auto &kw : keywords) {
 		auto score = 0;
-		if (kw == "SELECT" || kw == "DELETE" || kw == "INSERT" || kw == "UPDATE") {
+		if (kw == "FROM" || kw == "SELECT" || kw == "DELETE" || kw == "INSERT" || kw == "UPDATE") {
 			score = 1;
 		}
 		result.emplace_back(kw + " ", score);
