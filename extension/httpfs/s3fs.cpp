@@ -346,7 +346,9 @@ void S3FileHandle::Close() {
 	auto &s3fs = (S3FileSystem &)file_system;
 	if ((flags & FileFlags::FILE_FLAGS_WRITE) && !upload_finalized) {
 		s3fs.FlushAllBuffers(*this);
-		s3fs.FinalizeMultipartUpload(*this);
+		if (parts_uploaded) {
+			s3fs.FinalizeMultipartUpload(*this);
+		}
 	}
 }
 
@@ -504,6 +506,7 @@ void S3FileSystem::FlushAllBuffers(S3FileHandle &file_handle) {
 
 void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 	auto &s3fs = (S3FileSystem &)file_handle.file_system;
+	file_handle.upload_finalized = true;
 
 	std::stringstream ss;
 	ss << "<CompleteMultipartUpload xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">";
@@ -532,7 +535,6 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 	if (open_tag_pos == string::npos) {
 		throw IOException("Unexpected response during S3 multipart upload finalization: %d\n\n%s", res->code, result);
 	}
-	file_handle.upload_finalized = true;
 }
 
 // Wrapper around the BufferManager::Allocate to that allows limiting the number of buffers that will be handed out
@@ -913,10 +915,6 @@ void S3FileHandle::Initialize(FileOpener *opener) {
 		D_ASSERT(part_size * max_part_count >= config_params.max_file_size);
 
 		multipart_upload_id = s3fs.InitializeMultipartUpload(*this);
-
-		uploads_in_progress = 0;
-		parts_uploaded = 0;
-		upload_finalized = false;
 	}
 }
 
