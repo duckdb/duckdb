@@ -41,9 +41,9 @@ vector<reference<ReduceColumnInfo>> ReduceGetInconstantColumnInfo(vector<ReduceC
 }
 
 static void ExecuteReduce(idx_t loops, std::vector<idx_t> &active_rows, const list_entry_t *list_entries,
-                          Vector &result, Vector &left_slice, UnifiedVectorFormat &list_column_format, Vector &child_vector, ClientContext &context,
-                          const Expression &lambda_expr, const bool has_index, DataChunk &lambda_chunk,
-                          const vector<ReduceColumnInfo> &column_infos) {
+                          Vector &result, Vector &left_slice, UnifiedVectorFormat &list_column_format,
+                          Vector &child_vector, ClientContext &context, const Expression &lambda_expr,
+                          const bool has_index, DataChunk &result_chunk, const vector<ReduceColumnInfo> &column_infos) {
 	SelectionVector right_sel(active_rows.size());
 	SelectionVector left_sel(active_rows.size());
 
@@ -52,7 +52,7 @@ static void ExecuteReduce(idx_t loops, std::vector<idx_t> &active_rows, const li
 
 	auto it = active_rows.begin();
 	while (it != active_rows.end()) {
-		auto list_column_format_index = list_column_format.sel->get_index(old_count);
+		auto list_column_format_index = list_column_format.sel->get_index(*it);
 		if (list_entries[list_column_format_index].length > loops + 1) {
 			right_sel.set_index(new_count, list_entries[list_column_format_index].offset + loops + 1);
 			left_sel.set_index(new_count, old_count);
@@ -104,9 +104,12 @@ static void ExecuteReduce(idx_t loops, std::vector<idx_t> &active_rows, const li
 		input_chunk.data[slice_offset + 2 + i].Reference(column_infos[i].vector);
 	}
 
-	lambda_chunk.SetCardinality(new_count);
+	result_chunk.Reset();
+	result_chunk.SetCardinality(new_count);
 
-	expr_executor->Execute(input_chunk, lambda_chunk);
+	expr_executor->Execute(input_chunk, result_chunk);
+
+	left_slice.Reference(result_chunk.data[0]);
 }
 
 void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -168,19 +171,26 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 	auto inconstant_column_infos = ReduceGetInconstantColumnInfo(column_infos);
 
 	Vector left_slice = Vector(child_vector, left_vector, row_count);
-	DataChunk lambda_chunk;
-	lambda_chunk.Initialize(Allocator::DefaultAllocator(), {lambda_expr->return_type});
+
+	DataChunk odd_result_chunk;
+	odd_result_chunk.Initialize(Allocator::DefaultAllocator(), {lambda_expr->return_type});
+
+	DataChunk even_result_chunk;
+	even_result_chunk.Initialize(Allocator::DefaultAllocator(), {lambda_expr->return_type});
 
 	idx_t loops = 0;
 	// Execute reduce until all rows are finished
 	while (!active_rows.empty()) {
-		ExecuteReduce(loops, active_rows, list_entries, result, left_slice, list_column_format, child_vector, state.GetContext(),
-		              *lambda_expr, bind_info.has_index, lambda_chunk, column_infos);
-
-		if (active_rows.empty()) {
-			break;
+		if (loops % 2) {
+			ExecuteReduce(loops, active_rows, list_entries, result, left_slice, list_column_format, child_vector,
+			              state.GetContext(), *lambda_expr, bind_info.has_index, odd_result_chunk, column_infos);
+			even_result_chunk.Reset();
+		} else {
+			ExecuteReduce(loops, active_rows, list_entries, result, left_slice, list_column_format, child_vector,
+			              state.GetContext(), *lambda_expr, bind_info.has_index, even_result_chunk, column_infos);
+			odd_result_chunk.Reset();
 		}
-		left_slice.Reference(lambda_chunk.data[0]);
+
 		loops++;
 	}
 
