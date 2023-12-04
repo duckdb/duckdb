@@ -1136,7 +1136,7 @@ static bool IntegerBinaryCastLoop(const char *buf, idx_t len, T &result, bool st
 	return pos > start_pos;
 }
 
-template <class T, bool IS_SIGNED = true, bool ALLOW_EXPONENT = true, class OP = SimpleIntegerCastOperation,
+template <class T, bool IS_SIGNED = true, bool ALLOW_EXPONENT = true, class OP = IntegerCastOperation,
           bool ZERO_INITIALIZE = true, char decimal_separator = '.'>
 static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	// skip any spaces at the start
@@ -1184,8 +1184,8 @@ static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 
 template <typename T, bool IS_SIGNED = true>
 static inline bool TrySimpleIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
-	SimpleIntegerCastData<T> simple_data;
-	if (TryIntegerCast<SimpleIntegerCastData<T>, IS_SIGNED, false, SimpleIntegerCastOperation>(buf, len, simple_data,
+	IntegerCastData<T> simple_data;
+	if (TryIntegerCast<IntegerCastData<T>, IS_SIGNED, false, IntegerCastOperation>(buf, len, simple_data,
 	                                                                                           strict)) {
 		result = (T)simple_data.result;
 		return true;
@@ -1194,8 +1194,8 @@ static inline bool TrySimpleIntegerCast(const char *buf, idx_t len, T &result, b
 	// Simple integer cast failed, try again with decimals/exponents included
 	// FIXME: This could definitely be improved as some extra work is being done here. It is more important that
 	//  "normal" integers (without exponent/decimals) are still being parsed quickly.
-	IntegerCastData<T> cast_data;
-	if (TryIntegerCast<IntegerCastData<T>, IS_SIGNED, true, IntegerCastOperation>(buf, len, cast_data, strict)) {
+	IntegerDecimalCastData<T> cast_data;
+	if (TryIntegerCast<IntegerDecimalCastData<T>, IS_SIGNED, true, IntegerDecimalCastOperation>(buf, len, cast_data, strict)) {
 		result = (T)cast_data.result;
 		return true;
 	}
