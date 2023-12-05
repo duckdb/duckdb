@@ -162,9 +162,14 @@ TEST_CASE("Test Invalid Path", "[adbc]") {
 
 	REQUIRE(!SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
 
-	REQUIRE(std::strcmp(
-	            adbc_error.message,
-	            "IO Error: Cannot open file \"/this/path/is/imaginary/hopefully/\": No such file or directory") == 0);
+	if (!adbc_error.message) {
+		REQUIRE(false);
+	} else {
+		REQUIRE(std::strcmp(
+		            adbc_error.message,
+		            "IO Error: Cannot open file \"/this/path/is/imaginary/hopefully/\": No such file or directory") ==
+		        0);
+	}
 }
 
 TEST_CASE("Error Release", "[adbc]") {

@@ -143,13 +143,13 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);
 	D_ASSERT(constant_value.type() == constant_expr.return_type);
-	auto patt_str = StringValue::Get(constant_value);
 
 	duckdb_re2::RE2::Options parsed_options = regexp_bind_data.options;
 
 	if (constant_expr.value.IsNull()) {
 		return make_uniq<BoundConstantExpression>(Value(root.return_type));
 	}
+	auto patt_str = StringValue::Get(constant_value);
 
 	// the constant_expr is a scalar expression that we have to fold
 	if (!constant_expr.IsFoldable()) {
