@@ -627,10 +627,17 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 		throw IOException("URL needs to contain key");
 	}
 
-	if (params.url_style == "vhost" || params.url_style == "") {
-		host = bucket + "." + params.endpoint;
+	// If endpoint contains a subpath, extract the correct host (excluding subpath) and prepend subpath to path
+	auto sub_path_pos = params.endpoint.find_first_of('/');
+	if (sub_path_pos != string::npos) {
+		host = params.endpoint.substr(0, sub_path_pos);
+		path = params.endpoint.substr(sub_path_pos) + path;
 	} else {
 		host = params.endpoint;
+	}
+
+	if (params.url_style == "vhost" || params.url_style == "") {
+		host = bucket + "." + host;
 	}
 
 	http_proto = params.use_ssl ? "https://" : "http://";
