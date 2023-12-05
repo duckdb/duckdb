@@ -90,28 +90,6 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	return transaction_ref;
 }
 
-struct ClientLockWrapper {
-	ClientLockWrapper(mutex &client_lock, shared_ptr<ClientContext> connection)
-	    : connection(std::move(connection)), connection_lock(make_uniq<lock_guard<mutex>>(client_lock)) {
-	}
-
-	shared_ptr<ClientContext> connection;
-	unique_ptr<lock_guard<mutex>> connection_lock;
-};
-
-void DuckTransactionManager::LockClients(vector<ClientLockWrapper> &client_locks, ClientContext &context) {
-	auto &connection_manager = ConnectionManager::Get(context);
-	client_locks.emplace_back(connection_manager.connections_lock, nullptr);
-	auto connection_list = connection_manager.GetConnectionList();
-	for (auto &con : connection_list) {
-		if (con.get() == &context) {
-			continue;
-		}
-		auto &context_lock = con->context_lock;
-		client_locks.emplace_back(context_lock, std::move(con));
-	}
-}
-
 void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 	auto &storage_manager = db.GetStorageManager();
 	if (storage_manager.InMemory()) {
@@ -140,8 +118,9 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		// lock all the clients AND the connection manager now
 		// this ensures no new queries can be started, and no new connections to the database can be made
 		// to avoid deadlock we release the transaction lock while locking the clients
+		auto &connection_manager = ConnectionManager::Get(context);
 		vector<ClientLockWrapper> client_locks;
-		LockClients(client_locks, context);
+		connection_manager.LockClients(client_locks, context);
 
 		lock.lock();
 		if (!CanCheckpoint(current)) {
