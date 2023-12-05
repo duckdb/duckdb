@@ -162,40 +162,6 @@ static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 	}
 } // LCOV_EXCL_STOP
 
-#if defined(__APPLE__) || defined(__linux__)
-struct ConflictingProcess {
-	string name = "";
-	bool read = false;
-	bool write = false;
-};
-
-static string RenderConflictMessage(unordered_map<int, ConflictingProcess> &conflicts) {
-	if (conflicts.empty()) {
-		return "";
-	}
-
-	// from here on we know someone's having this file open
-	string ret = "\nDatabase file is currently open in the following process(es):\n";
-
-	bool only_read = true;
-	for (auto &conflict_entry : conflicts) {
-		auto &conflict = conflict_entry.second;
-		ret += StringUtil::Format("    %s (PID %d): %s Access\n", conflict.name, conflict_entry.first,
-		                          conflict.write  ? "Write"
-		                          : conflict.read ? "Read"
-		                                          : "Unknown");
-		only_read &= !conflict.write;
-	}
-	if (only_read) {
-		ret +=
-		    "You likely will be able to open this database in read-only mode, e.g. by using `-readonly` in the CLI\n";
-	}
-	ret += "See also https://duckdb.org/faq#how-does-duckdb-handle-concurrency";
-	return ret;
-}
-
-#endif
-
 #ifdef __APPLE__
 #include <libproc.h>
 #include <pwd.h>
@@ -354,7 +320,6 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 			fl.l_len = 0;
 			rc = fcntl(fd, F_SETLK, &fl);
 			if (rc == -1) {
-				// initial error message, pretty unhelpful usually ("resource busy")
 				string message;
 				// try to find out who is holding the lock using F_GETLK
 				rc = fcntl(fd, F_GETLK, &fl);
@@ -655,6 +620,70 @@ public:
 	};
 };
 
+#include <RestartManager.h>
+
+static string AdditionalLockInfo(const std::wstring path) {
+	// try to find out if another process is holding the lock
+
+	// init of the somewhat obscure "Windows Restart Manager"
+	// see also https://devblogs.microsoft.com/oldnewthing/20120217-00/?p=8283
+
+	DWORD session, status, reason;
+	WCHAR session_key[CCH_RM_SESSION_KEY + 1] = {0};
+
+	status = RmStartSession(&session, 0, session_key);
+	if (status != ERROR_SUCCESS) {
+		return "";
+	}
+
+	PCWSTR path_ptr = path.c_str();
+	status = RmRegisterResources(session, 1, &path_ptr, 0, NULL, 0, NULL);
+	if (status != ERROR_SUCCESS) {
+		return "";
+	}
+	UINT process_info_size_needed, process_info_size;
+
+	// we first call with nProcInfo = 0 to find out how much to allocate
+	process_info_size = 0;
+	status = RmGetList(session, &process_info_size_needed, &process_info_size, NULL, &reason);
+	if (status != ERROR_MORE_DATA || process_info_size_needed == 0) {
+		return "";
+	}
+
+	// allocate
+	auto process_info_buffer = duckdb::unique_ptr<RM_PROCESS_INFO[]>(new RM_PROCESS_INFO[process_info_size_needed]);
+	auto process_info = process_info_buffer.get();
+
+	// now call again to get actual data
+	process_info_size = process_info_size_needed;
+	status = RmGetList(session, &process_info_size_needed, &process_info_size, process_info, &reason);
+	if (status != ERROR_SUCCESS || process_info_size == 0) {
+		return "";
+	}
+
+	string conflict_string = "File is already open in ";
+
+	for (UINT process_idx = 0; process_idx < process_info_size; process_idx++) {
+		string process_name = WindowsUtil::UnicodeToUTF8(process_info[process_idx].strAppName);
+		auto pid = process_info[process_idx].Process.dwProcessId;
+
+		// find out full path if possible
+		HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+		if (process) {
+			WCHAR full_path[MAX_PATH];
+			DWORD full_path_size = MAX_PATH;
+			if (QueryFullProcessImageNameW(process, 0, full_path, &full_path_size) && full_path_size <= MAX_PATH) {
+				process_name = WindowsUtil::UnicodeToUTF8(full_path);
+			}
+			CloseHandle(process);
+		}
+		conflict_string += StringUtil::Format("\n%s (PID %d)", process_name, pid);
+	}
+
+	RmEndSession(session);
+	return conflict_string;
+}
+
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
@@ -696,6 +725,12 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 	                           flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
+
+		auto better_error = AdditionalLockInfo(unicode_path);
+		if (!better_error.empty()) {
+			throw IOException(better_error);
+		}
+
 		throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
 	}
 	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile);
