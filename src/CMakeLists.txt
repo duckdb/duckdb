@@ -8,7 +8,7 @@ add_extension_definitions()
 
 if(NOT MSVC)
   set(CMAKE_CXX_FLAGS_DEBUG
-      "${CMAKE_CXX_FLAGS_DEBUG} -Wextra -Wno-unused-parameter -Wno-redundant-move"
+      "${CMAKE_CXX_FLAGS_DEBUG} -Wextra -Wno-unused-parameter -Wno-redundant-move -Wimplicit-fallthrough"
   )
 endif()
 set(EXIT_TIME_DESTRUCTORS_WARNING FALSE)
