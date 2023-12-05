@@ -200,7 +200,7 @@ static string RenderConflictMessage(unordered_map<int, ConflictingProcess> &conf
 #include <libproc.h>
 #include <pwd.h>
 
-static string AdditionalProcessInfo(pid_t pid) {
+static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 	if (pid == getpid()) {
 		return "Lock is already held in current process, likely another DuckDB instance";
 	}
@@ -230,122 +230,55 @@ static string AdditionalProcessInfo(pid_t pid) {
 }
 
 #elif __linux__
-#include <dirent.h>
-#include <fcntl.h>
+#include <pwd.h>
+#include <libgen.h>
 
-static string AdditionalLockInfo(FileLockType &lock_type, const string &path) {
+static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
+	if (pid == getpid()) {
+		return "Lock is already held in current process, likely another DuckDB instance";
+	}
+	string process_name, process_owner;
 
+	try {
+		auto cmdline_file = fs.OpenFile(StringUtil::Format("/proc/%d/cmdline", pid), FileFlags::FILE_FLAGS_READ);
+		auto cmdline = cmdline_file->ReadLine();
+		process_name = basename((char *)cmdline.c_str());
+	} catch (Exception &) {
+		// ignore
+	}
+
+	// we would like to provide a full path to the executable if possible but we might not have rights
 	{
-		auto fd = open(path.c_str(), O_RDONLY);
-		if (fd < 0) { // not a file, hence cannot be locked
-			return "";
-		}
-		struct flock lock_info;
-		memset(&lock_info, 0, sizeof(struct flock));
-		lock_info.l_type = F_WRLCK;
-		auto fncnl_res = fcntl(fd, F_GETLK, &lock_info);
-		if (fncnl_res == -1) {
-			close(fd);
-			return "XX";
-		}
-		close(fd);
-
-		return StringUtil::Format("PID %d %d", lock_info.l_pid, lock_info.l_type == F_UNLCK);
-	}
-
-	char real_path[PATH_MAX];
-	{
-		memset(real_path, '\0', PATH_MAX);
-		auto fd = open(path.c_str(), O_RDONLY);
-		if (fd < 0) {
-			return "";
-		}
-		auto fd_proc = StringUtil::Format("/proc/%d/fd/%d", getpid(), fd);
-		auto readlink_n = readlink(fd_proc.c_str(), real_path, PATH_MAX);
-		if (readlink_n < 1) {
-			close(fd);
-			return "";
-		}
-		close(fd);
-	}
-
-	unordered_map<int, ConflictingProcess> conflicts;
-
-	auto proc_root_dp = opendir("/proc");
-	if (!proc_root_dp) {
-		return "";
-	}
-	struct dirent *proc_root_ep;
-	while ((proc_root_ep = readdir(proc_root_dp)) != NULL) {
-		// is this a PID?
-		if (!isdigit(proc_root_ep->d_name[0])) {
-			continue;
-		}
-		auto pid = atoi(proc_root_ep->d_name);
-		// ignore our own access
-		if (pid == getpid()) {
-			continue;
-		}
-
-		// find out what the binary is called
 		char exe_target[PATH_MAX];
-		{
-			memset(exe_target, '\0', PATH_MAX);
-			auto exe_link = StringUtil::Format("/proc/%s/exe", proc_root_ep->d_name);
-			auto readlink_n = readlink(exe_link.c_str(), exe_target, PATH_MAX);
-			if (readlink_n < 1) {
-				snprintf(exe_target, PATH_MAX, "unknown_pid_%s", proc_root_ep->d_name);
-			}
+		memset(exe_target, '\0', PATH_MAX);
+		auto proc_exe_link = StringUtil::Format("/proc/%d/exe", pid);
+		auto readlink_n = readlink(proc_exe_link.c_str(), exe_target, PATH_MAX);
+		if (readlink_n > 0) {
+			process_name = exe_target;
 		}
-
-		auto fd_dir = StringUtil::Format("/proc/%s/fd", proc_root_ep->d_name);
-		auto fd_dir_dp = opendir(fd_dir.c_str());
-		if (!fd_dir_dp) {
-			continue; // we may have no rights
-		}
-		struct dirent *fd_dir_ep;
-		while ((fd_dir_ep = readdir(fd_dir_dp)) != NULL) {
-			char fd_link_target[PATH_MAX];
-			auto fd_file = StringUtil::Format("/proc/%s/fd/%s", proc_root_ep->d_name, fd_dir_ep->d_name);
-
-			{
-				memset(fd_link_target, '\0', PATH_MAX);
-				auto readlink_n = readlink(fd_file.c_str(), fd_link_target, PATH_MAX);
-				if (readlink_n < 1) {
-					continue;
-				}
-			}
-
-			if (strcmp(real_path, fd_link_target) != 0) {
-				continue;
-			}
-
-			if (conflicts.find(pid) == conflicts.end()) {
-				conflicts[pid] = ConflictingProcess();
-				auto &conflict = conflicts[pid];
-				conflict.name = exe_target;
-			}
-
-			auto &conflict = conflicts[pid];
-
-			struct stat stat_res;
-			auto stat_ret = lstat(fd_file.c_str(), &stat_res);
-			if (stat_ret < 0) {
-				continue;
-			}
-
-			conflict.read |= (stat_res.st_mode & S_IRUSR) != 0;
-			conflict.write |= (stat_res.st_mode & S_IWUSR) != 0;
-		}
-		closedir(fd_dir_dp);
 	}
 
-	closedir(proc_root_dp);
-	return RenderConflictMessage(conflicts);
+	// try to find out who created that process
+	try {
+		auto loginuid_file = fs.OpenFile(StringUtil::Format("/proc/%d/loginuid", pid), FileFlags::FILE_FLAGS_READ);
+		auto uid = std::stoi(loginuid_file->ReadLine());
+		auto pw = getpwuid(uid);
+		if (pw) {
+			process_owner = pw->pw_name;
+		}
+	} catch (Exception &) {
+		// ignore
+	}
+
+	return StringUtil::Format("Conflicting lock is held in %s%s",
+	                          !process_name.empty() ? StringUtil::Format("%s (PID %d)", process_name, pid)
+	                                                : StringUtil::Format("PID %d", pid),
+	                          !process_owner.empty() ? StringUtil::Format(" by user %s", process_owner) : "");
 }
+
 #else
-static string AdditionalLockInfo(const string &path) {
-	return strerror(errno);
+static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
+	return "";
 }
 #endif
 
@@ -428,7 +361,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 				if (rc == -1) { // fnctl does not want to help us
 					message = strerror(errno);
 				} else {
-					message = AdditionalProcessInfo(fl.l_pid);
+					message = AdditionalProcessInfo(*this, fl.l_pid);
 				}
 
 				if (lock_type == FileLockType::WRITE_LOCK) {
