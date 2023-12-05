@@ -120,10 +120,7 @@ public:
 	//! Current Number of Columns
 	idx_t column_count = 1;
 
-	//! Current, previous, and state before the previous
-	CSVState state;
-	CSVState previous_state;
-	CSVState pre_previous_state;
+	CSVStates states;
 
 	//! String Value
 	string value;

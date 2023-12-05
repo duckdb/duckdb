@@ -14,6 +14,19 @@
 
 namespace duckdb {
 
+//! State of necessary CSV States to parse file
+//! Current, previous, and state before the previous
+struct CSVStates {
+	void Initialize(CSVState initial_state){
+		current_state = initial_state;
+		previous_state = initial_state;
+		pre_previous_state = initial_state;
+	}
+	CSVState current_state = CSVState::EMPTY_LINE;
+	CSVState previous_state = CSVState::EMPTY_LINE;
+	CSVState pre_previous_state = CSVState::EMPTY_LINE;
+};
+
 //! The CSV State Machine comprises a state transition array (STA).
 //! The STA indicates the current state of parsing based on both the current and preceding characters.
 //! This reveals whether we are dealing with a Field, a New Line, a Delimiter, and so forth.
@@ -26,10 +39,10 @@ public:
 	                         CSVStateMachineCache &csv_state_machine_cache_p);
 
 	//! Transition all states to next state, that depends on the current char
-	inline void Transition(char current_char) {
-		pre_previous_state = previous_state;
-		previous_state = state;
-		state = transition_array[state][static_cast<uint8_t>(current_char)];
+	inline void Transition(CSVStates& states, char current_char) {
+		states.pre_previous_state = states.previous_state;
+		states.previous_state = states.current_state;
+		states.current_state = transition_array[states.current_state][static_cast<uint8_t>(current_char)];
 	}
 
 	//! Resets the state machine, so it can be used again

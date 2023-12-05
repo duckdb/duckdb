@@ -22,9 +22,7 @@ struct TupleOfValues {
 //! Templated Function that process a CSV buffer into a vector of sniffed values
 struct ParseValues {
 	inline static void Initialize(CSVScanner &scanner) {
-		scanner.state = CSVState::STANDARD;
-		scanner.previous_state = CSVState::STANDARD;
-		scanner.pre_previous_state = CSVState::STANDARD;
+		scanner.states.Initialize(CSVState::STANDARD);
 		scanner.cur_rows = 0;
 		scanner.value = "";
 		scanner.rows_read = 0;
@@ -33,28 +31,26 @@ struct ParseValues {
 	inline static bool Process(CSVScanner &scanner, vector<TupleOfValues> &sniffed_values, char current_char,
 	                           idx_t current_pos) {
 		auto &sniffing_state_machine = scanner.GetStateMachineSniff();
+		auto& states = scanner.states;
+
 		if ((sniffing_state_machine.dialect_options.new_line == NewLineIdentifier::SINGLE &&
 		     (current_char == '\r' || current_char == '\n')) ||
 		    (sniffing_state_machine.dialect_options.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
 			scanner.rows_read++;
 		}
 
-		if ((scanner.previous_state == CSVState::RECORD_SEPARATOR && scanner.state != CSVState::EMPTY_LINE) ||
-		    (scanner.state != CSVState::RECORD_SEPARATOR && scanner.previous_state == CSVState::CARRIAGE_RETURN)) {
+		if ((states.previous_state == CSVState::RECORD_SEPARATOR) ||
+		    (states.current_state != CSVState::RECORD_SEPARATOR && states.previous_state == CSVState::CARRIAGE_RETURN)) {
 			sniffed_values[scanner.cur_rows].position = scanner.line_start_pos;
 			sniffed_values[scanner.cur_rows].set = true;
 			scanner.line_start_pos = current_pos;
 		}
-		scanner.pre_previous_state = scanner.previous_state;
-		scanner.previous_state = scanner.state;
-		scanner.state = static_cast<CSVState>(
-		    sniffing_state_machine
-		        .transition_array[static_cast<uint8_t>(scanner.state)][static_cast<uint8_t>(current_char)]);
 
-		bool carriage_return = scanner.previous_state == CSVState::CARRIAGE_RETURN;
-		if (scanner.previous_state == CSVState::DELIMITER ||
-		    (scanner.previous_state == CSVState::RECORD_SEPARATOR && scanner.state != CSVState::EMPTY_LINE) ||
-		    (scanner.state != CSVState::RECORD_SEPARATOR && carriage_return)) {
+		sniffing_state_machine.Transition(states,current_char);
+
+		bool carriage_return = states.previous_state == CSVState::CARRIAGE_RETURN;
+		if (states.previous_state == CSVState::DELIMITER || (states.previous_state == CSVState::RECORD_SEPARATOR) ||
+		    (states.current_state != CSVState::RECORD_SEPARATOR && carriage_return)) {
 			// Started a new value
 			// Check if it's UTF-8
 			scanner.VerifyUTF8();
@@ -68,14 +64,13 @@ struct ParseValues {
 
 			scanner.value = "";
 		}
-		if (scanner.state == CSVState::STANDARD ||
-		    (scanner.state == CSVState::QUOTED && scanner.previous_state == CSVState::QUOTED)) {
+		if (states.current_state == CSVState::STANDARD ||
+		    (states.current_state == CSVState::QUOTED && states.previous_state == CSVState::QUOTED)) {
 			scanner.value += current_char;
 		}
-		scanner.cur_rows +=
-		    scanner.previous_state == CSVState::RECORD_SEPARATOR && scanner.state != CSVState::EMPTY_LINE;
+		scanner.cur_rows += states.previous_state == CSVState::RECORD_SEPARATOR;
 		// It means our carriage return is actually a record separator
-		scanner.cur_rows += scanner.state != CSVState::RECORD_SEPARATOR && carriage_return;
+		scanner.cur_rows += states.current_state != CSVState::RECORD_SEPARATOR && carriage_return;
 		if (scanner.cur_rows >= sniffed_values.size()) {
 			// We sniffed enough rows
 			return true;
@@ -84,11 +79,11 @@ struct ParseValues {
 	}
 
 	inline static void Finalize(CSVScanner &scanner, vector<TupleOfValues> &sniffed_values) {
-		if (scanner.cur_rows < sniffed_values.size() && scanner.state == CSVState::DELIMITER) {
+		if (scanner.cur_rows < sniffed_values.size() && scanner.states.current_state == CSVState::DELIMITER) {
 			// Started a new empty value
 			sniffed_values[scanner.cur_rows].values.push_back(Value(scanner.value));
 		}
-		if (scanner.cur_rows < sniffed_values.size() && scanner.state != CSVState::EMPTY_LINE) {
+		if (scanner.cur_rows < sniffed_values.size() && scanner.states.current_state != CSVState::EMPTY_LINE) {
 			scanner.VerifyUTF8();
 			sniffed_values[scanner.cur_rows].line_number = scanner.rows_read;
 			if (!sniffed_values[scanner.cur_rows].set) {
@@ -100,5 +95,6 @@ struct ParseValues {
 		}
 		sniffed_values.erase(sniffed_values.end() - (sniffed_values.size() - scanner.cur_rows), sniffed_values.end());
 	}
+
 };
 } // namespace duckdb
