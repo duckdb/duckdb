@@ -144,10 +144,8 @@ private:
 	void InitializeDateAndTimeStampDetection(CSVStateMachine &candidate, const string &separator,
 	                                         const LogicalType &sql_type);
 	//! Functions that performs detection for date and timestamp formats
-	void DetectDateAndTimeStampFormats(CSVStateMachineSniffing &candidate,
-	                                   map<LogicalTypeId, bool> &has_format_candidates,
-	                                   map<LogicalTypeId, vector<string>> &format_candidates,
-	                                   const LogicalType &sql_type, const string &separator, Value &dummy_val);
+	void DetectDateAndTimeStampFormats(CSVStateMachineSniffing &candidate, const LogicalType &sql_type,
+	                                   const string &separator, Value &dummy_val);
 
 	//! Variables for Type Detection
 	//! Format Candidates for Date and Timestamp Types

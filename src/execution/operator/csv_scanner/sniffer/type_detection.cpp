@@ -119,34 +119,7 @@ void CSVSniffer::SetDateFormat(CSVStateMachineSniffing &candidate, const string 
 	candidate.dialect_options.date_format[sql_type].Set(strpformat, false);
 }
 
-void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachineSniffing &candidate,
-                                               map<LogicalTypeId, bool> &has_format_candidates,
-                                               map<LogicalTypeId, vector<string>> &format_candidates,
-                                               const LogicalType &sql_type, const string &separator, Value &dummy_val) {
-	// generate date format candidates the first time through
-	auto &type_format_candidates = format_candidates[sql_type.id()];
-	const auto had_format_candidates = has_format_candidates[sql_type.id()];
-	if (!has_format_candidates[sql_type.id()]) {
-		has_format_candidates[sql_type.id()] = true;
-		// order by preference
-		auto entry = format_template_candidates.find(sql_type.id());
-		if (entry != format_template_candidates.end()) {
-			const auto &format_template_list = entry->second;
-			for (const auto &t : format_template_list) {
-				const auto format_string = GenerateDateFormat(separator, t);
-				// don't parse ISO 8601
-				if (format_string.find("%Y-%m-%d") == string::npos) {
-					format_candidate.format.emplace_back(format_string);
-				}
-			}
-		}
-	}
-	//	initialise the first candidate
-	//	all formats are constructed to be valid
-	SetDateFormat(candidate, format_candidate.format.back(), sql_type.id());
-}
-
-void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const LogicalType &sql_type,
+void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachineSniffing &candidate, const LogicalType &sql_type,
                                                const string &separator, Value &dummy_val) {
 	// If it is the first time running date/timestamp detection we must initilize the format variables
 	InitializeDateAndTimeStampDetection(candidate, separator, sql_type);
@@ -247,7 +220,7 @@ void CSVSniffer::DetectTypes() {
 			if (tuple_true_start > 0) {
 				tuples.erase(tuples.begin(), tuples.begin() + tuple_true_start);
 			}
-		} while (tuples.empty() && !candidate->csv_buffer_iterator.Finished());
+		} while (tuples.empty() && !candidate->Finished());
 
 		idx_t row_idx = 0;
 		if (tuples.size() > 1 &&
@@ -284,7 +257,8 @@ void CSVSniffer::DetectTypes() {
 					if (!dummy_val.IsNull() && StartsWithNumericDate(separator, StringValue::Get(dummy_val)) &&
 					    (col_type_candidates.back().id() == LogicalTypeId::TIMESTAMP ||
 					     col_type_candidates.back().id() == LogicalTypeId::DATE)) {
-						DetectDateAndTimeStampFormats(*candidate, sql_type, separator, dummy_val);
+						DetectDateAndTimeStampFormats(candidate->GetStateMachineSniff(), sql_type, separator,
+						                              dummy_val);
 					}
 					// try cast from string to sql_type
 					if (TryCastValue(sniffing_state_machine, dummy_val, sql_type)) {

@@ -682,16 +682,11 @@
       },
       {
         "id": 107,
-        "name": "single_threaded",
-        "type": "bool"
-      },
-      {
-        "id": 108,
         "name": "reader_bind",
         "type": "MultiFileReaderBindData"
       },
       {
-        "id": 109,
+        "id": 108,
         "name": "column_info",
         "type": "vector<ColumnInfo>"
       }

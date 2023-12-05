@@ -379,9 +379,8 @@ void ReadCSVData::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<string>>(104, "return_names", return_names);
 	serializer.WritePropertyWithDefault<idx_t>(105, "filename_col_idx", filename_col_idx);
 	serializer.WriteProperty<CSVReaderOptions>(106, "options", options);
-	serializer.WritePropertyWithDefault<bool>(107, "single_threaded", single_threaded);
-	serializer.WriteProperty<MultiFileReaderBindData>(108, "reader_bind", reader_bind);
-	serializer.WritePropertyWithDefault<vector<ColumnInfo>>(109, "column_info", column_info);
+	serializer.WriteProperty<MultiFileReaderBindData>(107, "reader_bind", reader_bind);
+	serializer.WritePropertyWithDefault<vector<ColumnInfo>>(108, "column_info", column_info);
 }
 
 unique_ptr<ReadCSVData> ReadCSVData::Deserialize(Deserializer &deserializer) {
@@ -393,9 +392,8 @@ unique_ptr<ReadCSVData> ReadCSVData::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<string>>(104, "return_names", result->return_names);
 	deserializer.ReadPropertyWithDefault<idx_t>(105, "filename_col_idx", result->filename_col_idx);
 	deserializer.ReadProperty<CSVReaderOptions>(106, "options", result->options);
-	deserializer.ReadPropertyWithDefault<bool>(107, "single_threaded", result->single_threaded);
-	deserializer.ReadProperty<MultiFileReaderBindData>(108, "reader_bind", result->reader_bind);
-	deserializer.ReadPropertyWithDefault<vector<ColumnInfo>>(109, "column_info", result->column_info);
+	deserializer.ReadProperty<MultiFileReaderBindData>(107, "reader_bind", result->reader_bind);
+	deserializer.ReadPropertyWithDefault<vector<ColumnInfo>>(108, "column_info", result->column_info);
 	return result;
 }
 

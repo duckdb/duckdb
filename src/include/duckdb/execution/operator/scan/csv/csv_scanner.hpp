@@ -127,6 +127,9 @@ public:
 	idx_t rows_read = 0;
 	idx_t line_start_pos = 0;
 
+	//! Id of the scanner, used to know order in which data is in the CSV file(s)
+	const idx_t scanner_id = 0;
+
 	//! Verifies if value is UTF8
 	void VerifyUTF8();
 
