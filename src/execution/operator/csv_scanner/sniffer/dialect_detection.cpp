@@ -5,9 +5,7 @@ namespace duckdb {
 
 struct SniffDialect {
 	inline static void Initialize(CSVScanner &scanner) {
-		scanner.state = CSVState::EMPTY_LINE;
-		scanner.previous_state = CSVState::EMPTY_LINE;
-		scanner.pre_previous_state = CSVState::EMPTY_LINE;
+		scanner.states.Initialize(CSVState::EMPTY_LINE);
 		scanner.cur_rows = 0;
 		scanner.column_count = 1;
 	}
@@ -15,31 +13,32 @@ struct SniffDialect {
 	inline static bool Process(CSVScanner &scanner, vector<idx_t> &sniffed_column_counts, char current_char,
 	                           idx_t current_pos) {
 		auto &sniffing_state_machine = scanner.GetStateMachineSniff();
+		auto& states = scanner.states;
 		D_ASSERT(sniffed_column_counts.size() == STANDARD_VECTOR_SIZE);
-		if (scanner.state == CSVState::INVALID) {
+		if (states.current_state == CSVState::INVALID) {
 			sniffed_column_counts.clear();
 			return true;
 		}
-		scanner.Transition(current_char);
+		sniffing_state_machine.Transition(states,current_char);
 
-		bool carriage_return = scanner.previous_state == CSVState::CARRIAGE_RETURN;
-		scanner.column_count += scanner.previous_state == CSVState::DELIMITER;
+		bool carriage_return = states.previous_state == CSVState::CARRIAGE_RETURN;
+		scanner.column_count += states.previous_state == CSVState::DELIMITER;
 		sniffed_column_counts[scanner.cur_rows] = scanner.column_count;
 		scanner.cur_rows +=
-		    scanner.previous_state == CSVState::RECORD_SEPARATOR && scanner.state != CSVState::EMPTY_LINE;
-		scanner.column_count -= (scanner.column_count - 1) * (scanner.previous_state == CSVState::RECORD_SEPARATOR);
+		    states.previous_state == CSVState::RECORD_SEPARATOR && states.current_state != CSVState::EMPTY_LINE;
+		scanner.column_count -= (scanner.column_count - 1) * (states.previous_state == CSVState::RECORD_SEPARATOR);
 
 		// It means our carriage return is actually a record separator
-		scanner.cur_rows += scanner.state != CSVState::RECORD_SEPARATOR && carriage_return;
+		scanner.cur_rows += states.current_state != CSVState::RECORD_SEPARATOR && carriage_return;
 		scanner.column_count -=
-		    (scanner.column_count - 1) * (scanner.state != CSVState::RECORD_SEPARATOR && carriage_return);
+		    (scanner.column_count - 1) * (states.current_state != CSVState::RECORD_SEPARATOR && carriage_return);
 
 		// Identify what is our line separator
-		sniffing_state_machine.carry_on_separator = (scanner.state == CSVState::RECORD_SEPARATOR && carriage_return) ||
+		sniffing_state_machine.carry_on_separator = (states.current_state == CSVState::RECORD_SEPARATOR && carriage_return) ||
 		                                            sniffing_state_machine.carry_on_separator;
 		sniffing_state_machine.single_record_separator =
-		    ((scanner.state != CSVState::RECORD_SEPARATOR && carriage_return) ||
-		     (scanner.state == CSVState::RECORD_SEPARATOR && !carriage_return)) ||
+		    ((states.current_state != CSVState::RECORD_SEPARATOR && carriage_return) ||
+		     (states.current_state == CSVState::RECORD_SEPARATOR && !carriage_return)) ||
 		    sniffing_state_machine.single_record_separator;
 		if (scanner.cur_rows >= STANDARD_VECTOR_SIZE) {
 			// We sniffed enough rows
@@ -49,16 +48,18 @@ struct SniffDialect {
 	}
 	inline static void Finalize(CSVScanner &scanner, vector<idx_t> &sniffed_column_counts) {
 		auto &sniffing_state_machine = scanner.GetStateMachineSniff();
-		if (scanner.state == CSVState::INVALID) {
+		auto& states = scanner.states;
+
+		if (states.current_state == CSVState::INVALID) {
 			return;
 		}
-		if (scanner.cur_rows < STANDARD_VECTOR_SIZE && scanner.state == CSVState::DELIMITER) {
+		if (scanner.cur_rows < STANDARD_VECTOR_SIZE && states.current_state == CSVState::DELIMITER) {
 			sniffed_column_counts[scanner.cur_rows] = ++scanner.column_count;
 		}
-		if (scanner.cur_rows < STANDARD_VECTOR_SIZE && scanner.state != CSVState::EMPTY_LINE) {
+		if (scanner.cur_rows < STANDARD_VECTOR_SIZE && states.current_state != CSVState::EMPTY_LINE) {
 			sniffed_column_counts[scanner.cur_rows++] = scanner.column_count;
 		}
-		if (scanner.cur_rows == 0 && scanner.state == CSVState::EMPTY_LINE) {
+		if (scanner.cur_rows == 0 && states.current_state == CSVState::EMPTY_LINE) {
 			sniffed_column_counts[scanner.cur_rows++] = scanner.column_count;
 		}
 		NewLineIdentifier suggested_newline;
