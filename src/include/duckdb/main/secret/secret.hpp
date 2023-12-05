@@ -64,7 +64,7 @@ protected:
 class CreateSecretFunctionEntry : public CatalogEntry {
 public:
 	CreateSecretFunctionEntry(Catalog &catalog, CreateSecretFunctionSet &function_set, const string &name)
-	    : CatalogEntry(CatalogType::SECRET_FUNCTION, catalog, name), function_set(function_set),
+	    : CatalogEntry(CatalogType::SECRET_FUNCTION_ENTRY, catalog, name), function_set(function_set),
 	      parent_catalog(&catalog) {
 		internal = true;
 	}
@@ -80,7 +80,7 @@ public:
 struct SecretFunctionType : public CatalogEntry {
 	SecretFunctionType(Catalog &catalog, const string &name, secret_deserializer_t deserializer,
 	                   const string &default_provider)
-	    : CatalogEntry(CatalogType::SECRET_TYPE, catalog, name), name(name), deserializer(deserializer),
+	    : CatalogEntry(CatalogType::SECRET_TYPE_ENTRY, catalog, name), name(name), deserializer(deserializer),
 	      default_provider(default_provider), parent_catalog(&catalog) {
 		internal = true;
 	}
@@ -112,7 +112,7 @@ struct SecretType {
 
 struct SecretTypeEntry : public CatalogEntry {
 	SecretTypeEntry(Catalog &catalog, SecretType &type)
-	    : CatalogEntry(CatalogType::SECRET, catalog, type.name), type(type), parent_catalog(&catalog) {
+	    : CatalogEntry(CatalogType::SECRET_ENTRY, catalog, type.name), type(type), parent_catalog(&catalog) {
 		internal = true;
 	}
 

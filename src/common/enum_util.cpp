@@ -778,8 +778,12 @@ const char* EnumUtil::ToChars<CatalogType>(CatalogType value) {
 		return "UPDATED_ENTRY";
 	case CatalogType::DELETED_ENTRY:
 		return "DELETED_ENTRY";
-	case CatalogType::SECRET:
-		return "SECRET";
+	case CatalogType::SECRET_ENTRY:
+		return "SECRET_ENTRY";
+	case CatalogType::SECRET_TYPE_ENTRY:
+		return "SECRET_TYPE_ENTRY";
+	case CatalogType::SECRET_FUNCTION_ENTRY:
+		return "SECRET_FUNCTION_ENTRY";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -844,8 +848,14 @@ CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
 	if (StringUtil::Equals(value, "DELETED_ENTRY")) {
 		return CatalogType::DELETED_ENTRY;
 	}
-	if (StringUtil::Equals(value, "SECRET")) {
-		return CatalogType::SECRET;
+	if (StringUtil::Equals(value, "SECRET_ENTRY")) {
+		return CatalogType::SECRET_ENTRY;
+	}
+	if (StringUtil::Equals(value, "SECRET_TYPE_ENTRY")) {
+		return CatalogType::SECRET_TYPE_ENTRY;
+	}
+	if (StringUtil::Equals(value, "SECRET_FUNCTION_ENTRY")) {
+		return CatalogType::SECRET_FUNCTION_ENTRY;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

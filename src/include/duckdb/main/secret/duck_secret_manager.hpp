@@ -22,7 +22,6 @@ class SchemaCatalogEntry;
 //! secrets
 class DuckSecretManager : public SecretManager {
 	friend struct SecretEntry;
-	friend class DuckSecretManager;
 
 public:
 	explicit DuckSecretManager() = default;

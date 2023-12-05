@@ -24,7 +24,7 @@ struct CatalogTransaction;
 struct SecretEntry : public CatalogEntry {
 public:
 	SecretEntry(unique_ptr<const BaseSecret> secret, Catalog &catalog, string name)
-	    : CatalogEntry(CatalogType::SECRET, catalog, name), secret(std::move(secret)), parent_catalog(&catalog) {
+	    : CatalogEntry(CatalogType::SECRET_ENTRY, catalog, name), secret(std::move(secret)), parent_catalog(&catalog) {
 		internal = true;
 	}
 

@@ -482,7 +482,7 @@ unique_ptr<CatalogEntry> DefaultDuckSecretGenerator::CreateDefaultEntry(ClientCo
 		auto entry = make_uniq<SecretEntry>(std::move(deserialized_secret), catalog, name);
 		entry->storage_mode = base_secret_path;
 
-		return entry;
+		return std::move(entry);
 	}
 	return nullptr;
 }
