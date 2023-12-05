@@ -1,19 +1,24 @@
 #include "statement_generator.hpp"
 
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/query_node/set_operation_node.hpp"
-#include "duckdb/parser/tableref/list.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
-#include "duckdb/parser/expression/list.hpp"
-#include "duckdb/parser/statement/delete_statement.hpp"
-#include "duckdb/parser/statement/insert_statement.hpp"
-#include "duckdb/parser/statement/update_statement.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
-#include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
-#include "duckdb/parser/expression/list.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/function/table/system_functions.hpp"
+#include "duckdb/parser/expression/list.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/create_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/tableref/list.hpp"
 
 namespace duckdb {
 
@@ -50,8 +55,15 @@ shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientContext 
 		auto &schema = schema_ref.get();
 		schema.Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY,
 		            [&](CatalogEntry &entry) { result->scalar_functions.push_back(entry); });
-		schema.Scan(context, CatalogType::TABLE_FUNCTION_ENTRY,
-		            [&](CatalogEntry &entry) { result->table_functions.push_back(entry); });
+		schema.Scan(context, CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
+			// don't include fuzz functions
+			if (entry.name.find("fuzzyduck") == std::string::npos &&
+			    entry.name.find("fuzz_all_functions") == std::string::npos &&
+			    entry.name.find("reduce_sql_statement") == std::string::npos &&
+			    entry.name.find("sqlsmith") == std::string::npos) {
+				result->table_functions.push_back(entry);
+			}
+		});
 		schema.Scan(context, CatalogType::PRAGMA_FUNCTION_ENTRY,
 		            [&](CatalogEntry &entry) { result->pragma_functions.push_back(entry); });
 		schema.Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
@@ -65,13 +77,18 @@ shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientContext 
 }
 
 unique_ptr<SQLStatement> StatementGenerator::GenerateStatement() {
-	return GenerateStatement(StatementType::SELECT_STATEMENT);
+	if (RandomPercentage(80)) {
+		return GenerateStatement(StatementType::SELECT_STATEMENT);
+	}
+	return GenerateStatement(StatementType::CREATE_STATEMENT);
 }
 
 unique_ptr<SQLStatement> StatementGenerator::GenerateStatement(StatementType type) {
 	switch (type) {
 	case StatementType::SELECT_STATEMENT:
 		return GenerateSelect();
+	case StatementType::CREATE_STATEMENT:
+		return GenerateCreate();
 	default:
 		throw InternalException("Unsupported type");
 	}
@@ -80,10 +97,69 @@ unique_ptr<SQLStatement> StatementGenerator::GenerateStatement(StatementType typ
 //===--------------------------------------------------------------------===//
 // Statements
 //===--------------------------------------------------------------------===//
-unique_ptr<SQLStatement> StatementGenerator::GenerateSelect() {
+unique_ptr<SelectStatement> StatementGenerator::GenerateSelect() {
 	auto select = make_uniq<SelectStatement>();
 	select->node = GenerateQueryNode();
-	return std::move(select);
+	return select;
+}
+
+unique_ptr<CreateStatement> StatementGenerator::GenerateCreate() {
+	auto create = make_uniq<CreateStatement>();
+	create->info = GenerateCreateInfo();
+	return create;
+}
+
+//===--------------------------------------------------------------------===//
+// Create Info Node
+//===--------------------------------------------------------------------===//
+
+unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
+	switch (RandomValue(4)) {
+	case 0: {
+		auto info = make_uniq<CreateTypeInfo>();
+		info->name = RandomString(5);
+		idx_t num_enums = RandomValue(10);
+		auto Enum_Vector = Vector(LogicalType::VARCHAR, num_enums);
+		for (idx_t i = 0; i < num_enums; i++) {
+			Enum_Vector.SetValue(i, Value(RandomString(10)));
+		}
+		info->type = LogicalType::ENUM("My_enum", Enum_Vector, num_enums);
+		return std::move(info);
+	}
+	case 1: {
+		auto info = make_uniq<CreateTableInfo>();
+		info->catalog = INVALID_CATALOG;
+		info->schema = DEFAULT_SCHEMA;
+		info->table = GenerateTableIdentifier();
+		if (RandomPercentage(50)) {
+			info->query = GenerateSelect();
+		} else {
+			idx_t num_cols = RandomValue(1000);
+			for (idx_t i = 0; i < num_cols; i++) {
+				info->columns.AddColumn(ColumnDefinition(GenerateIdentifier(), GenerateLogicalType()));
+			}
+		}
+		// TODO: add constraints to the columns (primary keys etc.);
+		return std::move(info);
+	}
+	case 2: {
+		auto info = make_uniq<CreateSchemaInfo>();
+		info->catalog = INVALID_CATALOG;
+		info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+		info->schema = GenerateSchemaIdentifier();
+		return std::move(info);
+	}
+	case 3: {
+		auto info = make_uniq<CreateViewInfo>();
+		info->view_name = GenerateViewIdentifier();
+		info->query = GenerateSelect();
+		// TODO: add support for aliases in the view.
+		return std::move(info);
+	}
+	default:
+		break;
+	}
+	throw InternalException("Unsupported Create Info Type");
 }
 
 //===--------------------------------------------------------------------===//
@@ -873,6 +949,18 @@ string StatementGenerator::GenerateIdentifier() {
 	return identifier;
 }
 
+string StatementGenerator::GenerateSchemaIdentifier() {
+	auto identifier = "s" + to_string(GetIndex());
+	// TODO: add support for current_schema_names
+	return identifier;
+}
+
+string StatementGenerator::GenerateViewIdentifier() {
+	auto identifier = "v" + to_string(GetIndex());
+	current_relation_names.push_back(identifier);
+	return identifier;
+}
+
 idx_t StatementGenerator::GetIndex() {
 	if (parent) {
 		return parent->GetIndex();
@@ -995,6 +1083,18 @@ idx_t StatementGenerator::RandomValue(idx_t max) {
 		return 0;
 	}
 	return RandomEngine::Get(context).NextRandomInteger() % max;
+}
+
+string StatementGenerator::RandomString(idx_t length) {
+
+	const string charset = "$_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+	string result = "";
+	for (int i = 0; i < length; ++i) {
+		int randomIndex = RandomValue(charset.length());
+		result += charset[randomIndex];
+	}
+
+	return result;
 }
 
 bool StatementGenerator::RandomBoolean() {

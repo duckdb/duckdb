@@ -38,6 +38,7 @@ env:
 jobs:
  linux-debug:
     name: Linux Debug
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     env:
       CC: gcc-10
@@ -74,6 +75,7 @@ jobs:
 
  force-storage:
     name: Force Storage
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:
@@ -116,6 +118,7 @@ jobs:
 
  force-restart:
     name: Force Restart
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:
@@ -158,6 +161,7 @@ jobs:
 
  valgrind:
     name: Valgrind
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:
@@ -192,6 +196,7 @@ jobs:
 
  docs:
     name: Website Docs
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     needs: linux-debug
     steps:
@@ -216,6 +221,7 @@ jobs:
 
  odbc:
     name: ODBC
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-22.04
     needs: linux-debug
     env:
@@ -253,12 +259,6 @@ jobs:
         cmake -DNANODBC_DISABLE_TESTS=OFF ..
         cmake --build .
 
-    - name: Install psqlodbc
-      shell: bash
-      run: |
-        git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout edd9890a5046a2006f210849abb97c6a6589a45c && make debug)
-
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
       with:
@@ -276,10 +276,6 @@ jobs:
     - name: Test nanodbc
       shell: bash
       run: ./tools/odbc/test/run_nanodbc_tests.sh
-
-    - name: Test psqlodbc
-      shell: bash
-      run: ./tools/odbc/test/run_psqlodbc_tests.sh
 
     - name: Test isql
       shell: bash

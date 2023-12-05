@@ -13,6 +13,7 @@ duckdb_state duckdb_create_config(duckdb_config *out_config) {
 	DBConfig *config;
 	try {
 		config = new DBConfig();
+		config->SetOptionByName("duckdb_api", "capi");
 	} catch (...) { // LCOV_EXCL_START
 		return DuckDBError;
 	} // LCOV_EXCL_STOP

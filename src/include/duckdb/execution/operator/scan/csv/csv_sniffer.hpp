@@ -14,6 +14,10 @@
 #include "duckdb/execution/operator/scan/csv/csv_scanner.hpp"
 
 namespace duckdb {
+struct DateTimestampSniffing {
+	bool initialized = false;
+	vector<string> format;
+};
 //! Struct to store the result of the Sniffer
 struct SnifferResult {
 	SnifferResult(vector<LogicalType> return_types_p, vector<string> names_p)
@@ -25,20 +29,64 @@ struct SnifferResult {
 	vector<string> names;
 };
 
+//! This represents the data related to columns that have been set by the user
+//! e.g., from a copy command
+struct SetColumns {
+	SetColumns(const vector<LogicalType> *types_p, const vector<string> *names_p) : types(types_p), names(names_p) {
+		if (!types) {
+			D_ASSERT(!types && !names);
+		} else {
+			D_ASSERT(types->size() == names->size());
+		}
+	}
+	SetColumns() {};
+	//! Return Types that were detected
+	const vector<LogicalType> *types = nullptr;
+	//! Column Names that were detected
+	const vector<string> *names = nullptr;
+	//! If columns are set
+	bool IsSet();
+	//! How many columns
+	idx_t Size();
+	//! Helper function that checks if candidate is acceptable based on the number of columns it produces
+	inline bool IsCandidateUnacceptable(idx_t num_cols, bool null_padding, bool ignore_errors) {
+		if (!IsSet() || ignore_errors) {
+			// We can't say its unacceptable if it's not set or if we ignore errors
+			return false;
+		}
+		idx_t size = Size();
+		// If the columns are set and there is a mismatch with the expected number of columns, with null_padding and
+		// ignore_errors not set, we don't have a suitable candidate.
+		// Note that we compare with max_columns_found + 1, because some broken files have the behaviour where two
+		// columns are represented as: | col 1 | col_2 |
+		if (num_cols == size || num_cols == size + 1) {
+			// Good Candidate
+			return false;
+		}
+		// if we detected more columns than we have set, it's all good because we can null-pad them
+		if (null_padding && num_cols > size) {
+			return false;
+		}
+
+		// Unacceptable
+		return true;
+	}
+};
+
 //! Sniffer that detects Header, Dialect and Types of CSV Files
 class CSVSniffer {
 public:
 	explicit CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-	                    CSVStateMachineCache &state_machine_cache, bool explicit_set_columns = false);
+	                    CSVStateMachineCache &state_machine_cache, SetColumns set_columns = {});
 
 	//! Main method that sniffs the CSV file, returns the types, names and options as a result
 	//! CSV Sniffing consists of five steps:
 	//! 1. Dialect Detection: Generate the CSV Options (delimiter, quote, escape, etc.)
 	//! 2. Type Detection: Figures out the types of the columns (For one chunk)
-	//! 3. Header Detection: Figures out if  the CSV file has a header and produces the names of the columns
-	//! 4. Type Replacement: Replaces the types of the columns if the user specified them
-	//! 5. Type Refinement: Refines the types of the columns for the remaining chunks
-	SnifferResult SniffCSV();
+	//! 3. Type Refinement: Refines the types of the columns for the remaining chunks
+	//! 4. Header Detection: Figures out if  the CSV file has a header and produces the names of the columns
+	//! 5. Type Replacement: Replaces the types of the columns if the user specified them
+	SnifferResult SniffCSV(bool force_match = false);
 
 private:
 	//! CSV State Machine Cache
@@ -51,6 +99,10 @@ private:
 	CSVReaderOptions &options;
 	//! Buffer being used on sniffer
 	shared_ptr<CSVBufferManager> buffer_manager;
+	//! Information regarding columns that were set by user/query
+	SetColumns set_columns;
+	//! Sets the result options
+	void SetResultOptions();
 
 	//! ------------------------------------------------------//
 	//! ----------------- Dialect Detection ----------------- //
@@ -85,8 +137,11 @@ private:
 	//! Change the date format for the type to the string
 	//! Try to cast a string value to the specified sql type
 	bool TryCastValue(CSVStateMachineSniffing &candidate, const Value &value, const LogicalType &sql_type);
-	void SetDateFormat(CSVStateMachineSniffing &candidate, const string &format_specifier,
-	                   const LogicalTypeId &sql_type);
+	void SetDateFormat(CSVStateMachineSniffing &candidate, const string &format_specifier, const LogicalTypeId &sql_type);
+
+	//! Function that initialized the necessary variables used for date and timestamp detection
+	void InitializeDateAndTimeStampDetection(CSVStateMachine &candidate, const string &separator,
+	                                         const LogicalType &sql_type);
 	//! Functions that performs detection for date and timestamp formats
 	void DetectDateAndTimeStampFormats(CSVStateMachineSniffing &candidate,
 	                                   map<LogicalTypeId, bool> &has_format_candidates,
@@ -107,19 +162,8 @@ private:
 	idx_t best_start_with_header = 0;
 	idx_t best_start_without_header = 0;
 	vector<Value> best_header_row;
-
-	//! ------------------------------------------------------//
-	//! ------------------ Header Detection ----------------- //
-	//! ------------------------------------------------------//
-	void DetectHeader();
-	vector<string> names;
-	//! If Column Names and Types have been explicitly set
-	const bool explicit_set_columns;
-
-	//! ------------------------------------------------------//
-	//! ------------------ Type Replacement ----------------- //
-	//! ------------------------------------------------------//
-	void ReplaceTypes();
+	//! Variable used for sniffing date and timestamp
+	map<LogicalTypeId, DateTimestampSniffing> format_candidates;
 
 	//! ------------------------------------------------------//
 	//! ------------------ Type Refinement ------------------ //
@@ -127,6 +171,17 @@ private:
 	void RefineTypes();
 	bool TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type);
 	vector<LogicalType> detected_types;
+
+	//! ------------------------------------------------------//
+	//! ------------------ Header Detection ----------------- //
+	//! ------------------------------------------------------//
+	void DetectHeader();
+	vector<string> names;
+
+	//! ------------------------------------------------------//
+	//! ------------------ Type Replacement ----------------- //
+	//! ------------------------------------------------------//
+	void ReplaceTypes();
 };
 
 } // namespace duckdb

@@ -98,10 +98,14 @@ void CSVSniffer::DetectHeader() {
 	// check if header row is all null and/or consistent with detected column data types
 	bool first_row_nulls = true;
 	auto &sniffer_state_machine = best_candidate->GetStateMachineSniff();
-
-	// This case will fail in dialect detection, so we assert here just for sanity
-	D_ASSERT(sniffer_state_machine.options.null_padding ||
-	         best_sql_types_candidates_per_column_idx.size() == best_header_row.size());
+	// If null-padding is not allowed and there is a mismatch between our header candidate and the number of columns
+	// We can't detect the dialect/type options properly
+	if (!sniffer_state_machine.options.null_padding &&
+	    best_sql_types_candidates_per_column_idx.size() != best_header_row.size()) {
+		throw InvalidInputException(
+		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
+		    options.file_path);
+	}
 	for (idx_t col = 0; col < best_header_row.size(); col++) {
 		auto dummy_val = best_header_row[col];
 		if (!dummy_val.IsNull()) {
@@ -115,10 +119,10 @@ void CSVSniffer::DetectHeader() {
 		}
 	}
 	bool has_header;
-	if (!sniffer_state_machine.options.has_header) {
+	if (!sniffer_state_machine.dialect_options.header.IsSetByUser()) {
 		has_header = !first_row_consistent || first_row_nulls;
 	} else {
-		has_header = sniffer_state_machine.options.dialect_options.header;
+		has_header = sniffer_state_machine.options.dialect_options.header.GetValue();
 	}
 	// update parser info, and read, generate & set col_names based on previous findings
 	if (has_header) {

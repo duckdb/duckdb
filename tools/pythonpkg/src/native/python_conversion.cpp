@@ -363,7 +363,9 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 
 	if (ele.is_none()) {
 		return PythonObjectType::None;
-	} else if (py::isinstance(ele, import_cache.pandas().libs.NAType())) {
+	} else if (ele.is(import_cache.pandas.NaT())) {
+		return PythonObjectType::None;
+	} else if (ele.is(import_cache.pandas.NA())) {
 		return PythonObjectType::None;
 	} else if (py::isinstance<py::bool_>(ele)) {
 		return PythonObjectType::Bool;
@@ -371,17 +373,17 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 		return PythonObjectType::Integer;
 	} else if (py::isinstance<py::float_>(ele)) {
 		return PythonObjectType::Float;
-	} else if (py::isinstance(ele, import_cache.decimal().Decimal())) {
+	} else if (py::isinstance(ele, import_cache.decimal.Decimal())) {
 		return PythonObjectType::Decimal;
-	} else if (py::isinstance(ele, import_cache.uuid().UUID())) {
+	} else if (py::isinstance(ele, import_cache.uuid.UUID())) {
 		return PythonObjectType::Uuid;
-	} else if (py::isinstance(ele, import_cache.datetime().datetime())) {
+	} else if (py::isinstance(ele, import_cache.datetime.datetime())) {
 		return PythonObjectType::Datetime;
-	} else if (py::isinstance(ele, import_cache.datetime().time())) {
+	} else if (py::isinstance(ele, import_cache.datetime.time())) {
 		return PythonObjectType::Time;
-	} else if (py::isinstance(ele, import_cache.datetime().date())) {
+	} else if (py::isinstance(ele, import_cache.datetime.date())) {
 		return PythonObjectType::Date;
-	} else if (py::isinstance(ele, import_cache.datetime().timedelta())) {
+	} else if (py::isinstance(ele, import_cache.datetime.timedelta())) {
 		return PythonObjectType::Timedelta;
 	} else if (py::isinstance<py::str>(ele)) {
 		return PythonObjectType::String;
@@ -397,11 +399,11 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 		return PythonObjectType::Tuple;
 	} else if (py::isinstance<py::dict>(ele)) {
 		return PythonObjectType::Dict;
-	} else if (py::isinstance(ele, import_cache.numpy().ndarray())) {
+	} else if (py::isinstance(ele, import_cache.numpy.ndarray())) {
 		return PythonObjectType::NdArray;
-	} else if (py::isinstance(ele, import_cache.numpy().datetime64())) {
+	} else if (py::isinstance(ele, import_cache.numpy.datetime64())) {
 		return PythonObjectType::NdDatetime;
-	} else if (py::isinstance(ele, import_cache.pyduckdb().value())) {
+	} else if (py::isinstance(ele, import_cache.duckdb.Value())) {
 		return PythonObjectType::Value;
 	} else {
 		return PythonObjectType::Other;
@@ -453,8 +455,8 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 	case PythonObjectType::Datetime: {
 		auto &import_cache = *DuckDBPyConnection::ImportCache();
 		bool is_nat = false;
-		if (import_cache.pandas().isnull.IsLoaded()) {
-			auto isnull_result = import_cache.pandas().isnull()(ele);
+		if (import_cache.pandas.isnull(false)) {
+			auto isnull_result = import_cache.pandas.isnull()(ele);
 			is_nat = string(py::str(isnull_result)) == "True";
 		}
 		if (is_nat) {

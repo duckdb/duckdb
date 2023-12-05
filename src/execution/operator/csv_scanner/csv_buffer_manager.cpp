@@ -9,10 +9,8 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOpti
 	D_ASSERT(!file_path.empty());
 	cached_buffers.resize(file_path.size());
 	file_handle = ReadCSV::OpenCSV(file_path[0], options.compression, context);
-	if (options.skip_rows_set) {
-		// Skip rows if they are set
-		skip_rows = options.dialect_options.skip_rows;
-	}
+	skip_rows = options.dialect_options.skip_rows.GetValue();
+
 	auto file_size = file_handle->FileSize();
 	if (file_size > 0 && file_size < buffer_size) {
 		buffer_size = CSVBuffer::CSV_MINIMUM_BUFFER_SIZE;

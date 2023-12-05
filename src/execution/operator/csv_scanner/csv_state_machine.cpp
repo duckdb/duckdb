@@ -17,7 +17,6 @@ CSVStateMachineSniffing::CSVStateMachineSniffing(CSVReaderOptions &options_p,
                                                  CSVStateMachineCache &csv_state_machine_cache_p)
     : CSVStateMachine(options_p, state_machine_options, csv_state_machine_cache_p) {
 	dialect_options.state_machine_options = state_machine_options;
-	dialect_options.has_format = options.dialect_options.has_format;
 	dialect_options.date_format = options.dialect_options.date_format;
 	dialect_options.skip_rows = options.dialect_options.skip_rows;
 }

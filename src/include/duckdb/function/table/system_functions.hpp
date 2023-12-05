@@ -85,6 +85,10 @@ struct DuckDBIndexesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBOptimizersFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBSequencesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -130,6 +134,10 @@ struct TestAllTypesFun {
 };
 
 struct TestVectorTypesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct PragmaUserAgent {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

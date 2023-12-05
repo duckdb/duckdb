@@ -96,7 +96,6 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &info = func_expr.bind_info->Cast<ICUStrptimeBindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
-		auto &formats = info.formats;
 
 		D_ASSERT(fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR);
 
@@ -108,7 +107,11 @@ struct ICUStrptime : public ICUDateFunc {
 				ParseResult parsed;
 				for (auto &format : info.formats) {
 					if (format.Parse(input, parsed)) {
-						return GetTime(calendar, ToMicros(calendar, parsed, format));
+						if (parsed.is_special) {
+							return parsed.ToTimestamp();
+						} else {
+							return GetTime(calendar, ToMicros(calendar, parsed, format));
+						}
 					}
 				}
 
@@ -126,7 +129,6 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &info = func_expr.bind_info->Cast<ICUStrptimeBindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
-		auto &formats = info.formats;
 
 		D_ASSERT(fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR);
 
@@ -139,9 +141,13 @@ struct ICUStrptime : public ICUDateFunc {
 				    ParseResult parsed;
 				    for (auto &format : info.formats) {
 					    if (format.Parse(input, parsed)) {
-						    timestamp_t result;
-						    if (TryGetTime(calendar, ToMicros(calendar, parsed, format), result)) {
-							    return result;
+						    if (parsed.is_special) {
+							    return parsed.ToTimestamp();
+						    } else {
+							    timestamp_t result;
+							    if (TryGetTime(calendar, ToMicros(calendar, parsed, format), result)) {
+								    return result;
+							    }
 						    }
 					    }
 				    }
@@ -362,8 +368,7 @@ struct ICUStrftime : public ICUDateFunc {
 					    if (Timestamp::IsFinite(input)) {
 						    return Operation(calendar.get(), input, tz_name, format, result);
 					    } else {
-						    mask.SetInvalid(idx);
-						    return string_t();
+						    return StringVector::AddString(result, Timestamp::ToString(input));
 					    }
 				    });
 			}
@@ -377,8 +382,7 @@ struct ICUStrftime : public ICUDateFunc {
 
 					    return Operation(calendar.get(), input, tz_name, format, result);
 				    } else {
-					    mask.SetInvalid(idx);
-					    return string_t();
+					    return StringVector::AddString(result, Timestamp::ToString(input));
 				    }
 			    });
 		}

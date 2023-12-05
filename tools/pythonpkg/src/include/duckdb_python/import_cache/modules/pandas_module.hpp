@@ -1,3 +1,4 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -12,44 +13,24 @@
 
 namespace duckdb {
 
-// pandas.libs
-struct PandasLibsCacheItem : public PythonImportCacheItem {
-public:
-	~PandasLibsCacheItem() override {
-	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		NAType.LoadAttribute("NAType", cache, *this);
-	}
-
-public:
-	PythonImportCacheItem NAType;
-
-protected:
-	bool IsRequired() const override final {
-		return false;
-	}
-};
-
 struct PandasCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "pandas";
 
 public:
+	PandasCacheItem()
+	    : PythonImportCacheItem("pandas"), DataFrame("DataFrame", this), isnull("isnull", this),
+	      ArrowDtype("ArrowDtype", this), NaT("NaT", this), NA("NA", this) {
+	}
 	~PandasCacheItem() override {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		DataFrame.LoadAttribute("DataFrame", cache, *this);
-		libs.LoadModule("pandas._libs.missing", cache);
-		isnull.LoadAttribute("isnull", cache, *this);
-		ArrowDtype.LoadAttribute("ArrowDtype", cache, *this);
-	}
 
-public:
-	//! pandas.DataFrame
 	PythonImportCacheItem DataFrame;
-	PandasLibsCacheItem libs;
 	PythonImportCacheItem isnull;
 	PythonImportCacheItem ArrowDtype;
+	PythonImportCacheItem NaT;
+	PythonImportCacheItem NA;
 
 protected:
 	bool IsRequired() const override final {

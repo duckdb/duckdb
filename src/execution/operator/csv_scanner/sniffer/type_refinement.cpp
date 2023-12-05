@@ -8,14 +8,15 @@ bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const Logica
 	auto &sniffing_state_machine = best_candidate->GetStateMachineSniff();
 	// try vector-cast from string to sql_type
 	Vector dummy_result(sql_type);
-	if (sniffing_state_machine.dialect_options.has_format[LogicalTypeId::DATE] && sql_type == LogicalTypeId::DATE) {
+	if (!sniffing_state_machine.dialect_options.date_format[LogicalTypeId::DATE].GetValue().Empty() &&
+	    sql_type == LogicalTypeId::DATE) {
 		// use the date format to cast the chunk
 		string error_message;
 		idx_t line_error;
 		return BaseCSVReader::TryCastDateVector(sniffing_state_machine.dialect_options.date_format, parse_chunk_col,
 		                                        dummy_result, size, error_message, line_error);
 	}
-	if (sniffing_state_machine.dialect_options.has_format[LogicalTypeId::TIMESTAMP] &&
+	if (!sniffing_state_machine.dialect_options.date_format[LogicalTypeId::TIMESTAMP].GetValue().Empty() &&
 	    sql_type == LogicalTypeId::TIMESTAMP) {
 		// use the timestamp format to cast the chunk
 		string error_message;

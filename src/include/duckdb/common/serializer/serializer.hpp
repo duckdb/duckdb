@@ -39,6 +39,9 @@ public:
 		template <class T>
 		void WriteElement(const T &value);
 
+		//! Serialize bytes
+		void WriteElement(data_ptr_t ptr, idx_t size);
+
 		// Serialize an object
 		template <class FUNC>
 		void WriteObject(FUNC f);
@@ -54,6 +57,19 @@ public:
 	}
 
 	// Default value
+	template <class T>
+	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const T &value) {
+		// If current value is default, don't write it
+		if (!serialize_default_values && SerializationDefaultValue::IsDefault<T>(value)) {
+			OnOptionalPropertyBegin(field_id, tag, false);
+			OnOptionalPropertyEnd(false);
+			return;
+		}
+		OnOptionalPropertyBegin(field_id, tag, true);
+		WriteValue(value);
+		OnOptionalPropertyEnd(true);
+	}
+
 	template <class T>
 	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const T &value, const T &&default_value) {
 		// If current value is default, don't write it

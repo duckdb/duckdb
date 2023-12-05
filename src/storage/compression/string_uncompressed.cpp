@@ -2,7 +2,6 @@
 
 #include "duckdb/common/pair.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
-#include "miniz_wrapper.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/table/column_data.hpp"
@@ -335,52 +334,36 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		auto handle = buffer_manager.Pin(block_handle);
 
 		// read header
-		uint32_t compressed_size = Load<uint32_t>(handle.Ptr() + offset);
-		uint32_t uncompressed_size = Load<uint32_t>(handle.Ptr() + offset + sizeof(uint32_t));
-		uint32_t remaining = compressed_size;
-		offset += 2 * sizeof(uint32_t);
+		uint32_t length = Load<uint32_t>(handle.Ptr() + offset);
+		uint32_t remaining = length;
+		offset += sizeof(uint32_t);
 
-		data_ptr_t decompression_ptr;
-		unsafe_unique_array<data_t> decompression_buffer;
+		// allocate a buffer to store the string
+		auto alloc_size = MaxValue<idx_t>(Storage::BLOCK_SIZE, length);
+		// allocate a buffer to store the compressed string
+		// TODO: profile this to check if we need to reuse buffer
+		auto target_handle = buffer_manager.Allocate(alloc_size);
+		auto target_ptr = target_handle.Ptr();
 
-		// If string is in single block we decompress straight from it, else we copy first
-		if (remaining <= WriteOverflowStringsToDisk::STRING_SPACE - offset) {
-			decompression_ptr = handle.Ptr() + offset;
-		} else {
-			decompression_buffer = make_unsafe_uniq_array<data_t>(compressed_size);
-			auto target_ptr = decompression_buffer.get();
-
-			// now append the string to the single buffer
-			while (remaining > 0) {
-				idx_t to_write = MinValue<idx_t>(remaining, WriteOverflowStringsToDisk::STRING_SPACE - offset);
-				memcpy(target_ptr, handle.Ptr() + offset, to_write);
-
-				remaining -= to_write;
-				offset += to_write;
-				target_ptr += to_write;
-				if (remaining > 0) {
-					// read the next block
-					D_ASSERT(offset == WriteOverflowStringsToDisk::STRING_SPACE);
-					block_id_t next_block = Load<block_id_t>(handle.Ptr() + WriteOverflowStringsToDisk::STRING_SPACE);
-					block_handle = state.GetHandle(block_manager, next_block);
-					handle = buffer_manager.Pin(block_handle);
-					offset = 0;
-				}
+		// now append the string to the single buffer
+		while (remaining > 0) {
+			idx_t to_write = MinValue<idx_t>(remaining, Storage::BLOCK_SIZE - sizeof(block_id_t) - offset);
+			memcpy(target_ptr, handle.Ptr() + offset, to_write);
+			remaining -= to_write;
+			offset += to_write;
+			target_ptr += to_write;
+			if (remaining > 0) {
+				// read the next block
+				block_id_t next_block = Load<block_id_t>(handle.Ptr() + offset);
+				block_handle = state.GetHandle(block_manager, next_block);
+				handle = buffer_manager.Pin(block_handle);
+				offset = 0;
 			}
-			decompression_ptr = decompression_buffer.get();
 		}
 
-		// overflow strings on disk are gzipped, decompress here
-		auto decompressed_target_handle =
-		    buffer_manager.Allocate(MaxValue<idx_t>(Storage::BLOCK_SIZE, uncompressed_size));
-		auto decompressed_target_ptr = decompressed_target_handle.Ptr();
-		MiniZStream s;
-		s.Decompress(const_char_ptr_cast(decompression_ptr), compressed_size, char_ptr_cast(decompressed_target_ptr),
-		             uncompressed_size);
-
-		auto final_buffer = decompressed_target_handle.Ptr();
-		StringVector::AddHandle(result, std::move(decompressed_target_handle));
-		return ReadString(final_buffer, 0, uncompressed_size);
+		auto final_buffer = target_handle.Ptr();
+		StringVector::AddHandle(result, std::move(target_handle));
+		return ReadString(final_buffer, 0, length);
 	} else {
 		// read the overflow string from memory
 		// first pin the handle, if it is not pinned yet

@@ -11,3 +11,12 @@
 #define MBEDTLS_PK_C
 #define MBEDTLS_PEM_PARSE_C
 #define MBEDTLS_PLATFORM_C
+#define MBEDTLS_AES_C
+#define MBEDTLS_CIPHER_C
+#define MBEDTLS_CAMELLIA_C
+#define MBEDTLS_ARIA_C
+#define MBEDTLS_GCM_C
+#define MBEDTLS_ENTROPY_C
+#if defined(_WIN32)
+#define MBEDTLS_NO_PLATFORM_ENTROPY
+#endif

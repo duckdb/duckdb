@@ -298,12 +298,10 @@ void PerfectAggregateHashTable::Destroy() {
 	RowOperationsState row_state(*aggregate_allocator);
 	data_ptr_t payload_ptr = data;
 	for (idx_t i = 0; i < total_groups; i++) {
-		if (group_is_set[i]) {
-			data_pointers[count++] = payload_ptr;
-			if (count == STANDARD_VECTOR_SIZE) {
-				RowOperations::DestroyStates(row_state, layout, addresses, count);
-				count = 0;
-			}
+		data_pointers[count++] = payload_ptr;
+		if (count == STANDARD_VECTOR_SIZE) {
+			RowOperations::DestroyStates(row_state, layout, addresses, count);
+			count = 0;
 		}
 		payload_ptr += tuple_size;
 	}

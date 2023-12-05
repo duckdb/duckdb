@@ -19,8 +19,7 @@
       {
         "id": 102,
         "name": "sample",
-        "type": "SampleOptions*",
-        "optional": true
+        "type": "SampleOptions*"
       }
     ]
   },
@@ -69,8 +68,7 @@
       {
         "id": 202,
         "name": "condition",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       },
       {
         "id": 203,

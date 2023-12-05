@@ -1,14 +1,17 @@
 #include "duckdb/storage/checkpoint_manager.hpp"
 
-#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
@@ -25,9 +28,6 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
 
 namespace duckdb {
 
@@ -52,6 +52,74 @@ MetadataManager &SingleFileCheckpointWriter::GetMetadataManager() {
 
 unique_ptr<TableDataWriter> SingleFileCheckpointWriter::GetTableDataWriter(TableCatalogEntry &table) {
 	return make_uniq<SingleFileTableDataWriter>(*this, table, *table_metadata_writer);
+}
+
+static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEntry>> &schemas) {
+	catalog_entry_vector_t entries;
+	for (auto &schema_p : schemas) {
+		auto &schema = schema_p.get();
+		entries.push_back(schema);
+		schema.Scan(CatalogType::TYPE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			entries.push_back(entry);
+		});
+
+		schema.Scan(CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			entries.push_back(entry);
+		});
+
+		catalog_entry_vector_t tables;
+		vector<reference<ViewCatalogEntry>> views;
+		schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			if (entry.type == CatalogType::TABLE_ENTRY) {
+				tables.push_back(entry.Cast<TableCatalogEntry>());
+			} else if (entry.type == CatalogType::VIEW_ENTRY) {
+				views.push_back(entry.Cast<ViewCatalogEntry>());
+			} else {
+				throw NotImplementedException("Catalog type for entries");
+			}
+		});
+		// Reorder tables because of foreign key constraint
+		ReorderTableEntries(tables);
+		for (auto &table : tables) {
+			entries.push_back(table.get());
+		}
+		for (auto &view : views) {
+			entries.push_back(view.get());
+		}
+
+		schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			if (entry.type == CatalogType::MACRO_ENTRY) {
+				entries.push_back(entry);
+			}
+		});
+
+		schema.Scan(CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			if (entry.type == CatalogType::TABLE_MACRO_ENTRY) {
+				entries.push_back(entry);
+			}
+		});
+
+		schema.Scan(CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) {
+			D_ASSERT(!entry.internal);
+			entries.push_back(entry);
+		});
+	}
+	return entries;
 }
 
 void SingleFileCheckpointWriter::CreateCheckpoint() {
@@ -97,11 +165,12 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	        ]
 	    }
 	 */
+	auto catalog_entries = GetCatalogEntries(schemas);
 	BinarySerializer serializer(*metadata_writer);
 	serializer.Begin();
-	serializer.WriteList(100, "schemas", schemas.size(), [&](Serializer::List &list, idx_t i) {
-		auto &schema = schemas[i];
-		list.WriteObject([&](Serializer &obj) { WriteSchema(schema.get(), obj); });
+	serializer.WriteList(100, "catalog_entries", catalog_entries.size(), [&](Serializer::List &list, idx_t i) {
+		auto &entry = catalog_entries[i];
+		list.WriteObject([&](Serializer &obj) { WriteEntry(entry.get(), obj); });
 	});
 	serializer.End();
 
@@ -141,8 +210,8 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 void CheckpointReader::LoadCheckpoint(ClientContext &context, MetadataReader &reader) {
 	BinaryDeserializer deserializer(reader);
 	deserializer.Begin();
-	deserializer.ReadList(100, "schemas", [&](Deserializer::List &list, idx_t i) {
-		return list.ReadObject([&](Deserializer &obj) { ReadSchema(context, obj); });
+	deserializer.ReadList(100, "catalog_entries", [&](Deserializer::List &list, idx_t i) {
+		return list.ReadObject([&](Deserializer &obj) { ReadEntry(context, obj); });
 	});
 	deserializer.End();
 }
@@ -169,112 +238,102 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 	con.Commit();
 }
 
+void CheckpointWriter::WriteEntry(CatalogEntry &entry, Serializer &serializer) {
+	serializer.WriteProperty(99, "catalog_type", entry.type);
+
+	switch (entry.type) {
+	case CatalogType::SCHEMA_ENTRY: {
+		auto &schema = entry.Cast<SchemaCatalogEntry>();
+		WriteSchema(schema, serializer);
+		break;
+	}
+	case CatalogType::TYPE_ENTRY: {
+		auto &custom_type = entry.Cast<TypeCatalogEntry>();
+		WriteType(custom_type, serializer);
+		break;
+	}
+	case CatalogType::SEQUENCE_ENTRY: {
+		auto &seq = entry.Cast<SequenceCatalogEntry>();
+		WriteSequence(seq, serializer);
+		break;
+	}
+	case CatalogType::TABLE_ENTRY: {
+		auto &table = entry.Cast<TableCatalogEntry>();
+		WriteTable(table, serializer);
+		break;
+	}
+	case CatalogType::VIEW_ENTRY: {
+		auto &view = entry.Cast<ViewCatalogEntry>();
+		WriteView(view, serializer);
+		break;
+	}
+	case CatalogType::MACRO_ENTRY: {
+		auto &macro = entry.Cast<ScalarMacroCatalogEntry>();
+		WriteMacro(macro, serializer);
+		break;
+	}
+	case CatalogType::TABLE_MACRO_ENTRY: {
+		auto &macro = entry.Cast<TableMacroCatalogEntry>();
+		WriteTableMacro(macro, serializer);
+		break;
+	}
+	case CatalogType::INDEX_ENTRY: {
+		auto &index = entry.Cast<IndexCatalogEntry>();
+		WriteIndex(index, serializer);
+		break;
+	}
+	default:
+		throw InternalException("Unrecognized catalog type in CheckpointWriter::WriteEntry");
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Schema
 //===--------------------------------------------------------------------===//
 void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema, Serializer &serializer) {
 	// write the schema data
 	serializer.WriteProperty(100, "schema", &schema);
+}
 
-	// Write the custom types
-	vector<reference<TypeCatalogEntry>> custom_types;
-	schema.Scan(CatalogType::TYPE_ENTRY, [&](CatalogEntry &entry) {
-		if (entry.internal) {
-			return;
-		}
-		custom_types.push_back(entry.Cast<TypeCatalogEntry>());
-	});
+void CheckpointReader::ReadEntry(ClientContext &context, Deserializer &deserializer) {
+	auto type = deserializer.ReadProperty<CatalogType>(99, "type");
 
-	serializer.WriteList(101, "custom_types", custom_types.size(), [&](Serializer::List &list, idx_t i) {
-		auto &entry = custom_types[i];
-		list.WriteObject([&](Serializer &obj) { WriteType(entry, obj); });
-	});
-
-	// Write the sequences
-	vector<reference<SequenceCatalogEntry>> sequences;
-	schema.Scan(CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry &entry) {
-		if (entry.internal) {
-			return;
-		}
-		sequences.push_back(entry.Cast<SequenceCatalogEntry>());
-	});
-
-	serializer.WriteList(102, "sequences", sequences.size(), [&](Serializer::List &list, idx_t i) {
-		auto &entry = sequences[i];
-		list.WriteObject([&](Serializer &obj) { WriteSequence(entry, obj); });
-	});
-
-	// Read the tables and views
-	catalog_entry_vector_t tables;
-	vector<reference<ViewCatalogEntry>> views;
-	schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
-		if (entry.internal) {
-			return;
-		}
-		if (entry.type == CatalogType::TABLE_ENTRY) {
-			tables.push_back(entry.Cast<TableCatalogEntry>());
-		} else if (entry.type == CatalogType::VIEW_ENTRY) {
-			views.push_back(entry.Cast<ViewCatalogEntry>());
-		} else {
-			throw NotImplementedException("Catalog type for entries");
-		}
-	});
-	// Reorder tables because of foreign key constraint
-	ReorderTableEntries(tables);
-	// Tables
-	serializer.WriteList(103, "tables", tables.size(), [&](Serializer::List &list, idx_t i) {
-		auto &entry = tables[i];
-		auto &table = entry.get().Cast<TableCatalogEntry>();
-		list.WriteObject([&](Serializer &obj) { WriteTable(table, obj); });
-	});
-
-	// Views
-	serializer.WriteList(104, "views", views.size(), [&](Serializer::List &list, idx_t i) {
-		auto &entry = views[i];
-		list.WriteObject([&](Serializer &obj) { WriteView(entry.get(), obj); });
-	});
-
-	// Scalar macros
-	vector<reference<ScalarMacroCatalogEntry>> macros;
-	schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
-		if (entry.internal) {
-			return;
-		}
-		if (entry.type == CatalogType::MACRO_ENTRY) {
-			macros.push_back(entry.Cast<ScalarMacroCatalogEntry>());
-		}
-	});
-	serializer.WriteList(105, "macros", macros.size(), [&](Serializer::List &list, idx_t i) {
-		auto &entry = macros[i];
-		list.WriteObject([&](Serializer &obj) { WriteMacro(entry.get(), obj); });
-	});
-
-	// Table macros
-	vector<reference<TableMacroCatalogEntry>> table_macros;
-	schema.Scan(CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
-		if (entry.internal) {
-			return;
-		}
-		if (entry.type == CatalogType::TABLE_MACRO_ENTRY) {
-			table_macros.push_back(entry.Cast<TableMacroCatalogEntry>());
-		}
-	});
-	serializer.WriteList(106, "table_macros", table_macros.size(), [&](Serializer::List &list, idx_t i) {
-		auto &entry = table_macros[i];
-		list.WriteObject([&](Serializer &obj) { WriteTableMacro(entry.get(), obj); });
-	});
-
-	// Indexes
-	vector<reference<IndexCatalogEntry>> indexes;
-	schema.Scan(CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) {
-		D_ASSERT(!entry.internal);
-		indexes.push_back(entry.Cast<IndexCatalogEntry>());
-	});
-
-	serializer.WriteList(107, "indexes", indexes.size(), [&](Serializer::List &list, idx_t i) {
-		auto &entry = indexes[i];
-		list.WriteObject([&](Serializer &obj) { WriteIndex(entry.get(), obj); });
-	});
+	switch (type) {
+	case CatalogType::SCHEMA_ENTRY: {
+		ReadSchema(context, deserializer);
+		break;
+	}
+	case CatalogType::TYPE_ENTRY: {
+		ReadType(context, deserializer);
+		break;
+	}
+	case CatalogType::SEQUENCE_ENTRY: {
+		ReadSequence(context, deserializer);
+		break;
+	}
+	case CatalogType::TABLE_ENTRY: {
+		ReadTable(context, deserializer);
+		break;
+	}
+	case CatalogType::VIEW_ENTRY: {
+		ReadView(context, deserializer);
+		break;
+	}
+	case CatalogType::MACRO_ENTRY: {
+		ReadMacro(context, deserializer);
+		break;
+	}
+	case CatalogType::TABLE_MACRO_ENTRY: {
+		ReadTableMacro(context, deserializer);
+		break;
+	}
+	case CatalogType::INDEX_ENTRY: {
+		ReadIndex(context, deserializer);
+		break;
+	}
+	default:
+		throw InternalException("Unrecognized catalog type in CheckpointWriter::WriteEntry");
+	}
 }
 
 void CheckpointReader::ReadSchema(ClientContext &context, Deserializer &deserializer) {
@@ -285,41 +344,6 @@ void CheckpointReader::ReadSchema(ClientContext &context, Deserializer &deserial
 	// we set create conflict to IGNORE_ON_CONFLICT, so that we can ignore a failure when recreating the main schema
 	schema_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	catalog.CreateSchema(context, schema_info);
-
-	// Read the custom types
-	deserializer.ReadList(101, "custom_types", [&](Deserializer::List &list, idx_t i) {
-		return list.ReadObject([&](Deserializer &obj) { ReadType(context, obj); });
-	});
-
-	// Read the sequences
-	deserializer.ReadList(102, "sequences", [&](Deserializer::List &list, idx_t i) {
-		return list.ReadObject([&](Deserializer &obj) { ReadSequence(context, obj); });
-	});
-
-	// Read the tables
-	deserializer.ReadList(103, "tables", [&](Deserializer::List &list, idx_t i) {
-		return list.ReadObject([&](Deserializer &obj) { ReadTable(context, obj); });
-	});
-
-	// Read the views
-	deserializer.ReadList(104, "views", [&](Deserializer::List &list, idx_t i) {
-		return list.ReadObject([&](Deserializer &obj) { ReadView(context, obj); });
-	});
-
-	// Read the macros
-	deserializer.ReadList(105, "macros", [&](Deserializer::List &list, idx_t i) {
-		return list.ReadObject([&](Deserializer &obj) { ReadMacro(context, obj); });
-	});
-
-	// Read the table macros
-	deserializer.ReadList(106, "table_macros", [&](Deserializer::List &list, idx_t i) {
-		return list.ReadObject([&](Deserializer &obj) { ReadTableMacro(context, obj); });
-	});
-
-	// Read the indexes
-	deserializer.ReadList(107, "indexes", [&](Deserializer::List &list, idx_t i) {
-		return list.ReadObject([&](Deserializer &obj) { ReadIndex(context, obj); });
-	});
 }
 
 //===--------------------------------------------------------------------===//
@@ -351,37 +375,35 @@ void CheckpointReader::ReadSequence(ClientContext &context, Deserializer &deseri
 //===--------------------------------------------------------------------===//
 // Indexes
 //===--------------------------------------------------------------------===//
-void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog, Serializer &serializer) {
-	// The index data is written as part of WriteTableData.
-	// Here, we need only serialize the pointer to that data.
-	auto root_block_pointer = index_catalog.index->GetRootBlockPointer();
-	serializer.WriteProperty(100, "index", &index_catalog);
-	serializer.WriteProperty(101, "root_block_pointer", root_block_pointer);
+void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog_entry, Serializer &serializer) {
+	// The index data is written as part of WriteTableData
+	// Here, we serialize the index catalog entry
+
+	// we need to keep the tag "index", even though it is slightly misleading
+	serializer.WriteProperty(100, "index", &index_catalog_entry);
 }
 
 void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deserializer) {
 
-	// deserialize the index create info
+	// we need to keep the tag "index", even though it is slightly misleading.
 	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "index");
 	auto &info = create_info->Cast<CreateIndexInfo>();
 
+	// also, we have to read the root_block_pointer, which will not be valid for newer storage versions.
+	// This leads to different code paths in this function.
+	auto root_block_pointer =
+	    deserializer.ReadPropertyWithDefault<BlockPointer>(101, "root_block_pointer", BlockPointer());
+
 	// create the index in the catalog
-	auto &schema = catalog.GetSchema(context, create_info->schema);
 	auto &table =
 	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info->schema, info.table).Cast<DuckTableEntry>();
-
-	auto &index = schema.CreateIndex(context, info, table)->Cast<DuckIndexEntry>();
-
+	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
 	index.info = table.GetStorage().info;
-	// insert the parsed expressions into the stored index so that we correctly (de)serialize it during consecutive
-	// checkpoints
+
+	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
 	for (auto &parsed_expr : info.parsed_expressions) {
 		index.parsed_expressions.push_back(parsed_expr->Copy());
 	}
-
-	// we deserialize the index lazily, i.e., we do not need to load any node information
-	// except the root block pointer
-	auto root_block_pointer = deserializer.ReadProperty<BlockPointer>(101, "root_block_pointer");
 
 	// obtain the parsed expressions of the ART from the index metadata
 	vector<unique_ptr<ParsedExpression>> parsed_expressions;
@@ -411,19 +433,27 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 		unbound_expressions.push_back(idx_binder.Bind(expr));
 	}
 
-	// create the index and add it to the storage
-	switch (info.index_type) {
-	case IndexType::ART: {
-		auto &storage = table.GetStorage();
-		auto art = make_uniq<ART>(info.column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
-		                          info.constraint_type, storage.db, nullptr, root_block_pointer);
+	auto &data_table = table.GetStorage();
+	IndexStorageInfo index_storage_info;
+	if (root_block_pointer.IsValid()) {
+		// this code path is necessary to read older duckdb files
+		index_storage_info.name = info.index_name;
+		index_storage_info.root_block_ptr = root_block_pointer;
 
-		index.index = art.get();
-		storage.info->indexes.AddIndex(std::move(art));
-	} break;
-	default:
-		throw InternalException("Unknown index type for ReadIndex");
+	} else {
+		// get the matching index storage info
+		for (auto const &elem : data_table.info->index_storage_infos) {
+			if (elem.name == info.index_name) {
+				index_storage_info = elem;
+				break;
+			}
+		}
 	}
+
+	D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
+	auto art = make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
+	                          std::move(unbound_expressions), data_table.db, nullptr, index_storage_info);
+	data_table.info->indexes.AddIndex(std::move(art));
 }
 
 //===--------------------------------------------------------------------===//
@@ -466,7 +496,7 @@ void CheckpointReader::ReadTableMacro(ClientContext &context, Deserializer &dese
 // Table Metadata
 //===--------------------------------------------------------------------===//
 void CheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer &serializer) {
-	// Write the table meta data
+	// Write the table metadata
 	serializer.WriteProperty(100, "table", &table);
 
 	// Write the table data
@@ -482,7 +512,7 @@ void CheckpointReader::ReadTable(ClientContext &context, Deserializer &deseriali
 	auto &schema = catalog.GetSchema(context, info->schema);
 	auto bound_info = binder->BindCreateTableInfo(std::move(info), schema);
 
-	// now read the actual table data and place it into the create table info
+	// now read the actual table data and place it into the CreateTableInfo
 	ReadTableData(context, deserializer, *bound_info);
 
 	// finally create the table in the catalog
@@ -492,10 +522,27 @@ void CheckpointReader::ReadTable(ClientContext &context, Deserializer &deseriali
 void CheckpointReader::ReadTableData(ClientContext &context, Deserializer &deserializer,
                                      BoundCreateTableInfo &bound_info) {
 
-	// This is written in "SingleFileTableDataWriter::FinalizeTable"
+	// written in "SingleFileTableDataWriter::FinalizeTable"
 	auto table_pointer = deserializer.ReadProperty<MetaBlockPointer>(101, "table_pointer");
 	auto total_rows = deserializer.ReadProperty<idx_t>(102, "total_rows");
-	auto index_pointers = deserializer.ReadProperty<vector<BlockPointer>>(103, "index_pointers");
+
+	// old file read
+	auto index_pointers = deserializer.ReadPropertyWithDefault<vector<BlockPointer>>(103, "index_pointers", {});
+	// new file read
+	auto index_storage_infos =
+	    deserializer.ReadPropertyWithDefault<vector<IndexStorageInfo>>(104, "index_storage_infos", {});
+
+	if (!index_storage_infos.empty()) {
+		bound_info.indexes = index_storage_infos;
+
+	} else {
+		// old duckdb file containing index pointers
+		for (idx_t i = 0; i < index_pointers.size(); i++) {
+			IndexStorageInfo index_storage_info;
+			index_storage_info.root_block_ptr = index_pointers[i];
+			bound_info.indexes.push_back(index_storage_info);
+		}
+	}
 
 	// FIXME: icky downcast to get the underlying MetadataReader
 	auto &binary_deserializer = dynamic_cast<BinaryDeserializer &>(deserializer);
@@ -506,7 +553,6 @@ void CheckpointReader::ReadTableData(ClientContext &context, Deserializer &deser
 	data_reader.ReadTableData();
 
 	bound_info.data->total_rows = total_rows;
-	bound_info.indexes = index_pointers;
 }
 
 } // namespace duckdb

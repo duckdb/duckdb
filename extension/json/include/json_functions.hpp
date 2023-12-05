@@ -101,6 +101,7 @@ private:
 	static ScalarFunctionSet GetValidFunction();
 	static ScalarFunctionSet GetSerializeSqlFunction();
 	static ScalarFunctionSet GetDeserializeSqlFunction();
+	static ScalarFunctionSet GetSerializePlanFunction();
 
 	static PragmaFunctionSet GetExecuteJsonSerializedSqlPragmaFunction();
 

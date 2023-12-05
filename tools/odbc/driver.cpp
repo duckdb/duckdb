@@ -251,6 +251,14 @@ static SQLRETURN SetConnection(SQLHDBC connection_handle, SQLCHAR *conn_str) {
 			config.options.access_mode = duckdb::AccessMode::READ_ONLY;
 		}
 		bool cache_instance = db_name != ":memory:" && !db_name.empty();
+
+		config.SetOptionByName("duckdb_api", "odbc");
+		std::string custom_user_agent;
+		OdbcUtils::SetValueFromConnStr(conn_str, "custom_user_agent", custom_user_agent);
+		if (!custom_user_agent.empty()) {
+			config.SetOptionByName("custom_user_agent", custom_user_agent);
+		}
+
 		dbc->env->db = instance_cache.GetOrCreateInstance(db_name, config, cache_instance);
 	}
 
@@ -300,8 +308,9 @@ SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSM
 	    };
 
 	duckdb::OdbcHandle *hdl = nullptr;
-	if (ConvertHandle(handle, hdl) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertHandle(handle, hdl);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	bool is_valid_type;
@@ -380,8 +389,9 @@ SQLRETURN SQL_API SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQL
 	case SQL_HANDLE_STMT:
 	case SQL_HANDLE_DESC: {
 		duckdb::OdbcHandle *hdl = nullptr;
-		if (ConvertHandle(handle, hdl) != SQL_SUCCESS) {
-			return SQL_ERROR;
+		SQLRETURN ret = ConvertHandle(handle, hdl);
+		if (ret != SQL_SUCCESS) {
+			return ret;
 		}
 
 		// diag header fields

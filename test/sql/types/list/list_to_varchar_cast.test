@@ -1,0 +1,9 @@
+# name: test/sql/types/list/list_to_varchar_cast.test
+# description: Tests issue 9808
+# group: [list]
+
+query I
+SELECT concat_ws('.', list_reverse(string_split('1.2..3', '.')));
+----
+[3, , 2, 1]
+

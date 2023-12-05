@@ -261,7 +261,7 @@ idx_t RadixHTConfig::ExternalRadixBits(const idx_t &maximum_sink_radix_bits_p) {
 idx_t RadixHTConfig::SinkCapacity(ClientContext &context) {
 	// Get active and maximum number of threads
 	const idx_t active_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	const auto max_threads = DBConfig::GetSystemMaxThreads(FileSystem::GetFileSystem(context));
+	const auto max_threads = DBConfig::GetConfig(context).options.maximum_threads;
 
 	// Compute cache size per active thread (assuming cache is shared)
 	const auto total_shared_cache_size = max_threads * L3_CACHE_SIZE;
@@ -344,6 +344,11 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 			ht.InitializePartitionedData();
 			return true;
 		}
+	}
+
+	// We can go external when there is only one active thread, but we shouldn't repartition here
+	if (gstate.active_threads < 2) {
+		return false;
 	}
 
 	const auto partition_count = partitioned_data->PartitionCount();

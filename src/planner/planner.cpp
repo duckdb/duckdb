@@ -76,7 +76,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	}
 	this->properties = binder->properties;
 	this->properties.parameter_count = parameter_count;
-	properties.bound_all_parameters = parameters_resolved;
+	properties.bound_all_parameters = !bound_parameters.rebind && parameters_resolved;
 
 	Planner::VerifyPlan(context, plan, bound_parameters.GetParametersPtr());
 
@@ -136,6 +136,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::LOGICAL_PLAN_STATEMENT:
 	case StatementType::ATTACH_STATEMENT:
 	case StatementType::DETACH_STATEMENT:
+	case StatementType::COPY_DATABASE_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:

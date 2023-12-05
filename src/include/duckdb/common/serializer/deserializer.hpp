@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/serializer/format_serializer.hpp
+// duckdb/common/serializer/deserializer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -14,6 +14,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
 
 namespace duckdb {
 
@@ -38,6 +39,10 @@ public:
 		// Deserialize an element
 		template <class T>
 		T ReadElement();
+
+		//! Deserialize bytes
+		template <class T>
+		void ReadElement(data_ptr_t &ptr, idx_t size);
 
 		// Deserialize an object
 		template <class FUNC>
@@ -64,6 +69,17 @@ public:
 
 	// Default Value return
 	template <typename T>
+	inline T ReadPropertyWithDefault(const field_id_t field_id, const char *tag) {
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
+			OnOptionalPropertyEnd(false);
+			return std::forward<T>(SerializationDefaultValue::GetDefault<T>());
+		}
+		auto ret = Read<T>();
+		OnOptionalPropertyEnd(true);
+		return ret;
+	}
+
+	template <typename T>
 	inline T ReadPropertyWithDefault(const field_id_t field_id, const char *tag, T &&default_value) {
 		if (!OnOptionalPropertyBegin(field_id, tag)) {
 			OnOptionalPropertyEnd(false);
@@ -75,6 +91,17 @@ public:
 	}
 
 	// Default value in place
+	template <typename T>
+	inline void ReadPropertyWithDefault(const field_id_t field_id, const char *tag, T &ret) {
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
+			ret = std::forward<T>(SerializationDefaultValue::GetDefault<T>());
+			OnOptionalPropertyEnd(false);
+			return;
+		}
+		ret = Read<T>();
+		OnOptionalPropertyEnd(true);
+	}
+
 	template <typename T>
 	inline void ReadPropertyWithDefault(const field_id_t field_id, const char *tag, T &ret, T &&default_value) {
 		if (!OnOptionalPropertyBegin(field_id, tag)) {
@@ -92,6 +119,19 @@ public:
 		OnPropertyBegin(field_id, tag);
 		ReadDataPtr(ret, count);
 		OnPropertyEnd();
+	}
+
+	// Try to read a property, if it is not present, continue, otherwise read and discard the value
+	template <typename T>
+	inline void ReadDeletedProperty(const field_id_t field_id, const char *tag) {
+		// Try to read the property. If not present, great!
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
+			OnOptionalPropertyEnd(false);
+			return;
+		}
+		// Otherwise read and discard the value
+		(void)Read<T>();
+		OnOptionalPropertyEnd(true);
 	}
 
 	//! Set a serialization property
@@ -143,14 +183,28 @@ private:
 		return val;
 	}
 
-	template <class T = void>
-	inline typename std::enable_if<is_unique_ptr<T>::value, T>::type Read() {
-		using ELEMENT_TYPE = typename is_unique_ptr<T>::ELEMENT_TYPE;
+	// Deserialize unique_ptr if the element type has a Deserialize method
+	template <class T, typename ELEMENT_TYPE = typename is_unique_ptr<T>::ELEMENT_TYPE>
+	inline typename std::enable_if<is_unique_ptr<T>::value && has_deserialize<ELEMENT_TYPE>::value, T>::type Read() {
 		unique_ptr<ELEMENT_TYPE> ptr = nullptr;
 		auto is_present = OnNullableBegin();
 		if (is_present) {
 			OnObjectBegin();
 			ptr = ELEMENT_TYPE::Deserialize(*this);
+			OnObjectEnd();
+		}
+		OnNullableEnd();
+		return ptr;
+	}
+
+	// Deserialize a unique_ptr if the element type does not have a Deserialize method
+	template <class T, typename ELEMENT_TYPE = typename is_unique_ptr<T>::ELEMENT_TYPE>
+	inline typename std::enable_if<is_unique_ptr<T>::value && !has_deserialize<ELEMENT_TYPE>::value, T>::type Read() {
+		unique_ptr<ELEMENT_TYPE> ptr = nullptr;
+		auto is_present = OnNullableBegin();
+		if (is_present) {
+			OnObjectBegin();
+			ptr = make_uniq<ELEMENT_TYPE>(Read<ELEMENT_TYPE>());
 			OnObjectEnd();
 		}
 		OnNullableEnd();
@@ -425,6 +479,11 @@ void Deserializer::List::ReadObject(FUNC f) {
 template <class T>
 T Deserializer::List::ReadElement() {
 	return deserializer.Read<T>();
+}
+
+template <class T>
+void Deserializer::List::ReadElement(data_ptr_t &ptr, idx_t size) {
+	deserializer.ReadDataPtr(ptr, size);
 }
 
 } // namespace duckdb

@@ -64,7 +64,10 @@ static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr,
 // 	- s3://bucket/var1=value1/bla/bla/var2=value2
 //  - http(s)://domain(:port)/lala/kasdl/var1=value1/?not-a-var=not-a-value
 //  - folder/folder/folder/../var1=value1/etc/.//var2=value2
-const string HivePartitioning::REGEX_STRING = "[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]+)";
+const string &HivePartitioning::RegexString() {
+	static string REGEX = "[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]*)";
+	return REGEX;
+}
 
 std::map<string, string> HivePartitioning::Parse(const string &filename, duckdb_re2::RE2 &regex) {
 	std::map<string, string> result;
@@ -79,7 +82,7 @@ std::map<string, string> HivePartitioning::Parse(const string &filename, duckdb_
 }
 
 std::map<string, string> HivePartitioning::Parse(const string &filename) {
-	duckdb_re2::RE2 regex(REGEX_STRING);
+	duckdb_re2::RE2 regex(RegexString());
 	return Parse(filename, regex);
 }
 
@@ -94,7 +97,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 	vector<bool> have_preserved_filter(filters.size(), false);
 	vector<unique_ptr<Expression>> pruned_filters;
 	unordered_set<idx_t> filters_applied_to_files;
-	duckdb_re2::RE2 regex(REGEX_STRING);
+	duckdb_re2::RE2 regex(RegexString());
 	auto table_index = get.table_index;
 
 	if ((!filename_enabled && !hive_enabled) || filters.empty()) {

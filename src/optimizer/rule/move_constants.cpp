@@ -21,8 +21,12 @@ MoveConstantsRule::MoveConstantsRule(ExpressionRewriter &rewriter) : Rule(rewrit
 	arithmetic->function = make_uniq<ManyFunctionMatcher>(unordered_set<string> {"+", "-", "*"});
 	// we match only on integral numeric types
 	arithmetic->type = make_uniq<IntegerTypeMatcher>();
-	arithmetic->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
-	arithmetic->matchers.push_back(make_uniq<ExpressionMatcher>());
+	auto child_constant_matcher = make_uniq<ConstantExpressionMatcher>();
+	auto child_expression_matcher = make_uniq<ExpressionMatcher>();
+	child_constant_matcher->type = make_uniq<IntegerTypeMatcher>();
+	child_expression_matcher->type = make_uniq<IntegerTypeMatcher>();
+	arithmetic->matchers.push_back(std::move(child_constant_matcher));
+	arithmetic->matchers.push_back(std::move(child_expression_matcher));
 	arithmetic->policy = SetMatcher::Policy::SOME;
 	op->matchers.push_back(std::move(arithmetic));
 	root = std::move(op);
@@ -34,9 +38,8 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 	auto &outer_constant = bindings[1].get().Cast<BoundConstantExpression>();
 	auto &arithmetic = bindings[2].get().Cast<BoundFunctionExpression>();
 	auto &inner_constant = bindings[3].get().Cast<BoundConstantExpression>();
-	if (!TypeIsIntegral(arithmetic.return_type.InternalType())) {
-		return nullptr;
-	}
+	D_ASSERT(arithmetic.return_type.IsIntegral());
+	D_ASSERT(arithmetic.children[0]->return_type.IsIntegral());
 	if (inner_constant.value.IsNull() || outer_constant.value.IsNull()) {
 		return make_uniq<BoundConstantExpression>(Value(comparison.return_type));
 	}
@@ -115,8 +118,10 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 			// we let the arithmetic_simplification rule take care of simplifying this first
 			return nullptr;
 		}
-		if (outer_value % inner_value != 0) {
-			// not cleanly divisible
+		// check out of range for HUGEINT or not cleanly divisible
+		// HUGEINT is not cleanly divisible when outer_value == minimum and inner value == -1. (modulo overflow)
+		if ((outer_value == NumericLimits<hugeint_t>::Minimum() && inner_value == -1) ||
+		    outer_value % inner_value != 0) {
 			bool is_equality = comparison.type == ExpressionType::COMPARE_EQUAL;
 			bool is_inequality = comparison.type == ExpressionType::COMPARE_NOTEQUAL;
 			if (is_equality || is_inequality) {

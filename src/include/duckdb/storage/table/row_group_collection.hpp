@@ -14,6 +14,7 @@
 #include "duckdb/storage/table/table_statistics.hpp"
 
 namespace duckdb {
+
 struct ParallelTableScanState;
 struct ParallelCollectionScanState;
 class CreateIndexScanState;

@@ -1,0 +1,20 @@
+# name: test/issues/rigger/decimal_int_between.test
+# description: Issue #9825 - Missing Results when using Floating-point in BETWEEN
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c1 INT);
+
+statement ok
+INSERT INTO t0(c1) VALUES (-1);
+
+statement ok
+INSERT INTO t0(c1) VALUES (5);
+
+query I
+SELECT * FROM t0 WHERE (c1 BETWEEN 3.1 AND c1);
+----
+5

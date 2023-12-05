@@ -1,0 +1,12 @@
+# name: test/sql/catalog/issue_9459.test
+# description: Issue #9459 - Dropping schema with double quote in name fails
+# group: [catalog]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create schema """cursed_schema";
+
+statement ok
+drop schema """cursed_schema";

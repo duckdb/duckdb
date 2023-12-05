@@ -141,6 +141,36 @@ class TestReadFromStdin(object):
             '5|Raising Arizona'
         ])
 
+    def test_read_stdin_json_auto_recursive_cte(self, shell, json_extension):
+        test = (
+            ShellTest(shell)
+            .input_file('data/json/filter_keystage.ndjson')
+            .statement("""
+                CREATE TABLE mytable AS
+                WITH RECURSIVE nums AS (
+                    SELECT 0 AS n
+                UNION ALL
+                    SELECT n + 1
+                    FROM nums
+                    WHERE n < (
+                        SELECT MAX(JSON_ARRAY_LENGTH(filter_keystage))::int - 1
+                        FROM read_json_auto('/dev/stdin'))
+                ) SELECT * FROM nums;
+            """)
+            .statement("select * from mytable;")
+            .add_argument(
+                '-list',
+                ':memory:'
+            )
+        )
+        result = test.run()
+        result.check_stdout([
+            'n',
+            '0',
+            '1',
+            '2',
+        ])
+
 
     @pytest.mark.parametrize("alias", [
         "'/dev/stdout'",

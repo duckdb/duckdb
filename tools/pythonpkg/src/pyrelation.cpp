@@ -460,6 +460,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::BoolOr(const std::string &column,
 	return ApplyAggOrWin("bool_or", column, "", groups, window_spec, projected_columns);
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ValueCounts(const std::string &column, const std::string &groups) {
+	return Count(column, groups, "", column);
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Count(const std::string &column, const std::string &groups,
                                                      const std::string &window_spec,
                                                      const std::string &projected_columns) {

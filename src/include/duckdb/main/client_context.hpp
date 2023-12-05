@@ -148,7 +148,7 @@ public:
 	                                           const PendingQueryParameters &parameters);
 
 	//! Gets current percentage of the query's progress, returns 0 in case the progress bar is disabled.
-	DUCKDB_API double GetProgress();
+	DUCKDB_API QueryProgress GetQueryProgress();
 
 	//! Register function in the temporary schema
 	DUCKDB_API void RegisterFunction(CreateFunctionInfo &info);
@@ -261,7 +261,7 @@ private:
 	//! The currently active query context
 	unique_ptr<ActiveQueryContext> active_query;
 	//! The current query progress
-	atomic<double> query_progress;
+	QueryProgress query_progress;
 };
 
 class ClientContextLock {

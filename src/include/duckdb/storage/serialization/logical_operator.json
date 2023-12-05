@@ -94,7 +94,7 @@
       {
         "id": 206,
         "name": "grouping_functions",
-        "type": "vector<vector<idx_t>>"
+        "type": "vector<unsafe_vector<idx_t>>"
       }
     ],
     "constructor": ["group_index", "aggregate_index", "expressions"]
@@ -153,14 +153,12 @@
       {
         "id": 202,
         "name": "limit",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       },
       {
         "id": 203,
         "name": "offset",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       }
     ],
     "constructor": ["limit_val", "offset_val", "limit", "offset"]
@@ -224,8 +222,7 @@
       {
         "id": 202,
         "name": "order_by",
-        "type": "BoundOrderModifier*",
-        "optional": true
+        "type": "BoundOrderModifier*"
       }
     ],
     "constructor": ["distinct_targets", "distinct_type"]
@@ -238,7 +235,7 @@
       {
         "id": 200,
         "name": "sample_options",
-        "type": "SampleOptions"
+        "type": "SampleOptions*"
       }
     ]
   },
@@ -260,14 +257,12 @@
       {
         "id": 202,
         "name": "limit",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       },
       {
         "id": 203,
         "name": "offset",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       }
     ],
     "constructor": ["limit_percent", "offset_val", "limit", "offset"]
@@ -503,9 +498,21 @@
         "id": 201,
         "name": "column_count",
         "type": "idx_t"
+      },
+      {
+        "id": 202,
+        "name": "setop_all",
+        "type": "bool",
+        "default": "true"
+      },
+      {
+        "id": 203,
+        "name": "allow_out_of_order",
+        "type": "bool",
+        "default": "true"
       }
     ],
-    "constructor": ["table_index", "column_count", "type"]
+    "constructor": ["table_index", "column_count", "type", "setop_all", "allow_out_of_order"]
   },
   {
     "class": "LogicalRecursiveCTE",
@@ -579,7 +586,7 @@
       {
         "id": 202,
         "name": "column_index_map",
-        "type": "vector<idx_t>"
+        "type": "IndexVector<idx_t, PhysicalIndex>"
       },
       {
         "id": 203,
@@ -619,19 +626,17 @@
       {
         "id": 210,
         "name": "on_conflict_condition",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       },
       {
         "id": 211,
         "name": "do_update_condition",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       },
       {
         "id": 212,
         "name": "set_columns",
-        "type": "vector<idx_t>"
+        "type": "vector<PhysicalIndex>"
       },
       {
         "id": 213,
@@ -897,7 +902,8 @@
       {
         "id": 200,
         "name": "info",
-        "type": "CreateInfo*"
+        "type": "CreateIndexInfo*",
+        "base": "CreateInfo"
       },
       {
         "id": 201,
@@ -912,5 +918,32 @@
     "base": "LogicalOperator",
     "enum": "LOGICAL_EXTENSION_OPERATOR",
     "custom_implementation": true
+  },
+  {
+    "class": "FilenamePattern",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 200,
+        "name": "base",
+        "type": "string",
+        "serialize_property": "_base",
+        "deserialize_property": "_base"
+      },
+      {
+        "id": 201,
+        "name": "pos",
+        "type": "idx_t",
+        "serialize_property": "_pos",
+        "deserialize_property": "_pos"
+      },
+      {
+        "id": 202,
+        "name": "uuid",
+        "type": "bool",
+        "serialize_property": "_uuid",
+        "deserialize_property": "_uuid"
+      }
+    ]
   }
 ]

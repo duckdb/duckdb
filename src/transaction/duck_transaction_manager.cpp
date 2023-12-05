@@ -12,6 +12,7 @@
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -64,7 +65,7 @@ DuckTransactionManager &DuckTransactionManager::Get(AttachedDatabase &db) {
 	return reinterpret_cast<DuckTransactionManager &>(transaction_manager);
 }
 
-Transaction *DuckTransactionManager::StartTransaction(ClientContext &context) {
+Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
 	if (current_start_timestamp >= TRANSACTION_ID_START) { // LCOV_EXCL_START
@@ -82,11 +83,11 @@ Transaction *DuckTransactionManager::StartTransaction(ClientContext &context) {
 
 	// create the actual transaction
 	auto transaction = make_uniq<DuckTransaction>(*this, context, start_time, transaction_id);
-	auto transaction_ptr = transaction.get();
+	auto &transaction_ref = *transaction;
 
 	// store it in the set of active transactions
 	active_transactions.push_back(std::move(transaction));
-	return transaction_ptr;
+	return transaction_ref;
 }
 
 struct ClientLockWrapper {
@@ -154,7 +155,10 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 				// potentially resulting in garbage collection
 				RemoveTransaction(*transaction);
 				if (transaction_context) {
-					transaction_context->transaction.ClearTransaction();
+					// invalidate the active transaction for this connection
+					auto &meta_transaction = MetaTransaction::Get(*transaction_context);
+					meta_transaction.RemoveTransaction(db);
+					ValidChecker::Get(meta_transaction).Invalidate("Invalidated due to FORCE CHECKPOINT");
 				}
 				i--;
 			}
@@ -183,8 +187,8 @@ bool DuckTransactionManager::CanCheckpoint(optional_ptr<DuckTransaction> current
 	return true;
 }
 
-string DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction *transaction_p) {
-	auto &transaction = transaction_p->Cast<DuckTransaction>();
+string DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
+	auto &transaction = transaction_p.Cast<DuckTransaction>();
 	vector<ClientLockWrapper> client_locks;
 	auto lock = make_uniq<lock_guard<mutex>>(transaction_lock);
 	CheckpointLock checkpoint_lock(*this);
@@ -238,8 +242,8 @@ string DuckTransactionManager::CommitTransaction(ClientContext &context, Transac
 	return error;
 }
 
-void DuckTransactionManager::RollbackTransaction(Transaction *transaction_p) {
-	auto &transaction = transaction_p->Cast<DuckTransaction>();
+void DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
+	auto &transaction = transaction_p.Cast<DuckTransaction>();
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
 
@@ -252,6 +256,7 @@ void DuckTransactionManager::RollbackTransaction(Transaction *transaction_p) {
 }
 
 void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noexcept {
+	bool changes_made = transaction.ChangesMade();
 	// remove the transaction from the list of active transactions
 	idx_t t_index = active_transactions.size();
 	// check for the lowest and highest start time in the list of transactions
@@ -275,15 +280,18 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noe
 	D_ASSERT(t_index != active_transactions.size());
 	auto current_transaction = std::move(active_transactions[t_index]);
 	auto current_query = DatabaseManager::Get(db).ActiveQueryNumber();
-	if (transaction.commit_id != 0) {
-		// the transaction was committed, add it to the list of recently
-		// committed transactions
-		recently_committed_transactions.push_back(std::move(current_transaction));
-	} else {
-		// the transaction was aborted, but we might still need its information
-		// add it to the set of transactions awaiting GC
-		current_transaction->highest_active_query = current_query;
-		old_transactions.push_back(std::move(current_transaction));
+	if (changes_made) {
+		// if the transaction made any changes we need to keep it around
+		if (transaction.commit_id != 0) {
+			// the transaction was committed, add it to the list of recently
+			// committed transactions
+			recently_committed_transactions.push_back(std::move(current_transaction));
+		} else {
+			// the transaction was aborted, but we might still need its information
+			// add it to the set of transactions awaiting GC
+			current_transaction->highest_active_query = current_query;
+			old_transactions.push_back(std::move(current_transaction));
+		}
 	}
 	// remove the transaction from the set of currently active transactions
 	active_transactions.erase(active_transactions.begin() + t_index);

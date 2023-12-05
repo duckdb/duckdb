@@ -304,8 +304,8 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 	}
 	struct_definition += ")";
 
-	auto csv_result =
-	    con.Query("SELECT * FROM read_csv('" + fname + "', header=1, sep='|', columns=" + struct_definition + ")");
+	auto csv_result = con.Query("SELECT * FROM read_csv('" + fname +
+	                            "', header=1, sep='|', columns=" + struct_definition + ", auto_detect=false)");
 	if (csv_result->HasError()) {
 		error = StringUtil::Format("Could not read CSV File \"%s\": %s", fname, csv_result->GetError());
 		return vector<string>();

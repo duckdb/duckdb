@@ -1,23 +1,20 @@
 #include "duckdb/execution/index/art/art.hpp"
 
-#include "duckdb/common/radix.hpp"
+#include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
-#include "duckdb/execution/index/art/prefix.hpp"
-#include "duckdb/execution/index/art/leaf.hpp"
-#include "duckdb/execution/index/art/node4.hpp"
-#include "duckdb/execution/index/art/node16.hpp"
-#include "duckdb/execution/index/art/node48.hpp"
-#include "duckdb/execution/index/art/node256.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
-#include "duckdb/common/types/conflict_manager.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/execution/index/art/leaf.hpp"
+#include "duckdb/execution/index/art/node16.hpp"
+#include "duckdb/execution/index/art/node256.hpp"
+#include "duckdb/execution/index/art/node4.hpp"
+#include "duckdb/execution/index/art/node48.hpp"
+#include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
-
-#include <algorithm>
 
 namespace duckdb {
 
@@ -33,15 +30,16 @@ struct ARTIndexScanState : public IndexScanState {
 	Iterator iterator;
 };
 
-ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
-         const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
+//===--------------------------------------------------------------------===//
+// ART
+//===--------------------------------------------------------------------===//
+
+ART::ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
+         TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
          AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
-         const BlockPointer &pointer)
-    : Index(db, IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type),
+         const IndexStorageInfo &info)
+    : Index(name, "ART", index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
       allocators(allocators_ptr), owns_data(false) {
-	if (!Radix::IsLittleEndian()) {
-		throw NotImplementedException("ART indexes are not supported on big endian architectures");
-	}
 
 	// initialize all allocators
 	if (!allocators) {
@@ -58,8 +56,16 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 		allocators = make_shared<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
 	}
 
-	if (pointer.IsValid()) {
-		Deserialize(pointer);
+	// deserialize lazily
+	if (info.IsValid()) {
+
+		if (!info.root_block_ptr.IsValid()) {
+			InitAllocators(info);
+
+		} else {
+			// old storage file
+			Deserialize(info.root_block_ptr);
+		}
 	}
 
 	// validate the types of the key columns
@@ -896,11 +902,11 @@ string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, cons
 	case VerifyExistenceType::APPEND: {
 		// APPEND to PK/UNIQUE table, but node/key already exists in PK/UNIQUE table
 		string type = IsPrimary() ? "primary key" : "unique";
-		return StringUtil::Format(
-		    "Duplicate key \"%s\" violates %s constraint. "
-		    "If this is an unexpected constraint violation please double "
-		    "check with the known index limitations section in our documentation (docs - sql - indexes).",
-		    key_name, type);
+		return StringUtil::Format("Duplicate key \"%s\" violates %s constraint. "
+		                          "If this is an unexpected constraint violation please double "
+		                          "check with the known index limitations section in our documentation "
+		                          "(https://duckdb.org/docs/sql/indexes).",
+		                          key_name, type);
 	}
 	case VerifyExistenceType::APPEND_FK: {
 		// APPEND_FK to FK table, node/key does not exist in PK/UNIQUE table
@@ -971,46 +977,67 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 }
 
 //===--------------------------------------------------------------------===//
-// Serialization
+// Helper functions for (de)serialization
 //===--------------------------------------------------------------------===//
 
-BlockPointer ART::Serialize(MetadataWriter &writer) {
+IndexStorageInfo ART::GetStorageInfo(const bool get_buffers) {
 
-	D_ASSERT(owns_data);
+	// set the name and root node
+	IndexStorageInfo info;
+	info.name = name;
+	info.root = tree.Get();
 
-	// early-out, if all allocators are empty
-	if (!tree.HasMetadata()) {
-		root_block_pointer = BlockPointer();
-		return root_block_pointer;
+	if (!get_buffers) {
+		// store the data on disk as partial blocks and set the block ids
+		WritePartialBlocks();
+
+	} else {
+		// set the correct allocation sizes and get the map containing all buffers
+		for (const auto &allocator : *allocators) {
+			info.buffers.push_back(allocator->InitSerializationToWAL());
+		}
 	}
 
-	lock_guard<mutex> l(lock);
+	for (const auto &allocator : *allocators) {
+		info.allocator_infos.push_back(allocator->GetInfo());
+	}
+
+	return info;
+}
+
+void ART::WritePartialBlocks() {
+
+	// use the partial block manager to serialize all allocator data
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
 	PartialBlockManager partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT);
 
-	vector<BlockPointer> allocator_pointers;
 	for (auto &allocator : *allocators) {
-		allocator_pointers.push_back(allocator->Serialize(partial_block_manager, writer));
+		allocator->SerializeBuffers(partial_block_manager);
 	}
 	partial_block_manager.FlushPartialBlocks();
+}
 
-	root_block_pointer = writer.GetBlockPointer();
-	writer.Write(tree);
-	for (auto &allocator_pointer : allocator_pointers) {
-		writer.Write(allocator_pointer);
+void ART::InitAllocators(const IndexStorageInfo &info) {
+
+	// set the root node
+	tree.Set(info.root);
+
+	// initialize the allocators
+	D_ASSERT(info.allocator_infos.size() == ALLOCATOR_COUNT);
+	for (idx_t i = 0; i < info.allocator_infos.size(); i++) {
+		(*allocators)[i]->Init(info.allocator_infos[i]);
 	}
-
-	return root_block_pointer;
 }
 
 void ART::Deserialize(const BlockPointer &pointer) {
 
 	D_ASSERT(pointer.IsValid());
-	MetadataReader reader(table_io_manager.GetMetadataManager(), pointer);
+	auto &metadata_manager = table_io_manager.GetMetadataManager();
+	MetadataReader reader(metadata_manager, pointer);
 	tree = reader.Read<Node>();
 
 	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
-		(*allocators)[i]->Deserialize(reader.Read<BlockPointer>());
+		(*allocators)[i]->Deserialize(metadata_manager, reader.Read<BlockPointer>());
 	}
 }
 
@@ -1067,6 +1094,21 @@ void ART::Vacuum(IndexLock &state) {
 
 	// finalize the vacuum operation
 	FinalizeVacuum(flags);
+}
+
+//===--------------------------------------------------------------------===//
+// Size
+//===--------------------------------------------------------------------===//
+
+idx_t ART::GetInMemorySize(IndexLock &index_lock) {
+
+	D_ASSERT(owns_data);
+
+	idx_t in_memory_size = 0;
+	for (auto &allocator : *allocators) {
+		in_memory_size += allocator->GetInMemorySize();
+	}
+	return in_memory_size;
 }
 
 //===--------------------------------------------------------------------===//
