@@ -42,9 +42,9 @@ public:
 
 	void IncreaseUsedMemory(idx_t size);
 
-	idx_t GetUsedMemory();
+	idx_t GetUsedMemory() const;
 
-	idx_t GetMaxMemory();
+	idx_t GetMaxMemory() const;
 
 protected:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
