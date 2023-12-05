@@ -40,12 +40,12 @@ void CreatePropertyGraphInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<string>(100, "property_graph_name", property_graph_name);
 	serializer.WriteList(101, "vertex_tables", vertex_tables.size(), [&](Serializer::List &list, idx_t i) {
 			auto &entry = vertex_tables[i];
-			list.WriteObject([&](Serializer &obj) { entry->WritePropertyGraphTableEntry(obj);
+			list.WriteObject([&](Serializer &obj) { entry->Serialize(obj);
 			});
 	});
 	serializer.WriteList(102, "edge_tables", edge_tables.size(), [&](Serializer::List &list, idx_t i) {
 			auto &entry = edge_tables[i];
-			list.WriteObject([&](Serializer &obj) { entry->WritePropertyGraphTableEntry(obj); });
+			list.WriteObject([&](Serializer &obj) { entry->Serialize(obj); });
 	});
 	serializer.WriteProperty(103, "label_map", label_map);
 }

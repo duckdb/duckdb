@@ -205,7 +205,7 @@ bool PropertyGraphTable::Equals(const PropertyGraphTable *other_p) const {
 	return true;
 }
 
-void PropertyGraphTable::WritePropertyGraphTableEntry(Serializer &serializer) {
+void PropertyGraphTable::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "table_name", table_name);
 	serializer.WriteProperty(101, "column_names", column_names);
 	serializer.WriteProperty(102, "column_aliases", column_aliases);
