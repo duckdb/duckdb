@@ -9,9 +9,9 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/named_parameter_map.hpp"
 
 namespace duckdb {
 class BaseSecret;
@@ -60,6 +60,44 @@ protected:
 	case_insensitive_map_t<CreateSecretFunction> functions;
 };
 
+//! A table function in the catalog
+class CreateSecretFunctionEntry : public CatalogEntry {
+public:
+	CreateSecretFunctionEntry(Catalog &catalog, CreateSecretFunctionSet &function_set, const string &name)
+	    : CatalogEntry(CatalogType::SECRET_FUNCTION, catalog, name), function_set(function_set),
+	      parent_catalog(&catalog) {
+		internal = true;
+	}
+	Catalog &ParentCatalog() override {
+		return *parent_catalog;
+	};
+
+	CreateSecretFunctionSet function_set;
+	optional_ptr<Catalog> parent_catalog;
+};
+
+//! Secret types contain the base settings of a secret
+struct SecretFunctionType : public CatalogEntry {
+	SecretFunctionType(Catalog &catalog, const string &name, secret_deserializer_t deserializer,
+	                   const string &default_provider)
+	    : CatalogEntry(CatalogType::SECRET_TYPE, catalog, name), name(name), deserializer(deserializer),
+	      default_provider(default_provider), parent_catalog(&catalog) {
+		internal = true;
+	}
+	Catalog &ParentCatalog() override {
+		return *parent_catalog;
+	};
+
+	//! Unique name identifying the secret type
+	string name;
+	//! The deserialization function for the type
+	secret_deserializer_t deserializer;
+	//! Provider to use when non is specified
+	string default_provider;
+
+	optional_ptr<Catalog> parent_catalog;
+};
+
 enum class SecretPersistMode : uint8_t { DEFAULT, TEMPORARY, PERMANENT };
 
 //! Secret types contain the base settings of a secret
@@ -70,6 +108,20 @@ struct SecretType {
 	secret_deserializer_t deserializer;
 	//! Provider to use when non is specified
 	string default_provider;
+};
+
+struct SecretTypeEntry : public CatalogEntry {
+	SecretTypeEntry(Catalog &catalog, SecretType &type)
+	    : CatalogEntry(CatalogType::SECRET, catalog, type.name), type(type), parent_catalog(&catalog) {
+		internal = true;
+	}
+
+	Catalog &ParentCatalog() override {
+		return *parent_catalog;
+	};
+
+	SecretType type;
+	optional_ptr<Catalog> parent_catalog;
 };
 
 //! Base class from which BaseSecret classes can be made.

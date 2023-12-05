@@ -61,15 +61,17 @@ Value AccessModeSetting::GetSetting(ClientContext &context) {
 // Allow Permanent Secrets
 //===--------------------------------------------------------------------===//
 void AllowPermanentSecrets::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (config.secret_manager->AllowConfigChanges()) {
-		throw InvalidInputException("Can't modify allow_permanent_secrets after the secret manager has been used.");
+	if (!config.secret_manager->AllowConfigChanges()) {
+		throw InvalidInputException(
+		    "Can't modify allow_permanent_secrets after the secret manager has been initialized.");
 	}
 	config.options.allow_permanent_secrets = input.GetValue<bool>();
 }
 
 void AllowPermanentSecrets::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (config.secret_manager->AllowConfigChanges()) {
-		throw InvalidInputException("Can't modify allow_permanent_secrets after the secret manager has been used.");
+	if (!config.secret_manager->AllowConfigChanges()) {
+		throw InvalidInputException(
+		    "Can't modify allow_permanent_secrets after the secret manager has been initialized.");
 	}
 	config.options.allow_permanent_secrets = DBConfig().options.allow_permanent_secrets;
 }
@@ -1153,15 +1155,15 @@ Value SearchPathSetting::GetSetting(ClientContext &context) {
 // Secret Directory
 //===--------------------------------------------------------------------===//
 void SecretDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (config.secret_manager->AllowConfigChanges()) {
-		throw InvalidInputException("Can't modify the secret_directory after the secret manager has been used.");
+	if (!config.secret_manager->AllowConfigChanges()) {
+		throw InvalidInputException("Can't modify the secret_directory after the secret manager has been initialized.");
 	}
 	config.options.secret_directory = input.ToString();
 }
 
 void SecretDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (config.secret_manager->AllowConfigChanges()) {
-		throw InvalidInputException("Can't modify the secret_directory after the secret manager has been used.");
+	if (!config.secret_manager->AllowConfigChanges()) {
+		throw InvalidInputException("Can't modify the secret_directory after the secret manager has been initialized.");
 	}
 	config.options.secret_directory = DBConfig().options.secret_directory;
 }

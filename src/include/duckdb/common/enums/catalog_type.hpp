@@ -42,6 +42,8 @@ enum class CatalogType : uint8_t {
 
 	// secrets
 	SECRET = 71,
+	SECRET_TYPE = 72,
+	SECRET_FUNCTION = 73,
 };
 
 DUCKDB_API string CatalogTypeToString(CatalogType type);

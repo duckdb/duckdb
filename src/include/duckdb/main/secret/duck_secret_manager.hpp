@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/catalog/default/default_generator.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
@@ -15,11 +16,13 @@
 namespace duckdb {
 class SecretManager;
 struct DBConfig;
+class SchemaCatalogEntry;
 
 //! The Main secret manager implementation for DuckDB. The secret manager can handle both temporary and permanent
 //! secrets
 class DuckSecretManager : public SecretManager {
 	friend struct SecretEntry;
+	friend class DuckSecretManager;
 
 public:
 	explicit DuckSecretManager() = default;
@@ -29,16 +32,16 @@ public:
 	DUCKDB_API void Initialize(DatabaseInstance &db) override;
 	DUCKDB_API unique_ptr<BaseSecret> DeserializeSecret(CatalogTransaction transaction,
 	                                                    Deserializer &deserializer) override;
-	DUCKDB_API void RegisterSecretType(SecretType &type) override;
-	DUCKDB_API SecretType LookupType(const string &type, optional_ptr<ClientContext> context) override;
-	DUCKDB_API void RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) override;
+	DUCKDB_API void RegisterSecretType(CatalogTransaction transaction, SecretType &type) override;
+	DUCKDB_API SecretType LookupType(CatalogTransaction transaction, const string &type) override;
+	DUCKDB_API void RegisterSecretFunction(CatalogTransaction transaction, CreateSecretFunction function,
+	                                       OnCreateConflict on_conflict) override;
 	DUCKDB_API optional_ptr<SecretEntry> RegisterSecret(CatalogTransaction transaction,
 	                                                    unique_ptr<const BaseSecret> secret,
 	                                                    OnCreateConflict on_conflict,
 	                                                    SecretPersistMode persist_mode) override;
 	DUCKDB_API optional_ptr<SecretEntry> CreateSecret(ClientContext &context, const CreateSecretInfo &info) override;
-	DUCKDB_API BoundStatement BindCreateSecret(CreateSecretStatement &stmt,
-	                                           optional_ptr<ClientContext> context) override;
+	DUCKDB_API BoundStatement BindCreateSecret(CatalogTransaction transaction, CreateSecretStatement &stmt) override;
 	DUCKDB_API optional_ptr<SecretEntry> GetSecretByPath(CatalogTransaction transaction, const string &path,
 	                                                     const string &type) override;
 	DUCKDB_API optional_ptr<SecretEntry> GetSecretByName(CatalogTransaction transaction, const string &name) override;
@@ -46,61 +49,59 @@ public:
 	DUCKDB_API vector<SecretEntry *> AllSecrets(CatalogTransaction transaction) override;
 	DUCKDB_API bool AllowConfigChanges() override;
 
-private:
-	//! Deserialize a secret
-	unique_ptr<BaseSecret> DeserializeSecretInternal(Deserializer &deserializer, unique_lock<mutex> &manager_lock,
-	                                                 optional_ptr<ClientContext> context);
-	//! Lookup a SecretType
-	SecretType LookupTypeInternal(const string &type, unique_lock<mutex> &manager_lock,
-	                              optional_ptr<ClientContext> context);
-	//! Lookup a CreateSecretFunction
-	CreateSecretFunction *LookupFunctionInternal(const string &type, const string &provider,
-	                                             unique_lock<mutex> &manager_lock, optional_ptr<ClientContext> context);
-	//! Register a new Secret
-	optional_ptr<SecretEntry> RegisterSecretInternal(CatalogTransaction transaction,
-	                                                 unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
-	                                                 SecretPersistMode persist_mode, unique_lock<mutex> &manager_lock);
-
-	//! Write a secret to the FileSystem
-	void WriteSecretToFile(CatalogTransaction transaction, const BaseSecret &secret);
-
-	//! Lazily preloads the permanent secrets
-	void PreloadPermanentSecrets(CatalogTransaction transaction);
-
-	//! Fully loads ALL lazily preloaded permanent secrets that have not yet been preloaded
-	void LoadPreloadedSecrets(CatalogTransaction transaction, unique_lock<mutex> &manager_lock);
-	//! Fully load a lazily preloaded permanent secret by path
-	void LoadSecret(CatalogTransaction transaction, const string &path, SecretPersistMode persist_mode,
-	                unique_lock<mutex> &manager_lock);
-	//! Fully load a lazily preloaded permanent secret by name
-	void LoadSecretFromPreloaded(CatalogTransaction transaction, const string &name, unique_lock<mutex> &manager_lock);
-
-	//! Checks if the secret_directory changed, if so this reloads all permanent secrets (lazily)
-	void SyncPermanentSecrets(CatalogTransaction transaction, unique_lock<mutex> &manager_lock, bool force = false);
 	//! Return secret directory
 	string GetSecretDirectory(DBConfig &config);
 
+private:
+	//! Deserialize a secret
+	unique_ptr<BaseSecret> DeserializeSecretInternal(CatalogTransaction transaction, Deserializer &deserializer);
+	//! Lookup a SecretType
+	SecretType LookupTypeInternal(CatalogTransaction transaction, const string &type);
+	//! Lookup a CreateSecretFunction
+	CreateSecretFunction *LookupFunctionInternal(CatalogTransaction transaction, const string &type,
+	                                             const string &provider);
+	//! Register a new Secret
+	optional_ptr<SecretEntry> RegisterSecretInternal(CatalogTransaction transaction,
+	                                                 unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
+	                                                 SecretPersistMode persist_mode);
+	//! Write a secret to the FileSystem
+	void WriteSecretToFile(CatalogTransaction transaction, const BaseSecret &secret);
+
+	//! Initialize the secret catalog_set and permanent secrets (lazily)
+	void InitializeSecrets(CatalogTransaction transaction);
+	//! Lazily preloads the permanent secrets
+	void LoadPermanentSecretsMap(CatalogTransaction transaction);
+
 	//! Autoload extension for specific secret type
-	void AutoloadExtensionForType(ClientContext &context, const string &type, unique_lock<mutex> &manager_lock);
+	void AutoloadExtensionForType(ClientContext &context, const string &type);
 	//! Autoload extension for specific secret function
-	void AutoloadExtensionForFunction(ClientContext &context, const string &type, const string &provider,
-	                                  unique_lock<mutex> &manager_lock);
+	void AutoloadExtensionForFunction(ClientContext &context, const string &type, const string &provider);
 
-	//! Secrets
-	unique_ptr<CatalogSet> registered_secrets;
-	// Types
-	case_insensitive_map_t<SecretType> registered_types;
-	// Functions
-	case_insensitive_map_t<CreateSecretFunctionSet> create_secret_functions;
+	//! Secret CatalogSets
+	unique_ptr<CatalogSet> secrets;
+	unique_ptr<CatalogSet> secret_types;
+	unique_ptr<CatalogSet> secret_functions;
 
-	//! Maps secret name -> permanent secret file path. Permanent secrets are loaded lazily into this map. Then loaded
-	//! into registered_secrets when they are needed
+	//! Lock for initialization
+	mutex initialize_lock;
+	//! Map of permanent serret files: read once during initialization
 	case_insensitive_map_t<string> permanent_secret_files;
-	//! When fs is initialized changing the secret path is prohibited
-	bool initialized_fs = false;
+	//! The secret manager is fully initialized: no more settings changes or fs reading
+	atomic<bool> initialized {false};
+};
 
-	//! Secret manager needs to be thread-safe
-	mutex lock;
+//! The DefaultGenerator for permanent secrets. This is used to store lazy loaded secrets in the catalog
+class DefaultDuckSecretGenerator : public DefaultGenerator {
+public:
+	DefaultDuckSecretGenerator(Catalog &catalog, DuckSecretManager &secret_manager, vector<string> &permanent_secrets);
+
+public:
+	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;
+	vector<string> GetDefaultEntries() override;
+
+protected:
+	DuckSecretManager &secret_manager;
+	vector<string> permanent_secrets;
 };
 
 } // namespace duckdb

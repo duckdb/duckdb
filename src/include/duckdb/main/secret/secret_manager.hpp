@@ -28,7 +28,7 @@ public:
 		internal = true;
 	}
 
-	Catalog &ParentCatalog() {
+	Catalog &ParentCatalog() override {
 		return *parent_catalog;
 	};
 
@@ -53,11 +53,12 @@ public:
 	DUCKDB_API virtual unique_ptr<BaseSecret> DeserializeSecret(CatalogTransaction transaction,
 	                                                            Deserializer &deserializer) = 0;
 	//! Registers a secret type
-	DUCKDB_API virtual void RegisterSecretType(SecretType &type) = 0;
+	DUCKDB_API virtual void RegisterSecretType(CatalogTransaction transaction, SecretType &type) = 0;
 	//! Get the registered type
-	DUCKDB_API virtual SecretType LookupType(const string &type, optional_ptr<ClientContext> context) = 0;
+	DUCKDB_API virtual SecretType LookupType(CatalogTransaction transaction, const string &type) = 0;
 	//! Registers a create secret function
-	DUCKDB_API virtual void RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) = 0;
+	DUCKDB_API virtual void RegisterSecretFunction(CatalogTransaction transaction, CreateSecretFunction function,
+	                                               OnCreateConflict on_conflict) = 0;
 	//! Register a Secret directly
 	DUCKDB_API virtual optional_ptr<SecretEntry> RegisterSecret(CatalogTransaction transaction,
 	                                                            unique_ptr<const BaseSecret> secret,
@@ -67,8 +68,7 @@ public:
 	DUCKDB_API virtual optional_ptr<SecretEntry> CreateSecret(ClientContext &context,
 	                                                          const CreateSecretInfo &input) = 0;
 	//! Binds a create secret statement, optionally pass a ClientContext to support auto-loading extensions
-	DUCKDB_API virtual BoundStatement BindCreateSecret(CreateSecretStatement &stmt,
-	                                                   optional_ptr<ClientContext> context) = 0;
+	DUCKDB_API virtual BoundStatement BindCreateSecret(CatalogTransaction transaction, CreateSecretStatement &stmt) = 0;
 	//! Get the secret whose scope best matches the path.
 	DUCKDB_API virtual optional_ptr<SecretEntry> GetSecretByPath(CatalogTransaction transaction, const string &path,
 	                                                             const string &type) = 0;
