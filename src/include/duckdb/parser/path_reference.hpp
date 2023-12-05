@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-enum class PGQPathReferenceType : uint8_t { PATH_ELEMENT = 0, SUBPATH = 1 };
+enum class PGQPathReferenceType : uint8_t { PATH_ELEMENT = 0, SUBPATH = 1, UNKNOWN = 2 };
 
 class PathReference {
 public:

@@ -3832,6 +3832,8 @@ const char* EnumUtil::ToChars<PGQPathReferenceType>(PGQPathReferenceType value) 
 		return "PATH_ELEMENT";
 	case PGQPathReferenceType::SUBPATH:
 		return "SUBPATH";
+	case PGQPathReferenceType::UNKNOWN:
+		return "UNKNOWN";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -3844,6 +3846,9 @@ PGQPathReferenceType EnumUtil::FromString<PGQPathReferenceType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "SUBPATH")) {
 		return PGQPathReferenceType::SUBPATH;
+	}
+	if (StringUtil::Equals(value, "UNKNOWN")) {
+		return PGQPathReferenceType::UNKNOWN;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

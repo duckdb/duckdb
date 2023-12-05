@@ -1,7 +1,6 @@
 #include "duckdb/parser/tableref/matchref.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 

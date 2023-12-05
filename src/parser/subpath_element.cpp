@@ -118,7 +118,11 @@ string SubPath::ToString() const {
 		case PGQPathReferenceType::SUBPATH:
 			result += " " + path_list[0]->ToString();
 			break;
+		case PGQPathReferenceType::UNKNOWN:
+		default:
+			throw InternalException("Unknown PathReferenceType found.");
 		}
+
 	}
 	if (lower != upper) {
 		result += "{" + std::to_string(lower) + "," + std::to_string(upper) + "}";
