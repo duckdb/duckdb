@@ -119,22 +119,13 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 	}
 
 	// first check if no other thread is checkpointing right now
+	auto current = &DuckTransaction::Get(context, db);
 	auto lock = unique_lock<mutex>(transaction_lock);
 	if (thread_is_checkpointing) {
 		throw TransactionException("Cannot CHECKPOINT: another thread is checkpointing right now");
 	}
 	CheckpointLock checkpoint_lock(*this);
 	checkpoint_lock.Lock();
-	lock.unlock();
-
-	// lock all the clients AND the connection manager now
-	// this ensures no new queries can be started, and no new connections to the database can be made
-	// to avoid deadlock we release the transaction lock while locking the clients
-	vector<ClientLockWrapper> client_locks;
-	LockClients(client_locks, context);
-
-	auto current = &DuckTransaction::Get(context, db);
-	lock.lock();
 	if (current->ChangesMade()) {
 		throw TransactionException("Cannot CHECKPOINT: the current transaction has transaction local changes");
 	}
@@ -144,6 +135,15 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 			                           "the other transactions and force a checkpoint");
 		}
 	} else {
+		lock.unlock();
+
+		// lock all the clients AND the connection manager now
+		// this ensures no new queries can be started, and no new connections to the database can be made
+		// to avoid deadlock we release the transaction lock while locking the clients
+		vector<ClientLockWrapper> client_locks;
+		LockClients(client_locks, context);
+
+		lock.lock();
 		if (!CanCheckpoint(current)) {
 			for (size_t i = 0; i < active_transactions.size(); i++) {
 				auto &transaction = active_transactions[i];
@@ -197,18 +197,6 @@ string DuckTransactionManager::CommitTransaction(ClientContext &context, Transac
 	if (checkpoint) {
 		if (transaction.AutomaticCheckpoint(db)) {
 			checkpoint_lock.Lock();
-			// we might be able to checkpoint: lock all clients
-			// to avoid deadlock we release the transaction lock while locking the clients
-			lock.reset();
-
-			LockClients(client_locks, context);
-
-			lock = make_uniq<lock_guard<mutex>>(transaction_lock);
-			checkpoint = CanCheckpoint(&transaction);
-			if (!checkpoint) {
-				checkpoint_lock.Unlock();
-				client_locks.clear();
-			}
 		} else {
 			checkpoint = false;
 		}
