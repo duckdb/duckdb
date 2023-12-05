@@ -34,9 +34,6 @@ unique_ptr<PathReference> PathElement::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty(100, "match_type", result->match_type);
 	deserializer.ReadProperty(101, "label", result->label);
 	deserializer.ReadProperty(102, "variable_binding", result->variable_binding);
-//	result->match_type = reader.ReadRequired<PGQMatchType>();
-//	result->label = reader.ReadRequired<string>();
-//	result->variable_binding = reader.ReadRequired<string>();
 	return std::move(result);
 }
 

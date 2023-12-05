@@ -63,26 +63,25 @@ bool SubPath::Equals(const PathReference *other_p) const {
 	}
 	return true;
 }
-void SubPath::Serialize(FieldWriter &writer) const {
-	writer.WriteField<PGQPathMode>(path_mode);
-	writer.WriteSerializableList(path_list);
-	writer.WriteField<bool>(single_bind);
-	writer.WriteField<int64_t>(lower);
-	writer.WriteField<int64_t>(upper);
-	writer.WriteOptional(where_clause);
-	writer.WriteString(path_variable);
+void SubPath::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty(100, "path_mode", path_mode);
+	serializer.WriteProperty(101, "path_list", path_list);
+	serializer.WriteProperty(102, "single_bind", single_bind);
+	serializer.WriteProperty(103, "lower", lower);
+	serializer.WriteProperty(104, "upper", upper);
+	serializer.WriteProperty(105, "where_clause", where_clause);
+	serializer.WriteProperty(106, "path_variable", path_variable);
 }
 
-unique_ptr<PathReference> SubPath::Deserialize(FieldReader &reader) {
+unique_ptr<PathReference> SubPath::Deserialize(Deserializer &deserializer) {
 	auto result = make_uniq<SubPath>(PGQPathReferenceType::SUBPATH);
-
-	result->path_mode = reader.ReadRequired<PGQPathMode>();
-	result->path_list = reader.ReadRequiredSerializableList<PathReference>();
-	result->single_bind = reader.ReadRequired<bool>();
-	result->lower = reader.ReadRequired<int64_t>();
-	result->upper = reader.ReadRequired<int64_t>();
-	result->where_clause = reader.ReadOptional<ParsedExpression>(nullptr);
-	result->path_variable = reader.ReadRequired<string>();
+	deserializer.ReadProperty(100, "path_mode", result->path_mode);
+	deserializer.ReadProperty(101, "path_list", result->path_list);
+	deserializer.ReadProperty(102, "single_bind", result->single_bind);
+	deserializer.ReadProperty(103, "lower", result->lower);
+	deserializer.ReadProperty(104, "upper", result->upper);
+	deserializer.ReadProperty(105, "where_clause", result->where_clause);
+	deserializer.ReadProperty(106, "path_variable", result->path_variable);
 	return std::move(result);
 }
 string SubPath::ToString() const {
