@@ -214,7 +214,7 @@ void CSVSniffer::DetectTypes() {
 			tuples.resize(STANDARD_VECTOR_SIZE);
 			true_line_start = 0;
 			true_pos = 0;
-		candidate->Process<ParseValues>(*candidate, tuples);
+			candidate->Process<ParseValues>(*candidate, tuples);
 			// Potentially Skip empty rows (I find this dirty, but it is what the original code does)
 			// The true line where parsing starts in reference to the csv file
 

@@ -31,7 +31,7 @@ struct ParseValues {
 	inline static bool Process(CSVScanner &scanner, vector<TupleOfValues> &sniffed_values, char current_char,
 	                           idx_t current_pos) {
 		auto &sniffing_state_machine = scanner.GetStateMachineSniff();
-		auto& states = scanner.states;
+		auto &states = scanner.states;
 
 		if ((sniffing_state_machine.dialect_options.new_line == NewLineIdentifier::SINGLE &&
 		     (current_char == '\r' || current_char == '\n')) ||
@@ -40,13 +40,14 @@ struct ParseValues {
 		}
 
 		if ((states.previous_state == CSVState::RECORD_SEPARATOR) ||
-		    (states.current_state != CSVState::RECORD_SEPARATOR && states.previous_state == CSVState::CARRIAGE_RETURN)) {
+		    (states.current_state != CSVState::RECORD_SEPARATOR &&
+		     states.previous_state == CSVState::CARRIAGE_RETURN)) {
 			sniffed_values[scanner.cur_rows].position = scanner.line_start_pos;
 			sniffed_values[scanner.cur_rows].set = true;
 			scanner.line_start_pos = current_pos;
 		}
 
-		sniffing_state_machine.Transition(states,current_char);
+		sniffing_state_machine.Transition(states, current_char);
 
 		bool carriage_return = states.previous_state == CSVState::CARRIAGE_RETURN;
 		if (states.previous_state == CSVState::DELIMITER || (states.previous_state == CSVState::RECORD_SEPARATOR) ||
@@ -95,6 +96,5 @@ struct ParseValues {
 		}
 		sniffed_values.erase(sniffed_values.end() - (sniffed_values.size() - scanner.cur_rows), sniffed_values.end());
 	}
-
 };
 } // namespace duckdb

@@ -21,9 +21,9 @@ struct ParseChunk {
 
 	inline static bool Process(CSVScanner &scanner, DataChunk &parse_chunk, char current_char, idx_t current_pos) {
 		auto &sniffing_state_machine = scanner.GetStateMachineSniff();
-		auto& states = scanner.states;
+		auto &states = scanner.states;
 
-		sniffing_state_machine.Transition(states,current_char);
+		sniffing_state_machine.Transition(states, current_char);
 
 		bool carriage_return = states.previous_state == CSVState::CARRIAGE_RETURN;
 		if (states.previous_state == CSVState::DELIMITER || (states.previous_state == CSVState::RECORD_SEPARATOR) ||
@@ -68,8 +68,10 @@ struct ParseChunk {
 		scanner.column_count -= scanner.column_count * (states.previous_state == CSVState::RECORD_SEPARATOR);
 
 		// It means our carriage return is actually a record separator
-		scanner.cur_rows += states.current_state != CSVState::RECORD_SEPARATOR && carriage_return && scanner.column_count > 0;
-		scanner.column_count -= scanner.column_count * (states.current_state != CSVState::RECORD_SEPARATOR && carriage_return);
+		scanner.cur_rows +=
+		    states.current_state != CSVState::RECORD_SEPARATOR && carriage_return && scanner.column_count > 0;
+		scanner.column_count -=
+		    scanner.column_count * (states.current_state != CSVState::RECORD_SEPARATOR && carriage_return);
 
 		if (scanner.cur_rows >= STANDARD_VECTOR_SIZE) {
 			// We parsed enough rows
@@ -80,7 +82,7 @@ struct ParseChunk {
 
 	inline static void Finalize(CSVScanner &scanner, DataChunk &parse_chunk) {
 		auto &sniffing_state_machine = scanner.GetStateMachineSniff();
-		auto& states = scanner.states;
+		auto &states = scanner.states;
 
 		if (scanner.cur_rows < STANDARD_VECTOR_SIZE && states.current_state != CSVState::EMPTY_LINE) {
 			scanner.VerifyUTF8();

@@ -148,8 +148,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 struct CSVGlobalState : public GlobalTableFunctionState {
 public:
 	CSVGlobalState(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager_p,
-	                       const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
-	                       bool force_parallelism_p, vector<column_t> column_ids_p)
+	               const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
+	               bool force_parallelism_p, vector<column_t> column_ids_p)
 	    : buffer_manager(std::move(buffer_manager_p)), csv_reader_options(options), system_threads(system_threads_p),
 	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)),
 	      line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end, options.sniffer_user_mismatch_error),
@@ -167,7 +167,7 @@ public:
 		running_threads = MaxThreads();
 
 		//! Set current position, where it should start scanning, and number of bytes to read
-		cur_pos = CSVIterator(options.dialect_options.true_start, buffer_manager->GetBufferSize()/running_threads);
+		cur_pos = CSVIterator(options.dialect_options.true_start, buffer_manager->GetBufferSize() / running_threads);
 
 		//! Initialize all the book-keeping variables used in verification
 		InitializeVerificationVariables(files.size());
@@ -179,15 +179,15 @@ public:
 		}
 	}
 
-//	explicit CSVGlobalState(idx_t system_threads_p)
-//	    : system_threads(system_threads_p), line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
-//		running_threads = MaxThreads();
-//	}
+	//	explicit CSVGlobalState(idx_t system_threads_p)
+	//	    : system_threads(system_threads_p), line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
+	//		running_threads = MaxThreads();
+	//	}
 
 	~CSVGlobalState() override {
 	}
 
-	void InitializeVerificationVariables(idx_t file_count){
+	void InitializeVerificationVariables(idx_t file_count) {
 		line_info.current_batches.resize(file_count);
 		line_info.lines_read.resize(file_count);
 		line_info.lines_errored.resize(file_count);
@@ -255,7 +255,6 @@ private:
 	CSVStateMachineCache state_machine_cache;
 	CSVReaderOptions csv_reader_options;
 
-
 	//! Mutex to lock when getting next batch of bytes (Parallel Only)
 	mutex main_mutex;
 	//! Byte set from for last thread
@@ -290,7 +289,6 @@ private:
 	LineInfo line_info;
 
 	string sniffer_mismatch_error;
-
 };
 
 idx_t CSVGlobalState::MaxThreads() const {
@@ -390,26 +388,25 @@ void LineInfo::Verify(idx_t file_idx, idx_t batch_idx, idx_t cur_first_pos) {
 }
 unique_ptr<CSVScanner> CSVGlobalState::Next(ClientContext &context, const ReadCSVData &bind_data) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	if (finished){
+	if (finished) {
 		return nullptr;
 	}
 	// Create a CSV State machine
 	auto csv_state_machine = make_uniq<CSVStateMachine>();
 
-		auto scanner =  make_uniq<CSVScanner>(buffer_manager,state_machine, cur_pos);
+	auto scanner = make_uniq<CSVScanner>(buffer_manager, state_machine, cur_pos);
 	// Generate CSV Iterator
-//	CSVIterator csv_iterator (cur_file_idx, cur_buffer_idx, cur, bytes_to_read );
+	//	CSVIterator csv_iterator (cur_file_idx, cur_buffer_idx, cur, bytes_to_read );
 
-			line_info.lines_read[file_index++][local_batch_index] =
-			    bind_data.options.dialect_options.header.GetValue() ? 1 : 0;
+	line_info.lines_read[file_index++][local_batch_index] = bind_data.options.dialect_options.header.GetValue() ? 1 : 0;
 
 	// set up the current buffer
 	line_info.current_batches[file_index - 1].insert(local_batch_index);
 	idx_t bytes_per_local_state = current_buffer->actual_size / MaxThreads() + 1;
 	auto result =
 	    make_uniq<CSVBuffer>(buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx),
-	                             buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx + 1), next_byte,
-	                             next_byte + bytes_per_local_state, batch_index++, local_batch_index++, &line_info);
+	                         buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx + 1), next_byte,
+	                         next_byte + bytes_per_local_state, batch_index++, local_batch_index++, &line_info);
 	// move the byte index of the CSV reader to the next buffer
 	next_byte += bytes_per_local_state;
 	if (next_byte >= current_buffer->actual_size) {
@@ -453,7 +450,7 @@ unique_ptr<CSVScanner> CSVGlobalState::Next(ClientContext &context, const ReadCS
 		//		                                  bind_data.files.front(), context);
 	} else {
 		// update the current reader
-//		reader->SetBufferRead(std::move(result));
+		//		reader->SetBufferRead(std::move(result));
 	}
 
 	return true;
@@ -567,9 +564,9 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
 		return nullptr;
 	}
-	return make_uniq<CSVGlobalState>(context, bind_data.buffer_manager, bind_data.options, context.db->NumberOfThreads(),
-	                                         bind_data.files, ClientConfig::GetConfig(context).verify_parallelism,
-	                                         input.column_ids);
+	return make_uniq<CSVGlobalState>(context, bind_data.buffer_manager, bind_data.options,
+	                                 context.db->NumberOfThreads(), bind_data.files,
+	                                 ClientConfig::GetConfig(context).verify_parallelism, input.column_ids);
 }
 
 unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,

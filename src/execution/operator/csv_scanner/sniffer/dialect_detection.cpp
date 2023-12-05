@@ -13,13 +13,13 @@ struct SniffDialect {
 	inline static bool Process(CSVScanner &scanner, vector<idx_t> &sniffed_column_counts, char current_char,
 	                           idx_t current_pos) {
 		auto &sniffing_state_machine = scanner.GetStateMachineSniff();
-		auto& states = scanner.states;
+		auto &states = scanner.states;
 		D_ASSERT(sniffed_column_counts.size() == STANDARD_VECTOR_SIZE);
 		if (states.current_state == CSVState::INVALID) {
 			sniffed_column_counts.clear();
 			return true;
 		}
-		sniffing_state_machine.Transition(states,current_char);
+		sniffing_state_machine.Transition(states, current_char);
 
 		bool carriage_return = states.previous_state == CSVState::CARRIAGE_RETURN;
 		scanner.column_count += states.previous_state == CSVState::DELIMITER;
@@ -34,8 +34,9 @@ struct SniffDialect {
 		    (scanner.column_count - 1) * (states.current_state != CSVState::RECORD_SEPARATOR && carriage_return);
 
 		// Identify what is our line separator
-		sniffing_state_machine.carry_on_separator = (states.current_state == CSVState::RECORD_SEPARATOR && carriage_return) ||
-		                                            sniffing_state_machine.carry_on_separator;
+		sniffing_state_machine.carry_on_separator =
+		    (states.current_state == CSVState::RECORD_SEPARATOR && carriage_return) ||
+		    sniffing_state_machine.carry_on_separator;
 		sniffing_state_machine.single_record_separator =
 		    ((states.current_state != CSVState::RECORD_SEPARATOR && carriage_return) ||
 		     (states.current_state == CSVState::RECORD_SEPARATOR && !carriage_return)) ||
@@ -48,7 +49,7 @@ struct SniffDialect {
 	}
 	inline static void Finalize(CSVScanner &scanner, vector<idx_t> &sniffed_column_counts) {
 		auto &sniffing_state_machine = scanner.GetStateMachineSniff();
-		auto& states = scanner.states;
+		auto &states = scanner.states;
 
 		if (states.current_state == CSVState::INVALID) {
 			return;

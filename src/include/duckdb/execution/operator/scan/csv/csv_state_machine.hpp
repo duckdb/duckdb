@@ -17,7 +17,7 @@ namespace duckdb {
 //! State of necessary CSV States to parse file
 //! Current, previous, and state before the previous
 struct CSVStates {
-	void Initialize(CSVState initial_state){
+	void Initialize(CSVState initial_state) {
 		current_state = initial_state;
 		previous_state = initial_state;
 		pre_previous_state = initial_state;
@@ -39,7 +39,7 @@ public:
 	                         CSVStateMachineCache &csv_state_machine_cache_p);
 
 	//! Transition all states to next state, that depends on the current char
-	inline void Transition(CSVStates& states, char current_char) {
+	inline void Transition(CSVStates &states, char current_char) {
 		states.pre_previous_state = states.previous_state;
 		states.previous_state = states.current_state;
 		states.current_state = transition_array[states.current_state][static_cast<uint8_t>(current_char)];
@@ -67,7 +67,6 @@ public:
 	                                 CSVStateMachineCache &csv_state_machine_cache_p);
 	//! Stores identified start row for this file (e.g., a file can start with garbage like notes, before the header)
 	idx_t start_row = 0;
-
 
 	//! Both these variables are used for new line identifier detection
 	bool single_record_separator = false;
