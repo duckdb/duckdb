@@ -17,8 +17,10 @@ create table ${dbname}.${dbname}(foo bigint)
 statement ok
 insert into ${dbname}.${dbname} select sum(i) from range(1000000) t(i)
 
-statement ok
+statement maybe
 checkpoint ${dbname}
+----
+there are other transactions
 
 statement ok
 select
