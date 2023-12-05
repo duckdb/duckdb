@@ -376,6 +376,27 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 				high_comparison_type = between.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO
 				                                               : ExpressionType::COMPARE_LESSTHAN;
 				break;
+			} else if (expr.type == ExpressionType::BOUND_FUNCTION) {
+				// Arbitrary function expression
+				auto &function_expr = expr.Cast<BoundFunctionExpression>();
+				if (function_expr.function.side_effects == FunctionSideEffects::HAS_SIDE_EFFECTS) {
+					// function has side effects, we can't use it
+					continue;
+				}
+				if(function_expr.children.size() != 2) {
+					// we only support binary functions for now
+					continue;
+				}
+				if(function_expr.children[0]->Equals(*index_expression)
+				    && function_expr.children[1]->type == ExpressionType::VALUE_CONSTANT) {
+					// one of the children is the index expression, we can use this function
+
+				}
+				if(function_expr.children[1]->Equals(*index_expression)
+				    && function_expr.children[0]->type == ExpressionType::VALUE_CONSTANT) {
+					// one of the children is the index expression, we can use this function
+
+				}
 			}
 		}
 		if (!equal_value.IsNull() || !low_value.IsNull() || !high_value.IsNull()) {
