@@ -1,4 +1,4 @@
-# name: test/sql/attach/attach_checkpoint_deadlock.test
+# name: test/sql/attach/attach_checkpoint_deadlock.test_slow
 # description: Deadlock when checkpointing multiple databases
 # group: [attach]
 

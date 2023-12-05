@@ -1,4 +1,4 @@
-# name: test/sql/attach/attach_concurrent_checkpoint.test
+# name: test/sql/attach/attach_concurrent_checkpoint.test_slow
 # description: Concurrently checkpoint the same database
 # group: [attach]
 

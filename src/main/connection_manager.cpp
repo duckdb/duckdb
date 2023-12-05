@@ -50,4 +50,4 @@ void ConnectionManager::LockClients(vector<ClientLockWrapper> &client_locks, Cli
 	is_locking = false;
 }
 
-}
+} // namespace duckdb
