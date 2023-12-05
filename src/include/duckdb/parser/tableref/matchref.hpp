@@ -30,9 +30,9 @@ public:
 	unique_ptr<ParsedExpression> Copy() const override;
 
 	//! Serializes a blob into a MatchRef
-	void Serialize(FieldWriter &writer) const override;
+	void Serialize(Serializer &serializer) const override;
 	//! Deserializes a blob back into a MatchRef
-	static unique_ptr<ParsedExpression> Deserialize(FieldReader &reader);
+	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

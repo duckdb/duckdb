@@ -1,29 +1,24 @@
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/path_pattern.hpp"
 
 namespace duckdb {
 
 void PathPattern::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteSerializableList(path_elements);
-	writer.WriteOptional(where_clause);
-	writer.WriteField<bool>(all);
-	writer.WriteField<bool>(shortest);
-	writer.WriteField<bool>(group);
-	writer.WriteField<int32_t>(topk);
-	writer.Finalize();
+	serializer.WriteProperty(100, "path_elements", path_elements);
+	serializer.WriteProperty(101, "where_clause", where_clause);
+	serializer.WriteProperty(102, "all", all);
+	serializer.WriteProperty(103, "shortest", shortest);
+	serializer.WriteProperty(104, "group", group);
+	serializer.WriteProperty(105, "topk", topk);
 }
 
 unique_ptr<PathPattern> PathPattern::Deserialize(Deserializer &deserializer) {
 	auto result = make_uniq<PathPattern>();
-	FieldReader reader(deserializer);
-	result->path_elements = reader.ReadRequiredSerializableList<PathReference>();
-	result->where_clause = reader.ReadOptional<ParsedExpression>(nullptr);
-	result->all = reader.ReadRequired<bool>();
-	result->shortest = reader.ReadRequired<bool>();
-	result->group = reader.ReadRequired<bool>();
-	result->topk = reader.ReadRequired<int32_t>();
-	reader.Finalize();
+	deserializer.ReadProperty(100, "path_elements", result->path_elements);
+	deserializer.ReadProperty(101, "where_clause", result->where_clause);
+	deserializer.ReadProperty(102, "all", result->all);
+	deserializer.ReadProperty(103, "shortest", result->shortest);
+	deserializer.ReadProperty(104, "group", result->group);
+	deserializer.ReadProperty(105, "topk", result->topk);
 	return result;
 }
 

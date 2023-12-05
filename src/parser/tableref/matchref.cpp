@@ -117,21 +117,22 @@ unique_ptr<ParsedExpression> MatchExpression::Copy() const {
 	return std::move(copy);
 }
 
-void MatchExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteString(pg_name);
-	writer.WriteString(alias);
-	writer.WriteSerializableList<PathPattern>(path_patterns);
-	writer.WriteSerializableList<ParsedExpression>(column_list);
-	writer.WriteOptional(where_clause);
+void MatchExpression::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty(100, "pg_name", pg_name);
+	serializer.WriteProperty(101, "alias", alias);
+	serializer.WriteProperty(102, "path_patterns", path_patterns);
+	serializer.WriteProperty(103, "column_list", column_list);
+	serializer.WriteProperty(104, "where_clause", where_clause);
 }
 
-unique_ptr<ParsedExpression> MatchExpression::Deserialize(FieldReader &reader) {
+unique_ptr<ParsedExpression> MatchExpression::Deserialize(Deserializer &deserializer) {
 	auto result = make_uniq<MatchExpression>();
-	result->pg_name = reader.ReadRequired<string>();
-	result->alias = reader.ReadRequired<string>();
-	result->path_patterns = reader.ReadRequiredSerializableList<PathPattern>();
-	result->column_list = reader.ReadRequiredSerializableList<ParsedExpression>();
-	result->where_clause = reader.ReadOptional<ParsedExpression>(nullptr);
+
+	deserializer.ReadProperty(100, "pg_name", result->pg_name);
+	deserializer.ReadProperty(101, "alias", result->alias);
+	deserializer.ReadProperty(102, "path_patterns", result->path_patterns);
+	deserializer.ReadProperty(103, "column_list", result->column_list);
+	deserializer.ReadProperty(104, "where_clause", result->where_clause);
 	return std::move(result);
 }
 
