@@ -7,6 +7,7 @@
 namespace duckdb {
 
 SimpleBufferedData::SimpleBufferedData(shared_ptr<ClientContext> context) : BufferedData(std::move(context)) {
+	buffered_count = 0;
 }
 
 void SimpleBufferedData::AddToBacklog(BlockedSink blocked_sink) {
