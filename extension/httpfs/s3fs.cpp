@@ -582,7 +582,7 @@ static string GetPrefix(string url) {
 }
 
 ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
-	string http_proto, prefix, host, bucket, path, query_param, trimmed_s3_url;
+	string http_proto, prefix, host, bucket, path, query_param, trimmed_s3_url, path_prefix;
 
 	prefix = GetPrefix(url);
 	auto prefix_end_pos = url.find("//") + 2;
@@ -631,18 +631,22 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 	auto sub_path_pos = params.endpoint.find_first_of('/');
 	if (sub_path_pos != string::npos) {
 		host = params.endpoint.substr(0, sub_path_pos);
-		path = params.endpoint.substr(sub_path_pos) + path;
+		path_prefix = params.endpoint.substr(sub_path_pos);
+		path = path_prefix + path;
 	} else {
 		host = params.endpoint;
+		path_prefix = "";
 	}
 
 	if (params.url_style == "vhost" || params.url_style == "") {
 		host = bucket + "." + host;
+	} else if (params.url_style == "path") {
+		path_prefix += "/" + bucket;
 	}
 
 	http_proto = params.use_ssl ? "https://" : "http://";
 
-	return {http_proto, prefix, host, bucket, path, query_param, trimmed_s3_url};
+	return {http_proto, prefix, host, bucket, path, query_param, trimmed_s3_url, path_prefix};
 }
 
 string S3FileSystem::GetPayloadHash(char *buffer, idx_t buffer_len) {
@@ -974,12 +978,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 		}
 	} while (!main_continuation_token.empty());
 
-	auto pattern_trimmed = parsed_s3_url.path.substr(1);
-
-	// Trim the bucket prefix for path-style urls
-	if (s3_auth_params.url_style == "path") {
-		pattern_trimmed = pattern_trimmed.substr(parsed_s3_url.bucket.length() + 1);
-	}
+	auto pattern_trimmed = parsed_s3_url.path.substr(parsed_s3_url.path_prefix.length() + 1);
 
 	vector<string> pattern_splits = StringUtil::Split(pattern_trimmed, "/");
 	vector<string> result;
@@ -1026,19 +1025,8 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 	auto parsed_url = S3FileSystem::S3UrlParse(path, s3_auth_params);
 
 	// Construct the ListObjectsV2 call
-	string req_path;
-	if (s3_auth_params.url_style == "path") {
-		req_path = "/" + parsed_url.bucket + "/";
-	} else {
-		req_path = "/";
-	}
-
-	string prefix = parsed_url.path.substr(1);
-
-	// Trim the bucket prefix for path-style urls
-	if (s3_auth_params.url_style == "path") {
-		prefix = prefix.substr(parsed_url.bucket.length() + 1);
-	}
+	string req_path = parsed_url.path_prefix + "/";
+	string prefix = parsed_url.path.substr(parsed_url.path_prefix.length() + 1);
 
 	string req_params = "";
 	if (!continuation_token.empty()) {

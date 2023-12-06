@@ -55,6 +55,7 @@ struct ParsedS3Url {
 	const string path;
 	const string query_param;
 	const string trimmed_s3_url;
+	const string path_prefix;
 
 	string GetHTTPUrl(S3AuthParams &auth_params, string http_query_string = "");
 };
