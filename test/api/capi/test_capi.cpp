@@ -89,6 +89,7 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	// NULL selection
 	result = tester.Query("SELECT a, b FROM test ORDER BY a");
 	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->rows_changed() == 0);
 	// NULL, 11, 13
 	REQUIRE(result->IsNull(0, 0));
 	REQUIRE(result->Fetch<int32_t>(0, 1) == 11);
