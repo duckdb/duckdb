@@ -35,10 +35,27 @@ SELECT list_reduce([1, 2, 3], (x, y, i) -> x + y + i);
 ----
 9
 
+query I
+SELECT list_reduce([NULL], (x, y, i) -> x + y + i);
+----
+NULL
+
+query I
+SELECT list_reduce(NULL, (x, y, i) -> x + y + i);
+----
+NULL
+
+statement error
+SELECT list_reduce([], (x, y, i) -> x + y + i);
+----
+empty list
+
 statement error
 SELECT list_reduce([1, 2, 3], (x, y) -> (x * y)::VARCHAR || 'please work');
 ----
 Could not convert
+
+# simple reduce on a table
 
 statement ok
 CREATE table t1(a int[]);
@@ -76,15 +93,35 @@ NULL
 100
 NULL
 
+statement ok
+INSERT INTO t1 VALUES ([]);
+
+statement error
+SELECT list_reduce(a, (x, y) -> x + y) FROM t1;
+----
+empty list
+
+# nested functions
+
 query I
 SELECT list_reduce([1, 2, 3], (x, y) -> list_reduce([4, 5, 6], (a, b) -> x + y + a + b));
 ----
 63
 
+statement error
+SELECT list_reduce([1, 2, 3], (x, y) -> list_reduce([], (a, b) -> x + y + a + b));
+----
+empty list
+
 query I
 SELECT list_reduce([1, 2, 3], (x, y, x_i) -> list_reduce([4, 5, 6], (a, b, a_i) -> x + y + a + b + x_i + a_i));
 ----
 80
+
+statement error
+SELECT list_reduce([1, 2, 3], (x, y, x_i) -> list_reduce([], (a, b, a_i) -> x + y + a + b + x_i + a_i));
+----
+empty list
 
 query I
 SELECT list_reduce([[10, 20], [30, 40], [50, 60]], (x, y) -> list_pack(list_reduce(x, (l, m) -> l + m) + list_reduce(y, (n, o) -> n + o)));
@@ -92,6 +129,69 @@ SELECT list_reduce([[10, 20], [30, 40], [50, 60]], (x, y) -> list_pack(list_redu
 [210]
 
 query I
+SELECT list_reduce([[1,2,3], [4,5,6], [7,8,9]], (x, y) -> list_pack(list_reduce(x, (l, m) -> l + m) + list_reduce(y, (n, o) -> n + o)));
+----
+[45]
+
+query I
 SELECT list_reduce([[10, 20], [30, 40], NULL, [NULL, 60], NULL], (x, y) -> list_pack(list_reduce(x, (l, m) -> l + m) + list_reduce(y, (n, o) -> n + o)));
 ----
 [NULL]
+
+statement ok
+CREATE TABLE nested (n integer[], l integer[])
+
+statement ok
+INSERT INTO nested VALUES ([1, 2, 3], [4, 5, 6]), (NULL, NULL), (NULL, [110, 111, 112]), ([77, 88, 99], [55, 66, NULL]);
+
+query I
+SELECT list_reduce(n, (x, y) -> list_reduce(l, (a, b) -> x + y + a + b)) FROM nested;
+----
+63
+NULL
+NULL
+NULL
+
+query I
+SELECT list_reduce(n, (x, y, x_i) -> list_reduce(l, (a, b, a_i) -> x + y + a + b + x_i + a_i)) FROM nested;
+----
+80
+NULL
+NULL
+NULL
+
+query I
+SELECT list_reduce(n, (x, y, x_i) -> list_reduce(l, (a, b, a_i) -> x + y + x_i < a + b + a_i)) FROM nested;
+----
+1
+NULL
+NULL
+NULL
+
+statement ok
+INSERT INTO nested VALUES ([4, 5, 6], []);
+
+statement error
+SELECT list_reduce(n, (x, y) -> list_reduce(l, (a, b) -> x + y + a + b)) FROM nested;
+----
+empty list
+
+statement ok
+DROP TABLE nested;
+
+statement ok
+CREATE TABLE nested (n integer[])
+
+statement ok
+INSERT INTO nested VALUES ([[10, 20], [30, 40], [50, 60]]), ([[1,2,3], [4,5,6], [7,8,9]]), ([77, 88, 99]), (NULL), ([[NULL, 60], [70, NULL], [NULL, NULL]]);
+
+query I
+SELECT list_reduce(n, (x, y) -> list_pack(list_reduce(x, (l, m) -> l + m) + list_reduce(y, (j, k) -> j + k)));
+----
+[210]
+[45]
+NULL
+NULL
+
+
+

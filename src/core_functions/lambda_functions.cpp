@@ -12,19 +12,6 @@ namespace duckdb {
 // Helper functions
 //===--------------------------------------------------------------------===//
 
-//! LambdaColumnInfo holds information for preparing the input vectors. We prepare the input vectors
-//! for executing a lambda expression on STANDARD_VECTOR_SIZE list child elements at a time.
-struct LambdaColumnInfo {
-	explicit LambdaColumnInfo(Vector &vector) : vector(vector), sel(SelectionVector(STANDARD_VECTOR_SIZE)) {};
-
-	//! The original vector taken from args
-	reference<Vector> vector;
-	//! The selection vector to slice the original vector
-	SelectionVector sel;
-	//! The unified vector format of the original vector
-	UnifiedVectorFormat format;
-};
-
 //! LambdaExecuteInfo holds information for executing the lambda expression on an input chunk and
 //! a resulting lambda chunk.
 struct LambdaExecuteInfo {
@@ -173,7 +160,7 @@ struct ListFilterFunctor {
 	}
 };
 
-vector<LambdaColumnInfo> GetColumnInfo(DataChunk &args, const idx_t row_count) {
+vector<LambdaFunctions::LambdaColumnInfo> LambdaFunctions::GetColumnInfo(DataChunk &args, const idx_t row_count) {
 
 	vector<LambdaColumnInfo> data;
 	// skip the input list and then insert all remaining input vectors
@@ -184,7 +171,7 @@ vector<LambdaColumnInfo> GetColumnInfo(DataChunk &args, const idx_t row_count) {
 	return data;
 }
 
-vector<reference<LambdaColumnInfo>> GetInconstantColumnInfo(vector<LambdaColumnInfo> &data) {
+vector<reference<LambdaFunctions::LambdaColumnInfo>> LambdaFunctions::GetInconstantColumnInfo(vector<LambdaFunctions::LambdaColumnInfo> &data) {
 
 	vector<reference<LambdaColumnInfo>> inconstant_info;
 	for (auto &entry : data) {
@@ -195,8 +182,8 @@ vector<reference<LambdaColumnInfo>> GetInconstantColumnInfo(vector<LambdaColumnI
 	return inconstant_info;
 }
 
-void ExecuteExpression(const idx_t elem_cnt, const LambdaColumnInfo &column_info,
-                       const vector<LambdaColumnInfo> &column_infos, const Vector &index_vector,
+void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::LambdaColumnInfo &column_info,
+                       const vector<LambdaFunctions::LambdaColumnInfo> &column_infos, const Vector &index_vector,
                        LambdaExecuteInfo &info) {
 
 	info.input_chunk.SetCardinality(elem_cnt);
@@ -321,12 +308,12 @@ void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
 	// special-handling for the child_vector
 	auto child_vector_size = ListVector::GetListSize(list_column);
 	auto &child_vector = ListVector::GetEntry(list_column);
-	LambdaColumnInfo child_info(child_vector);
+	LambdaFunctions::LambdaColumnInfo child_info(child_vector);
 	child_vector.ToUnifiedFormat(child_vector_size, child_info.format);
 
 	// get the lambda column data for all other input vectors
-	auto column_infos = GetColumnInfo(args, row_count);
-	auto inconstant_column_infos = GetInconstantColumnInfo(column_infos);
+	auto column_infos = LambdaFunctions::GetColumnInfo(args, row_count);
+	auto inconstant_column_infos = LambdaFunctions::GetInconstantColumnInfo(column_infos);
 
 	// get the expression executor
 	LambdaExecuteInfo execute_info(state.GetContext(), *lambda_expr, args, bind_info.has_index, child_vector);
@@ -422,13 +409,6 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context,
 	// get the lambda expression and put it in the bind info
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	auto lambda_expr = std::move(bound_lambda_expr.lambda_expr);
-
-	// move (almost all of this stuff) into the listreduce special bind, then
-	// try to wrap lambda_expr in a cast to the list child type
-	// 1. get list child type
-	// 2. add cast
-	// 3. if cast not possible, throw binder exception
-	// 4. add tests for the exception
 
 	return make_uniq<ListLambdaBindData>(bound_function.return_type, std::move(lambda_expr), has_index);
 }

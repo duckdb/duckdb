@@ -53,6 +53,23 @@ public:
 	static void ListFilterFunction(DataChunk &args, ExpressionState &state, Vector &result);
 	//! Internally executes list_reduce
 	static void ListReduceFunction(DataChunk &args, ExpressionState &state, Vector &result);
+
+public:
+	//! LambdaColumnInfo holds information for preparing the input vectors. We prepare the input vectors
+	//! for executing a lambda expression on STANDARD_VECTOR_SIZE list child elements at a time.
+	struct LambdaColumnInfo {
+		explicit LambdaColumnInfo(Vector &vector) : vector(vector), sel(SelectionVector(STANDARD_VECTOR_SIZE)) {};
+
+		//! The original vector taken from args
+		reference<Vector> vector;
+		//! The selection vector to slice the original vector
+		SelectionVector sel;
+		//! The unified vector format of the original vector
+		UnifiedVectorFormat format;
+	};
+
+	static vector<LambdaColumnInfo> GetColumnInfo(DataChunk &args, const idx_t row_count);
+	static vector<reference<LambdaColumnInfo>> GetInconstantColumnInfo(vector<LambdaColumnInfo> &data);
 };
 
 } // namespace duckdb
