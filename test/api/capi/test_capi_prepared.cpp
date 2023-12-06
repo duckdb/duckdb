@@ -401,7 +401,7 @@ TEST_CASE("Prepared streaming result", "[capi]") {
 
 		duckdb_data_chunk chunk;
 		idx_t index = 0;
-		while(true) {
+		while (true) {
 			chunk = duckdb_stream_fetch_chunk(res);
 			if (!chunk) {
 				break;
@@ -415,7 +415,7 @@ TEST_CASE("Prepared streaming result", "[capi]") {
 			duckdb_destroy_logical_type(&column_type);
 
 			auto data = reinterpret_cast<int64_t *>(duckdb_vector_get_data(vec));
-			for(idx_t i = 0; i < chunk_size; i++) {
+			for (idx_t i = 0; i < chunk_size; i++) {
 				REQUIRE(data[i] == index + i);
 			}
 			index += chunk_size;
