@@ -44,7 +44,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
 	// Types for the layout
 	vector<LogicalType> layout_types(condition_types);
 	layout_types.insert(layout_types.end(), build_types.begin(), build_types.end());
-	if (PropogatesBuildSide(join_type)) {
+	if (PropagatesBuildSide(join_type)) {
 		// full/right outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
 		// we place the bool before the NEXT pointer
 		layout_types.emplace_back(LogicalType::BOOLEAN);
@@ -184,7 +184,7 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 		source_chunk.data[col_offset + i].Reference(payload.data[i]);
 	}
 	col_offset += payload.ColumnCount();
-	if (PropogatesBuildSide(join_type)) {
+	if (PropagatesBuildSide(join_type)) {
 		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
 		source_chunk.data[col_offset].Reference(vfound);
 		col_offset++;
@@ -224,7 +224,7 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> 
 	// figure out which keys are NULL, and create a selection vector out of them
 	current_sel = FlatVector::IncrementalSelectionVector();
 	idx_t added_count = keys.size();
-	if (build_side && (PropogatesBuildSide(join_type))) {
+	if (build_side && (PropagatesBuildSide(join_type))) {
 		// in case of a right or full outer join, we cannot remove NULL keys from the build side
 		return added_count;
 	}
@@ -506,7 +506,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 
 	idx_t result_count = ScanInnerJoin(keys, result_vector);
 	if (result_count > 0) {
-		if (PropogatesBuildSide(ht.join_type)) {
+		if (PropagatesBuildSide(ht.join_type)) {
 			// full/right outer join: mark join matches as FOUND in the HT
 			auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
 			for (idx_t i = 0; i < result_count; i++) {

@@ -11,7 +11,7 @@ bool IsRightOuterJoin(JoinType type) {
 	return type == JoinType::OUTER || type == JoinType::RIGHT;
 }
 
-bool PropogatesBuildSide(JoinType type) {
+bool PropagatesBuildSide(JoinType type) {
 	return type == JoinType::OUTER || type == JoinType::RIGHT || type == JoinType::RIGHT_ANTI ||
 	       type == JoinType::RIGHT_SEMI;
 }

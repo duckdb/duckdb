@@ -34,7 +34,7 @@ public:
 class BlockwiseNLJoinGlobalState : public GlobalSinkState {
 public:
 	explicit BlockwiseNLJoinGlobalState(ClientContext &context, const PhysicalBlockwiseNLJoin &op)
-	    : right_chunks(context, op.children[1]->GetTypes()), right_outer(PropogatesBuildSide(op.join_type)) {
+	    : right_chunks(context, op.children[1]->GetTypes()), right_outer(PropagatesBuildSide(op.join_type)) {
 	}
 
 	mutex lock;
@@ -252,7 +252,7 @@ unique_ptr<LocalSourceState> PhysicalBlockwiseNLJoin::GetLocalSourceState(Execut
 
 SourceResultType PhysicalBlockwiseNLJoin::GetData(ExecutionContext &context, DataChunk &chunk,
                                                   OperatorSourceInput &input) const {
-	D_ASSERT(PropogatesBuildSide(join_type));
+	D_ASSERT(PropagatesBuildSide(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = sink_state->Cast<BlockwiseNLJoinGlobalState>();
 	auto &gstate = input.global_state.Cast<BlockwiseNLJoinGlobalScanState>();

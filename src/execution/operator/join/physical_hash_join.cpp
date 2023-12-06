@@ -543,7 +543,7 @@ public:
 		idx_t count;
 		if (gstate.probe_spill) {
 			count = probe_count;
-		} else if (PropogatesBuildSide(op.join_type)) {
+		} else if (PropagatesBuildSide(op.join_type)) {
 			count = gstate.hash_table->Count();
 		} else {
 			return 0;
@@ -664,7 +664,7 @@ void HashJoinGlobalSourceState::TryPrepareNextStage(HashJoinGlobalSinkState &sin
 		break;
 	case HashJoinSourceStage::PROBE:
 		if (probe_chunk_done == probe_chunk_count) {
-			if (PropogatesBuildSide(op.join_type)) {
+			if (PropagatesBuildSide(op.join_type)) {
 				PrepareScanHT(sink);
 			} else {
 				PrepareBuild(sink);
@@ -904,7 +904,7 @@ SourceResultType PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk 
 	auto &lstate = input.local_state.Cast<HashJoinLocalSourceState>();
 	sink.scanned_data = true;
 
-	if (!sink.external && !(PropogatesBuildSide(join_type))) {
+	if (!sink.external && !(PropagatesBuildSide(join_type))) {
 		return SourceResultType::FINISHED;
 	}
 

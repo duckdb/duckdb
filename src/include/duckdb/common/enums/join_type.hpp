@@ -38,7 +38,7 @@ bool IsLeftOuterJoin(JoinType type);
 bool IsRightOuterJoin(JoinType type);
 
 //!
-bool PropogatesBuildSide(JoinType type);
+bool PropagatesBuildSide(JoinType type);
 
 // **DEPRECATED**: Use EnumUtil directly instead.
 string JoinTypeToString(JoinType type);

@@ -128,7 +128,7 @@ static void RewriteJoinCondition(Expression &expr, idx_t offset) {
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { RewriteJoinCondition(child, offset); });
 }
 
-bool PhysicalPlanGenerator::HasEquality(vector<JoinCondition> &conds, idx_t &has_range) {
+bool PhysicalPlanGenerator::HasEquality(vector<JoinCondition> &conds, idx_t &range_count) {
 	for (size_t c = 0; c < conds.size(); ++c) {
 		auto &cond = conds[c];
 		switch (cond.comparison) {
@@ -139,7 +139,7 @@ bool PhysicalPlanGenerator::HasEquality(vector<JoinCondition> &conds, idx_t &has
 		case ExpressionType::COMPARE_GREATERTHAN:
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			++has_range;
+			++range_count;
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
 		case ExpressionType::COMPARE_DISTINCT_FROM:
