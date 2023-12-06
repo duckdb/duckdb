@@ -190,14 +190,14 @@ void CSVSniffer::DetectTypes() {
 	for (auto &candidate : candidates) {
 		auto &sniffing_state_machine = candidate->GetStateMachineSniff();
 		unordered_map<idx_t, vector<LogicalType>> info_sql_types_candidates;
-		for (idx_t i = 0; i < sniffing_state_machine.dialect_options.num_cols; i++) {
+		for (idx_t i = 0; i < max_columns_found; i++) {
 			info_sql_types_candidates[i] = sniffing_state_machine.options.auto_type_candidates;
 		}
-		D_ASSERT(sniffing_state_machine.options.dialect_options.num_cols > 0);
+		D_ASSERT(max_columns_found > 0);
 
 		// Set all return_types to VARCHAR, so we can do datatype detection based on VARCHAR values
 		return_types.clear();
-		return_types.assign(sniffing_state_machine.dialect_options.num_cols, LogicalType::VARCHAR);
+		return_types.assign(max_columns_found, LogicalType::VARCHAR);
 
 		// Reset candidate for parsing
 		candidate->Reset();
@@ -332,12 +332,6 @@ void CSVSniffer::DetectTypes() {
 	}
 	// Assert that it's all good at this point.
 	D_ASSERT(best_candidate && !best_format_candidates.empty() && !best_header_row.empty());
-
-	for (const auto &best : best_format_candidates) {
-		if (!best.second.empty()) {
-			SetDateFormat(best_candidate->GetStateMachineSniff(), best.second.back(), best.first);
-		}
-	}
 }
 
 } // namespace duckdb
