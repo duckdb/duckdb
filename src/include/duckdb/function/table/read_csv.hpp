@@ -73,6 +73,7 @@ struct ColumnInfo {
 };
 
 struct ReadCSVData : public BaseCSVData {
+	ReadCSVData() {};
 	//! The expected SQL types to read from the file
 	vector<LogicalType> csv_types;
 	//! The expected SQL names to be read from the file
@@ -96,6 +97,8 @@ struct ReadCSVData : public BaseCSVData {
 	//! State machines for sniffing becomes a major bottleneck.
 	CSVStateMachineCache state_machine_cache;
 
+	//! The state machine used to parse this file
+	StateMachine state_machine;
 	//! CSV Files can be parallelized either within a file or per-file, depending on the number of files
 	//! Or options used, we only parallelize per-file.
 	bool parallelize_single_file_scan = true;
