@@ -385,6 +385,7 @@ unique_ptr<CSVScanner> CSVGlobalState::Next(ClientContext &context, const ReadCS
 	if (finished) {
 		return nullptr;
 	}
+	return nullptr;
 	//	// Create a CSV State machine
 	//	auto csv_state_machine = make_uniq<CSVStateMachine>();
 	//
@@ -420,7 +421,7 @@ unique_ptr<CSVScanner> CSVGlobalState::Next(ClientContext &context, const ReadCS
 	//		//		// we either don't have a reader, or the reader was created for a different file
 	//		//		// we need to create a new reader and instantiate it
 	//		//		if (file_index > 0 && file_index <= bind_data.union_readers.size() &&
-	//bind_data.union_readers[file_index
+	// bind_data.union_readers[file_index
 	//		//- 1]) {
 	//		//			// we are doing UNION BY NAME - fetch the options from the union reader for this file
 	//		//			auto &union_reader = *bind_data.union_readers[file_index - 1];
@@ -429,9 +430,9 @@ unique_ptr<CSVScanner> CSVGlobalState::Next(ClientContext &context, const ReadCS
 	//		// reader->names = union_reader.GetNames(); 		} else if (file_index <= bind_data.column_info.size()) {
 	//		//			// Serialized Union By name
 	//		//			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result),
-	//first_position,
+	// first_position,
 	//		//			                                      bind_data.column_info[file_index - 1].types, file_index -
-	//1);
+	// 1);
 	//		//			reader->names = bind_data.column_info[file_index - 1].names;
 	//		//		} else {
 	//		//			// regular file - use the standard options
@@ -439,14 +440,14 @@ unique_ptr<CSVScanner> CSVGlobalState::Next(ClientContext &context, const ReadCS
 	//		//				return false;
 	//		//			}
 	//		//			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result),
-	//first_position,
+	// first_position,
 	//		//			                                      bind_data.csv_types, file_index - 1);
 	//		//			reader->names = bind_data.csv_names;
 	//		//		}
 	//		//		reader->options.file_path = current_file_path;
 	//		//		MultiFileReader::InitializeReader(*reader, bind_data.options.file_options, bind_data.reader_bind,
 	//		//		                                  bind_data.return_types, bind_data.return_names, column_ids,
-	//nullptr,
+	// nullptr,
 	//		//		                                  bind_data.files.front(), context);
 	//	} else {
 	//		// update the current reader
@@ -592,7 +593,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	do {
 		//		if (output.size() != 0) {
 		//			MultiFileReader::FinalizeChunk(bind_data.reader_bind, csv_local_state.csv_reader->reader_data,
-		//output); 			break;
+		// output); 			break;
 		//		}
 		//		if (csv_local_state.csv_reader->finished) {
 		//			auto verification_updates = csv_local_state.csv_reader->GetVerificationPositions();

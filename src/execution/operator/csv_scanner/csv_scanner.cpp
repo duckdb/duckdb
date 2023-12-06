@@ -23,21 +23,21 @@ CSVScanner::CSVScanner(ClientContext &context, CSVReaderOptions &options) {
 
 CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p,
                        CSVIterator csv_iterator_p)
-    : buffer_manager(std::move(buffer_manager_p)), state_machine(std::move(state_machine_p)),
-      csv_iterator(csv_iterator_p) {
+    : csv_iterator(csv_iterator_p), buffer_manager(std::move(buffer_manager_p)),
+      state_machine(std::move(state_machine_p)) {
 }
 
 //! Skips all empty lines, until a non-empty line shows up
 struct ProcessSkipEmptyLines {
 	inline static void Initialize(CSVScanner &scanner) {
-		scanner.state = CSVState::STANDARD;
+		scanner.states.Initialize(CSVState::STANDARD);
 	}
 	inline static bool Process(CSVScanner &scanner, idx_t &result_pos, char current_char, idx_t current_pos) {
 		auto state_machine = scanner.GetStateMachine();
-		scanner.state = static_cast<CSVState>(
-		    state_machine.transition_array[static_cast<uint8_t>(scanner.state)][static_cast<uint8_t>(current_char)]);
-		if (scanner.state != CSVState::EMPTY_LINE && scanner.state != CSVState::CARRIAGE_RETURN &&
-		    scanner.state != CSVState::RECORD_SEPARATOR) {
+		auto &state = scanner.states;
+		state_machine.Transition(scanner.states, current_char);
+		if (state.current_state != CSVState::EMPTY_LINE && state.current_state != CSVState::CARRIAGE_RETURN &&
+		    state.current_state != CSVState::RECORD_SEPARATOR) {
 			result_pos = current_pos;
 			return true;
 		}
@@ -61,13 +61,13 @@ void CSVScanner::SkipEmptyLines() {
 //! Moves the buffer until the next new line
 struct SkipUntilNewLine {
 	inline static void Initialize(CSVScanner &scanner) {
-		scanner.state = CSVState::STANDARD;
+		scanner.states.Initialize(CSVState::STANDARD);
 	}
 	inline static bool Process(CSVScanner &scanner, idx_t &result_pos, char current_char, idx_t current_pos) {
 		auto state_machine = scanner.GetStateMachine();
-		scanner.state = static_cast<CSVState>(
-		    state_machine.transition_array[static_cast<uint8_t>(scanner.state)][static_cast<uint8_t>(current_char)]);
-		if (scanner.state == CSVState::RECORD_SEPARATOR) {
+		auto &state = scanner.states;
+		state_machine.Transition(scanner.states, current_char);
+		if (state.current_state == CSVState::RECORD_SEPARATOR) {
 			// Next Position is the first line.
 			result_pos = current_pos + 1;
 			return true;
@@ -82,7 +82,7 @@ struct SkipUntilNewLine {
 };
 
 void CSVScanner::SkipHeader() {
-	if (!state_machine->options.has_header || !state_machine->options.dialect_options.header) {
+	if (!state_machine->options.dialect_options.header.GetValue()) {
 		// No header to skip
 		return;
 	}

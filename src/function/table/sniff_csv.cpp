@@ -122,8 +122,9 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	sniffer_options.file_path = data.path;
 
 	CSVStateMachineCache state_machine_cache;
-	auto file_handle = BaseCSVReader::OpenCSV(context, sniffer_options);
-	auto buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), sniffer_options);
+	vector<string> file_paths {sniffer_options.file_path};
+
+	auto buffer_manager = make_shared<CSVBufferManager>(context, sniffer_options, file_paths);
 	CSVSniffer sniffer(sniffer_options, buffer_manager, state_machine_cache);
 	auto sniffer_result = sniffer.SniffCSV(true);
 	string str_opt;

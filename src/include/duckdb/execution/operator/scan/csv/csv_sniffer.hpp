@@ -141,7 +141,7 @@ private:
 	                   const LogicalTypeId &sql_type);
 
 	//! Function that initialized the necessary variables used for date and timestamp detection
-	void InitializeDateAndTimeStampDetection(CSVStateMachine &candidate, const string &separator,
+	void InitializeDateAndTimeStampDetection(CSVStateMachineSniffing &candidate, const string &separator,
 	                                         const LogicalType &sql_type);
 	//! Functions that performs detection for date and timestamp formats
 	void DetectDateAndTimeStampFormats(CSVStateMachineSniffing &candidate, const LogicalType &sql_type,

@@ -70,8 +70,6 @@ void CSVSniffer::RefineTypes() {
 						}
 						//	doesn't work - move to the next one
 						best_type_format_candidates.pop_back();
-						sniffing_state_machine.dialect_options.has_format[sql_type.id()] =
-						    (!best_type_format_candidates.empty());
 						if (!best_type_format_candidates.empty()) {
 							SetDateFormat(best_candidate->GetStateMachineSniff(), best_type_format_candidates.back(),
 							              sql_type.id());

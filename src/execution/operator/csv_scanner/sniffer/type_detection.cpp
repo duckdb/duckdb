@@ -119,6 +119,29 @@ void CSVSniffer::SetDateFormat(CSVStateMachineSniffing &candidate, const string 
 	candidate.dialect_options.date_format[sql_type].Set(strpformat, false);
 }
 
+void CSVSniffer::InitializeDateAndTimeStampDetection(CSVStateMachineSniffing &candidate, const string &separator,
+                                                     const LogicalType &sql_type) {
+	auto &format_candidate = format_candidates[sql_type.id()];
+	if (!format_candidate.initialized) {
+		format_candidate.initialized = true;
+		// order by preference
+		auto entry = format_template_candidates.find(sql_type.id());
+		if (entry != format_template_candidates.end()) {
+			const auto &format_template_list = entry->second;
+			for (const auto &t : format_template_list) {
+				const auto format_string = GenerateDateFormat(separator, t);
+				// don't parse ISO 8601
+				if (format_string.find("%Y-%m-%d") == string::npos) {
+					format_candidate.format.emplace_back(format_string);
+				}
+			}
+		}
+	}
+	//	initialise the first candidate
+	//	all formats are constructed to be valid
+	SetDateFormat(candidate, format_candidate.format.back(), sql_type.id());
+}
+
 void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachineSniffing &candidate, const LogicalType &sql_type,
                                                const string &separator, Value &dummy_val) {
 	// If it is the first time running date/timestamp detection we must initilize the format variables
@@ -170,9 +193,9 @@ void CSVSniffer::DetectTypes() {
 		for (idx_t i = 0; i < sniffing_state_machine.dialect_options.num_cols; i++) {
 			info_sql_types_candidates[i] = sniffing_state_machine.options.auto_type_candidates;
 		}
-		D_ASSERT(candidate->dialect_options.num_cols > 0);
+		D_ASSERT(sniffing_state_machine.options.dialect_options.num_cols > 0);
 
-		// Set all return_types to VARCHAR so we can do datatype detection based on VARCHAR values
+		// Set all return_types to VARCHAR, so we can do datatype detection based on VARCHAR values
 		return_types.clear();
 		return_types.assign(sniffing_state_machine.dialect_options.num_cols, LogicalType::VARCHAR);
 
