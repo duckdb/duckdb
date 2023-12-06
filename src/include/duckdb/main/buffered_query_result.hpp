@@ -22,13 +22,6 @@ class Executor;
 class MaterializedQueryResult;
 class PreparedStatementData;
 
-struct BufferedDataScanState {
-	//! The chunk we're currently scanning from
-	unique_ptr<DataChunk> chunk = nullptr;
-	//! The offset into the current chunk
-	idx_t offset = 0;
-};
-
 class BufferedQueryResult : public QueryResult {
 	friend class ClientContext;
 
@@ -66,7 +59,6 @@ private:
 
 private:
 	shared_ptr<BufferedData> buffered_data;
-	BufferedDataScanState scan_state;
 };
 
 } // namespace duckdb

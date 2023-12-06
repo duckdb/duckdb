@@ -35,12 +35,12 @@ unique_ptr<PhysicalResultCollector> PhysicalResultCollector::GetResultCollector(
 		// we care about maintaining insertion order and the sources all support batch indexes
 		// use a batch collector
 		// FIXME: maybe just start off with using this in the order-preserving case
-		//if (data.is_streaming) {
-		//	return make_uniq_base<PhysicalResultCollector, PhysicalBufferedCollector>(data, true);
-		//}
 		if (data.is_streaming) {
-			throw NotImplementedException("BATCHED BUFFERED COLLECTOR MISSING");
+			return make_uniq_base<PhysicalResultCollector, PhysicalBufferedCollector>(data, false);
 		}
+		// if (data.is_streaming) {
+		//	throw NotImplementedException("BATCHED BUFFERED COLLECTOR MISSING");
+		//}
 		return make_uniq_base<PhysicalResultCollector, PhysicalBatchCollector>(data);
 	}
 }
