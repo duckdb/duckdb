@@ -57,7 +57,7 @@ public:
 	}
 };
 
-TEST_CASE("Test Progress Bar Fast", "[api]") {
+TEST_CASE("Test Progress Bar Fast", "[progress-bar]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NOTHROW(con.context->GetQueryProgress());
@@ -126,7 +126,7 @@ TEST_CASE("Test Progress Bar Fast", "[api]") {
 	REQUIRE_NO_FAIL(*result);
 }
 
-TEST_CASE("Test Progress Bar", "[api][.]") {
+TEST_CASE("Test Progress Bar", "[progress-bar][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	TestProgressBar test_progress(con.context.get());
@@ -190,7 +190,7 @@ TEST_CASE("Test Progress Bar", "[api][.]") {
 	REQUIRE_NO_FAIL(*result);
 }
 
-TEST_CASE("Test Progress Bar CSV", "[api][.]") {
+TEST_CASE("Test Progress Bar CSV", "[progress-bar][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
