@@ -39,10 +39,10 @@ static void LoadInternal(DatabaseInstance &instance) {
 	config.AddExtensionOption("s3_secret_access_key", "S3 Access Key", LogicalType::VARCHAR);
 	config.AddExtensionOption("s3_session_token", "S3 Session Token", LogicalType::VARCHAR);
 	config.AddExtensionOption("s3_endpoint", "S3 Endpoint (empty for default endpoint)", LogicalType::VARCHAR);
-	config.AddExtensionOption("s3_url_style", "S3 url style ('vhost' (default) or 'path')", LogicalType::VARCHAR,
+	config.AddExtensionOption("s3_url_style", "S3 URL style ('vhost' (default) or 'path')", LogicalType::VARCHAR,
 	                          Value("vhost"));
 	config.AddExtensionOption("s3_use_ssl", "S3 use SSL (default true)", LogicalType::BOOLEAN, Value(true));
-	config.AddExtensionOption("s3_url_compatibility_mode", "Disable Globs and Query Parameters on S3 urls",
+	config.AddExtensionOption("s3_url_compatibility_mode", "Disable Globs and Query Parameters on S3 URLs",
 	                          LogicalType::BOOLEAN, Value(false));
 
 	// S3 Uploader config

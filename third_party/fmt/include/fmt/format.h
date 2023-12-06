@@ -73,6 +73,8 @@
 #if FMT_HAS_CPP_ATTRIBUTE(fallthrough) && \
     (__cplusplus >= 201703 || FMT_GCC_VERSION != 0)
 #  define FMT_FALLTHROUGH [[fallthrough]]
+#elif defined(DUCKDB_EXPLICIT_FALLTHROUGH)
+#  define FMT_FALLTHROUGH DUCKDB_EXPLICIT_FALLTHROUGH
 #else
 #  define FMT_FALLTHROUGH
 #endif
