@@ -416,7 +416,7 @@ TEST_CASE("Prepared streaming result", "[capi]") {
 
 			auto data = reinterpret_cast<int64_t *>(duckdb_vector_get_data(vec));
 			for (idx_t i = 0; i < chunk_size; i++) {
-				REQUIRE(data[i] == index + i);
+				REQUIRE(data[i] == int64_t(index + i));
 			}
 			index += chunk_size;
 			duckdb_destroy_data_chunk(&chunk);
