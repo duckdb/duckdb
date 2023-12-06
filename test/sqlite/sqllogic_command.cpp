@@ -10,9 +10,7 @@
 #include "catch.hpp"
 #include <list>
 #include <thread>
-#ifdef DUCKDB_DEBUG_BUFFERED_STREAMING_RESULT
-#include "duckdb/main/buffered_query_result.hpp"
-#endif
+#include "duckdb/main/stream_query_result.hpp"
 
 namespace duckdb {
 
@@ -91,15 +89,12 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 	if (TestForceReload() && TestForceStorage()) {
 		RestartDatabase(context, connection, context.sql_query);
 	}
-#ifndef DUCKDB_DEBUG_BUFFERED_STREAMING_RESULT
-	return connection->Query(context.sql_query);
-#else
+	// return connection->Query(context.sql_query);
 	auto ccontext = connection->context;
 	auto result = ccontext->Query(context.sql_query, true);
-	D_ASSERT(result->type == QueryResultType::BUFFERED_RESULT);
-	auto &buffered_result = result->Cast<BufferedQueryResult>();
-	return buffered_result.Materialize();
-#endif
+	D_ASSERT(result->type == QueryResultType::STREAM_RESULT);
+	auto &stream_result = result->Cast<StreamQueryResult>();
+	return stream_result.Materialize();
 }
 
 void Command::Execute(ExecuteContext &context) const {

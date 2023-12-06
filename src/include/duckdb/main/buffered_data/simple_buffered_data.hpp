@@ -16,7 +16,7 @@
 
 namespace duckdb {
 
-class BufferedQueryResult;
+class StreamQueryResult;
 
 class SimpleBufferedData : public BufferedData {
 private:
@@ -30,7 +30,7 @@ public:
 	void Append(unique_ptr<DataChunk> chunk, optional_idx batch = optional_idx()) override;
 	void AddToBacklog(BlockedSink blocked_sink) override;
 	bool BufferIsFull() const override;
-	void ReplenishBuffer(BufferedQueryResult &result) override;
+	void ReplenishBuffer(StreamQueryResult &result) override;
 	unique_ptr<DataChunk> Scan() override;
 
 private:

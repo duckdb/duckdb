@@ -254,19 +254,6 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	auto &executor = GetExecutor();
 	auto &prepared = *active_query->prepared;
 	bool create_stream_result = prepared.properties.allow_stream_result && pending.allow_stream_result;
-	if (create_stream_result) {
-#ifndef DUCKDB_DEBUG_BUFFERED_STREAMING_RESULT
-		D_ASSERT(!executor.HasResultCollector());
-		active_query->progress_bar.reset();
-		query_progress.Initialize();
-		// successfully compiled SELECT clause, and it is the last statement
-		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
-		auto stream_result = make_uniq<StreamQueryResult>(pending.statement_type, pending.properties,
-		                                                  shared_from_this(), pending.types, pending.names);
-		active_query->SetOpenResult(*stream_result);
-		return std::move(stream_result);
-#endif
-	}
 	unique_ptr<QueryResult> result;
 	if (executor.HasResultCollector()) {
 		// we have a result collector - fetch the result directly from the result collector

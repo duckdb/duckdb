@@ -7,12 +7,11 @@
 namespace duckdb {
 
 StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProperties properties,
-                                     shared_ptr<ClientContext> context_p, vector<LogicalType> types,
-                                     vector<string> names)
+                                     vector<LogicalType> types, vector<string> names,
+                                     ClientProperties client_properties, shared_ptr<BufferedData> buffered_data)
     : QueryResult(QueryResultType::STREAM_RESULT, statement_type, std::move(properties), std::move(types),
-                  std::move(names), context_p->GetClientProperties()),
-      context(std::move(context_p)) {
-	D_ASSERT(context);
+                  std::move(names), std::move(client_properties)),
+      buffered_data(buffered_data) {
 }
 
 StreamQueryResult::~StreamQueryResult() {
@@ -22,7 +21,7 @@ string StreamQueryResult::ToString() {
 	string result;
 	if (success) {
 		result = HeaderToString();
-		result += "[[STREAM RESULT]]";
+		result += "[[BUFFERED RESULT]]";
 	} else {
 		result = GetError() + "\n";
 	}
@@ -40,28 +39,9 @@ unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
 	return context->LockContext();
 }
 
-void StreamQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
-	if (!IsOpenInternal(lock)) {
-		string error_str = "Attempting to execute an unsuccessful or closed pending query result";
-		if (HasError()) {
-			error_str += StringUtil::Format("\nError: %s", GetError());
-		}
-		throw InvalidInputException(error_str);
-	}
-}
-
 unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
-	unique_ptr<DataChunk> chunk;
-	{
-		auto lock = LockContext();
-		CheckExecutableInternal(*lock);
-		chunk = context->Fetch(*lock, *this);
-	}
-	if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
-		Close();
-		return nullptr;
-	}
-	return chunk;
+	buffered_data->ReplenishBuffer(*this);
+	return buffered_data->Scan();
 }
 
 unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
@@ -93,6 +73,16 @@ bool StreamQueryResult::IsOpenInternal(ClientContextLock &lock) {
 		invalidated = !context->IsActiveResult(lock, *this);
 	}
 	return !invalidated;
+}
+
+void StreamQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
+	if (!IsOpenInternal(lock)) {
+		string error_str = "Attempting to execute an unsuccessful or closed pending query result";
+		if (HasError()) {
+			error_str += StringUtil::Format("\nError: %s", GetError());
+		}
+		throw InvalidInputException(error_str);
+	}
 }
 
 bool StreamQueryResult::IsOpen() {

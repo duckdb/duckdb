@@ -44,7 +44,6 @@ class ScalarFunctionCatalogEntry;
 struct ActiveQueryContext;
 struct ParserOptions;
 class SimpleBufferedData;
-class BufferedQueryResult;
 struct ClientData;
 
 struct PendingQueryParameters {
@@ -65,9 +64,8 @@ public:
 //! The ClientContext holds information relevant to the current client session
 //! during execution
 class ClientContext : public std::enable_shared_from_this<ClientContext> {
-	friend class PendingQueryResult;  // LockContext
-	friend class SimpleBufferedData;  // LockContext
-	friend class BufferedQueryResult; // LockContext
+	friend class PendingQueryResult; // LockContext
+	friend class SimpleBufferedData; // LockContext
 	friend class StreamQueryResult;
 	friend class DuckTransactionManager;
 

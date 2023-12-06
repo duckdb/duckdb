@@ -1,7 +1,7 @@
 #include "duckdb/main/buffered_data/simple_buffered_data.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/buffered_query_result.hpp"
+#include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/common/helper.hpp"
 
 namespace duckdb {
@@ -37,7 +37,7 @@ void SimpleBufferedData::UnblockSinks(idx_t &estimated_tuples) {
 	}
 }
 
-void SimpleBufferedData::ReplenishBuffer(BufferedQueryResult &result) {
+void SimpleBufferedData::ReplenishBuffer(StreamQueryResult &result) {
 	if (!context) {
 		// Result has already been closed
 		return;

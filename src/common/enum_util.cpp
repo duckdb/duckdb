@@ -4691,8 +4691,6 @@ const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value) {
 		return "MATERIALIZED_RESULT";
 	case QueryResultType::STREAM_RESULT:
 		return "STREAM_RESULT";
-	case QueryResultType::BUFFERED_RESULT:
-		return "BUFFERED_RESULT";
 	case QueryResultType::PENDING_RESULT:
 		return "PENDING_RESULT";
 	default:
@@ -4707,9 +4705,6 @@ QueryResultType EnumUtil::FromString<QueryResultType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "STREAM_RESULT")) {
 		return QueryResultType::STREAM_RESULT;
-	}
-	if (StringUtil::Equals(value, "BUFFERED_RESULT")) {
-		return QueryResultType::BUFFERED_RESULT;
 	}
 	if (StringUtil::Equals(value, "PENDING_RESULT")) {
 		return QueryResultType::PENDING_RESULT;

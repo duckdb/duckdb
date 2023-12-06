@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/helper/physical_buffered_collector.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/main/buffered_query_result.hpp"
+#include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
@@ -79,8 +79,8 @@ unique_ptr<LocalSinkState> PhysicalBufferedCollector::GetLocalSinkState(Executio
 unique_ptr<QueryResult> PhysicalBufferedCollector::GetResult(GlobalSinkState &state) {
 	auto &gstate = state.Cast<BufferedCollectorGlobalState>();
 	lock_guard<mutex> l(gstate.glock);
-	auto result = make_uniq<BufferedQueryResult>(statement_type, properties, types, names,
-	                                             gstate.context->GetClientProperties(), gstate.buffered_data);
+	auto result = make_uniq<StreamQueryResult>(statement_type, properties, types, names,
+	                                           gstate.context->GetClientProperties(), gstate.buffered_data);
 	return std::move(result);
 }
 
