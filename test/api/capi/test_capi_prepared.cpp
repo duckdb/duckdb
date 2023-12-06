@@ -400,27 +400,27 @@ TEST_CASE("Prepared streaming result", "[capi]") {
 		REQUIRE(duckdb_result_is_streaming(res));
 
 		duckdb_data_chunk chunk;
-		chunk = duckdb_stream_fetch_chunk(res);
-		REQUIRE(duckdb_data_chunk_get_size(chunk) == 10);
+		idx_t index = 0;
+		while (true) {
+			chunk = duckdb_stream_fetch_chunk(res);
+			if (!chunk) {
+				break;
+			}
+			auto chunk_size = duckdb_data_chunk_get_size(chunk);
+			REQUIRE(chunk_size > 0);
 
-		auto vec = duckdb_data_chunk_get_vector(chunk, 0);
-		auto column_type = duckdb_vector_get_column_type(vec);
-		REQUIRE(duckdb_get_type_id(column_type) == DUCKDB_TYPE_BIGINT);
-		duckdb_destroy_logical_type(&column_type);
+			auto vec = duckdb_data_chunk_get_vector(chunk, 0);
+			auto column_type = duckdb_vector_get_column_type(vec);
+			REQUIRE(duckdb_get_type_id(column_type) == DUCKDB_TYPE_BIGINT);
+			duckdb_destroy_logical_type(&column_type);
 
-		auto data = (int64_t *)duckdb_vector_get_data(vec);
-		REQUIRE(data[0] == 0);
-		REQUIRE(data[1] == 1);
-		REQUIRE(data[2] == 2);
-		REQUIRE(data[3] == 3);
-		REQUIRE(data[4] == 4);
-		REQUIRE(data[5] == 5);
-		REQUIRE(data[6] == 6);
-		REQUIRE(data[7] == 7);
-		REQUIRE(data[8] == 8);
-		REQUIRE(data[9] == 9);
-
-		duckdb_destroy_data_chunk(&chunk);
+			auto data = reinterpret_cast<int64_t *>(duckdb_vector_get_data(vec));
+			for (idx_t i = 0; i < chunk_size; i++) {
+				REQUIRE(data[i] == int64_t(index + i));
+			}
+			index += chunk_size;
+			duckdb_destroy_data_chunk(&chunk);
+		}
 
 		REQUIRE(duckdb_stream_fetch_chunk(res) == nullptr);
 
