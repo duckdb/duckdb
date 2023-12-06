@@ -337,11 +337,9 @@ vector<SecretEntry *> DuckSecretManager::AllSecrets(CatalogTransaction transacti
 }
 
 bool DuckSecretManager::AllowConfigChanges() {
-	bool ret = initialized;
-	return !ret;
+	return !initialized;
 }
 
-// TODO: switch to single file for secrets
 void DuckSecretManager::WriteSecretToFile(CatalogTransaction transaction, const BaseSecret &secret) {
 	auto &fs = *transaction.db->config.file_system;
 	auto secret_dir = GetSecretDirectory(transaction.db->config);

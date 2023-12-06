@@ -19,8 +19,7 @@ struct BoundStatement;
 class CreateSecretStatement;
 struct CatalogTransaction;
 
-//! SecretEntry is a wrapper around a secret containing metadata from the secret manager and allowing storage in a
-//! CatalogSet
+//! Wrapper around a BaseSecret containing metadata and allow storing in CatalogSet
 struct SecretEntry : public CatalogEntry {
 public:
 	SecretEntry(unique_ptr<const BaseSecret> secret, Catalog &catalog, string name)
@@ -79,7 +78,7 @@ public:
 	DUCKDB_API virtual void DropSecretByName(CatalogTransaction transaction, const string &name, bool missing_ok) = 0;
 	//! Get a vector of all registered secrets
 	DUCKDB_API virtual vector<SecretEntry *> AllSecrets(CatalogTransaction transaction) = 0;
-	//! Returns a boolean indicating the SecretManager has been initialized and no longer excepts certain config changes
+	//! Returns a boolean indicating the SecretManager has been initialized and no longer accepts config changes
 	DUCKDB_API virtual bool AllowConfigChanges() = 0;
 };
 

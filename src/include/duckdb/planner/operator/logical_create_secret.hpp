@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-//! LogicalSimple represents a simple logical operator that only passes on the parse info
+//! LogicalCreateSecret represents a simple logical operator that only passes on the parse info
 class LogicalCreateSecret : public LogicalOperator {
 public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_CREATE_SECRET;

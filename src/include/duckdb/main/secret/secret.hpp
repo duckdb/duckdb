@@ -76,28 +76,6 @@ public:
 	optional_ptr<Catalog> parent_catalog;
 };
 
-//! Secret types contain the base settings of a secret
-struct SecretFunctionType : public CatalogEntry {
-	SecretFunctionType(Catalog &catalog, const string &name, secret_deserializer_t deserializer,
-	                   const string &default_provider)
-	    : CatalogEntry(CatalogType::SECRET_TYPE_ENTRY, catalog, name), name(name), deserializer(deserializer),
-	      default_provider(default_provider), parent_catalog(&catalog) {
-		internal = true;
-	}
-	Catalog &ParentCatalog() override {
-		return *parent_catalog;
-	};
-
-	//! Unique name identifying the secret type
-	string name;
-	//! The deserialization function for the type
-	secret_deserializer_t deserializer;
-	//! Provider to use when non is specified
-	string default_provider;
-
-	optional_ptr<Catalog> parent_catalog;
-};
-
 enum class SecretPersistMode : uint8_t { DEFAULT, TEMPORARY, PERMANENT };
 
 //! Secret types contain the base settings of a secret

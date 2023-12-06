@@ -1,12 +1,6 @@
 #define DUCKDB_EXTENSION_MAIN
 
 #include "duckdb.hpp"
-#include "duckdb/function/function_set.hpp"
-#include "duckdb/main/extension_util.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/parser/expression/comparison_expression.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
 #include "httpfs_extension.hpp"
 #include "s3fs.hpp"
 #include "create_secret_functions.hpp"

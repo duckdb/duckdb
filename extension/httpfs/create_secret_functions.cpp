@@ -105,7 +105,6 @@ void CreateS3SecretFunctions::SetBaseNamedParams(CreateSecretFunction &function,
 }
 
 void CreateS3SecretFunctions::RegisterCreateSecretFunction(DatabaseInstance &instance, string type) {
-	// TODO: handle case where this has already run?
 	// Register the new type
 	SecretType secret_type;
 	secret_type.name = type;

@@ -616,7 +616,6 @@ void CatalogSet::CreateDefaultEntries(CatalogTransaction transaction, unique_loc
 
 			lock.lock();
 
-			// Note: this skips the dependency manager creation
 			DependencyList l;
 			catalog.GetDependencyManager().AddObject(transaction, *entry, l);
 			CreateEntryInternal(transaction, std::move(entry));

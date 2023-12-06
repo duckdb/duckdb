@@ -18,8 +18,7 @@ class SecretManager;
 struct DBConfig;
 class SchemaCatalogEntry;
 
-//! The Main secret manager implementation for DuckDB. The secret manager can handle both temporary and permanent
-//! secrets
+//! The Main secret manager implementation for DuckDB. Can handle both temporary and permanent secrets
 class DuckSecretManager : public SecretManager {
 	friend struct SecretEntry;
 
@@ -36,7 +35,7 @@ public:
 	DUCKDB_API void RegisterSecretFunction(CatalogTransaction transaction, CreateSecretFunction function,
 	                                       OnCreateConflict on_conflict) override;
 	DUCKDB_API optional_ptr<SecretEntry> RegisterSecret(CatalogTransaction transaction,
-	                                                    unique_ptr<const BaseSecret> secret,
+	                                                    unique_ptr<const BaseSecret> secrsecretet,
 	                                                    OnCreateConflict on_conflict,
 	                                                    SecretPersistMode persist_mode) override;
 	DUCKDB_API optional_ptr<SecretEntry> CreateSecret(ClientContext &context, const CreateSecretInfo &info) override;
