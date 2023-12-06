@@ -13,7 +13,6 @@ create table all_types as
 		small_enum,
 		medium_enum,
 		large_enum,
-		uhugeint
 	)
 from test_all_types();
 
