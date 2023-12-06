@@ -2,6 +2,9 @@
 # description: Test compatibility of ART indexes for different duckdb versions
 # group: [storage]
 
+# data/storage/index_0-9-1.db was written with a 64-bit version of duckdb
+require 64bit
+
 # SQL to create index_0-9-1.db
 
 # CREATE TABLE pk_tbl (id INTEGER PRIMARY KEY, name VARCHAR UNIQUE);
