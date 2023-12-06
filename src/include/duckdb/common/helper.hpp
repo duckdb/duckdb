@@ -151,7 +151,7 @@ T MaxValue(T a, T b) {
 }
 
 template <typename T>
-T MinValue(T a, T b) {
+constexpr T MinValue(T a, T b) {
 	return a < b ? a : b;
 }
 

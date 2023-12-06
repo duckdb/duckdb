@@ -26,17 +26,17 @@ struct FileHandle;
 
 struct Storage {
 	//! The size of a hard disk sector, only really needed for Direct IO
-	constexpr static int SECTOR_SIZE = 4096;
+	constexpr static idx_t SECTOR_SIZE = 4096;
 	//! Block header size for blocks written to the storage
-	constexpr static int BLOCK_HEADER_SIZE = sizeof(uint64_t);
+	constexpr static idx_t BLOCK_HEADER_SIZE = sizeof(uint64_t);
 	// Size of a memory slot managed by the StorageManager. This is the quantum of allocation for Blocks on DuckDB. We
 	// default to 256KB. (1 << 18)
-	constexpr static int BLOCK_ALLOC_SIZE = 262144;
+	constexpr static idx_t BLOCK_ALLOC_SIZE = 262144;
 	//! The actual memory space that is available within the blocks
-	constexpr static int BLOCK_SIZE = BLOCK_ALLOC_SIZE - BLOCK_HEADER_SIZE;
+	constexpr static idx_t BLOCK_SIZE = BLOCK_ALLOC_SIZE - BLOCK_HEADER_SIZE;
 	//! The size of the headers. This should be small and written more or less atomically by the hard disk. We default
 	//! to the page size, which is 4KB. (1 << 12)
-	constexpr static int FILE_HEADER_SIZE = 4096;
+	constexpr static idx_t FILE_HEADER_SIZE = 4096;
 	//! The number of rows per row group (must be a multiple of the vector size)
 	constexpr static const idx_t ROW_GROUP_SIZE = STANDARD_ROW_GROUPS_SIZE;
 	//! The number of vectors per row group
