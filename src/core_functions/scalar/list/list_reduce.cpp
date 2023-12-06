@@ -10,7 +10,8 @@ namespace duckdb {
 static void ExecuteReduce(idx_t loops, std::vector<idx_t> &active_rows, const list_entry_t *list_entries,
                           Vector &result, Vector &left_slice, UnifiedVectorFormat &list_column_format,
                           Vector &child_vector, ClientContext &context, const Expression &lambda_expr,
-                          const bool has_index, DataChunk &result_chunk, const vector<LambdaFunctions::LambdaColumnInfo> &column_infos) {
+                          const bool has_index, DataChunk &result_chunk,
+                          const vector<LambdaFunctions::LambdaColumnInfo> &column_infos) {
 	SelectionVector right_sel(active_rows.size());
 	SelectionVector left_sel(active_rows.size());
 	SelectionVector active_rows_sel(active_rows.size());
@@ -154,7 +155,6 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 		}
 		old_count++;
 	}
-
 
 	Vector left_slice = Vector(child_vector, left_vector, row_count);
 

@@ -171,7 +171,8 @@ vector<LambdaFunctions::LambdaColumnInfo> LambdaFunctions::GetColumnInfo(DataChu
 	return data;
 }
 
-vector<reference<LambdaFunctions::LambdaColumnInfo>> LambdaFunctions::GetInconstantColumnInfo(vector<LambdaFunctions::LambdaColumnInfo> &data) {
+vector<reference<LambdaFunctions::LambdaColumnInfo>>
+LambdaFunctions::GetInconstantColumnInfo(vector<LambdaFunctions::LambdaColumnInfo> &data) {
 
 	vector<reference<LambdaColumnInfo>> inconstant_info;
 	for (auto &entry : data) {
