@@ -191,7 +191,15 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener, FileOpenerInfo &info) {
 	}
 
 	if (FileOpener::TryGetCurrentSetting(opener, "s3_endpoint", value, info)) {
-		endpoint = value.ToString();
+		if (value.ToString().empty()) {
+			if (StringUtil::StartsWith(info.file_path, "gcs://")) {
+				endpoint = "storage.googleapis.com";
+			} else {
+				endpoint = "s3.amazonaws.com";
+			}
+		} else {
+			endpoint = value.ToString();
+		}
 	} else {
 		endpoint = "s3.amazonaws.com";
 	}
@@ -221,6 +229,10 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener, FileOpenerInfo &info) {
 
 	return {region,   access_key_id, secret_access_key, session_token,
 	        endpoint, url_style,     use_ssl,           s3_url_compatibility_mode};
+}
+
+S3FileHandle::~S3FileHandle() {
+	Close();
 }
 
 S3ConfigParams S3ConfigParams::ReadFrom(FileOpener *opener) {
@@ -254,7 +266,9 @@ void S3FileHandle::Close() {
 	auto &s3fs = (S3FileSystem &)file_system;
 	if ((flags & FileFlags::FILE_FLAGS_WRITE) && !upload_finalized) {
 		s3fs.FlushAllBuffers(*this);
-		s3fs.FinalizeMultipartUpload(*this);
+		if (parts_uploaded) {
+			s3fs.FinalizeMultipartUpload(*this);
+		}
 	}
 }
 
@@ -412,6 +426,7 @@ void S3FileSystem::FlushAllBuffers(S3FileHandle &file_handle) {
 
 void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 	auto &s3fs = (S3FileSystem &)file_handle.file_system;
+	file_handle.upload_finalized = true;
 
 	std::stringstream ss;
 	ss << "<CompleteMultipartUpload xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">";
@@ -438,9 +453,8 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 
 	auto open_tag_pos = result.find("<CompleteMultipartUploadResult", 0);
 	if (open_tag_pos == string::npos) {
-		throw IOException("Unexpected response during S3 multipart upload finalization: %d", res->code);
+		throw IOException("Unexpected response during S3 multipart upload finalization: %d\n\n%s", res->code, result);
 	}
-	file_handle.upload_finalized = true;
 }
 
 // Wrapper around the BufferManager::Allocate to that allows limiting the number of buffers that will be handed out
@@ -556,17 +570,27 @@ void S3FileSystem::ReadQueryParams(const string &url_query_param, S3AuthParams &
 	}
 }
 
-ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
-	string http_proto, host, bucket, path, query_param, trimmed_s3_url;
-
-	if (url.rfind("s3://", 0) != 0) {
-		throw IOException("URL needs to start with s3://");
+static string GetPrefix(string url) {
+	const string prefixes[] = {"s3://", "s3a://", "s3n://", "gcs://", "r2://"};
+	for (auto &prefix : prefixes) {
+		if (StringUtil::StartsWith(url, prefix)) {
+			return prefix;
+		}
 	}
-	auto slash_pos = url.find('/', 5);
+	throw IOException("URL needs to start with s3://, gcs:// or r2://");
+	return string();
+}
+
+ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
+	string http_proto, prefix, host, bucket, path, query_param, trimmed_s3_url;
+
+	prefix = GetPrefix(url);
+	auto prefix_end_pos = url.find("//") + 2;
+	auto slash_pos = url.find('/', prefix_end_pos);
 	if (slash_pos == string::npos) {
 		throw IOException("URL needs to contain a '/' after the host");
 	}
-	bucket = url.substr(5, slash_pos - 5);
+	bucket = url.substr(prefix_end_pos, slash_pos - prefix_end_pos);
 	if (bucket.empty()) {
 		throw IOException("URL needs to contain a bucket name");
 	}
@@ -611,7 +635,7 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 
 	http_proto = params.use_ssl ? "https://" : "http://";
 
-	return {http_proto, host, bucket, path, query_param, trimmed_s3_url};
+	return {http_proto, prefix, host, bucket, path, query_param, trimmed_s3_url};
 }
 
 string S3FileSystem::GetPayloadHash(char *buffer, idx_t buffer_len) {
@@ -804,15 +828,13 @@ void S3FileHandle::Initialize(FileOpener *opener) {
 		D_ASSERT(part_size * max_part_count >= config_params.max_file_size);
 
 		multipart_upload_id = s3fs.InitializeMultipartUpload(*this);
-
-		uploads_in_progress = 0;
-		parts_uploaded = 0;
-		upload_finalized = false;
 	}
 }
 
 bool S3FileSystem::CanHandleFile(const string &fpath) {
-	return fpath.rfind("s3://", 0) == 0;
+	return fpath.rfind("s3://", 0) * fpath.rfind("s3a://", 0) * fpath.rfind("s3n://", 0) * fpath.rfind("gcs://", 0) *
+	           fpath.rfind("r2://", 0) ==
+	       0;
 }
 
 void S3FileSystem::FileSync(FileHandle &handle) {
@@ -927,7 +949,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 		// Repeat requests until the keys of all common prefixes are parsed.
 		auto common_prefixes = AWSListObjectV2::ParseCommonPrefix(response_str);
 		while (!common_prefixes.empty()) {
-			auto prefix_path = "s3://" + parsed_s3_url.bucket + '/' + common_prefixes.back();
+			auto prefix_path = parsed_s3_url.prefix + parsed_s3_url.bucket + '/' + common_prefixes.back();
 			common_prefixes.pop_back();
 
 			// TODO we could optimize here by doing a match on the prefix, if it doesn't match we can skip this prefix
@@ -960,7 +982,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 		bool is_match = Match(key_splits.begin(), key_splits.end(), pattern_splits.begin(), pattern_splits.end());
 
 		if (is_match) {
-			auto result_full_url = "s3://" + parsed_s3_url.bucket + "/" + s3_key;
+			auto result_full_url = parsed_s3_url.prefix + parsed_s3_url.bucket + "/" + s3_key;
 			// if a ? char was present, we re-add it here as the url parsing will have trimmed it.
 			if (!parsed_s3_url.query_param.empty()) {
 				result_full_url += '?' + parsed_s3_url.query_param;

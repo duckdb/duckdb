@@ -34,6 +34,13 @@ statement ok
 SET enable_http_metadata_cache=true;
 
 statement ok
+set http_timeout=120000;
+
+# More retries (longest wait will be 25600ms)
+statement ok
+set http_retries=6;
+
+statement ok
 CREATE SCHEMA tpcds;
 
 statement ok

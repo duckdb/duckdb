@@ -7,6 +7,8 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/core_functions/to_interval.hpp"
 
 #include "datetime.h" // Python datetime initialize #1
 
@@ -26,19 +28,17 @@ PyTimeDelta::PyTimeDelta(py::handle &obj) {
 }
 
 interval_t PyTimeDelta::ToInterval() {
-	interval_t interval;
+	interval_t result;
 
-	// Timedelta stores any amount of seconds lower than a day only
-	D_ASSERT(seconds < Interval::SECS_PER_DAY);
+	auto micros_interval = Interval::FromMicro(microseconds);
+	auto days_interval = interval_t {/*months = */ 0,
+	                                 /*days = */ days,
+	                                 /*micros = */ 0};
+	auto seconds_interval = ToSecondsOperator::Operation<int64_t, interval_t>(seconds);
 
-	// Convert overflow of days to months
-	interval.months = days / Interval::DAYS_PER_MONTH;
-	days -= interval.months * Interval::DAYS_PER_MONTH;
-
-	microseconds += seconds * Interval::MICROS_PER_SEC;
-	interval.days = days;
-	interval.micros = microseconds;
-	return interval;
+	result = AddOperator::Operation<interval_t, interval_t, interval_t>(micros_interval, days_interval);
+	result = AddOperator::Operation<interval_t, interval_t, interval_t>(result, seconds_interval);
+	return result;
 }
 
 int64_t PyTimeDelta::GetDays(py::handle &obj) {
@@ -274,23 +274,7 @@ timestamp_t PyDateTime::ToTimestamp() {
 	return Timestamp::FromDatetime(date, time);
 }
 
-bool PyDateTime::IsPositiveInfinity() const {
-	return year == 9999 && month == 12 && day == 31 && hour == 23 && minute == 59 && second == 59 && micros == 999999;
-}
-
-bool PyDateTime::IsNegativeInfinity() const {
-	return year == 1 && month == 1 && day == 1 && hour == 0 && minute == 0 && second == 0 && micros == 0;
-}
-
 Value PyDateTime::ToDuckValue(const LogicalType &target_type) {
-	if (IsPositiveInfinity()) {
-		// FIXME: respect the target_type ?
-		return Value::TIMESTAMP(timestamp_t::infinity());
-	}
-	if (IsNegativeInfinity()) {
-		// FIXME: respect the target_type ?
-		return Value::TIMESTAMP(timestamp_t::ninfinity());
-	}
 	auto timestamp = ToTimestamp();
 	if (!py::none().is(tzone_obj)) {
 		auto utc_offset = PyTimezone::GetUTCOffset(tzone_obj);
@@ -363,21 +347,8 @@ PyDate::PyDate(py::handle &ele) {
 }
 
 Value PyDate::ToDuckValue() {
-	if (IsPositiveInfinity()) {
-		return Value::DATE(date_t::infinity());
-	}
-	if (IsNegativeInfinity()) {
-		return Value::DATE(date_t::ninfinity());
-	}
-	return Value::DATE(year, month, day);
-}
-
-bool PyDate::IsPositiveInfinity() const {
-	return year == 9999 && month == 12 && day == 31;
-}
-
-bool PyDate::IsNegativeInfinity() const {
-	return year == 1 && month == 1 && day == 1;
+	auto value = Value::DATE(year, month, day);
+	return value;
 }
 
 void PythonObject::Initialize() {

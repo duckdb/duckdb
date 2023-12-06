@@ -817,6 +817,29 @@ ScalarFunction Log10Fun::GetFunction() {
 }
 
 //===--------------------------------------------------------------------===//
+// log with base
+//===--------------------------------------------------------------------===//
+struct LogBaseOperator {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA b, TB x) {
+		auto divisor = Log10Operator::Operation<TA, TR>(b);
+		if (divisor == 0) {
+			throw OutOfRangeException("divison by zero in based logarithm");
+		}
+		return Log10Operator::Operation<TB, TR>(x) / divisor;
+	}
+};
+
+ScalarFunctionSet LogFun::GetFunctions() {
+	ScalarFunctionSet funcs;
+	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                                 ScalarFunction::UnaryFunction<double, double, Log10Operator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                                 ScalarFunction::BinaryFunction<double, double, double, LogBaseOperator>));
+	return funcs;
+}
+
+//===--------------------------------------------------------------------===//
 // log2
 //===--------------------------------------------------------------------===//
 struct Log2Operator {
@@ -1103,6 +1126,23 @@ ScalarFunction AcosFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // cot
 //===--------------------------------------------------------------------===//
+template <class OP>
+struct NoInfiniteNoZeroDoubleWrapper {
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input) {
+		if (DUCKDB_UNLIKELY(!Value::IsFinite(input))) {
+			if (Value::IsNan(input)) {
+				return input;
+			}
+			throw OutOfRangeException("input value %lf is out of range for numeric function", input);
+		}
+		if (DUCKDB_UNLIKELY((double)input == 0.0 || (double)input == -0.0)) {
+			throw OutOfRangeException("input value %lf is out of range for numeric function cotangent", input);
+		}
+		return OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input);
+	}
+};
+
 struct CotOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
@@ -1112,7 +1152,7 @@ struct CotOperator {
 
 ScalarFunction CotFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<CotOperator>>);
+	                      ScalarFunction::UnaryFunction<double, double, NoInfiniteNoZeroDoubleWrapper<CotOperator>>);
 }
 
 //===--------------------------------------------------------------------===//

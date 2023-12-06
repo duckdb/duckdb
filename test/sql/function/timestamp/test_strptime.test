@@ -72,11 +72,11 @@ SELECT strptime('jun', '%b')
 ----
 1900-06-01 00:00:00
 
-# First Sunday of Monday weeks is Jan 7
+# First Monday of Monday weeks is Jan 1
 query I
 SELECT strptime('1', '%W')
 ----
-1900-01-07 00:00:00
+1900-01-01 00:00:00
 
 # First Sunday of Sunday weeks is Jan 7
 query I
@@ -90,9 +90,9 @@ SELECT strptime('30', '%U'), strftime('1900-07-29'::DATE, '%U')
 1900-07-29 00:00:00	30
 
 query II
-SELECT strptime('30', '%W'), strftime('1900-07-29'::DATE, '%W')
+SELECT strptime('30', '%W'), strftime('1900-07-23'::DATE, '%W')
 ----
-1900-07-29 00:00:00	30
+1900-07-23 00:00:00	30
 
 # Ignored
 query I
@@ -260,6 +260,24 @@ query I
 select strptime('2020-12-30 23:25:58.745232-04', '%Y-%m-%d %H:%M:%S.%f%z');
 ----
 2020-12-31 03:25:58.745232+00
+
+# infinities should always parse
+
+query I
+select strptime('infinity', '%m/%d/%Y');
+----
+infinity
+
+query I
+select strptime('-infinity', '%m/%d/%Y');
+----
+-infinity
+
+query I
+select strptime('epoch', '%m/%d/%Y');
+----
+1970-01-01 00:00:00
+
 
 # Don't swallow non-spaces
 query I

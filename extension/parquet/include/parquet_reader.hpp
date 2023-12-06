@@ -40,6 +40,7 @@ class Allocator;
 class ClientContext;
 class BaseStatistics;
 class TableFilterSet;
+class ParquetEncryptionConfig;
 
 struct ParquetReaderPrefetchConfig {
 	// Percentage of data in a row group span that should be scanned for enabling whole group prefetch
@@ -86,6 +87,8 @@ struct ParquetOptions {
 
 	bool binary_as_string = false;
 	bool file_row_number = false;
+	shared_ptr<ParquetEncryptionConfig> encryption_config;
+
 	MultiFileReaderOptions file_options;
 	vector<ParquetColumnDefinition> schema;
 
@@ -124,6 +127,10 @@ public:
 	idx_t NumRowGroups();
 
 	const duckdb_parquet::format::FileMetaData *GetFileMetadata();
+
+	uint32_t Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot);
+	uint32_t ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
+	                  const uint32_t buffer_size);
 
 	unique_ptr<BaseStatistics> ReadStatistics(const string &name);
 	static LogicalType DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string);

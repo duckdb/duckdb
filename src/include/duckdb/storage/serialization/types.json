@@ -124,6 +124,18 @@
         "id": 200,
         "name": "user_type_name",
         "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "catalog",
+        "type": "string",
+        "default": "string()"
+      },
+      {
+        "id": 202,
+        "name": "schema",
+        "type": "string",
+        "default": "string()"
       }
     ]
   },

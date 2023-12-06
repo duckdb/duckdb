@@ -22,6 +22,7 @@ struct ExtensionEntry {
 
 static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"->>", "json"},
+    {"add_parquet_key", "parquet"},
     {"array_to_json", "json"},
     {"create_fts_index", "fts"},
     {"current_localtime", "icu"},
@@ -70,12 +71,15 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"json_valid", "json"},
     {"load_aws_credentials", "aws"},
     {"make_timestamptz", "icu"},
+    {"parquet_file_metadata", "parquet"},
     {"parquet_kv_metadata", "parquet"},
     {"parquet_metadata", "parquet"},
     {"parquet_scan", "parquet"},
     {"parquet_schema", "parquet"},
+    {"pg_clear_cache", "postgres_scanner"},
     {"pg_timezone_names", "icu"},
     {"postgres_attach", "postgres_scanner"},
+    {"postgres_query", "postgres_scanner"},
     {"postgres_scan", "postgres_scanner"},
     {"postgres_scan_pushdown", "postgres_scanner"},
     {"read_json", "json"},
@@ -116,6 +120,7 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"st_distance", "spatial"},
     {"st_distance_spheroid", "spatial"},
     {"st_drivers", "spatial"},
+    {"st_dump", "spatial"},
     {"st_dwithin", "spatial"},
     {"st_dwithin_spheroid", "spatial"},
     {"st_endpoint", "spatial"},
@@ -142,9 +147,12 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"st_isvalid", "spatial"},
     {"st_length", "spatial"},
     {"st_length_spheroid", "spatial"},
+    {"st_linemerge", "spatial"},
     {"st_linestring2dfromwkb", "spatial"},
     {"st_list_proj_crs", "spatial"},
+    {"st_makeenvelope", "spatial"},
     {"st_makeline", "spatial"},
+    {"st_makepolygon", "spatial"},
     {"st_ngeometries", "spatial"},
     {"st_ninteriorrings", "spatial"},
     {"st_normalize", "spatial"},
@@ -206,6 +214,13 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"http_retry_backoff", "httpfs"},
     {"http_retry_wait_ms", "httpfs"},
     {"http_timeout", "httpfs"},
+    {"http_keep_alive", "httpfs"},
+    {"pg_debug_show_queries", "postgres_scanner"},
+    {"pg_use_binary_copy", "postgres_scanner"},
+    {"pg_experimental_filter_pushdown", "postgres_scanner"},
+    {"pg_connection_limit", "postgres_scanner"},
+    {"pg_pages_per_task", "postgres_scanner"},
+    {"pg_array_as_varchar", "postgres_scanner"},
     {"s3_access_key_id", "httpfs"},
     {"s3_endpoint", "httpfs"},
     {"s3_region", "httpfs"},
@@ -260,9 +275,9 @@ static constexpr ExtensionEntry EXTENSION_COLLATIONS[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
-    {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"},
-    //    {"azure://", "azure"}
-}; // END_OF_EXTENSION_FILE_PREFIXES
+    {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"}, {"s3a://", "httpfs"},
+    {"s3n://", "httpfs"},  {"gcs://", "httpfs"},   {"r2://", "httpfs"} // , {"azure://", "azure"}
+};                                                                     // END_OF_EXTENSION_FILE_PREFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb

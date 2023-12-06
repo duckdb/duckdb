@@ -6,10 +6,9 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, unique_ptr<CSVFileH
                                    const CSVReaderOptions &options, idx_t file_idx_p)
     : file_handle(std::move(file_handle_p)), context(context_p), file_idx(file_idx_p),
       buffer_size(CSVBuffer::CSV_BUFFER_SIZE) {
-	if (options.skip_rows_set) {
-		// Skip rows if they are set
-		skip_rows = options.dialect_options.skip_rows;
-	}
+	// Skip rows if they are set
+	skip_rows = options.dialect_options.skip_rows.GetValue();
+
 	auto file_size = file_handle->FileSize();
 	if (file_size > 0 && file_size < buffer_size) {
 		buffer_size = CSVBuffer::CSV_MINIMUM_BUFFER_SIZE;

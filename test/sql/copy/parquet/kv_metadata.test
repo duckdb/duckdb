@@ -43,12 +43,12 @@ SELECT key::VARCHAR, value::VARCHAR FROM parquet_kv_metadata('__TEST_DIR__/kv_me
 statement ok
 COPY (SELECT 2, 'bar') TO  '__TEST_DIR__/kv_metadata_test2.parquet' (FORMAT PARQUET, KV_METADATA {a: 'b', c: 'd'});
 
-query II rowsort
-SELECT key::VARCHAR, value::VARCHAR FROM parquet_kv_metadata('__TEST_DIR__/kv_metadata_tes*');
+query III
+SELECT replace(replace(file_name, '\', '/'),replace('__TEST_DIR__/', '\', '/'), '') AS file_name, key::VARCHAR, value::VARCHAR FROM parquet_kv_metadata('__TEST_DIR__/kv_metadata_tes*') ORDER BY 1, 2;
 ----
-a	b
-baz	42
-c	d
-foo	bar
-quz	\xC3\xB6\xC3\xA4\xC3\xA5
+kv_metadata_test.parquet	baz	42
+kv_metadata_test.parquet	foo	bar
+kv_metadata_test.parquet	quz	\xC3\xB6\xC3\xA4\xC3\xA5
+kv_metadata_test2.parquet	a	b
+kv_metadata_test2.parquet	c	d
 

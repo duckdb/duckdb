@@ -63,4 +63,11 @@ bool NO_FAIL(duckdb::unique_ptr<QueryResult> result);
 			FAIL(res);                                                                                                 \
 	}
 
+#define COMPARE_CSV_COLLECTION(collection, csv, header)                                                                \
+	{                                                                                                                  \
+		auto res = compare_csv_collection(collection, csv, header);                                                    \
+		if (!res.empty())                                                                                              \
+			FAIL(res);                                                                                                 \
+	}
+
 } // namespace duckdb

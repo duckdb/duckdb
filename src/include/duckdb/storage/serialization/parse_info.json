@@ -287,6 +287,12 @@
         "id": 202,
         "name": "options",
         "type": "unordered_map<string, Value>"
+      },
+      {
+        "id": 203,
+        "name": "on_conflict",
+        "type": "OnCreateConflict",
+        "default": "OnCreateConflict::ERROR_ON_CONFLICT"
       }
     ]
   },
@@ -446,12 +452,12 @@
       {
         "id": 201,
         "name": "parameters",
-        "type": "vector<Value>"
+        "type": "vector<ParsedExpression*>"
       },
       {
         "id": 202,
         "name": "named_parameters",
-        "type": "named_parameter_map_t"
+        "type": "case_insensitive_map_t<ParsedExpression*>"
       }
     ]
   },

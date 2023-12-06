@@ -36,7 +36,10 @@ whitelist = [
     '_edata',
     '__bss_start',
     '__udivti3',
+    '__popcount',
     'Adbc',
+    'ErrorArrayStream',
+    'ErrorFromArrayStream',
 ]
 
 for symbol in res.stdout.decode('utf-8').split('\n'):

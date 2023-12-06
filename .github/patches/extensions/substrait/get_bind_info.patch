@@ -1,0 +1,18 @@
+diff --git a/src/to_substrait.cpp b/src/to_substrait.cpp
+index 7ca777e..bac1f35 100644
+--- a/src/to_substrait.cpp
++++ b/src/to_substrait.cpp
+@@ -1058,11 +1058,11 @@ substrait::Rel *DuckDBToSubstrait::TransformGet(LogicalOperator &dop) {
+ 	substrait::Rel *rel = get_rel;
+ 	auto &dget = (LogicalGet &)dop;
+ 
+-	if (!dget.function.get_batch_info) {
++	if (!dget.function.get_bind_info) {
+ 		throw NotImplementedException("This Scanner Type can't be used in substrait because a get batch info "
+ 		                              "is not yet implemented");
+ 	}
+-	auto bind_info = dget.function.get_batch_info(dget.bind_data.get());
++	auto bind_info = dget.function.get_bind_info(dget.bind_data.get());
+ 	auto sget = get_rel->mutable_read();
+ 
+ 	if (!dget.table_filters.filters.empty()) {

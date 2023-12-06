@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/serializer/format_serializer.hpp
+// duckdb/common/serializer/deserializer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -14,6 +14,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
 
 namespace duckdb {
 
@@ -38,6 +39,10 @@ public:
 		// Deserialize an element
 		template <class T>
 		T ReadElement();
+
+		//! Deserialize bytes
+		template <class T>
+		void ReadElement(data_ptr_t &ptr, idx_t size);
 
 		// Deserialize an object
 		template <class FUNC>
@@ -474,6 +479,11 @@ void Deserializer::List::ReadObject(FUNC f) {
 template <class T>
 T Deserializer::List::ReadElement() {
 	return deserializer.Read<T>();
+}
+
+template <class T>
+void Deserializer::List::ReadElement(data_ptr_t &ptr, idx_t size) {
+	deserializer.ReadDataPtr(ptr, size);
 }
 
 } // namespace duckdb

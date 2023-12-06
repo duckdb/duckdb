@@ -73,6 +73,9 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 	case duckdb_libpgquery::PG_CONSTR_UNIQUE:
 	case duckdb_libpgquery::PG_CONSTR_PRIMARY: {
 		bool is_primary_key = constraint->contype == duckdb_libpgquery::PG_CONSTR_PRIMARY;
+		if (!constraint->keys) {
+			throw ParserException("UNIQUE USING INDEX is not supported");
+		}
 		vector<string> columns;
 		for (auto kc = constraint->keys->head; kc; kc = kc->next) {
 			columns.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(kc->data.ptr_value)->val.str);
@@ -110,8 +113,9 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 	case duckdb_libpgquery::PG_CONSTR_NULL:
 		return nullptr;
 	case duckdb_libpgquery::PG_CONSTR_GENERATED_VIRTUAL: {
-		if (column.DefaultValue()) {
-			throw InvalidInputException("DEFAULT constraint on GENERATED column \"%s\" is not allowed", column.Name());
+		if (column.HasDefaultValue()) {
+			throw InvalidInputException("\"%s\" has a DEFAULT value set, it can not become a GENERATED column",
+			                            column.Name());
 		}
 		column.SetGeneratedExpression(TransformExpression(constraint->raw_expr));
 		return nullptr;

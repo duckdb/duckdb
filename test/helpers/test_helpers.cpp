@@ -105,7 +105,8 @@ string TestDirectoryPath() {
 	string path;
 	if (custom_test_directory.empty()) {
 		// add the PID to the test directory - but only if it was not specified explicitly by the user
-		path = StringUtil::Format(test_directory + "/%d", getpid());
+		auto pid = getpid();
+		path = fs->JoinPath(test_directory, to_string(pid));
 	} else {
 		path = test_directory;
 	}
@@ -249,6 +250,14 @@ string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
 	}
 	string error;
 	if (!compare_result(csv, materialized.Collection(), materialized.types, header, error)) {
+		return error;
+	}
+	return "";
+}
+
+string compare_csv_collection(duckdb::ColumnDataCollection &collection, string csv, bool header) {
+	string error;
+	if (!compare_result(csv, collection, collection.Types(), header, error)) {
 		return error;
 	}
 	return "";
