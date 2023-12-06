@@ -41,33 +41,30 @@ unique_ptr<ClientContextLock> BufferedQueryResult::LockContext() {
 
 unique_ptr<DataChunk> BufferedQueryResult::FetchRaw() {
 	buffered_data->ReplenishBuffer(*this);
-
 	return buffered_data->Scan();
 }
 
 unique_ptr<MaterializedQueryResult> BufferedQueryResult::Materialize() {
-	// if (HasError() || !context) {
-	//	return make_uniq<MaterializedQueryResult>(GetErrorObject());
-	//}
-	// auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+	if (HasError() || !context) {
+		return make_uniq<MaterializedQueryResult>(GetErrorObject());
+	}
+	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 
-	// ColumnDataAppendState append_state;
-	// collection->InitializeAppend(append_state);
-	// while (true) {
-	//	auto chunk = Fetch();
-	//	if (!chunk || chunk->size() == 0) {
-	//		break;
-	//	}
-	//	collection->Append(append_state, *chunk);
-	//}
-	// auto result =
-	//    make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection),
-	//    client_properties);
-	// if (HasError()) {
-	//	return make_uniq<MaterializedQueryResult>(GetErrorObject());
-	//}
-	// return result;
-	return nullptr;
+	ColumnDataAppendState append_state;
+	collection->InitializeAppend(append_state);
+	while (true) {
+		auto chunk = Fetch();
+		if (!chunk || chunk->size() == 0) {
+			break;
+		}
+		collection->Append(append_state, *chunk);
+	}
+	auto result =
+	    make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection), client_properties);
+	if (HasError()) {
+		return make_uniq<MaterializedQueryResult>(GetErrorObject());
+	}
+	return result;
 }
 
 bool BufferedQueryResult::IsOpenInternal(ClientContextLock &lock) {
