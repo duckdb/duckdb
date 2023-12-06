@@ -13,6 +13,7 @@ static void ExecuteReduce(idx_t loops, std::vector<idx_t> &active_rows, const li
                           const bool has_index, DataChunk &result_chunk, const vector<LambdaFunctions::LambdaColumnInfo> &column_infos) {
 	SelectionVector right_sel(active_rows.size());
 	SelectionVector left_sel(active_rows.size());
+	SelectionVector active_rows_sel(active_rows.size());
 
 	idx_t old_count = 0;
 	idx_t new_count = 0;
@@ -23,15 +24,12 @@ static void ExecuteReduce(idx_t loops, std::vector<idx_t> &active_rows, const li
 		if (list_entries[list_column_format_index].length > loops + 1) {
 			right_sel.set_index(new_count, list_entries[list_column_format_index].offset + loops + 1);
 			left_sel.set_index(new_count, old_count);
+			active_rows_sel.set_index(new_count, *it);
 
 			new_count++;
 			it++;
 		} else {
-			if (list_entries[list_column_format_index].length == 0) {
-//				throw ParameterNotAllowedException("An empty list cannot be reduced");
-			} else {
-				result.SetValue(*it, left_slice.GetValue(old_count));
-			}
+			result.SetValue(*it, left_slice.GetValue(old_count));
 			active_rows.erase(it);
 		}
 		old_count++;
@@ -78,7 +76,7 @@ static void ExecuteReduce(idx_t loops, std::vector<idx_t> &active_rows, const li
 			input_chunk.data[slice_offset + 2 + i].Reference(column_infos[i].vector);
 		} else {
 			// slice the other vectors
-			slices.emplace_back(column_infos[i].vector, column_infos[i].sel, new_count);
+			slices.emplace_back(column_infos[i].vector, active_rows_sel, new_count);
 			input_chunk.data[slice_offset + 2 + i].Reference(slices.back());
 		}
 	}

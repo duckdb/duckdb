@@ -362,6 +362,7 @@ void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
 				elem_cnt = 0;
 			}
 
+			// FIXME: reuse same selection vector for inconstant rows
 			// adjust indexes for slicing
 			child_info.sel.set_index(elem_cnt, list_entry.offset + child_idx);
 			for (auto &entry : inconstant_column_infos) {

@@ -180,18 +180,43 @@ statement ok
 DROP TABLE nested;
 
 statement ok
-CREATE TABLE nested (n integer[])
+CREATE TABLE nested (n integer[][])
 
 statement ok
-INSERT INTO nested VALUES ([[10, 20], [30, 40], [50, 60]]), ([[1,2,3], [4,5,6], [7,8,9]]), ([77, 88, 99]), (NULL), ([[NULL, 60], [70, NULL], [NULL, NULL]]);
+INSERT INTO nested VALUES ([[10, 20], [30, 40], [50, 60]]), ([[1,2,3], [4,5,6], [7,8,9]]), (NULL), ([[NULL, 60], [70, NULL], [NULL, NULL]]);
 
 query I
-SELECT list_reduce(n, (x, y) -> list_pack(list_reduce(x, (l, m) -> l + m) + list_reduce(y, (j, k) -> j + k)));
+SELECT list_reduce(n, (x, y) -> list_pack(list_reduce(x, (l, m) -> l + m) + list_reduce(y, (j, k) -> j + k))) from nested;
 ----
 [210]
 [45]
 NULL
-NULL
+[NULL]
 
+statement ok
+INSERT INTO nested VALUES ([[4, 5, 6], []]);
 
+statement error
+SELECT list_reduce(n, (x, y) -> list_pack(list_reduce(x, (l, m) -> l + m) + list_reduce(y, (j, k) -> j + k))) from nested;
+----
+empty list
+
+# very large lists
+
+statement ok
+CREATE TABLE large_lists AS SELECT range % 4 g, list(range) l FROM range(10000) GROUP BY range % 4;
+
+statement ok
+CREATE TABLE reduced_lists (g integer, l integer);
+
+statement ok
+INSERT INTO reduced_lists (SELECT g, list_reduce(l, (x, y) -> least(x, y)) FROM large_lists);
+
+query I
+SELECT ll.g = rl.l FROM large_lists ll, reduced_lists rl WHERE ll.g = rl.g;
+----
+True
+True
+True
+True
 
