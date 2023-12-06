@@ -30,7 +30,21 @@ Connection::Connection(DatabaseInstance &database) : context(make_shared<ClientC
 Connection::Connection(DuckDB &database) : Connection(*database.instance) {
 }
 
+Connection::Connection(Connection &&other) noexcept {
+	std::swap(context, other.context);
+	std::swap(warning_cb, other.warning_cb);
+}
+
+Connection &Connection::operator=(Connection &&other) noexcept {
+	std::swap(context, other.context);
+	std::swap(warning_cb, other.warning_cb);
+	return *this;
+}
+
 Connection::~Connection() {
+	if (!context) {
+		return;
+	}
 	ConnectionManager::Get(*context->db).RemoveConnection(*context);
 }
 

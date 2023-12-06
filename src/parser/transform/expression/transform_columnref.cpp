@@ -45,6 +45,7 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 		result->expr = TransformExpression(star.expr);
 		if (result->expr->type == ExpressionType::STAR) {
 			auto &child_star = result->expr->Cast<StarExpression>();
+			result->relation_name = child_star.relation_name;
 			result->exclude_list = std::move(child_star.exclude_list);
 			result->replace_list = std::move(child_star.replace_list);
 			result->expr.reset();
