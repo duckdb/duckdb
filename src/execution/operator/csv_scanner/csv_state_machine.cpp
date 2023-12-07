@@ -12,7 +12,7 @@ CSVStateMachine::CSVStateMachine(CSVReaderOptions &options_p, const CSVStateMach
       state_machine_options(state_machine_options_p), options(options_p) {
 }
 
-CSVStateMachine::CSVStateMachine(const StateMachine &transition_array_p, CSVReaderOptions &options_p)
+CSVStateMachine::CSVStateMachine(const StateMachine &transition_array_p, const CSVReaderOptions &options_p)
     : transition_array(transition_array_p), state_machine_options(options_p.dialect_options.state_machine_options),
       options(options_p) {
 }

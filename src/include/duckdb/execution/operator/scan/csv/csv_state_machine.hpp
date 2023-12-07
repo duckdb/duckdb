@@ -38,7 +38,7 @@ public:
 	explicit CSVStateMachine(CSVReaderOptions &options_p, const CSVStateMachineOptions &state_machine_options,
 	                         CSVStateMachineCache &csv_state_machine_cache_p);
 
-	explicit CSVStateMachine(const StateMachine &transition_array, CSVReaderOptions &options);
+	explicit CSVStateMachine(const StateMachine &transition_array, const CSVReaderOptions &options);
 
 	//! Transition all states to next state, that depends on the current char
 	inline void Transition(CSVStates &states, char current_char) {

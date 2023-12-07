@@ -188,6 +188,7 @@ struct BufferPosition {
 		finished = true;
 		return false;
 	}
+
 	//! Number of bytes each thread will consume
 	//! 8 MB TODO: Should benchmarks other values
 	static constexpr idx_t BYTES_PER_THREAD = 8000000;
@@ -197,6 +198,10 @@ struct BufferPosition {
 	idx_t buffer_pos = 0;
 	idx_t buffer_size = 0;
 	idx_t end_buffer = 0;
+
+	CSVIterator GetIterator() {
+		return CSVIterator(file_idx, buffer_idx, buffer_pos, end_buffer - buffer_pos);
+	}
 
 private:
 	bool initialized = false;
@@ -210,13 +215,13 @@ struct CSVGlobalState : public GlobalTableFunctionState {
 public:
 	CSVGlobalState(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager_p,
 	               const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
-	               bool force_parallelism_p, vector<column_t> column_ids_p, StateMachine state_machine_p)
-	    : state_machine(state_machine_p), buffer_manager(std::move(buffer_manager_p)),
-	      last_pos(options.dialect_options.true_start), system_threads(system_threads_p),
-	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)),
+	               bool force_parallelism_p, vector<column_t> column_ids_p, const StateMachine &state_machine_p)
+	    : buffer_manager(std::move(buffer_manager_p)), scanner_boundaries(options.dialect_options.true_start),
+	      system_threads(system_threads_p), force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)),
 	      line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end, options.sniffer_user_mismatch_error),
 	      sniffer_mismatch_error(options.sniffer_user_mismatch_error) {
 
+		state_machine = make_shared<CSVStateMachine>(state_machine_p, options);
 		//! If the buffer manager has not yet being initialized, we do it now.
 		if (!buffer_manager) {
 			buffer_manager = make_shared<CSVBufferManager>(context, options, files);
@@ -263,7 +268,7 @@ public:
 	// Optimizations to multi-file readers.
 	idx_t file_size;
 
-	StateMachine state_machine;
+	shared_ptr<CSVStateMachine> state_machine;
 
 public:
 	idx_t MaxThreads() const override;
@@ -292,7 +297,7 @@ public:
 			progress = double(bytes_read) / double(file_size);
 		}
 		// now get the total percentage of files read
-		double percentage = double(last_pos.file_idx) / total_files;
+		double percentage = double(scanner_boundaries.file_idx) / total_files;
 		percentage += (double(1) / double(total_files)) * progress;
 		return percentage * 100;
 	}
@@ -301,9 +306,7 @@ private:
 	//! Buffer Manager for the CSV Files in this Scan
 	shared_ptr<CSVBufferManager> buffer_manager;
 	//! We hold information on the current position we are iterating, this is used to set the next positions
-	BufferPosition last_pos;
-	//! If this scan is finished, no more files or buffers to read.
-	bool finished = false;
+	BufferPosition scanner_boundaries;
 
 	//! Mutex to lock when getting next batch of bytes (Parallel Only)
 	mutex main_mutex;
@@ -434,9 +437,13 @@ void LineInfo::Verify(idx_t file_idx, idx_t batch_idx, idx_t cur_first_pos) {
 }
 unique_ptr<CSVScanner> CSVGlobalState::Next(ClientContext &context, const ReadCSVData &bind_data) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	if (finished) {
+	if (!scanner_boundaries.Next(*buffer_manager)) {
+		// we are done
 		return nullptr;
 	}
+	//	return nullptr;
+	auto scanner = make_uniq<CSVScanner>(buffer_manager, state_machine, scanner_boundaries.GetIterator());
+	return scanner;
 	// Create a CSV State machine
 	//	auto scanner = make_uniq<CSVScanner>(buffer_manager, state_machine, cur_pos);
 	//	// Generate CSV Iterator
@@ -478,13 +485,13 @@ unique_ptr<CSVScanner> CSVGlobalState::Next(ClientContext &context, const ReadCS
 	//			// first_position, 			                                      union_reader.GetTypes(), file_index -
 	// 1);
 	//			// reader->names = union_reader.GetNames(); 		} else if (file_index <=
-	//bind_data.column_info.size())
+	// bind_data.column_info.size())
 	//{
 	//			//			// Serialized Union By name
 	//			//			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result),
 	//	 first_position,
 	//			//			                                      bind_data.column_info[file_index - 1].types,
-	//file_index
+	// file_index
 	//- 	 1);
 	//			//			reader->names = bind_data.column_info[file_index - 1].names;
 	//			//		} else {

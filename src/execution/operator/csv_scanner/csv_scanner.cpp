@@ -6,8 +6,8 @@
 
 namespace duckdb {
 
-CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p)
-    : buffer_manager(std::move(buffer_manager_p)), state_machine(std::move(state_machine_p)) {
+CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p)
+    : buffer_manager(std::move(buffer_manager_p)), state_machine(state_machine_p) {
 	csv_iterator.buffer_pos = buffer_manager->GetStartPos();
 };
 
@@ -21,10 +21,9 @@ CSVScanner::CSVScanner(ClientContext &context, CSVReaderOptions &options) {
 	csv_iterator.buffer_pos = buffer_manager->GetStartPos();
 }
 
-CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p,
+CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
                        CSVIterator csv_iterator_p)
-    : csv_iterator(csv_iterator_p), buffer_manager(std::move(buffer_manager_p)),
-      state_machine(std::move(state_machine_p)) {
+    : csv_iterator(csv_iterator_p), buffer_manager(std::move(buffer_manager_p)), state_machine(state_machine_p) {
 }
 
 //! Skips all empty lines, until a non-empty line shows up
