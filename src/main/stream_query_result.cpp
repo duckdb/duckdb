@@ -102,6 +102,7 @@ bool StreamQueryResult::IsOpen() {
 }
 
 void StreamQueryResult::Close() {
+	buffered_data->Close();
 	context.reset();
 }
 

@@ -442,7 +442,7 @@ void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 	}
 }
 
-bool Executor::ResultCollectorIsBlocked() const {
+bool Executor::ResultCollectorIsBlocked() {
 	if (completed_pipelines + 1 != total_pipelines) {
 		// The result collector is always in the last pipeline
 		return false;
@@ -450,6 +450,7 @@ bool Executor::ResultCollectorIsBlocked() const {
 	if (to_be_rescheduled_tasks.empty()) {
 		return false;
 	}
+	lock_guard<mutex> l(executor_lock);
 	for (auto &kv : to_be_rescheduled_tasks) {
 		auto &task = kv.second;
 		D_ASSERT(task->Type() == TaskType::EXECUTOR);
