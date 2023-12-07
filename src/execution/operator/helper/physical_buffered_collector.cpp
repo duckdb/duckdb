@@ -75,6 +75,7 @@ unique_ptr<LocalSinkState> PhysicalBufferedCollector::GetLocalSinkState(Executio
 unique_ptr<QueryResult> PhysicalBufferedCollector::GetResult(GlobalSinkState &state) {
 	auto &gstate = state.Cast<BufferedCollectorGlobalState>();
 	lock_guard<mutex> l(gstate.glock);
+	// FIXME: maybe we want to check if the execution was successfull before creating the StreamQueryResult ?
 	auto result = make_uniq<StreamQueryResult>(statement_type, properties, types, names,
 	                                           gstate.context->GetClientProperties(), gstate.buffered_data);
 	return std::move(result);
