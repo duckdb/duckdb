@@ -37,7 +37,7 @@ void SimpleBufferedData::UnblockSinks(idx_t &estimated_tuples) {
 	}
 }
 
-void SimpleBufferedData::ReplenishBuffer(StreamQueryResult &result) {
+void SimpleBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
 	if (!context) {
 		// Result has already been closed
 		return;
@@ -49,8 +49,7 @@ void SimpleBufferedData::ReplenishBuffer(StreamQueryResult &result) {
 	idx_t estimated_tuples = 0;
 	UnblockSinks(estimated_tuples);
 	// Let the executor run until the buffer is no longer empty
-	auto context_lock = context->LockContext();
-	while (!PendingQueryResult::IsFinished(context->ExecuteTaskInternal(*context_lock, result))) {
+	while (!PendingQueryResult::IsFinished(context->ExecuteTaskInternal(context_lock, result))) {
 		if (buffered_count >= BUFFER_SIZE) {
 			break;
 		}

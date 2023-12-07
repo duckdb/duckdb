@@ -41,8 +41,15 @@ unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
 }
 
 unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
-	buffered_data->ReplenishBuffer(*this);
-	return buffered_data->Scan();
+	auto lock = LockContext();
+	CheckExecutableInternal(*lock);
+	buffered_data->ReplenishBuffer(*this, *lock);
+	auto chunk = buffered_data->Scan();
+	if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
+		Close();
+		return nullptr;
+	}
+	return chunk;
 }
 
 unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {

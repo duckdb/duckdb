@@ -17,6 +17,7 @@
 namespace duckdb {
 
 class StreamQueryResult;
+class ClientContextLock;
 
 class SimpleBufferedData : public BufferedData {
 private:
@@ -30,7 +31,7 @@ public:
 	void Append(unique_ptr<DataChunk> chunk, optional_idx batch = optional_idx()) override;
 	void AddToBacklog(BlockedSink blocked_sink) override;
 	bool BufferIsFull() const override;
-	void ReplenishBuffer(StreamQueryResult &result) override;
+	void ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
 	unique_ptr<DataChunk> Scan() override;
 
 private:
