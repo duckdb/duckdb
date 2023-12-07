@@ -7,10 +7,11 @@
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/index_type_catalog_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
-#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
@@ -395,8 +396,16 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	    deserializer.ReadPropertyWithDefault<BlockPointer>(101, "root_block_pointer", BlockPointer());
 
 	// create the index in the catalog
+
+	// look for the table in the catalog
 	auto &table =
 	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info->schema, info.table).Cast<DuckTableEntry>();
+
+	// we also need to make sure the index type is loaded
+	auto &index_type = catalog.GetEntry(context, CatalogType::INDEX_TYPE_ENTRY, DEFAULT_SCHEMA, info.index_type)
+	                       .Cast<IndexTypeCatalogEntry>();
+
+	// now we can look for the index in the catalog and assign the table info
 	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
 	index.info = table.GetStorage().info;
 
@@ -451,9 +460,13 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	}
 
 	D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
-	auto art = make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
-	                          std::move(unbound_expressions), data_table.db, nullptr, index_storage_info);
-	data_table.info->indexes.AddIndex(std::move(art));
+
+	// now we recreate the index instance from the deserialized info and the hook in the index type
+	auto index_instance = index_type.create_instance(info.index_name, info.constraint_type, info.column_ids,
+	                                                 TableIOManager::Get(data_table), unbound_expressions,
+	                                                 data_table.db, index_storage_info);
+
+	data_table.info->indexes.AddIndex(std::move(index_instance));
 }
 
 //===--------------------------------------------------------------------===//

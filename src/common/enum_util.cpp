@@ -759,6 +759,8 @@ const char* EnumUtil::ToChars<CatalogType>(CatalogType value) {
 		return "TYPE_ENTRY";
 	case CatalogType::DATABASE_ENTRY:
 		return "DATABASE_ENTRY";
+	case CatalogType::INDEX_TYPE_ENTRY:
+		return "INDEX_TYPE_ENTRY";
 	case CatalogType::TABLE_FUNCTION_ENTRY:
 		return "TABLE_FUNCTION_ENTRY";
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
@@ -813,6 +815,9 @@ CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "DATABASE_ENTRY")) {
 		return CatalogType::DATABASE_ENTRY;
+	}
+	if (StringUtil::Equals(value, "INDEX_TYPE_ENTRY")) {
+		return CatalogType::INDEX_TYPE_ENTRY;
 	}
 	if (StringUtil::Equals(value, "TABLE_FUNCTION_ENTRY")) {
 		return CatalogType::TABLE_FUNCTION_ENTRY;

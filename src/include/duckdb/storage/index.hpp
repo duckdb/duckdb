@@ -143,6 +143,10 @@ public:
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);
 	static string AppendRowError(DataChunk &input, idx_t index);
 
+	//! Throw a constraint violation exception
+	virtual string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
+	                                             DataChunk &input) = 0;
+
 protected:
 	//! Lock used for any changes to the index
 	mutex lock;

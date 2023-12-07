@@ -23,7 +23,7 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 	row_groups->InitializeEmpty();
 
 	table.info->indexes.Scan([&](Index &index) {
-		if(index.index_type != "ART") {
+		if (index.index_type != "ART") {
 			// TODO: support other index types
 			return false;
 		}

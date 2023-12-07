@@ -4,11 +4,11 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/index_type_catalog_entry.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
@@ -441,6 +441,10 @@ void ReplayState::ReplayCreateIndex(BinaryDeserializer &deserializer) {
 	}
 	auto &info = create_info->Cast<CreateIndexInfo>();
 
+	// Ensure the index type exists
+	auto &index_type = catalog.GetEntry(context, CatalogType::INDEX_TYPE_ENTRY, DEFAULT_SCHEMA, info.index_type)
+	                       .Cast<IndexTypeCatalogEntry>();
+
 	// create the index in the catalog
 	auto &table = catalog.GetEntry<TableCatalogEntry>(context, create_info->schema, info.table).Cast<DuckTableEntry>();
 	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
@@ -480,9 +484,12 @@ void ReplayState::ReplayCreateIndex(BinaryDeserializer &deserializer) {
 	}
 
 	auto &data_table = table.GetStorage();
-	auto art = make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
-	                          std::move(unbound_expressions), data_table.db, nullptr, index_info);
-	data_table.info->indexes.AddIndex(std::move(art));
+
+	auto index_instance =
+	    index_type.create_instance(info.index_name, info.constraint_type, info.column_ids,
+	                               TableIOManager::Get(data_table), unbound_expressions, data_table.db, index_info);
+
+	data_table.info->indexes.AddIndex(std::move(index_instance));
 }
 
 void ReplayState::ReplayDropIndex(BinaryDeserializer &deserializer) {

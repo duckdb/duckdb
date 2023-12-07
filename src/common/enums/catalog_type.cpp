@@ -39,6 +39,8 @@ string CatalogTypeToString(CatalogType type) {
 		return "Prepared Statement";
 	case CatalogType::SEQUENCE_ENTRY:
 		return "Sequence";
+	case CatalogType::INDEX_TYPE_ENTRY:
+		return "Index Type";
 	case CatalogType::INVALID:
 	case CatalogType::DELETED_ENTRY:
 	case CatalogType::UPDATED_ENTRY:

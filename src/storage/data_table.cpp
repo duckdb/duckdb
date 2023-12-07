@@ -19,7 +19,6 @@
 #include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"
@@ -369,13 +368,9 @@ idx_t LocateErrorIndex(bool is_append, const ManagedSelection &matches) {
                                                         DataChunk &input) {
 
 	auto verify_type = is_append ? VerifyExistenceType::APPEND_FK : VerifyExistenceType::DELETE_FK;
-
 	D_ASSERT(failed_index != DConstants::INVALID_INDEX);
-	D_ASSERT(index.index_type == "ART");
-	auto &art_index = index.Cast<ART>();
-	auto key_name = art_index.GenerateErrorKeyName(input, failed_index);
-	auto exception_msg = art_index.GenerateConstraintErrorMessage(verify_type, key_name);
-	throw ConstraintException(exception_msg);
+	auto message = index.GetConstraintViolationMessage(verify_type, failed_index, input);
+	throw ConstraintException(message);
 }
 
 bool IsForeignKeyConstraintError(bool is_append, idx_t input_count, const ManagedSelection &matches) {

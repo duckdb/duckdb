@@ -153,6 +153,9 @@ private:
 	void Deserialize(const BlockPointer &pointer);
 	//! Initializes the serialization of the index by combining the allocator data onto partial blocks
 	void WritePartialBlocks();
+
+	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
+	                                     DataChunk &input) override;
 };
 
 } // namespace duckdb

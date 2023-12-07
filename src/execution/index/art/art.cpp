@@ -1171,4 +1171,10 @@ string ART::VerifyAndToStringInternal(const bool only_verify) {
 	return "[empty]";
 }
 
+string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index, DataChunk &input) {
+	auto key_name = GenerateErrorKeyName(input, failed_index);
+	auto exception_msg = GenerateConstraintErrorMessage(verify_type, key_name);
+	return exception_msg;
+}
+
 } // namespace duckdb

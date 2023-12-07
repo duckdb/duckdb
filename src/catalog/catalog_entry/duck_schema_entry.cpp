@@ -2,9 +2,11 @@
 #include "duckdb/catalog/default/default_functions.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/catalog/default/default_views.hpp"
+#include "duckdb/catalog/default/default_index_types.hpp"
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
+#include "duckdb/catalog/catalog_entry/index_type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
@@ -26,6 +28,7 @@
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/parsed_data/create_index_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
@@ -68,7 +71,8 @@ DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, string name_p, bool is_intern
       tables(catalog, make_uniq<DefaultViewGenerator>(catalog, *this)), indexes(catalog), table_functions(catalog),
       copy_functions(catalog), pragma_functions(catalog),
       functions(catalog, make_uniq<DefaultFunctionGenerator>(catalog, *this)), sequences(catalog), collations(catalog),
-      types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)) {
+      types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)),
+      index_types(catalog, make_uniq<DefaultIndexTypesGenerator>(catalog, *this)) {
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction transaction,
@@ -200,6 +204,8 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(ClientContext &context, 
 	DependencyList dependencies;
 	dependencies.AddDependency(table);
 
+	// TODO: Add dependency to index type as well!
+
 	// currently, we can not alter PK/FK/UNIQUE constraints
 	// concurrency-safe name checks against other INDEX catalog entries happens in the catalog
 	if (!table.GetStorage().IndexNameIsUnique(info.index_name)) {
@@ -208,6 +214,12 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(ClientContext &context, 
 
 	auto index = make_uniq<DuckIndexEntry>(catalog, *this, info);
 	return AddEntryInternal(GetCatalogTransaction(context), std::move(index), info.on_conflict, dependencies);
+}
+
+optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndexType(CatalogTransaction transaction, CreateIndexTypeInfo &info) {
+	auto index_type = make_uniq<IndexTypeCatalogEntry>(catalog, *this, info);
+	// TODO: DuckIndexTypeEntry?
+	return AddEntry(transaction, std::move(index_type), info.on_conflict);
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) {
@@ -327,6 +339,8 @@ CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {
 		return collations;
 	case CatalogType::TYPE_ENTRY:
 		return types;
+	case CatalogType::INDEX_TYPE_ENTRY:
+		return index_types;
 	default:
 		throw InternalException("Unsupported catalog type in schema");
 	}
