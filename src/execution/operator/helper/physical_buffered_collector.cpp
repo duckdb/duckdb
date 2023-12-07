@@ -69,8 +69,6 @@ unique_ptr<GlobalSinkState> PhysicalBufferedCollector::GetGlobalSinkState(Client
 
 unique_ptr<LocalSinkState> PhysicalBufferedCollector::GetLocalSinkState(ExecutionContext &context) const {
 	auto state = make_uniq<BufferedCollectorLocalState>();
-	state->collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
-	state->collection->InitializeAppend(state->append_state);
 	return std::move(state);
 }
 
