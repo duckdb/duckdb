@@ -224,6 +224,8 @@ enum class ResultModifierType : uint8_t;
 
 enum class SampleMethod : uint8_t;
 
+enum class SecretDisplayType : uint8_t;
+
 enum class SecretPersistMode : uint8_t;
 
 enum class SequenceInfo : uint8_t;
@@ -588,6 +590,9 @@ const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
 
 template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value);
+
+template<>
+const char* EnumUtil::ToChars<SecretDisplayType>(SecretDisplayType value);
 
 template<>
 const char* EnumUtil::ToChars<SecretPersistMode>(SecretPersistMode value);
@@ -991,6 +996,9 @@ ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
 
 template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);
+
+template<>
+SecretDisplayType EnumUtil::FromString<SecretDisplayType>(const char *value);
 
 template<>
 SecretPersistMode EnumUtil::FromString<SecretPersistMode>(const char *value);
