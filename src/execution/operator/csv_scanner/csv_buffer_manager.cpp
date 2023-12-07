@@ -57,6 +57,10 @@ bool CSVBufferManager::ReadNextAndCacheIt(const idx_t file_idx) {
 }
 
 unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t file_idx, const idx_t pos) {
+	if (file_idx >= file_path.size()) {
+		// This file is bigger than the scanner
+		return nullptr;
+	}
 	while (pos >= cached_buffers[file_idx].size()) {
 		if (done) {
 			return nullptr;
