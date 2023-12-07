@@ -9,6 +9,8 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/catalog/catalog_entry/secret_type_entry.hpp"
+#include "duckdb/catalog/catalog_entry/secret_function_entry.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"

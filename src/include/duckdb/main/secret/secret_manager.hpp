@@ -20,23 +20,17 @@ class CreateSecretStatement;
 struct CatalogTransaction;
 
 //! Wrapper around a BaseSecret containing metadata and allow storing in CatalogSet
-struct SecretEntry : public CatalogEntry {
+struct SecretEntry : public InCatalogEntry {
 public:
 	SecretEntry(unique_ptr<const BaseSecret> secret, Catalog &catalog, string name)
-	    : CatalogEntry(CatalogType::SECRET_ENTRY, catalog, name), secret(std::move(secret)), parent_catalog(&catalog) {
+	    : InCatalogEntry(CatalogType::SECRET_ENTRY, catalog, name), secret(std::move(secret)) {
 		internal = true;
 	}
-
-	Catalog &ParentCatalog() override {
-		return *parent_catalog;
-	};
 
 	//! Metadata for user on how the secret is stored. (DuckSecretManager will set this to the path)
 	string storage_mode;
 	//! The secret pointer
 	shared_ptr<const BaseSecret> secret;
-
-	optional_ptr<Catalog> parent_catalog;
 };
 
 //! Secret Manager is responsible the for the creation, deletion and storage of secrets.
