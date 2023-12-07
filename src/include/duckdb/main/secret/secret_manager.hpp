@@ -40,6 +40,10 @@ class SecretManager {
 public:
 	virtual ~SecretManager() = default;
 
+	//! Static Helper Functions
+	DUCKDB_API static SecretManager &Get(ClientContext &context);
+
+	//! Secret Manager API
 	//! Initializes the secret manager for a given DB instance
 	DUCKDB_API virtual void Initialize(DatabaseInstance &db) = 0;
 	//! Deserialize the secret. Will look up the deserialized type, then call the deserialize for the registered type.
@@ -72,9 +76,6 @@ public:
 	DUCKDB_API virtual void DropSecretByName(CatalogTransaction transaction, const string &name, bool missing_ok) = 0;
 	//! Get a vector of all registered secrets
 	DUCKDB_API virtual vector<reference<SecretEntry>> AllSecrets(CatalogTransaction transaction) = 0;
-
-	//! Options for secret manager
-
 	//! Whether permanent secrets are enabled
 	DUCKDB_API virtual void SetEnablePermanentSecrets(bool enabled) = 0;
 	DUCKDB_API virtual void ResetEnablePermanentSecrets() = 0;
@@ -83,6 +84,9 @@ public:
 	DUCKDB_API virtual void SetPermanentSecretPath(const string &path) = 0;
 	DUCKDB_API virtual void ResetPermanentSecretPath() = 0;
 	DUCKDB_API virtual string PermanentSecretPath() = 0;
+
+	//! Utility functions
+	DUCKDB_API virtual void DropSecretByName(ClientContext &context, const string &name, bool missing_ok);
 };
 
 } // namespace duckdb

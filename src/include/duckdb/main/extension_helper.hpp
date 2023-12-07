@@ -76,7 +76,7 @@ public:
 	static bool IsFullPath(const string &extension);
 
 	//! Lookup a name in an ExtensionEntry list
-	template <size_t N>
+	template <idx_t N>
 	static string FindExtensionInEntries(const string &name, const ExtensionEntry (&entries)[N]) {
 		auto lcase = StringUtil::Lower(name);
 
@@ -90,7 +90,7 @@ public:
 	}
 
 	//! Lookup a name in an extension entry and try to autoload it
-	template <size_t N>
+	template <idx_t N>
 	static void TryAutoloadFromEntry(ClientContext &context, const string &entry, const ExtensionEntry (&entries)[N]) {
 		auto &dbconfig = DBConfig::GetConfig(context);
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD

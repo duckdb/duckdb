@@ -8,8 +8,9 @@ namespace duckdb {
 SourceResultType PhysicalCreateSecret::GetData(ExecutionContext &context, DataChunk &chunk,
                                                OperatorSourceInput &input) const {
 	auto &client = context.client;
+	auto &secret_manager = SecretManager::Get(client);
 
-	context.client.db->config.secret_manager->CreateSecret(client, info);
+	secret_manager.CreateSecret(client, info);
 
 	chunk.SetValue(0, 0, true);
 	chunk.SetCardinality(1);

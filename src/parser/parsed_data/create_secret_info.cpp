@@ -5,8 +5,7 @@
 namespace duckdb {
 
 CreateSecretInfo::CreateSecretInfo(OnCreateConflict on_conflict, SecretPersistMode persist_mode)
-    : ParseInfo(ParseInfoType::CREATE_SECRET_INFO), on_conflict(on_conflict), persist_mode(persist_mode),
-      options() {
+    : ParseInfo(ParseInfoType::CREATE_SECRET_INFO), on_conflict(on_conflict), persist_mode(persist_mode), options() {
 }
 
 unique_ptr<CreateSecretInfo> CreateSecretInfo::Copy() const {

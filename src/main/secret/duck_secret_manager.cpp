@@ -114,8 +114,8 @@ optional_ptr<SecretEntry> DuckSecretManager::RegisterSecretInternal(CatalogTrans
 	if (persist_mode == SecretPersistMode::PERMANENT) {
 		storage_str = config.secret_path;
 	} else {
-		storage_str = "in-memory";
-	};
+		storage_str = ":memory:";
+	}
 
 	if (secrets->GetEntry(transaction, secret->GetName())) {
 		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
@@ -145,8 +145,8 @@ optional_ptr<SecretEntry> DuckSecretManager::RegisterSecretInternal(CatalogTrans
 	return &secrets->GetEntry(transaction, secret_name)->Cast<SecretEntry>();
 }
 
-CreateSecretFunction *DuckSecretManager::LookupFunctionInternal(CatalogTransaction transaction, const string &type,
-                                                                const string &provider) {
+optional_ptr<CreateSecretFunction>
+DuckSecretManager::LookupFunctionInternal(CatalogTransaction transaction, const string &type, const string &provider) {
 	auto lookup = secret_functions->GetEntry(transaction, type);
 
 	if (lookup) {
@@ -424,6 +424,10 @@ void DuckSecretManager::WriteSecretToFile(CatalogTransaction transaction, const 
 void DuckSecretManager::InitializeSecrets(CatalogTransaction transaction) {
 	if (!initialized) {
 		lock_guard<mutex> lck(initialize_lock);
+		if (initialized) {
+			// some sneaky other thread beat us to it
+			return;
+		}
 
 		if (config.allow_permanent_secrets) {
 			DuckSecretManager::LoadPermanentSecretsMap(transaction);

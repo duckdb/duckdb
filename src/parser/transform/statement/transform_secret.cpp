@@ -7,7 +7,8 @@
 
 namespace duckdb {
 
-void Transformer::TransformCreateSecretOptions(CreateSecretInfo &info, optional_ptr<duckdb_libpgquery::PGList> options) {
+void Transformer::TransformCreateSecretOptions(CreateSecretInfo &info,
+                                               optional_ptr<duckdb_libpgquery::PGList> options) {
 	if (!options) {
 		return;
 	}
@@ -55,7 +56,7 @@ void Transformer::TransformCreateSecretOptions(CreateSecretInfo &info, optional_
 		case_insensitive_map_t<vector<Value>> vector_options;
 		ParseGenericOptionListEntry(vector_options, lower_name, def_elem->arg);
 
-		for (const auto& entry : vector_options) {
+		for (const auto &entry : vector_options) {
 			if (entry.second.size() != 1) {
 				throw ParserException("Invalid parameter passed to option '%s'", entry.first);
 			}

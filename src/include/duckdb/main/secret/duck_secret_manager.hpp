@@ -69,8 +69,8 @@ private:
 	//! Lookup a SecretType
 	SecretType LookupTypeInternal(CatalogTransaction transaction, const string &type);
 	//! Lookup a CreateSecretFunction
-	CreateSecretFunction *LookupFunctionInternal(CatalogTransaction transaction, const string &type,
-	                                             const string &provider);
+	optional_ptr<CreateSecretFunction> LookupFunctionInternal(CatalogTransaction transaction, const string &type,
+	                                                          const string &provider);
 	//! Register a new Secret
 	optional_ptr<SecretEntry> RegisterSecretInternal(CatalogTransaction transaction,
 	                                                 unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,

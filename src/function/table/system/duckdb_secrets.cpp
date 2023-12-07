@@ -43,7 +43,8 @@ static unique_ptr<FunctionData> DuckDBSecretsBind(ClientContext &context, TableF
 		}
 	}
 
-	if (!DBConfig::GetConfig(context).options.allow_unredacted_secrets && result->redact == SecretDisplayType::UNREDACTED) {
+	if (!DBConfig::GetConfig(context).options.allow_unredacted_secrets &&
+	    result->redact == SecretDisplayType::UNREDACTED) {
 		throw InvalidInputException("Displaying unredacted secrets is disabled");
 	}
 
@@ -77,10 +78,10 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 	auto &data = data_p.global_state->Cast<DuckDBSecretsData>();
 	auto &bind_data = data_p.bind_data->Cast<DuckDBSecretsBindData>();
 
-	auto &secret_manager = context.db->config.secret_manager;
+	auto &secret_manager = SecretManager::Get(context);
 
 	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
-	auto secrets = secret_manager->AllSecrets(transaction);
+	auto secrets = secret_manager.AllSecrets(transaction);
 
 	if (data.offset >= secrets.size()) {
 		// finished returning values

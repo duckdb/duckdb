@@ -36,19 +36,20 @@ unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(Cli
 			params.url_style = named_param.second.ToString();
 		} else if (lower_name == "use_ssl") {
 			if (named_param.second.type() != LogicalType::BOOLEAN) {
-				throw InvalidInputException("Invalid type past to secret option: '%s', found '%s', expected: 'BOOLEAN'", lower_name, named_param.second.type().ToString());
+				throw InvalidInputException("Invalid type past to secret option: '%s', found '%s', expected: 'BOOLEAN'",
+				                            lower_name, named_param.second.type().ToString());
 			}
 			params.use_ssl = named_param.second.GetValue<bool>();
 		} else if (lower_name == "url_compatibility_mode") {
 			if (named_param.second.type() != LogicalType::BOOLEAN) {
-				throw InvalidInputException("Invalid type past to secret option: '%s', found '%s', expected: 'BOOLEAN'", lower_name, named_param.second.type().ToString());
+				throw InvalidInputException("Invalid type past to secret option: '%s', found '%s', expected: 'BOOLEAN'",
+				                            lower_name, named_param.second.type().ToString());
 			}
 			params.s3_url_compatibility_mode = named_param.second.GetValue<bool>();
 		} else if (lower_name == "account_id") {
 			continue; // handled already
 		} else {
-			throw InternalException("Unknown named parameter passed to CreateSecretFunctionInternal: " +
-			                        lower_name);
+			throw InternalException("Unknown named parameter passed to CreateSecretFunctionInternal: " + lower_name);
 		}
 	}
 

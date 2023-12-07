@@ -12,7 +12,8 @@
 
 namespace duckdb {
 
-void Transformer::ParseGenericOptionListEntry(case_insensitive_map_t<vector<Value>> &result_options, string &name, duckdb_libpgquery::PGNode * arg) {
+void Transformer::ParseGenericOptionListEntry(case_insensitive_map_t<vector<Value>> &result_options, string &name,
+                                              duckdb_libpgquery::PGNode *arg) {
 	// otherwise
 	if (result_options.find(name) != result_options.end()) {
 		throw ParserException("Unexpected duplicate option \"%s\"", name);
