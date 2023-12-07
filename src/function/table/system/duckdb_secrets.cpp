@@ -27,7 +27,7 @@ public:
 		auto &other = other_p.Cast<DuckDBSecretsBindData>();
 		return redact == other.redact;
 	}
-	bool redact = true;
+	SecretDisplayType redact = SecretDisplayType::REDACTED;
 };
 
 static unique_ptr<FunctionData> DuckDBSecretsBind(ClientContext &context, TableFunctionBindInput &input,
@@ -36,7 +36,15 @@ static unique_ptr<FunctionData> DuckDBSecretsBind(ClientContext &context, TableF
 
 	auto entry = input.named_parameters.find("redact");
 	if (entry != input.named_parameters.end()) {
-		result->redact = BooleanValue::Get(entry->second);
+		if (BooleanValue::Get(entry->second)) {
+			result->redact = SecretDisplayType::REDACTED;
+		} else {
+			result->redact = SecretDisplayType::UNREDACTED;
+		}
+	}
+
+	if (!DBConfig::GetConfig(context).options.allow_unredacted_secrets && result->redact == SecretDisplayType::UNREDACTED) {
+		throw InvalidInputException("Displaying unredacted secrets is disabled");
 	}
 
 	names.emplace_back("name");

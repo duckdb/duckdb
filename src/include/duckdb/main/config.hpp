@@ -122,6 +122,8 @@ struct DBConfigOptions {
 	string temporary_directory;
 	//! Whether or not to allow writing secrets to disk to persist them between duckdb sessions
 	bool allow_permanent_secrets = true;
+	//! Whether or not to allow printing unredacted secrets
+	bool allow_unredacted_secrets = false;
 	//! Override the default directory for storing permanent secrets
 	string secret_directory;
 	//! The collation type of the database

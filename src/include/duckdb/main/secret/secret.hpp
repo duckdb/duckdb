@@ -61,6 +61,8 @@ protected:
 };
 
 enum class SecretPersistMode : uint8_t { DEFAULT, TEMPORARY, PERMANENT };
+//! Determines whether the secrets are allowed to be shown
+enum class SecretDisplayType : uint8_t { REDACTED, UNREDACTED };
 
 //! Secret types contain the base settings of a secret
 struct SecretType {
@@ -91,9 +93,8 @@ public:
 	//! The score of how well this secret's scope matches the path (by default: the length of the longest matching
 	//! prefix)
 	virtual int64_t MatchScore(const string &path) const;
-	//! The ToString method prints the secret, the redact option determines whether secret data is allowed to be printed
-	//! in clear text. This is to be decided by the secret implementation
-	virtual string ToString(bool redact) const;
+	//! Prints the secret as a string
+	virtual string ToString(SecretDisplayType mode = SecretDisplayType::REDACTED) const;
 	//! Serialize this secret
 	virtual void Serialize(Serializer &serializer) const;
 
@@ -151,7 +152,7 @@ public:
 	};
 
 	//! Print the secret as a key value map in the format 'key1=value;key2=value2'
-	virtual string ToString(bool redact) const override;
+	virtual string ToString(SecretDisplayType mode = SecretDisplayType::REDACTED) const override;
 	void Serialize(Serializer &serializer) const override;
 
 	template <class TYPE>

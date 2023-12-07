@@ -28,7 +28,7 @@ void BaseSecret::SerializeBaseSecret(Serializer &serializer) const {
 	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(prefix_paths[i]); });
 }
 
-string BaseSecret::ToString(bool redact) const {
+string BaseSecret::ToString(SecretDisplayType display_type) const {
 	return "";
 }
 
@@ -36,7 +36,7 @@ void BaseSecret::Serialize(Serializer &serializer) const {
 	throw InternalException("Attempted to serialize secret without serialize");
 }
 
-string KeyValueSecret::ToString(bool redact) const {
+string KeyValueSecret::ToString(SecretDisplayType mode) const {
 	string result;
 
 	result += "name=" + name + ";";
@@ -52,7 +52,7 @@ string KeyValueSecret::ToString(bool redact) const {
 	for (auto it = secret_map.begin(); it != secret_map.end(); it++) {
 		result.append(it->first);
 		result.append("=");
-		if (redact && redact_keys.find(it->first) != redact_keys.end()) {
+		if (mode == SecretDisplayType::REDACTED && redact_keys.find(it->first) != redact_keys.end()) {
 			result.append("redacted");
 		} else {
 			result.append(it->second);
