@@ -14,34 +14,41 @@ unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(Cli
                                                                              CreateSecretInput &input,
                                                                              S3AuthParams params) {
 	// for r2 we can set the endpoint using the account id
-	if (input.type == "r2" && input.named_parameters.find("account_id") != input.named_parameters.end()) {
-		params.endpoint = input.named_parameters["account_id"].ToString() + ".r2.cloudflarestorage.com";
+	if (input.type == "r2" && input.options.find("account_id") != input.options.end()) {
+		params.endpoint = input.options["account_id"].ToString() + ".r2.cloudflarestorage.com";
 	}
 
 	// apply any overridden settings
-	for (const auto &named_param : input.named_parameters) {
-		if (named_param.first == "key_id") {
+	for (const auto &named_param : input.options) {
+		auto lower_name = StringUtil::Lower(named_param.first);
+
+		if (lower_name == "key_id") {
 			params.access_key_id = named_param.second.ToString();
-		} else if (named_param.first == "secret") {
+		} else if (lower_name == "secret") {
 			params.secret_access_key = named_param.second.ToString();
-		} else if (named_param.first == "region") {
+		} else if (lower_name == "region") {
 			params.region = named_param.second.ToString();
-		} else if (named_param.first == "session_token") {
+		} else if (lower_name == "session_token") {
 			params.session_token = named_param.second.ToString();
-		} else if (named_param.first == "endpoint") {
+		} else if (lower_name == "endpoint") {
 			params.endpoint = named_param.second.ToString();
-		} else if (named_param.first == "url_style") {
+		} else if (lower_name == "url_style") {
 			params.url_style = named_param.second.ToString();
-		} else if (named_param.first == "use_ssl") {
-			params.use_ssl = BooleanValue::Get(named_param.second.DefaultCastAs(LogicalType::BOOLEAN));
-		} else if (named_param.first == "url_compatibility_mode") {
-			params.s3_url_compatibility_mode =
-			    BooleanValue::Get(named_param.second.DefaultCastAs(LogicalType::BOOLEAN));
-		} else if (named_param.first == "account_id") {
+		} else if (lower_name == "use_ssl") {
+			if (named_param.second.type() != LogicalType::BOOLEAN) {
+				throw InvalidInputException("Invalid type past to secret option: '%s', found '%s', expected: 'BOOLEAN'", lower_name, named_param.second.type().ToString());
+			}
+			params.use_ssl = named_param.second.GetValue<bool>();
+		} else if (lower_name == "url_compatibility_mode") {
+			if (named_param.second.type() != LogicalType::BOOLEAN) {
+				throw InvalidInputException("Invalid type past to secret option: '%s', found '%s', expected: 'BOOLEAN'", lower_name, named_param.second.type().ToString());
+			}
+			params.s3_url_compatibility_mode = named_param.second.GetValue<bool>();
+		} else if (lower_name == "account_id") {
 			continue; // handled already
 		} else {
 			throw InternalException("Unknown named parameter passed to CreateSecretFunctionInternal: " +
-			                        named_param.first);
+			                        lower_name);
 		}
 	}
 
@@ -96,8 +103,8 @@ void CreateS3SecretFunctions::SetBaseNamedParams(CreateSecretFunction &function,
 	function.named_parameters["session_token"] = LogicalType::VARCHAR;
 	function.named_parameters["endpoint"] = LogicalType::VARCHAR;
 	function.named_parameters["url_style"] = LogicalType::VARCHAR;
-	function.named_parameters["use_ssl"] = LogicalType::VARCHAR;
-	function.named_parameters["url_compatibility_mode"] = LogicalType::VARCHAR;
+	function.named_parameters["use_ssl"] = LogicalType::BOOLEAN;
+	function.named_parameters["url_compatibility_mode"] = LogicalType::BOOLEAN;
 
 	if (type == "r2") {
 		function.named_parameters["account_id"] = LogicalType::VARCHAR;

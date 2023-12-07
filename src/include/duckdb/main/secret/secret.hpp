@@ -29,7 +29,7 @@ struct CreateSecretInput {
 	//! (optional) scope provided by user
 	vector<string> scope;
 	//! (optional) named parameter map, each create secret function has defined it's own set of these
-	named_parameter_map_t named_parameters;
+	case_insensitive_map_t<Value> options;
 };
 
 typedef unique_ptr<BaseSecret> (*secret_deserializer_t)(Deserializer &deserializer, BaseSecret base_secret);

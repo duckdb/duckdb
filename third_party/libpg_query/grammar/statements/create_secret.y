@@ -4,7 +4,7 @@
  *
  *****************************************************************************/
 CreateSecretStmt:
-			CREATE_P opt_persist SECRET opt_secret_name '(' secret_key_val ')'
+			CREATE_P opt_persist SECRET opt_secret_name '(' copy_generic_opt_list ')'
 				{
 					PGCreateSecretStmt *n = makeNode(PGCreateSecretStmt);
 					n->persist_option = $2;
@@ -13,7 +13,7 @@ CreateSecretStmt:
 					n->onconflict = PG_ERROR_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
-			| CREATE_P opt_persist SECRET IF_P NOT EXISTS opt_secret_name '(' secret_key_val ')'
+			| CREATE_P opt_persist SECRET IF_P NOT EXISTS opt_secret_name '(' copy_generic_opt_list ')'
 				{
 					PGCreateSecretStmt *n = makeNode(PGCreateSecretStmt);
 					n->persist_option = $2;
@@ -22,7 +22,7 @@ CreateSecretStmt:
 					n->onconflict = PG_IGNORE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
-			| CREATE_P OR REPLACE opt_persist SECRET opt_secret_name '(' secret_key_val ')'
+			| CREATE_P OR REPLACE opt_persist SECRET opt_secret_name '(' copy_generic_opt_list ')'
 				{
 					PGCreateSecretStmt *n = makeNode(PGCreateSecretStmt);
 					n->persist_option = $4;
@@ -38,32 +38,8 @@ opt_secret_name:
 	| ColId { $$ = $1; }
 	;
 
-/*------------------- WITH -------------------*/
-secret_key:
-		ColId SCONST                                { $$ = list_make2($1, makeString($2)); }
-		| ColId ColId						        { $$ = list_make2($1, makeString($2)); }
-		| ColId '[' scope_list_val ']'		        { $$ = list_make2($1, $3); }
-	;
-
-secret_key_val:
-		secret_key						            { $$ = list_make1($1); }
-		| secret_key_val ',' secret_key	            { $$ = lappend($1,$3); }
-	;
-
-/*------------------- Scope -------------------*/
-scope_list_val_item:
-		SCONST                                      { $$ = makeString($1); }
-	;
-
-scope_list_val:
-		scope_list_val_item						    { $$ = list_make1($1); }
-		| scope_list_val ',' scope_list_val_item	{ $$ = lappend($1,$3); }
-    ;
-
-/*------------------- Scope -------------------*/
 opt_persist:
         /* empty */                                 { $$ = pstrdup("default"); }
         | TEMPORARY                                 { $$ = pstrdup("temporary"); }
         | PERMANENT                                 { $$ = pstrdup("permanent"); }
     ;
-

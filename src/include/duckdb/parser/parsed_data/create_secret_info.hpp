@@ -37,7 +37,7 @@ public:
 	//! (optionally) the scope of the secret
 	vector<string> scope;
 	//! Named parameter list (if any)
-	named_parameter_map_t named_parameters;
+	case_insensitive_map_t<Value> options;
 
 	unique_ptr<CreateSecretInfo> Copy() const;
 };

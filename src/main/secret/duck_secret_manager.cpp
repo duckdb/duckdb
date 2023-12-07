@@ -161,7 +161,7 @@ optional_ptr<SecretEntry> DuckSecretManager::CreateSecret(ClientContext &context
 
 	// Make a copy to set the provider to default if necessary
 	CreateSecretInput function_input {info.type, info.provider, info.persist_mode,
-	                                  info.name, info.scope,    info.named_parameters};
+	                                  info.name, info.scope,    info.options};
 	if (function_input.provider.empty()) {
 		auto secret_type = LookupTypeInternal(transaction, function_input.type);
 		function_input.provider = secret_type.default_provider;
@@ -208,17 +208,31 @@ BoundStatement DuckSecretManager::BindCreateSecret(CatalogTransaction transactio
 		                      default_string, provider);
 	}
 
-	for (const auto &param : stmt.info->named_parameters) {
-		if (function->named_parameters.find(param.first) == function->named_parameters.end()) {
+	auto bound_info = *stmt.info;
+	bound_info.options.clear();
+
+	// We cast the passed parameters
+	for (const auto &param : stmt.info->options) {
+		auto matched_param = function->named_parameters.find(param.first);
+		if (matched_param == function->named_parameters.end()) {
 			throw BinderException("Unknown parameter '%s' for secret type '%s' with %sprovider '%s'", param.first, type,
 			                      default_string, provider);
 		}
+
+		// Cast the provided value to the expected type
+		string error_msg;
+		Value cast_value;
+		if (!param.second.DefaultTryCastAs(matched_param->second, cast_value, &error_msg)) {
+			throw BinderException("Failed to cast option '%s' to type '%s': '%s'", matched_param->first, matched_param->second.ToString(), error_msg);
+		}
+
+		bound_info.options[matched_param->first] = {cast_value};
 	}
 
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
-	result.plan = make_uniq<LogicalCreateSecret>(*function, *stmt.info);
+	result.plan = make_uniq<LogicalCreateSecret>(*function, std::move(bound_info));
 	return result;
 }
 

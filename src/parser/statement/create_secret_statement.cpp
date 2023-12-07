@@ -1,3 +1,4 @@
+
 #include "duckdb/parser/statement/create_secret_statement.hpp"
 
 namespace duckdb {
