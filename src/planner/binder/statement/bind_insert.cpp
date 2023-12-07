@@ -42,8 +42,8 @@ static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t res
 }
 
 unique_ptr<ParsedExpression> ExpandDefaultExpression(const ColumnDefinition &column) {
-	if (column.DefaultValue()) {
-		return column.DefaultValue()->Copy();
+	if (column.HasDefaultValue()) {
+		return column.DefaultValue().Copy();
 	} else {
 		return make_uniq<ConstantExpression>(Value(column.Type()));
 	}
