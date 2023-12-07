@@ -80,9 +80,9 @@ public:
 		check_thread.join();
 		if (error.IsSet()) {
 			error.ThrowError();
+			// This should never be reached, ThrowError() should contain a failing REQUIRE statement
+			REQUIRE(false);
 		}
-		// This should never be reached, ThrowError() should contain a failing REQUIRE statement
-		REQUIRE(false);
 	}
 };
 
