@@ -54,6 +54,9 @@ public:
 	shared_ptr<ClientContext> GetContext() {
 		return context;
 	}
+	bool Closed() const {
+		return !context;
+	}
 	void Close() {
 		context = nullptr;
 	}

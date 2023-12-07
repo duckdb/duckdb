@@ -20,6 +20,9 @@ bool SimpleBufferedData::BufferIsFull() const {
 }
 
 void SimpleBufferedData::UnblockSinks(idx_t &estimated_tuples) {
+	if (Closed()) {
+		return;
+	}
 	if (buffered_count + estimated_tuples >= BUFFER_SIZE) {
 		return;
 	}
@@ -38,8 +41,7 @@ void SimpleBufferedData::UnblockSinks(idx_t &estimated_tuples) {
 }
 
 void SimpleBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
-	if (!context) {
-		// Result has already been closed
+	if (Closed()) {
 		return;
 	}
 	if (BufferIsFull()) {
@@ -62,13 +64,12 @@ void SimpleBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContex
 }
 
 unique_ptr<DataChunk> SimpleBufferedData::Scan() {
-	if (!context) {
-		// Result has been closed
+	if (Closed()) {
 		return nullptr;
 	}
 	lock_guard<mutex> lock(glock);
 	if (buffered_chunks.empty()) {
-		context.reset();
+		Close();
 		return nullptr;
 	}
 	auto chunk = std::move(buffered_chunks.front());
