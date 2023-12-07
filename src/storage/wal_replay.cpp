@@ -442,6 +442,9 @@ void ReplayState::ReplayCreateIndex(BinaryDeserializer &deserializer) {
 	auto &info = create_info->Cast<CreateIndexInfo>();
 
 	// Ensure the index type exists
+	if (info.index_type.empty()) {
+		info.index_type = "ART";
+	}
 	auto &index_type = catalog.GetEntry(context, CatalogType::INDEX_TYPE_ENTRY, DEFAULT_SCHEMA, info.index_type)
 	                       .Cast<IndexTypeCatalogEntry>();
 

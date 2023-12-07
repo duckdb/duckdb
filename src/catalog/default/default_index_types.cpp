@@ -46,7 +46,8 @@ vector<string> DefaultIndexTypesGenerator::GetDefaultEntries() {
 		return result;
 	}
 
-	result.emplace_back("art");
+	// TODO: Change the DEFAULT_INDEX_TYPE in the parser too?
+	result.emplace_back("ART");
 
 	return result;
 }

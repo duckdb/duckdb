@@ -402,6 +402,11 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info->schema, info.table).Cast<DuckTableEntry>();
 
 	// we also need to make sure the index type is loaded
+	// backwards compatability:
+	// if the index type is not specified, we default to ART
+	if (info.index_type.empty()) {
+		info.index_type = "ART";
+	}
 	auto &index_type = catalog.GetEntry(context, CatalogType::INDEX_TYPE_ENTRY, DEFAULT_SCHEMA, info.index_type)
 	                       .Cast<IndexTypeCatalogEntry>();
 
