@@ -50,6 +50,9 @@ public:
 	virtual bool BufferIsFull() const = 0;
 	virtual void ReplenishBuffer(StreamQueryResult &result) = 0;
 	virtual unique_ptr<DataChunk> Scan() = 0;
+	shared_ptr<ClientContext> GetContext() {
+		return context;
+	}
 
 protected:
 	shared_ptr<ClientContext> context;

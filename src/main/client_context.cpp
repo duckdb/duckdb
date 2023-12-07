@@ -427,7 +427,6 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
 		executor.Initialize(std::move(collector));
 	} else if (stream_result && statement.properties.return_type == StatementReturnType::QUERY_RESULT) {
-#ifdef DUCKDB_DEBUG_BUFFERED_STREAMING_RESULT
 		unique_ptr<PhysicalResultCollector> collector;
 
 		auto &client_config = ClientConfig::GetConfig(*this);
@@ -436,9 +435,6 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		collector = get_method(*this, statement);
 		D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
 		executor.Initialize(std::move(collector));
-#else
-		executor.Initialize(*statement.plan);
-#endif
 	} else {
 		executor.Initialize(*statement.plan);
 	}

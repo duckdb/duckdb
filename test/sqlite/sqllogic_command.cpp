@@ -92,9 +92,13 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 	// return connection->Query(context.sql_query);
 	auto ccontext = connection->context;
 	auto result = ccontext->Query(context.sql_query, true);
-	D_ASSERT(result->type == QueryResultType::STREAM_RESULT);
-	auto &stream_result = result->Cast<StreamQueryResult>();
-	return stream_result.Materialize();
+	if (result->type == QueryResultType::STREAM_RESULT) {
+		auto &stream_result = result->Cast<StreamQueryResult>();
+		return stream_result.Materialize();
+	} else {
+		D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+		return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
+	}
 }
 
 void Command::Execute(ExecuteContext &context) const {

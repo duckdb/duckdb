@@ -12,6 +12,7 @@ StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProp
     : QueryResult(QueryResultType::STREAM_RESULT, statement_type, std::move(properties), std::move(types),
                   std::move(names), std::move(client_properties)),
       buffered_data(buffered_data) {
+	context = buffered_data->GetContext();
 }
 
 StreamQueryResult::~StreamQueryResult() {

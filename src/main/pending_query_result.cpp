@@ -59,8 +59,7 @@ PendingExecutionResult PendingQueryResult::ExecuteTaskInternal(ClientContextLock
 
 unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &lock) {
 	CheckExecutableInternal(lock);
-// Busy wait while execution is not finished
-#ifdef DUCKDB_DEBUG_BUFFERED_STREAMING_RESULT
+	// Busy wait while execution is not finished
 	if (allow_stream_result) {
 		while (!IsFinishedOrBlocked(ExecuteTaskInternal(lock))) {
 		}
@@ -68,10 +67,6 @@ unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &l
 		while (!IsFinished(ExecuteTaskInternal(lock))) {
 		}
 	}
-#else
-	while (!IsFinished(ExecuteTaskInternal(lock))) {
-	}
-#endif
 	if (HasError()) {
 		return make_uniq<MaterializedQueryResult>(error);
 	}
