@@ -15,24 +15,29 @@ using namespace std;
 class TestProgressBar {
 	class TestFailure {
 		using failure_callback = std::function<void()>;
-		public:
-			TestFailure() : callback(nullptr) {}
-		public:
-			bool IsSet() {
-				return callback != nullptr;
+
+	public:
+		TestFailure() : callback(nullptr) {
+		}
+
+	public:
+		bool IsSet() {
+			return callback != nullptr;
+		}
+		void SetError(failure_callback failure) {
+			if (!callback) {
+				callback = failure;
 			}
-			void SetError(failure_callback failure) {
-				if (!callback) {
-					callback = failure;
-				}
-			}
-			void ThrowError() {
-				D_ASSERT(IsSet());
-				callback();
-			}
-		private:
-			failure_callback callback;
+		}
+		void ThrowError() {
+			D_ASSERT(IsSet());
+			callback();
+		}
+
+	private:
+		failure_callback callback;
 	};
+
 public:
 	explicit TestProgressBar(ClientContext *context) : context(context) {
 	}
@@ -51,27 +56,19 @@ public:
 			auto query_progress = context->GetQueryProgress();
 			double new_percentage = query_progress.GetPercentage();
 			if (new_percentage < prev_percentage && new_percentage != -1) {
-				error.SetError([new_percentage, prev_percentage]() {
-					REQUIRE(new_percentage >= prev_percentage);
-				});
+				error.SetError([new_percentage, prev_percentage]() { REQUIRE(new_percentage >= prev_percentage); });
 			}
 			if (new_percentage > 100) {
-				error.SetError([new_percentage]() {
-					REQUIRE(new_percentage <= 100);
-				});
+				error.SetError([new_percentage]() { REQUIRE(new_percentage <= 100); });
 			}
 			cur_rows_read = query_progress.GetRowsProcesseed();
 			total_cardinality = query_progress.GetTotalRowsToProcess();
 			if (cur_rows_read > total_cardinality) {
-				error.SetError([cur_rows_read, total_cardinality]() {
-					REQUIRE(cur_rows_read <= total_cardinality);
-				});
+				error.SetError([cur_rows_read, total_cardinality]() { REQUIRE(cur_rows_read <= total_cardinality); });
 			}
 		}
 		if (cur_rows_read != total_cardinality) {
-			error.SetError([cur_rows_read, total_cardinality]() {
-				REQUIRE(cur_rows_read == total_cardinality);
-			});
+			error.SetError([cur_rows_read, total_cardinality]() { REQUIRE(cur_rows_read == total_cardinality); });
 		}
 	}
 	void Start() {
