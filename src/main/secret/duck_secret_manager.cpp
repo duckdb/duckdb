@@ -1,7 +1,10 @@
 #include "duckdb/main/secret/duck_secret_manager.hpp"
 
+#include "duckdb/catalog/catalog_entry/secret_function_entry.hpp"
+#include "duckdb/catalog/catalog_entry/secret_type_entry.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -9,8 +12,6 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/catalog/catalog_entry/secret_type_entry.hpp"
-#include "duckdb/catalog/catalog_entry/secret_function_entry.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
@@ -20,9 +21,24 @@
 namespace duckdb {
 
 void DuckSecretManager::Initialize(DatabaseInstance &db) {
+	lock_guard<mutex> lck(initialize_lock);
+
 	auto &catalog = Catalog::GetSystemCatalog(db);
 	secret_functions = make_uniq<CatalogSet>(catalog);
 	secret_types = make_uniq<CatalogSet>(catalog);
+
+	// Construct default path
+	LocalFileSystem fs;
+	config.default_secret_path = fs.GetHomeDirectory();
+	vector<string> path_components = {".duckdb", "stored_secrets", ExtensionHelper::GetVersionDirectoryName()};
+	for (auto &path_ele : path_components) {
+		config.default_secret_path = fs.JoinPath(config.default_secret_path, path_ele);
+		if (!fs.DirectoryExists(config.default_secret_path)) {
+			fs.CreateDirectory(config.default_secret_path);
+		}
+	}
+
+	config.secret_path = config.default_secret_path;
 }
 
 unique_ptr<BaseSecret> DuckSecretManager::DeserializeSecret(CatalogTransaction transaction,
@@ -96,7 +112,7 @@ optional_ptr<SecretEntry> DuckSecretManager::RegisterSecretInternal(CatalogTrans
 
 	string storage_str;
 	if (persist_mode == SecretPersistMode::PERMANENT) {
-		storage_str = GetSecretDirectory(transaction.db->config);
+		storage_str = config.secret_path;
 	} else {
 		storage_str = "in-memory";
 	};
@@ -162,8 +178,7 @@ optional_ptr<SecretEntry> DuckSecretManager::CreateSecret(ClientContext &context
 	InitializeSecrets(transaction);
 
 	// Make a copy to set the provider to default if necessary
-	CreateSecretInput function_input {info.type, info.provider, info.persist_mode,
-	                                  info.name, info.scope,    info.options};
+	CreateSecretInput function_input {info.type, info.provider, info.persist_mode, info.name, info.scope, info.options};
 	if (function_input.provider.empty()) {
 		auto secret_type = LookupTypeInternal(transaction, function_input.type);
 		function_input.provider = secret_type.default_provider;
@@ -225,7 +240,8 @@ BoundStatement DuckSecretManager::BindCreateSecret(CatalogTransaction transactio
 		string error_msg;
 		Value cast_value;
 		if (!param.second.DefaultTryCastAs(matched_param->second, cast_value, &error_msg)) {
-			throw BinderException("Failed to cast option '%s' to type '%s': '%s'", matched_param->first, matched_param->second.ToString(), error_msg);
+			throw BinderException("Failed to cast option '%s' to type '%s': '%s'", matched_param->first,
+			                      matched_param->second.ToString(), error_msg);
 		}
 
 		bound_info.options[matched_param->first] = {cast_value};
@@ -295,7 +311,7 @@ void DuckSecretManager::DropSecretByName(CatalogTransaction transaction, const s
 	deleted = secrets->DropEntry(transaction, name, true, true);
 
 	if (!deleted || was_persistent) {
-		auto &fs = *transaction.db->config.file_system;
+		LocalFileSystem fs;
 		auto file_lu = permanent_secret_files.find(name);
 
 		if (file_lu != permanent_secret_files.end()) {
@@ -352,14 +368,44 @@ vector<reference<SecretEntry>> DuckSecretManager::AllSecrets(CatalogTransaction 
 	return ret_value;
 }
 
-bool DuckSecretManager::AllowConfigChanges() {
-	return !initialized;
+void DuckSecretManager::ThrowOnSettingChangeIfInitialized() {
+	if (initialized) {
+		throw InvalidInputException(
+		    "Changing Secret Manager settings after the secret manager is used is not allowed!");
+	}
+}
+
+void DuckSecretManager::SetEnablePermanentSecrets(bool enabled) {
+	ThrowOnSettingChangeIfInitialized();
+	config.allow_permanent_secrets = enabled;
+}
+
+void DuckSecretManager::ResetEnablePermanentSecrets() {
+	ThrowOnSettingChangeIfInitialized();
+	config.allow_permanent_secrets = DuckSecretManagerConfig::DEFAULT_ALLOW_PERMANENT_SECRETS;
+}
+
+bool DuckSecretManager::PermanentSecretsEnabled() {
+	return config.allow_permanent_secrets;
+}
+
+void DuckSecretManager::SetPermanentSecretPath(const string &path) {
+	ThrowOnSettingChangeIfInitialized();
+	config.secret_path = path;
+}
+
+void DuckSecretManager::ResetPermanentSecretPath() {
+	ThrowOnSettingChangeIfInitialized();
+	config.secret_path = config.default_secret_path;
+}
+
+string DuckSecretManager::PermanentSecretPath() {
+	return config.secret_path;
 }
 
 void DuckSecretManager::WriteSecretToFile(CatalogTransaction transaction, const BaseSecret &secret) {
-	auto &fs = *transaction.db->config.file_system;
-	auto secret_dir = GetSecretDirectory(transaction.db->config);
-	auto file_path = fs.JoinPath(secret_dir, secret.GetName() + ".duckdb_secret");
+	LocalFileSystem fs;
+	auto file_path = fs.JoinPath(config.secret_path, secret.GetName() + ".duckdb_secret");
 
 	if (fs.FileExists(file_path)) {
 		fs.RemoveFile(file_path);
@@ -376,12 +422,10 @@ void DuckSecretManager::WriteSecretToFile(CatalogTransaction transaction, const 
 }
 
 void DuckSecretManager::InitializeSecrets(CatalogTransaction transaction) {
-	auto permanent_secrets_enabled = transaction.db->config.options.allow_permanent_secrets;
-
 	if (!initialized) {
 		lock_guard<mutex> lck(initialize_lock);
 
-		if (permanent_secrets_enabled) {
+		if (config.allow_permanent_secrets) {
 			DuckSecretManager::LoadPermanentSecretsMap(transaction);
 		}
 
@@ -398,8 +442,13 @@ void DuckSecretManager::InitializeSecrets(CatalogTransaction transaction) {
 }
 
 void DuckSecretManager::LoadPermanentSecretsMap(CatalogTransaction transaction) {
-	auto &fs = *transaction.db->config.file_system;
-	auto secret_dir = GetSecretDirectory(transaction.db->config);
+	LocalFileSystem fs;
+
+	auto secret_dir = config.secret_path;
+
+	if (!fs.DirectoryExists(secret_dir)) {
+		fs.CreateDirectory(secret_dir);
+	}
 
 	if (permanent_secret_files.empty()) {
 		fs.ListFiles(secret_dir, [&](const string &fname, bool is_dir) {
@@ -411,40 +460,6 @@ void DuckSecretManager::LoadPermanentSecretsMap(CatalogTransaction transaction) 
 			}
 		});
 	}
-}
-
-string DuckSecretManager::GetSecretDirectory(DBConfig &config) {
-	string directory = config.options.secret_directory;
-	auto &fs = *config.file_system;
-
-	if (directory.empty()) {
-		directory = fs.GetHomeDirectory();
-		if (!fs.DirectoryExists(directory)) {
-			throw IOException(
-			    "Can't find the home directory for storing permanent secrets. Either specify a secret directory "
-			    "using SET secret_directory='/path/to/dir' or specify a home directory using the SET "
-			    "home_directory='/path/to/dir' option.",
-			    directory);
-		}
-
-		// TODO: make secret version num instead, add a test that reads same as storage info test
-		vector<string> path_components = {".duckdb", "stored_secrets", ExtensionHelper::GetVersionDirectoryName()};
-		for (auto &path_ele : path_components) {
-			directory = fs.JoinPath(directory, path_ele);
-			if (!fs.DirectoryExists(directory)) {
-				fs.CreateDirectory(directory);
-			}
-		}
-	} else if (!fs.DirectoryExists(directory)) {
-		// This is mostly for our unittest to easily allow making unique directories for test secret storage
-		fs.CreateDirectory(directory);
-	}
-
-	if (fs.IsRemoteFile(directory)) {
-		throw InternalException("Cannot set the secret_directory to a remote filesystem: '%s'", directory);
-	}
-
-	return directory;
 }
 
 void DuckSecretManager::AutoloadExtensionForType(ClientContext &context, const string &type) {
@@ -474,31 +489,43 @@ unique_ptr<CatalogEntry> DefaultDuckSecretGenerator::CreateDefaultEntry(ClientCo
 		return nullptr;
 	}
 
-	auto &config = DBConfig::GetConfig(context);
-	auto &fs = FileSystem::GetFileSystem(context);
+	LocalFileSystem fs;
 	auto &catalog = Catalog::GetSystemCatalog(context);
 
-	string base_secret_path = secret_manager.GetSecretDirectory(config);
+	string base_secret_path = secret_manager.PermanentSecretPath();
 	string secret_path = fs.JoinPath(base_secret_path, entry_name + ".duckdb_secret");
 
 	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
 
 	// Note each file should contain 1 secret
-	auto file_reader = BufferedFileReader(fs, secret_path.c_str());
-	if (!file_reader.Finished()) {
-		BinaryDeserializer deserializer(file_reader);
+	try {
+		auto file_reader = BufferedFileReader(fs, secret_path.c_str());
+		if (!file_reader.Finished()) {
+			BinaryDeserializer deserializer(file_reader);
 
-		deserializer.Begin();
-		auto deserialized_secret = secret_manager.DeserializeSecret(transaction, deserializer);
-		deserializer.End();
+			deserializer.Begin();
+			auto deserialized_secret = secret_manager.DeserializeSecret(transaction, deserializer);
+			deserializer.End();
 
-		auto name = deserialized_secret->GetName();
-		auto entry = make_uniq<SecretEntry>(std::move(deserialized_secret), catalog, name);
-		entry->storage_mode = base_secret_path;
+			auto name = deserialized_secret->GetName();
+			auto entry = make_uniq<SecretEntry>(std::move(deserialized_secret), catalog, name);
+			entry->storage_mode = base_secret_path;
 
-		return std::move(entry);
+			return std::move(entry);
+		}
+	} catch (SerializationException &e) {
+		throw SerializationException("Failed to deserialize the permanent secret file: '%s'. The file maybe be "
+		                             "corrupt, please remove the file, restart and try again. (error message: '%s')",
+		                             secret_path, e.RawMessage());
+	} catch (IOException &e) {
+		throw IOException("Failed to open the permanent secret file: '%s'. Some other process may have removed it, "
+		                  "please restart and try again. (error message: '%s')",
+		                  secret_path, e.RawMessage());
 	}
-	return nullptr;
+
+	throw SerializationException("Failed to deserialize secret '%s' from '%s': file appears empty! Please remove the "
+	                             "file, restart and try again",
+	                             entry_name, secret_path);
 }
 
 vector<string> DefaultDuckSecretGenerator::GetDefaultEntries() {

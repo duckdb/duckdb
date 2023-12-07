@@ -61,24 +61,16 @@ Value AccessModeSetting::GetSetting(ClientContext &context) {
 // Allow Permanent Secrets
 //===--------------------------------------------------------------------===//
 void AllowPermanentSecrets::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!config.secret_manager->AllowConfigChanges()) {
-		throw InvalidInputException(
-		    "Can't modify allow_permanent_secrets after the secret manager has been initialized.");
-	}
-	config.options.allow_permanent_secrets = input.GetValue<bool>();
+	config.secret_manager->SetEnablePermanentSecrets(input.GetValue<bool>());
 }
 
 void AllowPermanentSecrets::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!config.secret_manager->AllowConfigChanges()) {
-		throw InvalidInputException(
-		    "Can't modify allow_permanent_secrets after the secret manager has been initialized.");
-	}
-	config.options.allow_permanent_secrets = DBConfig().options.allow_permanent_secrets;
+	config.secret_manager->ResetEnablePermanentSecrets();
 }
 
 Value AllowPermanentSecrets::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.allow_permanent_secrets);
+	return config.secret_manager->PermanentSecretsEnabled();
 }
 
 //===--------------------------------------------------------------------===//
@@ -1155,22 +1147,16 @@ Value SearchPathSetting::GetSetting(ClientContext &context) {
 // Secret Directory
 //===--------------------------------------------------------------------===//
 void SecretDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!config.secret_manager->AllowConfigChanges()) {
-		throw InvalidInputException("Can't modify the secret_directory after the secret manager has been initialized.");
-	}
-	config.options.secret_directory = input.ToString();
+	config.secret_manager->SetPermanentSecretPath(input.ToString());
 }
 
 void SecretDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!config.secret_manager->AllowConfigChanges()) {
-		throw InvalidInputException("Can't modify the secret_directory after the secret manager has been initialized.");
-	}
-	config.options.secret_directory = DBConfig().options.secret_directory;
+	config.secret_manager->ResetPermanentSecretPath();
 }
 
 Value SecretDirectorySetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return config.options.secret_directory;
+	return config.secret_manager->PermanentSecretPath();
 }
 
 //===--------------------------------------------------------------------===//
