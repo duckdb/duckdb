@@ -95,6 +95,17 @@ static void CheckConstraints(TableCatalogEntry &table, const ColumnDefinition &c
 	}
 }
 
+static Value DefaultValue(const ColumnDefinition &def) {
+	if (def.Generated()) {
+		return Value(def.GeneratedExpression().ToString());
+	}
+	if (!def.HasDefaultValue()) {
+		return Value();
+	}
+	auto &value = def.DefaultValue();
+	return Value(value.ToString());
+}
+
 static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntry &table, DataChunk &output) {
 	if (data.offset >= table.GetColumns().LogicalColumnCount()) {
 		// finished returning values
@@ -122,8 +133,7 @@ static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntr
 		// "notnull", PhysicalType::BOOL
 		output.SetValue(3, index, Value::BOOLEAN(not_null));
 		// "dflt_value", PhysicalType::VARCHAR
-		Value def_value = column.DefaultValue() ? Value(column.DefaultValue()->ToString()) : Value();
-		output.SetValue(4, index, def_value);
+		output.SetValue(4, index, DefaultValue(column));
 		// "pk", PhysicalType::BOOL
 		output.SetValue(5, index, Value::BOOLEAN(pk));
 	}
