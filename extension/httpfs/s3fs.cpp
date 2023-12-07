@@ -201,7 +201,7 @@ unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(FileOpener *ope
 	}
 
 	// Return the stored credentials
-	const auto secret = secret_lookup->secret;
+	const auto &secret = secret_lookup->secret;
 	const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret);
 
 	return make_uniq<S3AuthParams>(S3SecretHelper::GetParams(kv_secret));

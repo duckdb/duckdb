@@ -30,7 +30,7 @@ public:
 	//! Metadata for user on how the secret is stored. (DuckSecretManager will set this to the path)
 	string storage_mode;
 	//! The secret pointer
-	shared_ptr<const BaseSecret> secret;
+	unique_ptr<const BaseSecret> secret;
 };
 
 //! Secret Manager is responsible the for the creation, deletion and storage of secrets.

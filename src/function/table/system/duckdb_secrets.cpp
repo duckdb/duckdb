@@ -97,14 +97,14 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 			scope_value.push_back(scope_entry);
 		}
 
-		const auto secret_ptr = secret_entry->secret;
+		const auto &secret = *secret_entry->secret;
 
-		output.SetValue(0, count, secret_ptr->GetName());
-		output.SetValue(1, count, Value(secret_ptr->GetType()));
-		output.SetValue(2, count, Value(secret_ptr->GetProvider()));
+		output.SetValue(0, count, secret.GetName());
+		output.SetValue(1, count, Value(secret.GetType()));
+		output.SetValue(2, count, Value(secret.GetProvider()));
 		output.SetValue(3, count, Value(secret_entry->storage_mode));
 		output.SetValue(4, count, Value::LIST(LogicalType::VARCHAR, scope_value));
-		output.SetValue(5, count, secret_ptr->ToString(bind_data.redact));
+		output.SetValue(5, count, secret.ToString(bind_data.redact));
 
 		data.offset++;
 		count++;
