@@ -34,11 +34,11 @@ static const ValidityMask &CopyValidityMask(const Vector &v) {
 	}
 }
 
-void VectorOperations::CopyPartial(const Vector &source_p, Vector &target, const SelectionVector &sel_p,
-                                   idx_t source_count, idx_t source_offset, idx_t copy_count, idx_t target_offset) {
+void VectorOperations::Copy(const Vector &source_p, Vector &target, const SelectionVector &sel_p, idx_t source_count,
+                            idx_t source_offset, idx_t target_offset) {
 	D_ASSERT(source_offset <= source_count);
-	D_ASSERT(copy_count <= source_count - source_offset);
 	D_ASSERT(source_p.GetType() == target.GetType());
+	idx_t copy_count = source_count - source_offset;
 
 	SelectionVector owned_sel;
 	const SelectionVector *sel = &sel_p;
@@ -279,19 +279,6 @@ void VectorOperations::CopyPartial(const Vector &source_p, Vector &target, const
 	if (target_vector_type != VectorType::FLAT_VECTOR) {
 		target.SetVectorType(target_vector_type);
 	}
-}
-
-void VectorOperations::Copy(const Vector &source, Vector &target, const SelectionVector &sel_p, idx_t source_count,
-                            idx_t source_offset, idx_t target_offset) {
-	// Copy everything up to 'count' starting at 'offset'
-	idx_t copy_count = source_count - source_offset;
-	CopyPartial(source, target, sel_p, source_count, source_offset, copy_count, target_offset);
-}
-
-void VectorOperations::CopyPartial(const Vector &source, Vector &target, idx_t source_count, idx_t source_offset,
-                                   idx_t copy_count, idx_t target_offset) {
-	VectorOperations::CopyPartial(source, target, *FlatVector::IncrementalSelectionVector(), source_count,
-	                              source_offset, copy_count, target_offset);
 }
 
 void VectorOperations::Copy(const Vector &source, Vector &target, idx_t source_count, idx_t source_offset,
