@@ -1,7 +1,5 @@
 #include "duckdb/core_functions/scalar/list_functions.hpp"
 #include "duckdb/core_functions/lambda_functions.hpp"
-
-#include "duckdb/core_functions/lambda_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
@@ -19,6 +17,7 @@ static void ExecuteReduce(idx_t loops, std::vector<idx_t> &active_rows, const li
 	idx_t old_count = 0;
 	idx_t new_count = 0;
 
+	// create selection vectors for the left and right slice
 	auto it = active_rows.begin();
 	while (it != active_rows.end()) {
 		auto list_column_format_index = list_column_format.sel->get_index(*it);
@@ -40,9 +39,10 @@ static void ExecuteReduce(idx_t loops, std::vector<idx_t> &active_rows, const li
 		return;
 	}
 
-	// Execute the lambda function`
+	// create the index vector
 	Vector index_vector(Value::BIGINT(loops + 1));
 
+	// slice the left and right slice
 	left_slice.Slice(left_slice, left_sel, new_count);
 	Vector right_slice = Vector(child_vector, right_sel, new_count);
 
@@ -58,6 +58,7 @@ static void ExecuteReduce(idx_t loops, std::vector<idx_t> &active_rows, const li
 		input_types.push_back(entry.vector.get().GetType());
 	}
 
+	// create the input chunk
 	DataChunk input_chunk;
 	input_chunk.InitializeEmpty(input_types);
 	input_chunk.SetCardinality(new_count);
@@ -87,6 +88,7 @@ static void ExecuteReduce(idx_t loops, std::vector<idx_t> &active_rows, const li
 
 	expr_executor->Execute(input_chunk, result_chunk);
 
+	// use the result chunk to update the left slice
 	left_slice.Reference(result_chunk.data[0]);
 }
 
@@ -138,6 +140,7 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 	idx_t old_count = 0;
 	idx_t new_count = 0;
 
+	// Initialize the left vector from list entries and the active rows
 	auto it = active_rows.begin();
 	while (it != active_rows.end()) {
 		auto list_column_format_index = list_column_format.sel->get_index(old_count);
@@ -150,6 +153,7 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 			new_count++;
 			it++;
 		} else {
+			// Remove the invalid rows
 			result_validity.SetInvalid(old_count);
 			active_rows.erase(it);
 		}
