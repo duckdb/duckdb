@@ -56,9 +56,16 @@ void SimpleBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContex
 		// Check if we need to unblock more sinks to reach the buffer size
 		UnblockSinks(estimated_tuples);
 	}
+	if (result.HasError()) {
+		Close();
+	}
 }
 
 unique_ptr<DataChunk> SimpleBufferedData::Scan() {
+	if (!context) {
+		// Result has been closed
+		return nullptr;
+	}
 	lock_guard<mutex> lock(glock);
 	if (buffered_chunks.empty()) {
 		context.reset();
