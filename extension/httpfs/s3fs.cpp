@@ -635,7 +635,7 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 	// See https://docs.aws.amazon.com/AmazonS3/latest/userguide/VirtualHosting.html
 	if (params.url_style == "vhost" || params.url_style == "") {
 		host = bucket + "." + host;
-	} else {
+	} else if (params.url_style == "path") {
 		path += "/" + bucket;
 	}
 
