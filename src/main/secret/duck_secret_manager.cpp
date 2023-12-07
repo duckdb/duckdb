@@ -339,13 +339,13 @@ SecretType DuckSecretManager::LookupTypeInternal(CatalogTransaction transaction,
 	return lookup->Cast<SecretTypeEntry>().type;
 }
 
-vector<SecretEntry *> DuckSecretManager::AllSecrets(CatalogTransaction transaction) {
+vector<reference<SecretEntry>> DuckSecretManager::AllSecrets(CatalogTransaction transaction) {
 	InitializeSecrets(transaction);
 
-	vector<SecretEntry *> ret_value;
+	vector<reference<SecretEntry>> ret_value;
 	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
 		auto &cast_entry = entry.Cast<SecretEntry>();
-		ret_value.push_back(&cast_entry);
+		ret_value.push_back(cast_entry);
 	};
 	secrets->Scan(transaction, callback);
 

@@ -93,16 +93,16 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 		auto &secret_entry = secrets[data.offset];
 
 		vector<Value> scope_value;
-		for (const auto &scope_entry : secret_entry->secret->GetScope()) {
+		for (const auto &scope_entry : secret_entry.get().secret->GetScope()) {
 			scope_value.push_back(scope_entry);
 		}
 
-		const auto &secret = *secret_entry->secret;
+		const auto &secret = *secret_entry.get().secret;
 
 		output.SetValue(0, count, secret.GetName());
 		output.SetValue(1, count, Value(secret.GetType()));
 		output.SetValue(2, count, Value(secret.GetProvider()));
-		output.SetValue(3, count, Value(secret_entry->storage_mode));
+		output.SetValue(3, count, Value(secret_entry.get().storage_mode));
 		output.SetValue(4, count, Value::LIST(LogicalType::VARCHAR, scope_value));
 		output.SetValue(5, count, secret.ToString(bind_data.redact));
 

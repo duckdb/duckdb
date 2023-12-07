@@ -44,7 +44,7 @@ public:
 	                                                     const string &type) override;
 	DUCKDB_API optional_ptr<SecretEntry> GetSecretByName(CatalogTransaction transaction, const string &name) override;
 	DUCKDB_API void DropSecretByName(CatalogTransaction transaction, const string &name, bool missing_ok) override;
-	DUCKDB_API vector<SecretEntry *> AllSecrets(CatalogTransaction transaction) override;
+	DUCKDB_API vector<reference<SecretEntry>> AllSecrets(CatalogTransaction transaction) override;
 	DUCKDB_API bool AllowConfigChanges() override;
 
 	//! Return secret directory

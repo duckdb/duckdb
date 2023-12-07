@@ -71,7 +71,7 @@ public:
 	//! Drop a secret by name
 	DUCKDB_API virtual void DropSecretByName(CatalogTransaction transaction, const string &name, bool missing_ok) = 0;
 	//! Get a vector of all registered secrets
-	DUCKDB_API virtual vector<SecretEntry *> AllSecrets(CatalogTransaction transaction) = 0;
+	DUCKDB_API virtual vector<reference<SecretEntry>> AllSecrets(CatalogTransaction transaction) = 0;
 	//! Returns a boolean indicating the SecretManager has been initialized and no longer accepts config changes
 	DUCKDB_API virtual bool AllowConfigChanges() = 0;
 };
