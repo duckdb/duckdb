@@ -215,6 +215,10 @@ public:
 	idx_t payload_pos;
 	idx_t memory_per_thread;
 
+	vector<LogicalType> payload_types;
+	DataChunk sort_chunk;
+	DataChunk payload_chunk;
+
 	//! The merge sort tree for the aggregate.
 	unique_ptr<DistinctSortTree> merge_sort_tree;
 
@@ -225,10 +229,6 @@ public:
 
 	//! The total number of internal nodes of the tree, stored in levels_flat_native
 	idx_t internal_nodes;
-
-	vector<LogicalType> payload_types;
-	DataChunk sort_chunk;
-	DataChunk payload_chunk;
 };
 
 } // namespace duckdb

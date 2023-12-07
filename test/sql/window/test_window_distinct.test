@@ -10,10 +10,32 @@ SELECT COUNT(DISTINCT 42) OVER ()
 ----
 1
 
-statement ok
-WITH t AS (SELECT col0 AS a, col1 AS b FROM (VALUES(1,2),(1,1),(1,2),(2,1),(2,1),(2,2),(2,3),(2,4)) v) SELECT *, COUNT(b) OVER(PARTITION BY a), COUNT(DISTINCT b) OVER(PARTITION BY a) FROM t;
+query IIII
+WITH t AS (
+	SELECT col0 AS a, col1 AS b 
+	FROM (VALUES
+		(1,2),
+		(1,1),
+		(1,2),
+		(2,1),
+		(2,1),
+		(2,2),
+		(2,3),
+		(2,4)
+	) v) 
+SELECT *, COUNT(b) OVER(PARTITION BY a), COUNT(DISTINCT b) OVER(PARTITION BY a) 
+FROM t
+ORDER BY 1, 2
+----
+1	1	3	2
+1	2	3	2
+1	2	3	2
+2	1	5	4
+2	1	5	4
+2	2	5	4
+2	3	5	4
+2	4	5	4
 
-# Tests from the paper
 statement ok
 CREATE TABLE figure1 AS 
 	SELECT * 

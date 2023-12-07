@@ -50,7 +50,7 @@ template <typename T>
 struct MergeSortTraits {
 	using return_type = T;
 	static const return_type SENTINEL() {
-		return std::numeric_limits<T>::max();
+		return NumericLimits<T>::Maximum();
 	};
 };
 
