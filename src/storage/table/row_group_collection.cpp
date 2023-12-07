@@ -692,6 +692,9 @@ void RowGroupCollection::VacuumDeletes(vector<SegmentNode<RowGroup>> &segments) 
 		scan_state.table_state.Initialize(types);
 		scan_state.table_state.max_row = idx_t(-1);
 		for (idx_t c_idx = r_idx; c_idx < next_idx; c_idx++) {
+			if (row_group_counts[c_idx] == 0) {
+				continue;
+			}
 			auto &current_row_group = *segments[c_idx].node;
 
 			current_row_group.InitializeScan(scan_state.table_state);

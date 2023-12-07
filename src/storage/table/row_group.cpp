@@ -763,7 +763,7 @@ RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
 idx_t RowGroup::GetCommittedRowCount() {
 	auto &vinfo = GetVersionInfo();
 	if (!vinfo) {
-		return false;
+		return count;
 	}
 	return count - vinfo->GetCommittedDeletedCount(count);
 }
