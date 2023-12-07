@@ -770,6 +770,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 	uint64_t weekno = 0;
 	uint64_t weekday = 0;
 	uint64_t yearday = 0;
+	bool has_weekday = false;
 
 	for (idx_t i = 0;; i++) {
 		D_ASSERT(i < literals.size());
@@ -947,6 +948,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 					error_position = start_pos;
 					return false;
 				}
+				has_weekday = true;
 				weekday = number;
 				break;
 			case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
@@ -1110,7 +1112,9 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST: {
 		// Adjust weekday to be 0-based for the week type
-		weekday = (weekday + 7 - int(offset_specifier == StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST)) % 7;
+		if (has_weekday) {
+			weekday = (weekday + 7 - int(offset_specifier == StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST)) % 7;
+		}
 		// Get the start of week 1, move back 7 days and then weekno * 7 + weekday gives the date
 		const auto jan1 = Date::FromDate(result_data[0], 1, 1);
 		auto yeardate = Date::GetMondayOfCurrentWeek(jan1);

@@ -22,7 +22,7 @@ INSERT INTO u VALUES (1, NULL);
 statement error
 UPDATE u SET ju = 1 WHERE iu = 1;
 ----
-Constraint Error: Duplicate key "iu: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
+Constraint Error: Duplicate key "iu: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).
 
 # issue #5807
 
@@ -38,7 +38,7 @@ SELECT 1, 41;
 statement error
 UPDATE tunion SET u = 42 WHERE id = 1;
 ----
-Constraint Error: Duplicate key "id: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
+Constraint Error: Duplicate key "id: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).
 
 # issue #5771
 
@@ -57,7 +57,7 @@ UPDATE workers SET phone = '345' WHERE id = 1;
 statement error
 UPDATE workers SET worker = 'leo' WHERE id = 1;
 ----
-Constraint Error: Duplicate key "id: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
+Constraint Error: Duplicate key "id: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).
 
 # issue #4886
 
@@ -80,7 +80,7 @@ UPDATE test SET i = 4 WHERE i = 1;
 statement error
 INSERT INTO test VALUES (1);
 ----
-Constraint Error: Duplicate key "i: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
+Constraint Error: Duplicate key "i: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).
 
 statement ok
 ROLLBACK
@@ -104,6 +104,6 @@ UPDATE tbl
 SET sometext = 'ghi', someothertext = 'mno'
 WHERE id = 2;
 ----
-Constraint Error: Duplicate key "id: 2" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
+Constraint Error: Duplicate key "id: 2" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).
 
 

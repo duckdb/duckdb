@@ -49,7 +49,8 @@ public:
 
 	void CheckProgressThread() {
 		double prev_percentage = -1;
-		uint64_t total_cardinality, cur_rows_read;
+		uint64_t total_cardinality = 0;
+		uint64_t cur_rows_read = 0;
 		while (!stop) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 			auto query_progress = context->GetQueryProgress();
@@ -60,8 +61,8 @@ public:
 			if (new_percentage > 100) {
 				error.SetError([new_percentage]() { REQUIRE(new_percentage <= 100); });
 			}
-			total_cardinality = query_progress.GetTotalRowsToProcess();
 			cur_rows_read = query_progress.GetRowsProcesseed();
+			total_cardinality = query_progress.GetTotalRowsToProcess();
 			if (cur_rows_read > total_cardinality) {
 				error.SetError([cur_rows_read, total_cardinality]() { REQUIRE(cur_rows_read <= total_cardinality); });
 			}
@@ -83,7 +84,7 @@ public:
 	}
 };
 
-TEST_CASE("Test Progress Bar Fast", "[api]") {
+TEST_CASE("Test Progress Bar Fast", "[progress-bar]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NOTHROW(con.context->GetQueryProgress());
@@ -97,17 +98,17 @@ TEST_CASE("Test Progress Bar Fast", "[api]") {
 
 	REQUIRE_NO_FAIL(con.Query("PRAGMA progress_bar_time=10"));
 	REQUIRE_NO_FAIL(con.Query("PRAGMA disable_print_progress_bar"));
-	//! Simple Aggregation
+	// Simple Aggregation
 	test_progress.Start();
 	REQUIRE_NO_FAIL(con.Query("select count(*) from tbl"));
 	test_progress.End();
 
-	//! Simple Join
+	// Simple Join
 	test_progress.Start();
 	REQUIRE_NO_FAIL(con.Query("select count(*) from tbl inner join tbl_2 on (tbl.a = tbl_2.a)"));
 	test_progress.End();
 
-	//! Subquery
+	// Subquery
 	test_progress.Start();
 	REQUIRE_NO_FAIL(con.Query("select count(*) from tbl where a = (select min(a) from tbl_2)"));
 	test_progress.End();
@@ -122,21 +123,21 @@ TEST_CASE("Test Progress Bar Fast", "[api]") {
 	test_progress.End();
 	REQUIRE_NO_FAIL(*result);
 
-	//! Test Multiple threads
+	// Test Multiple threads
 	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=2"));
 	REQUIRE_NO_FAIL(con.Query("PRAGMA verify_parallelism"));
 
-	//! Simple Aggregation
+	// Simple Aggregation
 	test_progress.Start();
 	REQUIRE_NO_FAIL(con.Query("select count(*) from tbl"));
 	test_progress.End();
 
-	//! Simple Join
+	// Simple Join
 	test_progress.Start();
 	REQUIRE_NO_FAIL(con.Query("select count(*) from tbl inner join tbl_2 on (tbl.a = tbl_2.a)"));
 	test_progress.End();
 
-	//! Subquery
+	// Subquery
 	test_progress.Start();
 	REQUIRE_NO_FAIL(con.Query("select count(*) from tbl where a = (select min(a) from tbl_2)"));
 	test_progress.End();
@@ -152,7 +153,7 @@ TEST_CASE("Test Progress Bar Fast", "[api]") {
 	REQUIRE_NO_FAIL(*result);
 }
 
-TEST_CASE("Test Progress Bar", "[api][.]") {
+TEST_CASE("Test Progress Bar", "[progress-bar][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	TestProgressBar test_progress(con.context.get());
@@ -161,17 +162,17 @@ TEST_CASE("Test Progress Bar", "[api][.]") {
 
 	REQUIRE_NO_FAIL(con.Query("PRAGMA progress_bar_time=10"));
 	REQUIRE_NO_FAIL(con.Query("PRAGMA disable_print_progress_bar"));
-	//! Simple Aggregation
+	// Simple Aggregation
 	test_progress.Start();
 	REQUIRE_NO_FAIL(con.Query("select count(*) from tbl"));
 	test_progress.End();
 
-	//! Simple Join
+	// Simple Join
 	test_progress.Start();
 	REQUIRE_NO_FAIL(con.Query("select count(*) from tbl inner join tbl_2 on (tbl.a = tbl_2.a)"));
 	test_progress.End();
 
-	//! Subquery
+	// Subquery
 	test_progress.Start();
 	REQUIRE_NO_FAIL(con.Query("select count(*) from tbl where a = (select min(a) from tbl_2)"));
 	test_progress.End();
@@ -186,21 +187,21 @@ TEST_CASE("Test Progress Bar", "[api][.]") {
 	test_progress.End();
 	REQUIRE_NO_FAIL(*result);
 
-	//! Test Multiple threads
+	// Test Multiple threads
 	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=4"));
 	REQUIRE_NO_FAIL(con.Query("PRAGMA verify_parallelism"));
 
-	//! Simple Aggregation
+	// Simple Aggregation
 	test_progress.Start();
 	REQUIRE_NO_FAIL(con.Query("select count(*) from tbl"));
 	test_progress.End();
 
-	//! Simple Join
+	// Simple Join
 	test_progress.Start();
 	REQUIRE_NO_FAIL(con.Query("select count(*) from tbl inner join tbl_2 on (tbl.a = tbl_2.a)"));
 	test_progress.End();
 
-	//! Subquery
+	// Subquery
 	test_progress.Start();
 	REQUIRE_NO_FAIL(con.Query("select count(*) from tbl where a = (select min(a) from tbl_2)"));
 	test_progress.End();
@@ -216,7 +217,7 @@ TEST_CASE("Test Progress Bar", "[api][.]") {
 	REQUIRE_NO_FAIL(*result);
 }
 
-TEST_CASE("Test Progress Bar CSV", "[api][.]") {
+TEST_CASE("Test Progress Bar CSV", "[progress-bar][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -224,7 +225,7 @@ TEST_CASE("Test Progress Bar CSV", "[api][.]") {
 	REQUIRE_NO_FAIL(con.Query("PRAGMA progress_bar_time=1"));
 	REQUIRE_NO_FAIL(con.Query("PRAGMA disable_print_progress_bar"));
 
-	//! Create Tables From CSVs
+	// Create Tables From CSVs
 	test_progress.Start();
 	REQUIRE_NO_FAIL(
 	    con.Query("CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/test/test.csv')"));
@@ -236,7 +237,7 @@ TEST_CASE("Test Progress Bar CSV", "[api][.]") {
 	    ":= 'INTEGER', b := 'INTEGER', c := 'VARCHAR'), sep=',', auto_detect='false')"));
 	test_progress.End();
 
-	//! Insert into existing tables
+	// Insert into existing tables
 	test_progress.Start();
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/test.csv')"));
 	test_progress.End();
@@ -247,19 +248,19 @@ TEST_CASE("Test Progress Bar CSV", "[api][.]") {
 	    "'INTEGER', b := 'INTEGER', c := 'VARCHAR'), sep=',', auto_detect='false')"));
 	test_progress.End();
 
-	//! copy from
+	// copy from
 	test_progress.Start();
 	REQUIRE_NO_FAIL(con.Query("COPY test FROM 'test/sql/copy/csv/data/test/test.csv'"));
 	test_progress.End();
 
-	//! Repeat but in parallel
+	// Repeat but in parallel
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE test"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE test_2"));
 
-	//! Test Multiple threads
+	// Test Multiple threads
 	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=4"));
 	REQUIRE_NO_FAIL(con.Query("PRAGMA verify_parallelism"));
-	//! Create Tables From CSVs
+	// Create Tables From CSVs
 	test_progress.Start();
 	REQUIRE_NO_FAIL(
 	    con.Query("CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/test/test.csv')"));
@@ -271,7 +272,7 @@ TEST_CASE("Test Progress Bar CSV", "[api][.]") {
 	    ":= 'INTEGER', b := 'INTEGER', c := 'VARCHAR'), sep=',', auto_detect='false')"));
 	test_progress.End();
 
-	//! Insert into existing tables
+	// Insert into existing tables
 	test_progress.Start();
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/test.csv')"));
 	test_progress.End();
@@ -282,7 +283,7 @@ TEST_CASE("Test Progress Bar CSV", "[api][.]") {
 	    "'INTEGER', b := 'INTEGER', c := 'VARCHAR'), sep=',', auto_detect='false')"));
 	test_progress.End();
 
-	//! copy from
+	// copy from
 	test_progress.Start();
 	REQUIRE_NO_FAIL(con.Query("COPY test FROM 'test/sql/copy/csv/data/test/test.csv'"));
 	test_progress.End();

@@ -25,6 +25,8 @@ date_t ParquetIntToDate(const int32_t &raw_date);
 dtime_t ParquetIntToTimeMs(const int32_t &raw_time);
 dtime_t ParquetIntToTime(const int64_t &raw_time);
 dtime_t ParquetIntToTimeNs(const int64_t &raw_time);
+dtime_tz_t ParquetIntToTimeMsTZ(const int32_t &raw_time);
 dtime_tz_t ParquetIntToTimeTZ(const int64_t &raw_time);
+dtime_tz_t ParquetIntToTimeNsTZ(const int64_t &raw_time);
 
 } // namespace duckdb
