@@ -90,7 +90,7 @@ public:
 
 	//! The score of how well this secret's scope matches the path (by default: the length of the longest matching
 	//! prefix)
-	virtual int MatchScore(const string &path) const;
+	virtual int64_t MatchScore(const string &path) const;
 	//! The ToString method prints the secret, the redact option determines whether secret data is allowed to be printed
 	//! in clear text. This is to be decided by the secret implementation
 	virtual string ToString(bool redact) const;

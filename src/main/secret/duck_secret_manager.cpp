@@ -242,7 +242,7 @@ optional_ptr<SecretEntry> DuckSecretManager::GetSecretByPath(CatalogTransaction 
                                                              const string &type) {
 	InitializeSecrets(transaction);
 
-	int best_match_score = -1;
+	int64_t best_match_score = -1;
 	SecretEntry *best_match = nullptr;
 
 	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
