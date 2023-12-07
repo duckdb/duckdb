@@ -95,6 +95,7 @@ public:
 		}
 		while (cur_buffer_handle) {
 			char *buffer_handle_ptr = cur_buffer_handle->Ptr();
+			value_pos = csv_iterator.buffer_pos;
 			while (csv_iterator.buffer_pos < cur_buffer_handle->actual_size) {
 				if (OP::Process(machine, result, buffer_handle_ptr[csv_iterator.buffer_pos], csv_iterator.buffer_pos) ||
 				    csv_iterator.bytes_to_read == 0) {
@@ -130,6 +131,8 @@ public:
 
 	//! String Value
 	string value;
+	idx_t value_pos;
+	idx_t length;
 	idx_t rows_read = 0;
 	idx_t line_start_pos = 0;
 
@@ -167,15 +170,15 @@ public:
 	vector<LogicalType> types;
 
 	bool Last();
-
+	//! Unique pointer to the buffer_handle, this is unique per scanner, since it also contains the necessary counters
+	//! To offload buffers to disk if necessary
+	unique_ptr<CSVBufferHandle> cur_buffer_handle;
 private:
 	//! Where this CSV Scanner starts
 	CSVIterator csv_iterator;
 	//! Shared pointer to the buffer_manager, this is shared across multiple scanners
 	shared_ptr<CSVBufferManager> buffer_manager;
-	//! Unique pointer to the buffer_handle, this is unique per scanner, since it also contains the necessary counters
-	//! To offload buffers to disk if necessary
-	unique_ptr<CSVBufferHandle> cur_buffer_handle;
+
 	//! Shared pointer to the state machine, this is used across multiple scanners
 	shared_ptr<CSVStateMachine> state_machine;
 	//! Parse Chunk where all columns are defined as VARCHAR
