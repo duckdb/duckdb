@@ -138,28 +138,30 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	result->return_types = return_types;
 	result->return_names = names;
 	result->FinalizeRead(context);
-
+	result->options.dialect_options.num_cols = names.size();
 	return std::move(result);
 }
 
 //! This struct holds information regarding the last position scanned by the csv reader
 struct BufferPosition {
-	explicit BufferPosition(idx_t start) : buffer_pos(start) {
+	explicit BufferPosition(idx_t start) : start_pos(start) {
 	}
 
 	//! true if there is still something to be scanned
 	//! false otherwise
-	bool Next(CSVBufferManager &buffer_manager) {
+	bool Next(CSVBufferManager &buffer_manager, LineInfo &line_info) {
 		if (finished) {
 			return false;
 		}
 		if (!initialized) {
 			// First buffer
 			initialized = true;
+			buffer_pos = start_pos;
 			auto buffer = buffer_manager.GetBuffer(file_idx, buffer_idx);
 			buffer_size = buffer->actual_size;
 			// We either read BYTES_PER_THREAD or up to the end of the buffer size
 			end_buffer = std::min(buffer_pos + BYTES_PER_THREAD, buffer_size);
+			line_info.lines_read[0][0] = start_pos != 0 ? 1 : 0;
 			return true;
 		}
 		// There are three moves we can do:
@@ -173,6 +175,7 @@ struct BufferPosition {
 		auto buffer = buffer_manager.GetBuffer(file_idx, ++buffer_idx);
 		buffer_pos = 0;
 		if (buffer) {
+			line_info.current_batches[file_idx].insert(buffer_idx);
 			buffer_size = buffer->actual_size;
 			end_buffer = std::min(buffer_pos + BYTES_PER_THREAD, buffer_size);
 			return true;
@@ -181,8 +184,10 @@ struct BufferPosition {
 		buffer_idx = 0;
 		buffer = buffer_manager.GetBuffer(++file_idx, buffer_idx);
 		if (buffer) {
+			buffer_pos = start_pos;
 			buffer_size = buffer->actual_size;
 			end_buffer = std::min(buffer_pos + BYTES_PER_THREAD, buffer_size);
+			line_info.lines_read[0][0] = start_pos != 0 ? 1 : 0;
 			return true;
 		}
 		finished = true;
@@ -198,6 +203,9 @@ struct BufferPosition {
 	idx_t buffer_pos = 0;
 	idx_t buffer_size = 0;
 	idx_t end_buffer = 0;
+
+	//! We assume the same start_position for everty file;
+	const idx_t start_pos;
 
 	CSVIterator GetIterator() {
 		return CSVIterator(file_idx, buffer_idx, buffer_pos, end_buffer - buffer_pos);
@@ -437,41 +445,22 @@ void LineInfo::Verify(idx_t file_idx, idx_t batch_idx, idx_t cur_first_pos) {
 }
 unique_ptr<CSVScanner> CSVGlobalState::Next(ClientContext &context, const ReadCSVData &bind_data) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	if (!scanner_boundaries.Next(*buffer_manager)) {
+	if (!scanner_boundaries.Next(*buffer_manager, line_info)) {
 		// we are done
 		return nullptr;
 	}
-	//	return nullptr;
-	auto scanner = make_uniq<CSVScanner>(buffer_manager, state_machine, scanner_boundaries.GetIterator());
-	return scanner;
-	// Create a CSV State machine
-	//	auto scanner = make_uniq<CSVScanner>(buffer_manager, state_machine, cur_pos);
-	//	// Generate CSV Iterator
-	//	//	CSVIterator csv_iterator (cur_file_idx, cur_buffer_idx, cur, bytes_to_read );
-	//
-	//	line_info.lines_read[file_index++][local_batch_index] = bind_data.options.dialect_options.header.GetValue() ? 1
-	//	: 0;
-	//
-	//		// set up the current buffer
-	//		line_info.current_batches[file_index - 1].insert(local_batch_index);
-	//		idx_t bytes_per_local_state = current_buffer->actual_size / MaxThreads() + 1;
-	//		auto result =
-	//		    make_uniq<CSVBuffer>(buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx),
-	//		                         buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx + 1), next_byte,
-	//		                         next_byte + bytes_per_local_state, batch_index++, local_batch_index++, &line_info);
-	//		// move the byte index of the CSV reader to the next buffer
-	//		next_byte += bytes_per_local_state;
-	//		if (next_byte >= current_buffer->actual_size) {
-	//			// We replace the current buffer with the next buffer
-	//			next_byte = 0;
-	//			bytes_read += current_buffer->actual_size;
-	//			current_buffer = std::move(next_buffer);
-	//			cur_buffer_idx++;
-	//			if (current_buffer) {
-	//				// Next buffer gets the next-next buffer
-	//				next_buffer = buffer_manager->GetBuffer(file_index - 1, cur_buffer_idx + 1);
-	//			}
-	//		}
+	auto csv_scanner = make_uniq<CSVScanner>(buffer_manager, state_machine, scanner_boundaries.GetIterator());
+
+	// FIXME: yuck
+	csv_scanner->file_path = bind_data.files.front();
+	csv_scanner->names = bind_data.return_names;
+	csv_scanner->types = bind_data.return_types;
+	MultiFileReader::InitializeReader(*csv_scanner, bind_data.options.file_options, bind_data.reader_bind,
+	                                  bind_data.return_types, bind_data.return_names, column_ids, nullptr,
+	                                  bind_data.files.front(), context);
+
+	return csv_scanner;
+
 	//		if (!reader) {
 	//			D_ASSERT(0);
 	//			//		// we either don't have a reader, or the reader was created for a different file
@@ -652,26 +641,28 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 		return;
 	}
 	do {
-		//		if (output.size() != 0) {
-		//			MultiFileReader::FinalizeChunk(bind_data.reader_bind, csv_local_state.csv_reader->reader_data,
-		// output); 			break;
-		//		}
-		//		if (csv_local_state.csv_reader->finished) {
-		//			auto verification_updates = csv_local_state.csv_reader->GetVerificationPositions();
-		//			csv_global_state.UpdateVerification(verification_updates, csv_local_state.csv_reader->file_idx,
-		//			                                    csv_local_state.csv_reader->scanner->scanner_id);
-		//			csv_global_state.UpdateLinesRead(*csv_local_state.csv_reader->scanner,
-		//			                                 csv_local_state.csv_reader->file_idx);
-		//			auto has_next = csv_global_state.Next(context, bind_data, csv_local_state.csv_reader);
-		//			if (csv_local_state.csv_reader) {
-		//				csv_local_state.csv_reader->linenr = 0;
-		//			}
-		//			if (!has_next) {
-		//				csv_global_state.DecrementThread();
-		//				break;
-		//			}
-		//		}
-		//		csv_local_state.csv_reader->Parse(output);
+		if (output.size() != 0) {
+			//			MultiFileReader::FinalizeChunk(bind_data.reader_bind, csv_local_state.csv_reader->reader_data,
+			//		 output);
+			break;
+		}
+		if (csv_local_state.csv_reader->Finished()) {
+			//			auto verification_updates = csv_local_state.csv_reader->GetVerificationPositions();
+			//			csv_global_state.UpdateVerification(verification_updates, csv_local_state.csv_reader->file_idx,
+			//			                                    csv_local_state.csv_reader->scanner->scanner_id);
+			//			csv_global_state.UpdateLinesRead(*csv_local_state.csv_reader->scanner,
+			//			                                 csv_local_state.csv_reader->file_idx);
+			csv_local_state.csv_reader = csv_global_state.Next(context, bind_data);
+			//			if (csv_local_state.csv_reader) {
+			//				csv_local_state.csv_reader->linenr = 0;
+			//			}
+			if (!csv_local_state.csv_reader) {
+				csv_global_state.DecrementThread();
+				break;
+			}
+		}
+		VerificationPositions positions;
+		csv_local_state.csv_reader->Parse(output, positions);
 
 	} while (true);
 	if (csv_global_state.Finished()) {

@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/scan/csv/csv_sniffer.hpp"
 #include "duckdb/execution/operator/scan/csv/base_csv_reader.hpp"
 #include "duckdb/execution/operator/scan/csv/parse_chunk.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_casting.hpp"
 
 namespace duckdb {
 
@@ -13,15 +14,15 @@ bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const Logica
 		// use the date format to cast the chunk
 		string error_message;
 		idx_t line_error;
-		return BaseCSVReader::TryCastDateVector(sniffing_state_machine.dialect_options.date_format, parse_chunk_col,
-		                                        dummy_result, size, error_message, line_error);
+		return CSVCast::TryCastDateVector(sniffing_state_machine.dialect_options.date_format, parse_chunk_col,
+		                                  dummy_result, size, error_message, line_error);
 	}
 	if (!sniffing_state_machine.dialect_options.date_format[LogicalTypeId::TIMESTAMP].GetValue().Empty() &&
 	    sql_type == LogicalTypeId::TIMESTAMP) {
 		// use the timestamp format to cast the chunk
 		string error_message;
-		return BaseCSVReader::TryCastTimestampVector(sniffing_state_machine.dialect_options.date_format,
-		                                             parse_chunk_col, dummy_result, size, error_message);
+		return CSVCast::TryCastTimestampVector(sniffing_state_machine.dialect_options.date_format, parse_chunk_col,
+		                                       dummy_result, size, error_message);
 	}
 	// target type is not varchar: perform a cast
 	string error_message;

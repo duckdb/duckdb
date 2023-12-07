@@ -13,6 +13,7 @@
 #include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_state_machine.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
 
 namespace duckdb {
 
@@ -22,6 +23,9 @@ struct VerificationPositions {
 	idx_t beginning_of_first_line = 0;
 	idx_t end_of_last_line = 0;
 };
+
+//! If we are Parsing or Sniffing
+enum class ParserMode : uint8_t { PARSING = 0, SNIFFING = 1 };
 
 //! Structure that holds information from the data a scanner should scan
 struct CSVIterator {
@@ -135,8 +139,10 @@ public:
 	//! Verifies if value is UTF8
 	void VerifyUTF8();
 
-	//! Parses data into a parse_chunk (chunk where all columns are initially set to varchar)
-	void Parse(DataChunk &parse_chunk, VerificationPositions &verification_positions, const vector<LogicalType> &types);
+	bool Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_add_line);
+
+	//! Parses data into a output_chunk
+	void Parse(DataChunk &output_chunk, VerificationPositions &verification_positions);
 
 	//! Produces error messages for column name -> type mismatch.
 	static string ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
@@ -148,6 +154,21 @@ public:
 	//! This is currently used for retrieving lines when errors occur.
 	idx_t GetTotalRowsEmmited();
 
+	const string &GetFileName() {
+		return file_path;
+	}
+	const vector<string> &GetNames() {
+		return names;
+	}
+	const vector<LogicalType> &GetTypes() {
+		return types;
+	}
+
+	MultiFileReaderData reader_data;
+	string file_path;
+	vector<string> names;
+	vector<LogicalType> types;
+
 private:
 	//! Where this CSV Scanner starts
 	CSVIterator csv_iterator;
@@ -158,7 +179,9 @@ private:
 	unique_ptr<CSVBufferHandle> cur_buffer_handle;
 	//! Shared pointer to the state machine, this is used across multiple scanners
 	shared_ptr<CSVStateMachine> state_machine;
-
+	//! Parse Chunk where all columns are defined as VARCHAR
+	DataChunk parse_chunk;
+	const ParserMode mode;
 	//! ------------- CSV Parsing -------------------//
 	//! The following set of functions and variables are related to actual CSV Parsing
 	//! Sets the start of a buffer. In Parallel CSV Reading, buffers can (and most likely will) start mid-line.

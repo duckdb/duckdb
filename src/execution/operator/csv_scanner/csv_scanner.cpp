@@ -1,17 +1,21 @@
-#include "utf8proc_wrapper.hpp"
-#include "duckdb/main/error_manager.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_scanner.hpp"
-#include "duckdb/execution/operator/scan/csv/parse_values.hpp"
+
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/execution/operator/scan/csv/parse_chunk.hpp"
+#include "duckdb/execution/operator/scan/csv/parse_values.hpp"
+#include "duckdb/main/error_manager.hpp"
+#include "utf8proc_wrapper.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_casting.hpp"
 
 namespace duckdb {
 
 CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p)
-    : buffer_manager(std::move(buffer_manager_p)), state_machine(state_machine_p) {
+    : buffer_manager(std::move(buffer_manager_p)), state_machine(state_machine_p), mode(ParserMode::SNIFFING) {
 	csv_iterator.buffer_pos = buffer_manager->GetStartPos();
 };
 
-CSVScanner::CSVScanner(ClientContext &context, CSVReaderOptions &options) {
+CSVScanner::CSVScanner(ClientContext &context, CSVReaderOptions &options) : mode(ParserMode::SNIFFING) {
 	const vector<string> file_path {options.file_path};
 	CSVStateMachineCache state_machine_cache;
 	buffer_manager = make_shared<CSVBufferManager>(context, options, file_path);
@@ -23,7 +27,10 @@ CSVScanner::CSVScanner(ClientContext &context, CSVReaderOptions &options) {
 
 CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
                        CSVIterator csv_iterator_p)
-    : csv_iterator(csv_iterator_p), buffer_manager(std::move(buffer_manager_p)), state_machine(state_machine_p) {
+    : csv_iterator(csv_iterator_p), buffer_manager(std::move(buffer_manager_p)), state_machine(state_machine_p),
+      mode(ParserMode::PARSING) {
+	vector<LogicalType> varchar_types(state_machine->options.dialect_options.num_cols, LogicalType::VARCHAR);
+	parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), varchar_types);
 }
 
 //! Skips all empty lines, until a non-empty line shows up
@@ -151,18 +158,229 @@ bool CSVScanner::SetStart(VerificationPositions &verification_positions, const v
 	return success;
 }
 
-void CSVScanner::Parse(DataChunk &parse_chunk, VerificationPositions &verification_positions,
-                       const vector<LogicalType> &types) {
+bool CSVScanner::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_add_line) {
+	if (parse_chunk.size() == 0) {
+		return true;
+	}
+
+	//	bool conversion_error_ignored = false;
+
+	// convert the columns in the parsed chunk to the types of the table
+	insert_chunk.SetCardinality(parse_chunk);
+
+	for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
+		auto col_idx = reader_data.column_ids[c];
+		auto result_idx = reader_data.column_mapping[c];
+		auto &parse_vector = parse_chunk.data[col_idx];
+		auto &result_vector = insert_chunk.data[result_idx];
+		auto &type = result_vector.GetType();
+		if (type.id() == LogicalTypeId::VARCHAR) {
+			// target type is varchar: no need to convert
+			// reinterpret rather than reference, so we can deal with user-defined types
+			result_vector.Reinterpret(parse_vector);
+		} else {
+			string error_message;
+			bool success;
+			idx_t line_error = 0;
+			if (!state_machine->options.dialect_options.date_format.at(LogicalTypeId::DATE).GetValue().Empty() &&
+			    type.id() == LogicalTypeId::DATE) {
+				// use the date format to cast the chunk
+				success = CSVCast::TryCastDateVector(state_machine->options.dialect_options.date_format, parse_vector,
+				                                     result_vector, parse_chunk.size(), error_message, line_error);
+			} else if (!state_machine->options.dialect_options.date_format.at(LogicalTypeId::TIMESTAMP)
+			                .GetValue()
+			                .Empty() &&
+			           type.id() == LogicalTypeId::TIMESTAMP) {
+				// use the date format to cast the chunk
+				success =
+				    CSVCast::TryCastTimestampVector(state_machine->options.dialect_options.date_format, parse_vector,
+				                                    result_vector, parse_chunk.size(), error_message);
+			} else if (state_machine->options.decimal_separator != "." &&
+			           (type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE)) {
+				success =
+				    CSVCast::TryCastFloatingVectorCommaSeparated(state_machine->options, parse_vector, result_vector,
+				                                                 parse_chunk.size(), error_message, type, line_error);
+			} else if (state_machine->options.decimal_separator != "." && type.id() == LogicalTypeId::DECIMAL) {
+				success = CSVCast::TryCastDecimalVectorCommaSeparated(
+				    state_machine->options, parse_vector, result_vector, parse_chunk.size(), error_message, type);
+			} else {
+				// target type is not varchar: perform a cast
+				success = VectorOperations::TryCast(buffer_manager->context, parse_vector, result_vector,
+				                                    parse_chunk.size(), &error_message);
+			}
+			if (success) {
+				continue;
+			}
+			throw InvalidInputException("error");
+		}
+
+		//			string col_name = to_string(col_idx);
+		//			if (col_idx < names.size()) {
+		//				col_name = "\"" + names[col_idx] + "\"";
+		//			}
+
+		// figure out the exact line number
+		//			if (target_type_not_varchar) {
+		//				UnifiedVectorFormat inserted_column_data;
+		//				result_vector.ToUnifiedFormat(parse_chunk.size(), inserted_column_data);
+		//				for (; line_error < parse_chunk.size(); line_error++) {
+		//					if (!inserted_column_data.validity.RowIsValid(line_error) &&
+		//					    !FlatVector::IsNull(parse_vector, line_error)) {
+		//						break;
+		//					}
+		//				}
+		//			}
+
+		// The line_error must be summed with linenr (All lines emmited from this batch)
+		// But subtracted from the parse_chunk
+		//			D_ASSERT(line_error + linenr >= parse_chunk.size());
+		//			line_error += linenr;
+		//			line_error -= parse_chunk.size();
+		//
+		//			auto error_line = GetLineError(line_error, buffer_idx);
+		//
+		//			if (options.ignore_errors) {
+		//				conversion_error_ignored = true;
+		//
+		//			} else if (options.auto_detect) {
+		//				throw InvalidInputException("%s in column %s, at line %llu.\n\nParser "
+		//				                            "options:\n%s.\n\nConsider either increasing the sample size "
+		//				                            "(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
+		//				                            "or skipping column conversion (ALL_VARCHAR=1)",
+		//				                            error_message, col_name, error_line, options.ToString());
+		//			} else {
+		//				throw InvalidInputException("%s at line %llu in column %s. Parser options:\n%s ", error_message,
+		//				                            error_line, col_name, options.ToString());
+		//			}
+		//		}
+	}
+	//	if (conversion_error_ignored) {
+	//		D_ASSERT(options.ignore_errors);
+	//
+	//		SelectionVector succesful_rows(parse_chunk.size());
+	//		idx_t sel_size = 0;
+	//
+	//		// Keep track of failed cells
+	//		vector<ErrorLocation> failed_cells;
+	//
+	//		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
+	//
+	//			auto global_row_idx = row_idx + linenr - parse_chunk.size();
+	//			auto row_line = GetLineError(global_row_idx, buffer_idx, false);
+	//
+	//			bool row_failed = false;
+	//			for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
+	//				auto col_idx = reader_data.column_ids[c];
+	//				auto result_idx = reader_data.column_mapping[c];
+	//
+	//				auto &parse_vector = parse_chunk.data[col_idx];
+	//				auto &result_vector = insert_chunk.data[result_idx];
+	//
+	//				bool was_already_null = FlatVector::IsNull(parse_vector, row_idx);
+	//				if (!was_already_null && FlatVector::IsNull(result_vector, row_idx)) {
+	//					Increment(buffer_idx);
+	//					auto bla = GetLineError(global_row_idx, buffer_idx, false);
+	//					row_idx += bla;
+	//					row_idx -= bla;
+	//					row_failed = true;
+	//					failed_cells.emplace_back(row_idx, col_idx, row_line);
+	//				}
+	//			}
+	//			if (!row_failed) {
+	//				succesful_rows.set_index(sel_size++, row_idx);
+	//			}
+	//		}
+	//
+	//		// Now do a second pass to produce the reject table entries
+	//		if (!failed_cells.empty() && !options.rejects_table_name.empty()) {
+	//			auto limit = options.rejects_limit;
+	//
+	//			auto rejects = CSVRejectsTable::GetOrCreate(context, options.rejects_table_name);
+	//			lock_guard<mutex> lock(rejects->write_lock);
+	//
+	//			// short circuit if we already have too many rejects
+	//			if (limit == 0 || rejects->count < limit) {
+	//				auto &table = rejects->GetTable(context);
+	//				InternalAppender appender(context, table);
+	//				auto file_name = GetFileName();
+	//
+	//				for (auto &cell : failed_cells) {
+	//					if (limit != 0 && rejects->count >= limit) {
+	//						break;
+	//					}
+	//					rejects->count++;
+	//
+	//					auto row_idx = cell.row_idx;
+	//					auto col_idx = cell.col_idx;
+	//					auto row_line = cell.row_line;
+	//
+	//					auto col_name = to_string(col_idx);
+	//					if (col_idx < names.size()) {
+	//						col_name = "\"" + names[col_idx] + "\"";
+	//					}
+	//
+	//					auto &parse_vector = parse_chunk.data[col_idx];
+	//					auto parsed_str = FlatVector::GetData<string_t>(parse_vector)[row_idx];
+	//					auto &type = insert_chunk.data[col_idx].GetType();
+	//					auto row_error_msg = StringUtil::Format("Could not convert string '%s' to '%s'",
+	//					                                        parsed_str.GetString(), type.ToString());
+	//
+	//					// Add the row to the rejects table
+	//					appender.BeginRow();
+	//					appender.Append(string_t(file_name));
+	//					appender.Append(row_line);
+	//					appender.Append(col_idx);
+	//					appender.Append(string_t(col_name));
+	//					appender.Append(parsed_str);
+	//
+	//					if (!options.rejects_recovery_columns.empty()) {
+	//						child_list_t<Value> recovery_key;
+	//						for (auto &key_idx : options.rejects_recovery_column_ids) {
+	//							// Figure out if the recovery key is valid.
+	//							// If not, error out for real.
+	//							auto &component_vector = parse_chunk.data[key_idx];
+	//							if (FlatVector::IsNull(component_vector, row_idx)) {
+	//								throw InvalidInputException("%s at line %llu in column %s. Parser options:\n%s ",
+	//								                            "Could not parse recovery column", row_line, col_name,
+	//								                            options.ToString());
+	//							}
+	//							auto component = Value(FlatVector::GetData<string_t>(component_vector)[row_idx]);
+	//							recovery_key.emplace_back(names[key_idx], component);
+	//						}
+	//						appender.Append(Value::STRUCT(recovery_key));
+	//					}
+	//
+	//					appender.Append(string_t(row_error_msg));
+	//					appender.EndRow();
+	//				}
+	//				appender.Close();
+	//			}
+	//		}
+	//
+	//		// Now slice the insert chunk to only include the succesful rows
+	//		insert_chunk.Slice(succesful_rows, sel_size);
+	//	}
+	parse_chunk.Reset();
+	return true;
+}
+
+void CSVScanner::Parse(DataChunk &output_chunk, VerificationPositions &verification_positions) {
 	// If necessary we set the start of the buffer, basically where we need to start scanning from
-	bool found_start = SetStart(verification_positions, types);
+	bool found_start = SetStart(verification_positions, output_chunk.GetTypes());
 	if (!found_start) {
 		// Nothing to Scan
 		return;
 	}
 	// Now we do the actual parsing
 	// TODO: Check for errors.
-	Process<ParseChunk>(*this, parse_chunk);
-	total_rows_emmited += parse_chunk.size();
+	if (mode == ParserMode::SNIFFING) {
+		Process<ParseChunk>(*this, output_chunk);
+	} else {
+		Process<ParseChunk>(*this, parse_chunk);
+		Flush(output_chunk, 0, false);
+	}
+
+	total_rows_emmited += output_chunk.size();
 }
 
 string CSVScanner::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names) {

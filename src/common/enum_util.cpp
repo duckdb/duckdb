@@ -3874,34 +3874,6 @@ ParserExtensionResultType EnumUtil::FromString<ParserExtensionResultType>(const 
 }
 
 template<>
-const char* EnumUtil::ToChars<ParserMode>(ParserMode value) {
-	switch(value) {
-	case ParserMode::PARSING:
-		return "PARSING";
-	case ParserMode::SNIFFING_DATATYPES:
-		return "SNIFFING_DATATYPES";
-	case ParserMode::PARSING_HEADER:
-		return "PARSING_HEADER";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
-	}
-}
-
-template<>
-ParserMode EnumUtil::FromString<ParserMode>(const char *value) {
-	if (StringUtil::Equals(value, "PARSING")) {
-		return ParserMode::PARSING;
-	}
-	if (StringUtil::Equals(value, "SNIFFING_DATATYPES")) {
-		return ParserMode::SNIFFING_DATATYPES;
-	}
-	if (StringUtil::Equals(value, "PARSING_HEADER")) {
-		return ParserMode::PARSING_HEADER;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
-}
-
-template<>
 const char* EnumUtil::ToChars<PartitionSortStage>(PartitionSortStage value) {
 	switch(value) {
 	case PartitionSortStage::INIT:

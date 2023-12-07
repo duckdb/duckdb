@@ -338,7 +338,7 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 		// parse a chunk from the CSV file
 		try {
 			parsed_result.Reset();
-			scanner.Parse(parsed_result, ver, sql_types);
+			scanner.Parse(parsed_result, ver);
 		} catch (std::exception &ex) {
 			error_message = "Could not parse CSV: " + string(ex.what());
 			return false;
