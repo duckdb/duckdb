@@ -13,14 +13,34 @@ using namespace duckdb;
 using namespace std;
 
 class TestProgressBar {
+	class TestFailure {
+		using failure_callback = std::function<void()>;
+		public:
+			TestFailure() : callback(nullptr) {}
+		public:
+			bool IsSet() {
+				return callback != nullptr;
+			}
+			void SetError(failure_callback failure) {
+				if (!callback) {
+					callback = failure;
+				}
+			}
+			void ThrowError() {
+				D_ASSERT(IsSet());
+				callback();
+			}
+		private:
+			failure_callback callback;
+	};
 public:
-	explicit TestProgressBar(ClientContext *context) : context(context), correct(true) {
+	explicit TestProgressBar(ClientContext *context) : context(context) {
 	}
 
 	ClientContext *context;
 	atomic<bool> stop;
 	std::thread check_thread;
-	atomic<bool> correct;
+	TestFailure error;
 
 	void CheckProgressThread() {
 		double prev_percentage = -1;
@@ -30,20 +50,28 @@ public:
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 			auto query_progress = context->GetQueryProgress();
 			double new_percentage = query_progress.GetPercentage();
-			if (!(new_percentage >= prev_percentage || new_percentage == -1)) {
-				correct = false;
+			if (new_percentage < prev_percentage && new_percentage != -1) {
+				error.SetError([new_percentage, prev_percentage]() {
+					REQUIRE(new_percentage >= prev_percentage);
+				});
 			}
-			if (!(new_percentage <= 100)) {
-				correct = false;
+			if (new_percentage > 100) {
+				error.SetError([new_percentage]() {
+					REQUIRE(new_percentage <= 100);
+				});
 			}
 			cur_rows_read = query_progress.GetRowsProcesseed();
 			total_cardinality = query_progress.GetTotalRowsToProcess();
 			if (cur_rows_read > total_cardinality) {
-				correct = false;
+				error.SetError([cur_rows_read, total_cardinality]() {
+					REQUIRE(cur_rows_read <= total_cardinality);
+				});
 			}
 		}
 		if (cur_rows_read != total_cardinality) {
-			correct = false;
+			error.SetError([cur_rows_read, total_cardinality]() {
+				REQUIRE(cur_rows_read == total_cardinality);
+			});
 		}
 	}
 	void Start() {
@@ -53,7 +81,11 @@ public:
 	void End() {
 		stop = true;
 		check_thread.join();
-		REQUIRE(correct);
+		if (error.IsSet()) {
+			error.ThrowError();
+		}
+		// This should never be reached, ThrowError() should contain a failing REQUIRE statement
+		REQUIRE(false);
 	}
 };
 
