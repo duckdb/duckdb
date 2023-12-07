@@ -1469,10 +1469,17 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 				break;
 			}
 		}
+		throw NotImplementedException("Unsupported time encoding in Parquet file");
 	case LogicalTypeId::TIME_TZ:
 		if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIME) {
-			if (schema_p.logicalType.TIME.unit.__isset.MICROS) {
+			if (schema_p.logicalType.TIME.unit.__isset.MILLIS) {
+				return make_uniq<CallbackColumnReader<int32_t, dtime_tz_t, ParquetIntToTimeMsTZ>>(
+				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			} else if (schema_p.logicalType.TIME.unit.__isset.MICROS) {
 				return make_uniq<CallbackColumnReader<int64_t, dtime_tz_t, ParquetIntToTimeTZ>>(
+				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			} else if (schema_p.logicalType.TIME.unit.__isset.NANOS) {
+				return make_uniq<CallbackColumnReader<int64_t, dtime_tz_t, ParquetIntToTimeNsTZ>>(
 				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 			}
 		} else if (schema_p.__isset.converted_type) {
@@ -1484,6 +1491,7 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 				break;
 			}
 		}
+		throw NotImplementedException("Unsupported time encoding in Parquet file");
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 		return make_uniq<StringColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);

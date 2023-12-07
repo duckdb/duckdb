@@ -530,7 +530,6 @@ TEST_CASE("Test large number of connections to a single database", "[api]") {
 	REQUIRE(connection_manager.connections.size() == createdConnections);
 
 	for (size_t i = 0; i < toRemove; i++) {
-		auto conn = *connections[0];
 		connections.erase(connections.begin());
 	}
 

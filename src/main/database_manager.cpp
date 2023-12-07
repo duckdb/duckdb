@@ -94,7 +94,12 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabaseFromPath(ClientContex
 
 void DatabaseManager::CheckPathConflict(ClientContext &context, const string &path) {
 	// ensure that we did not already attach a database with the same path
-	if (db_paths.find(path) != db_paths.end()) {
+	bool path_exists;
+	{
+		lock_guard<mutex> path_lock(db_paths_lock);
+		path_exists = db_paths.find(path) != db_paths.end();
+	}
+	if (path_exists) {
 		// check that the database is actually still attached
 		auto entry = GetDatabaseFromPath(context, path);
 		if (entry) {
@@ -109,8 +114,8 @@ void DatabaseManager::InsertDatabasePath(ClientContext &context, const string &p
 		return;
 	}
 
-	lock_guard<mutex> path_lock(db_paths_lock);
 	CheckPathConflict(context, path);
+	lock_guard<mutex> path_lock(db_paths_lock);
 	db_paths.insert(path);
 }
 
@@ -141,7 +146,6 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, string &db_type, A
 
 	// try to extract database type from path
 	if (db_type.empty()) {
-		lock_guard<mutex> path_lock(db_paths_lock);
 		CheckPathConflict(context, info.path);
 
 		DBPathAndType::CheckMagicBytes(info.path, db_type, config);
