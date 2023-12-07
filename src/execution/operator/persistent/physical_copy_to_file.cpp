@@ -47,16 +47,18 @@ public:
 	idx_t writer_offset;
 };
 
-unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext &context,
-                                                                   GlobalSinkState &sink) const {
+unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext &context, GlobalSinkState &sink,
+                                                                   bool already_locked) const {
+	auto &g = sink.Cast<CopyToFunctionGlobalState>();
 	idx_t this_file_offset;
-	{
-		auto &g = sink.Cast<CopyToFunctionGlobalState>();
+	if (already_locked) {
+		this_file_offset = g.last_file_offset++;
+	} else {
 		lock_guard<mutex> glock(g.lock);
 		this_file_offset = g.last_file_offset++;
 	}
 	auto &fs = FileSystem::GetFileSystem(context);
-	string output_path(filename_pattern.CreateFilename(fs, file_path, function.extension, this_file_offset));
+	string output_path(filename_pattern.CreateFilename(fs, file_path, this_file_offset));
 	if (fs.FileExists(output_path) && !overwrite_or_ignore) {
 		throw IOException("%s exists! Enable OVERWRITE_OR_IGNORE option to force writing", output_path);
 	}
@@ -122,7 +124,6 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-
 void PhysicalCopyToFile::MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto file_path = tmp_file_path.substr(0, tmp_file_path.length() - 4);
@@ -183,16 +184,16 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 		lock_guard<mutex> glock(g.lock);
 		if (take_ownership) {
 			// This thread has been assigned to take ownership of the current gstate
-			if (g.sinks_finished != g.sinks_started) {
-				continue; // Spinlock until all threads that started writing to this gstate are done
+			if (g.sinks_finished == g.sinks_started) {
+				// Threads are done, take ownership of current gstate and create a new gstate
+				owned_gstate = std::move(gstate);
+				gstate = CreateFileState(context.client, *sink_state, true);
+				g.file_done = false;
+				g.sinks_started = 0;
+				g.sinks_finished = 0;
+				take_ownership = false;
 			}
-
-			// Threads are done, take ownership of current gstate and create a new gstate
-			owned_gstate = std::move(gstate);
-			gstate = CreateFileState(context.client, *sink_state);
-			g.sinks_started = 0;
-			g.sinks_finished = 0;
-			take_ownership = false;
+			continue;
 		}
 
 		if (g.file_done) {
@@ -277,10 +278,10 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 
 		for (idx_t i = 0; i < partitions.size(); i++) {
 			string hive_path = GetDirectory(partition_columns, names, partition_key_map[i]->values, trimmed_path, fs);
-			string full_path(filename_pattern.CreateFilename(fs, hive_path, function.extension, l.writer_offset));
+			string full_path(filename_pattern.CreateFilename(fs, hive_path, l.writer_offset));
 			if (fs.FileExists(full_path) && !overwrite_or_ignore) {
-				throw IOException("failed to create " + full_path +
-				                  ", file exists! Enable OVERWRITE_OR_IGNORE option to force writing");
+				throw IOException(
+				    "failed to create %s, file exists! Enable OVERWRITE_OR_IGNORE option to force writing", full_path);
 			}
 			// Create a writer for the current file
 			auto fun_data_global = function.copy_to_initialize_global(context.client, *bind_data, full_path);
@@ -293,16 +294,17 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 			function.copy_to_combine(context, *bind_data, *fun_data_global, *fun_data_local);
 			function.copy_to_finalize(context.client, *bind_data, *fun_data_global);
 		}
-
-		return SinkCombineResultType::FINISHED;
-	}
-
-	if (function.copy_to_combine) {
-		function.copy_to_combine(context, *bind_data, per_thread_output ? *l.global_state : *g.global_state,
-		                         *l.local_state);
-
+	} else if (function.copy_to_combine) {
 		if (per_thread_output) {
+			// For PER_THREAD_OUTPUT, we can combine/finalize immediately
+			function.copy_to_combine(context, *bind_data, *l.global_state, *l.local_state);
 			function.copy_to_finalize(context.client, *bind_data, *l.global_state);
+		} else if (file_size_bytes.IsValid()) {
+			// File in global state may change with FILE_SIZE_BYTES, need to grab lock
+			lock_guard<mutex> guard(g.lock);
+			function.copy_to_combine(context, *bind_data, *g.global_state, *l.local_state);
+		} else {
+			function.copy_to_combine(context, *bind_data, *g.global_state, *l.local_state);
 		}
 	}
 

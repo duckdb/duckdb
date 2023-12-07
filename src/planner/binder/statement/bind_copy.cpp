@@ -83,6 +83,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	bool use_tmp_file = true;
 	bool overwrite_or_ignore = false;
 	FilenamePattern filename_pattern;
+	filename_pattern.SetExtension(stmt.info->format);
 	bool user_set_use_tmp_file = false;
 	bool per_thread_output = false;
 	optional_idx file_size_bytes;
@@ -104,6 +105,11 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			}
 			filename_pattern.SetFilenamePattern(
 			    option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
+		} else if (loption == "file_extension") {
+			if (option.second.empty()) {
+				throw IOException("FILE_EXTENSION cannot be empty");
+			}
+			filename_pattern.SetExtension(option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
 		} else if (loption == "per_thread_output") {
 			per_thread_output = GetBooleanArg(context, option.second);
 		} else if (loption == "file_size_bytes") {

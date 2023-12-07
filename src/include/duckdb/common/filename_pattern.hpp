@@ -27,13 +27,15 @@ public:
 
 public:
 	void SetFilenamePattern(const string &pattern);
-	string CreateFilename(FileSystem &fs, const string &path, const string &extension, idx_t offset) const;
+	void SetExtension(const string &extension);
+	string CreateFilename(FileSystem &fs, const string &path, idx_t offset) const;
 
 	void Serialize(Serializer &serializer) const;
 	static FilenamePattern Deserialize(Deserializer &deserializer);
 
 private:
 	string _base;
+	string _extension;
 	idx_t _pos;
 	bool _uuid;
 };
