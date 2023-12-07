@@ -21,8 +21,6 @@ public:
 
 class BufferedCollectorLocalState : public LocalSinkState {
 public:
-	unique_ptr<ColumnDataCollection> collection;
-	ColumnDataAppendState append_state;
 	bool blocked = false;
 };
 
