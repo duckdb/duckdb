@@ -44,7 +44,10 @@ unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
 	auto lock = LockContext();
 	CheckExecutableInternal(*lock);
 	buffered_data->ReplenishBuffer(*this, *lock);
-	auto chunk = buffered_data->Scan();
+	unique_ptr<DataChunk> chunk = nullptr;
+	if (success) {
+		chunk = buffered_data->Scan();
+	}
 	if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
 		Close();
 		return nullptr;
