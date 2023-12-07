@@ -30,12 +30,15 @@ struct ParseValues {
 
 	inline static bool Process(CSVScanner &scanner, vector<TupleOfValues> &sniffed_values, char current_char,
 	                           idx_t current_pos) {
-		auto &sniffing_state_machine = scanner.GetStateMachineSniff();
+		auto &sniffing_state_machine = scanner.GetStateMachine();
 		auto &states = scanner.states;
 
-		if ((sniffing_state_machine.dialect_options.new_line == NewLineIdentifier::SINGLE &&
-		     (current_char == '\r' || current_char == '\n')) ||
-		    (sniffing_state_machine.dialect_options.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
+		//		if ((sniffing_state_machine.dialect_options.new_line == NewLineIdentifier::SINGLE &&
+		//		     (current_char == '\r' || current_char == '\n')) ||
+		//		    (sniffing_state_machine.dialect_options.new_line == NewLineIdentifier::CARRY_ON && current_char ==
+		//'\n')) { 			scanner.rows_read++;
+		//		}
+		if ((current_char == '\r' || current_char == '\n')) {
 			scanner.rows_read++;
 		}
 
@@ -53,8 +56,6 @@ struct ParseValues {
 		if (states.previous_state == CSVState::DELIMITER || (states.previous_state == CSVState::RECORD_SEPARATOR) ||
 		    (states.current_state != CSVState::RECORD_SEPARATOR && carriage_return)) {
 			// Started a new value
-			// Check if it's UTF-8
-			scanner.VerifyUTF8();
 			if (scanner.value.empty() || scanner.value == sniffing_state_machine.options.null_str) {
 				// We set empty == null value
 				sniffed_values[scanner.cur_rows].values.push_back(Value(LogicalType::VARCHAR));
@@ -85,7 +86,6 @@ struct ParseValues {
 			sniffed_values[scanner.cur_rows].values.push_back(Value(scanner.value));
 		}
 		if (scanner.cur_rows < sniffed_values.size() && scanner.states.current_state != CSVState::EMPTY_LINE) {
-			scanner.VerifyUTF8();
 			sniffed_values[scanner.cur_rows].line_number = scanner.rows_read;
 			if (!sniffed_values[scanner.cur_rows].set) {
 				sniffed_values[scanner.cur_rows].position = scanner.line_start_pos;

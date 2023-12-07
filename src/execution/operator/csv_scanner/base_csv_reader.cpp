@@ -255,16 +255,16 @@
 ////	// convert the columns in the parsed chunk to the types of the table
 ////	insert_chunk.SetCardinality(parse_chunk);
 ////	if (reader_data.column_ids.empty() && !reader_data.empty_columns) {
-////		throw InternalException("BaseCSVReader::Flush called on a CSV reader that was not correctly initialized. Call
-///" /		                        "MultiFileReader::InitializeReader or InitializeProjection"); /	} /
-///D_ASSERT(reader_data.column_ids.size() == reader_data.column_mapping.size()); /	for (idx_t c = 0; c <
-///reader_data.column_ids.size(); c++) { /		auto col_idx = reader_data.column_ids[c]; /		auto result_idx =
-///reader_data.column_mapping[c]; /		auto &parse_vector = parse_chunk.data[col_idx]; /		auto &result_vector =
-///insert_chunk.data[result_idx]; /		auto &type = result_vector.GetType(); /		if (type.id() ==
-///LogicalTypeId::VARCHAR) { /			// target type is varchar: no need to convert /			// just test that all
-///strings are valid utf-8 strings /			VerifyUTF8(col_idx); /			// reinterpret rather than reference so
-///we can deal with user-defined types /			result_vector.Reinterpret(parse_vector); /		} else { /
-///string error_message; /			bool success; /			idx_t line_error = 0;
+////		throw InternalException("BaseCSVReader::Flush called on a CSV reader that was not correctly initialized.
+///Call " /		                        "MultiFileReader::InitializeReader or InitializeProjection"); /	} /
+/// D_ASSERT(reader_data.column_ids.size() == reader_data.column_mapping.size()); /	for (idx_t c = 0; c <
+/// reader_data.column_ids.size(); c++) { /		auto col_idx = reader_data.column_ids[c]; /		auto result_idx =
+/// reader_data.column_mapping[c]; /		auto &parse_vector = parse_chunk.data[col_idx]; /		auto &result_vector
+/// = insert_chunk.data[result_idx]; /		auto &type = result_vector.GetType(); /		if (type.id() ==
+/// LogicalTypeId::VARCHAR) { /			// target type is varchar: no need to convert /			// just test that all
+/// strings are valid utf-8 strings /			VerifyUTF8(col_idx); /			// reinterpret rather than reference so
+/// we can deal with user-defined types /			result_vector.Reinterpret(parse_vector); /		} else { /
+/// string error_message; /			bool success; /			idx_t line_error = 0;
 ////			bool target_type_not_varchar = false;
 ////			if (!options.dialect_options.date_format[LogicalTypeId::DATE].GetValue().Empty() &&
 ////			    type.id() == LogicalTypeId::DATE) {
@@ -279,10 +279,10 @@
 ////			} else if (options.decimal_separator != "." &&
 ////			           (type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE)) {
 ////				success = TryCastFloatingVectorCommaSeparated(options, parse_vector, result_vector,
-///parse_chunk.size(), /				                                              error_message, type, line_error);
+/// parse_chunk.size(), /				                                              error_message, type, line_error);
 ////			} else if (options.decimal_separator != "." && type.id() == LogicalTypeId::DECIMAL) {
 ////				success = TryCastDecimalVectorCommaSeparated(options, parse_vector, result_vector,
-///parse_chunk.size(), /				                                             error_message, type);
+/// parse_chunk.size(), /				                                             error_message, type);
 ////			} else {
 ////				// target type is not varchar: perform a cast
 ////				target_type_not_varchar = true;

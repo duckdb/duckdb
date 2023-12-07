@@ -26,9 +26,10 @@ CSVScanner::CSVScanner(ClientContext &context, CSVReaderOptions &options) : mode
 }
 
 CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
-                       CSVIterator csv_iterator_p)
-    : csv_iterator(csv_iterator_p), buffer_manager(std::move(buffer_manager_p)), state_machine(state_machine_p),
-      mode(ParserMode::PARSING) {
+                       CSVIterator csv_iterator_p, idx_t scanner_id_p)
+    : scanner_id(scanner_id_p), csv_iterator(csv_iterator_p), buffer_manager(std::move(buffer_manager_p)),
+      state_machine(state_machine_p), mode(ParserMode::PARSING) {
+	cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
 	vector<LogicalType> varchar_types(state_machine->options.dialect_options.num_cols, LogicalType::VARCHAR);
 	parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), varchar_types);
 }
@@ -95,7 +96,7 @@ void CSVScanner::SkipHeader() {
 	Process<SkipUntilNewLine>(*this, csv_iterator.buffer_pos);
 }
 
-bool CSVScanner::SetStart(VerificationPositions &verification_positions, const vector<LogicalType> &types) {
+bool CSVScanner::SetStart(VerificationPositions &verification_positions) {
 	if (start_set) {
 		return true;
 	}
@@ -122,7 +123,7 @@ bool CSVScanner::SetStart(VerificationPositions &verification_positions, const v
 		idx_t position_being_checked = csv_iterator.buffer_pos;
 		vector<TupleOfValues> tuples(1);
 		Process<ParseValues>(*this, tuples);
-		if (!tuples.empty()) {
+		if (tuples.empty()) {
 			// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
 			csv_iterator.buffer_pos = position_being_checked;
 			continue;
@@ -137,7 +138,7 @@ bool CSVScanner::SetStart(VerificationPositions &verification_positions, const v
 		// 2. We try to cast all columns to the correct types
 		bool all_cast = true;
 		for (idx_t i = 0; i < values.size(); i++) {
-			if (!values[0].TryCastAs(buffer_manager->context, types[i])) {
+			if (!values[i].TryCastAs(buffer_manager->context, types[i])) {
 				// We could not cast it to the right type, this is probably not the correct line start.
 				all_cast = false;
 				break;
@@ -366,7 +367,7 @@ bool CSVScanner::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_add_l
 
 void CSVScanner::Parse(DataChunk &output_chunk, VerificationPositions &verification_positions) {
 	// If necessary we set the start of the buffer, basically where we need to start scanning from
-	bool found_start = SetStart(verification_positions, output_chunk.GetTypes());
+	bool found_start = SetStart(verification_positions);
 	if (!found_start) {
 		// Nothing to Scan
 		return;
@@ -483,15 +484,8 @@ CSVStateMachine &CSVScanner::GetStateMachine() {
 	return *state_machine;
 }
 
-void CSVScanner::VerifyUTF8() {
-	auto utf_type = Utf8Proc::Analyze(value.c_str(), value.size());
-	if (utf_type == UnicodeType::INVALID) {
-		int64_t error_line = cur_rows;
-		throw InvalidInputException("Error in file \"%s\" at line %llu: "
-		                            "%s. Parser options:\n%s",
-		                            state_machine->options.file_path, error_line,
-		                            ErrorManager::InvalidUnicodeError(value, "CSV file"),
-		                            state_machine->options.ToString());
-	}
+bool CSVScanner::Last() {
+	D_ASSERT(cur_buffer_handle);
+	return cur_buffer_handle->is_last_buffer && csv_iterator.buffer_pos + 1 == cur_buffer_handle->actual_size;
 }
 } // namespace duckdb

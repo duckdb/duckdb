@@ -29,8 +29,6 @@ struct ParseChunk {
 		if (states.previous_state == CSVState::DELIMITER || (states.previous_state == CSVState::RECORD_SEPARATOR) ||
 		    (states.current_state != CSVState::RECORD_SEPARATOR && carriage_return)) {
 			// Started a new value
-			// Check if it's UTF-8 (Or not?)
-			scanner.VerifyUTF8();
 			if (scanner.column_count >= parse_chunk.ColumnCount() && sniffing_state_machine.options.ignore_errors) {
 				return false;
 			}
@@ -84,8 +82,7 @@ struct ParseChunk {
 		auto &sniffing_state_machine = scanner.GetStateMachineSniff();
 		auto &states = scanner.states;
 
-		if (scanner.cur_rows < STANDARD_VECTOR_SIZE && states.current_state != CSVState::EMPTY_LINE) {
-			scanner.VerifyUTF8();
+		if (scanner.cur_rows < STANDARD_VECTOR_SIZE && states.current_state != CSVState::EMPTY_LINE && scanner.Last()) {
 			if (scanner.column_count < parse_chunk.ColumnCount() || !sniffing_state_machine.options.ignore_errors) {
 				auto &v = parse_chunk.data[scanner.column_count++];
 				auto parse_data = FlatVector::GetData<string_t>(v);

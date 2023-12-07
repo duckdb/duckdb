@@ -74,7 +74,7 @@ public:
 
 	//! Constructor used when parsing
 	explicit CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
-	                    CSVIterator csv_iterator);
+	                    CSVIterator csv_iterator, idx_t scanner_id);
 
 	//! This functions templates an operation over the CSV File
 	template <class OP, class T>
@@ -136,9 +136,6 @@ public:
 	//! Id of the scanner, used to know order in which data is in the CSV file(s)
 	const idx_t scanner_id = 0;
 
-	//! Verifies if value is UTF8
-	void VerifyUTF8();
-
 	bool Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_add_line);
 
 	//! Parses data into a output_chunk
@@ -169,6 +166,8 @@ public:
 	vector<string> names;
 	vector<LogicalType> types;
 
+	bool Last();
+
 private:
 	//! Where this CSV Scanner starts
 	CSVIterator csv_iterator;
@@ -191,7 +190,7 @@ private:
 	//! Number of rows emmited by this scanner
 	idx_t total_rows_emmited = 0;
 	//! This function walks the buffer until the first new valid line.
-	bool SetStart(VerificationPositions &verification_positions, const vector<LogicalType> &types);
+	bool SetStart(VerificationPositions &verification_positions);
 	//! Skips empty lines when reading the first buffer
 	void SkipEmptyLines();
 	//! Skips header when reading the first buffer

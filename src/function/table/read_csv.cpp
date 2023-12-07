@@ -278,6 +278,8 @@ public:
 
 	shared_ptr<CSVStateMachine> state_machine;
 
+	idx_t scanner_id = 0;
+
 public:
 	idx_t MaxThreads() const override;
 
@@ -449,7 +451,8 @@ unique_ptr<CSVScanner> CSVGlobalState::Next(ClientContext &context, const ReadCS
 		// we are done
 		return nullptr;
 	}
-	auto csv_scanner = make_uniq<CSVScanner>(buffer_manager, state_machine, scanner_boundaries.GetIterator());
+	auto csv_scanner =
+	    make_uniq<CSVScanner>(buffer_manager, state_machine, scanner_boundaries.GetIterator(), scanner_id++);
 
 	// FIXME: yuck
 	csv_scanner->file_path = bind_data.files.front();
