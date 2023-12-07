@@ -31,7 +31,8 @@ public:
 
 public:
 	//! default_value
-	const unique_ptr<ParsedExpression> &DefaultValue() const;
+	const ParsedExpression &DefaultValue() const;
+	bool HasDefaultValue() const;
 	void SetDefaultValue(unique_ptr<ParsedExpression> default_value);
 
 	//! type
