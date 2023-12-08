@@ -22,6 +22,14 @@ struct CSVStates {
 		previous_state = initial_state;
 		pre_previous_state = initial_state;
 	}
+	inline bool NewValue() {
+		return previous_state == CSVState::DELIMITER;
+	}
+
+	inline bool NewRow() {
+		return (previous_state == CSVState::RECORD_SEPARATOR && current_state != CSVState::EMPTY_LINE) ||
+		       (current_state != CSVState::RECORD_SEPARATOR && previous_state == CSVState::CARRIAGE_RETURN);
+	}
 	CSVState current_state = CSVState::EMPTY_LINE;
 	CSVState previous_state = CSVState::EMPTY_LINE;
 	CSVState pre_previous_state = CSVState::EMPTY_LINE;

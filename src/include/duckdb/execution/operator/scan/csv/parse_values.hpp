@@ -21,7 +21,7 @@ struct TupleOfValues {
 
 //! Templated Function that process a CSV buffer into a vector of sniffed values
 struct ParseValues {
-	inline static void Initialize(CSVScanner &scanner) {
+	inline static void Initialize(CSVScanner &scanner, idx_t cur_pos) {
 		scanner.states.Initialize(CSVState::STANDARD);
 		scanner.cur_rows = 0;
 		scanner.value = "";

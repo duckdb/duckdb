@@ -256,7 +256,7 @@
 ////	insert_chunk.SetCardinality(parse_chunk);
 ////	if (reader_data.column_ids.empty() && !reader_data.empty_columns) {
 ////		throw InternalException("BaseCSVReader::Flush called on a CSV reader that was not correctly initialized.
-///Call " /		                        "MultiFileReader::InitializeReader or InitializeProjection"); /	} /
+/// Call " /		                        "MultiFileReader::InitializeReader or InitializeProjection"); /	} /
 /// D_ASSERT(reader_data.column_ids.size() == reader_data.column_mapping.size()); /	for (idx_t c = 0; c <
 /// reader_data.column_ids.size(); c++) { /		auto col_idx = reader_data.column_ids[c]; /		auto result_idx =
 /// reader_data.column_mapping[c]; /		auto &parse_vector = parse_chunk.data[col_idx]; /		auto &result_vector

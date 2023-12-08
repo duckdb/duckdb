@@ -63,6 +63,56 @@ struct CSVIterator {
 	idx_t iterator_id = 0;
 };
 
+//! This represents a CSV Value in a buffer
+struct CSVValue {
+public:
+	CSVValue(char *buffer_ptr_p, idx_t buffer_pos_p, idx_t buffer_length_p)
+	    : buffer_ptr(buffer_ptr_p), buffer_pos(buffer_pos_p), buffer_length(buffer_length_p) {};
+	//! Converts value to string_t
+	string_t GetStringT() {
+		//		if (!buffer_ptr_2){
+		return string_t(&buffer_ptr[buffer_pos], length);
+		//		}
+		//		D_ASSERT(0);
+		//		// Check our value length is not bigger than a Buffer size, since this would mean that we have to deal
+		//with more than two buffers 		if (length > CSVBuffer::CSV_BUFFER_SIZE + buffer_length-buffer_pos){
+		//			// If someone runs into this with valid data, I'll personally send them a DuckDB cap.
+		//			throw NotImplementedException("This CSV file has a value of size: %llu. Values over %llu bytes which not
+		//yet accepted", CSVBuffer::CSV_BUFFER_SIZE);
+		//		}
+		//		overlap_value.reserve(length);
+		//		// Construct the string that holds the overlap value
+		//		for (idx_t  i = buffer_pos; i < buffer_length; i++){
+		//			overlap_value[i] = buffer_ptr[i];
+		//		}
+		//		idx_t buffer_2_length = length - (buffer_length - buffer_pos);
+		//		auto buffer_ptr_2_char = (char*)buffer_ptr_2;
+		//		for (idx_t  i = 0; i <  buffer_2_length; i++){
+		//			overlap_value[i] = buffer_ptr_2_char[i];
+		//		}
+		//		return string_t(overlap_value);
+	};
+
+	//! If this value spans over multiple buffers
+	bool OverBuffer() {
+		return buffer_ptr_2;
+	}
+	//! Buffer Pointer
+	const char *buffer_ptr;
+	//! Buffer Position
+	const idx_t buffer_pos;
+	//! The length of the first buffer
+	const idx_t buffer_length;
+	//! Length of the string
+	idx_t length = 0;
+	//! If this value spans over more than one buffer
+	uintptr_t buffer_ptr_2 = 0;
+
+private:
+	//! When we have the
+	// string overlap_value;
+};
+
 //! The CSV Scanner is what iterates over CSV Buffers
 class CSVScanner {
 public:
@@ -83,7 +133,6 @@ public:
 			//! Nothing to process, as we exhausted the bytes we can process in this scanner
 			return false;
 		}
-		OP::Initialize(machine);
 		//! If current buffer is not set we try to get a new one
 		if (!cur_buffer_handle) {
 			csv_iterator.buffer_pos = 0;
@@ -93,9 +142,9 @@ public:
 			cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
 			D_ASSERT(cur_buffer_handle);
 		}
+		OP::Initialize(machine, csv_iterator.buffer_pos);
 		while (cur_buffer_handle) {
 			char *buffer_handle_ptr = cur_buffer_handle->Ptr();
-			value_pos = csv_iterator.buffer_pos;
 			while (csv_iterator.buffer_pos < cur_buffer_handle->actual_size) {
 				if (OP::Process(machine, result, buffer_handle_ptr[csv_iterator.buffer_pos], csv_iterator.buffer_pos) ||
 				    csv_iterator.bytes_to_read == 0) {
@@ -129,10 +178,10 @@ public:
 
 	CSVStates states;
 
-	//! String Value
+	//! String Values per [row|column]
+	vector<CSVValue> values[STANDARD_VECTOR_SIZE];
 	string value;
-	idx_t value_pos;
-	idx_t length;
+
 	idx_t rows_read = 0;
 	idx_t line_start_pos = 0;
 
@@ -173,6 +222,7 @@ public:
 	//! Unique pointer to the buffer_handle, this is unique per scanner, since it also contains the necessary counters
 	//! To offload buffers to disk if necessary
 	unique_ptr<CSVBufferHandle> cur_buffer_handle;
+
 private:
 	//! Where this CSV Scanner starts
 	CSVIterator csv_iterator;

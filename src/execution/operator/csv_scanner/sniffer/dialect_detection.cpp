@@ -4,7 +4,7 @@
 namespace duckdb {
 
 struct SniffDialect {
-	inline static void Initialize(CSVScanner &scanner) {
+	inline static void Initialize(CSVScanner &scanner, idx_t cur_pos) {
 		scanner.states.Initialize(CSVState::EMPTY_LINE);
 		scanner.cur_rows = 0;
 		scanner.column_count = 1;

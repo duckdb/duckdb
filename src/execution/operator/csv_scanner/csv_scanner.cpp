@@ -36,7 +36,7 @@ CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr
 
 //! Skips all empty lines, until a non-empty line shows up
 struct ProcessSkipEmptyLines {
-	inline static void Initialize(CSVScanner &scanner) {
+	inline static void Initialize(CSVScanner &scanner, idx_t cur_pos) {
 		scanner.states.Initialize(CSVState::STANDARD);
 	}
 	inline static bool Process(CSVScanner &scanner, idx_t &result_pos, char current_char, idx_t current_pos) {
@@ -67,7 +67,7 @@ void CSVScanner::SkipEmptyLines() {
 
 //! Moves the buffer until the next new line
 struct SkipUntilNewLine {
-	inline static void Initialize(CSVScanner &scanner) {
+	inline static void Initialize(CSVScanner &scanner, idx_t cur_pos) {
 		scanner.states.Initialize(CSVState::STANDARD);
 	}
 	inline static bool Process(CSVScanner &scanner, idx_t &result_pos, char current_char, idx_t current_pos) {
@@ -488,4 +488,5 @@ bool CSVScanner::Last() {
 	D_ASSERT(cur_buffer_handle);
 	return cur_buffer_handle->is_last_buffer && csv_iterator.buffer_pos + 1 == cur_buffer_handle->actual_size;
 }
+
 } // namespace duckdb
