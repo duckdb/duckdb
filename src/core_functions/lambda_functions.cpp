@@ -160,9 +160,9 @@ struct ListFilterFunctor {
 	}
 };
 
-vector<LambdaFunctions::LambdaColumnInfo> LambdaFunctions::GetColumnInfo(DataChunk &args, const idx_t row_count) {
+vector<LambdaFunctions::ColumnInfo> LambdaFunctions::GetColumnInfo(DataChunk &args, const idx_t row_count) {
 
-	vector<LambdaColumnInfo> data;
+	vector<ColumnInfo> data;
 	// skip the input list and then insert all remaining input vectors
 	for (idx_t i = 1; i < args.ColumnCount(); i++) {
 		data.emplace_back(args.data[i]);
@@ -171,10 +171,10 @@ vector<LambdaFunctions::LambdaColumnInfo> LambdaFunctions::GetColumnInfo(DataChu
 	return data;
 }
 
-vector<reference<LambdaFunctions::LambdaColumnInfo>>
-LambdaFunctions::GetInconstantColumnInfo(vector<LambdaFunctions::LambdaColumnInfo> &data) {
+vector<reference<LambdaFunctions::ColumnInfo>>
+LambdaFunctions::GetInconstantColumnInfo(vector<LambdaFunctions::ColumnInfo> &data) {
 
-	vector<reference<LambdaColumnInfo>> inconstant_info;
+	vector<reference<ColumnInfo>> inconstant_info;
 	for (auto &entry : data) {
 		if (entry.vector.get().GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			inconstant_info.push_back(entry);
@@ -183,8 +183,8 @@ LambdaFunctions::GetInconstantColumnInfo(vector<LambdaFunctions::LambdaColumnInf
 	return inconstant_info;
 }
 
-void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::LambdaColumnInfo &column_info,
-                       const vector<LambdaFunctions::LambdaColumnInfo> &column_infos, const Vector &index_vector,
+void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::ColumnInfo &column_info,
+                       const vector<LambdaFunctions::ColumnInfo> &column_infos, const Vector &index_vector,
                        LambdaExecuteInfo &info) {
 
 	info.input_chunk.SetCardinality(elem_cnt);
@@ -267,7 +267,7 @@ LogicalType LambdaFunctions::BindBinaryLambda(const idx_t parameter_idx, const L
 	}
 }
 
-LogicalType LambdaFunctions::BindReduceLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
+LogicalType LambdaFunctions::BindTertiaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
 	switch (parameter_idx) {
 	case 0:
 		return list_child_type;
@@ -281,9 +281,9 @@ LogicalType LambdaFunctions::BindReduceLambda(const idx_t parameter_idx, const L
 }
 
 template <class FUNCTION_FUNCTOR>
-void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
+void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result, bool is_reduce) {
+	LambdaFunctions::LambdaInfo lambda_info(args);
 
-	auto row_count = args.size();
 	Vector &list_column = args.data[0];
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -299,29 +299,36 @@ void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &bind_info = func_expr.bind_info->Cast<ListLambdaBindData>();
 	auto &lambda_expr = bind_info.lambda_expr;
-	bool has_side_effects = lambda_expr->HasSideEffects();
+	lambda_info.has_side_effects = lambda_expr->HasSideEffects();
+	lambda_info.has_index = bind_info.has_index;
 
 	// get the list column entries
 	UnifiedVectorFormat list_column_format;
-	list_column.ToUnifiedFormat(row_count, list_column_format);
+	list_column.ToUnifiedFormat(lambda_info.row_count, list_column_format);
 	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_column_format);
 
 	// special-handling for the child_vector
 	auto child_vector_size = ListVector::GetListSize(list_column);
 	auto &child_vector = ListVector::GetEntry(list_column);
-	LambdaFunctions::LambdaColumnInfo child_info(child_vector);
+	LambdaFunctions::ColumnInfo child_info(child_vector);
 	child_vector.ToUnifiedFormat(child_vector_size, child_info.format);
 
 	// get the lambda column data for all other input vectors
-	auto column_infos = LambdaFunctions::GetColumnInfo(args, row_count);
+	auto column_infos = LambdaFunctions::GetColumnInfo(args, lambda_info.row_count);
 	auto inconstant_column_infos = LambdaFunctions::GetInconstantColumnInfo(column_infos);
 
+	if (is_reduce) {
+		LambdaFunctions::ReduceInfo reduce_info(list_entries, list_column_format, child_vector, result, column_infos);
+		LambdaFunctions::PrepareReduce(lambda_expr, result_validity, lambda_info, reduce_info, state);
+		return;
+	}
+
 	// get the expression executor
-	LambdaExecuteInfo execute_info(state.GetContext(), *lambda_expr, args, bind_info.has_index, child_vector);
+	LambdaExecuteInfo execute_info(state.GetContext(), *lambda_expr, args, lambda_info.has_index, child_vector);
 
 	// get list_filter specific info
 	ListFilterInfo list_filter_info;
-	FUNCTION_FUNCTOR::ReserveNewLengths(list_filter_info.entry_lengths, row_count);
+	FUNCTION_FUNCTOR::ReserveNewLengths(list_filter_info.entry_lengths, lambda_info.row_count);
 
 	// additional index vector
 	Vector index_vector(LogicalType::BIGINT);
@@ -329,7 +336,7 @@ void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
 	// loop over the child entries and create chunks to be executed by the expression executor
 	idx_t elem_cnt = 0;
 	idx_t offset = 0;
-	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+	for (idx_t row_idx = 0; row_idx < lambda_info.row_count; row_idx++) {
 
 		auto list_idx = list_column_format.sel->get_index(row_idx);
 		const auto &list_entry = list_entries[list_idx];
@@ -371,7 +378,7 @@ void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
 			}
 
 			// set the index vector
-			if (bind_info.has_index) {
+			if (lambda_info.has_index) {
 				index_vector.SetValue(elem_cnt, Value::BIGINT(child_idx + 1));
 			}
 
@@ -385,7 +392,7 @@ void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
 
 	FUNCTION_FUNCTOR::AppendResult(result, lambda_vector, elem_cnt, result_entries, list_filter_info, execute_info);
 
-	if (args.AllConstant() && !has_side_effects) {
+	if (lambda_info.is_all_constant && !lambda_info.has_side_effects) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
@@ -416,11 +423,15 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context,
 }
 
 void LambdaFunctions::ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	ExecuteLambda<ListTransformFunctor>(args, state, result);
+	ExecuteLambda<ListTransformFunctor>(args, state, result, false);
 }
 
 void LambdaFunctions::ListFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	ExecuteLambda<ListFilterFunctor>(args, state, result);
+	ExecuteLambda<ListFilterFunctor>(args, state, result, false);
+}
+
+void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	ExecuteLambda<ListFilterFunctor>(args, state, result, true);
 }
 
 } // namespace duckdb

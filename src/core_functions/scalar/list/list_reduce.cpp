@@ -5,32 +5,75 @@
 
 namespace duckdb {
 
-static void ExecuteReduce(idx_t loops, std::vector<idx_t> &active_rows, const list_entry_t *list_entries,
-                          Vector &result, Vector &left_slice, UnifiedVectorFormat &list_column_format,
-                          Vector &child_vector, ClientContext &context, const Expression &lambda_expr,
-                          const bool has_index, DataChunk &result_chunk,
-                          const vector<LambdaFunctions::LambdaColumnInfo> &column_infos) {
-	SelectionVector right_sel(active_rows.size());
-	SelectionVector left_sel(active_rows.size());
-	SelectionVector active_rows_sel(active_rows.size());
+struct ReduceExecuteInfo {
+	ReduceExecuteInfo(LambdaFunctions::ReduceInfo &reduce_info, idx_t row_count, bool has_index, ValidityMask &result_validity,
+	                  Vector &vector) : left_slice(vector) {
+		SelectionVector left_vector(row_count);
+		active_rows.resize(row_count);
+
+		idx_t old_count = 0;
+		idx_t new_count = 0;
+
+		// Initialize the left vector from list entries and the active rows
+		auto it = active_rows.begin();
+		while (it != active_rows.end()) {
+			auto list_column_format_index = reduce_info.list_column_format.sel->get_index(old_count);
+			if (reduce_info.list_column_format.validity.RowIsValid(list_column_format_index)) {
+				if (reduce_info.list_entries[list_column_format_index].length == 0) {
+					throw ParameterNotAllowedException("Cannot perform list_reduce on an empty input list");
+				}
+				left_vector.set_index(new_count, reduce_info.list_entries[list_column_format_index].offset);
+				active_rows[new_count] = old_count;
+				new_count++;
+				it++;
+			} else {
+				// Remove the invalid rows
+				result_validity.SetInvalid(old_count);
+				active_rows.erase(it);
+			}
+			old_count++;
+		}
+
+		left_slice.Slice(left_vector, new_count);
+
+		if (has_index) {
+			input_types.push_back(LogicalType::BIGINT);
+		}
+		input_types.push_back(left_slice.GetType());
+		input_types.push_back(left_slice.GetType());
+		for (auto &entry : reduce_info.column_infos) {
+			input_types.push_back(entry.vector.get().GetType());
+		}
+	};
+
+	vector<idx_t> active_rows;
+	Vector left_slice;
+	unique_ptr<ExpressionExecutor> expr_executor;
+	vector<LogicalType> input_types;
+};
+
+static void ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFunctions::LambdaInfo &info, DataChunk &result_chunk, LambdaFunctions::ReduceInfo &reduce_info) {
+	SelectionVector right_sel(execute_info.active_rows.size());
+	SelectionVector left_sel(execute_info.active_rows.size());
+	SelectionVector active_rows_sel(execute_info.active_rows.size());
 
 	idx_t old_count = 0;
 	idx_t new_count = 0;
 
 	// create selection vectors for the left and right slice
-	auto it = active_rows.begin();
-	while (it != active_rows.end()) {
-		auto list_column_format_index = list_column_format.sel->get_index(*it);
-		if (list_entries[list_column_format_index].length > loops + 1) {
-			right_sel.set_index(new_count, list_entries[list_column_format_index].offset + loops + 1);
+	auto it = execute_info.active_rows.begin();
+	while (it != execute_info.active_rows.end()) {
+		auto list_column_format_index = reduce_info.list_column_format.sel->get_index(*it);
+		if (reduce_info.list_entries[list_column_format_index].length > loops + 1) {
+			right_sel.set_index(new_count, reduce_info.list_entries[list_column_format_index].offset + loops + 1);
 			left_sel.set_index(new_count, old_count);
 			active_rows_sel.set_index(new_count, *it);
 
 			new_count++;
 			it++;
 		} else {
-			result.SetValue(*it, left_slice.GetValue(old_count));
-			active_rows.erase(it);
+			reduce_info.result.SetValue(*it, execute_info.left_slice.GetValue(old_count));
+			execute_info.active_rows.erase(it);
 		}
 		old_count++;
 	}
@@ -43,42 +86,30 @@ static void ExecuteReduce(idx_t loops, std::vector<idx_t> &active_rows, const li
 	Vector index_vector(Value::BIGINT(loops + 1));
 
 	// slice the left and right slice
-	left_slice.Slice(left_slice, left_sel, new_count);
-	Vector right_slice = Vector(child_vector, right_sel, new_count);
-
-	unique_ptr<ExpressionExecutor> expr_executor = make_uniq<ExpressionExecutor>(context, lambda_expr);
-
-	vector<LogicalType> input_types;
-	if (has_index) {
-		input_types.push_back(LogicalType::BIGINT);
-	}
-	input_types.push_back(right_slice.GetType());
-	input_types.push_back(left_slice.GetType());
-	for (auto &entry : column_infos) {
-		input_types.push_back(entry.vector.get().GetType());
-	}
+	execute_info.left_slice.Slice(execute_info.left_slice, left_sel, new_count);
+	Vector right_slice(reduce_info.child_vector, right_sel, new_count);
 
 	// create the input chunk
 	DataChunk input_chunk;
-	input_chunk.InitializeEmpty(input_types);
+	input_chunk.InitializeEmpty(execute_info.input_types);
 	input_chunk.SetCardinality(new_count);
 
-	idx_t slice_offset = has_index ? 1 : 0;
-	if (has_index) {
+	idx_t slice_offset = info.has_index ? 1 : 0;
+	if (info.has_index) {
 		input_chunk.data[0].Reference(index_vector);
 	}
-	input_chunk.data[slice_offset + 1].Reference(left_slice);
+	input_chunk.data[slice_offset + 1].Reference(execute_info.left_slice);
 	input_chunk.data[slice_offset].Reference(right_slice);
 
 	// add the other columns
 	vector<Vector> slices;
-	for (idx_t i = 0; i < column_infos.size(); i++) {
-		if (column_infos[i].vector.get().GetVectorType() == VectorType::CONSTANT_VECTOR) {
+	for (idx_t i = 0; i < reduce_info.column_infos.size(); i++) {
+		if (reduce_info.column_infos[i].vector.get().GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// only reference constant vectors
-			input_chunk.data[slice_offset + 2 + i].Reference(column_infos[i].vector);
+			input_chunk.data[slice_offset + 2 + i].Reference(reduce_info.column_infos[i].vector);
 		} else {
 			// slice the other vectors
-			slices.emplace_back(column_infos[i].vector, active_rows_sel, new_count);
+			slices.emplace_back(reduce_info.column_infos[i].vector, active_rows_sel, new_count);
 			input_chunk.data[slice_offset + 2 + i].Reference(slices.back());
 		}
 	}
@@ -86,106 +117,42 @@ static void ExecuteReduce(idx_t loops, std::vector<idx_t> &active_rows, const li
 	result_chunk.Reset();
 	result_chunk.SetCardinality(new_count);
 
-	expr_executor->Execute(input_chunk, result_chunk);
+	execute_info.expr_executor->Execute(input_chunk, result_chunk);
 
 	// use the result chunk to update the left slice
-	left_slice.Reference(result_chunk.data[0]);
+	execute_info.left_slice.Reference(result_chunk.data[0]);
 }
 
-void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto row_count = args.size();
-	Vector &list_column = args.data[0];
+void LambdaFunctions::PrepareReduce(unique_ptr<Expression> &lambda_expr, ValidityMask &result_validity, LambdaInfo &info, ReduceInfo &reduce_info, ExpressionState &state) {
+	ReduceExecuteInfo execute_info(reduce_info, info.row_count, info.has_index, result_validity, reduce_info.child_vector);
 
-	// Initialize the result vector
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto &result_validity = FlatVector::Validity(result);
-	if (list_column.GetType().id() == LogicalTypeId::SQLNULL) {
-		result_validity.SetInvalid(0);
-		return;
-	}
-
-	if (list_column.GetType().id() == LogicalTypeId::SQLNULL) {
-		result_validity.SetInvalid(0);
-		return;
-	}
-
-	// get the lambda expression
-	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &bind_info = func_expr.bind_info->Cast<ListLambdaBindData>();
-	auto &lambda_expr = bind_info.lambda_expr;
-	bool has_side_effects = lambda_expr->HasSideEffects();
-
-	// get the list column entries
-	UnifiedVectorFormat list_column_format;
-	list_column.ToUnifiedFormat(row_count, list_column_format);
-	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_column_format);
-
-	// special-handling for the child_vector
-	auto child_vector_size = ListVector::GetListSize(list_column);
-	auto &child_vector = ListVector::GetEntry(list_column);
-	UnifiedVectorFormat child_vector_format;
-	child_vector.ToUnifiedFormat(child_vector_size, child_vector_format);
-
-	// get the lambda column data for all other input vectors
-	auto column_infos = LambdaFunctions::GetColumnInfo(args, row_count);
-	auto inconstant_column_infos = LambdaFunctions::GetInconstantColumnInfo(column_infos);
-
-	ExpressionExecutor executor(state.GetContext());
-
-	std::vector<idx_t> active_rows(row_count);
-
-	// Initialize the left_vector & the result vector
-	SelectionVector left_vector(row_count);
-
-	idx_t old_count = 0;
-	idx_t new_count = 0;
-
-	// Initialize the left vector from list entries and the active rows
-	auto it = active_rows.begin();
-	while (it != active_rows.end()) {
-		auto list_column_format_index = list_column_format.sel->get_index(old_count);
-		if (list_column_format.validity.RowIsValid(list_column_format_index)) {
-			if (list_entries[list_column_format_index].length == 0) {
-				throw ParameterNotAllowedException("An empty list cannot be reduced");
-			}
-			left_vector.set_index(new_count, list_entries[list_column_format_index].offset);
-			active_rows[new_count] = old_count;
-			new_count++;
-			it++;
-		} else {
-			// Remove the invalid rows
-			result_validity.SetInvalid(old_count);
-			active_rows.erase(it);
-		}
-		old_count++;
-	}
-
-	Vector left_slice = Vector(child_vector, left_vector, row_count);
-
+	// Since the left slice references the result chunk, we need to create two result chunks.
+	// This means there is always an empty result chunk for the next iteration,
+	// without the referenced chunk having to be reset until the current iteration is complete.
 	DataChunk odd_result_chunk;
 	odd_result_chunk.Initialize(Allocator::DefaultAllocator(), {lambda_expr->return_type});
 
 	DataChunk even_result_chunk;
 	even_result_chunk.Initialize(Allocator::DefaultAllocator(), {lambda_expr->return_type});
 
+	unique_ptr<ExpressionExecutor> expr_executor = make_uniq<ExpressionExecutor>(state.GetContext(), *lambda_expr);
+
 	idx_t loops = 0;
 	// Execute reduce until all rows are finished
-	while (!active_rows.empty()) {
+	while (!execute_info.active_rows.empty()) {
 		if (loops % 2) {
-			ExecuteReduce(loops, active_rows, list_entries, result, left_slice, list_column_format, child_vector,
-			              state.GetContext(), *lambda_expr, bind_info.has_index, odd_result_chunk, column_infos);
+			ExecuteReduce(loops, execute_info, info, odd_result_chunk, reduce_info);
 			even_result_chunk.Reset();
 		} else {
-			ExecuteReduce(loops, active_rows, list_entries, result, left_slice, list_column_format, child_vector,
-			              state.GetContext(), *lambda_expr, bind_info.has_index, even_result_chunk, column_infos);
+			ExecuteReduce(loops, execute_info, info, even_result_chunk, reduce_info);
 			odd_result_chunk.Reset();
 		}
 
 		loops++;
 	}
 
-	if (args.AllConstant() && !has_side_effects) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	if (info.is_all_constant && !info.has_side_effects) {
+		reduce_info.result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 
@@ -230,7 +197,7 @@ static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFun
 }
 
 static LogicalType ListReduceBindLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
-	return LambdaFunctions::BindReduceLambda(parameter_idx, list_child_type);
+	return LambdaFunctions::BindTertiaryLambda(parameter_idx, list_child_type);
 }
 
 ScalarFunction ListReduceFun::GetFunction() {
