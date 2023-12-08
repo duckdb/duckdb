@@ -608,7 +608,9 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		// get the current bucket of constant values
 		D_ASSERT(constant_values.find(equivalence_set) != constant_values.end());
 		auto &info_list = constant_values.find(equivalence_set)->second;
-		D_ASSERT(node.return_type == info.constant.type());
+		if (node.return_type != info.constant.type()) {
+			return FilterResult::UNSUPPORTED;
+		}
 		// check the existing constant comparisons to see if we can do any pruning
 		auto ret = AddConstantComparison(info_list, info);
 

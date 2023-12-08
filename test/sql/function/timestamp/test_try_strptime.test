@@ -72,11 +72,11 @@ SELECT try_strptime('jun', '%b')
 ----
 1900-06-01 00:00:00
 
-# First Sunday of Monday weeks is Jan 7
+# First Monday of Monday weeks is Jan 7
 query I
 SELECT try_strptime('1', '%W')
 ----
-1900-01-07 00:00:00
+1900-01-01 00:00:00
 
 # First Sunday of Sunday weeks is Jan 7
 query I
@@ -90,9 +90,9 @@ SELECT try_strptime('30', '%U'), strftime('1900-07-29'::DATE, '%U')
 1900-07-29 00:00:00	30
 
 query II
-SELECT try_strptime('30', '%W'), strftime('1900-07-29'::DATE, '%W')
+SELECT try_strptime('30', '%W'), strftime('1900-07-23'::DATE, '%W')
 ----
-1900-07-29 00:00:00	30
+1900-07-23 00:00:00	30
 
 # Ignored
 query I
