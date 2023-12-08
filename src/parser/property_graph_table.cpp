@@ -260,7 +260,7 @@ shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
 	auto result = make_shared<PropertyGraphTable>();
 
 	result->table_name = table_name;
-	result->table_name_alias = table_name_alias
+	result->table_name_alias = table_name_alias;
 	for (auto &column_name : column_names) {
 		result->column_names.push_back(column_name);
 	}
