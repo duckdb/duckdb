@@ -24,7 +24,7 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	case TableReferenceType::BASE_TABLE:
 		result = BaseTableRef::Deserialize(deserializer);
 		break;
-	case TableReferenceType::EMPTY_FROM:
+	case TableReferenceType::EMPTY_TABLE:
 		result = EmptyTableRef::Deserialize(deserializer);
 		break;
 	case TableReferenceType::EXPRESSION_LIST:
