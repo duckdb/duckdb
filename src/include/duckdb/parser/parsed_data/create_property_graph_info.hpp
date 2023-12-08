@@ -34,8 +34,6 @@ struct CreatePropertyGraphInfo : public CreateInfo {
 	//! Dictionary to point label to vector or edge table
 	case_insensitive_map_t<shared_ptr<PropertyGraphTable>> label_map;
 
-	case_insensitive_map_t<string> table_alias_map;
-
 public:
 	unique_ptr<CreateInfo> Copy() const override;
 

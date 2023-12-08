@@ -44,7 +44,7 @@ unique_ptr<SubPath> Transformer::TransformSubPathElement(duckdb_libpgquery::PGSu
 
 	result->where_clause = TransformExpression(root->where_clause);
 	if (root->lower > root->upper) {
-		throw ConstraintException("lower bound greater than upper bound");
+		throw ConstraintException("Lower bound greater than upper bound");
 	}
 	result->lower = root->lower;
 	result->upper = root->upper;

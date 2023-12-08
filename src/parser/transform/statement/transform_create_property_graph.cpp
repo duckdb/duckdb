@@ -129,7 +129,7 @@ Transformer::TransformCreatePropertyGraph(duckdb_libpgquery::PGCreatePropertyGra
 	auto info = make_uniq<CreatePropertyGraphInfo>();
 
 	case_insensitive_set_t global_label_set;
-
+	case_insensitive_map_t<string> table_alias_map;
 	auto property_graph_name = TransformQualifiedName(*stmt.name);
 	info->property_graph_name = property_graph_name.name;
 
@@ -141,7 +141,7 @@ Transformer::TransformCreatePropertyGraph(duckdb_libpgquery::PGCreatePropertyGra
 			throw NotImplementedException("CreatePropertyGraphTable not implemented.");
 		}
 		auto graph_table = reinterpret_cast<duckdb_libpgquery::PGPropertyGraphTable *>(vertex_table->data.ptr_value);
-		auto pg_table = TransformPropertyGraphTable(graph_table, global_label_set, info->table_alias_map);
+		auto pg_table = TransformPropertyGraphTable(graph_table, global_label_set, table_alias_map);
 		for (auto &label : pg_table->sub_labels) {
 			info->label_map[label] = pg_table;
 		}
@@ -158,7 +158,7 @@ Transformer::TransformCreatePropertyGraph(duckdb_libpgquery::PGCreatePropertyGra
 				throw NotImplementedException("CreatePropertyGraphTable not implemented.");
 			}
 			auto graph_table = reinterpret_cast<duckdb_libpgquery::PGPropertyGraphTable *>(edge_table->data.ptr_value);
-			auto pg_table = TransformPropertyGraphTable(graph_table, global_label_set, info->table_alias_map);
+			auto pg_table = TransformPropertyGraphTable(graph_table, global_label_set, table_alias_map);
 			for (auto &label : pg_table->sub_labels) {
 				info->label_map[label] = pg_table;
 			}
