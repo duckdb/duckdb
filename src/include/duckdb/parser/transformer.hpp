@@ -323,7 +323,8 @@ private:
 	//===--------------------------------------------------------------------===//
 	//! Transform a node/edge table create (SQL/PGQ)
 	shared_ptr<PropertyGraphTable> TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable *node,
-	                                                           case_insensitive_set_t &global_label_set);
+	                                                           case_insensitive_set_t &global_label_set,
+																														 case_insensitive_map_t<string> &table_alias_map);
 	//! Transform a path pattern (SQL/PGQ)
 	unique_ptr<PathPattern> TransformPath(duckdb_libpgquery::PGPathPattern *root);
 	//! Transform a path element (SQL/PGQ)

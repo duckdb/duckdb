@@ -8,7 +8,8 @@ namespace duckdb {
 
 shared_ptr<PropertyGraphTable>
 Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable *graph_table,
-                                         case_insensitive_set_t &global_label_set) {
+                                         case_insensitive_set_t &global_label_set,
+																				 case_insensitive_map_t<string> &table_alias_map) {
 	vector<string> column_names;
 	vector<string> except_list;
 	case_insensitive_set_t label_set;
@@ -19,8 +20,7 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 	string table_name_alias =
 	    reinterpret_cast<duckdb_libpgquery::PGValue *>(graph_table->table->head->next->data.ptr_value)->val.str;
 	if (!table_name_alias.empty()) {
-		// TODO
-		// Insert into case insenstive map with real table name
+		table_alias_map[table_name_alias] = graph_table_name.name;
 	}
 
 	bool all_columns = false;
@@ -84,11 +84,21 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 	if (!graph_table->is_vertex_table) {
 		D_ASSERT(graph_table->src_name);
 		auto src_name = TransformQualifiedName(*graph_table->src_name);
-		pg_table->source_reference = src_name.name;
+		auto possible_src_alias = table_alias_map.find(src_name.name);
+		if (possible_src_alias == table_alias_map.end()) {
+			pg_table->source_reference = src_name.name;
+		} else {
+			pg_table->source_reference = possible_src_alias->second;
+		}
 
 		D_ASSERT(graph_table->dst_name);
 		auto dst_name = TransformQualifiedName(*graph_table->dst_name);
-		pg_table->destination_reference = dst_name.name;
+		auto possible_dst_alias = table_alias_map.find(dst_name.name);
+		if (possible_dst_alias == table_alias_map.end()) {
+			pg_table->destination_reference = dst_name.name;
+		} else {
+			pg_table->destination_reference = possible_dst_alias->second;
+		}
 
 		for (auto &src_key = graph_table->src_pk->head; src_key != nullptr; src_key = lnext(src_key)) {
 			auto key = reinterpret_cast<duckdb_libpgquery::PGValue *>(src_key->data.ptr_value);
@@ -131,7 +141,7 @@ Transformer::TransformCreatePropertyGraph(duckdb_libpgquery::PGCreatePropertyGra
 			throw NotImplementedException("CreatePropertyGraphTable not implemented.");
 		}
 		auto graph_table = reinterpret_cast<duckdb_libpgquery::PGPropertyGraphTable *>(vertex_table->data.ptr_value);
-		auto pg_table = TransformPropertyGraphTable(graph_table, global_label_set);
+		auto pg_table = TransformPropertyGraphTable(graph_table, global_label_set, info->table_alias_map);
 		for (auto &label : pg_table->sub_labels) {
 			info->label_map[label] = pg_table;
 		}
@@ -148,7 +158,7 @@ Transformer::TransformCreatePropertyGraph(duckdb_libpgquery::PGCreatePropertyGra
 				throw NotImplementedException("CreatePropertyGraphTable not implemented.");
 			}
 			auto graph_table = reinterpret_cast<duckdb_libpgquery::PGPropertyGraphTable *>(edge_table->data.ptr_value);
-			auto pg_table = TransformPropertyGraphTable(graph_table, global_label_set);
+			auto pg_table = TransformPropertyGraphTable(graph_table, global_label_set, info->table_alias_map);
 			for (auto &label : pg_table->sub_labels) {
 				info->label_map[label] = pg_table;
 			}

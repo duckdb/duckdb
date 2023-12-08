@@ -64,12 +64,6 @@ unique_ptr<CreateInfo> CreatePropertyGraphInfo::Deserialize(Deserializer &deseri
 
 	deserializer.ReadProperty(103, "label_map", result->label_map);
 	deserializer.ReadProperty(104, "table_alias_map", result->table_alias_map);
-
-//	result->property_graph_name = reader.ReadRequired<string>();
-//	result->vertex_tables = reader.ReadRequiredSharedSerializableList<PropertyGraphTable>();
-//	result->edge_tables = reader.ReadRequiredSharedSerializableList<PropertyGraphTable>();
-//  result->label_map = reader.ReadRequiredSerializableMap<PropertyGraphTable>();
-//	reader.Finalize();
 	return std::move(result);
 }
 
