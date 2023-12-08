@@ -150,7 +150,7 @@ public:
 
 	//! String Values per [row|column]
 
-	unique_ptr<CSVValue[]> values [STANDARD_VECTOR_SIZE];
+	unique_ptr<CSVValue[]> values;
 
 	string value;
 

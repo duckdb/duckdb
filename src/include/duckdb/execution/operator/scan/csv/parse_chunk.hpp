@@ -17,8 +17,8 @@ struct ParseChunk {
 		scanner.states.Initialize(CSVState::EMPTY_LINE);
 		scanner.cur_rows = 0;
 		scanner.column_count = 0;
-		scanner.values[0] = unique_ptr<CSVValue[]>(new CSVValue[16]);
-		scanner.values[0][0].buffer_ptr = scanner.cur_buffer_handle->Ptr() + current_pos;
+		scanner.values = unique_ptr<CSVValue[]>(new CSVValue[16*2048]);
+		scanner.values[0].buffer_ptr = scanner.cur_buffer_handle->Ptr() + current_pos;
 		scanner.length = 0;
 
 	}
@@ -35,8 +35,9 @@ struct ParseChunk {
 		// Check if it's a new value - We don't predicate this because of the cost of creating a CSV Value
 		if (states.NewValue()) {
 			scanner.length--;
-			scanner.values[scanner.cur_rows][scanner.column_count++].length = scanner.length;
-			scanner.values[scanner.cur_rows][scanner.column_count].buffer_ptr = scanner.cur_buffer_handle->Ptr() + current_pos;
+			scanner.values[scanner.cur_rows*16+ scanner.column_count].length = scanner.length;
+			scanner.column_count++;
+			scanner.values[scanner.cur_rows *16+ scanner.column_count].buffer_ptr = scanner.cur_buffer_handle->Ptr() + current_pos;
 			scanner.length = 0;
 			// Create next value
 			// fixme: states.current_state == CSVState::QUOTED
@@ -45,14 +46,14 @@ struct ParseChunk {
 		// Check if it's a new row
 		if (states.NewRow()) {
 			scanner.length--;
-			scanner.values[scanner.cur_rows++][scanner.column_count].length = scanner.length;
+			scanner.values[scanner.cur_rows*16+scanner.column_count].length = scanner.length;
+			scanner.cur_rows++;
 			scanner.length = 0;
 			if (scanner.cur_rows >= STANDARD_VECTOR_SIZE) {
 				return true;
 			}
 			scanner.column_count = 0;
-			scanner.values[scanner.cur_rows] = unique_ptr<CSVValue[]>(new CSVValue[parse_chunk.ColumnCount()]);
-			scanner.values[scanner.cur_rows][scanner.column_count].buffer_ptr = scanner.cur_buffer_handle->Ptr() + current_pos;
+			scanner.values[scanner.cur_rows*16+scanner.column_count].buffer_ptr = scanner.cur_buffer_handle->Ptr() + current_pos;
 
 		}
 		//		bool carriage_return = states.previous_state == CSVState::CARRIAGE_RETURN;
@@ -116,7 +117,7 @@ struct ParseChunk {
 			auto &v = parse_chunk.data[col_idx];
 			auto parse_data = FlatVector::GetData<string_t>(v);
 			for (idx_t row_idx = 0; row_idx < scanner.cur_rows; row_idx++) {
-				auto &value = scanner.values[row_idx][col_idx];
+				auto &value = scanner.values[row_idx*16 + col_idx];
 //				if (value.OverBuffer()) {
 //					// Lets copy the string
 //					parse_data[row_idx] = StringVector::AddStringOrBlob(v, value.GetStringT());
