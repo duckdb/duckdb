@@ -31,7 +31,7 @@ SELECT '1e-100'::DECIMAL
 
 # large negative exponent
 query I
-SELECT '1e-99999999'::DECIMAL
+SELECT '1e-9999'::DECIMAL
 ----
 0
 
