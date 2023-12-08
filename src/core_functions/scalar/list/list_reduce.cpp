@@ -168,6 +168,9 @@ static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFun
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
+	if (bound_lambda_expr.parameter_count < 2 || bound_lambda_expr.parameter_count > 3) {
+		throw BinderException("list_reduce expects a function with 2 or 3 arguments");
+	}
 	auto has_index = bound_lambda_expr.parameter_count == 3;
 
 	unique_ptr<FunctionData> bind_data = LambdaFunctions::ListLambdaPrepareBind(arguments, context, bound_function);

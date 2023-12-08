@@ -17,6 +17,9 @@ statement ok
 CREATE MACRO my_filter(list) AS list_filter(list, x -> x > 42)
 
 statement ok
+CREATE MACRO my_reduce(list) AS list_reduce(list, (x, y) -> x + y)
+
+statement ok
 CREATE MACRO my_nested_lambdas(nested_list) AS list_filter(nested_list, elem -> list_sum(list_transform(elem, x -> x + 1)) > 42)
 
 query I

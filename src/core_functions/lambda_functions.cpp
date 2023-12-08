@@ -280,8 +280,8 @@ LogicalType LambdaFunctions::BindTertiaryLambda(const idx_t parameter_idx, const
 	}
 }
 
-template <class FUNCTION_FUNCTOR>
-void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result, bool is_reduce) {
+template <class FUNCTION_FUNCTOR, bool IS_REDUCE>
+void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
 	LambdaFunctions::LambdaInfo lambda_info(args);
 
 	Vector &list_column = args.data[0];
@@ -317,7 +317,7 @@ void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result, bool
 	auto column_infos = LambdaFunctions::GetColumnInfo(args, lambda_info.row_count);
 	auto inconstant_column_infos = LambdaFunctions::GetInconstantColumnInfo(column_infos);
 
-	if (is_reduce) {
+	if (IS_REDUCE) {
 		LambdaFunctions::ReduceInfo reduce_info(list_entries, list_column_format, child_vector, result, column_infos, lambda_expr);
 		LambdaFunctions::PrepareReduce(result_validity, lambda_info, reduce_info, state);
 		return;
@@ -431,15 +431,15 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context,
 }
 
 void LambdaFunctions::ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	ExecuteLambda<ListTransformFunctor>(args, state, result, false);
+	ExecuteLambda<ListTransformFunctor, false>(args, state, result);
 }
 
 void LambdaFunctions::ListFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	ExecuteLambda<ListFilterFunctor>(args, state, result, false);
+	ExecuteLambda<ListFilterFunctor, false>(args, state, result);
 }
 
 void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	ExecuteLambda<ListFilterFunctor>(args, state, result, true);
+	ExecuteLambda<ListFilterFunctor, true>(args, state, result);
 }
 
 } // namespace duckdb

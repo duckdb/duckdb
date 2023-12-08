@@ -50,6 +50,8 @@ SELECT list_reduce(['Once', 'upon', 'a', 'time'], (x, y) -> x || ' ' || y);
 ----
 Once upon a time
 
+#errors on simple reduce
+
 statement error
 SELECT list_reduce([], (x, y, i) -> x + y + i);
 ----
@@ -59,6 +61,21 @@ statement error
 SELECT list_reduce([1, 2, 3], (x, y) -> (x * y)::VARCHAR || 'please work');
 ----
 Could not convert
+
+statement error
+SELECT list_reduce([1, 2], (x) -> x);
+----
+list_reduce expects a function with 2 or 3 arguments
+
+statement error
+SELECT list_reduce([1, 2], NULL);
+----
+Invalid lambda expression!
+
+statement error
+SELECt list_reduce([1, 2], (len('abc') AS x, y) - > x + y)
+----
+Parser Error: syntax error at or near "AS"
 
 # simple reduce on a table
 
@@ -133,6 +150,21 @@ statement error
 SELECT list_reduce(a, (x, y) -> x || ' ' || y) FROM t1;
 ----
 Cannot perform list_reduce on an empty input list
+
+# reduce on a string only using the RHS
+
+statement ok
+CREATE TABLE right_only (v varchar[], i int);
+
+statement ok
+INSERT INTO right_only VALUES (['blue', 'babbling', 'brook'], 1), (['dogs', 'doing', 'dishes'], 2), (['she', 'sells', 'seashells'], 3);
+
+query I
+SELECT list_reduce(v, (x, y) -> y[i]) FROM right_only;
+----
+b
+i
+a
 
 # nested functions with ints
 
@@ -267,6 +299,59 @@ NULL
 NULL
 NULL
 
+statement ok
+DROP TABLE nested;
+
+# three level nested functions with ints
+
+query I
+SELECT list_reduce([1, 2, 3], (x, y) -> list_reduce([4, 5, 6], (a, b) -> list_reduce([7, 8, 9], (c, d) -> x + y + a + b + c + d)));
+----
+966
+
+query I
+SELECT list_reduce([1, 2, 3], (x, y, x_i) -> list_reduce([4, 5, 6], (a, b, a_i) -> list_reduce([7, 8, 9], (c, d, c_i) -> x + y + a + b + c + d + x_i + a_i + c_i)));
+----
+1133
+
+query I
+SELECT list_reduce([[[10, 20], [100, 200]], [[30, 40], [300, 400]], [[50, 60], [500, 600]]], (x, y) -> list_pack(list_reduce(x, (l, m) -> list_pack(list_reduce(l, (a, b) -> a + b) + list_reduce(m, (c, d) -> c + d))) + list_reduce(y, (n, o) -> list_pack(list_reduce(n, (a, b) -> a + b) + list_reduce(o, (c, d) -> c + d)))));
+----
+[[330, 770, 1210]]
+
+# three level nested in a table with ints
+
+statement ok
+CREATE TABLE nested (n integer[], l integer[], m integer[])
+
+statement ok
+INSERT INTO nested VALUES ([1, 2, 3], [4, 5, 6], [7, 8, 9]), (NULL, NULL, NULL), (NULL, [110, 111, 112], [113, 114, 115]), ([77, 88, 99], [55, 66, NULL], [44, 33, 22]);
+
+query I
+SELECT list_reduce(n, (x, y) -> list_reduce(l, (a, b) -> list_reduce(m, (c, d) -> x + y + a + b + c + d))) FROM nested;
+----
+966
+NULL
+NULL
+NULL
+
+statement ok
+DROP TABLE nested;
+
+statement ok
+CREATE TABLE nested (n integer[][][])
+
+statement ok
+INSERT INTO nested VALUES ([[[10, 20], [100, 200]], [[30, 40], [300, 400]], [[50, 60], [500, 600]]]), ([[[1,2,3], [4,5,6], [7,8,9]]]), (NULL), ([[[NULL, 60], [70, NULL], [NULL, NULL]]]);
+
+query I
+SELECT list_reduce(n, (x, y) -> list_pack(list_reduce(x, (l, m) -> list_pack(list_reduce(l, (a, b) -> a + b) + list_reduce(m, (c, d) -> c + d))) + list_reduce(y, (e, f) -> list_pack(list_reduce(e, (a, b) -> a + b) + list_reduce(f, (c, d) -> c + d))))) from nested;
+----
+[[330, 770, 1210]]
+[[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+NULL
+[[NULL, 60], [70, NULL], [NULL, NULL]]
+
 # very large lists
 
 statement ok
@@ -287,3 +372,35 @@ SELECT list_reduce(l, (x, y) -> x + y) FROM large_lists ORDER BY g;
 12497500
 12500000
 12502500
+
+# list_reduce in where clause
+
+statement ok
+CREATE table where_clause (a int[]);
+
+statement ok
+INSERT INTO where_clause VALUES ([10, 2, 1]), ([1, 2, 3]), ([15, 4, 3]), ([3, 4, 5]), ([11, 2, 3, 4, 5]), ([5, 4, 3, 2, 1]), ([100, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+
+query I
+SELECT a FROM where_clause WHERE list_reduce(a, (x, y) -> x - y) > 0;
+----
+[10, 2, 1]
+[15, 4, 3]
+[100, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+# tests on structs
+
+statement ok
+CREATE TABLE t_struct (s STRUCT(v VARCHAR, i INTEGER)[]);
+
+statement ok
+INSERT INTO t_struct VALUES ([row('a', 1), row('b', 2)]), ([row('c', 3), row('d', 4)]), ([row('e', 5), row('f', 6)]), ([row('g', 7), row('h', 8)]), ([row('i', 9), row('j', 10)]);
+
+query I
+SELECT list_reduce(s, (a, b) -> row(a.v || b.v, a.i + b.i)) FROM t_struct;
+----
+{'v': ab, 'i': 3}
+{'v': cd, 'i': 7}
+{'v': ef, 'i': 11}
+{'v': gh, 'i': 15}
+{'v': ij, 'i': 19}
