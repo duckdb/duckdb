@@ -33,6 +33,7 @@ unique_ptr<CreateInfo> CreatePropertyGraphInfo::Copy() const {
 		result->label_map[copied_edge_table->main_label] = copied_edge_table;
 		result->edge_tables.push_back(std::move(copied_edge_table));
 	}
+	result->table_alias_map.insert(table_alias_map.begin(), table_alias_map.end());
 	return std::move(result);
 }
 
@@ -48,6 +49,7 @@ void CreatePropertyGraphInfo::Serialize(Serializer &serializer) const {
 			list.WriteObject([&](Serializer &obj) { entry->Serialize(obj); });
 	});
 	serializer.WriteProperty(103, "label_map", label_map);
+	serializer.WriteProperty(104, "table_alias_map", table_alias_map);
 }
 
 unique_ptr<CreateInfo> CreatePropertyGraphInfo::Deserialize(Deserializer &deserializer) {
@@ -61,6 +63,7 @@ unique_ptr<CreateInfo> CreatePropertyGraphInfo::Deserialize(Deserializer &deseri
 	});
 
 	deserializer.ReadProperty(103, "label_map", result->label_map);
+	deserializer.ReadProperty(104, "table_alias_map", result->table_alias_map);
 
 //	result->property_graph_name = reader.ReadRequired<string>();
 //	result->vertex_tables = reader.ReadRequiredSharedSerializableList<PropertyGraphTable>();

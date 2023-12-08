@@ -66,5 +66,9 @@ public:
 
 	static shared_ptr<PropertyGraphTable> Deserialize(Deserializer &deserializer);
 
+	bool hasTableNameAlias() {
+		return !table_name_alias.empty();
+	}
+
 };
 } // namespace duckdb
