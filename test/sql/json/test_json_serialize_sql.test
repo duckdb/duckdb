@@ -19,7 +19,7 @@ SELECT json_serialize_sql('SELECT *, 1 + 2 FROM tbl1', skip_null := true, skip_e
 query I
 SELECT json_serialize_sql('SELECT * FROM (SELECT 1 + 2)', skip_null := true, skip_empty := true);
 ----
-{"error":false,"statements":[{"node":{"type":"SELECT_NODE","select_list":[{"class":"STAR","type":"STAR","columns":false}],"from_table":{"type":"SUBQUERY","subquery":{"node":{"type":"SELECT_NODE","select_list":[{"class":"FUNCTION","type":"FUNCTION","function_name":"+","children":[{"class":"CONSTANT","type":"VALUE_CONSTANT","value":{"type":{"id":"INTEGER"},"is_null":false,"value":1}},{"class":"CONSTANT","type":"VALUE_CONSTANT","value":{"type":{"id":"INTEGER"},"is_null":false,"value":2}}],"order_bys":{"type":"ORDER_MODIFIER"},"distinct":false,"is_operator":true,"export_state":false}],"from_table":{"type":"EMPTY"},"aggregate_handling":"STANDARD_HANDLING"}}},"aggregate_handling":"STANDARD_HANDLING"}}]}
+{"error":false,"statements":[{"node":{"type":"SELECT_NODE","select_list":[{"class":"STAR","type":"STAR","columns":false}],"from_table":{"type":"SUBQUERY","subquery":{"node":{"type":"SELECT_NODE","select_list":[{"class":"FUNCTION","type":"FUNCTION","function_name":"+","children":[{"class":"CONSTANT","type":"VALUE_CONSTANT","value":{"type":{"id":"INTEGER"},"is_null":false,"value":1}},{"class":"CONSTANT","type":"VALUE_CONSTANT","value":{"type":{"id":"INTEGER"},"is_null":false,"value":2}}],"order_bys":{"type":"ORDER_MODIFIER"},"distinct":false,"is_operator":true,"export_state":false}],"from_table":{"type":"EMPTY_FROM"},"aggregate_handling":"STANDARD_HANDLING"}}},"aggregate_handling":"STANDARD_HANDLING"}}]}
 
 # Example with syntax error
 query I
