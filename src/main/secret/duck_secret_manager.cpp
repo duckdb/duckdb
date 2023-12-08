@@ -295,7 +295,8 @@ optional_ptr<SecretEntry> DuckSecretManager::GetSecretByName(CatalogTransaction 
 	throw InternalException("GetSecretByName called on unknown secret: %s", name);
 }
 
-void DuckSecretManager::DropSecretByName(CatalogTransaction transaction, const string &name, OnEntryNotFound on_entry_not_found) {
+void DuckSecretManager::DropSecretByName(CatalogTransaction transaction, const string &name,
+                                         OnEntryNotFound on_entry_not_found) {
 	InitializeSecrets(transaction);
 
 	bool deleted;
@@ -319,8 +320,8 @@ void DuckSecretManager::DropSecretByName(CatalogTransaction transaction, const s
 			fs.RemoveFile(file);
 		} catch (IOException &e) {
 			throw IOException("Failed to remove secret file '%s', the file may have been removed by another duckdb "
-							  "instance. (original error: '%s')",
-							  file, e.RawMessage());
+			                  "instance. (original error: '%s')",
+			                  file, e.RawMessage());
 		}
 	}
 

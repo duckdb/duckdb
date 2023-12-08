@@ -34,12 +34,9 @@ using case_insensitive_map_t =
 
 using case_insensitive_set_t = unordered_set<string, CaseInsensitiveStringHashFunction, CaseInsensitiveStringEquality>;
 
-
-struct CaseInsensitiveStringCompare
-{
-	bool operator() (const string& a, const string& b) const
-	{
-		return StringUtil::CILessThan(a,b);
+struct CaseInsensitiveStringCompare {
+	bool operator()(const string &a, const string &b) const {
+		return StringUtil::CILessThan(a, b);
 	}
 };
 

@@ -67,7 +67,9 @@ void Transformer::TransformCreateSecretOptions(CreateSecretInfo &info,
 unique_ptr<CreateStatement> Transformer::TransformSecret(duckdb_libpgquery::PGCreateSecretStmt &stmt) {
 	auto result = make_uniq<CreateStatement>();
 
-	auto create_secret_info = make_uniq<CreateSecretInfo>(TransformOnConflict(stmt.onconflict), EnumUtil::FromString<SecretPersistMode>(StringUtil::Upper(stmt.persist_option)));
+	auto create_secret_info =
+	    make_uniq<CreateSecretInfo>(TransformOnConflict(stmt.onconflict),
+	                                EnumUtil::FromString<SecretPersistMode>(StringUtil::Upper(stmt.persist_option)));
 
 	if (stmt.secret_name) {
 		create_secret_info->name = StringUtil::Lower(stmt.secret_name);

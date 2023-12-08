@@ -54,7 +54,8 @@ public:
 	DUCKDB_API optional_ptr<SecretEntry> GetSecretByPath(CatalogTransaction transaction, const string &path,
 	                                                     const string &type) override;
 	DUCKDB_API optional_ptr<SecretEntry> GetSecretByName(CatalogTransaction transaction, const string &name) override;
-	DUCKDB_API void DropSecretByName(CatalogTransaction transaction, const string &name, OnEntryNotFound on_entry_not_found) override;
+	DUCKDB_API void DropSecretByName(CatalogTransaction transaction, const string &name,
+	                                 OnEntryNotFound on_entry_not_found) override;
 	DUCKDB_API vector<reference<SecretEntry>> AllSecrets(CatalogTransaction transaction) override;
 	DUCKDB_API virtual void SetEnablePermanentSecrets(bool enabled) override;
 	DUCKDB_API virtual void ResetEnablePermanentSecrets() override;
@@ -109,7 +110,8 @@ private:
 //! The DefaultGenerator for permanent secrets. This is used to store lazy loaded secrets in the catalog
 class DefaultDuckSecretGenerator : public DefaultGenerator {
 public:
-	DefaultDuckSecretGenerator(Catalog &catalog, DuckSecretManager &secret_manager, case_insensitive_set_t &permanent_secrets);
+	DefaultDuckSecretGenerator(Catalog &catalog, DuckSecretManager &secret_manager,
+	                           case_insensitive_set_t &permanent_secrets);
 
 public:
 	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;
