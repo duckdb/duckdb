@@ -346,6 +346,32 @@ static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, c
 	}
 }
 
+template <class RUN_END_TYPE>
+static idx_t FindRunIndex(const RUN_END_TYPE *run_ends, idx_t count, idx_t offset) {
+	idx_t begin = 0;
+	idx_t end = count - 1;
+	while (begin < end) {
+		idx_t middle = static_cast<idx_t>(std::floor((begin + end) / 2));
+		if (offset >= static_cast<idx_t>(run_ends[middle])) {
+			// Our offset starts after this run has ended
+			begin = middle + 1;
+		} else {
+			// This offset might fall into this run_end
+			if (middle == 0) {
+				return middle;
+			}
+			if (offset >= static_cast<idx_t>(run_ends[middle - 1])) {
+				// For example [0, 0, 0, 1, 1, 2]
+				// encoded as run_ends: [3, 5, 6]
+				// 3 (run_ends[0]) >= offset < 5 (run_ends[1])
+				return middle;
+			}
+			end = middle - 1;
+		}
+	}
+	return end;
+}
+
 // FIXME: this is not respecting the array offset yet
 template <class RUN_END_TYPE, class VALUE_TYPE>
 static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_encoding, idx_t compressed_size,
@@ -367,7 +393,7 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 
 	// Now construct the result vector from the run_ends and the values
 
-	idx_t &run = run_end_encoding.run_index;
+	auto run = FindRunIndex(run_ends_data, compressed_size, scan_offset);
 	// FIXME: can not support array.offset currently because
 	// `state.chunk_offset` and `run_end_encoding.run_index` are assumed to be in sync
 	// If we add `array.offset` to the mix, we need to recalculate the `run_index`
@@ -505,7 +531,7 @@ static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, ArrowArray &array, 
 		ColumnArrowToDuckDB(values, values_array, array_state, compressed_size, values_type);
 	}
 
-	idx_t scan_offset = scan_state.chunk_offset;
+	idx_t scan_offset = GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
 	auto physical_type = run_ends_type.GetDuckType().InternalType();
 	switch (physical_type) {
 	case PhysicalType::INT16:

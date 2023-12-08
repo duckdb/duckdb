@@ -65,17 +65,15 @@ public:
 
 struct ArrowRunEndEncodingState {
 public:
-	ArrowRunEndEncodingState() : run_index(0) {
+	ArrowRunEndEncodingState() {
 	}
 
 public:
-	idx_t run_index;
 	unique_ptr<Vector> run_ends;
 	unique_ptr<Vector> values;
 
 public:
 	void Reset() {
-		run_index = 0;
 		run_ends.reset();
 		values.reset();
 	}
