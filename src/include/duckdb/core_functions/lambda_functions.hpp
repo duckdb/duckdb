@@ -12,6 +12,9 @@
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+
 namespace duckdb {
 
 struct ListLambdaBindData : public FunctionData {
@@ -44,8 +47,8 @@ public:
 	static LogicalType BindTertiaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type);
 
 	//! Checks for NULL list parameter and prepared statements and adds bound cast expression
-	static unique_ptr<FunctionData> ListLambdaPrepareBind(vector<unique_ptr<Expression>> &arguments, ClientContext &context,
-	                                                      ScalarFunction &bound_function);
+	static unique_ptr<FunctionData> ListLambdaPrepareBind(vector<unique_ptr<Expression>> &arguments,
+	                                                      ClientContext &context, ScalarFunction &bound_function);
 
 	//! Returns the ListLambdaBindData containing the lambda expression
 	static unique_ptr<FunctionData> ListLambdaBind(ClientContext &, ScalarFunction &bound_function,
@@ -74,29 +77,49 @@ public:
 	};
 
 	struct LambdaInfo {
-		explicit LambdaInfo(DataChunk &args) : row_count(args.size()), is_all_constant(args.AllConstant()) {};
+		explicit LambdaInfo(DataChunk &args, ExpressionState &state, Vector &result, bool &completed)
+		    : result(result), row_count(args.size()),  is_all_constant(args.AllConstant()) {
+			Vector &list_column = args.data[0];
+
+			result.SetVectorType(VectorType::FLAT_VECTOR);
+			result_validity = &FlatVector::Validity(result);
+
+			if (list_column.GetType().id() == LogicalTypeId::SQLNULL) {
+				result_validity->SetInvalid(0);
+				completed = true;
+				return;
+			}
+
+			// get the lambda expression
+			auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+			auto &bind_info = func_expr.bind_info->Cast<ListLambdaBindData>();
+			lambda_expr = bind_info.lambda_expr;
+			has_side_effects = lambda_expr->HasSideEffects();
+			has_index = bind_info.has_index;
+
+			// get the list column entries
+			list_column.ToUnifiedFormat(row_count, list_column_format);
+			list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_column_format);
+
+			 child_vector = &ListVector::GetEntry(list_column);
+
+			// get the lambda column data for all other input vectors
+			column_infos = LambdaFunctions::GetColumnInfo(args, row_count);
+		};
+
+		const list_entry_t *list_entries;
+		UnifiedVectorFormat list_column_format;
+		optional_ptr<Vector> child_vector;
+		Vector &result;
+		optional_ptr<ValidityMask> result_validity;
+		vector<ColumnInfo> column_infos;
+		optional_ptr<Expression> lambda_expr;
 
 		const idx_t row_count;
 		bool has_index;
 		bool has_side_effects;
 		const bool is_all_constant;
 	};
-
-	struct ReduceInfo {
-		explicit ReduceInfo(const list_entry_t *list_entries, const UnifiedVectorFormat &list_column_format, Vector &child_vector,
-		                    Vector &result, const vector<ColumnInfo> &column_infos, unique_ptr<Expression> &lambda_expr)
-		    : list_entries(list_entries), list_column_format(list_column_format), child_vector(child_vector),
-		      result(result), column_infos(column_infos), lambda_expr(lambda_expr) {};
-
-		const list_entry_t *list_entries;
-		const UnifiedVectorFormat &list_column_format;
-		Vector &child_vector;
-		Vector &result;
-		const vector<ColumnInfo> &column_infos;
-		unique_ptr<Expression> &lambda_expr;
-	};
-
-	static void PrepareReduce(ValidityMask &result_validity, LambdaInfo &info, ReduceInfo &reduce_info, ExpressionState &state);
 
 	static vector<ColumnInfo> GetColumnInfo(DataChunk &args, const idx_t row_count);
 	static vector<reference<ColumnInfo>> GetInconstantColumnInfo(vector<ColumnInfo> &data);
