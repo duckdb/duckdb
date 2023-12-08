@@ -207,32 +207,25 @@ bool PropertyGraphTable::Equals(const PropertyGraphTable *other_p) const {
 
 void PropertyGraphTable::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "table_name", table_name);
-	serializer.WriteProperty(101, "column_names", column_names);
-	serializer.WriteProperty(102, "column_aliases", column_aliases);
-	serializer.WriteProperty(103, "except_columns", except_columns);
-	serializer.WriteProperty(104, "sub_labels", sub_labels);
+	serializer.WriteProperty(101, "table_name", table_name);
+	serializer.WriteProperty(102, "column_names", column_names);
+	serializer.WriteProperty(103, "column_aliases", column_aliases);
+	serializer.WriteProperty(104, "except_columns", except_columns);
+	serializer.WriteProperty(105, "sub_labels", sub_labels);
 
-//	serializer.WriteList(101, "column_names", column_names.size(),
-//											 [&](Serializer::List &list, idx_t i) { list.WriteElement(column_names[i]); });
-//	serializer.WriteList(102, "column_aliases", column_aliases.size(),
-//											 [&](Serializer::List &list, idx_t i) { list.WriteElement(column_aliases[i]); });
-//	serializer.WriteList(103, "except_columns", except_columns.size(),
-//											 [&](Serializer::List &list, idx_t i) { list.WriteElement(except_columns[i]); });
-//	serializer.WriteList(104, "sub_labels", sub_labels.size(),
-//											 [&](Serializer::List &list, idx_t i) { list.WriteElement(sub_labels[i]); });
-	serializer.WriteProperty(105, "main_label", main_label);
-	serializer.WriteProperty(106, "is_vertex_table", is_vertex_table);
-	serializer.WriteProperty(107, "all_columns", all_columns);
-	serializer.WriteProperty(108, "no_columns", no_columns);
+	serializer.WriteProperty(106, "main_label", main_label);
+	serializer.WriteProperty(107, "is_vertex_table", is_vertex_table);
+	serializer.WriteProperty(108, "all_columns", all_columns);
+	serializer.WriteProperty(109, "no_columns", no_columns);
 
 	if (!is_vertex_table) {
-		serializer.WriteProperty(109, "source_pk", source_pk);
-		serializer.WriteProperty(110, "source_fk", source_fk);
-		serializer.WriteProperty(111, "source_reference", source_reference);
+		serializer.WriteProperty(110, "source_pk", source_pk);
+		serializer.WriteProperty(111, "source_fk", source_fk);
+		serializer.WriteProperty(112, "source_reference", source_reference);
 
-		serializer.WriteProperty(112, "destination_pk", destination_pk);
-		serializer.WriteProperty(113, "destination_fk", destination_fk);
-		serializer.WriteProperty(114, "destination_reference", destination_reference);
+		serializer.WriteProperty(113, "destination_pk", destination_pk);
+		serializer.WriteProperty(114, "destination_fk", destination_fk);
+		serializer.WriteProperty(115, "destination_reference", destination_reference);
 	}
 }
 
@@ -240,46 +233,25 @@ void PropertyGraphTable::Serialize(Serializer &serializer) const {
 shared_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &deserializer) {
 	auto pg_table = make_shared<PropertyGraphTable>();
 	deserializer.ReadProperty(100, "table_name", pg_table->table_name);
-	deserializer.ReadProperty(101, "column_names", pg_table->column_names);
-	deserializer.ReadProperty(102, "column_aliases", pg_table->column_aliases);
-	deserializer.ReadProperty(103, "except_columns", pg_table->except_columns);
-	deserializer.ReadProperty(104, "sub_labels", pg_table->sub_labels);
-	// read the column names
-//	deserializer.ReadList(101, "column_names", [&](Deserializer::List &list, idx_t i) {
-//			auto column_name = list.ReadElement<string>();
-//			pg_table->column_names.push_back(column_name);
-//	});
-//
-//	vector<string> column_aliases;
-//	deserializer.ReadList(102, "column_aliases", [&](Deserializer::List &list, idx_t i) {
-//			auto column_alias = list.ReadElement<string>();
-//			pg_table->column_aliases.push_back(column_alias);
-//	});
-//
-//	vector<string> except_columns;
-//	deserializer.ReadList(103, "column_aliases", [&](Deserializer::List &list, idx_t i) {
-//			auto except_column = list.ReadElement<string>();
-//			pg_table->except_columns.push_back(except_column);
-//	});
-//
-//	vector<string> sub_labels;
-//	deserializer.ReadList(104, "column_aliases", [&](Deserializer::List &list, idx_t i) {
-//			auto sub_label = list.ReadElement<string>();
-//			pg_table->sub_labels.push_back(sub_label);
-//	});
+	deserializer.ReadProperty(101, "table_name", pg_table->table_name_alias);
+	deserializer.ReadProperty(102, "column_names", pg_table->column_names);
+	deserializer.ReadProperty(103, "column_aliases", pg_table->column_aliases);
+	deserializer.ReadProperty(104, "except_columns", pg_table->except_columns);
+	deserializer.ReadProperty(105, "sub_labels", pg_table->sub_labels);
 
-	deserializer.ReadProperty(105, "main_label", pg_table->main_label);
-	deserializer.ReadProperty(106, "is_vertex_table", pg_table->is_vertex_table);
-	deserializer.ReadProperty(107, "no_columns", pg_table->no_columns);
+	deserializer.ReadProperty(106, "main_label", pg_table->main_label);
+	deserializer.ReadProperty(107, "is_vertex_table", pg_table->is_vertex_table);
+	deserializer.ReadProperty(108, "all_columns", pg_table->all_columns);
+	deserializer.ReadProperty(109, "no_columns", pg_table->no_columns);
 
 	if (!pg_table->is_vertex_table) {
-		deserializer.ReadProperty(108, "source_pk", pg_table->source_pk);
-		deserializer.ReadProperty(109, "source_fk", pg_table->source_fk);
-		deserializer.ReadProperty(110, "source_reference", pg_table->source_reference);
+		deserializer.ReadProperty(110, "source_pk", pg_table->source_pk);
+		deserializer.ReadProperty(111, "source_fk", pg_table->source_fk);
+		deserializer.ReadProperty(112, "source_reference", pg_table->source_reference);
 
-		deserializer.ReadProperty(108, "destination_pk", pg_table->destination_pk);
-		deserializer.ReadProperty(109, "destination_fk", pg_table->destination_fk);
-		deserializer.ReadProperty(110, "destination_reference", pg_table->destination_reference);
+		deserializer.ReadProperty(113, "destination_pk", pg_table->destination_pk);
+		deserializer.ReadProperty(114, "destination_fk", pg_table->destination_fk);
+		deserializer.ReadProperty(115, "destination_reference", pg_table->destination_reference);
 	}
 	return pg_table;
 }
@@ -288,6 +260,7 @@ shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
 	auto result = make_shared<PropertyGraphTable>();
 
 	result->table_name = table_name;
+	result->table_name_alias = table_name_alias
 	for (auto &column_name : column_names) {
 		result->column_names.push_back(column_name);
 	}
