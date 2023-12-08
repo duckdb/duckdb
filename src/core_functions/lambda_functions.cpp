@@ -412,7 +412,7 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaPrepareBind(vector<unique_pt
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 	D_ASSERT(arguments[0]->return_type.id() == LogicalTypeId::LIST);
-	return NULL;
+	return nullptr;
 }
 
 unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context, ScalarFunction &bound_function,
