@@ -1,0 +1,20 @@
+# name: test/sql/window/test_window_distinct.test_slow
+# description: Windowed distinct aggregates at scale
+# group: [window]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1);
+
+# DISTINCT aggregate over a larger data set (e.g. lineitem or so)
+query I
+SELECT 
+	l_orderkey, 
+	l_linenumber,
+	l_returnflag,
+	COUNT(DISTINCT l_returnflag) OVER(PARTITION BY l_orderkey ORDER BY l_linenumber)
+FROM lineitem
+ORDER BY ALL
+----
+24004860 values hashing to d39903ddf93011916ff3354d8bded7ff
