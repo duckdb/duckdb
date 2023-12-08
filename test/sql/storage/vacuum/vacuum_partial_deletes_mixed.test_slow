@@ -1,4 +1,4 @@
-# name: test/sql/storage/vacuum/vacuum_partial_deletes_mixed.test
+# name: test/sql/storage/vacuum/vacuum_partial_deletes_mixed.test_slow
 # description: Verify that deletes get vacuumed correctly through merging of adjacent row groups
 # group: [vacuum]
 
