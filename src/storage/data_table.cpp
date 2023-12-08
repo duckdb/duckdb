@@ -24,6 +24,7 @@
 #include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/catalog/catalog_entry/index_type_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -31,6 +32,10 @@ DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> ta
                              string table)
     : db(db), table_io_manager(std::move(table_io_manager_p)), cardinality(0), schema(std::move(schema)),
       table(std::move(table)) {
+}
+
+void DataTableInfo::InitializeIndexes(ClientContext &context) {
+	indexes.InitializeIndexes(context, *this);
 }
 
 bool DataTableInfo::IsTemporary() const {

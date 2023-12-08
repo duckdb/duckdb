@@ -59,6 +59,11 @@ public:
 	AttachedDatabase &db;
 
 public:
+	//! Returns true if the index is a unknown index, and false otherwise
+	virtual bool IsUnknown() {
+		return false;
+	}
+
 	//! Initialize a single predicate scan on the index with the given expression and column IDs
 	virtual unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
 	                                                                 const ExpressionType expression_type) = 0;

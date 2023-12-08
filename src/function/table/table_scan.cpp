@@ -295,9 +295,18 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 		// no indexes or no filters: skip the pushdown
 		return;
 	}
+
+	// Lazily initialize any unknown indexes that might have been loaded by an extension
+	storage.info->InitializeIndexes(context);
+
 	// behold
 	storage.info->indexes.Scan([&](Index &index) {
 		// first rewrite the index expression so the ColumnBindings align with the column bindings of the current table
+
+		if (index.IsUnknown()) {
+			// unknown index: skip
+			return false;
+		}
 
 		if (index.unbound_expressions.size() > 1) {
 			// NOTE: index scans are not (yet) supported for compound index keys

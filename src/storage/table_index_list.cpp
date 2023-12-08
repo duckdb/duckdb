@@ -2,6 +2,8 @@
 
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/catalog/catalog_entry/index_type_catalog_entry.hpp"
+#include "duckdb/execution/index/unknown_index.hpp"
 
 namespace duckdb {
 void TableIndexList::AddIndex(unique_ptr<Index> index) {
@@ -48,6 +50,34 @@ bool TableIndexList::NameIsUnique(const string &name) {
 	}
 
 	return true;
+}
+
+void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &table_info) {
+	lock_guard<mutex> lock(indexes_lock);
+	for (auto &index : indexes) {
+		if (index->IsUnknown()) {
+			auto &unknown_index = index->Cast<UnknownIndex>();
+			auto &index_type = unknown_index.GetIndexType();
+
+			// Do we know the type of this index now?
+			auto &catalog = Catalog::GetSystemCatalog(context);
+			auto index_type_entry = catalog.GetEntry<IndexTypeCatalogEntry>(context, DEFAULT_SCHEMA, index_type,
+			                                                                OnEntryNotFound::RETURN_NULL);
+			if (!index_type_entry) {
+				continue;
+			}
+
+			// Swap this with a new index
+			auto &create_info = unknown_index.GetCreateInfo();
+			auto &storage_info = unknown_index.GetStorageInfo();
+
+			auto index_instance = index_type_entry->create_instance(
+			    create_info.index_name, create_info.constraint_type, create_info.column_ids,
+			    *table_info.table_io_manager, unknown_index.unbound_expressions, table_info.db, storage_info);
+
+			index = std::move(index_instance);
+		}
+	}
 }
 
 bool TableIndexList::Empty() {

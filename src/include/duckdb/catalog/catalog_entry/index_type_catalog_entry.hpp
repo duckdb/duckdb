@@ -19,7 +19,7 @@ typedef unique_ptr<Index> (*index_create_function_t)(const string &name,
                                                      const vector<column_t> &column_ids,
                                                      TableIOManager &table_io_manager,
                                                      const vector<unique_ptr<Expression>> &unbound_expressions,
-                                                     AttachedDatabase &db, IndexStorageInfo &storage_info);
+                                                     AttachedDatabase &db, const IndexStorageInfo &storage_info);
 
 //! An catalog entry for an index "type"
 class IndexTypeCatalogEntry : public StandardEntry {

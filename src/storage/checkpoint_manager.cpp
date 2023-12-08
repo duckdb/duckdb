@@ -29,6 +29,8 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/unknown_index.hpp"
 
 namespace duckdb {
 
@@ -407,8 +409,6 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	if (info.index_type.empty()) {
 		info.index_type = "ART";
 	}
-	auto &index_type = catalog.GetEntry(context, CatalogType::INDEX_TYPE_ENTRY, DEFAULT_SCHEMA, info.index_type)
-	                       .Cast<IndexTypeCatalogEntry>();
 
 	// now we can look for the index in the catalog and assign the table info
 	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
@@ -466,12 +466,17 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 
 	D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
 
-	// now we recreate the index instance from the deserialized info and the hook in the index type
-	auto index_instance = index_type.create_instance(info.index_name, info.constraint_type, info.column_ids,
-	                                                 TableIOManager::Get(data_table), unbound_expressions,
-	                                                 data_table.db, index_storage_info);
+	if (info.index_type == "ART") {
+		data_table.info->indexes.AddIndex(make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids,
+		                                                 TableIOManager::Get(data_table), unbound_expressions,
+		                                                 data_table.db, nullptr, index_storage_info));
+	} else {
+		auto unknown_index = make_uniq<UnknownIndex>(info.index_name, info.index_type, info.constraint_type,
+		                                             info.column_ids, TableIOManager::Get(data_table),
+		                                             unbound_expressions, data_table.db, info, index_storage_info);
 
-	data_table.info->indexes.AddIndex(std::move(index_instance));
+		data_table.info->indexes.AddIndex(std::move(unknown_index));
+	}
 }
 
 //===--------------------------------------------------------------------===//

@@ -31,7 +31,7 @@ unique_ptr<CatalogEntry> DefaultIndexTypesGenerator::CreateDefaultEntry(ClientCo
 	index_entry.create_instance = [](const string &name, const IndexConstraintType constraint_type,
 	                                 const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	                                 const vector<unique_ptr<Expression>> &unbound_expressions, AttachedDatabase &db,
-	                                 IndexStorageInfo &storage_info) -> unique_ptr<Index> {
+	                                 const IndexStorageInfo &storage_info) -> unique_ptr<Index> {
 		auto art = make_uniq<ART>(name, constraint_type, column_ids, table_io_manager, unbound_expressions, db, nullptr,
 		                          storage_info);
 		return art;

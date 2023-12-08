@@ -40,6 +40,8 @@ public:
 	void CommitDrop(const string &name);
 	//! Returns true, if the index name does not exist
 	bool NameIsUnique(const string &name);
+	//! Initializes unknown indexes that might now be present after an extension load
+	void InitializeIndexes(ClientContext &context, DataTableInfo &table_info);
 
 	bool Empty();
 	idx_t Count();
