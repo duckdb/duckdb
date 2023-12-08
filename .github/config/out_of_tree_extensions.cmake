@@ -11,6 +11,7 @@ if (NOT WIN32)
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/arrow
             GIT_TAG 1b5b9649d28cd7f79496fb3f2e4dd7b03bf90ac5
+            APPLY_PATCHES
             )
 endif()
 
@@ -83,5 +84,6 @@ if (NOT WIN32)
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/substrait
             GIT_TAG 5d621b1d7d16fe86f8b1930870c8e6bf05bcb92a
+            APPLY_PATCHES
             )
 endif()

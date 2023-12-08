@@ -328,6 +328,7 @@ void BaseStatistics::Serialize(Serializer &serializer) const {
 			break;
 		case StatisticsType::ARRAY_STATS:
 			ArrayStats::Serialize(*this, serializer);
+			break;
 		default:
 			break;
 		}
