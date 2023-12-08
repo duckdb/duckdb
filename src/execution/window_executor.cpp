@@ -887,9 +887,10 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
     : WindowExecutor(wexpr, context, count, partition_mask, order_mask), mode(mode), filter_executor(context) {
 
 	// Force naive for SEPARATE mode or for (currently!) unsupported functionality
+	const auto force_naive =
+	    !ClientConfig::GetConfig(context).enable_optimizer || mode == WindowAggregationMode::SEPARATE;
 	AggregateObject aggr(wexpr);
-	if (mode == WindowAggregationMode::SEPARATE ||
-	    (wexpr.distinct && wexpr.exclude_clause != WindowExcludeMode::NO_OTHER)) {
+	if (force_naive || (wexpr.distinct && wexpr.exclude_clause != WindowExcludeMode::NO_OTHER)) {
 		aggregator = make_uniq<WindowNaiveAggregator>(aggr, wexpr.return_type, wexpr.exclude_clause, count);
 	} else if (IsDistinctAggregate()) {
 		// build a merge sort tree
