@@ -155,6 +155,7 @@ public:
 	virtual string ToString(SecretDisplayType mode = SecretDisplayType::REDACTED) const override;
 	void Serialize(Serializer &serializer) const override;
 
+	// FIXME: use serialization scripts
 	template <class TYPE>
 	static unique_ptr<BaseSecret> Deserialize(Deserializer &deserializer, BaseSecret base_secret) {
 		auto result = make_uniq<TYPE>(base_secret);

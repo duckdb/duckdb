@@ -66,6 +66,7 @@ string KeyValueSecret::ToString(SecretDisplayType mode) const {
 	return result;
 }
 
+// FIXME: use serialization scripts
 void KeyValueSecret::Serialize(Serializer &serializer) const {
 	BaseSecret::SerializeBaseSecret(serializer);
 

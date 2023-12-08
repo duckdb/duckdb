@@ -47,6 +47,7 @@ unique_ptr<BaseSecret> DuckSecretManager::DeserializeSecret(CatalogTransaction t
 	return DeserializeSecretInternal(transaction, deserializer);
 }
 
+// FIXME: use serialization scripts
 unique_ptr<BaseSecret> DuckSecretManager::DeserializeSecretInternal(CatalogTransaction transaction,
                                                                     Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<string>(100, "type");
