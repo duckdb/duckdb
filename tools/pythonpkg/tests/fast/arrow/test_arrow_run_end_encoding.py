@@ -45,7 +45,62 @@ class TestArrowREE(object):
 
         schema = pa.schema([("ree", encoded_array.type)])
         tbl = pa.Table.from_arrays([encoded_array], schema=schema)
-        res = duckdb.sql("select * from tbl").fetchall()
+        res = duckdb_cursor.sql("select * from tbl").fetchall()
+        assert res == expected
+
+    @pytest.mark.parametrize(
+        ['val1', 'val2'],
+        [
+            ('(-128)::TINYINT', '127::TINYINT'),
+            ('(-32768)::SMALLINT', '32767::SMALLINT'),
+            ('(-2147483648)::INTEGER', '2147483647::INTEGER'),
+            ('(-9223372036854775808)::BIGINT', '9223372036854775807::BIGINT'),
+            ('0::UTINYINT', '255::UTINYINT'),
+            ('0::USMALLINT', '65535::USMALLINT'),
+            ('0::UINTEGER', '4294967295::UINTEGER'),
+            ('0::UBIGINT', '18446744073709551615::UBIGINT'),
+            ('true::BOOL', 'false::BOOL'),
+            ("'test'::VARCHAR", "'this is a long string'::VARCHAR"),
+            ("'\\xE0\\x9F\\x98\\x84'::BLOB", "'\\xF0\\x9F\\xA6\\x86'::BLOB"),
+            ("'1992-03-27'::DATE", "'2204-11-01'::DATE"),
+            ("'01:02:03'::TIME", "'23:41:35'::TIME"),
+            ("'1992-03-22 01:02:03'::TIMESTAMP_S", "'2022-11-07 08:43:04.123456'::TIMESTAMP_S"),
+            ("'1992-03-22 01:02:03'::TIMESTAMP", "'2022-11-07 08:43:04.123456'::TIMESTAMP"),
+            ("'1992-03-22 01:02:03'::TIMESTAMP_MS", "'2022-11-07 08:43:04.123456'::TIMESTAMP_MS"),
+            ("'1992-03-22 01:02:03'::TIMESTAMP_NS", "'2022-11-07 08:43:04.123456'::TIMESTAMP_NS"),
+            ("'12.23'::DECIMAL(4,2)", "'99.99'::DECIMAL(4,2)"),
+            ("'1.234234'::DECIMAL(7,6)", "'0.000001'::DECIMAL(7,6)"),
+            ("'134523.234234'::DECIMAL(14,7)", "'999999.000001'::DECIMAL(14,7)"),
+            ("'12345678910111234123456789.1'::DECIMAL(28,1)", "'999999999999999999999999999.9'::DECIMAL(28,1)"),
+            # ("'10acd298-15d7-417c-8b59-eabb5a2bacab'::UUID", "'eeccb8c5-9943-b2bb-bb5e-222f4e14b687'::UUID"),
+            # ("'01010101010000'::BIT", "'01010100010101010101010101111111111'::BIT"), # FIXME: BIT seems broken?
+        ],
+    )
+    @pytest.mark.parametrize('size', [3000])
+    def test_arrow_run_end_encoding_coverage(self, duckdb_cursor, val1, val2, size):
+        query = """
+            select
+                case when ((i // 8) % 2 == 0)
+                    then (
+                        case when ((i // 4) % 2 == 0)
+                            then {}
+                            else {}
+                        end
+                    ) else
+                        NULL
+                end as ree
+            from range({}) t(i);
+        """
+        query = query.format(val1, val2, size)
+        rel = duckdb_cursor.sql(query)
+        array = rel.arrow()['ree']
+        expected = rel.fetchall()
+
+        encoded_array = pc.run_end_encode(array)
+
+        schema = pa.schema([("ree", encoded_array.type)])
+        tbl = pa.Table.from_arrays([encoded_array], schema=schema)
+        res = duckdb_cursor.sql("select * from tbl").fetchall()
         assert res == expected
 
     def test_arrow_ree_empty_table(self, duckdb_cursor):
@@ -58,7 +113,7 @@ class TestArrowREE(object):
 
         schema = pa.schema([("ree", encoded_array.type)])
         pa_res = pa.Table.from_arrays([encoded_array], schema=schema)
-        res = duckdb.sql("select * from pa_res").fetchall()
+        res = duckdb_cursor.sql("select * from pa_res").fetchall()
         assert res == expected
 
 

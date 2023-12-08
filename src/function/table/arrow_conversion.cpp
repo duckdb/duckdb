@@ -394,9 +394,6 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 	// Now construct the result vector from the run_ends and the values
 
 	auto run = FindRunIndex(run_ends_data, compressed_size, scan_offset);
-	// FIXME: can not support array.offset currently because
-	// `state.chunk_offset` and `run_end_encoding.run_index` are assumed to be in sync
-	// If we add `array.offset` to the mix, we need to recalculate the `run_index`
 	idx_t logical_index = scan_offset;
 	idx_t index = 0;
 	if (value_format.validity.AllValid()) {
@@ -494,6 +491,24 @@ static void FlattenRunEndsSwitch(Vector &result, ArrowRunEndEncodingState &run_e
 	case PhysicalType::UINT64:
 		FlattenRunEnds<RUN_END_TYPE, uint64_t>(result, run_end_encoding, compressed_size, scan_offset, size);
 		break;
+	case PhysicalType::BOOL:
+		FlattenRunEnds<RUN_END_TYPE, bool>(result, run_end_encoding, compressed_size, scan_offset, size);
+		break;
+	case PhysicalType::FLOAT:
+		FlattenRunEnds<RUN_END_TYPE, float>(result, run_end_encoding, compressed_size, scan_offset, size);
+		break;
+	case PhysicalType::DOUBLE:
+		FlattenRunEnds<RUN_END_TYPE, double>(result, run_end_encoding, compressed_size, scan_offset, size);
+		break;
+	case PhysicalType::INTERVAL:
+		FlattenRunEnds<RUN_END_TYPE, interval_t>(result, run_end_encoding, compressed_size, scan_offset, size);
+		break;
+	case PhysicalType::VARCHAR: {
+		// Share the string heap, we don't need to allocate new strings, we just reference the existing ones
+		result.SetAuxiliary(values.GetAuxiliary());
+		FlattenRunEnds<RUN_END_TYPE, string_t>(result, run_end_encoding, compressed_size, scan_offset, size);
+		break;
+	}
 	default:
 		throw NotImplementedException("RunEndEncoded value type '%s' not supported yet", TypeIdToString(physical_type));
 	}
