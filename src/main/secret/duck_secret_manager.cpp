@@ -312,19 +312,15 @@ void DuckSecretManager::DropSecretByName(CatalogTransaction transaction, const s
 
 	if (!deleted || was_persistent) {
 		LocalFileSystem fs;
-		auto file_lu = permanent_secret_files.find(name);
-
-		if (file_lu != permanent_secret_files.end()) {
-			deleted = true;
-			string file = file_lu->second;
-			permanent_secret_files.erase(file_lu);
-			try {
-				fs.RemoveFile(file);
-			} catch (IOException &e) {
-				throw IOException("Failed to remove secret file '%s', the file may have been removed by another duckdb "
-				                  "instance. (original error: '%s')",
-				                  file_lu->second, e.RawMessage());
-			}
+		deleted = true;
+		string file = fs.JoinPath(config.secret_path, name + ".duckdb_secret");
+		permanent_secrets.erase(name);
+		try {
+			fs.RemoveFile(file);
+		} catch (IOException &e) {
+			throw IOException("Failed to remove secret file '%s', the file may have been removed by another duckdb "
+							  "instance. (original error: '%s')",
+							  file, e.RawMessage());
 		}
 	}
 
@@ -433,11 +429,6 @@ void DuckSecretManager::InitializeSecrets(CatalogTransaction transaction) {
 			DuckSecretManager::LoadPermanentSecretsMap(transaction);
 		}
 
-		vector<string> permanent_secrets;
-		for (auto &kv : permanent_secret_files) {
-			permanent_secrets.push_back(kv.first);
-		}
-
 		auto &catalog = Catalog::GetSystemCatalog(*transaction.db);
 		secrets =
 		    make_uniq<CatalogSet>(catalog, make_uniq<DefaultDuckSecretGenerator>(catalog, *this, permanent_secrets));
@@ -454,13 +445,13 @@ void DuckSecretManager::LoadPermanentSecretsMap(CatalogTransaction transaction) 
 		fs.CreateDirectory(secret_dir);
 	}
 
-	if (permanent_secret_files.empty()) {
+	if (permanent_secrets.empty()) {
 		fs.ListFiles(secret_dir, [&](const string &fname, bool is_dir) {
 			string full_path = fs.JoinPath(secret_dir, fname);
 
 			if (StringUtil::EndsWith(full_path, ".duckdb_secret")) {
 				string secret_name = fname.substr(0, fname.size() - 14); // size of file ext
-				permanent_secret_files[secret_name] = full_path;
+				permanent_secrets.insert(secret_name);
 			}
 		});
 	}
@@ -476,20 +467,15 @@ void DuckSecretManager::AutoloadExtensionForFunction(ClientContext &context, con
 }
 
 DefaultDuckSecretGenerator::DefaultDuckSecretGenerator(Catalog &catalog, DuckSecretManager &secret_manager,
-                                                       vector<string> &permanent_secrets)
+                                                       case_insensitive_set_t &permanent_secrets)
     : DefaultGenerator(catalog), secret_manager(secret_manager), permanent_secrets(permanent_secrets) {
 }
 
 unique_ptr<CatalogEntry> DefaultDuckSecretGenerator::CreateDefaultEntry(ClientContext &context,
                                                                         const string &entry_name) {
 
-	bool found = false;
-	for (const auto &secret : permanent_secrets) {
-		if (secret == entry_name) {
-			found = true;
-		}
-	}
-	if (!found) {
+	auto secret_lu = permanent_secrets.find(entry_name);
+	if (secret_lu == permanent_secrets.end()) {
 		return nullptr;
 	}
 
@@ -533,7 +519,13 @@ unique_ptr<CatalogEntry> DefaultDuckSecretGenerator::CreateDefaultEntry(ClientCo
 }
 
 vector<string> DefaultDuckSecretGenerator::GetDefaultEntries() {
-	return permanent_secrets;
+	vector<string> ret;
+
+	for (const auto &res : permanent_secrets) {
+		ret.push_back(res);
+	}
+
+	return ret;
 }
 
 } // namespace duckdb

@@ -480,6 +480,10 @@ optional_ptr<CatalogEntry> CatalogSet::CreateEntryInternal(CatalogTransaction tr
 	entry->set = this;
 	entry->timestamp = 0;
 
+	// Add default entry to dependency manager
+	DependencyList l;
+	catalog.GetDependencyManager().AddObject(transaction, *entry, l);
+
 	auto entry_index = PutEntry(current_entry++, std::move(entry));
 	PutMapping(transaction, name, std::move(entry_index));
 	mapping[name]->timestamp = 0;
@@ -616,8 +620,6 @@ void CatalogSet::CreateDefaultEntries(CatalogTransaction transaction, unique_loc
 
 			lock.lock();
 
-			DependencyList l;
-			catalog.GetDependencyManager().AddObject(transaction, *entry, l);
 			CreateEntryInternal(transaction, std::move(entry));
 		}
 	}
