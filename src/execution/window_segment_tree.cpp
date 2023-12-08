@@ -562,9 +562,6 @@ void WindowNaiveState::Evaluate(const DataChunk &bounds, Vector &result, idx_t c
 	EvaluateSubFrames(bounds, gstate.exclude_mode, count, row_idx, frames, [&](idx_t rid, bool non_empty) {
 		auto agg_state = fdata[rid];
 		aggr.function.initialize(agg_state);
-		if (!non_empty) {
-			return;
-		}
 
 		//	Just update the aggregate with the unfiltered input rows
 		row_set.clear();
@@ -1142,6 +1139,7 @@ void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
 	scan_chunk.Initialize(Allocator::DefaultAllocator(), payload_types);
 
 	auto scanner = make_uniq<PayloadScanner>(*global_sort);
+	const auto in_size = scanner->Remaining();
 	scanner->Scan(scan_chunk);
 	idx_t scan_idx = 0;
 
@@ -1150,6 +1148,12 @@ void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
 	const auto count = inputs.size();
 	DistinctSortTree::ZippedElements prev_idcs;
 	prev_idcs.resize(count);
+
+	//	To handle FILTER clauses we make the missing elements
+	//	point to themselves so they won't be counted.
+	for (idx_t i = 0; i < count; ++i) {
+		prev_idcs[i] = {i + 1, i};
+	}
 
 	auto *input_idx = FlatVector::GetData<idx_t>(scan_chunk.data[0]);
 	auto i = input_idx[scan_idx++];
@@ -1160,7 +1164,7 @@ void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
 	auto prefix_layout = global_sort->sort_layout.GetPrefixComparisonLayout(sort_chunk.ColumnCount() - 1);
 
 	//	8:	for i ← 1 to in.size do
-	for (++curr; curr.GetIndex() < count; ++curr, ++prev) {
+	for (++curr; curr.GetIndex() < in_size; ++curr, ++prev) {
 		//	Scan second one chunk at a time
 		//	Note the scan is one behind the iterators
 		if (scan_idx >= scan_chunk.size()) {
@@ -1379,9 +1383,6 @@ void WindowDistinctState::Evaluate(const DataChunk &bounds, Vector &result, idx_
 	EvaluateSubFrames(bounds, tree.exclude_mode, count, row_idx, frames, [&](idx_t rid, bool non_empty) {
 		auto agg_state = fdata[rid];
 		aggr.function.initialize(agg_state);
-		if (!non_empty) {
-			return;
-		}
 
 		//	TODO: Extend AggregateLowerBound to handle subframes, just like SelectNth.
 		const auto lower = frames[0].start;

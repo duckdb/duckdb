@@ -93,8 +93,10 @@ public:
 		string result = schema.empty() ? function_name : schema + "." + function_name;
 		result += "(";
 		if (entry.children.size()) {
+			//	Only one DISTINCT is allowed (on the first argument)
+			int distincts = entry.distinct ? 0 : 1;
 			result += StringUtil::Join(entry.children, entry.children.size(), ", ", [&](const unique_ptr<BASE> &child) {
-				return (entry.distinct ? "DISTINCT " : "") + child->ToString();
+				return (distincts++ ? "" : "DISTINCT ") + child->ToString();
 			});
 		}
 		// Lead/Lag extra arguments
