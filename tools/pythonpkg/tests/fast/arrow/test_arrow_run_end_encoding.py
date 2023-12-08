@@ -116,6 +116,44 @@ class TestArrowREE(object):
         res = duckdb_cursor.sql("select * from pa_res").fetchall()
         assert res == expected
 
+    @pytest.mark.parametrize(
+        "filter",
+        [
+            "ree % 2 == 0",
+            "ree == 1",
+            "ree != 1",
+            "ree == 20000",
+            "true",
+            "ree == 0 and ree == 1",
+            "ree % 2 == 1",
+            "ree % 2 == 2",
+            "ree == 1250",
+            "ree == 1249",
+            "ree::VARCHAR == 'test'",
+        ],
+    )
+    def test_arrow_run_end_encoding_filters(self, duckdb_cursor, filter):
+        duckdb_cursor.query(
+            """
+            create table tbl as select (i // 8) as ree from range(10000) t(i)
+        """
+        )
+        query = """
+            select * from tbl where {}
+        """
+        query = query.format(filter)
+        rel = duckdb_cursor.query(query)
+
+        array = rel.arrow()['ree']
+        expected = rel.fetchall()
+
+        encoded_array = pc.run_end_encode(array)
+
+        schema = pa.schema([("ree", encoded_array.type)])
+        pa_res = pa.Table.from_arrays([encoded_array], schema=schema)
+        res = duckdb_cursor.sql("select * from pa_res").fetchall()
+        assert res == expected
+
 
 # TODO: add tests with a WHERE clause
 # TODO: add tests with projections
