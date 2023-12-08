@@ -190,9 +190,6 @@ private:
 	vector<shared_ptr<ArenaAllocator>> stored_allocators;
 
 private:
-	void LinearProbe(idx_t ht_offsets[], const hash_t hash_salts[], const SelectionVector &probe_sel,
-	                 const idx_t probe_count) const;
-
 	//! Disabled the copy constructor
 	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;
 	//! Destroy the HT

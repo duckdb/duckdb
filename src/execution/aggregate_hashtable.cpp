@@ -303,27 +303,6 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 	RowOperations::FinalizeStates(row_state, layout, addresses, result, 0);
 }
 
-void GroupedAggregateHashTable::LinearProbe(idx_t ht_offsets[], const hash_t hash_salts[],
-                                            const SelectionVector &probe_sel, const idx_t probe_count) const {
-	for (idx_t i = 0; i < probe_count; i++) {
-		const auto index = probe_sel.get_index(i);
-		auto &ht_offset = ht_offsets[index];
-		const auto &salt = hash_salts[index];
-		while (true) {
-			auto &entry = entries[ht_offset];
-			if (!entry.IsOccupied() || entry.GetSalt() == salt) {
-				break;
-			} else {
-				// Different salts, move to next entry (linear probing)
-				if (++ht_offset >= capacity) {
-					ht_offset = 0;
-				}
-				continue;
-			}
-		}
-	}
-}
-
 idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes_v,
                                                             Vector &addresses_v, SelectionVector &new_groups_out) {
 	D_ASSERT(groups.ColumnCount() + 1 == layout.ColumnCount());
@@ -340,6 +319,26 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	}
 	D_ASSERT(capacity - Count() >= groups.size()); // we need to be able to fit at least one vector of data
 
+	group_hashes_v.Flatten(groups.size());
+	auto hashes = FlatVector::GetData<hash_t>(group_hashes_v);
+
+	addresses_v.Flatten(groups.size());
+	auto addresses = FlatVector::GetData<data_ptr_t>(addresses_v);
+
+	// Compute the entry in the table based on the hash using a modulo,
+	// and precompute the hash salts for faster comparison below
+	auto ht_offsets = FlatVector::GetData<uint64_t>(state.ht_offsets);
+	const auto hash_salts = FlatVector::GetData<hash_t>(state.hash_salts);
+	for (idx_t r = 0; r < groups.size(); r++) {
+		const auto &hash = hashes[r];
+		ht_offsets[r] = ApplyBitMask(hash);
+		D_ASSERT(ht_offsets[r] == hash % capacity);
+		hash_salts[r] = aggr_ht_entry_t::ExtractSalt(hash);
+	}
+
+	// we start out with all entries [0, 1, 2, ..., groups.size()]
+	const SelectionVector *sel_vector = FlatVector::IncrementalSelectionVector();
+
 	// Make a chunk that references the groups and the hashes and convert to unified format
 	if (state.group_chunk.ColumnCount() == 0) {
 		state.group_chunk.InitializeEmpty(layout.GetTypes());
@@ -351,40 +350,13 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	state.group_chunk.data[groups.ColumnCount()].Reference(group_hashes_v);
 	state.group_chunk.SetCardinality(groups);
 
-	// Convert all vectors to unified format
+	// convert all vectors to unified format
 	auto &chunk_state = state.append_state.chunk_state;
 	TupleDataCollection::ToUnifiedFormat(chunk_state, state.group_chunk);
 	if (!state.group_data) {
 		state.group_data = make_unsafe_uniq_array<UnifiedVectorFormat>(state.group_chunk.ColumnCount());
 	}
 	TupleDataCollection::GetVectorData(chunk_state, state.group_data.get());
-
-	group_hashes_v.Flatten(groups.size());
-	auto hashes = FlatVector::GetData<hash_t>(group_hashes_v);
-
-	addresses_v.Flatten(groups.size());
-	auto addresses = FlatVector::GetData<data_ptr_t>(addresses_v);
-
-	// Compute the entry in the table based on the hash using a modulo,
-	// and incur the cache misses for in a vectorized way,
-	// then precompute the hash salts for faster comparison below
-	auto ht_offsets = FlatVector::GetData<uint64_t>(state.ht_offsets);
-	const auto hash_salts = FlatVector::GetData<hash_t>(state.hash_salts);
-	idx_t occupied_count = 0;
-	for (idx_t r = 0; r < groups.size(); r++) {
-		const auto &hash = hashes[r];
-		ht_offsets[r] = ApplyBitMask(hash);
-		D_ASSERT(ht_offsets[r] == hash % capacity);
-		occupied_count += entries[ht_offsets[r]].IsOccupied();
-		hash_salts[r] = aggr_ht_entry_t::ExtractSalt(hash);
-	}
-
-	// We start out with all entries [0, 1, 2, ..., groups.size()]
-	const SelectionVector *sel_vector = FlatVector::IncrementalSelectionVector();
-
-	if (occupied_count != 0) {
-		LinearProbe(ht_offsets, hash_salts, *sel_vector, groups.size());
-	}
 
 	idx_t new_group_count = 0;
 	idx_t remaining_entries = groups.size();
@@ -465,7 +437,6 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 				ht_offset = 0;
 			}
 		}
-		
 		sel_vector = &state.no_match_vector;
 		remaining_entries = no_match_count;
 	}
