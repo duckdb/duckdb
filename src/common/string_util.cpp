@@ -237,6 +237,20 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 	return true;
 }
 
+bool StringUtil::CILessThan(const string &l1, const string &l2) {
+	auto min_length = MinValue(l1.size(), l2.size());
+
+	for (idx_t c = 0; c < min_length; c++) {
+		if (StringUtil::CharacterToLower(l1[c]) == StringUtil::CharacterToLower(l2[c])) {
+			continue;
+		}
+
+		return StringUtil::CharacterToLower(l1[c]) < StringUtil::CharacterToLower(l2[c]);
+	}
+
+	return l1.size() < l2.size();
+}
+
 vector<string> StringUtil::Split(const string &input, const string &split) {
 	vector<string> splits;
 

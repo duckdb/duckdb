@@ -34,4 +34,16 @@ using case_insensitive_map_t =
 
 using case_insensitive_set_t = unordered_set<string, CaseInsensitiveStringHashFunction, CaseInsensitiveStringEquality>;
 
+
+struct CaseInsensitiveStringCompare
+{
+	bool operator() (const string& a, const string& b) const
+	{
+		return StringUtil::CILessThan(a,b);
+	}
+};
+
+template <typename T>
+using case_insensitive_ordered_map_t = map<string, T, CaseInsensitiveStringCompare>;
+
 } // namespace duckdb
