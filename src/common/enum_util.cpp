@@ -5849,7 +5849,7 @@ const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value) {
 	case TableReferenceType::CTE:
 		return "CTE";
 	case TableReferenceType::EMPTY_FROM:
-		return "EMPTY_FROM";
+		return "EMPTY";
 	case TableReferenceType::PIVOT:
 		return "PIVOT";
 	default:
@@ -5880,7 +5880,7 @@ TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value) {
 	if (StringUtil::Equals(value, "CTE")) {
 		return TableReferenceType::CTE;
 	}
-	if (StringUtil::Equals(value, "EMPTY_FROM")) {
+	if (StringUtil::Equals(value, "EMPTY")) {
 		return TableReferenceType::EMPTY_FROM;
 	}
 	if (StringUtil::Equals(value, "PIVOT")) {
