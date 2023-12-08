@@ -1,4 +1,4 @@
-#include "duckdb/parser/statement/create_secret_statement.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -64,25 +64,27 @@ void Transformer::TransformCreateSecretOptions(CreateSecretInfo &info,
 	}
 }
 
-unique_ptr<CreateSecretStatement> Transformer::TransformSecret(duckdb_libpgquery::PGCreateSecretStmt &stmt) {
-	auto result = make_uniq<CreateSecretStatement>(
-	    TransformOnConflict(stmt.onconflict),
-	    EnumUtil::FromString<SecretPersistMode>(StringUtil::Upper(stmt.persist_option)));
+unique_ptr<CreateStatement> Transformer::TransformSecret(duckdb_libpgquery::PGCreateSecretStmt &stmt) {
+	auto result = make_uniq<CreateStatement>();
+
+	auto create_secret_info = make_uniq<CreateSecretInfo>(TransformOnConflict(stmt.onconflict), EnumUtil::FromString<SecretPersistMode>(StringUtil::Upper(stmt.persist_option)));
 
 	if (stmt.secret_name) {
-		result->info->name = StringUtil::Lower(stmt.secret_name);
+		create_secret_info->name = StringUtil::Lower(stmt.secret_name);
 	}
 
 	if (stmt.options) {
-		TransformCreateSecretOptions(*result->info, stmt.options);
+		TransformCreateSecretOptions(*create_secret_info, stmt.options);
 	}
 
-	if (result->info->type.empty()) {
+	if (create_secret_info->type.empty()) {
 		throw ParserException("Failed to create secret - secret must have a type defined");
 	}
-	if (result->info->name.empty()) {
-		result->info->name = "__default_" + result->info->type;
+	if (create_secret_info->name.empty()) {
+		create_secret_info->name = "__default_" + create_secret_info->type;
 	}
+
+	result->info = std::move(create_secret_info);
 
 	return result;
 }

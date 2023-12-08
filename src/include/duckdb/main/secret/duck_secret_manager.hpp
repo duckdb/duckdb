@@ -50,7 +50,7 @@ public:
 	                                                    OnCreateConflict on_conflict,
 	                                                    SecretPersistMode persist_mode) override;
 	DUCKDB_API optional_ptr<SecretEntry> CreateSecret(ClientContext &context, const CreateSecretInfo &info) override;
-	DUCKDB_API BoundStatement BindCreateSecret(CatalogTransaction transaction, CreateSecretStatement &stmt) override;
+	DUCKDB_API BoundStatement BindCreateSecret(CatalogTransaction transaction, CreateSecretInfo &info) override;
 	DUCKDB_API optional_ptr<SecretEntry> GetSecretByPath(CatalogTransaction transaction, const string &path,
 	                                                     const string &type) override;
 	DUCKDB_API optional_ptr<SecretEntry> GetSecretByName(CatalogTransaction transaction, const string &name) override;

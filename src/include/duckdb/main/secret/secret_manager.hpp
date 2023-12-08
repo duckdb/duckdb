@@ -16,7 +16,6 @@
 namespace duckdb {
 struct CreateSecretInfo;
 struct BoundStatement;
-class CreateSecretStatement;
 struct CatalogTransaction;
 
 //! Wrapper around a BaseSecret containing metadata and allow storing in CatalogSet
@@ -65,7 +64,7 @@ public:
 	DUCKDB_API virtual optional_ptr<SecretEntry> CreateSecret(ClientContext &context,
 	                                                          const CreateSecretInfo &input) = 0;
 	//! Binds a create secret statement, optionally pass a ClientContext to support auto-loading extensions
-	DUCKDB_API virtual BoundStatement BindCreateSecret(CatalogTransaction transaction, CreateSecretStatement &stmt) = 0;
+	DUCKDB_API virtual BoundStatement BindCreateSecret(CatalogTransaction transaction, CreateSecretInfo &info) = 0;
 	//! Get the secret whose scope best matches the path.
 	DUCKDB_API virtual optional_ptr<SecretEntry> GetSecretByPath(CatalogTransaction transaction, const string &path,
 	                                                             const string &type) = 0;

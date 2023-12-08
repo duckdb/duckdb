@@ -35,8 +35,6 @@ string StatementTypeToString(StatementType type) {
 		return "EXPLAIN";
 	case StatementType::CREATE_STATEMENT:
 		return "CREATE";
-	case StatementType::CREATE_SECRET_STATEMENT:
-		return "CREATE_SECRET";
 	case StatementType::DROP_STATEMENT:
 		return "DROP";
 	case StatementType::PRAGMA_STATEMENT:

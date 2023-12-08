@@ -15,7 +15,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
-#include "duckdb/parser/statement/create_secret_statement.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/operator/logical_create_secret.hpp"
 
 namespace duckdb {
@@ -203,11 +203,11 @@ optional_ptr<SecretEntry> DuckSecretManager::CreateSecret(ClientContext &context
 	return RegisterSecretInternal(transaction, std::move(secret), info.on_conflict, info.persist_mode);
 }
 
-BoundStatement DuckSecretManager::BindCreateSecret(CatalogTransaction transaction, CreateSecretStatement &stmt) {
+BoundStatement DuckSecretManager::BindCreateSecret(CatalogTransaction transaction, CreateSecretInfo &info) {
 	InitializeSecrets(transaction);
 
-	auto type = stmt.info->type;
-	auto provider = stmt.info->provider;
+	auto type = info.type;
+	auto provider = info.provider;
 	bool default_provider = false;
 
 	if (provider.empty()) {
@@ -225,11 +225,11 @@ BoundStatement DuckSecretManager::BindCreateSecret(CatalogTransaction transactio
 		                      default_string, provider);
 	}
 
-	auto bound_info = *stmt.info;
+	auto bound_info = info;
 	bound_info.options.clear();
 
 	// We cast the passed parameters
-	for (const auto &param : stmt.info->options) {
+	for (const auto &param : info.options) {
 		auto matched_param = function->named_parameters.find(param.first);
 		if (matched_param == function->named_parameters.end()) {
 			throw BinderException("Unknown parameter '%s' for secret type '%s' with %sprovider '%s'", param.first, type,

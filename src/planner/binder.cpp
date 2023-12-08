@@ -120,8 +120,6 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<DetachStatement>());
 	case StatementType::COPY_DATABASE_STATEMENT:
 		return Bind(statement.Cast<CopyDatabaseStatement>());
-	case StatementType::CREATE_SECRET_STATEMENT:
-		return Bind(statement.Cast<CreateSecretStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));

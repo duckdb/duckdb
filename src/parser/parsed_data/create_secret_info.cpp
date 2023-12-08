@@ -5,10 +5,10 @@
 namespace duckdb {
 
 CreateSecretInfo::CreateSecretInfo(OnCreateConflict on_conflict, SecretPersistMode persist_mode)
-    : ParseInfo(ParseInfoType::CREATE_SECRET_INFO), on_conflict(on_conflict), persist_mode(persist_mode), options() {
+    : CreateInfo(CatalogType::SECRET_ENTRY), on_conflict(on_conflict), persist_mode(persist_mode), options() {
 }
 
-unique_ptr<CreateSecretInfo> CreateSecretInfo::Copy() const {
+unique_ptr<CreateInfo> CreateSecretInfo::Copy() const {
 	auto result = make_uniq<CreateSecretInfo>(on_conflict, persist_mode);
 	result->type = type;
 	result->provider = provider;
