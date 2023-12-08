@@ -12,24 +12,15 @@
 
 namespace duckdb {
 
-inline static void FinalizeValue(CSVValue &value, const CSVScanner &scanner, const idx_t current_pos) {
-	// Here it is all predicated
-	const bool same_buf = scanner.cur_buffer_handle->Ptr() == value.buffer_ptr;
-	// if it is the same buffer the length is simply current position minus the start position
-	value.length += same_buf * (current_pos - value.buffer_pos);
-	// If it is not the same buffer, then the math is slightly more complex, but still trivial.
-	value.length += !same_buf * (value.buffer_length - value.buffer_pos + current_pos);
-	// We set the pointer for the second buffer if it is not the same buffer
-	value.buffer_ptr_2 += !same_buf * (uintptr_t)scanner.cur_buffer_handle->Ptr();
-}
-
 struct ParseChunk {
 	inline static void Initialize(CSVScanner &scanner, idx_t current_pos) {
 		scanner.states.Initialize(CSVState::EMPTY_LINE);
 		scanner.cur_rows = 0;
 		scanner.column_count = 0;
-		scanner.values[0].emplace_back(scanner.cur_buffer_handle->Ptr(), current_pos,
-		                               scanner.cur_buffer_handle->actual_size);
+		scanner.values[0] = unique_ptr<CSVValue[]>(new CSVValue[16]);
+		scanner.values[0][0].buffer_ptr = scanner.cur_buffer_handle->Ptr() + current_pos;
+		scanner.length = 0;
+
 	}
 
 	// break it into a 2-step
@@ -40,23 +31,29 @@ struct ParseChunk {
 		auto &states = scanner.states;
 
 		sniffing_state_machine.Transition(states, current_char);
+		scanner.length++;
 		// Check if it's a new value - We don't predicate this because of the cost of creating a CSV Value
 		if (states.NewValue()) {
-			FinalizeValue(scanner.values[scanner.cur_rows][scanner.column_count++], scanner, current_pos);
+			scanner.length--;
+			scanner.values[scanner.cur_rows][scanner.column_count++].length = scanner.length;
+			scanner.values[scanner.cur_rows][scanner.column_count].buffer_ptr = scanner.cur_buffer_handle->Ptr() + current_pos;
+			scanner.length = 0;
 			// Create next value
 			// fixme: states.current_state == CSVState::QUOTED
-			scanner.values[scanner.cur_rows].emplace_back(scanner.cur_buffer_handle->Ptr(), current_pos,
-			                                              scanner.cur_buffer_handle->actual_size);
+
 		}
 		// Check if it's a new row
 		if (states.NewRow()) {
-			FinalizeValue(scanner.values[scanner.cur_rows++][scanner.column_count], scanner, current_pos);
+			scanner.length--;
+			scanner.values[scanner.cur_rows++][scanner.column_count].length = scanner.length;
+			scanner.length = 0;
 			if (scanner.cur_rows >= STANDARD_VECTOR_SIZE) {
 				return true;
 			}
-			scanner.values[scanner.cur_rows].emplace_back(scanner.cur_buffer_handle->Ptr(), current_pos,
-			                                              scanner.cur_buffer_handle->actual_size);
 			scanner.column_count = 0;
+			scanner.values[scanner.cur_rows] = unique_ptr<CSVValue[]>(new CSVValue[parse_chunk.ColumnCount()]);
+			scanner.values[scanner.cur_rows][scanner.column_count].buffer_ptr = scanner.cur_buffer_handle->Ptr() + current_pos;
+
 		}
 		//		bool carriage_return = states.previous_state == CSVState::CARRIAGE_RETURN;
 		//		if (states.previous_state == CSVState::DELIMITER || (states.previous_state == CSVState::RECORD_SEPARATOR)
@@ -120,13 +117,13 @@ struct ParseChunk {
 			auto parse_data = FlatVector::GetData<string_t>(v);
 			for (idx_t row_idx = 0; row_idx < scanner.cur_rows; row_idx++) {
 				auto &value = scanner.values[row_idx][col_idx];
-				if (value.OverBuffer()) {
-					// Lets copy the string
-					parse_data[row_idx] = StringVector::AddStringOrBlob(v, value.GetStringT());
-				} else {
+//				if (value.OverBuffer()) {
+//					// Lets copy the string
+//					parse_data[row_idx] = StringVector::AddStringOrBlob(v, value.GetStringT());
+//				} else {
 					// Don't copy the string
 					parse_data[row_idx] = value.GetStringT();
-				}
+//				}
 			}
 		}
 

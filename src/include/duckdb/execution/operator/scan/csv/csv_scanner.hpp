@@ -66,51 +66,19 @@ struct CSVIterator {
 //! This represents a CSV Value in a buffer
 struct CSVValue {
 public:
-	CSVValue(char *buffer_ptr_p, idx_t buffer_pos_p, idx_t buffer_length_p)
-	    : buffer_ptr(buffer_ptr_p), buffer_pos(buffer_pos_p), buffer_length(buffer_length_p) {};
+	CSVValue() {
+	}
+
 	//! Converts value to string_t
-	string_t GetStringT() {
-		//		if (!buffer_ptr_2){
-		return string_t(&buffer_ptr[buffer_pos], length);
-		//		}
-		//		D_ASSERT(0);
-		//		// Check our value length is not bigger than a Buffer size, since this would mean that we have to deal
-		//with more than two buffers 		if (length > CSVBuffer::CSV_BUFFER_SIZE + buffer_length-buffer_pos){
-		//			// If someone runs into this with valid data, I'll personally send them a DuckDB cap.
-		//			throw NotImplementedException("This CSV file has a value of size: %llu. Values over %llu bytes which not
-		//yet accepted", CSVBuffer::CSV_BUFFER_SIZE);
-		//		}
-		//		overlap_value.reserve(length);
-		//		// Construct the string that holds the overlap value
-		//		for (idx_t  i = buffer_pos; i < buffer_length; i++){
-		//			overlap_value[i] = buffer_ptr[i];
-		//		}
-		//		idx_t buffer_2_length = length - (buffer_length - buffer_pos);
-		//		auto buffer_ptr_2_char = (char*)buffer_ptr_2;
-		//		for (idx_t  i = 0; i <  buffer_2_length; i++){
-		//			overlap_value[i] = buffer_ptr_2_char[i];
-		//		}
-		//		return string_t(overlap_value);
+	inline string_t GetStringT() {
+		return string_t(buffer_ptr, length);
+
 	};
 
-	//! If this value spans over multiple buffers
-	bool OverBuffer() {
-		return buffer_ptr_2;
-	}
 	//! Buffer Pointer
-	const char *buffer_ptr;
-	//! Buffer Position
-	const idx_t buffer_pos;
-	//! The length of the first buffer
-	const idx_t buffer_length;
+	char *buffer_ptr;
 	//! Length of the string
-	idx_t length = 0;
-	//! If this value spans over more than one buffer
-	uintptr_t buffer_ptr_2 = 0;
-
-private:
-	//! When we have the
-	// string overlap_value;
+	uint16_t length;
 };
 
 //! The CSV Scanner is what iterates over CSV Buffers
@@ -176,10 +144,14 @@ public:
 	//! Current Number of Columns
 	idx_t column_count = 1;
 
+	idx_t length = 0;
+
 	CSVStates states;
 
 	//! String Values per [row|column]
-	vector<CSVValue> values[STANDARD_VECTOR_SIZE];
+
+	unique_ptr<CSVValue[]> values [STANDARD_VECTOR_SIZE];
+
 	string value;
 
 	idx_t rows_read = 0;
@@ -223,6 +195,9 @@ public:
 	//! To offload buffers to disk if necessary
 	unique_ptr<CSVBufferHandle> cur_buffer_handle;
 
+		//! Parse Chunk where all columns are defined as VARCHAR
+	DataChunk parse_chunk;
+
 private:
 	//! Where this CSV Scanner starts
 	CSVIterator csv_iterator;
@@ -231,8 +206,7 @@ private:
 
 	//! Shared pointer to the state machine, this is used across multiple scanners
 	shared_ptr<CSVStateMachine> state_machine;
-	//! Parse Chunk where all columns are defined as VARCHAR
-	DataChunk parse_chunk;
+
 	const ParserMode mode;
 	//! ------------- CSV Parsing -------------------//
 	//! The following set of functions and variables are related to actual CSV Parsing
