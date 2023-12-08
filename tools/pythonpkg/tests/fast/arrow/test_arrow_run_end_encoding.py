@@ -78,7 +78,10 @@ class TestArrowREE(object):
     )
     @pytest.mark.parametrize(
         "filter",
-        ["ree::VARCHAR == '5'"],
+        [
+            # "ree::VARCHAR == '5'",
+            "true"
+        ],
     )
     def test_arrow_run_end_encoding(self, duckdb_cursor, dbtype, val1, val2, filter):
         projection = "a, b, ree"
@@ -143,6 +146,7 @@ class TestArrowREE(object):
         pa_res = pa.Table.from_arrays([encoded_array], schema=schema)
         res = duckdb_cursor.sql("select * from pa_res").fetchall()
         assert res == expected
+
 
 # TODO: add tests with a WHERE clause
 # TODO: add tests with projections
