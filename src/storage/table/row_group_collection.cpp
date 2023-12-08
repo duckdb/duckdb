@@ -667,7 +667,7 @@ void RowGroupCollection::VacuumDeletes(VacuumState &state, vector<SegmentNode<Ro
 	if (!perform_merge) {
 		return;
 	}
-	// create a new row group
+	// create the new set of target row groups (initially empty)
 	vector<unique_ptr<RowGroup>> new_row_groups;
 	vector<idx_t> append_counts;
 	idx_t row_group_rows = merge_rows;
