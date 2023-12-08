@@ -29,7 +29,7 @@ class TestArrowREE(object):
         'value_type',
         ['UTINYINT', 'USMALLINT', 'UINTEGER', 'UBIGINT', 'TINYINT', 'SMALLINT', 'INTEGER', 'BIGINT', 'HUGEINT'],
     )
-    def test_arrow_run_end_encoding(self, duckdb_cursor, query, run_length, size, value_type):
+    def test_arrow_run_end_encoding_numerics(self, duckdb_cursor, query, run_length, size, value_type):
         if value_type == 'UTINYINT':
             if size > 255:
                 size = 255
@@ -49,58 +49,86 @@ class TestArrowREE(object):
         assert res == expected
 
     @pytest.mark.parametrize(
-        ['val1', 'val2'],
+        ['dbtype', 'val1', 'val2'],
         [
-            ('(-128)::TINYINT', '127::TINYINT'),
-            ('(-32768)::SMALLINT', '32767::SMALLINT'),
-            ('(-2147483648)::INTEGER', '2147483647::INTEGER'),
-            ('(-9223372036854775808)::BIGINT', '9223372036854775807::BIGINT'),
-            ('0::UTINYINT', '255::UTINYINT'),
-            ('0::USMALLINT', '65535::USMALLINT'),
-            ('0::UINTEGER', '4294967295::UINTEGER'),
-            ('0::UBIGINT', '18446744073709551615::UBIGINT'),
-            ('true::BOOL', 'false::BOOL'),
-            ("'test'::VARCHAR", "'this is a long string'::VARCHAR"),
-            ("'\\xE0\\x9F\\x98\\x84'::BLOB", "'\\xF0\\x9F\\xA6\\x86'::BLOB"),
-            ("'1992-03-27'::DATE", "'2204-11-01'::DATE"),
-            ("'01:02:03'::TIME", "'23:41:35'::TIME"),
-            ("'1992-03-22 01:02:03'::TIMESTAMP_S", "'2022-11-07 08:43:04.123456'::TIMESTAMP_S"),
-            ("'1992-03-22 01:02:03'::TIMESTAMP", "'2022-11-07 08:43:04.123456'::TIMESTAMP"),
-            ("'1992-03-22 01:02:03'::TIMESTAMP_MS", "'2022-11-07 08:43:04.123456'::TIMESTAMP_MS"),
-            ("'1992-03-22 01:02:03'::TIMESTAMP_NS", "'2022-11-07 08:43:04.123456'::TIMESTAMP_NS"),
-            ("'12.23'::DECIMAL(4,2)", "'99.99'::DECIMAL(4,2)"),
-            ("'1.234234'::DECIMAL(7,6)", "'0.000001'::DECIMAL(7,6)"),
-            ("'134523.234234'::DECIMAL(14,7)", "'999999.000001'::DECIMAL(14,7)"),
-            ("'12345678910111234123456789.1'::DECIMAL(28,1)", "'999999999999999999999999999.9'::DECIMAL(28,1)"),
+            ('TINYINT', '(-128)', '127'),
+            ('SMALLINT', '(-32768)', '32767'),
+            ('INTEGER', '(-2147483648)', '2147483647'),
+            ('BIGINT', '(-9223372036854775808)', '9223372036854775807'),
+            ('UTINYINT', '0', '255'),
+            ('USMALLINT', '0', '65535'),
+            ('UINTEGER', '0', '4294967295'),
+            ('UBIGINT', '0', '18446744073709551615'),
+            ('BOOL', 'true', 'false'),
+            ('VARCHAR', "'test'", "'this is a long string'"),
+            ('BLOB', "'\\xE0\\x9F\\x98\\x84'", "'\\xF0\\x9F\\xA6\\x86'"),
+            ('DATE', "'1992-03-27'", "'2204-11-01'"),
+            ('TIME', "'01:02:03'", "'23:41:35'"),
+            ('TIMESTAMP_S', "'1992-03-22 01:02:03'", "'2022-11-07 08:43:04.123456'"),
+            ('TIMESTAMP', "'1992-03-22 01:02:03'", "'2022-11-07 08:43:04.123456'"),
+            ('TIMESTAMP_MS', "'1992-03-22 01:02:03'", "'2022-11-07 08:43:04.123456'"),
+            ('TIMESTAMP_NS', "'1992-03-22 01:02:03'", "'2022-11-07 08:43:04.123456'"),
+            ('DECIMAL(4,2)', "'12.23'", "'99.99'"),
+            ('DECIMAL(7,6)', "'1.234234'", "'0.000001'"),
+            ('DECIMAL(14,7)', "'134523.234234'", "'999999.000001'"),
+            ('DECIMAL(28,1)', "'12345678910111234123456789.1'", "'999999999999999999999999999.9'"),
             # ("'10acd298-15d7-417c-8b59-eabb5a2bacab'::UUID", "'eeccb8c5-9943-b2bb-bb5e-222f4e14b687'::UUID"),
             # ("'01010101010000'::BIT", "'01010100010101010101010101111111111'::BIT"), # FIXME: BIT seems broken?
         ],
     )
-    @pytest.mark.parametrize('size', [3000])
-    def test_arrow_run_end_encoding_coverage(self, duckdb_cursor, val1, val2, size):
+    @pytest.mark.parametrize(
+        "filter",
+        ["ree::VARCHAR == '5'"],
+    )
+    def test_arrow_run_end_encoding(self, duckdb_cursor, dbtype, val1, val2, filter):
+        projection = "a, b, ree"
         query = """
-            select
+            create table ree_tbl as select
                 case when ((i // 8) % 2 == 0)
                     then (
                         case when ((i // 4) % 2 == 0)
-                            then {}
-                            else {}
+                            then {}::{}
+                            else {}::{}
                         end
                     ) else
                         NULL
-                end as ree
+                end as ree,
+                i as a,
+                i // 5 as b
             from range({}) t(i);
         """
-        query = query.format(val1, val2, size)
-        rel = duckdb_cursor.sql(query)
-        array = rel.arrow()['ree']
-        expected = rel.fetchall()
+        # Create the table
+        query = query.format(val1, dbtype, val2, dbtype, 10000, filter)
+        duckdb_cursor.execute(query)
 
-        encoded_array = pc.run_end_encode(array)
+        rel = duckdb_cursor.query("select * from ree_tbl")
+        expected = duckdb_cursor.query("select {} from ree_tbl where {}".format(projection, filter)).fetchall()
 
-        schema = pa.schema([("ree", encoded_array.type)])
-        tbl = pa.Table.from_arrays([encoded_array], schema=schema)
-        res = duckdb_cursor.sql("select * from tbl").fetchall()
+        # Create an Arrow Table from the table
+        arrow_conversion = rel.arrow()
+        arrays = {
+            'ree': arrow_conversion['ree'],
+            'a': arrow_conversion['a'],
+            'b': arrow_conversion['b'],
+        }
+
+        encoded_arrays = {
+            'ree': pc.run_end_encode(arrays['ree']),
+            'a': pc.run_end_encode(arrays['a']),
+            'b': pc.run_end_encode(arrays['b']),
+        }
+
+        schema = pa.schema(
+            [
+                ("ree", encoded_arrays['ree'].type),
+                ("a", encoded_arrays['a'].type),
+                ("b", encoded_arrays['b'].type),
+            ]
+        )
+        tbl = pa.Table.from_arrays([encoded_arrays['ree'], encoded_arrays['a'], encoded_arrays['b']], schema=schema)
+
+        # Scan the Arrow Table and verify that the results are the same
+        res = duckdb_cursor.sql("select {} from tbl where {}".format(projection, filter)).fetchall()
         assert res == expected
 
     def test_arrow_ree_empty_table(self, duckdb_cursor):
@@ -115,45 +143,6 @@ class TestArrowREE(object):
         pa_res = pa.Table.from_arrays([encoded_array], schema=schema)
         res = duckdb_cursor.sql("select * from pa_res").fetchall()
         assert res == expected
-
-    @pytest.mark.parametrize(
-        "filter",
-        [
-            "ree % 2 == 0",
-            "ree == 1",
-            "ree != 1",
-            "ree == 20000",
-            "true",
-            "ree == 0 and ree == 1",
-            "ree % 2 == 1",
-            "ree % 2 == 2",
-            "ree == 1250",
-            "ree == 1249",
-            "ree::VARCHAR == 'test'",
-        ],
-    )
-    def test_arrow_run_end_encoding_filters(self, duckdb_cursor, filter):
-        duckdb_cursor.query(
-            """
-            create table tbl as select (i // 8) as ree from range(10000) t(i)
-        """
-        )
-        query = """
-            select * from tbl where {}
-        """
-        query = query.format(filter)
-        rel = duckdb_cursor.query(query)
-
-        array = rel.arrow()['ree']
-        expected = rel.fetchall()
-
-        encoded_array = pc.run_end_encode(array)
-
-        schema = pa.schema([("ree", encoded_array.type)])
-        pa_res = pa.Table.from_arrays([encoded_array], schema=schema)
-        res = duckdb_cursor.sql("select * from pa_res").fetchall()
-        assert res == expected
-
 
 # TODO: add tests with a WHERE clause
 # TODO: add tests with projections
