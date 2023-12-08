@@ -72,7 +72,7 @@ public:
 	DUCKDB_API virtual optional_ptr<SecretEntry> GetSecretByName(CatalogTransaction transaction,
 	                                                             const string &name) = 0;
 	//! Drop a secret by name
-	DUCKDB_API virtual void DropSecretByName(CatalogTransaction transaction, const string &name, bool missing_ok) = 0;
+	DUCKDB_API virtual void DropSecretByName(CatalogTransaction transaction, const string &name, OnEntryNotFound on_entry_not_found) = 0;
 	//! Get a vector of all registered secrets
 	DUCKDB_API virtual vector<reference<SecretEntry>> AllSecrets(CatalogTransaction transaction) = 0;
 	//! Whether permanent secrets are enabled
@@ -85,7 +85,7 @@ public:
 	DUCKDB_API virtual string PermanentSecretPath() = 0;
 
 	//! Utility functions
-	DUCKDB_API virtual void DropSecretByName(ClientContext &context, const string &name, bool missing_ok);
+	DUCKDB_API virtual void DropSecretByName(ClientContext &context, const string &name, OnEntryNotFound on_entry_not_found);
 };
 
 } // namespace duckdb

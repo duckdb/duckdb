@@ -295,14 +295,14 @@ optional_ptr<SecretEntry> DuckSecretManager::GetSecretByName(CatalogTransaction 
 	throw InternalException("GetSecretByName called on unknown secret: %s", name);
 }
 
-void DuckSecretManager::DropSecretByName(CatalogTransaction transaction, const string &name, bool missing_ok) {
+void DuckSecretManager::DropSecretByName(CatalogTransaction transaction, const string &name, OnEntryNotFound on_entry_not_found) {
 	InitializeSecrets(transaction);
 
 	bool deleted;
 	bool was_persistent;
 
 	auto entry = secrets->GetEntry(transaction, name);
-	if (!entry && !missing_ok) {
+	if (!entry && on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 		throw InvalidInputException("Failed to remove non-existent secret with name '%s'", name);
 	}
 
@@ -328,7 +328,7 @@ void DuckSecretManager::DropSecretByName(CatalogTransaction transaction, const s
 		}
 	}
 
-	if (!deleted && !missing_ok) {
+	if (!deleted && on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 		throw InvalidInputException("Failed to remove non-existent secret with name '%s'", name);
 	}
 }

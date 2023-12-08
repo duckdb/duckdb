@@ -171,7 +171,7 @@ private:
 	unique_ptr<SetStatement> TransformUse(duckdb_libpgquery::PGUseStmt &stmt);
 	unique_ptr<SQLStatement> TransformCopyDatabase(duckdb_libpgquery::PGCopyDatabaseStmt &stmt);
 	unique_ptr<CreateStatement> TransformSecret(duckdb_libpgquery::PGCreateSecretStmt &stmt);
-	unique_ptr<PragmaStatement> TransformDropSecret(duckdb_libpgquery::PGDropSecretStmt &stmt);
+	unique_ptr<DropStatement> TransformDropSecret(duckdb_libpgquery::PGDropSecretStmt &stmt);
 
 	unique_ptr<PrepareStatement> TransformPrepare(duckdb_libpgquery::PGPrepareStmt &stmt);
 	unique_ptr<ExecuteStatement> TransformExecute(duckdb_libpgquery::PGExecuteStmt &stmt);

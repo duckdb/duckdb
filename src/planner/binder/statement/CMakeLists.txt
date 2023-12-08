@@ -6,7 +6,6 @@ add_library_unity(
   bind_copy.cpp
   bind_copy_database.cpp
   bind_create.cpp
-  bind_create_secret.cpp
   bind_create_table.cpp
   bind_delete.cpp
   bind_detach.cpp

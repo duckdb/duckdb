@@ -73,4 +73,14 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGDropStm
 	return std::move(result);
 }
 
+unique_ptr<DropStatement> Transformer::TransformDropSecret(duckdb_libpgquery::PGDropSecretStmt &stmt) {
+	auto result = make_uniq<DropStatement>();
+
+	result->info->type = CatalogType::SECRET_ENTRY;
+	result->info->name = stmt.secret_name;
+	result->info->if_not_found = stmt.missing_ok ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+
+	return result;
+}
+
 } // namespace duckdb

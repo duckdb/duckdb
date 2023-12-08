@@ -8,9 +8,9 @@ SecretManager &SecretManager::Get(ClientContext &context) {
 	return *DBConfig::GetConfig(context).secret_manager;
 }
 
-void SecretManager::DropSecretByName(ClientContext &context, const string &name, bool missing_ok) {
+void SecretManager::DropSecretByName(ClientContext &context, const string &name, OnEntryNotFound on_entry_not_found) {
 	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
-	return DropSecretByName(transaction, name, missing_ok);
+	return DropSecretByName(transaction, name, on_entry_not_found);
 }
 
 } // namespace duckdb
