@@ -125,7 +125,7 @@
   {
     "class": "EmptyTableRef",
     "base": "TableRef",
-    "enum": "EMPTY_TABLE",
+    "enum": "EMPTY_FROM",
     "members": [
     ]
   },
