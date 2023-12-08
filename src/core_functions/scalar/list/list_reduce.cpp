@@ -6,10 +6,9 @@
 namespace duckdb {
 
 struct ReduceExecuteInfo {
-	ReduceExecuteInfo(LambdaFunctions::ReduceInfo &reduce_info, idx_t row_count, bool has_index, ValidityMask &result_validity,
-	                  Vector &vector) : left_slice(vector) {
-		SelectionVector left_vector(row_count);
-		active_rows.resize(row_count);
+	ReduceExecuteInfo(LambdaFunctions::ReduceInfo &reduce_info, LambdaFunctions::LambdaInfo &info, ValidityMask &result_validity, ClientContext &context) : left_slice(reduce_info.child_vector) {
+		SelectionVector left_vector(info.row_count);
+		active_rows.resize(info.row_count);
 
 		idx_t old_count = 0;
 		idx_t new_count = 0;
@@ -36,7 +35,7 @@ struct ReduceExecuteInfo {
 
 		left_slice.Slice(left_vector, new_count);
 
-		if (has_index) {
+		if (info.has_index) {
 			input_types.push_back(LogicalType::BIGINT);
 		}
 		input_types.push_back(left_slice.GetType());
@@ -44,6 +43,8 @@ struct ReduceExecuteInfo {
 		for (auto &entry : reduce_info.column_infos) {
 			input_types.push_back(entry.vector.get().GetType());
 		}
+
+		expr_executor = make_uniq<ExpressionExecutor>(context, *reduce_info.lambda_expr);
 	};
 
 	vector<idx_t> active_rows;
@@ -123,19 +124,18 @@ static void ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 	execute_info.left_slice.Reference(result_chunk.data[0]);
 }
 
-void LambdaFunctions::PrepareReduce(unique_ptr<Expression> &lambda_expr, ValidityMask &result_validity, LambdaInfo &info, ReduceInfo &reduce_info, ExpressionState &state) {
-	ReduceExecuteInfo execute_info(reduce_info, info.row_count, info.has_index, result_validity, reduce_info.child_vector);
+void LambdaFunctions::PrepareReduce(ValidityMask &result_validity, LambdaInfo &info, ReduceInfo &reduce_info, ExpressionState &state) {
+	// Initializes the left slice from the list entries, active rows, the expression executor and the input types
+	ReduceExecuteInfo execute_info(reduce_info, info, result_validity, state.GetContext());
 
 	// Since the left slice references the result chunk, we need to create two result chunks.
 	// This means there is always an empty result chunk for the next iteration,
 	// without the referenced chunk having to be reset until the current iteration is complete.
 	DataChunk odd_result_chunk;
-	odd_result_chunk.Initialize(Allocator::DefaultAllocator(), {lambda_expr->return_type});
+	odd_result_chunk.Initialize(Allocator::DefaultAllocator(), {reduce_info.lambda_expr->return_type});
 
 	DataChunk even_result_chunk;
-	even_result_chunk.Initialize(Allocator::DefaultAllocator(), {lambda_expr->return_type});
-
-	unique_ptr<ExpressionExecutor> expr_executor = make_uniq<ExpressionExecutor>(state.GetContext(), *lambda_expr);
+	even_result_chunk.Initialize(Allocator::DefaultAllocator(), {reduce_info.lambda_expr->return_type});
 
 	idx_t loops = 0;
 	// Execute reduce until all rows are finished
@@ -170,19 +170,10 @@ static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFun
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	auto has_index = bound_lambda_expr.parameter_count == 3;
 
-	// NULL list parameter
-	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[0] = LogicalType::SQLNULL;
-		bound_function.return_type = LogicalType::SQLNULL;
-		return make_uniq<ListLambdaBindData>(bound_function.return_type, nullptr);
+	unique_ptr<FunctionData> bind_data = LambdaFunctions::ListLambdaPrepareBind(arguments, context, bound_function);
+	if (bind_data) {
+		return bind_data;
 	}
-	// prepared statements
-	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
-		throw ParameterNotResolvedException();
-	}
-
-	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
-	D_ASSERT(arguments[0]->return_type.id() == LogicalTypeId::LIST);
 
 	auto list_child_type = arguments[0]->return_type;
 	list_child_type = ListType::GetChildType(list_child_type);

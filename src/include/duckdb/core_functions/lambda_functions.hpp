@@ -42,6 +42,11 @@ public:
 	//! Returns the parameter type for binary lambdas
 	static LogicalType BindBinaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type);
 	static LogicalType BindTertiaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type);
+
+	//! Checks for NULL list parameter and prepared statements and adds bound cast expression
+	static unique_ptr<FunctionData> ListLambdaPrepareBind(vector<unique_ptr<Expression>> &arguments, ClientContext &context,
+	                                                      ScalarFunction &bound_function);
+
 	//! Returns the ListLambdaBindData containing the lambda expression
 	static unique_ptr<FunctionData> ListLambdaBind(ClientContext &, ScalarFunction &bound_function,
 	                                               vector<unique_ptr<Expression>> &arguments,
@@ -79,18 +84,19 @@ public:
 
 	struct ReduceInfo {
 		explicit ReduceInfo(const list_entry_t *list_entries, const UnifiedVectorFormat &list_column_format, Vector &child_vector,
-		                    Vector &result, const vector<ColumnInfo> &column_infos)
+		                    Vector &result, const vector<ColumnInfo> &column_infos, unique_ptr<Expression> &lambda_expr)
 		    : list_entries(list_entries), list_column_format(list_column_format), child_vector(child_vector),
-		      result(result), column_infos(column_infos) {};
+		      result(result), column_infos(column_infos), lambda_expr(lambda_expr) {};
 
 		const list_entry_t *list_entries;
 		const UnifiedVectorFormat &list_column_format;
 		Vector &child_vector;
 		Vector &result;
 		const vector<ColumnInfo> &column_infos;
+		unique_ptr<Expression> &lambda_expr;
 	};
 
-	static void PrepareReduce(unique_ptr<Expression> &lambda_expr, ValidityMask &result_validity, LambdaInfo &info, ReduceInfo &reduce_info, ExpressionState &state);
+	static void PrepareReduce(ValidityMask &result_validity, LambdaInfo &info, ReduceInfo &reduce_info, ExpressionState &state);
 
 	static vector<ColumnInfo> GetColumnInfo(DataChunk &args, const idx_t row_count);
 	static vector<reference<ColumnInfo>> GetInconstantColumnInfo(vector<ColumnInfo> &data);

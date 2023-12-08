@@ -318,8 +318,8 @@ void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result, bool
 	auto inconstant_column_infos = LambdaFunctions::GetInconstantColumnInfo(column_infos);
 
 	if (is_reduce) {
-		LambdaFunctions::ReduceInfo reduce_info(list_entries, list_column_format, child_vector, result, column_infos);
-		LambdaFunctions::PrepareReduce(lambda_expr, result_validity, lambda_info, reduce_info, state);
+		LambdaFunctions::ReduceInfo reduce_info(list_entries, list_column_format, child_vector, result, column_infos, lambda_expr);
+		LambdaFunctions::PrepareReduce(result_validity, lambda_info, reduce_info, state);
 		return;
 	}
 
@@ -397,10 +397,8 @@ void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result, bool
 	}
 }
 
-unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context, ScalarFunction &bound_function,
-                                                         vector<unique_ptr<Expression>> &arguments,
-                                                         const bool has_index) {
-
+unique_ptr<FunctionData> LambdaFunctions::ListLambdaPrepareBind(vector<unique_ptr<Expression>> &arguments, ClientContext &context,
+                                                                ScalarFunction &bound_function) {
 	// NULL list parameter
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
 		bound_function.arguments[0] = LogicalType::SQLNULL;
@@ -414,6 +412,16 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context,
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 	D_ASSERT(arguments[0]->return_type.id() == LogicalTypeId::LIST);
+	return NULL;
+}
+
+unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context, ScalarFunction &bound_function,
+                                                         vector<unique_ptr<Expression>> &arguments,
+                                                         const bool has_index) {
+	unique_ptr<FunctionData> bind_data = ListLambdaPrepareBind(arguments, context, bound_function);
+	if (bind_data) {
+		return bind_data;
+	}
 
 	// get the lambda expression and put it in the bind info
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();

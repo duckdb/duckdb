@@ -53,7 +53,7 @@ Once upon a time
 statement error
 SELECT list_reduce([], (x, y, i) -> x + y + i);
 ----
-empty list
+Cannot perform list_reduce on an empty input list
 
 statement error
 SELECT list_reduce([1, 2, 3], (x, y) -> (x * y)::VARCHAR || 'please work');
@@ -104,7 +104,7 @@ INSERT INTO t1 VALUES ([]);
 statement error
 SELECT list_reduce(a, (x, y) -> x + y) FROM t1;
 ----
-empty list
+Cannot perform list_reduce on an empty input list
 
 statement ok
 DROP TABLE t1;
@@ -132,7 +132,7 @@ INSERT INTO t1 VALUES ([]);
 statement error
 SELECT list_reduce(a, (x, y) -> x || ' ' || y) FROM t1;
 ----
-empty list
+Cannot perform list_reduce on an empty input list
 
 # nested functions with ints
 
@@ -144,7 +144,7 @@ SELECT list_reduce([1, 2, 3], (x, y) -> list_reduce([4, 5, 6], (a, b) -> x + y +
 statement error
 SELECT list_reduce([1, 2, 3], (x, y) -> list_reduce([], (a, b) -> x + y + a + b));
 ----
-empty list
+Cannot perform list_reduce on an empty input list
 
 query I
 SELECT list_reduce([1, 2, 3], (x, y, x_i) -> list_reduce([4, 5, 6], (a, b, a_i) -> x + y + a + b + x_i + a_i));
@@ -154,7 +154,7 @@ SELECT list_reduce([1, 2, 3], (x, y, x_i) -> list_reduce([4, 5, 6], (a, b, a_i) 
 statement error
 SELECT list_reduce([1, 2, 3], (x, y, x_i) -> list_reduce([], (a, b, a_i) -> x + y + a + b + x_i + a_i));
 ----
-empty list
+Cannot perform list_reduce on an empty input list
 
 query I
 SELECT list_reduce([[10, 20], [30, 40], [50, 60]], (x, y) -> list_pack(list_reduce(x, (l, m) -> l + m) + list_reduce(y, (n, o) -> n + o)));
@@ -221,7 +221,7 @@ INSERT INTO nested VALUES ([4, 5, 6], []);
 statement error
 SELECT list_reduce(n, (x, y) -> list_reduce(l, (a, b) -> x + y + a + b)) FROM nested;
 ----
-empty list
+Cannot perform list_reduce on an empty input list
 
 statement ok
 DROP TABLE nested;
@@ -246,7 +246,7 @@ INSERT INTO nested VALUES ([[4, 5, 6], []]);
 statement error
 SELECT list_reduce(n, (x, y) -> list_pack(list_reduce(x, (l, m) -> l + m) + list_reduce(y, (j, k) -> j + k))) from nested;
 ----
-empty list
+Cannot perform list_reduce on an empty input list
 
 statement ok
 DROP TABLE nested;
