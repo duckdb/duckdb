@@ -30,6 +30,7 @@ public:
 	string file_path;
 	bool use_tmp_file;
 	FilenamePattern filename_pattern;
+	string file_extension;
 	bool overwrite_or_ignore;
 	bool parallel;
 	bool per_thread_output;

@@ -52,6 +52,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 	copy->use_tmp_file = op.use_tmp_file;
 	copy->overwrite_or_ignore = op.overwrite_or_ignore;
 	copy->filename_pattern = op.filename_pattern;
+	copy->file_extension = op.file_extension;
 	copy->per_thread_output = op.per_thread_output;
 	if (op.file_size_bytes.IsValid()) {
 		copy->file_size_bytes = op.file_size_bytes;

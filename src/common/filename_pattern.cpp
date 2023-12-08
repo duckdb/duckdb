@@ -1,5 +1,4 @@
 #include "duckdb/common/filename_pattern.hpp"
-
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
@@ -25,11 +24,8 @@ void FilenamePattern::SetFilenamePattern(const string &pattern) {
 	_pos = std::min(_pos, (idx_t)_base.length());
 }
 
-void FilenamePattern::SetExtension(const string &extension) {
-	_extension = extension;
-}
-
-string FilenamePattern::CreateFilename(FileSystem &fs, const string &path, idx_t offset) const {
+string FilenamePattern::CreateFilename(FileSystem &fs, const string &path, const string &extension,
+                                       idx_t offset) const {
 	string result(_base);
 	string replacement;
 
@@ -39,7 +35,7 @@ string FilenamePattern::CreateFilename(FileSystem &fs, const string &path, idx_t
 		replacement = std::to_string(offset);
 	}
 	result.insert(_pos, replacement);
-	return fs.JoinPath(path, result + "." + _extension);
+	return fs.JoinPath(path, result + "." + extension);
 }
 
 } // namespace duckdb

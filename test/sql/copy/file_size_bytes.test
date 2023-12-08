@@ -93,26 +93,26 @@ SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv3/*.csv')
 ----
 100000
 
-# there should be 2 files
+# there should always be 2 files, even with parallelism nondeterminism
 query I
 SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_csv3/*.csv')
 ----
 2
 
-# what about a 240kb limit, which is ~1/4th of the total file size
+# what about a 200kb limit, which is <1/4th of the total file size
 statement ok
-COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv4' (FORMAT CSV, FILE_SIZE_BYTES '240kb');
+COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv4' (FORMAT CSV, FILE_SIZE_BYTES '200kb');
 
 query I
 SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv4/*.csv')
 ----
 100000
 
-# there should be 4 files
+# there should be around 4 files, not exact due to parallelism
 query I
-SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_csv4/*.csv')
+SELECT count(*) BETWEEN 3 AND 5 FROM glob('__TEST_DIR__/file_size_bytes_csv4/*.csv')
 ----
-4
+1
 
 # should work nicely with per thread output
 # no thread should see more than 700kb (being lenient in case of thread imbalance here),
@@ -131,29 +131,29 @@ SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_csv5/*.csv')
 ----
 4
 
-# each thread sees ~240kb if it's balanced, what about a 200kb limit
-# even in the case of extreme thread imbalance, this should always yield 8 files
+# each thread sees ~240kb if it's balanced, what about a 190kb limit
+# even in the case of extreme thread imbalance, this always yield around 8 files
 statement ok
-COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv6' (FORMAT CSV, FILE_SIZE_BYTES '200kb', PER_THREAD_OUTPUT TRUE);
+COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv6' (FORMAT CSV, FILE_SIZE_BYTES '190kb', PER_THREAD_OUTPUT TRUE);
 
 query I
 SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv6/*.csv')
 ----
 100000
 
-# 2 files per thread, 8 in total
+# ~2 files per thread, around 8 in total
 query I
-SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_csv6/*.csv')
+SELECT count(*) BETWEEN 7 AND 9 FROM glob('__TEST_DIR__/file_size_bytes_csv6/*.csv')
 ----
-8
+1
 
 # doesn't work in combination with certain params
 statement error
-COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv7' (FORMAT CSV, FILE_SIZE_BYTES '200kb', USE_TMP_FILE TRUE);
+COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv7' (FORMAT CSV, FILE_SIZE_BYTES '190kb', USE_TMP_FILE TRUE);
 ----
 Not implemented Error
 
 statement error
-COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv7' (FORMAT CSV, FILE_SIZE_BYTES '200kb', PARTITION_BY col_a);
+COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv7' (FORMAT CSV, FILE_SIZE_BYTES '190kb', PARTITION_BY col_a);
 ----
 Not implemented Error

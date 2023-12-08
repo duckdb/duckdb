@@ -58,7 +58,7 @@ unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext
 		this_file_offset = g.last_file_offset++;
 	}
 	auto &fs = FileSystem::GetFileSystem(context);
-	string output_path(filename_pattern.CreateFilename(fs, file_path, this_file_offset));
+	string output_path(filename_pattern.CreateFilename(fs, file_path, file_extension, this_file_offset));
 	if (fs.FileExists(output_path) && !overwrite_or_ignore) {
 		throw IOException("%s exists! Enable OVERWRITE_OR_IGNORE option to force writing", output_path);
 	}
@@ -278,7 +278,7 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 
 		for (idx_t i = 0; i < partitions.size(); i++) {
 			string hive_path = GetDirectory(partition_columns, names, partition_key_map[i]->values, trimmed_path, fs);
-			string full_path(filename_pattern.CreateFilename(fs, hive_path, l.writer_offset));
+			string full_path(filename_pattern.CreateFilename(fs, hive_path, file_extension, l.writer_offset));
 			if (fs.FileExists(full_path) && !overwrite_or_ignore) {
 				throw IOException(
 				    "failed to create %s, file exists! Enable OVERWRITE_OR_IGNORE option to force writing", full_path);
