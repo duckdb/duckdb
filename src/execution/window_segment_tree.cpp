@@ -1151,8 +1151,10 @@ void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
 
 	//	To handle FILTER clauses we make the missing elements
 	//	point to themselves so they won't be counted.
-	for (idx_t i = 0; i < count; ++i) {
-		prev_idcs[i] = {i + 1, i};
+	if (in_size < count) {
+		for (idx_t i = 0; i < count; ++i) {
+			prev_idcs[i] = {i + 1, i};
+		}
 	}
 
 	auto *input_idx = FlatVector::GetData<idx_t>(scan_chunk.data[0]);
