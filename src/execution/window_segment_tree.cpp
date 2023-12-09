@@ -1132,7 +1132,7 @@ void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
 		global_sort->InitializeMergeRound();
 		MergeSorter merge_sorter(*global_sort, global_sort->buffer_manager);
 		merge_sorter.PerformInMergeRound();
-		global_sort->CompleteMergeRound(false);
+		global_sort->CompleteMergeRound(true);
 	}
 
 	DataChunk scan_chunk;
