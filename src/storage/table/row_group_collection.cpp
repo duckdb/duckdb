@@ -359,11 +359,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 			D_ASSERT(chunk.size() == remaining + append_count);
 			// slice the input chunk
 			if (remaining < chunk.size()) {
-				SelectionVector sel(remaining);
-				for (idx_t i = 0; i < remaining; i++) {
-					sel.set_index(i, append_count + i);
-				}
-				chunk.Slice(sel, remaining);
+				chunk.Slice(append_count, remaining);
 			}
 			// append a new row_group
 			new_row_group = true;
@@ -599,17 +595,183 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_i
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
-	bool can_vacuum_deletes = info->indexes.Empty();
-	idx_t start = this->row_start;
-	auto segments = row_groups->MoveSegments();
-	auto l = row_groups->Lock();
+struct VacuumState {
+	bool can_vacuum_deletes = false;
+	idx_t next_vacuum_idx = 0;
+	vector<idx_t> row_group_counts;
+};
+
+void RowGroupCollection::InitializeVacuumState(VacuumState &state, vector<SegmentNode<RowGroup>> &segments) {
+	state.can_vacuum_deletes = info->indexes.Empty();
+	if (!state.can_vacuum_deletes) {
+		return;
+	}
+	// obtain the set of committed row counts for each row group
+	state.row_group_counts.reserve(segments.size());
 	for (auto &entry : segments) {
 		auto &row_group = *entry.node;
-		if (can_vacuum_deletes && row_group.AllDeleted()) {
+		auto row_group_count = row_group.GetCommittedRowCount();
+		if (row_group_count == 0) {
+			// empty row group - we can drop it entirely
 			row_group.CommitDrop();
+			entry.node.reset();
+		}
+		state.row_group_counts.push_back(row_group_count);
+	}
+}
+void RowGroupCollection::VacuumDeletes(VacuumState &state, vector<SegmentNode<RowGroup>> &segments, idx_t segment_idx) {
+	static constexpr const idx_t MAX_MERGE_COUNT = 3;
+
+	if (!state.can_vacuum_deletes || state.next_vacuum_idx >= segment_idx) {
+		// don't vacuum this segment index
+		return;
+	}
+	if (state.row_group_counts[segment_idx] == 0) {
+		// segment was already dropped - skip
+		return;
+	}
+	idx_t merge_rows;
+	idx_t next_idx;
+	idx_t merge_count;
+	idx_t target_count;
+	bool perform_merge = false;
+	// check if we can merge row groups adjacent to the current segment_idx
+	// we try merging row groups into batches of 1-3 row groups
+	// our goal is to reduce the amount of row groups
+	// hence we target_count should be less than merge_count for a marge to be worth it
+	// we greedily prefer to merge to the lowest target_count
+	// i.e. we prefer to merge 2 row groups into 1, than 3 row groups into 2
+	for (target_count = 1; target_count <= MAX_MERGE_COUNT; target_count++) {
+		auto total_target_size = target_count * Storage::ROW_GROUP_SIZE;
+		merge_count = 0;
+		merge_rows = 0;
+		for (next_idx = segment_idx; next_idx < segments.size(); next_idx++) {
+			if (state.row_group_counts[next_idx] == 0) {
+				continue;
+			}
+			if (merge_rows + state.row_group_counts[next_idx] > total_target_size) {
+				// does not fit
+				break;
+			}
+			// we can merge this row group together with the other row group
+			merge_rows += state.row_group_counts[next_idx];
+			merge_count++;
+		}
+		if (target_count < merge_count) {
+			// we can reduce "merge_count" row groups to "target_count"
+			// perform the merge at this level
+			perform_merge = true;
+			break;
+		}
+	}
+	if (!perform_merge) {
+		return;
+	}
+	// create the new set of target row groups (initially empty)
+	vector<unique_ptr<RowGroup>> new_row_groups;
+	vector<idx_t> append_counts;
+	idx_t row_group_rows = merge_rows;
+	idx_t start = segments[segment_idx].node->start;
+	for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
+		idx_t current_row_group_rows = MinValue<idx_t>(row_group_rows, Storage::ROW_GROUP_SIZE);
+		auto new_row_group = make_uniq<RowGroup>(*this, start, current_row_group_rows);
+		new_row_group->InitializeEmpty(types);
+		new_row_groups.push_back(std::move(new_row_group));
+		append_counts.push_back(0);
+
+		row_group_rows -= current_row_group_rows;
+		start += current_row_group_rows;
+	}
+
+	DataChunk scan_chunk;
+	scan_chunk.Initialize(Allocator::DefaultAllocator(), types);
+
+	vector<column_t> column_ids;
+	for (idx_t c = 0; c < types.size(); c++) {
+		column_ids.push_back(c);
+	}
+
+	idx_t current_append_idx = 0;
+
+	// fill the new row group with the merged rows
+	TableAppendState append_state;
+	new_row_groups[current_append_idx]->InitializeAppend(append_state.row_group_append_state);
+
+	TableScanState scan_state;
+	scan_state.Initialize(column_ids);
+	scan_state.table_state.Initialize(types);
+	scan_state.table_state.max_row = idx_t(-1);
+	for (idx_t c_idx = segment_idx; c_idx < next_idx; c_idx++) {
+		if (state.row_group_counts[c_idx] == 0) {
 			continue;
 		}
+		auto &current_row_group = *segments[c_idx].node;
+
+		current_row_group.InitializeScan(scan_state.table_state);
+		while (true) {
+			scan_chunk.Reset();
+
+			current_row_group.ScanCommitted(scan_state.table_state, scan_chunk,
+			                                TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+			if (scan_chunk.size() == 0) {
+				break;
+			}
+			idx_t remaining = scan_chunk.size();
+			while (remaining > 0) {
+				idx_t append_count =
+				    MinValue<idx_t>(remaining, Storage::ROW_GROUP_SIZE - append_counts[current_append_idx]);
+				new_row_groups[current_append_idx]->Append(append_state.row_group_append_state, scan_chunk,
+				                                           append_count);
+				append_counts[current_append_idx] += append_count;
+				remaining -= append_count;
+				if (remaining > 0) {
+					// move to the next row group
+					current_append_idx++;
+					new_row_groups[current_append_idx]->InitializeAppend(append_state.row_group_append_state);
+					// slice chunk for the next append
+					scan_chunk.Slice(append_count, remaining);
+				}
+			}
+		}
+		// drop the row group after merging
+		state.row_group_counts[c_idx] = 0;
+		current_row_group.CommitDrop();
+		segments[c_idx].node.reset();
+	}
+	idx_t total_append_count = 0;
+	for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
+		auto &row_group = new_row_groups[target_idx];
+		row_group->Verify();
+
+		// assign the new row group to the current segment
+		state.row_group_counts[segment_idx + target_idx] = row_group->count;
+		segments[segment_idx + target_idx].node = std::move(row_group);
+		total_append_count += append_counts[target_idx];
+	}
+	if (total_append_count != merge_rows) {
+		throw InternalException("Mismatch in row group count vs verify count in RowGroupCollection::Checkpoint");
+	}
+	// skip vacuuming by the row groups we have merged
+	state.next_vacuum_idx = segment_idx + merge_count;
+}
+
+void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
+	auto segments = row_groups->MoveSegments();
+	auto l = row_groups->Lock();
+
+	VacuumState vacuum_state;
+	InitializeVacuumState(vacuum_state, segments);
+	idx_t start = this->row_start;
+	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
+		auto &entry = segments[segment_idx];
+		// prior to checkpointing check if we can vacuum any rows at this segment
+		VacuumDeletes(vacuum_state, segments, segment_idx);
+		if (!entry.node) {
+			// row group was vacuumed/dropped - skip
+			continue;
+		}
+		auto &row_group = *entry.node;
+
 		row_group.MoveToCollection(*this, start);
 		auto row_group_writer = writer.GetRowGroupWriter(row_group);
 		auto pointer = row_group.Checkpoint(*row_group_writer, global_stats);
