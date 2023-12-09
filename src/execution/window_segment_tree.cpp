@@ -1052,6 +1052,25 @@ WindowDistinctAggregator::WindowDistinctAggregator(AggregateObject aggr, const L
 }
 
 WindowDistinctAggregator::~WindowDistinctAggregator() {
+	if (!aggr.function.destructor) {
+		// nothing to destroy
+		return;
+	}
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	// call the destructor for all the intermediate states
+	data_ptr_t address_data[STANDARD_VECTOR_SIZE];
+	Vector addresses(LogicalType::POINTER, data_ptr_cast(address_data));
+	idx_t count = 0;
+	for (idx_t i = 0; i < internal_nodes; i++) {
+		address_data[count++] = data_ptr_t(levels_flat_native.get() + i * state_size);
+		if (count == STANDARD_VECTOR_SIZE) {
+			aggr.function.destructor(addresses, aggr_input_data, count);
+			count = 0;
+		}
+	}
+	if (count > 0) {
+		aggr.function.destructor(addresses, aggr_input_data, count);
+	}
 }
 
 void WindowDistinctAggregator::Sink(DataChunk &arg_chunk, SelectionVector *filter_sel, idx_t filtered) {
