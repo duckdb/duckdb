@@ -40,7 +40,7 @@ void Transformer::ParseGenericOptionListEntry(case_insensitive_map_t<vector<Valu
 
 		Value value;
 		if (!Transformer::ConstructConstantFromExpression(*func_expr, value)) {
-			throw ParserException("Unsupported expression in COPY result_options: %s", func_expr->ToString());
+			throw ParserException("Unsupported expression in option list: %s", func_expr->ToString());
 		}
 		result_options[name].push_back(std::move(value));
 		break;
