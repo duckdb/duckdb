@@ -15,7 +15,7 @@ unique_ptr<CreateInfo> CreateSecretInfo::Copy() const {
 	result->name = name;
 	result->scope = scope;
 	result->options = options;
-	return result;
+	return std::move(result);
 }
 
 } // namespace duckdb
