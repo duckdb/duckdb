@@ -19,17 +19,17 @@ struct DBConfig;
 class SchemaCatalogEntry;
 
 struct DuckSecretManagerConfig {
-	static constexpr const bool DEFAULT_ALLOW_PERMANENT_SECRETS = true;
+	static constexpr const bool DEFAULT_ALLOW_PERSISTENT_SECRETS = true;
 	//! Secret Path can be changed by until the secret manager is initialized, after that it will be set automatically
 	string secret_path = "";
 	//! The default secret path is loaded on startup and can be used to reset the secret path
 	string default_secret_path = "";
 
-	//! Permanent secrets are enabled by default
-	bool allow_permanent_secrets = DEFAULT_ALLOW_PERMANENT_SECRETS;
+	//! Persistent secrets are enabled by default
+	bool allow_persistent_secrets = DEFAULT_ALLOW_PERSISTENT_SECRETS;
 };
 
-//! The Main secret manager implementation for DuckDB. Can handle both temporary and permanent secrets
+//! The Main secret manager implementation for DuckDB. Can handle both temporary and persistent secrets
 class DuckSecretManager : public SecretManager {
 	friend struct SecretEntry;
 
@@ -57,12 +57,12 @@ public:
 	DUCKDB_API void DropSecretByName(CatalogTransaction transaction, const string &name,
 	                                 OnEntryNotFound on_entry_not_found) override;
 	DUCKDB_API vector<reference<SecretEntry>> AllSecrets(CatalogTransaction transaction) override;
-	DUCKDB_API virtual void SetEnablePermanentSecrets(bool enabled) override;
-	DUCKDB_API virtual void ResetEnablePermanentSecrets() override;
-	DUCKDB_API virtual bool PermanentSecretsEnabled() override;
-	DUCKDB_API virtual void SetPermanentSecretPath(const string &path) override;
-	DUCKDB_API virtual void ResetPermanentSecretPath() override;
-	DUCKDB_API virtual string PermanentSecretPath() override;
+	DUCKDB_API virtual void SetEnablePersistentSecrets(bool enabled) override;
+	DUCKDB_API virtual void ResetEnablePersistentSecrets() override;
+	DUCKDB_API virtual bool PersistentSecretsEnabled() override;
+	DUCKDB_API virtual void SetPersistentSecretPath(const string &path) override;
+	DUCKDB_API virtual void ResetPersistentSecretPath() override;
+	DUCKDB_API virtual string PersistentSecretPath() override;
 
 private:
 	//! Deserialize a secret
@@ -79,10 +79,10 @@ private:
 	//! Write a secret to the FileSystem
 	void WriteSecretToFile(CatalogTransaction transaction, const BaseSecret &secret);
 
-	//! Initialize the secret catalog_set and permanent secrets (lazily)
+	//! Initialize the secret catalog_set and persistent secrets (lazily)
 	void InitializeSecrets(CatalogTransaction transaction);
-	//! Lazily preloads the permanent secrets
-	void LoadPermanentSecretsMap(CatalogTransaction transaction);
+	//! Lazily preloads the persistent secrets
+	void LoadPersistentSecretsMap(CatalogTransaction transaction);
 
 	//! Autoload extension for specific secret type
 	void AutoloadExtensionForType(ClientContext &context, const string &type);
@@ -99,19 +99,19 @@ private:
 
 	//! While false, secret manager settings can still be changed
 	atomic<bool> initialized {false};
-	//! Initialization lock for settings and permanent files
+	//! Initialization lock for settings and persistent files
 	mutex initialize_lock;
-	//! Set of permanent secrets that are lazily loaded
-	case_insensitive_set_t permanent_secrets;
+	//! Set of persistent secrets that are lazily loaded
+	case_insensitive_set_t persistent_secrets;
 	//! Configuration for secret manager
 	DuckSecretManagerConfig config;
 };
 
-//! The DefaultGenerator for permanent secrets. This is used to store lazy loaded secrets in the catalog
+//! The DefaultGenerator for persistent secrets. This is used to store lazy loaded secrets in the catalog
 class DefaultDuckSecretGenerator : public DefaultGenerator {
 public:
 	DefaultDuckSecretGenerator(Catalog &catalog, DuckSecretManager &secret_manager,
-	                           case_insensitive_set_t &permanent_secrets);
+	                           case_insensitive_set_t &persistent_secrets);
 
 public:
 	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;
@@ -119,7 +119,7 @@ public:
 
 protected:
 	DuckSecretManager &secret_manager;
-	case_insensitive_set_t permanent_secrets;
+	case_insensitive_set_t persistent_secrets;
 };
 
 } // namespace duckdb

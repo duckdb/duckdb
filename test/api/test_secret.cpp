@@ -14,8 +14,8 @@ TEST_CASE("Test secrets in transactions", "[api]") {
 	// Running single threaded
 	REQUIRE_NO_FAIL(con1.Query("PRAGMA threads=1"));
 
-	// Disable permanent secrets to prevent accidentally loading them from ~/.duckdb
-	REQUIRE_NO_FAIL(con1.Query("SET allow_permanent_secrets=0;"));
+	// Disable persistent secrets to prevent accidentally loading them from ~/.duckdb
+	REQUIRE_NO_FAIL(con1.Query("SET allow_persistent_secrets=0;"));
 
 	// Start transaction 1
 	REQUIRE_NO_FAIL(con1.Query("BEGIN TRANSACTION"));

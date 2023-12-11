@@ -364,7 +364,7 @@ extern int base_yydebug;
     PASSING = 565,                 /* PASSING  */
     PASSWORD = 566,                /* PASSWORD  */
     PERCENT = 567,                 /* PERCENT  */
-    PERMANENT = 568,               /* PERMANENT  */
+    PERSISTENT = 568,              /* PERSISTENT  */
     PIVOT = 569,                   /* PIVOT  */
     PIVOT_LONGER = 570,            /* PIVOT_LONGER  */
     PIVOT_WIDER = 571,             /* PIVOT_WIDER  */

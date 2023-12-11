@@ -578,7 +578,7 @@ enum yysymbol_kind_t
   YYSYMBOL_PASSING = 310,                  /* PASSING  */
   YYSYMBOL_PASSWORD = 311,                 /* PASSWORD  */
   YYSYMBOL_PERCENT = 312,                  /* PERCENT  */
-  YYSYMBOL_PERMANENT = 313,                /* PERMANENT  */
+  YYSYMBOL_PERSISTENT = 313,               /* PERSISTENT  */
   YYSYMBOL_PIVOT = 314,                    /* PIVOT  */
   YYSYMBOL_PIVOT_LONGER = 315,             /* PIVOT_LONGER  */
   YYSYMBOL_PIVOT_WIDER = 316,              /* PIVOT_WIDER  */
@@ -1953,7 +1953,7 @@ static const char *const yytname[] =
   "ON", "ONLY", "OPERATOR", "OPTION", "OPTIONS", "OR", "ORDER",
   "ORDINALITY", "OTHERS", "OUT_P", "OUTER_P", "OVER", "OVERLAPS",
   "OVERLAY", "OVERRIDING", "OWNED", "OWNER", "PARALLEL", "PARSER",
-  "PARTIAL", "PARTITION", "PASSING", "PASSWORD", "PERCENT", "PERMANENT",
+  "PARTIAL", "PARTITION", "PASSING", "PASSWORD", "PERCENT", "PERSISTENT",
   "PIVOT", "PIVOT_LONGER", "PIVOT_WIDER", "PLACING", "PLANS", "POLICY",
   "POSITION", "POSITIONAL", "PRAGMA_P", "PRECEDING", "PRECISION",
   "PREPARE", "PREPARED", "PRESERVE", "PRIMARY", "PRIOR", "PRIVILEGES",
@@ -19970,9 +19970,9 @@ yyreduce:
 #line 19971 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 
-  case 208: /* opt_persist: PERMANENT  */
+  case 208: /* opt_persist: PERSISTENT  */
 #line 44 "third_party/libpg_query/grammar/statements/create_secret.y"
-                                                    { (yyval.str) = pstrdup("permanent"); }
+                                                     { (yyval.str) = pstrdup("persistent"); }
 #line 19977 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 

@@ -58,19 +58,19 @@ Value AccessModeSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// Allow Permanent Secrets
+// Allow Persistent Secrets
 //===--------------------------------------------------------------------===//
-void AllowPermanentSecrets::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.secret_manager->SetEnablePermanentSecrets(input.GetValue<bool>());
+void AllowPersistentSecrets::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.secret_manager->SetEnablePersistentSecrets(input.GetValue<bool>());
 }
 
-void AllowPermanentSecrets::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.secret_manager->ResetEnablePermanentSecrets();
+void AllowPersistentSecrets::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.secret_manager->ResetEnablePersistentSecrets();
 }
 
-Value AllowPermanentSecrets::GetSetting(ClientContext &context) {
+Value AllowPersistentSecrets::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return config.secret_manager->PermanentSecretsEnabled();
+	return config.secret_manager->PersistentSecretsEnabled();
 }
 
 //===--------------------------------------------------------------------===//
@@ -1147,16 +1147,16 @@ Value SearchPathSetting::GetSetting(ClientContext &context) {
 // Secret Directory
 //===--------------------------------------------------------------------===//
 void SecretDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.secret_manager->SetPermanentSecretPath(input.ToString());
+	config.secret_manager->SetPersistentSecretPath(input.ToString());
 }
 
 void SecretDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.secret_manager->ResetPermanentSecretPath();
+	config.secret_manager->ResetPersistentSecretPath();
 }
 
 Value SecretDirectorySetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return config.secret_manager->PermanentSecretPath();
+	return config.secret_manager->PersistentSecretPath();
 }
 
 //===--------------------------------------------------------------------===//

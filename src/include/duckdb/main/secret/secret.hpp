@@ -60,7 +60,7 @@ protected:
 	case_insensitive_map_t<CreateSecretFunction> functions;
 };
 
-enum class SecretPersistMode : uint8_t { DEFAULT, TEMPORARY, PERMANENT };
+enum class SecretPersistMode : uint8_t { DEFAULT, TEMPORARY, PERSISTENT };
 //! Determines whether the secrets are allowed to be shown
 enum class SecretDisplayType : uint8_t { REDACTED, UNREDACTED };
 

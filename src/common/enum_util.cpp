@@ -5018,8 +5018,8 @@ const char* EnumUtil::ToChars<SecretPersistMode>(SecretPersistMode value) {
 		return "DEFAULT";
 	case SecretPersistMode::TEMPORARY:
 		return "TEMPORARY";
-	case SecretPersistMode::PERMANENT:
-		return "PERMANENT";
+	case SecretPersistMode::PERSISTENT:
+		return "PERSISTENT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5033,8 +5033,8 @@ SecretPersistMode EnumUtil::FromString<SecretPersistMode>(const char *value) {
 	if (StringUtil::Equals(value, "TEMPORARY")) {
 		return SecretPersistMode::TEMPORARY;
 	}
-	if (StringUtil::Equals(value, "PERMANENT")) {
-		return SecretPersistMode::PERMANENT;
+	if (StringUtil::Equals(value, "PERSISTENT")) {
+		return SecretPersistMode::PERSISTENT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

@@ -41,5 +41,5 @@ opt_secret_name:
 opt_persist:
         /* empty */                                 { $$ = pstrdup("default"); }
         | TEMPORARY                                 { $$ = pstrdup("temporary"); }
-        | PERMANENT                                 { $$ = pstrdup("permanent"); }
+        | PERSISTENT                                 { $$ = pstrdup("persistent"); }
     ;

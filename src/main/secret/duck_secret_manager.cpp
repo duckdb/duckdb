@@ -109,10 +109,10 @@ optional_ptr<SecretEntry> DuckSecretManager::RegisterSecretInternal(CatalogTrans
 	//! Ensure we only create secrets for known types;
 	LookupTypeInternal(transaction, secret->GetType());
 
-	bool persist = persist_mode == SecretPersistMode::PERMANENT;
+	bool persist = persist_mode == SecretPersistMode::PERSISTENT;
 
 	string storage_str;
-	if (persist_mode == SecretPersistMode::PERMANENT) {
+	if (persist_mode == SecretPersistMode::PERSISTENT) {
 		storage_str = config.secret_path;
 	} else {
 		storage_str = ":memory:";
@@ -130,7 +130,7 @@ optional_ptr<SecretEntry> DuckSecretManager::RegisterSecretInternal(CatalogTrans
 		}
 	}
 
-	if (persist_mode == SecretPersistMode::PERMANENT) {
+	if (persist_mode == SecretPersistMode::PERSISTENT) {
 		WriteSecretToFile(transaction, *secret);
 	}
 
@@ -316,7 +316,7 @@ void DuckSecretManager::DropSecretByName(CatalogTransaction transaction, const s
 		LocalFileSystem fs;
 		deleted = true;
 		string file = fs.JoinPath(config.secret_path, name + ".duckdb_secret");
-		permanent_secrets.erase(name);
+		persistent_secrets.erase(name);
 		try {
 			fs.RemoveFile(file);
 		} catch (IOException &e) {
@@ -373,31 +373,31 @@ void DuckSecretManager::ThrowOnSettingChangeIfInitialized() {
 	}
 }
 
-void DuckSecretManager::SetEnablePermanentSecrets(bool enabled) {
+void DuckSecretManager::SetEnablePersistentSecrets(bool enabled) {
 	ThrowOnSettingChangeIfInitialized();
-	config.allow_permanent_secrets = enabled;
+	config.allow_persistent_secrets = enabled;
 }
 
-void DuckSecretManager::ResetEnablePermanentSecrets() {
+void DuckSecretManager::ResetEnablePersistentSecrets() {
 	ThrowOnSettingChangeIfInitialized();
-	config.allow_permanent_secrets = DuckSecretManagerConfig::DEFAULT_ALLOW_PERMANENT_SECRETS;
+	config.allow_persistent_secrets = DuckSecretManagerConfig::DEFAULT_ALLOW_PERSISTENT_SECRETS;
 }
 
-bool DuckSecretManager::PermanentSecretsEnabled() {
-	return config.allow_permanent_secrets;
+bool DuckSecretManager::PersistentSecretsEnabled() {
+	return config.allow_persistent_secrets;
 }
 
-void DuckSecretManager::SetPermanentSecretPath(const string &path) {
+void DuckSecretManager::SetPersistentSecretPath(const string &path) {
 	ThrowOnSettingChangeIfInitialized();
 	config.secret_path = path;
 }
 
-void DuckSecretManager::ResetPermanentSecretPath() {
+void DuckSecretManager::ResetPersistentSecretPath() {
 	ThrowOnSettingChangeIfInitialized();
 	config.secret_path = config.default_secret_path;
 }
 
-string DuckSecretManager::PermanentSecretPath() {
+string DuckSecretManager::PersistentSecretPath() {
 	return config.secret_path;
 }
 
@@ -427,18 +427,18 @@ void DuckSecretManager::InitializeSecrets(CatalogTransaction transaction) {
 			return;
 		}
 
-		if (config.allow_permanent_secrets) {
-			DuckSecretManager::LoadPermanentSecretsMap(transaction);
+		if (config.allow_persistent_secrets) {
+			DuckSecretManager::LoadPersistentSecretsMap(transaction);
 		}
 
 		auto &catalog = Catalog::GetSystemCatalog(*transaction.db);
 		secrets =
-		    make_uniq<CatalogSet>(catalog, make_uniq<DefaultDuckSecretGenerator>(catalog, *this, permanent_secrets));
+		    make_uniq<CatalogSet>(catalog, make_uniq<DefaultDuckSecretGenerator>(catalog, *this, persistent_secrets));
 		initialized = true;
 	}
 }
 
-void DuckSecretManager::LoadPermanentSecretsMap(CatalogTransaction transaction) {
+void DuckSecretManager::LoadPersistentSecretsMap(CatalogTransaction transaction) {
 	LocalFileSystem fs;
 
 	auto secret_dir = config.secret_path;
@@ -447,13 +447,13 @@ void DuckSecretManager::LoadPermanentSecretsMap(CatalogTransaction transaction) 
 		fs.CreateDirectory(secret_dir);
 	}
 
-	if (permanent_secrets.empty()) {
+	if (persistent_secrets.empty()) {
 		fs.ListFiles(secret_dir, [&](const string &fname, bool is_dir) {
 			string full_path = fs.JoinPath(secret_dir, fname);
 
 			if (StringUtil::EndsWith(full_path, ".duckdb_secret")) {
 				string secret_name = fname.substr(0, fname.size() - 14); // size of file ext
-				permanent_secrets.insert(secret_name);
+				persistent_secrets.insert(secret_name);
 			}
 		});
 	}
@@ -469,22 +469,22 @@ void DuckSecretManager::AutoloadExtensionForFunction(ClientContext &context, con
 }
 
 DefaultDuckSecretGenerator::DefaultDuckSecretGenerator(Catalog &catalog, DuckSecretManager &secret_manager,
-                                                       case_insensitive_set_t &permanent_secrets)
-    : DefaultGenerator(catalog), secret_manager(secret_manager), permanent_secrets(permanent_secrets) {
+                                                       case_insensitive_set_t &persistent_secrets)
+    : DefaultGenerator(catalog), secret_manager(secret_manager), persistent_secrets(persistent_secrets) {
 }
 
 unique_ptr<CatalogEntry> DefaultDuckSecretGenerator::CreateDefaultEntry(ClientContext &context,
                                                                         const string &entry_name) {
 
-	auto secret_lu = permanent_secrets.find(entry_name);
-	if (secret_lu == permanent_secrets.end()) {
+	auto secret_lu = persistent_secrets.find(entry_name);
+	if (secret_lu == persistent_secrets.end()) {
 		return nullptr;
 	}
 
 	LocalFileSystem fs;
 	auto &catalog = Catalog::GetSystemCatalog(context);
 
-	string base_secret_path = secret_manager.PermanentSecretPath();
+	string base_secret_path = secret_manager.PersistentSecretPath();
 	string secret_path = fs.JoinPath(base_secret_path, entry_name + ".duckdb_secret");
 
 	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
@@ -506,11 +506,11 @@ unique_ptr<CatalogEntry> DefaultDuckSecretGenerator::CreateDefaultEntry(ClientCo
 			return std::move(entry);
 		}
 	} catch (SerializationException &e) {
-		throw SerializationException("Failed to deserialize the permanent secret file: '%s'. The file maybe be "
+		throw SerializationException("Failed to deserialize the persistent secret file: '%s'. The file maybe be "
 		                             "corrupt, please remove the file, restart and try again. (error message: '%s')",
 		                             secret_path, e.RawMessage());
 	} catch (IOException &e) {
-		throw IOException("Failed to open the permanent secret file: '%s'. Some other process may have removed it, "
+		throw IOException("Failed to open the persistent secret file: '%s'. Some other process may have removed it, "
 		                  "please restart and try again. (error message: '%s')",
 		                  secret_path, e.RawMessage());
 	}
@@ -523,7 +523,7 @@ unique_ptr<CatalogEntry> DefaultDuckSecretGenerator::CreateDefaultEntry(ClientCo
 vector<string> DefaultDuckSecretGenerator::GetDefaultEntries() {
 	vector<string> ret;
 
-	for (const auto &res : permanent_secrets) {
+	for (const auto &res : persistent_secrets) {
 		ret.push_back(res);
 	}
 

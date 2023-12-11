@@ -25,10 +25,10 @@ struct AccessModeSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
-struct AllowPermanentSecrets {
-	static constexpr const char *Name = "allow_permanent_secrets";
+struct AllowPersistentSecrets {
+	static constexpr const char *Name = "allow_persistent_secrets";
 	static constexpr const char *Description =
-	    "Allow the creation of permanent secrets, that are stored and loaded on restarts";
+	    "Allow the creation of persistent secrets, that are stored and loaded on restarts";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -527,7 +527,7 @@ struct SearchPathSetting {
 
 struct SecretDirectorySetting {
 	static constexpr const char *Name = "secret_directory";
-	static constexpr const char *Description = "Set the directory to which permanent secrets are stored";
+	static constexpr const char *Description = "Set the directory to which persistent secrets are stored";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);

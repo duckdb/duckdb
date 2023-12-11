@@ -76,14 +76,14 @@ public:
 	                                         OnEntryNotFound on_entry_not_found) = 0;
 	//! Get a vector of all registered secrets
 	DUCKDB_API virtual vector<reference<SecretEntry>> AllSecrets(CatalogTransaction transaction) = 0;
-	//! Whether permanent secrets are enabled
-	DUCKDB_API virtual void SetEnablePermanentSecrets(bool enabled) = 0;
-	DUCKDB_API virtual void ResetEnablePermanentSecrets() = 0;
-	DUCKDB_API virtual bool PermanentSecretsEnabled() = 0;
-	//! Where to store the permanent secrets
-	DUCKDB_API virtual void SetPermanentSecretPath(const string &path) = 0;
-	DUCKDB_API virtual void ResetPermanentSecretPath() = 0;
-	DUCKDB_API virtual string PermanentSecretPath() = 0;
+	//! Whether persistent secrets are enabled
+	DUCKDB_API virtual void SetEnablePersistentSecrets(bool enabled) = 0;
+	DUCKDB_API virtual void ResetEnablePersistentSecrets() = 0;
+	DUCKDB_API virtual bool PersistentSecretsEnabled() = 0;
+	//! Where to store the persistent secrets
+	DUCKDB_API virtual void SetPersistentSecretPath(const string &path) = 0;
+	DUCKDB_API virtual void ResetPersistentSecretPath() = 0;
+	DUCKDB_API virtual string PersistentSecretPath() = 0;
 
 	//! Utility functions
 	DUCKDB_API virtual void DropSecretByName(ClientContext &context, const string &name,
