@@ -221,3 +221,7 @@ void OdbcUtils::SetValueFromConnStr(SQLCHAR *conn_c_str, const char *key, string
 SQLUINTEGER OdbcUtils::SQLPointerToSQLUInteger(SQLPOINTER value) {
 	return static_cast<SQLUINTEGER>(reinterpret_cast<SQLULEN>(value));
 }
+
+std::string OdbcUtils::ConvertSQLCHARToString(SQLCHAR *str) {
+	return std::string(reinterpret_cast<char *>(str));
+}

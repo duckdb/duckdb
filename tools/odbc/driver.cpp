@@ -11,6 +11,7 @@
 #include <odbcinst.h>
 #include <locale>
 
+using namespace duckdb;
 using duckdb::OdbcDiagnostic;
 using duckdb::OdbcUtils;
 using duckdb::SQLStateType;
@@ -285,10 +286,50 @@ SQLRETURN SQL_API SQLDriverConnect(SQLHDBC connection_handle, SQLHWND window_han
 	return ret;
 }
 
+static SQLRETURN ConvertDBCBeforeConnection(SQLHDBC connection_handle, duckdb::OdbcHandleDbc *&dbc) {
+	if (!connection_handle) {
+		return SQL_INVALID_HANDLE;
+	}
+	dbc = static_cast<duckdb::OdbcHandleDbc *>(connection_handle);
+	if (dbc->type != duckdb::OdbcHandleType::DBC) {
+		return SQL_INVALID_HANDLE;
+	}
+	return SQL_SUCCESS;
+}
+
+SQLRETURN Connect::HandleDsn(const string &val) {
+	dbc->dsn = val;
+	set_keys[DSN] = true;
+	return SQL_SUCCESS;
+}
+
+SQLRETURN Connect::SetConnection() {
+	std::string database = dbc->GetDatabaseName();
+	config.SetOptionByName("duckdb_api", "odbc");
+
+	bool cache_instance = database != ":memory:" && !database.empty();
+	dbc->env->db = instance_cache.GetOrCreateInstance(database, config, cache_instance);
+
+	if (!dbc->conn) {
+		dbc->conn = duckdb::make_uniq<duckdb::Connection>(*dbc->env->db);
+		dbc->conn->SetAutoCommit(dbc->autocommit);
+	}
+	return SQL_SUCCESS;
+}
+
 SQLRETURN SQL_API SQLConnect(SQLHDBC connection_handle, SQLCHAR *server_name, SQLSMALLINT name_length1,
                              SQLCHAR *user_name, SQLSMALLINT name_length2, SQLCHAR *authentication,
                              SQLSMALLINT name_length3) {
-	return SetConnection(connection_handle, server_name);
+	duckdb::OdbcHandleDbc *dbc = nullptr;
+	SQLRETURN ret = ConvertDBCBeforeConnection(connection_handle, dbc);
+	if (!SQL_SUCCEEDED(ret)) {
+		return ret;
+	}
+
+	duckdb::Connect connect(dbc, OdbcUtils::ConvertSQLCHARToString(server_name));
+	connect.HandleDsn(connect.GetInputStr());
+
+	return connect.SetConnection();
 }
 
 SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number, SQLCHAR *sql_state,
