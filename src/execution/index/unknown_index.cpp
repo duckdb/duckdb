@@ -1,4 +1,5 @@
 #include "duckdb/execution/index/unknown_index.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
 
 namespace duckdb {
 

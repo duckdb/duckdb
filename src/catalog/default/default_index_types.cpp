@@ -34,7 +34,7 @@ unique_ptr<CatalogEntry> DefaultIndexTypesGenerator::CreateDefaultEntry(ClientCo
 	                                 const IndexStorageInfo &storage_info) -> unique_ptr<Index> {
 		auto art = make_uniq<ART>(name, constraint_type, column_ids, table_io_manager, unbound_expressions, db, nullptr,
 		                          storage_info);
-		return art;
+		return std::move(art);
 	};
 
 	return result;
