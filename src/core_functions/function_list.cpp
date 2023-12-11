@@ -276,6 +276,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(RadiansFun),
 	DUCKDB_SCALAR_FUNCTION(RandomFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ListRangeFun),
+	DUCKDB_SCALAR_FUNCTION(RegexpEscapeFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(RegexpSplitToArrayFun),
 	DUCKDB_AGGREGATE_FUNCTION(RegrAvgxFun),
 	DUCKDB_AGGREGATE_FUNCTION(RegrAvgyFun),

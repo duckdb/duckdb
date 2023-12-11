@@ -1,0 +1,75 @@
+# name: test/sql/function/string/regex_escape.test
+# description: regex escape test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# test the example
+query T
+SELECT regexp_escape('https://duckdb.org');
+----
+https://duckdb\.org
+
+# no special chars in the input
+query T
+SELECT regexp_escape('abc');
+----
+abc
+
+# metacharacters
+query T
+SELECT regexp_escape('a.b');
+----
+a\.b
+
+query T
+SELECT regexp_escape('()[]{}*+?|^$');
+----
+\(\)\[\]\{\}\*\+\?\|\^\$
+
+query T
+SELECT regexp_escape('a.b[c]*');
+----
+a\.b\[c\]\*
+
+# empty string
+query T
+SELECT regexp_escape('""');
+----
+""
+
+# whitespaces
+query T
+SELECT regexp_escape('a b c');
+----
+a b c
+
+query T
+SELECT regexp_escape('line1\nline2');
+----
+line1\\nline2
+
+# case sensitive
+query T
+SELECT regexp_escape('CaseSensitive');
+----
+CaseSensitive
+
+# unicode character
+query T
+SELECT regexp_escape('@');
+----
+@
+
+# backslashes
+query T
+SELECT regexp_escape('path\to\wonderland');
+----
+path\\to\\wonderland
+
+# escape all special characters
+query T
+SELECT regexp_escape('$()*+.?[\]^{|}-');
+----
+\$\(\)\*\+\.\?\[\\\]\^\{\|\}\-
