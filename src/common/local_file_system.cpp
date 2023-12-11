@@ -34,6 +34,19 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 #undef FILE_CREATE // woo mingw
 #endif
 
+// includes for giving a better error message on lock conflicts
+#if defined(__linux__) || defined(__APPLE__)
+#include <pwd.h>
+#endif
+
+#if defined(__linux__)
+#include <libgen.h>
+#elif defined(__APPLE__)
+#include <libproc.h>
+#elif defined(_WIN32)
+#include <RestartManager.h>
+#endif
+
 namespace duckdb {
 
 static void AssertValidFileFlags(uint8_t flags) {
@@ -163,8 +176,6 @@ static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 } // LCOV_EXCL_STOP
 
 #ifdef __APPLE__
-#include <libproc.h>
-#include <pwd.h>
 
 static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 	if (pid == getpid()) {
@@ -196,8 +207,6 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 }
 
 #elif __linux__
-#include <pwd.h>
-#include <libgen.h>
 
 static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 	if (pid == getpid()) {
@@ -619,8 +628,6 @@ public:
 		fd = nullptr;
 	};
 };
-
-#include <RestartManager.h>
 
 static string AdditionalLockInfo(const std::wstring path) {
 	// try to find out if another process is holding the lock
