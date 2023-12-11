@@ -66,31 +66,25 @@ Not implemented Error: 'excluded' qualified columns are not supported in the RET
 
 statement error
 insert into insertconflicttest values (1, 'Apple') on conflict (keyy) do update set fruit = excluded.fruit;
-----
 
 # Have useful HINT for EXCLUDED.* RTE within UPDATE:
 
 statement error
 insert into insertconflicttest values (1, 'Apple') on conflict (key) do update set fruit = excluded.fruitt;
-----
 
 # inference fails:
 
 statement error
 insert into insertconflicttest values (3, 'Kiwi') on conflict (key, fruit) do update set fruit = excluded.fruit;
-----
 
 statement error
 insert into insertconflicttest values (4, 'Mango') on conflict (fruit, key) do update set fruit = excluded.fruit;
-----
 
 statement error
 insert into insertconflicttest values (5, 'Lemon') on conflict (fruit) do update set fruit = excluded.fruit;
-----
 
 statement error
 insert into insertconflicttest values (6, 'Passionfruit') on conflict (fruit) do update set fruit = excluded.fruit;
-----
 
 # Check the target relation can be aliased
 
@@ -105,4 +99,3 @@ insert into insertconflicttest AS ict values (6, 'Passionfruit') on conflict (ke
 statement error
 insert into insertconflicttest AS ict values (6, 'Passionfruit') on conflict (key) do update set fruit = insertconflicttest.fruit;
 # error, references aliased away name
-----

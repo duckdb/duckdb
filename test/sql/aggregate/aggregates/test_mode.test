@@ -14,7 +14,6 @@ PRAGMA verify_external
 #Corner cases
 statement error
 select mode()
-----
 
 query I
 select mode(NULL)
@@ -28,7 +27,6 @@ select mode(1)
 
 statement error
 select mode(*)
-----
 
 statement ok
 create table aggr(k int, v decimal(10,2));

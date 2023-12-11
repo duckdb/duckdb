@@ -21,7 +21,6 @@ ALTER TABLE test DROP COLUMN i
 
 statement error
 INSERT INTO test VALUES (20)
-----
 
 statement ok
 INSERT INTO test VALUES (3)

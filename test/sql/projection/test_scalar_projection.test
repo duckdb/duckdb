@@ -48,11 +48,9 @@ SELECT 1 AS a, a * 2
 # query without selection list
 statement error
 SELECT
-----
 
 statement error
 SELECT FROM (SELECT 42) v1
-----
 
 # Scalar query from SQLLogicTests
 query I

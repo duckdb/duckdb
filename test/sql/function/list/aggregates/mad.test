@@ -103,11 +103,9 @@ endloop
 
 statement error
 SELECT list_mad([INTERVAL 1 YEAR])
-----
 
 statement error
 SELECT list_mad([NULL::INTERVAL])
-----
 
 # extreme values
 

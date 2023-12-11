@@ -20,7 +20,6 @@ SELECT * FROM b
 
 statement error
 EXECUTE s1 (42, 41, 10000)
-----
 
 statement ok
 CREATE TABLE c (i INTEGER)

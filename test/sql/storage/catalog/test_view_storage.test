@@ -36,7 +36,6 @@ PRAGMA table_info('test.v')
 # but querying the view fails
 statement error
 SELECT * FROM test.v
-----
 
 
 loop i 0 2
@@ -54,7 +53,6 @@ PRAGMA table_info('test.v')
 
 statement error
 SELECT * FROM test.v
-----
 
 # after recreating the table, we can query the view again
 statement ok

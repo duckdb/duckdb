@@ -85,15 +85,12 @@ endloop
 
 statement error
 select list_intersect(l1) from list_of_strings;
-----
 
 statement error
 select list_intersect(l1, l2, l1) from list_of_strings;
-----
 
 statement error
 select list_intersect([[1,2], [2,4]], ['abc', 'def']);
-----
 
 # Test Large Lists
 

@@ -56,7 +56,6 @@ endloop
 # the query can still fail even after replacing unicode spaces
 statement error
 SELEC 
-----
 
 # only a unicode space
 statement ok
@@ -64,4 +63,3 @@ statement ok
 
 statement error
 S
-----

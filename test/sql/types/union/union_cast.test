@@ -25,7 +25,6 @@ three
 # cannot cast union to value in the general case 
 statement error
 SELECT u::int FROM tbl1;
-----
 
 # but we can cast to VARCHAR
 query I
@@ -152,7 +151,6 @@ INSERT INTO tbl4 VALUES (1), ('010203'::BLOB), (3), ('070809'::BLOB);
 # fails since b is missing
 statement error
 SELECT u::UNION(i SMALLINT, v VARCHAR) FROM tbl4;
-----
 
 # succeeds since b is present
 query I
@@ -166,7 +164,6 @@ SELECT u::UNION(i SMALLINT, b VARCHAR) FROM tbl4 ORDER BY ALL;;
 # fails since b is not compatible
 statement error
 SELECT u::UNION(i SMALLINT, b INT) FROM tbl4;
-----
 
 statement ok
 DELETE FROM tbl4 WHERE union_tag(u) == 'b';

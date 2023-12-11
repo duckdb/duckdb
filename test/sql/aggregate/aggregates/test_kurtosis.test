@@ -8,7 +8,6 @@ PRAGMA enable_verification
 #Corner cases
 statement error
 select kurtosis()
-----
 
 query I
 select kurtosis(NULL)
@@ -22,7 +21,6 @@ NULL
 
 statement error
 select kurtosis(*)
-----
 
 query I
 select kurtosis(i) from (values (0), (0), (0), (0), (0), (0)) tbl(i)
@@ -32,7 +30,6 @@ NULL
 # out of range
 statement error
 select kurtosis(i) from (values (2e304), (2e305), (2e306), (2e307)) tbl(i)
-----
 
 # Constant Value (This should be an error)
 query I

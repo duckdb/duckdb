@@ -30,8 +30,6 @@ NULL
 
 statement error
 SELECT constant_or_null(1);
-----
 
 statement error
 SELECT constant_or_null();
-----

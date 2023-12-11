@@ -88,11 +88,9 @@ select format('{:b}', 123456789)
 # too few parameters
 statement error
 SELECT format('{}')
-----
 
 statement error
 SELECT format('{} {}', 'hello')
-----
 
 # excess parameters are ignored
 query T
@@ -103,9 +101,7 @@ hello
 # incorrect types
 statement error
 SELECT format('{:s}', 42)
-----
 
 statement error
 SELECT format('{:d}', 'hello')
-----
 

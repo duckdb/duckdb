@@ -31,15 +31,12 @@ SELECT list_distinct([]) WHERE 1 = 0
 
 statement error
 SELECT list_distinct()
-----
 
 statement error
 SELECT list_distinct(*)
-----
 
 statement error
 SELECT list_distinct([1, 2], 2)
-----
 
 # test incorrect parameter type
 
@@ -47,7 +44,6 @@ foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint us
 
 statement error
 SELECT list_distinct(NULL::${type})
-----
 
 endloop
 

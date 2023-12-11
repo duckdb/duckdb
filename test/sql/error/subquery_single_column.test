@@ -5,4 +5,3 @@
 # subqueries can only return a single column
 statement error
 SELECT (SELECT 42, 84)
-----

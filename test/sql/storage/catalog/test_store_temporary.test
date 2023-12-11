@@ -27,7 +27,6 @@ DELETE FROM temp.a
 # check schema
 statement error
 DELETE FROM asdf.a
-----
 
 # temporary sequences
 statement ok
@@ -78,7 +77,6 @@ SELECT * FROM persistent
 # temporary table is gone
 statement error
 SELECT * FROM a
-----
 
 statement ok
 CREATE TEMPORARY TABLE a (i INTEGER)

@@ -65,7 +65,6 @@ WHERE a>=10 AND a <=13  RETURNING c as aliasc, a as aliasa, b as aliasb;
 # returning expression with aggregate function at top level is not allowed
 statement error
 DELETE FROM table1 WHERE a >= 13 AND a <= 15 RETURNING SUM(a);
-----
 
 # update and return combination of values
 query I
@@ -153,7 +152,6 @@ RETURNING *;
 # subquery not allowed in returning statement
 statement error
 DELETE FROM table1 WHERE a = 14 RETURNING a IN (SELECT a FROM table1);
-----
 
 
 # using case statement

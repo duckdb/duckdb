@@ -13,11 +13,9 @@ UPDATE test SET b=2 WHERE b=3;
 
 statement error
 UPDATE test SET a=a+1 WHERE b=1;
-----
 
 statement error
 UPDATE test SET a=4;
-----
 
 query II
 SELECT * FROM test;
@@ -47,7 +45,6 @@ SELECT * FROM test ORDER BY a;
 
 statement error
 INSERT INTO test VALUES (11, 1);
-----
 
 query II
 SELECT * FROM test ORDER BY a;
@@ -68,9 +65,7 @@ SELECT * FROM test ORDER BY a;
 
 statement error
 UPDATE test SET a=NULL WHERE b=1;
-----
 
 statement error
 UPDATE test SET a=NULL;
-----
 

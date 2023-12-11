@@ -55,7 +55,6 @@ SELECT nextval('seq_cycle')
 
 statement error
 SELECT nextval('seq2')
-----
 
 # again
 restart
@@ -79,7 +78,6 @@ restart
 # verify that sequence is gone
 statement error
 SELECT nextval('seq')
-----
 
 # other sequence is still there
 statement ok

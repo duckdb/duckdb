@@ -15,7 +15,6 @@ PRAGMA memory_limit='2MB'
 # hence this creation should fail as the table does not fit within our memory limit
 statement error
 CREATE TABLE t2 AS SELECT * FROM range(1000000);
-----
 
 # after we set the temp directory, we can create this table
 statement ok
@@ -27,4 +26,3 @@ CREATE TABLE t2 AS SELECT * FROM range(1000000);
 # after the temp directory is created, we can't change the temp directory again
 statement error
 PRAGMA temp_directory=''
-----

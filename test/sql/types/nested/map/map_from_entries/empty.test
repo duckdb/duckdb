@@ -8,4 +8,3 @@ PRAGMA enable_verification
 # Empty arguments not allowed
 statement error
 SELECT map_from_entries();
-----

@@ -10,4 +10,3 @@ SET profiling_mode='detailed';
 
 statement error
 SET profiling_mode='unknown';
-----

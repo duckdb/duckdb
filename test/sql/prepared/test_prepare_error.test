@@ -7,7 +7,6 @@ PREPARE v1 AS SELECT ?::VARCHAR::INT
 
 statement error
 EXECUTE v1('hello')
-----
 
 query I
 EXECUTE v1('3')

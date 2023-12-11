@@ -12,15 +12,12 @@ foreach func_name list_transform list_filter
 
 statement error
 SELECT ${func_name}();
-----
 
 statement error
 SELECT ${func_name}([]);
-----
 
 statement error
 SELECT ${func_name}(1, 2, 3);
-----
 
 statement error
 SELECT ${func_name}(NULL, NULL);
@@ -39,7 +36,6 @@ Binder Error: Invalid parameter list! Parameters must be comma-separated column 
 
 statement error
 SELECT ${func_name}(NULL, i) FROM incorrect_test;
-----
 
 statement error
 SELECT ${func_name}(NULL, x -> y);
@@ -48,7 +44,6 @@ Binder Error: Referenced column "y" not found in FROM clause!
 
 statement error
 SELECT ${func_name}([1]);
-----
 
 statement error
 SELECT ${func_name}([1], NULL);
@@ -57,11 +52,9 @@ Binder Error: Invalid lambda expression!
 
 statement error
 SELECT ${func_name}([[1]], x -> x + 1);
-----
 
 statement error
 SELECT ${func_name}(1, 1);
-----
 
 statement error
 SELECT ${func_name}([1], x -> x, 3);

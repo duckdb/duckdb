@@ -76,4 +76,3 @@ SELECT k FROM test ORDER BY k
 
 statement error
 SELECT a FROM test
-----

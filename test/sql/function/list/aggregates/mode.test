@@ -7,7 +7,6 @@ require strinline
 # incorrect usage
 statement error
 select list_mode()
-----
 
 # integers
 statement ok

@@ -124,11 +124,9 @@ select g,histogram(g) over (partition by g%2)
 #Corner cases
 statement error
 select histogram()
-----
 
 statement error
 select histogram(*)
-----
 
 # enums
 statement ok

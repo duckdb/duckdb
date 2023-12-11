@@ -14,7 +14,6 @@ CREATE TABLE person (
     name text,
     current_car car
 );
-----
 
 statement ok
 CREATE TABLE person (
@@ -27,7 +26,6 @@ INSERT INTO person VALUES ('Moe', 'happy');
 
 statement error
 INSERT INTO person VALUES ('Moe', 'diego');
-----
 
 query TT
 select * from person
@@ -99,7 +97,6 @@ CREATE TABLE aliens (
     name text,
     current_mood mood
 );
-----
 
 statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
@@ -224,7 +221,6 @@ ok
 
 statement error
 SELECT CAST ('bla' as mood)
-----
 
 query I
 SELECT TRY_CAST ('bla' as mood)

@@ -4,7 +4,6 @@
 
 statement error
 SELECT union_extract(1, 'b');
-----
 
 query I
 SELECT union_extract(1::UNION(a INT, b FLOAT), 'a');

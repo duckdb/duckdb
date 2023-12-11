@@ -14,7 +14,6 @@ CREATE OR REPLACE TABLE integers_not_null(i INTEGER NOT NULL);
 
 statement error
 INSERT INTO integers_not_null SELECT * FROM integers;
-----
 
 # generated columns
 statement ok
@@ -25,7 +24,6 @@ CREATE OR REPLACE TABLE varchars_generated(s VARCHAR, i AS (s::INT));
 
 statement error
 INSERT INTO varchars_generated (s) SELECT * FROM varchars;
-----
 
 # primary key
 statement ok
@@ -36,7 +34,6 @@ CREATE OR REPLACE TABLE integers_pk(i INTEGER PRIMARY KEY);
 
 statement error
 INSERT INTO integers_pk SELECT * FROM integers;
-----
 
 # foreign key
 statement ok
@@ -53,7 +50,6 @@ CREATE OR REPLACE TABLE integers_fk(i INTEGER PRIMARY KEY REFERENCES integers_pk
 
 statement error
 INSERT INTO integers_fk SELECT * FROM integers
-----
 
 statement ok
 DROP TABLE integers_fk;

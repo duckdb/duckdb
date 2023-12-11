@@ -25,7 +25,6 @@ SELECT
   DISTINCT(id) as id,
   name
 FROM test_table_raw;
-----
 
 # Insert aggregated data
 statement error
@@ -34,7 +33,6 @@ SELECT
   DISTINCT(id) as id,
   name
 FROM test_table_raw;
-----
 
 # Insert aggregated data second time with "INSERT OR IGNORE" => Segmentation fault
 # This contains conflicts between the to-be-inserted rows, still won't succeed

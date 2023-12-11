@@ -80,4 +80,3 @@ INSERT INTO a VALUES (5);
 # Violates primary key constraint
 statement error
 INSERT INTO a VALUES (5);
-----

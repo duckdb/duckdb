@@ -299,4 +299,3 @@ NULL
 
 statement error
 SELECT (1)[1:2];
-----

@@ -34,7 +34,6 @@ EXECUTE v3(42)
 
 statement error
 EXECUTE v3(-1)
-----
 
 # mixed varchar types
 statement ok

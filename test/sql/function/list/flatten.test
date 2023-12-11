@@ -18,7 +18,6 @@ SELECT flatten([[1, 2], [3, 4]])
 
 statement error
 SELECT flatten(1)
-----
 
 # empty nested list
 query T

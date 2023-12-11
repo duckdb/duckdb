@@ -39,4 +39,3 @@ SELECT stats(i) FROM test LIMIT 1
 # fail when column does not exist
 statement error
 ALTER TABLE test ALTER nonexistingcolumn SET DATA TYPE INTEGER
-----

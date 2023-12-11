@@ -37,7 +37,6 @@ SELECT SUM(i), SUM(j) FROM integers
 # verify that the not null constraint is still there
 statement error
 INSERT INTO integers VALUES (NULL, NULL)
-----
 
 statement ok
 DROP TABLE integers
@@ -71,7 +70,6 @@ SELECT SUM(i), SUM(j) FROM integers
 # verify that the not null constraint is still there
 statement error
 INSERT INTO integers VALUES (NULL, NULL)
-----
 
 statement ok
 DROP TABLE integers
@@ -105,4 +103,3 @@ SELECT SUM(i), SUM(j) FROM integers
 # verify that the not null constraint is still there
 statement error
 INSERT INTO integers VALUES (NULL, NULL)
-----

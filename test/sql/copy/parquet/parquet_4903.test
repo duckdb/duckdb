@@ -7,4 +7,3 @@ require parquet
 # file is corrupt
 statement error
 SELECT type_param_constraints FROM 'data/parquet-testing/bug4903.parquet' limit 10
-----

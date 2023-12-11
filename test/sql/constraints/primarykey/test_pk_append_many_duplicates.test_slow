@@ -45,7 +45,6 @@ loop it 0 10
 
 statement error
 INSERT INTO integers VALUES ($val)
-----
 
 endloop
 

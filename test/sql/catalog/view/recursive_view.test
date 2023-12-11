@@ -20,7 +20,6 @@ CREATE OR REPLACE VIEW foo AS (SELECT * FROM foo);
 
 statement error
 SELECT * FROM foo;
-----
 
 # more complex recursive view definition
 statement ok
@@ -34,4 +33,3 @@ CREATE OR REPLACE VIEW foo AS (SELECT (SELECT * FROM foo2));
 
 statement error
 SELECT * FROM foo;
-----

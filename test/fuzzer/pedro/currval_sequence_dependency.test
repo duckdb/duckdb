@@ -24,6 +24,5 @@ DROP SEQUENCE seq CASCADE;
 # this also drops the table
 statement error
 INSERT INTO t1 VALUES (1)
-----
 
 endloop
