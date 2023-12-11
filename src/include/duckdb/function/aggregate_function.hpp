@@ -91,9 +91,10 @@ public:
 	                  aggregate_deserialize_t deserialize = nullptr)
 	    : BaseScalarFunction(name, arguments, return_type, FunctionSideEffects::NO_SIDE_EFFECTS,
 	                         LogicalType(LogicalTypeId::INVALID), null_handling),
-	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
-	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
+	      state_size(state_size), initialize(initialize), update(update), combine(combine), absorb(combine),
+	      finalize(finalize), simple_update(simple_update), window(window), bind(bind), destructor(destructor),
+	      statistics(statistics), serialize(serialize), deserialize(deserialize),
+	      order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
 	}
 
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -105,9 +106,10 @@ public:
 	                  aggregate_deserialize_t deserialize = nullptr)
 	    : BaseScalarFunction(name, arguments, return_type, FunctionSideEffects::NO_SIDE_EFFECTS,
 	                         LogicalType(LogicalTypeId::INVALID)),
-	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
-	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
+	      state_size(state_size), initialize(initialize), update(update), combine(combine), absorb(combine),
+	      finalize(finalize), simple_update(simple_update), window(window), bind(bind), destructor(destructor),
+	      statistics(statistics), serialize(serialize), deserialize(deserialize),
+	      order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
 	}
 
 	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
@@ -139,8 +141,10 @@ public:
 	aggregate_initialize_t initialize;
 	//! The hashed aggregate update state function
 	aggregate_update_t update;
-	//! The hashed aggregate combine states function
+	//! The non-destructive hashed aggregate combine states function
 	aggregate_combine_t combine;
+	//! The (possibly) destructive hashed aggregate combine states function (may be == combine)
+	aggregate_combine_t absorb;
 	//! The hashed aggregate finalization function
 	aggregate_finalize_t finalize;
 	//! The simple aggregate update function (may be null)
@@ -276,6 +280,11 @@ public:
 	template <class STATE, class OP>
 	static void StateCombine(Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
 		AggregateExecutor::Combine<STATE, OP>(source, target, aggr_input_data, count);
+	}
+
+	template <class STATE, class OP>
+	static void StateAbsorb(Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
+		AggregateExecutor::Absorb<STATE, OP>(source, target, aggr_input_data, count);
 	}
 
 	template <class STATE, class RESULT_TYPE, class OP>
