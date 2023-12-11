@@ -9,7 +9,7 @@ require skip_reload
 concurrentforeach dbname foo bar i1 i2 i3 i4 i5 i6 i7 i8 i9
 
 statement ok
-attach '__TEST_DIR__/${dbname}.duckdb' as ${dbname}
+attach '__TEST_DIR__/checkpoint_${dbname}.duckdb' as ${dbname}
 
 statement ok
 create table ${dbname}.${dbname}(foo bigint)

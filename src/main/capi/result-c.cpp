@@ -431,10 +431,21 @@ idx_t duckdb_rows_changed(duckdb_result *result) {
 	if (!result) {
 		return 0;
 	}
-	if (!duckdb::deprecated_materialize_result(result)) {
+	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data));
+	if (result_data.result_set_type == duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED) {
+		// not a materialized result
+		return result->__deprecated_rows_changed;
+	}
+	auto &materialized = reinterpret_cast<duckdb::MaterializedQueryResult &>(*result_data.result);
+	if (materialized.properties.return_type != duckdb::StatementReturnType::CHANGED_ROWS) {
+		// we can only use this function for CHANGED_ROWS result types
 		return 0;
 	}
-	return result->__deprecated_rows_changed;
+	if (materialized.RowCount() != 1 || materialized.ColumnCount() != 1) {
+		// CHANGED_ROWS should return exactly one row
+		return 0;
+	}
+	return materialized.GetValue(0, 0).GetValue<uint64_t>();
 }
 
 void *duckdb_column_data(duckdb_result *result, idx_t col) {

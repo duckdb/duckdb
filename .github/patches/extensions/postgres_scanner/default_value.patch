@@ -1,0 +1,15 @@
+diff --git a/src/storage/postgres_table_set.cpp b/src/storage/postgres_table_set.cpp
+index 88786cf..bfd37ab 100644
+--- a/src/storage/postgres_table_set.cpp
++++ b/src/storage/postgres_table_set.cpp
+@@ -205,8 +205,8 @@ string PostgresColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<C
+ 		}
+ 		if (column.Generated()) {
+ 			ss << " GENERATED ALWAYS AS(" << column.GeneratedExpression().ToString() << ")";
+-		} else if (column.DefaultValue()) {
+-			ss << " DEFAULT(" << column.DefaultValue()->ToString() << ")";
++		} else if (column.HasDefaultValue()) {
++			ss << " DEFAULT(" << column.DefaultValue().ToString() << ")";
+ 		}
+ 	}
+ 	// print any extra constraints that still need to be printed
