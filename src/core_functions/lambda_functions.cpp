@@ -267,7 +267,7 @@ LogicalType LambdaFunctions::BindBinaryLambda(const idx_t parameter_idx, const L
 	}
 }
 
-LogicalType LambdaFunctions::BindTertiaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
+LogicalType LambdaFunctions::BindTernaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
 	switch (parameter_idx) {
 	case 0:
 		return list_child_type;
@@ -283,9 +283,9 @@ LogicalType LambdaFunctions::BindTertiaryLambda(const idx_t parameter_idx, const
 template <class FUNCTION_FUNCTOR>
 void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
 
-	bool completed = false;
-	LambdaFunctions::LambdaInfo info(args, state, result, completed);
-	if (completed) {
+	bool result_is_null = false;
+	LambdaFunctions::LambdaInfo info(args, state, result, result_is_null);
+	if (result_is_null) {
 		return;
 	}
 

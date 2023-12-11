@@ -44,7 +44,8 @@ class LambdaFunctions {
 public:
 	//! Returns the parameter type for binary lambdas
 	static LogicalType BindBinaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type);
-	static LogicalType BindTertiaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type);
+	//! Returns the parameter type for ternary lambdas
+	static LogicalType BindTernaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type);
 
 	//! Checks for NULL list parameter and prepared statements and adds bound cast expression
 	static unique_ptr<FunctionData> ListLambdaPrepareBind(vector<unique_ptr<Expression>> &arguments,
@@ -63,8 +64,9 @@ public:
 	static void ListReduceFunction(DataChunk &args, ExpressionState &state, Vector &result);
 
 public:
-	//! LambdaColumnInfo holds information for preparing the input vectors. We prepare the input vectors
-	//! for executing a lambda expression on STANDARD_VECTOR_SIZE list child elements at a time.
+	//! Lambda expressions can only be executed on one STANDARD_VECTOR_SIZE list child elements at a time, so for
+	//! list_transform and list_filter we need to prepare the input vectors for the lambda expression.  In list_reduce
+	//! the input size can never exceed row_count so it doesn't need ColumnInfo.
 	struct ColumnInfo {
 		explicit ColumnInfo(Vector &vector) : vector(vector), sel(SelectionVector(STANDARD_VECTOR_SIZE)) {};
 
@@ -76,8 +78,9 @@ public:
 		UnifiedVectorFormat format;
 	};
 
+	//! LambdaInfo sets up and stores the information needed by all lambda functions
 	struct LambdaInfo {
-		explicit LambdaInfo(DataChunk &args, ExpressionState &state, Vector &result, bool &completed)
+		explicit LambdaInfo(DataChunk &args, ExpressionState &state, Vector &result, bool &result_is_null)
 		    : result(result), row_count(args.size()), is_all_constant(args.AllConstant()) {
 			Vector &list_column = args.data[0];
 
@@ -86,7 +89,7 @@ public:
 
 			if (list_column.GetType().id() == LogicalTypeId::SQLNULL) {
 				result_validity->SetInvalid(0);
-				completed = true;
+				result_is_null = true;
 				return;
 			}
 

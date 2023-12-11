@@ -199,7 +199,7 @@ static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFun
 }
 
 static LogicalType ListReduceBindLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
-	return LambdaFunctions::BindTertiaryLambda(parameter_idx, list_child_type);
+	return LambdaFunctions::BindTernaryLambda(parameter_idx, list_child_type);
 }
 
 ScalarFunction ListReduceFun::GetFunction() {
