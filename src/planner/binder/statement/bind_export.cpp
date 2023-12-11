@@ -284,7 +284,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 			auto full_path = fs.JoinPath(directory, name);
 			info->file_path = full_path;
 			auto insert_result = table_name_index.insert(info->file_path);
-			if (insert_result.second == true) {
+			if (insert_result.second) {
 				// this name was not yet taken: take it
 				break;
 			}

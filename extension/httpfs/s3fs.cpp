@@ -266,7 +266,9 @@ void S3FileHandle::Close() {
 	auto &s3fs = (S3FileSystem &)file_system;
 	if ((flags & FileFlags::FILE_FLAGS_WRITE) && !upload_finalized) {
 		s3fs.FlushAllBuffers(*this);
-		s3fs.FinalizeMultipartUpload(*this);
+		if (parts_uploaded) {
+			s3fs.FinalizeMultipartUpload(*this);
+		}
 	}
 }
 
@@ -424,6 +426,7 @@ void S3FileSystem::FlushAllBuffers(S3FileHandle &file_handle) {
 
 void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 	auto &s3fs = (S3FileSystem &)file_handle.file_system;
+	file_handle.upload_finalized = true;
 
 	std::stringstream ss;
 	ss << "<CompleteMultipartUpload xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">";
@@ -450,9 +453,8 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 
 	auto open_tag_pos = result.find("<CompleteMultipartUploadResult", 0);
 	if (open_tag_pos == string::npos) {
-		throw IOException("Unexpected response during S3 multipart upload finalization: %d", res->code);
+		throw IOException("Unexpected response during S3 multipart upload finalization: %d\n\n%s", res->code, result);
 	}
-	file_handle.upload_finalized = true;
 }
 
 // Wrapper around the BufferManager::Allocate to that allows limiting the number of buffers that will be handed out
@@ -569,7 +571,7 @@ void S3FileSystem::ReadQueryParams(const string &url_query_param, S3AuthParams &
 }
 
 static string GetPrefix(string url) {
-	const string prefixes[] = {"s3://", "gcs://", "r2://"};
+	const string prefixes[] = {"s3://", "s3a://", "s3n://", "gcs://", "r2://"};
 	for (auto &prefix : prefixes) {
 		if (StringUtil::StartsWith(url, prefix)) {
 			return prefix;
@@ -826,15 +828,13 @@ void S3FileHandle::Initialize(FileOpener *opener) {
 		D_ASSERT(part_size * max_part_count >= config_params.max_file_size);
 
 		multipart_upload_id = s3fs.InitializeMultipartUpload(*this);
-
-		uploads_in_progress = 0;
-		parts_uploaded = 0;
-		upload_finalized = false;
 	}
 }
 
 bool S3FileSystem::CanHandleFile(const string &fpath) {
-	return fpath.rfind("s3://", 0) * fpath.rfind("gcs://", 0) * fpath.rfind("r2://", 0) == 0;
+	return fpath.rfind("s3://", 0) * fpath.rfind("s3a://", 0) * fpath.rfind("s3n://", 0) * fpath.rfind("gcs://", 0) *
+	           fpath.rfind("r2://", 0) ==
+	       0;
 }
 
 void S3FileSystem::FileSync(FileHandle &handle) {

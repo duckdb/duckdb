@@ -13,35 +13,6 @@
 
 namespace duckdb {
 
-struct PandasLibsMissingCacheItem : public PythonImportCacheItem {
-
-public:
-	PandasLibsMissingCacheItem(optional_ptr<PythonImportCacheItem> parent)
-	    : PythonImportCacheItem("missing", parent), NAType("NAType", this) {
-	}
-	~PandasLibsMissingCacheItem() override {
-	}
-
-	PythonImportCacheItem NAType;
-};
-
-struct PandasLibsCacheItem : public PythonImportCacheItem {
-
-public:
-	PandasLibsCacheItem(optional_ptr<PythonImportCacheItem> parent)
-	    : PythonImportCacheItem("_libs", parent), missing(this) {
-	}
-	~PandasLibsCacheItem() override {
-	}
-
-	PandasLibsMissingCacheItem missing;
-
-protected:
-	bool IsRequired() const override final {
-		return false;
-	}
-};
-
 struct PandasCacheItem : public PythonImportCacheItem {
 
 public:
@@ -49,16 +20,17 @@ public:
 
 public:
 	PandasCacheItem()
-	    : PythonImportCacheItem("pandas"), DataFrame("DataFrame", this), _libs(this), isnull("isnull", this),
-	      ArrowDtype("ArrowDtype", this) {
+	    : PythonImportCacheItem("pandas"), DataFrame("DataFrame", this), isnull("isnull", this),
+	      ArrowDtype("ArrowDtype", this), NaT("NaT", this), NA("NA", this) {
 	}
 	~PandasCacheItem() override {
 	}
 
 	PythonImportCacheItem DataFrame;
-	PandasLibsCacheItem _libs;
 	PythonImportCacheItem isnull;
 	PythonImportCacheItem ArrowDtype;
+	PythonImportCacheItem NaT;
+	PythonImportCacheItem NA;
 
 protected:
 	bool IsRequired() const override final {

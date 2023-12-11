@@ -1,5 +1,18 @@
 #include "arrow/arrow_test_helper.hpp"
 
+duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper>
+ArrowStreamTestFactory::CreateStream(uintptr_t this_ptr, duckdb::ArrowStreamParameters &parameters) {
+	auto stream_wrapper = duckdb::make_uniq<duckdb::ArrowArrayStreamWrapper>();
+	stream_wrapper->number_of_rows = -1;
+	stream_wrapper->arrow_array_stream = *(ArrowArrayStream *)this_ptr;
+
+	return stream_wrapper;
+}
+
+void ArrowStreamTestFactory::GetSchema(ArrowArrayStream *arrow_array_stream, ArrowSchema &schema) {
+	arrow_array_stream->get_schema(arrow_array_stream, &schema);
+}
+
 namespace duckdb {
 
 int ArrowTestFactory::ArrowArrayStreamGetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out) {
@@ -74,28 +87,14 @@ duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> ArrowTestFactory::CreateStre
 	return stream_wrapper;
 }
 
-void ArrowTestFactory::GetSchema(uintptr_t factory_ptr, duckdb::ArrowSchemaWrapper &schema) {
+void ArrowTestFactory::GetSchema(ArrowArrayStream *factory_ptr, ArrowSchema &schema) {
 	//! Create a new batch reader
 	auto &factory = *reinterpret_cast<ArrowTestFactory *>(factory_ptr); //! NOLINT
-	factory.ToArrowSchema(&schema.arrow_schema);
+	factory.ToArrowSchema(&schema);
 }
 
 void ArrowTestFactory::ToArrowSchema(struct ArrowSchema *out) {
 	ArrowConverter::ToArrowSchema(out, types, names, options);
-}
-
-duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper>
-ArrowStreamTestFactory::CreateStream(uintptr_t this_ptr, ArrowStreamParameters &parameters) {
-	auto stream_wrapper = make_uniq<ArrowArrayStreamWrapper>();
-	stream_wrapper->number_of_rows = -1;
-	stream_wrapper->arrow_array_stream = *(ArrowArrayStream *)this_ptr;
-
-	return stream_wrapper;
-}
-
-void ArrowStreamTestFactory::GetSchema(uintptr_t factory_ptr, duckdb::ArrowSchemaWrapper &schema) {
-	auto &factory = *reinterpret_cast<ArrowArrayStreamWrapper *>(factory_ptr); //! NOLINT
-	factory.arrow_array_stream.get_schema(&factory.arrow_array_stream, &schema.arrow_schema);
 }
 
 unique_ptr<QueryResult> ArrowTestHelper::ScanArrowObject(Connection &con, vector<Value> &params) {

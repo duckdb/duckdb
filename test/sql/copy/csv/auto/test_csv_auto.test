@@ -9,6 +9,11 @@ statement ok
 PRAGMA verify_parallelism
 
 query II
+select * from read_csv_auto('data/csv/dates.csv')
+----
+919 304 6161	2008-08-10
+
+query II
 select * from read_csv_auto('data/csv/from_df.csv', quote='''')
 ----
 'a,b,c'	45

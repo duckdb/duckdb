@@ -51,7 +51,12 @@ int64_t FunctionBinder::BindFunctionCost(const SimpleFunction &func, const vecto
 		return -1;
 	}
 	int64_t cost = 0;
+	bool has_parameter = false;
 	for (idx_t i = 0; i < arguments.size(); i++) {
+		if (arguments[i].id() == LogicalTypeId::UNKNOWN) {
+			has_parameter = true;
+			continue;
+		}
 		int64_t cast_cost = CastFunctionSet::Get(context).ImplicitCastCost(arguments[i], func.arguments[i]);
 		if (cast_cost >= 0) {
 			// we can implicitly cast, add the cost to the total cost
@@ -60,6 +65,10 @@ int64_t FunctionBinder::BindFunctionCost(const SimpleFunction &func, const vecto
 			// we can't implicitly cast: throw an error
 			return -1;
 		}
+	}
+	if (has_parameter) {
+		// all arguments are implicitly castable and there is a parameter - return 0 as cost
+		return 0;
 	}
 	return cost;
 }

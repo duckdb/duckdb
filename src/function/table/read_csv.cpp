@@ -156,11 +156,12 @@ public:
 	                       bool force_parallelism_p, vector<column_t> column_ids_p)
 	    : buffer_manager(std::move(buffer_manager_p)), system_threads(system_threads_p),
 	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)),
-	      line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
+	      line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end, options.sniffer_user_mismatch_error),
+	      sniffer_mismatch_error(options.sniffer_user_mismatch_error) {
 		current_file_path = files_path_p[0];
 		CSVFileHandle *file_handle_ptr;
 
-		if (!buffer_manager || (options.skip_rows_set && options.dialect_options.skip_rows > 0) ||
+		if (!buffer_manager || options.dialect_options.skip_rows.GetValue() > 0 ||
 		    buffer_manager->file_handle->GetFilePath() != current_file_path) {
 			// If our buffers are too small, and we skip too many rows there is a chance things will go over-buffer
 			// for now don't reuse the buffer manager
@@ -188,15 +189,15 @@ public:
 		batch_to_tuple_end.resize(file_count);
 
 		// Initialize the lines read
-		line_info.lines_read[0][0] = options.dialect_options.skip_rows;
-		if (options.has_header && options.dialect_options.header) {
+		line_info.lines_read[0][0] = options.dialect_options.skip_rows.GetValue();
+		if (options.dialect_options.header.GetValue()) {
 			line_info.lines_read[0][0]++;
 		}
 		first_position = options.dialect_options.true_start;
 		next_byte = options.dialect_options.true_start;
 	}
 	explicit ParallelCSVGlobalState(idx_t system_threads_p)
-	    : system_threads(system_threads_p), line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
+	    : system_threads(system_threads_p), line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end, "") {
 		running_threads = MaxThreads();
 	}
 
@@ -284,6 +285,8 @@ private:
 	idx_t cur_buffer_idx = 0;
 	//! Only used if we don't run auto_detection first
 	unique_ptr<CSVFileHandle> file_handle;
+
+	string sniffer_mismatch_error;
 };
 
 idx_t ParallelCSVGlobalState::MaxThreads() const {
@@ -336,8 +339,8 @@ void ParallelCSVGlobalState::Verify() {
 					throw InvalidInputException(
 					    "CSV File not supported for multithreading. This can be a problematic line in your CSV File or "
 					    "that this CSV can't be read in Parallel. Please, inspect if the line %llu is correct. If so, "
-					    "please run single-threaded CSV Reading by setting parallel=false in the read_csv call.",
-					    problematic_line);
+					    "please run single-threaded CSV Reading by setting parallel=false in the read_csv call. %s",
+					    problematic_line, sniffer_mismatch_error);
 				}
 			}
 		}
@@ -373,8 +376,8 @@ void LineInfo::Verify(idx_t file_idx, idx_t batch_idx, idx_t cur_first_pos) {
 		throw InvalidInputException(
 		    "CSV File not supported for multithreading. This can be a problematic line in your CSV File or "
 		    "that this CSV can't be read in Parallel. Please, inspect if the line %llu is correct. If so, "
-		    "please run single-threaded CSV Reading by setting parallel=false in the read_csv call.",
-		    problematic_line);
+		    "please run single-threaded CSV Reading by setting parallel=false in the read_csv call.\n %s",
+		    problematic_line, sniffer_mismatch_error);
 	}
 }
 bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bind_data,
@@ -401,7 +404,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 			local_batch_index = 0;
 
 			line_info.lines_read[file_index++][local_batch_index] =
-			    (bind_data.options.has_header && bind_data.options.dialect_options.header ? 1 : 0);
+			    bind_data.options.dialect_options.header.GetValue() ? 1 : 0;
 
 			current_buffer = buffer_manager->GetBuffer(cur_buffer_idx);
 			next_buffer = buffer_manager->GetBuffer(cur_buffer_idx + 1);
@@ -861,7 +864,7 @@ static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *
 	return data.csv_reader->buffer->batch_index;
 }
 
-static void ReadCSVAddNamedParameters(TableFunction &table_function) {
+void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["sep"] = LogicalType::VARCHAR;
 	table_function.named_parameters["delim"] = LogicalType::VARCHAR;
 	table_function.named_parameters["quote"] = LogicalType::VARCHAR;

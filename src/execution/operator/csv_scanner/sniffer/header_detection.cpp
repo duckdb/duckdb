@@ -118,10 +118,10 @@ void CSVSniffer::DetectHeader() {
 		}
 	}
 	bool has_header;
-	if (!best_candidate->options.has_header) {
+	if (!best_candidate->options.dialect_options.header.IsSetByUser()) {
 		has_header = !first_row_consistent || first_row_nulls;
 	} else {
-		has_header = best_candidate->options.dialect_options.header;
+		has_header = best_candidate->options.dialect_options.header.GetValue();
 	}
 	// update parser info, and read, generate & set col_names based on previous findings
 	if (has_header) {

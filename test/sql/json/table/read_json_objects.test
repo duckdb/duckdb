@@ -19,7 +19,7 @@ Invalid Input Error: Expected top-level JSON array
 
 # now it should work!
 query I
-SELECT * FROM read_csv('data/json/example_n.ndjson', columns={'json': 'JSON'}, delim=NULL, header=0, quote=NULL, escape=NULL)
+SELECT * FROM read_csv('data/json/example_n.ndjson', columns={'json': 'JSON'}, delim=NULL, header=0, quote=NULL, escape=NULL, auto_detect = false)
 ----
 {"id":1,"name":"O Brother, Where Art Thou?"}
 {"id":2,"name":"Home for the Holidays"}

@@ -50,8 +50,8 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Bin
 }
 
 Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool inherit_ctes_p)
-    : context(context), parent(std::move(parent_p)), bound_tables(0), inherit_ctes(inherit_ctes_p),
-      entry_retriever(context) {
+    : context(context), bind_context(*this), parent(std::move(parent_p)), bound_tables(0),
+      inherit_ctes(inherit_ctes_p), entry_retriever(context) {
 	if (parent) {
 		entry_retriever.SetCallback(parent->entry_retriever.GetCallback());
 

@@ -149,7 +149,7 @@ struct ParquetWriteLocalState : public LocalFunctionData {
 	ColumnDataAppendState append_state;
 };
 
-BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
+BindInfo ParquetGetBindInfo(const optional_ptr<FunctionData> bind_data) {
 	auto bind_info = BindInfo(ScanType::PARQUET);
 	auto &parquet_bind = bind_data->Cast<ParquetReadBindData>();
 	vector<Value> file_path;
@@ -317,7 +317,7 @@ public:
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
-		table_function.get_batch_info = ParquetGetBatchInfo;
+		table_function.get_bind_info = ParquetGetBindInfo;
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
 		table_function.filter_prune = true;
@@ -1222,6 +1222,10 @@ void ParquetExtension::Load(DuckDB &db) {
 	// parquet_key_value_metadata
 	ParquetKeyValueMetadataFunction kv_meta_fun;
 	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(kv_meta_fun));
+
+	// parquet_file_metadata
+	ParquetFileMetadataFunction file_meta_fun;
+	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(file_meta_fun));
 
 	CopyFunction function("parquet");
 	function.copy_to_bind = ParquetWriteBind;
