@@ -36,7 +36,6 @@ struct FunctionLocalState {
 
 class Binder;
 class BoundFunctionExpression;
-class PhysicalDependencyList;
 class LogicalDependencyList;
 class ScalarFunctionCatalogEntry;
 

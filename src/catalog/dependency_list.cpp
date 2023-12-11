@@ -8,37 +8,6 @@
 
 namespace duckdb {
 
-void PhysicalDependencyList::AddDependency(CatalogEntry &entry) {
-	if (entry.internal) {
-		return;
-	}
-	set.insert(entry);
-}
-
-void PhysicalDependencyList::VerifyDependencies(Catalog &catalog, const string &name) {
-	for (auto &dep_entry : set) {
-		auto &dep = dep_entry.get();
-		if (&dep.ParentCatalog() != &catalog) {
-			throw DependencyException(
-			    "Error adding dependency for object \"%s\" - dependency \"%s\" is in catalog "
-			    "\"%s\", which does not match the catalog \"%s\".\nCross catalog dependencies are not supported.",
-			    name, dep.name, dep.ParentCatalog().GetName(), catalog.GetName());
-		}
-	}
-}
-
-LogicalDependencyList PhysicalDependencyList::GetLogical() const {
-	LogicalDependencyList result;
-	for (auto &entry : set) {
-		result.AddDependency(entry);
-	}
-	return result;
-}
-
-bool PhysicalDependencyList::Contains(CatalogEntry &entry) {
-	return set.count(entry);
-}
-
 uint64_t LogicalDependencyHashFunction::operator()(const LogicalDependency &a) const {
 	auto &name = a.entry.name;
 	auto &schema = a.entry.schema;
@@ -125,30 +94,6 @@ void LogicalDependencyList::AddDependency(const LogicalDependency &entry) {
 bool LogicalDependencyList::Contains(CatalogEntry &entry_p) {
 	LogicalDependency logical_entry(entry_p);
 	return set.count(logical_entry);
-}
-
-PhysicalDependencyList LogicalDependencyList::GetPhysical(ClientContext &context, Catalog &catalog) const {
-	PhysicalDependencyList dependencies;
-
-	for (auto &entry : set) {
-		auto &name = entry.entry.name;
-		// Don't use the serialized catalog name, could be attached with a different name
-		auto &schema = entry.entry.schema;
-		auto &type = entry.entry.type;
-
-		CatalogEntryLookup lookup;
-		if (type == CatalogType::SCHEMA_ENTRY) {
-			auto lookup = catalog.GetSchema(context, name, OnEntryNotFound::THROW_EXCEPTION);
-			D_ASSERT(lookup);
-			dependencies.AddDependency(*lookup);
-		} else {
-			auto lookup = catalog.LookupEntry(context, type, schema, name, OnEntryNotFound::THROW_EXCEPTION);
-			D_ASSERT(lookup.Found());
-			auto catalog_entry = lookup.entry;
-			dependencies.AddDependency(*catalog_entry);
-		}
-	}
-	return dependencies;
 }
 
 void LogicalDependencyList::VerifyDependencies(Catalog &catalog, const string &name) {

@@ -21,7 +21,6 @@
 namespace duckdb {
 
 class BaseStatistics;
-class PhysicalDependencyList;
 class LogicalGet;
 class TableFilterSet;
 class TableCatalogEntry;
