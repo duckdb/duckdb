@@ -11,7 +11,6 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/string_util.hpp"
-#include <iostream>
 
 namespace duckdb {
 class CatalogEntry;
