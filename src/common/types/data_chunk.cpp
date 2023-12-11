@@ -305,6 +305,15 @@ void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count_
 	}
 }
 
+void DataChunk::Slice(idx_t offset, idx_t slice_count) {
+	D_ASSERT(offset + slice_count <= size());
+	SelectionVector sel(slice_count);
+	for (idx_t i = 0; i < slice_count; i++) {
+		sel.set_index(i, offset + i);
+	}
+	Slice(sel, slice_count);
+}
+
 unsafe_unique_array<UnifiedVectorFormat> DataChunk::ToUnifiedFormat() {
 	auto unified_data = make_unsafe_uniq_array<UnifiedVectorFormat>(ColumnCount());
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {

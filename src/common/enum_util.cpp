@@ -5608,6 +5608,12 @@ const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value) {
 		return "LOCALE_APPROPRIATE_TIME";
 	case StrTimeSpecifier::NANOSECOND_PADDED:
 		return "NANOSECOND_PADDED";
+	case StrTimeSpecifier::YEAR_ISO:
+		return "YEAR_ISO";
+	case StrTimeSpecifier::WEEKDAY_ISO:
+		return "WEEKDAY_ISO";
+	case StrTimeSpecifier::WEEK_NUMBER_ISO:
+		return "WEEK_NUMBER_ISO";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5713,6 +5719,15 @@ StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "NANOSECOND_PADDED")) {
 		return StrTimeSpecifier::NANOSECOND_PADDED;
+	}
+	if (StringUtil::Equals(value, "YEAR_ISO")) {
+		return StrTimeSpecifier::YEAR_ISO;
+	}
+	if (StringUtil::Equals(value, "WEEKDAY_ISO")) {
+		return StrTimeSpecifier::WEEKDAY_ISO;
+	}
+	if (StringUtil::Equals(value, "WEEK_NUMBER_ISO")) {
+		return StrTimeSpecifier::WEEK_NUMBER_ISO;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
