@@ -709,7 +709,8 @@ static LogicalType CombineNumericTypes(const LogicalType &left, const LogicalTyp
 	}
 
 	// No type is larger than (u)hugeint, so casting to double is required
-	if (left.id() == LogicalTypeId::HUGEINT || right.id() == LogicalTypeId::UHUGEINT) {
+	// UHUGEINT is on the left because the enum is lower
+	if (left.id() == LogicalTypeId::UHUGEINT || right.id() == LogicalTypeId::HUGEINT) {
 		return LogicalType::DOUBLE;
 	}
 	throw InternalException("Cannot combine these numeric types (%s & %s)", left.ToString(), right.ToString());
