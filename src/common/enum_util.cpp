@@ -10,6 +10,7 @@
 
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
@@ -773,10 +774,12 @@ const char* EnumUtil::ToChars<CatalogType>(CatalogType value) {
 		return "MACRO_ENTRY";
 	case CatalogType::TABLE_MACRO_ENTRY:
 		return "TABLE_MACRO_ENTRY";
-	case CatalogType::UPDATED_ENTRY:
-		return "UPDATED_ENTRY";
 	case CatalogType::DELETED_ENTRY:
 		return "DELETED_ENTRY";
+	case CatalogType::RENAMED_ENTRY:
+		return "RENAMED_ENTRY";
+	case CatalogType::DEPENDENCY_ENTRY:
+		return "DEPENDENCY_ENTRY";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -835,11 +838,14 @@ CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
 	if (StringUtil::Equals(value, "TABLE_MACRO_ENTRY")) {
 		return CatalogType::TABLE_MACRO_ENTRY;
 	}
-	if (StringUtil::Equals(value, "UPDATED_ENTRY")) {
-		return CatalogType::UPDATED_ENTRY;
-	}
 	if (StringUtil::Equals(value, "DELETED_ENTRY")) {
 		return CatalogType::DELETED_ENTRY;
+	}
+	if (StringUtil::Equals(value, "RENAMED_ENTRY")) {
+		return CatalogType::RENAMED_ENTRY;
+	}
+	if (StringUtil::Equals(value, "DEPENDENCY_ENTRY")) {
+		return CatalogType::DEPENDENCY_ENTRY;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -1374,6 +1380,29 @@ DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *
 	}
 	if (StringUtil::Equals(value, "NULLS_LAST_ON_ASC_FIRST_ON_DESC")) {
 		return DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value) {
+	switch(value) {
+	case DependencyEntryType::SUBJECT:
+		return "SUBJECT";
+	case DependencyEntryType::DEPENDENT:
+		return "DEPENDENT";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value) {
+	if (StringUtil::Equals(value, "SUBJECT")) {
+		return DependencyEntryType::SUBJECT;
+	}
+	if (StringUtil::Equals(value, "DEPENDENT")) {
+		return DependencyEntryType::DEPENDENT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
