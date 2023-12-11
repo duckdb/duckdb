@@ -158,6 +158,7 @@ if platform.system() == 'Darwin':
 
 if platform.system() == 'Windows':
     toolchain_args.extend(['-DDUCKDB_BUILD_LIBRARY', '-DWIN32'])
+    toolchain_args.extend('rstrtmgr.lib')
 
 if 'BUILD_HTTPFS' in os.environ:
     libraries += ['crypto', 'ssl']
