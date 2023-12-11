@@ -203,88 +203,72 @@ SQLRETURN SQL_API SQLGetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
  * Get the new database name from the DSN string.
  * Otherwise, try to read the database name from odbc.ini
  */
-static void GetDatabaseNameFromDSN(duckdb::OdbcHandleDbc *dbc, SQLCHAR *conn_str, string &new_db_name) {
-	OdbcUtils::SetValueFromConnStr(conn_str, "Database", new_db_name);
-
-	// given preference for the connection attribute
-	if (!dbc->sql_attr_current_catalog.empty() && new_db_name.empty()) {
-		new_db_name = dbc->sql_attr_current_catalog;
-		return;
-	}
-#if defined ODBC_LINK_ODBCINST || defined WIN32
-	if (new_db_name.empty()) {
-		string dsn_name;
-		OdbcUtils::SetValueFromConnStr(conn_str, "DSN", dsn_name);
-		if (!dsn_name.empty()) {
-			const int MAX_DB_NAME = 256;
-			char db_name[MAX_DB_NAME];
-			SQLGetPrivateProfileString(dsn_name.c_str(), "Database", "", db_name, MAX_DB_NAME, "odbc.ini");
-			new_db_name = string(db_name);
-		}
-	}
-#endif
-}
+//static void GetDatabaseNameFromDSN(duckdb::OdbcHandleDbc *dbc, SQLCHAR *conn_str, string &new_db_name) {
+//	OdbcUtils::SetValueFromConnStr(conn_str, "Database", new_db_name);
+//
+//	// given preference for the connection attribute
+//	if (!dbc->sql_attr_current_catalog.empty() && new_db_name.empty()) {
+//		new_db_name = dbc->sql_attr_current_catalog;
+//		return;
+//	}
+//#if defined ODBC_LINK_ODBCINST || defined WIN32
+//	if (new_db_name.empty()) {
+//		string dsn_name;
+//		OdbcUtils::SetValueFromConnStr(conn_str, "DSN", dsn_name);
+//		if (!dsn_name.empty()) {
+//			const int MAX_DB_NAME = 256;
+//			char db_name[MAX_DB_NAME];
+//			SQLGetPrivateProfileString(dsn_name.c_str(), "Database", "", db_name, MAX_DB_NAME, "odbc.ini");
+//			new_db_name = string(db_name);
+//		}
+//	}
+//#endif
+//}
 
 //! The database instance cache, used so that multiple connections to the same file point to the same database object
 duckdb::DBInstanceCache instance_cache;
 
-static SQLRETURN SetConnection(SQLHDBC connection_handle, SQLCHAR *conn_str) {
-	// TODO actually interpret Database in in_connection_string
-	if (!connection_handle) {
-		return SQL_ERROR;
-	}
-	auto *dbc = (duckdb::OdbcHandleDbc *)connection_handle;
-	if (dbc->type != duckdb::OdbcHandleType::DBC) {
-		return SQL_ERROR;
-	}
-
-	// set DSN
-	OdbcUtils::SetValueFromConnStr(conn_str, "DSN", dbc->dsn);
-
-	string db_name;
-	GetDatabaseNameFromDSN(dbc, conn_str, db_name);
-	dbc->SetDatabaseName(db_name);
-	db_name = dbc->GetDatabaseName();
-
-	if (!db_name.empty()) {
-		duckdb::DBConfig config;
-		if (dbc->sql_attr_access_mode == SQL_MODE_READ_ONLY) {
-			config.options.access_mode = duckdb::AccessMode::READ_ONLY;
-		}
-		bool cache_instance = db_name != ":memory:" && !db_name.empty();
-
-		config.SetOptionByName("duckdb_api", "odbc");
-		std::string custom_user_agent;
-		OdbcUtils::SetValueFromConnStr(conn_str, "custom_user_agent", custom_user_agent);
-		if (!custom_user_agent.empty()) {
-			config.SetOptionByName("custom_user_agent", custom_user_agent);
-		}
-
-		dbc->env->db = instance_cache.GetOrCreateInstance(db_name, config, cache_instance);
-	}
-
-	if (!dbc->conn) {
-		dbc->conn = duckdb::make_uniq<duckdb::Connection>(*dbc->env->db);
-		dbc->conn->SetAutoCommit(dbc->autocommit);
-	}
-	return SQL_SUCCESS;
-}
-
-SQLRETURN SQL_API SQLDriverConnect(SQLHDBC connection_handle, SQLHWND window_handle, SQLCHAR *in_connection_string,
-                                   SQLSMALLINT string_length1, SQLCHAR *out_connection_string,
-                                   SQLSMALLINT buffer_length, SQLSMALLINT *string_length2_ptr,
-                                   SQLUSMALLINT driver_completion) {
-	auto ret = SetConnection(connection_handle, in_connection_string);
-	std::string connect_str = "DuckDB connection";
-	if (string_length2_ptr) {
-		*string_length2_ptr = connect_str.size();
-	}
-	if (ret == SQL_SUCCESS && out_connection_string) {
-		memcpy(out_connection_string, connect_str.c_str(),
-		       duckdb::MinValue<SQLSMALLINT>((SQLSMALLINT)connect_str.size(), buffer_length));
-	}
-	return ret;
-}
+//static SQLRETURN SetConnection(SQLHDBC connection_handle, SQLCHAR *conn_str) {
+//	// TODO actually interpret Database in in_connection_string
+//	if (!connection_handle) {
+//		return SQL_ERROR;
+//	}
+//	auto *dbc = (duckdb::OdbcHandleDbc *)connection_handle;
+//	if (dbc->type != duckdb::OdbcHandleType::DBC) {
+//		return SQL_ERROR;
+//	}
+//
+//	// set DSN
+//	OdbcUtils::SetValueFromConnStr(conn_str, "DSN", dbc->dsn);
+//
+//	string db_name;
+//	GetDatabaseNameFromDSN(dbc, conn_str, db_name);
+//	dbc->SetDatabaseName(db_name);
+//	db_name = dbc->GetDatabaseName();
+//
+//	if (!db_name.empty()) {
+//		duckdb::DBConfig config;
+//		if (dbc->sql_attr_access_mode == SQL_MODE_READ_ONLY) {
+//			config.options.access_mode = duckdb::AccessMode::READ_ONLY;
+//		}
+//		bool cache_instance = db_name != ":memory:" && !db_name.empty();
+//
+//		config.SetOptionByName("duckdb_api", "odbc");
+//		std::string custom_user_agent;
+//		OdbcUtils::SetValueFromConnStr(conn_str, "custom_user_agent", custom_user_agent);
+//		if (!custom_user_agent.empty()) {
+//			config.SetOptionByName("custom_user_agent", custom_user_agent);
+//		}
+//
+//		dbc->env->db = instance_cache.GetOrCreateInstance(db_name, config, cache_instance);
+//	}
+//
+//	if (!dbc->conn) {
+//		dbc->conn = duckdb::make_uniq<duckdb::Connection>(*dbc->env->db);
+//		dbc->conn->SetAutoCommit(dbc->autocommit);
+//	}
+//	return SQL_SUCCESS;
+//}
 
 static SQLRETURN ConvertDBCBeforeConnection(SQLHDBC connection_handle, duckdb::OdbcHandleDbc *&dbc) {
 	if (!connection_handle) {
@@ -297,9 +281,147 @@ static SQLRETURN ConvertDBCBeforeConnection(SQLHDBC connection_handle, duckdb::O
 	return SQL_SUCCESS;
 }
 
+bool Connect::SetSuccessWithInfo(SQLRETURN ret) {
+	if (SQL_SUCCEEDED(ret)) {
+		if (ret == SQL_SUCCESS_WITH_INFO) {
+			success_with_info = true;
+		}
+		return true;
+	}
+	return false;
+}
+
+static bool FindSubstrInSubstr(const std::string &s1, const std::string &s2) {
+	std::string longest = s1.length() >= s2.length() ? s1 : s2;
+	std::string shortest = s1.length() >= s2.length() ? s2 : s1;
+
+	idx_t longest_match = 0;
+	for (int i = 0; i < longest.length(); i++) {
+		for (int j = 0; j < shortest.length(); j++) {
+			if (longest[i] == shortest[j]) {
+				idx_t match = 1;
+				while (i + match < longest.length() && j + match < shortest.length() &&
+				       longest[i + match] == shortest[j + match]) {
+					match++;
+				}
+				if (match > longest_match) {
+					longest_match = match;
+				}
+			}
+		}
+	}
+
+	if (longest_match > 4) {
+		return true;
+	}
+	return false;
+}
+
+bool Connect::FindSimilar(const std::string &input, std::string &match) {
+	duckdb::vector<std::string> keys;
+	keys.reserve(conn_str_keynames.size());
+	for (auto &key_pair : conn_str_keynames) {
+		if (input.find(key_pair.second) != std::string::npos || key_pair.second.find(input) != std::string::npos ||
+		    FindSubstrInSubstr(input, key_pair.second)) {
+			match = key_pair.second;
+			return true;
+		}
+		keys.push_back(key_pair.second);
+	}
+
+	auto result = duckdb::StringUtil::TopNLevenshtein(keys, input);
+	return false;
+}
+
+SQLRETURN Connect::FindMatchingKey(const std::string &input, ODBCConnStrKey &key) {
+	for (auto &key_pair : conn_str_keynames) {
+		if (key_pair.second == input) {
+			key = key_pair.first;
+			return SQL_SUCCESS;
+		}
+	}
+
+	std::string match;
+	// If the input doesn't match a keyname, find a similar keyname
+	if (FindSimilar(input, match)) {
+		// If there is a similar keyname, populate a diagnostic record with a suggestion
+		return duckdb::SetDiagnosticRecord(dbc, SQL_SUCCESS_WITH_INFO, "SQLDriverConnect",
+		                                   "Invalid keyword: '" + input + "', Did you mean '" + match + "'?",
+		                                   SQLStateType::ST_01S09, "");
+	}
+	return duckdb::SetDiagnosticRecord(dbc, SQL_SUCCESS_WITH_INFO, "SQLDriverConnect", "Invalid keyword",
+	                                   SQLStateType::ST_01S09, "");
+}
+
+SQLRETURN Connect::FindKeyValPair(const std::string &row) {
+	ODBCConnStrKey key;
+
+	size_t val_pos = row.find(KEY_VAL_DEL);
+	if (val_pos == std::string::npos) {
+		// an equal '=' char must be present (syntax error)
+		return (duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLDriverConnect", "Invalid connection string",
+		                                    SQLStateType::ST_HY000, ""));
+	}
+
+	SQLRETURN ret = FindMatchingKey(duckdb::StringUtil::Lower(row.substr(0, val_pos)), key);
+	if (ret != SQL_SUCCESS) {
+		return ret;
+	}
+
+	SetVal(key, row.substr(val_pos + 1));
+	return SQL_SUCCESS;
+}
+
+SQLRETURN Connect::SetVal(ODBCConnStrKey key, const std::string &val) {
+	if (CheckSet(key)) {
+		return SQL_SUCCESS;
+	}
+	return (this->*handle_functions.at(key))(val);
+}
+
+SQLRETURN Connect::ParseInputStr() {
+	size_t row_pos;
+	std::string row;
+
+	if (input_str.empty()) {
+		return SQL_SUCCESS;
+	}
+
+	while ((row_pos = input_str.find(ROW_DEL)) != std::string::npos) {
+		row = input_str.substr(0, row_pos);
+		SQLRETURN ret = FindKeyValPair(row);
+		if (ret != SQL_SUCCESS) {
+			return ret;
+		}
+		input_str.erase(0, row_pos + 1);
+	}
+
+	if (input_str.empty()) {
+		return SQL_SUCCESS;
+	}
+
+	SQLRETURN ret = FindKeyValPair(input_str);
+	if (ret != SQL_SUCCESS) {
+		return ret;
+	}
+	return SQL_SUCCESS;
+}
+
 SQLRETURN Connect::HandleDsn(const string &val) {
 	dbc->dsn = val;
 	set_keys[DSN] = true;
+	return SQL_SUCCESS;
+}
+
+SQLRETURN Connect::HandleDatabase(const string &val) {
+	std::string new_db_name = val;
+	// given preference for the connection attribute
+	if (!dbc->sql_attr_current_catalog.empty() && new_db_name.empty()) {
+		new_db_name = dbc->sql_attr_current_catalog;
+	}
+
+	dbc->SetDatabaseName(new_db_name);
+	set_keys[DATABASE] = true;
 	return SQL_SUCCESS;
 }
 
@@ -315,6 +437,41 @@ SQLRETURN Connect::SetConnection() {
 		dbc->conn->SetAutoCommit(dbc->autocommit);
 	}
 	return SQL_SUCCESS;
+}
+
+SQLRETURN SQL_API SQLDriverConnect(SQLHDBC connection_handle, SQLHWND window_handle, SQLCHAR *in_connection_string,
+                                   SQLSMALLINT string_length1, SQLCHAR *out_connection_string,
+                                   SQLSMALLINT buffer_length, SQLSMALLINT *string_length2_ptr,
+                                   SQLUSMALLINT driver_completion) {
+	duckdb::OdbcHandleDbc *dbc = nullptr;
+	SQLRETURN ret = ConvertDBCBeforeConnection(connection_handle, dbc);
+	if (!SQL_SUCCEEDED(ret)) {
+		return ret;
+	}
+
+	duckdb::Connect connect(dbc, OdbcUtils::ConvertSQLCHARToString(in_connection_string));
+
+	ret = connect.ParseInputStr();
+	if (!connect.SetSuccessWithInfo(ret)) {
+		return ret;
+	}
+
+	std::string db_name = dbc->GetDatabaseName();
+
+	ret = connect.SetConnection();
+	if (!connect.SetSuccessWithInfo(ret)) {
+		return ret;
+	}
+
+	std::string connect_str = "DuckDB connection";
+	if (string_length2_ptr) {
+		*string_length2_ptr = connect_str.size();
+	}
+	if (out_connection_string) {
+		memcpy(out_connection_string, connect_str.c_str(),
+		       duckdb::MinValue<SQLSMALLINT>((SQLSMALLINT)connect_str.size(), buffer_length));
+	}
+	return connect.GetSuccessWithInfo() ? SQL_SUCCESS_WITH_INFO : ret;
 }
 
 SQLRETURN SQL_API SQLConnect(SQLHDBC connection_handle, SQLCHAR *server_name, SQLSMALLINT name_length1,
