@@ -340,6 +340,7 @@ SELECT cast(ACOS(n::double)*1000 as bigint) FROM numbers  WHERE n between -1 and
 
 statement error
 SELECT cast(ASIN(n)*1000 as bigint) FROM numbers ORDER BY n
+----
 
 query I
 SELECT cast(COT(n::tinyint)*1000 as bigint) FROM numbers  WHERE n > 0.1 OR N < -0.1 ORDER BY n

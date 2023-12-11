@@ -30,3 +30,4 @@ SELECT [INET '127.0.0.1/17', NULL, '255.255.255.255/31']
 # unsupported cast from int to inet
 statement error
 SELECT [INET '127.0.0.1/17', 3, INET '255.255.255.255/31']::VARCHAR[]
+----

@@ -50,6 +50,8 @@ physical_plan	<REGEX>:.*PERFECT_HASH_GROUP_BY.*
 # the threshold has to be in range
 statement error
 PRAGMA perfect_ht_threshold=-1;
+----
 
 statement error
 PRAGMA perfect_ht_threshold=100;
+----

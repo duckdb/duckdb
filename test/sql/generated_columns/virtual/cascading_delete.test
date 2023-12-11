@@ -27,6 +27,7 @@ SELECT * FROM unit;
 # Is a dependency of 1 or more columns - CASCADE required
 statement error
 ALTER TABLE unit DROP COLUMN price;
+----
 
 statement ok
 ALTER TABLE unit DROP COLUMN price CASCADE;
@@ -57,6 +58,7 @@ SELECT * FROM unit;
 # Cant delete last column
 statement error
 ALTER TABLE unit DROP COLUMN amount_sold CASCADE;
+----
 
 query I
 SELECT * FROM unit;

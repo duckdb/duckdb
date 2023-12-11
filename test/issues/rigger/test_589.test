@@ -11,4 +11,5 @@ CREATE TABLE t0(c0 INT);
 
 statement error
 CREATE INDEX i0 ON t0(rowid, c0);
+----
 

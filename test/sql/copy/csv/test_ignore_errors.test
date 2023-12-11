@@ -10,6 +10,7 @@ COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little.csv' (HEADER, I
 
 statement error
 COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little.csv' (HEADER, NULL_PADDING FALSE)
+----
 
 # not enough columns provided
 query II
@@ -29,6 +30,7 @@ INSERT INTO integers SELECT * FROM read_csv('test/sql/copy/csv/data/test/error_t
 
 statement error
 INSERT INTO integers SELECT * FROM read_csv('test/sql/copy/csv/data/test/error_too_little.csv', columns={'i': 'INTEGER'}, header=1, null_padding=0)
+----
 
 # not enough columns provided
 query II
@@ -48,6 +50,7 @@ COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_single.csv' (HE
 
 statement error
 COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_single.csv' (HEADER, NULL_PADDING 0)
+----
 
 # not enough columns provided, single value
 query II
@@ -84,6 +87,7 @@ COPY integers FROM 'test/sql/copy/csv/data/test/error_invalid_type.csv' (HEADER,
 
 statement error
 COPY integers FROM 'test/sql/copy/csv/data/test/error_invalid_type.csv' (HEADER)
+----
 
 # too many columns provided
 query II
