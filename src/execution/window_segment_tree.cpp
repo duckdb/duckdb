@@ -319,7 +319,6 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 
 	auto &lcstate = lstate.Cast<WindowCustomAggregatorState>();
 	auto &frames = lcstate.frames;
-	auto &rmask = FlatVector::Validity(result);
 	const_data_ptr_t gstate_p = nullptr;
 	if (gstate) {
 		auto &gcstate = gstate->Cast<WindowCustomAggregatorState>();
@@ -327,11 +326,9 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 	}
 	for (idx_t i = 0, cur_row = row_idx; i < count; ++i, ++cur_row) {
 		idx_t nframes = 0;
-		idx_t non_empty = 0;
 		if (exclude_mode == WindowExcludeMode::NO_OTHER) {
 			auto begin = begins[i];
 			auto end = ends[i];
-			non_empty += (begin < end);
 			frames[nframes++] = FrameBounds(begin, end);
 		} else {
 			//	The frame_exclusion option allows rows around the current row to be excluded from the frame,
@@ -357,13 +354,11 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 			auto begin = begins[i];
 			auto end = (exclude_mode == WindowExcludeMode::CURRENT_ROW) ? cur_row : peer_begin[i];
 			end = MaxValue(begin, end);
-			non_empty += (begin < end);
 			frames[nframes++] = FrameBounds(begin, end);
 
 			// with EXCLUDE TIES, in addition to the frame part right of the peer group's end,
 			// we also need to consider the current row
 			if (exclude_mode == WindowExcludeMode::TIES) {
-				++non_empty;
 				frames[nframes++] = FrameBounds(cur_row, cur_row + 1);
 			}
 
@@ -371,14 +366,7 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 			end = ends[i];
 			begin = (exclude_mode == WindowExcludeMode::CURRENT_ROW) ? (cur_row + 1) : peer_end[i];
 			begin = MinValue(begin, end);
-			non_empty += (begin < end);
 			frames[nframes++] = FrameBounds(begin, end);
-		}
-
-		//	No data means NULL
-		if (!non_empty) {
-			rmask.SetInvalid(i);
-			continue;
 		}
 
 		// Extract the range
@@ -687,17 +675,6 @@ void WindowSegmentTree::Evaluate(WindowAggregatorState &lstate, const DataChunk 
 	}
 
 	part.Finalize(result, count);
-
-	//	Set the validity mask on the invalid rows
-
-	auto &rmask = FlatVector::Validity(result);
-	for (idx_t rid = 0, cur_row = row_idx; rid < count; ++rid, ++cur_row) {
-		auto begin = window_begin[rid];
-		auto end = window_end[rid];
-		if (begin >= end) {
-			rmask.SetInvalid(rid);
-		}
-	}
 }
 
 void WindowSegmentTreePart::Evaluate(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends,
