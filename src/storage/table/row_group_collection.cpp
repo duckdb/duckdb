@@ -706,6 +706,7 @@ private:
 //===--------------------------------------------------------------------===//
 struct VacuumState {
 	bool can_vacuum_deletes = false;
+	idx_t row_start = 0;
 	idx_t next_vacuum_idx = 0;
 	vector<idx_t> row_group_counts;
 };
@@ -713,9 +714,9 @@ struct VacuumState {
 class VacuumTask : public BaseCheckpointTask {
 public:
 	VacuumTask(CollectionCheckpointState &checkpoint_state, VacuumState &vacuum_state, idx_t segment_idx,
-	           idx_t merge_count, idx_t target_count, idx_t merge_rows)
+	           idx_t merge_count, idx_t target_count, idx_t merge_rows, idx_t row_start)
 	    : BaseCheckpointTask(checkpoint_state), vacuum_state(vacuum_state), segment_idx(segment_idx),
-	      merge_count(merge_count), target_count(target_count), merge_rows(merge_rows) {
+	      merge_count(merge_count), target_count(target_count), merge_rows(merge_rows), row_start(row_start) {
 	}
 
 	void ExecuteTask() override {
@@ -725,7 +726,7 @@ public:
 		vector<unique_ptr<RowGroup>> new_row_groups;
 		vector<idx_t> append_counts;
 		idx_t row_group_rows = merge_rows;
-		idx_t start = checkpoint_state.segments[segment_idx].node->start;
+		idx_t start = row_start;
 		for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
 			idx_t current_row_group_rows = MinValue<idx_t>(row_group_rows, Storage::ROW_GROUP_SIZE);
 			auto new_row_group = make_uniq<RowGroup>(collection, start, current_row_group_rows);
@@ -816,6 +817,7 @@ private:
 	idx_t merge_count;
 	idx_t target_count;
 	idx_t merge_rows;
+	idx_t row_start;
 };
 
 void RowGroupCollection::InitializeVacuumState(VacuumState &state, vector<SegmentNode<RowGroup>> &segments) {
@@ -892,10 +894,11 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	}
 	// schedule the vacuum task
 	auto vacuum_task =
-	    make_uniq<VacuumTask>(checkpoint_state, state, segment_idx, merge_count, target_count, merge_rows);
+	    make_uniq<VacuumTask>(checkpoint_state, state, segment_idx, merge_count, target_count, merge_rows, state.row_start);
 	checkpoint_state.ScheduleTask(std::move(vacuum_task));
 	// skip vacuuming by the row groups we have merged
 	state.next_vacuum_idx = segment_idx + merge_count;
+	state.row_start += merge_rows;
 	return true;
 }
 
@@ -928,7 +931,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			continue;
 		}
 		// schedule a checkpoint task for this row group
+		entry.node->MoveToCollection(*this, vacuum_state.row_start);
 		ScheduleCheckpointTask(checkpoint_state, segment_idx);
+		vacuum_state.row_start += entry.node->count;
 	}
 	// all tasks have been scheduled - execute tasks until we are done
 	do {
@@ -944,7 +949,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		checkpoint_state.ThrowError();
 	}
 	// no errors - finalize the row groups
-	idx_t start = this->row_start;
+	idx_t new_total_rows = 0;
 	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 		auto &entry = segments[segment_idx];
 		if (!entry.node) {
@@ -952,15 +957,13 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			continue;
 		}
 		auto &row_group = *entry.node;
-
-		row_group.MoveToCollection(*this, start);
 		auto row_group_writer = checkpoint_state.writer.GetRowGroupWriter(*entry.node);
 		auto pointer = row_group.Checkpoint(*row_group_writer, global_stats);
 		writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
 		row_groups->AppendSegment(l, std::move(entry.node));
-		start += row_group.count;
+		new_total_rows += row_group.count;
 	}
-	total_rows = start - this->row_start;
+	total_rows = new_total_rows;
 }
 
 //===--------------------------------------------------------------------===//
