@@ -38,5 +38,4 @@ NULL
 
 # incorrect usage
 statement error
-select list_kurtosis()
-----
+select list_kurtosis()----

@@ -105,5 +105,4 @@ SELECT lgamma(2::hugeint)
 0
 
 statement error
-SELECT lgamma('asdf')
-----
+SELECT lgamma('asdf')----

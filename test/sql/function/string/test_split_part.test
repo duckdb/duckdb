@@ -95,5 +95,4 @@ select split_part('a')
 ----
 
 statement error
-select split_part('a','a')
-----
+select split_part('a','a')----

@@ -14,5 +14,4 @@ SELECT enum_last(null::rainbow)
 purple
 
 statement error
-SELECT enum_last('bla')
-----
+SELECT enum_last('bla')----

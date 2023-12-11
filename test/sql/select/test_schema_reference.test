@@ -22,5 +22,4 @@ SELECT s2.tbl.i FROM s1.tbl;
 
 # no schema present
 statement error
-SELECT a.tbl.i FROM range(10) tbl(i)
-----
+SELECT a.tbl.i FROM range(10) tbl(i)----

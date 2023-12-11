@@ -62,5 +62,4 @@ SELECT '14:42:70.500'::TIME::VARCHAR
 
 # invalid separator
 statement error
-SELECT '14-42-04'::TIME::VARCHAR
-----
+SELECT '14-42-04'::TIME::VARCHAR----

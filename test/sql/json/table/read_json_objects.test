@@ -173,11 +173,11 @@ select * from read_ndjson_objects('https://github.com/duckdb/duckdb-data/release
 # empty file
 query I
 select * from read_json_objects('data/json/empty.ndjson')
-----
+---
 
 query I
 select * from read_ndjson_objects('data/json/empty.ndjson')
-----
+---
 
 # invalid json stuff
 statement error

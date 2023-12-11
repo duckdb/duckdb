@@ -44,9 +44,7 @@ ALTER TABLE a ALTER COLUMN gen_x TYPE BOOLEAN;
 ## TEXT -> BOOLEAN: KO
 #statement error
 #SELECT * FROM a;
-----
 
 ## TEXT -> BOOLEAN: KO
 #statement error
 #INSERT INTO a VALUES ('hello', 42)
-----

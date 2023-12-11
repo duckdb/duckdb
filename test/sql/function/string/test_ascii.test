@@ -80,5 +80,4 @@ SELECT CHR(1073741824)
 ----
 
 statement error
-SELECT CHR()
-----
+SELECT CHR()----

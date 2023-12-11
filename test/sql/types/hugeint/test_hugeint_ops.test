@@ -15,7 +15,6 @@ INSERT INTO hugeints VALUES (42::HUGEINT), ('1267650600228229401496703205376'::H
 # out of range conversion
 # statement error
 # SELECT h::INTEGER FROM hugeints
-----
 
 # filter before cast works
 query I

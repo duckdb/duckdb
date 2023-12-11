@@ -16,7 +16,6 @@ PRAGMA enable_verification
 #
 #statement error
 #create table ups (z int, constraint x foreign key (x) references y(y));
-----
 
 statement ok
 create table x (x int primary key);
@@ -26,7 +25,6 @@ create table x (x int primary key);
 #
 #statement error
 #create table y (y int references x(y));
-----
 
 statement ok
 create table y (y int references x(x));

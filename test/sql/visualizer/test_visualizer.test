@@ -70,5 +70,4 @@ Pragma visualize_diff_profiling_output('__TEST_DIR__/test.html','__TEST_DIR__/fi
 ----
 
 statement error
-Pragma visualize_diff_profiling_output('__TEST_DIR__/test.html','__TEST_DIR__/DOESNOTEXIST.json', '__TEST_DIR__/DOESNOTEXIST.json')
-----
+Pragma visualize_diff_profiling_output('__TEST_DIR__/test.html','__TEST_DIR__/DOESNOTEXIST.json', '__TEST_DIR__/DOESNOTEXIST.json')----

@@ -15,7 +15,6 @@ CREATE TEMPORARY TABLE integersx(i INTEGER)
 # we don't support temporary schemas (yet?)
 #statement error
 #CREATE TEMPORARY SCHEMA asdf
-----
 
 # we can prefix temp tables with a schema that is not "temp"
 statement ok
@@ -158,5 +157,4 @@ SELECT i from integers3
 # table is not visible to other cons
 statement error con2
 INSERT INTO integers VALUES (42)
-----
 

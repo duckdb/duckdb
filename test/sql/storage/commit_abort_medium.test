@@ -46,7 +46,6 @@ COMMIT
 
 statement error con2
 COMMIT
-----
 
 query III
 SELECT * FROM test ORDER BY a, b, c

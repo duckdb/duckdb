@@ -74,5 +74,4 @@ VARCHAR
 
 # Try to cast to bogus enum
 statement error
-ALTER TABLE person ALTER name TYPE bogus_name
-----
+ALTER TABLE person ALTER name TYPE bogus_name----

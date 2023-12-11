@@ -54,5 +54,4 @@ SELECT enum_range_boundary('orange'::rainbow, 1)
 ----
 
 statement error
-SELECT enum_range_boundary(1, 'orange'::rainbow)
-----
+SELECT enum_range_boundary(1, 'orange'::rainbow)----

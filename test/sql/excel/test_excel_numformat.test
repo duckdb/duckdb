@@ -552,5 +552,4 @@ SELECT text('hello', 1.0)
 ----
 
 statement error
-SELECT text('hello', '@')
-----
+SELECT text('hello', '@')----

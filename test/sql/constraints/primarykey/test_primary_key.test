@@ -70,5 +70,4 @@ COMMIT
 # but the second transaction results in a conflict
 statement error con2
 COMMIT
-----
 

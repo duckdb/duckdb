@@ -95,5 +95,4 @@ INSERT INTO t21 VALUES (1);
 ART indexes cannot contain BLOBs with zero bytes.
 
 statement error
-CREATE INDEX i21 ON t21 (c1);
-----
+CREATE INDEX i21 ON t21 (c1);----

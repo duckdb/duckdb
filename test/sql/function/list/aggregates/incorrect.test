@@ -139,5 +139,4 @@ SELECT list_aggr([1, 2, NULL], 'min_by');
 ----
 
 statement error
-SELECT list_aggr([1, 2, NULL], 'argmin');
-----
+SELECT list_aggr([1, 2, NULL], 'argmin');----

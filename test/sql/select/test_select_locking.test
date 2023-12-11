@@ -22,5 +22,4 @@ SELECT * FROM t FOR SHARE;
 
 # unsupported
 statement error
-SELECT * FROM t KEY SHARE;
-----
+SELECT * FROM t KEY SHARE;----

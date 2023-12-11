@@ -58,7 +58,6 @@ SELECT ${func_name}([1, 2], 'DESC', 2)
 
 statement error 
 SELECT ${func_name}([1, 2], 2, 2)
-----
 
 endloop
 

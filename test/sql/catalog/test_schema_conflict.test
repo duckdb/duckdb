@@ -15,7 +15,6 @@ CREATE SCHEMA test;
 # this should cause a conflict
 statement error con2
 CREATE SCHEMA test;
-----
 
 statement ok con1
 COMMIT
@@ -36,7 +35,6 @@ DROP SCHEMA test;
 # this should cause a conflict
 statement error con2
 DROP SCHEMA test;
-----
 
 # rollback the drop
 statement ok con1

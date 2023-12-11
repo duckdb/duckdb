@@ -177,5 +177,4 @@ SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=${AWS_DEF
 ----
 
 statement error
-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=${AWS_DEFAULT_REGION}&bla=bla" LIMIT 3
-----
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=${AWS_DEFAULT_REGION}&bla=bla" LIMIT 3----

@@ -177,6 +177,7 @@ statement ok
 SET SEARCH_PATH = 'test,test2,test3,test4,test5';
 
 statement ok
+---
 SELECT i FROM test5_table;
 
 statement ok
@@ -215,11 +216,9 @@ SELECT i FROM test_table;
 
 statement error con2
 SELECT i FROM test_table;
-----
 
 statement error con1
 SELECT i FROM test2_table;
-----
 
 statement ok con2
 SELECT i FROM test2_table;
