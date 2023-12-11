@@ -88,6 +88,7 @@ protected:
 	void ConvertToTransient(MetadataBlock &block);
 };
 
+//! Detect mismatching constant values
 static_assert(MetadataManager::METADATA_BLOCK_SIZE * MetadataManager::METADATA_BLOCK_COUNT <= Storage::BLOCK_SIZE,
               "metadata block count exceeds total block alloc size");
 

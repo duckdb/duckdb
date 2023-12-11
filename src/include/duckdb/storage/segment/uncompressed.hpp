@@ -47,6 +47,7 @@ public:
 	    MinValue(AlignValueFloor(Storage::BLOCK_SIZE / 4), idx_t(DEFAULT_STRING_SIZE));
 };
 
+//! Detect mismatching constant values
 static_assert(StringUncompressed::STRING_BLOCK_LIMIT != 0, "the string block limit cannot be 0");
 
 } // namespace duckdb

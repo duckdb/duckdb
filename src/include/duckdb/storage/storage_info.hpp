@@ -98,11 +98,16 @@ struct DatabaseHeader {
 };
 
 //! Detect mismatching constant values when compiling
-static_assert(STANDARD_ROW_GROUPS_SIZE >= STANDARD_VECTOR_SIZE, "row groups must be able to hold at least one vector");
+
+#if (STANDARD_ROW_GROUPS_SIZE % STANDARD_VECTOR_SIZE != 0)
+#error The row group size must be a multiple of the vector size
+#endif
+#if (STANDARD_ROW_GROUPS_SIZE < STANDARD_VECTOR_SIZE)
+#error Row groups must be able to hold at least one vector
+#endif
+
 static_assert(Storage::BLOCK_ALLOC_SIZE % Storage::SECTOR_SIZE == 0,
               "the block allocation size has to be a multiple of the sector size");
-static_assert(STANDARD_ROW_GROUPS_SIZE % STANDARD_VECTOR_SIZE == 0,
-              "the row group size must be a multiple of the vector size");
 static_assert(Storage::BLOCK_SIZE < idx_t(NumericLimits<int32_t>::Maximum()),
               "the block size cannot exceed the maximum signed integer value,"
               "as some comparisons require casts");
