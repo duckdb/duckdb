@@ -103,7 +103,7 @@ static_assert(Storage::BLOCK_ALLOC_SIZE % Storage::SECTOR_SIZE == 0,
               "the block allocation size has to be a multiple of the sector size");
 static_assert(STANDARD_ROW_GROUPS_SIZE % STANDARD_VECTOR_SIZE == 0,
               "the row group size must be a multiple of the vector size");
-static_assert(Storage::BLOCK_SIZE < NumericLimits<int32_t>::Maximum(),
+static_assert(Storage::BLOCK_SIZE < idx_t(NumericLimits<int32_t>::Maximum()),
               "the block size cannot exceed the maximum signed integer value,"
               "as some comparisons require casts");
 
