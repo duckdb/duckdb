@@ -31,24 +31,19 @@ struct ParseChunk {
 		auto &states = scanner.states;
 
 		sniffing_state_machine.Transition(states, current_char);
-		scanner.length++;
 		// Check if it's a new value - We don't predicate this because of the cost of creating a CSV Value
 		if (states.NewValue()) {
-			scanner.length--;
 			scanner.values[scanner.cur_rows*16+ scanner.column_count].length = scanner.length;
 			scanner.column_count++;
 			scanner.values[scanner.cur_rows *16+ scanner.column_count].buffer_ptr = scanner.cur_buffer_handle->Ptr() + current_pos;
-			scanner.length = 0;
 			// Create next value
 			// fixme: states.current_state == CSVState::QUOTED
 
 		}
 		// Check if it's a new row
 		if (states.NewRow()) {
-			scanner.length--;
-			scanner.values[scanner.cur_rows*16+scanner.column_count].length = scanner.length;
+			scanner.values[scanner.cur_rows*16+scanner.column_count].length = csvz;
 			scanner.cur_rows++;
-			scanner.length = 0;
 			if (scanner.cur_rows >= STANDARD_VECTOR_SIZE) {
 				return true;
 			}
