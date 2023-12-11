@@ -78,7 +78,7 @@ public:
 
 	struct LambdaInfo {
 		explicit LambdaInfo(DataChunk &args, ExpressionState &state, Vector &result, bool &completed)
-		    : result(result), row_count(args.size()),  is_all_constant(args.AllConstant()) {
+		    : result(result), row_count(args.size()), is_all_constant(args.AllConstant()) {
 			Vector &list_column = args.data[0];
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -101,7 +101,7 @@ public:
 			list_column.ToUnifiedFormat(row_count, list_column_format);
 			list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_column_format);
 
-			 child_vector = &ListVector::GetEntry(list_column);
+			child_vector = &ListVector::GetEntry(list_column);
 
 			// get the lambda column data for all other input vectors
 			column_infos = LambdaFunctions::GetColumnInfo(args, row_count);

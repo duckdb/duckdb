@@ -6,8 +6,7 @@
 namespace duckdb {
 
 struct ReduceExecuteInfo {
-	ReduceExecuteInfo(LambdaFunctions::LambdaInfo &info, ClientContext &context)
-	    : left_slice(*info.child_vector) {
+	ReduceExecuteInfo(LambdaFunctions::LambdaInfo &info, ClientContext &context) : left_slice(*info.child_vector) {
 		SelectionVector left_vector(info.row_count);
 		active_rows.resize(info.row_count);
 
@@ -126,7 +125,8 @@ static void ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 	execute_info.left_slice.Reference(result_chunk.data[0]);
 }
 
-void LambdaFunctions::ListReduceFunction(duckdb::DataChunk &args, duckdb::ExpressionState &state, duckdb::Vector &result) {
+void LambdaFunctions::ListReduceFunction(duckdb::DataChunk &args, duckdb::ExpressionState &state,
+                                         duckdb::Vector &result) {
 	// Initializes the left slice from the list entries, active rows, the expression executor and the input types
 	bool completed = false;
 	LambdaFunctions::LambdaInfo info(args, state, result, completed);
