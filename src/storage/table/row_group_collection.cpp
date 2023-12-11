@@ -601,12 +601,16 @@ struct CollectionCheckpointState {
 	                          vector<SegmentNode<RowGroup>> &segments, TableStatistics &global_stats)
 	    : collection(collection), writer(writer), scheduler(writer.GetScheduler()), segments(segments),
 	      global_stats(global_stats), token(scheduler.CreateProducer()), completed_tasks(0), total_tasks(0) {
+		writers.resize(segments.size());
+		write_data.resize(segments.size());
 	}
 
 	RowGroupCollection &collection;
 	TableDataWriter &writer;
 	TaskScheduler &scheduler;
 	vector<SegmentNode<RowGroup>> &segments;
+	vector<unique_ptr<RowGroupWriter>> writers;
+	vector<RowGroupWriteData> write_data;
 	TableStatistics &global_stats;
 	mutex write_lock;
 
@@ -688,13 +692,12 @@ public:
 	}
 
 	void ExecuteTask() override {
-		return;
-		//		auto &entry = checkpoint_state.segments[index];
-		//		auto &row_group = *entry.node;
-		//		checkpoint_state.writers[index] = checkpoint_state.writer.GetRowGroupWriter(*entry.node);
-		//		// FIXME - this can be removed with relatively minor changes to the partial block manager
-		//		lock_guard<mutex> write_lock(checkpoint_state.write_lock);
-		//		row_group.WriteToDisk(*checkpoint_state.writers[index]);
+		auto &entry = checkpoint_state.segments[index];
+		auto &row_group = *entry.node;
+		checkpoint_state.writers[index] = checkpoint_state.writer.GetRowGroupWriter(*entry.node);
+		// FIXME - this can be removed with relatively minor changes to the partial block manager
+		lock_guard<mutex> write_lock(checkpoint_state.write_lock);
+		checkpoint_state.write_data[index] = row_group.WriteToDisk(*checkpoint_state.writers[index]);
 	}
 
 private:
@@ -957,8 +960,11 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			continue;
 		}
 		auto &row_group = *entry.node;
-		auto row_group_writer = checkpoint_state.writer.GetRowGroupWriter(*entry.node);
-		auto pointer = row_group.Checkpoint(*row_group_writer, global_stats);
+		auto row_group_writer = std::move(checkpoint_state.writers[segment_idx]);
+		if (!row_group_writer) {
+			throw InternalException("Missing row group writer for index %llu", segment_idx);
+		}
+		auto pointer = row_group.Checkpoint(std::move(checkpoint_state.write_data[segment_idx]), *row_group_writer, global_stats);
 		writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
 		row_groups->AppendSegment(l, std::move(entry.node));
 		new_total_rows += row_group.count;
