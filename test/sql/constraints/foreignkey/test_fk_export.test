@@ -3,7 +3,6 @@
 # group: [foreignkey]
 
 # FIXME: due to a bug in foreign key dependencies this test has been disabled for now
-mode skip
 
 statement ok
 CREATE TABLE pk_integers(i INTEGER PRIMARY KEY)
@@ -63,5 +62,3 @@ DROP TABLE fk_integers;
 
 statement ok
 DROP TABLE pk_integers;
-
-mode unskip
