@@ -1153,6 +1153,60 @@ bool LogicalType::IsJSONType() const {
 	return id() == LogicalTypeId::VARCHAR && HasAlias() && GetAlias() == JSON_TYPE_NAME;
 }
 
+bool LogicalType::ContainsJSONType() const {
+	switch (id_) {
+	case LogicalTypeId::LIST:
+		return ListType::GetChildType(*this).ContainsJSONType();
+	case LogicalTypeId::STRUCT:
+		for (auto &child_type : StructType::GetChildTypes(*this)) {
+			if (child_type.second.ContainsJSONType()) {
+				return true;
+			}
+		}
+		return false;
+	case LogicalTypeId::UNION:
+		for (idx_t child_idx = 0; child_idx < UnionType::GetMemberCount(*this); child_idx++) {
+			if (UnionType::GetMemberType(*this, child_idx).ContainsJSONType()) {
+				return true;
+			}
+		}
+		return false;
+	case LogicalTypeId::ARRAY:
+		return ArrayType::GetChildType(*this).ContainsJSONType();
+	default:
+		return IsJSONType();
+	}
+}
+
+LogicalType LogicalType::GetJSONRenderType() const {
+	D_ASSERT(ContainsJSONType());
+	switch (id_) {
+	case LogicalTypeId::LIST:
+		return LogicalType::LIST(ListType::GetChildType(*this).GetJSONRenderType());
+	case LogicalTypeId::STRUCT: {
+		child_list_t<LogicalType> children;
+		children.reserve(StructType::GetChildCount(*this));
+		for (auto &child_type : StructType::GetChildTypes(*this)) {
+			children.emplace_back(child_type.first, child_type.second.GetJSONRenderType());
+		}
+		return LogicalType::STRUCT(std::move(children));
+	}
+	case LogicalTypeId::UNION: {
+		child_list_t<LogicalType> children;
+		children.reserve(UnionType::GetMemberCount(*this));
+		for (idx_t child_idx = 0; child_idx < UnionType::GetMemberCount(*this); child_idx++) {
+			children.emplace_back(UnionType::GetMemberName(*this, child_idx),
+			                      UnionType::GetMemberType(*this, child_idx).GetJSONRenderType());
+		}
+		return LogicalType::UNION(std::move(children));
+	}
+	case LogicalTypeId::ARRAY:
+		return LogicalType::ARRAY(ArrayType::GetChildType(*this).GetJSONRenderType(), ArrayType::GetSize(*this));
+	default:
+		return IsJSONType() ? LogicalType::VARCHAR : *this;
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Array Type
 //===--------------------------------------------------------------------===//

@@ -2,11 +2,11 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
 
@@ -114,12 +114,12 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			function_name = "map_extract";
 		} else if (b_exp_type.IsJSONType() && op.children.size() == 2) {
 			function_name = "json_extract";
-			// Make sure we only extract array elements, not fields
+			// Make sure we only extract array elements, not fields, by adding the $[] syntax
 			auto &i_exp = BoundExpression::GetExpression(*op.children[1]);
 			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
 				if (!const_exp.value.IsNull()) {
-					const_exp.value = "$[" + const_exp.value.ToString() + "]";
+					const_exp.value = StringUtil::Format("$[%s]", const_exp.value.ToString());
 					const_exp.return_type = LogicalType::VARCHAR;
 				}
 			}
@@ -148,11 +148,11 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			function_name = "union_extract";
 		} else if (extract_expr_type.IsJSONType()) {
 			function_name = "json_extract";
-			// Make sure we only extract fields, not array elements
+			// Make sure we only extract fields, not array elements, by adding $. syntax
 			if (name_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				auto &const_exp = name_exp->Cast<BoundConstantExpression>();
 				if (!const_exp.value.IsNull()) {
-					const_exp.value = "$.\"" + const_exp.value.ToString() + "\"";
+					const_exp.value = StringUtil::Format("$.\"%s\"", const_exp.value.ToString());
 					const_exp.return_type = LogicalType::VARCHAR;
 				}
 			}

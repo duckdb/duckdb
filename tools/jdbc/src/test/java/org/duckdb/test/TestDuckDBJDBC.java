@@ -2877,7 +2877,7 @@ public class TestDuckDBJDBC {
             assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
             JsonNode jsonNode = (JsonNode) rs.getObject(1);
             assertTrue(jsonNode.isString());
-            assertEquals(jsonNode.toString(), "hello");
+            assertEquals(jsonNode.toString(), "\"hello\"");
         }
     }
 

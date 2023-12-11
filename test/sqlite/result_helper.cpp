@@ -356,8 +356,15 @@ string TestResultHelper::SQLLogicTestConvertValue(Value value, LogicalType sql_t
 		case LogicalTypeId::BOOLEAN:
 			return BooleanValue::Get(value) ? "1" : "0";
 		default: {
-			string str = sql_type.IsJSONType() ? value.ToString()
-			                                   : value.CastAs(*runner.con->context, LogicalType::VARCHAR).ToString();
+			string str;
+			if (sql_type.ContainsJSONType()) {
+				auto temp = value;
+				temp.Reinterpret(value.type().GetJSONRenderType());
+				str = temp.CastAs(*runner.con->context, LogicalType::VARCHAR).ToString();
+			} else {
+				str = value.CastAs(*runner.con->context, LogicalType::VARCHAR).ToString();
+			}
+
 			if (str.empty()) {
 				return "(empty)";
 			} else {
