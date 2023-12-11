@@ -3068,10 +3068,10 @@ const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value) {
 	case LogicalTypeId::BIT:
 		return "BIT";
 	case LogicalTypeId::HUGEINT:
-		return "UHUGEINT";
-	case LogicalTypeId::POINTER:
 		return "HUGEINT";
 	case LogicalTypeId::UHUGEINT:
+		return "UHUGEINT";
+	case LogicalTypeId::POINTER:
 		return "POINTER";
 	case LogicalTypeId::VALIDITY:
 		return "VALIDITY";
