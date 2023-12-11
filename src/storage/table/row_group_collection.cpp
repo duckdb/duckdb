@@ -11,6 +11,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 
 namespace duckdb {
 
@@ -593,12 +594,228 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_i
 }
 
 //===--------------------------------------------------------------------===//
-// Checkpoint
+// Checkpoint State
+//===--------------------------------------------------------------------===//
+struct CollectionCheckpointState {
+	CollectionCheckpointState(RowGroupCollection &collection, TableDataWriter &writer,
+	                          vector<SegmentNode<RowGroup>> &segments, TableStatistics &global_stats)
+	    : collection(collection), writer(writer), scheduler(writer.GetScheduler()), segments(segments),
+	      global_stats(global_stats), token(scheduler.CreateProducer()), completed_tasks(0), total_tasks(0) {
+	}
+
+	RowGroupCollection &collection;
+	TableDataWriter &writer;
+	TaskScheduler &scheduler;
+	vector<SegmentNode<RowGroup>> &segments;
+	TableStatistics &global_stats;
+	mutex write_lock;
+
+public:
+	// FIXME: this is mostly the same as the Executor - perhaps this can be unified?
+	void PushError(PreservedError error) {
+		lock_guard<mutex> elock(error_lock);
+		this->errors.push_back(std::move(error));
+	}
+	bool HasError() {
+		lock_guard<mutex> elock(error_lock);
+		return !errors.empty();
+	}
+	void ThrowError() {
+		lock_guard<mutex> elock(error_lock);
+		errors[0].Throw();
+	}
+
+	void ScheduleTask(unique_ptr<Task> task) {
+		++total_tasks;
+		scheduler.ScheduleTask(*token, std::move(task));
+	}
+	void FinishTask() {
+		++completed_tasks;
+	}
+	bool TasksFinished() {
+		if (completed_tasks == total_tasks) {
+			return true;
+		}
+		if (HasError()) {
+			return true;
+		}
+		return false;
+	}
+	bool GetTask(shared_ptr<Task> &task) {
+		return scheduler.GetTaskFromProducer(*token, task);
+	}
+
+private:
+	unique_ptr<ProducerToken> token;
+	mutex error_lock;
+	vector<PreservedError> errors;
+	atomic<idx_t> completed_tasks;
+	atomic<idx_t> total_tasks;
+};
+
+class BaseCheckpointTask : public Task {
+public:
+	BaseCheckpointTask(CollectionCheckpointState &checkpoint_state) : checkpoint_state(checkpoint_state) {
+	}
+
+	virtual void ExecuteTask() = 0;
+	TaskExecutionResult Execute(TaskExecutionMode mode) override {
+		if (checkpoint_state.HasError()) {
+			return TaskExecutionResult::TASK_FINISHED;
+		}
+		try {
+			ExecuteTask();
+			checkpoint_state.FinishTask();
+			return TaskExecutionResult::TASK_FINISHED;
+		} catch (Exception &ex) {
+			checkpoint_state.PushError(PreservedError(ex));
+		} catch (std::exception &ex) {
+			checkpoint_state.PushError(PreservedError(ex));
+		} catch (...) { // LCOV_EXCL_START
+			checkpoint_state.PushError(PreservedError("Unknown exception during Checkpoint!"));
+		} // LCOV_EXCL_STOP
+		return TaskExecutionResult::TASK_ERROR;
+	}
+
+protected:
+	CollectionCheckpointState &checkpoint_state;
+};
+
+class CheckpointTask : public BaseCheckpointTask {
+public:
+	CheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t index)
+	    : BaseCheckpointTask(checkpoint_state), index(index) {
+	}
+
+	void ExecuteTask() override {
+		return;
+		//		auto &entry = checkpoint_state.segments[index];
+		//		auto &row_group = *entry.node;
+		//		checkpoint_state.writers[index] = checkpoint_state.writer.GetRowGroupWriter(*entry.node);
+		//		// FIXME - this can be removed with relatively minor changes to the partial block manager
+		//		lock_guard<mutex> write_lock(checkpoint_state.write_lock);
+		//		row_group.WriteToDisk(*checkpoint_state.writers[index]);
+	}
+
+private:
+	idx_t index;
+};
+
+//===--------------------------------------------------------------------===//
+// Vacuum
 //===--------------------------------------------------------------------===//
 struct VacuumState {
 	bool can_vacuum_deletes = false;
 	idx_t next_vacuum_idx = 0;
 	vector<idx_t> row_group_counts;
+};
+
+class VacuumTask : public BaseCheckpointTask {
+public:
+	VacuumTask(CollectionCheckpointState &checkpoint_state, VacuumState &vacuum_state, idx_t segment_idx,
+	           idx_t merge_count, idx_t target_count, idx_t merge_rows)
+	    : BaseCheckpointTask(checkpoint_state), vacuum_state(vacuum_state), segment_idx(segment_idx),
+	      merge_count(merge_count), target_count(target_count), merge_rows(merge_rows) {
+	}
+
+	void ExecuteTask() override {
+		auto &collection = checkpoint_state.collection;
+		auto &types = collection.GetTypes();
+		// create the new set of target row groups (initially empty)
+		vector<unique_ptr<RowGroup>> new_row_groups;
+		vector<idx_t> append_counts;
+		idx_t row_group_rows = merge_rows;
+		idx_t start = checkpoint_state.segments[segment_idx].node->start;
+		for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
+			idx_t current_row_group_rows = MinValue<idx_t>(row_group_rows, Storage::ROW_GROUP_SIZE);
+			auto new_row_group = make_uniq<RowGroup>(collection, start, current_row_group_rows);
+			new_row_group->InitializeEmpty(types);
+			new_row_groups.push_back(std::move(new_row_group));
+			append_counts.push_back(0);
+
+			row_group_rows -= current_row_group_rows;
+			start += current_row_group_rows;
+		}
+
+		DataChunk scan_chunk;
+		scan_chunk.Initialize(Allocator::DefaultAllocator(), types);
+
+		vector<column_t> column_ids;
+		for (idx_t c = 0; c < types.size(); c++) {
+			column_ids.push_back(c);
+		}
+
+		idx_t current_append_idx = 0;
+
+		// fill the new row group with the merged rows
+		TableAppendState append_state;
+		new_row_groups[current_append_idx]->InitializeAppend(append_state.row_group_append_state);
+
+		TableScanState scan_state;
+		scan_state.Initialize(column_ids);
+		scan_state.table_state.Initialize(types);
+		scan_state.table_state.max_row = idx_t(-1);
+		idx_t next_idx = segment_idx + merge_count;
+		for (idx_t c_idx = segment_idx; c_idx < next_idx; c_idx++) {
+			if (vacuum_state.row_group_counts[c_idx] == 0) {
+				continue;
+			}
+			auto &current_row_group = *checkpoint_state.segments[c_idx].node;
+
+			current_row_group.InitializeScan(scan_state.table_state);
+			while (true) {
+				scan_chunk.Reset();
+
+				current_row_group.ScanCommitted(scan_state.table_state, scan_chunk,
+				                                TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+				if (scan_chunk.size() == 0) {
+					break;
+				}
+				idx_t remaining = scan_chunk.size();
+				while (remaining > 0) {
+					idx_t append_count =
+					    MinValue<idx_t>(remaining, Storage::ROW_GROUP_SIZE - append_counts[current_append_idx]);
+					new_row_groups[current_append_idx]->Append(append_state.row_group_append_state, scan_chunk,
+					                                           append_count);
+					append_counts[current_append_idx] += append_count;
+					remaining -= append_count;
+					if (remaining > 0) {
+						// move to the next row group
+						current_append_idx++;
+						new_row_groups[current_append_idx]->InitializeAppend(append_state.row_group_append_state);
+						// slice chunk for the next append
+						scan_chunk.Slice(append_count, remaining);
+					}
+				}
+			}
+			// drop the row group after merging
+			current_row_group.CommitDrop();
+			checkpoint_state.segments[c_idx].node.reset();
+		}
+		idx_t total_append_count = 0;
+		for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
+			auto &row_group = new_row_groups[target_idx];
+			row_group->Verify();
+
+			// assign the new row group to the current segment
+			checkpoint_state.segments[segment_idx + target_idx].node = std::move(row_group);
+			total_append_count += append_counts[target_idx];
+		}
+		if (total_append_count != merge_rows) {
+			throw InternalException("Mismatch in row group count vs verify count in RowGroupCollection::Checkpoint");
+		}
+		// merging is complete - schedule checkpoint tasks of the target row groups
+		for (idx_t i = 0; i < target_count; i++) {
+			collection.ScheduleCheckpointTask(checkpoint_state, segment_idx + i);
+		}
+	}
+
+private:
+	VacuumState &vacuum_state;
+	idx_t segment_idx;
+	idx_t merge_count;
+	idx_t target_count;
+	idx_t merge_rows;
 };
 
 void RowGroupCollection::InitializeVacuumState(VacuumState &state, vector<SegmentNode<RowGroup>> &segments) {
@@ -619,16 +836,22 @@ void RowGroupCollection::InitializeVacuumState(VacuumState &state, vector<Segmen
 		state.row_group_counts.push_back(row_group_count);
 	}
 }
-void RowGroupCollection::VacuumDeletes(VacuumState &state, vector<SegmentNode<RowGroup>> &segments, idx_t segment_idx) {
+
+bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state,
+                                             idx_t segment_idx) {
 	static constexpr const idx_t MAX_MERGE_COUNT = 3;
 
-	if (!state.can_vacuum_deletes || state.next_vacuum_idx >= segment_idx) {
-		// don't vacuum this segment index
-		return;
+	if (!state.can_vacuum_deletes) {
+		// we cannot vacuum deletes - cannot vacuum
+		return false;
+	}
+	if (segment_idx < state.next_vacuum_idx) {
+		// this segment is being vacuumed by a previously scheduled task
+		return true;
 	}
 	if (state.row_group_counts[segment_idx] == 0) {
 		// segment was already dropped - skip
-		return;
+		return false;
 	}
 	idx_t merge_rows;
 	idx_t next_idx;
@@ -645,7 +868,7 @@ void RowGroupCollection::VacuumDeletes(VacuumState &state, vector<SegmentNode<Ro
 		auto total_target_size = target_count * Storage::ROW_GROUP_SIZE;
 		merge_count = 0;
 		merge_rows = 0;
-		for (next_idx = segment_idx; next_idx < segments.size(); next_idx++) {
+		for (next_idx = segment_idx; next_idx < checkpoint_state.segments.size(); next_idx++) {
 			if (state.row_group_counts[next_idx] == 0) {
 				continue;
 			}
@@ -665,107 +888,65 @@ void RowGroupCollection::VacuumDeletes(VacuumState &state, vector<SegmentNode<Ro
 		}
 	}
 	if (!perform_merge) {
-		return;
+		return false;
 	}
-	// create the new set of target row groups (initially empty)
-	vector<unique_ptr<RowGroup>> new_row_groups;
-	vector<idx_t> append_counts;
-	idx_t row_group_rows = merge_rows;
-	idx_t start = segments[segment_idx].node->start;
-	for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
-		idx_t current_row_group_rows = MinValue<idx_t>(row_group_rows, Storage::ROW_GROUP_SIZE);
-		auto new_row_group = make_uniq<RowGroup>(*this, start, current_row_group_rows);
-		new_row_group->InitializeEmpty(types);
-		new_row_groups.push_back(std::move(new_row_group));
-		append_counts.push_back(0);
-
-		row_group_rows -= current_row_group_rows;
-		start += current_row_group_rows;
-	}
-
-	DataChunk scan_chunk;
-	scan_chunk.Initialize(Allocator::DefaultAllocator(), types);
-
-	vector<column_t> column_ids;
-	for (idx_t c = 0; c < types.size(); c++) {
-		column_ids.push_back(c);
-	}
-
-	idx_t current_append_idx = 0;
-
-	// fill the new row group with the merged rows
-	TableAppendState append_state;
-	new_row_groups[current_append_idx]->InitializeAppend(append_state.row_group_append_state);
-
-	TableScanState scan_state;
-	scan_state.Initialize(column_ids);
-	scan_state.table_state.Initialize(types);
-	scan_state.table_state.max_row = idx_t(-1);
-	for (idx_t c_idx = segment_idx; c_idx < next_idx; c_idx++) {
-		if (state.row_group_counts[c_idx] == 0) {
-			continue;
-		}
-		auto &current_row_group = *segments[c_idx].node;
-
-		current_row_group.InitializeScan(scan_state.table_state);
-		while (true) {
-			scan_chunk.Reset();
-
-			current_row_group.ScanCommitted(scan_state.table_state, scan_chunk,
-			                                TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
-			if (scan_chunk.size() == 0) {
-				break;
-			}
-			idx_t remaining = scan_chunk.size();
-			while (remaining > 0) {
-				idx_t append_count =
-				    MinValue<idx_t>(remaining, Storage::ROW_GROUP_SIZE - append_counts[current_append_idx]);
-				new_row_groups[current_append_idx]->Append(append_state.row_group_append_state, scan_chunk,
-				                                           append_count);
-				append_counts[current_append_idx] += append_count;
-				remaining -= append_count;
-				if (remaining > 0) {
-					// move to the next row group
-					current_append_idx++;
-					new_row_groups[current_append_idx]->InitializeAppend(append_state.row_group_append_state);
-					// slice chunk for the next append
-					scan_chunk.Slice(append_count, remaining);
-				}
-			}
-		}
-		// drop the row group after merging
-		state.row_group_counts[c_idx] = 0;
-		current_row_group.CommitDrop();
-		segments[c_idx].node.reset();
-	}
-	idx_t total_append_count = 0;
-	for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
-		auto &row_group = new_row_groups[target_idx];
-		row_group->Verify();
-
-		// assign the new row group to the current segment
-		state.row_group_counts[segment_idx + target_idx] = row_group->count;
-		segments[segment_idx + target_idx].node = std::move(row_group);
-		total_append_count += append_counts[target_idx];
-	}
-	if (total_append_count != merge_rows) {
-		throw InternalException("Mismatch in row group count vs verify count in RowGroupCollection::Checkpoint");
-	}
+	// schedule the vacuum task
+	auto vacuum_task =
+	    make_uniq<VacuumTask>(checkpoint_state, state, segment_idx, merge_count, target_count, merge_rows);
+	checkpoint_state.ScheduleTask(std::move(vacuum_task));
 	// skip vacuuming by the row groups we have merged
 	state.next_vacuum_idx = segment_idx + merge_count;
+	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Checkpoint
+//===--------------------------------------------------------------------===//
+void RowGroupCollection::ScheduleCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx) {
+	auto checkpoint_task = make_uniq<CheckpointTask>(checkpoint_state, segment_idx);
+	checkpoint_state.ScheduleTask(std::move(checkpoint_task));
 }
 
 void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
 	auto segments = row_groups->MoveSegments();
 	auto l = row_groups->Lock();
 
+	CollectionCheckpointState checkpoint_state(*this, writer, segments, global_stats);
+
 	VacuumState vacuum_state;
 	InitializeVacuumState(vacuum_state, segments);
+	// schedule tasks
+	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
+		auto &entry = segments[segment_idx];
+		auto vacuum_tasks = ScheduleVacuumTasks(checkpoint_state, vacuum_state, segment_idx);
+		if (vacuum_tasks) {
+			// vacuum tasks were scheduled - don't schedule a checkpoint task yet
+			continue;
+		}
+		if (!entry.node) {
+			// row group was vacuumed/dropped - skip
+			continue;
+		}
+		// schedule a checkpoint task for this row group
+		ScheduleCheckpointTask(checkpoint_state, segment_idx);
+	}
+	// all tasks have been scheduled - execute tasks until we are done
+	do {
+		shared_ptr<Task> task;
+		while (checkpoint_state.GetTask(task)) {
+			task->Execute(TaskExecutionMode::PROCESS_ALL);
+			task.reset();
+		}
+	} while (!checkpoint_state.TasksFinished());
+	// check if we ran into any errors while checkpointing
+	if (checkpoint_state.HasError()) {
+		// throw the error
+		checkpoint_state.ThrowError();
+	}
+	// no errors - finalize the row groups
 	idx_t start = this->row_start;
 	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 		auto &entry = segments[segment_idx];
-		// prior to checkpointing check if we can vacuum any rows at this segment
-		VacuumDeletes(vacuum_state, segments, segment_idx);
 		if (!entry.node) {
 			// row group was vacuumed/dropped - skip
 			continue;
@@ -773,13 +954,13 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		auto &row_group = *entry.node;
 
 		row_group.MoveToCollection(*this, start);
-		auto row_group_writer = writer.GetRowGroupWriter(row_group);
+		auto row_group_writer = checkpoint_state.writer.GetRowGroupWriter(*entry.node);
 		auto pointer = row_group.Checkpoint(*row_group_writer, global_stats);
 		writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
 		row_groups->AppendSegment(l, std::move(entry.node));
 		start += row_group.count;
 	}
-	total_rows = start;
+	total_rows = start - this->row_start;
 }
 
 //===--------------------------------------------------------------------===//

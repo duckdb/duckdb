@@ -120,6 +120,7 @@ public:
 	RowGroupWriteData WriteToDisk(PartialBlockManager &manager, const vector<CompressionType> &compression_types);
 	//! Returns the number of committed rows (count - committed deletes)
 	idx_t GetCommittedRowCount();
+	void WriteToDisk(RowGroupWriter &writer);
 	RowGroupPointer Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats);
 
 	void InitializeAppend(RowGroupAppendState &append_state);

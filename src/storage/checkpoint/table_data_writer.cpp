@@ -5,6 +5,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 
 namespace duckdb {
 
@@ -27,6 +28,10 @@ CompressionType TableDataWriter::GetColumnCompressionType(idx_t i) {
 void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> &&writer) {
 	row_group_pointers.push_back(std::move(row_group_pointer));
 	writer.reset();
+}
+
+TaskScheduler &TableDataWriter::GetScheduler() {
+	return TaskScheduler::GetScheduler(table.ParentCatalog().GetDatabase());
 }
 
 SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager,
