@@ -114,27 +114,35 @@ Invalid Input Error
 # path error
 statement error
 select json_extract('{"a": {"b": "c"}}', '$[]');
+----
 
 statement error
 select json_extract('{"a": {"b": "c"}}', '$[#');
+----
 
 statement error
 select json_extract(j, '$.my_field[my_nested_field[#-3]') from test
+----
 
 statement error
 select json_extract(j, '$.my_field.my_nested_field[!]') from test
+----
 
 statement error
 select json_extract('{"a": {"b": "c"}}', '$.a..');
+----
 
 statement error
 select json_extract('{"a": {"b": "c"}}', '$[[');
+----
 
 statement error
 select json_extract('{"a": {"b": "c"}}', '$[.');
+----
 
 statement error
 select json_extract('{"a": {"b": "c"}}', '$]');
+----
 
 # with JSON path we support wildcards in arrays and objects, this results in a LIST
 query T

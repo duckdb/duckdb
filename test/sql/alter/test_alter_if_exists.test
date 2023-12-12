@@ -13,6 +13,7 @@ ALTER TABLE IF EXISTS t0 ADD COLUMN c0 INT;
 # Make sure the column was not actually created
 statement error
 INSERT INTO t0 VALUES (42);
+----
 
 # Add column if not exists to non-existing table
 statement ok
@@ -20,6 +21,7 @@ ALTER TABLE IF EXISTS t0 ADD COLUMN IF NOT EXISTS c0 int;
 
 statement error
 INSERT INTO t0 VALUES (42);
+----
 
 statement ok
 CREATE TABLE t0 (c0 INT);
@@ -35,6 +37,7 @@ INSERT INTO t0 VALUES (42);
 # Alter existing table with existing column
 statement error
 ALTER TABLE t0 ADD COLUMN c0 int;
+----
 
 # Alter existing table with new column
 statement ok
@@ -61,18 +64,22 @@ ALTER TABLE IF EXISTS t0 DROP COLUMN if EXISTS c3;
 
 statement error
 ALTER TABLE t1 DROP COLUMN IF EXISTS c3;
+----
 
 statement error
 ALTER TABLE t1 DROP COLUMN c3;
+----
 
 statement error
 ALTER TABLE t0 DROP COLUMN c3;
+----
 
 statement ok
 ALTER TABLE t0 DROP COLUMN IF EXISTS c3
 
 statement error
 ALTER TABLE IF EXISTS t0 DROP COLUMN c3
+----
 
 # Change type of column if exists
 statement ok
@@ -81,6 +88,7 @@ ALTER TABLE IF EXISTS t1 ALTER COLUMN c0 TYPE varchar;
 # Not supported for ALTER COLUMN
 statement error
 ALTER TABLE IF EXISTS t1 ALTER COLUMN IF EXISTS c0 TYPE varchar;
+----
 
 # 'rowid' pseudo-column
 statement ok

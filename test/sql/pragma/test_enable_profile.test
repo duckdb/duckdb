@@ -5,12 +5,15 @@
 # enable profiling cannot be called
 statement error
 PRAGMA enable_profiling()
+----
 
 statement error
 PRAGMA enable_profiling='unsupported'
+----
 
 statement error
 PRAGMA profiling_output
+----
 
 # select the location of where to save the profiling output (instead of printing to stdout)
 statement ok
