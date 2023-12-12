@@ -407,6 +407,42 @@ SQLRETURN Connect::ParseInputStr() {
 	return SQL_SUCCESS;
 }
 
+SQLRETURN Connect::ReadFromIniFile() {
+	duckdb::unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
+	std::string home_directory = fs->GetHomeDirectory();
+
+	std::string odbc_file = home_directory + "/.odbc.ini";
+
+	if (!fs->FileExists(odbc_file)) {
+		return SQL_SUCCESS;
+	}
+
+	if (dbc->dsn.empty()) {
+		return SQL_SUCCESS;
+	}
+
+	for (auto &key_pair : conn_str_keynames) {
+		if (CheckSet(key_pair.first)) {
+			continue;
+		}
+		const int max_val_len = 256;
+		char char_val[max_val_len];
+		int read_size = SQLGetPrivateProfileString(OdbcUtils::ConvertStringToLPCSTR(dbc->dsn), key_pair.second.c_str(),
+		                                           "", char_val, max_val_len, odbc_file.c_str());
+		if (read_size == 0) {
+			continue;
+		} else if (read_size < 0) {
+			return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLDriverConnect", "Error reading from .odbc.ini",
+			                                   SQLStateType::ST_01S09, "");
+		}
+		SQLRETURN ret = SetVal(key_pair.first, string(char_val));
+		if (ret != SQL_SUCCESS) {
+			return ret;
+		}
+	}
+	return SQL_SUCCESS;
+}
+
 SQLRETURN Connect::HandleDsn(const string &val) {
 	dbc->dsn = val;
 	set_keys[DSN] = true;
@@ -426,6 +462,10 @@ SQLRETURN Connect::HandleDatabase(const string &val) {
 }
 
 SQLRETURN Connect::SetConnection() {
+#if defined ODBC_LINK_ODBCINST || defined WIN32
+	ReadFromIniFile();
+#endif
+
 	std::string database = dbc->GetDatabaseName();
 	config.SetOptionByName("duckdb_api", "odbc");
 

@@ -48,6 +48,7 @@ public:
 	SQLRETURN FindMatchingKey(const std::string &input, ODBCConnStrKey &key);
 	// If the input doesn't match a keyname, find a similar keyname
 	bool FindSimilar(const std::string &input, std::string &match);
+	SQLRETURN ReadFromIniFile();
 	// Executes the connection
 	SQLRETURN SetConnection();
 
