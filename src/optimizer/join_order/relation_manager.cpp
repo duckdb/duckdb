@@ -3,6 +3,7 @@
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/list.hpp"
@@ -183,6 +184,9 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		op->children[0] = optimizer.Optimize(std::move(op->children[0]), &child_stats);
 		auto &aggr = op->Cast<LogicalAggregate>();
 		auto operator_stats = RelationStatisticsHelper::ExtractAggregationStats(aggr, child_stats);
+		if (!datasource_filters.empty()) {
+			operator_stats.cardinality *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
+		}
 		AddAggregateRelation(input_op, parent, operator_stats);
 		return true;
 	}
@@ -246,6 +250,14 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		// Projection can create columns so we need to add them here
 		auto proj_stats = RelationStatisticsHelper::ExtractProjectionStats(proj, child_stats);
 		AddRelation(input_op, parent, proj_stats);
+		return true;
+	}
+	case LogicalOperatorType::LOGICAL_EMPTY_RESULT: {
+		// optimize the child and copy the stats
+		auto &empty_result = op->Cast<LogicalEmptyResult>();
+		// Projection can create columns so we need to add them here
+		auto stats = RelationStatisticsHelper::ExtractEmptyResultStats(empty_result);
+		AddRelation(input_op, parent, stats);
 		return true;
 	}
 	default:
