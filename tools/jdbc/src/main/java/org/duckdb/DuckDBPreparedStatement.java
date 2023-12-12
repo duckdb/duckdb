@@ -27,6 +27,7 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
 import java.time.LocalDateTime;
@@ -49,7 +50,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     boolean closeOnCompletion = false;
     private Object[] params = new Object[0];
     private DuckDBResultSetMetaData meta = null;
-    private final List<String> batchedQueries = new ArrayList<>();
+    private final List<Object[]> batchedValues = new ArrayList<>();
     private Boolean isBatch = false;
 
     public DuckDBPreparedStatement(DuckDBConnection conn) throws SQLException {
@@ -71,6 +72,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     }
 
     private void startTransaction() throws SQLException {
+
         if (this.conn.autoCommit || this.conn.transactionRunning) {
             return;
         }
@@ -193,12 +195,14 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public ResultSet executeQuery(String sql) throws SQLException {
+        requireNonBatch();
         prepare(sql);
         return executeQuery();
     }
 
     @Override
     public int executeUpdate(String sql) throws SQLException {
+        requireNonBatch();
         prepare(sql);
         return executeUpdate();
     }
@@ -452,22 +456,22 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void addBatch(String sql) throws SQLException {
-        batchedQueries.add(sql);
-        isBatch = true;
+        prepare(sql);
+        addBatch();
     }
 
     @Override
     public void clearBatch() throws SQLException {
-        batchedQueries.clear();
+        batchedValues.clear();
         isBatch = false;
     }
 
     @Override
     public int[] executeBatch() throws SQLException {
         try{
-            int[] updateCounts = new int[batchedQueries.size()];
-            for (int i = 0; i < batchedQueries.size(); i++){
-                prepare(batchedQueries.get(i));
+            int[] updateCounts = new int[batchedValues.size()];
+            for (int i = 0; i < batchedValues.size(); i++){
+                params = batchedValues.get(i);
                 execute();
                 updateCounts[i] = getUpdateCount();
             }
@@ -743,7 +747,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void addBatch() throws SQLException {
-        throw new SQLFeatureNotSupportedException("addBatch");
+        batchedValues.add(params);
+        isBatch = true;
     }
 
     @Override
