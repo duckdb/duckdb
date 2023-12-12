@@ -69,7 +69,7 @@ statement ok
 insert into list_of_strings values (['here is a very long long string that is def more than 12 bytes', 'and a shorty'], ['here is a very long long string that is def more than 12 bytes', 'here is a very long long string that is def more than 12 bytes', 'c', 'd']);
 
 query I
-select ${f}(l1, l2) from list_of_strings;
+select list_sort(${f}(l1, l2)) from list_of_strings;
 ----
 NULL
 [b, c]
