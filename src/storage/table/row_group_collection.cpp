@@ -433,14 +433,13 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row) {
 	auto l = row_groups->Lock();
 	// find the segment index that the current row belongs to
 	idx_t segment_index = row_groups->GetSegmentIndex(l, start_row);
-	auto segment = row_groups->GetSegmentByIndex(l, segment_index);
-	auto &info = *segment;
+	auto &segment = *row_groups->GetSegmentByIndex(l, segment_index);
 
 	// remove any segments AFTER this segment: they should be deleted entirely
 	row_groups->EraseSegments(l, segment_index);
 
-	info.next = nullptr;
-	info.RevertAppend(start_row);
+	segment.next = nullptr;
+	segment.RevertAppend(start_row);
 }
 
 void RowGroupCollection::MergeStorage(RowGroupCollection &data) {
@@ -854,6 +853,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	}
 	if (state.row_group_counts[segment_idx] == 0) {
 		// segment was already dropped - skip
+		D_ASSERT(!checkpoint_state.segments[segment_idx].node);
 		return false;
 	}
 	idx_t merge_rows;
