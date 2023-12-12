@@ -2,6 +2,9 @@
 # description: Test loading overflow strings in small batches
 # group: [overflow_strings]
 
+# for smaller block sizes, we get more overflow blocks for this test
+require block_size 262144
+
 load __TEST_DIR__/load_overflow_strings.db
 
 loop x 0 10
@@ -26,7 +29,7 @@ SELECT COUNT(*) FROM pragma_storage_info('strings') WHERE contains(segment_info,
 1
 
 query I
-select total_blocks < 100 from pragma_database_size();
+SELECT total_blocks < 100 FROM pragma_database_size();
 ----
 true
 

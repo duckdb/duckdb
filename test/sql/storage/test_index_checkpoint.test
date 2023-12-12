@@ -6,6 +6,9 @@
 
 require skip_reload
 
+# for smaller block sizes, we see more blocks written
+require block_size 262144
+
 load __TEST_DIR__/test_index_checkpoint.db
 
 # Ensure we do not checkpoint early (which would throw off the total_blocks stat)

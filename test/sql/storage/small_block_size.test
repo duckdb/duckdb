@@ -1,0 +1,28 @@
+# name: test/sql/storage/small_block_size.test
+# description: Test storage with a small block size
+# group: [storage]
+
+require block_size 16384
+
+load __TEST_DIR__/load_overflow_strings.db
+
+statement ok
+CREATE TABLE strings(s VARCHAR);
+
+statement ok
+INSERT INTO strings SELECT repeat('X', case when i%17=0 then 5000 else i%7 end) AS s FROM generate_series(0,2500) tbl(i);
+
+statement ok
+INSERT INTO strings SELECT repeat('X', case when i%17=0 then 5000 else i%7 end) AS s FROM generate_series(0,2500) tbl(i);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT COUNT(*) FROM pragma_storage_info('strings') WHERE contains(segment_info, 'Overflow String');
+----
+3
+
+statement ok
+DROP TABLE strings;
+

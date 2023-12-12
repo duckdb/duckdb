@@ -2,9 +2,12 @@
 # description: Test that the right scheme is chosen for the right data.
 # group: [compression]
 
+# for small block sizes, this test will default to another compression function, as the bitpacking groups
+# no longer fit the blocks
+require block_size 262144
+
 require vector_size 1024
 
-# load the DB from disk
 load __TEST_DIR__/test_compression_simple.db
 
 statement ok
@@ -12,6 +15,8 @@ CREATE TABLE test_rle (a INTEGER);
 
 statement ok
 INSERT INTO test_rle SELECT 2147480000 FROM range(0, 10000) tbl(i);
+
+statement ok
 INSERT INTO test_rle SELECT 2147480001 FROM range(0, 10000) tbl(i);
 
 statement ok

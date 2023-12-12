@@ -1,12 +1,12 @@
-# name: test/sql/storage/compression/bitpacking/bitpacking_simple_hugeint.test
-# description: Test storage bitpacking, but simple and for hugeints
-# group: [bitpacking]
+# name: test/sql/storage/compression/compression_small_block_sizes.test
+# description: Test compression on small blocks
+# group: [compression]
 
-# for small block sizes, this test will default to another compression function, as the bitpacking groups
-# no longer fit the blocks
-require block_size 262144
+# we revert to other compression functions or no compression for very small block sizes,
+# as we cannot store, e.g., the bitpacking group data on a block
+require block_size 16384
 
-load __TEST_DIR__/test_bitpacking.db
+load __TEST_DIR__/test_compression_small_block.db
 
 statement ok
 PRAGMA force_compression='bitpacking'
@@ -16,7 +16,6 @@ foreach bitpacking_mode delta_for for constant_delta constant
 statement ok
 PRAGMA force_bitpacking_mode='${bitpacking_mode}'
 
-# simple compression with few values
 statement ok
 CREATE TABLE test (id VARCHAR, a HUGEINT);
 
@@ -29,10 +28,10 @@ statement ok
 INSERT INTO test SELECT i::VARCHAR, 13371337 FROM range(0,10000) tbl(i);
 
 statement ok
-checkpoint
+CHECKPOINT
 
 query I
-select a from test limit 5;
+SELECT a FROM test LIMIT 5;
 ----
 -1234567891011121314151617180000
 -1234567891011121314151617180001
@@ -41,7 +40,7 @@ select a from test limit 5;
 -1234567891011121314151617180004
 
 query I
-select a from test limit 5 offset 12000;
+SELECT a FROM test LIMIT 5 OFFSET 12000;
 ----
 13371337
 13371337
@@ -49,10 +48,12 @@ select a from test limit 5 offset 12000;
 13371337
 13371337
 
+# normally, we'd expect bitpacking here, but the small block size forces a different compression function
+
 query I
-SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'HUGEINT';
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'HUGEINT' GROUP BY compression;
 ----
-BitPacking
+RLE
 
 statement ok
 DROP TABLE test;

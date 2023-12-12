@@ -2,6 +2,9 @@
 # description: Test auto checkpointing of the ART after CREATE and INSERT
 # group: [storage]
 
+# checkpointing and the number of used blocks changes with different block sizes
+require block_size 262144
+
 load __TEST_DIR__/idx_checkpoint_create.db
 
 statement ok

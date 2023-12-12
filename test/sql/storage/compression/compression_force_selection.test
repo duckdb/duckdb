@@ -2,6 +2,10 @@
 # description: Test the forcing of a compression scheme
 # group: [compression]
 
+# for small block sizes, this test will default to another compression function, as the bitpacking groups
+# no longer fit the blocks
+require block_size 262144
+
 require vector_size 1024
 
 # load the DB from disk
@@ -15,6 +19,8 @@ CREATE TABLE test_bp (a INTEGER);
 
 statement ok
 INSERT INTO test_bp SELECT 1 FROM range(0, 1000) tbl(i);
+
+statement ok
 INSERT INTO test_bp SELECT 2 FROM range(0, 1000) tbl(i);
 
 statement ok
