@@ -464,9 +464,9 @@ struct ToDecadesFun {
 
 struct ToHoursFun {
 	static constexpr const char *Name = "to_hours";
-	static constexpr const char *Parameters = "double";
+	static constexpr const char *Parameters = "integer";
 	static constexpr const char *Description = "Construct a hour interval";
-	static constexpr const char *Example = "to_hours(5.5)";
+	static constexpr const char *Example = "to_hours(5)";
 
 	static ScalarFunction GetFunction();
 };
@@ -500,9 +500,9 @@ struct ToMillisecondsFun {
 
 struct ToMinutesFun {
 	static constexpr const char *Name = "to_minutes";
-	static constexpr const char *Parameters = "double";
+	static constexpr const char *Parameters = "integer";
 	static constexpr const char *Description = "Construct a minute interval";
-	static constexpr const char *Example = "to_minutes(5.5)";
+	static constexpr const char *Example = "to_minutes(5)";
 
 	static ScalarFunction GetFunction();
 };

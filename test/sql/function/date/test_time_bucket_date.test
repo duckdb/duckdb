@@ -230,7 +230,7 @@ select w, d, shift, time_bucket(w, d, shift) from dates;
 10 days	1906-02-08	-2 days	1906-02-03
 2 months	1946-09-14	00:00:00	1946-09-01
 2 months	2000-01-01	1 month 7 days	1999-12-08
-2 months	2000-01-03	-1 months 7 days	1999-12-08
+2 months	2000-01-03	-1 month 7 days	1999-12-08
 2 years	2004-05-20	6 months	2002-07-01
 2 years	2032-12-06	-6 months	2031-07-01
 10 days	infinity	00:00:00	infinity
