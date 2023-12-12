@@ -6,7 +6,7 @@ statement ok
 CREATE TABLE strings(i STRING)
 
 statement error
-INSERT INTO strings VALUES ('�(')
+INSERT INTO strings VALUES ('�(');
 ----
 
 statement error
