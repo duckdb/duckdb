@@ -1,0 +1,11 @@
+# name: test/sql/prepared/test_prepare_issue_8500.test
+# description: Issue #8500 - Prepared statement results in INTERVAL type
+# group: [prepared]
+
+statement ok
+PREPARE S1 AS SELECT (? / 1) + 1;
+
+query I
+EXECUTE S1(42)
+----
+43

@@ -123,7 +123,7 @@ cmake build directory and build it from there:
 ```cmake
 duckdb_extension_load(postgres_scanner
     (DONT_LINK)
-    GIT_URL https://github.com/duckdblabs/postgres_scanner
+    GIT_URL https://github.com/duckdb/postgres_scanner
     GIT_TAG cd043b49cdc9e0d3752535b8333c9433e1007a48
 )
 ```

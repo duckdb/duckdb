@@ -183,6 +183,14 @@ void DBConfig::SetOptionByName(const string &name, const Value &value) {
 	}
 }
 
+void DBConfig::SetOptionsByName(const case_insensitive_map_t<Value> &values) {
+	for (auto &kv : values) {
+		auto &name = kv.first;
+		auto &value = kv.second;
+		SetOptionByName(name, value);
+	}
+}
+
 void DBConfig::SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value) {
 	lock_guard<mutex> l(config_lock);
 	if (!option.set_global) {
@@ -376,8 +384,17 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 		multiplier = 1000LL * 1000LL * 1000LL;
 	} else if (unit == "terabyte" || unit == "terabytes" || unit == "tb" || unit == "t") {
 		multiplier = 1000LL * 1000LL * 1000LL * 1000LL;
+	} else if (unit == "kib") {
+		multiplier = 1024LL;
+	} else if (unit == "mib") {
+		multiplier = 1024LL * 1024LL;
+	} else if (unit == "gib") {
+		multiplier = 1024LL * 1024LL * 1024LL;
+	} else if (unit == "tib") {
+		multiplier = 1024LL * 1024LL * 1024LL * 1024LL;
 	} else {
-		throw ParserException("Unknown unit for memory_limit: %s (expected: b, mb, gb or tb)", unit);
+		throw ParserException("Unknown unit for memory_limit: %s (expected: KB, MB, GB, TB for 1000^i units or KiB, "
+		                      "MiB, GiB, TiB for 1024^i unites)");
 	}
 	return (idx_t)multiplier * limit;
 }

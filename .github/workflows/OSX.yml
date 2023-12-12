@@ -56,12 +56,17 @@ jobs:
       shell: bash
       run: GEN=ninja make debug
 
+    - name: Set DUCKDB_INSTALL_LIB for ADBC tests
+      shell: bash
+      run: echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.dylib" | head -n 1)" >> $GITHUB_ENV
+
+    - name: Test DUCKDB_INSTALL_LIB variable
+      run: echo $DUCKDB_INSTALL_LIB
+
     - name: Test
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       shell: bash
-      run: |
-          echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.dylib" | head -n 1)" >> $GITHUB_ENV
-          make unittestci
+      run: make unittestci
 
     - name: Amalgamation
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
@@ -209,8 +214,8 @@ jobs:
         with:
           python-version: '3.7'
 
-      - name: Install Ninja
-        run: brew install ninja
+      - name: Install Ninja and Pkg-config
+        run: brew install pkg-config ninja
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main

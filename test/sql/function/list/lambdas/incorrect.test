@@ -192,3 +192,13 @@ CREATE TABLE unit2(
 );
 ----
 Not implemented Error: Lambda functions are currently not supported in generated columns.
+
+# issue 9732
+
+statement ok
+CREATE TABLE tbl AS SELECT {'a': 10} AS s;
+
+statement error
+SELECT list_transform(UNNEST(s), x -> UNNEST(x)) FROM tbl;
+----
+failed to bind function

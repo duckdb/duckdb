@@ -17,37 +17,25 @@ namespace duckdb {
 class ClientContext;
 class DatabaseInstance;
 
+struct ClientLockWrapper {
+	ClientLockWrapper(mutex &client_lock, shared_ptr<ClientContext> connection)
+	    : connection(std::move(connection)), connection_lock(make_uniq<lock_guard<mutex>>(client_lock)) {
+	}
+
+	shared_ptr<ClientContext> connection;
+	unique_ptr<lock_guard<mutex>> connection_lock;
+};
+
 class ConnectionManager {
 public:
-	ConnectionManager() {
-	}
+	ConnectionManager();
 
-	void AddConnection(ClientContext &context) {
-		lock_guard<mutex> lock(connections_lock);
-		connections.insert(make_pair(&context, weak_ptr<ClientContext>(context.shared_from_this())));
-	}
+	void AddConnection(ClientContext &context);
+	void RemoveConnection(ClientContext &context);
 
-	void RemoveConnection(ClientContext &context) {
-		lock_guard<mutex> lock(connections_lock);
-		connections.erase(&context);
-	}
+	vector<shared_ptr<ClientContext>> GetConnectionList();
 
-	vector<shared_ptr<ClientContext>> GetConnectionList() {
-		vector<shared_ptr<ClientContext>> result;
-		for (auto &it : connections) {
-			auto connection = it.second.lock();
-			if (!connection) {
-				connections.erase(it.first);
-				continue;
-			} else {
-				result.push_back(std::move(connection));
-			}
-		}
-
-		return result;
-	}
-
-	ClientContext *GetConnection(DatabaseInstance *db);
+	void LockClients(vector<ClientLockWrapper> &client_locks, ClientContext &context);
 
 	static ConnectionManager &Get(DatabaseInstance &db);
 	static ConnectionManager &Get(ClientContext &context);
@@ -55,6 +43,9 @@ public:
 public:
 	mutex connections_lock;
 	unordered_map<ClientContext *, weak_ptr<ClientContext>> connections;
+
+	mutex lock_clients_lock;
+	bool is_locking;
 };
 
 } // namespace duckdb

@@ -26,7 +26,9 @@ public:
 
 	//! The projection list of the WINDOW statement (may contain aggregates)
 	vector<unique_ptr<Expression>> select_list;
-	//! Whether or not the window is order dependent (only true if all window functions contain neither an order nor a
+	//! The window expression with the order clause
+	idx_t order_idx;
+	//! Whether or not the window is order dependent (only true if ANY window function contains neither an order nor a
 	//! partition clause)
 	bool is_order_dependent;
 

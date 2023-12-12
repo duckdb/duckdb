@@ -118,7 +118,8 @@ public:
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *row_ids, idx_t count);
 
 	RowGroupWriteData WriteToDisk(PartialBlockManager &manager, const vector<CompressionType> &compression_types);
-	bool AllDeleted();
+	//! Returns the number of committed rows (count - committed deletes)
+	idx_t GetCommittedRowCount();
 	RowGroupPointer Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats);
 
 	void InitializeAppend(RowGroupAppendState &append_state);

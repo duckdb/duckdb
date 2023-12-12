@@ -70,12 +70,20 @@ void duckdb_interrupt(duckdb_connection connection) {
 	conn->Interrupt();
 }
 
-double duckdb_query_progress(duckdb_connection connection) {
+duckdb_query_progress_type duckdb_query_progress(duckdb_connection connection) {
+	duckdb_query_progress_type query_progress_type;
+	query_progress_type.percentage = -1;
+	query_progress_type.total_rows_to_process = 0;
+	query_progress_type.rows_processed = 0;
 	if (!connection) {
-		return -1;
+		return query_progress_type;
 	}
 	Connection *conn = reinterpret_cast<Connection *>(connection);
-	return conn->context->GetProgress();
+	auto query_progress = conn->context->GetQueryProgress();
+	query_progress_type.total_rows_to_process = query_progress.GetTotalRowsToProcess();
+	query_progress_type.rows_processed = query_progress.GetRowsProcesseed();
+	query_progress_type.percentage = query_progress.GetPercentage();
+	return query_progress_type;
 }
 
 void duckdb_disconnect(duckdb_connection *connection) {

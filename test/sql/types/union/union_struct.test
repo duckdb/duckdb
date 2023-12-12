@@ -85,7 +85,7 @@ SELECT * FROM tbl2
 {'str': key4, 'alt': key2}
 
 query II
-SELECT * FROM tbl1 JOIN tbl2 ON tbl1.union_struct.str = tbl2.struct_union.alt.k
+SELECT * FROM tbl1 JOIN tbl2 ON tbl1.union_struct.str = tbl2.struct_union.alt.k order by all
 ----
-key2	{'str': key4, 'alt': key2}
 key2	{'str': key2, 'alt': key2}
+key2	{'str': key4, 'alt': key2}

@@ -5,9 +5,10 @@
 
 namespace duckdb {
 
-SetOpRelation::SetOpRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p, SetOperationType setop_type_p)
+SetOpRelation::SetOpRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p, SetOperationType setop_type_p,
+                             bool setop_all)
     : Relation(left_p->context, RelationType::SET_OPERATION_RELATION), left(std::move(left_p)),
-      right(std::move(right_p)), setop_type(setop_type_p) {
+      right(std::move(right_p)), setop_type(setop_type_p), setop_all(setop_all) {
 	if (left->context.GetContext() != right->context.GetContext()) {
 		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
@@ -22,6 +23,7 @@ unique_ptr<QueryNode> SetOpRelation::GetQueryNode() {
 	result->left = left->GetQueryNode();
 	result->right = right->GetQueryNode();
 	result->setop_type = setop_type;
+	result->setop_all = setop_all;
 	return std::move(result);
 }
 

@@ -48,7 +48,7 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(LogicalComparisonJoin &op, unique_ptr<Physica
 			break;
 		case ExpressionType::COMPARE_EQUAL:
 			null_sensitive.emplace_back(lhs_orders.size());
-			// Fall through
+			DUCKDB_EXPLICIT_FALLTHROUGH;
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 			lhs_partitions.emplace_back(std::move(left));
 			rhs_partitions.emplace_back(std::move(right));
