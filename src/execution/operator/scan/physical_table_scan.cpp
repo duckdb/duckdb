@@ -105,10 +105,17 @@ string PhysicalTableScan::ParamsToString() const {
 		result = function.to_string(bind_data.get());
 		result += "\n[INFOSEPARATOR]\n";
 	}
+	// Get vaild column ids
+	std::vector<idx_t> vaild_column_ids;
+	for (auto &id : column_ids) {
+		if (id < names.size()) {
+			vaild_column_ids.emplace_back(id);
+		}
+	}
 	if (function.projection_pushdown) {
-		if (function.filter_prune) {
+		if (!projection_ids.empty() && projection_ids.size() < vaild_column_ids.size() && function.filter_prune) {
 			for (idx_t i = 0; i < projection_ids.size(); i++) {
-				const auto &column_id = column_ids[projection_ids[i]];
+				const auto &column_id = vaild_column_ids[projection_ids[i]];
 				if (column_id < names.size()) {
 					if (i > 0) {
 						result += "\n";
@@ -117,8 +124,8 @@ string PhysicalTableScan::ParamsToString() const {
 				}
 			}
 		} else {
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				const auto &column_id = column_ids[i];
+			for (idx_t i = 0; i < vaild_column_ids.size(); i++) {
+				const auto &column_id = vaild_column_ids[i];
 				if (column_id < names.size()) {
 					if (i > 0) {
 						result += "\n";
