@@ -65,6 +65,7 @@ COMMIT
 # Cannot insert after tran
 statement error 
 INSERT INTO t VALUES(9999, NULL)
+----
 
 # No null data
 query II
@@ -171,6 +172,7 @@ ROLLBACK
 # CANNOT insert null after rollback 
 statement error 
 INSERT INTO t VALUES(8888, NULL)
+----
 
 # NO null values
 query I

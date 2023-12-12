@@ -22,6 +22,7 @@ DROP TABLE integers CASCADE
 # after the drop the prepared statement is invalidated
 statement error con2
 EXECUTE v
+----
 
 # dependency on a sequence for prepare
 statement ok con1
@@ -40,4 +41,5 @@ DROP SEQUENCE seq CASCADE
 # after the drop the prepared statement is invalidated
 statement error con2
 EXECUTE v
+----
 

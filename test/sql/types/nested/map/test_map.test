@@ -106,6 +106,8 @@ select MAP(10,12)
 # Map function called with more than 2 lists
 statement error
 select MAP(LIST_VALUE(10),LIST_VALUE(10),LIST_VALUE(10))
+----
+
 # Map where 1 of the 2 entries is not a list
 statement error
 select MAP(LIST_VALUE(10),10)

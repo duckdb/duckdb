@@ -194,6 +194,7 @@ SELECT CAST('{3=three}}' AS MAP(INT, VARCHAR));
 
 statement error   
 SELECT CAST('{Ducky=, DB=ok}' AS MAP(VARCHAR, INT));
+----
 
 statement error
 SELECT CAST('{5=5,, 3=3}' AS MAP(INT, INT));

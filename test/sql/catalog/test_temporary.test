@@ -157,4 +157,5 @@ SELECT i from integers3
 # table is not visible to other cons
 statement error con2
 INSERT INTO integers VALUES (42)
+----
 

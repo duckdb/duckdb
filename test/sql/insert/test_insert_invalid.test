@@ -6,10 +6,12 @@ statement ok
 CREATE TABLE strings(i STRING)
 
 statement error
-INSERT INTO strings VALUES ('â‚(')
+INSERT INTO strings VALUES ('ï¿½(')
+----
 
 statement error
-SELECT * FROM strings WHERE i = 'â‚('
+SELECT * FROM strings WHERE i = 'ï¿½('
+----
 
 # Test insert with too few or too many cols
 statement ok
@@ -21,17 +23,21 @@ INSERT INTO a VALUES (1, 2)
 # scalar inserts
 statement error
 INSERT INTO a VALUES (1)
+----
 
 statement error
 INSERT INTO a VALUES (1,2,3)
+----
 
 statement error
 INSERT INTO a VALUES (1,2),(3)
+----
 
 statement error
 INSERT INTO a VALUES (1,2),(3,4,5)
+----
 
 # also with queries
 statement error
 INSERT INTO a SELECT 42
-
+----
