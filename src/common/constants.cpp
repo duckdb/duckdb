@@ -9,7 +9,6 @@ constexpr const idx_t DConstants::INVALID_INDEX;
 const row_t MAX_ROW_ID = 36028797018960000ULL;       // 2^55
 const row_t MAX_ROW_ID_LOCAL = 72057594037920000ULL; // 2^56
 const column_t COLUMN_IDENTIFIER_ROW_ID = (column_t)-1;
-const sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE] = {0};
 const double PI = 3.141592653589793;
 
 const transaction_t TRANSACTION_ID_START = 4611686018427388000ULL;                // 2^62
