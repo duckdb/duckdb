@@ -184,7 +184,7 @@ public:
 	}
 
 	//! the map of key -> values that make up the secret
-	case_insensitive_ordered_map_t<Value> secret_map;
+	case_insensitive_tree_t<Value> secret_map;
 	//! keys that are sensitive and should be redacted
 	case_insensitive_set_t redact_keys;
 };
