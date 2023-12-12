@@ -327,11 +327,9 @@ static void EvaluateSubFrames(const DataChunk &bounds, const WindowExcludeMode e
 
 	for (idx_t i = 0, cur_row = row_idx; i < count; ++i, ++cur_row) {
 		idx_t nframes = 0;
-		idx_t non_empty = 0;
 		if (exclude_mode == WindowExcludeMode::NO_OTHER) {
 			auto begin = begins[i];
 			auto end = ends[i];
-			non_empty += (begin < end);
 			frames[nframes++] = FrameBounds(begin, end);
 		} else {
 			//	The frame_exclusion option allows rows around the current row to be excluded from the frame,
@@ -357,13 +355,11 @@ static void EvaluateSubFrames(const DataChunk &bounds, const WindowExcludeMode e
 			auto begin = begins[i];
 			auto end = (exclude_mode == WindowExcludeMode::CURRENT_ROW) ? cur_row : peer_begin[i];
 			end = MaxValue(begin, end);
-			non_empty += (begin < end);
 			frames[nframes++] = FrameBounds(begin, end);
 
 			// with EXCLUDE TIES, in addition to the frame part right of the peer group's end,
 			// we also need to consider the current row
 			if (exclude_mode == WindowExcludeMode::TIES) {
-				++non_empty;
 				frames[nframes++] = FrameBounds(cur_row, cur_row + 1);
 			}
 
@@ -371,11 +367,10 @@ static void EvaluateSubFrames(const DataChunk &bounds, const WindowExcludeMode e
 			end = ends[i];
 			begin = (exclude_mode == WindowExcludeMode::CURRENT_ROW) ? (cur_row + 1) : peer_end[i];
 			begin = MinValue(begin, end);
-			non_empty += (begin < end);
 			frames[nframes++] = FrameBounds(begin, end);
 		}
 
-		operation(i, non_empty);
+		operation(i);
 	}
 }
 
@@ -383,20 +378,13 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
                                       idx_t count, idx_t row_idx) const {
 	auto &lcstate = lstate.Cast<WindowCustomAggregatorState>();
 	auto &frames = lcstate.frames;
-	auto &rmask = FlatVector::Validity(result);
 	const_data_ptr_t gstate_p = nullptr;
 	if (gstate) {
 		auto &gcstate = gstate->Cast<WindowCustomAggregatorState>();
 		gstate_p = gcstate.state.data();
 	}
 
-	EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i, bool non_empty) {
-		//	No data means NULL
-		if (!non_empty) {
-			rmask.SetInvalid(i);
-			return;
-		}
-
+	EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		// Extract the range
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), lstate.allocator);
 		aggr.function.window(aggr_input_data, *partition_input, gstate_p, lcstate.state.data(), frames, result, i);
@@ -559,7 +547,7 @@ void WindowNaiveState::Evaluate(const DataChunk &bounds, Vector &result, idx_t c
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
 	auto pdata = FlatVector::GetData<data_ptr_t>(statep);
 
-	EvaluateSubFrames(bounds, gstate.exclude_mode, count, row_idx, frames, [&](idx_t rid, bool non_empty) {
+	EvaluateSubFrames(bounds, gstate.exclude_mode, count, row_idx, frames, [&](idx_t rid) {
 		auto agg_state = fdata[rid];
 		aggr.function.initialize(agg_state);
 
@@ -908,17 +896,6 @@ void WindowSegmentTree::Evaluate(WindowAggregatorState &lstate, const DataChunk 
 	}
 
 	part.Finalize(result, count);
-
-	//	Set the validity mask on the invalid rows
-
-	auto &rmask = FlatVector::Validity(result);
-	for (idx_t rid = 0, cur_row = row_idx; rid < count; ++rid, ++cur_row) {
-		auto begin = window_begin[rid];
-		auto end = window_end[rid];
-		if (begin >= end) {
-			rmask.SetInvalid(rid);
-		}
-	}
 }
 
 void WindowSegmentTreePart::Evaluate(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends,
@@ -1401,7 +1378,7 @@ void WindowDistinctState::Evaluate(const DataChunk &bounds, Vector &result, idx_
 	const auto &merge_sort_tree = *tree.merge_sort_tree;
 	const auto running_aggs = tree.levels_flat_native.get();
 
-	EvaluateSubFrames(bounds, tree.exclude_mode, count, row_idx, frames, [&](idx_t rid, bool non_empty) {
+	EvaluateSubFrames(bounds, tree.exclude_mode, count, row_idx, frames, [&](idx_t rid) {
 		auto agg_state = fdata[rid];
 		aggr.function.initialize(agg_state);
 
