@@ -102,7 +102,7 @@ statement ok
 insert into insertconflicttest AS ict values (6, 'Passionfruit') on conflict (key) do update set fruit = ict.fruit;
 # ok, alias
 
+# error, references aliased away name
 statement error
 insert into insertconflicttest AS ict values (6, 'Passionfruit') on conflict (key) do update set fruit = insertconflicttest.fruit;
-# error, references aliased away name
 ----

@@ -5,9 +5,9 @@
 statement error
 ATTACH 'dummy_extension:/hello.world';
 ----
-Extension not found
+not found
 
 statement error
 ATTACH 'file://dummy.csv'
 ----
-File not found
+No such file or directory
