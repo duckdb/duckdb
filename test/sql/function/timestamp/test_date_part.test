@@ -194,6 +194,22 @@ WHERE p <> f
 
 endloop
 
+# Cast injection for DOUBLE types
+foreach tstype TIMESTAMP TIMESTAMP_S TIMESTAMP_MS TIMESTAMP_NS
+
+query I
+SELECT EXTRACT(EPOCH FROM ${tstype} '1992-09-20 11:30:00.0');
+----
+716988600.0
+
+query I
+SELECT EXTRACT(JULIAN FROM ${tstype} '1992-09-20 00:00:00.0');
+----
+2448886.0
+
+endloop
+
+
 #
 # Structs
 #

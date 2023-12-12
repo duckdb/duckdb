@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+import logging
 import os
 import sys
 import platform
@@ -102,9 +102,12 @@ def parallel_cpp_compile(
 
 # speed up compilation with: -j = cpu_number() on non Windows machines
 if os.name != 'nt' and os.environ.get('DUCKDB_DISABLE_PARALLEL_COMPILE', '') != '1':
-    import distutils.ccompiler
-
-    distutils.ccompiler.CCompiler.compile = parallel_cpp_compile
+    try:
+        from pybind11.setup_helpers import ParallelCompile
+    except ImportError:
+        logging.warning('Pybind11 not available yet')
+    else:
+        ParallelCompile().install()
 
 
 def open_utf8(fpath, flags):
@@ -325,10 +328,13 @@ packages = [
     'duckdb-stubs',
     'duckdb-stubs.functional',
     'duckdb-stubs.typing',
+    'duckdb-stubs.value',
+    'duckdb-stubs.value.constant',
     'adbc_driver_duckdb',
 ]
 
 spark_packages = [
+    'duckdb.experimental',
     'duckdb.experimental.spark',
     'duckdb.experimental.spark.sql',
     'duckdb.experimental.spark.errors',
@@ -349,8 +355,6 @@ setup(
     packages=packages,
     include_package_data=True,
     python_requires='>=3.7.0',
-    setup_requires=setup_requires + ["setuptools_scm<7.0.0", 'pybind11>=2.6.0'],
-    use_scm_version=setuptools_scm_conf,
     tests_require=['google-cloud-storage', 'mypy', 'pytest'],
     classifiers=[
         'Topic :: Database :: Database Engines/Servers',

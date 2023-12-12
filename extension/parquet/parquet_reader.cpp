@@ -203,6 +203,9 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 			if (!s_ele.__isset.precision || !s_ele.__isset.scale) {
 				throw IOException("DECIMAL requires a length and scale specifier!");
 			}
+			if (s_ele.precision > DecimalType::MaxWidth()) {
+				return LogicalType::DOUBLE;
+			}
 			switch (s_ele.type) {
 			case Type::BYTE_ARRAY:
 			case Type::FIXED_LEN_BYTE_ARRAY:

@@ -20,13 +20,23 @@ public:
 	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
 	using Orders = vector<BoundOrderByNode>;
 	using Types = vector<LogicalType>;
+	using OrderMasks = unordered_map<idx_t, ValidityMask>;
 
 	PartitionGlobalHashGroup(BufferManager &buffer_manager, const Orders &partitions, const Orders &orders,
 	                         const Types &payload_types, bool external);
 
-	int ComparePartitions(const SBIterator &left, const SBIterator &right) const;
+	inline int ComparePartitions(const SBIterator &left, const SBIterator &right) {
+		int part_cmp = 0;
+		if (partition_layout.all_constant) {
+			part_cmp = FastMemcmp(left.entry_ptr, right.entry_ptr, partition_layout.comparison_size);
+		} else {
+			part_cmp = Comparators::CompareTuple(left.scan, right.scan, left.entry_ptr, right.entry_ptr,
+			                                     partition_layout, left.external);
+		}
+		return part_cmp;
+	}
 
-	void ComputeMasks(ValidityMask &partition_mask, ValidityMask &order_mask);
+	void ComputeMasks(ValidityMask &partition_mask, OrderMasks &order_masks);
 
 	GlobalSortStatePtr global_sort;
 	atomic<idx_t> count;

@@ -75,19 +75,19 @@ SELECT list_zip([1,2,3], [2,3,4], [3,4,5], [], true);
 []
 
 query I
-SELECT list_zip(a.i, b.i) FROM integers AS a, integers AS b
+SELECT list_zip(a.i, b.i) as zipped_list FROM integers AS a, integers as b order by all;
 ----
 [{'i': 1, 'i': 1}, {'i': 2, 'i': 2}, {'i': 3, 'i': 3}]
-[{'i': 4, 'i': 1}, {'i': 5, 'i': 2}, {'i': 6, 'i': 3}]
 [{'i': 1, 'i': 4}, {'i': 2, 'i': 5}, {'i': 3, 'i': 6}]
+[{'i': 4, 'i': 1}, {'i': 5, 'i': 2}, {'i': 6, 'i': 3}]
 [{'i': 4, 'i': 4}, {'i': 5, 'i': 5}, {'i': 6, 'i': 6}]
 
 query I
-SELECT list_zip(a.i, b.i, b.i) FROM integers AS a, integers AS b
+SELECT list_zip(a.i, b.i, b.i) FROM integers AS a, integers AS b order by all
 ----
 [{'i': 1, 'i': 1, 'i': 1}, {'i': 2, 'i': 2, 'i': 2}, {'i': 3, 'i': 3, 'i': 3}]
-[{'i': 4, 'i': 1, 'i': 1}, {'i': 5, 'i': 2, 'i': 2}, {'i': 6, 'i': 3, 'i': 3}]
 [{'i': 1, 'i': 4, 'i': 4}, {'i': 2, 'i': 5, 'i': 5}, {'i': 3, 'i': 6, 'i': 6}]
+[{'i': 4, 'i': 1, 'i': 1}, {'i': 5, 'i': 2, 'i': 2}, {'i': 6, 'i': 3, 'i': 3}]
 [{'i': 4, 'i': 4, 'i': 4}, {'i': 5, 'i': 5, 'i': 5}, {'i': 6, 'i': 6, 'i': 6}]
 
 query I
@@ -111,12 +111,12 @@ SELECT list_zip([1,2], [1,2,3], true)
 [{'list_1': 1, 'list_2': 1}, {'list_1': 2, 'list_2': 2}]
 
 query I
-SELECT list_zip(i, j, b) FROM integers, integers2, bools
+SELECT list_zip(i, j, b) FROM integers, integers2, bools order by all desc
 ----
-[{'i': 1, 'j': NULL}, {'i': 2, 'j': NULL}, {'i': 3, 'j': NULL}]
-[{'i': 1, 'j': NULL}, {'i': 2, 'j': NULL}, {'i': 3, 'j': NULL}]
 [{'i': 4, 'j': NULL}, {'i': 5, 'j': NULL}, {'i': 6, 'j': NULL}]
 [{'i': 4, 'j': NULL}, {'i': 5, 'j': NULL}, {'i': 6, 'j': NULL}]
+[{'i': 1, 'j': NULL}, {'i': 2, 'j': NULL}, {'i': 3, 'j': NULL}]
+[{'i': 1, 'j': NULL}, {'i': 2, 'j': NULL}, {'i': 3, 'j': NULL}]
 []
 []
 []

@@ -320,6 +320,17 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 	return duckdb_translate_result(std::move(result), out_result);
 }
 
+duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_statement prepared_statement,
+                                               duckdb_result *out_result) {
+	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
+	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
+		return DuckDBError;
+	}
+
+	auto result = wrapper->statement->Execute(wrapper->values, true);
+	return duckdb_translate_result(std::move(result), out_result);
+}
+
 duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement statement) {
 	if (!statement) {
 		return DUCKDB_STATEMENT_TYPE_INVALID;
