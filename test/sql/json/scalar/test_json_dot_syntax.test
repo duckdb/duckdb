@@ -187,11 +187,11 @@ SELECT (x::JSON).settings.layer2."tris.legomenon"."summary.report" FROM t12;
 ----
 false
 
-# test new type conversions
-query T
+# this will be upcast to JSON, cannot parse 'bar'
+statement error
 SELECT json('{"foo": "bar"}').foo = 'bar';
 ----
-true
+Conversion Error
 
 query T
 SELECT json('{"foo": "bar"}').foo = '"bar"';

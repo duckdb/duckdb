@@ -220,20 +220,7 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 		    yyjson_read_err error;
 		    auto doc = JSONCommon::ReadDocumentUnsafe(data, length, JSONCommon::READ_FLAG, alc, &error);
 
-		    if (doc) {
-			    return input; // Parsed correctly
-		    }
-
-		    // We weren't able to parse, but we're lenient with strings, auto-convert
-		    if (StringUtil::CharacterIsAlpha(*data) && memchr(data, '\0', length) == nullptr) {
-			    auto wrapped_string = StringVector::EmptyString(result, length + 2);
-			    auto wrapped_data = wrapped_string.GetDataWriteable();
-			    wrapped_data[0] = '"';
-			    memcpy(wrapped_data + 1, data, length);
-			    wrapped_data[length + 1] = '"';
-			    wrapped_string.Finalize();
-			    return wrapped_string;
-		    } else {
+		    if (!doc) {
 			    mask.SetInvalid(idx);
 			    if (success) {
 				    HandleCastError::AssignError(JSONCommon::FormatParseError(data, length, error),

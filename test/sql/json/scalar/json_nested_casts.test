@@ -27,10 +27,10 @@ select cast(json('[1,2]') as json[]);
 ----
 [1, 2]
 
-query I
+statement error
 select cast(['boom'] as json[]);
 ----
-["boom"]
+Conversion Error
 
 query I
 select cast(['[1, 2]', '[3, 4]'] as json[]);
@@ -53,10 +53,10 @@ SELECT {'a': 42, 'b': '[1, 2]'}::ROW(a JSON, b INT[])
 ----
 {'a': 42, 'b': [1, 2]}
 
-query I
+statement error
 SELECT {'a': 'boom', 'b': '[1, 2]'}::ROW(a JSON, b INT[])
 ----
-{'a': "boom", 'b': [1, 2]}
+Conversion Error
 
 # varchar to struct of json
 query I
