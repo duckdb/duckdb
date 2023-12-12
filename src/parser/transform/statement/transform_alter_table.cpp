@@ -95,7 +95,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlte
 		}
 		case duckdb_libpgquery::PG_AT_DropConstraint:
 		default:
-			throw NotImplementedException("ALTER TABLE option not supported yet!");
+			throw NotImplementedException("No support for that ALTER TABLE option yet!");
 		}
 	}
 
