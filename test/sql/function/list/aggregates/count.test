@@ -33,3 +33,4 @@ NULL
 # incorrect usage
 statement error
 select list_count()
+----

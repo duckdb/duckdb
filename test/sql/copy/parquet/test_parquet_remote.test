@@ -9,18 +9,22 @@ require parquet
 # non existent host
 statement error
 SELECT * FROM PARQUET_SCAN('https://this-host-does-not-exist-for-sure/test.parquet');
+----
 
 # non existent file
 statement error
 SELECT * FROM PARQUET_SCAN('https://duckdb.org/test.parquet');
+----
 
 # missing path
 statement error
 SELECT * FROM PARQUET_SCAN('https://duckdb.org');
+----
 
 # empty path
 statement error
 SELECT * FROM PARQUET_SCAN('https://duckdb.org/');
+----
 
 # straightforward
 query IIII

@@ -14,9 +14,11 @@ load __TEST_DIR__/dummy_database_for_extension_installation.db
 
 statement error
 INSTALL 'asdf';
+----
 
 statement error
 INSTALL 'asdf/asdf.duckdb_extension';
+----
 
 statement ok
 INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
@@ -39,6 +41,7 @@ SET extension_directory='__TEST_DIR__/extension_directory'
 
 statement error
 LOAD 'loadable_extension_demo';
+----
 
 # can install after setting directory, even if the extension directory does not yet exist
 statement ok
@@ -69,10 +72,12 @@ SET home_directory='__TEST_DIR__/home_directory'
 
 statement error
 LOAD 'loadable_extension_demo';
+----
 
 # we can't install because we will not create a non-existing home directory
 statement error
 INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+----
 
 # but this one should exist
 statement ok

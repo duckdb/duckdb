@@ -86,6 +86,7 @@ SELECT regexp_matches('foobarbequebaz', '(bar)(beque)')
 # postgres says throw error on invalid regex
 statement error
 SELECT regexp_matches('', '\X')
+----
 
 statement ok
 CREATE TABLE regex(s STRING, p STRING)
@@ -178,14 +179,17 @@ SELECT regexp_matches(v, 'h.*', 'c') FROM test ORDER BY v
 
 statement error
 SELECT regexp_matches(v, 'h.*', v) FROM test ORDER BY v
+----
 
 # throw on invalid options
 statement error
 SELECT regexp_matches(c0, '.*SD.*', 'q') from t0;
+----
 
 # can only use "g" with regexp replace
 statement error
 SELECT regexp_matches(c0, '.*SD.*', 'g') from t0;
+----
 
 # error in non-constant regex
 statement ok
@@ -193,3 +197,4 @@ INSERT INTO regex VALUES ('asdf', '(')
 
 statement error
 SELECT regexp_matches(s, p) FROM regex
+----

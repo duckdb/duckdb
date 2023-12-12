@@ -5,6 +5,7 @@
 # incorrect usage
 statement error
 select list_skewness()
+----
 
 query I
 select list_skewness([1])
@@ -23,6 +24,7 @@ NULL
 # out of range
 statement error
 select list_skewness([-2e307, 0, 2e307])
+----
 
 statement ok
 create table aggr(k int[], v decimal(10,2)[], v2 decimal(10, 2)[]);

@@ -81,9 +81,11 @@ SELECT MIN(i), (SELECT SUM(i1.i)) FROM integers i1;
 # this will fail, because "i" is not an aggregate but the SUM(i1.i) turns this query into an aggregate
 statement error
 SELECT i, (SELECT SUM(i1.i)) FROM integers i1;
+----
 
 statement error
 SELECT i+1, (SELECT SUM(i1.i)) FROM integers i1;
+----
 
 query IR
 SELECT MIN(i), (SELECT SUM(i1.i)) FROM integers i1;
@@ -109,6 +111,7 @@ SELECT SUM(i), (SELECT SUM(i) FROM integers WHERE i>SUM(i1.i)) FROM integers i1;
 # subquery with aggregation inside aggregation should fail
 statement error
 SELECT SUM((SELECT SUM(i))) FROM integers
+----
 
 # aggregate with correlation in filter
 query II
@@ -264,6 +267,7 @@ NULL	NULL
 # aggregate subqueries cannot be nested
 statement error
 SELECT i, SUM((SELECT SUM(i)*SUM(i1.i) FROM integers)) AS k FROM integers i1 GROUP BY i ORDER BY i;
+----
 
 # aggregation but ONLY inside subquery results in implicit aggregation
 query R

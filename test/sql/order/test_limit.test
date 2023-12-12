@@ -34,18 +34,22 @@ SELECT a FROM test LIMIT 2-1
 # LIMIT with non-scalar should fail
 statement error
 SELECT a FROM test LIMIT a
+----
 
 # LIMIT with non-scalar operation should also fail
 statement error
 SELECT a FROM test LIMIT a+1
+----
 
 # aggregate in limit
 statement error
 SELECT a FROM test LIMIT SUM(42)
+----
 
 # window function in limit
 statement error
 SELECT a FROM test LIMIT row_number() OVER ()
+----
 
 # LIMIT Bug #321 Crazy Result
 statement ok
@@ -65,6 +69,7 @@ Hello World
 # can only limit by integers
 statement error
 select 1 limit date '1992-01-01';
+----
 
 
 # Test limits with no constants
@@ -180,10 +185,12 @@ SELECT * FROM integers as int LIMIT (SELECT NULL)
 #Subqueries that return negative values
 statement error
 SELECT * FROM integers as int LIMIT (SELECT -1);
+----
 
 #Subqueries that return strings that can't be converted to integers
 statement error
 SELECT * FROM integers as int LIMIT (SELECT 'ab');
+----
 
 # Test use subquery in limit and offset
 statement ok
@@ -262,10 +269,12 @@ SELECT * FROM t ORDER BY x LIMIT (SELECT 3) OFFSET 3;
 # negeive number in the limit
 statement error
 SELECT * FROM t ORDER BY x LIMIT (SELECT -1);
+----
 
 # negeive number in the offset
 statement error
 SELECT * FROM t ORDER BY x OFFSET (SELECT -1);
+----
 
 statement ok
 create table t0(c0 int);
