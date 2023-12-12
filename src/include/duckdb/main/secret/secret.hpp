@@ -132,11 +132,11 @@ protected:
 	bool serializable;
 };
 
-//! The KeyValueSecret is a class that implements a Secret as a set of key -> value strings. This class can be used
+//! The KeyValueSecret is a class that implements a Secret as a set of key -> values. This class can be used
 //! for most use-cases of secrets as secrets generally tend to fit in a key value map.
 class KeyValueSecret : public BaseSecret {
 public:
-	KeyValueSecret(vector<string> &prefix_paths, const string &type, const string &provider, const string &name)
+	KeyValueSecret(const vector<string> &prefix_paths, const string &type, const string &provider, const string &name)
 	    : BaseSecret(prefix_paths, type, provider, name) {
 		D_ASSERT(!type.empty());
 		serializable = true;
@@ -148,6 +148,13 @@ public:
 	KeyValueSecret(KeyValueSecret &secret)
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		secret_map = secret.secret_map;
+		redact_keys = secret.redact_keys;
+		serializable = true;
+	};
+	KeyValueSecret(KeyValueSecret &&secret)
+	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
+		secret_map = std::move(secret.secret_map);
+		redact_keys = std::move(secret.redact_keys);
 		serializable = true;
 	};
 
@@ -177,7 +184,7 @@ public:
 	}
 
 	//! the map of key -> values that make up the secret
-	case_insensitive_ordered_map_t<string> secret_map;
+	case_insensitive_ordered_map_t<Value> secret_map;
 	//! keys that are sensitive and should be redacted
 	case_insensitive_set_t redact_keys;
 };

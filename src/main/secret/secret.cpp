@@ -55,7 +55,7 @@ string KeyValueSecret::ToString(SecretDisplayType mode) const {
 		if (mode == SecretDisplayType::REDACTED && redact_keys.find(it->first) != redact_keys.end()) {
 			result.append("redacted");
 		} else {
-			result.append(it->second);
+			result.append(it->second.ToString());
 		}
 		if (it != --secret_map.end()) {
 			result.append(";");

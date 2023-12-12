@@ -286,8 +286,8 @@ unique_ptr<KeyValueSecret> S3SecretHelper::CreateSecret(vector<string> &prefix_p
 	return_value->secret_map["session_token"] = params.session_token;
 	return_value->secret_map["endpoint"] = params.endpoint;
 	return_value->secret_map["url_style"] = params.url_style;
-	return_value->secret_map["use_ssl"] = params.use_ssl ? "true" : "false";
-	return_value->secret_map["s3_url_compatibility_mode"] = params.s3_url_compatibility_mode ? "true" : "false";
+	return_value->secret_map["use_ssl"] = params.use_ssl;
+	return_value->secret_map["s3_url_compatibility_mode"] = params.s3_url_compatibility_mode;
 
 	//! Set redact keys
 	return_value->redact_keys = {"secret_access_key", "session_token"};
@@ -298,15 +298,14 @@ unique_ptr<KeyValueSecret> S3SecretHelper::CreateSecret(vector<string> &prefix_p
 S3AuthParams S3SecretHelper::GetParams(const KeyValueSecret &secret) {
 	S3AuthParams params;
 
-	params.region = secret.secret_map.at("region");
-	params.access_key_id = secret.secret_map.at("access_key_id");
-	params.secret_access_key = secret.secret_map.at("secret_access_key");
-	params.session_token = secret.secret_map.at("session_token");
-	params.endpoint = secret.secret_map.at("endpoint");
-	params.url_style = secret.secret_map.at("url_style");
-	params.use_ssl = BooleanValue::Get(Value(secret.secret_map.at("use_ssl")).DefaultCastAs(LogicalType::BOOLEAN));
-	params.s3_url_compatibility_mode =
-	    BooleanValue::Get(Value(secret.secret_map.at("s3_url_compatibility_mode")).DefaultCastAs(LogicalType::BOOLEAN));
+	params.region = secret.secret_map.at("region").ToString();
+	params.access_key_id = secret.secret_map.at("access_key_id").ToString();
+	params.secret_access_key = secret.secret_map.at("secret_access_key").ToString();
+	params.session_token = secret.secret_map.at("session_token").ToString();
+	params.endpoint = secret.secret_map.at("endpoint").ToString();
+	params.url_style = secret.secret_map.at("url_style").ToString();
+	params.use_ssl = secret.secret_map.at("use_ssl").GetValue<bool>();
+	params.s3_url_compatibility_mode = secret.secret_map.at("s3_url_compatibility_mode").GetValue<bool>();
 
 	return params;
 }
