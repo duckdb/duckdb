@@ -128,13 +128,13 @@ class TestPyArrowUDF(object):
         import random as r
 
         def random_arrow(x):
-            if 'data' not in random_arrow.__dict__:
-                random_arrow.__dict__["data"] = 0
+            if not hasattr(random_arrow, 'data'):
+                random_arrow.data = 0
 
             input = x.to_pylist()
-            val = random_arrow.__dict__["data"]
+            val = random_arrow.data
             output = [val + i for i in range(len(input))]
-            random_arrow.__dict__["data"] += len(input)
+            random_arrow.data += len(input)
             return output
 
         duckdb_cursor.create_function(
