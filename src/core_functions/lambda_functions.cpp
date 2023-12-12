@@ -207,7 +207,7 @@ void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::ColumnInfo &
 	for (idx_t i = 0; i < column_infos.size(); i++) {
 
 		if (column_infos[i].vector.get().GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			// only reference constant vectors
+			// only reference constant vectorsl
 			info.input_chunk.data[i + slice_offset].Reference(column_infos[i].vector);
 
 		} else {

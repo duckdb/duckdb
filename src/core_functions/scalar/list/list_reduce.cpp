@@ -148,13 +148,11 @@ void LambdaFunctions::ListReduceFunction(duckdb::DataChunk &args, duckdb::Expres
 	idx_t loops = 0;
 	// Execute reduce until all rows are finished
 	while (!execute_info.active_rows.empty()) {
-		if (loops % 2) {
-			ExecuteReduce(loops, execute_info, info, odd_result_chunk);
-			even_result_chunk.Reset();
-		} else {
-			ExecuteReduce(loops, execute_info, info, even_result_chunk);
-			odd_result_chunk.Reset();
-		}
+		auto &result_chunk = loops % 2 ? odd_result_chunk : even_result_chunk;
+		auto &spare_result_chunk = loops % 2 ? even_result_chunk : odd_result_chunk;
+
+		ExecuteReduce(loops, execute_info, info, result_chunk);
+		spare_result_chunk.Reset();
 
 		loops++;
 	}
