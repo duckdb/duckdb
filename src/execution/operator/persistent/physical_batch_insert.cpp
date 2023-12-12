@@ -112,7 +112,8 @@ public:
 	static constexpr const idx_t BATCH_FLUSH_THRESHOLD = LocalStorage::MERGE_THRESHOLD * 3;
 
 public:
-	explicit BatchInsertGlobalState(DuckTableEntry &table) : table(table), insert_count(0), optimistically_written(false) {
+	explicit BatchInsertGlobalState(DuckTableEntry &table)
+	    : table(table), insert_count(0), optimistically_written(false) {
 	}
 
 	mutex lock;

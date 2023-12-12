@@ -124,6 +124,10 @@ public:
 	//! Flush any remaining partial blocks to disk
 	void FlushPartialBlocks();
 
+	unique_lock<mutex> GetLock() {
+		return unique_lock<mutex>(partial_block_lock);
+	}
+
 protected:
 	BlockManager &block_manager;
 	CheckpointType checkpoint_type;

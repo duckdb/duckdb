@@ -793,7 +793,8 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	return WriteToDisk(writer.GetPartialBlockManager(), compression_types);
 }
 
-RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats) {
+RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer,
+                                     TableStatistics &global_stats) {
 	RowGroupPointer row_group_pointer;
 
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
