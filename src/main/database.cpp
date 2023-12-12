@@ -40,13 +40,8 @@ DBConfig::DBConfig(bool read_only) : DBConfig::DBConfig() {
 	}
 }
 
-DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) : DBConfig::DBConfig(read_only) {
-	for (auto &kv : config_dict) {
-		string key = kv.first;
-		string val = kv.second;
-		auto opt_val = Value(val);
-		DBConfig::SetOptionByName(key, opt_val);
-	}
+DBConfig::DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_only) : DBConfig::DBConfig(read_only) {
+	SetOptionsByName(config_dict);
 }
 
 DBConfig::~DBConfig() {
