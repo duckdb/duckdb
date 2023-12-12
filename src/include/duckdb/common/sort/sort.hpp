@@ -204,4 +204,85 @@ private:
 	                data_ptr_t &target_heap_ptr, idx_t &copied, const idx_t &count);
 };
 
+struct SBIterator {
+	static int ComparisonValue(ExpressionType comparison);
+
+	SBIterator(GlobalSortState &gss, ExpressionType comparison, idx_t entry_idx_p = 0);
+
+	inline idx_t GetIndex() const {
+		return entry_idx;
+	}
+
+	inline void SetIndex(idx_t entry_idx_p) {
+		const auto new_block_idx = entry_idx_p / block_capacity;
+		if (new_block_idx != scan.block_idx) {
+			scan.SetIndices(new_block_idx, 0);
+			if (new_block_idx < block_count) {
+				scan.PinRadix(scan.block_idx);
+				block_ptr = scan.RadixPtr();
+				if (!all_constant) {
+					scan.PinData(*scan.sb->blob_sorting_data);
+				}
+			}
+		}
+
+		scan.entry_idx = entry_idx_p % block_capacity;
+		entry_ptr = block_ptr + scan.entry_idx * entry_size;
+		entry_idx = entry_idx_p;
+	}
+
+	inline SBIterator &operator++() {
+		if (++scan.entry_idx < block_capacity) {
+			entry_ptr += entry_size;
+			++entry_idx;
+		} else {
+			SetIndex(entry_idx + 1);
+		}
+
+		return *this;
+	}
+
+	inline SBIterator &operator--() {
+		if (scan.entry_idx) {
+			--scan.entry_idx;
+			--entry_idx;
+			entry_ptr -= entry_size;
+		} else {
+			SetIndex(entry_idx - 1);
+		}
+
+		return *this;
+	}
+
+	inline bool Compare(const SBIterator &other, const SortLayout &prefix) const {
+		int comp_res;
+		if (all_constant) {
+			comp_res = FastMemcmp(entry_ptr, other.entry_ptr, prefix.comparison_size);
+		} else {
+			comp_res = Comparators::CompareTuple(scan, other.scan, entry_ptr, other.entry_ptr, prefix, external);
+		}
+
+		return comp_res <= cmp;
+	}
+
+	inline bool Compare(const SBIterator &other) const {
+		return Compare(other, sort_layout);
+	}
+
+	// Fixed comparison parameters
+	const SortLayout &sort_layout;
+	const idx_t block_count;
+	const idx_t block_capacity;
+	const size_t entry_size;
+	const bool all_constant;
+	const bool external;
+	const int cmp;
+
+	// Iteration state
+	SBScanState scan;
+	idx_t entry_idx;
+	data_ptr_t block_ptr;
+	data_ptr_t entry_ptr;
+};
+
 } // namespace duckdb

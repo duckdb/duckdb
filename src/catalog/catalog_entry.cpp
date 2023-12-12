@@ -41,6 +41,35 @@ string CatalogEntry::ToSQL() const {
 	throw InternalException("Unsupported catalog type for ToSQL()");
 }
 
+void CatalogEntry::SetChild(unique_ptr<CatalogEntry> child_p) {
+	child = std::move(child_p);
+	if (child) {
+		child->parent = this;
+	}
+}
+
+unique_ptr<CatalogEntry> CatalogEntry::TakeChild() {
+	if (child) {
+		child->parent = nullptr;
+	}
+	return std::move(child);
+}
+
+bool CatalogEntry::HasChild() const {
+	return child != nullptr;
+}
+bool CatalogEntry::HasParent() const {
+	return parent != nullptr;
+}
+
+CatalogEntry &CatalogEntry::Child() {
+	return *child;
+}
+
+CatalogEntry &CatalogEntry::Parent() {
+	return *parent;
+}
+
 Catalog &CatalogEntry::ParentCatalog() {
 	throw InternalException("CatalogEntry::ParentCatalog called on catalog entry without catalog");
 }
