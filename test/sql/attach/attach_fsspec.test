@@ -10,4 +10,3 @@ not found
 statement error
 ATTACH 'file://dummy.csv'
 ----
-No such file or directory
