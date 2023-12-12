@@ -372,7 +372,6 @@ static idx_t FindRunIndex(const RUN_END_TYPE *run_ends, idx_t count, idx_t offse
 	return end;
 }
 
-// FIXME: this is not respecting the array offset yet
 template <class RUN_END_TYPE, class VALUE_TYPE>
 static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_encoding, idx_t compressed_size,
                            idx_t scan_offset, idx_t count) {
@@ -460,9 +459,7 @@ static void FlattenRunEndsSwitch(Vector &result, ArrowRunEndEncodingState &run_e
                                  idx_t scan_offset, idx_t size) {
 	auto &values = *run_end_encoding.values;
 	auto physical_type = values.GetType().InternalType();
-	// TODO: add more types
-	// Use Value API for complex types (list/struct/map)
-	// Use a custom version for strings as well
+
 	switch (physical_type) {
 	case PhysicalType::INT8:
 		FlattenRunEnds<RUN_END_TYPE, int8_t>(result, run_end_encoding, compressed_size, scan_offset, size);
