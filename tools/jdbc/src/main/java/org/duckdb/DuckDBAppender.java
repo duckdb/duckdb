@@ -4,6 +4,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import org.duckdb.DuckDBTimestamp;
 
 public class DuckDBAppender implements AutoCloseable {
@@ -57,6 +58,14 @@ public class DuckDBAppender implements AutoCloseable {
         } else {
             long timeInMicros = DuckDBTimestamp.localDateTime2Micros(value);
             DuckDBNative.duckdb_jdbc_appender_append_timestamp(appender_ref, timeInMicros);
+        }
+    }
+
+    public void appendBigDecimal(BigDecimal value) throws SQLException {
+        if (value == null) {
+            DuckDBNative.duckdb_jdbc_appender_append_null(appender_ref);
+        } else {
+            DuckDBNative.duckdb_jdbc_appender_append_decimal(appender_ref, value);
         }
     }
 
