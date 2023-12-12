@@ -1548,7 +1548,9 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	}
 
 	DBConfig config(read_only);
-	config.AddExtensionOption("pandas_analyze_sample", "The maximum number of rows to sample when analyzing a pandas object column.", LogicalType::UBIGINT, Value::UBIGINT(1000));
+	config.AddExtensionOption("pandas_analyze_sample",
+	                          "The maximum number of rows to sample when analyzing a pandas object column.",
+	                          LogicalType::UBIGINT, Value::UBIGINT(1000));
 	for (auto &kv : config_dict) {
 		auto &key = kv.first;
 		auto &value = kv.second;
