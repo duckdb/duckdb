@@ -43,6 +43,7 @@ PartialBlockManager::~PartialBlockManager() {
 }
 
 PartialBlockAllocation PartialBlockManager::GetBlockAllocation(uint32_t segment_size) {
+	lock_guard<mutex> lock(partial_block_lock);
 	PartialBlockAllocation allocation;
 	allocation.block_manager = &block_manager;
 	allocation.allocation_size = segment_size;
@@ -96,6 +97,7 @@ bool PartialBlockManager::GetPartialBlock(idx_t segment_size, unique_ptr<Partial
 }
 
 void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation &&allocation) {
+	lock_guard<mutex> lock(partial_block_lock);
 	auto &state = allocation.partial_block->state;
 	D_ASSERT(checkpoint_type != CheckpointType::FULL_CHECKPOINT || state.block_id >= 0);
 	if (state.block_use_count < max_use_count) {

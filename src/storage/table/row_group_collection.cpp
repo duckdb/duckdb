@@ -695,8 +695,6 @@ public:
 		auto &entry = checkpoint_state.segments[index];
 		auto &row_group = *entry.node;
 		checkpoint_state.writers[index] = checkpoint_state.writer.GetRowGroupWriter(*entry.node);
-		// FIXME - this can be removed with relatively minor changes to the partial block manager
-		lock_guard<mutex> write_lock(checkpoint_state.write_lock);
 		checkpoint_state.write_data[index] = row_group.WriteToDisk(*checkpoint_state.writers[index]);
 	}
 
