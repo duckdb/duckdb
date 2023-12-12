@@ -70,8 +70,8 @@ SELECT * FROM read_csv_auto(['data/csv/union-by-name/ubn1.csv', 'data/csv/union-
 Error in file
 
 query IIIII
-SELECT  a, b, c, ts, k  
-FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE) 
+SELECT  a, b, c, ts, k
+FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
 ORDER BY a, c, ts
 ----
 NULL	NULL	3	2003-06-30 12:03:10	6
@@ -134,6 +134,11 @@ Sunday
 NULL
 NULL
 NULL
+
+query TTT
+SELECT typeof(a), typeof(b), typeof(ts) FROM read_csv_auto('data/csv/union-by-name/ubn2.csv') LIMIT 1;
+----
+VARCHAR	BIGINT	TIMESTAMP
 
 # Test glob pattern [12] and union_by_name with filename options
 query IIIII

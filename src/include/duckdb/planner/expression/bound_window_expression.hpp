@@ -65,6 +65,10 @@ public:
 
 	string ToString() const override;
 
+	//! The number of ordering clauses the functions share
+	idx_t GetSharedOrders(const BoundWindowExpression &other) const;
+
+	bool PartitionsAreEquivalent(const BoundWindowExpression &other) const;
 	bool KeysAreCompatible(const BoundWindowExpression &other) const;
 	bool Equals(const BaseExpression &other) const override;
 

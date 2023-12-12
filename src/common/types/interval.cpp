@@ -126,7 +126,7 @@ interval_parse_time : {
 	// parse the remainder of the time as a Time type
 	dtime_t time;
 	idx_t pos;
-	if (!Time::TryConvertTime(str + start_pos, len - start_pos, pos, time)) {
+	if (!Time::TryConvertInterval(str + start_pos, len - start_pos, pos, time)) {
 		return false;
 	}
 	result.micros += time.micros;

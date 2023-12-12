@@ -24,6 +24,7 @@ class BaseStatistics;
 class DependencyList;
 class LogicalGet;
 class TableFilterSet;
+class TableCatalogEntry;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
@@ -138,8 +139,12 @@ enum ScanType { TABLE, PARQUET };
 struct BindInfo {
 public:
 	explicit BindInfo(ScanType type_p) : type(type_p) {};
+	explicit BindInfo(TableCatalogEntry &table) : type(ScanType::TABLE), table(&table) {};
+
 	unordered_map<string, Value> options;
 	ScanType type;
+	optional_ptr<TableCatalogEntry> table;
+
 	void InsertOption(const string &name, Value value) {
 		if (options.find(name) != options.end()) {
 			throw InternalException("This option already exists");
@@ -190,7 +195,7 @@ typedef idx_t (*table_function_get_batch_index_t)(ClientContext &context, const 
                                                   LocalTableFunctionState *local_state,
                                                   GlobalTableFunctionState *global_state);
 
-typedef BindInfo (*table_function_get_bind_info)(const FunctionData *bind_data);
+typedef BindInfo (*table_function_get_bind_info_t)(const optional_ptr<FunctionData> bind_data);
 
 typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state);
@@ -259,8 +264,8 @@ public:
 	table_function_progress_t table_scan_progress;
 	//! (Optional) returns the current batch index of the current scan operator
 	table_function_get_batch_index_t get_batch_index;
-	//! (Optional) returns the extra batch info, currently only used for the substrait extension
-	table_function_get_bind_info get_batch_info;
+	//! (Optional) returns extra bind info
+	table_function_get_bind_info_t get_bind_info;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;

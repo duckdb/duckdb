@@ -23,7 +23,10 @@ LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<Fun
 }
 
 optional_ptr<TableCatalogEntry> LogicalGet::GetTable() const {
-	return TableScanFunction::GetTableEntry(function, bind_data.get());
+	if (!function.get_bind_info) {
+		return nullptr;
+	}
+	return function.get_bind_info(bind_data.get()).table;
 }
 
 string LogicalGet::ParamsToString() const {

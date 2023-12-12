@@ -55,7 +55,8 @@ SELECT * FROM read_csv(
     rejects_table='csv_rejects_table',
     rejects_recovery_columns=['name', 'age'],
     ignore_errors=true,
-    parallel=${PARALLEL}
+    parallel=${PARALLEL},
+    auto_detect = false
 );
 ----
 alice	10	1	20
@@ -79,7 +80,8 @@ SELECT SUM(COL1) FROM read_csv(
     rejects_table='csv_rejects_table',
     rejects_recovery_columns=['COL2'],
     ignore_errors=true,
-    parallel=${PARALLEL}
+    parallel=${PARALLEL},
+    auto_detect = false
 );
 ----
 14799

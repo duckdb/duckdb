@@ -28,7 +28,7 @@ physical_plan	<REGEX>:.*READ_CSV.*l_returnflag.*
 statement error
 SELECT l_shipinstruct FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'DECIMAL(15,2)','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'DATE','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'}, parallel = ${parallel});
 ----
-date field value out of range
+Column at position: 13 Set type: DATE Sniffed type: VARCHAR
 
 # conversion is skipped if we don't read the value - so even with the incorrect type specified this still works
 query I

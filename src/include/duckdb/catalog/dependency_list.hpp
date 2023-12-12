@@ -13,10 +13,12 @@
 namespace duckdb {
 class Catalog;
 class CatalogEntry;
+class DependencySetCatalogEntry;
 
 //! The DependencyList
 class DependencyList {
 	friend class DependencyManager;
+	friend class DependencySetCatalogEntry;
 
 public:
 	DUCKDB_API void AddDependency(CatalogEntry &entry);
