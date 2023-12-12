@@ -242,6 +242,7 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 		default:
 			break;
 		}
+		break;
 	}
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
