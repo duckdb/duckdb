@@ -49,7 +49,7 @@ public:
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
-		return IsRightOuterJoin(join_type);
+		return PropagatesBuildSide(join_type);
 	}
 	bool ParallelSource() const override {
 		return true;

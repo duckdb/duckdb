@@ -5,6 +5,7 @@
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/assert.hpp"
@@ -333,12 +334,29 @@ unique_ptr<LogicalOperator> QueryGraphManager::RewritePlan(unique_ptr<LogicalOpe
 	return plan;
 }
 
-bool QueryGraphManager::LeftCardLessThanRight(LogicalOperator &op) {
-	D_ASSERT(op.children.size() == 2);
-	if (op.children[0]->has_estimated_cardinality && op.children[1]->has_estimated_cardinality) {
-		return op.children[0]->estimated_cardinality < op.children[1]->estimated_cardinality;
+void QueryGraphManager::TryFlipChildren(LogicalOperator &op, JoinType inverse, idx_t cardinality_ratio) {
+	auto &left_child = op.children[0];
+	auto &right_child = op.children[1];
+	auto lhs_cardinality = left_child->has_estimated_cardinality ? left_child->estimated_cardinality
+	                                                             : left_child->EstimateCardinality(context);
+	auto rhs_cardinality = right_child->has_estimated_cardinality ? right_child->estimated_cardinality
+	                                                              : right_child->EstimateCardinality(context);
+	if (rhs_cardinality < lhs_cardinality * cardinality_ratio) {
+		return;
 	}
-	return op.children[0]->EstimateCardinality(context) < op.children[1]->EstimateCardinality(context);
+	std::swap(left_child, right_child);
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		join.join_type = inverse;
+		for (auto &cond : join.conditions) {
+			std::swap(cond.left, cond.right);
+			cond.comparison = FlipComparisonExpression(cond.comparison);
+		}
+	}
+	if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+		auto &join = op.Cast<LogicalAnyJoin>();
+		join.join_type = inverse;
+	}
 }
 
 unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr<LogicalOperator> input_op) {
@@ -349,45 +367,41 @@ unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr
 			switch (op->type) {
 			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 				auto &join = op->Cast<LogicalComparisonJoin>();
+
 				if (join.join_type == JoinType::INNER) {
-					if (LeftCardLessThanRight(*op)) {
-						std::swap(op->children[0], op->children[1]);
-						for (auto &cond : join.conditions) {
-							std::swap(cond.left, cond.right);
-							cond.comparison = FlipComparisonExpression(cond.comparison);
-						}
-					}
+					TryFlipChildren(join, JoinType::INNER);
 				} else if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
-					auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
-					auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
-					if (rhs_cardinality > lhs_cardinality * 2) {
-						join.join_type = JoinType::RIGHT;
-						std::swap(join.children[0], join.children[1]);
-						for (auto &cond : join.conditions) {
-							std::swap(cond.left, cond.right);
-							cond.comparison = FlipComparisonExpression(cond.comparison);
-						}
+					TryFlipChildren(join, JoinType::RIGHT, 2);
+				} else if (join.join_type == JoinType::SEMI) {
+					idx_t has_range = 0;
+					if (!PhysicalPlanGenerator::HasEquality(join.conditions, has_range)) {
+						// if the conditions have no equality, do not flip the children.
+						// There is no physical join operator (yet) that can do a right_semi/anti join.
+						break;
 					}
+					TryFlipChildren(join, JoinType::RIGHT_SEMI, 2);
+				} else if (join.join_type == JoinType::ANTI) {
+					idx_t has_range = 0;
+					if (!PhysicalPlanGenerator::HasEquality(join.conditions, has_range)) {
+						// if the conditions have no equality, do not flip the children.
+						// There is no physical join operator (yet) that can do a right_semi/anti join.
+						break;
+					}
+					TryFlipChildren(join, JoinType::RIGHT_ANTI, 2);
 				}
 				break;
 			}
 			case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-				if (LeftCardLessThanRight(*op)) {
-					std::swap(op->children[0], op->children[1]);
-				}
+				// cross product not a comparison join so JoinType::INNER will get ignored
+				TryFlipChildren(*op, JoinType::INNER, 1);
 				break;
 			}
 			case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 				auto &join = op->Cast<LogicalAnyJoin>();
 				if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
-					auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
-					auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
-					if (rhs_cardinality > lhs_cardinality * 2) {
-						join.join_type = JoinType::RIGHT;
-						std::swap(join.children[0], join.children[1]);
-					}
-				} else if (join.join_type == JoinType::INNER && LeftCardLessThanRight(*op)) {
-					std::swap(join.children[0], join.children[1]);
+					TryFlipChildren(join, JoinType::RIGHT, 2);
+				} else if (join.join_type == JoinType::INNER) {
+					TryFlipChildren(join, JoinType::INNER, 1);
 				}
 				break;
 			}
