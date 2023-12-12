@@ -1453,12 +1453,12 @@ static unique_ptr<TableRef> ScanReplacement(ClientContext &context, const string
 	return nullptr;
 }
 
-unordered_map<string, string> TransformPyConfigDict(const py::dict &py_config_dict) {
-	unordered_map<string, string> config_dict;
+case_insensitive_map_t<Value> TransformPyConfigDict(const py::dict &py_config_dict) {
+	case_insensitive_map_t<Value> config_dict;
 	for (auto &kv : py_config_dict) {
 		auto key = py::str(kv.first);
 		auto val = py::str(kv.second);
-		config_dict[key] = val;
+		config_dict[key] = Value(val);
 	}
 	return config_dict;
 }
@@ -1528,7 +1528,7 @@ static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &databa
 	return res;
 }
 
-bool IsDefaultConnectionString(const string &database, bool read_only, unordered_map<string, string> &config) {
+bool IsDefaultConnectionString(const string &database, bool read_only, case_insensitive_map_t<Value> &config) {
 	bool is_default = StringUtil::CIEquals(database, ":default:");
 	if (!is_default) {
 		return false;
@@ -1551,13 +1551,9 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	config.AddExtensionOption("pandas_analyze_sample",
 	                          "The maximum number of rows to sample when analyzing a pandas object column.",
 	                          LogicalType::UBIGINT, Value::UBIGINT(1000));
-	for (auto &kv : config_dict) {
-		auto &key = kv.first;
-		auto &value = kv.second;
-		auto opt_val = Value(value);
-		config.SetOptionByName(key, opt_val);
-	}
-	config.SetOptionByName("duckdb_api", "python");
+	config_dict["duckdb_api"] = Value("python");
+	config.SetOptionsByName(config_dict);
+
 	auto res = FetchOrCreateInstance(database, config);
 	auto &client_context = *res->connection->context;
 	SetDefaultConfigArguments(client_context);
