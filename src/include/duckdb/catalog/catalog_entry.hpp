@@ -49,6 +49,8 @@ public:
 	bool internal;
 	//! Timestamp at which the catalog entry was created
 	atomic<transaction_t> timestamp;
+
+private:
 	//! Child entry
 	unique_ptr<CatalogEntry> child;
 	//! Parent entry (the node that dependents_map this node)
@@ -76,6 +78,14 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
+
+public:
+	void SetChild(unique_ptr<CatalogEntry> child);
+	unique_ptr<CatalogEntry> TakeChild();
+	bool HasChild() const;
+	bool HasParent() const;
+	CatalogEntry &Child();
+	CatalogEntry &Parent();
 
 public:
 	template <class TARGET>

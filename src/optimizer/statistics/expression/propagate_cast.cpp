@@ -32,6 +32,7 @@ static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatisti
 		default:
 			break;
 		}
+		break;
 	default:
 		break;
 	}

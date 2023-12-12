@@ -139,7 +139,7 @@ SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event 
 	auto &gstate = input.global_state.Cast<MergeJoinGlobalState>();
 	auto &global_sort_state = gstate.table->global_sort_state;
 
-	if (IsRightOuterJoin(join_type)) {
+	if (PropagatesBuildSide(join_type)) {
 		// for FULL/RIGHT OUTER JOIN, initialize found_match to false for every tuple
 		gstate.table->IntializeMatches();
 	}
@@ -700,7 +700,7 @@ unique_ptr<GlobalSourceState> PhysicalPiecewiseMergeJoin::GetGlobalSourceState(C
 
 SourceResultType PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &result,
                                                      OperatorSourceInput &input) const {
-	D_ASSERT(IsRightOuterJoin(join_type));
+	D_ASSERT(PropagatesBuildSide(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = sink_state->Cast<MergeJoinGlobalState>();
 	auto &state = input.global_state.Cast<PiecewiseJoinScanState>();

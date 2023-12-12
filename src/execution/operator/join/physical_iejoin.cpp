@@ -164,7 +164,7 @@ SinkFinalizeType PhysicalIEJoin::Finalize(Pipeline &pipeline, Event &event, Clie
 	auto &table = *gstate.tables[gstate.child];
 	auto &global_sort_state = table.global_sort_state;
 
-	if ((gstate.child == 1 && IsRightOuterJoin(join_type)) || (gstate.child == 0 && IsLeftOuterJoin(join_type))) {
+	if ((gstate.child == 1 && PropagatesBuildSide(join_type)) || (gstate.child == 0 && IsLeftOuterJoin(join_type))) {
 		// for FULL/LEFT/RIGHT OUTER JOIN, initialize found_match to false for every tuple
 		table.IntializeMatches();
 	}

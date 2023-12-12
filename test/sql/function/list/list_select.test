@@ -74,27 +74,27 @@ NULL
 [4, NULL]
 
 query I
-SELECT list_select(i, j) FROM integers, selections
+SELECT list_select(i, j) FROM integers, selections ORDER BY i, j;
 ----
-[2, 1]
-[5, 4]
+[]
+[NULL, NULL]
+[NULL, NULL, NULL]
 NULL
-[NULL, NULL]
-[NULL, NULL]
-[NULL, 4]
+[]
+[2, 1]
 [3, 1, 3]
+NULL
+[]
+[NULL, 4]
+[NULL, 4, NULL]
+NULL
+[]
+[5, 4]
 [6, 4, 6]
 NULL
+[]
+[NULL, NULL]
 [NULL, NULL, NULL]
-[NULL, NULL, NULL]
-[NULL, 4, NULL]
-[]
-[]
-NULL
-[]
-[]
-[]
-NULL
 NULL
 NULL
 NULL

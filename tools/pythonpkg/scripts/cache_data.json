@@ -48,9 +48,10 @@
         "name": "pandas",
         "children": [
             "pandas.DataFrame",
-            "pandas._libs",
             "pandas.isnull",
-            "pandas.ArrowDtype"
+            "pandas.ArrowDtype",
+            "pandas.NaT",
+            "pandas.NA"
         ],
         "required": false
     },
@@ -60,27 +61,16 @@
         "name": "DataFrame",
         "children": []
     },
-    "pandas._libs": {
+    "pandas.NaT": {
         "type": "attribute",
-        "full_path": "pandas._libs",
-        "name": "_libs",
-        "children": [
-            "pandas._libs.missing"
-        ],
-        "required": false
+        "full_path": "pandas.NaT",
+        "name": "NaT",
+        "children": []
     },
-    "pandas._libs.missing": {
+    "pandas.NA": {
         "type": "attribute",
-        "full_path": "pandas._libs.missing",
-        "name": "missing",
-        "children": [
-            "pandas._libs.missing.NAType"
-        ]
-    },
-    "pandas._libs.missing.NAType": {
-        "type": "attribute",
-        "full_path": "pandas._libs.missing.NAType",
-        "name": "NAType",
+        "full_path": "pandas.NA",
+        "name": "NA",
         "children": []
     },
     "pandas.isnull": {
@@ -433,7 +423,7 @@
         "children": [
             "duckdb.filesystem.ModifiedMemoryFileSystem"
         ],
-		"required": false
+        "required": false
     },
     "duckdb.filesystem.ModifiedMemoryFileSystem": {
         "type": "attribute",
