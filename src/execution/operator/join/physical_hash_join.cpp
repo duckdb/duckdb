@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/parallel/interrupt.hpp"
 
 namespace duckdb {
 
@@ -925,14 +926,14 @@ SourceResultType PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk 
 			lstate.ExecuteTask(sink, gstate, chunk);
 		} else {
 			lock_guard<mutex> guard(gstate.lock);
-			if (!gstate.TryPrepareNextStage(sink)) {
-				gstate.blocked_tasks.push_back(input.interrupt_state);
-				return SourceResultType::BLOCKED;
-			} else {
+			if (gstate.TryPrepareNextStage(sink) || gstate.global_stage == HashJoinSourceStage::DONE) {
 				for (auto &state : gstate.blocked_tasks) {
 					state.Callback();
 				}
 				gstate.blocked_tasks.clear();
+			} else {
+				gstate.blocked_tasks.push_back(input.interrupt_state);
+				return SourceResultType::BLOCKED;
 			}
 		}
 	}
