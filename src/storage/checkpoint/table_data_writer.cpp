@@ -72,7 +72,10 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
 	auto index_storage_infos = info->indexes.GetStorageInfos();
-	serializer.WriteProperty(104, "index_storage_infos", index_storage_infos);
+	// write empty block pointers for forwards compatibility
+	vector<BlockPointer> compat_block_pointers;
+	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
+	serializer.WritePropertyWithDefault(104, "index_storage_infos", index_storage_infos);
 }
 
 } // namespace duckdb

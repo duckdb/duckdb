@@ -249,7 +249,7 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	auto res = make_uniq<ArrowScanFunctionData>(stream_factory_produce, stream_factory_ptr);
 
 	auto &data = *res;
-	stream_factory_get_schema(stream_factory_ptr, data.schema_root);
+	stream_factory_get_schema(reinterpret_cast<ArrowArrayStream *>(stream_factory_ptr), data.schema_root.arrow_schema);
 	PopulateArrowTableType(res->arrow_table, data.schema_root, names, return_types);
 	RenameArrowColumns(names);
 	res->all_types = return_types;
