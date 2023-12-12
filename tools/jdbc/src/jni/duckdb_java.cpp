@@ -737,7 +737,7 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 	jobjectArray varlen_data = nullptr;
 
 	// this allows us to treat aliased (usually extension) types as strings
-	auto type = vec.GetType().ContainsJSONType() ? vec.GetType().GetJSONRenderType() : vec.GetType();
+	auto type = vec.GetType();
 	auto type_id = type.HasAlias() ? LogicalTypeId::UNKNOWN : type.id();
 
 	switch (type_id) {

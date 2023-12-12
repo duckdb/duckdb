@@ -72,9 +72,9 @@ select ('{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON).my_field.m
 [
 
 query T
-select json('{"my_field": {"my_nested_field": ["goose", "duck"]}}').my_field.my_nested_field[1]::text
+select json('{"my_field": {"my_nested_field": ["goose", "duck"]}}').my_field.my_nested_field[1]
 ----
-duck
+"duck"
 
 query T
 select json('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}').my_field.my_nested_field[1]
@@ -87,14 +87,9 @@ select ('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}'::JSON
 "duckduckduckduck"
 
 query T
-select json('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}').my_field.my_nested_field[1]::text
+select json('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}').my_field.my_nested_field[1]
 ----
-duckduckduckduck
-
-query T
-select ('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}'::JSON).my_field.my_nested_field[1]::text
-----
-duckduckduckduck
+"duckduckduckduck"
 
 # doesn't work
 query T
@@ -115,9 +110,9 @@ select json('[1, 2, 42]')[2]::text
 
 # chained
 query T
-select ('{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON).my_field.my_nested_field[1]::text
+select ('{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON).my_field.my_nested_field[1]
 ----
-duck
+"duck"
 
 # some sqlite tests
 query T
@@ -201,7 +196,7 @@ true
 query T
 SELECT json('{"foo": "bar"}').foo = '"bar"';
 ----
-false
+true
 
 query T
 SELECT json('{"foo": 1}').foo = 1;

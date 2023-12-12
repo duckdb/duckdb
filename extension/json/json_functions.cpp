@@ -206,6 +206,37 @@ unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, 
 	return std::move(table_function);
 }
 
+static inline bool WrapInQuotes(const char *data, const idx_t &length) {
+	char first_non_whitespace = '\0';
+	for (const char *const end = data + length; data != end; data++) {
+		const auto &c = *data;
+		if (c == '\0') {
+			// Not allowed in JSON
+			return false;
+		}
+		if (first_non_whitespace == '\0' && !StringUtil::CharacterIsSpace(c)) {
+			first_non_whitespace = c;
+		}
+	}
+
+	if (first_non_whitespace == '\0') {
+		// All whitespace, we can just wrap it
+		return true;
+	}
+
+	if (StringUtil::CharacterIsDigit(first_non_whitespace)) {
+		return false;
+	}
+	switch (first_non_whitespace) {
+	case '{':
+	case '[':
+	case '"':
+		return false;
+	default:
+		return true;
+	}
+}
+
 static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator.Reset();
@@ -216,6 +247,16 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 	    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
 		    auto data = input.GetDataWriteable();
 		    const auto length = input.GetSize();
+
+		    if (WrapInQuotes(data, length)) {
+			    auto wrapped_string = StringVector::EmptyString(result, length + 2);
+			    auto wrapped_data = wrapped_string.GetDataWriteable();
+			    wrapped_data[0] = '"';
+			    memcpy(wrapped_data + 1, data, length);
+			    wrapped_data[length + 1] = '"';
+			    wrapped_string.Finalize();
+			    return wrapped_string;
+		    }
 
 		    yyjson_read_err error;
 		    auto doc = JSONCommon::ReadDocumentUnsafe(data, length, JSONCommon::READ_FLAG, alc, &error);
@@ -234,20 +275,9 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 	return success;
 }
 
-static bool CastJSONToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](const string_t &input) {
-		// If input type is JSON, it is always valid JSON and non-zero length
-		const auto data = input.GetData();
-		return *data == '"' ? string_t(data + 1, input.GetSize() - 2) : input;
-	});
-	StringVector::AddHeapReference(result, source);
-	return true;
-}
-
 void JSONFunctions::RegisterSimpleCastFunctions(CastFunctionSet &casts) {
 	// JSON to VARCHAR is basically free
-	BoundCastInfo json_to_varchar_info(CastJSONToVarchar);
-	casts.RegisterCastFunction(LogicalType::JSON(), LogicalType::VARCHAR, std::move(json_to_varchar_info), 1);
+	casts.RegisterCastFunction(LogicalType::JSON(), LogicalType::VARCHAR, DefaultCasts::ReinterpretCast, 1);
 
 	// VARCHAR to JSON requires a parse so it's not free. Let's make it 1 more than a cast to STRUCT
 	auto varchar_to_json_cost = casts.ImplicitCastCost(LogicalType::SQLNULL, LogicalTypeId::STRUCT) + 1;

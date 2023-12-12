@@ -27,10 +27,10 @@ select cast(json('[1,2]') as json[]);
 ----
 [1, 2]
 
-statement error
+query I
 select cast(['boom'] as json[]);
 ----
-Malformed JSON
+["boom"]
 
 query I
 select cast(['[1, 2]', '[3, 4]'] as json[]);
@@ -53,10 +53,10 @@ SELECT {'a': 42, 'b': '[1, 2]'}::ROW(a JSON, b INT[])
 ----
 {'a': 42, 'b': [1, 2]}
 
-statement error
+query I
 SELECT {'a': 'boom', 'b': '[1, 2]'}::ROW(a JSON, b INT[])
 ----
-Malformed JSON
+{'a': "boom", 'b': [1, 2]}
 
 # varchar to struct of json
 query I
@@ -394,3 +394,13 @@ select v::JSON::ROW(i INTEGER, j VARCHAR) from test_vector_types(NULL::ROW(i INT
 
 
 endloop
+
+query I
+select ''::JSON
+----
+""
+
+query I
+select '          '::JSON
+----
+"          "

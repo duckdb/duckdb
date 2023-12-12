@@ -1,13 +1,12 @@
 #include "result_helper.hpp"
-
+#include "re2/re2.h"
 #include "catch.hpp"
+#include "termcolor.hpp"
+#include "sqllogic_test_runner.hpp"
 #include "duckdb/common/crypto/md5.hpp"
 #include "duckdb/parser/qualified_name.hpp"
-#include "re2/re2.h"
-#include "sqllogic_test_logger.hpp"
-#include "sqllogic_test_runner.hpp"
-#include "termcolor.hpp"
 #include "test_helpers.hpp"
+#include "sqllogic_test_logger.hpp"
 
 #include <thread>
 
@@ -356,15 +355,7 @@ string TestResultHelper::SQLLogicTestConvertValue(Value value, LogicalType sql_t
 		case LogicalTypeId::BOOLEAN:
 			return BooleanValue::Get(value) ? "1" : "0";
 		default: {
-			string str;
-			if (sql_type.ContainsJSONType()) {
-				auto temp = value;
-				temp.Reinterpret(value.type().GetJSONRenderType());
-				str = temp.CastAs(*runner.con->context, LogicalType::VARCHAR).ToString();
-			} else {
-				str = value.CastAs(*runner.con->context, LogicalType::VARCHAR).ToString();
-			}
-
+			string str = value.CastAs(*runner.con->context, LogicalType::VARCHAR).ToString();
 			if (str.empty()) {
 				return "(empty)";
 			} else {

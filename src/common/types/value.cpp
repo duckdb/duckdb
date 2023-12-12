@@ -1,37 +1,39 @@
 #include "duckdb/common/types/value.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+
+#include "utf8proc_wrapper.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/to_string.hpp"
-#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/blob.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/decimal.hpp"
-#include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/common/types/hash.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/error_manager.hpp"
-#include "utf8proc_wrapper.hpp"
 
-#include <cmath>
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+
 #include <utility>
+#include <cmath>
 
 namespace duckdb {
 
@@ -1359,11 +1361,6 @@ hash_t Value::Hash() const {
 string Value::ToString() const {
 	if (IsNull()) {
 		return "NULL";
-	}
-	if (type_.ContainsJSONType()) {
-		auto temp = *this;
-		temp.Reinterpret(type_.GetJSONRenderType());
-		return StringValue::Get(temp.DefaultCastAs(LogicalType::VARCHAR));
 	}
 	return StringValue::Get(DefaultCastAs(LogicalType::VARCHAR));
 }
