@@ -206,37 +206,6 @@ unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, 
 	return std::move(table_function);
 }
 
-static inline bool WrapInQuotes(const char *data, const idx_t &length) {
-	char first_non_whitespace = '\0';
-	for (const char *const end = data + length; data != end; data++) {
-		const auto &c = *data;
-		if (c == '\0') {
-			// Not allowed in JSON
-			return false;
-		}
-		if (first_non_whitespace == '\0' && !StringUtil::CharacterIsSpace(c)) {
-			first_non_whitespace = c;
-		}
-	}
-
-	if (first_non_whitespace == '\0') {
-		// All whitespace, we can just wrap it
-		return true;
-	}
-
-	if (StringUtil::CharacterIsDigit(first_non_whitespace)) {
-		return false;
-	}
-	switch (first_non_whitespace) {
-	case '{':
-	case '[':
-	case '"':
-		return false;
-	default:
-		return true;
-	}
-}
-
 static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator.Reset();
@@ -248,7 +217,15 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 		    auto data = input.GetDataWriteable();
 		    const auto length = input.GetSize();
 
-		    if (WrapInQuotes(data, length)) {
+		    yyjson_read_err error;
+		    auto doc = JSONCommon::ReadDocumentUnsafe(data, length, JSONCommon::READ_FLAG, alc, &error);
+
+		    if (doc) {
+			    return input; // Parsed correctly
+		    }
+
+		    // We weren't able to parse, but we're lenient with strings, auto-convert
+		    if (StringUtil::CharacterIsAlpha(*data) && memchr(data, '\0', length) == nullptr) {
 			    auto wrapped_string = StringVector::EmptyString(result, length + 2);
 			    auto wrapped_data = wrapped_string.GetDataWriteable();
 			    wrapped_data[0] = '"';
@@ -256,12 +233,7 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 			    wrapped_data[length + 1] = '"';
 			    wrapped_string.Finalize();
 			    return wrapped_string;
-		    }
-
-		    yyjson_read_err error;
-		    auto doc = JSONCommon::ReadDocumentUnsafe(data, length, JSONCommon::READ_FLAG, alc, &error);
-
-		    if (!doc) {
+		    } else {
 			    mask.SetInvalid(idx);
 			    if (success) {
 				    HandleCastError::AssignError(JSONCommon::FormatParseError(data, length, error),
@@ -269,6 +241,7 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 				    success = false;
 			    }
 		    }
+
 		    return input;
 	    });
 	StringVector::AddHeapReference(result, source);

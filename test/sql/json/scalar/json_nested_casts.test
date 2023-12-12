@@ -395,12 +395,24 @@ select v::JSON::ROW(i INTEGER, j VARCHAR) from test_vector_types(NULL::ROW(i INT
 
 endloop
 
-query I
+# we only cast our strings to JSON if they start with an alphabetic character, so this won't work
+statement error
 select ''::JSON
 ----
-""
+Conversion Error
 
-query I
+statement error
 select '          '::JSON
 ----
-"          "
+Conversion Error
+
+# JSON cannot contain the NULL byte
+statement error
+select chr(0)::JSON
+----
+Conversion Error
+
+statement error
+select ('duck' || chr(0))::JSON
+----
+Conversion Error
