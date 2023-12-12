@@ -226,7 +226,8 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 	idx_t child_1_card = child_stats[0].stats_initialized ? child_stats[0].cardinality : 0;
 	idx_t child_2_card = child_stats[1].stats_initialized ? child_stats[1].cardinality : 0;
 	ret.cardinality = MaxValue(child_1_card, child_2_card);
-	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		switch (join.join_type) {
 		case JoinType::RIGHT_ANTI:
@@ -242,6 +243,23 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 			break;
 		}
 	}
+	case LogicalOperatorType::LOGICAL_UNION:
+	case LogicalOperatorType::LOGICAL_INTERSECT:
+	case LogicalOperatorType::LOGICAL_EXCEPT: {
+		auto &setop = op.Cast<LogicalSetOperation>();
+		if (setop.type == LogicalOperatorType::LOGICAL_EXCEPT) {
+			ret.cardinality = child_1_card;
+		} else if (setop.type == LogicalOperatorType::LOGICAL_INTERSECT) {
+			ret.cardinality = child_2_card;
+		} else if (setop.type == LogicalOperatorType::LOGICAL_UNION) {
+			ret.cardinality = child_1_card + child_2_card;
+		}
+		break;
+	}
+	default:
+		break;
+	}
+
 	ret.stats_initialized = true;
 	ret.filter_strength = 1;
 	ret.table_name = child_stats[0].table_name + " joined with " + child_stats[1].table_name;
