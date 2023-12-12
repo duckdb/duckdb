@@ -2617,6 +2617,10 @@ const char* EnumUtil::ToChars<JoinType>(JoinType value) {
 		return "MARK";
 	case JoinType::SINGLE:
 		return "SINGLE";
+	case JoinType::RIGHT_SEMI:
+		return "RIGHT_SEMI";
+	case JoinType::RIGHT_ANTI:
+		return "RIGHT_ANTI";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2650,6 +2654,12 @@ JoinType EnumUtil::FromString<JoinType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "SINGLE")) {
 		return JoinType::SINGLE;
+	}
+	if (StringUtil::Equals(value, "RIGHT_SEMI")) {
+		return JoinType::RIGHT_SEMI;
+	}
+	if (StringUtil::Equals(value, "RIGHT_ANTI")) {
+		return JoinType::RIGHT_ANTI;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
