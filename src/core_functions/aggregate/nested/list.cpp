@@ -67,7 +67,7 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 	}
 }
 
-static void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInputData &, idx_t count) {
+static void ListAbsorbFunction(Vector &states_vector, Vector &combined, AggregateInputData &, idx_t count) {
 
 	UnifiedVectorFormat states_data;
 	states_vector.ToUnifiedFormat(count, states_data);
@@ -147,49 +147,32 @@ static void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_d
 	ListVector::SetListSize(result, total_len);
 }
 
-static void ListWindow(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
-                       const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &frames, Vector &result,
-                       idx_t rid) {
+static void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInputData &aggr_input_data,
+                                idx_t count) {
+
+	UnifiedVectorFormat states_data;
+	states_vector.ToUnifiedFormat(count, states_data);
+	auto states_ptr = UnifiedVectorFormat::GetData<const ListAggState *>(states_data);
+	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
 
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
-	LinkedList linked_list;
+	auto result_type = ListType::GetChildType(list_bind_data.stype);
 
-	// UPDATE step
+	for (idx_t i = 0; i < count; i++) {
+		auto &source = *states_ptr[states_data.sel->get_index(i)];
+		auto &target = *combined_ptr[i];
 
-	D_ASSERT(partition.input_count == 1);
-	// FIXME: We are modifying the window operator's data here
-	auto &input = const_cast<Vector &>(partition.inputs[0]);
+		const auto entry_count = source.linked_list.total_capacity;
+		Vector input(result_type, source.linked_list.total_capacity);
+		list_bind_data.functions.BuildListVector(source.linked_list, input, 0);
 
-	// FIXME: we unify more values than necessary (count is frame.end)
-	const auto count = frames.back().end;
+		RecursiveUnifiedVectorFormat input_data;
+		Vector::RecursiveToUnifiedFormat(input, entry_count, input_data);
 
-	RecursiveUnifiedVectorFormat input_data;
-	Vector::RecursiveToUnifiedFormat(input, count, input_data);
-
-	for (const auto &frame : frames) {
-		for (idx_t i = frame.start; i < frame.end; i++) {
-			list_bind_data.functions.AppendRow(aggr_input_data.allocator, linked_list, input_data, i);
+		for (idx_t entry_idx = 0; entry_idx < entry_count; ++entry_idx) {
+			list_bind_data.functions.AppendRow(aggr_input_data.allocator, target.linked_list, input_data, entry_idx);
 		}
 	}
-
-	// FINALIZE step
-
-	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
-	size_t total_len = ListVector::GetListSize(result);
-
-	// set the length and offset of this list in the result vector
-	result_data[rid].offset = total_len;
-	result_data[rid].length = linked_list.total_capacity;
-	total_len += linked_list.total_capacity;
-
-	// reserve capacity, then copy over the data to the child vector
-	ListVector::Reserve(result, total_len);
-	auto &result_child = ListVector::GetEntry(result);
-	idx_t offset = result_data[rid].offset;
-	list_bind_data.functions.BuildListVector(linked_list, result_child, offset);
-
-	ListVector::SetListSize(result, total_len);
 }
 
 unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunction &function,
@@ -208,10 +191,13 @@ unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunct
 }
 
 AggregateFunction ListFun::GetFunction() {
-	return AggregateFunction({LogicalType::ANY}, LogicalTypeId::LIST, AggregateFunction::StateSize<ListAggState>,
-	                         AggregateFunction::StateInitialize<ListAggState, ListFunction>, ListUpdateFunction,
-	                         ListCombineFunction, ListFinalize, nullptr, ListBindFunction, nullptr, nullptr,
-	                         ListWindow);
+	auto func =
+	    AggregateFunction({LogicalType::ANY}, LogicalTypeId::LIST, AggregateFunction::StateSize<ListAggState>,
+	                      AggregateFunction::StateInitialize<ListAggState, ListFunction>, ListUpdateFunction,
+	                      ListCombineFunction, ListFinalize, nullptr, ListBindFunction, nullptr, nullptr, nullptr);
+	func.absorb = ListAbsorbFunction;
+
+	return func;
 }
 
 } // namespace duckdb
