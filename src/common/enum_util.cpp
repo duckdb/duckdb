@@ -3067,10 +3067,10 @@ const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value) {
 		return "TIME WITH TIME ZONE";
 	case LogicalTypeId::BIT:
 		return "BIT";
-	case LogicalTypeId::HUGEINT:
-		return "HUGEINT";
 	case LogicalTypeId::UHUGEINT:
 		return "UHUGEINT";
+	case LogicalTypeId::HUGEINT:
+		return "HUGEINT";
 	case LogicalTypeId::POINTER:
 		return "POINTER";
 	case LogicalTypeId::VALIDITY:
