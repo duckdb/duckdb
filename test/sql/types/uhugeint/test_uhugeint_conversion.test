@@ -28,13 +28,19 @@ SELECT '1267650600228229401496703205376'::UHUGEINT, '340282366920938463463374607
 # negative numbers in hugeint
 statement error
 SELECT '-1267650600228229401496703205376'::UHUGEINT, '-17014118346046923173168730371588410572'::UHUGEINT;
+----
+Conversion Error
 
 # string -> hugeint conversion throws error on overflow
 statement error
 SELECT '340282366920938463463374607431768211456'::UHUGEINT;
+----
+Conversion Error
 
 statement error
 SELECT '-1'::UHUGEINT;
+----
+Conversion Error
 
 # test the exact boundaries
 # these work
@@ -46,9 +52,13 @@ SELECT '340282366920938463463374607431768211455'::UHUGEINT, '0'::UHUGEINT;
 # these don't
 statement error
 SELECT '340282366920938463463374607431768211456'::UHUGEINT;
+----
+Conversion Error
 
 statement error
 SELECT '-1'::UHUGEINT;
+----
+Conversion Error
 
 # cast various types to uhugeint
 query IIIIII
@@ -59,6 +69,8 @@ SELECT 42::TINYINT::UHUGEINT, 42::SMALLINT::UHUGEINT, 42::INTEGER::UHUGEINT, 42:
 # negative values
 statement error
 SELECT (-42)::TINYINT::UHUGEINT, (-42)::SMALLINT::UHUGEINT, (-42)::INTEGER::UHUGEINT, (-42)::BIGINT::UHUGEINT, (-42)::FLOAT::UHUGEINT, (-42)::DOUBLE::UHUGEINT;
+----
+Conversion Error
 
 # cast uhugeint to various types
 query IIIIRR
@@ -70,10 +82,14 @@ SELECT 42::UHUGEINT::TINYINT, 42::UHUGEINT::SMALLINT, 42::UHUGEINT::INTEGER, 42:
 # test the exact boundaries for each type
 statement error
 SELECT 1000::UHUGEINT::TINYINT;
+----
+Conversion Error
 
 # TINYINT
 statement error
 SELECT 128::UHUGEINT::TINYINT;
+----
+Conversion Error
 
 statement ok
 SELECT 127::UHUGEINT::TINYINT;
@@ -81,19 +97,29 @@ SELECT 127::UHUGEINT::TINYINT;
 # SMALLINT
 statement error
 SELECT 100000::UHUGEINT::SMALLINT;
+----
+Conversion Error
 
 statement error
 SELECT 32768::UHUGEINT::SMALLINT;
+----
+Conversion Error
 
-statement ok
+query I
 SELECT 32767::UHUGEINT::SMALLINT;
+----
+32767
 
 # INTEGER
 statement error
 SELECT 100000000000::UHUGEINT::INTEGER;
+----
+Conversion Error
 
 statement error
 SELECT 2147483648::UHUGEINT::INTEGER;
+----
+Conversion Error
 
 statement ok
 SELECT 2147483647::UHUGEINT::INTEGER;
@@ -101,19 +127,29 @@ SELECT 2147483647::UHUGEINT::INTEGER;
 # BIGINT
 statement error
 SELECT 10000000000000000000::UHUGEINT::BIGINT;
+----
+Conversion Error
 
 statement error
 SELECT '9223372036854775808'::UHUGEINT::BIGINT;
+----
+Conversion Error
 
-statement ok
+query I
 SELECT 9223372036854775807::UHUGEINT::BIGINT;
+----
+9223372036854775807
 
 # overflow in double -> hugeint conversion
 statement error
 SELECT 1e100::FLOAT::UHUGEINT;
+----
+Conversion Error
 
 statement error
 SELECT 1e100::DOUBLE::UHUGEINT;
+----
+Conversion Error
 
 # typeof large constant is hugeint, as long as it fits
 query TTTTT
