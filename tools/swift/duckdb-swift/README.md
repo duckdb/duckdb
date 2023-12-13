@@ -27,20 +27,21 @@ DuckDB is a high-performance analytical database system. It is designed to be fa
 
 ## Installation
 To use DuckDB in your Swift based project:
+
 1. Add DuckDB to your `Swift.package` dependencies:
 
-  ```swift
-   .package(url: "https://github.com/duckdb/duckdb-swift", .upToNextMinor(from: .init(0, x, 0))),
-   ```
+    ```swift
+    .package(url: "https://github.com/duckdb/duckdb-swift", .upToNextMinor(from: .init(0, x, 0))),
+    ```
 
 2. Add `DuckDB` as a dependency to your target:
  
-  ```swift
-  .target(name: "TargetName", dependencies: [
-    .product(name: "DuckDB", package: "duckdb-swift"),
-  ...
-  ]),
-  ```    
+    ```swift
+    .target(name: "TargetName", dependencies: [
+      .product(name: "DuckDB", package: "duckdb-swift"),
+    ...
+    ]),
+    ```
 
 ## Source and file format stability
 DuckDB is in early release mode and API is subject to change between minor version updates. DuckDB's file format is also subject to change and – in the short-term – it is recommended to make use of [DuckDB's CSV import/export capabilities](https://duckdb.org/docs/csv_import.html) to ensure your data remains accessible between DuckDB version updates.
