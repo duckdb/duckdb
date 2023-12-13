@@ -3868,6 +3868,14 @@ target_el:	a_expr AS ColLabelOrString
 					$$->val = (PGNode *)$1;
 					$$->location = @1;
 				}
+            | IDENT ':' a_expr
+				{
+					$$ = makeNode(PGResTarget);
+					$$->name = $1;
+					$$->indirection = NIL;
+					$$->val = (PGNode *)$3;
+					$$->location = @1;
+				}
 		;
 
 except_list: EXCLUDE '(' name_list_opt_comma ')'					{ $$ = $3; }
