@@ -124,6 +124,30 @@ class TestPyArrowUDF(object):
         with pytest.raises(duckdb.InvalidInputException, match='Returned pyarrow table should have 1 tuples, found 5'):
             res = con.sql("""select too_many_tuples(5)""").fetchall()
 
+    def test_arrow_side_effects(self, duckdb_cursor):
+        import random as r
+
+        def random_arrow(x):
+            if not hasattr(random_arrow, 'data'):
+                random_arrow.data = 0
+
+            input = x.to_pylist()
+            val = random_arrow.data
+            output = [val + i for i in range(len(input))]
+            random_arrow.data += len(input)
+            return output
+
+        duckdb_cursor.create_function(
+            "random_arrow",
+            random_arrow,
+            [VARCHAR],
+            INTEGER,
+            side_effects=True,
+            type="arrow",
+        )
+        res = duckdb_cursor.query("SELECT random_arrow('') FROM range(10)").fetchall()
+        assert res == [(0,), (1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,), (9,)]
+
     def test_return_struct(self):
         def return_struct(col):
             con = duckdb.connect()

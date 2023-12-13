@@ -34,16 +34,14 @@ DBConfig::DBConfig() {
 	options.duckdb_api = StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
 }
 
-DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) : DBConfig::DBConfig() {
+DBConfig::DBConfig(bool read_only) : DBConfig::DBConfig() {
 	if (read_only) {
 		options.access_mode = AccessMode::READ_ONLY;
 	}
-	for (auto &kv : config_dict) {
-		string key = kv.first;
-		string val = kv.second;
-		auto opt_val = Value(val);
-		DBConfig::SetOptionByName(key, opt_val);
-	}
+}
+
+DBConfig::DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_only) : DBConfig::DBConfig(read_only) {
+	SetOptionsByName(config_dict);
 }
 
 DBConfig::~DBConfig() {
@@ -117,15 +115,6 @@ TransactionManager &TransactionManager::Get(AttachedDatabase &db) {
 
 ConnectionManager &ConnectionManager::Get(DatabaseInstance &db) {
 	return db.GetConnectionManager();
-}
-
-ClientContext *ConnectionManager::GetConnection(DatabaseInstance *db) {
-	for (auto &conn : connections) {
-		if (conn.first->db.get() == db) {
-			return conn.first;
-		}
-	}
-	return nullptr;
 }
 
 ConnectionManager &ConnectionManager::Get(ClientContext &context) {
@@ -316,6 +305,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (config.options.access_mode == AccessMode::UNDEFINED) {
 		config.options.access_mode = AccessMode::READ_WRITE;
 	}
+	config.extension_parameters = new_config.extension_parameters;
 	if (new_config.file_system) {
 		config.file_system = std::move(new_config.file_system);
 	} else {

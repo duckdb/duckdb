@@ -140,7 +140,7 @@ string S3FileSystem::UrlEncode(const string &input, bool encode_slash) {
 }
 
 void AWSEnvironmentCredentialsProvider::SetExtensionOptionValue(string key, const char *env_var_name) {
-	static char *evar;
+	char *evar;
 
 	if ((evar = std::getenv(env_var_name)) != NULL) {
 		if (StringUtil::Lower(evar) == "false") {

@@ -549,6 +549,8 @@ SELECT text(1.0, 3.5)
 
 statement error
 SELECT text('hello', 1.0)
+----
 
 statement error
 SELECT text('hello', '@')
+----

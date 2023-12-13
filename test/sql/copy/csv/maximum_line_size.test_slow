@@ -13,6 +13,7 @@ foreach parallel_option true false
 # Linesize exceeds maximum_line_size
 statement error
 insert into test select * from read_csv('test/sql/copy/csv/data/test/test_long_line.csv', columns={'a': 'INTEGER',  'b': 'VARCHAR', 'c': 'INTEGER'}, maximum_line_size=0, parallel=${parallel_option}});
+----
 
 # Single line too long
 # "a".repeat(2 * 1024 * 1024 + 10);

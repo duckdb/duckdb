@@ -36,6 +36,13 @@ bool BoundWindowExpression::Equals(const BaseExpression &other_p) const {
 	if (exclude_clause != other.exclude_clause) {
 		return false;
 	}
+
+	// If there are aggregates, check they are equal
+	if (aggregate.get() != other.aggregate.get()) {
+		if (!aggregate || !other.aggregate || *aggregate != *other.aggregate) {
+			return false;
+		}
+	}
 	// check if the child expressions are equivalent
 	if (!Expression::ListEquals(children, other.children)) {
 		return false;
@@ -54,9 +61,39 @@ bool BoundWindowExpression::Equals(const BaseExpression &other_p) const {
 	return KeysAreCompatible(other);
 }
 
+bool BoundWindowExpression::PartitionsAreEquivalent(const BoundWindowExpression &other) const {
+	// Partitions are not order sensitive.
+	if (partitions.size() != other.partitions.size()) {
+		return false;
+	}
+	// TODO: Should partitions be an expression_set_t?
+	expression_set_t others;
+	for (const auto &partition : other.partitions) {
+		others.insert(*partition);
+	}
+	for (const auto &partition : partitions) {
+		if (!others.count(*partition)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+idx_t BoundWindowExpression::GetSharedOrders(const BoundWindowExpression &other) const {
+	const auto overlap = MinValue<idx_t>(orders.size(), other.orders.size());
+
+	idx_t result = 0;
+	for (; result < overlap; ++result) {
+		if (!orders[result].Equals(other.orders[result])) {
+			return false;
+		}
+	}
+
+	return result;
+}
+
 bool BoundWindowExpression::KeysAreCompatible(const BoundWindowExpression &other) const {
-	// check if the partitions are equivalent
-	if (!Expression::ListEquals(partitions, other.partitions)) {
+	if (!PartitionsAreEquivalent(other)) {
 		return false;
 	}
 	// check if the orderings are equivalent

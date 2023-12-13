@@ -258,7 +258,7 @@ query III nosort left_equality
 SELECT p.key, p.ts, e.value
 FROM probes p ASOF LEFT JOIN events e
   ON p.key = e.key AND p.ts >= e.begin
-ORDER BY 1, 2 ASC NULLS FIRST
+ORDER BY 1, 2, 3 ASC NULLS FIRST
 ----
 
 # LEFT USING with equality

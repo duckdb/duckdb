@@ -50,6 +50,7 @@ CREATE TABLE vals2 (i INTEGER, j INTEGER)
 
 statement error
 COPY vals2 FROM 's3://test-bucket/parquet_glob_s3/nonexistentfolderblablabla/t*.parquet' (FORMAT PARQUET);
+----
 
 # Test variety of urls with both url styles
 foreach urlstyle path vhost
@@ -91,6 +92,7 @@ select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/with*/*.parq
 # schema mismatch in parquet glob
 statement error
 select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/notglob/*.parquet')
+----
 
 # parallel testing
 statement ok

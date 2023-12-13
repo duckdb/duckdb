@@ -45,16 +45,20 @@ SELECT * FROM tbl1
 
 statement error con2
 SELECT * FROM tbl2
+----
 
 statement error con2
 SELECT * FROM tbl3
+----
 
 statement error con2
 SELECT * FROM tbl4
+----
 
 # con3 sees ONLY tbl2
 statement error con3
 SELECT * FROM tbl1
+----
 
 query I con3
 SELECT * FROM tbl2
@@ -64,16 +68,20 @@ SELECT * FROM tbl2
 
 statement error con3
 SELECT * FROM tbl3
+----
 
 statement error con3
 SELECT * FROM tbl4
+----
 
 # con4 sees ONLY tbl3
 statement error con4
 SELECT * FROM tbl1
+----
 
 statement error con4
 SELECT * FROM tbl2
+----
 
 query I con4
 SELECT * FROM tbl3
@@ -83,16 +91,20 @@ SELECT * FROM tbl3
 
 statement error con4
 SELECT * FROM tbl4
+----
 
 # con1 sees ONLY tbl4
 statement error con1
 SELECT * FROM tbl1
+----
 
 statement error con1
 SELECT * FROM tbl2
+----
 
 statement error con1
 SELECT * FROM tbl3
+----
 
 query I con1
 SELECT * FROM tbl4
