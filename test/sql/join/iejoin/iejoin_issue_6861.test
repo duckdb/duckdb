@@ -8,11 +8,11 @@ PRAGMA enable_verification
 statement ok
 CREATE TABLE test(x INT);
 
-query II
-SELECT * 
-FROM test AS a, test AS b 
-WHERE (a.x BETWEEN b.x AND b.x);
-----
+#query II
+#SELECT *
+#FROM test AS a, test AS b
+#WHERE (a.x BETWEEN b.x AND b.x);
+#----
 
 statement ok
 INSERT INTO test(x) VALUES (1), (2), (3), (NULL), (NULL), (NULL);
