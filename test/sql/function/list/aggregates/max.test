@@ -5,6 +5,7 @@
 # incorrect usage
 statement error
 SELECT list_max()
+----
 
 # test different types
 

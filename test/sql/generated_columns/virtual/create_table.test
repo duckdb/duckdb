@@ -8,6 +8,7 @@ PRAGMA enable_verification
 # Creating tables with only generated columns is not supported
 statement error
 CREATE TEMP TABLE t0(c0 AS (1));
+----
 
 # Function doesn't exist
 statement error
@@ -42,6 +43,7 @@ SELECT * FROM tbl
 # Cant convert 'string' to boolean
 statement error
 INSERT INTO tbl VALUES ('string', 5, 12);
+----
 
 # Expression contains a subquery
 statement error
@@ -51,6 +53,7 @@ CREATE TABLE unit (
     price INTEGER,
     amount_sold INTEGER,
 );
+----
 
 # Duplicate column definition
 statement error
@@ -60,6 +63,7 @@ CREATE TABLE unit (
     price INTEGER,
     amount_sold INTEGER,
 );
+----
 
 statement ok
 CREATE TABLE unit (
@@ -83,3 +87,4 @@ ALTER TABLE unit DROP COLUMN total_profit;
 # We can now no longer select it
 statement error
 SELECT total_profit FROM unit;
+----

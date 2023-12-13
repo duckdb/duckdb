@@ -28,6 +28,7 @@ ALTER TABLE unit RENAME COLUMN price TO value
 # No CASCADE provided
 statement error
 ALTER TABLE unit DROP COLUMN value;
+----
 
 query IIIII
 SELECT * FROM unit

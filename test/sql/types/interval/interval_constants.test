@@ -82,49 +82,62 @@ SELECT interval 2 seconds, interval 2 second;
 # 2 years 10 months
 statement error
 SELECT interval '2 10' years to months
+----
 
 # 2 days 10 hours
 statement error
 SELECT interval '2 10' days to hours
+----
 
 # 12 days 15:06:00
 statement error
 SELECT interval '12 15:06' days to minutes
+----
 
 # 12 days 15:06:04.123
 statement error
 SELECT interval '12 15:06:04.123' days to seconds
+----
 
 # 12:30:00
 statement error
 SELECT interval '12:30' hours to minutes
+----
 
 # 15:06:04.123
 statement error
 SELECT interval '15:06:04.123' hours to seconds
+----
 
 # 00:12:30
 statement error
 SELECT interval '12:30' minutes to seconds
+----
 
 # test out of range interval constants
 statement error
 SELECT interval '99999999999999' years;
+----
 
 statement error
 SELECT interval '214748364' years;
+----
 
 statement error
 SELECT interval '9223372036854775807' hours;
+----
 
 statement error
 SELECT interval '9223372036854775807' minutes;
+----
 
 statement error
 SELECT interval '9223372036854775807' seconds;
+----
 
 statement error
 SELECT interval '9223372036854775807' milliseconds;
+----
 
 # milliseconds
 query II

@@ -17,6 +17,8 @@ INSERT INTO t0(c0) VALUES (0);
 
 statement error
 SELECT t0.c0 AND (t0.c0<<64) FROM t0;
+----
 
 statement error
 SELECT * FROM t0 WHERE t0.c0 AND (t0.c0<<64);
+----

@@ -95,6 +95,7 @@ select '1999-12-31 16:00:00-08'::timestamptz + interval 2400 hours
 
 statement error
 select 'epoch'::timestamptz + '9223372036854775000 microseconds'::interval
+----
 
 query I
 select 'epoch'::timestamptz + '9223372036854774999 microseconds'::interval
@@ -103,6 +104,7 @@ select 'epoch'::timestamptz + '9223372036854774999 microseconds'::interval
 
 statement error
 select 'epoch'::timestamptz + '-9223372022400001001 microseconds'::interval
+----
 
 query I
 select 'epoch'::timestamptz + '-9223372022400001000 microseconds'::interval
@@ -152,6 +154,7 @@ select interval 2400 hours + '1999-12-31 16:00:00-08'::timestamptz
 
 statement error
 select '9223372036854775000 microseconds'::interval + 'epoch'::timestamptz
+----
 
 query I
 select '9223372036854774999 microseconds'::interval + 'epoch'::timestamptz
@@ -160,6 +163,7 @@ select '9223372036854774999 microseconds'::interval + 'epoch'::timestamptz
 
 statement error
 select '-9223372022400001001 microseconds'::interval + 'epoch'::timestamptz
+----
 
 query I
 select  '-9223372022400001000 microseconds'::interval + 'epoch'::timestamptz
@@ -230,6 +234,7 @@ select '2000-04-09 17:00:00-07'::timestamptz - interval 2400 hours
 
 statement error
 select 'epoch'::timestamptz - '9223372022400001001 microseconds'::interval
+----
 
 query I
 select 'epoch'::timestamptz - '9223372022400001000 microseconds'::interval
@@ -316,36 +321,47 @@ WHERE label = 'tsmin'
 # Backwards from the minimum
 statement error
 SELECT ts + (INTERVAL (-1) year) FROM limits WHERE label = 'tsmin';
+----
 
 statement error
 SELECT ts + (INTERVAL (-1) month) FROM limits WHERE label = 'tsmin';
+----
 
 statement error
 SELECT ts + (INTERVAL (-15) month) FROM limits WHERE label = 'tsmin';
+----
 
 statement error
 SELECT ts + (INTERVAL (-1) day) FROM limits WHERE label = 'tsmin';
+----
 
 statement error
 SELECT ts + (INTERVAL (-40) day) FROM limits WHERE label = 'tsmin';
+----
 
 statement error
 SELECT ts + (INTERVAL (-1) hour) FROM limits WHERE label = 'tsmin';
+----
 
 statement error
 SELECT ts + (INTERVAL (-14) hour) FROM limits WHERE label = 'tsmin';
+----
 
 statement error
 SELECT ts + (INTERVAL (-1) minute) FROM limits WHERE label = 'tsmin';
+----
 
 statement error
 SELECT ts + (INTERVAL (-72) minute) FROM limits WHERE label = 'tsmin';
+----
 
 statement error
 SELECT ts + (INTERVAL (-1) second) FROM limits WHERE label = 'tsmin';
+----
 
 statement error
 SELECT ts + (INTERVAL (-118) second) FROM limits WHERE label = 'tsmin';
+----
 
 # Succeeds because we are below the precision of UDate
 query I
@@ -355,17 +371,21 @@ SELECT ts + (INTERVAL (-1) millisecond) FROM limits WHERE label = 'tsmin';
 
 statement error
 SELECT ts + (INTERVAL (-150) millisecond) FROM limits WHERE label = 'tsmin';
+----
 
 statement error
 SELECT ts + (INTERVAL (-1) microsecond) FROM limits WHERE label = 'tsmin';
+----
 
 statement error
 SELECT ts + (INTERVAL (-485) microsecond) FROM limits WHERE label = 'tsmin';
 statement error
 SELECT ts + INTERVAL (-150) millisecond FROM limits WHERE label = 'tsmin';
+----
 
 statement error
 SELECT ts + INTERVAL (-485) microsecond FROM limits WHERE label = 'tsmin';
+----
 
 # Backward from the maximum
 # UDate loses ms accuracy when close to the upper limit,
@@ -391,58 +411,76 @@ WHERE label = 'tsmax'
 
 statement error
 SELECT ts + (INTERVAL (-485) microsecond) FROM limits WHERE label = 'tsmax';
+----
 
 statement error
 SELECT ts + (INTERVAL (-1) microsecond) FROM limits WHERE label = 'tsmax';
+----
 
 statement error
 SELECT ts + (INTERVAL (-1) millisecond) FROM limits WHERE label = 'tsmax';
+----
 
 # Forward from the maximum
 statement error
 SELECT ts + (INTERVAL 1 year) FROM limits WHERE label = 'tsmax';
+----
 
 statement error
 SELECT ts + (INTERVAL 1 month) FROM limits WHERE label = 'tsmax';
+----
 
 statement error
 SELECT ts + (INTERVAL 13 month) FROM limits WHERE label = 'tsmax';
+----
 
 statement error
 SELECT ts + (INTERVAL 1 day) FROM limits WHERE label = 'tsmax';
+----
 
 statement error
 SELECT ts + (INTERVAL 32 day) FROM limits WHERE label = 'tsmax';
+----
 
 statement error
 SELECT ts + (INTERVAL 1 hour) FROM limits WHERE label = 'tsmax';
+----
 
 statement error
 SELECT ts + (INTERVAL 11 hour) FROM limits WHERE label = 'tsmax';
+----
 
 statement error
 SELECT ts + (INTERVAL 1 minute) FROM limits WHERE label = 'tsmax';
+----
 
 statement error
 SELECT ts + (INTERVAL 6 minute) FROM limits WHERE label = 'tsmax';
+----
 
 statement error
 SELECT ts + (INTERVAL 1 second) FROM limits WHERE label = 'tsmax';
+----
 
 statement error
 SELECT ts + (INTERVAL 23 second) FROM limits WHERE label = 'tsmax';
+----
 
 statement error
 SELECT ts + (INTERVAL 1 millisecond) FROM limits WHERE label = 'tsmax';
+----
 
 statement error
 SELECT ts + (INTERVAL 910 millisecond) FROM limits WHERE label = 'tsmax';
+----
 
 statement error
 SELECT ts + (INTERVAL 1 microsecond) FROM limits WHERE label = 'tsmax';
+----
 
 statement error
 SELECT ts + (INTERVAL 612 microsecond) FROM limits WHERE label = 'tsmax';
+----
 
 # DST arithmetic
 statement ok

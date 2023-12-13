@@ -1094,54 +1094,71 @@ select w, t, timezone, time_bucket(w, t, timezone) from timestamps_tz;
 
 statement error
 select time_bucket('-3 hours'::interval, '2019-04-05 00:00:00+03'::timestamptz);
+----
 
 statement error
 select time_bucket('-3 hours'::interval, '2019-04-05 00:00:00+03'::timestamptz, '1 hour 30 minutes'::interval);
+----
 
 statement error
 select time_bucket('-3 hours'::interval, '2019-04-05 00:00:00+03'::timestamptz, '2019-04-05 00:00:00+03'::timestamptz);
+----
 
 statement error
 select time_bucket('-1 month'::interval, '2019-04-05 00:00:00-11'::timestamptz);
+----
 
 statement error
 select time_bucket('-1 month'::interval, '2019-04-05 00:00:00-11'::timestamptz, '1 hour 30 minutes'::interval);
+----
 
 statement error
 select time_bucket('-1 month'::interval, '2019-04-05 00:00:00-11'::timestamptz, '2018-04-05 00:00:00+11'::timestamptz);
+----
 
 statement error
 select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05 00:00:00+07'::timestamptz);
+----
 
 statement error
 select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05 00:00:00+07'::timestamptz, '1 hour 30 minutes'::interval);
+----
 
 statement error
 select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05 00:00:00+07'::timestamptz, '2018-05-05 00:00:00+07'::timestamptz);
+----
 
 statement error
 select time_bucket('1 month 1 day'::interval, '2018-05-05 00:00:00+02'::timestamptz);
+----
 
 statement error
 select time_bucket('1 month 1 day'::interval, '2018-05-05 00:00:00+02'::timestamptz, '1 hour 30 minutes'::interval);
+----
 
 statement error
 select time_bucket('1 month 1 day'::interval, '2018-05-05 00:00:00+02'::timestamptz, '2018-05-05 00:00:00+02'::timestamptz);
+----
 
 statement error
 select time_bucket('3 days'::interval, '2019-05-05 00:00:00+09'::timestamptz, '2000000000 months'::interval);
+----
 
 statement error
 select time_bucket('3 days'::interval, '2019-05-05 00:00:00+09'::timestamptz, '-2000000000 months'::interval);
+----
 
 statement error
 select time_bucket('3 months'::interval, '2019-05-05 00:00:00+00'::timestamptz, '2000000000 months'::interval);
+----
 
 statement error
 select time_bucket('3 months'::interval, '2019-05-05 00:00:00+00'::timestamptz, '-2000000000 months'::interval);
+----
 
 statement error
 select time_bucket('1 microseconds'::interval, '290279-12-24 (BC) 19:59:05.224191+00'::timestamptz);
+----
 
 query I
 select time_bucket('1 microseconds'::interval, '290279-12-24 (BC) 19:59:05.224192+00'::timestamptz);
@@ -1150,6 +1167,7 @@ select time_bucket('1 microseconds'::interval, '290279-12-24 (BC) 19:59:05.22419
 
 statement error
 select time_bucket('1 microseconds'::interval, '294247-01-10 04:00:54.775+00'::timestamptz);
+----
 
 query I
 select time_bucket('1 microseconds'::interval, '294247-01-10 04:00:54.774999+00'::timestamptz);

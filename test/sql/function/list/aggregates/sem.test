@@ -5,6 +5,7 @@
 # incorrect usage
 statement error
 select list_sem()
+----
 
 query I
 select list_sem([1])

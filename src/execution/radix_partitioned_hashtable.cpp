@@ -647,9 +647,18 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	}
 
 	if (!ht) {
-		// Create a HT with sufficient capacity
+		// This capacity would always be sufficient for all data
 		const auto capacity = GroupedAggregateHashTable::GetCapacityForCount(partition.data->Count());
-		ht = sink.radix_ht.CreateHT(gstate.context, capacity, 0);
+
+		// However, we will limit the initial capacity so we don't do a huge over-allocation
+		const idx_t n_threads = TaskScheduler::GetScheduler(gstate.context).NumberOfThreads();
+		const idx_t memory_limit = BufferManager::GetBufferManager(gstate.context).GetMaxMemory();
+		const idx_t thread_limit = 0.6 * memory_limit / n_threads;
+		const auto size_per_entry = partition.data->GetLayout().GetRowWidth() +
+		                            GroupedAggregateHashTable::LOAD_FACTOR * sizeof(aggr_ht_entry_t);
+		const auto capacity_limit = NextPowerOfTwo(thread_limit / size_per_entry);
+
+		ht = sink.radix_ht.CreateHT(gstate.context, MinValue<idx_t>(capacity, capacity_limit), 0);
 	} else {
 		// We may want to resize here to the size of this partition, but for now we just assume uniform partition sizes
 		ht->InitializePartitionedData();
