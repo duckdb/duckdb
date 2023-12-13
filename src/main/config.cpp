@@ -183,6 +183,14 @@ void DBConfig::SetOptionByName(const string &name, const Value &value) {
 	}
 }
 
+void DBConfig::SetOptionsByName(const case_insensitive_map_t<Value> &values) {
+	for (auto &kv : values) {
+		auto &name = kv.first;
+		auto &value = kv.second;
+		SetOptionByName(name, value);
+	}
+}
+
 void DBConfig::SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value) {
 	lock_guard<mutex> l(config_lock);
 	if (!option.set_global) {

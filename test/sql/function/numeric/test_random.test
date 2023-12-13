@@ -89,9 +89,11 @@ SELECT COUNT(*) FROM (SELECT a FROM t1 JOIN t2 ON (a=b) JOIN t3 ON (b=c)) s1
 # incorrect usage of setseed
 statement error
 select setseed(1.1)
+----
 
 statement error
 select setseed(-1.1)
+----
 
 # we can use setseed with a table as well
 statement ok

@@ -33,6 +33,7 @@ CREATE TABLE tbl2 (
 	circular INTEGER AS (dependency),
 	dependency INTEGER AS (circular)
 );
+----
 
 # Type is resolved, regardless of order
 statement ok

@@ -70,16 +70,20 @@ SELECT * FROM blobs
 # Insert invalid hex strings (invalid hex chars: G, H, I)
 statement error
 INSERT INTO blobs VALUES('\xGA\xFF\xAA')
+----
 
 # Insert invalid hex strings (odd # of chars)
 statement error
 INSERT INTO blobs VALUES('\xA')
+----
 
 statement error
 INSERT INTO blobs VALUES('\xAA\xA')
+----
 
 statement error
 INSERT INTO blobs VALUES('blablabla\x')
+----
 
 statement ok
 checkpoint

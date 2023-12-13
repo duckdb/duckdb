@@ -52,6 +52,7 @@ DROP MACRO TABLE xt;
 
 statement error
 SELECT * from my_seq(0,10,2);
+----
 
 # create another macro to check  the WAL
 statement ok
@@ -70,9 +71,11 @@ restart
 
 statement error
 SELECT * FROM xt(100, 'joe');
+----
 
 statement error
 SELECT * FROM my_seq(0,3,2);
+----
 
 query I
 SELECT * from my_range(2);
