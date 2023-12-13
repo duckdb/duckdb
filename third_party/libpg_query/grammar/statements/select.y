@@ -1005,6 +1005,24 @@ from_list_opt_comma:
 			| from_list ','							{ $$ = $1; }
 		;
 
+
+
+
+alias_prefix_colon_clause:
+			ColIdOrString ':'
+				{
+					$$ = makeNode(PGAlias);
+					$$->aliasname = $1;
+				}
+				/*| ColIdOrString '(' name_list_opt_comma ')' ':' // TODO
+                {
+                    $$ = makeNode(PGAlias);
+                    $$->aliasname = $1;
+                    $$->colnames = $3;
+                }*/
+		;
+
+
 /*
  * table_ref is where an alias clause can be attached.
  */
@@ -1014,7 +1032,13 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					$1->sample = $3;
 					$$ = (PGNode *) $1;
 				}
-			| func_table func_alias_clause opt_tablesample_clause
+			| alias_prefix_colon_clause relation_expr opt_tablesample_clause
+                {
+                    $2->alias = $1;
+                    $2->sample = $3;
+                    $$ = (PGNode *) $2;
+                }
+            | func_table func_alias_clause opt_tablesample_clause
 				{
 					PGRangeFunction *n = (PGRangeFunction *) $1;
 					n->alias = (PGAlias*) linitial($2);
