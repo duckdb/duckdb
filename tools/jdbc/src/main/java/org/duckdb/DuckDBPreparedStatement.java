@@ -195,14 +195,12 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public ResultSet executeQuery(String sql) throws SQLException {
-        requireNonBatch();
         prepare(sql);
         return executeQuery();
     }
 
     @Override
     public int executeUpdate(String sql) throws SQLException {
-        requireNonBatch();
         prepare(sql);
         return executeUpdate();
     }
