@@ -7,6 +7,7 @@ require no_extension_autoloading
 # zstd requires the parquet extension
 statement error
 CREATE TABLE test_zst AS SELECT * FROM read_csv('test/sql/copy/csv/broken/test.csv.zst', AUTO_DETECT=TRUE);
+----
 
 statement ok
 CREATE TABLE test_zst(a INTEGER, b INTEGER, c INTEGER, d VARCHAR, e VARCHAR);
@@ -14,18 +15,23 @@ CREATE TABLE test_zst(a INTEGER, b INTEGER, c INTEGER, d VARCHAR, e VARCHAR);
 # what if we try to load this with random other compressions
 statement error
 COPY test_zst FROM 'test/sql/copy/csv/broken/test.csv.zst' (COMPRESSION ZSTD);
+----
 
 statement error
 COPY test_zst FROM 'test/sql/copy/csv/broken/test.csv.zst' (COMPRESSION GZIP);
+----
 
 statement error
 COPY test_zst FROM 'test/sql/copy/csv/broken/test.csv.zst' (COMPRESSION NONE);
+----
 
 statement error
 COPY test_zst FROM 'test/sql/copy/csv/broken/test.csv.zst' (COMPRESSION INFER);
+----
 
 statement error
 COPY test_zst FROM 'test/sql/copy/csv/broken/test.csv.zst' (COMPRESSION UNKNOWN);
+----
 
 # zstd works once we load the parquet extension
 require parquet
@@ -39,6 +45,7 @@ COPY test_zst FROM 'test/sql/copy/csv/broken/test.csv.zst' (COMPRESSION ZSTD, AU
 # what if we try to load a gzip file with zstd
 statement error
 COPY test_zst FROM 'test/sql/copy/csv/data/lineitem1k.tbl.gz' (COMPRESSION ZSTD);
+----
 
 # we can read/write a ZSTD file also without the extension if we specify the compression type
 statement ok

@@ -27,12 +27,15 @@ SELECT list_unique([]) WHERE 1 = 0
 
 statement error
 SELECT list_unique()
+----
 
 statement error
 SELECT list_unique(*)
+----
 
 statement error
 SELECT list_unique([1, 2], 2)
+----
 
 # test incorrect parameter type
 
@@ -40,6 +43,7 @@ foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint us
 
 statement error
 SELECT list_unique(NULL::${type})
+----
 
 endloop
 

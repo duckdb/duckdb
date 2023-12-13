@@ -18,12 +18,15 @@ select regr_avgx(1,1)
 #Corner cases
 statement error
 select regr_avgx()
+----
 
 statement error
 select regr_avgx(*)
+----
 
 statement error
 select regr_avgy()
+----
 
 query I
 select regr_avgy(NULL,NULL)
@@ -37,9 +40,11 @@ select regr_avgy(1,1)
 
 statement error
 select regr_avgy(*)
+----
 
 statement error
 select regr_count()
+----
 
 query I
 select regr_count(NULL,NULL)
@@ -53,9 +58,11 @@ select regr_count(1,1)
 
 statement error
 select regr_count(*)
+----
 
 statement error
 select regr_slope()
+----
 
 query I
 select regr_slope(NULL,NULL)
@@ -69,9 +76,11 @@ NULL
 
 statement error
 select regr_slope(*)
+----
 
 statement error
 select regr_r2()
+----
 
 query I
 select regr_r2(NULL,NULL)
@@ -86,9 +95,11 @@ NULL
 #Corner cases
 statement error
 select regr_r2(0, 1e230*i) from range(5) tbl(i);
+----
 
 statement error
 select regr_r2(1e230*i, i) from range(5) tbl(i);
+----
 
 query I
 select regr_r2(1e230*i, 0) from range(5) tbl(i);
@@ -102,12 +113,15 @@ select regr_r2(0, i) from range(5) tbl(i);
 
 statement error
 select regr_r2(*)
+----
 
 statement error
 select regr_sxx()
+----
 
 statement error
 select regr_sxx(0, 2e230*i) from range(5) tbl(i)
+----
 
 query I
 select regr_sxx(2e230*i, 0) from range(5) tbl(i)
@@ -126,6 +140,7 @@ select regr_sxx(1,1)
 
 statement error
 select regr_syy()
+----
 
 query I
 select regr_syy(NULL,NULL)
@@ -139,9 +154,11 @@ select regr_syy(1,1)
 
 statement error
 select regr_sxy(*)
+----
 
 statement error
 select regr_sxy()
+----
 
 query I
 select regr_sxy(NULL,NULL)
@@ -155,9 +172,11 @@ select regr_sxy(1,1)
 
 statement error
 select regr_syy(*)
+----
 
 statement error
 select regr_intercept()
+----
 
 query I
 select regr_intercept(NULL,NULL)
@@ -172,6 +191,7 @@ NULL
 
 statement error
 select regr_intercept(*)
+----
 
 statement ok
 create  table aggr(k int, v decimal(10,2), v2 decimal(10, 2));

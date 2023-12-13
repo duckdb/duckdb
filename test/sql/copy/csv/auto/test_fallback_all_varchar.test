@@ -22,6 +22,7 @@ loop i 1 100
 # CSV file with irregularity in first column and small sample size
 statement error
 CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/test_fallback.csv', SAMPLE_SIZE=1);
+----
 
 endloop
 # CSV file with irregularity in first column, small sample size and fallback activated

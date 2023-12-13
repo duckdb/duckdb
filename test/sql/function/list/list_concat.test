@@ -43,6 +43,7 @@ SELECT list_concat([1, 2], [])
 
 statement error
 SELECT list_concat([1, 2], 3)
+----
 
 # operators
 query T
@@ -127,6 +128,7 @@ SELECT i, list_concat(j, k) FROM lists
 
 statement error
 SELECT i, list_concat(j, cast(k AS VARCHAR)) FROM lists
+----
 
 # list_append(l, e) is an alias for list_concat(l, list_value(e))
 query T

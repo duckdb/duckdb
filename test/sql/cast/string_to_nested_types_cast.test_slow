@@ -43,6 +43,7 @@ SELECT '[ok,happy]'::MOOD[]
 
 statement error
 SELECT '[nothappy]'::MOOD[]
+----
 
 query I
 SELECT CAST(LIST(date)::VARCHAR AS DATE[]) FROM test_all_types();
@@ -136,6 +137,7 @@ SELECT '{a: ok, b: happy}'::STRUCT(a MOOD, b MOOD)
 
 statement error
 SELECT '{a: nothappy}'::STRUCT(a MOOD)
+----
 
 query I
 SELECT CAST(struct_pack(A=>date)::VARCHAR AS STRUCT(A DATE)) FROM test_all_types();

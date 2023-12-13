@@ -450,20 +450,24 @@ INSERT INTO multiples VALUES
 
 statement error
 SELECT strptime(s, f) FROM multiples;
+----
 
 # Invalid format
 statement error
 select strptime('2022-03-05 17:59:17.877 CST', '%C');
+----
 
 # Parse error
 statement error
 select strptime('2022-03-05 17:59:17.877 CST', '%Y-%m-%d %H:%M:%S.%g');
+----
 
 #
 # Cast VARCHAR => TIMESTAMPTZ
 #
 statement error
 select 'fnord'::timestamptz;
+----
 
 query I
 select TRY_CAST('fnord' AS timestamptz);

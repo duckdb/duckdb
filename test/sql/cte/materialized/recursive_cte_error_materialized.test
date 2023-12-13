@@ -28,3 +28,4 @@ WITH RECURSIVE tag_hierarchy(id, source, path, target) AS materialized (
 SELECT source, path, target
 FROM tag_hierarchy
 ;
+----

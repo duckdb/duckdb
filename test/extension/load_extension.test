@@ -11,12 +11,15 @@ PRAGMA enable_verification
 
 statement error
 LOAD 'asdf';
+----
 
 statement error
 LOAD 'Makefile';
+----
 
 statement error
 LOAD NULL;
+----
 
 statement ok
 LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
@@ -41,9 +44,11 @@ QUACK
 
 statement error
 QUAC
+----
 
 statement error
 QUACK NOT QUACK
+----
 
 query I
 SELECT contains(loaded_extensions(), 'loadable_extension_demo')
