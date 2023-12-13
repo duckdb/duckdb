@@ -1,6 +1,6 @@
 # name: benchmark/micro/lambdas/list_reduce/list_length_2.benchmark
 # description: list_reduce with lists that have a length of 2 benchmark
-# group: [lambdas]
+# group: [lambdas] [list_reduce]
 
 name list length 2
 group micro
