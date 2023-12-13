@@ -8,29 +8,36 @@ namespace duckdb {
 struct ReduceExecuteInfo {
 	ReduceExecuteInfo(LambdaFunctions::LambdaInfo &info, ClientContext &context) : left_slice(*info.child_vector) {
 		SelectionVector left_vector(info.row_count);
-		active_rows.resize(info.row_count);
+		active_rows.Resize(0, info.row_count);
+		active_rows.SetAllValid(info.row_count);
 
 		idx_t old_count = 0;
 		idx_t new_count = 0;
 
 		// Initialize the left vector from list entries and the active rows
-		auto it = active_rows.begin();
-		while (it != active_rows.end()) {
-			auto list_column_format_index = info.list_column_format.sel->get_index(old_count);
-			if (info.list_column_format.validity.RowIsValid(list_column_format_index)) {
-				if (info.list_entries[list_column_format_index].length == 0) {
-					throw ParameterNotAllowedException("Cannot perform list_reduce on an empty input list");
-				}
-				left_vector.set_index(new_count, info.list_entries[list_column_format_index].offset);
-				active_rows[new_count] = old_count;
-				new_count++;
-				it++;
-			} else {
-				// Remove the invalid rows
-				info.result_validity->SetInvalid(old_count);
-				active_rows.erase(it);
+		auto data = active_rows.GetData();
+
+		for (idx_t entry_idx = 0; old_count < info.row_count; entry_idx++) {
+			if (data[entry_idx] == 0) {
+				old_count += 64;
+				continue;
 			}
-			old_count++;
+
+			for (idx_t j = 0; j < 64 && entry_idx + j < info.row_count; j++) {
+				auto list_column_format_index = info.list_column_format.sel->get_index(old_count);
+				if (info.list_column_format.validity.RowIsValid(list_column_format_index)) {
+					if (info.list_entries[list_column_format_index].length == 0) {
+						throw ParameterNotAllowedException("Cannot perform list_reduce on an empty input list");
+					}
+					left_vector.set_index(new_count, info.list_entries[list_column_format_index].offset);
+					new_count++;
+				} else {
+					// Remove the invalid rows
+					info.result_validity->SetInvalid(old_count);
+					active_rows.SetInvalid(old_count);
+				}
+				old_count++;
+			}
 		}
 
 		left_slice.Slice(left_vector, new_count);
@@ -47,41 +54,54 @@ struct ReduceExecuteInfo {
 		expr_executor = make_uniq<ExpressionExecutor>(context, *info.lambda_expr);
 	};
 
-	vector<idx_t> active_rows;
+	ValidityMask active_rows;
 	Vector left_slice;
 	unique_ptr<ExpressionExecutor> expr_executor;
 	vector<LogicalType> input_types;
 };
 
-static void ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFunctions::LambdaInfo &info,
+static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFunctions::LambdaInfo &info,
                           DataChunk &result_chunk) {
-	SelectionVector right_sel(execute_info.active_rows.size());
-	SelectionVector left_sel(execute_info.active_rows.size());
-	SelectionVector active_rows_sel(execute_info.active_rows.size());
+	SelectionVector right_sel(STANDARD_VECTOR_SIZE);
+	SelectionVector left_sel(STANDARD_VECTOR_SIZE);
+	SelectionVector active_rows_sel(STANDARD_VECTOR_SIZE);
 
 	idx_t old_count = 0;
 	idx_t new_count = 0;
+	idx_t valid_count = 0;
 
 	// create selection vectors for the left and right slice
-	auto it = execute_info.active_rows.begin();
-	while (it != execute_info.active_rows.end()) {
-		auto list_column_format_index = info.list_column_format.sel->get_index(*it);
-		if (info.list_entries[list_column_format_index].length > loops + 1) {
-			right_sel.set_index(new_count, info.list_entries[list_column_format_index].offset + loops + 1);
-			left_sel.set_index(new_count, old_count);
-			active_rows_sel.set_index(new_count, *it);
+	auto data = execute_info.active_rows.GetData();
 
-			new_count++;
-			it++;
-		} else {
-			info.result.SetValue(*it, execute_info.left_slice.GetValue(old_count));
-			execute_info.active_rows.erase(it);
+	for (idx_t entry_idx = 0; old_count < info.row_count; entry_idx++) {
+		if (data[entry_idx] == 0) {
+			old_count += 64;
+			continue;
 		}
-		old_count++;
+
+		for (idx_t j = 0; j < 64 && entry_idx + j < info.row_count; j++) {
+			if (!execute_info.active_rows.RowIsValid(old_count)) {
+				old_count++;
+				continue;
+			}
+			auto list_column_format_index = info.list_column_format.sel->get_index(old_count);
+			if (info.list_entries[list_column_format_index].length > loops + 1) {
+				right_sel.set_index(new_count, info.list_entries[list_column_format_index].offset + loops + 1);
+				left_sel.set_index(new_count, valid_count);
+				active_rows_sel.set_index(new_count, old_count);
+
+				new_count++;
+			} else {
+				execute_info.active_rows.SetInvalid(old_count);
+				info.result.SetValue(old_count, execute_info.left_slice.GetValue(valid_count));
+			}
+			old_count++;
+			valid_count++;
+		}
 	}
 
 	if (new_count == 0) {
-		return;
+		return true;
 	}
 
 	// create the index vector
@@ -123,6 +143,7 @@ static void ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 
 	// use the result chunk to update the left slice
 	execute_info.left_slice.Reference(result_chunk.data[0]);
+	return false;
 }
 
 void LambdaFunctions::ListReduceFunction(duckdb::DataChunk &args, duckdb::ExpressionState &state,
@@ -146,12 +167,13 @@ void LambdaFunctions::ListReduceFunction(duckdb::DataChunk &args, duckdb::Expres
 	even_result_chunk.Initialize(Allocator::DefaultAllocator(), {info.lambda_expr->return_type});
 
 	idx_t loops = 0;
+	bool end = false;
 	// Execute reduce until all rows are finished
-	while (!execute_info.active_rows.empty()) {
+	while (!end) {
 		auto &result_chunk = loops % 2 ? odd_result_chunk : even_result_chunk;
 		auto &spare_result_chunk = loops % 2 ? even_result_chunk : odd_result_chunk;
 
-		ExecuteReduce(loops, execute_info, info, result_chunk);
+		end = ExecuteReduce(loops, execute_info, info, result_chunk);
 		spare_result_chunk.Reset();
 
 		loops++;
