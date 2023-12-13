@@ -39,6 +39,7 @@ struct CSVIterator {
 
 	//! Resets the Iterator, only used in the sniffing where scanners must be restarted for dialect/type detection
 	void Reset();
+
 	//! Moves the Iterator to the next positions
 	//! There are three options for the iterator movement.
 	//! 1) We are done with the current file, hence we move to the next file
@@ -57,6 +58,7 @@ struct CSVIterator {
 	idx_t buffer_idx = 0;
 	//! Current Buffer position of the buffer of the file we are scanning
 	idx_t buffer_pos = 0;
+
 	//! How many bytes this CSV Scanner should read
 	//! If higher than the remainder of the file, will read the file in its entirety
 	idx_t bytes_to_read = NumericLimits<idx_t>::Maximum();
@@ -113,14 +115,13 @@ public:
 		OP::Initialize(machine, csv_iterator.buffer_pos);
 		while (cur_buffer_handle) {
 			char *buffer_handle_ptr = cur_buffer_handle->Ptr();
-			while (csv_iterator.buffer_pos < cur_buffer_handle->actual_size) {
+			for (; csv_iterator.buffer_pos < cur_buffer_handle->actual_size; csv_iterator.buffer_pos++) {
 				if (OP::Process(machine, result, buffer_handle_ptr[csv_iterator.buffer_pos], csv_iterator.buffer_pos) ||
 				    csv_iterator.bytes_to_read == 0) {
 					//! Not-Done Processing the File, but the Operator is happy!
 					OP::Finalize(machine, result);
 					return false;
 				}
-				csv_iterator.buffer_pos++;
 				csv_iterator.bytes_to_read--;
 			}
 			cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
@@ -139,18 +140,22 @@ public:
 
 	CSVStateMachineSniffing &GetStateMachineSniff();
 
-	//! Current Numbers of Rows
-	idx_t cur_rows = 0;
-	//! Current Number of Columns
-	idx_t column_count = 1;
+	//! Current position on values
+	idx_t current_value_pos = 0;
 
 	idx_t length = 0;
+
+	idx_t cur_rows = 0;
+	idx_t  column_count = 1;
 
 	CSVStates states;
 
 	//! String Values per [row|column]
-
 	unique_ptr<CSVValue[]> values;
+	idx_t values_size;
+
+	vector<string_t*> parse_data;
+
 
 	string value;
 
@@ -165,6 +170,7 @@ public:
 	//! Parses data into a output_chunk
 	void Parse(DataChunk &output_chunk, VerificationPositions &verification_positions);
 
+	void Process();
 	//! Produces error messages for column name -> type mismatch.
 	static string ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
 
@@ -195,8 +201,17 @@ public:
 	//! To offload buffers to disk if necessary
 	unique_ptr<CSVBufferHandle> cur_buffer_handle;
 
-		//! Parse Chunk where all columns are defined as VARCHAR
+	//! Parse Chunk where all columns are defined as VARCHAR
 	DataChunk parse_chunk;
+
+	//! Total Number of Columns
+	idx_t total_columns = 0;
+
+	void SetTotalColumns(idx_t total_columns_p){
+		total_columns = total_columns_p;
+		vector<LogicalType> varchar_types(total_columns, LogicalType::VARCHAR);
+		parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), varchar_types);
+	}
 
 private:
 	//! Where this CSV Scanner starts
@@ -216,6 +231,7 @@ private:
 	bool start_set = false;
 	//! Number of rows emmited by this scanner
 	idx_t total_rows_emmited = 0;
+
 	//! This function walks the buffer until the first new valid line.
 	bool SetStart(VerificationPositions &verification_positions);
 	//! Skips empty lines when reading the first buffer

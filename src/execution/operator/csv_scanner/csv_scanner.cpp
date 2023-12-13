@@ -15,10 +15,10 @@ CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr
 	csv_iterator.buffer_pos = buffer_manager->GetStartPos();
 };
 
-CSVScanner::CSVScanner(ClientContext &context, CSVReaderOptions &options) : mode(ParserMode::SNIFFING) {
-	const vector<string> file_path {options.file_path};
+CSVScanner::CSVScanner(ClientContext &context, CSVReaderOptions &options) : total_columns(options.dialect_options.num_cols), mode(ParserMode::PARSING) {
+	const vector<string> file_path_list {options.file_path};
 	CSVStateMachineCache state_machine_cache;
-	buffer_manager = make_shared<CSVBufferManager>(context, options, file_path);
+	buffer_manager = make_shared<CSVBufferManager>(context, options, file_path_list);
 
 	state_machine =
 	    make_shared<CSVStateMachine>(options, options.dialect_options.state_machine_options, state_machine_cache);
@@ -27,10 +27,10 @@ CSVScanner::CSVScanner(ClientContext &context, CSVReaderOptions &options) : mode
 
 CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
                        CSVIterator csv_iterator_p, idx_t scanner_id_p)
-    : scanner_id(scanner_id_p), csv_iterator(csv_iterator_p), buffer_manager(std::move(buffer_manager_p)),
-      state_machine(state_machine_p), mode(ParserMode::PARSING) {
+    : scanner_id(scanner_id_p), total_columns(state_machine_p->options.dialect_options.num_cols), csv_iterator(csv_iterator_p),
+      buffer_manager(std::move(buffer_manager_p)), state_machine(state_machine_p), mode(ParserMode::PARSING) {
 	cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
-	vector<LogicalType> varchar_types(state_machine->options.dialect_options.num_cols, LogicalType::VARCHAR);
+	vector<LogicalType> varchar_types(total_columns, LogicalType::VARCHAR);
 	parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), varchar_types);
 }
 
@@ -365,6 +365,10 @@ bool CSVScanner::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_add_l
 	return true;
 }
 
+void CSVScanner::Process() {
+	Process<ParseChunk>(*this, parse_chunk);
+}
+
 void CSVScanner::Parse(DataChunk &output_chunk, VerificationPositions &verification_positions) {
 	// If necessary we set the start of the buffer, basically where we need to start scanning from
 	bool found_start = SetStart(verification_positions);
@@ -374,12 +378,12 @@ void CSVScanner::Parse(DataChunk &output_chunk, VerificationPositions &verificat
 	}
 	// Now we do the actual parsing
 	// TODO: Check for errors.
-	if (mode == ParserMode::SNIFFING) {
-		Process<ParseChunk>(*this, output_chunk);
-	} else {
+//	if (mode == ParserMode::SNIFFING) {
+//		Process<ParseChunk>(*this, output_chunk);
+//	} else {
 		Process<ParseChunk>(*this, parse_chunk);
 		Flush(output_chunk, 0, false);
-	}
+//	}
 
 	total_rows_emmited += output_chunk.size();
 }

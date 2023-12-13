@@ -31,14 +31,16 @@ bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const Logica
 
 void CSVSniffer::RefineTypes() {
 	auto &sniffing_state_machine = best_candidate->GetStateMachineSniff();
+	best_candidate->SetTotalColumns(sniffing_state_machine.dialect_options.num_cols);
+
 	// if data types were provided, exit here if number of columns does not match
-	detected_types.assign(sniffing_state_machine.dialect_options.num_cols, LogicalType::VARCHAR);
+//	detected_types.assign(sniffing_state_machine.dialect_options.num_cols, LogicalType::VARCHAR);
 	if (sniffing_state_machine.options.all_varchar) {
 		// return all types varchar
 		return;
 	}
-	DataChunk parse_chunk;
-	parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), detected_types, STANDARD_VECTOR_SIZE);
+//	DataChunk parse_chunk;
+//	parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), detected_types, STANDARD_VECTOR_SIZE);
 	for (idx_t i = 1; i < sniffing_state_machine.options.sample_size_chunks; i++) {
 		bool finished_file = best_candidate->Finished();
 		if (finished_file) {
@@ -55,7 +57,8 @@ void CSVSniffer::RefineTypes() {
 			}
 			return;
 		}
-		best_candidate->Process<ParseChunk>(*best_candidate, parse_chunk);
+		best_candidate->Process();
+		auto& parse_chunk = best_candidate->parse_chunk;
 		for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 			vector<LogicalType> &col_type_candidates = best_sql_types_candidates_per_column_idx[col];
 			bool is_bool_type = col_type_candidates.back() == LogicalType::BOOLEAN;
