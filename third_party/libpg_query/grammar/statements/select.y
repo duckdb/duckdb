@@ -1005,23 +1005,19 @@ from_list_opt_comma:
 			| from_list ','							{ $$ = $1; }
 		;
 
-
-
-
 alias_prefix_colon_clause:
 			ColIdOrString ':'
 				{
 					$$ = makeNode(PGAlias);
 					$$->aliasname = $1;
 				}
-				/*| ColIdOrString '(' name_list_opt_comma ')' ':' // TODO
+			/*	| ColIdOrString '(' name_list_opt_comma ')' ':'
                 {
                     $$ = makeNode(PGAlias);
                     $$->aliasname = $1;
                     $$->colnames = $3;
                 }*/
 		;
-
 
 /*
  * table_ref is where an alias clause can be attached.
