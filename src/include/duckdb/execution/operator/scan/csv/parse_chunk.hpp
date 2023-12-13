@@ -19,14 +19,9 @@ struct ParseChunk {
 		}
 		scanner.states.Initialize(CSVState::EMPTY_LINE);
 		scanner.current_value_pos = 0;
-		scanner.cur_rows = 0;
-//		scanner.values_size = scanner.total_columns*STANDARD_VECTOR_SIZE;
-//		scanner.values = unique_ptr<CSVValue[]>(new CSVValue[scanner.values_size]);
-		scanner.parse_data.resize(scanner.total_columns);
-		for (idx_t i = 0; i < scanner.total_columns; i ++){
-			auto &v = scanner.parse_chunk.data[i];
-			scanner.parse_data[i]= FlatVector::GetData<string_t>(v);
-		}
+		scanner.values_size = scanner.total_columns*STANDARD_VECTOR_SIZE;
+		scanner.values = unique_ptr<CSVValue[]>(new CSVValue[scanner.values_size]);
+//		scanner.parse_data.resize(to)
 		scanner.length = current_pos;
 
 	}
@@ -41,28 +36,15 @@ struct ParseChunk {
 		sniffing_state_machine.Transition(states, current_char);
 		// Check if it's a new value - We don't predicate this because of the cost of creating a CSV Value
 
-		if (states.NewValue()) {
-			scanner.parse_data[scanner.current_value_pos][scanner.cur_rows] = string_t(scanner.cur_buffer_handle->Ptr()+ scanner.length , current_pos - scanner.length);
+		if (states.NewValue() || states.NewRow()) {
 			// We have a value if it hits a delimiter
-//			scanner.values[scanner.current_value_pos].length = current_pos - scanner.length;
-//			scanner.values[scanner.current_value_pos].buffer_ptr = scanner.cur_buffer_handle->Ptr() + scanner.length;
-//
+			scanner.values[scanner.current_value_pos].length = current_pos - scanner.length;
+			scanner.values[scanner.current_value_pos].buffer_ptr = scanner.cur_buffer_handle->Ptr() + scanner.length;
+
 			scanner.length = current_pos;
 			scanner.current_value_pos++;
-			// Create next value
-			// fixme: states.current_state == CSVState::QUOTED
 
-		} else if (states.NewRow()) {
-			scanner.parse_data[scanner.current_value_pos][scanner.cur_rows] = string_t(scanner.cur_buffer_handle->Ptr()+ scanner.length , current_pos - scanner.length);
-			// We have a value if it hits a delimiter
-//			scanner.values[scanner.current_value_pos].length = current_pos - scanner.length;
-//			scanner.values[scanner.current_value_pos].buffer_ptr = scanner.cur_buffer_handle->Ptr() + scanner.length;
-//
-			scanner.length = current_pos;
-			scanner.current_value_pos = 0;
-			scanner.cur_rows++;
-
-			if (scanner.cur_rows >= STANDARD_VECTOR_SIZE) {
+			if (scanner.current_value_pos >= scanner.values_size) {
 				return true;
 			}
 			// Create next value
@@ -129,22 +111,22 @@ struct ParseChunk {
 	inline static void Finalize(CSVScanner &scanner, DataChunk &parse_chunk) {
 		auto &sniffing_state_machine = scanner.GetStateMachineSniff();
 		auto &states = scanner.states;
-//		idx_t number_of_rows = scanner.current_value_pos/scanner.total_columns;
-//		for (idx_t col_idx = 0; col_idx < parse_chunk.ColumnCount(); col_idx++) {
-//			// fixme: has to do some extra checks for null padding
-//			auto &v = parse_chunk.data[col_idx];
-//			auto parse_data = FlatVector::GetData<string_t>(v);
-//			for (idx_t row_idx = 0; row_idx < number_of_rows; row_idx++) {
-//				auto &value = scanner.values[row_idx*scanner.total_columns + col_idx];
-////				if (value.OverBuffer()) {
-////					// Lets copy the string
-////					parse_data[row_idx] = StringVector::AddStringOrBlob(v, value.GetStringT());
-////				} else {
-//					// Don't copy the string
-//					parse_data[row_idx] = value.GetStringT();
-////				}
-//			}
-//		}
+		idx_t number_of_rows = scanner.current_value_pos/scanner.total_columns;
+		for (idx_t col_idx = 0; col_idx < parse_chunk.ColumnCount(); col_idx++) {
+			// fixme: has to do some extra checks for null padding
+			auto &v = parse_chunk.data[col_idx];
+			auto parse_data = FlatVector::GetData<string_t>(v);
+			for (idx_t row_idx = 0; row_idx < number_of_rows; row_idx++) {
+				auto &value = scanner.values[row_idx*scanner.total_columns + col_idx];
+//				if (value.OverBuffer()) {
+//					// Lets copy the string
+//					parse_data[row_idx] = StringVector::AddStringOrBlob(v, value.GetStringT());
+//				} else {
+					// Don't copy the string
+					parse_data[row_idx] = value.GetStringT();
+//				}
+			}
+		}
 
 		//		if (scanner.cur_rows < STANDARD_VECTOR_SIZE && states.current_state != CSVState::EMPTY_LINE &&
 		//scanner.Last()) { 			if (scanner.column_count < parse_chunk.ColumnCount() ||
@@ -163,7 +145,7 @@ struct ParseChunk {
 		//
 		//			scanner.cur_rows++;
 		//		}
-		parse_chunk.SetCardinality(scanner.cur_rows);
+		parse_chunk.SetCardinality(number_of_rows);
 		int x = 0;
 	}
 };
