@@ -50,6 +50,8 @@ public:
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink,
 	                         OperatorSourceInput &input) const;
 
+	double GetProgress(ClientContext &context, GlobalSinkState &sink_p, GlobalSourceState &gstate) const;
+
 	const TupleDataLayout &GetLayout() const;
 	idx_t NumberOfPartitions(GlobalSinkState &sink) const;
 	static void SetMultiScan(GlobalSinkState &sink);

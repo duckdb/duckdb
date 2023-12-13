@@ -850,6 +850,17 @@ SourceResultType PhysicalHashAggregate::GetData(ExecutionContext &context, DataC
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
+double PhysicalHashAggregate::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+	auto &sink_gstate = sink_state->Cast<HashAggregateGlobalSinkState>();
+	auto &gstate = gstate_p.Cast<HashAggregateGlobalSourceState>();
+	double total_progress = 0;
+	for (idx_t radix_idx = 0; radix_idx < groupings.size(); radix_idx++) {
+		total_progress += groupings[radix_idx].table_data.GetProgress(
+		    context, *sink_gstate.grouping_states[radix_idx].table_state, *gstate.radix_states[radix_idx]);
+	}
+	return total_progress / double(groupings.size());
+}
+
 string PhysicalHashAggregate::ParamsToString() const {
 	string result;
 	auto &groups = grouped_aggregate_data.groups;

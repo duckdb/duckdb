@@ -69,9 +69,11 @@ unique_ptr<GroupedAggregateHashTable> RadixPartitionedHashTable::CreateHT(Client
 // Sink
 //===--------------------------------------------------------------------===//
 struct AggregatePartition {
-	explicit AggregatePartition(unique_ptr<TupleDataCollection> data_p) : data(std::move(data_p)), finalized(false) {
+	explicit AggregatePartition(unique_ptr<TupleDataCollection> data_p)
+	    : data(std::move(data_p)), progress(0), finalized(false) {
 	}
 	unique_ptr<TupleDataCollection> data;
+	atomic<double> progress;
 	atomic<bool> finalized;
 };
 
@@ -658,7 +660,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		                            GroupedAggregateHashTable::LOAD_FACTOR * sizeof(aggr_ht_entry_t);
 		const auto capacity_limit = NextPowerOfTwo(thread_limit / size_per_entry);
 
-		ht = sink.radix_ht.CreateHT(gstate.context, MinValue<idx_t>(capacity, capacity_limit), 0);
+		ht = sink.radix_ht.CreateHT(gstate.context, MinValue<idx_t>(capacity, capacity), 0);
 	} else {
 		// We may want to resize here to the size of this partition, but for now we just assume uniform partition sizes
 		ht->InitializePartitionedData();
@@ -667,7 +669,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	}
 
 	// Now combine the uncombined data using this thread's HT
-	ht->Combine(*partition.data);
+	ht->Combine(*partition.data, &partition.progress);
 	ht->UnpinData();
 
 	// Move the combined data back to the partition
@@ -819,6 +821,27 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 	} else {
 		return SourceResultType::FINISHED;
 	}
+}
+
+double RadixPartitionedHashTable::GetProgress(ClientContext &, GlobalSinkState &sink_p,
+                                              GlobalSourceState &gstate_p) const {
+	auto &sink = sink_p.Cast<RadixHTGlobalSinkState>();
+	auto &gstate = gstate_p.Cast<RadixHTGlobalSourceState>();
+
+	// Get partition combine progress, weigh it 2x
+	double total_progress = 0;
+	for (auto &partition : sink.partitions) {
+		total_progress += partition->progress * 2.0;
+	}
+
+	// Get scan progress, weigh it 1x
+	total_progress += gstate.scan_done;
+
+	// Divide by 3x for the weights, and the number of partitions to get a value between 0 and 1 again
+	total_progress /= 3.0 * sink.partitions.size();
+
+	// Multiply by 100 to get a percentage
+	return 100.0 * total_progress;
 }
 
 } // namespace duckdb
