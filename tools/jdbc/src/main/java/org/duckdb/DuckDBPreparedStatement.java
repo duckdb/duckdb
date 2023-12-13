@@ -72,7 +72,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     }
 
     private void startTransaction() throws SQLException {
-
         if (this.conn.autoCommit || this.conn.transactionRunning) {
             return;
         }
@@ -181,7 +180,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         execute();
         if (!(returnsChangedRows || returnsNothing)) {
             throw new SQLException(
-                    "executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows");
+                "executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows");
         }
         return getUpdateCountInternal();
     }
@@ -466,16 +465,15 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public int[] executeBatch() throws SQLException {
-        try{
+        try {
             int[] updateCounts = new int[batchedValues.size()];
-            for (int i = 0; i < batchedValues.size(); i++){
+            for (int i = 0; i < batchedValues.size(); i++) {
                 params = batchedValues.get(i);
                 execute();
                 updateCounts[i] = getUpdateCount();
             }
             return updateCounts;
-        }
-        finally{
+        } finally {
             clearBatch();
         }
     }
@@ -614,132 +612,132 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             return;
         }
         switch (targetSqlType) {
-            case Types.BOOLEAN:
-            case Types.BIT:
-                if (x instanceof Boolean) {
-                    setObject(parameterIndex, x);
-                } else if (x instanceof Number) {
-                    setObject(parameterIndex, ((Number) x).byteValue() == 1);
-                } else if (x instanceof String) {
-                    setObject(parameterIndex, Boolean.parseBoolean((String) x));
-                } else {
-                    throw new SQLException("Can't convert value to boolean " + x.getClass().toString());
-                }
-                break;
-            case Types.TINYINT:
-                if (x instanceof Byte) {
-                    setObject(parameterIndex, x);
-                } else if (x instanceof Number) {
-                    setObject(parameterIndex, ((Number) x).byteValue());
-                } else if (x instanceof String) {
-                    setObject(parameterIndex, Byte.parseByte((String) x));
-                } else if (x instanceof Boolean) {
-                    setObject(parameterIndex, (byte) (((Boolean) x) ? 1 : 0));
-                } else {
-                    throw new SQLException("Can't convert value to byte " + x.getClass().toString());
-                }
-                break;
-            case Types.SMALLINT:
-                if (x instanceof Short) {
-                    setObject(parameterIndex, x);
-                } else if (x instanceof Number) {
-                    setObject(parameterIndex, ((Number) x).shortValue());
-                } else if (x instanceof String) {
-                    setObject(parameterIndex, Short.parseShort((String) x));
-                } else if (x instanceof Boolean) {
-                    setObject(parameterIndex, (short) (((Boolean) x) ? 1 : 0));
-                } else {
-                    throw new SQLException("Can't convert value to short " + x.getClass().toString());
-                }
-                break;
-            case Types.INTEGER:
-                if (x instanceof Integer) {
-                    setObject(parameterIndex, x);
-                } else if (x instanceof Number) {
-                    setObject(parameterIndex, ((Number) x).intValue());
-                } else if (x instanceof String) {
-                    setObject(parameterIndex, Integer.parseInt((String) x));
-                } else if (x instanceof Boolean) {
-                    setObject(parameterIndex, (int) (((Boolean) x) ? 1 : 0));
-                } else {
-                    throw new SQLException("Can't convert value to int " + x.getClass().toString());
-                }
-                break;
-            case Types.BIGINT:
-                if (x instanceof Long) {
-                    setObject(parameterIndex, x);
-                } else if (x instanceof Number) {
-                    setObject(parameterIndex, ((Number) x).longValue());
-                } else if (x instanceof String) {
-                    setObject(parameterIndex, Long.parseLong((String) x));
-                } else if (x instanceof Boolean) {
-                    setObject(parameterIndex, (long) (((Boolean) x) ? 1 : 0));
-                } else {
-                    throw new SQLException("Can't convert value to long " + x.getClass().toString());
-                }
-                break;
-            case Types.REAL:
-            case Types.FLOAT:
-                if (x instanceof Float) {
-                    setObject(parameterIndex, x);
-                } else if (x instanceof Number) {
-                    setObject(parameterIndex, ((Number) x).floatValue());
-                } else if (x instanceof String) {
-                    setObject(parameterIndex, Float.parseFloat((String) x));
-                } else if (x instanceof Boolean) {
-                    setObject(parameterIndex, (float) (((Boolean) x) ? 1 : 0));
-                } else {
-                    throw new SQLException("Can't convert value to float " + x.getClass().toString());
-                }
-                break;
-            case Types.DECIMAL:
-                if (x instanceof BigDecimal) {
-                    setObject(parameterIndex, x);
-                } else if (x instanceof Double) {
-                    setObject(parameterIndex, new BigDecimal((Double) x));
-                } else if (x instanceof String) {
-                    setObject(parameterIndex, new BigDecimal((String) x));
-                } else {
-                    throw new SQLException("Can't convert value to double " + x.getClass().toString());
-                }
-                break;
-            case Types.NUMERIC:
-            case Types.DOUBLE:
-                if (x instanceof Double) {
-                    setObject(parameterIndex, x);
-                } else if (x instanceof Number) {
-                    setObject(parameterIndex, ((Number) x).doubleValue());
-                } else if (x instanceof String) {
-                    setObject(parameterIndex, Double.parseDouble((String) x));
-                } else if (x instanceof Boolean) {
-                    setObject(parameterIndex, (double) (((Boolean) x) ? 1 : 0));
-                } else {
-                    throw new SQLException("Can't convert value to double " + x.getClass().toString());
-                }
-                break;
-            case Types.CHAR:
-            case Types.LONGVARCHAR:
-            case Types.VARCHAR:
-                if (x instanceof String) {
-                    setObject(parameterIndex, (String) x);
-                } else {
-                    setObject(parameterIndex, x.toString());
-                }
-                break;
-            case Types.TIMESTAMP:
-            case Types.TIMESTAMP_WITH_TIMEZONE:
-                if (x instanceof Timestamp) {
-                    setObject(parameterIndex, x);
-                } else if (x instanceof LocalDateTime) {
-                    setObject(parameterIndex, x);
-                } else if (x instanceof OffsetDateTime) {
-                    setObject(parameterIndex, x);
-                } else {
-                    throw new SQLException("Can't convert value to timestamp " + x.getClass().toString());
-                }
-                break;
-            default:
-                throw new SQLException("Unknown target type " + targetSqlType);
+        case Types.BOOLEAN:
+        case Types.BIT:
+            if (x instanceof Boolean) {
+                setObject(parameterIndex, x);
+            } else if (x instanceof Number) {
+                setObject(parameterIndex, ((Number) x).byteValue() == 1);
+            } else if (x instanceof String) {
+                setObject(parameterIndex, Boolean.parseBoolean((String) x));
+            } else {
+                throw new SQLException("Can't convert value to boolean " + x.getClass().toString());
+            }
+            break;
+        case Types.TINYINT:
+            if (x instanceof Byte) {
+                setObject(parameterIndex, x);
+            } else if (x instanceof Number) {
+                setObject(parameterIndex, ((Number) x).byteValue());
+            } else if (x instanceof String) {
+                setObject(parameterIndex, Byte.parseByte((String) x));
+            } else if (x instanceof Boolean) {
+                setObject(parameterIndex, (byte) (((Boolean) x) ? 1 : 0));
+            } else {
+                throw new SQLException("Can't convert value to byte " + x.getClass().toString());
+            }
+            break;
+        case Types.SMALLINT:
+            if (x instanceof Short) {
+                setObject(parameterIndex, x);
+            } else if (x instanceof Number) {
+                setObject(parameterIndex, ((Number) x).shortValue());
+            } else if (x instanceof String) {
+                setObject(parameterIndex, Short.parseShort((String) x));
+            } else if (x instanceof Boolean) {
+                setObject(parameterIndex, (short) (((Boolean) x) ? 1 : 0));
+            } else {
+                throw new SQLException("Can't convert value to short " + x.getClass().toString());
+            }
+            break;
+        case Types.INTEGER:
+            if (x instanceof Integer) {
+                setObject(parameterIndex, x);
+            } else if (x instanceof Number) {
+                setObject(parameterIndex, ((Number) x).intValue());
+            } else if (x instanceof String) {
+                setObject(parameterIndex, Integer.parseInt((String) x));
+            } else if (x instanceof Boolean) {
+                setObject(parameterIndex, (int) (((Boolean) x) ? 1 : 0));
+            } else {
+                throw new SQLException("Can't convert value to int " + x.getClass().toString());
+            }
+            break;
+        case Types.BIGINT:
+            if (x instanceof Long) {
+                setObject(parameterIndex, x);
+            } else if (x instanceof Number) {
+                setObject(parameterIndex, ((Number) x).longValue());
+            } else if (x instanceof String) {
+                setObject(parameterIndex, Long.parseLong((String) x));
+            } else if (x instanceof Boolean) {
+                setObject(parameterIndex, (long) (((Boolean) x) ? 1 : 0));
+            } else {
+                throw new SQLException("Can't convert value to long " + x.getClass().toString());
+            }
+            break;
+        case Types.REAL:
+        case Types.FLOAT:
+            if (x instanceof Float) {
+                setObject(parameterIndex, x);
+            } else if (x instanceof Number) {
+                setObject(parameterIndex, ((Number) x).floatValue());
+            } else if (x instanceof String) {
+                setObject(parameterIndex, Float.parseFloat((String) x));
+            } else if (x instanceof Boolean) {
+                setObject(parameterIndex, (float) (((Boolean) x) ? 1 : 0));
+            } else {
+                throw new SQLException("Can't convert value to float " + x.getClass().toString());
+            }
+            break;
+        case Types.DECIMAL:
+            if (x instanceof BigDecimal) {
+                setObject(parameterIndex, x);
+            } else if (x instanceof Double) {
+                setObject(parameterIndex, new BigDecimal((Double) x));
+            } else if (x instanceof String) {
+                setObject(parameterIndex, new BigDecimal((String) x));
+            } else {
+                throw new SQLException("Can't convert value to double " + x.getClass().toString());
+            }
+            break;
+        case Types.NUMERIC:
+        case Types.DOUBLE:
+            if (x instanceof Double) {
+                setObject(parameterIndex, x);
+            } else if (x instanceof Number) {
+                setObject(parameterIndex, ((Number) x).doubleValue());
+            } else if (x instanceof String) {
+                setObject(parameterIndex, Double.parseDouble((String) x));
+            } else if (x instanceof Boolean) {
+                setObject(parameterIndex, (double) (((Boolean) x) ? 1 : 0));
+            } else {
+                throw new SQLException("Can't convert value to double " + x.getClass().toString());
+            }
+            break;
+        case Types.CHAR:
+        case Types.LONGVARCHAR:
+        case Types.VARCHAR:
+            if (x instanceof String) {
+                setObject(parameterIndex, (String) x);
+            } else {
+                setObject(parameterIndex, x.toString());
+            }
+            break;
+        case Types.TIMESTAMP:
+        case Types.TIMESTAMP_WITH_TIMEZONE:
+            if (x instanceof Timestamp) {
+                setObject(parameterIndex, x);
+            } else if (x instanceof LocalDateTime) {
+                setObject(parameterIndex, x);
+            } else if (x instanceof OffsetDateTime) {
+                setObject(parameterIndex, x);
+            } else {
+                throw new SQLException("Can't convert value to timestamp " + x.getClass().toString());
+            }
+            break;
+        default:
+            throw new SQLException("Unknown target type " + targetSqlType);
         }
     }
 
