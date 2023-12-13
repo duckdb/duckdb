@@ -113,7 +113,8 @@ string PhysicalTableScan::ParamsToString() const {
 		}
 	}
 	if (function.projection_pushdown) {
-		if (!projection_ids.empty() && vaild_column_id_num == column_ids.size() && projection_ids.size() < column_ids.size() && function.filter_prune) {
+		if (!projection_ids.empty() && vaild_column_id_num == column_ids.size() &&
+		    projection_ids.size() < column_ids.size() && function.filter_prune) {
 			for (idx_t i = 0; i < projection_ids.size(); i++) {
 				const auto &column_id = column_ids[projection_ids[i]];
 				if (column_id < names.size()) {
