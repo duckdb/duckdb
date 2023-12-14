@@ -90,6 +90,18 @@ void KeyValueSecret::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(202, "redact_keys", list);
 }
 
+Value KeyValueSecret::TryGetValue(const string& key, bool error_on_missing) const {
+	auto lookup = secret_map.find(key);
+	if (lookup == secret_map.end()) {
+		if (error_on_missing) {
+			throw InternalException("Failed to fetch key '%s' from secret '%s' of type '%s'", key, name, type);
+		}
+		return Value();
+	}
+
+	return lookup->second;
+}
+
 bool CreateSecretFunctionSet::ProviderExists(const string &provider_name) {
 	return functions.find(provider_name) != functions.end();
 }

@@ -208,71 +208,63 @@ unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(FileOpener *ope
 }
 
 S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener, FileOpenerInfo &info) {
-	string region;
-	string access_key_id;
-	string secret_access_key;
-	string session_token;
-	string endpoint;
-	string url_style;
-	bool s3_url_compatibility_mode;
-	bool use_ssl;
+	S3AuthParams result;
 	Value value;
 
 	if (FileOpener::TryGetCurrentSetting(opener, "s3_region", value, info)) {
-		region = value.ToString();
+		result.region = value.ToString();
 	}
 
 	if (FileOpener::TryGetCurrentSetting(opener, "s3_access_key_id", value, info)) {
-		access_key_id = value.ToString();
+		result.access_key_id = value.ToString();
 	}
 
 	if (FileOpener::TryGetCurrentSetting(opener, "s3_secret_access_key", value, info)) {
-		secret_access_key = value.ToString();
+		result.secret_access_key = value.ToString();
 	}
 
 	if (FileOpener::TryGetCurrentSetting(opener, "s3_session_token", value, info)) {
-		session_token = value.ToString();
+		result.session_token = value.ToString();
 	}
 
 	if (FileOpener::TryGetCurrentSetting(opener, "s3_endpoint", value, info)) {
 		if (value.ToString().empty()) {
 			if (StringUtil::StartsWith(info.file_path, "gcs://")) {
-				endpoint = "storage.googleapis.com";
+				result.endpoint = "storage.googleapis.com";
 			} else {
-				endpoint = "s3.amazonaws.com";
+				result.endpoint = "s3.amazonaws.com";
 			}
 		} else {
-			endpoint = value.ToString();
+			result.endpoint = value.ToString();
 		}
 	} else {
-		endpoint = "s3.amazonaws.com";
+		result.endpoint = "s3.amazonaws.com";
 	}
 
 	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_style", value, info)) {
 		auto val_str = value.ToString();
-		if (!(val_str == "vhost" || val_str != "path" || val_str != "")) {
+		if (!(val_str == "vhost" || val_str != "path" || !val_str.empty())) {
 			throw std::runtime_error(
 			    "Incorrect setting found for s3_url_style, allowed values are: 'path' and 'vhost'");
 		}
-		url_style = val_str;
+		result.url_style = val_str;
 	} else {
-		url_style = "vhost";
+		result.url_style = "vhost";
 	}
 
 	if (FileOpener::TryGetCurrentSetting(opener, "s3_use_ssl", value, info)) {
-		use_ssl = value.GetValue<bool>();
+		result.use_ssl = value.GetValue<bool>();
 	} else {
-		use_ssl = true;
+		result.use_ssl = true;
 	}
 
 	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_compatibility_mode", value, info)) {
-		s3_url_compatibility_mode = value.GetValue<bool>();
+		result.s3_url_compatibility_mode = value.GetValue<bool>();
 	} else {
-		s3_url_compatibility_mode = true;
+		result.s3_url_compatibility_mode = true;
 	}
 
-	return {region,   access_key_id, secret_access_key, session_token,
-	        endpoint, url_style,     use_ssl,           s3_url_compatibility_mode};
+	return result;
 }
 
 unique_ptr<KeyValueSecret> S3SecretHelper::CreateSecret(vector<string> &prefix_paths_p, string &type, string &provider,
@@ -297,16 +289,30 @@ unique_ptr<KeyValueSecret> S3SecretHelper::CreateSecret(vector<string> &prefix_p
 
 S3AuthParams S3SecretHelper::GetParams(const KeyValueSecret &secret) {
 	S3AuthParams params;
-
-	params.region = secret.secret_map.at("region").ToString();
-	params.access_key_id = secret.secret_map.at("access_key_id").ToString();
-	params.secret_access_key = secret.secret_map.at("secret_access_key").ToString();
-	params.session_token = secret.secret_map.at("session_token").ToString();
-	params.endpoint = secret.secret_map.at("endpoint").ToString();
-	params.url_style = secret.secret_map.at("url_style").ToString();
-	params.use_ssl = secret.secret_map.at("use_ssl").GetValue<bool>();
-	params.s3_url_compatibility_mode = secret.secret_map.at("s3_url_compatibility_mode").GetValue<bool>();
-
+	if (!secret.TryGetValue("region").IsNull()) {
+		params.region = secret.TryGetValue("region").ToString();
+	}
+	if (!secret.TryGetValue("access_key_id").IsNull()) {
+		params.access_key_id = secret.TryGetValue("access_key_id").ToString();
+	}
+	if (!secret.TryGetValue("secret_access_key").IsNull()) {
+		params.secret_access_key = secret.TryGetValue("secret_access_key").ToString();
+	}
+	if (!secret.TryGetValue("session_token").IsNull()) {
+		params.session_token = secret.TryGetValue("session_token").ToString();
+	}
+	if (!secret.TryGetValue("endpoint").IsNull()) {
+		params.endpoint = secret.TryGetValue("endpoint").ToString();
+	}
+	if (!secret.TryGetValue("url_style").IsNull()) {
+		params.endpoint = secret.TryGetValue("url_style").ToString();
+	}
+	if (!secret.TryGetValue("use_ssl").IsNull()) {
+		params.use_ssl = secret.TryGetValue("use_ssl").GetValue<bool>();
+	}
+	if (!secret.TryGetValue("s3_url_compatibility_mode").IsNull()) {
+		params.s3_url_compatibility_mode = secret.TryGetValue("s3_url_compatibility_mode").GetValue<bool>();
+	}
 	return params;
 }
 
@@ -814,9 +820,11 @@ unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, uint8_
 
 // this computes the signature from https://czak.pl/2015/09/15/s3-rest-api-with-curl.html
 void S3FileSystem::Verify() {
+	S3AuthParams auth_params;
+	auth_params.region = "us-east-1";
+	auth_params.access_key_id = "AKIAIOSFODNN7EXAMPLE";
+	auth_params.secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
 
-	S3AuthParams auth_params = {
-	    "us-east-1", "AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "", "", "", true};
 	auto test_header = create_s3_header("/", "", "my-precious-bucket.s3.amazonaws.com", "s3", "GET", auth_params,
 	                                    "20150915", "20150915T124500Z");
 	if (test_header["Authorization"] !=
@@ -841,24 +849,24 @@ void S3FileSystem::Verify() {
 	// aws --region eu-west-1 --debug s3 ls my-precious-bucket 2>&1 | less
 	string canonical_query_string = "delimiter=%2F&encoding-type=url&list-type=2&prefix="; // aws s3 ls <bucket>
 
-	S3AuthParams auth_params2 = {
-	    "eu-west-1",
-	    "ASIAYSPIOYDTHTBIITVC",
-	    "vs1BZPxSL2qVARBSg5vCMKJsavCoEPlo/HSHRaVe",
-	    "IQoJb3JpZ2luX2VjENX//////////wEaCWV1LXdlc3QtMSJHMEUCIQDfjzs9BYHrEXDMU/"
-	    "NR+PHV1uSTr7CSVSQdjKSfiPRLdgIgCCztF0VMbi9+"
-	    "uHHAfBVKhV4t9MlUrQg3VAOIsLxrWyoqlAIIHRAAGgw1ODk0MzQ4OTY2MTQiDOGl2DsYxENcKCbh+irxARe91faI+"
-	    "hwUhT60sMGRFg0GWefKnPclH4uRFzczrDOcJlAAaQRJ7KOsT8BrJlrY1jSgjkO7PkVjPp92vi6lJX77bg99MkUTJA"
-	    "ctiOKmd84XvAE5bFc/jFbqechtBjXzopAPkKsGuaqAhCenXnFt6cwq+LZikv/"
-	    "NJGVw7TRphLV+"
-	    "Aq9PSL9XwdzIgsW2qXwe1c3rxDNj53yStRZHVggdxJ0OgHx5v040c98gFphzSULHyg0OY6wmCMTYcswpb4kO2IIi6"
-	    "AiD9cY25TlwPKRKPi5CdBsTPnyTeW62u7PvwK0fTSy4ZuJUuGKQnH2cKmCXquEwoOHEiQY6nQH9fzY/"
-	    "EDGHMRxWWhxu0HiqIfsuFqC7GS0p0ToKQE+pzNsvVwMjZc+KILIDDQpdCWRIwu53I5PZy2Cvk+"
-	    "3y4XLvdZKQCsAKqeOc4c94UAS4NmUT7mCDOuRV0cLBVM8F0JYBGrUxyI+"
-	    "YoIvHhQWmnRLuKgTb5PkF7ZWrXBHFWG5/tZDOvBbbaCWTlRCL9b0Vpg5+BM/81xd8jChP4w83",
-	    "",
-	    "",
-	    true};
+	S3AuthParams auth_params2;
+	auth_params2.region = "eu-west-1";
+	auth_params2.access_key_id = "ASIAYSPIOYDTHTBIITVC";
+	auth_params2.secret_access_key = "vs1BZPxSL2qVARBSg5vCMKJsavCoEPlo/HSHRaVe";
+	auth_params2.session_token = "IQoJb3JpZ2luX2VjENX//////////wEaCWV1LXdlc3QtMSJHMEUCIQDfjzs9BYHrEXDMU/"
+	                             "NR+PHV1uSTr7CSVSQdjKSfiPRLdgIgCCztF0VMbi9+"
+	                             "uHHAfBVKhV4t9MlUrQg3VAOIsLxrWyoqlAIIHRAAGgw1ODk0MzQ4OTY2MTQiDOGl2DsYxENcKCbh+irxARe91faI+"
+	                             "hwUhT60sMGRFg0GWefKnPclH4uRFzczrDOcJlAAaQRJ7KOsT8BrJlrY1jSgjkO7PkVjPp92vi6lJX77bg99MkUTJA"
+	                             "ctiOKmd84XvAE5bFc/jFbqechtBjXzopAPkKsGuaqAhCenXnFt6cwq+LZikv/"
+	                             "NJGVw7TRphLV+"
+	                             "Aq9PSL9XwdzIgsW2qXwe1c3rxDNj53yStRZHVggdxJ0OgHx5v040c98gFphzSULHyg0OY6wmCMTYcswpb4kO2IIi6"
+	                             "AiD9cY25TlwPKRKPi5CdBsTPnyTeW62u7PvwK0fTSy4ZuJUuGKQnH2cKmCXquEwoOHEiQY6nQH9fzY/"
+	                             "EDGHMRxWWhxu0HiqIfsuFqC7GS0p0ToKQE+pzNsvVwMjZc+KILIDDQpdCWRIwu53I5PZy2Cvk+"
+	                             "3y4XLvdZKQCsAKqeOc4c94UAS4NmUT7mCDOuRV0cLBVM8F0JYBGrUxyI+"
+	                             "YoIvHhQWmnRLuKgTb5PkF7ZWrXBHFWG5/tZDOvBbbaCWTlRCL9b0Vpg5+BM/81xd8jChP4w83";
+
+
+
 	auto test_header2 = create_s3_header("/", canonical_query_string, "my-precious-bucket.s3.eu-west-1.amazonaws.com",
 	                                     "s3", "GET", auth_params2, "20210904", "20210904T121746Z");
 	if (test_header2["Authorization"] !=
@@ -868,7 +876,11 @@ void S3FileSystem::Verify() {
 		throw std::runtime_error("test fail");
 	}
 
-	S3AuthParams auth_params3 = {"eu-west-1", "S3RVER", "S3RVER", "", "", "", true};
+	S3AuthParams auth_params3;
+	auth_params3.region = "eu-west-1";
+	auth_params3.access_key_id = "S3RVER";
+	auth_params3.secret_access_key = "S3RVER";
+
 	auto test_header3 =
 	    create_s3_header("/correct_auth_test.csv", "", "test-bucket-ceiveran.s3.amazonaws.com", "s3", "PUT",
 	                     auth_params3, "20220121", "20220121T141452Z",
@@ -880,8 +892,10 @@ void S3FileSystem::Verify() {
 	}
 
 	// bug #4082
-	S3AuthParams auth_params4 = {
-	    "auto", "asdf", "asdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdf", "", "", "", true};
+	S3AuthParams auth_params4;
+	auth_params4.region = "auto";
+	auth_params4.access_key_id = "asdf";
+	auth_params4.secret_access_key = "asdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdf";
 	create_s3_header("/", "", "exampple.com", "s3", "GET", auth_params4);
 
 	if (UrlEncode("/category=Books/") != "/category%3DBooks/") {

@@ -162,6 +162,9 @@ public:
 	virtual string ToString(SecretDisplayType mode = SecretDisplayType::REDACTED) const override;
 	void Serialize(Serializer &serializer) const override;
 
+	//! Tries to get the value at key <key>, depending on error_on_missing will throw or return Value()
+	Value TryGetValue(const string& key, bool error_on_missing = false) const;
+
 	// FIXME: use serialization scripts
 	template <class TYPE>
 	static unique_ptr<BaseSecret> Deserialize(Deserializer &deserializer, BaseSecret base_secret) {

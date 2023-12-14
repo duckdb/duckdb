@@ -28,8 +28,8 @@ struct S3AuthParams {
 	string session_token;
 	string endpoint;
 	string url_style;
-	bool use_ssl;
-	bool s3_url_compatibility_mode;
+	bool use_ssl = true;
+	bool s3_url_compatibility_mode = false;
 
 	static S3AuthParams ReadFrom(FileOpener *opener, FileOpenerInfo &info);
 	static unique_ptr<S3AuthParams> ReadFromStoredCredentials(FileOpener *opener, string path);
