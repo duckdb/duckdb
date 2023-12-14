@@ -1362,6 +1362,9 @@ void linenoiseEditHistoryNext(struct linenoiseState *l, int dir) {
 		strncpy(l->buf, history[history_len - 1 - l->history_index], l->buflen);
 		l->buf[l->buflen - 1] = '\0';
 		l->len = l->pos = strlen(l->buf);
+		if (mlmode && dir == LINENOISE_HISTORY_NEXT) {
+			l->pos = colAndRowToPosition(l, 1, l->len);
+		}
 		refreshLine(l);
 	}
 }
