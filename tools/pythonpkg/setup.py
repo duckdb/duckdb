@@ -173,7 +173,6 @@ if platform.system() == 'Windows':
     linker_args.extend(['rstrtmgr.lib'])
 
 
-
 class get_pybind_include(object):
     def __init__(self, user=False):
         self.user = user
