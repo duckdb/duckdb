@@ -12,6 +12,7 @@
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/execution/task_error_manager.hpp"
 
 namespace duckdb {
 
@@ -614,18 +615,14 @@ struct CollectionCheckpointState {
 	mutex write_lock;
 
 public:
-	// FIXME: this is mostly the same as the Executor - perhaps this can be unified?
 	void PushError(PreservedError error) {
-		lock_guard<mutex> elock(error_lock);
-		this->errors.push_back(std::move(error));
+		error_manager.PushError(std::move(error));
 	}
 	bool HasError() {
-		lock_guard<mutex> elock(error_lock);
-		return !errors.empty();
+		return error_manager.HasError();
 	}
 	void ThrowError() {
-		lock_guard<mutex> elock(error_lock);
-		errors[0].Throw();
+		error_manager.ThrowException();
 	}
 
 	void ScheduleTask(unique_ptr<Task> task) {
@@ -649,9 +646,8 @@ public:
 	}
 
 private:
+	TaskErrorManager error_manager;
 	unique_ptr<ProducerToken> token;
-	mutex error_lock;
-	vector<PreservedError> errors;
 	atomic<idx_t> completed_tasks;
 	atomic<idx_t> total_tasks;
 };

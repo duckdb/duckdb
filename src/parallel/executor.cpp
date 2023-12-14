@@ -554,23 +554,18 @@ vector<LogicalType> Executor::GetTypes() {
 }
 
 void Executor::PushError(PreservedError exception) {
-	lock_guard<mutex> elock(error_lock);
 	// interrupt execution of any other pipelines that belong to this executor
 	context.interrupted = true;
 	// push the exception onto the stack
-	exceptions.push_back(std::move(exception));
+	error_manager.PushError(exception);
 }
 
 bool Executor::HasError() {
-	lock_guard<mutex> elock(error_lock);
-	return !exceptions.empty();
+	return error_manager.HasError();
 }
 
 void Executor::ThrowException() {
-	lock_guard<mutex> elock(error_lock);
-	D_ASSERT(!exceptions.empty());
-	auto &entry = exceptions[0];
-	entry.Throw();
+	error_manager.ThrowException();
 }
 
 void Executor::Flush(ThreadContext &tcontext) {
