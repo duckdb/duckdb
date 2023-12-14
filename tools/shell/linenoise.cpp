@@ -1679,6 +1679,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 		nread = read(l.ifd, &c, 1);
 		if (nread <= 0)
 			return l.len;
+		l.cols = getColumns(stdin_fd, stdout_fd);
 
 		if (l.search) {
 			char ret = linenoiseSearch(&l, c);
@@ -1735,9 +1736,8 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 			return (int)l.len;
 		case CTRL_G:
 		case CTRL_C: /* ctrl-c */ {
-			if (mlmode && l.pos != l.len) {
-				l.pos = l.len;
-				refreshLine(&l);
+			if (mlmode) {
+				linenoiseEditMoveEnd(&l);
 			}
 			l.buf[0] = '\3';
 			// we keep track of whether or not the line was empty by writing \3 to the second position of the line
