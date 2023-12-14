@@ -1143,38 +1143,42 @@ static void refreshMultiLine(struct linenoiseState *l) {
 /* Calls the two low level functions refreshSingleLine() or
  * refreshMultiLine() according to the selected mode. */
 static void refreshLine(struct linenoiseState *l) {
-	if (mlmode)
+	if (mlmode) {
 		refreshMultiLine(l);
-	else
+	} else {
 		refreshSingleLine(l);
+	}
 }
 
 /* Insert the character 'c' at cursor current position.
  *
  * On error writing to the terminal -1 is returned, otherwise 0. */
-int linenoiseEditInsert(struct linenoiseState *l, char c) {
+void insertCharacter(struct linenoiseState *l, char c) {
 	if (l->len < l->buflen) {
 		if (l->len == l->pos) {
 			l->buf[l->pos] = c;
 			l->pos++;
 			l->len++;
 			l->buf[l->len] = '\0';
-			if ((!mlmode && l->plen + l->len < l->cols && !hintsCallback)) {
-				/* Avoid a full update of the line in the
-				 * trivial case. */
-				if (write(l->ofd, &c, 1) == -1)
-					return -1;
-			} else {
-				refreshLine(l);
-			}
 		} else {
 			memmove(l->buf + l->pos + 1, l->buf + l->pos, l->len - l->pos);
 			l->buf[l->pos] = c;
 			l->len++;
 			l->pos++;
 			l->buf[l->len] = '\0';
-			refreshLine(l);
 		}
+	}
+}
+
+int linenoiseEditInsert(struct linenoiseState *l, char c) {
+	insertCharacter(l, c);
+	refreshLine(l);
+	return 0;
+}
+
+int linenoiseEditInsertMulti(struct linenoiseState *l, const char *c) {
+	for(size_t pos = 0; c[pos]; pos++) {
+		insertCharacter(l, c[pos]);
 	}
 	refreshLine(l);
 	return 0;
@@ -1626,10 +1630,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 			if (mlmode && hasMoreData(l.ifd)) {
 				// enter was added as part of copy pasting and not as part of the user adding it
 				// insert newline into buffer
-				if (linenoiseEditInsert(&l, '\r')) {
-					return -1;
-				}
-				if (linenoiseEditInsert(&l, '\n')) {
+				if (linenoiseEditInsertMulti(&l, "\r\n")) {
 					return -1;
 				}
 				break;
