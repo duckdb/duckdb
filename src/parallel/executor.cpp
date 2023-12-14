@@ -521,7 +521,7 @@ void Executor::Reset() {
 	root_pipeline_idx = 0;
 	completed_pipelines = 0;
 	total_pipelines = 0;
-	exceptions.clear();
+	error_manager.Reset();
 	pipelines.clear();
 	events.clear();
 	to_be_rescheduled_tasks.clear();

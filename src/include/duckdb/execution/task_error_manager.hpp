@@ -33,6 +33,11 @@ public:
 		entry.Throw();
 	}
 
+	void Reset() {
+		lock_guard<mutex> elock(error_lock);
+		exceptions.clear();
+	}
+
 private:
 	mutex error_lock;
 	//! Exceptions that occurred during the execution of the current query
