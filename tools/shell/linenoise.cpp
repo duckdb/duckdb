@@ -940,50 +940,34 @@ static void refreshSearch(struct linenoiseState *l) {
 			search_prompt += "> ";
 		}
 	}
-
-	char seq[64];
-	size_t plen = linenoiseComputeRenderWidth(search_prompt.c_str(), search_prompt.size());
-	int fd = l->ofd;
-	char *buf;
-	size_t len;
-	size_t cols = l->cols;
-	struct abuf ab;
-	size_t render_pos = 0;
-	std::string highlight_buffer;
-
-	if (!no_matches) {
+	auto oldHighlighting = enableHighlighting;
+	linenoiseState clone = *l;
+	l->prompt = (char *) search_prompt.c_str();
+	l->plen = search_prompt.size();
+	if (no_matches || l->search_buf.empty()) {
+		// if there are no matches render the no_matches_text
+		l->buf = (char *) no_matches_text.c_str();
+		l->len = no_matches_text.size();
+		l->pos = 0;
+		// don't highlight the "no_matches" text
+		enableHighlighting = false;
+	} else {
 		// if there are matches render the current history item
 		auto search_match = l->search_matches[l->search_index];
 		auto history_index = search_match.history_index;
 		auto cursor_position = search_match.match_end;
-		buf = history[history_index];
-		len = strlen(history[history_index]);
-		renderText(render_pos, buf, len, cursor_position, cols, plen, highlight_buffer, enableHighlighting,
-		           &search_match);
+		l->buf = history[history_index];
+		l->len = strlen(history[history_index]);
+		l->pos = cursor_position;
 	}
+	refreshLine(l);
 
-	abInit(&ab);
-	/* Cursor to left edge */
-	snprintf(seq, 64, "\r");
-	abAppend(&ab, seq, strlen(seq));
-	/* Write the prompt and the current buffer content */
-	abAppend(&ab, search_prompt.c_str(), search_prompt.size());
-	if (no_matches) {
-		abAppend(&ab, no_matches_text.c_str(), no_matches_text.size());
-	} else {
-		abAppend(&ab, buf, len);
-	}
-	/* Show hits if any. */
-	refreshShowHints(&ab, l, plen);
-	/* Erase to right */
-	snprintf(seq, 64, "\x1b[0K");
-	abAppend(&ab, seq, strlen(seq));
-	/* Move cursor to original position. */
-	snprintf(seq, 64, "\r\x1b[%dC", (int)(render_pos + plen));
-	abAppend(&ab, seq, strlen(seq));
-	if (write(fd, ab.b, ab.len) == -1) {
-	} /* Can't recover from write error. */
-	abFree(&ab);
+	enableHighlighting = oldHighlighting;
+	l->buf = clone.buf;
+	l->len = clone.len;
+	l->pos = clone.pos;
+	l->prompt = clone.prompt;
+	l->plen = clone.plen;
 }
 
 bool isNewline(char c) {
@@ -2145,10 +2129,12 @@ int linenoiseHistoryAdd(const char *line) {
 	linecopy = strdup(line);
 	if (!linecopy)
 		return 0;
-	// replace all newlines with spaces
-	for (auto ptr = linecopy; *ptr; ptr++) {
-		if (*ptr == '\n' || *ptr == '\r') {
-			*ptr = ' ';
+	if (!mlmode) {
+		// replace all newlines with spaces
+		for (auto ptr = linecopy; *ptr; ptr++) {
+			if (*ptr == '\n' || *ptr == '\r') {
+				*ptr = ' ';
+			}
 		}
 	}
 	if (history_len == history_max_len) {
