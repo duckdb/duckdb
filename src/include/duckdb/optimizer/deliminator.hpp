@@ -32,6 +32,7 @@ private:
 	bool RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_join, const idx_t delim_get_count,
 	                                      unique_ptr<LogicalOperator> &join,
 	                                      const vector<ReplacementBinding> &replacement_bindings);
+	void TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join);
 
 private:
 	optional_ptr<LogicalOperator> root;

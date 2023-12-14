@@ -69,6 +69,12 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 				}
 			}
 		}
+
+		// Only DelimJoins are ever created as SINGLE joins,
+		// and we can switch from SINGLE to LEFT if the RHS is de-duplicated by an aggr
+		if (delim_join.join_type == JoinType::SINGLE) {
+			TrySwitchSingleToLeft(delim_join);
+		}
 	}
 
 	return op;
@@ -311,6 +317,57 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 	}
 
 	return found_all;
+}
+
+void Deliminator::TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join) {
+	D_ASSERT(delim_join.join_type == JoinType::SINGLE);
+
+	// Collect RHS bindings
+	vector<ColumnBinding> join_bindings;
+	for (const auto &cond : delim_join.conditions) {
+		if (!IsEqualityJoinCondition(cond)) {
+			return;
+		}
+		if (cond.right->type != ExpressionType::BOUND_COLUMN_REF) {
+			return;
+		}
+		auto &colref = cond.right->Cast<BoundColumnRefExpression>();
+		join_bindings.emplace_back(colref.binding);
+	}
+
+	// Now try to find an aggr in the RHS such that the join_column_bindings is a superset of the groups
+	reference<LogicalOperator> current_op = *delim_join.children[1];
+	while (current_op.get().type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		if (current_op.get().children.size() != 1) {
+			return;
+		}
+
+		switch (current_op.get().type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+			FindAndReplaceBindings(join_bindings, current_op.get().expressions, current_op.get().GetColumnBindings());
+			break;
+		case LogicalOperatorType::LOGICAL_FILTER:
+			break; // Doesn't change bindings
+		default:
+			return;
+		}
+		current_op = *current_op.get().children[0];
+	}
+
+	D_ASSERT(current_op.get().type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY);
+	const auto &aggr = current_op.get().Cast<LogicalAggregate>();
+	if (!aggr.grouping_functions.empty()) {
+		return;
+	}
+
+	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
+		if (std::find(join_bindings.begin(), join_bindings.end(), ColumnBinding(aggr.group_index, group_idx)) ==
+		    join_bindings.end()) {
+			return;
+		}
+	}
+
+	delim_join.join_type = JoinType::LEFT;
 }
 
 } // namespace duckdb
