@@ -18,9 +18,11 @@ create table insertconflicttest(
 
 statement error
 insert into insertconflicttest values(0, 'Crowberry', 0) on conflict (key) do nothing;
+----
 
 statement error
 insert into insertconflicttest values(0, 'Crowberry', 0) on conflict (fruit) do nothing;
+----
 
 # succeeds
 
@@ -49,9 +51,11 @@ insert into insertconflicttest values (8, 'Lime', 0) on conflict (fruit, key) do
 
 statement error
 insert into insertconflicttest values (9, 'Banana', 0) on conflict (key) do update set other = 1
+----
 
 statement error
 insert into insertconflicttest values (10, 'Blueberry', 0) on conflict (key, key, key) do update set other = 1
+----
 
 ## -- This fails on postgres for some reason? -- ##
 statement ok

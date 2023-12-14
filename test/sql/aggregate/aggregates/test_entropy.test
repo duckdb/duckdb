@@ -11,6 +11,7 @@ PRAGMA verify_external
 #Corner cases
 statement error
 select entropy()
+----
 
 query I
 select entropy(NULL)
@@ -24,6 +25,7 @@ select entropy(1)
 
 statement error
 select entropy(*)
+----
 
 statement ok
 create table aggr(k int);

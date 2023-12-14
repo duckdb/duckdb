@@ -45,6 +45,7 @@ PRAGMA table_info('test.v')
 # but querying the view fails
 statement error
 SELECT * FROM test.v
+----
 
 statement ok
 CREATE VIEW test.v2 AS SELECT 42
@@ -67,6 +68,7 @@ PRAGMA table_info('test.v')
 
 statement error
 SELECT * FROM test.v
+----
 
 # after recreating the table, we can query the view again
 statement ok
@@ -90,5 +92,6 @@ DROP TABLE test.t
 
 statement error
 SELECT * FROM test.v2
+----
 
 endloop

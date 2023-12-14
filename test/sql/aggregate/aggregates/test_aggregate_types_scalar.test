@@ -14,6 +14,7 @@ SELECT COUNT(), COUNT(1), COUNT(*), COUNT(NULL), COUNT('hello'), COUNT(DATE '199
 
 statement error
 SELECT COUNT(1, 2)
+----
 
 query RRR
 SELECT SUM(1), SUM(NULL), SUM(33.3)
@@ -24,18 +25,23 @@ NULL
 
 statement error
 SELECT SUM(True)
+----
 
 statement error
 SELECT SUM('hello')
+----
 
 statement error
 SELECT SUM(DATE '1992-02-02')
+----
 
 statement error
 SELECT SUM()
+----
 
 statement error
 SELECT SUM(1, 2)
+----
 
 query IIRTTTT
 SELECT MIN(1), MIN(NULL), MIN(33.3), MIN('hello'), MIN(True), MIN(DATE '1992-02-02'), MIN(TIMESTAMP '2008-01-01 00:00:01')
@@ -44,9 +50,11 @@ SELECT MIN(1), MIN(NULL), MIN(33.3), MIN('hello'), MIN(True), MIN(DATE '1992-02-
 
 statement error
 SELECT MIN()
+----
 
 statement error
 SELECT MIN(1, 2)
+----
 
 query IIRTTTT
 SELECT MAX(1), MAX(NULL), MAX(33.3), MAX('hello'), MAX(True), MAX(DATE '1992-02-02'), MAX(TIMESTAMP '2008-01-01 00:00:01')
@@ -55,9 +63,11 @@ SELECT MAX(1), MAX(NULL), MAX(33.3), MAX('hello'), MAX(True), MAX(DATE '1992-02-
 
 statement error
 SELECT MAX()
+----
 
 statement error
 SELECT MAX(1, 2)
+----
 
 query IIRTTTT
 SELECT FIRST(1), FIRST(NULL), FIRST(33.3), FIRST('hello'), FIRST(True), FIRST(DATE '1992-02-02'), FIRST(TIMESTAMP '2008-01-01 00:00:01')
@@ -66,9 +76,11 @@ SELECT FIRST(1), FIRST(NULL), FIRST(33.3), FIRST('hello'), FIRST(True), FIRST(DA
 
 statement error
 SELECT FIRST()
+----
 
 statement error
 SELECT FIRST(1, 2)
+----
 
 query IIRTTTT
 SELECT LAST(1), LAST(NULL), LAST(33.3), LAST('hello'), LAST(True), LAST(DATE '1992-02-02'), LAST(TIMESTAMP '2008-01-01 00:00:01')
@@ -77,9 +89,11 @@ SELECT LAST(1), LAST(NULL), LAST(33.3), LAST('hello'), LAST(True), LAST(DATE '19
 
 statement error
 SELECT LAST()
+----
 
 statement error
 SELECT LAST(1, 2)
+----
 
 query RRR
 SELECT AVG(1), AVG(NULL), AVG(33.3)
@@ -88,18 +102,23 @@ SELECT AVG(1), AVG(NULL), AVG(33.3)
 
 statement error
 SELECT AVG(True)
+----
 
 statement error
 SELECT AVG('hello')
+----
 
 statement error
 SELECT AVG(DATE '1992-02-02')
+----
 
 statement error
 SELECT AVG()
+----
 
 statement error
 SELECT AVG(1, 2)
+----
 
 query T
 SELECT STRING_AGG('hello')
@@ -113,9 +132,11 @@ hello	NULL	NULL	NULL	(empty)
 
 statement error
 SELECT STRING_AGG()
+----
 
 statement error
 SELECT STRING_AGG(1, 2, 3)
+----
 
 statement ok
 CREATE TABLE test_val(val INT)

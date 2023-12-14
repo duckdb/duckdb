@@ -47,6 +47,7 @@ SELECT MAP(
 		NULL,NULL,NULL,NULL,NULL,NULL
 	]
 );
+----
 
 # Nested keys (list) not succesfull (nulls)
 statement error
@@ -58,6 +59,7 @@ SELECT MAP(
 		NULL,NULL,NULL,NULL,NULL,NULL
 	]
 );
+----
 
 # Nested keys (struct) succesfull
 query I
@@ -82,6 +84,7 @@ SELECT MAP(
 		'n', 'o', 'p', 'e'
 	]
 );
+----
 
 # Nested keys (struct) not succesfull (null)
 statement error
@@ -93,6 +96,7 @@ SELECT MAP(
 		'e', 'r', 'r', 'o', 'r'
 	]
 );
+----
 
 # Nested keys (map) succesfull
 query I
@@ -117,6 +121,7 @@ SELECT MAP(
 		0,1,2,3,4,5
 	]
 );
+----
 
 # Nested keys (map) not succesfull (null)
 statement error
@@ -128,3 +133,4 @@ SELECT MAP(
 		0,1,2,3,4
 	]
 );
+----

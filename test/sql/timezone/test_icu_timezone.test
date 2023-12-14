@@ -9,6 +9,7 @@ SET Calendar = 'gregorian';
 
 statement error
 SET TimeZone = 'Europe/Duck';
+----
 
 statement ok
 SET TimeZone = 'America/Los_Angeles';
