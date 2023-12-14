@@ -11,6 +11,7 @@
 #include "duckdb/catalog/default/default_generator.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/main/secret/secret.hpp"
+#include "duckdb/main/secret/secret_storage.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 
@@ -18,6 +19,14 @@ namespace duckdb {
 class SecretManager;
 struct DBConfig;
 class SchemaCatalogEntry;
+
+//! Return value of a Secret Matching operations
+struct SecretMatch {
+	SecretMatch(SecretEntry *secret, int64_t score) : secret(secret), score(score){};
+
+	optional_ptr<SecretEntry> secret;
+	int64_t score;
+};
 
 //! Wrapper around a BaseSecret containing metadata and allow storing in CatalogSet
 struct SecretEntry : public InCatalogEntry {
@@ -52,6 +61,10 @@ public:
 	explicit SecretManager() = default;
 	virtual ~SecretManager() = default;
 
+	static constexpr const char* DEFAULT_BACKEND_NAME = "default";
+	static constexpr const char* LOCAL_FILE_BACKEND_NAME = "persistent";
+	static constexpr const char* IN_MEMORY_BACKEND_NAME = "temporary";
+
 	//! Static Helper Functions
 	DUCKDB_API static SecretManager &Get(ClientContext &context);
 
@@ -64,9 +77,9 @@ public:
 	DUCKDB_API void RegisterSecretFunction(CatalogTransaction transaction, CreateSecretFunction function,
 	                                       OnCreateConflict on_conflict);
 	DUCKDB_API optional_ptr<SecretEntry> RegisterSecret(CatalogTransaction transaction,
-	                                                    unique_ptr<const BaseSecret> secrsecretet,
+	                                                    unique_ptr<const BaseSecret> secret,
 	                                                    OnCreateConflict on_conflict,
-	                                                    SecretPersistMode persist_mode);
+	                                                    const string &storage_mode);
 
 	DUCKDB_API optional_ptr<SecretEntry> CreateSecret(ClientContext &context, const CreateSecretInfo &info);
 	DUCKDB_API BoundStatement BindCreateSecret(CatalogTransaction transaction, CreateSecretInfo &info);
@@ -99,7 +112,7 @@ private:
 	//! Register a new Secret
 	optional_ptr<SecretEntry> RegisterSecretInternal(CatalogTransaction transaction,
 	                                                 unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
-	                                                 SecretPersistMode persist_mode);
+	                                                 const string &storage_mode);
 	//! Write a secret to the FileSystem
 	void WriteSecretToFile(CatalogTransaction transaction, const BaseSecret &secret);
 
@@ -117,9 +130,11 @@ private:
 	void ThrowOnSettingChangeIfInitialized();
 
 	//! Secret CatalogSets
-	unique_ptr<CatalogSet> secrets;
 	unique_ptr<CatalogSet> secret_types;
 	unique_ptr<CatalogSet> secret_functions;
+
+	//! Overloadable secret storage backends
+	case_insensitive_map_t<unique_ptr<SecretStorage>> storage_backends;
 
 	//! While false, secret manager settings can still be changed
 	atomic<bool> initialized {false};

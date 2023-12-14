@@ -12,12 +12,168 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/secret/secret_storage.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/operator/logical_create_secret.hpp"
 
 namespace duckdb {
+
+bool CatalogSetSecretStorage::HasSecret(CatalogTransaction transaction, const string &name) {
+	return secrets->GetEntry(transaction, name);
+}
+
+optional_ptr<SecretEntry> CatalogSetSecretStorage::StoreSecret(CatalogTransaction transaction,
+                                                               unique_ptr<const BaseSecret> secret,
+                                                               OnCreateConflict on_conflict) {
+	if (secrets->GetEntry(transaction, secret->GetName())) {
+		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
+			throw InvalidInputException("Secret with name '" + secret->GetName() + "' already exists!");
+		} else if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+			return nullptr;
+		} else if (on_conflict == OnCreateConflict::ALTER_ON_CONFLICT) {
+			throw InternalException("unknown OnCreateConflict found while registering secret");
+		} else if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+			secrets->DropEntry(transaction, secret->GetName(), true, true);
+		}
+	}
+
+	// Call write function
+	WriteSecret(transaction, *secret);
+
+	auto secret_name = secret->GetName();
+	auto secret_entry =
+	    make_uniq<SecretEntry>(std::move(secret), Catalog::GetSystemCatalog(*transaction.db), secret_name);
+	secret_entry->temporary = !persistent;
+	secret_entry->storage_mode = name;
+	DependencyList l;
+	secrets->CreateEntry(transaction, secret_name, std::move(secret_entry), l);
+	return &secrets->GetEntry(transaction, secret_name)->Cast<SecretEntry>();
+}
+
+vector<reference<SecretEntry>> CatalogSetSecretStorage::AllSecrets(CatalogTransaction transaction) {
+	vector<reference<SecretEntry>> ret_value;
+	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
+		auto &cast_entry = entry.Cast<SecretEntry>();
+		ret_value.push_back(cast_entry);
+	};
+	secrets->Scan(transaction, callback);
+	return ret_value;
+}
+
+void CatalogSetSecretStorage::DropSecretByName(CatalogTransaction transaction, const string &name,
+                                               OnEntryNotFound on_entry_not_found) {
+	auto entry = secrets->GetEntry(transaction, name);
+	if (!entry && on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+		throw InvalidInputException("Failed to remove non-existent secret with name '%s'", name);
+	}
+
+	secrets->DropEntry(transaction, name, true, true);
+	RemoveSecret(transaction, name);
+}
+
+SecretMatch CatalogSetSecretStorage::GetSecretByPath(CatalogTransaction transaction, const string &path,
+                                                     const string &type) {
+	int64_t best_match_score = -1;
+	SecretEntry *best_match = nullptr;
+
+	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
+		auto &cast_entry = entry.Cast<SecretEntry>();
+
+		if (cast_entry.secret->GetType() == type) {
+			auto match = cast_entry.secret->MatchScore(path);
+
+			if (match > best_match_score) {
+				best_match_score = match;
+				best_match = &cast_entry;
+			}
+		}
+	};
+	secrets->Scan(transaction, callback);
+
+	if (best_match) {
+		return {best_match, best_match_score};
+	}
+
+	return {nullptr, best_match_score};
+}
+
+optional_ptr<SecretEntry> CatalogSetSecretStorage::GetSecretByName(CatalogTransaction transaction, const string &name) {
+	auto res = secrets->GetEntry(transaction, name);
+
+	if (res) {
+		auto &cast_entry = res->Cast<SecretEntry>();
+		return &cast_entry;
+	}
+
+	return nullptr;
+}
+
+LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseInstance &db, const string &name_p,
+                                               const string &secret_path)
+    : CatalogSetSecretStorage(name_p), secret_path(secret_path) {
+	persistent = true;
+
+	LocalFileSystem fs;
+
+	if (!fs.DirectoryExists(secret_path)) {
+		fs.CreateDirectory(secret_path);
+	}
+
+	if (persistent_secrets.empty()) {
+		fs.ListFiles(secret_path, [&](const string &fname, bool is_dir) {
+			string full_path = fs.JoinPath(secret_path, fname);
+
+			if (StringUtil::EndsWith(full_path, ".duckdb_secret")) {
+				string secret_name = fname.substr(0, fname.size() - 14); // size of file ext
+				persistent_secrets.insert(secret_name);
+			}
+		});
+	}
+
+	auto &catalog = Catalog::GetSystemCatalog(db);
+	secrets = make_uniq<CatalogSet>(Catalog::GetSystemCatalog(db),
+	                                make_uniq<DefaultSecretGenerator>(catalog, manager, persistent_secrets));
+};
+
+void CatalogSetSecretStorage::WriteSecret(CatalogTransaction transaction, const BaseSecret &secret) {
+	// By default, this writes nothing
+}
+void CatalogSetSecretStorage::RemoveSecret(CatalogTransaction transaction, const string &name) {
+	// By default, this writes nothing
+}
+
+void LocalFileSecretStorage::WriteSecret(CatalogTransaction transaction, const BaseSecret &secret) {
+	LocalFileSystem fs;
+	auto file_path = fs.JoinPath(secret_path, secret.GetName() + ".duckdb_secret");
+
+	if (fs.FileExists(file_path)) {
+		fs.RemoveFile(file_path);
+	}
+
+	auto file_writer = BufferedFileWriter(fs, file_path);
+
+	auto serializer = BinarySerializer(file_writer);
+	serializer.Begin();
+	secret.Serialize(serializer);
+	serializer.End();
+
+	file_writer.Flush();
+}
+
+void LocalFileSecretStorage::RemoveSecret(CatalogTransaction transaction, const string &secret) {
+	LocalFileSystem fs;
+	string file = fs.JoinPath(secret_path, secret + ".duckdb_secret");
+	persistent_secrets.erase(secret);
+	try {
+		fs.RemoveFile(file);
+	} catch (IOException &e) {
+		throw IOException("Failed to remove secret file '%s', the file may have been removed by another duckdb "
+		                  "instance. (original error: '%s')",
+		                  file, e.RawMessage());
+	}
+}
 
 void SecretManager::Initialize(DatabaseInstance &db) {
 	lock_guard<mutex> lck(initialize_lock);
@@ -96,53 +252,33 @@ void SecretManager::RegisterSecretFunction(CatalogTransaction transaction, Creat
 optional_ptr<SecretEntry> SecretManager::RegisterSecret(CatalogTransaction transaction,
                                                             unique_ptr<const BaseSecret> secret,
                                                             OnCreateConflict on_conflict,
-                                                            SecretPersistMode persist_mode) {
+                                                            const string &storage_mode) {
 	InitializeSecrets(transaction);
-	return RegisterSecretInternal(transaction, std::move(secret), on_conflict, persist_mode);
+	return RegisterSecretInternal(transaction, std::move(secret), on_conflict, storage_mode);
 }
 
 optional_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransaction transaction,
                                                                     unique_ptr<const BaseSecret> secret,
                                                                     OnCreateConflict on_conflict,
-                                                                    SecretPersistMode persist_mode) {
+                                                                    const string &storage_mode) {
 	//! Ensure we only create secrets for known types;
 	LookupTypeInternal(transaction, secret->GetType());
 
-	bool persist = persist_mode == SecretPersistMode::PERSISTENT;
-
-	string storage_str;
-	if (persist_mode == SecretPersistMode::PERSISTENT) {
-		storage_str = config.secret_path;
+	//! TODO move to setting?
+	string actual_storage_mode;
+	if (storage_mode == DEFAULT_BACKEND_NAME) {
+		actual_storage_mode = IN_MEMORY_BACKEND_NAME;
 	} else {
-		storage_str = ":memory:";
+		actual_storage_mode = storage_mode;
 	}
 
-	if (secrets->GetEntry(transaction, secret->GetName())) {
-		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
-			throw InvalidInputException("Secret with name '" + secret->GetName() + "' already exists!");
-		} else if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
-			return nullptr;
-		} else if (on_conflict == OnCreateConflict::ALTER_ON_CONFLICT) {
-			throw InternalException("unknown OnCreateConflict found while registering secret");
-		} else if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
-			secrets->DropEntry(transaction, secret->GetName(), true, true);
-		}
+	//! Lookup which backend to store the secret in
+	auto backend = storage_backends.find(actual_storage_mode);
+	if (backend != storage_backends.end()) {
+		return backend->second->StoreSecret(transaction, std::move(secret), on_conflict);
 	}
 
-	if (persist_mode == SecretPersistMode::PERSISTENT) {
-		WriteSecretToFile(transaction, *secret);
-	}
-
-	// Creating entry
-	auto secret_name = secret->GetName();
-	auto secret_entry =
-	    make_uniq<SecretEntry>(std::move(secret), Catalog::GetSystemCatalog(*transaction.db), secret_name);
-	secret_entry->temporary = !persist;
-	secret_entry->storage_mode = storage_str;
-	DependencyList l;
-	secrets->CreateEntry(transaction, secret_name, std::move(secret_entry), l);
-
-	return &secrets->GetEntry(transaction, secret_name)->Cast<SecretEntry>();
+	throw InvalidInputException("Secret storage mode '%s' not found!", storage_mode);
 }
 
 optional_ptr<CreateSecretFunction>
@@ -178,7 +314,7 @@ optional_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, co
 	InitializeSecrets(transaction);
 
 	// Make a copy to set the provider to default if necessary
-	CreateSecretInput function_input {info.type, info.provider, info.persist_mode, info.name, info.scope, info.options};
+	CreateSecretInput function_input {info.type, info.provider, info.storage_type, info.name, info.scope, info.options};
 	if (function_input.provider.empty()) {
 		auto secret_type = LookupTypeInternal(transaction, function_input.type);
 		function_input.provider = secret_type.default_provider;
@@ -200,7 +336,7 @@ optional_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, co
 	}
 
 	// Register the secret at the secret_manager
-	return RegisterSecretInternal(transaction, std::move(secret), info.on_conflict, info.persist_mode);
+	return RegisterSecretInternal(transaction, std::move(secret), info.on_conflict, info.storage_type);
 }
 
 BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, CreateSecretInfo &info) {
@@ -261,19 +397,12 @@ optional_ptr<SecretEntry> SecretManager::GetSecretByPath(CatalogTransaction tran
 	int64_t best_match_score = -1;
 	SecretEntry *best_match = nullptr;
 
-	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
-		auto &cast_entry = entry.Cast<SecretEntry>();
-
-		if (cast_entry.secret->GetType() == type) {
-			auto match = cast_entry.secret->MatchScore(path);
-
-			if (match > best_match_score) {
-				best_match_score = match;
-				best_match = &cast_entry;
-			}
+	for (const auto &backend : storage_backends) {
+		auto match = backend.second->GetSecretByPath(transaction, path, type);
+		if (match.secret && match.score > best_match_score){
+			best_match = match.secret.get();
 		}
-	};
-	secrets->Scan(transaction, callback);
+	}
 
 	if (best_match) {
 		return best_match;
@@ -285,49 +414,42 @@ optional_ptr<SecretEntry> SecretManager::GetSecretByPath(CatalogTransaction tran
 optional_ptr<SecretEntry> SecretManager::GetSecretByName(CatalogTransaction transaction, const string &name) {
 	InitializeSecrets(transaction);
 
-	auto res = secrets->GetEntry(transaction, name);
+	bool found = false;
+	for (const auto &backend : storage_backends) {
+		auto lookup = backend.second->GetSecretByName(transaction, name);
+		if (lookup) {
+			if (found) {
+				throw NotImplementedException("Name collisions between secret manager backends not implemented");
+			}
 
-	if (res) {
-		auto &cast_entry = res->Cast<SecretEntry>();
-		return &cast_entry;
+			return lookup;
+		}
 	}
 
-	throw InternalException("GetSecretByName called on unknown secret: %s", name);
+	return nullptr;
 }
 
 void SecretManager::DropSecretByName(CatalogTransaction transaction, const string &name,
                                          OnEntryNotFound on_entry_not_found) {
 	InitializeSecrets(transaction);
 
-	bool deleted;
-	bool was_persistent;
-
-	auto entry = secrets->GetEntry(transaction, name);
-	if (!entry && on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-		throw InvalidInputException("Failed to remove non-existent secret with name '%s'", name);
-	}
-
-	const auto &cast_entry = entry->Cast<SecretEntry>();
-	was_persistent = !cast_entry.temporary;
-	deleted = secrets->DropEntry(transaction, name, true, true);
-
-	if (!deleted || was_persistent) {
-		LocalFileSystem fs;
-		deleted = true;
-		string file = fs.JoinPath(config.secret_path, name + ".duckdb_secret");
-		persistent_secrets.erase(name);
-		try {
-			fs.RemoveFile(file);
-		} catch (IOException &e) {
-			throw IOException("Failed to remove secret file '%s', the file may have been removed by another duckdb "
-			                  "instance. (original error: '%s')",
-			                  file, e.RawMessage());
+	vector<SecretStorage*> matches;
+	for (const auto &backend : storage_backends) {
+		auto lookup = backend.second->GetSecretByName(transaction, name);
+		if (lookup) {
+			matches.push_back(backend.second.get());
 		}
 	}
 
-	if (!deleted && on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+	if (matches.size() > 1) {
+		throw NotImplementedException("Name collisions between storage backends");
+	}
+
+	if (matches.empty() && on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 		throw InvalidInputException("Failed to remove non-existent secret with name '%s'", name);
 	}
+
+	matches[0]->DropSecretByName(transaction, name, on_entry_not_found);
 }
 
 SecretType SecretManager::LookupType(CatalogTransaction transaction, const string &type) {
@@ -355,14 +477,17 @@ SecretType SecretManager::LookupTypeInternal(CatalogTransaction transaction, con
 vector<reference<SecretEntry>> SecretManager::AllSecrets(CatalogTransaction transaction) {
 	InitializeSecrets(transaction);
 
-	vector<reference<SecretEntry>> ret_value;
-	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
-		auto &cast_entry = entry.Cast<SecretEntry>();
-		ret_value.push_back(cast_entry);
-	};
-	secrets->Scan(transaction, callback);
+	vector<reference<SecretEntry>> result;
 
-	return ret_value;
+	// Add results from all backends to the result set
+	for (const auto &backend : storage_backends) {
+		auto backend_result = backend.second->AllSecrets(transaction);
+		for (const auto& it : backend_result) {
+			result.push_back(it);
+		}
+	}
+
+	return result;
 }
 
 void SecretManager::ThrowOnSettingChangeIfInitialized() {
@@ -426,13 +551,15 @@ void SecretManager::InitializeSecrets(CatalogTransaction transaction) {
 			return;
 		}
 
+		string local_backend_name = "temporary";
+		storage_backends[local_backend_name] = make_uniq<TemporarySecretStorage>(local_backend_name, *transaction.db);
+
 		if (config.allow_persistent_secrets) {
+			string file_backend_name = "persistent";
+			storage_backends[file_backend_name] = make_uniq<LocalFileSecretStorage>(*this, *transaction.db, file_backend_name, config.secret_path);
 			SecretManager::LoadPersistentSecretsMap(transaction);
 		}
 
-		auto &catalog = Catalog::GetSystemCatalog(*transaction.db);
-		secrets =
-		    make_uniq<CatalogSet>(catalog, make_uniq<DefaultSecretGenerator>(catalog, *this, persistent_secrets));
 		initialized = true;
 	}
 }
@@ -500,7 +627,7 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContex
 
 			auto name = deserialized_secret->GetName();
 			auto entry = make_uniq<SecretEntry>(std::move(deserialized_secret), catalog, name);
-			entry->storage_mode = base_secret_path;
+			entry->storage_mode = SecretManager::LOCAL_FILE_BACKEND_NAME;
 
 			return std::move(entry);
 		}

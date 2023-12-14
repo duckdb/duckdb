@@ -23,11 +23,11 @@ public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::CREATE_SECRET_INFO;
 
 public:
-	explicit CreateSecretInfo(OnCreateConflict on_conflict, SecretPersistMode persist_mode);
+	explicit CreateSecretInfo(OnCreateConflict on_conflict, const string &storage_type);
 	//! How to handle conflict
 	OnCreateConflict on_conflict;
-	//! Should the secret be persisted
-	SecretPersistMode persist_mode;
+	//! Secret Storage type
+	string storage_type;
 	//! The type of secret
 	string type;
 	//! (optionally) the provider of the secret credentials

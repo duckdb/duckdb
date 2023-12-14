@@ -23,7 +23,7 @@ struct CreateSecretInput {
 	//! mode
 	string provider;
 	//! should the secret be persisted?
-	SecretPersistMode persist;
+	string storage_type;
 	//! (optional) alias provided by user
 	string name;
 	//! (optional) scope provided by user
@@ -60,7 +60,6 @@ protected:
 	case_insensitive_map_t<CreateSecretFunction> functions;
 };
 
-enum class SecretPersistMode : uint8_t { DEFAULT, TEMPORARY, PERSISTENT };
 //! Determines whether the secrets are allowed to be shown
 enum class SecretDisplayType : uint8_t { REDACTED, UNREDACTED };
 

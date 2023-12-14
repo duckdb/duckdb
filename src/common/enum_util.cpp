@@ -5051,34 +5051,6 @@ SecretDisplayType EnumUtil::FromString<SecretDisplayType>(const char *value) {
 }
 
 template<>
-const char* EnumUtil::ToChars<SecretPersistMode>(SecretPersistMode value) {
-	switch(value) {
-	case SecretPersistMode::DEFAULT:
-		return "DEFAULT";
-	case SecretPersistMode::TEMPORARY:
-		return "TEMPORARY";
-	case SecretPersistMode::PERSISTENT:
-		return "PERSISTENT";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
-	}
-}
-
-template<>
-SecretPersistMode EnumUtil::FromString<SecretPersistMode>(const char *value) {
-	if (StringUtil::Equals(value, "DEFAULT")) {
-		return SecretPersistMode::DEFAULT;
-	}
-	if (StringUtil::Equals(value, "TEMPORARY")) {
-		return SecretPersistMode::TEMPORARY;
-	}
-	if (StringUtil::Equals(value, "PERSISTENT")) {
-		return SecretPersistMode::PERSISTENT;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
-}
-
-template<>
 const char* EnumUtil::ToChars<SequenceInfo>(SequenceInfo value) {
 	switch(value) {
 	case SequenceInfo::SEQ_START:
