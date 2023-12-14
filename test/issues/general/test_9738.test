@@ -11,8 +11,6 @@ insert into my_table(name) values('Someone');
 statement ok
 create or replace macro do_nothing(input) as input;
 
-mode skip
-
 query I
 select name from my_table;
 ----
@@ -27,8 +25,6 @@ query I
 select do_nothing(NAME) from my_table;
 ----
 Someone
-
-mode unskip
 
 query I
 select do_nothing(name) from my_table;
