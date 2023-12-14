@@ -1679,7 +1679,18 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 		nread = read(l.ifd, &c, 1);
 		if (nread <= 0)
 			return l.len;
-		l.cols = getColumns(stdin_fd, stdout_fd);
+		if (mlmode) {
+			int new_cols = getColumns(stdin_fd, stdout_fd);
+			if (new_cols != l.cols) {
+				// terminal resize! re-compute max lines
+				l.cols = new_cols;
+				int rows, cols;
+				int cursor_row, cursor_col;
+				positionToColAndRow(&l, l.pos, cursor_row, cursor_col, rows, cols);
+				l.old_cursor_rows = cursor_row;
+				l.maxrows = rows;
+			}
+		}
 
 		if (l.search) {
 			char ret = linenoiseSearch(&l, c);
