@@ -13,6 +13,7 @@
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
 
 namespace duckdb {
 
@@ -654,7 +655,7 @@ private:
 
 class BaseCheckpointTask : public Task {
 public:
-	BaseCheckpointTask(CollectionCheckpointState &checkpoint_state) : checkpoint_state(checkpoint_state) {
+	explicit BaseCheckpointTask(CollectionCheckpointState &checkpoint_state) : checkpoint_state(checkpoint_state) {
 	}
 
 	virtual void ExecuteTask() = 0;

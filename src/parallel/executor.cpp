@@ -557,7 +557,7 @@ void Executor::PushError(PreservedError exception) {
 	// interrupt execution of any other pipelines that belong to this executor
 	context.interrupted = true;
 	// push the exception onto the stack
-	error_manager.PushError(exception);
+	error_manager.PushError(std::move(exception));
 }
 
 bool Executor::HasError() {
