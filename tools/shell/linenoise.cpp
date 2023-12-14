@@ -184,7 +184,7 @@ struct linenoiseState {
 	const char *prompt;                      /* Prompt to display. */
 	size_t plen;                             /* Prompt length. */
 	size_t pos;                              /* Current cursor position. */
-	size_t oldpos;                           /* Previous refresh cursor position. */
+	size_t old_cursor_rows;                  /* Previous refresh cursor position. */
 	size_t len;                              /* Current edited line length. */
 	size_t cols;                             /* Number of columns in terminal. */
 	size_t maxrows;                          /* Maximum num of rows used so far (multiline mode) */
@@ -222,9 +222,10 @@ enum KEY_ACTION {
 static void linenoiseAtExit(void);
 int linenoiseHistoryAdd(const char *line);
 static void refreshLine(struct linenoiseState *l);
+static int hasMoreData(int fd);
 
 /* Debugging macro. */
-#if 0
+#if 1
 FILE *lndebug_fp = NULL;
 #define lndebug(...)                                                                                                   \
 	do {                                                                                                               \
@@ -282,7 +283,8 @@ static int enableRawMode(int fd) {
 	/* output modes - disable post processing */
 	raw.c_oflag &= ~(OPOST);
 	/* control modes - set 8 bit chars */
-	raw.c_cflag |= (CS8);
+	raw.c_iflag |= IUTF8;
+	raw.c_cflag |= CS8;
 	/* local modes - choing off, canonical off, no extended functions,
 	 * no signal chars (^Z,^C) */
 	raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
@@ -991,12 +993,51 @@ static void refreshSearch(struct linenoiseState *l) {
 static void refreshMultiLine(struct linenoiseState *l) {
 	char seq[64];
 	int plen = linenoiseComputeRenderWidth(l->prompt, strlen(l->prompt));
-	int total_len = linenoiseComputeRenderWidth(l->buf, l->len);
-	int cursor_old_pos = linenoiseComputeRenderWidth(l->buf, l->oldpos);
-	int cursor_pos = linenoiseComputeRenderWidth(l->buf, l->pos);
-	int rows = (plen + total_len + l->cols - 1) / l->cols;  /* rows used by current buf. */
-	int rpos = (plen + cursor_old_pos + l->cols) / l->cols; /* cursor relative row. */
-	int rpos2;                                              /* rpos after refresh. */
+	// utf8 in prompt, get render width
+	int rows = 1;
+	int new_cursor_x = 0;
+	int new_cursor_row = -1;
+	size_t row_size = plen;
+	size_t cpos = 0;
+	while (cpos < l->len) {
+		if (row_size >= l->cols) {
+			rows++;
+			row_size = 0;
+		}
+		if (new_cursor_row < 0 && cpos >= l->pos) {
+			new_cursor_row = rows;
+			new_cursor_x = row_size;
+		}
+		if (l->buf[cpos] == '\r' || l->buf[cpos] == '\n') {
+			// newline! move to next line
+			rows++;
+			row_size = 0;
+			cpos++;
+			if (l->buf[cpos - 1] == '\r' && cpos < l->len && l->buf[cpos] == '\n') {
+				cpos++;
+			}
+			continue;
+		}
+		int sz;
+		size_t char_render_width;
+		if (duckdb::Utf8Proc::UTF8ToCodepoint(l->buf + cpos, sz) < 0) {
+			char_render_width = 1;
+			cpos++;
+		} else {
+			char_render_width = duckdb::Utf8Proc::RenderWidth(l->buf, l->len, cpos);
+			cpos = duckdb::Utf8Proc::NextGraphemeCluster(l->buf, l->len, cpos);
+		}
+		if (row_size + char_render_width > l->cols) {
+			// exceeded l->cols, move to next row
+			rows++;
+			row_size = char_render_width;
+		}
+		row_size += char_render_width;
+	}
+	if (l->pos == l->len) {
+		new_cursor_row = rows;
+		new_cursor_x = row_size;
+	}
 	int col;                                                /* colum position, zero-based. */
 	int old_rows = l->maxrows;
 	int fd = l->ofd, j;
@@ -1010,22 +1051,22 @@ static void refreshMultiLine(struct linenoiseState *l) {
 		l->maxrows = rows;
 	}
 
-	if (duckdb::Utf8Proc::IsValid(l->buf, l->len)) {
 #ifndef DISABLE_HIGHLIGHT
+	if (duckdb::Utf8Proc::IsValid(l->buf, l->len)) {
 		if (enableHighlighting) {
 			highlight_buffer = highlightText(buf, len, 0, len);
-			buf = (char *)highlight_buffer.c_str();
+			buf = (char *) highlight_buffer.c_str();
 			len = highlight_buffer.size();
 		}
-#endif
 	}
+#endif
 
 	/* First step: clear all the lines used before. To do so start by
 	 * going to the last row. */
 	abInit(&ab);
-	if (old_rows - rpos > 0) {
-		lndebug("go down %d", old_rows - rpos);
-		snprintf(seq, 64, "\x1b[%dB", old_rows - rpos);
+	if (old_rows - l->old_cursor_rows > 0) {
+		lndebug("go down %d", old_rows - l->old_cursor_rows);
+		snprintf(seq, 64, "\x1b[%dB", old_rows - l->old_cursor_rows);
 		abAppend(&ab, seq, strlen(seq));
 	}
 
@@ -1050,29 +1091,40 @@ static void refreshMultiLine(struct linenoiseState *l) {
 
 	/* If we are at the very end of the screen with our prompt, we need to
 	 * emit a newline and move the prompt to the first column. */
-	if (l->pos && l->pos == len && (cursor_pos + plen) % l->cols == 0) {
-		lndebug("<newline>", 0);
+	lndebug("l->pos > 0 %d", l->pos > 0 ? 1 : 0);
+	lndebug("l->pos == len %d", l->pos == l->len ? 1 : 0);
+	lndebug("new_cursor_x == l->cols %d", new_cursor_x == l->cols ? 1 : 0);
+	if (l->pos > 0 && l->pos == l->len && new_cursor_x == l->cols) {
+		lndebug("<newline>");
 		abAppend(&ab, "\n", 1);
 		snprintf(seq, 64, "\r");
 		abAppend(&ab, seq, strlen(seq));
 		rows++;
-		if (rows > (int)l->maxrows)
+		new_cursor_row++;
+		new_cursor_x = 0;
+		if (rows > (int)l->maxrows) {
 			l->maxrows = rows;
+		}
 	}
+	lndebug("render %d rows (old rows %d)", rows, old_rows);
 
 	/* Move cursor to right position. */
-	rpos2 = (plen + cursor_pos + l->cols) / l->cols; /* current cursor relative row. */
-	lndebug("rpos2 %d", rpos2);
+	lndebug("new_cursor_row %d", new_cursor_row);
+	lndebug("new_cursor_x %d", new_cursor_x);
+	lndebug("l->len %d", l->len);
+	lndebug("l->old_cursor_rows %d", l->old_cursor_rows);
+	lndebug("l->pos %d", l->pos);
+	lndebug("max cols %d", l->cols);
 
 	/* Go up till we reach the expected positon. */
-	if (rows - rpos2 > 0) {
-		lndebug("go-up %d", rows - rpos2);
-		snprintf(seq, 64, "\x1b[%dA", rows - rpos2);
+	if (rows - new_cursor_row > 0) {
+		lndebug("go-up %d", rows - new_cursor_row);
+		snprintf(seq, 64, "\x1b[%dA", rows - new_cursor_row);
 		abAppend(&ab, seq, strlen(seq));
 	}
 
 	/* Set column. */
-	col = (plen + (int)cursor_pos) % (int)l->cols;
+	col = new_cursor_x;
 	lndebug("set col %d", 1 + col);
 	if (col)
 		snprintf(seq, 64, "\r\x1b[%dC", col);
@@ -1081,7 +1133,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
 	abAppend(&ab, seq, strlen(seq));
 
 	lndebug("\n", 0);
-	l->oldpos = l->pos;
+	l->old_cursor_rows = new_cursor_row;
 
 	if (write(fd, ab.b, ab.len) == -1) {
 	} /* Can't recover from write error. */
@@ -1272,7 +1324,7 @@ void linenoiseEditDeletePrevWord(struct linenoiseState *l) {
 }
 
 // returns true if there is more data available to read in a particular stream
-static int hasMoreData(int fd) {
+int hasMoreData(int fd) {
 	fd_set rfds;
 	FD_ZERO(&rfds);
 	FD_SET(fd, &rfds);
@@ -1513,7 +1565,8 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 	l.buflen = buflen;
 	l.prompt = prompt;
 	l.plen = strlen(prompt);
-	l.oldpos = l.pos = 0;
+	l.pos = 0;
+	l.old_cursor_rows = 1;
 	l.len = 0;
 	l.cols = getColumns(stdin_fd, stdout_fd);
 	l.maxrows = 0;
@@ -1570,6 +1623,17 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 		switch (c) {
 		case 10:
 		case ENTER: /* enter */
+			if (mlmode && hasMoreData(l.ifd)) {
+				// enter was added as part of copy pasting and not as part of the user adding it
+				// insert newline into buffer
+				if (linenoiseEditInsert(&l, '\r')) {
+					return -1;
+				}
+				if (linenoiseEditInsert(&l, '\n')) {
+					return -1;
+				}
+				break;
+			}
 			history_len--;
 			free(history[history_len]);
 			if (mlmode) {
