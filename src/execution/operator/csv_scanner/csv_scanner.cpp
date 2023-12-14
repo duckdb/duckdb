@@ -424,7 +424,7 @@ idx_t CSVScanner::GetTotalRowsEmmited() {
 bool CSVScanner::Finished() {
 	// We consider the scanner done, if there is no buffer handle for a given buffer_idx (i.e., we are done scanning
 	// the file) OR if we exhausted the bytes we were supposed to read
-	return buffer_manager->done || csv_iterator.bytes_to_read == 0;
+	return csv_iterator.bytes_to_read == 0;
 }
 
 void CSVIterator::Reset() {

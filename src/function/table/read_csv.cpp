@@ -204,11 +204,19 @@ struct BufferPosition {
 	idx_t buffer_size = 0;
 	idx_t end_buffer = 0;
 
-	//! We assume the same start_position for everty file;
+	//! We assume the same start_position for every file;
 	const idx_t start_pos;
 
 	CSVIterator GetIterator() {
 		return CSVIterator(file_idx, buffer_idx, buffer_pos, end_buffer - buffer_pos);
+	}
+
+	void Print(){
+		std::cout << "File: " << file_idx << std::endl;
+		std::cout << "Buff: " << buffer_idx << std::endl;
+		std::cout << "Posi: " << buffer_pos << std::endl;
+		std::cout << "Size: " << buffer_size << std::endl;
+		std::cout << "BEnd: " << end_buffer << std::endl << std::endl;
 	}
 
 private:
@@ -452,8 +460,11 @@ unique_ptr<CSVScanner> CSVGlobalState::Next(ClientContext &context, const ReadCS
 		// we are done
 		return nullptr;
 	}
+
+
 	auto csv_scanner =
 	    make_uniq<CSVScanner>(buffer_manager, state_machine, scanner_boundaries.GetIterator(), scanner_id++);
+
 //	std::cout << scanner_id << std::endl;
 	// FIXME: yuck
 	csv_scanner->file_path = bind_data.files.front();
@@ -646,6 +657,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	}
 	do {
 		if (output.size() != 0) {
+
 			//			MultiFileReader::FinalizeChunk(bind_data.reader_bind, csv_local_state.csv_reader->reader_data,
 			//		 output);
 			break;

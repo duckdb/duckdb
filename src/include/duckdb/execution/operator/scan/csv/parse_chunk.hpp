@@ -42,7 +42,7 @@ struct ParseChunk {
 			// We have a value if it hits a delimiter
 //			scanner.values[scanner.current_value_pos].length = current_pos - scanner.length;
 //			scanner.values[scanner.current_value_pos].buffer_ptr = scanner.cur_buffer_handle->Ptr() + scanner.length;
-			scanner.duck_vector_ptr[scanner.current_value_pos] = string_t(scanner.cur_buffer_handle->Ptr() + scanner.length, current_pos - scanner.length);
+			scanner.duck_vector_ptr[scanner.current_value_pos] = string_t(scanner.cur_buffer_handle->Ptr() + scanner.length, current_pos - scanner.length - 1);
 			scanner.length = current_pos;
 			scanner.current_value_pos++;
 
@@ -113,6 +113,10 @@ struct ParseChunk {
 	inline static void Finalize(CSVScanner &scanner, DataChunk &parse_chunk) {
 //		auto &sniffing_state_machine = scanner.GetStateMachineSniff();
 //		auto &states = scanner.states;
+
+	if (scanner.current_value_pos % scanner.total_columns!=0){
+		throw InternalException("This should never happen, unless we have null padding");
+	}
 		idx_t number_of_rows = scanner.current_value_pos/scanner.total_columns;
 		for (idx_t col_idx = 0; col_idx < parse_chunk.ColumnCount(); col_idx++) {
 			// fixme: has to do some extra checks for null padding

@@ -105,27 +105,55 @@ public:
 		}
 		//! If current buffer is not set we try to get a new one
 		if (!cur_buffer_handle) {
-			csv_iterator.buffer_pos = 0;
-			if (csv_iterator.buffer_idx == 0) {
-				csv_iterator.buffer_pos = buffer_manager->GetStartPos();
-			}
+//			csv_iterator.buffer_pos = 0;
+//			if (csv_iterator.buffer_idx == 0) {
+//				csv_iterator.buffer_pos = buffer_manager->GetStartPos();
+//			}
 			cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
 			D_ASSERT(cur_buffer_handle);
 		}
+		char *buffer_handle_ptr = nullptr;
 		OP::Initialize(machine, csv_iterator.buffer_pos);
-		while (cur_buffer_handle) {
-			char *buffer_handle_ptr = cur_buffer_handle->Ptr();
+		while (cur_buffer_handle && csv_iterator.bytes_to_read > 0) {
+			buffer_handle_ptr = cur_buffer_handle->Ptr();
 			for (; csv_iterator.buffer_pos < cur_buffer_handle->actual_size; csv_iterator.buffer_pos++) {
-				if (OP::Process(machine, result, buffer_handle_ptr[csv_iterator.buffer_pos], csv_iterator.buffer_pos) ||
-				    csv_iterator.bytes_to_read == 0) {
+				if (OP::Process(machine, result, buffer_handle_ptr[csv_iterator.buffer_pos], csv_iterator.buffer_pos)) {
 					//! Not-Done Processing the File, but the Operator is happy!
 					OP::Finalize(machine, result);
 					return false;
 				}
 				csv_iterator.bytes_to_read--;
+				if (csv_iterator.bytes_to_read == 0){
+					break;
+				}
 			}
+			if (csv_iterator.bytes_to_read == 0){
+					break;
+				}
 			cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
-			csv_iterator.buffer_pos = 0;
+			if (!cur_buffer_handle){
+				// we are done, no more bytes to read
+				csv_iterator.bytes_to_read = 0;
+			}
+				csv_iterator.buffer_pos = 0;
+		}
+		//! We must ensure that process continues until a full line is read, regardless of bytes_to_read
+		while (current_value_pos % total_columns!=0 && cur_buffer_handle) {
+			if (csv_iterator.buffer_pos >= cur_buffer_handle->actual_size){
+				cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
+				if (!cur_buffer_handle){
+				// we are done, no more bytes to read
+				break;
+			}
+				csv_iterator.buffer_pos = 0;
+				buffer_handle_ptr = cur_buffer_handle->Ptr();
+			}
+			if (OP::Process(machine, result, buffer_handle_ptr[csv_iterator.buffer_pos], csv_iterator.buffer_pos)) {
+				//! Not-Done Processing the File, but the Operator is happy!
+				OP::Finalize(machine, result);
+				return false;
+			}
+			csv_iterator.buffer_pos++;
 		}
 		//! Done Processing the File
 		OP::Finalize(machine, result);
@@ -166,6 +194,8 @@ public:
 
 	//! Id of the scanner, used to know order in which data is in the CSV file(s)
 	const idx_t scanner_id = 0;
+
+	idx_t forgotten_lines = 0;
 
 	bool Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_add_line);
 
@@ -224,7 +254,7 @@ public:
 		for (idx_t i = 0; i < selection_vectors.size(); i ++){
 			selection_vectors[i].Initialize();
 			for (idx_t j = 0; j < STANDARD_VECTOR_SIZE; j ++){
-				selection_vectors[i][j] = j + (i*j);
+				selection_vectors[i][j] = i + (total_columns*j);
 			}
 		}
 
