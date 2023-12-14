@@ -211,7 +211,7 @@ struct BufferPosition {
 		return CSVIterator(file_idx, buffer_idx, buffer_pos, end_buffer - buffer_pos);
 	}
 
-	void Print(){
+	void Print() {
 		std::cout << "File: " << file_idx << std::endl;
 		std::cout << "Buff: " << buffer_idx << std::endl;
 		std::cout << "Posi: " << buffer_pos << std::endl;
@@ -461,11 +461,10 @@ unique_ptr<CSVScanner> CSVGlobalState::Next(ClientContext &context, const ReadCS
 		return nullptr;
 	}
 
-
 	auto csv_scanner =
 	    make_uniq<CSVScanner>(buffer_manager, state_machine, scanner_boundaries.GetIterator(), scanner_id++);
 
-//	std::cout << scanner_id << std::endl;
+	//	std::cout << scanner_id << std::endl;
 	// FIXME: yuck
 	csv_scanner->file_path = bind_data.files.front();
 	csv_scanner->names = bind_data.return_names;

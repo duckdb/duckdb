@@ -15,7 +15,7 @@ CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr
 	csv_iterator.buffer_pos = buffer_manager->GetStartPos();
 };
 
-CSVScanner::CSVScanner(ClientContext &context, CSVReaderOptions &options) :  mode(ParserMode::PARSING) {
+CSVScanner::CSVScanner(ClientContext &context, CSVReaderOptions &options) : mode(ParserMode::PARSING) {
 	SetTotalColumns(options.dialect_options.num_cols);
 	const vector<string> file_path_list {options.file_path};
 	CSVStateMachineCache state_machine_cache;
@@ -28,12 +28,12 @@ CSVScanner::CSVScanner(ClientContext &context, CSVReaderOptions &options) :  mod
 
 CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
                        CSVIterator csv_iterator_p, idx_t scanner_id_p)
-    : scanner_id(scanner_id_p), csv_iterator(csv_iterator_p),
-      buffer_manager(std::move(buffer_manager_p)), state_machine(state_machine_p), mode(ParserMode::PARSING) {
+    : scanner_id(scanner_id_p), csv_iterator(csv_iterator_p), buffer_manager(std::move(buffer_manager_p)),
+      state_machine(state_machine_p), mode(ParserMode::PARSING) {
 	SetTotalColumns(state_machine->options.dialect_options.num_cols);
-//	cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
-//	vector<LogicalType> varchar_types(total_columns, LogicalType::VARCHAR);
-//	parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), varchar_types);
+	//	cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
+	//	vector<LogicalType> varchar_types(total_columns, LogicalType::VARCHAR);
+	//	parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), varchar_types);
 }
 
 //! Skips all empty lines, until a non-empty line shows up
@@ -110,6 +110,7 @@ bool CSVScanner::SetStart(VerificationPositions &verification_positions) {
 		SkipEmptyLines();
 		SkipHeader();
 		SkipEmptyLines();
+		std::cout << "bla_2" << std::endl;
 		if (verification_positions.beginning_of_first_line == 0) {
 			verification_positions.beginning_of_first_line = csv_iterator.buffer_pos;
 		}
@@ -123,11 +124,13 @@ bool CSVScanner::SetStart(VerificationPositions &verification_positions) {
 		// 1. We walk until the next new line
 		Process<SkipUntilNewLine>(*this, csv_iterator.buffer_pos);
 		idx_t position_being_checked = csv_iterator.buffer_pos;
+		idx_t bytes_to_check = csv_iterator.bytes_to_read;
 		vector<TupleOfValues> tuples(1);
 		Process<ParseValues>(*this, tuples);
 		if (tuples.empty()) {
 			// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
 			csv_iterator.buffer_pos = position_being_checked;
+			csv_iterator.bytes_to_read = bytes_to_check;
 			continue;
 		}
 		vector<Value> &values = tuples[0].values;
@@ -135,6 +138,7 @@ bool CSVScanner::SetStart(VerificationPositions &verification_positions) {
 		if (values.size() != state_machine->options.dialect_options.num_cols) {
 			// If columns don't match, this is not the correct start, we need to skip until the next new line
 			csv_iterator.buffer_pos = position_being_checked;
+			csv_iterator.bytes_to_read = bytes_to_check;
 			continue;
 		}
 		// 2. We try to cast all columns to the correct types
@@ -147,6 +151,7 @@ bool CSVScanner::SetStart(VerificationPositions &verification_positions) {
 			};
 		}
 		csv_iterator.buffer_pos = position_being_checked;
+		csv_iterator.bytes_to_read = bytes_to_check;
 		if (all_cast) {
 			// We found the start of the line, yay
 			success = true;
@@ -380,12 +385,12 @@ void CSVScanner::Parse(DataChunk &output_chunk, VerificationPositions &verificat
 	}
 	// Now we do the actual parsing
 	// TODO: Check for errors.
-//	if (mode == ParserMode::SNIFFING) {
-//		Process<ParseChunk>(*this, output_chunk);
-//	} else {
-		Process<ParseChunk>(*this, parse_chunk);
-		Flush(output_chunk, 0, false);
-//	}
+	//	if (mode == ParserMode::SNIFFING) {
+	//		Process<ParseChunk>(*this, output_chunk);
+	//	} else {
+	Process<ParseChunk>(*this, parse_chunk);
+	Flush(output_chunk, 0, false);
+	//	}
 
 	total_rows_emmited += output_chunk.size();
 }

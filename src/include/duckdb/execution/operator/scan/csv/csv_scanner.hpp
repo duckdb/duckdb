@@ -74,7 +74,6 @@ public:
 	//! Converts value to string_t
 	inline string_t GetStringT() {
 		return string_t(buffer_ptr, length);
-
 	};
 
 	//! Buffer Pointer
@@ -96,6 +95,56 @@ public:
 	explicit CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
 	                    CSVIterator csv_iterator, idx_t scanner_id);
 
+	void ProcessOverbufferValue() {
+		// figure out current_pos
+		auto cur_buf = cur_buffer_handle->Ptr();
+		for (; csv_iterator.buffer_pos < cur_buffer_handle->actual_size; csv_iterator.buffer_pos++) {
+			state_machine->Transition(states, cur_buf[csv_iterator.buffer_pos]);
+			if (csv_iterator.bytes_to_read > 0) {
+				csv_iterator.bytes_to_read--;
+			}
+			if (states.NewRow() || states.NewValue()) {
+				break;
+			}
+		}
+		D_ASSERT(states.NewRow() || states.NewValue());
+		if (csv_iterator.buffer_pos == 0) {
+			duck_vector_ptr[current_value_pos] = string_t(previous_cur_buffer_handle->Ptr() + length,
+			                                              previous_cur_buffer_handle->actual_size - length - 1);
+		} else if (csv_iterator.buffer_pos == 1) {
+			duck_vector_ptr[current_value_pos] =
+			    string_t(previous_cur_buffer_handle->Ptr() + length, previous_cur_buffer_handle->actual_size - length);
+		} else {
+			idx_t first_buffer_size = previous_cur_buffer_handle->actual_size - length;
+			auto string_length = first_buffer_size + csv_iterator.buffer_pos - 1;
+			auto intersection = make_unsafe_uniq_array<char>(string_length);
+			memcpy(intersection.get(), previous_cur_buffer_handle->Ptr() + length, first_buffer_size);
+			auto res_intersect = intersection.get() + first_buffer_size;
+			// fixme this little memcpy is evil
+			memcpy(res_intersect, cur_buffer_handle->Ptr(), string_length - first_buffer_size);
+
+			duck_vector_ptr[current_value_pos] =
+			    StringVector::AddStringOrBlob(*duck_vector, string_t(intersection.get(), string_length));
+		}
+		//	else{
+		//		// fixme this is an over buffer value
+		//		auto string_length =  previous_cur_buffer_handle->actual_size - length + csv_iterator.buffer_pos -1 ;
+		//		auto intersection = make_unsafe_uniq_array<char>(string_length);
+		//		idx_t cur_pos = 0;
+		//		auto buffer_ptr = previous_cur_buffer_handle->Ptr();
+		//		for (idx_t i = length; i < previous_cur_buffer_handle->actual_size; i++) {
+		//			intersection[cur_pos++] = buffer_ptr[i];
+		//		}
+		//		idx_t nxt_buffer_pos = 0;
+		//		for (idx_t i = 0; i < csv_iterator.buffer_pos - 1; i++) {
+		//			intersection[cur_pos++] = cur_buffer_handle->Ptr()[nxt_buffer_pos++];
+		//		}
+		//		duck_vector_ptr[current_value_pos] = StringVector::AddStringOrBlob(*duck_vector,
+		//string_t(intersection.get(),string_length));
+		//	}
+		length = csv_iterator.buffer_pos;
+		current_value_pos++;
+	}
 	//! This functions templates an operation over the CSV File
 	template <class OP, class T>
 	inline bool Process(CSVScanner &machine, T &result) {
@@ -105,10 +154,6 @@ public:
 		}
 		//! If current buffer is not set we try to get a new one
 		if (!cur_buffer_handle) {
-//			csv_iterator.buffer_pos = 0;
-//			if (csv_iterator.buffer_idx == 0) {
-//				csv_iterator.buffer_pos = buffer_manager->GetStartPos();
-//			}
 			cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
 			D_ASSERT(cur_buffer_handle);
 		}
@@ -123,30 +168,46 @@ public:
 					return false;
 				}
 				csv_iterator.bytes_to_read--;
-				if (csv_iterator.bytes_to_read == 0){
+				if (csv_iterator.bytes_to_read == 0) {
+					csv_iterator.buffer_pos++;
 					break;
 				}
 			}
-			if (csv_iterator.bytes_to_read == 0){
-					break;
-				}
+			if (csv_iterator.bytes_to_read == 0) {
+				break;
+			}
+			previous_cur_buffer_handle = std::move(cur_buffer_handle);
 			cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
-			if (!cur_buffer_handle){
+			if (!cur_buffer_handle) {
 				// we are done, no more bytes to read
 				csv_iterator.bytes_to_read = 0;
 			}
-				csv_iterator.buffer_pos = 0;
-		}
-		//! We must ensure that process continues until a full line is read, regardless of bytes_to_read
-		while (current_value_pos % total_columns!=0 && cur_buffer_handle) {
-			if (csv_iterator.buffer_pos >= cur_buffer_handle->actual_size){
-				cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
-				if (!cur_buffer_handle){
-				// we are done, no more bytes to read
-				break;
+			csv_iterator.buffer_pos = 0;
+			if (cur_buffer_handle) {
+				buffer_handle_ptr = cur_buffer_handle->Ptr();
+				ProcessOverbufferValue();
 			}
+
+			// fixme: the next value will be an over buffer value
+		}
+		//! We must ensure that process continues until a full line is read. If it stops in a newline we also continue
+		//! it. This is regardless of bytes_to_read
+		idx_t cur_val_pos = current_value_pos;
+		if (states.NewRow()) {
+			cur_val_pos++;
+		}
+		while ((cur_val_pos > current_value_pos || current_value_pos % total_columns != 0) && cur_buffer_handle) {
+			D_ASSERT(csv_iterator.bytes_to_read == 0);
+			if (csv_iterator.buffer_pos >= cur_buffer_handle->actual_size) {
+				previous_cur_buffer_handle = std::move(cur_buffer_handle);
+				cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
+				if (!cur_buffer_handle) {
+					// we are done, no more bytes to read
+					break;
+				}
 				csv_iterator.buffer_pos = 0;
 				buffer_handle_ptr = cur_buffer_handle->Ptr();
+				ProcessOverbufferValue();
 			}
 			if (OP::Process(machine, result, buffer_handle_ptr[csv_iterator.buffer_pos], csv_iterator.buffer_pos)) {
 				//! Not-Done Processing the File, but the Operator is happy!
@@ -174,18 +235,17 @@ public:
 	idx_t length = 0;
 
 	idx_t cur_rows = 0;
-	idx_t  column_count = 1;
+	idx_t column_count = 1;
 
 	CSVStates states;
 
 	//! String Values per [row|column]
 	unique_ptr<CSVValue[]> values;
 	unique_ptr<Vector> duck_vector;
-	string_t* duck_vector_ptr;
+	string_t *duck_vector_ptr;
 	idx_t values_size;
 
-	vector<string_t*> parse_data;
-
+	vector<string_t *> parse_data;
 
 	string value;
 
@@ -233,6 +293,7 @@ public:
 	//! To offload buffers to disk if necessary
 	unique_ptr<CSVBufferHandle> cur_buffer_handle;
 
+	unique_ptr<CSVBufferHandle> previous_cur_buffer_handle;
 	//! Parse Chunk where all columns are defined as VARCHAR
 	DataChunk parse_chunk;
 
@@ -241,20 +302,19 @@ public:
 
 	vector<SelectionVector> selection_vectors;
 
-
-	void SetTotalColumns(idx_t total_columns_p){
+	void SetTotalColumns(idx_t total_columns_p) {
 		total_columns = total_columns_p;
 		vector<LogicalType> varchar_types(total_columns, LogicalType::VARCHAR);
-		values_size = total_columns*STANDARD_VECTOR_SIZE;
+		values_size = total_columns * STANDARD_VECTOR_SIZE;
 		duck_vector = make_uniq<Vector>(LogicalType::VARCHAR, values_size);
 
 		selection_vectors.resize(total_columns);
 
 		// precompute these selection vectors
-		for (idx_t i = 0; i < selection_vectors.size(); i ++){
+		for (idx_t i = 0; i < selection_vectors.size(); i++) {
 			selection_vectors[i].Initialize();
-			for (idx_t j = 0; j < STANDARD_VECTOR_SIZE; j ++){
-				selection_vectors[i][j] = i + (total_columns*j);
+			for (idx_t j = 0; j < STANDARD_VECTOR_SIZE; j++) {
+				selection_vectors[i][j] = i + (total_columns * j);
 			}
 		}
 
