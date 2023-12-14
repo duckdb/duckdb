@@ -986,8 +986,12 @@ static void refreshSearch(struct linenoiseState *l) {
 	abFree(&ab);
 }
 
+bool isNewline(char c) {
+	return c == '\r' || c == '\n';
+}
+
 void nextPosition(struct linenoiseState *l, size_t &cpos, int &rows, int &cols) {
-	if (l->buf[cpos] == '\r' || l->buf[cpos] == '\n') {
+	if (isNewline(l->buf[cpos])) {
 		// newline! move to next line
 		rows++;
 		cols = 0;
@@ -1023,7 +1027,7 @@ void positionToColAndRow(struct linenoiseState *l, size_t target_pos, int &out_r
 	cols = plen;
 	size_t cpos = 0;
 	while (cpos < l->len) {
-		if (cols >= l->cols) {
+		if (cols >= l->cols && !isNewline(l->buf[cpos])) {
 			rows++;
 			cols = 0;
 		}
