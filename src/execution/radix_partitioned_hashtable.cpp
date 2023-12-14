@@ -495,14 +495,14 @@ idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
 		}
 	}
 
-	// Worst-case if every value is unique
+	// Worst-case size if every value is unique
 	const auto maximum_combined_partition_size =
 	    GroupedAggregateHashTable::GetCapacityForCount(largest_partition.get().Count()) * sizeof(aggr_ht_entry_t) +
 	    largest_partition.get().SizeInBytes();
 
 	// How many of these can we fit in 60% of memory
 	const idx_t memory_limit = 0.6 * BufferManager::GetBufferManager(sink.context).GetMaxMemory();
-	const auto partitions_that_fit = memory_limit / maximum_combined_partition_size;
+	const auto partitions_that_fit = MaxValue<idx_t>(memory_limit / maximum_combined_partition_size, 1);
 
 	// Of course, limit it to the number of threads
 	return MinValue<idx_t>(sink.partitions.size(), partitions_that_fit);
@@ -683,7 +683,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		                             idx_t(GroupedAggregateHashTable::LOAD_FACTOR * sizeof(aggr_ht_entry_t));
 		const auto capacity_limit = NextPowerOfTwo(thread_limit / size_per_entry);
 
-		ht = sink.radix_ht.CreateHT(gstate.context, MinValue<idx_t>(capacity, capacity), 0);
+		ht = sink.radix_ht.CreateHT(gstate.context, MinValue<idx_t>(capacity, capacity_limit), 0);
 	} else {
 		// We may want to resize here to the size of this partition, but for now we just assume uniform partition sizes
 		ht->InitializePartitionedData();
