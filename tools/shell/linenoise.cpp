@@ -986,53 +986,84 @@ static void refreshSearch(struct linenoiseState *l) {
 	abFree(&ab);
 }
 
-void positionToColAndRow(struct linenoiseState *l, size_t target_pos, int &out_row, int &out_col) {
+void nextPosition(struct linenoiseState *l, size_t &cpos, int &rows, int &cols) {
+	if (l->buf[cpos] == '\r' || l->buf[cpos] == '\n') {
+		// newline! move to next line
+		rows++;
+		cols = 0;
+		cpos++;
+		if (l->buf[cpos - 1] == '\r' && cpos < l->len && l->buf[cpos] == '\n') {
+			cpos++;
+		}
+		return;
+	}
+	int sz;
+	int char_render_width;
+	if (duckdb::Utf8Proc::UTF8ToCodepoint(l->buf + cpos, sz) < 0) {
+		char_render_width = 1;
+		cpos++;
+	} else {
+		char_render_width = (int) duckdb::Utf8Proc::RenderWidth(l->buf, l->len, cpos);
+		cpos = duckdb::Utf8Proc::NextGraphemeCluster(l->buf, l->len, cpos);
+	}
+	if (cols + char_render_width > l->cols) {
+		// exceeded l->cols, move to next row
+		rows++;
+		cols = char_render_width;
+	}
+	cols += char_render_width;
+
+}
+
+void positionToColAndRow(struct linenoiseState *l, size_t target_pos, int &out_row, int &out_col, int &rows, int &cols) {
 	int plen = linenoiseComputeRenderWidth(l->prompt, strlen(l->prompt));
 	out_row = -1;
 	out_col = 0;
-	int rows = 1;
-	int row_size = plen;
+	rows = 1;
+	cols = plen;
 	size_t cpos = 0;
 	while (cpos < l->len) {
-		if (row_size >= l->cols) {
+		if (cols >= l->cols) {
 			rows++;
-			row_size = 0;
+			cols = 0;
 		}
-		if (cpos >= target_pos) {
+		if (out_row < 0 && cpos >= target_pos) {
 			out_row = rows;
-			out_col = row_size;
-			return;
+			out_col = cols;
 		}
-		if (l->buf[cpos] == '\r' || l->buf[cpos] == '\n') {
-			// newline! move to next line
-			rows++;
-			row_size = 0;
-			cpos++;
-			if (l->buf[cpos - 1] == '\r' && cpos < l->len && l->buf[cpos] == '\n') {
-				cpos++;
-			}
-			continue;
-		}
-		int sz;
-		int char_render_width;
-		if (duckdb::Utf8Proc::UTF8ToCodepoint(l->buf + cpos, sz) < 0) {
-			char_render_width = 1;
-			cpos++;
-		} else {
-			char_render_width = (int) duckdb::Utf8Proc::RenderWidth(l->buf, l->len, cpos);
-			cpos = duckdb::Utf8Proc::NextGraphemeCluster(l->buf, l->len, cpos);
-		}
-		if (row_size + char_render_width > l->cols) {
-			// exceeded l->cols, move to next row
-			rows++;
-			row_size = char_render_width;
-		}
-		row_size += char_render_width;
+		nextPosition(l, cpos, rows, cols);
 	}
 	if (target_pos == l->len) {
 		out_row = rows;
-		out_col = row_size;
+		out_col = cols;
 	}
+}
+
+size_t colAndRowToPosition(struct linenoiseState *l, int target_row, int target_col) {
+	int plen = linenoiseComputeRenderWidth(l->prompt, strlen(l->prompt));
+	int rows = 1;
+	int cols = plen;
+	size_t last_cpos = 0;
+	size_t cpos = 0;
+	while (cpos < l->len) {
+		if (cols >= l->cols) {
+			rows++;
+			cols = 0;
+		}
+		if (rows > target_row) {
+			// we have skipped our target row - that means "target_col" was out of range for this row
+			// return the last position within the target row
+			return last_cpos;
+		}
+		if (rows == target_row) {
+			last_cpos = cpos;
+		}
+		if (rows == target_row && cols == target_col) {
+			return cpos;
+		}
+		nextPosition(l, cpos, rows, cols);
+	}
+	return cpos;
 }
 
 /* Multi line low level line refresh.
@@ -1045,8 +1076,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
 	// utf8 in prompt, get render width
 	int rows, cols;
 	int new_cursor_row, new_cursor_x;
-	positionToColAndRow(l, l->len, rows, cols);
-	positionToColAndRow(l, l->pos, new_cursor_row, new_cursor_x);
+	positionToColAndRow(l, l->pos, new_cursor_row, new_cursor_x, rows, cols);
 	int col;                                                /* colum position, zero-based. */
 	int old_rows = l->maxrows;
 	int fd = l->ofd, j;
@@ -1250,6 +1280,48 @@ void linenoiseEditMoveWordRight(struct linenoiseState *l) {
 		l->pos = next_char(l);
 	} while (l->pos != l->len && !characterIsWordBoundary(l->buf[l->pos]));
 	refreshLine(l);
+}
+
+/* Move cursor one row up. */
+bool linenoiseEditMoveRowUp(struct linenoiseState *l) {
+	if (!mlmode) {
+		return false;
+	}
+	int rows, cols;
+	int cursor_row, cursor_col;
+	positionToColAndRow(l, l->pos, cursor_row, cursor_col, rows, cols);
+	if (cursor_row <= 1) {
+		return false;
+	}
+	// we can move the cursor a line up
+	lndebug("source pos %d", l->pos);
+	lndebug("move from row %d to row %d", cursor_row, cursor_row - 1);
+	cursor_row--;
+	l->pos = colAndRowToPosition(l, cursor_row, cursor_col);
+	lndebug("new pos %d", l->pos);
+	refreshLine(l);
+	return true;
+}
+
+/* Move cursor one row down. */
+bool linenoiseEditMoveRowDown(struct linenoiseState *l) {
+	if (!mlmode) {
+		return false;
+	}
+	int rows, cols;
+	int cursor_row, cursor_col;
+	positionToColAndRow(l, l->pos, cursor_row, cursor_col, rows, cols);
+	if (cursor_row >= rows) {
+		return false;
+	}
+	// we can move the cursor a line down
+	lndebug("source pos %d", l->pos);
+	lndebug("move from row %d to row %d", cursor_row, cursor_row + 1);
+	cursor_row++;
+	l->pos = colAndRowToPosition(l, cursor_row, cursor_col);
+	lndebug("new pos %d", l->pos);
+	refreshLine(l);
+	return true;
 }
 
 /* Move cursor to the start of the line. */
@@ -1788,9 +1860,15 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 				} else {
 					switch (seq[1]) {
 					case 'A': /* Up */
+						if (linenoiseEditMoveRowUp(&l)) {
+							break;
+						}
 						linenoiseEditHistoryNext(&l, LINENOISE_HISTORY_PREV);
 						break;
 					case 'B': /* Down */
+						if (linenoiseEditMoveRowDown(&l)) {
+							break;
+						}
 						linenoiseEditHistoryNext(&l, LINENOISE_HISTORY_NEXT);
 						break;
 					case 'C': /* Right */
