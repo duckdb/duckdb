@@ -15,7 +15,8 @@ CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr
 	csv_iterator.buffer_pos = buffer_manager->GetStartPos();
 };
 
-CSVScanner::CSVScanner(ClientContext &context, CSVReaderOptions &options) : total_columns(options.dialect_options.num_cols), mode(ParserMode::PARSING) {
+CSVScanner::CSVScanner(ClientContext &context, CSVReaderOptions &options) :  mode(ParserMode::PARSING) {
+	SetTotalColumns(options.dialect_options.num_cols);
 	const vector<string> file_path_list {options.file_path};
 	CSVStateMachineCache state_machine_cache;
 	buffer_manager = make_shared<CSVBufferManager>(context, options, file_path_list);
@@ -27,11 +28,12 @@ CSVScanner::CSVScanner(ClientContext &context, CSVReaderOptions &options) : tota
 
 CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
                        CSVIterator csv_iterator_p, idx_t scanner_id_p)
-    : scanner_id(scanner_id_p), total_columns(state_machine_p->options.dialect_options.num_cols), csv_iterator(csv_iterator_p),
+    : scanner_id(scanner_id_p), csv_iterator(csv_iterator_p),
       buffer_manager(std::move(buffer_manager_p)), state_machine(state_machine_p), mode(ParserMode::PARSING) {
-	cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
-	vector<LogicalType> varchar_types(total_columns, LogicalType::VARCHAR);
-	parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), varchar_types);
+	SetTotalColumns(state_machine->options.dialect_options.num_cols);
+//	cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
+//	vector<LogicalType> varchar_types(total_columns, LogicalType::VARCHAR);
+//	parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), varchar_types);
 }
 
 //! Skips all empty lines, until a non-empty line shows up
@@ -422,7 +424,7 @@ idx_t CSVScanner::GetTotalRowsEmmited() {
 bool CSVScanner::Finished() {
 	// We consider the scanner done, if there is no buffer handle for a given buffer_idx (i.e., we are done scanning
 	// the file) OR if we exhausted the bytes we were supposed to read
-	return (!cur_buffer_handle && csv_iterator.buffer_idx > 0) || csv_iterator.bytes_to_read == 0;
+	return buffer_manager->done || csv_iterator.bytes_to_read == 0;
 }
 
 void CSVIterator::Reset() {

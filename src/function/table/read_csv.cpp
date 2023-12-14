@@ -229,7 +229,7 @@ public:
 	      line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end, options.sniffer_user_mismatch_error),
 	      sniffer_mismatch_error(options.sniffer_user_mismatch_error) {
 
-		state_machine = make_shared<CSVStateMachine>(state_machine_p, options);
+		state_machine = make_shared<CSVStateMachine>(cache.Get(options.dialect_options.state_machine_options), options);
 		//! If the buffer manager has not yet being initialized, we do it now.
 		if (!buffer_manager) {
 			buffer_manager = make_shared<CSVBufferManager>(context, options, files);
@@ -347,6 +347,7 @@ private:
 	//! Line Info used in error messages
 	LineInfo line_info;
 
+	CSVStateMachineCache cache;
 	string sniffer_mismatch_error;
 };
 
@@ -453,7 +454,7 @@ unique_ptr<CSVScanner> CSVGlobalState::Next(ClientContext &context, const ReadCS
 	}
 	auto csv_scanner =
 	    make_uniq<CSVScanner>(buffer_manager, state_machine, scanner_boundaries.GetIterator(), scanner_id++);
-
+//	std::cout << scanner_id << std::endl;
 	// FIXME: yuck
 	csv_scanner->file_path = bind_data.files.front();
 	csv_scanner->names = bind_data.return_names;

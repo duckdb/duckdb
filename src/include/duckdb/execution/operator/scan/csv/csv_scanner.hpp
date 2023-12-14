@@ -152,6 +152,8 @@ public:
 
 	//! String Values per [row|column]
 	unique_ptr<CSVValue[]> values;
+	unique_ptr<Vector> duck_vector;
+	string_t* duck_vector_ptr;
 	idx_t values_size;
 
 	vector<string_t*> parse_data;
@@ -207,9 +209,25 @@ public:
 	//! Total Number of Columns
 	idx_t total_columns = 0;
 
+	vector<SelectionVector> selection_vectors;
+
+
 	void SetTotalColumns(idx_t total_columns_p){
 		total_columns = total_columns_p;
 		vector<LogicalType> varchar_types(total_columns, LogicalType::VARCHAR);
+		values_size = total_columns*STANDARD_VECTOR_SIZE;
+		duck_vector = make_uniq<Vector>(LogicalType::VARCHAR, values_size);
+
+		selection_vectors.resize(total_columns);
+
+		// precompute these selection vectors
+		for (idx_t i = 0; i < selection_vectors.size(); i ++){
+			selection_vectors[i].Initialize();
+			for (idx_t j = 0; j < STANDARD_VECTOR_SIZE; j ++){
+				selection_vectors[i][j] = j + (i*j);
+			}
+		}
+
 		parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), varchar_types);
 	}
 
