@@ -22,6 +22,7 @@ insert into tbl VALUES
 # The column referenced in the SET expression is indexed on, can't be updated
 statement error
 insert into tbl VALUES (3,5,1) ON CONFLICT (i) DO UPDATE SET i = i;
+----
 
 query III
 select * from tbl;

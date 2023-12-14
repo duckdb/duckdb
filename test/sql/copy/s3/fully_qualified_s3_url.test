@@ -152,6 +152,7 @@ SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_use_ssl=false" L
 
 statement error
 SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_use_ssl=bla" LIMIT 3
+----
 
 #test url_style
 statement ok
@@ -173,6 +174,8 @@ SET s3_access_key_id='${AWS_ACCESS_KEY_ID}'; SET s3_region='${AWS_DEFAULT_REGION
 # test faulty input
 statement error
 SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=${AWS_DEFAULT_REGION}&s3_access_key_id=incorrect_key_id" LIMIT 3
+----
 
 statement error
 SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=${AWS_DEFAULT_REGION}&bla=bla" LIMIT 3
+----

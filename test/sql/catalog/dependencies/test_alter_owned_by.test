@@ -48,3 +48,4 @@ DROP TABLE tbl1;
 
 statement error
 SELECT nextval('sequence1');
+----

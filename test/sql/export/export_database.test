@@ -48,6 +48,7 @@ CREATE TABLE "SAME_NAME"(i INTEGER, j INTEGER);
 
 statement error
 CREATE TABLE "same_name"(i INTEGER, j INTEGER);
+----
 
 statement ok
 INSERT INTO "SAME_NAME" VALUES (1, 1), (2, 2)
@@ -276,6 +277,8 @@ SELECT * FROM s2.table01 ORDER BY i;
 # verify that constraints are still there
 statement error
 INSERT INTO integers VALUES (5, 6)
+----
 
 statement error
 INSERT INTO strings VALUES(NULL, NULL)
+----

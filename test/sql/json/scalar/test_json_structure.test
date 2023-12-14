@@ -155,6 +155,7 @@ select json_structure('[[1], {"a": 1}]')
 # duplicate key
 statement error
 select json_structure('{"a": 42, "a": 7}')
+----
 
 # from a table
 statement ok

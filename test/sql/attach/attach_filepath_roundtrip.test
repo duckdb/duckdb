@@ -15,6 +15,7 @@ concurrentloop i 1 100
 
 statement maybe
 ATTACH '__TEST_DIR__/concurrent.db';
+----
 
 endloop
 
@@ -115,4 +116,5 @@ already attached
 
 statement error con1
 ATTACH '__TEST_DIR__/con2_rollback_detach.db';
+----
 

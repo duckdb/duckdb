@@ -34,6 +34,7 @@ SELECT SUM(a) FROM test
 
 statement error
 INSERT INTO test VALUES (42)
+----
 
 restart
 
@@ -49,3 +50,4 @@ SELECT SUM(a) FROM test
 
 statement error
 INSERT INTO test VALUES (42)
+----

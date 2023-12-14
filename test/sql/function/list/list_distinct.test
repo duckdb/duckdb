@@ -31,12 +31,18 @@ SELECT list_distinct([]) WHERE 1 = 0
 
 statement error
 SELECT list_distinct()
+----
+No function matches
 
 statement error
 SELECT list_distinct(*)
+----
+No function matches
 
 statement error
 SELECT list_distinct([1, 2], 2)
+----
+No function matches
 
 # test incorrect parameter type
 
@@ -44,6 +50,8 @@ foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint us
 
 statement error
 SELECT list_distinct(NULL::${type})
+----
+No function matches
 
 endloop
 
@@ -258,3 +266,39 @@ query I
 SELECT list_sort(list_distinct(['a', 'b、c', 'a']))
 ----
 [a, b、c]
+
+statement ok
+CREATE TABLE all_types AS SELECT * FROM test_all_types();
+
+# unsupported histogram types
+foreach colname bool tinyint smallint int bigint utinyint usmallint uint ubigint date time timestamp timestamp_s timestamp_ms timestamp_ns time_tz timestamp_tz float double dec_4_1 dec_9_4 uuid interval varchar small_enum medium_enum large_enum
+
+statement ok
+select list_distinct(["${colname}"]) FROM all_types;
+
+endloop
+
+# we don't support histogram for the min/max values of these types (casting errors)
+foreach colname hugeint dec_18_6 dec38_10
+
+statement error
+select list_distinct(["${colname}"]) FROM all_types;
+----
+Invalid Input Error
+
+endloop
+
+statement error
+select list_distinct(["blob"]) FROM all_types;
+----
+No matching aggregate function
+
+# we don't support histogram for nested types
+foreach colname int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array struct struct_of_arrays array_of_structs map
+
+statement error
+select list_distinct(["${colname}"]) FROM all_types;
+----
+Not implemented Error
+
+endloop
