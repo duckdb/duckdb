@@ -211,6 +211,7 @@ enum class LogicalTypeId : uint8_t {
 	TIMESTAMP_TZ = 32,
 	TIME_TZ = 34,
 	BIT = 36,
+	STRING_LITERAL = 37, /* string literals, used for constant strings - only exists while binding */
 
 	HUGEINT = 50,
 	POINTER = 51,

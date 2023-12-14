@@ -3106,6 +3106,8 @@ const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value) {
 		return "TIME WITH TIME ZONE";
 	case LogicalTypeId::BIT:
 		return "BIT";
+	case LogicalTypeId::STRING_LITERAL:
+		return "STRING_LITERAL";
 	case LogicalTypeId::HUGEINT:
 		return "HUGEINT";
 	case LogicalTypeId::POINTER:
@@ -3228,6 +3230,9 @@ LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "BIT")) {
 		return LogicalTypeId::BIT;
+	}
+	if (StringUtil::Equals(value, "STRING_LITERAL")) {
+		return LogicalTypeId::STRING_LITERAL;
 	}
 	if (StringUtil::Equals(value, "HUGEINT")) {
 		return LogicalTypeId::HUGEINT;

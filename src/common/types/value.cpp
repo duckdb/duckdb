@@ -821,6 +821,12 @@ Value Value::BIT(const string &data) {
 	return result;
 }
 
+Value Value::STRING_LITERAL(string data) {
+	Value result(std::move(data));
+	result.type_ = LogicalTypeId::STRING_LITERAL;
+	return result;
+}
+
 Value Value::ENUM(uint64_t value, const LogicalType &original_type) {
 	D_ASSERT(original_type.id() == LogicalTypeId::ENUM);
 	Value result(original_type);

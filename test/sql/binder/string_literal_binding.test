@@ -1,0 +1,13 @@
+# name: test/sql/binder/string_literal_binding.test
+# description: Test string literal binding
+# group: [binder]
+
+query I
+select '01'=1;
+----
+true
+
+statement error
+select i=1 from (values ('01')) t(i);
+----
+eek

@@ -184,6 +184,8 @@ public:
 	DUCKDB_API static Value BIT(const_data_ptr_t data, idx_t len);
 	DUCKDB_API static Value BIT(const string &data);
 
+	DUCKDB_API static Value STRING_LITERAL(string data);
+
 	template <class T>
 	T GetValue() const;
 	template <class T>
