@@ -997,7 +997,7 @@ from_clause:
 
 from_list:
 			table_ref								{ $$ = list_make1($1); }
-			| from_list ',' table_ref				{ $$ = lappend($1, $3); }
+			| from_listÏ ',' table_ref				{ $$ = lappend($1, $3); }
 		;
 
 from_list_opt_comma:
