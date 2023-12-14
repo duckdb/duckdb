@@ -107,6 +107,7 @@ SET s3_url_style='handwritten';
 
 statement error
 COPY test TO 's3://test-bucket-public/root-dir/test2.parquet';
+----
 
 # 404
 statement error

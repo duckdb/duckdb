@@ -20,6 +20,7 @@ INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
 # aggregates cannot be nested
 statement error
 SELECT SUM(SUM(41)), COUNT(*);
+----
 
 # simple aggregates without group by
 query RIR
@@ -90,6 +91,7 @@ SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test WHERE a <= 12 GROUP BY b ORDER BY
 # nested aggregate in group by
 statement error
 SELECT b % 2 AS f, COUNT(SUM(a)) FROM test GROUP BY f;
+----
 
 statement ok
 INSERT INTO test VALUES (12, 21), (12, 21), (12, 21)
@@ -118,6 +120,7 @@ SELECT i, i + 10 FROM integers GROUP BY i ORDER BY i
 # using non-group column and non-aggregate should throw an error
 statement error
 SELECT i, SUM(j), j FROM integers GROUP BY i ORDER BY i
+----
 
 # but it works if we wrap it in FIRST() or LAST()
 query IRI
@@ -183,6 +186,7 @@ NULL	NULL	NULL
 # CONTROVERSIAL: this query DOES work in SQLite
 statement error
 SELECT 1 AS k, SUM(i) FROM integers GROUP BY k+1 ORDER BY 2;
+----
 
 # group by column refs should be recognized, even if one uses an explicit table specifier and the other does not
 query IR

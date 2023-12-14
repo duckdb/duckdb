@@ -19,6 +19,7 @@ SELECT d+1 FROM decimals
 
 statement error
 SELECT d+1000000000000000.0 FROM decimals
+----
 
 # subtraction
 query I
@@ -28,6 +29,7 @@ SELECT -1-d FROM decimals
 
 statement error
 SELECT -1000000000000000.0-d FROM decimals
+----
 
 # multiplication
 query I
@@ -37,3 +39,4 @@ SELECT 1*d FROM decimals
 
 statement error
 SELECT 2*d FROM decimals
+----

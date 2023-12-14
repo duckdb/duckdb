@@ -244,6 +244,7 @@ SELECT lag(ten, four, 0) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 ord
 
 statement error
 SELECT lag(ten, four, 0, 0) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt
+----
 
 query I
 SELECT lead(ten) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt

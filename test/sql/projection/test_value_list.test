@@ -102,10 +102,12 @@ hello
 # unbalanced value list is not allowed
 statement error
 SELECT * FROM (VALUES (1, 2, 3), (1,2)) v1;
+----
 
 # default in value list is not allowed
 statement error
 SELECT * FROM (VALUES (DEFAULT, 2, 3), (1,2)) v1;
+----
 
 # VALUES list for INSERT
 statement ok
@@ -124,14 +126,18 @@ hello
 # too many columns provided
 statement error
 INSERT INTO varchars VALUES (1, 2), ('hello', 3), (DEFAULT, DEFAULT);
+----
 
 statement error
 INSERT INTO varchars (v) VALUES (1, 2), ('hello', 3), (DEFAULT, DEFAULT);
+----
 
 statement error
 INSERT INTO varchars (v) VALUES (1, 2), ('hello'), (DEFAULT, DEFAULT);
+----
 
 # operation on default not allowed
 statement error
 INSERT INTO varchars (v) VALUES (DEFAULT IS NULL);
+----
 

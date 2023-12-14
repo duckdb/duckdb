@@ -45,6 +45,7 @@ with cte1 as MATERIALIZED (select i as j from a), cte2 as MATERIALIZED (select r
 # duplicate CTE alias
 statement error
 with cte1 as MATERIALIZED (select 42), cte1 as MATERIALIZED (select 42) select * FROM cte1;
+----
 
 # reference to CTE before its actually defined
 query I

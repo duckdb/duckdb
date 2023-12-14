@@ -32,6 +32,7 @@ SELECT i, MIN(i), MAX(i) FROM range(9000) tbl(i) GROUP BY i
 # 1M integers is too much -> does not fit into 1MB
 statement error
 SELECT i, MIN(i), MAX(i) FROM range(1000000) tbl(i) GROUP BY i
+----
 
 # we can group by 9K integers a bunch of times -> memory should be released between queries
 loop i 0 10
@@ -52,6 +53,7 @@ CREATE TABLE t1 AS SELECT * FROM range(10000) tbl(i)
 # we can't create a table with 1M integers: not enough memory!
 statement error
 CREATE TABLE t2 AS SELECT * FROM range(1000000) tbl(i)
+----
 
 # if we drop the table, we can re-use any memory that the table took up (i.e. the memory gets released again)
 loop i 0 10
