@@ -282,7 +282,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	// If any of the parameters are NULL, the function will just be replaced with a NULL constant
 	// But this NULL constant needs to have to correct type, because we use LogicalType::SQLNULL for binding macro's
 	// However, some functions may have an invalid return type, so we default to SQLNULL for those
-	LogicalType return_type;
+	LogicalType return_type_if_null;
 	switch (bound_function.return_type.id()) {
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::DECIMAL:
@@ -291,16 +291,16 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::ARRAY:
-		return_type = LogicalType::SQLNULL;
+		return_type_if_null = LogicalType::SQLNULL;
 		break;
 	default:
-		return_type = bound_function.return_type;
+		return_type_if_null = bound_function.return_type;
 	}
 
 	if (bound_function.null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		for (auto &child : children) {
 			if (child->return_type == LogicalTypeId::SQLNULL) {
-				return make_uniq<BoundConstantExpression>(Value(return_type));
+				return make_uniq<BoundConstantExpression>(Value(return_type_if_null));
 			}
 			if (!child->IsFoldable()) {
 				continue;
@@ -310,7 +310,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 				continue;
 			}
 			if (result.IsNull()) {
-				return make_uniq<BoundConstantExpression>(Value(return_type));
+				return make_uniq<BoundConstantExpression>(Value(return_type_if_null));
 			}
 		}
 	}
