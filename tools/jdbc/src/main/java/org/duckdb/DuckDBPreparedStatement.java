@@ -896,7 +896,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     public void setNClob(int parameterIndex, Reader reader) throws SQLException {
         throw new SQLFeatureNotSupportedException("setNClob");
     }
-
+    
     private void requireNonBatch() throws SQLException {
         if (isBatch) {
             throw new SQLException("Batched queries must be executed with executeBatch.");

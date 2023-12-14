@@ -4048,6 +4048,72 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_batch_prepared_statement() throws Exception {
+        Connection conn = DriverManager.getConnection(JDBC_URL);
+        Statement stmt = conn.createStatement();
+        stmt.execute("CREATE TABLE test (x INT, y INT, z INT)");
+
+        LocalDateTime ldt = LocalDateTime.of(2021, 1, 18, 21, 20, 7);
+
+        PreparedStatement ps1 = conn.prepareStatement("INSERT INTO test VALUES (?, ?, ?)");
+        
+        ps1.setObject(1, 1);
+        ps1.setObject(2, 2);
+        ps1.setObject(3, 3);
+        ps1.addBatch();
+
+        ps1.setObject(1, 4);
+        ps1.setObject(2, 5);
+        ps1.setObject(3, 6);
+        ps1.addBatch();
+        
+        ps1.executeBatch();
+        ps1.close();
+
+        PreparedStatement ps2 = conn.prepareStatement("SELECT * FROM test");
+        ResultSet rs2 = ps2.executeQuery();
+
+        rs2.next();
+        assertEquals(rs2.getInt(1), rs2.getObject(1, Integer.class));
+        assertEquals(rs2.getObject(1, Integer.class), 1);
+
+        assertEquals(rs2.getInt(2), rs2.getObject(2, Integer.class));
+        assertEquals(rs2.getObject(2, Integer.class), 2);
+
+        assertEquals(rs2.getInt(3), rs2.getObject(3, Integer.class));
+        assertEquals(rs2.getObject(3, Integer.class), 3);
+
+        rs2.next();
+        assertEquals(rs2.getInt(1), rs2.getObject(1, Integer.class));
+        assertEquals(rs2.getObject(1, Integer.class), 4);
+
+        assertEquals(rs2.getInt(2), rs2.getObject(2, Integer.class));
+        assertEquals(rs2.getObject(2, Integer.class), 5);
+
+        assertEquals(rs2.getInt(3), rs2.getObject(3, Integer.class));
+        assertEquals(rs2.getObject(3, Integer.class), 6);
+
+        rs2.close();
+        ps2.close();
+        stmt.close();
+        conn.close();
+    }
+    
+    public static test_execute_while_batch() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            try (Statement s = conn.createStatement()) {
+                s.execute("create table test (id int)");
+            }
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO test VALUES (?)")) {
+                ps.setObject(1, 1);
+                ps.addBatch();
+                String msg = assertThrows(ps::execute, SQLException.class);
+                assertTrue(msg.contains("Batched queries must be executed with executeBatch."));
+            }
+        }
+    }
+
+
     public static void main(String[] args) throws Exception {
         // Woo I can do reflection too, take this, JUnit!
         Method[] methods = TestDuckDBJDBC.class.getMethods();
