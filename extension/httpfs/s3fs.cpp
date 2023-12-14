@@ -305,7 +305,7 @@ S3AuthParams S3SecretHelper::GetParams(const KeyValueSecret &secret) {
 		params.endpoint = secret.TryGetValue("endpoint").ToString();
 	}
 	if (!secret.TryGetValue("url_style").IsNull()) {
-		params.endpoint = secret.TryGetValue("url_style").ToString();
+		params.url_style = secret.TryGetValue("url_style").ToString();
 	}
 	if (!secret.TryGetValue("use_ssl").IsNull()) {
 		params.use_ssl = secret.TryGetValue("use_ssl").GetValue<bool>();
