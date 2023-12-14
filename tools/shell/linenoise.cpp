@@ -1950,6 +1950,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 			break;
 		case CTRL_L: /* ctrl+l, clear screen */
 			linenoiseClearScreen();
+			l.old_cursor_rows = 0;
 			refreshLine(&l);
 			break;
 		case CTRL_W: /* ctrl+w, delete previous word */
