@@ -53,7 +53,7 @@ public:
 	double GetProgress(ClientContext &context, GlobalSinkState &sink_p, GlobalSourceState &gstate) const;
 
 	const TupleDataLayout &GetLayout() const;
-	idx_t NumberOfPartitions(GlobalSinkState &sink) const;
+	idx_t MaxThreads(GlobalSinkState &sink) const;
 	static void SetMultiScan(GlobalSinkState &sink);
 
 private:
