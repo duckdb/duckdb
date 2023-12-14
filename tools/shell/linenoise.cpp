@@ -986,27 +986,22 @@ static void refreshSearch(struct linenoiseState *l) {
 	abFree(&ab);
 }
 
-/* Multi line low level line refresh.
- *
- * Rewrite the currently edited line accordingly to the buffer content,
- * cursor position, and number of columns of the terminal. */
-static void refreshMultiLine(struct linenoiseState *l) {
-	char seq[64];
+void positionToColAndRow(struct linenoiseState *l, size_t target_pos, int &out_row, int &out_col) {
 	int plen = linenoiseComputeRenderWidth(l->prompt, strlen(l->prompt));
-	// utf8 in prompt, get render width
+	out_row = -1;
+	out_col = 0;
 	int rows = 1;
-	int new_cursor_x = 0;
-	int new_cursor_row = -1;
-	size_t row_size = plen;
+	int row_size = plen;
 	size_t cpos = 0;
 	while (cpos < l->len) {
 		if (row_size >= l->cols) {
 			rows++;
 			row_size = 0;
 		}
-		if (new_cursor_row < 0 && cpos >= l->pos) {
-			new_cursor_row = rows;
-			new_cursor_x = row_size;
+		if (cpos >= target_pos) {
+			out_row = rows;
+			out_col = row_size;
+			return;
 		}
 		if (l->buf[cpos] == '\r' || l->buf[cpos] == '\n') {
 			// newline! move to next line
@@ -1019,12 +1014,12 @@ static void refreshMultiLine(struct linenoiseState *l) {
 			continue;
 		}
 		int sz;
-		size_t char_render_width;
+		int char_render_width;
 		if (duckdb::Utf8Proc::UTF8ToCodepoint(l->buf + cpos, sz) < 0) {
 			char_render_width = 1;
 			cpos++;
 		} else {
-			char_render_width = duckdb::Utf8Proc::RenderWidth(l->buf, l->len, cpos);
+			char_render_width = (int) duckdb::Utf8Proc::RenderWidth(l->buf, l->len, cpos);
 			cpos = duckdb::Utf8Proc::NextGraphemeCluster(l->buf, l->len, cpos);
 		}
 		if (row_size + char_render_width > l->cols) {
@@ -1034,10 +1029,24 @@ static void refreshMultiLine(struct linenoiseState *l) {
 		}
 		row_size += char_render_width;
 	}
-	if (l->pos == l->len) {
-		new_cursor_row = rows;
-		new_cursor_x = row_size;
+	if (target_pos == l->len) {
+		out_row = rows;
+		out_col = row_size;
 	}
+}
+
+/* Multi line low level line refresh.
+ *
+ * Rewrite the currently edited line accordingly to the buffer content,
+ * cursor position, and number of columns of the terminal. */
+static void refreshMultiLine(struct linenoiseState *l) {
+	char seq[64];
+	int plen = linenoiseComputeRenderWidth(l->prompt, strlen(l->prompt));
+	// utf8 in prompt, get render width
+	int rows, cols;
+	int new_cursor_row, new_cursor_x;
+	positionToColAndRow(l, l->len, rows, cols);
+	positionToColAndRow(l, l->pos, new_cursor_row, new_cursor_x);
 	int col;                                                /* colum position, zero-based. */
 	int old_rows = l->maxrows;
 	int fd = l->ofd, j;
