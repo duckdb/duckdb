@@ -668,6 +668,7 @@ void RowGroup::InitializeAppend(RowGroupAppendState &append_state) {
 
 void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append_count) {
 	// append to the current row_group
+	D_ASSERT(chunk.ColumnCount() == GetColumnCount());
 	for (idx_t i = 0; i < GetColumnCount(); i++) {
 		auto &col_data = GetColumn(i);
 		col_data.Append(state.states[i], chunk.data[i], append_count);
@@ -759,16 +760,12 @@ RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
 	return result;
 }
 
-bool RowGroup::AllDeleted() {
-	if (HasUnloadedDeletes()) {
-		// deletes aren't loaded yet - we know not everything is deleted
-		return false;
-	}
+idx_t RowGroup::GetCommittedRowCount() {
 	auto &vinfo = GetVersionInfo();
 	if (!vinfo) {
-		return false;
+		return count;
 	}
-	return vinfo->GetCommittedDeletedCount(count) == count;
+	return count - vinfo->GetCommittedDeletedCount(count);
 }
 
 bool RowGroup::HasUnloadedDeletes() const {

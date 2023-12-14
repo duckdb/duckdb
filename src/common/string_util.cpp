@@ -4,6 +4,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -229,12 +230,30 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 	if (l1.size() != l2.size()) {
 		return false;
 	}
+	const auto charmap = LowerFun::ascii_to_lower_map;
 	for (idx_t c = 0; c < l1.size(); c++) {
-		if (StringUtil::CharacterToLower(l1[c]) != StringUtil::CharacterToLower(l2[c])) {
+		if (charmap[(uint8_t)l1[c]] != charmap[(uint8_t)l2[c]]) {
 			return false;
 		}
 	}
 	return true;
+}
+
+bool StringUtil::CILessThan(const string &s1, const string &s2) {
+	const auto charmap = UpperFun::ascii_to_upper_map;
+
+	unsigned char u1, u2;
+
+	idx_t length = MinValue<idx_t>(s1.length(), s2.length());
+	length += s1.length() != s2.length();
+	for (idx_t i = 0; i < length; i++) {
+		u1 = (unsigned char)s1[i];
+		u2 = (unsigned char)s2[i];
+		if (charmap[u1] != charmap[u2]) {
+			break;
+		}
+	}
+	return (charmap[u1] - charmap[u2]) < 0;
 }
 
 vector<string> StringUtil::Split(const string &input, const string &split) {

@@ -44,7 +44,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
 	// Types for the layout
 	vector<LogicalType> layout_types(condition_types);
 	layout_types.insert(layout_types.end(), build_types.begin(), build_types.end());
-	if (IsRightOuterJoin(join_type)) {
+	if (PropagatesBuildSide(join_type)) {
 		// full/right outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
 		// we place the bool before the NEXT pointer
 		layout_types.emplace_back(LogicalType::BOOLEAN);
@@ -184,7 +184,7 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 		source_chunk.data[col_offset + i].Reference(payload.data[i]);
 	}
 	col_offset += payload.ColumnCount();
-	if (IsRightOuterJoin(join_type)) {
+	if (PropagatesBuildSide(join_type)) {
 		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
 		source_chunk.data[col_offset].Reference(vfound);
 		col_offset++;
@@ -224,7 +224,7 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> 
 	// figure out which keys are NULL, and create a selection vector out of them
 	current_sel = FlatVector::IncrementalSelectionVector();
 	idx_t added_count = keys.size();
-	if (build_side && IsRightOuterJoin(join_type)) {
+	if (build_side && (PropagatesBuildSide(join_type))) {
 		// in case of a right or full outer join, we cannot remove NULL keys from the build side
 		return added_count;
 	}
@@ -384,6 +384,8 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	switch (ht.join_type) {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
+	case JoinType::RIGHT_ANTI:
+	case JoinType::RIGHT_SEMI:
 		NextInnerJoin(keys, left, result);
 		break;
 	case JoinType::SEMI:
@@ -405,6 +407,13 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	default:
 		throw InternalException("Unhandled join type in JoinHashTable");
 	}
+}
+
+bool ScanStructure::PointersExhausted() {
+	// AdvancePointers creates a "new_count" for every pointer advanced during the
+	// previous advance pointers call. If no pointers are advanced, new_count = 0.
+	// count is then set ot new_count.
+	return count == 0;
 }
 
 idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector *no_match_sel) {
@@ -485,7 +494,9 @@ void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vect
 }
 
 void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	D_ASSERT(result.ColumnCount() == left.ColumnCount() + ht.build_types.size());
+	if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
+		D_ASSERT(result.ColumnCount() == left.ColumnCount() + ht.build_types.size());
+	}
 	if (this->count == 0) {
 		// no pointers left to chase
 		return;
@@ -495,7 +506,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 
 	idx_t result_count = ScanInnerJoin(keys, result_vector);
 	if (result_count > 0) {
-		if (IsRightOuterJoin(ht.join_type)) {
+		if (PropagatesBuildSide(ht.join_type)) {
 			// full/right outer join: mark join matches as FOUND in the HT
 			auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
 			for (idx_t i = 0; i < result_count; i++) {
@@ -505,16 +516,19 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 				Store<bool>(true, ptrs[idx] + ht.tuple_size);
 			}
 		}
-		// matches were found
-		// construct the result
-		// on the LHS, we create a slice using the result vector
-		result.Slice(left, result_vector, result_count);
+		// for right semi join, just mark the entry as found and move on. Propogation happens later
+		if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
+			// matches were found
+			// construct the result
+			// on the LHS, we create a slice using the result vector
+			result.Slice(left, result_vector, result_count);
 
-		// on the RHS, we need to fetch the data from the hash table
-		for (idx_t i = 0; i < ht.build_types.size(); i++) {
-			auto &vector = result.data[left.ColumnCount() + i];
-			D_ASSERT(vector.GetType() == ht.build_types[i]);
-			GatherResult(vector, result_vector, result_count, i + ht.condition_types.size());
+			// on the RHS, we need to fetch the data from the hash table
+			for (idx_t i = 0; i < ht.build_types.size(); i++) {
+				auto &vector = result.data[left.ColumnCount() + i];
+				D_ASSERT(vector.GetType() == ht.build_types[i]);
+				GatherResult(vector, result_vector, result_count, i + ht.condition_types.size());
+			}
 		}
 		AdvancePointers();
 	}
@@ -786,12 +800,20 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 		return;
 	}
 
+	// When scanning Full Outer for right semi joins, we only propagate matches that have true
+	// Right Semi Joins do not propagate values during the probe phase, since we do not want to
+	// duplicate RHS rows.
+	bool match_propagation_value = false;
+	if (join_type == JoinType::RIGHT_SEMI) {
+		match_propagation_value = true;
+	}
+
 	const auto row_locations = iterator.GetRowLocations();
 	do {
 		const auto count = iterator.GetCurrentChunkCount();
 		for (idx_t i = state.offset_in_chunk; i < count; i++) {
 			auto found_match = Load<bool>(row_locations[i] + tuple_size);
-			if (!found_match) {
+			if (found_match == match_propagation_value) {
 				key_locations[found_entries++] = row_locations[i];
 				if (found_entries == STANDARD_VECTOR_SIZE) {
 					state.offset_in_chunk = i + 1;
@@ -810,7 +832,11 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 		return;
 	}
 	result.SetCardinality(found_entries);
+
 	idx_t left_column_count = result.ColumnCount() - build_types.size();
+	if (join_type == JoinType::RIGHT_SEMI || join_type == JoinType::RIGHT_ANTI) {
+		left_column_count = 0;
+	}
 	const auto &sel_vector = *FlatVector::IncrementalSelectionVector();
 	// set the left side as a constant NULL
 	for (idx_t i = 0; i < left_column_count; i++) {

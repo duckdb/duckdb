@@ -22,6 +22,7 @@ SELECT * FROM t0 WHERE t0.c0 = 1;
 
 statement error
 INSERT INTO t0(c0) VALUES (1);
+----
 
 query I
 SELECT * FROM t0 WHERE t0.c0 = 1;
@@ -37,6 +38,7 @@ INSERT INTO t0(c0) VALUES (3);
 
 statement error
 INSERT INTO t0(c0) VALUES (2);
+----
 
 query I
 SELECT * FROM t0 WHERE t0.c0 = 2;

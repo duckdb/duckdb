@@ -30,6 +30,7 @@ NULL
 
 statement error
 ${statement_type} ${null_order_type}='unknown_null_order'
+----
 
 endloop
 

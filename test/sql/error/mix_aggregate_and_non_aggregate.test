@@ -10,7 +10,9 @@ SELECT FIRST(name), FIRST(abv)
 FROM tbl
 GROUP BY style
 ORDER BY abv DESC;
+----
 
 statement error
 SELECT FIRST(name)||abv
 FROM tbl
+----

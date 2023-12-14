@@ -23,5 +23,6 @@ foreach datatype DATE TIME
 
 statement error
 SELECT '2021-04-29 10:50:09-05'::TIMESTAMPTZ::{datatype}
+----
 
 endloop

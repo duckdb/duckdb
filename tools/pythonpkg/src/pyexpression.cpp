@@ -10,7 +10,7 @@ namespace duckdb {
 
 DuckDBPyExpression::DuckDBPyExpression(unique_ptr<ParsedExpression> expr_p, OrderType order_type,
                                        OrderByNullType null_order)
-    : expression(std::move(expr_p)), order_type(order_type), null_order(null_order) {
+    : expression(std::move(expr_p)), null_order(null_order), order_type(order_type) {
 	if (!expression) {
 		throw InternalException("DuckDBPyExpression created without an expression");
 	}
@@ -325,7 +325,7 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::CaseExpression(const DuckDBPy
 	// Add NULL as default Else expression
 	auto &internal_expression = reinterpret_cast<duckdb::CaseExpression &>(*case_expr->expression);
 	internal_expression.else_expr = make_uniq<duckdb::ConstantExpression>(Value(LogicalTypeId::SQLNULL));
-	return std::move(case_expr);
+	return case_expr;
 }
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::FunctionExpression(const string &function_name,
