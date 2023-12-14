@@ -1594,7 +1594,7 @@ static char linenoiseSearch(linenoiseState *l, char c) {
 		return acceptSearch(l, CTRL_U);
 	case CTRL_K: // accept search, clear after cursor
 		return acceptSearch(l, CTRL_K);
-	case CTRL_D: // accept saerch, delete a character
+	case CTRL_D: // accept search, delete a character
 		return acceptSearch(l, CTRL_D);
 	case CTRL_L:
 		linenoiseClearScreen();
@@ -1735,6 +1735,10 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 			return (int)l.len;
 		case CTRL_G:
 		case CTRL_C: /* ctrl-c */ {
+			if (mlmode && l.pos != l.len) {
+				l.pos = l.len;
+				refreshLine(&l);
+			}
 			l.buf[0] = '\3';
 			// we keep track of whether or not the line was empty by writing \3 to the second position of the line
 			// this is because at a higher level we might want to know if we pressed ctrl c to clear the line
