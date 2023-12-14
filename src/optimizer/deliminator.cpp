@@ -42,6 +42,10 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 	vector<DelimCandidate> candidates;
 	FindCandidates(op, candidates);
 
+	if (candidates.empty()) {
+		return op;
+	}
+
 	for (auto &candidate : candidates) {
 		auto &delim_join = candidate.delim_join;
 
@@ -230,8 +234,8 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 	}
 
 	// TODO: we cannot perform the optimization here because our pure inequality joins don't implement
-	//  JoinType::SINGLE yet
-	if (delim_join.join_type == JoinType::SINGLE) {
+	//  JoinType::SINGLE yet, and JoinType::MARK is a special case
+	if (delim_join.join_type == JoinType::SINGLE || delim_join.join_type == JoinType::MARK) {
 		bool has_one_equality = false;
 		for (auto &cond : join_conditions) {
 			has_one_equality = has_one_equality || IsEqualityJoinCondition(cond);
@@ -283,7 +287,22 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 			auto &delim_side = delim_idx == 0 ? *join_condition.left : *join_condition.right;
 			auto &colref = delim_side.Cast<BoundColumnRefExpression>();
 			if (colref.binding == traced_binding) {
-				delim_condition.comparison = FlipComparisonExpression(join_condition.comparison);
+				auto join_comparison = join_condition.comparison;
+				if (delim_condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
+				    delim_condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+					// We need to compare NULL values
+					if (join_comparison == ExpressionType::COMPARE_EQUAL) {
+						join_comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+					} else if (join_comparison == ExpressionType::COMPARE_NOTEQUAL) {
+						join_comparison = ExpressionType::COMPARE_DISTINCT_FROM;
+					} else if (join_comparison != ExpressionType::COMPARE_DISTINCT_FROM &&
+					           join_comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+						// The optimization does not work here
+						found = false;
+						break;
+					}
+				}
+				delim_condition.comparison = FlipComparisonExpression(join_comparison);
 				found = true;
 				break;
 			}
