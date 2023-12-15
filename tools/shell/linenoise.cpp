@@ -1805,7 +1805,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 			if (mlmode && l.len > 0) {
 				// check if this forms a complete SQL statement or not
 				l.buf[l.len] = '\0';
-				if (!allWhitespace(l.buf) && !sqlite3_complete(l.buf)) {
+				if (l.buf[0] != '.' && !allWhitespace(l.buf) && !sqlite3_complete(l.buf)) {
 					// not a complete SQL statement yet! continuation
 					// insert "\r\n"
 					if (linenoiseEditInsertMulti(&l, "\r\n")) {
