@@ -16,7 +16,9 @@ namespace std {
 template <>
 struct hash<duckdb::interval_t> {
 	inline size_t operator()(const duckdb::interval_t &val) const {
-		return hash<int32_t> {}(val.days) ^ hash<int32_t> {}(val.months) ^ hash<int64_t> {}(val.micros);
+		int64_t months, days, micros;
+		val.Normalize(months, days, micros);
+		return hash<int32_t> {}(days) ^ hash<int32_t> {}(months) ^ hash<int64_t> {}(micros);
 	}
 };
 

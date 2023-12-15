@@ -19,6 +19,7 @@ INSERT INTO a SELECT i id, NULL c FROM range(-2, -250000, -1) tbl(i)
 
 statement error
 INSERT INTO a VALUES (1, 5)
+----
 
 statement ok
 ROLLBACK
@@ -42,6 +43,7 @@ INSERT INTO a SELECT i id, -i c FROM range(-2, -250000, -1) tbl(i)
 
 statement error
 INSERT INTO a VALUES (1, 5)
+----
 
 statement ok
 ROLLBACK

@@ -33,18 +33,23 @@ SELECT list_grade_up([]) WHERE 1 = 0
 
 statement error
 SELECT list_grade_up()
+----
 
 statement error
 SELECT list_grade_up(*)
+----
 
 statement error
 SELECT list_grade_up([1, 2], 2)
+----
 
 statement error
 SELECT list_grade_up([1, 2], 'DESC', 2)
+----
 
 statement error
 SELECT list_grade_up([1, 2], 2, 2)
+----
 
 
 query I

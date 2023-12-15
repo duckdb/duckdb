@@ -16,9 +16,11 @@ INSERT INTO t1 VALUES
 # Binding errors
 statement error
 SELECT CAST(a AS INTEGER), sum(b) OVER win FROM t1 WINDOW win AS ( ORDER BY a, b RANGE BETWEEN 5 PRECEDING AND 5 FOLLOWING )
+----
 
 statement error
 SELECT CAST(a AS INTEGER), sum(b) OVER win FROM t1 WINDOW win AS ( ORDER BY a RANGE BETWEEN 'a' PRECEDING AND 'a' FOLLOWING )
+----
 
 # Numeric type coverage
 foreach type <numeric>
@@ -114,6 +116,7 @@ CREATE VIEW c1 AS SELECT a::${type} AS a, b FROM t1;
 
 statement error
 SELECT a, sum(b) OVER win FROM c1 WINDOW win AS ( ORDER BY a RANGE BETWEEN 5 PRECEDING AND 5 FOLLOWING )
+----
 
 statement ok
 DROP VIEW c1;
@@ -1049,8 +1052,7 @@ SELECT max(a) OVER ( ORDER BY (SELECT sum(a) FROM t1) )
          + min(a) OVER()
   )
   FROM t1
-#----
-#NULL
+----
 
 #==========================================================================
 
