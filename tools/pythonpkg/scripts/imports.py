@@ -93,7 +93,6 @@ types.GenericAlias
 import typing
 
 typing._UnionGenericAlias
-typing._GenericAlias
 
 import uuid
 
