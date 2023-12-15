@@ -110,7 +110,6 @@ bool CSVScanner::SetStart(VerificationPositions &verification_positions) {
 		SkipEmptyLines();
 		SkipHeader();
 		SkipEmptyLines();
-		std::cout << "bla_2" << std::endl;
 		if (verification_positions.beginning_of_first_line == 0) {
 			verification_positions.beginning_of_first_line = csv_iterator.buffer_pos;
 		}
@@ -130,7 +129,6 @@ bool CSVScanner::SetStart(VerificationPositions &verification_positions) {
 		if (tuples.empty()) {
 			// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
 			csv_iterator.buffer_pos = position_being_checked;
-			csv_iterator.bytes_to_read = bytes_to_check;
 			continue;
 		}
 		vector<Value> &values = tuples[0].values;
@@ -138,7 +136,6 @@ bool CSVScanner::SetStart(VerificationPositions &verification_positions) {
 		if (values.size() != state_machine->options.dialect_options.num_cols) {
 			// If columns don't match, this is not the correct start, we need to skip until the next new line
 			csv_iterator.buffer_pos = position_being_checked;
-			csv_iterator.bytes_to_read = bytes_to_check;
 			continue;
 		}
 		// 2. We try to cast all columns to the correct types

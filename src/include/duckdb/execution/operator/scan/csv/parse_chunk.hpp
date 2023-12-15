@@ -129,7 +129,7 @@ struct ParseChunk {
 			if (!scanner.cur_buffer_handle) {
 				scanner.duck_vector_ptr[scanner.current_value_pos++] =
 				    string_t(scanner.previous_cur_buffer_handle->Ptr() + scanner.length,
-				             scanner.previous_cur_buffer_handle->actual_size);
+				             scanner.previous_cur_buffer_handle->actual_size - scanner.length - 1);
 			} else {
 				throw InternalException("This should never happen, unless we have null padding");
 			}

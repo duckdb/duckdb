@@ -110,6 +110,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			return_types = sniffer_result.return_types;
 		}
 	}
+
 	D_ASSERT(return_types.size() == names.size());
 
 	result->csv_types = return_types;

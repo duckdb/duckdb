@@ -14,6 +14,7 @@
 #include "duckdb/execution/operator/scan/csv/csv_state_machine.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/fast_mem.hpp"
 
 namespace duckdb {
 
@@ -96,7 +97,6 @@ public:
 	                    CSVIterator csv_iterator, idx_t scanner_id);
 
 	void ProcessOverbufferValue() {
-		// figure out current_pos
 		auto cur_buf = cur_buffer_handle->Ptr();
 		for (; csv_iterator.buffer_pos < cur_buffer_handle->actual_size; csv_iterator.buffer_pos++) {
 			state_machine->Transition(states, cur_buf[csv_iterator.buffer_pos]);
@@ -117,31 +117,12 @@ public:
 		} else {
 			idx_t first_buffer_size = previous_cur_buffer_handle->actual_size - length;
 			auto string_length = first_buffer_size + csv_iterator.buffer_pos - 1;
-			auto intersection = make_unsafe_uniq_array<char>(string_length);
-			memcpy(intersection.get(), previous_cur_buffer_handle->Ptr() + length, first_buffer_size);
-			auto res_intersect = intersection.get() + first_buffer_size;
-			// fixme this little memcpy is evil
-			memcpy(res_intersect, cur_buffer_handle->Ptr(), string_length - first_buffer_size);
-
-			duck_vector_ptr[current_value_pos] =
-			    StringVector::AddStringOrBlob(*duck_vector, string_t(intersection.get(), string_length));
+			auto &result_str = duck_vector_ptr[current_value_pos];
+			result_str = StringVector::EmptyString(*duck_vector, string_length);
+			FastMemcpy(result_str.GetDataWriteable(), previous_cur_buffer_handle->Ptr() + length, first_buffer_size);
+			FastMemcpy(result_str.GetDataWriteable() + first_buffer_size, cur_buffer_handle->Ptr(), string_length - first_buffer_size);
+			result_str.Finalize();
 		}
-		//	else{
-		//		// fixme this is an over buffer value
-		//		auto string_length =  previous_cur_buffer_handle->actual_size - length + csv_iterator.buffer_pos -1 ;
-		//		auto intersection = make_unsafe_uniq_array<char>(string_length);
-		//		idx_t cur_pos = 0;
-		//		auto buffer_ptr = previous_cur_buffer_handle->Ptr();
-		//		for (idx_t i = length; i < previous_cur_buffer_handle->actual_size; i++) {
-		//			intersection[cur_pos++] = buffer_ptr[i];
-		//		}
-		//		idx_t nxt_buffer_pos = 0;
-		//		for (idx_t i = 0; i < csv_iterator.buffer_pos - 1; i++) {
-		//			intersection[cur_pos++] = cur_buffer_handle->Ptr()[nxt_buffer_pos++];
-		//		}
-		//		duck_vector_ptr[current_value_pos] = StringVector::AddStringOrBlob(*duck_vector,
-		//string_t(intersection.get(),string_length));
-		//	}
 		length = csv_iterator.buffer_pos;
 		current_value_pos++;
 	}
