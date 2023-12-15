@@ -119,6 +119,8 @@
 #include "utf8proc_wrapper.hpp"
 #include <unordered_set>
 #include <vector>
+#include "duckdb_shell_wrapper.h"
+#include "sqlite3.h"
 #ifdef __MVS__
 #include <strings.h>
 #include <sys/time.h>
@@ -1688,6 +1690,27 @@ static char linenoiseSearch(linenoiseState *l, char c) {
 	return 0;
 }
 
+static int allWhitespace(const char *z){
+	for(; *z; z++){
+		if( isspace((unsigned char)z[0]) ) continue;
+		if( *z=='/' && z[1]=='*' ){
+			z += 2;
+			while( *z && (*z!='*' || z[1]!='/') ){ z++; }
+			if( *z==0 ) return 0;
+			z++;
+			continue;
+		}
+		if( *z=='-' && z[1]=='-' ){
+			z += 2;
+			while( *z && *z!='\n' ){ z++; }
+			if( *z==0 ) return 1;
+			continue;
+		}
+		return 0;
+	}
+	return 1;
+}
+
 /* This function is the core of the line editing capability of linenoise.
  * It expects 'fd' to be already in "raw mode" so that every key pressed
  * will be returned ASAP to read().
@@ -1779,13 +1802,17 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 		switch (c) {
 		case 10:
 		case ENTER: /* enter */
-			if (mlmode && hasMoreData(l.ifd)) {
-				// enter was added as part of copy pasting and not as part of the user adding it
-				// insert newline into buffer
-				if (linenoiseEditInsertMulti(&l, "\r\n")) {
-					return -1;
+			if (mlmode && l.len > 0) {
+				// check if this forms a complete SQL statement or not
+				l.buf[l.len] = '\0';
+				if (!allWhitespace(l.buf) && !sqlite3_complete(l.buf)) {
+					// not a complete SQL statement yet! continuation
+					// insert "\r\n"
+					if (linenoiseEditInsertMulti(&l, "\r\n")) {
+						return -1;
+					}
+					break;
 				}
-				break;
 			}
 			history_len--;
 			free(history[history_len]);
