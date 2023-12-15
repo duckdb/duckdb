@@ -189,6 +189,7 @@ struct linenoiseState {
 	struct winsize ws;                       /* Terminal size */
 	size_t maxrows;                          /* Maximum num of rows used so far (multiline mode) */
 	int history_index;                       /* The history index we are currently editing. */
+	bool clear_screen;                       /* Whether we are clearing the screen */
 	bool search;                             /* Whether or not we are searching our history */
 	std::string search_buf;                  //! The search buffer
 	std::vector<searchMatch> search_matches; //! The set of search matches in our history
@@ -1099,6 +1100,11 @@ static void refreshMultiLine(struct linenoiseState *l) {
 	std::string highlight_buffer;
 	auto buf = l->buf;
 	auto len = l->len;
+	if (l->clear_screen) {
+		l->old_cursor_rows = 0;
+		old_rows = 0;
+		l->clear_screen = false;
+	}
 
 	/* Update maxrows if needed. */
 	if (rows > (int)l->maxrows) {
@@ -1674,6 +1680,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 	l.ws = getTerminalSize(stdin_fd, stdout_fd);
 	l.maxrows = 0;
 	l.history_index = 0;
+	l.clear_screen = false;
 	l.search = false;
 
 	/* Buffer starts empty. */
@@ -1961,7 +1968,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 			break;
 		case CTRL_L: /* ctrl+l, clear screen */
 			linenoiseClearScreen();
-			l.old_cursor_rows = 0;
+			l.clear_screen = true;
 			refreshLine(&l);
 			break;
 		case CTRL_W: /* ctrl+w, delete previous word */
