@@ -2,6 +2,9 @@
 # description: Test Regression Functions
 # group: [aggregates]
 
+statement ok
+PRAGMA enable_verification
+
 query I
 select regr_avgx(NULL,NULL)
 ----
@@ -15,12 +18,15 @@ select regr_avgx(1,1)
 #Corner cases
 statement error
 select regr_avgx()
+----
 
 statement error
 select regr_avgx(*)
+----
 
 statement error
 select regr_avgy()
+----
 
 query I
 select regr_avgy(NULL,NULL)
@@ -34,9 +40,11 @@ select regr_avgy(1,1)
 
 statement error
 select regr_avgy(*)
+----
 
 statement error
 select regr_count()
+----
 
 query I
 select regr_count(NULL,NULL)
@@ -50,9 +58,11 @@ select regr_count(1,1)
 
 statement error
 select regr_count(*)
+----
 
 statement error
 select regr_slope()
+----
 
 query I
 select regr_slope(NULL,NULL)
@@ -66,9 +76,11 @@ NULL
 
 statement error
 select regr_slope(*)
+----
 
 statement error
 select regr_r2()
+----
 
 query I
 select regr_r2(NULL,NULL)
@@ -83,9 +95,11 @@ NULL
 #Corner cases
 statement error
 select regr_r2(0, 1e230*i) from range(5) tbl(i);
+----
 
 statement error
 select regr_r2(1e230*i, i) from range(5) tbl(i);
+----
 
 query I
 select regr_r2(1e230*i, 0) from range(5) tbl(i);
@@ -99,12 +113,15 @@ select regr_r2(0, i) from range(5) tbl(i);
 
 statement error
 select regr_r2(*)
+----
 
 statement error
 select regr_sxx()
+----
 
 statement error
 select regr_sxx(0, 2e230*i) from range(5) tbl(i)
+----
 
 query I
 select regr_sxx(2e230*i, 0) from range(5) tbl(i)
@@ -123,6 +140,7 @@ select regr_sxx(1,1)
 
 statement error
 select regr_syy()
+----
 
 query I
 select regr_syy(NULL,NULL)
@@ -136,9 +154,11 @@ select regr_syy(1,1)
 
 statement error
 select regr_sxy(*)
+----
 
 statement error
 select regr_sxy()
+----
 
 query I
 select regr_sxy(NULL,NULL)
@@ -152,9 +172,11 @@ select regr_sxy(1,1)
 
 statement error
 select regr_syy(*)
+----
 
 statement error
 select regr_intercept()
+----
 
 query I
 select regr_intercept(NULL,NULL)
@@ -169,6 +191,7 @@ NULL
 
 statement error
 select regr_intercept(*)
+----
 
 statement ok
 create  table aggr(k int, v decimal(10,2), v2 decimal(10, 2));
@@ -178,55 +201,55 @@ insert into aggr values(1, 10, null), (2, 10, 11), (2, 20, 22), (2, 25, null), (
 
 
 query II
-select k, regr_avgx(v, v2) from aggr group by k;
+select k, regr_avgx(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	NULL
 2	22.666667
 
 query II
-select k, regr_avgy(v, v2) from aggr group by k;
+select k, regr_avgy(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	NULL
 2	20
 
 query III
-select k, count(*), regr_count(v, v2) from aggr group by k;
+select k, count(*), regr_count(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	1	0
 2	4	3
 
 query II
-select k, regr_slope(v, v2) from aggr group by k;
+select k, regr_slope(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	NULL
 2	0.831409
 
 query II
-select k, regr_r2(v, v2) from aggr group by k;
+select k, regr_r2(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	NULL
 2	0.997691
 
 query II
-select k, regr_sxx(v, v2) from aggr group by k;
+select k, regr_sxx(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	NULL
 2	288.666667
 
 query II
-select k, regr_syy(v, v2) from aggr group by k;
+select k, regr_syy(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	NULL
 2	200.000000
 
 query II
-select k, regr_sxy(v, v2) from aggr group by k;
+select k, regr_sxy(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	NULL
 2	240.000000
 
 query II
-select k, regr_intercept(v, v2) from aggr group by k;
+select k, regr_intercept(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	NULL
 2	1.154734

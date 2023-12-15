@@ -122,3 +122,11 @@ select i, i % 2, list(i) over(partition by i % 2 order by i rows between 1 prece
 5	1	[3, 5, 7]
 7	1	[5, 7, 9]
 9	1	[7, 9]
+
+# parameter not resolved issue (#484)
+
+statement ok
+PREPARE rebind_stmt AS SELECT list(list_value({'foo': [?]}));
+
+statement ok
+EXECUTE rebind_stmt(10);

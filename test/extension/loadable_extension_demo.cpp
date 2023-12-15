@@ -6,6 +6,8 @@
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/planner/extension_callback.hpp"
+
 using namespace duckdb;
 
 //===--------------------------------------------------------------------===//
@@ -212,6 +214,25 @@ public:
 	}
 };
 
+static set<string> test_loaded_extension_list;
+
+class QuackLoadExtension : public ExtensionCallback {
+	void OnExtensionLoaded(DatabaseInstance &db, const string &name) override {
+		test_loaded_extension_list.insert(name);
+	}
+};
+
+inline void LoadedExtensionsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	string result_str;
+	for (auto &ext : test_loaded_extension_list) {
+		if (!result_str.empty()) {
+			result_str += ", ";
+		}
+		result_str += ext;
+	}
+	result.Reference(Value(result_str));
+}
+
 //===--------------------------------------------------------------------===//
 // Extension load + setup
 //===--------------------------------------------------------------------===//
@@ -227,8 +248,7 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	con.BeginTransaction();
 	con.CreateScalarFunction<int32_t, string_t>("hello", {LogicalType(LogicalTypeId::VARCHAR)},
 	                                            LogicalType(LogicalTypeId::INTEGER), &hello_fun);
-
-	catalog.CreateFunction(client_context, &hello_alias_info);
+	catalog.CreateFunction(client_context, hello_alias_info);
 
 	// Add alias POINT type
 	string alias_name = "POINT";
@@ -242,29 +262,34 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	target_type.SetAlias(alias_name);
 	alias_info->type = target_type;
 
-	auto entry = (TypeCatalogEntry *)catalog.CreateType(client_context, alias_info.get());
-	LogicalType::SetCatalog(target_type, entry);
+	catalog.CreateType(client_context, *alias_info);
 
 	// Function add point
 	ScalarFunction add_point_func("add_point", {target_type, target_type}, target_type, AddPointFunction);
 	CreateScalarFunctionInfo add_point_info(add_point_func);
-	catalog.CreateFunction(client_context, &add_point_info);
+	catalog.CreateFunction(client_context, add_point_info);
 
 	// Function sub point
 	ScalarFunction sub_point_func("sub_point", {target_type, target_type}, target_type, SubPointFunction);
 	CreateScalarFunctionInfo sub_point_info(sub_point_func);
-	catalog.CreateFunction(client_context, &sub_point_info);
+	catalog.CreateFunction(client_context, sub_point_info);
+
+	// Function sub point
+	ScalarFunction loaded_extensions("loaded_extensions", {}, LogicalType::VARCHAR, LoadedExtensionsFunction);
+	CreateScalarFunctionInfo loaded_extensions_info(loaded_extensions);
+	catalog.CreateFunction(client_context, loaded_extensions_info);
 
 	// Quack function
 	QuackFunction quack_function;
 	CreateTableFunctionInfo quack_info(quack_function);
-	catalog.CreateTableFunction(client_context, &quack_info);
+	catalog.CreateTableFunction(client_context, quack_info);
 
 	con.Commit();
 
 	// add a parser extension
 	auto &config = DBConfig::GetConfig(db);
 	config.parser_extensions.push_back(QuackExtension());
+	config.extension_callbacks.push_back(make_uniq<QuackLoadExtension>());
 }
 
 DUCKDB_EXTENSION_API const char *loadable_extension_demo_version() {

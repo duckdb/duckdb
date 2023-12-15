@@ -1,19 +1,18 @@
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
+
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
 
-DuckIndexEntry::DuckIndexEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info)
+DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info)
     : IndexCatalogEntry(catalog, schema, info) {
 }
 
 DuckIndexEntry::~DuckIndexEntry() {
-	// remove the associated index from the info
-	if (!info || !index) {
+	if (!info) {
 		return;
 	}
-	info->indexes.RemoveIndex(*index);
+	info->indexes.RemoveIndex(name);
 }
 
 string DuckIndexEntry::GetSchemaName() const {
@@ -22,6 +21,11 @@ string DuckIndexEntry::GetSchemaName() const {
 
 string DuckIndexEntry::GetTableName() const {
 	return info->table;
+}
+
+void DuckIndexEntry::CommitDrop() {
+	D_ASSERT(info);
+	info->indexes.CommitDrop(name);
 }
 
 } // namespace duckdb

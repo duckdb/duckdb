@@ -72,7 +72,7 @@ void Event::InsertEvent(shared_ptr<Event> replacement_event) {
 	executor.AddEvent(std::move(replacement_event));
 }
 
-void Event::SetTasks(vector<unique_ptr<Task>> tasks) {
+void Event::SetTasks(vector<shared_ptr<Task>> tasks) {
 	auto &ts = TaskScheduler::GetScheduler(executor.context);
 	D_ASSERT(total_tasks == 0);
 	D_ASSERT(!tasks.empty());

@@ -8,7 +8,7 @@ string SimilarCatalogEntry::GetQualifiedName(bool qualify_catalog, bool qualify_
 	D_ASSERT(Found());
 	string result;
 	if (qualify_catalog) {
-		result += schema->catalog->GetName();
+		result += schema->catalog.GetName();
 	}
 	if (qualify_schema) {
 		if (!result.empty()) {

@@ -6,15 +6,15 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> Transformer::TransformBooleanTest(duckdb_libpgquery::PGBooleanTest *node) {
-	auto argument = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(node->arg));
+unique_ptr<ParsedExpression> Transformer::TransformBooleanTest(duckdb_libpgquery::PGBooleanTest &node) {
+	auto argument = TransformExpression(PGPointerCast<duckdb_libpgquery::PGNode>(node.arg));
 
 	auto expr_true = make_uniq<ConstantExpression>(Value::BOOLEAN(true));
 	auto expr_false = make_uniq<ConstantExpression>(Value::BOOLEAN(false));
 	// we cast the argument to bool to remove ambiguity wrt function binding on the comparision
 	auto cast_argument = make_uniq<CastExpression>(LogicalType::BOOLEAN, argument->Copy());
 
-	switch (node->booltesttype) {
+	switch (node.booltesttype) {
 	case duckdb_libpgquery::PGBoolTestType::PG_IS_TRUE:
 		return make_uniq<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM, std::move(cast_argument),
 		                                       std::move(expr_true));
@@ -32,7 +32,7 @@ unique_ptr<ParsedExpression> Transformer::TransformBooleanTest(duckdb_libpgquery
 	case duckdb_libpgquery::PGBoolTestType::IS_NOT_UNKNOWN: // IS NOT NULL
 		return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, std::move(argument));
 	default:
-		throw NotImplementedException("Unknown boolean test type %d", node->booltesttype);
+		throw NotImplementedException("Unknown boolean test type %d", node.booltesttype);
 	}
 }
 

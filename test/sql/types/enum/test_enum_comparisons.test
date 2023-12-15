@@ -172,6 +172,7 @@ Tim	Chorizo	ok	NULL
 # Explicit casts from one enum to another
 statement error
 SELECT person_mood::pet_mood FROM person_pet_den
+----
 
 
 # Use enums as normal strings (testing e.g. substr, LIKE, REGEXP_MATCHES).

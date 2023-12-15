@@ -55,7 +55,7 @@ void ColumnScanState::Next(idx_t count) {
 	}
 }
 
-const vector<column_t> &CollectionScanState::GetColumnIds() {
+const vector<storage_t> &CollectionScanState::GetColumnIds() {
 	return parent.GetColumnIds();
 }
 

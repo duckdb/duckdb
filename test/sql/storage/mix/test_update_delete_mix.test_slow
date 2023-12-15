@@ -1,0 +1,44 @@
+# name: test/sql/storage/mix/test_update_delete_mix.test_slow
+# description: Test mix of updates and deletes with storage
+# group: [mix]
+
+# load the DB from disk
+load __TEST_DIR__/test_mix.db
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
+
+statement ok
+BEGIN TRANSACTION;
+
+loop i 0 1000
+
+statement ok
+UPDATE test SET b=b+1 WHERE a=11
+
+endloop
+
+query I
+DELETE FROM test WHERE a=12
+----
+1
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+11	1022
+13	22
+
+statement ok
+COMMIT
+
+restart
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+11	1022
+13	22

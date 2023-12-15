@@ -10,7 +10,7 @@ PRAGMA verify_serializer
 # answers are generated from postgres
 # hence check with NULLS LAST flag
 statement ok
-PRAGMA default_null_order='NULLS LAST'
+PRAGMA default_null_order='postgres'
 
 statement ok
 CALL dsdgen(sf=0.01)

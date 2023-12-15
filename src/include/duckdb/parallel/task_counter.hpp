@@ -18,7 +18,7 @@ public:
 	    : scheduler(scheduler_p), token(scheduler_p.CreateProducer()), task_count(0), tasks_completed(0) {
 	}
 
-	virtual void AddTask(unique_ptr<Task> task) {
+	virtual void AddTask(shared_ptr<Task> task) {
 		++task_count;
 		scheduler.ScheduleTask(*token, std::move(task));
 	}
@@ -29,7 +29,7 @@ public:
 
 	virtual void Finish() {
 		while (tasks_completed < task_count) {
-			unique_ptr<Task> task;
+			shared_ptr<Task> task;
 			if (scheduler.GetTaskFromProducer(*token, task)) {
 				task->Execute();
 				task.reset();

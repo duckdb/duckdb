@@ -34,7 +34,7 @@ void TransactionContext::BeginTransaction() {
 		// if immediate transaction mode is enabled then start all transactions immediately
 		auto databases = DatabaseManager::Get(context).GetDatabases(context);
 		for (auto db : databases) {
-			current_transaction->GetTransaction(*db);
+			current_transaction->GetTransaction(db.get());
 		}
 	}
 }

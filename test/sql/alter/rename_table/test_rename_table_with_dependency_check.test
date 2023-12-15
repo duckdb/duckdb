@@ -11,6 +11,7 @@ CREATE UNIQUE INDEX i1 ON t0 (c0);
 # Cannot alter entry "t0" because there are entries that depend on it
 statement error
 ALTER TABLE t0 RENAME TO t3;
+----
 
 # t3 is not exist
 statement ok
@@ -19,6 +20,7 @@ CREATE TABLE t3 (c0 INT);
 # Cannot alter entry "t0" because there are entries that depend on it
 statement error
 ALTER TABLE t0 RENAME TO t4;
+----
 
 statement ok
 DROP TABLE t0;
@@ -26,3 +28,4 @@ DROP TABLE t0;
 # t4 is not exist
 statement error
 ANALYZE t4;
+----

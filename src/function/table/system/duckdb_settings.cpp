@@ -2,6 +2,7 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -49,7 +50,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		value.name = option->name;
 		value.value = option->get_setting(context).ToString();
 		value.description = option->description;
-		value.input_type = LogicalTypeIdToString(option->parameter_type);
+		value.input_type = EnumUtil::ToString(option->parameter_type);
 
 		result->settings.push_back(std::move(value));
 	}

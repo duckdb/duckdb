@@ -1,0 +1,188 @@
+# name: test/sql/index/art/insert_update_delete/test_art_linear_insert.test_slow
+# description: Test ART index with linear insertions and deletes
+# group: [insert_update_delete]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+CREATE INDEX i_index ON integers using art(i);
+
+# this test tests linear insertions into the ART index
+# we test using a number of different "breaking points":
+# 4, 16, 48, 256, 1024
+# this is related to the ART leaf size
+
+# BREAKING POINT: [4]
+loop i 1 5
+
+statement ok
+INSERT INTO integers VALUES (${i});
+
+# verify the element was inserted correctly
+query I
+SELECT COUNT(*)-${i} FROM integers WHERE i < 100000000;
+----
+0
+
+query I
+SELECT COUNT(*)-${i} FROM integers WHERE i >= 0;
+----
+0
+
+endloop
+
+# now delete data sequentially
+
+loop i 1 5
+
+statement ok
+DELETE FROM integers WHERE i=${i};
+
+# verify that the deletion worked
+query I
+SELECT COUNT(*)+${i} FROM integers WHERE i >= 0;
+----
+4
+
+endloop
+
+# BREAKING POINT: [16]
+loop i 1 17
+
+statement ok
+INSERT INTO integers VALUES (${i});
+
+# verify the element was inserted correctly
+query I
+SELECT COUNT(*)-${i} FROM integers WHERE i < 100000000;
+----
+0
+
+query I
+SELECT COUNT(*)-${i} FROM integers WHERE i >= 0;
+----
+0
+
+endloop
+
+# now delete data sequentially
+
+loop i 1 17
+
+statement ok
+DELETE FROM integers WHERE i=${i};
+
+# verify that the deletion worked
+query I
+SELECT COUNT(*)+${i} FROM integers WHERE i >= 0;
+----
+16
+
+endloop
+
+# BREAKING POINT: [48]
+loop i 1 49
+
+statement ok
+INSERT INTO integers VALUES (${i});
+
+# verify the element was inserted correctly
+query I
+SELECT COUNT(*)-${i} FROM integers WHERE i < 100000000;
+----
+0
+
+query I
+SELECT COUNT(*)-${i} FROM integers WHERE i >= 0;
+----
+0
+
+endloop
+
+# now delete data sequentially
+
+loop i 1 49
+
+statement ok
+DELETE FROM integers WHERE i=${i};
+
+# verify that the deletion worked
+query I
+SELECT COUNT(*)+${i} FROM integers WHERE i >= 0;
+----
+48
+
+endloop
+
+# BREAKING POINT: [256]
+loop i 1 257
+
+statement ok
+INSERT INTO integers VALUES (${i});
+
+# verify the element was inserted correctly
+query I
+SELECT COUNT(*)-${i} FROM integers WHERE i < 100000000;
+----
+0
+
+query I
+SELECT COUNT(*)-${i} FROM integers WHERE i >= 0;
+----
+0
+
+endloop
+
+# now delete data sequentially
+
+loop i 1 257
+
+statement ok
+DELETE FROM integers WHERE i=${i};
+
+# verify that the deletion worked
+query I
+SELECT COUNT(*)+${i} FROM integers WHERE i >= 0;
+----
+256
+
+endloop
+
+
+# BREAKING POINT: [1024]
+loop i 1 1025
+
+statement ok
+INSERT INTO integers VALUES (${i});
+
+# verify the element was inserted correctly
+query I
+SELECT COUNT(*)-${i} FROM integers WHERE i < 100000000;
+----
+0
+
+query I
+SELECT COUNT(*)-${i} FROM integers WHERE i >= 0;
+----
+0
+
+endloop
+
+# now delete data sequentially
+
+loop i 1 1025
+
+statement ok
+DELETE FROM integers WHERE i=${i};
+
+# verify that the deletion worked
+query I
+SELECT COUNT(*)+${i} FROM integers WHERE i >= 0;
+----
+1024
+
+endloop

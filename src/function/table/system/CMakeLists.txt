@@ -9,6 +9,7 @@ add_library_unity(
   duckdb_functions.cpp
   duckdb_keywords.cpp
   duckdb_indexes.cpp
+  duckdb_optimizers.cpp
   duckdb_schemas.cpp
   duckdb_sequences.cpp
   duckdb_settings.cpp
@@ -18,8 +19,10 @@ add_library_unity(
   duckdb_views.cpp
   pragma_collations.cpp
   pragma_database_size.cpp
+  pragma_metadata_info.cpp
   pragma_storage_info.cpp
   pragma_table_info.cpp
+  pragma_user_agent.cpp
   test_all_types.cpp
   test_vector_types.cpp)
 set(ALL_OBJECT_FILES

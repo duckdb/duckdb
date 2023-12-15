@@ -28,6 +28,8 @@ struct CatalogTransaction {
 	transaction_t start_time;
 
 	ClientContext &GetContext();
+
+	static CatalogTransaction GetSystemTransaction(DatabaseInstance &db);
 };
 
 } // namespace duckdb

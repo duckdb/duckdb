@@ -11,6 +11,7 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
 
 namespace duckdb {
 
@@ -27,23 +28,28 @@ enum class AlterType : uint8_t {
 struct AlterEntryData {
 	AlterEntryData() {
 	}
-	AlterEntryData(string catalog_p, string schema_p, string name_p, bool if_exists)
-	    : catalog(std::move(catalog_p)), schema(std::move(schema_p)), name(std::move(name_p)), if_exists(if_exists) {
+	AlterEntryData(string catalog_p, string schema_p, string name_p, OnEntryNotFound if_not_found)
+	    : catalog(std::move(catalog_p)), schema(std::move(schema_p)), name(std::move(name_p)),
+	      if_not_found(if_not_found) {
 	}
 
 	string catalog;
 	string schema;
 	string name;
-	bool if_exists;
+	OnEntryNotFound if_not_found;
 };
 
 struct AlterInfo : public ParseInfo {
-	AlterInfo(AlterType type, string catalog, string schema, string name, bool if_exists);
-	virtual ~AlterInfo() override;
+public:
+	static constexpr const ParseInfoType TYPE = ParseInfoType::ALTER_INFO;
+
+public:
+	AlterInfo(AlterType type, string catalog, string schema, string name, OnEntryNotFound if_not_found);
+	~AlterInfo() override;
 
 	AlterType type;
 	//! if exists
-	bool if_exists;
+	OnEntryNotFound if_not_found;
 	//! Catalog name to alter
 	string catalog;
 	//! Schema name to alter
@@ -56,14 +62,18 @@ struct AlterInfo : public ParseInfo {
 public:
 	virtual CatalogType GetCatalogType() const = 0;
 	virtual unique_ptr<AlterInfo> Copy() const = 0;
-	void Serialize(Serializer &serializer) const;
-	virtual void Serialize(FieldWriter &writer) const = 0;
-	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
+
 	virtual string GetColumnName() const {
 		return "";
 	};
 
 	AlterEntryData GetAlterEntryData() const;
+
+protected:
+	explicit AlterInfo(AlterType type);
 };
 
 } // namespace duckdb

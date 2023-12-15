@@ -1,0 +1,60 @@
+# name: test/sql/catalog/function/test_macro_default_arg.test_slow
+# group: [function]
+
+statement ok
+pragma enable_verification;
+
+# The following tests do not test any behavior related to default arguments,
+# other than what expressions can be passed to a parameter with a default argument
+
+statement ok
+CREATE MACRO f(x := NULL) AS (
+	x
+)
+
+# Empty
+statement ok
+select f(
+)
+
+# constant
+statement ok
+select f(
+	x := 42
+)
+
+# column reference
+
+statement ok
+create table tbl as select 42 i;
+
+# existing column reference
+statement ok
+select f(
+	x := i
+) from tbl;
+
+# non-existing column reference
+statement error
+select f(
+	x := j
+) from tbl;
+----
+
+# cast
+statement ok
+select f(
+	x := cast('42' as INT)
+);
+
+# is null
+statement ok
+select f(
+	x := 42 IS NULL
+)
+
+# is not null
+statement ok
+select f(
+	x := 42 IS NOT NULL
+)

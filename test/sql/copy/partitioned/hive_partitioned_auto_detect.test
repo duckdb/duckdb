@@ -1,0 +1,228 @@
+# name: test/sql/copy/partitioned/hive_partitioned_auto_detect.test
+# description: basic tests for the hive partition auto detection
+# group: [partitioned]
+
+# create a table
+statement ok
+CREATE TABLE t AS SELECT i%2 AS year, i%3 AS month, i%4 AS c, i%5 AS d FROM RANGE(0,20) tbl(i);
+
+#	test a csv partition by year
+statement ok
+COPY t TO '__TEST_DIR__/csv_partition_1' (partition_by(year));
+
+query I
+select count(*) from glob('__TEST_DIR__/csv_partition_1/**');
+----
+2
+
+query IIII
+select alias(columns(*)) from read_csv_auto('__TEST_DIR__/csv_partition_1/**', names=['a','b','c','d'], HIVE_PARTITIONING=0) LIMIT 1;
+----
+a	b	c	d
+
+query IIIII
+select alias(columns(*)) from read_csv_auto('__TEST_DIR__/csv_partition_1/**', names=['a','b','c','d'], HIVE_PARTITIONING=1) LIMIT 1;
+----
+a	b	c	d	year
+
+query IIIII
+select alias(columns(*)) from read_csv_auto('__TEST_DIR__/csv_partition_1/**', names=['a','b','c','d']) LIMIT 1;
+----
+a	b	c	d	year
+
+#	test a csv partition by year,month
+statement ok
+COPY t TO '__TEST_DIR__/csv_partition_2' (partition_by(year,month));
+
+query I
+select count(*) from glob('__TEST_DIR__/csv_partition_2/**');
+----
+6
+
+query IIII
+select alias(columns(*)) from read_csv_auto('__TEST_DIR__/csv_partition_2/**', names=['a','b','c','d'], HIVE_PARTITIONING=0) LIMIT 1;
+----
+a	b	c	d
+
+query IIIIII
+select alias(columns(*)) from read_csv_auto('__TEST_DIR__/csv_partition_2/**', names=['a','b','c','d'], HIVE_PARTITIONING=1) LIMIT 1;
+----
+a	b	c	d	month	year
+
+query IIIIII
+select alias(columns(*)) from read_csv_auto('__TEST_DIR__/csv_partition_2/**', names=['a','b','c','d']) LIMIT 1;
+----
+a	b	c	d	month	year
+
+#	test a single file
+query I
+select count(*) from glob('__TEST_DIR__/t.csv');
+----
+0
+
+statement ok
+COPY t TO '__TEST_DIR__/bad_file.csv';
+
+query I
+select count(*) from glob('__TEST_DIR__/bad_file.csv');
+----
+1
+
+query IIII
+select alias(columns(*)) from read_csv_auto('__TEST_DIR__/bad_file.csv', names=['a','b','c','d'], HIVE_PARTITIONING=0) LIMIT 1;
+----
+a	b	c	d
+
+query IIII
+select alias(columns(*)) from read_csv_auto('__TEST_DIR__/bad_file.csv', names=['a','b','c','d'], HIVE_PARTITIONING=1) LIMIT 1;
+----
+a	b	c	d
+
+query IIII
+select alias(columns(*)) from read_csv_auto('__TEST_DIR__/bad_file.csv', names=['a','b','c','d']) LIMIT 1;
+----
+a	b	c	d
+
+#	add bad file to list: hive partitioning will be false, because scheme doesn't match
+query IIII
+select alias(columns(*)) from read_csv_auto(['__TEST_DIR__/csv_partition_2/**', '__TEST_DIR__/bad_file.csv'], HIVE_PARTITIONING=0, names=['a','b','c','d']) LIMIT 1;
+----
+a	b	c	d
+
+statement error
+select alias(columns(*)) from read_csv_auto(['__TEST_DIR__/csv_partition_2/**', '__TEST_DIR__/bad_file.csv'], HIVE_PARTITIONING=1, names=['a','b','c','d']) LIMIT 1;
+----
+Binder Error: Hive partition mismatch
+
+query IIII
+select alias(columns(*)) from read_csv_auto(['__TEST_DIR__/csv_partition_2/**', '__TEST_DIR__/bad_file.csv'], names=['a','b','c','d']) LIMIT 1;
+----
+a	b	c	d
+
+
+
+# same tests with parquet
+require parquet
+
+#	test a parquet partition by year
+statement ok
+COPY t TO '__TEST_DIR__/parquet_partition_1' (format parquet, partition_by(year));
+
+query I
+select count(*) from glob('__TEST_DIR__/parquet_partition_1/**');
+----
+2
+
+query IIII
+select alias(columns(*)) from read_parquet('__TEST_DIR__/parquet_partition_1/**', HIVE_PARTITIONING=0) LIMIT 1;
+----
+year	month	c	d
+
+query IIII
+select alias(columns(*)) from read_parquet('__TEST_DIR__/parquet_partition_1/**', HIVE_PARTITIONING=1) LIMIT 1;
+----
+year	month	c	d
+
+query IIII
+select alias(columns(*)) from read_parquet('__TEST_DIR__/parquet_partition_1/**') LIMIT 1;
+----
+year	month	c	d
+
+#	test a parquet partition by year,month
+statement ok
+COPY t TO '__TEST_DIR__/parquet_partition_2' (format parquet, partition_by(year,month));
+
+query I
+select count(*) from glob('__TEST_DIR__/parquet_partition_2/**');
+----
+6
+
+query IIII
+select alias(columns(*)) from read_parquet('__TEST_DIR__/parquet_partition_2/**', HIVE_PARTITIONING=0) LIMIT 1;
+----
+year	month	c	d
+
+query IIII
+select alias(columns(*)) from read_parquet('__TEST_DIR__/parquet_partition_2/**', HIVE_PARTITIONING=1) LIMIT 1;
+----
+year	month	c	d
+
+query IIII
+select alias(columns(*)) from read_parquet('__TEST_DIR__/parquet_partition_2/**') LIMIT 1;
+----
+year	month	c	d
+
+#	test a single file
+query I
+select count(*) from glob('__TEST_DIR__/t.parquet');
+----
+0
+
+statement ok
+COPY t TO '__TEST_DIR__/t.parquet' (format parquet);
+
+query I
+select count(*) from glob('__TEST_DIR__/t.parquet');
+----
+1
+
+query IIII
+select alias(columns(*)) from read_parquet('__TEST_DIR__/t.parquet', HIVE_PARTITIONING=0) LIMIT 1;
+----
+year	month	c	d
+
+query IIII
+select alias(columns(*)) from read_parquet('__TEST_DIR__/t.parquet', HIVE_PARTITIONING=1) LIMIT 1;
+----
+year	month	c	d
+
+query IIII
+select alias(columns(*)) from read_parquet('__TEST_DIR__/t.parquet') LIMIT 1;
+----
+year	month	c	d
+
+#	add bad file to list: hive partitioning will be false, because scheme doesn't match
+query IIII
+select alias(columns(*)) from read_parquet(['__TEST_DIR__/parquet_partition_2/**', '__TEST_DIR__/t.parquet'], HIVE_PARTITIONING=0) LIMIT 1;
+----
+year	month	c	d
+
+statement error
+select alias(columns(*)) from read_parquet(['__TEST_DIR__/parquet_partition_2/**', '__TEST_DIR__/t.parquet'], HIVE_PARTITIONING=1) LIMIT 1;
+----
+Binder Error: Hive partition mismatch
+
+query IIII
+select alias(columns(*)) from read_parquet(['__TEST_DIR__/parquet_partition_2/**', '__TEST_DIR__/t.parquet']) LIMIT 1;
+----
+year	month	c	d
+
+
+
+
+query IIII
+select i,j,k,x 
+from read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=0, union_by_name=1) 
+order by j,x nulls last;
+----
+42	84	NULL	1
+42	84	NULL	NULL
+NULL	128	33	NULL
+
+query IIII
+select i,j,k,x 
+from read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=1, union_by_name=1) 
+order by j,x nulls last;
+----
+42	84	NULL	1
+42	84	NULL	1
+NULL	128	33	2
+
+query IIII
+select i,j,k,x 
+from read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', union_by_name=1) 
+order by j,x nulls last;
+----
+42	84	NULL	1
+42	84	NULL	1
+NULL	128	33	2

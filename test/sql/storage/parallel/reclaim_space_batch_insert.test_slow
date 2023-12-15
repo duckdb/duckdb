@@ -7,30 +7,30 @@ require parquet
 load __TEST_DIR__/reclaim_space_batch_insert.db
 
 statement ok
-COPY (FROM range(10000000) t(i)) TO '__TEST_DIR__/integers.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 200000)
+COPY (FROM range(10000000) t(i)) TO '__TEST_DIR__/integers.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 200000);
 
 statement ok
-CREATE VIEW integers AS FROM '__TEST_DIR__/integers.parquet'
+CREATE VIEW integers AS FROM '__TEST_DIR__/integers.parquet';
 
 statement ok
-CREATE TABLE integers2(i INTEGER PRIMARY KEY)
+CREATE TABLE integers2 (i INTEGER PRIMARY KEY);
 
 statement ok
-INSERT INTO integers2 VALUES (9999999)
+INSERT INTO integers2 VALUES (9999999);
 
 statement error
-INSERT INTO integers2 SELECT * FROM integers
+INSERT INTO integers2 SELECT * FROM integers;
 ----
 violates primary key constraint
 
 statement ok
-CREATE TABLE block_count(count int)
+CREATE TABLE block_count (count int);
 
 loop i 0 10
 
 # conflict with base table data
 statement error
-INSERT INTO integers2 SELECT * FROM integers
+INSERT INTO integers2 SELECT * FROM integers;
 ----
 violates primary key constraint
 
@@ -42,7 +42,7 @@ statement ok
 INSERT INTO integers2 VALUES (9999998);
 
 statement error
-INSERT INTO integers2 SELECT * FROM integers WHERE i<=9999998
+INSERT INTO integers2 SELECT * FROM integers WHERE i <= 9999998;
 ----
 PRIMARY KEY or UNIQUE constraint violated
 
@@ -50,27 +50,27 @@ statement ok
 ROLLBACK
 
 query I
-SELECT COUNT(*)-${i} FROM integers2
+SELECT COUNT(*) - ${i} FROM integers2;
 ----
 1
 
 statement ok
-INSERT INTO integers2 VALUES (10000000 + ${i})
+INSERT INTO integers2 VALUES (10000000 + ${i});
 
 statement ok
 CHECKPOINT;
 
 statement ok
-insert into block_count select total_blocks from pragma_database_size();
+INSERT INTO block_count SELECT total_blocks FROM pragma_database_size();
 
 query I
-SELECT COUNT(*)-${i} FROM integers2
+SELECT COUNT(*) - ${i} FROM integers2;
 ----
 2
 
 # ensure there is a small diff between min and max block counts
 query I
-select (max(count)-min(count))<20 from block_count
+SELECT (MAX(count) - MIN(count)) < 20 FROM block_count;
 ----
 true
 

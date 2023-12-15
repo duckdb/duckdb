@@ -72,13 +72,13 @@ struct date_t { // NOLINT
 	};
 
 	// special values
-	static inline date_t infinity() {
+	static inline date_t infinity() { // NOLINT
 		return date_t(NumericLimits<int32_t>::Maximum());
-	} // NOLINT
-	static inline date_t ninfinity() {
+	}                                  // NOLINT
+	static inline date_t ninfinity() { // NOLINT
 		return date_t(-NumericLimits<int32_t>::Maximum());
-	} // NOLINT
-	static inline date_t epoch() {
+	}                              // NOLINT
+	static inline date_t epoch() { // NOLINT
 		return date_t(0);
 	} // NOLINT
 };
@@ -122,6 +122,9 @@ public:
 	DUCKDB_API static date_t FromCString(const char *str, idx_t len, bool strict = false);
 	//! Convert a date object to a string in the format "YYYY-MM-DD"
 	DUCKDB_API static string ToString(date_t date);
+	//! Try to convert the string as a give "special" date (e.g, PINF, ...)
+	//! Returns true if it was successful and updates the scan pos.
+	DUCKDB_API static bool TryConvertDateSpecial(const char *buf, idx_t len, idx_t &pos, const char *special);
 	//! Try to convert text in a buffer to a date; returns true if parsing was successful
 	//! If the date was a "special" value, the special flag will be set.
 	DUCKDB_API static bool TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result, bool &special,
@@ -158,6 +161,8 @@ public:
 	DUCKDB_API static int64_t EpochNanoseconds(date_t date);
 	//! Extract the epoch from the date (microseconds since 1970-01-01)
 	DUCKDB_API static int64_t EpochMicroseconds(date_t date);
+	//! Extract the epoch from the date (milliseconds since 1970-01-01)
+	DUCKDB_API static int64_t EpochMilliseconds(date_t date);
 	//! Convert the epoch (seconds since 1970-01-01) to a date_t
 	DUCKDB_API static date_t EpochToDate(int64_t epoch);
 
@@ -179,6 +184,8 @@ public:
 	DUCKDB_API static int32_t ExtractISODayOfTheWeek(date_t date);
 	//! Extract the day of the year
 	DUCKDB_API static int32_t ExtractDayOfTheYear(date_t date);
+	//! Extract the day of the year
+	DUCKDB_API static int64_t ExtractJulianDay(date_t date);
 	//! Extract the ISO week number
 	//! ISO weeks start on Monday and the first week of a year
 	//! contains January 4 of that year.

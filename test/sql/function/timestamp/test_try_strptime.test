@@ -72,11 +72,11 @@ SELECT try_strptime('jun', '%b')
 ----
 1900-06-01 00:00:00
 
-# First Sunday of Monday weeks is Jan 7
+# First Monday of Monday weeks is Jan 7
 query I
 SELECT try_strptime('1', '%W')
 ----
-1900-01-07 00:00:00
+1900-01-01 00:00:00
 
 # First Sunday of Sunday weeks is Jan 7
 query I
@@ -84,19 +84,35 @@ SELECT try_strptime('1', '%U')
 ----
 1900-01-07 00:00:00
 
+# Default ISO year is 1900, which starts on a Monday
+query I
+SELECT try_strptime('1', '%V')
+----
+1900-01-01 00:00:00
+
 query II
 SELECT try_strptime('30', '%U'), strftime('1900-07-29'::DATE, '%U')
 ----
 1900-07-29 00:00:00	30
 
 query II
-SELECT try_strptime('30', '%W'), strftime('1900-07-29'::DATE, '%W')
+SELECT try_strptime('30', '%W'), strftime('1900-07-23'::DATE, '%W')
 ----
-1900-07-29 00:00:00	30
+1900-07-23 00:00:00	30
+
+query II
+SELECT try_strptime('30', '%V'), strftime('1900-07-23'::DATE, '%V')
+----
+1900-07-23 00:00:00	30
 
 # Ignored
 query I
 SELECT try_strptime('6', '%w')
+----
+1900-01-01 00:00:00
+
+query I
+SELECT try_strptime('6', '%u')
 ----
 1900-01-01 00:00:00
 
@@ -106,10 +122,19 @@ SELECT try_strptime('1-4', '%U-%w'), strftime('1900-01-11'::DATE, '%U-%w')
 ----
 1900-01-11 00:00:00	01-4
 
+query II
+SELECT try_strptime('2-4', '%V-%u'), strftime('1900-01-11'::DATE, '%V-%u')
+----
+1900-01-11 00:00:00	02-4
 
 # Thursday after 1st Monday
 query II
 SELECT try_strptime('1-4', '%W-%w'), strftime('1900-01-04'::DATE, '%W-%w')
+----
+1900-01-04 00:00:00	01-4
+
+query II
+SELECT try_strptime('1-4', '%V-%u'), strftime('1900-01-04'::DATE, '%V-%u')
 ----
 1900-01-04 00:00:00	01-4
 
@@ -137,6 +162,12 @@ SELECT try_strptime('2021-19-4', '%Y-%W-%w'), strftime('2021-05-13'::DATE, '%Y-%
 ----
 2021-05-13 00:00:00	2021-19-4
 
+# Year-ISO Week-Weekday
+query II
+SELECT try_strptime('2021-19-4', '%G-%V-%u'), strftime('2021-05-13'::DATE, '%G-%V-%u')
+----
+2021-05-13 00:00:00	2021-19-4
+
 # Year, Sunday Week 0, Friday
 query II
 SELECT try_strptime('2021-0-5', '%Y-%U-%w'), strftime('2021-01-01'::DATE, '%Y-%U-%w')
@@ -149,6 +180,12 @@ SELECT try_strptime('2021-0-5', '%Y-%W-%w'), strftime('2021-01-01'::DATE, '%Y-%W
 ----
 2021-01-01 00:00:00	2021-00-5
 
+# Year-ISO, Week 1, Friday
+query II
+SELECT try_strptime('2021-1-5', '%G-%V-%u'), strftime('2021-01-08'::DATE, '%G-%V-%u')
+----
+2021-01-08 00:00:00	2021-01-5
+
 # Year-Sunday Week-Weekday Mismatch should defer to the day
 query I
 SELECT try_strptime('2021-05-12 19-4', '%Y-%m-%d %U-%w')
@@ -158,6 +195,12 @@ SELECT try_strptime('2021-05-12 19-4', '%Y-%m-%d %U-%w')
 # Year-Monday Week-Weekday Mismatch should defer to the day
 query I
 SELECT try_strptime('2021-05-12 19-4', '%Y-%m-%d %W-%w')
+----
+2021-05-12 00:00:00
+
+# Year-ISO Week-Weekday Mismatch should defer to the day
+query I
+SELECT try_strptime('2021-05-12 19-4', '%Y-%m-%d %V-%u')
 ----
 2021-05-12 00:00:00
 
@@ -179,12 +222,23 @@ SELECT * FROM (
 WHERE rt <> dt
 ----
 
+# Round trip ISO weeks
+query III
+SELECT * FROM (
+    SELECT dt, strftime(dt, '%G-%V-%u') AS ft, try_strptime(strftime(dt, '%G-%V-%u'), '%G-%V-%u') AS rt
+    FROM (SELECT '2021-01-01'::DATE + (INTERVAL (d) DAY) AS dt FROM range(365) tbl(d)) days
+) diffs
+WHERE rt <> dt
+----
+
 # empty specifier and string
 statement error
 SELECT try_strptime('', '')
+----
 
 statement error
 SELECT try_strptime(NULL, '')
+----
 
 query I
 SELECT try_strptime('', NULL)
@@ -485,9 +539,19 @@ SELECT try_strptime('60', '%W')
 ----
 NULL
 
+query I
+SELECT try_strptime('60', '%V')
+----
+NULL
+
 # weekday out of range
 query I
 SELECT try_strptime('9', '%w')
+----
+NULL
+
+query I
+SELECT try_strptime('9', '%u')
 ----
 NULL
 
@@ -498,7 +562,32 @@ SELECT try_strptime('20 19', '%U %W')
 NULL
 
 query I
+SELECT try_strptime('20 19', '%U %V')
+----
+NULL
+
+query I
+SELECT try_strptime('20 2021', '%U %G')
+----
+NULL
+
+query I
 SELECT try_strptime('20 19', '%U %j')
+----
+NULL
+
+query I
+SELECT try_strptime('20 19', '%W %U')
+----
+NULL
+
+query I
+SELECT try_strptime('20 19', '%W %V')
+----
+NULL
+
+query I
+SELECT try_strptime('20 2021', '%W %G')
 ----
 NULL
 
@@ -506,6 +595,57 @@ query I
 SELECT try_strptime('20 19', '%W %j')
 ----
 NULL
+
+query I
+SELECT try_strptime('20 19', '%V %U')
+----
+NULL
+
+query I
+SELECT try_strptime('20 19', '%V %W')
+----
+NULL
+
+query I
+SELECT try_strptime('20 19', '%V %j')
+----
+NULL
+
+query I
+SELECT try_strptime('2021 19', '%G %U')
+----
+NULL
+
+query I
+SELECT try_strptime('2021 19', '%G %W')
+----
+NULL
+
+query I
+SELECT try_strptime('2021 19', '%G %j')
+----
+NULL
+
+# Years override ISO offsets
+query I
+SELECT try_strptime('2021 1950', '%G %Y')
+----
+1950-01-01 00:00:00
+
+query I
+SELECT try_strptime('2021 1950', '%Y %G')
+----
+2021-01-01 00:00:00
+
+query I
+SELECT try_strptime('20 1950', '%V %Y')
+----
+1950-01-01 00:00:00
+
+query I
+SELECT try_strptime('2021 19', '%Y %V')
+----
+2021-01-01 00:00:00
 
 # AM/PM out of range
 query I

@@ -16,15 +16,19 @@ DROP TABLE T
 
 statement error
 CREATE TABLE T (a INTEGER USING COMPRESSION 'bla')
+----
 
 statement error
 CREATE TABLE T (a INTEGER USING COMPRESSION )
+----
 
 statement error
 CREATE TABLE T (a INTEGER NOT NULL USING COMPRESSION )
+----
 
 statement error
 CREATE TABLE T (a INTEGER USING COMPRESSION bla)
+----
 
 statement ok
 CREATE TABLE T (a INTEGER NOT NULL USING COMPRESSION RLE)
@@ -75,6 +79,9 @@ SELECT * FROM T
 2	2	2
 2	2	2
 3	3	3
+
+statement ok
+CHECKPOINT
 
 query I
 SELECT compression FROM pragma_storage_info('T') WHERE segment_type ILIKE 'INTEGER' LIMIT 3
@@ -173,6 +180,9 @@ SELECT * FROM T_1
 2	2
 2	2
 3	2
+
+statement ok
+CHECKPOINT
 
 query I
 SELECT compression FROM pragma_storage_info('T_1') WHERE segment_type ILIKE 'INTEGER' LIMIT 3

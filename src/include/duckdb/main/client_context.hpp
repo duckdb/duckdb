@@ -24,6 +24,7 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/common/preserved_error.hpp"
+#include "duckdb/main/client_properties.hpp"
 
 namespace duckdb {
 class Appender;
@@ -46,7 +47,7 @@ struct ClientData;
 
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
-	vector<Value> *parameters = nullptr;
+	optional_ptr<case_insensitive_map_t<Value>> parameters;
 	//! Whether or not a stream result should be allowed
 	bool allow_stream_result = false;
 };
@@ -64,7 +65,7 @@ public:
 class ClientContext : public std::enable_shared_from_this<ClientContext> {
 	friend class PendingQueryResult;
 	friend class StreamQueryResult;
-	friend class DuckTransactionManager;
+	friend class ConnectionManager;
 
 public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
@@ -86,7 +87,7 @@ public:
 	TransactionContext transaction;
 
 public:
-	DUCKDB_API MetaTransaction &ActiveTransaction() {
+	MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
 	}
 
@@ -134,22 +135,23 @@ public:
 	//! Create a pending query result from a prepared statement with the given name and set of parameters
 	//! It is possible that the prepared statement will be re-bound. This will generally happen if the catalog is
 	//! modified in between the prepared statement being bound and the prepared statement being run.
-	DUCKDB_API unique_ptr<PendingQueryResult>
-	PendingQuery(const string &query, shared_ptr<PreparedStatementData> &prepared, PendingQueryParameters parameters);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query,
+	                                                       shared_ptr<PreparedStatementData> &prepared,
+	                                                       const PendingQueryParameters &parameters);
 
 	//! Execute a prepared statement with the given name and set of parameters
 	//! It is possible that the prepared statement will be re-bound. This will generally happen if the catalog is
 	//! modified in between the prepared statement being bound and the prepared statement being run.
 	DUCKDB_API unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
-	                                           vector<Value> &values, bool allow_stream_result = true);
+	                                           case_insensitive_map_t<Value> &values, bool allow_stream_result = true);
 	DUCKDB_API unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
-	                                           PendingQueryParameters parameters);
+	                                           const PendingQueryParameters &parameters);
 
 	//! Gets current percentage of the query's progress, returns 0 in case the progress bar is disabled.
-	DUCKDB_API double GetProgress();
+	DUCKDB_API QueryProgress GetQueryProgress();
 
 	//! Register function in the temporary schema
-	DUCKDB_API void RegisterFunction(CreateFunctionInfo *info);
+	DUCKDB_API void RegisterFunction(CreateFunctionInfo &info);
 
 	//! Parse statements from a query
 	DUCKDB_API vector<unique_ptr<SQLStatement>> ParseStatements(const string &query);
@@ -197,7 +199,7 @@ private:
 	                     PreservedError &error);
 	//! Issues a query to the database and returns a Pending Query Result
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
-	                                                    PendingQueryParameters parameters, bool verify = true);
+	                                                    const PendingQueryParameters &parameters, bool verify = true);
 	unique_ptr<QueryResult> ExecutePendingQueryInternal(ClientContextLock &lock, PendingQueryResult &query);
 
 	//! Parse statements from a query
@@ -213,18 +215,18 @@ private:
 	unique_ptr<PendingQueryResult> PendingStatementOrPreparedStatement(ClientContextLock &lock, const string &query,
 	                                                                   unique_ptr<SQLStatement> statement,
 	                                                                   shared_ptr<PreparedStatementData> &prepared,
-	                                                                   PendingQueryParameters parameters);
+	                                                                   const PendingQueryParameters &parameters);
 	unique_ptr<PendingQueryResult> PendingPreparedStatement(ClientContextLock &lock,
 	                                                        shared_ptr<PreparedStatementData> statement_p,
-	                                                        PendingQueryParameters parameters);
+	                                                        const PendingQueryParameters &parameters);
 
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
-	shared_ptr<PreparedStatementData> CreatePreparedStatement(ClientContextLock &lock, const string &query,
-	                                                          unique_ptr<SQLStatement> statement,
-	                                                          vector<Value> *values = nullptr);
+	shared_ptr<PreparedStatementData>
+	CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
+	                        optional_ptr<case_insensitive_map_t<Value>> values = nullptr);
 	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, const string &query,
 	                                                        unique_ptr<SQLStatement> statement,
-	                                                        PendingQueryParameters parameters);
+	                                                        const PendingQueryParameters &parameters);
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, const string &query,
 	                                             unique_ptr<SQLStatement> statement, bool allow_stream_result,
 	                                             bool verify = true);
@@ -244,11 +246,11 @@ private:
 
 	unique_ptr<PendingQueryResult> PendingStatementOrPreparedStatementInternal(
 	    ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	    shared_ptr<PreparedStatementData> &prepared, PendingQueryParameters parameters);
+	    shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters);
 
 	unique_ptr<PendingQueryResult> PendingQueryPreparedInternal(ClientContextLock &lock, const string &query,
 	                                                            shared_ptr<PreparedStatementData> &prepared,
-	                                                            PendingQueryParameters parameters);
+	                                                            const PendingQueryParameters &parameters);
 
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &, const shared_ptr<Relation> &relation,
 	                                                    bool allow_stream_result);
@@ -259,7 +261,7 @@ private:
 	//! The currently active query context
 	unique_ptr<ActiveQueryContext> active_query;
 	//! The current query progress
-	atomic<double> query_progress;
+	QueryProgress query_progress;
 };
 
 class ClientContextLock {
@@ -276,7 +278,7 @@ private:
 
 class ClientContextWrapper {
 public:
-	DUCKDB_API explicit ClientContextWrapper(const shared_ptr<ClientContext> &context)
+	explicit ClientContextWrapper(const shared_ptr<ClientContext> &context)
 	    : client_context(context) {
 
 	      };

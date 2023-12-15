@@ -3,6 +3,9 @@
 # group: [update]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 SET immediate_transaction_mode=true
 
 # create a table

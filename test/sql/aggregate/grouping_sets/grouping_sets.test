@@ -3,6 +3,9 @@
 # group: [grouping_sets]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 PRAGMA enable_verification
 
 statement ok
@@ -271,3 +274,4 @@ select count(*), course, type
 # course is not a group or aggregate column
 statement error
 select course from students group by ();
+----

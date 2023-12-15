@@ -1,0 +1,52 @@
+name: test/issues/general/test_7250.test
+ # description: Issue 6822: Unexpected error in TryMultiplyOperator with lcm(.,.)
+ # group: [general]
+
+ statement ok
+ CREATE TABLE t21(c0 INT64);
+
+ statement ok
+ CREATE TABLE t0(c0 INT64, c1 INT64);
+
+ statement ok
+ CREATE VIEW v0(c0) AS SELECT t0.c1 FROM t21, t0;
+
+ statement ok
+ WITH temp_table1 AS(SELECT (t21.c0) AS c0 FROM t21) SELECT (t0.rowid) AS c0 FROM v0, t0, temp_table1 WHERE ((temp_table1.c0)<(( t0.rowid)));
+
+ statement ok
+ DROP TABLE t21;
+
+ statement ok
+ DROP TABLE t0;
+
+ statement ok
+ DROP VIEW v0;
+
+ statement ok
+ CREATE TABLE t0(c0 FLOAT4, c1 DOUBLE UNIQUE, PRIMARY KEY(c0));
+
+ statement ok
+ CREATE TABLE t1(c0 INT4, c1 INT1 DEFAULT(0), c2 INT4);
+
+ statement ok
+ CREATE VIEW v0(c0) AS SELECT 1 FROM t1, t0;
+
+
+ statement ok
+ SELECT *
+    FROM v0,
+         t0 NATURAL LEFT JOIN t1
+         WHERE
+             (
+                 ((25
+                     BETWEEN
+                         0
+                     AND
+                         (
+                             CASE t0.c0
+                                 -- WHEN 0 THEN t1.c0
+                                 -- WHEN 0 THEN t1.c1
+                                 WHEN 0 THEN t1.c2
+                                  END )))
+                         IS NULL);

@@ -16,13 +16,14 @@
 
 namespace duckdb {
 
+//! JSON allocator is a custom allocator for yyjson that prevents many tiny allocations
 class JSONAllocator {
 public:
 	explicit JSONAllocator(Allocator &allocator)
 	    : arena_allocator(allocator), yyjson_allocator({Allocate, Reallocate, Free, &arena_allocator}) {
 	}
 
-	inline yyjson_alc *GetYYJSONAllocator() {
+	inline yyjson_alc *GetYYAlc() {
 		return &yyjson_allocator;
 	}
 
@@ -38,7 +39,7 @@ private:
 
 	static inline void *Reallocate(void *ctx, void *ptr, size_t old_size, size_t size) {
 		auto alloc = (ArenaAllocator *)ctx;
-		return alloc->ReallocateAligned((data_ptr_t)ptr, old_size, size);
+		return alloc->ReallocateAligned(data_ptr_cast(ptr), old_size, size);
 	}
 
 	static inline void Free(void *ctx, void *ptr) {
@@ -50,6 +51,7 @@ private:
 	yyjson_alc yyjson_allocator;
 };
 
+//! JSONKey / json_key_map_t speeds up mapping from JSON key to column ID
 struct JSONKey {
 	const char *ptr;
 	size_t len;
@@ -62,7 +64,7 @@ struct JSONKeyHash {
 			memcpy(&result, k.ptr + k.len - sizeof(size_t), sizeof(size_t));
 		} else {
 			result = 0;
-			duckdb::FastMemcpy(&result, k.ptr, k.len);
+			FastMemcpy(&result, k.ptr, k.len);
 		}
 		return result;
 	}
@@ -73,7 +75,7 @@ struct JSONKeyEquality {
 		if (a.len != b.len) {
 			return false;
 		}
-		return duckdb::FastMemcmp(a.ptr, b.ptr, a.len) == 0;
+		return FastMemcmp(a.ptr, b.ptr, a.len) == 0;
 	}
 };
 
@@ -81,8 +83,10 @@ template <typename T>
 using json_key_map_t = unordered_map<JSONKey, T, JSONKeyHash, JSONKeyEquality>;
 using json_key_set_t = unordered_set<JSONKey, JSONKeyHash, JSONKeyEquality>;
 
+//! Common JSON functionality for most JSON functions
 struct JSONCommon {
 public:
+	//! The JSON logical type, registered when the extension is loaded
 	static constexpr auto JSON_TYPE_NAME = "JSON";
 
 	static const LogicalType JSONType() {
@@ -98,7 +102,8 @@ public:
 public:
 	//! Read/Write flags
 	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS;
-	static constexpr auto STOP_READ_FLAG = READ_FLAG | YYJSON_READ_STOP_WHEN_DONE | YYJSON_READ_INSITU;
+	static constexpr auto READ_STOP_FLAG = READ_FLAG | YYJSON_READ_STOP_WHEN_DONE;
+	static constexpr auto READ_INSITU_FLAG = READ_STOP_FLAG | YYJSON_READ_INSITU;
 	static constexpr auto WRITE_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN;
 	static constexpr auto WRITE_PRETTY_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY;
 
@@ -113,9 +118,8 @@ public:
 	static constexpr char const *TYPE_STRING_ARRAY = "ARRAY";
 	static constexpr char const *TYPE_STRING_OBJECT = "OBJECT";
 
-	template <class YYJSON_VAL_T>
-	static inline const char *ValTypeToString(YYJSON_VAL_T *val) {
-		switch (GetTag<YYJSON_VAL_T>(val)) {
+	static inline const char *ValTypeToString(yyjson_val *val) {
+		switch (yyjson_get_tag(val)) {
 		case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
 			return JSONCommon::TYPE_STRING_NULL;
 		case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
@@ -138,14 +142,12 @@ public:
 		}
 	}
 
-	template <class YYJSON_VAL_T>
-	static inline constexpr string_t ValTypeToStringT(YYJSON_VAL_T *val) {
-		return string_t(ValTypeToString<YYJSON_VAL_T>(val));
+	static inline string_t ValTypeToStringT(yyjson_val *val) {
+		return string_t(ValTypeToString(val));
 	}
 
-	template <class YYJSON_VAL_T>
-	static inline LogicalTypeId ValTypeToLogicalTypeId(YYJSON_VAL_T *val) {
-		switch (GetTag<YYJSON_VAL_T>(val)) {
+	static inline LogicalTypeId ValTypeToLogicalTypeId(yyjson_val *val) {
+		switch (yyjson_get_tag(val)) {
 		case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
 			return LogicalTypeId::SQLNULL;
 		case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
@@ -169,6 +171,19 @@ public:
 	}
 
 public:
+	//===--------------------------------------------------------------------===//
+	// Document creation / reading / writing
+	//===--------------------------------------------------------------------===//
+	template <class T>
+	static T *AllocateArray(yyjson_alc *alc, idx_t count) {
+		return reinterpret_cast<T *>(alc->malloc(alc->ctx, sizeof(T) * count));
+	}
+
+	template <class T>
+	static T *AllocateArray(yyjson_mut_doc *doc, idx_t count) {
+		return AllocateArray<T>(&doc->alc, count);
+	}
+
 	static inline yyjson_mut_doc *CreateDocument(yyjson_alc *alc) {
 		D_ASSERT(alc);
 		return yyjson_mut_doc_new(alc);
@@ -193,6 +208,7 @@ public:
 	static inline yyjson_doc *ReadDocument(const string_t &input, const yyjson_read_flag flg, yyjson_alc *alc) {
 		return ReadDocument(input.GetDataWriteable(), input.GetSize(), flg, alc);
 	}
+
 	static string FormatParseError(const char *data, idx_t length, yyjson_read_err &error, const string &extra = "") {
 		D_ASSERT(error.code != YYJSON_READ_SUCCESS);
 		// Truncate, so we don't print megabytes worth of JSON
@@ -217,275 +233,86 @@ public:
 		auto data = WriteVal<YYJSON_VAL_T>(val, alc, len);
 		return string_t(data, len);
 	}
+
+	//! Slow and easy ToString for errors
 	static string ValToString(yyjson_val *val, idx_t max_len = DConstants::INVALID_INDEX);
 	//! Throw an error with the printed yyjson_val
 	static void ThrowValFormatError(string error_string, yyjson_val *val);
 
 public:
-	//! Validate path with $ syntax
-	static void ValidatePathDollar(const char *ptr, const idx_t &len);
+	//===--------------------------------------------------------------------===//
+	// JSON pointer / path
+	//===--------------------------------------------------------------------===//
+	enum class JSONPathType : uint8_t {
+		//! Extract a single value
+		REGULAR = 0,
+		//! Extract multiple values (when we have a '*' wildcard in the JSON Path)
+		WILDCARD = 1,
+	};
 
 	//! Get JSON value using JSON path query (safe, checks the path query)
-	template <class YYJSON_VAL_T>
-	static inline YYJSON_VAL_T *GetPointer(YYJSON_VAL_T *root, const string_t &path_str) {
-		auto ptr = path_str.GetDataUnsafe();
+	static inline yyjson_val *Get(yyjson_val *val, const string_t &path_str) {
+		auto ptr = path_str.GetData();
 		auto len = path_str.GetSize();
 		if (len == 0) {
-			return GetPointerUnsafe<YYJSON_VAL_T>(root, ptr, len);
+			return GetUnsafe(val, ptr, len);
 		}
 		switch (*ptr) {
 		case '/': {
 			// '/' notation must be '\0'-terminated
 			auto str = string(ptr, len);
-			return GetPointerUnsafe<YYJSON_VAL_T>(root, str.c_str(), len);
+			return GetUnsafe(val, str.c_str(), len);
 		}
 		case '$': {
-			ValidatePathDollar(ptr, len);
-			return GetPointerUnsafe<YYJSON_VAL_T>(root, ptr, len);
+			if (ValidatePath(ptr, len, false) == JSONPathType::WILDCARD) {
+				throw InvalidInputException(
+				    "JSON path cannot contain wildcards if the path is not a constant parameter");
+			}
+			return GetUnsafe(val, ptr, len);
 		}
 		default:
 			auto str = "/" + string(ptr, len);
-			return GetPointerUnsafe<YYJSON_VAL_T>(root, str.c_str(), len + 1);
+			return GetUnsafe(val, str.c_str(), len + 1);
 		}
 	}
 
 	//! Get JSON value using JSON path query (unsafe)
-	template <class YYJSON_VAL_T>
-	static inline YYJSON_VAL_T *GetPointerUnsafe(YYJSON_VAL_T *root, const char *ptr, const idx_t &len) {
+	static inline yyjson_val *GetUnsafe(yyjson_val *val, const char *ptr, const idx_t &len) {
 		if (len == 0) {
 			return nullptr;
 		}
 		switch (*ptr) {
 		case '/':
-			return TemplatedGetPointer<YYJSON_VAL_T>(root, ptr, len);
+			return GetPointer(val, ptr, len);
 		case '$':
-			return TemplatedGetPointerDollar<YYJSON_VAL_T>(root, ptr, len);
+			return GetPath(val, ptr, len);
 		default:
-			throw InternalException("JSON path does not start with '/' or '$'");
+			throw InternalException("JSON pointer/path does not start with '/' or '$'");
 		}
 	}
+
+	//! Get JSON value using JSON path query (unsafe)
+	static void GetWildcardPath(yyjson_val *val, const char *ptr, const idx_t &len, vector<yyjson_val *> &vals);
+
+	//! Validate JSON Path ($.field[index]... syntax), returns true if there are wildcards in the path
+	static JSONPathType ValidatePath(const char *ptr, const idx_t &len, const bool binder);
 
 private:
-	//! Get JSON pointer using /field/index/... notation
-	template <class YYJSON_VAL_T>
-	static inline YYJSON_VAL_T *TemplatedGetPointer(YYJSON_VAL_T *root, const char *ptr, const idx_t &len) {
-		throw InternalException("Unknown yyjson value type");
+	//! Get JSON pointer (/field/index/... syntax)
+	static inline yyjson_val *GetPointer(yyjson_val *val, const char *ptr, const idx_t &len) {
+		return len == 1 ? val : unsafe_yyjson_get_pointer(val, ptr, len);
 	}
-
-	//! Get JSON pointer using $.field[index]... notation
-	template <class YYJSON_VAL_T>
-	static YYJSON_VAL_T *TemplatedGetPointerDollar(YYJSON_VAL_T *val, const char *ptr, const idx_t &len) {
-		if (len == 1) {
-			// Just '$'
-			return val;
-		}
-		const char *const end = ptr + len;
-		// Skip past '$'
-		ptr++;
-		while (val != nullptr && ptr != end) {
-			const auto &c = *ptr++;
-			if (c == '.') {
-				// Object
-				if (!IsObj<YYJSON_VAL_T>(val)) {
-					return nullptr;
-				}
-				bool escaped = false;
-				if (*ptr == '"') {
-					// Skip past opening '"'
-					ptr++;
-					escaped = true;
-				}
-				auto key_len = ReadString(ptr, end, escaped);
-				val = ObjGetN<YYJSON_VAL_T>(val, ptr, key_len);
-				ptr += key_len;
-				if (escaped) {
-					// Skip past closing '"'
-					ptr++;
-				}
-			} else if (c == '[') {
-				// Array
-				if (!IsArr<YYJSON_VAL_T>(val)) {
-					return nullptr;
-				}
-				bool from_back = false;
-				if (*ptr == '#') {
-					// Index from back of array
-					ptr++;
-					if (*ptr == ']') {
-						return nullptr;
-					}
-					from_back = true;
-					// Skip past '-'
-					ptr++;
-				}
-				// Read index
-				idx_t idx;
-				auto idx_len = ReadIndex(ptr, end, idx);
-				if (from_back) {
-					auto arr_size = ArrSize<YYJSON_VAL_T>(val);
-					idx = idx > arr_size ? arr_size : arr_size - idx;
-				}
-				val = ArrGet<YYJSON_VAL_T>(val, idx);
-				ptr += idx_len;
-				// Skip past closing ']'
-				ptr++;
-			} else {
-				throw InternalException("Unexpected char when parsing JSON path");
-			}
-		}
-		return val;
-	}
-
-	static inline idx_t ReadString(const char *ptr, const char *const end, const bool escaped) {
-		const char *const before = ptr;
-		if (escaped) {
-			while (ptr != end) {
-				if (*ptr == '"') {
-					break;
-				}
-				ptr++;
-			}
-			return ptr == end ? 0 : ptr - before;
-		} else {
-			while (ptr != end) {
-				if (*ptr == '.' || *ptr == '[') {
-					break;
-				}
-				ptr++;
-			}
-			return ptr - before;
-		}
-	}
-
-	static constexpr auto IDX_T_SAFE_DIG = 19;
-	static constexpr auto IDX_T_MAX = ((idx_t)(~(idx_t)0));
-
-	static inline idx_t ReadIndex(const char *ptr, const char *const end, idx_t &idx) {
-		const char *const before = ptr;
-		idx = 0;
-		for (idx_t i = 0; i < IDX_T_SAFE_DIG; i++) {
-			if (ptr == end) {
-				// No closing ']'
-				return 0;
-			}
-			if (*ptr == ']') {
-				break;
-			}
-			uint8_t add = (uint8_t)(*ptr - '0');
-			if (add <= 9) {
-				idx = add + idx * 10;
-			} else {
-				// Not a digit
-				return 0;
-			}
-			ptr++;
-		}
-		// Invalid if overflow
-		return idx >= (idx_t)IDX_T_MAX ? 0 : ptr - before;
-	}
-
-private:
-	template <class YYJSON_VAL_T>
-	static inline bool IsObj(YYJSON_VAL_T *val) {
-		throw InternalException("Unknown yyjson value type");
-	}
-
-	template <class YYJSON_VAL_T>
-	static inline YYJSON_VAL_T *ObjGetN(YYJSON_VAL_T *val, const char *ptr, idx_t key_len) {
-		throw InternalException("Unknown yyjson value type");
-	}
-
-	template <class YYJSON_VAL_T>
-	static inline bool IsArr(YYJSON_VAL_T *val) {
-		throw InternalException("Unknown yyjson value type");
-	}
-
-	template <class YYJSON_VAL_T>
-	static inline size_t ArrSize(YYJSON_VAL_T *val) {
-		throw InternalException("Unknown yyjson value type");
-	}
-
-	template <class YYJSON_VAL_T>
-	static inline YYJSON_VAL_T *ArrGet(YYJSON_VAL_T *val, idx_t index) {
-		throw InternalException("Unknown yyjson value type");
-	}
-
-	template <class YYJSON_VAL_T>
-	static inline yyjson_type GetTag(YYJSON_VAL_T *val) {
-		throw InternalException("Unknown yyjson value type");
-	}
+	//! Get JSON path ($.field[index]... syntax)
+	static yyjson_val *GetPath(yyjson_val *val, const char *ptr, const idx_t &len);
 };
 
 template <>
 inline char *JSONCommon::WriteVal(yyjson_val *val, yyjson_alc *alc, idx_t &len) {
-	return yyjson_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, (size_t *)&len, nullptr);
+	return yyjson_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, reinterpret_cast<size_t *>(&len), nullptr);
 }
 template <>
 inline char *JSONCommon::WriteVal(yyjson_mut_val *val, yyjson_alc *alc, idx_t &len) {
-	return yyjson_mut_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, (size_t *)&len, nullptr);
-}
-
-template <>
-inline yyjson_val *JSONCommon::TemplatedGetPointer(yyjson_val *root, const char *ptr, const idx_t &len) {
-	return len == 1 ? root : unsafe_yyjson_get_pointer(root, ptr, len);
-}
-template <>
-inline yyjson_mut_val *JSONCommon::TemplatedGetPointer(yyjson_mut_val *root, const char *ptr, const idx_t &len) {
-	return len == 1 ? root : unsafe_yyjson_mut_get_pointer(root, ptr, len);
-}
-
-template <>
-inline bool JSONCommon::IsObj(yyjson_val *val) {
-	return yyjson_is_obj(val);
-}
-template <>
-inline bool JSONCommon::IsObj(yyjson_mut_val *val) {
-	return yyjson_mut_is_obj(val);
-}
-
-template <>
-inline yyjson_val *JSONCommon::ObjGetN(yyjson_val *val, const char *ptr, idx_t key_len) {
-	return yyjson_obj_getn(val, ptr, key_len);
-}
-template <>
-inline yyjson_mut_val *JSONCommon::ObjGetN(yyjson_mut_val *val, const char *ptr, idx_t key_len) {
-	return yyjson_mut_obj_getn(val, ptr, key_len);
-}
-
-template <>
-inline bool JSONCommon::IsArr(yyjson_val *val) {
-	return yyjson_is_arr(val);
-}
-template <>
-inline bool JSONCommon::IsArr(yyjson_mut_val *val) {
-	return yyjson_mut_is_arr(val);
-}
-
-template <>
-inline size_t JSONCommon::ArrSize(yyjson_val *val) {
-	return yyjson_arr_size(val);
-}
-template <>
-inline size_t JSONCommon::ArrSize(yyjson_mut_val *val) {
-	return yyjson_mut_arr_size(val);
-}
-
-template <>
-inline yyjson_val *JSONCommon::ArrGet(yyjson_val *val, idx_t index) {
-	return yyjson_arr_get(val, index);
-}
-template <>
-inline yyjson_mut_val *JSONCommon::ArrGet(yyjson_mut_val *val, idx_t index) {
-	return yyjson_mut_arr_get(val, index);
-}
-
-template <>
-inline yyjson_type JSONCommon::GetTag(yyjson_val *val) {
-	return yyjson_get_tag(val);
-}
-template <>
-inline yyjson_type JSONCommon::GetTag(yyjson_mut_val *val) {
-	return yyjson_mut_get_tag(val);
+	return yyjson_mut_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, reinterpret_cast<size_t *>(&len), nullptr);
 }
 
 } // namespace duckdb

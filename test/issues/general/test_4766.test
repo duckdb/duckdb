@@ -3,6 +3,9 @@
 # group: [general]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 create table test as
 with cte1 as (
     select '01234567890' s

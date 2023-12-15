@@ -2,17 +2,20 @@ import pandas
 import numpy as np
 import datetime
 import duckdb
+import pytest
+from conftest import NumpyPandas, ArrowPandas
+
 
 class TestCaseAlias(object):
-    def test_case_alias(self, duckdb_cursor):
-        import pandas
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_case_alias(self, duckdb_cursor, pandas):
         import numpy as np
         import datetime
         import duckdb
 
         con = duckdb.connect(':memory:')
 
-        df = pandas.DataFrame([{"COL1": "val1", "CoL2": 1.05},{"COL1": "val3", "CoL2": 17}])
+        df = pandas.DataFrame([{"COL1": "val1", "CoL2": 1.05}, {"COL1": "val3", "CoL2": 17}])
 
         r1 = con.from_df(df).query('df', 'select * from df').df()
         assert r1["COL1"][0] == "val1"

@@ -45,10 +45,15 @@ public final class ResultSet: Sendable {
   public var columnCount: DBInt { duckdb_column_count(ptr) }
   
   /// The total number of rows in the result set
-  var rowCount: DBInt {
-    guard chunkCount > 0 else { return DBInt(0) }
-    let lastChunk = dataChunk(at: chunkCount - 1)
-    return (chunkCount - 1) * Vector.vectorSize + lastChunk.count
+  public var rowCount: DBInt {
+    var count = DBInt.zero
+    var chunkIndex = DBInt.zero
+    while chunkIndex < chunkCount {
+      let chunk = dataChunk(at: chunkIndex)
+      count += chunk.count
+      chunkIndex += 1
+    }
+    return count
   }
   
   private let ptr = UnsafeMutablePointer<duckdb_result>.allocate(capacity: 1)
@@ -114,6 +119,10 @@ public final class ResultSet: Sendable {
   func columnDataType(at index: DBInt) -> DatabaseType {
     let dataType = duckdb_column_type(ptr, index)
     return DatabaseType(rawValue: dataType.rawValue)
+  }
+
+  func columnLogicalType(at index: DBInt) -> LogicalType {
+    return LogicalType { duckdb_column_logical_type(ptr, index) }
   }
   
   func withCResult<T>(_ body: (UnsafeMutablePointer<duckdb_result>) throws -> T) rethrows -> T {
@@ -256,12 +265,22 @@ private extension ResultSet {
       }
     }
     return { [self] itemIndex in
-      let chunkIndex = itemIndex / Vector.vectorSize
-      let rowIndex = itemIndex % Vector.vectorSize
-      let chunk = dataChunk(at: chunkIndex)
-      return chunk.withVector(at: columnIndex) { vector in
-        body(vector[Int(rowIndex)])
+      var chunkIndex = DBInt.zero
+      var chunkRowOffset = DBInt.zero
+      while chunkIndex < chunkCount {
+        let chunk = dataChunk(at: chunkIndex)
+        let chunkCount = chunk.count
+        if itemIndex < chunkRowOffset + chunkCount {
+          return chunk.withVector(at: columnIndex) { vector in
+            body(vector[Int(itemIndex - chunkRowOffset)])
+          }
+        }
+        else {
+          chunkIndex += 1
+          chunkRowOffset += chunkCount
+        }
       }
+      preconditionFailure("item out of bounds")
     }
   }
 }

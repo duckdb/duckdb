@@ -4,11 +4,16 @@
 
 namespace duckdb {
 
-BindResult ExpressionBinder::BindExpression(PositionalReferenceExpression &ref, idx_t depth) {
+BindResult ExpressionBinder::BindPositionalReference(unique_ptr<ParsedExpression> &expr, idx_t depth,
+                                                     bool root_expression) {
+	auto &ref = expr->Cast<PositionalReferenceExpression>();
 	if (depth != 0) {
-		return BindResult("Positional reference expression could not be bound");
+		throw InternalException("Positional reference expression could not be bound");
 	}
-	return binder.bind_context.BindColumn(ref, depth);
+	// replace the positional reference with a column
+	auto column = binder.bind_context.PositionToColumn(ref);
+	expr = std::move(column);
+	return BindExpression(expr, depth, root_expression);
 }
 
 } // namespace duckdb

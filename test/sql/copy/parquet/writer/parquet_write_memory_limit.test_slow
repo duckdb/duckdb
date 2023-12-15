@@ -1,0 +1,35 @@
+# name: test/sql/copy/parquet/writer/parquet_write_memory_limit.test_slow
+# description: Verify data is streamed and memory limit is not exceeded in Parquet write
+# group: [writer]
+
+require parquet
+
+require 64bit
+
+load __TEST_DIR__/parquet_write_memory_limit.db
+
+# 100M rows, 2 BIGINT columns = 1.6GB uncompressed
+statement ok
+COPY (SELECT i, i // 5 AS j FROM range(100000000) t(i)) TO '__TEST_DIR__/large_integers.parquet'
+
+statement ok
+SET memory_limit='0.3GB'
+
+# we need to do this otherwise we buffer a lot more data in a BatchedDataCollection
+# by disable order preservation we can immediately flush the ColumnDataCollections
+statement ok
+set preserve_insertion_order=false
+
+# stream from one parquet file to another
+query I
+COPY '__TEST_DIR__/large_integers.parquet' TO '__TEST_DIR__/large_integers2.parquet'
+----
+100000000
+
+# verify that the file is correctly written
+statement ok
+SET memory_limit='-1'
+
+query II
+SELECT * FROM '__TEST_DIR__/large_integers.parquet' EXCEPT FROM '__TEST_DIR__/large_integers2.parquet'
+----

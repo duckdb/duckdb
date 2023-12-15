@@ -30,7 +30,7 @@ public:
 	explicit ChunkCollection(ClientContext &context);
 
 	//! The types of columns in the ChunkCollection
-	DUCKDB_API vector<LogicalType> &Types() {
+	vector<LogicalType> &Types() {
 		return types;
 	}
 	const vector<LogicalType> &Types() const {
@@ -38,12 +38,12 @@ public:
 	}
 
 	//! The amount of rows in the ChunkCollection
-	DUCKDB_API const idx_t &Count() const {
+	const idx_t &Count() const {
 		return count;
 	}
 
 	//! The amount of columns in the ChunkCollection
-	DUCKDB_API idx_t ColumnCount() const {
+	idx_t ColumnCount() const {
 		return types.size();
 	}
 
@@ -76,12 +76,12 @@ public:
 	DUCKDB_API void Print() const;
 
 	//! Gets a reference to the chunk at the given index
-	DUCKDB_API DataChunk &GetChunkForRow(idx_t row_index) {
+	DataChunk &GetChunkForRow(idx_t row_index) {
 		return *chunks[LocateChunk(row_index)];
 	}
 
 	//! Gets a reference to the chunk at the given index
-	DUCKDB_API DataChunk &GetChunk(idx_t chunk_index) {
+	DataChunk &GetChunk(idx_t chunk_index) {
 		D_ASSERT(chunk_index < chunks.size());
 		return *chunks[chunk_index];
 	}
@@ -90,21 +90,21 @@ public:
 		return *chunks[chunk_index];
 	}
 
-	DUCKDB_API const vector<unique_ptr<DataChunk>> &Chunks() {
+	const vector<unique_ptr<DataChunk>> &Chunks() {
 		return chunks;
 	}
 
-	DUCKDB_API idx_t ChunkCount() const {
+	idx_t ChunkCount() const {
 		return chunks.size();
 	}
 
-	DUCKDB_API void Reset() {
+	void Reset() {
 		count = 0;
 		chunks.clear();
 		types.clear();
 	}
 
-	DUCKDB_API unique_ptr<DataChunk> Fetch() {
+	unique_ptr<DataChunk> Fetch() {
 		if (ChunkCount() == 0) {
 			return nullptr;
 		}
@@ -115,7 +115,7 @@ public:
 	}
 
 	//! Locates the chunk that belongs to the specific index
-	DUCKDB_API idx_t LocateChunk(idx_t index) {
+	idx_t LocateChunk(idx_t index) {
 		idx_t result = index / STANDARD_VECTOR_SIZE;
 		D_ASSERT(result < chunks.size());
 		return result;

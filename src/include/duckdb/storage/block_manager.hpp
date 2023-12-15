@@ -19,13 +19,13 @@ class BlockHandle;
 class BufferManager;
 class ClientContext;
 class DatabaseInstance;
+class MetadataManager;
 
 //! BlockManager is an abstract representation to manage blocks on DuckDB. When writing or reading blocks, the
 //! BlockManager creates and accesses blocks. The concrete types implements how blocks are stored.
 class BlockManager {
 public:
-	explicit BlockManager(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
-	}
+	explicit BlockManager(BufferManager &buffer_manager);
 	virtual ~BlockManager() = default;
 
 	//! The buffer manager
@@ -33,11 +33,12 @@ public:
 
 public:
 	//! Creates a new block inside the block manager
+	virtual unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) = 0;
 	virtual unique_ptr<Block> CreateBlock(block_id_t block_id, FileBuffer *source_buffer) = 0;
 	//! Return the next free block id
 	virtual block_id_t GetFreeBlockId() = 0;
 	//! Returns whether or not a specified block is the root block
-	virtual bool IsRootBlock(block_id_t root) = 0;
+	virtual bool IsRootBlock(MetaBlockPointer root) = 0;
 	//! Mark a block as "free"; free blocks are immediately added to the free list and can be immediately overwritten
 	virtual void MarkBlockAsFree(block_id_t block_id) = 0;
 	//! Mark a block as "modified"; modified blocks are added to the free list after a checkpoint (i.e. their data is
@@ -47,7 +48,7 @@ public:
 	//! called.
 	virtual void IncreaseBlockReferenceCount(block_id_t block_id) = 0;
 	//! Get the first meta block id
-	virtual block_id_t GetMetaBlock() = 0;
+	virtual idx_t GetMetaBlock() = 0;
 	//! Read the content of the block from disk
 	virtual void Read(Block &block) = 0;
 	//! Writes the block to disk
@@ -64,24 +65,24 @@ public:
 	//! Returns the number of free blocks
 	virtual idx_t FreeBlocks() = 0;
 
+	//! Truncate the underlying database file after a checkpoint
+	virtual void Truncate();
+
 	//! Register a block with the given block id in the base file
-	shared_ptr<BlockHandle> RegisterBlock(block_id_t block_id, bool is_meta_block = false);
-	//! Clear cached handles for meta blocks
-	void ClearMetaBlockHandles();
+	shared_ptr<BlockHandle> RegisterBlock(block_id_t block_id);
 	//! Convert an existing in-memory buffer into a persistent disk-backed block
 	shared_ptr<BlockHandle> ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block);
 
 	void UnregisterBlock(block_id_t block_id, bool can_destroy);
 
-	static BlockManager &GetBlockManager(ClientContext &context);
-	static BlockManager &GetBlockManager(DatabaseInstance &db);
+	MetadataManager &GetMetadataManager();
 
 private:
 	//! The lock for the set of blocks
 	mutex blocks_lock;
 	//! A mapping of block id -> BlockHandle
 	unordered_map<block_id_t, weak_ptr<BlockHandle>> blocks;
-	//! A map to cache the BlockHandles of meta blocks
-	unordered_map<block_id_t, shared_ptr<BlockHandle>> meta_blocks;
+	//! The metadata manager
+	unique_ptr<MetadataManager> metadata_manager;
 };
 } // namespace duckdb

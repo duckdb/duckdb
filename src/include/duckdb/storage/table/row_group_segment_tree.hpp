@@ -14,7 +14,7 @@
 namespace duckdb {
 struct DataTableInfo;
 class PersistentTableData;
-class MetaBlockReader;
+class MetadataReader;
 
 class RowGroupSegmentTree : public SegmentTree<RowGroup, true> {
 public:
@@ -29,7 +29,7 @@ protected:
 	RowGroupCollection &collection;
 	idx_t current_row_group;
 	idx_t max_row_group;
-	unique_ptr<MetaBlockReader> reader;
+	unique_ptr<MetadataReader> reader;
 };
 
 } // namespace duckdb

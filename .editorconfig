@@ -14,6 +14,21 @@ x-soft-wrap-limit = 120
 x-show-invisibles = false
 x-show-spaces = false
 
+[*.{java}]
+end_of_line = lf
+insert_final_newline = true
+indent_style = tab
+tab_width = 4
+indent_size = tab
+trim_trailing_whitespace = false
+charset = utf-8
+max_line_length = 120
+x-soft-wrap-text = true
+x-soft-wrap-mode = CharacterWidth
+x-soft-wrap-limit = 120
+x-show-invisibles = false
+x-show-spaces = false
+
 [*.{test,test_slow,test_coverage,benchmark}]
 end_of_line = lf
 insert_final_newline = true
@@ -36,13 +51,3 @@ x-soft-wrap-text = false
 
 [*keywords.list]
 insert_final_newline = false
-
-[tools/rpkg/**.R]
-end_of_line = lf
-insert_final_newline = true
-indent_style = space
-tab_width = 2
-indent_size = tab
-trim_trailing_whitespace = true
-charset = utf-8
-max_line_length = 120

@@ -2,6 +2,9 @@
 # description: Parquet UUID round trip
 # group: [writer]
 
+statement ok
+SET default_null_order='nulls_first';
+
 require parquet
 
 statement ok

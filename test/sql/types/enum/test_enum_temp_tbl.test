@@ -1,0 +1,45 @@
+# name: test/sql/types/enum/test_enum_temp_tbl.test
+# description: ENUM types used in temporary table
+# group: [enum]
+
+# Can't do reload tests with temp tables
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TEMP TABLE tbl_temp (name varchar , cur_mood mood);
+
+statement ok
+insert into tbl_temp values ('bla', 'sad'), ('bla_2', 'happy')
+
+query I
+select count(*) from tbl_temp;
+----
+2
+
+statement error
+insert into tbl_temp values ('bla', 'invalid')
+----
+Could not convert string 'invalid'
+
+# We can drop the type and the temp table is still fine
+statement ok
+DROP TYPE mood;
+
+statement ok
+insert into tbl_temp values ('bla', 'sad'), ('bla_2', 'happy')
+
+query I
+select count(*) from tbl_temp;
+----
+4
+
+statement error
+insert into tbl_temp values ('bla', 'invalid')
+----
+Could not convert string 'invalid'

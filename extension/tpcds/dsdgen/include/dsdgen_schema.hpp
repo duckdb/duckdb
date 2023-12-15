@@ -482,7 +482,7 @@ const char *StoreInfo::Columns[] = {
     "s_market_id",     "s_geography_class",  "s_market_desc",    "s_market_manager", "s_division_id",
     "s_division_name", "s_company_id",       "s_company_name",   "s_street_number",  "s_street_name",
     "s_street_type",   "s_suite_number",     "s_city",           "s_county",         "s_state",
-    "s_zip",           "s_country",          "s_gmt_offset",     "s_tax_precentage"};
+    "s_zip",           "s_country",          "s_gmt_offset",     "s_tax_percentage"};
 
 const LogicalType StoreInfo::Types[] = {
     LogicalType::INTEGER,      LogicalType::VARCHAR, LogicalType::DATE,    LogicalType::DATE,

@@ -7,24 +7,24 @@
 
 namespace duckdb {
 
-unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgquery::PGNode *node) {
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateSeqStmt *>(node);
-
+unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgquery::PGCreateSeqStmt &stmt) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateSequenceInfo>();
 
-	auto qname = TransformQualifiedName(stmt->sequence);
+	auto qname = TransformQualifiedName(*stmt.sequence);
 	info->catalog = qname.catalog;
 	info->schema = qname.schema;
 	info->name = qname.name;
 
-	if (stmt->options) {
+	if (stmt.options) {
+		int64_t default_start_value = info->start_value;
+		bool has_start_value = false;
 		unordered_set<SequenceInfo, EnumClassHash> used;
 		duckdb_libpgquery::PGListCell *cell = nullptr;
-		for_each_cell(cell, stmt->options->head) {
-			auto *def_elem = reinterpret_cast<duckdb_libpgquery::PGDefElem *>(cell->data.ptr_value);
+		for_each_cell(cell, stmt.options->head) {
+			auto def_elem = PGPointerCast<duckdb_libpgquery::PGDefElem>(cell->data.ptr_value);
 			string opt_name = string(def_elem->defname);
-			auto val = (duckdb_libpgquery::PGValue *)def_elem->arg;
+			auto val = PGPointerCast<duckdb_libpgquery::PGValue>(def_elem->arg);
 			bool nodef = def_elem->defaction == duckdb_libpgquery::PG_DEFELEM_UNSPEC && !val; // e.g. NO MINVALUE
 			int64_t opt_value = 0;
 
@@ -53,10 +53,10 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 					throw ParserException("Increment must not be zero");
 				}
 				if (info->increment < 0) {
-					info->start_value = info->max_value = -1;
+					default_start_value = info->max_value = -1;
 					info->min_value = NumericLimits<int64_t>::Minimum();
 				} else {
-					info->start_value = info->min_value = 1;
+					default_start_value = info->min_value = 1;
 					info->max_value = NumericLimits<int64_t>::Maximum();
 				}
 			} else if (opt_name == "minvalue") {
@@ -70,7 +70,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 
 				info->min_value = opt_value;
 				if (info->increment > 0) {
-					info->start_value = info->min_value;
+					default_start_value = info->min_value;
 				}
 			} else if (opt_name == "maxvalue") {
 				if (used.find(SequenceInfo::SEQ_MAX) != used.end()) {
@@ -83,7 +83,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 
 				info->max_value = opt_value;
 				if (info->increment < 0) {
-					info->start_value = info->max_value;
+					default_start_value = info->max_value;
 				}
 			} else if (opt_name == "start") {
 				if (used.find(SequenceInfo::SEQ_START) != used.end()) {
@@ -93,7 +93,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 				if (nodef) {
 					continue;
 				}
-
+				has_start_value = true;
 				info->start_value = opt_value;
 			} else if (opt_name == "cycle") {
 				if (used.find(SequenceInfo::SEQ_CYCLE) != used.end()) {
@@ -109,9 +109,12 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 				throw ParserException("Unrecognized option \"%s\" for CREATE SEQUENCE", opt_name);
 			}
 		}
+		if (!has_start_value) {
+			info->start_value = default_start_value;
+		}
 	}
-	info->temporary = !stmt->sequence->relpersistence;
-	info->on_conflict = TransformOnConflict(stmt->onconflict);
+	info->temporary = !stmt.sequence->relpersistence;
+	info->on_conflict = TransformOnConflict(stmt.onconflict);
 	if (info->max_value <= info->min_value) {
 		throw ParserException("MINVALUE (%lld) must be less than MAXVALUE (%lld)", info->min_value, info->max_value);
 	}

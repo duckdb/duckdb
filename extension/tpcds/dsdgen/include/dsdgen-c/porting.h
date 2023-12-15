@@ -55,12 +55,7 @@
 #include <stdlib.h>
 #endif
 
-#ifndef WIN32
-#include <sys/types.h>
-#else
-#define int32_t __int32
-#define int64_t __int64
-#endif
+#include <stdint.h>
 
 #ifdef WIN32
 #include <sys/timeb.h>

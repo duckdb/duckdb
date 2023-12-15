@@ -1,0 +1,48 @@
+# name: test/sql/storage/reclaim_space/test_reclaim_space_drop.test_slow
+# description: Test that we reclaim space when dropping tables
+# group: [reclaim_space]
+
+load __TEST_DIR__/test_reclaim_space.db
+
+statement ok
+PRAGMA force_checkpoint;
+
+statement ok
+CREATE TABLE integers AS SELECT i FROM range(10000000) tbl(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+CHECKPOINT;
+
+query III
+SELECT MIN(i), MAX(i), COUNT(*) FROM integers
+----
+0	9999999	10000000
+
+loop i 0 10
+
+statement ok
+DROP TABLE integers;
+
+statement ok
+CREATE TABLE integers AS SELECT i FROM range(10000000) tbl(i);
+
+query III
+SELECT MIN(i), MAX(i), COUNT(*) FROM integers
+----
+0	9999999	10000000
+
+statement ok
+CHECKPOINT;
+
+query I nosort expected_blocks
+select round(total_blocks / 100.0) from pragma_database_size();
+
+query III
+SELECT MIN(i), MAX(i), COUNT(*) FROM integers
+----
+0	9999999	10000000
+
+endloop

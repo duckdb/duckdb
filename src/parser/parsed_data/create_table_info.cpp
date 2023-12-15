@@ -12,31 +12,8 @@ CreateTableInfo::CreateTableInfo(string catalog_p, string schema_p, string name_
     : CreateInfo(CatalogType::TABLE_ENTRY, std::move(schema_p), std::move(catalog_p)), table(std::move(name_p)) {
 }
 
-CreateTableInfo::CreateTableInfo(SchemaCatalogEntry *schema, string name_p)
-    : CreateTableInfo(schema->catalog->GetName(), schema->name, std::move(name_p)) {
-}
-
-void CreateTableInfo::SerializeInternal(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteString(table);
-	columns.Serialize(writer);
-	writer.WriteSerializableList(constraints);
-	writer.WriteOptional(query);
-	writer.Finalize();
-}
-
-unique_ptr<CreateTableInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) {
-	auto result = make_uniq<CreateTableInfo>();
-	result->DeserializeBase(deserializer);
-
-	FieldReader reader(deserializer);
-	result->table = reader.ReadRequired<string>();
-	result->columns = ColumnList::Deserialize(reader);
-	result->constraints = reader.ReadRequiredSerializableList<Constraint>();
-	result->query = reader.ReadOptional<SelectStatement>(nullptr);
-	reader.Finalize();
-
-	return result;
+CreateTableInfo::CreateTableInfo(SchemaCatalogEntry &schema, string name_p)
+    : CreateTableInfo(schema.catalog.GetName(), schema.name, std::move(name_p)) {
 }
 
 unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
@@ -50,6 +27,23 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 		result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	}
 	return std::move(result);
+}
+
+string CreateTableInfo::ToString() const {
+	string ret = "";
+
+	string table_name = KeywordHelper::WriteOptionallyQuoted(table);
+	if (schema != DEFAULT_SCHEMA) {
+		table_name = KeywordHelper::WriteOptionallyQuoted(schema) + "." + table_name;
+	}
+
+	ret += "CREATE TABLE " + table_name;
+	if (query != nullptr) {
+		ret += " AS " + query->ToString();
+	} else {
+		ret += TableCatalogEntry::ColumnsToSQL(columns, constraints) + ";";
+	}
+	return ret;
 }
 
 } // namespace duckdb

@@ -69,6 +69,7 @@ SELECT ARRAY[[1, 2], [3, 4]]::BIGINT[][]
 # this doesn't work: int[][] to bigint[]
 statement error
 SELECT ARRAY[[1, 2], [3, 4]]::BIGINT[]
+----
 
 # however, this does work
 # casting to varchar[] or varchar

@@ -220,7 +220,7 @@ namespace duckdb_jemalloc {
 #elif defined(COMPILER_MSVC) && defined(_M_IX86)
 #define LG_PAGE 12
 #elif defined(__aarch64__)
-#define LG_PAGE 14
+#define LG_PAGE 16
 #elif defined(__ARM_ARCH)
 #define LG_PAGE 14
 #else
@@ -348,7 +348,7 @@ namespace duckdb_jemalloc {
  *                                 system overhead.
  */
 //#define JEMALLOC_PURGE_MADVISE_FREE
-#define JEMALLOC_PURGE_MADVISE_DONTNEED 
+#define JEMALLOC_PURGE_MADVISE_DONTNEED
 /* #undef JEMALLOC_PURGE_MADVISE_DONTNEED_ZEROS */
 
 /* Defined if madvise(2) is available but MADV_FREE is not (x86 Linux only). */

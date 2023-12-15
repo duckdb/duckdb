@@ -1,0 +1,52 @@
+# name: test/sql/storage/parallel/batch_row_group_size_plus_one.test_slow
+# description: Test batches that are slightly larger than a single row group
+# group: [parallel]
+
+require parquet
+
+load __TEST_DIR__/insert_row_group_size_plus_one.db
+
+# write many batches of row group size plus one vector
+statement ok
+COPY (FROM range(10000000) tbl(i)) TO '__TEST_DIR__/row_group_size_plus_one.parquet' (ROW_GROUP_SIZE 124928)
+
+# create a view that reads the batch
+statement ok
+CREATE VIEW v1 AS SELECT * FROM parquet_scan('__TEST_DIR__/row_group_size_plus_one.parquet')
+
+query I
+CREATE TABLE integers AS FROM v1;
+----
+10000000
+
+# verify that we are not consuming an unnecessarily giant amount of blocks
+# we have a total of 10M values - this should not be more than 200 row groups (ideally it is 100)
+query I
+select count(distinct row_group_id) < 200 from pragma_storage_info('integers');
+----
+true
+
+query IIIII
+SELECT SUM(i), MIN(i), MAX(i), COUNT(i), COUNT(*) FROM v1
+----
+49999995000000	0	9999999	10000000	10000000
+
+query IIIII
+SELECT SUM(i), MIN(i), MAX(i), COUNT(i), COUNT(*) FROM integers
+----
+49999995000000	0	9999999	10000000	10000000
+
+query I
+SELECT * FROM integers LIMIT 5 OFFSET 99998
+----
+99998
+99999
+100000
+100001
+100002
+
+query I
+SELECT * FROM integers LIMIT 5 OFFSET 9999998
+----
+9999998
+9999999

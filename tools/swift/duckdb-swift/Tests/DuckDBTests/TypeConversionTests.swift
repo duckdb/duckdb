@@ -75,7 +75,7 @@ final class TypeConversionTests: XCTestCase {
   }
   
   func test_extract_from_hugeint() throws {
-    let expected = [IntHuge.min + 1, IntHuge.max, nil]
+    let expected = [IntHuge.min, IntHuge.max, nil]
     try extractTest(testColumnName: "hugeint", expected: expected) { $0.cast(to: IntHuge.self) }
   }
   
@@ -96,7 +96,7 @@ final class TypeConversionTests: XCTestCase {
   
   func test_extract_from_uuid() throws {
     let expected = [
-      UUID(uuidString: "00000000-0000-0000-0000-000000000001"),
+      UUID(uuidString: "00000000-0000-0000-0000-000000000000"),
       UUID(uuidString: "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF"),
       nil
     ]
@@ -106,12 +106,13 @@ final class TypeConversionTests: XCTestCase {
   func test_extract_from_time() throws {
     let expected = [
       Time(components: .init(hour: 0, minute: 0, second: 0, microsecond: 0)),
-      Time(components: .init(hour: 23, minute: 59, second: 59, microsecond: 999_999)),
+      Time(components: .init(hour: 24, minute: 0, second: 0, microsecond: 0)),
       nil
     ]
     try extractTest(testColumnName: "time", expected: expected) { $0.cast(to: Time.self) }
   }
-  
+/*
+  FIXME: TIMETZ <> TIME
   func test_extract_from_time_tz() throws {
     let expected = [
       Time(components: .init(hour: 0, minute: 0, second: 0, microsecond: 0)),
@@ -120,7 +121,7 @@ final class TypeConversionTests: XCTestCase {
     ]
     try extractTest(testColumnName: "time_tz", expected: expected) { $0.cast(to: Time.self) }
   }
-  
+*/
   func test_extract_from_date() throws {
     let expected = [
       Date(components: .init(year: -5_877_641, month: 06, day: 25)),
@@ -242,32 +243,46 @@ final class TypeConversionTests: XCTestCase {
     }
     let expected = [SmallEnum.duckDuckEnum, .goose, nil]
     try extractTest(
-      testColumnName: "small_enum", expected: expected) { $0.cast(to: SmallEnum.self) }
+      testColumnName: "small_enum",
+      expected: expected,
+      params: "use_large_enum=true"
+    ) { $0.cast(to: SmallEnum.self) }
   }
   
   func test_extract_from_enum_medium() throws {
-    enum SmallEnum: UInt16, RawRepresentable, Decodable {
+    enum MediumEnum: UInt16, RawRepresentable, Decodable {
       case enum0
       case enum299 = 299
     }
-    let expected = [SmallEnum.enum0, .enum299, nil]
+    let expected = [MediumEnum.enum0, .enum299, nil]
     try extractTest(
-      testColumnName: "medium_enum", expected: expected) { $0.cast(to: SmallEnum.self) }
+      testColumnName: "medium_enum",
+      expected: expected,
+      params: "use_large_enum=true"
+    ) { $0.cast(to: MediumEnum.self) }
   }
   
   func test_extract_from_enum_large() throws {
-    enum SmallEnum: UInt32, RawRepresentable, Decodable {
+    enum LargeEnum: UInt32, RawRepresentable, Decodable {
       case enum0
       case enum69_999 = 69_999
     }
-    let expected = [SmallEnum.enum0, .enum69_999, nil]
+    let expected = [LargeEnum.enum0, .enum69_999, nil]
     try extractTest(
-      testColumnName: "large_enum", expected: expected) { $0.cast(to: SmallEnum.self) }
+      testColumnName: "large_enum",
+      expected: expected,
+      params: "use_large_enum=true"
+    ) { $0.cast(to: LargeEnum.self) }
   }
   
   func test_extract_from_int_array() throws {
     let expected = [[], [Int32(42), 999, nil, nil, -42], nil]
     try extractTest(testColumnName: "int_array", expected: expected) { $0.cast(to: [Int32?].self) }
+  }
+  
+  func test_extract_from_int_array_casting_to_swift_int() throws {
+    let expected = [[], [Int(42), 999, nil, nil, -42], nil]
+    try extractTest(testColumnName: "int_array", expected: expected) { $0.cast(to: [Int?].self) }
   }
   
   func test_extract_from_double_array() throws {
@@ -407,10 +422,11 @@ private extension TypeConversionTests {
   func extractTest<T: Equatable>(
     testColumnName: String,
     expected: [T?],
+    params: String = "",
     cast: (Column<Void>) -> Column<T>
   ) throws {
     let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT \(testColumnName) FROM test_all_types();")
+    let result = try connection.query("SELECT \(testColumnName) FROM test_all_types(\(params));")
     let column = cast(result[0])
     for (index, item) in expected.enumerated() {
       XCTAssertEqual(column[DBInt(index)], item)

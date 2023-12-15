@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -24,14 +25,13 @@ PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOper
 }
 
 string PhysicalComparisonJoin::ParamsToString() const {
-	string extra_info = JoinTypeToString(join_type) + "\n";
+	string extra_info = EnumUtil::ToString(join_type) + "\n";
 	for (auto &it : conditions) {
 		string op = ExpressionTypeToOperator(it.comparison);
 		extra_info += it.left->GetName() + " " + op + " " + it.right->GetName() + "\n";
 	}
 	extra_info += "\n[INFOSEPARATOR]\n";
-	extra_info += StringUtil::Format("EC: %llu\n", estimated_props->GetCardinality<idx_t>());
-	extra_info += StringUtil::Format("Cost: %llu", (idx_t)estimated_props->GetCost());
+	extra_info += StringUtil::Format("EC: %llu\n", estimated_cardinality);
 	return extra_info;
 }
 

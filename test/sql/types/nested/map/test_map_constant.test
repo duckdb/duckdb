@@ -1,0 +1,50 @@
+# name: test/sql/types/nested/map/test_map_constant.test
+# description: Test map constants
+# group: [map]
+
+statement ok
+PRAGMA enable_verification
+
+# empty map
+query I
+SELECT MAP {};
+----
+{}
+
+# case sensitive key-value
+query I
+SELECT MAP { 'hello': 'world', 'HELLO': 'WORLD' };
+----
+{hello=world, HELLO=WORLD}
+
+# integer keys
+query I
+SELECT MAP { 1: 'a', 2: 'b' };
+----
+{1=a, 2=b}
+
+# non-constant keys
+query I
+SELECT MAP { i: 'a' || i } FROM range(5) t(i);
+----
+{0=a0}
+{1=a1}
+{2=a2}
+{3=a3}
+{4=a4}
+
+# lists
+query I
+SELECT MAP { [i]: [i + 1] } FROM range(5) t(i);
+----
+{[0]=[1]}
+{[1]=[2]}
+{[2]=[3]}
+{[3]=[4]}
+{[4]=[5]}
+
+
+statement error
+SELECT MAP { NULL: 'a' || i } FROM range(5) t(i);
+----
+Map keys can not be NULL

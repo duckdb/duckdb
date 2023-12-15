@@ -1,15 +1,15 @@
 #include "duckdb/planner/expression_binder/base_select_binder.hpp"
 
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/parser/expression/operator_expression.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -23,8 +23,8 @@ BaseSelectBinder::BaseSelectBinder(Binder &binder, ClientContext &context, Bound
     : BaseSelectBinder(binder, context, node, info, case_insensitive_map_t<idx_t>()) {
 }
 
-BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = **expr_ptr;
+BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = *expr_ptr;
 	// check if the expression binds to one of the groups
 	auto group_index = TryBindGroup(expr, depth);
 	if (group_index != DConstants::INVALID_INDEX) {
@@ -62,14 +62,14 @@ idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
 	}
 #ifdef DEBUG
 	for (auto entry : info.map) {
-		D_ASSERT(!entry.first.get().Equals(&expr));
-		D_ASSERT(!expr.Equals(&entry.first.get()));
+		D_ASSERT(!entry.first.get().Equals(expr));
+		D_ASSERT(!expr.Equals(entry.first.get()));
 	}
 #endif
 	return DConstants::INVALID_INDEX;
 }
 
-BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth) {
+BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth) {
 	// first try to bind the column reference regularly
 	auto result = ExpressionBinder::BindExpression(expr_ptr, depth);
 	if (!result.HasError()) {
@@ -77,7 +77,7 @@ BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_pt
 	}
 	// binding failed
 	// check in the alias map
-	auto &colref = (*expr_ptr)->Cast<ColumnRefExpression>();
+	auto &colref = (expr_ptr.get())->Cast<ColumnRefExpression>();
 	if (!colref.IsQualified()) {
 		auto alias_entry = alias_map.find(colref.column_names[0]);
 		if (alias_entry != alias_map.end()) {
@@ -98,11 +98,8 @@ BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_pt
 				                      " This is not yet supported.",
 				                      colref.column_names[0]);
 			}
-			auto result = BindResult(node.select_list[index]->Copy());
-			if (result.expression->type == ExpressionType::BOUND_COLUMN_REF) {
-				auto &result_expr = result.expression->Cast<BoundColumnRefExpression>();
-				result_expr.depth = depth;
-			}
+			auto copied_expression = node.original_expressions[index]->Copy();
+			result = BindExpression(copied_expression, depth, false);
 			return result;
 		}
 	}
@@ -138,9 +135,24 @@ BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 }
 
 BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, idx_t group_index) {
-	auto &group = node.groups.group_expressions[group_index];
-	return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), group->return_type,
-	                                                      ColumnBinding(node.group_index, group_index), depth));
+	auto it = info.collated_groups.find(group_index);
+	if (it != info.collated_groups.end()) {
+		// This is an implicitly collated group, so we need to refer to the first() aggregate
+		const auto &aggr_index = it->second;
+		return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), node.aggregates[aggr_index]->return_type,
+		                                                      ColumnBinding(node.aggregate_index, aggr_index), depth));
+	} else {
+		auto &group = node.groups.group_expressions[group_index];
+		return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), group->return_type,
+		                                                      ColumnBinding(node.group_index, group_index), depth));
+	}
+}
+
+bool BaseSelectBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
+	if (!colref.IsQualified()) {
+		return alias_map.find(colref.column_names[0]) != alias_map.end() ? true : false;
+	}
+	return false;
 }
 
 } // namespace duckdb

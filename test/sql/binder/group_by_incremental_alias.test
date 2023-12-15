@@ -1,0 +1,18 @@
+# name: test/sql/binder/group_by_incremental_alias.test
+# description: Issue #7880: Group By incremental alias issues
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table my_functions as select 'my_name' as function_name;
+
+query II
+select
+    function_name as raw,
+    replace(raw, '_', ' ') as prettier
+from my_functions
+group by all;
+----
+my_name	my name

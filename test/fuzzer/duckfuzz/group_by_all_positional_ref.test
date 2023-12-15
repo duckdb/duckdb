@@ -1,0 +1,12 @@
+# name: test/fuzzer/duckfuzz/group_by_all_positional_ref.test
+# description: Mix GROUP BY ALL and positional references
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table integers(c1 int, c2 int);
+
+statement ok
+SELECT c1, #2 FROM integers GROUP BY ALL

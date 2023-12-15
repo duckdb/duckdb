@@ -5,6 +5,8 @@
 name Write Lineitem Parquet
 group parquet
 
+cache tpch_sf1.duckdb
+
 require parquet
 
 require tpch

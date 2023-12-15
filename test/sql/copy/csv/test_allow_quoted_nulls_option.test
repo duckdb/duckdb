@@ -1,0 +1,33 @@
+# name: test/sql/copy/csv/test_allow_quoted_nulls_option.test
+# description: Test the allow_quoted_nulls option
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# allow_quoted_nulls set as true by default
+
+foreach parallel true false
+
+query II
+SELECT * FROM read_csv_auto('test/sql/copy/csv/data/null_comparison.csv', parallel = ${parallel});
+----
+42	NULL
+NULL	NULL
+88	a
+
+query II
+SELECT * FROM read_csv_auto('test/sql/copy/csv/data/null_comparison.csv', allow_quoted_nulls=False, parallel = ${parallel});
+----
+42	(empty)
+NULL	NULL
+88	a
+
+query II
+SELECT * FROM read_csv_auto('test/sql/copy/csv/data/null_comparison.csv', allow_quoted_nulls=True, parallel = ${parallel});
+----
+42	NULL
+NULL	NULL
+88	a
+
+endloop

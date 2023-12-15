@@ -8,7 +8,7 @@ using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
 static void ComputeStringEntrySizes(UnifiedVectorFormat &vdata, idx_t entry_sizes[], const idx_t ser_count,
                                     const SelectionVector &sel, const idx_t offset) {
-	auto strings = (string_t *)vdata.data;
+	auto strings = UnifiedVectorFormat::GetData<string_t>(vdata);
 	for (idx_t i = 0; i < ser_count; i++) {
 		auto idx = sel.get_index(i);
 		auto str_idx = vdata.sel->get_index(idx + offset);
@@ -78,6 +78,48 @@ static void ComputeListEntrySizes(Vector &v, UnifiedVectorFormat &vdata, idx_t e
 	}
 }
 
+static void ComputeArrayEntrySizes(Vector &v, UnifiedVectorFormat &vdata, idx_t entry_sizes[], idx_t ser_count,
+                                   const SelectionVector &sel, idx_t offset) {
+
+	auto array_size = ArrayType::GetSize(v.GetType());
+	auto child_vector = ArrayVector::GetEntry(v);
+
+	idx_t array_entry_sizes[STANDARD_VECTOR_SIZE];
+
+	for (idx_t i = 0; i < ser_count; i++) {
+
+		// Validity for the array elements
+		entry_sizes[i] += (array_size + 7) / 8;
+
+		// serialize size of each entry (if non-constant size)
+		if (!TypeIsConstantSize(ArrayType::GetChildType(v.GetType()).InternalType())) {
+			entry_sizes[i] += array_size * sizeof(idx_t);
+		}
+
+		auto elem_idx = sel.get_index(i);
+		auto source_idx = vdata.sel->get_index(elem_idx + offset);
+
+		auto array_start = source_idx * array_size;
+		auto elem_remaining = array_size;
+
+		// the array could span multiple vectors, so we divide it into chunks
+		while (elem_remaining > 0) {
+			auto chunk_size = MinValue(static_cast<idx_t>(STANDARD_VECTOR_SIZE), elem_remaining);
+
+			// compute and add to the total
+			std::fill_n(array_entry_sizes, chunk_size, 0);
+			RowOperations::ComputeEntrySizes(child_vector, array_entry_sizes, chunk_size, chunk_size,
+			                                 *FlatVector::IncrementalSelectionVector(), array_start);
+			for (idx_t arr_elem_idx = 0; arr_elem_idx < chunk_size; arr_elem_idx++) {
+				entry_sizes[i] += array_entry_sizes[arr_elem_idx];
+			}
+			// update for next iteration
+			elem_remaining -= chunk_size;
+			array_start += chunk_size;
+		}
+	}
+}
+
 void RowOperations::ComputeEntrySizes(Vector &v, UnifiedVectorFormat &vdata, idx_t entry_sizes[], idx_t vcount,
                                       idx_t ser_count, const SelectionVector &sel, idx_t offset) {
 	const auto physical_type = v.GetType().InternalType();
@@ -96,6 +138,9 @@ void RowOperations::ComputeEntrySizes(Vector &v, UnifiedVectorFormat &vdata, idx
 			break;
 		case PhysicalType::LIST:
 			ComputeListEntrySizes(v, vdata, entry_sizes, ser_count, sel, offset);
+			break;
+		case PhysicalType::ARRAY:
+			ComputeArrayEntrySizes(v, vdata, entry_sizes, ser_count, sel, offset);
 			break;
 		default:
 			// LCOV_EXCL_START
@@ -116,14 +161,14 @@ void RowOperations::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcou
 template <class T>
 static void TemplatedHeapScatter(UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t count, idx_t col_idx,
                                  data_ptr_t *key_locations, data_ptr_t *validitymask_locations, idx_t offset) {
-	auto source = (T *)vdata.data;
+	auto source = UnifiedVectorFormat::GetData<T>(vdata);
 	if (!validitymask_locations) {
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx + offset);
 
 			auto target = (T *)key_locations[i];
-			Store<T>(source[source_idx], (data_ptr_t)target);
+			Store<T>(source[source_idx], data_ptr_cast(target));
 			key_locations[i] += sizeof(T);
 		}
 	} else {
@@ -136,7 +181,7 @@ static void TemplatedHeapScatter(UnifiedVectorFormat &vdata, const SelectionVect
 			auto source_idx = vdata.sel->get_index(idx + offset);
 
 			auto target = (T *)key_locations[i];
-			Store<T>(source[source_idx], (data_ptr_t)target);
+			Store<T>(source[source_idx], data_ptr_cast(target));
 			key_locations[i] += sizeof(T);
 
 			// set the validitymask
@@ -152,7 +197,7 @@ static void HeapScatterStringVector(Vector &v, idx_t vcount, const SelectionVect
 	UnifiedVectorFormat vdata;
 	v.ToUnifiedFormat(vcount, vdata);
 
-	auto strings = (string_t *)vdata.data;
+	auto strings = UnifiedVectorFormat::GetData<string_t>(vdata);
 	if (!validitymask_locations) {
 		for (idx_t i = 0; i < ser_count; i++) {
 			auto idx = sel.get_index(i);
@@ -163,7 +208,7 @@ static void HeapScatterStringVector(Vector &v, idx_t vcount, const SelectionVect
 				Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
 				key_locations[i] += sizeof(uint32_t);
 				// store the string
-				memcpy(key_locations[i], string_entry.GetDataUnsafe(), string_entry.GetSize());
+				memcpy(key_locations[i], string_entry.GetData(), string_entry.GetSize());
 				key_locations[i] += string_entry.GetSize();
 			}
 		}
@@ -181,7 +226,7 @@ static void HeapScatterStringVector(Vector &v, idx_t vcount, const SelectionVect
 				Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
 				key_locations[i] += sizeof(uint32_t);
 				// store the string
-				memcpy(key_locations[i], string_entry.GetDataUnsafe(), string_entry.GetSize());
+				memcpy(key_locations[i], string_entry.GetData(), string_entry.GetSize());
 				key_locations[i] += string_entry.GetSize();
 			} else {
 				// set the validitymask
@@ -240,7 +285,6 @@ static void HeapScatterListVector(Vector &v, idx_t vcount, const SelectionVector
 	ValidityBytes::GetEntryIndex(col_no, entry_idx, idx_in_entry);
 
 	auto list_data = ListVector::GetData(v);
-
 	auto &child_vector = ListVector::GetEntry(v);
 
 	UnifiedVectorFormat list_vdata;
@@ -331,6 +375,108 @@ static void HeapScatterListVector(Vector &v, idx_t vcount, const SelectionVector
 	}
 }
 
+static void HeapScatterArrayVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
+                                   data_ptr_t *key_locations, data_ptr_t *validitymask_locations, idx_t offset) {
+
+	auto &child_vector = ArrayVector::GetEntry(v);
+	auto array_size = ArrayType::GetSize(v.GetType());
+	auto child_type = ArrayType::GetChildType(v.GetType());
+	auto child_type_size = GetTypeIdSize(child_type.InternalType());
+	auto child_type_is_var_size = !TypeIsConstantSize(child_type.InternalType());
+
+	UnifiedVectorFormat vdata;
+	v.ToUnifiedFormat(vcount, vdata);
+
+	UnifiedVectorFormat child_vdata;
+	child_vector.ToUnifiedFormat(ArrayVector::GetTotalSize(v), child_vdata);
+
+	data_ptr_t array_entry_locations[STANDARD_VECTOR_SIZE];
+	idx_t array_entry_sizes[STANDARD_VECTOR_SIZE];
+
+	// array must have a validitymask for its elements
+	auto array_validitymask_size = (array_size + 7) / 8;
+
+	idx_t entry_idx;
+	idx_t idx_in_entry;
+	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+	const auto bit = ~(1UL << idx_in_entry);
+
+	for (idx_t i = 0; i < ser_count; i++) {
+		auto source_idx = vdata.sel->get_index(sel.get_index(i) + offset);
+
+		// First off, set the validity of the mask itself in the parent entry
+		if (validitymask_locations && !vdata.validity.RowIsValid(source_idx)) {
+			*(validitymask_locations[i] + entry_idx) &= bit;
+		}
+
+		// Now we can serialize the array itself
+		// Every array starts with a validity mask for the children
+		data_ptr_t array_validitymask_location = key_locations[i];
+		memset(array_validitymask_location, -1, (array_size + 7) / 8);
+		key_locations[i] += array_validitymask_size;
+
+		// If the array contains variable size entries, we reserve spaces for them here
+		data_ptr_t var_entry_size_ptr = nullptr;
+		if (child_type_is_var_size) {
+			var_entry_size_ptr = key_locations[i];
+			key_locations[i] += array_size * sizeof(idx_t);
+		}
+
+		// Then comes the elements
+		auto array_start = source_idx * array_size;
+		auto elem_remaining = array_size;
+
+		idx_t offset_in_byte = 0;
+
+		while (elem_remaining > 0) {
+			// the array elements can span multiple vectors, so we divide it into chunks
+			auto chunk_size = MinValue(static_cast<idx_t>(STANDARD_VECTOR_SIZE), elem_remaining);
+
+			// serialize list validity
+			for (idx_t elem_idx = 0; elem_idx < chunk_size; elem_idx++) {
+				auto idx_in_array = child_vdata.sel->get_index(array_start + elem_idx);
+				if (!child_vdata.validity.RowIsValid(idx_in_array)) {
+					*(array_validitymask_location) &= ~(1UL << offset_in_byte);
+				}
+				if (++offset_in_byte == 8) {
+					array_validitymask_location++;
+					offset_in_byte = 0;
+				}
+			}
+
+			// Setup the locations for the elements
+			if (child_type_is_var_size) {
+				// The elements are variable sized
+				std::fill_n(array_entry_sizes, chunk_size, 0);
+				RowOperations::ComputeEntrySizes(child_vector, array_entry_sizes, chunk_size, chunk_size,
+				                                 *FlatVector::IncrementalSelectionVector(), array_start);
+				for (idx_t elem_idx = 0; elem_idx < chunk_size; elem_idx++) {
+					array_entry_locations[elem_idx] = key_locations[i];
+					key_locations[i] += array_entry_sizes[elem_idx];
+
+					// Now store the size of the entry
+					Store<idx_t>(array_entry_sizes[elem_idx], var_entry_size_ptr);
+					var_entry_size_ptr += sizeof(idx_t);
+				}
+			} else {
+				// The elements are constant sized
+				for (idx_t elem_idx = 0; elem_idx < chunk_size; elem_idx++) {
+					array_entry_locations[elem_idx] = key_locations[i];
+					key_locations[i] += child_type_size;
+				}
+			}
+
+			RowOperations::HeapScatter(child_vector, ArrayVector::GetTotalSize(v),
+			                           *FlatVector::IncrementalSelectionVector(), chunk_size, 0, array_entry_locations,
+			                           nullptr, array_start);
+
+			// update for next iteration
+			elem_remaining -= chunk_size;
+			array_start += chunk_size;
+		}
+	}
+}
+
 void RowOperations::HeapScatter(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
                                 data_ptr_t *key_locations, data_ptr_t *validitymask_locations, idx_t offset) {
 	if (TypeIsConstantSize(v.GetType().InternalType())) {
@@ -348,6 +494,9 @@ void RowOperations::HeapScatter(Vector &v, idx_t vcount, const SelectionVector &
 			break;
 		case PhysicalType::LIST:
 			HeapScatterListVector(v, vcount, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
+			break;
+		case PhysicalType::ARRAY:
+			HeapScatterArrayVector(v, vcount, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 			break;
 		default:
 			// LCOV_EXCL_START

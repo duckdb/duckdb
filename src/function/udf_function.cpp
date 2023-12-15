@@ -15,13 +15,13 @@ void UDFWrapper::RegisterFunction(string name, vector<LogicalType> args, Logical
 	scalar_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	CreateScalarFunctionInfo info(scalar_function);
 	info.schema = DEFAULT_SCHEMA;
-	context.RegisterFunction(&info);
+	context.RegisterFunction(info);
 }
 
 void UDFWrapper::RegisterAggrFunction(AggregateFunction aggr_function, ClientContext &context, LogicalType varargs) {
 	aggr_function.varargs = std::move(varargs);
 	CreateAggregateFunctionInfo info(std::move(aggr_function));
-	context.RegisterFunction(&info);
+	context.RegisterFunction(info);
 }
 
 } // namespace duckdb

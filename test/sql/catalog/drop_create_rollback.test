@@ -1,0 +1,29 @@
+# name: test/sql/catalog/drop_create_rollback.test
+# description: Issue #7274 - crash when recreating table with different case sensitivity but the same name
+# group: [catalog]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1 (c1 CHAR(5));
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+DROP TABLE IF EXISTS t1;
+
+statement ok
+CREATE TABLE T1 (C2 CHAR(5));
+
+statement ok
+SELECT C2 FROM T1;
+
+statement ok
+ROLLBACK;
+
+statement error
+SELECT C2 FROM T1;
+----
+c1

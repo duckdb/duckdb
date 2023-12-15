@@ -52,7 +52,7 @@ public:
 				NumericStats::Update<VALUE_TYPE>(state_wrapper->current_segment->stats.statistics, value);
 			}
 
-			state_wrapper->WriteValue(Load<EXACT_TYPE>((const_data_ptr_t)&value));
+			state_wrapper->WriteValue(Load<EXACT_TYPE>(const_data_ptr_cast(&value)));
 		}
 	};
 
@@ -138,7 +138,7 @@ public:
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
-		auto data = (T *)vdata.data;
+		auto data = UnifiedVectorFormat::GetData<T>(vdata);
 
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);

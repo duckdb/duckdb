@@ -2,6 +2,9 @@
 # description: Test duckdb_settings function with extensions
 # group: [table_function]
 
+statement ok
+SET default_null_order='nulls_first';
+
 require parquet
 
 statement ok

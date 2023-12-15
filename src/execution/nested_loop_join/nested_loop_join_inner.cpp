@@ -3,29 +3,20 @@
 
 namespace duckdb {
 
-template <class OP>
-struct ComparisonOperationWrapper {
-	template <class T>
-	static inline bool Operation(T left, T right, bool left_is_null, bool right_is_null) {
-		if (left_is_null || right_is_null) {
-			return false;
-		}
-		return OP::Operation(left, right);
-	}
-};
-
 struct InitialNestedLoopJoin {
 	template <class T, class OP>
 	static idx_t Operation(Vector &left, Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos, idx_t &rpos,
 	                       SelectionVector &lvector, SelectionVector &rvector, idx_t current_match_count) {
+		using MATCH_OP = ComparisonOperationWrapper<OP>;
+
 		// initialize phase of nested loop join
 		// fill lvector and rvector with matches from the base vectors
 		UnifiedVectorFormat left_data, right_data;
 		left.ToUnifiedFormat(left_size, left_data);
 		right.ToUnifiedFormat(right_size, right_data);
 
-		auto ldata = (T *)left_data.data;
-		auto rdata = (T *)right_data.data;
+		auto ldata = UnifiedVectorFormat::GetData<T>(left_data);
+		auto rdata = UnifiedVectorFormat::GetData<T>(right_data);
 		idx_t result_count = 0;
 		for (; rpos < right_size; rpos++) {
 			idx_t right_position = right_data.sel->get_index(rpos);
@@ -37,7 +28,7 @@ struct InitialNestedLoopJoin {
 				}
 				idx_t left_position = left_data.sel->get_index(lpos);
 				bool left_is_valid = left_data.validity.RowIsValid(left_position);
-				if (OP::Operation(ldata[left_position], rdata[right_position], !left_is_valid, !right_is_valid)) {
+				if (MATCH_OP::Operation(ldata[left_position], rdata[right_position], !left_is_valid, !right_is_valid)) {
 					// emit tuple
 					lvector.set_index(result_count, lpos);
 					rvector.set_index(result_count, rpos);
@@ -54,6 +45,8 @@ struct RefineNestedLoopJoin {
 	template <class T, class OP>
 	static idx_t Operation(Vector &left, Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos, idx_t &rpos,
 	                       SelectionVector &lvector, SelectionVector &rvector, idx_t current_match_count) {
+		using MATCH_OP = ComparisonOperationWrapper<OP>;
+
 		UnifiedVectorFormat left_data, right_data;
 		left.ToUnifiedFormat(left_size, left_data);
 		right.ToUnifiedFormat(right_size, right_data);
@@ -62,8 +55,8 @@ struct RefineNestedLoopJoin {
 		// refine lvector and rvector based on matches of subsequent conditions (in case there are multiple conditions
 		// in the join)
 		D_ASSERT(current_match_count > 0);
-		auto ldata = (T *)left_data.data;
-		auto rdata = (T *)right_data.data;
+		auto ldata = UnifiedVectorFormat::GetData<T>(left_data);
+		auto rdata = UnifiedVectorFormat::GetData<T>(right_data);
 		idx_t result_count = 0;
 		for (idx_t i = 0; i < current_match_count; i++) {
 			auto lidx = lvector.get_index(i);
@@ -72,7 +65,7 @@ struct RefineNestedLoopJoin {
 			auto right_idx = right_data.sel->get_index(ridx);
 			bool left_is_valid = left_data.validity.RowIsValid(left_idx);
 			bool right_is_valid = right_data.validity.RowIsValid(right_idx);
-			if (OP::Operation(ldata[left_idx], rdata[right_idx], !left_is_valid, !right_is_valid)) {
+			if (MATCH_OP::Operation(ldata[left_idx], rdata[right_idx], !left_is_valid, !right_is_valid)) {
 				lvector.set_index(result_count, lidx);
 				rvector.set_index(result_count, ridx);
 				result_count++;
@@ -139,26 +132,26 @@ idx_t NestedLoopJoinComparisonSwitch(Vector &left, Vector &right, idx_t left_siz
 	D_ASSERT(left.GetType() == right.GetType());
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		return NestedLoopJoinTypeSwitch<NLTYPE, ComparisonOperationWrapper<duckdb::Equals>>(
-		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
+		return NestedLoopJoinTypeSwitch<NLTYPE, Equals>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                rvector, current_match_count);
 	case ExpressionType::COMPARE_NOTEQUAL:
-		return NestedLoopJoinTypeSwitch<NLTYPE, ComparisonOperationWrapper<duckdb::NotEquals>>(
-		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
+		return NestedLoopJoinTypeSwitch<NLTYPE, NotEquals>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                   rvector, current_match_count);
 	case ExpressionType::COMPARE_LESSTHAN:
-		return NestedLoopJoinTypeSwitch<NLTYPE, ComparisonOperationWrapper<duckdb::LessThan>>(
-		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
+		return NestedLoopJoinTypeSwitch<NLTYPE, LessThan>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                  rvector, current_match_count);
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return NestedLoopJoinTypeSwitch<NLTYPE, ComparisonOperationWrapper<duckdb::GreaterThan>>(
-		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
+		return NestedLoopJoinTypeSwitch<NLTYPE, GreaterThan>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                     rvector, current_match_count);
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return NestedLoopJoinTypeSwitch<NLTYPE, ComparisonOperationWrapper<duckdb::LessThanEquals>>(
-		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
+		return NestedLoopJoinTypeSwitch<NLTYPE, LessThanEquals>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                        rvector, current_match_count);
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return NestedLoopJoinTypeSwitch<NLTYPE, ComparisonOperationWrapper<duckdb::GreaterThanEquals>>(
-		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
+		return NestedLoopJoinTypeSwitch<NLTYPE, GreaterThanEquals>(left, right, left_size, right_size, lpos, rpos,
+		                                                           lvector, rvector, current_match_count);
 	case ExpressionType::COMPARE_DISTINCT_FROM:
-		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::DistinctFrom>(left, right, left_size, right_size, lpos, rpos,
-		                                                              lvector, rvector, current_match_count);
+		return NestedLoopJoinTypeSwitch<NLTYPE, DistinctFrom>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                      rvector, current_match_count);
 	default:
 		throw NotImplementedException("Unimplemented comparison type for join!");
 	}

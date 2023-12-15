@@ -28,7 +28,7 @@ double RandomEngine::NextRandom(double min, double max) {
 }
 
 double RandomEngine::NextRandom() {
-	return random_state->pcg() / double(std::numeric_limits<uint32_t>::max());
+	return std::ldexp(random_state->pcg(), -32);
 }
 uint32_t RandomEngine::NextRandomInteger() {
 	return random_state->pcg();

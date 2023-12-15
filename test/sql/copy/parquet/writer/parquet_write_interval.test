@@ -2,6 +2,9 @@
 # description: Parquet interval round trip
 # group: [writer]
 
+statement ok
+SET default_null_order='nulls_first';
+
 require parquet
 
 statement ok
@@ -32,3 +35,4 @@ NULL
 
 statement error
 COPY (SELECT -interval '1 day') TO '__TEST_DIR__/intervals.parquet'
+----

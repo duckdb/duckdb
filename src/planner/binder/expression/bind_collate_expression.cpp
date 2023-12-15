@@ -6,21 +6,23 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth) {
 	// first try to bind the child of the cast expression
-	string error = Bind(&expr.child, depth);
+	string error = Bind(expr.child, depth);
 	if (!error.empty()) {
 		return BindResult(error);
 	}
-	auto &child = (BoundExpression &)*expr.child;
-	if (child.expr->HasParameter()) {
+	auto &child = BoundExpression::GetExpression(*expr.child);
+	if (child->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	if (child.expr->return_type.id() != LogicalTypeId::VARCHAR) {
+	if (child->return_type.id() != LogicalTypeId::VARCHAR) {
 		throw BinderException("collations are only supported for type varchar");
 	}
 	// Validate the collation, but don't use it
-	PushCollation(context, child.expr->Copy(), expr.collation, false);
-	child.expr->return_type = LogicalType::VARCHAR_COLLATION(expr.collation);
-	return BindResult(std::move(child.expr));
+	auto child_copy = child->Copy();
+	auto collation_type = LogicalType::VARCHAR_COLLATION(expr.collation);
+	PushCollation(context, child_copy, collation_type, false);
+	child->return_type = collation_type;
+	return BindResult(std::move(child));
 }
 
 } // namespace duckdb

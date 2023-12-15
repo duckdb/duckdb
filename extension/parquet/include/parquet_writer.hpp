@@ -15,22 +15,60 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/function/copy_function.hpp"
 #endif
 
-#include "parquet_types.h"
 #include "column_writer.hpp"
+#include "parquet_types.h"
 #include "thrift/protocol/TCompactProtocol.h"
 
 namespace duckdb {
 class FileSystem;
 class FileOpener;
+class ParquetEncryptionConfig;
+
+class Serializer;
+class Deserializer;
+
+struct PreparedRowGroup {
+	duckdb_parquet::format::RowGroup row_group;
+	vector<unique_ptr<ColumnWriterState>> states;
+	vector<shared_ptr<StringHeap>> heaps;
+};
+
+struct FieldID;
+struct ChildFieldIDs {
+	ChildFieldIDs();
+	ChildFieldIDs Copy() const;
+	unique_ptr<case_insensitive_map_t<FieldID>> ids;
+
+	void Serialize(Serializer &serializer) const;
+	static ChildFieldIDs Deserialize(Deserializer &source);
+};
+
+struct FieldID {
+	static constexpr const auto DUCKDB_FIELD_ID = "__duckdb_field_id";
+	FieldID();
+	explicit FieldID(int32_t field_id);
+	FieldID Copy() const;
+	bool set;
+	int32_t field_id;
+	ChildFieldIDs child_field_ids;
+
+	void Serialize(Serializer &serializer) const;
+	static FieldID Deserialize(Deserializer &source);
+};
 
 class ParquetWriter {
 public:
-	ParquetWriter(FileSystem &fs, string file_name, FileOpener *file_opener, vector<LogicalType> types,
-	              vector<string> names, duckdb_parquet::format::CompressionCodec::type codec);
+	ParquetWriter(FileSystem &fs, string file_name, vector<LogicalType> types, vector<string> names,
+	              duckdb_parquet::format::CompressionCodec::type codec, ChildFieldIDs field_ids,
+	              const vector<pair<string, string>> &kv_metadata,
+	              shared_ptr<ParquetEncryptionConfig> encryption_config);
 
 public:
+	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);
+	void FlushRowGroup(PreparedRowGroup &row_group);
 	void Flush(ColumnDataCollection &buffer);
 	void Finalize();
 
@@ -50,18 +88,27 @@ public:
 		return *writer;
 	}
 
+	static CopyTypeSupport TypeIsSupported(const LogicalType &type);
+
+	uint32_t Write(const duckdb_apache::thrift::TBase &object);
+	uint32_t WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size);
+
 private:
+	static CopyTypeSupport DuckDBTypeToParquetTypeInternal(const LogicalType &duckdb_type,
+	                                                       duckdb_parquet::format::Type::type &type);
 	string file_name;
 	vector<LogicalType> sql_types;
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec;
+	ChildFieldIDs field_ids;
+	shared_ptr<ParquetEncryptionConfig> encryption_config;
 
-	duckdb::unique_ptr<BufferedFileWriter> writer;
+	unique_ptr<BufferedFileWriter> writer;
 	shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
 	duckdb_parquet::format::FileMetaData file_meta_data;
 	std::mutex lock;
 
-	vector<duckdb::unique_ptr<ColumnWriter>> column_writers;
+	vector<unique_ptr<ColumnWriter>> column_writers;
 };
 
 } // namespace duckdb

@@ -10,6 +10,7 @@ namespace duckdb {
 
 ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder)
     : binder(binder), context(context) {
+	InitializeStackCheck();
 	if (replace_binder) {
 		stored_binder = &binder.GetActiveBinder();
 		binder.SetActiveBinder(*this);
@@ -28,8 +29,27 @@ ExpressionBinder::~ExpressionBinder() {
 	}
 }
 
-BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression) {
-	auto &expr_ref = **expr;
+void ExpressionBinder::InitializeStackCheck() {
+	if (binder.HasActiveBinder()) {
+		stack_depth = binder.GetActiveBinder().stack_depth;
+	} else {
+		stack_depth = 0;
+	}
+}
+
+StackChecker<ExpressionBinder> ExpressionBinder::StackCheck(const ParsedExpression &expr, idx_t extra_stack) {
+	D_ASSERT(stack_depth != DConstants::INVALID_INDEX);
+	if (stack_depth + extra_stack >= MAXIMUM_STACK_DEPTH) {
+		throw BinderException("Maximum recursion depth exceeded (Maximum: %llu) while binding \"%s\"",
+		                      MAXIMUM_STACK_DEPTH, expr.ToString());
+	}
+	return StackChecker<ExpressionBinder>(*this, extra_stack);
+}
+
+BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
+	auto stack_checker = StackCheck(*expr);
+
+	auto &expr_ref = *expr;
 	switch (expr_ref.expression_class) {
 	case ExpressionClass::BETWEEN:
 		return BindExpression(expr_ref.Cast<BetweenExpression>(), depth);
@@ -41,6 +61,8 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, 
 		return BindExpression(expr_ref.Cast<CollateExpression>(), depth);
 	case ExpressionClass::COLUMN_REF:
 		return BindExpression(expr_ref.Cast<ColumnRefExpression>(), depth);
+	case ExpressionClass::LAMBDA_REF:
+		return BindExpression(expr_ref.Cast<LambdaRefExpression>(), depth);
 	case ExpressionClass::COMPARISON:
 		return BindExpression(expr_ref.Cast<ComparisonExpression>(), depth);
 	case ExpressionClass::CONJUNCTION:
@@ -57,15 +79,16 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, 
 		return BindExpression(function, depth, expr);
 	}
 	case ExpressionClass::LAMBDA:
-		return BindExpression(expr_ref.Cast<LambdaExpression>(), depth, false, LogicalTypeId::INVALID);
+		return BindExpression(expr_ref.Cast<LambdaExpression>(), depth, LogicalTypeId::INVALID, nullptr);
 	case ExpressionClass::OPERATOR:
 		return BindExpression(expr_ref.Cast<OperatorExpression>(), depth);
 	case ExpressionClass::SUBQUERY:
 		return BindExpression(expr_ref.Cast<SubqueryExpression>(), depth);
 	case ExpressionClass::PARAMETER:
 		return BindExpression(expr_ref.Cast<ParameterExpression>(), depth);
-	case ExpressionClass::POSITIONAL_REFERENCE:
-		return BindExpression(expr_ref.Cast<PositionalReferenceExpression>(), depth);
+	case ExpressionClass::POSITIONAL_REFERENCE: {
+		return BindPositionalReference(expr, depth, root_expression);
+	}
 	case ExpressionClass::STAR:
 		return BindResult(binder.FormatError(expr_ref, "STAR expression is not supported here"));
 	default:
@@ -73,32 +96,32 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, 
 	}
 }
 
-bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr) {
+BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, string error_message) {
 	// try to bind in one of the outer queries, if the binding error occurred in a subquery
 	auto &active_binders = binder.GetActiveBinders();
 	// make a copy of the set of binders, so we can restore it later
 	auto binders = active_binders;
+	auto bind_error = std::move(error_message);
+	// we already failed with the current binder
 	active_binders.pop_back();
 	idx_t depth = 1;
-	bool success = false;
 	while (!active_binders.empty()) {
 		auto &next_binder = active_binders.back().get();
 		ExpressionBinder::QualifyColumnNames(next_binder.binder, expr);
-		auto bind_result = next_binder.Bind(&expr, depth);
-		if (bind_result.empty()) {
-			success = true;
+		bind_error = next_binder.Bind(expr, depth);
+		if (bind_error.empty()) {
 			break;
 		}
 		depth++;
 		active_binders.pop_back();
 	}
 	active_binders = binders;
-	return success;
+	return BindResult(bind_error);
 }
 
 void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error) {
 	if (expr) {
-		string bind_error = Bind(&expr, depth);
+		string bind_error = Bind(expr, depth);
 		if (error.empty()) {
 			error = bind_error;
 		}
@@ -142,6 +165,8 @@ bool ExpressionBinder::ContainsType(const LogicalType &type, LogicalTypeId targe
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
 		return ContainsType(ListType::GetChildType(type), target);
+	case LogicalTypeId::ARRAY:
+		return ContainsType(ArrayType::GetChildType(type), target);
 	default:
 		return false;
 	}
@@ -171,6 +196,9 @@ LogicalType ExpressionBinder::ExchangeType(const LogicalType &type, LogicalTypeI
 		return LogicalType::LIST(ExchangeType(ListType::GetChildType(type), target, new_type));
 	case LogicalTypeId::MAP:
 		return LogicalType::MAP(ExchangeType(ListType::GetChildType(type), target, new_type));
+	case LogicalTypeId::ARRAY:
+		return LogicalType::ARRAY(ExchangeType(ArrayType::GetChildType(type), target, new_type),
+		                          ArrayType::GetSize(type));
 	default:
 		return type;
 	}
@@ -184,15 +212,18 @@ LogicalType ExpressionBinder::ExchangeNullType(const LogicalType &type) {
 	return ExchangeType(type, LogicalTypeId::SQLNULL, LogicalType::INTEGER);
 }
 
-unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type,
+unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, optional_ptr<LogicalType> result_type,
                                               bool root_expression) {
 	// bind the main expression
-	auto error_msg = Bind(&expr, 0, root_expression);
+	auto error_msg = Bind(expr, 0, root_expression);
 	if (!error_msg.empty()) {
-		// failed to bind: try to bind correlated columns in the expression (if any)
-		bool success = BindCorrelatedColumns(expr);
-		if (!success) {
-			throw BinderException(error_msg);
+		// Try binding the correlated column. If binding the correlated column
+		// has error messages, those should be propagated up. So for the test case
+		// having subquery failed to bind:14 the real error message should be something like
+		// aggregate with constant input must be bound to a root node.
+		auto result = BindCorrelatedColumns(expr, error_msg);
+		if (result.HasError()) {
+			throw BinderException(result.error);
 		}
 		auto &bound_expr = expr->Cast<BoundExpression>();
 		ExtractCorrelatedExpressions(binder, *bound_expr.expr);
@@ -207,8 +238,8 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 			// SQL NULL type is only used internally in the binder
 			// cast to INTEGER if we encounter it outside of the binder
 			if (ContainsNullType(result->return_type)) {
-				auto result_type = ExchangeNullType(result->return_type);
-				result = BoundCastExpression::AddCastToType(context, std::move(result), result_type);
+				auto exchanged_type = ExchangeNullType(result->return_type);
+				result = BoundCastExpression::AddCastToType(context, std::move(result), exchanged_type);
 			}
 		}
 		if (result->return_type.id() == LogicalTypeId::UNKNOWN) {
@@ -221,9 +252,9 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	return result;
 }
 
-string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression) {
+string ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
 	// bind the node, but only if it has not been bound yet
-	auto &expression = **expr;
+	auto &expression = *expr;
 	auto alias = expression.alias;
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
 		// already bound, don't bind it again
@@ -235,8 +266,8 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, b
 		return result.error;
 	}
 	// successfully bound: replace the node with a BoundExpression
-	*expr = make_uniq<BoundExpression>(std::move(result.expression));
-	auto &be = (*expr)->Cast<BoundExpression>();
+	expr = make_uniq<BoundExpression>(std::move(result.expression));
+	auto &be = expr->Cast<BoundExpression>();
 	be.alias = alias;
 	if (!alias.empty()) {
 		be.expr->alias = alias;

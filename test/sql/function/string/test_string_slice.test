@@ -20,18 +20,23 @@ INSERT INTO nulltable VALUES (NULL)
 
 statement error
 SELECT NULL::VARCHAR[off:length+off] FROM strings
+----
 
 statement error
 SELECT NULL::VARCHAR[NULL:length+NULL] FROM strings
+----
 
 statement error
 SELECT NULL::VARCHAR[off:NULL+off] FROM strings
+----
 
 statement error
 SELECT NULL::VARCHAR[off:NULL+off] FROM strings
+----
 
 statement error
 SELECT NULL::VARCHAR[NULL:NULL+NULL] FROM strings
+----
 
 # test zero length
 query II
@@ -116,26 +121,26 @@ NULL
 query T
 SELECT 'hello'[NULL:length+NULL] FROM strings
 ----
-hello
-hello
-hello
-hello
+NULL
+NULL
+NULL
+NULL
 
 query T
 SELECT 'hello'[off:NULL+off] FROM strings
 ----
-hello
-hello
-hello
-hello
+NULL
+NULL
+NULL
+NULL
 
 query T
 SELECT 'hello'[off+1:NULL+off] FROM strings
 ----
-hello
-ello
-hello
-ello
+NULL
+NULL
+NULL
+NULL
 
 query T
 SELECT n[NULL:length+NULL] FROM strings, nulltable
@@ -148,10 +153,10 @@ NULL
 query T
 SELECT 'hello'[NULL:NULL+NULL] FROM strings
 ----
-hello
-hello
-hello
-hello
+NULL
+NULL
+NULL
+NULL
 
 query T
 SELECT n[off:NULL+off] FROM strings, nulltable
@@ -175,7 +180,7 @@ SELECT s[-2:] FROM strings
 ----
 lo
 ld
-NULL
+b
 NULL
 
 # length 1
@@ -191,9 +196,9 @@ NULL
 query T
 SELECT s[-4:-2] FROM strings
 ----
-el
-or
-NULL
+ell
+orl
+(empty)
 NULL
 
 # length 0
@@ -234,15 +239,15 @@ NULL
 query T
 SELECT s[(-2147483646-1):-1] FROM strings
 ----
-NULL
-NULL
-NULL
+hello
+world
+b
 NULL
 
 query T
 SELECT s[(-2147483646-1):-2147483647] FROM strings
 ----
-NULL
-NULL
-NULL
+(empty)
+(empty)
+(empty)
 NULL

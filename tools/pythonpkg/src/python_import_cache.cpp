@@ -1,5 +1,7 @@
 #include "duckdb_python/import_cache/python_import_cache.hpp"
 #include "duckdb_python/import_cache/python_import_cache_item.hpp"
+#include "duckdb/common/stack.hpp"
+#include "duckdb_python/import_cache/importer.hpp"
 
 namespace duckdb {
 
@@ -7,8 +9,15 @@ namespace duckdb {
 // PythonImportCacheItem (SUPER CLASS)
 //===--------------------------------------------------------------------===//
 
-py::handle PythonImportCacheItem::operator()(void) const {
-	return object;
+py::handle PythonImportCacheItem::operator()(bool load) {
+	stack<reference<PythonImportCacheItem>> hierarchy;
+
+	optional_ptr<PythonImportCacheItem> item = this;
+	while (item) {
+		hierarchy.push(*item);
+		item = item->parent;
+	}
+	return PythonImporter::Import(hierarchy, load);
 }
 
 bool PythonImportCacheItem::LoadSucceeded() const {
@@ -16,45 +25,50 @@ bool PythonImportCacheItem::LoadSucceeded() const {
 }
 
 bool PythonImportCacheItem::IsLoaded() const {
-	auto type = (*this)();
-	return type.ptr() != nullptr;
+	return object.ptr() != nullptr;
 }
 
-bool PythonImportCacheItem::IsInstance(py::handle object) const {
-	auto type = (*this)();
-	if (!IsLoaded()) {
-		// Type was not imported
-		return false;
-	}
-	return py::isinstance(object, type);
-}
-
-PyObject *PythonImportCacheItem::AddCache(PythonImportCache &cache, py::object object) {
+py::handle PythonImportCacheItem::AddCache(PythonImportCache &cache, py::object object) {
 	return cache.AddCache(std::move(object));
 }
 
-void PythonImportCacheItem::LoadModule(const string &name, PythonImportCache &cache) {
+void PythonImportCacheItem::LoadModule(PythonImportCache &cache) {
 	try {
 		py::gil_assert();
 		object = AddCache(cache, std::move(py::module::import(name.c_str())));
 		load_succeeded = true;
 	} catch (py::error_already_set &e) {
 		if (IsRequired()) {
-			PyErr_PrintEx(1);
 			throw InvalidInputException(
 			    "Required module '%s' failed to import, due to the following Python exception:\n%s", name, e.what());
 		}
+		object = nullptr;
 		return;
 	}
-	LoadSubtypes(cache);
 }
 
-void PythonImportCacheItem::LoadAttribute(const string &name, PythonImportCache &cache, PythonImportCacheItem &source) {
-	auto source_object = source();
-	if (py::hasattr(source_object, name.c_str())) {
-		object = AddCache(cache, std::move(source_object.attr(name.c_str())));
+void PythonImportCacheItem::LoadAttribute(PythonImportCache &cache, py::handle source) {
+	if (py::hasattr(source, name.c_str())) {
+		object = AddCache(cache, std::move(source.attr(name.c_str())));
+	} else {
+		object = nullptr;
 	}
-	LoadSubtypes(cache);
+}
+
+py::handle PythonImportCacheItem::Load(PythonImportCache &cache, py::handle source, bool load) {
+	if (IsLoaded()) {
+		return object;
+	}
+	if (!load) {
+		// Don't load the item if it's not already loaded
+		return object;
+	}
+	if (is_module) {
+		LoadModule(cache);
+	} else {
+		LoadAttribute(cache, source);
+	}
+	return object;
 }
 
 //===--------------------------------------------------------------------===//
@@ -66,7 +80,7 @@ PythonImportCache::~PythonImportCache() {
 	owned_objects.clear();
 }
 
-PyObject *PythonImportCache::AddCache(py::object item) {
+py::handle PythonImportCache::AddCache(py::object item) {
 	auto object_ptr = item.ptr();
 	owned_objects.push_back(std::move(item));
 	return object_ptr;

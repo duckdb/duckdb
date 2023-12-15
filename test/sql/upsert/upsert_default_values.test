@@ -10,10 +10,11 @@ create or replace table tbl (
 	b integer
 );
 
-statement error
+statement ok
 insert into tbl DEFAULT VALUES;
-----
-Parser Error: DEFAULT VALUES clause is not supported!
 
-# We only bind the on conflict clause when there is a SelectStmt child, so when support is added for DEFAULT VALUES
-# This might also need to be changed
+query II
+FROM tbl
+----
+5	NULL
+

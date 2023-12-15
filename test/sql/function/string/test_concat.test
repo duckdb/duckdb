@@ -2,6 +2,9 @@
 # description: Test concat function
 # group: [string]
 
+statement ok
+SET default_null_order='nulls_first';
+
 # Test Case disclaimer
 
 # Assertions built using the Domain Testing technique
@@ -51,6 +54,7 @@ NULL
 # concat requires at least one argument
 statement error
 SELECT CONCAT()
+----
 
 # concat with one argument works
 query T

@@ -1,17 +1,23 @@
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parser.hpp"
 
 #include "duckdb_python/python_objects.hpp"
-#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/expression/pyexpression.hpp"
 #include "duckdb_python/pyresult.hpp"
+#include "duckdb_python/pybind11/exceptions.hpp"
 #include "duckdb_python/typing.hpp"
-#include "duckdb_python/exceptions.hpp"
+#include "duckdb_python/functional.hpp"
 #include "duckdb_python/connection_wrapper.hpp"
-#include "duckdb_python/conversions/pyconnection_default.hpp"
+#include "duckdb_python/pybind11/conversions/pyconnection_default.hpp"
+#include "duckdb/common/box_renderer.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
+#include "duckdb_python/pybind11/conversions/python_udf_type_enum.hpp"
 
 #include "duckdb.hpp"
 
@@ -68,6 +74,15 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	      py::arg("connection") = py::none())
 	    .def("duplicate", &PyConnectionWrapper::Cursor, "Create a duplicate of the current connection",
 	         py::arg("connection") = py::none());
+	m.def("create_function", &PyConnectionWrapper::RegisterScalarUDF,
+	      "Create a DuckDB function out of the passing in python function so it can be used in queries",
+	      py::arg("name"), py::arg("function"), py::arg("return_type") = py::none(), py::arg("parameters") = py::none(),
+	      py::kw_only(), py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = 0,
+	      py::arg("exception_handling") = 0, py::arg("side_effects") = false, py::arg("connection") = py::none());
+
+	m.def("remove_function", &PyConnectionWrapper::UnregisterUDF, "Remove a previously created function",
+	      py::arg("name"), py::arg("connection") = py::none());
+
 	DefineMethod({"sqltype", "dtype", "type"}, m, &PyConnectionWrapper::Type, "Create a type object from 'type_str'",
 	             py::arg("type_str"), py::arg("connection") = py::none());
 	DefineMethod({"struct_type", "row_type"}, m, &PyConnectionWrapper::StructType,
@@ -94,6 +109,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
 	         py::arg("query"), py::arg("parameters") = py::none(), py::arg("connection") = py::none())
 	    .def("close", &PyConnectionWrapper::Close, "Close the connection", py::arg("connection") = py::none())
+	    .def("interrupt", &PyConnectionWrapper::Interrupt, "Interrupt pending operations",
+	         py::arg("connection") = py::none())
 	    .def("fetchone", &PyConnectionWrapper::FetchOne, "Fetch a single row from a result following execute",
 	         py::arg("connection") = py::none())
 	    .def("fetchmany", &PyConnectionWrapper::FetchMany, "Fetch the next set of rows from a result following execute",
@@ -131,16 +148,11 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("connection") = py::none())
 	    .def("read_json", &PyConnectionWrapper::ReadJSON, "Create a relation object from the JSON file in 'name'",
 	         py::arg("name"), py::arg("connection") = py::none(), py::arg("columns") = py::none(),
-	         py::arg("sample_size") = py::none(), py::arg("maximum_depth") = py::none());
+	         py::arg("sample_size") = py::none(), py::arg("maximum_depth") = py::none(),
+	         py::arg("records") = py::none(), py::arg("format") = py::none());
 
 	m.def("values", &PyConnectionWrapper::Values, "Create a relation object from the passed values", py::arg("values"),
 	      py::arg("connection") = py::none());
-	m.def("from_query", &PyConnectionWrapper::FromQuery, "Create a relation object from the given SQL query",
-	      py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
-	m.def("query", &PyConnectionWrapper::RunQuery,
-	      "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise "
-	      "run the query as-is.",
-	      py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
 	m.def("from_substrait", &PyConnectionWrapper::FromSubstrait, "Creates a query object from the substrait plan",
 	      py::arg("proto"), py::arg("connection") = py::none());
 	m.def("get_substrait", &PyConnectionWrapper::GetSubstrait, "Serialize a query object to protobuf", py::arg("query"),
@@ -189,10 +201,12 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(), py::arg("escapechar") = py::none(),
 	    py::arg("encoding") = py::none(), py::arg("parallel") = py::none(), py::arg("date_format") = py::none(),
 	    py::arg("timestamp_format") = py::none(), py::arg("sample_size") = py::none(),
-	    py::arg("all_varchar") = py::none(), py::arg("normalize_names") = py::none(), py::arg("filename") = py::none());
+	    py::arg("all_varchar") = py::none(), py::arg("normalize_names") = py::none(), py::arg("filename") = py::none(),
+	    py::arg("null_padding") = py::none(), py::arg("names") = py::none());
 
 	m.def("append", &PyConnectionWrapper::Append, "Append the passed DataFrame to the named table",
-	      py::arg("table_name"), py::arg("df"), py::arg("connection") = py::none())
+	      py::arg("table_name"), py::arg("df"), py::kw_only(), py::arg("by_name") = false,
+	      py::arg("connection") = py::none())
 	    .def("register", &PyConnectionWrapper::RegisterPythonObject,
 	         "Register the passed Python Object value for querying with a view", py::arg("view_name"),
 	         py::arg("python_object"), py::arg("connection") = py::none())
@@ -206,14 +220,12 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("values"), py::arg("connection") = py::none())
 	    .def("table_function", &PyConnectionWrapper::TableFunction,
 	         "Create a relation object from the name'd table function with given parameters", py::arg("name"),
-	         py::arg("parameters") = py::none(), py::arg("connection") = py::none())
-	    .def("from_query", &PyConnectionWrapper::FromQuery, "Create a relation object from the given SQL query",
-	         py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
+	         py::arg("parameters") = py::none(), py::arg("connection") = py::none());
 
-	DefineMethod({"query", "sql"}, m, &PyConnectionWrapper::RunQuery,
+	DefineMethod({"sql", "query", "from_query"}, m, &PyConnectionWrapper::RunQuery,
 	             "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	             "otherwise run the query as-is.",
-	             py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
+	             py::arg("query"), py::arg("alias") = "", py::arg("connection") = py::none());
 
 	DefineMethod({"from_parquet", "read_parquet"}, m, &PyConnectionWrapper::FromParquet,
 	             "Create a relation object from the Parquet files in file_glob", py::arg("file_glob"),
@@ -238,6 +250,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("query"), py::arg("connection") = py::none())
 	    .def("description", &PyConnectionWrapper::GetDescription, "Get result set attributes, mainly column names",
 	         py::arg("connection") = py::none())
+	    .def("rowcount", &PyConnectionWrapper::GetRowcount, "Get result set row count",
+	         py::arg("connection") = py::none())
 	    .def("install_extension", &PyConnectionWrapper::InstallExtension, "Install an extension by name",
 	         py::arg("extension"), py::kw_only(), py::arg("force_install") = false, py::arg("connection") = py::none())
 	    .def("load_extension", &PyConnectionWrapper::LoadExtension, "Load an installed extension", py::arg("extension"),
@@ -253,32 +267,44 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("connection") = py::none());
 }
 
-PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
+PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
+	py::enum_<duckdb::ExplainType>(m, "ExplainType")
+	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)
+	    .value("ANALYZE", duckdb::ExplainType::EXPLAIN_ANALYZE)
+	    .export_values();
+
+	py::enum_<duckdb::PythonExceptionHandling>(m, "PythonExceptionHandling")
+	    .value("DEFAULT", duckdb::PythonExceptionHandling::FORWARD_ERROR)
+	    .value("RETURN_NULL", duckdb::PythonExceptionHandling::RETURN_NULL)
+	    .export_values();
+
+	py::enum_<duckdb::RenderMode>(m, "RenderMode")
+	    .value("ROWS", duckdb::RenderMode::ROWS)
+	    .value("COLUMNS", duckdb::RenderMode::COLUMNS)
+	    .export_values();
+
+	DuckDBPyTyping::Initialize(m);
+	DuckDBPyFunctional::Initialize(m);
+	DuckDBPyExpression::Initialize(m);
 	DuckDBPyRelation::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
-	DuckDBPyTyping::Initialize(m);
 	PythonObject::Initialize();
-
-	InitializeConnectionMethods(m);
 
 	py::options pybind_opts;
 
 	m.doc() = "DuckDB is an embeddable SQL OLAP Database Management System";
 	m.attr("__package__") = "duckdb";
-	m.attr("__version__") = DuckDB::LibraryVersion();
+	m.attr("__version__") = std::string(DuckDB::LibraryVersion()).substr(1);
 	m.attr("__standard_vector_size__") = DuckDB::StandardVectorSize();
 	m.attr("__git_revision__") = DuckDB::SourceID();
 	m.attr("__interactive__") = DuckDBPyConnection::DetectAndGetEnvironment();
 	m.attr("__jupyter__") = DuckDBPyConnection::IsJupyter();
 	m.attr("default_connection") = DuckDBPyConnection::DefaultConnection();
-	m.attr("apilevel") = "1.0";
+	m.attr("apilevel") = "2.0";
 	m.attr("threadsafety") = 1;
 	m.attr("paramstyle") = "qmark";
 
-	py::enum_<duckdb::ExplainType>(m, "ExplainType")
-	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)
-	    .value("ANALYZE", duckdb::ExplainType::EXPLAIN_ANALYZE)
-	    .export_values();
+	InitializeConnectionMethods(m);
 
 	RegisterExceptions(m);
 

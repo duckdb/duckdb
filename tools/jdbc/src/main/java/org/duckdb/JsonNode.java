@@ -34,8 +34,10 @@ public class JsonNode {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof JsonNode)) return false;
+        if (this == o)
+            return true;
+        if (!(o instanceof JsonNode))
+            return false;
         JsonNode jsonNode = (JsonNode) o;
         return Objects.equals(source, jsonNode.source);
     }

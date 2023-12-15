@@ -31,16 +31,17 @@ class RowGroupCollection;
 class RowGroupWriter;
 class UpdateSegment;
 class TableStatistics;
-class TableStorageInfo;
+struct ColumnSegmentInfo;
 class Vector;
 struct ColumnCheckpointState;
 struct RowGroupPointer;
 struct TransactionData;
-struct VersionNode;
 class CollectionScanState;
 class TableFilterSet;
 struct ColumnFetchState;
 struct RowGroupAppendState;
+class MetadataManager;
+class RowVersionManager;
 
 struct RowGroupWriteData {
 	vector<unique_ptr<ColumnCheckpointState>> states;
@@ -50,31 +51,25 @@ struct RowGroupWriteData {
 class RowGroup : public SegmentBase<RowGroup> {
 public:
 	friend class ColumnData;
-	friend class VersionDeleteState;
-
-public:
-	static constexpr const idx_t ROW_GROUP_SIZE = STANDARD_ROW_GROUPS_SIZE;
-	static constexpr const idx_t ROW_GROUP_VECTOR_COUNT = ROW_GROUP_SIZE / STANDARD_VECTOR_SIZE;
 
 public:
 	RowGroup(RowGroupCollection &collection, idx_t start, idx_t count);
 	RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer);
-	RowGroup(RowGroup &row_group, RowGroupCollection &collection, idx_t start);
 	~RowGroup();
 
 private:
 	//! The RowGroupCollection this row-group is a part of
-	RowGroupCollection &collection;
+	reference<RowGroupCollection> collection;
 	//! The version info of the row_group (inserted and deleted tuple info)
-	shared_ptr<VersionNode> version_info;
+	shared_ptr<RowVersionManager> version_info;
 	//! The column data of the row_group
 	vector<shared_ptr<ColumnData>> columns;
 
 public:
+	void MoveToCollection(RowGroupCollection &collection, idx_t new_start);
 	RowGroupCollection &GetCollection() {
-		return collection;
+		return collection.get();
 	}
-	DatabaseInstance &GetDatabase();
 	BlockManager &GetBlockManager();
 	DataTableInfo &GetTableInfo();
 
@@ -82,7 +77,7 @@ public:
 	                               ExpressionExecutor &executor, CollectionScanState &scan_state,
 	                               DataChunk &scan_chunk);
 	unique_ptr<RowGroup> AddColumn(RowGroupCollection &collection, ColumnDefinition &new_column,
-	                               ExpressionExecutor &executor, Expression *default_value, Vector &intermediate);
+	                               ExpressionExecutor &executor, Expression &default_value, Vector &intermediate);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
 	void CommitDrop();
@@ -123,9 +118,10 @@ public:
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *row_ids, idx_t count);
 
 	RowGroupWriteData WriteToDisk(PartialBlockManager &manager, const vector<CompressionType> &compression_types);
-	RowGroupPointer Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats);
-	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
-	static RowGroupPointer Deserialize(Deserializer &source, const vector<LogicalType> &columns);
+	//! Returns the number of committed rows (count - committed deletes)
+	idx_t GetCommittedRowCount();
+	RowGroupWriteData WriteToDisk(RowGroupWriter &writer);
+	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats);
 
 	void InitializeAppend(RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
@@ -141,35 +137,41 @@ public:
 	void MergeIntoStatistics(idx_t column_idx, BaseStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
 
-	void GetStorageInfo(idx_t row_group_index, TableStorageInfo &result);
+	void GetColumnSegmentInfo(idx_t row_group_index, vector<ColumnSegmentInfo> &result);
 
 	void Verify();
 
 	void NextVector(CollectionScanState &state);
 
+	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
+	RowVersionManager &GetOrCreateVersionInfo();
+
+	// Serialization
+	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
+	static RowGroupPointer Deserialize(Deserializer &deserializer);
+
 private:
-	ChunkInfo *GetChunkInfo(idx_t vector_idx);
-	ColumnData &GetColumn(idx_t c);
+	shared_ptr<RowVersionManager> &GetVersionInfo();
+	shared_ptr<RowVersionManager> &GetOrCreateVersionInfoPtr();
+
+	ColumnData &GetColumn(storage_t c);
 	idx_t GetColumnCount() const;
 	vector<shared_ptr<ColumnData>> &GetColumns();
 
 	template <TableScanType TYPE>
 	void TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
 
-	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);
-	static shared_ptr<VersionNode> DeserializeDeletes(Deserializer &source);
+	vector<MetaBlockPointer> CheckpointDeletes(MetadataManager &manager);
+
+	bool HasUnloadedDeletes() const;
 
 private:
 	mutex row_group_lock;
 	mutex stats_lock;
-	vector<BlockPointer> column_pointers;
+	vector<MetaBlockPointer> column_pointers;
 	unique_ptr<atomic<bool>[]> is_loaded;
-};
-
-struct VersionNode {
-	unique_ptr<ChunkInfo> info[RowGroup::ROW_GROUP_VECTOR_COUNT];
-
-	void SetStart(idx_t start);
+	vector<MetaBlockPointer> deletes_pointers;
+	atomic<bool> deletes_is_loaded;
 };
 
 } // namespace duckdb

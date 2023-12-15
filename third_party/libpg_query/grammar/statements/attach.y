@@ -10,6 +10,16 @@ AttachStmt:
 					n->path = $3;
 					n->name = $4;
 					n->options = $5;
+					n->onconflict = PG_ERROR_ON_CONFLICT;
+					$$ = (PGNode *)n;
+				}
+				| ATTACH IF_P NOT EXISTS opt_database Sconst opt_database_alias copy_options
+				{
+					PGAttachStmt *n = makeNode(PGAttachStmt);
+					n->path = $6;
+					n->name = $7;
+					n->options = $8;
+					n->onconflict = PG_IGNORE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
 		;

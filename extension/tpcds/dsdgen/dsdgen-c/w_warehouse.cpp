@@ -95,7 +95,7 @@ int mk_w_warehouse(void *info_arr, ds_key_t index) {
 	sprintf(szTemp, "%05d", r->w_address.zip);
 	append_varchar(info, szTemp);
 	append_varchar(info, r->w_address.country);
-	append_integer(info, r->w_address.gmt_offset);
+	append_integer_decimal(info, r->w_address.gmt_offset);
 
 	append_row_end(info);
 

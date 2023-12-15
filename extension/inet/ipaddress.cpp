@@ -24,7 +24,7 @@ static bool IPAddressError(string_t input, string *error_message, string error) 
 }
 
 bool IPAddress::TryParse(string_t input, IPAddress &result, string *error_message) {
-	auto data = input.GetDataUnsafe();
+	auto data = input.GetData();
 	auto size = input.GetSize();
 	idx_t c = 0;
 	idx_t number_count = 0;

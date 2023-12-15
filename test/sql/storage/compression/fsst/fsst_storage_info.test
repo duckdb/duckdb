@@ -14,6 +14,9 @@ CREATE TABLE test (a VARCHAR, b VARCHAR);
 statement ok
 INSERT INTO test VALUES ('11', '22'), ('11', '22'), ('12', '21'), (NULL, NULL)
 
+statement ok
+CHECKPOINT
+
 query I
 SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----

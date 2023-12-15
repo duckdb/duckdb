@@ -26,57 +26,108 @@ CREATE TABLE probe0 AS
 	FROM range(0,10)
 ;
 
-# This is not implemented yet because it requires a dedicated operator 
-# instead of LEAD(...infinity::VARCHAR)
-
 # INNER ON inequality only
-statement error
+query II
 SELECT p.begin, e.value
 FROM probe0 p ASOF JOIN events0 e
 ON p.begin >= e.begin
 ORDER BY p.begin ASC
 ----
-Invalid type Error
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
 
-statement error
+query II
 SELECT p.begin, e.value
 FROM probe0 p ASOF JOIN events0 e
 USING (begin)
 ORDER BY p.begin ASC
 ----
-Invalid type Error
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
 
 # LEFT ON inequality only
-statement error
+query II
 SELECT p.begin, e.value
 FROM probe0 p ASOF LEFT JOIN events0 e
 ON p.begin >= e.begin
 ORDER BY p.begin ASC
 ----
-Invalid type Error
+0	NULL
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
 
-statement error
+query II
 SELECT p.begin, e.value
 FROM probe0 p ASOF LEFT JOIN events0 e
 USING (begin)
 ORDER BY p.begin ASC
 ----
-Invalid type Error
+0	NULL
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
 
 # RIGHT ON inequality only
-statement error
+query II
 SELECT p.begin, e.value
 FROM probe0 p ASOF RIGHT JOIN events0 e
 ON p.begin >= e.begin
 ORDER BY ALL
 ----
-Invalid type Error
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+NULL	-1
+NULL	9
 
 # RIGHT USING inequality only
-statement error
+query II
 SELECT p.begin, e.value
 FROM probe0 p ASOF RIGHT JOIN events0 e
 USING (begin)
 ORDER BY ALL
 ----
-Invalid type Error
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+NULL	-1
+NULL	9

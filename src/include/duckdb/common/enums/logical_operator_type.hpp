@@ -30,6 +30,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_SAMPLE = 12,
 	LOGICAL_LIMIT_PERCENT = 13,
 	LOGICAL_PIVOT = 14,
+	LOGICAL_COPY_DATABASE = 15,
 
 	// -----------------------------
 	// Data sources
@@ -51,6 +52,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_CROSS_PRODUCT = 54,
 	LOGICAL_POSITIONAL_JOIN = 55,
 	LOGICAL_ASOF_JOIN = 56,
+	LOGICAL_DEPENDENT_JOIN = 57,
 	// -----------------------------
 	// SetOps
 	// -----------------------------
@@ -58,6 +60,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_EXCEPT = 76,
 	LOGICAL_INTERSECT = 77,
 	LOGICAL_RECURSIVE_CTE = 78,
+	LOGICAL_MATERIALIZED_CTE = 79,
 
 	// -----------------------------
 	// Updates

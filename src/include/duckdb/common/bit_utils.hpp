@@ -112,35 +112,29 @@ struct CountZeros<uint64_t> {
 template <>
 struct CountZeros<hugeint_t> {
 	inline static int Leading(hugeint_t value) {
-		if (value == 0) {
+		const uint64_t upper = (uint64_t)value.upper;
+		const uint64_t lower = value.lower;
+
+		if (upper) {
+			return __builtin_clzll(upper);
+		} else if (lower) {
+			return 64 + __builtin_clzll(lower);
+		} else {
 			return 128;
 		}
-
-		uint64_t upper = (uint64_t)value.upper;
-		uint64_t lower = value.lower;
-
-		int res = __builtin_clzll(upper);
-		if (res == 64) {
-			res += __builtin_clzll(lower);
-		}
-
-		return res;
 	}
 
 	inline static int Trailing(hugeint_t value) {
-		if (value == 0) {
+		const uint64_t upper = (uint64_t)value.upper;
+		const uint64_t lower = value.lower;
+
+		if (lower) {
+			return __builtin_ctzll(lower);
+		} else if (upper) {
+			return 64 + __builtin_ctzll(upper);
+		} else {
 			return 128;
 		}
-
-		uint64_t upper = (uint64_t)value.upper;
-		uint64_t lower = value.lower;
-
-		int res = __builtin_ctzll(lower);
-		if (res == 64) {
-			res += __builtin_ctzll(upper);
-		}
-
-		return res;
 	}
 };
 

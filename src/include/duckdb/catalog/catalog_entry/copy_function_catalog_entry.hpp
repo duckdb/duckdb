@@ -24,7 +24,7 @@ public:
 	static constexpr const char *Name = "copy function";
 
 public:
-	CopyFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateCopyFunctionInfo *info);
+	CopyFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateCopyFunctionInfo &info);
 
 	//! The copy function
 	CopyFunction function;

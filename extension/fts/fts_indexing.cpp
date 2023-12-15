@@ -1,38 +1,45 @@
 #include "fts_indexing.hpp"
 
-#include "duckdb/main/connection.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/connection.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
 
-static string fts_schema_name(const string &schema, const string &table) {
-	return "fts_" + schema + "_" + table;
+static QualifiedName GetQualifiedName(ClientContext &context, const string &qname_str) {
+	auto qname = QualifiedName::Parse(qname_str);
+	if (qname.schema == INVALID_SCHEMA) {
+		qname.schema = ClientData::Get(context).catalog_search_path->GetDefaultSchema(qname.catalog);
+	}
+	return qname;
 }
 
-string drop_fts_index_query(ClientContext &context, const FunctionParameters &parameters) {
-	auto qname = QualifiedName::Parse(StringValue::Get(parameters.values[0]));
-	if (qname.schema == INVALID_SCHEMA) {
-		qname.schema = ClientData::Get(context).catalog_search_path->GetDefaultSchema(INVALID_CATALOG);
-	}
-	string fts_schema = fts_schema_name(qname.schema, qname.name);
+static string GetFTSSchema(QualifiedName &qname) {
+	auto result = qname.catalog == INVALID_CATALOG ? "" : StringUtil::Format("%s.", qname.catalog);
+	result += StringUtil::Format("fts_%s_%s", qname.schema, qname.name);
+	return result;
+}
 
-	if (!Catalog::GetSchema(context, INVALID_CATALOG, fts_schema, true)) {
+string FTSIndexing::DropFTSIndexQuery(ClientContext &context, const FunctionParameters &parameters) {
+	auto qname = GetQualifiedName(context, StringValue::Get(parameters.values[0]));
+	string fts_schema = GetFTSSchema(qname);
+
+	if (!Catalog::GetSchema(context, qname.catalog, fts_schema, OnEntryNotFound::RETURN_NULL)) {
 		throw CatalogException(
 		    "a FTS index does not exist on table '%s.%s'. Create one with 'PRAGMA create_fts_index()'.", qname.schema,
 		    qname.name);
 	}
 
-	return "DROP SCHEMA " + fts_schema + " CASCADE;";
+	return StringUtil::Format("DROP SCHEMA %s CASCADE;", fts_schema);
 }
 
-static string indexing_script(const string &input_schema, const string &input_table, const string &input_id,
-                              const vector<string> &input_values, const string &stemmer, const string &stopwords,
-                              const string &ignore, bool strip_accents, bool lower) {
+static string IndexingScript(ClientContext &context, QualifiedName &qname, const string &input_id,
+                             const vector<string> &input_values, const string &stemmer, const string &stopwords,
+                             const string &ignore, bool strip_accents, bool lower) {
 	// clang-format off
     string result = R"(
         DROP SCHEMA IF EXISTS %fts_schema% CASCADE;
@@ -76,7 +83,7 @@ static string indexing_script(const string &input_schema, const string &input_ta
         CREATE TABLE %fts_schema%.docs AS (
             SELECT rowid AS docid,
                    "%input_id%" AS name
-            FROM %input_schema%.%input_table%
+            FROM %input_table%
         );
 
 	    CREATE TABLE %fts_schema%.fields (fieldid BIGINT, field VARCHAR);
@@ -112,8 +119,9 @@ static string indexing_script(const string &input_schema, const string &input_ta
         WITH distinct_terms AS (
             SELECT DISTINCT term
             FROM %fts_schema%.terms
+            ORDER BY docid, term
         )
-        SELECT row_number() OVER (PARTITION BY (SELECT NULL)) - 1 AS termid,
+        SELECT row_number() OVER () - 1 AS termid,
                dt.term
         FROM distinct_terms AS dt;
 
@@ -208,7 +216,7 @@ static string indexing_script(const string &input_schema, const string &input_ta
         SELECT unnest(%fts_schema%.tokenize(fts_ii."%input_value%")) AS w,
 	           rowid AS docid,
 	           (SELECT fieldid FROM %fts_schema%.fields WHERE field = '%input_value%') AS fieldid
-        FROM %input_schema%.%input_table% AS fts_ii
+        FROM %input_table% AS fts_ii
     )";
 	// clang-format on
 	vector<string> field_values;
@@ -220,11 +228,12 @@ static string indexing_script(const string &input_schema, const string &input_ta
 	result = StringUtil::Replace(result, "%field_values%", StringUtil::Join(field_values, ", "));
 	result = StringUtil::Replace(result, "%union_fields_query%", StringUtil::Join(tokenize_fields, " UNION ALL "));
 
-	string fts_schema = fts_schema_name(input_schema, input_table);
+	string fts_schema = GetFTSSchema(qname);
+	string input_table = qname.catalog == INVALID_CATALOG ? "" : StringUtil::Format("%s.", qname.catalog);
+	input_table += StringUtil::Format("%s.%s", qname.schema, qname.name);
 
 	// fill in variables (inefficiently, but keeps SQL script readable)
 	result = StringUtil::Replace(result, "%fts_schema%", fts_schema);
-	result = StringUtil::Replace(result, "%input_schema%", input_schema);
 	result = StringUtil::Replace(result, "%input_table%", input_table);
 	result = StringUtil::Replace(result, "%input_id%", input_id);
 	result = StringUtil::Replace(result, "%stemmer%", stemmer);
@@ -232,17 +241,13 @@ static string indexing_script(const string &input_schema, const string &input_ta
 	return result;
 }
 
-void check_exists(ClientContext &context, QualifiedName &qname) {
-	Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, qname.schema, qname.name);
+static void CheckIfTableExists(ClientContext &context, QualifiedName &qname) {
+	Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
 }
 
-string create_fts_index_query(ClientContext &context, const FunctionParameters &parameters) {
-	auto qname = QualifiedName::Parse(StringValue::Get(parameters.values[0]));
-	if (qname.schema == INVALID_SCHEMA) {
-		qname.schema = ClientData::Get(context).catalog_search_path->GetDefaultSchema(INVALID_CATALOG);
-	}
-	check_exists(context, qname);
-	string fts_schema = fts_schema_name(qname.schema, qname.name);
+string FTSIndexing::CreateFTSIndexQuery(ClientContext &context, const FunctionParameters &parameters) {
+	auto qname = GetQualifiedName(context, StringValue::Get(parameters.values[0]));
+	CheckIfTableExists(context, qname);
 
 	// get named parameters
 	string stemmer = "porter";
@@ -250,34 +255,35 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 	if (stemmer_entry != parameters.named_parameters.end()) {
 		stemmer = StringValue::Get(stemmer_entry->second);
 	}
-	string stopwords = "english";
 
+	string stopwords = "english";
 	auto stopword_entry = parameters.named_parameters.find("stopwords");
 	if (stopword_entry != parameters.named_parameters.end()) {
 		stopwords = StringValue::Get(stopword_entry->second);
 		if (stopwords != "english" && stopwords != "none") {
-			auto stopwords_qname = QualifiedName::Parse(stopwords);
-			if (qname.schema == INVALID_SCHEMA) {
-				qname.schema = ClientData::Get(context).catalog_search_path->GetDefaultSchema(INVALID_CATALOG);
-			}
-			check_exists(context, stopwords_qname);
+			auto stopwords_qname = GetQualifiedName(context, stopwords);
+			CheckIfTableExists(context, stopwords_qname);
 		}
 	}
+
 	string ignore = "(\\\\.|[^a-z])+";
 	auto ignore_entry = parameters.named_parameters.find("ignore");
 	if (ignore_entry != parameters.named_parameters.end()) {
 		ignore = StringValue::Get(ignore_entry->second);
 	}
+
 	bool strip_accents = true;
 	auto strip_accents_entry = parameters.named_parameters.find("strip_accents");
 	if (strip_accents_entry != parameters.named_parameters.end()) {
 		strip_accents = BooleanValue::Get(strip_accents_entry->second);
 	}
+
 	bool lower = true;
 	auto lower_entry = parameters.named_parameters.find("lower");
 	if (lower_entry != parameters.named_parameters.end()) {
 		lower = BooleanValue::Get(lower_entry->second);
 	}
+
 	bool overwrite = false;
 	auto overwrite_entry = parameters.named_parameters.find("overwrite");
 	if (overwrite_entry != parameters.named_parameters.end()) {
@@ -285,8 +291,9 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 	}
 
 	// throw error if an index already exists on this table
-	if (Catalog::GetSchema(context, INVALID_CATALOG, fts_schema, true) && !overwrite) {
-		throw CatalogException("a FTS index already exists on table '%s.%s'. Supply 'overwite=1' to overwrite, or "
+	const string fts_schema = GetFTSSchema(qname);
+	if (Catalog::GetSchema(context, qname.catalog, fts_schema, OnEntryNotFound::RETURN_NULL) && !overwrite) {
+		throw CatalogException("a FTS index already exists on table '%s.%s'. Supply 'overwrite=1' to overwrite, or "
 		                       "drop the existing index with 'PRAGMA drop_fts_index()' before creating a new one.",
 		                       qname.schema, qname.name);
 	}
@@ -294,21 +301,21 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 	// positional parameters
 	auto doc_id = StringValue::Get(parameters.values[1]);
 	// check all specified columns
-	auto table = Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, qname.schema, qname.name);
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
 	vector<string> doc_values;
 	for (idx_t i = 2; i < parameters.values.size(); i++) {
 		string col_name = StringValue::Get(parameters.values[i]);
 		if (col_name == "*") {
 			// star found - get all columns
 			doc_values.clear();
-			for (auto &cd : table->GetColumns().Logical()) {
+			for (auto &cd : table.GetColumns().Logical()) {
 				if (cd.Type() == LogicalType::VARCHAR) {
 					doc_values.push_back(cd.Name());
 				}
 			}
 			break;
 		}
-		if (!table->ColumnExists(col_name)) {
+		if (!table.ColumnExists(col_name)) {
 			// we check this here because else we we end up with an error halfway the indexing script
 			throw CatalogException("Table '%s.%s' does not have a column named '%s'!", qname.schema, qname.name,
 			                       col_name);
@@ -319,8 +326,7 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 		throw Exception("at least one column must be supplied for indexing!");
 	}
 
-	return indexing_script(qname.schema, qname.name, doc_id, doc_values, stemmer, stopwords, ignore, strip_accents,
-	                       lower);
+	return IndexingScript(context, qname, doc_id, doc_values, stemmer, stopwords, ignore, strip_accents, lower);
 }
 
 } // namespace duckdb

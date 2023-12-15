@@ -16,15 +16,23 @@ public:
 			owned_data = allocator.Allocate(capacity * GetTypeIdSize(internal_type));
 			// child data of the list
 			auto &child_type = ListType::GetChildType(type);
-			child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type));
+			child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type, capacity));
 			auto child_vector = make_uniq<Vector>(child_type, false, false);
 			auxiliary = make_shared<VectorListBuffer>(std::move(child_vector));
+			break;
+		}
+		case PhysicalType::ARRAY: {
+			auto &child_type = ArrayType::GetChildType(type);
+			auto array_size = ArrayType::GetSize(type);
+			child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type, array_size * capacity));
+			auto child_vector = make_uniq<Vector>(child_type, true, false, array_size * capacity);
+			auxiliary = make_shared<VectorArrayBuffer>(std::move(child_vector), array_size, capacity);
 			break;
 		}
 		case PhysicalType::STRUCT: {
 			auto &child_types = StructType::GetChildTypes(type);
 			for (auto &child_type : child_types) {
-				child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type.second));
+				child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type.second, capacity));
 			}
 			auto struct_buffer = make_shared<VectorStructBuffer>(type);
 			auxiliary = std::move(struct_buffer);
@@ -48,14 +56,31 @@ public:
 			// reinitialize the VectorListBuffer
 			AssignSharedPointer(result.auxiliary, auxiliary);
 			// propagate through child
-			auto &list_buffer = (VectorListBuffer &)*result.auxiliary;
-			list_buffer.capacity = capacity;
-			list_buffer.size = 0;
+			auto &child_cache = child_caches[0]->Cast<VectorCacheBuffer>();
+			auto &list_buffer = result.auxiliary->Cast<VectorListBuffer>();
+			list_buffer.SetCapacity(child_cache.capacity);
+			list_buffer.SetSize(0);
 			list_buffer.SetAuxiliaryData(nullptr);
 
 			auto &list_child = list_buffer.GetChild();
-			auto &child_cache = (VectorCacheBuffer &)*child_caches[0];
 			child_cache.ResetFromCache(list_child, child_caches[0]);
+			break;
+		}
+		case PhysicalType::ARRAY: {
+			// fixed size list does not have own data
+			result.data = nullptr;
+			// reinitialize the VectorArrayBuffer
+			// auxiliary->SetAuxiliaryData(nullptr);
+			AssignSharedPointer(result.auxiliary, auxiliary);
+
+			// propagate through child
+			auto &child_cache = child_caches[0]->Cast<VectorCacheBuffer>();
+			auto &array_child = result.auxiliary->Cast<VectorArrayBuffer>().GetChild();
+			child_cache.ResetFromCache(array_child, child_caches[0]);
+
+			// Ensure the child validity is (will be) large enough, even if its not initialized.
+			auto validity_target_size = array_child.validity.TargetCount();
+			array_child.validity.Resize(validity_target_size, std::max(validity_target_size, child_cache.capacity));
 			break;
 		}
 		case PhysicalType::STRUCT: {
@@ -65,9 +90,9 @@ public:
 			auxiliary->SetAuxiliaryData(nullptr);
 			AssignSharedPointer(result.auxiliary, auxiliary);
 			// propagate through children
-			auto &children = ((VectorStructBuffer &)*result.auxiliary).GetChildren();
+			auto &children = result.auxiliary->Cast<VectorStructBuffer>().GetChildren();
 			for (idx_t i = 0; i < children.size(); i++) {
-				auto &child_cache = (VectorCacheBuffer &)*child_caches[i];
+				auto &child_cache = child_caches[i]->Cast<VectorCacheBuffer>();
 				child_cache.ResetFromCache(*children[i], child_caches[i]);
 			}
 			break;
@@ -103,12 +128,12 @@ VectorCache::VectorCache(Allocator &allocator, const LogicalType &type_p, idx_t 
 
 void VectorCache::ResetFromCache(Vector &result) const {
 	D_ASSERT(buffer);
-	auto &vcache = (VectorCacheBuffer &)*buffer;
+	auto &vcache = buffer->Cast<VectorCacheBuffer>();
 	vcache.ResetFromCache(result, buffer);
 }
 
 const LogicalType &VectorCache::GetType() const {
-	auto &vcache = (VectorCacheBuffer &)*buffer;
+	auto &vcache = buffer->Cast<VectorCacheBuffer>();
 	return vcache.GetType();
 }
 

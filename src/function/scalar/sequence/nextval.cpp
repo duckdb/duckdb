@@ -76,7 +76,7 @@ struct NextSequenceValueOperator {
 	}
 };
 
-SequenceCatalogEntry *BindSequence(ClientContext &context, const string &name) {
+SequenceCatalogEntry &BindSequence(ClientContext &context, const string &name) {
 	auto qname = QualifiedName::Parse(name);
 	// fetch the sequence from the catalog
 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
@@ -91,36 +91,37 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	auto &context = state.GetContext();
 	if (info.sequence) {
-		auto &transaction = DuckTransaction::Get(context, *info.sequence->catalog);
+		auto &sequence = *info.sequence;
+		auto &transaction = DuckTransaction::Get(context, sequence.catalog);
 		// sequence to use is hard coded
 		// increment the sequence
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<int64_t>(result);
 		for (idx_t i = 0; i < args.size(); i++) {
 			// get the next value from the sequence
-			result_data[i] = OP::Operation(transaction, *info.sequence);
+			result_data[i] = OP::Operation(transaction, sequence);
 		}
 	} else {
 		// sequence to use comes from the input
 		UnaryExecutor::Execute<string_t, int64_t>(input, result, args.size(), [&](string_t value) {
 			// fetch the sequence from the catalog
-			auto sequence = BindSequence(context, value.GetString());
+			auto &sequence = BindSequence(context, value.GetString());
 			// finally get the next value from the sequence
-			auto &transaction = DuckTransaction::Get(context, *sequence->catalog);
-			return OP::Operation(transaction, *sequence);
+			auto &transaction = DuckTransaction::Get(context, sequence.catalog);
+			return OP::Operation(transaction, sequence);
 		});
 	}
 }
 
 static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFunction &bound_function,
                                             vector<unique_ptr<Expression>> &arguments) {
-	SequenceCatalogEntry *sequence = nullptr;
+	optional_ptr<SequenceCatalogEntry> sequence;
 	if (arguments[0]->IsFoldable()) {
 		// parameter to nextval function is a foldable constant
 		// evaluate the constant and perform the catalog lookup already
 		auto seqname = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
 		if (!seqname.IsNull()) {
-			sequence = BindSequence(context, seqname.ToString());
+			sequence = &BindSequence(context, seqname.ToString());
 		}
 	}
 	return make_uniq<NextvalBindData>(sequence);

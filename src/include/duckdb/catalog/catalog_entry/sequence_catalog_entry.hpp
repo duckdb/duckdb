@@ -14,8 +14,6 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 
 namespace duckdb {
-class Serializer;
-class Deserializer;
 
 struct SequenceValue {
 	SequenceValue() : usage_count(0), counter(-1) {
@@ -35,7 +33,7 @@ public:
 
 public:
 	//! Create a real TableCatalogEntry and initialize storage for it
-	SequenceCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateSequenceInfo *info);
+	SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info);
 
 	//! Lock for getting a value on the sequence
 	mutex lock;
@@ -57,13 +55,8 @@ public:
 	bool cycle;
 
 public:
-	//! Serialize the meta information of the SequenceCatalogEntry a serializer
-	virtual void Serialize(Serializer &serializer) const;
-	//! Deserializes to a CreateTableInfo
-	static unique_ptr<CreateSequenceInfo> Deserialize(Deserializer &source);
+	unique_ptr<CreateInfo> GetInfo() const override;
 
 	string ToSQL() const override;
-
-	CatalogEntry *AlterOwnership(ClientContext &context, AlterInfo *info);
 };
 } // namespace duckdb

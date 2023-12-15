@@ -11,7 +11,27 @@ CREATE TABLE customer(c_customer_sk INTEGER, c_customer_id VARCHAR, c_current_cd
 statement ok
 COPY customer FROM 'data/csv/customer.csv' (FORMAT 'csv', quote '"', delimiter ',', header 0);
 
+query IIIIIIIIIIIIIIIIII
+SELECT * FROM customer
+----
+1	AAAAAAAABAAAAAAA	980124	7135	32946	2452238	2452208	Mr.	Javier	Lewis	Y	9	12	1936	CHILE	NULL	Javier.Lewis@VFAxlnZEvOx.org	2452508
+2	AAAAAAAACAAAAAAA	819667	1461	31655	2452318	2452288	Dr.	Amy	Moses	Y	9	4	1966	TOGO	NULL	Amy.Moses@Ovk9KjHH.com	2452318
+3	AAAAAAAADAAAAAAA	1473522	6247	48572	2449130	2449100	Miss	Latisha	Hamilton	Y	18	9	1979	NIUE	NULL	Latisha.Hamilton@V.com	2452313
+4	AAAAAAAAEAAAAAAA	1703214	3986	39558	2450030	2450000	Dr.	Michael	White	Y	7	6	1983	MEXICO	NULL	Michael.White@i.org	2452361
+5	AAAAAAAAFAAAAAAA	953372	4470	36368	2449438	2449408	Sir	Robert	Moran	N	8	5	1956	FIJI	NULL	Robert.Moran@Hh.edu	2452469
+6	AAAAAAAAGAAAAAAA	213219	6374	27082	2451883	2451853	Ms.	Brunilda	Sharp	Y	4	12	1925	SURINAME	NULL	Brunilda.Sharp@T3pylZEUQjm.org	2452430
+7	AAAAAAAAHAAAAAAA	68377	3219	44814	2451438	2451408	Ms.	Fonda	Wiles	N	24	4	1985	GAMBIA	NULL	Fonda.Wiles@S9KnyEtz9hv.org	2452360
+8	AAAAAAAAIAAAAAAA	1215897	2471	16598	2449406	2449376	Sir	Ollie	Shipman	N	26	12	1938	KOREA, REPUBLIC OF	NULL	Ollie.Shipman@be.org	2452334
+9	AAAAAAAAJAAAAAAA	1168667	1404	49388	2452275	2452245	Sir	Karl	Gilbert	N	26	10	1966	MONTSERRAT	NULL	Karl.Gilbert@Crg5KyP2IxX9C4d6.edu	2452454
+10	AAAAAAAAKAAAAAAA	1207553	5143	19580	2451353	2451323	Ms.	Albert	Brunson	N	15	10	1973	JORDAN	NULL	Albert.Brunson@62.com	2452641
+
+statement ok
+CREATE TABLE customer_quoted_nulls(c_customer_sk INTEGER, c_customer_id VARCHAR, c_current_cdemo_sk INTEGER, c_current_hdemo_sk INTEGER, c_current_addr_sk INTEGER, c_first_shipto_date_sk INTEGER, c_first_sales_date_sk INTEGER, c_salutation VARCHAR, c_first_name VARCHAR, c_last_name VARCHAR, c_preferred_cust_flag VARCHAR, c_birth_day INTEGER, c_birth_month INTEGER, c_birth_year INTEGER, c_birth_country VARCHAR, c_login VARCHAR, c_email_address VARCHAR, c_last_review_date_sk INTEGER);
+
+statement ok
+insert into customer_quoted_nulls select * from read_csv_auto('data/csv/customer.csv', allow_quoted_nulls=False)
+
 query I
-SELECT COUNT(c_login) FROM customer
+SELECT COUNT(c_login) FROM customer_quoted_nulls
 ----
 10

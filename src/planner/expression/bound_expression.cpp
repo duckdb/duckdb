@@ -2,8 +2,17 @@
 
 namespace duckdb {
 
-BoundExpression::BoundExpression(unique_ptr<Expression> expr)
-    : ParsedExpression(ExpressionType::INVALID, ExpressionClass::BOUND_EXPRESSION), expr(std::move(expr)) {
+BoundExpression::BoundExpression(unique_ptr<Expression> expr_p)
+    : ParsedExpression(ExpressionType::INVALID, ExpressionClass::BOUND_EXPRESSION), expr(std::move(expr_p)) {
+	this->alias = expr->alias;
+}
+
+unique_ptr<Expression> &BoundExpression::GetExpression(ParsedExpression &expr) {
+	auto &bound_expr = expr.Cast<BoundExpression>();
+	if (!bound_expr.expr) {
+		throw InternalException("BoundExpression::GetExpression called on empty bound expression");
+	}
+	return bound_expr.expr;
 }
 
 string BoundExpression::ToString() const {
@@ -13,7 +22,7 @@ string BoundExpression::ToString() const {
 	return expr->ToString();
 }
 
-bool BoundExpression::Equals(const BaseExpression *other) const {
+bool BoundExpression::Equals(const BaseExpression &other) const {
 	return false;
 }
 hash_t BoundExpression::Hash() const {
@@ -24,11 +33,7 @@ unique_ptr<ParsedExpression> BoundExpression::Copy() const {
 	throw SerializationException("Cannot copy or serialize bound expression");
 }
 
-void BoundExpression::Serialize(FieldWriter &writer) const {
-	throw SerializationException("Cannot copy or serialize bound expression");
-}
-
-void BoundExpression::FormatSerialize(FormatSerializer &serializer) const {
+void BoundExpression::Serialize(Serializer &serializer) const {
 	throw SerializationException("Cannot copy or serialize bound expression");
 }
 

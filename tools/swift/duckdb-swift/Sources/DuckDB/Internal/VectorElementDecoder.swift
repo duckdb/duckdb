@@ -57,12 +57,13 @@ fileprivate struct VectorElementDataDecoder: Decoder {
   }
   
   let codingPath: [CodingKey]
-  let userInfo = [CodingUserInfoKey : Any]()
   let element: Vector.Element
+  let userInfo: [CodingUserInfoKey : Any]
   
   init(element: Vector.Element, codingPath: [CodingKey] = []) {
     self.codingPath = codingPath
     self.element = element
+    self.userInfo = [CodingUserInfoKeys.logicalTypeCodingUserInfoKey: element.logicalType]
   }
   
   func container<Key: CodingKey>(keyedBy type: Key.Type) throws -> KeyedDecodingContainer<Key> {
@@ -126,6 +127,10 @@ extension VectorElementDataDecoder {
       element.unwrapNull()
     }
     
+    func decode(_ type: Int.Type) throws -> Int {
+      try attemptDecode { try element.unwrap(type) }
+    }
+    
     func decode(_ type: Int8.Type) throws -> Int8 {
       try attemptDecode { try element.unwrap(type) }
     }
@@ -139,6 +144,10 @@ extension VectorElementDataDecoder {
     }
     
     func decode(_ type: Int64.Type) throws -> Int64 {
+      try attemptDecode { try element.unwrap(type) }
+    }
+    
+    func decode(_ type: UInt.Type) throws -> UInt {
       try attemptDecode { try element.unwrap(type) }
     }
     

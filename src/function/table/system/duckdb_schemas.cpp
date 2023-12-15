@@ -12,7 +12,7 @@ struct DuckDBSchemasData : public GlobalTableFunctionState {
 	DuckDBSchemasData() : offset(0) {
 	}
 
-	vector<SchemaCatalogEntry *> entries;
+	vector<reference<SchemaCatalogEntry>> entries;
 	idx_t offset;
 };
 
@@ -58,20 +58,20 @@ void DuckDBSchemasFunction(ClientContext &context, TableFunctionInput &data_p, D
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = data.entries[data.offset];
+		auto &entry = data.entries[data.offset].get();
 
 		// return values:
 		idx_t col = 0;
 		// "oid", PhysicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(entry->oid));
+		output.SetValue(col++, count, Value::BIGINT(entry.oid));
 		// database_name, VARCHAR
-		output.SetValue(col++, count, entry->catalog->GetName());
+		output.SetValue(col++, count, entry.catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(entry->catalog->GetOid()));
+		output.SetValue(col++, count, Value::BIGINT(entry.catalog.GetOid()));
 		// "schema_name", PhysicalType::VARCHAR
-		output.SetValue(col++, count, Value(entry->name));
+		output.SetValue(col++, count, Value(entry.name));
 		// "internal", PhysicalType::BOOLEAN
-		output.SetValue(col++, count, Value::BOOLEAN(entry->internal));
+		output.SetValue(col++, count, Value::BOOLEAN(entry.internal));
 		// "sql", PhysicalType::VARCHAR
 		output.SetValue(col++, count, Value());
 

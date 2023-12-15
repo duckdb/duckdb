@@ -5,6 +5,7 @@ add_library_unity(
   attach_statement.cpp
   call_statement.cpp
   copy_statement.cpp
+  copy_database_statement.cpp
   create_statement.cpp
   detach_statement.cpp
   delete_statement.cpp

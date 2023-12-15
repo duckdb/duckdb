@@ -4,6 +4,10 @@
 
 require parquet
 
+# Zstd comes with the parquet extension but we currently can not autoload parquet for zstd. Parquet is generally bundled
+# though, so thats probably a non-issue
+require no_extension_autoloading
+
 # lineitem
 statement ok
 CREATE TABLE lineitem(l_orderkey INT NOT NULL,
@@ -53,16 +57,16 @@ COPY ncvoters FROM 'test/sql/copy/csv/data/zstd/ncvoter.csv.zst' DELIMITER '	';
 query ITTT
 SELECT county_id, county_desc, vtd_desc, name_prefx_cd FROM ncvoters;
 ----
-1	ALAMANCE	09S	(empty)
-1	ALAMANCE	09S	(empty)
-1	ALAMANCE	03W	(empty)
-1	ALAMANCE	09S	(empty)
-1	ALAMANCE	1210	(empty)
-1	ALAMANCE	035	(empty)
-1	ALAMANCE	124	(empty)
-1	ALAMANCE	06E	(empty)
-1	ALAMANCE	035	(empty)
-1	ALAMANCE	064	(empty)
+1	ALAMANCE	09S	NULL
+1	ALAMANCE	09S	NULL
+1	ALAMANCE	03W	NULL
+1	ALAMANCE	09S	NULL
+1	ALAMANCE	1210	NULL
+1	ALAMANCE	035	NULL
+1	ALAMANCE	124	NULL
+1	ALAMANCE	06E	NULL
+1	ALAMANCE	035	NULL
+1	ALAMANCE	064	NULL
 
 query ITTT nosort ncvoters_res
 SELECT * FROM ncvoters

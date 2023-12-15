@@ -3,6 +3,9 @@
 # group: [inner]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 PRAGMA enable_verification
 
 foreach type <numeric> DECIMAL(4,0) DECIMAL(8,0) DECIMAL(16,0) DECIMAL(32,0)
@@ -48,15 +51,16 @@ DROP TABLE test2;
 
 endloop
 
+foreach type TINYINT SMALLINT INTEGER BIGINT
 
 statement ok
-CREATE TABLE test3 (a INTEGER, b INTEGER);
+CREATE OR REPLACE TABLE test3 (a ${type}, b ${type});
 
 statement ok
 INSERT INTO test3 VALUES (-11, -1), (-12, -2), (13, 3)
 
 statement ok
-CREATE TABLE test4 (b INTEGER, c INTEGER);
+CREATE OR REPLACE TABLE test4 (b ${type}, c ${type});
 
 statement ok
 INSERT INTO test4 VALUES (-1, -10), (-2, -20), (3, 30), (-1, -10), (-2, -20), (3, 30), (-1, -10), (-2, -20), (3, 30), (-1, -10), (-2, -20), (3, 30), (-1, -10), (-2, -20), (3, 30)
@@ -81,14 +85,18 @@ SELECT a, test3.b,c FROM test3, test4 WHERE test3.b = test4.b order by a, test3.
 13	3	30
 13	3	30
 
+endloop
+
+foreach type <integral>
+
 statement ok
-CREATE TABLE test5 (a INTEGER, b INTEGER);
+CREATE OR REPLACE TABLE test5 (a ${type}, b ${type});
 
 statement ok
 INSERT INTO test5 VALUES (11, 1), (12, 2), (13, 3), (14, null), (null, 4)
 
 statement ok
-CREATE TABLE test6 (b INTEGER, c INTEGER);
+CREATE OR REPLACE TABLE test6 (b ${type}, c ${type});
 
 statement ok
 INSERT INTO test6 VALUES (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (4, 40), (null, 30), (1, null)
@@ -117,13 +125,13 @@ NULL	4	40
 
 
 statement ok
-CREATE TABLE test7 (a INTEGER, b INTEGER);
+CREATE OR REPLACE TABLE test7 (a ${type}, b ${type});
 
 statement ok
 INSERT INTO test7 VALUES (11, 1), (12, 2), (13, 3), (15, 5)
 
 statement ok
-CREATE TABLE test8 (b INTEGER, c INTEGER);
+CREATE OR REPLACE TABLE test8 (b ${type}, c ${type});
 
 statement ok
 INSERT INTO test8 VALUES (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (4, 40)
@@ -147,6 +155,8 @@ SELECT a, test7.b,c FROM test7, test8 WHERE test7.b = test8.b order by a, test7.
 13	3	30
 13	3	30
 13	3	30
+
+endloop
 
 # create the table integers with the values 0..1026
 statement ok

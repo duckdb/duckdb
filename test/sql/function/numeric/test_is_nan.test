@@ -3,6 +3,9 @@
 # group: [numeric]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 PRAGMA enable_verification
 
 foreach type FLOAT DOUBLE

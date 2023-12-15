@@ -1,20 +1,4 @@
-add_library_unity(
-  duckdb_aggr_distr
-  OBJECT
-  approx_count.cpp
-  bitagg.cpp
-  bitstring_agg.cpp
-  count.cpp
-  first.cpp
-  minmax.cpp
-  string_agg.cpp
-  sum.cpp
-  product.cpp
-  bool.cpp
-  arg_min_max.cpp
-  skew.cpp
-  kurtosis.cpp
-  entropy.cpp)
+add_library_unity(duckdb_aggr_distr OBJECT count.cpp first.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_aggr_distr>
     PARENT_SCOPE)

@@ -17,8 +17,7 @@ namespace duckdb {
 class StructColumnData : public ColumnData {
 public:
 	StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-	                 LogicalType type, ColumnData *parent = nullptr);
-	StructColumnData(ColumnData &original, idx_t start_row, ColumnData *parent = nullptr);
+	                 LogicalType type, optional_ptr<ColumnData> parent = nullptr);
 
 	//! The sub-columns of the struct
 	vector<unique_ptr<ColumnData>> sub_columns;
@@ -26,6 +25,7 @@ public:
 	ValidityColumnData validity;
 
 public:
+	void SetStart(idx_t new_start) override;
 	bool CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 	idx_t GetMaxEntry() override;
 
@@ -59,7 +59,8 @@ public:
 
 	void DeserializeColumn(Deserializer &source) override;
 
-	void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result) override;
+	void GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
+	                          vector<duckdb::ColumnSegmentInfo> &result) override;
 
 	void Verify(RowGroup &parent) override;
 };

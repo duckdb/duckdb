@@ -1,0 +1,26 @@
+# name: test/sql/copy/csv/7702.test
+# description: Test for issue #7702
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT count(*) FROM read_csv_auto( ['test/sql/copy/csv/data/error/mismatch/half1.csv', 'test/sql/copy/csv/data/error/mismatch/half2.csv'], ignore_errors=true, sample_size=1, parallel=true);
+----
+9102
+
+query I
+SELECT count(*) FROM read_csv_auto( ['test/sql/copy/csv/data/error/mismatch/half2.csv', 'test/sql/copy/csv/data/error/mismatch/half1.csv'], ignore_errors=true, sample_size=1, parallel=true);
+----
+9102
+
+query I
+SELECT count(*) FROM read_csv_auto(['test/sql/copy/csv/data/error/mismatch/half1.csv', 'test/sql/copy/csv/data/error/mismatch/half2.csv'], ignore_errors=true, sample_size=1, parallel=false);
+----
+9102
+
+query I
+SELECT count(*) FROM read_csv_auto( ['test/sql/copy/csv/data/error/mismatch/half2.csv', 'test/sql/copy/csv/data/error/mismatch/half1.csv'], ignore_errors=true, sample_size=1, parallel=false);
+----
+9102

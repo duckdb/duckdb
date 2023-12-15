@@ -10,23 +10,14 @@
 namespace duckdb {
 
 PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_p,
-                                     unique_ptr<FunctionData> bind_data_p, vector<column_t> column_ids_p,
-                                     vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
-                                     idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality),
-      function(std::move(function_p)), bind_data(std::move(bind_data_p)), column_ids(std::move(column_ids_p)),
-      names(std::move(names_p)), table_filters(std::move(table_filters_p)) {
-}
-
-PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_p,
                                      unique_ptr<FunctionData> bind_data_p, vector<LogicalType> returned_types_p,
                                      vector<column_t> column_ids_p, vector<idx_t> projection_ids_p,
                                      vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
-                                     idx_t estimated_cardinality)
+                                     idx_t estimated_cardinality, ExtraOperatorInfo extra_info)
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), returned_types(std::move(returned_types_p)),
       column_ids(std::move(column_ids_p)), projection_ids(std::move(projection_ids_p)), names(std::move(names_p)),
-      table_filters(std::move(table_filters_p)) {
+      table_filters(std::move(table_filters_p)), extra_info(extra_info) {
 }
 
 class TableScanGlobalSourceState : public GlobalSourceState {
@@ -73,14 +64,16 @@ unique_ptr<GlobalSourceState> PhysicalTableScan::GetGlobalSourceState(ClientCont
 	return make_uniq<TableScanGlobalSourceState>(context, *this);
 }
 
-void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                LocalSourceState &lstate) const {
+SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk,
+                                            OperatorSourceInput &input) const {
 	D_ASSERT(!column_ids.empty());
-	auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
-	auto &state = lstate.Cast<TableScanLocalSourceState>();
+	auto &gstate = input.global_state.Cast<TableScanGlobalSourceState>();
+	auto &state = input.local_state.Cast<TableScanLocalSourceState>();
 
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
 	function.function(context.client, data, chunk);
+
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 double PhysicalTableScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
@@ -147,8 +140,12 @@ string PhysicalTableScan::ParamsToString() const {
 			}
 		}
 	}
+	if (!extra_info.file_filters.empty()) {
+		result += "\n[INFOSEPARATOR]\n";
+		result += "File Filters: " + extra_info.file_filters;
+	}
 	result += "\n[INFOSEPARATOR]\n";
-	result += StringUtil::Format("EC: %llu", estimated_props->GetCardinality<idx_t>());
+	result += StringUtil::Format("EC: %llu", estimated_cardinality);
 	return result;
 }
 

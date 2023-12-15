@@ -15,7 +15,7 @@ enum class RegexOptions : uint8_t { NONE, CASE_INSENSITIVE };
 class Regex {
 public:
 	DUCKDB_API Regex(const std::string &pattern, RegexOptions options = RegexOptions::NONE);
-	DUCKDB_API Regex(const char *pattern, RegexOptions options = RegexOptions::NONE) : Regex(std::string(pattern)) {
+	Regex(const char *pattern, RegexOptions options = RegexOptions::NONE) : Regex(std::string(pattern)) {
 	}
 	const duckdb_re2::RE2 &GetRegex() const {
 		return *regex;

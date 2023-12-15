@@ -1,8 +1,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
 #include "duckdb/common/types/hash.hpp"
-#include "duckdb/common/to_string.hpp"
-#include "duckdb/common/field_writer.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -27,38 +26,33 @@ hash_t BoundColumnRefExpression::Hash() const {
 	return CombineHash(result, duckdb::Hash<uint64_t>(depth));
 }
 
-bool BoundColumnRefExpression::Equals(const BaseExpression *other_p) const {
+bool BoundColumnRefExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto &other = other_p->Cast<BoundColumnRefExpression>();
+	auto &other = other_p.Cast<BoundColumnRefExpression>();
 	return other.binding == binding && other.depth == depth;
 }
 
+string BoundColumnRefExpression::GetName() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return binding.ToString();
+	}
+#endif
+	return Expression::GetName();
+}
+
 string BoundColumnRefExpression::ToString() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return binding.ToString();
+	}
+#endif
 	if (!alias.empty()) {
 		return alias;
 	}
-	return "#[" + to_string(binding.table_index) + "." + to_string(binding.column_index) + "]";
-}
-
-void BoundColumnRefExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteString(alias);
-	writer.WriteSerializable(return_type);
-	writer.WriteField(binding.table_index);
-	writer.WriteField(binding.column_index);
-	writer.WriteField(depth);
-}
-
-unique_ptr<Expression> BoundColumnRefExpression::Deserialize(ExpressionDeserializationState &state,
-                                                             FieldReader &reader) {
-	auto alias = reader.ReadRequired<string>();
-	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto table_index = reader.ReadRequired<idx_t>();
-	auto column_index = reader.ReadRequired<idx_t>();
-	auto depth = reader.ReadRequired<idx_t>();
-
-	return make_uniq<BoundColumnRefExpression>(alias, return_type, ColumnBinding(table_index, column_index), depth);
+	return binding.ToString();
 }
 
 } // namespace duckdb

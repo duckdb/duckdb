@@ -13,6 +13,9 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/main/client_context.hpp"
+
 #include <cstring>
 #include <cassert>
 
@@ -29,8 +32,9 @@ struct DatabaseData {
 };
 
 struct PreparedStatementWrapper {
+	//! Map of name -> values
+	case_insensitive_map_t<Value> values;
 	unique_ptr<PreparedStatement> statement;
-	vector<Value> values;
 };
 
 struct ExtractStatementsWrapper {
@@ -46,7 +50,6 @@ struct PendingStatementWrapper {
 struct ArrowResultWrapper {
 	unique_ptr<MaterializedQueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
-	string timezone_config;
 };
 
 struct AppenderWrapper {
@@ -74,5 +77,6 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type);
 idx_t GetCTypeSize(duckdb_type type);
 duckdb_state duckdb_translate_result(unique_ptr<QueryResult> result, duckdb_result *out);
 bool deprecated_materialize_result(duckdb_result *result);
+duckdb_statement_type StatementTypeToC(duckdb::StatementType statement_type);
 
 } // namespace duckdb

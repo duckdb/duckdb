@@ -21,6 +21,9 @@ class PendingQueryResult : public BaseQueryResult {
 	friend class ClientContext;
 
 public:
+	static constexpr const QueryResultType TYPE = QueryResultType::PENDING_RESULT;
+
+public:
 	DUCKDB_API PendingQueryResult(shared_ptr<ClientContext> context, PreparedStatementData &statement,
 	                              vector<LogicalType> types, bool allow_stream_result);
 	DUCKDB_API explicit PendingQueryResult(PreservedError error_message);
@@ -31,6 +34,8 @@ public:
 	//! If this returns RESULT_READY, the Execute function can be called to obtain a pointer to the result.
 	//! If this returns RESULT_NOT_READY, the ExecuteTask function should be called again.
 	//! If this returns EXECUTION_ERROR, an error occurred during execution.
+	//! If this returns NO_TASKS_AVAILABLE, this means currently no meaningful work can be done by the current executor,
+	//!	    but tasks may become available in the future.
 	//! The error message can be obtained by calling GetError() on the PendingQueryResult.
 	DUCKDB_API PendingExecutionResult ExecuteTask();
 
@@ -39,6 +44,9 @@ public:
 	DUCKDB_API unique_ptr<QueryResult> Execute();
 
 	DUCKDB_API void Close();
+
+	//! Function to determine whether execution is considered finished
+	DUCKDB_API static bool IsFinished(PendingExecutionResult result);
 
 private:
 	shared_ptr<ClientContext> context;

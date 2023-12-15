@@ -3,6 +3,9 @@
 # group: [order]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 PRAGMA enable_verification
 
 statement ok
@@ -115,13 +118,17 @@ PRAGMA default_null_order='NULLS FIRST'
 
 statement error
 PRAGMA default_null_order())
+----
 
 statement error
 PRAGMA default_null_order='UNKNOWN'
+----
 
 statement error
 PRAGMA default_null_order=UNKNOWN)
+----
 
 statement error
 PRAGMA default_null_order=3)
+----
 

@@ -1,0 +1,77 @@
+# name: test/sql/storage/parallel/insert_order_preserving_odd_sized_batches.test_slow
+# description: Test parallel order-preserving insert
+# group: [parallel]
+
+require vector_size 512
+
+load __TEST_DIR__/insert_odd_sized_batches.db
+
+require parquet
+
+query I
+CREATE TABLE integers AS SELECT * FROM range(10000000) tbl(i);
+----
+10000000
+
+# check the block count and median number of rows per row group
+query I
+SELECT COUNT(DISTINCT block_id)<=3 FROM pragma_storage_info('integers');
+----
+true
+
+query I
+SELECT MEDIAN(count) FROM pragma_storage_info('integers');
+----
+122880
+
+statement ok
+COPY integers TO '__TEST_DIR__/integers.parquet' (ROW_GROUP_SIZE 77777)
+
+# verify that reading while preserving insertion order creates the same size table
+statement ok
+CREATE TABLE integers_parquet AS FROM '__TEST_DIR__/integers.parquet';
+
+query I
+SELECT * FROM integers_parquet LIMIT 5
+----
+0
+1
+2
+3
+4
+
+query I
+SELECT * FROM integers_parquet LIMIT 5 OFFSET 773654
+----
+773654
+773655
+773656
+773657
+773658
+
+query I
+SELECT COUNT(DISTINCT block_id)<=3 FROM pragma_storage_info('integers_parquet');
+----
+true
+
+query I
+SELECT MEDIAN(count) FROM pragma_storage_info('integers_parquet');
+----
+122880
+
+# verify that reading without preserving insertion order creates the same size table
+statement ok
+SET preserve_insertion_order=false
+
+statement ok
+CREATE TABLE integers_parquet_no_order AS FROM '__TEST_DIR__/integers.parquet'
+
+query I
+SELECT COUNT(DISTINCT block_id)<=3 FROM pragma_storage_info('integers_parquet_no_order');
+----
+true
+
+query I
+SELECT MEDIAN(count) FROM pragma_storage_info('integers_parquet_no_order');
+----
+122880

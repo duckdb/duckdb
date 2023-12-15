@@ -103,13 +103,13 @@ create table foo(a real, b real);
 statement ok
 insert into foo values (1, 69), (1, 420), (2, 69), (2, 420);
 
-query II
+query II rowsort
 select distinct on(a) a, b from foo order by b asc;
 ----
 1	69
 2	69
 
-query II
+query II rowsort
 select distinct on(a) a, b from foo order by b desc;
 ----
 1	420

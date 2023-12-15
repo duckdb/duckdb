@@ -24,7 +24,7 @@
 
 import Foundation
 
-extension Foundation.Date {
+public extension Foundation.Date {
   
   /// Creates a date value initialized from a DuckDB Time value
   init(_ date: Time) {
@@ -32,7 +32,7 @@ extension Foundation.Date {
   }
 }
 
-extension Time {
+public extension Time {
   
   /// Creates a time value initialized from a Foundation Date
   init(_ date: Foundation.Date) {

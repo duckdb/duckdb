@@ -37,6 +37,8 @@ struct UsingColumnSet {
 //! encountered during the binding process.
 class BindContext {
 public:
+	BindContext(Binder &binder);
+
 	//! Keep track of recursive CTE references
 	case_insensitive_map_t<std::shared_ptr<idx_t>> cte_references;
 
@@ -56,7 +58,7 @@ public:
 	//! or throws an exception if the column could not be bound.
 	BindResult BindColumn(ColumnRefExpression &colref, idx_t depth);
 	string BindColumn(PositionalReferenceExpression &ref, string &table_name, string &column_name);
-	BindResult BindColumn(PositionalReferenceExpression &ref, idx_t depth);
+	unique_ptr<ColumnRefExpression> PositionToColumn(PositionalReferenceExpression &ref);
 
 	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &table_name, const string &column_name);
 
@@ -96,7 +98,7 @@ public:
 	void AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundQueryNode &subquery);
 	//! Adds a binding to a catalog entry with a given alias to the BindContext.
 	void AddEntryBinding(idx_t index, const string &alias, const vector<string> &names,
-	                     const vector<LogicalType> &types, StandardEntry *entry);
+	                     const vector<LogicalType> &types, StandardEntry &entry);
 	//! Adds a base table with the given alias to the BindContext.
 	void AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
 	                       const vector<LogicalType> &types);
@@ -151,6 +153,7 @@ private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);
 
 private:
+	Binder &binder;
 	//! The set of bindings
 	case_insensitive_map_t<unique_ptr<Binding>> bindings;
 	//! The list of bindings in insertion order

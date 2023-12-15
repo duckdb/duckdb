@@ -8,8 +8,21 @@ set -e
 BASE_DIR=$(dirname $0)
 
 #Configuring ODBC files
-$BASE_DIR/../linux_setup/unixodbc_setup.sh -u -D $(pwd)/build/debug/tools/odbc/libduckdb_odbc.so
+# Check the OS and set the "extension" variable
+case "$(uname -s)" in
+    Darwin)
+        extension="dylib"
+        ;;
+    Linux)
+        extension="so"
+        ;;
+    *)
+        echo "Unsupported OS. Exiting."
+        exit 1
+        ;;
+esac
 
+$BASE_DIR/../linux_setup/unixodbc_setup.sh -u -D $(pwd)/build/debug/tools/odbc/libduckdb_odbc.${extension}
 
 export NANODBC_TEST_CONNSTR_ODBC="DRIVER=DuckDB Driver;"
 export ASAN_OPTIONS=verify_asan_link_order=0

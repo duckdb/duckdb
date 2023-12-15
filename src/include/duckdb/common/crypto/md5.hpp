@@ -26,10 +26,10 @@ public:
 	}
 	void Add(const char *data);
 	void Add(string_t string) {
-		MD5Update((const_data_ptr_t)string.GetDataUnsafe(), string.GetSize());
+		MD5Update(const_data_ptr_cast(string.GetData()), string.GetSize());
 	}
 	void Add(const string &data) {
-		MD5Update((const_data_ptr_t)data.c_str(), data.size());
+		MD5Update(const_data_ptr_cast(data.c_str()), data.size());
 	}
 
 	//! Write the 16-byte (binary) digest to the specified location

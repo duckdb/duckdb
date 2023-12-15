@@ -21,10 +21,10 @@ OnConflictAction TransformOnConflictAction(duckdb_libpgquery::PGOnConflictClause
 	}
 }
 
-vector<string> TransformConflictTarget(duckdb_libpgquery::PGList *list) {
+vector<string> Transformer::TransformConflictTarget(duckdb_libpgquery::PGList &list) {
 	vector<string> columns;
-	for (auto cell = list->head; cell != nullptr; cell = cell->next) {
-		auto index_element = (duckdb_libpgquery::PGIndexElem *)cell->data.ptr_value;
+	for (auto cell = list.head; cell != nullptr; cell = cell->next) {
+		auto index_element = PGPointerCast<duckdb_libpgquery::PGIndexElem>(cell->data.ptr_value);
 		if (index_element->collation) {
 			throw NotImplementedException("Index with collation not supported yet!");
 		}
@@ -77,7 +77,7 @@ unique_ptr<OnConflictInfo> Transformer::TransformOnConflictClause(duckdb_libpgqu
 		// A filter for the ON CONFLICT ... is specified
 		if (stmt->infer->indexElems) {
 			// Columns are specified
-			result->indexed_columns = TransformConflictTarget(stmt->infer->indexElems);
+			result->indexed_columns = TransformConflictTarget(*stmt->infer->indexElems);
 			if (stmt->infer->whereClause) {
 				result->condition = TransformExpression(stmt->infer->whereClause);
 			}

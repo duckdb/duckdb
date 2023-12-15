@@ -17,6 +17,8 @@ bool PhysicalJoin::EmptyResultIfRHSIsEmpty() const {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
 	case JoinType::SEMI:
+	case JoinType::RIGHT_SEMI:
+	case JoinType::RIGHT_ANTI:
 		return true;
 	default:
 		return false;
@@ -60,7 +62,7 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	// Join can become a source operator if it's RIGHT/OUTER, or if the hash join goes out-of-core
 	bool add_child_pipeline = false;
 	auto &join_op = op.Cast<PhysicalJoin>();
-	if (IsRightOuterJoin(join_op.join_type) || join_op.type == PhysicalOperatorType::HASH_JOIN) {
+	if (join_op.IsSource()) {
 		add_child_pipeline = true;
 	}
 

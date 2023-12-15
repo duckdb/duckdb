@@ -18,17 +18,29 @@ namespace duckdb {
 class PartitionGlobalHashGroup {
 public:
 	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
-	using LocalSortStatePtr = unique_ptr<LocalSortState>;
 	using Orders = vector<BoundOrderByNode>;
 	using Types = vector<LogicalType>;
+	using OrderMasks = unordered_map<idx_t, ValidityMask>;
 
 	PartitionGlobalHashGroup(BufferManager &buffer_manager, const Orders &partitions, const Orders &orders,
 	                         const Types &payload_types, bool external);
 
-	void ComputeMasks(ValidityMask &partition_mask, ValidityMask &order_mask);
+	inline int ComparePartitions(const SBIterator &left, const SBIterator &right) {
+		int part_cmp = 0;
+		if (partition_layout.all_constant) {
+			part_cmp = FastMemcmp(left.entry_ptr, right.entry_ptr, partition_layout.comparison_size);
+		} else {
+			part_cmp = Comparators::CompareTuple(left.scan, right.scan, left.entry_ptr, right.entry_ptr,
+			                                     partition_layout, left.external);
+		}
+		return part_cmp;
+	}
+
+	void ComputeMasks(ValidityMask &partition_mask, OrderMasks &order_masks);
 
 	GlobalSortStatePtr global_sort;
 	atomic<idx_t> count;
+	idx_t batch_base;
 
 	// Mask computation
 	SortLayout partition_layout;
@@ -40,17 +52,24 @@ public:
 	using Orders = vector<BoundOrderByNode>;
 	using Types = vector<LogicalType>;
 
-	using GroupingPartition = unique_ptr<PartitionedColumnData>;
-	using GroupingAppend = unique_ptr<PartitionedColumnDataAppendState>;
+	using GroupingPartition = unique_ptr<PartitionedTupleData>;
+	using GroupingAppend = unique_ptr<PartitionedTupleDataAppendState>;
 
-	PartitionGlobalSinkState(ClientContext &context, const vector<unique_ptr<Expression>> &partitions_p,
-	                         const vector<BoundOrderByNode> &orders_p, const Types &payload_types,
+	static void GenerateOrderings(Orders &partitions, Orders &orders,
+	                              const vector<unique_ptr<Expression>> &partition_bys, const Orders &order_bys,
+	                              const vector<unique_ptr<BaseStatistics>> &partitions_stats);
+
+	PartitionGlobalSinkState(ClientContext &context, const vector<unique_ptr<Expression>> &partition_bys,
+	                         const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
 	                         const vector<unique_ptr<BaseStatistics>> &partitions_stats, idx_t estimated_cardinality);
+
+	bool HasMergeTasks() const;
+
+	unique_ptr<RadixPartitionedTupleData> CreatePartition(idx_t new_bits) const;
+	void SyncPartitioning(const PartitionGlobalSinkState &other);
 
 	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
 	void CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
-
-	void BuildSortState(ColumnDataCollection &group_data, PartitionGlobalHashGroup &global_sort);
 
 	ClientContext &context;
 	BufferManager &buffer_manager;
@@ -58,9 +77,11 @@ public:
 	mutex lock;
 
 	// OVER(PARTITION BY...) (hash grouping)
-	unique_ptr<RadixPartitionedColumnData> grouping_data;
+	unique_ptr<RadixPartitionedTupleData> grouping_data;
 	//! Payload plus hash column
-	Types grouping_types;
+	TupleDataLayout grouping_types;
+	//! The number of radix bits if this partition is being synced with another
+	idx_t fixed_bits;
 
 	// OVER(...) (sorting)
 	Orders partitions;
@@ -68,6 +89,8 @@ public:
 	const Types payload_types;
 	vector<HashGroupPtr> hash_groups;
 	bool external;
+	//	Reverse lookup from hash bins to non-empty hash groups
+	vector<size_t> bin_groups;
 
 	// OVER() (no sorting)
 	unique_ptr<RowDataCollection> rows;
@@ -75,6 +98,7 @@ public:
 
 	// Threading
 	idx_t memory_per_thread;
+	idx_t max_bits;
 	atomic<idx_t> count;
 
 private:
@@ -84,21 +108,26 @@ private:
 
 class PartitionLocalSinkState {
 public:
+	using LocalSortStatePtr = unique_ptr<LocalSortState>;
+
 	PartitionLocalSinkState(ClientContext &context, PartitionGlobalSinkState &gstate_p);
 
 	// Global state
 	PartitionGlobalSinkState &gstate;
 	Allocator &allocator;
 
-	// OVER(PARTITION BY...) (hash grouping)
+	//	Shared expression evaluation
 	ExpressionExecutor executor;
 	DataChunk group_chunk;
 	DataChunk payload_chunk;
-	unique_ptr<PartitionedColumnData> local_partition;
-	unique_ptr<PartitionedColumnDataAppendState> local_append;
-
-	// OVER(...) (sorting)
 	size_t sort_cols;
+
+	// OVER(PARTITION BY...) (hash grouping)
+	unique_ptr<PartitionedTupleData> local_partition;
+	unique_ptr<PartitionedTupleDataAppendState> local_append;
+
+	// OVER(ORDER BY...) (only sorting)
+	LocalSortStatePtr local_sort;
 
 	// OVER() (no sorting)
 	RowLayout payload_layout;
@@ -113,15 +142,19 @@ public:
 	void Combine();
 };
 
-enum class PartitionSortStage : uint8_t { INIT, PREPARE, MERGE, SORTED };
+enum class PartitionSortStage : uint8_t { INIT, SCAN, PREPARE, MERGE, SORTED };
 
 class PartitionLocalMergeState;
 
 class PartitionGlobalMergeState {
 public:
-	using GroupDataPtr = unique_ptr<ColumnDataCollection>;
+	using GroupDataPtr = unique_ptr<TupleDataCollection>;
 
-	explicit PartitionGlobalMergeState(PartitionGlobalSinkState &sink, GroupDataPtr group_data);
+	//	OVER(PARTITION BY...)
+	PartitionGlobalMergeState(PartitionGlobalSinkState &sink, GroupDataPtr group_data, hash_t hash_bin);
+
+	//	OVER(ORDER BY...)
+	explicit PartitionGlobalMergeState(PartitionGlobalSinkState &sink);
 
 	bool IsSorted() const {
 		lock_guard<mutex> guard(lock);
@@ -135,7 +168,11 @@ public:
 	PartitionGlobalSinkState &sink;
 	GroupDataPtr group_data;
 	PartitionGlobalHashGroup *hash_group;
+	vector<column_t> column_ids;
+	TupleDataParallelScanState chunk_state;
 	GlobalSortState *global_sort;
+	const idx_t memory_per_thread;
+	const idx_t num_threads;
 
 private:
 	mutable mutex lock;
@@ -147,15 +184,14 @@ private:
 
 class PartitionLocalMergeState {
 public:
-	PartitionLocalMergeState() : merge_state(nullptr), stage(PartitionSortStage::INIT) {
-		finished = true;
-	}
+	explicit PartitionLocalMergeState(PartitionGlobalSinkState &gstate);
 
 	bool TaskFinished() {
 		return finished;
 	}
 
 	void Prepare();
+	void Scan();
 	void Merge();
 
 	void ExecuteTask();
@@ -163,13 +199,26 @@ public:
 	PartitionGlobalMergeState *merge_state;
 	PartitionSortStage stage;
 	atomic<bool> finished;
+
+	//	Sorting buffers
+	ExpressionExecutor executor;
+	DataChunk sort_chunk;
+	DataChunk payload_chunk;
 };
 
 class PartitionGlobalMergeStates {
 public:
+	struct Callback {
+		virtual bool HasError() const {
+			return false;
+		}
+	};
+
 	using PartitionGlobalMergeStatePtr = unique_ptr<PartitionGlobalMergeState>;
 
 	explicit PartitionGlobalMergeStates(PartitionGlobalSinkState &sink);
+
+	bool ExecuteTask(PartitionLocalMergeState &local_state, Callback &callback);
 
 	vector<PartitionGlobalMergeStatePtr> states;
 };
@@ -185,63 +234,6 @@ public:
 
 public:
 	void Schedule() override;
-};
-
-class PartitionGlobalSourceState {
-public:
-	explicit PartitionGlobalSourceState(PartitionGlobalSinkState &gsink_p) : gsink(gsink_p), next_bin(0) {
-	}
-
-	PartitionGlobalSinkState &gsink;
-	//! The output read position.
-	atomic<idx_t> next_bin;
-
-public:
-	idx_t MaxThreads() {
-		// If there is only one partition, we have to process it on one thread.
-		if (!gsink.grouping_data) {
-			return 1;
-		}
-
-		// If there is not a lot of data, process serially.
-		if (gsink.count < STANDARD_ROW_GROUPS_SIZE) {
-			return 1;
-		}
-
-		return gsink.hash_groups.size();
-	}
-};
-
-// Per-thread read state
-class PartitionLocalSourceState {
-public:
-	using HashGroupPtr = unique_ptr<PartitionGlobalHashGroup>;
-
-	explicit PartitionLocalSourceState(PartitionGlobalSinkState &gstate_p);
-
-	void MaterializeSortedData();
-	idx_t GeneratePartition(const idx_t hash_bin);
-
-	PartitionGlobalSinkState &gstate;
-
-	//! The read partition
-	idx_t hash_bin;
-	HashGroupPtr hash_group;
-
-	//! The generated input chunks
-	unique_ptr<RowDataCollection> rows;
-	unique_ptr<RowDataCollection> heap;
-	RowLayout layout;
-	//! The partition boundary mask
-	vector<validity_t> partition_bits;
-	ValidityMask partition_mask;
-	//! The order boundary mask
-	vector<validity_t> order_bits;
-	ValidityMask order_mask;
-	//! The read cursor
-	unique_ptr<RowDataCollectionScanner> scanner;
-	//! Buffer for the inputs
-	DataChunk input_chunk;
 };
 
 } // namespace duckdb

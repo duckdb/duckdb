@@ -89,7 +89,7 @@ int mk_w_customer_address(void *info_arr, ds_key_t index) {
 	sprintf(szTemp, "%05d", r->ca_address.zip);
 	append_varchar(info, szTemp);
 	append_varchar(info, &r->ca_address.country[0]);
-	append_integer(info, r->ca_address.gmt_offset);
+	append_integer_decimal(info, r->ca_address.gmt_offset);
 	append_varchar(info, r->ca_location_type);
 
 	append_row_end(info);

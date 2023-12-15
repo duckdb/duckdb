@@ -60,13 +60,13 @@ static Value NegatePercentileValue(const Value &v, const bool desc) {
 static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedExpression> &fractions, bool desc) {
 	D_ASSERT(fractions.get());
 	D_ASSERT(fractions->expression_class == ExpressionClass::BOUND_EXPRESSION);
-	auto &bound = (BoundExpression &)*fractions;
+	auto &bound = BoundExpression::GetExpression(*fractions);
 
-	if (!bound.expr->IsFoldable()) {
+	if (!bound->IsFoldable()) {
 		return;
 	}
 
-	Value value = ExpressionExecutor::EvaluateScalar(context, *bound.expr);
+	Value value = ExpressionExecutor::EvaluateScalar(context, *bound);
 	if (value.type().id() == LogicalTypeId::LIST) {
 		vector<Value> values;
 		for (const auto &element_val : ListValue::GetChildren(value)) {
@@ -75,18 +75,18 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedE
 		if (values.empty()) {
 			throw BinderException("Empty list in percentile not allowed");
 		}
-		bound.expr = make_uniq<BoundConstantExpression>(Value::LIST(values));
+		bound = make_uniq<BoundConstantExpression>(Value::LIST(values));
 	} else {
-		bound.expr = make_uniq<BoundConstantExpression>(NegatePercentileValue(value, desc));
+		bound = make_uniq<BoundConstantExpression>(NegatePercentileValue(value, desc));
 	}
 }
 
-BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, idx_t depth) {
+BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry &func, idx_t depth) {
 	// first bind the child of the aggregate expression (if any)
 	this->bound_aggregate = true;
 	unique_ptr<Expression> bound_filter;
 	AggregateBinder aggregate_binder(binder, context);
-	string error, filter_error;
+	string error;
 
 	// Now we bind the filter (if any)
 	if (aggr.filter) {
@@ -99,7 +99,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	bool negate_fractions = false;
 	if (aggr.order_bys && aggr.order_bys->orders.size() == 1) {
 		const auto &func_name = aggr.function_name;
-		ordered_set_agg = (func_name == "quantile_cont" || func_name == "quantile_disc" || func_name == "mode");
+		ordered_set_agg = (func_name == "quantile_cont" || func_name == "quantile_disc" ||
+		                   (func_name == "mode" && aggr.children.empty()));
 
 		if (ordered_set_agg) {
 			auto &config = DBConfig::GetConfig(context);
@@ -132,31 +133,31 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 				// however, we bound columns!
 				// that means this aggregation belongs to this node
 				// check if we have to resolve any errors by binding with parent binders
-				bool success = aggregate_binder.BindCorrelatedColumns(aggr.children[i]);
+				auto result = aggregate_binder.BindCorrelatedColumns(aggr.children[i], error);
 				// if there is still an error after this, we could not successfully bind the aggregate
-				if (!success) {
-					throw BinderException(error);
+				if (result.HasError()) {
+					throw BinderException(result.error);
 				}
-				auto &bound_expr = (BoundExpression &)*aggr.children[i];
-				ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+				auto &bound_expr = BoundExpression::GetExpression(*aggr.children[i]);
+				ExtractCorrelatedExpressions(binder, *bound_expr);
 			}
 			if (aggr.filter) {
-				bool success = aggregate_binder.BindCorrelatedColumns(aggr.filter);
+				auto result = aggregate_binder.BindCorrelatedColumns(aggr.filter, error);
 				// if there is still an error after this, we could not successfully bind the aggregate
-				if (!success) {
-					throw BinderException(error);
+				if (result.HasError()) {
+					throw BinderException(result.error);
 				}
-				auto &bound_expr = (BoundExpression &)*aggr.filter;
-				ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+				auto &bound_expr = BoundExpression::GetExpression(*aggr.filter);
+				ExtractCorrelatedExpressions(binder, *bound_expr);
 			}
 			if (aggr.order_bys && !aggr.order_bys->orders.empty()) {
 				for (auto &order : aggr.order_bys->orders) {
-					bool success = aggregate_binder.BindCorrelatedColumns(order.expression);
-					if (!success) {
-						throw BinderException(error);
+					auto result = aggregate_binder.BindCorrelatedColumns(order.expression, error);
+					if (result.HasError()) {
+						throw BinderException(result.error);
 					}
-					auto &bound_expr = (BoundExpression &)*order.expression;
-					ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+					auto &bound_expr = BoundExpression::GetExpression(*order.expression);
+					ExtractCorrelatedExpressions(binder, *bound_expr);
 				}
 			}
 		} else {
@@ -166,13 +167,10 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	} else if (depth > 0 && !aggregate_binder.HasBoundColumns()) {
 		return BindResult("Aggregate with only constant parameters has to be bound in the root subquery");
 	}
-	if (!filter_error.empty()) {
-		return BindResult(filter_error);
-	}
 
 	if (aggr.filter) {
-		auto &child = (BoundExpression &)*aggr.filter;
-		bound_filter = BoundCastExpression::AddCastToType(context, std::move(child.expr), LogicalType::BOOLEAN);
+		auto &child = BoundExpression::GetExpression(*aggr.filter);
+		bound_filter = BoundCastExpression::AddCastToType(context, std::move(child), LogicalType::BOOLEAN);
 	}
 
 	// all children bound successfully
@@ -182,30 +180,37 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	vector<unique_ptr<Expression>> children;
 
 	if (ordered_set_agg) {
+		const bool order_sensitive = (aggr.function_name == "mode");
 		for (auto &order : aggr.order_bys->orders) {
-			auto &child = (BoundExpression &)*order.expression;
-			types.push_back(child.expr->return_type);
-			arguments.push_back(child.expr->return_type);
-			children.push_back(std::move(child.expr));
+			auto &child = BoundExpression::GetExpression(*order.expression);
+			types.push_back(child->return_type);
+			arguments.push_back(child->return_type);
+			if (order_sensitive) {
+				children.push_back(child->Copy());
+			} else {
+				children.push_back(std::move(child));
+			}
 		}
-		aggr.order_bys->orders.clear();
+		if (!order_sensitive) {
+			aggr.order_bys->orders.clear();
+		}
 	}
 
 	for (idx_t i = 0; i < aggr.children.size(); i++) {
-		auto &child = (BoundExpression &)*aggr.children[i];
-		types.push_back(child.expr->return_type);
-		arguments.push_back(child.expr->return_type);
-		children.push_back(std::move(child.expr));
+		auto &child = BoundExpression::GetExpression(*aggr.children[i]);
+		types.push_back(child->return_type);
+		arguments.push_back(child->return_type);
+		children.push_back(std::move(child));
 	}
 
 	// bind the aggregate
 	FunctionBinder function_binder(context);
-	idx_t best_function = function_binder.BindFunction(func->name, func->functions, types, error);
+	idx_t best_function = function_binder.BindFunction(func.name, func.functions, types, error);
 	if (best_function == DConstants::INVALID_INDEX) {
 		throw BinderException(binder.FormatError(aggr, error));
 	}
 	// found a matching function!
-	auto bound_function = func->functions.GetFunctionByOffset(best_function);
+	auto bound_function = func.functions.GetFunctionByOffset(best_function);
 
 	// Bind any sort columns, unless the aggregate is order-insensitive
 	unique_ptr<BoundOrderModifier> order_bys;
@@ -213,13 +218,10 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		order_bys = make_uniq<BoundOrderModifier>();
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.order_bys->orders) {
-			auto &order_expr = (BoundExpression &)*order.expression;
-			const auto sense =
-			    (order.type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type : order.type;
-			const auto null_order = (order.null_order == OrderByNullType::ORDER_DEFAULT)
-			                            ? config.options.default_null_order
-			                            : order.null_order;
-			order_bys->orders.emplace_back(sense, null_order, std::move(order_expr.expr));
+			auto &order_expr = BoundExpression::GetExpression(*order.expression);
+			const auto sense = config.ResolveOrder(order.type);
+			const auto null_order = config.ResolveNullOrder(sense, order.null_order);
+			order_bys->orders.emplace_back(sense, null_order, std::move(order_expr));
 		}
 	}
 

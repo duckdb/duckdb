@@ -1,7 +1,7 @@
 // #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
 
-#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
+#include "duckdb/execution/operator/scan/csv/buffered_csv_reader.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "compare_result.hpp"
@@ -20,6 +20,9 @@ using namespace std;
 #define TESTING_DIRECTORY_NAME "duckdb_unittest_tempdir"
 
 namespace duckdb {
+static string custom_test_directory;
+static int debug_initialize_value = -1;
+static bool single_threaded = false;
 
 bool NO_FAIL(QueryResult &result) {
 	if (result.HasError()) {
@@ -57,7 +60,14 @@ void TestChangeDirectory(string path) {
 	FileSystem::SetWorkingDirectory(path);
 }
 
+string TestGetCurrentDirectory() {
+	return FileSystem::GetWorkingDirectory();
+}
+
 void DeleteDatabase(string path) {
+	if (!custom_test_directory.empty()) {
+		return;
+	}
 	TestDeleteFile(path);
 	TestDeleteFile(path + ".wal");
 }
@@ -67,12 +77,39 @@ void TestCreateDirectory(string path) {
 	fs->CreateDirectory(path);
 }
 
+void SetTestDirectory(string path) {
+	custom_test_directory = path;
+}
+
+void SetDebugInitialize(int value) {
+	debug_initialize_value = value;
+}
+
+void SetSingleThreaded() {
+	single_threaded = true;
+}
+
+string GetTestDirectory() {
+	if (custom_test_directory.empty()) {
+		return TESTING_DIRECTORY_NAME;
+	}
+	return custom_test_directory;
+}
+
 string TestDirectoryPath() {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	if (!fs->DirectoryExists(TESTING_DIRECTORY_NAME)) {
-		fs->CreateDirectory(TESTING_DIRECTORY_NAME);
+	auto test_directory = GetTestDirectory();
+	if (!fs->DirectoryExists(test_directory)) {
+		fs->CreateDirectory(test_directory);
 	}
-	string path = StringUtil::Format(TESTING_DIRECTORY_NAME "/%d", getpid());
+	string path;
+	if (custom_test_directory.empty()) {
+		// add the PID to the test directory - but only if it was not specified explicitly by the user
+		auto pid = getpid();
+		path = fs->JoinPath(test_directory, to_string(pid));
+	} else {
+		path = test_directory;
+	}
 	if (!fs->DirectoryExists(path)) {
 		fs->CreateDirectory(path);
 	}
@@ -95,8 +132,28 @@ bool TestIsInternalError(unordered_set<string> &internal_error_messages, const s
 
 unique_ptr<DBConfig> GetTestConfig() {
 	auto result = make_uniq<DBConfig>();
+#ifndef DUCKDB_ALTERNATIVE_VERIFY
 	result->options.checkpoint_wal_size = 0;
+#else
+	result->options.checkpoint_on_shutdown = false;
+#endif
 	result->options.allow_unsigned_extensions = true;
+	if (single_threaded) {
+		result->options.maximum_threads = 1;
+	}
+	switch (debug_initialize_value) {
+	case -1:
+		break;
+	case 0:
+		result->options.debug_initialize = DebugInitialize::DEBUG_ZERO_INITIALIZE;
+		break;
+	case 0xFF:
+		result->options.debug_initialize = DebugInitialize::DEBUG_ONE_INITIALIZE;
+		break;
+	default:
+		fprintf(stderr, "Invalid value for debug_initialize_value\n");
+		exit(1);
+	}
 	return result;
 }
 
@@ -198,6 +255,14 @@ string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
 	return "";
 }
 
+string compare_csv_collection(duckdb::ColumnDataCollection &collection, string csv, bool header) {
+	string error;
+	if (!compare_result(csv, collection, collection.Types(), header, error)) {
+		return error;
+	}
+	return "";
+}
+
 string show_diff(DataChunk &left, DataChunk &right) {
 	if (left.ColumnCount() != right.ColumnCount()) {
 		return StringUtil::Format("Different column counts: %d vs %d", (int)left.ColumnCount(),
@@ -253,12 +318,12 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 	f.close();
 
 	// set up the CSV reader
-	BufferedCSVReaderOptions options;
+	CSVReaderOptions options;
 	options.auto_detect = false;
-	options.delimiter = "|";
-	options.header = has_header;
-	options.quote = "\"";
-	options.escape = "\"";
+	options.dialect_options.state_machine_options.delimiter = '|';
+	options.dialect_options.header = has_header;
+	options.dialect_options.state_machine_options.quote = '\"';
+	options.dialect_options.state_machine_options.escape = '\"';
 	options.file_path = csv_path;
 
 	// set up the intermediate result chunk

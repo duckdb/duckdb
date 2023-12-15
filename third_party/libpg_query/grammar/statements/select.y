@@ -385,6 +385,13 @@ pivot_column_entry:
 				n->pivot_columns = list_make1($1);
 				$$ = (PGNode *) n;
 			}
+			| b_expr IN_P '(' select_no_parens ')'
+			{
+				PGPivot *n = makeNode(PGPivot);
+				n->pivot_columns = list_make1($1);
+				n->subquery = $4;
+				$$ = (PGNode *) n;
+			}
 			| single_pivot_value													{ $$ = $1; }
 		;
 
@@ -437,15 +444,22 @@ cte_list:
 		| cte_list ',' common_table_expr		{ $$ = lappend($1, $3); }
 		;
 
-common_table_expr:  name opt_name_list AS '(' PreparableStmt ')'
+common_table_expr:  name opt_name_list AS opt_materialized '(' PreparableStmt ')'
 			{
 				PGCommonTableExpr *n = makeNode(PGCommonTableExpr);
 				n->ctename = $1;
 				n->aliascolnames = $2;
-				n->ctequery = $5;
+				n->ctematerialized = $4;
+				n->ctequery = $6;
 				n->location = @1;
 				$$ = (PGNode *) n;
 			}
+		;
+
+opt_materialized:
+		MATERIALIZED							{ $$ = PGCTEMaterializeAlways; }
+		| NOT MATERIALIZED						{ $$ = PGCTEMaterializeNever; }
+		| /*EMPTY*/								{ $$ = PGCTEMaterializeDefault; }
 		;
 
 into_clause:
@@ -1611,25 +1625,37 @@ Typename:	SimpleTypename opt_array_bounds
 					$$->arrayBounds = list_make1(makeInteger(-1));
 					$$->setof = true;
 				}
-			| RowOrStruct '(' colid_type_list ')' opt_array_bounds {
-               $$ = SystemTypeName("struct");
-               $$->arrayBounds = $5;
-               $$->typmods = $3;
-               $$->location = @1;
+			| qualified_typename
+				{
+					$$ = makeTypeNameFromNameList($1);
+				}
+			| RowOrStruct '(' colid_type_list ')' opt_array_bounds
+				{
+				   $$ = SystemTypeName("struct");
+				   $$->arrayBounds = $5;
+				   $$->typmods = $3;
+				   $$->location = @1;
                }
-            | MAP '(' type_list ')' opt_array_bounds {
-               $$ = SystemTypeName("map");
-               $$->arrayBounds = $5;
-               $$->typmods = $3;
-               $$->location = @1;
-			}
-			| UNION '(' colid_type_list ')' opt_array_bounds {
-			   $$ = SystemTypeName("union");
-			   $$->arrayBounds = $5;
-			   $$->typmods = $3;
-			   $$->location = @1;
-			}
+            | MAP '(' type_list ')' opt_array_bounds
+            	{
+				   $$ = SystemTypeName("map");
+				   $$->arrayBounds = $5;
+				   $$->typmods = $3;
+				   $$->location = @1;
+				}
+			| UNION '(' colid_type_list ')' opt_array_bounds
+				{
+				   $$ = SystemTypeName("union");
+				   $$->arrayBounds = $5;
+				   $$->typmods = $3;
+				   $$->location = @1;
+				}
 		;
+
+qualified_typename:
+			IDENT '.' IDENT					{ $$ = list_make2(makeString($1), makeString($3)); }
+			| qualified_typename '.' IDENT	{ $$ = lappend($1, makeString($3)); }
+	;
 
 opt_array_bounds:
 			opt_array_bounds '[' ']'
@@ -1996,6 +2022,18 @@ millisecond_keyword:
 microsecond_keyword:
 	MICROSECOND_P | MICROSECONDS_P
 
+week_keyword:
+	WEEK_P | WEEKS_P
+
+decade_keyword:
+	DECADE_P | DECADES_P
+
+century_keyword:
+	CENTURY_P | CENTURIES_P
+
+millennium_keyword:
+	MILLENNIUM_P | MILLENNIA_P
+
 opt_interval:
 			year_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(YEAR), @1)); }
@@ -2013,6 +2051,14 @@ opt_interval:
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MILLISECOND), @1)); }
 			| microsecond_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MICROSECOND), @1)); }
+			| week_keyword
+				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(WEEK), @1)); }
+			| decade_keyword
+				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(DECADE), @1)); }
+			| century_keyword
+				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(CENTURY), @1)); }
+			| millennium_keyword
+				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MILLENNIUM), @1)); }
 			| year_keyword TO month_keyword
 				{
 					$$ = list_make1(makeIntConst(INTERVAL_MASK(YEAR) |
@@ -2625,7 +2671,7 @@ d_expr:		columnref								{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *) n;
 				}
-			| '$' named_param
+			| '$' ColLabel
 				{
 					$$ = makeNamedParamRef($2, @1);
 				}
@@ -2726,9 +2772,25 @@ indirection_expr:		'?'
 				{
 					$$ = $2;
 				}
-			| '{' dict_arguments_opt_comma '}'
+			| struct_expr
 				{
-					PGFuncCall *f = makeFuncCall(SystemFuncName("struct_pack"), $2, @2);
+					$$ = $1;
+				}
+			| MAP '{' opt_map_arguments_opt_comma '}'
+				{
+					PGList *key_list = NULL;
+					PGList *value_list = NULL;
+					PGListCell *lc;
+					PGList *entry_list = $3;
+					foreach(lc, entry_list)
+					{
+						PGList *l = (PGList *) lc->data.ptr_value;
+						key_list = lappend(key_list, (PGNode *) l->head->data.ptr_value);
+						value_list = lappend(value_list, (PGNode *) l->tail->data.ptr_value);
+					}
+					PGNode *keys   = (PGNode *) makeFuncCall(SystemFuncName("list_value"), key_list, @3);
+					PGNode *values = (PGNode *) makeFuncCall(SystemFuncName("list_value"), value_list, @3);
+					PGFuncCall *f = makeFuncCall(SystemFuncName("map"), list_make2(keys, values), @3);
 					$$ = (PGNode *) f;
 				}
 			| func_expr
@@ -2736,6 +2798,17 @@ indirection_expr:		'?'
 					$$ = $1;
 				}
 		;
+
+
+
+struct_expr:		'{' dict_arguments_opt_comma '}'
+				{
+					PGFuncCall *f = makeFuncCall(SystemFuncName("struct_pack"), $2, @2);
+					$$ = (PGNode *) f;
+				}
+		;
+
+
 
 func_application:       func_name '(' ')'
 				{
@@ -3039,7 +3112,7 @@ window_specification: '(' opt_existing_window_name opt_partition_clause
 		;
 
 /*
- * If we see PARTITION, RANGE, or ROWS as the first token after the '('
+ * If we see PARTITION, RANGE, ROWS or GROUPS as the first token after the '('
  * of a window_specification, we want the assumption to be that there is
  * no existing_window_name; but those keywords are unreserved and so could
  * be ColIds.  We fix this by making them have the same precedence as IDENT
@@ -3059,26 +3132,36 @@ opt_partition_clause: PARTITION BY expr_list		{ $$ = $3; }
 /*
  * For frame clauses, we return a PGWindowDef, but only some fields are used:
  * frameOptions, startOffset, and endOffset.
- *
- * This is only a subset of the full SQL:2008 frame_clause grammar.
- * We don't support <window frame exclusion> yet.
  */
 opt_frame_clause:
-			RANGE frame_extent
+			RANGE frame_extent opt_window_exclusion_clause
 				{
 					PGWindowDef *n = $2;
+
 					n->frameOptions |= FRAMEOPTION_NONDEFAULT | FRAMEOPTION_RANGE;
+					n->frameOptions |= $3;
 					$$ = n;
 				}
-			| ROWS frame_extent
+			| ROWS frame_extent opt_window_exclusion_clause
 				{
 					PGWindowDef *n = $2;
+
 					n->frameOptions |= FRAMEOPTION_NONDEFAULT | FRAMEOPTION_ROWS;
+					n->frameOptions |= $3;
+					$$ = n;
+				}
+			| GROUPS frame_extent opt_window_exclusion_clause
+				{
+					PGWindowDef *n = $2;
+
+					n->frameOptions |= FRAMEOPTION_NONDEFAULT | FRAMEOPTION_GROUPS;
+					n->frameOptions |= $3;
 					$$ = n;
 				}
 			| /*EMPTY*/
 				{
 					PGWindowDef *n = makeNode(PGWindowDef);
+
 					n->frameOptions = FRAMEOPTION_DEFAULTS;
 					n->startOffset = NULL;
 					n->endOffset = NULL;
@@ -3089,13 +3172,14 @@ opt_frame_clause:
 frame_extent: frame_bound
 				{
 					PGWindowDef *n = $1;
+
 					/* reject invalid cases */
 					if (n->frameOptions & FRAMEOPTION_START_UNBOUNDED_FOLLOWING)
 						ereport(ERROR,
 								(errcode(PG_ERRCODE_WINDOWING_ERROR),
 								 errmsg("frame start cannot be UNBOUNDED FOLLOWING"),
 								 parser_errposition(@1)));
-					if (n->frameOptions & FRAMEOPTION_START_VALUE_FOLLOWING)
+					if (n->frameOptions & FRAMEOPTION_START_OFFSET_FOLLOWING)
 						ereport(ERROR,
 								(errcode(PG_ERRCODE_WINDOWING_ERROR),
 								 errmsg("frame starting from following row cannot end with current row"),
@@ -3107,6 +3191,7 @@ frame_extent: frame_bound
 				{
 					PGWindowDef *n1 = $2;
 					PGWindowDef *n2 = $4;
+
 					/* form merged options */
 					int		frameOptions = n1->frameOptions;
 					/* shift converts START_ options to END_ options */
@@ -3124,13 +3209,13 @@ frame_extent: frame_bound
 								 errmsg("frame end cannot be UNBOUNDED PRECEDING"),
 								 parser_errposition(@4)));
 					if ((frameOptions & FRAMEOPTION_START_CURRENT_ROW) &&
-						(frameOptions & FRAMEOPTION_END_VALUE_PRECEDING))
+						(frameOptions & FRAMEOPTION_END_OFFSET_PRECEDING))
 						ereport(ERROR,
 								(errcode(PG_ERRCODE_WINDOWING_ERROR),
 								 errmsg("frame starting from current row cannot have preceding rows"),
 								 parser_errposition(@4)));
-					if ((frameOptions & FRAMEOPTION_START_VALUE_FOLLOWING) &&
-						(frameOptions & (FRAMEOPTION_END_VALUE_PRECEDING |
+					if ((frameOptions & FRAMEOPTION_START_OFFSET_FOLLOWING) &&
+						(frameOptions & (FRAMEOPTION_END_OFFSET_PRECEDING |
 										 FRAMEOPTION_END_CURRENT_ROW)))
 						ereport(ERROR,
 								(errcode(PG_ERRCODE_WINDOWING_ERROR),
@@ -3151,6 +3236,7 @@ frame_bound:
 			UNBOUNDED PRECEDING
 				{
 					PGWindowDef *n = makeNode(PGWindowDef);
+
 					n->frameOptions = FRAMEOPTION_START_UNBOUNDED_PRECEDING;
 					n->startOffset = NULL;
 					n->endOffset = NULL;
@@ -3159,6 +3245,7 @@ frame_bound:
 			| UNBOUNDED FOLLOWING
 				{
 					PGWindowDef *n = makeNode(PGWindowDef);
+
 					n->frameOptions = FRAMEOPTION_START_UNBOUNDED_FOLLOWING;
 					n->startOffset = NULL;
 					n->endOffset = NULL;
@@ -3167,6 +3254,7 @@ frame_bound:
 			| CURRENT_P ROW
 				{
 					PGWindowDef *n = makeNode(PGWindowDef);
+
 					n->frameOptions = FRAMEOPTION_START_CURRENT_ROW;
 					n->startOffset = NULL;
 					n->endOffset = NULL;
@@ -3175,7 +3263,8 @@ frame_bound:
 			| a_expr PRECEDING
 				{
 					PGWindowDef *n = makeNode(PGWindowDef);
-					n->frameOptions = FRAMEOPTION_START_VALUE_PRECEDING;
+
+					n->frameOptions = FRAMEOPTION_START_OFFSET_PRECEDING;
 					n->startOffset = $1;
 					n->endOffset = NULL;
 					$$ = n;
@@ -3183,11 +3272,20 @@ frame_bound:
 			| a_expr FOLLOWING
 				{
 					PGWindowDef *n = makeNode(PGWindowDef);
-					n->frameOptions = FRAMEOPTION_START_VALUE_FOLLOWING;
+
+					n->frameOptions = FRAMEOPTION_START_OFFSET_FOLLOWING;
 					n->startOffset = $1;
 					n->endOffset = NULL;
 					$$ = n;
 				}
+		;
+
+opt_window_exclusion_clause:
+			EXCLUDE CURRENT_P ROW	{ $$ = FRAMEOPTION_EXCLUDE_CURRENT_ROW; }
+			| EXCLUDE GROUP_P		{ $$ = FRAMEOPTION_EXCLUDE_GROUP; }
+			| EXCLUDE TIES			{ $$ = FRAMEOPTION_EXCLUDE_TIES; }
+			| EXCLUDE NO OTHERS		{ $$ = 0; }
+			| /*EMPTY*/				{ $$ = 0; }
 		;
 
 
@@ -3229,6 +3327,29 @@ dict_arguments_opt_comma:
 			| dict_arguments ','							{ $$ = $1; }
 		;
 
+map_arg:
+			a_expr ':' a_expr
+			{
+				$$ = list_make2($1, $3);
+			}
+	;
+
+map_arguments:
+			map_arg									{ $$ = list_make1($1); }
+			| map_arguments ',' map_arg				{ $$ = lappend($1, $3); }
+	;
+
+
+map_arguments_opt_comma:
+			map_arguments							{ $$ = $1; }
+			| map_arguments ','						{ $$ = $1; }
+		;
+
+
+opt_map_arguments_opt_comma:
+			map_arguments_opt_comma					{ $$ = $1; }
+			| /* empty */							{ $$ = NULL; }
+		;
 
 sub_type:	ANY										{ $$ = PG_ANY_SUBLINK; }
 			| SOME									{ $$ = PG_ANY_SUBLINK; }
@@ -3421,6 +3542,10 @@ extract_arg:
 			| second_keyword								{ $$ = (char*) "second"; }
 			| millisecond_keyword							{ $$ = (char*) "millisecond"; }
 			| microsecond_keyword							{ $$ = (char*) "microsecond"; }
+			| week_keyword									{ $$ = (char*) "week"; }
+			| decade_keyword								{ $$ = (char*) "decade"; }
+			| century_keyword								{ $$ = (char*) "century"; }
+			| millennium_keyword							{ $$ = (char*) "millennium"; }
 			| Sconst										{ $$ = $1; }
 		;
 
@@ -3580,11 +3705,7 @@ columnref:	ColId
 		;
 
 indirection_el:
-			'.' attr_name
-				{
-					$$ = (PGNode *) makeString($2);
-				}
-			| '[' a_expr ']'
+			'[' a_expr ']'
 				{
 					PGAIndices *ai = makeNode(PGAIndices);
 					ai->is_slice = false;
@@ -3600,17 +3721,28 @@ indirection_el:
 					ai->uidx = $4;
 					$$ = (PGNode *) ai;
 				}
-		;
+			| '[' opt_slice_bound ':' opt_slice_bound ':' opt_slice_bound ']' {
+				    	PGAIndices *ai = makeNode(PGAIndices);
+				    	ai->is_slice = true;
+				    	ai->lidx = $2;
+				    	ai->uidx = $4;
+				    	ai->step = $6;
+				    	$$ = (PGNode *) ai;
+				}
+			| '[' opt_slice_bound ':' '-' ':' opt_slice_bound ']' {
+					PGAIndices *ai = makeNode(PGAIndices);
+					ai->is_slice = true;
+					ai->lidx = $2;
+					ai->step = $6;
+					$$ = (PGNode *) ai;
+				}
+				;
 
 opt_slice_bound:
 			a_expr									{ $$ = $1; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
-indirection:
-			indirection_el							{ $$ = list_make1($1); }
-			| indirection indirection_el			{ $$ = lappend($1, $2); }
-		;
 
 opt_indirection:
 			/*EMPTY*/								{ $$ = NIL; }
@@ -3647,6 +3779,22 @@ extended_indirection_el:
 					ai->is_slice = true;
 					ai->lidx = $2;
 					ai->uidx = $4;
+					$$ = (PGNode *) ai;
+				}
+		    	| '[' opt_slice_bound ':' opt_slice_bound ':' opt_slice_bound ']' {
+					PGAIndices *ai = makeNode(PGAIndices);
+					ai->is_slice = true;
+					ai->lidx = $2;
+					ai->uidx = $4;
+					ai->step = $6;
+                 			$$ = (PGNode *) ai;
+                		}
+
+			| '[' opt_slice_bound ':' '-' ':' opt_slice_bound ']' {
+					PGAIndices *ai = makeNode(PGAIndices);
+					ai->is_slice = true;
+					ai->lidx = $2;
+					ai->step = $6;
 					$$ = (PGNode *) ai;
 				}
 		;
@@ -3759,45 +3907,6 @@ qualified_name_list:
 			| qualified_name_list ',' qualified_name { $$ = lappend($1, $3); }
 		;
 
-/*
- * The production for a qualified relation name has to exactly match the
- * production for a qualified func_name, because in a FROM clause we cannot
- * tell which we are parsing until we see what comes after it ('(' for a
- * func_name, something else for a relation). Therefore we allow 'indirection'
- * which may contain subscripts, and reject that case in the C code.
- */
-qualified_name:
-			ColIdOrString
-				{
-					$$ = makeRangeVar(NULL, $1, @1);
-				}
-			| ColId indirection
-				{
-					check_qualified_name($2, yyscanner);
-					$$ = makeRangeVar(NULL, NULL, @1);
-					switch (list_length($2))
-					{
-						case 1:
-							$$->catalogname = NULL;
-							$$->schemaname = $1;
-							$$->relname = strVal(linitial($2));
-							break;
-						case 2:
-							$$->catalogname = $1;
-							$$->schemaname = strVal(linitial($2));
-							$$->relname = strVal(lsecond($2));
-							break;
-						case 3:
-						default:
-							ereport(ERROR,
-									(errcode(PG_ERRCODE_SYNTAX_ERROR),
-									 errmsg("improper qualified name (too many dotted names): %s",
-											NameListToString(lcons(makeString($1), $2))),
-									 parser_errposition(@1)));
-							break;
-					}
-				}
-		;
 
 name_list:	name
 					{ $$ = list_make1(makeString($1)); }
@@ -3818,7 +3927,6 @@ name_list_opt_comma_opt_bracket:
 
 name:		ColIdOrString							{ $$ = $1; };
 
-attr_name:	ColLabel								{ $$ = $1; };
 
 /*
  * The production for a qualified func_name has to exactly match the
@@ -3951,7 +4059,6 @@ AexprConst: Iconst
 		;
 
 Iconst:		ICONST									{ $$ = $1; };
-Sconst:		SCONST									{ $$ = $1; };
 
 /* Role specifications */
 /*
@@ -3964,17 +4071,6 @@ Sconst:		SCONST									{ $$ = $1; };
  * So, we divide names into several possible classes.  The classification
  * is chosen in part to make keywords acceptable as names wherever possible.
  */
-
-/* Column identifier --- names that can be column, table, etc names.
- */
-ColId:		IDENT									{ $$ = $1; }
-			| unreserved_keyword					{ $$ = pstrdup($1); }
-			| col_name_keyword						{ $$ = pstrdup($1); }
-		;
-
-ColIdOrString:	ColId											{ $$ = $1; }
-				| SCONST										{ $$ = $1; }
-		;
 
 
 /* Type/function identifier --- names that can be type or function names.
@@ -4012,19 +4108,7 @@ opt_name_list:
 param_name:	type_function_name
 		;
 
-/* Any not-fully-reserved word --- these names can be, eg, role names.
- */
-/* Column label --- allowed labels in "AS" clauses.
- * This presently includes *all* Postgres keywords.
- */
-ColLabel:	IDENT									{ $$ = $1; }
-			| other_keyword							{ $$ = pstrdup($1); }
-			| unreserved_keyword					{ $$ = pstrdup($1); }
-			| reserved_keyword						{ $$ = pstrdup($1); }
-		;
 
 ColLabelOrString:	ColLabel						{ $$ = $1; }
 					| SCONST						{ $$ = $1; }
 		;
-
-named_param: IDENT { $$ = $1; }

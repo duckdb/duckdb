@@ -79,6 +79,8 @@ with recursive t as (select 1 as x union select x+(SELECT 1) from t where x < 3)
 2
 3
 
+require noalternativeverify
+
 # hash join
 query I
 with recursive t as (select 1 as x union all select * from (select x from t where x < 5) tbl(i) join (select 1) tbl2(i) using (i)) select * from t limit 3;
@@ -140,18 +142,22 @@ NULL
 # order by is not allowed in the recursive term of ctes
 statement error
 with recursive t as (select 1 as x union select sum(x+1) from t where x < 3 order by x) select * from t
+----
 
 # limit is not allowed in the recursive term of ctes
 statement error
 with recursive t as (select 1 as x union select sum(x+1) from t where x < 3 LIMIT 1) select * from t
+----
 
 # offset is not allowed in the recursive term of ctes
 statement error
 with recursive t as (select 1 as x union select sum(x+1) from t where x < 3 OFFSET 1) select * from t
+----
 
 # offset is not allowed in the recursive term of ctes
 statement error
 with recursive t as (select 1 as x union select sum(x+1) from t where x < 3 LIMIT 1 OFFSET 1) select * from t
+----
 
 # create a view from a recursive cte
 statement ok

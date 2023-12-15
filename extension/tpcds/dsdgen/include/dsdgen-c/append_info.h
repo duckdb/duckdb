@@ -18,6 +18,7 @@ void append_key(append_info info, int64_t value);
 void append_date(append_info info, int64_t value);
 void append_integer(append_info info, int32_t value);
 void append_decimal(append_info info, decimal_t *val);
+void append_integer_decimal(append_info info, int32_t val);
 void append_boolean(append_info info, int32_t val);
 
 #endif

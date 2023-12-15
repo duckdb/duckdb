@@ -29,7 +29,8 @@ enum class VectorBufferType : uint8_t {
 	STRUCT_BUFFER,       // struct buffer, holds a ordered mapping from name to child vector
 	LIST_BUFFER,         // list buffer, holds a single flatvector child
 	MANAGED_BUFFER,      // managed buffer, holds a buffer managed by the buffermanager
-	OPAQUE_BUFFER        // opaque buffer, can be created for example by the parquet reader
+	OPAQUE_BUFFER,       // opaque buffer, can be created for example by the parquet reader
+	ARRAY_BUFFER         // array buffer, holds a single flatvector child
 };
 
 enum class VectorAuxiliaryDataType : uint8_t {
@@ -45,6 +46,23 @@ struct VectorAuxiliaryData {
 
 	virtual ~VectorAuxiliaryData() {
 	}
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast vector auxiliary data to type - type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast vector auxiliary data to type - type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 //! The VectorBuffer is a class used by the vector to hold its data
@@ -54,10 +72,10 @@ public:
 	}
 	explicit VectorBuffer(idx_t data_size) : buffer_type(VectorBufferType::STANDARD_BUFFER) {
 		if (data_size > 0) {
-			data = unique_ptr<data_t[]>(new data_t[data_size]);
+			data = make_unsafe_uniq_array<data_t>(data_size);
 		}
 	}
-	explicit VectorBuffer(unique_ptr<data_t[]> data_p)
+	explicit VectorBuffer(unsafe_unique_array<data_t> data_p)
 	    : buffer_type(VectorBufferType::STANDARD_BUFFER), data(std::move(data_p)) {
 	}
 	virtual ~VectorBuffer() {
@@ -70,7 +88,7 @@ public:
 		return data.get();
 	}
 
-	void SetData(unique_ptr<data_t[]> new_data) {
+	void SetData(unsafe_unique_array<data_t> new_data) {
 		data = std::move(new_data);
 	}
 
@@ -80,6 +98,10 @@ public:
 
 	void SetAuxiliaryData(unique_ptr<VectorAuxiliaryData> aux_data_p) {
 		aux_data = std::move(aux_data_p);
+	}
+
+	void MoveAuxiliaryData(VectorBuffer &source_buffer) {
+		SetAuxiliaryData(std::move(source_buffer.aux_data));
 	}
 
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
@@ -99,7 +121,19 @@ public:
 protected:
 	VectorBufferType buffer_type;
 	unique_ptr<VectorAuxiliaryData> aux_data;
-	unique_ptr<data_t[]> data;
+	unsafe_unique_array<data_t> data;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 //! The DictionaryBuffer holds a selection vector
@@ -133,7 +167,7 @@ private:
 class VectorStringBuffer : public VectorBuffer {
 public:
 	VectorStringBuffer();
-	VectorStringBuffer(VectorBufferType type);
+	explicit VectorStringBuffer(VectorBufferType type);
 
 public:
 	string_t AddString(const char *data, idx_t len) {
@@ -143,7 +177,7 @@ public:
 		return heap.AddString(data);
 	}
 	string_t AddBlob(string_t data) {
-		return heap.AddBlob(data.GetDataUnsafe(), data.GetSize());
+		return heap.AddBlob(data.GetData(), data.GetSize());
 	}
 	string_t EmptyString(idx_t len) {
 		return heap.EmptyString(len);
@@ -186,7 +220,7 @@ private:
 class VectorStructBuffer : public VectorBuffer {
 public:
 	VectorStructBuffer();
-	VectorStructBuffer(const LogicalType &struct_type, idx_t capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorStructBuffer(const LogicalType &struct_type, idx_t capacity = STANDARD_VECTOR_SIZE);
 	VectorStructBuffer(Vector &other, const SelectionVector &sel, idx_t count);
 	~VectorStructBuffer() override;
 
@@ -205,8 +239,8 @@ private:
 
 class VectorListBuffer : public VectorBuffer {
 public:
-	VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
-	VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
 	~VectorListBuffer() override;
 
 public:
@@ -220,12 +254,42 @@ public:
 
 	void PushBack(const Value &insert);
 
-	idx_t capacity = 0;
-	idx_t size = 0;
+	idx_t GetSize() {
+		return size;
+	}
+
+	idx_t GetCapacity() {
+		return capacity;
+	}
+
+	void SetCapacity(idx_t new_capacity);
+	void SetSize(idx_t new_size);
 
 private:
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
+	idx_t capacity = 0;
+	idx_t size = 0;
+};
+
+class VectorArrayBuffer : public VectorBuffer {
+public:
+	explicit VectorArrayBuffer(unique_ptr<Vector> child_vector, idx_t array_size, idx_t initial_capacity);
+	explicit VectorArrayBuffer(const LogicalType &array, idx_t initial = STANDARD_VECTOR_SIZE);
+	~VectorArrayBuffer() override;
+
+public:
+	Vector &GetChild();
+	idx_t GetArraySize();
+	idx_t GetChildSize();
+
+private:
+	unique_ptr<Vector> child;
+	// The size of each array in this buffer
+	idx_t array_size = 0;
+	// How many arrays are currently stored in this buffer
+	// The child vector has size (array_size * size)
+	idx_t size = 0;
 };
 
 //! The ManagedVectorBuffer holds a buffer handle

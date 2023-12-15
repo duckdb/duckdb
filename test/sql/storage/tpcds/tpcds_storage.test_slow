@@ -20,7 +20,7 @@ CHECKPOINT
 restart
 
 statement ok
-PRAGMA default_null_order='NULLS LAST'
+PRAGMA default_null_order='postgres'
 
 loop i 1 9
 

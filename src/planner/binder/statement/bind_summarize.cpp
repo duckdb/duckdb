@@ -61,12 +61,8 @@ static unique_ptr<ParsedExpression> SummarizeCreateNullPercentage(string column_
 	    SummarizeCreateBinaryFunction("-", make_uniq<ConstantExpression>(Value::DOUBLE(1)), std::move(null_percentage));
 	auto percentage_x =
 	    SummarizeCreateBinaryFunction("*", std::move(negate_x), make_uniq<ConstantExpression>(Value::DOUBLE(100)));
-	auto round_x = SummarizeCreateBinaryFunction("round", std::move(percentage_x),
-	                                             make_uniq<ConstantExpression>(Value::INTEGER(2)));
-	auto concat_x =
-	    SummarizeCreateBinaryFunction("concat", std::move(round_x), make_uniq<ConstantExpression>(Value("%")));
 
-	return concat_x;
+	return make_uniq<CastExpression>(LogicalType::DECIMAL(9, 2), std::move(percentage_x));
 }
 
 BoundStatement Binder::BindSummarize(ShowStatement &stmt) {
@@ -95,7 +91,8 @@ BoundStatement Binder::BindSummarize(ShowStatement &stmt) {
 		type_children.push_back(make_uniq<ConstantExpression>(Value(plan.types[i].ToString())));
 		min_children.push_back(SummarizeCreateAggregate("min", plan.names[i]));
 		max_children.push_back(SummarizeCreateAggregate("max", plan.names[i]));
-		unique_children.push_back(SummarizeCreateAggregate("approx_count_distinct", plan.names[i]));
+		unique_children.push_back(make_uniq<CastExpression>(
+		    LogicalType::BIGINT, SummarizeCreateAggregate("approx_count_distinct", plan.names[i])));
 		if (plan.types[i].IsNumeric()) {
 			avg_children.push_back(SummarizeCreateAggregate("avg", plan.names[i]));
 			std_children.push_back(SummarizeCreateAggregate("stddev", plan.names[i]));

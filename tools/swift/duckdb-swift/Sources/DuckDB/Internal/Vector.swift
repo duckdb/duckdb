@@ -51,15 +51,13 @@ private extension Vector {
   func unwrapNull(at index: Int) -> Bool {
     precondition(index < count, "vector index out of bounds")
     let offsetIndex = offset + index
-    let validityMasks = duckdb_vector_get_validity(cvector)
-    guard let validityMasks else { return false }
-    let validityMasksBuffer = UnsafeBufferPointer(
-      start: validityMasks, count: Int(duckdb_vector_size() / 64))
-    let validityEntryIndex = offsetIndex / 64
+    let validityMasksPtr = duckdb_vector_get_validity(cvector)
+    guard let validityMasksPtr else { return false }
+    let validityMaskEntryIndex = offsetIndex / 64
+    let validityMaskEntryPtr = (validityMasksPtr + validityMaskEntryIndex)
     let validityBitIndex = offsetIndex % 64
-    let validityMask = validityMasksBuffer[Int(validityEntryIndex)]
     let validityBit = (DBInt(1) << validityBitIndex)
-    return validityMask & validityBit == 0
+    return validityMaskEntryPtr.pointee & validityBit == 0
   }
   
   func unwrap(_ type: Int.Type, at index: Int) throws -> Int {
@@ -258,6 +256,7 @@ extension Vector: Collection {
 extension Vector.Element {
   
   var dataType: DatabaseType { vector.logicalType.dataType }
+  var logicalType: LogicalType { vector.logicalType }
   
   func unwrapNull() -> Bool { vector.unwrapNull(at: index) }
   func unwrap(_ type: Int.Type) throws -> Int { try vector.unwrap(type, at: index) }
@@ -312,12 +311,12 @@ extension Vector.Element {
   }
   
   var structContents: [StructMemberContent]? {
-    guard let names = vector.logicalType.structMemberNames else { return nil }
+    guard let properties = vector.logicalType.structMemberProperties else { return nil }
     var content = [StructMemberContent]()
-    for (i, name) in names.enumerated() {
+    for (i, member) in properties.enumerated() {
       let memberCVector = duckdb_struct_vector_get_child(vector.cvector, DBInt(i))!
       let memberVector = Vector(memberCVector, count: vector.count, offset: vector.offset)
-      content.append(.init(name: name, vector: memberVector))
+      content.append(.init(name: member.name, vector: memberVector))
     }
     return content
   }

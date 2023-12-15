@@ -234,3 +234,8 @@ statement error
 SELECT list_transform([['abc']], x -> list_filter(x, y -> y));
 ----
 Conversion Error: Could not convert string 'abc' to BOOL
+
+query II
+select [[y] for y in range(5)] as c, [x for x in c if x IS NOT NULL];
+----
+[[0], [1], [2], [3], [4]]	[[0], [1], [2], [3], [4]]

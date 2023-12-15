@@ -126,6 +126,7 @@ SELECT list_position([1.0,2.0,3.0], 'a')
 # Not a list as input
 statement error
 SELECT list_position('a', 'a')
+----
 
 query T
 SELECT list_position(NULL,NULL)
@@ -222,15 +223,19 @@ SELECT list_position([NULL,7], 7)
 
 statement error
 SELECT list_position([[1,2,3],[1],[1,2,3])
+----
 
 statement error
 SELECT list_position([[1,2,3],[1],[1,2,3]])
+----
 
 statement error
 SELECT list_position(1)
+----
 
 statement error
 SELECT list_position(1,1)
+----
 
 statement ok
 PRAGMA debug_force_external=true

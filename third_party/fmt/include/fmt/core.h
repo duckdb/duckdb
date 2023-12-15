@@ -62,15 +62,9 @@
 
 // Check if relaxed C++14 constexpr is supported.
 // GCC doesn't allow throw in constexpr until version 6 (bug 67371).
-#ifndef FMT_USE_CONSTEXPR
-#  define FMT_USE_CONSTEXPR                                           \
-    (FMT_HAS_FEATURE(cxx_relaxed_constexpr) || FMT_MSC_VER >= 1910 || \
-     (FMT_GCC_VERSION >= 600 && __cplusplus >= 201402L)) &&           \
-        !FMT_NVCC
-#endif
 #if FMT_USE_CONSTEXPR
-#  define FMT_CONSTEXPR constexpr
-#  define FMT_CONSTEXPR_DECL constexpr
+#  define FMT_CONSTEXPR inline
+#  define FMT_CONSTEXPR_DECL
 #else
 #  define FMT_CONSTEXPR inline
 #  define FMT_CONSTEXPR_DECL
@@ -323,6 +317,10 @@ template <typename Char> class basic_string_view {
     size_ -= n;
   }
 
+  std::string to_string() {
+	  return std::string((char *) data(), size());
+  }
+
   // Lexicographically compare this string reference to other.
   int compare(basic_string_view other) const {
     size_t str_size = size_ < other.size_ ? size_ : other.size_;
@@ -416,7 +414,7 @@ template <typename S>
 struct is_compile_string : std::is_base_of<compile_string, S> {};
 
 template <typename S, FMT_ENABLE_IF(is_compile_string<S>::value)>
-constexpr basic_string_view<typename S::char_type> to_string_view(const S& s) {
+FMT_CONSTEXPR basic_string_view<typename S::char_type> to_string_view(const S& s) {
   return s;
 }
 
@@ -442,7 +440,7 @@ struct error_handler {
   FMT_CONSTEXPR error_handler(const error_handler&) = default;
 
   // This function is intentionally not constexpr to give a compile-time error.
-  FMT_NORETURN FMT_API void on_error(const char* message);
+  FMT_NORETURN FMT_API void on_error(std::string message);
 };
 }  // namespace internal
 
@@ -520,7 +518,7 @@ class basic_format_parse_context : private ErrorHandler {
 
   FMT_CONSTEXPR void check_arg_id(basic_string_view<Char>) {}
 
-  FMT_CONSTEXPR void on_error(const char* message) {
+  FMT_CONSTEXPR void on_error(std::string message) {
     ErrorHandler::on_error(message);
   }
 
@@ -1158,7 +1156,7 @@ template <typename OutputIt, typename Char> class basic_format_context {
   format_arg arg(basic_string_view<char_type> name);
 
   internal::error_handler error_handler() { return {}; }
-  void on_error(const char* message) { error_handler().on_error(message); }
+  void on_error(std::string message) { error_handler().on_error(message); }
 
   // Returns an iterator to the beginning of the output range.
   iterator out() { return out_; }

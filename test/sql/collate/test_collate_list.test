@@ -7,4 +7,5 @@ PRAGMA collations
 
 statement error
 PRAGMA collations=3
+----
 

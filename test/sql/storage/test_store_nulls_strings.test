@@ -23,21 +23,22 @@ CHECKPOINT
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	hello
 12	NULL
 13	abcdefgh
+NULL	hello
 
 restart
 
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	hello
 12	NULL
 13	abcdefgh
+NULL	hello
 
 statement error
 CREATE TABLE test (a INTEGER, b STRING);
+----
 
 statement ok
 CREATE TABLE IF NOT EXISTS test (a INTEGER, b STRING);

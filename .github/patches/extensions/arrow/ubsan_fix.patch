@@ -1,0 +1,20 @@
+diff --git a/duckdb b/duckdb
+index 3196df7..9723c96 160000
+--- a/duckdb
++++ b/duckdb
+@@ -1 +1 @@
+-Subproject commit 3196df79cecac38c867af084f19924c78dfc9d29
++Subproject commit 9723c96c284735e759138cedc5b00b282c2f2bec
+diff --git a/src/arrow_scan_ipc.cpp b/src/arrow_scan_ipc.cpp
+index e3bf858..5e45013 100644
+--- a/src/arrow_scan_ipc.cpp
++++ b/src/arrow_scan_ipc.cpp
+@@ -54,7 +54,7 @@ unique_ptr <FunctionData> ArrowIPCTableFunction::ArrowScanBind(ClientContext &co
+
+     // TODO Everything below this is identical to the bind in duckdb/src/function/table/arrow.cpp
+     auto &data = *res;
+-    stream_factory_get_schema(stream_factory_ptr, data.schema_root);
++    stream_factory_get_schema((ArrowArrayStream *) stream_factory_ptr, data.schema_root.arrow_schema);
+     for (idx_t col_idx = 0; col_idx < (idx_t) data.schema_root.arrow_schema.n_children; col_idx++) {
+         auto &schema = *data.schema_root.arrow_schema.children[col_idx];
+         if (!schema.release) {

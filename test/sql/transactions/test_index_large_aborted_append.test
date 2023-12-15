@@ -4,7 +4,6 @@
 
 require skip_reload
 
-
 statement ok
 PRAGMA enable_verification
 
@@ -36,6 +35,7 @@ COMMIT;
 # con2 fails to commit because of the conflict
 statement error con2
 COMMIT;
+----
 
 query I con1
 SELECT COUNT(*)=${i} FROM integers

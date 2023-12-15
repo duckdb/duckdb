@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/function/scalar/strftime_format.hpp"
 #include "json_common.hpp"
 
 namespace duckdb {
@@ -32,18 +32,18 @@ public:
 	//! Throws an error if an object has a key we didn't know about
 	bool error_unknown_key = false;
 
-	//! JSON reader for adding line number information to transform errors (can be NULL)
-	bool from_file = false;
+	//! Whether to delay the error when transforming (e.g., when non-strict casting or reading from file)
+	bool delay_error = false;
 	//! Date format used for parsing (can be NULL)
-	DateFormatMap *date_format_map = nullptr;
+	optional_ptr<DateFormatMap> date_format_map = nullptr;
 	//! String to store errors in
 	string error_message;
 	//! Index of the object where the error occurred
 	idx_t object_index = DConstants::INVALID_INDEX;
 
 public:
-	void Serialize(FieldWriter &writer);
-	void Deserialize(FieldReader &reader);
+	void Serialize(Serializer &serializer) const;
+	static JSONTransformOptions Deserialize(Deserializer &deserializer);
 };
 
 struct TryParseDate {

@@ -23,6 +23,7 @@ restart
 
 statement error
 INSERT INTO tbl VALUES (5, 'test');
+----
 
 restart
 
@@ -56,6 +57,7 @@ restart
 
 statement error
 INSERT INTO tbl VALUES (5, 'test');
+----
 
 restart
 
@@ -94,6 +96,7 @@ restart
 
 statement error
 INSERT INTO tbl VALUES (6,'test');
+----
 
 restart
 
@@ -124,6 +127,7 @@ restart
 
 statement error
 INSERT INTO tbl VALUES (6,'test');
+----
 
 restart
 
@@ -183,6 +187,7 @@ SELECT * FROM tbl;
 # gcol1 is a dependency of gcol2
 statement error
 ALTER TABLE tbl DROP COLUMN gcol1;
+----
 
 # gcol2 is not a dependency of anything
 statement ok

@@ -1,0 +1,17 @@
+# name: test/sql/copy/csv/glob/read_csv_glob_crawl.test_slow
+# description: Test glob **
+# group: [glob]
+
+statement ok
+PRAGMA enable_verification
+
+# tests without previous directories
+query I
+select count(*) > 0 from glob('**');
+----
+true
+
+query I
+select count(*) from glob('**/samename/*');
+----
+8

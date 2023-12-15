@@ -27,7 +27,7 @@ struct ExpressionHashFunction {
 template <class T>
 struct ExpressionEquality {
 	bool operator()(const reference<T> &a, const reference<T> &b) const {
-		return a.get().Equals(&b.get());
+		return a.get().Equals(b.get());
 	}
 };
 

@@ -1,0 +1,65 @@
+# name: test/issues/general/test_9795.test
+# description: Issue 1091: Min/Max function doesn't use collations.
+# group: [general]
+
+statement ok
+create table tbl (a varchar);
+
+statement ok
+insert into tbl values ('ö'), ('o'), ('p');
+
+query I
+select max(a) from tbl;
+----
+ö
+
+query I
+select arg_max(a, a) from tbl;
+----
+ö
+
+query I
+select max(a collate noaccent) from tbl;
+----
+p
+
+query I
+select arg_max(a, a collate noaccent) from tbl;
+----
+p
+
+query I
+select min(a) from tbl;
+----
+o
+
+query I
+select arg_min(a, a) from tbl;
+----
+o
+
+query I
+select min(a collate noaccent) from tbl;
+----
+ö
+
+query I
+select arg_min(a, a collate noaccent) from tbl;
+----
+ö
+
+statement ok
+create table tbl2 (a int);
+
+statement ok
+insert into tbl2 values (1), (2), (3);
+
+query I
+select min(a) from tbl2;
+----
+1
+
+query I
+select max(a) from tbl2;
+----
+3

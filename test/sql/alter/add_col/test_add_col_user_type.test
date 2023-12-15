@@ -1,0 +1,43 @@
+# name: test/sql/alter/add_col/test_add_col_user_type.test
+# description: Test ALTER TABLE ADD COLUMN with "CREATE TYPE"-based types
+# group: [add_col]
+
+statement ok
+CREATE SCHEMA test_schema;
+
+statement ok
+CREATE TYPE main_int AS int32;
+
+statement ok
+CREATE TYPE test_schema.test_int AS int32;
+
+statement ok
+CREATE TABLE test_schema.test_t1 (i INT);
+
+statement ok
+CREATE TABLE main_t1 (i INT);
+
+#
+# main.<type> in test_schema.<table>
+#
+statement error
+ALTER TABLE main_t1 ADD COLUMN j test_int;
+----
+
+#
+# main.<type> in test_schema.<table>
+#
+statement ok
+ALTER TABLE test_schema.test_t1 ADD COLUMN not_found main_int;
+
+#
+# test.<type> in test_schema.<table>, with qualifier
+# TODO(morrita): Currently the type name cannot be qualified. Fix this.
+# statement ok
+# ALTER TABLE test_schema.test_t1 ADD COLUMN k test_schema.test_int;
+
+#
+# test.<type> in test_schema.<table>, without qualifier
+#
+statement ok
+ALTER TABLE test_schema.test_t1 ADD COLUMN l test_int;

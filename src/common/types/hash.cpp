@@ -40,7 +40,7 @@ template <>
 hash_t Hash(float val) {
 	static_assert(sizeof(float) == sizeof(uint32_t), "");
 	FloatingPointEqualityTransform<float>::OP(val);
-	uint32_t uval = Load<uint32_t>((const_data_ptr_t)&val);
+	uint32_t uval = Load<uint32_t>(const_data_ptr_cast(&val));
 	return murmurhash64(uval);
 }
 
@@ -48,13 +48,15 @@ template <>
 hash_t Hash(double val) {
 	static_assert(sizeof(double) == sizeof(uint64_t), "");
 	FloatingPointEqualityTransform<double>::OP(val);
-	uint64_t uval = Load<uint64_t>((const_data_ptr_t)&val);
+	uint64_t uval = Load<uint64_t>(const_data_ptr_cast(&val));
 	return murmurhash64(uval);
 }
 
 template <>
 hash_t Hash(interval_t val) {
-	return Hash(val.days) ^ Hash(val.months) ^ Hash(val.micros);
+	int64_t months, days, micros;
+	val.Normalize(months, days, micros);
+	return Hash(days) ^ Hash(months) ^ Hash(micros);
 }
 
 template <>
@@ -64,7 +66,7 @@ hash_t Hash(const char *str) {
 
 template <>
 hash_t Hash(string_t val) {
-	return Hash(val.GetDataUnsafe(), val.GetSize());
+	return Hash(val.GetData(), val.GetSize());
 }
 
 template <>

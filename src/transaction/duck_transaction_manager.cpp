@@ -12,6 +12,7 @@
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -61,10 +62,10 @@ DuckTransactionManager &DuckTransactionManager::Get(AttachedDatabase &db) {
 	if (!transaction_manager.IsDuckTransactionManager()) {
 		throw InternalException("Calling DuckTransactionManager::Get on non-DuckDB transaction manager");
 	}
-	return (DuckTransactionManager &)transaction_manager;
+	return reinterpret_cast<DuckTransactionManager &>(transaction_manager);
 }
 
-Transaction *DuckTransactionManager::StartTransaction(ClientContext &context) {
+Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
 	if (current_start_timestamp >= TRANSACTION_ID_START) { // LCOV_EXCL_START
@@ -82,33 +83,11 @@ Transaction *DuckTransactionManager::StartTransaction(ClientContext &context) {
 
 	// create the actual transaction
 	auto transaction = make_uniq<DuckTransaction>(*this, context, start_time, transaction_id);
-	auto transaction_ptr = transaction.get();
+	auto &transaction_ref = *transaction;
 
 	// store it in the set of active transactions
 	active_transactions.push_back(std::move(transaction));
-	return transaction_ptr;
-}
-
-struct ClientLockWrapper {
-	ClientLockWrapper(mutex &client_lock, shared_ptr<ClientContext> connection)
-	    : connection(std::move(connection)), connection_lock(make_uniq<lock_guard<mutex>>(client_lock)) {
-	}
-
-	shared_ptr<ClientContext> connection;
-	unique_ptr<lock_guard<mutex>> connection_lock;
-};
-
-void DuckTransactionManager::LockClients(vector<ClientLockWrapper> &client_locks, ClientContext &context) {
-	auto &connection_manager = ConnectionManager::Get(context);
-	client_locks.emplace_back(connection_manager.connections_lock, nullptr);
-	auto connection_list = connection_manager.GetConnectionList();
-	for (auto &con : connection_list) {
-		if (con.get() == &context) {
-			continue;
-		}
-		auto &context_lock = con->context_lock;
-		client_locks.emplace_back(context_lock, std::move(con));
-	}
+	return transaction_ref;
 }
 
 void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
@@ -118,22 +97,13 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 	}
 
 	// first check if no other thread is checkpointing right now
+	auto current = &DuckTransaction::Get(context, db);
 	auto lock = unique_lock<mutex>(transaction_lock);
 	if (thread_is_checkpointing) {
 		throw TransactionException("Cannot CHECKPOINT: another thread is checkpointing right now");
 	}
 	CheckpointLock checkpoint_lock(*this);
 	checkpoint_lock.Lock();
-	lock.unlock();
-
-	// lock all the clients AND the connection manager now
-	// this ensures no new queries can be started, and no new connections to the database can be made
-	// to avoid deadlock we release the transaction lock while locking the clients
-	vector<ClientLockWrapper> client_locks;
-	LockClients(client_locks, context);
-
-	auto current = &DuckTransaction::Get(context, db);
-	lock.lock();
 	if (current->ChangesMade()) {
 		throw TransactionException("Cannot CHECKPOINT: the current transaction has transaction local changes");
 	}
@@ -143,6 +113,16 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 			                           "the other transactions and force a checkpoint");
 		}
 	} else {
+		lock.unlock();
+
+		// lock all the clients AND the connection manager now
+		// this ensures no new queries can be started, and no new connections to the database can be made
+		// to avoid deadlock we release the transaction lock while locking the clients
+		auto &connection_manager = ConnectionManager::Get(context);
+		vector<ClientLockWrapper> client_locks;
+		connection_manager.LockClients(client_locks, context);
+
+		lock.lock();
 		if (!CanCheckpoint(current)) {
 			for (size_t i = 0; i < active_transactions.size(); i++) {
 				auto &transaction = active_transactions[i];
@@ -152,9 +132,12 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 
 				// remove the transaction id from the list of active transactions
 				// potentially resulting in garbage collection
-				RemoveTransaction(transaction.get());
+				RemoveTransaction(*transaction);
 				if (transaction_context) {
-					transaction_context->transaction.ClearTransaction();
+					// invalidate the active transaction for this connection
+					auto &meta_transaction = MetaTransaction::Get(*transaction_context);
+					meta_transaction.RemoveTransaction(db);
+					ValidChecker::Get(meta_transaction).Invalidate("Invalidated due to FORCE CHECKPOINT");
 				}
 				i--;
 			}
@@ -164,7 +147,7 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 	storage_manager.CreateCheckpoint();
 }
 
-bool DuckTransactionManager::CanCheckpoint(DuckTransaction *current) {
+bool DuckTransactionManager::CanCheckpoint(optional_ptr<DuckTransaction> current) {
 	if (db.IsSystem()) {
 		return false;
 	}
@@ -176,35 +159,23 @@ bool DuckTransactionManager::CanCheckpoint(DuckTransaction *current) {
 		return false;
 	}
 	for (auto &transaction : active_transactions) {
-		if (transaction.get() != current) {
+		if (transaction.get() != current.get()) {
 			return false;
 		}
 	}
 	return true;
 }
 
-string DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction *transaction_p) {
-	auto transaction = (DuckTransaction *)transaction_p;
+string DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
+	auto &transaction = transaction_p.Cast<DuckTransaction>();
 	vector<ClientLockWrapper> client_locks;
 	auto lock = make_uniq<lock_guard<mutex>>(transaction_lock);
 	CheckpointLock checkpoint_lock(*this);
 	// check if we can checkpoint
-	bool checkpoint = thread_is_checkpointing ? false : CanCheckpoint(transaction);
+	bool checkpoint = thread_is_checkpointing ? false : CanCheckpoint(&transaction);
 	if (checkpoint) {
-		if (transaction->AutomaticCheckpoint(db)) {
+		if (transaction.AutomaticCheckpoint(db)) {
 			checkpoint_lock.Lock();
-			// we might be able to checkpoint: lock all clients
-			// to avoid deadlock we release the transaction lock while locking the clients
-			lock.reset();
-
-			LockClients(client_locks, context);
-
-			lock = make_uniq<lock_guard<mutex>>(transaction_lock);
-			checkpoint = CanCheckpoint(transaction);
-			if (!checkpoint) {
-				checkpoint_lock.Unlock();
-				client_locks.clear();
-			}
 		} else {
 			checkpoint = false;
 		}
@@ -212,12 +183,12 @@ string DuckTransactionManager::CommitTransaction(ClientContext &context, Transac
 	// obtain a commit id for the transaction
 	transaction_t commit_id = current_start_timestamp++;
 	// commit the UndoBuffer of the transaction
-	string error = transaction->Commit(db, commit_id, checkpoint);
+	string error = transaction.Commit(db, commit_id, checkpoint);
 	if (!error.empty()) {
 		// commit unsuccessful: rollback the transaction instead
 		checkpoint = false;
-		transaction->commit_id = 0;
-		transaction->Rollback();
+		transaction.commit_id = 0;
+		transaction.Rollback();
 	}
 	if (!checkpoint) {
 		// we won't checkpoint after all: unlock the clients again
@@ -238,20 +209,21 @@ string DuckTransactionManager::CommitTransaction(ClientContext &context, Transac
 	return error;
 }
 
-void DuckTransactionManager::RollbackTransaction(Transaction *transaction_p) {
-	auto transaction = (DuckTransaction *)transaction_p;
+void DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
+	auto &transaction = transaction_p.Cast<DuckTransaction>();
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
 
 	// rollback the transaction
-	transaction->Rollback();
+	transaction.Rollback();
 
 	// remove the transaction id from the list of active transactions
 	// potentially resulting in garbage collection
 	RemoveTransaction(transaction);
 }
 
-void DuckTransactionManager::RemoveTransaction(DuckTransaction *transaction) noexcept {
+void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noexcept {
+	bool changes_made = transaction.ChangesMade();
 	// remove the transaction from the list of active transactions
 	idx_t t_index = active_transactions.size();
 	// check for the lowest and highest start time in the list of transactions
@@ -259,7 +231,7 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction *transaction) noe
 	transaction_t lowest_transaction_id = MAX_TRANSACTION_ID;
 	transaction_t lowest_active_query = MAXIMUM_QUERY_ID;
 	for (idx_t i = 0; i < active_transactions.size(); i++) {
-		if (active_transactions[i].get() == transaction) {
+		if (active_transactions[i].get() == &transaction) {
 			t_index = i;
 		} else {
 			transaction_t active_query = active_transactions[i]->active_query;
@@ -275,15 +247,18 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction *transaction) noe
 	D_ASSERT(t_index != active_transactions.size());
 	auto current_transaction = std::move(active_transactions[t_index]);
 	auto current_query = DatabaseManager::Get(db).ActiveQueryNumber();
-	if (transaction->commit_id != 0) {
-		// the transaction was committed, add it to the list of recently
-		// committed transactions
-		recently_committed_transactions.push_back(std::move(current_transaction));
-	} else {
-		// the transaction was aborted, but we might still need its information
-		// add it to the set of transactions awaiting GC
-		current_transaction->highest_active_query = current_query;
-		old_transactions.push_back(std::move(current_transaction));
+	if (changes_made) {
+		// if the transaction made any changes we need to keep it around
+		if (transaction.commit_id != 0) {
+			// the transaction was committed, add it to the list of recently
+			// committed transactions
+			recently_committed_transactions.push_back(std::move(current_transaction));
+		} else {
+			// the transaction was aborted, but we might still need its information
+			// add it to the set of transactions awaiting GC
+			current_transaction->highest_active_query = current_query;
+			old_transactions.push_back(std::move(current_transaction));
+		}
 	}
 	// remove the transaction from the set of currently active transactions
 	active_transactions.erase(active_transactions.begin() + t_index);

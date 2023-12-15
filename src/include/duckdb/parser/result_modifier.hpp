@@ -14,10 +14,8 @@
 #include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
-class FieldWriter;
-class FieldReader;
-class FormatDeserializer;
-class FormatSerializer;
+class Deserializer;
+class Serializer;
 
 enum class ResultModifierType : uint8_t {
 	LIMIT_MODIFIER = 1,
@@ -41,19 +39,30 @@ public:
 
 public:
 	//! Returns true if the two result modifiers are equivalent
-	virtual bool Equals(const ResultModifier *other) const;
+	virtual bool Equals(const ResultModifier &other) const;
 
 	//! Create a copy of this ResultModifier
 	virtual unique_ptr<ResultModifier> Copy() const = 0;
-	//! Serializes a ResultModifier to a stand-alone binary blob
-	void Serialize(Serializer &serializer) const;
-	//! Serializes a ResultModifier to a stand-alone binary blob
-	virtual void Serialize(FieldWriter &writer) const = 0;
-	//! Deserializes a blob back into a ResultModifier
-	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
 
-	virtual void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
+	virtual void Serialize(Serializer &serializer) const;
+	static unique_ptr<ResultModifier> Deserialize(Deserializer &deserializer);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast result modifier to type - result modifier type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast result modifier to type - result modifier type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 //! Single node in ORDER BY statement
@@ -70,15 +79,16 @@ struct OrderByNode {
 	unique_ptr<ParsedExpression> expression;
 
 public:
-	void Serialize(Serializer &serializer) const;
 	string ToString() const;
-	static OrderByNode Deserialize(Deserializer &source);
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static OrderByNode FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static OrderByNode Deserialize(Deserializer &deserializer);
 };
 
 class LimitModifier : public ResultModifier {
+public:
+	static constexpr const ResultModifierType TYPE = ResultModifierType::LIMIT_MODIFIER;
+
 public:
 	LimitModifier() : ResultModifier(ResultModifierType::LIMIT_MODIFIER) {
 	}
@@ -89,16 +99,17 @@ public:
 	unique_ptr<ParsedExpression> offset;
 
 public:
-	bool Equals(const ResultModifier *other) const override;
+	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ResultModifier> Deserialize(Deserializer &deserializer);
 };
 
 class OrderModifier : public ResultModifier {
+public:
+	static constexpr const ResultModifierType TYPE = ResultModifierType::ORDER_MODIFIER;
+
 public:
 	OrderModifier() : ResultModifier(ResultModifierType::ORDER_MODIFIER) {
 	}
@@ -107,16 +118,19 @@ public:
 	vector<OrderByNode> orders;
 
 public:
-	bool Equals(const ResultModifier *other) const override;
+	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ResultModifier> Deserialize(Deserializer &deserializer);
+
+	static bool Equals(const unique_ptr<OrderModifier> &left, const unique_ptr<OrderModifier> &right);
 };
 
 class DistinctModifier : public ResultModifier {
+public:
+	static constexpr const ResultModifierType TYPE = ResultModifierType::DISTINCT_MODIFIER;
+
 public:
 	DistinctModifier() : ResultModifier(ResultModifierType::DISTINCT_MODIFIER) {
 	}
@@ -125,16 +139,17 @@ public:
 	vector<unique_ptr<ParsedExpression>> distinct_on_targets;
 
 public:
-	bool Equals(const ResultModifier *other) const override;
+	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ResultModifier> Deserialize(Deserializer &deserializer);
 };
 
 class LimitPercentModifier : public ResultModifier {
+public:
+	static constexpr const ResultModifierType TYPE = ResultModifierType::LIMIT_PERCENT_MODIFIER;
+
 public:
 	LimitPercentModifier() : ResultModifier(ResultModifierType::LIMIT_PERCENT_MODIFIER) {
 	}
@@ -145,13 +160,11 @@ public:
 	unique_ptr<ParsedExpression> offset;
 
 public:
-	bool Equals(const ResultModifier *other) const override;
+	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ResultModifier> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

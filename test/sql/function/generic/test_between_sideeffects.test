@@ -23,6 +23,7 @@ false
 
 statement error
 EXECUTE v1(1, 2)
+----
 
 statement ok
 PREPARE v2 AS SELECT 1 WHERE ? BETWEEN now() - INTERVAL '1 minute' AND now() + INTERVAL '1 minute';
@@ -36,7 +37,7 @@ query I
 EXECUTE v2(now() - INTERVAL '10 minute')
 ----
 
-loop i 0 100
+loop i 0 10
 
 # this should always be false
 query I

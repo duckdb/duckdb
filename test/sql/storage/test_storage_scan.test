@@ -18,12 +18,12 @@ restart
 query I
 SELECT * FROM test ORDER BY a
 ----
-NULL
 11
 12
 13
 14
 15
+NULL
 
 # now perform a deletion
 
@@ -32,12 +32,12 @@ restart
 query I
 SELECT * FROM test ORDER BY a
 ----
-NULL
 11
 12
 13
 14
 15
+NULL
 
 statement ok
 DELETE FROM test WHERE a=12
@@ -45,11 +45,11 @@ DELETE FROM test WHERE a=12
 query I
 SELECT * FROM test ORDER BY a
 ----
-NULL
 11
 13
 14
 15
+NULL
 
 # reload and perform another deletion
 restart
@@ -57,11 +57,11 @@ restart
 query I
 SELECT * FROM test ORDER BY a
 ----
-NULL
 11
 13
 14
 15
+NULL
 
 statement ok
 DELETE FROM test WHERE a=13
@@ -69,17 +69,17 @@ DELETE FROM test WHERE a=13
 query I
 SELECT * FROM test ORDER BY a
 ----
-NULL
 11
 14
 15
+NULL
 
 restart
 
 query I
 SELECT * FROM test ORDER BY a
 ----
-NULL
 11
 14
 15
+NULL

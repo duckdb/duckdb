@@ -2,6 +2,9 @@
 # description: Test standard update behavior with NULLs
 # group: [update]
 
+statement ok
+SET default_null_order='nulls_first';
+
 require skip_reload
 
 # create a table

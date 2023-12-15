@@ -102,7 +102,7 @@ struct EmptyPatasWriter {
 		using EXACT_TYPE = typename FloatingToExact<VALUE_TYPE>::type;
 
 		auto state_wrapper = (PatasAnalyzeState<VALUE_TYPE> *)state_p;
-		state_wrapper->WriteValue(Load<EXACT_TYPE>((const_data_ptr_t)&uncompressed_value), is_valid);
+		state_wrapper->WriteValue(Load<EXACT_TYPE>(const_data_ptr_cast(&uncompressed_value)), is_valid);
 	}
 };
 
@@ -117,7 +117,7 @@ bool PatasAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
-	auto data = (T *)vdata.data;
+	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		analyze_state.state.template Update<EmptyPatasWriter>(data[idx], vdata.validity.RowIsValid(idx));

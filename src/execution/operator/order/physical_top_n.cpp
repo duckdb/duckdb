@@ -276,7 +276,7 @@ void TopNHeap::Finalize() {
 }
 
 void TopNHeap::Reduce() {
-	idx_t min_sort_threshold = MaxValue<idx_t>(STANDARD_VECTOR_SIZE * 5, 2 * (limit + offset));
+	idx_t min_sort_threshold = MaxValue<idx_t>(STANDARD_VECTOR_SIZE * 5ULL, 2ULL * (limit + offset));
 	if (sort_state.count < min_sort_threshold) {
 		// only reduce when we pass two times the limit + offset, or 5 vectors (whichever comes first)
 		return;
@@ -435,11 +435,10 @@ unique_ptr<GlobalSinkState> PhysicalTopN::GetGlobalSinkState(ClientContext &cont
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-SinkResultType PhysicalTopN::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                  DataChunk &input) const {
+SinkResultType PhysicalTopN::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	// append to the local sink state
-	auto &sink = lstate.Cast<TopNLocalState>();
-	sink.heap.Sink(input);
+	auto &sink = input.local_state.Cast<TopNLocalState>();
+	sink.heap.Sink(chunk);
 	sink.heap.Reduce();
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -447,21 +446,23 @@ SinkResultType PhysicalTopN::Sink(ExecutionContext &context, GlobalSinkState &st
 //===--------------------------------------------------------------------===//
 // Combine
 //===--------------------------------------------------------------------===//
-void PhysicalTopN::Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const {
-	auto &gstate = state.Cast<TopNGlobalState>();
-	auto &lstate = lstate_p.Cast<TopNLocalState>();
+SinkCombineResultType PhysicalTopN::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<TopNGlobalState>();
+	auto &lstate = input.local_state.Cast<TopNLocalState>();
 
 	// scan the local top N and append it to the global heap
 	lock_guard<mutex> glock(gstate.lock);
 	gstate.heap.Combine(lstate.heap);
+
+	return SinkCombineResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalTopN::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                        GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<TopNGlobalState>();
+                                        OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<TopNGlobalState>();
 	// global finalize: compute the final top N
 	gstate.heap.Finalize();
 	return SinkFinalizeType::READY;
@@ -480,12 +481,11 @@ unique_ptr<GlobalSourceState> PhysicalTopN::GetGlobalSourceState(ClientContext &
 	return make_uniq<TopNOperatorState>();
 }
 
-void PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                           LocalSourceState &lstate) const {
+SourceResultType PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	if (limit == 0) {
-		return;
+		return SourceResultType::FINISHED;
 	}
-	auto &state = gstate_p.Cast<TopNOperatorState>();
+	auto &state = input.global_state.Cast<TopNOperatorState>();
 	auto &gstate = sink_state->Cast<TopNGlobalState>();
 
 	if (!state.initialized) {
@@ -493,6 +493,8 @@ void PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSo
 		state.initialized = true;
 	}
 	gstate.heap.Scan(state.state, chunk);
+
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 string PhysicalTopN::ParamsToString() const {

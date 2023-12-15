@@ -1,0 +1,30 @@
+# name: test/sql/attach/attach_show_all_tables.test
+# description: Test various DDL statements on an attached database
+# group: [attach]
+
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH DATABASE ':memory:' AS new_database;
+
+statement ok
+CREATE SCHEMA new_database.s1;
+
+statement ok
+CREATE TABLE tbl(a INTEGER);
+
+statement ok
+CREATE TABLE new_database.tbl(b INTEGER);
+
+statement ok
+CREATE TABLE new_database.s1.tbl(c INTEGER);
+
+query IIIIII
+SHOW ALL TABLES
+----
+memory	main	tbl	[a]	[INTEGER]	false
+new_database	main	tbl	[b]	[INTEGER]	false
+new_database	s1	tbl	[c]	[INTEGER]	false

@@ -3,6 +3,9 @@
 # group: [function]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 CREATE TABLE car_pool (
   -- define columns (name / type / default value / nullable)
   id           DECIMAL      ,

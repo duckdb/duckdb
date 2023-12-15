@@ -38,28 +38,4 @@ struct ModFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct LeftShiftFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct RightShiftFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct BitwiseAndFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct BitwiseOrFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct BitwiseXorFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct BitwiseNotFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 } // namespace duckdb

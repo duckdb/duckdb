@@ -57,8 +57,8 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 			if (!error.empty()) {
 				return BindResult(error);
 			}
-			auto &const_child = (BoundExpression &)*function.children[i];
-			auto value = ExpressionExecutor::EvaluateScalar(context, *const_child.expr, true);
+			auto &const_child = BoundExpression::GetExpression(*function.children[i]);
+			auto value = ExpressionExecutor::EvaluateScalar(context, *const_child, true);
 			if (alias == "recursive") {
 				auto recursive = value.GetValue<bool>();
 				if (recursive) {
@@ -87,14 +87,15 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	if (!error.empty()) {
 		// failed to bind
 		// try to bind correlated columns manually
-		if (!BindCorrelatedColumns(function.children[0])) {
-			return BindResult(error);
+		auto result = BindCorrelatedColumns(function.children[0], error);
+		if (result.HasError()) {
+			return BindResult(result.error);
 		}
-		auto bound_expr = (BoundExpression *)function.children[0].get();
-		ExtractCorrelatedExpressions(binder, *bound_expr->expr);
+		auto &bound_expr = BoundExpression::GetExpression(*function.children[0]);
+		ExtractCorrelatedExpressions(binder, *bound_expr);
 	}
-	auto &child = (BoundExpression &)*function.children[0];
-	auto &child_type = child.expr->return_type;
+	auto &child = BoundExpression::GetExpression(*function.children[0]);
+	auto &child_type = child->return_type;
 	unnest_level--;
 
 	if (unnest_level > 0) {
@@ -116,11 +117,11 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	idx_t list_unnests;
 	idx_t struct_unnests = 0;
 
-	auto unnest_expr = std::move(child.expr);
+	auto unnest_expr = std::move(child);
 	if (child_type.id() == LogicalTypeId::SQLNULL) {
 		list_unnests = 1;
 	} else {
-		// first do all of the list unnests
+		// perform all LIST unnests
 		auto type = child_type;
 		list_unnests = 0;
 		while (type.id() == LogicalTypeId::LIST) {
@@ -130,16 +131,17 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 				break;
 			}
 		}
-		// unnest structs all the way afterwards, if there are any
+		// unnest structs
 		if (type.id() == LogicalTypeId::STRUCT) {
 			struct_unnests = max_depth - list_unnests;
 		}
 	}
 	if (struct_unnests > 0 && !root_expression) {
+		child = std::move(unnest_expr);
 		return BindResult(binder.FormatError(
 		    function, "UNNEST() on a struct column can only be applied as the root element of a SELECT expression"));
 	}
-	// perform all of the list unnests first
+	// perform all LIST unnests
 	auto return_type = child_type;
 	for (idx_t current_depth = 0; current_depth < list_unnests; current_depth++) {
 		if (return_type.id() == LogicalTypeId::LIST) {

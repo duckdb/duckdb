@@ -16,7 +16,7 @@ WHERE d1.d_month_seq BETWEEN 1200 AND 1200+11
 GROUP BY rollup(i_category,i_class)
 ORDER BY lochierarchy DESC NULLS FIRST,
          CASE
-             WHEN lochierarchy = 0 THEN i_category
+             WHEN grouping(i_category)+grouping(i_class) = 0 THEN i_category
          END NULLS FIRST,
          rank_within_parent NULLS FIRST
 LIMIT 100;

@@ -5,6 +5,9 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+PRAGMA verify_external
+
 query I
 select histogram(NULL)
 ----
@@ -121,9 +124,11 @@ select g,histogram(g) over (partition by g%2)
 #Corner cases
 statement error
 select histogram()
+----
 
 statement error
 select histogram(*)
+----
 
 # enums
 statement ok

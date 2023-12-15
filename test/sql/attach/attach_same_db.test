@@ -4,6 +4,8 @@
 
 require skip_reload
 
+require notwindows
+
 statement ok
 PRAGMA enable_verification
 
@@ -12,3 +14,17 @@ ATTACH '__TEST_DIR__/attach_same_db.db' AS db1
 
 statement error
 ATTACH '__TEST_DIR__/attach_same_db.db' AS db2
+----
+
+# we can detach and attach in the same transaction
+statement ok
+BEGIN
+
+statement ok
+DETACH db1
+
+statement ok
+ATTACH '__TEST_DIR__/attach_same_db.db' AS db1
+
+statement ok
+COMMIT

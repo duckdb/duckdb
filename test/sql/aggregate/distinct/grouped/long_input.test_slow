@@ -1,0 +1,23 @@
+# name: test/sql/aggregate/distinct/grouped/long_input.test_slow
+# description: DISTINCT aggregations
+# group: [grouped]
+
+# This is string aggr, which goes through the HashAggregateOperator, so this is in fact 'grouped'
+
+statement ok
+create or replace table tbl as select * FROM ( VALUES
+	([repeat('a', 1000000)]),
+	([repeat('a', 1000000)]),
+	([repeat('a', 1000000)]),
+	([repeat('a', 1000000)]),
+	([repeat('b', 1000000)]),
+	([repeat('b', 1000000)]),
+	([repeat('b', 1000000)]),
+	([repeat('b', 1000000)]),
+) tbl(i)
+
+query I
+select (min(distinct i)::TEXT)[2:2] from tbl group by i order by all;
+----
+a
+b

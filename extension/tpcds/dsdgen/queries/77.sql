@@ -90,5 +90,6 @@ FROM
 GROUP BY ROLLUP (channel,
                  id)
 ORDER BY channel NULLS FIRST,
-         id NULLS FIRST
+         id NULLS FIRST,
+         returns_ DESC
 LIMIT 100;

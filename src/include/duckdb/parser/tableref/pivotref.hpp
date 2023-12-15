@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/tableref.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 
 namespace duckdb {
 
@@ -21,12 +22,10 @@ struct PivotColumnEntry {
 	string alias;
 
 	bool Equals(const PivotColumnEntry &other) const;
-	void Serialize(Serializer &serializer) const;
 	PivotColumnEntry Copy() const;
-	static PivotColumnEntry Deserialize(Deserializer &source);
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static PivotColumnEntry FormatDeserialize(FormatDeserializer &source);
+	void Serialize(Serializer &serializer) const;
+	static PivotColumnEntry Deserialize(Deserializer &source);
 };
 
 struct PivotValueElement {
@@ -43,15 +42,15 @@ struct PivotColumn {
 	vector<PivotColumnEntry> entries;
 	//! The enum to read pivot values from (if any)
 	string pivot_enum;
+	//! Subquery (if any) - used during transform only
+	unique_ptr<QueryNode> subquery;
 
 	string ToString() const;
 	bool Equals(const PivotColumn &other) const;
-	void Serialize(Serializer &serializer) const;
 	PivotColumn Copy() const;
-	static PivotColumn Deserialize(Deserializer &source);
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static PivotColumn FormatDeserialize(FormatDeserializer &source);
+	void Serialize(Serializer &serializer) const;
+	static PivotColumn Deserialize(Deserializer &source);
 };
 
 //! Represents a PIVOT or UNPIVOT expression
@@ -86,16 +85,12 @@ public:
 
 public:
 	string ToString() const override;
-	bool Equals(const TableRef *other_p) const override;
+	bool Equals(const TableRef &other_p) const override;
 
 	unique_ptr<TableRef> Copy() override;
 
-	//! Serializes a blob into a JoinRef
-	void Serialize(FieldWriter &serializer) const override;
-	//! Deserializes a blob back into a JoinRef
-	static unique_ptr<TableRef> Deserialize(FieldReader &source);
-
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<TableRef> FormatDeserialize(FormatDeserializer &source);
+	//! Deserializes a blob back into a PivotRef
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<TableRef> Deserialize(Deserializer &source);
 };
 } // namespace duckdb

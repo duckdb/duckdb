@@ -21,6 +21,10 @@ append_info *append_info_get(void *info_list, int table_id) {
 	return (append_info *)append_vector[table_id].get();
 }
 
+bool tpcds_append_information::IsNull() {
+	return nullCheck(table_def.first_column + appender.CurrentColumn());
+}
+
 void append_row_start(append_info info) {
 	auto append_info = (tpcds_append_information *)info;
 	append_info->appender.BeginRow();
@@ -33,39 +37,54 @@ void append_row_end(append_info info) {
 
 void append_varchar(append_info info, const char *value) {
 	auto append_info = (tpcds_append_information *)info;
-	if (!nullCheck(append_info->appender.CurrentColumn())) {
-		append_info->appender.Append<duckdb::string_t>(duckdb::string_t(value));
-	} else {
+	if (append_info->IsNull()) {
 		append_info->appender.Append(nullptr);
+	} else {
+		append_info->appender.Append<duckdb::string_t>(duckdb::string_t(value));
 	}
-}
-
-// TODO: use direct array manipulation for speed, but not now
-static void append_value(append_info info, duckdb::Value v) {
-	auto append_info = (tpcds_append_information *)info;
-	append_info->appender.Append<duckdb::Value>(v);
 }
 
 void append_key(append_info info, int64_t value) {
 	auto append_info = (tpcds_append_information *)info;
-	append_info->appender.Append<int64_t>(value);
+	if (append_info->IsNull() || value < 0) {
+		append_info->appender.Append(nullptr);
+	} else {
+		append_info->appender.Append<int64_t>(value);
+	}
+}
+
+void append_integer_decimal(append_info info, int32_t val) {
+	auto append_info = (tpcds_append_information *)info;
+	if (append_info->IsNull()) {
+		append_info->appender.Append(nullptr);
+	} else {
+		append_info->appender.Append<int32_t>(val * 100);
+	}
 }
 
 void append_integer(append_info info, int32_t value) {
 	auto append_info = (tpcds_append_information *)info;
-	append_info->appender.Append<int32_t>(value);
+	if (append_info->IsNull()) {
+		append_info->appender.Append(nullptr);
+	} else {
+		append_info->appender.Append<int32_t>(value);
+	}
 }
 
 void append_boolean(append_info info, int32_t value) {
 	auto append_info = (tpcds_append_information *)info;
-	append_info->appender.Append<bool>(value != 0);
+	if (append_info->IsNull()) {
+		append_info->appender.Append(nullptr);
+	} else {
+		append_info->appender.Append<bool>(value != 0);
+	}
 }
 
 // value is a Julian date
 // FIXME: direct int conversion, offsets should be constant
 void append_date(append_info info, int64_t value) {
 	auto append_info = (tpcds_append_information *)info;
-	if (value < 0) {
+	if (append_info->IsNull() || value < 0) {
 		append_info->appender.Append(nullptr);
 	} else {
 		date_t dTemp;
@@ -77,6 +96,10 @@ void append_date(append_info info, int64_t value) {
 
 void append_decimal(append_info info, decimal_t *val) {
 	auto append_info = (tpcds_append_information *)info;
+	if (append_info->IsNull()) {
+		append_info->appender.Append(nullptr);
+		return;
+	}
 	auto &appender = append_info->appender;
 	auto &type = appender.GetTypes()[appender.CurrentColumn()];
 	D_ASSERT(type.id() == duckdb::LogicalTypeId::DECIMAL);

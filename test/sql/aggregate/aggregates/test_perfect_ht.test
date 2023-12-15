@@ -3,13 +3,24 @@
 # group: [aggregates]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 PRAGMA enable_verification
 
 statement ok
 PRAGMA perfect_ht_threshold=20;
 
+foreach type INTEGER UINTEGER BIGINT UBIGINT
+
+foreach optimizer 'compressed_materialization' ''
+
+# we run these tests with and without compressed materialization to make sure we cover all types
 statement ok
-CREATE TABLE timeseries(year INTEGER, val INTEGER);
+SET disabled_optimizers to ${optimizer}
+
+statement ok
+CREATE OR REPLACE TABLE timeseries(year ${type}, val ${type});
 
 statement ok
 INSERT INTO timeseries VALUES (1996, 10), (1997, 12), (1996, 20), (2001, 30), (NULL, 1), (1996, NULL);
@@ -31,12 +42,16 @@ NULL	[1]	1
 1997	[12]	12
 2001	[30]	30
 
+endloop
+
+endloop
+
 # many small columns each having only the values 0 and 1
 # total possible combinations is 2^10, but there are only 2 groups
 statement ok
 create table manycolumns as select i a, i b, i c, i d, i e from range(0,2) tbl(i);
 
-query IIIII
+query IIIII rowsort
 select a, b, c, d, e FROM manycolumns GROUP BY 1, 2, 3, 4, 5
 ----
 0	0	0	0	0
@@ -70,7 +85,7 @@ statement ok
 create table dates as select date '1992-01-01' + concat(i, ' months')::interval as d from range(100) tbl(i);
 
 query II
-select extract(year from d), extract(month from d) from dates group by 1, 2;
+select extract(year from d), extract(month from d) from dates group by 1, 2 ORDER BY ALL;
 ----
 1992	1
 1992	2

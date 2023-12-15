@@ -52,24 +52,18 @@ private:
 	void RegisterReadFunctions();
 	void RegisterTableFunctions();
 	void RegisterArrowFunctions();
+	void RegisterSnifferFunction();
 
 	// aggregates
-	void RegisterAlgebraicAggregates();
 	void RegisterDistributiveAggregates();
-	void RegisterNestedAggregates();
-	void RegisterHolisticAggregates();
-	void RegisterRegressiveAggregates();
 
 	// scalar functions
-	void RegisterDateFunctions();
-	void RegisterEnumFunctions();
+	void RegisterCompressedMaterializationFunctions();
 	void RegisterGenericFunctions();
-	void RegisterMathFunctions();
 	void RegisterOperators();
 	void RegisterStringFunctions();
 	void RegisterNestedFunctions();
 	void RegisterSequenceFunctions();
-	void RegisterTrigonometricsFunctions();
 
 	// pragmas
 	void RegisterPragmaFunctions();

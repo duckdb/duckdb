@@ -98,7 +98,7 @@ struct BindReplaceDemoFun {
 		                                BindReplaceDemoFun::Function, BindReplaceDemoFun::Bind);
 		bind_replace_demo.bind_replace = BindReplaceDemoFun::BindReplace;
 		CreateTableFunctionInfo bind_replace_demo_info(bind_replace_demo);
-		catalog.CreateTableFunction(*con.context, &bind_replace_demo_info);
+		catalog.CreateTableFunction(*con.context, bind_replace_demo_info);
 		con.Commit();
 	}
 };
@@ -134,7 +134,7 @@ struct BindReplaceDemoFun2 {
 		TableFunction bind_replace_demo("bind_replace_demo2", {LogicalType::BIGINT}, nullptr, nullptr);
 		bind_replace_demo.bind_replace = BindReplaceDemoFun2::BindReplace;
 		CreateTableFunctionInfo bind_replace_demo_info(bind_replace_demo);
-		catalog.CreateTableFunction(*con.context, &bind_replace_demo_info);
+		catalog.CreateTableFunction(*con.context, bind_replace_demo_info);
 		con.Commit();
 	}
 };

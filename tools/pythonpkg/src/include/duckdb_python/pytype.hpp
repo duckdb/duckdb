@@ -1,6 +1,6 @@
 #pragma once
 
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb/common/types.hpp"
 
 namespace duckdb {
@@ -32,8 +32,10 @@ public:
 	bool Equals(const shared_ptr<DuckDBPyType> &other) const;
 	bool EqualsString(const string &type_str) const;
 	shared_ptr<DuckDBPyType> GetAttribute(const string &name) const;
+	py::list Children() const;
 	string ToString() const;
 	const LogicalType &Type() const;
+	string GetId() const;
 
 private:
 private:

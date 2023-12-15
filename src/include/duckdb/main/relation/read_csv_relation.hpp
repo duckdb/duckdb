@@ -8,22 +8,22 @@
 
 #pragma once
 
-#include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
 #include "duckdb/main/relation/table_function_relation.hpp"
+#include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
-struct BufferedCSVReaderOptions;
-
 class ReadCSVRelation : public TableFunctionRelation {
 public:
-	ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const string &csv_file,
-	                vector<ColumnDefinition> columns, string alias = string());
-	ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const string &csv_file,
-	                BufferedCSVReaderOptions options, string alias = string());
+	ReadCSVRelation(const shared_ptr<ClientContext> &context, const vector<string> &csv_files,
+	                named_parameter_map_t &&options, string alias = string());
 
 	string alias;
-	bool auto_detect;
+
+protected:
+	void InitializeAlias(const vector<string> &input);
 
 public:
 	string GetAlias() override;

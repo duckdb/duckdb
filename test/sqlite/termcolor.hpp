@@ -19,7 +19,7 @@
 #define TERMCOLOR_OS_WINDOWS
 #elif defined(__APPLE__)
 #define TERMCOLOR_OS_MACOS
-#elif defined(__unix__) || defined(__unix)
+#elif defined(__unix__) || defined(__unix) || defined(__MVS__)
 #define TERMCOLOR_OS_LINUX
 #else
 #error unsupported platform

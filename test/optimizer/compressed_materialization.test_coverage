@@ -1,0 +1,194 @@
+# name: test/optimizer/compressed_materialization.test_coverage
+# description: Compressed materialization test
+# group: [optimizer]
+
+statement ok
+pragma enable_verification
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+# these functions live in the catalog, but cannot be called directly
+statement error
+select __internal_compress_string_utinyint('L')
+----
+Binder Error: Compressed materialization functions are for internal use only!
+
+# tricky tests taken from test/sql/subquery/scalar/test_issue_6136.test
+# we run these with one thread since they are order dependent
+statement ok
+create table r as select * from values (1, 1, 'a', 'A'), (1, null, 'b', 'B'), (1, 2, 'c', 'C'), (2, null, 'd', 'D') t(ra, rb, x, y);
+
+statement ok
+create table b as select * from values (1, 1, 1), (2, 1, 2), (3, 1, 3), (4, 1, null), (5, 2, 1), (6, 2, null), (7, 99, 99) t(id, ba, bb);
+
+statement ok
+set threads=1
+
+query T
+select (
+    select {'x': first(x order by x), 'y': first(y order by y), '__matches': count(*)}
+    from (
+        select *
+        from r
+        where ba = ra
+          and (bb = rb or rb is null)
+        order by all
+    )
+    group by ra, rb
+    order by all)
+from b
+order by all
+----
+{'x': b, 'y': B, '__matches': 1}
+{'x': b, 'y': B, '__matches': 1}
+{'x': b, 'y': B, '__matches': 1}
+{'x': c, 'y': C, '__matches': 1}
+{'x': d, 'y': D, '__matches': 1}
+{'x': d, 'y': D, '__matches': 1}
+NULL
+
+query T
+select
+  coalesce((select {'x': first(x), 'y': first(y), '__matches': count(*)} from r where ba = ra and (bb = rb or rb is null) group by ra, rb order by bb = rb), {'x': null, 'y': null, '__matches': 0}) as ref2
+from b
+----
+{'x': b, 'y': B, '__matches': 1}
+{'x': b, 'y': B, '__matches': 1}
+{'x': b, 'y': B, '__matches': 1}
+{'x': b, 'y': B, '__matches': 1}
+{'x': d, 'y': D, '__matches': 1}
+{'x': d, 'y': D, '__matches': 1}
+{'x': NULL, 'y': NULL, '__matches': 0}
+
+statement ok
+set threads=4
+
+# we should see compress twice (in the ORDER BY expression and payload) and decompress once (just the payload)
+statement ok
+create table t1 as select range i from range(10)
+
+query II
+explain select i from t1 order by 10-i
+----
+logical_opt	<REGEX>:(.*__internal_decompress.*){1}(.*__internal_compress.*){2}
+
+statement ok
+create table test as
+select (range + 7) % 4 i,
+       (range + 7) % 11 j
+from range(10)
+
+# should see compress exactly twice (for columns i and j)
+# if we see less than twice we're not compressing,
+# and if we see it more than twice we're likely compressing and decompressing twice (once for each ORDER BY)
+# but we can compress once, then do both ORDER BYs, then decompress
+query II
+explain select count(i), count(j) from (select i, j from (select i, j from test order by j offset 1) order by j offset 1)
+----
+logical_opt	<REGEX>:(.*__internal_compress.*){2}
+
+# should see it exactly once here, as we can only compress the group (i), not the value being summed (j)
+# after the GROUP BY we do the ORDER BY, and finally decompress
+query II
+explain select i, sum(j) from test group by i order by i
+----
+logical_opt	<REGEX>:(.*__internal_compress.*){1}
+
+# We can't deal with duplicate projections (yet) so this should see 3 compresses instead of 1
+query II
+explain select count(j1), count(j2) from (select j j1, j j2 from (select j from test order by j offset 1) order by j1, j2 offset 1)
+----
+logical_opt	<REGEX>:(.*__internal_compress.*){3}
+
+query II
+explain select distinct i, j from test order by i, j
+----
+logical_opt	<REGEX>:(.*__internal_compress.*){2}
+
+# taken from third_party/sqllogictest/test/index/orderby_nosort/10/slt_good_27.test
+# the problem was that statistics propagation created an index join after "filter_prune" happened
+statement ok
+CREATE TABLE tab3(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 TEXT, col3 INTEGER, col4 FLOAT, col5 TEXT)
+
+statement ok
+INSERT INTO tab3 VALUES
+    (0,461,479.93,'idmdh',456,464.90,'nczyk'),
+    (1,473,482.60,'bguxh',460,466.25,'oseln'),
+    (2,474,484.45,'bnzmd',461,467.13,'kvwna'),
+    (3,475,485.1,'obtlj',462,468.73,'jkjbo'),
+    (4,477,486.62,'gjtbr',463,469.9,'bhers'),
+    (5,479,489.59,'bkxfm',464,470.29,'aklru'),
+    (6,481,495.30,'owirt',466,471.55,'lysig'),
+    (7,482,496.31,'yergm',467,473.31,'rkpxn'),
+    (8,484,497.51,'fszui',468,474.44,'ztexm'),
+    (9,486,498.24,'eueji',469,477.28,'amvcc')
+
+statement ok
+CREATE UNIQUE INDEX idx_tab3_4 ON tab3 (col3)
+
+query I
+SELECT pk FROM tab3 WHERE col0 IN (SELECT col3 FROM tab3 WHERE (col1 > 93.79)) ORDER BY 1 DESC
+----
+0
+
+# and of course some tpch stuff
+
+statement ok
+pragma disable_verification
+
+require tpch
+
+statement ok
+call dbgen(sf=0.01)
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY
+
+# tpch q1 should use perfect hash aggregate
+query II
+EXPLAIN
+SELECT
+    l_returnflag,
+    l_linestatus,
+    sum(l_quantity) AS sum_qty,
+    sum(l_extendedprice) AS sum_base_price,
+    sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
+    sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
+    avg(l_quantity) AS avg_qty,
+    avg(l_extendedprice) AS avg_price,
+    avg(l_discount) AS avg_disc,
+    count(*) AS count_order
+FROM
+    lineitem
+WHERE
+    l_shipdate <= CAST('1998-09-02' AS date)
+GROUP BY
+    l_returnflag,
+    l_linestatus
+ORDER BY
+    l_returnflag,
+    l_linestatus;
+----
+physical_plan	<REGEX>:.*PERFECT_HASH_GROUP_BY.*
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+# test that we're compressing lineitem
+query II
+explain select * from lineitem order by l_shipdate
+----
+logical_opt	<REGEX>:.*__internal_decompress.*__internal_compress.*
+
+# test that we get the same result with and without compressed materialization
+query IIIIIIIIIIIIIII nosort q0
+select * from lineitem order by l_shipdate
+----
+
+statement ok
+set disabled_optimizers to 'compressed_materialization'
+
+query IIIIIIIIIIIIIII nosort q0
+select * from lineitem order by l_shipdate
+----

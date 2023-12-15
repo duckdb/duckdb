@@ -28,12 +28,11 @@ static void GetArrayLengthFunctionsInternal(ScalarFunctionSet &set, const Logica
 	                               JSONReadManyFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetArrayLengthFunction() {
+ScalarFunctionSet JSONFunctions::GetArrayLengthFunction() {
 	ScalarFunctionSet set("json_array_length");
 	GetArrayLengthFunctionsInternal(set, LogicalType::VARCHAR);
 	GetArrayLengthFunctionsInternal(set, JSONCommon::JSONType());
-
-	return CreateScalarFunctionInfo(std::move(set));
+	return set;
 }
 
 } // namespace duckdb

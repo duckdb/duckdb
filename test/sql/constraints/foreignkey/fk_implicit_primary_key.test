@@ -1,0 +1,52 @@
+# name: test/sql/constraints/foreignkey/fk_implicit_primary_key.test
+# description: Issue #7118: implicitly link to primary key
+# group: [foreignkey]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table a (i int primary key);
+
+statement ok
+create table b (i int references a);
+
+statement error
+insert into b values (1)
+----
+does not exist in the referenced table
+
+statement ok
+insert into a values (1);
+
+statement ok
+insert into b values (1)
+
+
+# other tests
+statement ok
+drop table b;
+
+statement ok
+drop table a;
+
+# what if a does not have a primary key
+statement ok
+create table a (i int);
+
+statement error
+create table b (i int references a);
+----
+there is no primary key for referenced table
+
+statement ok
+drop table a
+
+# what if there is a column count mismatch
+statement ok
+create table a (i int, j int, primary key(i,j));
+
+statement error
+create table b (i int references a);
+----
+number of referencing

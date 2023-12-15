@@ -1,4 +1,3 @@
-
 SELECT c_last_name,
        c_first_name,
        SUBSTRING(s_city,1,30),
@@ -34,6 +33,6 @@ WHERE ss_customer_sk = c_customer_sk
 ORDER BY c_last_name  NULLS FIRST,
          c_first_name  NULLS FIRST,
          SUBSTRING(s_city,1,30)  NULLS FIRST,
-         profit NULLS FIRST
+         profit NULLS FIRST,
+         ss_ticket_number
 LIMIT 100;
-

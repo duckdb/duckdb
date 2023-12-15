@@ -1,0 +1,31 @@
+# name: test/sql/cte/materialized/recursive_cte_error_materialized.test
+# description: Recursive CTEs with an error thrown in the pipelines
+# group: [materialized]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tag(id int, name string, subclassof int);
+
+statement ok
+INSERT INTO tag VALUES
+  (7, 'Music',  9),
+  (8, 'Movies', 9),
+  (9, 'Art',    NULL)
+;
+
+statement error
+WITH RECURSIVE tag_hierarchy(id, source, path, target) AS materialized (
+  SELECT id, name, name AS path, NULL AS target -- this should be '' for correct behaviour
+  FROM tag
+  WHERE subclassof IS NULL
+  UNION ALL
+  SELECT tag.id, tag.name, tag_hierarchy.path || ' <- ' || tag.name, tag.name AS target
+  FROM tag, tag_hierarchy
+  WHERE tag.subclassof = tag_hierarchy.id
+)
+SELECT source, path, target
+FROM tag_hierarchy
+;
+----

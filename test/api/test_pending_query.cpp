@@ -118,7 +118,7 @@ static void parallel_pending_query(Connection *conn, bool *correct, size_t threa
 		try {
 			// this will randomly throw an exception if another thread calls pending query first
 			auto result = executor->Execute();
-			if (!CHECK_COLUMN(result, 0, {Value(), 1, 2, 3})) {
+			if (!CHECK_COLUMN(result, 0, {1, 2, 3, Value()})) {
 				correct[threadnr] = false;
 			}
 		} catch (...) {
@@ -178,7 +178,7 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api][.]") {
 		auto prepare = con.Prepare("SELECT SUM(i+X) FROM range(1000000) tbl(i) WHERE i>=$1");
 		REQUIRE(prepare->HasError());
 
-		REQUIRE_THROWS(prepare->PendingQuery(0));
+		REQUIRE_FAIL(prepare->PendingQuery(0));
 	}
 	SECTION("Error during execution") {
 		duckdb::vector<Value> parameters;

@@ -27,7 +27,7 @@ public:
 	idx_t bind_index;
 
 protected:
-	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) override;
+	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
 
 	string UnsupportedAggregateMessage() override;
 

@@ -7,6 +7,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/common/helper.hpp"
 
 #include <fstream>
 #include <sstream>
@@ -160,7 +161,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 					throw std::runtime_error("Failed to read " + splits[0] + " from file " + splits[1]);
 				}
 
-				auto buffer = duckdb::unique_ptr<char[]>(new char[size]);
+				auto buffer = make_unsafe_uniq_array<char>(size);
 				if (!file.read(buffer.get(), size)) {
 					throw std::runtime_error("Failed to read " + splits[0] + " from file " + splits[1]);
 				}

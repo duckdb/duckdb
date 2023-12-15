@@ -14,6 +14,8 @@ foreach type tinyint smallint int bigint
 
 statement error
 SELECT abs(${type}) FROM numerics;
+----
+Overflow on abs
 
 statement ok
 SELECT abs(${type}) FROM numerics WHERE ${type} > 0;

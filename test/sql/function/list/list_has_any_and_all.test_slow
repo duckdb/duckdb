@@ -1,0 +1,24 @@
+# name: test/sql/function/list/list_has_any_and_all.test_slow
+# description: Test list_has_any and list_has_all functions on Large Lists
+# group: [list]
+
+statement ok
+create table large_lists(l1 int[], l2 int[]);
+
+statement ok
+insert into large_lists values (range(1, 3000), range(2000, 3000));
+
+statement ok
+insert into large_lists values (range(3000), range(3000));
+
+query I
+select list_has_any(l1, l2) from large_lists;
+----
+1
+1
+
+query I
+select list_has_all(l1, l2) from large_lists;
+----
+1
+1

@@ -73,8 +73,8 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { CountExpressions(child, state); });
 }
 
-void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> *expr_ptr, CSEReplacementState &state) {
-	Expression &expr = **expr_ptr;
+void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> &expr_ptr, CSEReplacementState &state) {
+	Expression &expr = *expr_ptr;
 	if (expr.expression_class == ExpressionClass::BOUND_COLUMN_REF) {
 		auto &bound_column_ref = expr.Cast<BoundColumnRefExpression>();
 		// bound column ref, check if this one has already been recorded in the expression list
@@ -105,20 +105,20 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 			if (node.column_index == DConstants::INVALID_INDEX) {
 				// has not been pushed yet: push it
 				node.column_index = state.expressions.size();
-				state.expressions.push_back(std::move(*expr_ptr));
+				state.expressions.push_back(std::move(expr_ptr));
 			} else {
-				state.cached_expressions.push_back(std::move(*expr_ptr));
+				state.cached_expressions.push_back(std::move(expr_ptr));
 			}
 			// replace the original expression with a bound column ref
-			*expr_ptr = make_uniq<BoundColumnRefExpression>(alias, type,
-			                                                ColumnBinding(state.projection_index, node.column_index));
+			expr_ptr = make_uniq<BoundColumnRefExpression>(alias, type,
+			                                               ColumnBinding(state.projection_index, node.column_index));
 			return;
 		}
 	}
 	// this expression only occurs once, we can't perform CSE elimination
 	// look into the children to see if we can replace them
 	ExpressionIterator::EnumerateChildren(expr,
-	                                      [&](unique_ptr<Expression> &child) { PerformCSEReplacement(&child, state); });
+	                                      [&](unique_ptr<Expression> &child) { PerformCSEReplacement(child, state); });
 }
 
 void CommonSubExpressionOptimizer::ExtractCommonSubExpresions(LogicalOperator &op) {
@@ -143,8 +143,9 @@ void CommonSubExpressionOptimizer::ExtractCommonSubExpresions(LogicalOperator &o
 	state.projection_index = binder.GenerateTableIndex();
 	// we found common subexpressions to extract
 	// now we iterate over all the expressions and perform the actual CSE elimination
+
 	LogicalOperatorVisitor::EnumerateExpressions(
-	    op, [&](unique_ptr<Expression> *child) { PerformCSEReplacement(child, state); });
+	    op, [&](unique_ptr<Expression> *child) { PerformCSEReplacement(*child, state); });
 	D_ASSERT(state.expressions.size() > 0);
 	// create a projection node as the child of this node
 	auto projection = make_uniq<LogicalProjection>(state.projection_index, std::move(state.expressions));

@@ -1,0 +1,31 @@
+add_library_unity(
+  duckdb_func_string
+  OBJECT
+  ascii.cpp
+  bar.cpp
+  chr.cpp
+  damerau_levenshtein.cpp
+  format_bytes.cpp
+  hamming.cpp
+  hex.cpp
+  instr.cpp
+  jaccard.cpp
+  jaro_winkler.cpp
+  left_right.cpp
+  levenshtein.cpp
+  md5.cpp
+  pad.cpp
+  printf.cpp
+  repeat.cpp
+  replace.cpp
+  reverse.cpp
+  sha256.cpp
+  starts_with.cpp
+  string_split.cpp
+  to_base.cpp
+  translate.cpp
+  trim.cpp
+  unicode.cpp)
+set(ALL_OBJECT_FILES
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_string>
+    PARENT_SCOPE)

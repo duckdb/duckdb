@@ -1,0 +1,48 @@
+# name: test/sql/storage/optimistic_write/optimistic_write_index.test_slow
+# description: Test optimistic writes and index creation
+# group: [optimistic_write]
+
+# load the DB from disk
+load __TEST_DIR__/optimistic_write_index.db
+
+statement ok
+CREATE TABLE test (a INTEGER);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test SELECT * FROM range(1000000)
+
+statement ok
+CREATE INDEX i_index ON test(a)
+
+query I
+SELECT * FROM test WHERE a=242773
+----
+242773
+
+statement ok
+COMMIT
+
+query I
+SELECT * FROM test WHERE a=242773
+----
+242773
+
+query I
+SELECT SUM(a) FROM test
+----
+499999500000
+
+restart
+
+query I
+SELECT * FROM test WHERE a=242773
+----
+242773
+
+query I
+SELECT SUM(a) FROM test
+----
+499999500000

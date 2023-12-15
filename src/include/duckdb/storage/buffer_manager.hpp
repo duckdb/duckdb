@@ -58,15 +58,10 @@ public:
 	//! Construct a managed buffer.
 	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
 	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER);
-	//! Increases the currently allocated memory, but the actual allocation does not go through the buffer manager
-	virtual void IncreaseUsedMemory(idx_t size, bool unsafe = false) = 0;
-	//! Decrease the currently allocated memory, but the actual deallocation does not go through the buffer manager
-	virtual void DecreaseUsedMemory(idx_t size) = 0;
 	//! Get the underlying buffer pool responsible for managing the buffers
 	virtual BufferPool &GetBufferPool();
 
 	// Static methods
-
 	DUCKDB_API static BufferManager &GetBufferManager(DatabaseInstance &db);
 	DUCKDB_API static BufferManager &GetBufferManager(ClientContext &context);
 	DUCKDB_API static BufferManager &GetBufferManager(AttachedDatabase &db);

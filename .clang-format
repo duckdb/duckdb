@@ -1,6 +1,10 @@
+---
 BasedOnStyle: LLVM
 TabWidth: 4
 IndentWidth: 4
+ColumnLimit: 120
+AllowShortFunctionsOnASingleLine: false
+---
 UseTab: ForIndentation
 DerivePointerAlignment: false
 PointerAlignment: Right
@@ -16,11 +20,13 @@ SpaceBeforeInheritanceColon: true
 SpacesInAngles: false
 SpacesInCStyleCastParentheses: false
 SpacesInConditionalStatement: false
-AllowShortFunctionsOnASingleLine: false
 AllowShortLambdasOnASingleLine: Inline
 AllowShortLoopsOnASingleLine: false
 AlwaysBreakTemplateDeclarations: Yes
-ColumnLimit: 120
 IncludeBlocks: Regroup
 Language: Cpp
 AccessModifierOffset: -4
+---
+Language: Java
+SpaceAfterCStyleCast: true
+---

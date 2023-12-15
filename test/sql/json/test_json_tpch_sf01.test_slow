@@ -16,7 +16,7 @@ select * from lineitem order by all
 # create lineitem json table
 statement ok
 create table lineitem_j as
-    select json_quote(row(l_orderkey,l_partkey,l_suppkey,l_linenumber,l_quantity,l_extendedprice,l_discount,l_tax,l_returnflag,
+    select json_quote(struct_pack(l_orderkey,l_partkey,l_suppkey,l_linenumber,l_quantity,l_extendedprice,l_discount,l_tax,l_returnflag,
                           l_linestatus,l_shipdate,l_commitdate,l_receiptdate,l_shipinstruct,l_shipmode,l_comment)) as j
     from lineitem
 
@@ -24,12 +24,12 @@ create table lineitem_j as
 query T
 select json_structure(j) from lineitem_j limit 1
 ----
-{"l_orderkey":"UBIGINT","l_partkey":"UBIGINT","l_suppkey":"UBIGINT","l_linenumber":"UBIGINT","l_quantity":"UBIGINT","l_extendedprice":"DOUBLE","l_discount":"DOUBLE","l_tax":"DOUBLE","l_returnflag":"VARCHAR","l_linestatus":"VARCHAR","l_shipdate":"VARCHAR","l_commitdate":"VARCHAR","l_receiptdate":"VARCHAR","l_shipinstruct":"VARCHAR","l_shipmode":"VARCHAR","l_comment":"VARCHAR"}
+{"l_orderkey":"UBIGINT","l_partkey":"UBIGINT","l_suppkey":"UBIGINT","l_linenumber":"UBIGINT","l_quantity":"DOUBLE","l_extendedprice":"DOUBLE","l_discount":"DOUBLE","l_tax":"DOUBLE","l_returnflag":"VARCHAR","l_linestatus":"VARCHAR","l_shipdate":"VARCHAR","l_commitdate":"VARCHAR","l_receiptdate":"VARCHAR","l_shipinstruct":"VARCHAR","l_shipmode":"VARCHAR","l_comment":"VARCHAR"}
 
 # transform the structure back to what it was and verify it is the same as on the original lineitem table
 query IIIIIIIIIIIII nosort q0
 with transformed as (
-    select json_transform(j, '{"l_orderkey":"INTEGER","l_partkey":"INTEGER","l_suppkey":"INTEGER","l_linenumber":"INTEGER","l_quantity":"INTEGER","l_extendedprice":"DECIMAL(15,2)","l_discount":"DECIMAL(15,2)","l_tax":"DECIMAL(15,2)","l_returnflag":"VARCHAR","l_linestatus":"VARCHAR","l_shipdate":"DATE","l_commitdate":"DATE","l_receiptdate":"DATE","l_shipinstruct":"VARCHAR","l_shipmode":"VARCHAR","l_comment":"VARCHAR"}') as j
+    select json_transform(j, '{"l_orderkey":"INTEGER","l_partkey":"INTEGER","l_suppkey":"INTEGER","l_linenumber":"INTEGER","l_quantity":"DECIMAL(15,2)","l_extendedprice":"DECIMAL(15,2)","l_discount":"DECIMAL(15,2)","l_tax":"DECIMAL(15,2)","l_returnflag":"VARCHAR","l_linestatus":"VARCHAR","l_shipdate":"DATE","l_commitdate":"DATE","l_receiptdate":"DATE","l_shipinstruct":"VARCHAR","l_shipmode":"VARCHAR","l_comment":"VARCHAR"}') as j
     from lineitem_j
 )
 select j.l_orderkey,j.l_partkey,j.l_suppkey,j.l_linenumber,j.l_quantity,j.l_extendedprice,j.l_discount,j.l_tax,
@@ -41,7 +41,7 @@ order by all
 # run TPCH-Q1 straight on JSON
 query IIIIIIIIII
 with transformed as (
-    select json_transform(j, '{"l_orderkey":"INTEGER","l_partkey":"INTEGER","l_suppkey":"INTEGER","l_linenumber":"INTEGER","l_quantity":"INTEGER","l_extendedprice":"DECIMAL(15,2)","l_discount":"DECIMAL(15,2)","l_tax":"DECIMAL(15,2)","l_returnflag":"VARCHAR","l_linestatus":"VARCHAR","l_shipdate":"DATE","l_commitdate":"DATE","l_receiptdate":"DATE","l_shipinstruct":"VARCHAR","l_shipmode":"VARCHAR","l_comment":"VARCHAR"}') as j
+    select json_transform(j, '{"l_orderkey":"INTEGER","l_partkey":"INTEGER","l_suppkey":"INTEGER","l_linenumber":"INTEGER","l_quantity":"DECIMAL(15,2)","l_extendedprice":"DECIMAL(15,2)","l_discount":"DECIMAL(15,2)","l_tax":"DECIMAL(15,2)","l_returnflag":"VARCHAR","l_linestatus":"VARCHAR","l_shipdate":"DATE","l_commitdate":"DATE","l_receiptdate":"DATE","l_shipinstruct":"VARCHAR","l_shipmode":"VARCHAR","l_comment":"VARCHAR"}') as j
     from lineitem_j
 )
 SELECT

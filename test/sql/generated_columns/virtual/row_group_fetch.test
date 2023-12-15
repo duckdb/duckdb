@@ -1,0 +1,22 @@
+# name: test/sql/generated_columns/virtual/row_group_fetch.test
+# group: [virtual]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+CREATE TABLE t1 (
+	tr INTEGER,
+	td INTEGER GENERATED ALWAYS AS (tr),
+	tz INTEGER
+);
+
+statement ok
+CREATE INDEX id ON t1(tr);
+
+statement ok
+INSERT INTO t1(tr) VALUES (2);
+
+# Because of the generated column, the logical and physical index of 'tz' do not align.
+statement ok
+SELECT tz from t1 WHERE tr < 5;

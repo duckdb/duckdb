@@ -17,7 +17,7 @@ struct DuckDBTablesData : public GlobalTableFunctionState {
 	DuckDBTablesData() : offset(0) {
 	}
 
-	vector<CatalogEntry *> entries;
+	vector<reference<CatalogEntry>> entries;
 	idx_t offset;
 };
 
@@ -74,7 +74,8 @@ unique_ptr<GlobalTableFunctionState> DuckDBTablesInit(ClientContext &context, Ta
 	// scan all the schemas for tables and collect themand collect them
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
-		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema.get().Scan(context, CatalogType::TABLE_ENTRY,
+		                  [&](CatalogEntry &entry) { result->entries.push_back(entry); });
 	};
 	return std::move(result);
 }
@@ -111,23 +112,23 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = data.entries[data.offset++];
+		auto &entry = data.entries[data.offset++].get();
 
-		if (entry->type != CatalogType::TABLE_ENTRY) {
+		if (entry.type != CatalogType::TABLE_ENTRY) {
 			continue;
 		}
-		auto &table = entry->Cast<TableCatalogEntry>();
+		auto &table = entry.Cast<TableCatalogEntry>();
 		auto storage_info = table.GetStorageInfo(context);
 		// return values:
 		idx_t col = 0;
 		// database_name, VARCHAR
-		output.SetValue(col++, count, entry->catalog->GetName());
+		output.SetValue(col++, count, table.catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(entry->catalog->GetOid()));
+		output.SetValue(col++, count, Value::BIGINT(table.catalog.GetOid()));
 		// schema_name, LogicalType::VARCHAR
-		output.SetValue(col++, count, Value(table.schema->name));
+		output.SetValue(col++, count, Value(table.schema.name));
 		// schema_oid, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(table.schema->oid));
+		output.SetValue(col++, count, Value::BIGINT(table.schema.oid));
 		// table_name, LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(table.name));
 		// table_oid, LogicalType::BIGINT

@@ -1,13 +1,16 @@
 import duckdb
-import pandas as pd
 import pytest
 import tempfile
 import os
 import gc
+import pytest
+from conftest import NumpyPandas, ArrowPandas
+
 
 class TestPandasUnregister(object):
-    def test_pandas_unregister1(self, duckdb_cursor):
-        df = pd.DataFrame([[1, 2, 3], [4, 5, 6]])
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_pandas_unregister1(self, duckdb_cursor, pandas):
+        df = pandas.DataFrame([[1, 2, 3], [4, 5, 6]])
         connection = duckdb.connect(":memory:")
         connection.register("dataframe", df)
 
@@ -19,14 +22,14 @@ class TestPandasUnregister(object):
             connection.execute("DROP VIEW dataframe;")
         connection.execute("DROP VIEW IF EXISTS dataframe;")
 
-
-    def test_pandas_unregister2(self, duckdb_cursor):
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_pandas_unregister2(self, duckdb_cursor, pandas):
         fd, db = tempfile.mkstemp()
         os.close(fd)
         os.remove(db)
 
         connection = duckdb.connect(db)
-        df = pd.DataFrame([[1, 2, 3], [4, 5, 6]])
+        df = pandas.DataFrame([[1, 2, 3], [4, 5, 6]])
 
         connection.register("dataframe", df)
         connection.unregister("dataframe")  # Attempting to unregister.

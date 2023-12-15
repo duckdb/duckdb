@@ -5,7 +5,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
-
+#include "duckdb/storage/storage_info.hpp"
 #include <cstring>
 
 namespace duckdb {
@@ -68,7 +68,7 @@ FileBuffer::MemoryRequirement FileBuffer::CalculateMemory(uint64_t user_size) {
 		result.alloc_size = user_size;
 	} else {
 		result.header_size = Storage::BLOCK_HEADER_SIZE;
-		result.alloc_size = AlignValue<uint32_t, Storage::SECTOR_SIZE>(result.header_size + user_size);
+		result.alloc_size = AlignValue<idx_t, Storage::SECTOR_SIZE>(result.header_size + user_size);
 	}
 	return result;
 }
@@ -95,6 +95,14 @@ void FileBuffer::Write(FileHandle &handle, uint64_t location) {
 
 void FileBuffer::Clear() {
 	memset(internal_buffer, 0, internal_size);
+}
+
+void FileBuffer::Initialize(DebugInitialize initialize) {
+	if (initialize == DebugInitialize::NO_INITIALIZE) {
+		return;
+	}
+	uint8_t value = initialize == DebugInitialize::DEBUG_ZERO_INITIALIZE ? 0 : 0xFF;
+	memset(internal_buffer, value, internal_size);
 }
 
 } // namespace duckdb

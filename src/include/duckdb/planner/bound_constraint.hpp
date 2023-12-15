@@ -10,7 +10,6 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/parser/constraint.hpp"
-#include "duckdb/common/serializer.hpp"
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
@@ -21,14 +20,6 @@ public:
 	virtual ~BoundConstraint() {
 	}
 
-	void Serialize(Serializer &serializer) const {
-		serializer.Write(type);
-	}
-
-	static unique_ptr<BoundConstraint> Deserialize(Deserializer &source) {
-		return make_uniq<BoundConstraint>(source.Read<ConstraintType>());
-	}
-
 	ConstraintType type;
 
 public:
@@ -37,7 +28,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast constraint to type - bound constraint type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -45,7 +36,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast constraint to type - bound constraint type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 } // namespace duckdb

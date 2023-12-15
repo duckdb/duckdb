@@ -2,6 +2,9 @@
 # description: Test aggregates with scalar inputs
 # group: [aggregates]
 
+statement ok
+SET default_null_order='nulls_first';
+
 # test aggregate on scalar values
 query IIIIIIT
 SELECT COUNT(1), MIN(1), FIRST(1), LAST(1),MAX(1), SUM(1), STRING_AGG('hello', ',')

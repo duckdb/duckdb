@@ -133,7 +133,7 @@ static void parallel_query(Connection *conn, bool *correct, size_t threadnr) {
 	correct[threadnr] = true;
 	for (size_t i = 0; i < 100; i++) {
 		auto result = conn->Query("SELECT * FROM integers ORDER BY i");
-		if (!CHECK_COLUMN(result, 0, {Value(), 1, 2, 3})) {
+		if (!CHECK_COLUMN(result, 0, {1, 2, 3, Value()})) {
 			correct[threadnr] = false;
 		}
 	}
@@ -162,7 +162,7 @@ static void parallel_query_with_new_connection(DuckDB *db, bool *correct, size_t
 	for (size_t i = 0; i < 100; i++) {
 		auto conn = make_uniq<Connection>(*db);
 		auto result = conn->Query("SELECT * FROM integers ORDER BY i");
-		if (!CHECK_COLUMN(result, 0, {Value(), 1, 2, 3})) {
+		if (!CHECK_COLUMN(result, 0, {1, 2, 3, Value()})) {
 			correct[threadnr] = false;
 		}
 	}
@@ -182,14 +182,14 @@ TEST_CASE("Test making and dropping connections in parallel to a single database
 	}
 	for (size_t i = 0; i < 100; i++) {
 		auto result = conn->Query("SELECT * FROM integers ORDER BY i");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, Value()}));
 	}
 	for (size_t i = 0; i < 20; i++) {
 		threads[i].join();
 		REQUIRE(correct[i]);
 	}
 	auto result = conn->Query("SELECT * FROM integers ORDER BY i");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, Value()}));
 }
 
 TEST_CASE("Test multiple result sets", "[api]") {
@@ -530,7 +530,6 @@ TEST_CASE("Test large number of connections to a single database", "[api]") {
 	REQUIRE(connection_manager.connections.size() == createdConnections);
 
 	for (size_t i = 0; i < toRemove; i++) {
-		auto conn = *connections[0];
 		connections.erase(connections.begin());
 	}
 
@@ -593,7 +592,7 @@ TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.
 		count += chunk->size();
 	}
 
-	REQUIRE(951446 - count == 0);
+	REQUIRE(951468 - count == 0);
 }
 
 TEST_CASE("Fuzzer 50 - Alter table heap-use-after-free", "[api]") {
@@ -604,4 +603,38 @@ TEST_CASE("Fuzzer 50 - Alter table heap-use-after-free", "[api]") {
 
 	con.SendQuery("CREATE TABLE t0(c0 INT);");
 	con.SendQuery("ALTER TABLE t0 ADD c1 TIMESTAMP_SEC;");
+}
+
+TEST_CASE("Test loading database with enable_external_access set to false", "[api]") {
+	DBConfig config;
+	config.options.enable_external_access = false;
+	auto path = TestCreatePath("external_access_test");
+	DuckDB db(path, &config);
+	Connection con(db);
+
+	REQUIRE_FAIL(con.Query("ATTACH 'mydb.db' AS external_access_test"));
+}
+
+TEST_CASE("Test insert returning in CPP API", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.Query("CREATE TABLE test(val VARCHAR);");
+
+	con.Query("INSERT INTO test(val) VALUES ('query_1')");
+	auto res = con.Query("INSERT INTO test(val) VALUES ('query_2') returning *");
+	REQUIRE(CHECK_COLUMN(res, 0, {"query_2"}));
+
+	con.Query("INSERT INTO test(val) VALUES (?);", "query_arg_1");
+	auto returning_args = con.Query("INSERT INTO test(val) VALUES (?) RETURNING *;", "query_arg_2");
+	REQUIRE(CHECK_COLUMN(returning_args, 0, {"query_arg_2"}));
+
+	con.Prepare("INSERT INTO test(val) VALUES (?);")->Execute("prepared_arg_1");
+	auto prepared_returning_args =
+	    con.Prepare("INSERT INTO test(val) VALUES (?) returning *;")->Execute("prepared_arg_2");
+	REQUIRE(CHECK_COLUMN(prepared_returning_args, 0, {"prepared_arg_2"}));
+
+	// make sure all inserts actually inserted
+	auto result = con.Query("SELECT * from test;");
+	REQUIRE(CHECK_COLUMN(result, 0,
+	                     {"query_1", "query_2", "query_arg_1", "query_arg_2", "prepared_arg_1", "prepared_arg_2"}));
 }

@@ -1,0 +1,43 @@
+# name: test/sql/function/list/list_distance.test
+# group: [list]
+
+foreach type FLOAT DOUBLE
+
+query I
+SELECT list_distance([1, 2, 3]::${type}[], [1, 2, 3]::${type}[]);
+----
+0.0
+
+statement ok
+CREATE OR REPLACE TABLE lists (l ${type}[]);
+
+statement ok
+INSERT INTO lists VALUES ([1, 2, 3]), ([1, 2, 4]), ([7, 8, 9]), ([-1, -2, -3]), (NULL);
+
+query I
+SELECT list_distance(l, [1, 2, 3]) FROM lists;
+----
+0.0
+1.0
+10.392304
+7.483315
+NULL
+
+
+statement error
+SELECT list_distance([1, NULL, 3]::${type}[], [1, 2, 3]::${type}[]);
+----
+left argument can not contain NULL values
+
+statement error
+SELECT list_distance([1, 2, 3]::${type}[], [1, NULL, 3]::${type}[]);
+----
+right argument can not contain NULL values
+
+statement error
+SELECT list_distance([1, 2, 3]::${type}[], [1, 2, 3, 4]::${type}[]);
+----
+list dimensions must be equal, got left length 3 and right length 4
+
+
+endloop

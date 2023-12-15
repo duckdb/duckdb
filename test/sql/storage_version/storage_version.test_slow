@@ -3,8 +3,8 @@
 # group: [storage_version]
 
 # If this test fails, re-generate the database file by following the steps listed below:
-# 1) Increment the version number in src/storage/storage_info.cpp and recompile (make debug)
-# 2) Run the script in scripts/generate_storage_version.py,
+# 1) Increment the version number in src/storage/storage_info.cpp and recompile (make release)
+# 2) Run the script in scripts/generate_storage_version.py
 # 3) Commit the newly generated database file in test/sql/storage_version/storage_version.db
 
 statement ok
@@ -18,32 +18,32 @@ BEGIN TRANSACTION;
 query IIIII
 SELECT * FROM integral_values ORDER BY 1
 ----
-NULL	NULL	NULL	NULL	NULL
 1	2	3	4	5
+NULL	NULL	NULL	NULL	NULL
 
 query II
 SELECT * FROM numeric_values ORDER BY 1
 ----
-NULL	NULL
 1.0	3.0
+NULL	NULL
 
 query IIII
 SELECT * FROM decimal_values ORDER BY 1
 ----
-NULL	NULL	NULL	NULL
 1.0	3.22	10420942.4567	12908124908190481290481.11
+NULL	NULL	NULL	NULL
 
 query II
 SELECT * FROM string_values ORDER BY 1
 ----
-NULL	NULL
 hello world	\xAA\xFF\xAA
+NULL	NULL
 
 query III
 SELECT * FROM date_values ORDER BY 1
 ----
-NULL	NULL	NULL
 1992-01-01	12:00:03	1992-09-20 10:00:03
+NULL	NULL	NULL
 
 query I
 SELECT nextval('test3.bla')
@@ -53,14 +53,14 @@ SELECT nextval('test3.bla')
 query IIIII
 SELECT * FROM v1 ORDER BY 1
 ----
-NULL	NULL	NULL	NULL	NULL
 1	2	3	4	5
+NULL	NULL	NULL	NULL	NULL
 
 query I
 SELECT * FROM test3.v2 ORDER BY 1
 ----
-NULL
 9
+NULL
 
 query II
 SELECT COUNT(*), SUM(i) FROM big_integers ORDER BY 1
