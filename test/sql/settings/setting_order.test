@@ -26,9 +26,11 @@ SELECT * FROM range(3) ORDER BY 1
 
 statement error
 ${statement_type} default_order='unknown_order'
+----
 
 endloop
 
 # this can only be set globally (for now)
 statement error
 SET SESSION default_order='asc'
+----

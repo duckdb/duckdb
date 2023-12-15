@@ -52,6 +52,7 @@ Catalog Error: Table with name v does not exist!
 
 statement error
 SELECT * FROM test.v
+----
 
 statement ok
 CREATE TABLE test.t (a INTEGER, b INTEGER);
@@ -63,6 +64,7 @@ SELECT * FROM test.t
 
 statement error
 SELECT b,c FROM test.v
+----
 
 statement ok
 CREATE VIEW test.v (b,c) AS SELECT * FROM test.t;
