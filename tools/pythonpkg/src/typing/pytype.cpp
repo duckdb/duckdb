@@ -13,7 +13,13 @@ bool PyGenericAlias::check_(const py::handle &object) {
 	if (!ModuleIsLoaded<TypesCacheItem>()) {
 		return false;
 	}
+	auto typing_loaded = ModuleIsLoaded<TypingCacheItem>();
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	if (typing_loaded && py::isinstance(object, import_cache.typing._GenericAlias())) {
+		// Python 3.7
+		return true;
+	}
+
 	return py::isinstance(object, import_cache.types.GenericAlias());
 }
 
@@ -31,10 +37,6 @@ bool PyUnionType::check_(const py::handle &object) {
 		return true;
 	}
 	if (typing_loaded && py::isinstance(object, import_cache.typing._UnionGenericAlias())) {
-		return true;
-	}
-	if (typing_loaded && py::isinstance(object, import_cache.typing._GenericAlias())) {
-		// Python 3.7
 		return true;
 	}
 	return false;
