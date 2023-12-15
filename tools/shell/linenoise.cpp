@@ -186,6 +186,7 @@ struct linenoiseState {
 	size_t pos;                              /* Current cursor position. */
 	size_t old_cursor_rows;                  /* Previous refresh cursor position. */
 	size_t len;                              /* Current edited line length. */
+	size_t y_scroll;                         /* The y scroll position (multiline mode) */
 	struct winsize ws;                       /* Terminal size */
 	size_t maxrows;                          /* Maximum num of rows used so far (multiline mode) */
 	int history_index;                       /* The history index we are currently editing. */
@@ -1105,6 +1106,23 @@ static void refreshMultiLine(struct linenoiseState *l) {
 		old_rows = 0;
 		l->clear_screen = false;
 	}
+	if (rows > l->ws.ws_row) {
+		// the text does not fit in the terminal (too many rows)
+		// enable scrolling mode
+		// check if, given the current y_scroll, the cursor is visible
+		// display range is [y_scroll, y_scroll + ws.ws_row]
+		if (new_cursor_row < l->y_scroll + 1) {
+			l->y_scroll = new_cursor_row - 1;
+		} else if (new_cursor_row > l->y_scroll + l->ws.ws_row){
+			l->y_scroll = new_cursor_row - l->ws.ws_row;
+		}
+		// display only characters up to the current scroll position
+		len = colAndRowToPosition(l, l->y_scroll + l->ws.ws_row, 99999);
+		lndebug("truncate to rows %d - %d (render len %d)", l->y_scroll, l->y_scroll + l->ws.ws_row, len);
+		rows = l->y_scroll + l->ws.ws_row;
+	} else {
+		l->y_scroll = 0;
+	}
 
 	/* Update maxrows if needed. */
 	if (rows > (int)l->maxrows) {
@@ -1680,6 +1698,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 	l.ws = getTerminalSize(stdin_fd, stdout_fd);
 	l.maxrows = 0;
 	l.history_index = 0;
+	l.y_scroll = 0;
 	l.clear_screen = false;
 	l.search = false;
 
