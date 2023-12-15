@@ -2315,15 +2315,18 @@ int linenoiseHistorySave(const char *filename) {
  * on error -1 is returned. */
 int linenoiseHistoryLoad(const char *filename) {
 	FILE *fp = fopen(filename, "r");
-	char buf[LINENOISE_MAX_LINE];
+	char buf[LINENOISE_MAX_LINE + 1];
+	buf[LINENOISE_MAX_LINE] = '\0';
 
 	if (fp == NULL) {
 		return -1;
 	}
 
+	std::string result;
 	while (fgets(buf, LINENOISE_MAX_LINE, fp) != NULL) {
 		char *p;
 
+		// strip the newline first
 		p = strchr(buf, '\r');
 		if (!p) {
 			p = strchr(buf, '\n');
@@ -2331,7 +2334,22 @@ int linenoiseHistoryLoad(const char *filename) {
 		if (p) {
 			*p = '\0';
 		}
-		linenoiseHistoryAdd(buf);
+		if (result.empty() && buf[0] == '.') {
+			// if the first character is a dot this is a dot command
+			// add the full line to the history
+			linenoiseHistoryAdd(buf);
+			continue;
+		}
+		// else we are parsing a SQL statement
+		result += buf;
+		if (sqlite3_complete(result.c_str())) {
+			// this line contains a full SQL statement - add it to the history
+			linenoiseHistoryAdd(result.c_str());
+			result = std::string();
+			continue;
+		}
+		// the result does not contain a full SQL statement - add a newline deliminator and move on to the next line
+		result += "\r\n";
 	}
 	fclose(fp);
 
