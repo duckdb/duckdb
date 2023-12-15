@@ -214,7 +214,7 @@
         "full_path": "numpy",
         "name": "numpy",
         "children": [
-			"numpy.core",
+            "numpy.core",
             "numpy.ndarray",
             "numpy.datetime64",
             "numpy.generic",
@@ -492,13 +492,20 @@
         "full_path": "typing",
         "name": "typing",
         "children": [
-            "typing._UnionGenericAlias"
+            "typing._UnionGenericAlias",
+            "typing._GenericAlias"
         ]
     },
     "typing._UnionGenericAlias": {
         "type": "attribute",
         "full_path": "typing._UnionGenericAlias",
         "name": "_UnionGenericAlias",
+        "children": []
+    },
+    "typing._GenericAlias": {
+        "type": "attribute",
+        "full_path": "typing._GenericAlias",
+        "name": "_GenericAlias",
         "children": []
     },
     "uuid": {
