@@ -1117,9 +1117,22 @@ static void refreshMultiLine(struct linenoiseState *l) {
 			l->y_scroll = new_cursor_row - l->ws.ws_row;
 		}
 		// display only characters up to the current scroll position
-		len = colAndRowToPosition(l, l->y_scroll + l->ws.ws_row, 99999);
-		lndebug("truncate to rows %d - %d (render len %d)", l->y_scroll, l->y_scroll + l->ws.ws_row, len);
-		rows = l->y_scroll + l->ws.ws_row;
+		int start, end;
+		if (l->y_scroll == 0) {
+			start = 0;
+		} else {
+			start = colAndRowToPosition(l, l->y_scroll + 1, 0);
+		}
+		if (l->y_scroll + l->ws.ws_row >= rows) {
+			end = len;
+		} else {
+			end = colAndRowToPosition(l, l->y_scroll + l->ws.ws_row, 99999);
+		}
+		new_cursor_row -= l->y_scroll;
+		buf += start;
+		len = end - start;
+		lndebug("truncate to rows %d - %d (render bytes %d to %d)", l->y_scroll, l->y_scroll + l->ws.ws_row, start, end);
+		rows = l->ws.ws_row;
 	} else {
 		l->y_scroll = 0;
 	}
@@ -1161,7 +1174,9 @@ static void refreshMultiLine(struct linenoiseState *l) {
 	abAppend(&ab, seq, strlen(seq));
 
 	/* Write the prompt and the current buffer content */
-	abAppend(&ab, l->prompt, strlen(l->prompt));
+	if (l->y_scroll == 0) {
+		abAppend(&ab, l->prompt, strlen(l->prompt));
+	}
 	abAppend(&ab, buf, len);
 
 	/* Show hints if any. */
