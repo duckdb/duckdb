@@ -35,33 +35,20 @@ struct ParseChunk {
 		auto &states = scanner.states;
 
 		sniffing_state_machine.Transition(states, current_char);
+
 		// Check if it's a new value - We don't predicate this because of the cost of creating a CSV Value
 
 		if (states.NewValue() || states.NewRow()) {
-			// We have a value if it hits a delimiter
-			//			scanner.values[scanner.current_value_pos].length = current_pos - scanner.length;
-			//			scanner.values[scanner.current_value_pos].buffer_ptr = scanner.cur_buffer_handle->Ptr() +
-			// scanner.length;
-			if (scanner.length > current_pos) {
-				int x = 0;
-			}
-			//				D_ASSERT(0;)
-			//				scanner.duck_vector_ptr[scanner.current_value_pos] =
-			//				    string_t(scanner.cur_buffer_handle->Ptr() ,0);
-			//				} else {
 			scanner.duck_vector_ptr[scanner.current_value_pos] =
 			    string_t(scanner.cur_buffer_handle->Ptr() + scanner.length, current_pos - scanner.length - 1);
-			//			}
 			scanner.length = current_pos;
 			scanner.current_value_pos++;
 
 			if (scanner.current_value_pos >= scanner.values_size) {
 				return true;
 			}
-
-			// Create next value
-			// fixme: states.current_state == CSVState::QUOTED
 		}
+
 		// Or if it hits a new row
 
 		// We scanned enough values to fill a chunk

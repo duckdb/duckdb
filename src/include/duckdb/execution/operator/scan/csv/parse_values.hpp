@@ -17,6 +17,11 @@ struct TupleOfValues {
 	idx_t position;
 	bool set = false;
 	vector<Value> values;
+	void Print(){
+		for (auto& val: values){
+			val.Print();
+		}
+	}
 };
 
 //! Templated Function that process a CSV buffer into a vector of sniffed values

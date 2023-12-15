@@ -12,89 +12,23 @@
 #include "duckdb/execution/operator/scan/csv/csv_file_handle.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_state_machine.hpp"
+#include "duckdb/execution/operator/scan/csv/parsing/scanner_boundary.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/fast_mem.hpp"
 
 namespace duckdb {
 
-//! Structure that holds information on the beginning of the first line and end of the last line read by this scanner
-//! This is mainly used for verification and to guarantee our parallel scanner read all lines correctly
-struct VerificationPositions {
-	idx_t beginning_of_first_line = 0;
-	idx_t end_of_last_line = 0;
-};
+//! A CSV Scanner is what iterates over CSV Buffers.
+//! They are capable of autonomously getting their buffers, and by using a CSV State Machine, they can parse it to different structures
+//! In certain sniffing phases the can simply consist of counting the number of columns. While when reading the file
+//! It can be creating the data in DuckDB Chunks.
 
-//! If we are Parsing or Sniffing
-enum class ParserMode : uint8_t { PARSING = 0, SNIFFING = 1 };
-
-//! Structure that holds information from the data a scanner should scan
-struct CSVIterator {
-	CSVIterator(idx_t file_idx_p, idx_t buffer_idx_p, idx_t buffer_pos_p, idx_t bytes_to_read_p)
-	    : file_idx(file_idx_p), start_buffer_idx(buffer_idx_p), start_buffer_pos(buffer_pos_p),
-	      buffer_idx(buffer_idx_p), buffer_pos(buffer_pos_p), bytes_to_read(bytes_to_read_p) {};
-	//! Constructor used for the first CSV Iterator of a scanner
-	CSVIterator(idx_t start_buffer_pos_p, idx_t bytes_to_read_p)
-	    : start_buffer_pos(start_buffer_pos_p), buffer_pos(start_buffer_pos_p), bytes_to_read(bytes_to_read_p) {};
-	CSVIterator() {};
-
-	//! Resets the Iterator, only used in the sniffing where scanners must be restarted for dialect/type detection
-	void Reset();
-
-	//! Moves the Iterator to the next positions
-	//! There are three options for the iterator movement.
-	//! 1) We are done with the current file, hence we move to the next file
-	//! 2) We are done with the current buffer, hence we move to the next buffer
-	//! 3) We are not done with the current buffer, hence we just move where we start within the buffer
-	bool Next(CSVBufferManager &buffer_manager);
-
-	//! File index where we start scanning [0-idx], a scanner can never go over one file.
-	idx_t file_idx = 0;
-	//! Start Buffer index of the file where we start scanning
-	idx_t start_buffer_idx = 0;
-	//! Start Buffer position of the buffer of the file where we start scanning
-	idx_t start_buffer_pos = 0;
-
-	//! Current Buffer index of the file we are scanning
-	idx_t buffer_idx = 0;
-	//! Current Buffer position of the buffer of the file we are scanning
-	idx_t buffer_pos = 0;
-
-	//! How many bytes this CSV Scanner should read
-	//! If higher than the remainder of the file, will read the file in its entirety
-	idx_t bytes_to_read = NumericLimits<idx_t>::Maximum();
-	idx_t iterator_id = 0;
-};
-
-//! This represents a CSV Value in a buffer
-struct CSVValue {
-public:
-	CSVValue() {
-	}
-
-	//! Converts value to string_t
-	inline string_t GetStringT() {
-		return string_t(buffer_ptr, length);
-	};
-
-	//! Buffer Pointer
-	char *buffer_ptr;
-	//! Length of the string
-	uint16_t length;
-};
-
-//! The CSV Scanner is what iterates over CSV Buffers
+//! Due to a CSV File being broken into multiple buffers, the CSV Scanner also needs to ensure that overbuffer values are
+//! Properly read
 class CSVScanner {
-public:
-	//! Constructor used for result checking in unit-testing
-	CSVScanner(ClientContext &context, CSVReaderOptions &options);
-
-	//! Constructor used when sniffing
-	explicit CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p);
-
-	//! Constructor used when parsing
 	explicit CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
-	                    CSVIterator csv_iterator, idx_t scanner_id);
+	                    ScannerBoundary boundaries, idx_t scanner_id);
 
 	void ProcessOverbufferValue() {
 		auto cur_buf = cur_buffer_handle->Ptr();
@@ -144,6 +78,7 @@ public:
 			buffer_handle_ptr = cur_buffer_handle->Ptr();
 			for (; csv_iterator.buffer_pos < cur_buffer_handle->actual_size; csv_iterator.buffer_pos++) {
 				if (OP::Process(machine, result, buffer_handle_ptr[csv_iterator.buffer_pos], csv_iterator.buffer_pos)) {
+//					csv_iterator.buffer_pos++;
 					//! Not-Done Processing the File, but the Operator is happy!
 					OP::Finalize(machine, result);
 					return false;
@@ -168,12 +103,11 @@ public:
 				buffer_handle_ptr = cur_buffer_handle->Ptr();
 				ProcessOverbufferValue();
 			}
-
-			// fixme: the next value will be an over buffer value
 		}
 		//! We must ensure that process continues until a full line is read. If it stops in a newline we also continue
 		//! it. This is regardless of bytes_to_read
 		idx_t cur_val_pos = current_value_pos;
+		idx_t before_addition = current_value_pos;
 		if (states.NewRow()) {
 			cur_val_pos++;
 		}
@@ -191,6 +125,7 @@ public:
 				ProcessOverbufferValue();
 			}
 			if (OP::Process(machine, result, buffer_handle_ptr[csv_iterator.buffer_pos], csv_iterator.buffer_pos)) {
+
 				//! Not-Done Processing the File, but the Operator is happy!
 				OP::Finalize(machine, result);
 				return false;

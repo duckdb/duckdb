@@ -10,25 +10,9 @@
 
 namespace duckdb {
 
-CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p)
-    : buffer_manager(std::move(buffer_manager_p)), state_machine(state_machine_p), mode(ParserMode::SNIFFING) {
-	csv_iterator.buffer_pos = buffer_manager->GetStartPos();
-};
-
-CSVScanner::CSVScanner(ClientContext &context, CSVReaderOptions &options) : mode(ParserMode::PARSING) {
-	SetTotalColumns(options.dialect_options.num_cols);
-	const vector<string> file_path_list {options.file_path};
-	CSVStateMachineCache state_machine_cache;
-	buffer_manager = make_shared<CSVBufferManager>(context, options, file_path_list);
-
-	state_machine =
-	    make_shared<CSVStateMachine>(options, options.dialect_options.state_machine_options, state_machine_cache);
-	csv_iterator.buffer_pos = buffer_manager->GetStartPos();
-}
-
 CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
-                       CSVIterator csv_iterator_p, idx_t scanner_id_p)
-    : scanner_id(scanner_id_p), csv_iterator(csv_iterator_p), buffer_manager(std::move(buffer_manager_p)),
+	                    ScannerBoundary boundary_p, idx_t scanner_id);
+    : scanner_id(scanner_id_p), boundary(boundary_p), buffer_manager(std::move(buffer_manager_p)),
       state_machine(state_machine_p), mode(ParserMode::PARSING) {
 	SetTotalColumns(state_machine->options.dialect_options.num_cols);
 	//	cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
@@ -75,10 +59,14 @@ struct SkipUntilNewLine {
 	inline static bool Process(CSVScanner &scanner, idx_t &result_pos, char current_char, idx_t current_pos) {
 		auto state_machine = scanner.GetStateMachine();
 		auto &state = scanner.states;
+		if (current_char == '\n'){
+			result_pos = current_pos +1 ;
+			return true;
+		}
 		state_machine.Transition(scanner.states, current_char);
-		if (state.current_state == CSVState::RECORD_SEPARATOR) {
+		if (state.NewRow()) {
 			// Next Position is the first line.
-			result_pos = current_pos + 1;
+			result_pos = current_pos;
 			return true;
 		}
 		// Still reading the header so we have to keep going
@@ -132,7 +120,7 @@ bool CSVScanner::SetStart(VerificationPositions &verification_positions) {
 			continue;
 		}
 		vector<Value> &values = tuples[0].values;
-
+		tuples[0].Print();
 		if (values.size() != state_machine->options.dialect_options.num_cols) {
 			// If columns don't match, this is not the correct start, we need to skip until the next new line
 			csv_iterator.buffer_pos = position_being_checked;
@@ -429,48 +417,6 @@ bool CSVScanner::Finished() {
 	return csv_iterator.bytes_to_read == 0;
 }
 
-void CSVIterator::Reset() {
-	buffer_idx = start_buffer_idx;
-	buffer_pos = start_buffer_pos;
-	bytes_to_read = NumericLimits<idx_t>::Maximum();
-}
-
-bool CSVIterator::Next(CSVBufferManager &buffer_manager) {
-	if (file_idx >= buffer_manager.FileCount()) {
-		// We are done
-		return false;
-	}
-	iterator_id++;
-	// This is our start buffer
-	auto buffer = buffer_manager.GetBuffer(file_idx, buffer_idx);
-	// 1) We are done with the current file, we must move to the next file
-	if (buffer->is_last_buffer && buffer_pos + bytes_to_read > buffer->actual_size) {
-		// We are done with this file, we need to reset everything for the next file
-		file_idx++;
-		start_buffer_idx = 0;
-		start_buffer_pos = buffer_manager.GetStartPos();
-		buffer_idx = 0;
-		buffer_pos = buffer_manager.GetStartPos();
-		if (file_idx >= buffer_manager.FileCount()) {
-			// We are done
-			return false;
-		}
-		return true;
-	}
-	// 2) We still have data to scan in this file, we set the iterator accordingly.
-	else if (buffer_pos + bytes_to_read > buffer->actual_size) {
-		// We must move the buffer
-		start_buffer_idx++;
-		buffer_idx++;
-		start_buffer_pos = 0;
-		buffer_pos = 0;
-		return true;
-	}
-	// 3) We are not done with the current buffer, hence we just move where we start within the buffer
-	start_buffer_pos += bytes_to_read;
-	buffer_pos = start_buffer_pos;
-	return true;
-}
 
 void CSVScanner::Reset() {
 	if (cur_buffer_handle) {

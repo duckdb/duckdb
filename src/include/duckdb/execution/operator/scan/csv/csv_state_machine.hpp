@@ -30,6 +30,10 @@ struct CSVStates {
 		return (previous_state == CSVState::RECORD_SEPARATOR && current_state != CSVState::EMPTY_LINE) ||
 		       (current_state != CSVState::RECORD_SEPARATOR && previous_state == CSVState::CARRIAGE_RETURN);
 	}
+
+	inline bool IsCurrentNew(){
+		return  current_state == CSVState::RECORD_SEPARATOR || current_state == CSVState::CARRIAGE_RETURN ;
+	}
 	CSVState current_state = CSVState::EMPTY_LINE;
 	CSVState previous_state = CSVState::EMPTY_LINE;
 	CSVState pre_previous_state = CSVState::EMPTY_LINE;
