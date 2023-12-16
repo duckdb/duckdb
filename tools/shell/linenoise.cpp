@@ -316,7 +316,7 @@ static void disableRawMode(int fd) {
 static int parseInt(const char *s, int *offset = nullptr) {
 	int result = 0;
 	int idx;
-	for(idx = 0; s[idx]; idx++) {
+	for (idx = 0; s[idx]; idx++) {
 		char c = s[idx];
 		if (c < '0' || c > '9') {
 			break;
@@ -349,11 +349,11 @@ static struct winsize tryMeasureTerminalSize(int ifd, int ofd) {
 	struct winsize ws;
 	char b[16];
 	memset(&ws, 0, sizeof(ws));
-	if (writeString(ofd, "\0337"       /* save position */
-						 "\033[9979;9979H" /* move cursor to bottom right corner */
-						 "\033[6n"         /* report position */
-						 "\0338"           /* restore position */
-			) == -1) {
+	if (writeString(ofd, "\0337"           /* save position */
+	                     "\033[9979;9979H" /* move cursor to bottom right corner */
+	                     "\033[6n"         /* report position */
+	                     "\0338"           /* restore position */
+	                ) == -1) {
 		return ws;
 	}
 	int n = read(ifd, b, sizeof(b));
@@ -972,11 +972,11 @@ static void refreshSearch(struct linenoiseState *l) {
 	}
 	auto oldHighlighting = enableHighlighting;
 	linenoiseState clone = *l;
-	l->prompt = (char *) search_prompt.c_str();
+	l->prompt = (char *)search_prompt.c_str();
 	l->plen = search_prompt.size();
 	if (no_matches || l->search_buf.empty()) {
 		// if there are no matches render the no_matches_text
-		l->buf = (char *) no_matches_text.c_str();
+		l->buf = (char *)no_matches_text.c_str();
 		l->len = no_matches_text.size();
 		l->pos = 0;
 		// don't highlight the "no_matches" text
@@ -1021,7 +1021,7 @@ void nextPosition(struct linenoiseState *l, size_t &cpos, int &rows, int &cols) 
 		char_render_width = 1;
 		cpos++;
 	} else {
-		char_render_width = (int) duckdb::Utf8Proc::RenderWidth(l->buf, l->len, cpos);
+		char_render_width = (int)duckdb::Utf8Proc::RenderWidth(l->buf, l->len, cpos);
 		cpos = duckdb::Utf8Proc::NextGraphemeCluster(l->buf, l->len, cpos);
 	}
 	if (cols + char_render_width > l->ws.ws_col) {
@@ -1030,10 +1030,10 @@ void nextPosition(struct linenoiseState *l, size_t &cpos, int &rows, int &cols) 
 		cols = char_render_width;
 	}
 	cols += char_render_width;
-
 }
 
-void positionToColAndRow(struct linenoiseState *l, size_t target_pos, int &out_row, int &out_col, int &rows, int &cols) {
+void positionToColAndRow(struct linenoiseState *l, size_t target_pos, int &out_row, int &out_col, int &rows,
+                         int &cols) {
 	int plen = linenoiseComputeRenderWidth(l->prompt, strlen(l->prompt));
 	out_row = -1;
 	out_col = 0;
@@ -1098,7 +1098,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
 	int rows, cols;
 	int new_cursor_row, new_cursor_x;
 	positionToColAndRow(l, l->pos, new_cursor_row, new_cursor_x, rows, cols);
-	int col;                                                /* colum position, zero-based. */
+	int col; /* colum position, zero-based. */
 	int old_rows = l->maxrows ? l->maxrows : 1;
 	int fd = l->ofd, j;
 	struct abuf ab;
@@ -1117,7 +1117,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
 		// display range is [y_scroll, y_scroll + ws.ws_row]
 		if (new_cursor_row < l->y_scroll + 1) {
 			l->y_scroll = new_cursor_row - 1;
-		} else if (new_cursor_row > l->y_scroll + l->ws.ws_row){
+		} else if (new_cursor_row > l->y_scroll + l->ws.ws_row) {
 			l->y_scroll = new_cursor_row - l->ws.ws_row;
 		}
 		// display only characters up to the current scroll position
@@ -1135,7 +1135,8 @@ static void refreshMultiLine(struct linenoiseState *l) {
 		new_cursor_row -= l->y_scroll;
 		buf += start;
 		len = end - start;
-		lndebug("truncate to rows %d - %d (render bytes %d to %d)", l->y_scroll, l->y_scroll + l->ws.ws_row, start, end);
+		lndebug("truncate to rows %d - %d (render bytes %d to %d)", l->y_scroll, l->y_scroll + l->ws.ws_row, start,
+		        end);
 		rows = l->ws.ws_row;
 	} else {
 		l->y_scroll = 0;
@@ -1154,7 +1155,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
 		}
 		if (enableHighlighting) {
 			highlight_buffer = highlightText(buf, len, 0, len, match);
-			buf = (char *) highlight_buffer.c_str();
+			buf = (char *)highlight_buffer.c_str();
 			len = highlight_buffer.size();
 		}
 	}
@@ -1281,7 +1282,7 @@ int linenoiseEditInsert(struct linenoiseState *l, char c) {
 }
 
 int linenoiseEditInsertMulti(struct linenoiseState *l, const char *c) {
-	for(size_t pos = 0; c[pos]; pos++) {
+	for (size_t pos = 0; c[pos]; pos++) {
 		insertCharacter(l, c[pos]);
 	}
 	refreshLine(l);
@@ -1699,20 +1700,27 @@ static char linenoiseSearch(linenoiseState *l, char c) {
 	return 0;
 }
 
-static int allWhitespace(const char *z){
-	for(; *z; z++){
-		if( isspace((unsigned char)z[0]) ) continue;
-		if( *z=='/' && z[1]=='*' ){
+static int allWhitespace(const char *z) {
+	for (; *z; z++) {
+		if (isspace((unsigned char)z[0]))
+			continue;
+		if (*z == '/' && z[1] == '*') {
 			z += 2;
-			while( *z && (*z!='*' || z[1]!='/') ){ z++; }
-			if( *z==0 ) return 0;
+			while (*z && (*z != '*' || z[1] != '/')) {
+				z++;
+			}
+			if (*z == 0)
+				return 0;
 			z++;
 			continue;
 		}
-		if( *z=='-' && z[1]=='-' ){
+		if (*z == '-' && z[1] == '-') {
 			z += 2;
-			while( *z && *z!='\n' ){ z++; }
-			if( *z==0 ) return 1;
+			while (*z && *z != '\n') {
+				z++;
+			}
+			if (*z == 0)
+				return 1;
 			continue;
 		}
 		return 0;
