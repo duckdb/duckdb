@@ -1146,8 +1146,12 @@ static void refreshMultiLine(struct linenoiseState *l) {
 
 #ifndef DISABLE_HIGHLIGHT
 	if (duckdb::Utf8Proc::IsValid(l->buf, l->len)) {
+		searchMatch *match = nullptr;
+		if (l->search_index < l->search_matches.size()) {
+			match = &l->search_matches[l->search_index];
+		}
 		if (enableHighlighting) {
-			highlight_buffer = highlightText(buf, len, 0, len);
+			highlight_buffer = highlightText(buf, len, 0, len, match);
 			buf = (char *) highlight_buffer.c_str();
 			len = highlight_buffer.size();
 		}
