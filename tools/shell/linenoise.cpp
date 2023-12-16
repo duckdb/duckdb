@@ -140,7 +140,7 @@ static linenoiseFreeHintsCallback *freeHintsCallback = NULL;
 
 static struct termios orig_termios; /* In order to restore at exit.*/
 static int rawmode = 0;             /* For atexit() function to check if restore is needed*/
-static int mlmode = 0;              /* Multi line mode. Default is single line. */
+static int mlmode = 1;              /* Multi line mode. Default is multi line. */
 static int atexit_registered = 0;   /* Register atexit just 1 time. */
 static int history_max_len = LINENOISE_DEFAULT_HISTORY_MAX_LEN;
 static int history_len = 0;
@@ -164,7 +164,7 @@ static Color terminal_colors[] = {{"red", "\033[31m"},           {"green", "\033
                                   {"brightwhite", "\033[97m"},   {nullptr, nullptr}};
 static std::string bold = "\033[1m";
 static std::string underline = "\033[4m";
-static std::string keyword = "\033[32m\033[1m";
+static std::string keyword = "\033[32m";
 static std::string constant = "\033[33m";
 static std::string reset = "\033[00m";
 #endif
@@ -231,7 +231,7 @@ static void refreshLine(struct linenoiseState *l);
 static int hasMoreData(int fd);
 
 /* Debugging macro. */
-#if 1
+#if 0
 FILE *lndebug_fp = NULL;
 #define lndebug(...)                                                                                                   \
 	do {                                                                                                               \
@@ -250,9 +250,6 @@ FILE *lndebug_fp = NULL;
 /* Set if to use or not the multi line mode. */
 void linenoiseSetMultiLine(int ml) {
 	mlmode = ml;
-	if (ml) {
-		keyword = "\033[32m";
-	}
 }
 
 /* Return true if the terminal name is in the list of terminals we know are
