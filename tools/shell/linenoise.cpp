@@ -194,6 +194,8 @@ struct linenoiseState {
 	int history_index;                       /* The history index we are currently editing. */
 	bool clear_screen;                       /* Whether we are clearing the screen */
 	bool search;                             /* Whether or not we are searching our history */
+	bool render;                             /* Whether or not to re-render */
+	bool has_more_data;                      /* Whether or not there is more data available in the buffer (copy+paste)*/
 	std::string search_buf;                  //! The search buffer
 	std::vector<searchMatch> search_matches; //! The set of search matches in our history
 	size_t search_index;                     //! The current match index
@@ -1090,6 +1092,9 @@ size_t colAndRowToPosition(struct linenoiseState *l, int target_row, int target_
  * Rewrite the currently edited line accordingly to the buffer content,
  * cursor position, and number of columns of the terminal. */
 static void refreshMultiLine(struct linenoiseState *l) {
+	if (!l->render) {
+		return;
+	}
 	char seq[64];
 	int plen = linenoiseComputeRenderWidth(l->prompt, strlen(l->prompt));
 	// utf8 in prompt, get render width
@@ -1270,6 +1275,9 @@ void insertCharacter(struct linenoiseState *l, char c) {
 }
 
 int linenoiseEditInsert(struct linenoiseState *l, char c) {
+	if (l->has_more_data) {
+		l->render = false;
+	}
 	insertCharacter(l, c);
 	refreshLine(l);
 	return 0;
@@ -1743,6 +1751,8 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 	l.y_scroll = 0;
 	l.clear_screen = false;
 	l.search = false;
+	l.has_more_data = false;
+	l.render = true;
 
 	/* Buffer starts empty. */
 	l.buf[0] = '\0';
@@ -1762,7 +1772,9 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 		nread = read(l.ifd, &c, 1);
 		if (nread <= 0)
 			return l.len;
-		if (mlmode) {
+		l.has_more_data = hasMoreData(l.ifd);
+		l.render = true;
+		if (mlmode && !l.has_more_data) {
 			struct winsize new_size = getTerminalSize(stdin_fd, stdout_fd);
 			if (new_size.ws_col != l.ws.ws_col || new_size.ws_row != l.ws.ws_row) {
 				// terminal resize! re-compute max lines
@@ -1789,7 +1801,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 		 * there was an error reading from fd. Otherwise it will return the
 		 * character that should be handled next. */
 		if (c == 9 && completionCallback != NULL) {
-			if (hasMoreData(l.ifd)) {
+			if (l.has_more_data) {
 				// if there is more data, this tab character was added as part of copy-pasting data
 				continue;
 			}
@@ -1821,7 +1833,12 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 			history_len--;
 			free(history[history_len]);
 			if (mlmode) {
-				linenoiseEditMoveEnd(&l);
+				if (l.pos == l.len) {
+					// already at the end - only refresh
+					refreshLine(&l);
+				} else {
+					linenoiseEditMoveEnd(&l);
+				}
 			}
 			if (hintsCallback) {
 				/* Force a refresh without hints to leave the previous
