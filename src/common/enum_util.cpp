@@ -5887,7 +5887,7 @@ const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value) {
 		return "EXPRESSION_LIST";
 	case TableReferenceType::CTE:
 		return "CTE";
-	case TableReferenceType::EMPTY:
+	case TableReferenceType::EMPTY_FROM:
 		return "EMPTY";
 	case TableReferenceType::PIVOT:
 		return "PIVOT";
@@ -5920,7 +5920,7 @@ TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value) {
 		return TableReferenceType::CTE;
 	}
 	if (StringUtil::Equals(value, "EMPTY")) {
-		return TableReferenceType::EMPTY;
+		return TableReferenceType::EMPTY_FROM;
 	}
 	if (StringUtil::Equals(value, "PIVOT")) {
 		return TableReferenceType::PIVOT;
