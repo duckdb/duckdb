@@ -4049,54 +4049,48 @@ public class TestDuckDBJDBC {
     }
 
     public static void test_batch_prepared_statement() throws Exception {
-        Connection conn = DriverManager.getConnection(JDBC_URL);
-        Statement stmt = conn.createStatement();
-        stmt.execute("CREATE TABLE test (x INT, y INT, z INT)");
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            try (Statement s = conn.createStatement()) {
+                s.execute("CREATE TABLE test (x INT, y INT, z INT)");
+            }
+            try (PreparedStatement ps1 = conn.prepareStatement("INSERT INTO test VALUES (?, ?, ?)")) {
+                LocalDateTime ldt = LocalDateTime.of(2021, 1, 18, 21, 20, 7);
 
-        LocalDateTime ldt = LocalDateTime.of(2021, 1, 18, 21, 20, 7);
+                ps1.setObject(1, 1);
+                ps1.setObject(2, 2);
+                ps1.setObject(3, 3);
+                ps1.addBatch();
 
-        PreparedStatement ps1 = conn.prepareStatement("INSERT INTO test VALUES (?, ?, ?)");
-        
-        ps1.setObject(1, 1);
-        ps1.setObject(2, 2);
-        ps1.setObject(3, 3);
-        ps1.addBatch();
+                ps1.setObject(1, 4);
+                ps1.setObject(2, 5);
+                ps1.setObject(3, 6);
+                ps1.addBatch();
 
-        ps1.setObject(1, 4);
-        ps1.setObject(2, 5);
-        ps1.setObject(3, 6);
-        ps1.addBatch();
-        
-        ps1.executeBatch();
-        ps1.close();
+                ps1.executeBatch();
+            }
+            try (PreparedStatement ps2 = conn.prepareStatement("SELECT * FROM test");
+                 ResultSet rs2 = ps2.executeQuery()) {
+                rs2.next();
+                assertEquals(rs2.getInt(1), rs2.getObject(1, Integer.class));
+                assertEquals(rs2.getObject(1, Integer.class), 1);
 
-        PreparedStatement ps2 = conn.prepareStatement("SELECT * FROM test");
-        ResultSet rs2 = ps2.executeQuery();
+                assertEquals(rs2.getInt(2), rs2.getObject(2, Integer.class));
+                assertEquals(rs2.getObject(2, Integer.class), 2);
 
-        rs2.next();
-        assertEquals(rs2.getInt(1), rs2.getObject(1, Integer.class));
-        assertEquals(rs2.getObject(1, Integer.class), 1);
+                assertEquals(rs2.getInt(3), rs2.getObject(3, Integer.class));
+                assertEquals(rs2.getObject(3, Integer.class), 3);
 
-        assertEquals(rs2.getInt(2), rs2.getObject(2, Integer.class));
-        assertEquals(rs2.getObject(2, Integer.class), 2);
+                rs2.next();
+                assertEquals(rs2.getInt(1), rs2.getObject(1, Integer.class));
+                assertEquals(rs2.getObject(1, Integer.class), 4);
 
-        assertEquals(rs2.getInt(3), rs2.getObject(3, Integer.class));
-        assertEquals(rs2.getObject(3, Integer.class), 3);
+                assertEquals(rs2.getInt(2), rs2.getObject(2, Integer.class));
+                assertEquals(rs2.getObject(2, Integer.class), 5);
 
-        rs2.next();
-        assertEquals(rs2.getInt(1), rs2.getObject(1, Integer.class));
-        assertEquals(rs2.getObject(1, Integer.class), 4);
-
-        assertEquals(rs2.getInt(2), rs2.getObject(2, Integer.class));
-        assertEquals(rs2.getObject(2, Integer.class), 5);
-
-        assertEquals(rs2.getInt(3), rs2.getObject(3, Integer.class));
-        assertEquals(rs2.getObject(3, Integer.class), 6);
-
-        rs2.close();
-        ps2.close();
-        stmt.close();
-        conn.close();
+                assertEquals(rs2.getInt(3), rs2.getObject(3, Integer.class));
+                assertEquals(rs2.getObject(3, Integer.class), 6);
+            }
+        }
     }
     
     public static test_execute_while_batch() throws Exception {
@@ -4112,8 +4106,7 @@ public class TestDuckDBJDBC {
             }
         }
     }
-
-
+    
     public static void main(String[] args) throws Exception {
         // Woo I can do reflection too, take this, JUnit!
         Method[] methods = TestDuckDBJDBC.class.getMethods();
