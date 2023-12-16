@@ -1115,9 +1115,9 @@ static void refreshMultiLine(struct linenoiseState *l) {
 		// enable scrolling mode
 		// check if, given the current y_scroll, the cursor is visible
 		// display range is [y_scroll, y_scroll + ws.ws_row]
-		if (new_cursor_row < l->y_scroll + 1) {
+		if (new_cursor_row < int(l->y_scroll) + 1) {
 			l->y_scroll = new_cursor_row - 1;
-		} else if (new_cursor_row > l->y_scroll + l->ws.ws_row) {
+		} else if (new_cursor_row > int(l->y_scroll) + int(l->ws.ws_row)) {
 			l->y_scroll = new_cursor_row - l->ws.ws_row;
 		}
 		// display only characters up to the current scroll position
@@ -1127,7 +1127,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
 		} else {
 			start = colAndRowToPosition(l, l->y_scroll + 1, 0);
 		}
-		if (l->y_scroll + l->ws.ws_row >= rows) {
+		if (int(l->y_scroll) + int(l->ws.ws_row) >= rows) {
 			end = len;
 		} else {
 			end = colAndRowToPosition(l, l->y_scroll + l->ws.ws_row, 99999);
@@ -1166,7 +1166,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
 	abInit(&ab);
 	if (old_rows - l->old_cursor_rows > 0) {
 		lndebug("go down %d", old_rows - l->old_cursor_rows);
-		snprintf(seq, 64, "\x1b[%dB", old_rows - l->old_cursor_rows);
+		snprintf(seq, 64, "\x1b[%dB", old_rows - int(l->old_cursor_rows));
 		abAppend(&ab, seq, strlen(seq));
 	}
 
@@ -1197,7 +1197,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
 	lndebug("l->pos == len %d", l->pos == l->len ? 1 : 0);
 	lndebug("new_cursor_x == l->cols %d", new_cursor_x == l->ws.ws_col ? 1 : 0);
 	if (l->pos > 0 && l->pos == l->len && new_cursor_x == l->ws.ws_col) {
-		lndebug("<newline>");
+		lndebug("<newline>", 0);
 		abAppend(&ab, "\n", 1);
 		snprintf(seq, 64, "\r");
 		abAppend(&ab, seq, strlen(seq));
