@@ -4092,8 +4092,8 @@ public class TestDuckDBJDBC {
             }
         }
     }
-    
-    public static test_execute_while_batch() throws Exception {
+
+    public static void test_execute_while_batch() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
             try (Statement s = conn.createStatement()) {
                 s.execute("create table test (id int)");
@@ -4106,7 +4106,7 @@ public class TestDuckDBJDBC {
             }
         }
     }
-    
+
     public static void main(String[] args) throws Exception {
         // Woo I can do reflection too, take this, JUnit!
         Method[] methods = TestDuckDBJDBC.class.getMethods();
