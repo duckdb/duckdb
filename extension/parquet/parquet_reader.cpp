@@ -402,6 +402,9 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader() {
 	D_ASSERT(file_meta_data->row_groups.empty() || next_file_idx == file_meta_data->row_groups[0].columns.size());
 
 	auto &root_struct_reader = ret->Cast<StructColumnReader>();
+	if (!parquet_options.columns.empty()) {
+		root_struct_reader.RemoveUnusedColumns("", parquet_options.columns);
+	}
 	// add casts if required
 	for (auto &entry : reader_data.cast_map) {
 		auto column_idx = entry.first;

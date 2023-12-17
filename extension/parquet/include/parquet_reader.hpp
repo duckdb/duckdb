@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb.hpp"
+#include <string>
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
@@ -91,6 +92,7 @@ struct ParquetOptions {
 
 	MultiFileReaderOptions file_options;
 	vector<ParquetColumnDefinition> schema;
+	set<string> columns;
 
 public:
 	void Serialize(Serializer &serializer) const;

@@ -79,6 +79,12 @@
         "name": "encryption_config",
         "type": "shared_ptr<ParquetEncryptionConfig>",
         "default": "nullptr"
+      },
+      {
+        "id": 105,
+        "name": "columns",
+        "type": "std::set<string>",
+        "default": "std::set<string>()"
       }
     ],
     "pointer_type": "none"

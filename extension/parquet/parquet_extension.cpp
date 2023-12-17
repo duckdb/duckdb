@@ -1,3 +1,4 @@
+#include "duckdb/common/types.hpp"
 #define DUCKDB_EXTENSION_MAIN
 
 #include "parquet_extension.hpp"
@@ -313,6 +314,7 @@ public:
 		                                                                 {"type", LogicalType::VARCHAR},
 		                                                                 {"default_value", LogicalType::VARCHAR}}}));
 		table_function.named_parameters["encryption_config"] = LogicalTypeId::ANY;
+		table_function.named_parameters["columns"] = LogicalType::LIST(LogicalType::VARCHAR);
 		MultiFileReader::AddParameters(table_function);
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.serialize = ParquetScanSerialize;
@@ -474,6 +476,14 @@ public:
 
 				// cannot be combined with hive_partitioning=true, so we disable auto-detection
 				parquet_options.file_options.auto_detect_hive_partitioning = false;
+			} else if (loption == "columns") {
+				const auto columns = ListValue::GetChildren(kv.second);
+				if (columns.empty()) {
+					throw BinderException("Parquet columns cannot be empty");
+				}
+				for (const auto &c : columns) {
+					parquet_options.columns.insert(c.GetValue<std::string>());
+				}
 			} else if (loption == "encryption_config") {
 				parquet_options.encryption_config = ParquetEncryptionConfig::Create(context, kv.second);
 			}

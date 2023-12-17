@@ -71,6 +71,7 @@ void ParquetOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<MultiFileReaderOptions>(102, "file_options", file_options);
 	serializer.WritePropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", schema);
 	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", encryption_config, nullptr);
+	serializer.WritePropertyWithDefault<std::set<string>>(105, "columns", columns, std::set<string>());
 }
 
 ParquetOptions ParquetOptions::Deserialize(Deserializer &deserializer) {
@@ -80,6 +81,7 @@ ParquetOptions ParquetOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<MultiFileReaderOptions>(102, "file_options", result.file_options);
 	deserializer.ReadPropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", result.schema);
 	deserializer.ReadPropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", result.encryption_config, nullptr);
+	deserializer.ReadPropertyWithDefault<std::set<string>>(105, "columns", result.columns, std::set<string>());
 	return result;
 }
 

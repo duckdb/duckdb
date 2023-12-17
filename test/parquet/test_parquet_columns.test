@@ -1,0 +1,41 @@
+# name: test/parquet/test_parquet_columns.test
+# description: Parquet reader columns parameter tests
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+FROM read_parquet('data/parquet-testing/complex.parquet', columns=[]);
+----
+Binder Error: Parquet columns cannot be empty
+
+statement error
+FROM read_parquet('data/parquet-testing/complex.parquet', columns=['not-found']);
+----
+Invalid Input Error: column not-found not found in parquet file
+
+query II
+FROM read_parquet('data/parquet-testing/complex.parquet', columns=['stateId', 'id']);
+----
+{'idNum': 1, 'sessionNum': 1, 'sessionName': PARQUET_TEST_1, 'instanceName': PARQUET_TEST, 'smName': ParquetTestEngine}	1
+{'idNum': 1, 'sessionNum': 1, 'sessionName': PARQUET_TEST_1, 'instanceName': PARQUET_TEST, 'smName': ParquetTestEngine}	2
+
+statement error
+FROM read_parquet('data/parquet-testing/complex.parquet', columns=['stateId.not-found']);
+----
+Invalid Input Error: column stateId.not-found not found in parquet file
+
+query I
+FROM read_parquet('data/parquet-testing/complex.parquet', columns=['stateId.idNum', 'stateId.sessionNum', 'stateId.smName']);
+----
+{'idNum': 1, 'sessionNum': 1, 'smName': ParquetTestEngine}
+{'idNum': 1, 'sessionNum': 1, 'smName': ParquetTestEngine}
+
+query II
+FROM read_parquet('data/parquet-testing/complex.parquet', columns=['stateId.idNum', 'subProduct.stateId.idNum', 'subProduct.stateMeta']);
+----
+{'idNum': 1}	{'stateId': {'idNum': 1}, 'stateMeta': {'creationTime': 2021-11-04 11:26:12.894647+00, 'updateTime': 2021-11-04 11:26:12.894647+00, 'version': 1, 'deleted': false, 'completed': true}}
+{'idNum': 1}	{'stateId': {'idNum': 1}, 'stateMeta': {'creationTime': 2021-11-04 11:26:12.894647+00, 'updateTime': 2021-11-04 11:26:12.894647+00, 'version': 1, 'deleted': false, 'completed': true}}

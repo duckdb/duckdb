@@ -10,6 +10,7 @@
 
 #include "column_reader.hpp"
 #include "templated_column_reader.hpp"
+#include <set>
 
 namespace duckdb {
 
@@ -25,6 +26,8 @@ public:
 
 public:
 	ColumnReader *GetChildReader(idx_t child_idx);
+
+	void RemoveUnusedColumns(const string &prefix, std::set<string> columns);
 
 	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
 

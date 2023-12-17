@@ -4,6 +4,7 @@
 #include "callback_column_reader.hpp"
 #include "cast_column_reader.hpp"
 #include "duckdb.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "list_column_reader.hpp"
 #include "miniz_wrapper.hpp"
 #include "parquet_decimal_utils.hpp"
@@ -16,6 +17,9 @@
 #include "templated_column_reader.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "zstd.h"
+#include <set>
+#include <string>
+#include <utility>
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/bit.hpp"
@@ -1030,6 +1034,48 @@ StructColumnReader::StructColumnReader(ParquetReader &reader, LogicalType type_p
     : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
       child_readers(std::move(child_readers_p)) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
+}
+
+void StructColumnReader::RemoveUnusedColumns(const string &prefix, std::set<string> columns) {
+	D_ASSERT(Type().id() == LogicalTypeId::STRUCT);
+	D_ASSERT(!columns.empty());
+
+	auto child_types = StructType::GetChildTypes(Type());
+	vector<unique_ptr<ColumnReader>> used_child_readers;
+	child_list_t<LogicalType> used_child_types;
+
+	for (idx_t idx = 0; idx < child_types.size(); idx++) {
+		auto child_name = child_types[idx].first;
+		auto child_type = child_types[idx].second;
+		auto child_reader = std::move(child_readers[idx]);
+		if (columns.count(prefix + child_name)) {
+			// keep child
+			used_child_readers.push_back(std::move(child_reader));
+			used_child_types.push_back(std::make_pair(child_name, child_type));
+			columns.erase(prefix + child_name);
+		} else if (child_reader->Type().id() == LogicalTypeId::STRUCT) {
+			auto child_prefix = prefix + child_name + ".";
+			auto iter = columns.lower_bound(child_prefix);
+			std::set<string> columns_in_child;
+			while (iter != columns.end() && StringUtil::StartsWith(*iter, child_prefix)) {
+				columns_in_child.insert(*iter);
+				iter = columns.erase(iter);
+			}
+			if (!columns_in_child.empty()) {
+				// keep child and remove unused columns in child
+				child_reader->Cast<StructColumnReader>().RemoveUnusedColumns(child_prefix, columns_in_child);
+				used_child_types.push_back(std::make_pair(child_name, child_reader->Type()));
+				used_child_readers.push_back(std::move(child_reader));
+			}
+		}
+	}
+
+	if (!columns.empty()) {
+		throw InvalidInputException("column %s not found in parquet file", *columns.begin());
+	}
+
+	child_readers = std::move(used_child_readers);
+	type = LogicalType::STRUCT(used_child_types);
 }
 
 ColumnReader *StructColumnReader::GetChildReader(idx_t child_idx) {
