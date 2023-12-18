@@ -1,0 +1,36 @@
+# name: test/sql/catalog/dependencies/test_concurrent_schema_creation.test
+# description: Test concurrent schema creation + table creation
+# group: [dependencies]
+
+require skip_reload
+
+concurrentloop i 0 100
+
+# Create a schema for every thread
+statement ok
+create schema schema${i};
+
+# Create a table inside this schema
+statement ok
+create table schema${i}.tbl${i} (a integer);
+
+# Drop the schema for the thread - should fail
+statement error
+drop schema schema${i};
+----
+because there are entries that depend on it
+
+# Insert into the table
+statement ok
+insert into schema${i}.tbl${i} VALUES(1);
+
+# Drop the table
+statement ok
+drop table schema${i}.tbl${i};
+
+# Drop the schema again - now it succeeds
+statement ok
+drop schema schema${i};
+
+# i
+endloop

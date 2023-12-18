@@ -14,6 +14,7 @@ NULL
 # CAST throws an error
 statement error
 SELECT CAST('hello' as INTEGER)
+----
 
 query IIII
 SELECT TRY_CAST(3 as BIGINT), CAST(3 AS BIGINT), TRY_CAST(2 as BIGINT), CAST(3 AS INTEGER)

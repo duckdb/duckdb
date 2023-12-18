@@ -16,8 +16,6 @@ driver_path = duckdb.duckdb.__file__
 
 @pytest.fixture
 def duck_conn():
-    if sys.platform.startswith("win"):
-        pytest.xfail("not supported on Windows")
     with adbc_driver_manager.connect(driver=driver_path, entrypoint="duckdb_adbc_init") as conn:
         yield conn
 
@@ -62,8 +60,6 @@ def test_connection_get_objects(duck_conn):
 
 
 def test_commit(tmp_path):
-    if sys.platform.startswith("win"):
-        pytest.xfail("not supported on Windows")
     db = os.path.join(tmp_path, "tmp.db")
     if os.path.exists(db):
         os.remove(db)

@@ -40,10 +40,12 @@ UPDATE test SET x=0 WHERE x = 1 RETURNING *;
 # Error: Binder Error: Referenced table "y" not found!
 statement error
 INSERT INTO test VALUES(1) RETURNING y.y;
+----
 
 # Error: Binder Error: Referenced table "y" not found!
 statement error
 INSERT INTO test VALUES(1) RETURNING y.*;
+----
 
 query I
 INSERT INTO test VALUES(1) RETURNING test;

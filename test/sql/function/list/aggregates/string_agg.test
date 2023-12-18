@@ -5,6 +5,7 @@
 # incorrect usage
 statement error
 SELECT list_string_agg()
+----
 
 # scalar values
 query T

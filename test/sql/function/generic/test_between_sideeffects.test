@@ -23,6 +23,7 @@ false
 
 statement error
 EXECUTE v1(1, 2)
+----
 
 statement ok
 PREPARE v2 AS SELECT 1 WHERE ? BETWEEN now() - INTERVAL '1 minute' AND now() + INTERVAL '1 minute';

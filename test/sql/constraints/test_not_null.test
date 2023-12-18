@@ -10,12 +10,14 @@ INSERT INTO integers VALUES (3)
 
 statement error
 INSERT INTO integers VALUES (NULL)
+----
 
 statement ok
 UPDATE integers SET i=4
 
 statement error
 UPDATE integers SET i=NULL
+----
 
 statement ok
 CREATE TABLE integers_with_null(i INTEGER)
@@ -25,6 +27,7 @@ INSERT INTO integers_with_null VALUES (3), (4), (5), (NULL);
 
 statement error
 INSERT INTO integers (i) SELECT * FROM integers_with_null
+----
 
 statement ok
 INSERT INTO integers (i) SELECT * FROM integers_with_null WHERE i IS NOT NULL

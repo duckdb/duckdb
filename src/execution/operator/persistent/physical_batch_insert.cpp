@@ -112,7 +112,8 @@ public:
 	static constexpr const idx_t BATCH_FLUSH_THRESHOLD = LocalStorage::MERGE_THRESHOLD * 3;
 
 public:
-	explicit BatchInsertGlobalState(DuckTableEntry &table) : table(table), insert_count(0) {
+	explicit BatchInsertGlobalState(DuckTableEntry &table)
+	    : table(table), insert_count(0), optimistically_written(false) {
 	}
 
 	mutex lock;
@@ -120,7 +121,7 @@ public:
 	idx_t insert_count;
 	vector<RowGroupBatchEntry> collections;
 	idx_t next_start = 0;
-	bool optimistically_written = false;
+	atomic<bool> optimistically_written;
 
 	void FindMergeCollections(idx_t min_batch_index, optional_idx &merged_batch_index,
 	                          vector<unique_ptr<RowGroupCollection>> &result) {
