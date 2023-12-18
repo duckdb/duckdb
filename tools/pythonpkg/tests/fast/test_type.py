@@ -190,6 +190,8 @@ class TestType(object):
         child_type = type.v2.child
         assert str(child_type) == 'MAP(BLOB, BIT)'
 
+    # NOTE: we can support this, but I don't think going through hoops for an outdated version of python is worth it
+    @pytest.mark.skipif(sys.version_info < (3, 9), reason="python3.7 does not store Optional[..] in a recognized way")
     def test_optional(self):
         type = duckdb.typing.DuckDBPyType(Optional[str])
         assert type == 'VARCHAR'

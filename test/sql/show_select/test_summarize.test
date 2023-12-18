@@ -47,3 +47,14 @@ e	BLOB	(empty)	a\x00b\x00c	2	NULL	NULL	NULL	NULL	NULL	3	33.33
 
 statement ok
 SUMMARIZE VALUES (1.0),(6754950520);
+
+# Various overflows
+statement ok
+SUMMARIZE SELECT 9223372036854775296;
+
+statement ok
+summarize select bigint from test_all_types();
+
+statement ok
+summarize select 9223372036854775295;
+
