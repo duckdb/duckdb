@@ -5,6 +5,9 @@
 namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(ConstantExpression &expr, idx_t depth) {
+	if (expr.value.type().id() == LogicalTypeId::VARCHAR) {
+		return BindResult(make_uniq<BoundConstantExpression>(Value::STRING_LITERAL(StringValue::Get(expr.value))));
+	}
 	return BindResult(make_uniq<BoundConstantExpression>(expr.value));
 }
 

@@ -16,7 +16,7 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 		return make_uniq<ConstantExpression>(Value::INTEGER((int32_t)val.val.ival));
 	case duckdb_libpgquery::T_PGBitString: // FIXME: this should actually convert to BLOB
 	case duckdb_libpgquery::T_PGString:
-		return make_uniq<ConstantExpression>(Value::STRING_LITERAL(string(val.val.str)));
+		return make_uniq<ConstantExpression>(Value(string(val.val.str)));
 	case duckdb_libpgquery::T_PGFloat: {
 		string_t str_val(val.val.str);
 		bool try_cast_as_integer = true;

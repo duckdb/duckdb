@@ -145,6 +145,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::INVALID:
 	case LogicalTypeId::UNKNOWN:
+	case LogicalTypeId::STRING_LITERAL:
 		return PhysicalType::INVALID;
 	case LogicalTypeId::USER:
 		return PhysicalType::UNKNOWN;
