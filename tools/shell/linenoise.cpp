@@ -176,8 +176,8 @@ struct searchMatch {
 };
 
 struct TerminalSize {
-	size_t ws_col = 0;
-	size_t ws_row = 0;
+	int ws_col = 0;
+	int ws_row = 0;
 };
 
 /* The linenoiseState structure represents the state during line editing.
@@ -619,7 +619,7 @@ static void abFree(struct abuf *ab) {
  * to the right of the prompt. */
 void refreshShowHints(struct abuf *ab, struct linenoiseState *l, int plen) {
 	char seq[64];
-	if (hintsCallback && plen + l->len < l->ws.ws_col) {
+	if (hintsCallback && plen + l->len < size_t(l->ws.ws_col)) {
 		int color = -1, bold = 0;
 		char *hint = hintsCallback(l->buf, &color, &bold);
 		if (hint) {
