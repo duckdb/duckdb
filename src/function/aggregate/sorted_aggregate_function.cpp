@@ -1,5 +1,6 @@
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/list_segment.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -17,14 +18,22 @@ struct SortedAggregateBindData : public FunctionData {
 	      external(ClientConfig::GetConfig(context).force_external) {
 		auto &children = expr.children;
 		arg_types.reserve(children.size());
+		arg_funcs.reserve(children.size());
 		for (const auto &child : children) {
 			arg_types.emplace_back(child->return_type);
+			ListSegmentFunctions funcs;
+			GetSegmentDataFunctions(funcs, arg_types.back());
+			arg_funcs.emplace_back(funcs);
 		}
 		auto &order_bys = *expr.order_bys;
 		sort_types.reserve(order_bys.orders.size());
+		sort_funcs.reserve(order_bys.orders.size());
 		for (auto &order : order_bys.orders) {
 			orders.emplace_back(order.Copy());
 			sort_types.emplace_back(order.expression->return_type);
+			ListSegmentFunctions funcs;
+			GetSegmentDataFunctions(funcs, sort_types.back());
+			sort_funcs.emplace_back(funcs);
 		}
 		sorted_on_args = (children.size() == order_bys.orders.size());
 		for (size_t i = 0; sorted_on_args && i < children.size(); ++i) {
@@ -34,8 +43,8 @@ struct SortedAggregateBindData : public FunctionData {
 
 	SortedAggregateBindData(const SortedAggregateBindData &other)
 	    : buffer_manager(other.buffer_manager), function(other.function), arg_types(other.arg_types),
-	      sort_types(other.sort_types), sorted_on_args(other.sorted_on_args), threshold(other.threshold),
-	      external(other.external) {
+	      arg_funcs(other.arg_funcs), sort_types(other.sort_types), sort_funcs(other.sort_funcs),
+	      sorted_on_args(other.sorted_on_args), threshold(other.threshold), external(other.external) {
 		if (other.bind_info) {
 			bind_info = other.bind_info->Copy();
 		}
@@ -75,9 +84,11 @@ struct SortedAggregateBindData : public FunctionData {
 	AggregateFunction function;
 	vector<LogicalType> arg_types;
 	unique_ptr<FunctionData> bind_info;
+	vector<ListSegmentFunctions> arg_funcs;
 
 	vector<BoundOrderByNode> orders;
 	vector<LogicalType> sort_types;
+	vector<ListSegmentFunctions> sort_funcs;
 	bool sorted_on_args;
 
 	//! The sort flush threshold
@@ -86,171 +97,277 @@ struct SortedAggregateBindData : public FunctionData {
 };
 
 struct SortedAggregateState {
-	//! Default buffer size, optimised for small group to avoid blowing out memory.
-	static const idx_t BUFFER_CAPACITY = 16;
+	// Linked list equivalent of DataChunk
+	using LinkedLists = vector<LinkedList>;
+	using LinkedChunkFunctions = vector<ListSegmentFunctions>;
+
+	//! Capacities of the various levels of buffering
+	static const idx_t LIST_CAPACITY = 16;
+	static const idx_t CHUNK_CAPACITY = STANDARD_VECTOR_SIZE;
 
 	SortedAggregateState() : count(0), nsel(0), offset(0) {
 	}
 
-	static inline void InitializeBuffer(DataChunk &chunk, const vector<LogicalType> &types) {
-		if (!chunk.ColumnCount() && !types.empty()) {
-			chunk.Initialize(Allocator::DefaultAllocator(), types, BUFFER_CAPACITY);
+	static inline void InitializeLinkedList(LinkedLists &linked, const vector<LogicalType> &types) {
+		if (linked.empty() && !types.empty()) {
+			linked.resize(types.size(), LinkedList());
 		}
 	}
 
-	void InitializeBuffers(const SortedAggregateBindData &order_bind) {
-		// Lazy instantiation of the buffer chunks
-		InitializeBuffer(sort_buffer, order_bind.sort_types);
+	inline void InitializeLinkedLists(const SortedAggregateBindData &order_bind) {
+		InitializeLinkedList(sort_linked, order_bind.sort_types);
 		if (!order_bind.sorted_on_args) {
-			InitializeBuffer(arg_buffer, order_bind.arg_types);
+			InitializeLinkedList(arg_linked, order_bind.arg_types);
 		}
 	}
 
-	//! Make sure the buffer is large enough for slicing
-	static inline void ResetBuffer(DataChunk &chunk, const vector<LogicalType> &types) {
-		chunk.Reset();
-		chunk.Destroy();
-		chunk.Initialize(Allocator::DefaultAllocator(), types);
+	static inline void InitializeChunk(unique_ptr<DataChunk> &chunk, const vector<LogicalType> &types) {
+		if (!chunk && !types.empty()) {
+			chunk = make_uniq<DataChunk>();
+			chunk->Initialize(Allocator::DefaultAllocator(), types);
+		}
 	}
 
-	void Flush(const SortedAggregateBindData &order_bind) {
-		if (ordering) {
-			ordering->Append(*ordering_append, sort_buffer);
-			sort_buffer.Reset();
-			if (arguments) {
-				arguments->Append(*arguments_append, arg_buffer);
-				arg_buffer.Reset();
-			}
-			return;
+	void InitializeChunks(const SortedAggregateBindData &order_bind) {
+		// Lazy instantiation of the buffer chunks
+		InitializeChunk(sort_chunk, order_bind.sort_types);
+		if (!order_bind.sorted_on_args) {
+			InitializeChunk(arg_chunk, order_bind.arg_types);
 		}
+	}
 
+	static inline void FlushLinkedList(const LinkedChunkFunctions &funcs, LinkedLists &linked, DataChunk &chunk) {
+		idx_t total_count = 0;
+		for (column_t i = 0; i < linked.size(); ++i) {
+			funcs[i].BuildListVector(linked[i], chunk.data[i], total_count);
+			chunk.SetCardinality(linked[i].total_capacity);
+		}
+	}
+
+	void FlushLinkedLists(const SortedAggregateBindData &order_bind) {
+		InitializeChunks(order_bind);
+		FlushLinkedList(order_bind.sort_funcs, sort_linked, *sort_chunk);
+		if (arg_chunk) {
+			FlushLinkedList(order_bind.arg_funcs, arg_linked, *arg_chunk);
+		}
+	}
+
+	void InitializeCollections(const SortedAggregateBindData &order_bind) {
 		ordering = make_uniq<ColumnDataCollection>(order_bind.buffer_manager, order_bind.sort_types);
 		ordering_append = make_uniq<ColumnDataAppendState>();
 		ordering->InitializeAppend(*ordering_append);
-		if (sort_buffer.size()) {
-			InitializeBuffer(sort_buffer, order_bind.sort_types);
-			ordering->Append(*ordering_append, sort_buffer);
-			ResetBuffer(sort_buffer, order_bind.sort_types);
-		} else {
-			sort_buffer.Initialize(Allocator::DefaultAllocator(), order_bind.sort_types);
-		}
 
 		if (!order_bind.sorted_on_args) {
 			arguments = make_uniq<ColumnDataCollection>(order_bind.buffer_manager, order_bind.arg_types);
 			arguments_append = make_uniq<ColumnDataAppendState>();
 			arguments->InitializeAppend(*arguments_append);
-			if (arg_buffer.size()) {
-				InitializeBuffer(arg_buffer, order_bind.arg_types);
-				arguments->Append(*arguments_append, arg_buffer);
-				ResetBuffer(arg_buffer, order_bind.arg_types);
-			} else {
-				arg_buffer.Initialize(Allocator::DefaultAllocator(), order_bind.arg_types);
+		}
+	}
+
+	void FlushChunks(const SortedAggregateBindData &order_bind, SortedAggregateState &other) {
+		D_ASSERT(other.sort_chunk);
+		ordering->Append(*ordering_append, *other.sort_chunk);
+		other.sort_chunk->Reset();
+
+		if (arguments) {
+			D_ASSERT(other.arg_chunk);
+			arguments->Append(*arguments_append, *other.arg_chunk);
+			other.arg_chunk->Reset();
+		}
+	}
+
+	void Resize(const SortedAggregateBindData &order_bind, idx_t n) {
+		count = n;
+
+		//	Establish the current buffering
+		if (count <= LIST_CAPACITY) {
+			InitializeLinkedLists(order_bind);
+		}
+
+		if (count > LIST_CAPACITY && !sort_chunk && !ordering) {
+			FlushLinkedLists(order_bind);
+		}
+
+		if (count > CHUNK_CAPACITY && !ordering) {
+			InitializeCollections(order_bind);
+			FlushChunks(order_bind, *this);
+		}
+	}
+
+	void LinkedAppend(const LinkedChunkFunctions &functions, ArenaAllocator &allocator, DataChunk &input,
+	                  LinkedLists &linked) {
+		const auto count = input.size();
+		for (column_t c = 0; c < input.ColumnCount(); ++c) {
+			auto &func = functions[c];
+			auto &linked_list = linked[c];
+			RecursiveUnifiedVectorFormat input_data;
+			Vector::RecursiveToUnifiedFormat(input.data[c], count, input_data);
+			for (idx_t i = 0; i < nsel; ++i) {
+				idx_t sidx = sel.get_index(i);
+				func.AppendRow(allocator, linked_list, input_data, sidx);
 			}
 		}
 	}
 
-	void Update(const SortedAggregateBindData &order_bind, DataChunk &sort_chunk, DataChunk &arg_chunk) {
-		count += sort_chunk.size();
+	void Update(const AggregateInputData &aggr_input_data, DataChunk &sort_input, DataChunk &arg_input) {
+		const auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
+		Resize(order_bind, count + sort_input.size());
 
-		if (sort_chunk.size() + sort_buffer.size() > STANDARD_VECTOR_SIZE) {
-			Flush(order_bind);
+		if (ordering) {
+			//	Using collections
+			ordering->Append(*ordering_append, sort_input);
+			if (arguments) {
+				arguments->Append(*arguments_append, arg_input);
+			}
+		} else if (sort_chunk) {
+			//	Still using data chunks
+			sort_chunk->Append(sort_input);
+			if (arg_chunk) {
+				arg_chunk->Append(arg_input);
+			}
 		} else {
-			InitializeBuffers(order_bind);
-		}
-
-		if (order_bind.sorted_on_args) {
-			sort_buffer.Append(sort_chunk, true);
-		} else {
-			sort_buffer.Append(sort_chunk, true);
-			arg_buffer.Append(arg_chunk, true);
+			//	Still using linked lists
+			LinkedAppend(order_bind.sort_funcs, aggr_input_data.allocator, sort_input, sort_linked);
+			if (!arg_linked.empty()) {
+				LinkedAppend(order_bind.arg_funcs, aggr_input_data.allocator, arg_input, arg_linked);
+			}
 		}
 	}
 
-	void UpdateSlice(const SortedAggregateBindData &order_bind, DataChunk &sort_inputs, DataChunk &arg_inputs) {
-		count += nsel;
+	void UpdateSlice(const AggregateInputData &aggr_input_data, DataChunk &sort_input, DataChunk &arg_input) {
+		const auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
+		Resize(order_bind, count + nsel);
 
-		if (nsel + sort_buffer.size() > STANDARD_VECTOR_SIZE) {
-			Flush(order_bind);
+		if (ordering) {
+			//	Using collections
+			D_ASSERT(sort_chunk);
+			sort_chunk->Slice(sort_input, sel, nsel);
+			if (arg_chunk) {
+				arg_chunk->Slice(arg_input, sel, nsel);
+			}
+			FlushChunks(order_bind, *this);
+		} else if (sort_chunk) {
+			//	Still using data chunks
+			sort_chunk->Append(sort_input, true, &sel, nsel);
+			if (arg_chunk) {
+				arg_chunk->Append(arg_input, true, &sel, nsel);
+			}
 		} else {
-			InitializeBuffers(order_bind);
-		}
-
-		if (order_bind.sorted_on_args) {
-			sort_buffer.Append(sort_inputs, true, &sel, nsel);
-		} else {
-			sort_buffer.Append(sort_inputs, true, &sel, nsel);
-			arg_buffer.Append(arg_inputs, true, &sel, nsel);
+			//	Still using linked lists
+			LinkedAppend(order_bind.sort_funcs, aggr_input_data.allocator, sort_input, sort_linked);
+			if (!arg_linked.empty()) {
+				LinkedAppend(order_bind.arg_funcs, aggr_input_data.allocator, arg_input, arg_linked);
+			}
 		}
 
 		nsel = 0;
 		offset = 0;
 	}
 
-	void Combine(SortedAggregateBindData &order_bind, SortedAggregateState &other) {
-		if (other.arguments) {
-			// Force CDC if the other has it
-			Flush(order_bind);
-			ordering->Combine(*other.ordering);
-			arguments->Combine(*other.arguments);
-			count += other.count;
-		} else if (other.ordering) {
-			// Force CDC if the other has it
-			Flush(order_bind);
-			ordering->Combine(*other.ordering);
-			count += other.count;
-		} else if (other.sort_buffer.size()) {
-			Update(order_bind, other.sort_buffer, other.arg_buffer);
+	void Absorb(const SortedAggregateBindData &order_bind, SortedAggregateState &other) {
+		if (!other.count) {
+			return;
+		}
+
+		//	Change to a state large enough for all the data
+		Resize(order_bind, count + other.count);
+
+		//	3x3 matrix.
+		//	We can simplify the logic a bit because the target is already set for the final capacity
+		//	Force chunks, reducing to a 2x2 matrix. Finalize would do this anyway.
+		if (!sort_chunk) {
+			FlushLinkedLists(order_bind);
+		}
+		if (!other.sort_chunk) {
+			other.FlushLinkedLists(order_bind);
+		}
+
+		if (!ordering) {
+			//	Still using chunks, which means the source is using chunks or lists
+			D_ASSERT(sort_chunk);
+			D_ASSERT(other.sort_chunk);
+			sort_chunk->Append(*other.sort_chunk);
+			if (arg_chunk) {
+				D_ASSERT(other.arg_chunk);
+				arg_chunk->Append(*other.arg_chunk);
+			}
+		} else {
+			// Using collections, so source could be using anything.
+			if (other.ordering) {
+				ordering->Combine(*other.ordering);
+				if (arguments) {
+					D_ASSERT(other.arguments);
+					arguments->Combine(*other.arguments);
+				}
+			} else {
+				FlushChunks(order_bind, other);
+			}
 		}
 	}
 
 	void PrefixSortBuffer(DataChunk &prefixed) {
-		for (column_t col_idx = 0; col_idx < sort_buffer.ColumnCount(); ++col_idx) {
-			prefixed.data[col_idx + 1].Reference(sort_buffer.data[col_idx]);
+		for (column_t col_idx = 0; col_idx < sort_chunk->ColumnCount(); ++col_idx) {
+			prefixed.data[col_idx + 1].Reference(sort_chunk->data[col_idx]);
 		}
-		prefixed.SetCardinality(sort_buffer);
+		prefixed.SetCardinality(*sort_chunk);
 	}
 
 	void Finalize(const SortedAggregateBindData &order_bind, DataChunk &prefixed, LocalSortState &local_sort) {
 		if (arguments) {
-			Flush(order_bind);
 			ColumnDataScanState sort_state;
 			ordering->InitializeScan(sort_state);
 			ColumnDataScanState arg_state;
 			arguments->InitializeScan(arg_state);
-			for (sort_buffer.Reset(); ordering->Scan(sort_state, sort_buffer); sort_buffer.Reset()) {
+			for (sort_chunk->Reset(); ordering->Scan(sort_state, *sort_chunk); sort_chunk->Reset()) {
 				PrefixSortBuffer(prefixed);
-				arg_buffer.Reset();
-				arguments->Scan(arg_state, arg_buffer);
-				local_sort.SinkChunk(prefixed, arg_buffer);
+				arg_chunk->Reset();
+				arguments->Scan(arg_state, *arg_chunk);
+				local_sort.SinkChunk(prefixed, *arg_chunk);
 			}
-			ordering->Reset();
-			arguments->Reset();
 		} else if (ordering) {
-			Flush(order_bind);
 			ColumnDataScanState sort_state;
 			ordering->InitializeScan(sort_state);
-			for (sort_buffer.Reset(); ordering->Scan(sort_state, sort_buffer); sort_buffer.Reset()) {
+			for (sort_chunk->Reset(); ordering->Scan(sort_state, *sort_chunk); sort_chunk->Reset()) {
 				PrefixSortBuffer(prefixed);
-				local_sort.SinkChunk(prefixed, sort_buffer);
+				local_sort.SinkChunk(prefixed, *sort_chunk);
 			}
-			ordering->Reset();
-		} else if (order_bind.sorted_on_args) {
-			PrefixSortBuffer(prefixed);
-			local_sort.SinkChunk(prefixed, sort_buffer);
 		} else {
+			//	Force chunks so we can sort
+			if (!sort_chunk) {
+				FlushLinkedLists(order_bind);
+			}
+
 			PrefixSortBuffer(prefixed);
-			local_sort.SinkChunk(prefixed, arg_buffer);
+			if (arg_chunk) {
+				local_sort.SinkChunk(prefixed, *arg_chunk);
+			} else {
+				local_sort.SinkChunk(prefixed, *sort_chunk);
+			}
 		}
+
+		//	Release all memory
+		ordering.reset();
+		arguments.reset();
+
+		sort_chunk.reset();
+		arg_chunk.reset();
+
+		sort_linked.clear();
+		arg_linked.clear();
 	}
 
 	idx_t count;
+
 	unique_ptr<ColumnDataCollection> arguments;
 	unique_ptr<ColumnDataAppendState> arguments_append;
 	unique_ptr<ColumnDataCollection> ordering;
 	unique_ptr<ColumnDataAppendState> ordering_append;
 
-	DataChunk sort_buffer;
-	DataChunk arg_buffer;
+	unique_ptr<DataChunk> sort_chunk;
+	unique_ptr<DataChunk> arg_chunk;
+
+	LinkedLists sort_linked;
+	LinkedLists arg_linked;
 
 	// Selection for scattering
 	SelectionVector sel;
@@ -270,33 +387,33 @@ struct SortedAggregateFunction {
 	}
 
 	static void ProjectInputs(Vector inputs[], const SortedAggregateBindData &order_bind, idx_t input_count,
-	                          idx_t count, DataChunk &arg_chunk, DataChunk &sort_chunk) {
+	                          idx_t count, DataChunk &arg_input, DataChunk &sort_input) {
 		idx_t col = 0;
 
 		if (!order_bind.sorted_on_args) {
-			arg_chunk.InitializeEmpty(order_bind.arg_types);
-			for (auto &dst : arg_chunk.data) {
+			arg_input.InitializeEmpty(order_bind.arg_types);
+			for (auto &dst : arg_input.data) {
 				dst.Reference(inputs[col++]);
 			}
-			arg_chunk.SetCardinality(count);
+			arg_input.SetCardinality(count);
 		}
 
-		sort_chunk.InitializeEmpty(order_bind.sort_types);
-		for (auto &dst : sort_chunk.data) {
+		sort_input.InitializeEmpty(order_bind.sort_types);
+		for (auto &dst : sort_input.data) {
 			dst.Reference(inputs[col++]);
 		}
-		sort_chunk.SetCardinality(count);
+		sort_input.SetCardinality(count);
 	}
 
 	static void SimpleUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
 	                         idx_t count) {
 		const auto order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
-		DataChunk arg_chunk;
-		DataChunk sort_chunk;
-		ProjectInputs(inputs, order_bind, input_count, count, arg_chunk, sort_chunk);
+		DataChunk arg_input;
+		DataChunk sort_input;
+		ProjectInputs(inputs, order_bind, input_count, count, arg_input, sort_input);
 
 		const auto order_state = reinterpret_cast<SortedAggregateState *>(state);
-		order_state->Update(order_bind, sort_chunk, arg_chunk);
+		order_state->Update(aggr_input_data, sort_input, arg_input);
 	}
 
 	static void ScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
@@ -347,7 +464,7 @@ struct SortedAggregateFunction {
 				continue;
 			}
 
-			order_state->UpdateSlice(order_bind, sort_inputs, arg_inputs);
+			order_state->UpdateSlice(aggr_input_data, sort_inputs, arg_inputs);
 		}
 	}
 
@@ -355,7 +472,7 @@ struct SortedAggregateFunction {
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
 		auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
 		auto &other = const_cast<STATE &>(source);
-		target.Combine(order_bind, other);
+		target.Absorb(order_bind, other);
 	}
 
 	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
@@ -381,8 +498,7 @@ struct SortedAggregateFunction {
 
 		// State variables
 		auto bind_info = order_bind.bind_info.get();
-		ArenaAllocator allocator(Allocator::DefaultAllocator());
-		AggregateInputData aggr_bind_info(bind_info, allocator);
+		AggregateInputData aggr_bind_info(bind_info, aggr_input_data.allocator);
 
 		// Inner aggregate APIs
 		auto initialize = order_bind.function.initialize;
