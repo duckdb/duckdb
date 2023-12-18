@@ -13,8 +13,8 @@ namespace duckdb {
 PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
                                              vector<const_reference<PhysicalOperator>> delim_scans,
                                              idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::LEFT_DELIM_JOIN, std::move(types), estimated_cardinality),
-      join(std::move(original_join)), delim_scans(std::move(delim_scans)) {
+    : PhysicalDelimJoin(PhysicalOperatorType::LEFT_DELIM_JOIN, std::move(types), std::move(original_join),
+                        std::move(delim_scans), estimated_cardinality) {
 	D_ASSERT(join->children.size() == 2);
 	// now for the original join
 	// we take its left child, this is the side that we will duplicate eliminate
@@ -25,16 +25,6 @@ PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(vector<LogicalType> types, unique_p
 	auto cached_chunk_scan = make_uniq<PhysicalColumnDataScan>(
 	    children[0]->GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN, estimated_cardinality);
 	join->children[0] = std::move(cached_chunk_scan);
-}
-
-vector<const_reference<PhysicalOperator>> PhysicalLeftDelimJoin::GetChildren() const {
-	vector<const_reference<PhysicalOperator>> result;
-	for (auto &child : children) {
-		result.push_back(*child);
-	}
-	result.push_back(*join);
-	result.push_back(*distinct);
-	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -119,10 +109,6 @@ SinkFinalizeType PhysicalLeftDelimJoin::Finalize(Pipeline &pipeline, Event &even
 	OperatorSinkFinalizeInput finalize_input {*distinct->sink_state, input.interrupt_state};
 	distinct->Finalize(pipeline, event, client, finalize_input);
 	return SinkFinalizeType::READY;
-}
-
-string PhysicalLeftDelimJoin::ParamsToString() const {
-	return join->ParamsToString();
 }
 
 //===--------------------------------------------------------------------===//

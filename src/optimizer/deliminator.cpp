@@ -63,7 +63,7 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 		          [](const JoinWithDelimGet &lhs, const JoinWithDelimGet &rhs) { return lhs.depth > rhs.depth; });
 
 		bool all_removed = true;
-		if (HasSelection(delim_join)) {
+		if (!candidate.joins.empty() && HasSelection(delim_join)) {
 			// Keep the deepest join with DelimGet in these cases,
 			// as the selection can greatly reduce the cost of the RHS child of the DelimJoin
 			candidate.joins.erase(candidate.joins.begin());

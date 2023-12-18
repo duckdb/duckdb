@@ -1,9 +1,8 @@
 #include "duckdb/execution/operator/join/physical_right_delim_join.hpp"
 
-#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
-#include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
+#include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -13,28 +12,15 @@ namespace duckdb {
 PhysicalRightDelimJoin::PhysicalRightDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
                                                vector<const_reference<PhysicalOperator>> delim_scans,
                                                idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::LEFT_DELIM_JOIN, std::move(types), estimated_cardinality),
-      join(std::move(original_join)), delim_scans(std::move(delim_scans)) {
+    : PhysicalDelimJoin(PhysicalOperatorType::RIGHT_DELIM_JOIN, std::move(types), std::move(original_join),
+                        std::move(delim_scans), estimated_cardinality) {
 	D_ASSERT(join->children.size() == 2);
 	// now for the original join
 	// we take its right child, this is the side that we will duplicate eliminate
 	children.push_back(std::move(join->children[1]));
 
-	// we replace it with a PhysicalColumnDataScan, that scans the ColumnDataCollection that we keep cached
-	// the actual chunk collection to scan will be created in the RightDelimJoinGlobalState
-	auto cached_chunk_scan = make_uniq<PhysicalColumnDataScan>(
-	    children[0]->GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN, estimated_cardinality);
-	join->children[1] = std::move(cached_chunk_scan);
-}
-
-vector<const_reference<PhysicalOperator>> PhysicalRightDelimJoin::GetChildren() const {
-	vector<const_reference<PhysicalOperator>> result;
-	for (auto &child : children) {
-		result.push_back(*child);
-	}
-	result.push_back(*join);
-	result.push_back(*distinct);
-	return result;
+	// we replace it with a PhysicalDummyScan, which contains no data, just the types, it won't be scanned anyway
+	join->children[1] = make_uniq<PhysicalDummyScan>(children[0]->GetTypes(), estimated_cardinality);
 }
 
 //===--------------------------------------------------------------------===//
@@ -50,6 +36,7 @@ public:
 
 unique_ptr<GlobalSinkState> PhysicalRightDelimJoin::GetGlobalSinkState(ClientContext &context) const {
 	auto state = make_uniq<RightDelimJoinGlobalState>();
+	join->sink_state = join->GetGlobalSinkState(context);
 	distinct->sink_state = distinct->GetGlobalSinkState(context);
 	if (delim_scans.size() > 1) {
 		PhysicalHashAggregate::SetMultiScan(*distinct->sink_state);
@@ -105,10 +92,6 @@ SinkFinalizeType PhysicalRightDelimJoin::Finalize(Pipeline &pipeline, Event &eve
 	return SinkFinalizeType::READY;
 }
 
-string PhysicalRightDelimJoin::ParamsToString() const {
-	return join->ParamsToString();
-}
-
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
@@ -122,14 +105,39 @@ void PhysicalRightDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &met
 	if (type == PhysicalOperatorType::RIGHT_DELIM_JOIN) {
 		// recurse into the actual join
 		// any pipelines in there depend on the main pipeline
-		// any scan of the duplicate eliminated data on the RHS depends on this pipeline
+		// any scan of the duplicate eliminated data on the LHS depends on this pipeline
 		// we add an entry to the mapping of (PhysicalOperator*) -> (Pipeline*)
 		auto &state = meta_pipeline.GetState();
 		for (auto &delim_scan : delim_scans) {
 			state.delim_join_dependencies.insert(
 			    make_pair(delim_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
 		}
-		join->BuildPipelines(current, meta_pipeline);
+
+		// The rest of this function replicates the PhysicalJoin::BuildJoinPipelines,
+		// without building the RHS because we already build that in the Sink phase of this operator
+		state.AddPipelineOperator(current, *join);
+
+		// FIXME maybe the join probe pipeline needs to depend on this build,
+		//  but the probe contains delim scans that depend on the build, so probably redundant
+
+		// save the last added pipeline to set up dependencies later (in case we need to add a child pipeline)
+		vector<shared_ptr<Pipeline>> pipelines_so_far;
+		meta_pipeline.GetPipelines(pipelines_so_far, false);
+		auto last_pipeline = pipelines_so_far.back().get();
+
+		// continue building the current pipeline on the LHS (probe side)
+		join->children[0]->BuildPipelines(current, meta_pipeline);
+
+		// Join can become a source operator if it's RIGHT/OUTER, or if the hash join goes out-of-core
+		bool add_child_pipeline = false;
+		auto &join_op = join->Cast<PhysicalJoin>();
+		if (join_op.IsSource()) {
+			add_child_pipeline = true;
+		}
+
+		if (add_child_pipeline) {
+			meta_pipeline.CreateChildPipeline(current, *join, last_pipeline);
+		}
 	}
 }
 

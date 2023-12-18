@@ -1,7 +1,7 @@
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
-#include "duckdb/execution/operator/join/physical_left_delim_join.hpp"
+#include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
@@ -58,8 +58,9 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 		auto delim_dependency = entry->second.get().shared_from_this();
 		auto delim_sink = state.GetPipelineSink(*delim_dependency);
 		D_ASSERT(delim_sink);
-		D_ASSERT(delim_sink->type == PhysicalOperatorType::LEFT_DELIM_JOIN);
-		auto &delim_join = delim_sink->Cast<PhysicalLeftDelimJoin>();
+		D_ASSERT(delim_sink->type == PhysicalOperatorType::LEFT_DELIM_JOIN ||
+		         delim_sink->type == PhysicalOperatorType::RIGHT_DELIM_JOIN);
+		auto &delim_join = delim_sink->Cast<PhysicalDelimJoin>();
 		current.AddDependency(delim_dependency);
 		state.SetPipelineSource(current, delim_join.distinct->Cast<PhysicalOperator>());
 		return;

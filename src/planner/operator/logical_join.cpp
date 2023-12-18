@@ -50,22 +50,6 @@ void LogicalJoin::ResolveTypes() {
 	types.insert(types.end(), right_types.begin(), right_types.end());
 }
 
-void LogicalJoin::FlipChildren(LogicalOperator &op, JoinType inverse) {
-	std::swap(op.children[0], op.children[1]);
-	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		auto &join = op.Cast<LogicalComparisonJoin>();
-		join.join_type = inverse;
-		for (auto &cond : join.conditions) {
-			std::swap(cond.left, cond.right);
-			cond.comparison = FlipComparisonExpression(cond.comparison);
-		}
-	}
-	if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
-		auto &join = op.Cast<LogicalAnyJoin>();
-		join.join_type = inverse;
-	}
-}
-
 void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<idx_t> &bindings) {
 	auto column_bindings = op.GetColumnBindings();
 	for (auto binding : column_bindings) {

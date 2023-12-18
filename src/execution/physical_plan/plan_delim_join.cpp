@@ -19,35 +19,11 @@ static void GatherDelimScans(const PhysicalOperator &op, vector<const_reference<
 }
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanDelimJoin(LogicalComparisonJoin &op) {
-	// Try to swap LHS and RHS
-	switch (op.join_type) {
-	case JoinType::SINGLE:
-	case JoinType::MARK:
-		// We can't flip these joins (yet)
+	if (op.delim_flipped) {
+		return PlanRightDelimJoin(op);
+	} else {
 		return PlanLeftDelimJoin(op);
-	case JoinType::INNER:
-	case JoinType::OUTER:
-		// These are symmetric
-		LogicalJoin::FlipChildren(op, op.join_type);
-		break;
-	case JoinType::LEFT:
-		LogicalJoin::FlipChildren(op, JoinType::RIGHT);
-		break;
-	case JoinType::RIGHT:
-		LogicalJoin::FlipChildren(op, JoinType::LEFT);
-		break;
-	case JoinType::SEMI:
-		LogicalJoin::FlipChildren(op, JoinType::RIGHT_SEMI);
-		break;
-	case JoinType::ANTI:
-		LogicalJoin::FlipChildren(op, JoinType::RIGHT_ANTI);
-		break;
-	default:
-		throw NotImplementedException("PhysicalPlanGenerator::PlanDelimJoin for JoinType::%s",
-		                              EnumUtil::ToString(op.join_type));
 	}
-
-	return PlanRightDelimJoin(op);
 }
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanLeftDelimJoin(LogicalComparisonJoin &op) {

@@ -6,6 +6,7 @@ add_library_unity(
   physical_blockwise_nl_join.cpp
   physical_comparison_join.cpp
   physical_cross_product.cpp
+  physical_delim_join.cpp
   physical_left_delim_join.cpp
   physical_hash_join.cpp
   physical_iejoin.cpp

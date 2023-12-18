@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
@@ -16,20 +17,13 @@ class PhysicalHashAggregate;
 
 //! PhysicalRightDelimJoin represents a join where the RHS will be duplicate eliminated and pushed into a
 //! PhysicalColumnDataScan in the LHS.
-class PhysicalRightDelimJoin : public PhysicalOperator {
+class PhysicalRightDelimJoin : public PhysicalDelimJoin {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::RIGHT_DELIM_JOIN;
 
 public:
 	PhysicalRightDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
 	                       vector<const_reference<PhysicalOperator>> delim_scans, idx_t estimated_cardinality);
-
-	unique_ptr<PhysicalOperator> join;
-	unique_ptr<PhysicalHashAggregate> distinct;
-	vector<const_reference<PhysicalOperator>> delim_scans;
-
-public:
-	vector<const_reference<PhysicalOperator>> GetChildren() const override;
 
 public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
@@ -38,20 +32,6 @@ public:
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          OperatorSinkFinalizeInput &input) const override;
-
-	bool IsSink() const override {
-		return true;
-	}
-	bool ParallelSink() const override {
-		return true;
-	}
-	OrderPreservationType SourceOrder() const override {
-		return OrderPreservationType::NO_ORDER;
-	}
-	bool SinkOrderDependent() const override {
-		return false;
-	}
-	string ParamsToString() const override;
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;

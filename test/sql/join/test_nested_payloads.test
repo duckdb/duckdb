@@ -84,7 +84,7 @@ NULL	NULL	NULL
 5	5	[9, 10, 11]
 
 query III
-SELECT fk, pk, p FROM integers FULL OUTER JOIN intlists ON integers.fk=intlists.pk ORDER BY fk, pk
+SELECT fk, pk, p FROM integers FULL OUTER JOIN intlists ON integers.fk=intlists.pk ORDER BY ALL
 ----
 NULL	NULL	NULL
 NULL	NULL	[13]
@@ -151,7 +151,7 @@ NULL	NULL	NULL
 5	5	[i, j, k]
 
 query III
-SELECT fk, pk, p FROM integers FULL OUTER JOIN strlists ON integers.fk=strlists.pk ORDER BY fk, pk
+SELECT fk, pk, p FROM integers FULL OUTER JOIN strlists ON integers.fk=strlists.pk ORDER BY ALL
 ----
 NULL	NULL	NULL
 NULL	NULL	[Somateria mollissima]
@@ -229,7 +229,7 @@ NULL	NULL	NULL
 
 
 query III
-SELECT fk, pk, p FROM integers FULL OUTER JOIN structs ON integers.fk=structs.pk ORDER BY fk, pk
+SELECT fk, pk, p FROM integers FULL OUTER JOIN structs ON integers.fk=structs.pk ORDER BY ALL
 ----
 NULL	NULL	NULL
 NULL	NULL	{'x': 13, 'y': Somateria mollissima}
@@ -302,7 +302,7 @@ NULL	NULL	NULL
 query III
 SELECT fk, pk, p
 FROM integers FULL OUTER JOIN struct_lint_lstr ON integers.fk=struct_lint_lstr.pk
-ORDER BY fk, pk
+ORDER BY ALL
 ----
 NULL	NULL	NULL
 NULL	NULL	{'x': [13], 'y': [Somateria mollissima]}
@@ -375,7 +375,7 @@ NULL	NULL	NULL
 query III
 SELECT fk, pk, p
 FROM integers FULL OUTER JOIN r2l3r4l5i4i2l3v ON integers.fk=r2l3r4l5i4i2l3v.pk
-ORDER BY fk, pk
+ORDER BY ALL
 ----
 NULL	NULL	NULL
 NULL	NULL	{'x': [{'l4': [62], 'i4': 47}], 'y': [Somateria mollissima]}
