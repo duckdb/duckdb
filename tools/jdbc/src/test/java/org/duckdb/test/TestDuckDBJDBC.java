@@ -4068,7 +4068,7 @@ public class TestDuckDBJDBC {
 
                 ps1.executeBatch();
             }
-            try (PreparedStatement ps2 = conn.prepareStatement("SELECT * FROM test");
+            try (PreparedStatement ps2 = conn.prepareStatement("SELECT * FROM test ORDER BY x");
                  ResultSet rs2 = ps2.executeQuery()) {
                 rs2.next();
                 assertEquals(rs2.getInt(1), rs2.getObject(1, Integer.class));

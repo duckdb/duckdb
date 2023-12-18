@@ -120,6 +120,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public boolean execute() throws SQLException {
+        requireNonBatch();
         if (isClosed()) {
             throw new SQLException("Statement was closed");
         }
@@ -166,7 +167,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public ResultSet executeQuery() throws SQLException {
-        requireNonBatch();
         execute();
         if (!returnsResultSet) {
             throw new SQLException("executeQuery() can only be used with queries that return a ResultSet");
@@ -176,7 +176,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public int executeUpdate() throws SQLException {
-        requireNonBatch();
         execute();
         if (!(returnsChangedRows || returnsNothing)) {
             throw new SQLException(
@@ -187,7 +186,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public boolean execute(String sql) throws SQLException {
-        requireNonBatch();
         prepare(sql);
         return execute();
     }
