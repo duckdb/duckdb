@@ -2,10 +2,7 @@
 # description: Test loading overflow strings in small batches
 # group: [overflow_strings]
 
-# for smaller block sizes, we get more overflow blocks for this test
-require block_size 262144
-
-load __TEST_DIR__/load_overflow_strings.db
+load __TEST_DIR__/overflow_strings.db
 
 loop x 0 10
 
@@ -16,7 +13,7 @@ CREATE TABLE strings(s VARCHAR);
 loop it 0 10
 
 statement ok
-INSERT INTO strings SELECT repeat('X', case when i%17=0 then 5000 else i%7 end) AS s FROM generate_series(0,2500) tbl(i);
+INSERT INTO strings SELECT repeat('X', CASE WHEN i % 17 = 0 THEN 5000 ELSE i % 7 END) AS s FROM generate_series(0, 2500) tbl(i);
 
 statement ok
 CHECKPOINT;
@@ -24,14 +21,17 @@ CHECKPOINT;
 endloop
 
 query I
-SELECT COUNT(*) FROM pragma_storage_info('strings') WHERE contains(segment_info, 'Overflow String');
+SELECT EXISTS (SELECT * FROM pragma_storage_info('strings') WHERE contains(segment_info, 'Overflow String'));
 ----
 1
 
+# we expect a storage size of approximately 14 MiB (14680064 bytes),
+# and we allow a variation of 20% in storage size
+
 query I
-SELECT total_blocks < 100 FROM pragma_database_size();
+SELECT total_blocks < (14680064 / get_block_size('overflow_strings') * 1.2) FROM pragma_database_size();
 ----
-true
+1
 
 statement ok
 DROP TABLE strings;

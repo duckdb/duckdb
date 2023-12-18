@@ -226,13 +226,17 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t location) const {
 	// read the buffer from disk
 	block.Read(*handle, location);
+
 	// compute the checksum
 	auto stored_checksum = Load<uint64_t>(block.InternalBuffer());
 	uint64_t computed_checksum = Checksum(block.buffer, block.size);
+
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
-		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block",
-		                  computed_checksum, stored_checksum);
+		throw IOException(
+		    "Cannot read database file: computed checksum %llu does not match stored checksum %llu in block, DuckDB's "
+		    "block size is %llu bytes",
+		    computed_checksum, stored_checksum, Storage::BLOCK_ALLOC_SIZE);
 	}
 }
 

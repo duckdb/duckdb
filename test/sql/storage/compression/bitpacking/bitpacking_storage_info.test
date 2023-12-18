@@ -2,7 +2,7 @@
 # description: Test storage with Bitpacking
 # group: [bitpacking]
 
-# for very small block sizes, this test will default to another compression function, as the bitpacking groups
+# for small block sizes, this test will default to another compression function, as the bitpacking groups
 # no longer fit the blocks
 require block_size 262144
 
