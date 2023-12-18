@@ -8,10 +8,19 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_delim_get.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 #include <algorithm>
 
 namespace duckdb {
+
+struct JoinWithDelimGet {
+	JoinWithDelimGet(unique_ptr<LogicalOperator> &join_p, idx_t depth_p) : join(join_p), depth(depth_p) {
+	}
+	reference<unique_ptr<LogicalOperator>> join;
+	idx_t depth;
+};
 
 struct DelimCandidate {
 public:
@@ -22,7 +31,7 @@ public:
 public:
 	unique_ptr<LogicalOperator> &op;
 	LogicalComparisonJoin &delim_join;
-	vector<reference<unique_ptr<LogicalOperator>>> joins;
+	vector<JoinWithDelimGet> joins;
 	idx_t delim_get_count;
 };
 
@@ -49,12 +58,23 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 	for (auto &candidate : candidates) {
 		auto &delim_join = candidate.delim_join;
 
+		// Sort these so the deepest are first
+		std::sort(candidate.joins.begin(), candidate.joins.end(),
+		          [](const JoinWithDelimGet &lhs, const JoinWithDelimGet &rhs) { return lhs.depth > rhs.depth; });
+
 		bool all_removed = true;
+		if (HasSelection(delim_join)) {
+			// Keep the deepest join with DelimGet in these cases,
+			// as the selection can greatly reduce the cost of the RHS child of the DelimJoin
+			candidate.joins.erase(candidate.joins.begin());
+			all_removed = false;
+		}
+
 		bool all_equality_conditions = true;
 		for (auto &join : candidate.joins) {
-			all_removed =
-			    RemoveJoinWithDelimGet(delim_join, candidate.delim_get_count, join, all_equality_conditions) &&
-			    all_removed;
+			all_removed = RemoveJoinWithDelimGet(delim_join, candidate.delim_get_count, join.join.get(),
+			                                     all_equality_conditions) &&
+			              all_removed;
 		}
 
 		// Change type if there are no more duplicate-eliminated columns
@@ -81,7 +101,6 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 }
 
 void Deliminator::FindCandidates(unique_ptr<LogicalOperator> &op, vector<DelimCandidate> &candidates) {
-	// Search children before adding, so the deepest candidates get added first
 	for (auto &child : op->children) {
 		FindCandidates(child, candidates);
 	}
@@ -97,6 +116,33 @@ void Deliminator::FindCandidates(unique_ptr<LogicalOperator> &op, vector<DelimCa
 	FindJoinWithDelimGet(op->children[1], candidate);
 }
 
+bool Deliminator::HasSelection(const LogicalOperator &op) {
+	// TODO once we implement selectivity estimation using samples we need to use that here
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_GET: {
+		auto &get = op.Cast<LogicalGet>();
+		for (const auto &filter : get.table_filters.filters) {
+			if (filter.second->filter_type != TableFilterType::IS_NOT_NULL) {
+				return true;
+			}
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_FILTER:
+		return true;
+	default:
+		break;
+	}
+
+	for (auto &child : op.children) {
+		if (HasSelection(*child)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 static bool OperatorIsDelimGet(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_DELIM_GET) {
 		return true;
@@ -108,20 +154,20 @@ static bool OperatorIsDelimGet(LogicalOperator &op) {
 	return false;
 }
 
-void Deliminator::FindJoinWithDelimGet(unique_ptr<LogicalOperator> &op, DelimCandidate &candidate) {
+void Deliminator::FindJoinWithDelimGet(unique_ptr<LogicalOperator> &op, DelimCandidate &candidate, idx_t depth) {
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		FindJoinWithDelimGet(op->children[0], candidate);
+		FindJoinWithDelimGet(op->children[0], candidate, depth + 1);
 	} else if (op->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
 		candidate.delim_get_count++;
 	} else {
 		for (auto &child : op->children) {
-			FindJoinWithDelimGet(child, candidate);
+			FindJoinWithDelimGet(child, candidate, depth + 1);
 		}
 	}
 
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
 	    (OperatorIsDelimGet(*op->children[0]) || OperatorIsDelimGet(*op->children[1]))) {
-		candidate.joins.emplace_back(op);
+		candidate.joins.emplace_back(op, depth);
 	}
 }
 

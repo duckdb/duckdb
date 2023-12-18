@@ -25,7 +25,9 @@ public:
 private:
 	//! Finds DelimJoins and their corresponding DelimGets
 	void FindCandidates(unique_ptr<LogicalOperator> &op, vector<DelimCandidate> &candidates);
-	void FindJoinWithDelimGet(unique_ptr<LogicalOperator> &op, DelimCandidate &candidate);
+	void FindJoinWithDelimGet(unique_ptr<LogicalOperator> &op, DelimCandidate &candidate, idx_t depth = 0);
+	//! Whether the DelimJoin is selective
+	bool HasSelection(const LogicalOperator &delim_join);
 	//! Remove joins with a DelimGet
 	bool RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, const idx_t delim_get_count,
 	                            unique_ptr<LogicalOperator> &join, bool &all_equality_conditions);
