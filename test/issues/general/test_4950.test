@@ -45,7 +45,7 @@ explain select * from lineitem l1 where exists (
         and l2.l_suppkey <> l1.l_suppkey
 );
 ----
-logical_opt	<!REGEX>:.*DELIM_JOIN.*
+logical_opt	<!REGEX>:.*LEFT_DELIM_JOIN.*
 
 # SINGLE join - same story
 query III
@@ -143,7 +143,7 @@ explain select count(*) from lineitem l1 where exists (
          and l2.l_suppkey <> l1.l_suppkey
 );
 ----
-logical_opt	<!REGEX>:.*DELIM_JOIN.*
+logical_opt	<!REGEX>:.*LEFT_DELIM_JOIN.*
 
 # aggregate within the subquery
 query I
@@ -205,4 +205,4 @@ ORDER BY
     s_name
 LIMIT 100;
 ----
-logical_opt	<!REGEX>:.*DELIM_JOIN.*
+logical_opt	<!REGEX>:.*LEFT_DELIM_JOIN.*

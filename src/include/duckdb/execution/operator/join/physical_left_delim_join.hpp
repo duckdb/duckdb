@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/join/physical_delim_join.hpp
+// duckdb/execution/operator/join/physical_left_delim_join.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -14,15 +14,15 @@
 namespace duckdb {
 class PhysicalHashAggregate;
 
-//! PhysicalDelimJoin represents a join where the LHS will be duplicate eliminated and pushed into a
+//! PhysicalLeftDelimJoin represents a join where the LHS will be duplicate eliminated and pushed into a
 //! PhysicalColumnDataScan in the RHS.
-class PhysicalDelimJoin : public PhysicalOperator {
+class PhysicalLeftDelimJoin : public PhysicalOperator {
 public:
-	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::DELIM_JOIN;
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::LEFT_DELIM_JOIN;
 
 public:
-	PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
-	                  vector<const_reference<PhysicalOperator>> delim_scans, idx_t estimated_cardinality);
+	PhysicalLeftDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
+	                      vector<const_reference<PhysicalOperator>> delim_scans, idx_t estimated_cardinality);
 
 	unique_ptr<PhysicalOperator> join;
 	unique_ptr<PhysicalHashAggregate> distinct;

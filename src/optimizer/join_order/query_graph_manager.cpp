@@ -1,14 +1,15 @@
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
-#include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/optimizer/join_order/join_relation.hpp"
+
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/join_type.hpp"
-#include "duckdb/planner/operator/list.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/assert.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/list.hpp"
 
 namespace duckdb {
 
@@ -344,19 +345,7 @@ void QueryGraphManager::TryFlipChildren(LogicalOperator &op, JoinType inverse, i
 	if (rhs_cardinality < lhs_cardinality * cardinality_ratio) {
 		return;
 	}
-	std::swap(left_child, right_child);
-	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		auto &join = op.Cast<LogicalComparisonJoin>();
-		join.join_type = inverse;
-		for (auto &cond : join.conditions) {
-			std::swap(cond.left, cond.right);
-			cond.comparison = FlipComparisonExpression(cond.comparison);
-		}
-	}
-	if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
-		auto &join = op.Cast<LogicalAnyJoin>();
-		join.join_type = inverse;
-	}
+	LogicalJoin::FlipChildren(op, inverse);
 }
 
 unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr<LogicalOperator> input_op) {

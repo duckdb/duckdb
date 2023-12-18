@@ -98,6 +98,8 @@ protected:
 	unique_ptr<PhysicalOperator> PlanAsOfJoin(LogicalComparisonJoin &op);
 	unique_ptr<PhysicalOperator> PlanComparisonJoin(LogicalComparisonJoin &op);
 	unique_ptr<PhysicalOperator> PlanDelimJoin(LogicalComparisonJoin &op);
+	unique_ptr<PhysicalOperator> PlanLeftDelimJoin(LogicalComparisonJoin &op);
+	unique_ptr<PhysicalOperator> PlanRightDelimJoin(LogicalComparisonJoin &op);
 	unique_ptr<PhysicalOperator> ExtractAggregateExpressions(unique_ptr<PhysicalOperator> child,
 	                                                         vector<unique_ptr<Expression>> &expressions,
 	                                                         vector<unique_ptr<Expression>> &groups);

@@ -40,6 +40,7 @@ public:
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
+	static void FlipChildren(LogicalOperator &op, JoinType inverse);
 
 protected:
 	void ResolveTypes() override;

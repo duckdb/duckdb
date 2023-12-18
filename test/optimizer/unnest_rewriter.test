@@ -72,18 +72,18 @@ PRAGMA explain_output = OPTIMIZED_ONLY
 query II
 EXPLAIN SELECT * FROM (VALUES ([1, 2, 3]), ([4, 5])) t(i), (SELECT UNNEST(i)) t2(j) ORDER BY 1, 2;
 ----
-logical_opt	<!REGEX>:.*DELIM_JOIN.*
+logical_opt	<!REGEX>:.*LEFT_DELIM_JOIN.*
 
 # additional LHS columns
 query II
 EXPLAIN SELECT * FROM (VALUES (3, [1, 2, 3], 'hi'), (8, [4, 5], 'hi')) t(a, i, k), (SELECT UNNEST(i)) t2(j) ORDER BY 1, 2, 3, 4;
 ----
-logical_opt	<!REGEX>:.*DELIM_JOIN.*
+logical_opt	<!REGEX>:.*LEFT_DELIM_JOIN.*
 
 query II
 EXPLAIN SELECT UNNEST(j) FROM (VALUES ([[1, 2, 3]]), ([[4, 5]])) t(i), (SELECT UNNEST(i)) t2(j);
 ----
-logical_opt	<!REGEX>:.*DELIM_JOIN.*
+logical_opt	<!REGEX>:.*LEFT_DELIM_JOIN.*
 
 # nested DELIM JOINs
 query II
@@ -95,7 +95,7 @@ FROM (SELECT GEN_RANDOM_UUID() as __distinct_key, * FROM 'data/parquet-testing/t
 (SELECT GEN_RANDOM_UUID() as __row_id, x.access FROM (SELECT UNNEST(hits_0.access.product)) as x(access)) as product_0
 GROUP BY 1 LIMIT 2;
 ----
-logical_opt	<!REGEX>:.*DELIM_JOIN.*
+logical_opt	<!REGEX>:.*LEFT_DELIM_JOIN.*
 
 query II
 EXPLAIN with stage1 as (
@@ -114,19 +114,19 @@ FROM stage3,
   (SELECT UNNEST(stage3.sub) sub) as s1(sub),
   (SELECT UNNEST(s1.sub.sub) sub) as s2(sub);
 ----
-logical_opt	<!REGEX>:.*DELIM_JOIN.*
+logical_opt	<!REGEX>:.*LEFT_DELIM_JOIN.*
 
 # make sure that these plans are not rewritten
 
 query II
 EXPLAIN SELECT (SELECT UNNEST(i)) FROM (VALUES ([])) tbl(i);
 ----
-logical_opt	<REGEX>:.*DELIM_JOIN.*SINGLE.*
+logical_opt	<REGEX>:.*LEFT_DELIM_JOIN.*SINGLE.*
 
 query II
 EXPLAIN select * from (select [42, 43, 44]) t(a), (select unnest(t.a)) t2(b) where b=43;
 ----
-logical_opt	<!REGEX>:.*DELIM_JOIN.*
+logical_opt	<!REGEX>:.*LEFT_DELIM_JOIN.*
 
 # test issue #7444
 
