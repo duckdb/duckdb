@@ -4054,8 +4054,6 @@ public class TestDuckDBJDBC {
                 s.execute("CREATE TABLE test (x INT, y INT, z INT)");
             }
             try (PreparedStatement ps1 = conn.prepareStatement("INSERT INTO test VALUES (?, ?, ?)")) {
-                LocalDateTime ldt = LocalDateTime.of(2021, 1, 18, 21, 20, 7);
-
                 ps1.setObject(1, 1);
                 ps1.setObject(2, 2);
                 ps1.setObject(3, 3);
@@ -4101,7 +4099,9 @@ public class TestDuckDBJDBC {
             try (PreparedStatement ps = conn.prepareStatement("INSERT INTO test VALUES (?)")) {
                 ps.setObject(1, 1);
                 ps.addBatch();
-                String msg = assertThrows(ps::execute, SQLException.class);
+                String msg = assertThrows(() -> {
+                    ps.execute("INSERT INTO test VALUES (1)");
+                }, SQLException.class);
                 assertTrue(msg.contains("Batched queries must be executed with executeBatch."));
             }
         }
