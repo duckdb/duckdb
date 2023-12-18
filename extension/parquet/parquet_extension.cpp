@@ -1,5 +1,3 @@
-#include "duckdb/common/vector_size.hpp"
-#include <algorithm>
 #define DUCKDB_EXTENSION_MAIN
 
 #include "parquet_extension.hpp"
