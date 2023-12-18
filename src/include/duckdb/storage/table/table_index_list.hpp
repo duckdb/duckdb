@@ -15,6 +15,7 @@ namespace duckdb {
 
 class ConflictManager;
 struct IndexStorageInfo;
+struct DataTableInfo;
 
 class TableIndexList {
 public:

@@ -4,6 +4,7 @@
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/catalog/catalog_entry/index_type_catalog_entry.hpp"
 #include "duckdb/execution/index/unknown_index.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
 
 namespace duckdb {
 void TableIndexList::AddIndex(unique_ptr<Index> index) {
