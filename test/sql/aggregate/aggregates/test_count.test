@@ -47,3 +47,4 @@ SELECT COUNT(1 ORDER BY 1)
 # cannot do DISTINCT *
 statement error
 SELECT COUNT(DISTINCT *) FROM integers
+----

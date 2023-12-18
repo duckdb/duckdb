@@ -62,16 +62,21 @@ NULL
 # incorrect number of struct entries
 statement error
 INSERT INTO a VALUES (ROW(1, 2, 3))
+----
 
 statement error
 INSERT INTO a VALUES (ROW(1))
+----
 
 # incorrect types
 statement error
 INSERT INTO a VALUES (ROW('hello', 1))
+----
 
 statement error
 INSERT INTO a VALUES (ROW('hello', [1, 2]))
+----
 
 statement error
 INSERT INTO a VALUES (ROW(1, ROW(1, 7)))
+----

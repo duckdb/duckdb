@@ -242,7 +242,7 @@ jobs:
       shell: bash
       run: |
         cd tools/pythonpkg
-        python setup.py install --user
+        pip install --use-pep517 . --user
         cd ../..
 
     - name: Run New Version
@@ -262,7 +262,7 @@ jobs:
       run: |
         git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb/tools/pythonpkg
-        python setup.py install --user
+        pip install --use-pep517 . --user
         cd ../../..
 
     - name: Run Current Version

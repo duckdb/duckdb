@@ -229,21 +229,27 @@ SELECT j::JSON->'$.b[#-000001]' a, a = (j::JSON->'$.b[-000001]') FROM t1;
 
 statement error
 SELECT json_extract(j, '$.b[#-]') FROM t1;
+----
 
 statement error
 SELECT json_extract(j, '$.b[-]') FROM t1;
+----
 
 statement error
 SELECT json_extract(j, '$.b[#9]') FROM t1;
+----
 
 statement error
 SELECT json_extract(j, '$.b[#+2]') FROM t1;
+----
 
 statement error
 SELECT json_extract(j, '$.b[#-1') FROM t1;
+----
 
 statement error
 SELECT json_extract(j, '$.b[#-1x]') FROM t1;
+----
 
 statement ok
 CREATE TABLE obj(x varchar);

@@ -22,6 +22,7 @@ SELECT * FROM tbl2
 
 statement error
 SELECT * FROM tbl
+----
 
 statement ok
 ROLLBACK
@@ -34,6 +35,7 @@ SELECT * FROM tbl;
 
 statement error
 SELECT * FROM tbl2
+----
 
 statement ok
 BEGIN TRANSACTION;
@@ -52,6 +54,7 @@ SELECT * FROM tbl2
 
 statement error
 SELECT * FROM tbl
+----
 
 query I
 SELECT * FROM tbl2
@@ -84,6 +87,7 @@ SELECT * FROM tbl2
 
 statement error
 SELECT * FROM tbl5
+----
 
 statement ok
 BEGIN TRANSACTION
@@ -103,6 +107,7 @@ COMMIT
 # everything was committed
 statement error
 SELECT * FROM tbl2
+----
 
 query I
 SELECT * FROM tbl5

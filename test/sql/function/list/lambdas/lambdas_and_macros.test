@@ -41,6 +41,7 @@ CREATE MACRO some_macro(x, y, z) AS (SELECT list_transform(x, a -> x + y + z))
 
 statement error
 SELECT some_macro([1, 2], 3, 4);
+----
 
 statement ok
 CREATE MACRO reduce_macro(list, num) AS (list_reduce(list, (x, y) -> x + y + num))

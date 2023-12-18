@@ -35,3 +35,4 @@ NULL
 
 statement error
 COPY (SELECT -interval '1 day') TO '__TEST_DIR__/intervals.parquet'
+----

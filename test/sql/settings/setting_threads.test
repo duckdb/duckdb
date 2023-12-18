@@ -9,8 +9,10 @@ SET ${thread_type} TO '3'
 
 statement error
 SET ${thread_type} TO '-1'
+----
 
 statement error
 SET ${thread_type} TO 'blabla'
+----
 
 endloop

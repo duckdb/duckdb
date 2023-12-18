@@ -13,6 +13,18 @@
 
 namespace duckdb {
 
+struct NumpyCoreCacheItem : public PythonImportCacheItem {
+
+public:
+	NumpyCoreCacheItem(optional_ptr<PythonImportCacheItem> parent)
+	    : PythonImportCacheItem("core", parent), multiarray("multiarray", this) {
+	}
+	~NumpyCoreCacheItem() override {
+	}
+
+	PythonImportCacheItem multiarray;
+};
+
 struct NumpyCacheItem : public PythonImportCacheItem {
 
 public:
@@ -20,7 +32,7 @@ public:
 
 public:
 	NumpyCacheItem()
-	    : PythonImportCacheItem("numpy"), ndarray("ndarray", this), datetime64("datetime64", this),
+	    : PythonImportCacheItem("numpy"), core(this), ndarray("ndarray", this), datetime64("datetime64", this),
 	      generic("generic", this), int64("int64", this), bool_("bool_", this), byte("byte", this),
 	      ubyte("ubyte", this), short_("short", this), ushort_("ushort", this), intc("intc", this),
 	      uintc("uintc", this), int_("int_", this), uint("uint", this), longlong("longlong", this),
@@ -31,6 +43,7 @@ public:
 	~NumpyCacheItem() override {
 	}
 
+	NumpyCoreCacheItem core;
 	PythonImportCacheItem ndarray;
 	PythonImportCacheItem datetime64;
 	PythonImportCacheItem generic;

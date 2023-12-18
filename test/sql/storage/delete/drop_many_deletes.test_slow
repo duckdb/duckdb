@@ -24,7 +24,7 @@ SELECT COUNT(*) FROM integers
 query I
 SELECT COUNT(*) FROM pragma_metadata_info()
 ----
-7
+1
 
 statement ok
 DROP TABLE integers

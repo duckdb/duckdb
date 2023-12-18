@@ -373,9 +373,8 @@ static idx_t GetBlockCountWithEmptyCheck(const GlobalSortState &gss) {
 
 SBIterator::SBIterator(GlobalSortState &gss, ExpressionType comparison, idx_t entry_idx_p)
     : sort_layout(gss.sort_layout), block_count(GetBlockCountWithEmptyCheck(gss)), block_capacity(gss.block_capacity),
-      cmp_size(sort_layout.comparison_size), entry_size(sort_layout.entry_size), all_constant(sort_layout.all_constant),
-      external(gss.external), cmp(ComparisonValue(comparison)), scan(gss.buffer_manager, gss), block_ptr(nullptr),
-      entry_ptr(nullptr) {
+      entry_size(sort_layout.entry_size), all_constant(sort_layout.all_constant), external(gss.external),
+      cmp(ComparisonValue(comparison)), scan(gss.buffer_manager, gss), block_ptr(nullptr), entry_ptr(nullptr) {
 
 	scan.sb = gss.sorted_blocks[0].get();
 	scan.block_idx = block_count;

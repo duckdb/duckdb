@@ -15,12 +15,15 @@ foreach q q1 q2
 
 statement error
 execute ${q}([1, 2, 3], -1);
+----
 
 statement error
 execute ${q}([1, 2, 3], 'a');
+----
 
 statement error
 execute ${q}('cici n est pas een list', 2);
+----
 
 statement error
 execute ${q}([1, 2, 3], 'huh');
@@ -29,9 +32,11 @@ Conversion Error: Could not convert string 'huh' to UINT64
 
 statement error
 execute ${q}();
+----
 
 statement error
 execute ${q}([1, 2, 3]);
+----
 
 endloop
 
@@ -50,6 +55,7 @@ Conversion Error: Could not convert string 'abc' to INT32
 
 statement error
 execute ${q}([1, 2, 3], 2, 3, 4);
+----
 
 statement error
 execute ${q}([1, 2, 3], 1, [1, 2, 3]);

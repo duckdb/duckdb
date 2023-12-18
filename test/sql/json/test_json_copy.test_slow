@@ -161,6 +161,7 @@ create table conclusions (conclusion varchar)
 # this doesn't work because we assume NDJSON records
 statement error
 copy conclusions from 'data/json/top_level_array.json'
+----
 
 # but works if we tell it to auto-detect
 statement ok

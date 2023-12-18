@@ -109,10 +109,12 @@ SELECT * FROM (VALUES (LIST_VALUE(1, 2)), (LIST_VALUE()), (LIST_VALUE('a'))) lv(
 # can't cast lists to stuff
 statement error
 SELECT CAST(LIST_VALUE(42) AS INTEGER)
+----
 
 # can't add a number to a list
 statement error
 SELECT LIST_VALUE(42) + 4
+----
 
 # list value automatically upcasts to the highest type (varchar in this case)
 query I

@@ -110,14 +110,17 @@ EXECUTE v1([1,2,3,4,5]);
 # FIXME: NULL without cast (should this work?)
 statement error
 SELECT i FROM UNNEST(NULL) AS tbl(i);
+----
 
 # not a list
 statement error
 SELECT i FROM UNNEST(1) AS tbl(i);
+----
 
 # multiple parameters
 statement error
 SELECT i FROM UNNEST([1, 2], [3, 4]) AS tbl(i);
+----
 
 # issue 7927
 

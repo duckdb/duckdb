@@ -5,7 +5,7 @@
 foreach f list_intersect array_intersect
 
 query I
-select ${f}([1,2,3], [2,3,4]);
+select list_sort(${f}([1,2,3], [2,3,4]));
 ----
 [2, 3]
 
@@ -28,7 +28,7 @@ statement ok
 INSERT INTO list_data VALUES ([1,2,NULL], [2,3,NULL]);
 
 query I
-select ${f}(l1, l2) from list_data;
+select list_sort(${f}(l1, l2)) from list_data;
 ----
 NULL
 NULL
@@ -48,11 +48,10 @@ insert into list_of_list values (NULL, NULL);
 statement ok
 insert into list_of_list values ([[1 , 2, 3], NULL, [3, 2, 1]], [[ 2, 3, 4], NULL, [1, 2, 3]]);
 
-query I
+statement error
 select ${f}(l1, l2) from list_of_list;
 ----
-NULL
-[[1, 2, 3]]
+Not implemented
 
 statement ok
 drop table list_of_list;
@@ -70,7 +69,7 @@ statement ok
 insert into list_of_strings values (['here is a very long long string that is def more than 12 bytes', 'and a shorty'], ['here is a very long long string that is def more than 12 bytes', 'here is a very long long string that is def more than 12 bytes', 'c', 'd']);
 
 query I
-select ${f}(l1, l2) from list_of_strings;
+select list_sort(${f}(l1, l2)) from list_of_strings;
 ----
 NULL
 [b, c]
@@ -85,12 +84,15 @@ endloop
 
 statement error
 select list_intersect(l1) from list_of_strings;
+----
 
 statement error
 select list_intersect(l1, l2, l1) from list_of_strings;
+----
 
 statement error
 select list_intersect([[1,2], [2,4]], ['abc', 'def']);
+----
 
 # Test Large Lists
 
@@ -106,10 +108,10 @@ insert into large_lists values (range(3000), range(3000));
 statement ok
 select list_intersect(l1, l2) from large_lists;
 
-query I
+statement error
 select list_intersect(list_intersect([1,2,3,4], [4,5,6,7]), list_intersect([4,5,6,7],[1,2,3,4]));
 ----
-[4]
+function cannot be nested
 
 query I
 select list_intersect(list_filter([1,2,3,4], x -> x > 2), list_filter([4,5,6,7], x -> x > 2));
@@ -127,9 +129,17 @@ execute q1(['abc', 'def'], ['def', 'ghi']);
 statement ok
 CREATE TABLE all_types AS SELECT * FROM test_all_types();
 
-foreach colname bool tinyint smallint int bigint hugeint utinyint usmallint uint ubigint date time timestamp timestamp_s timestamp_ms timestamp_ns time_tz timestamp_tz float double dec_4_1 dec_9_4 dec_18_6 dec38_10 uuid interval varchar blob small_enum medium_enum large_enum int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array struct struct_of_arrays array_of_structs map
+foreach colname bool tinyint smallint int bigint utinyint usmallint uint ubigint date time timestamp timestamp_s timestamp_ms timestamp_ns time_tz timestamp_tz float double dec_4_1 dec_9_4 uuid interval varchar small_enum medium_enum large_enum
 
 statement ok
 select list_intersect(["${colname}"], ["${colname}"]) FROM all_types;
 
 endloop
+
+# issue 9942
+
+query I
+SELECT list_sort(list_intersect([1, 4, 3, 5, 5, 2, 2], [5, 5, 5, 1, 1, 2, 4]));
+----
+[1, 2, 4, 5]
+

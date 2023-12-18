@@ -14,6 +14,7 @@ EXECUTE p1
 # only the conn which did the prepare can execute
 statement error con1
 EXECUTE p1
+----
 
 # we can drop the table though
 statement ok con1
@@ -22,6 +23,7 @@ DROP TABLE a
 # after dropping the table, the statement fails
 statement error con2
 EXECUTE p1
+----
 
 # but when we take the statement away
 statement ok con2
