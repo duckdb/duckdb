@@ -242,7 +242,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         } else if (x instanceof OffsetDateTime) {
             x = new DuckDBTimestampTZ((OffsetDateTime) x);
         }
-
         params[parameterIndex - 1] = x;
     }
 
