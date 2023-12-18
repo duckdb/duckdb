@@ -39,7 +39,7 @@ for block_size in block_sizes:
             'src/include/duckdb/common/vector_size.hpp',
             r'#define STANDARD_VECTOR_SIZE \d+',
             '#define STANDARD_VECTOR_SIZE %d' % (vector_size,),
-            )
+        )
 
         execute_system_command('rm -rf build')
         execute_system_command('make relassert')
