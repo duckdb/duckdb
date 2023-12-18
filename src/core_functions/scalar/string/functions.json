@@ -308,7 +308,7 @@
     {
         "name": "regexp_escape",
         "parameters": "string",
-        "description": "Return the input string with all the regular expression metacharacters escaped",
+        "description": "Escapes all potentially meaningful regexp characters in the input string",
         "example": "regexp_escape('https://duckdb.org')",
         "struct": "RegexpEscapeFun",
         "type": "scalar_function"

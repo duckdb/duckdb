@@ -483,7 +483,7 @@ struct ToBaseFun {
 struct RegexpEscapeFun {
 	static constexpr const char *Name = "regexp_escape";
 	static constexpr const char *Parameters = "string";
-	static constexpr const char *Description = "Return the input string with all the regular expression metacharacters escaped";
+	static constexpr const char *Description = "Escapes all potentially meaningful regexp characters in the input string";
 	static constexpr const char *Example = "regexp_escape('https://duckdb.org')";
 
 	static ScalarFunction GetFunction();

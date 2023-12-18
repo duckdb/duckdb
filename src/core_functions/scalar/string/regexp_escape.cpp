@@ -1,31 +1,18 @@
 #include "duckdb/core_functions/scalar/string_functions.hpp"
-#include "duckdb/common/string_util.hpp"
+#include "re2/re2.h"
 
 namespace duckdb {
 
-static string_t escape(const string_t &str, vector<char> &escaped_pattern) {
-	auto input_str = str.GetData();
-	auto size_str = str.GetSize();
-
-	escaped_pattern.clear(); // reuse the buffer
-	// note: reserving double the size to account for escaping ('\\') as an average case
-	// to have half of the characters in the input string are special
-	escaped_pattern.reserve(2 * size_str);
-	string special_chars = "()[]{}?*+-|^$\\.&~#";
-	for (idx_t i = 0; i < size_str; ++i) {
-		char ch = input_str[i];
-		if (special_chars.find(ch) != std::string::npos) {
-			escaped_pattern.push_back('\\'); // escape the special character
-		}
-		escaped_pattern.push_back(ch);
+struct EscapeOperator {
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE &input, Vector &result) {
+		auto escaped_pattern = RE2::QuoteMeta(input.GetString());
+		return StringVector::AddString(result, escaped_pattern);
 	}
-	return string_t(escaped_pattern.data(), escaped_pattern.size());
-}
+};
 
 static void RegexpEscapeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	vector<char> escaped_pattern;
-	auto input_str = args.GetValue(0, 0);
-	result.Reference(escape(input_str.ToString(), escaped_pattern));
+	UnaryExecutor::ExecuteString<string_t, string_t, EscapeOperator>(args.data[0], result, args.size());
 }
 
 ScalarFunction RegexpEscapeFun::GetFunction() {

@@ -9,9 +9,9 @@ PRAGMA enable_verification
 query T
 SELECT regexp_escape('https://duckdb.org');
 ----
-https://duckdb\.org
+https\:\/\/duckdb\.org
 
-# no special chars in the input
+# no special chars
 query T
 SELECT regexp_escape('abc');
 ----
@@ -24,26 +24,21 @@ SELECT regexp_escape('a.b');
 a\.b
 
 query T
-SELECT regexp_escape('()[]{}*+?|^$');
-----
-\(\)\[\]\{\}\*\+\?\|\^\$
-
-query T
 SELECT regexp_escape('a.b[c]*');
 ----
 a\.b\[c\]\*
 
 # empty string
 query T
-SELECT regexp_escape('""');
+SELECT regexp_escape('\n');
 ----
-""
+\\n
 
 # whitespaces
 query T
 SELECT regexp_escape('a b c');
 ----
-a b c
+a\ b\ c
 
 query T
 SELECT regexp_escape('line1\nline2');
@@ -52,15 +47,15 @@ line1\\nline2
 
 # case sensitive
 query T
-SELECT regexp_escape('CaseSensitive');
+SELECT regexp_escape('CaseSensitivE');
 ----
-CaseSensitive
+CaseSensitivE
 
 # unicode character
 query T
 SELECT regexp_escape('@');
 ----
-@
+\@
 
 # backslashes
 query T
@@ -68,8 +63,19 @@ SELECT regexp_escape('path\to\wonderland');
 ----
 path\\to\\wonderland
 
-# escape all special characters
+# more special characters
 query T
 SELECT regexp_escape('$()*+.?[\]^{|}-');
 ----
 \$\(\)\*\+\.\?\[\\\]\^\{\|\}\-
+
+query I
+CREATE TABLE tbl (a VARCHAR);
+INSERT INTO tbl VALUES('cde');
+INSERT INTO tbl VALUES('-cd+e');
+INSERT INTO tbl VALUES('[^!$');
+SELECT regexp_escape(a) FROM tbl;
+----
+cde
+\-cd\+e
+\[\^\!\$
