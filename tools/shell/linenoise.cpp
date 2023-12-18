@@ -176,8 +176,8 @@ struct searchMatch {
 };
 
 struct TerminalSize {
-	int ws_col = 0;
-	int ws_row = 0;
+	size_t ws_col = 0;
+	size_t ws_row = 0;
 };
 
 /* The linenoiseState structure represents the state during line editing.
@@ -344,10 +344,6 @@ static int tryParseEnv(const char *env_var) {
 		return 0;
 	}
 	return parseInt(s);
-}
-
-static int writeString(int ofd, const char *str) {
-	return write(ofd, str, strlen(str));
 }
 
 /* Use the ESC [6n escape sequence to query the cursor position
