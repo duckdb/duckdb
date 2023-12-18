@@ -1,6 +1,6 @@
 # name: benchmark/micro/lambdas/list_reduce/complex_expression.benchmark
 # description: list_reduce with a complex expression
-# group: [lambdas] [list_reduce]
+# group: [list_reduce]
 
 name list complex expression
 group micro

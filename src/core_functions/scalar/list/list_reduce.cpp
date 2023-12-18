@@ -11,6 +11,10 @@ struct ReduceExecuteInfo {
 		active_rows.Resize(0, info.row_count);
 		active_rows.SetAllValid(info.row_count);
 
+		right_sel.Initialize(info.row_count);
+		left_sel.Initialize(info.row_count);
+		active_rows_sel.Initialize(info.row_count);
+
 		idx_t old_count = 0;
 		idx_t new_count = 0;
 
@@ -53,19 +57,18 @@ struct ReduceExecuteInfo {
 
 		expr_executor = make_uniq<ExpressionExecutor>(context, *info.lambda_expr);
 	};
-
 	ValidityMask active_rows;
 	Vector left_slice;
 	unique_ptr<ExpressionExecutor> expr_executor;
 	vector<LogicalType> input_types;
+
+	SelectionVector right_sel;
+	SelectionVector left_sel;
+	SelectionVector active_rows_sel;
 };
 
 static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFunctions::LambdaInfo &info,
                           DataChunk &result_chunk) {
-	SelectionVector right_sel(STANDARD_VECTOR_SIZE);
-	SelectionVector left_sel(STANDARD_VECTOR_SIZE);
-	SelectionVector active_rows_sel(STANDARD_VECTOR_SIZE);
-
 	idx_t old_count = 0;
 	idx_t new_count = 0;
 	idx_t valid_count = 0;
@@ -86,9 +89,10 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 			}
 			auto list_column_format_index = info.list_column_format.sel->get_index(old_count);
 			if (info.list_entries[list_column_format_index].length > loops + 1) {
-				right_sel.set_index(new_count, info.list_entries[list_column_format_index].offset + loops + 1);
-				left_sel.set_index(new_count, valid_count);
-				active_rows_sel.set_index(new_count, old_count);
+				execute_info.right_sel.set_index(new_count,
+				                                 info.list_entries[list_column_format_index].offset + loops + 1);
+				execute_info.left_sel.set_index(new_count, valid_count);
+				execute_info.active_rows_sel.set_index(new_count, old_count);
 
 				new_count++;
 			} else {
@@ -108,8 +112,8 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 	Vector index_vector(Value::BIGINT(loops + 1));
 
 	// slice the left and right slice
-	execute_info.left_slice.Slice(execute_info.left_slice, left_sel, new_count);
-	Vector right_slice(*info.child_vector, right_sel, new_count);
+	execute_info.left_slice.Slice(execute_info.left_slice, execute_info.left_sel, new_count);
+	Vector right_slice(*info.child_vector, execute_info.right_sel, new_count);
 
 	// create the input chunk
 	DataChunk input_chunk;
@@ -131,7 +135,7 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 			input_chunk.data[slice_offset + 2 + i].Reference(info.column_infos[i].vector);
 		} else {
 			// slice the other vectors
-			slices.emplace_back(info.column_infos[i].vector, active_rows_sel, new_count);
+			slices.emplace_back(info.column_infos[i].vector, execute_info.active_rows_sel, new_count);
 			input_chunk.data[slice_offset + 2 + i].Reference(slices.back());
 		}
 	}
