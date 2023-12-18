@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/storage/index.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
 
 namespace duckdb {
 
