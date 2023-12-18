@@ -90,7 +90,7 @@ void KeyValueSecret::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(202, "redact_keys", list);
 }
 
-Value KeyValueSecret::TryGetValue(const string& key, bool error_on_missing) const {
+Value KeyValueSecret::TryGetValue(const string &key, bool error_on_missing) const {
 	auto lookup = secret_map.find(key);
 	if (lookup == secret_map.end()) {
 		if (error_on_missing) {

@@ -68,10 +68,15 @@ unique_ptr<CreateStatement> Transformer::TransformSecret(duckdb_libpgquery::PGCr
 	auto result = make_uniq<CreateStatement>();
 
 	auto create_secret_info =
-	    make_uniq<CreateSecretInfo>(TransformOnConflict(stmt.onconflict), StringUtil::Lower(stmt.persist_option));
+	    make_uniq<CreateSecretInfo>(TransformOnConflict(stmt.onconflict),
+	                                EnumUtil::FromString<SecretPersistType>(StringUtil::Upper(stmt.persist_type)));
 
 	if (stmt.secret_name) {
 		create_secret_info->name = StringUtil::Lower(stmt.secret_name);
+	}
+
+	if (stmt.secret_storage) {
+		create_secret_info->storage_type = StringUtil::Lower(stmt.secret_storage);
 	}
 
 	if (stmt.options) {

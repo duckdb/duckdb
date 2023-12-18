@@ -40,7 +40,9 @@ SourceResultType PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chu
 		break;
 	}
 	case CatalogType::SECRET_ENTRY: {
-		SecretManager::Get(context.client).DropSecretByName(context.client, info->name, info->if_not_found);
+		// Note: the schema param is used to optionally pass the storage to drop from
+		SecretManager::Get(context.client)
+		    .DropSecretByName(context.client, info->name, info->if_not_found, info->schema);
 		break;
 	}
 	default: {

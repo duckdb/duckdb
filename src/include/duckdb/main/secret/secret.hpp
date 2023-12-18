@@ -16,6 +16,9 @@
 namespace duckdb {
 class BaseSecret;
 
+//! Whether a secret is persistent or temporary
+enum class SecretPersistType : uint8_t { DEFAULT, TEMPORARY, PERSISTENT };
+
 //! Input passed to a CreateSecretFunction
 struct CreateSecretInput {
 	//! type
@@ -162,7 +165,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 
 	//! Tries to get the value at key <key>, depending on error_on_missing will throw or return Value()
-	Value TryGetValue(const string& key, bool error_on_missing = false) const;
+	Value TryGetValue(const string &key, bool error_on_missing = false) const;
 
 	// FIXME: use serialization scripts
 	template <class TYPE>

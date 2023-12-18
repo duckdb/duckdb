@@ -141,6 +141,15 @@ struct DefaultNullOrderSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct DefaultSecretStorage {
+	static constexpr const char *Name = "default_secret_storage";
+	static constexpr const char *Description = "Allows switching the default storage for secrets";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct DisabledFileSystemsSetting {
 	static constexpr const char *Name = "disabled_filesystems";
 	static constexpr const char *Description = "Disable specific file systems preventing access (e.g. LocalFileSystem)";

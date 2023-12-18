@@ -779,14 +779,14 @@ const char* EnumUtil::ToChars<CatalogType>(CatalogType value) {
 		return "DELETED_ENTRY";
 	case CatalogType::RENAMED_ENTRY:
 		return "RENAMED_ENTRY";
-	case CatalogType::DEPENDENCY_ENTRY:
-		return "DEPENDENCY_ENTRY";
 	case CatalogType::SECRET_ENTRY:
 		return "SECRET_ENTRY";
 	case CatalogType::SECRET_TYPE_ENTRY:
 		return "SECRET_TYPE_ENTRY";
 	case CatalogType::SECRET_FUNCTION_ENTRY:
 		return "SECRET_FUNCTION_ENTRY";
+	case CatalogType::DEPENDENCY_ENTRY:
+		return "DEPENDENCY_ENTRY";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -851,9 +851,6 @@ CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
 	if (StringUtil::Equals(value, "RENAMED_ENTRY")) {
 		return CatalogType::RENAMED_ENTRY;
 	}
-	if (StringUtil::Equals(value, "DEPENDENCY_ENTRY")) {
-		return CatalogType::DEPENDENCY_ENTRY;
-	}
 	if (StringUtil::Equals(value, "SECRET_ENTRY")) {
 		return CatalogType::SECRET_ENTRY;
 	}
@@ -862,6 +859,9 @@ CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "SECRET_FUNCTION_ENTRY")) {
 		return CatalogType::SECRET_FUNCTION_ENTRY;
+	}
+	if (StringUtil::Equals(value, "DEPENDENCY_ENTRY")) {
+		return CatalogType::DEPENDENCY_ENTRY;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -5046,6 +5046,34 @@ SecretDisplayType EnumUtil::FromString<SecretDisplayType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "UNREDACTED")) {
 		return SecretDisplayType::UNREDACTED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<SecretPersistType>(SecretPersistType value) {
+	switch(value) {
+	case SecretPersistType::DEFAULT:
+		return "DEFAULT";
+	case SecretPersistType::TEMPORARY:
+		return "TEMPORARY";
+	case SecretPersistType::PERSISTENT:
+		return "PERSISTENT";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value) {
+	if (StringUtil::Equals(value, "DEFAULT")) {
+		return SecretPersistType::DEFAULT;
+	}
+	if (StringUtil::Equals(value, "TEMPORARY")) {
+		return SecretPersistType::TEMPORARY;
+	}
+	if (StringUtil::Equals(value, "PERSISTENT")) {
+		return SecretPersistType::PERSISTENT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

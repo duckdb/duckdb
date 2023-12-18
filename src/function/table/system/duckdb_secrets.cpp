@@ -57,6 +57,9 @@ static unique_ptr<FunctionData> DuckDBSecretsBind(ClientContext &context, TableF
 	names.emplace_back("provider");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("persistent");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+
 	names.emplace_back("storage");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -103,9 +106,10 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 		output.SetValue(0, count, secret.GetName());
 		output.SetValue(1, count, Value(secret.GetType()));
 		output.SetValue(2, count, Value(secret.GetProvider()));
-		output.SetValue(3, count, Value(secret_entry.get().storage_mode));
-		output.SetValue(4, count, Value::LIST(LogicalType::VARCHAR, scope_value));
-		output.SetValue(5, count, secret.ToString(bind_data.redact));
+		output.SetValue(3, count, Value(secret_entry.get().persist_type == SecretPersistType::PERSISTENT));
+		output.SetValue(4, count, Value(secret_entry.get().storage_mode));
+		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, scope_value));
+		output.SetValue(6, count, secret.ToString(bind_data.redact));
 
 		data.offset++;
 		count++;

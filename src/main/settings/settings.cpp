@@ -337,6 +337,22 @@ Value DefaultNullOrderSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Default Null Order
+//===--------------------------------------------------------------------===//
+void DefaultSecretStorage::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.secret_manager->SetDefaultStorage(input.ToString());
+}
+
+void DefaultSecretStorage::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.secret_manager->ResetDefaultStorage();
+}
+
+Value DefaultSecretStorage::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return config.secret_manager->DefaultStorage();
+}
+
+//===--------------------------------------------------------------------===//
 // Disabled File Systems
 //===--------------------------------------------------------------------===//
 void DisabledFileSystemsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

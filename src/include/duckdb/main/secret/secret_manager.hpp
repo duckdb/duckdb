@@ -20,12 +20,19 @@ class SecretManager;
 struct DBConfig;
 class SchemaCatalogEntry;
 
-//! Return value of a Secret Matching operations
+//! Return value of a Secret Lookup
 struct SecretMatch {
-	SecretMatch(SecretEntry *secret, int64_t score) : secret(secret), score(score){};
+	SecretMatch() : secret(nullptr), score(-1) {
+	}
+	SecretMatch(SecretEntry &secret, int64_t score) : secret(&secret), score(score) {
+	}
 
 	optional_ptr<SecretEntry> secret;
 	int64_t score;
+
+	bool HasMatch() {
+		return secret;
+	}
 };
 
 //! Wrapper around a BaseSecret containing metadata and allow storing in CatalogSet
@@ -36,7 +43,9 @@ public:
 		internal = true;
 	}
 
-	//! Metadata for user on how the secret is stored. (SecretManager will set this to the path)
+	//! Whether the secret is persistent
+	SecretPersistType persist_type;
+	//! The storage backend of the secret
 	string storage_mode;
 	//! The secret pointer
 	unique_ptr<const BaseSecret> secret;
@@ -44,10 +53,16 @@ public:
 
 struct SecretManagerConfig {
 	static constexpr const bool DEFAULT_ALLOW_PERSISTENT_SECRETS = true;
+	//! The default persistence type for secrets
+	SecretPersistType default_persist_type = SecretPersistType::TEMPORARY;
+
 	//! Secret Path can be changed by until the secret manager is initialized, after that it will be set automatically
 	string secret_path = "";
-	//! The default secret path is loaded on startup and can be used to reset the secret path
+	//! The default secret path is determined on startup and can be used to reset the secret path
 	string default_secret_path = "";
+
+	//! The storage type for persistent secrets when none is specified;
+	string default_persistent_storage = "";
 
 	//! Persistent secrets are enabled by default
 	bool allow_persistent_secrets = DEFAULT_ALLOW_PERSISTENT_SECRETS;
@@ -61,45 +76,52 @@ public:
 	explicit SecretManager() = default;
 	virtual ~SecretManager() = default;
 
-	static constexpr const char* DEFAULT_BACKEND_NAME = "default";
-	static constexpr const char* LOCAL_FILE_BACKEND_NAME = "persistent";
-	static constexpr const char* IN_MEMORY_BACKEND_NAME = "temporary";
+	//! The default storage backends
+	static constexpr const char *TEMPORARY_STORAGE_NAME = "memory";
+	static constexpr const char *LOCAL_FILE_STORAGE_NAME = "local_file";
 
 	//! Static Helper Functions
 	DUCKDB_API static SecretManager &Get(ClientContext &context);
 
 	//! SecretManager API
 	DUCKDB_API void Initialize(DatabaseInstance &db);
-	DUCKDB_API unique_ptr<BaseSecret> DeserializeSecret(CatalogTransaction transaction,
-	                                                    Deserializer &deserializer);
+	DUCKDB_API unique_ptr<BaseSecret> DeserializeSecret(CatalogTransaction transaction, Deserializer &deserializer);
 	DUCKDB_API void RegisterSecretType(CatalogTransaction transaction, SecretType &type);
 	DUCKDB_API SecretType LookupType(CatalogTransaction transaction, const string &type);
 	DUCKDB_API void RegisterSecretFunction(CatalogTransaction transaction, CreateSecretFunction function,
 	                                       OnCreateConflict on_conflict);
 	DUCKDB_API optional_ptr<SecretEntry> RegisterSecret(CatalogTransaction transaction,
 	                                                    unique_ptr<const BaseSecret> secret,
-	                                                    OnCreateConflict on_conflict,
-	                                                    const string &storage_mode);
+	                                                    OnCreateConflict on_conflict, SecretPersistType persist_type,
+	                                                    const string &storage = "");
 
 	DUCKDB_API optional_ptr<SecretEntry> CreateSecret(ClientContext &context, const CreateSecretInfo &info);
 	DUCKDB_API BoundStatement BindCreateSecret(CatalogTransaction transaction, CreateSecretInfo &info);
 	DUCKDB_API optional_ptr<SecretEntry> GetSecretByPath(CatalogTransaction transaction, const string &path,
 	                                                     const string &type);
-	DUCKDB_API optional_ptr<SecretEntry> GetSecretByName(CatalogTransaction transaction, const string &name);
+	DUCKDB_API optional_ptr<SecretEntry> GetSecretByName(CatalogTransaction transaction, const string &name,
+	                                                     const string &storage = "");
 	DUCKDB_API void DropSecretByName(CatalogTransaction transaction, const string &name,
-	                                 OnEntryNotFound on_entry_not_found);
+	                                 OnEntryNotFound on_entry_not_found, const string &storage = "");
 
 	DUCKDB_API vector<reference<SecretEntry>> AllSecrets(CatalogTransaction transaction);
+
+	//! Settings
 	DUCKDB_API virtual void SetEnablePersistentSecrets(bool enabled);
 	DUCKDB_API virtual void ResetEnablePersistentSecrets();
 	DUCKDB_API virtual bool PersistentSecretsEnabled();
+
+	DUCKDB_API virtual void SetDefaultStorage(string storage);
+	DUCKDB_API virtual void ResetDefaultStorage();
+	DUCKDB_API virtual string DefaultStorage();
+
 	DUCKDB_API virtual void SetPersistentSecretPath(const string &path);
 	DUCKDB_API virtual void ResetPersistentSecretPath();
 	DUCKDB_API virtual string PersistentSecretPath();
 
 	//! Utility functions
-	DUCKDB_API void DropSecretByName(ClientContext &context, const string &name,
-	                                 OnEntryNotFound on_entry_not_found);
+	DUCKDB_API void DropSecretByName(ClientContext &context, const string &name, OnEntryNotFound on_entry_not_found,
+	                                 const string &storage = "");
 
 private:
 	//! Deserialize a secret
@@ -112,7 +134,7 @@ private:
 	//! Register a new Secret
 	optional_ptr<SecretEntry> RegisterSecretInternal(CatalogTransaction transaction,
 	                                                 unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
-	                                                 const string &storage_mode);
+	                                                 SecretPersistType persist_type, const string &storage = "");
 	//! Write a secret to the FileSystem
 	void WriteSecretToFile(CatalogTransaction transaction, const BaseSecret &secret);
 
@@ -149,8 +171,7 @@ private:
 //! The DefaultGenerator for persistent secrets. This is used to store lazy loaded secrets in the catalog
 class DefaultSecretGenerator : public DefaultGenerator {
 public:
-	DefaultSecretGenerator(Catalog &catalog, SecretManager &secret_manager,
-	                           case_insensitive_set_t &persistent_secrets);
+	DefaultSecretGenerator(Catalog &catalog, SecretManager &secret_manager, case_insensitive_set_t &persistent_secrets);
 
 public:
 	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;
