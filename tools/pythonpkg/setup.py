@@ -168,6 +168,10 @@ for ext in extensions:
 
 toolchain_args.extend(['-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1', '-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1'])
 
+linker_args = toolchain_args
+if platform.system() == 'Windows':
+    linker_args.extend(['rstrtmgr.lib'])
+
 
 class get_pybind_include(object):
     def __init__(self, user=False):
@@ -257,7 +261,7 @@ if len(existing_duckdb_dir) == 0:
         include_dirs=include_directories,
         sources=source_files,
         extra_compile_args=toolchain_args,
-        extra_link_args=toolchain_args,
+        extra_link_args=linker_args,
         libraries=libraries,
         language='c++',
     )
@@ -277,7 +281,7 @@ else:
         include_dirs=include_directories,
         sources=main_source_files,
         extra_compile_args=toolchain_args,
-        extra_link_args=toolchain_args,
+        extra_link_args=linker_args,
         libraries=libnames,
         library_dirs=library_dirs,
         language='c++',
@@ -328,10 +332,13 @@ packages = [
     'duckdb-stubs',
     'duckdb-stubs.functional',
     'duckdb-stubs.typing',
+    'duckdb-stubs.value',
+    'duckdb-stubs.value.constant',
     'adbc_driver_duckdb',
 ]
 
 spark_packages = [
+    'duckdb.experimental',
     'duckdb.experimental.spark',
     'duckdb.experimental.spark.sql',
     'duckdb.experimental.spark.errors',
@@ -352,8 +359,6 @@ setup(
     packages=packages,
     include_package_data=True,
     python_requires='>=3.7.0',
-    setup_requires=setup_requires + ["setuptools_scm<7.0.0", 'pybind11>=2.6.0'],
-    use_scm_version=setuptools_scm_conf,
     tests_require=['google-cloud-storage', 'mypy', 'pytest'],
     classifiers=[
         'Topic :: Database :: Database Engines/Servers',

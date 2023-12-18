@@ -181,24 +181,31 @@ NULL
 # Invalid usage
 statement error
 SELECT quantile_disc(r, -1.1) FROM quantile
+----
 
 statement error
 SELECT quantile_disc(r, 1.1) FROM quantile
+----
 
 statement error
 SELECT quantile_disc(r, "string") FROM quantile
+----
 
 statement error
 SELECT quantile_disc(r, NULL) FROM quantile
+----
 
 statement error
 SELECT quantile_disc(r) FROM quantile
+----
 
 statement error
 SELECT quantile_disc(r, 0.1, 50) FROM quantile
+----
 
 statement error
 SELECT quantile_cont(r, q) FROM quantile
+----
 
 statement ok
 pragma threads=4

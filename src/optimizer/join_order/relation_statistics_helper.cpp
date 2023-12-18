@@ -226,6 +226,22 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 	idx_t child_1_card = child_stats[0].stats_initialized ? child_stats[0].cardinality : 0;
 	idx_t child_2_card = child_stats[1].stats_initialized ? child_stats[1].cardinality : 0;
 	ret.cardinality = MaxValue(child_1_card, child_2_card);
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		switch (join.join_type) {
+		case JoinType::RIGHT_ANTI:
+		case JoinType::RIGHT_SEMI:
+			ret.cardinality = child_2_card;
+			break;
+		case JoinType::ANTI:
+		case JoinType::SEMI:
+		case JoinType::SINGLE:
+			ret.cardinality = child_1_card;
+			break;
+		default:
+			break;
+		}
+	}
 	ret.stats_initialized = true;
 	ret.filter_strength = 1;
 	ret.table_name = child_stats[0].table_name + " joined with " + child_stats[1].table_name;
@@ -280,6 +296,32 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 	// TODO: look at child distinct count to better estimate cardinality.
 	stats.cardinality = child_stats.cardinality;
 	stats.column_distinct_count = child_stats.column_distinct_count;
+	double new_card = -1;
+	for (auto &g_set : aggr.grouping_sets) {
+		for (auto &ind : g_set) {
+			if (aggr.groups[ind]->expression_class != ExpressionClass::BOUND_COLUMN_REF) {
+				continue;
+			}
+			auto bound_col = &aggr.groups[ind]->Cast<BoundColumnRefExpression>();
+			auto col_index = bound_col->binding.column_index;
+			if (col_index >= child_stats.column_distinct_count.size()) {
+				// it is possible the column index of the grouping_set is not in the child stats.
+				// this can happen when delim joins are present, since delim scans are not currently
+				// reorderable. Meaning they don't add a relation or column_ids that could potentially
+				// be grouped by. Hopefully this can be fixed with duckdb-internal#606
+				continue;
+			}
+			if (new_card < child_stats.column_distinct_count[col_index].distinct_count) {
+				new_card = child_stats.column_distinct_count[col_index].distinct_count;
+			}
+		}
+	}
+	if (new_card < 0 || new_card >= child_stats.cardinality) {
+		// We have no good statistics on distinct count.
+		// most likely we are running on parquet files. Therefore we divide by 2.
+		new_card = (double)child_stats.cardinality / 2;
+	}
+	stats.cardinality = new_card;
 	stats.column_names = child_stats.column_names;
 	stats.stats_initialized = true;
 	auto num_child_columns = aggr.GetColumnBindings().size();
@@ -289,6 +331,16 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 		stats.column_distinct_count.push_back(DistinctCount({child_stats.cardinality, false}));
 		stats.column_names.push_back("aggregate");
 	}
+	return stats;
+}
+
+RelationStats RelationStatisticsHelper::ExtractEmptyResultStats(LogicalEmptyResult &empty) {
+	RelationStats stats;
+	for (idx_t i = 0; i < empty.GetColumnBindings().size(); i++) {
+		stats.column_distinct_count.push_back(DistinctCount({0, false}));
+		stats.column_names.push_back("empty_result_column");
+	}
+	stats.stats_initialized = true;
 	return stats;
 }
 

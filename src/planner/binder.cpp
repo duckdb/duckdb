@@ -194,7 +194,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::SUBQUERY:
 		result = Bind(ref.Cast<SubqueryRef>());
 		break;
-	case TableReferenceType::EMPTY:
+	case TableReferenceType::EMPTY_FROM:
 		result = Bind(ref.Cast<EmptyTableRef>());
 		break;
 	case TableReferenceType::TABLE_FUNCTION:
@@ -230,7 +230,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	case TableReferenceType::TABLE_FUNCTION:
 		root = CreatePlan(ref.Cast<BoundTableFunction>());
 		break;
-	case TableReferenceType::EMPTY:
+	case TableReferenceType::EMPTY_FROM:
 		root = CreatePlan(ref.Cast<BoundEmptyTableRef>());
 		break;
 	case TableReferenceType::EXPRESSION_LIST:

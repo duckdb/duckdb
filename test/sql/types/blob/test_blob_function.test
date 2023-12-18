@@ -57,6 +57,7 @@ SELECT b || '\x5A\x5A'::BYTEA FROM blobs
 # BLOB || VARCHAR is not allowed, should fail
 statement error
 SELECT b || '5A5A'::VARCHAR FROM blobs
+----
 
 # Octet Length tests
 statement ok

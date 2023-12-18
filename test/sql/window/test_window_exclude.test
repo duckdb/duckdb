@@ -862,6 +862,8 @@ NULL	5200	6000
 
 statement error
 SELECT sum(i) OVER (EXCLUDE CURRENT ROW) FROM generate_series(1,10) AS _(i);
+----
 
 statement error
 SELECT sum(i) OVER (ROWS UNBOUNDED PRECEDING EXCLUDE GROUPS) FROM generate_series(1,10) AS _(i);
+----

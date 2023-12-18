@@ -277,3 +277,16 @@ class TestDuckDBConnection(object):
         for method in filtered_methods:
             # Assert that every method of DuckDBPyConnection is wrapped by the 'duckdb' module
             assert method in dir(duckdb)
+
+    def test_set_pandas_analyze_sample_size(self):
+        con = duckdb.connect(":memory:named", config={"pandas_analyze_sample": 0})
+        res = con.sql("select current_setting('pandas_analyze_sample')").fetchone()
+        assert res == (0,)
+
+        # Find the cached config
+        con2 = duckdb.connect(":memory:named", config={"pandas_analyze_sample": 0})
+        con2.execute(f"SET GLOBAL pandas_analyze_sample=2")
+
+        # This change is reflected in 'con' because the instance was cached
+        res = con.sql("select current_setting('pandas_analyze_sample')").fetchone()
+        assert res == (2,)

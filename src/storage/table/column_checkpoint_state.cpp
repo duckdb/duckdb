@@ -38,7 +38,6 @@ bool PartialBlockForCheckpoint::IsFlushed() {
 }
 
 void PartialBlockForCheckpoint::Flush(const idx_t free_space_left) {
-
 	if (IsFlushed()) {
 		throw InternalException("Flush called on partial block that was already flushed");
 	}
@@ -130,7 +129,10 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 	block_id_t block_id = INVALID_BLOCK;
 	uint32_t offset_in_block = 0;
 
+	unique_lock<mutex> partial_block_lock;
 	if (!segment->stats.statistics.IsConstant()) {
+		partial_block_lock = partial_block_manager.GetLock();
+
 		// non-constant block
 		PartialBlockAllocation allocation = partial_block_manager.GetBlockAllocation(segment_size);
 		block_id = allocation.state.block_id;
