@@ -1,4 +1,5 @@
 add_subdirectory(sniffer)
+add_subdirectory(scanner)
 
 add_library_unity(
   duckdb_operator_csv_scanner
@@ -11,6 +12,7 @@ add_library_unity(
   csv_scanner.cpp
   csv_state_machine.cpp
   csv_state_machine_cache.cpp)
+
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_operator_csv_scanner>
     PARENT_SCOPE)

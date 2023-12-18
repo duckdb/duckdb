@@ -17,8 +17,8 @@ struct TupleOfValues {
 	idx_t position;
 	bool set = false;
 	vector<Value> values;
-	void Print(){
-		for (auto& val: values){
+	void Print() {
+		for (auto &val : values) {
 			val.Print();
 		}
 	}

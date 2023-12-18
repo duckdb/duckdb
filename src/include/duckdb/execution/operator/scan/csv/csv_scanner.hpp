@@ -16,50 +16,24 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/fast_mem.hpp"
+#include "duckdb/execution/operator/scan/csv/scanner/base_scanner.hpp"
 
 namespace duckdb {
 
-//! A CSV Scanner is what iterates over CSV Buffers.
-//! They are capable of autonomously getting their buffers, and by using a CSV State Machine, they can parse it to different structures
-//! In certain sniffing phases the can simply consist of counting the number of columns. While when reading the file
-//! It can be creating the data in DuckDB Chunks.
+//! The different scanner types
+enum ScannerType : uint8_t { DIALECT_DETECTION = 0, TYPE_DETECTION = 1, TYPE_REFINEMENT = 2, PARSING = 3 };
 
-//! Due to a CSV File being broken into multiple buffers, the CSV Scanner also needs to ensure that overbuffer values are
-//! Properly read
+//! A CSV Scanner is what iterates over CSV Buffers.
+//! They are capable of autonomously getting their buffers, and by using a CSV State Machine, they can parse it to
+//! different structures In certain sniffing phases the can simply consist of counting the number of columns. While when
+//! reading the file It can be creating the data in DuckDB Chunks.
+
+//! Due to a CSV File being broken into multiple buffers, the CSV Scanner also needs to ensure that overbuffer values
+//! are Properly read
 class CSVScanner {
 	explicit CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
 	                    ScannerBoundary boundaries, idx_t scanner_id);
 
-	void ProcessOverbufferValue() {
-		auto cur_buf = cur_buffer_handle->Ptr();
-		for (; csv_iterator.buffer_pos < cur_buffer_handle->actual_size; csv_iterator.buffer_pos++) {
-			state_machine->Transition(states, cur_buf[csv_iterator.buffer_pos]);
-			if (csv_iterator.bytes_to_read > 0) {
-				csv_iterator.bytes_to_read--;
-			}
-			if (states.NewRow() || states.NewValue()) {
-				break;
-			}
-		}
-		D_ASSERT(states.NewRow() || states.NewValue());
-		if (csv_iterator.buffer_pos == 0) {
-			duck_vector_ptr[current_value_pos] = string_t(previous_cur_buffer_handle->Ptr() + length,
-			                                              previous_cur_buffer_handle->actual_size - length - 1);
-		} else if (csv_iterator.buffer_pos == 1) {
-			duck_vector_ptr[current_value_pos] =
-			    string_t(previous_cur_buffer_handle->Ptr() + length, previous_cur_buffer_handle->actual_size - length);
-		} else {
-			idx_t first_buffer_size = previous_cur_buffer_handle->actual_size - length;
-			auto string_length = first_buffer_size + csv_iterator.buffer_pos - 1;
-			auto &result_str = duck_vector_ptr[current_value_pos];
-			result_str = StringVector::EmptyString(*duck_vector, string_length);
-			FastMemcpy(result_str.GetDataWriteable(), previous_cur_buffer_handle->Ptr() + length, first_buffer_size);
-			FastMemcpy(result_str.GetDataWriteable() + first_buffer_size, cur_buffer_handle->Ptr(), string_length - first_buffer_size);
-			result_str.Finalize();
-		}
-		length = csv_iterator.buffer_pos;
-		current_value_pos++;
-	}
 	//! This functions templates an operation over the CSV File
 	template <class OP, class T>
 	inline bool Process(CSVScanner &machine, T &result) {
@@ -78,7 +52,7 @@ class CSVScanner {
 			buffer_handle_ptr = cur_buffer_handle->Ptr();
 			for (; csv_iterator.buffer_pos < cur_buffer_handle->actual_size; csv_iterator.buffer_pos++) {
 				if (OP::Process(machine, result, buffer_handle_ptr[csv_iterator.buffer_pos], csv_iterator.buffer_pos)) {
-//					csv_iterator.buffer_pos++;
+					//					csv_iterator.buffer_pos++;
 					//! Not-Done Processing the File, but the Operator is happy!
 					OP::Finalize(machine, result);
 					return false;
@@ -262,6 +236,8 @@ private:
 	void SkipEmptyLines();
 	//! Skips header when reading the first buffer
 	void SkipHeader();
+	//! Process values that fall over two buffers.
+	void ProcessOverbufferValue();
 };
 
 } // namespace duckdb

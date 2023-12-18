@@ -195,9 +195,7 @@ struct BufferPosition {
 		return false;
 	}
 
-	//! Number of bytes each thread will consume
-	//! 8 MB TODO: Should benchmarks other values
-	static constexpr idx_t BYTES_PER_THREAD = 8000000;
+
 
 	idx_t file_idx = 0;
 	idx_t buffer_idx = 0;

@@ -11,9 +11,9 @@
 namespace duckdb {
 
 CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
-	                    ScannerBoundary boundary_p, idx_t scanner_id);
+                       ScannerBoundary boundary_p, idx_t scanner_id_p)
     : scanner_id(scanner_id_p), boundary(boundary_p), buffer_manager(std::move(buffer_manager_p)),
-      state_machine(state_machine_p), mode(ParserMode::PARSING) {
+      state_machine(state_machine_p) {
 	SetTotalColumns(state_machine->options.dialect_options.num_cols);
 	//	cur_buffer_handle = buffer_manager->GetBuffer(csv_iterator.file_idx, csv_iterator.buffer_idx++);
 	//	vector<LogicalType> varchar_types(total_columns, LogicalType::VARCHAR);
@@ -59,8 +59,8 @@ struct SkipUntilNewLine {
 	inline static bool Process(CSVScanner &scanner, idx_t &result_pos, char current_char, idx_t current_pos) {
 		auto state_machine = scanner.GetStateMachine();
 		auto &state = scanner.states;
-		if (current_char == '\n'){
-			result_pos = current_pos +1 ;
+		if (current_char == '\n') {
+			result_pos = current_pos + 1;
 			return true;
 		}
 		state_machine.Transition(scanner.states, current_char);
@@ -84,6 +84,38 @@ void CSVScanner::SkipHeader() {
 		return;
 	}
 	Process<SkipUntilNewLine>(*this, csv_iterator.buffer_pos);
+}
+
+void CSVScanner::ProcessOverbufferValue() {
+	auto cur_buf = cur_buffer_handle->Ptr();
+	for (; csv_iterator.buffer_pos < cur_buffer_handle->actual_size; csv_iterator.buffer_pos++) {
+		state_machine->Transition(states, cur_buf[csv_iterator.buffer_pos]);
+		if (csv_iterator.bytes_to_read > 0) {
+			csv_iterator.bytes_to_read--;
+		}
+		if (states.NewRow() || states.NewValue()) {
+			break;
+		}
+	}
+	D_ASSERT(states.NewRow() || states.NewValue());
+	if (csv_iterator.buffer_pos == 0) {
+		duck_vector_ptr[current_value_pos] =
+		    string_t(previous_cur_buffer_handle->Ptr() + length, previous_cur_buffer_handle->actual_size - length - 1);
+	} else if (csv_iterator.buffer_pos == 1) {
+		duck_vector_ptr[current_value_pos] =
+		    string_t(previous_cur_buffer_handle->Ptr() + length, previous_cur_buffer_handle->actual_size - length);
+	} else {
+		idx_t first_buffer_size = previous_cur_buffer_handle->actual_size - length;
+		auto string_length = first_buffer_size + csv_iterator.buffer_pos - 1;
+		auto &result_str = duck_vector_ptr[current_value_pos];
+		result_str = StringVector::EmptyString(*duck_vector, string_length);
+		FastMemcpy(result_str.GetDataWriteable(), previous_cur_buffer_handle->Ptr() + length, first_buffer_size);
+		FastMemcpy(result_str.GetDataWriteable() + first_buffer_size, cur_buffer_handle->Ptr(),
+		           string_length - first_buffer_size);
+		result_str.Finalize();
+	}
+	length = csv_iterator.buffer_pos;
+	current_value_pos++;
 }
 
 bool CSVScanner::SetStart(VerificationPositions &verification_positions) {
@@ -416,7 +448,6 @@ bool CSVScanner::Finished() {
 	// the file) OR if we exhausted the bytes we were supposed to read
 	return csv_iterator.bytes_to_read == 0;
 }
-
 
 void CSVScanner::Reset() {
 	if (cur_buffer_handle) {
