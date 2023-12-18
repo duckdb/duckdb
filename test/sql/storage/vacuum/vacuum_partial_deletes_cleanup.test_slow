@@ -2,6 +2,9 @@
 # description: Verify that deleting rows and re-appending does not increase storage size
 # group: [vacuum]
 
+# the test explicitly compares to a block size of 262144
+require block_size 262144
+
 load __TEST_DIR__/vacuum_deletes_partial_cleanup.db
 
 statement ok

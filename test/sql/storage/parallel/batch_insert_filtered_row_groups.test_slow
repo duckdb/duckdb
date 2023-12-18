@@ -2,6 +2,9 @@
 # description: Test batch insert with small batches
 # group: [parallel]
 
+# for smaller block sizes, we see different numbers of blocks written
+require block_size 262144
+
 require vector_size 512
 
 require parquet

@@ -2,7 +2,9 @@
 # description: Test dropping a table that has many deletes
 # group: [delete]
 
-# load the DB from disk
+# for smaller block sizes, we see different numbers of metadata blocks
+require block_size 262144
+
 load __TEST_DIR__/drop_many_deletes.db
 
 statement ok
