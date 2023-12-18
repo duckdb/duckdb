@@ -2,8 +2,8 @@
 
 namespace duckdb {
 
-CreateIndexTypeInfo::CreateIndexTypeInfo(string index_type_name_p, string schema)
-    : CreateInfo(CatalogType::INDEX_TYPE_ENTRY, std::move(schema)), index_type_name(std::move(index_type_name_p)) {
+CreateIndexTypeInfo::CreateIndexTypeInfo(string name_p, string schema)
+    : CreateInfo(CatalogType::INDEX_TYPE_ENTRY, std::move(schema)), name(std::move(name_p)) {
 	internal = true;
 }
 

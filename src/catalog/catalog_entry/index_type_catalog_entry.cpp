@@ -3,7 +3,7 @@
 namespace duckdb {
 
 IndexTypeCatalogEntry::IndexTypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexTypeInfo &info)
-    : StandardEntry(CatalogType::INDEX_TYPE_ENTRY, schema, catalog, info.index_type_name) {
+    : StandardEntry(CatalogType::INDEX_TYPE_ENTRY, schema, catalog, info.name) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
 	this->create_instance = nullptr;

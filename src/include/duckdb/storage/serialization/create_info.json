@@ -68,7 +68,7 @@
       {
         "id": 202,
         "name": "index_type",
-        "type": "IndexType",
+        "type": "DeprecatedIndexType",
         "deleted": "True"
       },
       {
@@ -265,5 +265,21 @@
         "type": "bool"
       }
     ]
+  },
+  {
+    "class": "CreateIndexTypeInfo",
+    "base": "CreateInfo",
+    "enum": "INDEX_TYPE_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_index_type_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "name",
+        "type": "string"
+      }
+    ],
+    "constructor": ["name"]
   }
 ]

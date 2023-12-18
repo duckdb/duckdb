@@ -489,8 +489,8 @@ void ReplayState::ReplayCreateIndex(BinaryDeserializer &deserializer) {
 	auto &data_table = table.GetStorage();
 
 	auto index_instance =
-	    index_type.create_instance(info.index_name, info.constraint_type, info.column_ids,
-	                               TableIOManager::Get(data_table), unbound_expressions, data_table.db, index_info);
+	    index_type.create_instance(info.index_name, info.constraint_type, info.column_ids, unbound_expressions,
+	                               TableIOManager::Get(data_table), data_table.db, index_info);
 
 	data_table.info->indexes.AddIndex(std::move(index_instance));
 }

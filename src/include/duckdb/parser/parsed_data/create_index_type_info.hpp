@@ -14,11 +14,17 @@
 namespace duckdb {
 
 struct CreateIndexTypeInfo : public CreateInfo {
-	explicit CreateIndexTypeInfo(string index_type_name_p, string schema = DEFAULT_SCHEMA);
+	explicit CreateIndexTypeInfo(string name_p, string schema = DEFAULT_SCHEMA);
 
-	string index_type_name;
+	// The index type name
+	string name;
 
-	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;
+public:
+	unique_ptr<CreateInfo> Copy() const override;
+
+public:
+	DUCKDB_API void Serialize(Serializer &serializer) const override;
+	DUCKDB_API static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb
