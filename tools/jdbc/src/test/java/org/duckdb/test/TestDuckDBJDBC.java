@@ -4053,7 +4053,7 @@ public class TestDuckDBJDBC {
             try (Statement s = conn.createStatement()) {
                 s.execute("CREATE TABLE test (x INT, y INT, z INT)");
             }
-            try (PreparedStatement ps1 = conn.prepareStatement("INSERT INTO test VALUES (?, ?, ?)")) {
+            try (PreparedStatement ps1 = conn.prepareStatement("INSERT INTO test (x, y, z) VALUES (?, ?, ?);")) {
                 ps1.setObject(1, 1);
                 ps1.setObject(2, 2);
                 ps1.setObject(3, 3);
@@ -4096,13 +4096,20 @@ public class TestDuckDBJDBC {
             try (Statement s = conn.createStatement()) {
                 s.execute("create table test (id int)");
             }
-            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO test VALUES (?)")) {
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO test (id) VALUES (?)")) {
                 ps.setObject(1, 1);
                 ps.addBatch();
-                String msg = assertThrows(() -> {
-                    ps.execute("INSERT INTO test VALUES (1)");
-                }, SQLException.class);
+
+                String msg =
+                    assertThrows(() -> { ps.execute("INSERT INTO test (id) VALUES (1);"); }, SQLException.class);
                 assertTrue(msg.contains("Batched queries must be executed with executeBatch."));
+
+                String msg2 =
+                    assertThrows(() -> { ps.executeUpdate("INSERT INTO test (id) VALUES (1);"); }, SQLException.class);
+                assertTrue(msg2.contains("Batched queries must be executed with executeBatch."));
+
+                String msg3 = assertThrows(() -> { ps.executeQuery("SELECT * FROM test"); }, SQLException.class);
+                assertTrue(msg3.contains("Batched queries must be executed with executeBatch."));
             }
         }
     }

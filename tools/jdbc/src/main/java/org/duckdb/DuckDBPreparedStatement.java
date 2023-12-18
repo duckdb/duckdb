@@ -242,6 +242,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         } else if (x instanceof OffsetDateTime) {
             x = new DuckDBTimestampTZ((OffsetDateTime) x);
         }
+
         params[parameterIndex - 1] = x;
     }
 
@@ -744,6 +745,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     @Override
     public void addBatch() throws SQLException {
         batchedValues.add(params);
+        clearParameters();
         isBatch = true;
     }
 
