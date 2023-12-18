@@ -45,11 +45,9 @@ public:
 	}
 
 	// Index interface (unused)
-	unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
-	                                                         ExpressionType expression_type) override;
-	unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Transaction &transaction, const Value &low_value,
-	                                                       ExpressionType low_expression_type, const Value &high_value,
-	                                                       ExpressionType high_expression_type) override;
+	unique_ptr<IndexScanState> TryInitializeScan(const Transaction &transaction, const Expression &index_expr,
+	                                             const Expression &filter_expr) override;
+
 	bool Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state, idx_t max_count,
 	          vector<row_t> &result_ids) override;
 

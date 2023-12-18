@@ -52,17 +52,12 @@ public:
 	bool owns_data;
 
 public:
-	//! Initialize a single predicate scan on the index with the given expression and column IDs
-	unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
-	                                                         const ExpressionType expression_type) override;
-	//! Initialize a two predicate scan on the index with the given expression and column IDs
-	unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Transaction &transaction, const Value &low_value,
-	                                                       const ExpressionType low_expression_type,
-	                                                       const Value &high_value,
-	                                                       const ExpressionType high_expression_type) override;
+	unique_ptr<IndexScanState> TryInitializeScan(const Transaction &transaction, const Expression &index_expr,
+	                                             const Expression &filter_expr) override;
+
 	//! Performs a lookup on the index, fetching up to max_count result IDs. Returns true if all row IDs were fetched,
 	//! and false otherwise
-	bool Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state, const idx_t max_count,
+	bool Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state, idx_t max_count,
 	          vector<row_t> &result_ids) override;
 
 	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held

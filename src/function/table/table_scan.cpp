@@ -322,120 +322,21 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 			return false;
 		}
 
-		Value low_value, high_value, equal_value;
-		ExpressionType low_comparison_type = ExpressionType::INVALID, high_comparison_type = ExpressionType::INVALID;
 		// try to find a matching index for any of the filter expressions
+		auto &transaction = Transaction::Get(context, bind_data.table.catalog);
+
 		for (auto &filter : filters) {
-			auto &expr = *filter;
-
-			// create a matcher for a comparison with a constant
-			ComparisonExpressionMatcher matcher;
-			// match on a comparison type
-			matcher.expr_type = make_uniq<ComparisonExpressionTypeMatcher>();
-			// match on a constant comparison with the indexed expression
-			matcher.matchers.push_back(make_uniq<ExpressionEqualityMatcher>(*index_expression));
-			matcher.matchers.push_back(make_uniq<ConstantExpressionMatcher>());
-
-			matcher.policy = SetMatcher::Policy::UNORDERED;
-
-			vector<reference<Expression>> bindings;
-			if (matcher.Match(expr, bindings)) {
-				// range or equality comparison with constant value
-				// we can use our index here
-				// bindings[0] = the expression
-				// bindings[1] = the index expression
-				// bindings[2] = the constant
-				auto &comparison = bindings[0].get().Cast<BoundComparisonExpression>();
-				auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().value;
-				auto comparison_type = comparison.type;
-				if (comparison.left->type == ExpressionType::VALUE_CONSTANT) {
-					// the expression is on the right side, we flip them around
-					comparison_type = FlipComparisonExpression(comparison_type);
-				}
-				if (comparison_type == ExpressionType::COMPARE_EQUAL) {
-					// equality value
-					// equality overrides any other bounds so we just break here
-					equal_value = constant_value;
-					break;
-				} else if (comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-				           comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
-					// greater than means this is a lower bound
-					low_value = constant_value;
-					low_comparison_type = comparison_type;
+			auto index_state = index.TryInitializeScan(transaction, *index_expression, *filter);
+			if (index_state != nullptr) {
+				if (index.Scan(transaction, storage, *index_state, STANDARD_VECTOR_SIZE, bind_data.result_ids)) {
+					// use an index scan!
+					bind_data.is_index_scan = true;
+					get.function = TableScanFunction::GetIndexScanFunction();
 				} else {
-					// smaller than means this is an upper bound
-					high_value = constant_value;
-					high_comparison_type = comparison_type;
+					bind_data.result_ids.clear();
 				}
-			} else if (expr.type == ExpressionType::COMPARE_BETWEEN) {
-				// BETWEEN expression
-				auto &between = expr.Cast<BoundBetweenExpression>();
-				if (!between.input->Equals(*index_expression)) {
-					// expression doesn't match the current index expression
-					continue;
-				}
-				if (between.lower->type != ExpressionType::VALUE_CONSTANT ||
-				    between.upper->type != ExpressionType::VALUE_CONSTANT) {
-					// not a constant comparison
-					continue;
-				}
-				low_value = (between.lower->Cast<BoundConstantExpression>()).value;
-				low_comparison_type = between.lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
-				                                              : ExpressionType::COMPARE_GREATERTHAN;
-				high_value = (between.upper->Cast<BoundConstantExpression>()).value;
-				high_comparison_type = between.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO
-				                                               : ExpressionType::COMPARE_LESSTHAN;
-				break;
+				return true;
 			}
-			// TODO: Rest of this
-			else if (expr.type == ExpressionType::BOUND_FUNCTION) {
-				// Arbitrary function expression
-				auto &function_expr = expr.Cast<BoundFunctionExpression>();
-				if (function_expr.function.side_effects == FunctionSideEffects::HAS_SIDE_EFFECTS) {
-					// function has side effects, we can't use it
-					continue;
-				}
-				if (function_expr.children.size() != 2) {
-					// we only support binary functions for now
-					continue;
-				}
-				if (function_expr.children[0]->Equals(*index_expression) &&
-				    function_expr.children[1]->type == ExpressionType::VALUE_CONSTANT) {
-					// one of the children is the index expression, we can use this function
-				}
-				if (function_expr.children[1]->Equals(*index_expression) &&
-				    function_expr.children[0]->type == ExpressionType::VALUE_CONSTANT) {
-					// one of the children is the index expression, we can use this function
-				}
-			}
-		}
-		if (!equal_value.IsNull() || !low_value.IsNull() || !high_value.IsNull()) {
-			// we can scan this index using this predicate: try a scan
-			auto &transaction = Transaction::Get(context, bind_data.table.catalog);
-			unique_ptr<IndexScanState> index_state;
-			if (!equal_value.IsNull()) {
-				// equality predicate
-				index_state =
-				    index.InitializeScanSinglePredicate(transaction, equal_value, ExpressionType::COMPARE_EQUAL);
-			} else if (!low_value.IsNull() && !high_value.IsNull()) {
-				// two-sided predicate
-				index_state = index.InitializeScanTwoPredicates(transaction, low_value, low_comparison_type, high_value,
-				                                                high_comparison_type);
-			} else if (!low_value.IsNull()) {
-				// less than predicate
-				index_state = index.InitializeScanSinglePredicate(transaction, low_value, low_comparison_type);
-			} else {
-				D_ASSERT(!high_value.IsNull());
-				index_state = index.InitializeScanSinglePredicate(transaction, high_value, high_comparison_type);
-			}
-			if (index.Scan(transaction, storage, *index_state, STANDARD_VECTOR_SIZE, bind_data.result_ids)) {
-				// use an index scan!
-				bind_data.is_index_scan = true;
-				get.function = TableScanFunction::GetIndexScanFunction();
-			} else {
-				bind_data.result_ids.clear();
-			}
-			return true;
 		}
 		return false;
 	});

@@ -21,15 +21,11 @@ string UnknownIndex::GenerateErrorMessage() const {
 	    index_type.c_str(), name.c_str());
 }
 
-unique_ptr<IndexScanState> UnknownIndex::InitializeScanSinglePredicate(const Transaction &, const Value &,
-                                                                       ExpressionType) {
+unique_ptr<IndexScanState> UnknownIndex::TryInitializeScan(const Transaction &transaction, const Expression &index_expr,
+                                                           const Expression &filter_expr) {
 	throw NotImplementedException(GenerateErrorMessage());
 }
 
-unique_ptr<IndexScanState> UnknownIndex::InitializeScanTwoPredicates(const Transaction &, const Value &, ExpressionType,
-                                                                     const Value &, ExpressionType) {
-	throw NotImplementedException(GenerateErrorMessage());
-}
 bool UnknownIndex::Scan(const Transaction &, const DataTable &, IndexScanState &, idx_t, vector<row_t> &) {
 	throw NotImplementedException(GenerateErrorMessage());
 }

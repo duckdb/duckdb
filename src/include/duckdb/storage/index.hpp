@@ -64,19 +64,15 @@ public:
 		return false;
 	}
 
-	//! Initialize a single predicate scan on the index with the given expression and column IDs
-	virtual unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
-	                                                                 const ExpressionType expression_type) = 0;
-	//! Initialize a two predicate scan on the index with the given expression and column IDs
-	virtual unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Transaction &transaction,
-	                                                               const Value &low_value,
-	                                                               const ExpressionType low_expression_type,
-	                                                               const Value &high_value,
-	                                                               const ExpressionType high_expression_type) = 0;
+	//! Try to intialize a index scan with the given expressions.
+	//! If we cannot perform an index scan, returns nullptr.
+	virtual unique_ptr<IndexScanState> TryInitializeScan(const Transaction &transaction, const Expression &index_expr,
+	                                                     const Expression &filter_expr) = 0;
+
 	//! Performs a lookup on the index, fetching up to max_count result IDs. Returns true if all row IDs were fetched,
 	//! and false otherwise
-	virtual bool Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state,
-	                  const idx_t max_count, vector<row_t> &result_ids) = 0;
+	virtual bool Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state, idx_t max_count,
+	                  vector<row_t> &result_ids) = 0;
 
 	//! Obtain a lock on the index
 	void InitializeLock(IndexLock &state);
