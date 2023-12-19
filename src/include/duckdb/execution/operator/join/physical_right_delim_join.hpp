@@ -8,12 +8,9 @@
 
 #pragma once
 
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
-#include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
-class PhysicalHashAggregate;
 
 //! PhysicalRightDelimJoin represents a join where the RHS will be duplicate eliminated and pushed into a
 //! PhysicalColumnDataScan in the LHS.

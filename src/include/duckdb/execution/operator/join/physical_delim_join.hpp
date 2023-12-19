@@ -12,6 +12,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
+
 class PhysicalHashAggregate;
 
 //! PhysicalRightDelimJoin represents a join where the RHS will be duplicate eliminated and pushed into a

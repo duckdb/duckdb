@@ -2,6 +2,7 @@
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/execution/operator/join/physical_join.hpp"
 #include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"

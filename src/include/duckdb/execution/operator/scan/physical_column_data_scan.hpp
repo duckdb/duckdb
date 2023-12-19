@@ -8,10 +8,11 @@
 
 #pragma once
 
-#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
+
+class ColumnDataCollection;
 
 //! The PhysicalColumnDataScan scans a ColumnDataCollection
 class PhysicalColumnDataScan : public PhysicalOperator {
