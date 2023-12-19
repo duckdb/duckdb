@@ -38,7 +38,7 @@ struct CreateSecretInput {
 typedef unique_ptr<BaseSecret> (*secret_deserializer_t)(Deserializer &deserializer, BaseSecret base_secret);
 typedef unique_ptr<BaseSecret> (*create_secret_function_t)(ClientContext &context, CreateSecretInput &input);
 
-//! A CreateSecretFunction is a function that can produce secrets of a specific type.
+//! A CreateSecretFunction is a function adds a provider for a secret type.
 class CreateSecretFunction {
 public:
 	string secret_type;

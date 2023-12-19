@@ -42,9 +42,12 @@ public:
 	virtual void DropSecretByName(CatalogTransaction transaction, const string &name,
 	                              OnEntryNotFound on_entry_not_found) = 0;
 	//! Get best match
-	virtual SecretMatch GetSecretByPath(CatalogTransaction transaction, const string &path, const string &type) = 0;
+	virtual SecretMatch LookupSecret(CatalogTransaction transaction, const string &path, const string &type) = 0;
 	//! Get a secret by name
 	virtual optional_ptr<SecretEntry> GetSecretByName(CatalogTransaction transaction, const string &name) = 0;
+
+	//! Return the offset associated to this storage for tie-breaking
+	virtual int64_t GetTieBreakOffset() = 0;
 
 	//! Returns include_in_lookups, used to create secret storage
 	virtual bool IncludeInLookups() {
@@ -52,13 +55,20 @@ public:
 	}
 
 protected:
+	//! Offsets the score: the convention is (score * 100 - storage penalty) where 0 < storage_penalty < 100 will
+	//! tie-break secret matches with identical scores giving preference to the storage with the lowest storage_penalty
+	//! the base implementation will be chosen last in a tie-break
+	int64_t OffsetMatchScore(int64_t score) {
+		return 100 * score - GetTieBreakOffset();
+	}
+
 	//! Name of the storage backend (e.g. temporary, file, etc)
 	string storage_name;
 	//! Whether entries in this storage will survive duckdb reboots
 	bool persistent;
 };
 
-//! Base class for catalog set based secret storage
+//! Base Implementation for catalog set based secret storage
 class CatalogSetSecretStorage : public SecretStorage {
 public:
 	CatalogSetSecretStorage(const string &name_p) : SecretStorage(name_p) {};
@@ -73,7 +83,7 @@ public:
 	vector<reference<SecretEntry>> AllSecrets(CatalogTransaction transaction) override;
 	void DropSecretByName(CatalogTransaction transaction, const string &name,
 	                      OnEntryNotFound on_entry_not_found) override;
-	SecretMatch GetSecretByPath(CatalogTransaction transaction, const string &path, const string &type) override;
+	SecretMatch LookupSecret(CatalogTransaction transaction, const string &path, const string &type) override;
 	optional_ptr<SecretEntry> GetSecretByName(CatalogTransaction transaction, const string &name) override;
 
 protected:
@@ -91,6 +101,12 @@ public:
 		secrets = make_uniq<CatalogSet>(Catalog::GetSystemCatalog(db));
 		persistent = false;
 	}
+
+	int64_t GetTieBreakOffset() override {
+		return 10;
+	}
+
+protected:
 };
 
 class LocalFileSecretStorage : public CatalogSetSecretStorage {
@@ -98,8 +114,12 @@ public:
 	LocalFileSecretStorage(SecretManager &manager, DatabaseInstance &db, const string &name_p,
 	                       const string &secret_path);
 
+	int64_t GetTieBreakOffset() override {
+		return 20;
+	}
+
 protected:
-	//! Implements the actual writes to disk
+	//! Implements the writes to disk
 	void WriteSecret(CatalogTransaction transaction, const BaseSecret &secret) override;
 	//! Implements the deletes from disk
 	virtual void RemoveSecret(CatalogTransaction transaction, const string &secret) override;

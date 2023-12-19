@@ -189,20 +189,20 @@ unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(FileOpener *ope
 	auto &secret_manager = context->db->GetSecretManager();
 	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*context);
 
-	auto secret_lookup = secret_manager.GetSecretByPath(transaction, path, "s3");
-	if (!secret_lookup) {
-		secret_lookup = secret_manager.GetSecretByPath(transaction, path, "r2");
+	auto secret_match = secret_manager.LookupSecret(transaction, path, "s3");
+	if (!secret_match.HasMatch()) {
+		secret_match = secret_manager.LookupSecret(transaction, path, "r2");
 	}
-	if (!secret_lookup) {
-		secret_lookup = secret_manager.GetSecretByPath(transaction, path, "gcs");
+	if (!secret_match.HasMatch()) {
+		secret_match = secret_manager.LookupSecret(transaction, path, "gcs");
 	}
-	if (!secret_lookup) {
+	if (!secret_match.HasMatch()) {
 		return nullptr;
 	}
 
 	// Return the stored credentials
-	const auto &secret = secret_lookup->secret;
-	const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret);
+	const auto &secret = secret_match.GetSecret();
+	const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(secret);
 
 	return make_uniq<S3AuthParams>(S3SecretHelper::GetParams(kv_secret));
 }

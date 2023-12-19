@@ -11,11 +11,11 @@ static void WhichSecretFunction(DataChunk &args, ExpressionState &state, Vector 
 
 	BinaryExecutor::Execute<string_t, string_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(), [&](string_t path, string_t type) {
-		    auto secret_entry = secret_manager.GetSecretByPath(transaction, path.GetString(), type.GetString());
-		    if (!secret_entry) {
+		    auto secret_match = secret_manager.LookupSecret(transaction, path.GetString(), type.GetString());
+		    if (!secret_match.HasMatch()) {
 			    return string_t();
 		    }
-		    return StringVector::AddString(result, secret_entry->name);
+		    return StringVector::AddString(result, secret_match.GetSecret().GetName());
 	    });
 }
 
