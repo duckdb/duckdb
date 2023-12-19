@@ -673,24 +673,27 @@ static LogicalType CombineNumericTypes(const LogicalType &left, const LogicalTyp
 	throw InternalException("Cannot combine these numeric types!?");
 }
 
+static LogicalType ReturnType(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::STRING_LITERAL) {
+		return LogicalType::VARCHAR;
+	}
+	return type;
+}
+
 static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	// left and right are not equal
-	// string literals/unknown (parameter) types always take the other type
-	switch (left.id()) {
-	case LogicalTypeId::STRING_LITERAL:
-	case LogicalTypeId::UNKNOWN:
-		result = right;
-		return true;
-	default:
-		break;
-	}
-	switch (right.id()) {
-	case LogicalTypeId::STRING_LITERAL:
-	case LogicalTypeId::UNKNOWN:
-		result = left;
-		return true;
-	default:
-		break;
+	// NULL/string literals/unknown (parameter) types always take the other type
+	LogicalTypeId other_types[] = {
+		LogicalTypeId::UNKNOWN, LogicalTypeId::SQLNULL, LogicalTypeId::STRING_LITERAL
+	};
+	for(auto & other_type : other_types) {
+		if (left.id() == other_type) {
+			result = ReturnType(right);
+			return true;
+		} else if (right.id() == other_type) {
+			result = ReturnType(left);
+			return true;
+		}
 	}
 	// for enums, match the varchar rules
 	if (left.id() == LogicalTypeId::ENUM) {
