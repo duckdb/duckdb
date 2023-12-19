@@ -47,6 +47,10 @@ public:
 	template <class T>
 	inline static bool ProcessCharacter(BaseScanner &scanner, const char current_char, const idx_t buffer_pos,
 	                                    T &result) {
+		if (scanner.states.IsInvalid()) {
+			T::Kaput(result);
+			return true;
+		}
 		scanner.state_machine->Transition(scanner.states, current_char);
 		if (scanner.states.NewValue()) {
 			//! Add new value to result

@@ -16,7 +16,7 @@ void TypeScanner::Initialize() {
 }
 
 bool TypeScanner::ProcessInternal(char current_char) {
-	if (states.current_state == CSVState::INVALID) {
+	if (states.IsInvalid()) {
 		result.cur_rows = 0;
 		return true;
 	}

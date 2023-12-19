@@ -18,9 +18,12 @@ class DialectResult : public ScannerResult {
 public:
 	idx_t sniffed_column_counts[STANDARD_VECTOR_SIZE];
 	idx_t cur_rows;
+	//! Adds a Value to the result
 	static inline void AddValue(DialectResult &result, const char current_char, const idx_t buffer_pos);
-
+	//! Adds a Row to the result
 	static inline void AddRow(DialectResult &result, const char current_char, const idx_t buffer_pos);
+	//! Behavior when hitting an invalid state
+	static inline void Kaput(DialectResult &result);
 };
 
 //! Our dialect scanner basically goes over the CSV and figures out how many columns they have

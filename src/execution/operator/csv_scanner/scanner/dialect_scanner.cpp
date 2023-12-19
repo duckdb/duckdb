@@ -10,6 +10,10 @@ void DialectResult::AddRow(DialectResult &result, const char current_char, const
 	result.sniffed_column_counts[result.cur_rows++]++;
 }
 
+void DialectResult::Kaput(DialectResult &result){
+	result.cur_rows = 0;
+}
+
 DialectScanner::DialectScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine)
     : BaseScanner(buffer_manager, state_machine), column_count(1) {
 	result.cur_rows = 0;
