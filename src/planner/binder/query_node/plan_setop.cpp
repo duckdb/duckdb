@@ -123,6 +123,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	// need.
 	auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(left_node),
 	                                           std::move(right_node), logical_type, node.setop_all);
+	// Is this necessary?
+	root->ResolveOperatorTypes();
 
 	unique_ptr<LogicalOperator> op;
 
@@ -145,11 +147,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 			row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
 			auto left_bindings = left->GetColumnBindings();
 			for (idx_t i = 0; i < left_types.size(); i++) {
-				auto left_type = LogicalType(LogicalType::UNKNOWN);
-				if (i < left_types.size()) {
-					left_type = left_types[i];
-				}
-				row_number->partitions.push_back(make_uniq<BoundColumnRefExpression>(left_type, left_bindings[i]));
+				row_number->partitions.push_back(make_uniq<BoundColumnRefExpression>(left_types[i], left_bindings[i]));
 			}
 			left_window->expressions.push_back(std::move(row_number));
 			left_window->AddChild(std::move(left));
@@ -163,11 +161,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 			row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
 			auto right_bindings = right->GetColumnBindings();
 			for (idx_t i = 0; i < right_bindings.size(); i++) {
-				auto right_type = LogicalType(LogicalType::UNKNOWN);
-				if (i < right_types.size()) {
-					right_type = right_types[i];
-				}
-				row_number->partitions.push_back(make_uniq<BoundColumnRefExpression>(right_type, right_bindings[i]));
+				row_number->partitions.push_back(make_uniq<BoundColumnRefExpression>(right_types[i], right_bindings[i]));
 			}
 			right_window->expressions.push_back(std::move(row_number));
 			right_window->AddChild(std::move(right));
@@ -186,13 +180,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 		for (idx_t i = 0; i < left_bindings.size() - 1; i++) {
 			auto cond_type_left = LogicalType(LogicalType::UNKNOWN);
 			auto cond_type_right = LogicalType(LogicalType::UNKNOWN);
-			if (i < left_types.size()) {
-				cond_type_left = left_types[i];
-				cond_type_right = right_types[i];
-			}
 			JoinCondition cond;
-			cond.left = make_uniq<BoundColumnRefExpression>(cond_type_left, left_bindings[i]);
-			cond.right = make_uniq<BoundColumnRefExpression>(cond_type_right, right_bindings[i]);
+			cond.left = make_uniq<BoundColumnRefExpression>(left_types[i], left_bindings[i]);
+			cond.right = make_uniq<BoundColumnRefExpression>(right_types[i], right_bindings[i]);
 			cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 			conditions.push_back(std::move(cond));
 		}
@@ -228,7 +218,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 			auto projection =
 			    make_uniq<LogicalProjection>(projection_table_index, std::move(projection_select_list));
 			projection->children.push_back(std::move(op));
-//			projection->ResolveOperatorTypes();
 			op = std::move(projection);
 		}
 
