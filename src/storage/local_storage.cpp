@@ -80,7 +80,6 @@ void LocalTableStorage::InitializeScan(CollectionScanState &state, optional_ptr<
 }
 
 idx_t LocalTableStorage::EstimatedSize() {
-
 	// count the appended rows
 	idx_t appended_rows = row_groups->GetTotalRows() - deleted_rows;
 
