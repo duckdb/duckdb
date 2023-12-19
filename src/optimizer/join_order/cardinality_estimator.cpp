@@ -7,6 +7,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/limits.hpp"
 
 namespace duckdb {

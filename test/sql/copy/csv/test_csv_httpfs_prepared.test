@@ -29,6 +29,7 @@ DEALLOCATE boaz_bug
 
 statement error
 EXECUTE boaz_bug
+----
 
 # Recreate prepared statement with different file
 

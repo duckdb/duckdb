@@ -149,7 +149,7 @@ struct ParquetWriteLocalState : public LocalFunctionData {
 	ColumnDataAppendState append_state;
 };
 
-BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
+BindInfo ParquetGetBindInfo(const optional_ptr<FunctionData> bind_data) {
 	auto bind_info = BindInfo(ScanType::PARQUET);
 	auto &parquet_bind = bind_data->Cast<ParquetReadBindData>();
 	vector<Value> file_path;
@@ -317,7 +317,7 @@ public:
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
-		table_function.get_batch_info = ParquetGetBatchInfo;
+		table_function.get_bind_info = ParquetGetBindInfo;
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
 		table_function.filter_prune = true;
@@ -491,10 +491,9 @@ public:
 		if (bind_data.initial_file_cardinality == 0) {
 			return (100.0 * (bind_data.cur_file + 1)) / bind_data.files.size();
 		}
-		auto percentage = (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality) /
-		                  bind_data.files.size();
-		percentage += 100.0 * bind_data.cur_file / bind_data.files.size();
-		return percentage;
+		auto percentage = std::min(
+		    100.0, (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality));
+		return (percentage + 100.0 * bind_data.cur_file) / bind_data.files.size();
 	}
 
 	static unique_ptr<LocalTableFunctionState>

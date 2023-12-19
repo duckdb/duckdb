@@ -15,7 +15,7 @@ load __TEST_DIR__/store_tpch_auto_detect.db
 
 # now read the gzip compressed file with sample_size=-1
 statement ok
-SET memory_limit='500MB';
+SET memory_limit='750MB';
 
 statement ok
 CREATE OR REPLACE TABLE lineitem AS (SELECT * FROM read_csv_auto(['__TEST_DIR__/lineitem.csv.gz'], sample_size=-1));

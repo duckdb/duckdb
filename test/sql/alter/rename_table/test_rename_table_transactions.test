@@ -25,6 +25,7 @@ SELECT * FROM tbl2
 
 statement error con1
 SELECT * FROM tbl
+----
 
 query I con2
 SELECT * FROM tbl
@@ -34,6 +35,7 @@ SELECT * FROM tbl
 
 statement error con2
 SELECT * FROM tbl2
+----
 
 statement ok con1
 COMMIT
@@ -43,9 +45,11 @@ COMMIT
 
 statement error con1
 SELECT * FROM tbl
+----
 
 statement error con2
 SELECT * FROM tbl
+----
 
 query I con1
 SELECT * FROM tbl2
@@ -66,6 +70,7 @@ CREATE TABLE tbl(i INTEGER);
 # tbl2 is still occupied though
 statement error con1
 CREATE TABLE tbl2(i INTEGER);
+----
 
 # we can drop and re-create the table
 statement ok con1
@@ -77,3 +82,4 @@ CREATE TABLE tbl2(i INTEGER);
 # a rename fails now
 statement error con1
 ALTER TABLE tbl RENAME TO tbl2
+----

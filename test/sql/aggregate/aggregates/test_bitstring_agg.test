@@ -201,9 +201,11 @@ SELECT BITSTRING_AGG(column0, -10, 40) FROM '__TEST_DIR__/bitstring_agg.csv';
 # test incorrect usage
 statement error
 SELECT BITSTRING_AGG()
+----
 
 statement error
 SELECT BITSTRING_AGG(1, 3, 4, 8, 0)
+----
 
 # group by
 statement ok

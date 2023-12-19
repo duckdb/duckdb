@@ -164,15 +164,20 @@ FROM VALUES (0), (1), (2), (10) AS tab(col);
 # Invalid use
 statement error
 SELECT quantile_disc(r, [-0.1, 0.5, 0.9]) FROM quantiles
+----
 
 statement error
 SELECT quantile_disc(r, (0.1, 0.5, 1.1)) FROM quantiles
+----
 
 statement error
 SELECT quantile_disc(r, [0.1, 0.5, NULL]) FROM quantiles
+----
 
 statement error
 SELECT quantile_disc(r, ["0.1", "0.5", "0.9"]) FROM quantiles
+----
 
 statement error
 SELECT quantile_disc(r, [0.1, 0.5, 0.9], 50) FROM quantiles
+----

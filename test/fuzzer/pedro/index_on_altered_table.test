@@ -15,6 +15,7 @@ ALTER TABLE t4 ADD c1 BLOB;
 
 statement error
 CREATE INDEX i3 ON t4 (c3);
+----
 
 statement ok con1
 COMMIT;

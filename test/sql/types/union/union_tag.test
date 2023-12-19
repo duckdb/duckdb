@@ -5,6 +5,7 @@
 # Union type must be fully resolved
 statement error
 SELECT union_tag(1);
+----
 
 query I
 SELECT union_tag(1::UNION(a INT, b VARCHAR));
@@ -74,6 +75,7 @@ PREPARE p2 as SELECT union_tag(?);
 
 statement error
 EXECUTE p2(1);
+----
 
 query I
 EXECUTE p2('woo'::UNION(a INT, b VARCHAR));

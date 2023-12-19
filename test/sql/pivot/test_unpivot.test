@@ -182,12 +182,15 @@ statement error
 SELECT * FROM monthly_sales
     UNPIVOT(sales FOR month IN ())
     ORDER BY empid;
+----
 
 statement error
 SELECT * FROM monthly_sales
     UNPIVOT(sales FOR month IN (''))
     ORDER BY empid;
+----
 
 statement error
 SELECT * FROM monthly_sales
     UNPIVOT(SUM(sales) FOR month IN (empid, dept, jan, feb, mar, april))
+----
