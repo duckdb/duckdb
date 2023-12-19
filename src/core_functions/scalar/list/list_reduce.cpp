@@ -15,24 +15,24 @@ struct ReduceExecuteInfo {
 		left_sel.Initialize(info.row_count);
 		active_rows_sel.Initialize(info.row_count);
 
-		idx_t new_count = 0;
+		idx_t reduced_row_idx = 0;
 
-		for (idx_t old_count = 0; old_count < info.row_count; old_count++) {
-			auto list_column_format_index = info.list_column_format.sel->get_index(old_count);
+		for (idx_t original_row_idx = 0; original_row_idx < info.row_count; original_row_idx++) {
+			auto list_column_format_index = info.list_column_format.sel->get_index(original_row_idx);
 			if (info.list_column_format.validity.RowIsValid(list_column_format_index)) {
 				if (info.list_entries[list_column_format_index].length == 0) {
 					throw ParameterNotAllowedException("Cannot perform list_reduce on an empty input list");
 				}
-				left_vector.set_index(new_count, info.list_entries[list_column_format_index].offset);
-				new_count++;
+				left_vector.set_index(reduced_row_idx, info.list_entries[list_column_format_index].offset);
+				reduced_row_idx++;
 			} else {
 				// Remove the invalid rows
-				info.result_validity->SetInvalid(old_count);
-				active_rows.SetInvalid(old_count);
+				info.result_validity->SetInvalid(original_row_idx);
+				active_rows.SetInvalid(original_row_idx);
 			}
 		}
 
-		left_slice.Slice(left_vector, new_count);
+		left_slice.Slice(left_vector, reduced_row_idx);
 
 		if (info.has_index) {
 			input_types.push_back(LogicalType::BIGINT);
@@ -57,43 +57,43 @@ struct ReduceExecuteInfo {
 
 static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFunctions::LambdaInfo &info,
                           DataChunk &result_chunk) {
-	idx_t old_count = 0;
-	idx_t new_count = 0;
-	idx_t valid_count = 0;
+	idx_t original_row_idx = 0;
+	idx_t reduced_row_idx = 0;
+	idx_t valid_row_idx = 0;
 
 	// create selection vectors for the left and right slice
 	auto data = execute_info.active_rows.GetData();
 
 	idx_t bits_per_entry = sizeof(idx_t) * 8;
-	for (idx_t entry_idx = 0; old_count < info.row_count; entry_idx++) {
+	for (idx_t entry_idx = 0; original_row_idx < info.row_count; entry_idx++) {
 		if (data[entry_idx] == 0) {
-			old_count += bits_per_entry;
+			original_row_idx += bits_per_entry;
 			continue;
 		}
 
 		for (idx_t j = 0; entry_idx * bits_per_entry + j < info.row_count; j++) {
-			if (!execute_info.active_rows.RowIsValid(old_count)) {
-				old_count++;
+			if (!execute_info.active_rows.RowIsValid(original_row_idx)) {
+				original_row_idx++;
 				continue;
 			}
-			auto list_column_format_index = info.list_column_format.sel->get_index(old_count);
+			auto list_column_format_index = info.list_column_format.sel->get_index(original_row_idx);
 			if (info.list_entries[list_column_format_index].length > loops + 1) {
-				execute_info.right_sel.set_index(new_count,
+				execute_info.right_sel.set_index(reduced_row_idx,
 				                                 info.list_entries[list_column_format_index].offset + loops + 1);
-				execute_info.left_sel.set_index(new_count, valid_count);
-				execute_info.active_rows_sel.set_index(new_count, old_count);
+				execute_info.left_sel.set_index(reduced_row_idx, valid_row_idx);
+				execute_info.active_rows_sel.set_index(reduced_row_idx, original_row_idx);
 
-				new_count++;
+				reduced_row_idx++;
 			} else {
-				execute_info.active_rows.SetInvalid(old_count);
-				info.result.SetValue(old_count, execute_info.left_slice.GetValue(valid_count));
+				execute_info.active_rows.SetInvalid(original_row_idx);
+				info.result.SetValue(original_row_idx, execute_info.left_slice.GetValue(valid_row_idx));
 			}
-			old_count++;
-			valid_count++;
+			original_row_idx++;
+			valid_row_idx++;
 		}
 	}
 
-	if (new_count == 0) {
+	if (reduced_row_idx == 0) {
 		return true;
 	}
 
@@ -101,13 +101,13 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 	Vector index_vector(Value::BIGINT(loops + 1));
 
 	// slice the left and right slice
-	execute_info.left_slice.Slice(execute_info.left_slice, execute_info.left_sel, new_count);
-	Vector right_slice(*info.child_vector, execute_info.right_sel, new_count);
+	execute_info.left_slice.Slice(execute_info.left_slice, execute_info.left_sel, reduced_row_idx);
+	Vector right_slice(*info.child_vector, execute_info.right_sel, reduced_row_idx);
 
 	// create the input chunk
 	DataChunk input_chunk;
 	input_chunk.InitializeEmpty(execute_info.input_types);
-	input_chunk.SetCardinality(new_count);
+	input_chunk.SetCardinality(reduced_row_idx);
 
 	idx_t slice_offset = info.has_index ? 1 : 0;
 	if (info.has_index) {
@@ -124,13 +124,13 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 			input_chunk.data[slice_offset + 2 + i].Reference(info.column_infos[i].vector);
 		} else {
 			// slice the other vectors
-			slices.emplace_back(info.column_infos[i].vector, execute_info.active_rows_sel, new_count);
+			slices.emplace_back(info.column_infos[i].vector, execute_info.active_rows_sel, reduced_row_idx);
 			input_chunk.data[slice_offset + 2 + i].Reference(slices.back());
 		}
 	}
 
 	result_chunk.Reset();
-	result_chunk.SetCardinality(new_count);
+	result_chunk.SetCardinality(reduced_row_idx);
 
 	execute_info.expr_executor->Execute(input_chunk, result_chunk);
 
