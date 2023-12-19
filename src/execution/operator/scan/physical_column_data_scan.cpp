@@ -15,6 +15,11 @@ PhysicalColumnDataScan::PhysicalColumnDataScan(vector<LogicalType> types, Physic
       owned_collection(std::move(owned_collection_p)) {
 }
 
+PhysicalColumnDataScan::PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type,
+                                               idx_t estimated_cardinality, idx_t cte_index)
+    : PhysicalOperator(op_type, std::move(types), estimated_cardinality), collection(nullptr), cte_index(cte_index) {
+}
+
 class PhysicalColumnDataScanState : public GlobalSourceState {
 public:
 	explicit PhysicalColumnDataScanState() : initialized(false) {
