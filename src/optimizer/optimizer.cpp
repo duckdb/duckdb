@@ -121,10 +121,10 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	});
 
 //	 Convert setop operations to joins if possible
-	RunOptimizer(OptimizerType::OPERATION_CONVERTER, [&]() {
-		OperationConverter converter(*plan, binder);
-		converter.Optimize(plan, true);
-	});
+//	RunOptimizer(OptimizerType::OPERATION_CONVERTER, [&]() {
+//		OperationConverter converter(*plan, binder);
+//		converter.Optimize(plan, true);
+//	});
 
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
