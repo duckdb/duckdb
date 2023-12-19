@@ -673,75 +673,88 @@ static LogicalType CombineNumericTypes(const LogicalType &left, const LogicalTyp
 	throw InternalException("Cannot combine these numeric types!?");
 }
 
-static LogicalType CombineUnequalTypes(const LogicalType &left, const LogicalType &right) {
+static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	// left and right are not equal
 	// string literals/unknown (parameter) types always take the other type
 	switch(left.id()) {
 	case LogicalTypeId::STRING_LITERAL:
 	case LogicalTypeId::UNKNOWN:
-		return right;
+		result = right;
+		return true;
 	default:
 		break;
 	}
 	switch(right.id()) {
 	case LogicalTypeId::STRING_LITERAL:
 	case LogicalTypeId::UNKNOWN:
-		return left;
+		result = left;
+		return true;
 	default:
 		break;
 	}
-	if (right.id() == LogicalTypeId::ENUM || left.id() == LogicalTypeId::ENUM) {
-		// if one is an enum and the other is not, compare strings, not enums
-		// see https://github.com/duckdb/duckdb/issues/8561
-		return LogicalTypeId::VARCHAR;
+	// for enums, match the varchar rules
+	if (left.id() == LogicalTypeId::ENUM) {
+		return LogicalType::TryGetMaxLogicalType(LogicalType::VARCHAR, right, result);
+	} else if (right.id() == LogicalTypeId::ENUM) {
+		return LogicalType::TryGetMaxLogicalType(left, LogicalType::VARCHAR, result);
 	}
 	// for other types - use implicit cast rules to check if we can combine the types
 	if (CastRules::ImplicitCast(left, right) >= 0) {
 		// we can implicitly cast left to right, return right
 		//! Depending on the type, we might need to grow the `width` of the DECIMAL type
 		if (right.id() == LogicalTypeId::DECIMAL) {
-			return DecimalSizeCheck(left, right);
+			result = DecimalSizeCheck(left, right);
+		} else {
+			result = right;
 		}
-		return right;
+		return true;
 	}
 	if (CastRules::ImplicitCast(right, left) >= 0) {
 		// we can implicitly cast right to left, return left
 		//! Depending on the type, we might need to grow the `width` of the DECIMAL type
 		if (left.id() == LogicalTypeId::DECIMAL) {
-			return DecimalSizeCheck(right, left);
+			result = DecimalSizeCheck(right, left);
+		} else {
+			result = left;
 		}
-		return left;
+		return true;
 	}
 	// for unsigned/signed comparisons we have a few fallbacks
 	if (left.IsNumeric() && right.IsNumeric()) {
-		return CombineNumericTypes(left, right);
+		result = CombineNumericTypes(left, right);
+		return true;
 	}
 	if (left.id() == LogicalTypeId::BOOLEAN && right.IsIntegral()) {
-		return right;
+		result = right;
+		return true;
 	}
 	if (right.id() == LogicalTypeId::BOOLEAN && left.IsIntegral()) {
-		return left;
+		result = left;
+		return true;
 	}
-	throw NotImplementedException("Cannot combine types %s and %s - an explicit cast is required", left.ToString(), right.ToString());
+	return false;
 }
 
-
-static LogicalType CombineEqualTypes(const LogicalType &left, const LogicalType &right) {
+static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	// Since both left and right are equal we get the left type as our type_id for checks
 	auto type_id = left.id();
 	switch(type_id) {
 	case LogicalTypeId::STRING_LITERAL:
 		// two string literals convert to varchar
-		return LogicalType::VARCHAR;
+		result = LogicalType::VARCHAR;
+		return true;
 	case LogicalTypeId::ENUM:
 		// If both types are different ENUMs we do a string comparison.
-		return left == right ? left : LogicalType::VARCHAR;
+		result = left == right ? left : LogicalType::VARCHAR;
+		return true;
 	case LogicalTypeId::VARCHAR:
 		// varchar: use type that has collation (if any)
 		if (StringType::GetCollation(right).empty()) {
-			return left;
+			result = left;
+		} else {
+			result = right;
 		}
-		return right;
+		return true;
 	case LogicalTypeId::DECIMAL: {
 		// unify the width/scale so that the resulting decimal always fits
 		// "width - scale" gives us the number of digits on the left side of the decimal point
@@ -757,67 +770,98 @@ static LogicalType CombineEqualTypes(const LogicalType &left, const LogicalType 
 			width = DecimalType::MaxWidth();
 			scale = width - extra_width;
 		}
-		return LogicalType::DECIMAL(width, scale);
+		result = LogicalType::DECIMAL(width, scale);
+		return true;
 	}
 	case LogicalTypeId::LIST: {
 		// list: perform max recursively on child type
-		auto new_child = LogicalType::MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
-		return LogicalType::LIST(new_child);
+		LogicalType new_child;
+		if (!LogicalType::TryGetMaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
+			return false;
+		}
+		result = LogicalType::LIST(new_child);
+		return true;
 	}
 	case LogicalTypeId::ARRAY: {
-		auto new_child = LogicalType::MaxLogicalType(ArrayType::GetChildType(left), ArrayType::GetChildType(right));
+		LogicalType new_child;
+		if (!LogicalType::TryGetMaxLogicalType(ArrayType::GetChildType(left), ArrayType::GetChildType(right), new_child)) {
+			return false;
+		}
 		auto new_size = MaxValue(ArrayType::GetSize(left), ArrayType::GetSize(right));
-		return LogicalType::ARRAY(new_child, new_size);
+		result = LogicalType::ARRAY(new_child, new_size);
+		return true;
 	}
 	case LogicalTypeId::MAP: {
 		// map: perform max recursively on child type
-		auto new_child = LogicalType::MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
-		return LogicalType::MAP(new_child);
+		LogicalType new_child;
+		if (!LogicalType::TryGetMaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
+			return false;
+		}
+		result = LogicalType::MAP(new_child);
+		return true;
 	}
 	case LogicalTypeId::STRUCT: {
 		// struct: perform recursively on each child
 		auto &left_child_types = StructType::GetChildTypes(left);
 		auto &right_child_types = StructType::GetChildTypes(right);
 		if (left_child_types.size() != right_child_types.size()) {
-			// child types are not of equal size, we can't cast anyway
-			// just return the left child
-			return left;
+			// child types are not of equal size, we can't cast
+			// return false
+			return false;
 		}
 		child_list_t<LogicalType> child_types;
 		for (idx_t i = 0; i < left_child_types.size(); i++) {
-			auto child_type = LogicalType::MaxLogicalType(left_child_types[i].second, right_child_types[i].second);
+			LogicalType child_type;
+			if (!LogicalType::TryGetMaxLogicalType(left_child_types[i].second, right_child_types[i].second, child_type)) {
+				return false;
+			}
 			child_types.emplace_back(left_child_types[i].first, std::move(child_type));
 		}
-		return LogicalType::STRUCT(child_types);
+		result = LogicalType::STRUCT(child_types);
+		return true;
 	}
 	case LogicalTypeId::UNION: {
 		auto left_member_count = UnionType::GetMemberCount(left);
 		auto right_member_count = UnionType::GetMemberCount(right);
 		if (left_member_count != right_member_count) {
 			// return the "larger" type, with the most members
-			return left_member_count > right_member_count ? left : right;
+			result = left_member_count > right_member_count ? left : right;
+			return true;
 		}
 		// otherwise, keep left, don't try to meld the two together.
-		return left;
+		result = left;
+		return true;
 	}
 	default:
-		return left;
+		result = left;
+		return true;
 	}
 }
 
-LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
+bool LogicalType::TryGetMaxLogicalType(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	// we always prefer aliased types
 	if (!left.GetAlias().empty()) {
-		return left;
+		result = left;
+		return true;
 	}
 	if (!right.GetAlias().empty()) {
-		return right;
+		result = right;
+		return true;
 	}
 	if (left.id() != right.id()) {
-		return CombineUnequalTypes(left, right);
+		return CombineUnequalTypes(left, right, result);
 	} else {
-		return CombineEqualTypes(left, right);
+		return CombineEqualTypes(left, right, result);
 	}
+
+}
+
+LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
+	LogicalType result;
+	if (!TryGetMaxLogicalType(left, right, result)) {
+		throw NotImplementedException("Cannot combine types %s and %s - an explicit cast is required", left.ToString(), right.ToString());
+	}
+	return result;
 }
 
 void LogicalType::Verify() const {

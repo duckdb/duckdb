@@ -155,6 +155,10 @@ protected:
 
 	static unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
 
+	LogicalType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
+	LogicalType ResolveInType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
+	LogicalType ResolveNotType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
+
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);
 	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function, idx_t depth);

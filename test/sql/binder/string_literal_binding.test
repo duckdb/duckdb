@@ -53,17 +53,35 @@ SELECT list('hello world')
 ----
 [hello world]
 
+# literals in IN clause work correctly
+query I
+select 1 IN ('1', '2');
+----
+true
+
+# as does COALESCE with string literals
+query I
+SELECT COALESCE(1, '1');
+----
+1
+
 # we cannot do the same comparison with string columns
 statement error
 select i=1 from (values ('01')) t(i);
 ----
-Cannot combine types VARCHAR and INTEGER
+Cannot compare values of type
+
+# not with IN clause either
+statement error
+select i IN (1) from (values ('01')) t(i);
+----
+Cannot mix values of type
 
 # we cannot do the same comparison with string columns
 statement error
 select date '1992-01-01'>i from (values ('1991-01-01')) t(i);
 ----
-Cannot combine types DATE and VARCHAR
+Cannot compare values of type
 
 # we cannot subscript dates or other types
 statement error

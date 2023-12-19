@@ -73,8 +73,10 @@ void ExpressionBinder::TestCollation(ClientContext &context, const string &colla
 	PushCollation(context, expr, LogicalType::VARCHAR_COLLATION(collation));
 }
 
-LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, LogicalType right_type) {
-	auto result_type = LogicalType::MaxLogicalType(left_type, right_type);
+bool BoundComparisonExpression::TryBindComparison(const LogicalType &left_type, const LogicalType &right_type, LogicalType &result_type) {
+	if (!LogicalType::TryGetMaxLogicalType(left_type, right_type, result_type)) {
+		return false;
+	}
 	switch (result_type.id()) {
 	case LogicalTypeId::DECIMAL: {
 		// result is a decimal: we need the maximum width and the maximum scale over width
@@ -84,7 +86,7 @@ LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, Log
 			uint8_t width, scale;
 			auto can_convert = argument_types[i].GetDecimalProperties(width, scale);
 			if (!can_convert) {
-				return result_type;
+				return true;
 			}
 			max_width = MaxValue<uint8_t>(width, max_width);
 			max_scale = MaxValue<uint8_t>(scale, max_scale);
@@ -95,14 +97,17 @@ LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, Log
 			// target width does not fit in decimal: truncate the scale (if possible) to try and make it fit
 			max_width = Decimal::MAX_WIDTH_DECIMAL;
 		}
-		return LogicalType::DECIMAL(max_width, max_scale);
+		result_type = LogicalType::DECIMAL(max_width, max_scale);
+		return true;
 	}
 	case LogicalTypeId::VARCHAR:
 		// for comparison with strings, we prefer to bind to the numeric types
 		if (left_type.IsNumeric() || left_type.id() == LogicalTypeId::BOOLEAN) {
-			return left_type;
+			result_type = left_type;
+			return true;
 		} else if (right_type.IsNumeric() || right_type.id() == LogicalTypeId::BOOLEAN) {
-			return right_type;
+			result_type = right_type;
+			return true;
 		} else {
 			// else: check if collations are compatible
 			auto left_collation = StringType::GetCollation(left_type);
@@ -111,10 +116,18 @@ LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, Log
 				throw BinderException("Cannot combine types with different collation!");
 			}
 		}
-		return result_type;
+		return true;
 	default:
-		return result_type;
+		return true;
 	}
+}
+
+LogicalType BoundComparisonExpression::BindComparison(const LogicalType &left_type, const LogicalType &right_type) {
+	LogicalType result_type;
+	if (!BoundComparisonExpression::TryBindComparison(left_type, right_type, result_type)) {
+		throw BinderException("Cannot mix values of type %s and %s - an explicit cast is required", left_type.ToString(), right_type.ToString());
+	}
+	return result_type;
 }
 
 LogicalType ExpressionBinder::GetExpressionReturnType(const Expression &expr) {
@@ -140,7 +153,10 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	auto right_sql_type = ExpressionBinder::GetExpressionReturnType(*right);
 	// cast the input types to the same type
 	// now obtain the result type of the input types
-	auto input_type = BoundComparisonExpression::BindComparison(left_sql_type, right_sql_type);
+	LogicalType input_type;
+	if (!BoundComparisonExpression::TryBindComparison(left_sql_type, right_sql_type, input_type)) {
+		return BindResult(binder.FormatError(expr.query_location, "Cannot compare values of type %s and type %s - an explicit cast is required", left_sql_type.ToString(), right_sql_type.ToString()));
+	}
 	// add casts (if necessary)
 	left = BoundCastExpression::AddCastToType(context, std::move(left), input_type,
 	                                          input_type.id() == LogicalTypeId::ENUM);
