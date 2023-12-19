@@ -1,37 +1,37 @@
-# name: test/sql/storage/parallel/insert_order_preserving_odd_sized_batches.test_slow
-# description: Test parallel order-preserving insert
-# group: [parallel]
+# name: test/sql/storage/compact_block_size/insertion_order_odd_batches.test
+# description: Tests for insertion order preservation with compact blocks
+# group: [compact_block_size]
 
-# for smaller block sizes, we see different numbers of distinct blocks
-# because the segment size is bound by the block size
-require block_size 262144
+require block_size 16384
 
 require vector_size 512
 
 require parquet
 
-load __TEST_DIR__/insert_odd_sized_batches.db
+load __TEST_DIR__/compact_odd_batches.db
 
 query I
-CREATE TABLE integers AS SELECT * FROM range(10000000) tbl(i);
+CREATE TABLE integers AS SELECT * FROM range(100000) tbl(i);
 ----
-10000000
+100000
 
 # check the block count and median number of rows per row group
+
 query I
-SELECT COUNT(DISTINCT block_id) < 4 FROM pragma_storage_info('integers');
+SELECT COUNT(DISTINCT block_id) < 60 FROM pragma_storage_info('integers');
 ----
 true
 
 query I
 SELECT MEDIAN(count) FROM pragma_storage_info('integers');
 ----
-122880
+2047
 
 statement ok
-COPY integers TO '__TEST_DIR__/integers.parquet' (ROW_GROUP_SIZE 77777)
+COPY integers TO '__TEST_DIR__/integers.parquet' (ROW_GROUP_SIZE 777)
 
 # verify that reading while preserving insertion order creates the same size table
+
 statement ok
 CREATE TABLE integers_parquet AS FROM '__TEST_DIR__/integers.parquet';
 
@@ -45,25 +45,26 @@ SELECT * FROM integers_parquet LIMIT 5
 4
 
 query I
-SELECT * FROM integers_parquet LIMIT 5 OFFSET 773654
+SELECT * FROM integers_parquet LIMIT 5 OFFSET 73654
 ----
-773654
-773655
-773656
-773657
-773658
+73654
+73655
+73656
+73657
+73658
 
 query I
-SELECT COUNT(DISTINCT block_id) < 4 FROM pragma_storage_info('integers_parquet');
+SELECT COUNT(DISTINCT block_id) < 60 FROM pragma_storage_info('integers_parquet');
 ----
 true
 
 query I
 SELECT MEDIAN(count) FROM pragma_storage_info('integers_parquet');
 ----
-122880
+2047
 
 # verify that reading without preserving insertion order creates the same size table
+
 statement ok
 SET preserve_insertion_order=false
 
@@ -71,11 +72,11 @@ statement ok
 CREATE TABLE integers_parquet_no_order AS FROM '__TEST_DIR__/integers.parquet'
 
 query I
-SELECT COUNT(DISTINCT block_id) < 4 FROM pragma_storage_info('integers_parquet_no_order');
+SELECT COUNT(DISTINCT block_id) < 60 FROM pragma_storage_info('integers_parquet_no_order');
 ----
 true
 
 query I
 SELECT MEDIAN(count) FROM pragma_storage_info('integers_parquet_no_order');
 ----
-122880
+2047
