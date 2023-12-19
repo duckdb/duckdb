@@ -10,6 +10,23 @@
 
 namespace duckdb {
 
+static unique_ptr<LogicalWindow> CreateWindowWithPartitionedRowNum(idx_t window_table_index, unique_ptr<LogicalOperator> op) {
+	// instead create a logical projection on top of whatever to add the window expression, then
+	auto window = make_uniq<LogicalWindow>(window_table_index);
+	auto row_number =
+	    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
+	row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
+	row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+	auto bindings = op->GetColumnBindings();
+	auto types = op->types;
+	for (idx_t i = 0; i < types.size(); i++) {
+		row_number->partitions.push_back(make_uniq<BoundColumnRefExpression>(types[i], bindings[i]));
+	}
+	window->expressions.push_back(std::move(row_number));
+	window->AddChild(std::move(op));
+	return window;
+}
+
 // Optionally push a PROJECTION operator
 unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalType> &source_types,
                                                                vector<LogicalType> &target_types,
@@ -135,37 +152,12 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 		auto left_types = root->children[0]->types;
 		auto right_types = root->children[1]->types;
 		auto old_bindings = root->GetColumnBindings();
-		auto table_index = root->table_index;
 		if (node.setop_all) {
+			auto window_left_table_id = GenerateTableIndex();
+			root->children[0] = CreateWindowWithPartitionedRowNum(window_left_table_id, std::move(root->children[0]));
 
-			// instead create a logical projection on top of whatever to add the window expression, then
-			auto left_window_table_index = GenerateTableIndex();
-			auto left_window = make_uniq<LogicalWindow>(left_window_table_index);
-			auto row_number =
-			    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
-			row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
-			row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
-			auto left_bindings = left->GetColumnBindings();
-			for (idx_t i = 0; i < left_types.size(); i++) {
-				row_number->partitions.push_back(make_uniq<BoundColumnRefExpression>(left_types[i], left_bindings[i]));
-			}
-			left_window->expressions.push_back(std::move(row_number));
-			left_window->AddChild(std::move(left));
-			left = std::move(left_window);
-
-			auto right_window_table_index = GenerateTableIndex();
-			auto right_window = make_uniq<LogicalWindow>(right_window_table_index);
-			row_number =
-			    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
-			row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
-			row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
-			auto right_bindings = right->GetColumnBindings();
-			for (idx_t i = 0; i < right_bindings.size(); i++) {
-				row_number->partitions.push_back(make_uniq<BoundColumnRefExpression>(right_types[i], right_bindings[i]));
-			}
-			right_window->expressions.push_back(std::move(row_number));
-			right_window->AddChild(std::move(right));
-			right = std::move(right_window);
+			auto window_right_table_id = GenerateTableIndex();
+			root->children[1] = CreateWindowWithPartitionedRowNum(window_right_table_id, std::move(root->children[1]));
 
 			root->types.push_back(LogicalType::BIGINT);
 			root->column_count += 1;
@@ -177,7 +169,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 
 		vector<JoinCondition> conditions;
 		// create equality condition for all columns
-		for (idx_t i = 0; i < left_bindings.size() - 1; i++) {
+		idx_t binding_offset = node.setop_all ? 1 : 0;
+		for (idx_t i = 0; i < left_bindings.size() - binding_offset; i++) {
 			auto cond_type_left = LogicalType(LogicalType::UNKNOWN);
 			auto cond_type_right = LogicalType(LogicalType::UNKNOWN);
 			JoinCondition cond;
@@ -187,6 +180,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 			conditions.push_back(std::move(cond));
 		}
 
+		// create condition for the row number as well.
 		if (node.setop_all) {
 			JoinCondition cond;
 			cond.left =
@@ -214,9 +208,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 			for (idx_t i = 0; i < bindings.size() - 1; i++) {
 				projection_select_list.push_back(make_uniq<BoundColumnRefExpression>(op->types[i], bindings[i]));
 			}
-			auto projection_table_index = GenerateTableIndex();
 			auto projection =
-			    make_uniq<LogicalProjection>(projection_table_index, std::move(projection_select_list));
+			    make_uniq<LogicalProjection>(node.setop_index, std::move(projection_select_list));
 			projection->children.push_back(std::move(op));
 			op = std::move(projection);
 		}
@@ -235,7 +228,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 			distinct->children.push_back(std::move(op));
 			op = std::move(distinct);
 
-			auto projection = make_uniq<LogicalProjection>(table_index, std::move(select_list));
+			auto projection = make_uniq<LogicalProjection>(node.setop_index, std::move(select_list));
 			projection->children.push_back(std::move(op));
 			op = std::move(projection);
 			op->ResolveOperatorTypes();
