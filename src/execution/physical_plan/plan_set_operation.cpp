@@ -43,6 +43,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 		throw InvalidInputException("Type mismatch for SET OPERATION");
 	}
 
+	// can't swich logical unions to semi/anti join
+	// also if the operation is a INTERSECT ALL or EXCEPT ALL
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_UNION:
 		// UNION
@@ -51,6 +53,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 		break;
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT: {
+
+
 		auto &types = left->GetTypes();
 		vector<JoinCondition> conditions;
 		// create equality condition for all columns
