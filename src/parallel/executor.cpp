@@ -600,7 +600,7 @@ bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_
 		D_ASSERT(progress[i] <= 100);
 		current_cardinality += double(progress[i]) * double(cardinality[i]) / double(100);
 		current_progress += progress[i] * double(cardinality[i]) / double(total_cardinality);
-		D_ASSERT(current_cardinality < total_cardinality);
+		D_ASSERT(current_cardinality <= total_cardinality);
 	}
 	return true;
 } // LCOV_EXCL_STOP

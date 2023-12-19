@@ -221,6 +221,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		result->partitions.push_back(GetExpression(child));
 	}
 	result->ignore_nulls = window.ignore_nulls;
+	result->distinct = window.distinct;
 
 	// Convert RANGE boundary expressions to ORDER +/- expressions.
 	// Note that PRECEEDING and FOLLOWING refer to the sequential order in the frame,
