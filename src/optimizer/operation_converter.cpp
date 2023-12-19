@@ -12,7 +12,7 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
-
+#include "iostream"
 namespace duckdb {
 
 OperationConverter::OperationConverter(LogicalOperator &root, Binder &binder) : root(root), binder(binder) {
@@ -34,62 +34,79 @@ void OperationConverter::Optimize(unique_ptr<LogicalOperator> &op, bool is_root)
 			// if the operator is the root, then break. We don't want to update the root
 			// and the join order optimizer can still have an effect.
 			break;
-//			auto a = 0;
 		}
 
 		auto table_index = set_op.table_index;
 		auto &left = op->children[0];
+		auto left_types = op->children[0]->types;
 		auto &right = op->children[1];
+		auto right_types = op->children[1]->types;
 
 		auto old_bindings = op->GetColumnBindings();
 
 		if (setop_all) {
 
 			// instead create a logical projection on top of whatever to add the window expression, then
-			auto row_num = make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
-			row_num->start = WindowBoundary::UNBOUNDED_PRECEDING;
-			row_num->end = WindowBoundary::UNBOUNDED_FOLLOWING;
-			auto left_bindings = left->children[0]->GetColumnBindings();
-			for (idx_t i = 0; i < left_bindings.size(); i++) {
-				row_num->partitions.push_back(make_uniq<BoundColumnRefExpression>(op->types[i], left_bindings[i]));
+			auto left_window_table_index = binder.GenerateTableIndex();
+			auto left_window = make_uniq<LogicalWindow>(left_window_table_index);
+			auto row_number =
+			    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
+			row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
+			row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+			auto left_bindings = left->GetColumnBindings();
+			for (idx_t i = 0; i < left_types.size(); i++) {
+				row_number->partitions.push_back(make_uniq<BoundColumnRefExpression>(left_types[i], left_bindings[i]));
 			}
-			left->expressions.push_back(std::move(row_num));
-			left->types.push_back(LogicalType::BIGINT);
+			left_window->expressions.push_back(std::move(row_number));
+			left_window->AddChild(std::move(left));
+			left = std::move(left_window);
 
-			row_num = make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
-			row_num->start = WindowBoundary::UNBOUNDED_PRECEDING;
-			row_num->end = WindowBoundary::UNBOUNDED_FOLLOWING;
-			auto right_bindings = right->children[0]->GetColumnBindings();
+			auto right_window_table_index = binder.GenerateTableIndex();
+			auto right_window = make_uniq<LogicalWindow>(right_window_table_index);
+			row_number =
+			    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
+			row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
+			row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+			auto right_bindings = right->GetColumnBindings();
 			for (idx_t i = 0; i < right_bindings.size(); i++) {
-				row_num->partitions.push_back(make_uniq<BoundColumnRefExpression>(op->types[i], right_bindings[i]));
+				row_number->partitions.push_back(make_uniq<BoundColumnRefExpression>(right_types[i], right_bindings[i]));
 			}
-			right->expressions.push_back(std::move(row_num));
-			right->types.push_back(LogicalType::BIGINT);
+			right_window->expressions.push_back(std::move(row_number));
+			right_window->AddChild(std::move(right));
+			right = std::move(right_window);
 
-			// join (created below) now includes the row number result column from the left
-			left_bindings = left->GetColumnBindings();
 			set_op.types.push_back(LogicalType::BIGINT);
-//			set_op.expressions.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, left_bindings[left_bindings.size() - 1]));
 			set_op.column_count += 1;
 		}
 		auto left_bindings = left->GetColumnBindings();
 		auto right_bindings = right->GetColumnBindings();
 		D_ASSERT(left_bindings.size() == right_bindings.size());
 
-		D_ASSERT(left->types.size() == left_bindings.size());
-		D_ASSERT(right->types.size() == right_bindings.size());
+		if (setop_all) {
+			D_ASSERT(left_types.size() + 1 == left_bindings.size());
+			D_ASSERT(right_types.size() + 1 == right_bindings.size());
+		}
 		vector<JoinCondition> conditions;
 		// create equality condition for all columns
-		for (idx_t i = 0; i < left_bindings.size(); i++) {
+		for (idx_t i = 0; i < left_types.size(); i++) {
 			JoinCondition cond;
-			cond.left = make_uniq<BoundColumnRefExpression>(left->types[i], left_bindings[i]);
-			cond.right = make_uniq<BoundColumnRefExpression>(right->types[i], right_bindings[i]);
+			cond.left = make_uniq<BoundColumnRefExpression>(left_types[i], left_bindings[i]);
+			cond.right = make_uniq<BoundColumnRefExpression>(right_types[i], right_bindings[i]);
 			cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 			conditions.push_back(std::move(cond));
 		}
+
+		if (setop_all) {
+			JoinCondition cond;
+			cond.left =
+			    make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, left_bindings[left_bindings.size() - 1]);
+			cond.right =
+			    make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, right_bindings[right_bindings.size() - 1]);
+			cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+			conditions.push_back(std::move(cond));
+		}
+
 		JoinType join_type = op->type == LogicalOperatorType::LOGICAL_EXCEPT ? JoinType::ANTI : JoinType::SEMI;
-
-
 
 		auto join_op = make_uniq<LogicalComparisonJoin>(join_type);
 		join_op->children.push_back(std::move(left));
@@ -110,6 +127,7 @@ void OperationConverter::Optimize(unique_ptr<LogicalOperator> &op, bool is_root)
 			auto projection =
 			    make_uniq<LogicalProjection>(projection_table_index, std::move(projection_select_list));
 			projection->children.push_back(std::move(op));
+			projection->ResolveOperatorTypes();
 			op = std::move(projection);
 		}
 
