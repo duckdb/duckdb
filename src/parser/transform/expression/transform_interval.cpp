@@ -55,6 +55,7 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 	// (we might add support if someone complains about it)
 
 	string fname;
+	LogicalType parse_type = LogicalType::DOUBLE;
 	LogicalType target_type;
 	if (mask & YEAR_MASK && mask & MONTH_MASK) {
 		// DAY TO HOUR
@@ -92,11 +93,11 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 	} else if (mask & HOUR_MASK) {
 		// HOUR
 		fname = "to_hours";
-		target_type = LogicalType::DOUBLE;
+		target_type = LogicalType::BIGINT;
 	} else if (mask & MINUTE_MASK) {
 		// MINUTE
 		fname = "to_minutes";
-		target_type = LogicalType::DOUBLE;
+		target_type = LogicalType::BIGINT;
 	} else if (mask & SECOND_MASK) {
 		// SECOND
 		fname = "to_seconds";
@@ -128,8 +129,16 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 	} else {
 		throw InternalException("Unsupported interval post-fix");
 	}
-	// first push a cast to the target type
-	expr = make_uniq<CastExpression>(target_type, std::move(expr));
+	// first push a cast to the parse type
+	expr = make_uniq<CastExpression>(parse_type, std::move(expr));
+
+	// next, truncate it if the target type doesn't match the parse type
+	if (target_type != parse_type) {
+		vector<unique_ptr<ParsedExpression>> children;
+		children.push_back(std::move(expr));
+		expr = make_uniq<FunctionExpression>("trunc", std::move(children));
+		expr = make_uniq<CastExpression>(target_type, std::move(expr));
+	}
 	// now push the operation
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(expr));
