@@ -15,32 +15,20 @@ struct ReduceExecuteInfo {
 		left_sel.Initialize(info.row_count);
 		active_rows_sel.Initialize(info.row_count);
 
-		idx_t old_count = 0;
 		idx_t new_count = 0;
 
-		// Initialize the left vector from list entries and the active rows
-		auto data = active_rows.GetData();
-
-		for (idx_t entry_idx = 0; old_count < info.row_count; entry_idx++) {
-			if (data[entry_idx] == 0) {
-				old_count += 64;
-				continue;
-			}
-
-			for (idx_t j = 0; j < 64 && entry_idx + j < info.row_count; j++) {
-				auto list_column_format_index = info.list_column_format.sel->get_index(old_count);
-				if (info.list_column_format.validity.RowIsValid(list_column_format_index)) {
-					if (info.list_entries[list_column_format_index].length == 0) {
-						throw ParameterNotAllowedException("Cannot perform list_reduce on an empty input list");
-					}
-					left_vector.set_index(new_count, info.list_entries[list_column_format_index].offset);
-					new_count++;
-				} else {
-					// Remove the invalid rows
-					info.result_validity->SetInvalid(old_count);
-					active_rows.SetInvalid(old_count);
+		for (idx_t old_count = 0; old_count < info.row_count; old_count++) {
+			auto list_column_format_index = info.list_column_format.sel->get_index(old_count);
+			if (info.list_column_format.validity.RowIsValid(list_column_format_index)) {
+				if (info.list_entries[list_column_format_index].length == 0) {
+					throw ParameterNotAllowedException("Cannot perform list_reduce on an empty input list");
 				}
-				old_count++;
+				left_vector.set_index(new_count, info.list_entries[list_column_format_index].offset);
+				new_count++;
+			} else {
+				// Remove the invalid rows
+				info.result_validity->SetInvalid(old_count);
+				active_rows.SetInvalid(old_count);
 			}
 		}
 
@@ -76,13 +64,14 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 	// create selection vectors for the left and right slice
 	auto data = execute_info.active_rows.GetData();
 
+	idx_t bits_per_entry = sizeof(idx_t) * 8;
 	for (idx_t entry_idx = 0; old_count < info.row_count; entry_idx++) {
 		if (data[entry_idx] == 0) {
-			old_count += 64;
+			old_count += bits_per_entry;
 			continue;
 		}
 
-		for (idx_t j = 0; j < 64 && entry_idx + j < info.row_count; j++) {
+		for (idx_t j = 0; entry_idx * bits_per_entry + j < info.row_count; j++) {
 			if (!execute_info.active_rows.RowIsValid(old_count)) {
 				old_count++;
 				continue;

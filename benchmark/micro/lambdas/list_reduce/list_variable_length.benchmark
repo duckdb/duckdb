@@ -7,7 +7,7 @@ group micro
 subgroup lambdas
 
 load
-CREATE TABLE tbl AS SELECT range((i * 95823983533) % 100000) AS l from range(5000) t(i);
+CREATE TABLE tbl AS SELECT range((i * 95823983533) % 100000 + 1) AS l from range(5000) t(i);
 
 run
 SELECT list_reduce(l, (x, y) -> x + y) FROM tbl;

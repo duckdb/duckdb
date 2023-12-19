@@ -373,6 +373,16 @@ SELECT list_reduce(l, (x, y) -> x + y) FROM large_lists ORDER BY g;
 12500000
 12502500
 
+# very large table
+
+statement ok
+CREATE TABLE large_table AS SELECT list_reduce(range(5000), (x, y) -> x + y) as l FROM range(1000);
+
+query I
+SELECT count(*) from large_table where l = 12497500;
+----
+1000
+
 # list_reduce in where clause
 
 statement ok
