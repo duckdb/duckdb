@@ -150,6 +150,8 @@ private:
 	                                                 SecretPersistType persist_type, const string &storage = "");
 	//! Initialize the secret catalog_set and persistent secrets (lazily)
 	void InitializeSecrets(CatalogTransaction transaction);
+	//! Load a secret storage
+	void LoadSecretStorageInternal(unique_ptr<SecretStorage> storage);
 
 	//! Autoload extension for specific secret type
 	void AutoloadExtensionForType(ClientContext &context, const string &type);

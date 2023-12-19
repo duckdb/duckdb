@@ -305,7 +305,7 @@ static constexpr ExtensionEntry EXTENSION_FILE_CONTAINS[] = {
 static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {{"s3", "httpfs"},
                                                              {"r2", "httpfs"},
                                                              {"gcs", "httpfs"},
-                                                             {"azure", ".azure"}}; // EXTENSION_SECRET_TYPES
+                                                             {"azure", "azure"}}; // EXTENSION_SECRET_TYPES
                                                              
                                                              
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py

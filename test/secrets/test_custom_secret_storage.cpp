@@ -182,3 +182,99 @@ TEST_CASE("Test tie-break behaviour for custom secret storage", "[secret][.]") {
 	REQUIRE(log2.write_secret_requests[0] == "s3");
 	REQUIRE(log2.remove_secret_requests[0] == "s3");
 }
+
+TEST_CASE("Secret storage tie-break penalty collision: manager loaded after", "[secret][.]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	if (!db.ExtensionIsLoaded("httpfs")) {
+		return;
+	}
+
+	REQUIRE_NO_FAIL(con.Query("set allow_persistent_secrets=false;"));
+
+	// Register custom secret storage
+	auto &secret_manager = duckdb::SecretManager::Get(*db.instance);
+
+	// This collides with the temporary secret storage: it will throw, but only on first use of the secret manager
+	TestSecretLog log;
+	auto storage_ptr = duckdb::make_uniq<TestSecretStorage>("failing_storage", *db.instance, log, 10);
+
+	// This passes but is actually wrong already
+	secret_manager.LoadSecretStorage(std::move(storage_ptr));
+
+	// This will trigger InitializeSecrets and cause tie-break penalty collision
+	REQUIRE_FAIL(con.Query("FROM duckdb_secrets();"));
+}
+
+TEST_CASE("Secret storage tie-break penalty collision: manager loaded before", "[secret][.]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	if (!db.ExtensionIsLoaded("httpfs")) {
+		return;
+	}
+
+	REQUIRE_NO_FAIL(con.Query("set allow_persistent_secrets=false;"));
+
+	// Register custom secret storage
+	auto &secret_manager = duckdb::SecretManager::Get(*db.instance);
+
+	// This collides with the temporary secret storage: it will throw, but only on first use of the secret manager
+	TestSecretLog log;
+	auto storage_ptr = duckdb::make_uniq<TestSecretStorage>("failing_storage", *db.instance, log, 10);
+
+	// Ensure secret manager is fully initialized
+	REQUIRE_NO_FAIL(con.Query("FROM duckdb_secrets();"));
+
+	// This fails
+	REQUIRE_THROWS(secret_manager.LoadSecretStorage(std::move(storage_ptr)));
+}
+
+TEST_CASE("Secret storage name collision: manager loaded before", "[secret][.]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	if (!db.ExtensionIsLoaded("httpfs")) {
+		return;
+	}
+
+	REQUIRE_NO_FAIL(con.Query("set allow_persistent_secrets=false;"));
+
+	// Register custom secret storage
+	auto &secret_manager = duckdb::SecretManager::Get(*db.instance);
+
+	// This collides with the memory manager by name
+	TestSecretLog log;
+	auto storage_ptr = duckdb::make_uniq<TestSecretStorage>("memory", *db.instance, log, 50);
+
+	// Ensure secret manager is fully initialized
+	REQUIRE_NO_FAIL(con.Query("FROM duckdb_secrets();"));
+
+	// This fails
+	REQUIRE_THROWS(secret_manager.LoadSecretStorage(std::move(storage_ptr)));
+}
+
+TEST_CASE("Secret storage name collision: manager loaded after", "[secret][.]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	if (!db.ExtensionIsLoaded("httpfs")) {
+		return;
+	}
+
+	REQUIRE_NO_FAIL(con.Query("set allow_persistent_secrets=false;"));
+
+	// Register custom secret storage
+	auto &secret_manager = duckdb::SecretManager::Get(*db.instance);
+
+	// This collides with the memory manager by name
+	TestSecretLog log;
+	auto storage_ptr = duckdb::make_uniq<TestSecretStorage>("memory", *db.instance, log, 50);
+
+	// This passes but is actually wrong alsready
+	secret_manager.LoadSecretStorage(std::move(storage_ptr));
+
+	// This now fails with a name collision warning
+	REQUIRE_FAIL(con.Query("FROM duckdb_secrets();"));
+}

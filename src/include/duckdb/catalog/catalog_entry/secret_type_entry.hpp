@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-//! A Secret function in the catalog
+//! A Secret type in the catalog
 struct SecretTypeEntry : public InCatalogEntry {
 	SecretTypeEntry(Catalog &catalog, SecretType &type)
 	    : InCatalogEntry(CatalogType::SECRET_ENTRY, catalog, type.name), type(type) {

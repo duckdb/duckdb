@@ -52,7 +52,10 @@ void SecretManager::Initialize(DatabaseInstance &db) {
 
 void SecretManager::LoadSecretStorage(unique_ptr<SecretStorage> storage) {
 	lock_guard<mutex> lck(manager_lock);
+	return LoadSecretStorageInternal(std::move(storage));
+}
 
+void SecretManager::LoadSecretStorageInternal(unique_ptr<SecretStorage> storage) {
 	if (secret_storages.find(storage->GetName()) != secret_storages.end()) {
 		throw InternalException("Secret Storage with name '%s' already registered!", storage->GetName());
 	}
@@ -311,7 +314,6 @@ SecretMatch SecretManager::LookupSecret(CatalogTransaction transaction, const st
 	return SecretMatch();
 }
 
-// TODO test this
 optional_ptr<SecretEntry> SecretManager::GetSecretByName(CatalogTransaction transaction, const string &name,
                                                          const string &storage) {
 	InitializeSecrets(transaction);
@@ -482,13 +484,12 @@ void SecretManager::InitializeSecrets(CatalogTransaction transaction) {
 		}
 
 		// load the tmp storage
-		secret_storages[TEMPORARY_STORAGE_NAME] =
-		    make_uniq<TemporarySecretStorage>(TEMPORARY_STORAGE_NAME, *transaction.db);
+		LoadSecretStorageInternal(make_uniq<TemporarySecretStorage>(TEMPORARY_STORAGE_NAME, *transaction.db));
 
 		// load the persistent storage if enabled
 		if (config.allow_persistent_secrets) {
-			secret_storages[LOCAL_FILE_STORAGE_NAME] =
-			    make_uniq<LocalFileSecretStorage>(*this, *transaction.db, LOCAL_FILE_STORAGE_NAME, config.secret_path);
+			LoadSecretStorageInternal(
+			    make_uniq<LocalFileSecretStorage>(*this, *transaction.db, LOCAL_FILE_STORAGE_NAME, config.secret_path));
 		}
 
 		initialized = true;

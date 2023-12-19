@@ -77,7 +77,6 @@ public:
 	//! Create a pragma function within the given schema
 	virtual optional_ptr<CatalogEntry> CreatePragmaFunction(CatalogTransaction transaction,
 	                                                        CreatePragmaFunctionInfo &info) = 0;
-
 	//! Create a collation within the given schema
 	virtual optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) = 0;
 	//! Create a enum within the given schema
