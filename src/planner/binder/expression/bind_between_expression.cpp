@@ -22,9 +22,9 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 	auto &lower = BoundExpression::GetExpression(*expr.lower);
 	auto &upper = BoundExpression::GetExpression(*expr.upper);
 
-	auto input_sql_type = input->return_type;
-	auto lower_sql_type = lower->return_type;
-	auto upper_sql_type = upper->return_type;
+	auto input_sql_type = ExpressionBinder::GetExpressionReturnType(*input);
+	auto lower_sql_type = ExpressionBinder::GetExpressionReturnType(*lower);
+	auto upper_sql_type = ExpressionBinder::GetExpressionReturnType(*upper);
 
 	// cast the input types to the same type
 	// now obtain the result type of the input types
