@@ -447,7 +447,7 @@ bool SecretManager::PersistentSecretsEnabled() {
 	return config.allow_persistent_secrets;
 }
 
-void SecretManager::SetDefaultStorage(string storage) {
+void SecretManager::SetDefaultStorage(const string &storage) {
 	ThrowOnSettingChangeIfInitialized();
 	config.default_persistent_storage = storage;
 }

@@ -124,7 +124,7 @@ public:
 	DUCKDB_API virtual void ResetEnablePersistentSecrets();
 	DUCKDB_API virtual bool PersistentSecretsEnabled();
 
-	DUCKDB_API virtual void SetDefaultStorage(string storage);
+	DUCKDB_API virtual void SetDefaultStorage(const string &storage);
 	DUCKDB_API virtual void ResetDefaultStorage();
 	DUCKDB_API virtual string DefaultStorage();
 
