@@ -196,7 +196,7 @@ vector<LogicalType> FunctionBinder::GetLogicalTypesFromExpressions(vector<unique
 	vector<LogicalType> types;
 	types.reserve(arguments.size());
 	for (auto &argument : arguments) {
-		types.push_back(argument->return_type);
+		types.push_back(ExpressionBinder::GetExpressionReturnType(*argument));
 	}
 	return types;
 }

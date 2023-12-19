@@ -2,12 +2,50 @@
 # description: Test string literal binding
 # group: [binder]
 
+# string literals bind differently from strings
+# they can be auto-cast to everything
+# this is an integer comparison
 query I
 select '01'=1;
 ----
 true
 
+query I
+SELECT cos('0')
+----
+1
+
+# date comparison
+query I
+select date '1992-01-01'>'1991-01-01';
+----
+true
+
+# literals prefer to be strings
+query I
+SELECT '[hello]'[1];
+----
+[
+
+query I
+SELECT list('hello world')
+----
+[hello world]
+
+# we cannot do the same comparison with string columns
 statement error
 select i=1 from (values ('01')) t(i);
 ----
-eek
+Cannot combine types VARCHAR and INTEGER
+
+# we cannot do the same comparison with string columns
+statement error
+select date '1992-01-01'>i from (values ('1991-01-01')) t(i);
+----
+Cannot combine types DATE and VARCHAR
+
+# we cannot subscript dates or other types
+statement error
+select d[1] from (values (date '1992-01-01')) t(d);
+----
+No function matches the given name and argument types

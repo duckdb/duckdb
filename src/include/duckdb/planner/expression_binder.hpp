@@ -116,6 +116,8 @@ public:
 
 	void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
 
+	static LogicalType GetExpressionReturnType(const Expression &expr);
+
 private:
 	//! Maximum stack depth
 	static constexpr const idx_t MAXIMUM_STACK_DEPTH = 128;

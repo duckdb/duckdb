@@ -117,6 +117,13 @@ LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, Log
 	}
 }
 
+LogicalType ExpressionBinder::GetExpressionReturnType(const Expression &expr) {
+	if (expr.return_type == LogicalTypeId::VARCHAR && expr.expression_class == ExpressionClass::BOUND_CONSTANT) {
+		return LogicalTypeId::STRING_LITERAL;
+	}
+	return expr.return_type;
+}
+
 BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
 	string error;
@@ -129,8 +136,8 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	// the children have been successfully resolved
 	auto &left = BoundExpression::GetExpression(*expr.left);
 	auto &right = BoundExpression::GetExpression(*expr.right);
-	auto left_sql_type = left->return_type;
-	auto right_sql_type = right->return_type;
+	auto left_sql_type = ExpressionBinder::GetExpressionReturnType(*left);
+	auto right_sql_type = ExpressionBinder::GetExpressionReturnType(*right);
 	// cast the input types to the same type
 	// now obtain the result type of the input types
 	auto input_type = BoundComparisonExpression::BindComparison(left_sql_type, right_sql_type);

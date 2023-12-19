@@ -191,6 +191,15 @@ static int64_t ImplicitCastDate(const LogicalType &to) {
 	}
 }
 
+static int64_t ImplicitCastEnum(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::VARCHAR:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
 int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) {
 	if (from.id() == LogicalTypeId::SQLNULL) {
 		// NULL expression can be cast to anything
@@ -207,6 +216,11 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 	if (from.GetAlias() != to.GetAlias()) {
 		// if aliases are different, an implicit cast is not possible
 		return -1;
+	}
+	if (from.id() == LogicalTypeId::STRING_LITERAL) {
+		// string literals can be cast to ANY type for low cost
+		// but we prefer casting to VARCHAR
+		return to.id() == LogicalTypeId::VARCHAR ? 1 : 20;
 	}
 	if (from.id() == LogicalTypeId::LIST && to.id() == LogicalTypeId::LIST) {
 		// Lists can be cast if their child types can be cast
@@ -247,14 +261,6 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 	if (from.id() == to.id()) {
 		// arguments match: do nothing
 		return 0;
-	}
-	if (from.id() == LogicalTypeId::BLOB && to.id() == LogicalTypeId::VARCHAR) {
-		// Implicit cast not allowed from BLOB to VARCHAR
-		return -1;
-	}
-	if (to.id() == LogicalTypeId::VARCHAR) {
-		// everything can be cast to VARCHAR, but this cast has a high cost
-		return TargetTypeCost(to);
 	}
 
 	if (from.id() == LogicalTypeId::UNION && to.id() == LogicalTypeId::UNION) {
@@ -340,6 +346,8 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return ImplicitCastDate(to);
 	case LogicalTypeId::DECIMAL:
 		return ImplicitCastDecimal(to);
+	case LogicalTypeId::ENUM:
+		return ImplicitCastEnum(to);
 	default:
 		return -1;
 	}
