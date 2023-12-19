@@ -148,8 +148,8 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw InternalException("Unknown/unsupported window function");
 		}
 
-		if (root.agg_distinct) {
-			throw ParserException("DISTINCT is not implemented for window functions!");
+		if (win_fun_type != ExpressionType::WINDOW_AGGREGATE && root.agg_distinct) {
+			throw ParserException("DISTINCT is not implemented for non-aggregate window functions!");
 		}
 
 		if (root.agg_order) {
@@ -169,6 +169,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 
 		auto expr = make_uniq<WindowExpression>(win_fun_type, std::move(catalog), std::move(schema), lowercase_name);
 		expr->ignore_nulls = root.agg_ignore_nulls;
+		expr->distinct = root.agg_distinct;
 
 		if (root.agg_filter) {
 			auto filter_expr = TransformExpression(root.agg_filter);
