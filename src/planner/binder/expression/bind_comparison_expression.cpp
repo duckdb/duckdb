@@ -73,7 +73,8 @@ void ExpressionBinder::TestCollation(ClientContext &context, const string &colla
 	PushCollation(context, expr, LogicalType::VARCHAR_COLLATION(collation));
 }
 
-bool BoundComparisonExpression::TryBindComparison(const LogicalType &left_type, const LogicalType &right_type, LogicalType &result_type) {
+bool BoundComparisonExpression::TryBindComparison(const LogicalType &left_type, const LogicalType &right_type,
+                                                  LogicalType &result_type) {
 	if (!LogicalType::TryGetMaxLogicalType(left_type, right_type, result_type)) {
 		return false;
 	}
@@ -125,7 +126,8 @@ bool BoundComparisonExpression::TryBindComparison(const LogicalType &left_type, 
 LogicalType BoundComparisonExpression::BindComparison(const LogicalType &left_type, const LogicalType &right_type) {
 	LogicalType result_type;
 	if (!BoundComparisonExpression::TryBindComparison(left_type, right_type, result_type)) {
-		throw BinderException("Cannot mix values of type %s and %s - an explicit cast is required", left_type.ToString(), right_type.ToString());
+		throw BinderException("Cannot mix values of type %s and %s - an explicit cast is required",
+		                      left_type.ToString(), right_type.ToString());
 	}
 	return result_type;
 }
@@ -155,7 +157,9 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	// now obtain the result type of the input types
 	LogicalType input_type;
 	if (!BoundComparisonExpression::TryBindComparison(left_sql_type, right_sql_type, input_type)) {
-		return BindResult(binder.FormatError(expr.query_location, "Cannot compare values of type %s and type %s - an explicit cast is required", left_sql_type.ToString(), right_sql_type.ToString()));
+		return BindResult(binder.FormatError(
+		    expr.query_location, "Cannot compare values of type %s and type %s - an explicit cast is required",
+		    left_sql_type.ToString(), right_sql_type.ToString()));
 	}
 	// add casts (if necessary)
 	left = BoundCastExpression::AddCastToType(context, std::move(left), input_type,

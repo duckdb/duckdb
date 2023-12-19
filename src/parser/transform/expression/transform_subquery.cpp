@@ -9,8 +9,9 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 	auto subquery_expr = make_uniq<SubqueryExpression>();
 
 	subquery_expr->subquery = TransformSelect(root.subselect);
+	subquery_expr->query_location = root.location;
 	D_ASSERT(subquery_expr->subquery);
-	D_ASSERT(subquery_expr->subquery->node->GetSelectList().size() > 0);
+	D_ASSERT(!subquery_expr->subquery->node->GetSelectList().empty());
 
 	switch (root.subLinkType) {
 	case duckdb_libpgquery::PG_EXISTS_SUBLINK: {
@@ -97,7 +98,6 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 	default:
 		throw NotImplementedException("Subquery of type %d not implemented\n", (int)root.subLinkType);
 	}
-	subquery_expr->query_location = root.location;
 	return std::move(subquery_expr);
 }
 

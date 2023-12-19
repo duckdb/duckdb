@@ -19,17 +19,17 @@ SELECT 1 FROM t1;
 statement error
 SELECT 1 FROM t1 WHERE '\x96'::BLOB IN (1);
 ----
-Unimplemented
+Cannot mix values of type
 
 statement error
 SELECT 1 FROM t1 WHERE NOT ('\x96'::BLOB IN (1));
 ----
-Unimplemented
+Cannot mix values of type
 
 statement error
 SELECT 1 FROM t1 WHERE ('\x96'::BLOB IN (1)) IS NULL;
 ----
-Unimplemented
+Cannot mix values of type
 
 statement ok
 CREATE OR REPLACE VIEW t1(c0) AS (SELECT (SELECT 1 WHERE FALSE));

@@ -676,7 +676,7 @@ static LogicalType CombineNumericTypes(const LogicalType &left, const LogicalTyp
 static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	// left and right are not equal
 	// string literals/unknown (parameter) types always take the other type
-	switch(left.id()) {
+	switch (left.id()) {
 	case LogicalTypeId::STRING_LITERAL:
 	case LogicalTypeId::UNKNOWN:
 		result = right;
@@ -684,7 +684,7 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 	default:
 		break;
 	}
-	switch(right.id()) {
+	switch (right.id()) {
 	case LogicalTypeId::STRING_LITERAL:
 	case LogicalTypeId::UNKNOWN:
 		result = left;
@@ -738,7 +738,7 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	// Since both left and right are equal we get the left type as our type_id for checks
 	auto type_id = left.id();
-	switch(type_id) {
+	switch (type_id) {
 	case LogicalTypeId::STRING_LITERAL:
 		// two string literals convert to varchar
 		result = LogicalType::VARCHAR;
@@ -776,7 +776,8 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 	case LogicalTypeId::LIST: {
 		// list: perform max recursively on child type
 		LogicalType new_child;
-		if (!LogicalType::TryGetMaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
+		if (!LogicalType::TryGetMaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right),
+		                                       new_child)) {
 			return false;
 		}
 		result = LogicalType::LIST(new_child);
@@ -784,7 +785,8 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 	}
 	case LogicalTypeId::ARRAY: {
 		LogicalType new_child;
-		if (!LogicalType::TryGetMaxLogicalType(ArrayType::GetChildType(left), ArrayType::GetChildType(right), new_child)) {
+		if (!LogicalType::TryGetMaxLogicalType(ArrayType::GetChildType(left), ArrayType::GetChildType(right),
+		                                       new_child)) {
 			return false;
 		}
 		auto new_size = MaxValue(ArrayType::GetSize(left), ArrayType::GetSize(right));
@@ -794,7 +796,8 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 	case LogicalTypeId::MAP: {
 		// map: perform max recursively on child type
 		LogicalType new_child;
-		if (!LogicalType::TryGetMaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
+		if (!LogicalType::TryGetMaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right),
+		                                       new_child)) {
 			return false;
 		}
 		result = LogicalType::MAP(new_child);
@@ -812,7 +815,8 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 		child_list_t<LogicalType> child_types;
 		for (idx_t i = 0; i < left_child_types.size(); i++) {
 			LogicalType child_type;
-			if (!LogicalType::TryGetMaxLogicalType(left_child_types[i].second, right_child_types[i].second, child_type)) {
+			if (!LogicalType::TryGetMaxLogicalType(left_child_types[i].second, right_child_types[i].second,
+			                                       child_type)) {
 				return false;
 			}
 			child_types.emplace_back(left_child_types[i].first, std::move(child_type));
@@ -853,13 +857,13 @@ bool LogicalType::TryGetMaxLogicalType(const LogicalType &left, const LogicalTyp
 	} else {
 		return CombineEqualTypes(left, right, result);
 	}
-
 }
 
 LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
 	LogicalType result;
 	if (!TryGetMaxLogicalType(left, right, result)) {
-		throw NotImplementedException("Cannot combine types %s and %s - an explicit cast is required", left.ToString(), right.ToString());
+		throw NotImplementedException("Cannot combine types %s and %s - an explicit cast is required", left.ToString(),
+		                              right.ToString());
 	}
 	return result;
 }

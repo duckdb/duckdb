@@ -34,6 +34,7 @@ public:
 
 public:
 	static LogicalType BindComparison(const LogicalType &left_type, const LogicalType &right_type);
-	static bool TryBindComparison(const LogicalType &left_type, const LogicalType &right_type, LogicalType &result_type);
+	static bool TryBindComparison(const LogicalType &left_type, const LogicalType &right_type,
+	                              LogicalType &result_type);
 };
 } // namespace duckdb
