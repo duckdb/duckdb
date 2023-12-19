@@ -486,7 +486,7 @@ void RadixPartitionedHashTable::Finalize(ClientContext &, GlobalSinkState &gstat
 idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
 	auto &sink = sink_p.Cast<RadixHTGlobalSinkState>();
 	if (sink.partitions.empty()) {
-		return 1;
+		return 0;
 	}
 
 	// We take the largest partition as an example
