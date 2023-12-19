@@ -22,7 +22,7 @@ struct ScannerPosition {
 	//! Id of the file we are currently scanning
 	idx_t file_id = 0;
 	//! If the position is within the scanner boundary
-	bool InBoundary(const ScannerBoundary &boundary)
+	bool InBoundary(const ScannerBoundary &boundary);
 };
 
 class ScannerResult {};
@@ -40,6 +40,25 @@ public:
 	void Reset();
 	//! Parses data into a output_chunk
 	virtual ScannerResult *ParseChunk();
+
+	//! Templated function that process the parsing of a charecter
+	//! OP = Operation used to alter the result of the parser
+	//! T = Type of the result
+	template <class T>
+	inline static bool ProcessCharacter(BaseScanner &scanner, const char current_char, const idx_t buffer_pos,
+	                                    T &result) {
+		scanner.state_machine->Transition(scanner.states, current_char);
+		if (scanner.states.NewValue()) {
+			//! Add new value to result
+			T::AddValue(result, current_char, buffer_pos);
+		} else if (scanner.states.NewRow()) {
+			//! Add new row to result
+			//! Check if the result reached a vector size
+			T::AddRow(result, current_char, buffer_pos);
+		}
+		//! Still have more to read
+		return false;
+	}
 
 protected:
 	//! Boundaries of this scanner
@@ -62,6 +81,9 @@ protected:
 
 	//! Holds information regarding the position we are in the csv scanner
 	ScannerPosition pos;
+
+	//! States
+	CSVStates states;
 
 	//! Internal Functions used to perform the parsing
 	//! Initializes the scanner

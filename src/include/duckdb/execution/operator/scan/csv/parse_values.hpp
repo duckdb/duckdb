@@ -12,18 +12,6 @@
 
 namespace duckdb {
 
-struct TupleOfValues {
-	idx_t line_number;
-	idx_t position;
-	bool set = false;
-	vector<Value> values;
-	void Print() {
-		for (auto &val : values) {
-			val.Print();
-		}
-	}
-};
-
 //! Templated Function that process a CSV buffer into a vector of sniffed values
 struct ParseValues {
 	inline static void Initialize(CSVScanner &scanner, idx_t cur_pos) {

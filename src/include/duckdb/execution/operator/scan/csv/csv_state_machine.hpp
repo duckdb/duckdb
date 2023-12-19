@@ -53,7 +53,7 @@ public:
 	explicit CSVStateMachine(const StateMachine &transition_array, const CSVReaderOptions &options);
 
 	//! Transition all states to next state, that depends on the current char
-	inline void Transition(CSVStates &states, char current_char) {
+	inline void Transition(CSVStates &states, char current_char) const {
 		states.pre_previous_state = states.previous_state;
 		states.previous_state = states.current_state;
 		states.current_state = transition_array[states.current_state][static_cast<uint8_t>(current_char)];

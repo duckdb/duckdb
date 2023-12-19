@@ -1,31 +1,21 @@
-#include "duckdb/execution/operator/scan/csv/scanner/dialect_scanner.hpp"
+#include "duckdb/execution/operator/scan/csv/scanner/type_scanner.hpp"
 
 namespace duckdb {
-
-void DialectResult::AddValue(DialectResult &result, const char current_char, const idx_t buffer_pos) {
-	result.sniffed_column_counts[result.cur_rows]++;
-}
-
-void DialectResult::AddRow(DialectResult &result, const char current_char, const idx_t buffer_pos) {
-	result.sniffed_column_counts[result.cur_rows++]++;
-}
-
-DialectScanner::DialectScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine)
-    : BaseScanner(buffer_manager, state_machine), column_count(1) {
+TypeScanner::TypeScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine)
+    : BaseScanner(buffer_manager, state_machine) {
 	result.cur_rows = 0;
 };
 
-DialectResult *DialectScanner::ParseChunk() {
+TypeResult *TypeScanner::ParseChunk() {
 	result.cur_rows = 0;
-	column_count = 1;
 	ParseChunkInternal();
 	return &result;
 }
-void DialectScanner::Initialize() {
+void TypeScanner::Initialize() {
 	states.Initialize(CSVState::EMPTY_LINE);
 }
 
-bool DialectScanner::ProcessInternal(char current_char) {
+bool TypeScanner::ProcessInternal(char current_char) {
 	if (states.current_state == CSVState::INVALID) {
 		result.cur_rows = 0;
 		return true;
@@ -57,16 +47,19 @@ bool DialectScanner::ProcessInternal(char current_char) {
 	return false;
 }
 
-void DialectScanner::Process() {
+// template <class OP, class T>
+// ProcessCharacter(BaseScanner& scanner,const char current_char, const idx_t buffer_pos, T &result)
+
+void TypeScanner::Process() {
 	// Run on this buffer
 	for (; pos.pos < cur_buffer_handle->actual_size; pos.pos++) {
-		if (ProcessCharacter(*this, buffer_handle_ptr[pos.pos], pos.pos, result)) {
-			return;
-		}
+		//		if (ProcessCharacter<>()) {
+		//			return;
+		//		}
 	}
 }
 
-void DialectScanner::FinalizeChunkProcess() {
+void TypeScanner::FinalizeChunkProcess() {
 	if (result.cur_rows == STANDARD_VECTOR_SIZE) {
 		// We are done
 		return;
