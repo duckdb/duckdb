@@ -20,6 +20,7 @@ shared_ptr<ColumnStatistics> ColumnStatistics::CreateEmptyStats(const LogicalTyp
 void ColumnStatistics::Merge(ColumnStatistics &other) {
 	stats.Merge(other.stats);
 	if (distinct_stats) {
+		D_ASSERT(other.distinct_stats);
 		distinct_stats->Merge(*other.distinct_stats);
 	}
 }
