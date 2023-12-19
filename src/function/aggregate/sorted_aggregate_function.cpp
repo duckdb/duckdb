@@ -209,6 +209,26 @@ struct SortedAggregateState {
 		}
 	}
 
+	static void LinkedAbsorb(LinkedLists &source, LinkedLists &target) {
+		D_ASSERT(source.size() == target.size());
+		for (column_t i = 0; i < source.size(); ++i) {
+			auto &src = source[i];
+			if (!src.total_capacity) {
+				break;
+			}
+
+			auto &tgt = target[i];
+			if (!tgt.total_capacity) {
+				tgt = src;
+			} else {
+				// append the linked list
+				tgt.last_segment->next = src.first_segment;
+				tgt.last_segment = src.last_segment;
+				tgt.total_capacity += src.total_capacity;
+			}
+		}
+	}
+
 	void Update(const AggregateInputData &aggr_input_data, DataChunk &sort_input, DataChunk &arg_input) {
 		const auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
 		Resize(order_bind, count + sort_input.size());
@@ -280,10 +300,19 @@ struct SortedAggregateState {
 
 		//	3x3 matrix.
 		//	We can simplify the logic a bit because the target is already set for the final capacity
-		//	Force chunks, reducing to a 2x2 matrix. Finalize would do this anyway.
 		if (!sort_chunk) {
-			FlushLinkedLists(order_bind);
+			//	If the combined count is still linked lists,
+			//	then just move the pointers.
+			//	Note that this assumes ArenaAllocator is shared and the memory will not vanish under us.
+			LinkedAbsorb(other.sort_linked, sort_linked);
+			if (!arg_linked.empty()) {
+				LinkedAbsorb(other.arg_linked, arg_linked);
+			}
+
+			other.Reset();
+			return;
 		}
+
 		if (!other.sort_chunk) {
 			other.FlushLinkedLists(order_bind);
 		}

@@ -107,8 +107,7 @@ class UngroupedAggregateLocalSinkState : public LocalSinkState {
 public:
 	UngroupedAggregateLocalSinkState(const PhysicalUngroupedAggregate &op, const vector<LogicalType> &child_types,
 	                                 GlobalSinkState &gstate_p, ExecutionContext &context)
-	    : allocator(BufferAllocator::Get(context.client)), state(op.aggregates), child_executor(context.client),
-	      aggregate_input_chunk(), filter_set() {
+	    : state(op.aggregates), child_executor(context.client), aggregate_input_chunk(), filter_set() {
 		auto &gstate = gstate_p.Cast<UngroupedAggregateGlobalSinkState>();
 
 		auto &allocator = BufferAllocator::Get(context.client);
@@ -132,8 +131,6 @@ public:
 		filter_set.Initialize(context.client, aggregate_objects, child_types);
 	}
 
-	//! Local arena allocator
-	ArenaAllocator allocator;
 	//! The local aggregate state
 	AggregateState state;
 	//! The executor
@@ -241,16 +238,17 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, DataChu
 
 SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, DataChunk &chunk,
                                                 OperatorSinkInput &input) const {
-	auto &sink = input.local_state.Cast<UngroupedAggregateLocalSinkState>();
+	auto &gstate = input.global_state.Cast<UngroupedAggregateGlobalSinkState>();
+	auto &lstate = input.local_state.Cast<UngroupedAggregateLocalSinkState>();
 
 	// perform the aggregation inside the local state
-	sink.Reset();
+	lstate.Reset();
 
 	if (distinct_data) {
 		SinkDistinct(context, chunk, input);
 	}
 
-	DataChunk &payload_chunk = sink.aggregate_input_chunk;
+	DataChunk &payload_chunk = lstate.aggregate_input_chunk;
 
 	idx_t payload_idx = 0;
 	idx_t next_payload_idx = 0;
@@ -268,31 +266,31 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, DataC
 		idx_t payload_cnt = 0;
 		// resolve the filter (if any)
 		if (aggregate.filter) {
-			auto &filtered_data = sink.filter_set.GetFilterData(aggr_idx);
+			auto &filtered_data = lstate.filter_set.GetFilterData(aggr_idx);
 			auto count = filtered_data.ApplyFilter(chunk);
 
-			sink.child_executor.SetChunk(filtered_data.filtered_payload);
+			lstate.child_executor.SetChunk(filtered_data.filtered_payload);
 			payload_chunk.SetCardinality(count);
 		} else {
-			sink.child_executor.SetChunk(chunk);
+			lstate.child_executor.SetChunk(chunk);
 			payload_chunk.SetCardinality(chunk);
 		}
 
 #ifdef DEBUG
-		sink.state.counts[aggr_idx] += payload_chunk.size();
+		lstate.state.counts[aggr_idx] += payload_chunk.size();
 #endif
 
 		// resolve the child expressions of the aggregate (if any)
 		for (idx_t i = 0; i < aggregate.children.size(); ++i) {
-			sink.child_executor.ExecuteExpression(payload_idx + payload_cnt,
-			                                      payload_chunk.data[payload_idx + payload_cnt]);
+			lstate.child_executor.ExecuteExpression(payload_idx + payload_cnt,
+			                                        payload_chunk.data[payload_idx + payload_cnt]);
 			payload_cnt++;
 		}
 
 		auto start_of_input = payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx];
-		AggregateInputData aggr_input_data(aggregate.bind_info.get(), sink.allocator);
+		AggregateInputData aggr_input_data(aggregate.bind_info.get(), gstate.allocator);
 		aggregate.function.simple_update(start_of_input, aggr_input_data, payload_cnt,
-		                                 sink.state.aggregates[aggr_idx].get(), payload_chunk.size());
+		                                 lstate.state.aggregates[aggr_idx].get(), payload_chunk.size());
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -348,7 +346,6 @@ SinkCombineResultType PhysicalUngroupedAggregate::Combine(ExecutionContext &cont
 		gstate.state.counts[aggr_idx] += lstate.state.counts[aggr_idx];
 #endif
 	}
-	lstate.allocator.Destroy();
 
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(*this, lstate.child_executor, "child_executor", 0);
@@ -390,8 +387,7 @@ public:
 	UngroupedDistinctAggregateFinalizeTask(Executor &executor, shared_ptr<Event> event_p,
 	                                       const PhysicalUngroupedAggregate &op,
 	                                       UngroupedAggregateGlobalSinkState &state_p)
-	    : ExecutorTask(executor), event(std::move(event_p)), op(op), gstate(state_p),
-	      allocator(BufferAllocator::Get(executor.context)) {
+	    : ExecutorTask(executor), event(std::move(event_p)), op(op), gstate(state_p) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
@@ -404,8 +400,6 @@ private:
 
 	const PhysicalUngroupedAggregate &op;
 	UngroupedAggregateGlobalSinkState &gstate;
-
-	ArenaAllocator allocator;
 };
 
 void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
@@ -496,7 +490,7 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 		payload_chunk.InitializeEmpty(distinct_data.grouped_aggregate_data[table_idx]->group_types);
 		payload_chunk.SetCardinality(0);
 
-		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator);
+		AggregateInputData aggr_input_data(aggregate.bind_info.get(), gstate.allocator);
 		while (true) {
 			output_chunk.Reset();
 
@@ -537,7 +531,7 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 		}
 
 		auto &aggregate = aggregates[agg_idx]->Cast<BoundAggregateExpression>();
-		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator);
+		AggregateInputData aggr_input_data(aggregate.bind_info.get(), gstate.allocator);
 
 		Vector state_vec(Value::POINTER(CastPointerToValue(state.aggregates[agg_idx].get())));
 		Vector combined_vec(Value::POINTER(CastPointerToValue(gstate.state.aggregates[agg_idx].get())));
