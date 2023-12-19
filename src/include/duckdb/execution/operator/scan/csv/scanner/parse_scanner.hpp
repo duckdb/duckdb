@@ -1,8 +1,9 @@
+// struct ValidationPosition{
+//	//! Start of the csv scanner
+//	ScannerPosition start;
+//	//! End of the CSV Scanner
+//	ScannerPosition end;
+//};
 //
-// Created by Pedro Holanda on 18/12/2023.
-//
-
-#ifndef DUCKDB_PARSE_SCANNER_HPP
-#define DUCKDB_PARSE_SCANNER_HPP
-
-#endif // DUCKDB_PARSE_SCANNER_HPP
+////! The positions where this scanner started and ended
+//	ValidationPosition validation_pos;

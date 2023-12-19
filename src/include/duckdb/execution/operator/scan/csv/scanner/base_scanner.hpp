@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-struct ScannerPosition{
+struct ScannerPosition {
 	//! Current  position of the buffer we are scanning
 	idx_t pos = 0;
 	//! Id of the buffer we are currently scanning
@@ -23,19 +23,12 @@ struct ScannerPosition{
 	idx_t file_id = 0;
 };
 
-//struct ValidationPosition{
-//	//! Start of the csv scanner
-//	ScannerPosition start;
-//	//! End of the CSV Scanner
-//	ScannerPosition end;
-//};
-//
-////! The positions where this scanner started and ended
-//	ValidationPosition validation_pos;
+class ScannerResult {};
 
 //! This is the base of our CSV scanners.
 //! Scanners differ on what they are used for, and consequently have different performance benefits.
 class BaseScanner {
+public:
 	explicit BaseScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
 	                     ScannerBoundary boundary);
 
@@ -44,12 +37,11 @@ class BaseScanner {
 	//! Resets the scanner
 	void Reset();
 	//! Parses data into a output_chunk
-	virtual void ParseChunk();
+	virtual ScannerResult *ParseChunk();
 
 	//! Number of bytes each thread will consume
 
-
-private:
+protected:
 	//! Boundaries of this scanner
 	ScannerBoundary boundary;
 
@@ -73,7 +65,10 @@ private:
 	virtual void Initialize();
 
 	//! Process one chunk
-	virtual void Process();
+	void Process();
+
+	//! Internal Function to process one chunk
+	virtual void ProcessInternal();
 
 	//! Finalizes the process of the chunk
 	virtual void FinalizeChunkProcess();

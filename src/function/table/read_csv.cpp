@@ -195,8 +195,6 @@ struct BufferPosition {
 		return false;
 	}
 
-
-
 	idx_t file_idx = 0;
 	idx_t buffer_idx = 0;
 	idx_t buffer_pos = 0;

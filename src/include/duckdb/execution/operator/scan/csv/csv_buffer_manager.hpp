@@ -37,9 +37,15 @@ public:
 	idx_t GetBufferSize();
 	//! How many files are part of this buffer manager
 	idx_t FileCount();
+	//! If this buffer manager is done. In the context of a buffer manager it means that it read all buffers at least
+	//! once.
+	bool Done();
+
+	//! Returns the number of cached buffers for a given file index.
+	idx_t CachedBufferPerFile(idx_t file_idx);
+
 	ClientContext &context;
 	idx_t skip_rows = 0;
-	bool done = false;
 
 private:
 	//! Reads next buffer in reference to cached_buffers.front()
@@ -52,6 +58,7 @@ private:
 	idx_t buffer_size;
 	//! Starting position of first buffer
 	idx_t start_pos = 0;
+	bool done = false;
 };
 
 } // namespace duckdb

@@ -24,9 +24,10 @@
 namespace duckdb {
 struct ScannerBoundary {
 	ScannerBoundary(idx_t file_idx_p, idx_t buffer_idx_p, idx_t buffer_pos_p, bool scan_inifinity_and_beyond = false)
-	    : file_idx(file_idx_p), buffer_idx(buffer_idx_p), buffer_pos(buffer_pos_p), end_pos(buffer_pos + BYTES_PER_THREAD), scan_to_infinity(scan_inifinity_and_beyond) {
+	    : file_idx(file_idx_p), buffer_idx(buffer_idx_p), buffer_pos(buffer_pos_p),
+	      end_pos(buffer_pos + BYTES_PER_THREAD), scan_to_infinity(scan_inifinity_and_beyond) {
 
-	};
+	                                              };
 
 	//! 8 MB TODO: Should benchmarks other values
 	static constexpr idx_t BYTES_PER_THREAD = 8000000;
@@ -42,4 +43,4 @@ struct ScannerBoundary {
 	//! Sometimes life knows no boundaries.
 	bool scan_to_infinity;
 };
-}
+} // namespace duckdb

@@ -82,4 +82,13 @@ idx_t CSVBufferManager::FileCount() {
 	return file_path.size();
 }
 
+bool CSVBufferManager::Done() {
+	return done;
+}
+
+idx_t CSVBufferManager::CachedBufferPerFile(idx_t file_idx) {
+	D_ASSERT(file_idx < cached_buffers.size());
+	return cached_buffers[file_idx].size();
+}
+
 } // namespace duckdb
