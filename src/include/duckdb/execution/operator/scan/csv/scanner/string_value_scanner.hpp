@@ -14,22 +14,23 @@
 
 namespace duckdb {
 
-struct TupleOfValues {
-	idx_t line_number;
-	idx_t position;
-	bool set = false;
-	vector<Value> values;
-	void Print() {
-		for (auto &val : values) {
-			val.Print();
-		}
-	}
-};
-
 class TypeResult : public ScannerResult {
 public:
-	TupleOfValues values[STANDARD_VECTOR_SIZE];
-	idx_t cur_rows;
+	unique_ptr<Vector> vector;
+	string_t *vector_ptr;
+	idx_t vector_size;
+
+	idx_t last_position;
+	idx_t cur_value_idx;
+
+	char *buffer_ptr;
+
+	//! Adds a Value to the result
+	static inline void AddValue(TypeResult &result, const char current_char, const idx_t buffer_pos);
+	//! Adds a Row to the result
+	static inline bool AddRow(TypeResult &result, const char current_char, const idx_t buffer_pos);
+	//! Behavior when hitting an invalid state
+	static inline void Kaput(TypeResult &result);
 };
 
 //! Our dialect scanner basically goes over the CSV and figures out the tuples as Values for type sniffing.
@@ -40,15 +41,16 @@ public:
 	TypeResult *ParseChunk() override;
 
 private:
-	void Initialize() override;
-
 	void Process() override;
-
-	inline bool ProcessInternal(char current_char);
 
 	void FinalizeChunkProcess() override;
 
+	void ProcessOverbufferValue();
+
 	TypeResult result;
+
+	//! Pointer to the previous buffer handle, necessary for overbuffer values
+	unique_ptr<CSVBufferHandle> previous_buffer_handle;
 };
 
 } // namespace duckdb

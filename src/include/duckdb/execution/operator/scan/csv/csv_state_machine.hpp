@@ -35,7 +35,7 @@ struct CSVStates {
 		return current_state == CSVState::RECORD_SEPARATOR || current_state == CSVState::CARRIAGE_RETURN;
 	}
 
-	inline bool IsInvalid(){
+	inline bool IsInvalid() {
 		return current_state == CSVState::INVALID;
 	}
 	CSVState current_state = CSVState::EMPTY_LINE;
@@ -62,10 +62,6 @@ public:
 		states.previous_state = states.current_state;
 		states.current_state = transition_array[states.current_state][static_cast<uint8_t>(current_char)];
 	}
-
-	//! Aux Function for string UTF8 Verification
-	void VerifyUTF8();
-
 	//! The Transition Array is a Finite State Machine
 	//! It holds the transitions of all states, on all 256 possible different characters
 	const StateMachine &transition_array;

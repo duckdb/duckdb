@@ -58,7 +58,9 @@ public:
 		} else if (scanner.states.NewRow()) {
 			//! Add new row to result
 			//! Check if the result reached a vector size
-			T::AddRow(result, current_char, buffer_pos);
+			if (T::AddRow(result, current_char, buffer_pos)) {
+				return true;
+			}
 		}
 		//! Still have more to read
 		return false;

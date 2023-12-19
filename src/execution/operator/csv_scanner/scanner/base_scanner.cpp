@@ -52,7 +52,7 @@ ScannerResult *BaseScanner::ParseChunk() {
 }
 
 void BaseScanner::Initialize() {
-	throw InternalException("Initialize() from CSV Base Scanner is mot implemented");
+	states.Initialize(CSVState::EMPTY_LINE);
 }
 
 void BaseScanner::Process() {
