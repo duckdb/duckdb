@@ -7,9 +7,9 @@
 namespace duckdb {
 
 int64_t BaseSecret::MatchScore(const string &path) const {
-	int longest_match = -1;
+	int64_t longest_match = NumericLimits<int64_t>::Minimum();
 	for (const auto &prefix : prefix_paths) {
-		if (prefix == "*") {
+		if (prefix == "") {
 			longest_match = 0;
 			continue;
 		}

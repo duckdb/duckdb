@@ -369,8 +369,8 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const strin
 
 	if (matches.size() > 1) {
 		throw InvalidInputException(
-		    "Ambiguity detected for secret name '%s', secret occurs in multiple secret storages. Please specify which "
-		    "secret to drop using: 'DROP <PERSISTENT | LOCAL> SECRET [FROM <secret_storage>]'",
+		    "Ambiguity found for secret name '%s', secret occurs in multiple storages. Please specify which "
+		    "secret to drop using: 'DROP <PERSISTENT|LOCAL> SECRET [FROM <storage>]'",
 		    name);
 	}
 

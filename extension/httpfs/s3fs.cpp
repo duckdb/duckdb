@@ -229,7 +229,7 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener, FileOpenerInfo &info) {
 
 	if (FileOpener::TryGetCurrentSetting(opener, "s3_endpoint", value, info)) {
 		if (value.ToString().empty()) {
-			if (StringUtil::StartsWith(info.file_path, "gcs://")) {
+			if (StringUtil::StartsWith(info.file_path, "gcs://") || StringUtil::StartsWith(info.file_path, "gs://")) {
 				result.endpoint = "storage.googleapis.com";
 			} else {
 				result.endpoint = "s3.amazonaws.com";
@@ -656,7 +656,7 @@ void S3FileSystem::ReadQueryParams(const string &url_query_param, S3AuthParams &
 }
 
 static string GetPrefix(string url) {
-	const string prefixes[] = {"s3://", "s3a://", "s3n://", "gcs://", "r2://"};
+	const string prefixes[] = {"s3://", "s3a://", "s3n://", "gcs://", "gs://", "r2://"};
 	for (auto &prefix : prefixes) {
 		if (StringUtil::StartsWith(url, prefix)) {
 			return prefix;
@@ -931,9 +931,10 @@ void S3FileHandle::Initialize(FileOpener *opener) {
 }
 
 bool S3FileSystem::CanHandleFile(const string &fpath) {
+
+
 	return fpath.rfind("s3://", 0) * fpath.rfind("s3a://", 0) * fpath.rfind("s3n://", 0) * fpath.rfind("gcs://", 0) *
-	           fpath.rfind("r2://", 0) ==
-	       0;
+	           fpath.rfind("gs://", 0) * fpath.rfind("r2://", 0) == 0;
 }
 
 void S3FileSystem::FileSync(FileHandle &handle) {

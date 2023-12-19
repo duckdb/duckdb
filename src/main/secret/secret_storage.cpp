@@ -14,6 +14,31 @@
 
 namespace duckdb {
 
+SecretMatch SecretStorage::SelectBestMatch(SecretEntry &secret_entry, const string& path, SecretMatch &current_best) {
+	// Get secret match score
+	auto match_score = secret_entry.secret->MatchScore(path);
+
+	// On no match
+	if (match_score == NumericLimits<int64_t>::Minimum()) {
+		return current_best;
+	}
+
+	// The number of characters that match, where 0 means matching the catchall of "*"
+	D_ASSERT(match_score >= 0);
+
+	// Apply storage tie-break offset
+	match_score = OffsetMatchScore(match_score);
+
+	// Choose the best matching score, tie-breaking on secret name when necessary
+	if (match_score > current_best.score) {
+		return SecretMatch(secret_entry, match_score);
+	} else if (match_score == current_best.score && secret_entry.secret->GetName() < current_best.GetSecret().GetName()) {
+		return SecretMatch(secret_entry, match_score);
+	} else {
+		return current_best;
+	}
+}
+
 optional_ptr<SecretEntry> CatalogSetSecretStorage::StoreSecret(CatalogTransaction transaction,
                                                                unique_ptr<const BaseSecret> secret,
                                                                OnCreateConflict on_conflict) {
@@ -72,32 +97,16 @@ void CatalogSetSecretStorage::DropSecretByName(CatalogTransaction transaction, c
 
 SecretMatch CatalogSetSecretStorage::LookupSecret(CatalogTransaction transaction, const string &path,
                                                   const string &type) {
-	int64_t best_match_score = -1;
-	SecretEntry *best_match = nullptr;
+	auto best_match = SecretMatch();
 
 	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
 		auto &cast_entry = entry.Cast<SecretEntry>();
-
-		if (cast_entry.secret->GetType() == type) {
-			auto match = cast_entry.secret->MatchScore(path);
-
-			// Apply offset for this storage
-			match = OffsetMatchScore(match);
-
-			if (match > best_match_score) {
-				best_match_score = match;
-				best_match = &cast_entry;
-			} else if (match == best_match_score && cast_entry.secret->GetName() < best_match->secret->GetName()) {
-				// Resolve ties within secret storage by alphabetical order of secret names: those are unique
-				best_match_score = match;
-				best_match = &cast_entry;
-			}
-		}
+		best_match = SelectBestMatch(cast_entry, path, best_match);
 	};
 	secrets->Scan(transaction, callback);
 
-	if (best_match) {
-		return SecretMatch(*best_match, best_match_score);
+	if (best_match.HasMatch()) {
+		return best_match;
 	}
 
 	return SecretMatch();

@@ -46,7 +46,7 @@ public:
 	//! Get a secret by name
 	virtual optional_ptr<SecretEntry> GetSecretByName(CatalogTransaction transaction, const string &name) = 0;
 
-	//! Return the offset associated to this storage for tie-breaking
+	//! Return the offset associated to this storage for tie-breaking secrets between storages
 	virtual int64_t GetTieBreakOffset() = 0;
 
 	//! Returns include_in_lookups, used to create secret storage
@@ -55,8 +55,11 @@ public:
 	}
 
 protected:
-	//! Offsets the score: the convention is (score * 100 - storage penalty) where 0 < storage_penalty < 100 will
-	//! tie-break secret matches with identical scores giving preference to the storage with the lowest storage_penalty
+	//! Helper function to select the best matching secret within a storage. Tie-breaks within a storage are broken
+	//! by secret name by default.
+	SecretMatch SelectBestMatch(SecretEntry &secret_entry, const string& path, SecretMatch &current_best);
+
+	//! Offsets the score to tie-break secrets giving preference to the storage with the lowest storage_penalty
 	//! the base implementation will be chosen last in a tie-break
 	int64_t OffsetMatchScore(int64_t score) {
 		return 100 * score - GetTieBreakOffset();

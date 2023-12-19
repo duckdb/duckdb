@@ -23,7 +23,7 @@ class SchemaCatalogEntry;
 //! Return value of a Secret Lookup
 struct SecretMatch {
 public:
-	SecretMatch() : secret_entry(nullptr), score(-1) {
+	SecretMatch() : secret_entry(nullptr), score(NumericLimits<int64_t>::Minimum()) {
 	}
 	SecretMatch(SecretEntry &secret_entry, int64_t score) : secret_entry(&secret_entry), score(score) {
 	}
