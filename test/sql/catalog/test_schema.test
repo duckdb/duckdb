@@ -75,4 +75,5 @@ ROLLBACK;
 
 statement error con2
 SELECT * FROM test.hello
+----
 

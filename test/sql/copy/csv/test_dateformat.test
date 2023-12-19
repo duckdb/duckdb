@@ -91,6 +91,8 @@ SELECT * FROM new_timestamps ORDER BY 1
 # incorrect date/timestamp format results in an error
 statement error
 COPY dates FROM 'test/sql/copy/csv/data/test/dateformat.csv' (HEADER 0, DATEFORMAT '%')
+----
 
 statement error
 COPY timestamps FROM 'test/sql/copy/csv/data/test/timestampformat.csv' (HEADER 0, DELIMITER '|', TIMESTAMPFORMAT '%')
+----

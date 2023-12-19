@@ -55,6 +55,7 @@ read_csv_auto column_names/names can only be supplied once
 
 statement error
 select l_orderkey, l_partkey, column02, column03 from read_csv_auto('test/sql/copy/csv/data/real/lineitem_sample.csv', names=42) LIMIT 1;
+----
 
 # duplicate names
 statement error

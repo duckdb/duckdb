@@ -53,6 +53,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 			auto right_bindings = op.children[1]->GetColumnBindings();
 			bindings.insert(bindings.end(), right_bindings.begin(), right_bindings.end());
 		}
+		if (any_join.join_type == JoinType::RIGHT_SEMI || any_join.join_type == JoinType::RIGHT_ANTI) {
+			throw InternalException("RIGHT SEMI/ANTI any join not supported yet");
+		}
 		VisitOperatorExpressions(op);
 		return;
 	}

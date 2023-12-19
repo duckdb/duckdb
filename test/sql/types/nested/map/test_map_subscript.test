@@ -17,6 +17,7 @@ select m[0] from (select MAP(LIST_VALUE(1, 2, 3, 4,5),LIST_VALUE(10, 9, 8, 7,11)
 # Keys of a MAP can not be NULL
 statement error
 select m[NULL] from (select MAP(LIST_VALUE(1, 2, 3, 4,5, NULL),LIST_VALUE(10, 9, 8, 7,11,42)) as m) as T
+----
 
 # Null not present on map
 query I
@@ -27,6 +28,7 @@ select m[NULL] from (select MAP(LIST_VALUE(1, 2, 3, 4,5),LIST_VALUE(10, 9, 8, 7,
 # Keys of a MAP have to be unique
 statement error
 select m[2] from (select MAP(LIST_VALUE(1, 2, 3, 4,2),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
+----
 
 # Empty maps
 query I
@@ -49,6 +51,7 @@ select m[2::TINYINT] from (select MAP(LIST_VALUE(1, 2, 3, 4,5),LIST_VALUE(10, 9,
 # Keys of a MAP have to be unique
 statement error
 select m['Jon Lajoie'] from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as m) as T
+----
 
 query I
 select m['Spice Girls'] from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D' ),LIST_VALUE(10,9,10)) as m) as T
@@ -99,10 +102,12 @@ select m[10] from (select MAP(lst,lst) as m from (SELECT LIST(i) as lst FROM ran
 #Duplicate keys in a map
 statement error
 select m[1] from (select MAP(LIST_VALUE(1, 1, 1, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T
+----
 
 #String search with a bunch of NULL values in the map
 statement error
 select m[NULL] from (select MAP(LIST_VALUE('Jon Lajoie', NULL, 'Tenacious D',NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as m) as T
+----
 
 query I
 select m['Jon Lajoie'] from (select MAP(LIST_VALUE('Jon Lajoie', 'Tenacious D'),LIST_VALUE(10,1)) as m) as T
@@ -117,9 +122,11 @@ select m[10] from (select MAP(LIST_VALUE(10,9,1,11,13),LIST_VALUE(NULL, NULL, NU
 
 statement error
 select m[NULL] from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as m) as T
+----
 
 statement error
 select m[NULL] from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL, NULL),LIST_VALUE(NULL, NULL, NULL,NULL,NULL )) as m) as T
+----
 
 #Searching using a non-constant value (e.g. select m[a] from ...)
 statement ok
