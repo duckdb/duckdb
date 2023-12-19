@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-SecretMatch SecretStorage::SelectBestMatch(SecretEntry &secret_entry, const string& path, SecretMatch &current_best) {
+SecretMatch SecretStorage::SelectBestMatch(SecretEntry &secret_entry, const string &path, SecretMatch &current_best) {
 	// Get secret match score
 	auto match_score = secret_entry.secret->MatchScore(path);
 
@@ -32,7 +32,8 @@ SecretMatch SecretStorage::SelectBestMatch(SecretEntry &secret_entry, const stri
 	// Choose the best matching score, tie-breaking on secret name when necessary
 	if (match_score > current_best.score) {
 		return SecretMatch(secret_entry, match_score);
-	} else if (match_score == current_best.score && secret_entry.secret->GetName() < current_best.GetSecret().GetName()) {
+	} else if (match_score == current_best.score &&
+	           secret_entry.secret->GetName() < current_best.GetSecret().GetName()) {
 		return SecretMatch(secret_entry, match_score);
 	} else {
 		return current_best;
@@ -148,7 +149,7 @@ LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseI
 	auto &catalog = Catalog::GetSystemCatalog(db);
 	secrets = make_uniq<CatalogSet>(Catalog::GetSystemCatalog(db),
 	                                make_uniq<DefaultSecretGenerator>(catalog, manager, persistent_secrets));
-};
+}
 
 void CatalogSetSecretStorage::WriteSecret(CatalogTransaction transaction, const BaseSecret &secret) {
 	// By default, this writes nothing

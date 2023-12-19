@@ -57,7 +57,7 @@ public:
 protected:
 	//! Helper function to select the best matching secret within a storage. Tie-breaks within a storage are broken
 	//! by secret name by default.
-	SecretMatch SelectBestMatch(SecretEntry &secret_entry, const string& path, SecretMatch &current_best);
+	SecretMatch SelectBestMatch(SecretEntry &secret_entry, const string &path, SecretMatch &current_best);
 
 	//! Offsets the score to tie-break secrets giving preference to the storage with the lowest storage_penalty
 	//! the base implementation will be chosen last in a tie-break
