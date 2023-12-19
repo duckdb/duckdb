@@ -130,12 +130,13 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr, bo
 		string error_message;
 		auto new_expr = QualifyColumnName(colref, error_message);
 		if (new_expr) {
-			if (within_function_expression) {
-				// Remove alias within function expressions,
+			if (!expr->alias.empty()) {
+				// Pre-existing aliases are added to the qualified colref
+				new_expr->alias = expr->alias;
+			} else if (within_function_expression) {
+				// Qualifying the colref may add an alias, but this needs to be removed within function expressions,
 				// because the alias here means a named parameter instead of a positional parameter
 				new_expr->alias = "";
-			} else if (!expr->alias.empty()) {
-				new_expr->alias = expr->alias;
 			}
 			new_expr->query_location = colref.query_location;
 			expr = std::move(new_expr);
