@@ -164,15 +164,15 @@ struct SortedAggregateState {
 		}
 	}
 
-	void FlushChunks(const SortedAggregateBindData &order_bind, SortedAggregateState &other) {
-		D_ASSERT(other.sort_chunk);
-		ordering->Append(*ordering_append, *other.sort_chunk);
-		other.sort_chunk->Reset();
+	void FlushChunks(const SortedAggregateBindData &order_bind) {
+		D_ASSERT(sort_chunk);
+		ordering->Append(*ordering_append, *sort_chunk);
+		sort_chunk->Reset();
 
 		if (arguments) {
-			D_ASSERT(other.arg_chunk);
-			arguments->Append(*arguments_append, *other.arg_chunk);
-			other.arg_chunk->Reset();
+			D_ASSERT(arg_chunk);
+			arguments->Append(*arguments_append, *arg_chunk);
+			arg_chunk->Reset();
 		}
 	}
 
@@ -190,12 +190,12 @@ struct SortedAggregateState {
 
 		if (count > CHUNK_CAPACITY && !ordering) {
 			InitializeCollections(order_bind);
-			FlushChunks(order_bind, *this);
+			FlushChunks(order_bind);
 		}
 	}
 
-	void LinkedAppend(const LinkedChunkFunctions &functions, ArenaAllocator &allocator, DataChunk &input,
-	                  LinkedLists &linked) {
+	static void LinkedAppend(const LinkedChunkFunctions &functions, ArenaAllocator &allocator, DataChunk &input,
+	                         LinkedLists &linked, SelectionVector &sel, idx_t nsel) {
 		const auto count = input.size();
 		for (column_t c = 0; c < input.ColumnCount(); ++c) {
 			auto &func = functions[c];
@@ -213,6 +213,9 @@ struct SortedAggregateState {
 		const auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
 		Resize(order_bind, count + sort_input.size());
 
+		sel.Initialize(nullptr);
+		nsel = sort_input.size();
+
 		if (ordering) {
 			//	Using collections
 			ordering->Append(*ordering_append, sort_input);
@@ -227,11 +230,14 @@ struct SortedAggregateState {
 			}
 		} else {
 			//	Still using linked lists
-			LinkedAppend(order_bind.sort_funcs, aggr_input_data.allocator, sort_input, sort_linked);
+			LinkedAppend(order_bind.sort_funcs, aggr_input_data.allocator, sort_input, sort_linked, sel, nsel);
 			if (!arg_linked.empty()) {
-				LinkedAppend(order_bind.arg_funcs, aggr_input_data.allocator, arg_input, arg_linked);
+				LinkedAppend(order_bind.arg_funcs, aggr_input_data.allocator, arg_input, arg_linked, sel, nsel);
 			}
 		}
+
+		nsel = 0;
+		offset = 0;
 	}
 
 	void UpdateSlice(const AggregateInputData &aggr_input_data, DataChunk &sort_input, DataChunk &arg_input) {
@@ -245,7 +251,7 @@ struct SortedAggregateState {
 			if (arg_chunk) {
 				arg_chunk->Slice(arg_input, sel, nsel);
 			}
-			FlushChunks(order_bind, *this);
+			FlushChunks(order_bind);
 		} else if (sort_chunk) {
 			//	Still using data chunks
 			sort_chunk->Append(sort_input, true, &sel, nsel);
@@ -254,9 +260,9 @@ struct SortedAggregateState {
 			}
 		} else {
 			//	Still using linked lists
-			LinkedAppend(order_bind.sort_funcs, aggr_input_data.allocator, sort_input, sort_linked);
+			LinkedAppend(order_bind.sort_funcs, aggr_input_data.allocator, sort_input, sort_linked, sel, nsel);
 			if (!arg_linked.empty()) {
-				LinkedAppend(order_bind.arg_funcs, aggr_input_data.allocator, arg_input, arg_linked);
+				LinkedAppend(order_bind.arg_funcs, aggr_input_data.allocator, arg_input, arg_linked, sel, nsel);
 			}
 		}
 
@@ -300,7 +306,11 @@ struct SortedAggregateState {
 					arguments->Combine(*other.arguments);
 				}
 			} else {
-				FlushChunks(order_bind, other);
+				ordering->Append(*other.sort_chunk);
+				if (arguments) {
+					D_ASSERT(other.arg_chunk);
+					arguments->Append(*other.arg_chunk);
+				}
 			}
 		}
 	}
