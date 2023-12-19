@@ -392,7 +392,7 @@ struct DateToStringCast {
 		}
 		// optionally add BC to the end of the date
 		if (add_bc) {
-			memcpy(ptr, " (BC)", 5);
+			memcpy(ptr, " (BC)", 5); // NOLINT
 		}
 	}
 };
@@ -493,7 +493,7 @@ struct IntervalToStringCast {
 		// append the name together with a potential "s" (for plurals)
 		memcpy(buffer + length, name, name_len);
 		length += name_len;
-		if (value != 1) {
+		if (value != 1 && value != -1) {
 			buffer[length++] = 's';
 		}
 	}
@@ -554,7 +554,7 @@ struct IntervalToStringCast {
 			}
 		} else if (length == 0) {
 			// empty interval: default to 00:00:00
-			memcpy(buffer, "00:00:00", 8);
+			memcpy(buffer, "00:00:00", 8); // NOLINT
 			return 8;
 		}
 		return length;
