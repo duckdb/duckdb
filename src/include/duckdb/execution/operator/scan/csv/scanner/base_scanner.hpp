@@ -21,6 +21,8 @@ struct ScannerPosition {
 	idx_t buffer_id = 0;
 	//! Id of the file we are currently scanning
 	idx_t file_id = 0;
+	//! If the position is within the scanner boundary
+	bool InBoundary(const ScannerBoundary &boundary)
 };
 
 class ScannerResult {};
@@ -30,7 +32,7 @@ class ScannerResult {};
 class BaseScanner {
 public:
 	explicit BaseScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
-	                     ScannerBoundary boundary);
+	                     ScannerBoundary boundary = {});
 
 	//! Returns true if the scanner is finished
 	bool Finished();
@@ -39,8 +41,6 @@ public:
 	//! Parses data into a output_chunk
 	virtual ScannerResult *ParseChunk();
 
-	//! Number of bytes each thread will consume
-
 protected:
 	//! Boundaries of this scanner
 	ScannerBoundary boundary;
@@ -48,6 +48,9 @@ protected:
 	//! Unique pointer to the buffer_handle, this is unique per scanner, since it also contains the necessary counters
 	//! To offload buffers to disk if necessary
 	unique_ptr<CSVBufferHandle> cur_buffer_handle;
+
+	//! Hold the current buffer ptr
+	char *buffer_handle_ptr = nullptr;
 
 	//! Shared pointer to the buffer_manager, this is shared across multiple scanners
 	shared_ptr<CSVBufferManager> buffer_manager;
@@ -65,10 +68,7 @@ protected:
 	virtual void Initialize();
 
 	//! Process one chunk
-	void Process();
-
-	//! Internal Function to process one chunk
-	virtual void ProcessInternal();
+	virtual void Process();
 
 	//! Finalizes the process of the chunk
 	virtual void FinalizeChunkProcess();

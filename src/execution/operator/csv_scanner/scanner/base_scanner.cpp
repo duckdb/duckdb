@@ -1,15 +1,27 @@
 #include "duckdb/execution/operator/scan/csv/csv_sniffer.hpp"
 
 namespace duckdb {
+
+bool ScannerPosition::InBoundary(const ScannerBoundary &boundary) {
+	return boundary.file_idx == file_id && boundary.buffer_idx == buffer_id && pos < boundary.buffer_pos;
+}
+
 BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
                          ScannerBoundary boundary_p)
     : boundary(boundary_p), buffer_manager(buffer_manager_p), state_machine(state_machine_p) {
 	D_ASSERT(buffer_manager);
 	D_ASSERT(state_machine);
+	// Initialize current buffer handle
+	cur_buffer_handle = buffer_manager->GetBuffer(boundary.file_idx, boundary.buffer_idx);
+	buffer_handle_ptr = cur_buffer_handle->Ptr();
+	D_ASSERT(cur_buffer_handle);
+	// Ensure that the boundary end is within the realms of reality.
+	boundary_p.end_pos =
+	    boundary_p.end_pos > cur_buffer_handle->actual_size ? cur_buffer_handle->actual_size : boundary_p.end_pos;
 };
 
 bool BaseScanner::Finished() {
-	if (!boundary.scan_to_infinity) {
+	if (boundary.is_set) {
 		// If we don't have to scan the whole file we are done if we either went to next buffer or if our current
 		// position is over the end position of our boundary.
 		return pos.buffer_id > boundary.buffer_idx || pos.pos >= boundary.end_pos;

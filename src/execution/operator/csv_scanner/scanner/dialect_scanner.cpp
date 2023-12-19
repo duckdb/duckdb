@@ -1,14 +1,13 @@
 #include "duckdb/execution/operator/scan/csv/scanner/dialect_scanner.hpp"
 
 namespace duckdb {
-DialectScanner::DialectScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
-                               ScannerBoundary boundary)
-    : BaseScanner(buffer_manager, state_machine, boundary), column_count(1) {
-	result.current_rows = 0;
+DialectScanner::DialectScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine)
+    : BaseScanner(buffer_manager, state_machine), column_count(1) {
+	result.cur_rows = 0;
 };
 
 DialectResult *DialectScanner::ParseChunk() {
-	result.current_rows = 0;
+	result.cur_rows = 0;
 	column_count = 1;
 	ParseChunkInternal();
 	return &result;
@@ -17,42 +16,61 @@ void DialectScanner::Initialize() {
 	states.Initialize(CSVState::EMPTY_LINE);
 }
 
-void DialectScanner::Process() {
-	//! FIXME write functions that get the current char
-	char current_char = 'b';
+bool DialectScanner::ProcessInternal(char current_char) {
 	if (states.current_state == CSVState::INVALID) {
-		sniffed_column_counts.clear();
+		result.cur_rows = 0;
 		return true;
 	}
-	sniffing_state_machine.Transition(states, current_char);
+	state_machine->Transition(states, current_char);
 
 	bool carriage_return = states.previous_state == CSVState::CARRIAGE_RETURN;
-	scanner.column_count += states.previous_state == CSVState::DELIMITER;
-	sniffed_column_counts[scanner.cur_rows] = scanner.column_count;
-	scanner.cur_rows +=
+	column_count += states.previous_state == CSVState::DELIMITER;
+	result.sniffed_column_counts[result.cur_rows] = column_count;
+	result.cur_rows +=
 	    states.previous_state == CSVState::RECORD_SEPARATOR && states.current_state != CSVState::EMPTY_LINE;
-	scanner.column_count -= (scanner.column_count - 1) * (states.previous_state == CSVState::RECORD_SEPARATOR);
+	column_count -= (column_count - 1) * (states.previous_state == CSVState::RECORD_SEPARATOR);
 
 	// It means our carriage return is actually a record separator
-	scanner.cur_rows += states.current_state != CSVState::RECORD_SEPARATOR && carriage_return;
-	scanner.column_count -=
-	    (scanner.column_count - 1) * (states.current_state != CSVState::RECORD_SEPARATOR && carriage_return);
+	result.cur_rows += states.current_state != CSVState::RECORD_SEPARATOR && carriage_return;
+	column_count -= (column_count - 1) * (states.current_state != CSVState::RECORD_SEPARATOR && carriage_return);
 
 	// Identify what is our line separator
-	sniffing_state_machine.carry_on_separator =
-	    (states.current_state == CSVState::RECORD_SEPARATOR && carriage_return) ||
-	    sniffing_state_machine.carry_on_separator;
-	sniffing_state_machine.single_record_separator =
+	state_machine->carry_on_separator =
+	    (states.current_state == CSVState::RECORD_SEPARATOR && carriage_return) || state_machine->carry_on_separator;
+	state_machine->single_record_separator =
 	    ((states.current_state != CSVState::RECORD_SEPARATOR && carriage_return) ||
 	     (states.current_state == CSVState::RECORD_SEPARATOR && !carriage_return)) ||
-	    sniffing_state_machine.single_record_separator;
-	if (scanner.cur_rows >= STANDARD_VECTOR_SIZE) {
+	    state_machine->single_record_separator;
+	if (result.cur_rows >= STANDARD_VECTOR_SIZE) {
 		// We sniffed enough rows
 		return true;
 	}
 	return false;
 }
 
+void DialectScanner::Process() {
+	// Run on this buffer
+	for (; pos.pos < cur_buffer_handle->actual_size; pos.pos++) {
+		if (ProcessInternal(buffer_handle_ptr[pos.pos])) {
+			return;
+		}
+	}
+}
+
 void DialectScanner::FinalizeChunkProcess() {
+	if (result.cur_rows == STANDARD_VECTOR_SIZE) {
+		// We are done
+		return;
+	}
+	// We run until we have a full chunk, or we are done scanning
+	while (!Finished() && result.cur_rows < STANDARD_VECTOR_SIZE) {
+		if (pos.pos == cur_buffer_handle->actual_size) {
+			// Move to next buffer
+			pos.pos = 0;
+			cur_buffer_handle = buffer_manager->GetBuffer(pos.file_id, ++pos.buffer_id);
+			buffer_handle_ptr = cur_buffer_handle->Ptr();
+		}
+		Process();
+	}
 }
 } // namespace duckdb

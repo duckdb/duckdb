@@ -59,9 +59,6 @@ public:
 		states.current_state = transition_array[states.current_state][static_cast<uint8_t>(current_char)];
 	}
 
-	//! Resets the state machine, so it can be used again
-	void Reset();
-
 	//! Aux Function for string UTF8 Verification
 	void VerifyUTF8();
 
@@ -72,13 +69,7 @@ public:
 	const CSVStateMachineOptions state_machine_options;
 	//! CSV Reader Options
 	const CSVReaderOptions &options;
-};
 
-//! State Machine holding options that are detected during sniffing
-class CSVStateMachineSniffing : public CSVStateMachine {
-public:
-	explicit CSVStateMachineSniffing(CSVReaderOptions &options_p, const CSVStateMachineOptions &state_machine_options,
-	                                 CSVStateMachineCache &csv_state_machine_cache_p);
 	//! Stores identified start row for this file (e.g., a file can start with garbage like notes, before the header)
 	idx_t start_row = 0;
 

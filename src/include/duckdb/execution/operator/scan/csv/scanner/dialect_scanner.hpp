@@ -16,24 +16,25 @@ namespace duckdb {
 
 class DialectResult : public ScannerResult {
 public:
-	idx_t result[STANDARD_VECTOR_SIZE];
-	idx_t current_rows;
+	idx_t sniffed_column_counts[STANDARD_VECTOR_SIZE];
+	idx_t cur_rows;
 };
 
 //! Our dialect scanner basically goes over the CSV and figures out how many columns they have
 class DialectScanner : public BaseScanner {
 public:
-	DialectScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
-	               ScannerBoundary boundary);
+	DialectScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine);
 
 	DialectResult *ParseChunk() override;
 
 private:
-	virtual void Initialize() override;
+	void Initialize() override;
 
-	virtual void Process() override;
+	void Process() override;
 
-	virtual void FinalizeChunkProcess() override;
+	inline bool ProcessInternal(char current_char);
+
+	void FinalizeChunkProcess() override;
 
 	DialectResult result;
 
