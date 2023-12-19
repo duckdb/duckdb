@@ -1490,6 +1490,11 @@ date_t CastTimestampMsToDate::Operation(timestamp_t input) {
 }
 
 template <>
+dtime_t CastTimestampMsToTime::Operation(timestamp_t input) {
+	return Timestamp::GetTime(Timestamp::FromEpochMs(input.value));
+}
+
+template <>
 timestamp_t CastTimestampMsToNs::Operation(timestamp_t input) {
 	auto us = CastTimestampMsToUs::Operation<timestamp_t, timestamp_t>(input);
 	return CastTimestampUsToNs::Operation<timestamp_t, timestamp_t>(us);
@@ -1504,6 +1509,12 @@ template <>
 date_t CastTimestampNsToDate::Operation(timestamp_t input) {
 	const auto us = CastTimestampNsToUs::Operation<timestamp_t, timestamp_t>(input);
 	return Timestamp::GetDate(us);
+}
+
+template <>
+dtime_t CastTimestampNsToTime::Operation(timestamp_t input) {
+	const auto us = CastTimestampNsToUs::Operation<timestamp_t, timestamp_t>(input);
+	return Timestamp::GetTime(us);
 }
 
 template <>
@@ -1527,6 +1538,12 @@ template <>
 date_t CastTimestampSecToDate::Operation(timestamp_t input) {
 	const auto us = CastTimestampSecToUs::Operation<timestamp_t, timestamp_t>(input);
 	return Timestamp::GetDate(us);
+}
+
+template <>
+dtime_t CastTimestampSecToTime::Operation(timestamp_t input) {
+	const auto us = CastTimestampSecToUs::Operation<timestamp_t, timestamp_t>(input);
+	return Timestamp::GetTime(us);
 }
 
 //===--------------------------------------------------------------------===//

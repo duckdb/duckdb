@@ -116,6 +116,7 @@ NULL	NULL
 # not supported yet: left outer join on JoinSide::BOTH
 statement error
 SELECT i, (SELECT SUM(s1.i) FROM integers s1 LEFT OUTER JOIN integers s2 ON (SELECT i1.i+s1.i)=(SELECT i1.i+s2.i)) AS j FROM integers i1 ORDER BY i;
+----
 
 # REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 # REQUIRE(CHECK_COLUMN(result, 1, {6, 6, 6, 6}));

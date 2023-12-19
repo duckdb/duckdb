@@ -30,7 +30,7 @@ struct ExtensionAlias {
 
 struct ExtensionInitResult {
 	string filename;
-	string basename;
+	string filebase;
 
 	void *lib_hdl;
 };

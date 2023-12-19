@@ -53,3 +53,4 @@ from  read_csv('data/csv/bug_7578.csv', delim='\t', header=true, columns={
   'tags':'varchar'
 },
 parallel=true)
+----

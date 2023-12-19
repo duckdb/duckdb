@@ -159,6 +159,7 @@ fresh food
 
 statement error
 SELECT * FROM categories GROUP BY ()
+----
 
 statement ok
 ROLLBACK

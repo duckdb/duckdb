@@ -60,10 +60,13 @@ endloop
 # unsupported: precision too high
 statement error
 CREATE TABLE ts_precision(sec TIMESTAMP(10));
+----
 
 statement error
 CREATE TABLE ts_precision(sec TIMESTAMP(99999));
+----
 
 # timestamp only supporst a single modifier
 statement error
 CREATE TABLE ts_precision(sec TIMESTAMP(1, 1));
+----

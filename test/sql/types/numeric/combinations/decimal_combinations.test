@@ -47,8 +47,10 @@ DECIMAL
 # HUGEINT sets width to 38+scale, so it will never fit into DECIMAL
 statement error
 select (typeof([(SELECT min from hugeint_limits), 1.00005])::VARCHAR)[:7]
+----
 
 statement error
 select (typeof([(SELECT max from hugeint_limits), 1.00005])::VARCHAR)[:7]
+----
 
 endloop

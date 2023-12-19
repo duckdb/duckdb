@@ -17,6 +17,7 @@ select m[[2,3]] from (select MAP(LIST_VALUE([0], [1], [2,0], [3], [5]),LIST_VALU
 # Keys of a MAP can not be NULL
 statement error
 select m[NULL] from (select MAP(LIST_VALUE([2], [NULL], [3,0], [NULL,NULL],[5,4], NULL),LIST_VALUE(10, 9, 8, 7,11,42)) as m) as T
+----
 
 # Null not present on map
 query I

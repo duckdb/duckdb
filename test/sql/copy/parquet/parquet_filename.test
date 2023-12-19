@@ -45,6 +45,7 @@ COPY test_csv TO '__TEST_DIR__/filename_as_column.csv' WITH HEADER;
 # This currently fails with a binder error
 statement error
 SELECT id, filename FROM read_csv_auto('__TEST_DIR__/filename_as_column.csv', HEADER=1, FILENAME=1);
+----
 
 # Parquet filename name conflict
 statement ok
@@ -56,6 +57,7 @@ COPY test TO '__TEST_DIR__/filename_as_column.parquet';
 # we currently don't support filename as a column name when using the filename option
 statement error
 SELECT * FROM parquet_scan('__TEST_DIR__/filename_as_column.parquet', FILENAME=1);
+----
 
 # Now also test copy
 statement ok
