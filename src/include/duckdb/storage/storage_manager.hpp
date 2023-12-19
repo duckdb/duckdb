@@ -54,13 +54,12 @@ public:
 	}
 
 	//! Get the WAL of the StorageManager, returns nullptr if in-memory
-	optional_ptr<WriteAheadLog> GetWriteAheadLog() {
-		return wal.get();
-	}
+	optional_ptr<WriteAheadLog> GetWriteAheadLog();
 
 	string GetDBPath() {
 		return path;
 	}
+	string GetWALPath();
 	bool InMemory();
 
 	virtual bool AutomaticCheckpoint(idx_t estimated_wal_bytes) = 0;
@@ -83,6 +82,7 @@ protected:
 	unique_ptr<WriteAheadLog> wal;
 	//! Whether or not the database is opened in read-only mode
 	bool read_only;
+	bool replayed_wal = false;
 
 public:
 	template <class TARGET>
