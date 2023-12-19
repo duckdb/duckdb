@@ -23,7 +23,7 @@ enum class TableReferenceType : uint8_t {
 	TABLE_FUNCTION = 5,  // table producing function
 	EXPRESSION_LIST = 6, // expression list
 	CTE = 7,             // Recursive CTE
-	EMPTY = 8,           // placeholder for empty FROM
+	EMPTY_FROM = 8,      // placeholder for empty FROM
 	PIVOT = 9            // pivot statement
 };
 
