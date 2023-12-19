@@ -48,7 +48,6 @@ jobs:
     env:
       CIBW_BUILD: 'cp39-manylinux_x86_64'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose'
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       PYTEST_TIMEOUT: '600'
 
     steps:
@@ -152,7 +151,6 @@ jobs:
       CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_SKIP: '*-musllinux_aarch64'
       CIBW_ARCHS: ${{ matrix.arch == 'aarch64' && 'aarch64' || 'auto64' }}
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       PYTEST_TIMEOUT: '600'
       DUCKDB_BUILD_UNITY: 1
 
@@ -230,7 +228,6 @@ jobs:
         CIBW_BUILD: ${{ matrix.python_build}}
         CIBW_ARCHS: 'x86_64 universal2 arm64'
         CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast  --verbose'
-        SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         TWINE_USERNAME: '__token__'
         DUCKDB_BUILD_UNITY: 1
 
@@ -297,7 +294,6 @@ jobs:
 
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
-        SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         SETUPTOOLS_USE_DISTUTILS: 'stdlib'
         TWINE_USERNAME: '__token__'
         DUCKDB_BUILD_UNITY: 1
