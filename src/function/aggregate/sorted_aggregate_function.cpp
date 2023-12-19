@@ -313,6 +313,9 @@ struct SortedAggregateState {
 				}
 			}
 		}
+
+		//	Free all memory as we have absorbed it.
+		other.Reset();
 	}
 
 	void PrefixSortBuffer(DataChunk &prefixed) {
@@ -355,6 +358,10 @@ struct SortedAggregateState {
 			}
 		}
 
+		Reset();
+	}
+
+	void Reset() {
 		//	Release all memory
 		ordering.reset();
 		arguments.reset();
@@ -364,6 +371,8 @@ struct SortedAggregateState {
 
 		sort_linked.clear();
 		arg_linked.clear();
+
+		count = 0;
 	}
 
 	idx_t count;
