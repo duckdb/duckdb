@@ -56,4 +56,4 @@ CREATE MACRO other_reduce_macro(list, num, bla) AS (SELECT list_reduce(list, (x,
 
 statement error
 SELECT other_reduce_macro([1, 2, 3, 4], 5, 6);
-
+----
