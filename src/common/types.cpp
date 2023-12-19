@@ -716,6 +716,12 @@ static LogicalType CombineUnequalTypes(const LogicalType &left, const LogicalTyp
 	if (left.IsNumeric() && right.IsNumeric()) {
 		return CombineNumericTypes(left, right);
 	}
+	if (left.id() == LogicalTypeId::BOOLEAN && right.IsIntegral()) {
+		return right;
+	}
+	if (right.id() == LogicalTypeId::BOOLEAN && left.IsIntegral()) {
+		return left;
+	}
 	throw NotImplementedException("Cannot combine types %s and %s - an explicit cast is required", left.ToString(), right.ToString());
 }
 
