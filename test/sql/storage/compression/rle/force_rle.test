@@ -2,9 +2,9 @@
 # description: Test forcing RLE as the compression scheme
 # group: [rle]
 
-# FIXME: TODO, why does this fail for 16KB blocks?
-
 require vector_size 2048
+
+load __TEST_DIR__/force_rle.db
 
 statement ok
 PRAGMA force_compression = 'rle'

@@ -1,7 +1,5 @@
 import sys
 import subprocess
-import re
-import os
 import time
 
 no_exit = False

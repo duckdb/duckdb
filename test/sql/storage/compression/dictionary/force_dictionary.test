@@ -2,9 +2,9 @@
 # description: Test forcing dictionary encoding as the compression scheme
 # group: [dictionary]
 
-# FIXME: TODO, why does this fail for 16KB blocks?
-
 require vector_size 2048
+
+load __TEST_DIR__/force_dictionary.db
 
 statement ok
 PRAGMA force_compression = 'dictionary'

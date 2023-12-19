@@ -43,4 +43,4 @@ for block_size in block_sizes:
 
         execute_system_command('rm -rf build')
         execute_system_command('make relassert')
-        execute_system_command('build/release/test/unittest "*"')
+        execute_system_command('python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*"')
