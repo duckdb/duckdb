@@ -140,12 +140,12 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	// need.
 	auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(left_node),
 	                                           std::move(right_node), logical_type, node.setop_all);
-	// Is this necessary?
 	root->ResolveOperatorTypes();
 
 	unique_ptr<LogicalOperator> op;
 
 	// if we have an intersect or except, immediately translate it to a semi or anti join.
+	// Unions stay as they are.
 	if (logical_type == LogicalOperatorType::LOGICAL_INTERSECT || logical_type == LogicalOperatorType::LOGICAL_EXCEPT) {
 		auto &left = root->children[0];
 		auto &right = root->children[1];

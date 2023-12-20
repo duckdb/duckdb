@@ -14,7 +14,6 @@ add_library_unity(
   compressed_materialization.cpp
   cse_optimizer.cpp
   deliminator.cpp
-  operation_converter.cpp
   unnest_rewriter.cpp
   column_lifetime_analyzer.cpp
   expression_heuristics.cpp

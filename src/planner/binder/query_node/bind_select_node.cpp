@@ -514,7 +514,6 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			group_by_all_indexes.push_back(i);
 		}
 
-		// inspect what is going on here.
 		result->select_list.push_back(std::move(expr));
 		if (is_original_column) {
 			new_names.push_back(std::move(result->names[i]));
