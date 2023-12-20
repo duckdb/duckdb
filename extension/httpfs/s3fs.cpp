@@ -273,8 +273,8 @@ unique_ptr<KeyValueSecret> S3SecretHelper::CreateSecret(vector<string> &prefix_p
 
 	//! Set key value map
 	return_value->secret_map["region"] = params.region;
-	return_value->secret_map["access_key_id"] = params.access_key_id;
-	return_value->secret_map["secret_access_key"] = params.secret_access_key;
+	return_value->secret_map["key_id"] = params.access_key_id;
+	return_value->secret_map["secret"] = params.secret_access_key;
 	return_value->secret_map["session_token"] = params.session_token;
 	return_value->secret_map["endpoint"] = params.endpoint;
 	return_value->secret_map["url_style"] = params.url_style;
@@ -282,7 +282,7 @@ unique_ptr<KeyValueSecret> S3SecretHelper::CreateSecret(vector<string> &prefix_p
 	return_value->secret_map["s3_url_compatibility_mode"] = params.s3_url_compatibility_mode;
 
 	//! Set redact keys
-	return_value->redact_keys = {"secret_access_key", "session_token"};
+	return_value->redact_keys = {"secret", "session_token"};
 
 	return return_value;
 }
@@ -292,11 +292,11 @@ S3AuthParams S3SecretHelper::GetParams(const KeyValueSecret &secret) {
 	if (!secret.TryGetValue("region").IsNull()) {
 		params.region = secret.TryGetValue("region").ToString();
 	}
-	if (!secret.TryGetValue("access_key_id").IsNull()) {
-		params.access_key_id = secret.TryGetValue("access_key_id").ToString();
+	if (!secret.TryGetValue("key_id").IsNull()) {
+		params.access_key_id = secret.TryGetValue("key_id").ToString();
 	}
-	if (!secret.TryGetValue("secret_access_key").IsNull()) {
-		params.secret_access_key = secret.TryGetValue("secret_access_key").ToString();
+	if (!secret.TryGetValue("secret").IsNull()) {
+		params.secret_access_key = secret.TryGetValue("secret").ToString();
 	}
 	if (!secret.TryGetValue("session_token").IsNull()) {
 		params.session_token = secret.TryGetValue("session_token").ToString();
