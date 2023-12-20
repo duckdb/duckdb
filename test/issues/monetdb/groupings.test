@@ -34,7 +34,7 @@ INSERT INTO sales VALUES (1, date '2020-03-01', 10), (2, date '2020-03-01', 3), 
 
 query TTR rowsort
 SELECT COALESCE(products."description", 'all_products') AS "description",
-       COALESCE(sale_day, 'all_days') AS sale_day,
+       COALESCE(sale_day::VARCHAR, 'all_days') AS sale_day,
        CAST(totals.total AS DECIMAL (12,4))
 FROM (
     SELECT productid, sale_day, SUM(units * price) AS total

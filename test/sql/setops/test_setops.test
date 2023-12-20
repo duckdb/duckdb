@@ -70,12 +70,11 @@ SELECT b FROM test WHERE a < 13 UNION ALL SELECT b FROM test WHERE a > 11
 1
 2
 
-# mixing types, should upcast
-query T
+# mixing types, should error
+statement error
 SELECT 1 UNION ALL SELECT 'asdf'
 ----
-1
-asdf
+an explicit cast is required
 
 query T
 SELECT NULL UNION ALL SELECT 'asdf'
