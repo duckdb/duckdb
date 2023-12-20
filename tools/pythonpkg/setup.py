@@ -168,6 +168,10 @@ for ext in extensions:
 
 toolchain_args.extend(['-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1', '-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1'])
 
+linker_args = toolchain_args
+if platform.system() == 'Windows':
+    linker_args.extend(['rstrtmgr.lib'])
+
 
 class get_pybind_include(object):
     def __init__(self, user=False):
@@ -257,7 +261,7 @@ if len(existing_duckdb_dir) == 0:
         include_dirs=include_directories,
         sources=source_files,
         extra_compile_args=toolchain_args,
-        extra_link_args=toolchain_args,
+        extra_link_args=linker_args,
         libraries=libraries,
         language='c++',
     )
@@ -277,7 +281,7 @@ else:
         include_dirs=include_directories,
         sources=main_source_files,
         extra_compile_args=toolchain_args,
-        extra_link_args=toolchain_args,
+        extra_link_args=linker_args,
         libraries=libnames,
         library_dirs=library_dirs,
         language='c++',
