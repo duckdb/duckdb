@@ -202,6 +202,56 @@ static int64_t ImplicitCastEnum(const LogicalType &to) {
 	}
 }
 
+bool LogicalTypeIsValid(const LogicalType &type) {
+	switch(type.id()) {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UNION:
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::ARRAY:
+	case LogicalTypeId::DECIMAL:
+		// these types are only valid with auxiliary info
+		if (!type.AuxInfo()) {
+			return false;
+		}
+		break;
+	default:
+		break;
+	}
+	switch (type.id()) {
+	case LogicalTypeId::ANY:
+	case LogicalTypeId::INVALID:
+	case LogicalTypeId::UNKNOWN:
+		return false;
+	case LogicalTypeId::STRUCT: {
+		auto child_count = StructType::GetChildCount(type);
+		for (idx_t i = 0; i < child_count; i++) {
+			if (!LogicalTypeIsValid(StructType::GetChildType(type, i))) {
+				return false;
+			}
+		}
+		return true;
+	}
+	case LogicalTypeId::UNION: {
+		auto member_count = UnionType::GetMemberCount(type);
+		for (idx_t i = 0; i < member_count; i++) {
+			if (!LogicalTypeIsValid(UnionType::GetMemberType(type, i))) {
+				return false;
+			}
+		}
+		return true;
+	}
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+		return LogicalTypeIsValid(ListType::GetChildType(type));
+	case LogicalTypeId::ARRAY:
+		return LogicalTypeIsValid(ArrayType::GetChildType(type));
+	default:
+		return true;
+	}
+
+}
+
 int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) {
 	if (from.id() == LogicalTypeId::SQLNULL || to.id() == LogicalTypeId::ANY) {
 		// NULL expression can be cast to anything
@@ -216,13 +266,16 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return -1;
 	}
 	if (from.id() == LogicalTypeId::STRING_LITERAL) {
-		// string literals can be cast to ANY type for low cost as long as the type is well-defined
+		// string literals can be cast to any type for low cost as long as the type is valid
 		// i.e. we cannot cast to LIST(ANY) as we don't know what "ANY" should be
 		// we cannot cast to DECIMAL without precision/width specified
 		// etc...
+		// the exception is the ANY type - for the ANY type we just cast to VARCHAR
 		// but we prefer casting to VARCHAR
-		if (to.id() != LogicalType::ANY && ExpressionBinder::ContainsType(to, LogicalTypeId::ANY)) {
-			return -1;
+		if (to.id() != LogicalType::ANY) {
+			if (!LogicalTypeIsValid(to)) {
+				return -1;
+			}
 		}
 		return to.id() == LogicalTypeId::VARCHAR ? 1 : 20;
 	}
