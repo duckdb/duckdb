@@ -59,6 +59,11 @@ void Transformer::TransformCreateSecretOptions(CreateSecretInfo &info,
 			if (entry.second.size() != 1) {
 				throw ParserException("Invalid parameter passed to option '%s'", entry.first);
 			}
+
+			if (info.options.find(entry.first) != info.options.end()) {
+				throw BinderException("Duplicate query param found while parsing create secret: '%s'", entry.first);
+			}
+
 			info.options[entry.first] = entry.second.at(0);
 		}
 	}

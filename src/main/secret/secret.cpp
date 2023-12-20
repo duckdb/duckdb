@@ -62,7 +62,6 @@ string KeyValueSecret::ToString(SecretDisplayType mode) const {
 			result.append(";");
 		}
 	}
-	result += ")";
 
 	return result;
 }
