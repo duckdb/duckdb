@@ -37,7 +37,7 @@ SELECT 1 UNION ALL (SELECT 1.0 UNION ALL SELECT 1.0 UNION ALL SELECT 1.0) UNION 
 1
 1
 
-query T
+statement error
 SELECT 1 UNION (SELECT '1' UNION SELECT '1' UNION SELECT '1') UNION SELECT 1;
 ----
-1
+an explicit cast is required
