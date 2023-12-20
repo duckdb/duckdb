@@ -26,6 +26,12 @@ public:
 	static inline bool AddRow(ColumnCountResult &result, const char current_char, const idx_t buffer_pos);
 	//! Behavior when hitting an invalid state
 	static inline void Kaput(ColumnCountResult &result);
+
+	bool Empty();
+
+	idx_t Size();
+
+	idx_t &operator[](size_t index);
 };
 
 //! Scanner that goes over the CSV and figures out how many columns each row has. Used for dialect sniffing
@@ -34,6 +40,8 @@ public:
 	ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine);
 
 	ColumnCountResult *ParseChunk() override;
+
+	ColumnCountResult *GetResult() override;
 
 private:
 	void Process() override;

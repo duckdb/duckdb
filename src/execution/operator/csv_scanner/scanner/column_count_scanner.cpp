@@ -6,6 +6,18 @@ void ColumnCountResult::AddValue(ColumnCountResult &result, const char current_c
 	result.column_counts[result.cur_rows]++;
 }
 
+bool ColumnCountResult::Empty() {
+	return cur_rows == 0;
+}
+
+idx_t ColumnCountResult::Size() {
+	return cur_rows + 1;
+}
+
+idx_t &ColumnCountResult::operator[](size_t index) {
+	return column_counts[index];
+}
+
 bool ColumnCountResult::AddRow(ColumnCountResult &result, const char current_char, const idx_t buffer_pos) {
 	result.column_counts[result.cur_rows++]++;
 
@@ -35,6 +47,10 @@ ColumnCountResult *ColumnCountScanner::ParseChunk() {
 	result.cur_rows = 0;
 	column_count = 1;
 	ParseChunkInternal();
+	return &result;
+}
+
+ColumnCountResult *ColumnCountScanner::GetResult() {
 	return &result;
 }
 

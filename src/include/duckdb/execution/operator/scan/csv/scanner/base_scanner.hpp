@@ -41,6 +41,9 @@ public:
 	//! Parses data into a output_chunk
 	virtual ScannerResult *ParseChunk();
 
+	//! Returns the result from the last Parse call. Shouts at you if you call it wrong
+	virtual ScannerResult *GetResult();
+
 	//! Templated function that process the parsing of a charecter
 	//! OP = Operation used to alter the result of the parser
 	//! T = Type of the result
@@ -65,6 +68,8 @@ public:
 		//! Still have more to read
 		return false;
 	}
+
+	CSVStateMachine &GetStateMachine();
 
 protected:
 	//! Boundaries of this scanner

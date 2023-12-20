@@ -12,6 +12,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/execution/operator/scan/csv/quote_rules.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_scanner.hpp"
+#include "duckdb/execution/operator/scan/csv/scanner/column_count_scanner.hpp"
 
 namespace duckdb {
 struct DateTimestampSniffing {
@@ -94,7 +95,7 @@ private:
 	//! Highest number of columns found
 	idx_t max_columns_found = 0;
 	//! Current Candidates being considered
-	vector<unique_ptr<CSVScanner>> candidates;
+	vector<unique_ptr<ColumnCountScanner>> candidates;
 	//! Reference to original CSV Options, it will be modified as a result of the sniffer.
 	CSVReaderOptions &options;
 	//! Buffer being used on sniffer
@@ -115,18 +116,18 @@ private:
 	                                           unordered_map<uint8_t, vector<char>> &quote_candidates_map,
 	                                           unordered_map<uint8_t, vector<char>> &escape_candidates_map);
 	//! 2. Generates the search space candidates for the state machines
-	void GenerateStateMachineSearchSpace(vector<unique_ptr<CSVScanner>> &csv_state_machines,
+	void GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountScanner>> &column_count_scanners,
 	                                     const vector<char> &delimiter_candidates,
 	                                     const vector<QuoteRule> &quoterule_candidates,
 	                                     const unordered_map<uint8_t, vector<char>> &quote_candidates_map,
 	                                     const unordered_map<uint8_t, vector<char>> &escape_candidates_map);
 	//! 3. Analyzes if dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
-	void AnalyzeDialectCandidate(unique_ptr<CSVScanner>, idx_t &rows_read, idx_t &best_consistent_rows,
+	void AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner>, idx_t &rows_read, idx_t &best_consistent_rows,
 	                             idx_t &prev_padding_count);
 	//! 4. Refine Candidates over remaining chunks
 	void RefineCandidates();
 	//! Checks if candidate still produces good values for the next chunk
-	bool RefineCandidateNextChunk(CSVScanner &candidate);
+	bool RefineCandidateNextChunk(ColumnCountScanner &candidate);
 
 	//! ------------------------------------------------------//
 	//! ------------------- Type Detection ------------------ //

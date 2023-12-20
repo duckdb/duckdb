@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-class TypeResult : public ScannerResult {
+class StringValueResult : public ScannerResult {
 public:
 	unique_ptr<Vector> vector;
 	string_t *vector_ptr;
@@ -26,28 +26,34 @@ public:
 	char *buffer_ptr;
 
 	//! Adds a Value to the result
-	static inline void AddValue(TypeResult &result, const char current_char, const idx_t buffer_pos);
+	static inline void AddValue(StringValueResult &result, const char current_char, const idx_t buffer_pos);
 	//! Adds a Row to the result
-	static inline bool AddRow(TypeResult &result, const char current_char, const idx_t buffer_pos);
+	static inline bool AddRow(StringValueResult &result, const char current_char, const idx_t buffer_pos);
 	//! Behavior when hitting an invalid state
-	static inline void Kaput(TypeResult &result);
+	static inline void Kaput(StringValueResult &result);
+
+	//! Returns a DataChunk
 };
 
-//! Our dialect scanner basically goes over the CSV and figures out the tuples as Values for type sniffing.
-class TypeScanner : public BaseScanner {
+//! Our dialect scanner basically goes over the CSV and actually parses the values to a DuckDB vector of string_t
+class StringValueScanner : public BaseScanner {
 public:
-	TypeScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine);
+	StringValueScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine);
 
-	TypeResult *ParseChunk() override;
+	StringValueResult *ParseChunk() override;
 
 private:
 	void Process() override;
 
 	void FinalizeChunkProcess() override;
 
+	//! Function used to process values that go over the first buffer, extra allocation might be necessary
 	void ProcessOverbufferValue();
 
-	TypeResult result;
+	//! Function used to move from one buffer to the other, if necessary
+	void MoveToNextBuffer();
+
+	StringValueResult result;
 
 	//! Pointer to the previous buffer handle, necessary for overbuffer values
 	unique_ptr<CSVBufferHandle> previous_buffer_handle;

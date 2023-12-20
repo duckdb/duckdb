@@ -76,6 +76,7 @@ public:
 	//! Both these variables are used for new line identifier detection
 	bool single_record_separator = false;
 	bool carry_on_separator = false;
+
 	//! Dialect options resulting from sniffing
 	DialectOptions dialect_options;
 };

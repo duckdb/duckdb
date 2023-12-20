@@ -2,13 +2,13 @@
 
 namespace duckdb {
 
-void TypeResult::AddValue(TypeResult &result, const char current_char, const idx_t buffer_pos) {
+void StringValueResult::AddValue(StringValueResult &result, const char current_char, const idx_t buffer_pos) {
 	result.vector_ptr[result.cur_value_idx++] =
 	    string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position);
 	result.last_position = buffer_pos;
 }
 
-bool TypeResult::AddRow(TypeResult &result, const char current_char, const idx_t buffer_pos) {
+bool StringValueResult::AddRow(StringValueResult &result, const char current_char, const idx_t buffer_pos) {
 	result.vector_ptr[result.cur_value_idx++] =
 	    string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position);
 	result.last_position = buffer_pos;
@@ -19,13 +19,15 @@ bool TypeResult::AddRow(TypeResult &result, const char current_char, const idx_t
 	}
 }
 
-void TypeResult::Kaput(TypeResult &result) {
-	// FIXME: Add nicer error message
+void StringValueResult::Kaput(StringValueResult &result) {
+	// FIXME: Add nicer error messages, also what should we do for ignore_errors?
 	throw InvalidInputException("Can't parse this CSV File");
 }
 
-TypeScanner::TypeScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine)
+StringValueScanner::StringValueScanner(shared_ptr<CSVBufferManager> buffer_manager,
+                                       shared_ptr<CSVStateMachine> state_machine)
     : BaseScanner(buffer_manager, state_machine) {
+	// Set up the result
 	result.vector_size = state_machine->dialect_options.num_cols * STANDARD_VECTOR_SIZE;
 	result.vector = make_uniq<Vector>(LogicalType::VARCHAR, result.vector_size);
 	result.vector_ptr = FlatVector::GetData<string_t>(*result.vector);
@@ -34,22 +36,27 @@ TypeScanner::TypeScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr
 	result.buffer_ptr = cur_buffer_handle->Ptr();
 };
 
-TypeResult *TypeScanner::ParseChunk() {
+StringValueResult *StringValueScanner::ParseChunk() {
 	result.cur_value_idx = 0;
 	ParseChunkInternal();
 	return &result;
 }
 
-void TypeScanner::Process() {
-	// Run on this buffer
-	for (; pos.pos < cur_buffer_handle->actual_size; pos.pos++) {
+void StringValueScanner::Process() {
+	idx_t to_pos;
+	if (boundary.is_set) {
+		to_pos = boundary.end_pos;
+	} else {
+		to_pos = cur_buffer_handle->actual_size;
+	}
+	for (; pos.pos < to_pos; pos.pos++) {
 		if (ProcessCharacter(*this, buffer_handle_ptr[pos.pos], pos.pos, result)) {
 			return;
 		}
 	}
 }
 
-void TypeScanner::ProcessOverbufferValue() {
+void StringValueScanner::ProcessOverbufferValue() {
 	// Get next value
 	idx_t first_buffer_pos = result.last_position;
 	idx_t first_buffer_length = previous_buffer_handle->actual_size - first_buffer_pos;
@@ -78,22 +85,38 @@ void TypeScanner::ProcessOverbufferValue() {
 	}
 }
 
-void TypeScanner::FinalizeChunkProcess() {
+void StringValueScanner::MoveToNextBuffer() {
+	if (pos.pos == cur_buffer_handle->actual_size) {
+		pos.pos = 0;
+		previous_buffer_handle = std::move(cur_buffer_handle);
+		cur_buffer_handle = buffer_manager->GetBuffer(pos.file_id, ++pos.buffer_id);
+		buffer_handle_ptr = cur_buffer_handle->Ptr();
+		// Handle overbuffer value
+		ProcessOverbufferValue();
+	}
+}
+
+void StringValueScanner::FinalizeChunkProcess() {
 	if (result.cur_value_idx >= result.vector_size) {
 		// We are done
 		return;
 	}
-	// We run until we have a full chunk, or we are done scanning
-	while (!Finished() && result.cur_value_idx < result.vector_size) {
-		if (pos.pos == cur_buffer_handle->actual_size) {
+	// If we are not done we have two options.
+	// 1) If a boundary is set.
+	if (boundary.is_set) {
+		// We read until the next line or until we have nothing else to read.
+		do {
 			// Move to next buffer
-			pos.pos = 0;
-			previous_buffer_handle = std::move(cur_buffer_handle);
-			cur_buffer_handle = buffer_manager->GetBuffer(pos.file_id, ++pos.buffer_id);
-			buffer_handle_ptr = cur_buffer_handle->Ptr();
-			// Handle overbuffer value
+			MoveToNextBuffer();
+			Process();
+		} while (!Finished() && result.cur_value_idx % state_machine->dialect_options.num_cols != 0);
+	} else {
+		// 2) If a boundary is not set
+		// We read until the chunk is complete, or we have nothing else to read.
+		while (!Finished() && result.cur_value_idx < result.vector_size) {
+			MoveToNextBuffer();
+			Process();
 		}
-		Process();
 	}
 }
 } // namespace duckdb

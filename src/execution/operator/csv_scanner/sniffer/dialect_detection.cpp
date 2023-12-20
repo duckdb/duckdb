@@ -3,88 +3,6 @@
 
 namespace duckdb {
 
-struct SniffDialect {
-	inline static void Initialize(CSVScanner &scanner, idx_t cur_pos) {
-		scanner.states.Initialize(CSVState::EMPTY_LINE);
-		scanner.cur_rows = 0;
-		scanner.column_count = 1;
-	}
-
-	inline static bool Process(CSVScanner &scanner, vector<idx_t> &sniffed_column_counts, char current_char,
-	                           idx_t current_pos) {
-		auto &sniffing_state_machine = scanner.GetStateMachineSniff();
-		auto &states = scanner.states;
-		D_ASSERT(sniffed_column_counts.size() == STANDARD_VECTOR_SIZE);
-		if (states.current_state == CSVState::INVALID) {
-			sniffed_column_counts.clear();
-			return true;
-		}
-		sniffing_state_machine.Transition(states, current_char);
-
-		bool carriage_return = states.previous_state == CSVState::CARRIAGE_RETURN;
-		scanner.column_count += states.previous_state == CSVState::DELIMITER;
-		sniffed_column_counts[scanner.cur_rows] = scanner.column_count;
-		scanner.cur_rows +=
-		    states.previous_state == CSVState::RECORD_SEPARATOR && states.current_state != CSVState::EMPTY_LINE;
-		scanner.column_count -= (scanner.column_count - 1) * (states.previous_state == CSVState::RECORD_SEPARATOR);
-
-		// It means our carriage return is actually a record separator
-		scanner.cur_rows += states.current_state != CSVState::RECORD_SEPARATOR && carriage_return;
-		scanner.column_count -=
-		    (scanner.column_count - 1) * (states.current_state != CSVState::RECORD_SEPARATOR && carriage_return);
-
-		// Identify what is our line separator
-		sniffing_state_machine.carry_on_separator =
-		    (states.current_state == CSVState::RECORD_SEPARATOR && carriage_return) ||
-		    sniffing_state_machine.carry_on_separator;
-		sniffing_state_machine.single_record_separator =
-		    ((states.current_state != CSVState::RECORD_SEPARATOR && carriage_return) ||
-		     (states.current_state == CSVState::RECORD_SEPARATOR && !carriage_return)) ||
-		    sniffing_state_machine.single_record_separator;
-		if (scanner.cur_rows >= STANDARD_VECTOR_SIZE) {
-			// We sniffed enough rows
-			return true;
-		}
-		return false;
-	}
-	inline static void Finalize(CSVScanner &scanner, vector<idx_t> &sniffed_column_counts) {
-		auto &sniffing_state_machine = scanner.GetStateMachineSniff();
-		auto &states = scanner.states;
-
-		if (states.current_state == CSVState::INVALID) {
-			return;
-		}
-		if (scanner.cur_rows < STANDARD_VECTOR_SIZE && states.current_state == CSVState::DELIMITER) {
-			sniffed_column_counts[scanner.cur_rows] = ++scanner.column_count;
-		}
-		if (scanner.cur_rows < STANDARD_VECTOR_SIZE && states.current_state != CSVState::EMPTY_LINE) {
-			sniffed_column_counts[scanner.cur_rows++] = scanner.column_count;
-		}
-		if (scanner.cur_rows == 0 && states.current_state == CSVState::EMPTY_LINE) {
-			sniffed_column_counts[scanner.cur_rows++] = scanner.column_count;
-		}
-		NewLineIdentifier suggested_newline;
-		if (sniffing_state_machine.carry_on_separator) {
-			if (sniffing_state_machine.single_record_separator) {
-				suggested_newline = NewLineIdentifier::MIX;
-			} else {
-				suggested_newline = NewLineIdentifier::CARRY_ON;
-			}
-		} else {
-			suggested_newline = NewLineIdentifier::SINGLE;
-		}
-		if (sniffing_state_machine.options.dialect_options.new_line == NewLineIdentifier::NOT_SET) {
-			sniffing_state_machine.dialect_options.new_line = suggested_newline;
-		} else {
-			if (sniffing_state_machine.options.dialect_options.new_line != suggested_newline) {
-				// Invalidate this whole detection
-				scanner.cur_rows = 0;
-			}
-		}
-		sniffed_column_counts.erase(sniffed_column_counts.begin() + scanner.cur_rows, sniffed_column_counts.end());
-	}
-};
-
 bool IsQuoteDefault(char quote) {
 	if (quote == '\"' || quote == '\'' || quote == '\0') {
 		return true;
@@ -137,7 +55,7 @@ void CSVSniffer::GenerateCandidateDetectionSearchSpace(vector<char> &delim_candi
 	}
 }
 
-void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<CSVScanner>> &csv_state_machines,
+void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountScanner>> &column_count_scanners,
                                                  const vector<char> &delimiter_candidates,
                                                  const vector<QuoteRule> &quoterule_candidates,
                                                  const unordered_map<uint8_t, vector<char>> &quote_candidates_map,
@@ -152,34 +70,32 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<CSVScanner>> 
 					D_ASSERT(buffer_manager);
 					CSVStateMachineOptions state_machine_options(delimiter, quote, escape);
 					auto sniffing_state_machine =
-					    make_uniq<CSVStateMachineSniffing>(options, state_machine_options, state_machine_cache);
-					csv_state_machines.emplace_back(
-					    make_uniq<CSVScanner>(buffer_manager, std::move(sniffing_state_machine)));
+					    make_uniq<CSVStateMachine>(options, state_machine_options, state_machine_cache);
+					column_count_scanners.emplace_back(
+					    make_uniq<ColumnCountScanner>(buffer_manager, std::move(sniffing_state_machine)));
 				}
 			}
 		}
 	}
 }
 
-void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVScanner> scanner, idx_t &rows_read, idx_t &best_consistent_rows,
-                                         idx_t &prev_padding_count) {
+void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner, idx_t &rows_read,
+                                         idx_t &best_consistent_rows, idx_t &prev_padding_count) {
 	// The sniffed_column_counts variable keeps track of the number of columns found for each row
-	vector<idx_t> sniffed_column_counts(STANDARD_VECTOR_SIZE);
-
-	scanner->Process<SniffDialect>(*scanner, sniffed_column_counts);
+	auto &sniffed_column_counts = *scanner->ParseChunk();
 	idx_t start_row = options.dialect_options.skip_rows.GetValue();
 	idx_t consistent_rows = 0;
-	idx_t num_cols = sniffed_column_counts.empty() ? 0 : sniffed_column_counts[0];
+	idx_t num_cols = sniffed_column_counts.Empty() ? 0 : sniffed_column_counts[0];
 	idx_t padding_count = 0;
 	bool allow_padding = options.null_padding;
-	if (sniffed_column_counts.size() > rows_read) {
-		rows_read = sniffed_column_counts.size();
+	if (sniffed_column_counts.Size() > rows_read) {
+		rows_read = sniffed_column_counts.Size();
 	}
 	if (set_columns.IsCandidateUnacceptable(num_cols, options.null_padding, options.ignore_errors)) {
 		// Not acceptable
 		return;
 	}
-	for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
+	for (idx_t row = 0; row < sniffed_column_counts.Size(); row++) {
 		if (set_columns.IsCandidateUnacceptable(sniffed_column_counts[row], options.null_padding,
 		                                        options.ignore_errors)) {
 			// Not acceptable
@@ -220,7 +136,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVScanner> scanner, idx_t &
 	// If the number of rows is consistent with the calculated value after accounting for skipped rows and the
 	// start row.
 	bool rows_consistent =
-	    start_row + consistent_rows - options.dialect_options.skip_rows.GetValue() == sniffed_column_counts.size();
+	    start_row + consistent_rows - options.dialect_options.skip_rows.GetValue() == sniffed_column_counts.Size();
 
 	// If there are more than one consistent row.
 	bool more_than_one_row = (consistent_rows > 1);
@@ -229,7 +145,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVScanner> scanner, idx_t &
 	bool more_than_one_column = (num_cols > 1);
 
 	// If the start position is valid.
-	bool start_good = !candidates.empty() && (start_row <= candidates.front()->GetStateMachineSniff().start_row);
+	bool start_good = !candidates.empty() && (start_row <= candidates.front()->GetStateMachine().start_row);
 
 	// If padding happened but it is not allowed.
 	bool invalid_padding = !allow_padding && padding_count > 0;
@@ -247,7 +163,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVScanner> scanner, idx_t &
 			// We have a candidate that fits our requirements better
 			return;
 		}
-		auto &sniffing_state_machine = scanner->GetStateMachineSniff();
+		auto &sniffing_state_machine = scanner->GetStateMachine();
 
 		best_consistent_rows = consistent_rows;
 		max_columns_found = num_cols;
@@ -263,12 +179,12 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVScanner> scanner, idx_t &
 	// with the same quote, we add this state_machine as a suitable candidate.
 	if (more_than_one_row && more_than_one_column && start_good && rows_consistent && !require_more_padding &&
 	    !invalid_padding) {
-		auto &sniffing_state_machine = scanner->GetStateMachineSniff();
+		auto &sniffing_state_machine = scanner->GetStateMachine();
 
 		bool same_quote_is_candidate = false;
 		for (auto &candidate : candidates) {
 			if (sniffing_state_machine.dialect_options.state_machine_options.quote ==
-			    candidate->GetStateMachineSniff().dialect_options.state_machine_options.quote) {
+			    candidate->GetStateMachine().dialect_options.state_machine_options.quote) {
 				same_quote_is_candidate = true;
 			}
 		}
@@ -280,14 +196,14 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVScanner> scanner, idx_t &
 	}
 }
 
-bool CSVSniffer::RefineCandidateNextChunk(CSVScanner &candidate) {
-	vector<idx_t> sniffed_column_counts(STANDARD_VECTOR_SIZE);
-	candidate.Process<SniffDialect>(candidate, sniffed_column_counts);
-	for (auto &num_cols : sniffed_column_counts) {
+bool CSVSniffer::RefineCandidateNextChunk(ColumnCountScanner &candidate) {
+	auto &sniffed_column_counts = *candidate.ParseChunk();
+	for (idx_t i = 0; i < sniffed_column_counts.Size(); i++) {
 		if (set_columns.IsSet()) {
-			return !set_columns.IsCandidateUnacceptable(num_cols, options.null_padding, options.ignore_errors);
+			return !set_columns.IsCandidateUnacceptable(sniffed_column_counts[i], options.null_padding,
+			                                            options.ignore_errors);
 		} else {
-			if (max_columns_found != num_cols && (!options.null_padding && !options.ignore_errors)) {
+			if (max_columns_found != sniffed_column_counts[i] && (!options.null_padding && !options.ignore_errors)) {
 				return false;
 			}
 		}
@@ -316,8 +232,6 @@ void CSVSniffer::RefineCandidates() {
 				candidates.emplace_back(std::move(successful_candidate));
 				return;
 			}
-			cur_candidate->cur_rows = 0;
-			cur_candidate->column_count = 1;
 			if (!RefineCandidateNextChunk(*cur_candidate)) {
 				// This candidate failed, move to the next one
 				break;
@@ -353,7 +267,7 @@ void CSVSniffer::DetectDialect() {
 	// If padding was necessary (i.e., rows are missing some columns, how many)
 	idx_t prev_padding_count = 0;
 	// Vector of CSV State Machines
-	vector<unique_ptr<CSVScanner>> csv_state_machines;
+	vector<unique_ptr<ColumnCountScanner>> csv_state_machines;
 
 	// Step 1: Generate search space
 	GenerateCandidateDetectionSearchSpace(delim_candidates, quoterule_candidates, quote_candidates_map,

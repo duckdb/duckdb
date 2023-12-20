@@ -21,11 +21,6 @@ BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_p
 };
 
 bool BaseScanner::Finished() {
-	if (boundary.is_set) {
-		// If we don't have to scan the whole file we are done if we either went to next buffer or if our current
-		// position is over the end position of our boundary.
-		return pos.buffer_id > boundary.buffer_idx || pos.pos >= boundary.end_pos;
-	}
 	if (buffer_manager->FileCount() > 1) {
 		//! Fixme: We might want to lift this if we want to run the sniffer over multiple files.
 		throw InternalException("We can't have a buffer manager that scans to infinity with more than one file");
@@ -51,6 +46,10 @@ ScannerResult *BaseScanner::ParseChunk() {
 	throw InternalException("ParseChunk() from CSV Base Scanner is mot implemented");
 }
 
+ScannerResult *BaseScanner::GetResult() {
+	throw InternalException("GetResult() from CSV Base Scanner is mot implemented");
+}
+
 void BaseScanner::Initialize() {
 	states.Initialize(CSVState::EMPTY_LINE);
 }
@@ -69,6 +68,10 @@ void BaseScanner::ParseChunkInternal() {
 	}
 	Process();
 	FinalizeChunkProcess();
+}
+
+CSVStateMachine &BaseScanner::GetStateMachine() {
+	return *state_machine;
 }
 
 } // namespace duckdb
