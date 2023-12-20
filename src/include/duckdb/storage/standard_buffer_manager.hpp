@@ -19,7 +19,9 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 
 namespace duckdb {
+
 class BlockManager;
+class ConcurrentOperatorMemoryManager;
 class DatabaseInstance;
 class TemporaryDirectoryHandle;
 struct EvictionQueue;
@@ -110,6 +112,7 @@ protected:
 	void PurgeQueue() final override;
 
 	BufferPool &GetBufferPool() final override;
+	ConcurrentOperatorMemoryManager &GetConcurrentOperatorMemoryManager() final override;
 
 	//! Write a temporary buffer to disk
 	void WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) final override;

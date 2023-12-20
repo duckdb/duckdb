@@ -6,6 +6,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/concurrent_operator_memory_manager.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
@@ -68,6 +69,10 @@ StandardBufferManager::~StandardBufferManager() {
 
 BufferPool &StandardBufferManager::GetBufferPool() {
 	return buffer_pool;
+}
+
+ConcurrentOperatorMemoryManager &StandardBufferManager::GetConcurrentOperatorMemoryManager() {
+	return buffer_pool.GetConcurrentOperatorMemoryManager();
 }
 
 idx_t StandardBufferManager::GetUsedMemory() const {

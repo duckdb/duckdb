@@ -19,6 +19,7 @@ namespace duckdb {
 
 class Allocator;
 class BufferPool;
+class ConcurrentOperatorMemoryManager;
 
 class BufferManager {
 	friend class BufferHandle;
@@ -60,6 +61,7 @@ public:
 	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER);
 	//! Get the underlying buffer pool responsible for managing the buffers
 	virtual BufferPool &GetBufferPool();
+	virtual ConcurrentOperatorMemoryManager &GetConcurrentOperatorMemoryManager();
 
 	// Static methods
 	DUCKDB_API static BufferManager &GetBufferManager(DatabaseInstance &db);
